@@ -1,0 +1,15 @@
+{
+  "title_inbox_rules": "收件箱分拣规则",
+  "title_agent_rules": "AI 分身的规则",
+  "title_mail": "邮箱",
+  "none": "（无）",
+  "change": "改{title}：{before} → {after}",
+  "no_change": "{title}没有变化",
+  "field_password": "密码 / 授权码",
+  "field_password_hint": "国内邮箱多半要授权码",
+  "servers_auto": "服务器自动识别",
+  "servers_feishu": "飞书邮箱的服务器",
+  "auto": "自动",
+  "add_mail": "添加邮箱 {email}（{servers}），填上密码后先连一遍再保存",
+  "remove_mail": "删除邮箱 {email}（Persona 不再收它的邮件，邮箱里的邮件不受影响）"
+}

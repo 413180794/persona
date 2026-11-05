@@ -1,0 +1,8 @@
+{
+  "note_outdated": "このコンピューターのpersonadは古いため、まだego liteを使えません。再デプロイしてください",
+  "err_off": "ブラウザの拡張機能がオフか、このマシンはMacではありません",
+  "err_not_enabled": "このコンピューターではブラウザの拡張機能がオンになっていません",
+  "err_offline": "マシンがオフライン",
+  "err_outdated_install": "このコンピューターのpersonadは古いため、まだego liteをインストールできません。再デプロイしてください",
+  "confirm_script": "「{machine}」のブラウザでスクリプトを実行：{line}"
+}

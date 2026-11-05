@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -125,7 +126,7 @@ func (h *Hub) refreshComputer(ctx context.Context, m *Machine) *proto.Computer {
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.computerOf(m)
 		}
-		c = proto.Computer{Note: "这台电脑上的 personad 太旧，还不会操控电脑：重新部署它"}
+		c = proto.Computer{Note: i18n.T(h.userLang(), "hub-computer.note_outdated")}
 	}
 	if h.keepComputer(m, c, asked) {
 		h.broadcastMachines()
@@ -175,7 +176,7 @@ func (h *Hub) computerChanged(ctx context.Context) {
 func (h *Hub) getComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 	c := h.refreshComputer(r.Context(), m)
 	if c == nil {
-		writeErr(w, http.StatusNotFound, errors.New("操控电脑的扩展没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-computer.err_off"))
 		return
 	}
 	writeJSON(w, c)
@@ -194,7 +195,7 @@ func (h *Hub) putComputer(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if !h.operable(m) {
-		writeErr(w, http.StatusNotFound, errors.New("操控电脑的扩展没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-computer.err_off"))
 		return
 	}
 	if in.Enabled != nil {
@@ -252,7 +253,7 @@ func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine
 		return
 	}
 	if c := h.computerOf(m); c == nil || !c.Enabled {
-		writeErr(w, http.StatusNotFound, errors.New("操控电脑没有对这台打开"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-computer.err_not_enabled"))
 		return
 	}
 	if action == "unlocking" {
@@ -265,7 +266,7 @@ func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine
 		return
 	}
 	if !m.isOnline() {
-		writeErr(w, http.StatusConflict, errors.New("机器离线"))
+		writeErr(w, http.StatusConflict, i18n.Err("hub-computer.err_offline"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -274,7 +275,7 @@ func (h *Hub) postComputerJob(w http.ResponseWriter, r *http.Request, m *Machine
 	var c proto.Computer
 	if err := m.callBuiltin(ctx, "computer."+action, map[string]any{}, &c); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New("这台电脑上的 personad 太旧，还不会" + map[bool]string{true: "锁屏", false: "安装 Cua Driver"}[action == "lock"] + "：重新部署它")
+			err = i18n.Err("hub-computer." + map[bool]string{true: "err_outdated_lock", false: "err_outdated_install"}[action == "lock"])
 		}
 		writeErr(w, http.StatusConflict, err)
 		return
@@ -354,9 +355,9 @@ func (h *Hub) callComputerTool(ctx context.Context, sessionID, name string, args
 	default:
 		return proto.TextResult("give script (run_script) or steps (run_steps)", true)
 	}
-	what := computerSummary(tool, a.Script, a.Steps)
+	what := computerSummary(h.userLang(), m.cfg.Name, tool, a.Script, a.Steps)
 	asked, ok := h.approveApps(ctx, m, name, apps, whole, args)
-	if !ok || (h.cua().Confirm && !asked && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」上"+what, args)) {
+	if !ok || (h.cua().Confirm && !asked && !h.approve(ctx, m.cfg.ID, name, what, args)) {
 		return declined(computerLogWhat(tool, a.Script, a.Steps))
 	}
 	start := time.Now()
@@ -472,13 +473,14 @@ func computerResult(r *proto.ComputerResult) proto.ToolResult {
 	return out
 }
 
-// computerSummary is what the confirmation card says: a script's first line, or the steps' actions.
-func computerSummary(tool, script string, steps json.RawMessage) string {
+// computerSummary is what the confirmation card says, in l: on which Mac, a script's first line or the steps' actions.
+func computerSummary(l i18n.Lang, machine, tool, script string, steps json.RawMessage) string {
 	if tool == "run_script" {
 		line, _, _ := strings.Cut(strings.TrimSpace(script), "\n")
-		return "运行脚本：" + line
+		return i18n.T(l, "hub-computer.confirm_script", i18n.Args{"machine": machine, "line": line})
 	}
-	return "依次执行：" + strings.Join(stepActions(steps), "、")
+	return i18n.T(l, "hub-computer.confirm_steps", i18n.Args{"machine": machine,
+		"steps": strings.Join(stepActions(steps), i18n.T(l, "hub-computer.list_sep"))})
 }
 
 // computerLogWhat is the log's account of a run: the kind and the actions, never what is typed or clicked.

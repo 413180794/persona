@@ -13,6 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/devicewire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/streams"
@@ -135,16 +136,16 @@ func (m *Machine) snapshot() proto.Machine {
 // node that updates itself; an offline one waits.
 func (m *Machine) canDeployLocked() (bool, string) {
 	if m.cfg.Kind == "local" {
-		return false, "hub 所在的机器跟着 hub 一起更新"
+		return false, i18n.T(m.hub.userLang(), "hub-machine.deploy_local")
 	}
 	if (m.cfg.Kind == kindLink || m.cfg.Kind == kindService || m.derived) && !m.info.NodeUpdate {
 		if m.info.NodeUpdateReason != "" {
 			return false, m.info.NodeUpdateReason
 		}
-		return false, "请先在这台电脑上升级一次 node 服务，之后即可在这里远程更新"
+		return false, i18n.T(m.hub.userLang(), "hub-machine.deploy_upgrade_first")
 	}
 	if !m.online {
-		return false, "这台电脑不在线，连上以后再更新"
+		return false, i18n.T(m.hub.userLang(), "hub-machine.deploy_offline")
 	}
 	return true, ""
 }
@@ -169,7 +170,7 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 		}
 		_ = json.Unmarshal(raw, &fields)
 		if fields.Model != "" || fields.Fingerprint != "" {
-			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: "这台电脑的 node 还不支持统一模型配置，请更新 node"}
+			return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(m.hub.requestCtxLang(ctx), "hub-machine.node_no_model_config")}
 		}
 	}
 	if p == nil {
@@ -605,7 +606,7 @@ func (m *Machine) notifyFinished(id string, gen int) {
 	}
 	head, text := "✅ "+title, s.LastText
 	if text == "" {
-		text = "完成了"
+		text = i18n.T(m.hub.userLang(), "hub-machine.done")
 	}
 	if w := s.Work; w != nil && w.Line != "" {
 		switch w.Phase {

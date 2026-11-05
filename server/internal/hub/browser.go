@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -69,7 +70,7 @@ func (h *Hub) refreshBrowser(ctx context.Context, m *Machine) *proto.Browser {
 		if !strings.Contains(err.Error(), "unknown method") {
 			return h.browserOf(m)
 		}
-		b = proto.Browser{Note: "这台电脑上的 personad 太旧，还不会用 ego lite：重新部署它"}
+		b = proto.Browser{Note: i18n.T(h.userLang(), "hub-browser.note_outdated")}
 	}
 	if h.keepBrowser(m, b, asked) {
 		h.broadcastMachines()
@@ -115,7 +116,7 @@ func (h *Hub) browserChanged(ctx context.Context) {
 func (h *Hub) getBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 	b := h.refreshBrowser(r.Context(), m)
 	if b == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-browser.err_off"))
 		return
 	}
 	writeJSON(w, b)
@@ -131,7 +132,7 @@ func (h *Hub) putBrowser(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if h.browserOf(m) == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-browser.err_off"))
 		return
 	}
 	if err := h.setExtensionMachine(r.Context(), egoExtensionID, m.cfg.ID, in.Enabled); err != nil {
@@ -150,11 +151,11 @@ func (h *Hub) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine)
 		return
 	}
 	if b := h.browserOf(m); b == nil || !b.Enabled {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没有对这台打开"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-browser.err_not_enabled"))
 		return
 	}
 	if !m.isOnline() {
-		writeErr(w, http.StatusConflict, errors.New("机器离线"))
+		writeErr(w, http.StatusConflict, i18n.Err("hub-browser.err_offline"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
@@ -163,7 +164,7 @@ func (h *Hub) postBrowserJob(w http.ResponseWriter, r *http.Request, m *Machine)
 	var b proto.Browser
 	if err := m.callBuiltin(ctx, "browser."+action, map[string]any{}, &b); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New("这台电脑上的 personad 太旧，还不会装 ego lite：重新部署它")
+			err = i18n.Err("hub-browser.err_outdated_install")
 		}
 		writeErr(w, http.StatusConflict, err)
 		return
@@ -211,7 +212,7 @@ func (h *Hub) callBrowserTool(ctx context.Context, sessionID, name string, args 
 		}
 		in["script"], in["screenshot"], in["timeout_ms"] = a.Script, true, a.TimeoutMS
 		first, _, _ := strings.Cut(strings.TrimSpace(a.Script), "\n")
-		if h.machineExtension(egoExtensionID).Confirm && !h.approve(ctx, m.cfg.ID, name, "在「"+m.cfg.Name+"」的浏览器里运行脚本："+first, args) {
+		if h.machineExtension(egoExtensionID).Confirm && !h.approve(ctx, m.cfg.ID, name, i18n.T(h.userLang(), "hub-browser.confirm_script", i18n.Args{"machine": m.cfg.Name, "line": first}), args) {
 			h.logf("[%s] browser_run declined on the phone (%d bytes)", m.cfg.ID, len(a.Script))
 			return proto.TextResult("The user declined this on the phone. Do not retry it unless they ask.", true)
 		}

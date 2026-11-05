@@ -1,0 +1,11 @@
+{
+  "note_outdated": "このコンピューターのpersonadは古いため、まだ操作できません。再デプロイしてください",
+  "err_off": "コンピューター操作の拡張機能がオフか、このマシンはMacではありません",
+  "err_not_enabled": "このコンピューターではコンピューター操作がオンになっていません",
+  "err_offline": "マシンがオフライン",
+  "err_outdated_lock": "このコンピューターのpersonadは古いため、まだ画面をロックできません。再デプロイしてください",
+  "err_outdated_install": "このコンピューターのpersonadは古いため、まだCua Driverをインストールできません。再デプロイしてください",
+  "confirm_script": "「{machine}」でスクリプトを実行：{line}",
+  "confirm_steps": "「{machine}」で順に実行：{steps}",
+  "list_sep": "、"
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -54,21 +55,23 @@ func (s selfSetting) actions() []string {
 
 // selfSettings is the registry (what this hub has: mail only with mail set up).
 func (h *Hub) selfSettings() []selfSetting {
+	l := h.userLang() // the titles are on the phone's card
+	rulesTitle, agentRulesTitle := ss(l, "title_inbox_rules"), ss(l, "title_agent_rules")
 	out := []selfSetting{
-		{key: "inbox.rules", title: "收件箱分拣规则",
+		{key: "inbox.rules", title: rulesTitle,
 			about: "the user's own rules for sorting the inbox (需要你 / 知悉即可 / 噪音), in their words; they win over the defaults " +
 				"(a source with rules of its own, inbox.rules.<plugin>, uses those instead)",
 			value: `a string (the whole rules text; "" clears it and falls back to hub.json)`,
 			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxRules(ctx)), nil },
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-				return h.textSetting(ctx, v, "收件箱分拣规则", h.inboxRules, "inbox.rules")
+				return h.textSetting(ctx, v, rulesTitle, h.inboxRules, "inbox.rules")
 			}},
-		{key: "inbox.agent_rules", title: "AI 分身的规则",
+		{key: "inbox.agent_rules", title: agentRulesTitle,
 			about: "the user's rules for which 需要你 inbox items the AI 分身 takes on and drafts a reply for",
 			value: `a string ("" clears it)`,
 			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxAgentRules(ctx)), nil },
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-				return h.textSetting(ctx, v, "AI 分身的规则", h.inboxAgentRules, "inbox.agent_rules")
+				return h.textSetting(ctx, v, agentRulesTitle, h.inboxAgentRules, "inbox.agent_rules")
 			}},
 	}
 	if h.store != nil {
@@ -76,7 +79,7 @@ func (h *Hub) selfSettings() []selfSetting {
 	}
 	out = append(out, h.sourceRulesSettings()...)
 	if h.mail != nil {
-		out = append(out, selfSetting{key: "mail.accounts", title: "邮箱",
+		out = append(out, selfSetting{key: "mail.accounts", title: ss(l, "title_mail"),
 			about: "the user's mail accounts: Persona reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +
 				"the password is typed on the phone, never pass one. Gmail can only be added in the app (Google sign-in)",
 			value: `add: {"email", "provider": "imap|feishu" (default imap; feishu = Feishu / Lark mail), "name"?, "username"?, "imap_host"?, ` +
@@ -153,8 +156,23 @@ func orNone(s string) string {
 	return s
 }
 
-// clipped is a value as the card shows it.
-func clipped(s string) string { return clip(oneLine(orNone(s)), 120) }
+// ss is a hub-self_settings text in l.
+func ss(l i18n.Lang, name string, args ...i18n.Args) string {
+	return i18n.T(l, "hub-self_settings."+name, args...)
+}
+
+// clipped is a value as the card shows it, in l.
+func clipped(l i18n.Lang, s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ss(l, "none")
+	}
+	return clip(oneLine(s), 120)
+}
+
+// changeSummary is the card's「改 title：before → after」.
+func changeSummary(l i18n.Lang, title, before, after string) string {
+	return ss(l, "change", i18n.Args{"title": title, "before": clipped(l, before), "after": clipped(l, after)})
+}
 
 // ---- inbox rules (settings in Postgres win over hub.json) ----
 
@@ -183,13 +201,14 @@ func (h *Hub) textSetting(ctx context.Context, v json.RawMessage, title string, 
 	}
 	text = strings.TrimSpace(text)
 	before := now(ctx)
+	l := h.userLang()
 	if text == before {
-		return &selfChange{summary: title + "没有变化"}, nil
+		return &selfChange{summary: ss(l, "no_change", i18n.Args{"title": title})}, nil
 	}
 	if h.store == nil {
 		return nil, errors.New("no database on this hub")
 	}
-	return &selfChange{summary: fmt.Sprintf("改%s：%s → %s", title, clipped(before), clipped(text)),
+	return &selfChange{summary: changeSummary(l, title, before, text),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
 			if err := h.store.PutSetting(ctx, key, text); err != nil {
 				return "", err
@@ -216,12 +235,13 @@ func (h *Hub) getMailAccounts(context.Context) (string, error) {
 }
 
 func (h *Hub) addMailAccount(_ context.Context, v json.RawMessage) (*selfChange, error) {
-	req, summary, err := mailAccountRequest(v)
+	l := h.userLang()
+	req, summary, err := mailAccountRequest(l, v)
 	if err != nil {
 		return nil, err
 	}
 	return &selfChange{summary: summary,
-		fields: []proto.Field{{Key: "password", Label: "密码 / 授权码", Placeholder: "国内邮箱多半要授权码", Secret: true}},
+		fields: []proto.Field{{Key: "password", Label: ss(l, "field_password"), Placeholder: ss(l, "field_password_hint"), Secret: true}},
 		apply: func(_ context.Context, values map[string]string) (string, error) {
 			req.Password = values["password"]
 			a, err := h.mail.AddAccount(req)
@@ -236,7 +256,7 @@ func (h *Hub) addMailAccount(_ context.Context, v json.RawMessage) (*selfChange,
 
 // mailAccountRequest reads add's value into the request and what the card says. Gmail is an error: Google sign-in
 // only happens in the app.
-func mailAccountRequest(v json.RawMessage) (mail.AddAccountRequest, string, error) {
+func mailAccountRequest(l i18n.Lang, v json.RawMessage) (mail.AddAccountRequest, string, error) {
 	var a struct {
 		Email        string `json:"email"`
 		Provider     string `json:"provider"`
@@ -266,19 +286,19 @@ func mailAccountRequest(v json.RawMessage) (mail.AddAccountRequest, string, erro
 	req := mail.AddAccountRequest{Name: strings.TrimSpace(a.Name), Email: email, Provider: provider, Auth: mail.AuthPassword,
 		Username: a.Username, IMAPHost: a.IMAPHost, IMAPPort: a.IMAPPort, SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort,
 		SMTPSecurity: a.SMTPSecurity}
-	servers := "服务器自动识别"
+	servers := ss(l, "servers_auto")
 	if provider == mail.ProviderFeishu {
-		servers = "飞书邮箱的服务器"
+		servers = ss(l, "servers_feishu")
 	} else if a.IMAPHost != "" || a.SMTPHost != "" {
-		servers = fmt.Sprintf("IMAP %s · SMTP %s", hostPort(a.IMAPHost, a.IMAPPort), hostPort(a.SMTPHost, a.SMTPPort))
+		servers = fmt.Sprintf("IMAP %s · SMTP %s", hostPort(l, a.IMAPHost, a.IMAPPort), hostPort(l, a.SMTPHost, a.SMTPPort))
 	}
-	return req, fmt.Sprintf("添加邮箱 %s（%s），填上密码后先连一遍再保存", email, servers), nil
+	return req, ss(l, "add_mail", i18n.Args{"email": email, "servers": servers}), nil
 }
 
-func hostPort(host string, port int) string {
+func hostPort(l i18n.Lang, host string, port int) string {
 	switch {
 	case host == "":
-		return "自动"
+		return ss(l, "auto")
 	case port == 0:
 		return host
 	}
@@ -293,7 +313,7 @@ func (h *Hub) removeMailAccount(_ context.Context, id string) (*selfChange, erro
 	for _, a := range as {
 		if a.ID == id || strings.EqualFold(a.Email, id) {
 			acct := a
-			return &selfChange{summary: fmt.Sprintf("删除邮箱 %s（Persona 不再收它的邮件，邮箱里的邮件不受影响）", acct.Email),
+			return &selfChange{summary: ss(h.userLang(), "remove_mail", i18n.Args{"email": acct.Email}),
 				apply: func(context.Context, map[string]string) (string, error) {
 					if err := h.mail.DeleteAccount(acct.ID); err != nil {
 						return "", err

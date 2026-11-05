@@ -1,0 +1,6 @@
+{
+  "screen": "终端等你处理",
+  "needs_you_other": "{count} 个需要你",
+  "working_other": "{count} 个在工作",
+  "unread_other": "{count} 个做完了"
+}

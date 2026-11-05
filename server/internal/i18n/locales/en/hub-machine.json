@@ -1,0 +1,7 @@
+{
+  "deploy_local": "The hub machine updates along with the hub",
+  "deploy_upgrade_first": "Upgrade the node service on this computer once first. After that you can update it remotely from here",
+  "deploy_offline": "This computer is offline. Update it once it reconnects",
+  "node_no_model_config": "This computer’s node doesn’t support model config yet. Update the node",
+  "done": "Done"
+}

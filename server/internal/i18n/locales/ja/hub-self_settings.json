@@ -1,0 +1,15 @@
+{
+  "title_inbox_rules": "受信トレイの仕分けルール",
+  "title_agent_rules": "AI分身のルール",
+  "title_mail": "メール",
+  "none": "（なし）",
+  "change": "{title}を変更：{before} → {after}",
+  "no_change": "{title}に変更はありません",
+  "field_password": "パスワード / アプリパスワード",
+  "field_password_hint": "多くのメールサービスではアプリパスワードが必要です",
+  "servers_auto": "サーバーは自動検出",
+  "servers_feishu": "Larkメールのサーバー",
+  "auto": "自動",
+  "add_mail": "メールアカウント{email}を追加（{servers}）。パスワードを入力すると、保存前に一度接続を確認します",
+  "remove_mail": "メールアカウント{email}を削除（Personaはこのアカウントのメールを受信しなくなります。メールボックス内のメールには影響しません）"
+}

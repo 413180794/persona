@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -15,7 +16,7 @@ import (
 // (claudedirs.go). Same as the machine settings page (PUT /api/v1/machines/{mid}/claude-dirs/blocked).
 
 func (h *Hub) blockedClaudeDirsSetting() selfSetting {
-	return selfSetting{key: "agents.blocked_claude_dirs", title: "屏蔽的 Claude 配置目录",
+	return selfSetting{key: "agents.blocked_claude_dirs", title: i18n.T(h.userLang(), "hub-self_settings_claudedirs.title"),
 		about: "per machine, Claude Code config directories (CLAUDE_CONFIG_DIR) whose sessions are kept out of Agents: " +
 			"not scanned, not remembered, their sessions not listed (for automations that run claude with a directory of " +
 			"their own). get lists each machine's directories and patterns",
@@ -66,7 +67,7 @@ func (h *Hub) addBlockedClaudeDir(ctx context.Context, v json.RawMessage) (*self
 	if slices.Contains(now, p) {
 		return &selfChange{summary: p + " is already blocked on " + m.cfg.ID + "."}, nil
 	}
-	return &selfChange{summary: fmt.Sprintf("在 %s 上屏蔽 Claude 配置目录 %s（里面的会话不再出现在 Agents，文件不动）", m.cfg.Name, p),
+	return &selfChange{summary: i18n.T(h.userLang(), "hub-self_settings_claudedirs.block", i18n.Args{"machine": m.cfg.Name, "path": p}),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
 			if err := m.setBlockedClaudeDirs(ctx, append(m.blockedClaudeDirs(ctx), p)); err != nil {
 				return "", err
@@ -85,7 +86,7 @@ func (h *Hub) removeBlockedClaudeDir(ctx context.Context, id string) (*selfChang
 	if !slices.Contains(m.blockedClaudeDirs(ctx), p) {
 		return nil, fmt.Errorf("%s is not blocked on %s (get lists the patterns)", p, m.cfg.ID)
 	}
-	return &selfChange{summary: fmt.Sprintf("在 %s 上取消屏蔽 Claude 配置目录 %s（里面的会话重新出现在 Agents）", m.cfg.Name, p),
+	return &selfChange{summary: i18n.T(h.userLang(), "hub-self_settings_claudedirs.unblock", i18n.Args{"machine": m.cfg.Name, "path": p}),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
 			rest := slices.DeleteFunc(m.blockedClaudeDirs(ctx), func(s string) bool { return s == p })
 			if err := m.setBlockedClaudeDirs(ctx, rest); err != nil {

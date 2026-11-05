@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -212,6 +213,11 @@ type fleetInput struct {
 // working (longest first), then finished unseen. Muted agents, idle / offline ones, and /loop agents waiting for
 // their next tick are left out; the assistant only counts when it asks something.
 func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
+	return buildFleetIn(i18n.Default, agents, ixs)
+}
+
+// buildFleetIn is buildFleet with the texts for people in l (the user's language).
+func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) FleetState {
 	byKey := map[string]fleetInput{}
 	for _, a := range agents {
 		byKey[a.Session.MachineID+"/"+a.Session.SessionID] = a
@@ -232,7 +238,7 @@ func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
 		asked[key] = true
 		needs = append(needs, FleetItem{
 			ID: key, Title: agentTitle(a.Session), Place: agentPlace(a.Machine, a.Session), Kind: ix.Kind,
-			Detail: clip(oneLine(interactionDetail(ix)), 60), Interaction: ix.ID, Since: unix(ix.CreatedAt),
+			Detail: clip(oneLine(interactionDetail(l, ix)), 60), Interaction: ix.ID, Since: unix(ix.CreatedAt),
 		})
 	}
 	for _, a := range agents {
@@ -246,7 +252,7 @@ func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
 			if s.Assistant {
 				continue
 			}
-			needs = append(needs, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: proto.IxScreen, Detail: "终端等你处理"})
+			needs = append(needs, FleetItem{ID: key, Title: agentTitle(s), Place: agentPlace(a.Machine, s), Kind: proto.IxScreen, Detail: i18n.T(l, "hub-liveactivity.screen")})
 		case proto.StateWorking:
 			if s.Assistant {
 				st.Assistant = true
@@ -306,7 +312,7 @@ func agentPlace(machine string, s proto.Session) string {
 	return clip(oneLine(place), 32)
 }
 
-func interactionDetail(ix proto.Interaction) string {
+func interactionDetail(l i18n.Lang, ix proto.Interaction) string {
 	switch ix.Kind {
 	case proto.IxPermission:
 		if ix.Summary != "" {
@@ -321,7 +327,7 @@ func interactionDetail(ix proto.Interaction) string {
 		}
 		return ix.Summary
 	}
-	return "终端等你处理"
+	return i18n.T(l, "hub-liveactivity.screen")
 }
 
 func unix(t time.Time) float64 {
@@ -449,7 +455,7 @@ func (la *liveActivities) snapshot() FleetState {
 			})
 		}
 	}
-	return buildFleet(agents, h.pendingInteractions())
+	return buildFleetIn(h.userLang(), agents, h.pendingInteractions())
 }
 
 func (la *liveActivities) run(ctx context.Context) {
@@ -692,7 +698,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 				la.markSent(r.DeviceID, dst, now, true)
 				// 手机静音 while a desktop is online: the activity still starts, without its alert (desktops.go).
 				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline()
-				la.sendStart(d, r, startPayload(dst, now, quiet))
+				la.sendStart(d, r, startPayloadIn(la.h.userLang(), dst, now, quiet))
 			}
 		}
 	}
@@ -723,6 +729,11 @@ func (la *liveActivities) endAll() {
 
 // liveActivityPayload is the APNs body for one event. No `category`, no sound: the interaction push already rang.
 func liveActivityPayload(event string, st FleetState, now time.Time) map[string]any {
+	return liveActivityPayloadIn(i18n.Default, event, st, now)
+}
+
+// liveActivityPayloadIn is liveActivityPayload with a start's alert in l.
+func liveActivityPayloadIn(l i18n.Lang, event string, st FleetState, now time.Time) map[string]any {
 	aps := map[string]any{"timestamp": now.Unix(), "event": event, "content-state": st}
 	switch event {
 	case "end":
@@ -734,14 +745,18 @@ func liveActivityPayload(event string, st FleetState, now time.Time) map[string]
 	if event == "start" {
 		aps["attributes-type"] = "JarvisActivityAttributes"
 		aps["attributes"] = map[string]any{"kind": "fleet"}
-		aps["alert"] = map[string]any{"title": "Persona", "body": fleetSentence(st)}
+		aps["alert"] = map[string]any{"title": "Persona", "body": fleetSentence(l, st)}
 	}
 	return map[string]any{"aps": aps}
 }
 
 // startPayload is a push-to-start; quiet drops its alert (the phone is muted while a desktop is online).
 func startPayload(st FleetState, now time.Time, quiet bool) map[string]any {
-	p := liveActivityPayload("start", st, now)
+	return startPayloadIn(i18n.Default, st, now, quiet)
+}
+
+func startPayloadIn(l i18n.Lang, st FleetState, now time.Time, quiet bool) map[string]any {
+	p := liveActivityPayloadIn(l, "start", st, now)
 	if quiet {
 		delete(p["aps"].(map[string]any), "alert")
 	}
@@ -749,16 +764,16 @@ func startPayload(st FleetState, now time.Time, quiet bool) map[string]any {
 }
 
 // fleetSentence: "2 个需要你 · 3 个在工作", the alert of a push-started activity.
-func fleetSentence(st FleetState) string {
+func fleetSentence(l i18n.Lang, st FleetState) string {
 	var parts []string
 	if st.NeedsYou > 0 {
-		parts = append(parts, fmt.Sprintf("%d 个需要你", st.NeedsYou))
+		parts = append(parts, i18n.T(l, "hub-liveactivity.needs_you", i18n.Args{"count": st.NeedsYou}))
 	}
 	if st.Working > 0 {
-		parts = append(parts, fmt.Sprintf("%d 个在工作", st.Working))
+		parts = append(parts, i18n.T(l, "hub-liveactivity.working", i18n.Args{"count": st.Working}))
 	}
 	if st.Unread > 0 {
-		parts = append(parts, fmt.Sprintf("%d 个做完了", st.Unread))
+		parts = append(parts, i18n.T(l, "hub-liveactivity.unread", i18n.Args{"count": st.Unread}))
 	}
 	return strings.Join(parts, " · ")
 }

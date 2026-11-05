@@ -1,0 +1,5 @@
+{
+  "title": "Blocked Claude config directories",
+  "block": "Block Claude config directory {path} on {machine} (its sessions leave Agents; the files stay)",
+  "unblock": "Unblock Claude config directory {path} on {machine} (its sessions show in Agents again)"
+}

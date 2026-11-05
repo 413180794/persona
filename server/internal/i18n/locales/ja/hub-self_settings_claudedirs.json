@@ -1,0 +1,5 @@
+{
+  "title": "ブロックしたClaudeの設定ディレクトリ",
+  "block": "{machine}でClaudeの設定ディレクトリ{path}をブロック（中のセッションはAgentsに表示されなくなります。ファイルはそのままです）",
+  "unblock": "{machine}でClaudeの設定ディレクトリ{path}のブロックを解除（中のセッションがAgentsに再び表示されます）"
+}

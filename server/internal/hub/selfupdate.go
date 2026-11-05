@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 
@@ -44,11 +45,11 @@ const (
 )
 
 var (
-	errNoUpdate    = errors.New("没有更新的版本")
-	errUpdating    = errors.New("正在更新")
-	errNotRelease  = errors.New("这个 hub 不能自己更新")
-	errUpdateBusy  = errors.New("助手和 Agent 一直在忙，这次没更新，稍后再试")
-	errUpdateAgain = errors.New("自动更新已关")
+	errNoUpdate    = i18n.Err("hub-selfupdate.err_no_update")
+	errUpdating    = i18n.Err("hub-selfupdate.err_updating")
+	errNotRelease  = i18n.Err("hub-selfupdate.err_not_release")
+	errUpdateBusy  = i18n.Err("hub-selfupdate.err_busy")
+	errUpdateAgain = i18n.Err("hub-selfupdate.err_auto_off")
 )
 
 // updateRecord is one update in the history (设置 › hub › 更新记录).
@@ -160,7 +161,7 @@ func (u *updater) boot() (pending bool) {
 	}
 	if p.ToBuild != u.h.build.Number {
 		if u.h.build.Number == p.FromBuild {
-			u.markRolledBack(p, "回到了旧版本")
+			u.markRolledBack(p, su(u.h.userLang(), "reason_went_back"))
 		} else {
 			_ = os.Remove(update.PendingPath(u.dir)) // replaced by a build deployed straight from master: not a failure
 		}
@@ -170,7 +171,7 @@ func (u *updater) boot() (pending bool) {
 	p.Starts++
 	_ = update.Save(update.PendingPath(u.dir), p)
 	if p.Starts > updateMaxStarts {
-		u.rollback(p, fmt.Sprintf("新版本启动了 %d 次都没起来", p.Starts-1))
+		u.rollback(p, su(u.h.userLang(), "reason_no_start", i18n.Args{"count": p.Starts - 1}))
 	}
 	return true
 }
@@ -239,10 +240,11 @@ func (u *updater) recordRolledBack(ctx context.Context) {
 	}
 	u.record(ctx, updateRecord{FromVersion: rb.FromVersion, ToVersion: rb.ToVersion, ToBuild: rb.ToBuild, Started: rb.Started,
 		Ended: rb.At, Result: "rolled_back", Reason: rb.Reason, Auto: rb.Auto})
-	why := fmt.Sprintf("更新到 %s 没成功，已回到 %s：%s", rb.ToVersion, u.h.version, rb.Reason)
+	l := u.h.userLang()
+	why := su(l, "rolled_back", i18n.Args{"to": rb.ToVersion, "from": u.h.version, "reason": rb.Reason})
 	u.set("rolled_back", "", why)
 	_ = os.Remove(update.RolledBackPath(u.dir))
-	u.notify("hub 更新没成功", why+"。这一版不会再自动装。")
+	u.notify(su(l, "push_failed_title"), su(l, "push_failed_body", i18n.Args{"why": why}))
 	u.h.logf("update: %s went back to %s: %s", rb.ToVersion, u.h.version, rb.Reason)
 }
 
@@ -264,9 +266,10 @@ func (u *updater) confirm(ctx context.Context, p update.Pending) {
 			break
 		}
 		if !time.Now().Before(deadline) {
-			why := "连不上数据库"
+			l := u.h.userLang()
+			why := su(l, "reason_no_database")
 			if dbOK {
-				why = "这些机器 2 分钟内没连回来：" + strings.Join(missing, "、")
+				why = su(l, "reason_machines_missing", i18n.Args{"machines": strings.Join(missing, su(l, "list_sep"))})
 			}
 			u.rollback(p, why)
 			return
@@ -286,7 +289,8 @@ func (u *updater) confirm(ctx context.Context, p update.Pending) {
 	u.set("updated", "", "")
 	u.h.logf("update: %s -> %s confirmed", p.FromVersion, p.ToVersion)
 	if p.Auto { // one the user started is watched in the app
-		u.notify("hub 已更新到 "+p.ToVersion, "助手和 Agent 都空闲时自动装上的；各台电脑上的 jarvisd 也会换成这一版。")
+		l := u.h.userLang()
+		u.notify(su(l, "push_updated_title", i18n.Args{"version": p.ToVersion}), su(l, "push_updated_body"))
 	}
 	u.updateNodes(ctx, p.Nodes)
 }
@@ -432,7 +436,7 @@ func (u *updater) check(ctx context.Context) (*update.Published, error) {
 	}
 	u.mu.Unlock()
 	if err != nil {
-		u.set("idle", "", "检查更新失败："+err.Error())
+		u.set("idle", "", su(u.h.userLang(), "check_failed", i18n.Args{"error": i18n.Localize(err, u.h.userLang())}))
 		return nil, err
 	}
 	if u.h.build.Newer(r.Manifest.Build) {
@@ -468,14 +472,30 @@ func (u *updater) begin(ctx context.Context, now bool) error {
 	return nil
 }
 
+// whyNot is why this hub cannot update itself (begin's error); whyNotReason is the reason alone (the view's why_not).
 func (u *updater) whyNot() error {
+	key, args := u.whyNotKey()
+	return i18n.Err("hub-selfupdate.not_release_"+key, args)
+}
+
+func (u *updater) whyNotReason(l i18n.Lang) string {
+	key, args := u.whyNotKey()
+	return su(l, "why_"+key, args)
+}
+
+func (u *updater) whyNotKey() (string, i18n.Args) {
 	switch u.h.build.Channel {
 	case update.Docker:
-		return fmt.Errorf("%w：Docker 里的 hub 由新镜像更新（docker compose pull && docker compose up -d）", errNotRelease)
+		return "docker", nil
 	case update.Release:
-		return fmt.Errorf("%w：不知道去哪里找新版本", errNotRelease)
+		return "no_source", nil
 	}
-	return fmt.Errorf("%w：开发版（%s）", errNotRelease, u.h.version)
+	return "dev", i18n.Args{"version": u.h.version}
+}
+
+// su is a hub-selfupdate text in l.
+func su(l i18n.Lang, name string, args ...i18n.Args) string {
+	return i18n.T(l, "hub-selfupdate."+name, args...)
 }
 
 // install is one update: download, verify, wait for idle, swap, restart. It returns only when it did not restart.
@@ -494,15 +514,16 @@ func (u *updater) install(ctx context.Context, auto bool) {
 		u.running, u.now = false, false
 		u.busy = nil
 		u.mu.Unlock()
-		u.set("failed", "", err.Error())
+		why := i18n.Localize(err, u.h.userLang())
+		u.set("failed", "", why)
 		u.record(ctx, updateRecord{FromVersion: u.h.version, ToVersion: r.Manifest.Version, ToBuild: r.Manifest.Build,
-			Started: started, Ended: time.Now(), Result: "failed", Reason: err.Error(), Auto: auto})
+			Started: started, Ended: time.Now(), Result: "failed", Reason: why, Auto: auto})
 		u.h.logf("update to %s: %v", r.Manifest.Version, err)
 	}
 	m := r.Manifest
 	file, ok := m.Files[runtime.GOOS+"-"+runtime.GOARCH]
 	if !ok {
-		fail(fmt.Errorf("这个版本没有 %s/%s 的二进制", runtime.GOOS, runtime.GOARCH))
+		fail(i18n.Err("hub-selfupdate.err_no_binary", i18n.Args{"platform": runtime.GOOS + "/" + runtime.GOARCH}))
 		return
 	}
 	staged := filepath.Join(u.dir, fmt.Sprint(m.Build))
@@ -661,7 +682,7 @@ func (h *Hub) updateBusy() []busyItem {
 	var out []busyItem
 	for _, m := range h.machinesNow() {
 		if m.snapshot().Deploying {
-			out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, Title: "正在重新部署"})
+			out = append(out, busyItem{MachineID: m.cfg.ID, Machine: m.cfg.Name, Title: su(h.userLang(), "busy_redeploying")})
 		}
 		for _, s := range h.decorated(m) {
 			// On a turn, not working on in the background (#2228): a server an agent left running would hold the
@@ -723,7 +744,10 @@ type latestView struct {
 	Held string `json:"held,omitempty"`
 }
 
-func (u *updater) view() updateView {
+func (u *updater) view() updateView { return u.viewIn(u.h.userLang()) }
+
+// viewIn is the view with its texts for people in l.
+func (u *updater) viewIn(l i18n.Lang) updateView {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	v := updateView{Version: u.h.version, Build: u.h.build.Number, Channel: u.h.build.Channel, CanUpdate: u.h.build.SelfUpdates(),
@@ -733,7 +757,7 @@ func (u *updater) view() updateView {
 		v.Busy = []busyItem{}
 	}
 	if !v.CanUpdate {
-		v.Why = strings.TrimPrefix(u.whyNot().Error(), errNotRelease.Error()+"：")
+		v.Why = u.whyNotReason(l)
 	}
 	if !u.lastCheck.IsZero() {
 		t := u.lastCheck
@@ -772,7 +796,7 @@ func (u *updater) dockerImage() (update.Image, error) {
 		s = u.h.build.Image
 	}
 	if s == "" {
-		return update.Image{}, errors.New("不知道这个 hub 是哪个镜像：compose 没把 JARVIS_IMAGE 传进容器")
+		return update.Image{}, i18n.Err("hub-selfupdate.err_no_image")
 	}
 	return update.ParseImage(s)
 }
@@ -782,7 +806,7 @@ func (u *updater) dockerImage() (update.Image, error) {
 func (u *updater) checkImage(ctx context.Context) error {
 	im, err := u.dockerImage()
 	if err != nil {
-		u.set("idle", "", err.Error())
+		u.set("idle", "", i18n.Localize(err, u.h.userLang()))
 		return err
 	}
 	u.setState("checking")
@@ -797,9 +821,9 @@ func (u *updater) checkImage(ctx context.Context) error {
 	u.mu.Unlock()
 	switch {
 	case errors.Is(err, update.ErrPrivate):
-		u.set("idle", "", "查不了新镜像："+err.Error()+"。在 .env 里设 JARVIS_REGISTRY_TOKEN（能读这个镜像的 token），或者把镜像改成公开")
+		u.set("idle", "", su(u.h.userLang(), "image_private", i18n.Args{"error": err.Error()}))
 	case err != nil:
-		u.set("idle", "", "查不了新镜像："+err.Error())
+		u.set("idle", "", su(u.h.userLang(), "image_failed", i18n.Args{"error": err.Error()}))
 	case update.NewerVersion(newest, u.h.version):
 		u.set("available", "", "")
 	default:
@@ -811,7 +835,7 @@ func (u *updater) checkImage(ctx context.Context) error {
 func (u *updater) routes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/hub/update", func(w http.ResponseWriter, r *http.Request) {
 		u.load(r.Context())
-		writeJSON(w, u.view())
+		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("POST /api/v1/hub/update/check", func(w http.ResponseWriter, r *http.Request) {
 		u.load(r.Context())
@@ -819,7 +843,7 @@ func (u *updater) routes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadGateway, err)
 			return
 		}
-		writeJSON(w, u.view())
+		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("POST /api/v1/hub/update", func(w http.ResponseWriter, r *http.Request) {
 		u.load(r.Context())
@@ -832,7 +856,7 @@ func (u *updater) routes(api *http.ServeMux) {
 			writeErr(w, http.StatusConflict, err)
 			return
 		}
-		writeJSON(w, u.view())
+		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("PUT /api/v1/hub/update/settings", func(w http.ResponseWriter, r *http.Request) {
 		u.load(r.Context())
@@ -855,7 +879,7 @@ func (u *updater) routes(api *http.ServeMux) {
 		}
 		u.saveLocked(r.Context())
 		u.mu.Unlock()
-		writeJSON(w, u.view())
+		writeJSON(w, u.viewIn(u.h.requestLang(r)))
 	})
 	api.HandleFunc("GET /api/v1/hub/update/history", func(w http.ResponseWriter, r *http.Request) {
 		u.load(r.Context())

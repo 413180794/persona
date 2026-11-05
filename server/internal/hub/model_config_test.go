@@ -13,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/ai"
 	"github.com/nwverse/persona/server/internal/assistant"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -370,7 +371,7 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	}
 
 	// Nothing to call: the status and the error say where to fix it, not only hub.json.
-	if p := purpose("inbox.draft"); p.Status != modelNoAPIStatus {
+	if p := purpose("inbox.draft"); p.Status != i18n.T(i18n.Default, "hub-model_config."+modelNoAPIStatus) {
 		t.Fatalf("unconfigured status: %+v", p)
 	}
 	if _, err := h.purposeModel("inbox.draft").Complete(ctx, "", "", 10); err == nil || !strings.Contains(err.Error(), "设置 › 模型配置") {
@@ -400,7 +401,7 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 			t.Fatalf("%s: sent %q, %v", id, model, err)
 		}
 	}
-	if p := purpose("kb"); p.InheritedFrom != modelAutoSource {
+	if p := purpose("kb"); p.InheritedFrom != i18n.T(i18n.Default, "hub-model_config."+modelAutoSource) {
 		t.Fatalf("fallback not labelled: %+v", p)
 	}
 	if p := purpose("translate"); p.InheritedFrom != "信息处理" {

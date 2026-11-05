@@ -1,0 +1,9 @@
+{
+  "err_forbidden": "Browser sign-ins can only be managed from an app or web page you signed in to yourself",
+  "err_off": "The browser extension is off, or this isn’t a Mac",
+  "err_offline": "This Mac is offline. Import or view while it’s online",
+  "err_bad_cookies": "Couldn’t read the cookies to import",
+  "err_no_cookies": "No cookies to import",
+  "err_which_sites": "Which sites should be cleared?",
+  "err_outdated": "The personad on this computer is too old to import cookies. Redeploy it"
+}

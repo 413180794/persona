@@ -17,11 +17,13 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -336,48 +338,48 @@ type launcherInput struct {
 	Preset string `json:"preset,omitempty"`
 }
 
-var errNoPreset = errors.New("没有这个供应商预设（提供它的扩展停用或卸载了？）")
+var errNoPreset = i18n.Err("hub-launchers.err_no_preset")
 
 func (in launcherInput) check() error {
 	if in.Kind != "" && in.Kind != "api" && in.Kind != "launcher" {
-		return errors.New("接入类型不支持")
+		return i18n.Err("hub-launchers.err_kind")
 	}
 	if in.API != "" && in.API != "messages" && in.API != "responses" {
-		return errors.New("API 协议不支持")
+		return i18n.Err("hub-launchers.err_api")
 	}
 	if in.Kind != "api" && in.API == "responses" {
-		return errors.New("Claude 启动器只支持 Messages 接入")
+		return i18n.Err("hub-launchers.err_claude_messages")
 	}
 	if in.Auth != "" && in.Auth != "api_key" && in.Auth != "bearer" {
-		return errors.New("认证方式不支持")
+		return i18n.Err("hub-launchers.err_auth")
 	}
 	if in.Kind == "api" && (len(in.Args) != 0 || in.SmallModel != "" || in.SubagentModel != "" || in.CustomModel != "") {
-		return errors.New("直接 API 接入不能设置启动参数、小模型或子 Agent 模型")
+		return i18n.Err("hub-launchers.err_api_launch_fields")
 	}
-	for _, v := range []struct{ name, value string }{{"子 Agent 模型", in.SubagentModel}, {"自定义模型", in.CustomModel}} {
+	for _, v := range []struct{ name, value string }{{"err_subagent_model_long", in.SubagentModel}, {"err_custom_model_long", in.CustomModel}} {
 		if len(strings.TrimSpace(v.value)) > 200 {
-			return fmt.Errorf("%s太长", v.name)
+			return i18n.Err("hub-launchers." + v.name)
 		}
 	}
 	if in.CustomModelName == "" && in.CustomModelDescription != "" {
-		return errors.New("自定义模型的说明要配一个名字")
+		return i18n.Err("hub-launchers.err_custom_model_name")
 	}
 	if !managedLauncherName.MatchString(in.Name) || in.Name == "claude" || in.Name == "presets" {
-		return errors.New("名字只能用字母、数字、_ 和 -，以字母或 _ 开头（不能叫 claude）")
+		return i18n.Err("hub-launchers.err_name")
 	}
 	u, err := url.Parse(strings.TrimSpace(in.BaseURL))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("Base URL 要是 http(s):// 开头的地址")
+		return i18n.Err("hub-launchers.err_base_url")
 	}
 	if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return errors.New("Base URL 不能包含账号、凭据、查询参数或片段，请把凭据填在 API Key 中")
+		return i18n.Err("hub-launchers.err_base_url_parts")
 	}
 	if strings.TrimSpace(in.Model) == "" {
-		return errors.New("要填模型")
+		return i18n.Err("hub-launchers.err_model_required")
 	}
 	for _, a := range in.Args {
 		if !strings.HasPrefix(a, "-") {
-			return fmt.Errorf("额外参数 %q 要以 - 开头", a)
+			return i18n.Err("hub-launchers.err_arg_dash", i18n.Args{"arg": strconv.Quote(a)})
 		}
 	}
 	return nil
@@ -459,7 +461,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 		ctx := r.Context()
 		for _, v := range h.launcherViews(ctx) {
 			if v.Name == in.Name {
-				writeErr(w, http.StatusConflict, fmt.Errorf("已经有叫 %s 的启动器了", in.Name))
+				writeErr(w, http.StatusConflict, i18n.Err("hub-launchers.err_name_taken", i18n.Args{"name": in.Name}))
 				return
 			}
 		}
@@ -482,7 +484,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				return
 			}
 		}
-		writeErr(w, http.StatusNotFound, errors.New("只能改 Persona 里加的启动器；~/.zshrc 里的请在那台电脑上改"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-launchers.err_not_managed"))
 	})
 	api.HandleFunc("DELETE /api/v1/launchers/{name}", func(w http.ResponseWriter, r *http.Request) {
 		ctx, name := r.Context(), r.PathValue("name")
@@ -496,7 +498,7 @@ func (h *Hub) launcherRoutes(api *http.ServeMux) {
 				return
 			}
 			if len(uses) > 0 {
-				writeErr(w, 409, fmt.Errorf("这个供应商仍被 %s 使用，请先在模型配置中更换", strings.Join(uses, "、")))
+				writeErr(w, 409, i18n.Err("hub-launchers.err_in_use", i18n.Args{"uses": strings.Join(uses, i18n.T(h.requestLang(r), "hub-launchers.list_sep"))}))
 				return
 			}
 			list = slices.Delete(list, i, i+1)
@@ -783,7 +785,7 @@ func writeLauncherModelsErr(w http.ResponseWriter, err error) {
 	var re *rpc.Error
 	if errors.As(err, &re) && strings.HasPrefix(re.Message, "unknown method") {
 		// 404 like an older hub: the apps leave the picker out instead of offering a retry that cannot work.
-		writeCode(w, http.StatusNotFound, proto.CodeNodeOutdated, "这台机器上的 personad 太旧，列不出模型，需要重新部署", nil)
+		writeCode(w, http.StatusNotFound, proto.CodeNodeOutdated, i18n.T(i18n.OfWriter(w), "hub-launchers.err_node_outdated"), nil)
 		return
 	}
 	callErr(w, err)
@@ -798,7 +800,7 @@ func (h *Hub) providerModels(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	name, ok := strings.CutPrefix(r.PathValue("id"), "launcher.")
 	if !ok || name == "" {
-		writeErr(w, http.StatusNotFound, errors.New("这个供应商没有可列的模型"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-launchers.err_no_models"))
 		return
 	}
 	found, everywhere := name == "claude", name == "claude"
@@ -808,7 +810,7 @@ func (h *Hub) providerModels(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if v.Kind == "api" {
-			writeErr(w, http.StatusNotFound, errors.New("直接 API 接入没有可列的模型"))
+			writeErr(w, http.StatusNotFound, i18n.Err("hub-launchers.err_api_no_models"))
 			return
 		}
 		found = true
@@ -816,7 +818,7 @@ func (h *Hub) providerModels(w http.ResponseWriter, r *http.Request) {
 		has = append(has, v.Machines...)
 	}
 	if !found {
-		writeErr(w, http.StatusNotFound, errors.New("没有这个供应商"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-launchers.err_no_provider"))
 		return
 	}
 	if everywhere {
@@ -827,7 +829,7 @@ func (h *Hub) providerModels(w http.ResponseWriter, r *http.Request) {
 	}
 	m := h.quotaMachine(ctx, has, r.URL.Query().Get("machine"))
 	if m == nil {
-		writeErr(w, http.StatusServiceUnavailable, errors.New("有这个启动器的电脑都不在线，列不出模型"))
+		writeErr(w, http.StatusServiceUnavailable, i18n.Err("hub-launchers.err_all_offline"))
 		return
 	}
 	res, err := h.askLauncherModels(ctx, m, name, r.URL.Query().Get("refresh") == "1")

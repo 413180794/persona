@@ -1,0 +1,11 @@
+{
+  "note_outdated": "这台电脑上的 personad 太旧，还不会操控电脑：重新部署它",
+  "err_off": "操控电脑的扩展没打开，或这台不是 Mac",
+  "err_not_enabled": "操控电脑没有对这台打开",
+  "err_offline": "机器离线",
+  "err_outdated_lock": "这台电脑上的 personad 太旧，还不会锁屏：重新部署它",
+  "err_outdated_install": "这台电脑上的 personad 太旧，还不会安装 Cua Driver：重新部署它",
+  "confirm_script": "在「{machine}」上运行脚本：{line}",
+  "confirm_steps": "在「{machine}」上依次执行：{steps}",
+  "list_sep": "、"
+}

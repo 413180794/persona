@@ -12,13 +12,13 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -29,15 +29,15 @@ const maxCookieBody = 8 << 20
 // ?site=a&site=b or ?all=1 (clear).
 func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if !byOwnDevice(r.Context()) {
-		writeErr(w, http.StatusForbidden, errors.New("只能在你自己登录的 App 或网页上管理浏览器登录"))
+		writeErr(w, http.StatusForbidden, i18n.Err("hub-browser_cookies.err_forbidden"))
 		return
 	}
 	if h.browserOf(m) == nil {
-		writeErr(w, http.StatusNotFound, errors.New("浏览器扩展没打开，或这台不是 Mac"))
+		writeErr(w, http.StatusNotFound, i18n.Err("hub-browser_cookies.err_off"))
 		return
 	}
 	if !m.isOnline() {
-		writeErr(w, http.StatusConflict, errors.New("这台 Mac 离线：它在线时才能导入或查看"))
+		writeErr(w, http.StatusConflict, i18n.Err("hub-browser_cookies.err_offline"))
 		return
 	}
 	method, params := "browser.cookies.list", map[string]any{}
@@ -48,11 +48,11 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 			Cookies []proto.BrowserCookie `json:"cookies"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxCookieBody)).Decode(&in); err != nil {
-			writeErr(w, http.StatusBadRequest, errors.New("读不懂要导入的 cookie"))
+			writeErr(w, http.StatusBadRequest, i18n.Err("hub-browser_cookies.err_bad_cookies"))
 			return
 		}
 		if len(in.Cookies) == 0 {
-			writeErr(w, http.StatusBadRequest, errors.New("没有要导入的 cookie"))
+			writeErr(w, http.StatusBadRequest, i18n.Err("hub-browser_cookies.err_no_cookies"))
 			return
 		}
 		method, params["cookies"] = "browser.cookies.import", in.Cookies
@@ -62,7 +62,7 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 		all := q.Get("all") == "1"
 		sites := q["site"]
 		if !all && len(sites) == 0 {
-			writeErr(w, http.StatusBadRequest, errors.New("清除哪些网站？"))
+			writeErr(w, http.StatusBadRequest, i18n.Err("hub-browser_cookies.err_which_sites"))
 			return
 		}
 		method, params["sites"], params["all"] = "browser.cookies.clear", sites, all
@@ -76,7 +76,7 @@ func (h *Hub) browserCookies(w http.ResponseWriter, r *http.Request, m *Machine)
 	var out proto.BrowserCookies
 	if err := m.callBuiltin(ctx, method, params, &out); err != nil {
 		if strings.Contains(err.Error(), "unknown method") {
-			err = errors.New("这台电脑上的 personad 太旧，还不会导入 cookie：重新部署它")
+			err = i18n.Err("hub-browser_cookies.err_outdated")
 		}
 		writeErr(w, http.StatusConflict, err)
 		return

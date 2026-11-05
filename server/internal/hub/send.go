@@ -13,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -171,12 +172,13 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	if ch := channel.FromClientMsgID(id, []string{"voice"}); ch != "" {
 		h.channelNoted(ch, m.cfg.ID, sid) // a voice conversation's errand (docs/channels.md「来源标记」)
 	}
+	l := h.requestLang(r)
 	external := false
 	if s, ok := m.session(sid); ok {
 		external = s.SourceKind != ""
 	}
 	if external && id == "" {
-		callErr(w, &rpc.Error{Code: "codex_send_guard", Message: "发送到 app-server 必须带消息标识，避免断线后重复发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+		callErr(w, &rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_need_id"), Data: json.RawMessage(`{"delivered":"none"}`)})
 		return
 	}
 	if id == "" {
@@ -203,7 +205,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return
 	}
 	if external && h.store == nil {
-		f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+		f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
 		close(f.done)
 		h.sends.forget(id, f)
 		writeRaw(w, f.status, f.body)
@@ -214,7 +216,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 		var err error
 		if state, err = h.store.ClaimSend(ctx, id, m.cfg.ID, sid); err != nil {
 			if external {
-				f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: "无法记录消息标识，未向 app-server 发送", Data: json.RawMessage(`{"delivered":"none"}`)})
+				f.status, f.body = callErrBytes(&rpc.Error{Code: "codex_send_guard", Message: i18n.T(l, "hub-send.guard_no_record"), Data: json.RawMessage(`{"delivered":"none"}`)})
 				close(f.done)
 				h.sends.forget(id, f)
 				writeRaw(w, f.status, f.body)
@@ -227,7 +229,7 @@ func (h *Hub) sendMessage(w http.ResponseWriter, r *http.Request, m *Machine) {
 	case sendDelivered:
 		f.status, f.body = http.StatusOK, []byte("{}\n")
 	case sendSending, sendUnknown: // an earlier hub or connection was sending it and never learned the outcome
-		f.status, f.body = callErrBytes(unknownDelivery("这条消息之前发送时连接断了"))
+		f.status, f.body = callErrBytes(unknownDelivery(l, "hub-send.lost_before"))
 	default:
 		var outcome string
 		f.status, f.body, outcome = h.deliverOnce(ctx, m, p)
@@ -265,7 +267,7 @@ func (h *Hub) deliverOnce(ctx context.Context, m *Machine, p map[string]any) (in
 		}
 		return http.StatusOK, append(out, '\n'), outcome
 	case outcome == sendUnknown && !hasDelivered(err):
-		status, body := callErrBytes(unknownDelivery("发送途中和电脑的连接断了"))
+		status, body := callErrBytes(unknownDelivery(h.requestCtxLang(ctx), "hub-send.lost_during"))
 		return status, body, outcome
 	default:
 		status, body := callErrBytes(err)
@@ -306,8 +308,9 @@ func hasDelivered(err error) bool {
 	return errors.As(err, &re) && bytes.Contains(re.Data, []byte(`"delivered"`))
 }
 
-func unknownDelivery(why string) error {
-	return &rpc.Error{Message: why + "：它可能已经送到电脑上了，先看看对话里有没有，再决定要不要重发", Data: json.RawMessage(`{"delivered":"unknown"}`)}
+// unknownDelivery says, in l, why (a hub-send key) the outcome is unknown.
+func unknownDelivery(l i18n.Lang, why string) error {
+	return &rpc.Error{Message: i18n.T(l, "hub-send.unknown", i18n.Args{"why": i18n.T(l, why)}), Data: json.RawMessage(`{"delivered":"unknown"}`)}
 }
 
 // callErrBytes is callErr's response as bytes, so waiting retries can get the same one.

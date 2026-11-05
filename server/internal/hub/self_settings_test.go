@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/mail"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -24,12 +25,12 @@ func (f *selfSettingsMail) AddAccount(req mail.AddAccountRequest) (*mail.MailAcc
 }
 
 func TestSelfSettingsMailRequest(t *testing.T) {
-	req, summary, err := mailAccountRequest(json.RawMessage(`{"email":" Me@Example.com ","imap_host":"imap.example.com","imap_port":993,"smtp_host":"smtp.example.com"}`))
+	req, summary, err := mailAccountRequest(i18n.Default, json.RawMessage(`{"email":" Me@Example.com ","imap_host":"imap.example.com","imap_port":993,"smtp_host":"smtp.example.com"}`))
 	if err != nil || req.Email != "me@example.com" || req.Password != "" || req.Provider != mail.ProviderIMAP || !strings.Contains(summary, "imap.example.com:993") {
 		t.Fatalf("request %+v, summary %q, error %v", req, summary, err)
 	}
 	for _, input := range []string{`{"email":"a@gmail.com"}`, `{"email":"a@example.com","provider":"gmail"}`, `{"email":"nope"}`} {
-		if _, _, err := mailAccountRequest(json.RawMessage(input)); err == nil {
+		if _, _, err := mailAccountRequest(i18n.Default, json.RawMessage(input)); err == nil {
 			t.Fatalf("accepted %s", input)
 		}
 	}

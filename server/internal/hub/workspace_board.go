@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/workspaceboard"
 )
@@ -36,7 +36,7 @@ func (h *Hub) workspaceBoardRoutes(api *http.ServeMux) {
 func (h *Hub) boardStore(w http.ResponseWriter) workspaceBoardStore {
 	s, ok := h.store.(workspaceBoardStore)
 	if !ok {
-		writeErrCode(w, 503, "not_supported", errors.New("工作区看板需要支持此功能的数据库"))
+		writeErrCode(w, 503, "not_supported", i18n.Err("hub-workspace_board.err_no_store"))
 		return nil
 	}
 	return s
@@ -86,7 +86,7 @@ func (h *Hub) getWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 
 func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 	if principalOf(r.Context()).Role != roleFull {
-		writeErr(w, 403, errors.New("只读设备不能修改工作区看板"))
+		writeErr(w, 403, i18n.Err("hub-workspace_board.err_readonly"))
 		return
 	}
 	store := h.boardStore(w)
@@ -96,7 +96,7 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	var fields map[string]json.RawMessage
 	if err != nil || json.Unmarshal(body, &fields) != nil || fields["revision"] == nil || strings.TrimSpace(string(fields["revision"])) == "null" {
-		writeErr(w, 400, errors.New("需要有效请求和 revision"))
+		writeErr(w, 400, i18n.Err("hub-workspace_board.err_bad_request"))
 		return
 	}
 	var op workspaceboard.Mutation
@@ -123,7 +123,7 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, card := range state.Cards {
 			if h.effectiveBoardMachine(card.MachineID) == op.MachineID && workspaceDirectory(card.Cwd) == workspaceDirectory(op.Cwd) {
-				writeErr(w, 400, errors.New("该目录已绑定卡片，请查看现有或已归档卡片"))
+				writeErr(w, 400, i18n.Err("hub-workspace_board.err_already_bound"))
 				return
 			}
 		}
@@ -153,10 +153,10 @@ func (h *Hub) mutateWorkspaceBoard(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation) error {
 	m := h.localMachine(op.MachineID)
 	if m == nil {
-		return errors.New("未知电脑")
+		return i18n.Err("hub-workspace_board.err_unknown_machine")
 	}
 	if !m.isOnline() {
-		return errors.New("电脑离线，恢复连接后再绑定工作区")
+		return i18n.Err("hub-workspace_board.err_offline")
 	}
 	op.MachineID = m.cfg.ID
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
@@ -176,7 +176,7 @@ func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation)
 		if selected == nil {
 			var found proto.WorkspacesResponse
 			if err := m.call(ctx, "workspaces.list", map[string]any{}, &found); err != nil {
-				return fmt.Errorf("工作区枚举失败，请检查 node 版本：%w", err)
+				return i18n.Err("hub-workspace_board.err_list_failed", i18n.Args{"error": err.Error()})
 			}
 			for _, item := range found.Workspaces {
 				candidate := qualifyWorkspace(m.cfg.ID, item)
@@ -187,23 +187,23 @@ func (h *Hub) resolveBoardCard(ctx context.Context, op *workspaceboard.Mutation)
 			}
 		}
 		if selected == nil {
-			return errors.New("工作区已变化，请刷新后重新选择")
+			return i18n.Err("hub-workspace_board.err_changed")
 		}
 		if selected.Cwd == "" {
-			return errors.New("该工作区没有可确认的代码目录，请直接绑定目录")
+			return i18n.Err("hub-workspace_board.err_no_directory")
 		}
 		op.Cwd = selected.Cwd
 	}
 
 	if strings.TrimSpace(op.Cwd) == "" {
-		return errors.New("请选择真实代码目录")
+		return i18n.Err("hub-workspace_board.err_pick_directory")
 	}
 	var resolved proto.Workspace
 	if err := m.call(ctx, "workspace.resolve", map[string]any{"path": op.Cwd}, &resolved); err != nil {
-		return fmt.Errorf("目录验证失败，请检查路径与 node 版本：%w", err)
+		return i18n.Err("hub-workspace_board.err_resolve_failed", i18n.Args{"error": err.Error()})
 	}
 	if resolved.Cwd == "" || !resolved.Available {
-		return errors.New("目录验证没有返回可用工作区")
+		return i18n.Err("hub-workspace_board.err_resolve_empty")
 	}
 	if selected != nil {
 		op.Source, op.SourceID, op.Branch = selected.Source, selected.SourceID, selected.Branch
@@ -269,6 +269,7 @@ type workspaceDiscoveryError struct {
 }
 
 func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
+	l := h.requestLang(r)
 	store := h.boardStore(w)
 	if store == nil {
 		return
@@ -369,7 +370,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 		if entries == nil {
 			if old, ok := byMachine[m.cfg.ID]; ok {
 				if err := json.Unmarshal(old.Data, &entries); err != nil {
-					errs = append(errs, workspaceDiscoveryError{m.cfg.ID, "工作区历史快照无法读取"})
+					errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.T(l, "hub-workspace_board.err_snapshot_read")})
 				}
 			}
 		}
@@ -403,7 +404,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if result.err != nil {
-			errs = append(errs, workspaceDiscoveryError{m.cfg.ID, result.err.Error()})
+			errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.Localize(result.err, l)})
 		}
 		m.mu.Lock()
 		sessions := append([]proto.Session(nil), m.sessions...)
@@ -448,7 +449,7 @@ func (h *Hub) getWorkspaces(w http.ResponseWriter, r *http.Request) {
 		if online && (result.err == nil || len(sessions) > 0) {
 			raw, _ := json.Marshal(entries)
 			if err := store.SaveWorkspaceSnapshot(r.Context(), m.cfg.ID, raw); err != nil {
-				errs = append(errs, workspaceDiscoveryError{m.cfg.ID, "保存工作区快照失败"})
+				errs = append(errs, workspaceDiscoveryError{m.cfg.ID, i18n.T(l, "hub-workspace_board.err_snapshot_save")})
 			}
 		}
 		for _, item := range entries {

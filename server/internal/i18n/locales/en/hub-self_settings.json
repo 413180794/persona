@@ -1,0 +1,15 @@
+{
+  "title_inbox_rules": "Inbox sorting rules",
+  "title_agent_rules": "AI twin rules",
+  "title_mail": "Mail",
+  "none": "(none)",
+  "change": "Change {title}: {before} → {after}",
+  "no_change": "{title}: no change",
+  "field_password": "Password / app password",
+  "field_password_hint": "Many providers need an app password",
+  "servers_auto": "servers detected automatically",
+  "servers_feishu": "Lark Mail’s servers",
+  "auto": "auto",
+  "add_mail": "Add mail account {email} ({servers}). After you enter the password it connects once before saving",
+  "remove_mail": "Remove mail account {email} (Persona stops receiving its mail; the mail in the mailbox isn’t affected)"
+}

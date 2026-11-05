@@ -10,6 +10,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -114,7 +115,7 @@ func (h *Hub) terminalSubscribe(ctx context.Context, c *client, machineID, sessi
 	switch {
 	case ctl != nil && r.controller != c:
 		if old := r.controller; old != nil { // the newest device drives; the one before watches
-			old.sendTerm(termControlMessage(machineID, sessionID, "taken", nil, "另一台设备接管了这个终端"))
+			old.sendTerm(termControlMessage(machineID, sessionID, "taken", nil, i18n.T(old.lang(), "hub-terminal.taken_by_device")))
 		}
 		r.controller, r.ctl, r.takeover, sync = c, *ctl, takeover, true
 	case ctl != nil: // the same app again (it lost frames, or reconnected): continue, at its size now
@@ -204,7 +205,7 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 			r.controller, r.takeover = nil, false
 		}
 		r.synced, r.observing = nil, false // the node stopped watching to try: watch again
-		controller.sendTerm(termControlMessage(key[0], key[1], "busy", nil, "电脑上另一个程序正在使用这个终端"))
+		controller.sendTerm(termControlMessage(key[0], key[1], "busy", nil, i18n.T(controller.lang(), "hub-terminal.busy")))
 		return true
 	case err != nil:
 		go h.terminalEnded(key[0], key[1], err.Error(), r)
@@ -214,7 +215,7 @@ func (h *Hub) terminalSyncOnce(ctx context.Context, m *Machine, key [2]string, r
 			r.controller, r.takeover = nil, false
 		}
 		r.synced, r.observing = nil, true // it ignored control and watches
-		controller.sendTerm(termControlMessage(key[0], key[1], "unsupported", nil, "这台电脑的 Persona 或 herdr 太旧，只能看不能接管"))
+		controller.sendTerm(termControlMessage(key[0], key[1], "unsupported", nil, i18n.T(controller.lang(), "hub-terminal.unsupported")))
 	case controller != nil:
 		r.synced, r.observing = &termCtl{ctl.Cols, ctl.Rows}, false
 		if r.controller == controller {
@@ -437,12 +438,12 @@ func (h *Hub) terminalControlEnded(machineID, sessionID, why string, taken bool)
 		t.mu.Unlock()
 		return
 	}
-	state, text := "lost", "终端已回到电脑上的尺寸"
+	state, text := "lost", "hub-terminal.lost"
 	if taken {
-		state, text = "taken", "电脑上另一个程序接管了这个终端"
+		state, text = "taken", "hub-terminal.taken_by_program"
 	}
 	if c := r.controller; c != nil {
-		c.sendTerm(termControlMessage(machineID, sessionID, state, nil, text))
+		c.sendTerm(termControlMessage(machineID, sessionID, state, nil, i18n.T(c.lang(), text)))
 	}
 	r.controller, r.synced, r.observing = nil, nil, false
 	t.mu.Unlock()
@@ -493,7 +494,9 @@ func (c *client) sendTerm(v any) {
 }
 
 // terminalsOffline ends every stream of a machine whose node went away.
-func (h *Hub) terminalsOffline(machineID string) { h.terminalsEnded(machineID, "电脑离线") }
+func (h *Hub) terminalsOffline(machineID string) {
+	h.terminalsEnded(machineID, i18n.T(h.userLang(), "hub-terminal.offline"))
+}
 
 // terminalsEnded ends every terminal stream of the machine, saying why.
 func (h *Hub) terminalsEnded(machineID, why string) {

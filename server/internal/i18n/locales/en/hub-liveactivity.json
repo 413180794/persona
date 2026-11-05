@@ -1,0 +1,9 @@
+{
+  "screen": "Waiting for you in the terminal",
+  "needs_you_one": "{count} needs you",
+  "needs_you_other": "{count} need you",
+  "working_one": "{count} working",
+  "working_other": "{count} working",
+  "unread_one": "{count} done",
+  "unread_other": "{count} done"
+}

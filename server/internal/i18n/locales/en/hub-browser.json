@@ -1,0 +1,8 @@
+{
+  "note_outdated": "The personad on this computer is too old to use ego lite. Redeploy it",
+  "err_off": "The browser extension is off, or this isn’t a Mac",
+  "err_not_enabled": "The browser extension isn’t on for this computer",
+  "err_offline": "Machine offline",
+  "err_outdated_install": "The personad on this computer is too old to install ego lite. Redeploy it",
+  "confirm_script": "Run a script in the browser on “{machine}”: {line}"
+}

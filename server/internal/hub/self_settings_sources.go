@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // A source's own triage rules (#1644) for jarvis_settings: a plugin whose settings declare triage_rules (a string at the
@@ -33,7 +34,7 @@ func (h *Hub) sourceRulesSettings() []selfSetting {
 		if p.Manifest != nil && p.Manifest.Name != "" {
 			name = p.Manifest.Name
 		}
-		title := name + "的分拣规则"
+		title := i18n.T(h.userLang(), "hub-self_settings_sources.title", i18n.Args{"name": name})
 		out = append(out, selfSetting{key: "inbox.rules." + id, title: title,
 			about: fmt.Sprintf("the user's own rules for sorting the inbox items from %s (plugin %s), in their words; when set they "+
 				"replace inbox.rules for its items (the defaults stay underneath)", name, id),
@@ -80,10 +81,11 @@ func (h *Hub) setExtensionTriageRules(id, title string, v json.RawMessage) (*sel
 		return nil, fmt.Errorf("%s is set in hub.json: change it there (or in the admin page)", id)
 	}
 	before := h.extensionTriageRules(id)
+	l := h.userLang()
 	if text == before {
-		return &selfChange{summary: title + "没有变化"}, nil
+		return &selfChange{summary: ss(l, "no_change", i18n.Args{"title": title})}, nil
 	}
-	return &selfChange{summary: fmt.Sprintf("改%s：%s → %s", title, clipped(before), clipped(text)),
+	return &selfChange{summary: changeSummary(l, title, before, text),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
 			p := h.extensions.reg.Get(id)
 			if p == nil {

@@ -6,12 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // ModelBinding is a sparse, non-secret selection; missing fields inherit a declared baseline.
@@ -64,28 +64,59 @@ type ModelPurpose struct {
 
 var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage"}
 
+// modelPurposes are the uses; Name, Group and Uses hold catalog names (hub-model_config), read in a language by
+// localized.
 var modelPurposes = []ModelPurpose{
-	{ID: "assistant", Name: "主对话", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "与当前 persona 的直接对话"}, {Name: "定时任务"}}},
-	{ID: "agent.new", Name: "Agents", Group: "默认模型", Kind: "launcher", Uses: []ModelUse{{Name: "新建 Agent"}, {Name: "AI 分身执行"}, {Name: "飞书 /agent"}}},
-	{ID: "kb", Name: "信息处理", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "文本与邮件翻译"}, {Name: "草拟回复"}, {Name: "知识整理与会话压缩"}, {Name: "项目整理与事项提取"}, {Name: "对话标题与 Agent 标签名"}}},
-	{ID: "inbox.triage", Name: "信息筛选", Group: "默认模型", Kind: "api", Uses: []ModelUse{{Name: "收件箱分拣与摘要"}, {Name: "重要性判断"}, {Name: "判断是否需要回复或交给 Agent"}}},
-	{ID: "inbox.agent", Name: "AI 分身执行", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
-	{ID: "lark.agent", Name: "飞书 /agent", Group: "Agents", Kind: "launcher", Parent: "agent.new"},
-	{ID: "inbox.judge", Name: "AI 分身判断器", Group: "信息筛选", Kind: "api", Parent: "inbox.triage"},
-	{ID: "agent.triage", Name: "会话分诊", Group: "信息筛选", Kind: "api", Parent: "inbox.triage"},
-	{ID: "inbox.draft", Name: "草拟回复", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "translate", Name: "文本与邮件翻译", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.compress", Name: "会话压缩与打标", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.project", Name: "项目档案重写", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.dedupe", Name: "项目去重", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.items", Name: "事项提取与打标", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "kb.moments", Name: "公司圈关联", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "assistant.title", Name: "对话标题", Group: "信息处理", Kind: "api", Parent: "kb"},
-	{ID: "agent.title", Name: "Agent 标签名", Group: "信息处理", Kind: "api", Parent: "kb"},
+	{ID: "assistant", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_chat"}, {Name: "use_schedule"}}},
+	{ID: "agent.new", Group: "group_default", Kind: "launcher", Uses: []ModelUse{{Name: "use_new_agent"}, {Name: "use_inbox_agent"}, {Name: "use_lark_agent"}}},
+	{ID: "kb", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_translate"}, {Name: "use_draft"}, {Name: "use_knowledge"}, {Name: "use_projects"}, {Name: "use_titles"}}},
+	{ID: "inbox.triage", Group: "group_default", Kind: "api", Uses: []ModelUse{{Name: "use_triage"}, {Name: "use_importance"}, {Name: "use_reply_or_agent"}}},
+	{ID: "inbox.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
+	{ID: "lark.agent", Group: "group_agents", Kind: "launcher", Parent: "agent.new"},
+	{ID: "inbox.judge", Group: "group_triage", Kind: "api", Parent: "inbox.triage"},
+	{ID: "agent.triage", Group: "group_triage", Kind: "api", Parent: "inbox.triage"},
+	{ID: "inbox.draft", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "translate", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "kb.compress", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "kb.project", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "kb.dedupe", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "kb.items", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "kb.moments", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "assistant.title", Group: "group_processing", Kind: "api", Parent: "kb"},
+	{ID: "agent.title", Group: "group_processing", Kind: "api", Parent: "kb"},
 	// Scheduled tasks (早报…) run in the assistant's directory with its instructions, memory and tools: they are the
 	// assistant's conversations, on 主对话's model, not new Agents (#1544; #697 had them under Agents, plain Claude Code
 	// by default, which is not logged in on every hub machine).
-	{ID: "schedule", Name: "定时任务", Group: "主对话", Kind: "launcher", Parent: "assistant"},
+	{ID: "schedule", Group: "group_assistant", Kind: "launcher", Parent: "assistant"},
+}
+
+// mc is a hub-model_config text in l.
+func mc(l i18n.Lang, name string, args ...i18n.Args) string {
+	return i18n.T(l, "hub-model_config."+name, args...)
+}
+
+// purposeName is a built-in use's name in l.
+func purposeName(l i18n.Lang, id string) string {
+	return mc(l, "name_"+strings.ReplaceAll(id, ".", "_"))
+}
+
+// localized is a built-in use's definition with its texts in l.
+func (p ModelPurpose) localized(l i18n.Lang) ModelPurpose {
+	p.Name, p.Group = purposeName(l, p.ID), mc(l, p.Group)
+	if len(p.Uses) > 0 {
+		uses := make([]ModelUse, len(p.Uses))
+		for i, u := range p.Uses {
+			uses[i] = ModelUse{Name: mc(l, u.Name)}
+		}
+		p.Uses = uses
+	}
+	return p
+}
+
+// requestCtxLang is the language of what ctx is answering: the request's (http.go puts it in the context), else the
+// user's.
+func (h *Hub) requestCtxLang(ctx context.Context) i18n.Lang {
+	return i18n.From(ctx).Or(h.userLang())
 }
 
 func modelCategoryID(id string) string {
@@ -100,7 +131,7 @@ func modelCategoryID(id string) string {
 	return id
 }
 
-var errModelPurposeNotFound = errors.New("没有这个模型用途")
+var errModelPurposeNotFound = i18n.Err("hub-model_config.err_purpose_not_found")
 
 func modelKey(id string) string { return "model_config." + id }
 
@@ -114,8 +145,10 @@ func (h *Hub) modelRecord(ctx context.Context, id string) (modelRecord, error) {
 }
 
 func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, error) {
+	l := h.requestCtxLang(ctx)
 	for _, p := range modelPurposes {
 		if p.ID == id {
+			p = p.localized(l)
 			p.CategoryID = modelCategoryID(id)
 			if p.Kind == "launcher" && p.ID != "agent.new" {
 				p.MachineID = h.assistantProfile().MachineID
@@ -131,18 +164,18 @@ func (h *Hub) modelPurposeDef(ctx context.Context, id string) (ModelPurpose, err
 	if strings.HasPrefix(id, "task.") {
 		tasks, ok := h.assistantTasks() // the assistant's scheduled tasks, as it reported them
 		if !ok {
-			return ModelPurpose{}, errors.New("读不到定时任务")
+			return ModelPurpose{}, i18n.Err("hub-model_config.err_read_tasks")
 		}
 		for _, t := range tasks {
 			if id == "task."+t.ID {
-				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.Label, Group: "主对话", Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
+				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.Label, Group: mc(l, "group_assistant"), Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
 			}
 		}
 	}
 	if strings.HasPrefix(id, "plugin.") && h.extensions != nil {
 		for _, p := range h.extensions.list() {
 			if id == "plugin."+p.ID && p.Kind == "voice" {
-				return ModelPurpose{ID: id, Name: p.Name, Group: "扩展", Kind: "plugin"}, nil
+				return ModelPurpose{ID: id, Name: p.Name, Group: mc(l, "group_extensions"), Kind: "plugin"}, nil
 			}
 		}
 	}
@@ -182,8 +215,9 @@ func (h *Hub) legacyModelConfig(id string) ai.Config {
 }
 
 func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
+	l := h.requestCtxLang(ctx)
 	out := []ModelProvider{}
-	for _, x := range []struct{ id, name string }{{"legacy.ai", "hub 默认 API"}, {"legacy.triage", "hub 分拣 API"}, {"legacy.judge", "hub 判断 API"}, {"legacy.kb", "hub 知识 API"}} {
+	for _, x := range []struct{ id, name string }{{"legacy.ai", mc(l, "provider_legacy_ai")}, {"legacy.triage", mc(l, "provider_legacy_triage")}, {"legacy.judge", mc(l, "provider_legacy_judge")}, {"legacy.kb", mc(l, "provider_legacy_kb")}} {
 		c := h.legacyModelConfig(x.id)
 		if c.BaseURL == "" {
 			continue
@@ -206,7 +240,7 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 		out = append(out, ModelProvider{ID: "launcher." + v.Name, Name: v.Name, Kind: kind, API: apiName, Model: v.Model, Machines: v.Machines, Hidden: v.Hidden, HasKey: v.HasKey})
 	}
 	if !slices.ContainsFunc(out, func(p ModelProvider) bool { return p.ID == "launcher.claude" }) {
-		out = append(out, ModelProvider{ID: "launcher.claude", Name: "Claude Code 默认", Kind: "launcher"})
+		out = append(out, ModelProvider{ID: "launcher.claude", Name: mc(l, "provider_claude_default"), Kind: "launcher"})
 	}
 	if h.extensions != nil {
 		for _, p := range h.extensions.list() {
@@ -214,7 +248,7 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 				models, err := h.extensionModelChoices(ctx, "plugin."+p.ID)
 				provider := ModelProvider{ID: "plugin." + p.ID, Name: p.Name, Kind: "plugin", Model: models.Default, Models: models.Models}
 				if err != nil {
-					provider.Status = err.Error()
+					provider.Status = i18n.Localize(err, l)
 				}
 				out = append(out, provider)
 			}
@@ -224,6 +258,7 @@ func (h *Hub) modelProviders(ctx context.Context) []ModelProvider {
 }
 
 func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, string, error) {
+	l := h.requestCtxLang(ctx)
 	if p.Parent != "" {
 		b, err := h.resolveModel(ctx, p.Parent)
 		return b, p.Parent, err
@@ -241,27 +276,30 @@ func (h *Hub) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBinding, 
 			// No hub.json connection for this use: fall back to a provider the hub can call itself, instead of failing
 			// while a keyed Claude connection sits unused (#388). Not stored, so a later explicit choice still wins.
 			if name := h.fallbackAPIProvider(ctx); name != "" {
-				return ModelBinding{Provider: "launcher." + name}, modelAutoSource, nil
+				return ModelBinding{Provider: "launcher." + name}, mc(l, modelAutoSource), nil
 			}
 		}
-		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, "hub 配置", nil
+		return ModelBinding{Provider: provider, Model: c.Model, Effort: c.ReasoningEffort}, mc(l, "source_hub_config"), nil
 	}
 	if p.ID == "assistant" { // the assistant's own launcher (its settings, else hub.json's)
-		return ModelBinding{Provider: "launcher." + h.assistantProfile().Launcher}, "助手默认", nil
+		return ModelBinding{Provider: "launcher." + h.assistantProfile().Launcher}, mc(l, "source_assistant_default"), nil
 	}
 	if p.Kind == "launcher" {
-		return ModelBinding{Provider: "launcher.claude"}, "默认", nil
+		return ModelBinding{Provider: "launcher.claude"}, mc(l, "source_default"), nil
 	}
-	return ModelBinding{Provider: p.ID}, "扩展默认", nil
+	return ModelBinding{Provider: p.ID}, mc(l, "source_extension_default"), nil
 }
 
-// modelAutoSource is what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.
-const modelAutoSource = "自动选择（hub 上能直接调用的接入）"
+// modelAutoSource is (the catalog name of) what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.
+const modelAutoSource = "source_auto"
 
 // modelNoAPIStatus explains an API use with nothing to call: launchers like 「Claude Code 默认」 only start a CLI on a
-// computer, so they never show up for these uses.
-const modelNoAPIStatus = "没有能直接调用的模型：「Claude Code 默认」这类启动器只能在电脑上启动，不能用于此项。" +
-	"在 设置 › 模型供应商 添加带 Key 的接入后选它"
+// computer, so they never show up for these uses. A catalog name.
+const modelNoAPIStatus = "status_no_api"
+
+// modelUnverified is the status of a use nothing is known to be wrong with. Not translated: the apps compare it to
+// this text (iOS ModelConfigurationView, Android HttpVoiceExtensions) to leave it out.
+const modelUnverified = "未验证"
 
 // fallbackAPIProvider names the managed connection an unconfigured API use runs on: the first direct API provider,
 // else the first keyed launcher speaking Messages (Responses launchers cannot serve these uses). Hidden ones and
@@ -315,7 +353,7 @@ func (h *Hub) resolveModel(ctx context.Context, id string) (ModelBinding, error)
 	}
 	r, err := h.modelRecord(ctx, id)
 	if err != nil {
-		return base, fmt.Errorf("读取模型配置失败: %w", err)
+		return base, i18n.Err("hub-model_config.err_read_config", i18n.Args{"error": err.Error()})
 	}
 	return mergeModel(base, r.Binding), nil
 }
@@ -336,12 +374,12 @@ func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) 
 		for _, s := range h.storedLaunchers(ctx) {
 			if s.Name == name {
 				if s.Kind != "api" && s.API == "responses" {
-					return c, errors.New("启动器不能作为 Responses API")
+					return c, i18n.Err("hub-model_config.err_launcher_not_responses")
 				}
 				c = ai.Config{API: s.API, BaseURL: s.BaseURL, Model: s.Model, Bearer: s.BearerAuth()}
 				key, err := h.openKey(s.KeySealed)
 				if err != nil {
-					return c, errors.New("供应商密钥解密失败")
+					return c, i18n.Err("hub-model_config.err_key_decrypt")
 				}
 				c.APIKey = key
 				found = true
@@ -349,17 +387,17 @@ func (h *Hub) apiConfig(ctx context.Context, b ModelBinding) (ai.Config, error) 
 			}
 		}
 		if !found {
-			return c, errors.New("这个供应商不能在 hub 上直接调用 API")
+			return c, i18n.Err("hub-model_config.err_not_callable")
 		}
 	} else {
-		return c, errors.New("不是 API 供应商")
+		return c, i18n.Err("hub-model_config.err_not_api")
 	}
 	if b.Model != "" {
 		c.Model = b.Model
 	}
 	c.ReasoningEffort = b.Effort
 	if c.API != "" && c.API != "messages" && c.API != "responses" {
-		return c, errors.New("不支持这个 API 协议")
+		return c, i18n.Err("hub-model_config.err_api_protocol")
 	}
 	if c.API != "responses" && b.Effort != "" {
 		c.ReasoningEffort = ""
@@ -448,19 +486,20 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 	if p.Kind == "launcher" {
 		p.Fields = append(p.Fields, "effort")
 	}
-	p.Status = "未验证"
+	l := h.requestCtxLang(ctx)
+	p.Status = modelUnverified
 	if !slices.Contains(p.ProviderIDs, p.Effective.Provider) {
-		p.Status = "供应商不存在或不兼容"
+		p.Status = mc(l, "status_provider_incompatible")
 		if p.Kind == "api" && strings.HasPrefix(p.Effective.Provider, "legacy.") && h.legacyModelConfig(p.Effective.Provider).BaseURL == "" {
-			p.Status = modelNoAPIStatus
+			p.Status = mc(l, modelNoAPIStatus)
 		}
 	} else if p.Kind == "api" && p.Effective.Model == "" {
-		p.Status = "未配置模型"
+		p.Status = mc(l, "status_no_model")
 	} else if p.Kind == "api" {
 		if config, e := h.apiConfig(ctx, p.Effective); e != nil {
-			p.Status = e.Error()
+			p.Status = i18n.Localize(e, l)
 		} else if config.APIKey == "" && config.APIKeyFile == "" {
-			p.Status = "未配置凭据"
+			p.Status = mc(l, "status_no_credentials")
 		} else if pause := ai.Held(config); pause != nil {
 			p.Status, p.Limit = pause.Text(), pause
 		}
@@ -477,9 +516,9 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 			online, info := m.online, m.info
 			m.mu.Unlock()
 			if !online {
-				p.Status = "运行机器离线"
+				p.Status = mc(l, "status_machine_offline")
 			} else if info.Version != "" && !info.ModelConfiguration {
-				p.Status = "需要更新 node"
+				p.Status = mc(l, "status_node_outdated")
 			}
 		}
 	}
@@ -487,7 +526,7 @@ func (h *Hub) modelPurpose(ctx context.Context, id string, providers []ModelProv
 		p.Fields = []string{}
 		for _, category := range modelPurposes {
 			if category.ID == recordID {
-				p.InheritedFrom = category.Name
+				p.InheritedFrom = purposeName(l, category.ID)
 				break
 			}
 		}
@@ -507,7 +546,7 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 		var provider string
 		if string(in.Provider) != "null" {
 			if err := json.Unmarshal(in.Provider, &provider); err != nil {
-				return b, errors.New("供应商要是字符串或 null")
+				return b, i18n.Err("hub-model_config.err_provider_type")
 			}
 		}
 		if provider != b.Provider {
@@ -527,10 +566,10 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 		}
 		var v string
 		if err := json.Unmarshal(f.raw, &v); err != nil {
-			return b, errors.New("模型字段要是字符串或 null")
+			return b, i18n.Err("hub-model_config.err_field_type")
 		}
 		if v == "" || strings.TrimSpace(v) != v || strings.ContainsAny(v, "\r\n\x00") || len(v) > 512 {
-			return b, errors.New("模型字段不能为空或包含换行")
+			return b, i18n.Err("hub-model_config.err_field_invalid")
 		}
 		*f.dst = v
 	}
@@ -539,7 +578,7 @@ func patchModel(b ModelBinding, in modelPatch) (ModelBinding, error) {
 
 func (h *Hub) saveModelRecord(ctx context.Context, id string, revision int64, b ModelBinding) error {
 	if h.store == nil {
-		return errors.New("没有数据库，不能保存模型配置")
+		return i18n.Err("hub-model_config.err_no_database")
 	}
 	r := modelRecord{Revision: revision + 1, Binding: b}
 	if s, ok := h.store.(interface {
@@ -565,7 +604,7 @@ func (h *Hub) saveModelRecord(ctx context.Context, id string, revision int64, b 
 	return h.store.PutSetting(ctx, modelKey(id), r)
 }
 
-var errModelConflict = errors.New("配置已被修改，请重新加载后保存")
+var errModelConflict = i18n.Err("hub-model_config.err_conflict")
 
 func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding, providers []ModelProvider) error {
 	var provider *ModelProvider
@@ -576,13 +615,13 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 		}
 	}
 	if provider == nil {
-		return errors.New("供应商不存在")
+		return i18n.Err("hub-model_config.err_provider_missing")
 	}
 	if !slices.Contains(p.ProviderIDs, b.Provider) {
-		return errors.New("供应商不支持这个用途")
+		return i18n.Err("hub-model_config.err_provider_unsupported")
 	}
 	if b.Effort != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh", "max"}, b.Effort) {
-		return errors.New("思考等级不支持")
+		return i18n.Err("hub-model_config.err_effort_unsupported")
 	}
 	if p.Kind == "api" {
 		_, err := h.apiConfig(ctx, b)
@@ -590,7 +629,7 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 	}
 	if p.Kind == "plugin" {
 		if b.Effort != "" {
-			return errors.New("扩展不支持思考等级")
+			return i18n.Err("hub-model_config.err_extension_effort")
 		}
 		if b.Model != "" {
 			models, err := h.extensionModelChoices(ctx, p.ID)
@@ -598,14 +637,14 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 				return err
 			}
 			if !slices.ContainsFunc(models.Models, func(m ModelChoice) bool { return m.ID == b.Model }) {
-				return errors.New("扩展没有这个模型")
+				return i18n.Err("hub-model_config.err_extension_model")
 			}
 		}
 		return nil
 	}
 	if p.Kind == "launcher" {
 		if len(provider.Machines) > 0 && p.MachineID != "" && !slices.Contains(provider.Machines, p.MachineID) {
-			return errors.New("运行这个用途的电脑没有该启动器")
+			return i18n.Err("hub-model_config.err_launcher_not_on_machine")
 		}
 		if b.Model != "" {
 			m := h.localMachine(p.MachineID)
@@ -619,13 +658,13 @@ func (h *Hub) validateModel(ctx context.Context, p ModelPurpose, b ModelBinding,
 				name := strings.TrimPrefix(b.Provider, "launcher.")
 				params := map[string]any{"name": name, "model": b.Model, "configured": m.configuredLauncher(name)}
 				if err := m.call(ctx, "launchers.model.check", params, &result); err != nil {
-					return fmt.Errorf("无法验证启动器的具体模型: %w", err)
+					return i18n.Err("hub-model_config.err_check_model", i18n.Args{"error": i18n.Localize(err, h.requestCtxLang(ctx))})
 				}
 				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" {
-					return errors.New("普通 Agent 的启动只支持 Claude Code 或 Codex 启动器")
+					return i18n.Err("hub-model_config.err_agent_launcher")
 				}
 				if p.ID == "agent.new" && result.Agent == "codex" && b.Effort != "" {
-					return errors.New("新建 Codex 的思考强度由其启动器管理，请恢复继承")
+					return i18n.Err("hub-model_config.err_codex_effort")
 				}
 			}
 		}
@@ -672,7 +711,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 			return
 		}
 		if in.Revision == nil || *in.Revision < 0 {
-			writeErr(w, 400, errors.New("需要配置版本"))
+			writeErr(w, 400, i18n.Err("hub-model_config.err_revision_required"))
 			return
 		}
 		h.modelMu.Lock()
@@ -689,7 +728,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 			return
 		}
 		if p.CategoryID != "" && p.CategoryID != id {
-			writeErr(w, http.StatusBadRequest, errors.New("用途模型只读，请修改所属分类的模型配置"))
+			writeErr(w, http.StatusBadRequest, i18n.Err("hub-model_config.err_purpose_readonly"))
 			return
 		}
 		if p.Revision != *in.Revision {
@@ -718,7 +757,7 @@ func (h *Hub) modelConfigRoutes(api *http.ServeMux) {
 				return
 			}
 			if config.API != "responses" {
-				writeErr(w, 400, errors.New("这个 API 接入不支持思考等级"))
+				writeErr(w, 400, i18n.Err("hub-model_config.err_api_effort"))
 				return
 			}
 		}
@@ -804,11 +843,11 @@ func (h *Hub) finishModel(ctx context.Context, id string, params map[string]any,
 			params["model"] = b.Model
 			return nil
 		}
-		return errors.New("这个用途不是启动器")
+		return i18n.Err("hub-model_config.err_not_launcher")
 	}
 	for _, provider := range h.storedLaunchers(ctx) {
 		if provider.Name == name && provider.Kind == "api" {
-			return errors.New("这个用途引用了直接 API 接入，不能作为启动器运行")
+			return i18n.Err("hub-model_config.err_api_as_launcher")
 		}
 	}
 	params["launcher"] = name

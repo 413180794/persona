@@ -1,0 +1,16 @@
+{
+  "err_no_store": "The workspace board needs a database that supports it",
+  "err_readonly": "A read-only device can’t change the workspace board",
+  "err_bad_request": "A valid request and revision are required",
+  "err_already_bound": "This directory already has a card. Check the existing or archived cards",
+  "err_unknown_machine": "Unknown computer",
+  "err_offline": "The computer is offline. Bind the workspace once it reconnects",
+  "err_list_failed": "Couldn’t list workspaces. Check the node version: {error}",
+  "err_changed": "The workspace changed. Refresh and choose again",
+  "err_no_directory": "This workspace has no code directory to confirm. Bind a directory directly",
+  "err_pick_directory": "Choose a real code directory",
+  "err_resolve_failed": "Couldn’t verify the directory. Check the path and node version: {error}",
+  "err_resolve_empty": "Verifying the directory returned no usable workspace",
+  "err_snapshot_read": "Couldn’t read the workspace history snapshot",
+  "err_snapshot_save": "Couldn’t save the workspace snapshot"
+}

@@ -1,0 +1,11 @@
+{
+  "note_outdated": "The personad on this computer is too old to control it. Redeploy it",
+  "err_off": "The computer control extension is off, or this isn’t a Mac",
+  "err_not_enabled": "Computer control isn’t on for this computer",
+  "err_offline": "Machine offline",
+  "err_outdated_lock": "The personad on this computer is too old to lock the screen. Redeploy it",
+  "err_outdated_install": "The personad on this computer is too old to install Cua Driver. Redeploy it",
+  "confirm_script": "Run a script on “{machine}”: {line}",
+  "confirm_steps": "Run on “{machine}” in order: {steps}",
+  "list_sep": ", "
+}

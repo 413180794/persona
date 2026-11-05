@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/connector/imessage"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -83,7 +84,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/imessage", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", errNoIMessageMac.Error(), nil)
+			writeCode(w, http.StatusNotFound, "not_configured", i18n.Localize(errNoIMessageMac, h.requestLang(r)), nil)
 			return
 		}
 		c.Check(r.Context())
@@ -94,7 +95,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("PUT /api/v1/imessage/settings", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」", nil)
+			writeCode(w, http.StatusNotFound, "not_configured", i18n.T(h.requestLang(r), "hub-imessage.not_configured"), nil)
 			return
 		}
 		var in struct {
@@ -125,11 +126,11 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("DELETE /api/v1/imessage/data", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」", nil)
+			writeCode(w, http.StatusNotFound, "not_configured", i18n.T(h.requestLang(r), "hub-imessage.not_configured"), nil)
 			return
 		}
 		if c.AI() {
-			writeCode(w, http.StatusConflict, "ai_on", "先关掉「交给 Persona」再删除", nil)
+			writeCode(w, http.StatusConflict, "ai_on", i18n.T(h.requestLang(r), "hub-imessage.ai_on"), nil)
 			return
 		}
 		res, err := h.forgetIMessage(r.Context())
@@ -144,7 +145,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/imessage/chats", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」", nil)
+			writeCode(w, http.StatusNotFound, "not_configured", i18n.T(h.requestLang(r), "hub-imessage.not_configured"), nil)
 			return
 		}
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -158,7 +159,7 @@ func (h *Hub) imessageRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/imessage/chats/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
 		c := h.imessage()
 		if c == nil {
-			writeCode(w, http.StatusNotFound, "not_configured", "没有设置「信息」", nil)
+			writeCode(w, http.StatusNotFound, "not_configured", i18n.T(h.requestLang(r), "hub-imessage.not_configured"), nil)
 			return
 		}
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))

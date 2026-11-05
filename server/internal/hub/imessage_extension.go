@@ -3,11 +3,11 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"slices"
 
 	"github.com/nwverse/persona/server/internal/connector/imessage"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The built-in extension 信息 (#1830 step 6, docs/plan-extensions.md「iMessage 怎么用它」): which Mac's Messages the
@@ -145,7 +145,7 @@ func (h *Hub) imessageOneMac(raw json.RawMessage) *extension.FieldError {
 	if m := h.localMachine(other); m != nil {
 		name = m.cfg.Name
 	}
-	return &extension.FieldError{Path: "machines", Message: "只能读一台 Mac，先关掉「" + name + "」"}
+	return &extension.FieldError{Path: "machines", Message: i18n.T(h.userLang(), "hub-imessage_extension.one_mac", i18n.Args{"name": name})}
 }
 
-var errNoIMessageMac = errors.New("没有设置「信息」：在 设置 › 扩展 › 信息 选一台 Mac")
+var errNoIMessageMac = i18n.Err("hub-imessage_extension.no_mac")

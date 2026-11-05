@@ -1,0 +1,9 @@
+{
+  "err_forbidden": "只能在你自己登录的 App 或网页上管理浏览器登录",
+  "err_off": "浏览器扩展没打开，或这台不是 Mac",
+  "err_offline": "这台 Mac 离线：它在线时才能导入或查看",
+  "err_bad_cookies": "读不懂要导入的 cookie",
+  "err_no_cookies": "没有要导入的 cookie",
+  "err_which_sites": "清除哪些网站？",
+  "err_outdated": "这台电脑上的 personad 太旧，还不会导入 cookie：重新部署它"
+}

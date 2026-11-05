@@ -1,0 +1,9 @@
+{
+  "whole_screen": "the whole screen",
+  "app": "“{name}”",
+  "list_sep": ", ",
+  "ask_apps": "Let the assistant use {apps} on “{machine}”",
+  "ask_run": "Let the assistant run its actions on “{machine}”",
+  "ask_unknown": "{summary} (it can’t tell every app this touches, so it asks this time)",
+  "always": "Don’t ask again for {apps}"
+}

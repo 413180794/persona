@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -180,23 +181,29 @@ func (h *Hub) approveApps(ctx context.Context, m *Machine, tool string, names []
 	if whole && len(need) == 0 {
 		return false, true
 	}
+	l := h.userLang()
 	shown := make([]string, 0, len(need))
 	for _, a := range need {
-		shown = append(shown, "「"+a.Name+"」")
+		name := a.Name
+		if a.BundleID == "screen" {
+			name = i18n.T(l, "hub-computer_apps.whole_screen")
+		}
+		shown = append(shown, i18n.T(l, "hub-computer_apps.app", i18n.Args{"name": name}))
 	}
-	summary := "让助手操作「" + m.cfg.Name + "」上的" + strings.Join(shown, "、")
+	appList := strings.Join(shown, i18n.T(l, "hub-computer_apps.list_sep"))
+	summary := i18n.T(l, "hub-computer_apps.ask_apps", i18n.Args{"machine": m.cfg.Name, "apps": appList})
 	if len(need) == 0 {
-		summary = "让助手在「" + m.cfg.Name + "」上运行它的操作"
+		summary = i18n.T(l, "hub-computer_apps.ask_run", i18n.Args{"machine": m.cfg.Name})
 	}
 	if !whole {
-		summary += "（认不全它会碰哪些 App，所以这次要问）"
+		summary = i18n.T(l, "hub-computer_apps.ask_unknown", i18n.Args{"summary": summary})
 	}
 	ix := proto.Interaction{
 		ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
 		ToolInput: args, SessionTitle: "Persona", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
 	}
 	if remember {
-		ix.AlwaysLabel = "以后操作" + strings.Join(shown, "、") + "不再问"
+		ix.AlwaysLabel = i18n.T(l, "hub-computer_apps.always", i18n.Args{"apps": appList})
 	}
 	r, _ := h.waitInteraction(ctx, ix)
 	ok = r.Allow != nil && *r.Allow

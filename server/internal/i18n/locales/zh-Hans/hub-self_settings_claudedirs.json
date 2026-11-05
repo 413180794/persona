@@ -1,0 +1,5 @@
+{
+  "title": "屏蔽的 Claude 配置目录",
+  "block": "在 {machine} 上屏蔽 Claude 配置目录 {path}（里面的会话不再出现在 Agents，文件不动）",
+  "unblock": "在 {machine} 上取消屏蔽 Claude 配置目录 {path}（里面的会话重新出现在 Agents）"
+}

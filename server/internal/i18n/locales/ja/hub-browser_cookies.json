@@ -1,0 +1,9 @@
+{
+  "err_forbidden": "ブラウザのログインは、ご自身でログインしたAppかWebページからのみ管理できます",
+  "err_off": "ブラウザの拡張機能がオフか、このマシンはMacではありません",
+  "err_offline": "このMacはオフラインです。オンラインのときにインポートまたは表示できます",
+  "err_bad_cookies": "インポートするCookieを読み取れません",
+  "err_no_cookies": "インポートするCookieがありません",
+  "err_which_sites": "どのサイトを消去しますか？",
+  "err_outdated": "このコンピューターのpersonadは古いため、まだCookieをインポートできません。再デプロイしてください"
+}

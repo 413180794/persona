@@ -1,0 +1,9 @@
+{
+  "whole_screen": "整个屏幕",
+  "app": "「{name}」",
+  "list_sep": "、",
+  "ask_apps": "让助手操作「{machine}」上的{apps}",
+  "ask_run": "让助手在「{machine}」上运行它的操作",
+  "ask_unknown": "{summary}（认不全它会碰哪些 App，所以这次要问）",
+  "always": "以后操作{apps}不再问"
+}

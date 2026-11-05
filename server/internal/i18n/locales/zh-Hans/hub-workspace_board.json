@@ -1,0 +1,16 @@
+{
+  "err_no_store": "工作区看板需要支持此功能的数据库",
+  "err_readonly": "只读设备不能修改工作区看板",
+  "err_bad_request": "需要有效请求和 revision",
+  "err_already_bound": "该目录已绑定卡片，请查看现有或已归档卡片",
+  "err_unknown_machine": "未知电脑",
+  "err_offline": "电脑离线，恢复连接后再绑定工作区",
+  "err_list_failed": "工作区枚举失败，请检查 node 版本：{error}",
+  "err_changed": "工作区已变化，请刷新后重新选择",
+  "err_no_directory": "该工作区没有可确认的代码目录，请直接绑定目录",
+  "err_pick_directory": "请选择真实代码目录",
+  "err_resolve_failed": "目录验证失败，请检查路径与 node 版本：{error}",
+  "err_resolve_empty": "目录验证没有返回可用工作区",
+  "err_snapshot_read": "工作区历史快照无法读取",
+  "err_snapshot_save": "保存工作区快照失败"
+}
