@@ -4,6 +4,10 @@ import androidx.compose.ui.text.input.TextFieldValue
 import persona.core.contracts.Item
 import persona.core.contracts.api.DraftUploadState
 import persona.core.domain.lines.ChatLine
+import persona.core.domain.lines.ToolCall
+import persona.core.domain.lines.WorkItem
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -129,6 +133,66 @@ class MessageContentTest {
         assertEquals("正在工作，39 秒", workSummary(line, null, start.plusSeconds(39)))
         // A finished line keeps its recorded words.
         assertFalse(workSummary(line.copy(live = false), 30, start.plusSeconds(80)).contains("正在"))
+    }
+
+    @Test fun aRunningLineWithItsStepsShowingOnlySaysItIsWorking() {
+        val start = Instant.parse("2026-11-02T10:00:00Z")
+        val line = ChatLine.Work("w-1", emptyList(), live = true, start = start, end = null, open = false)
+        // The clock is a leaf of its own beside these words (WorkClock).
+        assertEquals("正在工作…", workSummary(line, null, start.plusSeconds(80), peek = true))
+        // Done, it folds to the summary as before.
+        assertEquals("做了 0 步，用时 30 秒", workSummary(line.copy(live = false), 30, start.plusSeconds(80), peek = true))
+    }
+
+    private fun step(id: String, name: String, vararg fields: Pair<String, String>) =
+        WorkItem.Tool(ToolCall(tool(name, *fields).copy(id = id).asLineItem(), null, emptyList()))
+    private fun thought(id: String, text: String) =
+        WorkItem.Thought(Item(id, kind = "thinking", role = "assistant", text = text).asLineItem())
+    private fun plan(id: String, vararg todos: Pair<String, String>) = WorkItem.Tool(ToolCall(Item(id, kind = "tool_use",
+        toolName = "TodoWrite", toolInput = buildJsonObject {
+            put("todos", buildJsonArray { todos.forEach { (c, s) -> add(buildJsonObject { if (c.isNotEmpty()) put("content", c); put("activeForm", "正在$c"); put("status", s) }) } })
+        }).asLineItem(), null, emptyList()))
+
+    @Test fun theRunningLinePeeksAtItsNewestFiveStepsAndPinsThePlan() {
+        val todo = plan("p1", "读代码" to "completed", "改代码" to "in_progress", "跑测试" to "pending")
+        val steps = listOf(
+            step("a", "Bash", "command" to "ls"), todo,
+            step("b", "Read", "file_path" to "/w/a.kt"), step("c", "Read", "file_path" to "/w/a.kt"),
+            thought("t-blank", " "), thought("t", "想一想"),
+            step("d", "Grep", "pattern" to "x"), step("e", "Read", "file_path" to "/w/a.kt"),
+            WorkItem.Narration(Item("n", kind = "text", role = "assistant", text = "中间的话").asLineItem()),
+            step("f", "Edit", "file_path" to "/w/b.kt", "old_string" to "a", "new_string" to "b"),
+            step("g", "Task", "description" to "子任务"),
+        )
+        val peek = workPeek(steps)
+        assertEquals("p1", peek.plan?.id)
+        // The repeated read of a.kt (b, c) shows once; the blank thought, the words, the subagent and the plan are not steps.
+        assertEquals(listOf("c", "t", "d", "e", "f"), peek.steps.map { it.id })
+        assertEquals(listOf("a", "c", "t", "d", "e", "f"), workPeek(steps, limit = 6).steps.map { it.id })
+        // A one-item TodoWrite is not a plan.
+        assertNull(workPeek(listOf(plan("p2", "只有一项" to "pending"))).plan)
+    }
+
+    @Test fun aLineDrawsOnlyItsLatestPlanOfTwoOrMoreItems() {
+        val older = plan("p1", "读" to "in_progress", "改" to "pending")
+        val latest = plan("p2", "读" to "completed", "改" to "in_progress")
+        val cleared = plan("p3")
+        val single = plan("p4", "只有一项" to "pending")
+        assertEquals("p2", latestPlan(listOf(older, latest, cleared, single))?.id)
+        assertNull(latestPlan(listOf(cleared, single)))
+        // An item with no content reads as its activeForm.
+        assertEquals(listOf("正在", "读"), latestPlan(listOf(plan("p5", "" to "pending", "读" to "pending")))?.todos?.map { it.content })
+    }
+
+    private fun todos(vararg s: String) = s.mapIndexed { i, st -> TodoEntry("第 ${i + 1} 项", st, null) }
+
+    @Test fun aPlanSaysTheStepItIsOn() {
+        assertEquals(PlanProgress(1, 3, "第 2 项", 2), planProgress(todos("completed", "in_progress", "pending")))
+        assertEquals(PlanProgress(1, 3, "第 2 项", 2), planProgress(todos("completed", "pending", "pending")))
+        planProgress(todos("completed", "completed")).let { assertTrue(it.allDone); assertEquals(2, it.step); assertEquals("第 2 项", it.current) }
+        // In progress, it reads as its activeForm.
+        assertEquals("正在改", planProgress(listOf(TodoEntry("改", "in_progress", "正在改"))).current)
+        assertEquals(PlanProgress(0, 0, "", 1), planProgress(emptyList()))
     }
 
     @Test fun aFoldCountsItsCallsAndThoughtsNotItsItems() {

@@ -13,6 +13,7 @@ import kotlinx.serialization.json.*
 /** Presentation options can be supplied by either chat host without changing wire items. */
 data class ChatRenderStyle(
     val collapseThoughts: Boolean = false,
+    /** The work line stays one sentence (Persona's own chat): no live steps under it, the plan as a plain step. */
     val compactToolSummary: Boolean = false,
     val hideThoughts: Boolean = false,
 ) {
@@ -210,10 +211,72 @@ internal fun todoEntries(item: Item): List<TodoEntry>? {
     val todos = (item.toolInput as? JsonObject)?.get("todos") as? JsonArray ?: return null
     return todos.mapNotNull { value ->
         val todo = value as? JsonObject ?: return@mapNotNull null
-        val content = todo.string("content")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        // An item with no content reads as its activeForm (web `planTodos`); one with neither is dropped.
+        val content = todo.string("content")?.takeIf { it.isNotBlank() }
+            ?: todo.string("activeForm")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         TodoEntry(content, todo.string("status").orEmpty(), todo.string("activeForm"))
     }
 }
+
+/** How far a plan is (web `planProgress`): the step it is on (in progress, else the next pending, else the last), 1-based. */
+internal data class PlanProgress(val done: Int, val total: Int, val current: String, val step: Int) {
+    val allDone get() = total > 0 && done >= total
+}
+
+internal fun planProgress(todos: List<TodoEntry>): PlanProgress {
+    val done = todos.count { it.status == "completed" }
+    val active = todos.indexOfFirst { it.status == "in_progress" }
+    val pending = todos.indexOfFirst { it.status != "completed" && it.status != "in_progress" }
+    val at = if (active >= 0) active else if (pending >= 0) pending else maxOf(0, todos.lastIndex)
+    val todo = todos.getOrNull(at)
+    val current = (if (todo?.status == "in_progress") todo.activeForm?.takeIf { it.isNotBlank() } else null) ?: todo?.content.orEmpty()
+    return PlanProgress(done, todos.size, current, if (todos.isNotEmpty() && done >= todos.size) todos.size else at + 1)
+}
+
+/**
+ * The plan a work line draws (web `planSteps`): its latest TodoWrite of two or more items, with them. Every other
+ * TodoWrite of the line (older updates, an empty list that clears it) is not drawn.
+ */
+internal data class LinePlan(val id: String, val todos: List<TodoEntry>, val failed: Boolean)
+
+internal fun latestPlan(steps: List<WorkItem>): LinePlan? = steps.asReversed().firstNotNullOfOrNull { step ->
+    (step as? WorkItem.Tool)?.call?.let { call ->
+        todoEntries(call.use.item)?.takeIf { it.size >= 2 }?.let { LinePlan(call.id, it, call.failed) }
+    }
+}
+
+/** What a running work line shows under its header (web #1990 `previewSteps`): the latest plan, and the newest steps. */
+internal data class WorkPeek(val plan: LinePlan?, val steps: List<WorkItem>)
+
+/**
+ * The newest [limit] tool calls and thoughts of a running line, oldest first; the agent's words, notices, folds and
+ * subagent calls (Task / Agent) are not steps here. Reading the same file again within one run of reads shows once. The plan is not one of the steps: the
+ * latest TodoWrite of two or more items is pinned above them.
+ */
+internal fun workPeek(steps: List<WorkItem>, limit: Int = 5): WorkPeek {
+    val plan = latestPlan(steps)
+    val out = mutableListOf<WorkItem>()
+    val seen = mutableSetOf<String>()
+    for (step in steps.asReversed()) {
+        if (out.size >= limit) break
+        when (step) {
+            is WorkItem.Thought -> if (step.item.kind == "thinking" && !step.item.text.isNullOrBlank()) out += step
+            is WorkItem.Tool -> {
+                val item = step.call.use.item
+                if (item.toolName == "TodoWrite" || item.toolName == "Task" || item.toolName == "Agent") continue
+                val read = if (item.toolName == "Read") toolPath(item) else null
+                if (item.toolName != "Read") seen.clear()
+                else if (read != null && !seen.add(read)) continue
+                out += step
+            }
+            else -> Unit
+        }
+    }
+    return WorkPeek(plan, out.asReversed())
+}
+
+/** A thought as one line in a running line's peek (web ThinkingLine): its words with the line breaks folded. */
+internal fun thoughtLine(text: String): String = text.trim().replace(Regex("\\s+"), " ").ifEmpty { "思考" }
 
 internal data class ToolPresentation(val title: String, val verb: String, val detail: String? = null, val mono: Boolean = false)
 
@@ -258,10 +321,12 @@ internal fun WorkItem.Folded.stepCount(): Int = item.fold?.let { it.tools + it.t
 
 /**
  * The words on a work line. A running one says what it is doing and, given [now], how long it has run (R1, ticking
- * every second like iOS's 「正在工作 39 秒」).
+ * every second like iOS's 「正在工作 39 秒」). With [peek] its latest steps show under it, so it only says
+ * 「正在工作…」; the time is a leaf of its own beside it (web #1990).
  */
-internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null): String {
+internal fun workSummary(line: ChatLine.Work, recordedDuration: Long?, now: Instant? = null, peek: Boolean = false): String {
     val count = line.steps.sumOf { if (it is WorkItem.Folded) it.stepCount() else 1 }
+    if (line.live && peek) return "正在工作…"
     if (line.live) {
         val current = line.steps.lastOrNull()
         val action = when (current) {

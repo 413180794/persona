@@ -252,6 +252,8 @@ private fun ChatPage(
         }.toSet()
     }
     val contentWorkGroups = remember(lines) { lines.filterIsInstance<ChatLine.Work>().associateBy { it.id } }
+    // Each open work line's plan card (web #1990 draws only the latest plan of an exchange).
+    val contentPlans = remember(contentWorkGroups) { contentWorkGroups.filterValues { it.open }.mapValues { latestPlan(it.value.steps) } }
     val currentItems by rememberUpdatedState(snapshot.items)
     val currentLive by rememberUpdatedState(liveId)
     val currentLines by rememberUpdatedState(lines)
@@ -601,7 +603,8 @@ private fun ChatPage(
                                         workRunning = (line as? ChatLine.Step)?.let { contentWorkGroups[it.groupId]?.live } == true,
                                         lastWorkStep = (line as? ChatLine.Step)?.let {
                                             contentWorkGroups[it.groupId]?.steps?.lastOrNull()?.id == it.step.id
-                                        } == true)
+                                        } == true,
+                                        plan = (line as? ChatLine.Step)?.let { contentPlans[it.groupId] })
                                         }
                                     }
                                 }

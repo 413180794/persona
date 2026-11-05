@@ -9,8 +9,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -20,8 +27,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -129,7 +138,9 @@ fun UserBubble(text: String, modifier: Modifier = Modifier, time: String? = null
 
 /**
  * A folded run of work (tools and thinking between replies). [summary] is one plain sentence such as
- * "做了 6 步，用时 7 分钟"; the steps go in [content] when [expanded].
+ * "做了 6 步，用时 7 分钟"; the steps go in [content] when [expanded]. [peek] is drawn under the header while folded:
+ * a running group's latest steps (web #1990's 「正在工作…」). [trailing] sits after the summary (a ticking clock: its own
+ * leaf, so the clock redraws only itself).
  */
 @Composable
 fun WorkGroup(
@@ -138,20 +149,24 @@ fun WorkGroup(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
     running: Boolean = false,
+    peek: (@Composable ColumnScope.() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val body: @Composable ColumnScope.() -> Unit = { if (expanded) content() else peek?.invoke(this) }
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val header: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onToggle)
-                .semantics { contentDescription = summary + if (expanded) "，已展开" else "，已收起" }
+                .semantics { contentDescription = summary + if (expanded || peek != null) "，已展开" else "，已收起" }
                 .padding(horizontal = if (PersonaTheme.style == AppStyle.Brief) 0.dp else 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (running) { JSpinner(Modifier.size(15.dp), stroke = 1.8.dp); Spacer(Modifier.width(8.dp)) }
             else if (PersonaTheme.style != AppStyle.Brief) { JIcon(PhIcons.Wrench, null, size = 17.dp, tint = palette.ink2, decorative = true); Spacer(Modifier.width(8.dp)) }
             Text(summary, style = type.caption, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = PersonaTheme.style != AppStyle.Brief))
+            trailing?.let { Spacer(Modifier.width(6.dp)); CompositionLocalProvider(LocalContentColor provides palette.ink2, LocalTextStyle provides type.micro) { it() } }
             Spacer(Modifier.width(4.dp))
             JIcon(if (expanded) PhIcons.CaretUp else PhIcons.CaretDown, null, size = 14.dp, tint = palette.ink3)
         }
@@ -161,14 +176,93 @@ fun WorkGroup(
             modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(24.dp)).background(palette.surface)
                 .border(1.dp, Brush.verticalGradient(listOf(palette.strokeTop, palette.strokeBottom)), RoundedCornerShape(24.dp))
                 .animateContentSize(PersonaTheme.motion.size()).padding(vertical = 4.dp),
-        ) { header(); if (expanded) content() }
+        ) { header(); body() }
         AppStyle.Brief -> Column(modifier.fillMaxWidth().padding(vertical = 6.dp).animateContentSize(PersonaTheme.motion.size())) {
-            header(); if (expanded) { Spacer(Modifier.height(4.dp)); content() }
+            header(); if (expanded || peek != null) { Spacer(Modifier.height(4.dp)); body() }
         }
         AppStyle.Board -> Column(
             modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(10.dp)).background(palette.surface)
                 .border(1.dp, palette.line, RoundedCornerShape(10.dp)).animateContentSize(PersonaTheme.motion.size()),
-        ) { header(); if (expanded) content() }
+        ) { header(); body() }
+    }
+}
+
+enum class PlanItemState { Pending, Active, Done }
+
+/**
+ * The agent's plan (TodoWrite) as a card (web #1990's PlanCard): the step it is on in the header with a 「Step N/M」
+ * pill (a check once all are done), the list open under it; folded, a thin progress bar. [live]: the active item spins;
+ * [nested]: drawn inside a [WorkGroup]'s peek.
+ */
+@Composable
+fun PlanCard(
+    items: List<Pair<String, PlanItemState>>,
+    current: String,
+    step: Int,
+    modifier: Modifier = Modifier,
+    live: Boolean = false,
+    nested: Boolean = false,
+    note: String? = null,
+) {
+    val palette = PersonaTheme.palette
+    val type = PersonaTheme.type
+    val shape = PersonaTheme.shapes.cardShape
+    // Inside a WorkGroup's card (glass, board) it keeps off the card's edges; brief's group has no card.
+    val inset = if (nested && PersonaTheme.style != AppStyle.Brief) 12.dp else 0.dp
+    val total = items.size
+    val done = items.count { it.second == PlanItemState.Done }
+    var open by rememberSaveable { mutableStateOf(true) }
+    Column(
+        modifier.fillMaxWidth().padding(horizontal = inset, vertical = 6.dp).clip(shape).background(palette.surface)
+            .border(1.dp, palette.line, shape).animateContentSize(PersonaTheme.motion.size()),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(role = Role.Button) { open = !open }
+                .semantics { contentDescription = "计划，第 $step 步，共 $total 步，$current" + if (open) "，已展开" else "，已收起" }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            JIcon(PhIcons.ListChecks, null, size = 17.dp, tint = palette.ink)
+            Spacer(Modifier.width(8.dp))
+            Text("$done/$total", style = type.micro, color = palette.ink)
+            Spacer(Modifier.width(8.dp))
+            Text(current, style = type.callout, color = palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).border(1.dp, palette.line, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (total in 1..done) JIcon(PhIcons.Check, "全部完成", size = 12.dp, tint = palette.done.dot)
+                else Text("Step $step/$total", style = type.micro, color = palette.ink2)
+            }
+            Spacer(Modifier.width(6.dp))
+            JIcon(if (open) PhIcons.CaretUp else PhIcons.CaretDown, null, size = 14.dp, tint = palette.ink3)
+        }
+        if (!open) Box(Modifier.fillMaxWidth().height(2.dp).background(palette.line)
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(done.toFloat(), 0f..total.toFloat().coerceAtLeast(1f)) }) {
+            Box(Modifier.fillMaxWidth(if (total > 0) done.toFloat() / total else 0f).fillMaxHeight().background(palette.ink))
+        }
+        if (open) Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
+            Spacer(Modifier.height(6.dp))
+            items.forEach { (text, state) ->
+                Row(Modifier.heightIn(min = 30.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                        when (state) {
+                            PlanItemState.Done -> JIcon(PhIcons.CheckCircle, "已完成", size = 18.dp, tint = palette.ink3)
+                            PlanItemState.Active -> if (live) JSpinner(Modifier.size(15.dp).semantics { contentDescription = "进行中" }, stroke = 1.8.dp)
+                                else JIcon(PhIcons.CircleDashed, "进行中", size = 18.dp, tint = palette.ink)
+                            PlanItemState.Pending -> Box(Modifier.size(16.dp).border(1.5.dp, palette.ink2, CircleShape).semantics { contentDescription = "待办" })
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(text, style = if (state == PlanItemState.Active) type.callout.copy(fontWeight = FontWeight.SemiBold) else type.callout,
+                        color = if (state == PlanItemState.Done) palette.ink3 else palette.ink)
+                }
+            }
+        }
+        // A failed update says so folded or open.
+        note?.let { Text(it, Modifier.padding(start = 14.dp, end = 14.dp, top = if (open) 0.dp else 6.dp, bottom = 10.dp), style = type.caption, color = palette.danger.text) }
     }
 }
 
@@ -191,8 +285,10 @@ fun WorkStep(
     added: Int = 0,
     removed: Int = 0,
     last: Boolean = false,
+    singleLine: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
+    val titleLines = if (singleLine) 1 else 2
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     val click = if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier
@@ -217,7 +313,7 @@ fun WorkStep(
                 JIcon(icon, null, size = 20.dp, tint = palette.ink2, decorative = true)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(title, style = titleStyle, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(title, style = titleStyle, color = palette.ink, maxLines = titleLines, overflow = TextOverflow.Ellipsis)
                     detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 }
                 diff(); Spacer(Modifier.width(6.dp)); mark()
@@ -234,7 +330,7 @@ fun WorkStep(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f).padding(top = 4.dp, bottom = if (last) 4.dp else 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, style = titleStyle, color = palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(title, style = titleStyle, color = palette.ink, maxLines = titleLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.weight(1f)); diff()
                     if (state == WorkState.Failed || state == WorkState.Waiting || state == WorkState.Unknown) { Spacer(Modifier.width(6.dp)); mark() }
                 }

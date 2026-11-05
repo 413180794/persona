@@ -193,7 +193,8 @@ internal fun ChatPicture(session: SessionKey, item: Item, loader: ImageLoader, a
 }
 
 /** [userImages] renders neighboring user-image rows in the same bubble; hide those rows with [imagesInUserBubble].
- * [workRunning] comes from the parent work group's live flag; [lastWorkStep] ends its timeline connector.
+ * [workRunning] comes from the parent work group's live flag; [lastWorkStep] ends its timeline connector; [plan] is the
+ * group's plan ([latestPlan]): its TodoWrite is the plan card, the group's other TodoWrites are not drawn (web #1990).
  */
 @Composable
 internal fun ChatLineContent(
@@ -207,6 +208,7 @@ internal fun ChatLineContent(
     imagesInUserBubble: Boolean = false,
     workRunning: Boolean = false,
     lastWorkStep: Boolean = false,
+    plan: LinePlan? = null,
 ) {
     when (line) {
         is ChatLine.Row -> when (line.row.type) {
@@ -232,12 +234,29 @@ internal fun ChatLineContent(
             images = userPictures(userImages, session, loader))
         is ChatLine.SplitHeader -> JTextButton("合并 ${line.count} 条输入", { onToggle(line.groupId) })
         is ChatLine.Work -> {
-            // The running line counts its time up every second (R1); a finished one is still.
-            val now by rememberNow(1_000, enabled = line.live)
-            WorkGroup(workSummary(line, recordedDuration, now.takeIf { line.live }), line.open,
-                { onToggle(line.id) }, running = line.live) {}
+            // While it runs, the plan and the newest steps show under 「正在工作…」 and a ticking clock (web #1990); done,
+            // it folds to its summary. Persona's own chat keeps one sentence that counts its time up every second (R1).
+            val trace = line.live && !style.compactToolSummary
+            val now by rememberNow(1_000, enabled = line.live && !trace)
+            val peek = remember(line.steps, trace) { if (trace) workPeek(line.steps) else null }
+            WorkGroup(workSummary(line, recordedDuration, now.takeIf { line.live }, peek = trace), line.open,
+                { onToggle(line.id) }, running = line.live,
+                trailing = if (trace) ({ WorkClock(line) }) else null,
+                peek = peek?.takeIf { it.plan != null || it.steps.isNotEmpty() }?.let { shown -> {
+                    shown.plan?.let { PlanStep(it, running = true, nested = true) }
+                    shown.steps.forEachIndexed { i, step ->
+                        key(step.id) {
+                            val last = i == shown.steps.lastIndex
+                            // A thought is one line here (web ThinkingLine): a long one streaming in would make the peek jump.
+                            if (step is WorkItem.Thought) TimelineStep(PhIcons.Lightbulb,
+                                thoughtLine(textUpdates[step.item.id]?.text ?: step.item.text.orEmpty()), verb = "思考", last = last, singleLine = true)
+                            else WorkStep(step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates,
+                                running = true, last = last)
+                        }
+                    }
+                } }) {}
         }
-        is ChatLine.Step -> WorkStep(line.step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates, workRunning, lastWorkStep)
+        is ChatLine.Step -> WorkStep(line.step, session, loader, onFold, folding, foldErrors, onFullText, style, textUpdates, workRunning, lastWorkStep, plan)
         is ChatLine.End -> TimelineMark("收起 ${line.count} 步",
             Modifier.heightIn(min = 44.dp).clickable(role = Role.Button) { onToggle(line.groupId) })
         is ChatLine.Wakes -> ChatSystemLine("后台唤醒 ${line.turn.wakes.size} 次")
@@ -247,7 +266,7 @@ internal fun ChatLineContent(
 @Composable
 private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, onFold: (Item) -> Unit,
     folding: Set<String>, errors: Map<String, String>, onFullText: (Item) -> Unit,
-    style: ChatRenderStyle, textUpdates: Map<String, ChatTextUpdate>, running: Boolean, last: Boolean) {
+    style: ChatRenderStyle, textUpdates: Map<String, ChatTextUpdate>, running: Boolean, last: Boolean, plan: LinePlan? = null) {
     when (step) {
         is WorkItem.Folded -> {
             val item = step.item.item
@@ -269,6 +288,10 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                 if (searchItem != null && (searchItem == call.use.id || searchItem == call.result?.id)) {
                     open = true
                 }
+            }
+            if (todos != null && !style.compactToolSummary) {
+                if (plan?.id == call.id) PlanStep(plan, running)
+                return
             }
             val presentation = toolPresentation(call.use.item)
             Column(Modifier.fillMaxWidth()) {
@@ -311,6 +334,27 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
         else step.item.compaction?.let { TimelineMark(it.label) }
             ?: ChatSystemLine(step.item.task?.detail ?: step.item.text.orEmpty(), step.item.task?.failed == true)
     }
+}
+
+/** A work line's plan as the plan card (web #1990): the step it is on, Step N/M, the list. [nested]: inside a work group's card. */
+@Composable
+private fun PlanStep(plan: LinePlan, running: Boolean, nested: Boolean = false) {
+    val progress = remember(plan.todos) { planProgress(plan.todos) }
+    val items = remember(plan.todos) {
+        plan.todos.map { it.content to when (it.status) {
+            "completed" -> PlanItemState.Done
+            "in_progress" -> PlanItemState.Active
+            else -> PlanItemState.Pending
+        } }
+    }
+    PlanCard(items, progress.current, progress.step, live = running, nested = nested, note = if (plan.failed) "更新失败" else null)
+}
+
+/** A running line's clock, every second: a leaf of its own, so the ticking redraws nothing else. */
+@Composable
+private fun WorkClock(line: ChatLine.Work) {
+    val now by rememberNow(1_000)
+    Text(line.durationText(now))
 }
 
 /** The pictures shown inside a user bubble, or null when there are none (a message of only contexts has no bubble). */
