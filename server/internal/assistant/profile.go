@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/kb"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -54,6 +55,8 @@ type Settings struct {
 	// StartRequestedTasks: a task_plan task the user asked for in so many words starts without the card's 开始
 	// (#2559). nil is on (the default).
 	StartRequestedTasks *bool `json:"start_requested_tasks,omitempty"`
+	// RecordingDays: how many days the phone's recordings stay in the knowledge base (#3235); nil is 14.
+	RecordingDays *int `json:"recording_days,omitempty"`
 }
 
 // FormerMain is a main conversation that was replaced, and until when it was the main one.
@@ -171,6 +174,32 @@ func (s *Service) startRequestedTasks(ctx context.Context) bool {
 	return quietOn(s.settings(ctx).StartRequestedTasks)
 }
 
+// Bounds of recording_days.
+const (
+	minRecordingDays = 1
+	maxRecordingDays = 365
+)
+
+// recordingDays is how many days recordings stay in the knowledge base (recording_days, 14 by default).
+func (s *Service) recordingDays(ctx context.Context) int {
+	if d := s.settings(ctx).RecordingDays; d != nil && *d >= minRecordingDays && *d <= maxRecordingDays {
+		return *d
+	}
+	return kb.DefaultRecordingDays
+}
+
+// recordingDaysNow is recordingDays for the knowledge base's engine, which has no context of its own; while the
+// settings cannot be read it keeps the default (savedSettings caches the last read).
+func (s *Service) recordingDaysNow() int {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	v, ok := s.savedSettings(ctx)
+	if !ok || v.RecordingDays == nil || *v.RecordingDays < minRecordingDays || *v.RecordingDays > maxRecordingDays {
+		return kb.DefaultRecordingDays
+	}
+	return *v.RecordingDays
+}
+
 // launcherNow is the launcher new conversations start with: 模型配置 › 主对话's, else the assistant's own.
 func (s *Service) launcherNow(ctx context.Context) string {
 	if rec, err := s.modelRecord(ctx, "assistant"); err == nil && rec.Binding.Provider != "" {
@@ -242,6 +271,8 @@ type assistantView struct {
 	MainTasksQuiet bool            `json:"main_tasks_quiet"` // in effect (the setting's own is left out while unset)
 	// StartRequestedTasks is in effect, like MainTasksQuiet.
 	StartRequestedTasks bool `json:"start_requested_tasks"`
+	// RecordingDays is in effect, like MainTasksQuiet.
+	RecordingDays int `json:"recording_days"`
 }
 
 // view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`). It lists the
@@ -255,7 +286,7 @@ func (s *Service) view(ctx context.Context, withArchived bool, space ...string) 
 	v := s.settings(ctx)
 	v.Launcher = s.launcherNow(ctx)
 	out := assistantView{Settings: v, Conversations: []proto.Session{}, NotesEffective: s.notes(ctx), MainTasksQuiet: quietOn(v.MainTasksQuiet),
-		StartRequestedTasks: quietOn(v.StartRequestedTasks)}
+		StartRequestedTasks: quietOn(v.StartRequestedTasks), RecordingDays: s.recordingDays(ctx)}
 	if d, ok := s.device(ctx, v.MachineID); ok {
 		out.Cwd = spaceCwd(d, sp)
 		list, _ := s.sessions(ctx, d.ID)
@@ -343,6 +374,10 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if d := in.RecordingDays; d != nil && (*d < minRecordingDays || *d > maxRecordingDays) {
+		apierr.Write(w, http.StatusBadRequest, errors.New("recording_days must be 1–365"))
+		return
+	}
 	if in.Timezone != "" {
 		if _, err := time.LoadLocation(in.Timezone); err != nil {
 			apierr.Write(w, http.StatusBadRequest, err)
@@ -386,6 +421,9 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.StartRequestedTasks != nil {
 			v.StartRequestedTasks = in.StartRequestedTasks
+		}
+		if in.RecordingDays != nil {
+			v.RecordingDays = in.RecordingDays
 		}
 		return nil
 	}); err != nil {

@@ -30,5 +30,13 @@
   "agents": "このプロジェクトのエージェント",
   "code_dirs": "コードのフォルダー",
   "copy_path": "パスをコピー",
-  "message_line": "{sender}：{text}"
+  "message_line": "{sender}：{text}",
+  "recording_started": "開始",
+  "recording_duration": "長さ",
+  "recording_device": "デバイス",
+  "recording_language": "言語",
+  "recording_partial": "文字起こし中です。完了後に補完されます",
+  "transcript": "文字起こし",
+  "transcript_empty": "文字起こしはまだありません",
+  "bookmark": "ブックマーク"
 }

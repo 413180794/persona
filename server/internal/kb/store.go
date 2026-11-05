@@ -141,6 +141,7 @@ type Store struct {
 	mu        sync.Mutex
 	metaMu    sync.Mutex
 	applyMu   sync.Mutex
+	recMu     sync.Mutex // a recording's read-compare-write (recordings.go)
 	observeMu sync.RWMutex
 	changed   func(Change)
 	zone      *time.Location // the user's zone, the archive's days and times are written in (zone.go); nil: time.Local
@@ -149,7 +150,7 @@ type Store struct {
 }
 
 func NewStore(dir string) (*Store, error) {
-	for _, k := range []string{KindChat, KindPerson, KindProject, KindDoc, KindMeeting, KindEvent} {
+	for _, k := range []string{KindChat, KindPerson, KindProject, KindDoc, KindMeeting, KindEvent, KindRecording} {
 		if err := os.MkdirAll(filepath.Join(dir, k), 0o700); err != nil {
 			return nil, err
 		}

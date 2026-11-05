@@ -20,6 +20,7 @@ import {
   parseRecent,
   profile,
   projectInfo,
+  recordingView,
   shortWhen,
   statusLabel,
   timeline,
@@ -27,6 +28,7 @@ import {
   type KBEntry,
   type KBMatch,
   type KBMomentRef,
+  type RecordingView,
 } from "../../lib/kb";
 import { machineWithHub } from "../../lib/mesh";
 import { openPanel } from "../../lib/panel";
@@ -126,6 +128,7 @@ export function EntryDetail({
   };
 
   const facts = d ? factsOf(d.kind, d.meta) : null;
+  const rec = d ? recordingView(d.kind, d.meta, d.segments) : null;
   const log = timeline(d?.log);
   const prof = profile(d?.summary, e.one_line, e.name);
   const links = linkGroups(d?.links);
@@ -216,6 +219,8 @@ export function EntryDetail({
                   </Card>
                 </section>
               )}
+
+              {rec && <RecordingFacts rec={rec} />}
 
               {query && resp?.matches && (
                 <Matches
@@ -365,6 +370,8 @@ export function EntryDetail({
 
               {dirs.length > 0 && <Dirs dirs={dirs} />}
 
+              {rec && <Transcript rec={rec} query={query} />}
+
               {recent.length > 0 && (
                 <section>
                   <Card>
@@ -501,6 +508,55 @@ function Agents({ agents }: { agents: Session[] }) {
             </a>
           );
         })}
+      </Card>
+    </section>
+  );
+}
+
+/** A recording's when, how long, where it was made; and whether its transcript is still coming. */
+function RecordingFacts({ rec }: { rec: RecordingView }) {
+  const rows: [string, string][] = [];
+  if (rec.startedAt) rows.push([t("knowledge-kbdetail.recording_started"), formatAt(rec.startedAt)]);
+  if (rec.duration) rows.push([t("knowledge-kbdetail.recording_duration"), rec.duration]);
+  rows.push([t("knowledge-kbdetail.recording_device"), rec.device]);
+  if (rec.language) rows.push([t("knowledge-kbdetail.recording_language"), rec.language]);
+  return (
+    <section>
+      <Card>
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
+            <span className="flex-1 text-ink-2">{k}</span>
+            <span className="whitespace-nowrap text-ink tabular-nums">{v}</span>
+          </div>
+        ))}
+      </Card>
+      {rec.partial && <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("knowledge-kbdetail.recording_partial")}</p>}
+    </section>
+  );
+}
+
+/** The whole transcript, a line per segment at its clock time; bookmarks inline. */
+function Transcript({ rec, query }: { rec: RecordingView; query?: string }) {
+  return (
+    <section>
+      <SectionTitle title={t("knowledge-kbdetail.transcript")} count={rec.lines.filter((l) => !l.bookmark).length} />
+      <Card>
+        {!rec.lines.length && <p className="px-4 py-2.5 text-[12.5px] text-ink-3">{t("knowledge-kbdetail.transcript_empty")}</p>}
+        <ol className="px-4 py-1.5">
+          {rec.lines.map((l, i) => (
+            <li key={i} className="flex gap-3 py-1.5 text-[13px] leading-relaxed">
+              <span className={cx("w-[60px] shrink-0 pt-px text-[11.5px] tabular-nums", l.bookmark ? "font-semibold text-accent-ink" : "text-ink-3")}>{l.clock}</span>
+              {l.bookmark ? (
+                <span className="min-w-0 flex-1 font-medium text-accent-ink">
+                  {t("knowledge-kbdetail.bookmark")}
+                  {l.text ? ` · ${l.text}` : ""}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1 text-ink select-text">{query ? <Marked text={l.text} query={query} /> : l.text}</span>
+              )}
+            </li>
+          ))}
+        </ol>
       </Card>
     </section>
   );

@@ -17,7 +17,8 @@ enum class KnowledgeKind(val title: CoreText) {
     @SerialName("people") People(CoreText.of(Key.KnowledgePeople)),
     @SerialName("docs") Docs(CoreText.of(Key.KnowledgeDocs)),
     @SerialName("meetings") Meetings(CoreText.of(Key.KnowledgeMeetings)),
-    @SerialName("events") Events(CoreText.of(Key.KnowledgeEvents));
+    @SerialName("events") Events(CoreText.of(Key.KnowledgeEvents)),
+    @SerialName("recordings") Recordings(CoreText.of(Key.KnowledgeRecordings));
 
     val wire: String get() = name.lowercase()
     companion object {
@@ -53,7 +54,13 @@ data class KnowledgeDetail(
     val log: List<String>? = null,
     val recent: String? = null,
     val links: List<KnowledgeEntry>? = null,
+    /** A recording's transcript (recordings only); the same text as [recent], kept apart line by line. */
+    val segments: List<KnowledgeSegment>? = null,
 )
+
+/** One line of a recording's transcript: [start] and [end] are seconds from the recording's `started_at`. */
+@Serializable
+data class KnowledgeSegment(val start: Double = 0.0, val end: Double = 0.0, val text: String = "")
 
 /** [agents]: the live, non-assistant sessions working in a project's code directories (projects only). */
 @Serializable

@@ -64,6 +64,10 @@ type Engine struct {
 	ExtraDirs []string
 	// Index mirrors an entity into the hub's Postgres index (optional).
 	Index func(kind, id, name string, t Tagging, oneLine string, updated time.Time)
+	// Unindex removes index rows (recordings deleted or past their retention; optional).
+	Unindex func(kind string, ids []string)
+	// RecordingDaysFunc is how many days recordings are kept (the assistant's recording_days; nil or <= 0: 14).
+	RecordingDaysFunc func() int
 	// HandleKey is the hub's key for the senders' identity hints (handles.go); without it none are kept.
 	HandleKey []byte
 

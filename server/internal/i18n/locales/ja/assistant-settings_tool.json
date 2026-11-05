@@ -9,5 +9,7 @@
   "change_notes": "「自分について」を変更：{before} → {after}",
   "change_main_tasks_quiet": "「メインチャットのタスクはメインチャットだけで通知」：{before} → {after}",
   "change_start_requested_tasks": "「会話で頼んだタスクはすぐ開始」：{before} → {after}",
-  "change_launcher": "Personaのデフォルトランチャー：{before} → {after}"
+  "change_launcher": "Personaのデフォルトランチャー：{before} → {after}",
+  "title_recording_days": "録音をナレッジベースに保存する日数",
+  "change_recording_days": "録音をナレッジベースに保存：{before} → {after} 日"
 }

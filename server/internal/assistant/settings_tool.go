@@ -62,6 +62,12 @@ func (s *Service) ownSettings() []ownSetting {
 			Value: "true or false"},
 			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.startRequestedTasks(ctx)), nil },
 			set: s.setStartRequestedTasks},
+		{Setting: Setting{Key: "assistant.recording_days", Title: "录音在知识库里保留", Actions: getSet,
+			About: "how many days the phone's and watch's recording transcripts stay in the knowledge base (kind recordings); older " +
+				"ones are deleted from it (the audio and the recordings on the phone are not touched). 14 by default",
+			Value: "a whole number of days, 1–365"},
+			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.recordingDays(ctx)), nil },
+			set: s.setRecordingDays},
 		{Setting: Setting{Key: "assistant.launcher", Title: "Persona 的启动器", Actions: getSet,
 			About: "which launcher (model) new Persona conversations start with by default",
 			Value: "a launcher name from this setting's get"},
@@ -171,7 +177,8 @@ func orNone(s string) string {
 // settingTitles are the settings' titles for the card the user approves on, in this file's namespace (Title stays
 // what the assistant reads).
 var settingTitles = map[string]string{"assistant.notes": "title_notes", "assistant.main_tasks_quiet": "title_main_tasks_quiet",
-	"assistant.start_requested_tasks": "title_start_requested_tasks", "assistant.launcher": "title_launcher"}
+	"assistant.start_requested_tasks": "title_start_requested_tasks", "assistant.launcher": "title_launcher",
+	"assistant.recording_days": "title_recording_days"}
 
 // clipped is a value as the card shows it, in l.
 func clipped(l i18n.Lang, s string) string {
@@ -253,6 +260,31 @@ func (s *Service) setStartRequestedTasks(ctx context.Context, v json.RawMessage)
 			}
 			s.settingsChanged(ctx)
 			return fmt.Sprintf("assistant.start_requested_tasks is %v for plans from now on.", on), nil
+		}}, nil
+}
+
+func (s *Service) setRecordingDays(ctx context.Context, v json.RawMessage) (*ownChange, error) {
+	var days int
+	if err := json.Unmarshal(v, &days); err != nil || days < minRecordingDays || days > maxRecordingDays {
+		return nil, errors.New("value must be a whole number of days, 1–365")
+	}
+	before := s.recordingDays(ctx)
+	if days == before {
+		return &ownChange{summary: "「录音在知识库里保留」没有变化"}, nil
+	}
+	if s.store() == nil {
+		return nil, errors.New("no database on this hub")
+	}
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_recording_days", i18n.Args{"before": before, "after": days})
+	},
+		apply: func(ctx context.Context) (string, error) {
+			if _, err := s.updateSettings(ctx, func(v *Settings) error { v.RecordingDays = &days; return nil }); err != nil {
+				return "", err
+			}
+			s.settingsChanged(ctx)
+			s.kbWake() // a shorter retention prunes now
+			return fmt.Sprintf("assistant.recording_days is %d: recordings older than that leave the knowledge base.", days), nil
 		}}, nil
 }
 

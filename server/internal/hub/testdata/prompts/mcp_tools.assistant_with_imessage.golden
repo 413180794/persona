@@ -523,7 +523,7 @@
   },
   {
     "name": "kb_search",
-    "description": "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
+    "description": "Search the knowledge base (~/.jarvis/data): summaries and metadata of chats, people, projects, docs, meetings, events, recordings (with their full transcripts), project timelines, the notes directories the user added (hits with an absolute path) and, with messages=true, the full message archive (newest days first). All words must match.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -546,7 +546,7 @@
   },
   {
     "name": "kb_list",
-    "description": "List knowledge-base entities of one kind ranked by importance (P0 first), relevance to the user, recency: projects (short = a feature / launch, long = a team mission), chats, people, docs, meetings, events. Optional tag filter.",
+    "description": "List knowledge-base entities of one kind ranked by importance (P0 first), relevance to the user, recency: projects (short = a feature / launch, long = a team mission), chats, people, docs, meetings, events, recordings (transcripts of the user's phone / watch recordings, kept a few days). Optional tag filter.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -561,7 +561,8 @@
             "people",
             "docs",
             "meetings",
-            "events"
+            "events",
+            "recordings"
           ]
         },
         "tag": {
@@ -576,7 +577,7 @@
   },
   {
     "name": "kb_get",
-    "description": "Read one entity: its metadata (links to people / chats / projects, tags), compressed context (summary.md), a project's timeline, a chat's messages of the last 7 days. id from kb_list / kb_search (a project also by name).",
+    "description": "Read one entity: its metadata (links to people / chats / projects, tags), compressed context (summary.md), a project's timeline, a chat's messages of the last 7 days, a recording's full timestamped transcript (recordings: the user's phone / watch recordings of the last days, text only). id from kb_list / kb_search (a project also by name).",
     "input_schema": {
       "type": "object",
       "required": [
@@ -592,7 +593,8 @@
             "people",
             "docs",
             "meetings",
-            "events"
+            "events",
+            "recordings"
           ]
         },
         "id": {
@@ -603,7 +605,7 @@
   },
   {
     "name": "kb_update",
-    "description": "Write to the knowledge base: create or change a project (name, project_kind short|long, status, goal, my_role, aliases, link chats / people, code dirs as \"\u003cmachine\u003e:\u003cpath\u003e\" so Agents there belong to it, append a timeline `log` line, replace its summary), or tag / annotate a chat, person, doc, meeting, event (importance P0–P3, relevance 0–100, tags, note, link projects). Tags set here are kept over the automatic ones. Use it whenever a conversation settles something about a project or person. Two projects that are the same work under two names: `merge_into`.",
+    "description": "Write to the knowledge base: create or change a project (name, project_kind short|long, status, goal, my_role, aliases, link chats / people, code dirs as \"\u003cmachine\u003e:\u003cpath\u003e\" so Agents there belong to it, append a timeline `log` line, replace its summary), or tag / annotate a chat, person, doc, meeting, event, recording (a recording's content is the phone's: only its tags, pinned and projects; importance P0–P3, relevance 0–100, tags, note, link projects). Tags set here are kept over the automatic ones. Use it whenever a conversation settles something about a project or person. Two projects that are the same work under two names: `merge_into`.",
     "input_schema": {
       "type": "object",
       "required": [
@@ -619,7 +621,8 @@
             "people",
             "docs",
             "meetings",
-            "events"
+            "events",
+            "recordings"
           ]
         },
         "id": {

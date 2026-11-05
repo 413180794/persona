@@ -18,6 +18,8 @@ import {
   linkGroups,
   markParts,
   parseLogLine,
+  recordingView,
+  durationLabel,
   parseMessageLine,
   parseRecent,
   parseTags,
@@ -321,5 +323,34 @@ describe("开 Agent", () => {
     expect(p).toMatchObject({ machineId: "desk", cwd: "~/code/weather" });
     expect(agentPreset("projects", { name: "天气 App" }, d, [])).toEqual({ prompt: p.prompt });
     expect(agentPreset("projects", { name: "x", one_line: "一句话" }, null, ["desk"]).prompt).toContain("\n一句话\n");
+  });
+});
+
+describe("recordingView", () => {
+  it("is only for recordings", () => {
+    expect(recordingView("meetings", {}, [])).toBeNull();
+  });
+  it("puts segments and bookmarks in order at their clock time", () => {
+    const start = new Date(2026, 10, 5, 9, 0, 0).toISOString();
+    const v = recordingView(
+      "recordings",
+      { started_at: start, duration: 3733, device: "watch", language: "zh-CN", complete: false, bookmarks: [{ at: 12, label: "灰度" }] },
+      [
+        { start: 20, end: 25, text: "后一段" },
+        { start: 0, end: 9, text: " 第一段 " },
+        { start: 30, end: 31, text: "  " },
+      ],
+    )!;
+    expect(v.lines).toEqual([
+      { clock: "09:00:00", text: "第一段" },
+      { clock: "09:00:12", text: "灰度", bookmark: true },
+      { clock: "09:00:20", text: "后一段" },
+    ]);
+    expect(v.partial).toBe(true);
+    expect(v.duration).toBe(durationLabel(3733));
+    expect(v.device).not.toBe(recordingView("recordings", { device: "phone" }, [])!.device);
+  });
+  it("falls back to offsets without a start", () => {
+    expect(recordingView("recordings", { complete: true }, [{ start: 3723, end: 3730, text: "x" }])!.lines[0].clock).toBe("1:02:03");
   });
 });

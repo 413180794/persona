@@ -4,7 +4,10 @@ import persona.core.contracts.Session
 import persona.core.contracts.api.*
 import kotlinx.serialization.json.*
 import androidx.annotation.StringRes
+import java.time.Instant
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import kotlin.math.roundToLong
 
 internal data class KnowledgeSection(
     @StringRes val title: Int,
@@ -83,6 +86,8 @@ internal sealed interface KnowledgeHitSource {
     data object Profile : KnowledgeHitSource
     data object Timeline : KnowledgeHitSource
     data object Details : KnowledgeHitSource
+    /** A recording's transcript (`recordings/<id>/transcript.md`). */
+    data object Transcript : KnowledgeHitSource
     data class File(val name: String) : KnowledgeHitSource
 }
 
@@ -95,6 +100,7 @@ internal val KnowledgeHit.source: KnowledgeHitSource
             "summary.md" -> KnowledgeHitSource.Profile
             "log.md" -> KnowledgeHitSource.Timeline
             "meta.json" -> KnowledgeHitSource.Details
+            "transcript.md" -> KnowledgeHitSource.Transcript
             else -> if (file.endsWith(".json")) KnowledgeHitSource.Details else KnowledgeHitSource.File(file)
         }
     }
@@ -226,14 +232,94 @@ internal fun parseTags(text: String): List<String> = text.split(Regex("\\s+")).f
 internal fun projectAgents(agents: List<Session>?): List<Session> = agents.orEmpty().filter { !it.assistant && it.isLive }
 
 internal fun KnowledgeDetail.entry(): KnowledgeEntry {
-    val name = meta.string("name").ifBlank { meta.string("title") }.ifBlank { id }
-    val projectExtra = if (kind == KnowledgeKind.Projects.wire)
-        "${meta.string("kind").ifBlank { "short" }} · ${meta.string("status").ifBlank { "active" }}" else meta.string("kind")
+    val recording = kind == KnowledgeKind.Recordings.wire
+    // A recording's title (when the summary gave it one) reads better than its generated name.
+    val name = (if (recording) meta.string("title").ifBlank { meta.string("name") } else meta.string("name").ifBlank { meta.string("title") })
+        .ifBlank { id }
+    val extra = when (kind) {
+        KnowledgeKind.Projects.wire -> "${meta.string("kind").ifBlank { "short" }} · ${meta.string("status").ifBlank { "active" }}"
+        KnowledgeKind.Recordings.wire -> meta.string("device")
+        else -> meta.string("kind")
+    }
+    // A recording lists as when it was made, as the hub's list does.
+    val updated = if (recording) meta.string("started_at")
+        else meta.string("updated").ifBlank { meta.string("last_at").ifBlank { meta.string("last_seen") } }
     return KnowledgeEntry(kind, id, name,
         meta.string("one_line").ifBlank { meta.string("note") }, meta.string("importance"),
-        (meta?.get("relevance") as? JsonPrimitive)?.intOrNull ?: 0, meta.strings("tags"),
-        meta.string("updated").ifBlank { meta.string("last_at").ifBlank { meta.string("last_seen") } }, projectExtra)
+        (meta?.get("relevance") as? JsonPrimitive)?.intOrNull ?: 0, meta.strings("tags"), updated, extra)
 }
+
+internal val KnowledgeEntry.isRecording: Boolean get() = kind == KnowledgeKind.Recordings.wire
+
+/** Where a recording was made: its `extra` on a list, `device` in its meta. */
+internal enum class RecordingDevice { Phone, Watch }
+
+internal fun recordingDevice(value: String?): RecordingDevice? = when (value?.trim()) {
+    "phone" -> RecordingDevice.Phone
+    "watch" -> RecordingDevice.Watch
+    else -> null
+}
+
+/** A mark set while recording, [at] seconds from the start; [label] when one was written. */
+internal data class RecordingBookmark(val at: Double, val label: String?)
+
+/** A recording's length split for display: hours and minutes past an hour, minutes and seconds past a minute. */
+internal sealed interface RecordingLength {
+    data class Hours(val hours: Long, val minutes: Long) : RecordingLength
+    data class Minutes(val minutes: Long, val seconds: Long) : RecordingLength
+    data class Seconds(val seconds: Long) : RecordingLength
+
+    companion object {
+        fun of(seconds: Double): RecordingLength {
+            val total = seconds.coerceAtLeast(0.0).roundToLong()
+            return when {
+                total >= 3600 -> Hours(total / 3600, total % 3600 / 60)
+                total >= 60 -> Minutes(total / 60, total % 60)
+                else -> Seconds(total)
+            }
+        }
+    }
+}
+
+/**
+ * What a recording's page shows above its transcript, read from its meta.json (docs/knowledge.md「录音」). A meta
+ * without `complete` is from a finished recording; a missing `duration` is measured from `ended_at`.
+ */
+internal data class RecordingFacts(
+    val startedAt: Instant?,
+    val duration: Double?,
+    val device: String,
+    val language: String,
+    val complete: Boolean,
+    val bookmarks: List<RecordingBookmark>,
+) {
+    val length: RecordingLength? get() = duration?.takeIf { it > 0 }?.let(RecordingLength::of)
+
+    /** The wall-clock moment [offset] seconds into the recording; null without a start time. */
+    fun clock(offset: Double): Instant? = startedAt?.plusMillis((offset.coerceAtLeast(0.0) * 1000).roundToLong())
+
+    companion object {
+        fun of(meta: JsonObject?): RecordingFacts {
+            val started = instant(meta.string("started_at"))
+            val duration = (meta?.get("duration") as? JsonPrimitive)?.doubleOrNull
+                ?: instant(meta.string("ended_at"))?.let { end -> started?.let { (end.toEpochMilli() - it.toEpochMilli()) / 1000.0 } }
+            val bookmarks = (meta?.get("bookmarks") as? JsonArray).orEmpty().mapNotNull { item ->
+                val mark = item as? JsonObject ?: return@mapNotNull null
+                val at = (mark["at"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
+                RecordingBookmark(at, mark.string("label").trim().takeIf { it.isNotEmpty() })
+            }.sortedBy { it.at }
+            return RecordingFacts(started, duration, meta.string("device"), meta.string("language"),
+                (meta?.get("complete") as? JsonPrimitive)?.booleanOrNull ?: true, bookmarks)
+        }
+
+        private fun instant(value: String): Instant? =
+            value.takeIf { it.isNotBlank() }?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.getOrNull() }
+    }
+}
+
+/** The transcript's lines that say something, in time order. */
+internal fun transcript(segments: List<KnowledgeSegment>?): List<KnowledgeSegment> =
+    segments.orEmpty().filter { it.text.isNotBlank() }.sortedBy { it.start }
 
 internal fun JsonObject?.string(key: String): String = (this?.get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
 internal fun JsonObject?.strings(key: String): List<String> = (this?.get(key) as? JsonArray)

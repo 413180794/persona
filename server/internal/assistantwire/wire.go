@@ -615,6 +615,10 @@ var Routes = []string{
 	"GET /api/v1/kb/chats/{id}/context",
 	"GET /api/v1/kb/chats/{id}/days/{day}",
 	"GET /api/v1/kb-search",
+	// The phone's recordings (kb_recordings.go there, docs/protocol.md「录音同步」).
+	"PUT /api/v1/recordings/{id}",
+	"DELETE /api/v1/recordings/{id}",
+	"GET /api/v1/recordings",
 }
 
 // ---- the assistant's settings, and the conversations the hub's features start (docs/assistant.md「和 hub 的边界」) ----

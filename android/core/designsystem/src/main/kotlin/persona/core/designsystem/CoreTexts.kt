@@ -274,6 +274,7 @@ private fun resourceOf(key: CoreText.Key): Int = when (key) {
     CoreText.Key.KnowledgeDocs -> R.string.designsystem_core_knowledge_docs
     CoreText.Key.KnowledgeMeetings -> R.string.designsystem_core_knowledge_meetings
     CoreText.Key.KnowledgeEvents -> R.string.designsystem_core_knowledge_events
+    CoreText.Key.KnowledgeRecordings -> R.string.designsystem_core_knowledge_recordings
     CoreText.Key.MailError -> R.string.designsystem_core_mail_error
     CoreText.Key.MailOutlook -> R.string.designsystem_core_mail_outlook
     CoreText.Key.MailGmail -> R.string.designsystem_core_mail_gmail

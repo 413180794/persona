@@ -43,7 +43,7 @@ export function KBIcon({ name, size = 15, stroke = 1.9, className }: { name: KBI
   );
 }
 
-export const KIND_ICON: Record<KBKind, KBIconName> = { projects: "layers", chats: "chat", people: "person", docs: "read", meetings: "video", events: "calendar" };
+export const KIND_ICON: Record<KBKind, KBIconName> = { projects: "layers", chats: "chat", people: "person", docs: "read", meetings: "video", events: "calendar", recordings: "mic" };
 
 export const TINT: Record<Tone, string> = {
   red: "bg-red-tint text-red",

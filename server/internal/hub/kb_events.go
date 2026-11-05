@@ -15,7 +15,7 @@ func init() {
 			return
 		}
 		var p assistantwire.KBChanged
-		if json.Unmarshal(raw, &p) != nil || p.ID == "" || !slices.Contains([]string{kb.KindChat, kb.KindPerson, kb.KindProject, kb.KindDoc, kb.KindMeeting, kb.KindEvent}, p.Kind) ||
+		if json.Unmarshal(raw, &p) != nil || p.ID == "" || !slices.Contains([]string{kb.KindChat, kb.KindPerson, kb.KindProject, kb.KindDoc, kb.KindMeeting, kb.KindEvent, kb.KindRecording}, p.Kind) ||
 			!slices.Contains([]string{"metadata", "summary", "messages", "log"}, p.What) {
 			return
 		}

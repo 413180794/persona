@@ -431,7 +431,20 @@ Claude 能滚是因为它在哪一行都接滚轮（第 0 行、输入框上都�
 
 **iOS / Android 能不能用同一个接口**：能，不用改服务端。它们已经在用 `POST /machines/{mid}/files`（对话页「发送文件」，传到电脑临时目录），
 加 `dest=terminal` 就落到 Persona 的目录；返回的路径同样要按上面的规则转义后经 `terminal_input` 的 `text`（括号粘贴 `ESC[200~ … ESC[201~` 自己包）敲进窗格。
-App 端没做：iOS 的终端 tab 还没有「粘贴图片」入口，Android 同理。
+Android 还没做。
+
+### iOS / Mac（#3083）
+
+和网页同一条路、同样的规则（UI 测试 `TerminalFilesUITests`：按住粘贴出菜单、点「文件」弹出选择器），纯逻辑在 `apple/Persona/Views/Session/Terminal/TerminalFiles.swift`（`TerminalPaste`：转义、命名、守卫、文案；`TerminalUploads`：上传和敲路径），单测 `TerminalFilesTests`。
+
+- **入口**：iOS 键栏的粘贴键点一下照旧粘贴文字，**按住**出菜单「粘贴文字 / 照片 / 文件」：照片图库（可多选，含视频）或文件 App。
+  也可以在设置 › 键栏里打开单独的回形针键「照片 / 文件」（默认不显示：手机宽度放不下，多一个键整条键栏就要左右滑）。
+  Mac 上终端里 ⌘V 粘贴 Finder 拷贝的文件、截图（剪贴板只有图片时；有文字时照旧是文字粘贴，判断同输入框的 `MacPaste`），也可以把文件拖到终端上（拖着时终端描一圈强调色，只在接管时描），键栏同样能用。
+- **上传**：`APIClient.upload(…, dest: "terminal")`，一个一个传；50 MB、空文件先拦下；文件夹不传，提示「文件夹传不了，拖里面的文件进来」。
+  照片图库里的 HEIC / TIFF 等转成 JPEG（`image.jpg`），PNG / JPEG / GIF / WebP 和视频原样传；没有名字的按类型起名（`image.png`、`video.mov`）。
+- **敲路径**：传完的路径按 `escapePastePath` 同样的规则转义（`TerminalPaste.escape`），空格隔开、末尾一个空格，整段包成括号粘贴（`ESC[200~ … ESC[201~`，App 不知道程序开没开 `?2004`，和多行粘贴一样总是包）经 `terminal_input.text` 发出去，不回车。
+- **守卫**：只在接管时收（否则提示「接管终端后才能粘贴文件」）；传的时候换了会话、关了终端，提示「上传期间终端已切换，没有粘贴」；不再接管，提示「上传期间不再接管终端，没有粘贴」。
+  传的时候终端顶部有「正在上传 xxx…」的状态条，失败用 toast。
 
 ### 把文件面板的条目拖进终端 / 输入框（#2333）
 

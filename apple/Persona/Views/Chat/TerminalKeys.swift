@@ -69,7 +69,7 @@ struct TerminalModifiers: Equatable {
 }
 
 /// Terminal keys in one row that never wraps (it scrolls sideways when they do not fit): ctrl / alt / shift (tap,
-/// double tap, hold), esc, tab, a ⌃C that goes out straight away, the saved commands, paste; then, always in reach, a
+/// double tap, hold), esc, tab, a ⌃C that goes out straight away, the saved commands, paste, photos / files; then, always in reach, a
 /// game-pad button that floats a direction pad (↑ ↓ ← → with enter in the middle) above the bar and the keyboard's.
 struct TerminalKeyBar: View {
     /// Shared with a text field that should honor them; the bar keeps its own when nil.
@@ -80,6 +80,9 @@ struct TerminalKeyBar: View {
     var shortcuts: (() -> Void)? = nil
     var shortcutsOn = false
     var paste: (() -> Void)? = nil
+    /// Pick photos / files to upload to the pane's machine and type their paths in (nil: no button).
+    var photos: (() -> Void)? = nil
+    var files: (() -> Void)? = nil
     /// The keyboard on the terminal: up or down (nil: no button).
     var keyboard: Binding<Bool>? = nil
     var send: ([String]) -> Void
@@ -147,13 +150,49 @@ struct TerminalKeyBar: View {
                 .accessibilityLabel("快捷命令")
             }
             if visible.contains("paste"), let paste {
-                Button { Haptics.tap(); paste() } label: { KeyCap(symbol: Theme.Icon.paste, state: .off) }
+                if let photos, let files {
+                    // A tap pastes the clipboard's text as ever; held, it offers photos and files too.
+                    Menu {
+                        Button { paste() } label: { Label("粘贴文字", systemImage: Theme.Icon.paste) }
+                        fileItems(photos: photos, files: files)
+                    } label: {
+                        KeyCap(symbol: Theme.Icon.paste, state: .off)
+                    } primaryAction: {
+                        Haptics.tap()
+                        paste()
+                    }
+                    .menuStyle(.button)
                     .buttonStyle(.plain)
+                    .menuIndicator(.hidden)
                     .accessibilityLabel("粘贴")
+                    .accessibilityHint("按住可以粘贴照片或文件")
+                    .accessibilityIdentifier("terminal-paste")
+                } else {
+                    Button { Haptics.tap(); paste() } label: { KeyCap(symbol: Theme.Icon.paste, state: .off) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("粘贴")
+                }
+            }
+            if visible.contains("files"), let photos, let files {
+                Menu {
+                    fileItems(photos: photos, files: files)
+                } label: {
+                    KeyCap(symbol: Theme.Icon.attachment, state: .off)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .accessibilityLabel("粘贴照片或文件")
+                .accessibilityIdentifier("terminal-files")
             }
             if visible.contains("alt") { modifier(.alt, "Alt", name: "Option") }
             if visible.contains("shift") { modifier(.shift, "⇧", name: "Shift") }
         }
+    }
+
+    @ViewBuilder private func fileItems(photos: @escaping () -> Void, files: @escaping () -> Void) -> some View {
+        Button { photos() } label: { Label("照片", systemImage: Theme.Icon.photos) }
+        Button { files() } label: { Label("文件", systemImage: Theme.Icon.file) }
     }
 
     private func keyboardButton(_ up: Binding<Bool>) -> some View {

@@ -27,5 +27,6 @@
   "common_tags": "よく使うタグ",
   "clear_filter": "絞り込みを解除",
   "all": "すべて",
-  "no_tags": "この種類にはまだタグがありません。"
+  "no_tags": "この種類にはまだタグがありません。",
+  "empty_recordings": "録音はまだありません"
 }

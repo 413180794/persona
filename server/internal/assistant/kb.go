@@ -189,7 +189,7 @@ func (s *Service) kbOpenLocked(ctx context.Context, set assistantwire.KBSettings
 	}
 	s.kbRezone(k.store, loc)
 	e := &kb.Engine{Store: k.store, Model: s.kbModel("inbox.triage"), ModelFor: func(id string) kb.Model { return s.kbModel(id) },
-		Owner: s.owner(ctx), Logf: s.logf, TextDays: set.TextDays, AttachmentDays: set.AttachmentDays, HandleKey: k.key, Index: s.kbIndexEntity, Changed: s.kbChanged, MineObserved: s.kbObserveOwner}
+		Owner: s.owner(ctx), Logf: s.logf, TextDays: set.TextDays, AttachmentDays: set.AttachmentDays, HandleKey: k.key, Index: s.kbIndexEntity, Unindex: s.kbUnindex, RecordingDaysFunc: s.recordingDaysNow, Changed: s.kbChanged, MineObserved: s.kbObserveOwner}
 	e.ObserveChanges()
 	for _, d := range set.ExtraDirs {
 		if d = expandHome(strings.TrimSpace(d)); filepath.IsAbs(d) {
@@ -245,6 +245,19 @@ func (s *Service) kbIndexEntity(kind, id, name string, t kb.Tagging, one string,
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := idx.PutKBEntity(ctx, kind, id, name, t.Importance, t.Relevance, t.Tags, one, updated); err != nil {
+		s.logf("kb index: %v", err)
+	}
+}
+
+// kbUnindex removes index rows (recordings deleted or past their retention), when the store has an index.
+func (s *Service) kbUnindex(kind string, ids []string) {
+	idx, ok := s.store().(kbIndex)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := idx.DeleteKBEntities(ctx, kind, ids); err != nil {
 		s.logf("kb index: %v", err)
 	}
 }
@@ -381,6 +394,14 @@ func (s *Service) kbRound(ctx context.Context, e *kb.Engine, r *kbRounds) {
 		}
 	}
 	e.RefreshProjects(ctx, 3)
+	// Recordings: those past recording_days go (every round: the setting may just have shortened), complete ones get
+	// their summary.
+	s.kbRun(ctx, func() {
+		if n := e.PruneRecordings(time.Now()); n > 0 {
+			s.logf("kb: pruned %d recording(s)", n)
+		}
+		e.SummarizeRecordings(ctx, 3)
+	})
 	// Same work under two names, and the 公司圈 posts about each project: a few model calls every half hour.
 	if time.Since(r.links) >= kbItemsPoll {
 		r.links = time.Now()

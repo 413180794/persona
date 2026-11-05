@@ -242,6 +242,7 @@ data class CoreText(val key: Key, val args: List<Any> = emptyList()) {
         KnowledgeDocs("Docs"),
         KnowledgeMeetings("Meetings"),
         KnowledgeEvents("Events"),
+        KnowledgeRecordings("Recordings"),
         MailError("Error"),
         MailOutlook("Outlook · Microsoft account"),
         MailGmail("Gmail · Google account"),

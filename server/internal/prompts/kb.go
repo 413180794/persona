@@ -12,6 +12,9 @@ func RenderKBCompress(o KBOwner) string { return render("kb/compress", o) }
 func RenderKBProject(o KBOwner) string  { return render("kb/project", o) }
 func RenderKBItems(o KBOwner) string    { return render("kb/items", o) }
 
+// RenderKBRecording is the system prompt for summarizing a recording's transcript (kb/recording).
+func RenderKBRecording(o KBOwner) string { return render("kb/recording", o) }
+
 // RenderKBReadme is the README.md at the top of the data dir (kb/readme).
 func RenderKBReadme() string { return render("kb/readme", nil) }
 
@@ -116,6 +119,19 @@ type KBItemsInput struct {
 }
 
 func RenderKBItemsInput(in KBItemsInput) string { return render("kb/items_input", in) }
+
+// KBRecordingInput is one recording to summarize (kb/recording_input): Start in the user's zone, the transcript as
+// transcript.md has it (clipped).
+type KBRecordingInput struct {
+	Pinned, Title, Device, Language string
+	Start                           time.Time
+	Minutes                         int
+	Projects                        []KnownProject
+	Tags                            []string
+	Transcript                      string
+}
+
+func RenderKBRecordingInput(in KBRecordingInput) string { return render("kb/recording_input", in) }
 
 // KBDigestEntry is one project or chat in the digest.
 type KBDigestEntry struct {

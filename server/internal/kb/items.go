@@ -191,6 +191,7 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 			if messages {
 				days = append(days, p)
 			}
+		case filepath.Base(p) == "segments.json": // a recording's: transcript.md has the same text
 		case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
 			files = append(files, p)
 		}
@@ -313,9 +314,21 @@ func (e *Engine) List(kind, tag string) []Entry {
 					Relevance: it.Relevance, Tags: it.Tags, Updated: it.At, Extra: it.URL})
 			}
 		}
+	case KindRecording:
+		for _, r := range e.Store.Recordings() {
+			if has(r.Tags) {
+				out = append(out, recordingEntry(r))
+			}
+		}
 	}
 	Rank(out)
 	return out
+}
+
+// recordingEntry is a recording as lists show it: Extra is the device it was made on.
+func recordingEntry(r *Recording) Entry {
+	return Entry{Kind: KindRecording, ID: r.ID, Name: r.Name, OneLine: r.OneLine, Importance: r.Importance,
+		Relevance: r.Relevance, Tags: r.Tags, Updated: r.StartedAt, Extra: r.Device}
 }
 
 // Prompt is a short Markdown digest of the most important projects and chats, for the assistant's live snapshot.

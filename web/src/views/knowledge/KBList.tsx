@@ -368,6 +368,7 @@ const EMPTY_TITLE: Record<KBKind, string> = {
   docs: t("knowledge-kblist.empty_docs"),
   meetings: t("knowledge-kblist.empty_meetings"),
   events: t("knowledge-kblist.empty_events"),
+  recordings: t("knowledge-kblist.empty_recordings"),
 };
 
 function Empty({ kind, tag }: { kind: KBKind; tag?: string }) {

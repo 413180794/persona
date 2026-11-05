@@ -54,10 +54,10 @@ Persona 和 AI 分身要「代替我上班」，前提是它们知道的和我�
 手机（和经手机回传的手表）录音的转写文字，由手机经 `PUT /api/v1/recordings/{id}` 同步进来（[protocol.md](protocol.md)「录音同步」、[recording.md](recording.md)），不上传音频。
 
 - 一条录音一个条目，键是手机上的 UUID；每次上传整份覆盖，`revision` 小于已存的就不写（乱序、重放都只留最新）。`complete: false` 时只存、可搜，不调模型。
-- 转写完成（`complete: true`）且这一版还没摘要过的，管理者每轮挑最多 3 条交给模型（`kb.recording`，没配就是 `kb.ai`，提示词 `prompts/kb/recording.md`）：
+- 转写完成（`complete: true`）且这一版还没摘要过的，管理者每轮挑最多 3 条交给模型（用途和会话压缩一样是 `kb.compress`，提示词 `prompts/kb/recording.md`；没有可用的模型时这一轮停下，下一轮再试）：
   得到摘要、一句话、标题（用户没起名时用）、打标和提到的项目；项目照常挂上（项目时间线记一条「录音 · 标题」）。全文最多给模型 2.4 万字（留开头和结尾）。
 - 保留期是助手设置 `recording_days`（默认 14 天，不跟 `text_days`）：每轮把开始时间早于保留期的目录和索引行删掉，墓碑也只留这么久。
-- `kb_list` / `kb_get` / `kb_search` 和 App 的知识库页多一类 `recordings`；`kb_get` 带摘要、书签和全文转写（按 `max_chars` 截）。录音不能经 `kb_update` 改内容（内容以手机为准），只能改打标。
+- `kb_list` / `kb_get` / `kb_search` 和 App 的知识库页多一类 `recordings`；`kb_get` 带摘要、书签和全文转写（最多 1.2 万字）。录音不能经 `kb_update` 改内容（内容以手机为准），只能改打标。
 
 ## 额外的笔记目录（`kb.extra_dirs`）
 

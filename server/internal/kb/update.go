@@ -65,6 +65,8 @@ type Detail struct {
 	Links []Entry `json:"links,omitempty"`
 	// Moments: a project's 公司圈 posts (LinkMoments), newest first.
 	Moments []MomentRef `json:"moments,omitempty"`
+	// Segments: a recording's transcript (the app shows it; Recent has it as text for the assistant).
+	Segments []RecordingSegment `json:"segments,omitempty"`
 }
 
 // MomentRef is a 公司圈 post as a project shows it.
@@ -81,10 +83,13 @@ var ErrNotFound = errors.New("not found")
 
 // Get reads one entity. recentChars bounds a chat's latest messages (0: none).
 func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
+	if kind == KindRecording {
+		id, _ = RecordingID(id) // the phone's UUID in any case
+	}
 	d := &Detail{Kind: kind, ID: SafeID(id)}
 	var meta string
 	switch kind {
-	case KindChat, KindPerson, KindProject:
+	case KindChat, KindPerson, KindProject, KindRecording:
 		meta = e.Store.path(kind, id, "meta.json")
 		d.Path = e.Store.path(kind, id)
 		d.Summary = e.Store.Summary(kind, id)
@@ -108,6 +113,13 @@ func (e *Engine) Get(kind, id string, recentChars int) (*Detail, error) {
 					d.Moments = append(d.Moments, MomentRef{ID: m.ID, Author: f.Author, Text: f.Text, At: m.At, Comments: m.CommentCount, Note: x.Note})
 				}
 			}
+		}
+	}
+	if kind == KindRecording {
+		d.Segments = nonNilSegments(e.Store.RecordingSegments(id))
+		if recentChars > 0 {
+			raw, _ := os.ReadFile(e.Store.path(kind, id, "transcript.md"))
+			d.Recent = clip(string(raw), recentChars)
 		}
 	}
 	if kind == KindChat && recentChars > 0 {
@@ -136,13 +148,19 @@ func (e *Engine) itemEntries(refs []string) []Entry {
 		if !ok {
 			continue
 		}
+		if kind == KindRecording {
+			if r, ok := e.Store.Recording(id); ok {
+				by[kind] = append(by[kind], recordingEntry(r))
+			}
+			continue
+		}
 		if it, ok := e.Store.Item(kind, id); ok && it.Title != "" {
 			by[kind] = append(by[kind], Entry{Kind: kind, ID: it.ID, Name: it.Title, OneLine: it.Note, Importance: it.Importance,
 				Relevance: it.Relevance, Tags: it.Tags, Updated: it.At, Extra: it.URL})
 		}
 	}
 	var out []Entry
-	for _, k := range []string{KindDoc, KindMeeting, KindEvent} {
+	for _, k := range []string{KindDoc, KindMeeting, KindEvent, KindRecording} {
 		list := by[k]
 		sort.SliceStable(list, func(i, j int) bool { return list[i].Updated.After(list[j].Updated) })
 		out = append(out, list[:min(len(list), 30)]...)
@@ -429,6 +447,38 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		}
 		e.index(kind, it.ID, it.Title, it.Tagging, it.Note, it.At)
 		return it.ID, nil
+	case KindRecording:
+		id, _ = RecordingID(id)
+		// The phone owns the content (PutRecording); by hand only the tags, the pinned facts and the projects.
+		e.Store.recMu.Lock()
+		defer e.Store.recMu.Unlock()
+		r, ok := e.Store.Recording(id)
+		if !ok {
+			return "", ErrNotFound
+		}
+		u.tag(&r.Tagging)
+		u.protect(&r.Tagging)
+		for _, slug := range u.Projects {
+			if pr, ok := e.Store.Project(slug); ok {
+				r.Projects = addUnique(r.Projects, pr.Slug)
+				pr.Items = addUnique(pr.Items, kind+"/"+r.ID)
+				if u.Lock == nil || *u.Lock {
+					pr.LockedFields = addUnique(pr.LockedFields, "items")
+				}
+				if err := e.Store.putEntity(KindProject, pr.Slug, pr, &pr.Tagging, true); err != nil {
+					return "", err
+				}
+			}
+		}
+		r.Projects = removeStrings(r.Projects, u.RemoveProjects)
+		if err := e.Store.putEntity(kind, r.ID, r, &r.Tagging, true); err != nil {
+			return "", err
+		}
+		if err := e.unlink(kind, r.ID, u); err != nil {
+			return "", err
+		}
+		e.index(kind, r.ID, r.Name, r.Tagging, r.OneLine, r.StartedAt)
+		return r.ID, nil
 	}
 	return "", fmt.Errorf("unknown kind %q", kind)
 }

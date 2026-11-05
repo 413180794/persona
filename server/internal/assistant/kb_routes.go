@@ -22,7 +22,7 @@ var (
 )
 
 func (s *Service) kbRoutes() {
-	kinds := map[string]bool{kb.KindProject: true, kb.KindChat: true, kb.KindPerson: true, kb.KindDoc: true, kb.KindMeeting: true, kb.KindEvent: true}
+	kinds := map[string]bool{kb.KindProject: true, kb.KindChat: true, kb.KindPerson: true, kb.KindDoc: true, kb.KindMeeting: true, kb.KindEvent: true, kb.KindRecording: true}
 	engine := func(w http.ResponseWriter, r *http.Request) *kb.Engine {
 		e, err := s.kbGet(r.Context())
 		switch {
@@ -33,6 +33,7 @@ func (s *Service) kbRoutes() {
 		}
 		return e
 	}
+	s.recordingRoutes(engine)
 	s.handle("GET /api/v1/kb/{kind}", func(w http.ResponseWriter, r *http.Request) {
 		e := engine(w, r)
 		kind := r.PathValue("kind")

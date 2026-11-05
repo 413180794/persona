@@ -263,10 +263,13 @@ nonisolated struct APIClient: Sendable {
 
     /// Sends a file to the machine's temp directory (docs/protocol.md「发送文件」), streamed from disk; progress gets
     /// the bytes sent so far. Cancelling the task cancels the upload and the machine removes what it wrote.
-    func upload(file: URL, name: String, machine: String,
+    /// dest "terminal": a file pasted into a terminal, kept in Persona's own directory (docs/terminal.md 第十八节).
+    func upload(file: URL, name: String, machine: String, dest: String? = nil,
                 progress: @escaping @Sendable (Int64) -> Void) async throws -> UploadedFile {
         if config.isDemo { throw APIError(status: 403, message: DemoText.notSent) }
-        var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: ["name": name]), timeoutInterval: 120)
+        var query = ["name": name]
+        if let dest { query["dest"] = dest }
+        var req = URLRequest(url: url("/api/v1/machines/\(machine)/files", query: query), timeoutInterval: 120)
         req.httpMethod = "POST"
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         let requestID = String(UUID().uuidString.prefix(8)).lowercased()

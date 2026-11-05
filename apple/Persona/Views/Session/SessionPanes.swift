@@ -1,4 +1,5 @@
 import BeautifulUI
+import PhotosUI
 import SwiftUI
 
 /// The tabs of a dev session page: the conversation, its terminal, the project's git state and its files.
@@ -171,6 +172,13 @@ struct TerminalPanel: View {
     @State private var pasting: String?
     /// The size a pinch is at, shown while it changes.
     @State private var pinchHUD: Double?
+    /// Files pasted, dropped or picked on the way to the pane's machine (TerminalFiles.swift).
+    @State private var uploads = TerminalUploads()
+    @State private var pickingPhotos = false
+    @State private var photoPicks: [PhotosPickerItem] = []
+    @State private var pickingFiles = false
+    /// Files are being dragged over the terminal (Mac).
+    @State private var dropping = false
     /// Switches the page to another session (two-finger swipes); nil where the panel cannot (the full-screen sheet).
     var switchTo: ((SessionKey) -> Void)?
     /// The keyboard came up on the terminal or went down (the page folds its header meanwhile).
@@ -235,6 +243,14 @@ struct TerminalPanel: View {
             if let note { model.toast = Toast(note, style: .info) }
         }
         .onChange(of: sizeMode) { _, mode in feed.setWantsControl(mode == "phone", model) }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photoPicks, maxSelectionCount: 10,
+                      matching: .any(of: [.images, .videos]), photoLibrary: .shared())
+        .onChange(of: photoPicks) { _, items in
+            guard !items.isEmpty else { return }
+            photoPicks = []
+            Task { await takePhotos(items) }
+        }
+        .fileUploadPicker(isPresented: $pickingFiles) { takeFiles($0.map { .file($0) }) }
         .confirmationDialog(pasting.map { "粘贴 \($0.split(separator: "\n", omittingEmptySubsequences: false).count) 行到终端？" } ?? "",
                             isPresented: Binding(get: { pasting != nil }, set: { if !$0 { pasting = nil } }),
                             titleVisibility: .visible) {
@@ -272,6 +288,7 @@ struct TerminalPanel: View {
                 try? await Task.sleep(for: .milliseconds(250))
             }
             feed.stop(model)
+            uploads.leave() // an upload that ends now types nothing into whatever is open next
         }
     }
 
@@ -285,6 +302,8 @@ struct TerminalPanel: View {
                                shortcuts: { withAnimation(.spring(duration: 0.3, bounce: 0.25)) { showShortcuts.toggle() } },
                                shortcutsOn: showShortcuts,
                                paste: pasteClipboard,
+                               photos: { pickingPhotos = true },
+                               files: { pickingFiles = true },
                                keyboard: direct ? $keyboardUp : nil) { keys in send(keys) }
                     .overlay(alignment: .bottomLeading) {
                         if showShortcuts {
@@ -367,6 +386,13 @@ struct TerminalPanel: View {
                         .background(Theme.danger.opacity(0.85), in: .capsule).padding(Theme.Space.s)
                 }
             }
+            .overlay {
+                if dropping {
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                        .strokeBorder(Theme.accent, lineWidth: Theme.Size.lineMedium)
+                        .allowsHitTesting(false)
+                }
+            }
             .animation(Theme.Motion.standard, value: feed.paused)
             .animation(Theme.Motion.standard, value: pinchHUD == nil)
     }
@@ -390,6 +416,12 @@ struct TerminalPanel: View {
                              onWheel: feed.drives && model.canScrollTerminal(key.group) ? { model.terminalScroll(key, lines: $0, at: $1) } : nil,
                              onClick: feed.drives && model.canClickTerminal(key.group) ? { model.terminalClick(key, column: $0, row: $1) } : nil,
                              onGrid: gridChanged)
+                #if os(macOS)
+                .files(takeFiles, dropping: { on in dropping = on && feed.drives })
+                #endif
+            }
+            .overlay(alignment: .top) {
+                if let status = uploads.status { uploadingBar(status).padding(Theme.Space.s) }
             }
         }
     }
@@ -600,7 +632,50 @@ struct TerminalPanel: View {
         .accessibilityValue(wrap ? "开" : TerminalHelpText.noWrapValue)
     }
 
+    /// Over the terminal while files go to its machine.
+    private func uploadingBar(_ status: String) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            ProgressView().controlSize(.mini).tint(Color(hex: side.foreground))
+            Text(status).lineLimit(1).truncationMode(.middle)
+        }
+        .font(Theme.Font.labelMedium)
+        .foregroundStyle(Color(hex: side.foreground))
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.xs)
+        .background(Color(hex: side.background).opacity(0.95), in: .capsule)
+        .overlay(Capsule().strokeBorder(Color(hex: side.foreground).opacity(0.15), lineWidth: Theme.Size.hairline))
+        .allowsHitTesting(false)
+        .accessibilityIdentifier("terminal-uploading")
+    }
+
     // MARK: Actions
+
+    /// Files pasted, dropped or picked: uploaded to the pane's machine, then their paths typed in (folders refused).
+    private func takeFiles(_ sources: [TerminalFileSource]) {
+        let urls = sources.compactMap { if case .file(let u) = $0 { u } else { nil } }
+        let split = TerminalPaste.files(urls)
+        if split.folders > 0 { model.toast = Toast(TerminalPaste.folders, style: .error) }
+        let keep = Set(split.files)
+        let sending = sources.filter { if case .file(let u) = $0 { keep.contains(u) } else { true } }
+        uploads.start(sending, feed: feed, model: model)
+    }
+
+    /// Photos from the library: pictures the agents cannot read (HEIC) as JPEG, the rest (and videos) as they are.
+    private func takePhotos(_ items: [PhotosPickerItem]) async {
+        var sources: [TerminalFileSource] = []
+        var failed = 0
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { failed += 1; continue }
+            let type = item.supportedContentTypes.first
+            if TerminalPaste.needsJPEG(type), let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9) {
+                sources.append(.data(jpeg, name: TerminalPaste.pictureName(.jpeg)))
+            } else {
+                sources.append(.data(data, name: TerminalPaste.photoName(type)))
+            }
+        }
+        if failed > 0 { model.toast = Toast("有 \(failed) 个照片读不出来（可能还在 iCloud 里没下载完）", style: .error) }
+        takeFiles(sources)
+    }
 
     private func pinched(_ size: CGFloat) {
         fontSize = Double(size)

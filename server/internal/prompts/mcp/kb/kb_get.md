@@ -1,4 +1,4 @@
-Read one entity: its metadata (links to people / chats / projects, tags), compressed context (summary.md), a project's timeline, a chat's messages of the last 7 days. id from kb_list / kb_search (a project also by name).
+Read one entity: its metadata (links to people / chats / projects, tags), compressed context (summary.md), a project's timeline, a chat's messages of the last 7 days, a recording's full timestamped transcript (recordings: the user's phone / watch recordings of the last days, text only). id from kb_list / kb_search (a project also by name).
 
 ```json
 {
@@ -7,7 +7,7 @@ Read one entity: its metadata (links to people / chats / projects, tags), compre
   "properties": {
     "kind": {
       "type": "string",
-      "enum": ["projects", "chats", "people", "docs", "meetings", "events"]
+      "enum": ["projects", "chats", "people", "docs", "meetings", "events", "recordings"]
     },
     "id": {
       "type": "string"

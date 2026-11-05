@@ -35,5 +35,13 @@
   "agents": "Agents on this project",
   "code_dirs": "Code folders",
   "copy_path": "Copy path",
-  "message_line": "{sender}: {text}"
+  "message_line": "{sender}: {text}",
+  "recording_started": "Started",
+  "recording_duration": "Length",
+  "recording_device": "Recorded on",
+  "recording_language": "Language",
+  "recording_partial": "Still transcribing; the rest will follow",
+  "transcript": "Transcript",
+  "transcript_empty": "No transcript yet",
+  "bookmark": "Bookmark"
 }

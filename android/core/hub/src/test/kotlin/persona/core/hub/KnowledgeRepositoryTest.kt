@@ -71,4 +71,20 @@ class KnowledgeRepositoryTest {
             assertTrue(runCatching { repository.update(KnowledgeKind.People, "gone", KnowledgeUpdate(tags = emptyList())) }.exceptionOrNull() is HubFailure)
         }
     }
+
+    @Test fun recordingDetailKeepsItsSegments() = runBlocking {
+        MockWebServer().use { server ->
+            val repository = HttpKnowledgeRepository(HubScope("demo", "generation"), server.url("/").toString(),
+                "fixture-token", OkHttpClient(), { true })
+            server.enqueue(MockResponse().setBody("""{"items":[{"kind":"recordings","id":"r1","name":"r1","updated":"2026-11-05T14:00:00Z","extra":"phone"}],"tags":[]}"""))
+            assertEquals("phone", repository.list(KnowledgeKind.Recordings).items.single().extra)
+            assertEquals("/api/v1/kb/recordings", server.takeRequest().requestUrl!!.encodedPath)
+            server.enqueue(MockResponse().setBody("""{"detail":{"kind":"recordings","id":"r1","path":"data/recordings/r1",
+                "meta":{"started_at":"2026-11-05T14:00:00Z","duration":12,"complete":true,"bookmarks":[]},"summary":"",
+                "recent":"x","segments":[{"start":0.5,"end":2,"text":"你好","speaker":"a"}],"unknown":[1]}}"""))
+            val detail = repository.detail(KnowledgeKind.Recordings, "r1")
+            assertEquals(listOf(0.5 to "你好"), detail.segments.orEmpty().map { it.start to it.text })
+            assertEquals("/api/v1/kb/recordings/r1", server.takeRequest().path)
+        }
+    }
 }

@@ -77,7 +77,7 @@ func entryOf(rel string) (kind, id string, ok bool) {
 		return "", "", false
 	}
 	switch parts[0] {
-	case KindChat, KindPerson, KindProject:
+	case KindChat, KindPerson, KindProject, KindRecording:
 		if len(parts) < 3 {
 			return "", "", false
 		}
@@ -151,7 +151,7 @@ func (e *Engine) Find(query string, limit int) []Result {
 	}
 	known := e.find.entries(metas, func() map[string]Entry {
 		known := map[string]Entry{}
-		for _, k := range []string{KindProject, KindChat, KindPerson, KindDoc, KindMeeting, KindEvent} {
+		for _, k := range []string{KindProject, KindChat, KindPerson, KindDoc, KindMeeting, KindEvent, KindRecording} {
 			for _, en := range e.List(k, "") {
 				known[k+"/"+en.ID] = en
 			}
@@ -247,6 +247,7 @@ func (e *Engine) files() (files, days []string) {
 				}
 			case strings.Contains(p, sep+"messages"+sep):
 				days = append(days, p)
+			case d.name == "segments.json": // a recording's: transcript.md has the same text
 			case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
 				files = append(files, p)
 			}
@@ -275,7 +276,7 @@ func sortHits(h []Found) []Found {
 			return 0
 		case strings.HasSuffix(f.Path, "/log.md"):
 			return 1
-		case strings.Contains(f.Path, "/messages/"):
+		case strings.Contains(f.Path, "/messages/"), strings.HasSuffix(f.Path, "/transcript.md"):
 			return 2
 		}
 		return 3
@@ -308,6 +309,9 @@ type Match struct {
 // Matches returns the places in one entry matching query: the profile, timeline and metadata, then messages, newest
 // day first; at most limit.
 func (e *Engine) Matches(kind, id, query string, limit int) []Match {
+	if kind == KindRecording {
+		id, _ = RecordingID(id)
+	}
 	match := matcher(query)
 	if match == nil {
 		return nil
@@ -363,6 +367,10 @@ func (e *Engine) Matches(kind, id, query string, limit int) []Match {
 			for i := len(days) - 1; i >= 0 && len(out) < limit; i-- {
 				look(e.Store.path(KindChat, id, "messages", days[i]+".md"), true)
 			}
+		}
+	case KindRecording:
+		for _, f := range []string{"summary.md", "transcript.md", "meta.json"} {
+			look(e.Store.path(kind, id, f), false)
 		}
 	case KindDoc, KindMeeting, KindEvent:
 		look(filepath.Join(e.Store.Dir, kind, SafeID(id)+".json"), false)

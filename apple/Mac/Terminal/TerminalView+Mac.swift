@@ -10,7 +10,8 @@ import SwiftUI
 /// - the keyboard goes to the terminal through `NSTextInputClient` (input methods compose over the cursor);
 /// - scrolling is the terminal's wheel while driving (`onWheel`), else it scrolls the scrollback;
 /// - a click is a click on the program's screen (`onClick`) or opens a link (`onOpenURL`); a drag selects, ⌘C copies;
-/// - ⌘+ / ⌘− / ⌘0 and a trackpad pinch change the font size (`onFontSize`); ⌘V pastes (`onDoubleTap`, the phone's paste).
+/// - ⌘+ / ⌘− / ⌘0 and a trackpad pinch change the font size (`onFontSize`); ⌘V pastes (`onDoubleTap`, the phone's paste);
+/// - files and pictures pasted with ⌘V or dragged in go to `onFiles` (uploaded, their paths typed: TerminalFiles.swift).
 struct TerminalView: NSViewRepresentable {
     var content: TerminalContent
     var wrap: Bool
@@ -36,6 +37,18 @@ struct TerminalView: NSViewRepresentable {
     var onClick: ((Int, Int) -> Void)?
     /// The cols × rows that fit the view at the font size.
     var onGrid: ((TerminalGridSize) -> Void)?
+    /// Files dropped on the terminal, or files / a picture on the pasteboard at ⌘V (set with `files(_:dropping:)`).
+    var onFiles: (([TerminalFileSource]) -> Void)?
+    /// Files are being dragged over the terminal (true) or not any more.
+    var onDropping: ((Bool) -> Void)?
+
+    /// Takes pasted and dropped files (the iOS view has no such thing: there the key bar picks them).
+    func files(_ take: (([TerminalFileSource]) -> Void)?, dropping: ((Bool) -> Void)? = nil) -> TerminalView {
+        var v = self
+        v.onFiles = take
+        v.onDropping = dropping
+        return v
+    }
 
     func makeNSView(context: Context) -> TerminalScrollView { TerminalScrollView() }
 
@@ -50,6 +63,8 @@ struct TerminalView: NSViewRepresentable {
         v.onClick = onClick
         v.onInput = onInput
         v.onGrid = onGrid
+        v.onFiles = onFiles
+        v.onDropping = onDropping
         v.onFocus = focused.map { b in { on in if b.wrappedValue != on { b.wrappedValue = on } } }
         v.update(content: content, wrap: wrap, fontSize: fontSize, font: font, theme: theme,
                  dark: context.environment.colorScheme == .dark)
@@ -79,6 +94,8 @@ final class TerminalScrollView: NSScrollView {
     var onInput: ((TerminalInputEvent) -> Void)?
     var onFocus: ((Bool) -> Void)?
     var onGrid: ((TerminalGridSize) -> Void)?
+    var onFiles: (([TerminalFileSource]) -> Void)?
+    var onDropping: ((Bool) -> Void)?
     private var reportedGrid: TerminalGridSize?
     private var wheelRows: CGFloat = 0
     private var wheelAt: (col: Int, row: Int)?
@@ -542,13 +559,35 @@ final class TerminalScrollView: NSScrollView {
                      CellPoint(line: lines.count - 1, col: max(0, lines[lines.count - 1].to - lines[lines.count - 1].from - 1)))
     }
 
-    /// ⌘V: the page's paste (it asks first for several lines), else the clipboard's text typed.
+    /// ⌘V: files copied in Finder or a picture alone (a screenshot) are uploaded (`onFiles`); text is the page's paste
+    /// (it asks first for several lines), else the clipboard's text typed.
     fileprivate func paste() {
+        if let onFiles {
+            switch MacPaste.current() {
+            case .files(let urls): return onFiles(urls.map { .file($0) })
+            case .image:
+                if let png = Self.pastedPicture() { return onFiles([.data(png, name: TerminalPaste.pictureName(.png))]) }
+            case .text: break
+            }
+        }
         if let onDoubleTap { onDoubleTap(); return }
         if onInput != nil, let t = UIPasteboard.general.string, !t.isEmpty { emit(t) }
     }
 
-    fileprivate var canPaste: Bool { onDoubleTap != nil || onInput != nil }
+    /// The picture on the pasteboard as PNG (screenshots come as PNG, pictures copied from apps often as TIFF).
+    private static func pastedPicture(_ board: NSPasteboard = .general) -> Data? {
+        if let png = board.data(forType: .png) { return png }
+        guard let tiff = board.data(forType: .tiff) ?? NSImage(pasteboard: board)?.tiffRepresentation else { return nil }
+        return NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+    }
+
+    fileprivate var canPaste: Bool { onDoubleTap != nil || onInput != nil || onFiles != nil }
+
+    // MARK: Dropped files
+
+    fileprivate static func droppedFiles(_ info: NSDraggingInfo) -> [URL] {
+        info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    }
 }
 
 /// The scrollback as one flipped view (top-left origin, like UIKit): it draws the lines in the dirty rect, takes the
@@ -562,6 +601,7 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
         setAccessibilityRole(.staticText)
         setAccessibilityLabel("终端")
         setAccessibilityIdentifier("terminal-screen")
+        registerForDraggedTypes([.fileURL])
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -606,6 +646,30 @@ final class TerminalScreenView: NSView, NSTextInputClient, NSMenuItemValidation 
 
     override func mouseUp(with event: NSEvent) {
         host?.mouseUp(at: point(event), clicks: event.clickCount)
+    }
+
+    // MARK: Dragging files in
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard let host, host.onFiles != nil, !TerminalScrollView.droppedFiles(sender).isEmpty else { return [] }
+        host.onDropping?(true)
+        return .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        host?.onFiles != nil && !TerminalScrollView.droppedFiles(sender).isEmpty ? .copy : []
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { host?.onDropping?(false) }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) { host?.onDropping?(false) }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = TerminalScrollView.droppedFiles(sender)
+        guard let onFiles = host?.onFiles, !urls.isEmpty else { return false }
+        host?.onDropping?(false)
+        onFiles(urls.map { .file($0) })
+        return true
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

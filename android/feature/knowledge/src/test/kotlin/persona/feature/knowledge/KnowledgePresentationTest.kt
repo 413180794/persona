@@ -40,9 +40,11 @@ class KnowledgePresentationTest {
         assertTrue(kindSections(emptyList(), null).isEmpty())
     }
 
-    @Test fun allSixKindsAndEveryConversationAreShown() {
-        assertEquals(listOf("项目", "会话", "人", "文档", "会议", "日程"), KnowledgeKind.entries.map { it.title.shown })
-        assertEquals(listOf("projects", "chats", "people", "docs", "meetings", "events"), KnowledgeKind.entries.map { it.wire })
+    @Test fun allSevenKindsAndEveryConversationAreShown() {
+        assertEquals(listOf("项目", "会话", "人", "文档", "会议", "日程", "录音"), KnowledgeKind.entries.map { it.title.shown })
+        assertEquals(listOf("projects", "chats", "people", "docs", "meetings", "events", "recordings"), KnowledgeKind.entries.map { it.wire })
+        assertEquals(KnowledgeKind.Recordings, KnowledgeKind.fromWire("recordings"))
+        assertTrue(KnowledgeEntry("recordings", "r", "录音").inScope())
         assertTrue(KnowledgeEntry("chats", "dm", "私聊", extra = "dm").inScope())
         assertTrue(KnowledgeEntry("events", "e", "日程").inScope())
         assertFalse(KnowledgeEntry("moments", "m", "帖子").inScope())
@@ -165,5 +167,57 @@ class KnowledgePresentationTest {
         assertEquals("P2", person.importance)
         assertEquals(100, person.relevance)
         assertEquals(KnowledgeUpdate("P2", 100, emptyList()), person.update(isProject = false))
+    }
+
+    private val recording = JsonCodec.decodeFromString<KnowledgeDetailResponse>(
+        """{"detail":{"kind":"recordings","id":"20261105-140000-phone","path":"data/recordings/20261105-140000-phone",
+        "meta":{"id":"20261105-140000-phone","name":"20261105-140000-phone","title":"周会","revision":3,
+          "started_at":"2026-11-05T14:00:00+08:00","ended_at":"2026-11-05T15:02:05+08:00","duration":3725.4,
+          "language":"zh-CN","device":"watch","complete":false,"segments":2,"chars":12,"projects":["weather"],
+          "one_line":"周会讨论发布","importance":"P1","relevance":60,"tags":["周会"],"future":{"x":1},
+          "bookmarks":[{"at":90.5,"label":"  "},{"at":12,"label":"开场"},{"at":"bad"}]},
+        "summary":"","links":null,"recent":"14:00:01 大家好\n14:00:07 开始",
+        "segments":[{"start":7.2,"end":9,"text":"开始","words":[]},{"start":1,"end":3.5,"text":"大家好"},{"start":10,"end":11,"text":"  "}]}}""",
+    ).detail
+
+    @Test fun recordingDetailParses() {
+        val entry = recording.entry()
+        assertEquals("周会", entry.name)
+        assertEquals("watch", entry.extra)
+        assertEquals("2026-11-05T14:00:00+08:00", entry.updated)
+        assertTrue(entry.isRecording)
+        assertEquals(RecordingDevice.Watch, recordingDevice(entry.extra))
+        assertEquals(RecordingDevice.Phone, recordingDevice("phone"))
+        assertNull(recordingDevice("tablet"))
+
+        val facts = RecordingFacts.of(recording.meta)
+        assertEquals(java.time.Instant.parse("2026-11-05T06:00:00Z"), facts.startedAt)
+        assertEquals(RecordingLength.Hours(1, 2), facts.length)
+        assertEquals("zh-CN", facts.language)
+        assertFalse(facts.complete)
+        assertEquals(listOf(RecordingBookmark(12.0, "开场"), RecordingBookmark(90.5, null)), facts.bookmarks)
+        // Clock times are the start plus the offset: 14:00:07.2 for the second line.
+        assertEquals(java.time.Instant.parse("2026-11-05T06:00:07.200Z"), facts.clock(7.2))
+
+        assertEquals(listOf("大家好", "开始"), transcript(recording.segments).map { it.text })
+        assertTrue(transcript(null).isEmpty())
+    }
+
+    @Test fun recordingFactsFallBack() {
+        val facts = RecordingFacts.of(JsonCodec.decodeFromString<JsonObject>(
+            """{"started_at":"2026-11-05T14:00:00Z","ended_at":"2026-11-05T14:00:42Z"}"""))
+        assertTrue("No complete flag: a finished recording", facts.complete)
+        assertEquals(RecordingLength.Seconds(42), facts.length)
+        assertEquals(RecordingLength.Minutes(2, 5), RecordingLength.of(125.4))
+        assertNull(RecordingFacts.of(null).startedAt)
+        assertNull(RecordingFacts.of(null).clock(1.0))
+        assertNull(RecordingFacts.of(null).length)
+    }
+
+    @Test fun recordingHitsFindTheirEntry() {
+        val hit = KnowledgeHit("recordings/20261105-140000-phone/transcript.md", "- 14:00:07 开始")
+        assertEquals(KnowledgeKind.Recordings to "20261105-140000-phone", hit.reference())
+        assertEquals(KnowledgeHitSource.Transcript, hit.source)
+        assertEquals(listOf(KnowledgeKind.Recordings), searchSections(searchGroups(listOf(hit), emptyMap())).map { it.first })
     }
 }

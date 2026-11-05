@@ -23,9 +23,10 @@ enum TerminalPrefs {
     static let defaultFontSize = 15.0 // as Moshi reads: about 46 columns on a 6.9-inch phone
     static let defaultShortcuts = ["git status", "git diff --stat", "ls -la", "/compact", "/status"]
     static let allKeys: [(id: String, label: String)] = [("esc", "esc"), ("tab", "tab"), ("ctrlc", "⌃C"), ("shortcuts", "快捷命令"),
-                                                         ("paste", "粘贴"), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", "方向键")]
-    /// alt and shift are a tap away in the settings (Moshi shows only ctrl too): the rest fits a phone's width.
-    static let defaultKeys = allKeys.map(\.id).filter { $0 != "alt" && $0 != "shift" }.joined(separator: ",")
+                                                         ("paste", "粘贴"), ("files", "照片 / 文件"), ("alt", "alt"), ("shift", "⇧ shift"), ("pad", "方向键")]
+    /// alt and shift are a tap away in the settings (Moshi shows only ctrl too): the rest fits a phone's width. So is
+    /// the photos / files key: holding paste offers the same.
+    static let defaultKeys = allKeys.map(\.id).filter { !["alt", "shift", "files"].contains($0) }.joined(separator: ",")
 
     static func decode(_ json: String) -> [String] {
         guard !json.isEmpty, let list = try? JSONDecoder().decode([String].self, from: Data(json.utf8)) else { return defaultShortcuts }

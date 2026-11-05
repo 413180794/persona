@@ -5,10 +5,10 @@
 import { formatDate, t } from "../i18n";
 import type { Session } from "./types";
 
-export const KB_KINDS = ["projects", "chats", "people", "docs", "meetings", "events"] as const;
+export const KB_KINDS = ["projects", "chats", "people", "docs", "meetings", "events", "recordings"] as const;
 export type KBKind = (typeof KB_KINDS)[number];
 
-export const KIND_TITLE: Record<KBKind, string> = { projects: t("lib-kb.kind_projects"), chats: t("lib-kb.kind_chats"), people: t("lib-kb.kind_people"), docs: t("lib-kb.kind_docs"), meetings: t("lib-kb.kind_meetings"), events: t("lib-kb.kind_events") };
+export const KIND_TITLE: Record<KBKind, string> = { projects: t("lib-kb.kind_projects"), chats: t("lib-kb.kind_chats"), people: t("lib-kb.kind_people"), docs: t("lib-kb.kind_docs"), meetings: t("lib-kb.kind_meetings"), events: t("lib-kb.kind_events"), recordings: t("lib-kb.kind_recordings") };
 
 export function isKind(k: unknown): k is KBKind {
   return typeof k === "string" && (KB_KINDS as readonly string[]).includes(k);
@@ -69,6 +69,14 @@ export interface KBDetail {
   recent?: string;
   links?: KBEntry[] | null;
   moments?: KBMomentRef[] | null;
+  /** recordings: the transcript, seconds from the start (docs/protocol.md「录音同步」). */
+  segments?: KBSegment[] | null;
+}
+
+export interface KBSegment {
+  start: number;
+  end: number;
+  text: string;
 }
 
 /** A line a search found: `path` relative to the data dir, `n` its line number in that file. */
@@ -373,7 +381,7 @@ export function hitView(f: Pick<KBFound, "path" | "line">, now = new Date()): { 
     return { source: t("lib-kb.hit_chat", { day: `${dayTitle(day, now)}${m.time ? ` ${m.time}` : ""}` }), text: m.sender ? t("lib-kb.hit_sender", { sender: m.sender, text: m.text }) : m.text, day };
   }
   const file = f.path.split("/").pop() ?? f.path;
-  const source = file === "summary.md" ? t("lib-kb.hit_profile") : file === "log.md" ? t("lib-kb.hit_timeline") : file.endsWith(".json") ? t("lib-kb.hit_data") : file;
+  const source = file === "summary.md" ? t("lib-kb.hit_profile") : file === "log.md" ? t("lib-kb.hit_timeline") : file === "transcript.md" ? t("lib-kb.hit_transcript") : file.endsWith(".json") ? t("lib-kb.hit_data") : file;
   return { source, text: hitText(f.line), day: null };
 }
 
@@ -495,6 +503,69 @@ export function factsOf(kind: string, meta?: Record<string, unknown> | null): Fa
     openLabel: kind === "docs" ? t("lib-kb.open_doc") : kind === "meetings" ? t("lib-kb.open_meeting") : t("lib-kb.open_event"),
   };
   return f.at || f.url ? f : null;
+}
+
+export interface RecordingView {
+  startedAt?: string;
+  /** "1 小时 2 分", "3 分 20 秒" */
+  duration?: string;
+  device: string;
+  language?: string;
+  /** Transcription still going (more will come). */
+  partial: boolean;
+  /** A line per segment and bookmark, at its clock time, in order. */
+  lines: { clock: string; text: string; bookmark?: boolean }[];
+}
+
+/** A recording's facts and transcript (meta.json and the detail's segments); null for the other kinds. */
+export function recordingView(kind: string, meta?: Record<string, unknown> | null, segments?: KBSegment[] | null): RecordingView | null {
+  if (kind !== "recordings") return null;
+  const started = str(meta?.started_at);
+  const t0 = started ? Date.parse(started) : NaN;
+  const clock = (sec: number) => {
+    if (!Number.isFinite(t0)) return formatSeconds(sec);
+    const d = new Date(t0 + sec * 1000);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  const at: { sec: number; line: RecordingView["lines"][number] }[] = [];
+  for (const s of segments ?? []) {
+    const sec = Number(s?.start) || 0;
+    if (typeof s?.text === "string" && s.text.trim()) at.push({ sec, line: { clock: clock(sec), text: s.text.trim() } });
+  }
+  const marks = Array.isArray(meta?.bookmarks) ? (meta.bookmarks as { at?: unknown; label?: unknown }[]) : [];
+  for (const b of marks) {
+    const sec = Number(b?.at) || 0;
+    at.push({ sec, line: { clock: clock(sec), text: typeof b?.label === "string" ? b.label.trim() : "", bookmark: true } });
+  }
+  at.sort((x, y) => x.sec - y.sec); // stable: a bookmark after the segment that starts with it
+  const lines = at.map((x) => x.line);
+  const secs = Number(meta?.duration);
+  const device = str(meta?.device) === "watch" ? t("lib-kb.device_watch") : t("lib-kb.device_phone");
+  return {
+    startedAt: Number.isFinite(t0) ? started : undefined,
+    duration: Number.isFinite(secs) && secs > 0 ? durationLabel(secs) : undefined,
+    device,
+    language: str(meta?.language) || undefined,
+    partial: meta?.complete !== true,
+    lines,
+  };
+}
+
+/** 3733 → "1 小时 2 分"; 200 → "3 分 20 秒"; 42 → "42 秒". */
+export function durationLabel(secs: number): string {
+  const s = Math.round(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return t("lib-kb.duration_hours", { h, m });
+  if (m > 0) return t("lib-kb.duration_minutes", { m, s: s % 60 });
+  return t("lib-kb.duration_seconds", { s });
+}
+
+/** Seconds from the start as "1:02:03" / "2:03", when the start time is unknown. */
+function formatSeconds(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  return h > 0 ? `${h}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}` : `${Math.floor(s / 60)}:${pad(s % 60)}`;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");

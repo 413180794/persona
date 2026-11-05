@@ -40,6 +40,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `kb/compress.md`、`compress_input.md` | 会话压缩 + 打标 | `kb/compress.go` |
 | `kb/project.md`、`project_input.md` | 重写项目档案 | 同上 |
 | `kb/items.md`、`items_input.md` | 文档 / 会议 / 日程打标 | `kb/items.go` |
+| `kb/recording.md`、`recording_input.md` | 录音转写的摘要、标题和打标（用途 `kb.compress`） | `kb/recordings.go` |
 | `kb/known_projects.md` | 「已知项目」列表（名字、别称、一句话），压缩和打标共用 | 同上 |
 | `kb/dedupe.md`、`dedupe_input.md`、`dedupe_side.md` | 两个项目是不是同一件事（项目去重） | `kb/dedupe.go` |
 | `kb/moments_link.md`、`moments_link_input.md` | 关键词搜到的公司圈帖子里哪些在说这个项目 | `kb/moments_link.go` |

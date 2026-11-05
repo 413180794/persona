@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import persona.core.designsystem.*
+import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -122,7 +123,7 @@ private fun LazyListScope.listContent(page: KnowledgePage, showIgnored: Boolean,
         page.entries.isEmpty() && !page.loaded -> item("loading") { JLoading() }
         page.entries.isEmpty() -> item("empty") {
             JEmptyState(page.filter.tag?.let { stringResource(kind.words.emptyTag, it) } ?: stringResource(kind.words.empty),
-                stringResource(R.string.knowledge_empty_text))
+                stringResource(R.string.knowledge_empty_text), icon = kind.words.icon)
         }
         else -> {
             val sections = if (kind == KnowledgeKind.Projects) projectSections(page.entries) else kindSections(page.entries, page.filter.tag)
@@ -221,6 +222,7 @@ private fun EntryMetadata(entry: KnowledgeEntry, allTags: Boolean = false) {
             JTag(stringResource(if (entry.projectKind == "long") R.string.knowledge_project_long else R.string.knowledge_project_short))
             entry.projectStatusLabel?.let { JTag(stringResource(it)) }
         }
+        if (entry.isRecording) recordingDevice(entry.extra)?.let { JTag(it.label()) }
         if (entry.relevance > 0) JTag(stringResource(R.string.knowledge_relevance, entry.relevance.coerceIn(0, 100)), status = relevanceStatus(entry.relevance))
         entry.tags.orEmpty().let { if (allTags) it else it.take(3) }.forEach { JTag("#$it") }
     }
@@ -229,7 +231,7 @@ private fun EntryMetadata(entry: KnowledgeEntry, allTags: Boolean = false) {
         runCatching { OffsetDateTime.parse(entry.updated).takeIf { it.year > 1970 }
             ?.let { LocalizedFormats.format(it.toInstant(), LocalizedFormats.DATE_TIME, locale) } }.getOrNull()
     }
-    updated?.let { Text(stringResource(R.string.knowledge_updated, it), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
+    updated?.let { Text(stringResource(if (entry.isRecording) R.string.knowledge_recorded else R.string.knowledge_updated, it), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3) }
 }
 
 /** P0 in the 需要你 tone, P1 in the 工作中 tone (iOS `ImportanceBadge`); P2 and P3 quiet. */
@@ -330,20 +332,26 @@ internal fun KnowledgeDetailScreen(
                         }
                     }
                     agents(page.agents, navigator)
+                    val recording = entry.isRecording
+                    val facts = if (recording) RecordingFacts.of(detail.meta) else null
+                    facts?.let { recordingFacts(it) }
                     timeline(timeline(detail.log), allLog) { allLog = !allLog }
                     val profileText = profile(detail.summary, entry.oneLine)
                     // A card like the other sections (and iOS): bare text sat at the card edge, left of every heading.
                     if (profileText.isNotBlank()) item("profile", contentType = "markdown") {
-                        JSectionHeader(stringResource(R.string.knowledge_profile))
+                        JSectionHeader(stringResource(if (recording) R.string.knowledge_recording_summary else R.string.knowledge_profile))
                         JGroupItem(GroupPosition.Single) {
                             Box(Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m)) { KnowledgeMarkdown(profileText) }
                         }
                     }
+                    facts?.let { recordingBookmarks(it) }
                     links(linkGroups(detail.links), openLinks, { kind ->
                         openLinks = if (kind in openLinks) openLinks - kind else openLinks + kind
                     }, navigator)
                     dirs(detail.meta.strings("dirs"))
-                    if (!detail.recent.isNullOrBlank()) {
+                    // A recording's `recent` is its transcript as text: the transcript below shows it line by line.
+                    facts?.let { recordingTranscript(it, transcript(detail.segments)) }
+                    if (!recording && !detail.recent.isNullOrBlank()) {
                         item("recent-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_chat_history)) }
                         item("recent-toggle", contentType = "row") {
                             JGroupItem(GroupPosition(first = true, last = !recent)) {
@@ -439,6 +447,97 @@ private fun TimelineLine(line: KnowledgeLogLine, newest: Boolean) {
     }
 }
 
+/** 录音信息: when it started, how long, on which device, in which language; 转写中 until the transcript is done. */
+private fun LazyListScope.recordingFacts(facts: RecordingFacts) {
+    item("recording-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_recording_info)) }
+    item("recording-facts", contentType = "facts") {
+        val locale = currentLocale
+        val started = remember(facts.startedAt, locale) { facts.startedAt?.let { LocalizedFormats.format(it, LocalizedFormats.DATE_TIME, locale) } }
+        val language = remember(facts.language, locale) { languageName(facts.language, locale) }
+        val rows = buildList<Pair<String, String>> {
+            started?.let { add(stringResource(R.string.knowledge_recording_started) to it) }
+            facts.length?.let { add(stringResource(R.string.knowledge_recording_duration) to it.label()) }
+            recordingDevice(facts.device)?.let { add(stringResource(R.string.knowledge_recording_device) to it.label()) }
+            language?.let { add(stringResource(R.string.knowledge_recording_language) to it) }
+        }
+        val count = rows.size + if (facts.complete) 0 else 1
+        Column {
+            rows.forEachIndexed { index, (title, value) ->
+                JGroupItem(GroupPosition.of(index, count)) { JRow(title, value = value) }
+            }
+            if (!facts.complete) JGroupItem(GroupPosition.of(rows.size, count)) {
+                JRow(stringResource(R.string.knowledge_recording_transcribing), subtitle = stringResource(R.string.knowledge_recording_transcribing_note),
+                    leading = { JStatusDot(Status.Working) })
+            }
+        }
+    }
+}
+
+/** 标记: the marks set while recording, at the time they were set. */
+private fun LazyListScope.recordingBookmarks(facts: RecordingFacts) {
+    if (facts.bookmarks.isEmpty()) return
+    item("bookmarks-header", contentType = "section") { JSectionHeader(stringResource(R.string.knowledge_recording_bookmarks), count = facts.bookmarks.size) }
+    itemsIndexed(facts.bookmarks, key = { index, _ -> "bookmark/$index" }, contentType = { _, _ -> "bookmark" }) { index, mark ->
+        JGroupItem(GroupPosition.of(index, facts.bookmarks.size)) {
+            JRow(mark.label ?: stringResource(R.string.knowledge_recording_bookmark), leadingIcon = PhIcons.BookmarkSimple,
+                value = clockText(facts, mark.at))
+        }
+    }
+}
+
+/** The whole transcript, a row per line with its wall-clock time; each line's text can be selected and copied. */
+private fun LazyListScope.recordingTranscript(facts: RecordingFacts, segments: List<KnowledgeSegment>) {
+    item("transcript-header", contentType = "section") {
+        JSectionHeader(stringResource(R.string.knowledge_recording_transcript), count = segments.size.takeIf { it > 0 })
+    }
+    if (segments.isEmpty()) {
+        item("transcript-empty", contentType = "row") {
+            JGroupItem(GroupPosition.Single) { JRow(stringResource(R.string.knowledge_recording_no_transcript), leadingIcon = PhIcons.Microphone) }
+        }
+        return
+    }
+    itemsIndexed(segments, key = { index, _ -> "segment/$index" }, contentType = { _, _ -> "segment" }) { index, segment ->
+        JGroupItem(GroupPosition.of(index, segments.size)) {
+            JRow {
+                Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
+                    clockText(facts, segment.start)?.let {
+                        Text(it, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3, maxLines = 1)
+                    }
+                    SelectionContainer { Text(segment.text.trim(), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink) }
+                }
+            }
+        }
+    }
+}
+
+/** [offset] seconds into the recording as the phone's clock reads it, with seconds (14:03:27). */
+@Composable
+private fun clockText(facts: RecordingFacts, offset: Double): String? {
+    val locale = currentLocale
+    return remember(facts.startedAt, offset, locale) {
+        facts.clock(offset)?.let { LocalizedFormats.format(it, LocalizedFormats.TIME_SECONDS, locale) }
+    }
+}
+
+/** A BCP 47 tag (zh-CN) in the page's language (中文（中国）); the tag itself when the phone has no name for it. */
+private fun languageName(tag: String, locale: java.util.Locale): String? {
+    val trimmed = tag.trim().takeIf { it.isNotEmpty() } ?: return null
+    return java.util.Locale.forLanguageTag(trimmed).getDisplayName(locale).takeIf { it.isNotBlank() } ?: trimmed
+}
+
+@Composable
+private fun RecordingDevice.label(): String = stringResource(when (this) {
+    RecordingDevice.Phone -> R.string.knowledge_recording_phone
+    RecordingDevice.Watch -> R.string.knowledge_recording_watch
+})
+
+@Composable
+private fun RecordingLength.label(): String = when (this) {
+    is RecordingLength.Hours -> stringResource(R.string.knowledge_duration_hours, hours.toInt(), minutes.toInt())
+    is RecordingLength.Minutes -> stringResource(R.string.knowledge_duration_minutes, minutes.toInt(), seconds.toInt())
+    is RecordingLength.Seconds -> stringResource(R.string.knowledge_duration_seconds, seconds.toInt())
+}
+
 /** Related entries by kind, a few each with 全部 for the rest. */
 private fun LazyListScope.links(groups: List<Pair<KnowledgeKind, List<KnowledgeEntry>>>, open: List<String>, toggle: (String) -> Unit, navigator: Navigator) {
     groups.forEach { (kind, entries) ->
@@ -524,7 +623,8 @@ private fun Navigator.open(entry: KnowledgeEntry) {
 }
 
 /** A kind's words: its name, and the empty list and the related entries that say it. */
-private class KindWords(@StringRes val name: Int, @StringRes val empty: Int, @StringRes val emptyTag: Int, @StringRes val linked: Int)
+private class KindWords(@StringRes val name: Int, @StringRes val empty: Int, @StringRes val emptyTag: Int, @StringRes val linked: Int,
+    val icon: PhIcon? = null)
 
 private val KnowledgeKind.words: KindWords
     get() = when (this) {
@@ -540,6 +640,8 @@ private val KnowledgeKind.words: KindWords
             R.string.knowledge_empty_tag_meetings, R.string.knowledge_linked_meetings)
         KnowledgeKind.Events -> KindWords(R.string.knowledge_kind_events, R.string.knowledge_empty_events,
             R.string.knowledge_empty_tag_events, R.string.knowledge_linked_events)
+        KnowledgeKind.Recordings -> KindWords(R.string.knowledge_kind_recordings, R.string.knowledge_empty_recordings,
+            R.string.knowledge_empty_tag_recordings, R.string.knowledge_linked_recordings, icon = PhIcons.Microphone)
     }
 
 /** The kind's name in the page's language (项目 · Projects · プロジェクト). */
@@ -552,5 +654,6 @@ private fun KnowledgeHitSource.label(): String = when (this) {
     KnowledgeHitSource.Profile -> stringResource(R.string.knowledge_profile)
     KnowledgeHitSource.Timeline -> stringResource(R.string.knowledge_timeline)
     KnowledgeHitSource.Details -> stringResource(R.string.knowledge_source_info)
+    KnowledgeHitSource.Transcript -> stringResource(R.string.knowledge_recording_transcript)
     is KnowledgeHitSource.File -> name
 }

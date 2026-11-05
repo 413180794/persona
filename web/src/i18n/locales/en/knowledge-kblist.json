@@ -28,5 +28,6 @@
   "common_tags": "Common tags",
   "clear_filter": "Clear filter",
   "all": "All",
-  "no_tags": "No tags in this type yet."
+  "no_tags": "No tags in this type yet.",
+  "empty_recordings": "No recordings yet"
 }

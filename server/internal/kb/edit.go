@@ -127,6 +127,8 @@ func (s *Store) putEntity(kind, id string, v any, t *Tagging, manual bool) error
 			*entity = Project{}
 		case *Item:
 			*entity = Item{}
+		case *Recording:
+			*entity = Recording{}
 		}
 		_ = json.Unmarshal(after, v)
 		t.persisted = true
@@ -250,7 +252,7 @@ func (e *Engine) unlink(kind, id string, u Update) error {
 			case KindPerson:
 				p.People = removeStrings(p.People, []string{id})
 				lock(&p.Tagging, "people")
-			case KindDoc, KindMeeting, KindEvent:
+			case KindDoc, KindMeeting, KindEvent, KindRecording:
 				p.Items = removeStrings(p.Items, []string{kind + "/" + SafeID(id)})
 				lock(&p.Tagging, "items")
 			default:

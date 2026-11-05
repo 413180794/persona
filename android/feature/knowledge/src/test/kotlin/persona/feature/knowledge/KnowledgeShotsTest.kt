@@ -56,6 +56,41 @@ class KnowledgeShotsTest {
     @Config(sdk = [35], qualifiers = "ja-w400dp-h1100dp-xhdpi")
     @Test fun japanese() = shots("ja", list = "ナレッジ", detail = "Personaに質問")
 
+    /** 录音: the kind's list and a recording still being transcribed, its bookmarks and transcript (#3235). */
+    @Config(sdk = [35], qualifiers = "zh-w400dp-h1700dp-xhdpi")
+    @Test fun recordingChinese() = recordingShots("zh", "转写中")
+
+    @Config(sdk = [35], qualifiers = "en-w400dp-h1700dp-xhdpi")
+    @Test fun recordingEnglish() = recordingShots("en", "Transcribing")
+
+    private fun recordingShots(language: String, transcribing: String) {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        var page by mutableStateOf("list")
+        val connection = object : KnowledgeConnection { override val current = MutableStateFlow<KnowledgeRepository?>(DemoKnowledge) }
+        val listModel = KnowledgeViewModel(connection).also { it.kind(KnowledgeKind.Recordings) }
+        val detailModel = KnowledgeDetailViewModel(KnowledgeKind.Recordings, "20261105-140000-watch", connection, NoSender)
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                Box(Modifier.testTag("shot").width(400.dp).height(1660.dp).background(PersonaTheme.palette.background)) {
+                    if (page == "list") KnowledgeScreen(listModel, NoNavigator)
+                    else KnowledgeDetailScreen(detailModel, NoNavigator, openLinkInApp = {})
+                }
+            }
+        }
+        for (name in listOf("list", "entry")) {
+            page = name
+            for ((s, d) in listOf(AppStyle.Glass to false, AppStyle.Glass to true, AppStyle.Brief to false, AppStyle.Board to false)) {
+                style = s; dark = d
+                rule.waitForIdle()
+                rule.onNodeWithText(if (name == "list") "Weekly sync" else transcribing).assertExists()
+                val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
+                val file = "knowledge-recording-$name-$language-${s.name.lowercase()}-${if (d) "dark" else "light"}.png"
+                File(out(), file).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+    }
+
     private fun shots(language: String, list: String, detail: String) {
         var style by mutableStateOf(AppStyle.Glass)
         var dark by mutableStateOf(false)
@@ -106,9 +141,38 @@ private object DemoKnowledge : KnowledgeRepository {
         KnowledgeEntry("projects", "launch", "Beta launch", "Shipped to testers", "P1", 60, emptyList(), "2026-10-20T10:00:00+08:00", "short · done"),
         KnowledgeEntry("projects", "promo", "Newsletter", null, "P3", 5, emptyList(), null, "short · ignored"),
     )
-    override suspend fun list(kind: KnowledgeKind, tag: String?) =
-        KnowledgeList(if (kind == KnowledgeKind.Projects) projects else emptyList(), listOf("ios", "web"))
-    override suspend fun detail(kind: KnowledgeKind, id: String) = KnowledgeDetail(kind.wire, id, "~/.persona/data/projects/weather",
+    private val recordings = listOf(
+        KnowledgeEntry("recordings", "20261105-140000-watch", "Weekly sync", "Release dates and who tests the widgets", "P1", 70,
+            listOf("meeting"), "2026-11-05T14:00:00+08:00", "watch"),
+        KnowledgeEntry("recordings", "20261104-091500-phone", "Voice memo", "Ideas for the watch face", null, 0,
+            emptyList(), "2026-11-04T09:15:00+08:00", "phone"),
+    )
+    override suspend fun list(kind: KnowledgeKind, tag: String?) = KnowledgeList(when (kind) {
+        KnowledgeKind.Projects -> projects
+        KnowledgeKind.Recordings -> recordings
+        else -> emptyList()
+    }, listOf("ios", "web"))
+    override suspend fun detail(kind: KnowledgeKind, id: String) = if (kind == KnowledgeKind.Recordings) recording(id) else project(kind, id)
+
+    private fun recording(id: String) = KnowledgeDetail("recordings", id, "~/.persona/data/recordings/$id",
+        meta = buildJsonObject {
+            put("id", id); put("name", id); put("title", "Weekly sync"); put("one_line", "Release dates and who tests the widgets")
+            put("importance", "P1"); put("relevance", 70); put("started_at", "2026-11-05T14:00:00+08:00"); put("duration", 1925)
+            put("language", "en-US"); put("device", "watch"); put("complete", false)
+            put("tags", buildJsonArray { add("meeting") })
+            put("bookmarks", buildJsonArray {
+                add(buildJsonObject { put("at", 95); put("label", "Release date") })
+                add(buildJsonObject { put("at", 610) })
+            })
+        },
+        summary = "- Widgets ship on Monday\n- Alex tests the watch face",
+        segments = listOf(
+            KnowledgeSegment(1.0, 4.0, "Morning, everyone. Let's start with the release."),
+            KnowledgeSegment(95.5, 99.0, "The widgets are ready, so Monday works."),
+            KnowledgeSegment(612.0, 618.0, "Alex, can you test the watch face this week?"),
+        ))
+
+    private fun project(kind: KnowledgeKind, id: String) = KnowledgeDetail(kind.wire, id, "~/.persona/data/projects/weather",
         meta = buildJsonObject {
             put("name", "Weather App"); put("one_line", "Widgets and a watch face for the forecast"); put("importance", "P0")
             put("relevance", 92); put("kind", "short"); put("status", "active"); put("updated", "2026-11-04T09:30:00+08:00")

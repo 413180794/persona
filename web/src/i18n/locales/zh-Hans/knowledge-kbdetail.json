@@ -30,5 +30,13 @@
   "agents": "在做这个项目的 Agent",
   "code_dirs": "代码目录",
   "copy_path": "拷贝路径",
-  "message_line": "{sender}：{text}"
+  "message_line": "{sender}：{text}",
+  "recording_started": "开始",
+  "recording_duration": "时长",
+  "recording_device": "设备",
+  "recording_language": "语言",
+  "recording_partial": "转写中，完成后会补全",
+  "transcript": "转写",
+  "transcript_empty": "还没有转写文字",
+  "bookmark": "书签"
 }
