@@ -454,6 +454,14 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
   收件箱从一个飞书会话点到另一个，右栏是新会话自己的消息和草稿，再点回来草稿还在）。XCUITest 自己在横屏下截的图是转过的，
   看横屏要 `TEST_RUNNER_JARVIS_HOLD=<秒>` 停住、用 `simctl io screenshot` 拍。
 
+## 长按图标快捷操作（#3199）
+
+主屏长按 Persona 图标：「新对话」「Agents」「收件箱」（`Persona/App/QuickActions.swift`），和 Android 的快捷方式、网页 manifest 的 shortcuts 对齐。启动时设一次 `shortcutItems`，对谁都一样，不随状态更新。
+
+- 只做切页：「Agents」切到 Agents 页，「收件箱」推到助手上，「新对话」走抽屉「新对话」同一条路（`ShellState.show(.newConversation)`），已推开的收件箱等页面一起退回根。没配对 hub 时停在欢迎页。
+- App 开着或在后台时点，走场景代理的 `windowScene(_:performActionFor:)`；冷启动时点，项在场景的 connectionOptions 里。场景代理（`QuickActionSceneDelegate`）只接这两处，窗口仍由 SwiftUI 管。
+- UI 测试 `QuickActionsTests` 从主屏长按依次点三项。冷启动没有测：从 SpringBoard 启动带不上体验模式的启动参数。模拟器上每次回主屏都要等约 60 秒 SpringBoard 空闲，整条约 7 分钟。
+
 ## 思考强度和权限模式
 
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），

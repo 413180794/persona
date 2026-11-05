@@ -63,6 +63,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ = KeyboardState.shared // watches the keyboard from the start: a card may come while it is already up
         UNUserNotificationCenter.current().delegate = self
         UNUserNotificationCenter.current().setNotificationCategories(NotificationActions.categories)
+        #if os(iOS)
+        QuickAction.publish()
+        #endif
         #if DEBUG
         // Simulator automation: `simctl launch … -pairURL jarvis://pair?...`; `-pairURL2`, `-pairURL3` pair more hubs
         // (several groups, docs/multi-hub.md「截图」).
@@ -178,6 +181,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if !automation { PushRegistrar.shared.registerIfPossible() }
         return true
     }
+
+    #if os(iOS)
+    /// The home screen menu's taps reach the scene's delegate (`QuickActionSceneDelegate`).
+    func application(_ application: UIApplication, configurationForConnecting session: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let config = UISceneConfiguration(name: nil, sessionRole: session.role)
+        if session.role == .windowApplication { config.delegateClass = QuickActionSceneDelegate.self }
+        return config
+    }
+    #endif
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         PushRegistrar.shared.didRegister(token: deviceToken)
