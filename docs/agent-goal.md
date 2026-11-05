@@ -6,7 +6,7 @@ Stop hook 判断条件成没成立，没成立就接着做；Codex 记一个目�
 
 ## 用户看到的
 
-- **对话页顶部**（手机的展开标题、iPad / 分栏的侧栏标题、Mac 对话上方那一行）：有 goal 时多一行「目标」条：图标 + 目标的第一行 + 状态
+- **对话页顶部**（手机的展开标题、iPad / 分栏的侧栏标题、Mac 对话上方那一行、Android 顶栏下面）：有 goal 时多一行「目标」条：图标 + 目标的第一行 + 状态
   （进行中 / 已达成 / 已暂停 / 受阻 / 用量到上限）。点按打开详情：目标全文、状态、最近一次判断的理由（Claude Code）、已用的 token 和时间、
   token 预算（Codex）。没有 goal 时这一行不出现，界面和以前一样。
 - **对话里**：goal 达成时插一条通知「目标已达成」（Claude Code 带判断的理由）；Codex 的 goal 变成暂停、受阻、到了用量上限时各插一条。
@@ -49,6 +49,8 @@ goal 的状态写成 `type: "attachment"` 的一行，`attachment.type` 是 `goa
   会话列表上带 `goal`，签名（`sessionsSignature`）里带上目标、状态和理由，变了就推一次。
 - **协议**：`Session.goal`，见 `docs/protocol.md`。只加字段，旧客户端不认就不显示。
 - **客户端**：iOS / Mac 的 `GoalBar`（`Views/Session/SessionPanes.swift`）和详情 `GoalSheet`；网页 `views/chat/Activity.tsx` 的活动行。
+  Android（#2888）：`core:contracts` 的 `Session.goal`（`GoalInfo`），对话页顶栏下面的 `ChatGoalBar`（`feature/chat/ChatGoal.kt`，设计系统的 `JActivityBar`），点按打开 `ChatGoalSheet`；
+  对话里的达成 / 停下通知是 hub 生成的 `notice`，照普通通知显示。顶栏不折叠，所以没有 iOS 折叠标题里的那个目标图标。
   对话条目（item）的结构没有变，`ChatCache` 的版本号不用加。
 
 ## 截图
@@ -59,4 +61,3 @@ goal 的状态写成 `type: "attachment"` 的一行，`attachment.type` 是 `goa
 ## 不做的
 
 - 不在 App 里设置、暂停或清除 goal：在终端里或者在输入框里发 `/goal …` 就行（Claude Code 的命令照常发过去）。
-- Android 这次不做，留到以后对齐。

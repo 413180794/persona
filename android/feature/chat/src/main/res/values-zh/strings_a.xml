@@ -380,4 +380,21 @@
     <string name="chat_content_plan_failed">更新失败</string>
     <string name="chat_status_workflows">后台 workflow</string>
     <string name="chat_status_workflow_untitled">workflow</string>
+    <!-- The agent's goal over the conversation (docs/agent-goal.md). -->
+    <string name="chat_goal_title">目标</string>
+    <string name="chat_goal_status_active">进行中</string>
+    <string name="chat_goal_status_complete">已达成</string>
+    <string name="chat_goal_status_paused">已暂停</string>
+    <string name="chat_goal_status_blocked">受阻</string>
+    <string name="chat_goal_status_usage_limited">用量到上限</string>
+    <string name="chat_goal_status_budget_limited">预算用完</string>
+    <string name="chat_goal_bar_desc">目标，%1$s：%2$s</string>
+    <string name="chat_goal_open">查看目标</string>
+    <string name="chat_goal_reason_met">为什么算达成</string>
+    <string name="chat_goal_reason_latest">最近一次检查</string>
+    <string name="chat_goal_hint">设置或清除目标：在输入框里发 /goal &lt;条件&gt; 或 /goal clear（Claude Code）。</string>
+    <string name="chat_goal_tokens">%1$s tokens</string>
+    <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
+    <string name="chat_goal_minutes">%1$d 分钟</string>
+    <string name="chat_goal_hours">%1$d 小时 %2$d 分</string>
 </resources>

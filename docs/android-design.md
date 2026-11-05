@@ -94,6 +94,7 @@ Material 3 的 ColorScheme、Typography、Shapes 也由当前风格生成，没�
 | `JSwipeActions` | 行的左右滑动操作（收件箱：右滑已处理，左滑交给 Persona） |
 | `JCodeBlock` | 命令和代码 |
 | `JSheet` / `JActionSheet` / `JMenu` / `JDialog` | 底部面板、长按操作面板（代替长下拉菜单）、锚点小菜单、确认对话框 |
+| `JActivityBar` | 对话顶栏下面一行「Agent 一直在做的事」（目标条，`docs/agent-goal.md`）：图标 + 一行文字 + 尾部状态，颜色取一组 `StatusColors`；玻璃和晨报铺状态色的浅底，看板是表面色加细线，点按打开详情 |
 | `DecisionCard` | 列表里「要你定的事」 |
 | `DecisionDock` | 对话里待处理的请求，代替输入框 |
 | `DecisionOption` / `DecisionButtons` / `DecisionAdvice` | 选项（推荐的那个在三种风格里各有突出方式）、回答按钮、Persona 的建议 |

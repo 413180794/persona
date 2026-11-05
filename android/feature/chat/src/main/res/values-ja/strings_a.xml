@@ -380,4 +380,21 @@
     <string name="chat_content_plan_failed">更新に失敗</string>
     <string name="chat_status_workflows">バックグラウンド workflow</string>
     <string name="chat_status_workflow_untitled">workflow</string>
+    <!-- The agent's goal over the conversation (docs/agent-goal.md). -->
+    <string name="chat_goal_title">目標</string>
+    <string name="chat_goal_status_active">進行中</string>
+    <string name="chat_goal_status_complete">達成</string>
+    <string name="chat_goal_status_paused">一時停止中</string>
+    <string name="chat_goal_status_blocked">ブロック中</string>
+    <string name="chat_goal_status_usage_limited">使用量の上限</string>
+    <string name="chat_goal_status_budget_limited">予算切れ</string>
+    <string name="chat_goal_bar_desc">目標、%1$s：%2$s</string>
+    <string name="chat_goal_open">目標を見る</string>
+    <string name="chat_goal_reason_met">達成と判断した理由</string>
+    <string name="chat_goal_reason_latest">直近のチェック</string>
+    <string name="chat_goal_hint">目標の設定・解除は入力欄で /goal &lt;条件&gt; または /goal clear を送信（Claude Code）。</string>
+    <string name="chat_goal_tokens">%1$s tokens</string>
+    <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
+    <string name="chat_goal_minutes">%1$d 分</string>
+    <string name="chat_goal_hours">%1$d 時間 %2$d 分</string>
 </resources>

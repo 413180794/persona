@@ -405,4 +405,21 @@
     <string name="chat_content_plan_failed">Update failed</string>
     <string name="chat_status_workflows">Background workflows</string>
     <string name="chat_status_workflow_untitled">Workflow</string>
+    <!-- The agent's goal over the conversation (docs/agent-goal.md). -->
+    <string name="chat_goal_title">Goal</string>
+    <string name="chat_goal_status_active">In progress</string>
+    <string name="chat_goal_status_complete">Met</string>
+    <string name="chat_goal_status_paused">Paused</string>
+    <string name="chat_goal_status_blocked">Blocked</string>
+    <string name="chat_goal_status_usage_limited">Usage limit reached</string>
+    <string name="chat_goal_status_budget_limited">Budget used up</string>
+    <string name="chat_goal_bar_desc">Goal, %1$s: %2$s</string>
+    <string name="chat_goal_open">View goal</string>
+    <string name="chat_goal_reason_met">Why it counts as met</string>
+    <string name="chat_goal_reason_latest">Latest check</string>
+    <string name="chat_goal_hint">To set or clear a goal, send /goal &lt;condition&gt; or /goal clear (Claude Code).</string>
+    <string name="chat_goal_tokens">%1$s tokens</string>
+    <string name="chat_goal_tokens_budget">%1$s / %2$s tokens</string>
+    <string name="chat_goal_minutes">%1$d min</string>
+    <string name="chat_goal_hours">%1$d h %2$d min</string>
 </resources>

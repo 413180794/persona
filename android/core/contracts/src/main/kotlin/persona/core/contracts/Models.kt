@@ -129,6 +129,32 @@ data class LoopInfo(
     val ticks: Int? = null,
 )
 
+/**
+ * A goal the agent keeps working toward until it holds (docs/agent-goal.md): Claude Code's `/goal`, whose Stop hook
+ * checks the condition each time it would stop, or a Codex thread goal.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = GoalInfoSerializer::class)
+data class GoalInfo(
+    val objective: String = "",
+    /** active / paused / blocked / usage_limited / budget_limited / complete (Claude Code's are only active or complete). */
+    val status: String = "",
+    /** Claude Code's latest check of the condition: why it holds, or what is still missing. */
+    val reason: String? = null,
+    @SerialName("tokens_used") val tokensUsed: Long? = null,
+    /** Codex: the tokens the goal may spend; absent or 0 when there is no budget. */
+    @SerialName("token_budget") val tokenBudget: Long? = null,
+    /** Time spent on it so far. */
+    val seconds: Long? = null,
+    @WireTime @SerialName("updated_at") val updatedAt: String? = null,
+) {
+    val isComplete: Boolean get() = status == "complete"
+    /** Still being worked on; anything else has stopped (met, paused, out of budget…). */
+    val isActive: Boolean get() = status == "active"
+    /** The objective's first non-blank line, for the one-line bar. */
+    val headline: String get() = objective.lineSequence().map(String::trim).firstOrNull(String::isNotEmpty) ?: objective.trim()
+}
+
 @KeepGeneratedSerializer
 @Serializable(with = BackgroundTaskSerializer::class)
 data class BackgroundTask(
@@ -259,6 +285,8 @@ data class Session(
      */
     val workflows: List<Workflow>? = null,
     @SerialName("loop") val loop: LoopInfo? = null,
+    /** The goal it works toward, when one is set (docs/agent-goal.md); older hubs never send it. */
+    val goal: GoalInfo? = null,
     @WireTime @SerialName("updated_at") val updatedAt: String? = null,
     @SerialName("last_text") val lastText: String? = null,
     /** Its latest step when that is a tool call no text came after (「在跑测试」「在读 tasks.go」), and when it started. */
@@ -600,6 +628,7 @@ data class ListeningPort(
 )
 object DetectedEngineSerializer : WireSerializer<DetectedEngine>(DetectedEngine.generatedSerializer())
 object LoopInfoSerializer : WireSerializer<LoopInfo>(LoopInfo.generatedSerializer())
+object GoalInfoSerializer : WireSerializer<GoalInfo>(GoalInfo.generatedSerializer())
 object BackgroundTaskSerializer : WireSerializer<BackgroundTask>(BackgroundTask.generatedSerializer())
 object SessionCapabilitiesSerializer : WireSerializer<SessionCapabilities>(SessionCapabilities.generatedSerializer())
 object SessionTodoSerializer : WireSerializer<SessionTodo>(SessionTodo.generatedSerializer())

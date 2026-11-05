@@ -287,3 +287,39 @@ fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
+
+/**
+ * A one-line bar under a conversation's header for something the agent keeps working on (its goal, docs/agent-goal.md;
+ * iOS `GoalBar`): an icon and [text] in [colors]' role colour, [trailing] (a status) at the end, a tap opens the detail.
+ * Glass and Brief fill it with the colour's tint; Board draws its surface and a line, as its chips.
+ */
+@Composable
+fun JActivityBar(
+    text: String,
+    icon: PhIcon,
+    colors: StatusColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: String? = null,
+    onClickLabel: String? = null,
+) {
+    val palette = PersonaTheme.palette
+    val board = PersonaTheme.style == AppStyle.Board
+    val shape = PersonaTheme.shapes.chipShape
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 36.dp).clip(shape)
+            .background(if (board) palette.surface else colors.tint)
+            .then(if (board) Modifier.border(1.dp, palette.line, shape) else Modifier)
+            .clickable(role = Role.Button, onClickLabel = onClickLabel, onClick = onClick)
+            .padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s),
+    ) {
+        JIcon(icon, null, size = 16.dp, tint = colors.text)
+        Text(text, style = PersonaTheme.type.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = palette.ink,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        trailing?.let {
+            Text(it, style = PersonaTheme.type.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = colors.text, maxLines = 1, softWrap = false)
+        }
+    }
+}
