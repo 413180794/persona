@@ -30,9 +30,13 @@ var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedu
 	"conversation_new", "conversation_send", "task_plan"}
 
 // Tools are the assistant's tools (assistant.tools).
-func (s *Service) Tools(context.Context) []proto.Tool {
-	tools := make([]proto.Tool, 0, len(toolNames))
-	for _, n := range toolNames {
+func (s *Service) Tools(ctx context.Context) []proto.Tool {
+	names := append([]string(nil), toolNames...)
+	if s.hello(ctx).PersonaView {
+		names = append(names, "view_show", "view_update", "view_get")
+	}
+	tools := make([]proto.Tool, 0, len(names))
+	for _, n := range names {
 		t := prompts.Tool(n)
 		tools = append(tools, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
 	}
@@ -70,6 +74,8 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 	switch name {
 	case "ask_user":
 		return s.toolAskUser(ctx, machine, self, args)
+	case "view_show", "view_update", "view_get":
+		return s.toolView(ctx, machine, self, name, args)
 	case "task_plan":
 		return s.toolTaskPlan(ctx, self, args)
 	case "kb_search", "kb_list", "kb_get", "kb_update":

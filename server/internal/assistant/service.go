@@ -40,22 +40,23 @@ type Service struct {
 	pubMu sync.Mutex
 	seq   uint64
 
-	titles    titleBook    // titles.go
-	prefs     settingsBook // profile.go
-	main      mainBook     // start.go
-	archived  archiveBook  // conversations.go
-	relays    relayBook    // conversations.go
-	quiet     quietBook    // quiet.go
-	sched     schedule     // schedule.go
-	tasks     tasksState   // tasks.go
-	questions questions    // tools.go (ask_user)
-	live      contextState // context.go
-	todos     todoBook     // todos.go
-	work      workBook     // agents_work.go: the Agents business
-	chans     channelsBook // channels.go
-	fbot      feishuBook   // feishu.go
-	kb        kbState      // kb.go
-	inbox     inboxBook    // inbox.go
+	titles     titleBook         // titles.go
+	prefs      settingsBook      // profile.go
+	main       mainBook          // start.go
+	archived   archiveBook       // conversations.go
+	relays     relayBook         // conversations.go
+	quiet      quietBook         // quiet.go
+	sched      schedule          // schedule.go
+	tasks      tasksState        // tasks.go
+	questions  questions         // tools.go (ask_user)
+	live       contextState      // context.go
+	todos      todoBook          // todos.go
+	work       workBook          // agents_work.go: the Agents business
+	chans      channelsBook      // channels.go
+	fbot       feishuBook        // feishu.go
+	kb         kbState           // kb.go
+	inbox      inboxBook         // inbox.go
+	viewEvents viewNotifications // views.go: only coalesced notifications; contents are stored first
 }
 
 var _ Handler = (*Service)(nil)

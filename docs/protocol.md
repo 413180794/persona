@@ -481,7 +481,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/task-plans/{id}` | 一个计划（`TaskPlan`，见下面「任务和对话动态」） → 200 `{"plan":TaskPlan}`；不存在 404 |
 | POST | `/api/v1/task-plans/{id}/start` | 开始计划 `{"tasks"?:[PlanTask],"remember"?:bool}`：`tasks` 按下标覆盖用户在卡片上改过的字段（空的不改），`remember` 记住「这类以后直接开」；每个任务建一个待办（`origin`、`plan_id`）、在后台开 Agent → 200 `{"plan":TaskPlan}`；已开始或不开了 409，不存在 404，只读设备 403 |
 | POST | `/api/v1/task-plans/{id}/dismiss` | 不开了 → 200 `{"plan":TaskPlan}`；已开始 409 |
-| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan}}`（`plans` 是 `plan` 条目引用的计划的当前状态） |
+| GET | `/api/v1/assistant/conversations/{id}/feed?since=` | 对话动态：`since`（RFC3339）之后的条目，旧的在前，一次最多 500 → `{"items":[FeedItem],"plans":{"plan_…":TaskPlan},"views":{"view_…":AssistantView}}`（plans 和 views 是引用对象的当前状态；views 总是返回该对话完整快照，不受 since 限制，更新不移动原 feed 位置） |
 | POST | `/api/v1/assistant/conversations/{id}/today` | 这段对话今天的「今天」卡片：已有就回那张，没有就建一张（`today` 条目，`at` 是用户那天的零点）→ `{"item":FeedItem,"new":bool}`；只读设备 403 |
 | GET | `/api/v1/task-trust` | 「这类以后直接开」记住的几类 → `{"kinds":[{"key","machine","cwd","readonly"}]}` |
 | DELETE | `/api/v1/task-trust?key=` | 忘掉一类（以后又要先给计划）→ `{"ok":true}`；没记过 404；只读设备 403 |
@@ -600,7 +600,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
-| `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条 |
+| `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |
+| `assistant_view` | `conversation`, `view`（schema 的 AssistantView：id、conversation、version、view、created_at、updated_at）：已存入数据库的活卡片更新；同一卡片每秒最多一次，按 version 忽略旧更新；不另发通知 |
 | `task_plan` | `plan`（`TaskPlan`）：计划交给用户、开始、不开了、某个任务没开起来（`tasks[i].error`） |
 | `sessions` | `machine_id`, `sessions`（该机器全量，变化时推，和上一条一模一样就不推；每个会话带 `rev` = transcript 字节数，变了就说明有新内容；可选 `suggestion`：Claude 一轮结束后在输入框里给的灰色「下一条」建议，见 `docs/claude-integration.md`；可选 `attention_reason`：会话在「需要你」时，宿主说的原因（botmux 的 attention reason）；可选 `external_url`：在 Persona 之外打开它的地方（botmux 会话的飞书话题），见 `docs/engines.md`「botmux」） |
 | `revs` | `machine_id`, `revs`（`{session_id: rev}`，只含变了的；列表里看得见的字段没变、只是 transcript 长了时发，推给所有客户端，App 据此后台拉增量） |
