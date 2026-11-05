@@ -172,9 +172,11 @@ struct RFBClientTests {
     /// and the pointer (the middle of the old screen) is kept on the new one, without anything sent for it.
     @MainActor @Test func sessionFollowsDesktopSize() async throws {
         func u16(_ v: Int) -> [UInt8] { [UInt8(v >> 8), UInt8(v & 0xff)] }
-        let resize: [UInt8] = [0, 0] + u16(1) + u16(0) + u16(0) + u16(100) + u16(50) + RFBAuth.be32(UInt32(bitPattern: -223))
-        let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0),
-                                   u16(300) + u16(200) + [UInt8](repeating: 0, count: 16) + RFBAuth.be32(0), resize], holds: true)
+        // built in steps: one long `+` chain does not type-check in time on Swift 6.2 (#2867, as #2096)
+        var resize: [UInt8] = [0, 0] + u16(1); resize += u16(0) + u16(0); resize += u16(100) + u16(50)
+        resize += RFBAuth.be32(UInt32(bitPattern: -223))
+        var server: [UInt8] = u16(300) + u16(200); server += [UInt8](repeating: 0, count: 16); server += RFBAuth.be32(0)
+        let t = ScriptedTransport([Array("RFB 003.889\n".utf8), [1, 1], RFBAuth.be32(0), server, resize], holds: true)
         let session = RFBSession(ref: MachineRef(id: "mac"))
         defer { session.close() }
         session.run(RFBClient(transport: t) { nil })
