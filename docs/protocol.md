@@ -22,6 +22,7 @@
   `503 {"code":"center_unreachable","center":{"hub_id","name"}}`。
 - 公网鉴权失败按 IPv4 单地址、IPv6 /64 计数，封禁检查在查库前；`429 rate_limited` 带秒数形式的 `Retry-After`。内网 / VPN 不计数，参数见 [网络配置](network.md#hubjson-网络配置)。
 - 服务（助手等独立进程）连 hub 的总线用另一种 token（`jb_…`），只能开 `GET /api/v1/bus`，见下文「总线」。
+- 请求可带 `Accept-Language: zh-Hans|en|ja`（浏览器自带的完整列表也认，取第一项按 [i18n.md](i18n.md) 回退）：这次响应里给人看的文字（`error`、状态说明）用这种语言；`code` 不变，客户端仍以 `code` 分支。没带时用用户语言（见「客户端能力与心跳」的 `client_hello.locale`）。
 - 每个响应带 `X-Request-Id`；请求可带 `X-Client-Request-Id`（4–32 位十六进制 / `-`），hub 就用它（`docs/server.md`「运维」）。
 
 ### 健康检查与能力位
@@ -42,7 +43,7 @@
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`file_upload`。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -560,7 +561,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/interactions/history?machine_id=&session_id=&limit=` | `{"interactions":[{"interaction","status","resolution","resolved_at"}]}` |
 | GET | `/api/v1/interactions` | `{"interactions":[Interaction]}`（待处理） |
 | POST | `/api/v1/interactions/{id}/resolve` | body 为 Resolution；回 `{"ok":true}`。已经结束的（#1673）：已回答的（或交回电脑后再交回）幂等回 200 `{"ok":true,"already":true,"status","resolution"}`，`resolution` 是当时生效的答案（按历史记录脱敏），可能和这次发的不同，App 据此把卡片显示成已回答；过期、撤回、交回电脑的回 410 `{"error","code":"gone","status"}`，查不到结局的 410 不带 `status` |
-| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?}`；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
+| POST | `/api/v1/devices` | `{"device_id","name","kind":"iphone|mac|watch","apns_token"?,"apns_env"?,"topic"?,"push_key"?,"relay_url"?,"relay_grant"?,"locale"?}`；`locale` 是这台设备的界面语言（`zh-Hans` / `en` / `ja`），推给它的通知用这种语言，没带用用户语言；后三个是推送中继（手机公钥、中继地址、中继给的凭据，`docs/push-relay.md`），hub 没有 APNs key 时据此推送。互联组里只有中心推送：连成员时这条也被转给中心；推送的 payload（直推的和经中继密封的）顶层带 `hub_id`：中心的（[mesh.md](mesh.md)「凭据和推送」）。`mac` 是 Mac App（同一个 bundle id，同一个 topic）：不收静默唤醒，它连着 hub 时不收「需要你处理」「Agent 做完」（App 自己发本地通知）。hub 记下是哪个设备凭据登记的，吊销那个凭据时连这台设备一起删掉，不再推送 |
 | POST | `/api/v1/devices/{id}/live-activity` | 实时活动的 token：`{"push_to_start_token"}`、`{"activity_id","push_token"}`（会轮换，重复发）、`{"activity_id","ended":true}`（`docs/live-activity.md`） |
 | GET | `/api/v1/fleet` | `{"fleet": FleetState}`：当前的实时活动内容（App 回到前台时拉），`stats` 带全部数字和每台机器的负载 |
 | GET | `/api/v1/metrics` | `{"machines": [{machine_id, online, system, latest: MetricSample \| 无, points: [MetricPoint]}], "step": 60}`：App「机器」页每张卡片上的现在值和走势，按配置顺序的每台机器，`points` 是最近 1 小时、每分钟一个点；`latest` 只在 30 秒内收到过样本时有（`docs/machines.md`） |
@@ -598,7 +599,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | --- | --- |
 | `hub_restarting` | `back_in_ms`：hub 要重启了（部署、`systemctl restart`、更新），接着就是 1001「hub restarting」。客户端立刻重连、界面保持原样（[hub-restart.md](hub-restart.md)）。不带 `event_seq`，不补发 |
 | `hub_update` | `update`（同 `GET /api/v1/hub/update`）：检查、下载、等空闲、重启、确认、回滚，状态一变就推；`restarting` 之后连接会断一会儿，是预期的 |
-| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`），`event_stream`, `event_seq`, `resumed`（见下「事件续传」）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
+| `hello` | `server_version`, `client_id`, `features`, `hub_id`, `hub_name`, `endpoints`, `tls_port`, `fp`, `mesh`, `channel`, `build`, `protocol`, `min_app_build`（后四个同 `/api/v1/health`），`event_stream`, `event_seq`, `resumed`（见下「事件续传」），`locale`（用户语言，feature `locale`）；每条 WS 首条消息，尚不含协商后的心跳。`mesh`：`{"hubs":[{hub_id,name,online,self,center,endpoints,tls_port,fp}]}`，互联组里所有 hub（含自己，`self: true`；配过对但现在到不了的 `online: false`；`center: true` 是组里的中心，客户端在同组的几台里优先连它），没有互联时只有自己。连成员时 hello 来自中心（`hub_id` 是中心的）（[mesh.md](mesh.md)） |
 | `endpoints` | `endpoints`（完整候选列表，仅发给声明同名能力的连接） |
 | `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
@@ -645,7 +646,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）；可选 `device_id`、`platform`。按设备替换注册，空工具列表只清除该设备的供给；缺少 `device_id` 时用鉴权设备 ID，再回退到 `legacy`。调用先筛选提供该工具的在线手机，再优先真机、最近活跃连接。iPhone 的 `device_id` 是推送用的设备 id（同 `POST /api/v1/devices`）：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机。 |
 | `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
-| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`，均可省略，见下文 |
+| `client_hello` | `device_id`, `platform`, `version`, `build`, `os: {name, version, sdk}`, `features`, `heartbeat: {interval?, pong_timeout?}`, `locale`（`zh-Hans` / `en` / `ja`，界面语言），均可省略，见下文 |
 | `ping` | 必须带字符串 `id`，允许空字符串；缺失、null 或非字符串时不回复 |
 
 ### 事件续传（`event_seq`，2026-11-04）
@@ -673,8 +674,10 @@ hub 发给所有客户端的广播（这张表里除 `hello`、连接快照、`s
 客户端看到服务端支持 `client_hello` 后可发送：
 
 ```json
-{"type":"client_hello","device_id":"<设备 id>","platform":"android","version":"<版本>","build":1,"os":{"name":"Android","version":"<系统版本>","sdk":36},"features":["endpoints"],"heartbeat":{"interval":240,"pong_timeout":15}}
+{"type":"client_hello","device_id":"<设备 id>","platform":"android","version":"<版本>","build":1,"os":{"name":"Android","version":"<系统版本>","sdk":36},"features":["endpoints"],"locale":"en","heartbeat":{"interval":240,"pong_timeout":15}}
 ```
+
+`locale` 是解析后的界面语言（`zh-Hans` / `en` / `ja`，[i18n.md](i18n.md)），不是「跟随系统」。hub 用它出这条连接上的 `notify`、`error` 等文案；`full` 角色的连接报的值同时记成**用户语言**（Postgres `settings.user_locale`），助手回答、injected 消息、任务通知、机器人回复、没有自己 `locale` 的设备的推送都用它。从没有客户端报过时是 `zh-Hans`。省略 `locale` 不改这两样；用户改了语言（或跟随系统时系统语言变了）立刻再发一次 `client_hello`（带上原来的其余字段，省略 `features` 会清空能力集合）。
 
 这份元数据只记录在当前连接，不改变已鉴权的设备身份或权限。`build` 当前接收任意 JSON。每次 `client_hello` 替换客户端的能力集合，省略 `features` 等于清空集合；不要用服务端能力列表代替客户端自己支持的能力。
 
