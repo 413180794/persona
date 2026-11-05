@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -64,5 +65,28 @@ func TestStopGroupTakesTheChildren(t *testing.T) {
 	}
 	if Alive(child) {
 		t.Fatal("StopGroup left the shell's child running")
+	}
+}
+
+// SessionGroupAttr puts the child in a session (and so a process group) of its own, with no controlling terminal,
+// and StopGroup still ends it (#3265).
+func TestSessionGroupAttrHasItsOwnSession(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	cmd.SysProcAttr = SessionGroupAttr()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	if sid, err := syscall.Getsid(pid); err != nil || sid != pid {
+		t.Fatalf("session %d (%v), want the child's own %d", sid, err, pid)
+	}
+	if pgid, err := syscall.Getpgid(pid); err != nil || pgid != pid {
+		t.Fatalf("process group %d (%v), want the child's own %d", pgid, err, pid)
+	}
+	if err := StopGroup(pid, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Wait(); err == nil {
+		t.Fatal("StopGroup did not end it")
 	}
 }

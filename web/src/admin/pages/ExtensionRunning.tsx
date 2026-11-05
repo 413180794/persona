@@ -10,6 +10,7 @@ import { AdminIcon } from "../icons";
 import { dateTime, logText, mergeLines, metricsCharts, msText, rateText, rateTone } from "../logic";
 import type { ExtensionMetrics, ExtensionOverview, LogLine, MetricsWindow } from "../types";
 import { Loader, Segmented, Tag } from "../parts";
+import { latestRequest, visiblePoll } from "../../lib/visible-poll";
 
 const WINDOWS: { value: MetricsWindow; label: string }[] = [
   { value: "1h", label: t("admin-pages-extensionrunning.window_1h") },
@@ -45,28 +46,36 @@ function Column({ label, className, children }: { label: string; className?: str
 /** 运行情况 and 日志, in an extension's details. */
 export function ExtensionRunning({ id }: { id: string }) {
   const [win, setWin] = useState<MetricsWindow>("24h");
-  const [m, setM] = useState<ExtensionMetrics | null>(null);
-  const [failed, setFailed] = useState<unknown>(null);
-  const [absent, setAbsent] = useState(false);
+  // Each answer is kept with the extension and window it is for, so a switch never shows the last one's figures as this one's.
+  const [got, setGot] = useState<{ id: string; win: MetricsWindow; m: ExtensionMetrics } | null>(null);
+  const [failed, setFailed] = useState<{ id: string; win: MetricsWindow; e: unknown } | null>(null);
+  const [absent, setAbsent] = useState<string | null>(null); // the id a hub from before #1857 answered 404 for
   useEffect(() => {
-    let live = true;
-    const load = () =>
-      getExtensionMetrics(id, win).then(
-        (r) => live && (setM(r), setFailed(null)),
-        (e) => {
-          if (!live) return;
-          if (e instanceof AdminError && e.status === 404) setAbsent(true);
-          else setFailed(e);
-        },
-      );
-    void load();
-    const timer = setInterval(load, 30_000);
+    const request = latestRequest<ExtensionMetrics>(
+      (m) => {
+        setGot({ id, win, m });
+        setFailed(null);
+      },
+      (e) => {
+        if (e instanceof AdminError && e.status === 404) setAbsent(id);
+        else setFailed({ id, win, e });
+      },
+    );
+    const stop = visiblePoll(() => void request.run(() => getExtensionMetrics(id, win)), 30_000, {
+      visible: () => document.visibilityState !== "hidden",
+      subscribe: (fn) => {
+        document.addEventListener("visibilitychange", fn);
+        return () => document.removeEventListener("visibilitychange", fn);
+      },
+    });
     return () => {
-      live = false;
-      clearInterval(timer);
+      request.dispose();
+      stop();
     };
   }, [id, win]);
-  if (absent) return null; // a hub from before #1857
+  if (absent === id) return null; // a hub from before #1857
+  const m = got?.id === id && got.win === win ? got.m : null;
+  const error = failed?.id === id && failed.win === win ? failed.e : null;
   return (
     <>
       <section className="grid min-w-0 gap-2">
@@ -74,7 +83,9 @@ export function ExtensionRunning({ id }: { id: string }) {
           <h4 className="text-[12px] font-medium text-ink-2">{t("admin-pages-extensionrunning.running")}</h4>
           <Segmented value={win} options={WINDOWS} onChange={setWin} label={t("admin-pages-extensionrunning.time_range")} />
         </div>
-        {!m ? failed ? <p className="text-[12px] text-red">{errorText(failed)}</p> : <Loader /> : <Running m={m} />}
+        {/* a failed refresh is said even while the last figures stay on screen */}
+        {error != null && <p className="text-[12px] text-red">{errorText(error)}</p>}
+        {m ? <Running m={m} /> : error == null && <Loader />}
       </section>
       <ExtensionLogs id={id} />
     </>

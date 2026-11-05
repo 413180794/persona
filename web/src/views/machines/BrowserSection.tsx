@@ -2,16 +2,28 @@
 // G107): the switch that lets the assistant drive its ego lite, and how far that is: 安装 ego lite when it is not there;
 // its first-run setup as steps (open it on the Mac or over VNC, import a browser's data, finish, check again); 就绪 with
 // what is left (its usage statistics) ticked or not. Once its setup is done, its sign-ins (BrowserLogins) follow. The
-// hub is asked again when the page opens, and every 2 s while a job runs or the setup is under way.
-import { useEffect, useState } from "react";
+// hub is asked again when the page opens, and every 2 s while a job runs or the setup is under way and the tab is shown.
+// Only the latest answer for the Mac shown now lands: one for a Mac opened before, or an older one, is dropped.
+import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { browserView, browserWatching, type BrowserAction, type BrowserStep, type MachineBrowser } from "../../lib/browser";
 import { screenPath } from "../../lib/computer";
+import { latestRequest, visiblePoll } from "../../lib/visible-poll";
 import { Button, cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Switch } from "../settings/SettingsParts";
 import { BrowserLogins } from "./BrowserLogins";
 import { t } from "../../i18n";
+
+type Reads = ReturnType<typeof latestRequest<MachineBrowser>>;
+
+const documentPage = {
+  visible: () => document.visibilityState === "visible",
+  subscribe: (fn: () => void) => {
+    document.addEventListener("visibilitychange", fn);
+    return () => document.removeEventListener("visibilitychange", fn);
+  },
+};
 
 export function BrowserSection({ mid, browser, online }: { mid: string; browser: MachineBrowser; online: boolean }) {
   // What the hub said since the page opened (newer than the machine list's).
@@ -23,13 +35,31 @@ export function BrowserSection({ mid, browser, online }: { mid: string; browser:
   const enabled = shown.enabled;
   const watching = browserWatching(shown, online);
 
-  useEffect(() => setFresh(null), [mid]);
+  // One request line per Mac: disposed when another Mac is shown or the page goes, so their answers never land.
+  // Declared before the effects that read through it, so it exists when they first run.
+  const reads = useRef<Reads | null>(null);
+  useEffect(() => {
+    setFresh(null);
+    // a failed read leaves the machine list's copy (or the last answer) on screen
+    const line = latestRequest<MachineBrowser>(setFresh, () => {});
+    reads.current = line;
+    return () => {
+      line.dispose();
+      if (reads.current === line) reads.current = null;
+    };
+  }, [mid]);
 
-  const refresh = async () => {
+  const refresh = () => reads.current?.run(() => api<MachineBrowser>(`/machines/${enc(mid)}/browser`)) ?? Promise.resolve();
+
+  // Runs a write and shows its answer as the latest one (an older read still in flight is dropped). If another Mac is
+  // shown by the time it comes back, both its answer and its failure belong to the Mac left behind and are dropped.
+  const write = async (send: () => Promise<MachineBrowser>) => {
+    const line = reads.current;
     try {
-      setFresh(await api<MachineBrowser>(`/machines/${enc(mid)}/browser`));
-    } catch {
-      // the machine list's copy stays
+      const value = await send();
+      void line?.run(() => Promise.resolve(value));
+    } catch (e) {
+      if (line && line === reads.current) throw e;
     }
   };
 
@@ -40,15 +70,18 @@ export function BrowserSection({ mid, browser, online }: { mid: string; browser:
 
   useEffect(() => {
     if (!watching) return;
-    const timer = setInterval(() => void refresh(), 2000);
-    return () => clearInterval(timer);
+    // visiblePoll asks right away when it starts; the page just asked (on open or with the action that started this)
+    let started = false;
+    const stop = visiblePoll(() => { if (started) void refresh(); }, 2000, documentPage);
+    started = true;
+    return stop;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mid, watching]);
 
   const set = async (on: boolean) => {
     setSaving(true);
     try {
-      setFresh(await api<MachineBrowser>(`/machines/${enc(mid)}/browser`, { method: "PUT", json: { enabled: on } }));
+      await write(() => api<MachineBrowser>(`/machines/${enc(mid)}/browser`, { method: "PUT", json: { enabled: on } }));
     } catch (e) {
       toast(t(on ? "machines-browsersection.turn_on_failed" : "machines-browsersection.turn_off_failed", { error: errorText(e) }), "error");
     } finally {
@@ -59,7 +92,7 @@ export function BrowserSection({ mid, browser, online }: { mid: string; browser:
   const run = async (what: BrowserAction) => {
     setAsking(true);
     try {
-      setFresh(await api<MachineBrowser>(`/machines/${enc(mid)}/browser/${what}`, { method: "POST" }));
+      await write(() => api<MachineBrowser>(`/machines/${enc(mid)}/browser/${what}`, { method: "POST" }));
     } catch (e) {
       toast(errorText(e), "error");
     } finally {

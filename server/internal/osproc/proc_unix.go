@@ -12,6 +12,12 @@ import (
 // GroupAttr starts a child as the leader of its own process group, so StopGroup reaches its children too.
 func GroupAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setpgid: true} }
 
+// SessionGroupAttr is GroupAttr in a session of its own: the child has no controlling terminal either, so an
+// interactive shell (zsh -ic) started from a process that has one is not stopped by SIGTTOU / SIGTTIN for reaching
+// for a terminal whose foreground it is not (#3265). The session's process group is the child's, so StopGroup still
+// reaches its children.
+func SessionGroupAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
+
 // DetachedAttr starts a child in its own session, so it outlives this process.
 func DetachedAttr() *syscall.SysProcAttr { return &syscall.SysProcAttr{Setsid: true} }
 

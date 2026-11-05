@@ -18,6 +18,9 @@ func GroupAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP}
 }
 
+// SessionGroupAttr is GroupAttr: Windows has no controlling terminal to keep the child from (the Unix one, #3265).
+func SessionGroupAttr() *syscall.SysProcAttr { return GroupAttr() }
+
 // DetachedAttr starts a child without this process's console, so it outlives this process.
 func DetachedAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}

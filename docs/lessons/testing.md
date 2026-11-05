@@ -496,3 +496,12 @@ tearDown 里按原样撤掉（`MOCK_PHOTO=1` 照旧可用）。新写的 UI 测�
 助手的自动链接走 `AutoLinkUnlinkedTodoAgent`：落库时它已经在别的待办里就什么也不做，不再顶掉手工的选择（直接调 `AutoLinkTodoAgent` 照旧会挪）。内存里那条没写进库的自动链接也要删掉，用户手动移除过的那条保留；撤回时只认它自己那条（同一个 LinkedAt），连带的「正在做哪个待办」也只在撤掉这条时才清，用户刚好手工重挂同一个待办的不能跟着丢。
 
 遇到偶发的约束冲突，先用 `-count=30` 确认能复现，再把会写同一行的事务逐个列出来，看它们锁的是不是同一个东西。不能靠重跑、加长超时或跳过 store 来过。
+
+## 在终端里跑 node 测试挂到超时：交互式 zsh 在后台进程组里被停住（2026-11-05，#3265）
+
+在 hc / herdr 窗格、Terminal 这类真终端里跑 `go test ./internal/node`，`TestLauncherRepair` 一直挂到 10 分钟超时；CI、`test-server.sh`（ssh 不带 `-t`）、Claude Code 的 Bash 工具没有终端，不会挂。
+node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来又用 `Setpgid` 把它放进自己的进程组：测试进程有控制终端时，交互式 zsh 会去拿终端，可它的进程组不在前台，
+于是被 SIGTTOU / SIGTTIN 停住，永远不退出（goroutine 栈停在 `launcherRepair` → `Cmd.Wait`）。线上在终端里前台跑 `personad node` 时，启动器的探测、健康检查、修复也会这样挂到超时。
+现在 `killGroupOnCancel` 用 `osproc.SessionGroupAttr()`（`Setsid`）：子进程在自己的会话里，没有控制终端，整组杀掉照旧。
+
+测试挂住时先给测试进程发 `kill -QUIT`，看是哪个测试、卡在哪个系统调用上，再判断是不是环境问题；要起交互式 shell 的子进程，要么用新会话，要么不开单独的进程组。

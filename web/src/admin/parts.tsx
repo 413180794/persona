@@ -1,6 +1,7 @@
 // Small building blocks of the admin pages, on the web client's tokens (src/styles.css) and atoms.
 import { t } from "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { visiblePoll } from "../lib/visible-poll";
 import { Button, copyText, cx, EASE, IconButton, PixelGrid, Shimmer } from "../ui/atoms";
 import { errorText } from "./api";
 import { AdminIcon, type AdminIconName } from "./icons";
@@ -271,6 +272,28 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[] = []) {
   }, deps);
   useEffect(run, [run]);
   return { data, error, loading, reload: run, set: setData };
+}
+
+// useVisiblePoll calls tick every ms while the tab is visible, and once at once when a hidden tab is shown again.
+// It does not tick when it starts (the page has just loaded); nothing runs while hidden, disabled or unmounted.
+export function useVisiblePoll(tick: () => void, ms: number, enabled = true) {
+  const latest = useRef(tick);
+  useEffect(() => {
+    latest.current = tick;
+  });
+  useEffect(() => {
+    if (!enabled) return;
+    let started = false;
+    const stop = visiblePoll(() => started && latest.current(), ms, {
+      visible: () => document.visibilityState !== "hidden",
+      subscribe: (fn) => {
+        document.addEventListener("visibilitychange", fn);
+        return () => document.removeEventListener("visibilitychange", fn);
+      },
+    });
+    started = true;
+    return stop;
+  }, [ms, enabled]);
 }
 
 // Segmented is a small radio group in the shell's switch style (the theme switch): one row of short choices.

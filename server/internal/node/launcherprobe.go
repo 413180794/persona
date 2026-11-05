@@ -308,9 +308,11 @@ func indexOf(list []string, want ...string) int {
 }
 
 // killGroupOnCancel: on timeout kill everything the shell started (a token script, a hung network call) and stop
-// waiting for its output soon after; killing only the shell left Output() waiting on the children's open pipe.
+// waiting for its output soon after; killing only the shell left Output() waiting on the children's open pipe. Its own
+// session, not just its own group: an interactive login shell under a node with a terminal (personad node in the
+// foreground, go test in a terminal) was stopped for good reaching for that terminal (#3265).
 func killGroupOnCancel(cmd *exec.Cmd) {
-	cmd.SysProcAttr = osproc.GroupAttr()
+	cmd.SysProcAttr = osproc.SessionGroupAttr()
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return nil

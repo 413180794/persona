@@ -12,7 +12,7 @@ import { centerName, countdown, peerStatus, probeLinkable, sortMeshHubs } from "
 import { devDialog, navigate } from "../router";
 import { refreshMesh, share, useShared } from "../store";
 import type { DiscoveredHub, MeshHub, MeshView, Peer, PeerCode, PeerProbe, PeersView } from "../types";
-import { Card, ConfirmButton, CopyValue, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Tag, useLoad } from "../parts";
+import { Card, ConfirmButton, CopyValue, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Tag, useLoad, useVisiblePoll } from "../parts";
 
 export function Peers() {
   const { tls, mesh } = useShared();
@@ -31,11 +31,8 @@ export function Peers() {
     setAdding(data.discovered[d === "addpeer-notls" ? 1 : 0] ?? true);
   }, [data, devOpened]);
 
-  useEffect(() => {
-    if (!data || missing) return;
-    const timer = setInterval(() => (reload(), void refreshMesh()), 10_000); // link state, RTT and who is online move on their own
-    return () => clearInterval(timer);
-  }, [data, missing, reload]);
+  // link state, RTT and who is online move on their own
+  useVisiblePoll(() => (reload(), void refreshMesh()), 10_000, Boolean(data) && !missing);
 
   return (
     <>

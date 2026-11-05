@@ -17,6 +17,7 @@ import {
 import { useChannels } from "../../lib/channels";
 import { ago } from "../../lib/format";
 import { useLarkOn } from "../../lib/store";
+import { latestRequest } from "../../lib/visible-poll";
 import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
@@ -83,28 +84,51 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
   const [failure, setFailure] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Only the newest read of this connector lands: an older answer arriving late, or one for a page already left (or
+  // another id), is dropped. `pending` lets the start-up poll skip a tick while a read is still on its way.
+  const reads = useRef<{ request: ReturnType<typeof latestRequest<HubConnector[]>>; pending: number } | null>(null);
   const load = useCallback(async (quietly = false) => {
+    const r = reads.current;
+    if (!r) return;
     if (!quietly) setLoading(true);
+    r.pending++;
     try {
-      const found = (await listConnectors()).find((x) => x.id === id) ?? null;
-      setC(found);
-      setFailure(found ? "" : t("settings-hubconnector.not_on_hub"));
-    } catch (e) {
-      setFailure(t("settings-hubconnector.status_failed", { error: errorText(e) }));
+      await r.request.run(listConnectors);
     } finally {
-      setLoading(false);
+      r.pending--;
     }
-  }, [id]);
-  useEffect(() => void load(), [load]);
+  }, []);
+  useEffect(() => {
+    const request = latestRequest<HubConnector[]>(
+      (list) => {
+        const found = list.find((x) => x.id === id) ?? null;
+        setC(found);
+        setFailure(found ? "" : t("settings-hubconnector.not_on_hub"));
+        setLoading(false);
+      },
+      (e) => {
+        setFailure(t("settings-hubconnector.status_failed", { error: errorText(e) }));
+        setLoading(false);
+      },
+    );
+    const r = { request, pending: 0 };
+    reads.current = r;
+    void load();
+    return () => {
+      request.dispose();
+      if (reads.current === r) reads.current = null;
+    };
+  }, [id, load]);
 
-  // Switched on, its program takes a moment to start and say it signs in: asked again every second (15 s at most).
+  // Switched on, its program takes a moment to start and say it signs in: asked again every second (15 s at most),
+  // a tick skipped while the last read hasn't answered.
   const starting = isStarting(c);
   useEffect(() => {
     if (!starting) return;
     let n = 0;
     const timer = setInterval(() => {
       if (++n > 15) clearInterval(timer);
-      else void load(true);
+      else if (!reads.current?.pending) void load(true);
     }, 1000);
     return () => clearInterval(timer);
   }, [starting, load]);

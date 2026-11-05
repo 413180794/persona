@@ -13,7 +13,7 @@ import { canRemove, countdown, isLegacy, linuxInstallCommand, machineStatus, nee
 import { devDialog, navigate } from "../router";
 import { share, useShared } from "../store";
 import type { AdminMachine, LinkPair, MachinesView, MeshView, Restart } from "../types";
-import { Card, CodeBlock, ConfirmButton, CopyValue, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad } from "../parts";
+import { Card, CodeBlock, ConfirmButton, CopyValue, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad, useVisiblePoll } from "../parts";
 
 const enc = encodeURIComponent;
 
@@ -46,11 +46,7 @@ export function Machines() {
   }, [data, devOpened]);
 
   // Online state and the paths' round trips move on their own.
-  useEffect(() => {
-    if (!data) return;
-    const timer = setInterval(reload, 15_000);
-    return () => clearInterval(timer);
-  }, [data, reload]);
+  useVisiblePoll(reload, 15_000, Boolean(data));
 
   const changed = (r?: Restart) => {
     if (r) share({ restart: r });

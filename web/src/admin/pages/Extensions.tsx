@@ -3,7 +3,7 @@
 // page has shown what it may do (the preview) and the user agreed to exactly that (its permissions digest).
 import { t } from "../../i18n";
 import { tRich } from "../../i18n/rich";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { dependencyText, previewBlocked } from "../../lib/extension-model";
 import { bytes } from "../../lib/format";
 import { Button, Collapse, cx, Dialog, toast, useNow } from "../../ui/atoms";
@@ -15,7 +15,7 @@ import { devDialog } from "../router";
 import { ExtensionMarkets } from "./ExtensionMarket";
 import { ExtensionRunning, RunColumns } from "./ExtensionRunning";
 import type { AdminExtension, ExtensionOverview, PermissionLine, ExtensionPreview } from "../types";
-import { Card, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad } from "../parts";
+import { Card, Dot, EmptyState, ErrorBox, Field, Loader, Notice, PageHeader, Segmented, Tag, useLoad, useVisiblePoll } from "../parts";
 
 const PERM_ICON: Record<string, AdminIconName> = {
   runs_code: "terminal", network: "web", hub_api: "key", launcher_keys: "gauge", secrets: "lock",
@@ -42,28 +42,25 @@ export function Extensions() {
   }, [data, devOpened]);
 
   // An extension's state moves on its own (starting, running, idle).
-  useEffect(() => {
-    if (!data) return;
-    const timer = setInterval(reload, 15_000);
-    return () => clearInterval(timer);
-  }, [data, reload]);
+  useVisiblePoll(reload, 15_000, Boolean(data));
 
   // How each runs, over the last day (docs/extensions.md「运行情况」); a hub from before #1857 has none (null).
   const [running, setRunning] = useState<Record<string, ExtensionOverview> | null>(null);
-  useEffect(() => {
-    let live = true;
-    const load = () =>
-      getMetricsOverview("24h").then(
-        (o) => live && setRunning(Object.fromEntries(o.extensions.map((x) => [x.id, x]))),
-        () => live && setRunning(null),
-      );
-    void load();
-    const timer = setInterval(load, 60_000);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
+  const live = useRef(true);
+  const loadRunning = useCallback(() => {
+    void getMetricsOverview("24h").then(
+      (o) => live.current && setRunning(Object.fromEntries(o.extensions.map((x) => [x.id, x]))),
+      () => live.current && setRunning(null),
+    );
   }, []);
+  useEffect(() => {
+    live.current = true;
+    loadRunning();
+    return () => {
+      live.current = false;
+    };
+  }, [loadRunning]);
+  useVisiblePoll(loadRunning, 60_000);
 
   const replace = (p: AdminExtension) => data && set({ ...data, extensions: data.extensions.map((x) => (x.id === p.id ? p : x)) });
   const missing = error instanceof AdminError && (error.status === 404 || error.code === "no_plugins");
