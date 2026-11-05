@@ -148,6 +148,19 @@ describe("catalogs", () => {
       }
     }
   });
+
+  // A file in this repository means nothing to someone using the app and is nowhere they can open it (#3597): say what
+  // to do or link to the page. The ones still left may only go away.
+  it("names no file of the repository's docs", () => {
+    const LEFT = new Set(["admin-pages-usage.url_hint_generic", "settings-connectors.lark_footer_unconfigured"]);
+    const found: string[] = [];
+    for (const [ns, cat] of Object.entries(source)) {
+      for (const k of Object.keys(cat)) {
+        if (LANGS.some((lang) => /\bdocs\//.test(all[lang][ns]?.[k] ?? ""))) found.push(`${ns}.${k}`);
+      }
+    }
+    expect(found.sort()).toEqual([...LEFT].sort());
+  });
 });
 
 describe("client and admin catalogs", () => {

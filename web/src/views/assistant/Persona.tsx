@@ -17,6 +17,10 @@ import { MochiFace } from "./MochiFace";
 import { CircuitFace, VisorFace } from "./BuiltinFaces";
 import { personaAccent, setPersonaAccent } from "../../ui/look";
 import { currentLanguage, t } from "../../i18n";
+import { tRich } from "../../i18n/rich";
+import { BASE } from "../../lib/base";
+import { navigate } from "../../lib/router";
+import { settingsHref } from "../settings/nav";
 import { setLookIcon } from "../../lib/look-icon";
 
 const CHOSEN_KEY = "jarvis.persona";
@@ -320,7 +324,32 @@ function Swatches({ p }: { p: PersonaInfo }) {
  * extensions' looks, and the chosen one's dot in each state. On a hub that keeps the choice every device follows it; the
  * page's colors follow it only with 主题色「跟随形象」 (ui/look.ts).
  */
-export function PersonaPicker() {
+/**
+ * What the picker says when the hub has no looks beyond the built-in ones: where to get one, with 设置 › 扩展 as a link
+ * (#3597). onExtensions opens it in place (设置 keeps its own tab state); without it the link goes to the page.
+ */
+export function NoOtherLooks({ onExtensions }: { onExtensions?: () => void }) {
+  const to = settingsHref("extensions", null, false);
+  const open = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    if (onExtensions) onExtensions();
+    else navigate(to);
+  };
+  return (
+    <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">
+      {tRich("assistant-persona.none", {
+        extensions: (
+          <a href={BASE + to} onClick={open} className="text-accent hover:underline">
+            {t("assistant-persona.none_extensions")}
+          </a>
+        ),
+      })}
+    </p>
+  );
+}
+
+export function PersonaPicker({ onExtensions }: { onExtensions?: () => void } = {}) {
   const s = usePersonaStore();
   const current = usePersona();
   const lang = currentLanguage();
@@ -387,7 +416,7 @@ export function PersonaPicker() {
       </div>
       {missing && <p className="px-1 text-[11.5px] text-ink-3">{t("assistant-persona.missing")}</p>}
       {s.error && <p role="alert" className="px-1 text-[11.5px] text-orange">{s.error}</p>}
-      {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-persona.none")}</p>}
+      {s.loaded && !s.error && !s.list.length && <NoOtherLooks onExtensions={onExtensions} />}
     </div>
   );
 }

@@ -10,7 +10,7 @@
   "no_status": "读不到状态",
   "signed_in_via": "登录",
   "last_sync": "最近一次同步",
-  "hub_side_note": "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。",
+  "hub_side_note": "登录在 hub 一侧设置（hub 机器上的 ~/.persona/hub.json），这里只看状态。",
   "fix_title": "怎么修好",
   "to_knowledge": "进知识库",
   "to_inbox": "进收件箱",

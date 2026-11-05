@@ -180,7 +180,7 @@ export function Settings({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           </div>
         ) : (
           <div key={tab} className="mx-auto max-w-[760px] px-5 py-6 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
-            {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} />}
+            {tab === "general" && <General onTriageModel={() => pick("model-config", "agent.triage")} onExtensions={() => pick("extensions")} />}
             {tab === "notifications" && <NotificationSettings />}
             {tab === "models" && <Models />}
             {tab === "model-config" && <ModelConfiguration open={sub} onOpen={(id) => pick("model-config", id)} onProviders={() => pick("models")} />}
@@ -236,7 +236,7 @@ interface AssistantState {
   cwd?: string;
 }
 
-function General({ onTriageModel }: { onTriageModel: () => void }) {
+function General({ onTriageModel, onExtensions }: { onTriageModel: () => void; onExtensions: () => void }) {
   const theme = useTheme();
   const replyMotion = useReplyMotionSetting();
   const sidebarTerminals = useSidebarTerminals();
@@ -302,7 +302,7 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
       <AgentGroup />
 
       <Group title={t("settings.avatar")} footer={t("settings.avatar_footer")}>
-        <PersonaPicker />
+        <PersonaPicker onExtensions={onExtensions} />
       </Group>
 
       <Group title={t("settings.assistant")} footer={t("settings.assistant_footer", { machine: machineName ?? t("settings.hub_machine"), cwd: assistant?.cwd ?? "~/.persona/assistant" })}>
