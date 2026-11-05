@@ -120,4 +120,67 @@ class AppNavigatorTest {
         router.navigate(agentChat)
         assertEquals(listOf(AgentsRoute, agentChat), stacks.getValue(AppTab.Agents))
     }
+
+    private fun agentsOwnAgentChats() = AppNavigator(stacks, { selected }, { selected = it }, chatTab = { AppTab.Agents })
+
+    @Test fun backFromAnAgentChatOpenedInThePersonaHomeReturnsToTheHome() {
+        // A task card in the main conversation opens its agent's chat (#1946): it lands under Agents.
+        val router = agentsOwnAgentChats()
+        selected = AppTab.Jarvis
+        val chat = ChatRoute("machine", "agent")
+        router.navigate(chat)
+        assertEquals(AppTab.Agents, selected)
+        assertEquals(listOf(AgentsRoute, chat), stacks.getValue(AppTab.Agents))
+        router.back()
+        assertEquals(AppTab.Jarvis, selected)
+        assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
+        assertEquals(listOf(AssistantRoute), stacks.getValue(AppTab.Jarvis))
+
+        // Already on top under Agents: back still returns to the page it was opened from.
+        stacks.getValue(AppTab.Agents).add(chat)
+        router.navigate(chat)
+        assertEquals(listOf(AgentsRoute, chat), stacks.getValue(AppTab.Agents))
+        router.back()
+        assertEquals(AppTab.Jarvis, selected)
+
+        // A chat with its kind known goes through the router, and returns the same way.
+        val known = ChatRoute("machine", "known", ConversationKind.Agent)
+        router.navigate(known)
+        assertEquals(AppTab.Agents, selected)
+        router.back()
+        assertEquals(AppTab.Jarvis, selected)
+    }
+
+    @Test fun pagesPushedAboveACrossTabChatGoBackToItFirst() {
+        val router = agentsOwnAgentChats()
+        selected = AppTab.Inbox
+        val chat = ChatRoute("machine", "agent")
+        val terminal = TerminalRoute("machine", "agent")
+        router.navigate(chat)
+        router.navigate(terminal)
+        assertEquals(listOf(AgentsRoute, chat, terminal), stacks.getValue(AppTab.Agents))
+        router.back()
+        assertEquals(AppTab.Agents, selected)
+        assertEquals(listOf(AgentsRoute, chat), stacks.getValue(AppTab.Agents))
+        router.back()
+        assertEquals(AppTab.Inbox, selected)
+    }
+
+    @Test fun pickingATabForgetsWhereACrossTabPageCameFrom() {
+        val router = agentsOwnAgentChats()
+        selected = AppTab.Jarvis
+        val chat = ChatRoute("machine", "agent")
+        router.navigate(chat)
+        router.selectTab(AppTab.Inbox)
+        router.selectTab(AppTab.Agents)
+        router.back()
+        assertEquals(AppTab.Agents, selected)
+        assertEquals(listOf(AgentsRoute), stacks.getValue(AppTab.Agents))
+
+        // Back within the tab a page was opened in stays in that tab.
+        selected = AppTab.Agents
+        router.navigate(chat)
+        router.back()
+        assertEquals(AppTab.Agents, selected)
+    }
 }

@@ -12,17 +12,38 @@ internal class AppNavigator(
     /** Returns true when the Persona home shows this conversation itself; the flag says whether to switch to it. */
     private val openAssistant: (ChatRoute, Boolean) -> Boolean = { _, _ -> false },
 ) : Navigator {
-    override fun selectTab(tab: AppTab) = onSelectTab(tab)
+    /**
+     * Pages [navigate] pushed onto another tab's stack, and the tab each was opened from: back from such a page returns
+     * to that tab (a task card in the Persona home opens its agent's chat under Agents; back goes to the home, not to
+     * the Agents list). The user picking a tab themselves drops these.
+     */
+    private val openedFrom = mutableMapOf<NavKey, AppTab>()
+
+    override fun selectTab(tab: AppTab) {
+        if (tab != selectedTab()) openedFrom.clear()
+        onSelectTab(tab)
+    }
 
     override fun navigate(key: NavKey) {
+        val from = selectedTab()
+        val shown = stacks.mapValues { it.value.lastOrNull() }
+        open(key)
+        val to = selectedTab()
+        val page = stacks.getValue(to).lastOrNull() ?: return
+        // Not recorded: the tab's root, and a page that already topped the target tab's stack but is not the one asked
+        // for (this call did not open it).
+        if (to != from && page != tabRoot(to) && (page != shown[to] || page == key)) openedFrom[page] = from
+    }
+
+    private fun open(key: NavKey) {
         val chat = when (key) { is ChatRoute -> key; is InteractionRoute -> key.chat; else -> null }
         if (chat != null && openAssistant(chat, true)) return
         if (chat != null && chat.kind != null) {
-            Router().parse(RouteInput.Internal(key))?.let { selectTab(it.restore(stacks)); return }
+            Router().parse(RouteInput.Internal(key))?.let { onSelectTab(it.restore(stacks)); return }
         }
         if (key is SettingsPageRoute || key == PairingRoute) {
             val route = Router().parse(RouteInput.Internal(key))!!
-            selectTab(route.restore(stacks)); return
+            onSelectTab(route.restore(stacks)); return
         }
         val rootTab = when (key) {
             AssistantRoute -> AppTab.Jarvis
@@ -32,18 +53,18 @@ internal class AppNavigator(
             else -> null
         }
         if (rootTab != null) {
-            selectTab(rootTab)
+            onSelectTab(rootTab)
             return
         }
         if (key == ConnectionSettingsRoute) {
-            selectTab(AppTab.Settings)
+            onSelectTab(AppTab.Settings)
             return
         }
         val target = if (key is ChatRoute) chatTab(key)
             ?: stacks.entries.firstOrNull { key in it.value }?.key
             ?: selectedTab().takeIf { it == AppTab.Jarvis }
             ?: AppTab.Agents else selectedTab()
-        selectTab(target)
+        onSelectTab(target)
         if (key is ChatRoute) stacks.filterKeys { it != target }.values.forEach { stack -> stack.removeAll { it == key } }
         val stack = stacks.getValue(target)
         if (stack.last() != key) stack.add(key)
@@ -66,7 +87,7 @@ internal class AppNavigator(
                         if (owner == selectedTab() && visible != chat) destination.add(1, chat)
                         else destination.add(chat)
                     }
-                    if (visible == chat) selectTab(owner)
+                    if (visible == chat) onSelectTab(owner)
                 }
             }
         }
@@ -74,7 +95,9 @@ internal class AppNavigator(
 
     override fun back() {
         val stack = stacks.getValue(selectedTab())
-        if (stack.size > 1) stack.removeAt(stack.lastIndex)
+        if (stack.size <= 1) return
+        val page = stack.removeAt(stack.lastIndex)
+        openedFrom.remove(page)?.let(onSelectTab)
     }
 
     /** Remove every destination owned by the confirmed closed session, including hidden tabs. */
@@ -89,5 +112,6 @@ internal class AppNavigator(
                 }
             }
         }
+        openedFrom.keys.retainAll { page -> stacks.values.any { page in it } }
     }
 }
