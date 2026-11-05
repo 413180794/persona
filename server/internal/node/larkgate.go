@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantskills"
@@ -107,7 +108,7 @@ func classifyLark(cmd string, gates []proto.CommandGate, cwd string, risk larkRi
 			continue
 		}
 		// `timeout 20 ol …` (the prompt asks for timeouts), `command -v ol`.
-		if len(words) > 2 && words[0] == "timeout" && regexp.MustCompile(`^[0-9.]+[smh]?$`).MatchString(words[1]) {
+		if len(words) > 2 && words[0] == "timeout" && timeoutArg.MatchString(words[1]) {
 			words = words[2:]
 		}
 		if len(words) > 1 && words[0] == "command" && (words[1] == "-v" || words[1] == "-V") {
@@ -187,7 +188,17 @@ func classifyLark(cmd string, gates []proto.CommandGate, cwd string, risk larkRi
 
 func isAssignment(w string) bool {
 	k, _, ok := strings.Cut(w, "=")
-	return ok && k != "" && regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(k)
+	if !ok || k == "" {
+		return false
+	}
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		if c == '_' || 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || i > 0 && '0' <= c && c <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // safeRedirect: output into /tmp, or stderr folded or dropped.
@@ -228,7 +239,7 @@ func parseGateCall(g proto.CommandGate, args []string, vars map[string]string, c
 		if !strings.Contains(s, "$") {
 			return s, true
 		}
-		out := regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`).ReplaceAllStringFunc(s, func(m string) string {
+		out := shellVarRef.ReplaceAllStringFunc(s, func(m string) string {
 			k := strings.Trim(m, "${}")
 			if val, ok := vars[k]; ok {
 				return val
@@ -313,6 +324,15 @@ func readBodyFile(p, cwd string) string {
 }
 
 var httpMethod = regexp.MustCompile(`^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS)$`)
+
+var (
+	// timeoutArg is the duration of a leading `timeout 20 …` (also read by readsOnlyMemory).
+	timeoutArg = regexp.MustCompile(`^[0-9.]+[smh]?$`)
+	// shellVarRef is a $NAME or ${NAME} reference parseGateCall expands.
+	shellVarRef = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+	// commandNameRe is what safeCommandName lets onto PATH.
+	commandNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+)
 
 // larkDecision is the gate's call on one call: its command gate's rules (the user's first, the hub put them there),
 // or for a lark-cli command the configured rules and then lark-cli's own risk level (a rule for one:
@@ -403,7 +423,7 @@ func bodyMatches(want map[string]any, body string) bool {
 func larkPattern(c larkCall) string {
 	segs := strings.Split(strings.Trim(c.Path, "/"), "/")
 	for i, s := range segs {
-		if regexp.MustCompile(`[0-9]`).MatchString(s) || len(s) > 24 {
+		if strings.ContainsAny(s, "0123456789") || len(s) > 24 {
 			segs[i] = "*"
 		}
 	}
@@ -600,12 +620,24 @@ func gateWrite(gates []proto.CommandGate, command string) (proto.CommandGate, bo
 		if len(names) == 0 {
 			continue
 		}
-		re := regexp.MustCompile("(?i)(^|[\\s;&|(`])(" + strings.Join(names, "|") + ")\\s+(POST|PUT|PATCH|DELETE|\"?\\$)")
-		if re.MatchString(command) {
+		if gateWriteRe(strings.Join(names, "|")).MatchString(command) {
 			return g, true
 		}
 	}
 	return proto.CommandGate{}, false
+}
+
+// gateWriteRes caches gateWrite's regexp by its alternation of names: gates come from config, so there are few.
+var gateWriteRes sync.Map // string -> *regexp.Regexp
+
+// gateWriteRe matches one of names (an alternation of quoted names) called with a write method.
+func gateWriteRe(names string) *regexp.Regexp {
+	if re, ok := gateWriteRes.Load(names); ok {
+		return re.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile("(?i)(^|[\\s;&|(`])(" + names + ")\\s+(POST|PUT|PATCH|DELETE|\"?\\$)")
+	gateWriteRes.Store(names, re)
+	return re
 }
 
 // callTitle is what the phone card names as the place a call acts on.
@@ -780,5 +812,5 @@ var envName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 // safeCommandName: a plain file name for a command on PATH.
 func safeCommandName(s string) bool {
-	return regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`).MatchString(s) && s != "lark-cli"
+	return commandNameRe.MatchString(s) && s != "lark-cli"
 }

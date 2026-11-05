@@ -75,24 +75,22 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 	var out []proto.Subagent
 	for _, mp := range metas {
 		id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(mp), "agent-"), ".meta.json")
-		b, err := os.ReadFile(mp)
-		if err != nil {
-			continue
-		}
-		var m subagentMeta
-		if json.Unmarshal(b, &m) != nil {
-			continue
-		}
 		jp := filepath.Join(dir, "agent-"+id+".jsonl")
 		st, err := os.Stat(jp)
 		if err != nil {
 			continue
 		}
-		// A subagent whose file has not moved for 20 minutes is not running any more (its claude went away).
-		running := !m.Finished && time.Since(st.ModTime()) < 20*time.Minute
-		if !running && time.Since(st.ModTime()) > 24*time.Hour {
+		// Past a day the file has not moved for 20 minutes either, so it is not running whatever its meta says:
+		// left out before the meta is read.
+		if time.Since(st.ModTime()) > 24*time.Hour {
 			continue
 		}
+		m, ok := subagentMetaCached(mp)
+		if !ok {
+			continue
+		}
+		// A subagent whose file has not moved for 20 minutes is not running any more (its claude went away).
+		running := !m.Finished && time.Since(st.ModTime()) < 20*time.Minute
 		started, last := subagentEdgesCached(jp, st)
 		out = append(out, proto.Subagent{
 			ID: id, SessionID: parent + subagentSep + id, Type: m.AgentType, Description: m.Description,
@@ -107,6 +105,49 @@ func (n *Node) subagents(parent string) []proto.Subagent {
 		return out[i].StartedAt.After(out[j].StartedAt)
 	})
 	return out
+}
+
+// metaCache remembers parsed agent-*.meta.json files by size and mtime: the session list asks for every live
+// session's subagents each second, and their metas rarely change (once when the subagent finishes).
+// Bounded like workspaceDirs: a long-lived node that has seen more metas than that starts over.
+var metaCache = struct {
+	sync.Mutex
+	m map[string]metaMemo
+}{m: map[string]metaMemo{}}
+
+const metaCacheMax = 4096
+
+type metaMemo struct {
+	size  int64
+	mtime time.Time
+	meta  subagentMeta
+	ok    bool // false: the file did not parse
+}
+
+func subagentMetaCached(path string) (subagentMeta, bool) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return subagentMeta{}, false
+	}
+	metaCache.Lock()
+	e, hit := metaCache.m[path]
+	metaCache.Unlock()
+	if hit && e.size == st.Size() && e.mtime.Equal(st.ModTime()) {
+		return e.meta, e.ok
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return subagentMeta{}, false
+	}
+	var m subagentMeta
+	ok := json.Unmarshal(b, &m) == nil
+	metaCache.Lock()
+	if len(metaCache.m) >= metaCacheMax {
+		metaCache.m = map[string]metaMemo{}
+	}
+	metaCache.m[path] = metaMemo{size: st.Size(), mtime: st.ModTime(), meta: m, ok: ok}
+	metaCache.Unlock()
+	return m, ok
 }
 
 // edgeCache remembers subagentEdges per file. The session list is rebuilt every second and lists each live

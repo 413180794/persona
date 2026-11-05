@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -973,7 +972,7 @@ func readsOnlyMemory(command, cwd, dir string) bool {
 	touched := false
 	for _, sg := range segs {
 		w := sg.words
-		if len(w) > 2 && w[0] == "timeout" && regexp.MustCompile(`^[0-9.]+[smh]?$`).MatchString(w[1]) {
+		if len(w) > 2 && w[0] == "timeout" && timeoutArg.MatchString(w[1]) {
 			w = w[2:]
 		}
 		if len(w) == 0 || sg.subst || !safeRedirect(sg.redirect) || strings.Contains(sg.redirect, "/tmp/") {

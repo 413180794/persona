@@ -14,9 +14,11 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
@@ -963,13 +965,43 @@ func (n *Node) decorate(s *proto.Session) {
 }
 
 func snippet(s string) string {
+	const most = 200
 	s = wire.AssistantCardText(s)
-	s = strings.Join(strings.Fields(s), " ")
-	r := []rune(s)
-	if len(r) > 200 {
-		return string(r[:200]) + "…"
+	// One pass instead of strings.Fields, Join and []rune over the whole reply: runs of white space become one space,
+	// leading and trailing space go, and the walk stops once there is more than most runes to show.
+	var out strings.Builder
+	out.Grow(min(len(s), most*utf8.UTFMax))
+	runes, space := 0, false
+	for i, r := range s {
+		if unicode.IsSpace(r) {
+			space = out.Len() > 0
+			continue
+		}
+		if space {
+			if runes == most {
+				return truncatedSnippet(out.String())
+			}
+			out.WriteByte(' ')
+			runes++
+			space = false
+		}
+		if runes == most {
+			return truncatedSnippet(out.String())
+		}
+		_, n := utf8.DecodeRuneInString(s[i:])
+		out.WriteString(s[i : i+n])
+		runes++
 	}
-	return s
+	return out.String()
+}
+
+// truncatedSnippet ends a cut snippet with "…". Like the string([]rune) it replaces, a cut snippet has each
+// invalid UTF-8 byte as U+FFFD; an uncut one keeps the bytes it had.
+func truncatedSnippet(s string) string {
+	if !utf8.ValidString(s) {
+		s = string([]rune(s))
+	}
+	return s + "…"
 }
 
 // errEngineChanged: the engine was switched while a refresh ran; its result is the old engine's and is dropped.
@@ -1746,7 +1778,10 @@ func (n *Node) publish(list []proto.Session) map[string]int64 {
 	if n.botmuxPending() {
 		return nil
 	}
-	key := listKey(list)
+	n.mu.Lock()
+	size := len(n.lastList)
+	n.mu.Unlock()
+	key := listKeySized(list, size)
 	n.mu.Lock()
 	changed := key != n.lastList
 	n.lastList = key
@@ -1781,49 +1816,139 @@ func (n *Node) revsChanged(list []proto.Session) map[string]int64 {
 }
 
 // listKey ignores fields that churn without meaning (updated_at of live sessions).
-func listKey(list []proto.Session) string {
-	var b strings.Builder
-	for _, s := range list {
-		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%s|%d|%q|%s|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.ParentSpaceID, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion, s.SpawnFrom)
+func listKey(list []proto.Session) string { return listKeySized(list, 0) }
+
+// listKeySized is listKey with the builder grown to size first (the last key's length: lists change little). It runs
+// on every publish, so the common fields go straight into the builder; fmt only writes the rare composite ones.
+func listKeySized(list []proto.Session, size int) string {
+	var w keyWriter
+	w.b.Grow(size)
+	for i := range list {
+		s := &list[i]
+		w.str(s.SessionID, '|')
+		w.str(s.Status, '|')
+		w.str(s.Title, '|')
+		w.str(s.PaneID, '|')
+		w.str(s.SpaceName, '|')
+		w.str(s.ParentSpaceID, '|')
+		w.str(s.SlotName, '|')
+		w.str(s.LastText, '|')
+		w.int(s.UpdatedAt.Unix()/10, '|')
+		w.quotes(s.Queued)
+		w.b.WriteByte('|')
+		w.str(s.Suggestion, '|')
+		w.str(s.SpawnFrom, '\n')
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
-			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
+			w.b.WriteString("activity:")
+			w.str(s.Activity, '/')
+			w.int(unixOf(s.ActivityAt), '\n')
 		}
-		fmt.Fprintf(&b, "attention:%q/%q/%s\n", s.AttentionReason, s.FailureReason, s.ExternalURL) // a new reason or link alone is a change
+		// A new reason or link alone is a change.
+		w.b.WriteString("attention:")
+		w.quote(s.AttentionReason, '/')
+		w.quote(s.FailureReason, '/')
+		w.str(s.ExternalURL, '\n')
 		// A topic dispatched or a session's chat known: the todos follow it at once.
 		if s.Chat != "" || len(s.Dispatched) > 0 {
-			fmt.Fprintf(&b, "botmux:%s/%s/%q\n", s.Chat, s.Topic, s.Dispatched)
+			w.b.WriteString("botmux:")
+			w.str(s.Chat, '/')
+			w.str(s.Topic, '/')
+			w.quotes(s.Dispatched)
+			w.b.WriteByte('\n')
 		}
 		// The pane's place in its tab, present or not: a swap or a closed shell pane changes only this (and 0 is not none).
-		pane := "none"
+		w.b.WriteString("pane:")
+		w.str(s.SlotID, '/')
+		w.int(int64(s.SlotIndex), '/')
 		if s.PaneIndex != nil {
-			pane = fmt.Sprint(*s.PaneIndex)
+			w.int(int64(*s.PaneIndex), '\n')
+		} else {
+			w.str("none", '\n')
 		}
-		fmt.Fprintf(&b, "pane:%s/%d/%s\n", s.SlotID, s.SlotIndex, pane)
 		if c := s.Compaction; c != nil {
-			fmt.Fprintf(&b, "compaction:%s/%d\n", c.State, c.StartedAt.Unix())
+			w.b.WriteString("compaction:")
+			w.str(c.State, '/')
+			w.int(c.StartedAt.Unix(), '\n')
 		}
 		// A Codex thread's effort, which may change on the computer without a turn (codex_effort.go).
 		if len(s.Efforts) > 0 {
-			fmt.Fprintf(&b, "effort:%s/%v\n", s.Effort, s.Efforts)
+			fmt.Fprintf(&w.b, "effort:%s/%v\n", s.Effort, s.Efforts)
 		}
-		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
+		w.b.WriteString("source:")
+		w.str(s.SourceKind, '/')
+		w.str(s.SourceThreadID, '/')
+		w.str(s.SourceInstanceID, '/')
+		w.str(s.ReadOnlyReason, '/')
+		if s.Capabilities != nil {
+			fmt.Fprint(&w.b, s.Capabilities)
+		} else {
+			w.b.WriteString("<nil>")
+		}
+		w.b.WriteByte('/')
+		w.str(strconv.FormatBool(s.Attached), '/')
+		w.str(s.CodexRoute, '/')
+		w.str(s.CodexRouteNote, '\n')
 		for _, t := range s.Background {
-			b.WriteString(t.ID + ",")
+			w.str(t.ID, ',')
 		}
 		if s.Loop != nil {
-			fmt.Fprintf(&b, "loop%d", s.Loop.NextAt.Unix())
+			w.b.WriteString("loop")
+			w.tmp = strconv.AppendInt(w.tmp[:0], s.Loop.NextAt.Unix(), 10)
+			w.b.Write(w.tmp)
 		}
 		if g := s.Goal; g != nil {
-			fmt.Fprintf(&b, "goal:%s/%q/%q\n", g.Status, g.Objective, g.Reason)
+			w.b.WriteString("goal:")
+			w.str(g.Status, '/')
+			w.quote(g.Objective, '/')
+			w.quote(g.Reason, '\n')
 		}
 		for _, a := range s.Subagents {
-			fmt.Fprintf(&b, "%s:%v:%d,", a.ID, a.Running, a.UpdatedAt.Unix()/10)
+			w.str(a.ID, ':')
+			w.str(strconv.FormatBool(a.Running), ':')
+			w.int(a.UpdatedAt.Unix()/10, ',')
 		}
 		for _, p := range s.Ports {
-			fmt.Fprintf(&b, "port%d/%d/%s,", p.Port, p.PID, p.Title)
+			w.b.WriteString("port")
+			w.int(int64(p.Port), '/')
+			w.int(int64(p.PID), '/')
+			w.str(p.Title, ',')
 		}
 	}
-	return b.String()
+	return w.b.String()
+}
+
+// keyWriter writes listKey's fields, each followed by its separator; tmp is the scratch numbers and quotes go
+// through.
+type keyWriter struct {
+	b   strings.Builder
+	tmp []byte
+}
+
+func (w *keyWriter) str(s string, sep byte) {
+	w.b.WriteString(s)
+	w.b.WriteByte(sep)
+}
+
+func (w *keyWriter) int(v int64, sep byte) {
+	w.tmp = strconv.AppendInt(w.tmp[:0], v, 10)
+	w.b.Write(w.tmp)
+	w.b.WriteByte(sep)
+}
+
+// quote writes s as %q would.
+func (w *keyWriter) quote(s string, sep byte) {
+	w.tmp = strconv.AppendQuote(w.tmp[:0], s)
+	w.b.Write(w.tmp)
+	w.b.WriteByte(sep)
+}
+
+// quotes writes a list of strings as %q would ([] when empty, the rare others through fmt).
+func (w *keyWriter) quotes(list []string) {
+	if len(list) == 0 {
+		w.b.WriteString("[]")
+		return
+	}
+	fmt.Fprintf(&w.b, "%q", list)
 }
 
 func unixOf(t *time.Time) int64 {

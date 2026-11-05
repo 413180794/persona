@@ -211,3 +211,14 @@ func TestGatedWriteInComplexCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestIsAssignmentMatchesShellNames(t *testing.T) {
+	for w, want := range map[string]bool{
+		"A=1": true, "_x=": true, "a_B9=v=w": true, "Z9=": true,
+		"=1": false, "9A=1": false, "A-B=1": false, "A": false, "é=1": false, "A B=1": false,
+	} {
+		if got := isAssignment(w); got != want {
+			t.Errorf("isAssignment(%q) = %v, want %v", w, got, want)
+		}
+	}
+}
