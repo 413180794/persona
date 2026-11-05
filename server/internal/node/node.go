@@ -41,6 +41,9 @@ type Node struct {
 	sockMu sync.Mutex
 	sock   os.FileInfo
 
+	// doctorAt replaces the places node.doctor looks at (tests; doctor_rpc.go).
+	doctorAt func() DoctorOptions
+
 	home string
 	dir  string // ~/.jarvis
 	bin  string // absolute path of this executable
@@ -336,6 +339,12 @@ func (n *Node) writeClaudeConfig() error { return writeGeneratedConfig(n.dir, n.
 func (n *Node) handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
 	if strings.HasPrefix(method, "node.update.") {
 		return n.handleUpdate(ctx, method, params)
+	}
+	switch method {
+	case "node.doctor": // the machine page's 这台电脑能做什么: node doctor's report, read-only unless {"fix":true} (doctor_rpc.go)
+		return n.doctor(ctx, params, false)
+	case "node.doctor.fix": // the same path as `node doctor --fix`: Persona's own generated files only
+		return n.doctor(ctx, params, true)
 	}
 	if strings.HasPrefix(method, "plugin.node.") { // plugins' programs on this computer (plugins.go)
 		return n.handlePlugins(ctx, method, params)

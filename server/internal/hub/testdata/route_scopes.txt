@@ -122,6 +122,7 @@ machines.read        GET /api/v1/machines/{id}/metrics
 -                    GET /api/v1/machines/{mid}/computer/apps
 -                    GET /api/v1/machines/{mid}/computer/clipboard
 -                    GET /api/v1/machines/{mid}/dirs
+-                    GET /api/v1/machines/{mid}/doctor
 -                    GET /api/v1/machines/{mid}/file
 -                    GET /api/v1/machines/{mid}/file/convert
 -                    GET /api/v1/machines/{mid}/file/download
@@ -252,6 +253,7 @@ agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/machines/{mid}/computer/clipboard
 -                    POST /api/v1/machines/{mid}/computer/{action}
 -                    POST /api/v1/machines/{mid}/deploy
+-                    POST /api/v1/machines/{mid}/doctor/fix
 -                    POST /api/v1/machines/{mid}/files
 -                    POST /api/v1/machines/{mid}/git/pull
 -                    POST /api/v1/machines/{mid}/herdr/start

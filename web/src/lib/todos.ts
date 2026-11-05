@@ -249,10 +249,16 @@ function sessionRank(s: Session, mutes: AgentMutes): number {
   return 5;
 }
 
+/** An agent opened by hand in herdr: not started by Persona (nor spawned through it). */
+function isManualHerdr(s: Session) {
+  return s.space_kind === "herdr" && !s.started_by_jarvis;
+}
+
 /**
  * Agents 侧边栏「按待办」分组纯函数：
  * - 每个有挂着 Agent 的未完成待办一段，段头是待办标题和状态，点段头进待办
- * - 没挂待办的 Agent 放最后「未归属」一段，默认折叠（#1836）
+ * - 没挂待办、在 herdr 里手动开的 Agent 一段「手动开的」（#2608）
+ * - 其余没挂待办的 Agent 放最后「未归属」一段，默认折叠（#1836）
  * - 置顶、屏蔽、「最近（未运行）」的规则和「按状态」一致
  */
 export function buildTodoAgentGroups(
@@ -319,22 +325,33 @@ export function buildTodoAgentGroups(
     }
   }
 
+  const byRank = (a: Session, b: Session) => {
+    const rA = sessionRank(a, mutes);
+    const rB = sessionRank(b, mutes);
+    if (rA !== rB) return rA - rB;
+    return byDate(a, b);
+  };
+  const rest = live.filter((s) => !assignedSessionKeys.has(`${s.machine_id}/${s.session_id}`));
+
+  // 在 herdr 里手动开的、没挂待办的单独一段「手动开的」，在「未归属」前面，展开（#2608）：
+  // 没有哪条自动挂的规则认得它们（不是派生的，空间也没挂待办）
+  const manual = rest.filter(isManualHerdr);
+  if (manual.length > 0) {
+    manual.sort(byRank);
+    groups.push({ key: "todo:manual", name: t("lib-todos.manual"), sessions: manual });
+  }
+
   // 没挂待办的放最后「未归属」一段，默认折叠
-  const unassigned = live.filter((s) => !assignedSessionKeys.has(`${s.machine_id}/${s.session_id}`));
+  const unassigned = rest.filter((s) => !isManualHerdr(s));
   if (unassigned.length > 0) {
-    unassigned.sort((a, b) => {
-      const rA = sessionRank(a, mutes);
-      const rB = sessionRank(b, mutes);
-      if (rA !== rB) return rA - rB;
-      return byDate(a, b);
-    });
+    unassigned.sort(byRank);
     groups.push({
       key: "todo:none",
       name: t("lib-todos.unassigned"),
       sessions: unassigned,
       // folded below todos, unless something in it needs you (unread alone stays folded: many lists always have some);
       // with no todo above it is the whole list, so open
-      folded: groups.length > 0 && !unassigned.some((s) => stateOf(s) === "needs_you"),
+      folded: groups.some((g) => g.todoId) && !unassigned.some((s) => stateOf(s) === "needs_you"),
     });
   }
 

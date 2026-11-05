@@ -165,6 +165,7 @@ hooks、MCP 和技能插件都是 node 启动时写出来的文件，坏了没�
 - `--fix` 只重写 Persona 自己生成的文件（发现有 `stale` / `missing` 才写，输出 `fixed`），不碰用户的全局配置，也不会替 node 重建 socket（那要重启 node）。
   **要用 node 实际在跑的那个二进制来跑**：生成文件里写的是「当前二进制」的路径，换了二进制跑 `--fix` 会把 hook 指到它上面。
 - `--json`：`{"ok", "dir", "checks": [{"name", "status", "state", "detail", "hint", "items"}], "fixed": []}`，字段一直都在，列表不会是 `null`，检查的顺序和名字固定（`TestDoctorJSONIsStable`）。
+- 网页机器页的「这台电脑能做什么」（#2429）经 node RPC `node.doctor` / `node.doctor.fix`（`node/doctor_rpc.go`）拿同一份报告，只有 `full` 设备能调；归并成功能的规则见 `docs/machines.md`「自检」。
 - `hub doctor` 管 hub 的配置和网络，不管这些；node 这边的检查另起 `node doctor`，没有往 `hub doctor` 里塞。
 - 测试在临时目录里跑（`node/doctor_test.go`）；手动试 `--fix` 用临时 `HOME`，别对真实的 `~/.persona` 跑。
 

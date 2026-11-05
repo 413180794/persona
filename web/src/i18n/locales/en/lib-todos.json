@@ -10,6 +10,7 @@
   "auto_done": "Auto-completed",
   "model_request_failed": "Model request failed",
   "unassigned": "Unassigned",
+  "manual": "Opened by hand",
   "context_title": "To-do · {title}",
   "decision_manual": "Added by hand",
   "decision_agent_question": "Answered in an agent's question",

@@ -33,6 +33,7 @@ import {
 } from "../../lib/machine-detail";
 import { hubLabel, routeText } from "../../lib/mesh";
 import { machineDeployment } from "../../lib/machine-deploy";
+import { classifyConnection } from "../../lib/node-health";
 import { href, onLinkClick } from "../../lib/router";
 import { getState, refresh, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
@@ -43,6 +44,7 @@ import { MachineDeploy } from "./MachineDeploy";
 import { BrowserLogins } from "./BrowserLogins";
 import { ComputerSection } from "./ComputerSection";
 import { EngineSection } from "./EngineSection";
+import { NodeHealth } from "./NodeHealth";
 import { MachineExtensionSections } from "../extensions/ExtensionSlots";
 import { t } from "../../i18n";
 
@@ -155,6 +157,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
     toast(err ? t("machines-machinedetail.not_connected_error", { error: err }) : t("machines-machinedetail.not_connected"), "error");
   };
 
+  const connFailure = m && !expectedDisconnect ? classifyConnection(m) : null;
   const groups = useMemo(() => (online ? agentsBySpace(sessions) : []), [online, sessions]);
   const agentCount = groups.reduce((n, g) => n + g.sessions.length, 0);
   const hub = hubLabel(m, machines);
@@ -216,6 +219,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
         {!online && !expectedDisconnect && (
           <div className="mx-4 mb-3.5 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">
             <p className="break-words">{m.error || t("machines-machinedetail.unreachable")}</p>
+            {connFailure && <p className="mt-0.5 font-medium">{t("node-health.failure_line", { title: connFailure.title, next: connFailure.next })}</p>}
             <p className="mt-0.5 text-red/80">{[m.last_seen && ago(m.last_seen) && t("machines-machinedetail.last_seen", { when: ago(m.last_seen) }), connectionText(m)].filter(Boolean).join(" · ")}</p>
           </div>
         )}
@@ -251,6 +255,9 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
 
       {/* which engine the sessions above come from (iOS engineRow) */}
       <EngineSection machine={m} heading={<Heading title={t("machines-machinedetail.engine")} />} />
+
+      {/* what this computer can do for Persona, from the node's self-check (docs/machines.md「自检」) */}
+      <NodeHealth machine={m} heading={<Heading title={t("node-health.title")} />} />
 
       {m.computer && <ComputerSection mid={mid} computer={m.computer} online={online} />}
       {m.browser?.set_up && <BrowserLogins mid={mid} online={online} />}

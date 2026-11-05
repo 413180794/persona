@@ -304,6 +304,28 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     expect(groups[2].sessions.map((s) => s.session_id)).toEqual(["solo-task"]);
   });
 
+  it("没挂待办、在 herdr 里手动开的单独一段「手动开的」，在「未归属」前面，展开 (#2608)", () => {
+    const sOnTodo = mockSession("mac-1", "on-todo", "working", { space_kind: "herdr", started_by_jarvis: false, todo: { id: "todo-a", title: "A" } });
+    const sManual = mockSession("mac-1", "manual-herdr", "idle", { space_kind: "herdr", started_by_jarvis: false });
+    const sByPersona = mockSession("mac-1", "persona-herdr", "idle", { space_kind: "herdr", started_by_jarvis: true });
+    const sBotmux = mockSession("mac-1", "botmux-chat", "idle", { space_kind: "botmux" });
+    const todos: Todo[] = [
+      { id: "todo-a", title: "待办 A", created_at: "2026-11-02T10:00:00Z", updated_at: "", agents: [{ machine_id: "mac-1", session_id: "on-todo", linked_at: "" }] },
+    ];
+
+    const groups = buildTodoAgentGroups([sOnTodo, sManual, sByPersona, sBotmux], machines, todos, mutes);
+    expect(groups.map((g) => g.key)).toEqual(["todo:todo-a", "todo:manual", "todo:none"]);
+    expect(groups[1].name).toBe("手动开的");
+    expect(groups[1].folded).toBeFalsy();
+    expect(groups[1].sessions.map((s) => s.session_id)).toEqual(["manual-herdr"]);
+    expect(groups[2].sessions.map((s) => s.session_id).sort()).toEqual(["botmux-chat", "persona-herdr"]);
+
+    // no todo above: 手动开的 alone does not fold 未归属
+    const noTodo = buildTodoAgentGroups([sManual, sBotmux], machines, [], mutes);
+    expect(noTodo.map((g) => g.key)).toEqual(["todo:manual", "todo:none"]);
+    expect(noTodo[1].folded).toBe(false);
+  });
+
   it("已完成的待办不生成 live 待办组", () => {
     const sDoneTask = mockSession("mac-1", "done-task", "idle", { todo: { id: "todo-done", title: "已完成" } });
     const todos: Todo[] = [

@@ -16,6 +16,26 @@ final class FileUploadTests: XCTestCase {
         return app
     }
 
+    /// How many times the mock was asked for `path` (GET, any query).
+    private func hits(_ path: String) -> Int {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_UPLOAD_HUB"],
+              let data = try? Data(contentsOf: URL(string: hub + "/mock/hits")!),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return 0 }
+        return (obj["hits"] as? [String: Int])?["GET " + path] ?? 0
+    }
+
+    /// Opening a chat at launch builds it once (#2061): in the old layout the push came before the list had appeared,
+    /// and the chat was built three times, its items read three times and `-openUploadDemo` uploading twice.
+    @MainActor func testOpeningAChatAtLaunchReadsItOnce() throws {
+        let items = "/api/v1/sessions/macbook/\(widget)/items"
+        let before = hits(items)
+        let app = try launch([])
+        let plus = app.buttons["Add"].exists ? app.buttons["Add"] : app.buttons["添加"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 15), "the chat did not open:\n\(app.debugDescription)")
+        sleep(3) // a second and third build came within half a second of the first
+        XCTAssertEqual(hits(items) - before, 1, "the chat's items read once")
+    }
+
     /// The + menu offers 文件 next to 照片 and 拍照.
     @MainActor func testMenuHasFiles() throws {
         let app = try launch([])

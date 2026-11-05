@@ -348,6 +348,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   整段没数据时只给一张卡片和「看最近 24 小时」），只在页面可见时刷新（1 小时档 10 秒、另两档每分钟，照 iOS）；系统信息、启动器。
   #433 加了「负载（1 分钟）」曲线（四张图 2×2，虚线标出核数，颜色 token `--chart-load` 取 iOS `MetricColor.load`）和「每个核心」柱状图（`latest.cores` 有两个以上且在线时，即 Linux 的 node，
   右上「最忙 X%」，悬停看每核数值）。
+  「这台电脑能做什么」（#2429，`machines/NodeHealth.tsx`，逻辑 `lib/node-health.ts`，[machines.md](machines.md)「自检」）：在引擎后面，把 node 自检按功能读出来（手机审批卡片 / 状态与通知 / 终端与引擎 / MCP 工具 / 技能 / 运行时接入：就绪、部分可用、有问题、未启用），
+  「查看全部检查（N）」展开逐项，「重新检查」，生成文件过期或缺失时「修复」（确认一次，走 `POST …/doctor/fix`）；用户自己的同步 PermissionRequest 钩子是一行说明；旧 node 写「node 太旧」并带部署按钮。
+  机器卡片和机器页离线时按错误文本给「认证没通过 / 连不上 / 超时 / 版本不一致」和一句下一步。截图用 `MOCK_DOCTOR=…` 的假 hub。
   「引擎」（#2071，`machines/EngineSection.tsx`，逻辑 `lib/engines.ts`，照 iOS `EngineSelectionModel` / `EngineSelectionView`，[engines.md](engines.md)）：在 Agent 下面，选这台电脑的会话从哪个引擎来。
   列出 node 上报的 `engines`（名字、「检测到可用 · 版本」/「没检测到」、`note` 用橙色写为什么用不了，网页还不认识的新引擎也列出来）；离线或老 hub 没有上报时列出已知的五个（herdr、Herdr App、herdr + Herdr App、Orca、Paseo）。
   已知的引擎随时能选（离线也能，连上后生效），不认识的只在 node 报可用时能选；当前的标「当前」。选了别的才出现「还原 / 保存」，保存走 `PUT /machines/{id}/engine`，

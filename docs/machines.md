@@ -216,6 +216,23 @@ hub 收到样本：最新一个留在内存（Dashboard 的「现在」，超过
 - 状态色（注意黄、严重红）只用于异常，不当普通系列色用。
 - 每张图有 VoiceOver 描述（现在多少、最高多少）。
 
+## 自检：这台电脑能做什么（#2429）
+
+网页版机器页有一张「这台电脑能做什么」（照 Moshi 的 Doctor 页），把 `personad node doctor` 的结果（`docs/claude-integration.md`「自检」）按功能读给人看，而不是丢一串检查名。
+
+- **取数**：hub 路由 `GET /api/v1/machines/{mid}/doctor`（只读）和 `POST …/doctor/fix`（重写 Persona 自己生成的文件，写完再检查一次，返回新的报告），都**只有 `full` 设备**（报告里有路径和用户自己的钩子命令，fix 会写电脑上的文件）；node RPC 是 `node.doctor`（只读，`{"fix":true}` 才写）和 `node.doctor.fix`（`node/doctor_rpc.go`），检查在 node 进程里跑，用的就是命令行的 `RunDoctor`，JSON 模型是同一个 `DoctorReport`。hub 的 GET 从不把 `fix` 传给 node。
+- **按功能归并**（`web/src/lib/node-health.ts` 的 `FEATURES`）：手机审批卡片（`node.sock`、claude / assistant 的 settings 和 hooks、`command-paths`）、状态与通知（`node.sock`、`command-paths`）、终端与引擎（`herdr`）、MCP 工具（`node.sock`、`mcp.json`、`command-paths`）、技能（`agent-plugin`、`claude-version`）、运行时接入（`runtime.sock`）。
+  一项功能取它那几个检查里最差的：有 `fail` 是「有问题」，有 `warn` 是「部分可用」，都正常是「就绪」。「终端与引擎」和「运行时接入」是可选的：只有 `warn` 时是「未启用」（写在「没有设置：…」里，不算需要处理），
+  但「终端与引擎」在这台电脑的引擎是 herdr（含 herdr + Herdr App，没选过也算 herdr）时，herdr 连不上是「有问题」。node 多报的、没归进任何功能的检查，不正常时进「其他检查」，不会藏起来。
+  `global-permission-hooks`（用户自己的同步 PermissionRequest 钩子）不算功能，作为一行说明列在功能下面，只看不改。
+- **界面**：顶部「一切正常」或「N 项功能需要处理」（Moshi 的 Everything works / N feature(s) need attention），下面一行「没有设置：…」；「查看全部检查（N）」展开逐项（状态、名字、发现了什么、怎么办、哪些文件不同）；「重新检查」；
+  有 `stale` / `missing` 的生成文件时出现「修复」，点了先确认一次（说明会重写哪几个文件、不改用户自己的 Claude Code 设置）。打开页面时检查一次，不轮询。
+- **旧 node**：没有这个 RPC 的 node 回 `unknown method`，卡片写「这台电脑的 node 太旧，更新后可以在这里自检」，旁边是机器页已有的部署按钮（同一个 `POST …/deploy`，同样的 `can_deploy` 判断）；旧 hub 没有这条路由（404）和非 `full` 设备（403）各有一句说明。离线的电脑不发请求。
+- **连不上时的分类**（`classifyConnection`）：机器卡片和机器页离线时，按 hub 记下的错误文本分「认证没通过 / 连不上这台电脑 / 连接超时 / 版本不一致」，各配一句下一步（ssh 接入和 Persona Link 的措辞不同）；
+  文本认不出来就什么都不加，不猜。计划内的重启（部署中）不算。
+- 截图用假 hub：`MOCK_DOCTOR=healthy|stale|broken|mixed|old|error|slow`、`MOCK_DOCTOR_OLD=<机器 id,…>`（`scripts/mock/mock_hub.py`）。
+- 测试：`node/doctor_rpc_test.go`（临时目录；不带 fix 时不写任何文件、fix 只重写生成的文件且不碰用户的 settings.json、检查名和网页的归并表对得上）、`hub/node_doctor_test.go`（权限）、`web/src/lib/node-health.test.ts`（归并、总结、修复、旧 node、连接分类）。
+
 ## API
 
 见 `docs/protocol.md`：`GET /api/v1/metrics`（机器页）、`GET /api/v1/machines/{id}/metrics?range=1h|6h|24h`（详情），

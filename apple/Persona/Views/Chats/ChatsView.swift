@@ -155,6 +155,9 @@ struct ChatsView: View {
     @State private var menuActions = AgentsListMenu.Actions()
     @StoredValue("dev.machineFilter") private var machineFilter = ""
 
+    /// The list has appeared once: pushes made before that are held back (`model.openChat`, #2061).
+    @State private var rootShown = false
+
     /// An active search keeps the system navigation bar up over what is pushed (the chat showed it over its own
     /// header; closing the search once pushed is too late): opening something from the results closes the search
     /// first and pushes on the next turn of the run loop. The search's text and results stay for coming back.
@@ -241,25 +244,17 @@ struct ChatsView: View {
                     if p.isEmpty { AppModel.rememberChat(nil); model.chatSwitched = [:] } // back at the list: next launch starts here
                 }
                 .onChange(of: model.openChat, initial: true) { _, key in
-                    guard let key else { return }
-                    path = NavigationPath([key])
-                    #if DEBUG
-                    // `-openOverSpace YES` with `-openSession`: the chat on its space's page, a page under it (its ‹, #1337).
-                    if UserDefaults.standard.bool(forKey: "openOverSpace") {
-                        Task {
-                            try? await Task.sleep(for: .seconds(3)) // the session list may not be in yet
-                            guard let space = model.session(key)?.spaceKey else { return }
-                            var under = NavigationPath()
-                            under.append(SpaceRoute(id: space))
-                            under.append(key)
-                            path = under
-                            spaceAt = [0: space]
-                        }
-                    }
-                    #endif
-                    model.openChat = nil
+                    // Not before the list is on screen: a push into a stack whose root has not appeared yet built the
+                    // chat three times (the old layout's launch onto a chat, `-openSession` / a notification: items
+                    // read three times, `-openUploadDemo` uploading twice, #2061). The list's appearing opens it.
+                    if rootShown { takeOpenChat() }
                 }
                 .onAppear {
+                    if !rootShown {
+                        rootShown = true
+                        // Asked for before the list was there (above): a turn later, as the remembered chat below.
+                        if model.openChat != nil { DispatchQueue.main.async { takeOpenChat() } }
+                    }
                     // A new tree (RootView swaps the shell and the tabs when the width class changes, which iOS does
                     // for its snapshots when the app goes to the background: iPhone Duo open, 2026-11-04) starts at the
                     // list: open the chat that was open, as a launch does (AppModel.init). Back at the list it is
@@ -304,6 +299,27 @@ struct ChatsView: View {
         .environment(\.openSpace) { space in
             if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
         }
+    }
+
+    /// The chat asked for from outside the list (a notification, a launch onto it): open, and the request taken.
+    private func takeOpenChat() {
+        guard let key = model.openChat else { return }
+        path = NavigationPath([key])
+        #if DEBUG
+        // `-openOverSpace YES` with `-openSession`: the chat on its space's page, a page under it (its ‹, #1337).
+        if UserDefaults.standard.bool(forKey: "openOverSpace") {
+            Task {
+                try? await Task.sleep(for: .seconds(3)) // the session list may not be in yet
+                guard let space = model.session(key)?.spaceKey else { return }
+                var under = NavigationPath()
+                under.append(SpaceRoute(id: space))
+                under.append(key)
+                path = under
+                spaceAt = [0: space]
+            }
+        }
+        #endif
+        model.openChat = nil
     }
 
     /// A space page from a page already open (a chat's 空间 menu): on top of it.

@@ -10,6 +10,7 @@
   "auto_done": "自动完成",
   "model_request_failed": "模型请求失败",
   "unassigned": "未归属",
+  "manual": "手动开的",
   "context_title": "待办 · {title}",
   "decision_manual": "手动记的",
   "decision_agent_question": "在 Agent 的提问里答的",

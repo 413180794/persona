@@ -146,6 +146,9 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/machines/{mid}/panes/git", h.nodeAction(nodeActions["panes/git"]))
 	api.HandleFunc("POST /api/v1/machines/{mid}/tabs/close", h.nodeAction(nodeActions["tabs/close"]))
 	api.HandleFunc("POST /api/v1/machines/{mid}/tabs/rename", h.nodeAction(nodeActions["tabs/rename"]))
+	// #2429 node self-check (node_doctor.go): the report, and rewriting Persona's own generated files; full devices only
+	api.HandleFunc("GET /api/v1/machines/{mid}/doctor", h.nodeDoctor("node.doctor", 45*time.Second))
+	api.HandleFunc("POST /api/v1/machines/{mid}/doctor/fix", h.nodeDoctor("node.doctor.fix", 60*time.Second))
 	// #2431 新建 worktree…: what the dialog starts from, and the worktree (full devices only, panes.go)
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/prepare", h.nodeAction(nodeActions["worktree/prepare"]))
 	api.HandleFunc("POST /api/v1/machines/{mid}/worktree/create", h.nodeAction(nodeActions["worktree/create"]))

@@ -1,9 +1,11 @@
 // 机器: every computer's CPU / memory / disk now and over the last hour (docs/machines.md), as Insight Cards.
 import { useEffect, useState } from "react";
+import { t as tr } from "../i18n";
 import { api, errorText } from "../lib/api";
 import { bytes, stateOf } from "../lib/format";
 import { hubLabel, routeText } from "../lib/mesh";
 import { machineDeployment } from "../lib/machine-deploy";
+import { classifyConnection } from "../lib/node-health";
 import { href, onLinkClick } from "../lib/router";
 import { useAgentSessions } from "../lib/sessions";
 import { useStore } from "../lib/store";
@@ -64,6 +66,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             const route = routeText(m, machines);
             const detail = { name: "machine" as const, mid: m.id };
             const { expectedDisconnect } = machineDeployment(m);
+            const connFailure = expectedDisconnect ? null : classifyConnection(m); // why it is offline, from the error text, and what to do
             return (
               <section key={m.id} className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${i * 60}ms both` }}>
                 <div className="flex items-start gap-3 px-4 pt-3.5">
@@ -93,6 +96,12 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                   )}
                 </div>
                 {m.online && m.error && <p className="mx-4 mt-2 rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red">{m.error}</p>}
+                {connFailure && (
+                  <p className="mx-4 mt-2 break-words rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] text-red" data-failure={connFailure.kind}>
+                    <span className="font-medium">{tr("node-health.failure_title", { title: connFailure.title })}</span>
+                    {connFailure.next}
+                  </p>
+                )}
                 <MachineDeploy machine={m} className="mt-2" />
                 <div className="grid grid-cols-3 gap-px px-4 pt-3">
                   <Stat label="CPU" value={l?.cpu !== undefined ? `${Math.round(l.cpu)}%` : "—"} warn={(l?.cpu ?? 0) > 85} />

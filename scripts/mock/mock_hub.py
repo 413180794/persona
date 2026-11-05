@@ -257,6 +257,72 @@ MACHINES = [
 if os.environ.get("MOCK_NODE_MISMATCH"):  # a machine whose jarvisd is another build than the hub's
     MACHINES[2]["node_mismatch"] = True
 
+# ---------- node self-check (#2429, docs/machines.md「自检」) ----------
+# GET /api/v1/machines/{mid}/doctor and POST …/doctor/fix: the report `personad node doctor` prints, as the hub relays it.
+#   MOCK_DOCTOR=healthy (default) | stale (hooks and MCP files out of date, 修复 puts them right) | broken (node.sock gone)
+#                | mixed (stale files, the user's own PermissionRequest hook, no runtime.sock) | old (the node has no such method)
+#                | error (the check fails) | slow (the check takes MOCK_DOCTOR_SECONDS, default 3)
+# MOCK_DOCTOR_OLD=macbook,studio   only these machines answer like an old node, whatever MOCK_DOCTOR says.
+DOCTOR_FIXED = set()
+DOCTOR_NAMES = ["node.sock", "runtime.sock", "claude-settings.json", "claude-hooks", "assistant-settings.json", "assistant-hooks",
+                "mcp.json", "agent-plugin", "command-paths", "claude-version", "herdr", "global-permission-hooks"]
+
+def doctor_check(name, status="ok", state="", detail="", hint="", items=None):
+    return {"name": name, "status": status, "state": state, "detail": detail, "hint": hint, "items": items or []}
+
+def doctor_report(mid, fixed=None):
+    mode = os.environ.get("MOCK_DOCTOR", "healthy")
+    if mid in DOCTOR_FIXED and mode in ("stale", "mixed", "broken"): mode = "healthy" if mode != "mixed" else "mixed-fixed"
+    generated = {"claude-settings.json", "claude-hooks", "assistant-settings.json", "assistant-hooks", "mcp.json", "agent-plugin"}
+    checks = []
+    for n in DOCTOR_NAMES:
+        if n == "node.sock":
+            c = doctor_check(n, detail="已应答") if mode != "broken" else doctor_check(
+                n, "fail", detail="不存在", hint="没有 node 在监听：hook 和 MCP 会静默退回终端。确认 hub 已连上这台电脑；node 重启会重建")
+        elif n == "runtime.sock":
+            c = doctor_check(n, detail="可连接") if not mode.startswith("mixed") else doctor_check(
+                n, "warn", detail="不存在", hint="没有 node 在监听：DSH、pi 这类 runtime 连不上；没用到可忽略")
+        elif n in generated:
+            if mode in ("stale", "mixed") and n in ("claude-settings.json", "claude-hooks", "mcp.json"):
+                c = doctor_check(n, "warn", "stale", "过期：2 处不同（differs claude-settings.json）", "重启 node 会重写；或运行 personad node doctor --fix",
+                                 ["differs " + n, "differs " + n.replace(".json", "") + "/hooks/hooks.json"])
+            else:
+                c = doctor_check(n, detail="和当前二进制会写的一致", state="current")
+        elif n == "command-paths":
+            c = doctor_check(n, detail="3 个命令路径都存在且可执行")
+        elif n == "claude-version":
+            c = doctor_check(n, detail="2.1.320，支持 --plugin-dir")
+        elif n == "herdr":
+            c = doctor_check(n, detail="herdr 在监听")
+        else:
+            c = doctor_check(n, detail="没有同步的 PermissionRequest 钩子") if not mode.startswith("mixed") else doctor_check(
+                n, "warn", detail="1 个同步的 PermissionRequest 钩子（/usr/local/bin/approve-tool）",
+                hint="它们和 Persona 的手机审批同时拦着权限请求，可能互相影响；Persona 不会改这个文件，需要时自己检查", items=["/usr/local/bin/approve-tool"])
+        checks.append(c)
+    return {"ok": not any(c["status"] == "fail" for c in checks), "dir": "~/.persona", "checks": checks, "fixed": fixed or []}
+
+def doctor_route(h, p, method):
+    parts = p.split("/")
+    if not (p.startswith("/api/v1/machines/") and len(parts) in (6, 7) and parts[5] == "doctor" and (len(parts) == 6 or parts[6] == "fix")):
+        return False
+    fix = len(parts) == 7
+    if (method == "POST") != fix: return False
+    machine = next((m for m in MACHINES if m["id"] == parts[4]), None)
+    if machine is None: return h.send_json({"error": "unknown machine"}, 404) or True
+    if not machine.get("online"): return h.send_json({"error": "machine is offline", "code": "node_unreachable"}, 503) or True
+    mode = os.environ.get("MOCK_DOCTOR", "healthy")
+    if mode == "old" or machine["id"] in {x for x in os.environ.get("MOCK_DOCTOR_OLD", "").split(",") if x}:
+        return h.send_json({"error": "unknown method node.doctor" + (".fix" if fix else ""), "code": "internal"}, 502) or True
+    if mode == "slow": time.sleep(float(os.environ.get("MOCK_DOCTOR_SECONDS", "3")))
+    if mode == "error": return h.send_json({"error": "context deadline exceeded", "code": "timeout"}, 502) or True
+    if fix:
+        before = doctor_report(machine["id"])
+        stale = [c["name"] for c in before["checks"] if c["state"] in ("stale", "missing")]
+        DOCTOR_FIXED.add(machine["id"])
+        return h.send_json(doctor_report(machine["id"], stale)) or True
+    return h.send_json(doctor_report(machine["id"])) or True
+
+
 # ---------- machine monitoring (docs/machines.md) ----------
 # What each machine runs, and made-up but smooth 24-hour curves: the server is busy right now (CPU and memory
 # high), the Mac Studio was away for two hours this morning (a gap), the NAS has been offline for three hours.
@@ -9432,6 +9498,7 @@ class H(BaseHTTPRequestHandler):
         if p.startswith("/api/v1/machines/") and "/launchers/" in p and p.endswith("/models"):  # 新建 Agent's model picker
             time.sleep(float(os.environ.get("MOCK_MODELS_SECONDS", "0.8")))
             return self.send_json(LAUNCHER_MODELS.get(unquote(p.split("/")[6]), {"agent": "traex", "models": []}))
+        if doctor_route(self, p, "GET"): return
         if p.startswith("/api/v1/machines/") and p.endswith("/launchers"):
             return self.send_json({"launchers": [{"name": "claude", "model": "opus"}, {"name": "sonnetcc", "model": "sonnet"},
                                                  {"name": "codex", "model": "gpt-5.5", "agent": "codex", "agent_type": "codex"}]})  # Codex: 从手机新建
@@ -9623,6 +9690,7 @@ class H(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if pins_route(self, p): return
         if chat_pins_route(self, p, parse_qs(urlparse(self.path).query)): return
+        if doctor_route(self, p, "POST"): return
         if history_route(self, p, parse_qs(urlparse(self.path).query)): return
         if plugins_route(self, p, self.last_body): return
         if os.environ.get("MOCK_TERMINAL_PANES") and re.fullmatch(r"/api/v1/machines/[^/]+/(panes/(close|split|agent|git)|tabs/(close|rename))", p):
