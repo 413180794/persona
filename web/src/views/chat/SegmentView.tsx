@@ -42,7 +42,7 @@ export function bubbleLines(text: string, perLine = CHARS_PER_LINE): number {
 export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: string; sid: string; pending?: boolean }) {
   const own = isOwnMessage(msg);
   return (
-    <div className="ml-auto flex max-w-[488px] min-w-0 flex-col items-end gap-1.5 pl-[12%]" style={pending ? { animation: `fade-up 300ms ${EASE} both` } : undefined} data-user-bubble>
+    <div className="ml-auto flex max-w-[488px] min-w-0 flex-col items-end gap-1.5 pl-[12%]" style={pending ? { animation: `fade-up 300ms ${EASE} both` } : undefined} data-user-bubble data-items={pending ? undefined : [msg.id, ...msg.images.map((i) => i.id)].join(" ")}>
       {msg.images.length > 0 && (
         <div className="flex flex-wrap justify-end gap-1.5">
           {msg.images.map((im) => (
@@ -158,7 +158,7 @@ export function Answer({ item, streaming, mid, sid, fade }: { item?: Item; strea
   }
   return (
     <MessageActions text={text} ts={item?.ts} itemId={item?.id}>
-      <div className={ANSWER} data-answer>
+      <div className={ANSWER} data-answer data-items={item?.id}>
         {/* the cards in it are this item's blocks (ui/AssistantCard.tsx): `<item id>/<n>` */}
         <CardItem.Provider value={item?.id ? { id: item.id, text } : null}>
           <Markdown text={text} mid={mid} cwd={cwd} fade={fade || undefined} />

@@ -9,6 +9,8 @@ import { Collapse, cx, Spinner, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ActionRow } from "./ActionRow";
 import { inOpenedFold, openFoldRange, useExpanded } from "./expanded";
+import { useReveal } from "./search-reveal";
+import { nodeItemIds } from "../../lib/chat-search";
 import { PlanCard } from "./PlanCard";
 import { Answer } from "./SegmentView";
 import { NoticeRow, Thumb } from "./Steps";
@@ -48,6 +50,13 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
     setOpen(next);
     if (next) for (const f of foldsOf(g)) if (f.fold) openFoldRange(p.scope, f.seq, f.fold.through_seq);
   };
+  // a search hit inside it (search-reveal.ts): it opens, and 返回搜索前位置 closes it again
+  const ids = useMemo(() => nodeItemIds(g.children), [g.children]);
+  useReveal(p.scope, ids, () => {
+    if (open || !opens) return;
+    toggle();
+    return () => setOpen(false);
+  });
   // an open group's folded steps are fetched: opened just now, or remembered open when the chat comes back (#1996: it
   // stayed at 正在取 N 条 then); once in, the folds are gone and this has nothing left to do. The outer group fetches
   // its nested groups' folds too.

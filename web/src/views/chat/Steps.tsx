@@ -29,6 +29,7 @@ function Disclosure({
   detail,
   onChip,
   chipTitle,
+  items,
 }: {
   icon: IconName;
   filled?: boolean;
@@ -41,10 +42,12 @@ function Disclosure({
   extra?: React.ReactNode;
   status?: React.ReactNode;
   detail?: React.ReactNode;
+  /** The items it draws (search-reveal.ts finds a hit by them). */
+  items?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div>
+    <div data-items={items}>
       <button
         type="button"
         aria-expanded={open}
@@ -190,20 +193,21 @@ export function NoticeRow({ item, mid, sid }: { item: Item; mid: string; sid: st
         mono={task.kind === "shell"}
         status={pill ? <span className={cx("rounded-[4px] px-1 text-[10.5px] font-medium whitespace-nowrap", TONE[pill.tone])}>{pill.text}</span> : null}
         detail={task.detail || task.title || out ? detail : undefined}
+        items={item.id}
       />
     );
   }
   if (item.wake) {
     const w = wakeSummary(item);
     return (
-      <div className="flex min-h-7 items-center gap-2 px-[3px] py-1 text-[12.5px] text-ink-2">
+      <div className="flex min-h-7 items-center gap-2 px-[3px] py-1 text-[12.5px] text-ink-2" data-items={item.id}>
         <Icon name="bell" size={13} className={cx("shrink-0", w.failed ? "text-red" : "text-accent")} />
         <span className="min-w-0 truncate">{w.text}</span>
       </div>
     );
   }
   return (
-    <div className="flex min-h-7 items-start gap-2 px-[3px] py-1 text-[12.5px] text-ink-2">
+    <div className="flex min-h-7 items-start gap-2 px-[3px] py-1 text-[12.5px] text-ink-2" data-items={item.id}>
       <Icon name="bell" size={13} className="mt-[3px] shrink-0 text-ink-3" />
       <span className="min-w-0 leading-relaxed whitespace-pre-wrap">{item.text}</span>
     </div>

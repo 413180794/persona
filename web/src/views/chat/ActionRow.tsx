@@ -16,6 +16,7 @@ import { cx, Dialog, EASE, IconButton, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { NARROW, useMedia } from "../../ui/media-query";
 import { useChatContext } from "./chat-context";
+import { useReveal } from "./search-reveal";
 import { edgeMask, useEdgeFade } from "./edge-fade";
 import { Thumb } from "./Steps";
 import { t } from "../../i18n";
@@ -147,7 +148,7 @@ export function inlineInput(use: Item): string {
 export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { step: ToolStep; running?: boolean; mid: string; sid: string }) {
   const { use, result, images } = step;
   const name = use.tool_name ?? "";
-  const { tasks } = useChatContext();
+  const { tasks, scope } = useChatContext();
   const p = useMemo(() => presentAction(use), [use]);
   const diffs = useMemo(() => (DIFF_TOOLS.has(name) ? editDiffs(use) : null), [name, use]);
   const stats = diffs ? diffStats(diffs) : null;
@@ -164,10 +165,17 @@ export const ActionRow = memo(function ActionRow({ step, running, mid, sid }: { 
     const f = toolFile(name, use.tool_input);
     if (f) openPanel({ kind: "file", mid, path: f.path, cwd: getSession(mid, sid)?.cwd, line: f.line });
   };
+  const ids = useMemo(() => [use.id, ...(result ? [result.id] : [])], [use.id, result]);
+  // a search hit in its input or output (search-reveal.ts): its detail opens in place
+  useReveal(scope, ids, () => {
+    if (!inPlace || open) return;
+    setOpen(true);
+    return () => setOpen(false);
+  });
   const label = [p.verb, p.param?.text].filter(Boolean).join(" ");
   const input = open ? inlineInput(use) : "";
   return (
-    <div className="flex min-w-0 flex-col" data-action-row={name}>
+    <div className="flex min-w-0 flex-col" data-action-row={name} data-items={ids.join(" ")}>
       <button type="button" onClick={activate} aria-expanded={inPlace ? open : undefined} aria-label={label || name} title={p.param?.title} className={ROW}>
         <span role="img" aria-label={running ? t("chat-actionrow.status_running") : error ? t("chat-actionrow.status_error") : t("chat-actionrow.status_done")} className={cx(STATUS_SLOT, error && "text-red")}>
           {running ? <Spinner size={12} /> : <Icon name={error ? "x" : "check"} size={13} />}

@@ -27,7 +27,16 @@ export interface LineProps {
   onRetry?: () => void;
 }
 
-export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid, streaming, expandFold, onRetry }: LineProps) {
+export const ChatLineView = memo(function ChatLineView(props: LineProps) {
+  // a box-less wrapper: the line's own element stays the chat's flex item; search finds the line by it (ChatSearch)
+  return (
+    <div className="contents" data-line={props.line.id}>
+      <LineBody {...props} />
+    </div>
+  );
+});
+
+function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry }: LineProps) {
   switch (line.kind) {
     case "segment":
       return (
@@ -52,7 +61,7 @@ export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid,
     case "apiError":
       return <APIErrorCard info={line.info} count={line.count} at={line.item.ts} onRetry={onRetry && retryable(line.info) ? onRetry : undefined} />;
   }
-});
+}
 
 /** A notice on a line of its own: a wake opening new work (a centered capsule), "已中断", a long local command's output. */
 function LineNotice({ item }: { item: Item }) {

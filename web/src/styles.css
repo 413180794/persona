@@ -180,6 +180,10 @@ body {
 @keyframes slide-in-right{0%{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
 /* a Feishu message a Pin jumped to: lit, then gone */
 @keyframes pin-flash{0%,35%{opacity:.9}to{opacity:0}}
+/* a chat row an in-conversation search went to (ChatView, Android ChatSearchHighlight): ringed, then gone */
+@keyframes search-hit{0%,75%{outline-color:var(--accent)}to{outline-color:transparent}}
+[data-search-hit] { outline: 2px solid transparent; outline-offset: -2px; border-radius: var(--radius-control); animation: search-hit 3s ease-out both; }
+@media (prefers-reduced-motion: reduce) { [data-search-hit] { animation: none; outline-color: var(--accent); } }
 
 html, body, #root { height: 100%; }
 /* Installed on a phone (PWA, docs/web.md「安装成 App」): the page runs under the home indicator and, in landscape, the

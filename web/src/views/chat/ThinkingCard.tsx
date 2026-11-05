@@ -9,17 +9,26 @@ import { Collapse, cx, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { CHEVRON_SLOT, STATUS_SLOT } from "./ActionRow";
 import { useExpanded } from "./expanded";
+import { useReveal } from "./search-reveal";
 import { t } from "../../i18n";
+
+const NONE: string[] = [];
 
 const HEAD = "flex w-full min-w-0 items-center gap-1.5 rounded-[8px] px-2 py-0.5 [@media(pointer:coarse)]:min-h-10 text-left select-none transition-colors duration-150 motion-reduce:transition-none";
 
 export function ThinkingCard({ item, durationMs, live, scope = "" }: { item?: Item; durationMs?: number; live?: SessionLive | null; scope?: string }) {
   const text = item?.text?.trim() ?? "";
   const [open, setOpen] = useExpanded(`${scope}thinking:${item?.id ?? "live"}`);
+  // a search hit in its words (search-reveal.ts): it opens
+  useReveal(scope, item ? [item.id] : NONE, () => {
+    if (open || !text) return;
+    setOpen(true);
+    return () => setOpen(false);
+  });
   if (live !== undefined) return live?.thinking ? <LiveThinking /> : null;
   const label = t("chat-thinkingcard.thought_for", { duration: workDuration(durationMs ?? 0) });
   return (
-    <div className="flex min-w-0 flex-col" data-thinking={text ? "words" : "empty"}>
+    <div className="flex min-w-0 flex-col" data-thinking={text ? "words" : "empty"} data-items={item?.id}>
       <button type="button" disabled={!text} aria-expanded={text ? open : undefined} onClick={() => setOpen((o) => !o)} className={cx(HEAD, text ? "group cursor-pointer hover:bg-tool-hover" : "cursor-default")}>
         <span className={STATUS_SLOT}>
           <Icon name="spark" size={14} />

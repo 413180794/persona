@@ -51,6 +51,9 @@ import { useTranscript } from "./useTranscript";
 import { DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
 import { QueueStrip } from "./QueueStrip";
+import { ChatSearch, type LoadOutcome } from "./ChatSearch";
+import { forgetReveals, revealItem, undoReveals, clearReveal } from "./search-reveal";
+import { lineOfItem, loadEarlierForSearch, untilStill, type ChatSearchHit, type SearchLoadOutcome } from "../../lib/chat-search";
 import { chatFiles } from "../../lib/mentions";
 import { sameMessage } from "../../lib/queue";
 import { OutboxBubbles } from "./OutboxBubbles";
@@ -66,6 +69,20 @@ import { DayLine, FeedLineView, QuickResultCard, RouteChip, TaskDock, TaskQuesti
 import { t } from "../../i18n";
 
 const NO_FEED: FeedItem[] = [];
+/** Going to a search hit: how long the rows that hold it get to open before the line it is on stands in, when to give
+ *  up, and how long it stays lit (Android: 3 s). */
+const FIND_MS = 400;
+const GIVE_UP_MS = 2000;
+const HIT_MS = 3000;
+const SEARCH_NOTICE: Record<SearchLoadOutcome, string | null> = {
+  start: null,
+  stopped: "chat-chatsearch.stopped",
+  busy: "chat-chatsearch.busy",
+  load_failed: "chat-chatsearch.load_failed",
+  no_progress: "chat-chatsearch.no_progress",
+  page_cap: "chat-chatsearch.page_cap",
+};
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 interface Pending {
   /** The client_msg_id it went with. */
@@ -505,6 +522,129 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
     [tr.items, subagents, assistant, fresh, mid, sid],
   );
+  // ── 会话内搜索 (ChatSearch.tsx, Android ChatSearchState): where the reader was when it opened, going to a hit (the
+  // rows that hold it open, search-reveal.ts), lit for HIT_MS, and 返回搜索前位置 ──
+  const [search, setSearch] = useState<{ open: boolean; query: string }>({ open: false, query: "" });
+  const origin = useRef<{ atEnd: boolean; line?: string; offset: number } | null>(null);
+  const [picked, setPicked] = useState(false);
+  const trNow = useRef(tr);
+  trNow.current = tr;
+  const linesNow = useRef(lines);
+  linesNow.current = lines;
+  const going = useRef(0);
+  // the ring on the hit gone to: one timer, restarted when another (or the same) row lights
+  const lit = useRef<{ el: HTMLElement; timer: number } | null>(null);
+  const unlight = useCallback(() => {
+    if (!lit.current) return;
+    clearTimeout(lit.current.timer);
+    lit.current.el.removeAttribute("data-search-hit");
+    lit.current = null;
+  }, []);
+  useEffect(() => {
+    setSearch({ open: false, query: "" });
+    setPicked(false);
+    origin.current = null;
+    going.current++;
+    unlight();
+    forgetReveals();
+  }, [mid, sid, unlight]);
+  const openSearch = useCallback(() => {
+    const sc = scroller.current;
+    if (sc && !origin.current) {
+      // the first line still in view, and how far under the view's top it starts
+      const top = sc.getBoundingClientRect().top;
+      const at = [...sc.querySelectorAll<HTMLElement>("[data-line]")].map((el) => ({ id: el.dataset.line, r: el.firstElementChild?.getBoundingClientRect() })).find((x) => x.r && x.r.bottom > top);
+      origin.current = { atEnd: atEnd.current, line: at?.id, offset: at?.r ? at.r.top - top : 0 };
+    }
+    setSearch((x) => ({ ...x, open: true }));
+  }, []);
+  const closeSearch = useCallback(() => {
+    setSearch((x) => ({ ...x, open: false }));
+    if (!picked) origin.current = null;
+  }, [picked]);
+  const goTo = useCallback((hit: ChatSearchHit) => {
+    setSearch((x) => ({ ...x, open: false }));
+    setPicked(true);
+    const sc = scroller.current;
+    if (!sc) return;
+    follow(false);
+    revealItem(ctx.scope, hit.itemId);
+    const run = ++going.current;
+    void untilStill<HTMLElement>({
+      frame: nextFrame,
+      now: () => performance.now(),
+      cancelled: () => run !== going.current,
+      giveUpMs: GIVE_UP_MS,
+      // the rows that hold it take a few frames to open: the line it is on only once they had the time
+      locate: (waited) => {
+        const exact = sc.querySelector<HTMLElement>(`[data-items~="${CSS.escape(hit.itemId)}"]`);
+        const lineId = exact || waited <= FIND_MS ? undefined : lineOfItem(linesNow.current, trNow.current.items, hit.itemId);
+        const el = exact ?? (lineId ? sc.querySelector<HTMLElement>(`[data-line="${CSS.escape(lineId)}"]`)?.firstElementChild : null);
+        return el instanceof HTMLElement ? { y: el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop, value: el } : null;
+      },
+    }).then((r) => {
+      if (r === "cancelled") return;
+      clearReveal();
+      if (r === "missing") return void toast(t("chat-chatsearch.not_found"));
+      const el = r.value;
+      const tall = el.getBoundingClientRect().height > sc.clientHeight;
+      el.scrollIntoView({ block: tall ? "start" : "center", behavior: "auto" });
+      unlight();
+      void el.getBoundingClientRect(); // the same row picked again lights again
+      el.setAttribute("data-search-hit", "");
+      lit.current = { el, timer: window.setTimeout(unlight, HIT_MS) };
+    });
+  }, [ctx.scope, follow, unlight]);
+  const backToOrigin = useCallback(() => {
+    const o = origin.current;
+    origin.current = null;
+    setPicked(false);
+    const run = ++going.current;
+    unlight();
+    undoReveals();
+    const sc = scroller.current;
+    if (!sc || !o) return;
+    if (o.atEnd) return void requestAnimationFrame(() => requestAnimationFrame(() => run === going.current && toEnd()));
+    // what the hits opened closes over a few hundred ms (Collapse): keep the origin line where it was until it holds
+    void untilStill<true>({
+      frame: nextFrame,
+      now: () => performance.now(),
+      cancelled: () => run !== going.current,
+      giveUpMs: GIVE_UP_MS,
+      locate: () => {
+        const el = o.line ? sc.querySelector<HTMLElement>(`[data-line="${CSS.escape(o.line)}"]`)?.firstElementChild : null;
+        if (!el) return null;
+        const scTop = sc.getBoundingClientRect().top;
+        sc.scrollTop += el.getBoundingClientRect().top - scTop - o.offset;
+        return { y: el.getBoundingClientRect().top - scTop + sc.scrollTop, value: true };
+      },
+    }).then((r) => r === "missing" && toast(t("chat-chatsearch.origin_changed")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlight]);
+  // 加载更早的记录并继续搜 (lib/chat-search.ts loadEarlierForSearch): the history's own pages, one after another, the
+  // view kept still as each lands above it
+  const loadForSearch = useCallback(async (onPage: (n: number) => void, stopped: () => boolean): Promise<LoadOutcome> => {
+    const outcome = await loadEarlierForSearch({
+      get: () => trNow.current,
+      load: async () => {
+        const sc = scroller.current;
+        if (sc) before.current = { h: sc.scrollHeight, top: sc.scrollTop };
+        try {
+          await trNow.current.loadEarlier();
+        } finally {
+          // nothing came: forget the anchor, or the next change of the chat jumps to it
+          requestAnimationFrame(() => (before.current = null));
+        }
+      },
+      frame: nextFrame,
+      stopped,
+      onPage,
+    });
+    const key = SEARCH_NOTICE[outcome];
+    return key ? t(key) : null;
+  }, []);
+  const rounds = useMemo(() => segs.filter((x) => x.user).length, [segs]);
+
   // the newest plan of the chat (lib/work-groups.ts planSteps): while its card is out of view, a pill above the composer
   const plan = useMemo(() => latestPlan(segs), [segs]);
   const planOut = usePlanOutOfView(scroller, plan?.id);
@@ -588,6 +728,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onInterrupt={interrupt}
           onStopLoop={() => void deliver({ text: STOP_LOOP_MESSAGE, images: [] }, uuid())}
           last={assistant ? tr.items[tr.items.length - 1] : undefined}
+          onSearch={openSearch}
           topCenter={topCenter}
           view={switchable ? view : undefined}
           onView={switchable ? setView : undefined}
@@ -678,6 +819,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           </ChatActionsContext.Provider>
         </div>
         {away && !jumpInDock && <JumpPill label={jumpLabel(newSince)} onClick={toEnd} />}
+        {picked && !search.open && <ReturnPill onClick={backToOrigin} />}
       </div>
 
       {!readOnly && (
@@ -761,6 +903,19 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       )}
       </div>
 
+      {!readOnly && (
+        <ChatSearch
+          open={search.open}
+          query={search.query}
+          onQuery={(query) => setSearch((x) => ({ ...x, query }))}
+          items={tr.items}
+          rounds={rounds}
+          hasMore={tr.hasMore}
+          onLoadEarlier={loadForSearch}
+          onPick={goTo}
+          onClose={closeSearch}
+        />
+      )}
       <Dialog
         open={Boolean(draftRefusal)}
         onClose={() => setDraftRefusal(null)}
@@ -788,6 +943,23 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <p className="text-[13px] leading-relaxed text-ink-2">{t("chat-chatview.draft_detail")}{draftRefusal?.clearable === undefined && t("chat-chatview.draft_multiline")}</p>
         {draftRefusal?.draft && <pre className="mt-2.5 max-h-40 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-ink shadow-hairline">{draftRefusal.draft}</pre>}
       </Dialog>
+    </div>
+  );
+}
+
+/** After going to a search hit: back to where the reader was when the search opened (Android ReturnChip). */
+function ReturnPill({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="absolute top-3 left-1/2 z-10 -translate-x-1/2" style={{ animation: "fade-up 150ms ease-out both" }}>
+      <button
+        type="button"
+        onClick={onClick}
+        data-search-return
+        className="flex h-8 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] leading-none font-medium whitespace-nowrap text-ink-2 shadow-raised transition-colors duration-150 hover:bg-hover active:scale-[0.98]"
+      >
+        <Icon name="arrowLeft" size={14} className="shrink-0" />
+        <span className="translate-y-[0.5px]">{t("chat-chatsearch.return")}</span>
+      </button>
     </div>
   );
 }
@@ -856,6 +1028,7 @@ export function Header({
   onInterrupt,
   onStopLoop,
   last,
+  onSearch,
   topCenter,
   view,
   onView,
@@ -872,6 +1045,8 @@ export function Header({
   onInterrupt: () => void;
   onStopLoop: () => void;
   last?: Item;
+  /** 会话内搜索 (ChatSearch.tsx). */
+  onSearch?: () => void;
   topCenter?: React.ReactNode;
   /** On an agent's page with a terminal to show: the view in the middle, and how to change it (the 终端 | 对话 switch). */
   view?: SessionView;
@@ -978,6 +1153,7 @@ export function Header({
         ...(showFiles ? [{ key: "files", label: t("chat-chatview.files"), icon: "folder" as const, checked: here(panel, "files"), onSelect: openFiles }, { key: "git", label: "Git", icon: "git" as const, checked: here(panel, "git"), onSelect: openGit }] : []),
         ...(allowed.includes("stop") ? [{ key: "stop", label: t("chat-chatview.interrupt"), icon: "stop" as const, hint: "Esc", onSelect: onInterrupt }] : []),
         ...(feishu ? [{ key: "feishu", label: t("chat-chatview.open_in_lark"), icon: "external" as const, onSelect: () => openLink(feishu) }] : []),
+        ...(onSearch ? [{ key: "search", label: t("chat-chatsearch.menu"), icon: "search" as const, onSelect: onSearch }] : []),
         { key: "info", label: t("chat-chatview.session_info"), icon: "info", onSelect: () => setDialog("info") },
         ...(!main && sessionCan(session, "send") && (session.assistant || !session.source_kind) ? [{ key: "rename", label: t("chat-chatview.rename"), icon: "pencil" as const, onSelect: () => setDialog("rename") }] : []),
         ...(!assistant && session.space_id && !session.source_kind ? [{ key: "space", label: t("chat-chatview.rename_space"), icon: "folder" as const, onSelect: () => setDialog("space") }] : []),
