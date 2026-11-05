@@ -541,7 +541,7 @@ private fun ChatPage(
                                         ChatModeBar(session, controls, connection == null || connection == ConnectionState.Online,
                                             onOverlay = { modeOverlay = it }, onPickModel = { model -> send("/model $model") })
                                     }) else null,
-                                    modeHint = if (session?.canChangeModes == true || session?.canChangeEffortOnly == true) chatModeHint(session) else null,
+                                    modeHint = chatModeHint(session, includeModes = session?.canChangeModes == true || session?.canChangeEffortOnly == true),
                                     accessory = {
                                         if (linkContexts.isEmpty()) ComposerSuggestion(session, composer)
                                         if (linkContexts.isNotEmpty()) Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {

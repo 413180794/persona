@@ -86,6 +86,22 @@ class AgentCreationModelTest {
         }
     }
 
+    @Test fun aFriendlyGptLabelStillSendsTheOriginalModelId() = runBlocking {
+        MockWebServer().use { server ->
+            val service = HttpAgentCreationService("hub/pairing", server.url("/").toString(), "test-token", OkHttpClient())
+            server.enqueue(MockResponse().setBody("""{"agent":"codex","models":[{"id":"gpt-6.1-sol","name":"GPT-6.1-sol"}]}"""))
+            val model = requireNotNull(service.launcherModels("box", "test-launcher")).models.single()
+            assertEquals("6.1 Sol", model.label)
+            server.takeRequest()
+            server.enqueue(MockResponse().setBody("""{"session":{"machine_id":"box","session_id":"gpt"}}"""))
+            service.start(AgentStartRequest("box", "/srv/app", "test-launcher", model = model.id),
+                "00000000-0000-4000-8000-000000000006")
+            val body = JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
+            assertEquals("gpt-6.1-sol", body.getValue("model").jsonPrimitive.content)
+            assertEquals("test-launcher", body.getValue("launcher").jsonPrimitive.content)
+        }
+    }
+
     @Test fun aPickedModelGoesWithTheStartAndNoneIsLeftOut() = runBlocking {
         MockWebServer().use { server ->
             val service = HttpAgentCreationService("hub/pairing", server.url("/").toString(), "test-token", OkHttpClient())

@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import persona.core.contracts.Session
 import persona.core.contracts.api.ChatAction
+import persona.core.contracts.api.modelName
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.sort.canChangeEffortOnly
@@ -80,10 +81,12 @@ internal object SessionModes {
     }
 }
 
-/** Non-default settings in one line above the composer ("自动改文件，思考很高"). */
-internal fun chatModeHint(session: Session?): String? = listOfNotNull(
-    session?.permissionMode?.takeIf { it != "default" }?.let { SessionModes.modeLabel(it) },
-    session?.effort?.takeIf { it != "high" }?.let { "思考${SessionModes.effortLabel(it)}" },
+/** Non-default settings and the current GPT model in the existing hint above the composer. */
+internal fun chatModeHint(session: Session?, includeModes: Boolean = true): String? = listOfNotNull(
+    session?.permissionMode?.takeIf { includeModes && it != "default" }?.let { SessionModes.modeLabel(it) },
+    session?.effort?.takeIf { includeModes && it != "high" }?.let { "思考${SessionModes.effortLabel(it)}" },
+    // Only GPT ids get a model hint: other models keep the composer's existing presentation.
+    session?.model?.let { id -> modelName(id).takeUnless { it == id } },
 ).takeIf { it.isNotEmpty() }?.joinToString("，")
 
 /**

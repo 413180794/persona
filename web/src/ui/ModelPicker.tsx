@@ -55,7 +55,7 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
         title={picked?.description ?? (picked || unlisted ? undefined : defaultModel(all)?.description)}
         className="flex h-9 w-full items-center gap-2 rounded-control bg-inset px-3 text-left shadow-hairline outline-none transition-colors enabled:hover:bg-hover focus-visible:shadow-[0_0_0_1px_var(--line-strong)] disabled:cursor-not-allowed"
       >
-        <span className={cx("max-w-[60%] shrink-0 truncate text-[12.5px]", locked ? "text-ink-3" : "text-ink", unlisted && "font-mono")}>{picked ? modelName(picked) : unlisted || "默认"}</span>
+        <span className={cx("max-w-[60%] shrink-0 truncate text-[12.5px]", locked ? "text-ink-3" : "text-ink", unlisted && "font-mono")}>{picked ? modelName(picked) : unlisted ? modelName({ id: unlisted }) : "默认"}</span>
         {loading && !all.length ? (
           <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[11.5px] text-ink-3"><Spinner size={10} /><span className="truncate">正在读取模型列表…</span></span>
         ) : models.status === "error" && !unlisted ? (
@@ -103,7 +103,7 @@ export function ModelPicker({ models, model, followed = {}, ownModel, open, onTo
           </div>
           <div role="listbox" aria-label="模型" className="max-h-60 overflow-y-auto p-1">
             {showDefault && <ModelRow name="默认" detail={defaultDetail(all, followed)} note={defaultModel(all)?.description} selected={!picked && !unlisted} onPick={() => onPick("")} />}
-            {unlisted && !query.trim() && <ModelRow name={unlisted} note="当前配置，列表里没有" selected onPick={() => onPick(unlisted)} mono />}
+            {unlisted && !query.trim() && <ModelRow name={modelName({ id: unlisted })} note="当前配置，列表里没有" selected onPick={() => onPick(unlisted)} mono />}
             {rows.map((m) => (
               <ModelRow key={m.id} name={modelName(m)} detail={modelDetail(m)} note={m.description} selected={m.id === model} onPick={() => onPick(m.id)} />
             ))}

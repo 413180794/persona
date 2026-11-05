@@ -11,7 +11,7 @@ import {
 import {
   archivedMainTitle, COMPACT_FEATURE, compactBody, compactionView, compactPath, NEW_MAIN_FEATURE, NEW_MAIN_PATH, newMainBody, type CompactionView,
 } from "../../lib/compaction";
-import { launcherModels, type AgentModel } from "../../lib/launcher-models";
+import { launcherModels, modelName, type AgentModel } from "../../lib/launcher-models";
 import { personaState } from "../../lib/persona";
 import { navigate } from "../../lib/router";
 import { hubHas, refreshAssistant, useStore } from "../../lib/store";
@@ -71,16 +71,23 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const picked = usePickedLauncher(key);
   const pickedM = usePickedModel(key);
   const [modelsFor, setModelsFor] = useState<{ name: string; options: AgentModel[]; loading: boolean } | null>(null);
+  const [knownModels, setKnownModels] = useState<{ machine: string; name: string; options: AgentModel[] } | null>(null);
   const current = effectiveLauncher({ isMain: assistant?.main === session.session_id, picked, session: session.launcher, config: assistant?.launcher });
   const { list, error } = useAssistantLaunchers(session.machine_id, Boolean(menu.anchor));
-  const model = shortModel(pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model));
+  const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model);
+  const named = knownModels?.machine === session.machine_id && knownModels.name === current ? knownModels.options.find((m) => m.id === modelId) : undefined;
+  const model = named ? modelName(named) : shortModel(modelId);
 
   // Picking the launcher already applies; the submenu only offers that launcher's models.
   const openModels = (name: string) => {
     pickLauncher(key, name);
     setModelsFor({ name, options: [], loading: true });
     void launcherModels(session.machine_id, name)
-      .then((r) => setModelsFor((cur) => (cur?.name === name ? { name, options: r?.models ?? [], loading: false } : cur)))
+      .then((r) => {
+        const options = r?.models ?? [];
+        setModelsFor((cur) => (cur?.name === name ? { name, options, loading: false } : cur));
+        setKnownModels({ machine: session.machine_id, name, options });
+      })
       .catch(() => setModelsFor((cur) => (cur?.name === name ? { name, options: [], loading: false } : cur)));
   };
   const pick = (name: string, id: string | undefined) => {
@@ -96,7 +103,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
           ? [{ key: "loading", label: "正在读取模型…", disabled: true, onSelect: () => {} }]
           : modelsFor.options.map((m) => ({
               key: m.id,
-              label: m.name || m.id,
+              label: modelName(m),
               hint: m.description,
               checked: m.default ? !pickedM : pickedM === m.id,
               onSelect: () => pick(modelsFor.name, m.default ? undefined : m.id),

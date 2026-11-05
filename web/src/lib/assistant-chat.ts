@@ -4,6 +4,7 @@
 // like the app's `assistantLaunchers`: after a reload the conversation's own launcher (the one the hub ran it on) shows.
 // The new-conversation page has its own pick under NEW_CONVERSATION, sent with POST /assistant/conversations.
 import { useSyncExternalStore } from "react";
+import { modelName } from "./launcher-models";
 
 export const NEW_CONVERSATION = "new";
 
@@ -30,9 +31,9 @@ export function effectiveLauncher(o: { isNew?: boolean; isMain?: boolean; picked
   return o.picked || o.session || o.config || "claude";
 }
 
-/** The model a launcher names, shortened (Fmt.model): the part after the last "/". */
+/** The model a launcher names, shortened (Fmt.model): the last path part, with raw GPT ids made readable. */
 export function shortModel(model?: string): string {
-  return model ? model.split("/").pop() ?? model : "";
+  return modelName({ id: model ? model.split("/").pop() ?? model : "" });
 }
 
 /** What 拷贝信息 copies (AssistantCopyText.info): enough for another agent, or a terminal, to find the conversation. */

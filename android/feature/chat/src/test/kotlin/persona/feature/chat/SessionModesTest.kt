@@ -39,6 +39,28 @@ class SessionModesTest {
         assertEquals(listOf("default", "opus", "sonnet", "haiku"), SessionModes.claudeModels.map { it.id })
     }
 
+    @Test fun theGptHintKeepsTheModesAndEveryVersionVariant() {
+        val session = Session(sessionId = "s", model = "gpt-6.1-sol", permissionMode = "default", effort = "high")
+        assertEquals("6.1 Sol", chatModeHint(session))
+        assertEquals("6.1", chatModeHint(session.copy(model = "gpt-6.1")))
+        assertEquals("4o Mini", chatModeHint(session.copy(model = "gpt-4o-mini")))
+        assertEquals("6.1 Codex Max", chatModeHint(session.copy(model = "gpt-6.1-codex-max")))
+        assertEquals("自动改文件，思考很高，6.1 Sol", chatModeHint(session.copy(permissionMode = "acceptEdits", effort = "xhigh")))
+        // The current model does not grant a session permission or effort controls.
+        assertEquals("6.1 Sol", chatModeHint(session.copy(permissionMode = "acceptEdits", effort = "xhigh"), includeModes = false))
+        assertEquals("gpt-6.1-sol", session.model)
+    }
+
+    @Test fun nonGptAndUnknownModelsDoNotChangeTheExistingHint() {
+        val session = Session(sessionId = "s", permissionMode = "acceptEdits", effort = "xhigh")
+        listOf(null, "", " \t", "unknown", "claude-opus-5-5", "deepseek/v4.1", "gateway/gpt-6.1", "gpt-", "gpt-6.1--sol").forEach { model ->
+            assertEquals(model, "自动改文件，思考很高", chatModeHint(session.copy(model = model)))
+            assertNull(chatModeHint(session.copy(model = model), includeModes = false))
+            assertNull(chatModeHint(session.copy(model = model, permissionMode = "default", effort = "high")))
+        }
+        assertNull(chatModeHint(null))
+    }
+
     @Test fun theHintNamesWhatIsNotTheDefault() {
         val session = Session(sessionId = "s", permissionMode = "default", effort = "high")
         assertNull(chatModeHint(session))

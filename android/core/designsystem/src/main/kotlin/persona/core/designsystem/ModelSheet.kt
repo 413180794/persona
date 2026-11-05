@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import persona.core.contracts.api.AgentModel
+import persona.core.contracts.api.modelName
 import persona.core.designsystem.icons.PhIcons
 
 /**
@@ -51,7 +52,7 @@ fun JModelSheet(
                         ModelChoice("默认", defaultDetail, null, selected.isEmpty()) { onPick(""); onDismiss() }
                     }
                     if (unlisted != null) JGroupItem(GroupPosition.of(1, rows)) {
-                        ModelChoice(unlisted, "当前配置，列表里没有", null, true) { onDismiss() }
+                        ModelChoice(modelName(unlisted), "当前配置，列表里没有", null, true) { onDismiss() }
                     }
                 }
             }
@@ -88,18 +89,19 @@ private fun ModelChoice(title: String, detail: String?, description: String?, se
 
 /** A model's second line: its id when the name is another word for it, and the model an alias stands for. */
 fun AgentModel.detailLine(): String? {
-    val id = id.takeUnless { it.equals(label, ignoreCase = true) }
-    val resolved = resolved?.takeIf { it.isNotBlank() && !it.equals(label, true) && it != this.id }
+    val rawLabel = name.ifBlank { id }
+    val id = id.takeUnless { it.equals(rawLabel, ignoreCase = true) }
+    val resolved = resolved?.takeIf { it.isNotBlank() && !it.equals(rawLabel, true) && it != this.id }
     return when {
         id != null && resolved != null -> "$id → $resolved"
         else -> id ?: resolved
     }
 }
 
-/** Whether [query] is in the model's name, id, resolved model or description. */
+/** Whether [query] is in the model's name, friendly label, id, resolved model or description. */
 fun AgentModel.matches(query: String): Boolean {
     val q = query.trim()
-    return q.isEmpty() || listOf(name, id, resolved.orEmpty(), description.orEmpty()).any { it.contains(q, ignoreCase = true) }
+    return q.isEmpty() || listOf(name, label, id, resolved.orEmpty(), description.orEmpty()).any { it.contains(q, ignoreCase = true) }
 }
 
 /** What is typed in the search, as an id to use when no model has exactly that id; null when it is no id (blank, words). */

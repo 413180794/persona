@@ -33,8 +33,15 @@ describe("the assistant's launchers", () => {
     expect(pickedLauncher(NEW_CONVERSATION)).toBe("claude-fast");
   });
 
-  it("shortens a model to its last part", () => {
+  it("shortens a model to its last part and makes GPT variants readable", () => {
     expect(shortModel("vendor/model-x")).toBe("model-x");
+    expect(shortModel("vendor/gpt-6.1-sol")).toBe("6.1 Sol");
+    expect(shortModel("gpt-6.1")).toBe("6.1");
+    expect(shortModel("gpt-4o-mini")).toBe("4o Mini");
+    expect(shortModel("claude-opus-5-5")).toBe("claude-opus-5-5");
+    expect(shortModel("unknown-name")).toBe("unknown-name");
+    expect(shortModel("gpt-")).toBe("gpt-");
+    expect(shortModel("")).toBe("");
     expect(shortModel(undefined)).toBe("");
   });
 });

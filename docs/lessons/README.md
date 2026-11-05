@@ -21,5 +21,6 @@
 | `android.md` | 改 Android App：Compose 与玻璃（Haze）、切页面闪烁、平板 / 折叠屏、深浅色、前台服务、模拟器和真机调试 |
 | `macos.md` | 改 Mac App：兼容层、分栏、截图、非活动窗口变灰、Form 里的危险按钮 |
 | `windows.md` | 改 Windows 上的 node、在 Windows 上开发：LF 检出、AF_UNIX 路径长度、`bash` 是 WSL、读别的进程的 PEB、Orca 的命名管道、计划任务（S4U 要管理员、失败后重启不管程序退出、控制台窗口、默认 72 小时）、机器监控（每核要正好的缓冲区、Google Drive 的假固定盘、ProductName 写着 Windows 10）、herdr（管道名是 socket 路径、ssh 起的 server 会退出、窗格 shell 设 Git Bash） |
+| `model-display.md` | 改输入框 / 模型选择项的友好名称：显式别名优先，原始 ID、请求和配置不变，详情行与搜索 |
 | `web.md` | 改网页界面：React 事件、弹出菜单、窄屏布局、浏览器交互回归、xterm、加 npm 依赖、Playwright 验证、展开折叠的动画和滚动锚定、全局样式和 Tailwind 的 layer；无会话工作区的文件 / Git 面板 key |
 | `testing.md` | 跑 UI 测试、截图、量帧率 / 跳动；模拟器和 XCUITest 的怪行为；起 sshd 做测试 |

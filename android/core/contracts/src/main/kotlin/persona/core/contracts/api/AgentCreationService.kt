@@ -50,7 +50,20 @@ data class AgentModel(
     val efforts: List<String> = emptyList(),
     @SerialName("default_effort") val defaultEffort: String? = null,
 ) {
-    val label: String get() = name.ifBlank { id }
+    val label: String get() = modelName(id, name)
+}
+
+private val gptModelId = Regex("^gpt-([a-z0-9]+(?:\\.[a-z0-9]+)*(?:-[a-z0-9]+(?:\\.[a-z0-9]+)*)*)$", RegexOption.IGNORE_CASE)
+
+/** Display only: explicit names win, and GPT versions and variants retain every component of their id. */
+fun modelName(id: String?, name: String? = null): String {
+    val raw = id.orEmpty()
+    if (!name.isNullOrBlank() && !name.equals(raw, ignoreCase = true)) return name
+    val label = name?.takeIf { it.isNotBlank() } ?: raw
+    val model = gptModelId.matchEntire(label)?.groupValues?.get(1) ?: return label
+    return model.split('-').mapIndexed { index, part ->
+        if (index == 0) part else part.replaceFirstChar { it.titlecase(java.util.Locale.ROOT) }
+    }.joinToString(" ")
 }
 
 @Serializable
