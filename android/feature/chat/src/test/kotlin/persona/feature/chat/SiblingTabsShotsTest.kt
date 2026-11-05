@@ -57,7 +57,7 @@ class SiblingTabsShotsTest {
         }
         for (nextStyle in AppStyle.entries) for (nextDark in listOf(false, true)) {
             rule.runOnIdle { style = nextStyle; dark = nextDark }
-            rule.onNodeWithText("#1 Claude 发起").assertIsDisplayed()
+            rule.onNodeWithText("#1 Claude 1 发起").assertIsDisplayed()
             val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
             File(out(), "chat-tabs-${nextStyle.name.lowercase()}-${if (nextDark) "dark" else "light"}.png").outputStream().use {
                 assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))

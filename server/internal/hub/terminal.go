@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coder/websocket"
-
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -534,9 +532,7 @@ func (c *client) sendTerm(v any) {
 	select {
 	case c.out <- b:
 	default:
-		if c.conn != nil {
-			go c.conn.Close(websocket.StatusPolicyViolation, "too slow")
-		}
+		c.dropSlow()
 	}
 }
 

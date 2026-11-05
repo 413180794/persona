@@ -97,6 +97,7 @@
 - coder/websocket 的读、写、ping 只要用的 context 结束，就直接关掉整条连接（`context.AfterFunc`），不发关闭帧。
   要带关闭码收尾的连接（jarvis-link 被顶掉 4001、撤销 4002），别用会先被取消的 context 去写或读：hub 的链路先 cancel 自己的 ctx 再 Close，
   正在写的一条消息就把连接掐了，客户端收到 -1 而不是 4002（`hub/link.go` 的 `send`、`keepAlive`，`TestLinkReplacedAndRevoked`）。
+- coder/websocket 的 `Conn.Close` 是一次握手：写锁被占着时先等着发关闭帧（最多 5 秒），再等对方回关闭帧（最多 5 秒）。对一个不再读的客户端，回帧永远不来，它通常要等满 5 秒，最多约 10 秒。所以别在 `h.mu` 这类共享锁里同步 Close：`sendJSON` 以前在 `notifyWS` 持锁时这样关慢客户端，整个 hub 跟着卡住；要关就 `go conn.Close(...)`（`client.queue`）或 `CloseNow`，回归 `TestWSNotifyDropsASlowClientWithoutHoldingTheHub`。
 
 ## jarvis-link 在 Linux 上（docs/link.md「Linux（headless）」，2026-11-02）
 

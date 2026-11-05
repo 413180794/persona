@@ -731,6 +731,7 @@ func startBudget(async bool) time.Duration {
 type client struct {
 	cancel   context.CancelFunc
 	stopping atomic.Bool
+	dropped  atomic.Bool // closed for falling behind (dropSlow): the close runs once, not once per send that finds it full
 
 	hub            *Hub
 	conn           *websocket.Conn
@@ -770,19 +771,14 @@ type client struct {
 	deviceSessionID int64      // immutable after registration in Hub.clients
 }
 
+// sendJSON queues v without ever waiting: notifyWS calls it under h.mu, so a client too slow to take it is dropped
+// in the background (queue), not by a close that waits on its stuck connection.
 func (c *client) sendJSON(v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
 	}
-	select {
-	case c.out <- b:
-	default:
-		// Slow consumer: drop the connection; the app reconnects and resyncs.
-		if c.conn != nil {
-			c.conn.Close(websocket.StatusPolicyViolation, "too slow")
-		}
-	}
+	c.queue(b)
 }
 
 func (h *Hub) broadcast(v any) {
