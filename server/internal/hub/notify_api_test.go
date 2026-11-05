@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/internal/extension"
 )
 
 func TestNotifyRequestValidate(t *testing.T) {
@@ -128,6 +128,43 @@ func TestNotifyPayload(t *testing.T) {
 	aps = p["aps"].(map[string]any)
 	if aps["thread-id"] != "sess-1" {
 		t.Fatalf("thread-id with session: %v", aps["thread-id"])
+	}
+}
+
+func TestNotifyPayloadMutableContent(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		extID   string
+		actions []wire.NotifyAction
+		silent  bool
+		session string
+		mutable bool
+	}{
+		{name: "ordinary alert"},
+		{name: "ordinary caller cannot set a dynamic category", actions: []wire.NotifyAction{{ID: "reply", Title: "Reply"}}},
+		{name: "extension metadata only", extID: "example"},
+		{name: "empty actions", extID: "example", actions: []wire.NotifyAction{}},
+		{name: "extension buttons", extID: "example", actions: []wire.NotifyAction{{ID: "reply", Title: "Reply"}}, mutable: true},
+		{name: "silent extension buttons", extID: "example", actions: []wire.NotifyAction{{ID: "reply", Title: "Reply"}}, silent: true, mutable: true},
+		{name: "session extension buttons", extID: "example", actions: []wire.NotifyAction{{ID: "reply", Title: "Reply"}}, session: "session-1", mutable: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := notifyPayload(notifyRequest{Title: "Example alert", Level: levelTimeSensitive, UI: "details", State: "range=1d", Actions: tc.actions, Silent: tc.silent, SessionID: tc.session}, "", tc.extID)
+			aps := payload["aps"].(map[string]any)
+			if value, present := aps["mutable-content"]; tc.mutable {
+				if !present || value != 1 {
+					t.Fatalf("mutable-content = %v, want 1 for dynamic buttons", value)
+				}
+			} else if present {
+				t.Fatalf("mutable-content = %v for notification without dynamic buttons", value)
+			}
+			if aps["interruption-level"] != levelTimeSensitive {
+				t.Fatalf("interruption-level changed: %v", aps)
+			}
+			if _, present := aps["sound"]; present == tc.silent {
+				t.Fatalf("silent behavior changed: %v", aps)
+			}
+		})
 	}
 }
 
@@ -283,6 +320,9 @@ func TestNotifyAPNs(t *testing.T) {
 		if c.Type != "alert" || aps["interruption-level"] != levelTimeSensitive || aps["thread-id"] != "s1" {
 			t.Fatalf("push %s: %s", c.Token, c.Body)
 		}
+		if _, ok := aps["mutable-content"]; ok {
+			t.Fatalf("ordinary alert invokes the service extension: %v", aps)
+		}
 	}
 	for _, c := range calls {
 		if c.Collapse != notifyCollapse+"alert-1" {
@@ -306,9 +346,27 @@ func TestNotifyAPNs(t *testing.T) {
 		if !ok || !strings.HasPrefix(cat, "ext.example-gateway.") || len(cat) != len("ext.example-gateway.")+8 {
 			t.Fatalf("apns category: %v", cat)
 		}
+		if aps["mutable-content"] != 1.0 {
+			t.Fatalf("direct APNs cannot register first-notification buttons: %v", aps)
+		}
 		en, ok := body["extension_notification"].(map[string]any)
 		if !ok || en["extension"] != "example-gateway" || en["ui"] != "usage" {
 			t.Fatalf("apns extension_notification: %v", en)
+		}
+	}
+
+	// Extension metadata without buttons does not invoke the service extension.
+	beforePlain := len(f.calls(t, beforeExt+2))
+	post(extTok, `{"title":"预算状态","ui":"usage","state":"range=1d"}`)
+	for _, c := range f.calls(t, beforePlain+2)[beforePlain:] {
+		var body map[string]any
+		_ = json.Unmarshal(c.Body, &body)
+		aps := body["aps"].(map[string]any)
+		if _, ok := aps["mutable-content"]; ok {
+			t.Fatalf("extension without buttons invokes the service extension: %v", aps)
+		}
+		if _, ok := aps["category"]; ok {
+			t.Fatalf("extension without buttons has a dynamic category: %v", aps)
 		}
 	}
 
@@ -317,7 +375,7 @@ func TestNotifyAPNs(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.push.desktopOnline = func() bool { return true }
-	before := len(f.calls(t, 4))
+	before := len(f.calls(t, beforePlain+2))
 	post(h.cfg.Token, `{"title":"t"}`)
 	time.Sleep(200 * time.Millisecond)
 	for _, c := range f.calls(t, before)[before:] {

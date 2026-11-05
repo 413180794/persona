@@ -158,6 +158,8 @@ func notifyPayload(r notifyRequest, machine, extID string) map[string]any {
 	}
 	if extID != "" && len(r.Actions) > 0 {
 		aps["category"] = "ext." + extID + "." + actionIDsHash(r.Actions)
+		// Register a new category before delivery even when the app is in the background.
+		aps["mutable-content"] = 1
 	}
 	payload := map[string]any{"aps": aps, "machine_id": r.MachineID, "session_id": r.SessionID}
 	if extID != "" {

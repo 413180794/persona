@@ -1239,7 +1239,7 @@ schema 在 `schema/extension/`（`WidgetFamily`、`WidgetPlace`、`WidgetAnswer`
 - `actions` 最多 3 个：`id`（1–128）、`title`（1–40 字，按钮文字不换行）、`role?`（`normal` / `destructive`）、`foreground?`（点了打开 App 再做；不写是在后台做）、`input?: {placeholder?}`（先让用户输入一行字）。
   `ui` 是点通知本身打开的页（同一个扩展的 `ui` 贡献，带 `state`），也是按钮的动作送去的地方。
 - 推送里：`aps.category` 是 `ext.<扩展 id>.<按钮 id 的 hash>`（同一组按钮同一个 category），`extension_notification: {extension, ui?, state?, actions?}`（schema `ExtensionNotification`）。
-  App 第一次见到一个 category 时按 `actions` 注册（`UNNotificationCategory`；`input` 是 `UNTextInputNotificationAction`）。
+  有扩展按钮的直连 APNs 同时带 `aps.mutable-content: 1`，让 Notification Service Extension 在交付通知前按 `actions` 注册 category（`UNNotificationCategory`；`input` 是 `UNTextInputNotificationAction`），覆盖 App 在后台首次收到新按钮的情况。relay 继续用已有的密文封装和 `mutable-content`；普通通知及没有按钮的扩展通知不因此启用服务扩展，现有静态交互类别保持原行为。
 - **点了按钮**：App 调 `POST /api/v1/extensions/{id}/-/ui/{ui}` `{action: <按钮 id>, state, values: {"text": <输入的字>}}`，和页面里点按钮完全一样走 `ui.action`；
   在后台做的，回答里的 `toast` 作为一条本地通知显示，`open_url` / `push` 忽略；`foreground` 的打开 App 到 `ui` 那一页再调，回答照页面的规矩处理。点通知本身打开 `ui` 那一页（带 `state`）。
 - 服务端已在 `POST /api/v1/notify` 支持 `actions` / `ui` / `state`（范围 `notify`），`features` 报 `extension_notify_actions`；Apple 端在 #1862；样例见 `scripts/mock/apns/extension-notification.apns`。
