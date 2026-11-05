@@ -3260,6 +3260,15 @@ struct Composer: View, Equatable {
             focused = true
         }
         #if os(macOS)
+        // ⌘I while no composer was there (a subagent shown): the request waits for it, and is not left set, which
+        // would make the next ⌘I no change at all (#2736).
+        .onAppear {
+            guard model.composerFocus == key else { return }
+            model.composerFocus = nil
+            focused = true
+        }
+        #endif
+        #if os(macOS)
         // ⇧Tab: back to the list beside the chat (Agents, Persona's conversations), as Tab there came here (#2113).
         .onKeyPress(.tab, phases: .down) { press in
             guard press.modifiers.contains(.shift), focused else { return .ignored }

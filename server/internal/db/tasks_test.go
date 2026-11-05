@@ -97,3 +97,103 @@ func TestMarkFeedSentUsesUnsentIndex(t *testing.T) {
 		t.Fatalf("MarkFeedSent does not use assistant_feed_unsent:\n%s", strings.Join(plan, "\n"))
 	}
 }
+
+// feedIDs is the ids Feed lists for c1 since since, at most limit.
+func feedIDs(t *testing.T, d *DB, since time.Time, limit int) []string {
+	t.Helper()
+	list, err := d.Feed(context.Background(), "c1", since, limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, r := range list {
+		ids = append(ids, r.ID)
+	}
+	return ids
+}
+
+// The cards sent after since and the items put in after it come in one list by time, each once, cut at limit; a card
+// put in with sent_at already in its body counts as sent too.
+func TestFeedSentAndNewInOrder(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if _, err := d.pool.Exec(ctx, `TRUNCATE assistant_feed`); err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)
+	add := func(id, kind string, at time.Time, body string) {
+		t.Helper()
+		if err := d.AppendFeed(ctx, FeedRow{ID: id, Conversation: "c1", At: at, Kind: kind, Ref: "inbox:" + id, Body: json.RawMessage(body)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sentAt := func(at time.Time) string { return `{"sent_at":"` + at.Format(time.RFC3339Nano) + `"}` }
+	since := t0.Add(10 * time.Minute)
+	add("a", "message", t0, `{}`)                                             // sent after since below
+	add("b", "message", t0.Add(time.Minute), sentAt(since.Add(time.Minute)))  // put in already sent, after since
+	add("c", "message", t0.Add(2*time.Minute), sentAt(t0.Add(3*time.Minute))) // sent before since
+	add("d", "task", t0.Add(3*time.Minute), sentAt(since.Add(time.Minute)))   // not a card
+	add("e", "task", since.Add(time.Minute), `{}`)
+	add("f", "message", since.Add(2*time.Minute), `{}`)
+	add("g", "task", since.Add(3*time.Minute), `{}`)
+	if _, err := d.MarkFeedSent(ctx, "message", "inbox:a", since.Add(5*time.Minute), json.RawMessage(sentAt(since.Add(5*time.Minute)))); err != nil {
+		t.Fatal(err)
+	}
+	// f is sent after since and put in after it: listed once.
+	if _, err := d.MarkFeedSent(ctx, "message", "inbox:f", since.Add(6*time.Minute), json.RawMessage(sentAt(since.Add(6*time.Minute)))); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(feedIDs(t, d, since, 100), ","); got != "a,b,e,f,g" {
+		t.Fatalf("since: %s", got)
+	}
+	if got := strings.Join(feedIDs(t, d, since, 3), ","); got != "a,b,e" {
+		t.Fatalf("since, limit 3: %s", got)
+	}
+	if got := strings.Join(feedIDs(t, d, time.Time{}, 4), ","); got != "a,b,c,d" {
+		t.Fatalf("from the start, limit 4: %s", got)
+	}
+}
+
+// A database from before 0390 keeps sent_at only in the bodies: the migration copies it to the column, so its sent
+// cards are still listed.
+func TestFeedSentAtBackfill(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	if _, err := d.pool.Exec(ctx, `TRUNCATE assistant_feed`); err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Now().UTC().Truncate(time.Microsecond).Add(-time.Hour)
+	since := t0.Add(10 * time.Minute)
+	for _, q := range []string{
+		`DROP INDEX assistant_feed_sent`,
+		`ALTER TABLE assistant_feed DROP COLUMN sent_at`,
+		`DELETE FROM schema_migrations WHERE version = 390`,
+	} {
+		if _, err := d.pool.Exec(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	for _, r := range []struct {
+		id, kind string
+		at       time.Time
+		body     string
+	}{
+		{"old-sent", "message", t0, `{"sent_at":"` + since.Add(time.Minute).Format(time.RFC3339Nano) + `"}`},
+		{"old-early", "message", t0, `{"sent_at":"` + t0.Add(time.Minute).Format(time.RFC3339Nano) + `"}`},
+		{"old-draft", "message", t0, `{"draft":"x"}`},
+		{"old-task", "task", t0, `{"sent_at":"` + since.Add(time.Minute).Format(time.RFC3339Nano) + `"}`},
+	} {
+		if _, err := d.pool.Exec(ctx, `INSERT INTO assistant_feed (id, conversation, at, kind, ref, body) VALUES ($1, 'c1', $2, $3, '', $4)`,
+			r.id, r.at, r.kind, []byte(r.body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := d.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(feedIDs(t, d, since, 100), ","); got != "old-sent" {
+		t.Fatalf("after backfill: %s", got)
+	}
+	var n int
+	if err := d.pool.QueryRow(ctx, `SELECT count(*) FROM assistant_feed WHERE sent_at IS NOT NULL`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("backfilled %d, %v", n, err)
+	}
+}

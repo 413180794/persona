@@ -91,17 +91,28 @@ func (d *DB) AppendFeed(ctx context.Context, f FeedRow) error {
 	if len(body) == 0 {
 		body = []byte("{}")
 	}
-	_, err := d.pool.Exec(ctx, `INSERT INTO assistant_feed (id, conversation, at, kind, ref, body) VALUES ($1, $2, $3, $4, $5, $6)`,
+	// sent_at mirrors body.sent_at (0390) so that Feed finds the sent cards by index.
+	_, err := d.pool.Exec(ctx, `INSERT INTO assistant_feed (id, conversation, at, kind, ref, body, sent_at)
+		VALUES ($1, $2, $3, $4, $5, $6, ($6::jsonb->>'sent_at')::timestamptz)`,
 		f.ID, f.Conversation, f.At, f.Kind, f.Ref, body)
 	return err
 }
 
 // Feed lists a conversation's items after since (zero: from the start), oldest first, at most limit, and the
-// message cards sent after since (their body changed, not their time).
+// message cards put in before since but sent after it (their body changed, not their time). Each half reads its own
+// index (assistant_feed_conversation, assistant_feed_sent): one OR over both read every row of the conversation.
 func (d *DB) Feed(ctx context.Context, conversation string, since time.Time, limit int) ([]FeedRow, error) {
-	rows, err := d.pool.Query(ctx, `SELECT id, conversation, at, kind, ref, body FROM assistant_feed
-		WHERE conversation = $1 AND (at > $2 OR kind = 'message' AND (body->>'sent_at')::timestamptz > $2)
-		ORDER BY at, id LIMIT $3`, conversation, since, limit)
+	q := `SELECT id, conversation, at, kind, ref, body FROM assistant_feed
+		WHERE conversation = $1 AND at > $2 ORDER BY at, id LIMIT $3`
+	if !since.IsZero() {
+		// From the start there is nothing put in before since; the sent half would read every sent card for none.
+		q = `(` + q + `)
+		UNION ALL
+		(SELECT id, conversation, at, kind, ref, body FROM assistant_feed
+			WHERE conversation = $1 AND kind = 'message' AND sent_at > $2 AND at <= $2)
+		ORDER BY at, id LIMIT $3`
+	}
+	rows, err := d.pool.Query(ctx, q, conversation, since, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -123,12 +134,13 @@ func (d *DB) FeedItem(ctx context.Context, id string) (*FeedRow, error) {
 
 // markFeedSentSQL is MarkFeedSent's update. Its WHERE matches the partial index assistant_feed_unsent
 // (migrations/0392): keep the two in step, or every reply scans the whole feed again.
-const markFeedSentSQL = `UPDATE assistant_feed SET body = body || $4::jsonb
+const markFeedSentSQL = `UPDATE assistant_feed SET body = body || $4::jsonb,
+		sent_at = ((body || $4::jsonb)->>'sent_at')::timestamptz
 	WHERE kind = $1 AND ref = $2 AND at <= $3 AND NOT body ? 'sent_at'
 	RETURNING id, conversation, at, kind, ref, body`
 
 // MarkFeedSent merges patch into the body of the items of kind about ref put in at or before at that have no
-// sent_at yet, and returns them as they are now.
+// sent_at yet (the column follows the body), and returns them as they are now.
 func (d *DB) MarkFeedSent(ctx context.Context, kind, ref string, at time.Time, patch json.RawMessage) ([]FeedRow, error) {
 	rows, err := d.pool.Query(ctx, markFeedSentSQL, kind, ref, at, []byte(patch))
 	if err != nil {

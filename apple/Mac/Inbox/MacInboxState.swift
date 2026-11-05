@@ -90,7 +90,7 @@ final class MacInboxState {
     /// the document closes.
     var listWhileReading = false
 
-    /// "" all, "feishu", or a mail account id (the iPhone's `inbox.source`).
+    /// "" all, "feishu", a mail account id or a connector's id (the iPhone's `inbox.source`).
     var source: String = UserDefaults.standard.string(forKey: "inbox.source") ?? "" {
         didSet { UserDefaults.standard.set(source, forKey: "inbox.source") }
     }
@@ -264,8 +264,9 @@ final class MacInboxState {
         guard let api = model.api, let a = try? await api.mailAccounts() else { return }
         accounts = a
         StateCache.save("mail-accounts", a)
-        // A connector's id is not a mail account: it stays (its entry comes and goes with its items).
-        if !source.isEmpty, source != "feishu", !a.contains(where: { $0.id == source }),
+        // A connector's id is not a mail account: it stays while the hub's list has not come yet (the cached one may
+        // be from before), and while its items are there.
+        if !source.isEmpty, source != "feishu", !a.contains(where: { $0.id == source }), store.listed,
            !store.items.contains(where: { $0.connector != nil && $0.account == source }) { source = "" }
     }
 }

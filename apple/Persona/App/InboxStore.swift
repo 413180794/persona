@@ -13,6 +13,8 @@ final class InboxStore {
     /// older hub, and until the first list of this run (it is not kept on disk: an old count must not show offline).
     private(set) var triage: InboxTriageStatus?
     private(set) var loading = false
+    /// A listing came from the hub since launch: what is cached on disk may be from before a source was added.
+    private(set) var listed = false
     var error: String?
     @ObservationIgnored private var reloading: Task<Void, Never>?
     @ObservationIgnored private let saver = Debouncer(.seconds(1))
@@ -50,8 +52,8 @@ final class InboxStore {
         await fetch { try await $0.refreshInbox(connectors: Self.drawsConnectors) }
     }
 
-    /// The connectors' items (GitHub…) are drawn on iOS; the Mac's inbox and the watch do not draw them yet.
-    #if os(iOS) || os(visionOS)
+    /// The connectors' items (GitHub…) are drawn on iOS and the Mac (#2611, #2736); the watch does not draw them yet.
+    #if os(iOS) || os(visionOS) || os(macOS)
     private static let drawsConnectors = true
     #else
     private static let drawsConnectors = false
@@ -64,6 +66,7 @@ final class InboxStore {
         do {
             let listing = try await load(api)
             apply(listing.items)
+            listed = true
             if listing.triage != triage { triage = listing.triage }
             error = nil
         } catch {

@@ -157,7 +157,7 @@
 ### 对话动态
 
 hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑一轮、还会被压缩掉），单独存表 `assistant_feed`：
-`id`、`conversation`、`at`、`kind`、`ref`、`body`（JSON）。
+`id`、`conversation`、`at`、`kind`、`ref`、`body`（JSON），以及 `sent_at`（消息卡回复发出的时间，和 `body.sent_at` 同步写，供 `since` 查询走索引；0390）。
 
 | kind | 什么时候 | ref / body |
 | --- | --- | --- |

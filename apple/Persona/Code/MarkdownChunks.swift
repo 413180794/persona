@@ -44,11 +44,12 @@ nonisolated struct MarkdownChunk: Identifiable, @unchecked Sendable {
 /// Code fences in rendered Markdown colored by the file viewer's lexer, by the fence's language (```swift).
 /// Unknown languages and long blocks stay plain.
 struct PersonaCodeHighlighter: CodeSyntaxHighlighter {
-    /// MarkdownUI asks again on every layout of the block: the colored text is kept by language and code.
+    /// MarkdownUI asks again on every layout of the block: the colored text is kept by text size, language and code
+    /// (its font is the code level at the text size it was made at, so 放大 / 缩小字号 make it again, #2736).
     @MainActor private static var memo: [String: Text] = [:]
 
     @MainActor func highlightCode(_ code: String, language: String?) -> Text {
-        let key = (language ?? "") + "\u{0}" + code
+        let key = "\(Theme.Font.scale)\u{0}" + (language ?? "") + "\u{0}" + code
         if let t = Self.memo[key] { return t }
         let t = Self.color(code, language: language)
         if Self.memo.count > 300 { Self.memo = [:] }

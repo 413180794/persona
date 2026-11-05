@@ -2227,9 +2227,9 @@ nonisolated struct SlotRow: View, Equatable {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                         #if os(macOS)
                         // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-                        if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                        if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
                         #endif
-                        if session.state == .needsYou && !muted && !hideState { BUIPill(session.state.label, tone: .red) }
+                        if session.state == .needsYou && !muted && !hideState && !pendingCount { BUIPill(session.state.label, tone: .red) }
                         if muted {
                             Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知")
                         }
@@ -2251,7 +2251,7 @@ nonisolated struct SlotRow: View, Equatable {
                             AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
                             #if os(macOS)
                             // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-                            if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                            if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
                             #endif
                         }
                         if let last = session.listPreview {
@@ -2283,10 +2283,20 @@ nonisolated struct SlotRow: View, Equatable {
         .opacity(muted ? 0.8 : 1) // quieter than live agents, never fainter than the idle spaces below
     }
 
+    /// Mac: the red count of the questions and approvals waiting at the row's end, as the web's (#2695); it says 需要你
+    /// on its own, so the state word and pill give way to it. Not for a muted agent (it should not catch the eye).
+    private var pendingCount: Bool {
+        #if os(macOS)
+        session.pendingInteractions > 0 && !muted
+        #else
+        false
+        #endif
+    }
+
     /// Persona' own row's line: "需要你 · Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var metaText: Text {
         var parts: [Text] = []
-        if session.state == .needsYou && !muted && !hideState {
+        if session.state == .needsYou && !muted && !hideState && !pendingCount {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
         parts.append(Text(session.sourceSubtitle ?? session.agentLabel))
@@ -2384,10 +2394,19 @@ nonisolated struct CompactSlotRow: View, Equatable {
             AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
             #if os(macOS)
             // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
-            if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+            if pendingCount { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
             #endif
         }
         .opacity(muted ? 0.8 : 1)
+    }
+
+    /// As SlotRow's: the red count on Mac, not for a muted agent.
+    private var pendingCount: Bool {
+        #if os(macOS)
+        session.pendingInteractions > 0 && !muted
+        #else
+        false
+        #endif
     }
 
     @MainActor private var place: String? {
