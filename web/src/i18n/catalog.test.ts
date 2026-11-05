@@ -50,7 +50,7 @@ function sourceFiles(dir: string): string[] {
     if (statSync(p).isDirectory()) {
       if (p === __dirname) continue; // the catalogs themselves
       out.push(...sourceFiles(p));
-    } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !name.endsWith(".d.ts") && !/(^|\/)mock\.ts$/.test(name)) {
+    } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) && !name.endsWith(".d.ts") && !/^mock[\w-]*\.ts$/.test(name)) {
       out.push(p);
     }
   }

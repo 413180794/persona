@@ -1,6 +1,4 @@
 {
-  "lib/drafts.ts": 4,
-  "lib/session-link.ts": 1,
   "views/LinkTodoDialog.tsx": 39,
   "views/Sidebar.tsx": 138,
   "views/Todos.tsx": 129,

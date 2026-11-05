@@ -26,9 +26,11 @@ export interface QuotedTask {
 
 /** `任务「<title>」（todo id: <id>）`: the first line of a task's quote. */
 export function taskQuoteLine(t: QuotedTask): string {
+  // i18n-ignore: written into the message and read back by TASK_LINE (and by the apps); not interface text
   return `任务「${t.title}」${t.id ? `（todo id: ${t.id}）` : ""}`;
 }
 
+// i18n-ignore: the shape taskQuoteLine writes
 const TASK_LINE = /^任务「(.*)」(?:（todo id: ([^）\s]+)）)?$/;
 
 /** A quote's words as sent (splitQuote's `quote`) back to what was quoted: a task's first line becomes its task. */

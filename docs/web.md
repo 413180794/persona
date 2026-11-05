@@ -683,6 +683,8 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
   写死的中文（字符串、JSX 文字，注释和测试不算）按文件只能减少，基线 `src/i18n/hardcoded-baseline.json`，减少后 `UPDATE_I18N_BASELINE=1 npx vitest run src/i18n/catalog.test.ts` 重记。
   必须保留的中文（要和别人写的原文匹配的，如解析 hub / 飞书的输出）在那一行或上一行注释写 `i18n-ignore`。
 - **测试**：vitest 的 `setupFiles` 先载入 zh-Hans，现有测试照旧按中文断言。
+- **key 的坑**：key 以 `_zero` / `_one` / `_two` / `_few` / `_many` / `_other` 结尾会被当成复数形式（`doc_other` 要写成 `doc_cloud`）；
+  模块里有局部变量叫 `t` 的要改名，别遮住 `t()`。要和别人写的原文匹配的中文（hub 写进对话的通知、`<jarvis-context>` 里的标记、引用的首行）不翻，标 `i18n-ignore`。
 
 ## 细节约定
 

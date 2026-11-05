@@ -2,6 +2,7 @@
 // agents_list show 8-character ids, and links get written with them (#2464). The node finds transcripts by the whole
 // id only, so the page settles the prefix against this machine's session list first.
 
+import { t } from "../i18n";
 import { tabOfSessionLink } from "./herdr-tree";
 import type { Route, SessionView } from "./router";
 import type { Session } from "./types";
@@ -48,7 +49,7 @@ const NOT_FOUND_RE = /\b(?:transcript for session|subagent) \S+ not found\b/i;
 
 /** What to say when a conversation cannot be read: "not found" from the node in words, anything else as it is. */
 export function sessionLoadError(text: string): string {
-  return NOT_FOUND_RE.test(text) ? "找不到这个会话：可能已经删除，或链接里的 id 不完整" : text;
+  return NOT_FOUND_RE.test(text) ? t("lib-session-link.not_found") : text;
 }
 
 /** Where a session's link really goes: its tab's `/t/…` when it has one, else `/s/<mid>/<whole id>`. */

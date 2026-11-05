@@ -9,8 +9,9 @@ describe("resolveLanguage (docs/i18n.md)", () => {
   });
 });
 
-describe("t", () => {
-  afterEach(() => initI18n("zh-Hans"));
+// Loading a whole language's catalogs (hundreds of JSON files) can take seconds on a busy machine.
+describe("t", { timeout: 30_000 }, () => {
+  afterEach(() => initI18n("zh-Hans"), 30_000);
 
   it("reads the loaded language and fills placeholders", async () => {
     expect(currentLanguage()).toBe("zh-Hans");

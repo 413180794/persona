@@ -4,8 +4,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-// jsdom has no matchMedia, which the sidebar's modules read when they load
+// jsdom has no matchMedia, which the sidebar's modules read when they load, and no ResizeObserver, which the
+// sidebar's highlight uses (#2490)
 vi.hoisted(() => {
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;
 });
 import { getWorkspaceBoardSetting, resetWorkspaceBoardSettingForTest } from "../lib/workspace-board-setting";
