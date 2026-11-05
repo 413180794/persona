@@ -145,6 +145,27 @@ class LoopbackTests(unittest.TestCase):
         self.assertEqual(pc.problems("hub at http://127.0.0.1:18660 or [::1]", words), [])
         self.assertIn(PRIVATE_IP, pc.problems("other machine at " + PRIVATE_IP, words))
 
+    def test_standard_xcode_path_is_not_a_word(self):
+        with tempfile.TemporaryDirectory(prefix="privacy-check-test-") as temp:
+            home = Path(temp)
+            config = home / ".config/persona/config.json"
+            config.parent.mkdir(parents=True)
+            own = "/Users/someone/Apps/Xcode-beta.app"
+            config.write_text(json.dumps({"xcode": "/Applications/Xcode.app", "machines": [{"xcode": own}],
+                                          "label": "/Applications/Private-Label.app"}))
+            with patch.object(pc, "HOME", str(home)), patch.object(pc, "ROOT", str(home)):
+                words, _ = pc.terms()
+        self.assertNotIn("/Applications/Xcode.app", words)
+        self.assertIn(own, words)
+        self.assertIn("/Applications/Private-Label.app", words)
+        self.assertEqual(pc.problems("sudo xcode-select -s /Applications/Xcode.app", words), [])
+
+    def test_ietf_protocol_block_is_not_private(self):
+        self.assertEqual(pc.problems('new Set(["100.100.100.200","168.63.129.16","192.0.0.192"])', []), [])
+        self.assertIn(PRIVATE_IP, pc.problems("at " + PRIVATE_IP, []))
+        home_lan = "192.168." + "1.10"
+        self.assertIn(home_lan, pc.problems("at " + home_lan, []))
+
 
 class NpmLockTests(unittest.TestCase):
     def test_public_lockfiles(self):

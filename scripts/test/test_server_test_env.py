@@ -144,9 +144,10 @@ class ServerTestEnvironmentTests(unittest.TestCase):
             remote = root / "remote"
             profile = remote / "live-profile"
             for path in (checkout / "scripts/test", checkout / "server", checkout / "spec", checkout / "apple",
-                         checkout / "sdk/go/ext", checkout / "sdk/go/wire/schema",
+                         checkout / "docs", checkout / "sdk/go/ext", checkout / "sdk/go/wire/schema",
                          checkout / "schema/extension/examples/invalid", tools, profile):
                 path.mkdir(parents=True)
+            (checkout / "docs/guide.md").write_text("# Fixture guide\n")
             sdk = checkout / "sdk/go"
             (sdk / "go.mod").write_text("module example.invalid/fixture-sdk\n")
             (sdk / "wire/schema/view.schema.json").write_text('{"fixture":true}\n')
@@ -197,14 +198,16 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                  "if sys.argv[1:2]==['env']:\n"
                  f" pathlib.Path({str(cache_capture)!r}).write_text(json.dumps(dict(os.environ)))\n"
                  f" print(json.dumps({caches!r})); sys.exit(0)\n"
-                 "sdk=pathlib.Path.cwd().parent/'sdk/go'\n"
+                 "base=pathlib.Path.cwd().parent\n"
+                 "sdk=base/'sdk/go'\n"
                  "assert (sdk/'go.mod').read_text()=='module example.invalid/fixture-sdk\\n'\n"
                  "assert (sdk/'wire/schema/view.schema.json').read_text()=='{\"fixture\":true}\\n'\n"
                  "assert not (sdk/'stale.go').exists()\n"
-                 "schema=pathlib.Path.cwd().parent/'schema/extension'\n"
+                 "schema=base/'schema/extension'\n"
                  "assert (schema/'examples/View.fixture.json').read_text()=='{\"valid\":true}\\n'\n"
                  "assert (schema/'examples/invalid/View.fixture.json').read_text()=='{\"valid\":false}\\n'\n"
                  "assert not (schema/'stale.json').exists()\n"
+                 "assert (base/'docs/guide.md').read_text()=='# Fixture guide\\n'\n"
                  f"pathlib.Path({str(capture)!r}).write_text(json.dumps({{'args':sys.argv[1:],'env':dict(os.environ),'sdk_source':(sdk/'ext/fixture.go').read_text()}}))\n"
                  "sys.exit(int(os.environ.get('FAKE_GO_EXIT','0')))\n")
             environment = {

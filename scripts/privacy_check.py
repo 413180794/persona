@@ -11,7 +11,8 @@ internal project names, people, anything else) and CLAUDE.local.md's `code spans
 address and any email outside example.* domains. Install as a hook: scripts/hooks/pre-commit (docs/testing.md).
 
 Not private: loopback addresses (127.0.0.0/8, ::1, also with a port or as a URL's host) even when the config or
-CLAUDE.local.md holds one, values config.example.json ships as defaults, the repo's own Go module path (it names the
+CLAUDE.local.md holds one, the documentation and IETF protocol ranges (192.0.0.0/24), an `xcode` in /Applications,
+values config.example.json ships as defaults, the repo's own Go module path (it names the
 GitHub owner),
 CLAUDE.local.md spans that only name repo files, commands or config keys, and in site/ the contact address and domain
 the App Store and the OAuth consent screen publish anyway.
@@ -64,6 +65,11 @@ def example_values():
         return set()
 
 
+def standard_app(key, value):
+    """An app in /Applications (the `xcode` key): every Mac has the same path, it names no person or machine."""
+    return key == "xcode" and re.fullmatch(r"/Applications/[\w .-]+\.app/?", value) is not None
+
+
 def config_values():
     """The config's values, and the subset that is published on purpose (PUBLIC_KEYS)."""
     out, public = set(), set()
@@ -77,7 +83,7 @@ def config_values():
         except (OSError, ValueError):
             continue
         for key, o in strings(cfg):
-            if key in ("os", "simulator") or o in defaults:
+            if key in ("os", "simulator") or o in defaults or standard_app(key, o):
                 continue
             if key == "url" or key.endswith("_url"):
                 o = url_term(o)
@@ -172,8 +178,10 @@ def module_paths():
 
 
 IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])")
-# Documentation ranges (RFC 5737): what redacted fixtures and docs use for addresses.
-DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")]
+# Documentation ranges (RFC 5737): what redacted fixtures and docs use for addresses. Also the IETF protocol
+# assignments block (RFC 6890): Python counts it private, but it is nobody's intranet (bundled SDKs list 192.0.0.192
+# as a cloud metadata address).
+DOC_NETS = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "192.0.0.0/24")]
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})")
 # Placeholders (example domains, public mail providers, noreply) are fine; so are made-up TLDs (the fixture redactor
 # scrambles domains): only addresses at a real-looking domain of somebody's are flagged.
