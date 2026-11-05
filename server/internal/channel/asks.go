@@ -132,9 +132,41 @@ var (
 	split       = func(r rune) bool { return unicode.IsSpace(r) || r == ',' || r == '，' || r == '、' }
 )
 
+// trailing is the punctuation a reply may end with, ignored when reading it.
+const trailing = "。.!！?？"
+
 func is(text string, words []string) bool {
-	t := strings.ToLower(strings.TrimRight(strings.TrimSpace(text), "。.!！?？"))
+	t := strings.ToLower(strings.TrimRight(strings.TrimSpace(text), trailing))
 	return slices.Contains(words, t)
+}
+
+// numberEnd is the punctuation an option number may end with (a full stop, an enumeration comma, !); not ? — "1?"
+// asks what 1 is.
+const numberEnd = "。.．、!！"
+
+// number reads text as an option number: full-width digits (a Chinese or Japanese keyboard's) count, and so does a
+// trailing full stop; not a leading zero.
+func number(text string) (int, bool) {
+	t := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(text), numberEnd))
+	if t == "" {
+		return 0, false
+	}
+	var b strings.Builder
+	for _, r := range t {
+		switch {
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r >= '０' && r <= '９':
+			b.WriteRune('0' + r - '０')
+		default:
+			return 0, false
+		}
+	}
+	if d := b.String(); d[0] != '0' {
+		n, err := strconv.Atoi(d)
+		return n, err == nil
+	}
+	return 0, false
 }
 
 // ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say in l when text does
@@ -154,10 +186,11 @@ func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool
 		}
 		return r, true, ""
 	case proto.IxPlan:
+		n, numbered := number(text)
 		switch {
-		case text == "1" || is(text, planRun):
+		case numbered && n == 1 || is(text, planRun):
 			r.Approve, r.Mode = &t, "bypassPermissions"
-		case text == "2" || is(text, planApprove) || is(text, yes):
+		case numbered && n == 2 || is(text, planApprove) || is(text, yes):
 			r.Approve, r.Mode = &t, "acceptEdits"
 		case is(text, no):
 			r.Approve = &f
@@ -166,8 +199,8 @@ func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool
 		}
 		return r, true, ""
 	case proto.IxScreen:
-		n, err := strconv.Atoi(strings.TrimSpace(text))
-		if err != nil || n < 1 || n > len(a.Options) {
+		n, ok := number(text)
+		if !ok || n < 1 || n > len(a.Options) {
 			return r, false, i18n.T(l, "channel-asks.again_screen", i18n.Args{"max": len(a.Options)})
 		}
 		r.Option = a.Options[n-1]
@@ -197,8 +230,11 @@ func optionAnswer(q proto.Question, text string) string {
 	fields := strings.FieldsFunc(text, split)
 	var labels []string
 	for _, f := range fields {
-		n, err := strconv.Atoi(f)
-		if err != nil || n < 1 || n > len(q.Options) {
+		if strings.Trim(f, numberEnd) == "" {
+			continue // a stray full stop
+		}
+		n, ok := number(f)
+		if !ok || n < 1 || n > len(q.Options) {
 			return strings.TrimSpace(text)
 		}
 		labels = append(labels, q.Options[n-1].Label)

@@ -291,3 +291,49 @@ func TestAskInLanguages(t *testing.T) {
 		t.Fatal(f[0].Title)
 	}
 }
+
+// An option number typed on a Chinese keyboard (full-width) or with a full stop is still that number: a plan is not
+// sent back with "１" as the note, a terminal dialog is answered, a question's option becomes its label (#3413).
+func TestOptionNumbersFullWidthAndPunctuated(t *testing.T) {
+	for text, mode := range map[string]string{"１": "bypassPermissions", "1。": "bypassPermissions", " 1. ": "bypassPermissions",
+		"２": "acceptEdits", "2！": "acceptEdits", "２。": "acceptEdits", "1、": "bypassPermissions", "１．": "bypassPermissions"} {
+		r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text)
+		if !done || r.Approve == nil || !*r.Approve || r.Mode != mode || r.Feedback != "" {
+			t.Errorf("plan %q: %+v", text, r)
+		}
+	}
+	for _, text := range []string{"3", "1?", "１？", "01", "10"} {
+		if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text); r.Approve == nil || *r.Approve || r.Feedback != text {
+			t.Errorf("plan %q is not a choice: %+v", text, r)
+		}
+	}
+	if _, done, again := ReadAnswer("", &Ask{Kind: proto.IxScreen, Options: []string{"yes", "no"}}, "３"); done || again == "" {
+		t.Error("screen: ３ of 2 options was taken")
+	}
+	if _, done, again := ReadAnswer("", &Ask{Kind: proto.IxPermission}, "1"); done || again == "" {
+		t.Error("permission: a number was taken")
+	}
+	for _, text := range []string{"２", "2。", "2."} {
+		r, done, again := ReadAnswer("", &Ask{Kind: proto.IxScreen, Options: []string{"yes", "no"}}, text)
+		if !done || again != "" || r.Option != "no" {
+			t.Errorf("screen %q: done=%v again=%q %+v", text, done, again, r)
+		}
+	}
+	q := []proto.Question{{Question: "哪些？", MultiSelect: true, Options: []proto.QuestionOption{{Label: "进展"}, {Label: "风险"}, {Label: "计划"}}}}
+	r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: q}, "１，３")
+	if !done || r.Answers["哪些？"] != "进展, 计划" {
+		t.Errorf("question: %+v", r)
+	}
+	if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: q}, "1，3 。"); r.Answers["哪些？"] != "进展, 计划" {
+		t.Errorf("question with a stray full stop: %+v", r)
+	}
+	one := []proto.Question{{Question: "发给谁？", Options: []proto.QuestionOption{{Label: "张三"}, {Label: "李四"}}}}
+	if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: one}, "２。"); r.Answers["发给谁？"] != "李四" {
+		t.Errorf("question: %+v", r)
+	}
+	for _, text := range []string{"３", "1 2"} {
+		if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: one}, text); r.Answers["发给谁？"] != text {
+			t.Errorf("question %q is the answer itself: %+v", text, r)
+		}
+	}
+}
