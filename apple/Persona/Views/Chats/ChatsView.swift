@@ -1062,6 +1062,9 @@ private struct AgentsList: View {
             TabGroupRow(group: g, folded: folded).padding(.leading, nested(indent ? 1 : 0))
         }
         .buttonStyle(.plain)
+        #if os(iOS) || os(visionOS)
+        .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to 助手
+        #endif
         .modifier(FoldAnchor(id: g.foldID, reader: feed.reader))
         .listRowInsets(compact ? rowInsets(level: indent ? 1 : 0) : capsules ? Self.tabCapsuleInsets(level: indent ? 1 : 0) : nil)
         .listRowBackground(capsules ? Color.clear : nil)
@@ -1568,6 +1571,7 @@ private struct AgentsList: View {
     private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil,
                          showHost: Bool = false, indent: Bool = false, pane: TabPanes.Role? = nil, branch: Bool = false) -> some View {
         let level = (indent ? 1 : 0) + (branch ? 1 : 0)
+        let closes = s.state.isLive && s.canTerminal // the row's 关闭, and its mark for the strip (#2822)
         return Group {
             if searching {
                 // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
@@ -1609,10 +1613,14 @@ private struct AgentsList: View {
                                ?? rowInsets(level: level)
                            : rowInsets(level: level)) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
-                if s.state.isLive && s.canTerminal {
+                if closes {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
                 }
             }
+            #if os(iOS) || os(visionOS)
+            // A row that closes swipes to the left: the strip leaves that drag to it, though 消息 is a page further (#2822).
+            .background { if closes { SwipeRowMark() } }
+            #endif
             .swipeActions(edge: .leading) {
                 Button { model.togglePin(s.key) } label: {
                     Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : Theme.Icon.pinned)

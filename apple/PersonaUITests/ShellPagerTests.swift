@@ -106,6 +106,79 @@ final class ShellPagerTests: XCTestCase {
         attachScreen("row swipe")
     }
 
+    /// With 消息 on there is a page to the left of Agents' rows too (#2822): a drag to the left from mid-row is the
+    /// row's 关闭, from the band at the right edge it still pages on to 消息. Needs the mock hub: 体验模式 has no Feishu
+    /// chats, so no 消息 page.
+    @MainActor func testRowSwipeLeftStaysTheRowsWithMessages() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app = XCUIApplication()
+        app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES",
+                               "-dev.openChat", "", "-tab", "assistant", "-integrations.lark-connector.enabled", "YES"]
+        app.launchPinned()
+        XCTAssertTrue(app.buttons["assistant-sidebar-button"].firstMatch.waitForExistence(timeout: 20), "no shell")
+        sleep(2)
+        toAgents()
+        // 终端 lists the sessions with a terminal: those close. The mock's cards that need you fill the first screen.
+        let terminal = app.buttons["agents.filter.terminal"].firstMatch
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10), "no 终端 filter")
+        terminal.tap()
+        let rows = app.descendants(matching: .any).matching(identifier: "agents.row")
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10), "no row")
+        let h = app.windows.firstMatch.frame
+        let close = app.buttons["关闭"].firstMatch
+        let shown = NSPredicate { _, _ in close.exists && close.isHittable }
+        var y: CGFloat?
+        // Not every row can be closed (a row without 关闭 pages on to 消息): find one that can.
+        for i in 0..<min(rows.count, 6) {
+            let f = rows.element(boundBy: i).frame
+            guard f.height > 0, f.minY > h.height * 0.2, f.maxY < h.height * 0.9 else { continue }
+            drag(from: CGVector(dx: 0.7, dy: f.midY / h.height), to: CGVector(dx: 0.3, dy: f.midY / h.height))
+            if XCTWaiter().wait(for: [expectation(for: shown, evaluatedWith: nil)], timeout: 2) == .completed {
+                y = f.midY / h.height; break
+            }
+            if !app.agentsDrawn() { toAgentsFromMessages() }
+        }
+        guard let y else { return XCTFail("no row's 关闭 came out: \(app.shellTrace)") }
+        expectAgents(true, "a row's swipe to the left paged away")
+        attachScreen("row swipe left")
+        // Tap the row's open swipe shut, then from the right edge band the strip pages on.
+        app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: y)).tap()
+        let hidden = NSPredicate { _, _ in !(close.exists && close.isHittable) }
+        wait(for: [expectation(for: hidden, evaluatedWith: nil)], timeout: 3)
+        expectAgents(true, "closing the row's swipe")
+        drag(from: CGVector(dx: 0.985, dy: y), to: CGVector(dx: 0.2, dy: y))
+        wait(for: [expectation(for: NSPredicate { _, _ in !self.app.agentsDrawn() }, evaluatedWith: nil)], timeout: 4)
+        XCTAssertFalse(close.exists && close.isHittable, "the edge band opened the row instead of paging")
+        attachScreen("edge band pages to 消息")
+    }
+
+    /// A herdr tab's group row (#2668) has no swipe of its own: a drag to the right along it pages back to 助手 rather
+    /// than doing nothing. Needs the mock hub with `MOCK_TAB_PANES=1` (JARVIS_MOCK_HUB_TABS).
+    @MainActor func testTabGroupRowPagesBack() throws {
+        guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB_TABS"] else { throw XCTSkip("needs the tab panes mock") }
+        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        app = XCUIApplication()
+        app.launchArguments = ["-pairURL", pair, "-demo.on", "NO", "-ui.oldLayout", "NO", "-probes", "YES", "-newAssistant", "YES",
+                               "-dev.openChat", "", "-tab", "assistant"]
+        app.launchPinned()
+        XCTAssertTrue(app.buttons["assistant-sidebar-button"].firstMatch.waitForExistence(timeout: 20), "no shell")
+        sleep(2)
+        toAgents()
+        let tab = app.descendants(matching: .any).matching(identifier: "agents.tab").firstMatch
+        XCTAssertTrue(tab.waitForExistence(timeout: 10), "no tab group row")
+        if !tab.isHittable { app.swipeUp(velocity: .slow) }
+        let h = app.windows.firstMatch.frame, y = tab.frame.midY / h.height
+        drag(from: CGVector(dx: 0.4, dy: y), to: CGVector(dx: 0.9, dy: y))
+        expectAgents(false, "a drag to the right along a tab's group row")
+    }
+
+    /// Back to Agents from 消息, the page to its right.
+    @MainActor private func toAgentsFromMessages() {
+        drag(from: CGVector(dx: 0.1, dy: 0.3), to: CGVector(dx: 0.85, dy: 0.3))
+        expectAgents(true, "a drag to the right on 消息")
+    }
+
     @MainActor func testPushedPagesSwipeBack() {
         launch()
         // 助手: 知识库 from the drawer, the edge swipe goes back to 助手 (not Agents, not the drawer).

@@ -342,7 +342,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
     var pager: ShellPager? = nil
 
     /// On Agents a drag to the right that starts on a row is the row's (置顶, 中断, 标为已看 under it), unless it starts
-    /// this close to the screen's left edge, where the system's back swipe would start.
+    /// this close to the screen's left edge, where the system's back swipe would start. To the left, from a row that
+    /// swipes left (关闭), likewise unless it starts this close to the right edge.
     static let edge: CGFloat = Theme.Space.xxl
 
     /// What a drag moves, decided when it starts.
@@ -386,6 +387,12 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
                 if Self.sidewaysScroller(at: start, in: view, towardsRight: dx < 0) { return refused("sideways scroller") }
                 if Self.typing(at: start, in: view) { return refused("typing") }
                 if pager.page == 1, dx > 0, start.x > DrawerPan.edge, Self.onRow(at: start, in: view) { return refused("a row's swipe") }
+                // To the left the strip has a page on Agents too once 消息 is on (#392): from a row that swipes left
+                // itself (an Agents row's 关闭, `SwipeRowMark`) the drag is the row's, except from the band at the
+                // right edge, which still pages (#2822). Rows without the mark have nothing to the left: they page.
+                if dx < 0, start.x < view.bounds.width - DrawerPan.edge, Self.onSwipeRow(at: start, in: view) {
+                    return refused("a row's swipe")
+                }
                 mode = .pager
                 return true
             }
@@ -455,7 +462,8 @@ struct DrawerPan: UIGestureRecognizerRepresentable {
             return false
         }
 
-        /// The finger is on a row that has a swipe of its own (`SwipeRowMark`): the sidebar's conversations.
+        /// The finger is on a row that swipes to the left (`SwipeRowMark`): the sidebar's conversations (归档), the
+        /// Agents rows that can be closed (关闭).
         static func onSwipeRow(at point: CGPoint, in view: UIView) -> Bool {
             var hit = view.hitTest(point, with: nil)
             while let v = hit, v !== view {
@@ -620,8 +628,8 @@ struct DrawerPan {
 #endif
 
 #if os(iOS) || os(visionOS)
-/// Marks a list row whose swipe the drawer leaves alone (a sidebar conversation's 归档): the drawer looks for it in
-/// the cell under the finger.
+/// Marks a list row whose swipe to the left the drawer and the strip leave alone (a sidebar conversation's 归档, an
+/// Agents row's 关闭): they look for it in the cell under the finger.
 struct SwipeRowMark: UIViewRepresentable {
     final class Marker: UIView {}
 
