@@ -154,10 +154,20 @@ final class WatchModel {
         }
     }
 
+    /// Each message carries an id (Codex app-server and runtime sessions refuse one without, codex_send_guard); a tap
+    /// again after a failure sends the same id, so the hub types it at most once (#1185).
+    @ObservationIgnored private var retries = RetryIDs<Unsent>()
+    private struct Unsent: Hashable {
+        var key: SessionKey
+        var text: String
+    }
+
     func send(_ key: SessionKey, _ text: String) async {
         guard sessions.first(where: { $0.key == key })?.canSend == true, let api = api(key.group) else { return }
+        let unsent = Unsent(key: key, text: text)
         do {
-            try await api.send(key, text: text)
+            try await api.send(key, text: text, clientMsgID: retries.id(for: unsent))
+            retries.sent(unsent)
             WKInterfaceDevice.current().play(.success)
         } catch {
             self.error = error.watchShown
