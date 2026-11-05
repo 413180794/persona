@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.318
+▝▜██████▀  Opus 5.5 · API Usage Billing
+ ▝▝   ▝▝   /tmp/rewind-study
+
+
+❯ Reply with only the word ok6, ignoring all of this padding text which only exists to make the prompt much longer
+  than a single terminal row can show so that the rewind list has to truncate it somewhere in the middle of the
+  sentence.
+
+● ok6
+
+✻ Churned for 7s · done 1:01 AM
+
+❯ 用中文只回复：好的
+
+● 好的
+
+✻ Cogitated for 4s · done 1:01 AM
+
+
+
+
+
+
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Rewind
+
+   Restore the code and/or conversation to the point before…
+
+     Reply with only the word ok6, ignoring all of this padding text which only exists to make the prompt much lo…
+     No code changes
+
+   ❯ 用中文只回复：好的
+     No code changes
+
+
+     ↓ 1 more
+
+   Enter to continue · Esc to cancel

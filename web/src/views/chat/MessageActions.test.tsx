@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
-import { MessageActions, moreActions } from "./MessageActions";
+import { MessageActions, moreActions, rewindActions } from "./MessageActions";
 
 const base: ChatActions = { draftKey: "m/s", canCompose: true, speaker: "Persona", images: () => [] };
 
@@ -38,5 +38,59 @@ describe("moreActions", () => {
     expect(moreActions("line12#0", () => {})).toEqual([]);
     expect(moreActions("u1", () => {})).toEqual([]);
     expect(moreActions(undefined, () => {})).toEqual([]);
+  });
+});
+
+// 回退到这里 (#2436): on your messages, 只回退对话 / 回退代码和对话, the second asking again.
+describe("rewindActions", () => {
+  const run = async () => {};
+  it("has the two choices, the second a danger that asks again", () => {
+    const [rewind] = rewindActions("u1#0", "继续", { block: "", run });
+    expect(rewind.label).toBe("回退到这里");
+    expect(rewind.disabled).toBe(false);
+    const [conv, code] = rewind.children as { label: string; danger?: boolean; confirm?: string; inline?: boolean }[];
+    expect([conv.label, code.label]).toEqual(["只回退对话", "回退代码和对话"]);
+    expect(conv.danger).toBeUndefined();
+    expect(conv.confirm).toBeUndefined();
+    expect(code.danger).toBe(true);
+    expect(code.confirm).toBe("确认回退代码");
+    expect(conv.inline && code.inline).toBe(true);
+  });
+  it("runs the choice it is given, with the message", async () => {
+    const got: unknown[] = [];
+    const [rewind] = rewindActions("u1#0", "继续", { block: "", run: async (...a) => void got.push(a) });
+    const [conv, code] = rewind.children as { onSelect: () => Promise<unknown> }[];
+    await conv.onSelect();
+    await code.onSelect();
+    expect(got).toEqual([["u1#0", "继续", "conversation"], ["u1#0", "继续", "code_and_conversation"]]);
+  });
+  it("is off with the reason while the session cannot", () => {
+    const [rewind] = rewindActions("u1#0", "继续", { block: "工作中", run });
+    expect(rewind.disabled).toBe(true);
+    expect(rewind.hint).toBe("工作中");
+  });
+  it("is not there without a message, words or a session that rewinds", () => {
+    expect(rewindActions(undefined, "继续", { block: "", run })).toEqual([]);
+    expect(rewindActions("u1#0", "  ", { block: "", run })).toEqual([]);
+    expect(rewindActions("u1#0", "继续", undefined)).toEqual([]);
+  });
+});
+
+describe("MessageActions on your own message", () => {
+  const mine = (actions: ChatActions, messageId?: string) =>
+    renderToStaticMarkup(
+      <ChatActionsContext.Provider value={actions}>
+        <MessageActions text="继续" isUser messageId={messageId}>
+          <p>继续</p>
+        </MessageActions>
+      </ChatActionsContext.Provider>,
+    );
+  it("has ⋯ for 回退到这里 when the chat can rewind, even while it is off", () => {
+    expect(mine({ ...base, rewind: { block: "", run: async () => {} } }, "u1#0")).toContain('aria-label="更多"');
+    expect(mine({ ...base, rewind: { block: "工作中", run: async () => {} } }, "u1#0")).toContain('aria-label="更多"');
+  });
+  it("has none for a chat that cannot, or a message without an id", () => {
+    expect(mine(base, "u1#0")).not.toContain('aria-label="更多"');
+    expect(mine({ ...base, rewind: { block: "", run: async () => {} } })).not.toContain('aria-label="更多"');
   });
 });

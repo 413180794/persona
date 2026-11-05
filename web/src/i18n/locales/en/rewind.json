@@ -1,0 +1,17 @@
+{
+  "menu": "Rewind to here",
+  "conversation": "Conversation only",
+  "code_and_conversation": "Code and conversation",
+  "confirm_code": "Confirm code rewind",
+  "block_claude_only": "Claude only",
+  "block_working": "Working",
+  "block_needs_you": "Needs reply",
+  "block_offline": "Not running",
+  "hub_unsupported": "This hub can't rewind yet. Update it first.",
+  "needs_full_device": "Rewinding needs a device with full access.",
+  "done_conversation": "Conversation rewound",
+  "done_code_and_conversation": "Code and conversation rewound",
+  "done_no_code_changes": "Conversation rewound (no code changed after this message)",
+  "no_text": "This message has no text, so it can't be rewound to.",
+  "input_kept": "Rewound, but Claude's input on the computer still holds this message."
+}

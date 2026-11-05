@@ -20,6 +20,9 @@ import { apiOp } from "../../lib/ops";
 import { conversationKey, pickedLauncher, pickedModel } from "../../lib/assistant-chat";
 import { unlinkAgentFromTodo } from "../../lib/todos";
 import { LinkTodoDialog } from "../LinkTodoDialog";
+import { t as tr } from "../../i18n";
+import { rewindBlock, rewindDone, rewindSession, rewindTarget, type RewindRestore } from "../../lib/rewind";
+import { sendDraft } from "../../lib/drafts";
 import { chatLines, freshWords, openRecap, parseUserText, segments, type UserMessage } from "../../lib/turns";
 import type { Item, Session } from "../../lib/types";
 import { anchoredScroll, followsAgain, isScrollbarPress, jumpLabel, leavesOnKey, leavesOnScrollbarDrag, leavesOnTouch, leavesOnWheel, followsAfterUnfold, UNFOLD_PAUSE, type ScrollAnchor } from "../../lib/disclosure";
@@ -78,6 +81,17 @@ async function forkAt(mid: string, sid: string, itemId: string, assistant: boole
   } catch (e) {
     toast(t("chat-chatview.fork_failed", { error: errorText(e) }), "error");
   }
+}
+
+/** 回退到这里 (#2436): the node drives Claude's /rewind to before the message; the message then goes back into the composer. */
+async function rewindTo(mid: string, sid: string, draftKey: string, items: Item[], messageId: string, text: string, restore: RewindRestore) {
+  const target = rewindTarget(items, messageId);
+  if (!target) throw new Error(tr("rewind.no_text"));
+  const res = await rewindSession(mid, sid, target, restore);
+  const done = rewindDone(res, restore);
+  toast(done.text, done.tone);
+  if (res.input_cleared) sendDraft(draftKey, { type: "replace", text });
+  else toast(tr("rewind.input_kept"), "info");
 }
 
 /** `readOnly`: a subagent's conversation (`<parent>@<agent>`) in the side panel (SubagentPanel): the transcript only,
@@ -156,9 +170,19 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const draftKey = `${mid}/${sid}`;
   const canCompose = sessionCan(session, "send");
   const canFork = Boolean(session?.can_fork) && !readOnly;
+  // 回退到这里 (#2436): offered on your messages of a session in a terminal; off with a reason while it cannot
+  const rewindOff = rewindBlock(session, working);
+  const canRewind = canCompose && !readOnly && !assistant;
   const actions = useMemo<ChatActions>(
-    () => ({ draftKey, canCompose, speaker: assistant ? persona.name : "Agent", images: () => items.current.filter((i) => i.kind === "image"), fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant)) : undefined }),
-    [draftKey, canCompose, canFork, mid, sid, assistant, persona.name],
+    () => ({
+      draftKey,
+      canCompose,
+      speaker: assistant ? persona.name : "Agent",
+      images: () => items.current.filter((i) => i.kind === "image"),
+      fork: canFork ? (itemId: string) => void forkAt(mid, sid, itemId, Boolean(assistant)) : undefined,
+      rewind: canRewind ? { block: rewindOff, run: (messageId, text, restore) => rewindTo(mid, sid, draftKey, items.current, messageId, text, restore) } : undefined,
+    }),
+    [draftKey, canCompose, canFork, canRewind, rewindOff, mid, sid, assistant, persona.name],
   );
   const mention = useMemo(() => ({ cwd: session?.cwd, self: draftKey, files: () => chatFiles(items.current) }), [session?.cwd, draftKey]);
 

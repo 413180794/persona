@@ -275,3 +275,22 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
   不列子节点，也不引用 pane，节点和 pane 的对应只能按 rect 找（节点的 rect 是它切的那块）；`panes` 的顺序实测就是分屏树的先序，但没有文档保证，node 按 `splits` + rect 自己排。
 - 只看 rect 排不出分屏的先后：2×2 的格子横竖两条线都能切通，先上下切还是先左右切只有 `splits` 知道。
 - zoom 一个 pane 时 `zoomed: true`，每个 pane 的 `rect` 仍是分屏里原来的位置，不变成整屏（实测 herdr 0.9.5）。
+
+## 驱动 Claude Code 的 `/rewind`（2026-11-05，#2436，2.1.318）
+
+录下的每一屏在 `server/internal/screen/testdata/claude-2.1.318-rewind-*`，解析在 `screen/rewind.go`，驱动在 `node/rewind.go`。
+
+- 打 `/rewind` 回车，出一个 `▔` 线下面的面板（不是 `─`，所以 `isRule` 不认它）。**列表只有两行的窗口**（`↑ N more` / `↓ N more`），光标起在最后一行 `(current)`，↑ 往更早的消息走、到头不循环；
+  一行是被截成 109 列、以 `…` 结尾的消息，下面一行是 `No code changes` 或 `notes.txt +1 -1`。没有可回退的：`Nothing to rewind to yet.`（`/clear` 之后列表里还有一条 `/clear`）。
+- 回车进确认页：`│ ` 引用整条消息（按 109 列折行，最后一行 `(47s ago)`），下面是选项。**选项随这条消息之后有没有代码改动而不同**：有 → `Restore code and conversation` / `Restore conversation` / `Restore code` /
+  `Summarize from here` / `Summarize up to here`（第五项滚在窗口外，前面是 `↓`）；没有 → `Restore conversation` / 两个 Summarize / `Never mind`。按序号选会选错，按名字选。
+  下面的说明（`The code will be restored +1 -1 in notes.txt.` / `The code will be unchanged.`）跟着光标走。2.1.304 的措辞不同（`The conversation will be forked`），只靠标题和选项名认。
+- Esc：确认页 → 列表（光标还在）→ 关掉；`(current)` 上回车也是关掉，什么都不说。回车确认后面板立刻关，输入框里是那条消息（多行的也是），文件按所选放回去。
+- **对话记录不删**：文件是棵树，回退后的下一条消息的 `parentUuid` 是目标前一条的 uuid，被回退的几轮还留着。node 的 transcript 读取按「同一个 parent 下两条用户自己的消息，较早那条的整棵子树被放弃」去掉它们
+  （`transcript/branch.go`，`docs/protocol.md`「回退到某条消息」）。**别用「从最后一行沿 parentUuid 往回走」**：并行工具结果、attachment 都是正常的分叉（真实语料 122 个文件里 7681 个），压缩的 `compact_boundary` 的
+  `parentUuid` 是 null，沿链走会丢掉压缩前的整段对话。真实语料（本机 122 个 jsonl，只比条数 / id）：3 个文件有这样的用户消息分叉，旧读法 → 新读法只少了被放弃的那几条，别的文件逐条一样，
+  窗口读和整读一致（`TestCorpusWindowed`）。回退后文件里没有任何新行，所以 node 自己回退时直接标（`File.Rewound`）；这个标记不落库，node 重启后到下一条消息才又看得出来。
+  窗口读（大文件只读末尾 8 MB）时，分叉的较早一条在窗口之前，窗口里属于它的行要等往前翻到那一段才去掉，去掉时令牌变、客户端重取。
+- 清输入框：一行的用 `ctrl+k ctrl+u`（不会出提示），多行的只有 `ctrl+c` 一次清得掉，它会在底下显示 `Press Ctrl-C again to exit`，只按一次、且只在确认框里是那条消息时按。
+- 测试：`node/rewind_sim_test.go` 的 `claudeSim` 按录下的画法画这些屏，`TestClaudeSimMatchesRecordedScreens` 逐行对录屏，所以流程测试跑的是真屏幕的样子；
+  真机只在一次性的会话里跑过（`go test -tags herdrlive -run TestLiveRewind`，`JARVIS_LIVE_PANE` / `JARVIS_LIVE_PROMPT`）。

@@ -4,13 +4,14 @@
 // puts it back in the composer to change and send again. Sharing as a card is the phone's. A reply's bar ends in a ⋯
 // whose menu has 分支到新聊天 (#2137: a new conversation with what was said up to this reply) when the session can.
 import { useEffect, useRef, useState } from "react";
+import { t } from "../../i18n";
 import { clock } from "../../lib/format";
 import { sendDraft, type QuotedTask } from "../../lib/drafts";
 import { Button, copyText, cx, Dialog, Menu, type MenuItem } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import type { RewindRestore } from "../../lib/rewind";
 import { isNoHover } from "../../ui/media-query";
-import { useChatActions } from "./chat-actions";
-import { t } from "../../i18n";
+import { useChatActions, type ChatActions } from "./chat-actions";
 
 
 function pointAnchor(x: number, y: number): HTMLElement {
@@ -21,11 +22,11 @@ function pointAnchor(x: number, y: number): HTMLElement {
 }
 
 /** The actions of one message; empty when there is nothing to act on. */
-export interface Action {
+export interface Action extends Pick<MenuItem, "hint" | "disabled" | "danger" | "confirm" | "inline" | "children"> {
   key: string;
   label: string;
   icon: IconName;
-  onSelect: () => void;
+  onSelect: () => void | Promise<unknown>;
 }
 
 function useActions(text: string, isUser: boolean, ts: string | undefined, task: QuotedTask | undefined, select: () => void): Action[] {
@@ -47,6 +48,28 @@ export function moreActions(itemId: string | undefined, fork: ((itemId: string) 
   return [{ key: "fork", label: t("chat-messageactions.fork"), icon: "fork", onSelect: () => fork(itemId) }];
 }
 
+/** 回退到这里 (#2436) on a message of yours: 只回退对话 / 回退代码和对话, the second asking again (it puts files back too). Off
+ *  with the reason as its hint while the session cannot (仅 Claude, 工作中…). Each choice waits for the node inside the
+ *  menu (it drives Claude's own /rewind, up to a minute) and shows the failure there. */
+export function rewindActions(messageId: string | undefined, text: string, rewind: ChatActions["rewind"]): Action[] {
+  if (!messageId || !rewind || !text.trim()) return [];
+  const go = (restore: RewindRestore) => () => rewind.run(messageId, text, restore);
+  return [
+    {
+      key: "rewind",
+      label: t("rewind.menu"),
+      icon: "undo",
+      hint: rewind.block || undefined,
+      disabled: Boolean(rewind.block),
+      onSelect: () => {},
+      children: [
+        { key: "rewind-conversation", label: t("rewind.conversation"), inline: true, onSelect: go("conversation") },
+        { key: "rewind-code", label: t("rewind.code_and_conversation"), danger: true, confirm: t("rewind.confirm_code"), inline: true, onSelect: go("code_and_conversation") },
+      ],
+    },
+  ];
+}
+
 /** Wraps a message: right-click / long press opens its menu. The hover bar goes under it (with the time), or beside it
  *  (`side`, your own bubbles: they had no row under them, so the layout does not move; the time stays the tooltip), or
  *  over its top right corner (`corner`, a task's card: no row under it either). `task`: 引用 quotes it as that task. */
@@ -58,6 +81,7 @@ export function MessageActions({
   corner,
   task,
   itemId,
+  messageId,
   children,
   className,
 }: {
@@ -69,12 +93,15 @@ export function MessageActions({
   task?: QuotedTask;
   /** The reply's transcript item: where 分支到新聊天 branches off. */
   itemId?: string;
+  /** Your message (UserMessage.id): where 回退到这里 goes back to. */
+  messageId?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   const [selecting, setSelecting] = useState(false);
   const actions = useActions(text, Boolean(isUser), ts, task, () => setSelecting(true));
-  const more = moreActions(itemId, useChatActions()?.fork);
+  const chat = useChatActions();
+  const more = [...moreActions(itemId, chat?.fork), ...(isUser ? rewindActions(messageId, text, chat?.rewind) : [])];
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const anchorRef = useRef<HTMLElement | null>(null);
@@ -101,7 +128,7 @@ export function MessageActions({
 
   if (!actions.length) return <div className={className}>{children}</div>;
 
-  const items: MenuItem[] = [...actions, ...more].map((a, i) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect, divider: i === actions.length && i > 0 }));
+  const items: MenuItem[] = [...actions, ...more].map((a, i) => ({ ...a, divider: i === actions.length && i > 0 }));
 
   return (
     <div className={cx("group/msg", (side || corner) && "relative", className)}>
@@ -184,8 +211,8 @@ export function MessageActions({
         )}
         {!side && !corner && ts && <span className="ml-1 text-[11px] text-ink-3">{clock(ts)}</span>}
       </div>
-      {anchor && <Menu anchor={anchor} onClose={close} items={items} width={168} />}
-      {moreAnchor && <Menu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={more.map((a) => ({ key: a.key, label: a.label, icon: a.icon, onSelect: a.onSelect }))} side="top" width={168} />}
+      {anchor && <Menu anchor={anchor} onClose={close} items={items} width={items.some((i) => i.hint) ? 200 : 168} />}
+      {moreAnchor && <Menu anchor={moreAnchor} onClose={() => setMoreAnchor(null)} items={more} side="top" width={more.some((a) => a.hint) ? 200 : 168} />}
       <Dialog
         open={selecting}
         onClose={() => setSelecting(false)}

@@ -5,6 +5,7 @@ package node
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -133,5 +134,42 @@ func TestLiveAnswerDangerousPrompt(t *testing.T) {
 	text, _ = n.readPane(ctx, pane, "visible", screen.DialogLines)
 	if after := screen.ParseDialog(text); after != nil && after.Rev == d.Rev {
 		t.Fatalf("the prompt is still there:\n%s", text)
+	}
+}
+
+// JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_PROMPT=<message> [JARVIS_LIVE_OCC=<n>] [JARVIS_LIVE_AFTER=<n>]
+// [JARVIS_LIVE_RESTORE=conversation|code_and_conversation]: rewinds the throwaway Claude in the pane (never a real
+// session) to before the message, through the screens of /rewind (rewind.go).
+func TestLiveRewind(t *testing.T) {
+	pane, prompt := os.Getenv("JARVIS_LIVE_PANE"), os.Getenv("JARVIS_LIVE_PROMPT")
+	if pane == "" || prompt == "" {
+		t.Skip("JARVIS_LIVE_PANE / JARVIS_LIVE_PROMPT not set")
+	}
+	o := rewindOpts{Prompt: prompt, Occurrence: 1, Restore: os.Getenv("JARVIS_LIVE_RESTORE")}
+	if o.Restore == "" {
+		o.Restore = RestoreConversation
+	}
+	if v, err := strconv.Atoi(os.Getenv("JARVIS_LIVE_OCC")); err == nil {
+		o.Occurrence = v
+	}
+	if v, err := strconv.Atoi(os.Getenv("JARVIS_LIVE_AFTER")); err == nil {
+		o.PromptsAfter = &v
+	}
+	n := &Node{hosts: herdrHosts(herdr.New()), state: newState(),
+		agents: map[string]host.Agent{"live": {PaneID: pane, Agent: "claude", AgentStatus: "idle"}}}
+	res, err := n.rewind(context.Background(), "live", o)
+	t.Logf("result %v, error %v", res, err)
+	if want := os.Getenv("JARVIS_LIVE_WANT"); want != "" {
+		code := ""
+		if err != nil {
+			code, _ = refusalOf(t, err)
+		}
+		if code != want {
+			t.Fatalf("code %q, want %q", code, want)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 }

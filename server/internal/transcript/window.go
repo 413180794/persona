@@ -159,7 +159,8 @@ func (f *File) openWindow(fh *os.File, size int64) (fresh []proto.Item, ok bool,
 	}
 	var kept []proto.Item
 	f.cut = nil
-	f.parseLines(data, starts[b-1], b, &meta, &kept, &fresh)
+	f.tree = &branchTree{}
+	f.parseLines(data, starts[b-1], b, &meta, f.tree, &kept, &fresh)
 	tail := make([]byte, size-lastNL)
 	if _, err := fh.ReadAt(tail, lastNL); err != nil && err != io.EOF {
 		return nil, false, err
@@ -313,7 +314,7 @@ var taskIDRe = regexp.MustCompile(`<task-id>([^<]{1,200})</task-id>`)
 
 // parseLines parses complete lines in data (starting at file offset pos, line number n) into meta: the stored (light)
 // items go to kept, the ones to send (light, images kept) to sent when it is not nil. Callers hold f.mu.
-func (f *File) parseLines(data []byte, pos int64, n int, meta *Meta, kept, sent *[]proto.Item) {
+func (f *File) parseLines(data []byte, pos int64, n int, meta *Meta, tree *branchTree, kept, sent *[]proto.Item) {
 	for {
 		i := bytes.IndexByte(data, '\n')
 		if i < 0 {
@@ -322,7 +323,12 @@ func (f *File) parseLines(data []byte, pos int64, n int, meta *Meta, kept, sent 
 		line, at := data[:i], pos
 		data, pos = data[i+1:], pos+int64(i)+1
 		if len(bytes.TrimSpace(line)) > 0 {
-			for _, it := range ParseLine(n, line, meta) {
+			items := ParseLine(n, line, meta)
+			if trackLine(tree, meta, items, kept, sent) { // on a branch that was gone back over (branch.go)
+				n++
+				continue
+			}
+			for _, it := range items {
 				if sent != nil {
 					s, _ := light(it, true)
 					*sent = append(*sent, s)
@@ -370,7 +376,18 @@ func (f *File) loadOlder() int64 {
 	}
 	meta := f.seeded(fh, w, b, end, data)
 	var older []proto.Item
-	f.parseLines(data, w.starts[b-1], b, &meta, &older, nil)
+	pre := &branchTree{}
+	f.parseLines(data, w.starts[b-1], b, &meta, pre, &older, nil)
+	// A branch can start in the lines before and be abandoned in the lines after: the tree is worked out again over
+	// both, and what it now holds abandoned goes out of the items already there and the ones just read. A client that
+	// had them sees the history token change.
+	if f.tree == nil {
+		f.tree = &branchTree{}
+	}
+	if len(f.tree.prepend(pre.recs)) > 0 || len(pre.hidden) > 0 {
+		older = withoutLines(older, f.tree.hidden)
+		f.items = withoutLines(f.items, f.tree.hidden)
+	}
 	f.items = append(older, f.items...)
 	f.base = b - 1
 	if f.base == 0 && !f.partialMeta {

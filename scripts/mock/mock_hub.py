@@ -1467,6 +1467,13 @@ ITEMS[REVIEW] = _REVIEW_BEFORE + [it("user", "text", 100, text="看一下 PR #42
 if os.environ.get("MOCK_RECAPS"):
     ITEMS[REVIEW] += [it("system", "recap", 11, text="作者改了 `fetchAll` 的命名，`tmp` 还没改。CI 上新的重试测试跑了 3 次都过。"),
                       it("system", "recap", 3, text="两条建议都改完了，CI 绿。等你看一眼就可以合。")]
+# MOCK_REWIND=1: the review chat has four messages of yours (two with the same words) to try 回退到这里 on (#2436).
+if os.environ.get("MOCK_REWIND"):
+    ITEMS[REVIEW] = _REVIEW_BEFORE + [
+        it("user", "text", 100, text="看一下 PR #42"), it("assistant", "text", 95, text="PR #42 看完了：逻辑没问题，留了两条关于命名的小建议。"),
+        it("user", "text", 60, text="继续"), it("assistant", "text", 55, text="把 `fetchAll` 改成了 `loadAll`。"),
+        it("user", "text", 40, text="把 tmp 也改了"), it("assistant", "text", 35, text="`tmp` 已经改成 `cached`。"),
+        it("user", "text", 20, text="继续"), it("assistant", "text", 15, text="CI 绿了，可以合。")]
 ITEMS[CODEX_LIVE] = (
     [it("user", "text", 12, text="把三个环境的部署变量合到一个 env 文件里")]
     + tool("Bash", {"command": "ls deploy/env"}, "dev.env\nprod.env\nstaging.env", 8)
@@ -2576,6 +2583,7 @@ def _claude_dirs_state(mid):
         dirs.append(d)
     return {"dirs": dirs, "blocked": pats, "home": home, "live": machine_online(mid)}
 KEYS = []  # bodies of …/keys (the terminal's key bar and text field; GET /mock/keys)
+REWINDS = []  # bodies of …/rewind (#2436; GET /mock/rewinds)
 QUEUE_EDITS = []  # bodies of …/queue with the queue they pulled back (GET /mock/queue)
 UPLOADS = []  # files received (GET /mock/uploads)
 SENT = []  # bodies of sends, one per client_msg_id (GET /mock/sent)
@@ -8972,6 +8980,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/started": return self.send_json({"started": STARTED})
         if p == "/mock/uploads": return self.send_json({"uploads": UPLOADS})
         if p == "/mock/keys": return self.send_json({"keys": KEYS})
+        if p == "/mock/rewinds": return self.send_json({"rewinds": REWINDS})
         if p == "/mock/queue": return self.send_json(queue_messages(q.get("text", [None])[0], "clear" in q))
         if p == "/mock/queue_edits": return self.send_json({"edits": QUEUE_EDITS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
@@ -10207,6 +10216,35 @@ class H(BaseHTTPRequestHandler):
             SESSIONS.insert(0, forked)
             push_machine(mid)
             return self.send_json({"session_id": new})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/rewind") and self.command == "POST":
+            # 回退到这里 (#2436): the node drives Claude's /rewind; the mock records the request and answers like the node. MOCK_REWIND_ERROR=<code>:<message> makes it refuse the way the node does.
+            if is_read_only(self): return self.send_json({"error": "回退要用完整权限的设备"}, 403)
+            mid, sid = p.split("/")[4:6]
+            body = json.loads(self.last_body or b"{}")
+            REWINDS.append(dict(body, session_id=sid))
+            s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
+            if s is None: return self.send_json({"error": "没有这个会话"}, 404)
+            fail = os.environ.get("MOCK_REWIND_ERROR", "")
+            if fail:
+                code, _, msg = fail.partition(":")
+                return self.send_json({"error": msg or code, "code": code, "delivered": "none"}, 409)
+            time.sleep(float(os.environ.get("MOCK_REWIND_DELAY", "0.6")))
+            items = ITEMS.get(sid, [])
+            users = [i for i, x in enumerate(items) if x.get("role") == "user" and x.get("kind") == "text" and not x.get("tool_use_id")]
+            at = len(users) - 1 - int(body.get("prompts_after", 0))
+            if at < 0 or at >= len(users): return self.send_json({"error": "Claude 的回退列表里没有找到这条消息。什么都没改。", "code": "rewind_mismatch", "delivered": "none"}, 409)
+            # Claude Code keeps the rewound turns in its transcript file (a tree); the node leaves them out and the history
+            # token changes (".r<n>"), which makes every client read the session again.
+            global HISTORY
+            ITEMS[sid] = items[:users[at]]
+            HISTORY = "mock-1.r%d" % (len(REWINDS))
+            last = ITEMS[sid][-1]["seq"] if ITEMS[sid] else 0
+            for out, subs in list(LIVE):
+                try:
+                    if sid in subs: out({"type": "items", "machine_id": mid, "session_id": sid, "items": [], "history": HISTORY, "from_seq": last, "to_seq": last})
+                except Exception: pass
+            both = body.get("restore") == "code_and_conversation"
+            return self.send_json({"prompt": body.get("prompt", ""), "restore": body.get("restore"), "code_restored": both, "input_cleared": True})
         if p.startswith("/api/v1/sessions/") and p.endswith("/close") and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能关闭 Agent"}, 403)
             mid, sid = p.split("/")[4:6]
@@ -10980,6 +11018,7 @@ def features():
     return _features_without_channels() + (["channels"] if CHANNELS_MODE else [])
 
 
+MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_CHANNELS=1  设置 › 插件 › 渠道：App、飞书机器人和微信已连接、飞书 /agent 只读、一个待绑定（令牌 example-token）、一个出错、一个在市场里；主对话第一条来自微信")
 
 

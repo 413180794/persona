@@ -52,7 +52,7 @@ export function UserBubble({ msg, mid, sid, pending }: { msg: UserMessage; mid: 
         (pending ? (
           <BubbleText text={msg.text} mid={mid} sid={sid} pending />
         ) : (
-          <MessageActions text={msg.text} isUser ts={msg.ts} side className="max-w-full">
+          <MessageActions text={msg.text} isUser ts={msg.ts} side messageId={msg.id} className="max-w-full">
             <BubbleText text={msg.text} ts={msg.ts} mid={mid} sid={sid} />
           </MessageActions>
         ))}

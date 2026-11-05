@@ -708,6 +708,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			return ok(n.submitReview(ctx, pane))
 		}
 		return ok(nil)
+	case "session.rewind": // Claude Code's /rewind, driven on the screen (rewind.go)
+		var o rewindOpts
+		if err := json.Unmarshal(params, &o); err != nil {
+			return nil, fmt.Errorf("bad params: %w", err)
+		}
+		return n.rewind(ctx, p.SessionID, o)
 	case "codex.answer": // the phone's answer to a Codex question or approval card (codexask.go)
 		var a struct {
 			ID         string           `json:"id"`

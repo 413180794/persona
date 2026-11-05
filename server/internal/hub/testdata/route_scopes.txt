@@ -276,6 +276,7 @@ agents.control       POST /api/v1/sessions/{mid}/{sid}/messages
 -                    POST /api/v1/sessions/{mid}/{sid}/modes
 agents.control       POST /api/v1/sessions/{mid}/{sid}/queue
 -                    POST /api/v1/sessions/{mid}/{sid}/rename
+-                    POST /api/v1/sessions/{mid}/{sid}/rewind
 -                    POST /api/v1/sessions/{mid}/{sid}/screen/before
 agents.control       POST /api/v1/sessions/{mid}/{sid}/seen
 -                    POST /api/v1/tabs/autoname

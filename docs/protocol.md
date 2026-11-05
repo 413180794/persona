@@ -843,6 +843,32 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 - 链路和耗时见 `docs/archive/lanes/session-verify.md`。
 
+### 回退到某条消息（#2436）
+
+`POST /api/v1/sessions/{mid}/{sid}/rewind`，**只有完整权限的设备**能调（会把文件放回去、删掉之后的对话；手表那种只能回答的设备、扩展的 token 都是 403，
+`testdata/route_scopes.txt` 里是 `-`）。body 只认这几个字段，别的不会交给 node：
+
+```json
+{"prompt": "<那条消息，和对话记录里一样>", "occurrence": 2, "prompts_after": 3, "restore": "conversation"}
+```
+
+- `prompt`：要回到的那条用户消息；`occurrence`：从最后往前数，是第几条**一样的话**（1 = 最后一条）；`prompts_after`（可不带）：它后面还有几条用户消息；
+  `restore`：`conversation`（只回退对话）或 `code_and_conversation`（文件也放回去）。Claude Code 的列表和 App 的对话都从末尾数，没加载的更早页不影响。
+- node 的 `session.rewind` 在会话的终端里打 `/rewind`、按 ↑ 走到那条、选方式、回车，**每一步先读屏**（`server/internal/node/rewind.go`、`screen/rewind.go`）：
+  列表里那一行的字、位置（`prompts_after`）、确认页上引用的整条消息、选项的名字（按名字选不按序号：这条之后没有代码改动时只有「Restore conversation」「Summarize…」「Never mind」）
+  任何一步和预期不一样，按 Esc 退出面板、什么都不改，回 409。`code_and_conversation` 遇到「之后没有代码改动」就只回退对话，结果里 `code_restored: false`。
+- 成功：`{prompt, restore, code_restored, input_cleared}`。Claude 会把那条消息放回自己的输入框；node 把它清掉（一行用 `ctrl+k ctrl+u`，多行用 `ctrl+c`），
+  `input_cleared: true` 时 App 把它放进自己的输入框，false（清不掉，比如输入框里是别的字）就只提示一句。
+- 拒绝（409，`code` 加说明，什么都没改）：`dialog_open`、`input_draft`（同「发消息」）、`rewind_busy`（在工作或等回答）、`rewind_unsupported`（不是终端里的 Claude 会话）、
+  `rewind_nothing`（Claude 里没有可回退的消息）、`rewind_mismatch`（列表里没找到那条、位置对不上、确认页上不是它）、`rewind_failed`（屏幕不是下一步需要的样子，或确认之后面板没关）。
+  旧 node 回 409 `node_outdated`。确认之后面板没关时 node 不再按任何键（回退可能已经发生，Esc 也撤不回）。
+- **Claude Code 不删对话记录里被回退的那部分**（2.1.318 实测）：文件是棵树（`parentUuid`），回退后的下一条消息挂在目标前一条下面，被回退的几轮还在文件里。
+  node 读 transcript 时**跟着没被放弃的那条分支走**（`transcript/branch.go`）：同一个 `parentUuid` 下有两条用户自己的消息，较早那条和从它长出来的所有行是被放弃的分支，不出 item
+  （item 的 `seq` 还是文件里的行号，被放弃的行成了空档）。别的分叉不算（并行工具结果、挂在回复旁边的 attachment、压缩的 `compact_boundary`：它 `parentUuid` 为 null、旧链在 `logicalParentUuid`）。
+  node 自己回退成功后马上标出这一段（`File.Rewound`），不等下一条消息。客户端怎么知道：`history`（见「items 的连续性」）末尾多一个 `.r<被放弃的分支数>`，变了就丢掉本地内容重新取——
+  和文件被改写同一个机制，所以网页、iOS、Android 都不用改（iOS 的 `ChatStore.apply`、Android 的 `reducer.history`、网页的 `useTranscript` 都已经这样处理），
+  hub 的助手快照、通知、知识库归档读的也是 node 的 items。令牌只由文件内容决定，node 重启后不变。
+
 ### 待发消息的对应
 
 App 发出的消息在对话记录里出现之前显示一个待发气泡。Claude Code、Codex、runtime 给用户那一行的 item id 都是自己的，不是
@@ -920,7 +946,7 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 
 每批 items（WebSocket `items` 事件、HTTP 的 `/items` 响应、node 的 `session.items`）都说明自己在 transcript 里的位置：
 
-- `history`：这份 transcript 的身份（inode + 第一行的 crc32 + 被改写的次数）。变了说明文件被替换 / 截短重写，App 丢掉本地内容重新取。
+- `history`：这份 transcript 的身份（inode + 第一行的 crc32 + 被改写的次数，Claude 会话回退过时再加 `.r<被放弃的分支数>`，见「回退到某条消息」）。变了说明文件被替换 / 截短重写 / 有轮次被回退掉，App 丢掉本地内容重新取。
 - `to_seq`：这批读到的最后一行（包括没有 item 的行）；`from_seq`：这批接在哪一行之后（只有接续的批次——补发、实时推送、`after_seq`——才有）。
 - App 记 `covered`（本地从头连续拿到的最后一行）：`from_seq <= covered` 就把 `covered` 推到 `to_seq`；`from_seq > covered` 说明中间丢了一批，
   稍等 1.5 秒（订阅时的补发可能还在路上）再用 `after_seq=covered` 补齐，超过 8 页改取最新一页。重连订阅带 `since_seq=covered`。
@@ -1092,6 +1118,7 @@ hub → node 请求：
 | `session.send` | `{session_id, text, images?, client_msg_id?}`（`client_msg_id` 见「待发消息的对应」） |
 | `session.echoes` | `{echoes: [{session_id, client_msg_id, text, images, sent_at, after_seq, line?}]}` → `{ok}`：hub 交回这台机器一天内记下的发送（node 每次连上时，在 `sessions.list` 之前）；node 已经知道的跳过。旧 node 回 unknown method，hub 不管 |
 | `session.keys` | `{session_id, keys, text}` |
+| `session.rewind` | `{session_id, prompt, occurrence, prompts_after?, restore}` → `{prompt, restore, code_restored, input_cleared}`：在终端里驱动 Claude Code 的 `/rewind`（「回退到某条消息」）；拒绝带 `code` |
 | `session.interrupt` | `{session_id}` |
 | `session.screen` | `{session_id, lines, source, format?}` → `{text, status}`（`format: "ansi"` 带颜色） |
 | `panes.list` | `{}` → `{hosts:[…]}`，同 REST `/machines/{mid}/panes`：node 用最近一次宿主快照（超过 3 秒才再拍一次）回空间 / 标签页 / 全部窗格，不另起轮询 |

@@ -1,6 +1,7 @@
 // What the chat's message parts need from the chat around them: where quotes, edits and edited images go (the
 // composer's draft key), whether it takes them now, and the conversation's images for the viewer to page through.
 import { createContext, useContext } from "react";
+import type { RewindRestore } from "../../lib/rewind";
 import type { Item } from "../../lib/types";
 
 export interface ChatActions {
@@ -13,6 +14,10 @@ export interface ChatActions {
   images: () => Item[];
   /** 分支到新聊天 from a reply (its item id): set only when the session can be forked. */
   fork?: (itemId: string) => void;
+  /** 回退到这里 (#2436) on a message of yours: set for a session in a terminal that takes messages. `block` is why it is
+   *  off for now ("" = on: 仅 Claude, 工作中…); `run` goes back to before the message (its UserMessage.id) and puts it
+   *  in the composer, rejecting with the reason in the message. */
+  rewind?: { block: string; run: (messageId: string, text: string, restore: RewindRestore) => Promise<void> };
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

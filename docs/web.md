@@ -145,6 +145,11 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **子 Agent** 的卡片见上面「对话页」（#1963 起不再有顶栏下的子 Agent 标签条和「全部子 Agent」弹窗）。截图用 `MOCK_SUBAGENT_CARDS=1 MOCK_WORK_GROUPS=1` 的假 hub（`scripts/test/web_chat_trace_e2e.py`）。
   - **消息的菜单**（#433，iOS `MessageMenu`，`views/chat/MessageActions.tsx`）：悬停回复下面出「复制 / 引用」和时间，你的消息在气泡左边出「复制 / 引用 / 编辑」；右键出同样的菜单
     （选中了文字、右键链接 / 图片 / 代码块时仍是浏览器的菜单）；触屏长按出菜单，多一个「选择文本」。引用不往输入框里写 `> …`：输入框上方出一条引用条（左竖线、浅底，「引用 <助手名 / Agent / 我> · 时间」和去掉 Markdown 的两行摘要，× 取消，再引用一条就换掉），输入框保持原样并聚焦；没开着的输入框引用存在 `quote:<草稿键>`。发送时照旧把引用拼成 `> ` 块放在正文前（`lib/drafts.ts` `withQuoteBlock`），助手和电脑上的 Agent 收到的和以前一样，协议不变。用户气泡（含历史消息、合并的气泡）开头的 `> ` 块画成气泡顶部的引用卡片（`views/chat/Quote.tsx`），最多三行，长的点开看全文；编辑一条带引用的消息，引用回到引用条、正文回到输入框。任务完成 / 没开起来的卡片（`views/assistant/Tasks.tsx` `OutcomeReceipt`，#2462）也能复制、引用：悬停时卡片右上角出「复制 / 引用」（不占卡片下面的位置），右键、长按出同样的菜单；引用条写「引用任务「标题」 · 时间」和 Agent 最后说的话的前两行，发出去的 `> ` 块第一行是 `任务「标题」（todo id: …）`，气泡里这一行画成任务标题，不露 todo id。编辑把那条放回输入框（输入框有字先确认）。分享卡片不做。
+  - **回退到这里**（#2436，Moshi 的 Rewind to here；`lib/rewind.ts`、`MessageActions.tsx` 的 `rewindActions`）：你的消息的 ⋯ 和右键菜单里有「回退到这里 ▸ 只回退对话 / 回退代码和对话」，
+    第二项是红色的、要再点一次「确认回退代码」；等 node 在终端里走完 Claude 的 `/rewind`（最长约一分钟）时那一行转圈，失败的原因显示在菜单里。成功后弹「已回退对话」，
+    那条消息放回输入框（输入框里有别的字先确认）。被回退的几轮由 node 在读 transcript 时去掉（`docs/protocol.md`「回退到某条消息」），`history` 变了，所有开着这个会话的网页都重新取，不在网页里单独藏。
+    不是 Claude 的会话（Codex…）、会话在工作 / 等回答 / 没在运行时这一项是灰的，右边写原因（仅 Claude / 工作中 / 待回答 / 未运行）；助手对话和子 Agent 没有这一项。
+    要对上的是「从最后数第几条一样的话」和「后面还有几条」，对不上 node 什么都不改。假 hub：`MOCK_REWIND=1`（四条消息，两条「继续」）。
   - **图片查看器**（`ImageViewer.tsx`）：整段对话里已加载的图片左右翻（←/→、两侧箭头、左右滑），顶部 n / m，按屏幕大小适配（小图也放大）；缩放（#1753，`lib/image-zoom.ts`，同 Android 的 1–6×）：滚轮、触控板捏合、触屏双指以指针为中心缩放，放大后拖动平移、不拖出边，双击 / 双击屏幕在那一点放大（2.5×，原图更大时到原始大小，最多 6×）或还原，`+` / `-` / `0` 也行；放大时左右滑是平移、点旁边不关闭（双击还原），翻页时复位；
     「编辑」（`ImageEditor.tsx`，canvas）：框选、画笔、6 种颜色、撤销、清除，按原图分辨率导出加到输入框；输入框里的图片附件点一下也能标注。「拷贝」只在 HTTPS / localhost 出现（明文 HTTP 写不了图片剪贴板）。
   - **为什么等你、在飞书打开**（#1752，iOS `AttentionNote`，`lib/format.ts` 的 `sessionPreview` / `externalLink`）：会话「需要你」且 hub 带了 `attention_reason`（botmux 举手的原因，`docs/engines.md`「botmux」）时，

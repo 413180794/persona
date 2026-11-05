@@ -1,0 +1,39 @@
+
+  ⎿  Added 1 line, removed 1 line
+      1  hello
+      2 -alpha
+      2 +beta
+
+● ok2
+
+✻ Cogitated for 8s · done 12:57 AM
+
+❯ Use the Edit tool (not Bash) to replace the line "beta" in notes.txt with "gamma". Reply with only: ok3
+
+● Update(notes.txt)
+  ⎿  Added 1 line, removed 1 line
+      1  hello
+      2 -beta
+      2 +gamma
+
+● ok3
+
+✻ Cogitated for 4s · done 12:57 AM
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Rewind
+
+   Confirm you want to restore to the point before you sent this message:
+
+   │ Use the Edit tool (not Bash) to replace the line "beta" in notes.txt with "gamma". Reply with only: ok3
+   │ (1m ago)
+
+   This message and everything after it will be removed.
+   The code will be unchanged.
+
+     1. Restore code and conversation
+   ❯ 2. Restore conversation
+     3. Restore code
+     4. Summarize from here
+   ↓ 5. Summarize up to here
+
+   ⚠ Restored files go back whole, losing later changes by anyone. Bash changes to other files are not undone.

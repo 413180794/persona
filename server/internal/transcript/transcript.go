@@ -165,6 +165,8 @@ type Meta struct {
 	// LastTool: the latest tool call no assistant text or new prompt came after (activity.go), nil when the agent's
 	// last word is newer.
 	LastTool *ToolCall
+	// tree is where the line just parsed sits in the transcript's tree (branch.go); the File reads and clears it.
+	tree treeLine
 	// localInput: the line being parsed is input the terminal handles itself (a slash command, "! cmd"), no message.
 	localInput bool
 	// bashInput is the last "! cmd" typed in Claude Code, for the Bash call its output line turns into.
@@ -256,6 +258,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 	if err := json.Unmarshal(line, &e); err != nil {
 		return nil
 	}
+	meta.tree = treeLine{uuid: e.UUID, parent: e.ParentUUID, sidechain: e.IsSidechain}
 	if e.Cwd != "" {
 		meta.Cwd = e.Cwd
 	}
@@ -1050,6 +1053,8 @@ type File struct {
 	ino       uint64
 	firstHash uint32
 	gen       int
+	// tree: the transcript's branches (branch.go): lines on an abandoned one are not kept as items.
+	tree *branchTree
 	// cut: where the lines whose stored items were cut down (light) sit in the file, by seq; Full reads them again.
 	// Images used to stay in memory for every session ever opened.
 	cut map[int]lineRef
@@ -1100,7 +1105,7 @@ func (f *File) history() string {
 	if f.lines == 0 {
 		return "" // nothing read yet: no identity to compare
 	}
-	return fmt.Sprintf("%x.%08x.%d", f.ino, f.firstHash, f.gen)
+	return fmt.Sprintf("%x.%08x.%d", f.ino, f.firstHash, f.gen) + f.branchToken()
 }
 
 // Refresh reads newly appended complete lines and returns the new items.
@@ -1124,7 +1129,7 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	}
 	ino := inode(st)
 	if st.Size() < f.offset || (f.ino != 0 && ino != 0 && ino != f.ino) { // truncated or replaced: start over
-		f.offset, f.lines, f.partial, f.items, f.cut, f.meta = 0, 0, nil, nil, nil, Meta{Sidechain: f.meta.Sidechain}
+		f.offset, f.lines, f.partial, f.items, f.cut, f.meta, f.tree = 0, 0, nil, nil, nil, Meta{Sidechain: f.meta.Sidechain}, nil
 		f.base, f.win, f.partialMeta = 0, nil, false
 		f.firstHash = 0
 		f.gen++
@@ -1174,9 +1179,16 @@ func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
+		items := ParseLine(f.lines, line, &f.meta)
+		if f.tree == nil {
+			f.tree = &branchTree{}
+		}
+		if trackLine(f.tree, &f.meta, items, &f.items, &fresh) { // on a branch that was gone back over (branch.go)
+			continue
+		}
 		// New items go out with their images (subscribers that did not ask for lazy images get them whole); the
 		// stored copy leaves them out.
-		for _, it := range ParseLine(f.lines, line, &f.meta) {
+		for _, it := range items {
 			sent, _ := light(it, true)
 			kept, cut := light(it, false)
 			fresh = append(fresh, sent)
