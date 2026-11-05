@@ -25,14 +25,16 @@ final class AgentsListTests: XCTestCase {
         super.tearDown()
     }
 
-    /// `fresh`: forget the list's saved look (cards, nothing folded, all machines, by space) first.
+    /// `fresh`: forget the list's saved look (cards, nothing folded, all machines) first. By space: these are about
+    /// spaces, and the default grouping is 按仓库 (#2108, `AgentsByMachineTests`).
     /// `chat`: the chat left open last time ("<machine>/<session>"), which the app opens again over the list.
     /// It is restored only when the tab saved with it is Agents (`app.tab`): given too, or the tab the last run ended on
     /// (another test's) decides whether the chat opens.
     private func launch(fresh: Bool = true, chat: String = "") {
         app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
-        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev"] + (fresh ? ["-openAgentsFresh", "YES", "-dev.grouping", "space"] : [])
+        app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-dev.openChat", chat, "-tab", "dev", "-dev.grouping", "space"]
+            + (fresh ? ["-openAgentsFresh", "YES"] : [])
         app.launchPinned()
         if chat.isEmpty { see(filter("all"), "the quick filters", timeout: 15) }
     }
@@ -65,9 +67,10 @@ final class AgentsListTests: XCTestCase {
     }
 
     /// A row or header that can be below the fold (under the 需要你处理 cards and weather on a 6.3" phone; the list
-    /// builds rows lazily, so it is not there to find until scrolled to).
+    /// builds rows lazily, so it is not there to find until scrolled to). Split by machine (#2108), platform is on Mac
+    /// Studio, the hub's last machine: under 服务器's and MacBook's spaces, several screens down.
     @discardableResult private func reach(_ e: XCUIElement, _ what: String) -> XCUIElement {
-        for _ in 0..<4 where !e.waitForExistence(timeout: 2) { app.swipeUp(velocity: .slow) }
+        for _ in 0..<10 where !e.waitForExistence(timeout: 2) { app.swipeUp(velocity: .slow) }
         return see(e, what)
     }
 
@@ -142,15 +145,18 @@ final class AgentsListTests: XCTestCase {
 
         filter("unread").tap()
         XCTAssertTrue(filter("unread").isSelected)
-        see(text("platform 任务 4"), "a finished-unread agent")
         gone(text("给天气 App 加主屏幕小组件"), "working agents leave under 未读")
         XCTAssertFalse(text("需要你处理").exists, "no cards that need you under 未读")
         see(button("全部标为已读"), "mark every one read, under 未读")
         shot("agents-unread")
+        // platform is on Mac Studio, the hub's last machine: under 服务器's and MacBook's unread (#2108).
+        reach(text("platform 任务 4"), "a finished-unread agent")
+        toTop()
 
         filter("working").tap()
-        see(text("给天气 App 加主屏幕小组件"), "a working agent under 工作中")
+        reach(text("给天气 App 加主屏幕小组件"), "a working agent under 工作中")
         gone(text("platform 任务 4"), "finished ones leave under 工作中")
+        toTop()
 
         filter("needsYou").tap()
         see(text("需要你处理"), "the cards that need you, under 需要你")
@@ -181,7 +187,8 @@ final class AgentsListTests: XCTestCase {
     @MainActor func testCompactRows() throws {
         launch()
         filter("unread").tap()
-        see(text("platform 任务 4"), "platform's rows")
+        // platform is on Mac Studio, the hub's last machine: under MacBook's unread first (#2108).
+        reach(text("platform 任务 4"), "platform's rows")
         let cards = visibleRows()
         XCTAssertGreaterThan(cards, 0)
 
@@ -191,6 +198,7 @@ final class AgentsListTests: XCTestCase {
         let compact = visibleRows()
         XCTAssertGreaterThanOrEqual(Double(compact), Double(cards) * 2.5, "compact \(compact) vs cards \(cards)")
         shot("agents-compact-unread")
+        toTop()
         filter("all").tap()
         reach(text("给天气 App 加主屏幕小组件"), "a working agent")
         shot("agents-compact-all")

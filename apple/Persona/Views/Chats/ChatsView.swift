@@ -81,10 +81,13 @@ extension DevGrouping {
 
 /// How 开发 groups its agents (the menu at the top left; remembered).
 enum DevGrouping: String, CaseIterable, Identifiable {
-    case space, todo, state, machine
+    case repo, space, todo, state, machine
+    /// What an app that never chose a grouping shows (#2108): machines → repositories → working trees, after Orca.
+    static let standard = DevGrouping.repo
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .repo: "按仓库"
         case .space: "按项目"
         case .todo: "按待办"
         case .state: "按状态"
@@ -93,6 +96,7 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .repo: Theme.Icon.folder
         case .space: Theme.Icon.space
         case .todo: Theme.Icon.todo
         case .state: "circle.grid.2x1"
@@ -129,10 +133,10 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// 开发: every agent across machines, grouped by space (default), by state or by machine. The navigation and the
-/// toolbar are here; the list is `AgentsList`, the view that follows the hub. A toolbar declared by the view the hub's
-/// pushes redraw is handed to UIKit again on each of them, and the ⋯ menu open over the list jumped back to its top
-/// (2026-10-31): nothing here reads the sessions.
+/// 开发: every agent across machines, grouped by repository (default), space, todo, state or machine. The navigation
+/// and the toolbar are here; the list is `AgentsList`, the view that follows the hub. A toolbar declared by the view the
+/// hub's pushes redraw is handed to UIKit again on each of them, and the ⋯ menu open over the list jumped back to its
+/// top (2026-10-31): nothing here reads the sessions.
 struct ChatsView: View {
     @Environment(AppModel.self) private var model
     /// The shell (docs/ios.md「新外壳」): its ☰ and 助手 | Agents switch take the navigation bar.
@@ -339,7 +343,7 @@ private struct AgentsList: View {
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @StoredValue(HubFilter.key) private var hubFilter = ""
-    @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .todo // by todo first (#1836)
+    @StoredValue("dev.grouping") private var storedGrouping: DevGrouping = .standard // by repository first (#2108)
     /// The grouping in use (`DevGrouping.resolved`).
     private var grouping: DevGrouping { DevGrouping.resolved(storedGrouping, supportsTodos: TodoStore.shared.isSupported) }
     /// 细列表: one line per agent.
@@ -481,9 +485,15 @@ private struct AgentsList: View {
             return quick == .all || quick == .needsYou
         }
         let unreadShown = filtered.filter { $0.state == .unread }.map(\.key)
+        // Agents on more than one machine: 按仓库 and 按项目 split the list by machine first (#2108), and the headers under
+        // a machine do not name it. Counted before the quick filter: choosing one does not add or take away headings.
+        let byHost = machineFilter.isEmpty && Set(base.lazy.filter { $0.state.isLive }.map(\.machineRef)).count > 1
+        let tree = grouping == .repo ? RepoTree.build(unpinned.filter { $0.state.isLive }, machines: machines.map(\.ref)) : []
 
-        // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list.
+        // What the ⋯ menu's actions act on, kept current without making the open menu a function of the list. Split by
+        // machine, 全部折叠 still folds the spaces and repositories, not the machines: every one of them a line, the overview.
         let sectionsForMenu: [String] = {
+            if grouping == .repo { return tree.flatMap(\.repos).filter { !isQuiet($0) }.map(\.id) }
             if grouping == .space { return active.map(\.id) }
             if grouping == .todo {
                 return TodosLogic.buildTodoAgentGroups(sessions: unpinned, todos: TodoStore.shared.todos, isMuted: model.isMuted).map(\.key)
@@ -603,27 +613,10 @@ private struct AgentsList: View {
                 stateSections(unpinned.filter { $0.state.isLive })
             } else if grouping == .machine {
                 machineSections(unpinned.filter { $0.state.isLive })
+            } else if grouping == .repo {
+                repoSections(tree, byHost: byHost)
             } else {
-                ForEach(active) { g in spaceSection(g) }
-
-                if !quiet.isEmpty {
-                    listSection {
-                        ForEach(quiet) { g in
-                            if compact { compactQuietSpace(g) } else if capsules { quietSpaceCard(g) } else {
-                            DisclosureGroup(isExpanded: Binding(
-                                get: { expandedQuiet.contains(g.id) || !query.isEmpty },
-                                set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
-                            )) {
-                                ForEach(g.sessions) { s in slotRow(s) }
-                            } label: {
-                                QuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty)
-                            }
-                            }
-                        }
-                    } header: {
-                        SectionHeader(title: "空闲的空间", count: quiet.count, tone: StatusPalette.idle)
-                    }
-                }
+                spaceSections(active: active, quiet: quiet, byHost: byHost)
             }
 
             if base.isEmpty, !query.isEmpty {
@@ -817,14 +810,39 @@ private struct AgentsList: View {
 
     // MARK: By space
 
+    /// 按项目: the spaces as they always were; with agents on more than one machine, each machine's spaces under its
+    /// heading, its quiet ones in its own 空闲的空间 (#2108).
+    @ViewBuilder private func spaceSections(active: [SpaceGroup], quiet: [SpaceGroup], byHost: Bool) -> some View {
+        if byHost {
+            let hosts = RepoTree.hostOrder(Set((active + quiet).map(\.machineRef)), machines: machines.map(\.ref))
+            ForEach(hosts, id: \.self) { ref in
+                let mine = active.filter { $0.machineRef == ref }
+                let still = quiet.filter { $0.machineRef == ref }
+                hostHeading(ref, sessions: (mine + still).flatMap(\.sessions))
+                if !isFolded(Self.hostFoldID(ref)) {
+                    ForEach(mine) { g in spaceSection(g, namesMachine: false) }
+                    quietSection(still, title: "空闲的空间", namesMachine: false)
+                }
+            }
+        } else {
+            ForEach(active) { g in spaceSection(g, namesMachine: machineFilter.isEmpty) }
+            quietSection(quiet, title: "空闲的空间", namesMachine: machineFilter.isEmpty)
+        }
+    }
+
     /// A space: tap its header to fold it (the counts stay on it); busy (and pinned / looping) agents first, idle ones
     /// fold into one row so a big workspace stays compact. Under a quick filter every agent it left shows.
-    @ViewBuilder private func spaceSection(_ g: SpaceGroup) -> some View {
-        if isFolded(g.id) {
-            // Folded: the header alone, as a plain row. As an empty section each kept a header's and a section's
-            // padding (全部折叠 showed six a screen).
+    private func spaceSection(_ g: SpaceGroup, namesMachine: Bool) -> some View {
+        foldableSection(g.id) { spaceHeader(g, folded: $0, namesMachine: namesMachine) } content: { agentRows(g.sessions, key: g.id) }
+    }
+
+    /// A section that folds from its header. Folded: the header alone, as a plain row. As an empty section each kept a
+    /// header's and a section's padding (全部折叠 showed six a screen).
+    @ViewBuilder private func foldableSection<Header: View, Content: View>(_ id: String, @ViewBuilder header: (Bool) -> Header,
+                                                                           @ViewBuilder content: () -> Content) -> some View {
+        if isFolded(id) {
             Section {
-                spaceHeader(g, folded: true)
+                header(true)
                     // Where a header sits; the capsules: the page's edge, where an open space's title is too.
                     .listRowInsets(capsules ? EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page)
                                    : Self.foldedHeaderInsets)
@@ -833,30 +851,31 @@ private struct AgentsList: View {
             }
             .listSectionSpacing(.custom(0))
         } else {
-            listSection {
-                let sessions = ordered(g.sessions)
-                let idle = quick == .all ? sessions.filter { !stays($0) } : []
-                let showIdle = expandedIdle.contains(g.id) || !query.isEmpty
-                ForEach(quick == .all ? sessions.filter(stays) : sessions) { s in slotRow(s) }
-                if !idle.isEmpty {
-                    if showIdle {
-                        ForEach(idle) { s in slotRow(s) }
-                        if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: g.id) }
-                    } else {
-                        expandRow(idle, key: g.id)
-                    }
-                }
-            } header: {
-                spaceHeader(g, folded: false)
+            listSection(content: content) { header(false) }
+        }
+    }
+
+    /// The agents of a space or a working tree: busy (and pinned / looping) ones first, idle ones behind one 还有 N 个空闲
+    /// row (`key` remembers it open). `indent`: a level in, under a working tree's row.
+    @ViewBuilder private func agentRows(_ list: [Session], key: String, indent: Bool = false) -> some View {
+        let sessions = ordered(list)
+        let idle = quick == .all ? sessions.filter { !stays($0) } : []
+        ForEach(quick == .all ? sessions.filter(stays) : sessions) { s in slotRow(s, indent: indent) }
+        if !idle.isEmpty {
+            if expandedIdle.contains(key) || !query.isEmpty {
+                ForEach(idle) { s in slotRow(s, indent: indent) }
+                if query.isEmpty { collapseRow("收起空闲的 \(idle.count) 个", key: key, indent: indent) }
+            } else {
+                expandRow(idle, key: key, indent: indent)
             }
         }
     }
 
     /// A visible ⋯ for open / mark read / pin / mute: long press on a list section header does not reach a context menu.
-    private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool) -> some View {
+    private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool, namesMachine: Bool) -> some View {
         HStack(spacing: Theme.Space.xs) {
             Button { toggleFold(g.id) } label: {
-                SpaceHeader(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty,
+                SpaceHeader(group: g, machine: machine(g.machineRef), showMachine: namesMachine,
                             pinned: model.isPinned(g), muted: model.isMuted(g), folded: isFolded)
             }
             .buttonStyle(.plain)
@@ -865,16 +884,163 @@ private struct AgentsList: View {
                 SpaceHeaderMenu(group: g, rename: { renamingSpace = g }, open: { openFromList(SpaceRoute(id: g.id)) },
                                 linkTodo: { linkingSpace = g }).equatable()
             } label: {
-                Image(systemName: compact ? Theme.Icon.more : Theme.Icon.moreMenu)
-                    .font(compact ? CompactList.metaStrong : Theme.Font.body)
-                    .foregroundStyle(.secondary)
-                    .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
-                    .contentShape(.rect)
+                headerMenuLabel
             }
             // 细列表: as quiet as the counts beside it (a Menu's label takes the accent otherwise).
             .tint(compact ? Color.secondary : nil)
             .labelOnlyMenu()
             .accessibilityLabel("\(g.name) 的更多操作")
+        }
+    }
+
+    /// The ⋯ on a space's or a repository's header.
+    private var headerMenuLabel: some View {
+        Image(systemName: compact ? Theme.Icon.more : Theme.Icon.moreMenu)
+            .font(compact ? CompactList.metaStrong : Theme.Font.body)
+            .foregroundStyle(.secondary)
+            .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+            .contentShape(.rect)
+    }
+
+    /// The quiet spaces or repositories, one line each, opened in place: 空闲的空间 / 空闲的仓库.
+    @ViewBuilder private func quietSection(_ groups: [SpaceGroup], title: String, namesMachine: Bool, repos: Bool = false) -> some View {
+        if !groups.isEmpty {
+            listSection {
+                ForEach(groups) { g in
+                    if compact { compactQuietSpace(g, namesMachine: namesMachine, repo: repos) } else if capsules {
+                        quietSpaceCard(g, namesMachine: namesMachine, repo: repos)
+                    } else {
+                        DisclosureGroup(isExpanded: Binding(
+                            get: { expandedQuiet.contains(g.id) || !query.isEmpty },
+                            set: { if $0 { expandedQuiet.insert(g.id) } else { expandedQuiet.remove(g.id) } }
+                        )) {
+                            ForEach(g.sessions) { s in slotRow(s) }
+                        } label: {
+                            QuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: namesMachine, repo: repos)
+                        }
+                    }
+                }
+            } header: {
+                SectionHeader(title: title, count: groups.count, tone: StatusPalette.idle)
+            }
+        }
+    }
+
+    // MARK: By repository
+
+    /// The fold id of a machine where the list is split by machine: the same in 按仓库, 按项目 and 按机器.
+    private static func hostFoldID(_ ref: MachineRef) -> String { "machine/" + ref.path }
+
+    /// Nothing going on in it: every agent idle (none pinned, looping or with work in the background). Under a quick
+    /// filter nothing is quiet: every repository it leaves is listed.
+    private func isQuiet(_ r: RepoTree.Repo) -> Bool { quick == .all && r.sessions.allSatisfy { !stays($0) } }
+
+    /// 按仓库 (#2108): the machines when there is more than one, each machine's repositories by name with their working
+    /// trees in their card, as Orca's projects; repositories with nothing going on fold into the machine's 空闲的仓库.
+    @ViewBuilder private func repoSections(_ tree: [RepoTree.Host], byHost: Bool) -> some View {
+        ForEach(tree) { host in
+            if byHost { hostHeading(host.ref, sessions: host.sessions) }
+            if !byHost || !isFolded(Self.hostFoldID(host.ref)) {
+                ForEach(host.repos.filter { !isQuiet($0) }) { r in repoSection(r) }
+                quietSection(host.repos.filter(isQuiet).map { r in
+                    SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0,
+                               sessions: ordered(r.sessions))
+                }, title: "空闲的仓库", namesMachine: false, repos: true)
+            }
+        }
+    }
+
+    /// A machine's heading: a plain row on the page's edge, a level above the headers under it; tap to fold the machine.
+    private func hostHeading(_ ref: MachineRef, sessions: [Session]) -> some View {
+        let id = Self.hostFoldID(ref)
+        let m = machine(ref)
+        let group = SpaceGroup(id: id, machineID: ref.id, spaceID: "-", group: ref.group, name: m?.title ?? ref.id, index: 0, sessions: sessions)
+        return Section {
+            FoldButton(title: group.name, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
+                HostHeading(symbol: m?.symbol ?? Theme.Icon.machine, title: group.name, group: group)
+            }
+            .listRowInsets(EdgeInsets(top: Theme.Space.l, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page))
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .accessibilityIdentifier("agents.host")
+        }
+        .listSectionSpacing(.custom(0))
+    }
+
+    /// A repository: its agents right in its card when it has only its main checkout, else its working trees, each a
+    /// row with its agents a level in under it.
+    private func repoSection(_ r: RepoTree.Repo) -> some View {
+        foldableSection(r.id) { repoHeader(r, folded: $0) } content: {
+            if r.flat {
+                agentRows(r.worktrees[0].sessions, key: r.worktrees[0].id)
+            } else {
+                ForEach(r.worktrees) { w in worktreeRows(w) }
+            }
+        }
+    }
+
+    /// A repository's header: its name and counts; when its agents are all in one herdr space (the usual case), that
+    /// space's marks, todo and ⋯ (pin, mute, rename…) are the repository's.
+    private func repoHeader(_ r: RepoTree.Repo, folded isFolded: Bool) -> some View {
+        let spaces = SpaceGroup.build(r.sessions)
+        let space = spaces.count == 1 && spaces[0].spaceID != "-" ? spaces[0] : nil
+        let counts = SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0, sessions: r.sessions)
+        let unread = r.sessions.filter { $0.state == .unread }.map(\.key)
+        return HStack(spacing: Theme.Space.xs) {
+            Button { toggleFold(r.id) } label: {
+                SpaceHeader(group: counts, machine: nil, showMachine: false, pinned: space.map(model.isPinned) ?? false,
+                            muted: space.map(model.isMuted) ?? false, folded: isFolded, symbol: Theme.Icon.folder)
+            }
+            .buttonStyle(.plain)
+            if let space {
+                TodoSpaceTag(group: space) { todoID in openFromList(TodoDetailRoute(id: todoID)) }
+            }
+            if space != nil || !unread.isEmpty {
+                Menu {
+                    if let space {
+                        SpaceHeaderMenu(group: space, rename: { renamingSpace = space }, open: { openFromList(SpaceRoute(id: space.id)) },
+                                        linkTodo: { linkingSpace = space }).equatable()
+                    } else {
+                        RepoMenuItems(unread: unread).equatable()
+                    }
+                } label: {
+                    headerMenuLabel
+                }
+                .tint(compact ? Color.secondary : nil)
+                .labelOnlyMenu()
+                .accessibilityLabel("\(r.name) 的更多操作")
+            }
+        }
+    }
+
+    /// A working tree in its repository's card: its row (⌂ for the main checkout), then its agents a level in. One with
+    /// nothing going on starts folded, as a quiet space does; a busy one folds from its row, remembered.
+    @ViewBuilder private func worktreeRows(_ w: RepoTree.Worktree) -> some View {
+        let quiet = quick == .all && w.sessions.allSatisfy { !stays($0) }
+        let open = !query.isEmpty || (quiet ? expandedQuiet.contains(w.id) : !isFolded(w.id))
+        Button {
+            if quiet {
+                Haptics.tap()
+                withAnimation(Theme.Motion.standard) {
+                    if open { expandedQuiet.remove(w.id) } else { expandedQuiet.insert(w.id) }
+                }
+            } else {
+                toggleFold(w.id)
+            }
+        } label: {
+            WorktreeRow(name: w.name, main: w.main, count: w.sessions.count, quiet: quiet, open: open)
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.worktreeCapsuleInsets : nil)
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
+        .accessibilityIdentifier("agents.worktree")
+        if open {
+            if quiet {
+                ForEach(ordered(w.sessions)) { s in slotRow(s, indent: true) }
+            } else {
+                agentRows(w.sessions, key: w.id, indent: true)
+            }
         }
     }
 
@@ -1010,44 +1176,60 @@ private struct AgentsList: View {
     }
 
     /// 还有 N 个空闲: the idle agents behind one row.
-    private func expandRow(_ rows: [Session], key: String) -> some View {
+    private func expandRow(_ rows: [Session], key: String, indent: Bool = false) -> some View {
         Button {
             Haptics.tap()
             withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
         } label: {
-            if compact { CompactFoldRow(sessions: rows) } else { IdleFoldRow(sessions: rows) }
+            Group { if compact { CompactFoldRow(sessions: rows) } else { IdleFoldRow(sessions: rows) } }
+                .padding(.leading, nested(indent))
         }
         .buttonStyle(.plain)
-        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
+        .listRowInsets(rowInsets(indent: indent))
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
-    private func collapseRow(_ title: String, key: String) -> some View {
+    private func collapseRow(_ title: String, key: String, indent: Bool = false) -> some View {
         Button {
             withAnimation(Theme.Motion.standard) { _ = expandedIdle.remove(key) }
         } label: {
-            if compact {
-                CompactCollapseRow(title: title)
-            } else {
-                Label(title, systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
+            Group {
+                if compact {
+                    CompactCollapseRow(title: title)
+                } else {
+                    Label(title, systemImage: Theme.Icon.collapse).font(Theme.Font.secondaryMedium).lineLimit(1)
+                }
             }
+            .padding(.leading, nested(indent))
         }
-        .listRowInsets(compact ? CompactList.rowInsets : capsules ? Self.capsuleInsets : nil)
+        .listRowInsets(rowInsets(indent: indent))
         .listRowBackground(capsules ? Color.clear : nil)
         .listRowSeparator(capsules ? .hidden : .automatic)
     }
 
+    /// A row's edges in 细列表 and the capsules; `indent`: a level in, under a working tree (按仓库). Nil: the grouped
+    /// list's own, the row's content moved in instead (`nested`).
+    private func rowInsets(indent: Bool) -> EdgeInsets? {
+        if compact { return indent ? CompactList.nestedRowInsets : CompactList.rowInsets }
+        if capsules { return indent ? Self.nestedCapsuleInsets : Self.capsuleInsets }
+        return nil
+    }
+
+    /// How far a row's content moves in under a working tree in the grouped list (its row keeps the list's insets, so
+    /// its line starts where its text does).
+    private func nested(_ indent: Bool) -> CGFloat { indent && !compact && !capsules ? Theme.Space.l : 0 }
+
     /// 细列表: a quiet space as one row like an agent's, its agents under it when opened (a DisclosureGroup's own row
     /// is taller and its arrow heavier than everything else in the list).
-    @ViewBuilder private func compactQuietSpace(_ g: SpaceGroup) -> some View {
+    @ViewBuilder private func compactQuietSpace(_ g: SpaceGroup, namesMachine: Bool, repo: Bool) -> some View {
         let open = expandedQuiet.contains(g.id) || !query.isEmpty
         Button {
             withAnimation(Theme.Motion.standard) {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            CompactQuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty, expanded: open)
+            CompactQuietSpaceRow(group: g, machine: machine(g.machineRef), showMachine: namesMachine, expanded: open, repo: repo)
         }
         .buttonStyle(.plain)
         .listRowInsets(CompactList.rowInsets)
@@ -1070,6 +1252,12 @@ private struct AgentsList: View {
 
     /// A capsule's room: the page's edges, a little air above and below.
     private static let capsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: Theme.Space.xs, trailing: Theme.Space.page)
+    /// A capsule a level in, under a working tree's row: as far in as a quiet space's opened card sets its agents.
+    private static let nestedCapsuleInsets = EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page + Theme.Space.l, bottom: Theme.Space.xs,
+                                                        trailing: Theme.Space.page)
+    /// A working tree's row among the capsules: a line of text on the page, over its agents' capsules.
+    private static let worktreeCapsuleInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.page, bottom: Theme.Space.xxs,
+                                                          trailing: Theme.Space.page)
 
     /// A section. The capsules are a plain list (every row sets its own edges, all on `Theme.Space.page`): its title is
     /// its first row on the page's edge (a plain list's headers stick to the top, and a grouped list pads its first
@@ -1093,14 +1281,14 @@ private struct AgentsList: View {
     }
 
     /// The capsules: a quiet space is one card, its title on top and, opened, its agents under it, set in a level.
-    @ViewBuilder private func quietSpaceCard(_ g: SpaceGroup) -> some View {
+    @ViewBuilder private func quietSpaceCard(_ g: SpaceGroup, namesMachine: Bool, repo: Bool) -> some View {
         let open = expandedQuiet.contains(g.id) || !query.isEmpty
         Button {
             withAnimation(Theme.Motion.standard) {
                 if open { expandedQuiet.remove(g.id) } else { expandedQuiet.insert(g.id) }
             }
         } label: {
-            QuietSpaceCardHead(group: g, machine: machine(g.machineRef), showMachine: machineFilter.isEmpty, open: open)
+            QuietSpaceCardHead(group: g, machine: machine(g.machineRef), showMachine: namesMachine, open: open, repo: repo)
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: Theme.Space.xs, leading: Theme.Space.page, bottom: open ? 0 : Theme.Space.xs, trailing: Theme.Space.page))
@@ -1114,7 +1302,9 @@ private struct AgentsList: View {
 
     /// `context`: also name the space (and machine) — when the list is not grouped by space.
     /// `cardLast`: a row of a quiet space's card (`quietSpaceCard`), and whether it ends the card.
-    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil, showHost: Bool = false) -> some View {
+    /// `indent`: a level in, under a working tree's row (按仓库).
+    private func slotRow(_ s: Session, context: Bool = false, inStateSection: Bool = false, cardLast: Bool? = nil,
+                         showHost: Bool = false, indent: Bool = false) -> some View {
         Group {
             if searching {
                 // A search result is a button, not a link: a link pushed at once, the push was refused (the search has
@@ -1122,6 +1312,7 @@ private struct AgentsList: View {
                 Button { openFromSearch(s.key) } label: {
                     HStack(spacing: Theme.Space.s) {
                         slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
+                            .padding(.leading, nested(indent))
                         // 胶囊 draws its own chevron; 列表 and Persona' own rows get the one a link would show.
                         if !capsules { Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary) }
                     }
@@ -1129,7 +1320,10 @@ private struct AgentsList: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                NavigationLink(value: s.key) { slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost) }
+                NavigationLink(value: s.key) {
+                    slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
+                        .padding(.leading, nested(indent))
+                }
             }
         }
             .accessibilityIdentifier(compact ? "agents.compactRow" : "agents.row")
@@ -1138,10 +1332,9 @@ private struct AgentsList: View {
             .navigationLinkIndicatorVisibility(capsules ? .hidden : .automatic)
             .listRowBackground(capsules ? Color.clear : nil)
             .listRowSeparator(capsules ? .hidden : .automatic)
-            .listRowInsets(compact ? CompactList.rowInsets
-                           : capsules ? cardLast.map { EdgeInsets(top: 0, leading: Theme.Space.page, bottom: $0 ? Theme.Space.xs : 0, trailing: Theme.Space.page) }
-                               ?? Self.capsuleInsets
-                           : nil) // a card's rows touch (the card is one surface); capsules keep a little air between them
+            .listRowInsets(capsules ? cardLast.map { EdgeInsets(top: 0, leading: Theme.Space.page, bottom: $0 ? Theme.Space.xs : 0, trailing: Theme.Space.page) }
+                               ?? rowInsets(indent: indent)
+                           : rowInsets(indent: indent)) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
                 if s.state.isLive && s.canTerminal {
                     Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
@@ -1651,6 +1844,8 @@ struct SpaceHeader: View {
     /// Muted with agents running: quieter than the busy spaces, not fainter than the idle ones.
     var muted = false
     var folded = false
+    /// A mark before the name: a repository's folder (按仓库).
+    var symbol: String? = nil
     @Environment(\.compactList) private var compact
 
     var body: some View {
@@ -1658,6 +1853,10 @@ struct SpaceHeader: View {
         let _ = PerfTrace.body("SpaceHeader")
         #endif
         HStack(spacing: Theme.Space.s) {
+            // 细列表's titles are big enough to tell a repository from a space: no mark (it cut a short name, "weat…").
+            if let symbol, !compact {
+                Image(systemName: symbol).font(Theme.Font.label).foregroundStyle(Color.secondary)
+            }
             if compact {
                 // 细列表: the space is the title over its rows (Color.primary: a header dims `.primary` a level).
                 Text(group.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
@@ -1980,14 +2179,16 @@ struct QuietSpaceRow: View {
     var group: SpaceGroup
     var machine: Machine?
     var showMachine: Bool
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
-            Image(systemName: Theme.Icon.space).foregroundStyle(.secondary)
+            Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个标签",
+                Text([showMachine ? machine?.title : nil, "\(group.sessions.count) 个" + (repo ? " Agent" : "标签"),
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -2024,16 +2225,18 @@ struct QuietSpaceCardHead: View {
     var machine: Machine?
     var showMachine: Bool
     var open: Bool
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
-                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个标签",
+                         subtitle: [showMachine ? machine?.title : nil, "\(group.sessions.count) 个" + (repo ? " Agent" : "标签"),
                                     group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                          status: .pending(step: 0)),
                 shape: .list(first: true, last: !open), accessory: .none, titleLines: 1, subtitleLines: 1) {
-            Image(systemName: Theme.Icon.space).font(Theme.Font.body).foregroundStyle(.secondary)
+            Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space).font(Theme.Font.body).foregroundStyle(.secondary)
                 .scaledFrame(width: Theme.Size.icon)
         } trailing: {
             HStack(spacing: Theme.Space.s) {

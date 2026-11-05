@@ -284,6 +284,10 @@ Agents 左上角菜单（按机器分组、按机器筛选、全部机器）、�
   按状态分组、卡片对照，每种三档字号（`-ui.textSize small|standard|large`；`TEST_RUNNER_JARVIS_TEXT_SIZES=standard` 只拍一档）。
   `TEST_RUNNER_JARVIS_SHOTS=<目录> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/CompactListShots`，深色再跑一遍。
   改前 / 改后对比：在 `git worktree add --detach <目录> origin/master` 里放进同一个测试文件拍改前，两边同一份数据。
+- 按电脑分段（#2108，`AgentsByMachineTests`）：默认的 mock（`TEST_RUNNER_JARVIS_MOCK_HUB`，三台电脑），查默认的按仓库和按项目都先按电脑分段、电脑按 hub 的顺序、
+  分组标题不再写电脑名、点电脑标题折叠整台电脑、选了机器筛选就没有电脑标题。仓库和工作树的推断规则在单元测试 `AgentRepoTreeTests`。
+  截图看工作树那一层用 `MOCK_WORKTREES=1` 启动 mock：weather 的小组件 Agent 在 `.worktrees/widget` 里（旁边一个空闲的），
+  `.claude/worktrees/fix-crash` 里一个空闲的，MacBook 上另有一个全空闲的仓库 notes。按仓库、按项目各拍深浅色，三种画法（默认、`-ui.style beautiful`、细列表）都看。
   带 `-openWelcome YES` 是为了去掉别的测试留下的配对（Keychain 里的 hub 优先于体验模式），`-demo.on YES` 让它直接进体验模式。
   所有 `launchJarvis()` / `launchPinned()` 的启动都一样：带 `-demo.on YES`、没带 `-pairURL` 时自动加 `-openWelcome YES`，不会接着用前面测试配对的 mock。
 

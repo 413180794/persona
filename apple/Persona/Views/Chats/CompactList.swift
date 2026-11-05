@@ -20,6 +20,8 @@ enum CompactList {
     static let gap = Theme.Space.s
     /// Every row: the same height whatever it holds.
     static let rowInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l, bottom: Theme.Space.s, trailing: Theme.Space.m)
+    /// A row a level in, under a working tree's row (按仓库).
+    static let nestedRowInsets = EdgeInsets(top: Theme.Space.s, leading: Theme.Space.l + Theme.Space.l, bottom: Theme.Space.s, trailing: Theme.Space.m)
 }
 
 extension EnvironmentValues {
@@ -77,18 +79,20 @@ struct CompactQuietSpaceRow: View {
     var machine: Machine?
     var showMachine: Bool
     var expanded: Bool
+    /// A repository (按仓库's 空闲的仓库), not a space: its folder, and its agents counted rather than its tabs.
+    var repo = false
     @Environment(AgentsFeed.self) private var feed: AgentsFeed?
 
     var body: some View {
         let at = Fmt.relative(group.updatedAt(feed))
         HStack(spacing: CompactList.gap) {
-            Image(systemName: Theme.Icon.space)
+            Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space)
                 .font(CompactList.meta)
                 .foregroundStyle(.secondary)
                 .scaledFrame(width: CompactList.mark)
             HStack(alignment: .firstTextBaseline, spacing: CompactList.gap) {
                 Text(group.name).font(CompactList.title).lineLimit(1).layoutPriority(1)
-                Text([showMachine ? machine?.name : nil, "\(group.sessions.count) 个标签"].compactMap { $0 }.joined(separator: " · "))
+                Text([showMachine ? machine?.name : nil, count].compactMap { $0 }.joined(separator: " · "))
                     .font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: Theme.Space.xs)
@@ -99,9 +103,11 @@ struct CompactQuietSpaceRow: View {
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([group.name, expanded ? "已展开" : "已折叠", showMachine ? machine?.name ?? "" : "",
-                             "\(group.sessions.count) 个标签", at].filter { !$0.isEmpty }.joined(separator: "，"))
+                             count, at].filter { !$0.isEmpty }.joined(separator: "，"))
         .accessibilityAddTraits(.isButton)
     }
+
+    private var count: String { "\(group.sessions.count) 个" + (repo ? " Agent" : "标签") }
 }
 
 /// 细列表: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in

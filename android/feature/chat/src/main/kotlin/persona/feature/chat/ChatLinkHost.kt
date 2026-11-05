@@ -85,7 +85,10 @@ fun ChatLinkHost(
                         machine != null && port != null -> scope.launch {
                             runCatching { machine.opener.open(machine.machineId, port.port, port.path, port.secure, port.port in machine.listed) }
                                 .onSuccess { local -> pool.forget(local); url = local; forwarded = "${machine.name} :${port.port}"; opening++ }
-                                .onFailure { error -> if (error !is kotlinx.coroutines.CancellationException) feedback?.notice(error.message ?: "打不开端口 :${port.port}") }
+                                .onFailure { error ->
+                                    if (error is persona.core.contracts.api.PortGone) machine.presence?.noteGone(port.port)
+                                    if (error !is kotlinx.coroutines.CancellationException) feedback?.notice(error.message ?: "打不开端口 :${port.port}")
+                                }
                         }
                         else -> { url = target; forwarded = null; opening++ }
                     }
@@ -280,12 +283,15 @@ fun ChatLinkHost(
  * The machine a conversation runs on, for its port links (docs/ports.md「识别回答里的链接」): its id and name, the names
  * it goes by in links, the ports its agents list (the hub allows those without asking), and how to open one.
  */
-data class ChatPorts(
+internal data class ChatPorts(
     val machineId: String,
     val name: String,
     val hostnames: List<String>,
-    val listed: Set<Int>,
+    /** The ports its agents list, with their pages' titles. */
+    val listed: Map<Int, String?>,
     val opener: persona.core.contracts.api.PortOpener,
+    /** What the other ports' badges know (null where nothing asks, e.g. a preview). */
+    val presence: PortPresence? = null,
 )
 
-val LocalChatPorts = androidx.compose.runtime.compositionLocalOf<ChatPorts?> { null }
+internal val LocalChatPorts = androidx.compose.runtime.compositionLocalOf<ChatPorts?> { null }

@@ -7,7 +7,13 @@ package persona.core.contracts.api
 interface PortOpener {
     /** [listed]: an agent on the machine lists the port, so the hub already allows it. */
     suspend fun open(machineId: String, port: Int, path: String, secure: Boolean, listed: Boolean): String
+
+    /** `GET …/ports/{port}`: whether something listens there, and its page's title; nothing is opened. */
+    suspend fun probe(machineId: String, port: Int): PortProbe = throw UnsupportedOperationException("probe")
 }
+
+/** What the hub says of a machine's port (`portProbe`). */
+data class PortProbe(val listening: Boolean, val title: String? = null)
 
 /** Nothing listens on the port any more (the hub's `…/open` is 404): said in words, the link stays as it is. */
 class PortGone(val port: Int) : Exception("端口 :$port 已经没有在监听")

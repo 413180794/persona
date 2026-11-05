@@ -38,7 +38,7 @@ enum MacViewCommands {
 struct MacViewMenu: Commands {
     let model: AppModel
     // The same settings as the Agents list's ⋯ menu (AgentsListMenu).
-    @StoredValue("dev.grouping") private var grouping: DevGrouping = .todo
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .standard
     @StoredValue("dev.compact") private var compact = false
     @StoredValue(MacSection.sidebarHiddenKey) private var sidebarHidden = false
 

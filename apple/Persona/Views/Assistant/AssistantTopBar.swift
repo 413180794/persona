@@ -287,7 +287,7 @@ struct AssistantTopBar: View {
                 Button {
                     withAnimation(Theme.Motion.standard) { model.assistantCurrent = main }
                     Haptics.tap()
-                } label: { Label("回到主对话", systemImage: "house") }
+                } label: { Label("回到主对话", systemImage: Theme.Icon.home) }
             }
         }
         Section {

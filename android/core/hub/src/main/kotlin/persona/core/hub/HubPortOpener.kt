@@ -4,6 +4,11 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import persona.core.contracts.api.PortGone
 import persona.core.contracts.api.PortOpener
+import persona.core.contracts.api.PortProbe
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /** [PortOpener] on the active pairing: `…/open` through [connection], the bytes through [forwarder]. */
 class HubPortOpener(
@@ -25,6 +30,12 @@ class HubPortOpener(
         val local = forwarder.localPort(PortForwarder.Key(machineId, port))
         return "${if (secure) "https" else "http"}://localhost:$local$path"
     }
+
+    override suspend fun probe(machineId: String, port: Int): PortProbe =
+        connection.request("/api/v1/machines/${encode(machineId)}/ports/$port").use { response ->
+            val o = persona.core.contracts.JsonCodec.parseToJsonElement(response.body?.string().orEmpty()).jsonObject
+            PortProbe(o["listening"]?.jsonPrimitive?.booleanOrNull == true, o["title"]?.jsonPrimitive?.contentOrNull?.takeIf(String::isNotBlank))
+        }
 
     private fun encode(segment: String) = java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
 

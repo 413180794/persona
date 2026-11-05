@@ -802,7 +802,8 @@ MOCK_LINK_SCHEMES=1 MOCK_LINKS=1 PORT=<端口> python3 scripts/mock/mock_hub.py
 - 转发（`core/hub/PortForwarder`）：在手机 127.0.0.1 上绑同一个端口号，被占就随机一个，再在 ::1 绑同一个号；只绑回环。每条连接一个 `…/ports/{port}/connect` 的 WebSocket（设备 token、配对钉住的证书，跟当前线路走），从 hub 来的字节在读线程上直接写给浏览器，往 hub 发的排队超过 512 KB 就先不读浏览器，两边都不在内存里堆。多 hub 时按会话所在的组转（`PortOpener.inGroup`）。
 - 端口链接不预加载；端口页不走磁盘缓存，再打开时重新加载（地址每次一样，dev server 已经变了，iOS #1934）。
 - 会话顶部的端口条（`ChatPortChips.kt`，iOS `SessionPortChips`）：Agent 对话的标签条下面一行，`Session.ports` 每个端口一枚 `PathChip`（地球图标、「:端口 页面标题」），点了和点链接一样经转发打开；没有端口、Persona 的对话、不能打开端口时不显示。
-- 还没有：回复和 Bash 输出下面的端口 Badge（变灰）→ #2144 第三步；https 的 dev server（系统 CA 不认自签证书）。
+- 回复和 Bash 输出下面的端口 Badge（`PortBadges`，iOS `PortChips`）：Agent 回复和 Bash 的输出里认出的端口链接，每个一枚「:端口/路径 页面标题」，点了经转发打开。不在 Agent `ports` 里的端口出现时问一次 `GET …/ports/{port}`（`PortPresence`：记 1 分钟，没在听的记 30 秒；问不到就不标），没在听的 Badge 变淡、写「已停止」，打开时 hub 说 404 也会把它标成停止。
+- 还没有：https 的 dev server（系统 CA 不认自签证书）。
 
 ## 机器、引擎、模型配置与新建 Agent
 

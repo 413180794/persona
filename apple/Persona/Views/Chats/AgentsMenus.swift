@@ -54,7 +54,7 @@ struct AgentsListMenu: View {
 
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     @StoredValue(HubFilter.key) private var hubFilter = ""
-    @StoredValue("dev.grouping") private var grouping: DevGrouping = .todo
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .standard
     /// The grouping the list shows: a stored 按待办 is 按项目 on a hub without todos (`DevGrouping.resolved`).
     private var shownGrouping: DevGrouping { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) }
     private var groupingChoice: Binding<DevGrouping> { Binding(get: { shownGrouping }, set: { grouping = $0 }) }
@@ -137,7 +137,7 @@ struct AgentsListMenu: View {
                 .font(Theme.Font.secondaryStrong)
                 .fixedSize()
             } else {
-                Image(systemName: shownGrouping == .space ? "line.3.horizontal.decrease" : shownGrouping.symbol)
+                Image(systemName: shownGrouping == .standard ? "line.3.horizontal.decrease" : shownGrouping.symbol)
             }
     }
 }

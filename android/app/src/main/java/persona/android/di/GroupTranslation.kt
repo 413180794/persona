@@ -293,6 +293,7 @@ internal fun PortOpener.inGroup(names: GroupNames): PortOpener {
     return object : PortOpener {
         override suspend fun open(machineId: String, port: Int, path: String, secure: Boolean, listed: Boolean) =
             source.open(names.rawMachine(machineId), port, path, secure, listed)
+        override suspend fun probe(machineId: String, port: Int) = source.probe(names.rawMachine(machineId), port)
     }
 }
 

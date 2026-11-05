@@ -199,6 +199,9 @@ extension Theme {
         /// A 公司圈 (Feishu Moments) post in the inbox: the company's public feed.
         static let moments = "rectangle.3.group.bubble"
         static let folder = "folder"
+        /// Home: 回到主对话 (the main conversation), and a repository's main checkout in the Agents list's 按仓库 (as Orca
+        /// and the web mark it).
+        static let home = "house"
         static let folderFilled = "folder.fill"
         static let photo = "photo"
         static let photos = "photo.on.rectangle"

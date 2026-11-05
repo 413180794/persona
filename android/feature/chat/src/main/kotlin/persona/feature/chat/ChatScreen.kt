@@ -428,10 +428,16 @@ private fun ChatPage(
         session != null && candidate.key != key && SessionRuntimeState.map(session, listOf(candidate), true).replaced
     } else null
     // The machine this conversation runs on, for its port links (docs/ports.md「识别回答里的链接」).
-    val chatPorts = remember(chrome.ports, machine, sessionList, key.machineId) {
+    val portPresence = remember(chrome.ports, key.machineId) {
+        chrome.ports?.let { opener -> PortPresence(scope, { port -> opener.probe(key.machineId, port).let { it.listening to it.title } }) }
+    }
+    val chatPorts = remember(chrome.ports, machine, sessionList, key.machineId, portPresence) {
         chrome.ports?.let { opener ->
+            val listed = LinkedHashMap<Int, String?>()
+            sessionList.filter { it.machineId == key.machineId }.flatMap { it.ports.orEmpty() }
+                .forEach { p -> if (p.port !in listed || listed[p.port] == null) listed[p.port] = p.title?.takeIf(String::isNotBlank) }
             ChatPorts(key.machineId, machine?.displayName ?: key.machineId, listOfNotNull(machine?.hostname?.takeIf(String::isNotBlank)),
-                sessionList.filter { it.machineId == key.machineId }.flatMap { it.ports.orEmpty() }.map { it.port }.toSet(), opener)
+                listed, opener, portPresence)
         }
     }
     CompositionLocalProvider(LocalChatMarkdownCache provides markdownCache, LocalChatRowActions provides rowActions,

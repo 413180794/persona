@@ -429,6 +429,20 @@ if os.environ.get("MOCK_STALE_DONE") == "1":
     for _s in SESSIONS:
         if _s["session_id"] == WIDGET: _s.update(status="done", state="idle")
 
+# MOCK_WORKTREES=1 (#2108): the widget agent works in a working tree of weather's own, with an idle agent beside it; an
+# idle one in a second tree; and MacBook has a repository with nothing going on: every level of the Agents list's 按仓库.
+if os.environ.get("MOCK_WORKTREES") == "1":
+    for _s in SESSIONS:
+        if _s["session_id"] == WIDGET: _s.update(cwd="/Users/me/code/weather/.worktrees/widget")
+    SESSIONS += [
+        sess("macbook", "a1f3c2d4-0000-4000-8000-0000000000c1", "初步调研 WidgetKit API", "/Users/me/code/weather/.worktrees/widget",
+             "idle", "idle", "weather", 1, "research", 5, 60, "WidgetKit 的时间线和刷新预算整理好了。", seen_at=ago(minutes=50)),
+        sess("macbook", "a1f3c2d4-0000-4000-8000-0000000000c2", "修小组件横屏崩溃", "/Users/me/code/weather/.claude/worktrees/fix-crash",
+             "idle", "idle", "weather", 1, "crash", 6, 180, "横屏时小组件不再崩溃，补了一条快照测试。", seen_at=ago(minutes=170)),
+        sess("macbook", "a1f3c2d4-0000-4000-8000-0000000000c3", "整理读书笔记", "/Users/me/code/notes",
+             "idle", "idle", "notes", 4, "1", 1, 60 * 48, "按主题整理好了，每本书一页。", seen_at=ago(days=2)),
+    ]
+
 
 # MOCK_MACHINES=1: the machine pages' edge cases (MachinePagesTests): a fourth machine that is offline with an ssh
 # error (POST …/reconnect brings it back), and Mac Studio with many agents across several projects.

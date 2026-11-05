@@ -44,6 +44,7 @@ internal fun MessageContent(item: Item, user: Boolean, update: ChatTextUpdate? =
         if (cut) FullTextButton(item) { whole = it } else ReaderEntry(text)
         if (update?.streaming == true) StreamingCursor()
         FileChips(model.files, alignEnd = user)
+        if (!user) PortBadges(text)
     }
 }
 

@@ -295,6 +295,8 @@ private fun WorkStep(step: WorkItem, session: SessionKey, loader: ImageLoader, o
                     } else if (todos == null) ToolInputDetail(call.use.item)
                     // A truncated output opens in full from 原始输出 below. An edit's own result only says it worked.
                     call.result?.item?.let { result -> if (todos == null && (diff == null || call.failed)) CodeText(result.text.orEmpty(), "输出") }
+                    // A dev server saying where it listens (docs/ports.md).
+                    if (call.name == "Bash") call.result?.text?.let { PortBadges(it) }
                     call.images.forEach { ChatPicture(session, it.item, loader) }
                     ToolReaderActions(call.use.item.toolInput?.toString(), call.result?.text,
                         call.result?.item?.takeIf { it.fullSize != null }?.let { result -> { onFullText(result) } })

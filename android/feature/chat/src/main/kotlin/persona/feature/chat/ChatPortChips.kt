@@ -3,12 +3,19 @@ package persona.feature.chat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import persona.core.contracts.ListeningPort
+import persona.core.domain.ports.PortLink
+import persona.core.domain.ports.PortLinks
 import persona.core.designsystem.PathChip
 import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
@@ -41,3 +48,45 @@ internal fun ChatPortChips(ports: List<ListeningPort>?) {
         }
     }
 }
+
+/** A link's badge text: `:5173`, with the path when it has one (`:8000/docs`, cut past 24), and what is known of it. */
+internal fun portBadgeLabel(link: PortLink, state: PortPresence.State?): String {
+    val path = link.path.takeIf { it != "/" }.orEmpty().let { if (it.length > 24) it.take(23) + "…" else it }
+    val detail = when (state) {
+        is PortPresence.State.Live -> state.title?.takeIf(String::isNotBlank)
+        PortPresence.State.Gone -> "已停止"
+        null -> null
+    }
+    return ":${link.port}$path" + (detail?.let { " $it" } ?: "")
+}
+
+/**
+ * Badges for a message's links to ports of its machine (docs/ports.md, iOS `PortChips`): under an agent's reply and
+ * under a Bash command's output (a dev server saying where it listens). Each is the port, its path and its page's
+ * title, gray once nothing listens there; a tap opens it through the hub as the link would.
+ */
+@Composable
+internal fun PortBadges(text: String) {
+    val ports = LocalChatPorts.current ?: return
+    val links = remember(text, ports.hostnames) { PortLinks.find(text, ports.hostnames) }
+    if (links.isEmpty()) return
+    val presence = ports.presence
+    if (presence != null) LaunchedEffect(presence, links, ports.listed) { presence.ask(links.map { it.port }.distinct(), ports.listed) }
+    val open = LocalUriHandler.current
+    Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.xs).horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
+        links.forEach { link ->
+            val state = presence?.state(link.port, ports.listed) ?: ports.listed[link.port]?.let { PortPresence.State.Live(it) }
+            val gone = state == PortPresence.State.Gone
+            PathChip(portBadgeLabel(link, state), PhIcons.GlobeSimple,
+                onClick = { open.openUri("${if (link.secure) "https" else "http"}://localhost:${link.port}${link.path}") },
+                modifier = Modifier.alpha(if (gone) GONE_ALPHA else 1f).semantics {
+                    contentDescription = "端口 ${link.port}" + if (gone) "，已经没有在监听" else ""
+                },
+                onClickLabel = "在 App 里打开这个页面")
+        }
+    }
+}
+
+/** A port nothing listens on any more: its badge stays, dimmed (iOS `LinkBadge(dimmed:)`). */
+private const val GONE_ALPHA = 0.45f

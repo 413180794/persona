@@ -21,7 +21,7 @@
 - `NavigationSplitView` 三栏：**侧边栏**（来源）→ **列表** → **详情**。侧边栏可收起（⌃⌘S），列表栏宽度可拖、记住。
 - 侧边栏（`List(selection:)`，`.sidebar` 样式）分组：
   - **Persona**：主对话 + 置顶的对话；「全部对话」进列表栏看按天分组的历史。
-  - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。分组菜单支持「按待办」，没选过时默认按待办（和 iOS 同一套，#1836）。
+  - **Agents**：全部 / 需要你 / 未读 / 工作中（带数量，需要你是红色角标）；下面是置顶的空间和各台机器（点机器 = 按机器筛）。分组菜单支持「按仓库」「按待办」，没选过时默认按仓库（和 iOS 同一套，#2108）。
   - **待办**：待办列表（左侧）与详情（右侧，⌘7 打开；旧 hub 上不显示），带未完成数量角标；新建待办、完成/重新打开、删除、交给 Agent。
   - **收件箱**：全部 / 飞书 / 各个邮箱 / @我 / 私聊 / 群聊 / 邮件 / Agent。
   - **知识库**：项目 / 会话 / 人 / 文档 / 会议 / 日程。
@@ -40,7 +40,7 @@
 | --- | --- |
 | 文件 | 新建 Agent 对话 ⌘N、新建 Persona 对话 ⇧⌘N、在新窗口打开 ⌥⏎ / ⌘⏎（列表里）、关闭窗口 ⌘W、交给 Persona ⌘J |
 | 编辑 | 系统的拷贝 / 粘贴 / 全选 / 查找、查找下一个 ⌘G / 上一个 ⇧⌘G；拷贝会话 ID、拷贝恢复命令 |
-| 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（项目 / 状态 / 机器 / 按待办）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
+| 显示 | 刷新 ⌘R、显示 / 隐藏侧边栏 ⌃⌘S、显示 Inspector ⌥⌘I、紧凑列表、分组方式（仓库 / 项目 / 状态 / 机器 / 按待办，默认按仓库）、全部折叠 / 展开、字号放大缩小 ⌘+ ⌘- ⌘0 |
 | Agent | 发送 ⏎（输入框里，⇧⏎ 换行）、中断 ⌘.、批准当前待处理 ⇧⌘⏎、拒绝 ⇧⌘⌫、回答选项 ⌥⌘1–9、重命名、屏蔽、置顶、标为已读、清空上下文、关闭 Agent… |
 | 前往 | Persona ⌘1 … 机器 ⌘5、设置 ⌘6、待办 ⌘7（侧边栏获焦时）、上一个 / 下一个 Agent ⌘[ ⌘]、下一个需要你的 ⌃⌘N、快速打开 ⌘K、回到最新 ⌘↓ |
 | 窗口 | 系统的；每个对话可以单独开窗口（`WindowGroup(for: SessionKey.self)`），终端也可以单独开窗口 |
@@ -451,7 +451,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 （文件查看器的「完成」占着 Esc，不先接就会关掉整个 sheet），拼音组字时让给输入法。截图：`-openFilePath <路径> -macFileFind <查询>`（体验模式的 hub 在 Mac 上给一个编造的 Swift 文件）。
 查找下一个 ⌘G / 查找上一个 ⇧⌘G（2026-11-01，`MacFind.findNext`，`CodeFindNextTests`、`MacFindTests`、`MacMenuShortcutTests`）跟着 ⌘F 走：带查找栏的文本视图（diff、输出）跳它的匹配，
 代码查看器跳自己的查找栏，查找栏关着时用上次的词重新打开。没做：区分大小写 / 整词 / 正则、行内部分选择；每次输入在主线程上重搜整个文件，10 万行的文件没量过。真按键没试过（锁屏）。
-显示 › 紧凑列表、分组方式（按项目 / 状态 / 机器 / 按待办）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
+显示 › 紧凑列表、分组方式（按仓库 / 按项目 / 状态 / 机器 / 按待办）、全部折叠 / 全部展开：和 Agents 列表左上 ⋯ 菜单是同一组设置（`dev.compact`、`dev.grouping`、折叠由列表登记的 `AgentsListMenu.Actions` 做）。
 会话信息在 Mac 上是对话右侧的一栏（Agent › 显示会话信息 ⌥⌘I，或点标题；`apple/Mac/Chat/MacInspector.swift`），宽度可拖、记在 `mac.inspector.width`，
 窗口太窄时盖在对话上。没用 SwiftUI 的 `.inspector`：放在 Agents 分栏的详情页里整栏是空的；`SessionInfoSheet` 在 Mac 上也不再包 NavigationStack（会接管详情栏的导航、对话页消失）。
 回到最新 ⌘↓ 是对话页右下角 ↓ 按钮的快捷键（悬停提示同），只在往上翻过、按钮出现时有效；其余时候 ⌘↓ 还是输入框的「移到末尾」。
@@ -634,7 +634,7 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
 - [x] Always-visible search; quick filters 全部/需要你/未读/工作中 with counts; snapshot (`kept`) semantics — Views/Chats/ChatsView.swift (QuickFilterBar, AgentsList)
   - Mac（2026-11-01 核对）：原来那块空白是离屏截图的问题（列表栏浮在玻璃容器里，`cacheDisplay` 跳过了它，`0af14af` 已修），浅色截图里搜索框和 全部 / 需要你 2 / 未读 11 / 工作中 5 都在。
   - Mac（2026-11-02 Mac mini 真窗口核对）：深色（`-macAppearance dark`）真窗口里工具栏搜索框有放大镜和占位文字「搜索空间、标签、会话、内容」，离屏那块白色空胶囊是截图的问题；点「需要你 2」后列表只剩两个需要你的 Agent。
-- [x] Grouping menu: 按项目 / 按状态 / 按机器 (`DevGrouping`, remembered); one rank order — ChatsView.swift, Views/Chats/AgentListOrder.swift, Views/Chats/AgentsMenus.swift (AgentsListMenu)
+- [x] Grouping menu: 按仓库（默认，#2108）/ 按项目 / 按状态 / 按机器 (`DevGrouping`, remembered); one rank order — ChatsView.swift, Views/Chats/AgentListOrder.swift, Views/Chats/AgentRepoTree.swift, Views/Chats/AgentsMenus.swift (AgentsListMenu)
   - Mac（2026-11-01 核对）截图：按项目、按状态（需要你 / 完成未看）、按机器三种都看过，记住的 `dev.grouping` 生效；显示 › 分组方式 是同一个设置。
 - [x] Card vs compact list (`dev.compact`); compact rows on one scale — ChatsView.swift (SessionRow), Views/Chats/CompactList.swift
   - Mac（2026-11-01 核对）截图（`-dev.compact YES`）：一行一条、同一个比例，有「还有 N 个空闲」；卡片模式见默认截图。显示 › 紧凑列表 是同一个设置。
