@@ -1,0 +1,236 @@
+// The popover of the composer's 思考 chip on a Claude Code session (issue #2434, after Moshi's model pill): effort tabs on
+// top, the agent's model list below. ↑↓ choose a model, ←→ an effort, Enter applies, Esc cancels, a click outside
+// closes. The models are what the launcher's agent lists in its own /model menu (lib/launcher-models.ts); applying
+// goes through the chip's `apply` (the model first, then the effort), each its own POST …/modes.
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { t as tr } from "../../i18n";
+import { errorText } from "../../lib/api";
+import { keyboardFrame } from "../../lib/viewport";
+import { launcherModels, modelDetail, modelName, type AgentModel, type LauncherModels } from "../../lib/launcher-models";
+import { effortOptions, EFFORTS } from "../../lib/session-actions";
+import { effortTabs, isCurrentModel, modelBusy, pickerKey, pickerPatch, sessionLauncher } from "../../lib/model-switch";
+import type { Session } from "../../lib/types";
+import { Button, cx, EASE, Spinner } from "../../ui/atoms";
+import { Icon } from "../../ui/icons";
+import { NARROW_QUERY, placeMenu, useMedia, type MenuPlace } from "../../ui/overlay";
+
+const WIDTH = 340;
+
+// a list read from the agent takes seconds the first time; later openings show it at once
+const cache = new Map<string, LauncherModels>();
+
+export function ModelEffortPopover({
+  session,
+  anchor,
+  onClose,
+  apply,
+}: {
+  session: Session;
+  anchor: HTMLElement;
+  onClose: () => void;
+  /** Sets one thing on the session (POST …/modes); false when it failed (the chip has told why). */
+  apply: (patch: { model?: string; effort?: string }) => Promise<boolean>;
+}) {
+  const mid = session.machine_id;
+  const launcher = sessionLauncher(session);
+  const cacheKey = `${mid}/${launcher}`;
+  const [list, setList] = useState<LauncherModels | null>(cache.get(cacheKey) ?? null);
+  const [loading, setLoading] = useState(!cache.has(cacheKey));
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const rows = useRef<(HTMLButtonElement | null)[]>([]);
+  const narrow = useMedia(NARROW_QUERY);
+  const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
+
+  useEffect(() => {
+    if (cache.has(cacheKey)) return;
+    const ctl = new AbortController();
+    launcherModels(mid, launcher, { signal: ctl.signal }).then(
+      (r) => {
+        if (r) cache.set(cacheKey, r);
+        setList(r);
+        setLoading(false);
+      },
+      (e) => {
+        if (ctl.signal.aborted) return;
+        setError(errorText(e));
+        setLoading(false);
+      },
+    );
+    return () => ctl.abort();
+  }, [mid, launcher, cacheKey]);
+
+  const models = list?.models ?? [];
+  const busyNote = modelBusy(session);
+  // a launcher that fixes its own --model: a pick would not reach the agent
+  const locked = Boolean(list?.locked);
+  const switchable = models.length > 0 && !busyNote && !locked;
+  const current = session.model;
+
+  const [pick, setPick] = useState(-1); // the model chosen; -1: keep the session's
+  const [effort, setEffort] = useState(session.effort ?? "");
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current || !models.length) return;
+    seeded.current = true;
+    setPick(models.findIndex((m) => isCurrentModel(m, current)));
+  }, [models, current]);
+
+  const all = useMemo(() => effortOptions(session).map((e) => e.id), [session]);
+  const chosen: AgentModel | undefined = pick >= 0 ? models[pick] : undefined;
+  const tabs = useMemo(() => effortTabs(list, chosen ?? models.find((m) => isCurrentModel(m, current)), all), [list, chosen, models, current, all]);
+  // the effort stays while the picked model takes it, else nothing is chosen (the session's own stays)
+  const effortNow = tabs.includes(effort) ? effort : "";
+  const patch = pickerPatch({ model: switchable ? chosen : undefined, current, effort: effortNow, currentEffort: session.effort });
+  const changed = Boolean(patch.model || patch.effort);
+
+  const run = async () => {
+    if (busy) return;
+    if (!changed) return onClose();
+    setBusy(true);
+    // the model first: the efforts a model takes depend on it
+    let ok = true;
+    if (patch.model) ok = await apply({ model: patch.model });
+    if (ok && patch.effort) ok = await apply({ effort: patch.effort });
+    setBusy(false);
+    if (ok) onClose();
+  };
+
+  // the key handler is registered once and reads this
+  const live = useRef({ pick, effort: effortNow, tabs, models, run });
+  live.current = { pick, effort: effortNow, tabs, models, run };
+
+  useEffect(() => {
+    const down = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (ref.current?.contains(t) || anchor.contains(t)) return;
+      onClose();
+    };
+    const key = (e: KeyboardEvent) => {
+      const l = live.current;
+      // Enter on the footer's own buttons is theirs (取消 must cancel)
+      if ((e.key === "Enter" || e.key === " ") && (e.target as Element | null)?.closest?.("[data-popover-footer]")) return;
+      const r = pickerKey({ model: l.pick, effort: l.tabs.indexOf(l.effort) }, { models: l.models.length, efforts: l.tabs.length }, e);
+      if (!r.handled) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (r.action === "cancel") return onClose();
+      if (r.action === "apply") return void l.run();
+      if (r.state.model !== l.pick && switchable) setPick(r.state.model);
+      if (r.state.effort !== l.tabs.indexOf(l.effort) && r.state.effort >= 0) setEffort(l.tabs[r.state.effort]);
+    };
+    addEventListener("pointerdown", down);
+    addEventListener("keydown", key, true);
+    return () => {
+      removeEventListener("pointerdown", down);
+      removeEventListener("keydown", key, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the handlers read `live`
+  }, [anchor, onClose, switchable]);
+
+  useEffect(() => {
+    rows.current[pick]?.scrollIntoView({ block: "nearest" });
+  }, [pick]);
+
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    const view = narrow ? keyboardFrame(innerHeight, window.visualViewport) : undefined;
+    const at: MenuPlace = placeMenu(anchor.getBoundingClientRect(), ref.current.offsetHeight, { width: WIDTH, align: "left", side: "top", screenW: innerWidth, screenH: innerHeight, view });
+    const { maxHeight, ...rest } = at;
+    setPos(maxHeight === undefined ? rest : { ...rest, maxHeight: `min(80vh, 520px, ${maxHeight}px)` });
+  }, [anchor, narrow, loading, models.length, error, busyNote, tabs.length]);
+
+  return createPortal(
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={tr("composer.model_effort")}
+      className="fixed z-50 flex max-h-[min(80vh,520px)] flex-col rounded-[10px] bg-surface p-1 shadow-overlay"
+      style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "bottom left" }}
+    >
+      <div className="px-2 pt-1.5 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{tr("composer.effort")}</div>
+      <div role="tablist" aria-label={tr("composer.effort")} className="flex gap-0.5 px-1 pb-1">
+        {all.map((id) => {
+          const title = (effortOptions(session).find((e) => e.id === id) ?? EFFORTS.find((e) => e.id === id))?.title ?? id;
+          const allowed = tabs.includes(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={effortNow === id}
+              disabled={!allowed}
+              title={allowed ? effortOptions(session).find((e) => e.id === id)?.detail : tr("composer.effort_missing")}
+              onClick={() => setEffort(id)}
+              className={cx(
+                "h-7 min-w-0 flex-1 truncate rounded-[6px] px-1 text-[12px] whitespace-nowrap transition-colors pointer-coarse:min-h-11 disabled:opacity-35",
+                effortNow === id ? "bg-ink font-medium text-surface" : session.effort === id ? "bg-hover text-ink" : "text-ink-2 enabled:hover:bg-hover enabled:hover:text-ink",
+              )}
+            >
+              {title}
+            </button>
+          );
+        })}
+      </div>
+
+      {(loading || models.length > 0 || error) && <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{tr("composer.models")}</div>}
+      {loading && (
+        <div role="status" className="flex h-8 items-center gap-2 px-2 text-[12.5px] text-ink-3">
+          <Spinner size={12} />
+          {tr("composer.loading_models")}
+        </div>
+      )}
+      {error && <div role="alert" className="px-2 py-1.5 text-[12px] break-words whitespace-pre-wrap text-red">{tr("composer.models_error", { error })}</div>}
+      {models.length > 0 && (
+        <div role="listbox" aria-label={tr("composer.models")} className="min-h-0 overflow-y-auto">
+          {models.map((m, i) => {
+            const cur = isCurrentModel(m, current);
+            const detail = m.description || modelDetail(m);
+            return (
+              <button
+                key={m.id}
+                ref={(el) => {
+                  rows.current[i] = el;
+                }}
+                type="button"
+                role="option"
+                aria-selected={pick === i}
+                disabled={!switchable}
+                onClick={() => setPick(i)}
+                onDoubleClick={() => void run()}
+                className={cx(
+                  "flex min-h-9 w-full items-center gap-2 rounded-[6px] px-2 py-1 text-left pointer-coarse:min-h-11 disabled:opacity-50",
+                  pick === i ? "bg-hover" : "enabled:hover:bg-hover",
+                )}
+              >
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="flex items-center gap-1.5">
+                    <span className="min-w-0 truncate text-[12.5px] text-ink">{modelName(m)}</span>
+                    {cur && <span className="shrink-0 rounded-full bg-field px-1.5 text-[10.5px] leading-4.5 whitespace-nowrap text-ink-2">{tr("composer.current")}</span>}
+                  </span>
+                  {detail && <span className="truncate text-[11px] text-ink-3">{detail}</span>}
+                </span>
+                <Icon name="check" size={13} stroke={2.5} className={pick === i ? "shrink-0 text-ink" : "invisible shrink-0"} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {switchable && <div className="px-2 pt-1 pb-0.5 text-[11px] break-words text-ink-3">{tr("composer.default_note")}</div>}
+      {(busyNote || locked) && (
+        <div role="status" className="px-2 py-1.5 text-[11.5px] break-words text-ink-3">
+          {busyNote || tr("composer.locked")}
+        </div>
+      )}
+
+      <div data-popover-footer className="mt-1 flex items-center gap-2 border-t border-line px-2 pt-1.5 pb-1">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-3 max-sm:hidden pointer-coarse:hidden">{tr("composer.keys_hint")}</span>
+        <Button tone="quiet" onClick={onClose}>{tr("common.cancel")}</Button>
+        <Button tone="primary" busy={busy} disabled={!changed} onClick={() => void run()}>{tr("composer.apply")}</Button>
+      </div>
+    </div>,
+    document.body,
+  );
+}

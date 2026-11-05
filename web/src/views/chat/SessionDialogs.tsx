@@ -1,14 +1,16 @@
 // The chat's ⋯ menu dialogs: session info, rename (the agent / its space), delete, and the run-mode chips under the composer.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
 import { ago, externalLink, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
 import { openLink } from "../../lib/links";
 import { BYPASS_MODE, BYPASS_WARNING, effortOptions, effortTitle, modeTitle, renameBody, switchableModes } from "../../lib/session-actions";
+import { canSwitchModel, onModelPicker } from "../../lib/model-switch";
 import { href, navigate } from "../../lib/router";
 import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { ModelEffortPopover } from "./ModelEffortPopover";
 import { t } from "../../i18n";
 
 interface SessionInfo {
@@ -243,18 +245,34 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
 
 // The two chips under the composer, like Claude Code's bottom bar: permission mode and effort (POST …/modes). A Codex
 // thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`). An assistant
-// conversation may also switch to 全部放行 (#2416).
+// conversation may also switch to 全部放行 (#2416). On a Claude Code session the effort chip opens the model and effort
+// popover instead of the effort menu (issue #2434; the chip itself reads as before), and `/model` Enter in the composer
+// opens it too.
 export function ModeChips({ session, effortOnly, assistant }: { session: Session; effortOnly?: boolean; assistant?: boolean }) {
   const modeMenu = useMenu();
   const effortMenu = useMenu();
-  const set = async (patch: { permission_mode?: string; effort?: string }) => {
-    const before = { permission_mode: session.permission_mode, effort: session.effort };
-    upsertSession({ ...session, ...patch });
+  const effortChip = useRef<HTMLButtonElement>(null);
+  const [popover, setPopover] = useState<HTMLElement | null>(null);
+  const withModel = !effortOnly && canSwitchModel(session);
+  const key = `${session.machine_id}/${session.session_id}`;
+  useEffect(() => (withModel ? onModelPicker(key, () => setPopover(effortChip.current)) : undefined), [withModel, key]);
+  useEffect(() => {
+    if (!withModel) setPopover(null);
+  }, [withModel]);
+  // the popover applies the model and then the effort: the second must build on the session the first changed
+  const latest = useRef(session);
+  latest.current = session;
+  const set = async (patch: { permission_mode?: string; effort?: string; model?: string }): Promise<boolean> => {
+    const base = latest.current;
+    const before = { permission_mode: base.permission_mode, effort: base.effort, model: base.model };
+    upsertSession({ ...base, ...patch });
     try {
-      await api(`${sessionPath(session.machine_id, session.session_id)}/modes`, { method: "POST", json: patch });
+      await api(`${sessionPath(base.machine_id, base.session_id)}/modes`, { method: "POST", json: patch });
+      return true;
     } catch (e) {
-      upsertSession({ ...session, ...before });
+      upsertSession({ ...latest.current, ...Object.fromEntries(Object.keys(patch).map((k) => [k, before[k as keyof typeof before]])) });
       toast(t("chat-sessiondialogs.change_failed", { error: errorText(e) }), "error");
+      return false;
     }
   };
   const mode = session.permission_mode;
@@ -262,7 +280,13 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
   return (
     <span className="flex shrink-0 items-center gap-1">
       {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
-      <Chip label={session.effort ? t("chat-sessiondialogs.effort_chip", { effort: effortTitle(session.effort) }) : t("chat-sessiondialogs.effort_default")} onClick={effortMenu.open} active={Boolean(effortMenu.anchor)} title={t("chat-sessiondialogs.effort")} />
+      <Chip
+        buttonRef={effortChip}
+        label={session.effort ? t("chat-sessiondialogs.effort_chip", { effort: effortTitle(session.effort) }) : t("chat-sessiondialogs.effort_default")}
+        onClick={withModel ? (e) => setPopover((a) => (a ? null : e.currentTarget)) : effortMenu.open}
+        active={Boolean(withModel ? popover : effortMenu.anchor)}
+        title={withModel ? t("composer.model_effort") : t("chat-sessiondialogs.effort")}
+      />
       {modeMenu.anchor && !effortOnly && (
         <Menu
           anchor={modeMenu.anchor}
@@ -273,7 +297,7 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
           items={switchableModes(assistant || session.assistant).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: mode === m.id, onSelect: () => void set({ permission_mode: m.id }) }))}
         />
       )}
-      {effortMenu.anchor && (
+      {effortMenu.anchor && !withModel && (
         <Menu
           anchor={effortMenu.anchor}
           onClose={effortMenu.close}
@@ -283,13 +307,15 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
           items={effortOptions(session).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
         />
       )}
+      {popover && withModel && <ModelEffortPopover session={session} anchor={popover} onClose={() => setPopover(null)} apply={set} />}
     </span>
   );
 }
 
-export function Chip({ label, onClick, active, danger, title }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string }) {
+export function Chip({ label, onClick, active, danger, title, buttonRef }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement> }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       title={title}
       aria-haspopup="menu"

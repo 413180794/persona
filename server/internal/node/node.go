@@ -416,6 +416,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			if _, _, driven := n.codexEffortThread(p.SessionID); !driven {
 				return nil, refusal("codex_read_only", "这个会话没有终端或启动器控制能力，请在原 app-server 中操作", nil)
 			}
+			if p.Model != "" {
+				return nil, fmt.Errorf("Codex 的会话不支持在手机上切换模型")
+			}
 			return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
 		case "session.interrupt":
 			return ok(n.interruptCodex(ctx, p.SessionID))
@@ -638,7 +641,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		id, err := n.assistantSend(ctx, p.SessionID, p.Cwd, p.Launcher, p.Text, p.Images, p.PermissionMode, p.Effort, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
 		return map[string]any{"session_id": id}, err
 	case "session.modes":
-		return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
+		return ok(n.setModelAndModes(ctx, p.SessionID, p.Model, p.PermissionMode, p.Effort)) // model: model_switch.go
 	case "assistant.compact": // the user compacting an assistant conversation (assistant_compact.go)
 		return ok(n.assistantCompact(ctx, p.SessionID))
 	case "assistant.handoff": // what a new main conversation is told about the old one

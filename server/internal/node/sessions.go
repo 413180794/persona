@@ -669,6 +669,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 					untitled(&s, m)
 				}
 				s.Model, s.LastText, s.UpdatedAt, s.Rev = m.model, snippet(m.lastText), lastUsed(m, st), st.Size()
+				if a.Agent != "codex" && a.Agent != traexAgent {
+					s.Model = n.shownModel(id, m.model) // the pick made in the app until a reply shows the real one (model_switch.go)
+				}
 				s.TurnError, s.TurnErrorKind = m.turnError, m.turnErrorKind
 				s.Activity, s.ActivityAt = m.activityOf()
 				setContext(&s, m)

@@ -172,6 +172,9 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     原样发给 Claude Code；只有 Claude 的 Agent 有，Codex / TRAEX 的会话不显示；
     粘贴 / 拖入 / 选择图片作为附件，别的文件传到会话所在的电脑并把路径插到光标处（`docs/protocol.md`「发送文件」）；
     Claude 输入框里的灰色建议显示成占位文字，Tab 填入；Agent 工作中且没打字时发送键换成红色中断，Esc 也是中断；Persona 的对话（主对话也算）一样（#1467：之前助手的对话一律不给中断，hub 和 node 其实支持，claude -p 结束进程、下一条消息从 transcript 接着）。草稿按会话存在 localStorage。
+  - **发送历史和 Ctrl+R 搜索**（#2434，`lib/send-history.ts`、`views/chat/useSendHistory.ts`、`HistorySearch.tsx`，对照 Moshi；只在有精确指针的设备上，触屏没有）：每个会话在这个浏览器里记最近 100 条发出去的消息（`persona.sent.<会话>`，发送成功才记，重复的挪到最后；不上传）。
+    输入框为空或正显示某条历史时，↑ 取更老的、↓ 取更新的（走过最新一条回到空框；多行的历史要光标在第一行 / 最后一行才翻，其余时候方向键归输入框）。输入框里打 Ctrl+R（Mac 也是 ⌃，⌘R 仍是刷新）在输入框上方开 `^R` 搜索面板：
+    按空格拆词、每个词都要出现（不分大小写），最新在前，最多 100 条，候选来自**所有会话**的历史；↑↓ / Ctrl+R / Ctrl+P 上移，Ctrl+S / Ctrl+N 下移，Enter 或 Tab 把选中的放进输入框（不发送），Esc 或 Ctrl+G 取消；没有匹配时「没有匹配的消息」。输入法组字期间所有键都不算。输入框的悬停提示写着这两个键。
   - 发送带 `client_msg_id`；被拒（`input_draft`）时弹窗显示电脑输入框里的字，能清空的给「清空并发送」（同一个 id 重发，带 `clear_draft`）。
   - 同空间的其他 Agent 在右上角「同空间 N」菜单里，每行显示状态圆点和文字标签（需要你 / 工作中 / 完成未看 / 已看），按 tab 顺序固定；状态随推送更新，不依赖颜色辨认。
     当前 Agent 保留勾选标记；长标题单行截断、悬停可看完整标题和状态，窄屏菜单宽度不超出视口。有别的需要你时按钮带红点。
@@ -180,6 +183,10 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
     屏蔽通知 / 恢复通知（`PUT /mutes`，Agent 自己的开关叠在空间的屏蔽上：空间屏蔽时单独开启进 `allowed`，`src/lib/session-actions.ts`）、
     拷贝会话 ID / 目录 / 恢复命令，关闭 Agent（先确认），未运行的会话可以删除对话（先确认，只从列表移除，`docs/protocol.md` DELETE `/sessions/{mid}/{sid}`）。
   - Claude Code 的会话在输入框下方有两个胶囊：权限模式、思考强度（`POST …/modes`，先改本地、失败恢复；「全部放行」只能新开时选，不在列表里）。
+    Claude Code 终端会话的思考强度胶囊（样子不变）点开是**模型与思考强度浮层**（#2434，`ModelEffortPopover.tsx`、`lib/model-switch.ts`，对照 Moshi 的模型胶囊）：上面是思考强度的几档（该模型不支持的档灰掉），下面是模型列表
+    （`GET /machines/{mid}/launchers/{name}/models`，就是新建 Agent 选模型用的那份，按会话的启动器取；当前模型带「当前」）。↑↓ 选模型、←→ 选档、Enter 应用、Esc 取消、点浮层外关闭；应用先 `POST …/modes {"model"}` 再 `{"effort"}`，各自先改本地、失败恢复。
+    输入框里只打 `/model` 按 Enter 不发送，改为打开这个浮层（没有模型切换的 Agent 照常发送）。node 收到 `model` 后用和发消息一样的安全路径往 Claude Code 的输入框打 `/model <id>`：先读屏，对话框开着（`dialog_open`）或输入框里有草稿（`input_draft`）就拒绝、什么都不打，
+    Agent 正在工作也拒绝；打完再读屏确认出现 `Set model to`，没出现就报错而不是当成功。模型 id 只收一个词（字母数字和 `._:/@[]-`），不是命令也不是参数。注意：新版 Claude Code 的 `/model <id>` 会同时把所选模型存为新会话的默认（本机 transcript 里的输出是「Set model to `…` and saved as your default for new sessions」），没有只改这个会话的写法，浮层里也写了这句。Codex 的线程保持只有思考强度，Persona 的对话在自己的胶囊里换模型，其他 Agent 没有这个入口。
     Codex、TRAEX、runtime 的会话和助手没有。
   - 发送中的气泡把 `<jarvis-context>` 显示成引用卡片，和记录里的一样（以前会露出原始标签）。
   - 打开页面、页面回到前台时发 `seen`。

@@ -21,6 +21,9 @@ import { ContextChips } from "../link/ContextChips";
 import { QuoteBar } from "./Quote";
 import { ImageEditor } from "./ImageEditor";
 import { MentionMenu, useMentionRows, type MentionRow, type MentionSource } from "./MentionMenu";
+import { HistorySearch } from "./HistorySearch";
+import { useSendHistory } from "./useSendHistory";
+import { isModelCommand, requestModelPicker } from "../../lib/model-switch";
 import { t } from "../../i18n";
 
 export interface Attachment {
@@ -230,6 +233,9 @@ export function Composer({
     if (el) setCaret(el.selectionStart);
   };
 
+  // ↑ / ↓ recall and Ctrl+R search of what was sent (useSendHistory.ts); desktop only
+  const history = useSendHistory({ draftKey, draft, setDraft, setCaret, input, disabled });
+
   const pickMention = (r: MentionRow) => {
     if (!token) return;
     if (r.kind === "session") {
@@ -352,6 +358,7 @@ export function Composer({
     const ok = await onSend({ text: withContexts(refs, withQuoteBlock(q, text), sent.length > 0), images: sent.map((a) => ({ mime: a.mime, data: a.data })) });
     setSending(false);
     if (ok) {
+      history.record(text);
       releaseAttachments(sent);
     } else {
       setDraft((cur) => withUnsent(cur, text));
@@ -419,6 +426,8 @@ export function Composer({
         </div>
       )}
 
+      {history.searching && <HistorySearch onPick={history.pick} onClose={history.closeSearch} />}
+
       {mOpen && (
         <MentionMenu rows={mRows} active={Math.min(mActive, Math.max(mRows.length - 1, 0))} loading={mLoading} browsing={Boolean(token && browseTarget(token.query, mention?.cwd))} onHover={setMActive} onPick={pickMention} />
       )}
@@ -482,6 +491,13 @@ export function Composer({
           }}
           onKeyDown={(e) => {
             if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+            // `/model` alone opens the model popover instead of sending (where the agent has one)
+            if (enterSends(e, hasFinePointer()) && isModelCommand(draft) && requestModelPicker(draftKey)) {
+              e.preventDefault();
+              setDraft("");
+              return;
+            }
+            if (history.onKeyDown(e)) return;
             if (mOpen) {
               if ((e.key === "ArrowDown" || e.key === "ArrowUp") && mRows.length) {
                 e.preventDefault();
@@ -530,6 +546,7 @@ export function Composer({
           }}
           placeholder={suggestion && !draft ? t("chat-composer.suggestion", { suggestion }) : placeholder}
           aria-label={t("chat-composer.message")}
+          title={hasFinePointer() ? t("composer.history_hint") : undefined}
           style={{ maxHeight: INPUT_MAX }}
           className="min-h-6 w-full resize-none overflow-y-auto bg-transparent px-2 pt-1.5 text-[14px] leading-[21px] text-ink outline-none [@media(pointer:coarse)]:text-[16px] [@media(pointer:coarse)]:leading-[24px] [overflow-wrap:anywhere] placeholder:text-ink-3 disabled:opacity-50"
         />

@@ -5490,6 +5490,9 @@ def served(sid, via, payload):
         SERVED.append({"via": via, "items": len(payload["items"]), "bytes": len(json.dumps(payload, ensure_ascii=False).encode())})
 
 
+MODES_LOG = []  # POST …/modes requests, GET /mock/modes (the model picker's apply, #2434)
+
+
 def all_sessions():
     return [decorated_session(s) for s in (SESSIONS + ASSISTANT)]
 
@@ -9103,6 +9106,7 @@ class H(BaseHTTPRequestHandler):
             del SCHEDULE_RAN[:]
             return self.send_json({"ok": True})
         if p == "/mock/renamed": return self.send_json({"renamed": RENAMED})
+        if p == "/mock/modes": return self.send_json({"modes": MODES_LOG})
         if p == "/mock/node_actions": return self.send_json({"actions": NODE_ACTIONS})
         if p == "/mock/served": return self.send_json({"served": SERVED})
         if p == "/api/v1/inbox":
@@ -10534,9 +10538,10 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"queue": pulled})
         if p.startswith("/api/v1/sessions/") and p.endswith("/modes"):  # permission mode / effort chips
             body = json.loads(self.last_body or b"{}")
-            for s in all_sessions():
+            for s in SESSIONS + ASSISTANT:  # the stored sessions: all_sessions() hands out copies
                 if s["session_id"] == p.split("/")[5]:
-                    s.update({k: v for k, v in body.items() if k in ("permission_mode", "effort") and v})
+                    s.update({k: v for k, v in body.items() if k in ("permission_mode", "effort", "model") and v})
+                    MODES_LOG.append({"session_id": s["session_id"], **{k: v for k, v in body.items() if k in ("permission_mode", "effort", "model")}})
             return self.send_json({"ok": True})
         self.send_json({"ok": True})
 
