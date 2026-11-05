@@ -1,6 +1,6 @@
 // @vitest-environment node
 // The catalogs and the code agree (docs/web.md「国际化」): the three languages have the same namespaces, keys and
-// placeholders; every t("literal") key exists; and no interface text is written into the code in Chinese. That last
+// placeholders; every t("literal") key exists and gets a value for each placeholder its text uses; and no interface text is written into the code in Chinese. That last
 // one is a ratchet while the strings move into catalogs: a file may only lose hard-coded strings, never gain them
 // (hardcoded-baseline.json; a file that reaches zero leaves it). Comments and tests don't count; a line that has to
 // keep CJK text (it matches what someone else writes, like a hub's output) says `i18n-ignore` in a comment.
@@ -63,7 +63,21 @@ function sourceFiles(dir: string): string[] {
 
 interface Scan {
   hardcoded: { line: number; text: string }[];
-  keys: { line: number; key: string }[];
+  /** `vars`: the names a literal second argument gives, [] for none, undefined when the code can't tell (a spread, a computed name, a variable) */
+  keys: { line: number; key: string; vars?: string[] }[];
+}
+
+/** The property names of t()/tRich()'s second argument, or undefined when they aren't all written out in the call. */
+function varNames(arg: ts.Expression | undefined): string[] | undefined {
+  if (!arg) return [];
+  if (!ts.isObjectLiteralExpression(arg)) return undefined;
+  const names: string[] = [];
+  for (const p of arg.properties) {
+    if (ts.isShorthandPropertyAssignment(p)) names.push(p.name.text);
+    else if ((ts.isPropertyAssignment(p) || ts.isMethodDeclaration(p)) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) || ts.isNumericLiteral(p.name))) names.push(p.name.text);
+    else return undefined;
+  }
+  return names;
 }
 
 function scan(file: string): Scan {
@@ -88,7 +102,7 @@ function scan(file: string): Scan {
     }
     if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && ours.has(n.expression.text)) {
       const a = n.arguments[0];
-      if (a && (ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a))) out.keys.push({ line: lineOf(n) + 1, key: a.text });
+      if (a && (ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a))) out.keys.push({ line: lineOf(n) + 1, key: a.text, vars: varNames(n.arguments[1]) });
     }
     ts.forEachChild(n, visit);
   };
@@ -168,6 +182,20 @@ describe("code", () => {
     const flat = new Set<string>();
     for (const [ns, cat] of Object.entries(catalogs()["zh-Hans"])) for (const k of Object.keys(cat)) flat.add(`${ns}.${k.replace(PLURAL, "")}`);
     const missing = [...scans].flatMap(([f, s]) => s.keys.filter((k) => !flat.has(k.key)).map((k) => `${f}:${k.line} ${k.key}`));
+    expect(missing).toEqual([]);
+  });
+
+  // interpolate() and tRich() leave a placeholder with no value as a literal `{name}` on the page
+  it("passes every placeholder a key's text uses", () => {
+    const want = new Map<string, string[]>();
+    for (const [ns, cat] of Object.entries(catalogs()["zh-Hans"])) for (const [k, ps] of shape(cat)) want.set(`${ns}.${k}`, ps);
+    const missing = [...scans].flatMap(([f, s]) =>
+      s.keys.flatMap(({ line, key, vars }) => {
+        if (!vars) return [];
+        const lacks = (want.get(key) ?? []).filter((p) => !vars.includes(p));
+        return lacks.length ? [`${f}:${line} ${key} lacks ${lacks.join(", ")}`] : [];
+      }),
+    );
     expect(missing).toEqual([]);
   });
 
