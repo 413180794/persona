@@ -1768,7 +1768,8 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
 | | `extensions.authorize {hash, pattern, method, path}` → `{ok, extension, name, scopes, scope?}` | 扩展的 token 打 hub 的路由：是谁的、开不开这条路由（`extension` 空：没有这个 token） |
 | | `extensions.hub_call {method, params}` → 结果 | hub 自己的功能问扩展：`github_login`、`settings.list`、`settings.tool`（node 的 MCP 工具、门禁命令的说法、`assistant.lark` 是管理者进程里直接问的，不过总线）；调用方不等了会发 `rpc.cancel`（卡片跟着撤） |
 | hub → 管理者，事件 | `extensions.emit {event, params}` | 扩展订阅的事：`agent.finished`、`agent.needs_you` |
-| 管理者 → hub，事件 | `extensions.report {features, apis, machines, screen_keep_awake}` | 整份：扩展的功能、API 前缀和回执、每台机器的 `computer` / `browser`；hub 留着（存在 `hub.extensions_report`） |
+| 管理者 → hub，事件 | `extensions.report {features, apis, machines, screen_keep_awake, looks}` | 整份：扩展的功能、API 前缀和回执、每台机器的 `computer` / `browser`、开着的扩展的形象和它们的文件（`looks`，hub 把它们和自己的形象包一起提供）；hub 留着（存在 `hub.extensions_report`） |
+| | `extensions.looks_gone {ids}` | 卸载了带形象的扩展：管理者先发一份不含这些形象的 report，再发这个；选中的形象在 `ids` 里、又没有别的来源提供了，hub 就把选择改回默认形象（见 [extensions.md](extensions.md)「形象」） |
 | 管理者 → hub，`app.call`（应用 `hub`） | `push.localized`、`push.background`、`push.mail_targets` | 推送（卡片在助手的交互队列，进程内）。模型配置的 `plugins.*` 和 `models.*` 在管理者进程里，不过 hub |
 
 ### 渠道用的方法（2026-11-04）

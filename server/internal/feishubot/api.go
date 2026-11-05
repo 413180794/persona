@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"strings"
@@ -102,18 +103,43 @@ func (c *Client) tenantToken(ctx context.Context, fresh bool) (string, error) {
 	return c.token, nil
 }
 
-// call sends one JSON request and decodes {code, msg, data} into out (data's fields, or the whole body for calls
-// whose payload is not under data).
+const (
+	codeRateLimited = 99991400 // the open platform's rate-limit body code
+	callMaxAttempts = 3        // includes the first attempt; callSleep is swapped in tests, so no t.Parallel here
+)
+
+var (
+	callBackoff = []time.Duration{200 * time.Millisecond, 500 * time.Millisecond}
+	callSleep   = func(ctx context.Context, d time.Duration) error {
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			return nil
+		}
+	}
+)
+
+// call sends one JSON request and decodes {code, msg, data} into out. Non-POST is safe to repeat; POST retries through callRetry only with an idempotency uuid.
 func (c *Client) call(ctx context.Context, op, method, path string, in, out any) error {
+	return c.callRetry(ctx, op, method, path, in, out, method != http.MethodPost)
+}
+
+func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out any, idempotent bool) error {
 	var payload []byte
 	if in != nil {
 		payload, _ = json.Marshal(in)
 	}
-	for attempt := 0; ; attempt++ {
-		tok, err := c.tenantToken(ctx, attempt > 0)
+	var lastErr error
+	fresh, waits := false, 0 // fresh forces one token refresh after tokenGone; waits counts backoff slots used
+	for attempt := 0; attempt < callMaxAttempts; attempt++ {
+		tok, err := c.tenantToken(ctx, fresh)
 		if err != nil {
 			return err
 		}
+		fresh = false // the fresh token is cached; a later transient retry reuses it
 		var body io.Reader
 		if payload != nil {
 			body = bytes.NewReader(payload)
@@ -126,37 +152,75 @@ func (c *Client) call(ctx context.Context, op, method, path string, in, out any)
 		if payload != nil {
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
 		}
+		retry := false
 		resp, err := c.http.Do(req)
-		if err != nil {
-			return err
-		}
-		raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-		resp.Body.Close()
-		if err != nil {
-			return err
-		}
-		var env struct {
-			Code int             `json:"code"`
-			Msg  string          `json:"msg"`
-			Data json.RawMessage `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &env); err != nil {
-			return fmt.Errorf("feishu %s: HTTP %d: %w", op, resp.StatusCode, err)
-		}
-		if env.Code != 0 {
-			if tokenGone(env.Code) && attempt == 0 {
-				continue
+		switch {
+		case err != nil:
+			if ctx.Err() != nil { // a done context: retrying cannot help
+				return err
 			}
-			return &APIError{Op: op, Code: env.Code, Msg: env.Msg}
+			lastErr, retry = err, true
+		default:
+			raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+			resp.Body.Close()
+			switch {
+			case readErr != nil:
+				if ctx.Err() != nil {
+					return readErr
+				}
+				lastErr, retry = readErr, true
+			default:
+				var env struct {
+					Code int             `json:"code"`
+					Msg  string          `json:"msg"`
+					Data json.RawMessage `json:"data"`
+				}
+				switch jerr := json.Unmarshal(raw, &env); {
+				case jerr != nil: // a gateway's HTML page on 429/5xx is transient; other non-JSON answers fail at once
+					lastErr = fmt.Errorf("feishu %s: HTTP %d: %w", op, resp.StatusCode, jerr)
+					retry = resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500
+				case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+					if env.Code != 0 { // a parseable body on 429/5xx still means the request did not land
+						lastErr = &APIError{Op: op, Code: env.Code, Msg: env.Msg}
+					} else {
+						lastErr = fmt.Errorf("feishu %s: HTTP %d", op, resp.StatusCode)
+					}
+					retry = true
+				case env.Code != 0:
+					if tokenGone(env.Code) && attempt == 0 {
+						fresh = true
+						continue // one fresh token, one immediate retry, no backoff slot spent
+					}
+					lastErr = &APIError{Op: op, Code: env.Code, Msg: env.Msg}
+					retry = env.Code == codeRateLimited
+				case out == nil:
+					return nil
+				case len(env.Data) > 0 && string(env.Data) != "null":
+					return json.Unmarshal(env.Data, out)
+				default:
+					return json.Unmarshal(raw, out)
+				}
+			}
 		}
-		if out == nil {
-			return nil
+		if !idempotent || !retry || !c.waitRetry(ctx, waits) {
+			if e := ctx.Err(); e != nil {
+				return e // the context ended during the backoff
+			}
+			return lastErr
 		}
-		if len(env.Data) > 0 && string(env.Data) != "null" {
-			return json.Unmarshal(env.Data, out)
-		}
-		return json.Unmarshal(raw, out)
+		waits++
 	}
+	return lastErr
+}
+
+// waitRetry applies the backoff after a failed attempt with +/-25% jitter and reports whether to try once more.
+func (c *Client) waitRetry(ctx context.Context, n int) bool {
+	if n >= len(callBackoff) {
+		return false
+	}
+	base := callBackoff[n]
+	d := base*3/4 + time.Duration(rand.Int64N(int64(base/2)))
+	return callSleep(ctx, d) == nil
 }
 
 // BotInfo is the app's bot: its name and open id (GET /open-apis/bot/v3/info). Asking for it also checks the app's
@@ -194,7 +258,8 @@ func (c *Client) Send(ctx context.Context, idType, id, msgType, content, uuid st
 	if uuid != "" {
 		in["uuid"] = uuid
 	}
-	err := c.call(ctx, "send", http.MethodPost, "/open-apis/im/v1/messages?receive_id_type="+url.QueryEscape(idType), in, &out)
+	// uuid makes a retried send land once: with it, transient failures are retried; without it, a POST is not.
+	err := c.callRetry(ctx, "send", http.MethodPost, "/open-apis/im/v1/messages?receive_id_type="+url.QueryEscape(idType), in, &out, uuid != "")
 	return out.MessageID, err
 }
 
@@ -208,7 +273,7 @@ func (c *Client) Reply(ctx context.Context, messageID, msgType, content, uuid st
 	if inThread {
 		in["reply_in_thread"] = true
 	}
-	err := c.call(ctx, "reply", http.MethodPost, "/open-apis/im/v1/messages/"+url.PathEscape(messageID)+"/reply", in, &out)
+	err := c.callRetry(ctx, "reply", http.MethodPost, "/open-apis/im/v1/messages/"+url.PathEscape(messageID)+"/reply", in, &out, uuid != "")
 	return out.MessageID, err
 }
 

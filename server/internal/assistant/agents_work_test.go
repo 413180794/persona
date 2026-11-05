@@ -656,7 +656,7 @@ func TestGoldenAgentTriage(t *testing.T) {
 	ctx := context.Background()
 	v := s.newWorkView(ctx)
 	c, _ := v.session("box", "s1")
-	if _, err := s.triageTurnModel(ctx, v, "box", c); err != nil {
+	if _, _, err := s.triageTurnModel(ctx, v, "box", c); err != nil {
 		t.Fatal(err)
 	}
 	if len(f.triageAsked) != 1 {
@@ -668,6 +668,9 @@ func TestGoldenAgentTriage(t *testing.T) {
 
 	golden(t, "agent_wake.timer", renderWake(agentWake{Attempt: 2, Wait: "部署跑完", Then: "跑线上测试"}))
 	golden(t, "agent_wake.agent", renderWake(agentWake{Attempt: 1, Wait: "合 PR 那个做完", Then: "rebase", Agent: "合 PR", AgentLine: "合好了"}))
+	golden(t, "agent_wake.approved", renderWake(agentWake{Attempt: 1, Wait: "CI 通过", Then: "push 到 beta", Approved: "push 到 beta"}))
+	golden(t, "agent_triage_input.approved", prompts.RenderAgentTriageInput(prompts.AgentTriageInput{Now: "2026-01-02 09:00 Fri",
+		Agent: "修登录", Machine: "示例电脑", Reply: "CI 还在跑", ApprovedWait: "CI 通过", ApprovedThen: "push 到 beta"}))
 	golden(t, "agent_answer", renderAnswer([]agentAnswerItem{{"用哪个方案？", "用 D4"}, {"要不要推到 beta？", "先不推"}}))
 }
 
@@ -1003,5 +1006,91 @@ func TestWakeLooksRightBefore(t *testing.T) {
 	s.workTick(context.Background(), time.Now().Add(time.Minute))
 	if got := f.sentToAgents(); len(got) != 1 {
 		t.Fatalf("sent %v", got)
+	}
+}
+
+// The user's 等好了就去做 holds while the agent keeps waiting: the next turn, still waiting (asked as the user's again,
+// in other words), is woken instead of carded again, and the wake says the step is approved (#3824). The user's own
+// message ends it.
+func TestApprovedWaitIsNotAskedAgain(t *testing.T) {
+	s, f := workService(t)
+	f.triage = `{"phase":"blocked","on":"external","line":"CI 过了就推","wait":{"what":"CI 通过","then":"push 到 beta","check_minutes":5}}`
+	f.setSessions("box", stopped("s1", "CI 过了我就推"))
+	triage(t, s, "s1")
+	card := s.workCards()[0]
+	answerCard(t, s, card.ID, proto.Resolution{Answers: map[string]string{card.Questions[0].Question: answerGo}})
+	s.workStarted(context.Background(), "box", "s1", time.Now()) // the answer set it going
+
+	// It checked, CI still runs; the model makes the push the user's, in its own words.
+	f.triage = `{"phase":"blocked","on":"user","line":"CI 还在跑，过了再推","wait":{"what":"CI 跑完","then":"把分支 push 到 beta","check_minutes":5,"risky":true,"approved":true},
+		"questions":[{"question":"CI 过了要推到 beta 吗？","options":[{"label":"推"},{"label":"先不推"}]}]}`
+	next := stopped("s1", "CI 还在跑，过了我就推到 beta")
+	next.UpdatedAt = turnEnd.Add(10 * time.Minute)
+	f.setSessions("box", next)
+	triage(t, s, "s1")
+	e := entryOf(t, s, "s1")
+	if len(s.workCards()) != 0 || e.InteractionID != "" || e.WakeAt == nil || e.Work.On != proto.WaitExternal {
+		t.Fatalf("asked again: %+v, cards %d", e, len(s.workCards()))
+	}
+	if !strings.Contains(f.triageAsked[len(f.triageAsked)-1].User, "用户已经同意") {
+		t.Fatal("the triage was not told of the approval")
+	}
+	before := len(f.sentToAgents())
+	s.workTick(context.Background(), time.Now().Add(6*time.Minute))
+	got := f.sentToAgents()
+	if len(got) != before+1 || !strings.Contains(got[len(got)-1], "用户已经同意") {
+		t.Fatalf("wake %v", got[before:])
+	}
+
+	// A riskier step than the one approved is asked, even when the model calls it the same.
+	s.workStarted(context.Background(), "box", "s1", time.Now())
+	f.triage = `{"phase":"blocked","on":"external","line":"等 CI","wait":{"what":"CI 跑完","then":"push 并部署到线上","check_minutes":5,"approved":true}}`
+	next.UpdatedAt = turnEnd.Add(20 * time.Minute)
+	f.setSessions("box", next)
+	triage(t, s, "s1")
+	if e := entryOf(t, s, "s1"); e.InteractionID == "" || e.WakeAt != nil {
+		t.Fatalf("a riskier step was not asked: %+v", e)
+	}
+
+	// Same words, another target: the model says it is not the approved step, and the user is asked.
+	s3, f3 := workService(t)
+	f3.triage = `{"phase":"blocked","on":"external","line":"CI 过了就推","wait":{"what":"CI 通过","then":"push 到 beta","check_minutes":5}}`
+	f3.setSessions("box", stopped("s1", "CI 过了我就推"))
+	triage(t, s3, "s1")
+	card = s3.workCards()[0]
+	answerCard(t, s3, card.ID, proto.Resolution{Answers: map[string]string{card.Questions[0].Question: answerGo}})
+	s3.workStarted(context.Background(), "box", "s1", time.Now())
+	f3.triage = `{"phase":"blocked","on":"user","line":"CI 过了 push 到 master","wait":{"what":"CI 通过","then":"push 到 master","check_minutes":5,"risky":true}}`
+	next = stopped("s1", "CI 过了我就 push 到 master")
+	next.UpdatedAt = turnEnd.Add(10 * time.Minute)
+	f3.setSessions("box", next)
+	triage(t, s3, "s1")
+	if e := entryOf(t, s3, "s1"); e.InteractionID == "" || e.WakeAt != nil {
+		t.Fatalf("another target rode on the approval: %+v", e)
+	}
+	// 先别做 on that card takes the earlier yes back.
+	card = s3.workCards()[0]
+	answerCard(t, s3, card.ID, proto.Resolution{Answers: map[string]string{card.Questions[0].Question: answerHold}})
+	s3.work.mu.Lock()
+	_, kept := s3.work.approved[[2]string{"box", "s1"}]
+	s3.work.mu.Unlock()
+	if kept {
+		t.Fatal("the approval outlived 先别做")
+	}
+
+	// The user writes to it themselves: their earlier yes is gone.
+	s2, f2 := workService(t)
+	f2.triage = `{"phase":"blocked","on":"external","line":"CI 过了就推","wait":{"what":"CI 通过","then":"push 到 beta","check_minutes":5}}`
+	f2.setSessions("box", stopped("s1", "CI 过了我就推"))
+	triage(t, s2, "s1")
+	card = s2.workCards()[0]
+	answerCard(t, s2, card.ID, proto.Resolution{Answers: map[string]string{card.Questions[0].Question: answerGo}})
+	s2.workStarted(context.Background(), "box", "s1", time.Now().Add(3*time.Minute)) // not the manager's send
+	next = stopped("s1", "CI 过了我就推")
+	next.UpdatedAt = turnEnd.Add(10 * time.Minute)
+	f2.setSessions("box", next)
+	triage(t, s2, "s1")
+	if e := entryOf(t, s2, "s1"); e.InteractionID == "" {
+		t.Fatalf("approval outlived the user's own message: %+v", e)
 	}
 }

@@ -148,7 +148,7 @@ type workBook struct {
 	tried    map[[2]string]triedTurn // the turn a triage was last attempted on, and when
 	sent     map[[2]string]time.Time // when the manager itself last sent the session something
 	seen     map[[2]string]time.Time // the turn whose first look was recorded
-	approved map[[2]string]string    // a risky next step the user said yes to (its wait.then)
+	approved map[[2]string]approval  // a risky next step the user said yes to, for the wait it ends
 	// answering marks cards whose answer is being delivered to the agent: a repeated callback in the send window
 	// (a redelivered webhook, a second tap, phone and watch together) is the same answer, not a second one.
 	answering map[string]bool
@@ -168,9 +168,31 @@ func (b *workBook) init() {
 		b.tried = map[[2]string]triedTurn{}
 		b.sent = map[[2]string]time.Time{}
 		b.seen = map[[2]string]time.Time{}
-		b.approved = map[[2]string]string{}
+		b.approved = map[[2]string]approval{}
 		b.answering = map[string]bool{}
 	}
+}
+
+// approval is the user's 等好了就去做 on a risky wait's card: once the wait is over, the agent may take that step. It
+// holds while the agent keeps waiting (a wake, the agent's own check), so the same question is not asked again each
+// turn; anything the user does themselves, a turn that is no wait, or a riskier step ends it.
+type approval struct{ wait, then string }
+
+// covers: a may stand for w's next step as far as the words go — w waits, and its step is no riskier than the approved
+// one (each risky word in it was in the approved step). No link: an authorization is the user's to give each time.
+// The words cannot tell a target apart (beta or master, one person or the group): applyApproval also wants the triage
+// model to say it is the same wait and the same step.
+func (a approval) covers(w *proto.WorkState) bool {
+	if a.then == "" || w.Phase != proto.WorkBlocked || w.Wait == "" || w.Link != nil {
+		return false
+	}
+	approved := strings.ToLower(a.then)
+	for _, word := range riskyWordsIn(w.Then) {
+		if !strings.Contains(approved, word) {
+			return false
+		}
+	}
+	return true
 }
 
 // triedTurn is a turn a triage was attempted on: a failed one is tried again after workRetryTriage, not every tick.
@@ -533,6 +555,9 @@ func (s *Service) workStarted(ctx context.Context, machine, sid string, now time
 	if now.Sub(s.work.sent[k]) < 2*time.Minute {
 		by = "hub"
 	}
+	if by == "user" {
+		delete(s.work.approved, k) // the user took over: their earlier yes is not for what comes next
+	}
 	card := e.InteractionID
 	prev := *e
 	if card != "" {
@@ -615,6 +640,7 @@ func (s *Service) triageTurn(ctx context.Context, v *workView, machine string, c
 	}()
 
 	start := time.Now()
+	var same bool // the model says it still waits on the step the user approved
 	w, by, skip := triageRules(c, s.location(ctx), s.lang(ctx))
 	if skip {
 		return // the agent asks itself (or its terminal does): the list shows that
@@ -623,7 +649,7 @@ func (s *Service) triageTurn(ctx context.Context, v *workView, machine string, c
 		mctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 		var err error
-		w, err = s.triageTurnModel(mctx, v, machine, c)
+		w, same, err = s.triageTurnModel(mctx, v, machine, c)
 		if err != nil {
 			s.logf("triage %s/%s: %v", machine, short(c.SessionID), err)
 			s.workEvent(machine, c.SessionID, "failed", map[string]any{"error": clip(err.Error(), 200)})
@@ -631,6 +657,7 @@ func (s *Service) triageTurn(ctx context.Context, v *workView, machine string, c
 		}
 		by = "model"
 	}
+	s.applyApproval(k, w, same)
 	w.TurnAt, w.At, w.By = c.UpdatedAt, time.Now().UTC(), by
 	e := db.SessionWork{MachineID: machine, SessionID: c.SessionID, TurnAt: c.UpdatedAt, Work: *w}
 	// The same wait goes on (the manager woke it, it still waits): its counts carry over.
@@ -646,6 +673,25 @@ func (s *Service) triageTurn(ctx context.Context, v *workView, machine string, c
 		time.Since(start).Seconds(), e.Work.Line)
 	s.workEvent(machine, c.SessionID, "triaged", map[string]any{"phase": w.Phase, "on": e.Work.On, "by": by,
 		"line": e.Work.Line, "ms": time.Since(start).Milliseconds()})
+}
+
+// applyApproval: a turn still waiting on the step the user already said yes to (same: the model says so, and the
+// words agree) is a wait the manager ends: no second card for it. A turn that is no such wait ends the approval, so
+// what is left in s.work.approved always held for the latest triaged turn.
+func (s *Service) applyApproval(k [2]string, w *proto.WorkState, same bool) {
+	s.work.mu.Lock()
+	defer s.work.mu.Unlock()
+	a, ok := s.work.approved[k]
+	if !ok {
+		return
+	}
+	if !same || !a.covers(w) || len(w.Questions) > 1 { // a second question is the user's all the same
+		delete(s.work.approved, k)
+		return
+	}
+	if w.On == proto.WaitUser && risky(w.Then) {
+		w.On, w.Questions = proto.WaitExternal, nil // only the approved step made it the user's
+	}
 }
 
 func orEmpty(sep, s string) string {
@@ -733,14 +779,23 @@ var riskyWords = []string{"push", "deploy", "部署", "发布", "上线", "merge
 
 func risky(texts ...string) bool {
 	for _, t := range texts {
-		t = strings.ToLower(t)
-		for _, w := range riskyWords {
-			if strings.Contains(t, w) {
-				return true
-			}
+		if len(riskyWordsIn(t)) > 0 {
+			return true
 		}
 	}
 	return false
+}
+
+// riskyWordsIn are the risky words in t (lower case).
+func riskyWordsIn(t string) []string {
+	t = strings.ToLower(t)
+	var out []string
+	for _, w := range riskyWords {
+		if strings.Contains(t, w) {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 // ---- acting ----
@@ -777,9 +832,9 @@ func (s *Service) actOn(ctx context.Context, v *workView, machine string, c prot
 			return // a background task or a /loop: it wakes itself
 		}
 		s.work.mu.Lock()
-		approved := s.work.approved[k]
+		a, approved := s.work.approved[k]
 		s.work.mu.Unlock()
-		if risky(w.Then) && (approved == "" || approved != w.Then) {
+		if risky(w.Then) && !(approved && a.covers(w)) {
 			*w = proto.WorkState{Phase: proto.WorkBlocked, On: proto.WaitUser, TurnAt: w.TurnAt, At: w.At, By: w.By, Wait: w.Wait, Then: w.Then,
 				Line: clip(oneLine(workT(l, "risky_line", i18n.Args{"wait": w.Wait, "then": w.Then})), 60),
 				Questions: []proto.Question{{Question: workT(l, "risky_ask", i18n.Args{"wait": w.Wait, "then": w.Then}), Header: workT(l, "header_risky"),
@@ -959,6 +1014,11 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		}
 		return renderAnswer(out)
 	}
+	if !only[answerGo] {
+		s.work.mu.Lock()
+		delete(s.work.approved, key) // any other answer (先别做, 先不管…) takes an earlier yes back
+		s.work.mu.Unlock()
+	}
 	var text string
 	var sent func(e *db.SessionWork)
 	switch {
@@ -983,7 +1043,7 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 	case only[answerGo]:
 		if e, ok := s.workEntry(key); ok {
 			s.work.mu.Lock()
-			s.work.approved[key] = e.Work.Then
+			s.work.approved[key] = approval{wait: e.Work.Wait, then: e.Work.Then}
 			s.work.mu.Unlock()
 		}
 		text = render()
@@ -993,6 +1053,9 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 	if err := s.sendToSession(ctx, ix.MachineID, ix.SessionID, text); err != nil {
 		s.logf("work %s/%s: the answer did not go, the card is up again: %v", ix.MachineID, short(ix.SessionID), err)
 		s.workEvent(ix.MachineID, ix.SessionID, "answer_failed", map[string]any{"error": clip(err.Error(), 200)})
+		s.work.mu.Lock()
+		delete(s.work.approved, key) // the card is asked again: the yes goes with the answer that did not
+		s.work.mu.Unlock()
 		if e, ok := s.workEntry(key); ok && e.InteractionID == id {
 			ix.ID, ix.CreatedAt = workCardPrefix+randomHex(6), time.Now().UTC()
 			s.work.mu.Lock()
@@ -1185,6 +1248,11 @@ func (s *Service) workWake(ctx context.Context, v *workView, k [2]string, now ti
 	case proto.WaitExternal, proto.WaitAgent:
 		e.Wakes++
 		wk := agentWake{Attempt: e.Wakes, Wait: e.Work.Wait, Then: e.Work.Then}
+		s.work.mu.Lock()
+		if a, ok := s.work.approved[k]; ok && risky(e.Work.Then) && a.covers(&e.Work) {
+			wk.Approved = a.then // the user said yes to it: the wake must not tell it to ask again
+		}
+		s.work.mu.Unlock()
 		if a := e.Work.Agent; a != nil && s.agentStopped(v, *a) {
 			wk.Agent = a.Label
 			if as, ok := v.session(a.MachineID, a.SessionID); ok {

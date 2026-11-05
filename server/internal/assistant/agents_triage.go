@@ -31,19 +31,23 @@ type triageOut struct {
 		CheckMinutes int    `json:"check_minutes"`
 		Agent        string `json:"agent"`
 		Risky        bool   `json:"risky"`
+		// Approved: the model says this is the very wait and next step the user already approved (same thing waited
+		// for, same step on the same target); only asked about when there is such an approval (#3824).
+		Approved bool `json:"approved"`
 	} `json:"wait"`
 	Artifacts []proto.WorkArtifact `json:"artifacts"`
 }
 
 // triageTurnModel asks the triage model where c stands after its turn. An answer it cannot read is unsure: a work state
 // with no phase (nothing shown, nothing done; the turn is not triaged again).
-func (s *Service) triageTurnModel(ctx context.Context, v *workView, machine string, c proto.Session) (*proto.WorkState, error) {
+// same: the model says the turn still waits on the very step the user approved (#3824), false when there is none.
+func (s *Service) triageTurnModel(ctx context.Context, v *workView, machine string, c proto.Session) (w *proto.WorkState, same bool, err error) {
 	ask, reply := s.lastTurnOf(ctx, machine, c.SessionID)
 	if reply == "" {
 		reply = strings.TrimSpace(c.LastText)
 	}
 	if reply == "" {
-		return &proto.WorkState{}, nil
+		return &proto.WorkState{}, false, nil
 	}
 	others, byShort := triageOthers(machine, c.SessionID, v.sessions(machine))
 	name := machine
@@ -55,12 +59,18 @@ func (s *Service) triageTurnModel(ctx context.Context, v *workView, machine stri
 		Cwd: c.Cwd, Ask: clipMiddleRunes(ask, 500), Reply: clipMiddleRunes(reply, 1500), Others: others,
 		Project: strings.Join(first(s.projectsFor(ctx, machine, c.Cwd), 3), "、"),
 	}
+	s.work.mu.Lock()
+	if a, ok := s.work.approved[[2]string{machine, c.SessionID}]; ok {
+		in.ApprovedWait, in.ApprovedThen = a.wait, a.then
+	}
+	s.work.mu.Unlock()
 	var out triageOut
 	if err := s.purposeModel("agent.triage").JSON(ctx, prompts.RenderAgentTriage(prompts.AgentTriage{Owner: s.owner(ctx)}),
 		prompts.RenderAgentTriageInput(in), &out); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return triageWork(out, byShort, time.Now(), s.lang(ctx)), nil
+	same = out.Wait != nil && out.Wait.Approved && in.ApprovedThen != ""
+	return triageWork(out, byShort, time.Now(), s.lang(ctx)), same, nil
 }
 
 // projectsFor are the names of the knowledge base's projects whose directories hold cwd on machine (none when it

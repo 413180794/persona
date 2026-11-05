@@ -34,7 +34,7 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 - 回答 `extwire.Routes`：`/api/v1/extensions…`、`/api/v1/admin/extensions…`、兼容的 `/api/v1/plugins…`、扩展自己的 HTTP / WebSocket / SSE（`/api/v1/extensions/{id}/…`，以及扩展的 `api` 贡献的前缀，比如飞书扩展的 `/api/v1/lark/…`）、`/api/v1/connectors…`、`/api/v1/bots…`、`/api/v1/channels/{id}/bind`、`/api/v1/mail/…`、`/api/v1/imessage…`、`/api/v1/agents…`、`/api/v1/messaging…`、机器的 `…/computer…`、`…/browser…`、`/api/v1/devices/{id}/widgets`。
 - 收件箱和知识库的来源、渠道的传输、连接器给助手的目录都在**同一个进程里**直接给助手（以前是 hub 经总线的 `inbox.collected`、`channels.receive`、`feishu.*`、`connectors.*`、`kb.*`，方法和参数照旧，只是不过总线）；助手发给 hub 的 `inbox.changed`、`kb.changed` 也先给它（推给扩展、给 App 推 `{"type":"inbox"}`）。
 - 电脑是它自己的 devices 连的：node 一连上，它把扩展的 Agent 过滤加进 `node.configure`，再开始 Cua / ego 的状态、扩展在电脑上的程序、连接器（以前在 hub 的 `devices.connected` 里做）；node 的 `plugin.node.*` 事件和它自己开的流（`mx…`）不再交给 hub；`assistant.lark` 它自己答（只给助手那台）。
-- 给 hub 的报告 `extensions.report`（每次变了整份发）：扩展的功能（hello、`/health` 的 `features`）、扩展服务的 API 前缀和它们声明的回执、每台机器上 Cua / ego 的状态和能不能开屏幕、看屏幕时保持唤醒。
+- 给 hub 的报告 `extensions.report`（每次变了整份发）：扩展的功能（hello、`/health` 的 `features`）、扩展服务的 API 前缀和它们声明的回执、每台机器上 Cua / ego 的状态和能不能开屏幕、看屏幕时保持唤醒、开着的扩展的形象（`looks`）。卸载带形象的扩展后再发 `extensions.looks_gone {ids}`，选中的形象没人提供了就改回默认（下面「形象」）。
 
 **hub 做的**：
 

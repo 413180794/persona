@@ -18,6 +18,9 @@ type AgentTriageInput struct {
 	Ask     string // what the user asked in this turn, "" when it is not known
 	Reply   string // its last reply, clipped
 	Others  []AgentTriageOther
+	// The risky step the user already said yes to, once what it waits for is over ("" when none): a turn still
+	// waiting for it is no question for the user.
+	ApprovedWait, ApprovedThen string
 }
 
 // AgentTriageOther is another agent working on the same machine: what this one may be waiting for.
@@ -34,6 +37,7 @@ type AgentWake struct {
 	Then      string
 	Agent     string // the agent it waited for, when it is that one stopping that wakes it
 	AgentLine string // what that agent said last
+	Approved  string // the risky step the user already said yes to, once the wait is over ("" when none)
 }
 
 func RenderAgentWake(w AgentWake) string { return render("agents/wake", w) }
