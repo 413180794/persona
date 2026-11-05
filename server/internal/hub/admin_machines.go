@@ -217,25 +217,7 @@ func (h *Hub) adminMachineRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("DELETE /api/v1/admin/machines/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
-		found := false
-		err := editHubJSON(h.cfg.dir, func(o *jsonObject) error {
-			list, err := machineEntries(o)
-			if err != nil {
-				return err
-			}
-			kept := make([]json.RawMessage, 0, len(list))
-			for _, raw := range list {
-				if machineEntryID(raw) == id {
-					found = true
-					continue
-				}
-				kept = append(kept, raw)
-			}
-			if !found {
-				return nil
-			}
-			return o.set("machines", kept)
-		})
+		found, err := removeMachineEntry(h.cfg.dir, id)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return

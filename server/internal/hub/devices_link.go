@@ -326,7 +326,29 @@ func (h *Hub) addMachineLive(mc MachineConfig) {
 	}
 	d.entries = append(d.entries, mc)
 	d.mu.Unlock()
+	h.setLeaving(mc.ID, false) // added again after a reject (machine_trust.go)
 	h.logf("[%s] added (%s): the manager connects it", mc.ID, kindOf(mc))
+	h.devicesConfigChanged()
+	h.meshTouch()
+}
+
+// removeMachineLive takes a hub.json entry out of what the manager connects: it lets the computer go now. A hub that
+// is not running (tests) does not read it again.
+func (h *Hub) removeMachineLive(id string) {
+	d := &h.devices
+	d.mu.Lock()
+	if !d.started {
+		d.mu.Unlock()
+		return
+	}
+	n := len(d.entries)
+	d.entries = slices.DeleteFunc(d.entries, func(e MachineConfig) bool { return e.ID == id })
+	gone := len(d.entries) != n
+	d.mu.Unlock()
+	if !gone {
+		return
+	}
+	h.logf("[%s] removed: the manager lets it go", id)
 	h.devicesConfigChanged()
 	h.meshTouch()
 }
@@ -586,6 +608,8 @@ func (h *Hub) applyDeviceStates(st devicewire.States) {
 	d.fresh = false
 	d.warmUntil = time.Time{} // the hub's start is over: from now on a call without the manager fails at once
 	d.mu.Unlock()
+	// The rejected computers the manager let go are not kept out any more (machine_trust.go).
+	h.fleetLeft(func(id string) bool { return byID[id] != nil || st.Absorbed[id] != "" })
 	if fresh {
 		go h.watchAgain(order)
 	}

@@ -23,3 +23,13 @@ func TestNodeMissingSaysHowThisComputerRunsTheNode(t *testing.T) {
 		}
 	}
 }
+
+// The hub reads the marker as error_code node_service_down (hub/machine_trust.go), also when the node is reached
+// over TCP and no socket file name is in the message.
+func TestNodeMissingCarriesTheMarker(t *testing.T) {
+	for _, goos := range []string{"windows", "darwin", "linux", "freebsd"} {
+		if msg := nodeMissing(goos, "127.0.0.1:7001").Error(); !strings.Contains(msg, NodeDownMarker) {
+			t.Errorf("%s: %s", goos, msg)
+		}
+	}
+}

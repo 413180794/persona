@@ -15,13 +15,18 @@ import (
 )
 
 type Machine struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Kind          string    `json:"kind"` // local | ssh | tailcat | link
-	Icon          string    `json:"icon"` // server | laptop | desktop
-	SSHHost       string    `json:"ssh_host,omitempty"`
-	Online        bool      `json:"online"`
-	Error         string    `json:"error,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Kind    string `json:"kind"` // local | ssh | tailcat | link
+	Icon    string `json:"icon"` // server | laptop | desktop
+	SSHHost string `json:"ssh_host,omitempty"`
+	Online  bool   `json:"online"`
+	Error   string `json:"error,omitempty"`
+	// ErrorCode is what Error is about, for a client's own words (docs/onboarding.md 5.3): node_service_down,
+	// link_offline, never_connected, node_outdated; "" none of them. An unknown one shows Error.
+	ErrorCode string `json:"error_code,omitempty"`
+	// Trust: pending while the user has not confirmed the computer is theirs (POST …/confirm); "" is confirmed.
+	Trust         string    `json:"trust,omitempty"`
 	Hostname      string    `json:"hostname,omitempty"`
 	OS            string    `json:"os,omitempty"`
 	Arch          string    `json:"arch,omitempty"`
@@ -270,6 +275,7 @@ var Features = []string{
 	"file_convert",           // GET /api/v1/machines/{mid}/file/convert: LibreOffice → PDF on the machine
 	"git_blob",               // GET /api/v1/machines/{mid}/git/blob: a file at a version, for comparing
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md「发送文件」)
+	"machine_trust",          // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)
@@ -729,8 +735,8 @@ type Session struct {
 	State string `json:"state"`
 	// BackgroundWorking: State is working only because of background work (#2935): its turn ended while its
 	// background commands, subagents, Monitors or workflows still run. Clients say 工作中（后台）. Set by the hub.
-	BackgroundWorking bool `json:"background_working,omitempty"`
-	SeenAt time.Time `json:"seen_at,omitempty"`
+	BackgroundWorking bool      `json:"background_working,omitempty"`
+	SeenAt            time.Time `json:"seen_at,omitempty"`
 	// StateSince is when the agent entered its current state, as the hub saw it (the hub restarting resets it):
 	// lists sort 工作中 by it, since updated_at moves on every step.
 	StateSince time.Time `json:"state_since,omitempty"`
@@ -1330,13 +1336,13 @@ type Workflow struct {
 	ToolUseID  string   `json:"tool_use_id,omitempty"` // the Workflow call that launched it
 	// AgentsStarted counts the agents it started so far (the total is not known before it ends: scripts fan out as
 	// they go), AgentsDone those that returned, AgentsRunning those still at it.
-	AgentsStarted int       `json:"agents_started"`
-	AgentsDone    int       `json:"agents_done"`
-	AgentsRunning int       `json:"agents_running"`
-	StartedAt     time.Time `json:"started_at"`
+	AgentsStarted int        `json:"agents_started"`
+	AgentsDone    int        `json:"agents_done"`
+	AgentsRunning int        `json:"agents_running"`
+	StartedAt     time.Time  `json:"started_at"`
 	EndedAt       *time.Time `json:"ended_at,omitempty"`   // nil while it runs
-	UpdatedAt     time.Time `json:"updated_at,omitempty"` // its last sign of life (journal or an agent's transcript)
-	Error         string    `json:"error,omitempty"`      // a failed or killed run's error, first line
+	UpdatedAt     time.Time  `json:"updated_at,omitempty"` // its last sign of life (journal or an agent's transcript)
+	Error         string     `json:"error,omitempty"`      // a failed or killed run's error, first line
 	// Agents are its agents in the order they started (at most WorkflowAgentsMax, the latest kept).
 	Agents []WorkflowAgent `json:"agents,omitempty"`
 }

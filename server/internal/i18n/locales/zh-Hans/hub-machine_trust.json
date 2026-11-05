@@ -1,0 +1,9 @@
+{
+  "confirm_forbidden": "只有登录过的设备能确认电脑",
+  "no_machine": "没有这台电脑",
+  "not_pending": "只有等你确认的电脑能在这里移除",
+  "pending": "等你在新版 App 或网页里确认这是你的电脑",
+  "pending_error": "等你在新版 App 或网页里确认这是你的电脑（{error}）",
+  "reject_forbidden": "只有登录过的设备能移除电脑",
+  "start_pending": "这台电脑还没确认是你的，确认后才能在上面开 Agent"
+}

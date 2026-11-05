@@ -56,17 +56,20 @@ func (h *Hub) machineByID(id string) *Machine {
 func (h *Hub) localMachine(id string) *Machine { return h.machineByID(id) }
 
 // machineIDs are the ids localMachine knows: the machines now, and the hub.json entries another one absorbed (the
-// same computer: their id still reaches it), e.g. for the assistant, whose saved machine may be such an id.
+// same computer: their id still reaches it), e.g. for the assistant, whose saved machine may be such an id. Not a
+// computer waiting to be confirmed (machine_trust.go): the assistant runs on none of those.
 func (h *Hub) machineIDs() []string {
 	out := []string{}
 	for _, m := range h.machinesNow() {
-		out = append(out, m.cfg.ID)
+		if !h.machineUntrusted(m.cfg.ID) {
+			out = append(out, m.cfg.ID)
+		}
 	}
 	d := &h.devices
 	d.mu.Lock()
 	var absorbed []string
 	for from := range d.absorbed {
-		if !slices.Contains(out, from) {
+		if !slices.Contains(out, from) && !h.machineUntrusted(from) {
 			absorbed = append(absorbed, from)
 		}
 	}
@@ -91,6 +94,9 @@ func (h *Hub) machineList() []proto.Machine {
 	list := h.machinesNow()
 	out := make([]proto.Machine, 0, len(list))
 	for _, m := range list {
+		if h.machineLeaving(m.cfg.ID) { // rejected, on its way out (machine_trust.go)
+			continue
+		}
 		s := m.snapshot()
 		if s.HubID == "" {
 			s.HubID, s.HubName = self, name
@@ -98,6 +104,7 @@ func (h *Hub) machineList() []proto.Machine {
 		if s.Route == nil {
 			s.Route = &proto.MachineRoute{Via: kindOf(m.cfg)}
 		}
+		h.withTrust(&s, m.cfg.Kind) // trust, error_code (machine_trust.go)
 		out = append(out, s)
 	}
 	return out

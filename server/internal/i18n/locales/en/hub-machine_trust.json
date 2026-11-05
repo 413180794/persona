@@ -1,0 +1,9 @@
+{
+  "confirm_forbidden": "Only a signed-in device can confirm a computer",
+  "no_machine": "There’s no such computer",
+  "not_pending": "Only a computer waiting for your confirmation can be removed here",
+  "pending": "Waiting for you to confirm this computer is yours in the latest app or on the web",
+  "pending_error": "Waiting for you to confirm this computer is yours in the latest app or on the web ({error})",
+  "reject_forbidden": "Only a signed-in device can remove a computer",
+  "start_pending": "This computer isn’t confirmed as yours yet. Confirm it before starting an agent on it"
+}

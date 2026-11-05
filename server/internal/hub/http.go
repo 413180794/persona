@@ -37,6 +37,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"machines": h.machineList()})
 	})
+	// Confirm / reject a computer (machine_trust.go).
+	h.machineTrustRoutes(api)
 	h.deviceRoutesRelayed(api) // the manager's own: reconnect, engine, herdr, deploy, claude-dirs (devices_link.go)
 	api.HandleFunc("GET /api/v1/machines/{mid}/dirs", h.proxy("dirs.list", func(r *http.Request) any {
 		return map[string]any{"path": r.URL.Query().Get("path")}
@@ -591,6 +593,10 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 	m := h.localMachine(p.MachineID)
 	if m == nil {
 		writeErr(w, http.StatusNotFound, errors.New("unknown machine"))
+		return
+	}
+	if h.machineUntrusted(m.cfg.ID) { // not confirmed yet (machine_trust.go)
+		writeErrCode(w, http.StatusConflict, "machine_pending", i18n.Err("hub-machine_trust.start_pending"))
 		return
 	}
 	if p.AgentType == "" {

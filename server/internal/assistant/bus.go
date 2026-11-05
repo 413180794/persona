@@ -204,10 +204,13 @@ func (b *BusHub) waitHello(ctx context.Context) {
 
 // ---- what the assistant asks of the hub ----
 
-func (b *BusHub) Hello(context.Context) (Hello, error) {
+func (b *BusHub) Hello(context.Context) (Hello, error) { return b.helloNow(), nil }
+
+// helloNow is the hello's answer as last kept.
+func (b *BusHub) helloNow() Hello {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.hello, nil
+	return b.hello
 }
 
 func (b *BusHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage, error) {
@@ -577,7 +580,10 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 		if err := decode(&h); err != nil {
 			return err
 		}
+		before := b.helloNow().Assistant.Machines
 		b.setHello(h)
+		// A computer just confirmed gets its keys (machine_trust.go).
+		s.trustChanged(ctx, before, h.Assistant.Machines)
 		s.ProfileChanged(ctx) // the live context and the settings are read again
 		s.Resync(ctx)         // and the hub gets the profile in effect now (the default machine may be another)
 	case assistantwire.EventResync:

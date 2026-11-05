@@ -167,11 +167,12 @@ func (s *Service) managedForNodes(ctx context.Context) []proto.ManagedLauncher {
 
 // pushManaged gives the online nodes (one machine when machine is not "") the launchers added in Persona; they keep
 // them in memory. After a change; a node's new connection gets them right after it is configured (main.go's
-// devices NodeCalls).
+// devices NodeCalls). A computer waiting to be confirmed gets none (machine_trust.go; the hub does not list it
+// either).
 func (s *Service) pushManaged(ctx context.Context, machine string) {
 	list := s.managedForNodes(ctx)
 	for _, d := range s.devices(ctx) {
-		if !d.Online || (machine != "" && d.ID != machine) {
+		if !d.Online || (machine != "" && d.ID != machine) || s.machinePending(ctx, d.ID) {
 			continue
 		}
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)

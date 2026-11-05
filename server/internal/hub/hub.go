@@ -48,6 +48,7 @@ type Hub struct {
 	fulls fullRelays // the web's full herdr views (herdrclient.go)
 
 	devices devicesState // the manager's machines as it reports them (devices_link.go)
+	trust   machineTrust // the computers waiting to be confirmed (machine_trust.go)
 
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
@@ -241,6 +242,8 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.push.userLang = h.userLang
 	// The machines are the manager's to connect (devices_link.go); until it reports them they show as before a
 	// restart (what it handed over), before the assistant's process starts and takes that hand-over.
+	h.loadMachineTrust(ctx) // before the manager connects them and the assistant asks (machine_trust.go)
+	go h.machineTrustLoop(ctx)
 	h.startDevices(ctx)
 	h.initMesh(ctx) // before the manager connects: a member leaves its computers to the center (mesh_group.go)
 	go h.terminalKeepalive(ctx)

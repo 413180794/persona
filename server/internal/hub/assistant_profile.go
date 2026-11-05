@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -103,12 +104,12 @@ func (h *Hub) isMainOn(machine, session string) bool {
 }
 
 // defaultAssistantMachine is where hub.json runs the assistant: its assistant.machine when the hub has it, else the
-// hub's own machine, else the first one.
+// hub's own machine, else the first one; never a computer waiting to be confirmed (machine_trust.go).
 func (h *Hub) defaultAssistantMachine() string {
-	if h.cfg != nil && h.localMachine(h.cfg.Assistant.Machine) != nil {
+	if h.cfg != nil && h.localMachine(h.cfg.Assistant.Machine) != nil && !h.machineUntrusted(h.cfg.Assistant.Machine) {
 		return h.cfg.Assistant.Machine
 	}
-	machines := h.machinesNow()
+	machines := slices.DeleteFunc(h.machinesNow(), func(m *Machine) bool { return h.machineUntrusted(m.cfg.ID) })
 	for _, m := range machines {
 		if m.cfg.Kind == "local" {
 			return m.cfg.ID

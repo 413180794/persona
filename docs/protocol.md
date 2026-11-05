@@ -45,7 +45,7 @@
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
 - 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
-- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
+- 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`extension_operations`（安装、升级、卸载分步骤带进度，见下「扩展的安装、升级、卸载进度」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）、`machine_trust`（机器的 `trust` / `error_code` 和 `POST /machines/{id}/confirm`、`…/reject`，见下面「电脑的信任」）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
 
@@ -295,7 +295,11 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  // id，撞名的加 @<成员名>。kind 是 hub 的：只在成员上配的电脑。旧 hub 没有这几个字段
  "hub_id":"<hub UUID>","hub_name":"家里","machine_uid":"<UUID>","route":{"via":"service","hops":0,"rtt_ms":12},
  // 可选：不止一条路（或只能经成员）时，每条路一项：方式、经哪台 hub（中心自己的路是中心的 hub_id）、现在能不能用、最近的 RTT、是不是在用的那条
- "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<成员 hub UUID>","ok":true,"rtt_ms":40}]}
+ "paths":[{"via":"service","hub_id":"<hub UUID>","ok":true,"rtt_ms":12,"active":true},{"via":"hub","hub_id":"<成员 hub UUID>","ok":true,"rtt_ms":40}],
+ // 可选（feature machine_trust，上手方案 #287 的 5.3）：trust 是 pending 时这台电脑在等用户确认（下面「电脑的信任」），省略 = 已确认；
+ // error_code 说 error 是哪一类：node_service_down（链路通、常驻 node 没在跑）| link_offline（连过、现在断着）| never_connected（电脑来连 /
+ // hub 来连的还从没连上过）| node_outdated（在线，node 是另一个版本、又旧到不能从这里远程更新）；error 原文照旧给，不认识的码显示 error
+ "trust":"pending","error_code":"never_connected"}
 
 // MetricSample：一次读数（每 10 秒）。没测到的字段缺省（第一次读数没有 cpu / net_*），不是 0；cores 只有 Linux 有
 {"t":1790003600,"cpu":42.5,"cores":[40,45],"load":3.1,"mem_used":34359738368,"mem_total":68719476736,
@@ -628,6 +632,7 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 | PUT | `/api/v1/workspace-board/settings` | `{enabled}` → `{enabled,can_write}`；仅 `full`，缺 `enabled` 返回 400 |
 | GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
+| POST | `/api/v1/machines/{id}/confirm` · `…/reject` | 确认 / 拒绝一台待确认的电脑（feature `machine_trust`，下面「电脑的信任」），只认已登录的 full 设备和主 token（配对码换来的临时身份 403）→ `{"ok":true}`。confirm：已经确认的再确认也是 200，没有这台 404；reject 只对待确认的（已确认的 409 `not_pending`，没有这台 404） |
 | GET | `/api/v1/machines/{mid}/panes` | 终端浏览器的树（feature `terminal_panes`，仅 `full`）：`{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`；包括没有 Agent 的 shell 窗格。`terminal` 是终端流用的地址 `pane:<pane>`，`session_id` 是跑在那个窗格里的 Agent 会话（有就用它开终端） |
 | POST | `/api/v1/machines/{mid}/panes` | `{workspace_id, kind?}`：在这个空间新开一个 shell 标签页（不抢电脑上的焦点，目录是空间自己的，请求不能指定）→ `{pane, terminal, tab_id}`；仅 `full`，只有用户点了才调用 |
 | POST | `/api/v1/machines/{mid}/panes/close` · `…/panes/split` · `…/panes/agent` · `…/panes/git` · `…/tabs/close` · `…/tabs/rename` | 终端节点菜单的动作（`docs/terminal.md` 第二十一节），仅 `full`：`{pane}` 关窗格；`{pane, direction: right\|down}` 拆分 → `{pane, terminal}`；`{pane, launcher}` 在 shell 窗格里启动 Agent → `{session_id}`；`{op: pull\|push\|fetch, pane \| workspace_id+kind?}` → `{op, message, output?}`；`{tab_id, kind?}` 关标签页；`{tab_id, label, kind?}` 改标签页名。只认这些字段，不能指定目录或命令 |
@@ -769,6 +774,23 @@ hub 把每一次安装、升级、卸载记成一个**操作**（operation）：
 - 链接最多跟 40 层（环就停）。这是基本防护，不是沙箱：设备 token 本来就能让 Agent 读这些文件。
 
 邮件见下文「邮件 API」。HTTP 错误格式和可选字段见上文「错误体」。
+
+### 电脑的信任（feature `machine_trust`，#3347）
+
+新用户上手方案（#287）4.2、5.3：已登录的设备以后能自己添加电脑，添加的电脑先是**待确认**（`trust: "pending"`），用户点「是我的电脑」才确认。
+信任存 Postgres 的 `machine_trust` 表，**没有记录 = 已确认**：升级前的机器、`/admin` 加的、`hub pair --machine` 加的都直接是已确认，行为不变。待确认的电脑：
+
+- 不收 Persona 管理的 Key（助手的 `pushManaged` 和新连接的 `launchers.managed` 都跳过）；它向管理者发的请求（`assistant.context`、MCP 工具）一律拒绝；
+- 不是助手的机器（`defaultAssistantMachine`、hello 的 `assistant.machines` 不含它），不在助手的 `devices.list` 里（派发、开 Agent、待办都看不到），hub 也不转给它助手的 `device.call`；
+- `POST /api/v1/sessions` 在它上面开 Agent 回 409 `machine_pending`（老 App 的新建 Agent 列表还会列它）；
+- 机器列表照常列出（App 要显示确认），`error` 写「等你在新版 App 或网页里确认这是你的电脑」，原来的 `error` 跟在括号里；
+- 24 小时没确认自动删除（hub.json 条目、记录，吊销它的 Persona Link 凭据和没用掉的配对码），和 `reject` 一样。
+
+拒绝或超时删除后，记录已经删了（看起来像已确认），但管理者断开它之前（配置变化要等一小会儿），hub 仍把它当待确认挡在外面，机器列表也不再列它，所以 hello 不会把它当成刚确认的电脑、给它推 Key。
+hub 读不到待确认的电脑（数据库不通）时，每台电脑都按待确认挡在外面（机器列表不标 `trust`），每 5 秒重读一次，读到为止；这期间不做超时删除。管理者那边读不到时，电脑发来的请求会拒绝，错误是「hub 的数据库没回应」，不说电脑在等确认。
+`confirm` / `reject` 的 `error` 按 `Accept-Language` 本地化（403 `forbidden`、404 `not_found`、409 `not_pending`）。
+
+确认后 hello 的机器列表多了它，助手随即给它推送 Key。确认、拒绝、超时删除（以后还有出码、兑换）都写 `machine_audit` 表（谁、什么时候、做了什么，不含凭据）。
 
 ## WebSocket `/api/v1/ws`
 

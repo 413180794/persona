@@ -531,7 +531,7 @@ func (s *passive) stream(w http.ResponseWriter, r *http.Request) {
 	s.seen(r)
 	node, err := net.DialTimeout("unix", s.o.Target, 2*time.Second)
 	if err != nil {
-		msg := fmt.Sprintf("本机的常驻 node 没在运行（%s 连不上）：让 jarvisd node --attach 一直跑", s.o.Target)
+		msg := fmt.Sprintf("本机的%s（%s 连不上）：让 jarvisd node --attach 一直跑", NodeDownMarker, s.o.Target)
 		s.mu.Lock()
 		s.node, s.nodeErr = "offline", msg
 		s.reportLocked()

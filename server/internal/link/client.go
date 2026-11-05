@@ -31,6 +31,11 @@ import (
 	"github.com/coder/websocket"
 )
 
+// NodeDownMarker is in the error a computer's link reports when its resident node is not running (nodeMissing,
+// listen.go): the hub reads it as error_code node_service_down (hub/machine_trust.go machineErrorCode). An older link
+// says it the same way, so it is kept as it is.
+const NodeDownMarker = "常驻 node 没在运行"
+
 // nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/link.md「装 node
 // 服务」): the hub shows it on the machine's page.
 func nodeMissing(goos, target string) error {
@@ -43,7 +48,7 @@ func nodeMissing(goos, target string) error {
 	case "linux":
 		how = "jarvis-link node install（systemd 用户服务）"
 	}
-	return fmt.Errorf("本机的常驻 node 没在运行（%s 连不上）：%s", target, how)
+	return fmt.Errorf("本机的%s（%s 连不上）：%s", NodeDownMarker, target, how)
 }
 
 // These are settings, not measurements.

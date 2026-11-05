@@ -114,6 +114,9 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 		case assistantwire.DeviceDevicesList:
 			list := []assistantwire.Device{}
 			for _, m := range h.machinesNow() {
+				if h.machineUntrusted(m.cfg.ID) { // the assistant lists and uses none (machine_trust.go)
+					continue
+				}
 				m.mu.Lock()
 				online, info := m.online, m.info
 				m.mu.Unlock()
@@ -125,7 +128,7 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 		}
 	}
 	m := h.localMachine(p.Device)
-	if m == nil {
+	if m == nil || h.machineUntrusted(m.cfg.ID) {
 		return nil, noDevice(p.Device)
 	}
 	if out, ok, err := h.channelsDeviceCall(ctx, m, p); ok { // following a turn, sending once (assistant_channels.go)

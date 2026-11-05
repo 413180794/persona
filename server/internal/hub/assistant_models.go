@@ -14,7 +14,7 @@ import (
 // hubModels is what hub.json says about models, for the hello.
 func (h *Hub) hubModels() assistantwire.HubModels {
 	out := assistantwire.HubModels{AI: h.cfg.AI, TriageAI: h.cfg.Inbox.TriageAI, JudgeAI: h.cfg.Inbox.JudgeAI, KBAI: h.cfg.KB.AI}
-	if m := h.cfg.Inbox.Agent.Machine; h.localMachine(m) != nil {
+	if m := h.cfg.Inbox.Agent.Machine; h.localMachine(m) != nil && !h.machineUntrusted(m) {
 		out.InboxAgentMachine = m
 	}
 	for _, m := range h.machinesNow() {

@@ -83,6 +83,7 @@ type Service struct {
 	fleetEnded func(ix proto.Interaction, r *proto.Resolution)
 	models     modelsState // models.go: the model configuration
 	health     healthBook  // launcher_health.go: each machine's launchers
+	trust      trustBook   // machine_trust.go: the computers waiting to be confirmed
 }
 
 var _ Handler = (*Service)(nil)

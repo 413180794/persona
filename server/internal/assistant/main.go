@@ -78,6 +78,9 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	var ext *extmgr.Manager
 	devs := devices.New(devices.Options{Store: database, Logf: log.New(os.Stderr, "devices: ", log.LstdFlags).Printf,
 		Answer: func(ctx context.Context, machine, method string, params json.RawMessage) (any, bool, error) {
+			if err := svc.machineTrust(ctx, machine); err != nil { // not confirmed yet: nothing of the assistant's (machine_trust.go)
+				return nil, true, err
+			}
 			if out, ok, err := svc.NodeAnswer(ctx, machine, method, params); ok {
 				return out, ok, err
 			}
@@ -91,7 +94,11 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 		OnConnected: func(machine string) { ext.NodeConnected(machine) },
 		OnEvent:     func(machine, event string, params json.RawMessage) bool { return ext.NodeEvent(machine, event, params) },
 		// A node's new connection gets the launchers added in Persona, with their keys (models_launchers.go).
+		// Not one waiting to be confirmed: it gets them when it is (trustChanged, machine_trust.go).
 		NodeCalls: func(ctx context.Context, machine string) []devicewire.NodeCall {
+			if svc.machinePending(ctx, machine) {
+				return nil
+			}
 			b, err := json.Marshal(map[string]any{"launchers": svc.managedForNodes(ctx)})
 			if err != nil {
 				return nil
