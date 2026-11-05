@@ -24,6 +24,7 @@ type uploadNode struct {
 	offsets []int64
 	data    bytes.Buffer
 	aborted bool
+	dests   []string // the dest of each file.upload.begin
 }
 
 func (f *uploadNode) handle(_ context.Context, method string, params json.RawMessage) (any, error) {
@@ -35,12 +36,14 @@ func (f *uploadNode) handle(_ context.Context, method string, params json.RawMes
 	}
 	var p struct {
 		Name   string `json:"name"`
+		Dest   string `json:"dest"`
 		Offset int64  `json:"offset"`
 		Data   []byte `json:"data"`
 	}
 	_ = json.Unmarshal(params, &p)
 	switch method {
 	case "file.upload.begin":
+		f.dests = append(f.dests, p.Dest)
 		return map[string]any{"upload_id": "u1"}, nil
 	case "file.upload.chunk":
 		f.offsets = append(f.offsets, p.Offset)
@@ -152,5 +155,46 @@ func TestUploadCancelledAborts(t *testing.T) {
 		if c == "file.upload.end" {
 			t.Fatal("ended a cut-short upload")
 		}
+	}
+}
+
+func TestUploadForTerminal(t *testing.T) {
+	// dest=terminal reaches the node, which keeps the file in its Persona directory.
+	f := &uploadNode{}
+	mux := uploadHub(t, f)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=image.png&dest=terminal", strings.NewReader("png")))
+	if rec.Code != 200 || len(f.dests) != 1 || f.dests[0] != proto.UploadDestTerminal {
+		t.Fatalf("%d %s %v", rec.Code, rec.Body, f.dests)
+	}
+	// Without dest the node hears none (an old node never has to understand it).
+	plain := &uploadNode{}
+	rec = httptest.NewRecorder()
+	uploadHub(t, plain).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt", strings.NewReader("hi")))
+	if rec.Code != 200 || len(plain.dests) != 1 || plain.dests[0] != "" {
+		t.Fatalf("%d %s %v", rec.Code, rec.Body, plain.dests)
+	}
+
+	// The terminal's limit is lower than the chat's, and the answer says what it is.
+	req := httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=big.mov&dest=terminal", strings.NewReader("x"))
+	req.ContentLength = proto.MaxTerminalUploadBytes + 1
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), `"code":"too_large"`) || len(f.dests) != 1 {
+		t.Fatalf("%d %s %v", rec.Code, rec.Body, f.dests)
+	}
+	var body struct {
+		Limit int64 `json:"limit"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if body.Limit != proto.MaxTerminalUploadBytes {
+		t.Fatalf("limit %d", body.Limit)
+	}
+
+	// An unknown destination is refused before the node hears of it.
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=a.txt&dest=%2Fetc", strings.NewReader("hi")))
+	if rec.Code != http.StatusBadRequest || len(f.dests) != 1 {
+		t.Fatalf("%d %s %v", rec.Code, rec.Body, f.dests)
 	}
 }

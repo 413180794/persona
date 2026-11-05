@@ -2,9 +2,13 @@ package node
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -150,5 +154,148 @@ func TestUploadIdleRemovesPart(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if ents, _ := os.ReadDir(dir); len(ents) != 0 {
 		t.Fatalf("left %v", ents)
+	}
+}
+
+// callUpload runs a whole terminal upload through the RPC the hub speaks.
+func callUpload(t *testing.T, n *Node, dest, name string, data []byte) (proto.UploadedFile, error) {
+	t.Helper()
+	call := func(method string, p map[string]any) (any, error) {
+		raw, _ := json.Marshal(p)
+		return n.uploadCall(method, raw)
+	}
+	res, err := call("file.upload.begin", map[string]any{"name": name, "size": len(data), "dest": dest})
+	if err != nil {
+		return proto.UploadedFile{}, err
+	}
+	id := res.(map[string]any)["upload_id"]
+	if _, err := call("file.upload.chunk", map[string]any{"upload_id": id, "offset": 0, "data": data}); err != nil {
+		return proto.UploadedFile{}, err
+	}
+	out, err := call("file.upload.end", map[string]any{"upload_id": id})
+	if err != nil {
+		return proto.UploadedFile{}, err
+	}
+	return out.(proto.UploadedFile), nil
+}
+
+func TestTerminalUploadLandsInPersonaDir(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	home := t.TempDir()
+	n := &Node{dir: home, logger: log.New(io.Discard, "", 0)}
+	data := []byte("\x89PNG pretend")
+	out, err := callUpload(t, n, proto.UploadDestTerminal, "Screen Shot 1.png", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir := terminalUploadDir(home, time.Now())
+	if !filepath.IsAbs(out.Path) || filepath.Dir(out.Path) != wantDir {
+		t.Fatalf("path %s, want it in %s", out.Path, wantDir)
+	}
+	if b := filepath.Base(out.Path); !regexp.MustCompile(`^[0-9a-f]{16}-Screen Shot 1\.png$`).MatchString(b) {
+		t.Fatalf("name %q", b)
+	}
+	got, _ := os.ReadFile(out.Path)
+	if !bytes.Equal(got, data) || out.Size != int64(len(data)) {
+		t.Fatal("content differs")
+	}
+	if st, _ := os.Stat(out.Path); st.Mode().Perm() != 0o600 {
+		t.Fatalf("file mode %v", st.Mode())
+	}
+	if st, _ := os.Stat(wantDir); st.Mode().Perm() != 0o700 {
+		t.Fatalf("dir mode %v", st.Mode())
+	}
+	// Nothing in the temp directory, and no part file beside the result.
+	if ents, _ := os.ReadDir(tmp); len(ents) != 0 {
+		t.Fatalf("temp dir has %v", ents)
+	}
+	if ents, _ := os.ReadDir(wantDir); len(ents) != 1 {
+		t.Fatalf("dir has %v", ents)
+	}
+	// The same name twice is two files.
+	again, err := callUpload(t, n, proto.UploadDestTerminal, "Screen Shot 1.png", data)
+	if err != nil || again.Path == out.Path {
+		t.Fatalf("again: %v %v", again.Path, err)
+	}
+	// Without a dest the old behaviour: the temp directory.
+	plain, err := callUpload(t, n, "", "a.txt", []byte("x"))
+	if err != nil || filepath.Dir(plain.Path) != tmp {
+		t.Fatalf("plain: %v %v", plain.Path, err)
+	}
+}
+
+func TestTerminalUploadCannotLeaveItsDirectory(t *testing.T) {
+	home := t.TempDir()
+	n := &Node{dir: home, logger: log.New(io.Discard, "", 0)}
+	root := terminalUploadRoot(home)
+	for _, name := range []string{"../../../etc/passwd", "..", "/etc/cron.d/x", `..\..\x`, "a/../../b.png", "\x00evil", "%2e%2e%2fx"} {
+		out, err := callUpload(t, n, proto.UploadDestTerminal, name, []byte("x"))
+		if err != nil {
+			t.Errorf("%q: %v", name, err)
+			continue
+		}
+		if filepath.Dir(out.Path) != terminalUploadDir(home, time.Now()) || !strings.HasPrefix(out.Path, root+string(filepath.Separator)) {
+			t.Errorf("%q escaped to %s", name, out.Path)
+		}
+	}
+	// Nothing was written next to the upload root's parents.
+	ents, _ := os.ReadDir(home)
+	if len(ents) != 1 || ents[0].Name() != "uploads" {
+		t.Fatalf("home has %v", ents)
+	}
+	if _, err := callUpload(t, n, "elsewhere", "a.png", []byte("x")); err == nil {
+		t.Fatal("an unknown destination is refused")
+	}
+}
+
+func TestTerminalUploadSizeCap(t *testing.T) {
+	home := t.TempDir()
+	n := &Node{dir: home, logger: log.New(io.Discard, "", 0)}
+	raw, _ := json.Marshal(map[string]any{"name": "big.bin", "size": proto.MaxTerminalUploadBytes + 1, "dest": proto.UploadDestTerminal})
+	_, err := n.uploadCall("file.upload.begin", raw)
+	var re *rpc.Error
+	if !errors.As(err, &re) || re.Code != proto.CodeTooLarge {
+		t.Fatalf("over the cap: %v", err)
+	}
+	// Exactly the cap is fine to begin (and abort); a part file never outlives a refused begin.
+	raw, _ = json.Marshal(map[string]any{"name": "ok.bin", "size": proto.MaxTerminalUploadBytes, "dest": proto.UploadDestTerminal})
+	res, err := n.uploadCall("file.upload.begin", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.ups.abort(res.(map[string]any)["upload_id"].(string))
+	if ents, _ := os.ReadDir(terminalUploadDir(home, time.Now())); len(ents) != 0 {
+		t.Fatalf("left %v", ents)
+	}
+}
+
+func TestSweepTerminalUploads(t *testing.T) {
+	home := t.TempDir()
+	root := terminalUploadRoot(home)
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.Local)
+	for _, d := range []string{"2026-10-01", "2026-11-02", "2026-11-03", "2026-11-10", "not-a-date"} {
+		if err := os.MkdirAll(filepath.Join(root, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(filepath.Join(root, d, "x.png"), []byte("x"), 0o600)
+	}
+	os.WriteFile(filepath.Join(root, "2026-01-01"), []byte("a file, not a day"), 0o600)
+	if got := sweepTerminalUploads(home, now); got != 2 {
+		t.Fatalf("removed %d", got)
+	}
+	var left []string
+	ents, _ := os.ReadDir(root)
+	for _, e := range ents {
+		left = append(left, e.Name())
+	}
+	// 11-03 ended 7 days before the 10th at noon is not yet over (its last hour is inside the week); 11-02 is.
+	want := []string{"2026-01-01", "2026-11-03", "2026-11-10", "not-a-date"}
+	if strings.Join(left, ",") != strings.Join(want, ",") {
+		t.Fatalf("left %v, want %v", left, want)
+	}
+	// No uploads yet at all.
+	if sweepTerminalUploads(t.TempDir(), now) != 0 {
+		t.Fatal("nothing to sweep")
 	}
 }

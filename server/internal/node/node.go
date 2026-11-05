@@ -209,6 +209,7 @@ func New(version string) (*Node, error) {
 	n.resetSignals()
 	n.state = newState()
 	n.ports.kick = make(chan struct{}, 1)
+	go sweepTerminalUploads(dir, time.Now()) // pasted files older than a week (upload_sweep.go)
 	return n, nil
 }
 

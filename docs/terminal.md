@@ -28,6 +28,7 @@
   按新尺寸重开一个 observe。
 - 观察者看到的是窗格当前显示的那一屏：电脑上有人往上翻（herdr 的滚动偏移），观察者也跟着看到翻上去的内容；备用屏同理（herdr 显示哪屏就是哪屏）。
 - 程序发出的 OSC 52（写剪贴板）和响铃被 herdr 自己处理掉，**不会出现在流里**；标题从 `pane.get` 的 `terminal_title` 取。
+  2026-11-04 在 herdr 0.9.5 上对 observe、control、`terminal attach` 三种流都实测过，见第十八节。
 - 量：工作中的 Claude 窗格（spinner 在转）约 11 帧 / 秒、首帧 13.5 KB 之后约 3 KB/s；空闲时没有帧。
 
 ## 二、方案
@@ -77,7 +78,7 @@ herdr 窗格 ──observe(窗格尺寸)──▶ node（每窗格一个 observe
 
 ## 四、限制
 
-- 程序写剪贴板的 OSC 52、响铃到不了手机（herdr 在电脑上处理）。手机上的复制走自己的选择。
+- 程序写剪贴板的 OSC 52、响铃到不了手机（herdr 在电脑上处理）。手机上的复制走自己的选择（网页版见第十八节）。
 - 电脑上翻看历史时，手机看到的也是翻上去的那屏（herdr 只有一个视口）。
 - Windows：Ovis 的注释说 herdr 的 attach 只在 Unix 上有，observe 在 Windows 上未核对；起不来就退回轮询读屏。
 
@@ -388,3 +389,100 @@ Claude 能滚是因为它在哪一行都接滚轮（第 0 行、输入框上都�
    一帧的绘制量只和看得见的字有关。
 
 手机上的渲染（`dumpsys gfxinfo`）和真实会话里按键 / 滚动的往返没有实测：前者要用户的手机连着 adb，后者要往用户正在用的会话里发键。
+
+## 十八、网页版剪贴板：粘贴图片 / 文件、复制、OSC 52（2026-11-04）
+
+网页终端的剪贴板两个方向：往里贴（截图、文件，照 Moshi 的网页端）和往外复制（选中的文字、程序的 OSC 52）。两个方向共用 `lib/terminal-clipboard.ts`（纯逻辑）和
+`session/terminal/clipboard.ts`（浏览器那一侧），提示都走页面的 toast，传文件时的状态条在终端顶部。
+
+### 粘贴图片 / 文件
+
+在终端里 ⌘V / Ctrl+V 粘贴截图、从文件管理器拖文件进来，文件传到**窗格所在的那台电脑**，再把路径敲进窗格，Claude Code / Codex 按路径把图片当附件读。
+
+**流程**（`lib/terminal-clipboard.ts`、`session/terminal/clipboard.ts`、`feed.ts` 的 `uploadFiles`）：
+
+1. 面板容器上抓 `paste`（捕获阶段）：`clipboardData.files`，没有就取 `items` 里 `kind=file` 的；拖放走 `drop`，同一条路。
+   键栏的「粘贴」键先试 `navigator.clipboard.read()` 里的图片（浏览器允许时），没有再读文字。浏览器里 ⌘V / Ctrl+V 本来就带着文件触发 `paste`，
+   所以不像 Moshi 原生端那样要拦 Ctrl+V 再决定发不发 `\x16`；剪贴板只有文字时走原来的文字粘贴，一个字没变。
+2. 只有**正在接管**时才收：只看（或被别处接管）时提示「接管终端后才能粘贴文件」，什么都不传。
+3. 每个文件 `POST /api/v1/machines/{mid}/files?name=<文件名>&dest=terminal`（原始字节，`application/octet-stream`，和对话页「发送文件」、新建 Agent 的附件是同一个接口，
+   `docs/protocol.md`「发送文件」；网页端请求也共用 `lib/attachments.ts` 的 `sendFile`）。hub 每 1 MB 一块转给那台电脑的 node（`file.upload.begin / chunk / end`，`begin` 带 `dest`），
+   整个文件不进 hub 内存。超时 60 秒 + 每 100 KB 加 1 秒。剪贴板里的图片没有文件名时按类型起名（`image.png`、`image.jpg`……）。
+4. node 存到 `<node 目录>/uploads/terminal/<YYYY-MM-DD>/<16 位随机十六进制>-<清理后的文件名>`（目录 0700、文件 0600），返回绝对路径。
+   和对话里的图片附件（`uploads/<日期>`）分开放，清理不会碰对方。
+5. 全部传完，页面用 xterm 的 `term.paste()` 把路径敲进窗格：`paths.map(escape).join(" ") + " "`，程序开了括号粘贴时由 xterm 自己加 `ESC[200~ … ESC[201~`。
+   `escape` 在每个不是字母、数字、`_@%+=:,./-` 和非 ASCII 的字符前加反斜杠（`escapePastePath`），所以带空格、引号、`$` 的路径也是 shell 里的一个词。
+   不自动回车。
+6. **守卫**：传的时候用户可能已经换了会话、关了面板、被别处接管或切到只看。结束时再查一遍（`pasteVerdict`）：feed 已销毁提示「上传期间终端已切换，没有粘贴」，
+   不再接管提示「上传期间不再接管终端，没有粘贴」，两种都不往窗格里敲（文件已经在电脑上了，只是不粘贴）。
+7. 界面：传的时候终端顶部有「正在上传 xxx.png…」的状态条，多个文件显示「等 N 个文件」；失败、超限、守卫拦下用 toast（错误 5 秒后自己消失）；文件拖在面板上时面板描一圈强调色。
+
+**安全（粘贴 / 拖入）**
+
+- 没有新接口、没有新的免登录入口：还是 hub 已有的 `POST /machines/{mid}/files`，走同样的设备 token 认证。`dest` 只认 `terminal`，别的值 400。
+- 文件名只当「名字」用：node 把 `/`、`\`、控制字符换成 `_`，`..` 和空名换成 `file`，超长截短；最终路径由 node 自己拼在日期目录里，客户端传不进路径。
+  测试里试了 `../../../etc/passwd`、绝对路径、`..\..\x`、NUL、`a/../../b.png`，都落在当天目录里。
+- 上限 50 MB（`proto.MaxTerminalUploadBytes`，hub 看 `Content-Length` 就拒，node `begin` 再拒一次；网页选完先查）。对话页的「发送文件」仍是 200 MB。
+- 文件 0600、目录 0700、随机前缀：同机别的用户读不到，也猜不出文件名。没有执行位。
+- 类型不设白名单：截图、PDF、日志、CSV 都是用户有意拖进来的，但文件只落盘不执行；图片类型只用来给没有扩展名的剪贴板图片起名。
+- 清理：node 启动时删掉 `uploads/terminal/` 下早于 7 天的日期目录（只认名字是日期的目录，别的东西不动）。常驻的 node 不到重启不会再扫，所以最长可能多留几天。
+- 旧 hub 或旧 node 不认 `dest`，直接忽略：照旧能传，文件落在系统临时目录、没有清理（旧 node 前面的 hub 是新的时，50 MB 上限仍在）。
+
+**iOS / Android 能不能用同一个接口**：能，不用改服务端。它们已经在用 `POST /machines/{mid}/files`（对话页「发送文件」，传到电脑临时目录），
+加 `dest=terminal` 就落到 Persona 的目录；返回的路径同样要按上面的规则转义后经 `terminal_input` 的 `text`（括号粘贴 `ESC[200~ … ESC[201~` 自己包）敲进窗格。
+App 端没做：iOS 的终端 tab 还没有「粘贴图片」入口，Android 同理。
+
+### 复制、OSC 52、输入法、字体
+
+复制的起因：Moshi 的浏览器端在用户这台机器上复制 herdr 里的内容是通的。原因是它本身就是一个真 herdr 客户端（herdr 认为自己在远程时发 OSC 52，
+用户在 systemd drop-in 里用 `SSH_CONNECTION` 强制了这一点，否则 herdr 在电脑上调 `wl-copy`），页面里的 `@xterm/addon-clipboard` 收到后写 `navigator.clipboard`。
+Persona 网页看的是 observe / control 流，「实测」一节是它们给不给这些东西。网页版做了：
+
+- **选中文字复制**（`lib/terminal.ts` 的 `keyDecision`，`lib/terminal-clipboard.ts` 的 `copyWith`、`copyNotice`，`terminal/clipboard.ts`）：有选中时 ⌃C / ⌘C / ⌃⇧C 复制，没有选中时 ^C 照旧发给程序；
+  复制成功后清掉选中（否则下一次 ⌃C 还是复制，打断不了程序）。先 `navigator.clipboard.writeText`，被拒绝或页面不是 HTTPS 时退回隐藏 textarea + `execCommand("copy")`，并在提示里说明
+  「这个页面不是 HTTPS，浏览器没开放剪贴板接口，用了兼容方式」；两条路都不行就说没复制上。键栏有「复制选中的文字」键（有选中时可点）。
+  触屏上 xterm.js 没有拖选，手机上要选文字目前靠换行模式（只看时页面自己画屏幕，可以用系统的长按选择）。
+- **OSC 52**：载入 `@xterm/addon-clipboard` 0.2.0（对应 `@xterm/xterm` 6.0.0，固定版本）。程序写剪贴板时直接写；浏览器要手势（Safari、Firefox）写不进去就弹提示「终端里的程序要复制一段文字」加「复制」按钮。
+  **读查询（`OSC 52;c;?`）一律拒绝**：provider 的 `readText` 返回空串，程序读不到用户的剪贴板（回复是空剪贴板）。空内容或超过 1 MiB 的写入忽略。
+  现在这条路在 herdr 的流里走不到（下面「实测」），先备着，herdr 或别的路径哪天透传了就能用。
+- **输入法**：`isComposing` 或 `keyCode === 229` 时页面的按键处理（shift+enter、复制）一律放手，交给 xterm 自己的输入法处理。
+- **字体**：打开 xterm 前等 `document.fonts.load("<字号>px <字体栈>", "W中")`，最多 1.5 秒，避免字体晚到、格子量错。`--font-mono` 的 JetBrains Mono 现在没有 `@font-face`，是本机字体，
+  所以今天这一步几乎立即返回；页面以后带网页字体时才有实际作用。
+- **Shift+Enter → `ESC CR`** 原来就有（`encodeKey` 和 `feed.ts` 的按键处理），这次只是挪进 `keyDecision` 并加了输入法的例外。
+
+### 实测：herdr 的三种流里都没有程序的 OSC 52，也没有颜色查询
+
+用一个新建的临时标签页（`herdr tab create --no-focus`，测完 `tab close`；没碰任何已有窗格），herdr 服务端进程环境里有 `SSH_CONNECTION`，
+在窗格里跑 `printf '\033]52;c;<base64>\007'` 和一个发查询、读回复的小脚本，同时从三条路收字节：
+
+| 流 | 程序的 OSC 52 | `OSC 10;?` / `CSI ? 996 n` 这类查询 |
+| --- | --- | --- |
+| `session observe`（带 `--cols/--rows`） | 没有（流里的 OSC 只有 OSC 8） | 没有 |
+| `session control --takeover`（Persona 接管用的） | 没有 | 没有 |
+| `terminal attach <terminal_id> --takeover`（PTY 里读） | 没有 | 没有 |
+
+三条路都是 herdr 把窗格网格**重画**出来的 VT，不是程序的原始输出。herdr 内部（基于 libghostty-vt）收到程序的 OSC 52 后走自己的「剪贴板写」
+（`src/pane.rs` 里的 `OSC 52 clipboard write` 队列、`src/selection.rs` 的 `write_osc52_bytes`），只会发给完整的 herdr TUI 客户端（`herdr` / `herdr session attach`，Moshi 就是这种），
+不进窗格级别的流。
+
+没验证的一条：完整 TUI 客户端（`herdr session attach`）是否一定带出 OSC 52。要 attach 到用户正在用的会话，会多一个客户端，可能影响布局和焦点，没有做。
+
+### herdr 自己的复制能不能送到网页
+
+不能，现在 herdr 0.9.5（协议 22）没有口子：
+
+- `herdr api schema --json` 里没有 clipboard / OSC 相关的请求、事件或订阅；复制相关只有 `pane.copy_motion`、`pane.copy_search`（复制模式里移动光标和搜索，不取文字）。
+- 事件只有 `layout_updated`、`pane_*`、`tab_*`、`workspace_*`、`worktree_*`、`pane_output_changed`（不带内容）。
+- 可能的做法是让 node 作为一个隐藏的完整 herdr 客户端（PTY 里 `herdr session attach`）常驻、解析它的输出里的 OSC 52。代价大：多一个客户端的尺寸和焦点、占资源，也要用户那边设 `SSH_CONNECTION`。这次不做。
+  如果 herdr 以后加「剪贴板」事件，再接：node 订阅 → hub 转发 → 网页弹「已复制到剪贴板」+ 「复制」按钮（浏览器要手势）。网页这边的按钮已经有（程序 OSC 52 到达时用，见上）。
+
+### 颜色查询：没做，因为到不了浏览器
+
+实测里 `CSI ? 996 n` 得到 `CSI ? 997 ; 1 n`、`OSC 10;?` 和 `OSC 11;?` 得到 `rgb:c8c8/c8c8/cece` 和 `rgb:1b1b/1e1e/1c1c`：**herdr 自己回答了**，用的是 herdr 主题的颜色，
+查询本身不在三种流里（所以浏览器的 xterm 永远看不到），control 开着和没开都一样。后果：
+
+- 网页要回答这些查询没有输入，写了也是死代码；就算哪天透传了，herdr 已经回了一份，网页再回会让程序多收到一段无人要的输入（出现在 shell 或 Claude 的输入框里）。
+- 程序看到的深浅色是 herdr 主题的，不是网页当前的深浅色。网页切到浅色，Claude Code 等仍认为终端是深色。要改只能在电脑上改 herdr 的主题，或等 herdr 提供按客户端报告颜色的方式。
+- DEC 2031（颜色方案变化通知）同理，没有人收。
+
+没验证：herdr 在 DEC 2031 打开后，主题变化时会不会主动发 `CSI ? 997 ; n n`（只测了一问一答）。

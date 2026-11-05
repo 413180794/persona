@@ -340,6 +340,51 @@ export function encodeKey(name: string, appCursor = false): string | null {
   return prefix + (shift ? base.toUpperCase() : base);
 }
 
+// ── keys the page takes before xterm, and the terminal font ──
+
+export interface KeyEventLike {
+  type: string;
+  key: string;
+  keyCode?: number;
+  isComposing?: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+}
+
+/**
+ * What the page does with a key event before xterm sees it. xterm: leave it to xterm (everything during an IME
+ * composition — keyCode 229 is the browsers that do not set isComposing). copy: ⌃C / ⌘C / ⌃⇧C with text selected copies
+ * it instead of sending ^C (with nothing selected ^C still interrupts). newline: shift+enter is ESC CR, a new line in
+ * Claude Code's box (xterm would send a bare CR). swallow: the keypress / keyup of a key handled on keydown.
+ */
+export type KeyDecision = "xterm" | "copy" | "newline" | "swallow";
+
+export function keyDecision(e: KeyEventLike, hasSelection: boolean): KeyDecision {
+  if (e.isComposing || e.keyCode === 229) return "xterm";
+  if (e.key === "Enter" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) return e.type === "keydown" ? "newline" : "swallow";
+  if (hasSelection && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "c") return e.type === "keydown" ? "copy" : "swallow";
+  return "xterm";
+}
+
+/** The `document.fonts.load` query for the terminal's font: its size and stack, and a sample of a Latin and a Chinese character. */
+export function fontLoadQuery(size: number, stack: string): { font: string; sample: string } {
+  return { font: `${size}px ${stack}`, sample: "W中" };
+}
+
+/** Whichever comes first: the promise (settled either way) or `ms` — so a font that never loads cannot hold the terminal back. */
+export function settleWithin(p: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    p.then(done, done);
+  });
+}
+
 /** What xterm sends for a key, back to the key's name (so key bar modifiers can apply to it); null for anything else. */
 export function keyNameForBytes(data: string): string | null {
   const names: Record<string, string> = {

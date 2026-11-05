@@ -1,6 +1,6 @@
 // The terminal's key bar (iOS TerminalKeyBar): keys a phone's keyboard lacks — and a browser on a phone cannot send —
 // in one row that scrolls sideways when it does not fit: ctrl / alt / shift (a tap arms one for the next key, a quick
-// second tap locks it, holding keeps it down), esc, tab, a ⌃C that goes out at once, the saved commands, paste, then
+// second tap locks it, holding keeps it down), esc, tab, a ⌃C that goes out at once, the saved commands, copy and paste, then
 // the arrows and return. The keys keep the focus in the terminal, so a phone's keyboard stays up.
 import { useEffect, useRef, useState } from "react";
 import type { ModifierKey, ModifierState } from "../../../lib/terminal";
@@ -142,6 +142,7 @@ export function KeyBar({ feed, v, onEditShortcuts }: { feed: TerminalFeed; v: Fe
           <Key label="Tab" title="Tab" disabled={off} onPress={k("tab")} />
           <Key label="⌃C" title="发送 Ctrl+C" disabled={off} onPress={() => feed.pressBare("ctrl+c")} />
           <Key icon="bolt" title="快捷命令" disabled={off} active={shortcuts} onPress={() => setShortcuts((s) => !s)} />
+          <Key icon="copy" title="复制选中的文字" disabled={off || !v.selection} onPress={() => feed.copySelection()} />
           <Key icon="paste" title="粘贴剪贴板" disabled={off} onPress={() => void feed.pasteClipboard()} />
           <ModifierKeyCap k="alt" label="Alt" name="Option" feed={feed} state={v.mods.alt} disabled={off} />
           <ModifierKeyCap k="shift" label="⇧" name="Shift" feed={feed} state={v.mods.shift} disabled={off} />

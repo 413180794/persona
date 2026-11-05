@@ -3,11 +3,11 @@
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
-import { ApiError, api, enc, errorText } from "../../lib/api";
+import { ApiError, errorText } from "../../lib/api";
 import { uuid } from "../../lib/format";
 import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
-import { imagePayload, MAX_IMAGE, quotePath } from "../../lib/attachments";
+import { imagePayload, MAX_IMAGE, quotePath, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
 import { applyDraft, onDraftEvent, replaceNeedsConfirm, withUnsent, type DraftImage } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
@@ -253,16 +253,16 @@ export function Composer({
   const upload = async (f: File) => {
     setUploading((n) => n + 1);
     try {
-      const r = await api<{ path: string }>(`/machines/${enc(machineId!)}/files?name=${enc(f.name)}`, { method: "POST", body: f, headers: { "Content-Type": "application/octet-stream" } });
+      const path = await sendFile(machineId!, f);
       const el = input.current;
-      const p = quotePath(r.path);
+      const p = quotePath(path);
       setDraft((d) => {
         const at = el && document.activeElement === el ? Math.min(el.selectionStart, d.length) : d.length;
         const before = d.slice(0, at),
           after = d.slice(at);
         return `${before}${before && !before.endsWith(" ") ? " " : ""}${p}${after.startsWith(" ") || !after ? "" : " "}${after}`;
       });
-      toast(`已传到电脑：${r.path}`, "ok");
+      toast(`已传到电脑：${path}`, "ok");
     } catch (e) {
       toast(e instanceof ApiError && e.code === "too_large" ? "文件太大（最多 200 MB）" : `上传失败：${errorText(e)}`, "error");
     } finally {

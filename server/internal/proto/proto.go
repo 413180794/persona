@@ -294,6 +294,10 @@ var Features = []string{
 const (
 	MaxUploadBytes   = 200 << 20
 	UploadChunkBytes = 1 << 20
+	// A file pasted or dropped into a web terminal (dest=terminal) lands under the node's Persona directory and is
+	// smaller: what an agent reads by path is a screenshot or a document, not a video.
+	UploadDestTerminal     = "terminal"
+	MaxTerminalUploadBytes = 50 << 20
 	// CodeTooLarge: over MaxUploadBytes (413); CodeNodeOutdated: the machine's node predates the feature (409).
 	CodeTooLarge     = "too_large"
 	CodeNodeOutdated = "node_outdated"

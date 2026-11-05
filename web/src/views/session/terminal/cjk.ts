@@ -6,7 +6,7 @@
 // Where no such font is found the terminal keeps its font stack as it was (a browser without `size-adjust` loads the
 // face unscaled: the gaps stay, nothing else changes).
 
-import { withFamily } from "../../../lib/terminal";
+import { fontLoadQuery, settleWithin, withFamily } from "../../../lib/terminal";
 
 const FAMILY = "JarvisTermCJK";
 // local() matches a font's full or PostScript name: the system Chinese fonts of macOS, Windows and Linux desktops.
@@ -62,4 +62,17 @@ async function load(stack: string): Promise<string | null> {
   await face.load();
   document.fonts.add(face);
   return withFamily(stack, FAMILY);
+}
+
+/** How long the terminal waits for its font before it measures cells with whatever the browser has. */
+const FONT_WAIT_MS = 1500;
+
+/**
+ * Resolves once the terminal's font is loaded (or after a moment, or where the browser cannot say): xterm measures a
+ * cell when it opens and fits the grid from it, and a font that arrives later leaves cells the wrong width.
+ */
+export function terminalFontReady(size: number, stack: string): Promise<void> {
+  if (typeof document === "undefined" || !document.fonts?.load) return Promise.resolve();
+  const q = fontLoadQuery(size, stack);
+  return settleWithin(document.fonts.load(q.font, q.sample), FONT_WAIT_MS);
 }

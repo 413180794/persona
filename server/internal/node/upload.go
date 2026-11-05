@@ -37,21 +37,29 @@ type upload struct {
 	written int64
 	f       *os.File
 	idle    *time.Timer
+	random  bool // the final name starts with a random prefix instead of ending in a timestamp (terminal pastes)
 }
 
+// begin opens an upload into the temp directory (the chat's 「发送文件」).
 func (u *uploads) begin(name string, size int64) (string, error) {
+	return u.beginIn(os.TempDir(), name, size, proto.MaxUploadBytes, false)
+}
+
+// beginIn opens an upload whose part file and final file live in dir (one directory, so the rename never crosses
+// file systems). random: the final name is <random>-<clean name>, which nobody can guess from the file name.
+func (u *uploads) beginIn(dir, name string, size, limit int64, random bool) (string, error) {
 	if size < 0 {
 		return "", fmt.Errorf("size is required")
 	}
-	if size > proto.MaxUploadBytes {
-		return "", &rpc.Error{Code: proto.CodeTooLarge, Message: fmt.Sprintf("file is larger than %d MB", proto.MaxUploadBytes>>20)}
+	if size > limit {
+		return "", &rpc.Error{Code: proto.CodeTooLarge, Message: fmt.Sprintf("file is larger than %d MB", limit>>20)}
 	}
-	f, err := os.CreateTemp(os.TempDir(), ".jarvis-upload-*") // 0600
+	f, err := os.CreateTemp(dir, ".jarvis-upload-*") // 0600
 	if err != nil {
 		return "", err
 	}
 	id := randHex(8)
-	up := &upload{name: name, size: size, f: f}
+	up := &upload{name: name, size: size, f: f, random: random}
 	up.idle = time.AfterFunc(uploadIdle, func() { u.abort(id) })
 	u.mu.Lock()
 	if u.open == nil {
@@ -117,7 +125,11 @@ func (u *uploads) end(id string, now time.Time) (string, int64, error) {
 		up.discard()
 		return "", 0, fmt.Errorf("got %d of %d bytes", up.written, up.size)
 	}
-	path, err := reserveName(filepath.Dir(part), up.name, now)
+	reserve := reserveName
+	if up.random {
+		reserve = reserveRandomName
+	}
+	path, err := reserve(filepath.Dir(part), up.name, now)
 	if err != nil {
 		up.discard()
 		return "", 0, err
@@ -152,6 +164,24 @@ func reserveName(dir, name string, now time.Time) (string, error) {
 			n = base + "-" + randHex(2) + ext
 		}
 		p := filepath.Join(dir, n)
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			_ = f.Close()
+			return p, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+	}
+	return "", fmt.Errorf("no free name for %s", name)
+}
+
+// reserveRandomName creates an empty 0600 file named <16 hex>-<clean name> in dir and returns its path. The name is
+// cut to what a file system takes, and never has a separator in it (cleanName), so it cannot leave dir.
+func reserveRandomName(dir, name string, _ time.Time) (string, error) {
+	stem, ext := splitName(cleanName(name))
+	for i := 0; i < 8; i++ {
+		p := filepath.Join(dir, randHex(8)+"-"+stem+ext)
 		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err == nil {
 			_ = f.Close()
@@ -219,6 +249,7 @@ func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 	var p struct {
 		UploadID string `json:"upload_id"`
 		Name     string `json:"name"`
+		Dest     string `json:"dest"` // "terminal": a paste into a terminal (uploadDir); "" the temp directory
 		Size     int64  `json:"size"`
 		Offset   int64  `json:"offset"`
 		Data     []byte `json:"data"` // base64 in JSON
@@ -228,7 +259,19 @@ func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 	}
 	switch method {
 	case "file.upload.begin":
-		id, err := n.ups.begin(p.Name, p.Size)
+		var id string
+		var err error
+		switch p.Dest {
+		case "":
+			id, err = n.ups.begin(p.Name, p.Size)
+		case proto.UploadDestTerminal:
+			dir := terminalUploadDir(n.dir, time.Now())
+			if err = os.MkdirAll(dir, 0o700); err == nil {
+				id, err = n.ups.beginIn(dir, p.Name, p.Size, proto.MaxTerminalUploadBytes, true)
+			}
+		default:
+			err = fmt.Errorf("unknown upload destination %q", p.Dest)
+		}
 		if err != nil {
 			return nil, err
 		}

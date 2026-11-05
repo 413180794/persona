@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AWAIT_FULL_MS,
   DEFAULT_SHORTCUTS,
@@ -12,7 +12,9 @@ import {
   decodeShortcuts,
   encodeKey,
   fitGrid,
+  fontLoadQuery,
   historyAnchor,
+  keyDecision,
   keyNameForBytes,
   isStale,
   lineCount,
@@ -26,6 +28,7 @@ import {
   moveShortcut,
   parseTerminalPush,
   pasteBytes,
+  settleWithin,
   terminalPalette,
   typedWithModifiers,
   usableGrid,
@@ -338,5 +341,69 @@ describe("font stack", () => {
     expect(withFamily('"JetBrains Mono", Menlo, monospace', "X")).toBe('"JetBrains Mono", Menlo, "X", monospace');
     expect(withFamily("Menlo", "X")).toBe('Menlo, "X", monospace');
     expect(withFamily('Menlo, "X", monospace', "X")).toBe('Menlo, "X", monospace');
+  });
+});
+
+const key = (over: Partial<Parameters<typeof keyDecision>[0]>) => ({
+  type: "keydown",
+  key: "a",
+  ctrlKey: false,
+  metaKey: false,
+  altKey: false,
+  shiftKey: false,
+  ...over,
+});
+
+describe("key decisions", () => {
+  it("copies on ⌃C / ⌘C / ⌃⇧C only with text selected", () => {
+    expect(keyDecision(key({ key: "c", ctrlKey: true }), true)).toBe("copy");
+    expect(keyDecision(key({ key: "c", metaKey: true }), true)).toBe("copy");
+    expect(keyDecision(key({ key: "C", ctrlKey: true, shiftKey: true }), true)).toBe("copy");
+    expect(keyDecision(key({ key: "c", ctrlKey: true }), false)).toBe("xterm"); // ^C still interrupts
+    expect(keyDecision(key({ key: "c" }), true)).toBe("xterm"); // a plain c is typed
+    expect(keyDecision(key({ key: "c", ctrlKey: true, altKey: true }), true)).toBe("xterm");
+    expect(keyDecision(key({ key: "v", ctrlKey: true }), true)).toBe("xterm");
+  });
+
+  it("leaves the keypress of a copy to nobody", () => {
+    expect(keyDecision(key({ type: "keypress", key: "c", ctrlKey: true }), true)).toBe("swallow");
+    expect(keyDecision(key({ type: "keyup", key: "c", metaKey: true }), true)).toBe("swallow");
+  });
+
+  it("makes shift+enter a new line, on keydown only", () => {
+    expect(keyDecision(key({ key: "Enter", shiftKey: true }), false)).toBe("newline");
+    expect(keyDecision(key({ type: "keypress", key: "Enter", shiftKey: true }), false)).toBe("swallow");
+    expect(keyDecision(key({ key: "Enter" }), false)).toBe("xterm");
+    expect(keyDecision(key({ key: "Enter", shiftKey: true, ctrlKey: true }), false)).toBe("xterm");
+  });
+
+  it("leaves everything to xterm while an IME composes", () => {
+    expect(keyDecision(key({ key: "Enter", shiftKey: true, isComposing: true }), false)).toBe("xterm");
+    expect(keyDecision(key({ key: "c", ctrlKey: true, isComposing: true }), true)).toBe("xterm");
+    expect(keyDecision(key({ key: "Process", keyCode: 229 }), false)).toBe("xterm");
+    expect(keyDecision(key({ key: "Enter", shiftKey: true, keyCode: 229 }), false)).toBe("xterm");
+  });
+});
+
+describe("waiting for the font", () => {
+  it("asks for the size, the stack and a Latin and a Chinese sample", () => {
+    expect(fontLoadQuery(13, '"JetBrains Mono", monospace')).toEqual({ font: '13px "JetBrains Mono", monospace', sample: "W中" });
+  });
+
+  it("settles when the font loads, fails, or takes too long", async () => {
+    vi.useFakeTimers();
+    try {
+      let done = 0;
+      const never = new Promise<void>(() => {});
+      void settleWithin(never, 1500).then(() => done++);
+      await vi.advanceTimersByTimeAsync(1499);
+      expect(done).toBe(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(done).toBe(1);
+      await settleWithin(Promise.resolve(), 1500);
+      await settleWithin(Promise.reject(new Error("font")), 1500);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

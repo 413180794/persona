@@ -864,6 +864,9 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
   hello 的 `features` 里也没有 `file_upload`：App 提示更新 hub。
 - 路径带空格或引号时 App 用单引号包起来，多个路径空格分隔。输入框没在编辑时插到末尾（未聚焦的 TextField 报的选区不可靠）。
 - 前面挡着反向代理时注意它的请求体上限（有的 CDN 免费版只放 100 MB）。
+- `?dest=terminal`（网页终端的粘贴 / 拖放，`docs/terminal.md` 第十八节）：node 不放系统临时目录，存到自己的 `uploads/terminal/<日期>/<随机>-<文件名>`
+  （0700 / 0600，7 天后在 node 启动时清掉），上限 50 MB（`proto.MaxTerminalUploadBytes`，超过同样回 413 `too_large`，带 `limit`）。别的 `dest` 回 400；
+  旧 hub / 旧 node 忽略这个参数，照旧放临时目录。
 
 ### 发送视频
 

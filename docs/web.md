@@ -343,6 +343,10 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **中文字之间的空隙**（`terminal/cjk.ts`）：xterm DOM 渲染器给宽字符两格、中文字形只有约 1em，就在后面补字距；用 `FontFace` 以 `local()` 载入系统中文字体、`size-adjust` 放大到正好两格，
     `unicode-range` 只含中日韩，不加依赖；找不到这些字体时保持原样。
   - **字号**：齿轮里 9–20，不占 ⌘+ / ⌘−（浏览器缩放），存在当前浏览器。
+  - **粘贴 / 拖入图片和文件、复制**（`lib/terminal-clipboard.ts`、`terminal/clipboard.ts`，`docs/terminal.md` 第十八节）：接管时 ⌘V / Ctrl+V 粘贴的截图或拖进面板的文件，经 `POST /machines/{mid}/files?dest=terminal`
+    传到窗格所在的电脑（50 MB 以内），再把转义后的路径加一个空格敲进窗格（括号粘贴），Claude Code / Codex 按路径读图片。传的时候顶部有状态条；传完时已换会话或不再接管就不粘贴并提示。
+    有选中文字时 ⌃C / ⌘C 复制（没有选中仍是 ^C），键栏也有复制键；页面不是 HTTPS 时退回 `execCommand` 并说明。载入 `@xterm/addon-clipboard`（程序的 OSC 52 写入剪贴板，读查询一律拒绝），herdr 的流目前不带程序的 OSC 52。
+    输入法组字时页面不处理按键，打开 xterm 前等字体。
   没做：只看时打字（iOS 只看时经 `/keys` 能打字）、终端配色和字体选择、键栏自选键 / 自动收起 / 输入框模式 / 补全、触屏手势（双指切 Agent、双击粘贴、捏合）、换行模式下 OSC 8 链接。
 - **文件和 Git**（`session/FilesPanel.tsx`、`GitPanel.tsx`、`FileViewer.tsx`、`session/files/`、`src/lib/files.ts`）：从会话目录逐级进入、面包屑、Git 标记、隐藏文件开关；
   查看器：代码带行号和轻量着色（注释 / 字符串 / 数字，只渲染看得见的行，两万行也不卡）、Markdown（可看源码，README 的 HTML 转成 Markdown，相对图片从那台机器读）、
@@ -563,6 +567,7 @@ hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector
 | Git（改动、diff、提交历史） | 有 | #297 | |
 | 终端：实时流、接管 / 只看、打字 / 滚轮 / 点击、断线重试 | 有 | #297 | |
 | 终端：键栏、快捷命令、往上翻 herdr 历史、换行开关、字号、中文空隙 | 有 | #433 | 见「侧边面板 › 终端」 |
+| 终端：粘贴 / 拖入图片和文件（传到电脑，路径敲进窗格） | 有 | — | iOS / Android 还没有入口，接口可以共用（`docs/terminal.md` 第十八节） |
 | 终端：只看时打字、配色 / 字体、键栏自选键 / 自动收起 / 输入框模式 / 补全、触屏手势 | 没有 | — | 电脑上有实体键盘；手机上用 App |
 | 端口转发（回答里的 localhost 链接） | 没有 | — | 手机是本机监听再经 hub 转发；浏览器不能监听端口，要 hub 做 HTTP 反向代理，安全边界要重新定（`docs/ports.md`），单独评估 |
 | 听写 | 不适用 | — | 用系统输入法 / 浏览器自带的听写 |

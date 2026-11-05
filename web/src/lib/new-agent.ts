@@ -1,7 +1,7 @@
 import { isEcho, type Seen } from "./echo";
-import { api, ApiError, enc, errorText, sessionPath } from "./api";
+import { api, ApiError, errorText, sessionPath } from "./api";
 import { parseUserText } from "./turns";
-import { imagePayload, quotePath, releaseAttachments, type LocalAttachment } from "./attachments";
+import { imagePayload, quotePath, releaseAttachments, sendFile, type LocalAttachment } from "./attachments";
 import { uuid } from "./format";
 import { href, navigate } from "./router";
 import { getState, putLaunch, upsertSession } from "./store";
@@ -97,8 +97,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
         } else {
           let path = launch.uploaded[att.id];
           if (!path) {
-            const r = await api<{ path: string }>(`/machines/${enc(launch.machineId)}/files?name=${enc(att.name)}`, { method: "POST", signal: controller.signal, body: att.file, headers: { "Content-Type": "application/octet-stream" } });
-            path = r.path;
+            path = await sendFile(launch.machineId, att.file, { name: att.name, signal: controller.signal });
             update({ uploaded: { ...launch.uploaded, [att.id]: path } });
           }
           paths.push(quotePath(path));

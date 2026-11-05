@@ -33,7 +33,7 @@ export default defineConfig({
     proxy: { "/api": { target: hub, changeOrigin: true, ws: true } },
   },
   // The terminal loads xterm only when opened: pre-bundle it, or the first open in dev re-optimizes and reloads the page.
-  optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit"] },
+  optimizeDeps: { include: ["@xterm/xterm", "@xterm/addon-fit", "@xterm/addon-clipboard"] },
   build: {
     target: "es2022",
     sourcemap: false,

@@ -18,9 +18,20 @@ import (
 // POST /api/v1/machines/{mid}/files?name=<file name>, the raw bytes as the body. The body is read a chunk at a time
 // and each chunk is one file.upload.chunk call, so neither side holds the file and no JSON line carries all of it.
 // The app cancelling the request (or going away) aborts the upload and the node removes what it wrote.
+// dest=terminal (the web terminal's paste and drop, docs/terminal.md): the node keeps the file under its Persona
+// directory for a week instead of the temp directory, and the limit is proto.MaxTerminalUploadBytes.
 func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	size := r.ContentLength
+	dest, limit := r.URL.Query().Get("dest"), int64(proto.MaxUploadBytes)
+	switch dest {
+	case "":
+	case proto.UploadDestTerminal:
+		limit = proto.MaxTerminalUploadBytes
+	default:
+		writeErr(w, http.StatusBadRequest, errors.New("unknown dest"))
+		return
+	}
 	switch {
 	case name == "":
 		writeErr(w, http.StatusBadRequest, errors.New("name is required"))
@@ -28,9 +39,9 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	case size < 0:
 		writeErr(w, http.StatusLengthRequired, errors.New("Content-Length is required"))
 		return
-	case size > proto.MaxUploadBytes:
+	case size > limit:
 		writeCode(w, http.StatusRequestEntityTooLarge, proto.CodeTooLarge,
-			fmt.Sprintf("文件超过 %d MB", proto.MaxUploadBytes>>20), map[string]any{"limit": proto.MaxUploadBytes})
+			fmt.Sprintf("文件超过 %d MB", limit>>20), map[string]any{"limit": limit})
 		return
 	}
 	ctx := r.Context()
@@ -42,7 +53,11 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	var begin struct {
 		UploadID string `json:"upload_id"`
 	}
-	if err := step("file.upload.begin", map[string]any{"name": name, "size": size}, &begin); err != nil {
+	beginParams := map[string]any{"name": name, "size": size}
+	if dest != "" {
+		beginParams["dest"] = dest // an old node ignores it and uses the temp directory
+	}
+	if err := step("file.upload.begin", beginParams, &begin); err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == "" && strings.HasPrefix(re.Message, "unknown method") {
 			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, m.cfg.Name+" 上的 jarvisd 太旧，不能接收文件，需要重新部署", nil)

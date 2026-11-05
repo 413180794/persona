@@ -21,6 +21,7 @@ import {
   encodeKey,
   historyAnchor,
   isStale,
+  keyDecision,
   keyNameForBytes,
   lineCount,
   modifierHeld,
@@ -41,7 +42,20 @@ import {
 } from "../../../lib/terminal";
 import { gridRow, parseAnsiRows, plainRow, type CellRow } from "../../../lib/terminal-cells";
 import { toast } from "../../../ui/atoms";
-import { cjkFontStack } from "./cjk";
+import {
+  copyNotice,
+  copyWith,
+  dragHasFiles,
+  osc52Text,
+  pastedPaths,
+  pasteVerdict,
+  refuseUpload,
+  transferFiles,
+  uploadName,
+  uploadingText,
+} from "../../../lib/terminal-clipboard";
+import { cjkFontStack, terminalFontReady } from "./cjk";
+import { browserClipboard, clipboardFiles, uploadFailure, uploadToMachine } from "./clipboard";
 
 /** Driving: not asked (off), asked (starting), granted (active), another program holds it and the user is to say
  * whether to take it (busy), or watching although it wanted to drive (declined, `why`). */
@@ -69,6 +83,12 @@ export interface FeedView {
   failure: string | null;
   /** A paste of several lines waiting for 粘贴. */
   pasting: string | null;
+  /** Files being sent to the computer to be pasted by path ("正在上传 …"), null when none are. */
+  uploading: string | null;
+  /** Files are being dragged over the panel. */
+  dropping: boolean;
+  /** Text is selected in xterm (the key bar's copy). */
+  selection: boolean;
   /** The key bar's ctrl / alt / shift: they apply to the next key, from the bar or typed. */
   mods: Modifiers;
   /** Pages of herdr's history above the screen, oldest first (watching only, iOS TerminalFeed.older). */
@@ -152,6 +172,9 @@ export class TerminalFeed {
   /** Too much arrived meanwhile: start over from a whole frame. */
   private heldOverflow = false;
   private screenFrame = 0;
+  /** Names of the files on their way to the computer (pasted or dropped), and how deep the drag is over the panel. */
+  private uploads: string[] = [];
+  private dragDepth = 0;
 
   constructor(
     readonly mid: string,
@@ -172,6 +195,9 @@ export class TerminalFeed {
       stale: false,
       failure: null,
       pasting: null,
+      uploading: null,
+      dropping: false,
+      selection: false,
       mods: NO_MODIFIERS,
       older: [],
       paused: false,
@@ -220,8 +246,10 @@ export class TerminalFeed {
       return;
     }
     if (this.disposed) return;
-    const { Terminal, FitAddon } = mod;
+    const { Terminal, FitAddon, ClipboardAddon } = mod;
     const family = getComputedStyle(host).fontFamily;
+    await terminalFontReady(this.view.fontSize, family); // xterm measures a cell when it opens: not before the font is there
+    if (this.disposed) return;
     this.patch({ palette: this.theme() });
     const term = new Terminal({
       fontFamily: family,
@@ -242,6 +270,9 @@ export class TerminalFeed {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    // OSC 52 from the program (herdr's streams do not carry it, docs/terminal.md): a write goes to the clipboard, a read
+    // is refused — a program must not read what the user copied, so it is told the clipboard is empty.
+    term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
     term.open(host);
     this.term = term;
     this.fit = fit;
@@ -249,9 +280,14 @@ export class TerminalFeed {
     const data = term.onData((d) => this.type(d));
     const resized = term.onResize(() => this.sizeElement());
     const parsed = term.onWriteParsed(() => this.screenChanged());
+    const selected = term.onSelectionChange(() => this.patch({ selection: term.hasSelection() }));
     term.attachCustomKeyEventHandler(this.key);
     term.attachCustomWheelEventHandler(this.wheelEvent);
     host.addEventListener("paste", this.paste, true);
+    viewport.addEventListener("dragenter", this.dragEnter, true);
+    viewport.addEventListener("dragover", this.dragOver, true);
+    viewport.addEventListener("dragleave", this.dragLeave, true);
+    viewport.addEventListener("drop", this.drop, true);
     host.addEventListener("pointerdown", this.pointerDown, true);
     host.addEventListener("click", this.click, true);
     const colors = new MutationObserver(() => {
@@ -268,8 +304,13 @@ export class TerminalFeed {
       () => data.dispose(),
       () => resized.dispose(),
       () => parsed.dispose(),
+      () => selected.dispose(),
       () => cancelAnimationFrame(this.screenFrame),
       () => host.removeEventListener("paste", this.paste, true),
+      () => viewport.removeEventListener("dragenter", this.dragEnter, true),
+      () => viewport.removeEventListener("dragover", this.dragOver, true),
+      () => viewport.removeEventListener("dragleave", this.dragLeave, true),
+      () => viewport.removeEventListener("drop", this.drop, true),
       () => host.removeEventListener("pointerdown", this.pointerDown, true),
       () => host.removeEventListener("click", this.click, true),
       () => colors.disconnect(),
@@ -596,6 +637,8 @@ export class TerminalFeed {
   /** The key bar's paste: what the clipboard has, as ⌘V does (several lines ask first). */
   async pasteClipboard() {
     if (!this.driving) return;
+    const files = await clipboardFiles();
+    if (files.length) return void this.uploadFiles(files);
     let text = "";
     try {
       text = (await navigator.clipboard?.readText?.()) ?? "";
@@ -616,21 +659,56 @@ export class TerminalFeed {
     this.term?.focus();
   }
 
-  /** shift+enter: a new line in Claude Code's box (ESC CR, as iOS); xterm would send a bare CR. */
+  /**
+   * Keys the page takes before xterm (keyDecision): ⌃C / ⌘C with text selected copies it (nothing selected: ^C goes to the
+   * program as ever), shift+enter is a new line in Claude Code's box (ESC CR, as iOS), an IME composition is left alone.
+   */
   private key = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (e.type === "keydown") this.send("\x1b\r");
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
+    const d = keyDecision(e, this.term?.hasSelection() ?? false);
+    if (d === "xterm") return true;
+    if (e.type === "keydown") {
+      if (d === "copy") this.copySelection();
+      else if (d === "newline") this.send("\x1b\r");
     }
-    return true;
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
   };
+
+  /** Copies what is selected in xterm (the key bar's copy, ⌃C / ⌘C); the selection goes once it is on the clipboard. */
+  copySelection() {
+    const text = this.term?.getSelection() ?? "";
+    if (!text) return void toast("先用鼠标选中要复制的文字");
+    void copyWith(text, browserClipboard()).then((outcome) => {
+      const n = copyNotice(outcome, window.isSecureContext);
+      toast(n.text, n.tone);
+      if (outcome !== "failed") this.term?.clearSelection();
+    });
+  }
+
+  /** A program asked for the clipboard (OSC 52): written at once where the browser allows it, else the user taps 复制 (it wants a gesture). */
+  private programCopied(text: string) {
+    const t = osc52Text(text);
+    if (!t) return;
+    void copyWith(t, browserClipboard()).then((outcome) => {
+      if (outcome !== "failed") return toast("终端里的程序已复制到剪贴板", "ok");
+      toast("终端里的程序要复制一段文字", "info", {
+        label: "复制",
+        run: () =>
+          void copyWith(t, browserClipboard()).then((o) => {
+            const n = copyNotice(o, window.isSecureContext);
+            toast(n.text, n.tone);
+          }),
+      });
+    });
+  }
 
   /** ⌘V: one line goes in as typed; several ask first, then go as one bracketed paste. */
   private paste = (e: ClipboardEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const files = transferFiles(e.clipboardData);
+    if (files.length) return void this.uploadFiles(files);
     if (this.view.control !== "active") return;
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text) return;
@@ -640,6 +718,68 @@ export class TerminalFeed {
     } else {
       this.send(pasteBytes(text));
     }
+  };
+
+  // ── files: pasted or dropped, sent to the computer, their paths typed in (docs/terminal.md「粘贴图片 / 文件」) ──
+
+  /**
+   * Sends the files to the computer the pane is on, then types their escaped paths into it as one paste: Claude Code
+   * and Codex take a path to an image as the image. Only while this browser drives the pane — before, and again when
+   * the uploads end (taken over, 只看 or another terminal meanwhile: nothing is pasted).
+   */
+  async uploadFiles(files: File[]) {
+    if (!this.driving) return void toast("接管终端后才能粘贴文件");
+    const sending = files.filter((f) => {
+      const why = refuseUpload(f);
+      if (why) toast(why, "error");
+      return !why;
+    });
+    if (!sending.length) return;
+    const names = sending.map(uploadName);
+    this.uploads.push(...names);
+    this.patch({ uploading: uploadingText(this.uploads) });
+    const results = await Promise.allSettled(sending.map((f) => uploadToMachine(this.mid, f)));
+    for (const n of names) this.uploads.splice(this.uploads.indexOf(n), 1);
+    this.patch({ uploading: this.uploads.length ? uploadingText(this.uploads) : null });
+    const paths: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") paths.push(r.value);
+      else if (!this.disposed) toast(uploadFailure(names[i], r.reason), "error");
+    });
+    if (!paths.length) return;
+    const verdict = pasteVerdict({ disposed: this.disposed, driving: this.driving });
+    if (verdict === "changed") return void toast("上传期间终端已切换，没有粘贴", "error");
+    if (verdict === "watching") return void toast("上传期间不再接管终端，没有粘贴", "error");
+    this.term?.paste(pastedPaths(paths)); // bracketed when the program asked for it; the keys go through type()
+    this.term?.focus();
+  }
+
+  private dragEnter = (e: DragEvent) => {
+    if (!dragHasFiles(e.dataTransfer)) return;
+    this.dragDepth++;
+    if (this.driving) this.patch({ dropping: true });
+  };
+
+  private dragOver = (e: DragEvent) => {
+    if (!dragHasFiles(e.dataTransfer)) return;
+    e.preventDefault(); // without it the browser does not offer the drop (and opens the file instead)
+    if (e.dataTransfer) e.dataTransfer.dropEffect = this.driving ? "copy" : "none";
+  };
+
+  private dragLeave = (e: DragEvent) => {
+    if (!dragHasFiles(e.dataTransfer)) return;
+    this.dragDepth = Math.max(0, this.dragDepth - 1);
+    if (!this.dragDepth) this.patch({ dropping: false });
+  };
+
+  private drop = (e: DragEvent) => {
+    const files = transferFiles(e.dataTransfer);
+    this.dragDepth = 0;
+    this.patch({ dropping: false });
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void this.uploadFiles(files);
   };
 
   confirmPaste(ok: boolean) {

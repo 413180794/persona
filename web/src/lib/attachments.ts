@@ -1,3 +1,4 @@
+import { api, enc } from "./api";
 import { uuid } from "./format";
 
 export const MAX_IMAGE = 8 * 1024 * 1024;
@@ -24,6 +25,21 @@ export async function imagePayload(file: File): Promise<{ mime: string; data: st
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return { mime: file.type || "image/png", data: btoa(bin) };
+}
+
+/**
+ * Sends a file to machine `mid` (POST /machines/{mid}/files, docs/protocol.md「发送文件」): the chat's attachments, a new
+ * agent's files and the terminal's pasted ones. Resolves to the file's absolute path on that machine.
+ */
+export async function sendFile(mid: string, file: File, opts: { name?: string; dest?: "terminal"; signal?: AbortSignal } = {}): Promise<string> {
+  const query = `name=${enc(opts.name ?? file.name)}${opts.dest ? `&dest=${opts.dest}` : ""}`;
+  const r = await api<{ path: string }>(`/machines/${enc(mid)}/files?${query}`, {
+    method: "POST",
+    signal: opts.signal,
+    body: file,
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+  return r.path;
 }
 
 export function quotePath(path: string) {

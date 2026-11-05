@@ -139,6 +139,7 @@ export function TerminalPanel({ mid, sid, onClose }: { mid: string; sid: string;
             "relative min-h-0 flex-1 p-2 transition-[opacity,filter] duration-300 [overflow-anchor:none]",
             drawn ? "overflow-x-hidden overflow-y-auto" : v?.pinned || older.length ? "overflow-auto" : "overflow-hidden",
             v?.stale && v.loaded && "opacity-45 grayscale",
+            v?.dropping && "ring-2 ring-inset ring-accent",
           )}
         >
           {v && older.length > 0 && (
@@ -160,6 +161,16 @@ export function TerminalPanel({ mid, sid, onClose }: { mid: string; sid: string;
         {feed && v && (
           <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col gap-1.5">
             {v.stale && <LinkStatus feed={feed} />}
+            {v.uploading && (
+              <div
+                role="status"
+                className="flex items-center gap-2 rounded-control bg-surface px-2.5 py-1.5 text-[12px] text-ink-2 shadow-raised"
+                style={{ animation: "fade-in 160ms ease-out both" }}
+              >
+                <Spinner size={12} />
+                <span className="min-w-0 flex-1 truncate">{v.uploading}</span>
+              </div>
+            )}
             {takeBack && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-control bg-surface py-1.5 pr-1.5 pl-2.5 text-[12px] text-ink-2 shadow-raised" style={{ animation: "fade-in 160ms ease-out both" }}>
                 <Icon name="info" size={13} className="shrink-0 text-ink-3" />
