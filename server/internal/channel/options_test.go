@@ -294,3 +294,35 @@ func TestReadAnswerTakesOrdinalsAndLabels(t *testing.T) {
 		t.Fatalf("a free answer: %+v", b.Answers)
 	}
 }
+
+// A phone keyboard shapes a number as ①, （1）, 1), and Chinese says a bare 二号 / 2号: all name the option. A question
+// mark, a shape out of range, a counting measure word, and a label that is itself the number keep the usual rules.
+func TestMatchOptionNumberShapes(t *testing.T) {
+	db := question(false, "PostgreSQL", "SQLite", "MySQL")
+	for text, want := range map[string]string{
+		"①": "PostgreSQL", "②": "SQLite", "③": "MySQL", "②。": "SQLite",
+		"（1）": "PostgreSQL", "(2)": "SQLite", "【3】": "MySQL", "[1]": "PostgreSQL",
+		"「2」": "SQLite", "『3』": "MySQL", "1)": "PostgreSQL", "2）": "SQLite",
+		"二号": "SQLite", "2号": "SQLite", "三号": "MySQL", "选二号": "SQLite", "二号吧": "SQLite", "2号吧": "SQLite",
+	} {
+		if got, ok := MatchOption(db, text); !ok || got != want {
+			t.Errorf("%q: %q, %v; want %q", text, got, ok, want)
+		}
+	}
+	multi := question(true, "进展", "风险", "计划")
+	for text, want := range map[string]string{"①，③": "进展, 计划", "二号和三号": "风险, 计划"} {
+		if got, ok := MatchOption(multi, text); !ok || got != want {
+			t.Errorf("%q: %q, %v; want %q", text, got, ok, want)
+		}
+	}
+	for _, text := range []string{"①？", "①?", "（1）?", "1)？", "④", "（4）", "⑵", "⓪", "（01）", "二号？", "一个", "二个", "1个", "2个"} {
+		if got, ok := MatchOption(db, text); ok {
+			t.Errorf("%q: %q, but it is not a choice", text, got)
+		}
+	}
+	// Another option's label is the number 2: a bare 2号 is then ambiguous and stays the answer itself.
+	collide := question(false, "2", "4", "8")
+	if got, ok := MatchOption(collide, "2号"); ok {
+		t.Errorf("2号 with a label 2: %q, %v", got, ok)
+	}
+}

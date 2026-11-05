@@ -1197,6 +1197,9 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 			st = "auto_done"
 		}
 		task := snapshotTask(t, st, agents, now)
+		if st == "failed" && task.Last == "" {
+			task.Last = clip(oneLine(t.StartError), 80) // why it did not start, for the 早报 (#4124)
+		}
 		task.Link = todoLink(web, t.ID)
 		var rank int
 		task.Health, rank = taskHealth(t, agents, now) // supervised tasks: what needs the assistant first (supervise.go)

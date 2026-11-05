@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -204,4 +205,37 @@ func TestGoldenAssistantSnapshotWork(t *testing.T) {
 		t.Fatalf("snapshot header: %q", res.Text)
 	}
 	golden(t, "assistant_snapshot.work", "- 现在：YYYY-MM-DD 周X HH:MM（"+m[1]+"）\n"+res.Text[len(m[0]):])
+}
+
+// A plan's work line says what the plan is, and a card of several questions says more follow (#4331): the user tells
+// one agent's plan from another's and knows a question is not the only one before opening the card.
+func TestInteractionLineSaysWhatIsAsked(t *testing.T) {
+	plan := proto.Interaction{Kind: proto.IxPlan, Plan: "# Move the cache to Postgres\n\n1. add a table"}
+	long := strings.Repeat("问", 80)
+	two := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "部署到哪？"}, {Question: "要回滚吗？"}}}
+	three := proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: long}, {Question: "b"}, {Question: "c"}}}
+	for _, c := range []struct {
+		l    i18n.Lang
+		ix   proto.Interaction
+		want string
+	}{
+		{i18n.ZhHans, plan, "计划等你审批：Move the cache to Postgres"},
+		{i18n.En, plan, "Plan waiting for approval: Move the cache to Postgres"},
+		{i18n.ZhHans, two, "部署到哪？（还有 1 个问题）"},
+		{i18n.En, two, "部署到哪？ (1 more question)"},
+		{i18n.Ja, two, "部署到哪？（ほかに1問）"},
+		{i18n.En, proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: " "}, {Question: "b"}, {Question: "c"}}}, "Has a question (2 more questions)"},
+		{i18n.ZhHans, proto.Interaction{Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "部署到哪？"}}}, "部署到哪？"},
+		{i18n.ZhHans, proto.Interaction{Kind: proto.IxPlan, Plan: " \n#\n"}, "计划等你审批"},
+	} {
+		if got := interactionLine(c.l, c.ix); got != c.want {
+			t.Errorf("%q %s: %q, want %q", c.l, c.ix.Kind, got, c.want)
+		}
+	}
+	// A long first question is what gets cut, never the count after it; the line is 60 runes and an ellipsis, as
+	// every other work line.
+	got := interactionLine(i18n.ZhHans, three)
+	if !strings.HasSuffix(got, "…（还有 2 个问题）") || utf8.RuneCountInString(got) != 61 {
+		t.Errorf("long question: %q (%d runes)", got, utf8.RuneCountInString(got))
+	}
 }

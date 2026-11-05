@@ -148,9 +148,22 @@ struct ExtensionDetailView: View {
     @State private var page: ExtensionModel
     @State private var editingSecret: ExtensionSecret?
     @State private var declarations = ExtensionTextContributions()
+    @State private var connectorInbox = ExtensionConnectorsModel()
     @Environment(\.scenePhase) private var phase
 
     init(id: String) { _page = State(initialValue: ExtensionModel(id: id)) }
+
+    private struct ConnectorSectionsKey: Equatable {
+        var ids: [String]
+        var depth: Int
+        var hub: String?
+    }
+
+    /// The connectors it contributes while it is on: switched off, they are off too.
+    private var connectorIDs: [String] {
+        guard let p = page.detail?.plugin, p.enabled ?? true else { return [] }
+        return p.contributes?["connectors"] ?? []
+    }
 
     var body: some View {
         SettingsForm {
@@ -173,6 +186,7 @@ struct ExtensionDetailView: View {
                 }
                 if let auto = d.plugin.autoUpgrade { upgrades(d.plugin, auto: auto) }
                 pages(d)
+                connectorSections(d)
                 if !d.readOnly && !d.form.isEmpty { form(d) }
                 if !d.readOnly && !d.secrets.isEmpty { secrets(d) }
                 contributions(d)
@@ -211,6 +225,12 @@ struct ExtensionDetailView: View {
                               clear: { await page.clearSecret(secret.name) })
         }
         .task { await page.load() }
+        // Again when the connector's page closes (its switch may have changed there) or the extension is switched.
+        // Also once paired (opened at launch, before the hub's address is known) or paired to another hub.
+        .task(id: ConnectorSectionsKey(ids: connectorIDs, depth: AppModel.shared.settingsPath.count,
+                                       hub: AppModel.shared.api?.config.url.absoluteString)) {
+            await connectorInbox.load(ids: connectorIDs)
+        }
         .tabActiveTask(id: ExtensionTextSource(group: AppModel.shared.hub?.group ?? "", features: AppModel.shared.hubFeatures,
                                                hub: AppModel.shared.api?.config.url.absoluteString, active: phase == .active)) {
             guard phase == .active else { return }
@@ -310,6 +330,43 @@ struct ExtensionDetailView: View {
                 }
             } header: {
                 SettingsHeading(String(localized: "页面"))
+            }
+        }
+    }
+
+    /// A section per connector it contributes that has an inbox (#3228): the connector's own 进收件箱 switch and the
+    /// way to its page. Not while the extension is off, nor when the hub's list cannot be read or has no such switch.
+    @ViewBuilder private func connectorSections(_ d: HubExtensionDetail) -> some View {
+        if d.plugin.enabled ?? true {
+            ForEach(connectorInbox.connectors) { c in
+                Section {
+                    Toggle(isOn: Binding(get: { c.inbox ?? false }, set: { on in
+                        Task { await connectorInbox.setInbox(c.id, on: on) }
+                    })) {
+                        Text("进收件箱").lineLimit(1)
+                    }
+                    .disabled(connectorInbox.changing != nil)
+                    .accessibilityIdentifier("extension-connector-inbox-\(c.id)")
+                    NavigationLink(value: SettingsPage.connector(c.id)) {
+                        Label {
+                            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                                Text("连接器设置").lineLimit(1)
+                                Text("登录、状态和更多收件箱设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        } icon: {
+                            Image(systemName: Theme.Icon.connectors)
+                        }
+                    }
+                    .accessibilityIdentifier("extension-connector-open-\(c.id)")
+                } header: {
+                    SettingsHeading(String(localized: "连接器 \(c.name)"))
+                } footer: {
+                    if c.inbox == true {
+                        Text("\(c.name) 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。")
+                    } else {
+                        Text("不进收件箱：不再收新的，已有的条目留着。")
+                    }
+                }
             }
         }
     }

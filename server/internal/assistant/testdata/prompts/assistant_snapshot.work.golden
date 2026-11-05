@@ -7,3 +7,4 @@
   - 做完的（24 小时内）：修登录（server，session_id=aaaaaaaa，链接 http://hub.example.com:18660/s/server/aaaaaaaa-1）：已合并 PR #12
 - iPhone：App 不在前台，phone_* 工具会先尝试在后台唤醒 App，失败就请他打开 App
 - 已安排的跟进：没有
+- 每天的定时任务：早报（工作日 09:00）

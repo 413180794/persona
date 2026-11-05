@@ -177,14 +177,8 @@ class Notifier @Inject constructor(
         val assistant = isAssistant(ix.sessionKey)
         val title = if (assistant == true && ix.kind == "question") context.getString(R.string.notify_title_assistant_asks)
             else ix.sessionTitle?.takeIf { it.isNotBlank() } ?: context.getString(R.string.notify_title_needs_you)
-        val detail = when (ix.kind) {
-            "question" -> ix.questions.orEmpty().joinToString("\n") { it.question }
-            "plan" -> ix.plan ?: ix.headline.shown
-            "permission" -> ix.summary ?: ix.headline.shown
-            "screen" -> ix.dialog?.let { "${it.question}\n${it.detail.orEmpty()}" } ?: ix.screen.orEmpty()
-            else -> ix.headline.shown
-        }
-        val builder = base(CH_INPUT).forSession(ix.sessionKey).setContentTitle(title).setContentText(ix.headline.shown)
+        val (line, detail) = requestCopy(context, ix)
+        val builder = base(CH_INPUT).forSession(ix.sessionKey).setContentTitle(title).setContentText(line)
             .addExtras(android.os.Bundle().apply { putBoolean(EXTRA_REQUEST, true) })
             .setStyle(NotificationCompat.BigTextStyle().bigText(detail.take(2000)))
             .setPriority(NotificationCompat.PRIORITY_HIGH)

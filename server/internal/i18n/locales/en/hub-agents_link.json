@@ -4,5 +4,8 @@
   "permission": "Waiting for your approval",
   "permission_for": "Waiting for approval: {summary}",
   "elicitation": "MCP request needs you",
-  "screen": "Terminal needs you"
+  "screen": "Terminal needs you",
+  "plan_for": "Plan waiting for approval: {plan}",
+  "more_questions_one": "{question} ({count} more question)",
+  "more_questions_other": "{question} ({count} more questions)"
 }

@@ -99185,6 +99185,94 @@
           }
         }
       }
+    },
+    "连接器设置": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接器设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connector Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コネクタの設定"
+          }
+        }
+      }
+    },
+    "登录、状态和更多收件箱设置": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录、状态和更多收件箱设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in, status and more Inbox settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインイン、状態、受信トレイのその他の設定"
+          }
+        }
+      }
+    },
+    "连接器 %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接器 %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connector %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コネクタ %@"
+          }
+        }
+      }
+    },
+    "%@ 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New %@ items show in the Inbox. This is the same switch as Show in Inbox on the connector's page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ の新しい項目が受信トレイに表示されます。コネクタのページの「受信トレイに表示」と同じスイッチです。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

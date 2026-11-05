@@ -441,9 +441,10 @@ func negated(t string) bool {
 }
 
 // Ordinals in the three languages, with what may come around one (「我选第二个吧」「the second one」「2番目で」). A
-// count (「1个」「一个」) is not a place: a measure word needs 第 or 选项 before the numeral.
+// count (「1个」「一个」) is not a place: a measure word needs 第 or 选项 before the numeral. 「号」 names a place itself,
+// so a bare 「二号」「2号」 is one too.
 var (
-	ordinalZh = regexp.MustCompile(`^(?:我|就)?(?:选|选择|要|用)?(?:(?:第|选项|序号)(\d+|[一二三四五六七八九十]+)(?:个|项|条|种|号|款|位)?(?:选项)?|(\d+|[一二三四五六七八九十]+))(?:吧|呢|啊|呀|的|就行|就好|好了)?$`)
+	ordinalZh = regexp.MustCompile(`^(?:我|就)?(?:选|选择|要|用)?(?:(?:第|选项|序号)(\d+|[一二三四五六七八九十]+)(?:个|项|条|种|号|款|位)?(?:选项)?|(\d+|[一二三四五六七八九十]+))(?:号)?(?:吧|呢|啊|呀|的|就行|就好|好了)?$`)
 	ordinalJa = regexp.MustCompile(`^(選択肢)?(\d+|[一二三四五六七八九十]+)(番目|番|つ目|個目)?(?:の(?:選択肢|もの|やつ))?(?:で|にします|でお願いします)?$`)
 	ordinalEn = regexp.MustCompile(`^(?:(?:i(?:'ll| will)? )?(?:pick|choose|take|go with|want) )?(?:the )?(?:(option|number|choice|#) ?)?([a-z]+|\d+(?:st|nd|rd|th)?)(?: (?:one|option|choice|answer))?(?: please)?$`)
 	lastOne   = regexp.MustCompile(`^(?:(?:the )?last(?: one| option| choice)?|最后(?:一个|一项|一种|那个)?吧?|最後(?:の(?:選択肢|もの|やつ))?で?)$`)

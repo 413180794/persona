@@ -4,5 +4,7 @@
   "permission": "等你授权",
   "permission_for": "等你授权：{summary}",
   "elicitation": "MCP 请求等你处理",
-  "screen": "终端等你处理"
+  "screen": "终端等你处理",
+  "plan_for": "计划等你审批：{plan}",
+  "more_questions": "{question}（还有 {count} 个问题）"
 }

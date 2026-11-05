@@ -3,6 +3,8 @@ package persona.platform.notify
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import persona.core.contracts.Elicitation
+import persona.core.contracts.Interaction
 import persona.core.contracts.api.ConnectionState
 import org.junit.Assert.*
 import org.junit.Test
@@ -49,6 +51,41 @@ class NotificationCopyTest {
         assertEquals(listOf("拒否", "許可", "表示", "承認", "差し戻し"), buttons().map(::text))
         assertEquals("Personaが質問しています", text(R.string.notify_title_assistant_asks))
         assertEquals("「再開」をタップすると通知を再び受け取れます", text(R.string.notify_stopped_text))
+    }
+
+    private val mcpPermission = Interaction("p", kind = "permission", toolName = "mcp__github__create_issue", summary = "Fix login")
+    private val personaPermission = Interaction("q", kind = "permission", toolName = "mcp__jarvis__mail_send")
+    private val form = Interaction("f", kind = "elicitation", summary = "Pick a repository",
+        elicitation = Elicitation(message = "Pick a repository"))
+
+    /** A glance at the lock screen says which tool and what form: no raw mcp__ names, not only 「MCP 表单等你填写」 (#4354). */
+    @Test fun requestNotificationsNameTheToolAndTheForm() {
+        assertEquals("请求使用 github · create issue：Fix login" to "请求使用 github · create issue：Fix login", requestCopy(context, mcpPermission))
+        assertEquals("请求使用 Persona · mail send", requestCopy(context, personaPermission).first)
+        assertEquals("MCP 表单：Pick a repository" to "MCP 表单：Pick a repository", requestCopy(context, form))
+        assertEquals("MCP 表单等你填写", requestCopy(context, Interaction("e", kind = "elicitation")).first)
+        val bash = Interaction("b", kind = "permission", toolName = "Bash", summary = "rm -rf build")
+        assertEquals("请求使用 Bash：rm -rf build", requestCopy(context, bash).second)
+        // A blank or missing summary falls back to the form's own message; a long message keeps its first line collapsed.
+        val message = Interaction("m", kind = "elicitation", summary = " ", elicitation = Elicitation(message = "Pick a repository\nfrom your org"))
+        assertEquals("MCP 表单：Pick a repository" to "MCP 表单：Pick a repository\nfrom your org", requestCopy(context, message))
+        assertEquals("MCP 表单：Pick a repository", requestCopy(context, form.copy(summary = null)).first)
+        val codex = Interaction("c", kind = "permission", agent = "codex", toolName = "mcp__github__create_issue")
+        assertEquals("Codex 请求使用 github · create issue", requestCopy(context, codex).first)
+        val question = Interaction("k", kind = "question", questions = listOf(persona.core.contracts.Question(question = "Which branch?")))
+        assertEquals("Which branch?" to "Which branch?", requestCopy(context, question))
+    }
+
+    @Config(sdk = [35], qualifiers = "en")
+    @Test fun requestNotificationsInEnglish() {
+        assertEquals("Wants to use github · create issue: Fix login", requestCopy(context, mcpPermission).first)
+        assertEquals("MCP form: Pick a repository", requestCopy(context, form).first)
+    }
+
+    @Config(sdk = [35], qualifiers = "ja")
+    @Test fun requestNotificationsInJapanese() {
+        assertEquals("github · create issueの使用をリクエスト：Fix login", requestCopy(context, mcpPermission).first)
+        assertEquals("MCPフォーム：Pick a repository", requestCopy(context, form).first)
     }
 
     private fun buttons() = listOf(R.string.notify_action_deny, R.string.notify_action_allow, R.string.notify_action_view,

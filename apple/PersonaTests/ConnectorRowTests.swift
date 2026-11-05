@@ -30,3 +30,22 @@ import Testing
         #expect(ConnectorRow.rows([c("lark"), c("github")], lark: false).map(\.id) == ["github"])
     }
 }
+
+/// An extension's page draws a section per contributed connector that has an inbox switch (#3228).
+@MainActor struct ExtensionConnectorsTests {
+    private func c(_ id: String, inbox: Bool?) -> HubConnector {
+        var c = HubConnector(id: id, name: id, status: "ok")
+        c.inbox = inbox
+        return c
+    }
+
+    @Test func onlyContributedOnesWithTheSwitchInTheExtensionsOrder() {
+        let all = [c("telegram", inbox: true), c("github", inbox: false), c("imessage", inbox: true)]
+        #expect(ExtensionConnectorsModel.shown(all, ids: ["github", "telegram"]).map(\.id) == ["github", "telegram"])
+        #expect(ExtensionConnectorsModel.shown(all, ids: ["examplenotes"]).isEmpty, "one the hub does not list")
+    }
+
+    @Test func aHubFromBeforeTheSwitchShowsNothing() {
+        #expect(ExtensionConnectorsModel.shown([c("github", inbox: nil)], ids: ["github"]).isEmpty)
+    }
+}

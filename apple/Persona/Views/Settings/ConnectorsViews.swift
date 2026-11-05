@@ -253,6 +253,58 @@ nonisolated enum ConnectorRow: Hashable, Identifiable {
     }
 }
 
+/// An extension's page (设置 › 扩展 › …) for the connectors it contributes (#3228, as the web's
+/// `ExtensionConnectorInbox`): each one's 进收件箱 switch, the hub's own (PUT /api/v1/connectors/{id}/settings, the same
+/// switch as on the connector's page, not a copy), and the way to that page for the rest.
+@Observable final class ExtensionConnectorsModel {
+    struct Deps {
+        var api: () -> APIClient?
+        var report: (Error) -> Void
+
+        static var live: Deps {
+            let model = AppModel.shared
+            return Deps(api: { model.api }, report: { model.show($0) })
+        }
+    }
+
+    /// The ones to draw, in the extension's order.
+    private(set) var connectors: [HubConnector] = []
+    /// The connector whose switch is being changed.
+    private(set) var changing: String?
+    @ObservationIgnored private let deps: Deps
+
+    init(deps: Deps = .live) { self.deps = deps }
+
+    /// The contributed connectors the hub lists with an inbox switch, in `ids`' order. A hub from before the switch
+    /// (no `inbox`) and a connector it does not list draw nothing.
+    nonisolated static func shown(_ all: [HubConnector], ids: [String]) -> [HubConnector] {
+        ids.compactMap { id in all.first { $0.id == id && $0.inbox != nil } }
+    }
+
+    /// Unreadable (a hub without connectors answers 404), the sections stay away: the connector's page says what is
+    /// wrong. Not gated on the hub's features: opened at launch, the page is there before they are.
+    func load(ids: [String]) async {
+        guard !ids.isEmpty, let api = deps.api() else { connectors = []; return }
+        guard let all = try? await api.connectors() else { connectors = []; return }
+        connectors = Self.shown(all, ids: ids)
+    }
+
+    func setInbox(_ id: String, on: Bool) async {
+        guard changing == nil, let api = deps.api() else { return }
+        changing = id
+        defer { changing = nil }
+        do {
+            let updated = try await api.setConnector(id, feed: .inbox, on: on)
+            if let i = connectors.firstIndex(where: { $0.id == id }) {
+                // A hub that answers without the switch still switched it: kept as asked.
+                connectors[i] = updated.inbox == nil ? { var c = updated; c.inbox = on; return c }() : updated
+            }
+        } catch {
+            deps.report(error)
+        }
+    }
+}
+
 /// The 连接器 section of 设置: one row per connector with what it has now.
 struct ConnectorsSection: View {
     @Environment(AppModel.self) private var model

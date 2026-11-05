@@ -35,6 +35,7 @@
     <string name="notify_channel_status">实时状态</string>
     <string name="notify_title_assistant_asks">Persona 在问你</string>
     <string name="notify_title_needs_you">需要你</string>
+    <string name="notify_body_elicitation">MCP 表单：%1$s</string>
     <string name="notify_title_done">做完了</string>
     <string name="notify_title_alert">提醒</string>
     <string name="notify_stopped_title">后台连接被你停止了</string>

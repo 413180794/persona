@@ -1693,9 +1693,10 @@ View、组件、动作、回答、位置和上下文都用 schema 生成的类�
 - 详情：状态、版本、来源、描述、是否在跑的小字（「正在运行」/「暂未运行，用到时自动启动」）、「还缺：…」和错误；「启用」开关；「设置」是按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，
   对象是单独一节），右上角「保存」整份提交，hub 拒绝的字段把原因显示在那一项下面、草稿留着；「密钥」每项只显示已设置 / 未设置，点开在单独的表单里输入（不回显），
   已设置的可以清除；「提供」「它可以」「关于」（版本、上一个版本、来源、安装自、发布者、主页、警告）。hub.json 来的只能看，不显示开关和表单。
-- 贡献的连接器（#3178）：贡献了带收件箱的连接器（`contributes.connectors`，连接器有 `inbox` 字段）时，网页和安卓的详情在「页面」后面每个连接器一节：
-  它的「进收件箱」开关（就是 hub 的连接器开关 `PUT /api/v1/connectors/{id}/settings {"inbox"}`，和 设置 › 连接器 › … 上的同一个，不另存一份）和「连接器设置」一行（跳到连接器页）。
-  扩展停用时不画。扩展自己决定哪些进收件箱的设置（比如 GitHub 的仓库、类型）照常写在 `configuration` 里，按表单画。iOS 还没有这一节（#3228）。
+- 贡献的连接器（#3178，iOS / Mac #3228）：贡献了带收件箱的连接器（`contributes.connectors`，连接器有 `inbox` 字段）时，网页、安卓、iOS / iPad / Mac 的详情在「页面」后面每个连接器一节：
+  它的「进收件箱」开关（就是 hub 的连接器开关 `PUT /api/v1/connectors/{id}/settings {"inbox"}`，和 设置 › 连接器 › … 上的同一个，不另存一份）和「连接器设置」一行（跳到连接器页，回来时重新读一次）。
+  扩展停用、读不到连接器列表、hub 没有 `connectors` 功能或连接器没有 `inbox` 字段（旧 hub）时不画，也不报错。扩展自己决定哪些进收件箱的设置（比如 GitHub 的仓库、类型）照常写在 `configuration` 里，按表单画。
+  假 hub：`MOCK_PLUGINS=1 MOCK_GITHUB_EXTENSION=1`（`=old` 是没有这个开关的旧 hub），UI 测试 `ExtensionConnectorInboxTests`。
 - 页面（#1328，「声明式 UI」）：详情里扩展的每个 `plugin_page` 一行（「页面」一节），点进去是一页；启动器详情页在额度、可用性后面每个
   `launcher_section` 一节。`ExtensionViewRenderer`（`ExtensionViewRenderer.swift`）用设计系统画 8 种条目：分隔线把一节分成两组（标题跟第一组，页脚跟最后一组），
   `tone` 换成 `Theme.positive` / `caution` / `danger`（neutral：次要色，进度条用强调色），`field` 的 5 种 kind（`secret` 用 SecureField、

@@ -142,13 +142,33 @@ func is(text string, words []string) bool {
 // asks what 1 is.
 const numberEnd = "。.．、!！"
 
-// number reads text as an option number: full-width digits (a Chinese or Japanese keyboard's) count, and so does a
-// trailing full stop; not a leading zero.
+// circledOne is ①; circled digits run ①…⑳ (U+2460…U+2473), the shapes a phone's keyboard offers for a list number.
+const (
+	circledOne = '①'
+	circledMax = 20
+)
+
+// numberWrappers are the paired brackets a phone puts around a typed number, whole: （1） (1) 【1】 [1] 「1」 『1』. A
+// right parenthesis after the bare digits, 1) / 1）, is stripped below.
+var numberWrappers = [][2]rune{
+	{'（', '）'}, {'(', ')'}, {'【', '】'}, {'[', ']'}, {'「', '」'}, {'『', '』'},
+}
+
+// number reads text as an option number: full-width digits (a Chinese or Japanese keyboard's) count, a trailing full
+// stop too, and so do the shapes phones type a number in: a circled digit ①, a paired bracket around the whole
+// number, or a trailing right parenthesis. A leading zero is no number, and a question mark stays a question ("1?",
+// "①?").
 func number(text string) (int, bool) {
 	t := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(text), numberEnd))
 	if t == "" {
 		return 0, false
 	}
+	if r := []rune(t); len(r) == 1 {
+		if n := int(r[0]) - int(circledOne) + 1; n >= 1 && n <= circledMax {
+			return n, true
+		}
+	}
+	t = unwrappedNumber(t)
 	var b strings.Builder
 	for _, r := range t {
 		switch {
@@ -160,11 +180,28 @@ func number(text string) (int, bool) {
 			return 0, false
 		}
 	}
-	if d := b.String(); d[0] != '0' {
+	if d := b.String(); d != "" && d[0] != '0' {
 		n, err := strconv.Atoi(d)
 		return n, err == nil
 	}
 	return 0, false
+}
+
+// unwrappedNumber takes the phone shapes off a number typed whole: a paired bracket around it （1）, or a right
+// parenthesis after it 1). Anything that is not exactly the wrapper around the digits is returned as it was.
+func unwrappedNumber(text string) string {
+	r := []rune(text)
+	if len(r) >= 3 {
+		for _, w := range numberWrappers {
+			if r[0] == w[0] && r[len(r)-1] == w[1] {
+				return string(r[1 : len(r)-1])
+			}
+		}
+	}
+	if len(r) >= 2 && (r[len(r)-1] == ')' || r[len(r)-1] == '）') {
+		return string(r[:len(r)-1])
+	}
+	return text
 }
 
 // ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say in l when text does

@@ -208,7 +208,7 @@ func failedStart(t *testing.T, h *Hub, want string) Todo {
 	if !strings.Contains(todo.StartError, want) || len(todo.Agents) != 0 {
 		t.Fatalf("todo = %+v", todo)
 	}
-	if line := taskLine(h, todo); !strings.HasSuffix(line, "：没开起来") {
+	if line := taskLine(h, todo); !strings.Contains(line, "：没开起来：") || !strings.Contains(line, want) { // and why (#4124)
 		t.Fatalf("the live context = %q", line)
 	}
 	if got := inboxTasks(t, h); len(got) != 0 {

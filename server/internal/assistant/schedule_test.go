@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 func TestNextRun(t *testing.T) {
@@ -929,5 +930,53 @@ func TestTaskArmedDuringItsMinuteRunsToday(t *testing.T) {
 	}
 	if next := nextRun(a, a.ArmedAt, time.Local); next.After(now) {
 		t.Fatalf("switched on during its minute, its run is due now, not %v", next)
+	}
+}
+
+// The snapshot tells the 早报 / 晚报 what went wrong overnight without a tool call (#4124): each daily task with how
+// its last run went, and the scheduled runs that failed or were skipped since yesterday 18:00, newest first, bounded.
+func TestSnapshotScheduleTellsMisses(t *testing.T) {
+	f := newFakeHub()
+	f.settings = &Settings{Timezone: "Asia/Shanghai"}
+	h := newStorelessService(t, f)
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	now := time.Date(2026, 11, 5, 8, 30, 0, 0, loc)
+	setTasks(h,
+		Task{ID: "m", Title: "早报", Repeat: repeatDaily, Time: "09:00", Weekdays: []int{1, 2, 3, 4, 5}, Enabled: true,
+			LastRun: now.Add(-23 * time.Hour), LastStatus: runOK},
+		Task{ID: "p", Title: "巡检", Repeat: repeatDaily, Time: "02:00", Enabled: true, LastRun: now.Add(-6 * time.Hour), LastStatus: runFailed,
+			LastError: "API Error: 503 upstream attempt budget is exhausted"},
+		Task{ID: "off", Title: "关了的", Repeat: repeatDaily, Time: "07:00", Enabled: false})
+	sc := h.loadSchedule(context.Background())
+	sc.mu.Lock()
+	sc.runs = []ScheduleRun{
+		{RefID: "p", Title: "巡检", At: now.Add(-40 * time.Hour), Status: runFailed, Error: "前天的，不算"},
+		{RefID: "m", Title: "早报", At: now.Add(-23 * time.Hour), Status: runOK},
+		{RefID: "p", Title: "巡检", At: now.Add(-6 * time.Hour), Status: runFailed, Error: "API Error: 503 upstream attempt budget is exhausted"},
+	}
+	for i := 0; i < 7; i++ {
+		sc.runs = append(sc.runs, ScheduleRun{RefID: "x", Title: "值守", At: now.Add(-time.Duration(5-i/2) * time.Hour), Status: runSkipped, Error: "Persona 停机，错过了时间"})
+	}
+	sc.mu.Unlock()
+
+	_, routines, misses, total := h.snapshotSchedule(context.Background(), loc, now)
+	if len(routines) != 2 || routines[0].Rule != "工作日 09:00" || !strings.HasSuffix(routines[0].Last, "成功") ||
+		!strings.Contains(routines[1].Last, "失败：API Error: 503") {
+		t.Fatalf("routines: %+v", routines)
+	}
+	if total != 8 || len(misses) != 6 {
+		t.Fatalf("misses: %d of %d, want 6 of 8 (the one before yesterday 18:00 left out)", len(misses), total)
+	}
+	if !misses[0].Skipped || misses[0].Label != "值守" {
+		t.Fatalf("newest first: %+v", misses[0])
+	}
+	text := prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "Asia/Shanghai", Routines: routines, Missed: misses, MissedTotal: total})
+	if !strings.Contains(text, "没成功的定时任务") || !strings.Contains(text, "值守跳过了") || !strings.Contains(text, "等 8 次") {
+		t.Fatalf("snapshot: %s", text)
+	}
+	for _, r := range misses {
+		if len([]rune(r.Why)) > 61 {
+			t.Fatalf("a reason is kept short: %q", r.Why)
+		}
 	}
 }

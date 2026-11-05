@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -86,19 +87,35 @@ func managerWaits(w *proto.WorkState) bool {
 	return w.WakeAt != nil || w.On == proto.WaitExternal && w.Wait == "" && w.Agent == nil
 }
 
+// interactionLineMost is how many runes of a pending interaction's work line are kept (the ellipsis after them).
+const interactionLineMost = 60
+
 // interactionLine is what a pending interaction waits for, in a line, in l.
 func interactionLine(l i18n.Lang, ix proto.Interaction) string {
 	switch ix.Kind {
 	case proto.IxQuestion:
+		if len(ix.Questions) > 1 { // the count after the first question is kept whole; the question is what gets cut
+			more := func(q string) string {
+				return i18n.T(l, "hub-agents_link.more_questions", i18n.Args{"question": q, "count": len(ix.Questions) - 1})
+			}
+			q := oneLine(ix.Questions[0].Question)
+			if q == "" {
+				q = i18n.T(l, "hub-agents_link.question")
+			}
+			return more(clip(q, max(interactionLineMost-utf8.RuneCountInString(more("")), 1)))
+		}
 		if len(ix.Questions) > 0 {
-			return clip(oneLine(ix.Questions[0].Question), 60)
+			return clip(oneLine(ix.Questions[0].Question), interactionLineMost)
 		}
 		return i18n.T(l, "hub-agents_link.question")
 	case proto.IxPlan:
+		if p := firstLine(ix.Plan); p != "" { // which plan: two agents' plans read apart
+			return clip(oneLine(i18n.T(l, "hub-agents_link.plan_for", i18n.Args{"plan": p})), interactionLineMost)
+		}
 		return i18n.T(l, "hub-agents_link.plan")
 	case proto.IxPermission:
 		if ix.Summary != "" {
-			return clip(oneLine(i18n.T(l, "hub-agents_link.permission_for", i18n.Args{"summary": ix.Summary})), 60)
+			return clip(oneLine(i18n.T(l, "hub-agents_link.permission_for", i18n.Args{"summary": ix.Summary})), interactionLineMost)
 		}
 		return i18n.T(l, "hub-agents_link.permission")
 	case proto.IxElicitation:

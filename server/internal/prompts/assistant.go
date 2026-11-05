@@ -91,6 +91,19 @@ type SnapshotFollowup struct {
 	Every string // "30 分钟" for a repeating one
 }
 
+// SnapshotRoutine is a daily scheduled task (早报, 晚报…): its rule, and how its last run went ("" when it never ran).
+type SnapshotRoutine struct {
+	Label, Rule, Last string
+}
+
+// SnapshotMiss is a scheduled run that failed or was skipped since yesterday evening, with why, in short (#4124): the
+// 早报 says 「昨晚巡检失败了」 without calling list_followups.
+type SnapshotMiss struct {
+	At         time.Time // in the user's zone
+	Label, Why string
+	Skipped    bool
+}
+
 // SnapshotTask is a task opened from an assistant conversation: a todo and its agents (docs/unified-entry.md).
 type SnapshotTask struct {
 	ID, Title, State string
@@ -135,7 +148,10 @@ type Snapshot struct {
 	Chats         *SnapshotChats    // nil: Feishu did not answer in time
 	Calendar      *SnapshotCalendar // nil: the calendar did not answer in time
 	Followups     []SnapshotFollowup
-	Tasks         []SnapshotTask // tasks opened from assistant conversations (task_plan), newest first
+	Routines      []SnapshotRoutine // the daily tasks that are on (at most eight)
+	Missed        []SnapshotMiss    // scheduled runs that failed or were skipped since yesterday 18:00, newest first
+	MissedTotal   int               // all of them (Missed is the newest six)
+	Tasks         []SnapshotTask    // tasks opened from assistant conversations (task_plan), newest first
 	// Unaccepted: deployed tasks whose 请验收 card the user has not passed yet (#2768), oldest first; the morning
 	// briefing brings them up again.
 	Unaccepted      []SnapshotAccept

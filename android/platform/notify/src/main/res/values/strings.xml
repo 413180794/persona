@@ -35,6 +35,7 @@
     <string name="notify_channel_status">Live status</string>
     <string name="notify_title_assistant_asks">Persona is asking you</string>
     <string name="notify_title_needs_you">Needs you</string>
+    <string name="notify_body_elicitation">MCP form: %1$s</string>
     <string name="notify_title_done">Finished</string>
     <string name="notify_title_alert">Alert</string>
     <string name="notify_stopped_title">You stopped the background connection</string>

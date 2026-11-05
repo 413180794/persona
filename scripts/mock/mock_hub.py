@@ -9126,6 +9126,30 @@ if PLUGINS_MODE and os.environ.get("MOCK_CHANNELS"):
                                            "why": "这台机器上没有 bubblewrap，扩展照常运行、没有隔离",
                                            "egress": {"allowed": 0, "denied": 0}}
 
+# MOCK_PLUGINS=1 with MOCK_GITHUB_EXTENSION=1: GitHub as an installed extension that contributes the github connector
+# (#3228, #3178): its page shows the connector's 进收件箱 switch (the same GITHUB_CONNECTOR["inbox"] as the connector
+# page's, PUT /api/v1/connectors/github/settings) and its own inbox rules in the form. MOCK_GITHUB_EXTENSION=old: a hub
+# from before the switch (the connector lists no inbox), so the page has no such section.
+MOCK_GITHUB_EXTENSION = os.environ.get("MOCK_GITHUB_EXTENSION", "")
+if PLUGINS_MODE and MOCK_GITHUB_EXTENSION:
+    # Signed in from the app's side as a hub of now lists it (login), so its page draws its own 进收件箱 too.
+    GITHUB_CONNECTOR.update(enabled=True, capabilities=sorted(set(GITHUB_CONNECTOR.get("capabilities", [])) | {"login"}))
+    if MOCK_GITHUB_EXTENSION != "old":
+        GITHUB_CONNECTOR["inbox"] = True
+    PLUGINS["github"] = {
+        "id": "github", "name": "GitHub", "kind": "connectors", "status": "running", "version": "0.3.0", "source": "installed",
+        "enabled": True, "description": "把 GitHub 的通知（请你 review、@你、CI 失败）收进收件箱，并给助手读 PR 和 issue 的工具。",
+        "contributes": {"connectors": ["github"]}, "publisher": "example", "origin": "market:3f2a9c1d0b/github",
+        "form": {"fields": [{"name": "inbox", "type": "object", "title": "收件箱", "description": "哪些通知进收件箱；都留空时全部都进", "fields": [
+            {"name": "only_repos", "type": "array", "title": "只收这些仓库", "items": {"name": "items", "type": "string"},
+             "description": "owner/repo，留空收全部"},
+            {"name": "exclude_repos", "type": "array", "title": "不收这些仓库", "items": {"name": "items", "type": "string"}},
+            {"name": "skip_kinds", "type": "array", "title": "不收这些类型", "unique_items": True, "items": {"name": "items", "type": "string", "enum": [
+                {"value": "review_requested", "title": "请你 review"}, {"value": "mention", "title": "@你"},
+                {"value": "ci_failed", "title": "CI 失败"}, {"value": "release", "title": "新版本发布"}]}}]}]},
+        "config": {"inbox": {"exclude_repos": ["example-org/noisy-repo"], "skip_kinds": ["release"]}}, "secrets": [],
+        "permissions": [_RUNS, {"key": "network", "title": "访问网络", "detail": "api.github.com"}]}
+
 
 def cua_config(pl):
     """The plugin cua's settings as the hub would answer: its machines are the Macs it is on for."""
@@ -11121,6 +11145,11 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"port": port, "listening": True, "http": True})
         if self.command == "PUT" and p == "/api/v1/connectors/github/settings":  # GitHub's inbox options
             body = json.loads(self.last_body or b"{}")
+            if "inbox" in body:  # 进收件箱 (MOCK_GITHUB_EXTENSION), from the connector's page or the extension's
+                if not isinstance(body["inbox"], bool) or "inbox" not in GITHUB_CONNECTOR:
+                    return self.send_json({"error": "inbox: true or false"}, 400)
+                GITHUB_CONNECTOR["inbox"] = body["inbox"]
+                return self.send_json(GITHUB_CONNECTOR)
             o = body.get("options") or {}
             if o.get("ci") not in (None, "off", "default_branch", "mine", "all") or any("/" not in r for r in o.get("muted_repos") or []):
                 return self.send_json({"error": "bad options"}, 400)

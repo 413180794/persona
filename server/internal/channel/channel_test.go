@@ -427,3 +427,67 @@ func TestOptionNumbersFullWidthAndPunctuated(t *testing.T) {
 		}
 	}
 }
+
+// A phone keyboard types a list number in a shape: a circled digit ①②, a paired bracket around it （1） 【1】 [1] 「1」
+// 『1』, or a right parenthesis after it 1) 1）. They answer a plan, a terminal dialog and a question like a plain
+// digit (#4327).
+func TestOptionNumberPhoneShapes(t *testing.T) {
+	for text, mode := range map[string]string{
+		"①": "bypassPermissions", "②": "acceptEdits", "①。": "bypassPermissions", "②、": "acceptEdits",
+		"（1）": "bypassPermissions", "(1)": "bypassPermissions", "【1】": "bypassPermissions", "[1]": "bypassPermissions",
+		"「1」": "bypassPermissions", "『1』": "bypassPermissions", "1)": "bypassPermissions", "1）": "bypassPermissions",
+		"（2）": "acceptEdits", "(2)": "acceptEdits", "【2】": "acceptEdits", "[2]": "acceptEdits",
+		"「2」": "acceptEdits", "『2』": "acceptEdits", "2)": "acceptEdits", "2）": "acceptEdits",
+	} {
+		r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text)
+		if !done || r.Approve == nil || !*r.Approve || r.Mode != mode || r.Feedback != "" {
+			t.Errorf("plan %q: %+v", text, r)
+		}
+	}
+	// A question mark asks what the number is; a shape past the choices or around a non-number is the note itself.
+	for _, text := range []string{"①？", "①?", "（1）?", "(1)？", "1)？", "1)?", "01)", "③", "⑴", "⓪", "（01）", "（0）", "（ 1 ）", "（1）删掉"} {
+		if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxPlan}, text); r.Approve == nil || *r.Approve || r.Feedback != text {
+			t.Errorf("plan %q is not a choice: %+v", text, r)
+		}
+	}
+	// number() itself: the circled range's both ends and the shapes it does not read.
+	for text, n := range map[string]int{"①": 1, "⑳": 20, "②": 2, "（12）": 12, "[20]": 20, "3)": 3} {
+		if got, ok := number(text); !ok || got != n {
+			t.Errorf("number(%q) = %d, %v; want %d", text, got, ok, n)
+		}
+	}
+	for _, text := range []string{"㉑", "⑴", "⓪", "01)", "（01）", "（1）删掉", "1)？"} {
+		if n, ok := number(text); ok {
+			t.Errorf("number(%q) = %d, true; want false", text, n)
+		}
+	}
+	screen := &Ask{Kind: proto.IxScreen, Options: []string{"a", "b", "c"}}
+	for text, want := range map[string]string{"①": "a", "③": "c", "（3）": "c", "【1】": "a", "[2]": "b",
+		"「2」": "b", "『3』": "c", "1)": "a", "2）": "b"} {
+		if r, done, again := ReadAnswer("", screen, text); !done || again != "" || r.Option != want {
+			t.Errorf("screen %q: done=%v again=%q %+v", text, done, again, r)
+		}
+	}
+	for _, text := range []string{"④", "（4）", "①？", "（01）"} {
+		if _, done, again := ReadAnswer("", screen, text); done || again == "" {
+			t.Errorf("screen %q was taken", text)
+		}
+	}
+	if _, done, again := ReadAnswer("", &Ask{Kind: proto.IxPermission}, "①"); done || again == "" {
+		t.Error("permission: a circled number was taken")
+	}
+	multi := []proto.Question{{Question: "哪些？", MultiSelect: true,
+		Options: []proto.QuestionOption{{Label: "进展"}, {Label: "风险"}, {Label: "计划"}}}}
+	for text, want := range map[string]string{"①，③": "进展, 计划", "(2)": "风险", "【3】": "计划", "「2」": "风险"} {
+		if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: multi}, text); !done || r.Answers["哪些？"] != want {
+			t.Errorf("question %q: %+v", text, r)
+		}
+	}
+	one := []proto.Question{{Question: "发给谁？", Options: []proto.QuestionOption{{Label: "张三"}, {Label: "李四"}}}}
+	if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: one}, "①"); r.Answers["发给谁？"] != "张三" {
+		t.Errorf("question ①: %+v", r)
+	}
+	if r, _, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: one}, "①？"); r.Answers["发给谁？"] != "①？" {
+		t.Errorf("question ①？ is the answer itself: %+v", r)
+	}
+}
