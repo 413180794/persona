@@ -262,6 +262,7 @@ var Features = []string{
 	"terminal_click",         // terminal_input with click: a tap on a terminal the app drives, a left click there (docs/terminal.md)
 	"terminal_mouse",         // terminal_input with mouse: press / release / drag / move, a button and modifiers at a cell (docs/terminal.md「鼠标」)
 	"herdr_client",           // WebSocket herdr_open / herdr_input / herdr_resize / herdr_ack / herdr_close: herdr's own client in a PTY for the web, full devices only (docs/terminal.md「完整 herdr 界面」)
+	"herdr_focus",            // WebSocket herdr_focus (browser -> hub) and herdr_focus (hub -> browser): the full herdr view moves herdr's focus and follows it, full devices only (docs/terminal.md「焦点联动」)
 	"terminal_panes",         // GET/POST /api/v1/machines/{mid}/panes, terminal ids "pane:<id>": any pane as a terminal (docs/terminal.md「独立终端」)
 	"file_download",          // GET /api/v1/machines/{mid}/file/download
 	"file_stream",            // file?stream=1 (binary described, bytes by Range), file/download?inline=1, sniffed MIME

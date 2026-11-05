@@ -187,6 +187,23 @@ type FullClient interface {
 	Close()
 }
 
+// FocusState is what a host shows now: its focused space, slot and pane (shared by every client of the host).
+type FocusState struct {
+	Space, Slot, Pane string
+}
+
+// Focuser moves and reports the focus a host shares among its clients (herdr: pane.focus, and the focus events with
+// the snapshot's focused_* ids). The web's full herdr view follows it and moves it (docs/terminal.md「焦点联动」).
+type Focuser interface {
+	// Focused is what the host shows now; Pane is empty when the host does not say.
+	Focused(ctx context.Context) (FocusState, error)
+	// WatchFocus calls changed when the stream starts and for each focus event, until ctx ends or the host ends the
+	// stream, and returns why it stopped. The events say nothing about who moved the focus.
+	WatchFocus(ctx context.Context, changed func()) error
+	// FocusPane makes the pane the focused one (its slot and space too).
+	FocusPane(ctx context.Context, pane PaneRef) error
+}
+
 // MetadataReporter reports and clears pane metadata tokens (docs/todos.md, #762).
 type MetadataReporter interface {
 	ReportMetadata(ctx context.Context, pane PaneRef, source string, tokens map[string]*string) error

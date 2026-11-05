@@ -55,7 +55,10 @@ type fullClient struct {
 	sent  int64
 	ack   int64
 	lease time.Time
-	once  sync.Once
+	// activeAt: when the user last did something in the client (keys, a click; not the mouse passing over it), which
+	// is how a focus change is attributed to it (focus.go).
+	activeAt time.Time
+	once     sync.Once
 }
 
 var errNoFullClient = fmt.Errorf("%w: this machine has no host that can run a full client (herdr on Linux or macOS)", host.ErrUnsupported)
@@ -270,6 +273,9 @@ func (n *Node) closeFulls() {
 func (n *Node) onFullEvent(event string, params json.RawMessage) bool {
 	switch event {
 	case "herdr.client.input", "herdr.client.resize", "herdr.client.ack", "herdr.client.close", "herdr.client.keepalive":
+	case "herdr.client.focus": // a view shows another session or pane (focus.go)
+		n.onFocusRequest(params)
+		return true
 	default:
 		return false
 	}
@@ -310,6 +316,7 @@ func (n *Node) onFullEvent(event string, params json.RawMessage) bool {
 		if len(b) == 0 {
 			return true
 		}
+		f.markActive(b)
 		select {
 		case f.in <- b:
 		default: // it takes nothing: not a client to keep

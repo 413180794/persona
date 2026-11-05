@@ -705,7 +705,7 @@ Moshi 是同一个会话页，中间区域在 Term 和 Chat 之间原地切换�
   `session attach` 对没在跑的会话也会把它起起来，所以 node 只对「host 已经在用的那个 socket」起客户端。
 - **环境**：继承 node 的，去掉 `HERDR_*`、`TMUX*`、`STY`、`SSH_*`（免得 herdr 以为自己在窗格里 / 另一个复用器里），再加 `TERM=xterm-256color`、`COLORTERM=truecolor`、
   `SSH_CONNECTION=127.0.0.1 1 127.0.0.1 2`（回环占位，让 herdr 把自己当成远程、复制时走 OSC 52 而不是电脑上的剪贴板工具；做法同有人给 moshi-hook 配的 systemd drop-in）。
-- **初始焦点**：herdr 没有「按窗格 id 聚焦」，只有 `workspace.focus` / `tab.focus`。打开时带 `focus`，node 先聚焦那个窗格所在的空间和标签页（窗格在标签页里是 herdr 上次聚焦的那个）。
+- **初始焦点**：打开时带 `focus`，node 先聚焦那个窗格（herdr 0.9.5 有 socket 方法 `pane.focus {pane_id}`，更老的只有 `workspace.focus` / `tab.focus`，那就聚焦窗格所在的空间和标签页，窗格在标签页里是 herdr 上次聚焦的那个；第二十八节）。
   **焦点是整个 herdr 会话共享的**（实测见下），所以电脑上的窗口也跟着跳——和用户在完整客户端里点一下标签页是同样的效果，所以默认就这样做。Moshi 的网页端不选，显示的是 herdr 当前聚焦的窗格。
 - **上限**：每台电脑最多 4 个完整客户端（`fullMaxClients`），第 5 个回 `too_many`；一个浏览器连接在 hub 上最多 4 个视图。
 - **流控**：node 给 hub 发出去、浏览器还没 ack 的字节超过 256 KB（`fullWindow`）就不再读 PTY——herdr 客户端写满终端缓冲区就自己停住，node 里不攒东西。ack 是累计的字节数，超过已发出的不算。
@@ -986,3 +986,70 @@ herdr 二进制里有 `mouse_tracking_enabled`（它内部的终端），只是�
 - `cd web && npm test`：新加 `widths.test.ts`（默认表里 😀 ✅ 是 1 格，加了之后 emoji / ZWJ 家庭 / 国旗 / `❤️` 是 2 格，汉字和全角标点 2 格，拉丁字母、框线、`⌘ ✓ ★ →` 1 格）。
 - `scripts/test/web_herdr_full_cjk_e2e.py`（假 hub 跑它自己当「herdr 客户端」，按真 herdr 的方式逐宽字符定位）：每一行的四条 `│` 和纯 ASCII 行的位置相差不超过 0.25 格（改动后最大 0.08；去掉 CSS 后最大 4.77），emoji 后的第二格没有上一帧的残留（去掉宽度表后出现 `Z`）；浅色、深色各一遍。
 - `scripts/test/web_herdr_full_live.py` / `web_herdr_full_conflicts_live.py` 的做法同上（真 herdr 的临时会话），本次的实测过程就是这么做的。
+
+## 二十八、焦点联动：herdr 自己的侧边栏和 Persona 的侧边栏一起动（2026-11-05，网页，#3021）
+
+用户：「persona 的 herdr 界面侧边栏选的会话和最外层侧边栏选的会话好像没联动，moshi 是联动的，你也学一下」。两个方向都没通：
+在完整界面里用 herdr 自己的侧边栏 / 标签页切窗格，Persona 的页面和侧边栏不动；在 Persona 的侧边栏、命令面板、/terminal 的树里选另一个窗格，herdr 里的焦点不一定跟过去
+（每个会话页各开一个客户端，从 /terminal 里「保持挂着」的另一个终端切回来时，那个客户端的焦点早被别处改走了）。
+
+### Moshi → Persona（读 Moshi 的网页包得到，只读、没运行）
+
+| 问题 | Moshi（`/gateway/events` 与路由代码） | Persona |
+| --- | --- | --- |
+| 怎么知道 herdr 聚焦的窗格 | 网关的 WebSocket `/gateway[/hosts/<主机>]/events`：页面发 `{watch:{workspaces:true, agent, context, usage, mux}}`，网关推整棵树 `{workspaces:{groups:[…]}}`，树里每个空间（group）、标签页（child）、窗格（pane）带 `focused` 布尔。**没有单独的焦点事件，也没有「谁改的」** | node 订阅 herdr 的 `workspace.focused` / `tab.focused` / `pane.focused`（`events.subscribe`），等一阵事件过去后读一次快照里的 `focused_*`，变了才发 `herdr.focus.changed`；多了一个 Moshi 没有的「谁改的」（下面） |
+| 侧边栏怎么跟 | 终端视图里（`view=term`）算出「有效节点」：`rz(状态, URL 里的 node, 树里聚焦的 node)`：URL 变了就偏向 URL，树里的焦点变了（`n !== treeFocus`）就偏向树，`iz` 取其一。侧边栏的高亮 `activeNodeId` 是这个有效节点，**URL 不变**；`_I` 在高亮行不完全可见时把它滚到列表中间（减弱动态时瞬移）。对话视图里不跟 | 跟的是**路由**：整页导航到那个窗格的地址（Agent 的会话页终端视图 / 终端页的 `pane:` 地址），侧边栏本来就按路由高亮、按路由滚到可见行（`Sidebar.tsx` 的 `useGlide`），不另写 |
+| 侧边栏点一下怎么让 herdr 聚焦 | 行的 `onClick` 里 `POST /gateway[/hosts/<主机>]/v1/workspaces/focus?mux=…`，body 是 `{workspaceId, tabId?, paneId?, allowParentFallback:true}`（tmux 是 `{session, window?, paneId?}`），发了就不管（不等结果、失败返回 false）；跳转不等它 | 路由变了之后，**打开着的完整界面**（一台电脑一个，见下）经已有的 WebSocket 发 `herdr_focus {id, session_id}`，hub → node → herdr `pane.focus`；同样不等结果，跳转不等它 |
+| 防回环 | 靠状态机：点击让 URL 变 → `preferUrl` 为真；点击发出的焦点让树里的焦点等于 URL 的节点，`treeFocus` 没有「变」，不会把页面拉回去。**不区分是谁改的焦点**：电脑上的窗口、别的浏览器改了 herdr 的焦点，终端视图里的页面也会被拉过去（Moshi 没有隔离） | 显式的：node 标出每次变化的来源（`persona` 我们要求的 / `client` 这个 App 的完整客户端刚被敲过 / `other`），hub 对每个视图说「是不是你的」；页面只跟自己的，别处的只出一个小提示；再加一个只在页面里的守卫（`lib/herdr-focus.ts` 的 `FocusGuard`）。下面「防回环」 |
+
+### herdr 0.9.5 给了什么（自己建的临时会话 `persona-focus-test` 里实测，测完 `session stop` + `session delete`）
+
+- **`pane.focus {pane_id}`**（socket 方法，CLI 的 `herdr pane focus` 只有 `--direction` 邻格）：对任何窗格都行（同标签页、别的标签页、别的空间），整条链上的空间 / 标签页 / 窗格都聚焦。第二十四节原先写的「herdr 没有按窗格 id 聚焦」对 0.9.5 不成立；更老的 herdr 回 `unknown variant`，退回 `workspace.focus` + `tab.focus`（`FocusPane`）。
+- **事件**：`events.subscribe` 可订 `workspace.focused`、`tab.focused`、`pane.focused`，事件名是下划线的（`workspace_focused`），数据只有 id：`{workspace_id}`、`{tab_id, workspace_id}`、`{pane_id, workspace_id}`。**一次聚焦总是三个一起发**，即使空间和标签页没变（同标签页里换窗格也是三个）；焦点没变（再 `pane.focus` 同一个）一个都不发。事件、快照、`events.subscribe` 的 schema（`herdr api schema --json`）里**没有任何客户端字段**：herdr 不说是哪个客户端改的。
+- **快照**（`session.snapshot`）顶层有 `focused_workspace_id` / `focused_tab_id` / `focused_pane_id`，空间 / 标签页 / 窗格各自也有 `focused`。
+
+### 方案
+
+**node**（`server/internal/node/focus.go`，herdr 宿主实现 `host.Focuser`）：
+
+- 另开一条只订这三个事件的 `events.subscribe`（一个连接只认一次订阅，不和生命周期那条挤），事件一到等 30 ms（一次聚焦的三个事件），读一次快照；和上次报的不同才发 `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}`。第一次读只是基线，不发。`session_id` 是那个窗格里的 Agent 会话（没有就是普通 shell）。
+- **谁改的**（herdr 不说，所以是启发式，按优先级）：① 我们刚替某个视图要求过聚焦这个窗格（3 s 内，`herdr.client.focus`）→ `persona`，带那个视图的 client id；② 这台 node 上某个完整客户端在 1.5 s 内被**真的敲过 / 点过**（`herdr.client.input` 的字节去掉鼠标移过去（SGR 里无按键的移动，herdr 开着任意移动上报）、`CSI I/O` 焦点事件和页面回给 herdr 的应答（配色、kitty 键盘、DA1、尺寸）之后还有东西）→ `client`，带最近那一个的 id；③ 其他 → `other`（电脑上的窗口、另一个工具）。
+  代价和限度：电脑上的窗口和浏览器恰好在 1.5 s 内同时有动作时，会算成浏览器的；两个浏览器各有一个视图时，最近敲过的那个得到它。
+- **要求聚焦**：`herdr.client.focus {client_id, session_id}`（会话 id 或 `pane:` 地址）。同一个视图的请求互相替换（用户在侧边栏里连点，只有最后一个值得聚焦），按顺序一个一个做；窗格必须是宿主列出的（`terminalPane`），视图必须是这台 node 上还开着的；先记下「这是我们要的」再调 `pane.focus`，失败就撤掉记号。
+
+**hub**（`hub/herdrclient.go`）：
+
+- 浏览器 → hub：`herdr_focus {id, session_id}`。和视图本身一样**只有 `full` 设备**，且只能是开这个视图的那条连接（`fullOf`）；`session_id` 空或超过 256 字符不转。**是电脑上的状态变更**（herdr 的焦点是整个会话共享的，电脑上的窗口也会跳），所以没有新的 HTTP 路由，`route_scopes.txt` 不变，扩展令牌连 WebSocket 都进不去，`answer` 设备开不了视图所以也发不了。
+- node → hub：`herdr.focus.changed`。hub 对这台电脑上**每个视图**发一条 `herdr_focus {id, machine_id, workspace_id, tab_id, pane_id, session_id?, source, mine}`；`mine` = 这是这个视图的客户端（或要求）干的。不认识的 `source` 当成 `other`。feature `herdr_focus`。
+
+**网页**：
+
+- **一台电脑一个客户端**（`terminal/full-registry.ts`）。以前每个会话页 / 每个保持挂着的终端各有一个 `FullFeed`（一个 herdr 客户端），换会话 = 关一个开一个。现在 `FullFeed` 按电脑共用：`FullTerminal` 挂上时 `acquireFeed(mid)`，在前面的那一个 `claim`（xterm 的 DOM 搬进它的盒子、按需 `herdr_resize`、`herdr_focus` 到它的地址），让出时 `yield`（1.2 s 内没人接手才放手客户端；换成单窗格是立刻放手），最后一个页面卸载后再留 1.5 s 才销毁。
+  所以会话页 → 会话页、会话页 ⇄ 终端页（都是整个页面换掉）之间**xterm 和屏幕都是同一个**，客户端不重开，屏幕不闪，切换就是一条 `herdr_focus`。
+- **上限和保活的变化**：每台电脑 4 个客户端的上限（`fullMaxClients`）还在，但一个浏览器页面对一台电脑只用 1 个，不再随打开过的会话数涨；终端页「每台电脑保持挂着最近 2 个」对完整界面不再多开客户端（只有一个在用，另一个只占着位置），对单窗格还是各自一条流。换到另一台电脑会为它开自己的客户端，原来那台在 1.2 s 后放手。
+- **herdr → 页面**（`lib/herdr-focus.ts`，`decideFocus`）：这个视图在前面且连着时，`source=client` 且 `mine` 的变化**整页导航**（`replace`，不堆历史）：Agent 窗格 → 它的会话页终端视图（`terminalTarget`，进不了终端的会话和普通 shell 走 `pane:` 地址的终端页）；侧边栏按路由高亮并滚到可见。
+  **别处的变化不拖页面**：电脑上的窗口（`other`）、别的浏览器的视图（`client` 但 `mine` 为假）、别的浏览器的侧边栏（`persona` 但不是我的）、这个视图没在前面时，只在工具栏出一个小标「焦点在别处」（橙点），点一下才跟过去。
+- **页面 → herdr**：路由换到同一台电脑的另一个会话 / 窗格、并且那一页显示着完整界面时，`claim` 里发 `herdr_focus`。从侧边栏 / 命令面板 / 终端页的树选都一样，因为它们都是导航。选的会话上次是在对话视图（每个会话记住上次的视图）就不显示完整界面，也就不聚焦。
+  hub 没有 `herdr_focus`（旧 hub）时不发，客户端和屏幕照样跨会话保留。
+
+### 防回环
+
+- **我们发的焦点回来了**：node 把它标成 `persona` + 请求视图的 id，hub 给那个视图 `mine=true` → `decideFocus` 得 `echo`，不导航；页面另外记着 3 s 内自己发过哪个地址（`FocusGuard.wasSent`），node 丢了记号（重启）时 `source` 不是 `persona` 也当成回声。
+- **跟随导致的导航不再发焦点**：`followTo` 先 `FocusGuard.noteFollow(地址)` 再导航，新页面 `claim` 时 `consumeFollow(地址)` 为真就只记下「herdr 已经在这儿」，不发 `herdr_focus`（一次性，2 s 内有效）。
+- 页面已经在那个地址上（`same`）什么都不做；`mine` 的变化只在视图在前面且已连上时跟。
+
+### 实测
+
+- **真 herdr 0.9.5，临时会话**：`PERSONA_LIVE_FULL_SESSION=persona-focus-test go test -tags herdrlive -run TestLiveFocusSync ./internal/node/`（`focus_live_test.go`：node 的焦点监视连着临时会话；`herdr tab focus` 来自另一个 API 客户端 → `other`；`onFocusRequest` → `persona` 且带请求视图的 id；一个**真的完整客户端**（`session attach` 在 PTY 里）里发 herdr 的前缀键 `ctrl+b` 加 `1` → `client`、带那个客户端的 id、落在第 1 个标签页；每一步之后 500 ms 内没有多余的事件）通过；测完会话已停掉并删除，没碰默认会话。
+- **假 hub + 浏览器**（`scripts/test/web_herdr_focus_e2e.py`，用法见脚本开头）：侧边栏选另一个会话 → 一条 `herdr_focus`（约 160 ms 内发出），没有 `herdr_open` / `herdr_close`，xterm 元素还是原来那个，回声不导航；`/mock/herdr_focus` 模拟「这个视图的客户端改了焦点」→ 页面到那个 Agent 的终端视图、侧边栏高亮并在可见范围、页面没有发 `herdr_focus`；普通 shell → `/terminal/<机器>/pane%3A…`；别处的改动（`other`、别的浏览器）不动页面并出小标，点小标跟过去；对话再回终端不重开；换电脑开自己的客户端、原来的放手；没有 `herdr_focus` 的 hub 不发。深浅色 × 宽 / 390 px 截图。
+
+### 测试
+
+- Go：`node/focus_test.go`（输入活动的判定、每种来源的归属、最近敲过的视图、鼠标移过不算、请求聚焦 / 回声、请求被替换、没有视图 / 窗格不在时拒绝、老 herdr 的退路）、`hub/herdrclient_test.go`（权限：只有 full 设备、只能是自己的视图、坏参数不转；每个视图的 `mine`、别的电脑的 node 到不了）、`-tags herdrlive` 的 `TestLiveFocusSync`。
+- 网页：`lib/herdr-focus.test.ts`（跟随判定、回声、守卫、路由）、`terminal/full-registry.test.ts`（一台电脑一个、换页不销毁、最后一个走了才销毁）。
+
+### 没做的
+
+- 精确到「哪个客户端」：herdr 没有这个字段，所以是启发式；herdr 以后在事件里带客户端 id 就可以把 `focusSource` 换成精确的。
+- 对话视图里的页面跟随 herdr（Moshi 也只在终端视图里跟）。
+- 一个标签页里分了多个窗格、而 Persona 的会话页只显示其中一个 Agent 时，herdr 里在这几个窗格间切换会换页面（每个 Agent 窗格一页）；没有 Agent 的窗格走终端页。

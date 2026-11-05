@@ -1044,7 +1044,7 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Cwd   string   `json:"cwd"`
 		Paths []string `json:"paths"`
 		Git   bool     `json:"git"`
-		// herdr_open, herdr_input, herdr_resize, herdr_ack: the web's full herdr view (herdrclient.go)
+		// herdr_open, herdr_input, herdr_resize, herdr_ack, herdr_focus: the web's full herdr view (herdrclient.go)
 		ID    string `json:"id"`
 		Data  string `json:"data"`
 		B64   string `json:"b64"`
@@ -1101,6 +1101,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		h.herdrAck(c, msg.ID, msg.Bytes)
 	case "herdr_close":
 		h.herdrClose(c, msg.ID)
+	case "herdr_focus": // a view shows another session or pane: herdr's focus moves with it (herdrclient.go)
+		h.herdrFocus(c, msg.ID, msg.SessionID)
 	case "subscribe":
 		m := h.localMachine(msg.MachineID)
 		if m == nil {

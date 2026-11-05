@@ -371,3 +371,17 @@ func (h *herdrHost) StartFullClient(ctx context.Context, opts host.FullClientOpt
 	}
 	return fc, nil
 }
+
+// Focused is the focus herdr shows now (host.Focuser).
+func (h *herdrHost) Focused(ctx context.Context) (host.FocusState, error) {
+	f, err := h.c.Focused(ctx)
+	return host.FocusState{Space: f.Workspace, Slot: f.Tab, Pane: f.Pane}, err
+}
+
+func (h *herdrHost) WatchFocus(ctx context.Context, changed func()) error {
+	return h.c.WatchFocus(ctx, changed)
+}
+
+func (h *herdrHost) FocusPane(ctx context.Context, pane host.PaneRef) error {
+	return h.c.FocusPane(ctx, pane.ID)
+}

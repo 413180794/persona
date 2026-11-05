@@ -459,3 +459,96 @@ func TestHerdrViewEndsWithItsNodesConnection(t *testing.T) {
 		t.Fatal("a view stays on a machine whose connection ended")
 	}
 }
+
+func TestHerdrFocusIsForTheViewsOwnerOnAFullDevice(t *testing.T) {
+	fn := newFullNode(t, nil)
+	h := fn.hub
+	a, b := termClient(h, roleFull), termClient(h, roleFull)
+	say(h, a, map[string]any{"type": "herdr_open", "machine_id": "m1", "id": "v1", "cols": 100, "rows": 30})
+	fn.await(t, 1)
+	id := nodeID(t, h)
+
+	// b guesses a's view id: it has no such view, so the computer's focus is not moved.
+	say(h, b, map[string]any{"type": "herdr_focus", "id": "v1", "session_id": "pane:w1:p2"})
+	// a, but nothing to show / far too long: not forwarded.
+	say(h, a, map[string]any{"type": "herdr_focus", "id": "v1", "session_id": ""})
+	say(h, a, map[string]any{"type": "herdr_focus", "id": "v1", "session_id": strings.Repeat("s", 300)})
+	say(h, a, map[string]any{"type": "herdr_focus", "id": "nope", "session_id": "pane:w1:p2"})
+	fn.nothingMore(t, 1)
+
+	say(h, a, map[string]any{"type": "herdr_focus", "id": "v1", "session_id": "pane:w1:p2"})
+	log := fn.await(t, 2)
+	if want := fmt.Sprintf(`herdr.client.focus {"client_id":%q,"session_id":"pane:w1:p2"}`, id); log[1] != want {
+		t.Fatalf("node log = %q, want %q", log[1], want)
+	}
+
+	// A device that is no longer a full one (its view stays until it ends) cannot move the focus either.
+	a.role = roleAnswer
+	say(h, a, map[string]any{"type": "herdr_focus", "id": "v1", "session_id": "pane:w1:p3"})
+	fn.nothingMore(t, 2)
+}
+
+func TestHerdrFocusEventsTellEachViewWhetherTheChangeIsItsOwn(t *testing.T) {
+	fn := newFullNode(t, nil)
+	h := fn.hub
+	a, b := termClient(h, roleFull), termClient(h, roleFull)
+	say(h, a, map[string]any{"type": "herdr_open", "machine_id": "m1", "id": "va", "cols": 100, "rows": 30})
+	say(h, b, map[string]any{"type": "herdr_open", "machine_id": "m1", "id": "vb", "cols": 100, "rows": 30})
+	fn.await(t, 2)
+	awaitTold(t, a, 1) // herdr_state
+	awaitTold(t, b, 1)
+	h.fulls.mu.Lock()
+	var idA string
+	for k, r := range h.fulls.byNode {
+		if r.id == "va" {
+			idA = k
+		}
+	}
+	h.fulls.mu.Unlock()
+
+	event := func(p map[string]any) {
+		raw, _ := json.Marshal(p)
+		h.onHerdrFocus("m1", raw)
+	}
+	only := func(c *client) map[string]any {
+		got := awaitTold(t, c, 1)
+		if len(got) != 1 || got[0]["type"] != "herdr_focus" {
+			t.Fatalf("told %v", got)
+		}
+		return got[0]
+	}
+
+	// A change a's client made: a's view follows it, b's only hears of it.
+	event(map[string]any{"workspace_id": "w1", "tab_id": "w1:t2", "pane_id": "w1:p2", "session_id": "s1", "source": "client", "client_id": idA})
+	ma, mb := only(a), only(b)
+	for _, m := range []map[string]any{ma, mb} {
+		if m["machine_id"] != "m1" || m["pane_id"] != "w1:p2" || m["tab_id"] != "w1:t2" || m["workspace_id"] != "w1" || m["session_id"] != "s1" || m["source"] != "client" {
+			t.Fatalf("told %v", m)
+		}
+	}
+	if ma["id"] != "va" || ma["mine"] != true || mb["id"] != "vb" || mb["mine"] != false {
+		t.Fatalf("mine: a %v, b %v", ma, mb)
+	}
+
+	// Our own focus coming back: a's echo, and for b a change made elsewhere.
+	event(map[string]any{"workspace_id": "w1", "tab_id": "w1:t1", "pane_id": "w1:p1", "source": "persona", "client_id": idA})
+	ma, mb = only(a), only(b)
+	if ma["source"] != "persona" || ma["mine"] != true || mb["source"] != "persona" || mb["mine"] != false || ma["session_id"] != nil {
+		t.Fatalf("echo: a %v, b %v", ma, mb)
+	}
+
+	// Anything else (a source the hub does not know, a client id with it) is "other" and nobody's.
+	event(map[string]any{"workspace_id": "w1", "tab_id": "w1:t1", "pane_id": "w1:p1", "source": "whatever", "client_id": idA})
+	ma, mb = only(a), only(b)
+	if ma["source"] != "other" || ma["mine"] != false || mb["mine"] != false {
+		t.Fatalf("other: a %v, b %v", ma, mb)
+	}
+
+	// A node tells only the views of its own machine; a change with no pane says nothing.
+	raw, _ := json.Marshal(map[string]any{"pane_id": "w1:p1", "source": "other"})
+	h.onHerdrFocus("m9", raw)
+	event(map[string]any{"workspace_id": "w1", "source": "other"})
+	if got := told(a); len(got) != 0 {
+		t.Fatalf("told %v", got)
+	}
+}

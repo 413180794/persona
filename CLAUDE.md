@@ -235,7 +235,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | `docs/agent-work.md` | Agent 的工作态（工作中 / 卡在具名的前置条件上 / 做完了）：一轮停下后 hub 分诊（规则 + 便宜模型），瞬时错误自动「继续」、等部署 / CI / 另一个 Agent 到点叫醒、要你决定的开卡片；安全边界（推代码、部署、发消息、碰别人 MR 只能问你）、不和手动操作打架、评估接口 |
 | `docs/engines.md` | 引擎（herdr / Herdr App / Orca / Paseo）：一机一引擎，怎么切换、切换后会怎样、各引擎能做什么、选不了时查什么 |
 | `docs/paseo.md` | Paseo 引擎：node 运行的桥（runtime）、怎么找到 Paseo、会话 id 和对话记录、卡片 / 新建 / 接手的映射、限制、端到端验证、排错 |
-| `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由；网页的「完整界面」（node 在 PTY 里跑 herdr 自己的客户端，默认，可切回单窗格）|
+| `docs/terminal.md` | 终端 tab 的真终端方案：herdr observe 流（不 attach、不改窗格尺寸）、续传、换行、iOS 端自写 VT 子集的选型理由；网页的「完整界面」（node 在 PTY 里跑 herdr 自己的客户端，默认，可切回单窗格），焦点联动（herdr 自己的侧边栏和 Persona 的侧边栏一起动，一台电脑一个客户端）|
 | `docs/launchers.md` | 启动器与「设置 › 模型供应商」：~/.zshrc 自动同步 / 隐藏、Persona 管理的接入（Key 加密存 hub）、直接 API 与启动器、接口 |
 | `docs/launcher-health.md` | 启动器健康检查和自动修复：定期和上线时在每台电脑上测每个启动器、起 Agent 失败也记、错误分类、派活绕开坏的、升级 CLI / 修复 Agent、阻塞和给看板的接口 |
 | `docs/model-config.md` | 统一模型配置：按用途选择供应商、具体模型和选项，继承、持久化、下一次运行生效、任务与插件边界 |

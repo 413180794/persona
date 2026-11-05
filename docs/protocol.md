@@ -42,7 +42,7 @@
 鉴权后的 WS `hello.features` 总是提供服务端能力。当前 `proto.Features` 包括：
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
-- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`file_upload`。
+- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`herdr_focus`（完整界面的焦点联动：`herdr_focus` 等，见下「焦点联动」）、`file_upload`。
 - 按 hub.json 出现：`assistant_views`（`assistant.persona_view` 打开：声明式动作带 `expected_version`、活卡片、正文卡片注册的接口可用）、`assistant_html_bridge`（另外 `assistant.html_views` 未关：`…/html-actions` 可用；客户端是否运行 HTML 仍看自己的安全验收，不据此跑 JS），见下面「助手」的卡片接口和 [assistant-views.md](assistant-views.md)。
 - 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
 
@@ -671,6 +671,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `terminal_control` | `machine_id`, `session_id`, `state`：`active`（接管了，带 `cols`, `rows`）、`busy`（电脑上别的程序占着，问用户要不要 `takeover`；先镜像着）、`taken`（被别的设备或程序抢走）、`lost`（node 自己放手了）、`unsupported`（旧 node / herdr，只能镜像），`error` 是给人看的原因 |
 | `terminal` | `machine_id`, `session_id`，以及一帧 `epoch`, `seq`, `full`, `cols`, `rows`, `data`（base64 的 VT 字节），或者 `error`（流停了：电脑离线、会话不在跑……）+ `unsupported`（旧 node / herdr 不能推流，改用 `/screen` 轮询）。见下「终端流」 |
 | `herdr_state` / `herdr_data` / `herdr_end` | `id` 加 `state: "open"`, `cols`, `rows` / `data`（base64，≤ 32 KB 一条）/ `error?`, `code?`（`forbidden` `too_many` `bad_request` `offline`）, `unsupported?`：完整 herdr 界面的视图（`herdr_open` 的回应）。没 ack 的字节超过 1 MiB hub 就结束视图 |
+| `herdr_focus` | `id`（视图）, `machine_id`, `workspace_id`, `tab_id`, `pane_id`, `session_id?`（那个窗格里的 Agent 会话）, `source`（`client` 这台电脑上某个完整客户端刚被敲过 / `persona` 一次 `herdr_focus` 要求的 / `other` 其他）, `mine`（这个视图自己干的）：herdr 的焦点变了，推给这台电脑上的每个视图。网页只跟 `mine` 且 `client` 的，`persona` + `mine` 是回声，其余只出提示。feature `herdr_focus`。`docs/terminal.md` 第二十八节 |
 | `interaction` | `interaction`（新的待处理，推给所有客户端） |
 | `interaction_resolved` | `id`；助手代答时另带 `answered_by: "assistant"`（#1602） |
 | `fleet` | `fleet`（实时活动汇总，与 HTTP `/api/v1/fleet` 的内容对应） |
@@ -697,6 +698,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `fs_watch` | #2439（文件和 Git 的自动刷新，下面「文件自动刷新」）：`machine_id`, `cwd`（会话目录）, `paths`（这个页面打开着的文件夹，绝对路径，最多 32 个）, `git`（是否显示 `cwd` 的 Git 状态）。整份替换这个页面对这台机器、这个 `cwd` 的集合；`paths` 空且 `git` 为 false 就是释放（连接断开也释放）。只有完全权限的设备能发，答题设备（手表）忽略 |
 | `herdr_open` | `id`（浏览器自己取，≤ 64 字符）, `machine_id`, `session_id`（可选，会话 id 或 `pane:` 地址，先聚焦它的标签页）, `cols`, `rows`, `focus`：让 node 在 PTY 里跑 herdr 自己的客户端，字节流回来（feature `herdr_client`，仅 `full` 设备）。`docs/terminal.md` 第二十四节 |
 | `herdr_input` / `herdr_resize` / `herdr_ack` / `herdr_close` | `id` 加 `data` 或 `b64`（≤ 1 MiB）/ `cols`, `rows` / `bytes`（累计已解析的字节数）/ —：只有开这个视图的连接能用它 |
+| `herdr_focus` | `id`（视图的 id）, `session_id`（会话 id 或 `pane:` 地址，≤ 256 字符）：页面现在显示这个窗格，把 herdr 的焦点移过去（feature `herdr_focus`，仅 `full` 设备，仅开这个视图的连接；电脑上的状态变更，焦点是整个 herdr 会话共享的）。不回应；焦点真的变了会以 `herdr_focus`（`source: "persona"`）回来。`docs/terminal.md` 第二十八节 |
 | `register_phone` | `device_name`, `tools`（`[{"name","description","input_schema"}]`，即 MCP 工具定义）, `simulator`（模拟器只在没有真机连着时接工具调用）；可选 `device_id`、`platform`。按设备替换注册，空工具列表只清除该设备的供给；缺少 `device_id` 时用鉴权设备 ID，再回退到 `legacy`。调用先筛选提供该工具的在线手机，再优先真机、最近活跃连接。iPhone 的 `device_id` 是推送用的设备 id（同 `POST /api/v1/devices`）：连着的这段时间 hub 不给这台设备的实时活动推 APNs，App 自己画，`docs/live-activity.md`「推送节奏」；老 App 不带。`tools` 里的 `phone_runtime_cli`（DEBUG 包打开了经 hub 的 Runtime CLI）不算手机的工具：hub 把它拿出来，不进 Agent 的工具列表、Agent 调不到，只给 `POST /api/v1/phone/runtime-cli`；只登记了它一个（脚本驱动的模拟器）时这条连接不算手机。 |
 | `register_desktop` | `device_name`：Mac App 登记成桌面端，不是手机——不接 `phone_*`，也不挡 hub 推送唤醒 iPhone（`hub/desktops.go`）；`device_id`（推送用的设备 id，同 `POST /api/v1/devices`：连着的这段时间 hub 不给这台 Mac 推「需要你处理」「Agent 做完」，它自己发本地通知；老 App 不带）。退出它就是吊销它的设备凭据（`DELETE /api/v1/auth/tokens/{id}`，hub 随即断开它的连接、删掉它登记的推送） |
 | `tool_result` | `call_id`, `content`（`[{"type":"text","text"}|{"type":"image","data","mime_type"}]`）, `is_error` |
@@ -1228,6 +1230,8 @@ node 拆成 `lines` 个一行的事件，落在 `column` / `row` 那一格，没
 
 完整 herdr 界面（feature `herdr_client`，`docs/terminal.md` 第二十四节）：hub → node RPC `herdr.client.open {client_id, cols, rows, session_id?, focus?}`（`session attach` 起一个 PTY 里的 herdr 客户端；每台电脑最多 4 个，第 5 个 `code: too_many`；不支持回 `unsupported: …`），
 事件 `herdr.client.input {client_id, data | b64}`、`.resize {client_id, cols, rows}`、`.ack {client_id, bytes}`（累计）、`.close {client_id}`、`.keepalive {client_ids}`（每 20 s，node 75 s 没听到就关）；node → hub 事件 `herdr.client.data {client_id, data}`（base64，node 在浏览器落后 256 KB 时不再读 PTY）、`herdr.client.end {client_id, error}`（客户端退出、租约到期、浏览器不读；hub 要求的关闭不回）。
+
+焦点联动（feature `herdr_focus`，`docs/terminal.md` 第二十八节）：hub → node 事件 `herdr.client.focus {client_id, session_id}`（页面显示了另一个窗格：node 让 herdr 聚焦它，同一视图的请求互相替换；窗格不是宿主列出的 / 视图不在就不做）；node → hub 事件 `herdr.focus.changed {workspace_id, tab_id, pane_id, session_id?, source, client_id?}`（herdr 的焦点变了：`persona` = 刚替 `client_id` 的视图要求的，`client` = 那个客户端在 1.5 s 内被真的敲过 / 点过，`other` = 其他；herdr 的事件本身不说是谁改的）。
 
 node → hub 事件：`fs.changed {dirs?, git?}`（#2439：`fs.watch` 里的文件夹的列表内容变了（名字、大小、时间）、或 Git 目录的 `git status` 变了，hub 转成给相关页面的 `fs_changed`）、`terminal.frame {session_id, epoch, seq, full, cols, rows, data}`（相隔不到 30 ms 的帧由 node 合成一帧：diff 的字节接起来，整帧丢掉它前面的 diff）、`terminal.end {session_id, error, control?, taken?}`（流停了且起不来：会话不在跑、herdr 一直拒绝；`control` 时是接管结束了：`taken` 被别人抢走，否则租约到期）、
 `session.items {session_id, items, history, from_seq, to_seq}`、`session.live {session_id, live}`（watch 中、工作中的 herdr Claude 的状态行，变了才发，结束补 `null`，见「实时状态」）、`session.echo {session_id, client_msg_id, text, images, sent_at, after_seq, line?}`（node 记下一次发送、认到它的那一行时各推一次，hub 存进 `sent_messages.echo`；已认到的不会被晚到的「还在等」盖掉）、`sessions.changed {sessions}`、

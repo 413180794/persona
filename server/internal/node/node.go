@@ -94,6 +94,7 @@ type Node struct {
 	modes     map[string]sessionModes    // session id -> mode / effort set from the app (modes.go)
 	terms     map[string]*termStream     // session id -> its terminal streaming to the hub (terminal.go)
 	fulls     map[string]*fullClient     // client id -> a full herdr client running for the web (fullclient.go)
+	focus     focusState                 // focus sync for the full views (focus.go)
 	suggests  map[string]*suggestState   // session id -> Claude's suggested next message (suggestion.go)
 	driving   map[string]bool            // session id -> Persona is working its TUI (a picker it opened is not "blocked")
 	dialogs   paneDialogs                // pane -> the dialog its last screen read showed (dialogstatus.go)

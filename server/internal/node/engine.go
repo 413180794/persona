@@ -149,6 +149,7 @@ func (n *Node) startWatchLocked() {
 		}
 		if h.Kind() == host.Herdr {
 			go n.watchHerdr(ctx)
+			go n.watchFocus(ctx)
 		} else {
 			go n.watchHost(ctx, w, n.hostSig[h.Kind()]) // resetSignals built one for every Watcher host
 		}

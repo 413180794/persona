@@ -40,5 +40,7 @@
   "copy": "复制",
   "paste_not_live": "完整界面连上后才能粘贴文件",
   "paste_changed": "上传期间终端已切换，没有粘贴",
-  "paste_released": "上传期间完整界面断开了，没有粘贴"
+  "paste_released": "上传期间完整界面断开了，没有粘贴",
+  "elsewhere": "焦点在别处",
+  "elsewhere_hint": "herdr 里的焦点被别处（电脑上的窗口或别的浏览器）移到了另一个窗格。点一下，这里跟过去"
 }

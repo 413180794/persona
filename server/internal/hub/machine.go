@@ -382,6 +382,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		m.hub.onHerdrClientData(m.cfg.ID, params)
 	case "herdr.client.end":
 		m.hub.onHerdrClientEnd(m.cfg.ID, params)
+	case "herdr.focus.changed":
+		m.hub.onHerdrFocus(m.cfg.ID, params)
 	case "terminal.end":
 		var p struct {
 			SessionID string `json:"session_id"`

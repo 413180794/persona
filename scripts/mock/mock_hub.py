@@ -31,7 +31,7 @@ def features():
             "screen_dialog", "resumable_interactions", "secret_prompts", "request_id", "file_upload",
             "tls", "endpoints", "connectors", "lark_attachments", "file_stream", "file_thumb", "git_blob", "task_push"] + (["terminal_stream"] if TERMINAL_STREAM else []) + (
                 ["terminal_control", "terminal_scroll", "terminal_click", "terminal_mouse"] if TERMINAL_CONTROL else []) + (
-                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] if FULL else []) + (
+                ["terminal_panes"] if os.environ.get("MOCK_TERMINAL_PANES") else []) + (["herdr_client"] + ([] if os.environ.get("MOCK_TERMINAL_FULL_NOFOCUS") else ["herdr_focus"]) if FULL else []) + (
                 ["assistant_compact", "assistant_main_new"] if os.environ.get("MOCK_MAIN_ACTIONS") == "1" else []) + (
                 ["messaging"] if os.environ.get("MOCK_MESSAGING") == "1" else [])
 
@@ -2711,11 +2711,29 @@ def phone_screen(cols, rows, typed="", tick=0):
 # is in the log (the whole of `data`: herdr_input is logged unabridged). MOCK_TERMINAL_FULL_EXEC="cmd args": instead run that command in a PTY and
 # relay its bytes, with the same window of unacknowledged bytes the node keeps (a real herdr client, for a live test).
 # MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many answers herdr_open with that end; MOCK_TERMINAL_FULL_END_AFTER=
-# seconds ends a view after that long (the Reconnect button).
+# seconds ends a view after that long (the Reconnect button). The hub also says herdr_focus: a herdr_focus from the page is
+# answered with the focus coming back as the page's own, and GET /mock/herdr_focus?pane=w1:p2[&session=<id>&source=client|persona|other
+# &mine=1|0&view=<id>] makes herdr's focus move as the node would tell the views (docs/terminal.md「焦点联动」);
+# MOCK_TERMINAL_FULL_NOFOCUS=1 leaves herdr_focus out (an older hub).
 FULL = bool(os.environ.get("MOCK_TERMINAL_FULL"))
 FULL_EXEC = os.environ.get("MOCK_TERMINAL_FULL_EXEC", "")
 FULL_LOG = []
+FULL_VIEWS = {}  # view id -> its fake client, whatever connection it is on (GET /mock/herdr_focus tells them all)
 FULL_WINDOW = 256 << 10
+
+
+def focus_event(vid, machine, pane, source, mine, session=""):
+    """The hub's herdr_focus message: herdr's focus moved to pane (see server/internal/hub/herdrclient.go)."""
+    ws, _, rest = pane.partition(":")
+    return {"type": "herdr_focus", "id": vid, "machine_id": machine, "workspace_id": ws, "tab_id": ws + ":t1", "pane_id": pane,
+            "source": source, "mine": bool(mine), **({"session_id": session} if session else {})}
+
+
+def pane_of(address):
+    """The pane an address (a session id, or "pane:<pane>") stands for in the fake hub, with the session if it has one."""
+    if address.startswith("pane:"): return address[5:], ""
+    s = next((x for x in SESSIONS if x.get("session_id") == address), None)
+    return (s.get("pane_id") or "w1:p1", address) if s else ("w1:p1", "")
 
 
 def _fit(s, n):
@@ -2923,12 +2941,18 @@ def herdr_message(msg, send, views):
         cols, rows = int(msg.get("cols") or 80), int(msg.get("rows") or 24)
         send({"type": "herdr_state", "id": vid, "state": "open", "cols": cols, "rows": rows})
         views[vid] = HerdrLive(vid, cols, rows, send, FULL_EXEC.split()) if FULL_EXEC else HerdrFake(vid, cols, rows, send)
+        views[vid].machine = msg.get("machine_id") or ""
+        FULL_VIEWS[vid] = views[vid]
+    elif t == "herdr_focus" and vid in views:
+        # the node moves herdr's focus, and the change comes back marked as the page's own (source "persona", mine)
+        pane, session = pane_of(str(msg.get("session_id") or ""))
+        send(focus_event(vid, views[vid].machine, pane, "persona", True, session))
     elif vid in views:
         v = views[vid]
         if t == "herdr_input": v.input(msg.get("data") or base64.b64decode(msg.get("b64") or "").decode("utf-8", "replace"))
         elif t == "herdr_resize": v.resize(int(msg["cols"]), int(msg["rows"]))
         elif t == "herdr_ack": v.acked(int(msg.get("bytes") or 0))
-        elif t == "herdr_close": views.pop(vid).close()
+        elif t == "herdr_close": views.pop(vid).close(); FULL_VIEWS.pop(vid, None)
     return True
 
 
@@ -9702,6 +9726,16 @@ class H(BaseHTTPRequestHandler):
         if p == "/mock/queue_edits": return self.send_json({"edits": QUEUE_EDITS})
         if p == "/mock/terminal_input": return self.send_json({"input": TERMINAL_INPUT})
         if p == "/mock/herdr_client": return self.send_json({"log": FULL_LOG})
+        if p == "/mock/herdr_focus":
+            # ?pane=w1:p2[&session=<id>&source=client|persona|other&mine=1|0&view=<id>]: herdr's focus moved, as the hub tells the views
+            pane, source, mine = q.get("pane", ["w1:p1"])[0], q.get("source", ["client"])[0], q.get("mine", ["1"])[0] == "1"
+            n = 0
+            for vid, v in list(FULL_VIEWS.items()):
+                if q.get("view") and q["view"][0] != vid: continue
+                try: v.send(focus_event(vid, getattr(v, "machine", ""), pane, source, mine, q.get("session", [""])[0]))
+                except OSError: FULL_VIEWS.pop(vid, None); continue  # its connection is gone
+                n += 1
+            return self.send_json({"told": n})
         if p == "/mock/kb_updates": return self.send_json({"updates": KB_UPDATES})
         if p == "/mock/inbox_drafts": return self.send_json({"drafts": INBOX_DRAFTS})
         if p == "/mock/inbox_bulk": return self.send_json({"requests": INBOX_BULK})
@@ -11680,6 +11714,7 @@ class H(BaseHTTPRequestHandler):
             LOG.write("  WS closed %r\n" % e); LOG.flush()
         SOCKETS.discard(self.connection)
         for vid, v in list(full_views.items()):  # the hub lets go of an app's views with its connection
+            FULL_VIEWS.pop(vid, None)
             FULL_LOG.append({"type": "herdr_dropped", "id": vid})
             v.close()
         with hb_condition:

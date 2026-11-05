@@ -12,7 +12,8 @@ import { Button, cx, IconButton, Loading, Menu, type MenuItem } from "../../../u
 import { Icon } from "../../../ui/icons";
 import { FindBar } from "./FindBar";
 import { focusFacts, selectionInside } from "./focus";
-import { FullFeed, type FullView } from "./full";
+import { type FullFeed, type FullView } from "./full";
+import { acquireFeed, releaseFeed } from "./full-registry";
 import { KeyBar } from "./KeyBar";
 import { saveKeyBar, savedKeyBar } from "./keybar-pref";
 import { ShortcutsEditor } from "./Shortcuts";
@@ -85,21 +86,31 @@ export function FullTerminal({
   const [find, dispatchFind] = useReducer(findReducer, FIND_CLOSED);
   const [menu, setMenu] = useState<{ x: number; y: number; selection: boolean } | null>(null);
   const delayAtMount = useRef(delay);
+  const sidAtMount = useRef(sid);
+  const token = useRef({}).current;
+  const firstClaim = useRef(true);
+  const leaving = useRef(false);
+  leaving.current = !live;
 
+  // The machine's one feed (full-registry.ts): the first surface of the machine builds xterm in its box, the others
+  // take it over when they are in front, so a route change between panes of the machine keeps the client and its screen.
   useEffect(() => {
-    const f = new FullFeed(mid, sid);
+    const { feed: f, fresh } = acquireFeed(mid, sidAtMount.current);
     setFeed(f);
-    void f.mount(host.current!, delayAtMount.current, viewport.current!);
-    return () => f.dispose();
-  }, [mid, sid]);
+    if (fresh) void f.mount(host.current!, viewport.current!);
+    return () => releaseFeed(mid, f);
+  }, [mid]);
 
-  // The client on the computer lives only while this surface is the one shown and in front.
+  // The client on the computer lives only while a surface of the machine is the one shown and in front. The DOM is
+  // asked as well as `unseen` (an effect that has not run yet at the first render): a kept terminal behind the one
+  // shown must not take the feed from it.
   const on = live && !unseen;
   useLayoutEffect(() => {
-    if (!feed) return;
-    if (!on) feed.release();
-    else if (feed.isReleased) feed.reconnect();
-  }, [feed, on]);
+    if (!feed || !on || root.current?.closest("[inert]")) return;
+    feed.claim(token, host.current!, viewport.current!, sid, firstClaim.current ? delayAtMount.current : 0);
+    firstClaim.current = false;
+    return () => feed.yield(token, leaving.current); // leaving for the single pane: let go at once, it drives the pane next
+  }, [feed, on, sid, token]);
 
   const status = v?.status ?? "connecting";
   const driving = status === "live";
@@ -186,6 +197,17 @@ export function FullTerminal({
         <span>{STATUS_LABEL[status]}</span>
         {status === "live" && size && <span className="font-mono tabular-nums">{size}</span>}
       </span>
+      {v?.elsewhere && (
+        <button
+          type="button"
+          title={t("terminal-full.elsewhere_hint")}
+          onClick={() => feed?.followTo(v.elsewhere!)}
+          className="inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip px-2 text-[11.5px] text-ink-2 transition-colors duration-150 hover:bg-hover hover:text-ink"
+        >
+          <span aria-hidden className="size-1.5 rounded-full bg-orange" />
+          {t("terminal-full.elsewhere")}
+        </button>
+      )}
       {onFiles && cwd && <IconButton icon="folder" label={t("terminal-full.files")} onClick={onFiles} className="max-lg:hidden" />}
       <IconButton icon="keyboard" label={keyBar ? t("terminal-full.keybar_hide") : t("terminal-full.keybar_show")} active={keyBar} onClick={() => chooseKeyBar(!keyBar)} />
       <IconButton icon="retry" label={t("terminal-full.reconnect")} onClick={() => feed?.reconnect()} disabled={!feed} />

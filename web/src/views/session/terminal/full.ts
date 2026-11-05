@@ -9,6 +9,8 @@ import type { FitAddon as XFit } from "@xterm/addon-fit";
 import type { SearchAddon as XSearch } from "@xterm/addon-search";
 import { t as tr } from "../../../i18n";
 import { openLink } from "../../../lib/links";
+import { followRoute, focusAddress, focusGuard, decideFocus, parseFocus, type HerdrFocus } from "../../../lib/herdr-focus";
+import { navigate } from "../../../lib/router";
 import { getState, isOpen, onHubEvent, send } from "../../../lib/store";
 import { currentPlatform, passesToApp } from "../../../lib/shortcuts";
 import { herdrOwnsKey, isCtrlV, linkOpens, rightClickRoute, type RightClick } from "../../../lib/terminal-conflicts";
@@ -71,9 +73,13 @@ export interface FullView {
   uploading: string | null;
   /** A drag of files is over the surface. */
   dropping: boolean;
+  /** herdr's focus moved to this pane without this view doing it (the computer's window, another browser); the page stayed (lib/herdr-focus.ts). */
+  elsewhere: HerdrFocus | null;
 }
 
 const RESIZE_MS = 120;
+/** A surface that gave the feed up is waited for this long (ms) before the client is let go: the page that takes over (another session of the machine) claims it within the same moment. */
+const YIELD_MS = 1200;
 /** One herdr_input carries at most this many UTF-16 units: a big paste goes in several (the hub caps one at 1 MiB). */
 const INPUT_CHUNK = 32 << 10;
 const FONT_KEY = "jarvis.terminal.fontSize";
@@ -99,8 +105,8 @@ export class FullFeed {
   /** The id of the view open on the hub ("" when none): messages about other ids are an earlier view's. */
   private id = "";
   private ack: AckTracker | null = null;
-  /** Let go on purpose (the surface is leaving or hidden): nothing is opened until `resume`. */
-  private released = false;
+  /** Let go on purpose (the surface is leaving or hidden): nothing is opened until `reconnect`. A new feed starts so: its first `claim` opens it. */
+  private released = true;
   private resumeAt = 0;
   private grid: { cols: number; rows: number } | null = null;
   private sent: { cols: number; rows: number } | null = null;
@@ -114,11 +120,23 @@ export class FullFeed {
   private transfer: FileTransfer;
   /** The pointer of the last press (a link opens on a tap but, with herdr holding the mouse, on ⌘ / Ctrl + click). */
   private pointer = "mouse";
+  /** The session or pane address the page shows now; herdr's focus is kept on it (one feed per machine, see full-registry.ts). */
+  private target: string;
+  /** The address herdr was last asked to show, or opened on. */
+  private focused = "";
+  /** Where xterm sits now, and what listens to it there (a page of the same machine can take the feed over: `claim`). */
+  private hostEl: HTMLElement | null = null;
+  private areaEl: HTMLElement | null = null;
+  private hostCleanup: (() => void)[] = [];
+  /** The surface that has the feed now (FullTerminal's token); null when none does. */
+  private owner: object | null = null;
+  private yieldTimer = 0;
 
   constructor(
     readonly mid: string,
-    readonly sid: string,
+    sid: string,
   ) {
+    this.target = sid;
     const feed = this;
     this.transfer = new FileTransfer(
       {
@@ -154,7 +172,13 @@ export class FullFeed {
       failedToStart: false,
       uploading: null,
       dropping: false,
+      elsewhere: null,
     };
+  }
+
+  /** The address the feed shows (the page's session or pane address). */
+  get sid() {
+    return this.target;
   }
 
   // ── React ─────────────────────────────────────────────
@@ -177,8 +201,10 @@ export class FullFeed {
 
   // ── lifecycle ─────────────────────────────────────────
 
-  /** Builds xterm in `host` (`area` around it is where files are dropped), then opens the view once there is a grid and a connection. `delay`: wait this long first. */
-  async mount(host: HTMLElement, delay = 0, area: HTMLElement = host) {
+  /** Builds xterm in `host` (`area` around it is where files are dropped), then opens the view once there is a grid and a connection and the feed is claimed. */
+  async mount(host: HTMLElement, area: HTMLElement = host) {
+    this.hostEl = host;
+    this.areaEl = area;
     let mod: typeof import("./xterm");
     try {
       mod = await import("./xterm");
@@ -216,7 +242,7 @@ export class FullFeed {
     // refused — nothing running on the computer gets to read what the user copied.
     term.loadAddon(new ClipboardAddon(undefined, { readText: () => "", writeText: (_selection: string, text: string) => this.programCopied(text) }));
     matchHerdrWidths(term);
-    term.open(host);
+    term.open(this.hostEl ?? host); // a page that claimed the feed meanwhile has moved the place
     this.term = term;
     this.fit = fit;
     this.search = search;
@@ -240,13 +266,6 @@ export class FullFeed {
     const selected = term.onSelectionChange(() => this.patch({ selection: term.hasSelection() }));
     const results = search.onDidChangeResults((r) => this.found.query && this.patch({ find: { index: r.resultIndex, count: r.resultCount } }));
     term.attachCustomKeyEventHandler(this.key);
-    const track = (e: PointerEvent) => void (this.pointer = e.pointerType);
-    host.addEventListener("pointerdown", track, true);
-    host.addEventListener("paste", this.pasted, true);
-    area.addEventListener("dragenter", this.transfer.dragEnter, true);
-    area.addEventListener("dragover", this.transfer.dragOver, true);
-    area.addEventListener("dragleave", this.transfer.dragLeave, true);
-    area.addEventListener("drop", this.transfer.drop, true);
     const colors = new MutationObserver(() => {
       const next = this.theme();
       this.patch({ palette: next });
@@ -254,32 +273,149 @@ export class FullFeed {
       if (this.schemeNotify) this.raw(colourReports(next.foreground, next.background) + schemeReport(this.dark()));
     });
     colors.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    const sizes = new ResizeObserver(() => this.measure());
-    sizes.observe(host);
-    const offs = [onHubEvent("herdr_state", this.onState), onHubEvent("herdr_data", this.onData), onHubEvent("herdr_end", this.onEnd), onHubEvent("hello", this.onHello)];
+    const offs = [
+      onHubEvent("herdr_state", this.onState),
+      onHubEvent("herdr_data", this.onData),
+      onHubEvent("herdr_end", this.onEnd),
+      onHubEvent("herdr_focus", this.onFocus),
+      onHubEvent("hello", this.onHello),
+    ];
     this.cleanup.push(
       ...handlers.map((h) => () => h.dispose()),
       () => data.dispose(),
       () => selected.dispose(),
       () => results.dispose(),
+      () => this.unbindHost(),
+      () => colors.disconnect(),
+      ...offs,
+    );
+
+    this.bindHost();
+    this.patch({ ready: true, palette });
+    void cjkFontStack(family).then((stack) => {
+      if (stack && !this.disposed && this.term) this.term.options.fontFamily = stack; // the cell is the same width: nothing resizes
+    });
+    this.measure(true);
+    this.begin();
+  }
+
+  /** Listens to the box xterm sits in: its size, a press (the pointer kind), a paste, files dragged over the area around it. */
+  private bindHost() {
+    this.unbindHost();
+    const host = this.hostEl;
+    const area = this.areaEl ?? host;
+    if (!host || !area || !this.term) return;
+    const track = (e: PointerEvent) => void (this.pointer = e.pointerType);
+    host.addEventListener("pointerdown", track, true);
+    host.addEventListener("paste", this.pasted, true);
+    area.addEventListener("dragenter", this.transfer.dragEnter, true);
+    area.addEventListener("dragover", this.transfer.dragOver, true);
+    area.addEventListener("dragleave", this.transfer.dragLeave, true);
+    area.addEventListener("drop", this.transfer.drop, true);
+    const sizes = new ResizeObserver(() => this.measure());
+    sizes.observe(host);
+    this.hostCleanup = [
       () => host.removeEventListener("pointerdown", track, true),
       () => host.removeEventListener("paste", this.pasted, true),
       () => area.removeEventListener("dragenter", this.transfer.dragEnter, true),
       () => area.removeEventListener("dragover", this.transfer.dragOver, true),
       () => area.removeEventListener("dragleave", this.transfer.dragLeave, true),
       () => area.removeEventListener("drop", this.transfer.drop, true),
-      () => colors.disconnect(),
       () => sizes.disconnect(),
-      ...offs,
-    );
+    ];
+  }
 
-    this.patch({ ready: true, palette });
-    void cjkFontStack(family).then((stack) => {
-      if (stack && !this.disposed && this.term) this.term.options.fontFamily = stack; // the cell is the same width: nothing resizes
-    });
-    this.measure(true);
-    this.resumeAt = Date.now() + delay;
-    this.begin();
+  private unbindHost() {
+    this.hostCleanup.forEach((f) => f());
+    this.hostCleanup = [];
+  }
+
+  // ── one feed per machine, taken over by the page in front (full-registry.ts) ──
+
+  /**
+   * The surface `token` is now the one in front: xterm moves into its box (nothing is reopened: the screen and the
+   * client stay as they are), the feed shows `sid` (herdr's focus follows it), and a feed that was let go opens again.
+   * `delay`: wait this long before opening a client (the surface before this one is still on screen, driving its pane).
+   */
+  claim(token: object, host: HTMLElement, area: HTMLElement, sid: string, delay = 0) {
+    if (this.disposed) return;
+    clearTimeout(this.yieldTimer);
+    this.owner = token;
+    this.hostEl = host;
+    this.areaEl = area;
+    const term = this.term;
+    if (term?.element && term.element.parentElement !== host) {
+      host.appendChild(term.element);
+      this.bindHost();
+      this.measure(true);
+      term.refresh(0, term.rows - 1);
+    } else if (term && !this.hostCleanup.length) {
+      this.bindHost();
+    }
+    this.retarget(sid);
+    if (this.released) this.reconnect(delay);
+    else if (this.view.status === "live") term?.focus();
+  }
+
+  /**
+   * The surface `token` is no longer in front: when no other surface takes the feed soon, the client on the computer is
+   * let go. `now`: at once (the surface is leaving for the single pane, which drives its own pane next).
+   */
+  yield(token: object, now = false) {
+    if (this.owner !== token) return;
+    this.owner = null;
+    clearTimeout(this.yieldTimer);
+    if (now) return this.release();
+    this.yieldTimer = window.setTimeout(() => {
+      if (!this.owner && !this.disposed) this.release();
+    }, YIELD_MS);
+  }
+
+  /** Whether a surface has the feed (it is in front). */
+  get claimed() {
+    return this.owner !== null;
+  }
+
+  /** The page shows another session or pane: herdr's focus follows it, unless the page got there by following herdr. */
+  private retarget(sid: string) {
+    if (sid === this.target && this.focused) return;
+    this.target = sid;
+    if (this.view.elsewhere && focusAddress(this.view.elsewhere) === sid) this.patch({ elsewhere: null });
+    this.syncFocus();
+  }
+
+  /** Asks herdr to show the page's address when it is not on it already (feature herdr_focus, a live view). */
+  private syncFocus() {
+    if (!this.id || this.view.status !== "live" || this.focused === this.target) return;
+    const address = this.target;
+    const followed = focusGuard.consumeFollow(address);
+    this.focused = address;
+    if (followed || !getState().features.includes("herdr_focus")) return;
+    focusGuard.noteSent(address);
+    send({ type: "herdr_focus", id: this.id, session_id: address });
+  }
+
+  /** herdr's focus moved (lib/herdr-focus.ts decides what that means for the page). */
+  private onFocus = (msg: Record<string, unknown>) => {
+    const ev = parseFocus(msg);
+    if (!ev || !this.id || ev.id !== this.id || this.disposed) return;
+    const address = focusAddress(ev);
+    const action = decideFocus(ev, { shown: this.target, front: this.claimed && this.view.status === "live", sent: focusGuard.wasSent(address) });
+    if (action === "follow") {
+      this.patch({ elsewhere: null });
+      this.followTo(ev);
+    } else if (action === "elsewhere") {
+      this.patch({ elsewhere: ev });
+    } else if (action === "same") {
+      this.patch({ elsewhere: null });
+    }
+  };
+
+  /** The page goes where herdr's focus is (a change made in this view, or the 焦点在别处 chip tapped). */
+  followTo(ev: HerdrFocus) {
+    const sessions = getState().sessions[this.mid] ?? [];
+    focusGuard.noteFollow(focusAddress(ev));
+    navigate(followRoute(this.mid, ev, sessions), true);
   }
 
   /** Leaves: the hub stops the client on the computer, xterm goes. */
@@ -289,6 +425,7 @@ export class FullFeed {
     this.close();
     clearTimeout(this.resizeTimer);
     clearTimeout(this.openTimer);
+    clearTimeout(this.yieldTimer);
     this.cleanup.forEach((f) => f());
     this.cleanup = [];
     this.term?.dispose();
@@ -306,17 +443,18 @@ export class FullFeed {
     this.released = true;
     clearTimeout(this.openTimer);
     this.close();
-    this.patch({ status: "closed", note: "", control: "off" });
+    this.patch({ status: "closed", note: "", control: "off", elsewhere: null });
   }
 
-  /** Opens a view again after `release`, or after it ended (重新连接): a clean screen, the client draws it all. */
-  reconnect() {
+  /** Opens a view again after `release`, or after it ended (重新连接): a clean screen, the client draws it all. `delay`: wait this long first. */
+  reconnect(delay = 0) {
     if (this.disposed) return;
+    clearTimeout(this.yieldTimer);
     this.released = false;
     this.close();
     this.term?.reset();
     this.patch({ status: "connecting", note: "", control: "off", failedToStart: false });
-    this.resumeAt = 0;
+    this.resumeAt = delay > 0 ? Date.now() + delay : 0;
     this.begin();
   }
 
@@ -358,7 +496,10 @@ export class FullFeed {
     this.sent = this.grid;
     this.ack = new AckTracker((bytes) => send({ type: "herdr_ack", id, bytes }));
     this.patch({ status: "connecting", note: "" });
-    send({ type: "herdr_open", id, machine_id: this.mid, session_id: this.sid, cols: this.grid.cols, rows: this.grid.rows, focus: true });
+    // herdr opens on the pane of the address (a page that got here by following herdr's focus is on it already)
+    this.focused = this.target;
+    focusGuard.consumeFollow(this.target);
+    send({ type: "herdr_open", id, machine_id: this.mid, session_id: this.target, cols: this.grid.cols, rows: this.grid.rows, focus: true });
   }
 
   private onHello = () => {
@@ -385,6 +526,7 @@ export class FullFeed {
     this.patch({ status: "live", note: "", control: "active", cols: cols || this.view.cols, rows: rows || this.view.rows });
     this.term?.focus();
     this.hint();
+    this.syncFocus(); // the page moved on while the client started
     if (this.grid && this.sent && (this.grid.cols !== this.sent.cols || this.grid.rows !== this.sent.rows)) this.measure(true); // it changed while the client started
   }
 

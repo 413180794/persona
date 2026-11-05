@@ -40,5 +40,7 @@
   "copy": "Copy",
   "paste_not_live": "Wait until the full view is connected to paste files",
   "paste_changed": "The terminal changed during the upload, so nothing was pasted",
-  "paste_released": "The full view disconnected during the upload, so nothing was pasted"
+  "paste_released": "The full view disconnected during the upload, so nothing was pasted",
+  "elsewhere": "Focus moved",
+  "elsewhere_hint": "herdr's focus was moved to another pane from elsewhere (the computer's window or another browser). Click to follow it here"
 }

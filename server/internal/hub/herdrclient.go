@@ -27,8 +27,13 @@ import (
 //	herdr_resize {cols, rows}
 //	herdr_ack    {bytes}          everything the browser has parsed so far, in bytes (cumulative)
 //	herdr_close
+//	herdr_focus  {session_id}     the view shows this session (or "pane:" address): herdr's focus moves to its pane
 //
-// To the browser: herdr_state {state: "open"}, herdr_data {data: base64}, herdr_end {error?, code?, unsupported?}.
+// To the browser: herdr_state {state: "open"}, herdr_data {data: base64}, herdr_end {error?, code?, unsupported?},
+// herdr_focus {machine_id, workspace_id, tab_id, pane_id, session_id?, source, mine}: herdr's focus moved. source:
+// "client" (a full view was just typed into), "persona" (a herdr_focus asked for it), "other" (the computer's own
+// window, anything else); mine: the view this goes to is the one that did it. A view follows only a change that is
+// its own (docs/terminal.md「焦点联动」).
 //
 // Only a full device may open one: the client can do anything on that computer's herdr (run in any pane, close them).
 // An answer-only device is refused, and the extension tokens cannot reach the WebSocket at all.
@@ -352,5 +357,58 @@ func (h *Hub) fullKeepalive(ctx context.Context) {
 				_ = m.notify("herdr.client.keepalive", map[string]any{"client_ids": ids})
 			}
 		}
+	}
+}
+
+// herdrFocus moves herdr's focus to the pane of the session the view now shows. It is a state change on the computer
+// (the focus is shared by every client of its herdr), so like the view itself it is for a full device and for the
+// view's own connection only; the node checks that the pane is one the host lists.
+func (h *Hub) herdrFocus(c *client, id, sessionID string) {
+	if c.role != roleFull || sessionID == "" || len(sessionID) > 256 {
+		return
+	}
+	r := h.fullOf(c, id)
+	if r == nil {
+		return
+	}
+	if m := h.localMachine(r.machineID); m != nil {
+		_ = m.notify("herdr.client.focus", map[string]any{"client_id": r.nodeID, "session_id": sessionID})
+	}
+}
+
+// onHerdrFocus tells the views on a machine that herdr's focus moved, each whether the change is its own.
+func (h *Hub) onHerdrFocus(machineID string, params json.RawMessage) {
+	var p struct {
+		WorkspaceID string `json:"workspace_id"`
+		TabID       string `json:"tab_id"`
+		PaneID      string `json:"pane_id"`
+		SessionID   string `json:"session_id"`
+		Source      string `json:"source"`
+		ClientID    string `json:"client_id"`
+	}
+	if json.Unmarshal(params, &p) != nil || p.PaneID == "" {
+		return
+	}
+	switch p.Source {
+	case "client", "persona":
+	default:
+		p.Source, p.ClientID = "other", ""
+	}
+	t := &h.fulls
+	t.mu.Lock()
+	var views []*fullRelay
+	for _, r := range t.byNode {
+		if r.machineID == machineID {
+			views = append(views, r)
+		}
+	}
+	t.mu.Unlock()
+	for _, r := range views {
+		msg := map[string]any{"type": "herdr_focus", "id": r.id, "machine_id": machineID, "workspace_id": p.WorkspaceID,
+			"tab_id": p.TabID, "pane_id": p.PaneID, "source": p.Source, "mine": p.ClientID != "" && p.ClientID == r.nodeID}
+		if p.SessionID != "" {
+			msg["session_id"] = p.SessionID
+		}
+		r.c.sendJSON(msg)
 	}
 }

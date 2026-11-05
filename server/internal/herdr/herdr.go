@@ -406,6 +406,11 @@ type Snapshot struct {
 	Panes []Agent `json:"panes"`
 	// Layouts are the tabs' split layouts: where each pane sits in its tab (layout.go).
 	Layouts []TabLayout `json:"layouts"`
+	// FocusedWorkspaceID, FocusedTabID and FocusedPaneID are what herdr shows now, shared by every client of the
+	// session (empty from a herdr that does not say).
+	FocusedWorkspaceID string `json:"focused_workspace_id"`
+	FocusedTabID       string `json:"focused_tab_id"`
+	FocusedPaneID      string `json:"focused_pane_id"`
 }
 
 func (c *Client) Snapshot(ctx context.Context) (*Snapshot, error) {

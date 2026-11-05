@@ -95,10 +95,14 @@ func fullClientEnv(environ []string) []string {
 	return append(out, fullEnvAssignments...)
 }
 
-// FocusPane makes the pane's tab (and its workspace) the one herdr shows. That is herdr's state, shared by every
-// client of the session, so the computer's own window moves too. herdr has no way to focus one pane by its id: the
-// pane within the tab stays the one herdr last had focused there.
+// FocusPane makes the pane the one herdr shows (herdr 0.9.5's pane.focus: its tab and workspace too). That is herdr's
+// state, shared by every client of the session, so the computer's own window moves too. A herdr without pane.focus
+// gets its workspace and tab focused instead: the pane within the tab stays the one herdr last had focused there.
 func (c *Client) FocusPane(ctx context.Context, pane string) error {
+	err := c.rpc(ctx, "pane.focus", map[string]any{"pane_id": pane}, nil)
+	if err == nil || !fallback(err) {
+		return err
+	}
 	var res struct {
 		Pane struct {
 			TabID       string `json:"tab_id"`
@@ -118,4 +122,26 @@ func (c *Client) FocusPane(ctx context.Context, pane string) error {
 		return c.call(ctx, "tab.focus", map[string]any{"tab_id": res.Pane.TabID}, nil, "tab", "focus", res.Pane.TabID)
 	}
 	return nil
+}
+
+// Focus is what herdr shows: the workspace, tab and pane focused (shared by every client of the session).
+type Focus struct {
+	Workspace, Tab, Pane string
+}
+
+// Focused reads the focus from a snapshot. Empty when herdr does not say (a version without the focused_* fields).
+func (c *Client) Focused(ctx context.Context) (Focus, error) {
+	snap, err := c.Snapshot(ctx)
+	if err != nil {
+		return Focus{}, err
+	}
+	return Focus{Workspace: snap.FocusedWorkspaceID, Tab: snap.FocusedTabID, Pane: snap.FocusedPaneID}, nil
+}
+
+// WatchFocus keeps an events.subscribe open for the focus events (workspace, tab and pane focused) and calls changed
+// for each, and once when the stream starts, until ctx ends or herdr closes it; it returns why. herdr names no client
+// in these events, so who moved the focus is not known from them. A moved focus sends all three events, in a burst.
+func (c *Client) WatchFocus(ctx context.Context, changed func()) error {
+	subs := []Subscription{{"type": "workspace.focused"}, {"type": "tab.focused"}, {"type": "pane.focused"}}
+	return c.Subscribe(ctx, subs, func(Event) { changed() })
 }
