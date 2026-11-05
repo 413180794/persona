@@ -49,6 +49,16 @@ Persona 和 AI 分身要「代替我上班」，前提是它们知道的和我�
 - **能看出来的差别**：只有上面「没连着」的那些。以前 hub 读的「只按聊天一个个读」的连接器接口（`connector.Chats`，lark-connector 那条路走了以后已经没有连接器实现它）
   不再读；插件的帖子没有经过它。
 
+## 录音（#3235）
+
+手机（和经手机回传的手表）录音的转写文字，由手机经 `PUT /api/v1/recordings/{id}` 同步进来（[protocol.md](protocol.md)「录音同步」、[recording.md](recording.md)），不上传音频。
+
+- 一条录音一个条目，键是手机上的 UUID；每次上传整份覆盖，`revision` 小于已存的就不写（乱序、重放都只留最新）。`complete: false` 时只存、可搜，不调模型。
+- 转写完成（`complete: true`）且这一版还没摘要过的，管理者每轮挑最多 3 条交给模型（`kb.recording`，没配就是 `kb.ai`，提示词 `prompts/kb/recording.md`）：
+  得到摘要、一句话、标题（用户没起名时用）、打标和提到的项目；项目照常挂上（项目时间线记一条「录音 · 标题」）。全文最多给模型 2.4 万字（留开头和结尾）。
+- 保留期是助手设置 `recording_days`（默认 14 天，不跟 `text_days`）：每轮把开始时间早于保留期的目录和索引行删掉，墓碑也只留这么久。
+- `kb_list` / `kb_get` / `kb_search` 和 App 的知识库页多一类 `recordings`；`kb_get` 带摘要、书签和全文转写（按 `max_chars` 截）。录音不能经 `kb_update` 改内容（内容以手机为准），只能改打标。
+
 ## 额外的笔记目录（`kb.extra_dirs`）
 
 hub.json 的 `kb.extra_dirs` 列出管理者所在机器（默认就是 hub 机器）上用户自己维护的笔记目录（例如一个记事实、经验、决定的 git 仓库，由它自己的工具同步）。
@@ -81,6 +91,12 @@ hub.json 的 `kb.extra_dirs` 列出管理者所在机器（默认就是 hub 机�
   docs/<id>.json            # 文档 / 会议 / 日程：标题、链接、时间、打标、关联项目
   meetings/<id>.json
   events/<id>.json
+  recordings/<uuid>/        # 一条录音一个目录（手机同步来的，#3235，下面「录音」）
+    meta.json               # 开始 / 结束、时长、语言、来源设备、书签、revision、是否转写完、打标、关联项目
+    segments.json           # 带时间戳的分段（start / end 是距开始的秒数）
+    transcript.md           # 分段按用户时区的钟点写成一行一段，kb_search 搜它
+    summary.md              # 转写完成后模型写的摘要
+  recordings/.deleted.json  # 删除过的录音 UUID（墓碑），保留期内迟到的上传回 410
 ```
 
 ## 打标
@@ -308,7 +324,7 @@ handles 汇总仍启用知识库归档的已配置邮箱地址与后续归档里
 
 | 接口 | 用途 |
 | --- | --- |
-| `GET /api/v1/kb/{kind}?tag=` | 排好序的列表（`items`）和常用标签（`tags`）；kind 是 projects / chats / people / docs / meetings / events |
+| `GET /api/v1/kb/{kind}?tag=` | 排好序的列表（`items`）和常用标签（`tags`）；kind 是 projects / chats / people / docs / meetings / events / recordings |
 | `GET /api/v1/kb/{kind}/{id}` | `detail`（meta、summary、项目时间线、会话最近 7 天消息）；项目还带 `agents` |
 | `PUT /api/v1/kb/{kind}/{id}` | 改（字段同 `kb_update`）；项目不存在就新建 |
 | `GET /api/v1/kb-search?q=&messages=0` | 全文搜索（按行，旧版 App 用；助手的 `kb_search` 经总线的 `kb.search` 做同样的搜索） |

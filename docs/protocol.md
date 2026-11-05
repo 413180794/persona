@@ -54,7 +54,7 @@ Persona Link 的主动 `link` / 被动 `service` 机器，以及经成员 hub �
 
 ### 临时配对
 
-`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页、#3077：iOS / Mac 的「设置 › 设备 › 连接新设备」）。
+`POST /api/v1/auth/pair-codes` 接受两种调用方：**回环来源 + 主 token**（`personad hub pair`），或**已登录的 `full` 设备 token**（任何来源，#2731：网页「设置 › 设备 › 连接新设备」）。
 无须请求体；请求体 `{"machine":"<id>"}` 生成给这台 link 机器的
 jarvis-link 用的配对码（只有主 token 可以，设备 token 带 `machine` 返回 403；返回多一个 `machine`，`pair_url` 是 `jarvis://link?…&machine=<id>`，只能兑换成这台的链路凭据，别的请求都 403；
 机器不存在或不是 link 返回 400，hub 没开 TLS 返回 409）。手表（`answer`）、链路、互联、扩展的凭据，临时配对 token 本身（不能用一个码生成下一个码），以及非回环来源的主 token 均返回 403。
@@ -581,8 +581,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | POST | `/api/v1/sessions/{mid}/{sid}/fork` | 分支到新聊天（#2137）：body `{at_item_id}`（某条回复的 item id，空则整段）→ `{session_id}`。node 把 Claude 的 transcript 复制到这条回复所在那一轮结束，换成新会话 id，原会话不动；新会话是离线会话，下一条消息照常 `--resume` 它。会话上 `can_fork: true` 才支持（Claude Code、有 transcript、不是外部来源 / runtime / Codex），否则回 `code: fork_unsupported`；从正在写的那一轮分支回 `fork_turn_running`。边界：只复制对话本身，`/rewind` 用的文件快照（`~/.claude/file-history/<id>/`）和子 Agent 的记录不复制，分支里 `/rewind` 不能回到分支前的改动 |
 | POST | `/api/v1/sessions/{mid}/{sid}/close` | 退出 claude 并关闭 tab（herdr 里的任何 Agent，手动启动的也行；分屏的 tab 只关它自己的窗格） |
 | DELETE | `/api/v1/sessions/{mid}/{sid}` | 删除对话：只是从各端的会话列表里移除（hub 在 settings `sessions.deleted` 记下时间，`sessions` 推送和 `GET /api/v1/sessions` 都不再带它），电脑上的 transcript 不动；之后这个会话再被用到（`updated_at` 晚于删除时间，或又运行起来）会重新出现。启动失败的（`start_error`）也能删，立即消失。→ `{"ok":true}`；正在运行或还在启动 409，助手的对话 400（用归档），没有这个会话 404，只读设备 403 |
-| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`）。`?space=health` 列健康空间的对话、`cwd` 是健康目录；不带 `space` 只列助手自己的，健康对话不在里面；别的 `space` 回 400（`docs/health.md`） |
-| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
+| GET | `/api/v1/assistant` | `{"machine_id","launcher","cwd","timezone","notes"?,"notes_effective","main"?,"main_tasks_quiet","recording_days","conversations":[Session]}`：`notes` 只在 App 里保存过时有，`main_tasks_quiet` 是「主对话派的任务只在主对话里通知」的生效值（没改过时是 `true`，#1731），`recording_days` 是录音在知识库里留几天的生效值（默认 14，#3235），`main` 是主对话的会话 id（在 `machine_id` 那台机器上）；已归档的对话默认不列，`?archived=1` 一起列（`archived: true`）。`?space=health` 列健康空间的对话、`cwd` 是健康目录；不带 `space` 只列助手自己的，健康对话不在里面；别的 `space` 回 400（`docs/health.md`） |
+| PUT | `/api/v1/assistant` | `{"machine_id"?,"launcher"?,"timezone"?,"notes"?,"main"?,"main_tasks_quiet"?,"recording_days"?}`，存 Postgres settings（`docs/assistant.md`）；只改带了的字段，`recording_days` 是 1–365，`notes` 为空串也算改；`main` 为 `"-"` 时清掉主对话（换机器时 App 一起发） |
 | POST | `/api/v1/assistant/conversations` | `{"prompt","images"?,"purpose"?,"machine_id"?,"main"?,"space"?,"report_tasks"?}` → `{"session"}`：写好 CLAUDE.md 后在助手目录新开会话。`space: "health"` 在健康空间的目录开（健康的 CLAUDE.md，`docs/health.md`），和 `main: true` 一起回 400，别的 `space` 回 400。`purpose`：用哪个模型用途（hub 认识的，如 `lark.agent`，不认识回 400；空着是 `assistant`）；`machine_id`：在 hub 的哪台机器上跑（空着是助手那台；没有这台回 400）。插件的 /agent 用这两个（#1484）。`report_tasks: true`：这段对话派出的任务（`task_plan`、`agent_start`）和主对话的「安静的任务」一样不另外推送，状态变化作为任务通知发进这段对话（#3192，`docs/lark-agent.md`「派出去的任务」），插件的 /agent 带上它 |
 | POST | `/api/v1/assistant/conversations/{id}/archive` | 归档助手的一段对话（只是不在列表里，数据保留）→ `{"ok","archived":true}`；主对话 400。会话列表（`sessions` 推送）里它带 `archived: true`，App 收在「已归档」；用户再给它发消息（`POST …/messages`）自动取消归档（`docs/assistant.md`「管理自己的对话」） |
 | POST | `/api/v1/assistant/conversations/{id}/unarchive` | 取消归档 → `{"ok","archived":false}` |
@@ -1768,7 +1768,7 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 
 ## 知识库 API
 
-知识库是管理者（助手）的，这些接口 hub 原样转给它（上面「总线」的转发）：它没连着时回 `503 assistant_offline`。知识库未启用时返回 503；`kind` 支持 `projects`、`chats`、`people`、`docs`、`meetings`、`events`。
+知识库是管理者（助手）的，这些接口 hub 原样转给它（上面「总线」的转发）：它没连着时回 `503 assistant_offline`。知识库未启用时返回 503；`kind` 支持 `projects`、`chats`、`people`、`docs`、`meetings`、`events`、`recordings`（录音，只读，写入走下面「录音同步」）。
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -1776,6 +1776,42 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 | GET | `/api/v1/kb/{kind}/{id}` | `{detail,agents?}`；项目可额外返回相关在线 Agent |
 | PUT | `/api/v1/kb/{kind}/{id}` | body 为 `kb.Update`，可更新名称、标签、重要性、摘要及项目属性；返回 `{id}`，字段见 [knowledge.md](knowledge.md) |
 | GET | `/api/v1/kb-search?q=&messages=0` | `{hits}`；默认包含消息，`messages=0` 排除消息 |
+
+### 录音同步（#3235）
+
+手机（含手表回传给手机的）录音转写后经这几个接口同步进知识库的 `recordings`（[recording.md](recording.md)、[knowledge.md](knowledge.md)「录音」）。只传转写文字，不传音频。
+和别的知识库接口一样由 hub 原样转给管理者，要设备 token；知识库没开 / 管理者没连着时 503。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| PUT | `/api/v1/recordings/{id}` | 上传或更新一条录音（幂等，下面） |
+| DELETE | `/api/v1/recordings/{id}` | 删除：`200 {"deleted": true\|false}`（false 是本来就没有）；删文件和索引，留墓碑 |
+| GET | `/api/v1/recordings` | 对账：`{"days":14,"recordings":[{"id","revision","complete","started_at"}],"deleted":["<id>"]}` |
+
+`{id}` 是录音的 UUID（大小写不敏感，按小写存）。PUT 每次带**到目前为止的完整状态**，整份覆盖同一条，所以重放、乱序、转写补全都不会多出一条：
+
+```jsonc
+{
+  "revision": 3,                              // 必填，> 0；同一条单调递增（建议用这份状态的更新时间，毫秒）
+  "started_at": "2026-11-05T09:00:00+08:00",  // 必填，RFC 3339
+  "ended_at": "2026-11-05T10:02:13+08:00",    // 还在录时省略
+  "duration": 3733.5,                         // 已录秒数
+  "language": "zh-CN",                        // BCP 47
+  "device": "phone",                          // phone | watch：录音的设备
+  "title": "",                                // 可选，用户起的名字
+  "bookmarks": [{"at": 120.5, "label": ""}],  // at：距开始的秒数
+  "segments": [{"start": 0, "end": 4.2, "text": "……"}],  // 距开始的秒数
+  "complete": false                           // 录音结束且转写全部完成才 true；之前先传已有的部分
+}
+```
+
+- 回答 `200 {"id","revision","status"}`：`stored` 写进去了（同一 revision 重放也照样覆盖）；`stale` 已存的 revision 更大，没写；`expired` 开始时间早于保留期，不存。
+- `410`，`code: recording_deleted`：这条删过（墓碑留到保留期满），手机不要再传。
+- `400`：id 不是 UUID、`revision` ≤ 0、缺 `started_at`、`device` 不认识，或太大（最多 20000 段、转写共 4 MB）。
+- 分段按 `start` 排，空文本丢掉；`complete` 从 true 变回 false（换语言重新转写）时照常覆盖，转写完成后摘要重做。
+- 保留期是助手设置 `recording_days`（默认 14，1–365）：`GET /api/v1/assistant` 带生效值，`PUT /api/v1/assistant {"recording_days": 30}` 改，`jarvis_settings` 的 `assistant.recording_days` 也能读改。
+  管理者每轮把开始时间超过保留期的录音连文件和索引一起删。
+- 读：`GET /api/v1/kb/recordings`、`GET /api/v1/kb/recordings/{id}`（`detail.meta` 是上面除 `segments` 外的字段加 `name`、打标；`detail.summary`；`detail.segments`），`kb-search` 搜得到转写全文。
 
 ## 消息来源 API（`/api/v1/messaging`）
 
