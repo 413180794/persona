@@ -626,12 +626,14 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		if !onList[id] { // the list's prompt is no suggestion of its
 			s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
 		}
-		// textAt: when the transcript last had the agent's words.
+		// textAt: when the transcript last had the agent's words; rollout: a Codex pane's rollout meta, for its effort.
 		var textAt time.Time
+		var rollout quickMeta
 		if p := n.transcriptPath(id); p != "" {
 			if st, err := os.Stat(p); err == nil {
 				m := n.meta(p, st)
 				textAt = m.lastTextAt
+				rollout = m
 				if m.title != "" && a.Agent != "codex" && a.Agent != traexAgent {
 					s.Title = m.title
 				}
@@ -664,6 +666,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		// right after the reply (the sentinel, a closing line) comes within minutes.
 		if a.LastText != "" && (a.LastTextAt.IsZero() || !textAt.After(a.LastTextAt.Add(hostTextSlack))) {
 			s.LastText = snippet(a.LastText)
+		}
+		if a.Agent == "codex" {
+			n.codexEffortRow(id, &s.Efforts, &s.Effort, rollout) // joined on its app-server: its effort (codex_effort.go)
 		}
 		if a.Agent == piAgent {
 			n.mergePiRow(&s) // its conversation is the extension's (pi.go)
@@ -1634,6 +1639,10 @@ func listKey(list []proto.Session) string {
 		fmt.Fprintf(&b, "attention:%q/%q/%s\n", s.AttentionReason, s.FailureReason, s.ExternalURL) // a new reason or link alone is a change
 		if c := s.Compaction; c != nil {
 			fmt.Fprintf(&b, "compaction:%s/%d\n", c.State, c.StartedAt.Unix())
+		}
+		// A Codex thread's effort, which may change on the computer without a turn (codex_effort.go).
+		if len(s.Efforts) > 0 {
+			fmt.Fprintf(&b, "effort:%s/%v\n", s.Effort, s.Efforts)
 		}
 		fmt.Fprintf(&b, "source:%s/%s/%s/%s/%v/%v/%s/%s\n", s.SourceKind, s.SourceThreadID, s.SourceInstanceID, s.ReadOnlyReason, s.Capabilities, s.Attached, s.CodexRoute, s.CodexRouteNote)
 		for _, t := range s.Background {

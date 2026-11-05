@@ -33,6 +33,9 @@ var tuiModeCycle = []string{"default", "acceptEdits", "plan", "auto", "bypassPer
 type sessionModes struct {
 	Mode, Effort     string
 	ModeAt, EffortAt time.Time
+	// Codex: an effort waiting for the phone's next turn/start on a Codex thread whose app-server has no
+	// thread/settings/update (codex_effort.go); nil none. Apart from Mode / Effort, which are Claude's.
+	Codex *codexPending
 }
 
 func validModes(mode, effort string) error {
@@ -115,6 +118,18 @@ func (n *Node) modesOf(id string) (mode, effort string) {
 
 // setModes changes a running session's permission mode and / or effort level ("" leaves one as it is).
 func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
+	if !n.isAssistantSession(id) {
+		// A Codex thread on its app-server takes Codex's efforts, checked against its model (codex_effort.go).
+		if c, t, ok := n.codexEffortThread(id); ok {
+			if mode != "" {
+				return fmt.Errorf("Codex 的会话在手机上只能改思考强度，权限模式要在电脑上改")
+			}
+			if effort == "" {
+				return nil
+			}
+			return n.setCodexEffort(ctx, id, c, t, effort)
+		}
+	}
 	if err := validModes(mode, effort); err != nil {
 		return err
 	}
@@ -138,7 +153,7 @@ func (n *Node) setModes(ctx context.Context, id, mode, effort string) error {
 		n.notifySessions()
 		return nil
 	}
-	if n.codexPath(id) != "" || n.traexPath(id) != "" {
+	if n.codexPath(id) != "" || n.traexPath(id) != "" { // not driven through an app-server: no way to set either
 		return fmt.Errorf("Codex / TRAEX 的会话不支持在手机上改权限模式和思考强度")
 	}
 	pane, err := n.paneFor(ctx, id)

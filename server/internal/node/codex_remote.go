@@ -27,11 +27,13 @@ var errCodexNoOwner = errors.New("没有可共享的 app-server 运行入口")
 
 type remoteThread struct {
 	id, publicID, title, cwd, status, turn, parent, partial string
-	joined                                                  bool
-	buffer                                                  *strings.Builder
-	lastDelta                                               time.Time
-	revision                                                uint64
-	files                                                   map[string][]string
+	// model and effort are what the app-server says the thread is configured with (codex_effort.go); "" unknown / unset.
+	model, effort string
+	joined        bool
+	buffer        *strings.Builder
+	lastDelta     time.Time
+	revision      uint64
+	files         map[string][]string
 }
 
 type remoteAsk struct {
@@ -56,6 +58,8 @@ type codexRemote struct {
 	joins      typingLocks
 	finished   map[string]bool
 	ready      bool
+	// models: the efforts each model takes, from model/list (codex_effort.go); nil until read.
+	models map[string]codexModelEfforts
 }
 
 func (n *Node) ensureCodexRemote(ctx context.Context, spec proto.CodexServer) {
@@ -222,6 +226,7 @@ func (c *codexRemote) run() {
 	c.ready = true
 	c.mu.Unlock()
 	c.n.notifyCodex()
+	go c.loadModels()
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	for {
@@ -309,6 +314,8 @@ func (c *codexRemote) loaded(ctx context.Context) ([]string, error) {
 type remoteThreadData struct {
 	ID             string          `json:"id"`
 	Name           string          `json:"name"`
+	Model          string          `json:"model"`
+	Effort         string          `json:"reasoningEffort"` // configured now; null (unset) reads as ""
 	Preview        string          `json:"preview"`
 	Cwd            string          `json:"cwd"`
 	Path           string          `json:"path"`
@@ -362,6 +369,9 @@ func (c *codexRemote) refresh() error {
 		path := rolloutPath(c.spec.Home, raw)
 		public := c.n.registerCodex(c.spec.Home, raw, path)
 		t.id, t.publicID, t.title, t.cwd = raw, public, firstNonEmpty(d.Name, d.Preview), d.Cwd
+		if d.Model != "" { // an app-server that reports a thread's settings (older ones do not: keep what join said)
+			t.model, t.effort = d.Model, d.Effort
+		}
 		t.parent = d.ParentThreadID
 		if t.parent == "" && strings.Contains(string(d.Source), "subAgent") {
 			t.parent = "parent-managed"
@@ -395,6 +405,7 @@ func (c *codexRemote) refresh() error {
 	for raw, t := range next {
 		if old, ok := c.threads[raw]; ok && old.revision != seenRevision[raw] {
 			t.joined, t.turn, t.partial, t.files, t.status, t.revision, t.buffer, t.lastDelta = old.joined, old.turn, old.partial, old.files, old.status, old.revision, old.buffer, old.lastDelta
+			t.model, t.effort = old.model, old.effort // an effort just set (codex_effort.go) over a read from before it
 			next[raw] = t
 		}
 	}
@@ -403,8 +414,17 @@ func (c *codexRemote) refresh() error {
 			a.cancel()
 		}
 	}
+	var gone []remoteThread
+	for raw, t := range c.threads {
+		if _, ok := next[raw]; !ok {
+			gone = append(gone, t)
+		}
+	}
 	c.threads = next
 	c.mu.Unlock()
+	for _, t := range gone { // no longer loaded: an effort still waiting for its next turn is not for a later one
+		c.n.dropCodexPending(t.publicID, c.generation, t.id)
+	}
 	return nil
 }
 
@@ -465,6 +485,8 @@ func (c *codexRemote) join(ctx context.Context, id string, remember bool) error 
 	// This is an explicit user-requested join, not a discovery or global subscription. Do not override runtime config.
 	var reply struct {
 		Thread remoteThreadData `json:"thread"`
+		Model  string           `json:"model"`
+		Effort string           `json:"reasoningEffort"`
 	}
 	c.mu.Lock()
 	joining := c.threads[t.id]
@@ -495,6 +517,9 @@ func (c *codexRemote) join(ctx context.Context, id string, remember bool) error 
 	if ok {
 		current.joined = true
 		current.revision++
+		if m := firstNonEmpty(reply.Model, reply.Thread.Model); m != "" {
+			current.model, current.effort = m, firstNonEmpty(reply.Effort, reply.Thread.Effort)
+		}
 		for _, turn := range reply.Thread.Turns {
 			if turn.Status == "inProgress" {
 				current.turn = turn.ID
@@ -562,6 +587,14 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 		method = "turn/steer"
 		params["expectedTurnId"] = t.turn
 	}
+	// An effort the phone chose that its app-server could not take on its own (codex_effort.go): a turn takes it for
+	// itself and the turns after; a steer cannot, so it waits for the next turn.
+	effort := ""
+	if method == "turn/start" {
+		if effort = n.codexPendingEffort(id, c, t); effort != "" {
+			params["effort"] = effort
+		}
+	}
 	var reply struct {
 		Turn struct {
 			ID string `json:"id"`
@@ -569,6 +602,10 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	}
 	err = c.wire.call(ctx, method, params, &reply)
 	var re *codexError
+	if errors.As(err, &re) && effort != "" {
+		// Codex refused a turn that carried the choice: drop it, so it does not fail every message after this one.
+		n.dropCodexPending(id, c.generation, t.id)
+	}
 	if errors.As(err, &re) {
 		if re.Code == -32601 || re.Code == -32602 {
 			return refusal("codex_refused", re.Error(), nil)
@@ -577,6 +614,9 @@ func (n *Node) sendCodex(ctx context.Context, id, text string, images []proto.Im
 	}
 	if err != nil {
 		return uncertain(err)
+	}
+	if effort != "" {
+		n.codexEffortTaken(id, c, t.id, effort)
 	}
 	if reply.Turn.ID != "" {
 		c.mu.Lock()
@@ -651,7 +691,11 @@ func (c *codexRemote) message(m codexMessage) {
 		Turn      struct {
 			ID string `json:"id"`
 		} `json:"turn"`
-		Item remoteEventItem `json:"item"`
+		Item     remoteEventItem `json:"item"`
+		Settings struct {
+			Model  string `json:"model"`
+			Effort string `json:"effort"`
+		} `json:"threadSettings"`
 	}
 	if json.Unmarshal(m.Params, &ev) != nil {
 		return
@@ -722,6 +766,8 @@ func (c *codexRemote) message(m codexMessage) {
 		if emit {
 			t.lastDelta = time.Now()
 		}
+	case "thread/settings/updated": // the thread's settings changed: on the computer, or from here (codex_effort.go)
+		t.model, t.effort = firstNonEmpty(ev.Settings.Model, t.model), ev.Settings.Effort
 	case "item/completed":
 		delete(t.files, ev.Item.ID)
 		refresh = true
@@ -745,7 +791,7 @@ func (c *codexRemote) message(m codexMessage) {
 	if emit {
 		c.n.emitDelta(t.publicID, delta)
 	}
-	if m.Method == "turn/started" || m.Method == "turn/completed" {
+	if m.Method == "turn/started" || m.Method == "turn/completed" || m.Method == "thread/settings/updated" {
 		c.n.notifyCodex()
 	}
 }

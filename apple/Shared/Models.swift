@@ -526,9 +526,13 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var agentLabelHint: String? = nil
     var launcher: String?
     var model: String?
-    /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex.
+    /// Claude Code's permission mode and effort level right now (`SessionModes`); nil while unknown and for Codex
+    /// (a Codex thread the hub drives through its app-server has an effort, never a mode).
     var permissionMode: String? = nil
     var effort: String? = nil
+    /// The levels `effort` may be set to when they are not Claude Code's (`SessionModes.effortOptions`): a Codex thread
+    /// the hub drives through its app-server, where only the effort changes (node/codex_effort.go). Nil elsewhere.
+    var efforts: [String]? = nil
     var startedByJarvis: Bool
     var assistant: Bool
     /// An assistant conversation moved out of the sidebar (listed under 已归档; nothing is deleted).
@@ -636,6 +640,9 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// Claude Code (or an older hub that does not name the agent): what the Claude-only controls (modes, /clear,
     /// /model) are for. Any other agent — named or not yet known to this app — does not get them.
     var isClaude: Bool { !isCodex && (agent == nil || agent == "" || agent == "claude") }
+    /// Only the thinking effort changes from the phone, among `efforts` (the hub says so by listing them): a Codex
+    /// thread driven through its app-server. Claude Code and the assistant change both, the rest neither.
+    var setsEffortOnly: Bool { canSend && !assistant && !isClaude && !(efforts ?? []).isEmpty }
     /// Who the user talks to in this session: "Claude", "Codex", "TRAEX", or what the hub calls a runtime's agent ("DSH").
     var agentLabel: String {
         if isCodex { return "Codex" }
@@ -648,7 +655,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var resumeCommand: String { isCodex ? "codex resume" : isTraex ? "traex resume" : "claude --resume" }
 
     enum CodingKeys: String, CodingKey {
-        case title, cwd, status, launcher, model, agent, effort, capabilities, attached
+        case title, cwd, status, launcher, model, agent, effort, efforts, capabilities, attached
         case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
              parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
         case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
@@ -689,6 +696,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         permissionMode = try c.decodeIfPresent(String.self, forKey: .permissionMode)
         effort = try c.decodeIfPresent(String.self, forKey: .effort)
+        efforts = try c.decodeIfPresent([String].self, forKey: .efforts)
         startedByJarvis = try c.decodeIfPresent(Bool.self, forKey: .startedByJarvis) ?? false
         assistant = try c.decodeIfPresent(Bool.self, forKey: .assistant) ?? false
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived)

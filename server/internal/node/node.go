@@ -418,8 +418,14 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	}
 	if n.externalCodex(p.SessionID) {
 		switch method {
-		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "session.close", "session.modes", "session.queue.edit", "session.rename", "assistant.send":
+		case "session.keys", "session.screen", "session.screen.before", "terminal.watch", "session.close", "session.queue.edit", "session.rename", "assistant.send":
 			return nil, refusal("codex_read_only", "这个会话没有终端或启动器控制能力，请在原 app-server 中操作", nil)
+		case "session.modes":
+			// Its effort, on the app-server running it (codex_effort.go); nothing else.
+			if _, _, driven := n.codexEffortThread(p.SessionID); !driven {
+				return nil, refusal("codex_read_only", "这个会话没有终端或启动器控制能力，请在原 app-server 中操作", nil)
+			}
+			return ok(n.setModes(ctx, p.SessionID, p.PermissionMode, p.Effort))
 		case "session.interrupt":
 			return ok(n.interruptCodex(ctx, p.SessionID))
 		}
@@ -1030,7 +1036,11 @@ func (n *Node) sessionInfo(ctx context.Context, id string) (map[string]any, erro
 	f, err := n.file(id)
 	if err != nil {
 		if src, ok := n.codexSource(id); ok {
-			return map[string]any{"session_id": id, "source_kind": "codex_app_server", "source_thread_id": src.thread, "transcript_path": "", "cwd": "", "model": "", "launcher": "", "git_branch": "", "version": "", "permission_mode": "", "effort": "", "context_tokens": 0, "output_tokens": 0, "compactions": 0, "turns": 0, "history_unavailable": true}, nil
+			effort := ""
+			if c, t, driven := n.codexEffortThread(id); driven {
+				effort = n.codexEffortNow(id, c, t, "")
+			}
+			return map[string]any{"session_id": id, "source_kind": "codex_app_server", "source_thread_id": src.thread, "transcript_path": "", "cwd": "", "model": "", "launcher": "", "git_branch": "", "version": "", "permission_mode": "", "effort": effort, "context_tokens": 0, "output_tokens": 0, "compactions": 0, "turns": 0, "history_unavailable": true}, nil
 		}
 		return nil, err
 	}
@@ -1041,6 +1051,9 @@ func (n *Node) sessionInfo(ctx context.Context, id string) (map[string]any, erro
 		st.Launcher = n.inferLauncher(id)
 	}
 	mode, effort := n.modesOf(id)
+	if c, t, driven := n.codexEffortThread(id); driven {
+		effort = n.codexEffortNow(id, c, t, m.Effort) // what the app-server runs it with (codex_effort.go)
+	}
 	if pane, err := n.paneFor(ctx, id); err == nil && !n.isAssistantSession(id) {
 		if screen, err := n.readPane(ctx, pane, "visible", 60); err == nil && tuiMode(screen) != "" {
 			mode = tuiMode(screen) // shift+tab in the terminal shows up in the transcript only with the next prompt

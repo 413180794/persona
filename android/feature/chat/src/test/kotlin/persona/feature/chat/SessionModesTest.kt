@@ -20,6 +20,15 @@ class SessionModesTest {
         assertNull(SessionModes.modeLabel(null))
     }
 
+    @Test fun aCodexThreadOffersItsOwnLevels() {
+        val codex = Session(sessionId = "s", agent = "codex", effort = "high", efforts = listOf("low", "high", "ultra", "turbo"))
+        assertEquals(listOf("low", "high", "ultra", "turbo"), SessionModes.effortOptions(codex).map { it.id })
+        assertEquals(listOf("低", "高", "极高", "turbo"), SessionModes.effortOptions(codex).map { it.title })
+        assertEquals("极低", SessionModes.effortLabel("minimal"))
+        // Claude Code's sessions keep Claude's levels.
+        assertEquals(SessionModes.effortLevels, SessionModes.effortOptions(Session(sessionId = "s")))
+    }
+
     @Test fun modelAliasesAsIos() {
         val alias = SessionModes::claudeModelId
         assertEquals("opus", alias("claude-opus-5-5[1m]"))

@@ -88,6 +88,24 @@ class SessionSourceTest {
         assertFalse(claude.copy(paneId = null).canTypeClaudeCommands)
     }
 
+    @Test fun codexOnItsAppServerChangesItsEffortOnly() {
+        val live = session(
+            """{"session_id":"opaque","source_kind":"codex_app_server","agent":"codex","status":"idle","effort":"high",""" +
+                """"efforts":["low","high","ultra"],"capabilities":{"read":true,"send":true}}""",
+        )
+        assertEquals(listOf("low", "high", "ultra"), live.efforts)
+        assertTrue(live.canChangeEffortOnly)
+        assertFalse(live.canChangeModes || live.canTypeClaudeCommands)
+        // A herdr pane joined on its app-server: no source, the levels the hub lists say so.
+        assertTrue(session("""{"session_id":"s","agent":"codex","status":"idle","efforts":["medium"]}""").canChangeEffortOnly)
+        // Without levels (the terminal route, TRAEX), without sending, offline, or a Claude session: not this way.
+        assertFalse(live.copy(efforts = emptyList()).canChangeEffortOnly)
+        assertFalse(live.copy(capabilities = SessionCapabilities(read = true)).canChangeEffortOnly)
+        assertFalse(live.copy(status = "offline").canChangeEffortOnly)
+        assertFalse(session("""{"session_id":"s","status":"idle","efforts":["low"]}""").canChangeEffortOnly)
+        assertTrue(session("""{"session_id":"s","status":"idle"}""").efforts.isEmpty())
+    }
+
     @Test fun resumeCommandsQuoteWhatTheyCarry() {
         val claude = session("""{"session_id":"s'1","cwd":"/tmp/my dir"}""")
         assertEquals("cd -- '/tmp/my dir' && claude --resume 's'\"'\"'1'", claude.resumeCommand())

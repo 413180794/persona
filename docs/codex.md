@@ -77,6 +77,7 @@ Persona 助手（「Persona」tab）也能用 Codex 的启动器，走的是 `co
   - async 提问（`request_user_input_async`）不是请求而是一条消息，照旧从 rollout 认（「提问和审批」），回答的回复信封作为消息经 app-server 发（`turn/start` / `turn/steer`）。
   - 手机发消息走 `turn/start`（空闲时）或带当前轮次的 `turn/steer`（工作中；接入前就在跑的轮次读一次 `thread/read` 拿到它），
     不往终端打字：电脑输入框里的草稿原样留着，不会被吞掉也不会混进去。
+  - 思考强度能在手机上改（权限模式不能），见下面「思考强度」。
   - 电脑先答：卡片随 `serverRequest/resolved` 撤掉（`interaction.dismiss`），手机再答不会有任何动作；手机先答：TUI 的提示随之关掉；
     两边同时答：app-server 只认第一个，命令只跑一次。观察者从不自动回答（`codex_remote_asks.go`）。
   - 终端路线对它关掉：不读它的屏幕找审批、不认它 rollout 里的阻塞提问，同一个问题不会出两张卡、答两次。
@@ -90,6 +91,43 @@ Persona 助手（「Persona」tab）也能用 Codex 的启动器，走的是 `co
 - **测试**：`node/codex_daemon_test.go`（合成 app-server 上的自动接入、发消息、async 回答、审批卡、拒绝理由、接入失败重试、socket 别名）；
   真实 Codex：`scripts/test/test-codex.sh` 带 `JARVIS_CODEX_DAEMON_BINS`（`docs/testing.md`「Codex 联调」），在独立的 herdr 里起一个只给测试用的 `codex app-server --listen unix://…`
   （不碰正在用的守护进程，node 关掉发现、只认它），TUI 用 `--remote` 挂上去。
+
+## 思考强度
+
+2026-11-04 起（#1709），手机经 app-server 驱动的 Codex 会话能在手机上改思考强度：Agents 里能发送的「Codex 实时」会话
+（`source_kind: codex_app_server`），和已经接上共享守护进程的 herdr 窗格（上面「守护进程上的会话」，「连接：app-server」）。
+手机发给它们的消息本来就是 `turn/start` / `turn/steer`，思考强度是这个 thread 自己的设置，不用往终端里打字（`node/codex_effort.go`）。
+
+- **不变的**：权限模式在手机上仍然不能改（Codex 的审批策略和沙箱照旧由启动参数和 `config.toml` 定，请求带权限模式回
+  「Codex 的会话在手机上只能改思考强度，权限模式要在电脑上改」）；只在终端窗格里跑的（终端路线）、子 Agent、Codex 桌面 App 自己的对话、
+  TRAEX 连思考强度也不能改，提示照旧；从手机新建 Codex 仍然不带思考强度（见「从手机新建」）。
+- **能选哪些**：这个 thread 的模型在 app-server `model/list` 里报的 `supportedReasoningEfforts`（每条连接读一次，带 `includeHidden`，
+  thread 可能用的是隐藏模型）；模型不在列表里、或者读不到列表，用「Codex 设置」页的同一套：minimal / low / medium / high / xhigh / max / ultra；
+  模型报的是空列表就是不支持，不显示、不收。会话带上 `efforts`（这些档位，从弱到强）和 `effort`（当前值），客户端只看 `efforts` 非空决定显示
+  （`docs/protocol.md`「Codex 来源与能力」）。node 自己校验档位：实测 0.163 的 `thread/settings/update` 给什么字符串都收。
+- **当前值**：app-server 说的这个 thread 现在配置的值（每 5 秒 `thread/read` 的 `reasoningEffort`、接入时 `thread/resume` 的回答、
+  `thread/settings/updated` 通知）；thread 没设（`null`，新 thread 就是这样）时是它的模型的默认值（`model/list` 的 `defaultReasoningEffort`）；
+  老的 app-server 不报这些时用 rollout 最后一轮 `turn_context` 记的。电脑上在 TUI 里改了，手机上跟着变。
+- **怎么改**：node 校验后发 `thread/settings/update {threadId, effort}`，从下一轮起生效，不管下一轮是手机发的还是电脑上发的，TUI 也收到
+  `thread/settings/updated`；这一轮正在跑时也能改，这一轮不变。这个方法在 0.163 是实验接口（node 连 app-server 时本来就声明了 `experimentalApi`），
+  实测：调用成功、随即推 `thread/settings/updated`、`thread/read` 读回新值。
+- **app-server 没有这个方法**：只认 JSON-RPC `-32601`（method not found）。这时选择先记在 node 内存里（`sessionModes.Codex`），
+  手机下一次 `turn/start` 带上 `effort`（`turn/start` 的 effort 管这一轮和之后），带出去一次就清掉，期间会话显示的就是这个选择；
+  `turn/steer`（这一轮在跑时插话）不能带 effort，所以等下一次 `turn/start`。这个选择只对当时那条连接上的那个 thread 有效：
+  连接断了又连上（可能已经换成支持这个方法的版本，thread 也可能在电脑上换过思考强度）、thread 在 app-server 上卸载了（会话在那边结束了），
+  它就作废、不带出去，会话显示 thread 自己的值，要改就在手机上重新选；带着它的 `turn/start` 被 Codex 拒绝也丢掉，免得之后每条消息都失败。
+  node 重启会丢掉还没带出去的选择（重启本来就是新连接）；`thread/settings/update` 成功的存在 app-server 里，不丢。
+- **其他失败一律报错、不记**：同时清掉之前还没带出去的选择，免得之后的 `turn/start` 把手机已经被告知没改成的值带出去。Codex 回别的错误
+  （-32602 参数不对、thread 不存在等）把原话转给手机；连接断开报「断开了」；15 秒没回应报「可能没有改成」（请求也许已经到了 app-server，
+  会话显示的以它下一次读到的为准）。
+- **客户端**：网页、iOS、Android 对 `efforts` 非空、能发送的会话只显示思考强度：网页输入框下面的 chip、iOS 旧布局输入框上方的标签和新外壳「模型 · 思考强度」
+  按钮的菜单、Android 的「模式」按钮；选项就是 `efforts`（minimal「极低」、ultra「极高」，不认识的照原样显示）。Claude Code 和助手照旧两个都有。
+- **测试**：`node/codex_effort_test.go`（合成 app-server：接上前照旧拒绝、接上后只收思考强度、非法档位、`thread/settings/update` 的参数、
+  -32601 时下一次 `turn/start` 带上而 `turn/steer` 不带、别的错误码 / 超时 / 断线都报错不记并清掉之前的选择、带着它的 `turn/start` 被拒绝就丢掉、
+  换了连接或 thread 卸载就作废、按模型的档位和默认值、Codex 拒绝、模型没有档位、`thread/settings/updated`、终端路线和 TRAEX 照旧拒绝）；
+  网页 `session-actions.test.ts`；iOS `SyncEventTests.codexThreadOnItsAppServerSetsItsEffortOnly`；Android `SessionSourceTest`、`SessionModesTest`。
+  真实 Codex 只在临时 `CODEX_HOME` 的 stdio app-server 上手动验过 `model/list`、`thread/settings/update`、`thread/read`（没跑模型），
+  `scripts/test/test-codex.sh` 还没有这一项。
 
 ## Codex 桌面 App 里的会话（App 的本机 IPC）
 
@@ -132,7 +170,7 @@ node 作为总线上的又一个客户端（`server/internal/node/codex_desktop.
 - **走哪条路**：0.163 的裸 `codex`（或不带下面这些参数的 alias）跑在共享守护进程上，几秒内自动接入，「会话信息」的「连接」是 app-server；
   带 `-c` / `--profile` / `--enable` / `--disable` / `--oss` / `--strict-config` / `--no-daemon` 的启动器在自己进程里跑，走终端路线（#214），
   「连接」那行写「用启动器「X」起的：它带了 -c，Codex 这时在自己的进程里跑，不在共享的 app-server 上」；0.153 没有守护进程，也是终端路线。
-- **不提供的**：Claude 的权限模式、思考强度（Codex 按启动器的参数和 `~/.codex/config.toml`）；从手机恢复已有的 Codex 会话（`codex_resume`，在电脑上 `codex resume`）。
+- **不提供的**：新建时选权限模式、思考强度（Codex 按启动器的参数和 `~/.codex/config.toml`；会话接上 app-server 以后能在对话里改思考强度，见「思考强度」）；从手机恢复已有的 Codex 会话（`codex_resume`，在电脑上 `codex resume`）。
 - **测试**：`node/codex_start_test.go`（假 herdr：窗格里的命令只有 `codex-start <文件>`、文件里是启动器的词和消息、只有一条会话、路由说明、拒绝、超时和启动失败的报错、信任对话框、
   `codex-start` 子进程逐字节收到消息、`~/.zshrc` 里的 Codex alias）；真实 Codex：`scripts/test/test-codex.sh` 的 `TestLiveCodexStart`
   （0.163 经 `--remote` 挂在测试自己的 app-server 上、0.153、带 `-c` 的 0.163，各连跑多轮：消息带引号 / 换行 / `$` / 反引号 / 中文 / 长文本，
@@ -193,7 +231,8 @@ herdr 在 Codex 有没答的 async 提问时报 blocked，于是 `agent prompt` 
 ## 还不支持
 
 - 从手机恢复已有的 Codex 会话：只能新建（「从手机新建」）；外部 app-server 实例上的离线 / 归档历史只读，不会偷偷另起一个 app-server 续聊。
-- 从手机新建 Codex 必须带第一条消息；跑 Codex 的 shell 函数、做了别的事的 alias、TRAEX 不能用来新建；新建时没有 Claude 的权限模式和思考强度。
+- 从手机新建 Codex 必须带第一条消息；跑 Codex 的 shell 函数、做了别的事的 alias、TRAEX 不能用来新建；新建时不能选权限模式和思考强度。
+- 权限模式不能在手机上改；思考强度只有经 app-server 的会话能改（「思考强度」），终端路线的 Codex 和 TRAEX 不能。
 - 带 `-c` 等参数的启动器新建的会话不在共享守护进程上，只能走终端路线（读屏幕、打字）。
 - 认不出来的 Codex 对话框（不是上面「提问和审批」里的格式）照旧走通用的「终端等你处理」屏幕交互。
 - 排队消息、子 Agent、后台任务这些 Claude transcript 才有的信息，Codex 会话里都是空的。

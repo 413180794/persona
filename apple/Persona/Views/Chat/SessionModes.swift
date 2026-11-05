@@ -25,11 +25,29 @@ nonisolated enum SessionModes {
         Option(id: "max", title: "最高", detail: "最慢最仔细", symbol: "gauge.with.dots.needle.100percent"),
     ]
 
+    /// Codex's reasoning efforts (node/codex_effort.go); a thread offers its model's, in `Session.efforts`.
+    static let codexEffortLevels: [Option] = [
+        Option(id: "minimal", title: "极低", detail: "几乎不思考，最快", symbol: effortLevels[0].symbol),
+        Option(id: "low", title: "低", detail: "快，简单的事够用", symbol: effortLevels[0].symbol),
+        Option(id: "medium", title: "中", detail: "快慢适中", symbol: effortLevels[1].symbol),
+        Option(id: "high", title: "高", detail: "更仔细", symbol: effortLevels[2].symbol),
+        Option(id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵", symbol: effortLevels[3].symbol),
+        Option(id: "max", title: "最高", detail: "最慢最仔细", symbol: effortLevels[4].symbol),
+        Option(id: "ultra", title: "极高", detail: "最仔细，还会主动分给多个子 Agent 一起做", symbol: effortLevels[4].symbol),
+    ]
+
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
     static let switchableModes = permissionModes.filter { $0.id != "bypassPermissions" }
 
     static func mode(_ id: String?) -> Option? { permissionModes.first { $0.id == id } }
-    static func effort(_ id: String?) -> Option? { effortLevels.first { $0.id == id } }
+    static func effort(_ id: String?) -> Option? { effortLevels.first { $0.id == id } ?? codexEffortLevels.first { $0.id == id } }
+
+    /// A running session's effort choices: its own levels when the hub lists them (a Codex thread on its app-server),
+    /// Claude Code's otherwise; a level this app does not know yet keeps its id.
+    static func effortOptions(_ session: Session?) -> [Option] {
+        guard let ids = session?.efforts, !ids.isEmpty else { return effortLevels }
+        return ids.map { id in codexEffortLevels.first { $0.id == id } ?? Option(id: id, title: id, detail: "", symbol: Theme.Icon.effort) }
+    }
 
     static func modeTint(_ id: String?) -> Color {
         switch id {
@@ -78,7 +96,8 @@ nonisolated enum SessionModes {
 }
 
 /// The two chips above the composer — permission mode and effort level, like the footer of Claude Code's TUI.
-/// Tapping one changes it on the running session.
+/// Tapping one changes it on the running session. A Codex thread on its app-server gets the effort alone, among its own
+/// levels (`Session.setsEffortOnly`).
 struct SessionModeBar: View {
     @Environment(AppModel.self) private var model
     let key: SessionKey
@@ -92,22 +111,24 @@ struct SessionModeBar: View {
         let mode = session?.permissionMode
         let effort = session?.effort
         HStack(spacing: Theme.Space.s) {
-            Menu {
-                Picker("权限模式", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
-                    ForEach(options(SessionModes.switchableModes, current: mode)) { o in
-                        Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+            if session?.setsEffortOnly != true {
+                Menu {
+                    Picker("权限模式", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
+                        ForEach(options(SessionModes.switchableModes, current: mode)) { o in
+                            Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
+                        }
                     }
+                    .pickerStyle(.inline)
+                } label: {
+                    ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
+                             text: SessionModes.modeLabel(mode) ?? "权限模式", tint: SessionModes.modeTint(mode), known: mode != nil)
                 }
-                .pickerStyle(.inline)
-            } label: {
-                ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
-                         text: SessionModes.modeLabel(mode) ?? "权限模式", tint: SessionModes.modeTint(mode), known: mode != nil)
+                .labelOnlyMenu()
+                .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")")
             }
-            .labelOnlyMenu()
-            .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? "未知")")
             Menu {
                 Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
-                    ForEach(SessionModes.effortLevels) { o in
+                    ForEach(SessionModes.effortOptions(session)) { o in
                         Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                     }
                 }
@@ -152,6 +173,8 @@ struct SessionModesMenu: View {
     var picksModel = false
     /// Effort and permission mode can change (Claude Code, the assistant; not Codex or TRAEX).
     var setsModes = true
+    /// Only the effort can change, among the session's own levels (a Codex thread on its app-server, `Session.setsEffortOnly`).
+    var setsEffortOnly = false
 
     /// The button's title for this conversation.
     static func title(_ session: Session?, setsModes: Bool) -> SessionModes.ComposerTitle? {
@@ -182,15 +205,17 @@ struct SessionModesMenu: View {
                 Text(SessionModes.modelName(session?.model) ?? "模型未知") // what it runs; changed where it was started
             }
         }
-        if setsModes {
+        if setsModes || setsEffortOnly {
             Section("思考强度") {
                 Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
-                    ForEach(SessionModes.effortLevels) { o in
+                    ForEach(SessionModes.effortOptions(session)) { o in
                         Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                     }
                 }
                 .pickerStyle(.inline)
             }
+        }
+        if setsModes {
             Picker(selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
                 ForEach(SessionModes.switchableModes + (mode.flatMap { m in SessionModes.switchableModes.contains { $0.id == m } ? nil : SessionModes.mode(m) }.map { [$0] } ?? [])) { o in
                     Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)

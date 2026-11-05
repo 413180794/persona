@@ -6,7 +6,7 @@ import { navigate } from "../../lib/router";
 import { openLink } from "../../lib/links";
 import { togglePanel, usePanel } from "../../lib/panel";
 import { machineWithHub } from "../../lib/mesh";
-import { hasModes, isMuted, toggleMute } from "../../lib/session-actions";
+import { hasEffortOnly, hasModes, isMuted, toggleMute } from "../../lib/session-actions";
 import { flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
@@ -703,9 +703,10 @@ function ComposerFooter({ session, assistant }: { session: Session; assistant?: 
   // a Persona conversation's launcher and model are its chip (they switch there)
   const parts = [sourceSubtitle(session), ...(assistant ? [] : [session.launcher, session.model?.split("/").pop(), shortPath(session.cwd)])].filter(Boolean);
   const modes = !assistant && hasModes(session) && stateOf(session) !== "offline";
+  const effortOnly = !assistant && hasEffortOnly(session) && stateOf(session) !== "offline"; // a Codex thread on its app-server
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {modes && <ModeChips session={session} />}
+      {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} />}
       {assistant && <AssistantLauncherChip session={session} />}
       <span className="min-w-0 truncate" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>
     </span>

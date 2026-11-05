@@ -138,6 +138,8 @@ export interface Session {
   model?: string;
   permission_mode?: string;
   effort?: string;
+  /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol.md). */
+  efforts?: string[];
   assistant?: boolean;
   started_by_jarvis?: boolean;
   space_id?: string;

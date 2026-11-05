@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { api, enc, errorText, sessionPath } from "../../lib/api";
 import { ago, externalLink, resumeCommand, sessionTitle, shortPath } from "../../lib/format";
 import { openLink } from "../../lib/links";
-import { EFFORTS, effortTitle, modeTitle, renameBody, SWITCHABLE_MODES } from "../../lib/session-actions";
+import { effortOptions, effortTitle, modeTitle, renameBody, SWITCHABLE_MODES } from "../../lib/session-actions";
 import { href, navigate } from "../../lib/router";
 import { dropSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
@@ -240,8 +240,9 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
   );
 }
 
-// The two chips under the composer, like Claude Code's bottom bar: permission mode and effort (POST …/modes).
-export function ModeChips({ session }: { session: Session }) {
+// The two chips under the composer, like Claude Code's bottom bar: permission mode and effort (POST …/modes). A Codex
+// thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`).
+export function ModeChips({ session, effortOnly }: { session: Session; effortOnly?: boolean }) {
   const modeMenu = useMenu();
   const effortMenu = useMenu();
   const set = async (patch: { permission_mode?: string; effort?: string }) => {
@@ -258,9 +259,9 @@ export function ModeChips({ session }: { session: Session }) {
   const danger = mode === "bypassPermissions";
   return (
     <span className="flex shrink-0 items-center gap-1">
-      <Chip label={mode ? modeTitle(mode) : "权限：默认"} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title="权限模式" />
+      {!effortOnly && <Chip label={mode ? modeTitle(mode) : "权限：默认"} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title="权限模式" />}
       <Chip label={session.effort ? `思考 ${effortTitle(session.effort)}` : "思考：默认"} onClick={effortMenu.open} active={Boolean(effortMenu.anchor)} title="思考强度" />
-      {modeMenu.anchor && (
+      {modeMenu.anchor && !effortOnly && (
         <Menu
           anchor={modeMenu.anchor}
           onClose={modeMenu.close}
@@ -277,7 +278,7 @@ export function ModeChips({ session }: { session: Session }) {
           side="top"
           width={280}
           header="思考强度"
-          items={EFFORTS.map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
+          items={effortOptions(session).map((m) => ({ key: m.id, label: m.title, hint: m.detail, checked: session.effort === m.id, onSelect: () => void set({ effort: m.id }) }))}
         />
       )}
     </span>

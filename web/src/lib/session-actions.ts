@@ -1,6 +1,7 @@
 // What the chat's ⋯ menu changes on a session: notifications (mutes), the run modes, the name
 // (docs/protocol.md `/mutes`, `/modes`, `/rename`; iOS Pins.togglingMute, SessionModes).
 import type { AgentMutes } from "./agent-groups";
+import { sessionCan } from "./format";
 import type { Session } from "./types";
 
 export interface ModeOption {
@@ -25,6 +26,17 @@ export const EFFORTS: ModeOption[] = [
   { id: "max", title: "最高", detail: "最慢最仔细" },
 ];
 
+/** Codex's reasoning efforts (node/codex_effort.go); a thread offers those of its model, in `Session.efforts`. */
+export const CODEX_EFFORTS: ModeOption[] = [
+  { id: "minimal", title: "极低", detail: "几乎不思考，最快" },
+  { id: "low", title: "低", detail: "快，简单的事够用" },
+  { id: "medium", title: "中", detail: "快慢适中" },
+  { id: "high", title: "高", detail: "更仔细" },
+  { id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵" },
+  { id: "max", title: "最高", detail: "最慢最仔细" },
+  { id: "ultra", title: "极高", detail: "最仔细，还会主动分给多个子 Agent 一起做" },
+];
+
 /** Modes a running session can switch to: 全部放行 is chosen only when it starts. */
 export const SWITCHABLE_MODES = PERMISSION_MODES.filter((m) => m.id !== "bypassPermissions");
 
@@ -33,13 +45,24 @@ export function modeTitle(id?: string): string {
 }
 
 export function effortTitle(id?: string): string {
-  return id ? (EFFORTS.find((m) => m.id === id)?.title ?? id) : "";
+  return id ? (EFFORTS.find((m) => m.id === id)?.title ?? CODEX_EFFORTS.find((m) => m.id === id)?.title ?? id) : "";
 }
 
 /** Claude Code shows the two chips (its TUI's bottom bar); Codex, TRAEX and runtimes have no such switches. */
 export function hasModes(s: Session | undefined): boolean {
   if (!s || s.assistant || s.source_kind) return false;
   return !s.agent || s.agent === "claude";
+}
+
+/** Only the effort chip: the node lists the levels it takes (`efforts`: a Codex thread on its app-server), and the phone may write to it. */
+export function hasEffortOnly(s: Session | undefined): boolean {
+  return Boolean(s && !s.assistant && !hasModes(s) && s.efforts?.length && sessionCan(s, "send"));
+}
+
+/** The effort menu's choices: the session's own levels when the node lists them, Claude Code's otherwise. */
+export function effortOptions(s: Session): ModeOption[] {
+  if (!s.efforts?.length) return EFFORTS;
+  return s.efforts.map((id) => CODEX_EFFORTS.find((m) => m.id === id) ?? { id, title: id, detail: "" });
 }
 
 const key = (s: Pick<Session, "machine_id" | "session_id">) => `${s.machine_id}/${s.session_id}`;

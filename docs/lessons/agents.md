@@ -213,3 +213,15 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 ## Claude 的状态行（2026-11-05，#1963）
 
 - 工作中的 Claude 在输入框上方画 `✻ Frosting… (16m 15s · ↓ 22.8k tokens · thinking with xhigh effort)`：spinner 字符每帧都在变，括号里的段会缺、顺序会变（`thought for 1s`、`esc to interrupt`），↑ 是输入 token。正文里引用的同样一行不能当成状态行，取输入框上方最后一行（`screen.AboveInputBox`，`node/claudestatus.go`）。pane 往上翻了的时候，读到的可见内容里没有状态行。
+
+## Codex app-server 改思考强度：自己校验档位，`null` 是模型默认（2026-11-04，#1709）
+
+- 0.163 的 `thread/settings/update {threadId, effort}`（实验接口）给什么字符串都回成功，`"bogus-level"` 也收：档位要 node 自己按
+  `model/list` 的 `supportedReasoningEfforts` 校验，不能靠 app-server 报错。
+- 新 thread 的 `thread/read` 里 `reasoningEffort` 是 `null`（没设，跑的是模型的 `defaultReasoningEffort`），不是「不知道」：显示时取模型默认值。
+- `turn/start` 的 `effort` 管这一轮和之后所有轮（不是只管这一轮）；`turn/steer` 没有 `effort`。
+- 兼容旧版的路径（选择先记着、下一次 `turn/start` 带上）只能认 `-32601`（method not found）：第一版把所有非 -32602 的错误都当成「不支持」，
+  断线、超时、thread 不存在时手机也看到「改好了」，之后的 `turn/start` 还会把这个陈旧选择带出去，重连后可能意外改掉 thread 的设置（PR review）。
+  记下的选择也要绑定当时的连接和 thread，换了就作废。
+- 实测方法：临时 `CODEX_HOME` 里起 stdio 的 `codex app-server`，`thread/start` 不需要登录也不调模型，能验设置类接口；别碰正在用的 `~/.codex`。
+  详见 `docs/codex.md`「思考强度」。

@@ -2,6 +2,11 @@ import XCTest
 
 /// Mock-only sends; the same draft, preview, outbox and transport as a picked attachment.
 final class LarkAttachmentFlowTests: XCTestCase {
+    /// Each test starts with no Feishu draft or outbox from the tests before it (`-lark-connectorSendFresh`, #1961): an
+    /// earlier test's failed or unconfirmed file stayed in 设计评审 and a later test tapped that one instead of its own.
+    /// Only on the first launch: a relaunch inside a test checks what the disk kept.
+    private static let fresh = ["-lark-connectorSendFresh", "YES"]
+
     @MainActor private func open(_ draft: String, quote: String? = nil) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs mock Hub") }
         continueAfterFailure = false
@@ -9,7 +14,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
                                "-inbox.source", "", "-inbox.kind", "mention", "-openInboxFirst", "NO",
-                               "-showLarkAttachmentDraft", draft] + (quote.map { ["-showLarkQuoteDraft", $0] } ?? [])
+                               "-showLarkAttachmentDraft", draft] + (quote.map { ["-showLarkQuoteDraft", $0] } ?? []) + Self.fresh
         app.launchPinned()
         let chat = app.staticTexts["设计评审"].firstMatch
         XCTAssertTrue(chat.waitForExistence(timeout: 20)); chat.tapCenter()
@@ -31,8 +36,8 @@ final class LarkAttachmentFlowTests: XCTestCase {
         XCUIDevice.shared.press(.home)
         XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
         app.terminate()
-        if let i = app.launchArguments.firstIndex(of: "-showLarkAttachmentDraft") {
-            app.launchArguments.removeSubrange(i...i + 1)
+        for flag in ["-showLarkAttachmentDraft", Self.fresh[0]] {
+            if let i = app.launchArguments.firstIndex(of: flag) { app.launchArguments.removeSubrange(i...i + 1) }
         }
         app.launchPinned()
         let chat = app.staticTexts["设计评审"].firstMatch
@@ -300,7 +305,7 @@ final class LarkAttachmentFlowTests: XCTestCase {
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-tab", "mail", "-demo.on", "NO", "-ui.oldLayout", "NO",
-                               "-openInboxItem", "lark:f3:300", "-showLarkThreadAttachmentDraft", draft]
+                               "-openInboxItem", "lark:f3:300", "-showLarkThreadAttachmentDraft", draft] + Self.fresh
         app.launchPinned()
         let thread = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", "条回复")).firstMatch
         XCTAssertTrue(thread.waitForExistence(timeout: 20), "the chat did not open at its thread")

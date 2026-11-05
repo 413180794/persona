@@ -291,7 +291,7 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 | 侧边栏的页面 | 都推到助手页的栈上（`ShellState.show` → `AssistantView.show`）。收件箱、机器按值推（`ShellRoute`，`ShellDestinations` 登记它们和它们再推的 InboxItem / 飞书页 / 机器详情 / 会话）：视图式推出的页面上再按值推，新页面会插到下面（docs/lessons/ios.md） |
 | 设置 | 全屏浮层（`model.shellSettings`，放在 model 里：换风格会重建整棵树，浮层要回到原来那一页），右上角 × |
 | 空对话 | 和旧布局同一个欢迎页（`AssistantWelcome`：问候、开一段新对话 / 主对话的说明、在线的机器和 iPhone、六个可以问的事；液态玻璃是两列卡片，BeautifulUI 是「可以问我」列表卡片）。2026-11-01 第一版只放输入框，没有待办时整页空白，用户 2026-11-02 要回原来的设计。输入框上面是需要你的事：等你的 Agent，然后收件箱的「需要你」，最多 3 行 +「还有 N 件在收件箱」（`ShellNeedsYou`），没有就不显示；这一块和输入框垫着页面底色，欢迎页滚到它们下面，在上沿渐隐（不硬切）。行数按空间定（2026-11-02，#283，iPhone Duo 外屏上 3 行 + 输入框占了半屏、把建议卡片拦腰截断）：这一块不盖住欢迎页第一行可以问的事（`NeedsRoom`：量第一行的下沿、页面高度（键盘不算）、输入框静止时的高度），放不下就少几行，至少 1 行；普通 iPhone 的液态玻璃仍是 3 行，17e 的 BeautifulUI 是 2 行，Duo 外屏和 SE 是 1 行。收起的里面有 Agent 时那一行写「还有 N 件需要你」，只剩 Agent 时点了去 Agents 页（收件箱里没有它们）。`AssistantWelcomeTests` 守着：两种布局、从侧边栏点新对话，问候、说明、第一个建议都在屏幕上、在输入框上面；「需要你」不盖住第一个建议、聚焦输入框后行数不变（在 Duo 外屏上也跑） |
-| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [模型 · 思考强度] [麦克风] [发送]（`ShellComposerBar`，助手和 Agent 对话页同一个，#1091）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。「模型 思考强度」是 ChatGPT「6.1 Sol 中」那样的紧凑文字按钮（「Opus 5.5 高」，#1117）：没有图标、不用红色，模型名主文本色加粗（`secondaryStrong`），思考强度次要文本色，中间一个小空格；模型名太长从尾部截断，思考强度不截；按钮右边留的空和发送 / 停止圆按钮四周留的一样，所以「模型 ↔ 麦克风」和「麦克风 ↔ 发送 / 停止」间隔相同（`SessionModes.composerTitle` / `modelName`）。菜单从按钮往上弹，离按钮最近的依次是：全部放行时的红色警告（`BypassWarning`，输入框上不再标）、模型、思考强度、再下一层的权限模式（`SessionModesMenu`；新对话 `StarterModesMenu`，模型就是启动器）。模型能选的只有 herdr 窗格里的 Claude Code（发 `/model`）和助手新对话（选启动器）；已开的助手对话、Codex 只显示正在用的模型；Codex / TRAEX 没有思考强度和权限模式 |
+| 输入框 | 一行：[+] 问 Persona [麦克风]；聚焦或有字时长成卡片，字在上，下面一排 [+] … [模型 · 思考强度] [麦克风] [发送]（`ShellComposerBar`，助手和 Agent 对话页同一个，#1091）。输入框始终是同一个视图，变形不丢焦点和拼音的 marked text。「模型 思考强度」是 ChatGPT「6.1 Sol 中」那样的紧凑文字按钮（「Opus 5.5 高」，#1117）：没有图标、不用红色，模型名主文本色加粗（`secondaryStrong`），思考强度次要文本色，中间一个小空格；模型名太长从尾部截断，思考强度不截；按钮右边留的空和发送 / 停止圆按钮四周留的一样，所以「模型 ↔ 麦克风」和「麦克风 ↔ 发送 / 停止」间隔相同（`SessionModes.composerTitle` / `modelName`）。菜单从按钮往上弹，离按钮最近的依次是：全部放行时的红色警告（`BypassWarning`，输入框上不再标）、模型、思考强度、再下一层的权限模式（`SessionModesMenu`；新对话 `StarterModesMenu`，模型就是启动器）。模型能选的只有 herdr 窗格里的 Claude Code（发 `/model`）和助手新对话（选启动器）；已开的助手对话、Codex 只显示正在用的模型；Codex / TRAEX 没有权限模式，经 app-server 的 Codex 有思考强度（`efforts`），其余没有 |
 | 对话 | 用户气泡换成中性灰（`Theme.Shell.userBubble`），只在壳里的 Persona 对话（`\.shellChat`），Agents 的对话不变 |
 | 弱网 | 顶栏下面一个小药丸（等待网络 / 连接中…），两页共用；原来的标题位被切换按钮占了 |
 
@@ -414,7 +414,8 @@ iPhone 和 iPad 一个 App（`TARGETED_DEVICE_FAMILY` 1,2）。以前只有 1：
 对话页输入框上方两个小标签：权限模式（手动确认 / 自动改文件 / 只做计划 / 自动 / 全部放行）和思考强度（低 … 最高），
 相当于 Claude Code 终端底栏，点开就能改（`SessionModeBar`，文案和图标在 `SessionModes`）。新外壳里没有这两个标签，收进了输入框右下角的
 「模型 · 思考强度」按钮（#1091，见上面「新外壳」的输入框）。新开 Agent 的表单、助手首页的输入框上方
-也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示。
+也能选（不选就是「跟随启动器」）。Codex / TRAEX 的会话不显示；经 app-server 驱动的 Codex 会话（hub 给了 `efforts`，`Session.setsEffortOnly`）
+只显示思考强度，选项是它的模型的档位（`SessionModes.effortOptions`，`docs/codex.md`「思考强度」）。
 
 - 显示：transcript 每条 user 行带 `permissionMode`、每条回复带 `effort`；在 App 里改过的值在 transcript 写下更新的值之前优先
   （node/modes.go）。终端里 shift+tab 改的模式要等下一条消息才写进 transcript，开发信息卡片读终端底栏拿实时值。

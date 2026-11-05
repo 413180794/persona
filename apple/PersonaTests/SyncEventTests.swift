@@ -57,6 +57,25 @@ struct SyncEventTests {
         #expect(old.permissionMode == nil && old.effort == nil)
     }
 
+    /// A Codex thread the hub drives through its app-server lists its levels (`efforts`): only its effort changes, among them.
+    @Test func codexThreadOnItsAppServerSetsItsEffortOnly() throws {
+        func decode(_ body: String) throws -> Session { try JSON.decoder.decode(Session.self, from: Data(body.utf8)) }
+        let live = try decode(#"{"session_id":"s","status":"idle","agent":"codex","source_kind":"codex_app_server","capabilities":{"read":true,"send":true},"effort":"high","efforts":["low","high","ultra"]}"#)
+        #expect(live.setsEffortOnly && !live.isClaude)
+        #expect(SessionModes.effortOptions(live).map(\.id) == ["low", "high", "ultra"])
+        #expect(SessionModes.effortOptions(live).map(\.title) == ["低", "高", "极高"])
+        #expect(SessionModes.effortLabel("minimal") == "极低")
+        let pane = try decode(#"{"session_id":"s","status":"idle","agent":"codex","efforts":["medium"]}"#)
+        #expect(pane.setsEffortOnly) // a herdr pane joined on its app-server: no source, its levels say so
+        let terminal = try decode(#"{"session_id":"s","status":"idle","agent":"codex"}"#)
+        #expect(!terminal.setsEffortOnly)
+        #expect(SessionModes.effortOptions(terminal).map(\.id) == SessionModes.effortLevels.map(\.id))
+        let readOnly = try decode(#"{"session_id":"s","status":"idle","source_kind":"codex_app_server","capabilities":{"read":true},"efforts":["low"]}"#)
+        #expect(!readOnly.setsEffortOnly)
+        let claude = try decode(#"{"session_id":"s","status":"idle","efforts":["low"]}"#)
+        #expect(!claude.setsEffortOnly) // Claude Code changes both
+    }
+
     @Test func sessionSourcesDecodeConservatively() throws {
         func decode(_ body: String) throws -> Session { try JSON.decoder.decode(Session.self, from: Data(body.utf8)) }
         let old = try decode(#"{"session_id":"aabbccdd","status":"working"}"#)

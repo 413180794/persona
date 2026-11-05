@@ -21,6 +21,11 @@ val Session.canAttach: Boolean get() = hasSource && capabilities?.attach == true
 
 /** Permission mode and effort change on a running Claude session the phone may write to, Persona's included. */
 val Session.canChangeModes: Boolean get() = isLive && isClaude && canSend
+/**
+ * Only the effort changes, among the session's own [Session.efforts]: a Codex thread the hub drives through its
+ * app-server (the hub lists the levels only then; the iOS `Session.setsEffortOnly`).
+ */
+val Session.canChangeEffortOnly: Boolean get() = isLive && !isClaude && !assistant && canSend && efforts.isNotEmpty()
 /** /model and /clear are typed into Claude's pane: Claude in a terminal engine, not Persona's conversations. */
 val Session.canTypeClaudeCommands: Boolean get() = canChangeModes && !assistant && !paneId.isNullOrBlank() && canTerminal
 

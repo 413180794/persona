@@ -584,11 +584,17 @@ type Session struct {
 	Launcher   string `json:"launcher,omitempty"`
 	Model      string `json:"model,omitempty"`
 	// PermissionMode and Effort are what Claude Code runs with now: default / acceptEdits / plan / auto /
-	// bypassPermissions, and low … max. Empty while unknown (before the first turn, Codex).
-	PermissionMode  string `json:"permission_mode,omitempty"`
-	Effort          string `json:"effort,omitempty"`
-	StartedByJarvis bool   `json:"started_by_jarvis"`
-	Assistant       bool   `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
+	// bypassPermissions, and low … max. Empty while unknown (before the first turn, Codex). A Codex thread the phone
+	// drives through its app-server has an Effort too (Codex's levels, see Efforts) but never a PermissionMode.
+	PermissionMode string `json:"permission_mode,omitempty"`
+	Effort         string `json:"effort,omitempty"`
+	// Efforts are the levels session.modes takes for Effort when they are not Claude Code's (which the apps know): a
+	// Codex thread the phone drives through its app-server (node/codex_effort.go), its model's levels weakest first.
+	// Only Effort can change there. Empty for every other session: Claude's and the assistant's keep the apps' own
+	// list, the rest cannot change it from the phone.
+	Efforts         []string `json:"efforts,omitempty"`
+	StartedByJarvis bool     `json:"started_by_jarvis"`
+	Assistant       bool     `json:"assistant"` // runs in the assistant directory (the app's 对话 tab)
 	// Archived: an assistant conversation moved out of the sidebar's list (kept, listed under 已归档; hub
 	// assistant_conversations.go).
 	Archived bool `json:"archived,omitempty"`

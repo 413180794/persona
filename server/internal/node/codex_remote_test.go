@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
-	"github.com/coder/websocket"
 )
 
 const remoteRaw = "11111111-2222-3333-4444-555555555555"
@@ -32,8 +32,13 @@ type remoteFixture struct {
 	replies       []codexMessage
 	drop          string
 	reject        string
+	rejectCode    int    // the error code a rejected call gets; 0: -32600
+	hangup        string // a call to it closes the connection instead of an answer
 	resumeRequest bool
 	ephemeral     string
+	// models answers model/list; threadModel / threadEffort are the threads' configured model and effort (codex_effort.go).
+	models                    any
+	threadModel, threadEffort string
 }
 
 func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
@@ -57,8 +62,12 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.got = append(f.got, m)
 		ids := append([]string(nil), f.threads...)
-		drop, reject, ephemeral := f.drop, f.reject, f.ephemeral
+		drop, reject, code, ephemeral, hangup := f.drop, f.reject, f.rejectCode, f.ephemeral, f.hangup
+		models, model, effort := f.models, f.threadModel, f.threadEffort
 		f.mu.Unlock()
+		if code == 0 {
+			code = -32600
+		}
 		if m.Method == "" {
 			f.mu.Lock()
 			f.replies = append(f.replies, m)
@@ -71,8 +80,11 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 		if m.Method == drop {
 			continue
 		}
+		if m.Method == hangup {
+			return
+		}
 		if m.Method == reject {
-			f.push(map[string]any{"id": m.ID, "error": map[string]any{"code": -32600, "message": "rejected"}})
+			f.push(map[string]any{"id": m.ID, "error": map[string]any{"code": code, "message": "rejected"}})
 			continue
 		}
 		var p map[string]any
@@ -80,6 +92,12 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 		var result any = map[string]any{}
 		thread, _ := p["threadId"].(string)
 		d := map[string]any{"id": thread, "name": "合成会话", "cwd": f.home, "status": map[string]any{"type": "idle"}}
+		if model != "" {
+			d["model"] = model
+		}
+		if effort != "" {
+			d["reasoningEffort"] = effort
+		}
 		switch m.Method {
 		case "initialize":
 			result = map[string]any{"codexHome": f.home}
@@ -102,6 +120,17 @@ func (f *remoteFixture) serve(w http.ResponseWriter, r *http.Request) {
 			result = map[string]any{"thread": d}
 		case "turn/start":
 			result = map[string]any{"turn": map[string]any{"id": "turn-1"}}
+			fallthrough // its effort is the thread's from then on, as a settings update's
+		case "thread/settings/update":
+			if e, ok := p["effort"].(string); ok {
+				f.mu.Lock()
+				f.threadEffort = e
+				f.mu.Unlock()
+			}
+		case "model/list":
+			if models != nil {
+				result = models
+			}
 		}
 		f.push(map[string]any{"id": m.ID, "result": result})
 		f.mu.Lock()

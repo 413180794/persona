@@ -410,6 +410,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			if src.path == "" {
 				s.ReadOnlyReason = "此会话尚未生成本地历史，实时接入后可查看新输出"
 			}
+			n.codexEffortRow(id, &s.Efforts, &s.Effort, m) // codex_effort.go
 		} else if err != errCodexNoOwner {
 			s.ReadOnlyReason = err.Error()
 		} else if o := readCodexOrigin(src.path); o.desktop {

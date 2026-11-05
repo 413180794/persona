@@ -218,6 +218,11 @@ data class Session(
      * was on. No alerts or global badges for it; the main conversation tells the user. Older hubs never send it.
      */
     val quiet: Boolean = false,
+    /**
+     * The levels [effort] may be set to when they are not Claude Code's: a Codex thread the hub drives through its
+     * app-server, where only the effort changes (node/codex_effort.go). Empty for every other session.
+     */
+    val efforts: List<String> = emptyList(),
 ) {
     val key: SessionKey get() = SessionKey(machineId, sessionId)
     val agentState: AgentState get() = AgentState.of(state, status)

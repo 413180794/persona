@@ -1415,9 +1415,10 @@ struct ChatView: View {
                 if let queued = session?.queued, !queued.isEmpty, style == .dev {
                     QueueStrip(key: key, queued: queued)
                 }
-                // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals).
+                // The assistant takes modes on Codex too (the node maps them to Codex's sandbox / approvals); a Codex thread
+                // on its app-server takes its effort alone (setsEffortOnly).
                 // In the shell the modes are in the composer's model menu (ShellComposerBar, #1091).
-                let modes = viewing == nil && !usesShellComposer && session?.canSend == true && (session.map({ $0.assistant || $0.isClaude }) ?? true)
+                let modes = viewing == nil && !usesShellComposer && session?.canSend == true && (session.map({ $0.assistant || $0.isClaude || $0.setsEffortOnly }) ?? true)
                 // While typing, a button at the row's end puts the keyboard away: the iPhone keyboard has no key for it
                 // and on iPhone Duo's side bars a drag on the few rows left is easy to miss (2026-11-04). The shell's
                 // composer has it in its own row (`dismissesKeyboard`): a row for it alone was a gap over the composer.
@@ -2814,9 +2815,13 @@ struct Composer: View, Equatable {
         return s.canSend && (s.assistant || s.isClaude)
     }
 
+    /// Only the effort can change: a Codex thread on its app-server (`Session.setsEffortOnly`).
+    private var setsEffortOnly: Bool { model.session(key)?.setsEffortOnly == true }
+
     /// The model button's title; with nothing to show or pick, no button.
     private var modesTitle: SessionModes.ComposerTitle? {
-        SessionModesMenu.title(model.session(key), setsModes: setsModes) ?? (setsModes || canPickModel ? .init(model: "模型") : nil)
+        let effort = setsModes || setsEffortOnly
+        return SessionModesMenu.title(model.session(key), setsModes: effort) ?? (effort || canPickModel ? .init(model: "模型") : nil)
     }
 
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
@@ -2891,7 +2896,8 @@ struct Composer: View, Equatable {
                     Button { showRecording = true } label: { Label("录音上下文", systemImage: Theme.Icon.recording).lineLimit(1) }
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
-                    SessionModesMenu(key: key, session: model.session(key), picksModel: canPickModel, setsModes: setsModes)
+                    SessionModesMenu(key: key, session: model.session(key), picksModel: canPickModel, setsModes: setsModes,
+                                     setsEffortOnly: setsEffortOnly)
                 }
             } else if AppStyle.current.usesBeautifulUI {
                 // The BeautifulUI style's prompt bar; every other style keeps the original input line.

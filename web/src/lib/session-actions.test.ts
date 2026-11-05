@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { effortTitle, hasModes, isMuted, modeTitle, renameBody, SWITCHABLE_MODES, toggleMute } from "./session-actions";
+import { EFFORTS, effortOptions, effortTitle, hasEffortOnly, hasModes, isMuted, modeTitle, renameBody, SWITCHABLE_MODES, toggleMute } from "./session-actions";
 import type { Session } from "./types";
 
 const s = (over: Partial<Session> = {}): Session => ({ machine_id: "mac", session_id: "s1", title: "修登录", cwd: "/home/me/app", status: "idle", space_name: "app", slot_id: "p1", slot_name: "login", ...over });
@@ -53,6 +53,28 @@ describe("modes", () => {
     expect(hasModes(s({ assistant: true }))).toBe(false);
     expect(hasModes(s({ source_kind: "runtime" }))).toBe(false);
     expect(hasModes(undefined)).toBe(false);
+  });
+
+  it("gives a Codex thread on its app-server the effort alone, among its own levels", () => {
+    const live = s({ agent: "codex", source_kind: "codex_app_server", capabilities: { read: true, send: true }, efforts: ["low", "high", "ultra"], effort: "high" });
+    expect(hasModes(live)).toBe(false);
+    expect(hasEffortOnly(live)).toBe(true);
+    expect(effortOptions(live).map((m) => m.id)).toEqual(["low", "high", "ultra"]);
+    expect(effortOptions(live).map((m) => m.title)).toEqual(["低", "高", "极高"]);
+    expect(effortTitle("minimal")).toBe("极低");
+    // A herdr pane joined on the app-server: no source, the node's levels say it.
+    expect(hasEffortOnly(s({ agent: "codex", efforts: ["medium"] }))).toBe(true);
+    // A level this app does not know yet keeps its id.
+    expect(effortOptions(s({ efforts: ["turbo"] }))[0]).toEqual({ id: "turbo", title: "turbo", detail: "" });
+  });
+
+  it("offers no effort where the node lists none or the phone cannot write", () => {
+    expect(hasEffortOnly(s({ agent: "codex" }))).toBe(false); // the terminal route, TRAEX
+    expect(hasEffortOnly(s({ agent: "codex", source_kind: "codex_app_server", capabilities: { read: true }, efforts: ["low"] }))).toBe(false);
+    expect(hasEffortOnly(s({ assistant: true, efforts: ["low"] }))).toBe(false);
+    expect(hasEffortOnly(s({ efforts: ["low"] }))).toBe(false); // Claude Code has both chips
+    expect(hasEffortOnly(undefined)).toBe(false);
+    expect(effortOptions(s())).toBe(EFFORTS);
   });
 });
 

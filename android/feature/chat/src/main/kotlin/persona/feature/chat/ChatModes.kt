@@ -8,6 +8,7 @@ import persona.core.contracts.Session
 import persona.core.contracts.api.ChatAction
 import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
+import persona.core.domain.sort.canChangeEffortOnly
 import persona.core.domain.sort.canChangeModes
 import persona.core.domain.sort.canTypeClaudeCommands
 
@@ -32,6 +33,22 @@ internal object SessionModes {
         Option("xhigh", "很高", "更仔细，也更慢、更贵"),
         Option("max", "最高", "最慢最仔细"),
     )
+
+    /** Codex's reasoning efforts (node/codex_effort.go, iOS SessionModes.codexEffortLevels); a thread offers its model's. */
+    val codexEffortLevels = listOf(
+        Option("minimal", "极低", "几乎不思考，最快"),
+        Option("low", "低", "快，简单的事够用"),
+        Option("medium", "中", "快慢适中"),
+        Option("high", "高", "更仔细"),
+        Option("xhigh", "很高", "更仔细，也更慢、更贵"),
+        Option("max", "最高", "最慢最仔细"),
+        Option("ultra", "极高", "最仔细，还会主动分给多个子 Agent 一起做"),
+    )
+
+    /** A running session's effort choices: its own levels when the hub lists them (a Codex thread on its app-server), Claude Code's otherwise. */
+    fun effortOptions(session: Session): List<Option> =
+        if (session.efforts.isEmpty()) effortLevels
+        else session.efforts.map { id -> codexEffortLevels.firstOrNull { it.id == id } ?: Option(id, id, "") }
 
     /** Claude Code's `/model` aliases (iOS PromptItems.claudeModels): picking one sends `/model <alias>`. */
     val claudeModels = listOf(
@@ -58,7 +75,9 @@ internal object SessionModes {
     }
 
     fun modeLabel(id: String?): String? = id?.let { mode -> permissionModes.firstOrNull { it.id == mode }?.title ?: mode }
-    fun effortLabel(id: String?): String? = id?.let { effort -> effortLevels.firstOrNull { it.id == effort }?.title ?: effort }
+    fun effortLabel(id: String?): String? = id?.let { effort ->
+        (effortLevels.firstOrNull { it.id == effort } ?: codexEffortLevels.firstOrNull { it.id == effort })?.title ?: effort
+    }
 }
 
 /** Non-default settings in one line above the composer ("自动改文件，思考很高"). */
@@ -70,8 +89,9 @@ internal fun chatModeHint(session: Session?): String? = listOfNotNull(
 /**
  * The composer's 模式 button (iOS SessionModeBar): permission mode and effort change on the running session; for
  * Claude in a terminal pane the model too, which goes out as `/model <alias>` ([onPickModel], the same path as the
- * quick messages). Only Claude's sessions get it (callers check [canChangeModes]); all-allow, which a running session
- * cannot pick, stays listed and marked while it is on.
+ * quick messages). Claude's sessions get it (callers check [canChangeModes]), and a Codex thread on its app-server
+ * with its effort alone, among its own levels ([canChangeEffortOnly]); all-allow, which a running session cannot pick,
+ * stays listed and marked while it is on.
  */
 @Composable
 internal fun ChatModeBar(
@@ -81,25 +101,28 @@ internal fun ChatModeBar(
     var open by remember { mutableStateOf(false) }
     LaunchedEffect(open) { onOverlay(open) }
     DisposableEffect(Unit) { onDispose { onOverlay(false) } }
-    val editable = session != null && state.available && online && session.canChangeModes
+    val effortOnly = session?.canChangeEffortOnly == true
+    val editable = session != null && state.available && online && (session.canChangeModes || effortOnly)
     val bypass = session?.permissionMode == SessionModes.BYPASS
     JIconButton(PhIcons.SlidersHorizontal, if (bypass) "模式：全部放行" else "模式", { open = true },
         tint = if (bypass) PersonaTheme.palette.danger.dot else null)
     if (open) JSheet(onDismiss = { open = false }, title = "对话模式", scrollable = true) {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            if (!editable) Text(if (session?.canChangeModes == false) "这个会话不能在手机上调整模式" else "连上 hub 后才能调整模式",
+            if (!editable) Text(if (session?.canChangeModes == false && !effortOnly) "这个会话不能在手机上调整模式" else "连上 hub 后才能调整模式",
                 style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
             if (session != null) {
-                JSectionHeader("文件权限")
-                SessionModes.switchable(session.permissionMode).forEach { option ->
-                    val current = option.id == session.permissionMode
-                    DecisionOption(option.title, {
-                        open = false
-                        if (!current) state.run(session, ChatAction.Modes(permissionMode = option.id))
-                    }, detail = option.detail, selected = current, enabled = editable)
+                if (!effortOnly) {
+                    JSectionHeader("文件权限")
+                    SessionModes.switchable(session.permissionMode).forEach { option ->
+                        val current = option.id == session.permissionMode
+                        DecisionOption(option.title, {
+                            open = false
+                            if (!current) state.run(session, ChatAction.Modes(permissionMode = option.id))
+                        }, detail = option.detail, selected = current, enabled = editable)
+                    }
                 }
                 JSectionHeader("思考强度")
-                SessionModes.effortLevels.forEach { option ->
+                SessionModes.effortOptions(session).forEach { option ->
                     JRow(option.title, subtitle = option.detail, trailing = { JRadio(option.id == session.effort, null) }, enabled = editable,
                         onClick = { open = false; if (option.id != session.effort) state.run(session, ChatAction.Modes(effort = option.id)) })
                 }

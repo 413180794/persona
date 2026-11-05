@@ -26,6 +26,7 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.lines.ChatLine
 import persona.core.domain.sort.READ_ONLY
 import persona.core.domain.sort.canApprove
+import persona.core.domain.sort.canChangeEffortOnly
 import persona.core.domain.sort.canChangeModes
 import persona.core.domain.sort.canInterrupt
 import persona.core.domain.sort.canSend
@@ -519,12 +520,13 @@ private fun ChatPage(
                                     service = composerService, onSend = { send() }, onCommand = { send(it) }, onNotice = { notice = it },
                                     extraContent = linkContexts.isNotEmpty(), visible = requests.isEmpty() || requestCollapsed,
                                     enabled = canSend, placeholder = if (canSend) "输入消息" else READ_ONLY,
-                                    // Permission mode and effort for Claude's sessions, Persona's included; the model for Claude in a pane.
-                                    leading = if (session?.canChangeModes == true) ({
+                                    // Permission mode and effort for Claude's sessions, Persona's included; the model for Claude in a pane;
+                                    // the effort alone for a Codex thread on its app-server.
+                                    leading = if (session?.canChangeModes == true || session?.canChangeEffortOnly == true) ({
                                         ChatModeBar(session, controls, connection == null || connection == ConnectionState.Online,
                                             onOverlay = { modeOverlay = it }, onPickModel = { model -> send("/model $model") })
                                     }) else null,
-                                    modeHint = if (session?.canChangeModes == true) chatModeHint(session) else null,
+                                    modeHint = if (session?.canChangeModes == true || session?.canChangeEffortOnly == true) chatModeHint(session) else null,
                                     accessory = {
                                         if (linkContexts.isEmpty()) ComposerSuggestion(session, composer)
                                         if (linkContexts.isNotEmpty()) Column(Modifier.heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
