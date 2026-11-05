@@ -801,7 +801,8 @@ func (n *Node) watchFor(parent context.Context, id string, since int) error {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(parent)
-	n.watches[id] = &watch{cancel: cancel}
+	w := &watch{cancel: cancel}
+	n.watches[id] = w
 	n.mu.Unlock()
 
 	// Catch up on lines appended after the hub's last seen seq, then stream. Without a seq (the hub has not seen this
@@ -818,7 +819,7 @@ func (n *Node) watchFor(parent context.Context, id string, since int) error {
 		}
 	}
 	mu.Unlock()
-	go n.watchLoop(ctx, id, f)
+	go n.watchLoop(ctx, id, f, w)
 	go n.watchLive(ctx, id) // claudestatus.go
 	return nil
 }
@@ -893,16 +894,17 @@ func (n *Node) refresh(id string, f *transcript.File) {
 
 // watchLoop pushes new transcript lines four times a second. (It used to read the pane's screen every 400 ms too, a
 // herdr call per watched session, for a live preview no view showed; the terminal pane reads the screen itself.)
-func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File) {
+func (n *Node) watchLoop(ctx context.Context, id string, f *transcript.File, w *watch) {
 	t := time.NewTicker(250 * time.Millisecond)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			// Drop the entry so the session is not left looking watched; a watch that ended with its connection has
-			// nobody to send to, and an unwatch for it never comes.
+			// nobody to send to, and an unwatch for it never comes. Only drop our own: after an unwatch, a new watch
+			// may already hold the id, and deleting it would silently stop that stream.
 			n.mu.Lock()
-			if w, ok := n.watches[id]; ok && w.cancel != nil {
+			if n.watches[id] == w {
 				delete(n.watches, id)
 			}
 			n.mu.Unlock()
