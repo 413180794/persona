@@ -141,7 +141,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const interactions = useStore((s) => s.interactions.filter((i) => i.machine_id === mid && i.session_id === sid));
   const answered = useStore((s) => Object.values(s.answered).filter((a) => a.ix.machine_id === mid && a.ix.session_id === sid));
   const viewed = readOnly ? (subagents?.find((a) => a.session_id === sid) ?? null) : null;
-  const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly });
+  const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
   const status = useSessionLive(mid, sid);
   const [pending, setPending] = useState<Pending[]>(() => {
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
@@ -745,6 +745,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       <div className={switchable ? "relative min-h-0 flex-1" : "contents"}>
       <ViewLayer bare={!switchable} on={view === "chat"} from="start">
       <div className="relative min-h-0 flex-1">
+        {tr.notLive && <NotLivePill onReload={tr.reload} lower={Boolean(picked && !search.open)} />}
         <div ref={scroller} onScroll={onScroll} data-chat-scroll className="h-full overflow-y-auto [overflow-anchor:none]">
           <ChatActionsContext.Provider value={actions}>
           <div className="mx-auto flex w-full max-w-[880px] flex-col gap-7 px-5 pt-6 pb-10 sm:px-8">
@@ -947,6 +948,20 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         <p className="text-[13px] leading-relaxed text-ink-2">{t("chat-chatview.draft_detail")}{draftRefusal?.clearable === undefined && t("chat-chatview.draft_multiline")}</p>
         {draftRefusal?.draft && <pre className="mt-2.5 max-h-40 overflow-auto rounded-[8px] bg-inset px-2.5 py-2 font-mono text-[12px] whitespace-pre-wrap text-ink shadow-hairline">{draftRefusal.draft}</pre>}
       </Dialog>
+    </div>
+  );
+}
+
+/** Over the chat's top edge when the page keeps getting its items by asking for them, not by push (lib/stale-page.ts). */
+function NotLivePill({ onReload, lower }: { onReload: () => void; /** The search's return pill is at the same edge: under it. */ lower?: boolean }) {
+  return (
+    <div role="status" data-testid="chat-not-live" className={lower ? "absolute top-14 left-1/2 z-10 -translate-x-1/2" : "absolute top-3 left-1/2 z-10 -translate-x-1/2"} style={{ animation: "fade-up 150ms ease-out both" }}>
+      <div className="flex h-8 items-center gap-2 rounded-full border border-line bg-surface px-3 text-[12px] leading-none whitespace-nowrap text-ink-2 shadow-raised">
+        <span>{t("chat-chatview.not_live")}</span>
+        <button type="button" onClick={onReload} className="font-medium text-accent-ink hover:underline">
+          {t("chat-chatview.not_live_reload")}
+        </button>
+      </div>
     </div>
   );
 }

@@ -84,6 +84,21 @@ type Peer struct {
 // pending otherwise, and allowing it later runs a tool call nobody is waiting on (a stale message sent, #2597).
 const cancelEvent = "rpc.cancel"
 
+// connKey carries the connection's context in a handler's ctx (ConnContext).
+type connKey struct{}
+
+// ConnContext is the context of the connection a handler's request came in on: it ends with the connection, not with
+// the request. A handler's own ctx ends when the handler returns (and when the caller cancels it), so anything meant
+// to outlive the request (a watch that keeps pushing after its reply) must hang off this one (#3139: a transcript
+// watch that took the request's ctx ended with the reply, and no session's items were pushed any more). A ctx that
+// did not come from Serve is its own connection.
+func ConnContext(ctx context.Context) context.Context {
+	if c, ok := ctx.Value(connKey{}).(context.Context); ok {
+		return c
+	}
+	return ctx
+}
+
 // New creates a peer. prefix distinguishes request ids by side ("h" for hub, "n" for node).
 func New(prefix string, w io.Writer) *Peer {
 	return &Peer{prefix: prefix, w: w, pending: map[string]chan message{}, running: map[string]context.CancelFunc{}, closed: make(chan struct{}), wsem: make(chan struct{}, 1)}
@@ -101,7 +116,7 @@ func (p *Peer) Serve(ctx context.Context, r io.Reader) error {
 		switch {
 		case m.Method != "":
 			// Registered before the handler starts: a cancel right behind the request finds it.
-			hctx, cancel := context.WithCancel(ctx)
+			hctx, cancel := context.WithCancel(context.WithValue(ctx, connKey{}, ctx))
 			p.mu.Lock()
 			p.running[m.ID] = cancel
 			p.mu.Unlock()

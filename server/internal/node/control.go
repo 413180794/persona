@@ -760,6 +760,21 @@ type watch struct {
 	cancel context.CancelFunc
 }
 
+// maxSubagentWatches bounds the subagent transcripts followed at once (a page open on one follows it, 4 reads a second
+// each): sessions are few, but every subagent a person opens would be one more reader for as long as its page stays.
+const maxSubagentWatches = 16
+
+// subagentWatches counts the followed subagent transcripts. Callers hold n.mu.
+func (n *Node) subagentWatches() int {
+	count := 0
+	for id := range n.watches {
+		if _, _, sub := splitSubagent(id); sub {
+			count++
+		}
+	}
+	return count
+}
+
 // watch keeps a session's transcript streaming to the hub. Outside of a hub connection (tests that drive the method
 // directly) there is nothing to end it but session.unwatch; Serve's calls go through watchFor, so the stream stops
 // when its connection does.
@@ -803,6 +818,10 @@ func (n *Node) watchFor(parent context.Context, id string, since int) error {
 	if _, ok := n.watches[id]; ok {
 		n.mu.Unlock()
 		return nil
+	}
+	if _, _, sub := splitSubagent(id); sub && n.subagentWatches() >= maxSubagentWatches {
+		n.mu.Unlock()
+		return fmt.Errorf("too many subagent conversations followed (%d): close one first", maxSubagentWatches)
 	}
 	ctx, cancel := context.WithCancel(parent)
 	w := &watch{cancel: cancel}

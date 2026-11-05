@@ -7737,6 +7737,7 @@ def sessions_for_delta_app(obj, have):
     return {"type": "sessions_delta", "machine_id": m, "upsert": upsert, "remove": remove}
 CHURN = {"rounds": 0}
 CHURN_ITEMS = {}  # each conversation's items before churn added to them (/mock/reset puts them back)
+DROPPED_AT = {}  # a session's updated_at before /mock/say?drop=1 moved it (/mock/reset puts it back)
 CHURN_INBOX = []  # the inbox before churn changed it (/mock/reset puts it back)
 
 
@@ -8162,6 +8163,7 @@ def bump(what, session=None):
     return {"error": "nothing to bump"}
 
 
+# /mock/say?drop=1: the reply is written and the session list moves, but its push never reaches the page (#3139).
 # /mock/say?preset=markdown: a long reply whose blocks change height as they render (a code block, a table, a list),
 # for StreamingScrollTests: streamed at the hub's pace it shows whether the chat holds still while it grows.
 SAY_PRESETS = {
@@ -8212,9 +8214,10 @@ service:
 }
 
 
-def say(text, user=None, stream=False, steps=10, ms=300, late=0):
+def say(text, user=None, stream=False, steps=10, ms=300, late=0, drop=False):
     """A reply (after `user`'s message, if given) in every conversation an app has open (/mock/say). `stream`: the
-    message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's."""
+    message first, then the reply arrives as growing `delta` text over about 3 s, like the Jarvis assistant's. `drop`: the
+    transcript grows and the session list says so (updated_at), but the items push is lost: the page has to notice (#3139)."""
     import time
     for send, subscribed in list(LIVE):
         for sid in list(subscribed):
@@ -8240,7 +8243,14 @@ def say(text, user=None, stream=False, steps=10, ms=300, late=0):
             before = items[-1]["seq"]
             new = ([it("user", "text", 0, text=user)] if user else []) + [it("assistant", "text", 0, text=text)]
             ITEMS[sid] = items + new
-            LOG.write("  SAY: %d items to %s after seq %d\n" % (len(new), sid, before)); LOG.flush()
+            LOG.write("  SAY: %d items to %s after seq %d%s\n" % (len(new), sid, before, " (push dropped)" if drop else "")); LOG.flush()
+            if drop:
+                row = next((x for x in SESSIONS + ASSISTANT if x["session_id"] == sid), None)
+                if row is not None:
+                    DROPPED_AT.setdefault(sid, row.get("updated_at"))
+                    row.update(updated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"), rev=(row.get("rev") or 0) + 1)
+                    push_machine(mid)
+                continue
             try:
                 send({"type": "items", "machine_id": mid, "session_id": sid, "items": new, **span(new, before)})
             except Exception:
@@ -9685,7 +9695,7 @@ class H(BaseHTTPRequestHandler):
             # the file was rewritten: docs/protocol.md「items 的连续性」); /mock/reset puts mock-1 back.
             if q.get("history", [""])[0]: HISTORY_NOW["token"] = q["history"][0]
             args = (SAY_PRESETS.get(q.get("preset", [""])[0]) or q.get("text", ["好了。"])[0], q["user"][0] if "user" in q else None, q.get("stream", ["0"])[0] == "1",
-                    int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]), int(q.get("late", ["0"])[0]))
+                    int(q.get("steps", ["10"])[0]), int(q.get("ms", ["300"])[0]), int(q.get("late", ["0"])[0]), q.get("drop", ["0"])[0] == "1")
             threading.Thread(target=say, args=args, daemon=True).start()
             return self.send_json({"ok": True})
         if MOCK_LARK and (p.startswith("/api/v1/lark/") or p == "/mock/lark") and fs_get(self, p, q): return  # area: feishu chat page
@@ -9824,6 +9834,9 @@ class H(BaseHTTPRequestHandler):
             SESSIONS.extend(SESSION_DELETED); del SESSION_DELETED[:]
             PINS.update(spaces=["macbook/weather"], sessions=[])
             for sid, items in CHURN_ITEMS.items(): ITEMS[sid] = list(items)  # LiveUpdateTests, ChatFollowTests: what churn / say added goes
+            for row in SESSIONS + ASSISTANT:
+                if row["session_id"] in DROPPED_AT: row["updated_at"] = DROPPED_AT[row["session_id"]]
+            DROPPED_AT.clear()
             if CHURN_INBOX: INBOX[:] = copy.deepcopy(CHURN_INBOX)
             for x in SESSIONS:
                 if x["session_id"] in ORIG_STATE:

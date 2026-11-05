@@ -254,6 +254,11 @@
 
 - **每个 `onKeyDown` 里处理回车 / Esc 的输入框，开头都要先 `if (composing(e.nativeEvent)) return;`**（`lib/send-history.ts`，判断 `isComposing || keyCode === 229`）。日文变换、拼音上屏英文时按的回车，浏览器也会照常发给页面，不判断的话就会拿还没上屏的半截字去新建待办、保存标题、添加列表项。Esc 也一样：取消组字的同时把整行关掉了。jsdom 里用 `new KeyboardEvent("keydown", { key: "Enter", isComposing: true })` 就能测（`views/ime-enter.test.tsx`）。
 
+## 推送是尽力而为，页面要有自己的兜底（2026-11-05，#3139）
+
+页面靠 WebSocket 推送跟着对话；队列满、连接看着开着其实断了、服务端的 bug 都会让一条推送丢掉，而 Agent 停了就没有下一批来露馅。会话列表照样在推（`sessions_delta`），所以页面能自己发现：列表的 `updated_at` 比手上最新 item 的 `ts` 新、又一阵没收到 items，就按 `after_seq` 拉一次（`lib/stale-page.ts`，节流 10 秒、前台才拉）。比较的是「文件改过」和「页面有的」，不是「推送到没到」，所以不依赖任何一条推送路径是好的；拉到东西就静默合并，反复需要才说「不是实时的」。
+写这类检查时注意：没有 item 的写入（标题、模式）也会让 `updated_at` 前进，拉回来是空的，要记下「这个 `updated_at` 已经查过」，别每 10 秒重拉；拉回来的 item 要和同时到的推送去重（只数 `seq` 大于 `covered` 的），否则健康的流也会被算成丢了。
+
 ## 脚本滚动不看减弱动态效果（2026-11-05，#2664）
 
 - `styles.css` 里 `prefers-reduced-motion` 的全局规则只把 CSS 动画、过渡压到 1 ms，管不到 JS 里显式传的 `scrollTo({ behavior: "smooth" })` / `scrollIntoView({ behavior: "smooth" })`，照样动画滚过去。

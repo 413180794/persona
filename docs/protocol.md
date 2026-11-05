@@ -999,6 +999,8 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 - **推送不会悄悄丢一条**（#3036）：订阅者的发送队列（512 条）满了，hub 断开这条连接（`too slow`），不是只丢这一条——后者让一次长输出（几千条 item）的尾巴到不了一个落在后面的页面，
   而 Agent 已经停了，没有下一批来提醒它缺了一段。客户端重连后带 `since_seq=covered` 重新订阅，补发从那里接上（网页 `useTranscript`、iOS `AppModel`、Android `ContinuitySync` 都是这样）。
   `delta` / `live` / `screen` 这些不留存的推送同理。订阅按电脑自己的 id 记，用被吸收的旧 id（`hub.json` 里合并掉的条目）订阅也收得到推送。
+- **子 Agent 的对话和会话同一套**（#3139）：订阅 `<会话>@<agent>` 就是对它的 `session.watch`，node 打开 `<会话>/subagents/agent-<id>.jsonl` 照主会话那样每 250 毫秒读新行、推 `session.items`，`history` / `from_seq` / `to_seq` / `since_seq` 的规则一样，`session.unwatch`（页面退订、断线）就停。同时跟着的子 Agent 对话最多 16 个，超过的 watch 回错误，那个页面靠下面的兜底拉取。
+- **页面自己的兜底**（网页 `useTranscript`，`lib/stale-page.ts`）：会话列表里的 `updated_at`（子 Agent 取它在父会话 `subagents` 里的）比页面手上最新一条 item 的 `ts` 新，且 4 秒内没收到过 items，就按 `after_seq=covered` 拉一次（每个会话最多每 10 秒一次、页面在前台才拉；`history` 变了整页重取）。拉到的 item 静默合并进去；没拉到 item 的写入（标题、模式）不重复拉；连续 2 次拉到了「推送本该带来」的 item（或连续 2 次拉失败）才在对话顶部出一个小提示「不是实时的 · 重新加载」，推送恢复就消失。
 - 老 hub 不带这些字段：App 照旧按 id 合并。新 hub 的字段对老 App 只是多出来的键。
 
 ### 真实记录的轮次用时
@@ -1156,6 +1158,8 @@ App 和网页在一轮的回复下面放一条「这一轮看过的图片」（#
 单向事件 `{"event":"…","params":{}}`。hub 发的 id 以 `h` 开头，node 发的以 `n` 开头。stderr 是 node 日志。
 
 取消（#2597）：调用方不再等某个请求时，发 `{"event":"rpc.cancel","params":{"id":"n12"}}`，对端取消那次请求的处理。目前只有 node 对 `mcp.call` 发：MCP 进程或 hook 断开（助手这一轮被停了）时，hub 端的 `approve` 随之结束，卡记成 cancelled 并撤下，之后再回答是 410，不会去执行一个没人在等的写操作（比如发出一条过时的消息）。不认识这个事件的旧版本忽略它，处理照常跑完。扩展、连接器的连接不发这个事件。
+
+处理器拿到的 ctx 在**回复发出后就结束**（和被取消一样）：回复之后还要继续做的事——`session.watch` 的 transcript 推送、流式的东西——不能挂在它上面，要用 `rpc.ConnContext(ctx)`（连接的 ctx，连接断了才结束）。#2645 之后每个请求的 ctx 一回复就取消，`session.watch` 还挂在请求的 ctx 上，于是所有会话（主会话、子 Agent）的 transcript 推送在 watch 回复的下一刻就停了，页面只剩 `sessions_delta`，要刷新才看得到新内容（#3139）。
 
 hub → node 请求：
 

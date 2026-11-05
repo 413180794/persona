@@ -777,6 +777,8 @@ CLAUDE.md 要求链接在 App 内打开；网页上浏览器本身就是「App�
 `interaction*` / `items` / `delta`）。断线指数退避重连（0.6 秒起，最多 15 秒），超过 70 秒没收到任何消息（hub 会 ping）就当连接已死重连，
 页面回到前台、网络恢复时也重连。断线后（宽限期过了还没连上）顶部出一个胶囊，照 iOS 的 `ConnectionTitle` 分阶段：没有网络（`navigator.onLine`）/ hub 正在更新…（hub 说了 `hub_restarting` 或 close 1001）/ 连接中… / 连不上 hub，正在重试…；点开是连接详情（为什么、几秒后重试、上次连上多久前、「立即重试」，`views/ConnectionPill.tsx`、`lib/connection.ts`，#2970），侧边栏底部的状态行和圆点用同样的阶段（`phaseTone`）。正在重连的每次尝试不会把「连不上」改回「连接中」，胶囊不会随退避来回跳；「hub 正在更新…」最多说 5 分钟（照 iOS 的 `hubRestartTimeout`），之后按连不上算。断线时因为连不上 hub 而失败的操作不再每次弹红色 toast：`toast()` 经 `lib/feedback.ts` 改成一句平和的「连不上 hub / 没有网络，刚才的操作没有生效」，4 秒内只出一条；只认连不上 hub 的错误（`errorText` 的「连不上 hub」、代理的裸 502 / 503 / 504，`isOfflineError`），表单校验、复制失败等别的错误照常显示原文和红色；同样的提示 4 秒内合并（带按钮的不合并），照 iOS `AppModel.notDone` 和安卓 `FeedbackGate`。重连后已打开的对话重新订阅，带 `since_seq`（本地连续拿到的最后一行），
 `from_seq` 接不上时 1.5 秒后按 `after_seq` 补洞（`docs/protocol.md`「items 的连续性」），`history` 变了就整页重取。
+推送丢了页面也不会停在那里（#3139，`lib/stale-page.ts`）：会话列表的 `updated_at`（子 Agent 的取父会话 `subagents` 里它那条）比页面手上最新的 item 新，且 4 秒没来过 items，就静默按 `after_seq` 拉一次（每个会话最多 10 秒一次，页面在前台才拉，拉到的合并进去、不重复）；
+连续 2 次拉到了本该由推送带来的 item（或连续拉失败），对话顶部出「不是实时的 · 重新加载」，推送恢复后消失。检查：`scripts/test/web_chat_stale_e2e.py`（假 hub 的 `/mock/say?drop=1` 写入回复、更新 `updated_at` 但不推 items）。
 store 自己不存的推送（`inbox`、`lark`、`terminal`、`terminal_control`、`assistant_schedule`……）由用到的页面按类型订阅（`onHubEvent(type, fn)`，`src/lib/store.ts`）；
 hello 的 `features`、`hub_name`、`mesh` 存在 store 里。经 lark-connector 的飞书由扩展提供（feature `lark`，公司圈 `lark_moments`）：依赖 `/api/v1/lark/…` 的地方——「消息」页和侧边栏入口、设置 › 连接器 › 飞书、翻译里的飞书会话、飞书文档 / 公司圈帖子的阅读器——都按 `store.larkOn()` / `useLarkOn()` 显示；hub 还没说 features（hello 之前）时照旧显示。收件箱里带 `lark` / `doc` / `moment` 块的条目照常画（只有扩展在时才有）。知识库的帖子存档带 `feed` 时用它当帖子页标题，没有时叫「公司圈」（#1530）。
 

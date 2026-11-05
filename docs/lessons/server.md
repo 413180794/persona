@@ -500,3 +500,8 @@ App 和网页按 `machine_id` + `session_id` 把卡放进对话；没有会话�
 ## 调用方走了，对端的处理要跟着停（2026-11-05，#2597）
 
 `internal/rpc` 原来没有取消：`Peer.Call` 的 ctx 结束只在本地返回，对端照常跑。用户打断助手这一轮，node 停掉 Claude 进程，`wechat-connector_send` 报「Connection closed」，hub 那边的审批卡却挂到 15 分钟过期。这期间点「允许」会把那条过时的消息发出去，助手重试后还有第二张一样的卡。现在 node 的 `mcp.call` 会发 `rpc.cancel`。别的方法想要同样的行为，加进 `Peer.Cancels`，先确认对端在 ctx 结束时停下是对的（写库之类要做完的别加）。
+
+## 处理器的 ctx 在回复后就结束，长期的事要挂连接的 ctx（2026-11-05，#3139）
+
+#2645 给 `rpc.Peer` 加取消时，每个请求的 ctx 改成了处理器返回就 `cancel()`。`session.watch` 的 transcript 循环原来直接 `WithCancel(ctx)` 这个 ctx，于是 watch 刚回复就被取消：hub 订阅了、node 也回了 ok，但之后一条 `session.items` 都不推，页面只剩 `sessions_delta`，要刷新才有新内容——主会话和子 Agent 一样（子 Agent 是先被用户发现的）。单测都绿，因为测试直接调 `n.watch(...)`（用 `context.Background()`），不经 `rpc.Peer`。
+回复之后还要继续的东西（watch、流）用 `rpc.ConnContext(ctx)`；测 watch 要走一对真的 `rpc.Peer`（`node/subagent_watch_test.go` 的 `servedNode`），别绕过请求这一层。其余用请求 ctx 起 goroutine 的地方（终端流、完整界面已经用 `context.Background()`）也照这个检查。

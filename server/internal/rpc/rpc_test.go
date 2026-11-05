@@ -508,3 +508,30 @@ func TestCancelReachesTheHandler(t *testing.T) {
 		}
 	}
 }
+
+// A handler's ctx ends with its reply; ConnContext is the connection's, which a watch that keeps pushing after the
+// reply hangs off (#3139).
+func TestConnContextOutlivesTheRequest(t *testing.T) {
+	hub, node := pair(t)
+	type seen struct{ req, conn context.Context }
+	got := make(chan seen, 1)
+	hub.OnRequest = func(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+		got <- seen{ctx, ConnContext(ctx)}
+		return nil, nil
+	}
+	if err := node.Call(context.Background(), "watch", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	s := <-got
+	select {
+	case <-s.req.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the request's ctx did not end with its reply")
+	}
+	if s.conn.Err() != nil {
+		t.Fatalf("the connection's ctx ended with the request: %v", s.conn.Err())
+	}
+	if ConnContext(context.Background()) == nil {
+		t.Fatal("a ctx that did not come from Serve is its own connection")
+	}
+}
