@@ -50,7 +50,11 @@ class ChatStatusRecoveryTest {
         runCurrent()
         assertEquals(session.key, state.restored)
         assertFalse(state.resumeUnknown)
-        assertTrue(state.notice!!.contains("列表暂未更新"))
+        // Compare against the resource so wording edits don't break the test; the
+        // acknowledgement must survive the failed refresh.
+        val restoredNotice = res.getString(R.string.chat_recovery_restored)
+        assertEquals(res.getString(R.string.chat_recovery_list_stale, restoredNotice), state.notice)
+        assertTrue(state.notice!!.contains(restoredNotice))
         state.resume(session)
         runCurrent()
         assertEquals(2, resumes)

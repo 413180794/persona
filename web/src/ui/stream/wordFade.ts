@@ -5,7 +5,9 @@
 // resumes its animation with a negative delay. Code blocks and formulas appear at once.
 //
 // While streaming, settled segments keep their span (only the animation class goes); when the stream ends the message
-// is rendered as plain Markdown again, without any of these spans.
+// is rendered as plain Markdown again, without any of these spans. A block that fades in once (`plain`) writes its
+// settled segments as plain text instead, so taking over a timeline whose words are mostly in (shownBefore: the stream
+// it ends, or an earlier mount of the same block) costs about what plain Markdown does.
 import type { Element, ElementContent, Root } from "hast";
 
 type Kind = "text" | "inline-code";
@@ -95,6 +97,45 @@ export function remainingMs(state: WordFadeState): number {
   let last = -Infinity;
   for (const s of state.timeline.startAt.values()) last = Math.max(last, s);
   return last === -Infinity ? 0 : Math.max(0, last + FADE_MS - clock(state.timeline));
+}
+
+// The timelines of what was on screen lately, by its text. A reply is drawn again from scratch when it moves in the
+// chat (the stream ends and its item takes its place; an earlier answer of the segment the next reply goes into): the
+// new mount takes over the old timeline, so the words already in don't fade again.
+// One entry per timeline: a stream moves its entry along as it grows.
+const shown = new Map<string, WordFadeState>();
+const shownAs = new WeakMap<WordFadeState, string>();
+const SHOWN_MAX = 64;
+
+/** Remembers the timeline `text` is drawn on (a streaming reply as it grows, a block fading in once). */
+export function rememberShown(text: string, state: WordFadeState): void {
+  const key = text.trimEnd();
+  if (!key || shown.get(key) === state) return;
+  const prev = shownAs.get(state);
+  if (prev !== undefined && shown.get(prev) === state) shown.delete(prev);
+  shown.delete(key);
+  shown.set(key, state);
+  shownAs.set(state, key);
+  if (shown.size > SHOWN_MAX) shown.delete(shown.keys().next().value!);
+}
+
+/**
+ * The timeline of what `text` was drawn as last (the longest remembered text it starts with), and whether all of it is
+ * in already (the same text, nothing left fading): then it is drawn plain at once.
+ */
+export function shownBefore(text: string): { state: WordFadeState; done: boolean } | null {
+  const whole = text.trimEnd();
+  let best: string | null = null;
+  // at least half of it: a short reply that happens to start another one is not where that one was drawn
+  for (const k of shown.keys()) if (k.length * 2 >= whole.length && text.startsWith(k) && (best === null || k.length > best.length)) best = k;
+  if (best === null) return null;
+  const state = shown.get(best)!;
+  return { state, done: best === whole && remainingMs(state) === 0 };
+}
+
+/** Tests: forget every remembered timeline. */
+export function forgetShown(): void {
+  shown.clear();
 }
 
 const SKIP = new Set(["pre", "script", "style", "textarea"]);
@@ -228,32 +269,49 @@ function delayOf(key: string, state: WordFadeState, now: number, index: number):
   return raw <= BACKLOG_MS ? raw : Math.min(MAX_WAIT_MS, BACKLOG_MS + (index - Math.floor(BACKLOG_MS / STEP_MS)) * BACKLOG_STEP_MS);
 }
 
-function fadeNode(children: ElementContent[], key: string, state: WordFadeState, now: number, index: number): ElementContent {
+// No style here: FadeSpan drops --wf-delay on a keyed span (its ref owns it), and parsing a style for every word is
+// most of what turning the tree into React elements costs.
+function fadeNode(children: ElementContent[], key: string, state: WordFadeState): ElementContent {
   return {
     type: "element",
     tagName: "span",
-    properties: { ...(state.timeline.settled.has(key) ? {} : { className: ["stream-word"] }), style: `--wf-delay:${delayOf(key, state, now, index)}ms`, dataWfKey: key },
+    properties: { ...(state.timeline.settled.has(key) ? {} : { className: ["stream-word"] }), dataWfKey: key },
     children,
   };
 }
 
-function slotNodes(slot: TextSlot | CodeSlot, keys: string[], state: WordFadeState, now: number): ElementContent[] {
-  if (slot.kind === "inline-code") return [fadeNode([slot.node], keys[slot.first], state, now, slot.first)];
+function slotNodes(slot: TextSlot | CodeSlot, keys: string[], state: WordFadeState, plain: boolean): ElementContent[] {
+  const settled = (key: string) => plain && state.timeline.settled.has(key);
+  if (slot.kind === "inline-code") return [settled(keys[slot.first]) ? slot.node : fadeNode([slot.node], keys[slot.first], state)];
   const nodes: ElementContent[] = [];
+  // settled words (with `plain`) and the whitespace between them run together into one text node
+  let run = "";
+  const flush = () => {
+    if (run) nodes.push({ type: "text", value: run });
+    run = "";
+  };
   let n = slot.first;
   for (const w of slot.words) {
     if (!w.trim()) {
-      nodes.push({ type: "text", value: w });
+      run += w;
       continue;
     }
-    nodes.push(fadeNode([{ type: "text", value: w }], keys[n], state, now, n));
+    if (settled(keys[n])) run += w;
+    else {
+      flush();
+      nodes.push(fadeNode([{ type: "text", value: w }], keys[n], state));
+    }
     n++;
   }
+  flush();
   return nodes;
 }
 
-/** The rehype plugin: wraps each word / inline code in a span.stream-word and marks list items whose dot fades in. */
-export function rehypeStreamWordFade(state: WordFadeState) {
+/**
+ * The rehype plugin: wraps each word / inline code in a span.stream-word and marks list items whose dot fades in.
+ * `plain`: segments already faded in stay plain text (a block fading in once; while streaming they keep their span).
+ */
+export function rehypeStreamWordFade(state: WordFadeState, plain = false) {
   return (tree: Root) => {
     const c: Collected = { slots: [], segments: [], markers: [] };
     collect(tree, c);
@@ -265,7 +323,7 @@ export function rehypeStreamWordFade(state: WordFadeState) {
       const start = state.timeline.startAt.get(k);
       if (start !== undefined && now - start >= FADE_MS) state.timeline.settled.add(k);
     }
-    const nodes = c.slots.map((s) => slotNodes(s, keys, state, now));
+    const nodes = c.slots.map((s) => slotNodes(s, keys, state, plain));
     // back to front: splicing a slot doesn't move the ones before it
     for (let i = c.slots.length - 1; i >= 0; i--) c.slots[i].parent.children.splice(c.slots[i].index, 1, ...nodes[i]);
     // A list item's dot fades in with its first word (at once while the item is still empty).

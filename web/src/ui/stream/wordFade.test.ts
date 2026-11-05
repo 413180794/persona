@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Element, Root } from "hast";
-import { assignKeys, BACKLOG_STEP_MS, chunkState, createWordFadeState, FADE_MS, MAX_WAIT_MS, rehypeStreamWordFade, remainingMs, scheduleSegment, splitWords, STEP_MS } from "./wordFade";
+import { assignKeys, BACKLOG_STEP_MS, chunkState, createWordFadeState, FADE_MS, forgetShown, MAX_WAIT_MS, rehypeStreamWordFade, rememberShown, remainingMs, scheduleSegment, shownBefore, splitWords, STEP_MS } from "./wordFade";
 
 const text = (value: string) => ({ type: "text" as const, value });
 const el = (tagName: string, children: Element["children"], properties: Element["properties"] = {}): Element => ({ type: "element", tagName, properties, children });
@@ -73,6 +73,57 @@ describe("rehypeStreamWordFade", () => {
     // the old words have had their time: no animation class; the new one still fades
     expect(s[0].properties.className).toBeUndefined();
     expect(s[2].properties.className).toEqual(["stream-word"]);
+  });
+
+  it("puts no style on a word: FadeSpan's ref owns the delay", () => {
+    const tree = root(el("p", [text("one two")]));
+    rehypeStreamWordFade(createWordFadeState())(tree);
+    expect(spans(tree).every((x) => x.properties.style === undefined)).toBe(true);
+  });
+
+  it("with `plain` (a block fading in once) writes the words already in as plain text", () => {
+    let now = 1000;
+    const state = createWordFadeState();
+    state.timeline.now = () => now;
+    const first = root(el("p", [text("alpha beta "), el("code", [text("x")])]), el("ul", [el("li", [text("item")])]));
+    rehypeStreamWordFade(state)(first);
+    for (const s of spans(first)) scheduleSegment(state, s.properties.dataWfKey as string, fakeEl().el);
+    now += FADE_MS + 200;
+    const p = el("p", [text("alpha beta "), el("code", [text("x")]), text(" gamma")]);
+    const li = el("li", [text("item")]);
+    rehypeStreamWordFade(state, true)(root(p, el("ul", [li])));
+    // the settled run is one text node, the inline code its own <code> again, only the new word fades
+    expect(p.children[0]).toEqual(text("alpha beta "));
+    expect(p.children[1]).toMatchObject({ tagName: "code" });
+    expect(p.children[2]).toEqual(text(" "));
+    expect(p.children[3]).toMatchObject({ tagName: "span", properties: { className: ["stream-word"] } });
+    expect(spans(root(p))).toHaveLength(1);
+    expect(li.children).toEqual([text("item")]);
+    expect(li.properties.dataStreamMarker).toBeUndefined();
+  });
+});
+
+describe("shownBefore", () => {
+  it("finds the timeline a text was drawn on: the same text, or the stream it ends", () => {
+    forgetShown();
+    let now = 0;
+    const stream = createWordFadeState();
+    stream.timeline.now = () => now;
+    rememberShown("今天先把", stream);
+    rememberShown("今天先把构建机改好", stream); // the stream grew: one entry, moved along
+    expect(shownBefore("今天先把")).toBeNull();
+    scheduleSegment(stream, "k", fakeEl().el);
+    expect(shownBefore("今天先把构建机改好，再看测试机")).toEqual({ state: stream, done: false });
+    expect(shownBefore("今天先把构建机改好\n")).toEqual({ state: stream, done: false }); // still fading
+    now = FADE_MS + 1;
+    expect(shownBefore("今天先把构建机改好")).toEqual({ state: stream, done: true });
+    expect(shownBefore("别的回答")).toBeNull();
+  });
+
+  it("does not take a short reply that happens to start a longer one", () => {
+    forgetShown();
+    rememberShown("好", createWordFadeState());
+    expect(shownBefore("好的，我先看一下构建机的日志")).toBeNull();
   });
 });
 

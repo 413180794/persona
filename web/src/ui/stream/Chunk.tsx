@@ -1,6 +1,6 @@
 // One chunk of a streaming reply (ported from cindy's StreamingMarkdownChunk): memo keeps a sealed chunk's parse and
 // DOM, so only the growing last one goes through Markdown again. With `fade` its words fade in on the message's
-// timeline.
+// timeline; `plain` (a block fading in once): the words already in are plain text.
 import { memo, useMemo } from "react";
 import ReactMarkdown, { type Components, type UrlTransform } from "react-markdown";
 import type { PluggableList } from "unified";
@@ -15,6 +15,7 @@ export const StreamChunk = memo(function StreamChunk({
   components,
   urlTransform,
   fade,
+  plain = false,
   wholeDocument,
 }: {
   start: number;
@@ -24,10 +25,11 @@ export const StreamChunk = memo(function StreamChunk({
   components: Components;
   urlTransform: UrlTransform;
   fade: WordFadeState | null;
+  plain?: boolean;
   wholeDocument: boolean;
 }) {
   const state = fade ? chunkState(fade, String(start), wholeDocument) : null;
-  const plugins = useMemo<PluggableList>(() => (state ? [...rehypePlugins, [rehypeStreamWordFade, state]] : rehypePlugins), [rehypePlugins, state]);
+  const plugins = useMemo<PluggableList>(() => (state ? [...rehypePlugins, [rehypeStreamWordFade, state, plain]] : rehypePlugins), [rehypePlugins, state, plain]);
   const fadeComponents = useMemo<Components>(
     () =>
       state

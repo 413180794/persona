@@ -36,6 +36,10 @@ import (
 // says it the same way, so it is kept as it is.
 const NodeDownMarker = "常驻 node 没在运行"
 
+// NodeDownSelf comes right before NodeDownMarker in nodeMissing: the link's own computer. The hub swaps it for the
+// computer's name on the machine's page (devices nodeUnavailable, #4080).
+const NodeDownSelf = "本机的"
+
 // nodeMissing says the resident node is not answering at target, and how this computer runs it (docs/link.md「装 node
 // 服务」): the hub shows it on the machine's page.
 func nodeMissing(goos, target string) error {
@@ -48,7 +52,7 @@ func nodeMissing(goos, target string) error {
 	case "linux":
 		how = "jarvis-link node install（systemd 用户服务）"
 	}
-	return fmt.Errorf("本机的%s（%s 连不上）：%s", NodeDownMarker, target, how)
+	return fmt.Errorf("%s%s（%s 连不上）：%s", NodeDownSelf, NodeDownMarker, target, how)
 }
 
 // These are settings, not measurements.

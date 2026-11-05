@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -429,5 +430,30 @@ func TestServiceDialTellsTheConnectorTheHeartbeat(t *testing.T) {
 		if h := <-got; h != tc.want {
 			t.Errorf("hub's %d / %d ms: header %q, want %q", tc.pingMS, tc.timeoutMS, h, tc.want)
 		}
+	}
+}
+
+// A connector whose resident node is down already says so and how its OS runs it; the machine's page says it once,
+// and about that computer, not 「本机」 (on the hub's page that reads as the hub, #4080).
+func TestConnectorNodeUnavailableSaidOnce(t *testing.T) {
+	answer := func(message string) string {
+		rec := httptest.NewRecorder()
+		rec.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = io.WriteString(rec, `{"error":"node_unavailable","message":`+strconv.Quote(message)+`}`)
+		return connectorError(rec.Result()).Error()
+	}
+	now := link.NodeDownSelf + link.NodeDownMarker + "（/tmp/node-attach.sock 连不上）：jarvis-link node install（systemd 用户服务）"
+	if got, want := answer(now), "这台电脑的"+link.NodeDownMarker+"（/tmp/node-attach.sock 连不上）：jarvis-link node install（systemd 用户服务）"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	// An older connector's own words follow the hub's sentence, which the hub still reads as node_service_down.
+	if got := answer("node down"); got != "这台电脑的"+link.NodeDownMarker+"：node down" {
+		t.Fatalf("older connector: %q", got)
+	}
+	if got := answer("node 那边：" + link.NodeDownMarker); got != "node 那边："+link.NodeDownMarker { // already says it
+		t.Fatalf("marker inside: %q", got)
+	}
+	if got := answer(""); got != "这台电脑的"+link.NodeDownMarker {
+		t.Fatalf("no message: %q", got)
 	}
 }

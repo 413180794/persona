@@ -182,15 +182,29 @@ func connectorError(resp *http.Response) error {
 		// Not tried again for a while: the connector counts failures and would block this hub's address.
 		return &connectorHTTPError{status: resp.StatusCode, retry: connectorRefusedWait, msg: "连接器不认这台 hub 的凭据：重新配对"}
 	case e.Error == "node_unavailable":
-		msg := "这台电脑的常驻 node 没在跑"
-		if e.Message != "" {
-			msg += "：" + clip(oneLine(e.Message), 200)
-		}
-		return &connectorHTTPError{status: resp.StatusCode, msg: msg}
+		return &connectorHTTPError{status: resp.StatusCode, msg: nodeUnavailable(e.Message)}
 	case e.Message != "":
 		return &connectorHTTPError{status: resp.StatusCode, msg: clip(oneLine(e.Message), 200)}
 	}
 	return &connectorHTTPError{status: resp.StatusCode, msg: "连接器回了 " + resp.Status}
+}
+
+// nodeUnavailable is what the machine's page says when the computer's connector answers that its resident node is not
+// running. A connector since #4020 already says so (link.NodeDownMarker, then how that OS runs the node), so it is said
+// once, and its 「本机」 (the connector's own computer) becomes 「这台电脑」: on the hub's page it reads as the hub
+// (#4080). An older connector's message only follows the hub's own sentence.
+func nodeUnavailable(message string) string {
+	message = oneLine(message)
+	self := link.NodeDownSelf
+	switch {
+	case strings.HasPrefix(message, self+link.NodeDownMarker):
+		return clip("这台电脑的"+strings.TrimPrefix(message, self), 200)
+	case strings.Contains(message, link.NodeDownMarker):
+		return clip(message, 200)
+	case message != "":
+		return "这台电脑的" + link.NodeDownMarker + "：" + clip(message, 200)
+	}
+	return "这台电脑的" + link.NodeDownMarker
 }
 
 type connectorHTTPError struct {

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "./remark-gfm-parse";
 import remarkCjkFriendly from "remark-cjk-friendly/parseOnly";
@@ -22,7 +22,8 @@ import { useMath } from "./stream/math";
 import { useReplyMotion } from "./stream/motion";
 import { repairStreamingMarkdown } from "./stream/repair";
 import { useThrottledText } from "./stream/throttle";
-import { createWordFadeState, remainingMs, type WordFadeState } from "./stream/wordFade";
+import { whenIdle } from "./stream/idle";
+import { createWordFadeState, rememberShown, remainingMs, shownBefore, type WordFadeState } from "./stream/wordFade";
 import "./stream/stream.css";
 
 // A link ends at whitespace or any non-ASCII character (Chinese text, full-width punctuation), without trailing
@@ -456,7 +457,7 @@ export const Markdown = memo(function Markdown({ text: raw, small, compact, mid,
     <div className={`prose-j ${small ? "prose-sm" : ""} ${compact ? "prose-compact" : ""}`}>
       {chunks ? (
         chunks.map((c) => (
-          <StreamChunk key={c.start} start={c.start} content={c.content} remarkPlugins={REMARK} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl} fade={wordFade} wholeDocument={chunks.length === 1} />
+          <StreamChunk key={c.start} start={c.start} content={c.content} remarkPlugins={REMARK} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl} fade={wordFade} plain={!streaming} wholeDocument={chunks.length === 1} />
         ))
       ) : (
         <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={rehypePlugins} components={components} urlTransform={markdownUrl}>
@@ -473,17 +474,28 @@ const REMARK: PluggableList = [remarkGfm, remarkMath, remarkCjkFriendly];
 /**
  * The message's fade timeline: while it streams (a fresh one per stream), or for a block that arrived whole until its
  * last word has faded in (`once`, at mount only), after which it renders plain. Null: no fade.
+ * A block drawn again (the stream it ends, an earlier mount of the same block: wordFade.ts shownBefore) takes over that
+ * timeline: words already in stay in, and a block that is all in is plain from the start. The swap back to plain waits
+ * for an idle moment and is a transition: it re-renders the whole block, and typing goes first.
  */
 function useWordFade(streaming: boolean, once: boolean, text: string): WordFadeState | null {
-  const [fadingOnce, setFadingOnce] = useState(once);
+  const [before] = useState(() => (once && !streaming ? shownBefore(text) : null));
+  const [fadingOnce, setFadingOnce] = useState(once && !before?.done);
   const ref = useRef<WordFadeState | null>(null);
   if (!streaming && !(once && fadingOnce)) ref.current = null;
-  else ref.current ??= createWordFadeState();
+  else ref.current ??= (!streaming && before?.state) || createWordFadeState();
+  if (ref.current) rememberShown(text, ref.current);
   useEffect(() => {
     if (streaming || !once || !fadingOnce || !ref.current) return;
     // after the commit: every word is on the timeline by now
-    const t = window.setTimeout(() => setFadingOnce(false), remainingMs(ref.current) + 32);
-    return () => clearTimeout(t);
+    let cancelIdle = () => {};
+    const t = window.setTimeout(() => {
+      cancelIdle = whenIdle(() => startTransition(() => setFadingOnce(false)));
+    }, remainingMs(ref.current) + 32);
+    return () => {
+      clearTimeout(t);
+      cancelIdle();
+    };
   }, [streaming, once, fadingOnce, text]);
   return ref.current;
 }

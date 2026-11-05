@@ -1,6 +1,10 @@
 // A rehype plugin kept out of the main bundle (highlight.ts, math.ts): loaded the first time a reply needs it, then
 // shared by every reply. A failed chunk (the hub was redeployed under the page) is asked for again by the next one.
-import { useEffect, useSyncExternalStore } from "react";
+// It is asked for once the page is idle, not in the frame that first draws the reply (opening a chat that has code
+// would fetch and run the grammars alongside the chat's own chunks), and the replies take it up in a transition: each
+// one re-renders, and a keystroke or the chat's own updates go first. Until then they draw without it.
+import { startTransition, useEffect, useState } from "react";
+import { whenIdle } from "./idle";
 
 export interface LazyPlugin<P> {
   /** Loads it (once); resolves with the plugin. */
@@ -10,14 +14,13 @@ export interface LazyPlugin<P> {
   use: (wanted: boolean) => P | null;
 }
 
+/** The longest a reply waits for an idle moment before its plugin is asked for. */
+const IDLE_MS = 1500;
+
 export function lazyPlugin<P>(importer: () => Promise<P>): LazyPlugin<P> {
   let plugin: P | null = null;
   let loading: Promise<P> | null = null;
   const listeners = new Set<() => void>();
-  const subscribe = (l: () => void) => {
-    listeners.add(l);
-    return () => listeners.delete(l);
-  };
   const load = () =>
     (loading ??= importer().then(
       (p) => {
@@ -31,11 +34,23 @@ export function lazyPlugin<P>(importer: () => Promise<P>): LazyPlugin<P> {
       },
     ));
   function use(wanted: boolean): P | null {
-    const p = useSyncExternalStore(subscribe, () => (wanted ? plugin : null), () => (wanted ? plugin : null));
+    // a plugin is a function: useState would call it
+    const [ready, setReady] = useState<P | null>(() => plugin);
     useEffect(() => {
-      if (wanted && !p) void load().catch(() => {});
-    }, [wanted, p]);
-    return p;
+      if (!wanted || ready) return;
+      if (plugin) {
+        setReady(() => plugin);
+        return;
+      }
+      const took = () => startTransition(() => setReady(() => plugin));
+      listeners.add(took);
+      const cancel = whenIdle(() => void load().catch(() => {}), IDLE_MS);
+      return () => {
+        listeners.delete(took);
+        cancel();
+      };
+    }, [wanted, ready]);
+    return wanted ? (ready ?? plugin) : null;
   }
   return { load, use };
 }

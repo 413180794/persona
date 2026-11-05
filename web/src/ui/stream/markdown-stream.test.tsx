@@ -28,6 +28,18 @@ describe("Markdown while streaming", () => {
     expect(render({ text: "整块到达的回答", fade: true })).toContain("stream-word");
   });
 
+  it("does not fade again what was on screen already: the stream a block ends, an earlier mount of the block", () => {
+    const text = "这段回答已经流式显示过了，到了之后不再淡入一遍";
+    render({ text, streaming: true });
+    // drawn again from scratch (its item takes the stream's place): all of it in, so plain from the start
+    const again = render({ text, fade: true });
+    expect(again).not.toContain("stream-word");
+    expect(again).not.toContain("data-wf-key");
+    expect(again).toBe(render({ text }));
+    // a block nobody has seen yet still fades
+    expect(render({ text: "另一段刚到的回答，从来没有显示过", fade: true })).toContain("stream-word");
+  });
+
   it("fades nothing with 回复动效 off or reduced motion", () => {
     motion.on = false;
     try {
