@@ -1,4 +1,4 @@
-import { byAttention } from "./format";
+import { byAttention, stateOf } from "./format";
 import type { Machine, Session } from "./types";
 
 /** Where a session's cwd sits: the repository it belongs to and the working tree inside it. */
@@ -15,6 +15,16 @@ export type RepoTree = {
   count: number;
   worktrees: RepoWorktree[];
 };
+
+/** One computer's section in the repository tree: its live repositories ordered by name. */
+export interface RepoMachine {
+  key: string;
+  machine: Machine;
+  foldKey: string;
+  repos: RepoTree[];
+  sessions: Session[];
+  needs: number;
+}
 
 // The layouts a working tree commonly lives in (herdr, Claude Code, a home-level collection): the parts before the
 // last one name the repository, everything from there on is the tree.
@@ -81,3 +91,63 @@ export function buildRepoTree(all: Session[], machines: Machine[]): RepoTree[] {
     })
     .sort((a, b) => a.name.localeCompare(b.name) || order(a.machineId) - order(b.machineId));
 }
+
+/**
+ * The sidebar's repository tree partitioned by computer (#2108 / #2126): each computer with live agents gets its own
+ * section, kept in the hub's machine order; repositories within each computer sort alphabetically by name.
+ */
+export function buildRepoMachineTree(all: Session[], machines: Machine[]): RepoMachine[] {
+  const online = new Set(machines.filter((m) => m.online).map((m) => m.id));
+  const byMachine = new Map<string, Session[]>();
+  for (const s of all) {
+    if (s.assistant || !online.has(s.machine_id)) continue;
+    let list = byMachine.get(s.machine_id);
+    if (!list) {
+      list = [];
+      byMachine.set(s.machine_id, list);
+    }
+    list.push(s);
+  }
+
+  const out: RepoMachine[] = [];
+  for (const m of machines) {
+    const sessions = byMachine.get(m.id);
+    if (!sessions || sessions.length === 0) continue;
+    const repos = new Map<string, RepoTree>();
+    for (const s of sessions) {
+      const where = repoOf(s.cwd ?? "");
+      const key = `${m.id}\u0000${where.repo}`;
+      let tree = repos.get(key);
+      if (!tree) {
+        tree = { key, machineId: m.id, name: where.name, repo: where.repo, count: 0, worktrees: [] };
+        repos.set(key, tree);
+      }
+      let worktree = tree.worktrees.find((w) => w.path === where.worktree);
+      if (!worktree) {
+        worktree = { key: `${key}\u0000${where.worktree}`, name: worktreeName(where.worktree, where.repo), path: where.worktree, main: where.main, sessions: [] };
+        tree.worktrees.push(worktree);
+      }
+      worktree.sessions.push(s);
+      tree.count++;
+    }
+    const repoTrees = [...repos.values()]
+      .map((tree) => {
+        const worktrees = tree.worktrees
+          .map((w) => ({ ...w, sessions: w.sessions.sort(byAttention) }))
+          .sort((a, b) => Number(b.main) - Number(a.main) || a.name.localeCompare(b.name));
+        return { ...tree, worktrees };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    out.push({
+      key: `repo-machine:${m.id}`,
+      machine: m,
+      foldKey: `repo-machine:${m.id}`,
+      repos: repoTrees,
+      sessions,
+      needs: sessions.filter((s) => stateOf(s) === "needs_you").length,
+    });
+  }
+  return out;
+}
+

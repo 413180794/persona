@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NARROW, useMedia } from "../lib/viewport";
 import { AGENT_FILTERS, agentFilter, applyFilter, arrangeSpaces, filterCounts, isSpaceMuted, matchingKeys, shownFilters, unreadOf, type AgentFilter, type FilterCounts } from "../lib/agent-filter";
 import { agentGrouping, AGENT_GROUPINGS, buildAgentGroups, buildSpaces, isQuiet, splitAgentSessions, type AgentGroup, type AgentMutes, type Space } from "../lib/agent-groups";
-import { buildRepoTree, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
+import { buildRepoMachineTree, type RepoMachine, type RepoTree, type RepoWorktree } from "../lib/agent-repos";
 import { buildMachineTree, resolveTab, type ChildStates, type HerdrMachine, type HerdrSpace, type HerdrTab } from "../lib/herdr-tree";
 import { addSection, arrangeSessions, assignSection, GROUP_LABEL, isDefaultView, providerLabel, removeSection, resetView, setView, SHOW_LABEL, SORT_LABEL, toggleProvider, togglePin, totalUnread, updateAgentPrefs, useAgentList, useAgentPrefs, viewOf, type AgentPrefs, type AgentSession, type GroupBy, type ShowMode, type SortBy } from "../lib/agents";
 import { api, setToken } from "../lib/api";
@@ -280,7 +280,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     if (grouping === "todo") return buildTodoAgentGroups(unpinned, machines, todos, mutes);
     return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, grouping, mutes, todos]);
-  const repoTree = useMemo(() => (grouping === "repo" ? buildRepoTree(unpinned, machines) : []), [unpinned, machines, grouping]);
+  const repoMachines = useMemo(() => (grouping === "repo" ? buildRepoMachineTree(unpinned, machines) : []), [unpinned, machines, grouping]);
   const machineTree = useMemo(() => (grouping === "machine" ? buildMachineTree(machines, unpinned, { pins, hideEmpty: filtered }) : []), [grouping, machines, unpinned, pins, filtered]);
   const unreadShown = filter === "unread" ? unreadOf(shown) : [];
   const choose = (f: AgentFilter) => {
@@ -378,9 +378,11 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
 
       </> : grouping === "machine" ? machineTree.map((m) => (
         <MachineSection key={m.key} m={m} {...tree} />
-      )) : grouping === "repo" ? repoTree.map((t) => (
-        <RepoSection key={t.key} tree={t} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
-      )) : groups.map((group) => (
+      )) : grouping === "repo" ? (
+        repoMachines.map((m) => (
+          <RepoMachineSection key={m.key} m={m} flat={repoMachines.length <= 1} machines={machines} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />
+        ))
+      ) : groups.map((group) => (
         <AgentSection key={group.key} group={group} machines={machines} byTodo={grouping === "todo"} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} onNavigate={onNavigate} />
       ))}
 
@@ -566,19 +568,52 @@ function AgentSection({ group, machines, byTodo, reg, hover, activeKey, go, onRo
   );
 }
 
+/** One computer in the repository tree (#2108 / #2126): header folds the whole computer; flat when only one computer has agents. */
+function RepoMachineSection({ m, flat, machines, reg, hover, activeKey, go, onRowMenu }: { m: RepoMachine; flat: boolean; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
+  const online = m.machine.online;
+  const [folded, toggle] = useFolded(m.foldKey, !online);
+  const repos = m.repos.map((tree) => <RepoSection key={tree.key} tree={tree} reg={reg} hover={hover} activeKey={activeKey} go={go} onRowMenu={onRowMenu} />);
+  if (flat) return <>{repos}</>;
+  return (
+    <div className="mt-3">
+      <div className="group/sec flex items-center gap-1 px-2 pb-0.5">
+        <button type="button" aria-expanded={!folded} onClick={toggle} className="relative z-10 flex min-h-7 min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap text-left [@media(pointer:coarse)]:min-h-11">
+          <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", online ? "bg-green" : "bg-line-strong")} />
+          <span className={cx("min-w-0 truncate text-[12.5px] font-semibold", online ? "text-ink" : "text-ink-3")}>{machineWithHub(m.machine.id, machines)}</span>
+          <span className="sr-only">{online ? "在线" : "离线"}</span>
+          <Icon name="chevron" size={10} stroke={2.4} className="shrink-0 text-ink-3 opacity-0 transition-[opacity,transform] duration-200 group-hover/sec:opacity-100 [@media(hover:none)]:opacity-100" style={{ transform: folded ? "rotate(-90deg)" : "none" }} />
+        </button>
+        {m.needs > 0 ? (
+          <span title={`${m.needs} 个需要你`} className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-red-tint px-1 text-[10.5px] font-semibold text-red tabular-nums">
+            {m.needs}<span className="sr-only"> 个需要你</span>
+          </span>
+        ) : !online ? (
+          <span className="shrink-0 text-[10.5px] whitespace-nowrap text-ink-3">离线</span>
+        ) : (
+          <SessionTally sessions={m.sessions} folded={folded} />
+        )}
+      </div>
+      <Collapse open={!folded}>
+        <div className="flex flex-col gap-px" inert={folded || undefined}>
+          {repos}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
 /** One repository on one machine (按仓库): its working trees under it, the main checkout marked and first. */
-function RepoSection({ tree, machines, reg, hover, activeKey, go, onRowMenu }: { tree: RepoTree; machines: Machine[]; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
+function RepoSection({ tree, reg, hover, activeKey, go, onRowMenu }: { tree: RepoTree; reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onRowMenu: RowMenuFn }) {
   const [folded, toggle] = useFolded(tree.key, false);
   const row = (s: Session, hint: string) => {
     const key = `s:${s.machine_id}/${s.session_id}`;
     return <SessionRow key={key} s={s} k={key} reg={reg} hover={hover} active={activeKey === key} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} hint={hint} onMenu={onRowMenu} />;
   };
-  const machine = machines.length > 1 ? machineWithHub(tree.machineId, machines) : "";
   // A repository with only its main checkout needs no working-tree level: its agents sit right under the repository.
   const flat = tree.worktrees.length === 1 && tree.worktrees[0]!.main;
   return (
     <Section
-      title={<span className="flex min-w-0 items-center gap-1.5"><Icon name="folder" size={12} stroke={2} className="shrink-0 text-ink-3" /><span className="truncate">{tree.name}</span>{machine && <span className="shrink-0 truncate font-normal normal-case tracking-normal">{machine}</span>}</span>}
+      title={<span className="flex min-w-0 items-center gap-1.5"><Icon name="folder" size={12} stroke={2} className="shrink-0 text-ink-3" /><span className="truncate">{tree.name}</span></span>}
       folded={folded}
       onToggle={toggle}
       right={<span className="text-[10.5px] text-ink-3 tabular-nums">{tree.count}</span>}

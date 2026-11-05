@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRepoTree, repoOf, type RepoTree } from "./agent-repos";
+import { buildRepoMachineTree, buildRepoTree, repoOf, type RepoTree } from "./agent-repos";
 import type { AgentState, Machine, Session } from "./types";
 
 const machines: Machine[] = [
@@ -87,3 +87,58 @@ describe("按仓库分组的树", () => {
     expect(buildRepoTree([session("assistant", "/code/app", { assistant: true })], machines)).toEqual([]);
   });
 });
+
+describe("按电脑分段的仓库树", () => {
+  it("只有一台电脑有 Agent 时返回这台电脑的仓库", () => {
+    const all = [
+      session("a", "/code/app"),
+      session("b", "/code/app/.worktrees/wt"),
+    ];
+    const tree = buildRepoMachineTree(all, machines);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]!.machine.id).toBe("machine-a");
+    expect(tree[0]!.repos).toHaveLength(1);
+    expect(tree[0]!.repos[0]!.name).toBe("app");
+    expect(tree[0]!.sessions).toHaveLength(2);
+  });
+
+  it("多台电脑时按 hub 机器顺序分段，电脑内仓库按名字排", () => {
+    const all = [
+      session("a-zeta", "/code/zeta", { machine_id: "machine-a" }),
+      session("a-alpha", "/code/alpha", { machine_id: "machine-a" }),
+      session("b-beta", "/code/beta", { machine_id: "machine-b" }),
+    ];
+    const tree = buildRepoMachineTree(all, machines);
+    expect(tree.map((m) => m.machine.id)).toEqual(["machine-b", "machine-a"]);
+    expect(tree[1]!.repos.map((r) => r.name)).toEqual(["alpha", "zeta"]);
+    expect(tree[0]!.repos.map((r) => r.name)).toEqual(["beta"]);
+  });
+
+  it("离线机器或没有 Agent 的机器不进树", () => {
+    const all = [
+      session("on", "/code/app", { machine_id: "machine-a" }),
+      session("off", "/code/app", { machine_id: "machine-off" }),
+    ];
+    const tree = buildRepoMachineTree(all, machines);
+    expect(tree.map((m) => m.machine.id)).toEqual(["machine-a"]);
+  });
+
+  it("needs 准确统计该电脑上需要你的 Agent 数量", () => {
+    const all = [
+      session("n1", "/code/app", { machine_id: "machine-a", state: "needs_you", status: "needs_you" }),
+      session("w1", "/code/app", { machine_id: "machine-a", state: "working", status: "working" }),
+      session("n2", "/code/app", { machine_id: "machine-b", state: "needs_you", status: "needs_you" }),
+    ];
+    const tree = buildRepoMachineTree(all, machines);
+    const macA = tree.find((m) => m.machine.id === "machine-a")!;
+    const macB = tree.find((m) => m.machine.id === "machine-b")!;
+    expect(macA.needs).toBe(1);
+    expect(macB.needs).toBe(1);
+  });
+
+  it("助手会话不进树", () => {
+    const all = [session("ast", "/code/app", { machine_id: "machine-a", assistant: true })];
+    expect(buildRepoMachineTree(all, machines)).toEqual([]);
+  });
+});
+
