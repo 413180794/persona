@@ -449,7 +449,8 @@ func (s *Service) listOne(ctx context.Context, a *MailAccount, mailbox string, l
 		// When the operation began, connecting included (a cold login to a slow server takes seconds), and not again
 		// on a retry: the page's time counts from here. A sooner context deadline makes it earlier, which is safe.
 		started := deadline.Add(-networkTimeout)
-		if _, err := c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait(); err != nil {
+		sel, err := c.Select(mailbox, &imap.SelectOptions{ReadOnly: true}).Wait()
+		if err != nil {
 			return fmt.Errorf("select %s: %w", mailbox, err)
 		}
 		found, err := s.searchUIDs(ctx, c, a, mailbox, beforeUID, query, limit+1, started)
@@ -457,7 +458,7 @@ func (s *Service) listOne(ctx context.Context, a *MailAccount, mailbox string, l
 			return fmt.Errorf("search: %w", err)
 		}
 		uids := found.uids
-		res := &ListResult{Messages: []MailSummary{}, HeadersOnly: found.headersOnly}
+		res := &ListResult{Messages: []MailSummary{}, HeadersOnly: found.headersOnly, UIDValidity: sel.UIDValidity}
 		switch {
 		case len(uids) > limit:
 			uids = uids[len(uids)-limit:]

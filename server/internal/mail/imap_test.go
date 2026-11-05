@@ -85,6 +85,10 @@ func TestListMessagesAndPaging(t *testing.T) {
 	if page2.HasMore {
 		t.Fatal("page 2 should not have more")
 	}
+	// The mailbox's UIDVALIDITY comes with every page, so a cursor of UIDs can tell when the mailbox was renumbered.
+	if res.UIDValidity == 0 || page2.UIDValidity != res.UIDValidity {
+		t.Fatalf("uid_validity = %d, page 2 %d", res.UIDValidity, page2.UIDValidity)
+	}
 }
 
 func TestListMessagesSearch(t *testing.T) {

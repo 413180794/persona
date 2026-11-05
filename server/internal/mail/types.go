@@ -146,6 +146,9 @@ type ListResult struct {
 	// search (HeadersOnly) can stop before it has looked at the whole mailbox, so the next page may start below the
 	// last message it looked at rather than below the last one it returned; Messages can then be empty.
 	NextBeforeUID uint32 `json:"next_before_uid,omitempty"`
+	// UIDValidity is the mailbox's UIDVALIDITY of a one-account listing (0 when merged): when it changes the server
+	// numbered the mailbox anew, so UIDs kept from before (a cursor) no longer mean the same messages.
+	UIDValidity uint32 `json:"uid_validity,omitempty"`
 	// HeadersOnly means the server's search found nothing for the query (some, like NetEase 163, do not search at
 	// all), so the results come from matching subjects, senders and recipients here, which does not look into bodies.
 	HeadersOnly bool `json:"headers_only,omitempty"`

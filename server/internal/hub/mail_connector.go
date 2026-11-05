@@ -1,10 +1,12 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 )
 
 // mailConnector is mail as a connector (docs/plan-connectors.md「三、迁移」): so far what goes into the knowledge
-// base, by one cursor per account (the newest UID archived), its inbox, its tools and mail_send through the gate;
+// base, by one cursor per account (the newest UID archived, see Changes), its inbox, its tools and mail_send through the gate;
 // 设置 › 连接器 draws its row from the connectors list (?all=1, migration M3–M6).
 type mailConnector struct{ h *Hub }
 
@@ -32,10 +34,24 @@ func (mailConnector) Manifest() connector.Manifest {
 		AgentTools: []string{"mail_*"}, Poll: kbMailPoll}
 }
 
+// Archive paging: a page of the inbox per ListMessages, at most mailArchivePages of them per account and call, at
+// most mailArchiveReads full texts per call (the rest their snippet).
+const (
+	mailArchivePage  = 40
+	mailArchivePages = 5
+	mailArchiveReads = 10
+)
+
 // Changes is inbox mail newer than the last UID archived per account, oldest first, one chat per account and
-// correspondent (mail-<account>-<address>); at most 10 full texts a run, the rest their snippet; subject + text,
-// 4 000 characters. The cursor is {"<account>": uid}, as mail-cursors.json always was. An account that cannot be
-// read is skipped this time.
+// correspondent (mail-<account>-<address>); subject + text, 4 000 characters. An account that cannot be read is
+// skipped this time.
+//
+// The cursor is {"<account>": uid}, as mail-cursors.json always was, plus per account (absent when zero):
+// "<account>#v" the mailbox's UIDVALIDITY, "<account>#t" the newest archived mail's time (unix seconds), and a hole
+// "<account>#f" < UID < "<account>#h" still to archive. The hole is what lies between the old cursor and the newest
+// page when more than a page came since (the hub was down, the account failed for a while): it is read page by page
+// downwards, more is true until it is filled. A changed UIDVALIDITY means the server numbered the mailbox anew:
+// the UIDs kept mean nothing, so it starts again from the newest page, with only mail newer than "<account>#t".
 func (c mailConnector) Changes(ctx context.Context, cursor string, _ int) ([]connector.ChatBatch, string, bool, error) {
 	cursors := map[string]uint32{}
 	if cursor != "" {
@@ -46,24 +62,16 @@ func (c mailConnector) Changes(ctx context.Context, cursor string, _ int) ([]con
 		return nil, cursor, false, nil
 	}
 	var batches []connector.ChatBatch
-	reads := 0
+	reads, more := 0, false
 	for _, a := range accounts {
-		res, err := c.h.mail.ListMessages(ctx, mail.ListOptions{AccountID: a.ID, Limit: 40})
-		if err != nil {
+		st := loadMailCursor(cursors, a.ID)
+		msgs, ok := c.mailChanges(ctx, a.ID, &st)
+		if !ok {
 			continue
 		}
-		last := cursors[a.ID]
-		top := last
-		for i := len(res.Messages) - 1; i >= 0; i-- { // oldest first
-			m := res.Messages[i]
-			if m.UID <= last {
-				continue
-			}
-			if m.UID > top {
-				top = m.UID
-			}
+		for _, m := range msgs {
 			text := m.Snippet
-			if reads < 10 {
+			if reads < mailArchiveReads {
 				if full, err := c.h.mail.GetMessage(ctx, a.ID, m.UID, m.Mailbox); err == nil && strings.TrimSpace(full.Text) != "" {
 					text = full.Text
 				}
@@ -83,10 +91,114 @@ func (c mailConnector) Changes(ctx context.Context, cursor string, _ int) ([]con
 					Text:          "【" + m.Subject + "】" + clipRunes(strings.TrimSpace(text), 4000)}},
 			})
 		}
-		cursors[a.ID] = top
+		st.store(cursors, a.ID)
+		more = more || st.holeTop != 0 || st.deferred
 	}
 	raw, _ := json.Marshal(cursors)
-	return batches, string(raw), false, nil
+	return batches, string(raw), more, nil
+}
+
+// mailCursor is one account's part of the mail archive cursor (see Changes).
+type mailCursor struct {
+	top       uint32 // newest UID archived
+	validity  uint32 // UIDVALIDITY the UIDs belong to, 0 unknown (a cursor from before it was kept)
+	newest    uint32 // newest archived mail's time, unix seconds
+	holeFloor uint32 // with holeTop != 0: UIDs holeFloor < uid < holeTop are not archived yet
+	holeTop   uint32
+	deferred  bool // this call left the newest page for the next, the hole still open (not stored)
+}
+
+func loadMailCursor(cursors map[string]uint32, id string) mailCursor {
+	return mailCursor{top: cursors[id], validity: cursors[id+"#v"], newest: cursors[id+"#t"],
+		holeFloor: cursors[id+"#f"], holeTop: cursors[id+"#h"]}
+}
+
+func (st mailCursor) store(cursors map[string]uint32, id string) {
+	cursors[id] = st.top
+	for key, v := range map[string]uint32{"#v": st.validity, "#t": st.newest, "#f": st.holeFloor, "#h": st.holeTop} {
+		if v == 0 {
+			delete(cursors, id+key)
+		} else {
+			cursors[id+key] = v
+		}
+	}
+}
+
+// mailChanges is the account's inbox mail to archive now, oldest first, moving st past it; ok is false when the
+// inbox could not be read (st is left as it was).
+func (c mailConnector) mailChanges(ctx context.Context, account string, st *mailCursor) ([]mail.MailSummary, bool) {
+	res, err := c.h.mail.ListMessages(ctx, mail.ListOptions{AccountID: account, Limit: mailArchivePage})
+	if err != nil {
+		return nil, false
+	}
+	var after time.Time // only mail newer than this, after a renumbering
+	if st.validity != 0 && res.UIDValidity != 0 && st.validity != res.UIDValidity {
+		if st.newest != 0 {
+			after = time.Unix(int64(st.newest), 0)
+		}
+		*st = mailCursor{newest: st.newest}
+	}
+	if res.UIDValidity != 0 {
+		st.validity = res.UIDValidity
+	}
+	var out []mail.MailSummary
+	take := func(m mail.MailSummary) {
+		at, _ := time.Parse(time.RFC3339, m.Date)
+		if !after.IsZero() && !at.After(after) {
+			return
+		}
+		// Clamped to now: a mail dated in the future would otherwise hide everything until then after a renumbering.
+		if t := min(at.Unix(), time.Now().Unix()); t > 0 && uint32(t) > st.newest {
+			st.newest = uint32(t)
+		}
+		out = append(out, m)
+	}
+	// Below the newest page, the hole page by page, at most mailArchivePages pages in all.
+	pages := 1
+	fill := func() {
+		for ; st.holeTop != 0 && pages < mailArchivePages; pages++ {
+			page, err := c.h.mail.ListMessages(ctx, mail.ListOptions{AccountID: account, Limit: mailArchivePage, BeforeUID: st.holeTop})
+			if err != nil || (page.UIDValidity != 0 && page.UIDValidity != st.validity) {
+				pages = mailArchivePages // read again next time; a renumbering in between is seen on the newest page then
+				return
+			}
+			for _, m := range page.Messages {
+				if m.UID > st.holeFloor && m.UID < st.holeTop {
+					take(m)
+				}
+			}
+			if pageReaches(page, st.holeFloor) || page.NextBeforeUID >= st.holeTop {
+				st.holeFloor, st.holeTop = 0, 0
+			} else {
+				st.holeTop = page.NextBeforeUID
+			}
+		}
+	}
+	// An open hole first: the newest page may only be taken once it is filled, else it would open a second one.
+	fill()
+	if reached := pageReaches(res, st.top); st.holeTop == 0 || reached {
+		top := st.top
+		for _, m := range res.Messages {
+			if m.UID > st.top {
+				take(m)
+				top = max(top, m.UID)
+			}
+		}
+		if st.top > 0 && !reached {
+			st.holeFloor, st.holeTop = st.top, res.NextBeforeUID
+		}
+		st.top = top
+	} else {
+		st.deferred = true
+	}
+	fill() // the hole the newest page left, with the pages still left
+	slices.SortFunc(out, func(a, b mail.MailSummary) int { return cmp.Compare(a.UID, b.UID) })
+	return out, true
+}
+
+// pageReaches says a page (newest first, down from its before_uid) holds every UID above floor up to it.
+func pageReaches(page *mail.ListResult, floor uint32) bool {
+	return !page.HasMore || page.NextBeforeUID == 0 || page.NextBeforeUID <= floor+1
 }
 
 // Tools are mail's (prompts/mcp/mail) without mail_send, which is an action: the user allows each mail on the phone
