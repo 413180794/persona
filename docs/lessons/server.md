@@ -29,6 +29,7 @@
   `Prompt is too long · automatic compaction failed: Not logged in`（上下文按新启动器的窗口算超了，压缩又要调 API）。往助手对话发东西一律走 `assistantSendModel`；
   主对话每条都按「主对话」配置，别从会话状态里继承。看到这条报错先看 `node_sessions.launcher` 和 hub 日志里的 `is not in <launcher>'s list`。
   定时任务本身（早报自己的对话）后来也改归「主对话」分类（#1544）：跑在助手目录里的东西别挂到「新建 Agent」的默认上。
+- 启动器偶发 `command not found: claude`、经 node 起的对话报 `send to claude: write |1: file already closed`（2026-11-05，#2581）：多半是 Claude Code 正被 npm 全局重装（自动更新先挪走旧安装，约 2.5 秒后才写好新的）。机器上挂着旧版本的长期 claude 进程（botmux / herdr 里几个月没关的会话）时，每个都会定期发现「有新版」就重装一次、装完自己又不重启，于是每一两分钟重装一次（实测 8 分钟 7 次）。查：`~/.npm/_logs/` 里反复的 `install --global @anthropic-ai/claude-code`，`/proc/<pid>/exe --version` 看各进程版本；治本是结束旧版本进程。node 对「找不到命令」的早退会隔 2 秒重起，最多 3 次，失败时报 stderr 而不是管道错误。
 - ssh 会话读不了 macOS 的登录钥匙串：hub 经 ssh 起的 node 再起的 claude，如果 API key 从钥匙串取，会报 401（herdr 里的 Agent 没事，herdr 在登录会话里）。
   在那台 Mac 上装常驻 node（`scripts/deploy/node-launchd.sh install`，`docs/server.md`「常驻 node」）。
 - Go 的 `UnixListener.Close()` 默认会删掉 socket 文件：重新部署时旧 node 退出会把新 node 的 `~/.jarvis/node.sock` 删掉，

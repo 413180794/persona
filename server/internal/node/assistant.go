@@ -68,6 +68,15 @@ const (
 // to it is lost, so the send fails with what it printed instead of leaving the message at "正在送达" for good.
 var assistantStartWait = 8 * time.Second
 
+// A launcher whose command is missing for a moment is started again a few times before the send fails (#2581):
+// Claude Code's auto-updater reinstalls it with npm, which moves the old install away and writes the new one about
+// 2.5 s later, and a machine with old long-running claude processes reinstalls every minute or two. A start in that
+// window got "command not found: claude" and the user saw "send to claude: write |1: file already closed".
+var (
+	assistantStartRetries    = 3
+	assistantStartRetryDelay = 2 * time.Second
+)
+
 type assistantProc struct {
 	id       string
 	agent    string // "claude" (stream-json) or "codex" (app-server, assistant_codex.go)
@@ -78,6 +87,9 @@ type assistantProc struct {
 	stdin    io.WriteCloser
 	exited   chan struct{}
 	born     time.Time
+	// stderrDone closes when its stderr ends (watchAssistantStderr has read all of it): what a failed start printed
+	// is complete only then. nil for Codex.
+	stderrDone chan struct{}
 	// ready closes at its first JSON line on stdout (claude): it started. nil for Codex.
 	ready     chan struct{}
 	readyOnce sync.Once
@@ -142,13 +154,46 @@ func (p *assistantProc) awaitStart(d time.Duration) error {
 		return nil
 	default:
 	}
+	return p.startFailure()
+}
+
+// startFailure is the error for a fresh process that exited before it started: how long it lived and its last stderr
+// lines. It waits a little for the process to exit and its stderr to be read to the end: a write to it fails as soon
+// as it is gone, before the output saying why has been read.
+func (p *assistantProc) startFailure() error {
+	select {
+	case <-p.exited:
+	case <-time.After(time.Second):
+	}
+	if p.stderrDone != nil {
+		select {
+		case <-p.stderrDone:
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 	p.mu.Lock()
 	tail := strings.Join(p.stderrTail, " | ")
 	p.mu.Unlock()
 	if tail == "" {
 		tail = "没有输出"
 	}
-	return fmt.Errorf("%s 没有启动起来，消息没有送达：%s", p.launcher, tail)
+	return fmt.Errorf("%s 没有启动起来（%s 后退出），消息没有送达：%s", p.launcher, time.Since(p.born).Round(100*time.Millisecond), tail)
+}
+
+// missingCommand: the process exited because its shell found no such command (exit status 127, "command not found"),
+// as while Claude Code is being reinstalled.
+func (p *assistantProc) missingCommand() bool {
+	select {
+	case <-p.exited:
+	default:
+		return false
+	}
+	if p.cmd != nil && p.cmd.ProcessState != nil && p.cmd.ProcessState.ExitCode() == 127 {
+		return true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.ContainsFunc(p.stderrTail, func(l string) bool { return strings.Contains(l, "command not found") })
 }
 
 func (p *assistantProc) alive() bool {
@@ -365,20 +410,39 @@ func (n *Node) assistantSend(ctx context.Context, id, cwd, launcher, text string
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
 	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": content}})
-	n.syncAssistantModes(p) // a new or resumed process starts without them
-	p.mu.Lock()
-	p.busy = true
-	p.compacted = false // a new turn: compact again when it is idle and long
-	p.lastActive = time.Now()
-	p.partial.Reset()
-	p.mu.Unlock()
-	if err := p.write(line); err != nil {
-		n.stopAssistant(id)
-		return "", fmt.Errorf("send to claude: %w", err)
-	}
-	if fresh {
-		if err := p.awaitStart(assistantStartWait); err != nil {
+	for attempt := 1; ; attempt++ {
+		n.syncAssistantModes(p) // a new or resumed process starts without them
+		p.mu.Lock()
+		p.busy = true
+		p.compacted = false // a new turn: compact again when it is idle and long
+		p.lastActive = time.Now()
+		p.partial.Reset()
+		p.mu.Unlock()
+		werr := p.write(line)
+		switch {
+		case werr != nil && !fresh:
 			n.stopAssistant(id)
+			return "", fmt.Errorf("send to claude: %w", werr)
+		case werr != nil:
+			werr = p.startFailure() // it is gone already: say why, not that the pipe is closed (#2581)
+		case fresh:
+			werr = p.awaitStart(assistantStartWait)
+		}
+		if werr == nil {
+			break
+		}
+		n.stopAssistant(id)
+		if !p.missingCommand() || attempt > assistantStartRetries {
+			return "", werr
+		}
+		// Its command is missing, most likely for the moment Claude Code is being reinstalled: start it again.
+		n.logf("assistant %s: %s (attempt %d), starting it again in %s", id[:8], werr, attempt, assistantStartRetryDelay)
+		select {
+		case <-ctx.Done():
+			return "", werr
+		case <-time.After(assistantStartRetryDelay):
+		}
+		if p, err = n.spawnAssistant(id, cwd, launcher, resume && n.transcriptPath(id) != "", false, execution); err != nil {
 			return "", err
 		}
 	}
@@ -532,7 +596,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 		return nil, fmt.Errorf("start %s: %w", launcher, err)
 	}
 	p := &assistantProc{id: id, agent: "claude", launcher: launcher, cwd: cwd, cmd: cmd, stdin: stdin, exited: make(chan struct{}), ready: make(chan struct{}),
-		born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
+		stderrDone: make(chan struct{}), born: time.Now(), lastActive: time.Now(), mode: startMode, canBypass: startMode == proto.ModeBypass, model: execution, fingerprint: n.executionFingerprint(launcher, execution)}
 	if !spare {
 		n.mu.Lock()
 		n.procs[id] = p
@@ -574,6 +638,9 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 // it exits before starting (awaitStart).
 func watchAssistantStderr(logger *log.Logger, p *assistantProc, stderr io.Reader) {
 	id, launcher, born := p.id, p.launcher, p.born
+	if p.stderrDone != nil {
+		defer close(p.stderrDone)
+	}
 	var tail []string
 	sc := bufio.NewScanner(stderr)
 	for sc.Scan() {

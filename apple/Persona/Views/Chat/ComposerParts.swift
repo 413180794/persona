@@ -105,6 +105,10 @@ struct ComposerImages: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
                 ForEach(Array(images.enumerated()), id: \.offset) { idx, pair in
+                    #if os(macOS)
+                    MacComposerThumb(image: pair.0, index: idx, editable: edit != nil,
+                                     edit: { edit?(idx) }, remove: { images.remove(at: idx) })
+                    #else
                     Image(uiImage: pair.0).resizable().scaledToFill().scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                         .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                         .overlay(alignment: .bottomLeading) {
@@ -122,6 +126,7 @@ struct ComposerImages: View {
                             }
                             .offset(x: 5, y: -5)
                         }
+                    #endif
                 }
             }
             .padding(.top, Theme.Space.sm)

@@ -286,6 +286,9 @@ hub.json 的 `assistant` 一节是它们的默认值（握手给）；JSON 和�
   消息就丢了，App 一直停在「正在送达」，日志里只有 zsh 主题插件一行带 `error` 字样的提示。现在新起进程的那一次发送等它第一行输出（最多 `assistantStartWait` 8 秒）：
   先退出就报错「<启动器> 没有启动起来，消息没有送达：<stderr 最后几行>」，App 显示发送失败可以重试；超过 8 秒还没输出按启动处理（慢的 SessionStart hook）。
   stderr 的尾巴去掉颜色码和空行后记在进程上（`watchAssistantStderr`）。
+  进程在写入前就退出时，原来报的是管道错误（`send to claude: write |1: file already closed`），现在也等它退出、读完 stderr，报同样的「没有启动起来（N 秒后退出）：…」。
+  如果是 shell 找不到命令（退出码 127 / `command not found`，多半是 Claude Code 正被自动更新重装，`claude` 会消失约 2.5 秒），
+  隔 `assistantStartRetryDelay`（2 秒）重起，最多 `assistantStartRetries`（3）次，用户无感；别的启动失败不重试（#2581，`docs/lessons/server.md`）。
 - **node 的 socket 文件被别的进程顶替**（2026-11-05）：另一个 node 在同一路径上监听过、退出时不删文件（`SetUnlinkOnClose(false)`），路径上就剩一个没人听的 socket，
   所有 `jarvisd launch <Persona 管理的启动器>` 和 hook 都 `connection refused`。原来的看门狗只看文件在不在；现在每 15 秒还看它是不是自己那个（`os.SameFile`），
   不是时拨一下，没人应答才重建（`sockGone`），有人应答说明是更新的 node 在用，不抢。
