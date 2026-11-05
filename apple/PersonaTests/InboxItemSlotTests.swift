@@ -114,7 +114,7 @@ import Testing
 
         // The context says which item, with the app's UI version and platform.
         let drawn = try #require(bodies.first)
-        #expect(drawn["context"]?["item"] == .string("lark:F1:1051") && drawn["context"]?["ui_version"] == .number(2))
+        #expect(drawn["context"]?["item"] == .string("lark:F1:1051") && drawn["context"]?["ui_version"] == .number(3))
         #expect(drawn["context"]?["platform"] == .string("ios") && drawn["action"] == nil)
 
         // A button: the same item, the plugin's state, the page's fields when it submits.
@@ -208,15 +208,15 @@ import Testing
         let page = try #require(slot.page)
 
         // 在会话里看: the item's own source, today's body; 回到 brings the plugin's page back as it was.
-        let open = await page.perform(ExtensionUIAction(id: "open"))
+        let open = await page.perform(ExtensionAction(id: "open"))
         let url = try #require(open.url)
         #expect(slot.open(url) && slot.showsSource && slot.phase == .plugin)
         slot.showsSource = false
         #expect(slot.page === page)
 
         // Another item's source is never opened; an https page is the page's to open.
-        #expect(await page.perform(ExtensionUIAction(id: "other")).url == nil)
-        let web = try #require(await page.perform(ExtensionUIAction(id: "web")).url)
+        #expect(await page.perform(ExtensionAction(id: "other")).url == nil)
+        let web = try #require(await page.perform(ExtensionAction(id: "web")).url)
         #expect(!slot.open(web) && !slot.showsSource)
     }
 
@@ -238,9 +238,9 @@ import Testing
     }
 
     @Test func thePlaceAndContextCode() throws {
-        let place = try JSON.decoder.decode(PluginUIPlace.self, from: Data(#"{"plugin":"p","id":"u","title":"t","placement":"inbox_item","connector":"lark"}"#.utf8))
-        #expect(place.connector == "lark" && PluginUIPlace.slots.contains("inbox_item"))
-        let ctx = try JSON.decoder.decode(JSONValue.self, from: JSONEncoder().encode(PluginUIContext(item: "lark:F1:1051")))
+        let place = try JSON.decoder.decode(ExtensionUIPlace.self, from: Data(#"{"plugin":"p","id":"u","title":"t","placement":"inbox_item","connector":"lark"}"#.utf8))
+        #expect(place.connector == "lark" && ExtensionUIPlace.slots.contains("inbox_item"))
+        let ctx = try JSON.decoder.decode(JSONValue.self, from: JSONEncoder().encode(ExtensionUIContext.here(item: "lark:F1:1051")))
         #expect(ctx["item"] == .string("lark:F1:1051") && ctx["machine"] == nil && ctx["launcher"] == nil)
     }
 }

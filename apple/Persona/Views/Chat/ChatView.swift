@@ -1865,6 +1865,18 @@ struct ChatView: View {
         #endif
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
+        .confirmationDialog("这条回复", isPresented: Binding(get: { menu.more != nil }, set: { if !$0 { menu.more = nil } })) {
+            if let id = menu.more {
+                // A new conversation with what was said up to here (#2137). Opened once the dialog is gone: a navigation
+                // made while it is still going away is dropped, and the chat stayed on the original.
+                Button("分支到新聊天") {
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(400))
+                        menu.fork?(id)
+                    }
+                }
+            }
+        }
         .sheet(isPresented: Binding(get: { wakeDrawer != nil }, set: { if !$0 { wakeDrawer = nil } })) { wakeDrawerSheet }
         // New content while following: back to offset 0 (exact; nothing to estimate).
         .onChange(of: store.resets) { _, _ in frozen = nil } // the snapshot's items are gone
@@ -2716,6 +2728,13 @@ struct ChatView: View {
         }
         if menu.swipeQuotes != (style == .dev) { menu.swipeQuotes = style == .dev }
         menu.edit = { [model, key] text in model.drafts[key] = text }
+        menu.fork = { [model, key] itemID in
+            Task {
+                guard let new = await model.fork(key, at: itemID), model.session(key)?.assistant != true else { return }
+                switchTo(new) // the Agents chat changes agents in place
+            }
+        }
+        menu.canFork = { [model, key] in model.session(key)?.canFork == true }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
             let s = model.session(key)

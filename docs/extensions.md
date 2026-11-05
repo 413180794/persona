@@ -1088,12 +1088,28 @@ hub 的 `features` 有 `extension_ui_v3`；`initialize` 的 `hub.extension_point
   比如 Markdown 里的图片、http 链接，快照里不能有）。
 - 各端的截图测试直接读这些快照画，不连 hub：网页 `web/showcase.html`（只在 `npx vite` 开发时有，不进构建；`?theme=dark`、`?pages=a,b`、`?only=<页>`，用真的 `ExtensionUI` 画，
   假的 hub 按 `state` 回那一页的快照），单元测试 `web/src/showcase/showcase.test.tsx`；安卓 `ExtensionShowcaseShotsTest`（Robolectric，35 页 × 三套风格 × 深浅色，共 210 张，
-  出到 `feature/settings/build/extension-showcase-shots/`）；iOS / Mac 见 #1860。
+  出到 `feature/settings/build/extension-showcase-shots/`）。iOS 的 `ExtensionShowcaseTests` 从 mock HTTP 原样读取同一份快照，画真实 App 页面；
+  五种界面风格 × 深浅色，共 350 张首页截图，另有 50 张长页底部截图。每次运行用 `TEST_RUNNER_JARVIS_SHOTS` 指定输出目录；
+  汇总图见下面。Mac 按用户的焦点限制只编译，不启动窗口或自动截图。
 - 改了组件：先改展示扩展（加一页或一种状态）、重新生成快照、拷过来，各端的截图跟着看一遍。
 
 ![组件展示：网页（左）和安卓（右）画同一页（浅色）](screenshots/extension-showcase-light.png)
 
 ![组件展示：网页（左）和安卓（右）画同一页（深色）](screenshots/extension-showcase-dark.png)
+
+Apple 的 35 页汇总（按文件名排序，裁去重复导航栏，完整原图由截图测试输出）：
+
+| 界面风格 | 浅色 | 深色 |
+| --- | --- | --- |
+| 液态玻璃 | [浅色](screenshots/extension-showcase-apple-glass-light.png) | [深色](screenshots/extension-showcase-apple-glass-dark.png) |
+| BeautifulUI | [浅色](screenshots/extension-showcase-apple-beautiful-light.png) | [深色](screenshots/extension-showcase-apple-beautiful-dark.png) |
+| 黏土 | [浅色](screenshots/extension-showcase-apple-clay-light.png) | [深色](screenshots/extension-showcase-apple-clay-dark.png) |
+| Island | [浅色](screenshots/extension-showcase-apple-island-light.png) | [深色](screenshots/extension-showcase-apple-island-dark.png) |
+| 飞书 | [浅色](screenshots/extension-showcase-apple-lark-light.png) | [深色](screenshots/extension-showcase-apple-lark-dark.png) |
+
+各端共用内容和动作语义，不要求逐像素相同：Apple 用原生 Form 卡片和系统选择控件，搜索框在导航栏，筛选用 chip，宽表横向滚动；
+图表系列色和折线画法沿用各端设计系统。Android 的 Robolectric 网络图片占位不是线上图片加载失败。小组件尺寸的快照在这里仍是普通页面，
+不代表 #1862 的 WidgetKit 或表盘位置已完成。
 
 ## 系统级位置（#1858）
 
@@ -1292,8 +1308,8 @@ iOS（Mac 共用同一套页面）在 hub 带 `extension_manager` 时，设置�
 UI 的位置 `extension` / `extension_name` 和 `plugin` / `plugin_name`，市场的个数 `extensions` / `plugins`；从市场预览的请求体在新 hub 写 `extension`、老 hub 写 `plugin`。
 features 认新名字也认老的（`hasExtensionFeature("ui_slots")` 即 `extension_ui_slots` 或 `plugin_ui_slots`，`"manager"` 同理）；事件 `extension_ui` 和 `plugin_ui`
 都收（新 hub 两份都发，角标是设置值，收两次没关系）；渠道的 `settings_url` 认 `settings/extensions/<id>` 和 `settings/plugins/<id>`。
-画 View 的几个类型（`PluginUIPlace`、`PluginUIItem`、`PluginUIContext`、`PluginBadge`、`PluginChoice`）暂时还叫这个名字：
-schema 生成的同名类型（`apple/Shared/Generated/ExtensionWire.swift`）在 #1860 替换它们。
+View、组件、动作、回答、位置和上下文都用 schema 生成的类型（`apple/Shared/Generated/ExtensionWire.swift`，#1860），App 只在旁边加读法
+（`ExtensionUIModel.swift`：`ExtensionUIPlace.owner` 认新老两种键，`ExtensionUIContext.here(…)` 带上时区、语言、平台和 `ui_version: 3`）。
 
 - 列表：每个扩展的名字和状态（启动 / 正在启动 / 需要设置 / 停用 / 这台 hub 用不了 / 出错了；`running`、`stopped` 都是「启动」），点进详情；页脚写明在 hub 的管理界面（`/admin`）或 hub 机器上（`personad extension`）装。
 - 详情：状态、版本、来源、描述、是否在跑的小字（「正在运行」/「暂未运行，用到时自动启动」）、「还缺：…」和错误；「启用」开关；「设置」是按 `form.fields` 画的表单（文字、数字、开关、选择、文字列表 / 多选，
@@ -1310,12 +1326,33 @@ schema 生成的同名类型（`apple/Shared/Generated/ExtensionWire.swift`）�
   再是「扩展」一节，每个 `nav_page` 一行（`icon` 换成 `Theme.Icon.plugin…`，不认识的是扩展图标；角标数字用 `CountBadge`、文字用 `Chip`），
   设置 tab 和新外壳抽屉里的设置按钮加上角标之和（只有文字时是一个点）。Mac：`nav_page` 在左边分区列的设置前面（`MacShellState.pluginPage`），
   卡片在设置 › 扩展列表上面。机器详情页在机器自己的各节后面每个 `machine_section` 一节（`ExtensionMachineModel`，按机器所在的 hub 组），
-  hub 回 404 就整节不画。每次画、每个动作带 `context`（`PluginUIContext`：`tz`、`locale`、`platform`、`ui_version: 2`、`size`、`launcher` / `machine`）。
+  hub 回 404 就整节不画。每次画、每个动作带 `context`（`ExtensionUIContext.here`：`tz`、`locale`、`platform`、`ui_version: 3`、`size`、`launcher` / `machine` / `item`）。
   新条目：`chart` 用 Swift Charts 画（`DataChart`：并排 / 叠起来的柱子、折线，系列没 `tone` 时取数据色，按住或悬停一列显示各系列的 `display`，
   紧凑时不写坐标轴、只留首尾标签，标签多时隔几个写一个），`stat_grid`（`ViewThatFits`：放得下一行放全，不然一行 3 个或 2 个），`segmented`
   （`SegmentedChoice`，选了马上发 `values: {name: 值}`）；不认识的条目跳过，不认识的 `tone` 当 `neutral`。`refresh_after` 只在页面在前台、
   App 在前台时计时（`.pluginRefresh`，最少 30 秒），回来时过了就马上画，自动重画时正在填的字段留着。卡片和机器上的一节不在列表里画链接面板：
   链接交给页面（Mac 的侧边面板会把整页包起来，放在一行里会把那一行压成只剩标题）。
+- UI 版本 3（#1860，「UI 版本 3」）：同一个渲染器（`ExtensionViewRenderer` 画列表页，`ExtensionViewStack` 画卡片、机器上的一节和助手的卡片），
+  组件实现在 `ExtensionComponents.swift`。
+  `markdown` 用对话的 Markdown 主题画（`ExtensionMarkdown`：图片一律不加载，链接只认 https、在 App 内打开）；`table` 一格一行不换行、宽了横着滚（`ExtensionTable`）；
+  `empty` 是设计系统的 `EmptyStateView`（按钮调它的动作）；`loading` 是小圈加一句。行可以带图标（图标集换成 `ExtensionUIStyle.icon`，`nav_page` 的入口和空状态也用它）、
+  头像（https 的图，没有或加载失败画 1–2 个字的 `Monogram`）或缩略图（方的 / 宽的）；图用不带任何 cookie 和凭据的单独会话加载（`ExtensionRemoteImage`）。
+  组件有 `key` 时按 `key` 认（画新的一页时位置不跳）。搜索框是整页的导航栏搜索（`.extensionSearch`，停 0.3 秒发 `values: {q}`，只显示最后一次搜索的回答）；
+  筛选是搜索框下面一排 `FilterChip`（选了马上发，带上现在的 `q`）；节的 `more` 是节尾一行「加载更多」，滚到就自动发一次（`loadingMore` 期间不再发），也能点。
+  `push` 不问扩展：设置和收件箱里经 `SplitNavigation` 的路径按值推一页（`splitPush`，目标 `ExtensionPushTarget` 和别的页面一起注册：`extensionPushDestination()`），
+  别处用 `navigationDestination(item:)`；推出来的页是同一个 `ExtensionPageView`，第一次画带 `push.state`，栈最多 8 层；回来时下面那页重新画一次。
+  回答里的 `pop` 关掉这一页。`.extensionPushes(…)` 放在页面上（列表的行里推不了）：扩展页、设置首页的卡片、启动器页、机器页、收件箱条目的页。
+  `extension_ui {invalidate}`（`ServerEvent.extensionInvalidate`）经 `ExtensionUIRegistry` 把同一 hub 组里那个扩展（那个界面）的模型标成 `stale`：在屏幕上的马上重画，
+  不在的出现时再画（和 `refresh_after` 同一个计时器 `.pluginRefresh`），正在填的字段留着。任务键用失效版本；请求结束后才处理标记，
+  避免刷新取消自己。操作中收到事件会在操作结束后重试，取消的刷新不消耗事件，请求期间到达的新事件仍然待处理。
+- 助手的卡片（#1860，「助手的卡片」）：```` ```persona-view ```` 和 ```` ```persona-card ```` 都在 `PersonaCard.swift`（`AssistantCardBlock`）：
+  `persona-card` 按 `sdk/go/wire/personacard.go` 的规则转成组件（`ExtensionPersonaCard.view()`，数字写法同 `Number`，`PersonaCardTests` 拿
+  `schema/extension/examples/persona-card/` 的每个用例逐字段对照），`persona-view` 是一个 View 或一个组件；都用 `ExtensionViewStack` 画在一张卡片里，
+  没有模型，所以行、按钮、字段、搜索、筛选、更多都不生效，链接照常。画不了的照旧是代码块。
+- 截图：`MOCK_PLUGINS=1` 的假 hub 的 `example-gateway` 有「笔记（组件 v3）」页（`-openExtension example-gateway -openExtensionPage notes`），
+  `GET /mock/invalidate` 同步进一条笔记并发 `ui.invalidate`；UI 测试 `ExtensionV3Tests`（列表、筛选、更多、搜索到空状态、推出笔记页、编辑保存后 pop 回来、invalidate），
+  单元测试 `ExtensionUIv3Tests`、`PersonaCardTests`。`MOCK_EXTENSION_CARDS=1` 配合 `ExtensionAssistantCardTests` 在真实助手对话中检查
+  `persona-view` 和旧 `persona-card` 共用渲染器、动作不可点、链接保留，并保存深浅色截图。showcase 的四端对照依赖 #1852，不能用 notes 截图替代。
 - 收件箱条目的正文（#1682，`inbox_item`，见上面「收件箱条目」）：hub 有 `extension_ui_slots` 时（App 刚启动、hello 还没到时也问：启动就点开的一件不能因此定成原来的正文，
   不认识这个插槽的 hub 只回空列表），每台 hub 问一次 `GET /api/v1/extensions/-/ui?placement=inbox_item`（配对 / 换 hub、打开收件箱时再问），
   记下哪些连接器有扩展画（`InboxItemSlots`，`connector` 对条目的 `source`）。打开这些来源的条目时 `POST …/-/ui/{ui}`、`context.item` 是条目 id，

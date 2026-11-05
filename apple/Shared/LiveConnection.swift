@@ -14,12 +14,6 @@ nonisolated enum TerminalEvent: Sendable {
     case control(state: String, cols: Int?, rows: Int?, why: String?)
 }
 
-/// A plugin's badge on an entry it put in the main navigation: a number or a short word, in one of the tones.
-nonisolated struct PluginBadge: Codable, Hashable, Sendable {
-    var text: String
-    /// neutral | positive | caution | danger; anything else reads as neutral.
-    var tone: String?
-}
 
 nonisolated enum ServerEvent: Sendable {
     /// features: what the hub supports beyond the first protocol (proto.Features); which hub it is and its group
@@ -62,7 +56,10 @@ nonisolated enum ServerEvent: Sendable {
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
     /// A plugin changed the badge on one of its main-navigation entries (docs/extensions.md「UI 插槽」角标): nil clears it.
-    case pluginBadge(plugin: String, id: String, badge: PluginBadge?)
+    case pluginBadge(plugin: String, id: String, badge: ExtensionBadge?)
+    /// An extension's data changed (`ui.invalidate`, docs/extensions.md「ui.invalidate」): its interface `id` (nil: all of
+    /// them) is drawn again where it is shown.
+    case extensionInvalidate(extension: String, id: String?)
     case error(SessionKey?, String)
 
     private struct Envelope: Decodable {
@@ -120,12 +117,13 @@ nonisolated enum ServerEvent: Sendable {
         var plugin: String?
         /// extension_ui's (plugin_ui says `plugin`).
         var extensionID: String?
-        var badge: PluginBadge?
+        var invalidate: Bool?
+        var badge: ExtensionBadge?
 
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, plan
-            case plugin, badge
+            case plugin, badge, invalidate
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
@@ -198,6 +196,8 @@ nonisolated enum ServerEvent: Sendable {
             return .terminal(key, .frame(epoch: epoch, seq: seq, full: e.full ?? false, cols: e.cols ?? 0, rows: e.rows ?? 0, data: data))
         // A hub from #1844 on sends each as plugin_ui and then extension_ui; the badge is set, so twice does no harm.
         case "plugin_ui", "extension_ui":
+            // An invalidate comes as extension_ui only (an older app would take a plugin_ui for a badge).
+            if e.invalidate == true, let ext = e.extensionID ?? e.plugin { return .extensionInvalidate(extension: ext, id: e.id) }
             guard let plugin = e.extensionID ?? e.plugin, let id = e.id else { return nil }
             return .pluginBadge(plugin: plugin, id: id, badge: e.badge.flatMap { $0.text.isEmpty ? nil : $0 })
         case "terminal_control":
@@ -229,7 +229,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .assistantFeed, .taskPlan, .pluginBadge: return self
+             .assistantFeed, .taskPlan, .pluginBadge, .extensionInvalidate: return self
         }
     }
 }

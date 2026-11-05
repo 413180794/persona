@@ -93,6 +93,7 @@ struct MachineDetailView: View {
         }
         .themedGroupedPage()
         .pluginLinks($pluginLink)
+        .extensionPushes(Array(plugins.models.values))
         .detailTitle(machine?.name ?? machineID)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {

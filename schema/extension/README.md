@@ -23,7 +23,7 @@ python3 scripts/test/test_extension_schema.py     # --check + 例子合不合 sc
 | --- | --- | --- |
 | Go | `sdk/go/wire/wire_gen.go`（独立 module `github.com/nwverse/persona/sdk/go`，不依赖任何东西） | 结构体；联合类型是**一个平铺的结构体**（各变体的字段合在一起，都可选，`Type` 说是哪种），和 hub 一直用的 `UIElem` 一样；枚举是字符串常量和一个列表（`Tones`）；`ComponentSince` 是每种组件从哪个 UI 版本开始有 |
 | TypeScript | `sdk/ts/src/wire.ts`，网页一份同样的 `web/src/lib/extension-wire.ts` | interface；联合类型是各变体的联合（`Component = TextComponent \| …`）；枚举是字面量联合再加 `string & {}`（新 hub 发来的值照样收） |
-| Swift | `apple/Shared/Generated/ExtensionWire.swift` | 类型名加 `Extension` 前缀（`ExtensionView`），`nonisolated`、`Codable`、`Sendable`；缺字段、字段类型不对都不失败（取零值或 nil）；联合类型是 enum，不认识的或读不出来的组件是 `.unknown(type:)`；任意 JSON 用 `JSONValue` |
+| Swift | `apple/Shared/Generated/ExtensionWire.swift` | 类型名加 `Extension` 前缀（`ExtensionView`），`nonisolated`、`Codable`、`Hashable`、`Sendable`；缺字段、字段类型不对都不失败（取零值或 nil）；联合类型是 enum，不认识的或读不出来的组件是 `.unknown(type:)`；任意 JSON 用 `JSONValue` |
 | Kotlin | `android/core/contracts/src/main/kotlin/persona/core/contracts/generated/ExtensionWire.kt` | kotlinx.serialization 的 data class，同样加 `Extension` 前缀，字段都有默认值；联合类型是 sealed interface + 读 `type` 的 serializer，不认识或读不出来的是 `Unknown(type, raw)`，写回去时原样写。和 Swift 不同，组件以外的对象有字段类型不对时整个读不出来（hub 先按 schema 查过 View，App 拿到的都合规） |
 
 生成器还把三份 schema 原样拷到 `sdk/go/wire/schema/`（`go:embed` 读不到 module 外面的文件）：`wire.Validate(<定义名>, 值)` 按它们查，

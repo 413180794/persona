@@ -518,6 +518,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var readOnlyReason: String? = nil
     var capabilities: SessionCapabilities? = nil
     var attached: Bool? = nil
+    /// 分支到新聊天 works for it (a Claude Code conversation the node can copy, #2137); older nodes never say so.
+    var canFork: Bool? = nil
     /// How Persona reaches a Codex in a terminal (docs/codex.md「守护进程上的会话」): "app_server" (joined on its shared
     /// app-server) or "terminal" (its screen and session record); the note says why it is the terminal.
     var codexRoute: String? = nil
@@ -665,6 +667,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case title, cwd, status, launcher, model, agent, effort, efforts, capabilities, attached
+        case canFork = "can_fork"
         case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
              parentThreadID = "parent_thread_id", readOnlyReason = "read_only_reason"
         case codexRoute = "codex_route", codexRouteNote = "codex_route_note"
@@ -698,6 +701,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         readOnlyReason = try c.decodeIfPresent(String.self, forKey: .readOnlyReason)
         capabilities = try c.decodeIfPresent(SessionCapabilities.self, forKey: .capabilities)
         attached = try c.decodeIfPresent(Bool.self, forKey: .attached)
+        canFork = try c.decodeIfPresent(Bool.self, forKey: .canFork)
         codexRoute = try c.decodeIfPresent(String.self, forKey: .codexRoute)
         codexRouteNote = try c.decodeIfPresent(String.self, forKey: .codexRouteNote)
         agentLabelHint = try c.decodeIfPresent(String.self, forKey: .agentLabelHint)

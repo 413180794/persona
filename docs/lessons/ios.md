@@ -20,6 +20,12 @@ visionOS 没有 iOS 的抽屉手势，`DrawerPan.NoRowSwipe` 只需作为无内�
 - 2026-11-05：App 的收键盘图标有两个来源：新外壳的 `ShellComposerBar`（主对话和 Agents 共用）以及旧布局的 `KeyboardDismissChip`。按用户要求删除时要同时移除旧布局仅为按钮创建的条件行，不能用透明占位替代；`composerTyping` 仍控制侧边栏布局的页头折叠，`Keyboard.dismiss` 与 `Theme.Icon.dismissKeyboard` 仍供手势和终端键栏使用，不能全局删除。
 - GPT 名称格式化只发生在显示层，版本和后缀都保留。模型选择项用计算属性提供友好名称，`AgentModel.id`、`name`、配置值和请求编码保持原样；独立的自定义名称优先。不要修改通用 `Fmt.model`，也不要让原本只去掉供应商前缀的非 GPT 标签被顺手缩写。UI 回归在旧实现上先确认失败，再验证两种布局、主对话／Agents、键盘展开／手势收起及长标签下的按钮尺寸。
 
+## 刷新任务不能在请求完成前改变自己的键（#1860）
+
+扩展页收到 `invalidate` 后把 `stale` 作为 `.task(id:)` 的键，刷新一开始就清掉 `stale`，SwiftUI 会取消这个任务正在等待的网络请求。现象是 mock 已收到重画请求，App 却一直保留旧页面；四种外观下都失败，单测直接调用 `refresh()` 则测不出来。
+
+任务键改用失效版本，请求结束后再处理标记。取消的请求不消耗失效事件；请求期间收到新事件不能被旧请求清掉。操作忙碌时暂缓，在操作结束后重试。用可控的异步响应测试取消和并发事件，再用真实 App 的 WebSocket → 重画 UI 测试验证完整链路。多 hub 的失效事件还必须带所属组，不能只按扩展 id 匹配。
+
 ## 视频导出
 
 - 2026-11-04，#1045：生成的灰色视频在真实压缩测试中触发 `EXC_BREAKPOINT / SIGTRAP`，调用栈位于 Swift AVFoundation 的 `AVAssetExportSession.ProgressStates.Iterator.StateInternal.init`。

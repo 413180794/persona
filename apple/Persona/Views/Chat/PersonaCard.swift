@@ -1,170 +1,144 @@
-import Charts
+import Foundation
 import SwiftUI
 
-/// A card the assistant puts in a reply (#886): a ```persona-card fenced block holding one JSON object. The app draws
-/// the ones it understands; anything else (unknown type, broken or still-streaming JSON) stays the code block it is, so
-/// nothing is lost on an older app, the web or Android. The prompt that teaches the format is the assistant's
-/// claude_md.md「做事方式」.
-struct PersonaCard: Decodable, Equatable {
-    static let language = "persona-card"
+/// The assistant's cards in a reply (docs/extensions.md「助手的卡片」): a ```persona-view block holds a View or one
+/// component, a ```persona-card block (#886, the older way) one card that becomes components by the rules every app
+/// shares (`sdk/go/wire/personacard.go`). Both are drawn by the renderer the extensions' views are drawn by, with nothing
+/// to use (no actions, fields, search, filter or more); links open as usual. Anything the app cannot draw (unknown,
+/// broken or still-streaming JSON, a card without what it needs) stays the code block it is, so nothing is lost on an
+/// older app, the web or Android.
+enum AssistantCardBlock {
+    static let viewLanguage = "persona-view"
+    static let cardLanguage = "persona-card"
 
-    enum Kind: String, Decodable {
-        /// One number that matters: `value` + `unit`, `note` beside it (比昨天 +12%).
-        case stat
-        /// A total and its parts: `segments`, `rest` (the unassigned part), `total` (else their sum).
-        case stackedBar = "stacked_bar"
-        /// By day: `points` as a line (two or more) or as bars.
-        case line, bar
-    }
-
-    struct Amount: Decodable, Equatable {
-        var value: Double
-        var unit: String?
-    }
-
-    struct Part: Decodable, Equatable {
-        var label: String
-        var value: Double
-        var note: String?
-    }
-
-    var type: Kind
-    var title: String?
-    var subtitle: String?
-    var value: Double?
-    var unit: String?
-    var note: String?
-    var total: Amount?
-    var segments: [Part]?
-    var rest: Part?
-    var points: [Part]?
-
-    /// The card in a fenced block's text, or nil when it is not one the app can draw.
-    static func parse(_ text: String) -> PersonaCard? {
-        guard let data = text.data(using: .utf8), let card = try? JSONDecoder().decode(PersonaCard.self, from: data),
-              card.drawable else { return nil }
-        return card
-    }
-
-    var drawable: Bool {
-        switch type {
-        case .stat: value != nil
-        case .stackedBar: !parts.isEmpty && parts.allSatisfy { $0.value >= 0 } && sum > 0
-        case .line: (points ?? []).count >= 2
-        case .bar: !(points ?? []).isEmpty
+    /// The View in a fenced block of `language`, nil when it is not one the app can draw.
+    static func parse(language: String?, _ text: String) -> ExtensionView? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        switch language {
+        case viewLanguage:
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            if json["sections"] != nil {
+                guard let v = try? JSONDecoder().decode(ExtensionView.self, from: data), v.drawable else { return nil }
+                return v
+            }
+            guard json["type"] is String, let c = try? JSONDecoder().decode(ExtensionComponent.self, from: data) else { return nil }
+            let v = ExtensionView(sections: [ExtensionSection(items: [c])])
+            return v.drawable ? v : nil
+        case cardLanguage:
+            guard let card = try? JSONDecoder().decode(ExtensionPersonaCard.self, from: data) else { return nil }
+            return card.view()
+        default:
+            return nil
         }
     }
 
-    /// The stacked bar's pieces in order, the rest last.
-    var parts: [Part] { (segments ?? []) + (rest.map { [$0] } ?? []) }
-    var sum: Double { parts.reduce(0) { $0 + $1.value } }
-
-    /// The headline amount: a stat's value, a stacked bar's total (or its parts' sum), a trend's optional value.
-    var headline: Amount? {
-        switch type {
-        case .stackedBar: total ?? Amount(value: sum, unit: unit)
-        default: value.map { Amount(value: $0, unit: unit) }
-        }
-    }
-
-    /// 2,250 / 7.5: grouped, at most one decimal.
-    static func number(_ v: Double) -> String { v.formatted(.number.precision(.fractionLength(0...1))) }
+    static func handles(_ language: String?) -> Bool { language == viewLanguage || language == cardLanguage }
 }
 
-struct PersonaCardView: View {
-    var card: PersonaCard
+nonisolated extension ExtensionView {
+    /// Something on it the app draws: a View of only components it does not know stays a code block.
+    var drawable: Bool {
+        sections.contains { section in
+            section.items.contains { component in
+                switch component {
+                case .unknown, .divider, .button, .field, .segmented, .html: false
+                default: true
+                }
+            }
+        }
+    }
+}
 
-    /// Parts are told apart, nothing more; the rest is quiet.
-    static let hues = [Theme.Hue.blue, Theme.Hue.green, Theme.Hue.orange, Theme.Hue.purple]
+nonisolated extension ExtensionPersonaCard {
+    /// The card as the apps draw it, nil when they cannot (it stays a code block): `sdk/go/wire/personacard.go`'s rules,
+    /// held to `schema/extension/examples/persona-card/` by the tests.
+    func view() -> ExtensionView? {
+        let parts = (segments ?? []) + (rest.map { [$0] } ?? [])
+        let sum = parts.reduce(0) { $0 + $1.value }
+        switch type {
+        case ExtensionPersonaCardKind.stat: guard value != nil else { return nil }
+        case ExtensionPersonaCardKind.stackedBar: guard !parts.isEmpty, sum > 0, parts.allSatisfy({ $0.value >= 0 }) else { return nil }
+        case ExtensionPersonaCardKind.line: guard (points ?? []).count >= 2 else { return nil }
+        case ExtensionPersonaCardKind.bar: guard !(points ?? []).isEmpty else { return nil }
+        default: return nil
+        }
+        var s = ExtensionSection(title: Self.nonEmpty(title), items: [])
+        if let sub = Self.nonEmpty(subtitle) { s.items.append(.text(ExtensionTextComponent(text: sub, style: "secondary"))) }
+        switch type {
+        case ExtensionPersonaCardKind.stat:
+            s.title = nil
+            s.items.append(.metric(ExtensionMetricComponent(label: Self.nonEmpty(title) ?? "数值", value: Self.amount(value ?? 0, unit),
+                                                            detail: Self.nonEmpty(note))))
+        case ExtensionPersonaCardKind.stackedBar:
+            var u = unit, total = sum
+            if let t = self.total { u = Self.nonEmpty(t.unit) ?? unit; total = t.value }
+            s.items.append(.metric(ExtensionMetricComponent(label: "合计", value: Self.amount(total, u), detail: Self.nonEmpty(note))))
+            let label = Self.nonEmpty(title) ?? "合计"
+            let shown = parts.count > 4 ? Array(parts.prefix(3)) : parts
+            var series: [ExtensionChartSeries] = shown.enumerated().map { i, p in
+                ExtensionChartSeries(name: p.label, tone: rest != nil && i == parts.count - 1 ? ExtensionTone.neutral : nil,
+                                     points: [ExtensionChartPoint(label: label, value: p.value, display: Self.amount(p.value, u))])
+            }
+            if parts.count > 4 {
+                let other = parts.dropFirst(3).reduce(0) { $0 + $1.value }
+                series.append(ExtensionChartSeries(name: "其他", tone: ExtensionTone.neutral,
+                                                   points: [ExtensionChartPoint(label: label, value: other, display: Self.amount(other, u))]))
+            }
+            s.items.append(.chart(ExtensionChartComponent(kind: ExtensionChartKind.bar, series: series, unit: Self.nonEmpty(u), stacked: true)))
+            for p in parts {
+                s.items.append(.row(ExtensionRowComponent(title: p.label, subtitle: Self.nonEmpty(p.note), value: Self.amount(p.value, u))))
+            }
+        default: // line, bar
+            if let v = value { s.items.append(.metric(ExtensionMetricComponent(label: "当前", value: Self.amount(v, unit)))) }
+            let pts = (points ?? []).suffix(120).map { ExtensionChartPoint(label: $0.label, value: $0.value, display: Self.amount($0.value, unit)) }
+            s.items.append(.chart(ExtensionChartComponent(kind: type == ExtensionPersonaCardKind.bar ? ExtensionChartKind.bar : ExtensionChartKind.line,
+                                                          series: [ExtensionChartSeries(points: Array(pts))], unit: Self.nonEmpty(unit),
+                                                          detail: Self.nonEmpty(note))))
+        }
+        return ExtensionView(sections: [s])
+    }
+
+    private static func nonEmpty(_ s: String?) -> String? { s?.isEmpty == false ? s : nil }
+
+    /// `v` written grouped with at most one decimal, then the unit: "2,250 kcal", "7.5 小时", "8,432".
+    static func amount(_ v: Double, _ unit: String?) -> String {
+        let n = number(v)
+        guard let unit, !unit.isEmpty else { return n }
+        return n + " " + unit
+    }
+
+    /// Grouped by thousands with at most one decimal, the same in every language: 2,250 · 7.5 · -1,200.3 · 0.
+    static func number(_ v: Double) -> String {
+        var r = (v * 10).rounded() / 10
+        if r == 0 { r = 0 } // not -0
+        let negative = r < 0
+        r = abs(r)
+        var whole = r.rounded(.down)
+        var tenth = Int(((r - whole) * 10).rounded())
+        if tenth == 10 { whole += 1; tenth = 0 }
+        let digits = String(format: "%.0f", whole)
+        var out = negative && (whole > 0 || tenth > 0) ? "-" : ""
+        for (i, d) in digits.enumerated() {
+            if i > 0 && (digits.count - i) % 3 == 0 { out.append(",") }
+            out.append(d)
+        }
+        if tenth > 0 { out += "." + String(tenth) }
+        return out
+    }
+}
+
+/// An assistant's card in its reply: the View in one card, its sections' titles as headings; nothing to use, links
+/// open where the chat opens them.
+struct AssistantViewCard: View {
+    var view: ExtensionView
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            if let t = card.title { Text(t).font(Theme.Font.heading).accessibilityAddTraits(.isHeader) }
-            if let s = card.subtitle { Text(s).font(Theme.Font.secondary).foregroundStyle(.secondary) }
-            if let a = card.headline { amount(a) }
-            if card.type == .stat, let n = card.note { Text(n).font(Theme.Font.secondary).foregroundStyle(.secondary) }
-            switch card.type {
-            case .stat: EmptyView()
-            case .stackedBar: shares
-            case .line, .bar: trend
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card(padding: Theme.Space.m)
-    }
-
-    private func amount(_ a: PersonaCard.Amount) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
-            Text(PersonaCard.number(a.value)).font(Theme.Font.display).monospacedDigit()
-            if let u = a.unit ?? card.unit { Text(u).font(Theme.Font.heading) }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func color(_ i: Int) -> Color {
-        i < (card.segments ?? []).count ? Self.hues[i % Self.hues.count] : Theme.Hue.gray
-    }
-
-    private var shares: some View {
-        let parts = card.parts, sum = card.sum
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            GeometryReader { g in
-                let gaps = Theme.Size.rule * CGFloat(max(parts.count - 1, 0))
-                HStack(spacing: Theme.Size.rule) {
-                    ForEach(parts.indices, id: \.self) { i in
-                        Rectangle().fill(color(i))
-                            .frame(width: max(g.size.width - gaps, 0) * parts[i].value / sum)
-                    }
-                }
-            }
-            .scaledFrame(height: Theme.Size.meter)
-            .clipShape(.capsule)
-            .accessibilityHidden(true) // the rows below say the same
-            ForEach(parts.indices, id: \.self) { i in
-                let p = parts[i], isRest = i >= (card.segments ?? []).count
-                if i > 0 { Divider() }
-                HStack(spacing: Theme.Space.s) {
-                    if !isRest { Circle().fill(color(i)).scaledFrame(width: Theme.Size.dot, height: Theme.Size.dot) }
-                    Text(p.label).font(Theme.Font.body).foregroundStyle(isRest ? .secondary : .primary).lineLimit(2)
-                    if let n = p.note { Text(n).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1) }
-                    Spacer(minLength: Theme.Space.s)
-                    Text(PersonaCard.number(p.value) + (card.headline?.unit.map { " " + $0 } ?? ""))
-                        .font(isRest ? Theme.Font.body : Theme.Font.bodyStrong).monospacedDigit()
-                        .foregroundStyle(isRest ? .secondary : .primary)
-                        .fixedSize() // the number stays whole; the label wraps
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-    }
-
-    private var trend: some View {
-        // Placed by position, named by label: two points both called 周一 are still two points.
-        let points = Array((card.points ?? []).enumerated()), n = points.count
-        let shown = Array(stride(from: 0, to: n, by: max(1, (n + 6) / 7))) // at most about seven labels
-        return VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Chart(points, id: \.offset) { i, p in
-                if card.type == .line {
-                    LineMark(x: .value("日期", String(i)), y: .value(card.unit ?? "值", p.value))
-                        .foregroundStyle(Theme.Hue.blue)
-                        .interpolationMethod(.monotone)
-                    PointMark(x: .value("日期", String(i)), y: .value(card.unit ?? "值", p.value))
-                        .foregroundStyle(Theme.Hue.blue)
-                } else {
-                    BarMark(x: .value("日期", String(i)), y: .value(card.unit ?? "值", p.value))
-                        .foregroundStyle(Theme.Hue.blue)
-                        .cornerRadius(Theme.Radius.badge)
-                }
-            }
-            .chartXAxis { // days as labels; only the value lines cross the plot
-                AxisMarks(values: shown.map(String.init)) { v in
-                    AxisValueLabel { if let i = v.as(String.self).flatMap(Int.init), i < n { Text(points[i].element.label) } }
-                }
-            }
-            .accessibilityLabel(card.title ?? "")
-            .accessibilityValue(points.map { "\($0.element.label) \(PersonaCard.number($0.element.value))" }.joined(separator: "，"))
-            .scaledFrame(height: Theme.Size.box150)
-            if let n = card.note { Text(n).font(Theme.Font.secondary).foregroundStyle(.secondary) }
-        }
+        ExtensionViewStack(view: view, model: nil, cards: false, titles: true, link: Binding(
+            get: { nil },
+            set: { if let url = $0?.url { openURL(url) } }))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card(padding: Theme.Space.m)
+            .accessibilityIdentifier("assistant-view-card")
     }
 }

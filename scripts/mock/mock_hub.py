@@ -367,7 +367,7 @@ def sess(mid, sid, title, cwd, status, state, space, sidx, slot, slidx, minutes,
          "tab_id": f"w{sidx}:t{slidx}", "workspace_id": f"w{sidx}", "updated_at": ago(minutes=minutes),
          "last_text": last, "pending_interactions": pending, "rev": 1000}
     if agent == "claude":
-        s.update(permission_mode="default", effort="high")
+        s.update(permission_mode="default", effort="high", can_fork=True)  # 分支到新聊天 (#2137)
     s.update(kw)
     return s
 
@@ -4770,6 +4770,18 @@ if os.environ.get("MOCK_CARDS") == "1":
             _card({"type": "pie", "segments": [{"label": "a", "value": 1}]}),
         ])),
     ]
+# 统一渲染器的助手截图：一个只读 persona-view 和一个旧 persona-card，不影响其他 mock 模式。
+if os.environ.get("MOCK_EXTENSION_CARDS") == "1":
+    _view = {"sections": [{"title": "本周概览", "items": [
+        {"type": "markdown", "text": "**会议记录已整理**，可以查看摘要。"},
+        {"type": "row", "title": "周会摘要", "icon": "doc", "action": {"id": "must-not-run"}},
+        {"type": "button", "title": "不应运行", "action": {"id": "must-not-run"}},
+        {"type": "link", "title": "查看说明", "url": "https://example.com/guide"}]}]}
+    _legacy = {"type": "stat", "title": "今天步数", "value": 8432, "unit": "步", "note": "这是演示数据"}
+    _fence = lambda language, data: "```" + language + "\n" + json.dumps(data, ensure_ascii=False) + "\n```"
+    ITEMS[ASK1] = [it("user", "text", 2, text="把今天的概览放到卡片里"),
+                   it("assistant", "text", 1, text=_fence("persona-view", _view) + "\n\n" + _fence("persona-card", _legacy))]
+
 if os.environ.get("MOCK_SPLIT_TABS"):
     ITEMS.update(split_tabs_items())
 if os.environ.get("MOCK_BOTMUX"):
@@ -9766,6 +9778,25 @@ class H(BaseHTTPRequestHandler):
             SESSION_DELETED.append(s)
             push_machine(mid)
             return self.send_json({"ok": True})
+        if p.startswith("/api/v1/sessions/") and p.endswith("/fork") and self.command == "POST":
+            # 分支到新聊天 (#2137): a copy of the session up to the reply's turn, offline until its next message.
+            if is_read_only(self): return self.send_json({"error": "只读角色不能分支"}, 403)
+            mid, sid = p.split("/")[4:6]
+            s = next((s for s in SESSIONS if s["machine_id"] == mid and s["session_id"] == sid), None)
+            if s is None or not s.get("can_fork"): return self.send_json({"error": "这个会话不能分支", "code": "fork_unsupported"}, 400)
+            at = json.loads(self.last_body or b"{}").get("at_item_id", "")
+            new = str(uuid.uuid4())
+            items = ITEMS.get(sid, [])
+            cut = next((i for i, x in enumerate(items) if x.get("id") == at), None) if at else len(items) - 1
+            if cut is None: return self.send_json({"error": "找不到要分支的那条消息", "code": "fork_item_missing"}, 400)
+            end = next((j for j in range(cut + 1, len(items)) if items[j].get("role") == "user" and items[j].get("kind") == "text"), len(items))
+            ITEMS[new] = [dict(x) for x in items[:end]]
+            forked = dict(s, session_id=new, title="分支 · " + s["title"], status="offline", state="offline", pane_id=None, tab_id=None, workspace_id=None, space_kind=None, space_id=None,
+                          space_name=None, space_index=None, slot_id=None, slot_name=None, slot_index=None,
+                          pending_interactions=0, rev=1, updated_at=ago(minutes=0))
+            SESSIONS.insert(0, forked)
+            push_machine(mid)
+            return self.send_json({"session_id": new})
         if p.startswith("/api/v1/sessions/") and p.endswith("/close") and self.command == "POST":
             if is_read_only(self): return self.send_json({"error": "只读角色不能关闭 Agent"}, 403)
             mid, sid = p.split("/")[4:6]
@@ -10983,6 +11014,10 @@ _plugins_route_without_extensions = plugins_route
 
 
 def plugins_route(handler, p, body):
+    if PLUGINS_MODE and p.startswith("/api/v1/extensions/showcase/-/ui/"):
+        return mock_showcase(handler, p.rsplit("/", 1)[-1], body)
+    if p == "/mock/invalidate" and PLUGINS_MODE:
+        return mock_invalidate(handler)
     if EXTENSIONS_API and (p == "/api/v1/extensions" or p.startswith("/api/v1/extensions/")):
         if body:
             try:
@@ -10991,6 +11026,53 @@ def plugins_route(handler, p, body):
             except ValueError: pass
         return _plugins_route_without_extensions(_NewKeysHandler(handler), "/api/v1/plugins" + p[len("/api/v1/extensions"):], body)
     return _plugins_route_without_extensions(handler, p, body)
+
+
+def mock_showcase(handler, ui, body):
+    """共享快照原样交给 App 的真实渲染器；索引只用于测试导航，不另定 View 协议。"""
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "schema/extension/examples/showcase"
+    names = sorted(p.stem for p in root.glob("*.json"))
+    if ui == "snapshots":
+        view = {"title": "共享组件快照", "sections": [{"items": [
+            {"type": "row", "key": name, "title": name,
+             "action": {"id": "snapshot-" + name, "push": {"ui": name, "title": name}}}
+            for name in names]}]}
+    elif ui in names:
+        view = json.loads((root / (ui + ".json")).read_text())
+    else:
+        handler.send_json({"error": "没有这个快照"}, 404)
+        return True
+    request = json.loads(body) if body else {}
+    if request.get("action"):
+        handler.send_json({"toast": "快照测试不执行写操作"})
+    else:
+        handler.send_json({"view": view})
+    return True
+
+
+def mock_invalidate(handler):
+    """GET /mock/invalidate: example-gateway's notes changed (a note synced in, the sync done) and it says so
+    (`ui.invalidate`, docs/extensions.md「ui.invalidate」): extension_ui {invalidate} to every app, no plugin_ui."""
+    if not any(x["id"] == "n0" for x in _NOTES):
+        _NOTES.insert(0, {"id": "n0", "title": "刚同步的笔记", "folder": "work", "when": "刚刚"})
+    _NOTES_SYNCED[0] = True
+    for send, _ in list(LIVE):
+        try: send({"type": "extension_ui", "extension": "example-gateway", "id": "notes", "invalidate": True})
+        except Exception: pass
+    handler.send_json({"ok": True})
+    return True
+
+
+_NOTES_SYNCED = [False]
+_notes_view_unsynced = _notes_view
+
+
+def _notes_view(state):
+    v = _notes_view_unsynced(state)
+    if _NOTES_SYNCED[0] and v.get("title") == "笔记":
+        v["sections"] = [s for s in v["sections"] if s.get("title") != "同步"]
+    return v
 
 
 _features_without_extensions = features

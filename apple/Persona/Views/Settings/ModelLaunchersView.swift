@@ -367,6 +367,7 @@ struct ModelLauncherDetailView: View {
             LauncherEditor(existing: launcher) { await load() }
         }
         .pluginLinks($pluginLink)
+        .extensionPushes(pluginSections.map { Array($0.models.values) } ?? [])
         .task(id: model.hubFeatures.hasExtensionFeature("manager")) {
             guard model.hubFeatures.hasExtensionFeature("manager") else { return }
             let sections = pluginSections ?? ExtensionLauncherModel(launcher: name)

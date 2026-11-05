@@ -51,16 +51,16 @@ struct ExtensionRenameTests {
         await page.load()
         #expect(page.error == nil && page.plugins?.map(\.id) == ["voice"])
         let d = try await c.plugin("voice")
-        #expect(d.ui.map(\.plugin) == ["voice"] && d.ui.first?.pluginName == "语音")
+        #expect(d.ui.map(\.owner) == ["voice"] && d.ui.first?.ownerName == "语音")
         #expect(hub.sent("GET", "/api/v1/plugins").isEmpty, "the old path is not used")
     }
 
     @Test func uiPlacesWithEitherKeys() throws {
-        let new = try JSON.decoder.decode(PluginUIPlace.self, from: Data(
+        let new = try JSON.decoder.decode(ExtensionUIPlace.self, from: Data(
             #"{"extension":"gw","extension_name":"网关","id":"usage","title":"用量","placement":"nav_page","badge":{"text":"3"}}"#.utf8))
-        let old = try JSON.decoder.decode(PluginUIPlace.self, from: Data(
+        let old = try JSON.decoder.decode(ExtensionUIPlace.self, from: Data(
             #"{"plugin":"gw","plugin_name":"网关","id":"usage","title":"用量","placement":"nav_page","badge":{"text":"3"}}"#.utf8))
-        #expect(new == old && new.plugin == "gw" && new.pluginName == "网关" && new.badge?.text == "3")
+        #expect(new.owner == old.owner && new.owner == "gw" && new.ownerName == "网关" && old.ownerName == "网关" && new.badge == old.badge)
     }
 
     @Test func marketsAndCatalogWithEitherKeys() async throws {

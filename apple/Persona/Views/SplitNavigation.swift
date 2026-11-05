@@ -22,6 +22,10 @@ struct SplitNavigation<Sidebar: View, Empty: View, Destinations: ViewModifier>: 
     @ViewBuilder var empty: Empty
 
     var body: some View {
+        layout.environment(\.splitPush, SplitPush { [path = $path] value in path.wrappedValue.append(value) })
+    }
+
+    @ViewBuilder private var layout: some View {
         if widthClass == .regular {
             #if os(macOS)
             // The list in the content column (flush; the sidebar column floats as a glass card on macOS 26 and stays
@@ -154,6 +158,14 @@ struct SplitDetail: Equatable {
 
 extension EnvironmentValues {
     @Entry var splitDetail: SplitDetail?
+    /// Pushes a page by value onto the stack the view is in (an extension's `push`, docs/extensions.md「页面跳转」): its
+    /// destination is registered with the list's.
+    @Entry var splitPush: SplitPush?
+}
+
+/// Appends a value to a `SplitNavigation`'s path.
+struct SplitPush {
+    var push: (any Hashable) -> Void
 }
 
 extension View {

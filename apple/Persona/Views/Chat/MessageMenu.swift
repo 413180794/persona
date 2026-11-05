@@ -27,6 +27,12 @@ final class MessageMenu {
     /// its first rows may have been drawn without it (they never got the drag, now and then).
     var swipeQuotes = false
     @ObservationIgnored var edit: ((String) -> Void)?
+    /// 分支到新聊天 (#2137): a new conversation from the reply with this item id. canFork: the chat's session can.
+    @ObservationIgnored var fork: ((String) -> Void)?
+    @ObservationIgnored var canFork: () -> Bool = { false }
+    /// The reply whose ⋯ was tapped: the chat shows its menu (a dialog of the page, not of the bar, which the list's
+    /// tap-to-close takes away with the same tap).
+    var more: String?
     /// The press that opened the bar. Its own lift must not close it: the list's simultaneous tap-to-close gesture
     /// recognizes that lift as a tap (only presses longer than ~2 s fail it), and a held finger's small drift shows
     /// up as list scrolling.
@@ -251,7 +257,7 @@ private struct MessageActionBarHost: ViewModifier {
                             // The bar may stick out of a narrow bubble, but not out of the chat.
                             let inArea = geo.frame(in: .named(MessageMenu.area))
                             let areaWidth = max(menu.areaWidth, inArea.maxX)
-                            let width = MessageActionBar.width(isUser: isUser)
+                            let width = MessageActionBar.width(isUser: isUser, more: MessageActionBar.forks(id: id, isUser: isUser, menu: menu))
                             let x = min(max(inArea.minX + menu.anchor.x, width / 2 + 8), areaWidth - width / 2 - 8) - inArea.minX
                             // Above the finger; below it when that would go under the navigation bar.
                             let above = frame.minY + menu.anchor.y - MessageActionBar.height - 16 > 140
@@ -324,7 +330,13 @@ struct MessageActionBar: View {
 
     static let height: CGFloat = 62
     static let item: CGFloat = 58
-    static func width(isUser: Bool) -> CGFloat { item * (isUser ? 5 : 4) + 12 }
+    static func width(isUser: Bool, more: Bool = false) -> CGFloat { item * CGFloat((isUser ? 5 : 4) + (more ? 1 : 0)) + 12 }
+    /// A reply ends in ⋯ with 分支到新聊天 when the session can fork and the reply is a Claude transcript line of its
+    /// own (`<uuid>#<n>`).
+    static func forks(id: String, isUser: Bool, menu: MessageMenu) -> Bool {
+        guard !isUser, menu.fork != nil, menu.canFork(), let line = id.split(separator: "#").first, id.contains("#") else { return false }
+        return UUID(uuidString: String(line)) != nil
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -339,6 +351,9 @@ struct MessageActionBar: View {
             }
             if isUser {
                 action("编辑", "pencil") { menu.edit?(text) }
+            }
+            if Self.forks(id: id, isUser: isUser, menu: menu) {
+                action("更多", Theme.Icon.more) { menu.more = id }
             }
         }
         .padding(.horizontal, Theme.Space.sm)

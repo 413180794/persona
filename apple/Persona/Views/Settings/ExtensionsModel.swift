@@ -118,7 +118,7 @@ nonisolated struct ExtensionField: Codable, Hashable, Sendable, Identifiable {
     var description: String?
     var `default`: JSONValue?
     var required: Bool?
-    var `enum`: [PluginChoice]?
+    var `enum`: [ExtensionFormChoice]?
     var format: String?
     var pattern: String?
     var minLength: Int?
@@ -148,7 +148,7 @@ nonisolated struct ExtensionField: Codable, Hashable, Sendable, Identifiable {
 /// An array field's items.
 nonisolated struct ExtensionItems: Codable, Hashable, Sendable {
     var type: String
-    var `enum`: [PluginChoice]?
+    var `enum`: [ExtensionFormChoice]?
     /// machine: the hub's machines by id, drawn as a switch each (`ExtensionMachineSwitches`).
     var format: String?
     /// For machine: only machines of these systems (darwin, linux, windows); nil, any.
@@ -156,7 +156,7 @@ nonisolated struct ExtensionItems: Codable, Hashable, Sendable {
 }
 
 /// One value of a field's choices, with its label.
-nonisolated struct PluginChoice: Codable, Hashable, Sendable, Identifiable {
+nonisolated struct ExtensionFormChoice: Codable, Hashable, Sendable, Identifiable {
     var value: JSONValue
     var title: String?
     var id: String { value.string ?? "\(value)" }
@@ -195,7 +195,7 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
     var secrets: [ExtensionSecret]
     var permissions: [ExtensionPermission]
     /// The pages it draws (placement plugin_page), a row each.
-    var ui: [PluginUIPlace]
+    var ui: [ExtensionUIPlace]
     /// The field (format machine) that picks the computers its program runs on; their rows say how it is there.
     var nodeMachines: String?
 
@@ -217,7 +217,7 @@ nonisolated struct HubExtensionDetail: Decodable, Hashable, Sendable {
         config = try c.decodeIfPresent([String: JSONValue].self, forKey: .config) ?? [:]
         secrets = try c.decodeIfPresent([ExtensionSecret].self, forKey: .secrets) ?? []
         permissions = try c.decodeIfPresent([ExtensionPermission].self, forKey: .permissions) ?? []
-        ui = (try c.decodeIfPresent([PluginUIPlace].self, forKey: .ui) ?? []).filter { ($0.placement ?? "plugin_page") == "plugin_page" }
+        ui = (try c.decodeIfPresent([ExtensionUIPlace].self, forKey: .ui) ?? []).filter(\.isExtensionPage)
         nodeMachines = try c.decodeIfPresent(String.self, forKey: .nodeMachines)
     }
 }

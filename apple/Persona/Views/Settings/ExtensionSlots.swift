@@ -18,10 +18,11 @@ import SwiftUI
     static let shared = ExtensionSlots()
 
     /// nav_page entries, in the hub's order.
-    private(set) var pages: [PluginUIPlace] = []
+    private(set) var pages: [ExtensionUIPlace] = []
     /// overview_card entries, in the hub's order.
-    private(set) var cards: [PluginUIPlace] = []
-    @ObservationIgnored private var cardModels: [String: ExtensionViewModel] = [:]
+    private(set) var cards: [ExtensionUIPlace] = []
+    /// The cards' models, made when the cards are listed (the page pushes what they ask for, `extensionPushes`).
+    private var cardModels: [String: ExtensionViewModel] = [:]
     @ObservationIgnored private var lastHub: String?
     @ObservationIgnored private let deps: ExtensionViewModel.Deps
     @ObservationIgnored private let features: () -> Set<String>
@@ -58,29 +59,33 @@ import SwiftUI
         do {
             let next = all.filter { $0.placement == "overview_card" }
             if next != cards { cards = next }
-            cardModels = cardModels.filter { k, _ in next.contains { Self.key($0) == k } }
+            var models = cardModels.filter { k, _ in next.contains { Self.key($0) == k } }
+            for c in next where models[Self.key(c)] == nil {
+                models[Self.key(c)] = ExtensionViewModel(plugin: c.owner, ui: c.id, context: .here(size: "compact"), deps: deps)
+            }
+            cardModels = models
         }
     }
 
     /// A plugin changed an entry's badge (nil: none).
-    func received(plugin: String, id: String, badge: PluginBadge?) {
-        guard let i = pages.firstIndex(where: { $0.plugin == plugin && $0.id == id }), pages[i].badge != badge else { return }
+    func received(plugin: String, id: String, badge: ExtensionBadge?) {
+        guard let i = pages.firstIndex(where: { $0.owner == plugin && $0.id == id }), pages[i].badge != badge else { return }
         pages[i].badge = badge
     }
 
     /// A card's model, kept while the card is listed (a card drawn again keeps its state).
-    func model(for card: PluginUIPlace) -> ExtensionViewModel {
-        let k = Self.key(card)
-        if let m = cardModels[k] { return m }
-        let m = ExtensionViewModel(plugin: card.plugin, ui: card.id, context: PluginUIContext(size: "compact"), deps: deps)
-        cardModels[k] = m
-        return m
+    func model(for card: ExtensionUIPlace) -> ExtensionViewModel {
+        cardModels[Self.key(card)]
+            ?? ExtensionViewModel(plugin: card.owner, ui: card.id, context: .here(size: "compact"), deps: deps)
     }
 
+    /// The cards' models, for the page that pushes what they ask for.
+    var cardPages: [ExtensionViewModel] { cards.compactMap { cardModels[Self.key($0)] } }
+
     /// The page a card opens (`opens`: the plugin's nav_page or plugin_page), with its title.
-    func opened(by card: PluginUIPlace) -> (ui: String, title: String)? {
+    func opened(by card: ExtensionUIPlace) -> (ui: String, title: String)? {
         guard let id = card.opens, !id.isEmpty else { return nil }
-        let title = pages.first { $0.plugin == card.plugin && $0.id == id }?.title ?? card.title
+        let title = pages.first { $0.owner == card.owner && $0.id == id }?.title ?? card.title
         return (id, title)
     }
 
@@ -91,7 +96,7 @@ import SwiftUI
         return (count, count == 0 && badges.contains { Int($0.text) == nil })
     }
 
-    static func key(_ p: PluginUIPlace) -> String { p.plugin + "/" + p.id }
+    static func key(_ p: ExtensionUIPlace) -> String { p.owner + "/" + p.id }
 
     /// What the lists depend on: which hub (paired again with another, or another group picked) and whether it has slots.
     nonisolated struct Source: Hashable, Sendable {
@@ -104,18 +109,7 @@ import SwiftUI
     }
 
     /// An entry's icon: one of the few a plugin may ask for, anything else the plugin's.
-    static func icon(_ name: String?) -> String {
-        switch name {
-        case "chart": Theme.Icon.pluginChart
-        case "gauge": Theme.Icon.pluginGauge
-        case "list": Theme.Icon.pluginList
-        case "bell": Theme.Icon.pluginBell
-        case "doc": Theme.Icon.pluginDoc
-        case "calendar": Theme.Icon.pluginCalendar
-        case "money": Theme.Icon.pluginMoney
-        default: Theme.Icon.plugins
-        }
-    }
+    static func icon(_ name: String?) -> String { ExtensionUIStyle.icon(name) }
 }
 
 // MARK: Badges
@@ -123,7 +117,7 @@ import SwiftUI
 /// A plugin's badge: a number as the count badges are drawn, a word as a chip; in its tone (neutral: the usual red of a
 /// count, a quiet chip).
 struct ExtensionBadgeView: View {
-    var badge: PluginBadge
+    var badge: ExtensionBadge
 
     var body: some View {
         if let n = Int(badge.text), n > 0 {
@@ -166,10 +160,10 @@ struct ExtensionSlotsSettingsSection: View {
                 Section {
                     Group {
                         ForEach(slots.pages) { page in
-                            NavigationLink(value: SettingsPage.pluginPage(plugin: page.plugin, ui: page.id, title: page.title)) {
+                            NavigationLink(value: SettingsPage.pluginPage(plugin: page.owner, ui: page.id, title: page.title)) {
                                 ExtensionNavRow(place: page)
                             }
-                            .accessibilityIdentifier("plugin-nav-\(page.plugin)-\(page.id)")
+                            .accessibilityIdentifier("plugin-nav-\(page.owner)-\(page.id)")
                         }
                     }
                     .bareListRow()
@@ -183,7 +177,7 @@ struct ExtensionSlotsSettingsSection: View {
 
 /// One plugin page on the navigation: its icon in the plugins' tile, its title on one line, its badge.
 struct ExtensionNavRow: View {
-    var place: PluginUIPlace
+    var place: ExtensionUIPlace
 
     var body: some View {
         let symbol = ExtensionSlots.icon(place.icon)
@@ -217,10 +211,10 @@ struct ExtensionCardsSection: View {
             Section {
                 ExtensionCard(card: card, model: slots.model(for: card), link: $link) {
                     if let (ui, title) = slots.opened(by: card) {
-                        model.settingsPath.append(SettingsPage.pluginPage(plugin: card.plugin, ui: ui, title: title))
+                        model.settingsPath.append(SettingsPage.pluginPage(plugin: card.owner, ui: ui, title: title))
                     }
                 }
-                .accessibilityIdentifier("plugin-card-\(card.plugin)-\(card.id)")
+                .accessibilityIdentifier("plugin-card-\(card.owner)-\(card.id)")
             }
         }
     }
@@ -229,7 +223,7 @@ struct ExtensionCardsSection: View {
 /// One overview card: its title line, then the plugin's View, compact. While loading a line of progress, a failure
 /// one line with 重试; a plugin that says it has nothing here draws nothing.
 struct ExtensionCard: View {
-    var card: PluginUIPlace
+    var card: ExtensionUIPlace
     var model: ExtensionViewModel
     @Binding var link: LinkTarget?
     var open: () -> Void
@@ -284,7 +278,7 @@ struct ExtensionCard: View {
 /// What plugins draw on a machine's page (placement machine_section), for that machine: its hub group's API, the
 /// machine's id as context. The page owns it and loads it (so an empty list adds nothing to the page, not even spacing).
 @MainActor @Observable final class ExtensionMachineModel {
-    private(set) var places: [PluginUIPlace] = []
+    private(set) var places: [ExtensionUIPlace] = []
     private(set) var models: [String: ExtensionViewModel] = [:]
 
     /// Asks the hub what plugins draw for `ref`; `redraw` (pull to refresh) draws the ones already there again.
@@ -294,12 +288,12 @@ struct ExtensionCard: View {
             return
         }
         guard let list = try? await api.pluginUI(placement: "machine_section", machine: ref.id) else { return }
-        let shown = list.filter { $0.placement == nil || $0.placement == "machine_section" }
+        let shown = list.filter { $0.placement.isEmpty || $0.placement == "machine_section" }
         let deps = ExtensionViewModel.Deps(api: { [weak app] in app?.api(ref.group) })
         var next: [String: ExtensionViewModel] = [:]
         for p in shown {
             next[ExtensionSlots.key(p)] = models[ExtensionSlots.key(p)]
-                ?? ExtensionViewModel(plugin: p.plugin, ui: p.id, context: PluginUIContext(machine: ref.id), deps: deps)
+                ?? ExtensionViewModel(plugin: p.owner, ui: p.id, context: ExtensionUIContext.here(machine: ref.id), deps: deps)
         }
         let kept = Set(models.keys)
         models = next
@@ -329,7 +323,7 @@ struct ExtensionMachineSections: View {
 }
 
 private struct ExtensionMachineSection: View {
-    var place: PluginUIPlace
+    var place: ExtensionUIPlace
     var model: ExtensionViewModel
     @Binding var link: LinkTarget?
 
@@ -356,7 +350,7 @@ private struct ExtensionMachineSection: View {
                 .card()
             }
         }
-        .accessibilityIdentifier("plugin-machine-\(place.plugin)-\(place.id)")
+        .accessibilityIdentifier("plugin-machine-\(place.owner)-\(place.id)")
         .task { if model.view == nil { await model.load() } }
         .pluginRefresh(model)
     }
@@ -367,17 +361,26 @@ private struct ExtensionMachineSection: View {
 nonisolated private struct ExtensionRefreshKey: Hashable, Sendable {
     var due: Date?
     var active: Bool
+    var invalidation: Int
+    var completion: Int
 }
 
-/// Draws a plugin's View again when its `refresh_after` is up, only while it is on screen with the app in front;
-/// coming back after the time has passed draws it at once.
+/// Draws an extension's View again when its `refresh_after` is up or `ui.invalidate` came for it, only while it is on
+/// screen with the app in front; coming back after the time has passed, or after an invalidate, draws it at once.
 private struct ExtensionRefresh: ViewModifier {
     var model: ExtensionViewModel
     @Environment(\.scenePhase) private var phase
 
     func body(content: Content) -> some View {
-        content.tabActiveTask(id: ExtensionRefreshKey(due: model.refreshDue, active: phase == .active)) {
-            guard phase == .active, let due = model.refreshDue else { return }
+        content.tabActiveTask(id: ExtensionRefreshKey(due: model.refreshDue, active: phase == .active,
+                                                      invalidation: model.invalidationVersion,
+                                                      completion: model.stale ? model.completedOperations : 0)) {
+            guard phase == .active else { return }
+            if model.stale {
+                await model.refresh()
+                return
+            }
+            guard let due = model.refreshDue else { return }
             let wait = due.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             guard !Task.isCancelled else { return }

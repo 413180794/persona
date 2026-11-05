@@ -483,7 +483,7 @@ def gen_swift(defs: dict[str, Def]) -> str:
     def struct(d: Def) -> list[str]:
         name = swift_name(d.name)
         lines = comment("/// ", d.doc)
-        lines.append(f"nonisolated struct {name}: Codable, Equatable, Sendable {{")
+        lines.append(f"nonisolated struct {name}: Codable, Hashable, Sendable {{")
         for f in d.fields:
             lines += comment("    /// ", f.doc)
             typ = stype(f.type) + ("" if f.required else "?")
@@ -532,7 +532,7 @@ def gen_swift(defs: dict[str, Def]) -> str:
         elif d.kind == "union":
             name, disc = swift_name(d.name), d.discriminator
             out += comment("/// ", d.doc)
-            out.append(f"nonisolated enum {name}: Codable, Equatable, Sendable {{")
+            out.append(f"nonisolated enum {name}: Codable, Hashable, Sendable {{")
             for v in d.variants:
                 out.append(f"    case {swift_ident(lower_camel(defs[v].tag))}({swift_name(v)})")
             out += [f"    /// A {disc} this app does not know, or a variant it could not read: skipped when drawn.",

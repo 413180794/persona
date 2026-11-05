@@ -216,14 +216,14 @@ struct ExtensionViewModelTests {
         await page.load()
         let v = try #require(page.view)
         #expect(v.title == "Example 网关" && v.sections.count == 2 && v.sections[0].items.map(\.type) == ["metric", "progress", "divider", "row"])
-        #expect(v.sections[0].items[1].ratio == 0.93 && v.sections[0].items[3].badge?.tone == "positive")
-        #expect(v.sections[1].items[3].choices?.map(\.label) == ["个人", "team"])
+        #expect(v.sections[0].items[1].progress?.ratio == 0.93 && v.sections[0].items[3].row?.badge?.tone == "positive")
+        #expect(v.sections[1].items[3].field?.choices?.map(\.label) == ["个人", "team"])
         #expect(page.values == ["note": "hi", "token": "", "auto": "false", "plan": "team"], "a secret is never prefilled")
         #expect(ExtensionUIStyle.tone("danger") == Theme.danger && ExtensionUIStyle.tone("bogus") == .secondary)
         // Drawing sends no action and no values; the context says where and for whom (docs/extensions.md「UI 插槽」上下文).
         let body = try JSON.decoder.decode(JSONValue.self, from: hub.requests.last?.body ?? Data())
         #expect(body["action"] == nil && body["values"] == nil && body["state"] == nil)
-        #expect(body["context"]?["ui_version"] == .number(2) && body["context"]?["platform"] == .string("ios"))
+        #expect(body["context"]?["ui_version"] == .number(3) && body["context"]?["platform"] == .string("ios"))
         #expect(body["context"]?["tz"]?.string == TimeZone.current.identifier && body["context"]?["locale"]?.string?.isEmpty == false)
         #expect(body["context"]?["launcher"] == nil && body["context"]?["machine"] == nil)
     }
@@ -241,21 +241,21 @@ struct ExtensionViewModelTests {
             default: return Data(Self.view.utf8)
             }
         }
-        let page = ExtensionViewModel(plugin: "example-gateway", ui: "home", context: PluginUIContext(launcher: "work"), deps: .init(api: { hub.client }))
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "home", context: ExtensionUIContext.here(launcher: "work"), deps: .init(api: { hub.client }))
         await page.load()
         page.values["token"] = "s3cret"
         page.values["auto"] = "true"
-        let saved = await page.perform(ExtensionUIAction(id: "save", submit: true))
+        let saved = await page.perform(ExtensionAction(id: "save", submit: true))
         #expect(saved == .init(toast: "已保存"))
         #expect(bodies[1]["context"]?["launcher"] == .string("work"))
         var sent = bodies[1]
         if case .object(var o) = sent { o["context"] = nil; sent = .object(o) }
         #expect(sent == .object(["state": .string("tab=overview"), "action": .string("save"),
                                       "values": .object(["note": .string("hi"), "token": .string("s3cret"), "auto": .string("true"), "plan": .string("team")])]))
-        let opened = await page.perform(ExtensionUIAction(id: "key:work"))
+        let opened = await page.perform(ExtensionAction(id: "key:work"))
         #expect(opened.url?.absoluteString == "https://example.com/console/keys")
         #expect(bodies[2]["values"] == nil, "only a submit sends the fields")
-        #expect(await page.perform(ExtensionUIAction(id: "bad")).url == nil, "only https opens")
+        #expect(await page.perform(ExtensionAction(id: "bad")).url == nil, "only https opens")
         // Nothing in the answer: drawn again.
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/home") { req in
             let b = try JSON.decoder.decode(JSONValue.self, from: req.body ?? Data())
@@ -263,7 +263,7 @@ struct ExtensionViewModelTests {
             return Data((b["action"] == nil ? Self.view : "{}").utf8)
         }
         let before = bodies.count
-        #expect(await page.perform(ExtensionUIAction(id: "noop")) == .init())
+        #expect(await page.perform(ExtensionAction(id: "noop")) == .init())
         #expect(bodies.count == before + 2 && bodies.last?["action"] == nil)
     }
 

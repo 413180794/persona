@@ -556,10 +556,12 @@ struct Monogram<Fill: ShapeStyle>: View {
     var ink: Color?
     /// The letter's text level: a smaller disc takes a smaller one.
     var font: Font = Theme.Font.heading
+    /// How many of the name's characters it shows (an extension's avatar shows the one or two it is given).
+    var letters = 1
 
     var body: some View {
         Circle().fill(fill).frame(width: size, height: size)
-            .overlay(Text(String((name.isEmpty ? "?" : name).prefix(1))).font(font)
+            .overlay(Text(String((name.isEmpty ? "?" : name).prefix(letters))).font(font)
                 .foregroundStyle(ink.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.primary)))
     }
 }

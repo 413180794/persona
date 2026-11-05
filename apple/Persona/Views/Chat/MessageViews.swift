@@ -38,9 +38,10 @@ extension MarkdownUI.Theme {
             }
             .listItem { config in config.label.markdownMargin(top: .em(0.2)) }
             .codeBlock { config in
-                // A card the assistant drew in numbers (#886); one the app cannot read stays a code block.
-                if config.language == PersonaCard.language, let card = PersonaCard.parse(config.content) {
-                    PersonaCardView(card: card).markdownMargin(top: 4, bottom: 12)
+                // A card the assistant drew (persona-view, or the older persona-card, #886), drawn with the extensions'
+                // components (docs/extensions.md「助手的卡片」); one the app cannot read stays a code block.
+                if AssistantCardBlock.handles(config.language), let view = AssistantCardBlock.parse(language: config.language, config.content) {
+                    AssistantViewCard(view: view).markdownMargin(top: 4, bottom: 12)
                 } else if let kind = RenderedFence.kind(config.language) {
                     // A formula or a diagram (docs/ios.md「公式和图」); the code block when it cannot be drawn.
                     RenderedBlock(kind: kind, source: config.content.trimmingCharacters(in: .whitespacesAndNewlines)) { plainCodeBlock(config) }

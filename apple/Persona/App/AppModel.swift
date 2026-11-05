@@ -94,6 +94,8 @@ final class AppModel {
     /// drawn again by every push. Pass the page's `tabIsActive`: the page is drawn again when it comes to the front.
     func allSessions(inFront: Bool) -> [Session] { inFront ? allSessions : sessionsNow }
     @ObservationIgnored private var sessionIndex: [SessionKey: Session] = [:]
+    /// Sessions a 分支到新聊天 is being made from (fork): a second tap waits for the first.
+    @ObservationIgnored private var forking: Set<SessionKey> = []
     /// One observable cell per session a view has looked up (`session(_:)`): a view showing one session is drawn again
     /// when that session changes, not on every push about any of them (the open chat and the tab badges were redrawn
     /// for each machine's list, 2026-10-31). `allSessions` is still there for views about all of them.
@@ -1333,6 +1335,8 @@ final class AppModel {
             link(group)?.desktops = list
         case .pluginBadge(let plugin, let id, let badge):
             if isHub { ExtensionSlots.shared.received(plugin: plugin, id: id, badge: badge) }
+        case .extensionInvalidate(let ext, let id):
+            ExtensionUIRegistry.shared.invalidate(extension: ext, ui: id, group: group)
         case .items(let key, let items, let backlog, let hasMore, let span, let moreAfter):
             if backlog { connection.caughtUp(Self.catchUpPart(key)) }
             let store = chat(key)
@@ -1406,6 +1410,7 @@ final class AppModel {
         case .desktops: "desktops"
         case .terminal: "terminal"
         case .pluginBadge: "plugin_ui"
+        case .extensionInvalidate: "extension_ui"
         case .error: "error"
         }
     }
@@ -1750,6 +1755,45 @@ final class AppModel {
     func keys(_ key: SessionKey, _ keys: [String], text: String = "") async {
         guard session(key)?.canTerminal == true else { return }
         do { try await api(key.group)?.keys(key, keys: keys, text: text) } catch { show(error) }
+    }
+
+    /// 分支到新聊天 (#2137): the node copies the conversation up to the end of item's turn into a new session, which
+    /// opens where the original lives (the assistant's page for a conversation of Persona's, else the Agents chat).
+    /// Returns the new session's key; an Agents chat switches to it itself (it changes agents in place, the path does not).
+    @discardableResult
+    func fork(_ key: SessionKey, at itemID: String) async -> SessionKey? {
+        guard let api = api(key.group), forking.insert(key).inserted else { return nil } // one at a time per session
+        defer { forking.remove(key) }
+        do {
+            let id = try await api.fork(key, at: itemID)
+            let new = SessionKey(group: key.group, machineID: key.machineID, sessionID: id)
+            if var copy = latest(key) { // listed at once with its name, until the hub's next list has it
+                copy.sessionID = id
+                copy.title = copy.title.hasPrefix("分支 · ") ? copy.title : "分支 · " + copy.title
+                copy.status = .offline
+                copy.state = .offline
+                copy.paneID = nil // offline, in no tab: the header shows its own name, not the original's place
+                copy.tabID = nil
+                copy.workspaceID = nil
+                copy.spaceKind = nil
+                copy.spaceID = nil
+                copy.spaceName = nil
+                copy.spaceIndex = nil
+                copy.slotID = nil
+                copy.slotName = nil
+                copy.slotIndex = nil
+                copy.queued = nil
+                copy.pendingInteractions = 0
+                adopt(copy)
+            }
+            if session(key)?.assistant == true { openAssistantConversation(new) }
+            toast = Toast("已分支到新聊天", style: .success)
+            Haptics.success()
+            return new
+        } catch {
+            show(error)
+            return nil
+        }
     }
 
     @discardableResult

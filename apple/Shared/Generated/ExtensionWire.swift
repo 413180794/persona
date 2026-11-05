@@ -11,7 +11,7 @@ nonisolated enum ExtensionActivationEvent {
     static let all = ["on_startup", "on_call", "on_http"]
 }
 
-nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
+nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     var manifestVersion: Int
     var id: String
     var name: String
@@ -100,7 +100,7 @@ nonisolated struct ExtensionManifest: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionDependency: Codable, Equatable, Sendable {
+nonisolated struct ExtensionDependency: Codable, Hashable, Sendable {
     var id: String
     /// A range of its versions: >=1.2.0, <2.0.0, or both with a space between.
     var version: String?
@@ -124,7 +124,7 @@ nonisolated struct ExtensionDependency: Codable, Equatable, Sendable {
 
 /// Extension points it opens to other extensions: they contribute under contributes["<this id>.<point id>"] and
 /// depend on it.
-nonisolated struct ExtensionExports: Codable, Equatable, Sendable {
+nonisolated struct ExtensionExports: Codable, Hashable, Sendable {
     var extensionPoints: [ExtensionExportedPoint]
 
     init(extensionPoints: [ExtensionExportedPoint] = []) {
@@ -141,7 +141,7 @@ nonisolated struct ExtensionExports: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionExportedPoint: Codable, Equatable, Sendable {
+nonisolated struct ExtensionExportedPoint: Codable, Hashable, Sendable {
     var id: String
     var version: Int
     var description: String?
@@ -172,7 +172,7 @@ nonisolated struct ExtensionExportedPoint: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionPackMember: Codable, Equatable, Sendable {
+nonisolated struct ExtensionPackMember: Codable, Hashable, Sendable {
     var id: String
     /// The address of the market it comes from (github:owner/repo, https://…), as the hub registered it; empty: the
     /// pack's own market, else the first registered market that has it.
@@ -201,7 +201,7 @@ nonisolated struct ExtensionPackMember: Codable, Equatable, Sendable {
 }
 
 /// What the extension runs on. extension_protocol is plugin_protocol's new name; a hub reads either.
-nonisolated struct ExtensionEngines: Codable, Equatable, Sendable {
+nonisolated struct ExtensionEngines: Codable, Hashable, Sendable {
     /// A range of hub build numbers (">=202611050000 <202701010000").
     var persona: String?
     var extensionProtocol: Int?
@@ -227,7 +227,7 @@ nonisolated struct ExtensionEngines: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionRuntime: Codable, Equatable, Sendable {
+nonisolated struct ExtensionRuntime: Codable, Hashable, Sendable {
     var command: JSONValue
     var args: [String]?
     var env: [String: String]?
@@ -266,7 +266,7 @@ nonisolated struct ExtensionRuntime: Codable, Equatable, Sendable {
 
 /// The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in
 /// percent of one core. Unset: 1024 MB, 100%.
-nonisolated struct ExtensionResources: Codable, Equatable, Sendable {
+nonisolated struct ExtensionResources: Codable, Hashable, Sendable {
     var memoryMb: Int?
     var cpuPercent: Int?
 
@@ -293,7 +293,7 @@ typealias ExtensionCommand = JSONValue
 /// The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on
 /// the machines picked in the configuration field `machines` (an array of format machine, x-os the programs'
 /// systems).
-nonisolated struct ExtensionNodeRuntime: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNodeRuntime: Codable, Hashable, Sendable {
     var command: JSONValue
     var args: [String]?
     var env: [String: String]?
@@ -344,7 +344,7 @@ nonisolated struct ExtensionNodeRuntime: Codable, Equatable, Sendable {
 
 /// What the program on computers asks for there: hosts it reaches, files outside its data directory, macOS's privacy
 /// permissions.
-nonisolated struct ExtensionNodePermissions: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNodePermissions: Codable, Hashable, Sendable {
     var network: [String]?
     var files: Bool?
     var macosPrivacy: Bool?
@@ -369,7 +369,7 @@ nonisolated struct ExtensionNodePermissions: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionSecretSpec: Codable, Equatable, Sendable {
+nonisolated struct ExtensionSecretSpec: Codable, Hashable, Sendable {
     var name: String
     var title: String
     var description: String?
@@ -399,7 +399,7 @@ nonisolated struct ExtensionSecretSpec: Codable, Equatable, Sendable {
 }
 
 /// A closed vocabulary: a permission the hub does not know fails the install.
-nonisolated struct ExtensionPermissions: Codable, Equatable, Sendable {
+nonisolated struct ExtensionPermissions: Codable, Hashable, Sendable {
     var network: [String]?
     /// The old way: the hub's full token. With hub scopes, the scopes win.
     var hubApi: Bool?
@@ -431,7 +431,7 @@ nonisolated struct ExtensionPermissions: Codable, Equatable, Sendable {
 }
 
 /// Contributions by extension point. A point this hub does not know installs with a warning, not taking effect.
-nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
+nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var connectors: [ExtensionConnectorItem]?
     var voice: [ExtensionNamedItem]?
     var computer: [ExtensionNamedItem]?
@@ -513,7 +513,7 @@ nonisolated struct ExtensionContributes: Codable, Equatable, Sendable {
 }
 
 /// A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
-nonisolated struct ExtensionSkillItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionSkillItem: Codable, Hashable, Sendable {
     var id: String
     /// The directory, relative to the package.
     var dir: String
@@ -544,7 +544,7 @@ nonisolated enum ExtensionPromptKind {
 
 /// A prompt: instructions (a .md of the package added to the assistant's CLAUDE.md) or quick (a template the apps
 /// offer in the message box).
-nonisolated struct ExtensionPromptItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionPromptItem: Codable, Hashable, Sendable {
     var id: String
     var kind: String
     /// instructions: the .md file.
@@ -581,7 +581,7 @@ nonisolated struct ExtensionPromptItem: Codable, Equatable, Sendable {
 }
 
 /// A scheme's role colors, #RRGGBB: accent (required), positive, caution, danger, ai.
-nonisolated struct ExtensionThemeColors: Codable, Equatable, Sendable {
+nonisolated struct ExtensionThemeColors: Codable, Hashable, Sendable {
     var accent: String
     var positive: String?
     var caution: String?
@@ -616,7 +616,7 @@ nonisolated struct ExtensionThemeColors: Codable, Equatable, Sendable {
 
 /// A theme (主题色): the design system's role colors for light and dark; the apps check the contrast and do not offer
 /// one that fails.
-nonisolated struct ExtensionThemeItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionThemeItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var light: ExtensionThemeColors
@@ -646,7 +646,7 @@ nonisolated struct ExtensionThemeItem: Codable, Equatable, Sendable {
 }
 
 /// A template of an inbox source's triage rules (triage_rules): settings offer it.
-nonisolated struct ExtensionTriageTemplateItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionTriageTemplateItem: Codable, Hashable, Sendable {
     var id: String
     var title: String
     var text: String
@@ -672,7 +672,7 @@ nonisolated struct ExtensionTriageTemplateItem: Codable, Equatable, Sendable {
 }
 
 /// The connector protocol's manifest (docs/connector-protocol.md).
-nonisolated struct ExtensionConnectorItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionConnectorItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var capabilities: [String]
@@ -738,7 +738,7 @@ nonisolated struct ExtensionConnectorItem: Codable, Equatable, Sendable {
 }
 
 /// A contribution with only an id and a name: voice, computer, browser.
-nonisolated struct ExtensionNamedItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNamedItem: Codable, Hashable, Sendable {
     var id: String
     var name: String?
 
@@ -759,7 +759,7 @@ nonisolated struct ExtensionNamedItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionQuotaItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionQuotaItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var hosts: [String]?
@@ -784,7 +784,7 @@ nonisolated struct ExtensionQuotaItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionProviderItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionProviderItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var description: String?
@@ -841,7 +841,7 @@ nonisolated struct ExtensionProviderItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionProviderModel: Codable, Equatable, Sendable {
+nonisolated struct ExtensionProviderModel: Codable, Hashable, Sendable {
     var id: String
     var name: String?
 
@@ -862,7 +862,7 @@ nonisolated struct ExtensionProviderModel: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionAPIItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAPIItem: Codable, Hashable, Sendable {
     var id: String
     var prefix: String
     var features: [String]?
@@ -895,7 +895,7 @@ nonisolated struct ExtensionAPIItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionAPIReceipt: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAPIReceipt: Codable, Hashable, Sendable {
     var method: String
     var path: String
     var kind: String
@@ -920,7 +920,7 @@ nonisolated struct ExtensionAPIReceipt: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionAssistantItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAssistantItem: Codable, Hashable, Sendable {
     var id: String
     var skills: [String]?
     var instructions: String?
@@ -950,7 +950,7 @@ nonisolated struct ExtensionAssistantItem: Codable, Equatable, Sendable {
 }
 
 /// A place in the apps the extension draws (docs「UI 插槽」).
-nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIItem: Codable, Hashable, Sendable {
     var id: String
     var title: String
     var placement: String
@@ -1005,7 +1005,7 @@ nonisolated struct ExtensionUIItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionAgentSourceItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAgentSourceItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var providers: [String]?
@@ -1030,7 +1030,7 @@ nonisolated struct ExtensionAgentSourceItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionChannelItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChannelItem: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var kind: String
@@ -1071,7 +1071,7 @@ nonisolated struct ExtensionChannelItem: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionChannelCapabilities: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChannelCapabilities: Codable, Hashable, Sendable {
     var imagesIn: Bool?
     var filesIn: Bool?
     var voiceIn: Bool?
@@ -1124,7 +1124,7 @@ nonisolated struct ExtensionChannelCapabilities: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionEventsItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionEventsItem: Codable, Hashable, Sendable {
     var id: String
     var subscribe: [String]
 
@@ -1147,7 +1147,7 @@ nonisolated struct ExtensionEventsItem: Codable, Equatable, Sendable {
 
 /// An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The
 /// hub asks the extension shortcut.run with the values.
-nonisolated struct ExtensionShortcutItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutItem: Codable, Hashable, Sendable {
     var id: String
     var title: String
     var description: String?
@@ -1182,7 +1182,7 @@ nonisolated struct ExtensionShortcutItem: Codable, Equatable, Sendable {
 }
 
 /// A value the shortcut asks for; it reaches the extension as a string (a toggle's "true" / "false").
-nonisolated struct ExtensionShortcutParam: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutParam: Codable, Hashable, Sendable {
     var name: String
     var title: String
     var kind: String
@@ -1226,7 +1226,7 @@ nonisolated enum ExtensionShortcutParamKind {
 }
 
 /// One line: a request {id, method, params}, an answer {id, result} or {id, error}, or an event {event, params}.
-nonisolated struct ExtensionFrame: Codable, Equatable, Sendable {
+nonisolated struct ExtensionFrame: Codable, Hashable, Sendable {
     var id: String?
     var method: String?
     var event: String?
@@ -1263,7 +1263,7 @@ nonisolated struct ExtensionFrame: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionRPCError: Codable, Equatable, Sendable {
+nonisolated struct ExtensionRPCError: Codable, Hashable, Sendable {
     /// For people; never a secret or a message's body.
     var message: String
     /// One of ErrorCode, or an extension point's own (not_found, invalid, conflict…).
@@ -1326,7 +1326,7 @@ nonisolated enum ExtensionHubCapability {
 
 /// What the hub sends first. The extension is under extension; hubs before the rename (#1844) send it as plugin,
 /// newer hubs send both.
-nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
+nonisolated struct ExtensionInitializeParams: Codable, Hashable, Sendable {
     var `protocol`: Int
     var hub: ExtensionHubInfo
     var `extension`: ExtensionInfo?
@@ -1379,7 +1379,7 @@ nonisolated struct ExtensionInitializeParams: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionExportedContribution: Codable, Equatable, Sendable {
+nonisolated struct ExtensionExportedContribution: Codable, Hashable, Sendable {
     /// The extension it comes from.
     var `extension`: String
     /// The contribution, as that extension's manifest wrote it.
@@ -1402,7 +1402,7 @@ nonisolated struct ExtensionExportedContribution: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionHubInfo: Codable, Equatable, Sendable {
+nonisolated struct ExtensionHubInfo: Codable, Hashable, Sendable {
     var build: Int64
     var extensionPoints: [String: Int]
     var role: String?
@@ -1449,7 +1449,7 @@ nonisolated struct ExtensionHubInfo: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionInfo: Codable, Equatable, Sendable {
+nonisolated struct ExtensionInfo: Codable, Hashable, Sendable {
     var id: String
     var version: String
     var dir: String?
@@ -1478,7 +1478,7 @@ nonisolated struct ExtensionInfo: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionInitializeResult: Codable, Equatable, Sendable {
+nonisolated struct ExtensionInitializeResult: Codable, Hashable, Sendable {
     var `protocol`: Int
     var id: String
     var version: String
@@ -1509,7 +1509,7 @@ nonisolated struct ExtensionInitializeResult: Codable, Equatable, Sendable {
 }
 
 /// ui.render's and ui.action's parameters: what to draw, where, for whom.
-nonisolated struct ExtensionUIParams: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIParams: Codable, Hashable, Sendable {
     var contribution: String
     var state: String
     var action: String?
@@ -1574,7 +1574,7 @@ nonisolated struct ExtensionUIParams: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionUIMachine: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIMachine: Codable, Hashable, Sendable {
     var id: String
     var name: String
     var os: String?
@@ -1603,7 +1603,7 @@ nonisolated struct ExtensionUIMachine: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionUILauncher: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUILauncher: Codable, Hashable, Sendable {
     var name: String
     var baseUrl: String
     var queryId: String
@@ -1628,7 +1628,7 @@ nonisolated struct ExtensionUILauncher: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionUIInboxItem: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIInboxItem: Codable, Hashable, Sendable {
     var id: String
     var title: String
     var summary: String?
@@ -1683,7 +1683,7 @@ nonisolated struct ExtensionUIInboxItem: Codable, Equatable, Sendable {
 }
 
 /// ui.badge, sent by an extension: the badge on its nav_page's entry (no text clears it).
-nonisolated struct ExtensionBadgeEvent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionBadgeEvent: Codable, Hashable, Sendable {
     var contribution: String
     var text: String?
     var tone: String?
@@ -1710,7 +1710,7 @@ nonisolated struct ExtensionBadgeEvent: Codable, Equatable, Sendable {
 
 /// ui.invalidate, sent by an extension (UI version 3): what it draws changed; the apps on screen draw it again
 /// (contribution: one ui; empty: all of the extension's).
-nonisolated struct ExtensionInvalidateEvent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionInvalidateEvent: Codable, Hashable, Sendable {
     var contribution: String?
 
     init(contribution: String? = nil) {
@@ -1728,7 +1728,7 @@ nonisolated struct ExtensionInvalidateEvent: Codable, Equatable, Sendable {
 }
 
 /// What an app says when it draws a slot: for whom and where (the hub checks it and hands the extension UIParams).
-nonisolated struct ExtensionUIContext: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIContext: Codable, Hashable, Sendable {
     var launcher: String?
     var machine: String?
     var item: String?
@@ -1774,7 +1774,7 @@ nonisolated struct ExtensionUIContext: Codable, Equatable, Sendable {
 }
 
 /// An app's POST …/-/ui/{ui}: without action it draws, with one a control was used.
-nonisolated struct ExtensionUIRequest: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIRequest: Codable, Hashable, Sendable {
     var context: ExtensionUIContext?
     var state: String?
     var action: String?
@@ -1805,7 +1805,7 @@ nonisolated struct ExtensionUIRequest: Codable, Equatable, Sendable {
 
 /// Where an extension draws something, as the hub lists it (GET …/-/ui). The new API names the extension extension /
 /// extension_name; the old one plugin / plugin_name.
-nonisolated struct ExtensionUIPlace: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIPlace: Codable, Hashable, Sendable {
     var `extension`: String?
     var extensionName: String?
     var plugin: String?
@@ -1866,7 +1866,7 @@ nonisolated struct ExtensionUIPlace: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionUIPlaces: Codable, Equatable, Sendable {
+nonisolated struct ExtensionUIPlaces: Codable, Hashable, Sendable {
     var ui: [ExtensionUIPlace]
 
     init(ui: [ExtensionUIPlace] = []) {
@@ -1884,7 +1884,7 @@ nonisolated struct ExtensionUIPlaces: Codable, Equatable, Sendable {
 }
 
 /// A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
-nonisolated struct ExtensionWidgetPlace: Codable, Equatable, Sendable {
+nonisolated struct ExtensionWidgetPlace: Codable, Hashable, Sendable {
     var `extension`: String
     var extensionName: String?
     var id: String
@@ -1925,7 +1925,7 @@ nonisolated struct ExtensionWidgetPlace: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionWidgetPlaces: Codable, Equatable, Sendable {
+nonisolated struct ExtensionWidgetPlaces: Codable, Hashable, Sendable {
     var widgets: [ExtensionWidgetPlace]
 
     init(widgets: [ExtensionWidgetPlace] = []) {
@@ -1943,7 +1943,7 @@ nonisolated struct ExtensionWidgetPlaces: Codable, Equatable, Sendable {
 }
 
 /// An app's POST …/extensions/{id}/-/widget/{ui}: context.size is the family it draws (WidgetFamily).
-nonisolated struct ExtensionWidgetRequest: Codable, Equatable, Sendable {
+nonisolated struct ExtensionWidgetRequest: Codable, Hashable, Sendable {
     var context: ExtensionUIContext?
 
     init(context: ExtensionUIContext? = nil) {
@@ -1961,7 +1961,7 @@ nonisolated struct ExtensionWidgetRequest: Codable, Equatable, Sendable {
 }
 
 /// A widget's view, held to what the family draws, and until when the hub keeps it (the app's timeline's next entry).
-nonisolated struct ExtensionWidgetAnswer: Codable, Equatable, Sendable {
+nonisolated struct ExtensionWidgetAnswer: Codable, Hashable, Sendable {
     var view: ExtensionView
     var expiresAt: String
 
@@ -1983,7 +1983,7 @@ nonisolated struct ExtensionWidgetAnswer: Codable, Equatable, Sendable {
 }
 
 /// A widget a device has on a screen (PUT /api/v1/devices/{id}/widgets): the hub wakes that device when it changes.
-nonisolated struct ExtensionDeviceWidget: Codable, Equatable, Sendable {
+nonisolated struct ExtensionDeviceWidget: Codable, Hashable, Sendable {
     var `extension`: String
     var id: String
     var family: String
@@ -2008,7 +2008,7 @@ nonisolated struct ExtensionDeviceWidget: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionDeviceWidgets: Codable, Equatable, Sendable {
+nonisolated struct ExtensionDeviceWidgets: Codable, Hashable, Sendable {
     var widgets: [ExtensionDeviceWidget]
 
     init(widgets: [ExtensionDeviceWidget] = []) {
@@ -2027,7 +2027,7 @@ nonisolated struct ExtensionDeviceWidgets: Codable, Equatable, Sendable {
 
 /// extension_widget in a background push (content-available): a widget the device has changed; the app reloads its
 /// timelines.
-nonisolated struct ExtensionWidgetPush: Codable, Equatable, Sendable {
+nonisolated struct ExtensionWidgetPush: Codable, Hashable, Sendable {
     var `extension`: String
     var id: String
 
@@ -2049,7 +2049,7 @@ nonisolated struct ExtensionWidgetPush: Codable, Equatable, Sendable {
 }
 
 /// An extension's action the system runs (GET …/extensions/-/shortcuts).
-nonisolated struct ExtensionShortcutPlace: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutPlace: Codable, Hashable, Sendable {
     var `extension`: String
     var extensionName: String?
     var id: String
@@ -2090,7 +2090,7 @@ nonisolated struct ExtensionShortcutPlace: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionShortcutPlaces: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutPlaces: Codable, Hashable, Sendable {
     var shortcuts: [ExtensionShortcutPlace]
 
     init(shortcuts: [ExtensionShortcutPlace] = []) {
@@ -2109,7 +2109,7 @@ nonisolated struct ExtensionShortcutPlaces: Codable, Equatable, Sendable {
 
 /// An app's POST …/extensions/{id}/-/shortcut/{sid}: the params' values (strings) and the context (tz, locale,
 /// platform, ui_version).
-nonisolated struct ExtensionShortcutRequest: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutRequest: Codable, Hashable, Sendable {
     var values: [String: String]?
     var context: ExtensionUIContext?
 
@@ -2131,7 +2131,7 @@ nonisolated struct ExtensionShortcutRequest: Codable, Equatable, Sendable {
 }
 
 /// shortcut.run's parameters: which shortcut, its values, for whom.
-nonisolated struct ExtensionShortcutRunParams: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutRunParams: Codable, Hashable, Sendable {
     var contribution: String
     var values: [String: String]
     var uiVersion: Int
@@ -2170,7 +2170,7 @@ nonisolated struct ExtensionShortcutRunParams: Codable, Equatable, Sendable {
 
 /// What shortcut.run answers (and the app gets): a sentence Siri says or shows, and a view held to the large widget's
 /// subset (the result card).
-nonisolated struct ExtensionShortcutResult: Codable, Equatable, Sendable {
+nonisolated struct ExtensionShortcutResult: Codable, Hashable, Sendable {
     var text: String?
     var view: ExtensionView?
 
@@ -2193,7 +2193,7 @@ nonisolated struct ExtensionShortcutResult: Codable, Equatable, Sendable {
 
 /// A button on an extension's notification (POST /api/v1/notify actions, at most 3). A tap runs ui.action on the
 /// notification's ui with this id; input asks for a line of text first (values.text).
-nonisolated struct ExtensionNotifyAction: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNotifyAction: Codable, Hashable, Sendable {
     var id: String
     var title: String
     var role: String?
@@ -2227,7 +2227,7 @@ nonisolated struct ExtensionNotifyAction: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionNotifyActionInput: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNotifyActionInput: Codable, Hashable, Sendable {
     var placeholder: String?
 
     init(placeholder: String? = nil) {
@@ -2246,7 +2246,7 @@ nonisolated struct ExtensionNotifyActionInput: Codable, Equatable, Sendable {
 
 /// extension_notification in an extension's alert push: whose it is, the page a tap opens (ui with state) and its
 /// buttons (category ext.<extension>.<hash of the action ids>, registered by the app as it meets it).
-nonisolated struct ExtensionNotification: Codable, Equatable, Sendable {
+nonisolated struct ExtensionNotification: Codable, Hashable, Sendable {
     var `extension`: String
     var ui: String?
     var state: String?
@@ -2395,7 +2395,7 @@ nonisolated enum ExtensionNavIcon {
     static let all = ["plugin", "chart", "gauge", "list", "bell", "doc", "calendar", "money", "extension", "person", "chat", "mail", "link", "folder", "star", "check", "warning", "clock", "tag", "search", "settings"]
 }
 
-nonisolated struct ExtensionView: Codable, Equatable, Sendable {
+nonisolated struct ExtensionView: Codable, Hashable, Sendable {
     var title: String?
     var sections: [ExtensionSection]
     /// The extension's own, sent back with the next render or action; at most 16 KB.
@@ -2445,7 +2445,7 @@ nonisolated struct ExtensionView: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionSection: Codable, Equatable, Sendable {
+nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
     var title: String?
     var footer: String?
     var items: [ExtensionComponent]
@@ -2475,7 +2475,7 @@ nonisolated struct ExtensionSection: Codable, Equatable, Sendable {
 }
 
 /// One component of a view, told apart by type. A type an app does not know is skipped and the rest drawn.
-nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
+nonisolated enum ExtensionComponent: Codable, Hashable, Sendable {
     case text(ExtensionTextComponent)
     case metric(ExtensionMetricComponent)
     case progress(ExtensionProgressComponent)
@@ -2575,7 +2575,7 @@ nonisolated enum ExtensionComponent: Codable, Equatable, Sendable {
 }
 
 /// A paragraph.
-nonisolated struct ExtensionTextComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionTextComponent: Codable, Hashable, Sendable {
     var key: String?
     var text: String
     var style: String?
@@ -2601,7 +2601,7 @@ nonisolated struct ExtensionTextComponent: Codable, Equatable, Sendable {
 }
 
 /// A number with its label.
-nonisolated struct ExtensionMetricComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionMetricComponent: Codable, Hashable, Sendable {
     var key: String?
     var label: String
     var value: String
@@ -2635,7 +2635,7 @@ nonisolated struct ExtensionMetricComponent: Codable, Equatable, Sendable {
 }
 
 /// A bar filled to ratio (0 to 1).
-nonisolated struct ExtensionProgressComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionProgressComponent: Codable, Hashable, Sendable {
     var key: String?
     var label: String
     var ratio: Double
@@ -2669,7 +2669,7 @@ nonisolated struct ExtensionProgressComponent: Codable, Equatable, Sendable {
 }
 
 /// A row of a list; with an action it can be tapped.
-nonisolated struct ExtensionRowComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionRowComponent: Codable, Hashable, Sendable {
     var key: String?
     var title: String
     var subtitle: String?
@@ -2720,7 +2720,7 @@ nonisolated struct ExtensionRowComponent: Codable, Equatable, Sendable {
 }
 
 /// A button; its title never wraps.
-nonisolated struct ExtensionButtonComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionButtonComponent: Codable, Hashable, Sendable {
     var key: String?
     var title: String
     var action: ExtensionAction
@@ -2750,7 +2750,7 @@ nonisolated struct ExtensionButtonComponent: Codable, Equatable, Sendable {
 }
 
 /// A link the app opens inside itself: https only.
-nonisolated struct ExtensionLinkComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionLinkComponent: Codable, Hashable, Sendable {
     var key: String?
     var title: String
     var url: String
@@ -2776,7 +2776,7 @@ nonisolated struct ExtensionLinkComponent: Codable, Equatable, Sendable {
 }
 
 /// An input; its value goes back under name when an action submits. A secret is never filled in.
-nonisolated struct ExtensionFieldComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionFieldComponent: Codable, Hashable, Sendable {
     var key: String?
     var name: String
     var label: String
@@ -2818,7 +2818,7 @@ nonisolated struct ExtensionFieldComponent: Codable, Equatable, Sendable {
 }
 
 /// A line between two groups of a section.
-nonisolated struct ExtensionDividerComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionDividerComponent: Codable, Hashable, Sendable {
     var key: String?
 
     init(key: String? = nil) {
@@ -2836,7 +2836,7 @@ nonisolated struct ExtensionDividerComponent: Codable, Equatable, Sendable {
 }
 
 /// A bar or line chart. Every series has the same labels in the same order; with more than one series each is named.
-nonisolated struct ExtensionChartComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChartComponent: Codable, Hashable, Sendable {
     var key: String?
     var kind: String
     var series: [ExtensionChartSeries]
@@ -2878,7 +2878,7 @@ nonisolated struct ExtensionChartComponent: Codable, Equatable, Sendable {
 }
 
 /// A few numbers side by side.
-nonisolated struct ExtensionStatGridComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionStatGridComponent: Codable, Hashable, Sendable {
     var key: String?
     var stats: [ExtensionStat]
 
@@ -2900,7 +2900,7 @@ nonisolated struct ExtensionStatGridComponent: Codable, Equatable, Sendable {
 }
 
 /// One of a few, chosen at once: its action goes with values {name: the chosen value}.
-nonisolated struct ExtensionSegmentedComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionSegmentedComponent: Codable, Hashable, Sendable {
     var key: String?
     var name: String
     var choices: [ExtensionChoice]
@@ -2936,7 +2936,7 @@ nonisolated struct ExtensionSegmentedComponent: Codable, Equatable, Sendable {
 /// Text in a safe subset of Markdown: headings (1 to 3), paragraphs, lists, bold, italics, inline code, code blocks,
 /// quotes, https links (opened in the app). No HTML, no images, no tables (a table is a table component). An older
 /// app gets it as plain text.
-nonisolated struct ExtensionMarkdownComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionMarkdownComponent: Codable, Hashable, Sendable {
     var key: String?
     var text: String
 
@@ -2959,7 +2959,7 @@ nonisolated struct ExtensionMarkdownComponent: Codable, Equatable, Sendable {
 
 /// A table: 1 to 8 columns, at most 100 rows, each with as many cells as there are columns. Narrow screens scroll it
 /// sideways; cells never squeeze. An older app gets a row per line.
-nonisolated struct ExtensionTableComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionTableComponent: Codable, Hashable, Sendable {
     var key: String?
     var columns: [ExtensionTableColumn]
     var rows: [[String]]
@@ -2989,7 +2989,7 @@ nonisolated struct ExtensionTableComponent: Codable, Equatable, Sendable {
 }
 
 /// An empty state: nothing here yet, and maybe one thing to do about it. An older app gets a text and a button.
-nonisolated struct ExtensionEmptyComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionEmptyComponent: Codable, Hashable, Sendable {
     var key: String?
     var title: String
     var detail: String?
@@ -3024,7 +3024,7 @@ nonisolated struct ExtensionEmptyComponent: Codable, Equatable, Sendable {
 
 /// Loading: the extension answers it while its data comes, then sends ui.invalidate to be drawn again. An older app
 /// gets a quiet text.
-nonisolated struct ExtensionLoadingComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionLoadingComponent: Codable, Hashable, Sendable {
     var key: String?
     var title: String?
 
@@ -3047,7 +3047,7 @@ nonisolated struct ExtensionLoadingComponent: Codable, Equatable, Sendable {
 
 /// Assistant only: self-contained HTML. Execution requires an isolated, network-denying renderer; unsupported clients
 /// show the root fallback. Extensions never execute it.
-nonisolated struct ExtensionHtmlComponent: Codable, Equatable, Sendable {
+nonisolated struct ExtensionHtmlComponent: Codable, Hashable, Sendable {
     var key: String?
     var html: String
     var height: Int?
@@ -3076,7 +3076,7 @@ nonisolated struct ExtensionHtmlComponent: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionAssistantView: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAssistantView: Codable, Hashable, Sendable {
     var id: String
     var conversation: String
     var version: Int64
@@ -3113,7 +3113,7 @@ nonisolated struct ExtensionAssistantView: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionViewAction: Codable, Equatable, Sendable {
+nonisolated struct ExtensionViewAction: Codable, Hashable, Sendable {
     var key: String
     var action: String
     var page: String?
@@ -3176,7 +3176,7 @@ nonisolated enum ExtensionViewActionStatus {
 
 /// What a row, a button or a segmented does: ui.action with its id. An object, so later kinds of action (push or pop
 /// a page) are fields added here.
-nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAction: Codable, Hashable, Sendable {
     var id: String
     /// Ask the user first, in these words.
     var confirm: String?
@@ -3228,7 +3228,7 @@ nonisolated struct ExtensionAction: Codable, Equatable, Sendable {
 
 /// A page pushed on the navigation stack: ui.render of the extension's ui (this one when empty; a full page:
 /// extension_page, plugin_page or nav_page) with state. title is shown until the view comes.
-nonisolated struct ExtensionPush: Codable, Equatable, Sendable {
+nonisolated struct ExtensionPush: Codable, Hashable, Sendable {
     var ui: String?
     /// Assistant only: a page in the root View.pages. Never combined with ui or state.
     var page: String?
@@ -3260,7 +3260,7 @@ nonisolated struct ExtensionPush: Codable, Equatable, Sendable {
 
 /// A search box on top of the page (UI version 3): the app calls ui.action with action and values {"q": the text},
 /// 0.3 s after the user stops typing.
-nonisolated struct ExtensionSearch: Codable, Equatable, Sendable {
+nonisolated struct ExtensionSearch: Codable, Hashable, Sendable {
     var placeholder: String?
     var value: String?
     var action: ExtensionAction
@@ -3287,7 +3287,7 @@ nonisolated struct ExtensionSearch: Codable, Equatable, Sendable {
 
 /// A drop-down beside the search box (UI version 3): choosing calls ui.action with action and values {name: the
 /// value} (and the search's q).
-nonisolated struct ExtensionFilter: Codable, Equatable, Sendable {
+nonisolated struct ExtensionFilter: Codable, Hashable, Sendable {
     var name: String
     var title: String?
     var choices: [ExtensionChoice]
@@ -3322,7 +3322,7 @@ nonisolated struct ExtensionFilter: Codable, Equatable, Sendable {
 
 /// A section's last row, 加载更多 (UI version 3): reaching it (or tapping it) calls ui.action with action once; the
 /// extension answers the whole view, longer.
-nonisolated struct ExtensionMore: Codable, Equatable, Sendable {
+nonisolated struct ExtensionMore: Codable, Hashable, Sendable {
     var title: String?
     var action: ExtensionAction
 
@@ -3344,7 +3344,7 @@ nonisolated struct ExtensionMore: Codable, Equatable, Sendable {
 }
 
 /// A person's or a chat's picture: an https image, else up to two characters drawn as the app's initials avatar.
-nonisolated struct ExtensionAvatar: Codable, Equatable, Sendable {
+nonisolated struct ExtensionAvatar: Codable, Hashable, Sendable {
     var url: String?
     var text: String?
 
@@ -3366,7 +3366,7 @@ nonisolated struct ExtensionAvatar: Codable, Equatable, Sendable {
 }
 
 /// A small picture at the row's start: an https image the app loads without any credentials.
-nonisolated struct ExtensionThumbnail: Codable, Equatable, Sendable {
+nonisolated struct ExtensionThumbnail: Codable, Hashable, Sendable {
     var url: String
     var aspect: String?
 
@@ -3401,7 +3401,7 @@ nonisolated enum ExtensionTableAlign {
     static let all = ["start", "end"]
 }
 
-nonisolated struct ExtensionTableColumn: Codable, Equatable, Sendable {
+nonisolated struct ExtensionTableColumn: Codable, Hashable, Sendable {
     var title: String
     var align: String?
 
@@ -3423,7 +3423,7 @@ nonisolated struct ExtensionTableColumn: Codable, Equatable, Sendable {
 }
 
 /// An empty state's one button.
-nonisolated struct ExtensionEmptyButton: Codable, Equatable, Sendable {
+nonisolated struct ExtensionEmptyButton: Codable, Hashable, Sendable {
     var title: String
     var action: ExtensionAction
 
@@ -3444,7 +3444,7 @@ nonisolated struct ExtensionEmptyButton: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionBadge: Codable, Equatable, Sendable {
+nonisolated struct ExtensionBadge: Codable, Hashable, Sendable {
     var text: String
     var tone: String?
 
@@ -3465,7 +3465,7 @@ nonisolated struct ExtensionBadge: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionChoice: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChoice: Codable, Hashable, Sendable {
     var value: String
     var title: String?
 
@@ -3487,7 +3487,7 @@ nonisolated struct ExtensionChoice: Codable, Equatable, Sendable {
 }
 
 /// One line, or one color of bars. No tone: the app's own colors, in order.
-nonisolated struct ExtensionChartSeries: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChartSeries: Codable, Hashable, Sendable {
     var name: String?
     var tone: String?
     var points: [ExtensionChartPoint]
@@ -3514,7 +3514,7 @@ nonisolated struct ExtensionChartSeries: Codable, Equatable, Sendable {
 
 /// A value at a label (a day, a model); display is how to write it ("¥1.20"), else the app writes value with the
 /// unit.
-nonisolated struct ExtensionChartPoint: Codable, Equatable, Sendable {
+nonisolated struct ExtensionChartPoint: Codable, Hashable, Sendable {
     var label: String
     var value: Double
     var display: String?
@@ -3539,7 +3539,7 @@ nonisolated struct ExtensionChartPoint: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionStat: Codable, Equatable, Sendable {
+nonisolated struct ExtensionStat: Codable, Hashable, Sendable {
     var label: String
     var value: String
     var detail: String?
@@ -3570,7 +3570,7 @@ nonisolated struct ExtensionStat: Codable, Equatable, Sendable {
 
 /// What ui.action answers: a new view, a short message, an https link to open, a page to push or to pop (UI version
 /// 3), or nothing (draw again).
-nonisolated struct ExtensionActionResult: Codable, Equatable, Sendable {
+nonisolated struct ExtensionActionResult: Codable, Hashable, Sendable {
     var view: ExtensionView?
     var toast: String?
     var openUrl: String?
@@ -3616,7 +3616,7 @@ nonisolated enum ExtensionPersonaCardKind {
 
 /// The assistant's ```persona-card block (#886): one JSON object. Joins the components in #1850; this form keeps
 /// drawing.
-nonisolated struct ExtensionPersonaCard: Codable, Equatable, Sendable {
+nonisolated struct ExtensionPersonaCard: Codable, Hashable, Sendable {
     var type: String
     var title: String?
     var subtitle: String?
@@ -3669,7 +3669,7 @@ nonisolated struct ExtensionPersonaCard: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionCardAmount: Codable, Equatable, Sendable {
+nonisolated struct ExtensionCardAmount: Codable, Hashable, Sendable {
     var value: Double
     var unit: String?
 
@@ -3690,7 +3690,7 @@ nonisolated struct ExtensionCardAmount: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated struct ExtensionCardPart: Codable, Equatable, Sendable {
+nonisolated struct ExtensionCardPart: Codable, Hashable, Sendable {
     var label: String
     var value: Double
     var note: String?

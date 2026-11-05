@@ -13,7 +13,7 @@ import SwiftUI
     static let shared = InboxItemSlots()
 
     /// The hub's inbox_item contributions in its order; nil until read for this hub.
-    private(set) var places: [PluginUIPlace]?
+    private(set) var places: [ExtensionUIPlace]?
     @ObservationIgnored private var lastHub: String?
     @ObservationIgnored private var reading: Task<Void, Never>?
     @ObservationIgnored private let deps: ExtensionViewModel.Deps
@@ -33,7 +33,7 @@ import SwiftUI
     }
 
     /// The contribution that draws items of `source`: the first the hub lists for that connector.
-    func place(for source: String) -> PluginUIPlace? {
+    func place(for source: String) -> ExtensionUIPlace? {
         places?.first { $0.connector == source }
     }
 
@@ -61,7 +61,7 @@ import SwiftUI
     }
 
     /// What the hub said, asking it first when nothing is known yet.
-    func known() async -> [PluginUIPlace] {
+    func known() async -> [ExtensionUIPlace] {
         if places == nil { await reload() }
         return places ?? []
     }
@@ -97,7 +97,7 @@ import SwiftUI
     /// The plugin's View of the item, once it drew one.
     private(set) var page: ExtensionViewModel?
     /// The contribution drawing the item (its title says where 回到 goes back to).
-    private(set) var place: PluginUIPlace?
+    private(set) var place: ExtensionUIPlace?
     /// Why the plugin's page is not there, said in a line over today's body with 重试: the plugin failed (502), the hub
     /// could not be reached. Nil when today's body is drawn quietly: no plugin for the source, or the hub refused or
     /// had nothing to draw (403 — a device that may only read —, 404, `unsupported`).
@@ -128,7 +128,7 @@ import SwiftUI
             return
         }
         self.place = place
-        let page = ExtensionViewModel(plugin: place.plugin, ui: place.id, context: PluginUIContext(item: item), deps: deps)
+        let page = ExtensionViewModel(plugin: place.owner, ui: place.id, context: ExtensionUIContext.here(item: item), deps: deps)
         await page.load()
         if page.view != nil, !page.unsupported {
             self.page = page
@@ -203,7 +203,7 @@ struct InboxItemSlotContent<Plain: View>: View {
         .onChange(of: InboxItemSlotChange(item)) { Task { await slot.changed() } }
     }
 
-    private var name: String { slot.place.map { $0.pluginName?.isEmpty == false ? $0.pluginName! : $0.title } ?? "扩展" }
+    private var name: String { slot.place.map { $0.ownerName?.isEmpty == false ? $0.ownerName! : $0.title } ?? "扩展" }
 
     /// The plugin failed: today's body under a line saying so, with 重试.
     private func failed(_ why: String) -> some View {
@@ -291,6 +291,8 @@ struct InboxExtensionItemPage: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await page.load() }
         .pluginRefresh(page)
+        .extensionSearch(page)
+        .extensionPushes([page])
         .accessibilityIdentifier("inbox-plugin-item")
     }
 }

@@ -77,6 +77,8 @@ extension Theme {
         static let save = "square.and.arrow.down"
         static let down = "arrow.down"
         static let gitBranch = "arrow.triangle.branch"
+        /// 分支到新聊天: a new conversation from a reply (#2137).
+        static let forkChat = "arrow.branch"
         static let gitUpstream = "cloud"
         static let gitNoUpstream = "icloud.slash"
         static let retry = "arrow.clockwise"
@@ -271,6 +273,7 @@ extension Theme {
         static let pluginDoc = "doc.text"
         static let pluginCalendar = "calendar"
         static let pluginMoney = "creditcard"
+        static let pluginStar = "star"
         static let phone = "iphone"
         static let watch = "applewatch"
         static let handoff = "iphone.and.arrow.forward"

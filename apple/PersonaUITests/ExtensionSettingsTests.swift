@@ -5,10 +5,20 @@ import XCTest
 /// MOCK_PLUGINS=1: `TEST_RUNNER_JARVIS_PLUGINS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the
 /// screenshots, named by `TEST_RUNNER_JARVIS_PLUGINS_APPEARANCE` (light / dark: set with `simctl ui … appearance`).
 final class ExtensionSettingsTests: XCTestCase {
-    @MainActor func testSetUpAnExtension() throws {
+    @MainActor func testSetUpAnExtension() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let hub = env["JARVIS_PLUGINS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_PLUGINS=1 (JARVIS_PLUGINS_HUB)") }
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        // 从当前 mock 的列表取数量，不写死后来新增示例之前的六个扩展。
+        var (data, response) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/extensions")!)
+        if (response as? HTTPURLResponse)?.statusCode == 404 {
+            (data, response) = try await URLSession.shared.data(from: URL(string: hub + "/api/v1/plugins")!)
+        }
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let plugins = try XCTUnwrap((json["extensions"] ?? json["plugins"]) as? [[String: Any]])
+        let attention = plugins.filter { ["needs_setup", "error", "incompatible"].contains($0["status"] as? String ?? "") }.count
+        let summary = "\(plugins.count) 个" + (attention > 0 ? " · \(attention) 个要处理" : "")
         func shot(_ app: XCUIApplication, _ name: String) {
             guard let dir = env["JARVIS_SHOTS"] else { return }
             try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir).appending(path: "plugins-\(name)-\(look).png"))
@@ -29,7 +39,7 @@ final class ExtensionSettingsTests: XCTestCase {
         let entry = app.buttons["settings-plugins"]
         XCTAssertTrue(entry.waitForExistence(timeout: 15) || app.staticTexts["设置"].exists, "no settings")
         for _ in 0..<8 where !(entry.exists && entry.isHittable) { app.swipeUp() }
-        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "6 个 · 2 个要处理")).firstMatch.exists,
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", summary)).firstMatch.exists,
                       "the row's summary:\n\(app.debugDescription)")
         shot(app, "home")
         entry.tap()

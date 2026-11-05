@@ -28,20 +28,20 @@ import Testing
         let s = slots(hub)
         await s.reload()
         #expect(s.pages.map(\.id) == ["usage", "alerts"], "a placement this app does not know is left out")
-        #expect(s.pages[0].pluginName == "Example 网关面板" && s.pages[0].badge == PluginBadge(text: "3", tone: "danger"))
+        #expect(s.pages[0].pluginName == "Example 网关面板" && s.pages[0].badge == ExtensionBadge(text: "3", tone: "danger"))
         #expect(s.cards.map(\.id) == ["today", "plain"])
         #expect(ExtensionSlots.icon("chart") == Theme.Icon.pluginChart && ExtensionSlots.icon("sparkles") == Theme.Icon.plugins)
         #expect(s.opened(by: s.cards[0])! == ("usage", "用量") && s.opened(by: s.cards[1]) == nil)
         #expect(s.total.count == 3 && !s.total.dot)
 
         // The plugin's badge changes (plugin_ui): a word only is a dot on 设置; cleared, nothing.
-        s.received(plugin: "example-gateway", id: "usage", badge: PluginBadge(text: "新"))
+        s.received(plugin: "example-gateway", id: "usage", badge: ExtensionBadge(text: "新"))
         #expect(s.pages[0].badge?.text == "新" && s.total.count == 0 && s.total.dot)
-        s.received(plugin: "example-gateway", id: "alerts", badge: PluginBadge(text: "2"))
+        s.received(plugin: "example-gateway", id: "alerts", badge: ExtensionBadge(text: "2"))
         #expect(s.total.count == 2 && !s.total.dot, "numbers add up; words make no dot when there is a number")
         s.received(plugin: "example-gateway", id: "usage", badge: nil)
         s.received(plugin: "example-gateway", id: "alerts", badge: nil)
-        s.received(plugin: "nobody", id: "usage", badge: PluginBadge(text: "9"))
+        s.received(plugin: "nobody", id: "usage", badge: ExtensionBadge(text: "9"))
         #expect(s.total.count == 0 && !s.total.dot)
 
         // A card's model draws compact, and is kept while the card is listed.
@@ -70,24 +70,24 @@ import Testing
         let hub = FakeHub()
         var draws = 0
         hub.on("POST", "/api/v1/plugins/example-gateway/-/ui/today") { _ in draws += 1; return Data(Self.chartView.utf8) }
-        let page = ExtensionViewModel(plugin: "example-gateway", ui: "today", context: PluginUIContext(machine: "macbook", size: "compact"),
+        let page = ExtensionViewModel(plugin: "example-gateway", ui: "today", context: ExtensionUIContext.here(machine: "macbook", size: "compact"),
                                    deps: .init(api: { hub.client }))
         await page.load()
         let v = try #require(page.view, "an item of a kind this app does not know does not lose the view")
         let items = v.sections[0].items
         #expect(items.map(\.type) == ["stat_grid", "chart", "hologram", "field"])
-        #expect(items[0].stats?.map(\.value) == ["1.2M", "¥36.20"] && items[0].stats?[0].tone == "caution")
-        let chart = items[1]
-        #expect(chart.kind == "bar" && chart.stacked == true && chart.unit == "tokens" && chart.series?.count == 2)
-        #expect(chart.series?[0].points[0].display == "1.2M" && chart.series?[0].points[1].display == nil)
-        #expect(chart.series?[1].tone == "positive" && chart.series?[1].points.map(\.value) == [300000, 250000])
+        #expect(items[0].statGrid?.stats.map(\.value) == ["1.2M", "¥36.20"] && items[0].statGrid?.stats[0].tone == "caution")
+        let chart = try #require(items[1].chart)
+        #expect(chart.kind == "bar" && chart.stacked == true && chart.unit == "tokens" && chart.series.count == 2)
+        #expect(chart.series[0].points[0].display == "1.2M" && chart.series[0].points[1].display == nil)
+        #expect(chart.series[1].tone == "positive" && chart.series[1].points.map(\.value) == [300000, 250000])
         #expect(ExtensionUIStyle.series(nil) == nil && ExtensionUIStyle.series("positive") == Theme.positive)
         #expect(ExtensionUIStyle.series("bogus") == ExtensionUIStyle.series("neutral"), "a tone this app does not know is neutral")
 
         // The context: the machine, the card's size, the app's time zone, platform and UI version.
         let body = try JSON.decoder.decode(JSONValue.self, from: hub.sent("POST", "/api/v1/plugins/example-gateway/-/ui/today")[0].body ?? Data())
         #expect(body["context"]?["machine"] == .string("macbook") && body["context"]?["size"] == .string("compact"))
-        #expect(body["context"]?["ui_version"] == .number(2))
+        #expect(body["context"]?["ui_version"] == .number(3))
 
         // refresh_after: due that long after it was drawn; drawn again, what the user typed stays.
         #expect(v.refreshAfter == 300)
@@ -112,7 +112,7 @@ import Testing
     @Test func theExtensionUIEvent() throws {
         let set = ServerEvent.decode(Data(#"{"type":"plugin_ui","plugin":"example-gateway","id":"usage","badge":{"text":"3","tone":"danger"}}"#.utf8))
         guard case .pluginBadge(let plugin, let id, let badge)? = set else { Issue.record("not decoded"); return }
-        #expect(plugin == "example-gateway" && id == "usage" && badge == PluginBadge(text: "3", tone: "danger"))
+        #expect(plugin == "example-gateway" && id == "usage" && badge == ExtensionBadge(text: "3", tone: "danger"))
         let cleared = ServerEvent.decode(Data(#"{"type":"plugin_ui","plugin":"example-gateway","id":"usage","badge":null}"#.utf8))
         guard case .pluginBadge(_, _, let none)? = cleared else { Issue.record("not decoded"); return }
         #expect(none == nil)
@@ -141,20 +141,20 @@ import Testing
         }
         let page = ExtensionViewModel(plugin: "p", ui: "u", deps: .init(api: { hub.client }))
         await page.load()
-        let seg = try #require(page.view?.sections[0].items[0])
+        let seg = try #require(page.view?.sections[0].items[0].segmented)
         #expect(page.values["range"] == "7d")
-        #expect(await page.choose(seg, "7d") == .init() && bodies.count == 1, "the one picked already: nothing sent")
-        _ = await page.choose(seg, "1d")
+        #expect(await page.choose(seg.name, "7d", action: seg.action) == .init() && bodies.count == 1, "the one picked already: nothing sent")
+        _ = await page.choose(seg.name, "1d", action: seg.action)
         #expect(bodies.last?["action"] == .string("range") && bodies.last?["values"] == .object(["range": .string("1d")]),
                 "only its own value without submit")
         #expect(bodies.last?["state"] == .string("range=7d"))
-        #expect(page.values["range"] == "1d" && page.view?.sections[0].items[0].value == "1d", "the plugin's answer is the view")
+        #expect(page.values["range"] == "1d" && page.view?.sections[0].items[0].segmented?.value == "1d", "the plugin's answer is the view")
     }
 
     @Test func aMachineTheHubDoesNotHaveDrawsNothing() async throws {
         let hub = FakeHub()
         hub.on("POST", "/api/v1/plugins/p/-/ui/gpu") { _ in throw APIError(status: 404, message: "没有这台机器") }
-        let section = ExtensionViewModel(plugin: "p", ui: "gpu", context: PluginUIContext(machine: "gone"), deps: .init(api: { hub.client }))
+        let section = ExtensionViewModel(plugin: "p", ui: "gpu", context: ExtensionUIContext.here(machine: "gone"), deps: .init(api: { hub.client }))
         await section.load()
         #expect(section.unsupported && section.error == nil)
         let page = ExtensionViewModel(plugin: "p", ui: "gpu", deps: .init(api: { hub.client }))

@@ -234,6 +234,7 @@ struct SettingsView: View {
             .sheet(isPresented: $showPair) { PairView() }
             #if os(iOS) || os(visionOS)
             .pluginLinks($pluginLink)
+            .extensionPushes(ExtensionSlots.shared.cardPages)
             #endif
             #if os(macOS) && DEBUG
             // `-tab settings -openPairSheet YES` (体验模式, or paired: 重新配对): the 连接 hub sheet, for screenshots
@@ -420,6 +421,7 @@ private struct SettingsDestinations: ViewModifier {
             .navigationDestination(for: MessagesChatsRoute.self) { _ in MessagesChatListView().splitDetailPage() }
             .navigationDestination(for: MessagesThreadRoute.self) { r in MessagesThreadView(id: r.id, name: r.name).splitDetailPage() }
             .navigationDestination(for: SessionKey.self) { key in ChatView(key: key).id(key).splitDetailPage(ownsBack: true) }
+            .extensionPushDestination()
     }
 
     @ViewBuilder private func page(for page: SettingsPage) -> some View {

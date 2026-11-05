@@ -739,6 +739,7 @@ struct InboxDestinations: ViewModifier {
                 InboxDetailView(item: $0, accounts: accounts).id($0.id).splitDetailPage().feishuHandlesLinks(feishuOpen)
             }
             .navigationDestination(for: FeishuRoute.self) { FeishuRouteView(route: $0).splitDetailPage().feishuHandlesLinks(feishuOpen) }
+            .extensionPushDestination()
     }
 }
 

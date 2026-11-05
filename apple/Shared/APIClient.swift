@@ -669,6 +669,12 @@ nonisolated struct APIClient: Sendable {
         return try await get(sp(k) + "/screen", query: q)
     }
     func close(_ k: SessionKey) async throws { try await post(sp(k) + "/close") }
+    private struct ForkBody: Encodable { var at_item_id: String }
+    private struct Forked: Decodable { var session_id: String }
+    /// 分支到新聊天 (#2137): a new session with the conversation up to the end of item's turn; its id.
+    func fork(_ k: SessionKey, at itemID: String) async throws -> String {
+        try await post(sp(k) + "/fork", body: ForkBody(at_item_id: itemID), timeout: 60, as: Forked.self).session_id
+    }
     /// 删除对话: the hub takes it out of every app's list; the transcript stays on its computer.
     func deleteSession(_ k: SessionKey) async throws { try await delete(sp(k)) }
 

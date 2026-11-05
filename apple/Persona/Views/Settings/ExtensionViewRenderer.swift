@@ -1,48 +1,34 @@
 import SwiftUI
 
-/// A plugin's View drawn with the app's design system (docs/extensions.md「声明式 UI」): each section a section of the form
-/// (a divider starts another one), each item a row — text, a number with what it is, a bar, a list row, a button, a
-/// link opened in the app, a field to fill in. Tones are the app's role colors. Buttons that ask first ask; the ones
-/// that submit take the page's fields along; what comes back (a new view, a word, a link) is handled here.
+/// An extension's View drawn with the app's design system (docs/extensions.md「声明式 UI」「UI 版本 3」): each section a
+/// section of the form (a divider starts another one), each component a row: text, Markdown, a number with what it is,
+/// a bar, a list row (with an icon, an avatar or a thumbnail), a table, a button, a link opened in the app, a field to
+/// fill in, an empty state, a spinner. Tones are the app's role colors. Controls that ask first ask; the ones that
+/// submit take the page's fields along; a section's `more` loads the next part when it is scrolled to. The page's
+/// search field is the hosting page's (`ExtensionPageView`), its filter is drawn here.
+///
+/// Without a model (the assistant's cards, docs/extensions.md「助手的卡片」) nothing can be used: rows and buttons do
+/// nothing, fields, search, filter and more are not drawn; links open as usual.
 struct ExtensionViewRenderer: View {
-    var view: ExtensionUIView
-    var model: ExtensionViewModel
-    /// The first section's title when it has none of its own (a launcher's section: what the plugin calls it).
+    var view: ExtensionView
+    var model: ExtensionViewModel?
+    /// The first section's title when it has none of its own (a launcher's section: what the extension calls it).
     var heading: String? = nil
     /// Where links and `open_url` open: the page's link card.
     @Binding var link: LinkTarget?
 
-    /// A section split at its dividers: the title goes with the first part, the footer with the last.
-    private struct Part: Identifiable {
-        var id: Int
-        var title: String?
-        var footer: String?
-        var items: [PluginUIItem]
-    }
-
-    private var groups: [Part] {
-        var out: [Part] = []
-        for (i, s) in view.sections.enumerated() {
-            var parts: [[PluginUIItem]] = [[]]
-            for item in s.items {
-                if item.type == "divider" { parts.append([]) } else { parts[parts.count - 1].append(item) }
-            }
-            parts = parts.filter { !$0.isEmpty }
-            if parts.isEmpty { parts = [[]] }
-            for (j, part) in parts.enumerated() {
-                let title = j == 0 ? (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)) : nil
-                out.append(Part(id: out.count, title: title, footer: j == parts.count - 1 ? s.footer : nil, items: part))
-            }
-        }
-        return out
-    }
-
     var body: some View {
-        ForEach(groups) { g in
+        if let f = view.filter, let model {
+            Section { ExtensionFilterChips(filter: f, model: model, link: $link) }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+        }
+        ForEach(ExtensionParts.of(view, heading: heading)) { g in
             Section {
-                ForEach(Array(g.items.enumerated()), id: \.offset) { _, item in
-                    ExtensionItemRow(item: item, model: model, link: $link)
+                ForEach(g.items) { item in
+                    ExtensionItemRow(item: item.component, model: model, link: $link)
                 }
+                if let more = g.more, let model { ExtensionMoreRow(more: more, model: model, link: $link) }
             } header: {
                 if let t = g.title, !t.isEmpty { SettingsHeading(t) }
             } footer: {
@@ -52,7 +38,45 @@ struct ExtensionViewRenderer: View {
     }
 }
 
-/// How a plugin's words map onto the app's look.
+/// A View's sections split at their dividers: the title goes with the first part, the footer and `more` with the last.
+/// Components are kept apart by their `key` when they have one (a page drawn again keeps its place), else by where
+/// they are.
+struct ExtensionParts: Identifiable {
+    struct Item: Identifiable {
+        var id: String
+        var component: ExtensionComponent
+    }
+
+    var id: Int
+    var title: String?
+    var footer: String?
+    var more: ExtensionMore?
+    var items: [Item]
+
+    static func of(_ view: ExtensionView, heading: String? = nil) -> [ExtensionParts] {
+        var out: [ExtensionParts] = []
+        for (i, s) in view.sections.enumerated() {
+            var parts: [[Item]] = [[]]
+            for (j, c) in s.items.enumerated() {
+                if case .divider = c { parts.append([]); continue }
+                if case .unknown = c { continue }
+                if case .html = c { continue } // 助手专用 HTML 由独立沙箱处理，扩展渲染器不执行它。
+                parts[parts.count - 1].append(Item(id: c.key.map { "k:" + $0 } ?? "\(i).\(j)", component: c))
+            }
+            parts = parts.filter { !$0.isEmpty }
+            if parts.isEmpty { parts = [[]] }
+            for (j, part) in parts.enumerated() {
+                let title = j == 0 ? (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)) : nil
+                let last = j == parts.count - 1
+                out.append(ExtensionParts(id: out.count, title: title, footer: last ? s.footer : nil, more: last ? s.more : nil,
+                                          items: part))
+            }
+        }
+        return out
+    }
+}
+
+/// How an extension's words map onto the app's look.
 enum ExtensionUIStyle {
     /// neutral | positive | caution | danger → the role colors; anything else reads as neutral.
     static func tone(_ t: String?) -> Color {
@@ -69,7 +93,7 @@ enum ExtensionUIStyle {
         t == nil || t == "neutral" ? .primary : tone(t)
     }
 
-    /// A chart series' color: a role color when the plugin names a tone, nil (the next data hue) when it does not.
+    /// A chart series' color: a role color when the extension names a tone, nil (the next data hue) when it does not.
     static func series(_ t: String?) -> Color? {
         switch t {
         case "positive": Theme.positive
@@ -94,257 +118,161 @@ enum ExtensionUIStyle {
         default: Theme.Font.body
         }
     }
+
+    /// The icon set's names (docs/extensions.md「新组件」: a row's `icon`, an empty state's, a nav_page's) as the app's
+    /// symbols: one meaning each; anything else (and `extension`, `plugin`) is the extensions' own.
+    static func icon(_ name: String?) -> String {
+        switch name {
+        case "chart": Theme.Icon.pluginChart
+        case "gauge": Theme.Icon.pluginGauge
+        case "list": Theme.Icon.pluginList
+        case "bell": Theme.Icon.pluginBell
+        case "doc": Theme.Icon.pluginDoc
+        case "calendar": Theme.Icon.pluginCalendar
+        case "money": Theme.Icon.pluginMoney
+        case "person": Theme.Icon.person
+        case "chat": Theme.Icon.message
+        case "mail": Theme.Icon.mail
+        case "link": Theme.Icon.link
+        case "folder": Theme.Icon.folder
+        case "star": Theme.Icon.pluginStar
+        case "check": Theme.Icon.success
+        case "warning": Theme.Icon.error
+        case "clock": Theme.Icon.time
+        case "tag": Theme.Icon.label
+        case "search": Theme.Icon.search
+        case "settings": Theme.Icon.settings
+        default: Theme.Icon.plugins
+        }
+    }
 }
 
-/// One item of a plugin's View.
+/// One component of an extension's View.
 struct ExtensionItemRow: View {
-    var item: PluginUIItem
-    @Bindable var model: ExtensionViewModel
+    var item: ExtensionComponent
+    var model: ExtensionViewModel?
     @Binding var link: LinkTarget?
 
     var body: some View {
-        switch item.type {
-        case "text":
-            Text(item.text ?? "")
-                .font(ExtensionUIStyle.font(item.style))
-                .foregroundStyle(item.style == "secondary" || item.style == "caption" ? Color.secondary : Color.primary)
+        switch item {
+        case .text(let t):
+            Text(t.text)
+                .font(ExtensionUIStyle.font(t.style))
+                .foregroundStyle(t.style == "secondary" || t.style == "caption" ? Color.secondary : Color.primary)
                 .textSelection(.enabled)
-        case "metric": metric
-        case "progress": progress
-        case "row":
-            if let action = item.action {
-                ExtensionActionButton(action: action, title: item.title ?? "", model: model, link: $link) { rowLabel(chevron: true) }
+        case .markdown(let m): ExtensionMarkdown(text: m.text, link: $link)
+        case .metric(let m): metric(m)
+        case .progress(let p): progress(p)
+        case .row(let r):
+            if let action = r.action, let model {
+                ExtensionActionButton(action: action, title: r.title, model: model, link: $link) { ExtensionComponentRowLabel(row: r, model: model, chevron: true) }
                     .foregroundStyle(Color.primary)
             } else {
-                rowLabel(chevron: false)
+                ExtensionComponentRowLabel(row: r, model: model, chevron: false)
             }
-        case "button":
-            if let action = item.action {
-                ExtensionActionButton(action: action, title: item.title ?? "", destructive: item.role == "destructive", model: model, link: $link) {
+        case .button(let b):
+            if let model {
+                ExtensionActionButton(action: b.action, title: b.title, destructive: b.role == "destructive", model: model, link: $link) {
                     HStack(spacing: Theme.Space.s) {
-                        Text(item.title ?? "").lineLimit(1).minimumScaleFactor(0.8)
-                        if model.running == action.id { ProgressView().controlSize(.small) }
+                        Text(b.title).lineLimit(1).minimumScaleFactor(0.8)
+                        if model.running == b.action.id { ProgressView().controlSize(.small) }
                     }
                 }
             }
-        case "link":
-            if let url = item.url.flatMap(URL.init(string:)), url.scheme == "https" {
+        case .link(let l):
+            if let url = URL(string: l.url), url.scheme == "https" {
                 Button { link = LinkTarget(url: url) } label: {
-                    Label { Text(item.title ?? url.host() ?? "").lineLimit(1) } icon: { Image(systemName: Theme.Icon.link) }
+                    Label { Text(l.title.isEmpty ? (url.host() ?? "") : l.title).lineLimit(1) } icon: { Image(systemName: Theme.Icon.link) }
                 }
                 .accessibilityIdentifier("plugin-ui-link")
             }
-        case "field": ExtensionFieldItem(item: item, model: model)
-        case "chart": ExtensionChartItem(item: item)
-        case "stat_grid": ExtensionStatGrid(stats: item.stats ?? [])
-        case "segmented": ExtensionSegmented(item: item, model: model, link: $link)
-        // An item this app does not know (a newer plugin's): left out, the rest drawn as usual.
-        default: EmptyView()
+        case .field(let f): if let model { ExtensionFieldItem(field: f, model: model) }
+        case .chart(let c): ExtensionChartItem(item: c)
+        case .statGrid(let g): ExtensionStatGrid(stats: g.stats)
+        case .segmented(let s): if let model { ExtensionSegmented(item: s, model: model, link: $link) }
+        case .table(let t): ExtensionTable(table: t)
+        case .empty(let e): ExtensionEmpty(empty: e, model: model, link: $link)
+        case .loading(let l):
+            HStack(spacing: Theme.Space.s) {
+                ProgressView().controlSize(.small)
+                Text(l.title?.isEmpty == false ? l.title! : "加载中…").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .accessibilityIdentifier("plugin-ui-loading")
+        // A divider splits sections before this; a component this app does not know (a newer extension's) is left out.
+        case .divider, .unknown, .html: EmptyView()
         }
     }
 
-    private var metric: some View {
+    private func metric(_ m: ExtensionMetricComponent) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(item.label ?? "").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-            Text(item.value ?? "").font(Theme.Font.title.monospacedDigit()).foregroundStyle(ExtensionUIStyle.ink(item.tone)).lineLimit(1)
+            Text(m.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+            Text(m.value).font(Theme.Font.title.monospacedDigit()).foregroundStyle(ExtensionUIStyle.ink(m.tone)).lineLimit(1)
                 .minimumScaleFactor(0.6)
-            if let d = item.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary) }
+            if let d = m.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary) }
         }
         .padding(.vertical, Theme.Space.xxs)
         .accessibilityElement(children: .combine)
     }
 
-    private var progress: some View {
-        let ratio = min(max(item.ratio ?? 0, 0), 1)
+    private func progress(_ p: ExtensionProgressComponent) -> some View {
+        let ratio = min(max(p.ratio, 0), 1)
         return VStack(alignment: .leading, spacing: Theme.Space.xs) {
             HStack(spacing: Theme.Space.sm) {
-                Text(item.label ?? "").font(Theme.Font.caption).lineLimit(1)
+                Text(p.label).font(Theme.Font.caption).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 Text("\(Int((ratio * 100).rounded()))%").font(Theme.Font.caption.monospacedDigit())
-                    .foregroundStyle(item.tone == nil || item.tone == "neutral" ? Color.secondary : ExtensionUIStyle.tone(item.tone)).lineLimit(1)
+                    .foregroundStyle(p.tone == nil || p.tone == "neutral" ? Color.secondary : ExtensionUIStyle.tone(p.tone)).lineLimit(1)
             }
-            ProgressView(value: ratio).tint(ExtensionUIStyle.bar(item.tone))
-            if let d = item.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2) }
+            ProgressView(value: ratio).tint(ExtensionUIStyle.bar(p.tone))
+            if let d = p.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2) }
         }
         .padding(.vertical, Theme.Space.xxs)
         .accessibilityElement(children: .combine)
-    }
-
-    private func rowLabel(chevron: Bool) -> some View {
-        HStack(spacing: Theme.Space.s) {
-            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(item.title ?? "").font(Theme.Font.body).lineLimit(2)
-                if let s = item.subtitle, !s.isEmpty { Text(s).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2) }
-            }
-            Spacer(minLength: Theme.Space.s)
-            if let v = item.value, !v.isEmpty { Text(v).font(Theme.Font.body.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1) }
-            if let b = item.badge { Chip(text: b.text, look: b.tone == nil || b.tone == "neutral" ? .neutral : .tint(ExtensionUIStyle.tone(b.tone))) }
-            if chevron {
-                if let a = item.action, model.running == a.id {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .contentShape(.rect)
-    }
-}
-
-/// A plugin's `chart`: its title, the chart (bars or lines, stacked when it says so), what it says under it. A series'
-/// tone is a role color, without one it takes the next data hue; values the plugin did not write are compact numbers
-/// with its unit. Compact (a card) when the environment says so.
-struct ExtensionChartItem: View {
-    var item: PluginUIItem
-    @Environment(\.pluginUICompact) private var compact
-
-    private var series: [PluginUIItem.ChartSeries] { Array((item.series ?? []).prefix(4)) }
-    /// The x axis: the first series' labels (the others line up with them).
-    private var labels: [String] { series.first?.points.map(\.label) ?? [] }
-
-    var body: some View {
-        if !labels.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                if let t = item.title, !t.isEmpty {
-                    Text(t).font(compact ? Theme.Font.labelStrong : Theme.Font.secondaryStrong).foregroundStyle(compact ? .secondary : .primary).lineLimit(1)
-                }
-                DataChart(kind: item.kind == "line" ? .line : .bar, labels: labels,
-                          series: series.enumerated().map { i, s in
-                              DataChart.Series(name: s.name?.isEmpty == false ? s.name! : "系列 \(i + 1)",
-                                               color: ExtensionUIStyle.series(s.tone), values: s.points.map(\.value),
-                                               displays: s.points.map(\.display))
-                          },
-                          stacked: item.stacked == true, format: format, compact: compact)
-                if let d = item.detail, !d.isEmpty, !compact {
-                    Text(d).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(3)
-                }
-            }
-            .padding(.vertical, Theme.Space.xs)
-        }
-    }
-
-    private func format(_ v: Double) -> String {
-        let n = DataChart.compact(v)
-        guard let u = item.unit, !u.isEmpty else { return n }
-        return n + " " + u
-    }
-}
-
-/// A plugin's `stat_grid`: a few numbers side by side (two or three a row on an iPhone, all of them in a row when
-/// there is room), each with what it is and a line under it in its tone.
-struct ExtensionStatGrid: View {
-    var stats: [PluginUIItem.Stat]
-
-    var body: some View {
-        let shown = Array(stats.prefix(6))
-        ViewThatFits(in: .horizontal) {
-            row(shown, columns: shown.count)
-            grid(shown, columns: shown.count == 4 ? 2 : 3)
-            grid(shown, columns: 2)
-        }
-        .padding(.vertical, Theme.Space.xs)
-    }
-
-    private func row(_ items: [PluginUIItem.Stat], columns: Int) -> some View {
-        HStack(alignment: .top, spacing: Theme.Space.l) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, s in cell(s).fixedSize() }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func grid(_ items: [PluginUIItem.Stat], columns: Int) -> some View {
-        Grid(alignment: .topLeading, horizontalSpacing: Theme.Space.l, verticalSpacing: Theme.Space.m) {
-            ForEach(Array(stride(from: 0, to: items.count, by: columns)), id: \.self) { start in
-                GridRow {
-                    ForEach(start..<min(start + columns, items.count), id: \.self) { i in
-                        cell(items[i]).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        }
-    }
-
-    private func cell(_ s: PluginUIItem.Stat) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(s.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-            Text(s.value).font(Theme.Font.heading.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
-            if let d = s.detail, !d.isEmpty {
-                Text(d).font(Theme.Font.label).foregroundStyle(ExtensionUIStyle.tone(s.tone)).lineLimit(1).minimumScaleFactor(0.8)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// A plugin's `segmented`: a few choices, one picked; picking another sends it to the plugin at once (its action, with
-/// `{name: value}`), whose answer is the view for it.
-struct ExtensionSegmented: View {
-    @Environment(AppModel.self) private var app
-    var item: PluginUIItem
-    var model: ExtensionViewModel
-    @Binding var link: LinkTarget?
-
-    private var name: String { item.name ?? "" }
-
-    var body: some View {
-        let choices = Array((item.choices ?? []).prefix(5))
-        if choices.count >= 2 {
-            SegmentedChoice(item.label ?? name, choices.map { ($0.value, $0.label) }, selection: Binding(
-                get: { model.values[name] ?? item.value ?? choices[0].value },
-                set: { v in
-                    Task {
-                        let o = await model.choose(item, v)
-                        if let e = o.error {
-                            Haptics.error()
-                            app.toast = Toast(e, style: .error)
-                        } else if let t = o.toast {
-                            app.toast = Toast(t, style: .success)
-                        }
-                        if let url = o.url { link = LinkTarget(url: url) }
-                    }
-                }))
-            // It has no label of its own (the name is the plugin's key): a Mac picker would write the key beside it.
-            .labelsHidden()
-            .disabled(model.running != nil)
-            .accessibilityIdentifier("plugin-ui-segmented-\(name)")
-            .padding(.vertical, Theme.Space.xxs)
-        }
     }
 }
 
 extension EnvironmentValues {
-    /// A plugin's View drawn as a card (`size: compact`): charts without axis text, the rest as usual.
+    /// An extension's View drawn as a card (`size: compact`): charts without axis text, the rest as usual.
     @Entry var pluginUICompact = false
 }
 
-/// A plugin's View on a page that is not a list (a machine's page, a card): each section a heading and a card of its
-/// items, a divider a line between them. The same items as `ExtensionViewRenderer`, drawn by `ExtensionItemRow`.
+/// An extension's View on a page that is not a list (a machine's page, a card, the assistant's reply): each section a
+/// heading and a card of its components, a divider a line between them. The same components as
+/// `ExtensionViewRenderer`, drawn by `ExtensionItemRow`.
 struct ExtensionViewStack: View {
-    var view: ExtensionUIView
-    var model: ExtensionViewModel
+    var view: ExtensionView
+    var model: ExtensionViewModel?
     /// The first section's heading when it has none of its own.
     var heading: String? = nil
     /// Draw the sections' cards (a page); false: the caller's card holds them (an overview card).
     var cards = true
+    /// Draw the sections' titles; nil: when it draws their cards (an overview card has its own title).
+    var titles: Bool? = nil
     @Binding var link: LinkTarget?
 
     var body: some View {
         VStack(alignment: .leading, spacing: cards ? Theme.Space.l : Theme.Space.m) {
+            if let f = view.filter, let model { ExtensionFilterChips(filter: f, model: model, link: $link) }
             ForEach(Array(view.sections.enumerated()), id: \.offset) { i, s in
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    if cards, let t = (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)), !t.isEmpty {
+                    if titles ?? cards, let t = (s.title?.isEmpty == false ? s.title : (i == 0 ? heading : nil)), !t.isEmpty {
                         Text(t).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                             .padding(.horizontal, Theme.Space.xs)
                     }
-                    let items = s.items
-                    if !items.isEmpty {
+                    let items = s.items.enumerated().compactMap { j, item -> ExtensionParts.Item? in
+                        if case .unknown = item { return nil }
+                        if case .html = item { return nil }
+                        return ExtensionParts.Item(id: item.key.map { "k:" + $0 } ?? "\(i).\(j)", component: item)
+                    }
+                    if !items.isEmpty || (s.more != nil && model != nil) {
                         let body = VStack(alignment: .leading, spacing: Theme.Space.m) {
-                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                                if item.type == "divider" { Divider() } else {
-                                    ExtensionItemRow(item: item, model: model, link: $link)
+                            ForEach(items) { entry in
+                                if case .divider = entry.component { Divider() } else {
+                                    ExtensionItemRow(item: entry.component, model: model, link: $link)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
+                            if let more = s.more, let model { ExtensionMoreRow(more: more, model: model, link: $link) }
                         }
                         if cards { body.card() } else { body }
                     }
@@ -357,108 +285,8 @@ struct ExtensionViewStack: View {
     }
 }
 
-/// A button or row that sends its action back to the plugin, asking first when it says so; the answer's word is a
-/// toast, its link opens in the app.
-private struct ExtensionActionButton<Content: View>: View {
-    @Environment(AppModel.self) private var app
-    var action: ExtensionUIAction
-    var title: String
-    var destructive = false
-    var model: ExtensionViewModel
-    @Binding var link: LinkTarget?
-    @ViewBuilder var label: Content
-    @State private var asking = false
-
-    var body: some View {
-        Button(role: destructive ? .destructive : nil) {
-            if action.confirm?.isEmpty == false { asking = true } else { run() }
-        } label: {
-            label
-        }
-        // A Mac form draws a button in the accent whatever its role: red as on the phone (#1512).
-        .tint(destructive ? Theme.danger : nil)
-        .disabled(model.running != nil)
-        .accessibilityIdentifier("plugin-ui-action-\(action.id)")
-        .confirmationDialog(action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
-            Button(role: destructive ? .destructive : nil) { run() } label: { Text(title.isEmpty ? "确定" : title).lineLimit(1) }
-                .accessibilityIdentifier("plugin-ui-confirm")
-            Button("取消", role: .cancel) {}
-        }
-    }
-
-    private func run() {
-        Task {
-            let o = await model.perform(action)
-            if let e = o.error {
-                Haptics.error()
-                app.toast = Toast(e, style: .error)
-            } else if let t = o.toast {
-                app.toast = Toast(t, style: .success)
-            }
-            if let url = o.url { link = LinkTarget(url: url) }
-        }
-    }
-}
-
-/// A field of a plugin's View: text, a secret (typed in hidden, never filled in for you), a number, a switch, a choice.
-private struct ExtensionFieldItem: View {
-    var item: PluginUIItem
-    @Bindable var model: ExtensionViewModel
-
-    private var name: String { item.name ?? "" }
-    private var text: Binding<String> {
-        Binding(get: { model.values[name] ?? "" }, set: { model.values[name] = $0 })
-    }
-
-    var body: some View {
-        Group {
-            switch item.kind {
-            case "toggle":
-                Toggle(isOn: Binding(get: { model.values[name] == "true" }, set: { model.values[name] = $0 ? "true" : "false" })) {
-                    Text(item.label ?? name).lineLimit(2)
-                }
-            case "choice":
-                Picker(selection: text) {
-                    if !(item.choices ?? []).contains(where: { $0.value == (model.values[name] ?? "") }) {
-                        Text(item.placeholder ?? "未选").tag(model.values[name] ?? "")
-                    }
-                    ForEach(item.choices ?? []) { c in Text(c.label).tag(c.value) }
-                } label: {
-                    Text(item.label ?? name).lineLimit(2)
-                }
-            case "secret":
-                labeled { SecretField(item.placeholder ?? "", filled: "已填写，提交时发送", text: text) }
-            case "number":
-                labeled {
-                    TextField(item.placeholder ?? "", text: text).keyboardType(.decimalPad)
-                }
-            default:
-                labeled {
-                    TextField(item.placeholder ?? "", text: text)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            }
-        }
-        .accessibilityIdentifier("plugin-ui-field-\(name)")
-    }
-
-    /// The label above the field.
-    private func labeled(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(item.label ?? name).font(Theme.Font.labelStrong).foregroundStyle(.secondary).lineLimit(2)
-            #if os(macOS)
-            content().labelsHidden() // a Mac form would put the label beside an empty box (#1221)
-            #else
-            content()
-            #endif
-        }
-        .padding(.vertical, Theme.Space.xxs)
-    }
-}
-
 extension View {
-    /// Where a plugin's links open: the link card (iPhone) or the panel at the trailing edge (Mac).
+    /// Where an extension's links open: the link card (iPhone) or the panel at the trailing edge (Mac).
     @ViewBuilder func pluginLinks(_ link: Binding<LinkTarget?>) -> some View {
         #if os(macOS)
         macLinkPanel(link)
@@ -466,6 +294,10 @@ extension View {
         modifier(ExtensionLinkSheet(link: link))
         #endif
     }
+
+    /// The pages `models` ask to push (docs/extensions.md「页面跳转」), on the navigation stack this page is on; the one
+    /// that asked draws again when its page closes. Put on the page itself, not a row: a list's rows cannot push.
+    func extensionPushes(_ models: [ExtensionViewModel]) -> some View { modifier(ExtensionPushes(models: models)) }
 }
 
 #if os(iOS) || os(visionOS)
@@ -479,14 +311,92 @@ private struct ExtensionLinkSheet: ViewModifier {
 }
 #endif
 
-/// 设置 › 扩展 › a plugin › one of its pages (placement plugin_page): its View as a page of its own.
+/// A page an extension pushes: its extension, which of its interfaces (its `ui`), the state it starts with.
+nonisolated struct ExtensionPushTarget: Hashable, Sendable {
+    var plugin: String
+    var ui: String
+    var state: String?
+    var title: String
+    var depth: Int
+    var group: String
+    var context: ExtensionUIContext
+
+    @MainActor init(model: ExtensionViewModel, push: ExtensionPush) {
+        plugin = model.plugin
+        ui = push.ui?.isEmpty == false ? push.ui! : model.ui
+        state = push.state
+        title = push.title ?? ""
+        depth = model.depth + 1
+        group = model.group
+        context = model.context
+        context.size = nil
+    }
+}
+
+private struct ExtensionPushes: ViewModifier {
+    var models: [ExtensionViewModel]
+    /// The stack's own way to push by value (settings, the inbox): the page goes where the list's pages go.
+    @Environment(\.splitPush) private var splitPush
+
+    func body(content: Content) -> some View {
+        // Read here, so that a model asking to push draws this again.
+        let asking = models.first { $0.pushed != nil }
+        let target = asking.flatMap { m in
+            m.pushed.map { ExtensionPushTarget(model: m, push: $0) }
+        }
+        if let splitPush {
+            content
+                .onChange(of: target) { _, t in
+                    guard let t, let asking else { return }
+                    asking.pushed = nil
+                    asking.returning = true
+                    splitPush.push(t)
+                }
+                // Back from the page it pushed (closed, or `pop`): the page below is drawn again.
+                .onAppear {
+                    for m in models where m.returning {
+                        m.returning = false
+                        Task { await m.refresh() }
+                    }
+                }
+        } else {
+            content.navigationDestination(item: Binding(get: { target }, set: { new in
+                guard new == nil, let asking else { return }
+                asking.pushed = nil
+                Task { await asking.refresh() }
+            })) { t in
+                ExtensionPageView(plugin: t.plugin, ui: t.ui, title: t.title, state: t.state, depth: t.depth,
+                                  group: t.group, context: t.context)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Where the pages extensions push open, registered with a stack's other destinations (`splitPush` pushes them).
+    func extensionPushDestination() -> some View {
+        navigationDestination(for: ExtensionPushTarget.self) { t in
+            ExtensionPageView(plugin: t.plugin, ui: t.ui, title: t.title, state: t.state, depth: t.depth,
+                                  group: t.group, context: t.context).splitDetailPage()
+        }
+    }
+}
+
+/// 设置 › 扩展 › an extension › one of its pages (placement extension_page / plugin_page), and the pages it pushes: its
+/// View as a page of its own, with its search field when it has one.
 struct ExtensionPageView: View {
     @State private var page: ExtensionViewModel
     @State private var link: LinkTarget?
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app
     var title: String
 
-    init(plugin: String, ui: String, title: String) {
-        _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui))
+    init(plugin: String, ui: String, title: String, state: String? = nil, depth: Int = 1,
+         group: String? = nil, context: ExtensionUIContext = .here()) {
+        let deps: ExtensionViewModel.Deps = group.map { group in
+            .init(api: { AppModel.shared.api(group) })
+        } ?? .live
+        _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui, context: context, state: state, depth: depth, deps: deps))
         self.title = title
     }
 
@@ -508,19 +418,53 @@ struct ExtensionPageView: View {
             }
         }
         .themedPage()
+        .accessibilityIdentifier(page.view == nil ? "extension-ui-waiting" : "extension-ui-ready")
         .overlay { if page.view == nil && page.error == nil && !page.unsupported { ProgressView() } }
         .detailTitle(page.view?.title ?? title)
         .navigationBarTitleDisplayMode(.inline)
+        .extensionSearch(page)
         .pluginLinks($link)
+        .extensionPushes([page])
+        .onChange(of: page.popped) { _, popped in if popped && page.depth > 1 { dismiss() } }
         .task { await page.load() }
         .pluginRefresh(page)
         .refreshable { await page.load() }
     }
 }
 
-/// A launcher's page › what plugins draw for it (placement launcher_section): a section each, after its quota. A plugin
-/// that says the launcher's gateway is not its own (404 unsupported) draws nothing, and that is not an error. The page
-/// owns the model and loads it (`ExtensionLauncherModel.load`, with a hub that has the plugin base).
+extension View {
+    /// The page's `search` field, while its View has one.
+    func extensionSearch(_ page: ExtensionViewModel) -> some View { modifier(ExtensionSearchField(page: page)) }
+}
+
+/// A page's `search`: the search field in the navigation bar while the View has one; what is typed goes to the
+/// extension once the typing pauses for 0.3 s.
+private struct ExtensionSearchField: ViewModifier {
+    @Bindable var page: ExtensionViewModel
+    @Environment(AppModel.self) private var app
+
+    func body(content: Content) -> some View {
+        if let s = page.view?.search {
+            content
+                .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always),
+                            prompt: s.placeholder?.isEmpty == false ? s.placeholder! : "搜索")
+                .task(id: page.query) {
+                    // Only what was typed since the last search: coming back to the page asks nothing again.
+                    guard page.query != page.searchedQuery else { return }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    guard !Task.isCancelled else { return }
+                    let o = await page.search()
+                    if let e = o.error { app.toast = Toast(e, style: .error) }
+                }
+        } else {
+            content
+        }
+    }
+}
+
+/// A launcher's page › what extensions draw for it (placement launcher_section): a section each, after its quota. An
+/// extension that says the launcher's gateway is not its own (404 unsupported) draws nothing, and that is not an error.
+/// The page owns the model and loads it (`ExtensionLauncherModel.load`, with a hub that has extensions).
 struct ExtensionLauncherSections: View {
     var page: ExtensionLauncherModel
     @Binding var link: LinkTarget?

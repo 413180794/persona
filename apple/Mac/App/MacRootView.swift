@@ -295,7 +295,7 @@ private struct MacShell: View {
     }
 
     /// The plugin page picked in the sidebar, while its plugin still has it.
-    private var pluginPlace: PluginUIPlace? {
+    private var pluginPlace: ExtensionUIPlace? {
         shell.pluginPage.flatMap { k in ExtensionSlots.shared.pages.first { ExtensionSlots.key($0) == k } }
     }
 
@@ -319,7 +319,7 @@ private struct MacShell: View {
         sectionPage.overlay {
             if let p = pluginPlace {
                 NavigationStack {
-                    ExtensionPageView(plugin: p.plugin, ui: p.id, title: p.title)
+                    ExtensionPageView(plugin: p.owner, ui: p.id, title: p.title)
                         .environment(\.macBelowTitleRow, true)
                 }
                 .id(ExtensionSlots.key(p))
