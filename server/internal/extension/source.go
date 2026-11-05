@@ -366,6 +366,23 @@ func writeFile(path string, r io.Reader, m fs.FileMode, limit int64) error {
 	if err != nil {
 		return err
 	}
+	return copyOut(out, r, limit)
+}
+
+// writeRootFile is writeFile for name inside root: a path that leads out of it through links is refused.
+func writeRootFile(root *os.Root, name string, r io.Reader, m fs.FileMode, limit int64) error {
+	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		return err
+	}
+	out, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_EXCL, m)
+	if err != nil {
+		return err
+	}
+	return copyOut(out, r, limit)
+}
+
+// copyOut copies r into out (at most limit bytes when limit >= 0) and closes it.
+func copyOut(out *os.File, r io.Reader, limit int64) error {
 	if limit >= 0 {
 		r = io.LimitReader(r, limit+1)
 	}
@@ -407,9 +424,24 @@ func untar(file, to string) error {
 	if err := os.MkdirAll(to, 0o755); err != nil {
 		return err
 	}
+	// Everything is made through root: each link is checked alone (linkInside), but links made earlier can lead a
+	// later path out of the package together ("a" -> ".", then "a/b" -> ".."), and root refuses that.
+	root, err := os.OpenRoot(to)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	var links []string
 	for {
 		hd, err := tr.Next()
 		if err == io.EOF {
+			// A link that only points out, through another one ("d" -> "a/.."), is refused as well. One pointing at
+			// nothing inside the package stays as it was allowed before.
+			for _, l := range links {
+				if _, err := root.Stat(l); err != nil && !errors.Is(err, fs.ErrNotExist) {
+					return fmt.Errorf("%s 是指向包外的链接", filepath.ToSlash(l))
+				}
+			}
 			return nil
 		}
 		if err != nil {
@@ -426,29 +458,30 @@ func untar(file, to string) error {
 		if macMetadata(rel) {
 			continue
 		}
-		dst := filepath.Join(to, filepath.FromSlash(rel))
+		dst := filepath.FromSlash(rel)
 		switch hd.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(dst, 0o755); err != nil {
+			if err := root.MkdirAll(dst, 0o755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
 			if err := b.take(hd.Size); err != nil {
 				return err
 			}
-			if err := writeFile(dst, tr, mode(fs.FileMode(hd.Mode)), hd.Size); err != nil {
+			if err := writeRootFile(root, dst, tr, mode(fs.FileMode(hd.Mode)), hd.Size); err != nil {
 				return err
 			}
 		case tar.TypeSymlink:
 			if !linkInside(rel, hd.Linkname) {
 				return fmt.Errorf("%s 是指向包外的链接", rel)
 			}
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			if err := root.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 				return err
 			}
-			if err := os.Symlink(hd.Linkname, dst); err != nil {
+			if err := root.Symlink(hd.Linkname, dst); err != nil {
 				return err
 			}
+			links = append(links, dst)
 		case tar.TypeXGlobalHeader, tar.TypeXHeader:
 		default:
 			return fmt.Errorf("%s 不是普通文件", rel)

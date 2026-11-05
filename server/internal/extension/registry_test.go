@@ -681,3 +681,67 @@ func TestPackageWithNodePrograms(t *testing.T) {
 		t.Fatal(keys)
 	}
 }
+
+// Links that each point inside the package can still lead out of it together: "a" -> "." puts "a/b" -> ".." at the
+// package's top, so "a/b/x" is a file next to the package, and every link like "c" -> "b/.." climbs one more level.
+// Each link alone passes linkInside; writing through them must not leave the package.
+func TestUntarRefusesWritesThroughLinkChains(t *testing.T) {
+	type entry struct{ name, link, body string }
+	archive := func(entries ...entry) []byte { // in this order: a map's would not do
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		tw := tar.NewWriter(gz)
+		for _, e := range entries {
+			if e.link != "" {
+				_ = tw.WriteHeader(&tar.Header{Name: e.name, Typeflag: tar.TypeSymlink, Linkname: e.link})
+				continue
+			}
+			_ = tw.WriteHeader(&tar.Header{Name: e.name, Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(e.body))})
+			_, _ = tw.Write([]byte(e.body))
+		}
+		_ = tw.Close()
+		_ = gz.Close()
+		return buf.Bytes()
+	}
+	for _, c := range []struct {
+		name    string
+		entries []entry
+		outside string // relative to the package's directory
+	}{
+		{"one level", []entry{{name: "a", link: "."}, {name: "a/b", link: ".."}, {name: "a/b/x.txt", body: "x"}}, "../x.txt"},
+		{"two levels", []entry{{name: "a", link: "."}, {name: "a/b", link: ".."}, {name: "c", link: "b/.."},
+			{name: "c/y.txt", body: "y"}}, "../../y.txt"},
+		{"a directory", []entry{{name: "a", link: "."}, {name: "a/b", link: ".."}, {name: "a/b/d/z.txt", body: "z"}}, "../d/z.txt"},
+		{"links only", []entry{{name: "a", link: "."}, {name: "a/b", link: ".."}}, ""},
+		{"a link through a link", []entry{{name: "a", link: "."}, {name: "d", link: "a/.."}}, ""},
+		{"the link made last", []entry{{name: "d", link: "a/.."}, {name: "a", link: "."}}, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			work := t.TempDir()
+			to := filepath.Join(work, "stage", "pkg")
+			file := filepath.Join(work, "p.tar.gz")
+			if err := os.WriteFile(file, archive(c.entries...), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			err := untar(file, to)
+			if _, serr := os.Lstat(filepath.Join(to, c.outside)); c.outside != "" && serr == nil {
+				t.Fatalf("untar wrote %s outside the package (err %v)", c.outside, err)
+			}
+			if err == nil {
+				t.Fatal("untar took a package that writes through links out of it")
+			}
+		})
+	}
+	// A link that resolves inside the package still works, written through or not.
+	work := t.TempDir()
+	file := filepath.Join(work, "p.tar.gz")
+	_ = os.WriteFile(file, archive(entry{name: "lib/real.txt", body: "r"}, entry{name: "cur", link: "lib"},
+		entry{name: "cur/more.txt", body: "m"}, entry{name: "lib/up", link: "../cur/real.txt"}, entry{name: "later", link: "gone"}), 0o644)
+	to := filepath.Join(work, "pkg")
+	if err := untar(file, to); err != nil {
+		t.Fatalf("a link inside the package: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(to, "lib", "more.txt")); err != nil || string(b) != "m" {
+		t.Fatalf("written through an inside link: %q %v", b, err)
+	}
+}
