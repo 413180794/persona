@@ -226,6 +226,38 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   @人：f2、f3 有成员（`GET …/members`，Tom 和 Mia 有头像，阿杰的群昵称是「杰哥」）；带 `mentions` 发送或回复时，mock 把文字里的 `@name` 存成 `at` 片段。
   话题群（#1087）：`MOCK_LARK_TOPIC=1` 启动 mock，`-tab mail -openInboxItem lark:f4:405` 打开「版本发布」话题群（消息页里也有）：发布机器人隔两分钟连发三个话题（各自一张卡片）、一个高过 320 pt 要收起的长卡片、我发的话题、带链接的话题，0 / 1 / 2 / 6 条回复的话题，还有撤回的话题（飞书网关留存了和没留存的各一个）和编辑过的话题（最新一条回复是撤回的），给「风灵月影」用；话题的回复和飞书网关一样先回话题本身、再回最新的 `limit` 条。不要和 `MOCK_LARK=1` 同开：那时飞书的读取先由它接管，「版本发布」不出现。
 
+### 就绪度场景（`MOCK_READINESS`，#287）
+
+新用户上手（[onboarding.md](onboarding.md) 4.4–4.6、第 5 节）的各种状态，网页 Playwright、Android、iOS / Mac 截图共用这一套。`MOCK_READINESS=<场景>` 启动 mock：
+`features` 多 `assistant_readiness`、`machines_add`、`machine_trust`、`builtin_presets`；`GET /api/v1/assistant/readiness[?probe=1]`、`POST …/readiness/dismiss`、
+`POST /api/v1/assistant/warm`（带 `readiness`）照 hub 的形状和文字回（文字读 `server/internal/i18n/locales`，按 `Accept-Language`，不带时中文）；
+`POST /api/v1/assistant/conversations` 按场景的码拒绝；`GET /api/v1/launchers/presets` 先列内置供应商（直接读 `server/internal/assistant/presets_builtin.json`），再列 mock 的插件预设。
+添加 / 确认电脑（`MOCK_ADD_COMPUTER`）一起打开，就绪度跟着机器变：`zero` 里加一台电脑、等它连上、确认后，`computer` 就是 `ok`。
+
+| 场景 | 电脑 | 就绪度 | 开对话 |
+| --- | --- | --- | --- |
+| `zero` | 没有 | `computer` todo `no_machine`，其余 `unknown` | 409 `no_machine` |
+| `offline` | 小林的 MacBook（`mbp`）离线（`error_code: link_offline`） | `computer` problem `node_unreachable` | 503 `node_unreachable` |
+| `pending` | `mbp` 在线、待确认（`trust: pending`） | 同 `zero`：hub 不把待确认的电脑给助手 | 409 `no_machine`；在它上面开 Agent（`POST /api/v1/sessions`）409 `machine_pending` |
+| `no_claude` | `mbp`，没有 `claude_version` | `claude` problem `claude_missing` | 409 `claude_missing` |
+| `not_logged_in` | `mbp` | `model`、`first_message` problem `not_logged_in`；主对话唯一一轮是「Not logged in · Please run /login」（`turn_error_code`） | 照常开 |
+| `bad_key` | `mbp` | 同上，`auth_failed`（「Invalid API key」），按钮 `edit_provider` | 照常开 |
+| `full` | `mbp` | 全部 `ok`，主对话答过一句 | 照常开 |
+| `demo` | mock 平常的三台机器 | 全部 `ok`（助手在 `server`），其余数据照旧，拍「用起来以后」的样子 | 照常开 |
+| `unverified` | `mbp` | `model` unknown `model_unverified`（`mode` 仍是 `full`）；`?probe=1` 之后变 `ok` | 照常开 |
+| `launcher_missing` | `mbp`，启动器 `cc_glm` 不在了 | `claude` problem `launcher_missing` | 409 `launcher_missing` |
+| `model_route` / `rate_limited` | `mbp` | `model` problem（`rate_limited` 不挡，`mode` 是 `full`） | 照常开 |
+| `node_outdated` | `mbp` 的 node 太旧（`error_code: node_outdated`） | `computer` problem，没有按钮 | 照常开（还没配模型时；配了模型后真 hub 拒绝成 409 `node_outdated`，用 `MOCK_START_ERROR=node_outdated` 拍） |
+| `assistant_offline` | `mbp` | 就绪度、warm、开对话都 503 `assistant_offline` | 503 |
+
+除 `demo` 外只有 `mbp` 一台、没有 Agent 和别的助手对话（新用户的样子）。`MOCK_START_ERROR=<码>` 不管场景，开对话一律按这个码拒绝
+（`no_machine`、`machine_pending`、`claude_missing`、`launcher_missing`、`node_unreachable`、`node_outdated`、`assistant_offline`），拍每个码的卡片；
+`MOCK_BUILTIN_PRESETS=1` 不带场景，只加内置供应商和 `builtin_presets`。`mock_scenarios.py` 里是 `readiness-<场景>`（运行中切换）。
+
+不会漂移：`server/internal/assistant/readiness_scenarios_test.go` 在假 hub 上搭出同样的场景，把真代码回的就绪度（三种语言）和开对话的拒绝存进
+`testdata/readiness_scenarios/<场景>.json`；`scripts/mock/test_readiness_mock.py` 起 mock 逐个比对。改了就绪度或文案：`UPDATE_GOLDEN=1 go test ./internal/assistant -run TestReadinessScenariosGolden`，
+看 diff，再让 `scripts/mock/readiness_mock.py` 跟上。
+
 ## UI 测试（`scripts/app/ui-test.sh`）
 
 `apple/PersonaUITests` 在模拟器里驱动真实 App、连配置里的 hub（所以不在默认的单元测试里跑）：
@@ -679,6 +711,18 @@ async 提问（空输入框、电脑上有草稿、0.163 的提问面板展开�
 - 每轮每个用例打一行 `LIVE <版本> round <n> <用例>: ok in <秒>`，失败时附上当时的屏幕；最后一行 `RESULT all: passed|FAILED`。
   失败时屏幕上是 Codex 自己的模型服务错误（「Selected model is at capacity」之类，不是 Persona 的问题）就记一行 `SERVICE-RETRY` 再跑一次这个用例，
   每个 RESULT 行报重试了几次——报告稳定性时要一起报，不能当成没发生。
+
+## 新手文案守门（`scripts/test/test_onboarding_copy.py`，#287）
+
+新用户上手时读到的字（引导卡、主对话的错误码、登录页、添加电脑、模型向导、各处空状态）里不能出现 hub.json、token（「配对码」不算）、jq、personad、TLS、node、herdr、
+launcher、localhost、`~/.`（[onboarding.md](onboarding.md) 8.1）。扫的范围在文件开头的 `SCOPES`：网页 i18n 和 hub 的 i18n 三种语言、Android `values` / `values-zh` / `values-ja` 里按前缀挑的键、
+iOS / Mac 几个 Swift 文件里的中文字面量（Apple 还没有词条文件）。`{name}`、`%1$s` 这类占位符不算。
+
+- 在「高级」「详情」里、本来就要说这些词的：进 `ALLOW`，写清在哪、为什么。
+- 已经知道不对、有人在改的：进 `PENDING`，写 issue 号或设计里的工作项（Android #4032、iOS M2–M4）。改好了它会报「从 `PENDING` 拿掉」，新的违规不能往里加。
+- 新做的引导界面把它的词条文件或键前缀加进 `SCOPES`。
+
+CI 的「Scripts tests」跑全部 `scripts/**/test_*.py`，它在里面；本地 `cd scripts/test && python3 -m unittest -v test_onboarding_copy`。
 
 ## 隐私扫描
 

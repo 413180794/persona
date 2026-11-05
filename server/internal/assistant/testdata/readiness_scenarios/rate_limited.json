@@ -1,0 +1,218 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "rate_limited",
+        "detail": "The model is being used too fast right now. It will recover on its own.",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "The model is being used too fast"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "rate_limited",
+        "detail": "The model is being used too fast right now. It will recover on its own.",
+        "id": "first_message",
+        "state": "problem",
+        "title": "The model is being used too fast"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "Show me the largest folders on this computer.",
+        "title": "Show the largest folders on this computer"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "What's on my schedule today?",
+        "title": "What's on today"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "Teach me how to connect my email to Persona.",
+        "title": "Teach me to connect email"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "rate_limited",
+        "detail": "今はモデルの利用が速すぎます。しばらくすると自動で回復します。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "モデルの利用が速すぎます"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "rate_limited",
+        "detail": "今はモデルの利用が速すぎます。しばらくすると自動で回復します。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "モデルの利用が速すぎます"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "このコンピューターで一番大きいフォルダーをいくつか見せて。",
+        "title": "このコンピューターで一番大きいフォルダーを見る"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今日の予定は？",
+        "title": "今日の予定"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "メールを Persona に接続する方法を教えて。",
+        "title": "メールの接続方法を教えて"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "rate_limited",
+        "detail": "模型这会儿用得太快了，稍后会自己恢复。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "模型用得太快了"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "rate_limited",
+        "detail": "模型这会儿用得太快了，稍后会自己恢复。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "模型用得太快了"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "看看这台电脑上最大的几个文件夹。",
+        "title": "看看这台电脑上最大的几个文件夹"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今天有什么安排？",
+        "title": "今天有什么安排"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "教我把邮箱接进 Persona。",
+        "title": "教我接邮箱"
+      }
+    ],
+    "version": 1
+  }
+}

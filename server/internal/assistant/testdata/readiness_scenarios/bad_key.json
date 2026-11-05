@@ -1,0 +1,179 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "edit_provider"
+        },
+        "code": "auth_failed",
+        "detail": "The model's key is wrong or has expired. Use one that works.",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "The model's key doesn't work"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "auth_failed",
+        "detail": "The model's key is wrong or has expired. Use one that works.",
+        "id": "first_message",
+        "state": "problem",
+        "title": "The model's key doesn't work"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "How do I connect a model?"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "edit_provider"
+        },
+        "code": "auth_failed",
+        "detail": "モデルのキーが間違っているか期限切れです。使えるキーに替えてください。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "モデルのキーが正しくありません"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "auth_failed",
+        "detail": "モデルのキーが間違っているか期限切れです。使えるキーに替えてください。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "モデルのキーが正しくありません"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "モデルはどう接続するの？"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "edit_provider"
+        },
+        "code": "auth_failed",
+        "detail": "模型的 Key 不对或过期了，换一个能用的。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "模型的 Key 不对"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "auth_failed",
+        "detail": "模型的 Key 不对或过期了，换一个能用的。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "模型的 Key 不对"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "怎么接模型？"
+      }
+    ],
+    "version": 1
+  }
+}

@@ -1,0 +1,10 @@
+code 12: （一段 12 行的代码，在屏幕上）
+code 1: （一段 1 行的代码，在屏幕上）
+table 3: （一张 3 行的表，在屏幕上）
+link 0: （一个链接）
+image 0: （一张图）
+path 0: 文件 runs.go
+line 42: 文件 runs.go 第 42 行
+hash 0: （一串哈希）
+snippet 0: （一段代码）
+omitted 0: （……中间省略，全文在屏幕上……）

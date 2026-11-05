@@ -70,6 +70,8 @@ var funcs = template.FuncMap{
 	"join": strings.Join,
 	// ctx is text for inside a context block, unable to close it (ContextBody).
 	"ctx": ContextBody,
+	// output is an agent's words for inside an <agent_output> block, unable to open or close one (AgentOutput).
+	"output": AgentOutput,
 	// indent puts by before every line and ends with one newline.
 	"indent": func(by, s string) string {
 		lines := strings.Split(strings.TrimRight(s, "\n"), "\n")

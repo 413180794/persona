@@ -1,0 +1,218 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "Send a message to check that the model answers.",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "The model hasn't been checked yet"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "Send “Hello” and see whether Persona answers.",
+        "id": "first_message",
+        "state": "todo",
+        "title": "Say hello"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "Show me the largest folders on this computer.",
+        "title": "Show the largest folders on this computer"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "What's on my schedule today?",
+        "title": "What's on today"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "Teach me how to connect my email to Persona.",
+        "title": "Teach me to connect email"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "メッセージを送って、モデルが答えるか確認してください。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "モデルはまだ確認されていません"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "「こんにちは」と送って、Persona が答えるか確かめましょう。",
+        "id": "first_message",
+        "state": "todo",
+        "title": "話しかけてみる"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "このコンピューターで一番大きいフォルダーをいくつか見せて。",
+        "title": "このコンピューターで一番大きいフォルダーを見る"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今日の予定は？",
+        "title": "今日の予定"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "メールを Persona に接続する方法を教えて。",
+        "title": "メールの接続方法を教えて"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": "model",
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "发一句试试，确认模型能回答。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "还没确认模型能用"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "发一句「你好」，看看 Persona 能不能回答。",
+        "id": "first_message",
+        "state": "todo",
+        "title": "试一句"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "看看这台电脑上最大的几个文件夹。",
+        "title": "看看这台电脑上最大的几个文件夹"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今天有什么安排？",
+        "title": "今天有什么安排"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "教我把邮箱接进 Persona。",
+        "title": "教我接邮箱"
+      }
+    ],
+    "version": 1
+  }
+}

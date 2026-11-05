@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 )
 
 // A wire is one dialect of the GPT-Live protocol: the frames to send, and what the service's frames mean.
@@ -15,13 +16,17 @@ type wire interface {
 	start(s session) any
 	audio(pcm []byte) any
 	// text is a line the user typed; say is something the model should speak about now (a delegated task came back
-	// after its delegation was gone).
+	// after its delegation was gone), in as many frames as the dialect takes it.
 	text(s string) any
-	say(s string) any
-	// reply answers a delegation: final is the result the model speaks about, otherwise quiet progress.
-	reply(delegation, s string, final bool) []any
+	say(s, id string) []any
+	// reply answers a delegation: final is the result the model speaks about (its only commentary), otherwise quiet
+	// context.
+	reply(delegation, s string, final bool, id string) []any
 	// toolResult answers a function call (live dialect with tools).
-	toolResult(delegation, callID, output string) []any
+	toolResult(delegation, callID, output, id string) []any
+	// acks: the service says when it took in a commentary sent with event id id (say, a final reply, a tool result)
+	// and names that id when it refuses one (evAck, evError). Without, an id is not sent.
+	acks() bool
 	close() any
 	decode(raw []byte) []event
 	// outputRate is the rate of the service's audio when session.started does not say.
@@ -53,7 +58,8 @@ const (
 	evInterrupted               // the model's answer was cut off: drop what has not been played
 	evDelegation                // the model hands work over: id, text (what to do, may be empty)
 	evToolCall                  // a function call: id (its delegation), callID, name, args
-	evError                     // text, code
+	evAck                       // the service took in what was sent as eventID (it may hold it while the model speaks)
+	evError                     // text, code; param (the field it refused), eventID (what it refused), when it says
 )
 
 type event struct {
@@ -63,12 +69,16 @@ type event struct {
 	audio            []byte
 	id, callID, name string
 	args, code       string
+	param, eventID   string
 	rate             int
 }
 
 func newWire(dialect string) wire {
-	if dialect == DialectCodex {
+	switch dialect {
+	case DialectCodex:
 		return codexWire{}
+	case DialectFake:
+		return fakeWire{}
 	}
 	return liveWire{}
 }
@@ -101,20 +111,35 @@ func (liveWire) audio(pcm []byte) any {
 
 // A commentary without a delegation is a turn of the user's (typed input).
 func (liveWire) text(s string) any {
-	return map[string]any{"type": "session.commentary.append", "delegation_id": nil, "content": clipTokens(s, appendTokens)}
+	return map[string]any{"type": "session.commentary.append", "delegation_id": nil, "content": clipRunes(s, commentaryRunes)}
 }
-func (w liveWire) say(s string) any { return w.text(s) }
+func (w liveWire) say(s, id string) []any { return []any{withEventID(w.text(s), id)} }
 
-func (liveWire) reply(delegation, s string, final bool) []any {
-	typ := "session.thinking.append"
+// A thinking is held to the append's token limit; a commentary only to its characters (docs/lessons/voice.md「错误」:
+// a delegation's commentary of 1300 Chinese characters went through on the measured service, its limit is 4000
+// characters), so a whole answer fits in one. Another service may hold a commentary to the append's tokens: it refuses
+// it (evError, param content) and the conversation sends a shorter one (session.go, deliver).
+func (liveWire) reply(delegation, s string, final bool, id string) []any {
 	if final {
-		typ = "session.commentary.append"
+		return []any{withEventID(map[string]any{"type": "session.commentary.append", "delegation_id": delegation,
+			"content": clipRunes(s, commentaryRunes)}, id)}
 	}
-	return []any{map[string]any{"type": typ, "delegation_id": delegation, "content": clipTokens(s, appendTokens)}}
+	return []any{map[string]any{"type": "session.thinking.append", "delegation_id": delegation, "content": clipTokens(s, appendTokens)}}
 }
 
-func (liveWire) toolResult(delegation, _, output string) []any {
-	return []any{map[string]any{"type": "session.commentary.append", "delegation_id": delegation, "content": clipTokens(output, appendTokens)}}
+func (w liveWire) toolResult(delegation, _, output, id string) []any {
+	return w.reply(delegation, output, true, id)
+}
+
+// The service echoes a client frame's event_id as client_event_id on its session.commentary.appended and on an error
+// about it (docs/lessons/voice.md「错误」).
+func (liveWire) acks() bool { return true }
+
+func withEventID(frame any, id string) any {
+	if m, ok := frame.(map[string]any); ok && id != "" {
+		m["event_id"] = id
+	}
+	return frame
 }
 
 func (liveWire) close() any            { return map[string]any{"type": "session.close"} }
@@ -141,11 +166,14 @@ func (liveWire) decode(raw []byte) []event {
 			Target  string        `json:"target"`
 			Content []contentPart `json:"content"`
 		} `json:"delegation"`
-		DelegationID string          `json:"delegation_id"`
-		Event        json.RawMessage `json:"event"`
-		Error        struct {
-			Message string `json:"message"`
-			Code    string `json:"code"`
+		DelegationID  string          `json:"delegation_id"`
+		Event         json.RawMessage `json:"event"`
+		ClientEventID string          `json:"client_event_id"`
+		Error         struct {
+			Message       string `json:"message"`
+			Code          string `json:"code"`
+			Param         string `json:"param"`
+			ClientEventID string `json:"client_event_id"`
 		} `json:"error"`
 	}
 	if json.Unmarshal(raw, &f) != nil {
@@ -176,8 +204,14 @@ func (liveWire) decode(raw []byte) []event {
 		return []event{{kind: evDelegation, id: f.Delegation.ID, text: inputText(f.Delegation.Content)}}
 	case "response.event":
 		return liveResponseEvent(f.DelegationID, f.Event)
+	case "session.commentary.appended":
+		if f.ClientEventID == "" {
+			return nil
+		}
+		return []event{{kind: evAck, eventID: f.ClientEventID}}
 	case "error":
-		return []event{{kind: evError, text: f.Error.Message, code: f.Error.Code}}
+		return []event{{kind: evError, text: f.Error.Message, code: f.Error.Code, param: f.Error.Param,
+			eventID: firstNonEmpty(f.Error.ClientEventID, f.ClientEventID)}}
 	}
 	return nil
 }
@@ -248,20 +282,27 @@ func (codexWire) audio(pcm []byte) any {
 	return map[string]any{"type": "input_audio.append", "audio": base64.StdEncoding.EncodeToString(pcm)}
 }
 
-func (w codexWire) text(s string) any { return w.say(s) }
-
 // Context for the whole session; speakable is what the model talks about (an omitted channel means the same).
-func (codexWire) say(s string) any {
+func (codexWire) text(s string) any {
 	return map[string]any{"type": "session.context.append", "channel": "speakable", "content": inputContent(clipBytes(s, codexAppendBytes))}
 }
 
-func (codexWire) reply(delegation, s string, final bool) []any {
+// say goes in pieces of at most 500 bytes, as Codex splits its own appends; a whole report (its closing tag too).
+func (codexWire) say(s, _ string) []any {
+	var out []any
+	for _, chunk := range chunkBytes(clipRunes(s, commentaryRunes), codexAppendBytes) {
+		out = append(out, map[string]any{"type": "session.context.append", "channel": "speakable", "content": inputContent(chunk)})
+	}
+	return out
+}
+
+func (codexWire) reply(delegation, s string, final bool, _ string) []any {
 	channel := "commentary"
 	if final {
 		channel = "speakable"
 	}
 	var out []any
-	for _, chunk := range chunkBytes(clipTokens(s, 4*appendTokens), codexAppendBytes) {
+	for _, chunk := range chunkBytes(clipRunes(s, commentaryRunes), codexAppendBytes) {
 		out = append(out, map[string]any{
 			"type": "delegation.context.append", "delegation_item_id": delegation, "channel": channel, "content": inputContent(chunk),
 		})
@@ -269,9 +310,12 @@ func (codexWire) reply(delegation, s string, final bool) []any {
 	return out
 }
 
-func (w codexWire) toolResult(delegation, _, output string) []any {
-	return w.reply(delegation, output, true)
+func (w codexWire) toolResult(delegation, _, output, _ string) []any {
+	return w.reply(delegation, output, true, "")
 }
+
+// Codex's realtime protocol has no ack of an append that we know of: what is sent counts as taken in at once.
+func (codexWire) acks() bool         { return false }
 func (codexWire) close() any         { return map[string]any{"type": "session.close"} }
 func (codexWire) outputRate(int) int { return 24000 }
 
@@ -356,8 +400,9 @@ func inputText(parts []contentPart) string {
 func inputContent(s string) []contentPart { return []contentPart{{Type: "input_text", Text: s}} }
 
 const (
-	appendTokens     = 450 // GPT-Live: an append's content is limited to 500 tokens
-	codexAppendBytes = 500 // Codex splits its context appends at 500 bytes
+	appendTokens     = 450  // GPT-Live: a thinking's content is limited to 500 tokens
+	commentaryRunes  = 3900 // GPT-Live: a commentary's to 4000 characters (docs/lessons/voice.md「错误」)
+	codexAppendBytes = 500  // Codex splits its context appends at 500 bytes
 )
 
 // clipTokens keeps the start of s within about n tokens (a CJK character is about one, other text about four
@@ -365,17 +410,31 @@ const (
 func clipTokens(s string, n int) string {
 	budget := float64(n)
 	for i, r := range s {
-		if r >= 0x2E80 {
-			budget--
-		} else {
-			budget -= 0.25
-		}
+		budget -= runeTokens(r)
 		if budget < 0 {
 			return strings.TrimSpace(s[:i]) + "…"
 		}
 	}
 	return s
 }
+
+// tokens is about how many tokens s is (as clipTokens counts).
+func tokens(s string) float64 {
+	n := 0.0
+	for _, r := range s {
+		n += runeTokens(r)
+	}
+	return n
+}
+
+func runeTokens(r rune) float64 {
+	if r >= 0x2E80 {
+		return 1
+	}
+	return 0.25
+}
+
+func runeLen(s string) int { return utf8.RuneCountInString(s) }
 
 func clipRunes(s string, n int) string {
 	s = strings.TrimSpace(s)

@@ -1,0 +1,1 @@
+The Persona main conversation stopped while doing "check tomorrow's calendar": it is waiting for the user to answer or approve something, in the Persona main conversation on the phone. It is not finished yet and goes on once that is answered. Tell the user in one sentence to have a look on the phone; do not guess what it asks.

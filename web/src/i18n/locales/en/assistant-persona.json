@@ -8,7 +8,7 @@
   "mochi_default": "Mochi, the default avatar",
   "states_label": "{name} in five states: idle, thinking, working, waiting for you, offline",
   "missing": "The chosen avatar isn't on the hub right now, so the default is shown. It switches back automatically when it returns.",
-  "none": "No other avatars on the hub yet. Install an extension that comes with avatars in {extensions}, or put avatar packages in ~/.persona/personas/ on the hub machine.",
+  "none": "No other avatars on the hub yet. Install an extension that comes with avatars in {extensions}.",
   "none_extensions": "Settings › Extensions",
   "visor": "Visor",
   "circuit": "Circuit",

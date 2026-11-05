@@ -30,6 +30,9 @@ const (
 	// session.update, input_audio.append, delegation.created{item} and delegation.context.append. No function tools:
 	// the model hands work over as delegations.
 	DialectCodex = "codex"
+	// DialectFake: no service at all, for development (fake.go; hub.json only, never the settings form): what the app
+	// types is handed over as it is, and what the model would be told comes back as its words.
+	DialectFake = "fake"
 )
 
 // Config is the plugin's configuration: the upstreams of the hub.json entry the hub took over and of the settings
@@ -247,10 +250,14 @@ func (p *Provider) validate() error {
 	if p.Dialect == "" {
 		p.Dialect = DialectLive
 	}
-	if p.Dialect != DialectLive && p.Dialect != DialectCodex {
-		return fmt.Errorf("config: provider %s: dialect %q (live or codex)", p.ID, p.Dialect)
+	if p.Dialect != DialectLive && p.Dialect != DialectCodex && p.Dialect != DialectFake {
+		return fmt.Errorf("config: provider %s: dialect %q (live, codex or fake)", p.ID, p.Dialect)
 	}
-	if !strings.HasPrefix(p.URL, "wss://") && !strings.HasPrefix(p.URL, "ws://") {
+	if p.Dialect == DialectFake {
+		if p.URL != "" || p.SSH != "" {
+			return fmt.Errorf("config: provider %s: the fake dialect connects nowhere (no url, no ssh)", p.ID)
+		}
+	} else if !strings.HasPrefix(p.URL, "wss://") && !strings.HasPrefix(p.URL, "ws://") {
 		return fmt.Errorf("config: provider %s: url must be ws:// or wss://", p.ID)
 	}
 	if p.InputRate != 0 && p.InputRate != 16000 && p.InputRate != 24000 {
@@ -293,6 +300,8 @@ func (p *Provider) defaultModel() string {
 		return p.Models[0]
 	case p.Dialect == DialectCodex:
 		return "gpt-live-1-codex"
+	case p.Dialect == DialectFake:
+		return "fake"
 	}
 	return ""
 }

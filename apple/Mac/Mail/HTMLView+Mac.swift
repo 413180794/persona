@@ -126,7 +126,7 @@ struct HTMLView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             if action.navigationType == .linkActivated, let url = action.request.url {
-                NSWorkspace.shared.open(url)
+                await MainActor.run { LinkPolicy.open(url) } // NSWorkspace would run any scheme it names
                 return .cancel
             }
             return .allow

@@ -91,7 +91,7 @@ type providerModels struct {
 
 // providerModels: the configured models, else the service's own list (live dialect), else the dialect's default.
 func (c *catalog) providerModels(ctx context.Context, p *Provider) (providerModels, error) {
-	if len(p.Models) > 0 || p.Dialect == DialectCodex {
+	if len(p.Models) > 0 || p.Dialect == DialectCodex || p.Dialect == DialectFake {
 		ids := p.Models
 		if len(ids) == 0 {
 			ids = []string{p.defaultModel()}
@@ -216,8 +216,11 @@ func (c *catalog) voices(ctx context.Context, id string) (voiceList, error) {
 		}
 		return out
 	}
-	if p.Dialect == DialectCodex {
+	switch p.Dialect {
+	case DialectCodex:
 		return builtin(codexVoices, "cove"), nil
+	case DialectFake:
+		return voiceList{Voices: []VoiceChoice{}}, nil // it speaks no audio
 	}
 	v, err := c.get("voices:"+p.ID+"/"+model, func() (any, error) {
 		var res struct {

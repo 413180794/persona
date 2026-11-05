@@ -13077,7 +13077,8 @@ if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
 # confirm it / remove it. MOCK_ADD_COMPUTER=seed also lists one pending computer that never connected and makes Mac Studio
 # a link computer that is offline (error_code link_offline). MOCK_ADD_COMPUTER_ERROR=<code> refuses every add with it
 # (tls_required, mesh_member, too_many_pending); MOCK_ADD_COMPUTER_NO_SITE=1: the reply has no install line (a local build).
-ADD_COMPUTER = os.environ.get("MOCK_ADD_COMPUTER", "")
+# MOCK_READINESS (below) turns it on too: a scenario with no computer or a pending one is added / confirmed here.
+ADD_COMPUTER = os.environ.get("MOCK_ADD_COMPUTER", "") or ("1" if os.environ.get("MOCK_READINESS") else "")
 ADD_COMPUTER_PENDING_TEXT = "等你在新版 App 或网页里确认这是你的电脑"
 ADD_COMPUTER_ERRORS = {
     "tls_required": (409, "hub 还没打开安全连接，电脑接不进来"),
@@ -13209,6 +13210,168 @@ if ADD_COMPUTER:
 MOCK_HELP.append("MOCK_ADD_COMPUTER=1|seed  机器 › 添加电脑（#287）：features 有 machines_add / machine_trust，pair-codes 的 add 加一台待确认的电脑，"
                  "MOCK_ADD_COMPUTER_JOIN 秒后（默认 8，0 = 不来）它连上来等确认；seed 另列一台没连过的待确认电脑、Mac Studio 离线（link_offline）；"
                  "MOCK_ADD_COMPUTER_ERROR=tls_required|mesh_member|too_many_pending 拒绝添加，MOCK_ADD_COMPUTER_NO_SITE=1 不给安装命令")
+
+# ---------- area: the main conversation's readiness (#287, docs/onboarding.md 4.4–4.6, 5.1–5.4) ----------
+# MOCK_READINESS=<scenario> (docs/testing.md「就绪度场景」, scripts/mock/readiness_mock.py): a new user's hub in one of
+# the states the setup card shows, in the hub's shapes and words (its own catalogs, by Accept-Language): the features
+# assistant_readiness, machines_add, machine_trust and builtin_presets; GET /api/v1/assistant/readiness[?probe=1],
+# POST …/readiness/dismiss, POST /api/v1/assistant/warm with readiness; POST /api/v1/assistant/conversations refused
+# with the scenario's code (409 no_machine / claude_missing / launcher_missing, 503 node_unreachable); POST
+# /api/v1/sessions on a pending computer 409 machine_pending; GET /api/v1/launchers/presets with the built-in providers
+# (presets_builtin.json) before the plugins'. The computer is 小林的 MacBook (mbp) alone, with no agents, except in
+# demo (full on the usual data, the assistant on server). Adding and confirming a computer works (MOCK_ADD_COMPUTER), and the
+# readiness follows the machines: zero → add → it joins → confirm → the computer step is ok.
+# MOCK_START_ERROR=<code> refuses every conversation start with that code whatever the scenario (no_machine,
+# machine_pending, claude_missing, launcher_missing, node_unreachable, assistant_offline). MOCK_BUILTIN_PRESETS=1 serves
+# the built-in providers and the feature builtin_presets without a scenario.
+READINESS = os.environ.get("MOCK_READINESS", "")
+BUILTIN_PRESETS = bool(READINESS) or os.environ.get("MOCK_BUILTIN_PRESETS") == "1"
+if READINESS or BUILTIN_PRESETS:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import readiness_mock
+    if READINESS and READINESS not in readiness_mock.SCENARIOS:
+        sys.exit("mock hub 配置错误：MOCK_READINESS 只能是 %s" % " / ".join(readiness_mock.SCENARIOS))
+    _START_ERROR = os.environ.get("MOCK_START_ERROR", "")
+    if _START_ERROR and _START_ERROR not in readiness_mock.START_CODES:
+        sys.exit("mock hub 配置错误：MOCK_START_ERROR 只能是 %s" % " / ".join(readiness_mock.START_CODES))
+    _features_without_readiness = features
+
+    def features():
+        f = _features_without_readiness()
+        extra = ("assistant_readiness", "machines_add", "machine_trust", "builtin_presets") if READINESS else ("builtin_presets",)
+        return f + [x for x in extra if x not in f]
+
+READY = {"sc": readiness_mock.SCENARIOS.get(READINESS, {}) if READINESS else {}, "dismissed": False}
+READY_MAIN = "b2e4d6f8-0000-4000-8000-0000000000aa"
+if READINESS:
+    _sc = READY["sc"]
+    _launcher = _sc.get("launcher", "claude")
+    ASSISTANT_CONFIG["launcher"] = _launcher
+    if not _sc.get("demo"):
+        _mbp = {"id": "mbp", "name": "小林的 MacBook", "kind": "link", "icon": "laptop", "online": True, "hostname": "MacBook",
+                "os": "darwin", "arch": "arm64", "home": "/Users/me", "herdr_version": "0.9.5", "claude_version": "2.1.320",
+                "last_seen": ago()}
+        if _sc.get("claude") == "missing":
+            _mbp.pop("claude_version")
+        if _sc["machine"] == "offline":
+            _mbp.update(online=False, error_code="link_offline", error="link closed: failed to get reader: EOF", last_seen=ago(hours=2))
+        if _sc["machine"] == "pending":
+            _mbp.update(trust="pending", error=ADD_COMPUTER_PENDING_TEXT)
+        if _sc["machine"] == "outdated":
+            _mbp["error_code"] = "node_outdated"  # a node from before 模型配置: it cannot run the main conversation
+        MACHINES_KEEP = set()
+        if _sc["machine"] != "none":
+            MACHINES.append(_mbp)
+            MACHINES_KEEP.add("mbp")
+        ASSISTANT[:] = []
+        ASSISTANT_CONFIG.update(machine_id="mbp" if _sc["machine"] not in ("none", "pending") else "", main=None)
+        _code = _sc.get("model")
+        if _code:  # the main conversation's only turn: answered (full), or failed so
+            _text = readiness_mock.ANSWER if _code == "ok" else readiness_mock.TURN_ERRORS[_code]
+            _main = assistant_sess(READY_MAIN, "", 2, _text)
+            _main.update(machine_id="mbp", cwd="/Users/me/.jarvis/assistant", launcher=_launcher, main=True)
+            if _code != "ok":
+                _main.update(turn_error=_text, turn_error_code=_code,
+                             **({"turn_error_kind": "user"} if _code in readiness_mock.USER_TURN_ERRORS else {}))
+            ASSISTANT.append(_main)
+            ASSISTANT_CONFIG["main"] = READY_MAIN
+            ITEMS[READY_MAIN] = [it("user", "text", 3, text="你好"), it("assistant", "text", 2, text=_text)]
+
+
+def ready_machine():
+    """The main conversation's computer as readiness_mock wants it: the one set in 设置 › 助手 when it is among the
+    confirmed ones served, else the first of them (assistant/profile.go effective); None when there is none."""
+    ok = [m for m in out_machines() if m.get("trust") != "pending"]
+    m = next((x for x in ok if x["id"] == ASSISTANT_CONFIG["machine_id"]), ok[0] if ok else None)
+    if m is None:
+        return None
+    return {"id": m["id"], "name": m["name"], "online": bool(m.get("online")), "claude_version": m.get("claude_version", ""),
+            "node_outdated": m.get("error_code") == "node_outdated"}
+
+
+def ready_lang(handler):
+    return readiness_mock.lang_of(handler.headers.get("Accept-Language", ""))
+
+
+def ready_state(handler, probe=False):
+    sc, m = READY["sc"], ready_machine()
+    launcher = ASSISTANT_CONFIG["launcher"] or "claude"
+    result = None
+    if probe and m and m["online"] and not m["node_outdated"]:
+        result = readiness_mock.probe_result(sc, launcher)
+        if result["ok"] and not sc.get("model"):
+            READY["sc"] = sc = dict(sc, model="ok")  # what a probe that answered says of the model, from now on
+    return readiness_mock.readiness(sc, m, ready_lang(handler), launcher, READY["dismissed"], result)
+
+
+if READINESS or BUILTIN_PRESETS:
+    def _readiness_route(handler, p, body):
+        method = handler.command
+        if p == "/api/v1/launchers/presets" and method == "GET":
+            handler.send_json({"presets": readiness_mock.merge_presets(readiness_mock.builtin_presets(ready_lang(handler)), LAUNCHER_PRESETS)})
+            return True
+        if not READINESS:
+            return False
+        lang = ready_lang(handler)
+        assistant = p in ("/api/v1/assistant/readiness", "/api/v1/assistant/readiness/dismiss", "/api/v1/assistant/warm",
+                          "/api/v1/assistant/conversations")
+        if assistant and READY["sc"].get("assistant_offline"):
+            status, reply = readiness_mock.refusal("assistant_offline", lang)
+            handler.send_json(reply, status)
+            return True
+        if p == "/api/v1/assistant/readiness" and method == "GET":
+            q = parse_qs(urlparse(handler.path).query).get("probe", [""])[0]
+            handler.send_json(ready_state(handler, q in ("1", "true")))
+            return True
+        if p == "/api/v1/assistant/readiness/dismiss" and method == "POST":
+            try:
+                req = json.loads(body) if body else {}
+            except ValueError as e:
+                handler.send_json({"error": str(e), "code": "bad_request", "retryable": False}, 400)
+                return True
+            READY["dismissed"] = req.get("dismissed") is not False  # an empty body dismisses
+            handler.send_json({"ok": True})
+            return True
+        if p == "/api/v1/assistant/warm" and method == "POST":
+            handler.send_json({"ok": True, "readiness": ready_state(handler)})
+            return True
+        if p == "/api/v1/assistant/conversations" and method == "POST":
+            m = ready_machine()
+            code = os.environ.get("MOCK_START_ERROR", "")
+            if not code:
+                if m is None:
+                    code = "no_machine"
+                elif not m["online"]:
+                    code = "node_unreachable"
+                elif READY["sc"].get("claude") == "missing":
+                    code = "claude_missing"
+                elif READY["sc"].get("claude") == "launcher_missing":
+                    code = "launcher_missing"
+            if code:
+                status, reply = readiness_mock.refusal(code, lang, m["name"] if m and code != "no_machine" else "",
+                                                       ASSISTANT_CONFIG["launcher"] or "claude")
+                handler.send_json(reply, status)
+                return True
+            return False
+        if p == "/api/v1/sessions" and method == "POST":
+            mid = (json.loads(body or b"{}") or {}).get("machine_id", "")
+            if any(x["id"] == mid and x.get("trust") == "pending" for x in MACHINES):
+                status, reply = readiness_mock.pending_agent_refusal(lang)
+                handler.send_json(reply, status)
+                return True
+        return False
+
+    _plugins_route_without_readiness = plugins_route
+
+    def plugins_route(handler, p, body):
+        if _readiness_route(handler, p, body): return True
+        return _plugins_route_without_readiness(handler, p, body)
+
+
+MOCK_HELP.append("MOCK_READINESS=zero|offline|pending|no_claude|not_logged_in|bad_key|full|demo|unverified|launcher_missing|model_route|rate_limited|node_outdated|assistant_offline  "
+                 "主对话就绪度的场景（#287，docs/testing.md「就绪度场景」）：GET /api/v1/assistant/readiness、dismiss、warm 带 readiness、开对话按码拒绝、"
+                 "内置供应商预设，features 有 assistant_readiness / machines_add / machine_trust / builtin_presets；MOCK_START_ERROR=<码> 让开对话一律按这个码拒绝；"
+                 "MOCK_BUILTIN_PRESETS=1 只加内置供应商预设")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")

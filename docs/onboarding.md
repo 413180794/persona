@@ -460,7 +460,7 @@ POST /api/v1/assistant/readiness/dismiss   {"dismissed": true}  →  {"ok": true
 - `no_machine`、`claude_missing`、`launcher_missing`、`machine_pending` 回 409；`node_unreachable` 不变（带码 502，`ErrOffline` 503）；`assistant_offline` 不变（503）。
 - `detail` 是原文，客户端只放进「详情」。
 - `turn_error_kind: "user"` 的轮次，会话上另带 `turn_error_code`（`not_logged_in` / `auth_failed` / `model_route` / `rate_limited`），客户端据此画卡片。
-- `errNoAssistantMachine`（`start.go:29`）和 `memory()`（`profile.go:465`）用同一个码，别让两处分开漂移；语音提示词的 golden（`server/internal/voice/testdata/prompts/report.failed.golden`）跟着更新。
+- `errNoAssistantMachine`（`start.go:29`）和 `memory()`（`profile.go:465`）用同一个码，别让两处分开漂移；语音提示词的 golden（`server/internal/voice/testdata/prompts/refused.failed.*.golden`，三种语言）跟着更新。
 - 老客户端照旧显示 `error`，只是从英文变成中文。iOS 的 `isQuiet` 判断要确认不把 409 当成静默错误。
 
 ### 5.3 已登录设备添加电脑、确认电脑
@@ -666,6 +666,10 @@ P1 各开一个 issue：「只聊天」模式（拍板 9 之后）、node 的 `c
   - `no_machine` 等码回 409，`error` 是中文。
 - **文案守门**：在 `scripts/test/` 里新加 test_onboarding_copy.py，扫引导、空状态、错误码对应的文案（网页 i18n、Android `values-zh`、iOS 字符串、服务端 i18n），禁止出现 `hub.json`、`token`（「配对码」不算）、`jq`、`personad`、`TLS`、`node`、`herdr`、`launcher`、`localhost`、`~/.`。「高级」「详情」里的键在白名单里。和 `privacy_check.py` 一样进测试。
 - **故障场景**：`mock_hub.py` / `mock_scenarios.py` 加七种就绪状态（零电脑、离线、pending、没装 Claude Code、没登录、Key 错、一切正常）和第 4.6 节每个码的错误，网页 Playwright、Android `android.sh shots`、iOS 截图共用一套。
+- 实现（#4033，用法见 `docs/testing.md`「新手文案守门」「就绪度场景」），和上面不同或补充的地方：
+  - 文案守门除了白名单（`ALLOW`，写理由），还有一张 `PENDING`：现在还不对、有人在改的（Android 的首屏和空状态归 #4032，iOS / Mac 的归 7.3 的 M2–M4），改好了必须拿掉，新的不能加。iOS 没有词条文件，扫几个 Swift 文件里的中文字面量。
+  - 「待确认」场景的就绪度是 `no_machine`，不是 `machine_pending`：hub 不把待确认的电脑给助手（`devices.list` 不含它），和 5.1 的实现说明一致；`machine_pending` 出现在给它开 Agent 时，以及 `MOCK_START_ERROR=machine_pending`。
+  - 七种之外另有 `demo`、`unverified`、`launcher_missing`、`model_route`、`rate_limited`、`node_outdated`、`assistant_offline`。场景的就绪度和开对话的拒绝由 `server/internal/assistant/readiness_scenarios_test.go` 用真代码生成 golden，mock 的测试逐个比对，不靠手抄。
 - **全新用户端到端**（Linux 开发机）：隔离测试 hub（自己的端口、数据目录、数据库，`JARVIS_LOCAL_NODE=0`）上，Playwright 走网页：登录 → 引导卡出现 → 用假网关加一个预设供应商 → `assign` 生效 → 就绪度的 `model` 变化。断言首屏和引导里没有文案守门禁止的词。
 - **升级回归**：拿一份手写 hub.json、`~/.zshrc` 启动器和带 Persona 管理供应商的库，升级后 Key 照常下发、机器都已确认、主对话照常；`./scripts/test/test-server.sh` 全过。
 

@@ -42,6 +42,11 @@ SCENARIOS = {
     "tasks": {"MOCK_TASKS": "1"},  # BackgroundNoticeTests
     "offline": None,  # no hub
 }
+# The main conversation's readiness (docs/testing.md「就绪度场景」): readiness-zero, readiness-not_logged_in…
+sys.path.insert(0, HERE)
+import readiness_mock  # noqa: E402
+
+SCENARIOS.update({"readiness-" + name: {"MOCK_READINESS": name} for name in readiness_mock.SCENARIOS})
 
 
 class Hub:

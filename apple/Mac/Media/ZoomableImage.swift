@@ -77,7 +77,7 @@ final class ZoomScrollView: NSScrollView {
             if magnification > minMagnification + 0.01 {
                 animator().magnification = minMagnification
             } else {
-                let p = imageView.convert(event.locationInWindow, from: nil)
+                let p = contentView.convert(event.locationInWindow, from: nil)
                 animator().setMagnification(min(maxMagnification, 2.5), centeredAt: p)
             }
         } else if event.clickCount == 1 {

@@ -1,0 +1,224 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "cc_glm",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "claude",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "launcher_missing",
+        "detail": "Can't find the model entry “cc_glm” on 小林的 MacBook. It may have been removed.",
+        "id": "claude",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "Model entry not found"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "Send a message to check that the model answers.",
+        "id": "model",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "The model hasn't been checked yet"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "Send “Hello” and see whether Persona answers.",
+        "id": "first_message",
+        "state": "todo",
+        "title": "Say hello"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "How do I connect a model?"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "cc_glm",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "claude",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "launcher_missing",
+        "detail": "小林的 MacBook でモデルの入口「cc_glm」が見つかりません。削除された可能性があります。",
+        "id": "claude",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "モデルの入口が見つかりません"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "メッセージを送って、モデルが答えるか確認してください。",
+        "id": "model",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "モデルはまだ確認されていません"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "「こんにちは」と送って、Persona が答えるか確かめましょう。",
+        "id": "first_message",
+        "state": "todo",
+        "title": "話しかけてみる"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "モデルはどう接続するの？"
+      }
+    ],
+    "version": 1
+  },
+  "start": {
+    "body": {
+      "action": "connect_model",
+      "code": "launcher_missing",
+      "delivered": "none",
+      "detail": "cc_glm 没有启动起来（1.2s 后退出），消息没有送达：zsh:1: command not found: cc_glm",
+      "error": "在 小林的 MacBook 上找不到「cc_glm」这个模型入口，可能被删了。",
+      "launcher": "cc_glm",
+      "machine_name": "小林的 MacBook"
+    },
+    "status": 409
+  },
+  "start.en": {
+    "body": {
+      "action": "connect_model",
+      "code": "launcher_missing",
+      "delivered": "none",
+      "detail": "cc_glm 没有启动起来（1.2s 后退出），消息没有送达：zsh:1: command not found: cc_glm",
+      "error": "Can't find the model entry “cc_glm” on 小林的 MacBook. It may have been removed.",
+      "launcher": "cc_glm",
+      "machine_name": "小林的 MacBook"
+    },
+    "status": 409
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "cc_glm",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "claude",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "launcher_missing",
+        "detail": "在 小林的 MacBook 上找不到「cc_glm」这个模型入口，可能被删了。",
+        "id": "claude",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "找不到模型入口"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_unverified",
+        "detail": "发一句试试，确认模型能回答。",
+        "id": "model",
+        "launcher": "cc_glm",
+        "machine": "mbp",
+        "state": "unknown",
+        "title": "还没确认模型能用"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "never_tried",
+        "detail": "发一句「你好」，看看 Persona 能不能回答。",
+        "id": "first_message",
+        "state": "todo",
+        "title": "试一句"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "怎么接模型？"
+      }
+    ],
+    "version": 1
+  }
+}

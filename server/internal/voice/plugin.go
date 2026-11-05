@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/nwverse/persona/server/internal/identity"
 	"log"
 	"net"
 	"net/http"
@@ -14,21 +13,27 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // Plugin serves the voice plugin's HTTP API on the hub's socket.
 type Plugin struct {
-	cfg      Config
-	cat      *catalog
-	hub      *hubClient
-	logger   *log.Logger
-	delegate delegateOptions
-	active   atomic.Int32 // open conversations: a redeploy waits for 0 (GET /health)
+	cfg    Config
+	cat    *catalog
+	hub    *hubClient
+	link   *hubLink // the conversations' one WebSocket to the hub (hublink.go)
+	logger *log.Logger
+	active atomic.Int32 // open conversations: a redeploy waits for 0 (GET /health)
 }
 
 func New(cfg Config, hubURL, hubToken string, logger *log.Logger) *Plugin {
 	c := cfg
-	return &Plugin{cfg: c, cat: &catalog{cfg: &c, now: time.Now}, hub: newHubClient(hubURL, hubToken), logger: logger, delegate: defaultDelegate}
+	pl := &Plugin{cfg: c, cat: &catalog{cfg: &c, now: time.Now}, hub: newHubClient(hubURL, hubToken), logger: logger}
+	pl.link = newHubLink(pl.hub, pl.logf)
+	return pl
 }
 
 func (pl *Plugin) logf(format string, args ...any) { pl.logger.Printf(format, args...) }
@@ -77,8 +82,11 @@ func (pl *Plugin) Handler() http.Handler {
 			return
 		}
 		c.SetReadLimit(1 << 20)
-		pl.logf("conversation opened")
-		pl.converse(context.WithoutCancel(r.Context()), c)
+		// Who is calling, as the hub found it (docs/extensions.md「转发时的调用方」): the role decides the tools, the
+		// language the words the model is told.
+		role, lang := r.Header.Get(extwire.HeaderRole), i18n.Resolve(r.Header.Get(extwire.HeaderLang))
+		pl.logf("conversation opened (role %q)", role)
+		pl.converse(context.WithoutCancel(r.Context()), c, role, lang)
 	})
 	return mux
 }

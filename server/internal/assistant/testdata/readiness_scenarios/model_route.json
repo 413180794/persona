@@ -1,0 +1,179 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "model_route",
+        "detail": "The model name is wrong, or the model isn't available right now. Try another model.",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "This model isn't available"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_route",
+        "detail": "The model name is wrong, or the model isn't available right now. Try another model.",
+        "id": "first_message",
+        "state": "problem",
+        "title": "This model isn't available"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "How do I connect a model?"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "model_route",
+        "detail": "モデル名が間違っているか、このモデルは今使えません。別のモデルを試してください。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "このモデルは今使えません"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_route",
+        "detail": "モデル名が間違っているか、このモデルは今使えません。別のモデルを試してください。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "このモデルは今使えません"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "モデルはどう接続するの？"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "model",
+    "ready": false,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "action": {
+          "id": "connect_model"
+        },
+        "code": "model_route",
+        "detail": "模型名不对，或者这个模型现在用不了。换一个模型试试。",
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "这个模型现在用不了"
+      },
+      {
+        "action": {
+          "id": "test_assistant"
+        },
+        "code": "model_route",
+        "detail": "模型名不对，或者这个模型现在用不了。换一个模型试试。",
+        "id": "first_message",
+        "state": "problem",
+        "title": "这个模型现在用不了"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "怎么接模型？"
+      }
+    ],
+    "version": 1
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": null,
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "action": {
+          "id": "add_computer"
+        },
+        "code": "no_machine",
+        "detail": "Persona works on one of your computers, and none is connected yet.",
+        "id": "computer",
+        "state": "todo",
+        "title": "Add your computer"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "How do I connect a model?"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": null,
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "action": {
+          "id": "add_computer"
+        },
+        "code": "no_machine",
+        "detail": "Persona はお使いのコンピューターの 1 台で作業します。まだコンピューターが接続されていません。",
+        "id": "computer",
+        "state": "todo",
+        "title": "コンピューターを追加"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "モデルはどう接続するの？"
+      }
+    ],
+    "version": 1
+  },
+  "start": {
+    "body": {
+      "action": "add_computer",
+      "code": "no_machine",
+      "delivered": "none",
+      "detail": "assistant machine is not configured",
+      "error": "Persona 要在你的一台电脑上干活，现在还没接上电脑。"
+    },
+    "status": 409
+  },
+  "start.en": {
+    "body": {
+      "action": "add_computer",
+      "code": "no_machine",
+      "delivered": "none",
+      "detail": "assistant machine is not configured",
+      "error": "Persona works on one of your computers, and none is connected yet."
+    },
+    "status": 409
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": null,
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "action": {
+          "id": "add_computer"
+        },
+        "code": "no_machine",
+        "detail": "Persona 要在你的一台电脑上干活，现在还没接上电脑。",
+        "id": "computer",
+        "state": "todo",
+        "title": "添加你的电脑"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "怎么接模型？"
+      }
+    ],
+    "version": 1
+  }
+}

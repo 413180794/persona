@@ -149,7 +149,7 @@ final class MacInboxState {
     func matches(_ it: InboxItem, source: String? = nil, kind: String? = nil, query: String? = nil) -> Bool {
         let source = source ?? self.source, kind = kind ?? self.kind, query = query ?? self.query
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && it.kind == "doc") { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == "@我")) { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }

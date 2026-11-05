@@ -10,7 +10,7 @@
   "memory": "Memory",
   "disk": "Disk",
   "disk_free": "{size} free",
-  "waiting_node": "Waiting for the node to reconnect",
+  "waiting_node": "Waiting for this computer to reconnect",
   "unreachable": "Can't reach this computer",
   "agents_one": "{count} agent",
   "agents_other": "{count} agents",

@@ -30,7 +30,7 @@
   "test_model": "Model to test with",
   "test": "Test connection",
   "discover": "Fetch models",
-  "test_cost": "Testing sends one 1-token request, which may cost a little.",
+  "test_cost": "Testing sends one very short request, which may cost a little.",
   "discover_failed": "Couldn't fetch the model list: {error}. You can add models by hand in the next step.",
   "discover_found_one": "Found {count} model. Check it in the next step.",
   "discover_found_other": "Found {count} models. Check them in the next step.",

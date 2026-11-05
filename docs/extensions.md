@@ -2146,11 +2146,11 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
 | --- | --- |
 | `id`、`name` | `a-z0-9_-`；模型 id 的前缀和显示名 |
 | `url` | 会话的 WebSocket：`wss://<host>/v1/live` |
-| `dialect` | `live`（默认）：公开的 GPT-Live 协议；`codex`：Codex 跟 `gpt-live-1-codex` 说的那套（见下） |
+| `dialect` | `live`（默认）：公开的 GPT-Live 协议；`codex`：Codex 跟 `gpt-live-1-codex` 说的那套（见下）；`fake`：开发用，不连任何服务（不写 `url`），App 打的字原样交给主对话，要告诉模型的话原样回成它的字幕，不用 GPT-Live 也能对着真 hub、真 Agent 跑通。`fake` 只能写在 hub.json |
 | `key` / `key_file` / `key_command` | 凭据，作为 `Authorization: Bearer` 发出：直接写、文件第一行、命令（`sh -c`）打印的第一行。命令每次对话都跑一次，别处续期的凭据马上生效。凭据只放在 hub 机器上（hub.json 0600，或单独的文件） |
 | `ssh` | hub 机器访问不到这个服务时，经那台机器连（`ssh -W host:port <机器>`，TLS 仍然是端到端的）；hub 机器要能免密 ssh 过去 |
 | `models`、`default_model` | 列出来的模型；不写时 live 方言读服务的 `GET <url>/models`，codex 方言是 `gpt-live-1-codex` |
-| `tools` | live 方言：在 `session.start` 里声明 Persona 的函数工具（查知识库、看 Agents、发给 Agent、交给主对话）。公开的 GPT-Live API 不收 `session.tools`，只有自己部署、支持它的服务才开 |
+| `tools` | live 方言：在 `session.start` 里声明 Persona 的函数工具（查知识库、看 Agents、发给 Agent、交给主对话）。公开的 GPT-Live API 不收 `session.tools`，只有自己部署、支持它的服务才开；有的服务只有声明了工具才会把事交出来（`docs/lessons/voice.md`），那就必须开。完整设备（`X-Persona-Role` 是 `full` 或没有）声明全部四个；别的扩展调来的通话只声明 `ask_jarvis`（交给主对话，它能做的就这些） |
 | `input_rate` | 麦克风采样率 16000 / 24000；默认 live 16000、codex 24000 |
 
 ### 在 App 里配上游（#3500）
@@ -2213,13 +2213,26 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
 | 麦克风 / 声音 | `session.input_audio.append` / `session.output_audio.delta{delta}` | `input_audio.append` / `output_audio.delta{audio}`（24 kHz） |
 | 字幕 | `session.input_transcript.delta`、`session.output_transcript.delta`（只追加，没有「完」） | `input_transcript.added`、`output_transcript.added`，`turn.done` 给整句 |
 | 交出去的事 | `session.delegation.created{target: client}`；有工具时 `response.event{function_call}` | `delegation.created{item{type: delegation, target: client, content}}` |
-| 回答 | `session.thinking.append`（安静的进度）、`session.commentary.append{delegation_id}`（结果，模型会说出来），最多约 500 token | `delegation.context.append{channel: commentary / speakable}`，按 500 字节切 |
+| 回答 | 这一轮的完整回答作为 `session.commentary.append{delegation_id}`（这个 delegation 唯一的一条，模型会说出来；上限 4000 字符），交出去时不先回任何东西 | `delegation.context.append{channel: speakable}`，按 500 字节切 |
 | 打字说一句 | `session.commentary.append{delegation_id: null}` | `session.context.append{channel: speakable}` |
 
-模型把事交给客户端（delegation）时，扩展把它交给 **Persona 主对话**（没有主对话就新开一个并设为主对话），先回一句安静的「交代下去了」，
-主对话做完把最后的回复作为这个 delegation 的结果交回去，模型再口头转述；delegation 已经不在了（重连过）就作为一句新的上下文说出来。
-App 那边这期间显示「Persona 主对话处理中」。开了 `tools` 的上游，模型调函数工具时扩展直接执行（查知识库、看 Agents 走 hub 的 API），
-`ask_jarvis` 也是交给主对话。
+模型把事交给客户端（delegation，开了 `tools` 时是 `ask_jarvis` 这个函数调用）时，扩展把它交给 **Persona 主对话**（没有主对话就新开一个并设为主对话），
+消息的 `client_msg_id` 是 `voice-<16 位十六进制随机数>`，第一行是任务，后面一块「上下文 · 语音对话」。交出去时不回任何东西（模型自己已经说了「交给主对话了」），
+扩展按一轮跟踪（`docs/voice.md`「一轮跟踪」，和渠道管线同一套 `channel.Run` 规则）：按这条消息的 id 找到它、等**它那一轮**结束（主对话在忙别的一轮时等它排到），
+读这一轮的完整回答，转成能说出口的文字（代码、表格、链接、哈希换成「一段 12 行的代码，在屏幕上」这类占位，路径只留文件名），
+放进 `<agent_output>` 数据块作为这个 delegation 唯一的结果交回去，模型再用一两句话说结论；delegation 已经不在了（重连过）就作为一句新的上下文说出来。
+主对话停下来等用户回答或批准时说一句「去手机上看」；留下后台任务时先说结果、后台做完再说一次。
+App 那边这期间显示「Persona 主对话处理中」。开了 `tools` 的上游，模型调查知识库、看 Agents 时扩展直接执行（走 hub 的 API）。
+
+**用户发言门槛**：交出去的事（交给主对话、`send_to_agent`）只在用户刚说过话时才做：模型读到上一个回答之后用户说过话（字幕或打字），而且不超过 30 秒；
+字幕晚到时先等最多 2.5 秒。「读到」以上游的 `session.commentary.appended` 回执为准（模型说话时结果会排队几十秒，排队时用户说的话不算），没有回执的方言按发出时算。
+不满足就不发，告诉模型「这条不是你说的，我没发」。这样回答里写着「下一步：请调用 …」也带不动模型自己下指令。
+查知识库、看 Agents 的结果不关门槛（模型常常先看再交给主对话），结果里别人的话放进同样的 `<agent_output>` 数据块。
+上游拒收结果时（delegation 过期、太长）改用 `say` 或短版重发，这一轮的回答不会悄悄丢掉。
+
+扩展经 hub 的 API 跟踪（`JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`）：会话列表、`…/items?after_seq=` 翻页、`…/items/{id}/full`、`GET /api/v1/machines`，
+外加一条共用的 `GET /api/v1/ws`（`subscribe` 主对话，收 `items` 里的 `turn_duration`、`sessions`、`delta`、`hook_event`；读循环不阻塞），没有它时每 5 秒看一次。
+`X-Persona-Lang` 决定交给模型和发给主对话的这些话用哪种语言（中、英、日）。
 
 上游会话中途断了（服务重启、网络断）：App 的连接不断，显示「连接断了，重新连接中」，扩展新开一个会话，把最近 40 句写进提示词，
 一次对话最多重连 3 次。App 发 `interrupt` 时扩展丢掉这次回答还没送出的声音（GPT-Live 没有打断的帧，模型自己听到插话会停）。

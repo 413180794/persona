@@ -1,0 +1,406 @@
+package voice
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// fakeHub is the Persona hub's API as the voice extension uses it (docs/voice.md「扩展调 hub」): the main conversation
+// and its transcript, sends, the sessions list, the items pages and /full, the machines, and /api/v1/ws pushing what
+// changes to its subscribers. A message the main conversation takes is worked on for work, then answered with
+// reply(text) and a turn_duration line, unless the test drives the conversation itself (manual).
+type fakeHub struct {
+	t  *testing.T
+	mu sync.Mutex
+
+	main      string // the main conversation ("" none yet: starting one makes main1)
+	sessions  map[string]*fakeSession
+	sent      []sentMsg
+	delivered map[string]bool
+	full      map[string]string // item id -> its whole text (a page cuts it)
+
+	reply  func(text string) string       // the main conversation's answer (nil: 明天下午三点有会)
+	onSend func(m sentMsg) (int, string)  // answers a send instead of taking it (status 0: take it)
+	manual bool                           // a message is put in the transcript and left there: the test answers it
+	work   time.Duration                  // how long a turn works (0: 50 ms)
+	delay  time.Duration                  // how long a send takes
+	pageAt int                            // items per after_seq page (0: all)
+	noWS   bool                           // /api/v1/ws is not there
+	cut    bool                           // a send's connection is dropped before the hub answers
+	toSeq  func(sid string, last int) int // what turns=1 says is the last line (nil: the last item's)
+	ws     map[*websocket.Conn]map[string]bool
+	wsSaw  []map[string]any
+	looks  int // GET /api/v1/sessions?machine_id= (a run's check, or a send's look first)
+}
+
+type fakeSession struct {
+	id         string
+	assistant  bool
+	status     string
+	pending    int
+	background int
+	turnError  string
+	items      []proto.Item
+}
+
+type sentMsg struct{ Session, Text, ID string }
+
+func newFakeHub(t *testing.T) *fakeHub {
+	return &fakeHub{t: t, main: "main1", sessions: map[string]*fakeSession{"main1": {id: "main1", assistant: true, status: "idle"}},
+		delivered: map[string]bool{}, full: map[string]string{}, ws: map[*websocket.Conn]map[string]bool{}}
+}
+
+func (h *fakeHub) server(t *testing.T) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/kb-search", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []map[string]string{{"path": "people/x.md", "line": "x likes " + r.URL.Query().Get("q")}}})
+	})
+	mux.HandleFunc("GET /api/v1/assistant", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]string{"machine_id": "m", "main": h.main})
+	})
+	mux.HandleFunc("POST /api/v1/assistant/conversations", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Prompt string }
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		h.mu.Lock()
+		h.main = "main1"
+		h.sessions["main1"] = &fakeSession{id: "main1", assistant: true, status: "working"}
+		h.sent = append(h.sent, sentMsg{Session: "main1", Text: in.Prompt})
+		h.mu.Unlock()
+		go h.take(sentMsg{Session: "main1", Text: in.Prompt})
+		_ = json.NewEncoder(w).Encode(map[string]any{"session": map[string]any{"machine_id": "m", "session_id": "main1", "assistant": true}})
+	})
+	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/messages", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Text        string `json:"text"`
+			ClientMsgID string `json:"client_msg_id"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		m := sentMsg{Session: r.PathValue("sid"), Text: in.Text, ID: in.ClientMsgID}
+		h.mu.Lock()
+		delay, onSend, cut := h.delay, h.onSend, h.cut
+		h.mu.Unlock()
+		time.Sleep(delay)
+		if cut { // it got there, and the connection dropped before the answer (a redeploy)
+			h.mu.Lock()
+			h.sent = append(h.sent, m)
+			h.mu.Unlock()
+			if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+				_ = conn.Close()
+			}
+			return
+		}
+		if onSend != nil {
+			if status, body := onSend(m); status != 0 {
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, body)
+				return
+			}
+		}
+		h.mu.Lock()
+		again := h.delivered[m.ID]
+		h.delivered[m.ID] = true
+		if !again {
+			h.sent = append(h.sent, m)
+		}
+		h.mu.Unlock()
+		if !again { // the hub sends an id once: the same one again answers 200 and does nothing
+			go h.take(m)
+		}
+		_, _ = io.WriteString(w, `{}`)
+	})
+	mux.HandleFunc("GET /api/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Has("machine_id") {
+			h.mu.Lock()
+			h.looks++
+			h.mu.Unlock()
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"sessions": h.list()})
+	})
+	mux.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"machines":[{"id":"m","name":"M","online":true}]}`)
+	})
+	mux.HandleFunc("GET /api/v1/sessions/m/{sid}/items", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		s := h.sessions[r.PathValue("sid")]
+		if s == nil {
+			http.Error(w, `{"error":"no such session"}`, http.StatusNotFound)
+			return
+		}
+		q := r.URL.Query()
+		last := 0
+		if n := len(s.items); n > 0 {
+			last = s.items[n-1].Seq
+		}
+		if !q.Has("after_seq") { // turns=1: the last exchange
+			to := last
+			if h.toSeq != nil {
+				to = h.toSeq(s.id, last)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []proto.Item{}, "to_seq": to})
+			return
+		}
+		after, _ := strconv.Atoi(q.Get("after_seq"))
+		var page []proto.Item
+		more := false
+		for _, it := range s.items {
+			if it.Seq <= after {
+				continue
+			}
+			if h.pageAt > 0 && len(page) == h.pageAt {
+				more = true
+				break
+			}
+			page = append(page, it)
+		}
+		to := max(last, after)
+		if more {
+			to = page[len(page)-1].Seq
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": page, "more_after": more, "to_seq": to})
+	})
+	mux.HandleFunc("GET /api/v1/sessions/m/{sid}/items/{iid}/full", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		for _, it := range h.sessions[r.PathValue("sid")].items {
+			if it.ID == r.PathValue("iid") {
+				if full, ok := h.full[it.ID]; ok {
+					it.Text, it.FullSize = full, 0
+				}
+				_ = json.NewEncoder(w).Encode(it)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc("GET /api/v1/ws", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		noWS := h.noWS
+		h.mu.Unlock()
+		if noWS || r.Header.Get("Authorization") != "Bearer hubtoken" {
+			http.NotFound(w, r)
+			return
+		}
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		h.mu.Lock()
+		h.ws[c] = map[string]bool{}
+		h.mu.Unlock()
+		defer func() {
+			h.mu.Lock()
+			delete(h.ws, c)
+			h.mu.Unlock()
+		}()
+		_ = writeJSON(context.Background(), c, map[string]any{"type": "hello", "locale": "zh-Hans", "hub_id": "hub1"})
+		for {
+			_, b, err := c.Read(context.Background())
+			if err != nil {
+				return
+			}
+			var f map[string]any
+			_ = json.Unmarshal(b, &f)
+			h.mu.Lock()
+			h.wsSaw = append(h.wsSaw, f)
+			sid, _ := f["session_id"].(string)
+			switch f["type"] {
+			case "subscribe":
+				h.ws[c][sid] = true
+			case "unsubscribe":
+				delete(h.ws[c], sid)
+			}
+			h.mu.Unlock()
+		}
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func (h *fakeHub) list() []proto.Session {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.listLocked()
+}
+
+func (h *fakeHub) listLocked() []proto.Session {
+	out := []proto.Session{}
+	for _, id := range []string{"main1", "a1"} {
+		s := h.sessions[id]
+		if s == nil {
+			continue
+		}
+		ps := proto.Session{MachineID: "m", SessionID: s.id, Assistant: s.assistant, Status: s.status, State: s.status,
+			PendingInteractions: s.pending, TurnError: s.turnError, Rev: int64(len(s.items))}
+		for range s.background {
+			ps.Background = append(ps.Background, proto.BackgroundTask{})
+		}
+		if n := len(s.items); n > 0 {
+			ps.LastText = clipRunes(s.items[n-1].Text, 200)
+		}
+		out = append(out, ps)
+	}
+	return out
+}
+
+// take puts a message into its conversation and, unless manual, works on it and answers.
+func (h *fakeHub) take(m sentMsg) {
+	h.add(m.Session, proto.Item{Role: "user", Kind: proto.KindText, Text: m.Text, ClientMsgID: m.ID})
+	h.mu.Lock()
+	manual, work, reply := h.manual, h.work, h.reply
+	h.mu.Unlock()
+	if manual {
+		return
+	}
+	if work == 0 {
+		work = 50 * time.Millisecond
+	}
+	answer := "明天下午三点有会"
+	if reply != nil {
+		answer = reply(m.Text)
+	}
+	h.status(m.Session, "working")
+	time.Sleep(work)
+	h.add(m.Session, proto.Item{Role: "assistant", Kind: proto.KindText, Text: answer})
+	h.end(m.Session)
+}
+
+// add appends items to a conversation's transcript and pushes them to its subscribers.
+func (h *fakeHub) add(sid string, items ...proto.Item) {
+	h.mu.Lock()
+	s := h.sessions[sid]
+	for i := range items {
+		n := len(s.items) + 1
+		if len(s.items) > 0 {
+			n = s.items[len(s.items)-1].Seq + 1
+		}
+		items[i].Seq = n
+		if items[i].ID == "" {
+			items[i].ID = fmt.Sprintf("%s#%d", sid, n)
+		}
+		s.items = append(s.items, items[i])
+	}
+	h.pushLocked(sid, map[string]any{"type": "items", "machine_id": "m", "session_id": sid, "items": items})
+	h.mu.Unlock()
+}
+
+// end ends a turn: its turn_duration line, and the conversation idle.
+func (h *fakeHub) end(sid string) {
+	h.add(sid, proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 50, Source: "claude_turn_duration"}})
+	h.status(sid, "idle")
+}
+
+func (h *fakeHub) status(sid, status string) {
+	h.edit(sid, func(s *fakeSession) { s.status = status })
+}
+
+// edit changes a conversation and pushes the machine's sessions to every client.
+func (h *fakeHub) edit(sid string, f func(s *fakeSession)) {
+	h.mu.Lock()
+	f(h.sessions[sid])
+	h.pushLocked("", map[string]any{"type": "sessions", "machine_id": "m", "sessions": h.listLocked()})
+	h.mu.Unlock()
+}
+
+// pushLocked sends v to the WebSocket clients: those subscribed to sid, every one for "".
+func (h *fakeHub) pushLocked(sid string, v any) {
+	for c, subs := range h.ws {
+		if sid == "" || subs[sid] {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			_ = writeJSON(ctx, c, v)
+			cancel()
+		}
+	}
+}
+
+// dropWS closes every /api/v1/ws connection, as the hub does to a client whose queue is full (or on a redeploy).
+func (h *fakeHub) dropWS() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for c := range h.ws {
+		_ = c.Close(websocket.StatusPolicyViolation, "queue full")
+	}
+}
+
+// subscribes is how many subscribe frames for sid the hub got, and the last one.
+func (h *fakeHub) subscribes(sid string) (int, map[string]any) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n, last := 0, map[string]any(nil)
+	for _, f := range h.wsSaw {
+		if f["type"] == "subscribe" && f["session_id"] == sid {
+			n, last = n+1, f
+		}
+	}
+	return n, last
+}
+
+// lookCount is how many times a conversation was looked up.
+func (h *fakeHub) lookCount() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.looks
+}
+
+func (h *fakeHub) messages() []sentMsg {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return append([]sentMsg(nil), h.sent...)
+}
+
+// waitSent waits for the n-th message the conversations got.
+func (h *fakeHub) waitSent(n int) sentMsg {
+	h.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if msgs := h.messages(); len(msgs) >= n {
+			return msgs[n-1]
+		}
+		if time.Now().After(deadline) {
+			h.t.Fatalf("the hub never got message %d (it has %d)", n, len(h.messages()))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// subscribed waits until a WebSocket client follows sid.
+func (h *fakeHub) subscribed(sid string) {
+	h.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.mu.Lock()
+		ok := false
+		for _, subs := range h.ws {
+			ok = ok || subs[sid]
+		}
+		h.mu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			h.t.Fatalf("nobody subscribed to %s", sid)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func isVoiceID(id string) bool {
+	rest, ok := strings.CutPrefix(id, "voice-")
+	return ok && len(rest) == 16 && strings.Trim(rest, "0123456789abcdef") == ""
+}

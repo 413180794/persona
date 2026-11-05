@@ -30,7 +30,7 @@
   "test_model": "测试用的模型",
   "test": "测试连接",
   "discover": "获取模型列表",
-  "test_cost": "测试会发一次 1 个 token 的请求，可能产生少量费用。",
+  "test_cost": "测试会发一条很短的请求，可能产生少量费用。",
   "discover_failed": "拉不到模型列表：{error}。可以在下一步手动添加模型。",
   "discover_found_other": "找到 {count} 个模型，下一步勾选。",
   "advanced": "高级",

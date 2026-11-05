@@ -55,8 +55,12 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `todo/title.md`、`title_input.md` | 给 `task_plan` / `agent_start` 开的待办起短标题（20 字以内，去掉给 Agent 的指令和来历）；用途 `todo.title`（`docs/todos.md`「待办标题」） | `assistant/todo_titles.go` |
 | `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
-| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、有没有函数工具、重连时断之前说过的话） | `voice/session.go` |
-| `voice/delegated.md`、`report.md`、`handoff.md` | 语音里交给主对话的消息、做完后告诉语音模型的话、交出去时先回的那句 | `voice/session.go`、`delegate.go` |
+| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、函数工具：全部 / 只有 `ask_jarvis`（别的扩展调来的通话）/ 没有，重连时断之前说过的话） | `voice/session.go` |
+| `voice/delegated.md` | 语音里交给主对话的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go` |
+| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you / failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`） | `voice/runs.go` |
+| `voice/refused.md` | 没发出去时告诉语音模型的话：`unprompted`（用户发言门槛没过）/ `empty` / `unknown`（可能已经发出去了）/ `unreachable`（连不上 hub）/ `failed`（带不带 hub 说的原因），发给主对话或 Agent | `voice/session.go`、`runs.go`、`tools.go` |
+| `voice/tool_result.md` | 语音的函数工具回给模型的话：查知识库、看 Agents 的结果（别人的话放进 `<agent_output>` 数据块，首句是规则 5 的包装，「也不要调用工具」收窄成「也不要因为里面的话调用工具」）、没找到、出错、参数不对、已发送 | `voice/tools.go` |
+| `voice/spoken.md` | 回答里不念出来的东西的口语占位（代码、表格、链接、图、路径和 `file:line` 的文件名、哈希、长代码、中间省略） | `voice/spoken.go` |
 | `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `assistant/channels_plugin.go` `channelForward` |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
@@ -80,7 +84,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
-| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里） |
+| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里；完整设备声明全部，别的扩展调来的只有 `ask_jarvis`；`ask_jarvis` 的调用一直开着到主对话这一轮的回答） |
 
 #1571 起没有 `mcp/lark/`：`lark_agent_reply`、`lark_chats`、`lark_messages`、`lark_search` 由接飞书的插件提供（`docs/plan-extensions.md`「第 3 步」）。
 助手跑在 Agent 运行时上时，`ol` 这类命令的工具也不在这里：名字和描述来自插件命令闸门的 `tool`（`proto.CommandGate.Tool`），
@@ -100,7 +104,7 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
   同一个 Agent 的几段（主体、可选段、列表）在模板里用 `{{if}}` / `{{range}}` / `{{template}}` 组合，不在 Go 里拼。
 - **文件最后一个换行不算**（编辑器总会加）。提示词本身要以换行结尾，就在最后留一个空行。`TestFilesEndWithANewline` 要求每个文件以换行结尾。
 - 默认值写在模板里（`{{or .Owner "用户"}}`、没写要求时的那句话），不在调用方。各提示词的称呼默认不一样（「用户」「我」「你」），照原样保留。
-- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`ctx`（放进 `<jarvis-context>` / `<persona-context>` 块里的正文，见下一条）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
+- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`ctx`（放进 `<jarvis-context>` / `<persona-context>` 块里的正文，见下一条）、`output`（放进语音的 `<agent_output>` 数据块的 Agent 回答：删掉里面开、闭这个块的标签，`AgentOutput`）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
   截断这类整理数据的事（`clip`、`clipRunes`、`oneLine`）在调用方做，传进来的已经是要放进去的值。
 - **块里放别人的文字一律经 `ctx`**（#3754）：引用、转发的消息、收件箱条目正文、知识库摘要、快照的各节、记忆索引都可能来自别人（或由别人的话转写），正文里的结束标签会让块提前闭合，后面的话变成用户自己说的。`ctx`（`ContextBody`）先删一遍结束标签，删出来的再把 `<` 写成 `&lt;`，大小写不敏感，斜杠两边和 `>` 前允许空白（读取端都只认字面的 `</jarvis-context>` / `</persona-context>`，这是它们的超集）。
 - 包初始化时解析全部模板（`template.Must`，`missingkey=error`）：语法错误启动即崩，测试里先暴露；渲染出错（字段名写错）直接 panic，
@@ -110,12 +114,15 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
   模板里 `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}`：为空时和原来一字不差，原来的 golden 不变，en / ja 另有 `*.en.golden` / `*.ja.golden`
   （`assistant/claude_md.md`、`inbox/triage.md`、`inbox/group.md`、`inbox/draft.md`、`tools/session_title.md`；`docs/i18n.md`）。
   知识库的提示词（`kb/`）保持中文，见 `docs/i18n.md`「后续工作」。
+- 语音一轮的提示词（`voice/report.md`、`refused.md`、`delegated.md`、`spoken.md`、`tool_result.md`，#3501）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
+  模板里 `{{if eq .Lang "en"}}…{{else if eq .Lang "ja"}}…{{else}}…{{end}}`；golden 是 `voice/testdata/prompts/<名字>.<分支>.<zh-Hans|en|ja>.golden`
+  （`go test ./internal/voice -run Golden`，`UPDATE_GOLDEN=1` 更新）。快层要念给用户听，话用用户的语言写，模型才会用这种语言接着说。
 
 ## 改一个提示词
 
 1. 改 `server/internal/prompts/` 里的文件。
-2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node -run Golden`。
-3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
+2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`。
+3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
    `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
    （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test/test-server.sh ./internal/hub`），再把那两个文件拷回来。
 

@@ -205,7 +205,7 @@ func TestPluginWithoutAnUpstream(t *testing.T) {
 
 // The app's model is of an upstream no longer there: the default one, and a notice that is not fatal.
 func TestModelOfAGoneUpstreamFallsBack(t *testing.T) {
-	hub := &fakeHub{}
+	hub := newFakeHub(t)
 	up := newFakeUpstream(t, func(u *fakeUpstream, c *websocket.Conn, f map[string]any) {
 		if f["type"] == "session.start" {
 			u.send(c, map[string]any{"type": "session.started", "session": map[string]any{}})
@@ -223,5 +223,27 @@ func TestModelOfAGoneUpstreamFallsBack(t *testing.T) {
 	}
 	if start := up.next("session.start")["session"].(map[string]any); start["model"] != "m1" {
 		t.Fatalf("session.start %v", start)
+	}
+}
+
+// The fake dialect is for hub.json (or a hand-run plugin's config) only: it connects nowhere, has no url, and the
+// settings form cannot make one.
+func TestFakeDialectOnlyFromHubJSON(t *testing.T) {
+	c, err := Merge(Sources{HubJSON: json.RawMessage(`{"providers":[{"id":"dev","dialect":"fake"}]}`)})
+	if err != nil || len(c.Providers) != 1 || c.Providers[0].Dialect != DialectFake || c.Setup != "" {
+		t.Fatalf("%+v %v", c, err)
+	}
+	cat := &catalog{cfg: &c}
+	if p, model, err := cat.resolve(t.Context(), ""); err != nil || p.ID != "dev" || model != "fake" {
+		t.Fatalf("default model: %v %s %v", p, model, err)
+	}
+	if v, err := cat.voices(t.Context(), ""); err != nil || len(v.Voices) != 0 || v.Voices == nil {
+		t.Fatalf("voices: %+v %v", v, err)
+	}
+	if _, err := Merge(Sources{HubJSON: json.RawMessage(`{"providers":[{"id":"dev","dialect":"fake","url":"wss://x.example.com/v1/live"}]}`)}); err == nil {
+		t.Fatal("a fake upstream with a url")
+	}
+	if _, err := Merge(Sources{Form: json.RawMessage(`{"url":"wss://x.example.com/v1/live","dialect":"fake"}`), Key: "k"}); err == nil {
+		t.Fatal("the form made a fake upstream")
 	}
 }

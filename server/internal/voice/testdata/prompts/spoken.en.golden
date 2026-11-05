@@ -1,0 +1,10 @@
+code 12: (a code block of 12 lines, on the screen)
+code 1: (a code block of 1 line, on the screen)
+table 3: (a table of 3 rows, on the screen)
+link 0: (a link)
+image 0: (an image)
+path 0: the file runs.go
+line 42: line 42 of runs.go
+hash 0: (a hash)
+snippet 0: (a piece of code)
+omitted 0: (… the middle is left out; the whole answer is on the screen …)

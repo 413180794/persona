@@ -3,15 +3,16 @@ package voice
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"slices"
 	"strings"
-	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // The function tools the voice model may call (live dialect with tools): what Persona knows and the agents on the
-// user's machines, through the hub's API. Their descriptions are prompts (prompts/mcp/voice).
+// user's machines, through the hub's API. Their descriptions are prompts (prompts/mcp/voice), and so is what they
+// answer (prompts/voice/tool_result.md, prompts/voice/refused.md).
 var toolNames = []string{"search_knowledge", "list_agents", "send_to_agent", "ask_jarvis"}
 
 // toolLabels are what the app shows while a tool runs.
@@ -22,91 +23,83 @@ var toolLabels = map[string]string{
 	"ask_jarvis":       "交给 Persona",
 }
 
-func toolDecls() []toolDecl {
-	out := make([]toolDecl, 0, len(toolNames))
+// toolDecls declares the named tools, in toolNames' order.
+func toolDecls(names []string) []toolDecl {
+	out := make([]toolDecl, 0, len(names))
 	for _, n := range toolNames {
+		if !slices.Contains(names, n) {
+			continue
+		}
 		t := prompts.Tool(n)
 		out = append(out, toolDecl{Type: "function", Name: t.Name, Description: t.Description, Parameters: t.InputSchema})
 	}
 	return out
 }
 
-var stateNames = map[string]string{
-	"needs_you": "需要你处理",
-	"working":   "工作中",
-	"unread":    "完成未看",
-	"idle":      "空闲",
-	"offline":   "离线",
-}
-
 // runTool runs one of the hub tools (ask_jarvis is the conversation's: it answers later) and returns what the model
-// is told.
-func runTool(ctx context.Context, hub *hubClient, name, args string) (string, error) {
+// is told, in language l.
+func runTool(ctx context.Context, hub *hubClient, l i18n.Lang, name, args string) string {
+	res := prompts.VoiceToolResult{Lang: string(l), Tool: name}
 	var in struct {
 		Query     string `json:"query"`
 		MachineID string `json:"machine_id"`
 		SessionID string `json:"session_id"`
 		Text      string `json:"text"`
 	}
-	if strings.TrimSpace(args) != "" {
-		if err := json.Unmarshal([]byte(args), &in); err != nil {
-			return "", fmt.Errorf("参数不是 JSON：%w", err)
-		}
+	if strings.TrimSpace(args) != "" && json.Unmarshal([]byte(args), &in) != nil {
+		res.Code = "bad_args"
+		return prompts.RenderVoiceToolResult(res)
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	switch name {
 	case "search_knowledge":
+		if strings.TrimSpace(in.Query) == "" {
+			res.Code = "bad_args"
+			break
+		}
 		hits, err := hub.searchKnowledge(ctx, in.Query)
 		if err != nil {
-			return "", err
+			res.Code, res.Reason = "failed", hubReason(err)
+			break
 		}
-		if len(hits) == 0 {
-			return "没有找到。", nil
-		}
-		var b strings.Builder
 		for i, h := range hits {
 			if i == 20 {
 				break
 			}
-			fmt.Fprintf(&b, "%s: %s\n", h.Path, clipRunes(h.Line, 300))
+			res.Hits = append(res.Hits, prompts.VoiceHit{Path: h.Path, Line: clipRunes(oneLine(h.Line), 300)})
 		}
-		return strings.TrimRight(b.String(), "\n"), nil
 	case "list_agents":
 		agents, err := hub.agents(ctx)
 		if err != nil {
-			return "", err
+			res.Code, res.Reason = "failed", hubReason(err)
+			break
 		}
-		var b strings.Builder
 		for _, a := range agents {
 			if a.State == "offline" {
 				continue
 			}
-			title := a.Title
-			if title == "" {
-				title = a.Cwd
-			}
-			state := stateNames[a.State]
-			if state == "" {
-				state = a.State
-			}
-			fmt.Fprintf(&b, "- [%s/%s] %s · %s\n", a.MachineID, a.SessionID, title, state)
-			if last := strings.Join(strings.Fields(a.LastText), " "); last != "" {
-				fmt.Fprintf(&b, "  最后：%s\n", clipRunes(last, 240))
-			}
+			res.Agents = append(res.Agents, prompts.VoiceAgent{ID: a.MachineID + "/" + a.SessionID, Title: firstNonEmpty(a.Title, a.Cwd),
+				State: a.State, Last: clipRunes(oneLine(a.LastText), 240)})
 		}
-		if b.Len() == 0 {
-			return "没有在运行的 Agent。", nil
-		}
-		return strings.TrimRight(b.String(), "\n"), nil
 	case "send_to_agent":
+		task := clipRunes(in.Text, taskMost)
 		if in.MachineID == "" || in.SessionID == "" || strings.TrimSpace(in.Text) == "" {
-			return "", fmt.Errorf("machine_id、session_id、text 都要有")
+			res.Code = "bad_args"
+			break
 		}
-		if err := hub.send(ctx, in.MachineID, in.SessionID, in.Text); err != nil {
-			return "", err
+		// As long as a send to the main conversation may take (sendTimeout): an agent that is offline is resumed first.
+		sess, _ := hub.session(ctx, in.MachineID, in.SessionID)
+		sctx, cancel := context.WithTimeout(ctx, sendTimeout(sess))
+		err := hub.send(sctx, in.MachineID, in.SessionID, in.Text, voiceMessageID())
+		cancel()
+		if err != nil {
+			code, reason := sendFailure(maybeSent(err))
+			return prompts.RenderVoiceRefused(prompts.VoiceRefused{Lang: string(l), Code: code, Task: task, Reason: reason, Agent: true})
 		}
-		return "已发送。", nil
+	default:
+		res.Code = "unknown_tool"
 	}
-	return "", fmt.Errorf("没有这个工具：%s", name)
+	return prompts.RenderVoiceToolResult(res)
 }
+
+// oneLine is s with its runs of white space (newlines too) as one space.
+func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }

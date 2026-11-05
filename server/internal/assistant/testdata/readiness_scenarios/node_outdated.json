@@ -1,0 +1,143 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "code": "node_outdated",
+        "detail": "Update Persona Link on 小林的 MacBook so the main conversation can run there.",
+        "id": "computer",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "Persona on 小林的 MacBook is out of date"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "How do I connect a model?"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "code": "node_outdated",
+        "detail": "小林的 MacBook の Persona Link を更新すると、メインの会話をそこで実行できます。",
+        "id": "computer",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "小林的 MacBook の Persona が古すぎます"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "モデルはどう接続するの？"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "setup",
+    "next": "computer",
+    "ready": false,
+    "steps": [
+      {
+        "code": "node_outdated",
+        "detail": "更新 小林的 MacBook 上的 Persona Link 后，主对话才能在上面运行。",
+        "id": "computer",
+        "machine": "mbp",
+        "state": "problem",
+        "title": "小林的 MacBook 上的 Persona 版本太旧"
+      },
+      {
+        "id": "claude",
+        "state": "unknown"
+      },
+      {
+        "id": "model",
+        "state": "unknown"
+      },
+      {
+        "id": "first_message",
+        "state": "unknown"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "how_to_connect_model",
+        "local": true,
+        "title": "怎么接模型？"
+      }
+    ],
+    "version": 1
+  }
+}

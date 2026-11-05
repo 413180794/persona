@@ -1,0 +1,182 @@
+{
+  "en": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": null,
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "first_message",
+        "state": "ok"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "What can you do for me?"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "Show me the largest folders on this computer.",
+        "title": "Show the largest folders on this computer"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "What's on my schedule today?",
+        "title": "What's on today"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "Teach me how to connect my email to Persona.",
+        "title": "Teach me to connect email"
+      }
+    ],
+    "version": 1
+  },
+  "ja": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": null,
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "first_message",
+        "state": "ok"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "何を手伝ってくれるの？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "このコンピューターで一番大きいフォルダーをいくつか見せて。",
+        "title": "このコンピューターで一番大きいフォルダーを見る"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今日の予定は？",
+        "title": "今日の予定"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "メールを Persona に接続する方法を教えて。",
+        "title": "メールの接続方法を教えて"
+      }
+    ],
+    "version": 1
+  },
+  "zh-Hans": {
+    "checked_at": "",
+    "dismissed": false,
+    "launcher": "claude",
+    "machine": {
+      "id": "mbp",
+      "name": "小林的 MacBook"
+    },
+    "mode": "full",
+    "next": null,
+    "ready": true,
+    "steps": [
+      {
+        "id": "computer",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "claude",
+        "state": "ok",
+        "version": "2.1.320"
+      },
+      {
+        "id": "model",
+        "launcher": "claude",
+        "machine": "mbp",
+        "state": "ok"
+      },
+      {
+        "id": "first_message",
+        "state": "ok"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "what_can_you_do",
+        "local": true,
+        "title": "你能帮我做什么？"
+      },
+      {
+        "id": "largest_folders",
+        "prompt": "看看这台电脑上最大的几个文件夹。",
+        "title": "看看这台电脑上最大的几个文件夹"
+      },
+      {
+        "id": "today",
+        "needs": [
+          "phone_calendar"
+        ],
+        "prompt": "今天有什么安排？",
+        "title": "今天有什么安排"
+      },
+      {
+        "id": "connect_mail",
+        "prompt": "教我把邮箱接进 Persona。",
+        "title": "教我接邮箱"
+      }
+    ],
+    "version": 1
+  }
+}
