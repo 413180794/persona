@@ -160,17 +160,29 @@ function received(items: FeedItem[], plans?: Record<string, TaskPlan>) {
 const loading = new Set<string>();
 const todayAsked = new Map<string, string>();
 
+/** The most items the hub answers at once (docs/protocol.md: oldest first, at most 500): a full page has more after it. */
+const FEED_PAGE = 500;
+/** Pages read in one load at most. */
+const FEED_PAGES = 40;
+
 /** A conversation's feed: what came since the newest item it has. */
 export async function loadFeed(conversation: string) {
   if (loading.has(conversation)) return;
   loading.add(conversation);
   try {
-    const last = st.feeds[conversation]?.at(-1)?.at;
-    const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan> }>(
-      `/assistant/conversations/${enc(conversation)}/feed${last ? `?since=${encodeURIComponent(last)}` : ""}`,
-    );
-    if (!st.feeds[conversation]) set({ feeds: { ...st.feeds, [conversation]: [] } });
-    received(res.items ?? [], res.plans ?? undefined);
+    let last = st.feeds[conversation]?.at(-1)?.at;
+    for (let n = 0; n < FEED_PAGES; n++) {
+      const res = await api<{ items: FeedItem[]; plans?: Record<string, TaskPlan> }>(
+        `/assistant/conversations/${enc(conversation)}/feed${last ? `?since=${encodeURIComponent(last)}` : ""}`,
+      );
+      if (!st.feeds[conversation]) set({ feeds: { ...st.feeds, [conversation]: [] } });
+      const items = res.items ?? [];
+      received(items, res.plans ?? undefined);
+      const newest = items.at(-1)?.at;
+      // the next page starts after this one's newest; one that did not move on would come back the same
+      if (items.length < FEED_PAGE || !newest || (last && Date.parse(newest) <= Date.parse(last))) break;
+      last = newest;
+    }
   } catch {
     // an older hub has no feed: the conversation shows as before
   } finally {

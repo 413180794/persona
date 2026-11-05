@@ -6,6 +6,7 @@ import {
   displayLines,
   draftPlaceholder,
   getFeedState,
+  loadFeed,
   mergeInto,
   quickResult,
   receiptState,
@@ -270,5 +271,26 @@ describe("a receipt's outcome (#1516)", () => {
     expect(days).toHaveLength(3);
     const dates = days.map((d) => (d.kind === "day" ? d.date.getTime() : 0));
     expect(dates).toEqual([...dates].sort((a, b) => a - b));
+  });
+});
+
+describe("loading a conversation's feed (docs/protocol.md: since, oldest first, at most 500)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads every page, not just the oldest 500", async () => {
+    const t0 = Date.parse("2026-01-01T00:00:00Z");
+    const all: FeedItem[] = Array.from({ length: 1201 }, (_, i) => ({ id: `f${String(i).padStart(4, "0")}`, conversation: "c-pages", at: new Date(t0 + i * 1000).toISOString(), kind: "routed", ref: "r" }));
+    // the hub's page: after since, oldest first, at most 500
+    const fetcher = vi.fn(async (url: string) => {
+      const since = new URL(url, "http://hub").searchParams.get("since");
+      const items = all.filter((it) => !since || Date.parse(it.at) > Date.parse(since)).slice(0, 500);
+      return { ok: true, status: 200, text: async () => JSON.stringify({ items }) };
+    });
+    vi.stubGlobal("localStorage", { getItem: () => "jd_test" });
+    vi.stubGlobal("fetch", fetcher);
+    await loadFeed("c-pages");
+    const got = getFeedState().feeds["c-pages"] ?? [];
+    expect(got.length).toBe(1201);
+    expect(got.at(-1)?.id).toBe("f1200");
   });
 });
