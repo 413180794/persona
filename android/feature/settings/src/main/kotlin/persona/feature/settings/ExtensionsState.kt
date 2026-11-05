@@ -1,13 +1,23 @@
 package persona.feature.settings
 
 import android.content.res.Resources
+import persona.core.contracts.MachineComputer
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionConfigRejected
 import persona.core.contracts.api.ExtensionDetail
+import persona.core.contracts.api.ExtensionField
 import persona.core.contracts.api.ExtensionManagement
+import persona.core.contracts.api.ExtensionNodeState
+import persona.core.contracts.api.ExtensionPermission
+import persona.core.contracts.api.ExtensionUpgrade
+import persona.core.contracts.api.ExtensionUpgradeNote
 import persona.core.designsystem.Status
 import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -16,6 +26,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 // 设置 › 扩展 (docs/extensions.md「App：设置 › 扩展」): the words, the draft of an extension's configuration, and the two
 // pages' models. The pages are in ExtensionsScreen.kt.
@@ -111,6 +122,114 @@ internal object ExtensionText {
         secret.required == true -> res.getString(R.string.settings_ext_secret_required)
         else -> res.getString(R.string.settings_ext_not_set)
     }
+
+    /** The list's line: its state, and that a newer version waits for the user's yes (it asks for more). */
+    fun listLine(res: Resources, p: HubExtension): String =
+        if (p.upgrade?.state == "needs_permission") listOf(state(res, p), res.getString(R.string.settings_ext_upgrade_pending))
+            .joinToString(res.getString(R.string.settings_ext_dot_separator)) else state(res, p)
+
+    /** The 升级 group's line under a newer version: what happens to it (the web's upgradeDetail). */
+    fun upgradeDetail(res: Resources, u: ExtensionUpgrade): String = when (u.state) {
+        "needs_permission" -> morePermissions(res, u.addedPermissions.orEmpty())
+        "waiting_idle" -> res.getString(R.string.settings_ext_upgrade_waiting_idle)
+        "available" -> res.getString(R.string.settings_ext_upgrade_available)
+        "off" -> res.getString(R.string.settings_ext_upgrade_off)
+        "skipped" -> res.getString(R.string.settings_ext_upgrade_skipped, u.from)
+        "failed" -> u.detail?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_upgrade_failed_detail, it) } ?: res.getString(R.string.settings_ext_upgrade_failed)
+        "incompatible" -> u.detail?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_upgrade_incompatible_detail, it) } ?: res.getString(R.string.settings_ext_upgrade_incompatible)
+        else -> ""
+    }
+
+    /** When the line asks something of the user, what its button says (it opens the upgrade in the market); null otherwise. */
+    fun upgradeAction(res: Resources, u: ExtensionUpgrade): String? = when (u.state) {
+        "needs_permission" -> res.getString(R.string.settings_ext_upgrade_review)
+        "off", "skipped", "failed" -> res.getString(R.string.settings_ext_upgrade_go)
+        else -> null
+    }
+
+    /** Whether the line is drawn as needing attention. */
+    fun upgradeAttention(u: ExtensionUpgrade): Boolean = u.state == "needs_permission" || u.state == "skipped"
+
+    /** What a newer version asks for beyond what the user agreed to. */
+    fun morePermissions(res: Resources, added: List<ExtensionPermission>): String {
+        if (added.isEmpty()) return res.getString(R.string.settings_ext_upgrade_permissions_changed)
+        val list = added.joinToString(res.getString(R.string.settings_ext_list_separator)) { p ->
+            p.detail?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_upgrade_permission_detail, p.title, it) } ?: p.title
+        }
+        return res.getQuantityString(R.plurals.settings_ext_upgrade_more_permissions, added.size, added.size, list)
+    }
+
+    /** The last upgrade, when it is news of its own (asking and failing are the newer version's line). */
+    fun upgradeNote(res: Resources, n: ExtensionUpgradeNote): String? = when (n.kind) {
+        "upgraded" -> res.getString(R.string.settings_ext_upgraded_note, n.to, n.from)
+        "rolled_back" -> res.getString(R.string.settings_ext_rolled_back_note, n.to, n.from)
+        else -> null
+    }
+
+    /**
+     * A machine of a machine list (format machine): online or not; for the field picking where the program runs, how it
+     * is there; otherwise, for an extension that operates computers ([computers]), how Cua Driver is there once its node
+     * has said (the web's machineStatus).
+     */
+    fun machineStatus(
+        res: Resources, online: Boolean, program: ExtensionNodeState?, picksProgram: Boolean, on: Boolean,
+        computer: MachineComputer? = null, computers: Boolean = false,
+    ): String {
+        val presence = res.getString(if (online) R.string.settings_ext_machine_online else R.string.settings_ext_machine_offline)
+        val separator = res.getString(R.string.settings_ext_dot_separator)
+        if (picksProgram && on) return listOf(presence, programStatus(res, program)).joinToString(separator)
+        val cua = computer?.takeIf { computers && online && (it.ready || !it.note.isNullOrBlank()) }?.let { cuaStatus(res, it) }
+        return listOfNotNull(presence, cua).joinToString(separator)
+    }
+
+    /** How Cua Driver is on a Mac, the first thing missing first. */
+    fun cuaStatus(res: Resources, c: MachineComputer): String = res.getString(when {
+        !c.installed -> R.string.settings_ext_cua_missing
+        !c.daemon -> R.string.settings_ext_cua_not_running
+        c.accessibility == "missing" || c.screenRecording == "missing" -> R.string.settings_ext_cua_no_permission
+        c.desktop == "locked" -> R.string.settings_ext_screen_locked
+        c.ready -> R.string.settings_ext_cua_ready
+        else -> R.string.settings_ext_cua_installed
+    })
+
+    /** How an extension's program is on a machine switched on for it. */
+    fun programStatus(res: Resources, s: ExtensionNodeState?): String {
+        s ?: return res.getString(R.string.settings_ext_program_waiting)
+        val error = s.error?.takeIf { it.isNotBlank() }
+        return when (s.state) {
+            "running" -> s.version?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_ext_program_running_version, it) } ?: res.getString(R.string.settings_ext_program_running)
+            "starting" -> res.getString(R.string.settings_ext_program_starting)
+            "missing" -> res.getString(R.string.settings_ext_program_sending)
+            "offline" -> res.getString(R.string.settings_ext_program_offline)
+            "lease_expired" -> res.getString(R.string.settings_ext_program_lease_expired)
+            "outdated" -> res.getString(R.string.settings_ext_program_outdated)
+            "error" -> error?.let { res.getString(R.string.settings_ext_program_error_detail, it) } ?: res.getString(R.string.settings_ext_program_error)
+            else -> listOfNotNull(s.state, error).joinToString(res.getString(R.string.settings_ext_colon))
+        }
+    }
+}
+
+/** A machine as a machine list draws it: only what its row shows, so live metrics do not redraw the page. */
+internal data class ExtensionMachine(val id: String, val name: String, val os: String?, val online: Boolean, val computer: MachineComputer? = null)
+
+/** One switch of a machine list: a machine of the systems the field names, or a value naming no machine (still shown, to turn off). */
+internal data class MachineSwitch(val id: String, val name: String, val known: Boolean, val online: Boolean, val computer: MachineComputer? = null)
+
+internal object ExtensionMachines {
+    fun selected(state: ExtensionState, field: ExtensionField, path: List<String>): List<String> =
+        ((state.value(path) ?: field.fallback) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+
+    fun switches(field: ExtensionField, machines: List<ExtensionMachine>, selected: List<String>): List<MachineSwitch> {
+        val os = field.items?.os.orEmpty()
+        val shown = machines.filter { os.isEmpty() || it.os in os }
+        val unknown = selected.filter { id -> machines.none { it.id == id } }
+        return shown.map { MachineSwitch(it.id, it.name.ifBlank { it.id }, known = true, online = it.online, computer = it.computer) } +
+            unknown.map { MachineSwitch(it, it, known = false, online = false) }
+    }
+
+    /** The list after turning one machine on or off; empty is "not set". */
+    fun toggled(selected: List<String>, id: String, on: Boolean): JsonArray? =
+        (selected.filter { it != id } + listOfNotNull(id.takeIf { on })).takeIf { it.isNotEmpty() }?.let { JsonArray(it.map(::JsonPrimitive)) }
 }
 
 /** The configuration being edited, by dotted path ("proxy.host"); an empty group goes with its last value. */
@@ -163,6 +282,19 @@ internal data class ExtensionListState(
     val loading: Boolean = false,
     val error: String? = null,
 )
+
+/**
+ * An extension's page changed something the list shows (removed it, switched it, its auto-upgrade): in a wide window the
+ * list stays beside the page, so it reloads on this instead of waiting for a pull. By hub connection, so another hub's
+ * page does not reload this one.
+ */
+internal object ExtensionChanges {
+    private val changes = MutableSharedFlow<ExtensionManagement>(extraBufferCapacity = 8)
+
+    fun changed(api: ExtensionManagement) { changes.tryEmit(api) }
+
+    fun of(api: ExtensionManagement): Flow<Unit> = changes.filter { it === api }.map { }
+}
 
 /** 设置 › 扩展: the list. */
 internal class ExtensionListModel(private val api: ExtensionManagement, private val res: Resources) {
@@ -244,7 +376,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
         if (!state.value.canSave) return false
         mutable.update { it.copy(saving = true, fieldErrors = emptyMap(), error = null) }
         return try {
-            run(saved = true) { api.setConfig(id, ExtensionDraft.compact(state.value.draft)) }
+            run(saved = true) { api.setConfig(id, ExtensionDraft.compact(state.value.draft)) }.also { if (it) ExtensionChanges.changed(api) }
         } finally { mutable.update { it.copy(saving = false) } }
     }
 
@@ -256,17 +388,60 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
 
     suspend fun clearSecret(name: String): Boolean = busy { run { api.clearSecret(id, name) } }
 
+    /** A market extension's own auto-upgrade switch (docs/extensions.md「自动升级」). */
+    suspend fun setAutoUpgrade(on: Boolean): Boolean = busy {
+        run(failed = if (on) R.string.settings_ext_auto_upgrade_on_failed else R.string.settings_ext_auto_upgrade_off_failed) { api.setAutoUpgrade(id, on) }
+    }
+
+    /**
+     * A switch that takes effect at once (a machine of a machine list): the saved configuration with this one value
+     * changed goes to the hub; any other edit stays in the draft, unsaved. Refused, the switch goes back.
+     */
+    suspend fun saveNow(path: List<String>, value: JsonElement?): Boolean {
+        val saved = state.value.detail?.config ?: return false
+        if (state.value.busy || state.value.saving) return false
+        mutable.update { it.copy(busy = true, error = null, draft = ExtensionDraft.set(it.draft, path, value)) }
+        return try {
+            val detail = api.setConfig(id, ExtensionDraft.compact(ExtensionDraft.set(saved, path, value)))
+            mutable.update { it.copy(detail = detail, draft = ExtensionDraft.set(it.draft, path, ExtensionDraft.value(detail.config, path))) }
+            ExtensionChanges.changed(api)
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            val reason = (error as? ExtensionConfigRejected)?.message ?: failureReason(error)
+            mutable.update { it.copy(draft = ExtensionDraft.set(it.draft, path, ExtensionDraft.value(saved, path)),
+                error = res.getString(R.string.settings_ext_not_saved, reason)) }
+            false
+        } finally { mutable.update { it.copy(busy = false) } }
+    }
+
+    /** Removes an extension installed from a market; its data folder stays when [keepData]. */
+    suspend fun uninstall(keepData: Boolean): Boolean {
+        if (state.value.busy || state.value.saving) return false
+        mutable.update { it.copy(busy = true, error = null) }
+        return try {
+            api.uninstall(id, keepData)
+            ExtensionChanges.changed(api)
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(error = res.getString(R.string.settings_ext_not_removed, failureReason(error))) }
+            false
+        } finally { mutable.update { it.copy(busy = false) } }
+    }
+
     private suspend fun busy(block: suspend () -> Boolean): Boolean {
         if (state.value.busy || state.value.saving) return false
         mutable.update { it.copy(busy = true) }
-        return try { block() } finally { mutable.update { it.copy(busy = false) } }
+        return try { block().also { if (it) ExtensionChanges.changed(api) } } finally { mutable.update { it.copy(busy = false) } }
     }
 
     /**
      * Puts the hub's answer in. The draft follows it after a save, or while it holds no edit; an edit the user has
-     * not saved survives switching the extension or setting a secret.
+     * not saved survives switching the extension or setting a secret. [failed] words a failure of its own (one argument,
+     * the reason) in place of the generic one.
      */
-    private suspend fun run(saved: Boolean = false, call: suspend () -> ExtensionDetail): Boolean = try {
+    private suspend fun run(saved: Boolean = false, failed: Int? = null, call: suspend () -> ExtensionDetail): Boolean = try {
         val detail = call()
         mutable.update {
             val follow = saved || !it.dirty
@@ -290,7 +465,7 @@ internal class ExtensionModel(private val api: ExtensionManagement, private val 
         }
         false
     } catch (error: Exception) {
-        mutable.update { it.copy(error = res.getString(if (it.detail == null) R.string.settings_ext_load_failed else R.string.settings_ext_not_changed, failureReason(error))) }
+        mutable.update { it.copy(error = res.getString(failed ?: if (it.detail == null) R.string.settings_ext_load_failed else R.string.settings_ext_not_changed, failureReason(error))) }
         false
     }
 }

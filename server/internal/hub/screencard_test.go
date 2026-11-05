@@ -196,3 +196,40 @@ func TestScreenCardGoneWhenTheAgentMovesOnIsRecorded(t *testing.T) {
 		t.Fatalf("history says %q, want cancelled", status)
 	}
 }
+
+// #2872: Claude's answer above a notice is often a numbered list. Its numbers are the conversation's words, not the
+// notice's options: the card for that screen must carry no dialog (it would offer the prose as buttons, and answering
+// one types a digit into whatever holds the terminal's keyboard), and it stays a card upgradeScreenCard can improve.
+func TestScreenCardIgnoresANumberedAnswer(t *testing.T) {
+	const noticeUnderNumberedAnswer = `❯ fix the flaky test
+
+⏺ I'll do three things:
+  1. Fix the race in the watcher
+  2. Add a regression test
+  3. Push the branch
+
+✻ Cooked for 12s
+────────────────────────────────────
+ We're changing auto mode to no longer charge for classifier requests in Claude Code.
+
+ Enter to continue · Esc to cancel
+`
+	h := newTestHub(t)
+	m, f := newCodexMachine(t, h)
+	f.screen = noticeUnderNumberedAnswer
+	blockSession(h, m, proto.Session{SessionID: "s1", Agent: "claude"})
+	got, _ := waitCards(h, 1, 2*time.Second)
+	if _, ok := got["scr_"+m.cfg.ID+"_s1"]; !ok {
+		t.Fatalf("no card for the notice: %v", got)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, p := range h.interactions {
+		if p.ix.SessionID != "s1" {
+			continue
+		}
+		if p.ix.Dialog != nil {
+			t.Fatalf("the answer's numbered list became the card's options: %q %+v", p.ix.Dialog.Question, p.ix.Dialog.Options)
+		}
+	}
+}

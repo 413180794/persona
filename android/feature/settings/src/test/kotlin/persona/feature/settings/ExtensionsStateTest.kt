@@ -5,7 +5,12 @@ import persona.core.designsystem.Status
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
+import persona.core.contracts.MachineComputer
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -20,6 +25,8 @@ private class FakeExtensions(var detail: ExtensionDetail) : ExtensionApiStub() {
     var list: List<HubExtension> = listOf(detail.extension)
     var refuse: ExtensionConfigRejected? = null
     var fail: Exception? = null
+    val autoUpgrades = mutableListOf<Boolean>()
+    val uninstalls = mutableListOf<Boolean>()
 
     private fun answer(): ExtensionDetail { fail?.let { throw it }; return detail }
     override suspend fun extensions() = fail?.let { throw it } ?: list
@@ -39,6 +46,13 @@ private class FakeExtensions(var detail: ExtensionDetail) : ExtensionApiStub() {
         detail = detail.copy(secrets = detail.secrets.map { if (it.name == name) it.copy(set = true) else it })
         return answer()
     }
+    override suspend fun setAutoUpgrade(id: String, auto: Boolean): ExtensionDetail {
+        autoUpgrades += auto
+        fail?.let { throw it }
+        detail = detail.copy(extension = detail.extension.copy(autoUpgrade = auto))
+        return detail
+    }
+    override suspend fun uninstall(id: String, keepData: Boolean) { uninstalls += keepData; fail?.let { throw it } }
     override suspend fun clearSecret(id: String, name: String): ExtensionDetail {
         secrets += name to null
         detail = detail.copy(secrets = detail.secrets.map { if (it.name == name) it.copy(set = false) else it })
@@ -232,5 +246,126 @@ class ExtensionsStateTest {
         val old = ExtensionListModel(object : ExtensionApiStub() { override suspend fun extensions() = listOf(notes.extension) }, res)
         old.load()
         assertFalse(old.state.value.markets)
+    }
+
+    private val machinesField = ExtensionField("machines", "array", title = "在哪些 Mac 上用",
+        items = ExtensionItems("string", format = "machine", os = listOf("darwin")), confirm = "扩展开着时这台 Mac 不会自动锁屏。")
+    private val cua = ExtensionDetail(
+        HubExtension("cua", "操控电脑", "computer", "running", enabled = true,
+            nodes = listOf(ExtensionNodeState("mac-a", version = "0.3.0", state = "running"))),
+        form = listOf(machinesField, ExtensionField("note", "string")), config = buildJsonObject { putJsonArray("machines") { add("mac-a"); add("gone") } },
+        nodeMachines = "machines", origin = "market:m1/cua",
+    )
+
+    @Test fun upgradeWords() {
+        val u = ExtensionUpgrade("example-ui", market = "m1", from = "1.0.0", to = "1.2.0", state = "needs_permission",
+            addedPermissions = listOf(ExtensionPermission("net", "访问更多网络", "api.example.com")))
+        assertEquals("要多 1 项权限：访问更多网络（api.example.com）", ExtensionText.upgradeDetail(res, u))
+        assertEquals("去确认", ExtensionText.upgradeAction(res, u))
+        assertTrue(ExtensionText.upgradeAttention(u))
+        assertEquals("去升级", ExtensionText.upgradeAction(res, u.copy(state = "failed")))
+        assertEquals("没装上：校验不过", ExtensionText.upgradeDetail(res, u.copy(state = "failed", detail = "校验不过")))
+        assertNull(ExtensionText.upgradeAction(res, u.copy(state = "waiting_idle")))
+        assertEquals("扩展空闲时自动升级", ExtensionText.upgradeDetail(res, u.copy(state = "waiting_idle")))
+        assertEquals("上次升级后起不来，已回到 1.0.0，不再自动升级到这个版本", ExtensionText.upgradeDetail(res, u.copy(state = "skipped")))
+        assertEquals("已自动升级到 1.2.0（原来是 1.0.0）", ExtensionText.upgradeNote(res, ExtensionUpgradeNote("upgraded", "1.0.0", "1.2.0")))
+        assertEquals("1.1.0 起不来，已回到 1.0.0", ExtensionText.upgradeNote(res, ExtensionUpgradeNote("rolled_back", "1.0.0", "1.1.0")))
+        assertNull(ExtensionText.upgradeNote(res, ExtensionUpgradeNote("needs_permission", "1.0.0", "1.2.0")))
+        val ext = HubExtension("example-ui", "Example UI", "ui", "running", upgrade = u)
+        assertEquals(ExtensionText.state(res, ext) + " · 新版本待确认", ExtensionText.listLine(res, ext))
+        assertEquals(ExtensionText.state(res, ext), ExtensionText.listLine(res, ext.copy(upgrade = u.copy(state = "available"))))
+    }
+
+    @Test fun aMachineListIsASwitchPerMachineSavedAtOnce() = runBlocking {
+        val api = FakeExtensions(cua)
+        val model = ExtensionModel(api, "cua", res)
+        model.load()
+        val machines = listOf(ExtensionMachine("mac-a", "工作 Mac", "darwin", true), ExtensionMachine("mac-b", "家里 Mac", "darwin", false),
+            ExtensionMachine("box", "Linux 机器", "linux", true))
+        val selected = ExtensionMachines.selected(model.state.value, machinesField, listOf("machines"))
+        val rows = ExtensionMachines.switches(machinesField, machines, selected)
+        // Only Macs, and a value naming no machine still shows (to turn off).
+        assertEquals(listOf("mac-a", "mac-b", "gone"), rows.map { it.id })
+        assertFalse(rows.last().known)
+        assertEquals("在线 · 程序在运行 · 0.3.0", ExtensionText.machineStatus(res, true, cua.extension.nodes!!.first(), picksProgram = true, on = true))
+        assertEquals("离线", ExtensionText.machineStatus(res, false, null, picksProgram = true, on = false))
+        assertEquals("在线 · 等 hub 把程序发过去", ExtensionText.machineStatus(res, true, null, picksProgram = true, on = true))
+
+        // An unsaved edit elsewhere stays a draft; the switch goes to the hub alone.
+        model.edit(listOf("note"), JsonPrimitive("草稿"))
+        assertTrue(model.saveNow(listOf("machines"), ExtensionMachines.toggled(selected, "mac-b", true)))
+        assertEquals(buildJsonObject { putJsonArray("machines") { add("mac-a"); add("gone"); add("mac-b") } }, api.configs.last())
+        assertEquals(JsonPrimitive("草稿"), model.state.value.value(listOf("note")))
+        assertTrue(model.state.value.dirty)
+
+        // Refused: the switch goes back and says why.
+        api.refuse = ExtensionConfigRejected("machines", "没有这台机器")
+        assertFalse(model.saveNow(listOf("machines"), null))
+        assertEquals(JsonArray(listOf("mac-a", "gone", "mac-b").map(::JsonPrimitive)), model.state.value.value(listOf("machines")))
+        assertEquals("没有保存：没有这台机器", model.state.value.error)
+        // Turning the last one off is "not set".
+        assertNull(ExtensionMachines.toggled(listOf("mac-a"), "mac-a", false))
+    }
+
+    @Test fun anExtensionOperatingComputersSaysHowCuaDriverIsOnEachMac() {
+        val ready = MachineComputer(enabled = true, installed = true, daemon = true, accessibility = "granted", screenRecording = "granted", desktop = "active", ready = true)
+        fun status(c: MachineComputer?, online: Boolean = true, computers: Boolean = true) =
+            ExtensionText.machineStatus(res, online, null, picksProgram = false, on = false, computer = c, computers = computers)
+        assertEquals("在线 · Cua 可以用", status(ready))
+        assertEquals("在线 · Cua 没装", status(MachineComputer(enabled = true, note = "装 Cua Driver")))
+        assertEquals("在线 · Cua 没在运行", status(ready.copy(daemon = false, ready = false, note = "打开 CuaDriver")))
+        assertEquals("在线 · Cua 缺权限", status(ready.copy(screenRecording = "missing", ready = false, note = "给录屏权限")))
+        assertEquals("在线 · 锁屏了", status(ready.copy(desktop = "locked", ready = false, note = "解锁")))
+        assertEquals("在线 · Cua 已装", status(ready.copy(desktop = "away", ready = false, note = "登录")))
+        // Never asked (no verdict, no note), offline, or an extension that does not operate computers: presence only.
+        assertEquals("在线", status(MachineComputer(enabled = true)))
+        assertEquals("离线", status(ready, online = false))
+        assertEquals("在线", status(ready, computers = false))
+        // The machine's computer reaches its switch.
+        val rows = ExtensionMachines.switches(machinesField, listOf(ExtensionMachine("mac-a", "工作 Mac", "darwin", true, ready)), emptyList())
+        assertEquals(ready, rows.single().computer)
+    }
+
+    @Test fun aFailedAutoUpgradeSwitchSaysWhichWay() = runBlocking {
+        val api = FakeExtensions(cua.copy(extension = cua.extension.copy(autoUpgrade = true)))
+        val model = ExtensionModel(api, "cua", res)
+        model.load()
+        api.fail = HubFailure(HubError.Server, "hub 忙", status = 503)
+        assertFalse(model.setAutoUpgrade(false))
+        assertEquals("没有关掉自动升级：hub 忙", model.state.value.error)
+        assertFalse(model.setAutoUpgrade(true))
+        assertEquals("没有打开自动升级：hub 忙", model.state.value.error)
+    }
+
+    @Test fun theListFollowsWhatItsPageChanged() = runBlocking {
+        val api = FakeExtensions(cua)
+        val list = ExtensionListModel(api, res)
+        list.load()
+        assertEquals(listOf("cua"), list.state.value.extensions?.map { it.id })
+        val follow = launch(start = CoroutineStart.UNDISPATCHED) { ExtensionChanges.of(api).collect { list.load() } }
+        // Another hub's page changing something does not reload this list.
+        ExtensionChanges.changed(FakeExtensions(cua))
+        val model = ExtensionModel(api, "cua", res)
+        model.load()
+        api.list = emptyList()
+        assertTrue(model.uninstall(keepData = true))
+        withTimeout(5_000) { while (list.state.value.extensions?.isNotEmpty() == true) yield() }
+        assertEquals(emptyList<HubExtension>(), list.state.value.extensions)
+        follow.cancel()
+    }
+
+    @Test fun autoUpgradeAndUninstallFromTheExtensionsPage() = runBlocking {
+        val api = FakeExtensions(cua.copy(extension = cua.extension.copy(autoUpgrade = true)))
+        val model = ExtensionModel(api, "cua", res)
+        model.load()
+        assertTrue(model.state.value.detail!!.fromMarket)
+        assertTrue(model.setAutoUpgrade(false))
+        assertEquals(listOf(false), api.autoUpgrades)
+        assertEquals(false, model.state.value.detail!!.extension.autoUpgrade)
+        assertTrue(model.uninstall(keepData = true))
+        assertEquals(listOf(true), api.uninstalls)
+        api.fail = HubFailure(HubError.Server, "还有扩展依赖它", status = 409)
+        assertFalse(model.uninstall(keepData = false))
+        assertEquals("没有卸载：还有扩展依赖它", model.state.value.error)
     }
 }

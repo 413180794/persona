@@ -255,4 +255,65 @@
     <string name="settings_ext_token_remove">去掉 token</string>
     <string name="settings_ext_dep_not_ready">依赖未就绪</string>
     <string name="settings_ext_cannot_confirm_not_ready">还有依赖未就绪，暂时不能安装；先完成依赖扩展的设置，确认其依赖也已就绪，再重新预览。</string>
+    <!-- 自动升级（docs/extensions.md「自动升级」） -->
+    <string name="settings_ext_upgrade_title">升级</string>
+    <string name="settings_ext_upgrade_footer">扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。</string>
+    <string name="settings_ext_auto_upgrade">自动升级</string>
+    <string name="settings_ext_new_version">有新版本 %1$s</string>
+    <string name="settings_ext_auto_upgrade_on">已打开自动升级</string>
+    <string name="settings_ext_auto_upgrade_off">已关掉自动升级</string>
+    <string name="settings_ext_auto_upgrade_on_failed">没有打开自动升级：%1$s</string>
+    <string name="settings_ext_auto_upgrade_off_failed">没有关掉自动升级：%1$s</string>
+    <string name="settings_ext_upgrade_waiting_idle">扩展空闲时自动升级</string>
+    <string name="settings_ext_upgrade_available">稍后自动升级</string>
+    <string name="settings_ext_upgrade_off">自动升级关着</string>
+    <string name="settings_ext_upgrade_skipped">上次升级后起不来，已回到 %1$s，不再自动升级到这个版本</string>
+    <string name="settings_ext_upgrade_failed">没装上</string>
+    <string name="settings_ext_upgrade_failed_detail">没装上：%1$s</string>
+    <string name="settings_ext_upgrade_incompatible">这台 hub 装不了</string>
+    <string name="settings_ext_upgrade_incompatible_detail">这台 hub 装不了：%1$s</string>
+    <string name="settings_ext_upgrade_review">去确认</string>
+    <string name="settings_ext_upgrade_go">去升级</string>
+    <string name="settings_ext_upgrade_permissions_changed">要的权限有变化</string>
+    <plurals name="settings_ext_upgrade_more_permissions">
+        <item quantity="other">要多 %1$d 项权限：%2$s</item>
+    </plurals>
+    <string name="settings_ext_upgrade_permission_detail">%1$s（%2$s）</string>
+    <string name="settings_ext_upgraded_note">已自动升级到 %1$s（原来是 %2$s）</string>
+    <string name="settings_ext_rolled_back_note">%1$s 起不来，已回到 %2$s</string>
+    <string name="settings_ext_upgrade_pending">新版本待确认</string>
+    <string name="settings_ext_auto_upgrades">自动升级扩展</string>
+    <string name="settings_ext_auto_upgrades_on">已打开扩展自动升级</string>
+    <string name="settings_ext_auto_upgrades_off">已关掉扩展自动升级</string>
+    <string name="settings_ext_auto_upgrades_failed">没有改：%1$s</string>
+    <string name="settings_ext_auto_upgrades_footer_on">从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。</string>
+    <string name="settings_ext_auto_upgrades_footer_off">关着：有新版本时只在扩展的页面里提示，你自己去升级。</string>
+    <!-- 在扩展自己的页面里卸载 -->
+    <string name="settings_ext_market_installed_note">这个扩展是从扩展市场装的：卸载后可以在市场里重新安装。</string>
+    <string name="settings_ext_keep_data_hint">以后重装能接着用。</string>
+    <!-- 机器列表（format machine） -->
+    <string name="settings_ext_machine_online">在线</string>
+    <string name="settings_ext_machine_offline">离线</string>
+    <string name="settings_ext_cua_missing">Cua 没装</string>
+    <string name="settings_ext_cua_not_running">Cua 没在运行</string>
+    <string name="settings_ext_cua_no_permission">Cua 缺权限</string>
+    <string name="settings_ext_screen_locked">锁屏了</string>
+    <string name="settings_ext_cua_ready">Cua 可以用</string>
+    <string name="settings_ext_cua_installed">Cua 已装</string>
+    <string name="settings_ext_machine_not_found">找不到这台机器</string>
+    <string name="settings_ext_no_mac">这个 hub 上还没有 Mac。</string>
+    <string name="settings_ext_no_machine">这个 hub 上还没有机器。</string>
+    <string name="settings_ext_turn_on_title">打开「%1$s」？</string>
+    <string name="settings_ext_turn_on">打开</string>
+    <string name="settings_ext_machines_now">这些开关即时生效。</string>
+    <string name="settings_ext_program_waiting">等 hub 把程序发过去</string>
+    <string name="settings_ext_program_running">程序在运行</string>
+    <string name="settings_ext_program_running_version">程序在运行 · %1$s</string>
+    <string name="settings_ext_program_starting">程序正在启动</string>
+    <string name="settings_ext_program_sending">正在把程序发过去</string>
+    <string name="settings_ext_program_offline">离线：连上后会启动</string>
+    <string name="settings_ext_program_lease_expired">和 hub 断开太久，程序已停，连上后会再启动</string>
+    <string name="settings_ext_program_outdated">这台电脑上的 personad 太旧，更新后才能运行</string>
+    <string name="settings_ext_program_error">程序出错</string>
+    <string name="settings_ext_program_error_detail">程序出错：%1$s</string>
 </resources>

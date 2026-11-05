@@ -110,9 +110,14 @@ type row struct {
 	cursor bool // the ❯ is on it
 }
 
+// numbered reads the dialog's numbered options. Only rows from dialogTop down count: a numbered list in the agent's
+// answer above the dialog (「I'll do three things: 1. … 2. …」) is the conversation, and its numbers pick nothing.
+// Nothing below dialogTop is the conversation — dialogTop stops under the last conversation row it finds, so a
+// finished turn under the list (「✻ Cooked for 12s」) is already outside the window read here.
 func numbered(lines []string) *Dialog {
 	var rows []row
-	for i, l := range lines {
+	for i := dialogTop(lines); i < len(lines); i++ {
+		l := lines[i]
 		m := numberedRE.FindStringSubmatchIndex(l)
 		if m == nil {
 			continue

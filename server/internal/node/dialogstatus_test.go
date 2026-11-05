@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,5 +120,24 @@ func TestDismissNoticePressesEnterOnce(t *testing.T) {
 	}
 	if len(f.keys) != 1 {
 		t.Fatalf("pressed %v", f.keys)
+	}
+}
+
+// #2872: the answer Claude leaves above a notice is often a numbered list (「I'll do three things: 1. … 2. …」). Its
+// numbers are the conversation's, not the notice's options: dismiss_notice still closes the notice with one Enter and
+// the send goes on instead of being refused with notice:false.
+func TestDismissNoticeUnderANumberedAnswer(t *testing.T) {
+	old := noticeSettle
+	noticeSettle = 0
+	t.Cleanup(func() { noticeSettle = old })
+	notice := strings.Replace(screenFixture(t, "claude-2.1.309-auto-mode-notice-120.txt"), "⏺ All 48 tests pass.",
+		"⏺ I'll do three things:\n  1. Fix the race in the watcher\n  2. Add a regression test\n  3. Push the branch", 1)
+	f := &fakePane{screens: []string{notice, screenFixture(t, "claude-2.1.312-empty-162.ansi")}}
+	n := &Node{hosts: herdrHosts(f.serve(t))}
+	if err := n.checkPaneFor(context.Background(), "w1:p1", "claude", sendOpts{DismissNotice: true}); err != nil {
+		t.Fatalf("the notice under a numbered answer was not closed: %v", err)
+	}
+	if len(f.keys) != 1 || len(f.keys[0]) != 1 || f.keys[0][0] != "enter" {
+		t.Fatalf("keys %v", f.keys)
 	}
 }

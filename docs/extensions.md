@@ -1561,7 +1561,7 @@ View、组件、动作、回答、位置和上下文都用 schema 生成的类�
   #1330 加上声明式 UI（`settings/ExtensionView.tsx`、`lib/extension-ui.ts`：扩展详情的「页面」、启动器详情里的一节）和扩展市场（`settings/ExtensionMarket.tsx`、`lib/extension-market.ts`：目录、详情、管理市场）。
   #1699 加上自动升级（「自动升级」）：市场扩展的详情里一组「升级」（开关、新版本那一行和「去确认」、上次的结果，`UpgradeGroup`），管理市场最上面是全部扩展的总开关，和 App 同样的文字（`lib/extensions.ts` 的 `upgradeDetail` 等）。
   #1681 加上 `inbox_item`（`inbox/InboxExtensionBody.tsx`：收件箱详情的正文；列表来自 `lib/extension-slots.ts` 的缓存），见 `docs/web.md`「设置」的「UI 插槽」。
-- Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「扩展（设置 › 扩展）」；扩展画的界面（扩展页面、启动器页上的一节）和扩展市场（#1329）见同一节下的「扩展画的界面和扩展市场」。
+- Android（#1206）同样的功能，入口在设置首页的「扩展」一节，代码和截图方法见 [android.md](android.md)「扩展（设置 › 扩展）」；扩展画的界面（扩展页面、启动器页上的一节）和扩展市场（#1329）见同一节下的「扩展画的界面和扩展市场」。自动升级、按机器的开关、详情页卸载（「保留数据」默认勾上）见同一节的「自动升级、按机器的开关和卸载」（#3049）。
 
 ## 管理界面：扩展
 

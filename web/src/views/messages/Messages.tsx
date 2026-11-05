@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { shortTime } from "../../lib/inbox";
 import { accountTitle, larkAccounts, useLarkAccounts, type LarkAccountsState } from "../../lib/lark-accounts";
+import { HIDDEN_DISPLAY, summaryText, useLarkDisplayState, type LarkMessageDisplay } from "../../lib/lark-display";
 import {
   arrangeConversations, conversationPreview, filterConversations, larkChatsFor, unreadBadge, useLarkChats, useLarkHome, type LarkChatsStore,
   type LarkConversation,
@@ -144,6 +145,8 @@ function ChatHeader({ chat, account }: { chat?: LarkConversation; account?: stri
 }
 
 function ChatList({ selected, store: larkChats, accounts }: { selected?: string; store: LarkChatsStore; accounts: LarkAccountsState }) {
+  // [removed] words in a row read decoded while the account's switch is on (lib/lark-display.ts).
+  const display = useLarkDisplayState(accounts.request).snapshot ?? HIDDEN_DISPLAY;
   const s = useLarkChats(larkChats);
   const [query, setQuery] = useState("");
   const end = useRef<HTMLDivElement>(null);
@@ -211,7 +214,7 @@ function ChatList({ selected, store: larkChats, accounts }: { selected?: string;
 
         {shown.length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5">
-            {shown.map((c) => <ChatRow key={c.id} c={c} selected={c.id === selected} />)}
+            {shown.map((c) => <ChatRow key={c.id} c={c} selected={c.id === selected} display={display} />)}
           </div>
         )}
         {!query && s.moreProblem && (
@@ -262,10 +265,10 @@ function PinnedShelf({ chats, selected }: { chats: LarkConversation[]; selected?
   );
 }
 
-function ChatRow({ c, selected }: { c: LarkConversation; selected: boolean }) {
+function ChatRow({ c, selected, display }: { c: LarkConversation; selected: boolean; display: LarkMessageDisplay }) {
   const to = { name: "messages", id: c.id } as const;
   const b = unreadBadge(c);
-  const preview = conversationPreview(c);
+  const preview = conversationPreview({ ...c, preview: c.preview && summaryText(display, c.preview) });
   return (
     <a
       data-chat={c.id}

@@ -27,9 +27,52 @@ data class HubExtension(
     @SerialName("needs_setup") val needsSetup: List<String>? = null,
     val warnings: List<String>? = null,
     val sandbox: ExtensionSandbox? = null,
+    /**
+     * An extension from a market on a hub with auto-upgrades (docs/extensions.md「自动升级」): its own switch (null: not
+     * from a market, or an older hub), its newer version and what happened last with an upgrade.
+     */
+    @SerialName("auto_upgrade") val autoUpgrade: Boolean? = null,
+    val upgrade: ExtensionUpgrade? = null,
+    @SerialName("upgrade_note") val upgradeNote: ExtensionUpgradeNote? = null,
+    /** An extension with a program on computers: how that program is on each machine it is switched on for. */
+    val nodes: List<ExtensionNodeState>? = null,
 ) {
     val isRunningVoice: Boolean get() = kind == "voice" && status == "running"
 }
+
+/** A market extension's newer version and where it stands (docs/extensions.md「自动升级」). */
+@Serializable
+data class ExtensionUpgrade(
+    val id: String = "",
+    val name: String? = null,
+    val market: String = "",
+    val from: String = "",
+    val to: String = "",
+    /** `available | waiting_idle | needs_permission | off | skipped | failed | incompatible`. */
+    val state: String = "",
+    @SerialName("added_permissions") val addedPermissions: List<ExtensionPermission>? = null,
+    val detail: String? = null,
+)
+
+/** What happened last with an extension's upgrade: `upgraded | rolled_back | needs_permission | failed`. */
+@Serializable
+data class ExtensionUpgradeNote(
+    val kind: String = "",
+    val from: String = "",
+    val to: String = "",
+    val detail: String? = null,
+    val at: String? = null,
+)
+
+/** An extension's program on one machine (docs/extensions.md「在电脑上运行的程序」). */
+@Serializable
+data class ExtensionNodeState(
+    @SerialName("machine_id") val machineId: String = "",
+    val version: String? = null,
+    /** `running | starting | stopped | error | missing | lease_expired | offline | outdated`. */
+    val state: String = "",
+    val error: String? = null,
+)
 
 /** A voice (音色) a voice extension offers for one model (`GET /api/v1/extensions/{id}/voices?model=`). */
 @Serializable

@@ -189,7 +189,9 @@ private fun SettingsContent(
             ?: ModelConfigurationPage(services.models.takeUnless { services.demo }, back,
                 onPurpose = { id -> onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute(id)) ?: run { purpose = id } },
                 providers = services.providers.takeUnless { services.demo })
-        "plugins" -> extension?.let { id -> ExtensionPage(services.extensions.takeUnless { services.demo }, id, onBack = { extension = null }) }
+        "plugins" -> extension?.let { id -> ExtensionPage(services.extensions.takeUnless { services.demo }, id, onBack = { extension = null },
+                machines = services.sessions.machines,
+                onUpgrade = onNavigate?.let { navigate -> { market, ext -> navigate(persona.core.navigation.ExtensionCatalogRoute(market, ext)) } }) }
             ?: ExtensionsPage(services.extensions.takeUnless { services.demo }, back,
                 onExtension = { id -> onNavigate?.invoke(persona.core.navigation.ExtensionRoute(id)) ?: run { extension = id } },
                 onMarket = onNavigate?.let { navigate -> { navigate(persona.core.navigation.ExtensionMarketRoute) } })

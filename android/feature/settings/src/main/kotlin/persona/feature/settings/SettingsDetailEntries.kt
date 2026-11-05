@@ -37,7 +37,8 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     entry<ExtensionRoute> { route ->
         ExtensionPage(services.extensions.takeUnless { demo }, route.extensionId, onBack = navigator::back,
             onPage = { page -> navigator.navigate(ExtensionUiRoute(page.extension.ifBlank { route.extensionId }, page.id, page.title.ifBlank { page.id })) },
-            onChannel = { navigator.navigate(ChannelRoute(it)) })
+            onChannel = { navigator.navigate(ChannelRoute(it)) }, machines = services.sessions.machines,
+            onUpgrade = { market, id -> navigator.navigate(ExtensionCatalogRoute(market, id)) })
     }
     entry<ExtensionUiRoute> { route ->
         ExtensionUiPage(services.extensions.takeUnless { demo }, route.extensionId, route.uiId, route.title, onBack = navigator::back,

@@ -39,8 +39,15 @@ interface ExtensionMarkets {
     /** `POST /api/v1/extensions/{id}/-/upgrade`. */
     suspend fun upgrade(id: String, preview: ExtensionPreview): ExtensionDetail
 
-    /** `DELETE /api/v1/extensions/{id}/-/` (only those installed from a market, on a phone). */
-    suspend fun uninstall(id: String, keepData: Boolean = false)
+    /** `DELETE /api/v1/extensions/{id}/-/` (only those installed from a market, on a phone); its data stays unless told otherwise. */
+    suspend fun uninstall(id: String, keepData: Boolean = true)
+
+    /** `GET /api/v1/extensions/-/upgrades`: the auto-upgrade switch for all market extensions; null on a hub without it. */
+    suspend fun autoUpgrades(): Boolean? = null
+
+    /** `PUT /api/v1/extensions/-/upgrades`: turns it on or off; the hub's answer. */
+    suspend fun setAutoUpgrades(auto: Boolean): Boolean =
+        throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
 }
 
 /** `GET /api/v1/extensions`: the list, and what this device may do with it. */

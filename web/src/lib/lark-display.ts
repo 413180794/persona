@@ -7,6 +7,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { api, ApiError } from "./api";
 import type { LarkMessage, LarkPart } from "./inbox";
+import { braveClimbSummary, decodeBraveClimbParts } from "./lark-brave-climb";
 import { larkPath, olAccount } from "./lark-accounts";
 import { onHubEvent } from "./store";
 
@@ -30,22 +31,19 @@ function isSystem(m: LarkMessage) {
   return m.type === "SYSTEM" || (m.parts ?? []).some((p) => p.kind === "text" && p.metadata?.system);
 }
 
-/** The message's content is shown: it was not recalled, or 防撤回 is on and lark-connector kept what it said. */
-export function showsBody(d: LarkMessageDisplay, m: LarkMessage): boolean {
-  if (!m.recalled) return true;
-  const kept = (m.parts ?? []).some((p) => p.kind !== "text" || (p.text ?? "").trim() !== "") || (m.text ?? "").trim() !== "";
-  return d.anti_recall && m.retained === true && !isSystem(m) && kept;
+/** The message''s parts as the chat shows them, and whether [removed] words in them were decoded (the switch is on). */
+export function shownParts(d: LarkMessageDisplay, parts: LarkPart[]): { parts: LarkPart[]; decoded: boolean } {
+  const decoded = climbs(d) ? decodeBraveClimbParts(parts) : undefined;
+  return decoded ? { parts: decoded, decoded: true } : { parts, decoded: false };
 }
 
-/** 已编辑 opens the earlier versions: 编辑历史 is on, the content shows, and versions were kept. */
-export function showsHistory(d: LarkMessageDisplay, m: LarkMessage): boolean {
-  return d.show_edit_history && showsBody(d, m) && (m.edit_history ?? []).length > 0;
-}
+/** A one-line summary of a message's text (a quote, a Pin, the chat list): see `braveClimbSummary`. */
+export const summaryText = (d: LarkMessageDisplay, text: string) => braveClimbSummary(text, climbs(d));
 
 /** A quoted message in one line: what it said (marked 已撤回 when recalled and kept), or that it was recalled. */
 export function quoteSummary(d: LarkMessageDisplay, q: NonNullable<LarkMessage["reply_to"]>): string {
-  if (!q.recalled) return q.text ?? "";
-  const text = (q.text ?? "").trim();
+  if (!q.recalled) return summaryText(d, q.text ?? "");
+  const text = summaryText(d, (q.text ?? "").trim());
   if (!(d.anti_recall && q.retained === true && text)) return t("lib-lark-display.recalled");
   return t("lib-lark-display.recalled_kept", { text });
 }

@@ -344,20 +344,18 @@ func Choosing(plain string) bool {
 // left edge too (`❯ 1. 预览`, AskUserQuestion 2.1.316): isHistory leaves it out.
 var historyRE = regexp.MustCompile(`^(?:❯ |\s*[⏺⎿✻])`)
 
-func isHistory(line string) bool { return historyRE.MatchString(line) && !selectedRE.MatchString(line) }
+// isHistory leaves out the dialog's own cursor rows: a numbered choice (selectedRE) and a multi-select question's
+// Submit / Next row, which a ❯ puts at the left edge too (`❯    Submit`).
+func isHistory(line string) bool {
+	return historyRE.MatchString(line) && !selectedRE.MatchString(line) && !submitRE.MatchString(strings.TrimSpace(line))
+}
 
-// DialogHead is the first line of the dialog at the bottom of a plain screen (Choosing): the first row under the
-// highest rule (or a picker's ▔ edge) between the dialog's footer and the conversation above it, else the first row
-// after the conversation. An AskUserQuestion dialog gives its question instead. "" when no dialog shows.
-func DialogHead(plain string) string {
-	if !Choosing(plain) {
-		return ""
-	}
-	// AskUserQuestion: its first row is the header chip or tab bar (「☐ 环境」), and its cursor can be at the left edge.
-	if d := ParseDialog(plain); d != nil && d.Question != "" && (len(d.Steps) > 0 || d.Header != "" || d.Multi || d.Review) {
-		return d.Question
-	}
-	lines := strings.Split(strings.ReplaceAll(plain, "\r", ""), "\n")
+// dialogTop is the first row of the dialog at the bottom of the screen, on a plain screen's lines: the first row under
+// the highest rule (or a picker's ▔ edge) between the dialog's footer and the conversation above it, else the first row
+// after the conversation. Everything above it is the conversation, and every reader of the dialog starts there — an
+// agent's own answer is often a numbered list (#2872: its numbers were read as the notice's options, so dismiss_notice
+// refused the notice and the phone offered the agent's prose as buttons).
+func dialogTop(lines []string) int {
 	top := max(0, len(lines)-DialogLines)
 	start := top
 	for i := len(lines) - 1; i >= top; i-- {
@@ -371,7 +369,21 @@ func DialogHead(plain string) string {
 			start = i + 1 // the highest so far: keep looking up
 		}
 	}
-	for _, l := range lines[start:] {
+	return start
+}
+
+// DialogHead is the first line of the dialog at the bottom of a plain screen (Choosing), the first row dialogTop
+// gives. An AskUserQuestion dialog gives its question instead. "" when no dialog shows.
+func DialogHead(plain string) string {
+	if !Choosing(plain) {
+		return ""
+	}
+	// AskUserQuestion: its first row is the header chip or tab bar (「☐ 环境」), and its cursor can be at the left edge.
+	if d := ParseDialog(plain); d != nil && d.Question != "" && (len(d.Steps) > 0 || d.Header != "" || d.Multi || d.Review) {
+		return d.Question
+	}
+	lines := strings.Split(strings.ReplaceAll(plain, "\r", ""), "\n")
+	for _, l := range lines[dialogTop(lines):] {
 		if t := strings.TrimSpace(l); t != "" && !isRule(l) && !pickerEdge(l) {
 			return t
 		}

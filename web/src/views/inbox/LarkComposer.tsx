@@ -6,6 +6,7 @@ import { t } from "../../i18n";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { Button, cx, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { useBraveClimbMode } from "./LarkBraveClimb";
 
 export interface LarkReplyTarget {
   id: string;
@@ -28,10 +29,12 @@ export interface LarkComposerProps {
   placeholder?: string;
   /** Smaller, under a thread. */
   compact?: boolean;
+  /** The [removed] mode may be picked (LarkBraveClimb.tsx): the switch is on and the chat takes plain text. */
+  canClimb?: boolean;
 }
 
 export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(function LarkComposer(
-  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false }, ref,
+  { replyTo = null, onClearReply, onSend, attachments: canAttach = false, placeholder, compact = false, canClimb = false }, ref,
 ) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -43,12 +46,17 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const filesRef = useRef(files);
   filesRef.current = files;
   const stagingRef = useRef(0);
+  const climb = useBraveClimbMode(canClimb);
 
   // previews left in the box go with it
   useEffect(() => () => releaseLarkAttachments(filesRef.current), []);
 
   const addFiles = (list: FileList | File[]) => {
     if (!canAttach) return;
+    if (climb.on) {
+      toast(t("inbox-larkbraveclimb.text_only"), "error");
+      return;
+    }
     const { take, dropped } = fitPick(filesRef.current.length + stagingRef.current, Array.from(list));
     if (dropped) toast(t("inbox-larkcomposer.too_many", { count: dropped }), "error");
     if (!take.length) return;
@@ -77,8 +85,14 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const ready = (text.trim() !== "" || files.length > 0) && staging === 0;
   const submit = async () => {
     if (!ready || sending) return;
-    const trimmed = text.trim();
     const picked = files;
+    if (climb.on && picked.length) {
+      toast(t("inbox-larkbraveclimb.text_only"), "error");
+      return;
+    }
+    // [removed] words go encoded, as lark-connector's web sends them; refused here keeps the text in the box
+    const trimmed = text.trim() && climb.prepare(text.trim());
+    if (trimmed === undefined) return;
     setSending(true);
     try {
       const sent = await onSend(trimmed, picked, replyTo ?? undefined);
@@ -158,7 +172,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
           </div>
         )}
         <div className="flex items-end gap-2">
-          {canAttach && (
+          {canAttach && !climb.on && (
             <>
               <input
                 ref={picker}
@@ -182,6 +196,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
               </button>
             </>
           )}
+          {climb.toggle}
           <textarea
             ref={input}
             value={text}
@@ -194,7 +209,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
                 addFiles(pasted);
               }
             }}
-            placeholder={placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : t("inbox-larkthread.reply_placeholder"))}
+            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : t("inbox-larkthread.reply_placeholder"))}
             aria-label={t("inbox-larkcomposer.message")}
             rows={1}
             className={cx(

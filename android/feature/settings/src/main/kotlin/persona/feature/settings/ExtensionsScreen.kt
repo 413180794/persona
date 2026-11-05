@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import persona.core.contracts.Machine
 import persona.core.contracts.api.HubExtension
 import persona.core.contracts.api.ExtensionDetail
 import persona.core.contracts.api.ExtensionField
@@ -31,6 +32,10 @@ import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.LocalDetailKey
 import persona.core.navigation.ExtensionMarketRoute
 import persona.core.navigation.ExtensionRoute
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -52,6 +57,8 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     LaunchedEffect(model) { model.load() }
+    // The page beside it (a wide window) removed or changed one: the list follows without a pull.
+    LaunchedEffect(model) { ExtensionChanges.of(extensions).collect { model.load() } }
     val list = state.extensions
     val detail = LocalDetailKey.current
     JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack, refreshing = state.loading && list != null, onRefresh = { scope.launch { model.load() } }) {
@@ -76,7 +83,7 @@ internal fun ExtensionsPage(extensions: ExtensionManagement?, onBack: () -> Unit
             item("top") { JSectionHeader(stringResource(R.string.settings_ext_list_header), count = list.size) }
             itemsIndexed(list, key = { _, it -> "plugin-${it.id}" }) { index, extension ->
                 JGroupItem(GroupPosition.of(index, list.size)) {
-                    JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.state(res, extension), leadingIcon = PhIcons.PuzzlePiece,
+                    JRow(extension.name.ifBlank { extension.id }, subtitle = ExtensionText.listLine(res, extension), leadingIcon = PhIcons.PuzzlePiece,
                         trailing = { ExtensionStateMark(extension) }, chevron = true,
                         selected = detail == ExtensionRoute(extension.id), onClick = { onExtension(extension.id) })
                 }
@@ -110,6 +117,10 @@ fun ExtensionPage(
     extensions: ExtensionManagement?, extensionId: String, onBack: () -> Unit, onPage: ((ExtensionUiPlace) -> Unit)? = null,
     /** Opens one of the channels it contributes (设置 › 渠道); without it the line is left out. */
     onChannel: ((String) -> Unit)? = null,
+    /** The hub's machines, for a field that lists machines (format machine); without them such a list shows only its values. */
+    machines: Flow<List<Machine>>? = null,
+    /** Opens a newer version in the market (market id, extension id) to review and upgrade it; without it the line only says. */
+    onUpgrade: ((String, String) -> Unit)? = null,
 ) {
     if (extensions == null) {
         JListPage(title = stringResource(R.string.settings_ext_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_ext_demo_none)) } }
@@ -122,12 +133,19 @@ fun ExtensionPage(
     val feedback = LocalAppFeedback.current
     var editingSecret by remember { mutableStateOf<ExtensionSecret?>(null) }
     var choosing by remember { mutableStateOf<Pair<ExtensionField, List<String>>?>(null) }
+    var removing by remember { mutableStateOf(false) }
+    // Only what a machine's row shows: live metrics would redraw the page every few seconds.
+    val machineList by remember(machines) {
+        (machines ?: flowOf(emptyList())).map { list -> list.map { ExtensionMachine(it.id, it.displayName, it.os, it.online, it.computer) } }.distinctUntilChanged()
+    }.collectAsState(emptyList())
     LaunchedEffect(model) { model.load() }
     val detail = state.detail
     val hasForm = detail != null && !detail.readOnly && detail.form.isNotEmpty()
+    // A form of machine lists only saves each switch at once: nothing waits for 保存.
+    val waitsForSave = hasForm && detail.form.flatMap { if (it.type == "object") it.fields.orEmpty() else listOf(it) }.any { it.items?.machines != true }
     JListPage(title = detail?.extension?.name?.ifBlank { null } ?: stringResource(R.string.settings_ext_title), onBack = onBack, largeTitle = false,
         refreshing = state.loading && detail != null, onRefresh = { scope.launch { model.load() } },
-        bottomBar = if (!hasForm) null else ({
+        bottomBar = if (!waitsForSave) null else ({
             Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
                 JButton(stringResource(R.string.settings_ext_save), { scope.launch { if (model.save()) feedback?.notice(res.getString(R.string.settings_ext_saved_restart)) } }, Modifier.fillMaxWidth(),
                     loading = state.saving, enabled = state.canSave)
@@ -146,13 +164,31 @@ fun ExtensionPage(
                 }
                 item("enabled-note") { Note(stringResource(R.string.settings_ext_enabled_note)) }
             }
+            if (detail.extension.autoUpgrade != null) upgrades(detail.extension, state.busy, res, onUpgrade,
+                onToggle = { on ->
+                    scope.launch {
+                        if (model.setAutoUpgrade(on)) feedback?.notice(res.getString(if (on) R.string.settings_ext_auto_upgrade_on else R.string.settings_ext_auto_upgrade_off))
+                    }
+                })
             if (onPage != null) extensionPages(detail.ui, onPage)
-            if (hasForm) form(detail, state, model, onChoose = { field, path -> choosing = field to path })
+            if (hasForm) form(detail, state, model, machineList, onChoose = { field, path -> choosing = field to path })
             if (!detail.readOnly && detail.secrets.isNotEmpty()) secrets(detail, state, onEdit = { editingSecret = it })
             contributions(detail, state.busy || state.saving, res) { item, on -> scope.launch { model.setContribution(item, on) } }
             sandbox(detail.extension.sandbox)
             permissions(detail)
             about(detail, res)
+            // From a market: removed here too, as in the market (docs/extensions.md「扩展市场」), read-only config or not.
+            if (detail.fromMarket) uninstallRow(state.busy) { removing = true }
+        }
+    }
+    val current = detail
+    if (removing && current != null) UninstallDialog(current.extension.name.ifBlank { current.extension.id }, onDismiss = { removing = false }) { keep ->
+        removing = false
+        scope.launch {
+            if (model.uninstall(keep)) {
+                feedback?.notice(res.getString(R.string.settings_ext_uninstalled, current.extension.name.ifBlank { current.extension.id }))
+                onBack()
+            }
         }
     }
     choosing?.let { (field, path) ->
@@ -210,17 +246,70 @@ private fun LazyListScope.channelLink(detail: ExtensionDetail, onChannel: (Strin
     }
 }
 
-private fun LazyListScope.form(detail: ExtensionDetail, state: ExtensionState, model: ExtensionModel, onChoose: (ExtensionField, List<String>) -> Unit) {
+/**
+ * A market extension's upgrades (docs/extensions.md「自动升级」): its own switch, its newer version (opening the market's
+ * upgrade when it waits for the user) or what happened last.
+ */
+private fun LazyListScope.upgrades(
+    extension: HubExtension, busy: Boolean, res: Resources, onUpgrade: ((String, String) -> Unit)?, onToggle: (Boolean) -> Unit,
+) {
+    val upgrade = extension.upgrade
+    val note = if (upgrade == null) extension.upgradeNote?.let { n -> ExtensionText.upgradeNote(res, n)?.let { it to n } } else null
+    val count = 1 + (if (upgrade != null) 1 else 0) + (if (note != null) 1 else 0)
+    item("upgrade-title") { JSectionHeader(stringResource(R.string.settings_ext_upgrade_title)) }
+    item("upgrade-auto") {
+        JGroupItem(GroupPosition.of(0, count)) {
+            JSwitchRow(stringResource(R.string.settings_ext_auto_upgrade), extension.autoUpgrade ?: true, onToggle, enabled = !busy)
+        }
+    }
+    upgrade?.let { u ->
+        item("upgrade-new") {
+            // Only a known market can open the upgrade; without one the line only says.
+            val action = ExtensionText.upgradeAction(res, u)?.takeIf { onUpgrade != null && u.market.isNotBlank() }
+            val detail = ExtensionText.upgradeDetail(res, u).takeIf { it.isNotBlank() }
+            JGroupItem(GroupPosition.of(1, count)) {
+                if (action == null) JRow(stringResource(R.string.settings_ext_new_version, u.to), subtitle = detail, subtitleLines = 4, leadingIcon = PhIcons.ArrowUp)
+                else JRow(stringResource(R.string.settings_ext_new_version, u.to), subtitle = detail, subtitleLines = 4, leadingIcon = PhIcons.ArrowUp,
+                    // Waiting on the user (more permissions, or a version that rolled back) stands out; the rest is a plain link.
+                    value = action.takeUnless { ExtensionText.upgradeAttention(u) },
+                    trailing = if (ExtensionText.upgradeAttention(u)) ({ JTag(action, Tone.Caution) }) else null,
+                    chevron = true, enabled = !busy, onClick = { onUpgrade?.invoke(u.market, u.id.ifBlank { extension.id }) })
+            }
+        }
+    }
+    note?.let { (text, n) ->
+        item("upgrade-note") {
+            JGroupItem(GroupPosition.of(count - 1, count)) {
+                JRow(text, subtitle = n.at?.let(CatalogText::time), subtitleLines = 3,
+                    trailing = if (n.kind == "rolled_back") ({ JIcon(PhIcons.WarningCircle, text, tint = PersonaTheme.palette.needsYou.dot) }) else null)
+            }
+        }
+    }
+    item("upgrade-note-footer") { Note(stringResource(R.string.settings_ext_upgrade_footer)) }
+}
+
+/** Removing an extension a market installed, at the end of its page. */
+private fun LazyListScope.uninstallRow(busy: Boolean, onRemove: () -> Unit) {
+    item("uninstall") {
+        JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.l)) {
+            JRow(stringResource(R.string.settings_ext_uninstall), leadingIcon = PhIcons.Trash, destructive = true, chevron = false, enabled = !busy, onClick = onRemove)
+        }
+    }
+    item("uninstall-note") { Note(stringResource(R.string.settings_ext_market_installed_note)) }
+}
+
+private fun LazyListScope.form(detail: ExtensionDetail, state: ExtensionState, model: ExtensionModel, machines: List<ExtensionMachine>, onChoose: (ExtensionField, List<String>) -> Unit) {
     val plain = detail.form.filter { it.type != "object" }
     if (plain.isNotEmpty()) {
         item("form-title") { JSectionHeader(stringResource(R.string.settings_ext_settings)) }
-        plain.forEach { field -> item("field-${field.name}") { ExtensionFieldBlock(field, listOf(field.name), state, model, onChoose) } }
+        plain.forEach { field -> item("field-${field.name}") { ExtensionFieldBlock(field, listOf(field.name), state, model, machines, onChoose) } }
     }
-    item("form-note") { Note(stringResource(R.string.settings_ext_form_note)) }
+    if (ExtensionDraft.paths(detail.form).isNotEmpty() && detail.form.flatMap { if (it.type == "object") it.fields.orEmpty() else listOf(it) }.any { it.items?.machines != true })
+        item("form-note") { Note(stringResource(R.string.settings_ext_form_note)) }
     detail.form.filter { it.type == "object" }.forEach { group ->
         item("group-${group.name}") { JSectionHeader(group.label) }
         group.fields.orEmpty().forEach { field ->
-            item("field-${group.name}.${field.name}") { ExtensionFieldBlock(field, listOf(group.name, field.name), state, model, onChoose) }
+            item("field-${group.name}.${field.name}") { ExtensionFieldBlock(field, listOf(group.name, field.name), state, model, machines, onChoose) }
         }
         group.description?.takeIf { it.isNotBlank() }?.let { item("group-note-${group.name}") { Note(it) } }
     }
@@ -231,7 +320,10 @@ private fun LazyListScope.form(detail: ExtensionDetail, state: ExtensionState, m
  * choices. Its description and the hub's word on it below.
  */
 @Composable
-private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state: ExtensionState, model: ExtensionModel, onChoose: (ExtensionField, List<String>) -> Unit) {
+private fun ExtensionFieldBlock(
+    field: ExtensionField, path: List<String>, state: ExtensionState, model: ExtensionModel, machines: List<ExtensionMachine>,
+    onChoose: (ExtensionField, List<String>) -> Unit,
+) {
     val res = LocalResources.current
     val title = ExtensionText.fieldTitle(res, field)
     val error = state.fieldError(path)
@@ -245,6 +337,7 @@ private fun ExtensionFieldBlock(field: ExtensionField, path: List<String>, state
                     JSwitchRow(title, on, { model.edit(path, JsonPrimitive(it)) }, subtitle = description, enabled = enabled)
                 }
             }
+            field.type == "array" && field.items?.machines == true -> MachineSwitches(field, title, path, state, model, machines)
             field.type == "array" -> ExtensionListField(field, title, path, state, model, enabled)
             field.enum != null -> {
                 val current = state.value(path)
@@ -288,6 +381,47 @@ private fun FieldLabel(text: String) = Text(text, style = PersonaTheme.type.capt
 @Composable
 private fun FieldSupport(text: String, isError: Boolean) =
     Text(text, style = PersonaTheme.type.caption, color = if (isError) PersonaTheme.palette.danger.text else PersonaTheme.palette.ink3)
+
+/**
+ * A list of the hub's machines (format machine): a switch per machine of the systems the field names, by name and how it
+ * is (online; for the field picking where the extension's program runs, how the program is there), in effect at once. A
+ * value naming no machine still shows, to be turned off. x-confirm asks before one is turned on (turning off is not asked).
+ */
+@Composable
+private fun MachineSwitches(field: ExtensionField, title: String, path: List<String>, state: ExtensionState, model: ExtensionModel, machines: List<ExtensionMachine>) {
+    val res = LocalResources.current
+    val scope = rememberCoroutineScope()
+    var asking by remember(path) { mutableStateOf<MachineSwitch?>(null) }
+    val selected = ExtensionMachines.selected(state, field, path)
+    val rows = ExtensionMachines.switches(field, machines, selected)
+    val detail = state.detail
+    val picksProgram = detail?.nodeMachines == field.name
+    val nodes = detail?.extension?.nodes.orEmpty()
+    // An extension that operates computers (cua): a machine's row also says how Cua Driver is there.
+    val computers = detail?.extension?.contributes?.containsKey("computer") == true
+    fun save(id: String, on: Boolean) { scope.launch { model.saveNow(path, ExtensionMachines.toggled(selected, id, on)) } }
+    FieldLabel(title)
+    if (rows.isEmpty()) {
+        FieldSupport(stringResource(if (field.items?.os == listOf("darwin")) R.string.settings_ext_no_mac else R.string.settings_ext_no_machine), isError = false)
+        return
+    }
+    Column {
+        rows.forEachIndexed { index, row ->
+            val on = row.id in selected
+            val status = if (row.known) ExtensionText.machineStatus(res, row.online, nodes.firstOrNull { it.machineId == row.id }, picksProgram, on, row.computer, computers)
+                else stringResource(R.string.settings_ext_machine_not_found)
+            JGroupItem(GroupPosition.of(index, rows.size)) {
+                JSwitchRow(row.name, on, { next -> if (next && !field.confirm.isNullOrBlank()) asking = row else save(row.id, next) },
+                    subtitle = status, leadingIcon = PhIcons.Desktop, enabled = !state.busy && !state.saving)
+            }
+        }
+    }
+    FieldSupport(stringResource(R.string.settings_ext_machines_now), isError = false)
+    asking?.let { row ->
+        JDialog({ asking = null }, title = stringResource(R.string.settings_ext_turn_on_title, row.name), text = field.confirm,
+            confirm = stringResource(R.string.settings_ext_turn_on) to { asking = null; save(row.id, true) })
+    }
+}
 
 /** A list of texts (each removable, more added below), or of choices (a switch each). */
 @Composable

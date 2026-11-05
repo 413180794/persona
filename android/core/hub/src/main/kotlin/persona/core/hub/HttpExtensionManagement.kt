@@ -207,6 +207,23 @@ class HttpExtensionManagement internal constructor(
         call(path(id, "-", "") + if (keepData) "?keep_data=1" else "", "DELETE")
     }
 
+    // ---- auto-upgrades (docs/extensions.md「自动升级」)
+
+    override suspend fun setAutoUpgrade(id: String, auto: Boolean) =
+        detail(call(path(id, "-", "auto-upgrade"), "PUT", buildJsonObject { put("auto", auto) }))
+
+    /** A hub without auto-upgrades has no route (404): null, and the switch is not shown. */
+    override suspend fun autoUpgrades(): Boolean? = try {
+        autoOf(call(hubPath("upgrades"), "GET"))
+    } catch (failure: HubFailure) {
+        if (failure.status == 404) null else throw failure
+    }
+
+    override suspend fun setAutoUpgrades(auto: Boolean): Boolean =
+        autoOf(call(hubPath("upgrades"), "PUT", buildJsonObject { put("auto", auto) })) ?: throw HubFailure(HubError.Protocol)
+
+    private fun autoOf(body: String): Boolean? = ((parse(body) as? JsonObject)?.get("auto") as? JsonPrimitive)?.booleanOrNull
+
     /** The preview and the permissions the user saw and agreed to. */
     private fun agreed(preview: ExtensionPreview) = buildJsonObject {
         require(preview.canConfirm) { "Unresolved extension dependencies" }

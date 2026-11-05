@@ -242,6 +242,9 @@ internal data class MarketsState(
     val addError: String? = null,
     /** Why the last refresh, removal or token change did not happen. */
     val actionError: String? = null,
+    /** The auto-upgrade switch for all market extensions (docs/extensions.md「自动升级」); null: a hub without it. */
+    val autoUpgrade: Boolean? = null,
+    val savingAuto: Boolean = false,
 )
 
 /** 管理市场: the markets the hub reads. */
@@ -255,12 +258,30 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
         try {
             val markets = api.markets()
             mutable.update { it.copy(markets = markets, error = null) }
+            // The switch is extra: a hub that cannot say leaves it out, the markets still show.
+            val auto = try { api.autoUpgrades() } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+            mutable.update { it.copy(autoUpgrade = auto) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { mutable.update { it.copy(error = res.getString(R.string.settings_ext_load_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
     fun clearAddError() = mutable.update { it.copy(addError = null) }
+
+    /** Turns auto-upgrades for all market extensions on or off; the switch shows what the hub then says. */
+    suspend fun setAutoUpgrade(on: Boolean): Boolean {
+        if (state.value.savingAuto) return false
+        mutable.update { it.copy(savingAuto = true, actionError = null) }
+        return try {
+            val auto = api.setAutoUpgrades(on)
+            mutable.update { it.copy(autoUpgrade = auto) }
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(actionError = res.getString(R.string.settings_ext_auto_upgrades_failed, failureReason(error))) }
+            false
+        } finally { mutable.update { it.copy(savingAuto = false) } }
+    }
 
     /**
      * Adds a market (read once by the hub first); a token, when given, is sent once and never shown. The address goes

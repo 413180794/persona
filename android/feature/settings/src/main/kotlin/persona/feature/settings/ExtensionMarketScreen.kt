@@ -180,7 +180,7 @@ fun ExtensionCatalogPage(extensions: ExtensionManagement?, marketId: String, ext
         PreviewSheet(extension, preview, busy = state.acting, onDismiss = model::dismissPreview,
             onConfirm = { scope.launch { model.confirm()?.let { feedback?.notice(it) } } })
     }
-    if (removing && extension != null) UninstallDialog(extension, onDismiss = { removing = false }) { keep ->
+    if (removing && extension != null) UninstallDialog(extension.label, onDismiss = { removing = false }) { keep ->
         removing = false
         scope.launch { if (model.uninstall(keep)) feedback?.notice(res.getString(R.string.settings_ext_uninstalled, extension.label)) }
     }
@@ -312,15 +312,21 @@ internal fun PermissionList(title: String, permissions: List<ExtensionPermission
     }
 }
 
-/** Removing stops it and deletes its settings and secrets; its data folder can stay. */
+/**
+ * Removing stops it and deletes its settings and secrets; its data folder stays unless the user unticks it (as on the
+ * web: a plain 卸载 loses nothing a reinstall could pick up again). The market's page and the extension's own share it.
+ */
 @Composable
-private fun UninstallDialog(extension: CatalogExtension, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
-    var keep by remember { mutableStateOf(false) }
-    JDialog(onDismiss, title = stringResource(R.string.settings_ext_uninstall_title, extension.label), text = stringResource(R.string.settings_ext_uninstall_text),
+internal fun UninstallDialog(name: String, onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
+    var keep by remember { mutableStateOf(true) }
+    JDialog(onDismiss, title = stringResource(R.string.settings_ext_uninstall_title, name), text = stringResource(R.string.settings_ext_uninstall_text),
         confirm = stringResource(R.string.settings_ext_uninstall) to { onConfirm(keep) }, destructive = true) {
         Row(Modifier.fillMaxWidth().padding(top = Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
             JCheckbox(keep, { keep = it })
-            Text(stringResource(R.string.settings_ext_keep_data), Modifier.padding(start = Tokens.Space.s), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+            Column(Modifier.padding(start = Tokens.Space.s)) {
+                Text(stringResource(R.string.settings_ext_keep_data), style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+                Text(stringResource(R.string.settings_ext_keep_data_hint), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink3)
+            }
         }
     }
 }
@@ -354,6 +360,21 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
             }
         }
         state.actionError?.let { error -> item("action-error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed) } }
+        // The switch for every market extension (docs/extensions.md「自动升级」); a hub without it shows none.
+        state.autoUpgrade?.takeIf { !markets.isNullOrEmpty() }?.let { auto ->
+            item("auto-upgrade") {
+                JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
+                    JSwitchRow(stringResource(R.string.settings_ext_auto_upgrades), auto, { on ->
+                        scope.launch {
+                            if (model.setAutoUpgrade(on)) feedback?.notice(res.getString(if (on) R.string.settings_ext_auto_upgrades_on else R.string.settings_ext_auto_upgrades_off))
+                        }
+                    }, leadingIcon = PhIcons.ArrowsClockwise, enabled = !state.savingAuto)
+                }
+            }
+            item("auto-upgrade-note") {
+                Note(stringResource(if (auto) R.string.settings_ext_auto_upgrades_footer_on else R.string.settings_ext_auto_upgrades_footer_off))
+            }
+        }
         when {
             markets == null && state.loading -> item("loading") { JLoading() }
             markets != null && markets.isEmpty() -> item("empty") {

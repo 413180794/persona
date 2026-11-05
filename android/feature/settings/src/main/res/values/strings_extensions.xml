@@ -262,4 +262,66 @@
     <string name="settings_ext_token_remove">Remove token</string>
     <string name="settings_ext_dep_not_ready">Not ready yet</string>
     <string name="settings_ext_cannot_confirm_not_ready">Some dependencies aren\'t ready, so it can\'t be installed yet. Finish setting up the extensions it depends on, make sure their own dependencies are ready, then preview again.</string>
+    <!-- Auto-upgrades (docs/extensions.md「自动升级」) -->
+    <string name="settings_ext_upgrade_title">Upgrades</string>
+    <string name="settings_ext_upgrade_footer">When the market has a new version, it\'s installed while the extension is idle. If it asks for more permissions, you\'re asked first. A version that fails to start rolls back to the previous one.</string>
+    <string name="settings_ext_auto_upgrade">Auto-upgrade</string>
+    <string name="settings_ext_new_version">New version %1$s</string>
+    <string name="settings_ext_auto_upgrade_on">Auto-upgrade on</string>
+    <string name="settings_ext_auto_upgrade_off">Auto-upgrade off</string>
+    <string name="settings_ext_auto_upgrade_on_failed">Couldn\'t turn on auto-upgrade: %1$s</string>
+    <string name="settings_ext_auto_upgrade_off_failed">Couldn\'t turn off auto-upgrade: %1$s</string>
+    <string name="settings_ext_upgrade_waiting_idle">Upgrades when the extension is idle</string>
+    <string name="settings_ext_upgrade_available">Upgrades automatically later</string>
+    <string name="settings_ext_upgrade_off">Auto-upgrade is off</string>
+    <string name="settings_ext_upgrade_skipped">Didn\'t start after the last upgrade, so it\'s back on %1$s and won\'t auto-upgrade to this version</string>
+    <string name="settings_ext_upgrade_failed">Didn\'t install</string>
+    <string name="settings_ext_upgrade_failed_detail">Didn\'t install: %1$s</string>
+    <string name="settings_ext_upgrade_incompatible">This hub can\'t install it</string>
+    <string name="settings_ext_upgrade_incompatible_detail">This hub can\'t install it: %1$s</string>
+    <string name="settings_ext_upgrade_review">Review</string>
+    <string name="settings_ext_upgrade_go">Upgrade</string>
+    <string name="settings_ext_upgrade_permissions_changed">The permissions it needs changed</string>
+    <plurals name="settings_ext_upgrade_more_permissions">
+        <item quantity="one">Needs %1$d more permission: %2$s</item>
+        <item quantity="other">Needs %1$d more permissions: %2$s</item>
+    </plurals>
+    <string name="settings_ext_upgrade_permission_detail">%1$s (%2$s)</string>
+    <string name="settings_ext_upgraded_note">Auto-upgraded to %1$s (was %2$s)</string>
+    <string name="settings_ext_rolled_back_note">%1$s didn\'t start, back on %2$s</string>
+    <string name="settings_ext_upgrade_pending">New version needs review</string>
+    <string name="settings_ext_auto_upgrades">Update extensions automatically</string>
+    <string name="settings_ext_auto_upgrades_on">Automatic extension updates on</string>
+    <string name="settings_ext_auto_upgrades_off">Automatic extension updates off</string>
+    <string name="settings_ext_auto_upgrades_failed">Couldn\'t change: %1$s</string>
+    <string name="settings_ext_auto_upgrades_footer_on">When an extension from these marketplaces has a new version, the hub installs it while the extension is idle, and asks you first if it needs more permissions. You can turn this off for each extension on its own page.</string>
+    <string name="settings_ext_auto_upgrades_footer_off">Off: new versions are only flagged on the extension\'s page, and you update them yourself.</string>
+    <!-- Removing from the extension's own page -->
+    <string name="settings_ext_market_installed_note">This extension came from a market. After removing it, you can install it again from the market.</string>
+    <string name="settings_ext_keep_data_hint">Pick up where you left off if you reinstall.</string>
+    <!-- A list of machines (format machine) -->
+    <string name="settings_ext_machine_online">Online</string>
+    <string name="settings_ext_machine_offline">Offline</string>
+    <string name="settings_ext_cua_missing">Cua not installed</string>
+    <string name="settings_ext_cua_not_running">Cua not running</string>
+    <string name="settings_ext_cua_no_permission">Cua lacks permissions</string>
+    <string name="settings_ext_screen_locked">Screen locked</string>
+    <string name="settings_ext_cua_ready">Cua ready</string>
+    <string name="settings_ext_cua_installed">Cua installed</string>
+    <string name="settings_ext_machine_not_found">Machine not found</string>
+    <string name="settings_ext_no_mac">No Macs on this hub yet.</string>
+    <string name="settings_ext_no_machine">No machines on this hub yet.</string>
+    <string name="settings_ext_turn_on_title">Turn on “%1$s”?</string>
+    <string name="settings_ext_turn_on">Turn on</string>
+    <string name="settings_ext_machines_now">These switches take effect right away.</string>
+    <string name="settings_ext_program_waiting">Waiting for the hub to send the program</string>
+    <string name="settings_ext_program_running">Program running</string>
+    <string name="settings_ext_program_running_version">Program running · %1$s</string>
+    <string name="settings_ext_program_starting">Program starting</string>
+    <string name="settings_ext_program_sending">Sending the program</string>
+    <string name="settings_ext_program_offline">Offline: starts once connected</string>
+    <string name="settings_ext_program_lease_expired">Disconnected from the hub too long, so the program stopped; it starts again once connected</string>
+    <string name="settings_ext_program_outdated">personad on this computer is too old; update it to run</string>
+    <string name="settings_ext_program_error">Program error</string>
+    <string name="settings_ext_program_error_detail">Program error: %1$s</string>
 </resources>

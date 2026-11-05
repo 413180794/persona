@@ -3,7 +3,7 @@
 // the hub sent (never the version's text); with 编辑历史 turned off meanwhile the list says it is hidden.
 import type { ReactNode } from "react";
 import { shortTime, type LarkMessage, type LarkPart } from "../../lib/inbox";
-import { showsHistory, versionParts, type LarkMessageDisplay } from "../../lib/lark-display";
+import { shownParts, showsHistory, versionParts, type LarkMessageDisplay } from "../../lib/lark-display";
 import { t } from "../../i18n";
 import { Dialog } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
@@ -30,7 +30,7 @@ export function LarkEditHistoryDialog({ message, display, renderParts, onClose }
                   </span>
                 )}
               </p>
-              {renderParts(versionParts(v))}
+              {renderParts(shownParts(display, versionParts(v)).parts)}
             </li>
           ))}
         </ol>

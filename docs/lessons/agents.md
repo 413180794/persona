@@ -42,6 +42,8 @@
 - 用户自己起的 claude（启动器、profile 目录）没有 Persona 的 hooks，AskUserQuestion 只能靠读屏幕的卡片答。读屏卡得认得 2.1.316 的多选：`[ ]`/`[✔]` 是状态不是文字，数字只勾不交，要挪到 Submit 行按 enter 再在确认页按 1；光标在自由回答行上按数字会写进去，在 Submit 行上按数字没反应；几个键一次发会丢，一次一个（`docs/claude-integration.md`「多选提问的屏幕卡」）。
 - AskUserQuestion 的选项带预览时，数字只挪光标，要再按 enter 才选；读屏卡只按数字会「答了没生效」。按键后要看屏幕确认问题真的往下走了（`docs/claude-integration.md`「带预览的提问」）。
 - 屏幕卡因为 Agent 不再 blocked 撤掉时，数据库里也要记成结束（cancelled），不然历史里一直挂着 pending，直到 hub 重启。
+- 读屏认对话框要先锚定对话框从哪一行开始（`screen.dialogTop`：对话下面最后那条分隔线、或选择面板 `▔` 边的下一行），再从锚点往下找编号；整屏找编号会把 Agent 自己答复里的「1. … 2. …」当成选项——
+  只按回车就能关的通知于是被当成选择题，`dismiss_notice` 拒绝关，手机上的屏幕卡还把答复正文列成按钮（#2872）。这个锚点 `DialogHead` 早就在用，现在两处读法共用一份。
 - AskUserQuestion：PreToolUse hook 返回 `permissionDecision: allow` + `updatedInput.answers` 即可代答（2.1.310 实测）。
 - ExitPlanMode：走 PermissionRequest（不走 PreToolUse）。`allow` 必须带 `updatedInput` + `updatedPermissions:[{type:setMode,...}]`
   才生效，单纯 `{behavior:allow}` 仍会弹 TUI 对话框；`deny` + `message` 会把反馈作为 tool_result 交给模型。

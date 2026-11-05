@@ -63,9 +63,30 @@ data class Machine(
     @SerialName("deploying") val deploying: Boolean = false,
     /** Why the last 重新部署 did not work. */
     @SerialName("deploy_error") val deployError: String? = null,
+    /** How Cua Driver is on this Mac (docs/computer-use.md), while the cua extension is on; null elsewhere. */
+    @SerialName("computer") val computer: MachineComputer? = null,
 ) {
     val displayName: String get() = name.ifEmpty { id }
 }
+
+/**
+ * The hub's `proto.Computer`: whether the user turned operating this Mac on, and what its node found when last asked
+ * (only for an enabled one). [accessibility] and [screenRecording] are granted | missing | unknown; [desktop] is
+ * active | locked | away; [note] says in words what is missing.
+ */
+@Serializable
+data class MachineComputer(
+    val enabled: Boolean = false,
+    val installed: Boolean = false,
+    val version: String? = null,
+    val daemon: Boolean = false,
+    val accessibility: String? = null,
+    @SerialName("screen_recording") val screenRecording: String? = null,
+    val desktop: String? = null,
+    @SerialName("screen_sharing") val screenSharing: Boolean = false,
+    val ready: Boolean = false,
+    val note: String? = null,
+)
 
 /** One engine the node looked for on its machine (docs/protocol.md「引擎」); [name] and [note] are shown as given. */
 @KeepGeneratedSerializer

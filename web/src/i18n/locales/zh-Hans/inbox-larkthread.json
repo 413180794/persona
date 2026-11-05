@@ -62,5 +62,6 @@
   "discard": "移除本机记录",
   "check_found": "已发出",
   "check_missing": "最新消息里没有找到它，可能没有发出",
-  "thread_placeholder": "回复话题…"
+  "thread_placeholder": "回复话题…",
+  "climb_placeholder": ""
 }

@@ -260,4 +260,32 @@ class ExtensionMarketStateTest {
         assertNull(model.state.value.working)
         assertEquals(2, model.state.value.markets?.size)
     }
+
+    @Test fun theAutoUpgradeSwitchForEveryMarketExtension() = runBlocking {
+        var current = true
+        var refuse = false
+        val api = object : ExtensionApiStub() {
+            override suspend fun markets() = listOf(marketA)
+            override suspend fun autoUpgrades() = current
+            override suspend fun setAutoUpgrades(auto: Boolean): Boolean {
+                if (refuse) throw HubFailure(HubError.Server, "hub 拒绝了", status = 500)
+                current = auto
+                return current
+            }
+        }
+        val model = MarketsModel(api, res)
+        model.load()
+        assertEquals(true, model.state.value.autoUpgrade)
+        assertTrue(model.setAutoUpgrade(false))
+        assertEquals(false, model.state.value.autoUpgrade)
+        refuse = true
+        assertFalse(model.setAutoUpgrade(true))
+        assertEquals(false, model.state.value.autoUpgrade)
+        assertEquals("没有改：hub 拒绝了", model.state.value.actionError)
+        // A hub without auto-upgrades: no switch, the markets still show.
+        val old = MarketsModel(object : ExtensionApiStub() { override suspend fun markets() = listOf(marketA) }, res)
+        old.load()
+        assertNull(old.state.value.autoUpgrade)
+        assertEquals(1, old.state.value.markets?.size)
+    }
 }

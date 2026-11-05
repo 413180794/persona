@@ -57,6 +57,10 @@ interface ExtensionManagement : ExtensionUi, ExtensionMarkets {
 
     /** `DELETE /api/v1/extensions/{id}/-/secrets/{name}`. */
     suspend fun clearSecret(id: String, name: String): ExtensionDetail
+
+    /** `PUT /api/v1/extensions/{id}/-/auto-upgrade`: a market extension's own auto-upgrade switch (docs/extensions.md「自动升级」). */
+    suspend fun setAutoUpgrade(id: String, auto: Boolean): ExtensionDetail =
+        throw UnsupportedOperationException("Auto-upgrades unsupported by this hub")
 }
 
 /** The hub refused the configuration (400 `invalid_config`): [field] is its dotted path (`proxy.host`). */
@@ -86,15 +90,27 @@ data class ExtensionField(
     @SerialName("unique_items") val uniqueItems: Boolean? = null,
     /** An object's fields (a group of the form). */
     val fields: List<ExtensionField>? = null,
+    /** x-confirm: what to ask before a switch of it is turned on (a boolean, or a machine of a machine list). */
+    val confirm: String? = null,
 ) {
     val label: String get() = title?.takeIf { it.isNotBlank() } ?: name
     /** The default it falls back to, when there is one (JSON null is none). */
     val fallback: JsonElement? get() = default?.takeIf { it != JsonNull }
 }
 
-/** An array field's items. */
+/**
+ * An array field's items. `format: machine` is the hub's machines by id (of the systems in [os]; none is any), drawn as a
+ * switch per machine and saved at once.
+ */
 @Serializable
-data class ExtensionItems(val type: String = "string", val enum: List<ExtensionChoice>? = null)
+data class ExtensionItems(
+    val type: String = "string",
+    val enum: List<ExtensionChoice>? = null,
+    val format: String? = null,
+    val os: List<String>? = null,
+) {
+    val machines: Boolean get() = format == "machine"
+}
 
 /** One value of a field's choices, with its label. */
 @Serializable
@@ -134,6 +150,8 @@ data class ExtensionDetail(
     /** The pages it draws: its `extension_page` and `nav_page` UI (both whole pages, opened from its settings too). */
     val ui: List<ExtensionUiPlace> = emptyList(),
     val contributions: List<ExtensionContribution>? = null,
+    /** The field (format machine) that picks the computers its program runs on; their rows say how it is there. */
+    val nodeMachines: String? = null,
 ) {
     /** Installed from an extension market (`market:<market>/<extension>`): a phone may upgrade and remove it. */
     val fromMarket: Boolean get() = origin?.startsWith("market:") == true
@@ -151,6 +169,7 @@ data class ExtensionDetail(
         val permissions: List<ExtensionPermission> = emptyList(),
         val ui: List<ExtensionUiPlace> = emptyList(),
         val contributions: List<ExtensionContribution>? = null,
+        @SerialName("node_machines") val nodeMachines: String? = null,
     )
 
     @Serializable
@@ -165,7 +184,7 @@ data class ExtensionDetail(
                 extension, extra.publisher, extra.homepage, extra.origin, extra.previousVersion, extra.readOnly,
                 extra.form?.fields.orEmpty(), extra.config ?: JsonObject(emptyMap()), extra.secrets, extra.permissions,
                 extra.ui.filter { it.placement.isEmpty() || it.placement == "extension_page" || it.placement == "plugin_page" || it.placement == "nav_page" },
-                extra.contributions,
+                extra.contributions, extra.nodeMachines?.takeIf { it.isNotBlank() },
             )
         }
     }

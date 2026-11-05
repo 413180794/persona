@@ -12,7 +12,7 @@ import {
 import { LARK_ATTACHMENT_REPLY_FEATURE, LARK_ATTACHMENTS_FEATURE, routeAllowed, type LarkAttachment } from "../../lib/lark-attachments";
 import { larkPath, olAccount } from "../../lib/lark-accounts";
 import { larkAccount } from "../../lib/lark-chats";
-import { quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
+import { climbs, HIDDEN_DISPLAY, quoteSummary, showsBody, showsHistory, useLarkDisplay, useLarkDisplayState } from "../../lib/lark-display";
 import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTarget } from "../../lib/lark-pins";
 import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
@@ -26,6 +26,7 @@ import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { scrollBehavior } from "../../ui/stream/motion";
 import { Monogram } from "./InboxParts";
+import { ClimbedParts } from "./LarkBraveClimb";
 import { LarkEditHistoryDialog } from "./LarkEditHistory";
 import { LarkComposer, type LarkComposerHandle, type LarkReplyTarget } from "./LarkComposer";
 import { newClientID, useLarkOutbox, type LarkOutgoing } from "./LarkOutbox";
@@ -78,86 +79,7 @@ export function chatOfItem(item: InboxItem): LarkChatRef {
 
 /** The account of the chat a message is drawn in: its thread is read as that account. */
 const ChatAccount = createContext<number | undefined>(undefined);
-/** …and its feed, where a thread's pictures and files are sent. */
-const ChatFeed = createContext("");
-
-type LarkThreadProps = { chat: LarkChatRef; pinsOpen?: boolean; onPinsOpen?: (open: boolean) => void };
-
-export function LarkThread(props: LarkThreadProps) {
-  return (
-    <ChatAccount.Provider value={props.chat.account}>
-      <ChatFeed.Provider value={props.chat.feed}><LarkThreadBody {...props} /></ChatFeed.Provider>
-    </ChatAccount.Provider>
-  );
-}
-
-function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps) {
-  const feed = chat.feed;
-  const ol = chat.account;
-  const focus = chat.focus;
-  const [page, setPage] = useState<LarkPage | null>(null);
-  const [error, setError] = useState("");
-  const [newerBusy, setNewerBusy] = useState(false);
-  const [replyTo, setReplyTo] = useState<LarkReplyTarget | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  const composer = useRef<LarkComposerHandle>(null);
-  const support = useAttachmentSupport();
-  const anchor = useRef<{ height: number; top: number; id?: string; offset?: number } | null>(null);
-  const placed = useRef(false);
-  const base = `/lark/conversations/${enc(feed)}/messages`;
-  const topic = Boolean(chat.topic);
-  const tracker = useRef<LarkReadTracker | null>(null);
-  const [flash, setFlash] = useState<{ id: string; n: number } | null>(null);
-  const jumpTo = useRef<string | null>(null);
-  const [pinThread, setPinThread] = useState<ChatPinTarget | null>(null);
-  const [adding, setAdding] = useState<LarkMessage | null>(null);
-  const [changingPin, setChangingPin] = useState(false);
-  const [pinRecheck, setPinRecheck] = useState(false);
-  // Older pages as the list nears its top (lark-history.ts); 回到最新 from the newest messages this window kept.
-  const paging = useRef(new OlderPaging());
-  const [, setPagingTick] = useState(0);
-  const latest = useRef<LarkPage | null>(null);
-  const toEnd = useRef(false);
-  const windowGen = useRef(0);
-  const [jumpShown, setJumpShown] = useState(false);
-  const [jumping, setJumping] = useState(false);
-  const prefs = useTranslatePrefs();
-  const translateTo = translatesChat(prefs, feed) ? prefs.target : undefined;
-  // A topic group: a card per topic, its newest replies on it, its thread in a dialog (LarkTopicCard.tsx).
-  const topicReplies = useTopicReplies(feed, ol);
-  const [openTopic, setOpenTopic] = useState<LarkMessage | null>(null);
-  useLarkDisplayState(ol); // 防撤回 / 编辑历史 (lark-display.ts): read while the chat shows
-
-  useEffect(() => {
-    let live = true;
-    placed.current = false;
-    tracker.current = null;
-    setPage(null);
-    setError("");
-    setReplyTo(null);
-    setFlash(null);
-    setPinThread(null);
-    setOpenTopic(null);
-    paging.current.reset();
-    latest.current = null;
-    toEnd.current = false;
-    windowGen.current++;
-    setJumpShown(false);
-    setJumping(false);
-    api<LarkPage>(larkPath(`${base}?limit=${PAGE}${focus ? `&around=${enc(focus)}` : ""}`, ol))
-      .then((r) => {
-        if (!live) return;
-        const messages = mergeMessages([], r.messages ?? []);
-        tracker.current = new LarkReadTracker(initialCursor(focus, messages, topic || Boolean(r.topic)));
-        setPage({ ...r, messages });
-      })
-      .catch((e) => live && setError(errorText(e)));
-    return () => {
-      live = false;
-    };
-  }, [base, focus, topic, ol]);
-
-  // New messages in this chat (the hub's `lark` push names the chats): read the newest page again when we show it.
+/** …and its feed, where a thread''s `lark` push names the chats): read the newest page again when we show it.
   const pageRef = useRef(page);
   pageRef.current = page;
   useEffect(
@@ -497,6 +419,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       </div>
       <LarkComposer
         ref={composer}
+        canClimb={climbs(display) && !topic && !page.topic}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
         onSend={handleSend}
@@ -704,7 +627,7 @@ function MessageBody({ m, translateTo }: { m: LarkMessage; translateTo?: string 
           {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
         </p>
       )}
-      {shown ? <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+      {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
       {shown && m.recalled && <p className="mt-0.5 text-[11px] text-ink-3">{t("inbox-larkthread.recalled_mark")}</p>}
       {translateTo && <TranslationLine m={m} target={translateTo} />}
     </>
@@ -825,7 +748,7 @@ function Message({
             {m.reply_to.sender_name ? t("inbox-larkthread.quoted_sender", { name: m.reply_to.sender_name }) : ""}{quoteSummary(display, m.reply_to)}
           </p>
         )}
-        {shown ? <Parts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
+        {shown ? <ClimbedParts parts={m.parts?.length ? m.parts : [{ kind: "text", text: m.text ?? "" }]} display={display} render={(parts) => <Parts parts={parts} />} /> : <p className="text-[13px] text-ink-3 italic">{t("inbox-larkthread.recalled")}</p>}
         {((shown && m.recalled) || (compact && m.edited)) && (
           <p className="mt-0.5 flex items-center gap-2 text-[11px] text-ink-3">
             {shown && m.recalled && <span>{t("inbox-larkthread.recalled_mark")}</span>}

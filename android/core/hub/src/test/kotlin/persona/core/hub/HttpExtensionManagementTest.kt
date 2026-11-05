@@ -454,7 +454,60 @@ class HttpExtensionManagementTest {
         api.uninstall("example-gateway", keepData = true)
         server.takeRequest().let { assertEquals("DELETE", (it.method).zhAny()); assertEquals("/api/v1/plugins/example-gateway/-/?keep_data=1", (it.path).zhAny()) }
         server.enqueue(MockResponse().setBody("""{"ok":true}"""))
-        api.uninstall("example-gateway")
+        api.uninstall("example-gateway", keepData = false)
         assertEquals("/api/v1/plugins/example-gateway/-/", (server.takeRequest().path).zhAny())
+        // Like the web: an uninstall keeps the data unless told otherwise.
+        server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+        api.uninstall("example-gateway")
+        assertEquals("/api/v1/plugins/example-gateway/-/?keep_data=1", (server.takeRequest().path).zhAny())
+    }
+
+    @Test fun autoUpgradesAndAnExtensionsUpgradeLines() = withHub(legacy = false) { server, api ->
+        server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"example-ui","name":"Example UI","status":"running","auto_upgrade":true,
+            "upgrade":{"id":"example-ui","market":"m1","from":"1.0.0","to":"1.2.0","state":"needs_permission",
+            "added_permissions":[{"key":"net","title":"访问更多网络","detail":"api.example.com"}]},
+            "upgrade_note":{"kind":"rolled_back","from":"1.0.0","to":"1.1.0","at":"2026-11-04T06:00:00Z"}}]}"""))
+        val extension = api.extensions().single()
+        server.takeRequest()
+        assertEquals(true, extension.autoUpgrade)
+        assertEquals("needs_permission", (extension.upgrade!!.state).zhAny())
+        assertEquals("net", (extension.upgrade!!.addedPermissions!!.single().key).zhAny())
+        assertEquals("rolled_back", (extension.upgradeNote!!.kind).zhAny())
+
+        server.enqueue(MockResponse().setBody("""{"auto":true,"upgrades":[],"off":[]}"""))
+        assertEquals(true, api.autoUpgrades())
+        assertEquals("/api/v1/extensions/-/upgrades", (server.takeRequest().path).zhAny())
+
+        server.enqueue(MockResponse().setBody("""{"auto":false}"""))
+        assertEquals(false, api.setAutoUpgrades(false))
+        server.takeRequest().let {
+            assertEquals("PUT", (it.method).zhAny())
+            assertEquals("""{"auto":false}""", (it.body.readUtf8()).zhAny())
+        }
+
+        server.enqueue(MockResponse().setBody(detail))
+        api.setAutoUpgrade("example-ui", false)
+        server.takeRequest().let {
+            assertEquals("/api/v1/extensions/example-ui/-/auto-upgrade", (it.path).zhAny())
+            assertEquals("""{"auto":false}""", (it.body.readUtf8()).zhAny())
+        }
+
+        // A hub from before auto-upgrades has no route: no switch.
+        server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"not found"}"""))
+        assertNull(api.autoUpgrades())
+    }
+
+    @Test fun readsAMachineListAndWhoseProgramItPicks() = withHub(legacy = false) { server, api ->
+        server.enqueue(MockResponse().setBody("""{"id":"cua","name":"操控电脑","status":"running","nodes":[{"machine_id":"m-a","state":"running","version":"0.3.0"}],
+            "node_machines":"machines","form":{"fields":[{"name":"machines","type":"array","title":"在哪些 Mac 上用",
+            "items":{"type":"string","format":"machine","os":["darwin"]},"confirm":"扩展开着时这台 Mac 不会自动锁屏。"}]},"config":{"machines":["m-a"]}}"""))
+        val d = api.extension("cua")
+        server.takeRequest()
+        val field = d.form.single()
+        assertTrue(field.items!!.machines)
+        assertEquals(listOf("darwin"), (field.items!!.os).zhAny())
+        assertEquals("扩展开着时这台 Mac 不会自动锁屏。", (field.confirm).zhAny())
+        assertEquals("machines", (d.nodeMachines).zhAny())
+        assertEquals("running", (d.extension.nodes!!.single().state).zhAny())
     }
 }

@@ -277,3 +277,49 @@ func TestQuestionWithPreviews(t *testing.T) {
 		t.Errorf("no previews: keys %v", o.Keys)
 	}
 }
+
+// #2872: the agent's own answer above a dialog is often a numbered list (「I'll do three things: 1. … 2. …」). Those
+// numbers are the conversation's words, not the dialog's options: the options start under the rule that opens the
+// dialog (dialogTop), and the dialog is the last thing on screen. Read as options they made the auto mode notice a
+// choice, so NoticeOnly said no and dismiss_notice refused to close it (#2612, #2553).
+func TestNumberedListItemInTheAnswerIsNotAnOption(t *testing.T) {
+	const answer = "⏺ I'll do three things:\n  1. Fix the race in the watcher\n  2. Add a regression test\n  3. Push the branch"
+	notice := strings.Replace(fixture(t, "claude-2.1.309-auto-mode-notice-120.txt"), "⏺ All 48 tests pass.", answer, 1)
+	if !strings.Contains(notice, "Fix the race in the watcher") {
+		t.Fatal("the committed notice no longer holds the answer this test swaps")
+	}
+	if d := ParseDialog(notice); d != nil {
+		t.Fatalf("the answer's numbered list read as the notice's options: %q %+v", d.Question, d.Options)
+	}
+	if !NoticeOnly(notice) {
+		t.Error("the notice under a numbered answer is no longer a notice")
+	}
+	if got := DialogHead(notice); got != "We're changing auto mode to no longer charge for classifier requests in Claude Code." {
+		t.Errorf("the notice's first line: %q", got)
+	}
+
+	// A finished turn ends the conversation: the list is not a dialog either, whatever is (or is not) below it.
+	if d := ParseDialog("❯ run the tests\n\n⏺ What I'll do:\n  1. Fix the flaky test\n  2. Push the branch\n\n✻ Cooked for 12s\n"); d != nil {
+		t.Fatalf("a finished answer read as a dialog: %q %+v", d.Question, d.Options)
+	}
+
+	// The rules of the conversation above do not count: the dialog is read under its own rule all the same.
+	const twoLists = `❯ run the tests
+
+⏺ What I'll do:
+  1. Fix the flaky test
+  2. Push the branch
+
+✻ Cooked for 12s
+────────────────────────────────────
+ Pick one
+
+ ❯ 1. Yes
+   2. No
+
+ Enter to confirm · Esc to cancel
+`
+	if d := ParseDialog(twoLists); d == nil || d.Question != "Pick one" || len(d.Options) != 2 || d.Options[1].Label != "No" {
+		t.Fatalf("the dialog under the answer's list: %+v", d)
+	}
+}
