@@ -18,6 +18,8 @@ import (
 // Typing into someone's terminal is the riskiest thing Persona does. Before a message goes into a running agent's
 // pane the node reads the screen and refuses — nothing typed — when
 //   - a dialog has the keyboard (permission prompt, picker, rewind): the text would pick an option (dialog_open);
+//     A notice that Enter only closes (Claude Code's auto mode billing notice) is closed first when the send asks
+//     for it (dismiss_notice); a refusal says what the dialog is (its first line) and whether it is such a notice;
 //   - Claude's input box holds a draft typed at the computer, or bash mode: the message would be appended to it and
 //     sent together, or run as a command (input_draft, with the box's text). The app may ask to clear that exact
 //     draft and send (clear_draft).
@@ -59,6 +61,9 @@ type sendOpts struct {
 	ClientMsgID string `json:"client_msg_id"`
 	// ClearDraft is the draft the user saw in a refusal and chose to clear: cleared only if the box still shows it.
 	ClearDraft string `json:"clear_draft"`
+	// DismissNotice: a notice that Enter only closes («Enter to continue», no options) is closed before the text is
+	// typed. Any other dialog is refused as before.
+	DismissNotice bool `json:"dismiss_notice"`
 	// Launcher (and its model) resumes a session that is not running when nothing on this machine says which
 	// launcher it ran with: the hub sends 新建 Agent's (hub/send.go). A recorded or inferred launcher wins.
 	Launcher         string `json:"launcher"`
@@ -104,6 +109,15 @@ func refusal(code, message string, data map[string]any) error {
 // checkPane refuses a send into a pane that is not ready for typed text, after clearing the draft the user agreed
 // to clear. kind is the agent ("claude", "codex", TRAEX).
 func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) error {
+	return n.checkPaneFor(ctx, pane, kind, sendOpts{ClearDraft: clearDraft})
+}
+
+// noticeTries is how many notices in a row a send closes at most (one may follow another).
+const noticeTries = 3
+
+// checkPaneFor is checkPane with the send's options: the draft to clear and whether to close a notice.
+func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpts) error {
+	clearDraft := opts.ClearDraft
 	// Codex / TRAEX: their own screen (codexask.go) — a draft in the box, an approval or a question overlay refuses;
 	// the transcript pager and 0.163's question pane are only shown, and step aside.
 	if kind == "codex" || kind == traexAgent {
@@ -116,8 +130,13 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 	// same there), any other agent: only the numbered approvals and pickers.
 	if kind != "claude" || n.plainScreen(pane) {
 		text, err := n.readPane(ctx, pane, "visible", 60)
+		if err == nil && opts.DismissNotice {
+			if text, err = n.closeNotices(ctx, pane, text, false); err != nil {
+				return err
+			}
+		}
 		if err == nil && screen.Choosing(text) {
-			return refusal(screen.DialogOpen, dialogMessage, nil)
+			return dialogRefusal(text)
 		}
 		return nil
 	}
@@ -128,7 +147,14 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 		}
 		return s
 	}
-	code, in := screen.CheckClaude(read())
+	shown := read()
+	if opts.DismissNotice {
+		var err error
+		if shown, err = n.closeNotices(ctx, pane, shown, true); err != nil {
+			return err
+		}
+	}
+	code, in := screen.CheckClaude(shown)
 	// What we typed a moment ago may still show while Claude takes it: wait for the box to empty rather than call our
 	// own message a draft.
 	for wait := time.Now().Add(2 * time.Second); code == screen.InputDraft && n.typing.ours(pane, in.Text) && time.Now().Before(wait); {
@@ -144,7 +170,7 @@ func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) err
 	}
 	switch code {
 	case screen.DialogOpen:
-		return refusal(code, dialogMessage, nil)
+		return dialogRefusal(screen.Plain(shown))
 	case screen.InputDraft:
 		data := map[string]any{"draft": in.Text}
 		if in.Clearable != "" {
@@ -198,6 +224,87 @@ func (n *Node) typingRefusal(id, text string, keys, pre []string) error {
 }
 
 const dialogMessage = "电脑上的终端正开着一个对话框（确认、选择列表等），这条消息没有发出去：先回答或关掉它再发。"
+
+// dialogRefusal refuses a send into a pane whose screen (plain) shows a dialog, saying which: its first line, and
+// notice when Enter only closes it (a send with dismiss_notice would close it and go through).
+func dialogRefusal(plain string) error {
+	head, notice := screen.DialogHead(plain), screen.NoticeOnly(plain)
+	msg := dialogMessage
+	if head != "" {
+		msg = "电脑上的终端正开着一个对话框（「" + clipDialog(head, 120) + "」），这条消息没有发出去："
+		if notice {
+			msg += "它只是一条通知，按回车就关掉，可以让发送先关掉它再发。"
+		} else {
+			msg += "先回答或关掉它再发。"
+		}
+	}
+	data := map[string]any{"notice": notice}
+	if head != "" {
+		data["dialog"] = head
+	}
+	return refusal(screen.DialogOpen, msg, data)
+}
+
+func clipDialog(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
+// closeNotices presses Enter on the notice shown at the bottom of pane (shown: its screen, with colors when ansi),
+// and again on another notice that takes its place, up to noticeTries; it returns the screen after. Enter goes in
+// only on a notice, and once per notice: after each press the screen is read until the notice is gone or another
+// one shows (noticeSettle), never again on the same one — a second Enter on Claude's input box would send its
+// suggestion. A notice still there then refuses the send. A failed key press refuses it too: nothing was typed.
+func (n *Node) closeNotices(ctx context.Context, pane, shown string, ansi bool) (string, error) {
+	read := func() (string, error) {
+		if ansi {
+			if s, err := n.readPaneANSI(ctx, pane, "visible", 60); err == nil {
+				return s, nil
+			}
+		}
+		return n.readPane(ctx, pane, "visible", 60)
+	}
+	for try := 0; try < noticeTries; try++ {
+		plain := screen.Plain(shown)
+		if !screen.NoticeOnly(plain) {
+			return shown, nil
+		}
+		head := screen.DialogHead(plain)
+		if n.logger != nil {
+			n.logger.Printf("closing a notice in %s before sending (dismiss_notice): %s", pane, head)
+		}
+		if err := n.sendKeys(ctx, pane, "enter"); err != nil {
+			return "", dialogRefusal(plain)
+		}
+		n.forgetDialog(pane)
+		gone := false
+		for end := time.Now().Add(noticeSettle); ; {
+			time.Sleep(noticeSettle / 10)
+			s, err := read()
+			if err != nil {
+				return "", err
+			}
+			shown = s
+			p := screen.Plain(s)
+			if !screen.NoticeOnly(p) || screen.DialogHead(p) != head {
+				gone = true
+				break
+			}
+			if time.Now().After(end) {
+				break
+			}
+		}
+		if !gone {
+			return "", dialogRefusal(screen.Plain(shown)) // Enter did not close it: not pressed again
+		}
+	}
+	return shown, nil
+}
+
+// noticeSettle is how long Claude has to take a notice off the screen after Enter. Tests shorten it.
+var noticeSettle = time.Second
 
 func draftMessage(draft string) string {
 	if r := []rune(draft); len(r) > 200 {

@@ -339,6 +339,85 @@ func Choosing(plain string) bool {
 	return false
 }
 
+// historyRE starts a row of the conversation above a dialog: the user's prompt at the left edge (`❯ fix it`), the
+// agent's words (⏺), a tool's output (⎿), a finished turn (✻). A dialog's cursor on a numbered choice can be at the
+// left edge too (`❯ 1. 预览`, AskUserQuestion 2.1.316): isHistory leaves it out.
+var historyRE = regexp.MustCompile(`^(?:❯ |\s*[⏺⎿✻])`)
+
+func isHistory(line string) bool { return historyRE.MatchString(line) && !selectedRE.MatchString(line) }
+
+// DialogHead is the first line of the dialog at the bottom of a plain screen (Choosing): the first row under the
+// highest rule (or a picker's ▔ edge) between the dialog's footer and the conversation above it, else the first row
+// after the conversation. An AskUserQuestion dialog gives its question instead. "" when no dialog shows.
+func DialogHead(plain string) string {
+	if !Choosing(plain) {
+		return ""
+	}
+	// AskUserQuestion: its first row is the header chip or tab bar (「☐ 环境」), and its cursor can be at the left edge.
+	if d := ParseDialog(plain); d != nil && d.Question != "" && (len(d.Steps) > 0 || d.Header != "" || d.Multi || d.Review) {
+		return d.Question
+	}
+	lines := strings.Split(strings.ReplaceAll(plain, "\r", ""), "\n")
+	top := max(0, len(lines)-DialogLines)
+	start := top
+	for i := len(lines) - 1; i >= top; i-- {
+		if isHistory(lines[i]) {
+			if start == top {
+				start = i + 1
+			}
+			break
+		}
+		if isRule(lines[i]) || pickerEdge(lines[i]) {
+			start = i + 1 // the highest so far: keep looking up
+		}
+	}
+	for _, l := range lines[start:] {
+		if t := strings.TrimSpace(l); t != "" && !isRule(l) && !pickerEdge(l) {
+			return t
+		}
+	}
+	return ""
+}
+
+// pickerEdge: the ▔ row over a picker, maybe with a hint in it (`▔▔▔ Ctrl+Y to paste deleted text ▔`).
+func pickerEdge(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "▔▔▔") }
+
+// noticeFooterRE is the key hint of a notice that only asks to be read: `Enter to continue · Esc to cancel`.
+var noticeFooterRE = regexp.MustCompile(`(?i)^enter to continue\b(?:\s*·\s*esc to (?:cancel|close|go back))?$`)
+
+// NoticeOnly: the dialog at the bottom of a plain screen is a notice that Enter only closes (Claude Code's auto mode
+// billing notice, 2.1.309: 「Enter to continue · Esc to cancel」) — its footer says nothing else, and it has no
+// options, cursor or check boxes. Confirmations, permissions and pickers are never one.
+func NoticeOnly(plain string) bool {
+	if ParseDialog(plain) != nil { // options it can read: a choice, whatever its footer says
+		return false
+	}
+	lines := strings.Split(strings.ReplaceAll(plain, "\r", ""), "\n")
+	foot := -1
+	for i := len(lines) - 1; i >= 0; i-- {
+		if t := strings.TrimSpace(lines[i]); t != "" {
+			if noticeFooterRE.MatchString(t) {
+				foot = i
+			}
+			break
+		}
+	}
+	if foot < 0 {
+		return false
+	}
+	for i := foot - 1; i >= 0 && i >= foot-DialogLines; i-- {
+		if isHistory(lines[i]) {
+			break
+		}
+		t := strings.TrimSpace(lines[i])
+		if selectedRE.MatchString(lines[i]) || numberedRE.MatchString(lines[i]) || cursorRE.MatchString(lines[i]) ||
+			boxRE.MatchString(t) || strings.HasPrefix(t, "❯") || strings.HasPrefix(t, "›") {
+			return false
+		}
+	}
+	return true
+}
+
 // Refusal codes: why text must not be typed into a pane now.
 const (
 	DialogOpen = "dialog_open" // a dialog has the keyboard

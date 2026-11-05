@@ -529,7 +529,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 			// On its app-server (codex_daemon.go): a turn or a steer, nothing typed — a draft in its box stays as it is.
 			return n.sendCodex(ctx, id, text, images)
 		}
-		if err := n.checkPane(ctx, pane, kind, opts.ClearDraft); err != nil { // sendsafe.go
+		if err := n.checkPaneFor(ctx, pane, kind, opts); err != nil { // sendsafe.go
 			return err
 		}
 	} else {

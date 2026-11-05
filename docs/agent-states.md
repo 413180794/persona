@@ -35,6 +35,10 @@ herdr 的状态常常不对（`done` 还在干活，#2069），标题字形和 t
 
 判断（herdr 说 `done` / `idle` / `unknown` 时；`blocked`、`working` 照 herdr）：
 
+- **终端上开着对话框**（#2553，`node/dialogstatus.go`）：上面的判断之后仍是 `done` / `idle` / `unknown` 的 Claude（不含 botmux、Claude 的 agents 列表里的、Persona 自己在操作选择器的），
+  herdr 窗格里的，node 每 5 秒在后台读一次它的屏幕（列表不等读屏），底部是对话框（`screen.Choosing`）就记为 `blocked`，`attention_reason` 是对话框第一行，App 列表和助手 `agents_list` 的「最后说」显示这一行。
+  起因：Claude Code 2.1.309 的 auto mode 计费通知挡住了 3 个 Agent 好几分钟，herdr 报 done，Persona 显示成完成未看。
+
 - **有 hook 且 `prompts > completed`**：工作中，覆盖 herdr 的 `done`。
 - **有 hook 且 `prompts == completed` 并且见过 `Stop`**：没在工作，终端标题里残留的转圈字形也不算。例外：transcript 里有一轮在 `Stop` 之后（加 5 秒宽限，让收尾的几行写完）才写的、还没结束的，
   是 hook 没通知的新一轮（后台任务或 `/loop` 唤醒 Claude、Stop hook 又让它接着干），这一轮按没有 hook 的规则判断。

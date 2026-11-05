@@ -604,6 +604,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 
 	var out []proto.Session
 	seen := map[string]bool{}
+	livePanes := map[string]bool{} // the resting Claudes' panes, whose screens are read for a dialog
 	now := time.Now()
 	for id, a := range agents {
 		if !onList[id] { // a pane on Claude's agents list stays idle: the transcript is its parked session's (claudebg.go)
@@ -649,6 +650,12 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		}
 		if why := n.lostFirstPrompt(id, s.Status); why != "" { // its first message did not go in (firstprompt.go)
 			s.Status, s.AttentionReason = proto.StatusBlocked, why
+		}
+		if restingClaude(a, s.Status) && !onList[id] && !n.isDriving(id) {
+			livePanes[a.PaneID] = true
+			if head := n.dialogOn(a.PaneID); head != "" { // a dialog holds its terminal (dialogstatus.go)
+				s.Status, s.AttentionReason = proto.StatusBlocked, head
+			}
 		}
 		if !onList[id] { // the list's prompt is no suggestion of its
 			s.Suggestion = n.noteStatus(id, a.Agent, a.PaneID, s.Status) // suggestion.go
@@ -712,6 +719,8 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		out = append(out, s)
 		seen[id] = true
 	}
+
+	n.forgetDialogs(livePanes)
 
 	for _, s := range n.starts.listed(seen) { // starting.go
 		n.decorate(&s)
@@ -1613,6 +1622,23 @@ func (n *Node) claudeStatus(id string, a host.Agent, now time.Time) string {
 		return proto.StatusWorking
 	}
 	return a.AgentStatus
+}
+
+// restingClaude: a Claude Code in a herdr pane whose host says its turn is over (or does not know), so a dialog on
+// its screen is what it waits on (dialogstatus.go). Only herdr: where it was seen (#2553); Orca reports its own
+// permission state, and botmux sessions have no screen of theirs to read.
+func restingClaude(a host.Agent, status string) bool {
+	if a.Agent != "claude" || a.PaneID == "" || host.ParsePane(a.PaneID).Kind != host.Herdr {
+		return false
+	}
+	return status == proto.StatusDone || status == proto.StatusIdle || status == proto.StatusUnknown
+}
+
+// isDriving: Persona is working the session's TUI itself (modes.go): a picker it opened is not the user's to answer.
+func (n *Node) isDriving(id string) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.driving[id]
 }
 
 // claudeSpinnerTitle: the terminal title starts with the spinner Claude Code shows in it while it works — a quarter

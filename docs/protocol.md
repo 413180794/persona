@@ -827,7 +827,7 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 
 | `code` | 什么时候 | 其他字段 |
 | --- | --- | --- |
-| `dialog_open` | 有对话框占着键盘：权限确认、信任目录、模型选择、rewind…（底部有 `Esc to cancel` / `Enter to confirm`，或输入框下面有带光标的编号选项） | `delivered: "none"` |
+| `dialog_open` | 有对话框占着键盘：权限确认、信任目录、模型选择、rewind、Claude Code 自己的通知…（底部有 `Esc to cancel` / `Enter to confirm`，或输入框下面有带光标的编号选项） | `delivered: "none"`、`dialog`（对话框第一行）、`notice`（只是按回车就关的通知时为 true） |
 | `input_draft` | Claude 的输入框里有电脑上没发出去的字、bash 模式（`!`）、粘贴占位、被窗格截掉的长草稿 | `delivered: "none"`、`draft`（输入框里的字）、`clearable`（只有一行字时才有） |
 | `open_elsewhere` | 要恢复的 Claude 会话正在别处开着：有活着的 claude 在 `sessions/<pid>.json` 里开着它（Claude 桌面版、Persona 不驱动的终端）。再 `claude --resume` 会让两个进程同时写这个会话 | `delivered: "none"`、`pid` |
 | `engine_missing` | 要新开或恢复会话，这台电脑的引擎（herdr）却没在运行或没装 | `delivered: "none"`、`detail`（引擎自己的报错） |
@@ -846,6 +846,8 @@ hub 还要先等小模型起完标签名（约 2 秒）。现在 `POST /api/v1/s
 - 同一个会话的发送一条一条来（node 的 `typingLocks`）：两条同时进来（连点、两台设备），以前第二条读屏时第一条还在输入框里（herdr
   `agent.prompt` 先粘贴、约 300 ms 后才回车），被当成草稿拒掉，还提示「清空并发送」——清掉的是用户自己的第一条。读屏看到的是 5 秒内刚打进去的字
   （或长文本的 `[Pasted text #1 …]`）时，等它被收走（最多 2 秒）。
+- `dismiss_notice`（#2553）：底部是只写着「Enter to continue」（后面最多跟一个 `Esc to cancel`）、没有选项 / 光标 / 勾选框的通知时，先按一次回车关掉（最多连关 3 个）再照常检查、发送。
+  确认、权限、选择列表、提问一律照旧回 `dialog_open`，不自动按。助手的 `agent_send` 有同名参数，看到 `notice: true` 的拒绝后带上它重发。
 - 离线会话 `--resume` 拉起后同样先读屏：Claude 起来就停在对话框上时回 `dialog_open`，不往对话框里打字。
 - Codex / TRAEX 只查对话框（`› 1.` 这样的编号选择），不查草稿：输入框里有字时消息会接在后面。旧 App 只认 `error` 字段，看到的就是拒绝原因。
 - 链路和耗时见 `docs/archive/lanes/session-verify.md`。

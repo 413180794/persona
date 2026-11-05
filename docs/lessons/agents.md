@@ -295,3 +295,10 @@ claude 刚出来 7 秒就判了超时；标签页留在那里，里面的 claude
 - 清输入框：一行的用 `ctrl+k ctrl+u`（不会出提示），多行的只有 `ctrl+c` 一次清得掉，它会在底下显示 `Press Ctrl-C again to exit`，只按一次、且只在确认框里是那条消息时按。
 - 测试：`node/rewind_sim_test.go` 的 `claudeSim` 按录下的画法画这些屏，`TestClaudeSimMatchesRecordedScreens` 逐行对录屏，所以流程测试跑的是真屏幕的样子；
   真机只在一次性的会话里跑过（`go test -tags herdrlive -run TestLiveRewind`，`JARVIS_LIVE_PANE` / `JARVIS_LIVE_PROMPT`）。
+
+## herdr 把挡着终端的 Claude 通知报成 done（2026-11-05，#2553）
+
+Claude Code 2.1.309 在一轮结束后弹出 auto mode 计费通知（「We're changing auto mode…」「Enter to continue · Esc to cancel」），herdr 的 `agent_status` 照样是 `done`，
+Persona 只看 herdr 和 hook，于是 3 个被挡住的 Agent 显示成「完成未看」好几分钟；发消息时 `checkPane` 读屏看到对话框一律拒绝，助手也关不掉。
+现在 node 定期读歇着的 Claude 的屏幕，有对话框就记为「需要你」（`node/dialogstatus.go`）；只按回车就关的通知可以用 `dismiss_notice` 先关掉再发。
+这个通知在走网关（非 anthropic.com 的 base URL）的会话上出现，Claude Code 没有关掉它的设置：按回车后记下 `autoModeClassifierBillingNoticeAcknowledgedAt`，24 小时后会再弹。

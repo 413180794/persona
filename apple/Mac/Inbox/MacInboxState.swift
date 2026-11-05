@@ -11,11 +11,14 @@ enum MacInboxSelection: Hashable {
     case agent(String)
 }
 
-/// One of the sidebar's inbox entries: 全部, 飞书, each mail account (sources), then @我 / 私聊 / 群聊 / 邮件 / Agent (kinds).
+/// One of the sidebar's inbox entries: 全部, 飞书, each mail account, each connector with items (sources), then @我 / 私聊 /
+/// 群聊 / 邮件 / Agent (kinds).
 enum MacInboxFilter: Hashable, Identifiable {
     case all
     case feishu
     case account(MailAccount)
+    /// A connector with items in the list (GitHub…), as the iPhone's and the web's source chips (#2611).
+    case connector(id: String, name: String)
     case kind(String)
 
     var id: String {
@@ -23,6 +26,7 @@ enum MacInboxFilter: Hashable, Identifiable {
         case .all: "all"
         case .feishu: "feishu"
         case .account(let a): "account." + a.id
+        case .connector(let id, _): "connector." + id
         case .kind(let k): "kind." + k
         }
     }
@@ -35,6 +39,7 @@ enum MacInboxFilter: Hashable, Identifiable {
         case .all: "全部"
         case .feishu: "飞书"
         case .account(let a): InboxView.short(a.email)
+        case .connector(_, let name): name
         case .kind(let k): Self.kinds.first { $0.key == k }?.title ?? k
         }
     }
@@ -44,6 +49,7 @@ enum MacInboxFilter: Hashable, Identifiable {
         case .all: Theme.Icon.inbox
         case .feishu: Theme.Icon.feishuChats
         case .account: Theme.Icon.mail
+        case .connector: Theme.Icon.connectors
         case .kind(let k):
             switch k {
             case "mention": Theme.Icon.mention
@@ -60,6 +66,7 @@ enum MacInboxFilter: Hashable, Identifiable {
         switch self {
         case .feishu: "feishu"
         case .account(let a): a.id
+        case .connector(let id, _): id
         default: ""
         }
     }
@@ -112,6 +119,7 @@ final class MacInboxState {
             if !kind.isEmpty { return .kind(kind) }
             if source == "feishu" { return .feishu }
             if let a = accounts.first(where: { $0.id == source }) { return .account(a) }
+            if let c = connectorSources.first(where: { $0.source == source }) { return c }
             return .all
         }
         set {
@@ -121,7 +129,16 @@ final class MacInboxState {
     }
 
     /// The sidebar's entries: sources, then kinds.
-    var sources: [MacInboxFilter] { [.all, .feishu] + accounts.map { .account($0) } }
+    var sources: [MacInboxFilter] { [.all, .feishu] + accounts.map { .account($0) } + connectorSources }
+
+    /// The connectors with items in the list, one entry each (the iPhone's `connectorSources`); none, no entry.
+    var connectorSources: [MacInboxFilter] {
+        var seen = Set<String>()
+        return store.items.compactMap { it in
+            guard it.connector != nil, seen.insert(it.account).inserted else { return nil }
+            return .connector(id: it.account, name: it.accountName)
+        }
+    }
     var kinds: [MacInboxFilter] { MacInboxFilter.kinds.map { .kind($0.key) } }
 
     func matches(_ it: InboxItem, source: String? = nil, kind: String? = nil, query: String? = nil) -> Bool {
@@ -231,6 +248,8 @@ final class MacInboxState {
         guard let api = model.api, let a = try? await api.mailAccounts() else { return }
         accounts = a
         StateCache.save("mail-accounts", a)
-        if !source.isEmpty, source != "feishu", !a.contains(where: { $0.id == source }) { source = "" }
+        // A connector's id is not a mail account: it stays (its entry comes and goes with its items).
+        if !source.isEmpty, source != "feishu", !a.contains(where: { $0.id == source }),
+           !store.items.contains(where: { $0.connector != nil && $0.account == source }) { source = "" }
     }
 }

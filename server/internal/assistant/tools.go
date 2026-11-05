@@ -142,6 +142,9 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			Machine   string `json:"machine"`
 			SessionID string `json:"session_id"`
 			Text      string `json:"text"`
+			// DismissNotice: close a notice that Enter only closes (no options) before sending; any other dialog
+			// still refuses the send.
+			DismissNotice bool `json:"dismiss_notice"`
 		}
 		_ = json.Unmarshal(args, &a)
 		am, c, err := s.findAgent(ctx, a.Machine, a.SessionID)
@@ -158,7 +161,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			return "", fmt.Errorf("text is empty")
 		}
 		if c.Status != proto.StatusOffline {
-			if err := s.call(ctx, am.ID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": a.Text}, nil); err != nil {
+			if err := s.call(ctx, am.ID, DeviceSessionSend, sendParams(c.SessionID, a.Text, a.DismissNotice), nil); err != nil {
 				return "", err
 			}
 			return fmt.Sprintf("Sent to %s on %s.", agentLabel(c), am.Name), nil
@@ -167,7 +170,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		// take minutes and goes on if this call stops waiting.
 		sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 		defer cancel()
-		if err := s.call(sctx, am.ID, DeviceSessionSend, map[string]any{"session_id": c.SessionID, "text": a.Text}, nil); err != nil {
+		if err := s.call(sctx, am.ID, DeviceSessionSend, sendParams(c.SessionID, a.Text, a.DismissNotice), nil); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("Resumed %s on %s (same session, directory and launcher) and sent.", agentLabel(c), am.Name), nil
@@ -490,8 +493,11 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 		for _, p := range pending[[2]string{r.m.ID, c.SessionID}] {
 			fmt.Fprintf(&b, "    等你：%s\n", p)
 		}
-		if c.LastText != "" {
-			fmt.Fprintf(&b, "    最后说：%s\n", clip(oneLine(c.LastText), 200))
+		// Why it waits, while it does (a dialog's first line, a host's reason), as the apps' rows show it; else its last words.
+		if last := c.LastText; c.State == proto.StateNeedsYou && strings.TrimSpace(c.AttentionReason) != "" {
+			fmt.Fprintf(&b, "    最后说：%s\n", clip(oneLine(c.AttentionReason), 200))
+		} else if last != "" {
+			fmt.Fprintf(&b, "    最后说：%s\n", clip(oneLine(last), 200))
 		}
 	}
 	if len(offline) > 0 {
@@ -530,4 +536,13 @@ func questionSummary(ix proto.Interaction) string {
 		parts = append(parts, part)
 	}
 	return strings.Join(parts, " / ")
+}
+
+// sendParams are an agent_send's session.send parameters.
+func sendParams(session, text string, dismissNotice bool) map[string]any {
+	p := map[string]any{"session_id": session, "text": text}
+	if dismissNotice {
+		p["dismiss_notice"] = true
+	}
+	return p
 }

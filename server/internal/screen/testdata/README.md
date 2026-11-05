@@ -4,6 +4,7 @@
 `.txt` 是同一屏的纯文本。Claude Code 改界面时加一份新版本的，老版本的留着。
 
 - `claude-2.1.312-*`：本仓库在一个临时目录里起的 claude 上录的（路径换成了 `/private/tmp/project`）；`-suggestion-171` 是一轮结束后输入框里的灰色建议（`-suggestion-typed-171` 是在它上面打了字）。
+- `claude-2.1.309-auto-mode-notice-120.txt`：auto mode 计费变更的提示框（「Enter to continue · Esc to cancel」，#2553）。当时的窗格已经被按掉，没能录下；照 2.1.309 二进制里的原文和 Claude 对话框的版式拼的，网关链接换成了 example.com。录到真屏后替换。
 - `claude-rewind-2.1.304-*`：取自 Ovis（github.com/devswha/ovis，`server/fixtures/`，MIT License，Copyright (c) 2026 devswha）。
 - `codex-0.153.4-*` / `codex-0.163.0-*`：本仓库在一个独立的 herdr 会话里起的 Codex（ChatGPT 登录）上录的，内容是编的（横幅颜色、example.com），
   路径换成了 `/private/tmp/project`；`@` 文件选择那屏会列出这台机器装的插件和 skill，没收进来。宽度是无头 herdr 窗格的 120 列。

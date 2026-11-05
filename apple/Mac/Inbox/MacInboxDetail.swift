@@ -114,6 +114,11 @@ struct MacInboxItemDetail: View {
     @ViewBuilder private var content: some View {
         if current.doc != nil {
             InboxDocDetailView(item: current)
+        } else if current.connector != nil {
+            // GitHub, Telegram…: the thread as the connector draws it, as on iOS and the web (#2611).
+            InboxConnectorDetailView(item: current)
+        } else if let m = current.moment {
+            LarkMomentsPostView(postID: m.postID, pushed: true) // the 公司圈 post and its comments
         } else if let c = item.larkConversation {
             LarkChatView(conversation: c)
         } else if let m = item.mailSummary {

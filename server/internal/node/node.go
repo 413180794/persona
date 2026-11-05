@@ -95,6 +95,7 @@ type Node struct {
 	fulls     map[string]*fullClient     // client id -> a full herdr client running for the web (fullclient.go)
 	suggests  map[string]*suggestState   // session id -> Claude's suggested next message (suggestion.go)
 	driving   map[string]bool            // session id -> Persona is working its TUI (a picker it opened is not "blocked")
+	dialogs   paneDialogs                // pane -> the dialog its last screen read showed (dialogstatus.go)
 	firstWait sync.WaitGroup             // first messages being checked (firstprompt.go)
 	lostFirst lostPrompts                // session id -> why its first message did not go in (firstprompt.go)
 	events    *herdrEvents               // herdr's event stream (herdrevents.go)
@@ -698,6 +699,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.restoreEchoes(a.Echoes)
 		return ok(nil)
 	case "session.keys":
+		if a, ok := n.agent(p.SessionID); ok {
+			defer n.forgetDialog(a.PaneID) // the dialog it showed may be gone (dialogstatus.go)
+		}
 		var dl struct {
 			Rev    string `json:"rev"`
 			Option string `json:"option"`

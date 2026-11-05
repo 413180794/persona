@@ -1,0 +1,18 @@
+
+❯ run the tests again
+
+⏺ All 48 tests pass.
+
+✻ Brewed for 12s · done 5:28 pm
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ We're changing auto mode to no longer charge for classifier requests in Claude Code.
+
+ However, this session isn't eligible because your requests go through a LiteLLM gateway, which isn't compatible with this
+ update.
+
+ Nothing breaks: auto mode keeps working, and its classifier requests are billed as before.
+
+ To fix it and access the new version of auto mode, ask your gateway to implement: https://example.com/gateway-docs
+
+ Enter to continue · Esc to cancel

@@ -6,7 +6,7 @@ import SwiftUI
 // E or ⌫ files the selected as 已处理 and selects the next, ⏎ or a double click opens it in a window of its own (an
 // agent row: its chat), a right-click menu with everything the row can do, swipe left on the trackpad for 已处理.
 
-/// The inbox's filters column: sources (全部, 飞书, each mail account) and kinds (@我, 私聊, 群聊, 邮件, Agent), each with
+/// The inbox's filters column: sources (全部, 飞书, each mail account, each connector with items) and kinds (@我, 私聊, 群聊, 邮件, Agent), each with
 /// what still waits in it; picking one sets the list's filter. The shell's rows (`MacSidebarRow`), not a sidebar
 /// `List`: its words went light gray whenever the window was not the active one (2026-11-02 user: 看不太清).
 struct MacInboxFilters: View {
