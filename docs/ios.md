@@ -696,6 +696,23 @@ TestFlight 开了公开链接、要过 Beta App Review：没配对时原来只�
 
 判断在 `AppModel.isQuiet`：先看 hub 在会话上的 `quiet`，再看当前 hub 的待办（`QuietTasks`：quiet 待办和它的 Agent，放出去的也算）。主对话里的任务卡片、Agents 页的列表照常显示。
 
+### hub 投进对话的消息（#2358）
+
+hub 投给助手的任务通知，以及定时任务、跟进、叫醒、node 重启的说明，在 transcript 里都是用户文字（协议见 `docs/protocol.md`「Persona 注入的消息」）。
+Apple 端不把它们画成用户气泡，也不显示给模型的说明：
+
+- 识别：`Injected.of(item)`（`Shared/Injected.swift`）先看 hub 下发的 `item.injected`；旧 hub 没有这个字段时按文字认，规则和 hub 的 `prompts.ParseInjected` 一样，
+  单测 `InjectedTests` 跑共用夹具 `spec/fixtures/injected/cases.json`。App 自己发的（带 `client_msg_id`）、别的会话发来的（`from`）不认。
+- 对话页：`ChatView.rowView` 画成 `InjectedLine`，是一个居中的胶囊，和「回答了」那行（`AnsweredLine`）同一种样子，图标加 `line`。图标和颜色由 `InjectedLook` 决定，手机、Mac、手表共用：
+  做完是绿色勾，在等你是强调色举手，被打断或没开起来是红色警告，定时任务是闹钟，叫醒是铃，node 重启是灰色信息。
+  任务通知点一下打开任务详情：用 hub 给的 `todo_id`，没有就找这段对话开出的同名任务里最新的一个，找不到就不能点。
+  定时任务或跟进的那行可以点开，看任务本身的要求（`detail`）。
+- 一轮里有几条消息时，平时会合成一个气泡（`mergedUsers`）；其中有注入消息就不合，注入的那条单独画一行。
+  它也不会被当成待发气泡已经送达（`PendingMessage.arrived`）。
+- 手表：对话里画成居中的一行小字（图标加 `line`），不画气泡（截图：mock 加 `MOCK_INJECTED_WATCH=1`，手表 `-openWatchItem session`）。
+- 对话列表的预览取的是助手的话（`last_text`），本来就不含这些消息。
+- `ChatCache` 升到 v9：缓存里的旧条目没有 `injected`。
+
 ## 连接状态（弱网 / 断网）
 
 参考 Telegram：网络有问题时不弹横幅，**页面标题位直接换成「小转圈 + 状态」**，好了以后无声换回（2026-10-29 用户要求，原来列表顶上的

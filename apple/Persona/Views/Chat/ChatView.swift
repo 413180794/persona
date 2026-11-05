@@ -2806,7 +2806,10 @@ struct ChatView: View {
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {
         switch row {
         case .user(let i):
-            if (i.text ?? "").hasPrefix("/loop") {
+            if let n = Injected.of(i) {
+                // Persona's message for the model: one line in its place, never its words (docs/protocol.md「Persona 注入的消息」).
+                InjectedLine(item: i, injected: n, conversation: style == .assistant ? shownKey.sessionID : nil)
+            } else if (i.text ?? "").hasPrefix("/loop") {
                 LoopTickRow(item: i)
             } else if let from = i.from {
                 PeerMessage(item: i, from: from)

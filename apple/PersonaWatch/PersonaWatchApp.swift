@@ -540,18 +540,29 @@ struct WatchSessionView: View {
                     Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
                 ForEach(items.suffix(6)) { it in
-                    // A bubble as wide as its words, the user's on the right, set off from the other edge.
-                    Text(WatchText.shown(it.text ?? ""))
-                        .font(.footnote)
-                        .lineLimit(8)
-                        .padding(Theme.Watch.bubblePadding)
-                        .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
-                        .padding(it.role == "user" ? .leading : .trailing, 14)
-                        .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
-                    // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
-                    if it.role == "user", let c = ChannelSource.of(it.clientMsgID, in: channels ?? []) {
-                        Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    if let n = Injected.of(it) {
+                        // Persona's message for the model (a task's notice, a scheduled run…): its line, centered, never
+                        // its words (docs/protocol.md「Persona 注入的消息」).
+                        Label { Text(n.line) } icon: { Image(systemName: InjectedLook.icon(n)).foregroundStyle(InjectedLook.tint(n)) }
+                            .font(Theme.Font.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        // A bubble as wide as its words, the user's on the right, set off from the other edge.
+                        Text(WatchText.shown(it.text ?? ""))
+                            .font(.footnote)
+                            .lineLimit(8)
+                            .padding(Theme.Watch.bubblePadding)
+                            .background(it.role == "user" ? Theme.accent.opacity(0.25) : Color.white.opacity(0.08), in: .rect(cornerRadius: Theme.Radius.control))
+                            .padding(it.role == "user" ? .leading : .trailing, 14)
+                            .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
+                        // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
+                        if it.role == "user", let c = ChannelSource.of(it.clientMsgID, in: channels ?? []) {
+                            Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
                     }
                 }
                 if let source = session.sourceSubtitle {

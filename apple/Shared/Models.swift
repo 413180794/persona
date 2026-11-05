@@ -1200,9 +1200,12 @@ nonisolated struct Item: Codable, Identifiable, Hashable, Sendable {
     /// kind == .notice: the context was compacted here (the hub's `compact`, or recognized by the app,
     /// `ChatStore.compactions`). Drawn as a divider across the chat (`CompactDivider`).
     var compact: Compaction?
+    /// User text Persona typed in for the model (a task's notice, a scheduled run…; docs/protocol.md「Persona 注入的消息」):
+    /// drawn as one line, not a bubble. Set by the hub; nil from older hubs, which `Injected.of` reads off the text.
+    var injected: Injected? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task, compact
+        case id, seq, ts, role, kind, text, image, queued, from, wake, fold, task, compact, injected
         case toolUseID = "tool_use_id", toolName = "tool_name", toolInput = "tool_input", isError = "is_error", fullSize = "full_size",
              clientMsgID = "client_msg_id"
     }

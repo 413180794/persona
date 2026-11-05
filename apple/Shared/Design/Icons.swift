@@ -40,6 +40,10 @@ extension Theme {
         static let inProgress = "arrow.triangle.2.circlepath"
         static let recurring = "repeat"
         static let schedule = "alarm"
+        /// Persona woke a waiting agent up (a message it typed in for the model, `Injected`).
+        static let wakeUp = "bell.and.waves.left.and.right"
+        /// A task that waits for the user's answer (its notice in the main conversation, `Injected`).
+        static let waitsForYou = "hand.raised.fill"
         /// Asks before acting (the manual permission mode), or needs someone to act.
         static let askFirst = "hand.raised"
         /// bypassPermissions: nothing is asked.
@@ -348,7 +352,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu [removed] words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

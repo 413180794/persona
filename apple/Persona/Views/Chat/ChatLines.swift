@@ -44,7 +44,8 @@ struct ChatLines {
                 let messages = segments.compactMap(\.user)
                 // A finished turn that took several messages reads as one exchange: the messages in one bubble,
                 // one work line for everything, the final answer. Opening the work line splits it back up.
-                if t.id != liveID && messages.count > 1 {
+                // (Never with one of Persona's messages for the model among them: that one is a line of its own.)
+                if t.id != liveID && messages.count > 1 && !messages.contains(where: Self.isInjected) {
                     if !openWork.contains(groupID) {
                         let photos = segments.flatMap { Self.photos($0.rows) }
                         if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
@@ -293,6 +294,11 @@ struct ChatLines {
             }
         }
         return items
+    }
+
+    /// A message Persona typed in for the model (`Injected`): drawn as a line of its own, not merged into a bubble.
+    static func isInjected(_ row: ChatRow) -> Bool {
+        if case .user(let i) = row { Injected.of(i) != nil } else { false }
     }
 
     /// A turn cut at each message: (message, what came after it until the next one).

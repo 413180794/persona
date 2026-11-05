@@ -11254,6 +11254,18 @@ def features():
     return f + [x for x in new if x not in f]
 
 
+# MOCK_INJECTED_WATCH=1 (with MOCK_INJECTED): the main conversation is the one agent working, the others idle and no
+# questions, so the watch lists it first (`-openWatchItem session` opens it; the watch lists no idle assistant
+# conversation). Last, after every other mode has added its sessions and questions.
+if os.environ.get("MOCK_INJECTED_WATCH") == "1":
+    for _s in SESSIONS:
+        _s.update(state="idle", status="idle", pending_interactions=0, seen_at=ago())
+    next(x for x in ASSISTANT if x["session_id"] == ASK1).update(
+        state="working", status="working", state_since=ago(), updated_at=ago())
+    INTERACTIONS[:] = []
+    MOCK_INTERACTIONS[:] = []
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")
