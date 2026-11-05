@@ -285,10 +285,11 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - 一台 Mac 一条连接（`VNC.hold` / `release`）：整页和小窗共用，最后一个放手 2 秒后才断，来回切换不重连。
   - 帧：`RFBFrameSink` 在更新之间从帧缓冲（加锁）拷进 `CVPixelBufferPool`（32BGRA、IOSurface），最多每秒 30 帧，时间戳取主机时钟（递增）。整页的层标 DisplayImmediately；小窗的源层有自己的 `controlTimebase`（主机时钟、速率 1），收不带 DisplayImmediately 的样本（AVFoundation 不建议两者混用）。
   - **小窗的源**（#1839）：一个按 Mac 画面比例、宽 192pt 的显示层（`Theme.Size.pictureInPictureSource`），放在 App 主窗口里、内容的后面：在窗口里、不隐藏、看不见。以前是 2×2pt，从整页开时还加在了整页自己的窗口上，整页一关就没了，真机上小窗起不来（TestFlight 161）。
-  - **什么时候开**：整页一连上就把小窗准备好（源、控制器、音频会话）。「…」› 小窗在点按里直接 `startPictureInPicture`，开起来以后整页再像点 × 一样关掉；整页开着时回桌面，小窗自己开（`canStartPictureInPictureAutomaticallyFromInline`）。从机器页、对话里点「VNC」（记住了登录）时立刻准备，第一帧到了源里再开（`RFBSession.pictured`）；系统没反应就每 1.5 秒再开一次，最多 4 次。15 秒内开不了、系统不让开（`failedToStart`）或要重新登录，就提示「小窗打不开：原因，已改用整页」并打开整页。
-  - 为什么等第一帧（TestFlight 161 的小窗诊断）：源还空着（还在连）时调 `startPictureInPicture`，`isPictureInPicturePossible` 已经是 true，系统却什么也不做，既不开也不报失败；整页里的「小窗」（已经有画面）一点就开。
+  - **什么时候开**：整页一连上就把小窗准备好（源、控制器、音频会话）。「…」› 小窗在点按里直接 `startPictureInPicture`，开起来以后整页再像点 × 一样关掉；整页开着时回桌面，小窗自己开（`canStartPictureInPictureAutomaticallyFromInline`）。从机器页、对话里点「VNC」（记住了登录）时也在点按里开：源里先放一张卡片（下一条），不等连接；`isPictureInPicturePossible` 还是 false 或系统没反应，就在它变成 true 时、隔 0.4 秒、之后每秒再开一次，最多 6 次，只在 App 在前台时开（在后台靠自动开）。8 秒内开不了或系统不让开（`failedToStart`），就提示「小窗打不开：原因，已改用整页」并打开整页。
+  - **卡片**（`VNCPiPCard`，#1839 跟进：用户嫌「连上了才有小窗」迟钝）：Mac 的画面到之前，源里是 `ImageRenderer` 画的一帧（黑底、机器名、转圈的「连接中…」，每 0.1 秒一帧），按主机时钟做成样本塞给源层；这一次连接的第一帧到了（`RFBSession.pictured`，每次连接重新算）换成 Mac 的画面。连不上或中途断了，卡片写原因和「点 ▶ 重新连接，或点还原回到 App」：这时告诉系统「暂停了」，小窗上的 ▶（`setPlaying(true)`）重新连接。记住的密码不对了：App 在前台就打开整页重新登录（小窗交给整页），在后台卡片上说回到 App 登录。
+  - 为什么要卡片（TestFlight 161 的小窗诊断）：源还空着（还在连）时调 `startPictureInPicture`，`isPictureInPicturePossible` 已经是 true，系统却什么也不做，既不开也不报失败；整页里的「小窗」（已经有画面）一点就开。#1928 改成等第一帧再开，能开了，但要等连上。
   - **小窗诊断**（整页「…」里）：设备支不支持画中画、音频会话、后台音频，和小窗最近每一步（`VNCPiPLog`：点了 VNC、准备好了、能不能开、在点按里开还是等画面、开了、关了、为什么改用整页），「复制全部」发给我们。DEBUG 构建的 runtime CLI `state` 里是 `vncPiP`；系统日志里是子系统 jarvis、类别 vnc。
-  - **模拟器没有画中画**（`isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上都是 false），这时点「VNC」直接打开整页。小窗只能在真机上看。
+  - **模拟器没有画中画**（`isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上都是 false），这时点「VNC」直接打开整页。小窗只能在真机上看；DEBUG 启动参数 `-showPiPSource YES` 把小窗的源摆到 App 右上角（不开整页），能在模拟器上看卡片 → 画面 → 断开这一段（`VNCTests.testTheSmallWindowConnectsInIt`），系统小窗本身的开、▶、还原仍只能真机看。
 - **从哪里打开「VNC」**：记住了那台 Mac 的登录、整页没开、设备有画中画时直接进小窗（`AppModel.openVNC`），否则打开整页（要登录时总是整页）。
 - **记住登录**（#1322）：
   - 登录框多一个「在这台手机上记住」（Mac 上是「在这台 Mac 上记住」），默认勾着。浏览器里打开的页面没有这一项，表单标好 `username` / `current-password`，交给浏览器自己的密码管理。
@@ -468,7 +469,7 @@ Cua Driver 在后台操作，不抢焦点，画面里看到的是真实桌面。
   - `ComputerSectionTests.testTheLiveScreenAsksForTheMacsSignIn` 点「VNC」，一直走到它要求登录（ARD）。
   - `ScreenDrawerTests`（mock 加 `MOCK_COMPUTER_OPERATING=1 MOCK_SCREEN=fake`；不加 `MOCK_SCREEN=fake` 时屏幕是这台 Mac 自己的屏幕共享，没开就只显示「hub 不让连这台的屏幕」，用例失败，助手和 Agent 的对话里各有一个在跑的操作）：点助手、Agent 的「正在操作」条和 ··· 菜单打开整页，点 × 关掉。
   - `ScreenPasswordTests`：记住、下次自己登录（真机进小窗，模拟器进整页）、密码改了重输、忘记；一键解锁。
-  - `VNCTests`：小窗（真机：菜单 → 小窗 → 回桌面还在 → 还原成整页 → 回小窗；模拟器没有画中画，只验证退回整页）；整页上两种模式各点一下、拖一下、指针居中（mock 记下的点击和指针位置）、剪贴板来回、键盘打字和 Mac 的那排键、帮助页。`TEST_RUNNER_JARVIS_VNC_PAUSE=2` 放慢，录屏用；`testMeasure`（`MOCK_SCREEN_ANIMATE=1`、`TEST_RUNNER_JARVIS_VNC_MEASURE=1`）打印帧率和延迟。
+  - `VNCTests`：小窗（真机：菜单 → 小窗 → 回桌面还在 → 还原成整页 → 回小窗；模拟器没有画中画，只验证退回整页）；小窗的源（`-showPiPSource`，模拟器也能跑）：点了 1.5 秒内出来、是「连接中」（mock 晚 3 秒才回），然后是实时画面，mock 挂断后写「没连上」；整页上两种模式各点一下、拖一下、指针居中（mock 记下的点击和指针位置）、剪贴板来回、键盘打字和 Mac 的那排键、帮助页。`TEST_RUNNER_JARVIS_VNC_PAUSE=2` 放慢，录屏用；`testMeasure`（`MOCK_SCREEN_ANIMATE=1`、`TEST_RUNNER_JARVIS_VNC_MEASURE=1`）打印帧率和延迟。
   - 连真实 Mac 的登录那一步要那台 Mac 的密码，测试不做。
 - **截图**：mock 的 `MOCK_COMPUTER=ready|permissions|locked|missing|off`（[testing.md](testing.md)），配合 `-tab settings -openMachines YES -openMachineDetail macbook`。
 - **部署后验收**：

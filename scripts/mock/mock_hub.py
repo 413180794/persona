@@ -6585,8 +6585,10 @@ def png(w, h, rgb):
 # MOCK_SCREEN=fake (#1322): the live screen's 5900 goes to a Screen Sharing of the mock's own instead of this Mac's: it
 # signs in with VeNCrypt Plain (noVNC asks for an account and a password, as for macOS's), takes FAKE_SCREEN's account
 # and password (GET /mock/screen-password?p=… changes the password: the Mac's was changed), then shows one frame.
+# …&slow=S: it answers S seconds late (the small window's 连接中…); …&down=1: it hangs up on everyone, now and on
+# connecting (0: back).
 FAKE_SCREEN = {"account": "me", "password": "mock-pass", "port": 0, "signins": [], "typed": "",  # typed: keys after signing in
-               "pointer": None, "clicks": [], "clipboard": "", "conns": [], "frames": 0}
+               "pointer": None, "clicks": [], "clipboard": "", "conns": [], "frames": 0, "slow": 0.0, "down": False}
 FAKE_W, FAKE_H = 480, 300
 
 
@@ -6655,6 +6657,8 @@ def fake_screen_sharing():
     def serve(c):
         lock = threading.Lock()
         conn = {"sock": c, "lock": lock}
+        if FAKE_SCREEN["down"]: return c.close()
+        time.sleep(FAKE_SCREEN["slow"])
         try:
             c.sendall(b"RFB 003.889\n"); exact(c, 12)
             types = [30, 19] if ard else [19]
@@ -8249,6 +8253,12 @@ class H(BaseHTTPRequestHandler):
             if "p" in q: FAKE_SCREEN["password"] = q["p"][0]
             if "clear" in q: FAKE_SCREEN.update(typed="", clicks=[], clipboard="")
             if "clip" in q: fake_screen_clip(q["clip"][0])  # the Mac copied this
+            if "slow" in q: FAKE_SCREEN["slow"] = float(q["slow"][0])
+            if "down" in q:
+                FAKE_SCREEN["down"] = q["down"][0] == "1"
+                for conn in list(FAKE_SCREEN["conns"]) if FAKE_SCREEN["down"] else []:
+                    try: conn["sock"].shutdown(socket.SHUT_RDWR)
+                    except OSError: pass
             return self.send_json({"signins": FAKE_SCREEN["signins"], "typed": FAKE_SCREEN["typed"], "clicks": FAKE_SCREEN["clicks"],
                                    "pointer": FAKE_SCREEN["pointer"], "clipboard": FAKE_SCREEN["clipboard"], "frames": FAKE_SCREEN["frames"]})
         if p == "/mock/churn":

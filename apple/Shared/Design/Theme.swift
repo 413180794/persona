@@ -325,6 +325,9 @@ nonisolated enum Theme {
         /// The width of the small window's source layer (VNC's picture in picture, #1839): a normal size, behind the
         /// app's content; one too small never started.
         static let pictureInPictureSource: CGFloat = 192
+        /// The width the small window's card is drawn at (VNCPiPCard: 连接中…, why not), in points, about the small
+        /// window's own on an iPhone so its text reads at its size there.
+        static let pictureInPictureCard: CGFloat = 240
         static let line: CGFloat = 1
         static let lineMedium: CGFloat = 1.5
         static let rule: CGFloat = 2

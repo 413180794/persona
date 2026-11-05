@@ -828,6 +828,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 ## 模拟器没有画中画；发 RFB 消息别每条开一个 Task（2026-11-04，#1343）
 
 - **画中画**：`AVPictureInPictureController.isPictureInPictureSupported()` 在 iOS 27.0、27.1 的模拟器上（iPhone、iPhone Duo）都是 false，`AVSampleBufferDisplayLayer` 的小窗在模拟器上起不来。App 这时退回整页（`AppModel.openVNC`），UI 测试照这个分支走（`VNCTests` 看到整页就跳过小窗那段）。小窗的录屏和验收只能用真机。
+  不支持的设备上 `AVPictureInPictureController(contentSource:)` 实际返回 nil，Swift 却把它当成非空的对象，第一次用（这里是 KVO 的 `observe`）就崩在 `swift_dynamicCast`。先看 `isPictureInPictureSupported()` 再建；DEBUG 的 `-showPiPSource` 在模拟器上只摆源、不建控制器（#1839）。
 - **发送顺序**：原生 RFB 客户端起先每条指针、按键、剪贴板消息各开一个 `Task { try await transport.send(…) }`。这些 Task 谁先跑没有保证，按下和松开、移动和点击会乱序到 Mac，快速打字时最明显。改成一个发件队列（`AsyncStream`），握手完后由一个任务按顺序发；握手前来的也排在握手之后，不会插进握手中间。别的「多条消息、顺序有意义」的通道（终端按键、WS）同理。
 - **测试读剪贴板**：UI 测试的 runner 写了 `UIPasteboard.general`，App 去读时没弹「允许粘贴」，送到 mock 的剪贴板却是空的（runner 那时在后台，写的没有生效或读不到）。剪贴板的 UI 测试改成在 App 里来回：先「复制到 iPhone」，再「只放进 Mac 的剪贴板」送回 mock，比对 mock 收到的。
 
@@ -875,6 +876,9 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   - 带 `controlTimebase` 的层不要再收 DisplayImmediately 的样本（头文件里明说不建议），给它单独做带时间的样本。
   - 开不了一定要让用户看得到原因（提示 + 一个能复制的诊断页），真机问题才能一次说清卡在哪。
   - 源里还没有画面时别开：`isPictureInPicturePossible` 在层一进窗口就是 true，可空的源上调 `startPictureInPicture` 系统直接忽略，不开也不调 `failedToStart`（TestFlight 161 的小窗诊断：机器页点 VNC 每次都这样，整页里有画面时点「小窗」就开了）。等第一帧到了再开，没反应就隔一会儿再试几次。
+  - 不想等连接的话，自己往源里先放一帧（#1839 跟进：用户嫌「连上了才有小窗」迟钝）：`ImageRenderer` 把 SwiftUI 画的卡片（机器名、转圈的「连接中…」）
+    画进 `CVPixelBuffer`，按主机时钟做成样本塞给源层，再在点按里开；之后 Mac 的帧（时间更晚）自然盖过它。卡片停掉时把最新一帧重新塞一次，
+    免得最后一张卡片排在真画面后面：VNC 只在屏幕变化时才发帧，静止的 Mac 会一直停在卡片上。
 
 ## 一个页面换成另一个页面，内容要在同一个位置交接（2026-11-05，#1911）
 

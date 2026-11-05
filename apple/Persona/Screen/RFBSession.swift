@@ -28,7 +28,7 @@ import SwiftUI
     /// Frames a second shown, and how long the last one took from the mock's Screen Sharing to here (its stamp).
     private(set) var fps: Double = 0
     private(set) var latency: Double?
-    /// A frame has been shown: the small window can start (with an empty source the system ignores it, #1839).
+    /// A frame of this connection has been shown: the small window shows it instead of its card (VNCPiPCard).
     private(set) var pictured = false
 
     @ObservationIgnored private var client: RFBClient?
@@ -58,6 +58,7 @@ import SwiftUI
         }
         client = c
         phase = .connecting
+        pictured = false
         c.start()
     }
 
@@ -413,6 +414,12 @@ nonisolated final class RFBFrameSink: @unchecked Sendable {
                                  Unmanaged.passUnretained(kCFBooleanTrue).toOpaque())
         }
         return sample
+    }
+
+    /// A picture of the app's own into a timed layer (the small window's card, VNCPiPCard), at this moment on the host
+    /// clock: the client's next frame, later, replaces it.
+    @MainActor static func show(_ pb: CVPixelBuffer, in layer: AVSampleBufferDisplayLayer) {
+        if let sample = sample(pb, immediate: false) { enqueue(sample, in: layer) }
     }
 
     @MainActor private static func enqueue(_ sample: CMSampleBuffer, in layer: AVSampleBufferDisplayLayer) {

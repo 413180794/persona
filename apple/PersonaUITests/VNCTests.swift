@@ -23,8 +23,8 @@ final class VNCTests: XCTestCase {
     }
 
     /// The machine page's VNC, signed in once on the whole page (kept), then straight into the small window.
-    @MainActor private func signedInMachinePage() throws -> (XCUIApplication, XCUIElement) {
-        let app = try launch(["-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"])
+    @MainActor private func signedInMachinePage(_ more: [String] = []) throws -> (XCUIApplication, XCUIElement) {
+        let app = try launch(["-tab", "settings", "-openMachines", "YES", "-openMachineDetail", "macbook", "-openScreenFresh", "YES"] + more)
         let vnc = app.buttons["computer-screen"].firstMatch
         XCTAssertTrue(vnc.waitForExistence(timeout: 30), "no VNC:\n\(app.debugDescription)")
         for _ in 0..<6 where !vnc.isHittable { app.swipeUp() }
@@ -90,6 +90,35 @@ final class VNCTests: XCTestCase {
         app.buttons["小窗"].firstMatch.tap()
         XCTAssertTrue(on.waitForExistence(timeout: 20), "the small window again")
         rest(3)
+    }
+
+    /// The small window comes up in the tap (#1839), 连接中… until the Mac's picture, then the picture; when the Mac
+    /// hangs up, why. The simulators have no picture in picture: DEBUG -showPiPSource lays its source over the app.
+    @MainActor func testTheSmallWindowConnectsInIt() throws {
+        let (app, vnc) = try signedInMachinePage(["-showPiPSource", "YES"])
+        let hub = try XCTUnwrap(self.hub)
+        defer { try? mock(hub, "/mock/screen-password?slow=0&down=0") }
+        app.buttons["screen-close"].tap()
+        XCTAssertTrue(vnc.waitForExistence(timeout: 10))
+        sleep(3) // the page's connection goes 2 s after it lets go (VNC.release): VNC makes a new one
+
+        try mock(hub, "/mock/screen-password?slow=3") // the Mac answers late
+        vnc.tap()
+        let source = app.descendants(matching: .any)["vnc-pip-source"].firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 1.5), "the small window at once:\n\(app.debugDescription)")
+        XCTAssertEqual(source.label, "小窗：连接中")
+        XCTAssertFalse(app.descendants(matching: .any)["screen-drawer"].exists, "not the page")
+        shot(app, "vnc-pip-card-connecting")
+        let live = NSPredicate(format: "label == '小窗：实时画面'")
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation(for: live, evaluatedWith: source)], timeout: 15), .completed, source.label)
+        rest(2)
+        shot(app, "vnc-pip-card-live")
+
+        try mock(hub, "/mock/screen-password?down=1") // the Mac hangs up
+        let failed = NSPredicate(format: "label == '小窗：没连上：连接断了'")
+        XCTAssertEqual(XCTWaiter().wait(for: [expectation(for: failed, evaluatedWith: source)], timeout: 15), .completed, source.label)
+        rest(2)
+        shot(app, "vnc-pip-card-failed")
     }
 
     /// On the page: the two modes (the mock's Screen Sharing says where it was clicked), the clipboard both ways, the

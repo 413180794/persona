@@ -327,6 +327,12 @@ nonisolated final class RFBClient: @unchecked Sendable {
         case Failure.protocolError(let s): return s
         case Failure.noCredentials: return "没有登录这台 Mac 的屏幕共享"
         case let e as URLError where e.code == .badServerResponse: return "hub 不让连这台的屏幕（扩展没开，或这台设备只能看不能操作）"
+        // What the network says in its own words ("Socket is not connected") when the Mac or the hub hangs up, or
+        // nothing answers: said plainly (the page, the small window's card).
+        case let e as URLError where e.code == .timedOut: return "连接超时"
+        case let e as URLError where [.cannotConnectToHost, .cannotFindHost, .notConnectedToInternet].contains(e.code): return "连不上 hub"
+        case let e as URLError where e.code == .networkConnectionLost: return "连接断了"
+        case let e as NSError where e.domain == NSPOSIXErrorDomain && [ENOTCONN, ECONNRESET, EPIPE].contains(Int32(e.code)): return "连接断了"
         default: return error.localizedDescription
         }
     }

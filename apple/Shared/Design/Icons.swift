@@ -215,6 +215,9 @@ extension Theme {
         static let pointer = "cursorarrow"
         /// VNC in a small window over everything (picture in picture).
         static let pictureInPicture = "pip.enter"
+        /// The small window's own buttons, named on its card (VNCPiPCard): back to the app, and ▶ (connect again).
+        static let pictureInPictureExit = "pip.exit"
+        static let pictureInPicturePlay = "play.fill"
         /// 触控板模式: the screen moves the pointer like a trackpad.
         static let trackpad = "rectangle.and.hand.point.up.left"
         /// 指针居中: the pointer back to the middle.

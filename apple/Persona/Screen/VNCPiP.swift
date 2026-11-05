@@ -2,6 +2,7 @@ import AVFoundation
 import AVKit
 import OSLog
 import SwiftUI
+import Synchronization
 
 #if os(iOS)
 /// A Mac's VNC in the system's picture in picture (#1343): it floats over the other apps and the home screen, can be
@@ -10,9 +11,10 @@ import SwiftUI
 ///
 /// Its source is a layer of the Mac's screen of a normal size (#1839: a 2×2 one in a window that went away never
 /// started), in the app's main window behind its content: in a window, not hidden, not seen. It is fed samples on the
-/// host clock and has a timebase of its own. The page makes it ready as soon as it shows a Mac, so that 小窗 (a tap)
-/// and going home start it at once; from a machine's VNC it starts once there is a picture, or the page opens with why
-/// not (VNCPiPLog, 小窗诊断).
+/// host clock and has a timebase of its own. Until the Mac's picture comes it shows a card (VNCPiPCard: 连接中…, or why
+/// not and how to try again), so a machine's VNC starts the small window in the tap and the picture follows in it; the
+/// page makes it ready as soon as it shows a Mac, so that 小窗 (a tap) and going home start it at once. When the system
+/// will not start it, the page opens saying why (VNCPiPLog, 小窗诊断).
 @MainActor final class VNCPiP: NSObject, AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate {
     static let shared = VNCPiP()
     nonisolated static let log = Logger(subsystem: "jarvis", category: "vnc")
@@ -27,18 +29,36 @@ import SwiftUI
     private var starting = false
     private var restoring = false
     private var waiting: Task<Void, Never>?
+    /// How many times the system was asked since the small window was, and when last.
+    private var tries = 0
+    private var lastTry = ContinuousClock.now
+    /// What the source shows instead of the Mac's picture (nil: the picture), and what keeps it up to date.
+    private var card: VNCPiPCard.State?
+    private var cardFrames = 0
+    private var drawing: Task<Void, Never>?
+    /// It could not connect: the small window shows ▶, which connects again. The system asks off the main actor.
+    private nonisolated let paused = Mutex(false)
 
-    static var supported: Bool { AVPictureInPictureController.isPictureInPictureSupported() }
+    static var supported: Bool { AVPictureInPictureController.isPictureInPictureSupported() || showsSource }
     var active: Bool { controller?.isPictureInPictureActive == true }
-    /// How long a machine's VNC waits for the small window before the page instead, and how often it asks the system.
-    static let patience: Duration = .seconds(15)
-    static let tries = 4
+    /// How long a machine's VNC asks the system for the small window before the page instead, and how many times.
+    static let patience: Duration = .seconds(8)
+    static let maxTries = 6
 
-    /// Ready for ref's small window (the page, once it shows the Mac): the source, the controller and the playback
-    /// audio session; `automatic`: it starts by itself when the app goes to the background.
+    #if DEBUG
+    /// DEBUG -showPiPSource YES: the source over the app's content, where it can be seen, also without picture in
+    /// picture (the simulators): what the small window would show, from the tap on (VNCTests).
+    static let showsSource = UserDefaults.standard.bool(forKey: "showPiPSource")
+    #else
+    static let showsSource = false
+    #endif
+
+    /// Ready for ref's small window (the page, once it shows the Mac; a machine's VNC, in the tap): the source with the
+    /// card in it, the controller and the playback audio session; `automatic`: it starts by itself when the app goes to
+    /// the background.
     @discardableResult func prepare(_ ref: MachineRef, from: SessionKey?, automatic: Bool) -> Bool {
-        if self.ref == ref, let controller {
-            controller.canStartPictureInPictureAutomaticallyFromInline = automatic
+        if self.ref == ref, host != nil {
+            controller?.canStartPictureInPictureAutomaticallyFromInline = automatic
             if let from { self.from = from }
             return true
         }
@@ -53,83 +73,131 @@ import SwiftUI
         }
         guard let window = Self.mainWindow() else { return note("找不到 App 的主窗口") }
         let session = VNC.hold(ref)
-        let size = Self.sourceSize(session.size)
+        let size = Self.size(session.size, width: Theme.Size.pictureInPictureSource)
         let v = VNCScreenUIView(frame: CGRect(x: 0, y: window.bounds.maxY - size.height, width: size.width, height: size.height))
         v.session = session
         v.isUserInteractionEnabled = false
-        v.accessibilityElementsHidden = true
         Self.giveTimebase(v.display)
         session.show(in: v.display, timed: true)
-        window.insertSubview(v, at: 0) // behind the app's content
-        let c = AVPictureInPictureController(contentSource: .init(sampleBufferDisplayLayer: v.display, playbackDelegate: self))
-        c.delegate = self
-        c.requiresLinearPlayback = true
-        c.canStartPictureInPictureAutomaticallyFromInline = automatic
+        if Self.showsSource {
+            v.frame.origin = CGPoint(x: window.bounds.maxX - size.width - Theme.Space.page, y: window.safeAreaInsets.top + Theme.Space.xxl)
+            v.accessibilityIdentifier = "vnc-pip-source"
+            v.accessibilityLabel = "小窗：实时画面" // until the card says otherwise (draw)
+            window.addSubview(v)
+        } else {
+            v.accessibilityElementsHidden = true
+            window.insertSubview(v, at: 0) // behind the app's content
+        }
         self.ref = ref
         self.from = from
         host = v
-        controller = c
-        watching = c.observe(\.isPictureInPicturePossible, options: [.new]) { c, _ in
-            let possible = c.isPictureInPicturePossible
-            Task { @MainActor in VNCPiP.shared.possibleChanged(possible) }
+        // Where there is no picture in picture (-showPiPSource on a simulator) its initializer gives back nil, which
+        // Swift takes for an object: the source only.
+        if AVPictureInPictureController.isPictureInPictureSupported() {
+            let c = AVPictureInPictureController(contentSource: .init(sampleBufferDisplayLayer: v.display, playbackDelegate: self))
+            c.delegate = self
+            c.requiresLinearPlayback = true
+            c.canStartPictureInPictureAutomaticallyFromInline = automatic
+            controller = c
+            watching = c.observe(\.isPictureInPicturePossible, options: [.new]) { c, _ in
+                let possible = c.isPictureInPicturePossible
+                Task { @MainActor in VNCPiP.shared.possibleChanged(possible) }
+            }
         }
-        VNCPiPLog.add("准备好了：源 \(Int(size.width))×\(Int(size.height))pt，\(automatic ? "回桌面时自己开" : "等开")，现在能开：\(VNCPiPLog.yes(c.isPictureInPicturePossible))")
+        VNCPiPLog.add("准备好了：源 \(Int(size.width))×\(Int(size.height))pt，\(automatic ? "回桌面时自己开" : "等开")，现在能开：\(VNCPiPLog.yes(controller?.isPictureInPicturePossible == true))")
+        // The card at once while there is no picture: the source is not empty in the tap that asked.
+        draw()
+        drawing = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard let self, !Task.isCancelled, self.ref == ref else { return }
+                self.draw()
+            }
+        }
         return true
     }
 
-    /// ref's screen in the small window: at once when it can be (in the tap that asked), else once there is a picture;
-    /// failing that, the page, saying why.
+    /// ref's screen in the small window, at once (in the tap that asked): 连接中… until the picture comes; failing
+    /// that, the page, saying why.
     func start(_ ref: MachineRef, from: SessionKey? = nil) {
         if self.ref == ref, active { return }
         VNCPiPLog.add("要小窗")
-        guard prepare(ref, from: from, automatic: false) else { return fallBack(ref, from, why: VNCPiPLog.last ?? "这台设备不支持画中画") }
+        guard prepare(ref, from: from, automatic: true) else { return fallBack(ref, from, why: VNCPiPLog.last ?? "这台设备不支持画中画") }
         wanted = true
         starting = false
-        // With the source still empty (connecting) the system takes the call and does nothing, not even failing
-        // (TestFlight 161's 小窗诊断): in the tap only once there is a picture, else as soon as there is one.
-        if let c = controller, c.isPictureInPicturePossible, VNC.current(ref)?.pictured == true {
-            VNCPiPLog.add("在点按里开")
-            c.startPictureInPicture()
-        } else {
-            VNCPiPLog.add("画面还没到：到了再开")
-        }
+        tries = 0
+        // With nothing in the source the system took the call and did nothing (TestFlight 161's 小窗诊断); the card
+        // is in it now (prepare).
+        attempt(inTap: true)
+        if tries == 0 { VNCPiPLog.add("现在还不能开：能开了就开") }
         waiting?.cancel()
         waiting = Task { [weak self] in
             let deadline = ContinuousClock.now + Self.patience
-            var tries = 0, lastTry = ContinuousClock.now, pictured = false
             while ContinuousClock.now < deadline {
-                try? await Task.sleep(for: .milliseconds(200))
+                try? await Task.sleep(for: .milliseconds(100))
                 guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
-                let session = VNC.current(ref)
-                switch session?.phase {
-                case .signIn: return self.fallBack(ref, self.from, why: nil) // the page asks for the sign-in
-                case .closed(let why): return self.fallBack(ref, self.from, why: why ?? "连接断了")
-                default: break
-                }
-                guard session?.pictured == true, !self.starting, let c = self.controller else { continue }
-                if !pictured {
-                    pictured = true
-                    VNCPiPLog.add("画面到了")
-                }
-                // Again every 1.5 s while the system has not started it, a few times.
-                guard c.isPictureInPicturePossible, tries < Self.tries,
-                      tries == 0 || ContinuousClock.now - lastTry >= .milliseconds(1500) else { continue }
-                tries += 1
-                lastTry = ContinuousClock.now
-                VNCPiPLog.add(tries == 1 ? "开（不在点按里）" : "系统没反应，再开一次（第 \(tries) 次）")
-                c.startPictureInPicture()
+                self.attempt(inTap: false)
             }
             guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
-            let why = !pictured ? "画面没到（\(Int(Self.patience.components.seconds)) 秒内）"
-                : tries == 0 ? "系统说现在不能开" : "开了 \(tries) 次，系统都没反应"
-            self.fallBack(ref, self.from, why: why)
+            if Self.showsSource { return VNCPiPLog.add("没有画中画（DEBUG）：只把源摆在前面") }
+            self.fallBack(ref, self.from, why: self.tries == 0 ? "系统说现在不能开" : "开了 \(self.tries) 次，系统都没反应")
         }
     }
 
-    /// Said in 小窗诊断; the start waits for a picture (start's loop), not for this.
+    /// Asks the system for the small window if it can start now (possible, the app in front): in the tap, then again a
+    /// moment later while it has not, a few times. In the background it starts by itself (from inline).
+    private func attempt(inTap: Bool) {
+        guard wanted, !active, !starting, let c = controller, c.isPictureInPicturePossible,
+              UIApplication.shared.applicationState == .active, tries < Self.maxTries,
+              tries == 0 || ContinuousClock.now - lastTry >= (tries == 1 ? .milliseconds(400) : .seconds(1)) else { return }
+        tries += 1
+        lastTry = .now
+        VNCPiPLog.add(inTap ? "在点按里开" : tries == 1 ? "能开了，开" : "系统没反应，再开一次（第 \(tries) 次）")
+        c.startPictureInPicture()
+    }
+
     private func possibleChanged(_ possible: Bool) {
         guard let c = controller, c.isPictureInPicturePossible == possible else { return }
         VNCPiPLog.add("现在能开：\(VNCPiPLog.yes(possible))")
+        if possible { attempt(inTap: false) }
+    }
+
+    /// The source's picture while the Mac's is not there: the card, turning while it connects and the small window is
+    /// asked for or up; the Mac's last frame over it once there is one. When the kept sign-in is refused, the page
+    /// asks for a new one (with the app in front; else the card says so).
+    private func draw() {
+        guard let ref, let host, let session = VNC.current(ref) else { return }
+        let now = VNCPiPCard.State(session.phase, pictured: session.pictured), was = card
+        card = now
+        if now != was {
+            VNCPiPLog.add("小窗显示：\(now?.line ?? "实时画面")")
+            let failed = if case .failed = now { true } else { false }
+            paused.withLock { $0 = failed }
+            controller?.invalidatePlaybackState()
+            if Self.showsSource { host.accessibilityLabel = "小窗：" + (now?.line ?? "实时画面") }
+        }
+        if now == .signIn, wanted || active, UIApplication.shared.applicationState == .active, AppModel.shared.screenOpen?.machine != ref {
+            VNCPiPLog.add("整页重新登录")
+            return AppModel.shared.openScreen(ref, from: from) // the small window hands over to it
+        }
+        guard let now else {
+            if was != nil { session.show(in: host.display, timed: true) } // the Mac's latest frame over the card's
+            return
+        }
+        guard now != was || (now == .connecting && (wanted || active)) else { return }
+        cardFrames += 1
+        let name = AppModel.shared.machine(ref)?.name ?? ref.id
+        let size = Self.size(session.size, width: Theme.Size.pictureInPictureCard)
+        if let pb = VNCPiPCard.frame(now, name: name, size: size, turn: Double(cardFrames % 12) / 12) {
+            RFBFrameSink.show(pb, in: host.display)
+        }
+    }
+
+    /// The small window's ▶ after it could not connect: again (the card turns again).
+    private func reconnect() {
+        guard let ref, let session = VNC.current(ref), case .closed = session.phase else { return }
+        VNCPiPLog.add("在小窗里重新连接")
+        session.start()
     }
 
     /// The whole page took it: the small window goes (the source stays ready for the page).
@@ -163,6 +231,10 @@ import SwiftUI
     private func end() {
         waiting?.cancel()
         waiting = nil
+        drawing?.cancel()
+        drawing = nil
+        card = nil
+        paused.withLock { $0 = false }
         watching = nil
         wanted = false
         if let ref, let host { VNC.current(ref)?.hide(from: host.display) }
@@ -186,9 +258,8 @@ import SwiftUI
         return scene?.windows.first { $0.windowLevel == .normal && !$0.isHidden && $0.rootViewController != nil }
     }
 
-    /// A normal size in the Mac's proportions (16:10 before it is known).
-    private static func sourceSize(_ mac: CGSize) -> CGSize {
-        let width = Theme.Size.pictureInPictureSource
+    /// This wide in the Mac's proportions (16:10 before it is known).
+    private static func size(_ mac: CGSize, width: CGFloat) -> CGSize {
         let ratio = mac.width > 1 && mac.height > 1 ? mac.height / mac.width : 10.0 / 16
         return CGSize(width: width, height: (width * ratio).rounded())
     }
@@ -259,13 +330,16 @@ import SwiftUI
         }
     }
 
-    // MARK: AVPictureInPictureSampleBufferPlaybackDelegate (live: no time line, never paused)
+    // MARK: AVPictureInPictureSampleBufferPlaybackDelegate (live: no time line; paused only when it could not connect)
 
-    nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, setPlaying playing: Bool) {}
+    nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, setPlaying playing: Bool) {
+        guard playing else { return }
+        Task { @MainActor in self.reconnect() }
+    }
     nonisolated func pictureInPictureControllerTimeRangeForPlayback(_ c: AVPictureInPictureController) -> CMTimeRange {
         CMTimeRange(start: .negativeInfinity, duration: .positiveInfinity)
     }
-    nonisolated func pictureInPictureControllerIsPlaybackPaused(_ c: AVPictureInPictureController) -> Bool { false }
+    nonisolated func pictureInPictureControllerIsPlaybackPaused(_ c: AVPictureInPictureController) -> Bool { paused.withLock { $0 } }
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, didTransitionToRenderSize size: CMVideoDimensions) {}
     nonisolated func pictureInPictureController(_ c: AVPictureInPictureController, skipByInterval interval: CMTime,
                                                 completion: @escaping () -> Void) { completion() }
