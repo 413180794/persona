@@ -188,6 +188,34 @@ Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：
   参数 schema（`src/shared/rpc-contract`）校验每个请求，不合格的回 `invalid_argument` 并记下来，测试检查没有这种请求。
   node 的测试包把 `ORCA_USER_DATA_PATH` 指到不存在的目录，任何测试都碰不到真的 Orca。
 
+### 结构化会话（#2072）
+
+Orca 1.4.24x 起有「结构化会话」：Orca 自己的聊天界面包着 Claude Code / Codex，没有终端。`terminal.list` 里没有它们，
+`worktree.ps` 里它们的行的 pane key 是 `structured-agent-session-<会话 id>:<uuid>`。第一期只认终端，所以这些会话在 Persona 里看不到。
+现在由 node 里的 Orca 桥接（`server/internal/node/orcabridge.go`，客户端 `server/internal/orcart/session.go`）把它们按
+runtime 协议（`docs/runtimes.md`）接进来，做法和 Paseo 的桥一样，只是在 node 进程里（`net.Pipe` 接到 `RuntimeHost`）：
+
+- **什么时候开**：引擎是 Orca 时开，切走就关。只列本机工作区（`hostId` 是 `local`）里 `agentType` 是 `claude` 的结构化会话；
+  Codex 的结构化会话这一版不列。
+- **会话 id**：用 Claude 自己的会话 id（`agentSession.history` 的 `providerSession.id`），对话记录照常读 Claude 的 transcript；
+  还没发过第一条消息的会话没有这个 id，发过之后（最多 10 秒）才出现。空间是工作区（`worktreeId`），名字和终端会话一样取分支；
+  子工作区带上 `parent_space_id`（父工作区），网页上和终端会话一样折叠在父工作区下（#2073）。
+- **状态**：`worktree.ps` 每 1.5 秒轮询一次，用行上的 `mainAgent.state`（working / blocked / done）；只在列表变了时才推给 hub。
+- **能做什么**：发消息（文字和图片，工作中发的排在这一轮后面，`delivery: queue-if-active`）、打断（`agentSession.cancel`）、
+  关闭（`agentSession.close`，和 Orca 的关闭按钮一样，记录还在）、切权限模式和思考强度（`agentSession.setOption`；Orca 没有 plan 模式，
+  选 plan 回 `unsupported`）。没有终端，读屏、按键、实时终端都没有。
+- **卡片**：会话是 blocked 时读 `agentSession.currentRequests`，把等着回答的审批变成权限卡片（`detail` 是工具输入的 JSON 时
+  按 hook 卡片的样子显示命令 / 文件）、计划审批变成计划卡片、提问变成提问卡片；回答按 Orca 的选项 id 和 `expectedRevision` 发回。
+  在电脑上先答了，手机上的卡片收回。
+- **写操作的信封**：每个写都带 `envelope {sessionId, clientOperationId, expectedRuntimeFence, payloadFingerprint}`。
+  `clientOperationId` 是 `<13 位毫秒>-<32 位十六进制>`，同一条消息（同一个 `client_msg_id`）用同一个，重发时 Orca 按第一次的结果回、不会发两遍；
+  `payloadFingerprint` 是 `{method, sessionId, fields}` 规范 JSON（键排序、不加空格、按 JavaScript 的 `JSON.stringify` 转义）的 SHA-256；
+  审批和提问按 `agentSession.respondTo:approval` / `respondTo:question` 算。`expectedRuntimeFence` 取 `history` 的 `page.fence`
+  （1.4.246 起不再比较，但必须是正整数）。Orca 回 `ok:false` 的 `refusal` 表示什么都没做；`agent_session_operation_unknown` 是不知道做没做。
+- **socket 上只有一问一答的方法**：`agentSession.subscribe*` 是流式方法，只在配对的 WebSocket 上有，所以靠轮询。
+- **实测**（2026-11-05，Orca 1.4.246，在新建的测试会话上，测完关掉）：`setOption`、`send`（同一个 operation id 重发不会发第二遍）、
+  Bash 审批的卡片内容和 deny（文件没建出来）、对已经答过的审批再答、`cancel`（工作中 → 停下）、`close` 都和上面一致。
+
 ## herdr-core 宿主
 
 herdr-core（命令 `hc`）是 Herdr 桌面版背后的终端运行时，和 herdr 同一个作者，但是重写的、不兼容：socket、方法（`terminal.*`）、

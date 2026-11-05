@@ -62,6 +62,7 @@ class CapsuleHost(
     private val windows = windowContext.getSystemService(WindowManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val completions = CapsuleCompletionQueue(scope)
+    private val drafts = mutableStateMapOf<Pair<String?, String?>, String>()
     private val appOps = app.getSystemService(AppOpsManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private var root: CapsuleWindow? = null
@@ -163,6 +164,7 @@ class CapsuleHost(
                             onOpen = { id -> source.open(id); changeExpanded(false) },
                             onSend = { id, text -> source.send(id, text) },
                             onAction = { id, action -> source.perform(id, action) },
+                            drafts = drafts,
                             extraContent = extraContent)
                     }
                 } }
@@ -332,6 +334,7 @@ class CapsuleHost(
         closed = true
         completions.close()
         hide()
+        drafts.clear()
         scope.cancel()
         if (started) {
             app.unregisterReceiver(configurationChanged)

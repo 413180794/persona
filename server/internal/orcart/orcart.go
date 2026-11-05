@@ -177,6 +177,9 @@ func Refused(err error) bool {
 		"request_too_large":
 		return true
 	}
+	if strings.HasPrefix(e.Code, "agent_session_") { // a structured session's write turned down (session.go)
+		return e.Code != "agent_session_operation_unknown"
+	}
 	return strings.Contains(e.Code, "incarnation") // a fence (expectedIncarnationId) that did not hold
 }
 

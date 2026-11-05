@@ -19,7 +19,7 @@
 | `herdr` | herdr | 终端里运行 `herdr`，在它的窗格里开 `claude` / `codex`（没在运行时 node 按需拉起，见「herdr 没在运行时」） | herdr 的 socket 能连上，或装了 `herdr` 命令 |
 | `herdr-core` | Herdr App | Herdr 桌面 App 里开的终端（App 背后的 herdr-core） | herdr-core 的 socket 有回应 |
 | `herdr-both` | herdr + Herdr App | 上面两个同时在用 | 两个运行时都检测得到 |
-| `orca` | Orca | Orca 桌面 App 里开的终端，或另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime 里的终端 | Orca（桌面 App 或远程 runtime）在运行，而且它的版本 Persona 认得 |
+| `orca` | Orca | Orca 桌面 App 里开的终端和 Orca 自己的 Claude 聊天（结构化会话），或另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime 里的这些 | Orca（桌面 App 或远程 runtime）在运行，而且它的版本 Persona 认得 |
 | `paseo` | Paseo | Paseo 里的 Agent（它的桌面 App、`paseo` 命令开的；Claude Code、Codex、ACP 都算） | Paseo 的 daemon 在运行：它 home 里的 `paseo.pid` 写的地址有回应 |
 
 herdr 和 Herdr App 是同一家的两个产品，但互不相通：在 Herdr App 里开的会话 herdr 看不到，反过来也一样。只装 / 只用一个时按实际选；
@@ -56,6 +56,10 @@ iOS 和 Android App 都有这两处入口（Android 的机器页在 Agents：列
 | 切权限模式 / 思考强度 | ✅ | 支持，未实测 | 支持，未实测 | ✅（端到端实测） |
 
 Windows：herdr 0.9.5 起有原生 Windows 版，herdr 引擎在 Windows 上除实时终端外和上表一样；Orca 也能用。见 [windows.md](windows.md)「herdr」。
+
+Orca 自己的 Claude 聊天（结构化会话，没有终端）经 node 里的桥接进来：能列出、显示状态、发消息（文字和图片）、打断、关闭、
+回答审批和提问卡片、切权限模式和思考强度（没有 plan 模式），没有读屏、按键和实时终端；还没发过第一条消息的聊天要发过之后才出现，
+Codex 的聊天这一版不列。见 `docs/plan-orca-support.md`「结构化会话」。
 
 做不到的操作会直接提示，不会只做一半。Herdr App 和 Orca 里，Claude 不在前台（被挂起、已退出）时发消息会被拒绝、什么都不输入，
 提示「Claude 不在前台（可能被挂起），没有发送」或者要你在电脑上重新打开那个会话。

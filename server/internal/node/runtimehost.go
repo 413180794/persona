@@ -48,6 +48,8 @@ type RuntimeHost struct {
 	ctx context.Context
 	// paseo runs the Paseo bridge while the machine's engine is Paseo (paseobridge.go).
 	paseo paseoBridge
+	// orca runs the bridge to Orca's structured sessions while the machine's engine is Orca (orcabridge.go).
+	orca orcaBridgeState
 }
 
 // NewRuntimeHost is a runtime socket at path (RuntimeSocketPath when empty) for a resident node; Attach starts it.

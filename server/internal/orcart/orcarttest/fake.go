@@ -596,6 +596,19 @@ func (f *Fake) Trace(methods ...string) []string {
 	return out
 }
 
+// Params are the params of every call of method so far, in order.
+func (f *Fake) Params(method string) []map[string]any {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []map[string]any
+	for _, c := range f.log {
+		if c.Method == method {
+			out = append(out, c.Params)
+		}
+	}
+	return out
+}
+
 // Count is how many calls of method came.
 func (f *Fake) Count(method string) int {
 	f.mu.Lock()

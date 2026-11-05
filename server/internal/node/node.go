@@ -457,6 +457,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		if n.runtimeHost != nil { // Paseo's agents come through its bridge, which the node runs (paseobridge.go)
 			n.runtimeHost.setPaseoBridge(n.engine() == proto.EnginePaseo)
+			// Orca's chats come through a bridge the node runs too (orcabridge.go); its terminals, the Orca host.
+			n.runtimeHost.setOrcaBridge(n.engine() == proto.EngineOrca)
 		}
 		n.configured()
 		return map[string]any{"engine": n.engine()}, nil

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +40,7 @@ fun CapsuleSurface(
     onOpen: (String?) -> Unit,
     onSend: suspend (String?, String) -> Unit,
     onAction: suspend (String?, String) -> Unit,
+    drafts: SnapshotStateMap<Pair<String?, String?>, String>,
     extraContent: @Composable (CapsuleEntry?) -> Unit = {},
 ) {
     var revealed by remember(expanded) { mutableStateOf(false) }
@@ -54,7 +56,6 @@ fun CapsuleSurface(
     var operation by remember { mutableStateOf(false) }
     var failure by remember(content.sectionId, content.selectedId) { mutableStateOf<String?>(null) }
     val pending = content.busy || operation
-    val drafts = remember { mutableStateMapOf<Pair<String?, String?>, String>() }
     val draftKey = content.sectionId to content.selectedId
     val text = drafts[draftKey].orEmpty()
     val messageScroll = remember(draftKey) { androidx.compose.foundation.ScrollState(0) }

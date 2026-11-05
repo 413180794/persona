@@ -146,6 +146,13 @@ type AgentRow struct {
 		State string `json:"state"`
 	} `json:"mainAgent"`
 	HasLivePty bool `json:"hasLivePty"`
+	// ConversationName, DisplayName and TaskTitle name the agent's conversation (Orca's sidebar: the first one set);
+	// Prompt is the first message, LastAssistantMessage its latest answer.
+	ConversationName     string `json:"conversationName"`
+	DisplayName          string `json:"displayName"`
+	TaskTitle            string `json:"taskTitle"`
+	Prompt               string `json:"prompt"`
+	LastAssistantMessage string `json:"lastAssistantMessage"`
 	// UpdatedAt and StateStartedAt are epoch milliseconds.
 	UpdatedAt      int64 `json:"updatedAt"`
 	StateStartedAt int64 `json:"stateStartedAt"`
