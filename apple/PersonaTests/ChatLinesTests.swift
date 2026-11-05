@@ -12,7 +12,7 @@ struct ChatLinesTests {
 
     private func blocks(_ items: [Item]) -> [ChatBlock] { ChatStore.rebuild(items, settled: nil).blocks }
 
-    /// Each line's kind, short: user / answer / work / step / end / merged / split / run / error.
+    /// Each line's kind, short: user / answer / work / step / end / run / error.
     private func kinds(_ lines: [ChatLine]) -> [String] {
         lines.map { line in
             switch line.content {
@@ -22,8 +22,6 @@ struct ChatLinesTests {
             case .work: "work"
             case .workStep: "step"
             case .workEnd: "end"
-            case .mergedUsers: "merged"
-            case .splitHeader: "split"
             case .toolRun: "run"
             case .apiError: "error"
             default: "other"
@@ -65,19 +63,18 @@ struct ChatLinesTests {
         #expect(kinds(apart) == ["user", "work", "step", "step", "end", "answer"])
     }
 
-    @Test func aFinishedTurnOfSeveralMessagesReadsAsOne() {
-        // The second message was sent while the agent worked (queued), so it joined the same turn.
+    @Test func aFinishedTurnOfSeveralMessagesReadsMessageByMessage() {
+        // The second message was sent while the agent worked (queued), so it joined the same turn: each message still
+        // opens its own exchange, the work after it and the answer under it (#2512).
         var queued = item(4, .text, role: "user", text: "再那样")
         queued.queued = true
         let items = [item(1, .text, role: "user", text: "先这样"), item(2, .toolUse, tool: "Bash", id: "a"),
                      item(3, .toolResult, role: "user", text: "ok", id: "a"), queued,
                      item(5, .toolUse, tool: "Read", id: "b"), item(6, .toolResult, role: "user", text: "ok", id: "b"),
                      item(7, .text, text: "都好了")]
-        let merged = ChatLines(openWork: []).build(blocks(items), live: nil)
-        #expect(kinds(merged) == ["merged", "work", "answer"])
-        let split = ChatLines(openWork: [merged[1].id]).build(blocks(items), live: nil)
-        #expect(kinds(split).first == "split")
-        #expect(kinds(split).filter { $0 == "user" }.count == 2, "opened, each message is its own exchange again")
+        let lines = ChatLines(openWork: []).build(blocks(items), live: nil)
+        #expect(kinds(lines) == ["user", "work", "user", "work", "answer"])
+        #expect(lines.map(\.id) == ["1#0", "w-1#0", "4#0", "w-4#0", "7#0"])
     }
 
     /// A running turn's words between its steps: the latest out of the work line; while the next ones stream in (drawn
@@ -97,14 +94,14 @@ struct ChatLinesTests {
         #expect(kinds(ChatLines(openWork: []).build(b, live: nil, streaming: true)) == ["user", "work", "answer"])
     }
 
-    @Test func theRunningTurnIsNeverMerged() {
+    @Test func theRunningTurnShowsEachMessage() {
         var queued = item(3, .text, role: "user", text: "b")
         queued.queued = true
         let items = [item(1, .text, role: "user", text: "a"), item(2, .toolUse, tool: "Bash", id: "x"),
                      queued, item(4, .toolUse, tool: "Bash", id: "y")]
         let b = blocks(items)
         guard case .turn(let t) = b.last else { Issue.record("expected a turn"); return }
-        #expect(!kinds(ChatLines(openWork: []).build(b, live: t.id)).contains("merged"))
+        #expect(kinds(ChatLines(openWork: []).build(b, live: t.id)).filter { $0 == "user" }.count == 2)
     }
 
     /// Recaps in a row are one line (newest last in it, the first one's id); a recap with something after it stays.

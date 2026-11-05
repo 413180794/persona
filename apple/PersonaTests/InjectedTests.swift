@@ -83,9 +83,8 @@ struct InjectedTests {
         #expect(PendingMessage.arrived(PendingMessage(text: "你好", images: [], createdAt: nil), as: user(2, "你好")))
     }
 
-    /// A finished turn of several messages merges them into one bubble, but not with a notice among them: that is a
-    /// line of its own, and the user's message stays a bubble.
-    @Test func aNoticeIsNotMergedIntoABubble() {
+    /// A finished turn of several messages: each is its own line, a notice among them too (#2512).
+    @Test func aNoticeIsALineOfItsOwn() {
         let items = [user(1, "先做这个"),
                      Item(id: "2#0", seq: 2, ts: nil, role: "assistant", kind: .toolUse, text: nil, toolUseID: "a", toolName: "Bash",
                           toolInput: nil, isError: nil, image: nil),
@@ -93,15 +92,14 @@ struct InjectedTests {
                      Item(id: "4#0", seq: 4, ts: nil, role: "assistant", kind: .text, text: "好了", toolUseID: nil, toolName: nil,
                           toolInput: nil, isError: nil, image: nil)]
         let lines = ChatLines(openWork: []).build(ChatStore.rebuild(items, settled: nil).blocks, live: nil)
-        #expect(!lines.contains { if case .mergedUsers = $0.content { true } else { false } })
         let users = lines.compactMap { line -> Item? in if case .row(.user(let i)) = line.content { i } else { nil } }
         #expect(users.map(\.id) == ["1#0", "3#0"])
         #expect(Injected.of(users[1]) != nil)
-        // Without the notice the two messages still merge, as before.
+        // Without the notice the two messages are two bubbles as well.
         var plain = items
         plain[2] = user(3, "再那样", queued: true)
-        let merged = ChatLines(openWork: []).build(ChatStore.rebuild(plain, settled: nil).blocks, live: nil)
-        #expect(merged.contains { if case .mergedUsers = $0.content { true } else { false } })
+        let apart = ChatLines(openWork: []).build(ChatStore.rebuild(plain, settled: nil).blocks, live: nil)
+        #expect(apart.filter { if case .row(.user) = $0.content { true } else { false } }.count == 2)
     }
 
     @Test func aNoticeOpensItsTask() {

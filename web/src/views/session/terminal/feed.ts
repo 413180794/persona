@@ -44,6 +44,18 @@ import {
 } from "../../../lib/terminal";
 import { gridRow, parseAnsiRows, plainRow, type CellRow } from "../../../lib/terminal-cells";
 import {
+  CellThrottle,
+  clampedPoint,
+  contextAction,
+  mouseButton,
+  mouseModifiers,
+  mouseRoute,
+  parseMouseMode,
+  type MouseAction,
+  type MouseButton,
+  type MouseMode,
+} from "../../../lib/terminal-mouse";
+import {
   DEFAULT_CURSOR,
   hex6,
   lineEditBytes,
@@ -104,6 +116,8 @@ export interface FeedView {
   selection: boolean;
   /** The key bar's ctrl / alt / shift: they apply to the next key, from the bar or typed. */
   mods: Modifiers;
+  /** Who gets the mouse while driving: the program (via herdr, Shift selects here) or this page (Shift sends it on). */
+  mouse: MouseMode;
   /** Pages of herdr's history above the screen, oldest first (watching only, iOS TerminalFeed.older). */
   older: CellRow[];
   /** Reading history: the screen stays as it was until 回到最新. */
@@ -148,6 +162,7 @@ const FONT_KEY = "jarvis.terminal.fontSize";
 const CURSOR_KEY = "jarvis.terminal.cursorStyle";
 const BLINK_KEY = "jarvis.terminal.cursorBlink";
 const WEBGL_KEY = "jarvis.terminal.webgl";
+const MOUSE_KEY = "jarvis.terminal.mouse";
 export const FONT_SIZES = { min: 9, max: 20, default: 13 };
 /** Frames held while history is read; past this the screen starts over from a whole frame instead. */
 const HELD_MAX = 4 << 20;
@@ -185,6 +200,13 @@ export class TerminalFeed {
   private wheelAt: [number, number] | null = null;
   private wheelTimer = 0;
   private down: { x: number; y: number } | null = null;
+  /** The pointer that last went down ("mouse", "pen", "touch"), and the button herdr holds pressed for a drag (the mouse section). */
+  private pointerKind = "mouse";
+  private mouseHeld: { button: MouseButton; cell: [number, number]; throttle: CellThrottle } | null = null;
+  /** The Shift press is being handed to xterm without Shift (selectHere). */
+  private replaying = false;
+  /** The press went to herdr: the click event that follows it is not also a click in the terminal. */
+  private mouseSent = false;
   private focusedOnce = false;
   /** The last screen read while polling (its rows, when the page draws them). */
   private pollText = "";
@@ -241,6 +263,7 @@ export class TerminalFeed {
       dropping: false,
       selection: false,
       mods: NO_MODIFIERS,
+      mouse: parseMouseMode(localStorage.getItem(MOUSE_KEY)),
       older: [],
       paused: false,
       loadingOlder: false,
@@ -342,6 +365,8 @@ export class TerminalFeed {
     viewport.addEventListener("dragleave", this.dragLeave, true);
     viewport.addEventListener("drop", this.drop, true);
     host.addEventListener("pointerdown", this.pointerDown, true);
+    host.addEventListener("mousedown", this.mouseDownEvent, true);
+    host.addEventListener("contextmenu", this.mouseContextMenu, true);
     host.addEventListener("click", this.click, true);
     const colors = new MutationObserver(() => {
       const palette = this.theme();
@@ -367,6 +392,9 @@ export class TerminalFeed {
       () => viewport.removeEventListener("dragleave", this.dragLeave, true),
       () => viewport.removeEventListener("drop", this.drop, true),
       () => host.removeEventListener("pointerdown", this.pointerDown, true),
+      () => host.removeEventListener("mousedown", this.mouseDownEvent, true),
+      () => host.removeEventListener("contextmenu", this.mouseContextMenu, true),
+      () => this.mouseEnd(),
       () => host.removeEventListener("click", this.click, true),
       () => colors.disconnect(),
       () => sizes.disconnect(),
@@ -938,6 +966,7 @@ export class TerminalFeed {
   };
 
   private pointerDown = (e: PointerEvent) => {
+    this.pointerKind = e.pointerType;
     this.down = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
     this.linkHit = false;
   };
@@ -955,6 +984,7 @@ export class TerminalFeed {
     const d = this.down;
     this.down = null;
     if (this.linkHit) return void (this.linkHit = false); // that click opened a link: the program does not get it too
+    if (this.mouseSent) return void (this.mouseSent = false); // its press and release already went to herdr (the mouse section)
     if (!d || e.detail !== 1 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) return;
     if (this.view.control !== "active" || !this.has("terminal_click") || this.term?.hasSelection()) return;
     const b = this.box();
@@ -963,6 +993,147 @@ export class TerminalFeed {
     if (x < 0 || y < 0 || x > b.width || y > b.height) return;
     send({ type: "terminal_input", ...this.ids(), click: cellAt(x, y, b.width, b.height, b.cols, b.rows) });
   };
+
+  // ── the mouse (#2441, lib/terminal-mouse.ts; docs/terminal.md「鼠标」) ──
+  //
+  // Driving, press / drag / release with the button and modifiers go to herdr as `terminal_input.mouse`, a cell at a
+  // time; herdr hands them to a program that takes the mouse and drops them for one that does not. What the page keeps
+  // (selection, the right-click menu) is decided by mouseRoute: Shift flips it. A touch keeps the older tap = `click`.
+
+  /** Mouse events can go to herdr: driving, on a hub that takes them. */
+  private mouseOn() {
+    return this.view.control === "active" && this.has("terminal_mouse");
+  }
+
+  /** The cell under the pointer; outside the screen: null, or with `clamp` the nearest edge cell (a drag that left). */
+  private mouseCell(e: MouseEvent, clamp: boolean): [number, number] | null {
+    const b = this.box();
+    if (!b) return null;
+    const x = e.clientX - b.left, y = e.clientY - b.top;
+    if (!clamp && (x < 0 || y < 0 || x > b.width || y > b.height)) return null;
+    const [cx, cy] = clampedPoint(x, y, b.width, b.height);
+    return cellAt(cx, cy, b.width, b.height, b.cols, b.rows);
+  }
+
+  private sendMouse(action: MouseAction, button: MouseButton, at: [number, number], mods: number) {
+    send({ type: "terminal_input", ...this.ids(), mouse: { action, button, at, mods } });
+  }
+
+  /** Capturing, so a press that is the program's never reaches xterm (which would start a selection). */
+  private mouseDownEvent = (e: MouseEvent) => {
+    if (this.mouseHeld) { // another button while one is held: swallowed
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (this.replaying) return; // the press below, handed to xterm
+    this.mouseSent = false;
+    const button = mouseButton(e.button);
+    if (!button || !this.mouseOn()) return;
+    if (mouseRoute(this.view.mouse, e, this.pointerKind) !== "program") return this.selectHere(e);
+    const cell = this.mouseCell(e, false);
+    if (!cell) return;
+    e.preventDefault(); // no page selection, no middle-click autoscroll
+    e.stopPropagation();
+    this.term?.clearSelection(); // what was selected with Shift goes: the program has the pointer now
+    this.term?.focus();
+    this.mouseSent = true;
+    this.mouseHeld = { button, cell, throttle: new CellThrottle() };
+    this.mouseHeld.throttle.reset(cell);
+    this.sendMouse("down", button, cell, mouseModifiers(e));
+    window.addEventListener("mousemove", this.mouseMove, true);
+    window.addEventListener("mouseup", this.mouseUp, true);
+    window.addEventListener("blur", this.mouseLost);
+  };
+
+  /**
+   * Shift+press for the page. xterm reads Shift as "extend the selection" and, with none to extend, starts nothing, so a
+   * Shift+drag would select nothing: its press goes on without Shift (the drag that follows is read from coordinates).
+   */
+  private selectHere(e: MouseEvent) {
+    const target = e.target;
+    if (!e.shiftKey || e.button !== 0 || !(target instanceof Element)) return;
+    e.stopPropagation();
+    e.preventDefault();
+    this.replaying = true;
+    try {
+      target.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          view: window,
+          detail: e.detail,
+          button: e.button,
+          buttons: e.buttons,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          screenX: e.screenX,
+          screenY: e.screenY,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          metaKey: e.metaKey,
+          shiftKey: false,
+        }),
+      );
+    } finally {
+      this.replaying = false;
+    }
+    this.term?.focus();
+  }
+
+  /** Motion with the button held, one event per cell; it follows the pointer out of the panel (clamped to the screen). */
+  private mouseMove = (e: MouseEvent) => {
+    const h = this.mouseHeld;
+    if (!h) return;
+    if (!this.mouseOn()) return this.mouseEnd();
+    if (e.buttons === 0) return this.mouseUp(e); // the release happened where no event reached us
+    const cell = this.mouseCell(e, true);
+    if (!cell || !h.throttle.step(cell)) return;
+    h.cell = cell;
+    this.sendMouse("drag", h.button, cell, mouseModifiers(e));
+  };
+
+  private mouseUp = (e: MouseEvent) => {
+    const h = this.mouseHeld;
+    if (!h || (e.type === "mouseup" && mouseButton(e.button) !== h.button)) return;
+    const cell = this.mouseCell(e, true) ?? h.cell;
+    const on = this.mouseOn();
+    this.mouseEnd();
+    if (on) this.sendMouse("up", h.button, cell, mouseModifiers(e));
+  };
+
+  /** The window lost focus with a button down: let go where it was, so the program is not left with a held button. */
+  private mouseLost = () => {
+    const h = this.mouseHeld;
+    const on = this.mouseOn();
+    this.mouseEnd();
+    if (h && on) this.sendMouse("up", h.button, h.cell, 0);
+  };
+
+  private mouseEnd() {
+    this.mouseHeld = null;
+    window.removeEventListener("mousemove", this.mouseMove, true);
+    window.removeEventListener("mouseup", this.mouseUp, true);
+    window.removeEventListener("blur", this.mouseLost);
+  }
+
+  /** A right click that is the program's must not also open the browser's menu (Persona's comes from the panel, below). */
+  private mouseContextMenu = (e: MouseEvent) => {
+    if (this.mouseOn() && contextAction(e, true, this.view.mouse, this.pointerKind) === "program") e.preventDefault();
+  };
+
+  /** Whether this right click opens Persona's menu (TerminalPanel); Shift and the mode decide while the mouse is forwarded. */
+  wantsMenu(e: MouseEvent, pointerType?: string): boolean {
+    return contextAction(e, this.mouseOn(), this.view.mouse, pointerType) === "menu";
+  }
+
+  /** 鼠标 in 终端设置 (remembered): who gets the pointer while driving. */
+  setMouse(mode: MouseMode) {
+    if (mode === "program") localStorage.removeItem(MOUSE_KEY);
+    else localStorage.setItem(MOUSE_KEY, mode);
+    this.patch({ mouse: mode });
+  }
 
   // ── what the user chose ───────────────────────────────
 

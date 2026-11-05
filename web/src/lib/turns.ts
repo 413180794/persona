@@ -522,11 +522,8 @@ export function buildBlocks(items: Item[]): Block[] {
 }
 
 export type ChatLine =
-  /** A message (or none), one work row for what the agent did after it, the agent's last words. `group`: a finished
-   *  exchange of several messages drawn as one (opening its work splits it, `ChatLinesOptions.split`). */
-  | { kind: "segment"; id: string; seg: Segment; live: boolean; group?: string }
-  /** Above the split exchange's messages: 已按 N 条消息拆开 · 收起. */
-  | { kind: "split"; id: string; group: string; count: number }
+  /** A message (or none), one work row for what the agent did after it, the agent's last words. */
+  | { kind: "segment"; id: string; seg: Segment; live: boolean }
   /** A notice of its own line: a wake that opens new work, "已中断" after an exchange. */
   | { kind: "notice"; id: string; item: Item }
   /** Under an answer: background tasks reported back; what the agent did next opens in a drawer. */
@@ -541,8 +538,6 @@ export type ChatLine =
 export interface ChatLinesOptions {
   /** The agent is at work: the last exchange is the live one. */
   live?: boolean;
-  /** Finished exchanges of several messages the user split open (their `group` ids). */
-  split?: ReadonlySet<string>;
 }
 
 /** The work of these items as one segment without a message: every step, the agent's words included (no answer). */
@@ -562,7 +557,7 @@ export function workSegment(id: string, items: Item[]): Segment {
   return out;
 }
 
-function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine[] {
+function turnLines(t: Turn, live: boolean): ChatLine[] {
   const out: ChatLine[] = [];
   let ordered = t.ordered;
   let wokeAt: string | undefined;
@@ -573,45 +568,10 @@ function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine
     ordered = ordered.slice(1);
   }
   const segs = segments(ordered);
-  const messages = segs.filter((s) => s.user);
-  const group = `wt-${t.id}`;
   const after = () => {
     if (t.wakes.length) out.push({ kind: "wakes", id: `wk-${t.id}`, turn: t, live: live && t.tail.length > 0 });
     for (const n of t.trailing) out.push({ kind: "notice", id: n.id, item: n });
   };
-  // a finished exchange that took several messages reads as one: the messages in one bubble, one work row, the answer
-  // (never with one of Persona's messages for the model among them: that one is a line of its own)
-  if (!live && messages.length > 1 && !messages.some((m) => m.user!.injected)) {
-    if (!split.has(group)) {
-      const seg = segments(ordered.filter((i) => !isUserInput(i)));
-      const merged: Segment = { id: `mu-${t.id}`, steps: [], tools: 0, thoughts: 0, replies: 0, folds: [] };
-      seg.forEach((s, k) => {
-        merged.steps.push(...s.steps);
-        if (s.answer && k < seg.length - 1) merged.steps.push({ kind: "text", id: s.answer.id, item: s.answer });
-        merged.tools += s.tools;
-        merged.thoughts += s.thoughts;
-        merged.folds.push(...s.folds);
-        merged.end = s.end ?? merged.end;
-      });
-      merged.answer = seg[seg.length - 1]?.answer;
-      merged.replies = merged.steps.filter((x) => x.kind === "text").length;
-      const users = messages.map((m) => m.user!);
-      merged.start = users[0].ts;
-      merged.user = {
-        id: users[0].id,
-        text: users.map((u) => u.text).filter(Boolean).join("\n\n"),
-        parts: users.map((u) => u.text).filter(Boolean),
-        images: users.flatMap((u) => u.images),
-        contexts: users.flatMap((u) => u.contexts),
-        files: users.flatMap((u) => u.files ?? []),
-        ts: users[0].ts,
-      };
-      out.push({ kind: "segment", id: merged.id, seg: merged, live: false, group });
-      after();
-      return out;
-    }
-    out.push({ kind: "split", id: `${group}-h`, group, count: messages.length });
-  }
   segs.forEach((seg, k) => {
     // once the answer is in and a background task woke the agent, the new work runs behind the chip
     const isLive = live && k === segs.length - 1 && !t.tail.length;
@@ -625,13 +585,12 @@ function turnLines(t: Turn, live: boolean, split: ReadonlySet<string>): ChatLine
 /** The chat as lines (iOS ChatLines.lines): exchanges, their wakes and notices, recaps, API errors as cards. */
 export function chatLines(items: Item[], opts: ChatLinesOptions = {}): ChatLine[] {
   const blocks = buildBlocks(foldCompactions(items));
-  const split = opts.split ?? new Set<string>();
   const last = blocks[blocks.length - 1];
   const liveId = opts.live && last?.kind === "turn" ? last.turn.id : undefined;
   const out: ChatLine[] = [];
   for (const b of blocks) {
     if (b.kind === "row") out.push(isCompaction(b.item) ? { kind: "compact", id: b.item.id, item: b.item } : { kind: "recaps", id: b.item.id, items: [b.item] });
-    else out.push(...turnLines(b.turn, b.turn.id === liveId, split));
+    else out.push(...turnLines(b.turn, b.turn.id === liveId));
   }
   // working with nothing of this turn yet (the last thing is a recap): the work row still shows
   if (opts.live && !liveId) out.push({ kind: "segment", id: "live", seg: { id: "live", steps: [], tools: 0, thoughts: 0, replies: 0, folds: [] }, live: true });

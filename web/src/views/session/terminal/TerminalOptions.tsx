@@ -7,6 +7,7 @@ import { cx, EASE } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { Switch } from "../../assistant/parts";
 import { CURSOR_STYLES } from "../../../lib/terminal-details";
+import { MOUSE_MODES } from "../../../lib/terminal-mouse";
 import { FONT_SIZES, type FeedView, type TerminalFeed } from "./feed";
 import { t } from "../../../i18n";
 
@@ -98,6 +99,35 @@ export function TerminalOptions({
           <StepButton label={t("session-terminal-terminaloptions.font_larger")} disabled={v.fontSize >= FONT_SIZES.max} onClick={() => feed.setFontSize(v.fontSize + 1)}>
             +
           </StepButton>
+        </div>
+      </div>
+      <div className={row}>
+        <Icon name="hand" size={15} className="shrink-0 text-ink-3" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12.5px] text-ink">{t("terminal-mouse.label")}</div>
+          <div
+            className="truncate text-[11px] text-ink-3"
+            title={t("terminal-mouse.tooltip")}
+          >
+            {v.mouse === "program" ? t("terminal-mouse.hint_program") : t("terminal-mouse.hint_local")}
+          </div>
+        </div>
+        <div role="radiogroup" aria-label={t("terminal-mouse.label")} className="flex h-7 shrink-0 items-center rounded-control bg-field p-0.5">
+          {MOUSE_MODES.map((m) => (
+            <button
+              key={m.mode}
+              type="button"
+              role="radio"
+              aria-checked={v.mouse === m.mode}
+              onClick={() => feed.setMouse(m.mode)}
+              className={cx(
+                "h-6 whitespace-nowrap rounded-chip px-2 text-[12px] font-medium transition-[background-color,color,box-shadow] duration-150",
+                v.mouse === m.mode ? "bg-surface text-ink shadow-btn" : "text-ink-3 hover:text-ink",
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
       </div>
       <div className={row}>

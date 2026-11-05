@@ -3,8 +3,8 @@
   "domain": "lines",
   "cases": [
     {
-      "name": "finished_queued_messages_merge",
-      "description": "完成轮合并被吸收的消息并保留最后回复。",
+      "name": "finished_queued_messages_apart",
+      "description": "完成轮里被吸收的消息照样按消息分段，各自带工作行和回复。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
         "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
@@ -98,20 +98,17 @@
       "expected": {
         "lines": [
           {
-            "id": "mu-1#0",
+            "id": "1#0",
             "is_input": true,
-            "item_ids": [
-              "1#0",
-              "5#0"
-            ],
-            "type": "merged_users"
+            "type": "user",
+            "text": "do it"
           },
           {
             "contains_fold": false,
             "duration_text": "",
             "elapsed_seconds": null,
             "end": null,
-            "id": "wt-1#0",
+            "id": "w-1#0",
             "is_input": false,
             "known_failed_tools": 0,
             "live": false,
@@ -119,51 +116,80 @@
             "start": null,
             "steps": [
               {
-                "id": "t-2#0",
-                "item_id": "2#0",
-                "text": "我先检查",
-                "type": "narration"
-              },
-              {
-                "call_id": "a",
-                "failed": false,
                 "id": "3#0",
-                "image_count": 0,
+                "type": "tool",
+                "call_id": "a",
                 "name": "Bash",
                 "result_id": "4#0",
                 "result_text": "ok",
                 "running": false,
-                "type": "tool"
-              },
+                "failed": false,
+                "image_count": 0
+              }
+            ],
+            "summary_full": [
+              "工具 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "thoughts": 0,
+            "tools": 1,
+            "type": "work",
+            "unresolved_tools": 0
+          },
+          {
+            "id": "2#0",
+            "is_input": false,
+            "text": "我先检查",
+            "type": "reply"
+          },
+          {
+            "id": "5#0",
+            "is_input": true,
+            "text": "补充检查",
+            "type": "user"
+          },
+          {
+            "id": "w-5#0",
+            "is_input": false,
+            "type": "work",
+            "live": false,
+            "open": false,
+            "start": null,
+            "end": null,
+            "elapsed_seconds": null,
+            "duration_text": "",
+            "tools": 1,
+            "thoughts": 1,
+            "known_failed_tools": 0,
+            "unresolved_tools": 1,
+            "contains_fold": false,
+            "summary_full": [
+              "工具 1",
+              "思考 1"
+            ],
+            "summary_short": [
+              "工具 1"
+            ],
+            "steps": [
               {
                 "id": "6#0",
-                "text": "继续检查",
-                "type": "thinking"
+                "type": "thinking",
+                "text": "继续检查"
               },
               {
-                "call_id": "b",
-                "failed": false,
+                "type": "tool",
                 "id": "7#0",
-                "image_count": 0,
+                "call_id": "b",
                 "name": "Read",
                 "result_id": null,
                 "result_text": null,
                 "running": true,
-                "type": "tool"
+                "failed": false,
+                "image_count": 0
               }
-            ],
-            "summary_full": [
-              "工具 2",
-              "思考 1",
-              "回复 1"
-            ],
-            "summary_short": [
-              "工具 2"
-            ],
-            "thoughts": 1,
-            "tools": 2,
-            "type": "work",
-            "unresolved_tools": 1
+            ]
           },
           {
             "id": "8#0",
@@ -174,20 +200,20 @@
           {
             "id": "9#0",
             "is_input": false,
-            "text": "回顾",
-            "type": "recap"
+            "type": "recap",
+            "text": "回顾"
           },
           {
             "id": "10#0",
             "is_input": true,
-            "text": "下一项",
-            "type": "user"
+            "type": "user",
+            "text": "下一项"
           },
           {
             "id": "11#0",
             "is_input": false,
-            "text": "好的",
-            "type": "reply"
+            "type": "reply",
+            "text": "好的"
           }
         ],
         "turns": [
@@ -249,8 +275,8 @@
       "from_test": "finishedTurnGathersQueuedMessagesAndKeepsTheLastAnswer"
     },
     {
-      "name": "open_queued_messages_split",
-      "description": "展开合并轮后，每条用户消息各有自己的工作段和回复。",
+      "name": "open_queued_messages_work",
+      "description": "多消息轮展开各条消息的工作行，每条用户消息各有自己的工作段和回复。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
         "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
@@ -340,7 +366,6 @@
           }
         ],
         "open_work": [
-          "wt-1#0",
           "w-1#0",
           "w-5#0"
         ]
@@ -348,84 +373,78 @@
       "expected": {
         "lines": [
           {
-            "count": 2,
-            "id": "wt-1#0-h",
-            "is_input": false,
-            "type": "split_header"
-          },
-          {
             "id": "1#0",
             "is_input": true,
-            "text": "do it",
-            "type": "user"
+            "type": "user",
+            "text": "do it"
           },
           {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
             "id": "w-1#0",
             "is_input": false,
-            "known_failed_tools": 0,
+            "type": "work",
             "live": false,
             "open": true,
             "start": null,
-            "steps": [
-              {
-                "call_id": "a",
-                "failed": false,
-                "id": "3#0",
-                "image_count": 0,
-                "name": "Bash",
-                "result_id": "4#0",
-                "result_text": "ok",
-                "running": false,
-                "type": "tool"
-              }
-            ],
+            "end": null,
+            "elapsed_seconds": null,
+            "duration_text": "",
+            "tools": 1,
+            "thoughts": 0,
+            "known_failed_tools": 0,
+            "unresolved_tools": 0,
+            "contains_fold": false,
             "summary_full": [
               "工具 1"
             ],
             "summary_short": [
               "工具 1"
             ],
-            "thoughts": 0,
-            "tools": 1,
-            "type": "work",
-            "unresolved_tools": 0
+            "steps": [
+              {
+                "type": "tool",
+                "id": "3#0",
+                "call_id": "a",
+                "name": "Bash",
+                "result_id": "4#0",
+                "result_text": "ok",
+                "running": false,
+                "failed": false,
+                "image_count": 0
+              }
+            ]
           },
           {
-            "first": true,
-            "group_id": "w-1#0",
             "id": "w-1#0/3#0",
             "is_input": false,
+            "type": "work_step",
+            "group_id": "w-1#0",
+            "first": true,
             "separator_before": false,
             "step": {
-              "call_id": "a",
-              "failed": false,
+              "type": "tool",
               "id": "3#0",
-              "image_count": 0,
+              "call_id": "a",
               "name": "Bash",
               "result_id": "4#0",
               "result_text": "ok",
               "running": false,
-              "type": "tool"
-            },
-            "type": "work_step"
+              "failed": false,
+              "image_count": 0
+            }
           },
           {
-            "count": 1,
             "group_id": "w-1#0",
             "id": "w-1#0-end",
             "is_input": false,
             "separator_before": true,
-            "type": "work_end"
+            "type": "work_end",
+            "count": 1
           },
           {
             "id": "2#0",
             "is_input": false,
-            "text": "我先检查",
-            "type": "reply"
+            "type": "reply",
+            "text": "我先检查"
           },
           {
             "id": "5#0",
@@ -434,34 +453,20 @@
             "type": "user"
           },
           {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
             "id": "w-5#0",
             "is_input": false,
-            "known_failed_tools": 0,
+            "type": "work",
             "live": false,
             "open": true,
             "start": null,
-            "steps": [
-              {
-                "id": "6#0",
-                "text": "继续检查",
-                "type": "thinking"
-              },
-              {
-                "call_id": "b",
-                "failed": false,
-                "id": "7#0",
-                "image_count": 0,
-                "name": "Read",
-                "result_id": null,
-                "result_text": null,
-                "running": true,
-                "type": "tool"
-              }
-            ],
+            "end": null,
+            "elapsed_seconds": null,
+            "duration_text": "",
+            "tools": 1,
+            "thoughts": 1,
+            "known_failed_tools": 0,
+            "unresolved_tools": 1,
+            "contains_fold": false,
             "summary_full": [
               "工具 1",
               "思考 1"
@@ -469,23 +474,37 @@
             "summary_short": [
               "工具 1"
             ],
-            "thoughts": 1,
-            "tools": 1,
-            "type": "work",
-            "unresolved_tools": 1
+            "steps": [
+              {
+                "id": "6#0",
+                "type": "thinking",
+                "text": "继续检查"
+              },
+              {
+                "type": "tool",
+                "id": "7#0",
+                "call_id": "b",
+                "name": "Read",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "failed": false,
+                "image_count": 0
+              }
+            ]
           },
           {
-            "first": true,
-            "group_id": "w-5#0",
             "id": "w-5#0/6#0",
             "is_input": false,
+            "type": "work_step",
+            "group_id": "w-5#0",
+            "first": true,
             "separator_before": false,
             "step": {
               "id": "6#0",
-              "text": "继续检查",
-              "type": "thinking"
-            },
-            "type": "work_step"
+              "type": "thinking",
+              "text": "继续检查"
+            }
           },
           {
             "first": false,
@@ -494,31 +513,31 @@
             "is_input": false,
             "separator_before": true,
             "step": {
-              "call_id": "b",
-              "failed": false,
               "id": "7#0",
-              "image_count": 0,
+              "type": "tool",
+              "call_id": "b",
               "name": "Read",
               "result_id": null,
               "result_text": null,
               "running": true,
-              "type": "tool"
+              "failed": false,
+              "image_count": 0
             },
             "type": "work_step"
           },
           {
-            "count": 2,
             "group_id": "w-5#0",
             "id": "w-5#0-end",
             "is_input": false,
             "separator_before": true,
-            "type": "work_end"
+            "type": "work_end",
+            "count": 2
           },
           {
             "id": "8#0",
             "is_input": false,
-            "text": "检查完成，结果如下",
-            "type": "reply"
+            "type": "reply",
+            "text": "检查完成，结果如下"
           },
           {
             "id": "9#0",
@@ -810,8 +829,8 @@
       "derived": true
     },
     {
-      "name": "three_users_merge_without_steps",
-      "description": "多条连续被吸收的消息即使没有工具也合并为一轮。",
+      "name": "three_users_apart_without_steps",
+      "description": "多条连续被吸收的消息没有工具时也各自一行。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
         "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
@@ -853,39 +872,28 @@
       "expected": {
         "lines": [
           {
-            "id": "mu-1#0",
+            "id": "1#0",
             "is_input": true,
-            "item_ids": [
-              "1#0",
-              "2#0",
-              "3#0"
-            ],
-            "type": "merged_users"
+            "type": "user",
+            "text": "请检查示例项目"
           },
           {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
-            "id": "wt-1#0",
-            "is_input": false,
-            "known_failed_tools": 0,
-            "live": false,
-            "open": false,
-            "start": null,
-            "steps": [],
-            "summary_full": [],
-            "summary_short": [],
-            "thoughts": 0,
-            "tools": 0,
-            "type": "work",
-            "unresolved_tools": 0
+            "id": "2#0",
+            "is_input": true,
+            "type": "user",
+            "text": "检查示例配置"
+          },
+          {
+            "id": "3#0",
+            "is_input": true,
+            "text": "也检查示例测试",
+            "type": "user"
           },
           {
             "id": "4#0",
             "is_input": false,
-            "text": "检查完成",
-            "type": "reply"
+            "type": "reply",
+            "text": "检查完成"
           }
         ],
         "turns": [
@@ -1074,7 +1082,7 @@
     },
     {
       "name": "absorbed_user_images",
-      "description": "被吸收的图片与补充消息一起显示，保持图片顺序。",
+      "description": "被吸收的图片留在对应消息的上方，保持图片顺序。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
         "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
@@ -1138,63 +1146,66 @@
       "expected": {
         "lines": [
           {
-            "id": "img-4#0",
-            "is_input": false,
-            "item_ids": [
-              "4#0",
-              "5#0"
-            ],
-            "type": "user_images"
-          },
-          {
-            "id": "mu-1#0",
+            "id": "1#0",
             "is_input": true,
-            "item_ids": [
-              "1#0",
-              "3#0"
-            ],
-            "type": "merged_users"
+            "type": "user",
+            "text": "请检查示例项目"
           },
           {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
-            "id": "wt-1#0",
+            "id": "w-1#0",
             "is_input": false,
-            "known_failed_tools": 0,
+            "type": "work",
             "live": false,
             "open": false,
             "start": null,
-            "steps": [
-              {
-                "call_id": "call_a",
-                "failed": false,
-                "id": "2#0",
-                "image_count": 0,
-                "name": "Bash",
-                "result_id": null,
-                "result_text": null,
-                "running": true,
-                "type": "tool"
-              }
-            ],
+            "end": null,
+            "elapsed_seconds": null,
+            "duration_text": "",
+            "tools": 1,
+            "thoughts": 0,
+            "known_failed_tools": 0,
+            "unresolved_tools": 1,
+            "contains_fold": false,
             "summary_full": [
               "工具 1"
             ],
             "summary_short": [
               "工具 1"
             ],
-            "thoughts": 0,
-            "tools": 1,
-            "type": "work",
-            "unresolved_tools": 1
+            "steps": [
+              {
+                "type": "tool",
+                "id": "2#0",
+                "call_id": "call_a",
+                "name": "Bash",
+                "result_id": null,
+                "result_text": null,
+                "running": true,
+                "failed": false,
+                "image_count": 0
+              }
+            ]
+          },
+          {
+            "id": "img-4#0",
+            "is_input": false,
+            "type": "user_images",
+            "item_ids": [
+              "4#0",
+              "5#0"
+            ]
+          },
+          {
+            "id": "3#0",
+            "is_input": true,
+            "text": "也检查这两张示例图",
+            "type": "user"
           },
           {
             "id": "6#0",
             "is_input": false,
-            "text": "检查完成",
-            "type": "reply"
+            "type": "reply",
+            "text": "检查完成"
           }
         ],
         "turns": [
@@ -1216,164 +1227,6 @@
               "tools-2#0",
               "4#0",
               "5#0"
-            ],
-            "start": null,
-            "tail_ids": [],
-            "thought_count": 0,
-            "tool_count": 1,
-            "trailing_ids": [],
-            "user_ids": [
-              "1#0",
-              "3#0"
-            ],
-            "wake_ids": []
-          }
-        ]
-      },
-      "derived": true
-    },
-    {
-      "name": "absorbed_images_when_split",
-      "description": "展开被吸收的图片消息后，图片仍留在对应消息段。",
-      "source": [
-        "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork"
-      ],
-      "input": {
-        "items": [
-          {
-            "id": "1#0",
-            "seq": 1,
-            "role": "user",
-            "kind": "text",
-            "text": "请检查示例项目"
-          },
-          {
-            "id": "2#0",
-            "seq": 2,
-            "role": "assistant",
-            "kind": "tool_use",
-            "tool_use_id": "call_a",
-            "tool_name": "Bash"
-          },
-          {
-            "id": "3#0",
-            "seq": 3,
-            "role": "user",
-            "kind": "text",
-            "text": "也检查示例图",
-            "queued": true
-          },
-          {
-            "id": "4#0",
-            "seq": 4,
-            "role": "user",
-            "kind": "image",
-            "image": {
-              "mime": "image/png",
-              "data": "iVBORw0KGgo="
-            },
-            "queued": true
-          },
-          {
-            "id": "5#0",
-            "seq": 5,
-            "role": "assistant",
-            "kind": "text",
-            "text": "检查完成"
-          }
-        ],
-        "open_work": [
-          "wt-1#0"
-        ]
-      },
-      "expected": {
-        "lines": [
-          {
-            "count": 2,
-            "id": "wt-1#0-h",
-            "is_input": false,
-            "type": "split_header"
-          },
-          {
-            "id": "1#0",
-            "is_input": true,
-            "text": "请检查示例项目",
-            "type": "user"
-          },
-          {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
-            "id": "w-1#0",
-            "is_input": false,
-            "known_failed_tools": 0,
-            "live": false,
-            "open": false,
-            "start": null,
-            "steps": [
-              {
-                "call_id": "call_a",
-                "failed": false,
-                "id": "2#0",
-                "image_count": 0,
-                "name": "Bash",
-                "result_id": null,
-                "result_text": null,
-                "running": true,
-                "type": "tool"
-              }
-            ],
-            "summary_full": [
-              "工具 1"
-            ],
-            "summary_short": [
-              "工具 1"
-            ],
-            "thoughts": 0,
-            "tools": 1,
-            "type": "work",
-            "unresolved_tools": 1
-          },
-          {
-            "id": "img-4#0",
-            "is_input": false,
-            "item_ids": [
-              "4#0"
-            ],
-            "type": "user_images"
-          },
-          {
-            "id": "3#0",
-            "is_input": true,
-            "text": "也检查示例图",
-            "type": "user"
-          },
-          {
-            "id": "5#0",
-            "is_input": false,
-            "text": "检查完成",
-            "type": "reply"
-          }
-        ],
-        "turns": [
-          {
-            "after_wake_ids": [],
-            "answer_id": "5#0",
-            "end": null,
-            "id": "1#0",
-            "interim_count": 0,
-            "ordered_ids": [
-              "1#0",
-              "tools-2#0",
-              "3#0",
-              "4#0",
-              "5#0"
-            ],
-            "process_ids": [
-              "tools-2#0",
-              "4#0"
             ],
             "start": null,
             "tail_ids": [],

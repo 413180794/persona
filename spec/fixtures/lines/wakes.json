@@ -2058,46 +2058,30 @@
       "expected": {
         "lines": [
           {
-            "id": "img-message#1",
-            "is_input": false,
-            "item_ids": [
-              "message#1"
-            ],
-            "type": "user_images"
-          },
-          {
-            "id": "mu-1#0",
+            "id": "1#0",
             "is_input": true,
-            "item_ids": [
-              "1#0",
-              "message#0"
-            ],
-            "type": "merged_users"
-          },
-          {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
-            "id": "wt-1#0",
-            "is_input": false,
-            "known_failed_tools": 0,
-            "live": false,
-            "open": false,
-            "start": null,
-            "steps": [],
-            "summary_full": [],
-            "summary_short": [],
-            "thoughts": 0,
-            "tools": 0,
-            "type": "work",
-            "unresolved_tools": 0
+            "type": "user",
+            "text": "开始"
           },
           {
             "id": "2#0",
             "is_input": false,
-            "text": "好的，在跑",
-            "type": "reply"
+            "type": "reply",
+            "text": "好的，在跑"
+          },
+          {
+            "id": "img-message#1",
+            "is_input": false,
+            "type": "user_images",
+            "item_ids": [
+              "message#1"
+            ]
+          },
+          {
+            "id": "message#0",
+            "is_input": true,
+            "text": "看这个",
+            "type": "user"
           },
           {
             "drawer_lines": [

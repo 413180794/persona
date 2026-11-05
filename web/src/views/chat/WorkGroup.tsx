@@ -26,8 +26,6 @@ export interface WorkProps {
   thinking: Map<string, number>;
   /** The screen's status line while this exchange is live (contract §3): a thinking card at the live group's end. */
   status?: SessionLive | null;
-  /** A merged exchange: opening its work splits it into its messages instead. */
-  onOpen?: () => void;
   /** Inside an open group (a finished timeline's inner groups stay folded). */
   nested?: boolean;
 }
@@ -44,9 +42,8 @@ export const WorkGroup = memo(function WorkGroup({ g, p }: { g: WorkGroupNode; p
   const opens = groupOpens(g);
   const open = remembered && opens;
   const preview = g.live && !open ? previewSteps(g) : [];
-  const inside = useMemo(() => ({ ...p, onOpen: undefined, nested: true }), [p]);
+  const inside = useMemo(() => ({ ...p, nested: true }), [p]);
   const toggle = () => {
-    if (p.onOpen) return p.onOpen();
     const next = !open;
     setOpen(next);
     if (next) for (const f of foldsOf(g)) if (f.fold) openFoldRange(p.scope, f.seq, f.fold.through_seq);

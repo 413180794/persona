@@ -160,7 +160,6 @@ export const SegmentView = memo(function SegmentView({
   streaming,
   status,
   expandFold,
-  onOpen,
 }: {
   seg: Segment;
   live: boolean;
@@ -170,8 +169,6 @@ export const SegmentView = memo(function SegmentView({
   /** The screen's status line, for the live exchange only. */
   status?: SessionLive | null;
   expandFold: (f: Item) => Promise<void>;
-  /** A merged exchange: opening its work splits it into its messages. */
-  onOpen?: () => void;
 }) {
   const { subagents, fresh, scope } = useChatContext();
   const steps = useMemo(() => planSteps(exchangeSteps(seg)), [seg]);
@@ -179,8 +176,8 @@ export const SegmentView = memo(function SegmentView({
   const thinking = useMemo(() => thinkingDurations(steps, turnStart), [steps, turnStart]);
   const p = useMemo<WorkProps>(() => {
     const agent = (s: ToolStep) => agentStatus(s.result, subagentFor(subagents, s.use), live);
-    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, status, onOpen };
-  }, [mid, sid, scope, expandFold, subagents, live, thinking, status, onOpen]);
+    return { mid, sid, scope, expandFold, agentStatus: agent, thinking, status };
+  }, [mid, sid, scope, expandFold, subagents, live, thinking, status]);
   const nodes = useMemo(() => workBlocks(steps, { live, turnStart, agentStatus: p.agentStatus }), [steps, live, turnStart, p.agentStatus]);
   // the pictures the agent looked at this turn, between its work and its last words
   const images = useMemo(() => turnImages(seg, getState().machines.find((m) => m.id === mid)?.name), [seg, mid]);

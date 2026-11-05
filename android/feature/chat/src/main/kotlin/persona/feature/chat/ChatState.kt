@@ -18,7 +18,6 @@ internal val chatItemOrder = compareBy<Item> { it.seq }.thenBy { it.id.substring
 
 internal fun ChatLine.lastItem(): Item? = when (this) {
     is ChatLine.Row -> row.item?.item
-    is ChatLine.MergedUsers -> users.lastOrNull()?.item?.item
     is ChatLine.UserImages -> images.lastOrNull()?.item
     is ChatLine.Work -> steps.mapNotNull { it.lastItem() }.maxWithOrNull(chatItemOrder)
     is ChatLine.Step -> step.lastItem()
@@ -72,7 +71,7 @@ internal class ChatTimeline {
 }
 
 internal fun ChatLine.recordedDuration(durations: Map<String, Long>): Long? = when (this) {
-    is ChatLine.Work -> durations[id.removePrefix("wt-").removePrefix("w-").removePrefix("dw-")]
+    is ChatLine.Work -> durations[id.removePrefix("w-").removePrefix("dw-")]
     else -> null
 }
 
@@ -119,8 +118,6 @@ internal fun ChatLine.contentType(): String = when (this) {
     is ChatLine.Work -> "work"
     is ChatLine.Step -> when (step) { is WorkItem.Tool -> "tool"; is WorkItem.Folded -> "fold"; else -> "thought" }
     is ChatLine.End -> "work_end"
-    is ChatLine.MergedUsers -> "merged_users"
-    is ChatLine.SplitHeader -> "split_header"
     is ChatLine.UserImages -> "images"
     is ChatLine.Wakes -> "wakes"
     is ChatLine.ApiError -> "api_error"

@@ -279,6 +279,8 @@ func TestTerminalControlTypesResizesAndLetsGo(t *testing.T) {
 	_ = hub.Notify("terminal.scroll", map[string]any{"session_id": "s1", "lines": 3, "up": true})                         // an old hub: no cell
 	_ = hub.Notify("terminal.scroll", map[string]any{"session_id": "s1", "lines": 2, "up": false, "column": 7, "row": 9}) // under the finger
 	_ = hub.Notify("terminal.click", map[string]any{"session_id": "s1", "column": 5, "row": 7})
+	_ = hub.Notify("terminal.mouse", map[string]any{"session_id": "s1", "action": "drag", "button": "right", "column": 6, "row": 8, "modifiers": 5})
+	_ = hub.Notify("terminal.mouse", map[string]any{"session_id": "s1", "action": "bogus", "button": "left", "column": 6, "row": 8}) // herdr would not parse it: not sent
 	waitFor(t, "the resized frame", func() bool {
 		for _, e := range events() {
 			if e.Event == "terminal.frame" && e.Full && e.Cols == 40 {
@@ -287,7 +289,7 @@ func TestTerminalControlTypesResizesAndLetsGo(t *testing.T) {
 		}
 		return false
 	})
-	waitFor(t, "the click", func() bool { return strings.Contains(readLog(log), `"type":"terminal.mouse"`) })
+	waitFor(t, "the mouse events", func() bool { return strings.Contains(readLog(log), `"modifiers":5`) })
 	l := readLog(log)
 	// One wheel event a line (herdr gives a program one per command, whatever "lines" says), over a cell of the
 	// screen: the middle when the hub did not say (at 1;1 Codex's pinned prompt takes it and nothing scrolls).
@@ -295,7 +297,9 @@ func TestTerminalControlTypesResizesAndLetsGo(t *testing.T) {
 		strings.Count(l, `{"column":20,"direction":"up","lines":1,"row":10,"type":"terminal.scroll"}`) != 3 ||
 		strings.Count(l, `{"column":7,"direction":"down","lines":1,"row":9,"type":"terminal.scroll"}`) != 2 ||
 		!strings.Contains(l, `{"action":"down","button":"left","column":5,"row":7,"type":"terminal.mouse"}`) ||
-		!strings.Contains(l, `{"action":"up","button":"left","column":5,"row":7,"type":"terminal.mouse"}`) {
+		!strings.Contains(l, `{"action":"up","button":"left","column":5,"row":7,"type":"terminal.mouse"}`) ||
+		!strings.Contains(l, `{"action":"drag","button":"right","column":6,"modifiers":5,"row":8,"type":"terminal.mouse"}`) ||
+		strings.Contains(l, "bogus") {
 		t.Fatalf("herdr got %q", l)
 	}
 	n.terminalUnwatch("s1")

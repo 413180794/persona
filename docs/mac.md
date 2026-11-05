@@ -733,8 +733,8 @@ Agent › 在新窗口打开终端：那个 Agent 的终端单独一个窗口（
   - Mac（2026-11-01 核对）截图（`-openMachinePage macbook`）：在线、项目和 Agent 数、状态计数、进行中的项目带最新一句、工具栏 ⓘ；体验数据里这台机器没有空闲项目和散的 Agent，那两块没看到。
 
 ## 4. Chat page (agent conversation)
-- [ ] Message rendering: user bubble, assistant markdown (MarkdownUI `.jarvis` theme), thinking row, peer 「来自 名字」 card, pending/sending bubble (retry/delete), merged queued bubble, sent photos, attached images — Views/Chat/MessageViews.swift (UserBubble, PeerMessage, PendingBubble, MergedUserBubble, SentPhotos, AttachedImages, AssistantText, ThinkingRow, NoticeRow)
-  - 要到 Mac 前看：别人发来的「来自 名字」卡片、合并的排队气泡、发出去的照片。假 hub 截图里用户气泡、回复 markdown、思考行、发送失败的气泡和它的菜单都对，这三种没有数据。
+- [ ] Message rendering: user bubble, assistant markdown (MarkdownUI `.jarvis` theme), thinking row, peer 「来自 名字」 card, pending/sending bubble (retry/delete), sent photos, attached images — Views/Chat/MessageViews.swift (UserBubble, PeerMessage, PendingBubble, SentPhotos, AttachedImages, AssistantText, ThinkingRow, NoticeRow)
+  - 要到 Mac 前看：别人发来的「来自 名字」卡片、发出去的照片。假 hub 截图里用户气泡、回复 markdown、思考行、发送失败的气泡和它的菜单都对，这两种没有数据。
 - [x] Markdown tables fitted / horizontal scroll — Views/Chat/MarkdownTable.swift (FittedTable)
   - Mac（2026-11-01 核对）：截图里两张表都按宽度排开（fitted 对）；「宽表，横着滑」在 1280pt 窗口里也放下了，横向滚动没触发，没看到。
   - Mac（2026-11-02 Mac mini 真窗口核对）：隐藏侧边栏、窗口 820 宽时七列表放不下，被截在右边，横向滚轮能滚到「数据来源」那列；三列表按宽度换行排开。

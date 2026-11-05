@@ -23,14 +23,11 @@ export interface LineProps {
   sid: string;
   streaming?: string;
   expandFold: (f: Item) => Promise<void>;
-  /** A merged exchange's work row: split it into its messages. */
-  onSplit: (group: string) => void;
-  onUnsplit: (group: string) => void;
   /** 重试 on an API error card (only on the last line, while the agent is not working). */
   onRetry?: () => void;
 }
 
-export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid, streaming, expandFold, onSplit, onUnsplit, onRetry }: LineProps) {
+export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid, streaming, expandFold, onRetry }: LineProps) {
   switch (line.kind) {
     case "segment":
       return (
@@ -42,19 +39,7 @@ export const ChatLineView = memo(function ChatLineView({ line, status, mid, sid,
           sid={sid}
           streaming={line.live ? streaming : undefined}
           expandFold={expandFold}
-          onOpen={line.group ? () => onSplit(line.group!) : undefined}
         />
-      );
-    case "split":
-      return (
-        <button
-          type="button"
-          onClick={() => onUnsplit(line.group)}
-          className="-mb-3 flex w-fit items-center gap-1.5 self-end rounded-control px-1.5 py-0.5 text-[12px] whitespace-nowrap text-ink-3 transition-colors hover:bg-hover-2 hover:text-ink-2"
-        >
-          {t("chat-lines.split_collapse", { count: line.count })}
-          <Icon name="up" size={12} stroke={2.2} />
-        </button>
       );
     case "notice":
       return <LineNotice item={line.item} />;

@@ -1,5 +1,4 @@
 {
-  "split_collapse_other": "已按 {count} 条消息拆开 · 收起",
   "wake_processing": "后台任务完成 · 正在处理",
   "wake_count_other": "{count} 个后台任务完成",
   "wake_single": "后台任务完成",

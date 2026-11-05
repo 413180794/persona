@@ -41,31 +41,6 @@ struct ChatLines {
                     wokeAt = n.ts
                 }
                 let segments = Self.segments(t.ordered)
-                let groupID = "wt-" + t.id
-                let messages = segments.compactMap(\.user)
-                // A finished turn that took several messages reads as one exchange: the messages in one bubble,
-                // one work line for everything, the final answer. Opening the work line splits it back up.
-                // (Never with one of Persona's messages for the model among them: that one is a line of its own.)
-                if t.id != liveID && messages.count > 1 && !messages.contains(where: Self.isInjected) {
-                    if !openWork.contains(groupID) {
-                        let photos = segments.flatMap { Self.photos($0.rows) }
-                        if !photos.isEmpty { out.append(.userImages(id: "img-" + photos[0].id, items: photos)) }
-                        out.append(.mergedUsers(id: "mu-" + t.id, rows: messages))
-                        let answer = t.ordered.lastIndex { if case .assistant = $0 { true } else { false } }
-                        let rest = t.ordered.enumerated().filter { n, r in
-                            if case .user = r { return false }
-                            return n != answer
-                        }.map(\.element)
-                        let work = Self.workItems(rest)
-                        out.append(.work(id: groupID, items: work, live: false, start: t.startedAt, end: t.endedAt))
-                        out += Self.viewed("vi-" + groupID, work)
-                        if let answer { out.append(.row(t.ordered[answer])) }
-                        if !t.wakes.isEmpty { out.append(.wakes(t, live: false)) }
-                        out += t.trailing.map { .row($0) }
-                        continue
-                    }
-                    out.append(.splitHeader(id: groupID, count: messages.count))
-                }
                 for (k, seg) in segments.enumerated() {
                     // Once the answer is in and a background task woke the agent, the new work runs behind the chip.
                     let live = t.id == liveID && k == segments.count - 1 && t.tail.isEmpty
@@ -297,11 +272,6 @@ struct ChatLines {
         return items
     }
 
-    /// A message Persona typed in for the model (`Injected`): drawn as a line of its own, not merged into a bubble.
-    static func isInjected(_ row: ChatRow) -> Bool {
-        if case .user(let i) = row { Injected.of(i) != nil } else { false }
-    }
-
     /// A turn cut at each message: (message, what came after it until the next one).
     static func segments(_ ordered: [ChatRow]) -> [(user: ChatRow?, rows: [ChatRow])] {
         var out: [(user: ChatRow?, rows: [ChatRow])] = []
@@ -362,7 +332,6 @@ extension ChatLines {
         switch line.content {
         case .row(.user(let i)): i.ts
         case .row(.image(let i)) where i.role == "user": i.ts
-        case .mergedUsers(_, let rows): rows.first?.firstTS
         case .userImages(_, let items): items.first?.ts
         default: nil
         }

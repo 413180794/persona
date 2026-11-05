@@ -160,9 +160,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   }, []);
 
   const segs = useMemo(() => segments(tr.items), [tr.items]);
-  // finished exchanges of several messages the user split open (iOS openWork on a merged exchange)
-  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => setSplit((x) => (x.size ? new Set() : x)), [mid, sid]);
 
   // what the messages' menus, the image viewer and the @ menu read from this chat (chat-actions.ts)
   const items = useRef(tr.items);
@@ -499,7 +496,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
-  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing), split }), [tr.items, lastLive, readOnly, outgoing, split]);
+  const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing) }), [tr.items, lastLive, readOnly, outgoing]);
   const ctx = useMemo<ChatContextValue>(
     () => ({ tasks: buildTaskIndex(tr.items), subagents: assistant ? [] : (subagents ?? []), fresh, scope: `${mid}/${sid}:` }),
     [tr.items, subagents, assistant, fresh, mid, sid],
@@ -507,8 +504,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // the newest plan of the chat (lib/work-groups.ts planSteps): while its card is out of view, a pill above the composer
   const plan = useMemo(() => latestPlan(segs), [segs]);
   const planOut = usePlanOutOfView(scroller, plan?.id);
-  const onSplit = useCallback((g: string) => setSplit((x) => new Set([...x, g])), []);
-  const onUnsplit = useCallback((g: string) => setSplit((x) => new Set([...x].filter((y) => y !== g))), []);
   const lastLine = lines[lines.length - 1];
   // 重试 on an API error card: only when it is the last thing, the agent is not working (someone may have retried already)
   const retry = useCallback(() => void deliver({ text: t("chat-chatview.continue_text"), images: [] }, uuid()), [deliver]);
@@ -634,8 +629,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                         sid={sid}
                         streaming={d.line.kind === "segment" && d.line.live ? tr.streaming || undefined : undefined}
                         expandFold={tr.expandFold}
-                        onSplit={onSplit}
-                        onUnsplit={onUnsplit}
                         onRetry={canRetry && d.line.id === lines.at(-1)?.id ? retry : undefined}
                       />
                     ),
@@ -652,8 +645,6 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   sid={sid}
                   streaming={line.kind === "segment" && line.live ? tr.streaming || undefined : undefined}
                   expandFold={tr.expandFold}
-                  onSplit={onSplit}
-                  onUnsplit={onUnsplit}
                   onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
                 />
               ))}

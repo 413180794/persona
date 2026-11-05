@@ -92,8 +92,6 @@ internal fun searchTarget(lines: List<ChatLine>, itemId: String): ChatSearchTarg
     }
     lines.forEach { line ->
         when (line) {
-            is ChatLine.MergedUsers -> if (line.users.any { it.id == itemId })
-                return ChatSearchTarget(itemId, setOf("wt-${line.turnId}"))
             is ChatLine.Work -> line.steps.firstOrNull { it.containsItem(itemId) }?.let {
                 return ChatSearchTarget("${line.id}/${it.id}", setOf(line.id))
             }

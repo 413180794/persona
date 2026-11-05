@@ -157,8 +157,6 @@ private class Projection(val tasks: TaskIndex, val menu: List<String?>, val now:
         val content = when (line) {
             is ChatLine.Row -> row(line.row)
             is ChatLine.UserImages -> obj("type" to "user_images", "item_ids" to line.images.map { it.id })
-            is ChatLine.MergedUsers -> obj("type" to "merged_users", "item_ids" to line.users.map { it.id })
-            is ChatLine.SplitHeader -> obj("type" to "split_header", "count" to line.count)
             is ChatLine.Work -> obj("type" to "work", "live" to line.live, "open" to line.open,
                 "start" to line.start, "end" to line.end, "elapsed_seconds" to line.elapsedSeconds(now),
                 "duration_text" to line.durationText(now), "tools" to line.tools, "thoughts" to line.thoughts,

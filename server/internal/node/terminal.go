@@ -380,6 +380,10 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		Up         bool     `json:"up"`
 		Column     *int     `json:"column"`
 		Row        *int     `json:"row"`
+		// terminal.mouse (docs/terminal.md「鼠标」)
+		Action    string `json:"action"`
+		Button    string `json:"button"`
+		Modifiers int    `json:"modifiers"`
 	}
 	if json.Unmarshal(params, &p) != nil {
 		return
@@ -411,6 +415,12 @@ func (n *Node) onTerminalEvent(event string, params json.RawMessage) {
 		if s := n.termStreamOf(p.SessionID); s != nil {
 			if c := s.control(); c != nil && p.Column != nil && p.Row != nil && *p.Column >= 0 && *p.Row >= 0 {
 				_ = c.Click(*p.Column, *p.Row)
+			}
+		}
+	case "terminal.mouse":
+		if s := n.termStreamOf(p.SessionID); s != nil && p.Column != nil && p.Row != nil {
+			if m, ok := s.control().(host.Mouser); ok { // control() is nil with no terminal driven: the assertion fails
+				_ = m.Mouse(host.MouseEvent{Action: p.Action, Button: p.Button, Column: *p.Column, Row: *p.Row, Modifiers: p.Modifiers})
 			}
 		}
 	case "terminal.keepalive":

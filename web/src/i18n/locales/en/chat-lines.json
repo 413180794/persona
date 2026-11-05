@@ -1,6 +1,4 @@
 {
-  "split_collapse_one": "Split into {count} message · Collapse",
-  "split_collapse_other": "Split into {count} messages · Collapse",
   "wake_processing": "Background task done · Processing",
   "wake_count_one": "{count} background task done",
   "wake_count_other": "{count} background tasks done",

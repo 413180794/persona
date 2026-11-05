@@ -300,6 +300,8 @@ func (h *herdrHost) Control(ctx context.Context, pane host.PaneRef, cols, rows i
 // herdrControl is herdr's control with its errors marked for the host package.
 type herdrControl struct{ *herdr.Control }
 
+func (c herdrControl) Mouse(e host.MouseEvent) error { return c.Control.Mouse(herdr.MouseEvent(e)) }
+
 func (c herdrControl) Err() error {
 	err := c.Control.Err()
 	if errors.Is(err, herdr.ErrTakenOver) {

@@ -105,20 +105,17 @@ describe("chatLines", () => {
     expect(ls.map((l) => l.kind === "segment" && l.live)).toEqual([false, true]);
   });
 
-  it("merges a finished exchange of several messages into one, and splits it when asked", () => {
+  it("draws a finished exchange of several messages message by message (#2512)", () => {
     const items = [u(1, "first"), tool(2, "x"), res(3, "x"), u(4, "also this", { queued: true }), a(5, "partial"), tool(6, "y"), res(7, "y"), a(8, "all done")];
     const ls = chatLines(items);
-    expect(kinds(ls)).toEqual(["segment"]);
-    const m = ls[0].kind === "segment" ? ls[0] : null;
-    expect(m?.group).toBe("wt-u1#0");
-    expect(m?.seg.user?.parts).toEqual(["first", "also this"]);
-    expect(m?.seg.answer?.text).toBe("all done");
-    expect(m?.seg.tools).toBe(2);
-    expect(m?.seg.steps.map((s) => s.kind)).toEqual(["tool", "text", "tool"]);
-    const open = chatLines(items, { split: new Set(["wt-u1#0"]) });
-    expect(kinds(open)).toEqual(["split", "segment", "segment"]);
-    expect(open[0].kind === "split" && open[0].count).toBe(2);
-    // the live exchange is never merged
+    expect(kinds(ls)).toEqual(["segment", "segment"]);
+    const [one, two] = ls.map((l) => (l.kind === "segment" ? l.seg : null));
+    expect(one?.user?.text).toBe("first");
+    expect(one?.tools).toBe(1);
+    expect(two?.user?.text).toBe("also this");
+    expect(two?.answer?.text).toBe("all done");
+    expect(two?.steps.map((s) => s.kind)).toEqual(["text", "tool"]);
+    // the live exchange as well
     expect(kinds(chatLines(items, { live: true }))).toEqual(["segment", "segment"]);
   });
 
@@ -293,11 +290,10 @@ describe("Persona's messages for the model (lib/injected.ts)", () => {
     const s = segments([u(1, "whatever", { injected: { kind: "followup", state: "daily", line: "定时任务「早报」开始运行" } })]);
     expect(s[0].user?.text).toBe("定时任务「早报」开始运行");
   });
-  it("is not merged into a finished exchange's bubble", () => {
+  it("is a line of its own in a finished exchange", () => {
     const lines = chatLines([u(1, notice), u(2, "顺便看看 CI", { queued: true }), a(3, "好")]);
     const segs = lines.filter((l) => l.kind === "segment");
     expect(segs.map((l) => (l.kind === "segment" ? l.seg.user?.injected?.kind ?? l.seg.user?.text : ""))).toEqual(["task_notice", "顺便看看 CI"]);
-    expect(lines.some((l) => l.kind === "split")).toBe(false);
   });
   it("a message the app sent stays a bubble", () => {
     expect(segments([u(1, notice, { client_msg_id: "c1" })])[0].user?.injected).toBeUndefined();

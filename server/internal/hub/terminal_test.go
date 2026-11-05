@@ -265,6 +265,51 @@ func TestTerminalControlDrivesAndGivesBack(t *testing.T) {
 	}
 }
 
+// A mouse event goes to the node in order with the keys and only from the device that drives the terminal; one herdr
+// would not take (a wheel "button", a cell off the screen) is dropped here, and the modifier bits are masked to three.
+func TestTerminalMouseRelaysInOrderFromTheDriverOnly(t *testing.T) {
+	tn := newTermNode(t)
+	h, ctx := tn.hub, context.Background()
+	a := &client{out: make(chan []byte, 64)}
+	b := &client{out: make(chan []byte, 64)}
+	h.terminalSubscribe(ctx, a, "m1", "s1", "", 0, &termCtl{44, 30}, false)
+	awaitStates(t, a, "active")
+	h.terminalInput(a, "m1", "s1", "x", nil, 0, nil)
+	h.terminalMouse(a, "m1", "s1", termMouse{Action: "down", Button: "left", At: []int{3, 4}, Mods: 1})
+	h.terminalMouse(a, "m1", "s1", termMouse{Action: "drag", Button: "left", At: []int{4, 4}, Mods: 9})
+	h.terminalMouse(a, "m1", "s1", termMouse{Action: "up", Button: "right", At: []int{4, 4}})
+	h.terminalMouse(a, "m1", "s1", termMouse{Action: "move", Button: "middle", At: []int{0, 0}, Mods: 6})
+	h.terminalMouse(b, "m1", "s1", termMouse{Action: "down", Button: "left", At: []int{1, 1}}) // b does not drive it
+	for _, bad := range []termMouse{
+		{Action: "wheel", Button: "left", At: []int{1, 1}},
+		{Action: "down", Button: "wheel", At: []int{1, 1}},
+		{Action: "down", Button: "left", At: []int{-1, 1}},
+		{Action: "down", Button: "left", At: []int{1}},
+		{Action: "down", Button: "left", At: []int{1, 5000}},
+		{Action: "down", Button: "left"},
+	} {
+		h.terminalMouse(a, "m1", "s1", bad)
+	}
+	h.terminalInput(a, "m1", "s1", "y", nil, 0, nil)
+	got := tn.await(t, 7)
+	want := []string{"control 44x30 takeover=false", `terminal.input {"session_id":"s1","text":"x"}`,
+		`terminal.mouse {"action":"down","button":"left","column":3,"modifiers":1,"row":4,"session_id":"s1"}`,
+		`terminal.mouse {"action":"drag","button":"left","column":4,"modifiers":1,"row":4,"session_id":"s1"}`,
+		`terminal.mouse {"action":"up","button":"right","column":4,"modifiers":0,"row":4,"session_id":"s1"}`,
+		`terminal.mouse {"action":"move","button":"middle","column":0,"modifiers":6,"row":0,"session_id":"s1"}`,
+		`terminal.input {"session_id":"s1","text":"y"}`}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("node got %q, want %q", got, want)
+	}
+	h.terminalUnsubscribe(a, "m1", "s1")
+	h.terminalMouse(a, "m1", "s1", termMouse{Action: "down", Button: "left", At: []int{1, 1}}) // gone: nothing reaches the node
+	for _, g := range tn.await(t, 8) {
+		if strings.HasPrefix(g, "terminal.mouse") && strings.Contains(g, `"column":1,`) {
+			t.Fatalf("a mouse event reached a terminal nobody drives: %q", g)
+		}
+	}
+}
+
 func TestTerminalControlAsksBeforeTakingOver(t *testing.T) {
 	tn := newTermNode(t)
 	tn.busy = true

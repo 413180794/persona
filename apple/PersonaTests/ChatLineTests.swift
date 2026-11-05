@@ -20,14 +20,10 @@ struct ChatLineTests {
 
     @Test func messageMenuStillBelongsToItsOriginalRow() {
         let user = RebuildTests.item(1, "user", .text, text: "first")
-        let next = RebuildTests.item(2, "user", .text, text: "second")
-        let merged = ChatLine.mergedUsers(id: "mu-1", rows: [.user(user), .user(next)])
-        #expect(merged.isInput)
-        #expect(merged.holds(user.id))
-        #expect(!merged.holds(next.id))
-        #expect(!merged.holds(nil))
-        #expect(ChatLine.row(.user(user)).isInput)
-        #expect(ChatLine.splitHeader(id: "wt-1", count: 2).id == "wt-1-h")
+        let line = ChatLine.row(.user(user))
+        #expect(line.isInput)
+        #expect(line.holds(user.id))
+        #expect(!line.holds(nil))
         #expect(ChatLine.wakes(Turn(id: "1"), live: false).id == "wk-1")
     }
 }

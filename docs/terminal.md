@@ -795,3 +795,64 @@ hub → 浏览器：`herdr_state {id, state: "open", cols, rows}`、`herdr_data 
 - Go：`go test -count=1 ./internal/herdr ./internal/host ./internal/node ./internal/hub ./internal/proto`；对真 herdr：`PERSONA_LIVE_FULL_SESSION=<临时会话> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`。
 - 网页：`cd web && npm test && npm run build`（`terminal-mode.test.ts`、`Surface.test.tsx`、快捷键表）。
 - 端到端：`scripts/test/web_herdr_full_e2e.py`（假 hub 的 `MOCK_TERMINAL_FULL=1`，用法见脚本开头：默认完整界面、ack、配色应答、打字、OSC 52 到剪贴板、切换 / 动画中间态 / 记住选择 / 快捷键 / 改尺寸 / 关闭、设置、减弱动态、结束后重连、不支持时回退、旧 hub 没有开关；截图深浅色 × 宽 / 390 px）和 `scripts/test/web_herdr_full_live.py`（真 herdr，见上）。
+
+## 二十五、鼠标：点击、拖动、按键和修饰键（2026-11-05，网页，#2441）
+
+用户：「旧版终端鼠标点击都不支持」。以前接管时只有「不拖动的左键单击」（`terminal_input.click`），没有拖动、没有右键 / 中键、没有修饰键。现在整条鼠标都转给 herdr。
+
+### herdr 的 `terminal.mouse`（0.9.5 实测，control 会话的 stdin 协议）
+
+来源：herdr 二进制里的 serde 报错（`unknown variant … expected one of …`）、`herdr api schema`（只有 socket API，没有终端流的消息）、
+以及在一个临时 herdr 标签里用 `cat -v` + `printf '\e[?1000h\e[?1002h\e[?1006h'`、vim（`set mouse=a`）逐个发消息看程序收到的字节。
+
+```json
+{"type":"terminal.mouse","action":"down","button":"left","column":10,"row":5,"modifiers":0}
+```
+
+| 字段 | 取值（实测） |
+| --- | --- |
+| `action` | `down`、`up`、`drag`（按住键移动）、`move`（不按键移动）。**没有** double / triple：双击三击就是程序按时间间隔数的几次 `down`/`up`，实时发过去它自己认（vim 的双击选词可用） |
+| `button` | `left`、`right`、`middle`。滚轮不在这里，是 `terminal.scroll`（第十六节） |
+| `modifiers` | 数字（u8），写成数组或字符串会被拒（`invalid type … expected u8`）。位：shift 1、ctrl 2、alt 4；组合相加（`3` = shift+ctrl 收到 `<20`，`5` = shift+alt 收到 `<12`）。没有 meta，别的位被忽略；不给就是 0 |
+| `column`、`row` | u16，从 0 起；程序收到的是 1 起（`ESC[<0;11;6M`）。落在窗格外（200、65535）herdr 直接丢掉（程序没收到），所以我们只发 `0 ≤ 值 < 4096` |
+
+herdr 照程序要的编码转发：程序开了 `?1006`（SGR）收到 `ESC[<b;x;yM` / `m`（松开）；`down` = `<0`、`drag` = `<32`、`move` = `<35`，右键 `<2`、中键 `<1`，shift +4、alt +8、ctrl +16。
+程序没开鼠标上报（`?1000/1002/1003` 都关）时事件被**丢掉**，herdr 不会自己选择文字或滚动；`move` 只有程序开了 `?1003`（任意移动）才收到。
+未知的 `action` / `button` / 字段类型：herdr 在 stderr 记一行 `terminal session control input ignored: invalid json command`，会话不断。
+
+### herdr 不告诉我们程序开没开鼠标
+
+找遍了：control 流的帧（`terminal.frame` 的字段只有 seq / full / width / height / encoding / bytes，bytes 是 herdr 重画的网格，里面没有 `?1000h` 之类的模式序列）、
+`pane get` / `pane process-info` / `pane layout`、`herdr api schema` / `snapshot`、`pane read --raw`（空）、`terminal attach`（要 tty；没有 tty 时只写一串 `?…l` 复位就退出）。都没有鼠标模式。
+herdr 二进制里有 `mouse_tracking_enabled`（它内部的终端），只是没有暴露。所以网页没法按程序切换「本地选择 / 交给程序」。
+
+### 选择 vs 程序（默认交给程序，Shift 留在页面）
+
+照 Moshi（它里面跑的是 herdr 客户端，鼠标一律先给 herdr，herdr 决定程序收不收）：
+
+| 设置（终端设置 › 鼠标，`jarvis.terminal.mouse`） | 不按 Shift | 按住 Shift |
+| --- | --- | --- |
+| 交给程序（默认，不写键） | 按下 / 拖动 / 松开都发给 herdr；左 / 中 / 右键，ctrl、alt 作为修饰键；页面不选字、右键不出菜单 | xterm 本地选字（拖动）、右键出 Persona 菜单 |
+| 本地选择 | 和以前一样：拖动选字、右键出菜单、不拖动的单击仍是 `terminal_input.click` | 交给程序（Shift 是路由键，不再当修饰键发出） |
+
+- ⌘（meta）和触屏一律留在页面：⌘ 点链接照旧能打开，手指仍是滚动 / 长按选字、轻点 = `click`。
+- 只在接管时发（driving），只看时什么都不发；Shift 选字后再点一次给程序的按下，会先清掉选区。
+- 副作用要知道：**默认下 shell 里（程序没开鼠标）直接拖动不会选字**，要按住 Shift，或在设置里选「本地选择」。这是没有模式信息下的取舍；
+  以后 herdr 暴露了鼠标模式，就可以只在程序开了鼠标时才交给程序。
+- 拖动：每进入新的一格发一次 `drag`（`CellThrottle`），指针移出终端后仍跟着，夹在最近的边缘格，松开一定发 `up`（窗口失焦也补一个）。
+- 悬停（`move`）**没做**：不知道程序开没开 `?1003`，每次鼠标移动都发一条消息要白白占链路；需要时可以在知道模式后再加。
+- 双击三击：不特殊处理，实时的 `down`/`up` 保留了间隔，程序自己数。
+
+### 协议和代码
+
+- 网页 → hub：`terminal_input` 多一个 `mouse: {action, button, at: [column, row], mods}`（feature `terminal_mouse`，旧的 `click` 保留给旧客户端和本地选择模式）。
+  hub 只认正在接管的那个连接（`terminalMouse`，和键、滚轮同一条顺序），校验 action / button / 格子后转成 node 的 `terminal.mouse` 事件；`mods` 只留三位。
+- node → herdr：`host.Mouser`（`herdr.Control.Mouse`）写 `terminal.mouse`，同样先校验。老 node 没有这个事件就丢掉，网页看 hub 的 `terminal_mouse` 决定发不发。
+- 网页：纯逻辑在 `web/src/lib/terminal-mouse.ts`（按钮 / 修饰键映射、路由、右键菜单决定、按格节流），`feed.ts` 里「the mouse」一节只做事件接线；右键菜单的判断经 `feed.wantsMenu`。
+- 文件拖放（上传、Files 条目）不受影响：它们走 `dragenter` / `drop`，鼠标转发只处理 `mousedown` / `mouseup` / `mousemove`。
+
+### 验证
+
+`go test ./internal/herdr ./internal/hub ./internal/node`（编码、只有 driver 能发、顺序）、`npm test`（`terminal-mouse.test.ts`）、
+`scripts/test/web_terminal_mouse_e2e.py`（假 hub 记录 `terminal_input.mouse`，Playwright 点 / 拖 / 右键 / Shift / 设置）、
+`go test -tags herdrlive -run TestLiveControlMouse`（`JARVIS_LIVE_MOUSE_PANE`，真 herdr 临时标签里的 vim：单击把光标移到格子上，拖动选出可视选区）。

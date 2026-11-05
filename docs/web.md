@@ -36,6 +36,8 @@
   `MOCK_TASKS=1 MOCK_TASKS_DOCK=pair|many` 起，再跑 `python3 scripts/test/web_task_dock_e2e.py <网页地址> [--browser chromium|webkit|all] [--shots <目录>]`。
   安装成 App 的端到端检查（Chrome 认为可安装、service worker 接管、缓存里只有外壳和 assets、断网能打开、设置里的安装行、theme-color 跟深浅色）：
   service worker 只在构建里跑，所以先 `npm run build`，用 `npx vite preview`（不是 `vite`）对着假 hub 起，再跑 `python3 scripts/test/web_pwa_e2e.py <网页地址> [--shots <目录>]`。
+  终端鼠标的端到端检查（#2441：点击 / 拖动 / 中右键 / ctrl alt 修饰键以 `terminal_input.mouse` 到 hub，Shift 选字和 Shift+右键菜单，「本地选择」，只看时不发，滚轮不变）：
+  假 hub 带 `MOCK_TERMINAL_STREAM=1 MOCK_TERMINAL_CONTROL=1 MOCK_TERMINAL_PANES=1` 起，再跑 `python3 scripts/test/web_terminal_mouse_e2e.py <网页地址> --hub <假 hub 地址> [--shots <目录>]`。
 
 ## 登录
 
@@ -141,9 +143,8 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **滚动**：在底部时跟着新内容走；滚轮向上、手指下拉、滚动键、拖滚动条一动就停止跟随，离底不到 100 px 往下滚或贴底时恢复；自己发送时回到底部；展开卡片时停 300 ms、按住点的那一行。
     不在底部时出「跳到底部」（有新内容时是「有新消息」）。打开、刷新、从侧栏切过来都停在最新消息（#1340）；滚到顶自动加载更早的两轮，位置不跳。
   - **同一个 tab 的几个 Agent pane**：顶栏下面一排标签（`PaneTabs`），带状态点和 Agent 类型，点了换对话；只有一个时不显示。
-  - **按行画**（#433，`chatLines()` / `buildBlocks()` 照 iOS `ChatLines`、`ChatBlock.build`，`views/chat/Lines.tsx`）：工作中插入的消息并进当前这一轮；做完的、有几条消息的一轮合成一个气泡（中间短横线），
-    点工作行按消息拆开、上面「已按 N 条消息拆开 · 收起」；「已中断」单独一行居中；别的会话发来的消息是「来自 X」卡片，`/loop` 的唤醒是一条小条。
-    hub 发给模型的任务通知、定时任务、叫醒（`docs/protocol.md`「Persona 注入的消息」，`lib/injected.ts`）不是用户气泡：居中一行「任务「x」做完了」，点开任务；定时任务那行点开看任务的要求；不并进多条消息的气泡，也不拿去认待发消息。
+  - **按行画**（#433，`chatLines()` / `buildBlocks()` 照 iOS `ChatLines`、`ChatBlock.build`，`views/chat/Lines.tsx`）：工作中插入的消息并进当前这一轮；做完的一轮有几条消息也按消息一来一回地画（#2512）；「已中断」单独一行居中；别的会话发来的消息是「来自 X」卡片，`/loop` 的唤醒是一条小条。
+    hub 发给模型的任务通知、定时任务、叫醒（`docs/protocol.md`「Persona 注入的消息」，`lib/injected.ts`）不是用户气泡：居中一行「任务「x」做完了」，点开任务；定时任务那行点开看任务的要求；不拿去认待发消息。
   - **后台任务唤醒**：被唤醒的工作留在原来那一轮，取最长的那段话当回答，下面「N 个后台任务完成 ›」小条，点开弹窗：每次唤醒一组（通知 + 回答），最新在上，中间的步骤折在最后。
     任务通知（iOS `TaskNoteRow`，`lib/tasks.ts`）显示类别、描述、结果胶囊，可展开看命令、「查看输出」在侧边面板打开；发起后台任务的那步工具行带「后台 · 已完成」之类的标记。
   - **离开期间回顾**：几条回顾折成一行，点开看全文（最新在上）；最新一条是对话最后一项时，它在对话末尾展开成全文卡片（`OpenRecapLine`，`openRecap`），和 Agent 的回复在同一个平面：往上翻跟着正文滚走，贴底时连同回顾一起完整露出来，展开 / 收起都在流里撑开或收回（#1360：放在输入框上方时会盖住回复的最后一部分）。点 × 或开始打字就关，关过的记在浏览器（只在 Agent 对话，同 iOS）；同一行折叠的更早几条留成小条放在卡片上面，关掉后整行变回小条（#870）。端到端检查：`MOCK_RECAP_LONG=1` 的假 hub 上跑 `scripts/test/web_recap_e2e.py <网页地址> [--shots <目录>]`（桌面 / 手机宽度 × 浅色 / 深色，用法见脚本开头）。
@@ -419,6 +420,9 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
     点链接不会同时给程序发一次 `terminal_click`。换行模式下页面自己画屏幕，没有链接（同 OSC 8）。
   - **右键菜单**：终端里右键不出浏览器菜单，出一个小菜单——复制（有选中才能点）、粘贴（接管时）、全选、搜索…、清除选区；用 `ui/atoms.tsx` 的 `Menu`，`point` 参数就是鼠标位置（#2329 前是放一个零大小的锚点）。
     按住 Shift 右键仍是浏览器自己的菜单；触屏长按不拦（长按要用来选字）。
+  - **鼠标转给程序**（#2441，`lib/terminal-mouse.ts`，`docs/terminal.md` 第二十五节）：接管时按下 / 拖动 / 松开（左中右键，ctrl / alt 修饰）经 `terminal_input.mouse` 到 herdr，
+    程序开了鼠标就收到、没开就丢掉（herdr 不告诉我们程序的鼠标模式）。默认「交给程序」：按住 Shift 拖动是页面选字、Shift+右键出上面的菜单（这时右键不再是浏览器菜单）；
+    终端设置 › 鼠标 选「本地选择」则回到原来的拖动选字 / 右键菜单，Shift 才交给程序。⌘ 和触屏留在页面。悬停不发。feature `terminal_mouse`。
   - **Mac 行编辑键**（接管时，在 xterm 的自定义按键处理里，`lineEdit`）：⌘⌫ → ^U、⌘← → ^A、⌘→ → ^E，和已有的 Shift+Enter（ESC CR）并列；带其他修饰键的组合不动。
   - **终端设置新增**：光标样式（方块 / 竖线 / 下划线）、光标闪烁、WebGL 渲染（`@xterm/addon-webgl`，第一次打开才加载，关掉或 context 丢失就释放并退回默认渲染）。
     存 `jarvis.terminal.cursorStyle` / `cursorBlink` / `webgl`；默认值（方块、不闪、DOM 渲染）不写键，默认外观一像素不变。光标样式只管 xterm 画的光标，换行模式下页面画的光标不变。

@@ -7,7 +7,7 @@
 | 文件 | 覆盖内容 |
 | --- | --- |
 | `structure.json` | 基本问答、行标识、菜单归属、回顾、中断、压缩通知 |
-| `queued.json` | 中途吸收、多消息合并与拆开、普通图片和被吸收的图片 |
+| `queued.json` | 中途吸收、多消息轮按消息分段、普通图片和被吸收的图片 |
 | `wakes.json` | 多次唤醒取答、后续抽屉、回顾后重新归轮、图片归属 |
 | `work.json` | 思考叙述、工具配对、失败、缺结果、工具图片、时间边界 |
 | `folds.json` | fold 计数、重复页、扩大范围、展开还原、范围外的结果 |
@@ -16,7 +16,7 @@
 | `rebuild.json` | 增量与全量重建等价、前插历史、后台突发和替换收敛 |
 | `layout.json` | 待处理交互在正文之外、输入框上方的位置契约 |
 
-65 个用例中，63 个通过 Swift 调用现有逻辑核对；`layout.json` 的 2 个用例通过 `mainFooter` 的源码顺序核对，未运行 SwiftUI 界面测试。`verification: "view_source_order"` 明示这一区别。没有仅凭推测填写的 `derived` 用例，也没有只能依赖 XCTest 断言、无法对照的内容用例。
+63 个用例中，61 个通过 Swift 调用现有逻辑核对；`layout.json` 的 2 个用例通过 `mainFooter` 的源码顺序核对，未运行 SwiftUI 界面测试。`verification: "view_source_order"` 明示这一区别。没有仅凭推测填写的 `derived` 用例，也没有只能依赖 XCTest 断言、无法对照的内容用例。
 
 ## 规则及来源
 
@@ -27,16 +27,16 @@
 | 空窗口不生成行，纯问答不补空工作行。 | `ChatView.chatLines` | `empty_session`、`plain_exchange` |
 | 进行中轮即使还没步骤也保留工作行，只有最后一段可以进行中。 | `chatLines(live:)`、`liveTurnID` | `live_empty_work`、`live_reply_stays_after_work`、`live_queued_message_keeps_position` |
 | 普通用户文本开新轮，`queued: true` 文本加入当前轮，窗口首条 queued 文本可以独立开轮。 | `ChatBlock.build` | `ordinary_user_starts_next_turn`、`queued_without_existing_turn` |
-| 完成轮的多条用户文本合成一个消息行和一个工作行，展开 `wt-` 后按消息分段。 | `chatLines`、`segments` | `finished_queued_messages_merge`、`open_queued_messages_split`、`three_users_merge_without_steps` |
+| 完成轮的多条用户文本和进行中一样按消息分段，每条一个消息行，工作和回复挂在各自下面（#2512 起不再合并）。 | `chatLines`、`segments` | `finished_queued_messages_apart`、`open_queued_messages_work`、`three_users_apart_without_steps` |
 | 工作展开只追加独立步骤和收起行，已有消息和工作标题的标识不变。 | `ChatLineTests.workExpansionKeepsExistingIdentities`、`unfoldWork` | `closed_work_identity`、`open_work_identity` |
-| 合并消息只让第一条原消息持有菜单，拆开标题使用 `wt-…-h`。 | `ChatLineTests.messageMenuStillBelongsToItsOriginalRow`、`ChatLine.holds` | `menu_owner_in_merged_messages`、`split_header_identity` |
-| 每段最后一条助手文本是回复，之前的助手文本作为工作叙述。 | `chatLines`、`workItems` | `open_queued_messages_split`、`trailing_tool_after_answer` |
+| 多消息轮里每条消息的菜单归属于它自己那一行。 | `ChatLineTests.messageMenuStillBelongsToItsOriginalRow`、`ChatLine.holds` | `menu_owner_per_message` |
+| 每段最后一条助手文本是回复，之前的助手文本作为工作叙述。 | `chatLines`、`workItems` | `open_queued_messages_work`、`trailing_tool_after_answer` |
 | 非空 thinking 保留为可展开叙述，独立的空白 thinking 不进入工作行。 | `workItems`、`ThinkingRow`；`CLAUDE.md` thinking 经验 | `thinking_narration_preserved`、`standalone_empty_thinking_hidden` |
 | thinking 在工具前形成独立行，在连续工具之间或末尾进入工具组，组内空 thinking 也保留。 | `ChatStore.buildRows`、`workItems` | `thinking_before_between_after_tools`、`empty_thinking_between_tools_is_retained` |
 | 工具按 `tool_use_id` 在整个窗口配结果，最后一个结果生效，孤立结果不另生成行。 | `buildRows` | `late_result_attaches_to_original_call`、`last_result_for_call_wins`、`orphan_tool_result_is_not_a_row` |
 | 工具缺结果时 `ToolCall.isRunning` 为真，但不会据此把完成轮的工作行改成进行中。 | `ToolCall.isRunning`、`chatLines(live:)` | `missing_tool_result_is_running` |
 | 工具失败只取结果的 `is_error`，不根据输出文字推断。 | `ToolCall.isError` | `failed_tool_counts_known_failure` |
-| 带 `tool_use_id` 的图片归工具卡，普通及被吸收的用户图片在消息上方显示。 | `buildRows`、`photos`、`chatLines`；`CLAUDE.md` 图片两条路 | `tool_images_belong_to_call`、`regular_user_images`、`absorbed_user_images`、`absorbed_images_when_split` |
+| 带 `tool_use_id` 的图片归工具卡，普通及被吸收的用户图片在消息上方显示。 | `buildRows`、`photos`、`chatLines`；`CLAUDE.md` 图片两条路 | `tool_images_belong_to_call`、`regular_user_images`、`absorbed_user_images` |
 | 每次唤醒之间只让最后一条助手回复参加比较，按 Swift 字符数取最长，等长取后者。 | `Turn.pickAnswerAcrossWakes` | `multiple_wakes_pick_middle_answer`、`equal_length_prefers_later_answer`、`only_last_reply_in_each_wake_is_candidate`、`answer_length_uses_grapheme_clusters` |
 | 选中回复之前的工作留在主列表，之后的助手内容只放抽屉，抽屉从第一次唤醒开始。 | `pickAnswerAcrossWakes`、`wakeLines` | `long_answer_before_wake`、`long_answer_after_wake` |
 | 唤醒后的用户文本和图片仍留在主轮，`tail` 和 `afterWake` 排除这些用户输入。 | `pickAnswerAcrossWakes`、`ChatRow.isUserInput`；`ChatStoreTests.picturesSentAfterAWakeStayWithTheirMessage` | `photos_after_wake_stay_with_message` |
@@ -69,7 +69,7 @@
 | 可选字段 | 含义与默认值 |
 | --- | --- |
 | `live_turn_id` | 当前进行中的 Turn ID，缺省为 `null`，对应 iOS 已从会话状态选出的轮，不根据工具结果自行推断 |
-| `open_work` | 展开的行 ID 集合，缺省为空，既可以有 `w-…`，也可以有 `wt-…` 或抽屉的 `dw-…` |
+| `open_work` | 展开的行 ID 集合，缺省为空，既可以有 `w-…`，也可以有抽屉的 `dw-…` |
 | `now` | 固定比较时钟，缺省为 `2026-01-01T00:01:00Z`，只用于工作行时长投影 |
 | `menu_queries` | 要传给每行 `holds` 的原消息 ID，允许 `null`，结果按查询顺序排列 |
 | `frozen` | `{seq, part, live_turn_id}`，按该位置截取 item 前缀并用冻结时的进行中轮重建 |
@@ -89,8 +89,6 @@
 | --- | --- |
 | `user` / `reply` / `thinking` / `notice` / `image` / `recap` | 原条目行；recap 是独立的历史标记，不增加轮间分隔线 |
 | `user_images` | `item_ids`，图片组在所属文本上方，ID 为 `img-` 加首图 ID |
-| `merged_users` | 按消息顺序列出 `item_ids`，ID 为 `mu-` 加 Turn ID |
-| `split_header` | 展开多消息轮的标题，`count` 为消息数，ID 为 `wt-` 加 Turn ID 再加 `-h` |
 | `work` | 过程步骤、计数、时间、展开状态和进行中状态，见下文 |
 | `work_step` | `group_id`、`first` 和 `step`，ID 为组 ID 加 `/` 再加步骤 ID |
 | `work_end` | `group_id` 和收起步数 `count`，ID 为组 ID 加 `-end` |

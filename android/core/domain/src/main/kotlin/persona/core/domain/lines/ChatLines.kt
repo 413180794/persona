@@ -263,24 +263,6 @@ private class LineBuilder(val liveId: String?, val open: Set<String>) {
             wokeAt = first.start
         }
         val segments = segments(ordered)
-        val groupId = "wt-" + turn.id
-        val messages = segments.mapNotNull { it.user }
-        // (never with one of Persona's messages for the model among them: that one is a line of its own)
-        if (turn.id != liveId && messages.size > 1 && messages.none { it.item?.injected != null }) {
-            if (groupId !in open) {
-                val photos = segments.flatMap { photos(it.rows) }
-                if (photos.isNotEmpty()) add(ChatLine.UserImages(photos))
-                add(ChatLine.MergedUsers(turn.id, messages))
-                val last = ordered.indexOfLast { it.type == "reply" }
-                val rest = ordered.filterIndexed { i, row -> row.type != "user" && i != last }
-                add(work(groupId, workItems(rest), false, turn.start, turn.end))
-                ordered.getOrNull(last)?.let { add(ChatLine.Row(it)) }
-                if (turn.wakes.isNotEmpty()) add(wakes(turn, false))
-                addAll(turn.trailing.map { ChatLine.Row(it) })
-                return@buildList
-            }
-            add(ChatLine.SplitHeader(groupId, messages.size))
-        }
         for ((k, seg) in segments.withIndex()) {
             val live = turn.id == liveId && k == segments.lastIndex && turn.tail.isEmpty()
             val photos = photos(seg.rows)

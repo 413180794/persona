@@ -298,6 +298,53 @@ func (h *Hub) terminalClick(c *client, machineID, sessionID string, column, row 
 	}
 }
 
+// termMouse is terminal_input.mouse: one event of the pointer on a terminal the app drives. Action is down | up | drag
+// (moving with the button held) | move (no button; herdr hands it to a program that asked for any-event tracking only),
+// Button left | middle | right, At the cell of its screen ([column, row], 0-based) and Mods the modifier bits
+// (shift 1, ctrl 2, alt 4).
+type termMouse struct {
+	Action string `json:"action"`
+	Button string `json:"button"`
+	At     []int  `json:"at"`
+	Mods   int    `json:"mods"`
+}
+
+// termMouseMax bounds a cell: a screen is never this big, and a number past it is not a cell.
+const termMouseMax = 4096
+
+// valid is whether this is an event herdr takes; anything else is dropped here rather than relayed.
+func (e termMouse) valid() bool {
+	switch e.Action {
+	case "down", "up", "drag", "move":
+	default:
+		return false
+	}
+	switch e.Button {
+	case "left", "middle", "right":
+	default:
+		return false
+	}
+	return len(e.At) == 2 && e.At[0] >= 0 && e.At[1] >= 0 && e.At[0] < termMouseMax && e.At[1] < termMouseMax
+}
+
+// terminalMouse relays a mouse event to the node in order with the keys (the driver's only: from any other connection it
+// is dropped, as are keys). The hub does not know what the program wants of the mouse; herdr decides.
+func (h *Hub) terminalMouse(c *client, machineID, sessionID string, e termMouse) {
+	m := h.localMachine(machineID)
+	if m == nil || !e.valid() {
+		return
+	}
+	t := &h.terms
+	t.mu.Lock()
+	r := t.relays[[2]string{machineID, sessionID}]
+	live := r != nil && r.controller == c && r.synced != nil
+	t.mu.Unlock()
+	if live {
+		_ = m.notify("terminal.mouse", map[string]any{"session_id": sessionID, "action": e.Action, "button": e.Button,
+			"column": e.At[0], "row": e.At[1], "modifiers": e.Mods & 7})
+	}
+}
+
 // terminalKeepalive renews the node's lease on every terminal an app drives; a node that stops hearing it lets the
 // terminal go (docs/terminal.md).
 func (h *Hub) terminalKeepalive(ctx context.Context) {

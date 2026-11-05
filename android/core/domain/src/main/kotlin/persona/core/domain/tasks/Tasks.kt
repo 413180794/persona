@@ -192,7 +192,6 @@ object AssistantLines {
 
     private fun inputTime(line: ChatLine): Instant? = when (line) {
         is ChatLine.Row -> if (line.row.type == "user") line.row.start else null
-        is ChatLine.MergedUsers -> line.users.firstOrNull()?.start
         is ChatLine.UserImages -> line.images.firstOrNull()?.time
         else -> null
     }
@@ -200,7 +199,6 @@ object AssistantLines {
     private fun lineTime(line: ChatLine): Instant? = when (line) {
         is ChatLine.Row -> line.row.start
         is ChatLine.Work -> line.start
-        is ChatLine.MergedUsers -> line.users.firstOrNull()?.start
         is ChatLine.ApiError -> line.item.time
         is ChatLine.Extra -> (line.payload as? AssistantExtra.Feed)?.item?.at?.let(::time)
         else -> null

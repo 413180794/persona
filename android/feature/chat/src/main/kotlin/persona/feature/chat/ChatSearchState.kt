@@ -87,8 +87,7 @@ internal fun ChatSearchNavigation(search: ChatSearchState, list: ChatListState, 
             if (!list.scrollToEntry(ChatListEntry(rowId, offsetPx = origin.offsetPx))) return@LaunchedEffect
         } else {
             // Expansion changes are projected asynchronously before the saved key becomes available.
-            if (lines.any { it is ChatLine.Step && it.groupId !in origin.expanded } ||
-                lines.any { it is ChatLine.SplitHeader && it.groupId !in origin.expanded }) return@LaunchedEffect
+            if (lines.any { it is ChatLine.Step && it.groupId !in origin.expanded }) return@LaunchedEffect
             search.notice = resources.getString(R.string.chat_search_origin_changed)
         }
         search.origin = null

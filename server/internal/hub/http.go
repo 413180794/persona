@@ -1052,6 +1052,8 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		Rows  int    `json:"rows"`
 		Bytes int64  `json:"bytes"`
 		Focus bool   `json:"focus"`
+		// terminal_input: one mouse event on a terminal the app drives (feature terminal_mouse, docs/terminal.md「鼠标」)
+		Mouse *termMouse `json:"mouse"`
 	}
 	if json.Unmarshal(data, &msg) != nil {
 		return
@@ -1078,6 +1080,9 @@ func (h *Hub) onClientMessage(ctx context.Context, c *client, data []byte) {
 		h.terminalInput(c, msg.MachineID, msg.SessionID, msg.Text, msg.Control, msg.Scroll, msg.At)
 		if len(msg.Click) == 2 {
 			h.terminalClick(c, msg.MachineID, msg.SessionID, msg.Click[0], msg.Click[1])
+		}
+		if msg.Mouse != nil {
+			h.terminalMouse(c, msg.MachineID, msg.SessionID, *msg.Mouse)
 		}
 	case "terminal_unsubscribe":
 		h.terminalUnsubscribe(c, msg.MachineID, msg.SessionID)

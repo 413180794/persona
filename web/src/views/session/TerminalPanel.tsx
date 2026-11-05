@@ -178,7 +178,8 @@ function PaneTerminal({
 
   // ── right-click menu ──
   const onContextMenu = (e: React.MouseEvent) => {
-    if (!wantsOwnMenu({ shiftKey: e.shiftKey, pointerType: (e.nativeEvent as PointerEvent).pointerType })) return;
+    const pointerType = (e.nativeEvent as PointerEvent).pointerType;
+    if (!(feed ? feed.wantsMenu(e.nativeEvent, pointerType) : wantsOwnMenu({ shiftKey: e.shiftKey, pointerType }))) return; // Shift / the mouse mode decide while the mouse goes to the program
     e.preventDefault();
     const own = Boolean(viewport.current && selectionInside(viewport.current));
     // xterm stops the keys it has focus for (Esc would go to the program): the menu takes them while it is open

@@ -381,10 +381,6 @@
     <string name="chat_content_show_all">Show all</string>
     <string name="chat_content_full_text">Full text</string>
     <string name="chat_content_image">Chat image</string>
-    <plurals name="chat_content_merge_inputs">
-        <item quantity="one">Merge %1$d input</item>
-        <item quantity="other">Merge %1$d inputs</item>
-    </plurals>
     <plurals name="chat_content_collapse_steps">
         <item quantity="one">Collapse %1$d step</item>
         <item quantity="other">Collapse %1$d steps</item>

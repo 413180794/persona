@@ -657,18 +657,17 @@ struct ChatView: View {
         }
         try? await Task.sleep(for: .seconds(6))
         var log: [String] = []
-        for kind in ["w-", "wt-"] {
+        for kind in ["w-"] {
             // The newest work line of this kind with steps, brought into view.
             let newest = currentLines().last { if case .work(let id, let items, _, _, _) = $0.content { id.hasPrefix(kind) && !items.isEmpty } else { false } }
             guard let w = newest?.id else { log.append("no \(kind) work line"); continue }
             await bring(w, to: 0.3)
             guard let y0 = scratch.workHeadY[w], Set(scratch.visibleLines).contains(w) else { log.append("\(w) not on screen"); continue }
             toggleWork(w, fromHeader: true); await pause()
-            let y1 = scratch.workHeadY[headLine(w, open: true)] ?? .nan
+            let y1 = scratch.workHeadY[w] ?? .nan
             toggleWork(w, fromHeader: true); await pause()
             let y2 = scratch.workHeadY[w] ?? .nan
             log.append("header \(w) at \(Int(y0)): opening moved it \(Int(y1 - y0)), folding \(Int(y2 - y0))")
-            guard kind == "w-" else { continue }
             toggleWork(w, fromHeader: true); await pause()
             let lines = currentLines()
             guard let e = lines.firstIndex(where: { $0.id == w + "-end" }), e + 1 < lines.count else { log.append("no line after the steps"); continue }
@@ -804,9 +803,6 @@ struct ChatView: View {
         position.scrollTo(point: CGPoint(x: scratch.offsetX, y: y))
     }
 
-    /// A merged multi-message turn ("wt-…") opens into its messages under a "N 条消息 · 收起" line instead.
-    private func headLine(_ id: String, open: Bool) -> String { id.hasPrefix("wt-") && open ? id + "-h" : id }
-
     /// Folds or opens a work line. From its header, the header stays under the finger (`ChatPin`), through the steps
     /// arriving from the hub after the tap; from 收起 under the last step, the flipped list keeps the reply below where
     /// it was on its own. No animation: hundreds of rows animating out left blank frames behind.
@@ -815,7 +811,7 @@ struct ChatView: View {
         let wasOpen = run ? isRunOpen(id) : isOpen(id)
         #if DEBUG
         UnfoldTrace.shared.begin("\(run ? "run" : "work") \(wasOpen ? "fold" : "open")") { [pin] in
-            pin.screenY(headLine(id, open: run ? isRunOpen(id) : isOpen(id)))
+            pin.screenY(id)
         }
         #endif
         guard run || !wasOpen else { return concealWork(id, fromHeader: fromHeader) }
@@ -874,7 +870,7 @@ struct ChatView: View {
         // taps ↓. Following on would scroll it away; holding back would freeze the turn (#1046).
         let anchored = fromHeader && !run && !wasOpen && follow.follows
         if fromHeader {
-            pin.hold(headLine(id, open: !wasOpen), from: headLine(id, open: wasOpen), slow: true,
+            pin.hold(id, from: id, slow: true,
                      rise: !run && !wasOpen ? workRise(id) : 0, keep: anchored)
         }
         if wasOpen { scratch.foldedAt = .now }
@@ -884,7 +880,7 @@ struct ChatView: View {
         // hold, following came back 1.5 s later and took the list to the newest end, the tapped chips up by what had
         // opened under them (BeautifulUI, 119–381 pt, #1123).
         if !(run && follow.anchored) { holdFollow(anchored: anchored) }
-        if anchored { keepHeader(headLine(id, open: true), rise: workRise(id)) }
+        if anchored { keepHeader(id, rise: workRise(id)) }
         var t = Transaction()
         t.disablesAnimations = true
         withTransaction(t) {
@@ -941,24 +937,6 @@ struct ChatView: View {
         case .userImages(_, let items):
             // Close to the bubble below it, like the photos on a message being sent (the list's spacing is 14).
             SentPhotos(images: items.compactMap(\.image)).padding(.bottom, -8)
-        case .mergedUsers(_, let rows):
-            MergedUserBubble(items: rows.compactMap { if case .user(let i) = $0 { i } else { nil } })
-        case .splitHeader(let id, let count):
-            Button {
-                toggleWork(id, fromHeader: true)
-            } label: {
-                HStack(spacing: Theme.Space.sm) {
-                    Image(systemName: "rectangle.split.1x2").font(Theme.Font.label)
-                    Text("已按 \(count) 条消息拆开 · 收起").lineLimit(1).fixedSize()
-                    Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
-                }
-                .font(Theme.Font.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .onGeometryChange(for: ChatPin.Spot.self, of: Self.headSpot) { workHeadMoved(id + "-h", $0) }
         case .work(let id, let items, let live, let start, let end):
             WorkLine(items: items, live: live, start: start, end: end, open: isOpen(id),
                      openTerminal: live && style == .dev && session?.canTerminal == true ? { showTerminal = true } : nil) {
@@ -1425,8 +1403,6 @@ struct ChatView: View {
             switch line.content {
             case .row, .recaps:
                 if line.holds(ref.msg) { target = line.id }
-            case .mergedUsers(_, let rows):
-                if rows.contains(where: { $0.id == ref.msg }) { target = line.id }
             case .work(let wid, let items, _, _, _):
                 // The agent's words before its last ones are in the work line: open it, go to that step.
                 if let item = items.first(where: { if case .text(let i) = $0 { i.id == ref.msg } else { false } }) {
@@ -3805,8 +3781,6 @@ struct ChatLine: Identifiable {
         case row(ChatRow)
         case work(id: String, items: [WorkItem], live: Bool, start: Date?, end: Date?)
         case userImages(id: String, items: [Item])
-        case mergedUsers(id: String, rows: [ChatRow])
-        case splitHeader(id: String, count: Int)
         case wakes(Turn, live: Bool)
         /// Two or more "while you were away" recaps in a row, as one line (they open in one drawer, newest first).
         case recaps(id: String, items: [Item])
@@ -3834,8 +3808,6 @@ struct ChatLine: Identifiable {
             case .workEnd(let group, _, _): group + "-end"
             case .toolRun(let id, _, _, _): id
             case .userImages(let id, _): id
-            case .mergedUsers(let id, _): id
-            case .splitHeader(let id, _): id + "-h"
             case .wakes(let t, _): "wk-" + t.id
             case .recaps(let id, _): id
             case .apiError(let item, _, _): item.id
@@ -3857,8 +3829,6 @@ struct ChatLine: Identifiable {
         Self(.work(id: id, items: items, live: live, start: start, end: end))
     }
     static func userImages(id: String, items: [Item]) -> Self { Self(.userImages(id: id, items: items)) }
-    static func mergedUsers(id: String, rows: [ChatRow]) -> Self { Self(.mergedUsers(id: id, rows: rows)) }
-    static func splitHeader(id: String, count: Int) -> Self { Self(.splitHeader(id: id, count: count)) }
     static func wakes(_ turn: Turn, live: Bool) -> Self { Self(.wakes(turn, live: live)) }
     static func recaps(id: String, items: [Item]) -> Self { Self(.recaps(id: id, items: items)) }
     static func workStep(group: String, item: WorkItem, first: Bool) -> Self {
@@ -3880,7 +3850,6 @@ struct ChatLine: Identifiable {
         guard let id else { return false }
         switch content {
         case .row(let r): return r.id == id
-        case .mergedUsers(_, let rows): return rows.first?.id == id
         case .recaps(_, let items): return items.contains { $0.id == id }
         default: return false
         }
@@ -3888,7 +3857,7 @@ struct ChatLine: Identifiable {
 
     var isInput: Bool {
         switch content {
-        case .row(.user), .mergedUsers: true
+        case .row(.user): true
         default: false
         }
     }

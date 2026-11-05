@@ -204,6 +204,22 @@ type Control interface {
 	Close()
 }
 
+// MouseEvent is one event of the pointer on a driven terminal: Action down | up | drag (moving with the button held) |
+// move (no button), Button left | middle | right, a cell of the screen (0-based) and the modifier bits (shift 1, ctrl 2,
+// alt 4). The host gives it to a program that takes the mouse and drops it for one that does not.
+type MouseEvent struct {
+	Action    string
+	Button    string
+	Column    int
+	Row       int
+	Modifiers int
+}
+
+// Mouser is a Control that takes mouse events beyond Click (herdr: terminal.mouse; docs/terminal.md「鼠标」).
+type Mouser interface {
+	Mouse(MouseEvent) error
+}
+
 // Redrawer is a Control that can be asked for a whole frame of the screen as it is, the programs seeing no change
 // (herdr: a resize to the size it has). The node asks when a slow link falls behind (node/terminal.go frameGate).
 type Redrawer interface {

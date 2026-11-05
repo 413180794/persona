@@ -259,8 +259,8 @@
       "from_test": "workExpansionKeepsExistingIdentities"
     },
     {
-      "name": "menu_owner_in_merged_messages",
-      "description": "合并消息的菜单只归属于第一条原消息。",
+      "name": "menu_owner_per_message",
+      "description": "多消息轮里每条消息的菜单归属于它自己那一行。",
       "source": [
         "ios/Shared/ChatStore.swift: buildRows / ChatBlock.build",
         "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / workItems / unfoldWork",
@@ -298,37 +298,21 @@
               false,
               false
             ],
-            "id": "mu-1#0",
+            "id": "1#0",
             "is_input": true,
-            "item_ids": [
-              "1#0",
-              "2#0"
-            ],
-            "type": "merged_users"
+            "type": "user",
+            "text": "first"
           },
           {
-            "contains_fold": false,
-            "duration_text": "",
-            "elapsed_seconds": null,
-            "end": null,
             "holds": [
               false,
-              false,
+              true,
               false
             ],
-            "id": "wt-1#0",
-            "is_input": false,
-            "known_failed_tools": 0,
-            "live": false,
-            "open": false,
-            "start": null,
-            "steps": [],
-            "summary_full": [],
-            "summary_short": [],
-            "thoughts": 0,
-            "tools": 0,
-            "type": "work",
-            "unresolved_tools": 0
+            "id": "2#0",
+            "is_input": true,
+            "type": "user",
+            "text": "second"
           }
         ],
         "turns": [
@@ -357,97 +341,6 @@
         ]
       },
       "from_test": "messageMenuStillBelongsToItsOriginalRow"
-    },
-    {
-      "name": "split_header_identity",
-      "description": "展开多消息轮后用独立标题标识保留分段结构。",
-      "source": [
-        "ios/Jarvis/Views/Chat/ChatView.swift: chatLines / ChatLine.Content.id",
-        "ios/JarvisTests/ChatLineTests.swift: messageMenuStillBelongsToItsOriginalRow"
-      ],
-      "input": {
-        "items": [
-          {
-            "id": "1#0",
-            "seq": 1,
-            "role": "user",
-            "kind": "text",
-            "text": "请检查示例项目"
-          },
-          {
-            "id": "2#0",
-            "seq": 2,
-            "role": "user",
-            "kind": "text",
-            "text": "补充检查范围",
-            "queued": true
-          },
-          {
-            "id": "3#0",
-            "seq": 3,
-            "role": "assistant",
-            "kind": "text",
-            "text": "检查完成"
-          }
-        ],
-        "open_work": [
-          "wt-1#0"
-        ]
-      },
-      "expected": {
-        "lines": [
-          {
-            "count": 2,
-            "id": "wt-1#0-h",
-            "is_input": false,
-            "type": "split_header"
-          },
-          {
-            "id": "1#0",
-            "is_input": true,
-            "text": "请检查示例项目",
-            "type": "user"
-          },
-          {
-            "id": "2#0",
-            "is_input": true,
-            "text": "补充检查范围",
-            "type": "user"
-          },
-          {
-            "id": "3#0",
-            "is_input": false,
-            "text": "检查完成",
-            "type": "reply"
-          }
-        ],
-        "turns": [
-          {
-            "after_wake_ids": [],
-            "answer_id": "3#0",
-            "end": null,
-            "id": "1#0",
-            "interim_count": 0,
-            "ordered_ids": [
-              "1#0",
-              "2#0",
-              "3#0"
-            ],
-            "process_ids": [],
-            "start": null,
-            "tail_ids": [],
-            "thought_count": 0,
-            "tool_count": 0,
-            "trailing_ids": [],
-            "user_ids": [
-              "1#0",
-              "2#0"
-            ],
-            "wake_ids": []
-          }
-        ]
-      },
-      "derived": true
     },
     {
       "name": "empty_session",

@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -210,4 +211,53 @@ func TestLiveMenuActions(t *testing.T) {
 	if n, _ := c.TabPanes(ctx, ws, tab); n != 0 {
 		t.Fatalf("panes after closing the tab = %d", n)
 	}
+}
+
+// The mouse through a control session, against a pane running vim with the mouse on (`:set mouse=a ruler`) on a file of
+// numbered lines, scrolled to the top: JARVIS_LIVE_MOUSE_PANE=<pane> go test -tags herdrlive -run TestLiveControlMouse.
+// A click moves vim's cursor to the cell (its ruler says line,column), a drag across a row starts a visual selection.
+func TestLiveControlMouse(t *testing.T) {
+	pane := os.Getenv("JARVIS_LIVE_MOUSE_PANE")
+	if pane == "" {
+		t.Skip("JARVIS_LIVE_MOUSE_PANE not set")
+	}
+	ctx := context.Background()
+	c := New()
+	s, err := c.StartControl(ctx, pane, 60, 24, false, func(Frame) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	screen := func() string {
+		time.Sleep(700 * time.Millisecond)
+		out, err := c.PaneRead(ctx, pane, "visible", 24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	press := func(action, button string, col, row, mods int) {
+		if err := s.Mouse(MouseEvent{action, button, col, row, mods}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	press("down", "left", 3, 5, 0)
+	press("up", "left", 3, 5, 0)
+	if out := screen(); !strings.Contains(out, "6,4") {
+		t.Fatalf("a click at column 3, row 5 did not put vim's cursor on 6,4:\n%s", out)
+	}
+	t.Log("click moved the cursor to 6,4")
+	press("down", "left", 2, 2, 0)
+	for col := 3; col <= 8; col++ {
+		press("drag", "left", col, 2, 0)
+	}
+	out := screen()
+	if !strings.Contains(out, "VISUAL") || !strings.Contains(out, "3,9") {
+		t.Fatalf("a drag along row 2 did not select to 3,9:\n%s", out)
+	}
+	press("up", "left", 8, 2, 0)
+	t.Log("drag selected from 3,3 to 3,9")
+	// a click outside Visual mode and a right click elsewhere does not break the session
+	press("down", "right", 10, 10, 0)
+	press("up", "right", 10, 10, 0)
 }

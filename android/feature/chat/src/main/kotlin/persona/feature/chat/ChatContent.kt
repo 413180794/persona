@@ -234,10 +234,6 @@ internal fun ChatLineContent(
         is ChatLine.UserImages -> if (!imagesInUserBubble) UserBubbleFrame {
             line.images.forEach { ChatPicture(session, it.item, loader, alignEnd = true) }
         }
-        is ChatLine.MergedUsers -> MergedUserBubble(line.users.mapNotNull { it.item?.item }, textUpdates,
-            onLastLine.takeIf { line.users.any { it.id == lastUserId } },
-            images = userPictures(userImages, session, loader))
-        is ChatLine.SplitHeader -> JTextButton(pluralStringResource(R.plurals.chat_content_merge_inputs, line.count, line.count), { onToggle(line.groupId) })
         is ChatLine.Work -> {
             // While it runs, the plan and the newest steps show under 「正在工作…」 and a ticking clock (web #1990); done,
             // it folds to its summary. Persona's own chat keeps one sentence that counts its time up every second (R1).

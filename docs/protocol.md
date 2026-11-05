@@ -42,7 +42,7 @@
 鉴权后的 WS `hello.features` 总是提供服务端能力。当前 `proto.Features` 包括：
 
 - P0 新增：`tls`、`endpoints`、`client_hello`、`heartbeat`、`app_ping`、`error_codes`、`client_ops`、`ws_notify`、`lock_test`、`android_update`。
-- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`file_upload`。
+- 已有：`client_msg_id`、`send_refusals`、`screen_dialog`、`resumable_interactions`、`secret_prompts`、`request_id`、`terminal_stream`、`terminal_control`、`terminal_scroll`、`terminal_click`、`terminal_mouse`、`herdr_client`（网页的完整 herdr 界面：`herdr_open` 等，见下「完整 herdr 界面」）、`file_upload`。
 - 另有：`assistant_compact`（手动压缩助手对话、会话的 `compaction`）、`assistant_main_new`（新建主对话），见下面「助手」的两个接口；`elicitation`（MCP 表单和链接）、`model_configuration`（按用途配置模型）、`plugins`（[插件](extensions.md)）、`plugin_ui_slots`（插件的 UI 插槽、UI 版本 2、`plugin_ui` 事件，[extensions.md](extensions.md)「UI 插槽」）、`plugin_auto_upgrade`（市场插件自动升级的开关和列表、`plugin_upgrade` 事件，[extensions.md](extensions.md)「自动升级」）、`desktops`（桌面端登记，见下文 `register_desktop`）、`locale`（认 `Accept-Language`、`client_hello.locale`、设备的 `locale`，给人看的文字按语言出，[i18n.md](i18n.md)）、`terminal_panes`（`GET/POST /machines/{mid}/panes` 和 `pane:<窗格 id>` 形式的终端流 id，[terminal.md](terminal.md)第十九节）。
 
 能力位表示实现支持；`tls` 不代表已经开启监听，要同时看 `tls_port` / `fp`。新客户端遇到旧 hub 时按能力位退回旧行为。机器列表的 `node_version` / `node_mismatch` 用来提示 node 与 hub 的部署版本是否一致（那台电脑上的 personad 不是 hub 这次部署的，`deploy.sh` 只部署了一部分；hub 连上时也记一行日志）。新字段都是可选的，App 目前靠字段在不在判断；以后有「旧 hub 会误解」的新请求时先查这里。
@@ -657,7 +657,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `seen` | `machine_id`, `session_id`；与 HTTP `/seen` 同义 |
 | `unsubscribe` | `machine_id`, `session_id` |
 | `terminal_subscribe` | `machine_id`, `session_id`, `epoch`（可选）, `after_seq`（可选）：开始收这个会话终端的实时帧（hub `features` 里有 `terminal_stream` 才发）；`control: {cols, rows}`（可选，`terminal_control`）：手机按这个尺寸接管终端，`takeover: true` 连别的程序占着的也抢 |
-| `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`）：只有正在接管的那个连接发的才转给 node |
+| `terminal_input` | `machine_id`, `session_id`, `text`（终端字节，原样写进去）, `control: {cols, rows}`（可选，新尺寸）, `scroll`（可选，滚轮的行数，> 0 往回、< 0 往新，feature `terminal_scroll`）, `at`（可选，`[column, row]` 从 0 起，滚轮落在屏幕的哪一格：手指按下的地方；不带时 node 用屏幕正中间）, `click`（可选，`[column, row]` 从 0 起，屏幕上那一格左键单击，feature `terminal_click`），`mouse`（可选，`{action: down|up|drag|move, button: left|middle|right, at: [column, row], mods}`，`mods` 位：shift 1、ctrl 2、alt 4；一个鼠标事件，feature `terminal_mouse`，docs/terminal.md 第二十三节）：只有正在接管的那个连接发的才转给 node |
 | `terminal_unsubscribe` | `machine_id`, `session_id` |
 | `fs_watch` | #2439（文件和 Git 的自动刷新，下面「文件自动刷新」）：`machine_id`, `cwd`（会话目录）, `paths`（这个页面打开着的文件夹，绝对路径，最多 32 个）, `git`（是否显示 `cwd` 的 Git 状态）。整份替换这个页面对这台机器、这个 `cwd` 的集合；`paths` 空且 `git` 为 false 就是释放（连接断开也释放）。只有完全权限的设备能发，答题设备（手表）忽略 |
 | `herdr_open` | `id`（浏览器自己取，≤ 64 字符）, `machine_id`, `session_id`（可选，会话 id 或 `pane:` 地址，先聚焦它的标签页）, `cols`, `rows`, `focus`：让 node 在 PTY 里跑 herdr 自己的客户端，字节流回来（feature `herdr_client`，仅 `full` 设备）。`docs/terminal.md` 第二十四节 |

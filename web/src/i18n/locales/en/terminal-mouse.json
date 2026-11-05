@@ -1,0 +1,8 @@
+{
+  "label": "Mouse",
+  "mode_program": "Send to program",
+  "mode_local": "Select locally",
+  "hint_program": "Shift: select text, right-click menu",
+  "hint_local": "Shift: send to program",
+  "tooltip": "While driving: Send to program passes clicks, drags and right-clicks to the program on the computer (a program that has not turned the mouse on won't get them), and holding Shift selects text here and opens the right-click menu. Select locally is the opposite: only holding Shift sends the pointer to the program"
+}

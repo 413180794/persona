@@ -243,8 +243,7 @@ private fun ChatPage(
     val contentUserImages = remember(lines) {
         buildMap<String, List<Item>> {
             lines.asReversed().zipWithNext().forEach { (photos, user) ->
-                if (photos is ChatLine.UserImages && (user is ChatLine.MergedUsers ||
-                        user is ChatLine.Row && user.row.type == "user")) {
+                if (photos is ChatLine.UserImages && user is ChatLine.Row && user.row.type == "user") {
                     put(user.id, photos.images.map { it.item })
                 }
             }
@@ -404,7 +403,7 @@ private fun ChatPage(
             !snapshot.loading && snapshot.verified && requests.isEmpty() && snapshot.error == null &&
             !snapshot.ended && !snapshot.replaced && (connection == null || connection == ConnectionState.Online))
     val unreadEntry = if (session?.agentState == AgentState.Unread) lines.firstOrNull { line ->
-        line.holds(lastUserId) || (line is ChatLine.MergedUsers && line.users.any { it.id == lastUserId })
+        line.holds(lastUserId)
     }?.let { ChatListEntry(it.id, lastLineAtTop = true) } else null
     ChatListEffects(chatList, messages.asReversed().map { "outbox-${it.clientMessageId}" } + lines.map { it.id },
         ready = !snapshot.loading && (snapshot.items.isEmpty() || lines.isNotEmpty()) &&

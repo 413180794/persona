@@ -6,7 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatTaskNavigationTest {
-    @Test fun opensMergedTurnThenResolvesTheActualToolRow() {
+    @Test fun opensTheMessagesWorkLineThenResolvesTheActualToolRow() {
         val items = listOf(
             Item("user-1", seq = 1, kind = "text", role = "user", text = "检查表单"),
             Item("use-1", seq = 2, kind = "tool_use", toolUseId = "task-1", toolName = "TaskList"),
@@ -15,15 +15,11 @@ class ChatTaskNavigationTest {
             Item("use-2", seq = 5, kind = "tool_use", toolUseId = "task-2", toolName = "TaskList"),
             Item("result-2", seq = 6, kind = "tool_result", toolUseId = "task-2", text = "[]"),
         ).map { LineItem(it) }
-        var expanded = emptySet<String>()
         val collapsed = chatLines(items).lines
+        // A finished turn of two messages is two exchanges (#2512): the call is in the second message's work line.
         val first = requireNotNull(taskRecordTarget(collapsed, "use-2"))
-        assertEquals("wt-user-1", first.expandGroup)
-        expanded += first.expandGroup!!
-        val second = requireNotNull(taskRecordTarget(chatLines(items, LineOptions(openWork = expanded)).lines, "use-2"))
-        assertEquals("w-user-2", second.expandGroup)
-        expanded += second.expandGroup!!
-        val opened = chatLines(items, LineOptions(openWork = expanded)).lines
+        assertEquals("w-user-2", first.expandGroup)
+        val opened = chatLines(items, LineOptions(openWork = setOf(first.expandGroup!!))).lines
         assertEquals("w-user-2/use-2", taskRecordTarget(opened, "use-2")?.rowId)
         assertEquals("w-user-2/use-2", taskRecordTarget(opened, "result-2")?.rowId)
         assertNull(taskRecordTarget(opened, "not-loaded"))

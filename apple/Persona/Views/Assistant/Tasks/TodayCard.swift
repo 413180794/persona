@@ -192,7 +192,6 @@ extension ChatLines {
         switch line.content {
         case .row(let r): r.firstTS
         case .work(_, _, _, let start, _): start
-        case .mergedUsers(_, let rows): rows.first?.firstTS
         case .userImages(_, let items), .recaps(_, let items): items.first?.ts
         case .apiError(let item, _, _): item.ts
         case .feed(let f): f.at

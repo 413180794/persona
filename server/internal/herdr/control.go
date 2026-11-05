@@ -232,6 +232,58 @@ func (s *Control) Click(column, row int) error {
 	return nil
 }
 
+// Mouse modifier bits of herdr's terminal.mouse / terminal.scroll "modifiers" (a u8): shift 1, ctrl 2, alt 4. Anything
+// above is ignored by herdr, so it is masked off here (docs/terminal.md「鼠标」).
+const (
+	ModShift    = 1
+	ModCtrl     = 2
+	ModAlt      = 4
+	modifierMax = ModShift | ModCtrl | ModAlt
+)
+
+// maxMouseCell bounds a column or row: herdr takes a u16 and drops a cell outside the pane, so a bigger number is garbage.
+const maxMouseCell = 4096
+
+// MouseEvent is one terminal.mouse: action down | up | drag (motion with the button held) | move (motion with none;
+// herdr hands it to a program only when that asked for any-event tracking, ?1003), button left | middle | right, a cell
+// of the screen (0-based) and the modifier bits above.
+type MouseEvent struct {
+	Action    string
+	Button    string
+	Column    int
+	Row       int
+	Modifiers int
+}
+
+// Valid is whether herdr takes this event (it ignores, and logs, one it cannot parse).
+func (e MouseEvent) Valid() bool {
+	switch e.Action {
+	case "down", "up", "drag", "move":
+	default:
+		return false
+	}
+	switch e.Button {
+	case "left", "middle", "right":
+	default:
+		return false
+	}
+	return e.Column >= 0 && e.Row >= 0 && e.Column < maxMouseCell && e.Row < maxMouseCell
+}
+
+// Mouse sends one mouse event to the pane: herdr gives it to a program that takes the mouse (in the encoding that program
+// asked for) and drops it for one that does not — it never selects or scrolls on its own, so the caller does not need to
+// know the program's mode. An event herdr would not parse is refused here instead.
+func (s *Control) Mouse(e MouseEvent) error {
+	if !e.Valid() {
+		return fmt.Errorf("terminal.mouse: invalid event %+v", e)
+	}
+	m := map[string]any{"type": "terminal.mouse", "action": e.Action, "button": e.Button, "column": e.Column, "row": e.Row}
+	if mods := e.Modifiers & modifierMax; mods != 0 {
+		m["modifiers"] = mods
+	}
+	return s.send(m)
+}
+
 // Done is closed when the session ended (released, taken over, the pane gone).
 func (s *Control) Done() <-chan struct{} { return s.done }
 

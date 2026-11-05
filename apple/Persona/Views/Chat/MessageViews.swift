@@ -331,44 +331,6 @@ struct PendingBubble: View {
     }
 }
 
-/// Several messages of a finished turn as one input: one bubble, the messages separated by short light rules.
-struct MergedUserBubble: View {
-    @Environment(\.shellChat) private var shellChat
-    var items: [Item]
-
-    var body: some View {
-        let texts = items.map { UserBubble.display(ContextRef.parse($0.text ?? "").rest) }.filter { !$0.isEmpty }
-        let files = items.flatMap { AttachedFile.parse(ContextRef.parse($0.text ?? "").rest).files }
-        VStack(alignment: .trailing, spacing: Theme.Space.sm) {
-            if !files.isEmpty { AttachedFileCards(files: files) } // the videos sent with them, as on one message
-            bubble(texts)
-        }
-    }
-
-    private func bubble(_ texts: [String]) -> some View {
-        HStack {
-            Spacer(minLength: 48)
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                ForEach(Array(texts.enumerated()), id: \.offset) { n, t in
-                    if n > 0 {
-                        Capsule().fill(Theme.userBubbleText(shell: shellChat).opacity(0.22)).scaledFrame(width: Theme.Size.wellL, height: Theme.Size.lineMedium)
-                            .frame(maxWidth: .infinity) // centered in the bubble
-                    }
-                    Text(t).font(Theme.Font.body).lineHeight(.body).foregroundStyle(Theme.userBubbleText(shell: shellChat))
-                }
-            }
-            .padding(.horizontal, Theme.Space.l)
-            .padding(.vertical, Theme.Space.m)
-            .background(Theme.userBubbleFill(shell: shellChat), in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
-            .messageLongPress(id: items.first?.id ?? "")
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .messageActionBar(id: items.first?.id ?? "", text: texts.joined(separator: "\n\n"), isUser: true, date: items.first?.ts)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(texts.count) 条消息：" + texts.joined(separator: "；"))
-    }
-}
-
 /// Photos that came with one of your messages (from the transcript): square thumbnails on your side, tap to view.
 struct SentPhotos: View {
     @Environment(\.chatImages) private var chatImages

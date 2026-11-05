@@ -117,7 +117,6 @@ sealed interface ChatLine {
     val isInput: Boolean get() = false
     fun holds(messageId: String?): Boolean = messageId != null && when (this) {
         is Row -> row.id == messageId
-        is MergedUsers -> users.firstOrNull()?.id == messageId
         is ApiError -> item.id == messageId
         else -> false
     }
@@ -128,13 +127,6 @@ sealed interface ChatLine {
     }
     data class UserImages(val images: List<LineItem>) : ChatLine {
         override val id get() = "img-" + images.first().id
-    }
-    data class MergedUsers(val turnId: String, val users: List<ChatRow>) : ChatLine {
-        override val id get() = "mu-$turnId"
-        override val isInput get() = true
-    }
-    data class SplitHeader(val groupId: String, val count: Int) : ChatLine {
-        override val id get() = "$groupId-h"
     }
     data class Work(
         override val id: String, val steps: List<WorkItem>, val live: Boolean,
