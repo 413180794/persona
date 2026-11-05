@@ -83,6 +83,7 @@
   "everyone": "全員",
   "mention_label": "メンバーをメンション",
   "group_placeholder": "Lark に返信。@ でメンバーをメンション…",
+  "group_placeholder_short": "返信、@ でメンション…",
   "older_loading": "以前のメッセージを読み込み中",
   "older_failed": "以前のメッセージを読み込めませんでした。クリックして再試行",
   "older_stopped": "今は以前のメッセージを読み込めません。クリックして再試行",

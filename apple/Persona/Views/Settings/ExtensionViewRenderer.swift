@@ -219,8 +219,7 @@ struct ExtensionItemRow: View {
                     })
             }
         case .divider, .unknown: EmptyView()
-        // UI version 4's code-hosting components (#2951): the app still says ui_version 3, so the hub sends it the
-        // older components instead; the code page that draws these comes with #2961.
+        // UI version 4's code-hosting components: a View with them is drawn by the code page (`ExtensionCodePage`, #2961).
         case .header, .breadcrumb, .fileTree, .code, .diff, .commentThread, .composer: EmptyView()
         }
     }
@@ -423,29 +422,25 @@ struct ExtensionPageView: View {
         let deps: ExtensionViewModel.Deps = group.map { group in
             .init(api: { AppModel.shared.api(group) })
         } ?? .live
-        _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui, context: context, state: state, depth: depth, deps: deps))
+        // A whole page draws UI version 4's code-hosting parts (#2961); cards and sections keep the shared version.
+        _page = State(initialValue: ExtensionViewModel(plugin: plugin, ui: ui, context: context.forPage(), state: state, depth: depth,
+                                                       deps: deps))
         self.title = title
         self.initial = initial
     }
 
     var body: some View {
-        SettingsForm {
-            if let v = page.view {
-                ExtensionViewRenderer(view: v, model: page, link: $link)
-            } else if let e = page.error {
-                Section {
-                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "读不到这一页"), message: e,
-                                   action: (String(localized: "重试"), { Task { await page.load() } }))
-                }
-                .listRowBackground(Color.clear)
-            } else if page.unsupported {
-                Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "这里没有内容"), message: String(localized: "扩展现在不在这里显示东西。"))
-                }
-                .listRowBackground(Color.clear)
+        Group {
+            if page.view?.wantsCodePage == true {
+                // UI version 4's code-hosting parts (#2961): tabs, a split, a tree, diffs, code, comments.
+                ExtensionCodePage(model: page, link: $link)
+                    // One container, so that the page's own identifier (extension-ui-ready) stays on it and does not
+                    // replace its first control's (it took the back row's and the code's).
+                    .accessibilityElement(children: .contain)
+            } else {
+                form
             }
         }
-        .themedPage()
         .accessibilityIdentifier(page.view == nil ? "extension-ui-waiting" : "extension-ui-ready")
         .overlay { if page.view == nil && page.error == nil && !page.unsupported { ProgressView() } }
         .detailTitle(page.view?.title ?? title)
@@ -468,6 +463,26 @@ struct ExtensionPageView: View {
         }
         .pluginRefresh(page)
         .refreshable { await page.load() }
+    }
+
+    private var form: some View {
+        SettingsForm {
+            if let v = page.view {
+                ExtensionViewRenderer(view: v, model: page, link: $link)
+            } else if let e = page.error {
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "读不到这一页"), message: e,
+                                   action: (String(localized: "重试"), { Task { await page.load() } }))
+                }
+                .listRowBackground(Color.clear)
+            } else if page.unsupported {
+                Section {
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "这里没有内容"), message: String(localized: "扩展现在不在这里显示东西。"))
+                }
+                .listRowBackground(Color.clear)
+            }
+        }
+        .themedPage()
     }
 }
 

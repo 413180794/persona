@@ -508,15 +508,16 @@ func (s *Service) InboxCollected(ctx context.Context, r assistantwire.InboxRound
 	return nil
 }
 
-// saveInbox persists changed items and tells the hub (it tells the extensions and the apps).
-func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
+// saveInbox persists changed items and tells the hub (it tells the extensions and the apps). It returns the ids
+// whose rows could not be written (the in-memory state of those is the caller's to roll back).
+func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) map[string]bool {
 	b := &s.inbox
 	if len(changed) == 0 {
-		return
+		return nil
 	}
 	if !b.loaded.Load() { // not read yet: what is stored stays as it is (inboxReady)
 		s.logf("inbox: %d changed items not saved: what is stored was not read", len(changed))
-		return
+		return nil
 	}
 	var told []assistantwire.InboxChangedItem
 	b.saving.Lock()
@@ -537,30 +538,43 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
 	b.mu.Unlock()
 	if len(rows) == 0 {
 		b.saving.Unlock()
-		return
+		return nil
 	}
+	var failed map[string]bool
 	if st := s.inboxDB(); st != nil {
-		s.putInboxRows(ctx, st, rows)
+		failed = s.putInboxRows(ctx, st, rows)
 	}
 	b.saving.Unlock()
+	if len(failed) > 0 {
+		// What was not stored is not announced: the apps would otherwise drop items the database still holds open.
+		told = slices.DeleteFunc(told, func(i assistantwire.InboxChangedItem) bool { return failed[i.ID] })
+	}
 	s.inboxChanged(ctx, told)
+	return failed
 }
 
 // putInboxRows writes rows in one go when the store can (a round's hundreds are one round trip, not hundreds); when
-// that fails, or the store can't, each row is written on its own so one that fails does not keep the others out.
-func (s *Service) putInboxRows(ctx context.Context, st inboxStore, rows []db.InboxRow) {
+// that fails, or the store can't, each row is written on its own so one that fails does not keep the others out. It
+// returns the ids that were not written anywhere.
+func (s *Service) putInboxRows(ctx context.Context, st inboxStore, rows []db.InboxRow) map[string]bool {
 	if bs, ok := st.(inboxBatchStore); ok && len(rows) > 1 {
 		err := bs.PutInboxItems(ctx, rows)
 		if err == nil {
-			return
+			return nil
 		}
 		s.logf("inbox: save %d items at once: %v (one by one)", len(rows), err)
 	}
+	var failed map[string]bool
 	for _, r := range rows {
 		if err := st.PutInboxItem(ctx, r.ID, r.Data, r.UpdatedAt, r.DoneAt); err != nil {
 			s.logf("inbox: save %s: %v", r.ID, err)
+			if failed == nil {
+				failed = map[string]bool{}
+			}
+			failed[r.ID] = true
 		}
 	}
+	return failed
 }
 
 // inboxChanged tells the hub what changed (EventInboxChanged): it tells the extensions and the apps.
@@ -913,6 +927,10 @@ func (s *Service) collectSource(ctx context.Context, src assistantwire.InboxSour
 
 var errNoInboxItem = errors.New("no such inbox item")
 
+// errInboxNotPersisted says the item moved in memory but its row could not be written; the in-memory move was
+// rolled back, so the request can be retried.
+var errInboxNotPersisted = errors.New("the inbox item could not be saved")
+
 var errCannotReply = errors.New("this item cannot be replied to")
 
 func (s *Service) inboxRoutes() {
@@ -965,7 +983,11 @@ func (s *Service) inboxRoutes() {
 		}
 		it, err := s.setInboxDone(r.Context(), r.PathValue("id"), in.Done, in.Dismiss)
 		if err != nil {
-			apierr.Write(w, http.StatusNotFound, err)
+			if errors.Is(err, errNoInboxItem) {
+				apierr.Write(w, http.StatusNotFound, err)
+			} else {
+				apierr.Write(w, http.StatusInternalServerError, err)
+			}
 			return
 		}
 		apierr.WriteJSON(w, it)
@@ -1146,6 +1168,9 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 		b.mu.Unlock()
 		return InboxItem{}, errNoInboxItem
 	}
+	// Keep the state we are changing so a failed write restores it: the request must not look done while the row
+	// (what a restart reads) still holds the other state.
+	prevDoneAt, prevDoneBy := it.DoneAt, it.DoneBy
 	if done {
 		it.done(time.Now(), doneByOf(dismiss))
 	} else {
@@ -1153,7 +1178,12 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	}
 	out := it.listed()
 	b.mu.Unlock()
-	s.saveInbox(ctx, []*InboxItem{it})
+	if failed := s.saveInbox(ctx, []*InboxItem{it}); failed[id] {
+		b.mu.Lock()
+		it.DoneAt, it.DoneBy = prevDoneAt, prevDoneBy
+		b.mu.Unlock()
+		return InboxItem{}, errInboxNotPersisted
+	}
 	return out, nil
 }
 

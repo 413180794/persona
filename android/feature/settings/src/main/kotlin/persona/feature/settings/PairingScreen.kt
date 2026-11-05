@@ -36,8 +36,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun PairingScreen(
@@ -131,7 +129,7 @@ fun PairingScreen(
         scope.launch {
             failure = null; progress = emptyList()
             fun record(item: PairingProgress) {
-                val stamped = item.copy(timestamp = item.timestamp ?: LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")))
+                val stamped = item.copy(timestamp = item.timestamp ?: pairingStepTime(java.time.Instant.now(), LocalizedFormats.locale(context)))
                 progress = progress.filterNot { it.stage == item.stage } + stamped
             }
             try {
@@ -388,6 +386,10 @@ private fun PairingDetail(label: String, value: String) {
         SelectionContainer { Text(value, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink) }
     }
 }
+
+/** When a pairing step was reported, in the app's language: 14:30:05 · 2:30:05 PM. */
+internal fun pairingStepTime(at: java.time.Instant, locale: java.util.Locale, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+    LocalizedFormats.format(at, LocalizedFormats.TIME_SECONDS, locale, zone)
 
 /** The step names of [pairingSteps], as string resources. */
 @StringRes

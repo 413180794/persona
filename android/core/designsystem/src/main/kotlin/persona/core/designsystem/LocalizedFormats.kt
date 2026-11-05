@@ -31,6 +31,8 @@ object LocalizedFormats {
     const val TIME = "jmm"
     /** A time with seconds. */
     const val TIME_SECONDS = "jmmss"
+    /** A month, day and time with seconds: 11月5日 14:30:05 · Nov 5, 2:30:05 PM. */
+    const val MONTH_DAY_TIME_SECONDS = "MMMdjmmss"
 
     /** A formatter for [skeleton] in [locale] and [zone]. */
     fun formatter(skeleton: String, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): DateTimeFormatter =

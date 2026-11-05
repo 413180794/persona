@@ -140,6 +140,8 @@ nonisolated enum Theme {
     /// Spacing on a 4 pt grid, BeautifulUI's (`BUISpacing`): 2 4 6 8 12 16 24 32, nothing in between. Pages and the
     /// terminal card keep 16 from the screen's edges.
     enum Space {
+        /// No gap: parts that touch (a diff line's gutter, mark and text; the two sides of a split diff).
+        static let flush: CGFloat = 0
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4
         static let sm: CGFloat = 6
@@ -431,6 +433,10 @@ nonisolated enum Theme {
         static let sidebarMax: CGFloat = 480
         /// The narrowest column of a card grid (机器's cards): two side by side in an iPad's detail column.
         static let cardColumn: CGFloat = 330
+        /// The file tree's column of an extension's code page beside its diffs or code (#2961).
+        static let codeSideColumn: CGFloat = 300
+        /// The width from which an extension's code page puts its side column beside the main one (#2961).
+        static let codeSplitMin: CGFloat = 700
     }
 
     /// The system's sidebar column on iPad (iOS 26, the glass styles), measured from its pixels: the split fills the

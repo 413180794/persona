@@ -79,7 +79,7 @@ internal fun LazyListScope.editableCurrentConnection(snapshot: EndpointsSnapshot
             SelectionContainer { JRow(stringResource(R.string.settings_endpoint_in_use), subtitle = active.url, value = active.label, subtitleLines = Int.MAX_VALUE) }
         }
     }
-    item { JGroupItem(GroupPosition.of(1, 3)) { DiagnosticValue(stringResource(R.string.settings_endpoint_last_received), localTime(data.lastReceivedAt)) } }
+    item { JGroupItem(GroupPosition.of(1, 3)) { DiagnosticValue(stringResource(R.string.settings_endpoint_last_received), localTime(data.lastReceivedAt, currentLocale)) } }
     item { JGroupItem(GroupPosition.of(2, 3)) { DiagnosticValue(stringResource(R.string.settings_endpoint_last_disconnect), data.lastDisconnectReason) } }
 }
 

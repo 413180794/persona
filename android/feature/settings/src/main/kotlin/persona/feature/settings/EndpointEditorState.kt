@@ -441,13 +441,13 @@ internal fun endpointOutcome(
     val measured = probe?.takeIf { it.sampleCount > 0 || !it.checkedAt.isNullOrBlank() }
     if (test != null && (measured == null || !isAfter(measured.checkedAt, test.testedAt))) {
         return EndpointOutcome(measuredText(resources, test.result.resolve(resources), test.elapsedMillis, 1), !test.passed,
-            measuredLabel(resources, R.string.settings_endpoint_label_test, R.string.settings_endpoint_label_test_at, localTime(test.testedAt, zone, today)))
+            measuredLabel(resources, R.string.settings_endpoint_label_test, R.string.settings_endpoint_label_test_at, localTime(test.testedAt, resources.textLocale, zone, today)))
     }
     if (measured == null) return null
     val millis = measured.probeDurationMillis?.takeIf { measured.sampleCount > 0 }
     val result = measured.result.resolve(resources).ifBlank { resources.getString(R.string.settings_endpoint_no_result) }
     return EndpointOutcome(measuredText(resources, result, millis, measured.sampleCount), result != ProbePassed.resolve(resources),
-        measuredLabel(resources, R.string.settings_endpoint_label_probe, R.string.settings_endpoint_label_probe_at, localTime(measured.checkedAt, zone, today)))
+        measuredLabel(resources, R.string.settings_endpoint_label_probe, R.string.settings_endpoint_label_probe_at, localTime(measured.checkedAt, resources.textLocale, zone, today)))
 }
 
 /** [label] alone, or [labelAt] with the [time] it was checked. */

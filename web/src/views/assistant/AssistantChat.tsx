@@ -90,6 +90,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   const modelId = pickedM ?? (picked ? list?.find((l) => l.name === picked)?.model : session.model);
   const named = knownModels?.machine === session.machine_id && knownModels.name === current ? knownModels.options.find((m) => m.id === modelId) : undefined;
   const model = named ? modelName(named) : shortModel(modelId);
+  const label = [current, picked ? oneOff() : model].filter(Boolean).join(" · ");
 
   // Picking the launcher already applies; the submenu only offers that launcher's models.
   const openModels = (name: string) => {
@@ -129,7 +130,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
 
   return (
     <>
-      <Chip label={[current, picked ? oneOff() : model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.launcher_chip_title")} />
+      <Chip label={label} phoneIcon="agent" onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.launcher_chip_title")} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}

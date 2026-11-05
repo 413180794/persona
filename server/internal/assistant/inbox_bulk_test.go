@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
@@ -256,6 +257,230 @@ func TestInboxBulkBadRequests(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{"action": "done", "ids": ids})
 	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", string(raw)); code != 413 {
 		t.Fatalf("too many: %d", code)
+	}
+}
+
+// inboxPutFailStore fails writes for all ids or a chosen set. The embedded inboxBatchMemStore always loses the
+// batch (batchFail), so production takes its batch-fails -> one-by-one path and the failures surface per id.
+type inboxPutFailStore struct {
+	*inboxBatchMemStore
+	failAll bool
+	fail    map[string]bool
+}
+
+func (s *inboxPutFailStore) PutInboxItem(ctx context.Context, id string, data []byte, updatedAt time.Time, doneAt *time.Time) error {
+	if s.failAll || s.fail[id] {
+		return errMuteStoreDown
+	}
+	return s.inboxBatchMemStore.PutInboxItem(ctx, id, data, updatedAt, doneAt)
+}
+
+func (s *inboxPutFailStore) hasRow(id string) bool {
+	s.imu.Lock()
+	defer s.imu.Unlock()
+	_, ok := s.rows[id]
+	return ok
+}
+
+func (s *inboxPutFailStore) doneAt(id string) *time.Time {
+	s.imu.Lock()
+	defer s.imu.Unlock()
+	return s.done[id]
+}
+
+func newBulkFailHub(t *testing.T) (*inboxHub, *inboxPutFailStore) {
+	t.Helper()
+	f := newFakeHub().withMachine()
+	in := newFakeInbox()
+	f.inbox = in
+	base := &inboxBatchMemStore{inboxMemStore: newInboxMemStore(), batchFail: errMuteStoreDown}
+	st := &inboxPutFailStore{inboxBatchMemStore: base}
+	h := New(Options{Hub: f, Store: func() Store { return st }, Logf: testLogf(t)})
+	if err := h.inboxReady(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return &inboxHub{Service: h, f: f, in: in, st: st.inboxMemStore}, st
+}
+
+func seedFailItems(h *inboxHub, ids ...string) {
+	for _, id := range ids {
+		h.inbox.items[id] = mailItem(id, "shop@example.com", "Shop")
+	}
+}
+
+func jsonIDs(v any) []string {
+	raw, _ := v.([]any)
+	out := make([]string, 0, len(raw))
+	for _, x := range raw {
+		out = append(out, x.(string))
+	}
+	return out
+}
+
+// When every bulk write fails the answer is still 200: failed lists every id, the items stay open and unannounced,
+// and the same request files all of them after recovery.
+func TestInboxBulkAllWritesFail(t *testing.T) {
+	h, st := newBulkFailHub(t)
+	mux := h.routes()
+	seedFailItems(h, "a", "b", "c")
+	before := len(h.in.changes())
+	st.failAll = true
+	code, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"done","ids":["a","b","c"]}`)
+	if code != 200 {
+		t.Fatalf("bulk done: %d %v", code, out)
+	}
+	if got := jsonIDs(out["failed"]); fmt.Sprint(got) != "[a b c]" {
+		t.Fatalf("failed = %v", got)
+	}
+	if len(out["changed"].([]any)) != 0 || len(out["ids"].([]any)) != 0 || out["undo"] != nil {
+		t.Fatalf("failed items were still changed/undoable: %v", out)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		if !h.inbox.items[id].open() || st.hasRow(id) {
+			t.Fatalf("item %s was filed or stored though its write failed", id)
+		}
+	}
+	if evs := h.in.changes()[before:]; len(evs) != 1 || len(evs[0].Items) != 0 {
+		t.Fatalf("the apps were told about failed items: %+v", evs)
+	}
+
+	st.failAll = false
+	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"done","ids":["a","b","c"]}`)
+	if got := jsonIDs(out["failed"]); len(got) != 0 {
+		t.Fatalf("the retry failed again: %v", got)
+	}
+	if got := jsonIDs(out["ids"]); fmt.Sprint(got) != "[a b c]" || out["undo"] == nil {
+		t.Fatalf("the retry did not file everything: %v", out)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		if h.inbox.items[id].open() {
+			t.Fatalf("item %s stayed open after the retry", id)
+		}
+	}
+}
+
+// A partial failure files only what was written: the failed id stays open and out of changed/ids/undo, the others
+// are stored and announced.
+func TestInboxBulkPartialWriteFailure(t *testing.T) {
+	h, st := newBulkFailHub(t)
+	mux := h.routes()
+	seedFailItems(h, "a", "b", "c")
+	before := len(h.in.changes())
+	st.fail = map[string]bool{"b": true}
+	_, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"done","ids":["a","b","c"]}`)
+	if got := jsonIDs(out["failed"]); fmt.Sprint(got) != "[b]" {
+		t.Fatalf("failed = %v", got)
+	}
+	if got := jsonIDs(out["ids"]); fmt.Sprint(got) != "[a c]" {
+		t.Fatalf("ids = %v, want [a c]", got)
+	}
+	if undo := out["undo"].(map[string]any); fmt.Sprint(jsonIDs(undo["ids"])) != "[a c]" {
+		t.Fatalf("undo = %v, want [a c]", undo)
+	}
+	if !h.inbox.items["b"].open() || h.inbox.items["a"].open() || h.inbox.items["c"].open() {
+		t.Fatalf("memory after partial failure: a open=%v b open=%v c open=%v",
+			h.inbox.items["a"].open(), h.inbox.items["b"].open(), h.inbox.items["c"].open())
+	}
+	if st.hasRow("b") || st.doneAt("a") == nil || st.doneAt("c") == nil {
+		t.Fatalf("stored state: b present=%v, a done=%v, c done=%v", st.hasRow("b"), st.doneAt("a"), st.doneAt("c"))
+	}
+	told := h.in.changes()[before].Items
+	if len(told) != 2 {
+		t.Fatalf("the apps were told about %d items, want 2: %+v", len(told), told)
+	}
+}
+
+// One dismiss request spans every bucket and the failed id comes first among the changed items: an open id with a
+// stale version is skipped, a missing id is skipped, a filed id is unchanged, one open id is kept and one whose
+// write fails is restored open with no dismissed marker. Restoring by the wrong parallel index would file f and
+// restore g; the batch is attempted before the one-by-one fallback.
+func TestInboxBulkDismissMixedWriteFailure(t *testing.T) {
+	h, st := newBulkFailHub(t)
+	mux := h.routes()
+	seedFailItems(h, "v", "u", "f", "g")
+	if _, err := h.setInboxDone(context.Background(), "u", true, false); err != nil {
+		t.Fatal(err)
+	}
+	before := len(h.in.changes())
+	st.fail = map[string]bool{"f": true}
+	body := `{"action":"dismiss","items":[{"id":"v","version":"stale"}],"ids":["x","u","f","g"]}`
+	_, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", body)
+	if got := jsonIDs(out["failed"]); fmt.Sprint(got) != "[f]" ||
+		fmt.Sprint(jsonIDs(out["ids"])) != "[g]" || fmt.Sprint(out["unchanged"]) != "[u]" ||
+		fmt.Sprint(bulkIDs(out["skipped"].([]any))) != "[v:changed x:missing]" {
+		t.Fatalf("mixed dismiss buckets: %v", out)
+	}
+	if f, g := h.inbox.items["f"], h.inbox.items["g"]; !f.open() || f.DoneBy != "" || g.open() || g.DoneBy != "dismissed" {
+		t.Fatalf("memory: f open=%v by=%q, g open=%v by=%q", f.open(), f.DoneBy, g.open(), g.DoneBy)
+	}
+	if st.doneAt("f") != nil || st.doneAt("g") == nil {
+		t.Fatalf("stored: f done=%v, g done=%v", st.doneAt("f"), st.doneAt("g"))
+	}
+	st.imu.Lock()
+	lastBatch := fmt.Sprint(st.batches[len(st.batches)-1])
+	st.imu.Unlock()
+	if lastBatch != "[f g]" {
+		t.Fatalf("the batch path was not taken with the changed ids: %s", lastBatch)
+	}
+	if told := h.in.changes()[before].Items; len(told) != 1 || told[0].ID != "g" {
+		t.Fatalf("the apps were told %+v, want only g", told)
+	}
+}
+
+// A failed bring-back restores the filed state in memory too, and retries after recovery.
+func TestInboxBulkReopenWriteFailure(t *testing.T) {
+	h, st := newBulkFailHub(t)
+	mux := h.routes()
+	seedFailItems(h, "d")
+	if _, err := h.setInboxDone(context.Background(), "d", true, false); err != nil {
+		t.Fatal(err)
+	}
+	st.failAll = true
+	_, out := inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"reopen","ids":["d"]}`)
+	if got := jsonIDs(out["failed"]); fmt.Sprint(got) != "[d]" || len(out["changed"].([]any)) != 0 ||
+		h.inbox.items["d"].open() {
+		t.Fatalf("reopen failure: %v open=%v", out, h.inbox.items["d"].open())
+	}
+	st.failAll = false
+	_, out = inboxCall(t, mux, "POST", "/api/v1/inbox/bulk", `{"action":"reopen","ids":["d"]}`)
+	if len(jsonIDs(out["failed"])) != 0 || len(out["changed"].([]any)) != 1 || !h.inbox.items["d"].open() {
+		t.Fatalf("reopen retry: %v open=%v", out, h.inbox.items["d"].open())
+	}
+}
+
+// One item's 已处理 that cannot be stored answers 500 and leaves the item open; after recovery it answers 200 and
+// the done state is stored. Bringing it back is symmetric: a failed reopen answers 500 and leaves it filed.
+func TestSetInboxDoneWriteFailure(t *testing.T) {
+	h, st := newBulkFailHub(t)
+	mux := h.routes()
+	seedFailItems(h, "s")
+	st.failAll = true
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/s/done", `{"done":true}`); code != http.StatusInternalServerError {
+		t.Fatalf("done with the store down: %d, want 500", code)
+	}
+	if !h.inbox.items["s"].open() || st.hasRow("s") {
+		t.Fatal("a failed done filed the item in memory or wrote a row")
+	}
+	st.failAll = false
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/s/done", `{"done":true}`); code != 200 || h.inbox.items["s"].open() {
+		t.Fatalf("retry: code=%d open=%v", code, h.inbox.items["s"].open())
+	}
+	if st.doneAt("s") == nil {
+		t.Fatal("the retry did not store the done state")
+	}
+	st.failAll = true
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/s/done", `{"done":false}`); code != http.StatusInternalServerError {
+		t.Fatalf("reopen with the store down: %d, want 500", code)
+	}
+	if h.inbox.items["s"].open() {
+		t.Fatal("a failed reopen brought the item back in memory")
+	}
+	st.failAll = false
+	if code, _ := inboxCall(t, mux, "POST", "/api/v1/inbox/s/done", `{"done":false}`); code != 200 || !h.inbox.items["s"].open() {
+		t.Fatalf("reopen retry: code=%d open=%v", code, h.inbox.items["s"].open())
+	}
+	if st.doneAt("s") != nil {
+		t.Fatal("the reopen retry left the row done")
 	}
 }
 

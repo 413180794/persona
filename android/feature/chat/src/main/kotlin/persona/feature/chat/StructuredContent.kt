@@ -99,6 +99,10 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
     }
 }
 
+/** The time under your message, in the app's language: 14:30 · 2:30 PM; null when [ts] is not a time. */
+internal fun userBubbleTime(ts: String, locale: java.util.Locale, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String? =
+    persona.core.contracts.parseTime(ts)?.let { LocalizedFormats.format(it, LocalizedFormats.TIME, locale, zone) }
+
 /**
  * Your message (several queued ones read as one): the photos it carries above its text (`<attached_images>`, read from
  * the session's machine, R3), its file paths as chips under the bubble, a long press for the message menu. Its
@@ -118,10 +122,8 @@ internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUp
             models.joinToString("\n\n") { it.editText() }.trim())
     }
     val timestamp = items.lastOrNull()?.ts
-    val time = remember(timestamp) { timestamp?.let {
-        runCatching { java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-            .withZone(java.time.ZoneId.systemDefault()).format(requireNotNull(persona.core.contracts.parseTime(it))) }.getOrNull()
-    } }
+    val locale = currentLocale
+    val time = remember(timestamp, locale) { timestamp?.let { userBubbleTime(it, locale) } }
     // A message that came in from a channel (WeChat, the Feishu bot…) says so under it; the app's own say nothing.
     val channels = LocalChannels.current
     val source = remember(items, channels) { items.firstNotNullOfOrNull { ChannelSources.of(it.clientMsgId, channels) } }

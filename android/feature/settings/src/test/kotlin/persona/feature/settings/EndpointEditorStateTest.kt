@@ -527,7 +527,7 @@ class EndpointTextTest {
         val passed = EndpointTestResult(url, passed = true, result = persona.core.contracts.CoreText.plain("已通过身份校验"), elapsedMillis = 85, testedAt = "2026-11-01T02:03:04Z")
         assertEquals(EndpointOutcome("已通过身份校验，85\u00A0毫秒（单次）", failed = false, label = "测试 10:03:04"), endpointOutcome(res, passed, null, zone, today))
         val timedOut = passed.copy(passed = false, result = persona.core.contracts.CoreText.plain("连接超时"), elapsedMillis = 8003, testedAt = "2026-10-31T01:00:00Z")
-        assertEquals(EndpointOutcome("连接超时，8003\u00A0毫秒（单次）", failed = true, label = "测试 10-31 09:00:00"), endpointOutcome(res, timedOut, null, zone, today))
+        assertEquals(EndpointOutcome("连接超时，8003\u00A0毫秒（单次）", failed = true, label = "测试 10月31日 09:00:00"), endpointOutcome(res, timedOut, null, zone, today))
     }
 
     @Test fun theNewerOfTestAndAutomaticProbeIsShown() {

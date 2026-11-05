@@ -66,9 +66,9 @@ internal fun LockScreenTestSection(diagnostics: SettingsDiagnostics?, onCheckSet
             test?.let { record ->
                 if (record.status == "sent") PendingBadge(PendingStatus.Unconfirmed)
                 Text(stringResource(lockTestStatus(record)), style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
-                SettingsCaption(stringResource(R.string.settings_lock_test_due, localTime(record.dueAt).orEmpty()))
-                record.sentAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_sent, localTime(it).orEmpty())) }
-                record.receivedAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_received, localTime(it).orEmpty())) }
+                SettingsCaption(stringResource(R.string.settings_lock_test_due, localTime(record.dueAt, currentLocale).orEmpty()))
+                record.sentAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_sent, localTime(it, currentLocale).orEmpty())) }
+                record.receivedAt?.let { SettingsCaption(stringResource(R.string.settings_lock_test_received, localTime(it, currentLocale).orEmpty())) }
                 if (record.status == "received") SettingsCaption(stringResource(when (record.notificationShown) {
                     true -> R.string.settings_lock_test_shown
                     false -> R.string.settings_lock_test_not_shown

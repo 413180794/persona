@@ -1,0 +1,56 @@
+// @vitest-environment jsdom
+// On a phone-width screen the detail's title comes first (#4144): Pin 消息 and 静音 fold into one ⋯ menu when both are there, and the
+// time in the source line keeps its own span so it is not the part that gets cut.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { InboxItem } from "../../lib/inbox";
+
+vi.mock("../../lib/extension-slots", () => ({ useInboxItemPlace: () => undefined }));
+vi.mock("../../lib/translate", () => ({ useTranslatePrefs: () => ({ enabled: false }), hubTranslation: () => undefined }));
+vi.mock("../../lib/viewport", async (original) => ({ ...(await original<typeof import("../../lib/viewport")>()), useMedia: (q: string) => q === "(max-width: 639px)" }));
+vi.mock("./LarkThread", () => ({ LarkThread: () => null, chatOfItem: () => ({}) }));
+import { InboxDetail } from "./InboxDetail";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const item = (over: Partial<InboxItem> = {}): InboxItem => ({
+  id: "lark:f1:1", source: "lark", kind: "mention", account: "lark", account_name: "飞书", title: "示例群", preview: "看一下",
+  count: 1, tier: "action", updated_at: new Date().toISOString(), lark: { is_group: true } as InboxItem["lark"],
+  mutes: [{ tag: "chat", value: "c1", name: "示例群" }], ...over,
+});
+
+let host: HTMLDivElement;
+let root: Root;
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+});
+
+describe("收件箱详情在手机宽度", () => {
+  it("folds Pin 消息 and 静音 into one 更多 menu", () => {
+    act(() => root.render(<InboxDetail item={item()} loaded />));
+    expect(host.querySelector('button[aria-label="Pin 消息"]')).toBeNull();
+    expect(host.querySelector('button[aria-label="静音"]')).toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="更多"]')!.click());
+    const rows = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((r) => r.textContent);
+    expect(rows).toEqual([expect.stringContaining("Pin 消息"), expect.stringContaining("示例群")]);
+  });
+
+  it("keeps a lone Pin 消息 as its own button", () => {
+    act(() => root.render(<InboxDetail item={item({ mutes: [] })} loaded />));
+    expect(host.querySelector('button[aria-label="Pin 消息"]')).not.toBeNull();
+    expect(host.querySelector('button[aria-label="更多"]')).toBeNull();
+  });
+
+  it("keeps the time whole in its own span", () => {
+    act(() => root.render(<InboxDetail item={item()} loaded />));
+    const time = [...host.querySelectorAll("p span")].find((s) => /· \d\d:\d\d$/.test(s.textContent ?? ""));
+    expect(time?.className).toContain("shrink-0");
+  });
+});

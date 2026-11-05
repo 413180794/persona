@@ -23,7 +23,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import android.content.res.Resources
 import androidx.compose.ui.res.stringResource
 
@@ -61,7 +60,7 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
                 val parts = path.split(" · ", limit = 2)
                 listOf(routeKind(parts.first(), resources)).plus(parts.drop(1)).joinToString(resources.getString(R.string.settings_list_separator))
             },
-            resources.getString(R.string.settings_diag_last_received) to localTime(data.lastReceivedAt),
+            resources.getString(R.string.settings_diag_last_received) to localTime(data.lastReceivedAt, resources.textLocale),
             resources.getString(R.string.settings_diag_last_disconnect) to data.lastDisconnectReason,
         ))
         if (data.legacyHub) item { JNotice(stringResource(R.string.settings_diag_legacy_hub), status = Status.NeedsYou) }
@@ -74,7 +73,7 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
                     resources.getString(R.string.settings_diag_address) to candidate.url,
                     resources.getString(R.string.settings_diag_last_probe) to candidate.result.resolve(resources).takeUnless { it.isBlank() },
                     resources.getString(R.string.settings_diag_probe_time) to candidate.probeMeasurement(resources),
-                    resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
+                    resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt, resources.textLocale),
                 ))
             }
         }
@@ -98,8 +97,8 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
         if (data.sessions.isEmpty()) item { JEmptyState(stringResource(R.string.settings_diag_no_records), stringResource(R.string.settings_diag_no_records_detail)) }
         data.sessions.forEach { session ->
             diagnosticGroup(resources.getString(R.string.settings_diag_session), listOf(
-                resources.getString(R.string.settings_diag_connected_at) to localTime(session.connectedAt),
-                resources.getString(R.string.settings_diag_disconnected_at) to (localTime(session.disconnectedAt) ?: resources.getString(R.string.settings_diag_still_connected)),
+                resources.getString(R.string.settings_diag_connected_at) to localTime(session.connectedAt, resources.textLocale),
+                resources.getString(R.string.settings_diag_disconnected_at) to (localTime(session.disconnectedAt, resources.textLocale) ?: resources.getString(R.string.settings_diag_still_connected)),
                 resources.getString(R.string.settings_diag_disconnect_reason) to session.reason))
         }
         pairing?.takeUnless { it.failed }?.let { pairingAttempt(it, resources) }
@@ -121,24 +120,31 @@ internal fun DiagnosticsScreen(services: SettingsServices, onBack: (() -> Unit)?
     endpoints?.let { EndpointOverlays(it) }
 }
 
-/** Wire times are ISO-8601 UTC; show the phone's local time, with the date only when it is not today. */
-internal fun localTime(value: String?, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String? {
+/** The locale the text of these resources is in (the app's language). */
+internal val Resources.textLocale: java.util.Locale get() = configuration.locales[0]
+
+/**
+ * Wire times are ISO-8601 UTC; show the phone's local time in the app's language (14:30:05 · 2:30:05 PM), with the
+ * date only when it is not today. Text that is not a time is shown as is.
+ */
+internal fun localTime(value: String?, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String? {
     if (value.isNullOrBlank()) return value
     val instant = runCatching { Instant.parse(value) }.getOrNull()
         ?: runCatching { OffsetDateTime.parse(value).toInstant() }.getOrNull() ?: return value
     val time = instant.atZone(zone)
-    return DateTimeFormatter.ofPattern(if (time.toLocalDate() == today) "HH:mm:ss" else "MM-dd HH:mm:ss").format(time)
+    val skeleton = if (time.toLocalDate() == today) LocalizedFormats.TIME_SECONDS else LocalizedFormats.MONTH_DAY_TIME_SECONDS
+    return LocalizedFormats.format(instant, skeleton, locale, zone)
 }
 
 private fun LazyListScope.pairingAttempt(attempt: PairingAttempt, resources: Resources) {
     val time = resources.getString(R.string.settings_diag_time)
     diagnosticGroup(resources.getString(R.string.settings_diag_last_pairing),
-        attempt.rows(resources).map { (label, value) -> label to if (label == time) localTime(value) else value })
+        attempt.rows(resources).map { (label, value) -> label to if (label == time) localTime(value, resources.textLocale) else value })
     attempt.candidates.forEach { candidate ->
         diagnosticGroup(resources.getString(R.string.settings_diag_pairing_probe, routeKind(candidate.kind, resources)), listOf(
             resources.getString(R.string.settings_diag_address) to candidate.url,
             resources.getString(R.string.settings_diag_probe_result) to candidate.result.resolve(resources).takeUnless { it.isBlank() },
-            resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt),
+            resources.getString(R.string.settings_diag_probed_at) to localTime(candidate.checkedAt, resources.textLocale),
         ))
     }
 }

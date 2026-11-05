@@ -23,6 +23,20 @@ nonisolated extension ExtensionUIPlace: Identifiable {
     var isExtensionPage: Bool { placement.isEmpty || placement == "plugin_page" || placement == "extension_page" }
 }
 
+nonisolated extension ExtensionUIContext {
+    /// The UI version a whole page of the app draws (`ExtensionPageView`): 4 adds the code-hosting parts (header,
+    /// breadcrumb, file_tree, code, diff, comment_thread, composer, tabs, the split layout) and actions' own values
+    /// (#2961). Cards, widgets, the watch and the extensions keep `version` (Shared, 3): they draw none of them.
+    static let pageVersion = 4
+
+    /// This context for a whole page: the page's UI version.
+    func forPage() -> Self {
+        var c = self
+        if c.size == nil || c.size == "full" { c.uiVersion = Self.pageVersion }
+        return c
+    }
+}
+
 nonisolated extension ExtensionChoice: Identifiable {
     var id: String { value }
     var label: String { title?.isEmpty == false ? title! : value }
@@ -236,7 +250,10 @@ extension APIClient {
         running = action.id
         defer { running = nil; completedOperations += 1 }
         do {
+            // The page's fields (submit), then the component's own values (a path, a line, what was written), then the
+            // action's own (UI version 4): the later wins (docs/extensions.md「UI 版本 4」).
             let sent = (action.submit == true ? submitted : [:]).merging(chosen) { _, c in c }
+                .merging(action.values ?? [:]) { _, own in own }
             let r = try await call(action.id, values: sent.isEmpty ? nil : sent)
             return await take(r)
         } catch let e as APIError where Self.isUnsupported(e) {
@@ -266,6 +283,18 @@ extension APIClient {
         values[name] = value
         let o = await perform(action, with: [name: value])
         if o.error != nil { values[name] = before }
+        return o
+    }
+
+    /// The page's tabs (UI version 4): picked at once, its action sent with `{name: value}` and the search.
+    func pickTab(_ value: String) async -> Outcome {
+        guard let t = view?.tabs, values[t.name] != value else { return Outcome() }
+        let before = values[t.name]
+        values[t.name] = value
+        var sent = [t.name: value]
+        if view?.search != nil { sent["q"] = query }
+        let o = await perform(t.action, with: sent)
+        if o.error != nil { values[t.name] = before }
         return o
     }
 
@@ -323,7 +352,10 @@ extension APIClient {
     /// The fields' values as the extension gets them: every field of the view, by name.
     var submitted: [String: String] {
         var out: [String: String] = [:]
-        for item in components { if case .field(let f) = item, !f.name.isEmpty { out[f.name] = values[f.name] ?? "" } }
+        for item in components {
+            if case .field(let f) = item, !f.name.isEmpty { out[f.name] = values[f.name] ?? "" }
+            if case .composer(let c) = item, !c.name.isEmpty { out[c.name] = values[c.name] ?? "" }
+        }
         return out
     }
 
@@ -373,10 +405,13 @@ extension APIClient {
                 next[f.name] = typed[f.name] ?? (f.kind == "secret" ? "" : (f.value ?? (f.kind == "toggle" ? "false" : "")))
             // What the extension says is picked (its answer to a pick, or its own state).
             case .segmented(let s) where !s.name.isEmpty: next[s.name] = s.value
+            // A composer keeps what is being typed in it; what the extension puts there, otherwise.
+            case .composer(let c) where !c.name.isEmpty: next[c.name] = typed[c.name] ?? c.value ?? ""
             default: break
             }
         }
         if let f = v.filter, !f.name.isEmpty { next[f.name] = f.value }
+        if let t = v.tabs, !t.name.isEmpty { next[t.name] = t.value }
         values = next
         // The search field says what the View was drawn for (none: nothing), unless something else is being typed in it
         // or this is the search's own answer.

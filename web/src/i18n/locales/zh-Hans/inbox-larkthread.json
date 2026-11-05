@@ -83,6 +83,7 @@
   "everyone": "所有人",
   "mention_label": "提及群成员",
   "group_placeholder": "回复飞书消息，输入 @ 提及群成员…",
+  "group_placeholder_short": "回复，@ 提及成员…",
   "older_loading": "正在加载更早的消息",
   "older_failed": "更早的消息未加载，点击重试",
   "older_stopped": "暂时无法加载更早的消息，点击重试",

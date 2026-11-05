@@ -121,13 +121,16 @@ class DiagnosticsStateTest {
     }
 }
 
+@RunWith(AndroidJUnit4::class)
+@org.robolectric.annotation.Config(sdk = [35])
 class DiagnosticsTimeTest {
     @Test fun wireTimesShowInLocalTimeWithTheDateOnlyBeforeToday() {
         val zone = java.time.ZoneId.of("Asia/Shanghai")
         val today = java.time.LocalDate.of(2026, 10, 31)
-        assertEquals("06:03:57", localTime("2026-10-30T22:03:57.566254Z", zone, today))
-        assertEquals("10-30 08:00:00", localTime("2026-10-30T08:00:00+08:00", zone, today))
-        assertEquals("时间未提供", localTime("时间未提供", zone, today))
-        assertNull(localTime(null, zone, today))
+        val zh = java.util.Locale.SIMPLIFIED_CHINESE
+        assertEquals("06:03:57", localTime("2026-10-30T22:03:57.566254Z", zh, zone, today))
+        assertEquals("10月30日 08:00:00", localTime("2026-10-30T08:00:00+08:00", zh, zone, today))
+        assertEquals("时间未提供", localTime("时间未提供", zh, zone, today))
+        assertNull(localTime(null, zh, zone, today))
     }
 }

@@ -1505,6 +1505,28 @@
         }
       }
     },
+    "%@ 的代码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的代码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code of %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ のコード"
+          }
+        }
+      }
+    },
     "%@ 的剪贴板里没有文字": {
       "localizations": {
         "en": {
@@ -17835,6 +17857,28 @@
         }
       }
     },
+    "二进制文件，不显示改动": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "二进制文件，不显示改动"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Binary file; changes not shown"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バイナリファイルのため変更は表示されません"
+          }
+        }
+      }
+    },
     "云文档": {
       "localizations": {
         "en": {
@@ -22915,6 +22959,28 @@
         }
       }
     },
+    "全部文件": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Files"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのファイル"
+          }
+        }
+      }
+    },
     "全部机器": {
       "localizations": {
         "en": {
@@ -24699,6 +24765,28 @@
         }
       }
     },
+    "写评论…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写评论…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write a comment…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コメントを書く…"
+          }
+        }
+      }
+    },
     "写邮件": {
       "localizations": {
         "en": {
@@ -25955,6 +26043,40 @@
         }
       }
     },
+    "删除 %lld 行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 行"
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line removed"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines removed"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行削除"
+          }
+        }
+      }
+    },
     "删除 SSH 隧道": {
       "localizations": {
         "en": {
@@ -26127,6 +26249,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除分组"
+          }
+        }
+      }
+    },
+    "删除原第 %lld 行：%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "new",
+            "value": "删除原第 %1$lld 行：%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed old line %lld: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除 元の %lld 行目：%@"
           }
         }
       }
@@ -27029,6 +27173,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "加载 Pin 消息…"
+          }
+        }
+      }
+    },
+    "加载 diff": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载 diff"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load Diff"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "差分を読み込む"
           }
         }
       }
@@ -33657,6 +33823,28 @@
         }
       }
     },
+    "回复…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回复…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reply…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返信…"
+          }
+        }
+      }
+    },
     "回复会%@": {
       "localizations": {
         "en": {
@@ -39816,6 +40004,28 @@
         }
       }
     },
+    "展开上面的行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展开上面的行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Lines Above"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上の行を表示"
+          }
+        }
+      }
+    },
     "展开全部 %lld 行": {
       "localizations": {
         "en": {
@@ -39846,6 +40056,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "展开全部 %lld 行"
+          }
+        }
+      }
+    },
+    "展开后面的行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展开后面的行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Lines Below"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下の行を表示"
           }
         }
       }
@@ -44297,6 +44529,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已过保留期"
+          }
+        }
+      }
+    },
+    "已过时": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已过时"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outdated"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "古い"
           }
         }
       }
@@ -55522,6 +55776,28 @@
         }
       }
     },
+    "改动的看法": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改动的看法"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff View"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "差分の表示"
+          }
+        }
+      }
+    },
     "改名": {
       "localizations": {
         "en": {
@@ -56293,6 +56569,28 @@
         }
       }
     },
+    "文件夹 %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件夹 %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダ %@"
+          }
+        }
+      }
+    },
     "文件夹传不了，拖里面的文件进来": {
       "localizations": {
         "en": {
@@ -56821,6 +57119,28 @@
         }
       }
     },
+    "新增": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加"
+          }
+        }
+      }
+    },
     "新增 %lld 个，合并 %lld 个": {
       "localizations": {
         "zh-Hans": {
@@ -56839,6 +57159,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld件追加、%2$lld件統合"
+          }
+        }
+      }
+    },
+    "新增 %lld 行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增 %lld 行"
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line added"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines added"
+                }
+              }
+            }
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行追加"
           }
         }
       }
@@ -56883,6 +57237,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "新增供应商…"
+          }
+        }
+      }
+    },
+    "新增第 %lld 行：%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "new",
+            "value": "新增第 %1$lld 行：%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added line %lld: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加 %lld 行目：%@"
           }
         }
       }
@@ -63636,6 +64012,28 @@
         }
       }
     },
+    "查看全部改动 · %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看全部改动 · %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Changes · %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべての変更 · %lld"
+          }
+        }
+      }
+    },
     "查看全部检查（%lld）": {
       "localizations": {
         "en": {
@@ -63786,6 +64184,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看待办详情"
+          }
+        }
+      }
+    },
+    "查看文件": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View File"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを表示"
           }
         }
       }
@@ -68727,6 +69147,28 @@
         }
       }
     },
+    "没有可显示的改动": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可显示的改动"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes to show"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示できる変更はありません"
+          }
+        }
+      }
+    },
     "没有启动起来：%@": {
       "localizations": {
         "en": {
@@ -69163,6 +69605,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有改成：%@"
+          }
+        }
+      }
+    },
+    "没有文件": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有文件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No files"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルはありません"
           }
         }
       }
@@ -77129,6 +77593,50 @@
         }
       }
     },
+    "第 %lld 行的评论": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %lld 行的评论"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comments on line %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行目のコメント"
+          }
+        }
+      }
+    },
+    "第 %lld 行：%@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "new",
+            "value": "第 %1$lld 行：%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line %lld: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行目：%@"
+          }
+        }
+      }
+    },
     "第 %lld 页": {
       "localizations": {
         "en": {
@@ -79296,6 +79804,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "给这一组起个名字"
+          }
+        }
+      }
+    },
+    "统一": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "统一"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unified"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "統合"
           }
         }
       }
@@ -83419,6 +83949,72 @@
         }
       }
     },
+    "评论原第 %lld 行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评论原第 %lld 行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment on old line %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元の %lld 行目にコメント"
+          }
+        }
+      }
+    },
+    "评论第 %lld 行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评论第 %lld 行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment on line %lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 行目にコメント"
+          }
+        }
+      }
+    },
+    "评论这一行": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评论这一行"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment on This Line"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この行にコメント"
+          }
+        }
+      }
+    },
     "评论这段": {
       "localizations": {
         "en": {
@@ -86939,6 +87535,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "返回"
+          }
+        }
+      }
+    },
+    "返回 %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回 %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ に戻る"
           }
         }
       }

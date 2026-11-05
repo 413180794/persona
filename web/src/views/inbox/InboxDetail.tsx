@@ -4,10 +4,11 @@
 import { useEffect, useState } from "react";
 import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
 import { useInboxItemPlace } from "../../lib/extension-slots";
+import { PHONE, useMedia } from "../../lib/viewport";
 import { navigate } from "../../lib/router";
 import { hubTranslation, useTranslatePrefs } from "../../lib/translate";
 import { t } from "../../i18n";
-import { Button, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
+import { Button, cx, IconButton, Loading, Menu, useMenu, type MenuItem } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ConnectorBody, openSystem } from "./ConnectorThread";
 import { DocBody, MailBody, MomentBody } from "./InboxBodies";
@@ -26,6 +27,9 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   const place = useInboxItemPlace(item?.source);
   const [ownShown, setOwnShown] = useState(false); // under an extension's page: it fell back to the item's own body
   const muteMenu = useMenu();
+  const moreMenu = useMenu();
+  // on a phone the title comes first: Pin and Mute fold into one ⋯ menu when both are there (#4144)
+  const phone = useMedia(PHONE);
   if (!item) {
     return (
       <div className="flex h-full items-center justify-center p-6">
@@ -37,6 +41,9 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   const label = kindLabel(item);
   const draft = agentDraft(item);
   const translated = hubTranslation(item, prefs);
+  const time = shortTime(item.updated_at);
+  const canPin = Boolean(item.lark) && (!place || ownShown);
+  const muteRows: MenuItem[] = (item.mutes ?? []).map((m) => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) }));
   // the item's own body: the chat, the mail, the document's rows, the post, a connector's thread
   const own = () => (
     <div className={cx("min-h-0 flex-1", item.lark || item.connector ? "flex flex-col overflow-hidden" : "overflow-y-auto")}>
@@ -56,13 +63,27 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
                 <span className="truncate" title={translated?.subject ? item.title : undefined}>{translated?.subject || item.title}</span>
                 {label && <Tag urgent={labelIsUrgent(item)}>{label}</Tag>}
               </h2>
-              <p className="mt-0.5 truncate text-[12px] text-ink-3">{[sourceLine(item), shortTime(item.updated_at)].filter(Boolean).join(" · ")}</p>
+              {/* the source line gives way first, so the time stays whole */}
+              <p className="mt-0.5 flex min-w-0 text-[12px] text-ink-3">
+                <span className="truncate">{sourceLine(item)}</span>
+                {time && <span className="shrink-0 whitespace-pre">{sourceLine(item) ? ` · ${time}` : time}</span>}
+              </p>
             </div>
-            {item.lark && (!place || ownShown) && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
-            {!!item.mutes?.length && <IconButton icon="bellOff" label={t("inbox-inboxdetail.mute")} onClick={muteMenu.open} active={Boolean(muteMenu.anchor)} size={32} />}
-            {muteMenu.anchor && (
-              <Menu anchor={muteMenu.anchor} onClose={muteMenu.close} align="right" width={224}
-                items={(item.mutes ?? []).map((m) => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) }))} />
+            {phone && canPin && muteRows.length > 0 ? (
+              <IconButton icon="more" label={t("inbox-inboxdetail.more")} onClick={moreMenu.open} active={Boolean(moreMenu.anchor)} size={32} />
+            ) : (
+              <>
+                {canPin && <IconButton icon="pin" label={t("inbox-inboxdetail.pin_messages")} onClick={() => setPins(true)} size={32} />}
+                {muteRows.length > 0 && <IconButton icon="bellOff" label={t("inbox-inboxdetail.mute")} onClick={muteMenu.open} active={Boolean(muteMenu.anchor)} size={32} />}
+              </>
+            )}
+            {muteMenu.anchor && <Menu anchor={muteMenu.anchor} onClose={muteMenu.close} align="right" width={224} items={muteRows} />}
+            {moreMenu.anchor && (
+              <Menu anchor={moreMenu.anchor} onClose={moreMenu.close} align="right" width={224}
+                items={[
+                  ...(canPin ? [{ key: "pins", label: t("inbox-inboxdetail.pin_messages"), icon: "pin" as const, onSelect: () => setPins(true) }] : []),
+                  ...muteRows.map((r, i) => (i === 0 && canPin ? { ...r, divider: true } : r)),
+                ]} />
             )}
             {done ? (
               <Button tone="secondary" icon="inbox" onClick={() => void setDone(item, false)}>{t("inbox-inboxdetail.move_back")}</Button>

@@ -1122,7 +1122,7 @@ function ComposerFooter({ session, assistant }: { session: Session; assistant?: 
   const effortOnly = !assistant && hasEffortOnly(session) && stateOf(session) !== "offline"; // a Codex thread on its app-server
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} assistant={assistant} />}
+      {(modes || effortOnly) && <ModeChips session={session} effortOnly={effortOnly} assistant={assistant} withInfo={parts.length > 0} />}
       {assistant && <AssistantLauncherChip session={session} />}
       {parts.length > 0 && <span className="min-w-0 truncate max-sm:hidden" title={[sourceSubtitle(session), session.cwd].filter(Boolean).join(" · ")}>{parts.join(" · ")}</span>}
       {/* phone width (#3533): the line would show a letter or two, so it is a button that lists the parts in full */}

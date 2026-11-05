@@ -10,7 +10,7 @@ import { stripBase } from "../../lib/base";
 import { dropSession, getSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
 import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
-import { Icon } from "../../ui/icons";
+import { Icon, type IconName } from "../../ui/icons";
 import { ModelEffortPopover } from "./ModelEffortPopover";
 import { t } from "../../i18n";
 
@@ -249,7 +249,7 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
 // conversation may also switch to 全部放行 (#2416). On a Claude Code session the effort chip opens the model and effort
 // popover instead of the effort menu (issue #2434; the chip itself reads as before), and `/model` Enter in the composer
 // opens it too.
-export function ModeChips({ session, effortOnly, assistant }: { session: Session; effortOnly?: boolean; assistant?: boolean }) {
+export function ModeChips({ session, effortOnly, assistant, withInfo }: { session: Session; effortOnly?: boolean; assistant?: boolean; withInfo?: boolean }) {
   const modeMenu = useMenu();
   const effortMenu = useMenu();
   const effortChip = useRef<HTMLButtonElement>(null);
@@ -280,8 +280,10 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
   const danger = mode === BYPASS_MODE;
   return (
     // A Persona conversation has its launcher chip after these and no text to give way: these keep their width up to
-    // the row less 5.5rem (the row's 0.5rem gap and 5rem of launcher chip), so that chip truncates first (#3575)
-    <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]")}>
+    // the row less 5.5rem (the row's 0.5rem gap and 5rem of launcher chip), so that chip truncates first (#3575). At
+    // phone width that chip is an icon (#4142): 3rem leaves its 2.5rem and the gap, 5rem also the footer's 22px ⓘ
+    // button and its gap (`withInfo`, #3533).
+    <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]", assistant && (withInfo ? "max-sm:max-w-[calc(100%-5rem)]" : "max-sm:max-w-[calc(100%-3rem)]"))}>
       {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
       <Chip
         buttonRef={effortChip}
@@ -315,7 +317,9 @@ export function ModeChips({ session, effortOnly, assistant }: { session: Session
   );
 }
 
-export function Chip({ label, onClick, active, danger, title, buttonRef }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement> }) {
+/** `phoneIcon`: at phone width the label gives way to this icon (still read out, and in full in the menu it opens), so
+ *  the chips beside it keep their words (#4142); wider, the chip is as before. */
+export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIcon }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement>; phoneIcon?: IconName }) {
   return (
     <button
       ref={buttonRef}
@@ -330,7 +334,8 @@ export function Chip({ label, onClick, active, danger, title, buttonRef }: { lab
         danger ? "bg-red-tint text-red" : active ? "bg-hover text-ink" : "bg-field text-ink-2 hover:bg-hover hover:text-ink",
       )}
     >
-      <span className="min-w-0 truncate">{label}</span>
+      {phoneIcon && <Icon name={phoneIcon} size={12} className="shrink-0 sm:hidden" />}
+      <span className={cx("min-w-0 truncate", phoneIcon && "max-sm:sr-only")}>{label}</span>
       <Icon name="chevron" size={9} stroke={2.4} className="shrink-0" />
     </button>
   );

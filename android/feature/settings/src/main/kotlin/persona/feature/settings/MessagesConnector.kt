@@ -20,8 +20,6 @@ import persona.core.designsystem.icons.PhIcons
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 /**
  * 设置 › 连接器 › 信息 (iOS `MessagesConnectorView`): one Mac's Messages, read through the hub. Which Mac and whether it
@@ -380,22 +378,34 @@ private fun parseInstant(text: String): Instant? = runCatching { Instant.parse(t
 
 @Composable
 private fun messagesSeparator(at: Instant): String {
+    val locale = currentLocale
     val zone = ZoneId.systemDefault()
     val day = at.atZone(zone).toLocalDate()
     val today = java.time.LocalDate.now(zone)
-    val time = DateTimeFormatter.ofPattern("HH:mm").format(at.atZone(zone))
+    val time = LocalizedFormats.format(at, LocalizedFormats.TIME, locale, zone)
     return when (day) {
         today -> stringResource(R.string.settings_src_messages_today, time)
         today.minusDays(1) -> stringResource(R.string.settings_src_messages_yesterday, time)
-        else -> DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).format(at.atZone(zone))
+        else -> messagesDayTime(at, locale, zone)
     }
 }
 
+/** A separator's date and time before yesterday, in the app's language: 2026年11月5日 14:30 · Nov 5, 2026, 2:30 PM. */
+internal fun messagesDayTime(at: Instant, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault()): String =
+    LocalizedFormats.format(at, LocalizedFormats.DATE_TIME, locale, zone)
+
 @Composable
-private fun messagesShortTime(text: String): String? {
+private fun messagesShortTime(text: String): String? = messagesShortTime(text, currentLocale)
+
+/** A chat row's last time in the app's language: 14:30 today, 11月5日 this year, else 2025年11月5日. */
+internal fun messagesShortTime(text: String, locale: java.util.Locale, zone: ZoneId = ZoneId.systemDefault(),
+                               today: java.time.LocalDate = java.time.LocalDate.now(zone)): String? {
     val at = parseInstant(text) ?: return null
-    val zone = ZoneId.systemDefault()
-    val local = at.atZone(zone)
-    return if (local.toLocalDate() == java.time.LocalDate.now(zone)) DateTimeFormatter.ofPattern("HH:mm").format(local)
-        else DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).format(local)
+    val day = at.atZone(zone).toLocalDate()
+    val skeleton = when {
+        day == today -> LocalizedFormats.TIME
+        day.year == today.year -> LocalizedFormats.MONTH_DAY
+        else -> LocalizedFormats.DATE
+    }
+    return LocalizedFormats.format(at, skeleton, locale, zone)
 }

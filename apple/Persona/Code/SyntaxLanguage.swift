@@ -367,6 +367,21 @@ nonisolated extension SyntaxLanguage {
         return m
     }()
 
+    /// A language an extension names (docs/extensions.md「UI 版本 4」 `code.language`): a linguist name ("Go",
+    /// "TypeScript", "Objective-C"), an extension ("ts", ".py") or one of the lexer's own ids. Nil: plain text.
+    static func named(_ name: String) -> SyntaxLanguage? {
+        let n = name.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !n.isEmpty else { return nil }
+        let aliases: [String: SyntaxLanguage] = [
+            "golang": go, "objective-c": objc, "objectivec": objc, "c++": cpp, "c#": csharp, "shell": shell, "bash": shell,
+            "zsh": shell, "sh": shell, "js": javascript, "jsx": javascript, "tsx": typescript, "yml": yaml, "terraform": hcl,
+            "protocol buffer": proto, "protobuf": proto, "docker": dockerfile, "make": makefile,
+        ]
+        if let l = aliases[n] ?? all.first(where: { $0.id == n }) { return l }
+        let ext = n.hasPrefix(".") ? String(n.dropFirst()) : n
+        return byExtension[ext]
+    }
+
     /// The language of a file by its name (extension, or a known name like Dockerfile), else by its first line
     /// (`#!/usr/bin/env python3`, `<?xml`). Nil: plain text.
     static func detect(name: String, firstLine: String? = nil) -> SyntaxLanguage? {

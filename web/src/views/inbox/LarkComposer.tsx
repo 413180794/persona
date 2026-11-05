@@ -7,6 +7,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { fitPick, releaseLarkAttachments, stageLarkAttachment, type LarkAttachment } from "../../lib/lark-attachments";
 import { chatMembers, loadDraft, saveDraft, withEveryone } from "../../lib/lark-chat";
 import { mentionsIn, type LarkPerson } from "../../lib/lark-people";
+import { PHONE, useMedia } from "../../lib/viewport";
 import { t } from "../../i18n";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { Button, cx, Spinner, toast } from "../../ui/atoms";
@@ -53,6 +54,7 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
   const [picked, setPicked] = useState<LarkPerson[]>(stored.mentions ?? []);
   const [caret, setCaret] = useState(stored.text.length);
   const [focused, setFocused] = useState(false);
+  const phone = useMedia(PHONE);
   const place = useRef<number | null>(null);
   const [sending, setSending] = useState(false);
   const [files, setFiles] = useState<LarkAttachment[]>([]);
@@ -286,11 +288,11 @@ export const LarkComposer = forwardRef<LarkComposerHandle, LarkComposerProps>(fu
                 addFiles(pasted);
               }
             }}
-            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : group ? t("inbox-larkthread.group_placeholder") : t("inbox-larkthread.reply_placeholder"))}
+            placeholder={climb.on ? t("inbox-larkthread.climb_placeholder") : placeholder ?? (replyTo ? t("inbox-larkthread.reply_to_placeholder", { name: replyTo.sender_name ?? "" }) : group ? t(phone ? "inbox-larkthread.group_placeholder_short" : "inbox-larkthread.group_placeholder") : t("inbox-larkthread.reply_placeholder"))}
             aria-label={t("inbox-larkcomposer.message")}
             rows={1}
             className={cx(
-              "max-h-[120px] flex-1 resize-none rounded-[10px] border border-line bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none",
+              "max-h-[120px] flex-1 resize-none rounded-[10px] border border-line bg-field px-3 py-1.5 text-[13px] leading-relaxed text-ink placeholder:truncate placeholder:text-ink-3 focus:border-accent focus:outline-none",
               compact ? "min-h-[32px]" : "min-h-[36px]",
             )}
           />

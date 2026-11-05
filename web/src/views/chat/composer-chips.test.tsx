@@ -31,4 +31,19 @@ describe("composer chips on a narrow row", () => {
     expect(wrapper(false)).toContain("shrink-0");
     expect(wrapper(false)).not.toContain("min-w-0");
   });
+
+  // #4142: at 360 px the launcher chip at 5rem still left 手动确认 / 思考 高 a letter each; on a phone it is an icon
+  it("at phone width a chip with a phone icon shows the icon, keeps its label for screen readers, and frees the row", () => {
+    const [, icon, label, chevron] = tags(<Chip label="claude · opus" phoneIcon="agent" title="launcher" onClick={() => {}} />);
+    expect(icon.tag).toBe("svg");
+    expect(icon.cls).toEqual(expect.arrayContaining(["shrink-0", "sm:hidden"]));
+    expect(label.text).toBe("claude · opus");
+    expect(label.cls).toEqual(expect.arrayContaining(["truncate", "max-sm:sr-only"]));
+    expect(chevron.tag).toBe("svg");
+    const [, plainLabel] = tags(<Chip label="手动确认" title="mode" onClick={() => {}} />);
+    expect(plainLabel.cls).not.toContain("max-sm:sr-only");
+    expect(tags(<ModeChips session={session} assistant />)[0].cls).toContain("max-sm:max-w-[calc(100%-3rem)]");
+    // the footer's ⓘ button (a read-only or conflicting source, #3533) takes room too
+    expect(tags(<ModeChips session={session} assistant withInfo />)[0].cls).toContain("max-sm:max-w-[calc(100%-5rem)]");
+  });
 });

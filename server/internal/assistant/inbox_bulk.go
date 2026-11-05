@@ -44,6 +44,15 @@ type inboxBulkResult struct {
 	// Unchanged were already in the state asked for (a retried request, another device): nothing written.
 	Unchanged []string        `json:"unchanged"`
 	Skipped   []inboxBulkSkip `json:"skipped"`
+	// Failed are the ids whose new state could not be written; they keep the state they had, so the client leaves
+	// them in the list and can retry. Additive: older clients ignore it and see an empty changed for those ids.
+	Failed []string `json:"failed"`
+}
+
+// doneState is what filing or bringing an item back overwrote, so an item whose write failed can be restored.
+type doneState struct {
+	DoneAt *time.Time
+	DoneBy string
 }
 
 // inboxVersion names what an item holds now (its newest message / mail / notice): it changes when something new
@@ -114,8 +123,9 @@ func (s *Service) setInboxDoneBulk(ctx context.Context, targets []inboxBulkTarge
 func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inboxBulkTarget, filter *inboxBulkFilter,
 	asOf, now time.Time) inboxBulkResult {
 	done := action != bulkReopen
-	res := inboxBulkResult{Changed: []InboxItem{}, Unchanged: []string{}, Skipped: []inboxBulkSkip{}}
+	res := inboxBulkResult{Changed: []InboxItem{}, Unchanged: []string{}, Skipped: []inboxBulkSkip{}, Failed: []string{}}
 	var changed []*InboxItem
+	var previous []doneState // previous[i] is what changed[i] held before this request
 	seen := map[string]bool{}
 	b := &s.inbox
 	b.mu.Lock()
@@ -147,6 +157,7 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 		case done && t.Version != "" && t.Version != inboxVersion(it):
 			res.Skipped = append(res.Skipped, inboxBulkSkip{t.ID, bulkSkipChanged})
 		default:
+			previous = append(previous, doneState{DoneAt: it.DoneAt, DoneBy: it.DoneBy})
 			if done {
 				it.done(now, doneByOf(action == bulkDismiss))
 			} else {
@@ -157,7 +168,27 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 		}
 	}
 	b.mu.Unlock()
-	s.saveInbox(ctx, changed)
+	failed := s.saveInbox(ctx, changed)
+	if len(failed) > 0 {
+		// The writes that failed never happened in the database, so they must not happen in memory either: restore
+		// the state those items had and report them as failed instead of changed.
+		b.mu.Lock()
+		rolled := make(map[string]bool, len(failed))
+		kept := changed[:0]
+		for i, it := range changed {
+			if !failed[it.ID] {
+				kept = append(kept, it)
+				continue
+			}
+			it.DoneAt, it.DoneBy = previous[i].DoneAt, previous[i].DoneBy
+			rolled[it.ID] = true
+			res.Failed = append(res.Failed, it.ID)
+		}
+		changed = kept
+		b.mu.Unlock()
+		slices.Sort(res.Failed)
+		res.Changed = slices.DeleteFunc(res.Changed, func(it InboxItem) bool { return rolled[it.ID] })
+	}
 	return res
 }
 

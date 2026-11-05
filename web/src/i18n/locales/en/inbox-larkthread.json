@@ -85,6 +85,7 @@
   "everyone": "Everyone",
   "mention_label": "Mention a member",
   "group_placeholder": "Reply in Lark, type @ to mention someone…",
+  "group_placeholder_short": "Reply, @ to mention…",
   "older_loading": "Loading earlier messages",
   "older_failed": "Earlier messages didn't load. Click to retry",
   "older_stopped": "Can't load earlier messages right now. Click to retry",
