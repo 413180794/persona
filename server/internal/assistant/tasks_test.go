@@ -342,3 +342,52 @@ func TestSnapshotLinks(t *testing.T) {
 		}
 	}
 }
+
+// A task the user asked for themselves starts without the card's 开始 while start_requested_tasks is on (the
+// default, #2559); one the assistant came up with still waits, and with the setting off the asked-for one waits too.
+func TestTaskPlanStartsWhatTheUserAskedFor(t *testing.T) {
+	plan := func(requested bool) json.RawMessage {
+		raw, _ := json.Marshal(map[string]any{"tasks": []map[string]any{{
+			"title": "修登录崩溃", "prompt": "iPad 横屏时登录页崩溃，修好并补测试", "machine": "box", "cwd": "/code/app",
+			"readonly": false, "user_requested": requested, "why": "这个仓库最近在 box 上",
+		}}})
+		return raw
+	}
+
+	s, f := newTaskService(t)
+	if !s.startRequestedTasks(context.Background()) {
+		t.Fatal("start_requested_tasks should be on by default")
+	}
+	res, err := s.toolTaskPlan(context.Background(), "conv1", plan(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res, "Started 1 task(s) without asking") {
+		t.Fatalf("result = %q", res)
+	}
+	waitFor(t, "the agent to start", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return len(f.starts) == 1 })
+
+	s2, f2 := newTaskService(t)
+	if res, err := s2.toolTaskPlan(context.Background(), "conv1", plan(false)); err != nil || !strings.Contains(res, "nothing has started") {
+		t.Fatalf("an inferred task: %q %v", res, err)
+	}
+	// One inferred task keeps the whole plan waiting.
+	mixed, _ := json.Marshal(map[string]any{"tasks": []map[string]any{
+		{"title": "修登录崩溃", "prompt": "修", "machine": "box", "cwd": "/code/app", "user_requested": true, "why": "-"},
+		{"title": "顺便升级依赖", "prompt": "升级", "machine": "box", "cwd": "/code/app", "user_requested": false, "why": "-"},
+	}})
+	if res, err := s2.toolTaskPlan(context.Background(), "conv1", mixed); err != nil || !strings.Contains(res, "nothing has started") {
+		t.Fatalf("a mixed plan: %q %v", res, err)
+	}
+
+	setSettings(t, s2, func(v *Settings) { off := false; v.StartRequestedTasks = &off })
+	if res, err := s2.toolTaskPlan(context.Background(), "conv1", plan(true)); err != nil || !strings.Contains(res, "nothing has started") {
+		t.Fatalf("with the setting off: %q %v", res, err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	f2.mu.Lock()
+	defer f2.mu.Unlock()
+	if len(f2.starts) != 0 {
+		t.Fatalf("%d agents started without the user", len(f2.starts))
+	}
+}

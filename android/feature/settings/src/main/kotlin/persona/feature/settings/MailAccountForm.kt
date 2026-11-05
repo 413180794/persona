@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.saveable.Saver
 import persona.core.contracts.api.AddMailAccountRequest
 
@@ -13,7 +14,7 @@ data class MailAccountForm(
     val smtpHost: String = "",
     val smtpPort: String = "465",
 ) {
-    enum class Kind(val title: String) { GMAIL("Gmail"), FEISHU("飞书"), IMAP("其他 IMAP") }
+    enum class Kind(@StringRes val title: Int) { GMAIL(R.string.settings_src_mail_kind_gmail), FEISHU(R.string.settings_src_mail_kind_feishu), IMAP(R.string.settings_src_mail_kind_imap) }
 
     /** 连接 is possible: address and password typed (Gmail only through the app-password fallback). */
     fun canConnect(gmailPasswordAllowed: Boolean): Boolean =

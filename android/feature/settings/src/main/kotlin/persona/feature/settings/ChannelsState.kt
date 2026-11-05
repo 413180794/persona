@@ -20,23 +20,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.time.Duration
+import android.content.res.Resources
+import android.text.format.DateUtils
+import androidx.annotation.StringRes
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 // 设置 › 扩展 › 渠道 (docs/channels.md「界面」): the words, the list's sections, where messages go, and the models of the
 // list, a channel's page and its binding a step at a time. The pages are in ChannelsScreen.kt.
 
 /** What a channel is called and says in the settings (the same words as the web's lib/channels.ts). */
 internal object ChannelText {
-    fun state(c: HubChannel): String = when (c.state) {
-        "connected" -> "已连接"
-        "error" -> "出错"
-        "disabled" -> "已停用"
-        "not_installed" -> "可以安装"
-        else -> "未连接"
-    }
+    fun state(res: Resources, c: HubChannel): String = res.getString(when (c.state) {
+        "connected" -> R.string.settings_src_state_connected
+        "error" -> R.string.settings_src_channel_state_error
+        "disabled" -> R.string.settings_src_channel_state_disabled
+        "not_installed" -> R.string.settings_src_channel_state_installable
+        else -> R.string.settings_src_state_not_connected
+    })
 
     /** Broken: drawn in the danger colour with its one-line reason. */
     fun isProblem(c: HubChannel): Boolean = c.state == "error"
@@ -57,40 +58,47 @@ internal object ChannelText {
     }
 
     /** 设置's row: how many are connected (the apps are always), and how many went wrong; null before the list is in. */
-    fun listSummary(list: List<HubChannel>?): String? {
+    fun listSummary(res: Resources, list: List<HubChannel>?): String? {
         list ?: return null
         val on = list.count { it.kind != "app" && it.state == "connected" }
         val bad = list.count(::isProblem)
-        return if (bad > 0) "$on 个已连接 · $bad 个出错" else "$on 个已连接"
+        val connected = res.getQuantityString(R.plurals.settings_src_channels_connected, on, on)
+        return if (bad > 0) res.getString(R.string.settings_src_channels_summary_with_errors, connected,
+            res.getQuantityString(R.plurals.settings_src_channels_errors, bad, bad)) else connected
     }
 
     fun hasProblem(list: List<HubChannel>?): Boolean = list.orEmpty().any(::isProblem)
 
-    fun targetText(t: ChannelTarget?): String = when (t?.kind) {
-        "new" -> "新对话（下一条消息开）"
-        "conversation" -> t.title?.takeIf { it.isNotBlank() } ?: "一段对话"
-        "agent" -> t.title?.takeIf { it.isNotBlank() }?.let { "Agent · $it" } ?: "一个 Agent"
-        else -> "主对话"
+    fun targetText(res: Resources, t: ChannelTarget?): String = when (t?.kind) {
+        "new" -> res.getString(R.string.settings_src_channel_target_new)
+        "conversation" -> t.title?.takeIf { it.isNotBlank() } ?: res.getString(R.string.settings_src_channel_a_chat)
+        "agent" -> t.title?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_src_channel_target_agent_named, it) }
+            ?: res.getString(R.string.settings_src_channel_target_agent)
+        else -> res.getString(R.string.settings_src_channel_target_main)
     }
 
     /** What the channel can do, in a few words each for its page. */
-    fun capabilities(c: ChannelCapabilities): List<String> = buildList {
-        add("收" + listOfNotNull("文字", "图片".takeIf { c.imagesIn }, "文件".takeIf { c.filesIn }, "语音".takeIf { c.voiceIn }).joinToString("、"))
-        add(if (c.format == "plain") "回答是纯文字" else "回答带格式（Markdown）")
-        if (c.maxText > 0) add("一条最多 ${c.maxText} 字，长的拆开发")
+    fun capabilities(res: Resources, c: ChannelCapabilities): List<String> = buildList {
+        // What comes in, in the language's list: 文字、图片 · text, images.
+        val kinds = listOfNotNull(R.string.settings_src_channel_in_text, R.string.settings_src_channel_in_images.takeIf { c.imagesIn },
+            R.string.settings_src_channel_in_files.takeIf { c.filesIn }, R.string.settings_src_channel_in_voice.takeIf { c.voiceIn })
+            .map(res::getString).joinToString(res.getString(R.string.settings_src_list_separator))
+        add(res.getString(R.string.settings_src_channel_receives, kinds))
+        add(res.getString(if (c.format == "plain") R.string.settings_src_channel_plain else R.string.settings_src_channel_markdown))
+        if (c.maxText > 0) add(res.getQuantityString(R.plurals.settings_src_channel_max_text, c.maxText, c.maxText))
         when (c.asks) {
-            "text" -> add("提问和批准回复序号或文字")
-            "buttons" -> add("提问和批准点按钮")
+            "text" -> add(res.getString(R.string.settings_src_channel_asks_text))
+            "buttons" -> add(res.getString(R.string.settings_src_channel_asks_buttons))
         }
-        if (c.typing) add("处理时显示「正在输入」")
-        if (c.progress) add("处理时显示进度")
+        if (c.typing) add(res.getString(R.string.settings_src_channel_typing))
+        if (c.progress) add(res.getString(R.string.settings_src_channel_progress))
     }
 
-    fun bindTitle(c: HubChannel): String = when (c.bind) {
-        "qr" -> "扫码绑定"
-        "code" -> "配对"
-        else -> "绑定"
-    }
+    fun bindTitle(res: Resources, c: HubChannel): String = res.getString(when (c.bind) {
+        "qr" -> R.string.settings_src_channel_bind_qr
+        "code" -> R.string.settings_src_channel_pair
+        else -> R.string.settings_src_channel_bind
+    })
 
     /** Set up on this page: not hub.json's or an extension page's, not a market's. */
     fun editable(c: HubChannel): Boolean = !c.readOnly && c.source != "market"
@@ -120,46 +128,47 @@ internal object ChannelText {
      * The header's line: the account, the time of the last message; empty when it has neither. The state is on the
      * header's right and the description under it, so neither is repeated here.
      */
-    fun headerLine(c: HubChannel, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String =
+    fun headerLine(res: Resources, c: HubChannel, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String =
         listOfNotNull(
             c.account?.name?.takeIf { it.isNotBlank() },
-            parseTime(c.lastEventAt)?.let { "最近一条 " + ago(it, now, zone) },
+            parseTime(c.lastEventAt)?.let { res.getString(R.string.settings_src_channel_last_message, ago(res, it, now, zone)) },
         ).joinToString(" · ")
 
-    fun ago(at: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String {
-        val gap = Duration.between(at, now)
-        return when {
-            gap.isNegative || gap < Duration.ofMinutes(1) -> "刚刚"
-            gap < Duration.ofHours(1) -> "${gap.toMinutes()} 分钟前"
-            gap < Duration.ofDays(1) -> "${gap.toHours()} 小时前"
-            else -> DateTimeFormatter.ofPattern("M 月 d 日").withZone(zone).format(at)
-        }
-    }
+    fun ago(res: Resources, at: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String = agoText(res, at, now, zone)
+
+    /**
+     * Kept for callers without [Resources] (HubUpdateState): the system's words for it, in the phone's language rather
+     * than the app's. Pass [Resources] instead.
+     */
+    @Deprecated("Pass Resources", ReplaceWith("ago(res, at, now)"))
+    fun ago(at: Instant, now: Instant = Instant.now()): String =
+        DateUtils.getRelativeTimeSpanString(at.toEpochMilli(), now.toEpochMilli(), DateUtils.MINUTE_IN_MILLIS).toString()
 
     /** 最近's 在等 line: the answers and questions the channel waits on; null when it waits on nothing. */
-    fun waiting(d: ChannelDetail): String? = listOfNotNull(
-        d.waiting.answers.takeIf { it > 0 }?.let { "$it 个回答" },
-        d.waiting.asks.takeIf { it > 0 }?.let { "$it 个提问" },
+    fun waiting(res: Resources, d: ChannelDetail): String? = listOfNotNull(
+        d.waiting.answers.takeIf { it > 0 }?.let { res.getQuantityString(R.plurals.settings_src_channel_waiting_answers, it, it) },
+        d.waiting.asks.takeIf { it > 0 }?.let { res.getQuantityString(R.plurals.settings_src_channel_waiting_asks, it, it) },
     ).joinToString(" · ").ifEmpty { null }
 
-    /** How a failed change reads: the hub's words when it gave any. */
-    fun failure(error: Throwable, verb: String = "没有改成"): String = "$verb：${failureReason(error)}"
+    /** How a failed change reads: what did not happen ([verb]), then the hub's words when it gave any. */
+    fun failure(error: Throwable, @StringRes verb: Int = R.string.settings_src_channel_not_changed): ResText = ResText.of(verb, failureReason(error))
 
     private val ExtensionId = Regex("[A-Za-z0-9_-]{1,64}")
 }
 
-/** A section of the list: the apps, the installed ones, those a market has. */
-internal data class ChannelSection(val title: String, val footer: String, val channels: List<HubChannel>)
+/** A section of the list: the apps, the installed ones, those a market has; [id] stays the same in every language. */
+internal data class ChannelSection(val id: String, @StringRes val title: Int, @StringRes val footer: Int, val channels: List<HubChannel>)
 
 internal fun channelSections(list: List<HubChannel>): List<ChannelSection> = listOf(
-    ChannelSection("Persona", "在 Persona 的哪一端说都进同一段对话，提问和批准在卡片上原地作答。", list.filter { it.kind == "app" }),
-    ChannelSection("已接入", "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。",
+    ChannelSection("app", R.string.settings_src_channels_section_app, R.string.settings_src_channels_section_app_footer, list.filter { it.kind == "app" }),
+    ChannelSection("installed", R.string.settings_src_channels_section_installed, R.string.settings_src_channels_section_installed_footer,
         list.filter { it.kind != "app" && it.source != "market" }),
-    ChannelSection("可以安装", "扩展市场里提供渠道的扩展：装好后在这里绑定。", list.filter { it.source == "market" }),
+    ChannelSection("market", R.string.settings_src_channel_state_installable, R.string.settings_src_channels_section_market_footer,
+        list.filter { it.source == "market" }),
 ).filter { it.channels.isNotEmpty() }
 
-/** One choice of 「消息发到」. */
-internal data class TargetOption(val target: ChannelTarget, val label: String, val selected: Boolean)
+/** One choice of 「消息发到」; [label] null: the target's own words ([ChannelText.targetText]). */
+internal data class TargetOption(val target: ChannelTarget, val label: String?, val selected: Boolean)
 
 /**
  * 「消息发到」's choices: the main conversation, a new one, then the conversations this channel's messages went to
@@ -180,10 +189,10 @@ internal fun targetOptions(detail: ChannelDetail, assistant: List<Session>, limi
         .groupBy { it.first to it.second }.values.map { same -> same.first().copy(third = same.firstNotNullOfOrNull { it.third }) }
         .take(limit)
     return buildList {
-        add(TargetOption(ChannelTarget.Main, "主对话", current == null || current.kind == "main"))
-        add(TargetOption(ChannelTarget.New, "新对话（下一条消息开）", current?.kind == "new"))
+        add(TargetOption(ChannelTarget.Main, null, current == null || current.kind == "main"))
+        add(TargetOption(ChannelTarget.New, null, current?.kind == "new"))
         conversations.forEach { (machine, session, title) ->
-            add(TargetOption(ChannelTarget.conversation(machine, session), title ?: "一段对话", isCurrent(machine, session)))
+            add(TargetOption(ChannelTarget.conversation(machine, session), title, isCurrent(machine, session)))
         }
     }
 }
@@ -191,7 +200,7 @@ internal fun targetOptions(detail: ChannelDetail, assistant: List<Session>, limi
 internal data class ChannelListState(
     val channels: List<HubChannel>? = null,
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: ResText? = null,
 ) {
     val sections: List<ChannelSection> get() = channelSections(channels.orEmpty())
 }
@@ -208,7 +217,7 @@ internal class ChannelListModel(private val api: ChannelManagement) {
             val list = api.channels()
             mutable.update { it.copy(channels = list, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ChannelText.failure(error, "读取失败")) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ChannelText.failure(error, R.string.settings_src_read_failed)) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
@@ -222,7 +231,7 @@ internal data class BindState(
     val values: Map<String, String> = emptyMap(),
     val sending: Boolean = false,
     /** Why the last step did not go (the network, the hub); the hub's word on the values is the prompt's own error. */
-    val error: String? = null,
+    val error: ResText? = null,
 ) {
     val active: Boolean get() = prompt != null
     val polled: Boolean get() = prompt?.polled == true
@@ -241,7 +250,7 @@ internal data class ChannelState(
     val detail: ChannelDetail? = null,
     val loading: Boolean = false,
     val busy: ChannelBusy? = null,
-    val error: String? = null,
+    val error: ResText? = null,
     val bind: BindState = BindState(),
     /** Binding just finished, as whom (empty when the hub did not say): the page says so once. */
     val boundAs: String? = null,
@@ -262,7 +271,7 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
             val detail = api.channel(id)
             mutable.update { it.copy(detail = detail, error = null) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = ChannelText.failure(error, if (it.detail == null) "读取失败" else "没有刷新")) } }
+        catch (error: Exception) { mutable.update { it.copy(error = ChannelText.failure(error, if (it.detail == null) R.string.settings_src_read_failed else R.string.settings_src_channel_not_refreshed)) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -281,14 +290,14 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
     }
 
     /** A line to the bound owner: the caller says it went. */
-    suspend fun test(): Boolean = busy(ChannelBusy.Test, verb = "没有发出") { api.test(id) }
+    suspend fun test(): Boolean = busy(ChannelBusy.Test, verb = R.string.settings_src_channel_not_sent) { api.test(id) }
 
     private suspend fun change(what: ChannelBusy, change: ChannelChange): Boolean = busy(what) {
         val detail = api.update(id, change)
         mutable.update { it.copy(detail = detail, error = null) }
     }
 
-    private suspend fun busy(what: ChannelBusy, verb: String = "没有改成", block: suspend () -> Unit): Boolean {
+    private suspend fun busy(what: ChannelBusy, @StringRes verb: Int = R.string.settings_src_channel_not_changed, block: suspend () -> Unit): Boolean {
         if (state.value.busy != null) return false
         mutable.update { it.copy(busy = what, error = null) }
         return try { block(); true }
@@ -354,7 +363,7 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
             true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
-            if (!quiet) mutable.update { it.copy(bind = it.bind.copy(sending = false, error = ChannelText.failure(error, "没有绑定上"))) }
+            if (!quiet) mutable.update { it.copy(bind = it.bind.copy(sending = false, error = ChannelText.failure(error, R.string.settings_src_channel_not_bound))) }
             false
         }
     }

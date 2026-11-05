@@ -56,6 +56,12 @@ func (s *Service) ownSettings() []ownSetting {
 			Value: "true or false"},
 			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.mainTasksQuiet(ctx)), nil },
 			set: s.setMainTasksQuiet},
+		{Setting: Setting{Key: "assistant.start_requested_tasks", Title: "我在对话里说过的，直接开始", Actions: getSet,
+			About: "on (the default): task_plan tasks marked user_requested (the user asked for that very task in this turn) start at once " +
+				"instead of waiting for 开始 on the plan card; off: only read-only tasks and remembered kinds start without asking",
+			Value: "true or false"},
+			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.startRequestedTasks(ctx)), nil },
+			set: s.setStartRequestedTasks},
 		{Setting: Setting{Key: "assistant.launcher", Title: "Persona 的启动器", Actions: getSet,
 			About: "which launcher (model) new Persona conversations start with by default",
 			Value: "a launcher name from this setting's get"},
@@ -165,7 +171,7 @@ func orNone(s string) string {
 // settingTitles are the settings' titles for the card the user approves on, in this file's namespace (Title stays
 // what the assistant reads).
 var settingTitles = map[string]string{"assistant.notes": "title_notes", "assistant.main_tasks_quiet": "title_main_tasks_quiet",
-	"assistant.launcher": "title_launcher"}
+	"assistant.start_requested_tasks": "title_start_requested_tasks", "assistant.launcher": "title_launcher"}
 
 // clipped is a value as the card shows it, in l.
 func clipped(l i18n.Lang, s string) string {
@@ -222,6 +228,31 @@ func (s *Service) setMainTasksQuiet(ctx context.Context, v json.RawMessage) (*ow
 			}
 			s.settingsChanged(ctx)
 			return fmt.Sprintf("assistant.main_tasks_quiet is %v for tasks opened from now on (existing ones keep theirs).", on), nil
+		}}, nil
+}
+
+func (s *Service) setStartRequestedTasks(ctx context.Context, v json.RawMessage) (*ownChange, error) {
+	var on bool
+	if err := json.Unmarshal(v, &on); err != nil {
+		return nil, errors.New("value must be true or false")
+	}
+	before := s.startRequestedTasks(ctx)
+	if on == before {
+		return &ownChange{summary: "「我在对话里说过的，直接开始」没有变化"}, nil
+	}
+	if s.store() == nil {
+		return nil, errors.New("no database on this hub")
+	}
+	word := map[bool]string{true: "assistant-settings_tool.on", false: "assistant-settings_tool.off"}
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_start_requested_tasks", i18n.Args{"before": i18n.T(l, word[before]), "after": i18n.T(l, word[on])})
+	},
+		apply: func(ctx context.Context) (string, error) {
+			if _, err := s.updateSettings(ctx, func(v *Settings) error { v.StartRequestedTasks = &on; return nil }); err != nil {
+				return "", err
+			}
+			s.settingsChanged(ctx)
+			return fmt.Sprintf("assistant.start_requested_tasks is %v for plans from now on.", on), nil
 		}}, nil
 }
 

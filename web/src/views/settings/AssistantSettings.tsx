@@ -28,6 +28,8 @@ interface AssistantState {
   notes_effective?: string;
   /** 主对话派的任务只在主对话里通知 (#1731): on by default; tasks opened from now on follow it. */
   main_tasks_quiet?: boolean;
+  /** 我在对话里说过的，直接开始 (#2559): on by default; tasks the user asked for start without the plan card's 开始. */
+  start_requested_tasks?: boolean;
 }
 
 export function AssistantSettings({ bare }: { /** Without its header (the profile page has its own). */ bare?: boolean } = {}) {
@@ -40,6 +42,7 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
   const [memoryError, setMemoryError] = useState("");
   const [open, setOpen] = useState<{ file: MemoryFile; index?: boolean } | null>(null);
   const [quietBusy, setQuietBusy] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
 
   const setQuiet = async (on: boolean) => {
     setQuietBusy(true);
@@ -52,6 +55,20 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
       toast(t("settings-assistantsettings.save_failed", { error: errorText(e) }), "error");
     } finally {
       setQuietBusy(false);
+    }
+  };
+
+  const setStartRequested = async (on: boolean) => {
+    setStartBusy(true);
+    setInfo((i) => (i ? { ...i, start_requested_tasks: on } : i));
+    try {
+      const r = await api<AssistantState>("/assistant", { method: "PUT", json: { start_requested_tasks: on } });
+      setInfo((i) => (i ? { ...i, start_requested_tasks: r.start_requested_tasks ?? on } : i));
+    } catch (e) {
+      setInfo((i) => (i ? { ...i, start_requested_tasks: !on } : i));
+      toast(t("settings-assistantsettings.save_failed", { error: errorText(e) }), "error");
+    } finally {
+      setStartBusy(false);
     }
   };
 
@@ -113,6 +130,12 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
       <Group title={t("settings-assistantsettings.notifications_title")} footer={t("settings-assistantsettings.notifications_footer")}>
         <Row label={t("settings-assistantsettings.quiet_tasks")}>
           <Switch on={info?.main_tasks_quiet ?? true} onChange={(on) => void setQuiet(on)} disabled={!info || quietBusy} label={t("settings-assistantsettings.quiet_tasks")} />
+        </Row>
+      </Group>
+
+      <Group title={t("settings-assistantsettings.start_title")} footer={t("settings-assistantsettings.start_footer")}>
+        <Row label={t("settings-assistantsettings.start_requested")}>
+          <Switch on={info?.start_requested_tasks ?? true} onChange={(on) => void setStartRequested(on)} disabled={!info || startBusy} label={t("settings-assistantsettings.start_requested")} />
         </Row>
       </Group>
 

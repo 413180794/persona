@@ -32,7 +32,7 @@ internal data class ClaudeSettingsState(
     val applyAll: Boolean = true,
     val settings: List<ClaudeSetting> = emptyList(),
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: ResText? = null,
 )
 
 /** First visit: the hub's own machine; a remembered one that went offline falls back to the first online machine. */
@@ -71,7 +71,7 @@ internal class ClaudeSettingsModel(private val api: MachineManagement, private v
             val settings = api.claudeSettings(machine)
             mutable.update { if (it.machineId == machine) it.copy(settings = settings, error = it.error.takeIf { keepError }) else it }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { if (it.machineId == machine) it.copy(error = "读不到设置：${failureReason(error)}") else it } }
+        catch (error: Exception) { mutable.update { if (it.machineId == machine) it.copy(error = ResText.of(R.string.settings_src_claude_read_failed, failureReason(error))) else it } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 
@@ -79,23 +79,23 @@ internal class ClaudeSettingsModel(private val api: MachineManagement, private v
      * Writes [key] (JsonNull: back to the default) to this machine, or to every [online] machine; the control moves
      * at once and the hub's answer (or a reload after a failure) corrects it. Returns the notice to show when it worked.
      */
-    suspend fun set(key: String, value: JsonElement, online: List<Machine>): String? {
+    suspend fun set(key: String, value: JsonElement, online: List<Machine>): ResText? {
         val current = state.value
         val targets = if (current.applyAll) online.map { it.id }.ifEmpty { listOf(current.machineId) } else listOf(current.machineId)
         mutable.update { s -> s.copy(settings = s.settings.map { if (it.key == key) it.copy(value = value) else it }) }
-        val failed = mutableListOf<String>()
+        val failed = mutableListOf<ResText>()
         for (id in targets) {
             try {
                 val list = api.setClaudeSetting(id, key, value)
                 if (id == state.value.machineId) mutable.update { it.copy(settings = list) }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { failed += "${online.firstOrNull { it.id == id }?.displayName ?: id}：${failureReason(error)}" }
+            catch (error: Exception) { failed += ResText.of(R.string.settings_src_name_reason, online.firstOrNull { it.id == id }?.displayName ?: id, failureReason(error)) }
         }
         if (failed.isEmpty()) {
             mutable.update { it.copy(error = null) }
-            return if (targets.size > 1) "已应用到 ${targets.size} 台机器" else "已保存"
+            return if (targets.size > 1) ResText.plural(R.plurals.settings_src_claude_applied, targets.size, targets.size) else ResText.of(R.string.settings_src_saved)
         }
-        mutable.update { it.copy(error = "没有全部保存：\n" + failed.joinToString("\n")) }
+        mutable.update { it.copy(error = ResText.of(R.string.settings_src_claude_not_all_saved, failed.toList())) }
         load(keepError = true)
         return null
     }

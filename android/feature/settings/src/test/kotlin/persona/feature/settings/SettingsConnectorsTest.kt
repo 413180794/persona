@@ -1,5 +1,11 @@
 package persona.feature.settings
 
+import android.content.Context
+import android.content.res.Resources
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -7,7 +13,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import persona.core.contracts.api.*
 
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class SettingsConnectorsTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     @Test
     fun stubConnectorsReturnsData() = runBlocking {
         val stub = object : ConnectorsApiStub() {
@@ -27,16 +38,16 @@ class SettingsConnectorsTest {
         val connectors = stub.connectors(all = true)
         assertEquals(1, connectors.size)
         assertEquals("GitHub", connectors[0].name)
-        assertEquals("已连接", ConnectorText.state(connectors[0]))
-        assertEquals("testuser", ConnectorText.summary(connectors[0]))
+        assertEquals("已连接", ConnectorText.state(res, connectors[0]))
+        assertEquals("testuser", ConnectorText.summary(res, connectors[0]))
 
         val accounts = stub.mailAccounts()
         assertEquals(1, accounts.size)
-        assertEquals("1 个账户", ConnectorText.mail(accounts))
+        assertEquals("1 个账户", ConnectorText.mail(res, accounts))
 
         val lark = stub.larkStatus()
         assertTrue(lark.connected)
-        assertEquals("测试用户", ConnectorText.lark(lark))
+        assertEquals("测试用户", ConnectorText.lark(res, lark))
 
         val larkAccounts = stub.larkAccounts()
         assertNotNull(larkAccounts)

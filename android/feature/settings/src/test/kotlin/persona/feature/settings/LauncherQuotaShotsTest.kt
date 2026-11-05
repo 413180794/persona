@@ -65,7 +65,7 @@ class LauncherQuotaShotsTest {
     private val others = listOf(
         LauncherQuotaState(loading = true),
         LauncherQuotaState(LauncherQuotaAnswer(machine = "mac", error = "这个网关没有能查的额度：没有装能读它的额度扩展", unsupported = true)),
-        LauncherQuotaState(failed = "读不到额度：网关超时"),
+        LauncherQuotaState(failed = ResText.of(R.string.settings_src_quota_read_failed, "网关超时")),
         LauncherQuotaState(LauncherQuotaAnswer(machine = "mac", quota = LauncherQuota("example-relay", gatewayName = "示例中转",
             usage = listOf(QuotaUsage("今日", 3, 1200))))),
     )

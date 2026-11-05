@@ -7,8 +7,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import persona.core.contracts.api.ClaudeSetting
@@ -25,10 +27,11 @@ import kotlinx.serialization.json.JsonPrimitive
 @Composable
 internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: MachineManagement?, onBack: () -> Unit) {
     if (management == null) {
-        JListPage(title = "Claude Code 设置", onBack = onBack) { item { JNotice("体验模式没有电脑上的 Claude Code 设置。") } }
+        JListPage(title = stringResource(R.string.settings_src_claude_title), onBack = onBack) { item { JNotice(stringResource(R.string.settings_src_claude_demo)) } }
         return
     }
     val context = LocalContext.current
+    val res = LocalResources.current
     val model = remember(management) { ClaudeSettingsModel(management, StoredClaudeSettingsChoices(context)) }
     val state by model.state.collectAsState()
     val machines by sessions.machines.collectAsState()
@@ -41,29 +44,29 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     LaunchedEffect(online.map { it.id }) { model.follow(online) }
     LaunchedEffect(state.machineId) { drafts.clear(); model.load() }
     fun set(key: String, value: JsonElement) {
-        scope.launch { model.set(key, value, online)?.let { feedback?.notice(it) } }
+        scope.launch { model.set(key, value, online)?.let { feedback?.notice(it.resolve(res)) } }
     }
-    JListPage(title = "Claude Code 设置", onBack = onBack, actions = {
-        JIconButton(PhIcons.ArrowClockwise, "刷新", { scope.launch { model.load() } }, enabled = !state.loading && state.machineId.isNotBlank())
+    JListPage(title = stringResource(R.string.settings_src_claude_title), onBack = onBack, actions = {
+        JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.settings_src_refresh), { scope.launch { model.load() } }, enabled = !state.loading && state.machineId.isNotBlank())
     }) {
         item("target") {
             JGroupItem(GroupPosition.of(0, 2), Modifier.padding(top = Tokens.Space.s)) {
-                JRow("机器", leadingIcon = PhIcons.Laptop, value = machines.firstOrNull { it.id == state.machineId }?.displayName
-                    ?: if (online.isEmpty()) "没有在线的机器" else null, enabled = online.isNotEmpty(), onClick = { picking = true })
+                JRow(stringResource(R.string.settings_src_claude_machine), leadingIcon = PhIcons.Laptop, value = machines.firstOrNull { it.id == state.machineId }?.displayName
+                    ?: if (online.isEmpty()) stringResource(R.string.settings_src_claude_no_online) else null, enabled = online.isNotEmpty(), onClick = { picking = true })
             }
         }
         item("apply-all") {
             JGroupItem(GroupPosition.of(1, 2)) {
-                JSwitchRow("同时改所有在线机器", state.applyAll, model::applyAll, leadingIcon = PhIcons.Stack)
+                JSwitchRow(stringResource(R.string.settings_src_claude_apply_all), state.applyAll, model::applyAll, leadingIcon = PhIcons.Stack)
             }
         }
         item("target-note") {
-            SettingsCaption("改的是那台机器的 ~/.claude/settings.json，只动下面这几项；新开的 Claude 会话生效，正在跑的会话一般要重启才生效。",
+            SettingsCaption(stringResource(R.string.settings_src_claude_caption),
                 Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
         }
-        state.error?.let { error -> item("error") { JInlineStatus(error, Modifier.padding(vertical = Tokens.Space.s), tone = InlineTone.Failed) } }
+        state.error?.let { error -> item("error") { JInlineStatus(error.text(), Modifier.padding(vertical = Tokens.Space.s), tone = InlineTone.Failed) } }
         when {
-            online.isEmpty() -> item("none") { JEmptyState("没有在线的机器", "机器连上 hub 后再来改。", icon = PhIcons.Laptop) }
+            online.isEmpty() -> item("none") { JEmptyState(stringResource(R.string.settings_src_claude_no_online), stringResource(R.string.settings_src_claude_no_online_hint), icon = PhIcons.Laptop) }
             state.settings.isEmpty() && state.loading -> item("loading") { JLoading() }
         }
         itemsIndexed(state.settings, key = { _, it -> "setting-${it.key}" }) { index, setting ->
@@ -93,7 +96,7 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     }
     if (picking) JActionSheet(online.map { machine ->
         JAction(machine.displayName, PhIcons.Laptop, checked = machine.id == state.machineId, onClick = { model.choose(machine.id) })
-    }, { picking = false }, title = "选一台在线的机器")
+    }, { picking = false }, title = stringResource(R.string.settings_src_claude_pick_machine))
     choosing?.let { setting ->
         JActionSheet(setting.options.orEmpty().map { option ->
             JAction(option, checked = option == setting.stringValue, onClick = { if (option != setting.stringValue) set(setting.key, JsonPrimitive(option)) })
@@ -108,7 +111,7 @@ private fun SettingTitle(setting: ClaudeSetting) {
         Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
             Text(setting.title.ifBlank { setting.key }, Modifier.weight(1f, fill = false), style = PersonaTheme.type.body,
                 color = PersonaTheme.palette.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (setting.isDefault) JTag("默认")
+            if (setting.isDefault) JTag(stringResource(R.string.settings_src_default))
         }
         if (setting.detail.isNotBlank()) Text(setting.detail, style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2)
     }

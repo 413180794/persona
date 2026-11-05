@@ -1,5 +1,11 @@
 package persona.feature.settings
 
+import android.content.Context
+import android.content.res.Resources
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.api.*
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
@@ -16,7 +22,12 @@ private class FakeProviders(var presets: List<ProviderPreset> = emptyList()) : P
 }
 
 /** 新增模型供应商 (docs/launchers.md「从扩展添加」): what is sent from each form, the name check, a refusal, older hubs. */
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class NewProviderStateTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     private val team = ProviderPreset("example-gateway/team", "example-gateway", "示例网关 · 团队", description = "团队共用",
         baseUrl = "https://gateway.example.com", model = "example-pro", models = listOf(PresetModel("example-mini", "Example Mini")), keyHint = "以 eg- 开头")
     private val api = ProviderPreset("example-gateway/api", "example-gateway", "示例 API", kind = "api", api = "responses",
@@ -30,8 +41,8 @@ class NewProviderStateTest {
         assertTrue(state.loaded && state.usesPreset)
         assertEquals("example-gateway/team", state.selected?.id)
         assertEquals("example-pro", state.draft.presetModel)
-        assertEquals("Claude Code 启动器 · gateway.example.com", presetSubtitle(team))
-        assertEquals("直接 API · api.example.com", presetSubtitle(api))
+        assertEquals("Claude Code 启动器 · gateway.example.com", presetSubtitle(res, team))
+        assertEquals("直接 API · api.example.com", presetSubtitle(res, api))
         assertFalse(state.canSave)
 
         model.edit(state.draft.copy(name = "9team", apiKey = " eg-secret "))
@@ -77,7 +88,7 @@ class NewProviderStateTest {
         assertNull(providerNameProblem("jv_team-2"))
         assertNotNull(providerNameProblem("9x"))
         assertNotNull(providerNameProblem("a b"))
-        assertEquals("不能叫 claude", providerNameProblem("claude"))
+        assertEquals("不能叫 claude", providerNameProblem("claude")?.resolve(res))
     }
 
     @Test fun aRefusalStaysOnThePageAndPresetsFailingLeaveTypingIn() = runBlocking {
@@ -94,7 +105,7 @@ class NewProviderStateTest {
         assertNull(model.save())
         val state = model.state.value
         assertFalse(state.busy)
-        assertTrue(state.error.orEmpty().contains("没有这个供应商预设"))
+        assertTrue(state.error?.resolve(res).orEmpty().contains("没有这个供应商预设"))
         assertEquals("jv_team", state.draft.name)
     }
 

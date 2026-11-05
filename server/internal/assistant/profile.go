@@ -50,6 +50,9 @@ type Settings struct {
 	// MainTasksQuiet: tasks the main conversation opens are told only there, not pushed, on the Live Activity or in
 	// task badges (#1731). nil is on (the default); the view always says what is in effect.
 	MainTasksQuiet *bool `json:"main_tasks_quiet,omitempty"`
+	// StartRequestedTasks: a task_plan task the user asked for in so many words starts without the card's 开始
+	// (#2559). nil is on (the default).
+	StartRequestedTasks *bool `json:"start_requested_tasks,omitempty"`
 }
 
 // FormerMain is a main conversation that was replaced, and until when it was the main one.
@@ -161,6 +164,12 @@ func (s *Service) mainTasksQuiet(ctx context.Context) bool {
 	return quietOn(s.settings(ctx).MainTasksQuiet)
 }
 
+// startRequestedTasks: task_plan starts the tasks the user asked for without waiting for 开始 (start_requested_tasks,
+// on by default).
+func (s *Service) startRequestedTasks(ctx context.Context) bool {
+	return quietOn(s.settings(ctx).StartRequestedTasks)
+}
+
 // launcherNow is the launcher new conversations start with: 模型配置 › 主对话's, else the assistant's own.
 func (s *Service) launcherNow(ctx context.Context) string {
 	if rec, err := s.modelRecord(ctx, "assistant"); err == nil && rec.Binding.Provider != "" {
@@ -246,13 +255,16 @@ type assistantView struct {
 	Conversations  []proto.Session `json:"conversations"`
 	NotesEffective string          `json:"notes_effective"`  // what the assistant is told about the user
 	MainTasksQuiet bool            `json:"main_tasks_quiet"` // in effect (the setting's own is left out while unset)
+	// StartRequestedTasks is in effect, like MainTasksQuiet.
+	StartRequestedTasks bool `json:"start_requested_tasks"`
 }
 
 // view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`).
 func (s *Service) view(ctx context.Context, withArchived bool) assistantView {
 	v := s.settings(ctx)
 	v.Launcher = s.launcherNow(ctx)
-	out := assistantView{Settings: v, Conversations: []proto.Session{}, NotesEffective: s.notes(ctx), MainTasksQuiet: quietOn(v.MainTasksQuiet)}
+	out := assistantView{Settings: v, Conversations: []proto.Session{}, NotesEffective: s.notes(ctx), MainTasksQuiet: quietOn(v.MainTasksQuiet),
+		StartRequestedTasks: quietOn(v.StartRequestedTasks)}
 	if d, ok := s.device(ctx, v.MachineID); ok {
 		out.Cwd = assistantCwd(d)
 		list, _ := s.sessions(ctx, d.ID)
@@ -375,6 +387,9 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.MainTasksQuiet != nil {
 			v.MainTasksQuiet = in.MainTasksQuiet
+		}
+		if in.StartRequestedTasks != nil {
+			v.StartRequestedTasks = in.StartRequestedTasks
 		}
 		return nil
 	}); err != nil {

@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import android.content.res.Resources
 import persona.core.contracts.api.*
 import persona.core.designsystem.failureReason
 import kotlinx.coroutines.CancellationException
@@ -8,29 +9,38 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /** The purposes grouped by their hub group (empty: 其他), in the hub's order, matching [query] by name, group, id or model. */
-internal fun modelPurposeGroups(purposes: List<ModelPurpose>, providers: List<ModelProvider>, query: String): List<Pair<String, List<ModelPurpose>>> {
+internal fun modelPurposeGroups(res: Resources, purposes: List<ModelPurpose>, providers: List<ModelProvider>, query: String): List<Pair<String, List<ModelPurpose>>> {
     val q = query.trim()
     return purposes.filter { purpose ->
-        q.isEmpty() || (listOf(purpose.name, purpose.group, purpose.id) + purpose.summaryParts(providers)).any { it.contains(q, ignoreCase = true) }
-    }.groupBy { it.group.ifBlank { "其他" } }.toList()
+        q.isEmpty() || (listOf(purpose.name, purpose.group, purpose.id) + summaryWords(res, purpose, providers)).any { it.contains(q, ignoreCase = true) }
+    }.groupBy { it.group.ifBlank { res.getString(R.string.settings_src_model_group_other) } }.toList()
 }
 
+/** What is in effect, piece by piece (`ModelPurpose.summaryParts` in words of [res]): the provider's name, the model, the effort. */
+internal fun summaryWords(res: Resources, purpose: ModelPurpose, providers: List<ModelProvider>): List<String> = listOfNotNull(
+    purpose.effective.provider?.takeIf { it.isNotBlank() }?.let { id -> providers.firstOrNull { it.id == id }?.displayName ?: id },
+    purpose.effective.model?.takeIf { it.isNotBlank() },
+    purpose.effective.effort?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_src_model_effort_summary, it) },
+)
+
 /** A purpose's row: what is in effect, then the hub's status or where it inherits from. */
-internal fun purposeSubtitle(purpose: ModelPurpose, catalog: ModelCatalog): String = listOfNotNull(
-    purpose.summaryParts(catalog.providers).joinToString("，").ifEmpty { "未配置" },
+internal fun purposeSubtitle(res: Resources, purpose: ModelPurpose, catalog: ModelCatalog): String = listOfNotNull(
+    summaryWords(res, purpose, catalog.providers).joinToString(res.getString(R.string.settings_src_model_summary_separator))
+        .ifEmpty { res.getString(R.string.settings_src_state_not_configured) },
     purpose.status?.takeIf { it.isNotBlank() } ?: purpose.inheritedFrom?.takeIf { it.isNotBlank() }?.let { from ->
-        "跟随 " + (catalog.purposes.firstOrNull { it.id == from }?.displayName ?: from)
+        res.getString(R.string.settings_src_model_follows, catalog.purposes.firstOrNull { it.id == from }?.displayName ?: from)
     },
 ).joinToString("\n")
 
 internal data class ProviderOption(val id: String, val label: String)
 
 /** 跟随默认, then the providers the purpose can use (hidden ones marked), and a reference the hub no longer offers. */
-internal fun providerOptions(purpose: ModelPurpose, providers: List<ModelProvider>, chosen: String): List<ProviderOption> {
+internal fun providerOptions(res: Resources, purpose: ModelPurpose, providers: List<ModelProvider>, chosen: String): List<ProviderOption> {
     val candidates = purpose.providersFrom(providers)
-    return listOf(ProviderOption("", "跟随默认")) +
-        candidates.map { ProviderOption(it.id, it.displayName + if (it.hidden) "（已隐藏）" else "") } +
-        listOfNotNull(ProviderOption(chosen, "$chosen（当前引用不可用）").takeIf { chosen.isNotEmpty() && candidates.none { it.id == chosen } })
+    return listOf(ProviderOption("", res.getString(R.string.settings_src_model_follow_default))) +
+        candidates.map { ProviderOption(it.id, if (it.hidden) res.getString(R.string.settings_src_model_provider_hidden, it.displayName) else it.displayName) } +
+        listOfNotNull(ProviderOption(chosen, res.getString(R.string.settings_src_model_provider_unavailable, chosen))
+            .takeIf { chosen.isNotEmpty() && candidates.none { it.id == chosen } })
 }
 
 /** Effort is a field of launchers and of Responses APIs; a Messages API provider has none to set. */
@@ -40,7 +50,7 @@ internal fun showsEffort(purpose: ModelPurpose, provider: ModelProvider?): Boole
 internal data class ModelCatalogState(
     val catalog: ModelCatalog? = null,
     val loading: Boolean = false,
-    val error: String? = null,
+    val error: ResText? = null,
     val unsupported: Boolean = false,
 )
 
@@ -56,7 +66,7 @@ internal class ModelCatalogModel(private val api: ModelConfiguration) {
             mutable.update { it.copy(catalog = catalog, error = null, unsupported = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: ModelConfigurationUnsupported) { mutable.update { it.copy(unsupported = true, error = null) } }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(loading = false) } }
     }
 }
@@ -74,7 +84,7 @@ internal data class ModelPurposeState(
     val detail: ModelPurposeDetail? = null,
     val draft: ModelConfigurationDraft = ModelConfigurationDraft(),
     val busy: Boolean = false,
-    val error: String? = null,
+    val error: ResText? = null,
     /** Another device saved first: saving stays off until the page is reloaded (which drops the edit). */
     val conflict: Boolean = false,
     val models: ProviderModelsState = ProviderModelsState(),
@@ -113,7 +123,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
             val detail = api.purpose(id)
             mutable.update { it.copy(detail = detail, draft = ModelConfigurationDraft.from(detail.purpose), conflict = false) }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(busy = false) } }
     }
 
@@ -133,7 +143,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
                 s.copy(detail = detail, draft = if (usable) s.draft.choosingProvider(providerId) else s.draft)
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "读取失败：${failureReason(error)}") } }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_read_failed, failureReason(error))) } }
         finally { mutable.update { it.copy(busy = false) } }
     }
 
@@ -154,7 +164,7 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
     }
 
     /** The notice to show when the hub took it ([restore]: every override of this purpose cleared); null otherwise. */
-    suspend fun save(restore: Boolean = false): String? {
+    suspend fun save(restore: Boolean = false): ResText? {
         val current = state.value
         val purpose = current.purpose ?: return null
         if (current.busy || current.conflict) return null
@@ -163,15 +173,15 @@ internal class ModelPurposeModel(private val api: ModelConfiguration, private va
             when (val result = api.save(purpose, if (restore) ModelConfigurationDraft() else current.draft)) {
                 is ModelPurposeSave.Saved -> {
                     mutable.update { it.copy(detail = result.detail, draft = ModelConfigurationDraft.from(result.detail.purpose)) }
-                    if (restore) "已恢复继承" else "已保存，下一次运行生效"
+                    ResText.of(if (restore) R.string.settings_src_model_restored else R.string.settings_src_model_saved)
                 }
                 ModelPurposeSave.Conflict -> {
-                    mutable.update { it.copy(conflict = true, error = "配置已在别处修改。你的编辑已保留；重新加载后再修改并保存。") }
+                    mutable.update { it.copy(conflict = true, error = ResText.of(R.string.settings_src_model_conflict)) }
                     null
                 }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "未保存：${failureReason(error)}") }; null }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReason(error))) }; null }
         finally { mutable.update { it.copy(busy = false) } }
     }
 }

@@ -1,5 +1,11 @@
 package persona.feature.settings
 
+import android.content.Context
+import android.content.res.Resources
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.JsonCodec
 import persona.core.contracts.api.AddMailAccountRequest
 import persona.core.contracts.api.HubConnector
@@ -11,7 +17,12 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class MailAccountFormTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     @Test fun imapRequestOnlyCarriesTypedServers() {
         val f = MailAccountForm(MailAccountForm.Kind.IMAP, "me@example.com", "pw", "", "993", "smtp.example.com", "587")
         val r = f.request()
@@ -57,31 +68,31 @@ class MailAccountFormTest {
     }
 
     @Test fun connectorText() {
-        assertEquals("", ConnectorText.mail(null))
-        assertEquals("未添加", ConnectorText.mail(emptyList()))
+        assertEquals("", ConnectorText.mail(res, null))
+        assertEquals("未添加", ConnectorText.mail(res, emptyList()))
         val ok = MailAccount(id = "a", email = "me@example.com", status = "ok")
-        assertEquals("2 个账户", ConnectorText.mail(listOf(ok, ok.copy(id = "b"))))
-        assertEquals("2 个 · 有错误", ConnectorText.mail(listOf(ok, ok.copy(id = "b", status = "error"))))
-        assertEquals("", ConnectorText.lark(null))
-        assertEquals("未配置", ConnectorText.lark(LarkStatus(configured = false)))
-        assertEquals("连不上", ConnectorText.lark(LarkStatus(configured = true, connected = false)))
-        assertEquals("已连接", ConnectorText.lark(LarkStatus(configured = true, connected = true)))
-        assertEquals("我", ConnectorText.lark(LarkStatus(configured = true, connected = true, name = "我")))
-        assertEquals("未打开", ConnectorText.device(0))
-        assertEquals("3 项已打开", ConnectorText.device(3))
+        assertEquals("2 个账户", ConnectorText.mail(res, listOf(ok, ok.copy(id = "b"))))
+        assertEquals("2 个 · 有错误", ConnectorText.mail(res, listOf(ok, ok.copy(id = "b", status = "error"))))
+        assertEquals("", ConnectorText.lark(res, null))
+        assertEquals("未配置", ConnectorText.lark(res, LarkStatus(configured = false)))
+        assertEquals("连不上", ConnectorText.lark(res, LarkStatus(configured = true, connected = false)))
+        assertEquals("已连接", ConnectorText.lark(res, LarkStatus(configured = true, connected = true)))
+        assertEquals("我", ConnectorText.lark(res, LarkStatus(configured = true, connected = true, name = "我")))
+        assertEquals("未打开", ConnectorText.device(res, 0))
+        assertEquals("3 项已打开", ConnectorText.device(res, 3))
         val st = JsonCodec.decodeFromString(LarkStatus.serializer(), """{"configured":true,"connected":true,"name":"我","last_event_at":1700000000}""")
         assertEquals(1700000000L, st.lastEventAt)
     }
 
     @Test fun hubConnectorText() {
         val github = HubConnector(id = "github", name = "GitHub", status = "ok", account = "myname")
-        assertEquals("已连接", ConnectorText.state(github))
-        assertEquals("myname", ConnectorText.summary(github))
+        assertEquals("已连接", ConnectorText.state(res, github))
+        assertEquals("myname", ConnectorText.summary(res, github))
         val broken = github.copy(status = "error", error = "token expired")
-        assertEquals("出错了", ConnectorText.state(broken))
-        assertEquals("出错了", ConnectorText.summary(broken))
+        assertEquals("出错了", ConnectorText.state(res, broken))
+        assertEquals("出错了", ConnectorText.summary(res, broken))
         val unconfigured = github.copy(status = "not_configured")
-        assertEquals("未配置", ConnectorText.state(unconfigured))
-        assertEquals("未配置", ConnectorText.summary(unconfigured))
+        assertEquals("未配置", ConnectorText.state(res, unconfigured))
+        assertEquals("未配置", ConnectorText.summary(res, unconfigured))
     }
 }

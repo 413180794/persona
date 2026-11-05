@@ -1,5 +1,6 @@
 package persona.feature.settings
 
+import android.content.res.Resources
 import persona.core.contracts.api.NewProvider
 import persona.core.contracts.api.ProviderPreset
 import persona.core.contracts.api.ProviderSetup
@@ -36,11 +37,11 @@ internal data class NewProviderState(
     val loaded: Boolean = false,
     val draft: NewProviderDraft = NewProviderDraft(),
     val busy: Boolean = false,
-    val error: String? = null,
+    val error: ResText? = null,
 ) {
     val usesPreset: Boolean get() = draft.fromPreset && selected != null
     val selected: ProviderPreset? get() = presets.firstOrNull { it.id == draft.preset }
-    val nameProblem: String? get() = providerNameProblem(draft.name)
+    val nameProblem: ResText? get() = providerNameProblem(draft.name)
 
     /** What is sent; null while something required is missing. */
     val request: NewProvider? get() {
@@ -65,21 +66,21 @@ internal data class NewProviderState(
 }
 
 /** What is wrong with a provider's name, the way the hub would put it; null while empty or fine. */
-internal fun providerNameProblem(name: String): String? {
+internal fun providerNameProblem(name: String): ResText? {
     val n = name.trim()
     return when {
         n.isEmpty() -> null
-        !Regex("^[A-Za-z_][A-Za-z0-9_-]*$").matches(n) -> "名字只能用字母、数字、_ 和 -，以字母或 _ 开头"
-        n == "claude" || n == "presets" -> "不能叫 $n"
+        !Regex("^[A-Za-z_][A-Za-z0-9_-]*$").matches(n) -> ResText.of(R.string.settings_src_provider_name_invalid)
+        n == "claude" || n == "presets" -> ResText.of(R.string.settings_src_provider_name_reserved, n)
         else -> null
     }
 }
 
 /** "直接 API · api.example.com", "Claude Code 启动器 · gateway.example.com". */
-internal fun presetSubtitle(preset: ProviderPreset): String {
-    val kind = if (preset.kind == "api") "直接 API" else "Claude Code 启动器"
+internal fun presetSubtitle(res: Resources, preset: ProviderPreset): String {
+    val kind = res.getString(if (preset.kind == "api") R.string.settings_src_provider_kind_api else R.string.settings_src_provider_kind_launcher)
     val host = runCatching { java.net.URI(preset.baseUrl).host }.getOrNull()
-    return if (host.isNullOrBlank()) kind else "$kind · $host"
+    return if (host.isNullOrBlank()) kind else res.getString(R.string.settings_src_provider_kind_host, kind, host)
 }
 
 /** 模型配置's id of a provider added under [name]. */
@@ -122,7 +123,7 @@ internal class NewProviderModel(private val api: ProviderSetup) {
             api.add(request)
             providerId(request.name)
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (error: Exception) { mutable.update { it.copy(error = "未保存：${failureReason(error)}") }; null }
+        catch (error: Exception) { mutable.update { it.copy(error = ResText.of(R.string.settings_src_not_saved, failureReason(error))) }; null }
         finally { mutable.update { it.copy(busy = false) } }
     }
 }

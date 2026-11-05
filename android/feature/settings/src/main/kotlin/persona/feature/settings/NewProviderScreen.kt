@@ -6,6 +6,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import android.content.res.Resources
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import persona.core.contracts.api.ProviderSetup
@@ -32,39 +35,41 @@ internal fun NewProviderPage(providers: ProviderSetup, onBack: () -> Unit, onSav
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
     val feedback = LocalAppFeedback.current
+    val res = LocalResources.current
     var choosingModel by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load(preferPreset) }
     BackHandler(onBack = onBack)
     val draft = state.draft
     val editable = !state.busy
-    JListPage(title = "新增模型供应商", onBack = onBack, largeTitle = false, bottomBar = {
+    JListPage(title = stringResource(R.string.settings_src_provider_new), onBack = onBack, largeTitle = false, bottomBar = {
         Row(Modifier.fillMaxWidth().padding(horizontal = pagePadding, vertical = Tokens.Space.s)) {
-            JButton("保存", { scope.launch { model.save()?.let { id -> feedback?.notice("已新增 ${draft.name.trim()}"); onSaved(id) } } },
+            JButton(stringResource(R.string.settings_src_save), { scope.launch { model.save()?.let { id -> feedback?.notice(res.getString(R.string.settings_src_provider_added, draft.name.trim())); onSaved(id) } } },
                 Modifier.fillMaxWidth(), loading = state.busy, enabled = state.canSave)
         }
     }) {
         if (!state.loaded) item("loading") { JLoading() }
         if (state.presets.isNotEmpty()) item("source") {
-            JSegmented(listOf(JSegment("自己填写"), JSegment("从扩展添加")), if (draft.fromPreset) 1 else 0,
+            JSegmented(listOf(JSegment(stringResource(R.string.settings_src_provider_manual)), JSegment(stringResource(R.string.settings_src_provider_from_extension))), if (draft.fromPreset) 1 else 0,
                 { model.edit(draft.copy(fromPreset = it == 1)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.s))
         }
         if (state.loaded) {
-            if (state.usesPreset) presetForm(state, editable, model::edit, model::pick, onModel = { choosingModel = true })
+            if (state.usesPreset) presetForm(res, state, editable, model::edit, model::pick, onModel = { choosingModel = true })
             else manualForm(state, editable, model::edit)
         }
-        state.error?.let { error -> item("error") { JInlineStatus(error, Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
+        state.error?.let { error -> item("error") { JInlineStatus(error.text(), Modifier.padding(top = Tokens.Space.m), tone = InlineTone.Failed) } }
     }
     val preset = state.selected
     if (choosingModel && preset != null) JActionSheet(preset.choices.map { choice ->
         JAction(choice.label, checked = choice.id == draft.presetModel, onClick = { model.edit(draft.copy(presetModel = choice.id)) })
-    }, { choosingModel = false }, title = "默认模型", note = preset.modelsError?.let { "读不到扩展的模型列表（$it），这里是它声明的。" })
+    }, { choosingModel = false }, title = stringResource(R.string.settings_src_provider_default_model),
+        note = preset.modelsError?.let { stringResource(R.string.settings_src_provider_models_error, it) })
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.nameField(state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, example: String) {
     item("name") {
-        JTextField(state.draft.name, { onEdit(state.draft.copy(name = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "名字",
-            placeholder = "比如 $example", singleLine = true, enabled = editable, isError = state.nameProblem != null,
-            supportingText = state.nameProblem ?: "字母、数字、_ 和 -；按这个名字选择供应商。")
+        JTextField(state.draft.name, { onEdit(state.draft.copy(name = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.settings_src_provider_name),
+            placeholder = stringResource(R.string.settings_src_provider_name_example, example), singleLine = true, enabled = editable, isError = state.nameProblem != null,
+            supportingText = state.nameProblem?.text() ?: stringResource(R.string.settings_src_provider_name_hint))
     }
 }
 
@@ -73,25 +78,25 @@ private fun androidx.compose.foundation.lazy.LazyListScope.keyField(state: NewPr
         JTextField(state.draft.apiKey, { onEdit(state.draft.copy(apiKey = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "API Key",
             singleLine = true, enabled = editable, visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            supportingText = listOfNotNull(hint, "Key 加密存在 hub，不会返回到客户端。").joinToString("\n"))
+            supportingText = listOfNotNull(hint, stringResource(R.string.settings_src_provider_key_hint)).joinToString("\n"))
     }
 }
 
 /** 从扩展添加: the presets to pick from, the name, the key and the model. */
 private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
-    state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, onPick: (String) -> Unit, onModel: () -> Unit,
+    res: Resources, state: NewProviderState, editable: Boolean, onEdit: (NewProviderDraft) -> Unit, onPick: (String) -> Unit, onModel: () -> Unit,
 ) {
     val preset = state.selected ?: return
-    item("presets-title") { JSectionHeader("供应商") }
+    item("presets-title") { JSectionHeader(stringResource(R.string.settings_src_provider_presets)) }
     itemsIndexed(state.presets, key = { _, it -> "preset-${it.id}" }) { index, p ->
         JGroupItem(GroupPosition.of(index, state.presets.size)) {
-            JRow(p.name.ifBlank { p.id }, subtitle = listOfNotNull(p.description?.takeIf { it.isNotBlank() }, presetSubtitle(p)).joinToString("\n"),
+            JRow(p.name.ifBlank { p.id }, subtitle = listOfNotNull(p.description?.takeIf { it.isNotBlank() }, presetSubtitle(res, p)).joinToString("\n"),
                 subtitleLines = 3, enabled = editable, selected = p.id == preset.id, onClick = { onPick(p.id) },
-                trailing = if (p.id == preset.id) ({ JIcon(PhIcons.Check, "已选", tint = PersonaTheme.palette.accent) }) else ({}))
+                trailing = if (p.id == preset.id) ({ JIcon(PhIcons.Check, stringResource(R.string.settings_src_provider_selected), tint = PersonaTheme.palette.accent) }) else ({}))
         }
     }
     item("presets-note") {
-        SettingsCaption("地址、接入方式和模型由扩展「${preset.extension}」提供；加好以后和自己填写的一样可以编辑。",
+        SettingsCaption(stringResource(R.string.settings_src_provider_preset_note, preset.extension),
             Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
     }
     nameField(state, editable, onEdit, "jv_team")
@@ -99,17 +104,17 @@ private fun androidx.compose.foundation.lazy.LazyListScope.presetForm(
     item("preset-model") {
         if (preset.choices.isEmpty()) {
             JTextField(state.draft.presetModel, { onEdit(state.draft.copy(presetModel = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m),
-                label = "默认模型", singleLine = true, enabled = editable)
+                label = stringResource(R.string.settings_src_provider_default_model), singleLine = true, enabled = editable)
         } else {
             val picked = preset.choices.firstOrNull { it.id == state.draft.presetModel }
             JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                JRow("默认模型", value = picked?.label ?: state.draft.presetModel.ifEmpty { "扩展默认" }, enabled = editable, onClick = onModel)
+                JRow(stringResource(R.string.settings_src_provider_default_model), value = picked?.label ?: state.draft.presetModel.ifEmpty { stringResource(R.string.settings_src_provider_extension_default) }, enabled = editable, onClick = onModel)
             }
         }
     }
     item("preset-model-note") {
-        SettingsCaption(preset.modelsError?.takeIf { it.isNotBlank() }?.let { "读不到扩展的模型列表（$it），这里是它声明的。" }
-            ?: "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。",
+        SettingsCaption(preset.modelsError?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.settings_src_provider_models_error, it) }
+            ?: stringResource(R.string.settings_src_provider_model_note),
             Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
     }
 }
@@ -121,38 +126,38 @@ private fun androidx.compose.foundation.lazy.LazyListScope.manualForm(state: New
     nameField(state, editable, onEdit, "jv_strong")
     item("kind") {
         Column(Modifier.padding(top = Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-            JSegmented(listOf(JSegment("Claude Code 启动器"), JSegment("直接 API")), if (api) 1 else 0,
+            JSegmented(listOf(JSegment(stringResource(R.string.settings_src_provider_kind_launcher)), JSegment(stringResource(R.string.settings_src_provider_kind_api))), if (api) 1 else 0,
                 { if (editable) onEdit(draft.copy(kind = if (it == 1) "api" else "launcher")) }, Modifier.fillMaxWidth())
             if (api) JSegmented(listOf(JSegment("Messages"), JSegment("Responses")), if (draft.api == "responses") 1 else 0,
                 { if (editable) onEdit(draft.copy(api = if (it == 1) "responses" else "messages")) }, Modifier.fillMaxWidth())
-            SettingsCaption(if (api) "hub 直接请求模型，供分拣、翻译和知识处理等用途选择。" else "在你的电脑上启动 Claude Code，供对话和 Agent 等用途选择。",
+            SettingsCaption(stringResource(if (api) R.string.settings_src_provider_api_note else R.string.settings_src_provider_launcher_note),
                 Modifier.padding(horizontal = rowPadding))
         }
     }
     item("base-url") {
         JTextField(draft.baseUrl, { onEdit(draft.copy(baseUrl = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "Base URL",
             placeholder = "https://…", singleLine = true, enabled = editable, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            supportingText = "填写所选协议兼容的地址。")
+            supportingText = stringResource(R.string.settings_src_provider_base_url_hint))
     }
     keyField(state, editable, onEdit, null)
     item("model") {
-        JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "默认模型",
-            singleLine = true, enabled = editable, supportingText = "各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。")
+        JTextField(draft.model, { onEdit(draft.copy(model = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.settings_src_provider_default_model),
+            singleLine = true, enabled = editable, supportingText = stringResource(R.string.settings_src_provider_model_note))
     }
     if (!api) {
         item("small-model") {
             JTextField(draft.smallModel, { onEdit(draft.copy(smallModel = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m),
-                label = "小模型（可选）", placeholder = "默认同上", singleLine = true, enabled = editable)
+                label = stringResource(R.string.settings_src_provider_small_model), placeholder = stringResource(R.string.settings_src_provider_same_as_above), singleLine = true, enabled = editable)
         }
         item("subagent-model") {
             JTextField(draft.subagentModel, { onEdit(draft.copy(subagentModel = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m),
-                label = "子 Agent 模型（可选）", placeholder = "默认同上", singleLine = true, enabled = editable,
-                supportingText = "用于 workflow 等多 Agent 运行。")
+                label = stringResource(R.string.settings_src_provider_subagent_model), placeholder = stringResource(R.string.settings_src_provider_same_as_above), singleLine = true, enabled = editable,
+                supportingText = stringResource(R.string.settings_src_provider_subagent_hint))
         }
         item("args") {
-            JTextField(draft.args, { onEdit(draft.copy(args = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = "额外参数（可选）",
-                placeholder = "比如 --dangerously-skip-permissions", singleLine = true, enabled = editable,
-                supportingText = "加在 claude 后面，空格分隔，每个都以 - 开头。")
+            JTextField(draft.args, { onEdit(draft.copy(args = it)) }, Modifier.fillMaxWidth().padding(top = Tokens.Space.m), label = stringResource(R.string.settings_src_provider_args),
+                placeholder = stringResource(R.string.settings_src_provider_args_example), singleLine = true, enabled = editable,
+                supportingText = stringResource(R.string.settings_src_provider_args_hint))
         }
     }
 }

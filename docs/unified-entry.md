@@ -35,6 +35,8 @@
   | 自动开始 | 只读：查资料、整理材料、读代码回答问题 | `task_plan` 直接开，卡片上标「自动开始 · 只读」 |
   | 先给计划 | 改代码、开多个 Agent、第一次在这个项目开 | 对话里出计划卡，每一项是能点开改的标签；「开始」后才开 |
 
+- 你在对话里亲口要求的任务（直接下令、「让 Agent 去做」「你去开始」，#2559）也直接开：Persona 在 `task_plan` 的这一项填 `user_requested: true`，卡片只显示进度。
+  它自己推断、你没说过的任务照旧等你点「开始」；一份计划里只要有一项要等，整份都等。设置 › 助手的「我在对话里说过的，直接开始」（`assistant.start_requested_tasks`，默认开）能关掉。
 - 计划卡上有「这类以后直接开」：按「项目 × 只读 / 改文件」记住，下次同类不再问。存 settings `tasks.trust`，设置里能看能删。
 - `task_plan` **不阻塞**：计划交给你以后，这一轮马上结束，你可以接着说别的。你点「开始」时 hub 直接开 Agent，Persona 在下一条消息的实时快照里看到结果。
 
@@ -144,10 +146,10 @@
 
 ### 计划
 
-表 `task_plans`：`id`、`conversation`、`tasks`（JSON：每项 `title`、`notes`、`machine`、`cwd`、`launcher`、`model`、`permission`、`readonly`、`why`）、
+表 `task_plans`：`id`、`conversation`、`tasks`（JSON：每项 `title`、`notes`、`machine`、`cwd`、`launcher`、`model`、`permission`、`readonly`、`user_requested`、`why`）、
 `state`（`open` / `started` / `dismissed`）、`created_at`、`updated_at`。
 
-- MCP 工具 `task_plan`（只给助手）：传任务列表。全部是只读，或命中 `tasks.trust` 时直接开始；否则存成 `open` 的计划，发对话动态。
+- MCP 工具 `task_plan`（只给助手）：传任务列表。每一项都是只读、`user_requested`（且 `assistant.start_requested_tasks` 开着）或命中 `tasks.trust` 时直接开始；否则存成 `open` 的计划，发对话动态。
   返回计划 id 和每个任务的状态（文字）。
 - `POST /api/v1/task-plans/{id}/start`：可以带用户改过的字段，一个任务建一个待办（`origin`、`plan_id`）再开 Agent（`startSession` 带 `todo_id`）；
   `remember: true` 时把这类记进 `tasks.trust`。`POST …/dismiss`：不开了。

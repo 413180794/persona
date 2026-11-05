@@ -1,5 +1,11 @@
 package persona.feature.settings
 
+import android.content.Context
+import android.content.res.Resources
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.Session
 import persona.core.contracts.api.*
 import persona.core.designsystem.Status
@@ -70,9 +76,14 @@ private class FakeChannels(var detail: ChannelDetail) : ChannelManagement {
     override suspend fun test(id: String) { tests++; fail?.let { throw it } }
 }
 
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ChannelsStateTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     @Test fun statesWordsAndMarks() {
-        assertEquals(listOf("已连接", "未连接", "出错", "可以安装", "已停用"), listOf(wechat, feishu, broken, market, larkAgent).map(ChannelText::state))
+        assertEquals(listOf("已连接", "未连接", "出错", "可以安装", "已停用"), listOf(wechat, feishu, broken, market, larkAgent).map { ChannelText.state(res, it) })
         assertEquals(Status.Unread, ChannelText.status(wechat))
         assertEquals(Status.Idle, ChannelText.status(feishu))
         assertEquals(Status.Offline, ChannelText.status(larkAgent))
@@ -92,19 +103,19 @@ class ChannelsStateTest {
 
     @Test fun theListHasThreeSectionsAndLeavesEmptyOnesOut() {
         val sections = channelSections(listOf(app, wechat, feishu, broken, market, larkAgent))
-        assertEquals(listOf("Persona", "已接入", "可以安装"), sections.map { it.title })
+        assertEquals(listOf("Persona", "已接入", "可以安装"), sections.map { res.getString(it.title) })
         assertEquals(listOf("app"), sections[0].channels.map { it.id })
         assertEquals(listOf("wechat", "feishu", "examplechat", "lark_agent"), sections[1].channels.map { it.id })
         assertEquals(listOf("slackish"), sections[2].channels.map { it.id })
-        assertEquals(listOf("Persona", "已接入"), channelSections(listOf(app, wechat)).map { it.title })
+        assertEquals(listOf("Persona", "已接入"), channelSections(listOf(app, wechat)).map { res.getString(it.title) })
     }
 
     @Test fun theSettingsRowCountsTheConnectedOnesAndTheBroken() {
-        assertNull(ChannelText.listSummary(null))
+        assertNull(ChannelText.listSummary(res, null))
         // The apps are always connected: not counted.
-        assertEquals("1 个已连接", ChannelText.listSummary(listOf(app, wechat, feishu)))
-        assertEquals("1 个已连接 · 1 个出错", ChannelText.listSummary(listOf(app, wechat, broken)))
-        assertEquals("0 个已连接", ChannelText.listSummary(listOf(app)))
+        assertEquals("1 个已连接", ChannelText.listSummary(res, listOf(app, wechat, feishu)))
+        assertEquals("1 个已连接 · 1 个出错", ChannelText.listSummary(res, listOf(app, wechat, broken)))
+        assertEquals("0 个已连接", ChannelText.listSummary(res, listOf(app)))
         assertTrue(ChannelText.hasProblem(listOf(broken)))
         assertFalse(ChannelText.hasProblem(null))
     }
@@ -121,9 +132,9 @@ class ChannelsStateTest {
         assertFalse(ChannelText.canBind(wechat)) // bound
         assertFalse(ChannelText.canBind(feishu.copy(enabled = false)))
         assertTrue(ChannelText.isBound(broken)) // bound, but its connection went wrong
-        assertEquals("扫码绑定", ChannelText.bindTitle(wechat))
-        assertEquals("绑定", ChannelText.bindTitle(feishu))
-        assertEquals("配对", ChannelText.bindTitle(feishu.copy(bind = "code")))
+        assertEquals("扫码绑定", ChannelText.bindTitle(res, wechat))
+        assertEquals("绑定", ChannelText.bindTitle(res, feishu))
+        assertEquals("配对", ChannelText.bindTitle(res, feishu.copy(bind = "code")))
     }
 
     @Test fun moreSettingsOpensOnlyPagesAndroidHas() {
@@ -137,25 +148,25 @@ class ChannelsStateTest {
     }
 
     @Test fun targetsCapabilitiesAndTheHeader() {
-        assertEquals("主对话", ChannelText.targetText(null))
-        assertEquals("主对话", ChannelText.targetText(ChannelTarget.Main))
-        assertEquals("新对话（下一条消息开）", ChannelText.targetText(ChannelTarget.New))
-        assertEquals("周报", ChannelText.targetText(ChannelTarget("conversation", "m", "s", "周报")))
-        assertEquals("一段对话", ChannelText.targetText(ChannelTarget.conversation("m", "s")))
-        assertEquals("Agent · 修 bug", ChannelText.targetText(ChannelTarget("agent", "m", "s", "修 bug")))
+        assertEquals("主对话", ChannelText.targetText(res, null))
+        assertEquals("主对话", ChannelText.targetText(res, ChannelTarget.Main))
+        assertEquals("新对话（下一条消息开）", ChannelText.targetText(res, ChannelTarget.New))
+        assertEquals("周报", ChannelText.targetText(res, ChannelTarget("conversation", "m", "s", "周报")))
+        assertEquals("一段对话", ChannelText.targetText(res, ChannelTarget.conversation("m", "s")))
+        assertEquals("Agent · 修 bug", ChannelText.targetText(res, ChannelTarget("agent", "m", "s", "修 bug")))
         assertEquals(listOf("收文字、图片", "回答是纯文字", "一条最多 3500 字，长的拆开发", "提问和批准回复序号或文字", "处理时显示「正在输入」"),
-            ChannelText.capabilities(wechat.capabilities))
-        assertEquals(listOf("收文字", "回答带格式（Markdown）"), ChannelText.capabilities(ChannelCapabilities()))
+            ChannelText.capabilities(res, wechat.capabilities))
+        assertEquals(listOf("收文字", "回答带格式（Markdown）"), ChannelText.capabilities(res, ChannelCapabilities()))
         val now = Instant.parse("2026-11-04T10:30:00Z")
         assertEquals("微信用户 a1b2c3 · 最近一条 30 分钟前",
-            ChannelText.headerLine(wechat.copy(lastEventAt = "2026-11-04T10:00:00Z"), now, ZoneOffset.UTC))
+            ChannelText.headerLine(res, wechat.copy(lastEventAt = "2026-11-04T10:00:00Z"), now, ZoneOffset.UTC))
         // Nothing to say about the account or the time: no second line (the description is under the header).
-        assertEquals("", ChannelText.headerLine(app.copy(surfaces = emptyList(), description = "各端"), now, ZoneOffset.UTC))
-        assertEquals("刚刚", ChannelText.ago(now, now))
-        assertEquals("3 小时前", ChannelText.ago(Instant.parse("2026-11-04T07:00:00Z"), now))
-        assertEquals("11 月 2 日", ChannelText.ago(Instant.parse("2026-11-02T07:00:00Z"), now, ZoneOffset.UTC))
-        assertEquals("1 个回答 · 2 个提问", ChannelText.waiting(ChannelDetail(wechat, ChannelWaiting(1, 2))))
-        assertNull(ChannelText.waiting(ChannelDetail(wechat)))
+        assertEquals("", ChannelText.headerLine(res, app.copy(surfaces = emptyList(), description = "各端"), now, ZoneOffset.UTC))
+        assertEquals("刚刚", ChannelText.ago(res, now, now))
+        assertEquals("3 小时前", ChannelText.ago(res, Instant.parse("2026-11-04T07:00:00Z"), now))
+        assertEquals("11月2日", ChannelText.ago(res, Instant.parse("2026-11-02T07:00:00Z"), now, ZoneOffset.UTC))
+        assertEquals("1 个回答 · 2 个提问", ChannelText.waiting(res, ChannelDetail(wechat, ChannelWaiting(1, 2))))
+        assertNull(ChannelText.waiting(res, ChannelDetail(wechat)))
     }
 
     @Test fun messagesGoToChoices() {
@@ -168,7 +179,7 @@ class ChannelsStateTest {
             Session(machineId = "mac", sessionId = "agent", title = "不是助手的", assistant = false),
         )
         val options = targetOptions(detail, assistant)
-        assertEquals(listOf("主对话", "新对话（下一条消息开）", "周报", "日程", "旅行"), options.map { it.label })
+        assertEquals(listOf("主对话", "新对话（下一条消息开）", "周报", "日程", "旅行"), options.map { it.label ?: ChannelText.targetText(res, it.target) })
         assertEquals(listOf(false, false, true, false, false), options.map { it.selected })
         assertEquals(ChannelTarget.conversation("hub", "s1"), options[3].target)
         // Main is chosen when the hub names no target; the list is cut at the limit after the two fixed choices.
@@ -184,7 +195,7 @@ class ChannelsStateTest {
         assertEquals(6, model.state.value.channels?.size)
         api.fail = ChannelsUnsupported()
         model.load()
-        assertEquals("读取失败：这台 hub 还不支持渠道，请先更新 hub", model.state.value.error)
+        assertEquals("读取失败：这台 hub 还不支持渠道，请先更新 hub", model.state.value.error?.resolve(res))
         // What was read stays on screen.
         assertEquals(6, model.state.value.channels?.size)
     }
@@ -212,14 +223,14 @@ class ChannelsStateTest {
         model.load()
         api.fail = ChannelRejected("只能选助手的对话")
         assertFalse(model.setTarget(ChannelTarget.conversation("mac", "agent")))
-        assertEquals("没有改成：只能选助手的对话", model.state.value.error)
+        assertEquals("没有改成：只能选助手的对话", model.state.value.error?.resolve(res))
         assertEquals(ChannelTarget.Main, model.state.value.channel?.target)
         api.fail = HubFailure(HubError.Server, "微信 还没连上", 502)
         assertFalse(model.test())
-        assertEquals("没有发出：微信 还没连上", model.state.value.error)
+        assertEquals("没有发出：微信 还没连上", model.state.value.error?.resolve(res))
         api.fail = null
         assertTrue(model.test())
-        assertNull(model.state.value.error)
+        assertNull(model.state.value.error?.resolve(res))
         assertEquals(2, api.tests)
     }
 
@@ -228,7 +239,7 @@ class ChannelsStateTest {
         val model = ChannelModel(api, "gone")
         model.load()
         assertNull(model.state.value.detail)
-        assertEquals("读取失败：这台 hub 上没有这个渠道了", model.state.value.error)
+        assertEquals("读取失败：这台 hub 上没有这个渠道了", model.state.value.error?.resolve(res))
     }
 
     @Test fun bindsWithFieldsThenAPairingCodeUntilDone() = runBlocking {
@@ -291,7 +302,7 @@ class ChannelsStateTest {
             }
         }
         assertEquals(3, asked)
-        assertNull(model.state.value.bind.error)
+        assertNull(model.state.value.bind.error?.resolve(res))
         assertFalse(model.state.value.bind.active)
         assertEquals(listOf<Pair<String?, Map<String, String>?>>(null to null, "scan" to null, "scan" to null), api.steps)
     }
@@ -302,7 +313,7 @@ class ChannelsStateTest {
         model.load()
         api.fail = HubFailure(HubError.Server, "飞书 没在运行：先打开它", 502)
         assertFalse(model.startBind())
-        assertEquals("没有绑定上：飞书 没在运行：先打开它", model.state.value.bind.error)
+        assertEquals("没有绑定上：飞书 没在运行：先打开它", model.state.value.bind.error?.resolve(res))
         assertFalse(model.state.value.bind.sending)
 
         api.fail = null

@@ -1,5 +1,11 @@
 package persona.feature.settings
 
+import android.content.Context
+import android.content.res.Resources
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
 import persona.core.contracts.DetectedEngine
 import persona.core.contracts.Machine
 import persona.core.contracts.api.*
@@ -74,7 +80,12 @@ class EngineSelectionModelTest {
     }
 }
 
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ClaudeSettingsModelTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     private class Choices : ClaudeSettingsChoices {
         override var machine = ""
         override var applyAll = true
@@ -122,11 +133,11 @@ class ClaudeSettingsModelTest {
         assertEquals("hub", choices.machine)
         model.load()
         assertEquals("中文", model.state.value.settings.single().stringValue)
-        assertEquals("已应用到 2 台机器", model.set("language", JsonPrimitive("English"), listOf(mac, hub)))
+        assertEquals("已应用到 2 台机器", model.set("language", JsonPrimitive("English"), listOf(mac, hub))?.resolve(res))
         assertEquals(listOf("mac", "hub"), api.writes.map { it.first })
         model.applyAll(false)
         assertFalse(choices.applyAll)
-        assertEquals("已保存", model.set("language", JsonNull, listOf(mac, hub)))
+        assertEquals("已保存", model.set("language", JsonNull, listOf(mac, hub))?.resolve(res))
         assertEquals(Triple("hub", "language", JsonNull as JsonElement), api.writes.last())
         assertTrue(model.state.value.settings.single().isDefault)
     }
@@ -138,7 +149,7 @@ class ClaudeSettingsModelTest {
         model.load()
         val reads = api.reads
         assertNull(model.set("language", JsonPrimitive("English"), listOf(mac, hub)))
-        assertEquals("没有全部保存：\nMacBook：machine is offline", model.state.value.error)
+        assertEquals("没有全部保存：\nMacBook：machine is offline", model.state.value.error?.resolve(res))
         assertEquals(reads + 1, api.reads)
         // Nothing online: nothing shown.
         model.follow(emptyList())
@@ -146,7 +157,12 @@ class ClaudeSettingsModelTest {
     }
 }
 
+// Robolectric: the words come from the app's resources, in Simplified Chinese (robolectric.properties).
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [35])
 class ModelConfigurationStateTest {
+    private val res: Resources get() = ApplicationProvider.getApplicationContext<Context>().resources
+
     private val providers = listOf(ModelProvider("launcher.claude", "claude", model = "model-chat"),
         ModelProvider("launcher.old", "旧网关", hidden = true), ModelProvider("api.fast", "轻量 API", kind = "api", api = "messages"))
     private val agent = ModelPurpose("agent.new", "新建 Agent", "对话与 Agent", effective = ModelBinding("launcher.claude", "model-chat"),
@@ -156,24 +172,24 @@ class ModelConfigurationStateTest {
     private val catalog = ModelCatalog(listOf(agent, chat, triage, ModelPurpose("misc", "其他用途")), providers)
 
     @Test fun groupsKeepTheHubsOrderAndSearchNamesGroupsIdsAndModels() {
-        assertEquals(listOf("对话与 Agent", "收件箱", "其他"), modelPurposeGroups(catalog.purposes, providers, "").map { it.first })
-        assertEquals(listOf("inbox.triage"), modelPurposeGroups(catalog.purposes, providers, "分拣").flatMap { it.second }.map { it.id })
-        assertEquals(listOf("agent.new", "assistant"), modelPurposeGroups(catalog.purposes, providers, "MODEL-CHAT").flatMap { it.second }.map { it.id })
-        assertEquals(listOf("inbox.triage"), modelPurposeGroups(catalog.purposes, providers, "轻量").flatMap { it.second }.map { it.id })
-        assertTrue(modelPurposeGroups(catalog.purposes, providers, "技能").isEmpty())
+        assertEquals(listOf("对话与 Agent", "收件箱", "其他"), modelPurposeGroups(res, catalog.purposes, providers, "").map { it.first })
+        assertEquals(listOf("inbox.triage"), modelPurposeGroups(res, catalog.purposes, providers, "分拣").flatMap { it.second }.map { it.id })
+        assertEquals(listOf("agent.new", "assistant"), modelPurposeGroups(res, catalog.purposes, providers, "MODEL-CHAT").flatMap { it.second }.map { it.id })
+        assertEquals(listOf("inbox.triage"), modelPurposeGroups(res, catalog.purposes, providers, "轻量").flatMap { it.second }.map { it.id })
+        assertTrue(modelPurposeGroups(res, catalog.purposes, providers, "技能").isEmpty())
     }
 
     @Test fun rowsSayWhatIsInEffectThenStatusOrSource() {
-        assertEquals("claude，model-chat\n跟随 Persona 对话", purposeSubtitle(agent, catalog))
-        assertEquals("轻量 API\n供应商离线", purposeSubtitle(triage, catalog))
-        assertEquals("未配置", purposeSubtitle(ModelPurpose("misc"), catalog))
+        assertEquals("claude，model-chat\n跟随 Persona 对话", purposeSubtitle(res, agent, catalog))
+        assertEquals("轻量 API\n供应商离线", purposeSubtitle(res, triage, catalog))
+        assertEquals("未配置", purposeSubtitle(res, ModelPurpose("misc"), catalog))
     }
 
     @Test fun providerChoicesMarkHiddenAndUnavailableReferences() {
-        val options = providerOptions(agent.copy(override = ModelBinding("launcher.old")), providers, "launcher.old")
+        val options = providerOptions(res, agent.copy(override = ModelBinding("launcher.old")), providers, "launcher.old")
         assertEquals(listOf("", "launcher.claude", "launcher.old"), options.map { it.id })
         assertEquals("旧网关（已隐藏）", options.last().label)
-        val gone = providerOptions(agent, providers, "launcher.gone")
+        val gone = providerOptions(res, agent, providers, "launcher.gone")
         assertEquals("launcher.gone（当前引用不可用）", gone.last().label)
         assertTrue(showsEffort(agent, providers[0]))
         assertFalse(showsEffort(agent, providers[2]))
@@ -249,7 +265,7 @@ class ModelConfigurationStateTest {
         assertFalse(model.state.value.conflict)
         assertEquals("", model.state.value.draft.model)
         result = ModelPurposeSave.Saved(ModelPurposeDetail(agent.copy(revision = 4), providers))
-        assertEquals("已恢复继承", model.save(restore = true))
+        assertEquals("已恢复继承", model.save(restore = true)?.resolve(res))
         assertEquals(ModelConfigurationDraft(), sent)
         assertEquals(4L, model.state.value.purpose?.revision)
     }
@@ -263,7 +279,7 @@ class ModelConfigurationStateTest {
         })
         unsupported.load()
         assertTrue(unsupported.state.value.unsupported)
-        assertNull(unsupported.state.value.error)
+        assertNull(unsupported.state.value.error?.resolve(res))
         val broken = ModelCatalogModel(object : ModelConfiguration {
             override suspend fun catalog(): ModelCatalog = throw HubFailure(HubError.Server, "boom", 500)
             override suspend fun purpose(id: String): ModelPurposeDetail = throw IllegalStateException()
@@ -271,6 +287,6 @@ class ModelConfigurationStateTest {
             override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
         })
         broken.load()
-        assertEquals("读取失败：boom", broken.state.value.error)
+        assertEquals("读取失败：boom", broken.state.value.error?.resolve(res))
     }
 }

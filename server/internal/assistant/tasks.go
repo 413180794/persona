@@ -26,8 +26,8 @@ import (
 )
 
 // Tasks dispatched from an assistant conversation (docs/unified-entry.md, #930). The assistant hands the user a plan
-// (task_plan); read-only plans and kinds the user trusts start at once, the rest wait for the user's 开始 on the
-// plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
+// (task_plan); read-only plans, tasks the user asked for in so many words (#2559) and kinds the user trusts start at
+// once, the rest wait for the user's 开始 on the plan card. A task is a todo (todos.go) whose origin is the conversation; its agents are ordinary agents
 // (the Agents page shows them as always). What the assistant adds to the conversation — the plan card, a started
 // task, an answered question, a receipt, a message sent straight to a task — is the conversation's feed, kept apart
 // from Claude's transcript.
@@ -42,7 +42,10 @@ type PlanTask struct {
 	Model      string `json:"model,omitempty"`
 	Permission string `json:"permission,omitempty"`
 	Readonly   bool   `json:"readonly,omitempty"`
-	Why        string `json:"why,omitempty"`
+	// UserRequested: the user asked for this very task in the turn that planned it (#2559); with
+	// assistant.start_requested_tasks on it starts without the card's 开始.
+	UserRequested bool   `json:"user_requested,omitempty"`
+	Why           string `json:"why,omitempty"`
 	// Set once started: the todo the task is, and why its agent did not start.
 	TodoID string `json:"todo_id,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -303,7 +306,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		return "", err
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Started %d task(s) without asking (read-only or a kind the user trusts):\n", len(started.Tasks))
+	fmt.Fprintf(&b, "Started %d task(s) without asking (read-only, asked for by the user, or a kind the user trusts):\n", len(started.Tasks))
 	for _, t := range started.Tasks {
 		fmt.Fprintf(&b, "- %s → todo %s on %s\n", t.Title, t.TodoID, t.Machine)
 	}
@@ -326,11 +329,13 @@ func (s *Service) placeTask(ctx context.Context, t *PlanTask) bool {
 	return true
 }
 
-// planStartsAtOnce: every task only reads, or is a kind the user said to start without asking.
+// planStartsAtOnce: every task only reads, was asked for by the user in this turn (while start_requested_tasks is on),
+// or is a kind the user said to start without asking.
 func (s *Service) planStartsAtOnce(ctx context.Context, tasks []PlanTask) bool {
 	trusted := s.trustedKinds(ctx)
+	requested := s.startRequestedTasks(ctx)
 	for _, t := range tasks {
-		if !t.Readonly && !trusted[trustKey(t)] {
+		if !t.Readonly && !(requested && t.UserRequested) && !trusted[trustKey(t)] {
 			return false
 		}
 	}
