@@ -3,11 +3,13 @@ import SwiftUI
 
 /// The keys of Agents' and Persona's lists, as 收件箱's (#2113): ⏎ and Tab go to the open conversation's composer, Delete
 /// asks to delete (Agents) or archives (Persona) it; ⇧Tab in a composer comes back (`MacShellState.focusList`). ↑ / ↓
-/// are a selecting list's own (`MacSelectingList`, Persona's).
+/// are a selecting list's own (`MacSelectingList`, Persona's), or `move`'s (Agents', which does not select: #2213).
 struct MacListKeys: ViewModifier {
     /// The open conversation: what the keys act on.
     var current: () -> SessionKey?
     var delete: ((SessionKey) -> Void)?
+    /// ↑ (-1) / ↓ (1) for a list that does not select.
+    var move: ((Int) -> Void)? = nil
     @FocusState private var isFocused: Bool
 
     func body(content: Content) -> some View {
@@ -15,8 +17,16 @@ struct MacListKeys: ViewModifier {
             .focused($isFocused)
             .onKeyPress(.return) { toComposer() }
             .onKeyPress(.tab) { toComposer() }
+            .onKeyPress(.upArrow) { step(-1) }
+            .onKeyPress(.downArrow) { step(1) }
             .onDeleteCommand { if let key = current() { delete?(key) } }
             .onChange(of: MacShellState.shared.focusList) { isFocused = true }
+    }
+
+    private func step(_ by: Int) -> KeyPress.Result {
+        guard let move else { return .ignored }
+        move(by)
+        return .handled
     }
 
     private func toComposer() -> KeyPress.Result {
@@ -24,6 +34,13 @@ struct MacListKeys: ViewModifier {
         AppModel.shared.composerFocus = key
         return .handled
     }
+}
+
+/// The Agents list's rows in order and a way to scroll to one (`ChatsView`); not observed: the keys read it.
+final class MacRowOrder {
+    var keys: [SessionKey] = []
+    var scroll: ((String) -> Void)?
+    func update(_ keys: [SessionKey]) { self.keys = keys }
 }
 
 extension MacShellState {

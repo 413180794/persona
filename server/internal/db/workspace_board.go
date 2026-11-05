@@ -39,6 +39,17 @@ func (d *DB) WorkspaceBoard(ctx context.Context) (workspaceboard.State, error) {
 	return decodeWorkspaceBoard(revision, data)
 }
 
+// WorkspaceBoardInUse is whether the board was ever changed. Opening the page seeds an untouched board (revision 0),
+// which does not count: before #2475 the board showed for everyone, so most hubs have that row.
+func (d *DB) WorkspaceBoardInUse(ctx context.Context) (bool, error) {
+	var revision int64
+	err := d.pool.QueryRow(ctx, `SELECT revision FROM workspace_board WHERE id = true`).Scan(&revision)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return revision > 0, err
+}
+
 func decodeWorkspaceBoard(revision int64, data []byte) (workspaceboard.State, error) {
 	var s workspaceboard.State
 	if err := json.Unmarshal(data, &s); err != nil {

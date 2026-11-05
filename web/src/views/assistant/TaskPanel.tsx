@@ -8,6 +8,7 @@ import { ChatView } from "../chat/ChatView";
 import { PanelHeader } from "../SidePanel";
 import { place, removeTaskNow, retryTaskNow, useRetrying, useTaskState, useTodo } from "./Tasks";
 import { sessionTitle, stateOf } from "../../lib/format";
+import { t } from "../../i18n";
 
 export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => void }) {
   const todo = useTodo(todoId);
@@ -19,8 +20,8 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
   if (!todo || !st) {
     return (
       <>
-        <PanelHeader icon="todo" title="任务" onClose={onClose} />
-        <div className="p-6 text-[13px] text-ink-2">没有这个任务了。</div>
+        <PanelHeader icon="todo" title={t("assistant-taskpanel.title")} onClose={onClose} />
+        <div className="p-6 text-[13px] text-ink-2">{t("assistant-taskpanel.gone")}</div>
       </>
     );
   }
@@ -37,13 +38,13 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
         actions={
           isRemovable(st.status) ? (
             <>
-              <IconButton icon="more" label="更多" onClick={more.open} active={Boolean(more.anchor)} />
+              <IconButton icon="more" label={t("assistant-taskpanel.more")} onClick={more.open} active={Boolean(more.anchor)} />
               {more.anchor && (
                 <Menu
                   anchor={more.anchor}
                   onClose={more.close}
                   align="right"
-                  items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
+                  items={[{ key: "remove", label: t("assistant-taskpanel.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
                 />
               )}
             </>
@@ -75,21 +76,21 @@ export function TaskPanel({ todoId, onClose }: { todoId: string; onClose: () => 
           <ChatView key={`${chosen.machine_id}/${chosen.session_id}`} mid={chosen.machine_id} sid={chosen.session_id} />
         ) : st.failure || todo.agents?.some((a) => a.start_error) ? (
           <div className="flex flex-col items-start gap-3 p-6 text-[13px]">
-            <div className="font-semibold text-red">Agent 没开起来</div>
+            <div className="font-semibold text-red">{t("assistant-taskpanel.start_failed")}</div>
             <div className="text-ink-2">{st.failure ?? todo.agents?.find((a) => a.start_error)?.start_error}</div>
             <div className="flex gap-2">
               {st.status === "failed" && (
                 <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
-                  重试
+                  {t("assistant-taskpanel.retry")}
                 </Button>
               )}
               <Button icon="trash" onClick={() => removeTaskNow(todo)}>
-                移除任务
+                {t("assistant-taskpanel.remove")}
               </Button>
             </div>
           </div>
         ) : (
-          <div className="p-6 text-[13px] text-ink-2">正在开 Agent，开好以后这里就是它的对话。</div>
+          <div className="p-6 text-[13px] text-ink-2">{t("assistant-taskpanel.starting")}</div>
         )}
       </div>
     </>

@@ -457,6 +457,8 @@ GET 清单合并宿主空间、当前会话目录和已绑定目录。宿主未�
 
 Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的物理目录，只用于工作区关联，原始 `cwd` 保持不变。不存在、不可解析或不允许读取的目录可以不返回该字段；旧客户端忽略它，新客户端优先使用它，缺失时回退 `cwd`。该值经过短期缓存，不构成后续文件操作的权限或存在性保证。
 
+看板默认关闭（#2475）：`GET /api/v1/workspace-board/settings` 返回 `{enabled,can_write}`，值存在 Postgres 的 `settings` 表（key `workspace_board.settings`，`{"enabled":bool}`），整个 hub 一份，所有浏览器和设备一致。从没设过时，`workspace_board` 的 `revision > 0`（看板被改过）就算打开，否则关闭；推断值不回写，第一次 PUT 才存下。PUT `{enabled}` 仅 `full`，成功后 WS 推送 `{"type":"workspace_board_settings","enabled":bool}`。开关只决定客户端显示不显示：关闭时看板和清单接口照常可用，数据不删。旧 hub 没有这个接口返回 404，客户端按打开处理（旧版本对所有人显示）且不显示开关。
+
 移动、归档等看板修改不调用 Agent 或 Git 操作。成功后 WS 推送 `{"type":"workspace_board","revision":<新版本>}`，客户端据此重读。网页还在看板可见期间每 10 秒刷新发现，回到前台时立即刷新，以补足目录和连接状态变化。
 
 ## REST（App → hub）
@@ -466,6 +468,8 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/machines` | `{"machines":[Machine]}` |
 | GET | `/api/v1/workspace-board` | `{revision,columns,cards,can_write}`，完整工作流看板；`answer` 可读，见「工作区看板」 |
 | POST | `/api/v1/workspace-board` | `{revision,action,...}` → 更新后的完整看板；仅 `full`，过期版本 409 `conflict` |
+| GET | `/api/v1/workspace-board/settings` | `{enabled,can_write}`：看板的开关（#2475），整个 hub 一份；没设过时按看板是否改过推断，见「工作区看板」 |
+| PUT | `/api/v1/workspace-board/settings` | `{enabled}` → `{enabled,can_write}`；仅 `full`，缺 `enabled` 返回 400 |
 | GET | `/api/v1/workspaces` | `{workspaces:[Workspace],errors?:[{machine_id,error}]}`；独立于 Agent 的工作区发现，失败保留历史信息，`answer` 可读 |
 | POST | `/api/v1/machines/{mid}/reconnect` | 重连该机器的 node |
 | GET | `/api/v1/machines/{mid}/panes` | 终端浏览器的树（feature `terminal_panes`，仅 `full`）：`{hosts:[{kind, stream, control, new_tab, workspaces:[{id,label,number?,cwd?,branch?}], tabs:[{id,workspace_id,label,number?}], panes:[{pane, terminal, tab_id, workspace_id, agent?, status?, title?, cwd?, session_id?}]}]}`；包括没有 Agent 的 shell 窗格。`terminal` 是终端流用的地址 `pane:<pane>`，`session_id` 是跑在那个窗格里的 Agent 会话（有就用它开终端） |
@@ -609,6 +613,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | `client_hello_ack` | `heartbeat: {interval, pong_timeout}`（本次协商后实际采用的秒数） |
 | `machines` | `machines` |
 | `workspace_board` | `revision`：看板修改已保存，客户端重新读取完整状态；不代表 Agent 状态变化 |
+| `workspace_board_settings` | `enabled`：看板的开关改了（`PUT /api/v1/workspace-board/settings`），客户端据此显示或隐藏入口 |
 | `todos` | —：待办或关联变了就推，客户端收到后重拉 `GET /api/v1/todos` |
 | `plugin_ui` | `plugin`, `id`, `badge`（`{text, tone}`，`null` 是清掉）：插件改了它主导航入口（`nav_page`）的角标，[extensions.md](extensions.md)「UI 插槽」 |
 | `assistant_feed` | `conversation`, `item`（`FeedItem`）：对话动态多了一条；kind `view` 是活卡片的原始位置，body.view 是 AssistantView |

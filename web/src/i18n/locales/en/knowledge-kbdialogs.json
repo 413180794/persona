@@ -1,0 +1,18 @@
+{
+  "tags_saved": "Tags saved",
+  "tag_title": "Tags · {name}",
+  "importance": "Importance",
+  "relevance": "Relevance to me",
+  "tags": "Tags",
+  "tags_placeholder": "Separate with spaces",
+  "kind": "Type",
+  "project_kind": "Project type",
+  "status": "Status",
+  "project_status": "Project status",
+  "locked_hint": "Tags you set by hand are locked; the hub won't overwrite them when it compacts later.",
+  "prev_day": "Previous day",
+  "next_day": "Next day",
+  "message_count_one": "{count} message",
+  "message_count_other": "{count} messages",
+  "moments": "Moments"
+}

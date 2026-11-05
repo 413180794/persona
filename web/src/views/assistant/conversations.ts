@@ -1,6 +1,7 @@
 // 全部对话 (docs/assistant.md「管理自己的对话」): the assistant's conversations, the main one first, the rest newest first
 // by day; search on the title and the last message; the archived ones apart. Pure functions, tested without a DOM.
 import type { Session } from "../../lib/types";
+import { t } from "../../i18n";
 
 /** A conversation as `GET /api/v1/assistant?archived=1` lists it. */
 export type Conversation = Session & { archived?: boolean };
@@ -17,8 +18,8 @@ export const MAIN_TITLE = "Persona";
 
 export function conversationTitle(s: Pick<Session, "title">, isMain = false): string {
   if (isMain) return MAIN_TITLE;
-  const t = s.title?.trim();
-  return !t || t === "Claude Code" || t === "assistant" ? "新对话" : t;
+  const title = s.title?.trim();
+  return !title || title === "Claude Code" || title === "assistant" ? t("assistant-conversations.untitled") : title;
 }
 
 const fold = (s: string) => s.normalize("NFKC").toLowerCase();
@@ -31,8 +32,8 @@ export function filterConversations<T extends Conversation>(list: T[], query: st
 }
 
 function time(s: Session): number {
-  const t = s.updated_at ? Date.parse(s.updated_at) : NaN;
-  return Number.isFinite(t) && t > 86_400_000 ? t : 0;
+  const at = s.updated_at ? Date.parse(s.updated_at) : NaN;
+  return Number.isFinite(at) && at > 86_400_000 ? at : 0;
 }
 
 /** Newest first, a fixed order for equal times. */
@@ -47,8 +48,8 @@ export function groupByDay<T extends Session>(list: T[], now: Date): { title: st
   const week = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
   const out: { title: string; items: T[] }[] = [];
   for (const s of newestFirst(list)) {
-    const t = time(s);
-    const title = !t ? "更早" : t >= today ? "今天" : t >= yesterday ? "昨天" : t >= week ? "最近 7 天" : "更早";
+    const at = time(s);
+    const title = !at ? t("assistant-conversations.earlier") : at >= today ? t("assistant-conversations.today") : at >= yesterday ? t("assistant-conversations.yesterday") : at >= week ? t("assistant-conversations.last_7_days") : t("assistant-conversations.earlier");
     if (out.length && out[out.length - 1].title === title) out[out.length - 1].items.push(s);
     else out.push({ title, items: [s] });
   }

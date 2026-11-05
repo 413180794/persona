@@ -159,7 +159,12 @@ final class AppModel {
     /// list came back to a chat just closed (#1868).
     static var rememberedChat: String? = UserDefaults.standard.string(forKey: "dev.openChat").flatMap { $0.isEmpty ? nil : $0 }
     /// Session whose chat is on screen; its completion pings are suppressed.
-    var visibleSession: SessionKey?
+    var visibleSession: SessionKey? {
+        didSet { if heldInList != visibleSession { heldInList = nil } }
+    }
+    /// The open agent that was 完成未看 and was marked seen by being open: the Agents list keeps it where it was until
+    /// its chat is left (`AgentListOrder.held`, #2213; user, 2026-11-05: 离开后才收进空闲).
+    private(set) var heldInList: SessionKey?
     private(set) var assistantConfig: APIClient.AssistantState? {
         didSet {
             if let g = hub?.group, let a = assistantConfig { assistantByGroup[g] = a }
@@ -1628,6 +1633,7 @@ final class AppModel {
         // Optimistic: flip the local copy right away.
         if var list = sessionsByMachine[key.machineRef], let i = list.firstIndex(where: { $0.sessionID == key.sessionID }),
            list[i].state == .unread {
+            if key == visibleSession { heldInList = key }
             list[i].state = .idle
             sessionsByMachine[key.machineRef] = list
         }

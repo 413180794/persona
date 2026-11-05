@@ -22,6 +22,7 @@ import { Button, cx, Dialog, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Marked } from "./KBParts";
+import { t } from "../../i18n";
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
@@ -73,7 +74,7 @@ export function TagEditor({ entry, open, onClose, onSaved }: { entry: KBEntry; o
     setError("");
     try {
       await api(`/kb/${enc(entry.kind)}/${enc(entry.id)}`, { method: "PUT", json: tagUpdate(entry.kind, f) });
-      toast("打标已保存", "ok");
+      toast(t("knowledge-kbdialogs.tags_saved"), "ok");
       onSaved();
       onClose();
     } catch (e) {
@@ -88,52 +89,52 @@ export function TagEditor({ entry, open, onClose, onSaved }: { entry: KBEntry; o
       open={open}
       onClose={onClose}
       width={460}
-      title={<span className="line-clamp-2">打标 · {entry.name}</span>}
+      title={<span className="line-clamp-2">{t("knowledge-kbdialogs.tag_title", { name: entry.name })}</span>}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={saving} onClick={save}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
     >
-      <Field label="重要级">
-        <Segmented label="重要级" value={f.importance} options={IMPORTANCE.map((p) => ({ value: p as string, label: p }))} onChange={(v) => set("importance", v)} />
+      <Field label={t("knowledge-kbdialogs.importance")}>
+        <Segmented label={t("knowledge-kbdialogs.importance")} value={f.importance} options={IMPORTANCE.map((p) => ({ value: p as string, label: p }))} onChange={(v) => set("importance", v)} />
       </Field>
       <Field
         label={
           <span className="flex items-center">
-            <span className="flex-1">与我相关</span>
+            <span className="flex-1">{t("knowledge-kbdialogs.relevance")}</span>
             <span className="tabular-nums text-ink">{f.relevance}</span>
           </span>
         }
       >
-        <input type="range" min={0} max={100} step={5} value={f.relevance} onChange={(e) => set("relevance", Number(e.target.value))} aria-label="与我相关" className="w-full accent-accent" />
+        <input type="range" min={0} max={100} step={5} value={f.relevance} onChange={(e) => set("relevance", Number(e.target.value))} aria-label={t("knowledge-kbdialogs.relevance")} className="w-full accent-accent" />
       </Field>
-      <Field label="标签">
+      <Field label={t("knowledge-kbdialogs.tags")}>
         <input
           value={f.tags}
           onChange={(e) => set("tags", e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void save()}
-          placeholder="用空格分隔"
-          aria-label="标签"
+          placeholder={t("knowledge-kbdialogs.tags_placeholder")}
+          aria-label={t("knowledge-kbdialogs.tags")}
           className="h-9 w-full rounded-control bg-surface px-3 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"
         />
       </Field>
       {project && (
         <>
-          <Field label="类型">
-            <Segmented label="项目类型" value={f.projectKind} options={PROJECT_KINDS} onChange={(v) => set("projectKind", v)} />
+          <Field label={t("knowledge-kbdialogs.kind")}>
+            <Segmented label={t("knowledge-kbdialogs.project_kind")} value={f.projectKind} options={PROJECT_KINDS} onChange={(v) => set("projectKind", v)} />
           </Field>
-          <Field label="状态">
-            <Segmented label="项目状态" value={f.status} options={PROJECT_STATUSES as readonly { value: string; label: string }[]} onChange={(v) => set("status", v)} />
+          <Field label={t("knowledge-kbdialogs.status")}>
+            <Segmented label={t("knowledge-kbdialogs.project_status")} value={f.status} options={PROJECT_STATUSES as readonly { value: string; label: string }[]} onChange={(v) => set("status", v)} />
           </Field>
         </>
       )}
-      <p className="text-[11.5px] leading-relaxed text-ink-3">手动打的标会锁住，hub 之后压缩时不再覆盖。</p>
+      <p className="text-[11.5px] leading-relaxed text-ink-3">{t("knowledge-kbdialogs.locked_hint")}</p>
       {error && <p className="mt-2 text-[12.5px] text-red">{error}</p>}
     </Dialog>
   );
@@ -196,11 +197,11 @@ export function DayDialog({ chat, chatName, day, focus, query, onClose }: { chat
         <>
           <Button tone="quiet" disabled={!page?.prev} onClick={() => page?.prev && setShown(page.prev)}>
             <Icon name="chevronLeft" size={13} stroke={2.2} />
-            {page?.prev ? dayTitle(page.prev) : "前一天"}
+            {page?.prev ? dayTitle(page.prev) : t("knowledge-kbdialogs.prev_day")}
           </Button>
           <span className="flex-1" />
           <Button tone="quiet" disabled={!page?.next} onClick={() => page?.next && setShown(page.next)}>
-            {page?.next ? dayTitle(page.next) : "后一天"}
+            {page?.next ? dayTitle(page.next) : t("knowledge-kbdialogs.next_day")}
             <Icon name="chevronRight" size={13} stroke={2.2} />
           </Button>
         </>
@@ -215,7 +216,7 @@ export function DayDialog({ chat, chatName, day, focus, query, onClose }: { chat
         {error && <p className="py-6 text-[12.5px] text-red">{error}</p>}
         {page && (
           <>
-            <p className="mb-2 text-[11.5px] text-ink-3">{msgs.length} 条消息</p>
+            <p className="mb-2 text-[11.5px] text-ink-3">{t("knowledge-kbdialogs.message_count", { count: msgs.length })}</p>
             <div className="flex flex-col gap-1 pb-1">
               {msgs.map((m) => (
                 <div key={m.n} data-n={m.n} className={cx("rounded-[8px] px-2.5 py-1.5", m.n === target && "bg-accent-tint")}>
@@ -245,7 +246,7 @@ export function MomentDialog({ moment, onClose }: { moment: KBMomentRef | null; 
     return () => ac.abort();
   }, [moment]);
   return (
-    <Dialog open={Boolean(moment)} onClose={onClose} width={600} title={moment ? momentFeed(moment) : "公司圈"}>
+    <Dialog open={Boolean(moment)} onClose={onClose} width={600} title={moment ? momentFeed(moment) : t("knowledge-kbdialogs.moments")}>
       <div className="-mx-4 max-h-[65vh] overflow-y-auto px-4 pb-1">
         {moment?.note && (
           <p className="mb-3 flex items-center gap-1.5 text-[12.5px] font-medium text-accent-ink">

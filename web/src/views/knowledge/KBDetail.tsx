@@ -42,6 +42,7 @@ import { openNewAgent } from "../../lib/new-agent";
 import { DayDialog, MessageView, MomentDialog, TagEditor } from "./KBDialogs";
 import { ErrorBox } from "./KBList";
 import { Badges, Card, KBIcon, Marked, MoreRow, onPlainClick, SectionTitle, Tile, TonePill } from "./KBParts";
+import { t } from "../../i18n";
 
 /** Timeline lines shown before 显示全部. */
 const LOG_SHOWN = 6;
@@ -56,8 +57,8 @@ export function EmptyDetail() {
       <span className="mb-3 flex size-11 items-center justify-center rounded-[12px] bg-field text-ink-3">
         <Icon name="book" size={20} />
       </span>
-      <p className="text-[14px] font-medium text-ink">选一个条目</p>
-      <p className="mt-1 max-w-[320px] text-[12.5px] leading-relaxed text-ink-3">看它的档案、时间线和关联；「问 Persona」把它交给主对话。</p>
+      <p className="text-[14px] font-medium text-ink">{t("knowledge-kbdetail.empty_title")}</p>
+      <p className="mt-1 max-w-[320px] text-[12.5px] leading-relaxed text-ink-3">{t("knowledge-kbdetail.empty_body")}</p>
     </div>
   );
 }
@@ -118,7 +119,7 @@ export function EntryDetail({
     try {
       await askPersona(askPersonaText(e, d));
     } catch (err) {
-      toast(`没发出去：${errorText(err)}`, "error");
+      toast(t("knowledge-kbdetail.send_failed", { error: errorText(err) }), "error");
     } finally {
       setAsking(false);
     }
@@ -136,12 +137,12 @@ export function EntryDetail({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <IconButton icon="chevronLeft" label="返回列表" onClick={onBack} className="@3xl:hidden" />
+        <IconButton icon="sidebar" label={t("knowledge-kbdetail.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="chevronLeft" label={t("knowledge-kbdetail.back")} onClick={onBack} className="@3xl:hidden" />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-2">{kindTitle(kind)}</span>
         <Button tone="secondary" onClick={() => setEditing(true)} disabled={!d}>
           <KBIcon name="tag" size={14} stroke={2.1} />
-          打标
+          {t("knowledge-kbdetail.tag")}
         </Button>
       </header>
 
@@ -154,7 +155,7 @@ export function EntryDetail({
               <div className="min-w-0 flex-1">
                 <h1 className="line-clamp-3 text-[20px] font-semibold leading-snug tracking-tight text-ink">{e.name}</h1>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <Badges entry={e} status={status} kindSuffix="项目" />
+                  <Badges entry={e} status={status} asProject />
                 </div>
               </div>
             </div>
@@ -167,8 +168,8 @@ export function EntryDetail({
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button tone="accent" icon="spark" busy={asking} disabled={!d} onClick={ask} title="把这个条目的档案和最近进展带进 Persona 的主对话">
-                问 Persona
+              <Button tone="accent" icon="spark" busy={asking} disabled={!d} onClick={ask} title={t("knowledge-kbdetail.ask_title")}>
+                {t("knowledge-kbdetail.ask")}
               </Button>
               {kind === "projects" && (
                 <Button
@@ -176,9 +177,9 @@ export function EntryDetail({
                   icon="plus"
                   disabled={!d}
                   onClick={() => openNewAgent(agentPreset(kind, e, d, getState().machines.filter((m) => m.online).map((m) => m.id)))}
-                  title="新建一个 Agent，带上这个项目的档案和最近进展"
+                  title={t("knowledge-kbdetail.new_agent_title")}
                 >
-                  开 Agent
+                  {t("knowledge-kbdetail.new_agent")}
                 </Button>
               )}
             </div>
@@ -230,7 +231,7 @@ export function EntryDetail({
 
               {log.length > 0 && (
                 <section>
-                  <SectionTitle title="时间线" count={log.length} />
+                  <SectionTitle title={t("knowledge-kbdetail.timeline")} count={log.length} />
                   <Card>
                     <ol className="px-4 pt-1.5 pb-1">
                       {(allLog ? log : log.slice(0, LOG_SHOWN)).map((l, i, shown) => {
@@ -257,14 +258,14 @@ export function EntryDetail({
                         );
                       })}
                     </ol>
-                    {log.length > LOG_SHOWN && <MoreRow open={allLog} label={`显示全部 ${log.length} 条`} onClick={() => setAllLog((x) => !x)} />}
+                    {log.length > LOG_SHOWN && <MoreRow open={allLog} label={t("knowledge-kbdetail.show_all_entries", { count: log.length })} onClick={() => setAllLog((x) => !x)} />}
                   </Card>
                 </section>
               )}
 
               {prof && (
                 <section>
-                  <SectionTitle title="档案" />
+                  <SectionTitle title={t("knowledge-kbdetail.profile")} />
                   <Card>
                     <div className="px-4 py-3.5">
                       <Markdown text={prof} small />
@@ -282,18 +283,18 @@ export function EntryDetail({
                       className="flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-[13px] font-medium text-accent-ink hover:bg-hover"
                     >
                       <Icon name="link" size={14} />
-                      已合并到另一个项目
+                      {t("knowledge-kbdetail.merged")}
                       <span className="flex-1" />
                       <Icon name="chevronRight" size={12} stroke={2.2} className="text-ink-3" />
                     </a>
                   </Card>
-                  <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">和另一个项目是同一件事，时间线、会话和人都并过去了。这里保留合并前的样子。</p>
+                  <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("knowledge-kbdetail.merged_hint")}</p>
                 </section>
               )}
 
               {moments.length > 0 && (
                 <section>
-                  <SectionTitle title="相关公司圈" count={moments.length} />
+                  <SectionTitle title={t("knowledge-kbdetail.moments")} count={moments.length} />
                   <Card>
                     {(allMoments ? moments : moments.slice(0, LINKS_SHOWN)).map((m) => (
                       <button key={m.id} type="button" onClick={() => setMoment(m)} className="block w-full px-4 py-2.5 text-left transition-colors hover:bg-hover">
@@ -302,7 +303,7 @@ export function EntryDetail({
                           {ago(m.at) && <span className="shrink-0 text-ink-3">{ago(m.at)}</span>}
                           <span className="flex-1" />
                           {m.comments > 0 && (
-                            <span className="flex shrink-0 items-center gap-1 text-ink-3 tabular-nums" aria-label={`${m.comments} 条评论`}>
+                            <span className="flex shrink-0 items-center gap-1 text-ink-3 tabular-nums" aria-label={t("knowledge-kbdetail.comments", { count: m.comments })}>
                               <Icon name="chat" size={12} />
                               {m.comments}
                             </span>
@@ -312,7 +313,7 @@ export function EntryDetail({
                         <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-ink-2">{m.text}</span>
                       </button>
                     ))}
-                    {moments.length > LINKS_SHOWN && <MoreRow open={allMoments} label={`全部 ${moments.length} 条`} onClick={() => setAllMoments((x) => !x)} />}
+                    {moments.length > LINKS_SHOWN && <MoreRow open={allMoments} label={t("knowledge-kbdetail.all_entries", { count: moments.length })} onClick={() => setAllMoments((x) => !x)} />}
                   </Card>
                 </section>
               )}
@@ -346,7 +347,7 @@ export function EntryDetail({
                       {g.items.length > LINKS_SHOWN && (
                         <MoreRow
                           open={open}
-                          label={`全部 ${g.items.length} 个`}
+                          label={t("knowledge-kbdetail.all_items", { count: g.items.length })}
                           onClick={() =>
                             setOpenKinds((s) => {
                               const n = new Set(s);
@@ -369,7 +370,7 @@ export function EntryDetail({
                   <Card>
                     <button type="button" onClick={() => setShowRecent((x) => !x)} aria-expanded={showRecent} className="flex h-10 w-full items-center gap-2 px-4 text-left transition-colors hover:bg-hover">
                       <Icon name="chat" size={14} className="text-ink-3" />
-                      <span className="flex-1 whitespace-nowrap text-[13px] text-ink">最近 7 天的消息</span>
+                      <span className="flex-1 whitespace-nowrap text-[13px] text-ink">{t("knowledge-kbdetail.last_7_days")}</span>
                       <span className="text-[12px] text-ink-3 tabular-nums">{recent.reduce((n, x) => n + x.messages.length, 0)}</span>
                       <Icon name="chevronRight" size={12} stroke={2.2} className={cx("text-ink-3 transition-transform duration-200", showRecent && "rotate-90")} />
                     </button>
@@ -383,7 +384,7 @@ export function EntryDetail({
                                   <span className="text-[11.5px] font-semibold text-ink-3">{dayTitle(g.day)}</span>
                                   <span className="flex-1" />
                                   <button type="button" onClick={() => setDay({ day: g.day! })} className="whitespace-nowrap rounded-[6px] px-1.5 py-0.5 text-[11.5px] font-medium text-accent-ink hover:bg-hover">
-                                    看这一天
+                                    {t("knowledge-kbdetail.view_day")}
                                   </button>
                                 </div>
                               )}
@@ -402,14 +403,14 @@ export function EntryDetail({
               )}
 
               <section>
-                <SectionTitle title="目录" />
+                <SectionTitle title={t("knowledge-kbdetail.directory")} />
                 <Card>
                   <div className="flex items-center gap-2 px-4 py-2">
                     <span className="min-w-0 flex-1 font-mono text-[12px] break-all text-ink-2 select-all">{d.path}</span>
-                    <IconButton icon="copy" label="拷贝目录" onClick={() => void copyText(d.path)} />
+                    <IconButton icon="copy" label={t("knowledge-kbdetail.copy_directory")} onClick={() => void copyText(d.path)} />
                   </div>
                 </Card>
-                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。</p>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("knowledge-kbdetail.directory_hint")}</p>
               </section>
             </div>
           )}
@@ -428,15 +429,15 @@ function Matches({ matches, query, all, onToggle, onOpenDay }: { matches: KBMatc
   const shown = all ? matches : matches.slice(0, MATCHES_SHOWN);
   return (
     <section>
-      <SectionTitle title={`搜索「${query}」`} count={matches.length >= 40 ? "40+" : matches.length} />
+      <SectionTitle title={t("knowledge-kbdetail.search_title", { query })} count={matches.length >= 40 ? "40+" : matches.length} />
       <Card>
-        {!matches.length && <p className="px-4 py-2.5 text-[12.5px] text-ink-2">「{query}」在名字或资料里</p>}
+        {!matches.length && <p className="px-4 py-2.5 text-[12.5px] text-ink-2">{t("knowledge-kbdetail.search_in_name", { query })}</p>}
         {shown.map((m) => {
           const v = hitView(m);
           const body = (
             <>
               {/* a message shows its own time below */}
-              <span className="block truncate text-[11px] text-ink-3">{m.day ? `聊天记录 · ${dayTitle(m.day)}` : v.source}</span>
+              <span className="block truncate text-[11px] text-ink-3">{m.day ? t("knowledge-kbdetail.chat_history_day", { day: dayTitle(m.day) }) : v.source}</span>
               {m.day ? (
                 <span className="mt-0.5 flex flex-col gap-0.5">
                   {m.before?.length ? <span className="truncate text-[11.5px] text-ink-3">{line(m.before[m.before.length - 1])}</span> : null}
@@ -460,7 +461,7 @@ function Matches({ matches, query, all, onToggle, onOpenDay }: { matches: KBMatc
             </div>
           );
         })}
-        {matches.length > MATCHES_SHOWN && <MoreRow open={all} label={`显示全部 ${matches.length} 处`} onClick={onToggle} />}
+        {matches.length > MATCHES_SHOWN && <MoreRow open={all} label={t("knowledge-kbdetail.show_all_matches", { count: matches.length })} onClick={onToggle} />}
       </Card>
     </section>
   );
@@ -468,7 +469,7 @@ function Matches({ matches, query, all, onToggle, onOpenDay }: { matches: KBMatc
 
 function line(raw: string) {
   const m = parseMessageLine(raw);
-  return m.sender ? `${m.sender}：${m.text}` : m.text;
+  return m.sender ? t("knowledge-kbdetail.message_line", { sender: m.sender, text: m.text }) : m.text;
 }
 
 /** The Agents working in the project's code directories, live from the store when it has them. */
@@ -478,7 +479,7 @@ function Agents({ agents }: { agents: Session[] }) {
   const live = agents.map((a) => (sessions[a.machine_id] ?? []).find((x) => x.session_id === a.session_id) ?? a);
   return (
     <section>
-      <SectionTitle title="在做这个项目的 Agent" count={live.length} />
+      <SectionTitle title={t("knowledge-kbdetail.agents")} count={live.length} />
       <Card>
         {live.map((s) => {
           const to = { name: "session" as const, mid: s.machine_id, sid: s.session_id };
@@ -509,7 +510,7 @@ function Dirs({ dirs }: { dirs: { machine: string; path: string }[] }) {
   const machines = useStore((s) => s.machines);
   return (
     <section>
-      <SectionTitle title="代码目录" count={dirs.length} />
+      <SectionTitle title={t("knowledge-kbdetail.code_dirs")} count={dirs.length} />
       <Card>
         {dirs.map((x) => (
           <div key={`${x.machine}:${x.path}`} className="flex items-center gap-2.5 px-4 py-2">
@@ -518,7 +519,7 @@ function Dirs({ dirs }: { dirs: { machine: string; path: string }[] }) {
               {shortPath(x.path)}
             </span>
             {x.machine && <span className="shrink-0 whitespace-nowrap text-[11.5px] text-ink-3">{machineWithHub(x.machine, machines)}</span>}
-            <IconButton icon="copy" label="拷贝路径" size={24} iconSize={13} onClick={() => void copyText(x.path)} />
+            <IconButton icon="copy" label={t("knowledge-kbdetail.copy_path")} size={24} iconSize={13} onClick={() => void copyText(x.path)} />
           </div>
         ))}
       </Card>

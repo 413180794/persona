@@ -9,10 +9,36 @@ import { BoardModel, boundCard, cardSessions, columnCards, sameDirectory, select
 import type { Machine, Session } from "../lib/types";
 import { Button, cx, Dialog, IconButton, Loading, Menu, StatePill, toast, type MenuItem } from "../ui/atoms";
 import { Icon } from "../ui/icons";
+import { t } from "../i18n";
+import { navigate } from "../lib/router";
+import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 const field = "w-full rounded-control bg-field px-3 py-2 text-sm text-ink outline-none focus:ring-2 focus:ring-accent";
 type Edit = { kind: "column" | "card"; id?: string; title: string };
 
+/** /workspace-board: the board only while it is turned on (#2475); off, nothing about it is loaded or polled. */
 export function WorkspaceBoard({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+  const { enabled } = useWorkspaceBoardSetting();
+  if (enabled) return <Board onToggleSidebar={onToggleSidebar} />;
+  return <div className="flex h-full flex-col bg-page">
+    <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-3">
+      {onToggleSidebar && <IconButton icon="sidebar" label={t("workspace-board.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />}
+      <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-ink">{t("workspace-board.title")}</h1>
+    </header>
+    {enabled === null ? <div className="p-6"><Loading label={t("workspace-board.loading")} /></div> : <WorkspaceBoardOff />}
+  </div>;
+}
+
+/** What /workspace-board says while the board is off: where to turn it on. */
+export function WorkspaceBoardOff() {
+  return <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+    <Icon name="layers" size={28} className="text-ink-3" />
+    <h2 className="text-base font-semibold text-ink">{t("workspace-board.off_title")}</h2>
+    <p className="max-w-sm text-sm text-ink-3">{t("workspace-board.off_body")}</p>
+    <Button tone="primary" icon="gear" className="whitespace-nowrap" onClick={() => navigate("/settings?tab=general")}>{t("workspace-board.open_settings")}</Button>
+  </div>;
+}
+
+function Board({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const [model] = useState(() => new BoardModel());
   const state = useSyncExternalStore(model.subscribe, model.snapshot, model.snapshot);
   const machines = useStore((s) => s.machines), sessions = useAgentSessions();

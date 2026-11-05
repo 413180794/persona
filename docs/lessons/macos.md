@@ -266,3 +266,7 @@
 - 写 UserDefaults 会让每一页里的 `@AppStorage` 视图都重算，页面常驻后这个代价乘以页数。
   所以切分区时记的 `app.tab` / `mac.section` 改成延后写（`DeferredDefaults`）。
 - 不要用 lldb attach 去看异常：会弹「开发者工具访问」的密码框并卡住，之后连 `sample` 也会卡；在 SecurityAgent 窗口点「取消」能恢复。
+- 分栏中间那栏的 `List(selection:)`：选中一变，系统就把右边详情栏清空。通知、⌘K 直接打开的对话会立刻被关掉（#2213）。
+  Agents 列表因此不选中：↑↓ 按 `AgentListRows` 算出的显示顺序打开下一个，打开的那行自己画底色。
+- 懒加载 `List` 的 `ScrollViewProxy.scrollTo`：目标在很远的下面时，第一次按估计的行高滚，会停在目标前面。
+  等那段行排好（约 0.1 s）再滚一次就准了（`MacRowOrder.scroll`）。

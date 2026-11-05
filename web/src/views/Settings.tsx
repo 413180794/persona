@@ -20,6 +20,7 @@ import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../lib/atten
 import { HubList } from "./Hubs";
 import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
+import { AgentGroup } from "./settings/AgentGroup";
 import { AssistantSettings } from "./settings/AssistantSettings";
 import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
@@ -304,6 +305,8 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
           <Switch on={contextAsUsed} onChange={setContextAsUsed} label={tr("context.as_used")} />
         </Row>
       </Group>
+
+      <AgentGroup />
 
       <Group title="形象" footer="Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。形象包放在 hub 机器上。">
         <PersonaPicker builtin={<BuiltinFace size={56} />} />

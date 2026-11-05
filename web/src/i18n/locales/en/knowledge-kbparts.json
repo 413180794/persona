@@ -1,0 +1,7 @@
+{
+  "importance": "Importance {level}",
+  "relevance_title": "Relevance to me",
+  "relevance": "Relevance {value}",
+  "collapse": "Show less",
+  "project_kind": "{kind} project"
+}

@@ -14,6 +14,7 @@ import { Button, Collapse, copyText, cx, Dialog, IconButton, Loading, Menu, Stat
 import { Icon } from "../../ui/icons";
 import { arrange, conversationTitle, filterConversations, mergeConversations, splitTitle, type Conversation } from "./conversations";
 import { Empty, inputClass, SectionTitle } from "./parts";
+import { t } from "../../i18n";
 
 const NONE: Session[] = [];
 
@@ -61,7 +62,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
     setFetched((list) => (list ?? []).map((x) => (x.session_id === s.session_id ? { ...x, archived: on } : x)));
     try {
       await api(`/assistant/conversations/${enc(s.session_id)}/${on ? "archive" : "unarchive"}`, { method: "POST", json: {} });
-      toast(on ? `已归档「${conversationTitle(s)}」` : `已取消归档「${conversationTitle(s)}」`, "ok");
+      toast(on ? t("assistant-history.archived_toast", { title: conversationTitle(s) }) : t("assistant-history.unarchived_toast", { title: conversationTitle(s) }), "ok");
     } catch (e) {
       toast(errorText(e), "error");
     }
@@ -73,13 +74,13 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
+        <IconButton icon="sidebar" label={t("assistant-history.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
         <h1 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-ink">
-          Persona 的对话
+          {t("assistant-history.title")}
           {total > 0 && <span className="ml-2 text-[12px] font-normal text-ink-3 tabular-nums">{total}</span>}
         </h1>
-        <IconButton icon="retry" label="刷新" onClick={() => void after()} />
-        <Button tone="primary" icon="plus" onClick={() => navigate({ name: "persona-new" })}>新对话</Button>
+        <IconButton icon="retry" label={t("assistant-history.refresh")} onClick={() => void after()} />
+        <Button tone="primary" icon="plus" onClick={() => navigate({ name: "persona-new" })}>{t("assistant-history.new_chat")}</Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -90,11 +91,11 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-              placeholder="搜索标题或最后一句"
-              aria-label="搜索对话"
+              placeholder={t("assistant-history.search_placeholder")}
+              aria-label={t("assistant-history.search_label")}
               className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
             />
-            {query && <IconButton icon="x" label="清除搜索" size={22} iconSize={12} onClick={() => setQuery("")} />}
+            {query && <IconButton icon="x" label={t("assistant-history.clear_search")} size={22} iconSize={12} onClick={() => setQuery("")} />}
           </label>
 
           {loading && (
@@ -103,16 +104,16 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             </div>
           )}
           {error && fetched === null && (
-            <Empty icon="info" title="读不到对话">
+            <Empty icon="info" title={t("assistant-history.load_failed")}>
               {error}
             </Empty>
           )}
           {!loading && !error && all.length === 0 && (
-            <Empty icon="chat" title="还没有对话">
-              在 Persona 里说句话，对话就会出现在这里。
+            <Empty icon="chat" title={t("assistant-history.empty_title")}>
+              {t("assistant-history.empty_body")}
             </Empty>
           )}
-          {!loading && searching && hits.length === 0 && all.length > 0 && <Empty icon="search" title={`没有和「${query.trim()}」相关的对话`} />}
+          {!loading && searching && hits.length === 0 && all.length > 0 && <Empty icon="search" title={t("assistant-history.no_results", { query: query.trim() })} />}
 
           {main && (
             <section className="mb-5">
@@ -142,7 +143,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 className="mb-1.5 flex items-center gap-1.5 whitespace-nowrap rounded-[6px] px-1 text-[12px] font-medium text-ink-3 transition-colors hover:text-ink-2"
               >
                 <Icon name="archive" size={13} />
-                已归档（{archived.length}）
+                {t("assistant-history.archived_count", { count: archived.length })}
                 <Icon name="chevron" size={12} stroke={2.2} className={cx("transition-transform duration-200", !(showArchived || searching) && "-rotate-90")} />
               </button>
               <Collapse open={showArchived || searching}>
@@ -153,7 +154,7 @@ export function History({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                     <ConvRow key={s.session_id} s={s} now={nowMs} onRename={setRenaming} onArchive={archive} />
                   ))}
                 </div>
-                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">归档只是不在列表里显示，对话还在。在归档的对话里再发消息，它会自动回到列表。</p>
+                <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-history.archived_footer")}</p>
                 </div>
               </Collapse>
             </section>
@@ -191,7 +192,7 @@ function ConvChannel({ ids }: { ids?: string[] }) {
   if (!via) return null;
   const kind = list.find((c) => c.id === via.id)?.kind ?? "im";
   return (
-    <span title={`来自${via.name}`} className="flex shrink-0">
+    <span title={t("assistant-history.via", { name: via.name })} className="flex shrink-0">
       <ChannelMark c={{ id: via.id, kind }} size={16} />
     </span>
   );
@@ -206,12 +207,12 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
   const flagged = st === "needs_you" || st === "working" || st === "unread";
   const last = plainMarkdown(s.last_text);
   const items: MenuItem[] = [
-    ...(!main ? [{ key: "rename", label: "重命名…", icon: "pencil" as const, onSelect: () => onRename(s) }] : []),
-    { key: "copy", label: "拷贝会话 ID", icon: "copy", onSelect: () => void copyText(s.session_id) },
+    ...(!main ? [{ key: "rename", label: t("assistant-history.rename_ellipsis"), icon: "pencil" as const, onSelect: () => onRename(s) }] : []),
+    { key: "copy", label: t("assistant-history.copy_session_id"), icon: "copy", onSelect: () => void copyText(s.session_id) },
     ...(!main
       ? [s.archived
-          ? { key: "unarchive", label: "取消归档", icon: "archive" as const, onSelect: () => onArchive(s, false) }
-          : { key: "archive", label: "归档", icon: "archive" as const, onSelect: () => onArchive(s, true) }]
+          ? { key: "unarchive", label: t("assistant-history.unarchive"), icon: "archive" as const, onSelect: () => onArchive(s, false) }
+          : { key: "archive", label: t("assistant-history.archive"), icon: "archive" as const, onSelect: () => onArchive(s, true) }]
       : []),
   ];
   return (
@@ -237,7 +238,7 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
                 title
               )}
             </span>
-            {main && <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-accent-tint px-2 text-[11px] font-medium text-accent-ink">主对话</span>}
+            {main && <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-accent-tint px-2 text-[11px] font-medium text-accent-ink">{t("assistant-history.main_chat")}</span>}
             <ConvChannel ids={s.channels} />
           </span>
           {last && <span className="mt-0.5 block truncate text-[12px] text-ink-3">{last}</span>}
@@ -249,7 +250,7 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
       </a>
       <IconButton
         icon="more"
-        label="更多"
+        label={t("assistant-history.more")}
         onClick={menu.open}
         active={!!menu.anchor}
         className={menu.anchor ? "" : "sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"}
@@ -260,7 +261,7 @@ function ConvRow({ s, main, now, onRename, onArchive }: { s: Conversation; main?
 }
 
 function RenameDialog({ s, onClose, onDone }: { s: Conversation; onClose: () => void; onDone: (title: string) => void }) {
-  const [title, setTitle] = useState(conversationTitle(s) === "新对话" ? "" : s.title);
+  const [title, setTitle] = useState(conversationTitle(s) === t("assistant-conversations.untitled") ? "" : s.title);
   const [busy, setBusy] = useState(false);
   const trimmed = title.trim();
   const save = async () => {
@@ -268,7 +269,7 @@ function RenameDialog({ s, onClose, onDone }: { s: Conversation; onClose: () => 
     setBusy(true);
     try {
       await api(`/sessions/${enc(s.machine_id)}/${enc(s.session_id)}/rename`, { method: "POST", json: { title: trimmed } });
-      toast("已重命名", "ok");
+      toast(t("assistant-history.renamed"), "ok");
       onDone(trimmed);
       onClose();
     } catch (e) {
@@ -280,12 +281,12 @@ function RenameDialog({ s, onClose, onDone }: { s: Conversation; onClose: () => 
     <Dialog
       open
       onClose={() => !busy && onClose()}
-      title="重命名对话"
+      title={t("assistant-history.rename_title")}
       width={420}
       footer={
         <>
-          <Button tone="quiet" disabled={busy} onClick={onClose}>取消</Button>
-          <Button tone="primary" busy={busy} disabled={!trimmed || trimmed === s.title} onClick={() => void save()}>保存</Button>
+          <Button tone="quiet" disabled={busy} onClick={onClose}>{t("common.cancel")}</Button>
+          <Button tone="primary" busy={busy} disabled={!trimmed || trimmed === s.title} onClick={() => void save()}>{t("common.save")}</Button>
         </>
       }
     >
@@ -295,8 +296,8 @@ function RenameDialog({ s, onClose, onDone }: { s: Conversation; onClose: () => 
           void save();
         }}
       >
-        <input className={inputClass} value={title} autoFocus onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTitle(e.target.value)} placeholder="对话标题" aria-label="对话标题" />
-        <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">你起的标题不会再被自动标题覆盖。</p>
+        <input className={inputClass} value={title} autoFocus onFocus={(e) => e.currentTarget.select()} onChange={(e) => setTitle(e.target.value)} placeholder={t("assistant-history.title_placeholder")} aria-label={t("assistant-history.title_placeholder")} />
+        <p className="mt-1.5 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-history.rename_hint")}</p>
       </form>
     </Dialog>
   );

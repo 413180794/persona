@@ -51,7 +51,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 
 ## 页面
 
-- **工作流看板**（`/workspace-board`，#1646）：从侧边栏进入，绑定已有工作区或在线机器的真实目录，手工管理列、卡片顺序、置顶和归档；详情关联同目录的 Agents，并打开文件、Git 或显式新建 Agent。卡片和列状态存 Postgres，Agent 状态不迁列，离线保留卡片。操作、权限、升级和来源见 [工作区看板](workspace-board.md)。
+- **工作流看板**（`/workspace-board`，#1646）：默认关闭，在设置 › 通用 › Agent 打开（开关存在 hub，每个浏览器一样，#2475）；关闭时侧边栏没有入口，直接打开地址显示「工作流看板未开启」和去设置的按钮，也不读看板、不轮询发现接口。打开后从侧边栏进入，绑定已有工作区或在线机器的真实目录，手工管理列、卡片顺序、置顶和归档；详情关联同目录的 Agents，并打开文件、Git 或显式新建 Agent。卡片和列状态存 Postgres，Agent 状态不迁列，离线保留卡片。操作、权限、升级和来源见 [工作区看板](workspace-board.md)。
 
 - **终端**（`/terminal`、`/terminal/<机器>/<终端 id>`，`src/views/terminal/TerminalPage.tsx`、`src/lib/terminals.ts`，`docs/terminal.md` 第十九节）：不开 Agent 也能开终端。
   机器 → herdr 空间 → 标签页 → 窗格，Agent 带状态点，普通 shell 是终端图标；点一个普通 shell 窗格在右边（窄屏整页）打开成终端，里面就是「侧边面板 › 终端」的那个 `TerminalPanel`，接管 / 只看 / 键栏 / 历史都一样；点 **Agent 的窗格**（Jump To 回车也一样）进它的会话页、中间是终端视图（「终端 ⇄ 对话」，#2419），`/terminal/<机器>/<Agent 的会话 id>` 的老链接照旧能开。

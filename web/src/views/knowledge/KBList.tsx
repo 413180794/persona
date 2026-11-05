@@ -24,6 +24,7 @@ import { Collapse, cx, EASE, IconButton, Loading, Spinner } from "../../ui/atoms
 import { Icon } from "../../ui/icons";
 import { lists, listKey, remember, searches } from "./cache";
 import { Badges, Card, KBIcon, KIND_ICON, Marked, onPlainClick, SectionTitle, Tile } from "./KBParts";
+import { t } from "../../i18n";
 
 /** Rows drawn at once in a section; more on 再显示 (people run to thousands). */
 const PAGE = 150;
@@ -87,7 +88,7 @@ export function ListPane({
     }
     setSearching(true);
     const ac = new AbortController();
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       api<{ results: KBResult[] | null }>(`/kb-search?q=${enc(q)}&results=1`, { signal: ac.signal })
         .then((r) => {
           const results = r.results ?? [];
@@ -99,7 +100,7 @@ export function ListPane({
         .finally(() => !ac.signal.aborted && setSearching(false));
     }, 300); // typing
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       ac.abort();
     };
   }, [q, reloadKey]);
@@ -120,8 +121,8 @@ export function ListPane({
   return (
     <section className={cx("min-h-0 min-w-0 flex-col @3xl:w-[400px] @3xl:shrink-0 @3xl:border-r @3xl:border-line", detailOpen ? "hidden @3xl:flex" : "flex w-full")}>
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3 sm:px-4">
-        <IconButton icon="sidebar" label="侧边栏" onClick={onToggleSidebar} className="lg:hidden" />
-        <h1 className="flex-1 truncate text-[14px] font-semibold text-ink">知识库</h1>
+        <IconButton icon="sidebar" label={t("knowledge-kblist.sidebar")} onClick={onToggleSidebar} className="lg:hidden" />
+        <h1 className="flex-1 truncate text-[14px] font-semibold text-ink">{t("knowledge-kblist.title")}</h1>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[760px] px-3 pt-3 pb-16 sm:px-4">
@@ -131,11 +132,11 @@ export function ListPane({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-              placeholder="搜索档案和聊天记录"
-              aria-label="搜索知识库"
+              placeholder={t("knowledge-kblist.search_placeholder")}
+              aria-label={t("knowledge-kblist.search_label")}
               className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
             />
-            {query && <IconButton icon="x" label="清除" size={22} iconSize={12} onClick={() => setQuery("")} />}
+            {query && <IconButton icon="x" label={t("knowledge-kblist.clear")} size={22} iconSize={12} onClick={() => setQuery("")} />}
           </label>
 
           {q ? (
@@ -144,7 +145,7 @@ export function ListPane({
             <>
               <div className="mt-3 flex items-start gap-2">
                 {/* Search covers every kind: the chips (one of them lit) would say otherwise, so they go while searching. */}
-                <div role="tablist" aria-label="类型" className="flex min-w-0 flex-1 flex-wrap gap-1">
+                <div role="tablist" aria-label={t("knowledge-kblist.kinds")} className="flex min-w-0 flex-1 flex-wrap gap-1">
                   {KB_KINDS.map((k) => {
                     const on = k === kind;
                     const n = on ? list?.items?.length : undefined;
@@ -170,8 +171,8 @@ export function ListPane({
               </div>
               {tag && (
                 <div className="mt-2 flex items-center gap-1.5 px-1 text-[12px] text-ink-3">
-                  只看
-                  <button type="button" onClick={() => setTag(undefined)} className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full bg-accent-tint px-2 font-medium text-accent-ink hover:brightness-105" title="取消筛选">
+                  {t("knowledge-kblist.only")}
+                  <button type="button" onClick={() => setTag(undefined)} className="inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full bg-accent-tint px-2 font-medium text-accent-ink hover:brightness-105" title={t("knowledge-kblist.clear_filter_title")}>
                     #{tag}
                     <Icon name="x" size={11} stroke={2.4} />
                   </button>
@@ -194,7 +195,7 @@ export function ListPane({
                   const more = s.items.length - limit;
                   const moreRow = more > 0 && (
                     <button type="button" onClick={() => setLimits((x) => ({ ...x, [k]: limit + PAGE }))} className="flex h-9 w-full items-center whitespace-nowrap px-4 text-[12.5px] font-medium text-accent-ink hover:bg-hover">
-                      再显示 {Math.min(more, PAGE)} 个（还有 {more} 个）
+                      {t("knowledge-kblist.show_more", { count: Math.min(more, PAGE), more })}
                     </button>
                   );
                   return (
@@ -294,7 +295,7 @@ function SearchResults({
   if (!found)
     return (
       <div className="py-10">
-        <Loading label="搜索中" />
+        <Loading label={t("knowledge-kblist.searching")} />
       </div>
     );
   if (!found.results.length) {
@@ -303,8 +304,8 @@ function SearchResults({
         <span className="mb-3 flex size-10 items-center justify-center rounded-[11px] bg-field text-ink-3">
           <Icon name="search" size={18} />
         </span>
-        <p className="text-[13.5px] font-medium text-ink">没有找到「{found.q}」</p>
-        <p className="mt-1 text-[12.5px] text-ink-3">每个词都要出现在同一行里。换个说法，或少写几个词。</p>
+        <p className="text-[13.5px] font-medium text-ink">{t("knowledge-kblist.no_results", { query: found.q })}</p>
+        <p className="mt-1 text-[12.5px] text-ink-3">{t("knowledge-kblist.no_results_hint")}</p>
       </div>
     );
   }
@@ -340,7 +341,7 @@ function ResultRow({ r, q, selected, onOpen }: { r: KBResult; q: string; selecte
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
             <Marked text={r.entry.name} query={q} />
           </span>
-          {r.count > hits.length && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{r.count >= 99 ? "99+ 处" : `${r.count} 处`}</span>}
+          {r.count > hits.length && <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-3">{r.count >= 99 ? t("knowledge-kblist.hits_99_plus") : t("knowledge-kblist.hits", { count: r.count })}</span>}
         </span>
         {!hits.length && r.entry.one_line && (
           <span className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-ink-2">
@@ -360,14 +361,23 @@ function ResultRow({ r, q, selected, onOpen }: { r: KBResult; q: string; selecte
   );
 }
 
+const EMPTY_TITLE: Record<KBKind, string> = {
+  projects: t("knowledge-kblist.empty_projects"),
+  chats: t("knowledge-kblist.empty_chats"),
+  people: t("knowledge-kblist.empty_people"),
+  docs: t("knowledge-kblist.empty_docs"),
+  meetings: t("knowledge-kblist.empty_meetings"),
+  events: t("knowledge-kblist.empty_events"),
+};
+
 function Empty({ kind, tag }: { kind: KBKind; tag?: string }) {
   return (
     <div className="flex flex-col items-center px-6 py-10 text-center">
       <span className="mb-3 flex size-10 items-center justify-center rounded-[11px] bg-field text-ink-3">
         <KBIcon name={KIND_ICON[kind]} size={18} />
       </span>
-      <p className="text-[13.5px] font-medium text-ink">{tag ? `没有带 #${tag} 的${KIND_TITLE[kind]}` : `还没有${KIND_TITLE[kind]}`}</p>
-      <p className="mt-1 max-w-[340px] text-[12.5px] leading-relaxed text-ink-3">hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。</p>
+      <p className="text-[13.5px] font-medium text-ink">{tag ? t("knowledge-kblist.empty_tag", { tag, kind: KIND_TITLE[kind] }) : EMPTY_TITLE[kind]}</p>
+      <p className="mt-1 max-w-[340px] text-[12.5px] leading-relaxed text-ink-3">{t("knowledge-kblist.empty_body")}</p>
     </div>
   );
 }
@@ -378,7 +388,7 @@ export function ErrorBox({ text, onRetry }: { text: string; onRetry?: () => void
       <span className="min-w-0 flex-1">{text}</span>
       {onRetry && (
         <button type="button" onClick={onRetry} className="shrink-0 whitespace-nowrap rounded-[6px] px-2 py-1 font-medium hover:bg-surface">
-          重试
+          {t("knowledge-kblist.retry")}
         </button>
       )}
     </div>
@@ -391,7 +401,7 @@ function TagFilter({ tags, value, onChange }: { tags: string[]; value?: string; 
   return (
     <>
       <span className="relative">
-        <IconButton icon="filter" label={value ? `按标签筛选，当前 #${value}` : "按标签筛选"} active={Boolean(value) || Boolean(anchor)} onClick={(e) => { const t = e.currentTarget; setAnchor((a) => (a ? null : t)); }} />
+        <IconButton icon="filter" label={value ? t("knowledge-kblist.filter_current", { tag: value }) : t("knowledge-kblist.filter")} active={Boolean(value) || Boolean(anchor)} onClick={(e) => { const t = e.currentTarget; setAnchor((a) => (a ? null : t)); }} />
         {value && <span aria-hidden className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-accent" />}
       </span>
       {anchor && (
@@ -444,19 +454,19 @@ function TagPopover({ anchor, tags, value, onPick, onClose }: { anchor: HTMLElem
     </button>
   );
   return createPortal(
-    <div ref={ref} role="dialog" aria-label="按标签筛选" className="fixed z-50 rounded-[12px] bg-surface p-2.5 shadow-overlay" style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}>
+    <div ref={ref} role="dialog" aria-label={t("knowledge-kblist.filter")} className="fixed z-50 rounded-[12px] bg-surface p-2.5 shadow-overlay" style={{ ...pos, animation: `pop-in 160ms ${EASE} both`, transformOrigin: "top right" }}>
       <div className="mb-2 flex items-center px-0.5">
-        <span className="flex-1 text-[11.5px] font-medium text-ink-3">常用标签</span>
+        <span className="flex-1 text-[11.5px] font-medium text-ink-3">{t("knowledge-kblist.common_tags")}</span>
         {value && (
           <button type="button" onClick={() => onPick(undefined)} className="whitespace-nowrap text-[11.5px] font-medium text-accent-ink hover:underline">
-            清除筛选
+            {t("knowledge-kblist.clear_filter")}
           </button>
         )}
       </div>
       <div className="flex max-h-[min(55vh,340px)] flex-wrap gap-1.5 overflow-y-auto">
-        {chip("全部", !value, () => onPick(undefined))}
+        {chip(t("knowledge-kblist.all"), !value, () => onPick(undefined))}
         {tags.map((t) => chip(`#${t}`, value === t, () => onPick(t)))}
-        {!tags.length && <p className="w-full px-0.5 py-2 text-[12px] text-ink-3">这一类还没有标签。</p>}
+        {!tags.length && <p className="w-full px-0.5 py-2 text-[12px] text-ink-3">{t("knowledge-kblist.no_tags")}</p>}
       </div>
     </div>,
     document.body,

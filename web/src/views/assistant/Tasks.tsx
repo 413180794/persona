@@ -41,6 +41,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { AnsweredCard, InteractionCard } from "../chat/Interactions";
 import { MessageActions } from "../chat/MessageActions";
 import { clock, sessionTitle, stateOf } from "../../lib/format";
+import { formatDate, t } from "../../i18n";
 
 // ── what a task is now ──
 
@@ -62,8 +63,8 @@ function statusOf(todo: Todo, lookup: SessionLookup, plans: Record<string, TaskP
 /** Removes a task (lib/feed removeTask), saying so when it did not go. */
 export function removeTaskNow(todo: Todo) {
   removeTask(todo).then(
-    (gone) => gone && toast(`已移除「${todo.title}」`, "ok"),
-    (e) => toast(`没移除：${e instanceof Error ? e.message : e}`, "error"),
+    (gone) => gone && toast(t("assistant-tasks.removed", { title: todo.title }), "ok"),
+    (e) => toast(t("assistant-tasks.remove_failed", { error: String(e instanceof Error ? e.message : e) }), "error"),
   );
 }
 
@@ -82,7 +83,7 @@ function useTaskMenu(todo: Todo | undefined, status: TodoStatus | undefined) {
         <Menu
           anchor={anchor}
           onClose={() => setAnchor(null)}
-          items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
+          items={[{ key: "remove", label: t("assistant-tasks.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(todo) }]}
         />
       ) : null,
   };
@@ -130,9 +131,9 @@ function place(todo: Todo, lead?: Session): string {
 function since(iso?: string): string | undefined {
   if (!iso) return undefined;
   const m = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
-  if (m < 1) return "刚开始";
-  if (m < 60) return `${m} 分钟`;
-  return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
+  if (m < 1) return t("assistant-tasks.just_started");
+  if (m < 60) return t("assistant-tasks.minutes", { count: m });
+  return m % 60 ? t("assistant-tasks.hours_minutes", { hours: Math.floor(m / 60), minutes: m % 60 }) : t("assistant-tasks.hours", { count: m / 60 });
 }
 
 /** What a task's lead agent says or does now, in a line (lib/todos taskNow): its words, or the step it is on. */
@@ -148,14 +149,14 @@ export function openTask(id: string) {
 
 // Dev only: `?task=<todo id>` opens that task's panel (screenshots, docs/testing.md).
 if (import.meta.env.DEV && typeof location !== "undefined") {
-  const t = new URLSearchParams(location.search).get("task");
-  if (t) setTimeout(() => openTask(t), 0);
+  const id = new URLSearchParams(location.search).get("task");
+  if (id) setTimeout(() => openTask(id), 0);
 }
 
 /** 重试 on a task that did not start, or 继续 on one the model service cut off (lib/feed retryTask), saying why when the
  *  hub refused (the machine offline…). */
-export function retryTaskNow(todo: Todo, verb = "重试") {
-  retryTask(todo).catch((e) => toast(`没${verb}：${e instanceof Error ? e.message : e}`, "error"));
+export function retryTaskNow(todo: Todo, verb: "retry" | "continue" = "retry") {
+  retryTask(todo).catch((e) => toast(verb === "continue" ? t("assistant-tasks.continue_failed", { error: String(e instanceof Error ? e.message : e) }) : t("assistant-tasks.retry_failed", { error: String(e instanceof Error ? e.message : e) }), "error"));
 }
 
 
@@ -166,7 +167,7 @@ export function useRetrying(todoId: string | undefined): boolean {
 
 // ── the plan card ──
 
-const PERMISSION: Record<string, string> = { acceptEdits: "可以改文件", plan: "先出方案", bypassPermissions: "全部放行", default: "每步都问" };
+const PERMISSION: Record<string, string> = { acceptEdits: t("assistant-tasks.perm_accept_edits"), plan: t("assistant-tasks.perm_plan"), bypassPermissions: t("assistant-tasks.perm_bypass"), default: t("assistant-tasks.perm_default") };
 
 export function PlanCard({ plan }: { plan: TaskPlan }) {
   const busy = useFeed((s) => s.busy[plan.id]);
@@ -177,36 +178,36 @@ export function PlanCard({ plan }: { plan: TaskPlan }) {
       <div className="flex flex-col gap-1 text-[13px] text-ink-2">
         <span className="flex items-center gap-1.5">
           <Icon name={plan.state === "started" ? "check" : "x"} size={13} />
-          {plan.state === "started" ? `开了 ${plan.tasks.length} 个任务` : `没开 · ${plan.tasks.length} 个任务`}
+          {plan.state === "started" ? t("assistant-tasks.plan_started", { count: plan.tasks.length }) : t("assistant-tasks.plan_dismissed", { count: plan.tasks.length })}
         </span>
-        {failed.map((t) => (
-          <span key={t.title} className="text-red">
-            「{t.title}」没开起来：{t.error}
+        {failed.map((task) => (
+          <span key={task.title} className="text-red">
+            {t("assistant-tasks.plan_task_failed", { title: task.title, error: task.error ?? "" })}
           </span>
         ))}
       </div>
     );
   }
-  const run = (f: () => Promise<void>) => f().catch((e) => toast(`没开起来：${e instanceof Error ? e.message : e}`, "error"));
+  const run = (f: () => Promise<void>) => f().catch((e) => toast(t("assistant-tasks.start_failed", { error: String(e instanceof Error ? e.message : e) }), "error"));
   return (
     <div className="flex flex-col gap-3 rounded-card bg-surface p-4 shadow-card">
       <div className="flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
         <Icon name="list" size={13} />
-        {plan.tasks.length > 1 ? `拆成 ${plan.tasks.length} 件事，这样开` : "这样开"}
+        {plan.tasks.length > 1 ? t("assistant-tasks.plan_split", { count: plan.tasks.length }) : t("assistant-tasks.plan_single")}
       </div>
       {plan.tasks.map((t, i) => (
         <PlanTaskRow key={i} n={i + 1} task={t} numbered={plan.tasks.length > 1} />
       ))}
       <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-ink-2">
         <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[var(--accent)]" />
-        这类以后直接开
+        {t("assistant-tasks.plan_remember")}
       </label>
       <div className="flex gap-2">
         <Button tone="accent" busy={busy} onClick={() => run(() => startPlan(plan, remember))} className="flex-1">
-          {plan.tasks.length > 1 ? `开始 ${plan.tasks.length} 个任务` : "开始"}
+          {plan.tasks.length > 1 ? t("assistant-tasks.plan_start_n", { count: plan.tasks.length }) : t("assistant-tasks.plan_start")}
         </Button>
         <Button disabled={busy} onClick={() => run(() => dismissPlan(plan))}>
-          不开
+          {t("assistant-tasks.plan_dismiss")}
         </Button>
       </div>
     </div>
@@ -219,7 +220,7 @@ function PlanTaskRow({ n, task, numbered }: { n: number; task: PlanTask; numbere
   const chips: { icon: IconName; text: string }[] = [
     { icon: "machine", text: machine },
     { icon: "folder", text: task.cwd.split("/").filter(Boolean).at(-1) ?? task.cwd },
-    { icon: "agent", text: task.model || task.launcher || "默认模型" },
+    { icon: "agent", text: task.model || task.launcher || t("assistant-tasks.default_model") },
   ];
   return (
     <div className={cx("flex flex-col gap-1.5", n > 1 && "border-t border-line pt-3")}>
@@ -235,7 +236,7 @@ function PlanTaskRow({ n, task, numbered }: { n: number; task: PlanTask; numbere
           </span>
         ))}
         <span className={cx("inline-flex h-6 items-center rounded-full px-2 text-[12px]", task.readonly ? "bg-accent-tint text-accent" : "bg-field text-ink-2")}>
-          {task.readonly ? "只读" : PERMISSION[task.permission || "default"] ?? task.permission}
+          {task.readonly ? t("assistant-tasks.readonly") : PERMISSION[task.permission || "default"] ?? task.permission}
         </span>
       </div>
       {task.why && <div className="text-[12px] text-ink-2">{task.why}</div>}
@@ -261,12 +262,12 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
   const progress = progressOf(lead);
   const now =
     status === "needs_you"
-      ? "有事等你回答"
+      ? t("assistant-tasks.needs_answer")
       : cut
-        ? `模型服务出错，中断了：${cut.reason}`
+        ? t("assistant-tasks.interrupted_reason", { reason: cut.reason })
         : status === "failed"
-        ? `没开起来：${startFailure(todo, plans) ?? "原因不明"}`
-        : progress?.text || (startError ? `没开起来：${startError}` : status === "not_started" ? "正在开 Agent" : "还没有动静");
+        ? t("assistant-tasks.start_failed", { error: startFailure(todo, plans) ?? t("assistant-tasks.unknown_reason") })
+        : progress?.text || (startError ? t("assistant-tasks.start_failed", { error: startError }) : status === "not_started" ? t("assistant-tasks.starting_agent") : t("assistant-tasks.no_activity"));
   const stepFor = now === progress?.text ? progress.for : undefined;
   // Its subagents add to its own progress, below it, and never stand in for it.
   const subagents = status === "working" || status === "needs_you" ? runningSubagents(lead) : [];
@@ -294,8 +295,9 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
           </span>
           {subagents.length > 0 && (
             <span className="truncate text-[12px] text-ink-3">
-              子 Agent 在跑：{subagents.slice(0, 3).join("、")}
-              {subagents.length > 3 && ` 等 ${subagents.length} 个`}
+              {subagents.length > 3
+                ? t("assistant-tasks.subagents_running_more", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")), count: subagents.length })
+                : t("assistant-tasks.subagents_running", { names: subagents.slice(0, 3).join(t("assistant-tasks.list_separator")) })}
             </span>
           )}
         </span>
@@ -317,7 +319,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
                 className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline"
               >
                 <Icon name="retry" size={12} />
-                {retrying ? "正在重试" : "重试"}
+                {retrying ? t("assistant-tasks.retrying") : t("assistant-tasks.retry")}
               </button>
               <button
                 type="button"
@@ -328,7 +330,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
                 className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-red hover:underline"
               >
                 <Icon name="trash" size={12} />
-                移除
+                {t("assistant-tasks.remove")}
               </button>
             </span>
           ) : (
@@ -340,12 +342,12 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
                   disabled={retrying}
                   onClick={(e) => {
                     e.stopPropagation();
-                    retryTaskNow(todo, "继续");
+                    retryTaskNow(todo, "continue");
                   }}
                   className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline disabled:opacity-50 disabled:hover:no-underline"
                 >
                   <Icon name="retry" size={12} />
-                  继续
+                  {t("assistant-tasks.continue")}
                 </button>
               )}
               <button
@@ -357,7 +359,7 @@ export function TaskCard({ todoId, conversation }: { todoId: string; conversatio
                 className="inline-flex items-center gap-1 whitespace-nowrap font-semibold text-accent hover:underline"
               >
                 <Icon name="send" size={12} />
-                说一句
+                {t("assistant-tasks.say_something")}
               </button>
             </span>
           )}
@@ -395,7 +397,7 @@ export function TaskLine({ todoId }: { todoId: string }) {
 export function FeedLineView({ item }: { item: FeedItem }) {
   const plan = useFeed((s) => (item.kind === "plan" && item.ref ? s.plans[item.ref] : undefined));
   const isLater = useFeed((s) => (item.ref ? s.later[item.ref] : false));
-  const title = useStore((s) => s.todos.find((t) => t.id === item.ref)?.title) ?? "任务";
+  const title = useStore((s) => s.todos.find((todo) => todo.id === item.ref)?.title) ?? t("assistant-tasks.task_fallback");
   const known = useStore((s) => s.todos.some((t) => t.id === item.ref));
   switch (item.kind) {
     case "plan":
@@ -411,7 +413,7 @@ export function FeedLineView({ item }: { item: FeedItem }) {
         <div className="flex flex-col items-end gap-1 pl-10">
           <span className="inline-flex items-center gap-1 text-[12px] font-medium text-accent">
             <Icon name="send" size={11} />
-            对「{title}」说
+            {t("assistant-tasks.say_to", { title })}
           </span>
           <div className="rounded-[18px] bg-field px-3.5 py-2 text-[14.5px]">{field(item, "text")}</div>
         </div>
@@ -449,7 +451,7 @@ export function AnsweredLine({ item, title, onOpenTask }: { item: FeedItem; titl
           onClick={() => setOpen(!open)}
           className="flex min-w-0 flex-1 items-center gap-1.5 text-left enabled:cursor-pointer"
         >
-          <span className="min-w-0 flex-1 truncate">· {field(item, "answer") ?? "回答了"}</span>
+          <span className="min-w-0 flex-1 truncate">· {field(item, "answer") ?? t("assistant-tasks.answered")}</span>
           {expandable && (
             <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-200" style={{ transform: open ? "rotate(90deg)" : "none" }} />
           )}
@@ -483,12 +485,12 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
   const plans = useFeed((s) => s.plans);
   const retrying = useRetrying(todo?.id);
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
-  const title = field(item, "title") ?? "任务";
+  const title = field(item, "title") ?? t("assistant-tasks.task_fallback");
   if (todo && status && status !== "interrupted") {
     return (
       <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-ink-2 hover:text-ink">
         <Icon name={status === "done" ? "check" : "retry"} size={13} />
-        「{title}」{status === "done" ? "已完成" : "中断后继续了"}
+        {status === "done" ? t("assistant-tasks.receipt_done", { title }) : t("assistant-tasks.receipt_continued", { title })}
       </button>
     );
   }
@@ -500,15 +502,15 @@ function InterruptedReceipt({ item }: { item: FeedItem }) {
     <div className="flex gap-3 rounded-card bg-red-tint p-4">
       <Icon name="info" size={18} stroke={2.4} className="text-red" />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="text-[14.5px] font-semibold">{title} 中断了</div>
-        <div className="line-clamp-4 text-[13px] text-ink-2">{reason ? `模型服务出错，中断了：${reason}` : "模型服务出错，中断了"}</div>
+        <div className="text-[14.5px] font-semibold">{t("assistant-tasks.interrupted_title", { title })}</div>
+        <div className="line-clamp-4 text-[13px] text-ink-2">{reason ? t("assistant-tasks.interrupted_reason", { reason }) : t("assistant-tasks.interrupted")}</div>
         <div className="mt-1 flex gap-2">
           {canContinue && (
-            <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo, "继续")}>
-              继续
+            <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo, "continue")}>
+              {t("assistant-tasks.continue")}
             </Button>
           )}
-          {item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
+          {item.ref && <Button onClick={() => openTask(item.ref!)}>{t("assistant-tasks.look")}</Button>}
         </div>
       </div>
     </div>
@@ -525,19 +527,19 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
   const status = todo ? statusOf(todo, lookup, plans) : undefined;
   const pr = field(item, "pr");
   const prN = pr?.split("/").at(-1);
-  const title = field(item, "title") ?? "任务";
+  const title = field(item, "title") ?? t("assistant-tasks.task_fallback");
   if (failed && todo && status && status !== "failed") {
-    const again = status === "not_started" ? "正在重新开" : "重试后开起来了";
+    const again = status === "not_started" ? t("assistant-tasks.receipt_restarting", { title }) : t("assistant-tasks.receipt_restarted", { title });
     return (
       <button type="button" onClick={() => openTask(todo.id)} className="flex items-center gap-1.5 self-start text-left text-[13px] text-ink-2 hover:text-ink">
         <Icon name={status === "not_started" ? "retry" : "check"} size={13} />
-        「{title}」{again}
+        {again}
       </button>
     );
   }
   const failure = failed && todo ? startFailure(todo, plans) : undefined;
-  const summary = failure ? `没开起来：${failure}` : field(item, "summary");
-  const heading = failed ? `${title}没开起来` : `${title} 完成`;
+  const summary = failure ? t("assistant-tasks.start_failed", { error: failure }) : field(item, "summary");
+  const heading = failed ? t("assistant-tasks.outcome_failed", { title }) : t("assistant-tasks.outcome_done", { title });
   // 复制 / 引用 like a reply's (#2462): the quote names the task and its todo id for the assistant
   return (
     <MessageActions text={summary?.trim() ? summary : heading} ts={item.at} task={{ title, ...(item.ref ? { id: item.ref } : {}) }} corner>
@@ -549,7 +551,7 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
           <div className="mt-1 flex gap-2">
             {failed && todo && (
               <Button icon="retry" busy={retrying} disabled={retrying} onClick={() => retryTaskNow(todo)}>
-                重试
+                {t("assistant-tasks.retry")}
               </Button>
             )}
             {pr && (
@@ -557,7 +559,7 @@ function OutcomeReceipt({ item, failed }: { item: FeedItem; failed: boolean }) {
                 PR #{prN}
               </Button>
             )}
-            {!failed && item.ref && <Button onClick={() => openTask(item.ref!)}>看看</Button>}
+            {!failed && item.ref && <Button onClick={() => openTask(item.ref!)}>{t("assistant-tasks.look")}</Button>}
           </div>
         </div>
       </div>
@@ -576,17 +578,17 @@ export function ReceiptSummary({ text, plain }: { text: string; plain?: boolean 
 }
 
 export function QuickResultCard({ result }: { result: QuickResult }) {
-  const when = result.when ? new Date(result.when).toLocaleString("zh-CN", { weekday: "short", hour: "2-digit", minute: "2-digit" }) : undefined;
+  const when = result.when ? formatDate(result.when, { weekday: "short", hour: "2-digit", minute: "2-digit" }) : undefined;
   return (
     <div className="flex items-center gap-3 rounded-card bg-field px-3.5 py-3">
       <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-control", result.kind === "reminder" ? "bg-orange-tint text-orange" : "bg-accent-tint text-accent")}>
         <Icon name={result.kind === "reminder" ? "bell" : "clock"} size={16} />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[13.5px] font-semibold">{result.kind === "reminder" ? "已加提醒" : "已加到日历"}</div>
+        <div className="text-[13.5px] font-semibold">{result.kind === "reminder" ? t("assistant-tasks.reminder_added") : t("assistant-tasks.calendar_added")}</div>
         <div className="truncate text-[12px] text-ink-2">{[when, result.title, result.place].filter(Boolean).join(" · ")}</div>
       </div>
-      <span className="shrink-0 text-[11.5px] text-ink-3">在 iPhone 上</span>
+      <span className="shrink-0 text-[11.5px] text-ink-3">{t("assistant-tasks.on_iphone")}</span>
     </div>
   );
 }
@@ -597,30 +599,30 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
   const say = useSayToPersona(conversation);
   const rows: { icon: IconName; tint: string; title: string; detail?: string; action?: string; run?: () => void }[] = [];
   if (body.done?.length)
-    rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? `做完了：${body.done[0].title}` : `做完了 ${body.done.length} 个任务`, detail: body.done.length > 1 ? body.done.map((d) => d.title).join("、") : undefined, action: "看看", run: () => openTask(body.done![0].id) });
+    rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
   if (body.waiting?.length)
-    rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? `等你：${body.waiting[0].title}` : `${body.waiting.length} 件等你`, action: "去看", run: () => openTask(body.waiting![0].id) });
-  if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: `${body.working} 个任务在做`, action: "全部", run: () => navigate({ name: "todos" }) });
+    rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
+  if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => navigate({ name: "todos" }) });
   for (const m of (body.meetings ?? []).slice(0, 3)) {
-    const t = new Date(m.start).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
-    rows.push({ icon: "clock", tint: "bg-accent-tint text-accent", title: `${t} ${m.title}`, action: "准备", run: () => say(`帮我准备一下 ${t} 的「${m.title}」：要看的文档、上次的结论、要我拍板的事`) });
+    const at = formatDate(m.start, { hour: "2-digit", minute: "2-digit" });
+    rows.push({ icon: "clock", tint: "bg-accent-tint text-accent", title: t("assistant-tasks.today_meeting", { time: at, title: m.title }), action: t("assistant-tasks.prepare"), run: () => say(t("assistant-tasks.prepare_prompt", { time: at, title: m.title })) });
   }
   if (body.at_me?.length)
     rows.push({
       icon: "at",
       tint: "bg-accent-tint text-accent",
-      title: `飞书 ${body.at_me.length} 个会话 @你${body.unread ? ` · 其他未读 ${body.unread}` : ""}`,
-      detail: body.at_me.slice(0, 2).map((c) => c.name + (c.preview ? `：${c.preview}` : "")).join("\n"),
-      action: "过一遍",
-      run: () => say("帮我过一遍飞书里 @我 的消息：哪些要我回，能起草的先起草"),
+      title: body.unread ? t("assistant-tasks.today_at_me_unread", { count: body.at_me.length, unread: body.unread }) : t("assistant-tasks.today_at_me", { count: body.at_me.length }),
+      detail: body.at_me.slice(0, 2).map((c) => (c.preview ? t("assistant-tasks.chat_preview", { name: c.name, preview: c.preview }) : c.name)).join("\n"),
+      action: t("assistant-tasks.review"),
+      run: () => say(t("assistant-tasks.review_prompt")),
     });
   return (
     <div className="flex flex-col rounded-card bg-surface p-4 shadow-card">
       <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-ink-2">
         <Icon name="sun" size={13} />
-        今天要知道的
+        {t("assistant-tasks.today_title")}
       </div>
-      {rows.length === 0 && <div className="text-[13px] text-ink-2">没有等你的事，日程也空着。</div>}
+      {rows.length === 0 && <div className="text-[13px] text-ink-2">{t("assistant-tasks.today_empty")}</div>}
       {rows.map((r, i) => (
         <div key={i} className={cx("flex items-center gap-3 py-2", i > 0 && "border-t border-line")}>
           <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-control", r.tint)}>
@@ -660,9 +662,9 @@ function MessageCard({ item }: { item: FeedItem }) {
   const send = async () => {
     try {
       await sendMessage(item, draft);
-      toast("已发送，标为已处理", "ok");
+      toast(t("assistant-tasks.sent_done"), "ok");
     } catch (e) {
-      toast(`回复没发出去：${e instanceof Error ? e.message : e}`, "error");
+      toast(t("assistant-tasks.send_failed", { error: String(e instanceof Error ? e.message : e) }), "error");
     }
   };
   const plans = useFeed((s) => s.plans);
@@ -685,7 +687,7 @@ function MessageCard({ item }: { item: FeedItem }) {
       <div className={cx("flex flex-col gap-1 rounded-control p-3", sent ? "bg-green-tint" : "bg-accent-tint")}>
         <span className={cx("flex items-center gap-1 text-[12px] font-semibold", sent ? "text-green" : "text-accent")}>
           <Icon name={sent ? "check" : "pencil"} size={12} />
-          {sent ? "已以你的名义回复" : "按任务进度起草的回复"}
+          {sent ? t("assistant-tasks.replied_as_you") : t("assistant-tasks.draft_from_progress")}
           {sent && <span className="ml-auto font-normal text-ink-3">{clock(sent.at)}</span>}
         </span>
         {!sent ? (
@@ -694,14 +696,14 @@ function MessageCard({ item }: { item: FeedItem }) {
           <div className="whitespace-pre-line text-[14.5px]">{sent.text}</div>
         )}
       </div>
-      {blank && <div className="text-[12px] text-red">草稿里还有没填的「{blank}」，改掉或删掉再发送</div>}
+      {blank && <div className="text-[12px] text-red">{t("assistant-tasks.draft_blank", { blank })}</div>}
       {!sent && (
         <div className="flex gap-2">
           <Button tone="accent" busy={busy} disabled={!!blank || !draft.trim()} onClick={send} className="flex-1">
-            发送
+            {t("assistant-tasks.send")}
           </Button>
           <Button disabled={busy} onClick={() => later(item.ref!)}>
-            稍后
+            {t("assistant-tasks.later")}
           </Button>
         </div>
       )}
@@ -742,7 +744,7 @@ export function TaskQuestions({ conversation }: { conversation: string }) {
             <Icon name="hand" size={13} />
             <span className="truncate">{first.todo.title}</span>
             <span className="flex-1" />
-            {asks.length > 1 && <span className="shrink-0">还有 {asks.length - 1} 件</span>}
+            {asks.length > 1 && <span className="shrink-0">{t("assistant-tasks.more_asks", { count: asks.length - 1 })}</span>}
           </div>
           <InteractionCard ix={first.ix} />
         </>
@@ -781,42 +783,42 @@ export function TaskDock({ conversation }: { conversation: string }) {
         onClick={() => navigate({ name: "todos" })}
         className={cx(capsule, "bg-field font-medium text-ink-2 hover:bg-hover")}
       >
-        全部 {mine.length + agents.length}
+        {t("assistant-tasks.dock_all", { count: mine.length + agents.length })}
       </button>
       {(going.length > 0 || agents.length > 0) && (
         // The scroller pads by the focus ring's width and takes it back, so the ring is not clipped and the row
         // stays a pill high.
         <div className="scrollbar-none -my-1 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1">
-          {going.map(({ t, st }) => (
+          {going.map(({ t: todo, st }) => (
             <button
-              key={t.id}
+              key={todo.id}
               type="button"
-              onClick={() => openTask(t.id)}
+              onClick={() => openTask(todo.id)}
               onContextMenu={(e) => {
                 if (!isRemovable(st)) return;
                 e.preventDefault();
-                setMenuFor({ todo: t, el: e.currentTarget });
+                setMenuFor({ todo, el: e.currentTarget });
               }}
               className={cx(pill, st === "needs_you" || st === "interrupted" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
             >
               <TaskMark status={st} size={8} />
-              <span className="truncate">{t.title}</span>
-              {st === "needs_you" && <span className="shrink-0">等你</span>}
-              {st === "interrupted" && <span className="shrink-0">中断了</span>}
+              <span className="truncate">{todo.title}</span>
+              {st === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
+              {st === "interrupted" && <span className="shrink-0">{t("assistant-tasks.interrupted_short")}</span>}
             </button>
           ))}
           {agents.map(({ session: s, state }) => (
             <button
               key={`${s.machine_id}/${s.session_id}`}
               type="button"
-              aria-label={`Agent ${sessionTitle(s)}，${state === "needs_you" ? "等你" : "在做"}`}
+              aria-label={state === "needs_you" ? t("assistant-tasks.dock_agent_waiting", { title: sessionTitle(s) }) : t("assistant-tasks.dock_agent_working", { title: sessionTitle(s) })}
               onClick={() => openPanel({ kind: "agent", mid: s.machine_id, sid: s.session_id })}
               className={cx(pill, state === "needs_you" ? "bg-red-tint text-red" : "bg-field text-ink hover:bg-hover")}
             >
               <StatusDot state={state} size={8} />
               <Icon name="agent" size={13} className={cx("shrink-0", state !== "needs_you" && "text-ink-2")} />
               <span className="truncate">{sessionTitle(s)}</span>
-              {state === "needs_you" && <span className="shrink-0">等你</span>}
+              {state === "needs_you" && <span className="shrink-0">{t("assistant-tasks.waiting")}</span>}
             </button>
           ))}
         </div>
@@ -826,7 +828,7 @@ export function TaskDock({ conversation }: { conversation: string }) {
           anchor={menuFor.el}
           side="top"
           onClose={() => setMenuFor(null)}
-          items={[{ key: "remove", label: "移除任务…", icon: "trash", danger: true, onSelect: () => removeTaskNow(menuFor.todo) }]}
+          items={[{ key: "remove", label: t("assistant-tasks.remove_ellipsis"), icon: "trash", danger: true, onSelect: () => removeTaskNow(menuFor.todo) }]}
         />
       )}
     </div>
@@ -842,8 +844,8 @@ export function RouteChip({ conversation }: { conversation: string }) {
     <div className="flex">
       <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-accent-tint pl-3 pr-1 text-[12.5px] font-semibold text-accent">
         <Icon name="send" size={12} />
-        对「{todo.title}」说
-        <button type="button" aria-label="交给 Persona" onClick={() => setRoute(conversation, null)} className="flex size-5 items-center justify-center rounded-full hover:bg-hover">
+        {t("assistant-tasks.say_to", { title: todo.title })}
+        <button type="button" aria-label={t("assistant-tasks.give_back")} onClick={() => setRoute(conversation, null)} className="flex size-5 items-center justify-center rounded-full hover:bg-hover">
           <Icon name="x" size={11} />
         </button>
       </span>

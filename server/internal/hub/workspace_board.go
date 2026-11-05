@@ -30,6 +30,7 @@ func (h *Hub) workspaceBoardRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/workspace-board", h.getWorkspaceBoard)
 	api.HandleFunc("POST /api/v1/workspace-board", h.mutateWorkspaceBoard)
 	api.HandleFunc("GET /api/v1/workspaces", h.getWorkspaces)
+	h.workspaceBoardSettingsRoutes(api)
 }
 
 func (h *Hub) boardStore(w http.ResponseWriter) workspaceBoardStore {

@@ -356,6 +356,10 @@ private struct AgentsList: View {
     @State private var confirmReadAll = false
     @State private var expandedQuiet = Set<String>()
     @State private var expandedIdle = Set<String>()
+    #if os(macOS)
+    /// The rows in order for ↑ / ↓ (`AgentListRows`), kept current without drawing the list again.
+    @State private var macRows = MacRowOrder()
+    #endif
     @State private var renamingSpace: SpaceGroup?
     @State private var renamingSession: Session?
     @State private var closingSession: Session?
@@ -469,12 +473,13 @@ private struct AgentsList: View {
         // quiet spaces (muted or not) fold into 空闲的空间. Under a quick filter every space it leaves is listed, most
         // recent first: the order must not move while its agents are being seen.
         let pinnedSpaces = groups.filter { model.isPinned($0) && !model.isMuted($0) }
+        let order = order
+        let busy: [SpaceGroup] = groups.filter { !order.isQuiet($0) }
         let active = quick != .all
             ? pinnedSpaces + groups.filter { !(model.isPinned($0) && !model.isMuted($0)) }
                 .sorted { $0.sortDate != $1.sortDate ? $0.sortDate > $1.sortDate : $0.id < $1.id }
-            : pinnedSpaces + groups.filter { !$0.isQuiet && !model.isPinned($0) && !model.isMuted($0) }
-                + groups.filter { !$0.isQuiet && model.isMuted($0) }
-        let quiet = quick != .all ? [] : groups.filter { $0.isQuiet && !(model.isPinned($0) && !model.isMuted($0)) }
+            : pinnedSpaces + busy.filter { !model.isPinned($0) && !model.isMuted($0) } + busy.filter { model.isMuted($0) }
+        let quiet = quick != .all ? [] : groups.filter { order.isQuiet($0) && !(model.isPinned($0) && !model.isMuted($0)) }
         let pinnedAgents = filtered.filter { model.isPinned($0.key) }
             .map { (session: $0, order: model.pinOrder($0.key)) }
             .sorted { $0.order < $1.order }
@@ -504,6 +509,9 @@ private struct AgentsList: View {
                                    foldAll: { setFolded(folding($0, true, in: folded)); expandedQuiet = [] },
                                    unfoldAll: { setFolded(Set(Self.foldedByDefault.union(Self.foldedByChoice).map { "!" + $0 })) },
                                    onMachines: { openFromList(MachineListRoute()) })
+        #if os(macOS)
+        let _ = macRows.update(rowsInOrder(unpinned: unpinned, pinned: pinnedAgents, active: active, quiet: quiet, tree: tree, byHost: byHost))
+        #endif
         let _ = rowActions.update(rename: { renamingSession = $0 }, close: { closingSession = $0 }, linkTodo: { linkingSession = $0 },
                                   delete: { deletingSession = $0 })
 
@@ -647,7 +655,7 @@ private struct AgentsList: View {
         }
         .modifier(AgentsListStyle(capsules: capsules))
         #if os(macOS)
-        .modifier(MacListKeys(current: { macOpenNow }, delete: { key in deletingSession = session(key) }))
+        .modifier(MacListKeys(current: { macOpenNow }, delete: { key in deletingSession = session(key) }, move: macMove))
         #endif
         // Keep the phone's first-row controls close to the bar: active search otherwise adds the grouped list's
         // default first-section margin. The split's sidebar keeps its native content margins.
@@ -722,7 +730,20 @@ private struct AgentsList: View {
         // The row being read, brought back when a change took it off screen (`ReaderAnchor.reveal`). Around a local:
         // the chain above in a closure is type-checked with all of it.
         ScrollViewReader { proxy in
-            list.onAppear { feed.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) } }
+            list.onAppear {
+                feed.reader.reveal = { id, at in proxy.scrollTo(id, anchor: UnitPoint(x: 0.5, y: at)) }
+                #if os(macOS)
+                // Again once the rows on the way are laid out: the first pass goes by the lazy list's estimates and
+                // stopped short of a row far below (#2213).
+                macRows.scroll = { id in
+                    proxy.scrollTo(id)
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(120))
+                        proxy.scrollTo(id)
+                    }
+                }
+                #endif
+            }
         }
         .environment(feed) // a quiet space's line reads its agents' times from the rows (`SpaceGroup.updatedAt(_:)`)
     }
@@ -749,6 +770,36 @@ private struct AgentsList: View {
         quick = f
         kept = Set(base.filter { f != .all && f.matches($0, muted: model.isMuted($0)) }.map(\.key))
     }
+
+    #if os(macOS)
+    /// The agents in the order the list shows them (`AgentListRows`), for ↑ / ↓.
+    private func rowsInOrder(unpinned: [Session], pinned: [Session], active: [SpaceGroup], quiet: [SpaceGroup],
+                             tree: [RepoTree.Host], byHost: Bool) -> [SessionKey] {
+        let rows = AgentListRows(order: order, grouping: grouping, all: quick == .all, searching: !query.isEmpty,
+                                 isFolded: { isFolded($0) }, expandedIdle: expandedIdle, expandedQuiet: expandedQuiet)
+        let live = unpinned.filter { $0.state.isLive }
+        let shown: [Session]
+        switch grouping {
+        case .todo:
+            let groups = TodosLogic.buildTodoAgentGroups(sessions: live, todos: TodoStore.shared.todos, isMuted: model.isMuted)
+            shown = rows.todos(groups) { g in g.todoID == nil ? isFolded(g.key, otherwise: g.folded) : isFolded(g.key) }
+        case .state: shown = rows.states(live)
+        case .machine: shown = rows.machines(live, order: machines.map(\.ref))
+        case .repo: shown = rows.repos(tree, byHost: byHost)
+        case .space:
+            let hosts = byHost ? RepoTree.hostOrder(Set((active + quiet).map(\.machineRef)), machines: machines.map(\.ref)) : nil
+            shown = rows.spaces(active: active, quiet: quiet, hosts: hosts)
+        }
+        return (pinned + shown).map(\.key)
+    }
+
+    /// ↑ / ↓: the agent above or below the open one, opened and scrolled to (the list does not select, #2213).
+    private func macMove(_ by: Int) {
+        guard let next = AgentListRows.step(macRows.keys, from: macOpenNow, by: by) else { return }
+        openFromList(next)
+        if let id = session(next)?.id { macRows.scroll?(id) }
+    }
+    #endif
 
     /// The agent open beside the list, if it is one of the list's (not a Persona conversation).
     private var macOpenNow: SessionKey? { model.visibleSession.flatMap { session($0)?.assistant == true ? nil : $0 } }
@@ -1057,7 +1108,7 @@ private struct AgentsList: View {
     // MARK: By state / by machine
 
     private var order: AgentListOrder {
-        AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted, byRank: quick == .all)
+        AgentListOrder(isPinned: model.isPinned, isMuted: model.isMuted, byRank: quick == .all, held: model.heldInList)
     }
     private func stays(_ s: Session) -> Bool { order.stays(s) }
     private func rank(_ s: Session) -> Int { order.rank(s) }
@@ -1334,6 +1385,15 @@ private struct AgentsList: View {
                 NavigationLink(value: s.key) {
                     slotRowContent(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost)
                         .padding(.leading, nested(indent))
+                        #if os(macOS)
+                        // The open one shaded as a selected row: the list does not select (#2213), ↑ / ↓ go from it.
+                        .background {
+                            if s.key == macOpenNow {
+                                RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous)
+                                    .fill(Theme.Fill.macSelected).padding(-Theme.Space.xs)
+                            }
+                        }
+                        #endif
                         .macHoverShade(in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous), outset: Theme.Space.xs)
                 }
             }

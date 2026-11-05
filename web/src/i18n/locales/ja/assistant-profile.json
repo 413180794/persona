@@ -1,0 +1,23 @@
+{
+  "reach_agents": "お使いのコンピューターのエージェント：状態の確認、チャットの閲覧、メッセージ送信、新規起動",
+  "reach_lark": "Lark：メッセージ、カレンダー、ドキュメント、議事録、タスク、メール",
+  "reach_iphone": "iPhone：連絡先、カレンダー、リマインダー、位置情報、ヘルスケア、写真",
+  "reach_mail": "追加したすべてのメールアカウント",
+  "reach_phone": "スマートフォンで質問や通知を送る",
+  "hub_machine": "ハブのマシン",
+  "list_separator": "、",
+  "reach_machines": "{machines}（ssh）",
+  "reach_hub_computers": "ハブに接続されたコンピューター（ssh）",
+  "sidebar": "サイドバー",
+  "main_chat": "メインチャット",
+  "subtitle": "あなた専用のアシスタント・{machine}で実行中",
+  "online": "オンライン",
+  "offline": "オフライン",
+  "working": "作業中",
+  "next_up": "次回{day} {time}",
+  "upcoming": "今後の予定",
+  "avatar": "アバター",
+  "avatar_footer": "アバターを変えると、Personaの名前、画像、チャット内のアニメーションする状態だけが変わります。このブラウザーでのみ有効で、ページの色は変わりません。",
+  "access": "アクセスできるもの",
+  "access_footer": "Larkのメッセージ送信、メール送信、予定の作成など、あなたの代わりに行う操作は、事前にスマートフォンで確認します。"
+}

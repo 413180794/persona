@@ -1,0 +1,12 @@
+{
+  "title": "Workflow board",
+  "setting_group": "Agents",
+  "setting_label": "Workflow board",
+  "setting_hint": "Lays out your agents as a board by code folder, with its own entry in the sidebar. Off by default. Saved on the hub, so every browser matches. Turning it off only hides it; the board's contents stay.",
+  "setting_readonly": "A read-only device can't change this.",
+  "off_title": "Workflow board is off",
+  "off_body": "Turn it on in Settings › General › Agents. Columns and cards you set up before are still there and come back as they were.",
+  "open_settings": "Open settings",
+  "loading": "Checking whether the workflow board is on",
+  "sidebar": "Sidebar"
+}

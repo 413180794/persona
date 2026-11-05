@@ -1,0 +1,23 @@
+{
+  "reach_agents": "Agents on your computers: check status, read chats, send messages, start new ones",
+  "reach_lark": "Lark: messages, calendar, docs, meeting notes, tasks, mail",
+  "reach_iphone": "iPhone: contacts, calendar, reminders, location, health, photos",
+  "reach_mail": "Every email account you've added",
+  "reach_phone": "Ask you and send notifications on your phone",
+  "hub_machine": "the hub machine",
+  "list_separator": ", ",
+  "reach_machines": "{machines} (ssh)",
+  "reach_hub_computers": "Computers connected to the hub (ssh)",
+  "sidebar": "Sidebar",
+  "main_chat": "Main chat",
+  "subtitle": "Your personal assistant · Running on {machine}",
+  "online": "Online",
+  "offline": "Offline",
+  "working": "Working",
+  "next_up": "Next {day} {time}",
+  "upcoming": "Up next",
+  "avatar": "Avatar",
+  "avatar_footer": "Changing the avatar only changes Persona's name, picture and the animated status in chats, in this browser only. The page's colors stay the same.",
+  "access": "Can access",
+  "access_footer": "Anything that acts on your behalf, like sending Lark messages or email or creating events, asks you on your phone first."
+}

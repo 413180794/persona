@@ -1,0 +1,17 @@
+{
+  "tags_saved": "タグを保存しました",
+  "tag_title": "タグ付け・{name}",
+  "importance": "重要度",
+  "relevance": "自分との関連度",
+  "tags": "タグ",
+  "tags_placeholder": "スペースで区切る",
+  "kind": "種類",
+  "project_kind": "プロジェクトの種類",
+  "status": "状態",
+  "project_status": "プロジェクトの状態",
+  "locked_hint": "手動で付けたタグはロックされ、今後ハブが圧縮するときも上書きされません。",
+  "prev_day": "前日",
+  "next_day": "翌日",
+  "message_count_other": "{count}件のメッセージ",
+  "moments": "Moments"
+}

@@ -1,0 +1,7 @@
+{
+  "importance": "重要度{level}",
+  "relevance_title": "自分との関連度",
+  "relevance": "関連{value}",
+  "collapse": "折りたたむ",
+  "project_kind": "{kind}プロジェクト"
+}

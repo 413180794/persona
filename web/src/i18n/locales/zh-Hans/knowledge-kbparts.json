@@ -1,0 +1,7 @@
+{
+  "importance": "重要级 {level}",
+  "relevance_title": "与我相关",
+  "relevance": "相关 {value}",
+  "collapse": "收起",
+  "project_kind": "{kind}项目"
+}

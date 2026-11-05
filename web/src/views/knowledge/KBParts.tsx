@@ -2,6 +2,7 @@
 import { importanceTone, initial, isKind, markParts, projectKindLabel, relevanceTone, type KBEntry, type KBKind, type Tone } from "../../lib/kb";
 import { cx } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
+import { t } from "../../i18n";
 
 // Icons the shared set does not have yet (person, video, calendar, tag); same grammar as ui/icons.tsx.
 const LOCAL: Record<string, React.ReactNode> = {
@@ -75,20 +76,20 @@ export function TonePill({ tone = "neutral", strong, children, title }: { tone?:
 }
 
 /** The importance, the project's kind and status, and the relevance, as pills. */
-export function Badges({ entry, status, kindSuffix = "" }: { entry: KBEntry; status?: string | null; kindSuffix?: string }) {
+export function Badges({ entry, status, asProject = false }: { entry: KBEntry; status?: string | null; asProject?: boolean }) {
   const kind = projectKindLabel(entry);
   return (
     <>
       {entry.importance && (
-        <TonePill tone={importanceTone(entry.importance)} strong title={`重要级 ${entry.importance}`}>
+        <TonePill tone={importanceTone(entry.importance)} strong title={t("knowledge-kbparts.importance", { level: entry.importance })}>
           {entry.importance}
         </TonePill>
       )}
-      {kind && <TonePill tone={kind === "长期" ? "accent" : "neutral"}>{kind + kindSuffix}</TonePill>}
+      {kind && <TonePill tone={entry.extra?.startsWith("long") ? "accent" : "neutral"}>{asProject ? t("knowledge-kbparts.project_kind", { kind }) : kind}</TonePill>}
       {status && <TonePill>{status}</TonePill>}
       {entry.relevance > 0 && (
-        <TonePill tone={relevanceTone(entry.relevance)} title="与我相关">
-          相关 {entry.relevance}
+        <TonePill tone={relevanceTone(entry.relevance)} title={t("knowledge-kbparts.relevance_title")}>
+          {t("knowledge-kbparts.relevance", { value: entry.relevance })}
         </TonePill>
       )}
     </>
@@ -131,7 +132,7 @@ export function Card({ children, className }: { children: React.ReactNode; class
 export function MoreRow({ open, label, onClick }: { open: boolean; label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="flex h-9 w-full items-center gap-1.5 whitespace-nowrap px-4 text-left text-[12.5px] font-medium text-accent-ink transition-colors hover:bg-hover">
-      {open ? "收起" : label}
+      {open ? t("knowledge-kbparts.collapse") : label}
       <Icon name="chevron" size={12} stroke={2.2} className={cx("transition-transform duration-200", open && "rotate-180")} />
     </button>
   );

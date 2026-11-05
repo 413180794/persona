@@ -167,3 +167,24 @@ func TestDecodeWorkspaceBoardUsesSQLRevisionAndRejectsCorruption(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkspaceBoardInUseIgnoresTheSeededBoard(t *testing.T) {
+	d := openWorkspaceBoard(t)
+	ctx := context.Background()
+	if used, err := d.WorkspaceBoardInUse(ctx); err != nil || used {
+		t.Fatalf("no board: %v %v", used, err)
+	}
+	initial, err := d.WorkspaceBoard(ctx) // opening the page seeds revision 0
+	if err != nil {
+		t.Fatal(err)
+	}
+	if used, err := d.WorkspaceBoardInUse(ctx); err != nil || used {
+		t.Fatalf("seeded board: %v %v", used, err)
+	}
+	if _, err := d.SaveWorkspaceBoard(ctx, initial.Revision, initial); err != nil {
+		t.Fatal(err)
+	}
+	if used, err := d.WorkspaceBoardInUse(ctx); err != nil || !used {
+		t.Fatalf("changed board: %v %v", used, err)
+	}
+}

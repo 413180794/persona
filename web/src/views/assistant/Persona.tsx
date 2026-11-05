@@ -13,6 +13,7 @@ import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
+import { t } from "../../i18n";
 
 const CHOSEN_KEY = "jarvis.persona";
 
@@ -51,7 +52,7 @@ export function refreshPersonas(): Promise<void> {
       const ready = !next || !shown || next.rev === shown.rev || (await preload(next));
       setPS({ list: withChosenReady(list, ps.list, ps.chosen, ready), loaded: true, error: "" });
     })
-    .catch((e) => setPS({ loaded: true, error: e instanceof ApiError && e.status === 404 ? "这个 hub 还不能放形象：更新 hub 后再看" : `没取到形象列表：${errorText(e)}` }))
+    .catch((e) => setPS({ loaded: true, error: e instanceof ApiError && e.status === 404 ? t("assistant-persona.hub_unsupported") : t("assistant-persona.load_failed", { error: errorText(e) }) }))
     .finally(() => {
       loading = null;
     });
@@ -225,7 +226,7 @@ function StillFrame({ url, size, className, onError }: { url: string; size: numb
 function Swatches({ p }: { p: PersonaInfo }) {
   const c = p.manifest.colors?.light ?? p.manifest.colors?.dark;
   const keys = ["primary", "secondary", "accent", "bubble"].filter((k) => c?.[k]);
-  if (!keys.length) return <span className="text-[11px] text-ink-3">没带配色</span>;
+  if (!keys.length) return <span className="text-[11px] text-ink-3">{t("assistant-persona.no_colors")}</span>;
   return (
     <span className="flex items-center gap-1" aria-hidden>
       {keys.map((k) => (
@@ -246,8 +247,8 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
     void refreshPersonas();
   }, []);
   const cards: { id: string; title: string; sub: React.ReactNode; face: React.ReactNode }[] = [
-    { id: BUILTIN_PERSONA, title: "团子", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: <MochiFace size={56} /> },
-    { id: MARK_PERSONA, title: "标志", sub: <span className="text-[11px] text-ink-3">网页的标志</span>, face: builtin },
+    { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), sub: <span className="text-[11px] text-ink-3">{t("assistant-persona.default_avatar")}</span>, face: <MochiFace size={56} /> },
+    { id: MARK_PERSONA, title: t("assistant-persona.mark"), sub: <span className="text-[11px] text-ink-3">{t("assistant-persona.mark_sub")}</span>, face: builtin },
     ...s.list.map((p) => ({
       id: p.id,
       title: p.manifest.name,
@@ -258,7 +259,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
   const missing = !isBuiltinPersona(s.chosen) && s.loaded && !s.list.some((p) => p.id === s.chosen);
   return (
     <div className="flex flex-col gap-3 p-3">
-      <div role="radiogroup" aria-label="形象" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div role="radiogroup" aria-label={t("assistant-persona.avatar")} className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {cards.map((c) => {
           const selected = c.id === s.chosen;
           return (
@@ -267,7 +268,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={c.id === BUILTIN_PERSONA ? "团子，默认形象" : c.title}
+              aria-label={c.id === BUILTIN_PERSONA ? t("assistant-persona.mochi_default") : c.title}
               onClick={() => choosePersona(c.id)}
               className={cx(
                 "flex flex-col items-center gap-2 rounded-card px-2 pt-3.5 pb-2.5 transition-[background-color,box-shadow] duration-150",
@@ -285,7 +286,7 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
         })}
       </div>
       {(current.info || current.mochi) && (
-        <div className="grid grid-cols-5 gap-1 rounded-card bg-inset py-2.5 shadow-hairline" aria-label={`${current.name}的五种状态：空闲、思考中、工作中、等你处理、离线`} role="img">
+        <div className="grid grid-cols-5 gap-1 rounded-card bg-inset py-2.5 shadow-hairline" aria-label={t("assistant-persona.states_label", { name: current.name })} role="img">
           {PERSONA_STATES.map((st) => (
             <span key={st.id} className="flex flex-col items-center gap-1">
               <PersonaDot size={40} state={st.id} fallback={null} />
@@ -294,9 +295,9 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
           ))}
         </div>
       )}
-      {missing && <p className="px-1 text-[11.5px] text-ink-3">选中的形象现在不在 hub 上，先用默认形象；回来后会自动换回。</p>}
+      {missing && <p className="px-1 text-[11.5px] text-ink-3">{t("assistant-persona.missing")}</p>}
       {s.error && <p role="alert" className="px-1 text-[11.5px] text-orange">{s.error}</p>}
-      {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">hub 上还没有别的形象。形象包放在 hub 机器的 ~/.persona/personas/ 下（docs/persona.md）。</p>}
+      {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-persona.none")}</p>}
     </div>
   );
 }

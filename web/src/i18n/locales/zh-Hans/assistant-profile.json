@@ -1,0 +1,23 @@
+{
+  "reach_agents": "各台电脑上的 Agent：看状态、读对话、发消息、开新的",
+  "reach_lark": "飞书：消息、日历、文档、会议纪要、任务、邮件",
+  "reach_iphone": "iPhone：通讯录、日历、提醒、位置、健康、照片",
+  "reach_mail": "你添加的所有邮箱",
+  "reach_phone": "在手机上问你、给你推送",
+  "hub_machine": "hub 所在的机器",
+  "list_separator": "、",
+  "reach_machines": "{machines}（ssh）",
+  "reach_hub_computers": "hub 接入的各台电脑（ssh）",
+  "sidebar": "侧边栏",
+  "main_chat": "主对话",
+  "subtitle": "你的私人助手 · 运行在 {machine}",
+  "online": "在线",
+  "offline": "离线",
+  "working": "工作中",
+  "next_up": "下一件 {day} {time}",
+  "upcoming": "接下来",
+  "avatar": "形象",
+  "avatar_footer": "换形象只换 Persona 的名字、头像和对话里会动的状态，只在这个浏览器里生效；网页的颜色不变。",
+  "access": "能访问",
+  "access_footer": "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。"
+}

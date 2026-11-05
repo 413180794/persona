@@ -13,6 +13,7 @@ import {
 import { Button, cx, Dialog, Spinner, toast, useNow } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Field, inputClass, Segmented, SectionTitle, Switch, textareaClass } from "./parts";
+import { t } from "../../i18n";
 
 /** Brings an inline confirmation into view once, when it appears (stable, so not on every render). */
 const reveal = (el: HTMLElement | null) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -111,7 +112,7 @@ export function TaskEditor({
     setBusy("save");
     try {
       if (await persist()) {
-        toast(creating ? `已添加「${taskTitle(draft)}」` : "已保存", "ok");
+        toast(creating ? t("assistant-taskeditor.added", { title: taskTitle(draft) }) : t("assistant-taskeditor.saved"), "ok");
         onClose();
       }
     } catch (e) {
@@ -124,14 +125,14 @@ export function TaskEditor({
   const runNow = async () => {
     setBusy("run");
     try {
-      const t = await persist();
-      if (!t) return;
-      const r = await api<{ session_id: string; machine_id: string }>(`/assistant/tasks/${enc(t.id)}/run`, { method: "POST", json: {} });
-      toast(`「${taskTitle(t)}」开始运行`, "ok");
+      const task = await persist();
+      if (!task) return;
+      const r = await api<{ session_id: string; machine_id: string }>(`/assistant/tasks/${enc(task.id)}/run`, { method: "POST", json: {} });
+      toast(t("assistant-taskeditor.run_started", { title: taskTitle(task) }), "ok");
       onClose();
       navigate({ name: "jarvis", sid: r.session_id });
     } catch (e) {
-      toast(e instanceof ApiError && e.status === 409 ? e.message || "上一轮还在运行，等它跑完再试" : errorText(e), "error");
+      toast(e instanceof ApiError && e.status === 409 ? e.message || t("assistant-taskeditor.still_running") : errorText(e), "error");
     } finally {
       setBusy("");
     }
@@ -144,7 +145,7 @@ export function TaskEditor({
       const r = await api<{ task: Task }>(`/assistant/tasks/${enc(saved.id)}/fresh`, { method: "POST", json: {} });
       setSaved((s) => (s ? { ...s, run_machine_id: r.task.run_machine_id, run_session_id: r.task.run_session_id, run_launcher: r.task.run_launcher } : s));
       onSaved({ ...saved, ...r.task });
-      toast("下次运行会开一段新对话", "ok");
+      toast(t("assistant-taskeditor.fresh_next"), "ok");
     } catch (e) {
       toast(errorText(e), "error");
     } finally {
@@ -157,7 +158,7 @@ export function TaskEditor({
     setBusy("delete");
     try {
       await api(`/assistant/tasks/${enc(saved.id)}`, { method: "DELETE" });
-      toast(`已删除「${taskTitle(saved)}」`, "ok");
+      toast(t("assistant-taskeditor.deleted", { title: taskTitle(saved) }), "ok");
       onDeleted(saved);
       onClose();
     } catch (e) {
@@ -177,18 +178,18 @@ export function TaskEditor({
 
   const footer = confirmDelete ? (
     <>
-      <span className="mr-auto min-w-0 text-[12px] text-ink-2">删除后不再定时运行，已经跑过的对话还在。</span>
-      <Button tone="quiet" disabled={working} onClick={() => setConfirmDelete(false)}>取消</Button>
-      <Button tone="danger" busy={busy === "delete"} onClick={() => void remove()}>删除</Button>
+      <span className="mr-auto min-w-0 text-[12px] text-ink-2">{t("assistant-taskeditor.delete_confirm")}</span>
+      <Button tone="quiet" disabled={working} onClick={() => setConfirmDelete(false)}>{t("common.cancel")}</Button>
+      <Button tone="danger" busy={busy === "delete"} onClick={() => void remove()}>{t("assistant-taskeditor.delete")}</Button>
     </>
   ) : (
     <>
       {!creating && (
-        <Button tone="quiet" icon="trash" className="text-red enabled:hover:text-red" disabled={working} onClick={() => setConfirmDelete(true)}>删除</Button>
+        <Button tone="quiet" icon="trash" className="text-red enabled:hover:text-red" disabled={working} onClick={() => setConfirmDelete(true)}>{t("assistant-taskeditor.delete")}</Button>
       )}
       <span className={cx("mr-auto min-w-0 truncate text-[11.5px]", problem ? "text-red" : "text-ink-3")}>{changed && problem ? problem : ""}</span>
-      <Button tone="quiet" disabled={working} onClick={onClose}>取消</Button>
-      <Button tone="primary" busy={busy === "save"} disabled={working || !!problem || (!creating && !changed)} onClick={() => void save()}>{creating ? "添加" : "保存"}</Button>
+      <Button tone="quiet" disabled={working} onClick={onClose}>{t("common.cancel")}</Button>
+      <Button tone="primary" busy={busy === "save"} disabled={working || !!problem || (!creating && !changed)} onClick={() => void save()}>{creating ? t("assistant-taskeditor.add") : t("common.save")}</Button>
     </>
   );
 
@@ -197,38 +198,38 @@ export function TaskEditor({
   const own = saved?.run_session_id;
 
   return (
-    <Dialog open onClose={close} width={600} title={creating ? "新建定时任务" : taskTitle(saved ?? draft)} footer={footer}>
+    <Dialog open onClose={close} width={600} title={creating ? t("assistant-taskeditor.new_title") : taskTitle(saved ?? draft)} footer={footer}>
       <div className="-mx-4 max-h-[min(64vh,680px)] overflow-y-auto px-4 pb-1">
         <div className="flex flex-col gap-5">
           <div className="flex items-end gap-3">
             <div className="min-w-0 flex-1">
-              <Field label="标题">
+              <Field label={t("assistant-taskeditor.title_label")}>
                 <input
                   className={inputClass}
                   value={draft.title}
                   autoFocus={creating}
-                  placeholder={draft.repeat === "once" ? "可不填" : "比如「早报」"}
+                  placeholder={draft.repeat === "once" ? t("assistant-taskeditor.title_optional") : t("assistant-taskeditor.title_example")}
                   onChange={(e) => set({ title: e.target.value })}
                 />
               </Field>
             </div>
             <label className="flex h-9 shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-[12.5px] text-ink-2">
-              开启
-              <Switch checked={draft.enabled} label="开启" onChange={(on) => set({ enabled: on })} />
+              {t("assistant-taskeditor.enabled")}
+              <Switch checked={draft.enabled} label={t("assistant-taskeditor.enabled")} onChange={(on) => set({ enabled: on })} />
             </label>
           </div>
 
           <section>
-            <SectionTitle>什么时候</SectionTitle>
+            <SectionTitle>{t("assistant-taskeditor.section_when")}</SectionTitle>
             <div className="flex flex-col gap-3 rounded-card bg-inset p-3 shadow-hairline">
               <Segmented<Repeat>
-                label="重复"
+                label={t("assistant-taskeditor.repeat")}
                 value={draft.repeat}
                 onChange={(r) => setDraft((d) => withRepeat(d, r, new Date()))}
                 options={[
-                  { v: "once", label: "一次" },
-                  { v: "daily", label: "每天" },
-                  { v: "interval", label: "每隔" },
+                  { v: "once", label: t("assistant-taskeditor.repeat_once") },
+                  { v: "daily", label: t("assistant-taskeditor.repeat_daily") },
+                  { v: "interval", label: t("assistant-taskeditor.repeat_interval") },
                 ]}
               />
               {draft.repeat === "once" && <OnceWhen draft={draft} now={now} onChange={(at) => set({ at })} />}
@@ -237,43 +238,43 @@ export function TaskEditor({
             </div>
             <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
               {draft.enabled && next && saved && !changed
-                ? `下次运行：${momentLabel(next, now)}（${untilLabel(next, now)}）`
+                ? t("assistant-taskeditor.next_run", { when: momentLabel(next, now), until: untilLabel(next, now) })
                 : draft.repeat === "once"
-                  ? "到点运行一次，跑完就从列表里拿掉（运行记录里还在）。"
+                  ? t("assistant-taskeditor.once_hint")
                   : draft.repeat === "daily"
-                    ? `${repeatsLabel(draft.weekdays)} ${draft.time || "--:--"}，按你所在的时区。`
+                    ? t("assistant-taskeditor.daily_hint", { days: repeatsLabel(draft.weekdays), time: draft.time || "--:--" })
                     : everyOk(draft.every_minutes)
-                      ? `${everyLabel(draft.every_minutes ?? 0)}运行一次，从保存时算起。`
-                      : "每隔几分钟运行一次，从保存时算起。"}
+                      ? t("assistant-taskeditor.interval_hint", { every: everyLabel(draft.every_minutes ?? 0) })
+                      : t("assistant-taskeditor.interval_hint_blank")}
             </p>
           </section>
 
           <section>
-            <SectionTitle>提示词</SectionTitle>
+            <SectionTitle>{t("assistant-taskeditor.section_prompt")}</SectionTitle>
             <textarea
               className={textareaClass}
               rows={6}
               value={draft.prompt}
-              placeholder="要 Persona 做什么"
-              aria-label="要 Persona 做什么"
+              placeholder={t("assistant-taskeditor.prompt_placeholder")}
+              aria-label={t("assistant-taskeditor.prompt_placeholder")}
               onChange={(e) => set({ prompt: e.target.value })}
             />
-            <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。</p>
+            <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-taskeditor.prompt_hint")}</p>
           </section>
 
           <section>
-            <SectionTitle>运行方式</SectionTitle>
+            <SectionTitle>{t("assistant-taskeditor.section_run")}</SectionTitle>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label="模型（启动器）">
+              <Field label={t("assistant-taskeditor.launcher_label")}>
                 <select className={inputClass} value={draft.launcher ?? ""} onChange={(e) => set({ launcher: e.target.value || undefined })}>
-                  <option value="">助手默认{defaultLauncher ? `（${defaultLauncher}）` : ""}</option>
+                  <option value="">{defaultLauncher ? t("assistant-taskeditor.assistant_default_named", { launcher: defaultLauncher }) : t("assistant-taskeditor.assistant_default")}</option>
                   {draft.launcher && !launchers?.some((l) => l.name === draft.launcher) && <option value={draft.launcher}>{draft.launcher}</option>}
                   {(launchers ?? []).map((l) => (
-                    <option key={l.name} value={l.name}>{l.model ? `${l.name}（${l.model}）` : l.name}</option>
+                    <option key={l.name} value={l.name}>{l.model ? t("assistant-taskeditor.launcher_with_model", { launcher: l.name, model: l.model }) : l.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="权限模式">
+              <Field label={t("assistant-taskeditor.permission_label")}>
                 <select
                   className={draft.permission_mode === BYPASS ? inputClass.replace(" text-ink ", " font-medium text-red ") : inputClass}
                   value={askBypass ? BYPASS : draft.permission_mode === "default" ? "" : draft.permission_mode ?? ""}
@@ -286,7 +287,7 @@ export function TaskEditor({
                     }
                   }}
                 >
-                  <option value="">默认（先问你）</option>
+                  <option value="">{t("assistant-taskeditor.permission_default")}</option>
                   {draft.permission_mode && draft.permission_mode !== "default" && !PERMISSION_MODES.some((m) => m.id === draft.permission_mode) && (
                     <option value={draft.permission_mode}>{draft.permission_mode}</option>
                   )}
@@ -295,9 +296,9 @@ export function TaskEditor({
                   ))}
                 </select>
               </Field>
-              <Field label="思考强度">
+              <Field label={t("assistant-taskeditor.effort_label")}>
                 <select className={inputClass} value={draft.effort ?? ""} onChange={(e) => set({ effort: e.target.value || undefined })}>
-                  <option value="">助手默认</option>
+                  <option value="">{t("assistant-taskeditor.assistant_default")}</option>
                   {draft.effort && !EFFORTS.some((x) => x.id === draft.effort) && <option value={draft.effort}>{draft.effort}</option>}
                   {EFFORTS.map((x) => (
                     <option key={x.id} value={x.id}>{x.title}</option>
@@ -306,13 +307,13 @@ export function TaskEditor({
               </Field>
             </div>
             {askBypass ? (
-              <div ref={reveal} role="alertdialog" aria-label="全部放行？" className="mt-3 rounded-card bg-red-tint p-3">
-                <p className="text-[13px] font-medium text-red">全部放行？</p>
+              <div ref={reveal} role="alertdialog" aria-label={t("assistant-taskeditor.bypass_title")} className="mt-3 rounded-card bg-red-tint p-3">
+                <p className="text-[13px] font-medium text-red">{t("assistant-taskeditor.bypass_title")}</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
-                  这个任务运行时，跑任何命令、改任何文件、用任何工具都不再问你，也没有人能中途拦下。只给你信得过、出了错也能接受的提示词用。
+                  {t("assistant-taskeditor.bypass_body")}
                 </p>
                 <div className="mt-2.5 flex justify-end gap-2">
-                  <Button tone="quiet" onClick={() => setAskBypass(false)}>取消</Button>
+                  <Button tone="quiet" onClick={() => setAskBypass(false)}>{t("common.cancel")}</Button>
                   <Button
                     tone="danger"
                     onClick={() => {
@@ -320,19 +321,19 @@ export function TaskEditor({
                       set({ permission_mode: BYPASS });
                     }}
                   >
-                    全部放行
+                    {t("assistant-taskeditor.bypass_confirm")}
                   </Button>
                 </div>
               </div>
             ) : draft.permission_mode === BYPASS ? (
               <p className="mt-1.5 flex items-center gap-1.5 px-1 text-[11.5px] font-medium text-red">
                 <Icon name="info" size={13} />
-                全部放行：运行时跑命令、改文件都不再问你。
+                {t("assistant-taskeditor.bypass_on")}
               </p>
             ) : (
               <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
-                空着就是助手的默认。定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着；要它跑命令也不问你，可以选「自动」（自己判断风险）。
-                {draft.session_id ? "接着原来的对话运行时，那段对话也会换成这里的设置。" : ""}
+                {t("assistant-taskeditor.permission_hint")}
+                {draft.session_id ? t("assistant-taskeditor.permission_hint_resume") : ""}
               </p>
             )}
             {central && (
@@ -344,61 +345,61 @@ export function TaskEditor({
                 }}
                 className="mt-1 inline-flex items-center gap-1 whitespace-nowrap px-1 text-[11.5px] text-accent-ink hover:underline"
               >
-                {saved ? "在「模型配置」里设置这个任务的具体模型" : "在「模型配置」里设置定时任务的默认模型"}
+                {saved ? t("assistant-taskeditor.model_config_task") : t("assistant-taskeditor.model_config_default")}
                 <Icon name="chevronRight" size={11} stroke={2.2} />
               </button>
             )}
           </section>
 
           <section>
-            <SectionTitle>对话</SectionTitle>
+            <SectionTitle>{t("assistant-taskeditor.section_chat")}</SectionTitle>
             <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
               {origin && (
                 <div className="flex items-center gap-3 px-3.5 py-2.5">
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">接着原来的对话</span>
-                  <Switch checked={!!draft.session_id} label="接着原来的对话" onChange={(on) => set({ session_id: on ? origin : undefined })} />
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("assistant-taskeditor.resume_chat")}</span>
+                  <Switch checked={!!draft.session_id} label={t("assistant-taskeditor.resume_chat")} onChange={(on) => set({ session_id: on ? origin : undefined })} />
                 </div>
               )}
               {!draft.session_id &&
                 (own ? (
                   <>
-                    <LinkRow icon="chat" label="在同一个对话里运行" onClick={() => open(own)} />
-                    <LinkRow icon="plus" label="下次开新对话" busy={busy === "fresh"} disabled={working} onClick={() => void startOver()} chevron={false} />
+                    <LinkRow icon="chat" label={t("assistant-taskeditor.same_chat")} onClick={() => open(own)} />
+                    <LinkRow icon="plus" label={t("assistant-taskeditor.fresh_chat")} busy={busy === "fresh"} disabled={working} onClick={() => void startOver()} chevron={false} />
                   </>
                 ) : (
                   <div className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-ink-2">
                     <Icon name="chat" size={14} className="text-ink-3" />
-                    在同一个对话里运行
+                    {t("assistant-taskeditor.same_chat")}
                   </div>
                 ))}
             </div>
             <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-ink-3">
               {draft.session_id
-                ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。"
+                ? t("assistant-taskeditor.chat_hint_resume")
                 : own
-                  ? "每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。"
-                  : "第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。"}
+                  ? t("assistant-taskeditor.chat_hint_own")
+                  : t("assistant-taskeditor.chat_hint_new")}
             </p>
           </section>
 
           <section>
             <div className="flex flex-wrap items-center gap-2">
-              <Button tone="secondary" icon="play" busy={busy === "run"} disabled={working || !!problem} onClick={() => void runNow()}>立即运行</Button>
+              <Button tone="secondary" icon="play" busy={busy === "run"} disabled={working || !!problem} onClick={() => void runNow()}>{t("assistant-taskeditor.run_now")}</Button>
               {saved?.last_session_id && saved.last_session_id !== own && (
-                <Button tone="quiet" icon="chat" disabled={working} onClick={() => open(saved.last_session_id!)}>查看上次结果</Button>
+                <Button tone="quiet" icon="chat" disabled={working} onClick={() => open(saved.last_session_id!)}>{t("assistant-taskeditor.view_last")}</Button>
               )}
               {last && <span className={cx("text-[11.5px] tabular-nums", last.failed ? "text-red" : "text-ink-3")}>{last.text}</span>}
             </div>
             <p className={cx("mt-1.5 px-1 text-[11.5px] leading-relaxed", saved?.last_status === "failed" && saved.last_error ? "text-red" : "text-ink-3")}>
               {saved?.last_status === "failed" && saved.last_error
-                ? `上次没有跑起来：${saved.last_error}`
-                : `立即运行不改它的时间，${creating || changed ? "先保存再运行，" : ""}跑完在 Persona 的对话里看结果。`}
+                ? t("assistant-taskeditor.last_failed", { error: saved.last_error })
+                : creating || changed ? t("assistant-taskeditor.run_now_hint_save") : t("assistant-taskeditor.run_now_hint")}
             </p>
           </section>
 
           {runs.length > 0 && (
             <section>
-              <SectionTitle right={runs.length > 5 ? <span className="text-[11px] text-ink-3">共 {runs.length} 次</span> : undefined}>历史记录</SectionTitle>
+              <SectionTitle right={runs.length > 5 ? <span className="text-[11px] text-ink-3">{t("assistant-taskeditor.run_total", { count: runs.length })}</span> : undefined}>{t("assistant-taskeditor.section_history")}</SectionTitle>
               <div className="divide-y divide-line overflow-hidden rounded-card bg-surface shadow-card">
                 {runs.slice(0, 5).map((r) => (
                   <RunLine key={r.id} run={r} now={now} onOpen={r.session_id ? () => open(r.session_id!) : undefined} />
@@ -440,7 +441,7 @@ export function RunLine({ run, now, onOpen, showTitle }: { run: Run; now: Date; 
     </>
   );
   return onOpen ? (
-    <button type="button" onClick={onOpen} title="打开这次运行的对话" className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-hover">
+    <button type="button" onClick={onOpen} title={t("assistant-taskeditor.open_run")} className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left transition-colors hover:bg-hover">
       {body}
     </button>
   ) : (
@@ -451,13 +452,13 @@ export function RunLine({ run, now, onOpen, showTitle }: { run: Run; now: Date; 
 export function RunMark({ status }: { status: string }) {
   if (status === "ok")
     return (
-      <span aria-label="已运行" role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-green text-white">
+      <span aria-label={t("assistant-taskeditor.status_ok")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-green text-white">
         <Icon name="check" size={11} stroke={3} />
       </span>
     );
-  if (status === "skipped") return <span aria-label="已跳过" role="img" className="size-[18px] shrink-0 rounded-full border-[1.5px] border-line-strong" />;
+  if (status === "skipped") return <span aria-label={t("assistant-taskeditor.status_skipped")} role="img" className="size-[18px] shrink-0 rounded-full border-[1.5px] border-line-strong" />;
   return (
-    <span aria-label="失败" role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-red text-white">
+    <span aria-label={t("assistant-taskeditor.status_failed")} role="img" className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-red text-white">
       <Icon name="x" size={11} stroke={3} />
     </span>
   );
@@ -466,7 +467,7 @@ export function RunMark({ status }: { status: string }) {
 function OnceWhen({ draft, now, onChange }: { draft: Task; now: Date; onChange: (at: string | undefined) => void }) {
   const value = toLocalInput(parseTime(draft.at));
   return (
-    <Field label="时间">
+    <Field label={t("assistant-taskeditor.time")}>
       <input
         type="datetime-local"
         className={cx(inputClass, "tabular-nums")}
@@ -505,7 +506,7 @@ function DailyWhen({ draft, onChange }: { draft: Task; onChange: (p: Partial<Tas
   };
   return (
     <div className="flex flex-col gap-3">
-      <Field label="时间">
+      <Field label={t("assistant-taskeditor.time")}>
         <input
           type="time"
           className={cx(inputClass.replace("w-full", "w-36"), "tabular-nums")}
@@ -514,7 +515,7 @@ function DailyWhen({ draft, onChange }: { draft: Task; onChange: (p: Partial<Tas
         />
       </Field>
       <div>
-        <span className="mb-1.5 block text-[12px] font-medium text-ink-2">哪几天</span>
+        <span className="mb-1.5 block text-[12px] font-medium text-ink-2">{t("assistant-taskeditor.which_days")}</span>
         <div className="flex flex-wrap items-center gap-1.5">
           {DAY_NAMES.map((n, i) => {
             const on = selected.has(i + 1);
@@ -523,7 +524,7 @@ function DailyWhen({ draft, onChange }: { draft: Task; onChange: (p: Partial<Tas
                 key={n}
                 type="button"
                 aria-pressed={on}
-                aria-label={`周${n}`}
+                aria-label={t("assistant-taskeditor.weekday", { day: n })}
                 onClick={() => toggle(i + 1)}
                 className={cx(
                   "flex size-8 items-center justify-center rounded-full text-[12.5px] font-medium transition-[background-color,color,transform] duration-150 active:scale-[0.94]",
@@ -535,9 +536,9 @@ function DailyWhen({ draft, onChange }: { draft: Task; onChange: (p: Partial<Tas
             );
           })}
           <span className="mx-1 hidden h-4 w-px bg-line sm:block" />
-          {shortcut("每天", [])}
-          {shortcut("工作日", WORKDAYS)}
-          {shortcut("周末", WEEKEND)}
+          {shortcut(t("assistant-taskeditor.every_day"), [])}
+          {shortcut(t("assistant-taskeditor.weekdays"), WORKDAYS)}
+          {shortcut(t("assistant-taskeditor.weekend"), WEEKEND)}
         </div>
       </div>
     </div>
@@ -550,7 +551,7 @@ function IntervalWhen({ minutes, onChange }: { minutes: number; onChange: (m: nu
   const bad = !everyOk(minutes);
   return (
     <div className="flex flex-col gap-2">
-      <Field label="间隔（分钟）" note={bad ? "间隔要在 5 分钟到 7 天（10080 分钟）之间" : undefined} error={bad}>
+      <Field label={t("assistant-taskeditor.interval_label")} note={bad ? t("assistant-taskeditor.interval_bad") : undefined} error={bad}>
         <input
           type="number"
           inputMode="numeric"
@@ -575,7 +576,7 @@ function IntervalWhen({ minutes, onChange }: { minutes: number; onChange: (m: nu
             onClick={() => onChange(m)}
             className={cx("h-6 whitespace-nowrap rounded-full px-2.5 text-[11.5px] font-medium transition-colors", m === minutes ? "bg-accent-tint text-accent-ink" : "bg-field text-ink-3 hover:text-ink-2")}
           >
-            {m < 60 ? `${m} 分钟` : m % 1440 === 0 ? `${m / 1440} 天` : `${m / 60} 小时`}
+            {m < 60 ? t("assistant-taskeditor.minutes", { count: m }) : m % 1440 === 0 ? t("assistant-taskeditor.days", { count: m / 1440 }) : t("assistant-taskeditor.hours", { count: m / 60 })}
           </button>
         ))}
       </div>

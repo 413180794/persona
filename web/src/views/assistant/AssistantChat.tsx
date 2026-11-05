@@ -21,6 +21,7 @@ import { Icon } from "../../ui/icons";
 import { Chip } from "../chat/SessionDialogs";
 import { Switch } from "./parts";
 import { PersonaDot, usePersona } from "./Persona";
+import { t } from "../../i18n";
 
 // ── launchers ───────────────────────────────────────────
 
@@ -57,8 +58,8 @@ function useAssistantLaunchers(mid: string | undefined, wanted: boolean): { list
 }
 
 function launcherItems(list: AssistantLauncher[] | null, error: string, current: string, onPick: (name: string) => void): MenuItem[] {
-  if (!list) return [{ key: "loading", label: error ? `读不到启动器：${error}` : "正在读取启动器…", disabled: true, onSelect: () => {} }];
-  if (!list.length) return [{ key: "none", label: "这台电脑上没有能运行 Persona 的启动器", disabled: true, onSelect: () => {} }];
+  if (!list) return [{ key: "loading", label: error ? t("assistant-assistantchat.launchers_failed", { error }) : t("assistant-assistantchat.launchers_loading"), disabled: true, onSelect: () => {} }];
+  if (!list.length) return [{ key: "none", label: t("assistant-assistantchat.launchers_none"), disabled: true, onSelect: () => {} }];
   return list.map((l) => ({ key: l.name, label: l.name, hint: shortModel(l.model) || undefined, checked: l.name === current, onSelect: () => onPick(l.name) }));
 }
 
@@ -92,15 +93,15 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
   };
   const pick = (name: string, id: string | undefined) => {
     pickModel(key, id);
-    toast(id ? `下一条消息起使用 ${name} · ${id}` : `下一条消息起使用 ${name} 的默认模型`, "ok");
+    toast(id ? t("assistant-assistantchat.using_model", { launcher: name, model: id }) : t("assistant-assistantchat.using_default_model", { launcher: name }), "ok");
   };
 
   const items: MenuItem[] = modelsFor
     ? [
-        { key: "back", label: "← 启动器", onSelect: () => setModelsFor(null), keepOpen: true },
-        { key: "default", label: "默认模型", checked: !pickedM, onSelect: () => pick(modelsFor.name, undefined) },
+        { key: "back", label: t("assistant-assistantchat.back_to_launchers"), onSelect: () => setModelsFor(null), keepOpen: true },
+        { key: "default", label: t("assistant-assistantchat.default_model"), checked: !pickedM, onSelect: () => pick(modelsFor.name, undefined) },
         ...(modelsFor.loading
-          ? [{ key: "loading", label: "正在读取模型…", disabled: true, onSelect: () => {} }]
+          ? [{ key: "loading", label: t("assistant-assistantchat.models_loading"), disabled: true, onSelect: () => {} }]
           : modelsFor.options.map((m) => ({
               key: m.id,
               label: modelName(m),
@@ -113,7 +114,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
 
   return (
     <>
-      <Chip label={[current, model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title="启动器：下一条消息起使用" />
+      <Chip label={[current, model].filter(Boolean).join(" · ")} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.launcher_chip_title")} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
@@ -123,7 +124,7 @@ export function AssistantLauncherChip({ session }: { session: Session }) {
           }}
           side="top"
           width={280}
-          header={modelsFor ? `模型：${modelsFor.name}` : "下一条消息起使用"}
+          header={modelsFor ? t("assistant-assistantchat.models_header", { launcher: modelsFor.name }) : t("assistant-assistantchat.from_next_message")}
           items={items}
         />
       )}
@@ -141,16 +142,16 @@ export function StarterLauncherChip() {
   if (!assistant) return null;
   return (
     <>
-      <Chip label={picked ? current : `默认 · ${current}`} onClick={menu.open} active={Boolean(menu.anchor)} title="新对话用的启动器" />
+      <Chip label={picked ? current : t("assistant-assistantchat.default_launcher_chip", { launcher: current })} onClick={menu.open} active={Boolean(menu.anchor)} title={t("assistant-assistantchat.new_chat_launcher_title")} />
       {menu.anchor && (
         <Menu
           anchor={menu.anchor}
           onClose={menu.close}
           side="top"
           width={280}
-          header="新对话使用"
+          header={t("assistant-assistantchat.new_chat_uses")}
           items={[
-            { key: "default", label: "默认", hint: assistant.launcher || undefined, checked: !picked, onSelect: () => pickLauncher(NEW_CONVERSATION, undefined) },
+            { key: "default", label: t("assistant-assistantchat.default"), hint: assistant.launcher || undefined, checked: !picked, onSelect: () => pickLauncher(NEW_CONVERSATION, undefined) },
             ...launcherItems(list, error, picked ?? "", (name) => pickLauncher(NEW_CONVERSATION, name)),
           ]}
         />
@@ -188,16 +189,16 @@ export function useAssistantMenu(session: Session | undefined): { items: MenuIte
   const title = !isMain && session.title && session.title !== "Claude Code" ? session.title : undefined;
   const compacting = session.compaction?.state === "running";
   const items: MenuItem[] = [
-    { key: "profile", label: "详细信息", icon: "info", onSelect: () => navigate({ name: "profile" }) },
-    { key: "kb", label: "知识库", icon: "book", onSelect: () => navigate({ name: "kb" }) },
-    ...(assistant?.main && !isMain ? [{ key: "main", label: "回到主对话", icon: "home" as const, onSelect: () => navigate({ name: "jarvis", sid: assistant.main }) }] : []),
+    { key: "profile", label: t("assistant-assistantchat.details"), icon: "info", onSelect: () => navigate({ name: "profile" }) },
+    { key: "kb", label: t("assistant-assistantchat.knowledge"), icon: "book", onSelect: () => navigate({ name: "kb" }) },
+    ...(assistant?.main && !isMain ? [{ key: "main", label: t("assistant-assistantchat.back_to_main"), icon: "home" as const, onSelect: () => navigate({ name: "jarvis", sid: assistant.main }) }] : []),
     ...(isMain && canCompact
-      ? [{ key: "compact", label: compacting ? "正在压缩上下文…" : "压缩上下文", icon: "layers" as const, disabled: compacting, onSelect: () => void startCompaction(session) }]
+      ? [{ key: "compact", label: compacting ? t("assistant-assistantchat.compacting") : t("assistant-assistantchat.compact"), icon: "layers" as const, disabled: compacting, onSelect: () => void startCompaction(session) }]
       : []),
-    ...(isMain && canNewMain ? [{ key: "newmain", label: "新建主对话…", icon: "compose" as const, onSelect: () => setNewMain(true) }] : []),
+    ...(isMain && canNewMain ? [{ key: "newmain", label: t("assistant-assistantchat.new_main_ellipsis"), icon: "compose" as const, onSelect: () => setNewMain(true) }] : []),
     {
       key: "copyinfo",
-      label: "拷贝信息",
+      label: t("assistant-assistantchat.copy_info"),
       icon: "copy",
       onSelect: () => void copyText(assistantInfoText({ title, isMain, sessionId: session.session_id, machine, machineId: session.machine_id, cwd, launcher, model: shortModel(session.model) || undefined })),
     },
@@ -217,7 +218,7 @@ async function startCompaction(session: Session) {
     window.dispatchEvent(new CustomEvent(COMPACT_REQUESTED, { detail: { mid: session.machine_id, sid: session.session_id } }));
   } catch (e) {
     // 409: busy (正在回答), compacting, gone, unsupported — the hub's words say which
-    toast(`没开始压缩：${errorText(e)}`, "error");
+    toast(t("assistant-assistantchat.compact_start_failed", { error: errorText(e) }), "error");
   }
 }
 
@@ -260,13 +261,13 @@ export function CompactionStrip({ session }: { session: Session }) {
       setRequested(null);
       return;
     }
-    const t = setTimeout(() => setRequested(null), REQUEST_GRACE_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setRequested(null), REQUEST_GRACE_MS);
+    return () => clearTimeout(timer);
   }, [requested, sig]);
   useEffect(() => {
     if (view?.kind !== "done") return;
-    const t = setTimeout(() => setView(null), DONE_SHOWN_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setView(null), DONE_SHOWN_MS);
+    return () => clearTimeout(timer);
   }, [view]);
 
   const shown: CompactionView = requested ? { kind: "running" } : view;
@@ -280,18 +281,18 @@ export function CompactionStrip({ session }: { session: Session }) {
       {shown.kind === "running" ? (
         <>
           <Spinner size={12} />
-          <span className="min-w-0 flex-1 truncate">正在压缩上下文…</span>
+          <span className="min-w-0 flex-1 truncate">{t("assistant-assistantchat.compacting")}</span>
         </>
       ) : shown.kind === "done" ? (
         <>
           <Icon name="check" size={13} stroke={2.2} className="shrink-0 text-green" />
-          <span className="min-w-0 flex-1 truncate">已压缩上下文</span>
+          <span className="min-w-0 flex-1 truncate">{t("assistant-assistantchat.compacted")}</span>
         </>
       ) : (
         <>
           <Icon name="info" size={13} className="shrink-0 text-red" />
-          <span className="min-w-0 flex-1 break-words">压缩失败：{shown.error}</span>
-          <IconButton icon="x" label="关闭" onClick={dismiss} size={24} iconSize={13} />
+          <span className="min-w-0 flex-1 break-words">{t("assistant-assistantchat.compact_failed", { error: shown.error })}</span>
+          <IconButton icon="x" label={t("assistant-assistantchat.close")} onClick={dismiss} size={24} iconSize={13} />
         </>
       )}
     </div>
@@ -314,14 +315,14 @@ function NewMainDialog({ open, onClose, session }: { open: boolean; onClose: () 
     try {
       const r = await api<{ ok: boolean; archived?: string; carried?: boolean }>(NEW_MAIN_PATH, { method: "POST", json: newMainBody(carry, session.session_id) });
       await toEmptyMain();
-      toast(r.carried ? "已新建主对话，会带上旧对话的摘要" : "已新建主对话", "ok");
+      toast(r.carried ? t("assistant-assistantchat.new_main_done_carried") : t("assistant-assistantchat.new_main_done"), "ok");
     } catch (e) {
       if (e instanceof ApiError && e.code === "main_changed") {
         // another device replaced it: show what the hub has now
         await toEmptyMain();
-        toast("主对话已在别的设备上换过了，已刷新", "info");
+        toast(t("assistant-assistantchat.new_main_elsewhere"), "info");
       } else {
-        toast(`没新建：${errorText(e)}`, "error");
+        toast(t("assistant-assistantchat.new_main_failed", { error: errorText(e) }), "error");
       }
     } finally {
       setBusy(false);
@@ -331,27 +332,27 @@ function NewMainDialog({ open, onClose, session }: { open: boolean; onClose: () 
     <Dialog
       open={open}
       onClose={onClose}
-      title="新建主对话？"
+      title={t("assistant-assistantchat.new_main_title")}
       footer={
         <>
           <Button tone="quiet" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy} onClick={() => void go()}>
-            新建主对话
+            {t("assistant-assistantchat.new_main")}
           </Button>
         </>
       }
     >
       <p className="text-[13px] leading-relaxed text-ink-2">
-        现在的主对话会归档，改名为「{archivedMainTitle()}」，之后在「已归档」里能找到。新的主对话从你发的下一条消息开始。
+        {t("assistant-assistantchat.new_main_body", { title: archivedMainTitle() })}
       </p>
       <div className="mt-3 flex items-start gap-3 rounded-control bg-inset px-3 py-2.5 shadow-hairline">
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-ink">带上旧对话的摘要</div>
-          <div className="mt-0.5 text-[12px] leading-relaxed text-ink-3">没压缩过的只带最近几条；想带完整摘要，可以先压缩上下文。</div>
+          <div className="text-[13px] font-medium text-ink">{t("assistant-assistantchat.carry_summary")}</div>
+          <div className="mt-0.5 text-[12px] leading-relaxed text-ink-3">{t("assistant-assistantchat.carry_summary_hint")}</div>
         </div>
-        <Switch checked={carry} onChange={setCarry} label="带上旧对话的摘要" disabled={busy} />
+        <Switch checked={carry} onChange={setCarry} label={t("assistant-assistantchat.carry_summary")} disabled={busy} />
       </div>
     </Dialog>
   );

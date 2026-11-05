@@ -23,6 +23,7 @@ import { href, navigate, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
+import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoAgentGroups, findTodoForSpace, openTodoFromTag, TODO_STATUS_INFO, type TodoStatus } from "../lib/todos";
 import type { AgentState, Machine, Session } from "../lib/types";
 import { Collapse, cx, EASE, Kbd, Menu, StatusDot, useMenu, type MenuItem } from "../ui/atoms";
@@ -214,6 +215,8 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
   // 消息 needs the hub to read Feishu (feature `lark`) as well as this browser's switch
   const larkHome = larkSwitch && lark;
   const extensionPages = useExtensionSlot("nav_page");
+  // off unless turned on in 设置 › 通用 › Agent (#2475)
+  const boardOn = useWorkspaceBoardSetting().enabled === true;
   // a phone's drawer has the pages as two rows of icons, so its first screen reaches the Agents (#1996)
   const narrow = useMedia(NARROW);
   const activeKey = useActiveKey(route);
@@ -228,7 +231,7 @@ export function Sidebar({ route, onSearch, onNewAgent, onNavigate }: { route: Ro
     home: { k: "home", to: { name: "home" }, icon: "home", label: "总览", badge: counts.badge || undefined, badgeTone: "red" },
     inbox: { k: "inbox", to: { name: "inbox" }, icon: "inbox", label: "收件箱", badge: inbox || undefined, badgeTone: "red" },
     messages: larkHome && { k: "messages", to: { name: "messages" }, icon: "chat", label: "消息" },
-    "workspace-board": { k: "workspace-board", to: { name: "workspace-board" }, icon: "layers", label: "工作流看板", short: "看板" },
+    "workspace-board": boardOn && { k: "workspace-board", to: { name: "workspace-board" }, icon: "layers", label: "工作流看板", short: "看板" },
     todos: todosSupported !== false && { k: "todos", to: { name: "todos" }, icon: "todo", label: "待办", badge: uncompletedTodosCount || undefined },
     routines: { k: "routines", to: { name: "routines" }, icon: "clock", label: "定时任务" },
     kb: { k: "kb", to: { name: "kb" }, icon: "book", label: "知识库" },
