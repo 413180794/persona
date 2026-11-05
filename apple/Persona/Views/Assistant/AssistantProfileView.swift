@@ -116,11 +116,11 @@ struct AssistantProfileView: View {
                 Label("飞书：消息、日历、文档、会议纪要、任务、邮件", systemImage: "building.2")
                 Label("iPhone：通讯录、日历、提醒、位置、健康、照片", systemImage: Theme.Icon.phone)
                 Label("你添加的所有邮箱", systemImage: Theme.Icon.mail)
-                Label("在手机上问你、给你推送", systemImage: Theme.Icon.notifications)
+                Label(Self.reachApprovalLine, systemImage: Theme.Icon.notifications)
             } header: {
                 Text("能访问")
             } footer: {
-                Text("发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")
+                Text(Self.reachApprovalFooter)
             }
         }
         .themedPage()
@@ -169,13 +169,13 @@ struct AssistantProfileView: View {
                     BUIListRow(String(localized: "运行在"), value: machineName)
                     BUIListRow(String(localized: "工作目录"), value: assistantCwd)
                 }
-                BUIListSection(String(localized: "能访问"), footer: String(localized: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")) {
+                BUIListSection(String(localized: "能访问"), footer: Self.reachApprovalFooter) {
                     buiReach(machinesLine, Theme.Icon.machines)
                     buiReach(String(localized: "各台电脑上的 Agent：看状态、读对话、发消息、开新的"), "rectangle.stack.badge.person.crop")
                     buiReach(String(localized: "飞书：消息、日历、文档、会议纪要、任务、邮件"), "building.2")
                     buiReach(String(localized: "iPhone：通讯录、日历、提醒、位置、健康、照片"), Theme.Icon.phone)
                     buiReach(String(localized: "你添加的所有邮箱"), Theme.Icon.mail)
-                    buiReach(String(localized: "在手机上问你、给你推送"), Theme.Icon.notifications)
+                    buiReach(Self.reachApprovalLine, Theme.Icon.notifications)
                 }
             }
             .padding(.horizontal, Theme.Space.l)
@@ -230,6 +230,16 @@ struct AssistantProfileView: View {
     }
     private static let quietTitle = String(localized: "只在主对话里通知")
     private static let quietFooter = String(localized: "主对话派出去的任务不进灵动岛、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。")
+
+    // Where Persona asks before acting on your behalf: the Mac app asks in the app, iOS asks on the phone (#4068).
+    // The push itself still goes to the iPhone, so "给你推送" stays in both.
+    #if os(macOS)
+    private static let reachApprovalLine = String(localized: "在 App 里问你、给你推送")
+    private static let reachApprovalFooter = String(localized: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在 App 里问你。")
+    #else
+    private static let reachApprovalLine = String(localized: "在手机上问你、给你推送")
+    private static let reachApprovalFooter = String(localized: "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。")
+    #endif
 
     private var upcoming: [AssistantUpcoming] {
         AssistantUpcoming.merge(tasks ?? []).prefix(3).map { $0 }

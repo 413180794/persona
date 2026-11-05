@@ -72,3 +72,16 @@ export function answeredSessions(sessions: Session[], interactions: Interaction[
   });
   return changed ? out : sessions;
 }
+
+/** One session as a row shows it (the sidebar, #4286), by the same rule; `answeredAt` is when this page last answered
+ *  one of its cards (ms), undefined for none. */
+export function answeredSession(s: Session, waiting: boolean, answeredAt: number | undefined): Session {
+  if (answeredAt === undefined) return s;
+  const k = key(s.machine_id, s.session_id);
+  return answeredHere(s, waiting ? new Set([k]) : new Set(), new Map([[k, answeredAt]])) ? answeredCopy(s) : s;
+}
+
+/** When this page last answered one of a session's cards (ms), for answeredSession. */
+export function lastAnsweredAt(answered: Record<string, AnsweredCard>, mid: string, sid: string): number | undefined {
+  return answeredBy(answered).get(key(mid, sid));
+}

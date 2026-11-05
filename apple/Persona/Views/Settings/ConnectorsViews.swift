@@ -471,7 +471,11 @@ struct FeishuConnectorView: View {
             Section("Persona 用飞书做什么") {
                 use(Theme.Icon.inbox, String(localized: "收件箱"), String(localized: "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复"))
                 use(Theme.Icon.knowledge, String(localized: "知识库"), String(localized: "会话、人、群、项目归档下来，给助手和 AI 分身做上下文"))
+                #if os(macOS)
+                use(Theme.Icon.ai, String(localized: "助手"), String(localized: "Persona 能搜消息、读文档；发消息等写操作先在 App 里问你"))
+                #else
                 use(Theme.Icon.ai, String(localized: "助手"), String(localized: "Persona 能搜消息、读文档；发消息等写操作先在手机上问你"))
+                #endif
                 use(Theme.Icon.agents, "/agent", String(localized: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复"))
                 ModelConfigurationLink(title: String(localized: "/agent 模型"), purposeID: "lark.agent")
             }

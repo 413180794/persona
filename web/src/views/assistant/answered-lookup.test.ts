@@ -5,7 +5,7 @@ import { todoStatus, type Todo } from "../../lib/todos";
 import type { AnsweredCard } from "../../lib/store";
 import type { Interaction, Session } from "../../lib/types";
 import { dockAgents } from "../../lib/todos";
-import { answeredLookup, answeredSessions } from "./answered-lookup";
+import { answeredLookup, answeredSession, answeredSessions } from "./answered-lookup";
 
 const s = { machine_id: "m1", session_id: "s1", title: "a", state: "needs_you", status: "blocked" } as Session;
 const other = { machine_id: "m1", session_id: "s2", title: "b", state: "needs_you", status: "blocked" } as Session;
@@ -70,5 +70,18 @@ describe("the answer's time (#4186 re-review)", () => {
     expect(stateOf(answeredLookup([later], [], card)("m1", "s1")!)).toBe("needs_you");
     const before = { ...s, state_since: new Date(t - 5_000).toISOString() } as Session;
     expect(stateOf(answeredLookup([before], [], card)("m1", "s1")!)).toBe("working");
+  });
+});
+
+describe("answeredSession, one row (#4286)", () => {
+  it("does one row by the same rule, and waits again with a new card", () => {
+    const at = Date.now();
+    expect(stateOf(answeredSession(s, false, at))).toBe("working");
+    expect(answeredSession(s, true, at)).toBe(s);
+    expect(answeredSession(s, false, undefined)).toBe(s);
+  });
+  it("lets a later needs_you win", () => {
+    const later = { ...s, state_since: new Date(Date.now() + 60_000).toISOString() } as Session;
+    expect(answeredSession(later, false, Date.now())).toBe(later);
   });
 });

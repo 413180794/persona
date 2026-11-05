@@ -19,6 +19,7 @@ import { Button, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
+import { answeredSessions } from "./assistant/answered-lookup";
 import { OverviewCards } from "./extensions/ExtensionSlots";
 import { t } from "../i18n";
 
@@ -30,9 +31,12 @@ function greeting() {
 }
 
 export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; onToggleSidebar: () => void }) {
-  const sessions = useAgentSessions();
   const machines = useStore((s) => s.machines);
   const interactions = useStore((s) => s.interactions);
+  const answered = useStore((s) => s.answered);
+  // a card answered here moves its agent out of 卡住了 at once, not at the hub's next push (#4286)
+  const agentSessions = useAgentSessions();
+  const sessions = useMemo(() => answeredSessions(agentSessions, interactions, answered), [agentSessions, interactions, answered]);
   const loaded = useStore((s) => s.loaded);
   const counts = useCounts();
   const now = useNow(5000, counts.working > 0);

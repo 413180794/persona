@@ -31,6 +31,7 @@ import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
 import { rowLine } from "../lib/row-line";
+import { answeredSession, lastAnsweredAt } from "./assistant/answered-lookup";
 import { BREATHING, connPhase, connStatus, phaseTone, type ConnPhase } from "../lib/connection";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
@@ -1696,7 +1697,12 @@ function sameRow(a: SessionRowProps, b: SessionRowProps): boolean {
   return keys.every((key) => (key === "to" ? routePath(a.to) === routePath(b.to) : Object.is(a[key], b[key])));
 }
 
-export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, to, go, tab, label, prefix, prefixClass, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: SessionRowProps) {
+export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, active, to, go, tab, label, prefix, prefixClass, hint, host, showState = true, showTodoTag, onMenu, menuLabel = t("sidebar.agent_actions"), endRoom, icon = "chat" }: SessionRowProps) {
+  // what it asks you, or what it did, under its title (#3195): no hover or click needed to see why it is red or green
+  const ix = useStore((st) => st.interactions.find((i) => i.machine_id === given.machine_id && i.session_id === given.session_id));
+  // a card answered here takes its red dot and 在问你 line away at once, not at the hub's next push (#4286)
+  const justAnswered = useStore((st) => lastAnsweredAt(st.answered, given.machine_id, given.session_id));
+  const s = answeredSession(given, Boolean(ix), justAnswered);
   const st = stateOf(s);
   const tail = [sourceSubtitle(s), hint ?? (tab ? tabLabel(s) : "")].filter(Boolean).join(" · ");
   const preview = sessionPreview(s);
@@ -1720,8 +1726,6 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
   const titleMin = prefix ? ROW_TITLE_MIN : "min-w-0";
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
   const regRow = useMemo(() => reg(k), [reg, k]);
-  // what it asks you, or what it did, under its title (#3195): no hover or click needed to see why it is red or green
-  const ix = useStore((st) => st.interactions.find((i) => i.machine_id === s.machine_id && i.session_id === s.session_id));
   const line = showState && !s.assistant ? rowLine(s, ix) : undefined;
   const link = (
     <a

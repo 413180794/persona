@@ -9839,6 +9839,28 @@
         }
       }
     },
+    "Persona 能搜消息、读文档；发消息等写操作先在 App 里问你": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona can search messages and read docs; sending messages and other changes ask you in the app first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaはメッセージの検索やドキュメントの閲覧ができます。メッセージ送信などの書き込みは先にAppで確認します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona 能搜消息、读文档；发消息等写操作先在 App 里问你"
+          }
+        }
+      }
+    },
     "Persona 能搜消息、读文档；发消息等写操作先在手机上问你": {
       "localizations": {
         "en": {
@@ -17698,6 +17720,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "之后只直连 hub。服务器上的那行 authorized_keys 需要你自己删。"
+          }
+        }
+      }
+    },
+    "也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在 App 里确认后就加好了。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can also just tell Persona “Add a mail account for me”, give it the address and password, and confirm in the app."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personaに「メールアカウントを追加して」と伝えて、アドレスとパスワードを教え、Appで確認するだけでも追加できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在 App 里确认后就加好了。"
           }
         }
       }
@@ -29797,6 +29841,28 @@
         }
       }
     },
+    "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在 App 里问你。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anything that acts on your behalf, like sending Lark messages, sending email, or creating events, asks you in the app first."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkメッセージの送信、メールの送信、予定の作成など、あなたの代わりに行う操作は、必ず先にアプリで確認します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在 App 里问你。"
+          }
+        }
+      }
+    },
     "发飞书消息、发邮件、新建日程这类会替你出面的操作，都先在手机上问你。": {
       "localizations": {
         "en": {
@@ -34853,6 +34919,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "在 App 里打开这个页面"
+          }
+        }
+      }
+    },
+    "在 App 里问你、给你推送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask you and notify you in the app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリでの確認と通知"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 App 里问你、给你推送"
           }
         }
       }

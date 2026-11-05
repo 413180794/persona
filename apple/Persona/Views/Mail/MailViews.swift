@@ -576,7 +576,12 @@ struct AddMailAccountView: View {
                 Section {
                 } footer: {
                     // 2026-11-01: 「AI 一键添加」 (paste and recognize) is gone; Persona adds accounts itself (mail_account_add).
+                    #if os(macOS)
+                    // On macOS the add-account confirmation card appears in the Mac app, not on a phone (#4070).
+                    Label("也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在 App 里确认后就加好了。", systemImage: Theme.Icon.ai)
+                    #else
                     Label("也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在手机上确认后就加好了。", systemImage: Theme.Icon.ai)
+                    #endif
                 }
             }
             .themedPage()
