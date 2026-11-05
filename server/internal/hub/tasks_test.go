@@ -257,10 +257,14 @@ func TestTaskStartFailedEndsTheTodo(t *testing.T) {
 
 // retryReq posts a task's retry as the app does.
 func retryReq(h *Hub, todoID string) *httptest.ResponseRecorder {
+	return retryReqWithHandler(h, todoID, h.routes())
+}
+
+func retryReqWithHandler(h *Hub, todoID string, handler http.Handler) *httptest.ResponseRecorder {
 	r := todoRequest("POST", "/api/v1/todos/"+todoID+"/retry", nil)
 	r.Header.Set("Authorization", "Bearer "+h.cfg.Token)
 	w := httptest.NewRecorder()
-	h.routes().ServeHTTP(w, r)
+	handler.ServeHTTP(w, r)
 	return w
 }
 

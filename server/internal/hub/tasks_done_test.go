@@ -34,6 +34,10 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 	t.Helper()
 	js := &judgeStub{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
 		raw, _ := io.ReadAll(r.Body)
 		js.input.Store(string(raw))
 		js.calls.Add(1)
@@ -48,7 +52,46 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 	_ = os.WriteFile(key, []byte("k"), 0o600)
 	// inbox.judge inherits 信息筛选 (inbox.triage) when nothing else is set, as in the inbox's own tests.
 	h.triageAI = ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
+	// Naming inherits kb; its requests must not change the judge's count or input.
+	naming := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "example-task"}}})
+	}))
+	t.Cleanup(naming.Close)
+	h.cfg.KB.AI = &ai.Config{BaseURL: naming.URL, APIKeyFile: key, Model: "m"}
 	return js
+}
+
+func TestJudgeStubSeparatesNamingCalls(t *testing.T) {
+	h, _ := newTaskHub(t)
+	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"Example completed task"}`)
+	if _, err := h.purposeModel("agent.title").Complete(context.Background(), "Example naming system", "Example task", 200); err != nil {
+		t.Fatal(err)
+	}
+	if js.calls.Load() != 0 {
+		t.Fatal("a naming request was counted as a completion judgment")
+	}
+	var result struct{ Verdict string }
+	if err := h.purposeModel("inbox.judge").JSON(context.Background(), "Example judgment system", "Example completed work", &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Verdict != "done" || js.calls.Load() != 1 {
+		t.Fatalf("judgment result %q, calls %d", result.Verdict, js.calls.Load())
+	}
+	input := js.input.Load()
+	probe, err := http.Get(h.triageAI.Config().BaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe.Body.Close()
+	if js.calls.Load() != 1 || js.input.Load() != input {
+		t.Fatal("a non-model probe changed the completion judgment's count or input")
+	}
+	if _, err := h.purposeModel("agent.title").Complete(context.Background(), "Example naming system", "Another example task", 200); err != nil {
+		t.Fatal(err)
+	}
+	if js.calls.Load() != 1 || js.input.Load() != input {
+		t.Fatal("late naming changed the completion judgment's count or input")
+	}
 }
 
 // startedTask opens a read-only task from conv1 and waits for its agent (s1 on box) to be linked.
@@ -299,8 +342,6 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	h, tn := newTaskHub(t)
 	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"修好了"}`)
 	todo := startedTask(t, h)
-	time.Sleep(50 * time.Millisecond)
-	before := js.calls.Load() // naming the agent's tab may ask the model too
 	cut := "API Error: Connection lost mid-response. The response above may be incomplete."
 	runTurn(h, cut)
 	waitFor(t, "a receipt", func() bool { return receipts(h) == 1 })
@@ -311,8 +352,8 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 		t.Fatalf("receipt = %+v", rb)
 	}
 	time.Sleep(50 * time.Millisecond)
-	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != before {
-		t.Fatalf("todo = %+v, %d judge calls", got, js.calls.Load()-before)
+	if got := todoNow(h, todo.ID); got.DoneAt != nil || js.calls.Load() != 0 {
+		t.Fatalf("todo = %+v, %d judge calls", got, js.calls.Load())
 	}
 	// Its state is the assistant's: the line the snapshot has for it (taskLine).
 	if line := taskLine(h, todo); !strings.Contains(line, "模型服务出错，中断了（没做完，等用户让它继续）") {
@@ -336,12 +377,13 @@ func TestTaskInterruptedByAPIError(t *testing.T) {
 	}
 
 	// 重试: 「继续」 to the agent, once for eight taps; the todo is answered as it is.
+	retryHandler := h.routes()
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if w := retryReq(h, todo.ID); w.Code != http.StatusOK {
+			if w := retryReqWithHandler(h, todo.ID, retryHandler); w.Code != http.StatusOK {
 				t.Errorf("retry: %d %s", w.Code, w.Body)
 			}
 		}()
