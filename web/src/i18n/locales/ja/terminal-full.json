@@ -20,6 +20,7 @@
   "status_unsupported": "非対応",
   "status_forbidden": "権限なし",
   "live_hint": "herdr 自身のクライアントです。ここで操作している間、コンピューター側のペインはこのパネルのサイズに合わせて配置され、コンピューターに戻ると元に戻ります",
+  "live_grid": "いまは {cols} 列 × {rows} 行",
   "files": "ファイル",
   "keybar_hide": "キーバーを閉じる",
   "keybar_show": "キーバーを表示",

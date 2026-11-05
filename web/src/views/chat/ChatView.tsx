@@ -65,6 +65,8 @@ import { PageBoundary } from "../PageBoundary";
 import { ViewLayer } from "../session/ViewLayer";
 import { MAIN_TITLE } from "../assistant/conversations";
 import { usePersona } from "../assistant/Persona";
+import { ChatOnlyNote, FailureCard, ReadinessCard, useReadinessGate, type ReadinessGate } from "../assistant/Readiness";
+import { codedFailure, refreshReadiness, turnErrorFix, type CodedFailure } from "../../lib/readiness";
 import { displayLines, getFeedState, loadFeed, loadToday, sendRouted, useFeed, type FeedItem } from "../../lib/feed";
 import { CardConversation } from "../../ui/AssistantCard";
 import { SessionMark } from "../../ui/AgentMark";
@@ -164,6 +166,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const viewed = readOnly ? (subagents?.find((a) => a.session_id === sid) ?? null) : null;
   const tr = useTranscript(mid, sid, { starting: Boolean(launching) && !readOnly, updatedAt: (readOnly ? viewed : session)?.updated_at });
   const status = useSessionLive(mid, sid);
+  // a Persona conversation's send the hub refused: a card above the composer, not a toast (docs/onboarding.md 4.4)
+  const [sendFailure, setSendFailure] = useState<{ chat: string; failure: CodedFailure } | null>(null);
+  // the main conversation's setup gate, for deliver (defined before the gate is)
+  const blockedRef = useRef<ReadinessGate["blocked"]>(undefined);
   const [pending, setPending] = useState<Pending[]>(() => {
     const launch = Object.values(getState().launches).find((l) => l.phase === "ready" && l.machineId === mid && l.session?.session_id === sid);
     const out = launch?.outgoing;
@@ -465,12 +471,18 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   // ── sending ──
   const deliver = useCallback(
     async (out: Outgoing, id: string, clearDraft?: string): Promise<boolean> => {
+      // the main conversation's setup gate holds every path that sends, not only the composer (4.4)
+      if (blockedRef.current) {
+        blockedRef.current.onClick?.();
+        return false;
+      }
       if (!sessionCan(getSession(mid, sid), "send")) {
         toast(sourceSubtitle(session) || t("chat-chatview.session_loading"), "error");
         return false;
       }
       // a sending bubble shows picked contexts as quote cards, like the transcript will (not the raw tags)
       const p: Pending = { id, at: Date.now(), msg: { id: `pending:${id}`, ...parseUserText(out.text), images: out.images.map((image, i) => ({ id: `pending:${id}#${i}`, seq: 0, role: "user", kind: "image", image })) } };
+      setSendFailure(null); // a new try: an earlier failure no longer applies
       setPending((ps) => [...ps.filter((x) => x.id !== id), p]);
       follow(true); // your own message: to the end, whatever you were reading
       try {
@@ -489,6 +501,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           toast(t("chat-chatview.dialog_open"), "error");
         } else if (e instanceof ApiError && e.body.delivered === "unknown") {
           toast(t("chat-chatview.delivery_unknown"), "error");
+        } else if (assistant) {
+          setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e) });
+          void refreshReadiness({ force: true });
         } else {
           toast(t("chat-chatview.send_failed", { error: errorText(e) }), "error");
         }
@@ -559,6 +574,12 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   const lastLive = (readOnly ? Boolean(viewed?.running) : working) && !tr.loading;
   // The main conversation is always Persona (#1313): not its first message, the node's title for it.
   const isMain = Boolean(assistant && sid === mainConversation);
+  // the main conversation's readiness: the card for what is missing, and the send button saying it (4.4)
+  const gate = useReadinessGate(isMain && !readOnly);
+  blockedRef.current = gate.blocked;
+  const failure = sendFailure?.chat === `${mid}/${sid}` ? sendFailure.failure : null;
+  // the hub's word on the last turn's model error, for its card (5.2 turn_error_code)
+  const turnFix = assistant ? turnErrorFix(session?.turn_error_code) : null;
   const title = isMain ? MAIN_TITLE : session ? sessionTitle(session) : assistant ? t("chat-chatview.new_chat") : t("chat-chatview.session");
   const lines = useMemo(() => chatLines(tr.items, { live: lastLive && (readOnly || !outgoing) }), [tr.items, lastLive, readOnly, outgoing]);
   // the live work lines' clocks on screen (WorkGroup's Elapsed): while one ticks, the running bar shows no time (#3534)
@@ -837,6 +858,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                         streaming={d.line.kind === "segment" && d.line.live ? tr.streaming || undefined : undefined}
                         expandFold={tr.expandFold}
                         onRetry={canRetry && d.line.id === lines.at(-1)?.id ? retry : undefined}
+                        fix={d.line.id === lines.at(-1)?.id ? turnFix : undefined}
+                        assistant={assistant}
                       />
                     ),
                   )
@@ -853,6 +876,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
                   streaming={line.kind === "segment" && line.live ? tr.streaming || undefined : undefined}
                   expandFold={tr.expandFold}
                   onRetry={canRetry && i === lines.length - 1 ? retry : undefined}
+                  assistant={assistant}
                 />
               ))}
               </CardConversation.Provider>
@@ -917,6 +941,9 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           onDismissKeyboard={() => composerBox.current?.querySelector("textarea")?.blur()}
         />
         {assistant && session && <CompactionStrip session={session} />}
+        {failure ? <FailureCard failure={failure} onClose={() => setSendFailure(null)} onHelp={gate.help} /> : <ReadinessCard gate={gate} />}
+        <ChatOnlyNote gate={gate} />
+        {gate.dialog}
         {session && !assistant && <AttentionNote session={session} />}
         {session && !assistant && showsFailureNote(session, { readOnly, retried }) && (
           <FailureNote
@@ -944,6 +971,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           mention={mention}
           autoFocus
           onFocusChange={setTyping}
+          blocked={gate.blocked}
           footer={session ? <ComposerFooter session={session} assistant={assistant} /> : null}
         />
         </div>

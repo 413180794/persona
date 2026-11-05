@@ -182,20 +182,20 @@ export function FullTerminal({
     }));
   };
 
-  const size = v && v.cols && v.rows ? `${v.cols}×${v.rows}` : "";
+  // The grid stays out of the line (#3667): it is in the hint, in plain columns and rows.
+  const grid = v && v.cols && v.rows ? t("terminal-full.live_grid", { cols: v.cols, rows: v.rows }) : "";
   const actions = (
     <>
       <span
         title={
           status === "live"
-            ? t("terminal-full.live_hint")
+            ? [t("terminal-full.live_hint"), grid].filter(Boolean).join("\n")
             : v?.note || STATUS_LABEL[status]
         }
         className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap text-[11.5px] text-ink-3 @md:inline-flex"
       >
         <span aria-hidden className={cx("size-1.5 rounded-full", DOT[status])} />
         <span>{STATUS_LABEL[status]}</span>
-        {status === "live" && size && <span className="font-mono tabular-nums">{size}</span>}
       </span>
       {v?.elsewhere && (
         <button

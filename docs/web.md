@@ -529,6 +529,35 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
 [unified-entry.md](unified-entry.md)「主对话的任务坞里的手动 Agent」），「全部 N」算上它们。任务详情在侧边面板（`kind: "task"`，`TaskPanel` 里就是那个 Agent 的对话；
 手动 Agent 的胶囊打开 `kind: "agent"`，`AgentPanel`），换页不关。截图用 `MOCK_TASKS_DOCK=pair`（一个任务 + 一个手动 Agent）/ `many`（九个）。开发时 `?task=<待办 id>` 直接打开某个任务的面板；`MOCK_TASKS=1` 的 mock 有整套假数据。
 
+### 主对话还缺什么（#3847）
+
+照新用户上手的方案第 4.4、4.5、5.1、5.2 节（[onboarding.md](onboarding.md)）。hub 带 `assistant_readiness` 时，主对话的首屏和主对话本身读 `GET /api/v1/assistant/readiness`（`lib/readiness.ts`）；
+进页面、机器上线 / 下线、窗口回到前台时重拉（5 秒内不重复），开对话或发消息被拒之后马上重拉。老 hub 不带这个能力，页面和以前一样（不画卡片，示例问题是写死的四个，失败照旧弹提示）。
+
+- **引导卡**（`views/assistant/Readiness.tsx` 的 `ReadinessCard`）：`mode` 是 `setup` 时，输入框上方一张卡，只画电脑 / Claude Code / 模型里第一个 `todo` 或 `problem` 的那一步：
+  标题和一句话用 hub 给的（`title` / `detail`），按钮按 `action.id` 出（不认识的 id 不画），`alt_actions` 是旁边的次要按钮。`rate_limited` 不挡（hub 也不因为它变 `setup`）；
+  「试一句」从不挡。认不出的步骤按 `next` 画「还差一步 + 标题」。`chat_only`（P1）时是一条常驻提示加「添加电脑」，发送照常。
+- **发送按钮**：有缺的那一步时换成「先添加电脑」「先唤醒电脑」「先确认电脑」「先接上模型」，点了和卡片的主按钮一样；输入框照常能打字，草稿保留，回车不发，什么都不排队（`Composer` 的 `blocked`）；「今天」卡片的动作、错误卡的「重试」这些不经输入框的发送在主对话里也一样拦下，改成打开那一步。
+  只有主对话和首屏才去问就绪度，Agent 会话和侧边面板不问。
+- **按钮去哪**：`connect_model` → 设置 › 模型供应商并打开向导（`/settings?tab=models&add=1`）；`edit_provider` → 那个供应商的详情（`&launcher=<名字>`）；
+  `confirm_computer` → 机器页；`wake_computer`、`install_claude`、`login_claude` 是页面里的说明弹窗（安装和登录各给一行要在那台电脑上敲的命令，可拷贝，另有「改用 API Key」）；
+  `add_computer` 现在也是说明弹窗，指到 hub 管理界面的「电脑 › 添加电脑」（`/admin/machines`，新标签页）：已登录的设备自己添加电脑（5.3 的 `machines_add`）合进来后，换成机器页里的添加流程；
+  `enable_tls` / `open_admin` 打开 `/admin`；`test_assistant` 跑一次 `?probe=1`，按钮转圈到 hub 回话，卡片上写试的结果（回答或原因）。
+  管理界面默认只在 hub 所在的网络里能打开（`admin.access: lan`），添加电脑的说明里写明了打不开时换一台同一网络的电脑。
+- **示例问题**：用就绪度里的 `suggestions`；`local: true` 的打开本地说明（「Persona 能做什么」「怎么接模型」），不发给模型；带 `prompt` 的点了填进输入框；`needs` 里有 `phone_calendar` 时右边写「会用到手机日历」。
+  `setup` 时首屏副标题换成「还差一步就能开始」，不再说「也能到各台电脑上动手」。
+- **失败是卡片，不是提示**（`FailureCard`）：开主对话（首屏）或在 Persona 对话里发消息被拒时，输入框上方一张卡：hub 按请求语言写的 `error`、按 `code` / `action` 的按钮
+  （`no_machine` 默认「添加电脑」，`node_unreachable` 默认「怎么唤醒」），`detail` 和请求 id 收在「详情」里（可拷贝）。没发出去的话已经回到输入框里，所以卡片上没有单独的「重试」；再发一次时卡片先收起，发成功就不再回来。
+  `assistant_offline`（助手进程重启）开对话时安静地每 2 秒再试，最多 3 次，过了才出卡片。Agent 会话的发送失败不变。
+- **模型没接好的轮次**：Claude Code 自己写的「Not logged in · …」「Invalid API key」「Failed to authenticate」「OAuth token has expired」「There's an issue with the selected model」
+  和「API Error:」一样画成错误卡（和 hub 的 `APIErrorMarkers` 同一份），不再是普通气泡；最后一轮以会话的 `turn_error_code` 为准，标题写「模型没接好：Claude Code 没登录 / Key 不对 / 这个模型用不了」，
+  按钮「去修」（没登录、模型不对去接模型，Key 不对去改供应商），这几种不给「重试」。更早的轮次按原文认出同样的三种。这些「去修」只在 Persona 的对话里出；Agent 会话里 Claude Code 报同样的错，还是原来的错误卡（能重试的照常给「重试」），不指到 Persona 的设置。
+- **空状态**（4.5 里网页的几处）：机器页零电脑时「还没有电脑」+「添加电脑」（同上面的说明弹窗）；助手设置「运行在」没有机器时写「还没选在哪台电脑上运行」，不再拼出「hub 所在的机器」；
+  模型配置里没配置的 `legacy.*` 供应商显示「未配置」，不露 id；官方扩展市场读不到时是灰字「暂时读不到官方扩展，稍后再试」（原文在悬停提示里），没 token 时不给「填 token」；
+  形象的空状态沿用 #3871 的写法（链到设置 › 扩展）。总览零电脑的那一处由 #3729 做。
+
+截图用隔离的测试 hub（零电脑是真的就绪度）加 Playwright 的接口替身（离线、没登录、Key 不对、一切正常、开对话被拒）。
+
 ### 终端 ⇄ 对话（#2419）
 
 Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端**之间原地切换，照 Moshi 的会话页（用户反馈「终端和聊天的切换感觉还是怪怪的」，明确要求照它的形态改；

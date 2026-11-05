@@ -400,13 +400,23 @@ function InstallRow() {
 
 // ── 模型 ────────────────────────────────────────────────
 
+/** Forgets `add` / `launcher` once what they opened is closed, so going back or reloading does not open it again. */
+function dropLinkParams() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has("add") && !q.has("launcher")) return;
+  q.delete("add");
+  q.delete("launcher");
+  history.replaceState(history.state, "", `${location.pathname}?${q.toString()}`);
+}
+
 function Models() {
   const machines = useStore((s) => s.machines);
   const [list, setList] = useState<LauncherView[] | null>(null);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
-  const [editing, setEditing] = useState<LauncherView | "new" | null>(null);
+  // `?add=1` opens the wizard, `?launcher=<name>` one provider: where 接上模型 / 换 Key lead (lib/readiness.ts)
+  const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("launcher"));
+  const [editing, setEditing] = useState<LauncherView | "new" | null>(() => (new URLSearchParams(location.search).get("add") === "1" ? "new" : null));
   const [importing, setImporting] = useState(false);
 
   const load = () =>
@@ -487,14 +497,14 @@ function Models() {
       )}
       <LauncherDetailDialog
         name={open}
-        onClose={() => setOpen(null)}
+        onClose={() => (setOpen(null), dropLinkParams())}
         onChanged={() => void load()}
         onEdit={(l) => {
           setOpen(null);
           setEditing(l);
         }}
       />
-      <ProviderWizard existing={editing} onClose={() => setEditing(null)} onSaved={() => void load()} />
+      <ProviderWizard existing={editing} onClose={() => (setEditing(null), dropLinkParams())} onSaved={() => void load()} />
       <ProviderImport open={importing} onClose={() => setImporting(false)} onImported={() => void load()} />
     </>
   );

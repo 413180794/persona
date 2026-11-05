@@ -54,7 +54,7 @@ def fresh(browser, token, viewport, scheme="light", mode=None):
 
 
 def driving(page):
-    expect(page.get_by_role("radio", name="接管")).to_have_attribute("aria-checked", "true")
+    expect(page.get_by_role("radio", name="接管（可打字）")).to_have_attribute("aria-checked", "true")
 
 
 def open_terminal(browser, base, token, viewport=None, scheme="light", mode=None):
@@ -71,9 +71,9 @@ class Grid:
     def __init__(self, page):
         screen = page.locator('section[aria-label="终端"] > div:not(.invisible) .xterm-screen').first
         self.box = screen.bounding_box()
-        # the grid is in the status line ("接管 44×30", or "只看 80×24")
-        m = re.search(r"(\d+)×(\d+)", page.get_by_text(re.compile(r"(接管|只看) \d+×\d+")).first.inner_text())
-        assert m, "the status line does not say the grid"
+        # the 接管 / 只看 switch carries the grid (data-grid="44x30"; its hint says it in columns and rows)
+        m = re.fullmatch(r"(\d+)x(\d+)", page.locator("[role=radiogroup][data-grid]").first.get_attribute("data-grid") or "")
+        assert m, "the switch does not carry the grid"
         cols, self.rows = int(m.group(1)), int(m.group(2))
         self.cw = self.box["width"] / cols
         self.ch = self.box["height"] / self.rows

@@ -360,3 +360,29 @@ test("action results for apps before UI version 3", async () => {
 
   expect(await action("url")).toEqual({ open_url: "https://example.com" });
 });
+
+test("lines and items (UI version 5) are answered as they are, not drawn again", async () => {
+  let renders = 0;
+  const lines = { path: "a.go", side: "new" as const, start: 3, lines: ["x := 1"], total: 9 };
+  const items = [{ type: "text" as const, key: "f", text: "看过了" }];
+  const { call } = harness({
+    id: "example",
+    version: "1.0.0",
+    ui: {
+      home: {
+        render: () => {
+          renders++;
+          return { sections: [] };
+        },
+        action: (r) => (r.action === "context" ? { lines } : r.action === "viewed" ? { items: [] } : { items }),
+      },
+    },
+  });
+  await call("initialize", initParams);
+  const action = async (id: string) => (await call("ui.action", { contribution: "home", ui_version: 5, action: id })).result;
+  expect(await action("context")).toEqual({ lines });
+  // An empty items says done: nothing to draw again (a viewed mark).
+  expect(await action("viewed")).toEqual({ items: [] });
+  expect(await action("replace")).toEqual({ items });
+  expect(renders).toBe(0);
+});

@@ -20,5 +20,6 @@
   "time": "時刻",
   "copy_raw": "原文をコピー",
   "retry": "再試行",
-  "copy_field": "{label}をコピー"
+  "copy_field": "{label}をコピー",
+  "fix_it": "直す"
 }

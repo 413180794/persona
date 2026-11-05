@@ -20,5 +20,6 @@
   "time": "时间",
   "copy_raw": "复制原文",
   "retry": "重试",
-  "copy_field": "拷贝{label}"
+  "copy_field": "拷贝{label}",
+  "fix_it": "去修"
 }

@@ -21,15 +21,14 @@
   "history_start": "— 已到最前面 —",
   "load_older": "往上滚动加载更早的输出",
   "size_watch_only": "只看",
-  "size_control": "接管 {size}",
   "size_starting": "接管中…",
-  "size_watch": "只看 {size}",
   "size_poll_hint": "这台电脑不能推送终端，每秒读一次屏幕",
-  "size_control_hint": "电脑上的窗格现在是这个面板的行列数",
-  "size_watch_hint": "电脑上窗格本身的行列数",
-  "mode_control": "接管",
-  "mode_control_hint": "按这个面板的大小接管终端，键盘直接输入",
+  "size_watch_hint": "这里只能看，不能打字",
+  "mode_control": "接管（可打字）",
+  "mode_control_hint": "电脑上的窗格改成这个面板的大小，你在这里打的字直接进终端",
   "mode_watch": "只看",
-  "mode_watch_hint": "不改电脑上的窗格，只看",
-  "mode_label": "接管或只看"
+  "mode_watch_hint": "不改电脑上的窗格，这里不能打字",
+  "mode_label": "接管或只看",
+  "grid_panel": "现在是 {cols} 列 × {rows} 行（这个面板的大小）",
+  "grid_pane": "电脑上的窗格是 {cols} 列 × {rows} 行"
 }

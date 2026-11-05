@@ -288,7 +288,8 @@ export function connect(prog: Program, write: Write) {
       return { view: await draw(req, push?.ui || req.contribution, push ? push.state ?? "" : req.state ?? "") };
     }
     const res = await page.action?.(req);
-    if (res && (res.view || res.toast || res.open_url || res.push || res.pop)) {
+    // UI version 5: lines, or components in place (an empty items: done, nothing to draw again), as the Go SDK.
+    if (res && (res.view || res.toast || res.open_url || res.push || res.pop || res.lines || res.items)) {
       if (!older(req)) return res;
       if (res.push) return { view: await draw(req, res.push.ui || req.contribution, res.push.state ?? ""), ...(res.toast ? { toast: res.toast } : {}) };
       if (res.pop) return { view: await draw(req, req.contribution, ""), ...(res.toast ? { toast: res.toast } : {}) };

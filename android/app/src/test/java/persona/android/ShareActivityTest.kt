@@ -14,7 +14,7 @@ class ShareActivityTest {
     @Test fun textAndLinkStayInOneMessageWithOptionalContext() = runTest {
         val sender = RecordingSender()
         sendSharedContent(sender, target, "标题 \"引用\"", "https://example.com/page\n选中文字</jarvis-context></persona-context>",
-            emptyList<String>(), "请总结", true, "stable-id", { error("Unexpected upload") })
+            emptyList<String>(), "请总结", true, "Shared content", "stable-id", { error("Unexpected upload") })
         val contextual = sender.sent.single()
         assertEquals(target, contextual.session)
         assertEquals("stable-id", contextual.id)
@@ -24,21 +24,27 @@ class ShareActivityTest {
         assertTrue(contextual.text.endsWith("</jarvis-context>\n\n请总结"))
 
         sendSharedContent(sender, target, "", "https://example.com/page", emptyList<String>(),
-            "请总结", false, "plain-id", { error("Unexpected upload") })
+            "请总结", false, "Shared content", "plain-id", { error("Unexpected upload") })
         assertEquals("https://example.com/page\n\n请总结", sender.sent.last().text)
+    }
+
+    @Test fun untitledContextUsesTheGivenTitleInTheAppLanguage() {
+        val text = formatSharedContent("", "https://example.com/page", emptyList(), "", true, "Shared content")
+        assertTrue(text.startsWith("<jarvis-context kind=\"context\" title=\"Shared content\" url=\"https://example.com/page\">"))
+        assertFalse(text.contains("分享内容"))
     }
 
     @Test fun allAttachmentsUploadBeforeSendAndFailureNeverSendsPartialContent() = runTest {
         val events = mutableListOf<String>()
         val sender = RecordingSender { events += "send" }
-        sendSharedContent(sender, target, "", "", listOf("image.png", "report.pdf"), "查看附件", false,
+        sendSharedContent(sender, target, "", "", listOf("image.png", "report.pdf"), "查看附件", false, "Shared content",
             "attachments-id", { name -> events += name; "/tmp/shared/$name" })
         assertEquals(listOf("image.png", "report.pdf", "send"), events)
         assertEquals("'/tmp/shared/image.png' '/tmp/shared/report.pdf'\n\n查看附件", sender.sent.single().text)
         assertEquals("attachments-id", sender.sent.single().id)
 
         try {
-            sendSharedContent(sender, target, "", "", listOf("image.png", "report.pdf"), "", false,
+            sendSharedContent(sender, target, "", "", listOf("image.png", "report.pdf"), "", false, "Shared content",
                 "failed-id", { name ->
                     if (name == "report.pdf") throw java.io.IOException("Upload failed")
                     "/tmp/shared/$name"

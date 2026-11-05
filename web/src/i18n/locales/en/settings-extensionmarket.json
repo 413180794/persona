@@ -115,5 +115,6 @@
   "op_review": "Review",
   "op_error": "Why: {error}",
   "op_machine_error": "{machine}: {error}",
-  "op_progress": "Step {done} of {total}"
+  "op_progress": "Step {done} of {total}",
+  "official_unreachable": "Can't reach the official extensions right now. Try again later."
 }

@@ -7,5 +7,8 @@
   "no_connection": "连不上模型服务",
   "bad_request": "请求被拒绝：参数或上下文有问题",
   "unavailable": "模型服务暂时不可用",
-  "failed": "模型请求失败"
+  "failed": "模型请求失败",
+  "not_logged_in": "Claude Code 还没登录",
+  "bad_key": "模型的 Key 不对或过期了",
+  "bad_model": "这个模型现在用不了"
 }

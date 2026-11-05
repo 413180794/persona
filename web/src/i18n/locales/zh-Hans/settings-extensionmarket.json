@@ -112,5 +112,6 @@
   "op_review": "查看权限",
   "op_error": "原因：{error}",
   "op_machine_error": "{machine}：{error}",
-  "op_progress": "{done}/{total} 步"
+  "op_progress": "{done}/{total} 步",
+  "official_unreachable": "暂时读不到官方扩展，稍后再试。"
 }

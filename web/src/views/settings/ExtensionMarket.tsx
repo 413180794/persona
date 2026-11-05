@@ -126,12 +126,20 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
           })}
         </div>
       )}
-      {broken.map((m) => (
-        <p key={m.id} className="mb-3 flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">
-          <Icon name="info" size={13} className="mt-0.5 shrink-0" />
-          {t("settings-extensionmarket.market_unreadable", { name: m.name, error: m.error ?? "" })}
-        </p>
-      ))}
+      {broken.map((m) =>
+        // the official market not reachable is the network's, not something a newcomer fixes with a token (docs/onboarding.md 4.5)
+        m.official ? (
+          <p key={m.id} title={m.error} className="mb-3 flex items-start gap-2 px-1 text-[12px] leading-relaxed text-ink-3">
+            <Icon name="info" size={13} className="mt-0.5 shrink-0" />
+            {t("settings-extensionmarket.official_unreachable")}
+          </p>
+        ) : (
+          <p key={m.id} className="mb-3 flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">
+            <Icon name="info" size={13} className="mt-0.5 shrink-0" />
+            {t("settings-extensionmarket.market_unreadable", { name: m.name, error: m.error ?? "" })}
+          </p>
+        ),
+      )}
 
       <Group title={data ? t("settings-extensionmarket.extension_count", { count: data.extensions.length }) : t("settings-extensionmarket.extensions")}>
         {!data && !error && (
@@ -686,7 +694,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
         {list?.map((m) => (
           <div key={m.id} className="px-4 py-3">
             <div className="flex items-start gap-3">
-              <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[9px]", m.error ? "bg-red-tint text-red" : "bg-inset text-ink-3 shadow-hairline")}>
+              <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[9px]", m.error && !m.official ? "bg-red-tint text-red" : "bg-inset text-ink-3 shadow-hairline")}>
                 <Icon name={marketKind(m.spec) === "web" ? "web" : "git"} size={16} />
               </span>
               <div className="min-w-0 flex-1">
@@ -705,7 +713,11 @@ export function Markets({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="mt-0.5 truncate text-[11.5px] text-ink-3">{marketLine(m, (iso) => ago(iso))}</div>
                 {m.description && <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{m.description}</p>}
-                {m.error && <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.market_error", { error: m.error })}</p>}
+                {m.error && (m.official ? (
+                  <p title={m.error} className="mt-1 text-[12px] leading-relaxed text-ink-3">{t("settings-extensionmarket.official_unreachable")}</p>
+                ) : (
+                  <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.market_error", { error: m.error })}</p>
+                ))}
                 {(m.warnings ?? []).map((w) => (
                   <p key={w} className="mt-1 flex items-start gap-1.5 text-[11.5px] leading-snug break-words text-orange">
                     <Icon name="info" size={12} className="mt-0.5 shrink-0" />
@@ -718,7 +730,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
               <Button tone="secondary" icon="retry" busy={busy[m.id] === "refresh"} disabled={!!busy[m.id]} onClick={() => void work(m, "refresh")}>
                 {t("settings-extensionmarket.reload")}
               </Button>
-              {!isGitMarket(m.spec) && (
+              {!isGitMarket(m.spec) && !(m.official && !m.has_token) && (
                 <Button tone="secondary" icon="key" disabled={!!busy[m.id]} onClick={() => setTokenFor(m)}>
                   {m.has_token ? t("settings-extensionmarket.change_token") : t("settings-extensionmarket.set_token")}
                 </Button>

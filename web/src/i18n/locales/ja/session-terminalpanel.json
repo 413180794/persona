@@ -21,15 +21,14 @@
   "history_start": "— 先頭です —",
   "load_older": "上にスクロールして以前の出力を読み込む",
   "size_watch_only": "表示のみ",
-  "size_control": "操作中{size}",
   "size_starting": "操作を開始中…",
-  "size_watch": "表示のみ{size}",
   "size_poll_hint": "このコンピューターはターミナルを配信できないため、画面を毎秒読み取ります",
-  "size_control_hint": "コンピューター上のペインは現在、このパネルと同じ行数・列数になっています",
-  "size_watch_hint": "コンピューター上のペイン本来の行数・列数",
-  "mode_control": "操作",
-  "mode_control_hint": "このパネルのサイズでターミナルを操作し、キーボードで直接入力します",
+  "size_watch_hint": "ここでは表示のみで、入力はできません",
+  "mode_control": "操作（入力可）",
+  "mode_control_hint": "コンピューター側のペインをこのパネルのサイズに変え、ここで入力した文字がそのままターミナルに入ります",
   "mode_watch": "表示のみ",
-  "mode_watch_hint": "コンピューター上のペインを変えずに表示のみ",
-  "mode_label": "操作または表示のみ"
+  "mode_watch_hint": "コンピューター側のペインは変えず、ここでは入力できません",
+  "mode_label": "操作または表示のみ",
+  "grid_panel": "いまは {cols} 列 × {rows} 行（このパネルのサイズ）",
+  "grid_pane": "コンピューター側のペインは {cols} 列 × {rows} 行"
 }

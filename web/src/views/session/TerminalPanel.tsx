@@ -227,8 +227,8 @@ function PaneTerminal({
     >
       {slot && live && createPortal(
           <>
-            {v && <SizeLabel v={v} />}
-            {feed && v && canDrive && streaming && <ModeSwitch drive={v.wants} onChange={(on) => feed.setWants(on)} />}
+            {v && <SizeLabel v={v} switching={Boolean(feed && canDrive && streaming)} />}
+            {feed && v && canDrive && streaming && <ModeSwitch v={v} onChange={(on) => feed.setWants(on)} />}
             {feed && v && !driving && (
               <IconButton
                 icon="wrap"
@@ -572,33 +572,44 @@ function HistoryStatus({ v, onLoad }: { v: FeedView; onLoad: () => void }) {
   );
 }
 
-/** 接管 120×40 while driving, 只看 172×45 while watching the pane (只看 alone while reading the screen). */
-function SizeLabel({ v }: { v: FeedView }) {
+/**
+ * What the terminal is doing when the 接管 / 只看 switch does not say it (#3667): 接管中… while taking it, 只看 when
+ * it can only be watched or 接管 was asked for but the keys do not go in (declined, taken, lost). Otherwise nothing:
+ * the switch's own words say it, and the grid is in its hint.
+ */
+function SizeLabel({ v, switching }: { v: FeedView; switching: boolean }) {
   if (!v.ready || !v.loaded) return null;
-  const size = v.cols && v.rows ? `${v.cols}×${v.rows}` : "";
-  const text =
-    v.mode === "poll" ? t("session-terminalpanel.size_watch_only") : v.control === "active" ? t("session-terminalpanel.size_control", { size }).trim() : v.control === "starting" ? t("session-terminalpanel.size_starting") : t("session-terminalpanel.size_watch", { size }).trim();
-  const title =
-    v.mode === "poll"
-      ? t("session-terminalpanel.size_poll_hint")
-      : v.control === "active"
-        ? t("session-terminalpanel.size_control_hint")
-        : t("session-terminalpanel.size_watch_hint");
+  if (v.control === "starting") return <span className="hidden shrink-0 whitespace-nowrap text-[11.5px] text-ink-3 @md:inline">{t("session-terminalpanel.size_starting")}</span>;
+  // The switch is the truth only when it shows what happens: 接管 while the keys go in, or 只看 chosen.
+  if (switching && (v.control === "active" || !v.wants)) return null;
+  const title = v.mode === "poll" ? t("session-terminalpanel.size_poll_hint") : t("session-terminalpanel.size_watch_hint");
   return (
-    <span title={title} className="hidden shrink-0 whitespace-nowrap font-mono text-[11.5px] text-ink-3 tabular-nums @md:inline">
-      {text}
+    <span title={title} className="hidden shrink-0 whitespace-nowrap text-[11.5px] text-ink-3 @md:inline">
+      {t("session-terminalpanel.size_watch_only")}
     </span>
   );
 }
 
-/** 接管 (the pane takes the panel's size, keys go in) or 只看 (the pane as the computer has it). */
-function ModeSwitch({ drive, onChange }: { drive: boolean; onChange: (drive: boolean) => void }) {
+/**
+ * 接管（可打字）: the pane takes the panel's size and keys go in; 只看: the pane as the computer has it. The words say
+ * the difference; the hint adds the grid in plain columns and rows (#3667).
+ */
+function ModeSwitch({ v, onChange }: { v: FeedView; onChange: (drive: boolean) => void }) {
+  const drive = v.wants;
+  const grid = v.cols && v.rows ? { cols: v.cols, rows: v.rows } : null;
+  const withGrid = (hint: string, key: string) => (grid ? `${hint}\n${t(key, grid)}` : hint);
   const options: [string, boolean, string][] = [
-    [t("session-terminalpanel.mode_control"), true, t("session-terminalpanel.mode_control_hint")],
-    [t("session-terminalpanel.mode_watch"), false, t("session-terminalpanel.mode_watch_hint")],
+    [t("session-terminalpanel.mode_control"), true, withGrid(t("session-terminalpanel.mode_control_hint"), "session-terminalpanel.grid_panel")],
+    [t("session-terminalpanel.mode_watch"), false, withGrid(t("session-terminalpanel.mode_watch_hint"), "session-terminalpanel.grid_pane")],
   ];
   return (
-    <SegmentedTrack role="radiogroup" label={t("session-terminalpanel.mode_label")} className="flex h-7 shrink-0 items-center rounded-control p-0.5" thumbClassName="rounded-chip">
+    <SegmentedTrack
+      role="radiogroup"
+      label={t("session-terminalpanel.mode_label")}
+      data-grid={grid ? `${grid.cols}x${grid.rows}` : undefined}
+      className="flex h-7 shrink-0 items-center rounded-control p-0.5"
+      thumbClassName="rounded-chip"
+    >
       {options.map(([label, value, title]) => (
         <button
           key={label}

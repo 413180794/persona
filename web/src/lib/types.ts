@@ -175,6 +175,11 @@ export interface Session {
   activity_at?: string;
   /** Its latest turn ended in a model API error (the hub sets it while it is stopped, #1516): its task is interrupted. */
   turn_error?: string;
+  /** What the agent's record says of turn_error: "transient" (worth a 继续) or "user" (the user must act). */
+  turn_error_kind?: string;
+  /** What is wrong, when the hub can tell from turn_error (docs/onboarding.md 5.2): not_logged_in / auth_failed /
+   *  model_route / rate_limited. */
+  turn_error_code?: string;
   /** Where it stands in its work (docs/agent-work.md): set by the hub once it triaged a stopped turn. */
   work?: WorkState;
   pending_interactions?: number;

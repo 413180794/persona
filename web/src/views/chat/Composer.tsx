@@ -82,6 +82,7 @@ export function Composer({
   suggestion,
   mention,
   onFocusChange,
+  blocked,
 }: {
   draftKey: string;
   placeholder: string;
@@ -100,6 +101,9 @@ export function Composer({
   mention?: MentionSource;
   /** The text box gains / loses focus (on a phone: the keyboard comes up / goes down). */
   onFocusChange?: (focused: boolean) => void;
+  /** The main conversation cannot answer yet (docs/onboarding.md 4.4): the send button says what to do first and opens
+   *  it; the box still takes typing and keeps the draft, nothing is sent or queued. */
+  blocked?: { label: string; onClick?: () => void };
 }) {
   const [draft, setDraft] = useState(() => localStorage.getItem(`draft:${draftKey}`) ?? "");
   const [atts, setAtts] = useState<Attachment[]>([]);
@@ -121,9 +125,9 @@ export function Composer({
   // text picked in the link panel waits here (lib/links.ts), and 「AI 修改」 sends through this composer
   const contexts = useContexts(draftKey);
   const sendNow = useRef<(text: string) => Promise<boolean>>(async () => false);
-  sendNow.current = async (text) => (disabled ? false : onSend({ text, images: [] }));
+  sendNow.current = async (text) => (disabled || blocked ? false : onSend({ text, images: [] }));
   const canTake = useRef(!disabled);
-  canTake.current = !disabled;
+  canTake.current = !disabled && !blocked;
   const handle = useMemo<ComposerHandle>(() => ({ key: draftKey, send: (text) => sendNow.current(text), focus: () => input.current?.focus({ preventScroll: true }), ready: () => canTake.current }), [draftKey]);
   useEffect(() => registerComposer(handle), [handle]);
 
@@ -372,7 +376,7 @@ export function Composer({
   // Claude's suggested next message (iOS SuggestionPill): while the box is empty and the agent waits for a message
   // (not working, not on a card); a tap fills it
   // in, 直接发送 sends it as it is (the node drops it once the agent works again)
-  const pill = suggestion && !draft && !atts.length && !contexts.length && !quote && !working && !needsYou && !disabled ? suggestion : null;
+  const pill = suggestion && !blocked && !draft && !atts.length && !contexts.length && !quote && !working && !needsYou && !disabled ? suggestion : null;
   const fillSuggestion = (text: string) => {
     setDraft(text);
     setDismissed(true);
@@ -389,7 +393,7 @@ export function Composer({
   const submit = async (text = draft) => {
     const refs = getContexts(draftKey);
     const q = getQuotes(draftKey).list;
-    if (sending || disabled || (!text.trim() && !atts.length && !refs.length && !q.length)) return;
+    if (sending || disabled || blocked || (!text.trim() && !atts.length && !refs.length && !q.length)) return;
     setSending(true);
     // The message shows in the chat at once (a sending bubble), so the box empties at once too: waiting for the hub to
     // hand it to the agent (seconds when it starts up) left the same words in both places. A failure puts them back.
@@ -653,6 +657,18 @@ export function Composer({
               style={{ animation: `pop-in 200ms ${EASE} both` }}
             >
               <Icon name="stop" size={12} />
+            </button>
+          ) : blocked ? (
+            <button
+              type="button"
+              data-testid="composer-blocked"
+              onClick={blocked.onClick}
+              disabled={!blocked.onClick}
+              className="touch-hit flex h-7 max-w-[60%] shrink-0 items-center gap-1 rounded-[8px] bg-ink px-2.5 text-[12px] font-medium whitespace-nowrap text-surface transition-[opacity,transform] duration-150 enabled:hover:opacity-90 enabled:active:scale-[0.96] disabled:opacity-45"
+              style={{ animation: `pop-in 200ms ${EASE} both` }}
+            >
+              <span className="truncate">{blocked.label}</span>
+              <Icon name="chevronRight" size={11} stroke={2.4} className="shrink-0" />
             </button>
           ) : (
             <button

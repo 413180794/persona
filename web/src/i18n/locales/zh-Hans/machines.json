@@ -20,7 +20,8 @@
   "cpu_last_hour": "最近一小时 CPU",
   "refresh_failed_stale": "暂时更新不了：{error}。显示的是上次的数据，每 {seconds} 秒重试。",
   "load_failed": "读取不到机器的监控：{error}",
-  "empty_title": "还没有机器",
+  "empty_title": "还没有电脑",
   "empty_unavailable": "现在看不到机器",
-  "empty_body": "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。"
+  "empty_body": "添加一台，Persona 就能在上面替你干活。",
+  "add_computer": "添加电脑"
 }

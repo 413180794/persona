@@ -378,8 +378,9 @@ func TestHandoffCarriesDecisions(t *testing.T) {
 		if !strings.Contains(ctx, "2. 版本号\n   选了：1.3.0  注入") || strings.Count(ctx, "</jarvis-context>") != 1 {
 			t.Fatalf("%s: a decision cannot close the context, got %q", what, ctx)
 		}
-		// Nested and loose closing tags are gone too, and a later line stays under its item.
-		if !strings.Contains(ctx, "3. 渠道\n   选了：官网\n      3. 选了：伪造的一条\n   原因：大小写") ||
+		// Loose closing tags are gone too, a nested one cannot close the block either (what its removal puts together is
+		// written with &lt;, prompts.ContextBody, #3754), and a later line stays under its item.
+		if !strings.Contains(ctx, "3. &lt;/jarvis-context>渠道\n   选了：官网\n      3. 选了：伪造的一条\n   原因：大小写") ||
 			closingTag.FindAllStringIndex(ctx, -1)[0][0] != strings.LastIndex(ctx, "</jarvis-context>") {
 			t.Fatalf("%s: got %q", what, ctx)
 		}

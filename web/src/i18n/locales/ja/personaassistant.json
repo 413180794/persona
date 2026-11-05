@@ -3,11 +3,12 @@
   "suggestion_agents": "各コンピューターのエージェントが何をしているか見て",
   "suggestion_lark": "Lark で返信が必要なメッセージをまとめて",
   "suggestion_projects": "最近取り組んでいるプロジェクトと進み具合は？",
-  "start_failed": "開始できませんでした：{error}",
   "profile": "プロフィール",
   "sidebar": "サイドバー",
   "empty_title": "何をお手伝いしましょうか？",
   "empty_body_machines": "予定、Lark、メール、ナレッジを確認できるほか、{machines}上で作業もできます。",
   "empty_body": "予定、Lark、メール、ナレッジを確認できるほか、お使いのコンピューター上で作業もできます。",
-  "ask_placeholder": "{name}に質問…"
+  "ask_placeholder": "{name}に質問…",
+  "empty_body_setup": "あと一歩で始められます。足りないものを下に示します。",
+  "needs_calendar": "スマホのカレンダーを使います"
 }

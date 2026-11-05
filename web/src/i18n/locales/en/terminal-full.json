@@ -20,6 +20,7 @@
   "status_unsupported": "Not supported",
   "status_forbidden": "No permission",
   "live_hint": "herdr's own client. While you work here, the panes on the computer are laid out for this panel's size; they switch back when you return to the computer",
+  "live_grid": "Now {cols} columns × {rows} rows",
   "files": "Files",
   "keybar_hide": "Hide key bar",
   "keybar_show": "Show key bar",

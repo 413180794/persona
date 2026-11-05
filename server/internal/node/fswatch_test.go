@@ -69,6 +69,19 @@ func waitExit(t *testing.T, w *fsWatcher) {
 	}
 }
 
+// writeWhole writes data to path whole: written beside it (in dir, which nobody watches), then renamed into place. A plain
+// os.WriteFile creates the file empty and then writes it, and a poll between the two sees two real changes.
+func writeWhole(t *testing.T, dir, path string, data []byte) {
+	t.Helper()
+	tmp := filepath.Join(dir, ".put-"+filepath.Base(path))
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFsWatchReportsChangesInWatchedFoldersOnly(t *testing.T) {
 	dir := t.TempDir()
 	watched, other := filepath.Join(dir, "watched"), filepath.Join(dir, "other")
@@ -93,23 +106,24 @@ func TestFsWatchReportsChangesInWatchedFoldersOnly(t *testing.T) {
 	}
 	ev.none(t, 150*time.Millisecond) // a folder nobody has open is not looked at
 
-	if err := os.WriteFile(filepath.Join(watched, "a.txt"), []byte("a"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeWhole(t, dir, filepath.Join(watched, "a.txt"), []byte("a"))
 	if c := ev.next(t); len(c.Dirs) != 1 || c.Dirs[0] != watched || len(c.Git) != 0 {
 		t.Fatalf("created file: %+v", c)
 	}
 	ev.none(t, 150*time.Millisecond) // reported once, not on every poll
 
 	// A rewrite that changes the size shows in the listing, so it is a change too.
-	if err := os.WriteFile(filepath.Join(watched, "a.txt"), []byte("longer"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeWhole(t, dir, filepath.Join(watched, "a.txt"), []byte("longer"))
 	if c := ev.next(t); len(c.Dirs) != 1 {
 		t.Fatalf("rewritten file: %+v", c)
 	}
+	ev.none(t, 150*time.Millisecond)
 
-	if err := os.RemoveAll(watched); err != nil {
+	// Gone in one step (RemoveAll empties it first: a poll in between sees two real changes), then removed.
+	if err := os.Rename(watched, filepath.Join(dir, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "gone")); err != nil {
 		t.Fatal(err)
 	}
 	if c := ev.next(t); len(c.Dirs) != 1 {

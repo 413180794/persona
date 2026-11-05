@@ -27,7 +27,6 @@
   "index_hint": "MEMORY.md：Persona 自己维护的目录，删除记忆时会一起更新。只读",
   "runs_on_title": "运行在",
   "runs_on_footer": "每段对话都在 {machine} 的这个目录里后台运行，不进 herdr。对话记录和记忆存在这台机器上；「关于我」、定时任务和设置存在 hub 上。用哪个模型，在「模型配置 › 主对话」里选。",
-  "hub_machine": "hub 所在的机器",
   "machine": "机器",
   "cwd": "工作目录",
   "timezone": "时区",
@@ -48,5 +47,7 @@
   "edit": "编辑",
   "edit_label": "编辑 {name}",
   "updated": "更新于 {when}",
-  "empty_body": "（空）"
+  "empty_body": "（空）",
+  "runs_on_none": "还没选在哪台电脑上运行。接上一台电脑后，对话会在它上面后台运行。",
+  "machine_none": "还没选"
 }

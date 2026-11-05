@@ -90,7 +90,7 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
   }, []);
 
   const machine = machines.find((m) => m.id === info?.machine_id);
-  const machineName = machine?.name ?? info?.machine_id;
+  const machineName = machine?.name || info?.machine_id || "";
   const entries = useMemo(() => memoryEntries(files ?? []), [files]);
   const index = files?.find((f) => f.name === MEMORY_INDEX);
   const on = tasks?.filter((task) => task.enabled).length ?? 0;
@@ -170,10 +170,10 @@ export function AssistantSettings({ bare }: { /** Without its header (the profil
 
       <Group
         title={t("settings-assistantsettings.runs_on_title")}
-        footer={t("settings-assistantsettings.runs_on_footer", { machine: machineName ?? t("settings-assistantsettings.hub_machine") })}
+        footer={machineName ? t("settings-assistantsettings.runs_on_footer", { machine: machineName }) : t("settings-assistantsettings.runs_on_none")}
       >
         <Row label={t("settings-assistantsettings.machine")}>
-          <span className="max-w-[220px] truncate">{machineName ?? "—"}</span>
+          <span className="max-w-[220px] truncate">{machineName || t("settings-assistantsettings.machine_none")}</span>
         </Row>
         <Row label={t("settings-assistantsettings.cwd")} mono>
           <span className="max-w-[300px] truncate" title={info?.cwd}>{info?.cwd || "~/.jarvis/assistant"}</span>

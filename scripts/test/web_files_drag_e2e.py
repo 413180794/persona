@@ -68,7 +68,7 @@ def fresh(browser, token, viewport, scheme="light"):
 
 
 def driving(page):
-    expect(page.get_by_role("radio", name="接管")).to_have_attribute("aria-checked", "true")
+    expect(page.get_by_role("radio", name="接管（可打字）")).to_have_attribute("aria-checked", "true")
 
 
 def open_pane(page, mid, pane):

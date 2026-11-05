@@ -29,7 +29,6 @@
   "index_hint": "MEMORY.md: the table of contents Persona keeps, updated when a memory is deleted. Read-only",
   "runs_on_title": "Runs on",
   "runs_on_footer": "Each chat runs in the background in this directory on {machine}, outside herdr. Transcripts and memory stay on that machine; About me, scheduled tasks, and settings live on the hub. Pick the model under Model settings › Main chat.",
-  "hub_machine": "the hub machine",
   "machine": "Machine",
   "cwd": "Working directory",
   "timezone": "Time zone",
@@ -50,5 +49,7 @@
   "edit": "Edit",
   "edit_label": "Edit {name}",
   "updated": "Updated {when}",
-  "empty_body": "(Empty)"
+  "empty_body": "(Empty)",
+  "runs_on_none": "No computer chosen to run on yet. Once a computer is connected, conversations run in the background on it.",
+  "machine_none": "Not chosen yet"
 }

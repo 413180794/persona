@@ -1,0 +1,22 @@
+{
+  "send_add_computer": "Add a computer first",
+  "send_wake_computer": "Wake the computer first",
+  "send_confirm_computer": "Confirm the computer first",
+  "send_update_computer": "Update the computer first",
+  "send_connect_model": "Connect a model first",
+  "action_add_computer": "Add a computer",
+  "action_confirm_computer": "It's my computer",
+  "action_wake_computer": "How to wake it",
+  "action_install_claude": "How to install",
+  "action_login_claude": "How to sign in",
+  "action_connect_model": "Connect a model",
+  "action_edit_provider": "Change the key",
+  "action_test_assistant": "Try it",
+  "action_open_admin": "Open hub admin",
+  "turn_not_logged_in": "Model not connected: Claude Code isn't signed in",
+  "turn_not_logged_in_detail": "Sign in once on that computer, or use an API key instead.",
+  "turn_auth_failed": "Model not connected: the key is wrong",
+  "turn_auth_failed_detail": "The key is wrong or has expired. Use one that works.",
+  "turn_model_route": "Model not connected: this model isn't available",
+  "turn_model_route_detail": "The model name is wrong or the model isn't available now. Try another one."
+}

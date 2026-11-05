@@ -20,7 +20,8 @@
   "cpu_last_hour": "直近1時間のCPU",
   "refresh_failed_stale": "いまは更新できません：{error}。前回のデータを表示中、{seconds} 秒ごとに再試行します。",
   "load_failed": "マシンの監視を読み込めません：{error}",
-  "empty_title": "マシンはまだありません",
+  "empty_title": "まだパソコンがありません",
   "empty_unavailable": "いまマシンを表示できません",
-  "empty_body": "ハブに接続すると、ハブのマシンと、ハブにつながっているコンピューターがここに表示されます。"
+  "empty_body": "1 台追加すると、Persona がそこで作業できます。",
+  "add_computer": "パソコンを追加"
 }

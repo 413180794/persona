@@ -21,15 +21,14 @@
   "history_start": "— Beginning of output —",
   "load_older": "Scroll up to load earlier output",
   "size_watch_only": "Watching",
-  "size_control": "Control {size}",
   "size_starting": "Taking control…",
-  "size_watch": "Watching {size}",
   "size_poll_hint": "This computer can't stream the terminal, so the screen is read once a second",
-  "size_control_hint": "The pane on the computer now has this panel's columns and rows",
-  "size_watch_hint": "The pane's own columns and rows on the computer",
-  "mode_control": "Control",
-  "mode_control_hint": "Control the terminal at this panel's size and type directly",
+  "size_watch_hint": "You can only watch here, not type",
+  "mode_control": "Control (type)",
+  "mode_control_hint": "The pane on the computer takes this panel's size, and what you type here goes into the terminal",
   "mode_watch": "Watch",
-  "mode_watch_hint": "Watch only, without changing the pane on the computer",
-  "mode_label": "Control or watch"
+  "mode_watch_hint": "The pane on the computer stays as it is; you can't type here",
+  "mode_label": "Control or watch",
+  "grid_panel": "Now {cols} columns × {rows} rows (this panel's size)",
+  "grid_pane": "The pane on the computer is {cols} columns × {rows} rows"
 }

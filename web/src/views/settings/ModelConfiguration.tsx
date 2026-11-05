@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText } from "../../lib/api";
 import { extRoot } from "../../lib/extension-api";
 import {
-  chooseProvider, draftFor, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, runtimeChoices, runtimeLabel, saveModelPurpose, supportsField,
+  chooseProvider, draftFor, providerName, modelConfiguration, modelPurpose, modelSummary, providersFor, purposeGroups, runtimeChoices, runtimeLabel, saveModelPurpose, supportsField,
   type ModelBinding, type ModelConfigurationBody, type ModelDraft, type ModelPurposeBody,
 } from "../../lib/model-config";
 import { effortChoices, providerModels, takesEffort } from "../../lib/launcher-models";
@@ -161,7 +161,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
       {!p && !error && <Loading />}
       {p && <div className="flex flex-col gap-4">
         <Group title={t("settings-modelconfiguration.effective")} footer={p.inherited_from ? t("settings-modelconfiguration.inherited_from", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.effective_footer")}>
-          <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{data?.providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider ?? t("settings-modelconfiguration.not_configured")}</span></Row>
+          <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{providerName(p.effective?.provider, data?.providers) ?? t("settings-modelconfiguration.not_configured")}</span></Row>
           <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
           {runtimes.length > 0 && <Row label={t("settings-modelconfiguration.runtime")}><span>{runtimeLabel(p.effective?.runtime)}</span></Row>}
           {p.status && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
@@ -170,7 +170,7 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
           <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.model_provider")}</span>
           <select className={inputClass} value={draft.provider} disabled={busy} onChange={(e) => setDraft((d) => chooseProvider(d, e.target.value))}>
             <option value="">{t("settings-modelconfiguration.follow_default")}</option>
-            {draft.provider && !candidates.some((v) => v.id === draft.provider) && <option value={draft.provider}>{t("settings-modelconfiguration.provider_unavailable", { id: draft.provider })}</option>}
+            {draft.provider && !candidates.some((v) => v.id === draft.provider) && <option value={draft.provider}>{draft.provider.startsWith("legacy.") ? t("settings-modelconfiguration.not_configured") : t("settings-modelconfiguration.provider_unavailable", { id: draft.provider })}</option>}
             {candidates.map((v) => <option key={v.id} value={v.id}>{v.hidden ? t("settings-modelconfiguration.provider_hidden", { name: v.name }) : v.name}</option>)}
           </select>
         </label>}

@@ -71,13 +71,13 @@ describe("Machines", () => {
     await flush();
     expect(alert()?.textContent).toContain("显示的是上次的数据");
     expect(host.textContent).toContain("电脑 A");
-    expect(host.textContent).not.toContain("还没有机器");
+    expect(host.textContent).not.toContain("还没有电脑");
   });
 
   it("shows the empty state when the hub has no machines", async () => {
     act(() => root.render(<Machines onToggleSidebar={() => {}} />));
     await flush();
-    expect(host.textContent).toContain("还没有机器");
+    expect(host.textContent).toContain("还没有电脑");
     expect(alert()).toBeNull();
   });
 

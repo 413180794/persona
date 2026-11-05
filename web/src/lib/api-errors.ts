@@ -13,12 +13,26 @@ export interface APIErrorInfo {
   transient?: boolean;
   requestId?: string;
   session?: string;
+  /** What to fix, when the words say (not_logged_in / auth_failed / model_route): the hub's turn_error_code for the
+   *  same turn wins over it. */
+  code?: string;
   raw: string;
 }
 
 /** Two errors are "the same" for folding when these match. */
 export function errorSignature(e: APIErrorInfo): string {
   return `${e.status ?? 0}|${e.reason}`;
+}
+
+/** The starts of Claude Code's answer when the model call itself failed, besides "API Error:" (the hub's
+ *  APIErrorMarkers): the turn did not run. */
+const MODEL_MARKERS = ["There's an issue with the selected model", "Failed to authenticate", "OAuth token has expired", "Invalid API key", "Not logged in ·"];
+
+function fixCode(s: string): string | undefined {
+  if (s.trimStart().startsWith("not logged in")) return "not_logged_in";
+  if (s.includes("issue with the selected model")) return "model_route";
+  if (s.includes("invalid api key") || s.includes("failed to authenticate") || s.includes("oauth token has expired")) return "auth_failed";
+  return undefined;
 }
 
 const STATUS_RE = /^\s*(\d{3})\b/;
@@ -31,6 +45,8 @@ export function parseAPIError(text?: string): APIErrorInfo | null {
   if (t.startsWith("API Error:")) body = t.slice("API Error:".length);
   // i18n-ignore: the hub's notice for a model API error starts with these words
   else if (t.startsWith("API 错误：")) body = t.slice("API 错误：".length);
+  // what Claude Code answers when it could not call the model at all (the hub's APIErrorMarkers, assistantwire/wire.go)
+  else if (MODEL_MARKERS.some((m) => t.startsWith(m))) body = t;
   else return null;
   const m = STATUS_RE.exec(body);
   const status = m ? Number(m[1]) : undefined;
@@ -41,11 +57,15 @@ export function parseAPIError(text?: string): APIErrorInfo | null {
     transient,
     requestId: REQUEST_RE.exec(body)?.[1],
     session: SESSION_RE.exec(body)?.[1],
+    code: fixCode(body.toLowerCase()),
     raw: t,
   };
 }
 
 function explain(s: string, status?: number): [string, boolean | undefined] {
+  if (s.trimStart().startsWith("not logged in")) return [t("lib-api-errors.not_logged_in"), false];
+  if (s.includes("invalid api key")) return [t("lib-api-errors.bad_key"), false];
+  if (s.includes("issue with the selected model")) return [t("lib-api-errors.bad_model"), false];
   if (s.includes("no available gpu")) return [t("lib-api-errors.no_gpu"), true];
   if (s.includes("overloaded") || status === 529) return [t("lib-api-errors.overloaded"), true];
   if (status === 401 || status === 403 || s.includes("authentication") || s.includes("/login") || s.includes("login expire")) {

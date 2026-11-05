@@ -4,6 +4,7 @@
 import { memo, useState } from "react";
 import { ago, clock } from "../../lib/format";
 import { retryable, type APIErrorInfo } from "../../lib/api-errors";
+import { runAction, turnErrorFix } from "../../lib/readiness";
 import { wakeSummary } from "../../lib/tasks";
 import { wakeDrawer, workSegment, type ChatLine, type OpenRecap, type Turn } from "../../lib/turns";
 import type { Item, SessionLive } from "../../lib/types";
@@ -25,6 +26,10 @@ export interface LineProps {
   expandFold: (f: Item) => Promise<void>;
   /** 重试 on an API error card (only on the last line, while the agent is not working). */
   onRetry?: () => void;
+  /** The hub's word on what to fix for this line's model error (the session's turn_error_code, last line only). */
+  fix?: { title: string; detail: string; action: string } | null;
+  /** A Persona conversation: a model error's text may name a fix in Persona's settings. Agent sessions keep 重试. */
+  assistant?: boolean;
 }
 
 export const ChatLineView = memo(function ChatLineView(props: LineProps) {
@@ -36,7 +41,7 @@ export const ChatLineView = memo(function ChatLineView(props: LineProps) {
   );
 });
 
-function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry }: LineProps) {
+function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry, fix, assistant }: LineProps) {
   switch (line.kind) {
     case "segment":
       return (
@@ -58,8 +63,11 @@ function LineBody({ line, status, mid, sid, streaming, expandFold, onRetry }: Li
       return <CompactDivider item={line.item} />;
     case "recaps":
       return <RecapChip items={line.items} />;
-    case "apiError":
-      return <APIErrorCard info={line.info} count={line.count} at={line.item.ts} onRetry={onRetry && retryable(line.info) ? onRetry : undefined} />;
+    case "apiError": {
+      // the text-derived fix points at Persona's model settings: only for Persona's own conversations
+      const f = assistant ? (fix ?? turnErrorFix(line.info.code)) : null;
+      return <APIErrorCard info={line.info} count={line.count} at={line.item.ts} fix={f} onRetry={onRetry && retryable(line.info) && !f ? onRetry : undefined} />;
+    }
   }
 }
 
@@ -248,15 +256,18 @@ export function closeRecap(key: string, id: string) {
 
 // ── model API errors ──
 
-function APIErrorCard({ info, count, at, onRetry }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void }) {
+/** A model API error: why, whether it passes by itself, the original under the fold, 重试. One the user must fix (not
+ *  signed in, a wrong key, a model that is not there) says so instead, with 去修 (docs/onboarding.md 4.4). */
+function APIErrorCard({ info, count, at, onRetry, fix }: { info: APIErrorInfo; count: number; at?: string; onRetry?: () => void; fix?: { title: string; detail: string; action: string } | null }) {
   const [open, setOpen] = useState(false);
-  const sub = info.transient === true ? t("chat-lines.api_transient") : info.transient === false ? t("chat-lines.api_permanent") : "";
+  const sub = fix ? fix.detail : info.transient === true ? t("chat-lines.api_transient") : info.transient === false ? t("chat-lines.api_permanent") : "";
+  const reason = fix ? fix.title : info.reason;
   return (
     <div className="flex flex-col gap-2.5 rounded-card bg-red-tint px-3.5 py-3 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--red)_22%,transparent)]">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={t("chat-lines.api_error", { reason: info.reason })} className="flex min-w-0 items-start gap-2 text-left">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={t("chat-lines.api_error", { reason })} className="flex min-w-0 items-start gap-2 text-left">
         <Icon name="info" size={15} stroke={2.2} className="mt-[2px] shrink-0 text-red" />
         <span className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-[14px] font-semibold text-ink">{info.reason}</span>
+          <span className="text-[14px] font-semibold text-ink">{reason}</span>
           {sub && <span className="text-[12px] text-ink-2">{sub}</span>}
         </span>
         <span className="flex shrink-0 items-center gap-1">
@@ -277,6 +288,13 @@ function APIErrorCard({ info, count, at, onRetry }: { info: APIErrorInfo; count:
           </button>
         </div>
       </Collapse>
+      {fix && (
+        <div>
+          <Button tone="primary" onClick={() => runAction(fix.action, { onHelp: () => {} })}>
+            {t("chat-lines.fix_it")}
+          </Button>
+        </div>
+      )}
       {onRetry && (
         <div>
           <Button icon="retry" onClick={onRetry}>

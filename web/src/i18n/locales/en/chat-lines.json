@@ -25,5 +25,6 @@
   "time": "Time",
   "copy_raw": "Copy raw text",
   "retry": "Retry",
-  "copy_field": "Copy {label}"
+  "copy_field": "Copy {label}",
+  "fix_it": "Fix it"
 }

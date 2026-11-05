@@ -112,5 +112,6 @@
   "op_review": "権限を確認",
   "op_error": "理由：{error}",
   "op_machine_error": "{machine}：{error}",
-  "op_progress": "{done}/{total} ステップ"
+  "op_progress": "{done}/{total} ステップ",
+  "official_unreachable": "今は公式の拡張機能を読み込めません。しばらくしてから試してください。"
 }

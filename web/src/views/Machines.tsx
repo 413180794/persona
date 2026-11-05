@@ -13,6 +13,7 @@ import type { MachineMetrics, MetricPoint } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
 import { Empty } from "./assistant/parts";
+import { HelpDialog } from "./assistant/Readiness";
 import { MachineDeploy } from "./machines/MachineDeploy";
 import { t } from "../i18n";
 
@@ -22,6 +23,8 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const sessions = useAgentSessions();
   const [metrics, setMetrics] = useState<MachineMetrics[] | null>(null);
   const [error, setError] = useState("");
+  // 添加电脑: how, in place (a signed-in device adding one itself comes with docs/onboarding.md 5.3)
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     let dead = false;
@@ -65,7 +68,21 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           )}
           {loaded && machines.length === 0 && (metrics || error) && (
             <div className="md:col-span-2">
-              <Empty icon="machine" title={error && !metrics ? t("machines.empty_unavailable") : t("machines.empty_title")}>{t("machines.empty_body")}</Empty>
+              {error && !metrics ? (
+                <Empty icon="machine" title={t("machines.empty_unavailable")} />
+              ) : (
+                <Empty
+                  icon="machine"
+                  title={t("machines.empty_title")}
+                  action={
+                    <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
+                      {t("machines.add_computer")}
+                    </Button>
+                  }
+                >
+                  {t("machines.empty_body")}
+                </Empty>
+              )}
             </div>
           )}
           {machines.map((m, i) => {
@@ -136,6 +153,7 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           })}
         </div>
       </div>
+      {adding && <HelpDialog topic="add_computer" machine="" step={null} onClose={() => setAdding(false)} onAction={() => {}} />}
     </div>
   );
 }

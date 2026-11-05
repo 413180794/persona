@@ -149,6 +149,7 @@ class ShareQueue @Inject constructor(
             try {
                 owner.active()
                 remaining = deliverQueuedShare(file, owner.hub.connection.state.value == ConnectionState.Online,
+                    untitled = application.getString(R.string.app_share_content),
                     prepareMain = { owner.data.messages.prepareMainConversation() },
                     upload = { machine, attachment, name -> upload(owner, machine, attachment, name) },
                     main = { body, id -> owner.data.messages.sendToMain(body, id) },
@@ -213,6 +214,7 @@ class ShareQueue @Inject constructor(
 /** Returns true while the staged entry still needs a connection or a main target. */
 internal suspend fun deliverQueuedShare(
     file: File, connected: Boolean,
+    untitled: String,
     prepareMain: suspend () -> SessionKey?,
     upload: suspend (String, File, String) -> String,
     main: suspend (String, String) -> Unit,
@@ -235,7 +237,7 @@ internal suspend fun deliverQueuedShare(
         }
     }
     val text = entry.finalText ?: formatSharedContent(entry.title, entry.text,
-        entry.attachments.map { requireNotNull(it.path) }, entry.note, entry.asContext)
+        entry.attachments.map { requireNotNull(it.path) }, entry.note, entry.asContext, untitled)
     if (entry.finalText == null) { entry = entry.copy(finalText = text); save() }
     check(text.isNotBlank())
     if (entry.machine == null) main(text, entry.id)

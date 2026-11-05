@@ -291,21 +291,24 @@ class ShareViewModel @Inject constructor(
 
 internal suspend fun <T> sendSharedContent(
     sender: MessageSender, target: SessionKey, title: String, text: String, attachments: List<T>,
-    note: String, asContext: Boolean, id: String, upload: suspend (T) -> String, beforeSend: () -> Unit = {},
+    note: String, asContext: Boolean, untitled: String, id: String, upload: suspend (T) -> String, beforeSend: () -> Unit = {},
 ) {
     val paths = attachments.map { upload(it) }
     beforeSend()
-    sender.send(target, formatSharedContent(title, text, paths, note, asContext), id)
+    sender.send(target, formatSharedContent(title, text, paths, note, asContext, untitled), id)
 }
 
-internal fun formatSharedContent(title: String, text: String, attachments: List<String>, note: String, asContext: Boolean): String {
+/** [untitled] is the context card's title when the share has none, in the app's language (`app_share_content`). */
+internal fun formatSharedContent(
+    title: String, text: String, attachments: List<String>, note: String, asContext: Boolean, untitled: String,
+): String {
     val paths = attachments.joinToString(" ") { "'${it.replace("'", "'\\''")}'" }
     val content = listOf(title, text, paths).filter { it.isNotBlank() }.joinToString("\n")
     val shared = if (asContext) {
         fun escape(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;")
             .replace("<", "&lt;").replace(">", "&gt;")
         val url = Regex("https?://[^\\s<>]+", RegexOption.IGNORE_CASE).find(text)?.value.orEmpty()
-        "<jarvis-context kind=\"context\" title=\"${escape(title.ifBlank { "分享内容" })}\" url=\"${escape(url)}\">\n" +
+        "<jarvis-context kind=\"context\" title=\"${escape(title.ifBlank { untitled })}\" url=\"${escape(url)}\">\n" +
             content.replace("</jarvis-context>", "").replace("</persona-context>", "") + "\n</jarvis-context>"
     } else content
     return listOf(shared, note.trim()).filter { it.isNotBlank() }.joinToString("\n\n")

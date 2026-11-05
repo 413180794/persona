@@ -106,8 +106,17 @@ export function providersFor(p: ModelPurpose, providers: ModelProvider[]): Model
   return candidates.filter((provider) => !provider.hidden || provider.id === p.override?.provider || provider.id === p.effective?.provider);
 }
 
+/** A provider's name for the page: its own, or nothing for one of the hub's old built-in ones (`legacy.*`) that is not
+ *  set up, whose id means nothing to a person (docs/onboarding.md 4.5). */
+export function providerName(id: string | undefined, providers: ModelProvider[] = []): string | undefined {
+  if (!id) return undefined;
+  const name = providers.find((v) => v.id === id)?.name;
+  if (name) return name;
+  return id.startsWith("legacy.") ? undefined : id;
+}
+
 export function modelSummary(p: ModelPurpose, providers: ModelProvider[] = []): string {
-  const name = providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider;
+  const name = providerName(p.effective?.provider, providers);
   const rt = p.effective?.runtime;
   const runtime = rt && rt !== "cli" ? runtimeLabel(rt) : ""; // the CLI is the default: not worth a word
   return [name, p.effective?.model, p.effective?.effort && t("lib-model-config.effort", { effort: p.effective.effort }), runtime].filter(Boolean).join(" · ") || t("lib-model-config.not_configured");

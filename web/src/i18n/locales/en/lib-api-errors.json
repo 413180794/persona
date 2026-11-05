@@ -7,5 +7,8 @@
   "no_connection": "Can't reach the model service",
   "bad_request": "Request rejected: something is wrong with the parameters or context",
   "unavailable": "The model service is unavailable for now",
-  "failed": "The model request failed"
+  "failed": "The model request failed",
+  "not_logged_in": "Claude Code isn't signed in",
+  "bad_key": "The model's key is wrong or has expired",
+  "bad_model": "This model isn't available now"
 }

@@ -20,6 +20,7 @@
   "status_unsupported": "不支持",
   "status_forbidden": "没有权限",
   "live_hint": "herdr 自己的客户端：在这里操作时，电脑上的窗格按这个面板的大小排版；回到电脑上操作又换回去",
+  "live_grid": "现在是 {cols} 列 × {rows} 行",
   "files": "文件",
   "keybar_hide": "收起按键栏",
   "keybar_show": "显示按键栏",
