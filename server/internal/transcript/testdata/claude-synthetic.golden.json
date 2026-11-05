@@ -76,6 +76,7 @@
     "compactions": 0,
     "context_tokens": 10,
     "output_tokens": 3,
+    "turn_open": true,
     "last_activity": "2026-01-01T00:32:00Z"
   }
 }

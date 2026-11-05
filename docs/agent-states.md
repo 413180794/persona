@@ -8,7 +8,7 @@ App、手表、推送都只认这一套状态（`proto.Session.state`，hub 计�
 | 状态 | 含义 | 来自 herdr | Persona 补充 | 颜色 |
 | --- | --- | --- | --- | --- |
 | `needs_you` 需要你 | 卡在需要人参与的地方 | `blocked`（TUI 里的提问 / 确认框） | 有待处理的提问、计划、授权、终端交互（hook 拦下来时 herdr 还显示 working） | 红，呼吸 |
-| `working` 工作中 | 正在跑 | `working` | — | 琥珀，呼吸 |
+| `working` 工作中 | 正在跑 | `working` | Claude：herdr 报 `done` / `idle` / `unknown`，但终端标题是 Claude Code 工作中的转圈字形（◐◓◑◒，旧版是盲文点阵），或 transcript 里这一轮已经开始、还没结束（没有 `turn_duration`、没被中断）且 45 秒内写过（#2069；transcript 里这一轮已经结束时照 herdr 的） | 琥珀，呼吸 |
 | `unread` 完成未看 | 一轮做完，结果还没看 | `done`（herdr 没被聚焦过） | 且 App 里在它完成之后没看过 | 绿 |
 | `idle` 已看 | 做完且看过，等输入 | `idle`（herdr 里看过） | 或 herdr 还是 `done` 但 App 里看过 | 灰 |
 | `offline` 未运行 | 不在宿主里，只有 transcript，发消息会 `--resume` | — | — | 浅灰 |

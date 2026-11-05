@@ -58,6 +58,7 @@
     "compactions": 0,
     "context_tokens": 0,
     "output_tokens": 0,
+    "turn_open": true,
     "last_turn_wake": true,
     "last_activity": "0001-01-01T00:00:00Z"
   }

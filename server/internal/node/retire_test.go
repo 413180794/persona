@@ -30,7 +30,11 @@ func TestHerdrRetire(t *testing.T) {
 	n, f, home := herdrNode(t)
 	cwd := mkdir(t, filepath.Join(home, "proj"))
 	for _, id := range []string{sidA, sidB, sidC} {
-		writeTranscript(t, home, cwd, id, time.Now(), `{"type":"user","cwd":"`+cwd+`","message":{"role":"user","content":"hi"}}`)
+		// A finished turn: a transcript with a prompt and nothing after it, written just now, is a turn under way
+		// whatever herdr says (claudeStatus, #2069).
+		writeTranscript(t, home, cwd, id, time.Now(), `{"type":"user","cwd":"`+cwd+`","message":{"role":"user","content":"hi"},"uuid":"u1"}`,
+			`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]},"uuid":"a1","parentUuid":"u1"}`,
+			`{"type":"system","subtype":"turn_duration","uuid":"d1","parentUuid":"a1","durationMs":1000}`)
 	}
 	n.state.put(sidA, sessionState{Launcher: "cc", Cwd: cwd, Model: "opus"})
 	f.reply("session.snapshot", snapshot(nil, nil, []any{

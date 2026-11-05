@@ -423,6 +423,12 @@ SESSIONS = [
          "搜索做好了，支持按食材和用时筛选。", space_kind=None, space_id=None, space_name=None, slot_id=None, slot_name=None),
 ]
 
+# MOCK_STALE_DONE=1 (#2069): the widget session as the hub listed it while herdr said done through a turn the phone
+# started (status done, state idle, its activity still moving): the Agents list before the node's fix.
+if os.environ.get("MOCK_STALE_DONE") == "1":
+    for _s in SESSIONS:
+        if _s["session_id"] == WIDGET: _s.update(status="done", state="idle")
+
 
 # MOCK_MACHINES=1: the machine pages' edge cases (MachinePagesTests): a fourth machine that is offline with an ssh
 # error (POST …/reconnect brings it back), and Mac Studio with many agents across several projects.

@@ -398,6 +398,7 @@
     "compactions": 0,
     "context_tokens": 224491,
     "output_tokens": 5393,
+    "turn_open": true,
     "last_activity": "2026-01-01T03:21:53.618Z"
   }
 }

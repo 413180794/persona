@@ -7,6 +7,12 @@
   node 启动会话后要检查 blocked 屏幕（`docs/claude-integration.md`）。
 - Claude 输入框里的灰字（预测的下一句、新会话的 `Try "…"`）在纯文本读屏里和用户打的字一模一样：判断有没有草稿要用 ansi 读屏看 dim（SGR 2）。
   2.1.312 的信任目录对话框选项不带编号（`❯ No, exit`），认对话框靠底部的 `Enter to confirm · Esc to cancel`（`server/internal/screen`）。
+- herdr 的 `agent_status` 会落后于 Claude（#2069，herdr 0.9.3）：上一轮结束（done、未看）后从 App 发消息开了新的一轮，herdr 一直报 done，
+  终端里状态行在转、标题是「◐ …」、transcript 在长，App 却显示做完了。本机按同样步骤（后台 workspace、send-text + Enter，还有长工具调用、
+  后台任务唤醒）试了 5 次都没复现，所以不靠猜 herdr 什么时候漏，而是 node 自己看两样兜底（`claudeStatus`）：标题的转圈字形（2.1.3xx 工作时是
+  ◐◓◑◒、等输入时是 ✳），和 transcript 里没结束的这一轮（`turn_duration` / 中断算结束；本机 955 轮里 913 轮以 `turn_duration` 结束）。
+  只纠正 done / idle / unknown，不碰 blocked；transcript 说这一轮已经结束时照 herdr 的（标题可能是结束前一刻读到的）。
+  复现时注意：herdr 新窗格里的 shell 没有当前会话的 `CLAUDE_CONFIG_DIR`，claude 会报 `Not logged in`（读不到默认目录的登录）。
 - Claude Code 的 `--settings` 只认最后一个，不合并（2026-11-02 实测：`--settings A --settings B` 时 A 的 `env` 全没了）。启动器 alias 自己带
   `--settings`、凭据在那个文件的 `env` 里时，Persona 再追加一个 `--settings` 就把它顶掉，从手机起的会话和助手每条消息都回
   `Not logged in · Please run /login`（transcript 里是 `isApiErrorMessage` + `authentication_failed`），在 herdr 里自己敲同一个 alias 却正常。

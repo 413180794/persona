@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/host"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -135,8 +136,11 @@ type quickMeta struct {
 	effort   string
 	effortAt time.Time
 	sandbox  string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
-	// turnClosed: a Codex rollout whose tail ends with its turn finished (transcript.Meta.TurnClosed)
+	// turnClosed: the tail ends with a turn finished (transcript.Meta.TurnClosed): a Codex rollout's, a Claude
+	// transcript's (turn_duration, an interrupt)
 	turnClosed bool
+	// claudeTurn: a Claude transcript whose tail has a turn started and not finished (transcript.Meta.TurnOpen)
+	claudeTurn bool
 	// turnOpen: a Codex rollout whose tail is inside a turn: the last turn it starts has not finished, or one turn
 	// fills the whole tail (a finished turn's task_complete is within a few KB of the end; real turns write MBs)
 	turnOpen bool
@@ -230,6 +234,9 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 				}
 				if !bytes.Contains(line, []byte(`"tool_result"`)) {
 					tm.LastTool = nil // a long prompt: a new turn
+					if !tm.Codex {
+						tm.TurnOpen, tm.TurnClosed = true, false
+					}
 				}
 				continue
 			}
@@ -251,6 +258,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 		m.doing, m.doingAt = transcript.Activity(t.Name, t.Input), t.At
 	}
 	m.turnOpen = tm.Codex && (tm.TurnOpen || off > 0 && !tm.TurnClosed)
+	m.claudeTurn = !tm.Codex && tm.TurnOpen
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
 	return m
 }
@@ -540,7 +548,9 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 
 	var out []proto.Session
 	seen := map[string]bool{}
+	now := time.Now()
 	for id, a := range agents {
+		a.AgentStatus = n.claudeStatus(id, a, now)
 		s := proto.Session{
 			SessionID: id, Cwd: a.Cwd, Status: a.AgentStatus, PaneID: a.PaneID, TabID: a.TabID,
 			WorkspaceID: a.WorkspaceID, AgentName: a.Name, Title: a.Title, Agent: a.Agent,
@@ -1393,11 +1403,51 @@ func (n *Node) guessSession(a host.Agent, taken map[string]host.Agent) string {
 	return best
 }
 
+// agent is the live agent of session id, with a Claude's status as claudeStatus says.
 func (n *Node) agent(id string) (host.Agent, bool) {
 	n.mu.Lock()
-	defer n.mu.Unlock()
 	a, ok := n.agents[id]
+	n.mu.Unlock()
+	if ok {
+		a.AgentStatus = n.claudeStatus(id, a, time.Now())
+	}
 	return a, ok
+}
+
+// claudeFresh: how recently a Claude transcript with an open turn must have been written to count as at work.
+const claudeFresh = 45 * time.Second
+
+// claudeStatus is a Claude's status with its own signs of work over its host's (#2069: herdr 0.9.3 said done through a
+// whole turn started from the phone, so the app showed it as finished while it searched code). When the host says
+// done, idle or does not know, it is working while its terminal title shows Claude Code's spinner, or its transcript has
+// a turn started and not finished (no turn_duration, no interrupt) written to within claudeFresh. A transcript whose
+// turn has finished keeps the host's word: a title read just before Claude redrew it says nothing then.
+func (n *Node) claudeStatus(id string, a host.Agent, now time.Time) string {
+	if a.Agent != "claude" || a.AgentStatus != proto.StatusDone && a.AgentStatus != proto.StatusIdle && a.AgentStatus != proto.StatusUnknown {
+		return a.AgentStatus
+	}
+	var m quickMeta
+	fresh := false
+	if p := n.transcriptPath(id); p != "" {
+		if st, err := os.Stat(p); err == nil {
+			m = n.meta(p, st)
+			fresh = now.Sub(st.ModTime()) < claudeFresh
+		}
+	}
+	switch {
+	case m.turnClosed:
+		return a.AgentStatus
+	case claudeSpinnerTitle(a.RawTitle), m.claudeTurn && fresh:
+		return proto.StatusWorking
+	}
+	return a.AgentStatus
+}
+
+// claudeSpinnerTitle: the terminal title starts with the spinner Claude Code shows in it while it works — a quarter
+// circle (◐◓◑◒, 2.1.3xx) or, in older versions, a braille dot; ✳ when it waits.
+func claudeSpinnerTitle(title string) bool {
+	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(title))
+	return r >= '◐' && r <= '◓' || r >= 0x2800 && r <= 0x28FF
 }
 
 // pollAgents refreshes the hosts' state every second (only the ones due) and pushes sessions.changed when anything

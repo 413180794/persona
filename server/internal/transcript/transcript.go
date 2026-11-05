@@ -136,10 +136,12 @@ type Meta struct {
 	Sidechain bool
 	// Codex: the file is a Codex rollout (codex.go), not a Claude transcript.
 	Codex bool
-	// TurnOpen: a rollout's latest turn has started and not finished (task_started without task_complete).
+	// TurnOpen: the latest turn has started and not finished: a rollout's task_started without task_complete; a
+	// Claude prompt (or a background task waking it) without its turn_duration line or an interrupt after it.
 	TurnOpen bool
-	// TurnClosed: the lines read so far end with a Codex turn finishing (task_complete / turn_aborted), no turn
-	// started after it. Unlike !TurnOpen it is false when the lines say nothing (a tail read from mid-turn).
+	// TurnClosed: the lines read so far end with a turn finishing (Codex: task_complete / turn_aborted; Claude:
+	// turn_duration / an interrupt), no turn started after it. Unlike !TurnOpen it is false when the lines say nothing
+	// (a tail read from mid-turn).
 	TurnClosed bool
 	// codexSeen: newer rollouts record an item both as event_msg/item_completed and in history_mutation.
 	codexSeen   map[string]bool
@@ -201,6 +203,9 @@ func ParseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			meta.LastTurnWake = true
 		case it.Role == "user" && it.Kind == proto.KindText && !it.Queued:
 			meta.LastTurnWake = false
+		}
+		if !meta.Codex && (it.Wake || it.Role == "user" && it.Kind == proto.KindText && !it.Queued) {
+			meta.TurnOpen, meta.TurnClosed = true, false // a Claude turn starts; parseLine closes it
 		}
 	}
 	return items
@@ -343,6 +348,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		var text string
 		switch e.Subtype {
 		case "turn_duration":
+			meta.TurnOpen, meta.TurnClosed = false, true
 			ms, ok := recordedMilliseconds(e.DurationMS)
 			if !ok || strings.TrimSpace(e.ParentUUID) == "" {
 				return nil
@@ -805,6 +811,7 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 		return []proto.Item{it}
 	}
 	if trimmed == "[Request interrupted by user]" || trimmed == "[Request interrupted by user for tool use]" {
+		meta.TurnOpen, meta.TurnClosed = false, true
 		it := mk(0, "system", proto.KindNotice)
 		it.Text = "已中断"
 		return []proto.Item{it}
