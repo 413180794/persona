@@ -1,5 +1,6 @@
 // A session's work state as the lists show it (docs/agent-work.md): the hub triages each stopped turn into done or
 // blocked on something named, with one line for the row.
+import { t } from "../i18n";
 import type { Session, WorkState } from "./types";
 
 /** The hub waits it out: it wakes it (wake_at), or it wakes itself (its background tasks, a /loop). */
@@ -16,14 +17,17 @@ export function workLine(s: Pick<Session, "work" | "state" | "status">, now = Da
   if (w.phase === "done") return `✓ ${w.line}`;
   if (!w.wake_at) return w.line;
   const ms = Date.parse(w.wake_at) - now;
-  const verb = w.on === "transient" ? "重试" : "叫醒";
-  const when = Number.isNaN(ms) || ms < 60_000 ? `马上${verb}` : `${inMinutes(ms)}后${verb}`;
-  return `${w.line}（${when}）`;
+  const retry = w.on === "transient";
+  const when =
+    Number.isNaN(ms) || ms < 60_000
+      ? t(retry ? "lib-work.retry_soon" : "lib-work.wake_soon")
+      : t(retry ? "lib-work.retry_in" : "lib-work.wake_in", { duration: inMinutes(ms) });
+  return t("lib-work.line_when", { line: w.line, when });
 }
 
 // 「12 分钟」「1 小时 5 分」: when the hub acts next, minutes are enough (format.ts shortDuration, which imports this).
 function inMinutes(ms: number): string {
   const m = Math.round(ms / 60_000);
-  if (m < 60) return `${m} 分钟`;
-  return m % 60 ? `${Math.floor(m / 60)} 小时 ${m % 60} 分` : `${m / 60} 小时`;
+  if (m < 60) return t("lib-work.minutes", { count: m });
+  return m % 60 ? t("lib-work.hours_minutes", { hours: Math.floor(m / 60), minutes: m % 60 }) : t("lib-work.hours", { count: m / 60 });
 }

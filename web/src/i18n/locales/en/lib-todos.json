@@ -1,0 +1,22 @@
+{
+  "status_done": "Done",
+  "status_needs_you": "Needs you",
+  "status_interrupted": "Interrupted",
+  "status_unread": "Unread",
+  "status_working": "Working",
+  "status_follow_up": "Follow-up",
+  "status_not_started": "Not started",
+  "status_failed": "Didn't start",
+  "auto_done": "Auto-completed",
+  "model_request_failed": "Model request failed",
+  "unassigned": "Unassigned",
+  "context_title": "To-do · {title}",
+  "decision_manual": "Added by hand",
+  "decision_agent_question": "Answered in an agent's question",
+  "decision_in_question": "Answered in a question from \"{title}\"",
+  "with_project_named": "With project {name}",
+  "with_project": "With project",
+  "spawned_by": "Spawned by {title}",
+  "spawned": "Spawned",
+  "subtask": "Subtask"
+}

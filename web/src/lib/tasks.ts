@@ -1,6 +1,7 @@
 // Background work in a chat (iOS TaskIndex / TaskNoteText / NoticeRow.wakeSummary / ActivityChips): which call started
 // a background task, what its notices say in words, and how a /loop and the session's background tasks read.
 
+import { formatDate, t } from "../i18n";
 import type { BackgroundTask, Item, LoopInfo, Subagent, TaskNote } from "./types";
 import type { AgentStatus } from "./work-groups";
 
@@ -66,13 +67,13 @@ export function taskFailed(n: TaskNote): boolean {
 export function taskLabel(n: TaskNote): string {
   switch (n.kind) {
     case "shell":
-      return "后台命令";
+      return t("lib-tasks.kind_shell");
     case "monitor":
-      return n.status === "event" ? "Monitor 事件" : "Monitor 结束";
+      return n.status === "event" ? t("lib-tasks.monitor_event") : t("lib-tasks.monitor_ended");
     case "agent":
-      return "子 Agent";
+      return t("lib-tasks.kind_agent");
   }
-  return "后台任务";
+  return t("lib-tasks.kind_task");
 }
 
 /** The call's description when we know the call, else what the notice says (a Monitor event: the event's first line). */
@@ -86,10 +87,10 @@ export function taskSubject(n: TaskNote, description?: string): string {
 
 /** How long it ran, short: "40 秒", "5 分", "2 小时 5 分". */
 export function took(s: number): string {
-  if (s < 60) return `${s} 秒`;
-  if (s < 3600) return `${Math.floor(s / 60)} 分`;
+  if (s < 60) return t("lib-tasks.took_seconds", { count: s });
+  if (s < 3600) return t("lib-tasks.took_minutes", { count: Math.floor(s / 60) });
   const m = Math.floor((s % 3600) / 60);
-  return m === 0 ? `${Math.floor(s / 3600)} 小时` : `${Math.floor(s / 3600)} 小时 ${m} 分`;
+  return m === 0 ? t("lib-tasks.took_hours", { count: Math.floor(s / 3600) }) : t("lib-tasks.took_hours_minutes", { hours: Math.floor(s / 3600), minutes: m });
 }
 
 export type Tone = "green" | "red" | "neutral" | "orange";
@@ -103,18 +104,18 @@ export function taskPill(n: TaskNote, startedAt?: string, at?: string): { text: 
   switch (n.status) {
     case "completed":
     case "ended":
-      return { text: withRan("已完成"), tone: "green" };
+      return { text: withRan(t("lib-tasks.state_done")), tone: "green" };
     case "failed":
-      return { text: withRan(n.exit_code !== undefined ? `退出码 ${n.exit_code}` : "失败"), tone: "red" };
+      return { text: withRan(n.exit_code !== undefined ? t("lib-tasks.exit_code", { code: n.exit_code }) : t("lib-tasks.state_failed")), tone: "red" };
     case "killed":
     case "stopped":
-      return { text: withRan("已停止"), tone: "neutral" };
+      return { text: withRan(t("lib-tasks.state_stopped")), tone: "neutral" };
     case "waiting":
-      return { text: "等待中", tone: "orange" };
+      return { text: t("lib-tasks.state_waiting"), tone: "orange" };
     case "event":
-      return { text: "事件", tone: "neutral" };
+      return { text: t("lib-tasks.state_event"), tone: "neutral" };
   }
-  if (n.exit_code !== undefined && n.exit_code !== 0) return { text: withRan(`退出码 ${n.exit_code}`), tone: "red" };
+  if (n.exit_code !== undefined && n.exit_code !== 0) return { text: withRan(t("lib-tasks.exit_code", { code: n.exit_code })), tone: "red" };
   return null;
 }
 
@@ -122,9 +123,9 @@ export function taskPill(n: TaskNote, startedAt?: string, at?: string): { text: 
 export function taskBadge(notes: TaskNote[]): { text: string; failed: boolean } {
   const events = notes.filter((n) => n.status === "event").length;
   const last = [...notes].reverse().find((n) => n.status !== "event");
-  if (!last) return { text: events > 0 ? `后台 · ${events} 个事件` : "后台 · 运行中", failed: false };
-  const state = last.status === "failed" ? "失败" : last.status === "killed" || last.status === "stopped" ? "已停止" : last.status === "waiting" ? "等待中" : last.status === "ended" ? "已结束" : "已完成";
-  return { text: `后台 · ${state}${events > 0 ? ` · ${events} 个事件` : ""}`, failed: taskFailed(last) };
+  if (!last) return { text: events > 0 ? t("lib-tasks.badge_events", { count: events }) : t("lib-tasks.badge_running"), failed: false };
+  const state = last.status === "failed" ? t("lib-tasks.state_failed") : last.status === "killed" || last.status === "stopped" ? t("lib-tasks.state_stopped") : last.status === "waiting" ? t("lib-tasks.state_waiting") : last.status === "ended" ? t("lib-tasks.state_ended") : t("lib-tasks.state_done");
+  return { text: events > 0 ? t("lib-tasks.badge_state_events", { state, count: events }) : t("lib-tasks.badge_state", { state }), failed: taskFailed(last) };
 }
 
 /** A wake notice in one line: the hub's text when it read the notification (`task`), else worked out from an older
@@ -134,12 +135,12 @@ export function wakeSummary(item: Item): { text: string; failed: boolean } {
   const s = item.text ?? "";
   const m = /^(.*?)\s*"(.+)"\s*(.*)$/.exec(s);
   if (!m) return { text: s, failed: false };
-  const kind = m[1] === "Background command" ? "后台命令" : m[1] === "Agent" ? "子 Agent " : m[1] === "Monitor" ? "监控" : "后台任务";
+  const kind = m[1] === "Background command" ? t("lib-tasks.wake_kind_shell") : m[1] === "Agent" ? t("lib-tasks.wake_kind_agent") : m[1] === "Monitor" ? t("lib-tasks.wake_kind_monitor") : t("lib-tasks.wake_kind_task");
   const rest = m[3].toLowerCase();
   const code = /exit code (\d+)/.exec(rest);
   const failed = rest.includes("fail") || rest.includes("error") || (code ? Number(code[1]) !== 0 : false);
-  const state = failed ? "失败" : rest.includes("kill") || rest.includes("stop") ? "已停止" : rest.includes("complet") ? "完成" : "有更新";
-  return { text: `${kind}${state} · ${m[2]}`, failed };
+  const state = failed ? t("lib-tasks.wake_failed") : rest.includes("kill") || rest.includes("stop") ? t("lib-tasks.wake_stopped") : rest.includes("complet") ? t("lib-tasks.wake_completed") : t("lib-tasks.wake_updated");
+  return { text: t("lib-tasks.wake_summary", { kind, state, subject: m[2] }), failed };
 }
 
 function firstLine(s: string): string {
@@ -156,52 +157,57 @@ export function loopTask(loop: LoopInfo): string {
 
 /** "每 30 分钟" / "按计划 33 17 * * *". */
 export function loopCadence(loop: LoopInfo): string {
-  if (loop.kind === "cron" && loop.cron) return `按计划 ${loop.cron}`;
+  if (loop.kind === "cron" && loop.cron) return t("lib-tasks.cadence_cron", { cron: loop.cron });
   const s = loop.interval_seconds ?? 0;
   if (s <= 0) return "";
-  if (s < 120) return `每 ${s} 秒`;
-  if (s < 7200) return `每 ${Math.floor(s / 60)} 分钟`;
-  return `每 ${Math.floor(s / 3600)} 小时`;
+  if (s < 120) return t("lib-tasks.every_seconds", { count: s });
+  if (s < 7200) return t("lib-tasks.every_minutes", { count: Math.floor(s / 60) });
+  return t("lib-tasks.every_hours", { count: Math.floor(s / 3600) });
 }
 
 function hhmm(ms: number): string {
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return formatDate(ms, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /** The loop beside its arrows, short: the next time, or that it is running. */
 export function loopShortLabel(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
   if (Number.isFinite(next) && next > now) return hhmm(next);
-  return loop.next_at ? "执行中" : "循环";
+  return loop.next_at ? t("lib-tasks.loop_running_short") : t("lib-tasks.loop_short");
 }
 
 /** "下次 11:57" / "循环执行中" / "每 30 分钟". */
 export function loopLabel(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
-  if (Number.isFinite(next) && next > now) return `下次 ${hhmm(next)}`;
-  if (loop.next_at) return "循环执行中";
-  return loopCadence(loop) || "循环中";
+  if (Number.isFinite(next) && next > now) return t("lib-tasks.loop_next", { time: hhmm(next) });
+  if (loop.next_at) return t("lib-tasks.loop_running");
+  return loopCadence(loop) || t("lib-tasks.loop_looping");
 }
 
 /** "下次唤醒 11:57（还有 4 分钟）" / "正在执行这一轮". */
 export function loopNext(loop: LoopInfo, now: number): string {
   const next = Date.parse(loop.next_at ?? "");
   if (!Number.isFinite(next)) return "";
-  if (next <= now) return "正在执行这一轮";
+  if (next <= now) return t("lib-tasks.loop_this_round");
   const m = Math.max(1, Math.ceil((next - now) / 60_000));
-  const until = m < 60 ? `还有 ${m} 分钟` : `还有 ${Math.floor(m / 60)} 小时${m % 60 ? ` ${m % 60} 分` : ""}`;
-  return `下次唤醒 ${hhmm(next)}（${until}）`;
+  const until =
+    m < 60
+      ? t("lib-tasks.until_minutes", { count: m })
+      : m % 60
+        ? t("lib-tasks.until_hours_minutes", { hours: Math.floor(m / 60), minutes: m % 60 })
+        : t("lib-tasks.until_hours", { count: m / 60 });
+  return t("lib-tasks.next_wake", { time: hhmm(next), until });
 }
 
 /** What tells the agent to end its /loop: nothing outside Claude can cancel a scheduled wakeup or its cron job. */
 export const STOP_LOOP_MESSAGE =
+  // i18n-ignore: an instruction to the agent, not interface text
   "停止当前的 /loop：调用 ScheduleWakeup(stop: true) 结束循环（如果用 CronCreate 建过定时任务，用 CronDelete 删掉），不要再安排下一次唤醒，回复一句「循环已停止」即可。";
 
 /** A background task in one line: the description Claude gave, else the command. */
-export function backgroundTitle(t: BackgroundTask): string {
-  if (t.description) return t.description;
-  return t.command?.split("\n")[0] || (t.kind === "agent" ? "子代理" : "后台命令");
+export function backgroundTitle(task: BackgroundTask): string {
+  if (task.description) return task.description;
+  return task.command?.split("\n")[0] || (task.kind === "agent" ? t("lib-tasks.background_agent") : t("lib-tasks.kind_shell"));
 }
 
 /** "40 秒" / "5 分 12 秒" / "1 时 5 分". */
@@ -209,13 +215,13 @@ export function elapsed(fromIso: string | undefined, now: number): string {
   const start = Date.parse(fromIso ?? "");
   if (!Number.isFinite(start)) return "";
   const s = Math.max(0, Math.floor((now - start) / 1000));
-  if (s < 60) return `${s} 秒`;
-  if (s < 3600) return `${Math.floor(s / 60)} 分 ${s % 60} 秒`;
-  return `${Math.floor(s / 3600)} 时 ${Math.floor((s % 3600) / 60)} 分`;
+  if (s < 60) return t("lib-tasks.elapsed_seconds", { count: s });
+  if (s < 3600) return t("lib-tasks.elapsed_minutes_seconds", { minutes: Math.floor(s / 60), seconds: s % 60 });
+  return t("lib-tasks.elapsed_hours_minutes", { hours: Math.floor(s / 3600), minutes: Math.floor((s % 3600) / 60) });
 }
 
 export function subagentTitle(a: Subagent): string {
-  return a.description || a.type || "子 Agent";
+  return a.description || a.type || t("lib-tasks.kind_agent");
 }
 
 // ── a subagent call in the chat (its card, cindy's AgentTaskCard) ──

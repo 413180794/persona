@@ -1,6 +1,7 @@
 // The assistant's scheduled tasks (docs/assistant.md「定时任务」, docs/protocol.md `/assistant/tasks`): the wire types,
 // how a task is said in words (the iOS app's AssistantScheduleText), what the editor checks, and the body it saves.
 // Pure functions of their arguments (`now` passed in), so they are tested without a DOM.
+import { currentLanguage, formatDate, t } from "../i18n";
 
 export type Repeat = "once" | "daily" | "interval";
 
@@ -49,7 +50,10 @@ export interface Run {
   session_id?: string;
 }
 
-export const DAY_NAMES = ["一", "二", "三", "四", "五", "六", "日"];
+/** Monday … Sunday, short (the editor's day buttons, 「每周一、三」). */
+export const DAY_NAMES = t("lib-routines.day_names").split(",");
+/** Monday … Sunday in full (the day buttons' labels): 2024-01-01 was a Monday. */
+export const DAY_LONG_NAMES = DAY_NAMES.map((_, i) => formatDate(new Date(2024, 0, 1 + i), { weekday: "long" }));
 export const WORKDAYS = [1, 2, 3, 4, 5];
 export const WEEKEND = [6, 7];
 export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -90,27 +94,29 @@ export function normalizeDays(days?: number[] | null): number[] {
 /** "每天" / "工作日" / "周末" / "每周一、三、五". */
 export function repeatsLabel(days?: number[] | null): string {
   const d = normalizeDays(days);
-  if (d.length === 0) return "每天";
-  if (d.join() === WORKDAYS.join()) return "工作日";
-  if (d.join() === WEEKEND.join()) return "周末";
-  return "每周" + d.map((x) => DAY_NAMES[x - 1]).join("、");
+  if (d.length === 0) return t("lib-routines.every_day");
+  if (d.join() === WORKDAYS.join()) return t("lib-routines.workdays");
+  if (d.join() === WEEKEND.join()) return t("lib-routines.weekend");
+  return t("lib-routines.weekly", { days: d.map((x) => DAY_NAMES[x - 1]).join(t("lib-routines.day_separator")) });
 }
 
 /** "09:00" → "上午 9:00", "21:30" → "晚上 9:30", "00:15" → "凌晨 12:15". */
 export function clockLabel(hhmm?: string): string {
   if (!hhmm || !HHMM.test(hhmm)) return hhmm ?? "";
   const [h, m] = hhmm.split(":").map(Number);
-  const part = h < 5 ? "凌晨" : h < 9 ? "早上" : h < 12 ? "上午" : h < 13 ? "中午" : h < 18 ? "下午" : "晚上";
+  // Chinese says the part of the day (凌晨 / 早上 / 上午…), finer than Intl's; the others read the clock their own way
+  if (currentLanguage() !== "zh-Hans") return formatDate(new Date(2000, 0, 1, h, m), { hour: "numeric", minute: "2-digit" });
+  const part = h < 5 ? t("lib-routines.part_small_hours") : h < 9 ? t("lib-routines.part_early_morning") : h < 12 ? t("lib-routines.part_morning") : h < 13 ? t("lib-routines.part_noon") : h < 18 ? t("lib-routines.part_afternoon") : t("lib-routines.part_evening");
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${part} ${h12}:${String(m).padStart(2, "0")}`;
+  return t("lib-routines.clock", { part, time: `${h12}:${String(m).padStart(2, "0")}` });
 }
 
 /** "每 30 分钟" / "每 2 小时" / "每 1 小时 30 分钟" / "每天" / "每 2 天". */
 export function everyLabel(minutes: number): string {
-  if (minutes < 60) return `每 ${minutes} 分钟`;
-  if (minutes % 1440 === 0) return minutes === 1440 ? "每天" : `每 ${minutes / 1440} 天`;
+  if (minutes < 60) return t("lib-routines.every_minutes", { count: minutes });
+  if (minutes % 1440 === 0) return minutes === 1440 ? t("lib-routines.every_day") : t("lib-routines.every_days", { count: minutes / 1440 });
   const h = Math.floor(minutes / 60), m = minutes % 60;
-  return m ? `每 ${h} 小时 ${m} 分钟` : `每 ${h} 小时`;
+  return m ? t("lib-routines.every_hours_minutes", { hours: h, minutes: m }) : t("lib-routines.every_hours", { count: h });
 }
 
 /** "17:05", always 24-hour. */
@@ -121,11 +127,11 @@ export function hm(d: Date): string {
 /** The day part of a moment: "今天" / "明天" / "昨天" / "周三" (within a week) / "11月2日". */
 export function dayLabel(d: Date, now: Date): string {
   const n = daysBetween(now, d);
-  if (n === 0) return "今天";
-  if (n === 1) return "明天";
-  if (n === -1) return "昨天";
-  if (Math.abs(n) < 7) return `周${DAY_NAMES[isoDay(d) - 1]}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  if (n === 0) return t("lib-routines.today");
+  if (n === 1) return t("lib-routines.tomorrow");
+  if (n === -1) return t("lib-routines.yesterday");
+  if (Math.abs(n) < 7) return t("lib-routines.weekday", { day: DAY_NAMES[isoDay(d) - 1] });
+  return formatDate(d, { month: "short", day: "numeric" });
 }
 
 /** "今天 15:30" / "明天 09:00" / "周三 09:00" / "11月2日 09:00". */
@@ -136,29 +142,29 @@ export function momentLabel(d: Date, now: Date): string {
 /** A future moment, roughly: "马上" / "25 分钟后" / "2 小时后" / "1 小时 30 分钟后" / "3 天后"; "已过时间" in the past. */
 export function untilLabel(d: Date, now: Date): string {
   const s = (d.getTime() - now.getTime()) / 1000;
-  if (s < 60) return s < -60 ? "已过时间" : "马上";
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟后`;
+  if (s < 60) return s < -60 ? t("lib-routines.past_due") : t("lib-routines.right_away");
+  if (s < 3600) return t("lib-routines.in_minutes", { count: Math.floor(s / 60) });
   if (s < 86400) {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return h < 3 && m >= 10 ? `${h} 小时 ${m} 分钟后` : `${h} 小时后`;
+    return h < 3 && m >= 10 ? t("lib-routines.in_hours_minutes", { hours: h, minutes: m }) : t("lib-routines.in_hours", { count: h });
   }
-  return `${Math.max(daysBetween(now, d), 1)} 天后`;
+  return t("lib-routines.in_days", { count: Math.max(daysBetween(now, d), 1) });
 }
 
 /** Its title, or the first line of the prompt (a follow-up Persona scheduled without one). */
-export function taskTitle(t: Pick<Task, "title" | "prompt">): string {
-  if (t.title?.trim()) return t.title.trim();
-  const first = (t.prompt ?? "").split("\n").find((l) => l.trim()) ?? "";
-  return first.trim() || "定时跟进";
+export function taskTitle(task: Pick<Task, "title" | "prompt">): string {
+  if (task.title?.trim()) return task.title.trim();
+  const first = (task.prompt ?? "").split("\n").find((l) => l.trim()) ?? "";
+  return first.trim() || t("lib-routines.scheduled_follow_up");
 }
 
 /** The rule in words: "每个工作日 上午 9:00" / "每 30 分钟" / "一次 · 新对话". */
-export function ruleText(t: Task): string {
-  if (t.repeat === "interval") return everyLabel(t.every_minutes ?? 0);
-  if (t.repeat === "once") return t.session_id ? "一次 · 接着原来的对话" : "一次 · 新对话";
-  const d = normalizeDays(t.weekdays);
-  const days = d.length === 0 ? "每天" : d.join() === WORKDAYS.join() ? "每个工作日" : d.join() === WEEKEND.join() ? "每个周末" : repeatsLabel(d);
-  return `${days} ${clockLabel(t.time)}`;
+export function ruleText(task: Task): string {
+  if (task.repeat === "interval") return everyLabel(task.every_minutes ?? 0);
+  if (task.repeat === "once") return task.session_id ? t("lib-routines.once_same_chat") : t("lib-routines.once_new_chat");
+  const d = normalizeDays(task.weekdays);
+  const days = d.length === 0 ? t("lib-routines.every_day") : d.join() === WORKDAYS.join() ? t("lib-routines.every_workday") : d.join() === WEEKEND.join() ? t("lib-routines.every_weekend") : repeatsLabel(d);
+  return t("lib-routines.rule_daily", { days, time: clockLabel(task.time) });
 }
 
 /** When it runs next, or null when it is switched off or the hub has no time for it. */
@@ -167,18 +173,18 @@ export function nextRun(t: Task): Date | null {
 }
 
 /** "下次 今天 09:00 · 2 小时后" / "已关闭" / "". */
-export function nextText(t: Task, now: Date): string {
-  if (!t.enabled) return "已关闭";
-  const n = nextRun(t);
-  return n ? `下次 ${momentLabel(n, now)} · ${untilLabel(n, now)}` : "";
+export function nextText(task: Task, now: Date): string {
+  if (!task.enabled) return t("lib-routines.off");
+  const n = nextRun(task);
+  return n ? t("lib-routines.next", { moment: momentLabel(n, now), until: untilLabel(n, now) }) : "";
 }
 
 /** The last run in a few words, null when it never ran: "上次 今天 09:03 · 已运行". */
-export function lastRunText(t: Task, now: Date): { text: string; failed: boolean } | null {
-  const at = parseTime(t.last_run);
+export function lastRunText(task: Task, now: Date): { text: string; failed: boolean } | null {
+  const at = parseTime(task.last_run);
   if (!at) return null;
-  const word = t.last_status === "failed" ? "失败" : t.last_status === "skipped" ? "已跳过" : "已运行";
-  return { text: `上次 ${momentLabel(at, now)} · ${word}`, failed: t.last_status === "failed" };
+  const word = task.last_status === "failed" ? t("lib-routines.status_failed") : task.last_status === "skipped" ? t("lib-routines.status_skipped") : t("lib-routines.status_ran");
+  return { text: t("lib-routines.last", { moment: momentLabel(at, now), status: word }), failed: task.last_status === "failed" };
 }
 
 // ── what a run starts claude with ───────────────────────
@@ -191,18 +197,15 @@ export interface ModeOption {
 
 /** Besides 默认 (""): the hub's permission modes (proto.PermissionModes). */
 export const PERMISSION_MODES: ModeOption[] = [
-  { id: "acceptEdits", title: "自动改文件", detail: "改文件不问，跑命令还会问" },
-  { id: "plan", title: "只做计划", detail: "只读代码、写计划，批准后才动手" },
-  { id: "auto", title: "自动", detail: "自己判断风险，安全的直接做" },
-  { id: "bypassPermissions", title: "全部放行", detail: "什么都不问，有风险" },
+  // the same names as the chat's ⋯ menu (session-actions.ts)
+  { id: "acceptEdits", title: t("lib-session-actions.mode_accept_edits"), detail: t("lib-session-actions.mode_accept_edits_detail") },
+  { id: "plan", title: t("lib-session-actions.mode_plan"), detail: t("lib-session-actions.mode_plan_detail") },
+  { id: "auto", title: t("lib-session-actions.mode_auto"), detail: t("lib-session-actions.mode_auto_detail") },
+  { id: "bypassPermissions", title: t("lib-session-actions.mode_bypass_permissions"), detail: t("lib-routines.bypass_detail") },
 ];
 
 export const EFFORTS: ModeOption[] = [
-  { id: "low", title: "低", detail: "最快，简单的事够用" },
-  { id: "medium", title: "中", detail: "快一些" },
-  { id: "high", title: "高", detail: "大多数任务的默认" },
-  { id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵" },
-  { id: "max", title: "最高", detail: "最慢最仔细" },
+  ...["low", "medium", "high", "xhigh", "max"].map((id) => ({ id, title: t(`lib-session-actions.effort_${id}`), detail: t(`lib-session-actions.effort_${id}_detail`) })),
 ];
 
 export const BYPASS = "bypassPermissions";
@@ -219,34 +222,34 @@ export function effortLabel(id?: string): string {
 }
 
 /** What it runs with when that isn't the default, in a few words: "claude-fast · 自动 · 思考低"; `danger` for 全部放行. */
-export function runsWith(t: Pick<Task, "launcher" | "permission_mode" | "effort">): { text: string; danger: boolean } | null {
-  const parts = [t.launcher, modeLabel(t.permission_mode), t.effort ? `思考${effortLabel(t.effort)}` : ""].filter(Boolean);
-  return parts.length ? { text: parts.join(" · "), danger: t.permission_mode === BYPASS } : null;
+export function runsWith(task: Pick<Task, "launcher" | "permission_mode" | "effort">): { text: string; danger: boolean } | null {
+  const parts = [task.launcher, modeLabel(task.permission_mode), task.effort ? t("lib-routines.effort", { effort: effortLabel(task.effort) }) : ""].filter(Boolean);
+  return parts.length ? { text: parts.join(" · "), danger: task.permission_mode === BYPASS } : null;
 }
 
 // ── the editor ──────────────────────────────────────────
 
 /** What the editor checks before saving (the hub checks the same and says why in Chinese): null = fine. */
 export function validateTask(d: Task, now: Date): string | null {
-  if (d.repeat !== "once" && !d.title.trim()) return "要有标题";
-  if (!d.prompt.trim()) return "提示词不能为空";
+  if (d.repeat !== "once" && !d.title.trim()) return t("lib-routines.error_title");
+  if (!d.prompt.trim()) return t("lib-routines.error_prompt");
   switch (d.repeat) {
     case "daily":
-      if (!HHMM.test(d.time ?? "")) return "时间要写成 HH:MM，比如 09:00";
+      if (!HHMM.test(d.time ?? "")) return t("lib-routines.error_time");
       return null;
     case "interval": {
       const m = d.every_minutes ?? 0;
-      if (!Number.isInteger(m) || m < MIN_EVERY || m > MAX_EVERY) return "间隔要在 5 分钟到 7 天之间";
+      if (!Number.isInteger(m) || m < MIN_EVERY || m > MAX_EVERY) return t("lib-routines.error_interval");
       return null;
     }
     case "once": {
       const at = parseTime(d.at);
-      if (!at) return "要选一个运行时间";
-      if (d.enabled && at.getTime() < now.getTime() - 60_000) return "这个时间已经过了，选一个以后的时间";
+      if (!at) return t("lib-routines.error_at");
+      if (d.enabled && at.getTime() < now.getTime() - 60_000) return t("lib-routines.error_past");
       return null;
     }
     default:
-      return "不认识的重复方式";
+      return t("lib-routines.error_repeat");
   }
 }
 
@@ -336,33 +339,33 @@ export interface Template {
 export const TEMPLATES: Template[] = [
   {
     key: "meeting",
-    title: "会前准备",
+    title: t("lib-routines.template_meeting_title"),
     prompt:
-      "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。",
+      t("lib-routines.template_meeting_prompt"),
     repeat: "daily",
     time: "08:45",
     weekdays: WORKDAYS,
   },
   {
     key: "weekly",
-    title: "周报",
+    title: t("lib-routines.template_weekly_title"),
     prompt:
-      "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。",
+      t("lib-routines.template_weekly_prompt"),
     repeat: "daily",
     time: "17:00",
     weekdays: [5],
   },
   {
     key: "patrol",
-    title: "Agent 巡检",
-    prompt: "看看各台电脑上的 Agent：哪些在等我、哪些卡住或报错了、哪些跑完了没人看。有要我处理的就列出来（一行一个，说清楚在哪台电脑、等什么）；都正常就回一句「都正常」。",
+    title: t("lib-routines.template_patrol_title"),
+    prompt: t("lib-routines.template_patrol_prompt"),
     repeat: "interval",
     every_minutes: 30,
   },
   {
     key: "wrapup",
-    title: "下班前盘点",
-    prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。",
+    title: t("lib-routines.template_wrapup_title"),
+    prompt: t("lib-routines.template_wrapup_prompt"),
     repeat: "daily",
     time: "18:30",
     weekdays: WORKDAYS,
@@ -398,10 +401,10 @@ export interface Upcoming {
 /** What Persona will do on its own next, soonest first; what is switched off is not coming up. */
 export function upcoming(tasks: Task[], limit = 3): Upcoming[] {
   const out: Upcoming[] = [];
-  for (const t of tasks) {
-    const at = nextRun(t);
+  for (const task of tasks) {
+    const at = nextRun(task);
     if (!at) continue;
-    out.push({ id: t.id, at, title: taskTitle(t), repeating: t.repeat !== "once", detail: t.repeat === "once" ? (t.session_id ? "跟进 · 接着原来的对话" : "跟进 · 新对话") : ruleText(t) });
+    out.push({ id: task.id, at, title: taskTitle(task), repeating: task.repeat !== "once", detail: task.repeat === "once" ? (task.session_id ? t("lib-routines.follow_up_same_chat") : t("lib-routines.follow_up_new_chat")) : ruleText(task) });
   }
   return out.sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, limit);
 }
@@ -409,20 +412,20 @@ export function upcoming(tasks: Task[], limit = 3): Upcoming[] {
 // ── runs ────────────────────────────────────────────────
 
 export function runStatusWord(r: Pick<Run, "status">): string {
-  return r.status === "ok" ? "已运行" : r.status === "skipped" ? "已跳过" : "失败";
+  return r.status === "ok" ? t("lib-routines.status_ran") : r.status === "skipped" ? t("lib-routines.status_skipped") : t("lib-routines.status_failed");
 }
 
 /** "手动运行" / the error / "准时" / "晚了 21 秒" / "晚了 3 分钟" / "晚了 2 小时". */
 export function runDetail(r: Run): string {
-  if (r.manual) return "手动运行";
+  if (r.manual) return t("lib-routines.run_manual");
   if (r.status !== "ok") return r.error || runStatusWord(r);
   const at = parseTime(r.at), due = parseTime(r.due);
   if (!at || !due) return runStatusWord(r);
   const late = (at.getTime() - due.getTime()) / 1000;
-  if (late < 5) return "准时";
-  if (late < 120) return `晚了 ${Math.round(late)} 秒`;
-  if (late < 7200) return `晚了 ${Math.floor(late / 60)} 分钟`;
-  return `晚了 ${Math.floor(late / 3600)} 小时`;
+  if (late < 5) return t("lib-routines.run_on_time");
+  if (late < 120) return t("lib-routines.late_seconds", { count: Math.round(late) });
+  if (late < 7200) return t("lib-routines.late_minutes", { count: Math.floor(late / 60) });
+  return t("lib-routines.late_hours", { count: Math.floor(late / 3600) });
 }
 
 /** Newest first, one group per day ("今天", "昨天", "周三", "11月2日"). */
@@ -432,7 +435,7 @@ export function runDays(runs: Run[], now: Date): { day: string; runs: Run[] }[] 
     .map((r) => ({ r, at: parseTime(r.at) }))
     .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
   for (const { r, at } of sorted) {
-    const day = at ? dayLabel(at, now) : "更早";
+    const day = at ? dayLabel(at, now) : t("lib-routines.earlier");
     if (out.length && out[out.length - 1].day === day) out[out.length - 1].runs.push(r);
     else out.push({ day, runs: [r] });
   }

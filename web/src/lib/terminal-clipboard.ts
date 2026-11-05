@@ -3,6 +3,7 @@
 // that is driven when the upload ends, and the line of escaped paths that is then typed into the pane. Copying: what
 // to say after a copy and what a program's OSC 52 write may put on the clipboard. The browser's side (the upload
 // request, reading and writing the clipboard) is in views/session/terminal/clipboard.ts.
+import { t } from "../i18n";
 
 /** The hub's limit for a terminal upload (`proto.MaxTerminalUploadBytes`). */
 export const MAX_TERMINAL_UPLOAD = 50 * 1024 * 1024;
@@ -63,8 +64,8 @@ export function uploadName(file: Pick<File, "name" | "type">): string {
 
 /** Why a file is not uploaded, in words for the toast; null when it may go. */
 export function refuseUpload(file: Pick<File, "name" | "size">): string | null {
-  if (file.size <= 0) return `「${file.name || "文件"}」是空的`;
-  if (file.size > MAX_TERMINAL_UPLOAD) return `「${file.name || "文件"}」超过 ${MAX_TERMINAL_UPLOAD >> 20} MB，没有上传`;
+  if (file.size <= 0) return t("lib-terminal-clipboard.empty_file", { name: file.name || t("lib-terminal-clipboard.file") });
+  if (file.size > MAX_TERMINAL_UPLOAD) return t("lib-terminal-clipboard.too_large", { name: file.name || t("lib-terminal-clipboard.file"), mb: MAX_TERMINAL_UPLOAD >> 20 });
   return null;
 }
 
@@ -92,8 +93,8 @@ export function pasteVerdict(now: PasteState): "ok" | "changed" | "watching" {
 
 /** "正在上传 shot.png" / "正在上传 shot.png 等 3 个文件". */
 export function uploadingText(names: string[]): string {
-  if (names.length <= 1) return `正在上传 ${names[0] ?? "文件"}…`;
-  return `正在上传 ${names[0]} 等 ${names.length} 个文件…`;
+  if (names.length <= 1) return t("lib-terminal-clipboard.uploading_single", { name: names[0] ?? t("lib-terminal-clipboard.file") });
+  return t("lib-terminal-clipboard.uploading_many", { name: names[0], count: names.length });
 }
 
 // ── copying ──
@@ -127,10 +128,10 @@ export async function copyWith(text: string, env: ClipboardEnv): Promise<CopyOut
 
 /** What to tell the user after a copy; a page without HTTPS says so, since that is why the browser holds back. */
 export function copyNotice(outcome: CopyOutcome, secure: boolean): { text: string; tone: "ok" | "error" } {
-  if (outcome === "wrote") return { text: "已复制", tone: "ok" };
+  if (outcome === "wrote") return { text: t("lib-terminal-clipboard.copied"), tone: "ok" };
   if (outcome === "legacy")
-    return { text: secure ? "已复制" : "已复制（这个页面不是 HTTPS，浏览器没开放剪贴板接口，用了兼容方式）", tone: "ok" };
-  return { text: secure ? "没复制上：浏览器没有允许写入剪贴板" : "没复制上：这个页面不是 HTTPS，浏览器不开放剪贴板", tone: "error" };
+    return { text: secure ? t("lib-terminal-clipboard.copied") : t("lib-terminal-clipboard.copied_legacy"), tone: "ok" };
+  return { text: secure ? t("lib-terminal-clipboard.copy_denied") : t("lib-terminal-clipboard.copy_insecure"), tone: "error" };
 }
 
 /** The most text a program may put on the clipboard with OSC 52. */

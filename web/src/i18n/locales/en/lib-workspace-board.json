@@ -1,0 +1,6 @@
+{
+  "conflict_reloaded": "The board was updated elsewhere and has been reloaded. Try again.",
+  "read_only": "This connection can only view the board. Use a connection with full access to edit it.",
+  "conflict_reloading": "The board was updated elsewhere. Reloading…",
+  "unsupported": "This hub version doesn't support the workflow board yet, or board storage isn't enabled. Update the hub."
+}

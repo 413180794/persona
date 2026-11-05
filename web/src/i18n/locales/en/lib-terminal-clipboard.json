@@ -1,0 +1,11 @@
+{
+  "file": "File",
+  "empty_file": "\"{name}\" is empty",
+  "too_large": "\"{name}\" is over {mb} MB and wasn't uploaded",
+  "uploading_many_other": "Uploading {name} and others ({count} files)…",
+  "copied": "Copied",
+  "copied_legacy": "Copied (this page isn't HTTPS, so the browser doesn't offer the clipboard API; used a fallback)",
+  "copy_denied": "Couldn't copy: the browser didn't allow writing to the clipboard",
+  "copy_insecure": "Couldn't copy: this page isn't HTTPS, so the browser blocks the clipboard",
+  "uploading_single": "Uploading {name}…"
+}

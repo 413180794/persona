@@ -1,0 +1,9 @@
+{
+  "invalid": "Not a valid PowerPoint file (presentation.xml is missing)",
+  "image": "Image",
+  "smartart_unsupported": "SmartArt can't be shown here. Use Convert to PDF at the top right to see it",
+  "object_unsupported": "This object can't be shown here. Use Convert to PDF at the top right to see it",
+  "chart_unsupported": "This chart can't be shown here. Use Convert to PDF at the top right to see it",
+  "series": "Series {n}",
+  "hidden": "Hidden"
+}

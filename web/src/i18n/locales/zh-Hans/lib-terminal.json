@@ -1,0 +1,9 @@
+{
+  "no_screen_yet": "还没有拿到终端",
+  "updated_seconds_other": "上次更新 {count} 秒前",
+  "updated_minutes_other": "上次更新 {count} 分钟前",
+  "updated_at": "上次更新 {time}",
+  "waiting": "等待电脑回应…",
+  "retry_in_other": "{count} 秒后重试",
+  "retrying": "正在重试…"
+}

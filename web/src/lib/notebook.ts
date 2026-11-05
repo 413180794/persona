@@ -1,5 +1,6 @@
 // Jupyter notebooks for the web's file viewer (docs/web.md「Jupyter」, #1407; iOS / Mac: #1296): nbformat 4 (and 3's
 // worksheets) into cells, each output reduced to the one representation the viewer shows. Pure; notebook.test.ts.
+import { t } from "../i18n";
 
 export type Output =
   | { kind: "stream"; name: "stdout" | "stderr"; text: string }
@@ -46,7 +47,7 @@ export function capLines(s: string, max = MAX_OUTPUT_LINES): string {
     if (i < 0) return s;
   }
   const rest = s.slice(i + 1).replace(/\n$/, "").split("\n").length;
-  return `${s.slice(0, i + 1)}… 还有 ${rest} 行没有显示`;
+  return s.slice(0, i + 1) + t("lib-notebook.lines_hidden", { count: rest });
 }
 
 const IMAGE = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"];
@@ -111,9 +112,9 @@ export function parseNotebook(text: string): Notebook {
   try {
     nb = JSON.parse(text) as Json;
   } catch (e) {
-    throw new Error(`不是有效的笔记本文件（JSON 解析失败：${e instanceof Error ? e.message : String(e)}）`);
+    throw new Error(t("lib-notebook.invalid_json", { reason: e instanceof Error ? e.message : String(e) }));
   }
-  if (!nb || typeof nb !== "object") throw new Error("不是有效的笔记本文件");
+  if (!nb || typeof nb !== "object") throw new Error(t("lib-notebook.invalid"));
   const meta = (nb.metadata as Json) ?? {};
   const kernelspec = (meta.kernelspec as Json) ?? {};
   const langInfo = (meta.language_info as Json) ?? {};
@@ -123,7 +124,7 @@ export function parseNotebook(text: string): Notebook {
     : Array.isArray(nb.worksheets) // nbformat 3
       ? ((nb.worksheets as Json[])[0]?.cells as Json[]) ?? []
       : [];
-  if (!Array.isArray(nb.cells) && !Array.isArray(nb.worksheets)) throw new Error("不是有效的笔记本文件（没有 cells）");
+  if (!Array.isArray(nb.cells) && !Array.isArray(nb.worksheets)) throw new Error(t("lib-notebook.no_cells"));
   const cells: Cell[] = raw.map((c) => {
     const type = c.cell_type === "code" ? "code" : c.cell_type === "markdown" || c.cell_type === "heading" ? "markdown" : "raw";
     let source = str(c.source ?? c.input);

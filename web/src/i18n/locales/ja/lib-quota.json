@@ -1,0 +1,16 @@
+{
+  "count_1e8": "{n}億",
+  "count_1e4": "{n}万",
+  "used_up": "上限到達",
+  "amount_tokens": "{used} / {limit}トークン",
+  "amount_requests": "{used} / {limit}回",
+  "used_percent": "{percent}%使用済み",
+  "usage": "{requests}回 · {tokens}トークン",
+  "reset_done": "リセット済み",
+  "resets_at": "{time}にリセット",
+  "footer_key": "ゲートウェイ上のキー名：{key}",
+  "footer_machine": "{machine}が読み取り（キーはそのコンピューターから出ません）",
+  "footer_when": "{when}に読み取り。1分以内に開き直すとこの結果を使います",
+  "footer_separator": "。",
+  "footer_end": "。"
+}

@@ -1,6 +1,7 @@
 // Details of the web terminal that decide things without touching the page (so they are tested): the Mac line-editing
 // keys, which links are opened, the right-click menu, when the terminal takes the focus back, and the cursor options.
 // The pieces that need xterm or the DOM are in views/session/terminal/.
+import { t } from "../i18n";
 
 // ── Mac line-editing keys ───────────────────────────────
 
@@ -73,11 +74,11 @@ export interface TerminalMenuEntry {
 /** The menu's rows: copy and clear need a selection, paste needs the terminal to be driven. */
 export function terminalMenu(s: { selection: boolean; driving: boolean }): TerminalMenuEntry[] {
   return [
-    { key: "copy", label: "复制", disabled: !s.selection },
-    { key: "paste", label: "粘贴", disabled: !s.driving },
-    { key: "selectAll", label: "全选", disabled: false, divider: true },
-    { key: "search", label: "搜索…", disabled: false },
-    { key: "clearSelection", label: "清除选区", disabled: !s.selection },
+    { key: "copy", label: t("lib-terminal-details.copy"), disabled: !s.selection },
+    { key: "paste", label: t("lib-terminal-details.paste"), disabled: !s.driving },
+    { key: "selectAll", label: t("lib-terminal-details.select_all"), disabled: false, divider: true },
+    { key: "search", label: t("lib-terminal-details.search"), disabled: false },
+    { key: "clearSelection", label: t("lib-terminal-details.clear_selection"), disabled: !s.selection },
   ];
 }
 
@@ -109,9 +110,9 @@ export function shouldRefocus(f: FocusFacts): boolean {
 export type CursorStyle = "block" | "bar" | "underline";
 
 export const CURSOR_STYLES: { value: CursorStyle; label: string }[] = [
-  { value: "block", label: "方块" },
-  { value: "bar", label: "竖线" },
-  { value: "underline", label: "下划线" },
+  { value: "block", label: t("lib-terminal-details.cursor_block") },
+  { value: "bar", label: t("lib-terminal-details.cursor_bar") },
+  { value: "underline", label: t("lib-terminal-details.cursor_underline") },
 ];
 
 export const DEFAULT_CURSOR: CursorStyle = "block";

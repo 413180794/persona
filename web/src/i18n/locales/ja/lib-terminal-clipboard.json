@@ -1,0 +1,11 @@
+{
+  "file": "ファイル",
+  "empty_file": "「{name}」は空です",
+  "too_large": "「{name}」は{mb} MBを超えているため、アップロードしませんでした",
+  "uploading_many_other": "{name}など{count}個のファイルをアップロード中…",
+  "copied": "コピーしました",
+  "copied_legacy": "コピーしました（このページはHTTPSではないため、ブラウザーのクリップボードAPIが使えず、互換方式を使いました）",
+  "copy_denied": "コピーできませんでした：ブラウザーがクリップボードへの書き込みを許可していません",
+  "copy_insecure": "コピーできませんでした：このページはHTTPSではないため、ブラウザーがクリップボードを使わせません",
+  "uploading_single": "{name}をアップロード中…"
+}

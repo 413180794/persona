@@ -1,0 +1,22 @@
+{
+  "status_done": "完了",
+  "status_needs_you": "要対応",
+  "status_interrupted": "中断",
+  "status_unread": "未確認",
+  "status_working": "作業中",
+  "status_follow_up": "フォローアップ",
+  "status_not_started": "未着手",
+  "status_failed": "開始失敗",
+  "auto_done": "自動完了",
+  "model_request_failed": "モデルへのリクエストに失敗しました",
+  "unassigned": "未割り当て",
+  "context_title": "ToDo · {title}",
+  "decision_manual": "手動で記録",
+  "decision_agent_question": "エージェントの質問で回答",
+  "decision_in_question": "「{title}」の質問で回答",
+  "with_project_named": "プロジェクト{name}に連動",
+  "with_project": "プロジェクトに連動",
+  "spawned_by": "{title}から派生",
+  "spawned": "派生",
+  "subtask": "サブタスク"
+}

@@ -1,5 +1,6 @@
 // The shell's side of the keyboard shortcuts (lib/shortcuts.ts, docs/web.md「快捷键」): what each command does here,
 // and the one keydown listener that dispatches them. Mounted once, by the shell.
+import { t } from "../i18n";
 import { useEffect, useRef } from "react";
 import { toast } from "../ui/atoms";
 import { AGENT_GROUPINGS } from "./agent-groups";
@@ -26,9 +27,12 @@ export interface ShortcutContext {
 /** The panel ⌘B closed last, to bring back. */
 let lastPanel: Panel | null = null;
 
+/** The narrow layout's sidebar drawer's label (App.tsx): a modal dialog the page's shortcuts don't stand aside for. */
+export const SIDEBAR_LABEL = t("lib-use-shortcuts.sidebar");
+
 /** A dialog or the palette is open: the shortcuts that act on the page stand aside. */
 export function overlayOpen(doc: Pick<Document, "querySelector"> = document): boolean {
-  return Boolean(doc.querySelector('[data-shortcut-layer], [role="dialog"][aria-modal="true"]:not([aria-label="侧边栏"])'));
+  return Boolean(doc.querySelector(`[data-shortcut-layer], [role="dialog"][aria-modal="true"]:not([aria-label=${JSON.stringify(SIDEBAR_LABEL)}])`));
 }
 
 const visible = (el: Element) => el.getClientRects().length > 0;
@@ -88,7 +92,7 @@ export function useShortcuts(ctx: ShortcutContext) {
       registerShortcut("next-tab", () => step(1)),
       registerShortcut("sidebar-grouping", () => {
         const offered = AGENT_GROUPINGS.map((g) => g.key).filter((k) => getState().todosSupported !== false || k !== "todo");
-        toast(`Agent 分组：${groupingLabel(cycleGrouping(offered))}`);
+        toast(t("lib-use-shortcuts.grouping_toast", { grouping: groupingLabel(cycleGrouping(offered)) }));
       }),
       registerShortcut("prev-row", () => stepSidebarRow(-1)),
       registerShortcut("next-row", () => stepSidebarRow(1)),

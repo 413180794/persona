@@ -1,0 +1,19 @@
+{
+  "update_todos": "Update to-dos",
+  "tool": "Tool",
+  "tool_run": "Run",
+  "tool_read": "Read",
+  "tool_edit": "Edit",
+  "tool_write": "Write",
+  "tool_search": "Search",
+  "tool_find_files": "Find files",
+  "tool_open_web_page": "Open page",
+  "tool_search_web": "Search web",
+  "tool_subagent": "Subagent",
+  "tool_todos": "To-dos",
+  "tool_load_tools": "Load tools",
+  "tool_skill": "Skill",
+  "tool_question": "Question",
+  "tool_plan": "Plan",
+  "tool_change": "Change"
+}

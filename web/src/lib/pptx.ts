@@ -5,6 +5,7 @@
 // Everything it emits is escaped text and values it checked (colors, numbers, data: URLs it made), and the viewer
 // puts it in a script-less sandboxed frame anyway. Pure: the XML parser is passed in (DOMParser in the browser).
 import type JSZip from "jszip";
+import { t } from "../i18n";
 
 export const EMU_PER_PX = 9525;
 
@@ -256,7 +257,7 @@ const relOfType = (p: Part, type: string) => Object.values(p.rels).find((r) => r
 export async function readPptx(zip: JSZip, parse: ParseXML): Promise<Deck> {
   const rd = new Reader(zip, parse);
   const pres = await rd.part("ppt/presentation.xml");
-  if (!pres) throw new Error("不是有效的 PowerPoint 文件（缺少 presentation.xml）");
+  if (!pres) throw new Error(t("lib-pptx.invalid"));
   const size = kid(pres.doc.documentElement, "sldSz");
   const width = Math.round((num(size, "cx") ?? 9144000) / EMU_PER_PX);
   const height = Math.round((num(size, "cy") ?? 6858000) / EMU_PER_PX);
@@ -534,7 +535,7 @@ async function readPicture(rd: Reader, p: Part, pic: Element): Promise<Shape | n
   if (!box) return null;
   const blip = path(pic, "blipFill", "blip");
   const image = await rd.image(p, attr(blip, "r:embed"));
-  return image ? { ...box, image } : { ...box, placeholder: "图片" };
+  return image ? { ...box, image } : { ...box, placeholder: t("lib-pptx.image") };
 }
 
 async function readFrame(rd: Reader, p: Part, frame: Element): Promise<Shape | null> {
@@ -569,10 +570,10 @@ async function readFrame(rd: Reader, p: Part, frame: Element): Promise<Shape | n
     const chart = doc ? readChart(doc, rd.scheme) : null;
     return chart ? { ...box, chart } : { ...box, placeholder: CHART_UNSUPPORTED };
   }
-  return { ...box, placeholder: uri.endsWith("/diagram") ? "SmartArt 图形在这里看不了，点右上角「转成 PDF」查看" : "这个对象在这里看不了，点右上角「转成 PDF」查看" };
+  return { ...box, placeholder: uri.endsWith("/diagram") ? t("lib-pptx.smartart_unsupported") : t("lib-pptx.object_unsupported") };
 }
 
-export const CHART_UNSUPPORTED = "这张图表在这里看不了，点右上角「转成 PDF」查看";
+export const CHART_UNSUPPORTED = t("lib-pptx.chart_unsupported");
 
 const ACCENTS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"];
 
@@ -597,27 +598,27 @@ export function readChart(doc: Document, scheme: Scheme): Chart | null {
   const plot = kid(chartEl, "plotArea");
   const types = kids(plot).filter((k) => k.localName.endsWith("Chart"));
   if (types.length !== 1) return null; // none, or a combination
-  const t = types[0];
-  const kind: Chart["kind"] | null = /^bar(3D)?Chart$/.test(t.localName)
-    ? attr(kid(t, "barDir"), "val") === "bar"
+  const chartType = types[0];
+  const kind: Chart["kind"] | null = /^bar(3D)?Chart$/.test(chartType.localName)
+    ? attr(kid(chartType, "barDir"), "val") === "bar"
       ? "bar"
       : "col"
-    : /^line(3D)?Chart$/.test(t.localName)
+    : /^line(3D)?Chart$/.test(chartType.localName)
       ? "line"
-      : /^area(3D)?Chart$/.test(t.localName)
+      : /^area(3D)?Chart$/.test(chartType.localName)
         ? "area"
-        : /^(pie|pie3D|ofPie)Chart$/.test(t.localName)
+        : /^(pie|pie3D|ofPie)Chart$/.test(chartType.localName)
           ? "pie"
-          : t.localName === "doughnutChart"
+          : chartType.localName === "doughnutChart"
             ? "doughnut"
             : null;
   if (!kind) return null;
-  const sers = kids(t, "ser");
+  const sers = kids(chartType, "ser");
   if (!sers.length) return null;
   let cats: string[] = [];
   const series: ChartSeries[] = sers.map((ser, i) => {
     const tx = kid(ser, "tx");
-    const name = points(tx)[0] ?? kid(tx, "v")?.textContent ?? `系列 ${i + 1}`;
+    const name = points(tx)[0] ?? kid(tx, "v")?.textContent ?? t("lib-pptx.series", { n: i + 1 });
     const c = points(kid(ser, "cat"));
     if (c.length > cats.length) cats = c;
     const values = points(kid(ser, "val")).map((v) => (v === "" || !Number.isFinite(Number(v)) ? null : Number(v)));
@@ -643,7 +644,7 @@ export function readChart(doc: Document, scheme: Scheme): Chart | null {
         .trim()
     : undefined;
   if (!title && kid(chartEl, "title") && series.length === 1 && attr(kid(chartEl, "autoTitleDeleted"), "val") !== "1") title = series[0].name;
-  const grouping = attr(kid(t, "grouping"), "val") ?? "";
+  const grouping = attr(kid(chartType, "grouping"), "val") ?? "";
   return { kind, title: title || undefined, cats, series, stacked: grouping === "stacked" || grouping === "percentStacked" || undefined };
 }
 
@@ -873,7 +874,7 @@ export function deckHTML(deck: Deck): string {
   return deck.slides
     .map(
       (s, i) =>
-        `<div class="page"><div class="num">${i + 1}${s.hidden ? " · 已隐藏" : ""}</div>${slideHTML(deck, s)}${s.notes ? `<div class="notes" style="width:${deck.width}px">${escapeHTML(s.notes).replace(/\n/g, "<br>")}</div>` : ""}</div>`,
+        `<div class="page"><div class="num">${i + 1}${s.hidden ? ` · ${t("lib-pptx.hidden")}` : ""}</div>${slideHTML(deck, s)}${s.notes ? `<div class="notes" style="width:${deck.width}px">${escapeHTML(s.notes).replace(/\n/g, "<br>")}</div>` : ""}</div>`,
     )
     .join("");
 }

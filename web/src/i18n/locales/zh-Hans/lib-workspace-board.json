@@ -1,0 +1,6 @@
+{
+  "conflict_reloaded": "看板已在别处更新，已重新加载，请重试。",
+  "read_only": "当前连接只能查看看板，请使用完整权限的连接来编辑。",
+  "conflict_reloading": "看板已在别处更新，正在重新加载…",
+  "unsupported": "此 hub 版本尚不支持工作流看板，或看板存储尚未启用，请更新 hub。"
+}

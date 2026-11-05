@@ -1,0 +1,10 @@
+{
+  "copy": "コピー",
+  "paste": "貼り付け",
+  "select_all": "すべて選択",
+  "search": "検索…",
+  "clear_selection": "選択を解除",
+  "cursor_block": "ブロック",
+  "cursor_bar": "縦線",
+  "cursor_underline": "下線"
+}

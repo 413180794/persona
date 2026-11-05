@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { api, ApiError, enc } from "./api";
 import { parseAPIError, retryable } from "./api-errors";
 import { stateOf } from "./format";
@@ -63,14 +64,14 @@ export const TODO_STATUS_RANK: Record<TodoStatus, number> = {
 };
 
 export const TODO_STATUS_INFO: Record<TodoStatus, { label: string; tone: "red" | "green" | "amber" | "idle" | "off" }> = {
-  done: { label: "已完成", tone: "off" },
-  needs_you: { label: "等你", tone: "red" },
-  interrupted: { label: "中断了", tone: "red" },
-  unread: { label: "待查看", tone: "green" },
-  working: { label: "进行中", tone: "amber" },
-  follow_up: { label: "待跟进", tone: "idle" },
-  not_started: { label: "未开始", tone: "off" },
-  failed: { label: "没开起来", tone: "red" },
+  done: { label: t("lib-todos.status_done"), tone: "off" },
+  needs_you: { label: t("lib-todos.status_needs_you"), tone: "red" },
+  interrupted: { label: t("lib-todos.status_interrupted"), tone: "red" },
+  unread: { label: t("lib-todos.status_unread"), tone: "green" },
+  working: { label: t("lib-todos.status_working"), tone: "amber" },
+  follow_up: { label: t("lib-todos.status_follow_up"), tone: "idle" },
+  not_started: { label: t("lib-todos.status_not_started"), tone: "off" },
+  failed: { label: t("lib-todos.status_failed"), tone: "red" },
 };
 
 /** Nothing of the task runs (it ended, stopped, or never started): the user may remove it (#1142). */
@@ -87,7 +88,7 @@ export function isAutoDone(todo: Todo): boolean {
 
 /** The status's label for this todo: 「自动完成」 for one the hub closed. */
 export function todoStatusLabel(todo: Todo, status: TodoStatus): string {
-  return status === "done" && isAutoDone(todo) ? "自动完成" : TODO_STATUS_INFO[status].label;
+  return status === "done" && isAutoDone(todo) ? t("lib-todos.auto_done") : TODO_STATUS_INFO[status].label;
 }
 
 export function makeSessionLookup(sessions: Session[] | Record<string, Session[]>): SessionLookup {
@@ -156,7 +157,7 @@ export function interruptedAgent(s?: Session): boolean {
 export function interruption(s?: Session): { reason: string; canContinue: boolean } | undefined {
   if (!interruptedAgent(s)) return undefined;
   const info = parseAPIError(s?.turn_error);
-  return { reason: info?.reason ?? "模型请求失败", canContinue: !info || retryable(info) };
+  return { reason: info?.reason ?? t("lib-todos.model_request_failed"), canContinue: !info || retryable(info) };
 }
 
 /**
@@ -329,7 +330,7 @@ export function buildTodoAgentGroups(
     });
     groups.push({
       key: "todo:none",
-      name: "未归属",
+      name: t("lib-todos.unassigned"),
       sessions: unassigned,
       // folded below todos, unless something in it needs you (unread alone stays folded: many lists always have some);
       // with no todo above it is the whole list, so open
@@ -345,9 +346,9 @@ export function buildTodoAgentGroups(
  * `<jarvis-context kind="context" title="待办 · <标题>" url="">说明</jarvis-context>`
  */
 export function formatTodoContext(title: string, notes?: string): string {
-  const t = title.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const body = (notes ?? "").trim();
-  return `<jarvis-context kind="context" title="待办 · ${t}" url="">${body}</jarvis-context>`;
+  return `<jarvis-context kind="context" title="${escape(t("lib-todos.context_title", { title }))}" url="">${body}</jarvis-context>`;
 }
 
 // ── 决策记录（#1618, docs/todos.md「决策记录」） ───────────────
@@ -373,13 +374,13 @@ export interface TodoDecision {
 
 /** Where a decision came from, as the detail page says it: the agent that asked, by its title when known. */
 export function decisionSourceLabel(d: TodoDecision, todo: Todo, lookup: ReturnType<typeof makeSessionLookup>): string {
-  if (d.source !== "card") return "手动记的";
+  if (d.source !== "card") return t("lib-todos.decision_manual");
   const title = lookup(d.source_machine, d.source_session)?.title
     || todo.agents?.find((a) => a.machine_id === d.source_machine && a.session_id === d.source_session)?.title;
-  if (!title) return "在 Agent 的提问里答的";
+  if (!title) return t("lib-todos.decision_agent_question");
   // A session's title is often its first message: keep the label to a glance.
   const short = [...title.trim()].length > 24 ? `${[...title.trim()].slice(0, 24).join("")}…` : title.trim();
-  return `在「${short}」的提问里答的`;
+  return t("lib-todos.decision_in_question", { title: short });
 }
 
 /** The decisions d may be marked as replacing: earlier ones (list order) that are in effect, not d itself. */
@@ -558,7 +559,7 @@ export function formatAgentSource(
       const s = lookup(agent.machine_id, agent.session_id);
       if (s?.space_name) spaceName = s.space_name;
     }
-    return spaceName ? `随项目 ${spaceName}` : "随项目";
+    return spaceName ? t("lib-todos.with_project_named", { name: spaceName }) : t("lib-todos.with_project");
   }
 
   if (agent.source === "spawned") {
@@ -569,11 +570,11 @@ export function formatAgentSource(
         const sid = agent.via.slice(slash + 1);
         const parent = lookup(mid, sid);
         if (parent?.title) {
-          return `由 ${parent.title} 派出`;
+          return t("lib-todos.spawned_by", { title: parent.title });
         }
       }
     }
-    return "派生";
+    return t("lib-todos.spawned");
   }
 
   return undefined;
@@ -636,5 +637,5 @@ export function taskNow(lead: Session | undefined, working: boolean): TaskNow | 
 
 /** What each of an agent's running subagents is for: shown under its own progress, never instead of it. */
 export function runningSubagents(s: Session | undefined): string[] {
-  return (s?.subagents ?? []).filter((a) => a.running).map((a) => a.description?.trim() || a.type || "子任务");
+  return (s?.subagents ?? []).filter((a) => a.running).map((a) => a.description?.trim() || a.type || t("lib-todos.subtask"));
 }

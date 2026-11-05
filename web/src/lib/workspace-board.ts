@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { api, ApiError, errorText } from "./api";
 import type { Session } from "./types";
 
@@ -126,16 +127,16 @@ export class BoardModel {
       this.set({ busy: false });
       if (conflict) {
         await this.refresh();
-        this.set({ error: "看板已在别处更新，已重新加载，请重试。" });
+        this.set({ error: t("lib-workspace-board.conflict_reloaded") });
       }
     }
   }
 }
 export function boardError(e: unknown): string {
   if (e instanceof ApiError) {
-    if (e.status === 403) return "当前连接只能查看看板，请使用完整权限的连接来编辑。";
-    if (e.status === 409) return "看板已在别处更新，正在重新加载…";
-    if (e.status === 404 || e.status === 503) return "此 hub 版本尚不支持工作流看板，或看板存储尚未启用，请更新 hub。";
+    if (e.status === 403) return t("lib-workspace-board.read_only");
+    if (e.status === 409) return t("lib-workspace-board.conflict_reloading");
+    if (e.status === 404 || e.status === 503) return t("lib-workspace-board.unsupported");
   }
   return errorText(e);
 }

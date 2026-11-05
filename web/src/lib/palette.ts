@@ -1,6 +1,7 @@
 // The palette's logic (views/Palette.tsx, docs/web.md「快捷键」): its state (open, what is typed), the two modes — ⌘K
 // jumps to a conversation or a terminal pane, `>` (or ⌘⇧P) lists commands — the commands and their filter, and the hook
 // other modules add commands through (`registerContextCommands`). Pure apart from the small store.
+import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import { chordParts, SCOPE_LABEL, SHORTCUTS, DIGITS, type Bindings, type Platform } from "./shortcuts";
 import type { Route } from "./router";
@@ -135,7 +136,7 @@ export function appCommands(input: AppCommandInput): PaletteCommand[] {
     const section = SCOPE_LABEL[def.scope];
     if (chord.endsWith(`+${DIGITS}`)) {
       input.machines.slice(0, 9).forEach((m, i) => {
-        out.push({ id: `app:${def.id}:${i + 1}`, title: `切到电脑：${m.name}`, section, icon: def.icon, chord: chord.replace(DIGITS, String(i + 1)), keywords: "machine 电脑 机器", run: () => input.run(def.id, i + 1) });
+        out.push({ id: `app:${def.id}:${i + 1}`, title: t("lib-palette.switch_machine", { name: m.name }), section, icon: def.icon, chord: chord.replace(DIGITS, String(i + 1)), keywords: t("lib-palette.machine_keywords"), run: () => input.run(def.id, i + 1) });
       });
       continue;
     }

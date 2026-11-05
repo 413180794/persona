@@ -1,0 +1,7 @@
+{
+  "lines_hidden_one": "… {count} more line not shown",
+  "lines_hidden_other": "… {count} more lines not shown",
+  "invalid_json": "Not a valid notebook file (couldn't parse JSON: {reason})",
+  "invalid": "Not a valid notebook file",
+  "no_cells": "Not a valid notebook file (no cells)"
+}

@@ -1,0 +1,16 @@
+{
+  "count_1e8": "{n} 亿",
+  "count_1e4": "{n} 万",
+  "used_up": "已用完",
+  "amount_tokens": "{used} / {limit} token",
+  "amount_requests": "{used} / {limit} 次",
+  "used_percent": "已用 {percent}%",
+  "usage": "{requests} 次 · {tokens} token",
+  "reset_done": "已重置",
+  "resets_at": "{time} 重置",
+  "footer_key": "网关上的 Key 名：{key}",
+  "footer_machine": "由 {machine} 读取，Key 不离开那台电脑",
+  "footer_when": "{when}读的，一分钟内再打开用这次的",
+  "footer_separator": "；",
+  "footer_end": "。"
+}

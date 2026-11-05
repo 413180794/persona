@@ -1,0 +1,12 @@
+{
+  "retry_soon": "retrying soon",
+  "wake_soon": "waking soon",
+  "retry_in": "retrying in {duration}",
+  "wake_in": "waking in {duration}",
+  "line_when": "{line} ({when})",
+  "minutes_one": "{count} min",
+  "minutes_other": "{count} min",
+  "hours_minutes": "{hours} h {minutes} min",
+  "hours_one": "{count} h",
+  "hours_other": "{count} h"
+}

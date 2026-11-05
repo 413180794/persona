@@ -2,6 +2,7 @@
 // (a Read or Codex view_image of a picture, screenshots of the screen or a browser, an MCP tool's image) and pictures it named by reading
 // a file whose image did not come back with it. The user's own pictures are in their bubble, not here. Each picture
 // once (by path, else by item), in the order it first appeared. Pure; tested in turn-images.test.ts.
+import { t } from "../i18n";
 import type { Segment, Step } from "./turns";
 import type { FoldImage, Item } from "./types";
 
@@ -43,10 +44,10 @@ export function sourceOf(tool: string): TurnImage["source"] {
 function labelOf(source: TurnImage["source"], tool: string, path: string | undefined, machine: string | undefined): string {
   if (path) return path.split("/").pop() || path;
   const where = machine ? ` · ${machine}` : "";
-  if (source === "screenshot") return `截图${where}`;
-  if (source === "browser") return `网页截图${where}`;
-  if (source === "mcp") return `${tool.split("__")[1] ?? "MCP"} 返回的图片`;
-  return `${tool || "工具"} 返回的图片`;
+  if (source === "screenshot") return t("lib-turn-images.screenshot") + where;
+  if (source === "browser") return t("lib-turn-images.browser_screenshot") + where;
+  if (source === "mcp") return t("lib-turn-images.image_from", { tool: tool.split("__")[1] ?? "MCP" });
+  return t("lib-turn-images.image_from", { tool: tool || t("lib-turn-images.tool") });
 }
 
 /** A folded picture as the strip shows it (its bytes by item id, else its file). */

@@ -11,6 +11,7 @@
 // - Durations: from the previous boundary (your message, the words before) when there is one, to the next words; else
 //   from the group's first step to the latest end among its steps (a tool ends at its result).
 
+import { t } from "../i18n";
 import type { Step } from "./turns";
 import type { Item } from "./types";
 
@@ -345,7 +346,7 @@ export function explorationSummary(g: WorkGroupNode): string {
     else list++;
   }
   const read = reads.size + anon;
-  return [read ? `读取 ${read} 个文件` : "", search ? `搜索 ${search} 次` : "", list ? `列出目录 ${list} 次` : ""].filter(Boolean).join(" · ");
+  return [read ? t("lib-work-groups.read_files", { count: read }) : "", search ? t("lib-work-groups.searches", { count: search }) : "", list ? t("lib-work-groups.listings", { count: list }) : ""].filter(Boolean).join(" · ");
 }
 
 /** A live group's newest steps that peek out: tool calls and thoughts with words, a file read again showing once. */
@@ -410,8 +411,8 @@ export function workDuration(msValue: number): string {
 
 /** A finished group's title: 「已工作 1m 5s」, and what it read when that is all it did. */
 export function groupTitle(g: WorkGroupNode): string {
-  if (g.live) return "正在工作…";
-  const base = g.durationMs !== undefined ? `已工作 ${workDuration(g.durationMs)}` : "工作过程";
+  if (g.live) return t("lib-work-groups.working");
+  const base = g.durationMs !== undefined ? t("lib-work-groups.worked_for", { duration: workDuration(g.durationMs) }) : t("lib-work-groups.work");
   const ex = explorationSummary(g);
   return ex ? `${base} · ${ex}` : base;
 }

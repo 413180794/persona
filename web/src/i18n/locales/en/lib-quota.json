@@ -1,0 +1,16 @@
+{
+  "count_1e8": "{n} × 100M",
+  "count_1e4": "{n} × 10K",
+  "used_up": "Used up",
+  "amount_tokens": "{used} / {limit} tokens",
+  "amount_requests": "{used} / {limit} requests",
+  "used_percent": "{percent}% used",
+  "usage": "{requests} requests · {tokens} tokens",
+  "reset_done": "Reset",
+  "resets_at": "Resets {time}",
+  "footer_key": "Key name at the gateway: {key}",
+  "footer_machine": "Read by {machine}; the key never leaves that computer",
+  "footer_when": "Read {when}; reopening within a minute reuses it",
+  "footer_separator": ". ",
+  "footer_end": "."
+}

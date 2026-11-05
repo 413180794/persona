@@ -1,0 +1,10 @@
+{
+  "copy": "Copy",
+  "paste": "Paste",
+  "select_all": "Select all",
+  "search": "Find…",
+  "clear_selection": "Clear selection",
+  "cursor_block": "Block",
+  "cursor_bar": "Bar",
+  "cursor_underline": "Underline"
+}

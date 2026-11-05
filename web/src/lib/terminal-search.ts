@@ -4,6 +4,7 @@
 // matches: "rows" (the lines the page holds, found here) and "screen" (xterm's grid, found by its search addon, which also
 // selects the current one). This file is the part that needs neither: the line matcher, the order of the two lists, and
 // the find bar's state.
+import { t } from "../i18n";
 
 /** More matches than this are not counted separately (the bar says "999+"). */
 export const FIND_LIMIT = 999;
@@ -70,7 +71,7 @@ export function findIndex(pos: FindPos, rows: number): number {
 /** What the bar says next to the field: nothing before a query, 无结果, or "3/12" (999+ past the limit). */
 export function findLabel(query: string, found: { index: number; count: number } | null): string {
   if (!query) return "";
-  if (!found || found.count <= 0) return "无结果";
+  if (!found || found.count <= 0) return t("lib-terminal-search.no_results");
   const count = found.count > FIND_LIMIT ? `${FIND_LIMIT}+` : String(found.count);
   return found.index < 0 ? count : `${found.index + 1}/${count}`;
 }

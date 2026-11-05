@@ -1,5 +1,6 @@
 // What the chat's ⋯ menu changes on a session: notifications (mutes), the run modes, the name
 // (docs/protocol.md `/mutes`, `/modes`, `/rename`; iOS Pins.togglingMute, SessionModes).
+import { t } from "../i18n";
 import type { AgentMutes } from "./agent-groups";
 import { sessionCan } from "./format";
 import type { Session } from "./types";
@@ -11,30 +12,30 @@ export interface ModeOption {
 }
 
 export const PERMISSION_MODES: ModeOption[] = [
-  { id: "default", title: "手动确认", detail: "改文件、跑命令前都先问你" },
-  { id: "acceptEdits", title: "自动改文件", detail: "改文件不问，跑命令还会问" },
-  { id: "plan", title: "只做计划", detail: "只读代码、写计划，批准后才动手" },
-  { id: "auto", title: "自动", detail: "自己判断风险，安全的直接做" },
-  { id: "bypassPermissions", title: "全部放行", detail: "什么都不问；只能在新开时选" },
+  { id: "default", title: t("lib-session-actions.mode_default"), detail: t("lib-session-actions.mode_default_detail") },
+  { id: "acceptEdits", title: t("lib-session-actions.mode_accept_edits"), detail: t("lib-session-actions.mode_accept_edits_detail") },
+  { id: "plan", title: t("lib-session-actions.mode_plan"), detail: t("lib-session-actions.mode_plan_detail") },
+  { id: "auto", title: t("lib-session-actions.mode_auto"), detail: t("lib-session-actions.mode_auto_detail") },
+  { id: "bypassPermissions", title: t("lib-session-actions.mode_bypass_permissions"), detail: t("lib-session-actions.mode_bypass_permissions_detail") },
 ];
 
 export const EFFORTS: ModeOption[] = [
-  { id: "low", title: "低", detail: "最快，简单的事够用" },
-  { id: "medium", title: "中", detail: "快一些" },
-  { id: "high", title: "高", detail: "大多数任务的默认" },
-  { id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵" },
-  { id: "max", title: "最高", detail: "最慢最仔细" },
+  { id: "low", title: t("lib-session-actions.effort_low"), detail: t("lib-session-actions.effort_low_detail") },
+  { id: "medium", title: t("lib-session-actions.effort_medium"), detail: t("lib-session-actions.effort_medium_detail") },
+  { id: "high", title: t("lib-session-actions.effort_high"), detail: t("lib-session-actions.effort_high_detail") },
+  { id: "xhigh", title: t("lib-session-actions.effort_xhigh"), detail: t("lib-session-actions.effort_xhigh_detail") },
+  { id: "max", title: t("lib-session-actions.effort_max"), detail: t("lib-session-actions.effort_max_detail") },
 ];
 
 /** Codex's reasoning efforts (node/codex_effort.go); a thread offers those of its model, in `Session.efforts`. */
 export const CODEX_EFFORTS: ModeOption[] = [
-  { id: "minimal", title: "极低", detail: "几乎不思考，最快" },
-  { id: "low", title: "低", detail: "快，简单的事够用" },
-  { id: "medium", title: "中", detail: "快慢适中" },
-  { id: "high", title: "高", detail: "更仔细" },
-  { id: "xhigh", title: "很高", detail: "更仔细，也更慢、更贵" },
-  { id: "max", title: "最高", detail: "最慢最仔细" },
-  { id: "ultra", title: "极高", detail: "最仔细，还会主动分给多个子 Agent 一起做" },
+  { id: "minimal", title: t("lib-session-actions.codex_effort_minimal"), detail: t("lib-session-actions.codex_effort_minimal_detail") },
+  { id: "low", title: t("lib-session-actions.codex_effort_low"), detail: t("lib-session-actions.codex_effort_low_detail") },
+  { id: "medium", title: t("lib-session-actions.codex_effort_medium"), detail: t("lib-session-actions.codex_effort_medium_detail") },
+  { id: "high", title: t("lib-session-actions.codex_effort_high"), detail: t("lib-session-actions.codex_effort_high_detail") },
+  { id: "xhigh", title: t("lib-session-actions.codex_effort_xhigh"), detail: t("lib-session-actions.codex_effort_xhigh_detail") },
+  { id: "max", title: t("lib-session-actions.codex_effort_max"), detail: t("lib-session-actions.codex_effort_max_detail") },
+  { id: "ultra", title: t("lib-session-actions.codex_effort_ultra"), detail: t("lib-session-actions.codex_effort_ultra_detail") },
 ];
 
 /** Modes a running session can switch to: 全部放行 is chosen only when it starts. */
@@ -43,11 +44,11 @@ export const SWITCHABLE_MODES = PERMISSION_MODES.filter((m) => m.id !== "bypassP
 export const BYPASS_MODE = "bypassPermissions";
 
 /** What 全部放行 means, said in red where it is on (iOS's warning). */
-export const BYPASS_WARNING = "全部放行：改文件、跑命令都不问你";
+export const BYPASS_WARNING = t("lib-session-actions.bypass_warning");
 
 /** An assistant conversation (the main one too) switches to any mode, 全部放行 included: the hub restarts its
  * Claude with the new mode (#2416). Other agents keep SWITCHABLE_MODES. */
-const ASSISTANT_MODES = PERMISSION_MODES.map((m) => (m.id === BYPASS_MODE ? { ...m, detail: "改文件、跑命令都不问你，有风险" } : m));
+const ASSISTANT_MODES = PERMISSION_MODES.map((m) => (m.id === BYPASS_MODE ? { ...m, detail: t("lib-session-actions.mode_bypass_permissions_assistant_detail") } : m));
 
 export function switchableModes(assistant: boolean | undefined): ModeOption[] {
   return assistant ? ASSISTANT_MODES : SWITCHABLE_MODES;

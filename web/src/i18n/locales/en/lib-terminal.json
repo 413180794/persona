@@ -1,0 +1,12 @@
+{
+  "no_screen_yet": "No terminal yet",
+  "updated_seconds_one": "Updated {count}s ago",
+  "updated_seconds_other": "Updated {count}s ago",
+  "updated_minutes_one": "Updated {count} min ago",
+  "updated_minutes_other": "Updated {count} min ago",
+  "updated_at": "Updated {time}",
+  "waiting": "Waiting for the computer…",
+  "retry_in_one": "Retrying in {count}s",
+  "retry_in_other": "Retrying in {count}s",
+  "retrying": "Retrying…"
+}

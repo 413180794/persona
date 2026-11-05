@@ -1,0 +1,22 @@
+{
+  "status_done": "已完成",
+  "status_needs_you": "等你",
+  "status_interrupted": "中断了",
+  "status_unread": "待查看",
+  "status_working": "进行中",
+  "status_follow_up": "待跟进",
+  "status_not_started": "未开始",
+  "status_failed": "没开起来",
+  "auto_done": "自动完成",
+  "model_request_failed": "模型请求失败",
+  "unassigned": "未归属",
+  "context_title": "待办 · {title}",
+  "decision_manual": "手动记的",
+  "decision_agent_question": "在 Agent 的提问里答的",
+  "decision_in_question": "在「{title}」的提问里答的",
+  "with_project_named": "随项目 {name}",
+  "with_project": "随项目",
+  "spawned_by": "由 {title} 派出",
+  "spawned": "派生",
+  "subtask": "子任务"
+}

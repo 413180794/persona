@@ -1,0 +1,11 @@
+{
+  "read_files_one": "Read {count} file",
+  "read_files_other": "Read {count} files",
+  "searches_one": "Searched {count} time",
+  "searches_other": "Searched {count} times",
+  "listings_one": "Listed {count} directory",
+  "listings_other": "Listed {count} directories",
+  "working": "Working…",
+  "worked_for": "Worked for {duration}",
+  "work": "Work"
+}

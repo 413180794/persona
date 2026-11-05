@@ -1,0 +1,9 @@
+{
+  "invalid": "有効なPowerPointファイルではありません（presentation.xmlがありません）",
+  "image": "画像",
+  "smartart_unsupported": "SmartArtはここでは表示できません。右上の「PDFに変換」で確認してください",
+  "object_unsupported": "このオブジェクトはここでは表示できません。右上の「PDFに変換」で確認してください",
+  "chart_unsupported": "このグラフはここでは表示できません。右上の「PDFに変換」で確認してください",
+  "series": "系列{n}",
+  "hidden": "非表示"
+}

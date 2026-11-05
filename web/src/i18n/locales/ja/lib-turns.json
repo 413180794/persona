@@ -1,0 +1,19 @@
+{
+  "update_todos": "ToDoを更新",
+  "tool": "ツール",
+  "tool_run": "実行",
+  "tool_read": "読み取り",
+  "tool_edit": "編集",
+  "tool_write": "書き込み",
+  "tool_search": "検索",
+  "tool_find_files": "ファイル検索",
+  "tool_open_web_page": "Webページを開く",
+  "tool_search_web": "Web検索",
+  "tool_subagent": "サブエージェント",
+  "tool_todos": "ToDo",
+  "tool_load_tools": "ツールを読み込み",
+  "tool_skill": "スキル",
+  "tool_question": "質問",
+  "tool_plan": "プラン",
+  "tool_change": "変更"
+}

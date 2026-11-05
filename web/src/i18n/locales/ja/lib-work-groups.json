@@ -1,0 +1,8 @@
+{
+  "read_files_other": "{count}個のファイルを読み取り",
+  "searches_other": "{count}回検索",
+  "listings_other": "{count}回ディレクトリを一覧",
+  "working": "作業中…",
+  "worked_for": "{duration}作業",
+  "work": "作業の経過"
+}

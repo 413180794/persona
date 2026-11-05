@@ -24,10 +24,10 @@ export interface TranslatePrefs {
 
 /** The targets the hub knows (translate.go `languageNames`), as the app lists them. */
 export const LANGUAGES: { code: string; name: string }[] = [
-  { code: "zh-Hans", name: "简体中文" },
-  { code: "zh-Hant", name: "繁體中文" },
+  { code: "zh-Hans", name: "简体中文" }, // i18n-ignore: each language by its own name
+  { code: "zh-Hant", name: "繁體中文" }, // i18n-ignore: each language by its own name
   { code: "en", name: "English" },
-  { code: "ja", name: "日本語" },
+  { code: "ja", name: "日本語" }, // i18n-ignore: each language by its own name
   { code: "ko", name: "한국어" },
   { code: "fr", name: "Français" },
   { code: "de", name: "Deutsch" },

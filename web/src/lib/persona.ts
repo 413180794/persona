@@ -3,6 +3,7 @@
 // app does). The default is 团子, the app icon's character the page draws (MochiFace); the page's own mark, the
 // built-in before 2026-11-03, is still a choice: with it chosen every place shows what it did before.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
+import { t } from "../i18n";
 
 /** The default, 团子 (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
@@ -20,11 +21,11 @@ export type PersonaState = "idle" | "thinking" | "working" | "needs_you" | "offl
 
 /** The five states in the order the phone shows them (PersonaState.allCases), with their names. */
 export const PERSONA_STATES: { id: PersonaState; title: string }[] = [
-  { id: "idle", title: "空闲" },
-  { id: "thinking", title: "思考中" },
-  { id: "working", title: "工作中" },
-  { id: "needs_you", title: "等你处理" },
-  { id: "offline", title: "离线" },
+  { id: "idle", title: t("lib-persona.state_idle") },
+  { id: "thinking", title: t("lib-persona.state_thinking") },
+  { id: "working", title: t("lib-persona.state_working") },
+  { id: "needs_you", title: t("lib-persona.state_needs_you") },
+  { id: "offline", title: t("lib-persona.state_offline") },
 ];
 
 /** persona.json, format 1. */

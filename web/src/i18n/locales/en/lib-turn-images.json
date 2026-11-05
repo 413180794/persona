@@ -1,0 +1,6 @@
+{
+  "screenshot": "Screenshot",
+  "browser_screenshot": "Web page screenshot",
+  "image_from": "Image from {tool}",
+  "tool": "Tool"
+}

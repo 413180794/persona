@@ -1,6 +1,7 @@
 // The web terminal's pure logic (docs/terminal.md, docs/protocol.md「终端流」): which frames to apply in what order,
 // base64 → VT bytes, the link status wording and its backoff, the wheel and click geometry, paste bytes, and the xterm
 // palette from the page's color tokens. The panel (views/session/terminal/) owns the DOM and the socket.
+import { formatDate, t } from "../i18n";
 
 export interface TerminalFrame {
   epoch: string;
@@ -122,19 +123,18 @@ export function isStale(lastOK: number | null, failure: string | null, now: numb
 
 /** "上次更新 12 秒前" / "还没有拿到终端". */
 export function linkHeadline(lastOK: number | null, now: number): string {
-  if (lastOK === null) return "还没有拿到终端";
+  if (lastOK === null) return t("lib-terminal.no_screen_yet");
   const s = Math.max(0, Math.floor((now - lastOK) / 1000));
-  if (s < 60) return `上次更新 ${s} 秒前`;
-  if (s < 3600) return `上次更新 ${Math.floor(s / 60)} 分钟前`;
-  const d = new Date(lastOK);
-  return `上次更新 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (s < 60) return t("lib-terminal.updated_seconds", { count: s });
+  if (s < 3600) return t("lib-terminal.updated_minutes", { count: Math.floor(s / 60) });
+  return t("lib-terminal.updated_at", { time: formatDate(lastOK, { hour: "2-digit", minute: "2-digit", hour12: false }) });
 }
 
 /** When it tries again, then why: "4 秒后重试 · 连不上 hub", or "等待电脑回应…" while nothing failed yet. */
 export function linkDetail(failure: string | null, nextTry: number, now: number): string {
-  if (!failure) return "等待电脑回应…";
+  if (!failure) return t("lib-terminal.waiting");
   const s = Math.ceil((nextTry - now) / 1000);
-  return `${s > 0 ? `${s} 秒后重试` : "正在重试…"} · ${failure}`;
+  return `${s > 0 ? t("lib-terminal.retry_in", { count: s }) : t("lib-terminal.retrying")} · ${failure}`;
 }
 
 // ── input ───────────────────────────────────────────────
@@ -235,29 +235,29 @@ export interface TerminalPalette {
  * nearest role colors.
  */
 export function terminalPalette(token: (name: string) => string, dark: boolean): TerminalPalette {
-  const t = (name: string, ...fallbacks: string[]) => [name, ...fallbacks].map((n) => token(n).trim()).find(Boolean) ?? "";
-  const ink = t("--ink"), ink2 = t("--ink-2"), ink3 = t("--ink-3");
-  const magenta = t("--term-magenta", "--red"), cyan = t("--term-cyan", "--accent-ink");
+  const tok = (name: string, ...fallbacks: string[]) => [name, ...fallbacks].map((n) => token(n).trim()).find(Boolean) ?? "";
+  const ink = tok("--ink"), ink2 = tok("--ink-2"), ink3 = tok("--ink-3");
+  const magenta = tok("--term-magenta", "--red"), cyan = tok("--term-cyan", "--accent-ink");
   return {
-    background: t("--page"),
+    background: tok("--page"),
     foreground: ink,
     cursor: ink,
-    cursorAccent: t("--page"),
-    selectionBackground: t("--accent-tint"),
-    selectionInactiveBackground: t("--hover-2"),
-    black: dark ? t("--line-strong") : ink,
-    red: t("--red"),
-    green: t("--green"),
-    yellow: t("--orange"),
-    blue: t("--accent"),
+    cursorAccent: tok("--page"),
+    selectionBackground: tok("--accent-tint"),
+    selectionInactiveBackground: tok("--hover-2"),
+    black: dark ? tok("--line-strong") : ink,
+    red: tok("--red"),
+    green: tok("--green"),
+    yellow: tok("--orange"),
+    blue: tok("--accent"),
     magenta,
     cyan,
     white: ink2,
     brightBlack: ink3,
-    brightRed: t("--red"),
-    brightGreen: t("--green"),
-    brightYellow: t("--orange"),
-    brightBlue: t("--accent-ink"),
+    brightRed: tok("--red"),
+    brightGreen: tok("--green"),
+    brightYellow: tok("--orange"),
+    brightBlue: tok("--accent-ink"),
     brightMagenta: magenta,
     brightCyan: cyan,
     brightWhite: ink,
@@ -370,7 +370,7 @@ export function keyDecision(e: KeyEventLike, hasSelection: boolean): KeyDecision
 
 /** The `document.fonts.load` query for the terminal's font: its size and stack, and a sample of a Latin and a Chinese character. */
 export function fontLoadQuery(size: number, stack: string): { font: string; sample: string } {
-  return { font: `${size}px ${stack}`, sample: "W中" };
+  return { font: `${size}px ${stack}`, sample: "W中" }; // i18n-ignore: a CJK glyph so the font's CJK face loads
 }
 
 /** Whichever comes first: the promise (settled either way) or `ms` — so a font that never loads cannot hold the terminal back. */

@@ -1,0 +1,10 @@
+{
+  "retry_soon": "马上重试",
+  "wake_soon": "马上叫醒",
+  "retry_in": "{duration}后重试",
+  "wake_in": "{duration}后叫醒",
+  "line_when": "{line}（{when}）",
+  "minutes_other": "{count} 分钟",
+  "hours_minutes": "{hours} 小时 {minutes} 分",
+  "hours_other": "{count} 小时"
+}

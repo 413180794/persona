@@ -4,6 +4,7 @@
 //
 // Every chord carries Mod (⌘ on a Mac, Ctrl elsewhere): a bare key is never a shortcut, so typing and the terminal's own
 // keys are never swallowed. Pure apart from the small store of rebindings, so it is tested without a DOM.
+import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import type { IconName } from "../ui/icons";
 
@@ -174,11 +175,11 @@ export interface Reserved {
   only?: Platform;
 }
 
-const BROWSER = "浏览器要用";
-const EDITING = "文字编辑要用";
-const TERMINAL = "终端要用";
-const SYSTEM = "系统要用";
-const FIND = "终端里的查找要用";
+const BROWSER = t("lib-shortcuts.reserved_browser");
+const EDITING = t("lib-shortcuts.reserved_editing");
+const TERMINAL = t("lib-shortcuts.reserved_terminal");
+const SYSTEM = t("lib-shortcuts.reserved_system");
+const FIND = t("lib-shortcuts.reserved_find");
 
 const mod = (keys: string[], why: string, only?: Platform): Reserved[] => keys.map((k) => ({ chord: `Mod+${k}`, why, only }));
 
@@ -191,7 +192,7 @@ export const RESERVED: readonly Reserved[] = [
   ...mod(["T", "W", "N", "R", "L", "D", "P", "S", "O", "U", "F", "G", "H", "0", "=", "-", "[", "]", "Shift+T", "Shift+N", "Shift+W", "Shift+R", "Shift+G", "Shift+I", "Shift+J", "Shift+C", "Shift+B"], BROWSER),
   ...mod(["Q", "M", "Alt+I"], BROWSER, "mac"),
   ...mod(["A", "C", "V", "X", "Z", "Y", "Shift+Z", "Shift+V", "Up", "Down", "Left", "Right", "Home", "End", "Shift+Left", "Shift+Right", "Shift+Up", "Shift+Down"], EDITING),
-  ...mod(["Enter"], "对话框的提交要用"),
+  ...mod(["Enter"], t("lib-shortcuts.reserved_dialog_submit")),
   ...mod(["Space"], SYSTEM),
   ...mod(["W", "R", "L", "U", "D", "Z"], TERMINAL, "other"),
   // the terminal's find bar takes Ctrl+Shift+F off the Mac (⌘F on a Mac is reserved above, with the browser's)
@@ -209,7 +210,7 @@ export function reservedWhy(chord: string, platform: Platform = currentPlatform(
 /** Where a command works: everywhere, on a conversation / terminal page, or on the sidebar. */
 export type ShortcutScope = "global" | "session" | "sidebar";
 
-export const SCOPE_LABEL: Record<ShortcutScope, string> = { global: "全局", session: "会话页", sidebar: "侧边栏" };
+export const SCOPE_LABEL: Record<ShortcutScope, string> = { global: t("lib-shortcuts.scope_global"), session: t("lib-shortcuts.scope_session"), sidebar: t("lib-shortcuts.scope_sidebar") };
 
 export interface ShortcutDef {
   id: string;
@@ -233,23 +234,23 @@ export interface ShortcutDef {
  * Not taken over: Moshi's Mod+Alt+1–3 (choose the right panel's tab), which Persona has no single place for.
  */
 export const SHORTCUTS: readonly ShortcutDef[] = [
-  { id: "jump", label: "跳转到会话或终端窗格", chord: "Mod+K", scope: "global", overlay: true, icon: "search" },
-  { id: "commands", label: "命令面板", chord: "Mod+Shift+P", scope: "global", overlay: true, icon: "run" },
-  { id: "help", label: "快捷键帮助", chord: "Mod+/", scope: "global", overlay: true, icon: "keyboard" },
-  { id: "settings", label: "打开设置", chord: "Mod+,", scope: "global", icon: "gear" },
-  { id: "machine", label: "切到第 1–9 台电脑", chord: `Mod+${DIGITS}`, scope: "global", icon: "machine" },
-  { id: "left-sidebar", label: "显示 / 隐藏侧边栏", chord: "Mod+Alt+B", scope: "global", icon: "sidebar" },
-  { id: "maximize", label: "最大化中间区域", chord: "Mod+Shift+Enter", scope: "global", icon: "layers" },
-  { id: "terminal-chat", label: "终端 ⇄ 对话", chord: "Mod+J", scope: "session", icon: "terminal" },
-  { id: "right-panel", label: "显示 / 隐藏右侧面板", chord: "Mod+B", scope: "session", icon: "sidebar" },
-  { id: "focus-input", label: "聚焦输入框", chord: "Mod+I", scope: "session", icon: "keyboard" },
-  { id: "prev-tab", label: "本机上一个标签页", chord: "Mod+Alt+Left", scope: "session", icon: "arrowLeft" },
-  { id: "next-tab", label: "本机下一个标签页", chord: "Mod+Alt+Right", scope: "session", icon: "arrowRight" },
-  { id: "sidebar-grouping", label: "切换侧边栏的分组方式", chord: "Mod+E", scope: "sidebar", icon: "filter" },
-  { id: "prev-row", label: "侧边栏上一行", chord: "Mod+Alt+Up", scope: "sidebar", repeat: true, icon: "up" },
-  { id: "next-row", label: "侧边栏下一行", chord: "Mod+Alt+Down", scope: "sidebar", repeat: true, icon: "arrowDown" },
-  { id: "collapse-tree", label: "折叠侧边栏的全部分组", chord: "Mod+Alt+Shift+Up", scope: "sidebar", icon: "chevron" },
-  { id: "expand-tree", label: "展开侧边栏的全部分组", chord: "Mod+Alt+Shift+Down", scope: "sidebar", icon: "chevron" },
+  { id: "jump", label: t("lib-shortcuts.cmd_jump"), chord: "Mod+K", scope: "global", overlay: true, icon: "search" },
+  { id: "commands", label: t("lib-shortcuts.cmd_commands"), chord: "Mod+Shift+P", scope: "global", overlay: true, icon: "run" },
+  { id: "help", label: t("lib-shortcuts.cmd_help"), chord: "Mod+/", scope: "global", overlay: true, icon: "keyboard" },
+  { id: "settings", label: t("lib-shortcuts.cmd_settings"), chord: "Mod+,", scope: "global", icon: "gear" },
+  { id: "machine", label: t("lib-shortcuts.cmd_machine"), chord: `Mod+${DIGITS}`, scope: "global", icon: "machine" },
+  { id: "left-sidebar", label: t("lib-shortcuts.cmd_left_sidebar"), chord: "Mod+Alt+B", scope: "global", icon: "sidebar" },
+  { id: "maximize", label: t("lib-shortcuts.cmd_maximize"), chord: "Mod+Shift+Enter", scope: "global", icon: "layers" },
+  { id: "terminal-chat", label: t("lib-shortcuts.cmd_terminal_chat"), chord: "Mod+J", scope: "session", icon: "terminal" },
+  { id: "right-panel", label: t("lib-shortcuts.cmd_right_panel"), chord: "Mod+B", scope: "session", icon: "sidebar" },
+  { id: "focus-input", label: t("lib-shortcuts.cmd_focus_input"), chord: "Mod+I", scope: "session", icon: "keyboard" },
+  { id: "prev-tab", label: t("lib-shortcuts.cmd_prev_tab"), chord: "Mod+Alt+Left", scope: "session", icon: "arrowLeft" },
+  { id: "next-tab", label: t("lib-shortcuts.cmd_next_tab"), chord: "Mod+Alt+Right", scope: "session", icon: "arrowRight" },
+  { id: "sidebar-grouping", label: t("lib-shortcuts.cmd_sidebar_grouping"), chord: "Mod+E", scope: "sidebar", icon: "filter" },
+  { id: "prev-row", label: t("lib-shortcuts.cmd_prev_row"), chord: "Mod+Alt+Up", scope: "sidebar", repeat: true, icon: "up" },
+  { id: "next-row", label: t("lib-shortcuts.cmd_next_row"), chord: "Mod+Alt+Down", scope: "sidebar", repeat: true, icon: "arrowDown" },
+  { id: "collapse-tree", label: t("lib-shortcuts.cmd_collapse_tree"), chord: "Mod+Alt+Shift+Up", scope: "sidebar", icon: "chevron" },
+  { id: "expand-tree", label: t("lib-shortcuts.cmd_expand_tree"), chord: "Mod+Alt+Shift+Down", scope: "sidebar", icon: "chevron" },
 ];
 
 export const shortcutDef = (id: string) => SHORTCUTS.find((s) => s.id === id);
@@ -269,7 +270,7 @@ export interface LocalShortcut {
 }
 
 export const LOCAL_SHORTCUTS: readonly LocalShortcut[] = [
-  { id: "terminal-find", label: "终端里查找", chord: { mac: "Mod+F", other: "Mod+Shift+F" }, note: "Windows / Linux 上没有接管终端时，Ctrl+F 也是" },
+  { id: "terminal-find", label: t("lib-shortcuts.local_terminal_find"), chord: { mac: "Mod+F", other: "Mod+Shift+F" }, note: t("lib-shortcuts.local_terminal_find_note") },
 ];
 
 // ── the user's bindings ──────────────────────────────────
@@ -295,20 +296,20 @@ export type Check = { ok: true; chord: string } | { ok: false; reason: "mod" | "
  * another command's ("已被「X」占用").
  */
 export function checkBinding(id: string, pressed: (Chord & { mod: boolean }) | null, bindings: Bindings, platform: Platform = currentPlatform()): Check {
-  if (!pressed) return { ok: false, reason: "key", message: "这个键不能用作快捷键" };
-  if (!pressed.mod) return { ok: false, reason: "mod", message: `需要带 ${modName(platform)}` };
+  if (!pressed) return { ok: false, reason: "key", message: t("lib-shortcuts.check_key") };
+  if (!pressed.mod) return { ok: false, reason: "mod", message: t("lib-shortcuts.check_mod", { mod: modName(platform) }) };
   const def = shortcutDef(id);
   let chord = chordText(pressed);
   if (def && parseChord(def.chord)?.key === DIGITS) {
-    if (!/^[1-9]$/.test(pressed.key)) return { ok: false, reason: "digits", message: "这一项要按数字键 1–9" };
+    if (!/^[1-9]$/.test(pressed.key)) return { ok: false, reason: "digits", message: t("lib-shortcuts.check_digits") };
     chord = chordText({ ...pressed, key: DIGITS });
   }
   const why = reservedWhy(chord, platform);
-  if (why) return { ok: false, reason: "reserved", message: `${formatChord(chord, platform)} ${why}，换一个` };
+  if (why) return { ok: false, reason: "reserved", message: t("lib-shortcuts.check_reserved", { chord: formatChord(chord, platform), why }) };
   const mine = new Set(expandChord(chord));
   for (const other of SHORTCUTS) {
     if (other.id === id) continue;
-    if (expandChord(bindings[other.id] ?? other.chord).some((c) => mine.has(c))) return { ok: false, reason: "conflict", message: `已被「${other.label}」占用`, with: other.id };
+    if (expandChord(bindings[other.id] ?? other.chord).some((c) => mine.has(c))) return { ok: false, reason: "conflict", message: t("lib-shortcuts.check_conflict", { label: other.label }), with: other.id };
   }
   return { ok: true, chord };
 }

@@ -1,0 +1,10 @@
+{
+  "retry_soon": "まもなく再試行",
+  "wake_soon": "まもなく再開",
+  "retry_in": "{duration}後に再試行",
+  "wake_in": "{duration}後に再開",
+  "line_when": "{line}（{when}）",
+  "minutes_other": "{count}分",
+  "hours_minutes": "{hours}時間{minutes}分",
+  "hours_other": "{count}時間"
+}

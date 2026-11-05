@@ -1,6 +1,7 @@
 // The terminal browser's tree (docs/terminal.md「独立终端」): what a machine's node lists (`GET /machines/{mid}/panes`:
 // workspaces, tabs and panes of its terminal host, agent or plain shell) turned into the rows the page shows, plus the
 // Jump-To filter and which terminals the page keeps alive. Pure, so it is tested without a DOM.
+import { t } from "../i18n";
 import { baseName, sessionTitle, shortPath, stateOf } from "./format";
 import type { AgentState, Session } from "./types";
 
@@ -100,7 +101,7 @@ export function paneRow(p: PaneDTO, session: Session | undefined): Pick<TermPane
   const dir = shortPath(p.cwd);
   if (session) return { title: sessionTitle(session), detail: [p.agent, dir].filter(Boolean).join(" · ") };
   if (p.agent) return { title: p.title?.trim() || p.agent, detail: [p.agent, dir].filter(Boolean).join(" · ") };
-  const title = p.title?.trim() || baseName(p.cwd) || "终端";
+  const title = p.title?.trim() || baseName(p.cwd) || t("lib-terminals.terminal");
   return { title, detail: title === dir ? "" : dir };
 }
 

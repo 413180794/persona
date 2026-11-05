@@ -1,0 +1,7 @@
+{
+  "state_idle": "待機",
+  "state_thinking": "思考中",
+  "state_working": "作業中",
+  "state_needs_you": "要対応",
+  "state_offline": "オフライン"
+}

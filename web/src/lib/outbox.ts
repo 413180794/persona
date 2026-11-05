@@ -2,6 +2,7 @@
 // the page moves to the conversation at once and the message shows there as a sending bubble until the transcript has
 // it, as the app's outbox does (AppModel.sendNow / askPersona). A failed one stays with the reason, 重试 and 删除.
 // The conversation's own composer keeps its local sending bubbles (ChatView); both look the same.
+import { t } from "../i18n";
 import { api, ApiError, errorText, sessionPath } from "./api";
 import { pickedLauncher, pickedModel, conversationKey } from "./assistant-chat";
 import { uuid } from "./format";
@@ -71,9 +72,9 @@ export function settle(list: OutboxEntry[], users: Seen[], now: number, claimed 
 
 /** Why it didn't go, in words. */
 export function failureText(e: unknown): string {
-  if (e instanceof ApiError && e.code === "input_draft") return "电脑上的输入框里有没发出去的字";
-  if (e instanceof ApiError && e.code === "dialog_open") return "电脑上开着一个对话框，先处理它再发";
-  if (e instanceof ApiError && e.body.delivered === "unknown") return "不确定送到没有：先看一眼对话再决定要不要重发";
+  if (e instanceof ApiError && e.code === "input_draft") return t("lib-outbox.input_draft");
+  if (e instanceof ApiError && e.code === "dialog_open") return t("lib-outbox.dialog_open");
+  if (e instanceof ApiError && e.body.delivered === "unknown") return t("lib-outbox.delivery_unknown");
   return errorText(e);
 }
 

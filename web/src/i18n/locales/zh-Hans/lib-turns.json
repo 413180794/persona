@@ -1,0 +1,19 @@
+{
+  "update_todos": "更新待办",
+  "tool": "工具",
+  "tool_run": "运行",
+  "tool_read": "读取",
+  "tool_edit": "编辑",
+  "tool_write": "写入",
+  "tool_search": "搜索",
+  "tool_find_files": "查找文件",
+  "tool_open_web_page": "打开网页",
+  "tool_search_web": "搜索网页",
+  "tool_subagent": "子 Agent",
+  "tool_todos": "待办",
+  "tool_load_tools": "加载工具",
+  "tool_skill": "技能",
+  "tool_question": "提问",
+  "tool_plan": "计划",
+  "tool_change": "修改"
+}

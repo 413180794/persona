@@ -2,6 +2,7 @@
 // the message, one work row folding the tools / thoughts / notices / intermediate replies, and the agent's last
 // words before the next message as the answer.
 
+import { t } from "../i18n";
 import { errorSignature, isRetryText, parseAPIError, type APIErrorInfo } from "./api-errors";
 import { foldCompactions, isCompaction } from "./compaction";
 import { injectedOf } from "./injected";
@@ -111,6 +112,7 @@ export function mediaKindOf(path: string): string {
  */
 export function replyPaths(text: string): string[] {
   const exts = [...VIDEO, ...AUDIO, ...IMAGE, ...DOCS].join("|");
+  // i18n-ignore: CJK punctuation around paths in the agent's reply
   const re = new RegExp(`(?:^|[\\s\`'"(（「:：])((?:~/|/(?!/))[^\\s\`'"()（）<>「」，。；！？]*\\.(?:${exts}))(?=$|[\\s\`'")）」，。；！？.,:;!?])`, "gim");
   const out: string[] = [];
   for (const m of text.matchAll(re)) if (!out.includes(m[1]) && out.length < 8) out.push(m[1]);
@@ -292,7 +294,7 @@ export function toolChip(use: Item): string {
   else if (name === "WebFetch") v = pick("url");
   else if (name === "WebSearch") v = pick("query");
   else if (name === "Task" || name === "Agent") v = pick("description", "prompt");
-  else if (name === "TodoWrite") v = "更新待办";
+  else if (name === "TodoWrite") v = t("lib-turns.update_todos");
   else v = pick("description", "command", "file_path", "path", "query", "url", "prompt", "pattern", "name");
   if (!v && Array.isArray(inp.command)) v = (inp.command as unknown[]).join(" ");
   return v.split("\n")[0].slice(0, 200);
@@ -304,29 +306,29 @@ export function shortFile(p: string) {
 }
 
 export const TOOL_LABEL: Record<string, string> = {
-  Bash: "运行",
-  exec_command: "运行",
-  shell: "运行",
-  Read: "读取",
-  Edit: "编辑",
-  MultiEdit: "编辑",
-  Write: "写入",
-  Grep: "搜索",
-  Glob: "查找文件",
-  WebFetch: "打开网页",
-  WebSearch: "搜索网页",
-  Task: "子 Agent",
-  Agent: "子 Agent",
-  TodoWrite: "待办",
-  ToolSearch: "加载工具",
-  Skill: "技能",
-  AskUserQuestion: "提问",
-  ExitPlanMode: "计划",
-  apply_patch: "修改",
+  Bash: t("lib-turns.tool_run"),
+  exec_command: t("lib-turns.tool_run"),
+  shell: t("lib-turns.tool_run"),
+  Read: t("lib-turns.tool_read"),
+  Edit: t("lib-turns.tool_edit"),
+  MultiEdit: t("lib-turns.tool_edit"),
+  Write: t("lib-turns.tool_write"),
+  Grep: t("lib-turns.tool_search"),
+  Glob: t("lib-turns.tool_find_files"),
+  WebFetch: t("lib-turns.tool_open_web_page"),
+  WebSearch: t("lib-turns.tool_search_web"),
+  Task: t("lib-turns.tool_subagent"),
+  Agent: t("lib-turns.tool_subagent"),
+  TodoWrite: t("lib-turns.tool_todos"),
+  ToolSearch: t("lib-turns.tool_load_tools"),
+  Skill: t("lib-turns.tool_skill"),
+  AskUserQuestion: t("lib-turns.tool_question"),
+  ExitPlanMode: t("lib-turns.tool_plan"),
+  apply_patch: t("lib-turns.tool_change"),
 };
 
 export function toolLabel(name?: string): string {
-  if (!name) return "工具";
+  if (!name) return t("lib-turns.tool");
   if (TOOL_LABEL[name]) return TOOL_LABEL[name];
   // mcp__<server>__<tool>, and the server may have underscores itself (mcp__plugin_x_y__tool), like the apps
   if (name.startsWith("mcp__")) return name.slice(name.lastIndexOf("__") + 2).replace(/_/g, " ");
@@ -505,7 +507,7 @@ export function buildBlocks(items: Item[]): Block[] {
         // e.g. a background command finishing after a recap: part of the (next) work, never its own line
         cur = newTurn(it.id);
         add(cur, it);
-      } else if (!it.task && (it.text ?? "").includes("中断")) {
+      } else if (!it.task && (it.text ?? "").includes("中断")) { // i18n-ignore: the transcript's interrupt notice
         cur.trailing.push(it);
       } else {
         add(cur, it);
