@@ -142,7 +142,8 @@ private fun PageFrame(
                 }
                 val bodyHeight = if (tabletop) hingeTop else constraints.maxHeight
                 val body = subcompose(PageSlot.Content) {
-                    Box(Modifier.fillMaxSize().glassSource()) {
+                    // A tap on the page's blank space puts the keyboard away (the bars and the dock are not in here).
+                    Box(Modifier.fillMaxSize().glassSource().dismissKeyboardOnBlankTap()) {
                         // The window's one light, not a block of this page's own: panes, nested pages and the
                         // shell around them paint the same pixels, so nothing shows where one ends.
                         PageBackdrop(ambience = light)
@@ -178,7 +179,9 @@ private fun PageFrame(
         } else {
             BoxWithConstraints(modifier.fillMaxSize().background(palette.background)) {
                 val inset = readingInset(maxWidth)
-                val withInset: @Composable (PaddingValues) -> Unit = { padding -> CompositionLocalProvider(LocalReadingInset provides inset) { content(padding) } }
+                val withInset: @Composable (PaddingValues) -> Unit = { padding ->
+                    Box(Modifier.fillMaxSize().dismissKeyboardOnBlankTap()) { CompositionLocalProvider(LocalReadingInset provides inset) { content(padding) } }
+                }
                 if (tabletop) {
                     val hingeTop = with(density) { window.hingeTop.toDp() }.coerceIn(0.dp, maxHeight)
                     val hingeBottom = with(density) { window.hingeBottom.toDp() }.coerceIn(hingeTop, maxHeight)

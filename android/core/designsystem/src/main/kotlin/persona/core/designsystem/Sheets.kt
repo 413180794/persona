@@ -66,7 +66,7 @@ fun JSheet(
     ) {
         // Opaque over a scrim: glass inside the sheet must not sample (and show through) the page behind it.
         androidx.compose.runtime.CompositionLocalProvider(LocalReadingInset provides 0.dp, LocalGlassSource provides null) {
-        Column(Modifier.fillMaxWidth()
+        Column(Modifier.fillMaxWidth().dismissKeyboardOnBlankTap()
             // Content that grows once the sheet is open (会话信息 after it loads) would stay where the opening left the
             // sheet, its rest below the screen and out of reach: settle the sheet again at its new height.
             .onSizeChanged {

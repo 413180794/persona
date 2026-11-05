@@ -387,7 +387,7 @@ fun ComposerFrame(
 ) {
     val palette = PersonaTheme.palette
     when (PersonaTheme.style) {
-        AppStyle.Glass -> Column(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).floatingSurface(RoundedCornerShape(28.dp)).padding(6.dp)) {
+        AppStyle.Glass -> Column(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).floatingSurface(RoundedCornerShape(28.dp)).keepsKeyboardOnTap().padding(6.dp)) {
             accessory?.let { Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 2.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.invoke(this)
@@ -395,7 +395,7 @@ fun ComposerFrame(
                 trailing?.invoke(this)
             }
         }
-        AppStyle.Brief -> Column(modifier.fillMaxWidth().background(palette.background).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        AppStyle.Brief -> Column(modifier.fillMaxWidth().background(palette.background).keepsKeyboardOnTap().padding(horizontal = 12.dp, vertical = 8.dp)) {
             accessory?.let { Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 6.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.let { Row(Modifier.padding(bottom = 2.dp)) { it() }; Spacer(Modifier.width(4.dp)) }
@@ -409,7 +409,7 @@ fun ComposerFrame(
             }
         }
         // The board's grey under a rule, the field a white ticket on it: no white plate across the bottom.
-        AppStyle.Board -> Column(modifier.fillMaxWidth().background(palette.background).drawBehind { drawLine(palette.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(10.dp)) {
+        AppStyle.Board -> Column(modifier.fillMaxWidth().background(palette.background).drawBehind { drawLine(palette.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.keepsKeyboardOnTap().padding(10.dp)) {
             accessory?.let { Column(Modifier.padding(bottom = 8.dp), content = it) }
             Row(verticalAlignment = Alignment.Bottom) {
                 leading?.invoke(this)

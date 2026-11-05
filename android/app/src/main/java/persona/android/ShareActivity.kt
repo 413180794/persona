@@ -29,6 +29,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import persona.core.designsystem.PersonaTheme
+import persona.core.designsystem.dismissKeyboardOnBlankTap
 import persona.core.contracts.SessionKey
 import persona.core.contracts.api.AssistantRepository
 import persona.core.contracts.api.MessageSender
@@ -69,7 +70,7 @@ class ShareActivity : ComponentActivity() {
                 }
                 ModalBottomSheet(onDismissRequest = { finish() }, sheetState = sheet) {
                     Column(
-                        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        Modifier.fillMaxWidth().dismissKeyboardOnBlankTap().verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp).padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
