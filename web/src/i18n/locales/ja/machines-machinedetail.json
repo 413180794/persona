@@ -55,5 +55,6 @@
   "cores_label_other": "コアごとの使用率：{count}コア、最大{busiest}",
   "per_core": "コアごと",
   "busiest": "最大{value}",
-  "core_title": "コア{n}：{value}"
+  "core_title": "コア{n}：{value}",
+  "open_space": "スペース「{name}」を開く"
 }

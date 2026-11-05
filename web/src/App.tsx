@@ -46,6 +46,7 @@ const WorkspaceBoard = lazy(() => import("./views/WorkspaceBoard").then((m) => (
 const Machines = lazy(() => import("./views/Machines").then((m) => ({ default: m.Machines })));
 const TerminalPage = lazy(() => import("./views/terminal/TerminalPage").then((m) => ({ default: m.TerminalPage })));
 const MachineDetail = lazy(() => import("./views/machines/MachineDetail").then((m) => ({ default: m.MachineDetail })));
+const SpacePage = lazy(() => import("./views/SpacePage").then((m) => ({ default: m.SpacePage })));
 const Settings = lazy(() => import("./views/Settings").then((m) => ({ default: m.Settings })));
 const Health = lazy(() => import("./views/health/Health").then((m) => ({ default: m.Health })));
 const History = lazy(() => import("./views/assistant/History").then((m) => ({ default: m.History })));
@@ -242,7 +243,7 @@ function Shell() {
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =
     pane ? "Agent" : route.name === "jarvis" ? "Persona" : route.name === "persona-new" ? t("app.title_new_chat") : route.name === "history" ? t("app.title_history") : route.name === "health" ? t("app.title_health") : route.name === "profile" ? t("app.title_profile") : route.name === "inbox" ? t("app.title_inbox") : route.name === "messages" ? t("app.title_messages")
-      : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "terminal" ? t("app.title_terminal") : route.name === "settings" ? t("app.title_settings")
+      : route.name === "routines" ? t("app.title_routines") : route.name === "kb" ? t("app.title_kb") : route.name === "workspace-board" ? t("app.title_workspace_board") : route.name === "todos" ? t("app.title_todos") : route.name === "machines" || route.name === "machine" ? t("app.title_machines") : route.name === "space" ? route.space : route.name === "terminal" ? t("app.title_terminal") : route.name === "settings" ? t("app.title_settings")
       : route.name === "agents" ? t("app.title_agents") : route.name === "agent-list" ? "Agents" : route.name === "extension" ? extensionTitle || t("app.title_extension") : t("app.title_home");
   useAttentionSignals(title, pane); // tab title with the 需要你 count, favicon badge, optional sounds (#2332)
 
@@ -307,6 +308,9 @@ function Shell() {
       break;
     case "machine":
       main = <MachineDetail key={route.mid} mid={route.mid} onToggleSidebar={toggle} />;
+      break;
+    case "space":
+      main = <SpacePage key={`${route.mid}/${route.space}`} mid={route.mid} space={route.space} onToggleSidebar={toggle} />;
       break;
     case "settings":
       main = <Settings onToggleSidebar={toggle} />;

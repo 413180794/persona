@@ -55,5 +55,6 @@
   "cores_label_other": "Per-core usage: {count} cores, busiest {busiest}",
   "per_core": "Per core",
   "busiest": "Busiest {value}",
-  "core_title": "Core {n}: {value}"
+  "core_title": "Core {n}: {value}",
+  "open_space": "Open space \"{name}\""
 }

@@ -29,6 +29,8 @@ export type Route =
   | { name: "kb"; kind?: string; id?: string }
   | { name: "machines" }
   | { name: "machine"; mid: string }
+  // one space of a machine by its name (lib/space-page.ts): its agents, the todos it hangs on, what can be done to it
+  | { name: "space"; mid: string; space: string }
   // the terminal browser (docs/terminal.md「独立终端」): every pane of every machine; `id` is the terminal opened (an agent
   // session's id, or "pane:<pane>" for a plain shell)
   | { name: "terminal"; mid?: string; id?: string }
@@ -62,6 +64,7 @@ export function parse(path: string, search = ""): Route {
   if (p[0] === "messages") return { name: "messages", id: p[1] };
   if (p[0] === "routines") return { name: "routines" };
   if (p[0] === "kb") return { name: "kb", kind: p[1], id: p[2] };
+  if (p[0] === "space" && p[1] && p[2]) return { name: "space", mid: p[1], space: p[2] };
   if (p[0] === "machines") return p[1] ? { name: "machine", mid: p[1] } : { name: "machines" };
   if (p[0] === "terminal") return p[1] && p[2] ? { name: "terminal", mid: p[1], id: p[2] } : { name: "terminal" };
   if (p[0] === "a") return { name: "agents", id: p[1] };
@@ -110,6 +113,8 @@ export function routePath(r: Route): string {
       return "/machines";
     case "machine":
       return `/machines/${encodeURIComponent(r.mid)}`;
+    case "space":
+      return `/space/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.space)}`;
     case "terminal":
       return r.mid && r.id ? `/terminal/${encodeURIComponent(r.mid)}/${encodeURIComponent(r.id)}` : "/terminal";
     case "workspace-board":

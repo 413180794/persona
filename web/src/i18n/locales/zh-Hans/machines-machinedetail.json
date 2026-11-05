@@ -55,5 +55,6 @@
   "cores_label_other": "每个核心的使用率：{count} 个核心，最忙 {busiest}",
   "per_core": "每个核心",
   "busiest": "最忙 {value}",
-  "core_title": "核心 {n}：{value}"
+  "core_title": "核心 {n}：{value}",
+  "open_space": "打开空间「{name}」"
 }

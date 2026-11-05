@@ -4,9 +4,8 @@
 // each core now (Linux), the system, the launchers. Its engine (which one the agents come from) follows the agents. A Mac the hub's extension cua is on for gets 操控电脑 after that. The metrics refresh only while the page is visible.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, enc, errorText, isAbort } from "../../lib/api";
-import { ago, sessionPreview, sessionTitle, stateOf } from "../../lib/format";
+import { ago } from "../../lib/format";
 import {
-  agentMeta,
   agentsBySpace,
   bytesAxis,
   bytesBin,
@@ -18,7 +17,6 @@ import {
   load as loadText,
   loadAxis,
   localOffset,
-  loudState,
   memPercent,
   percent,
   RANGE_KEYS,
@@ -37,7 +35,8 @@ import { classifyConnection } from "../../lib/node-health";
 import { href, onLinkClick } from "../../lib/router";
 import { getState, refresh, useStore } from "../../lib/store";
 import type { Session } from "../../lib/types";
-import { Button, cx, EASE, IconButton, Loading, StatePill, StatusDot, toast } from "../../ui/atoms";
+import { Button, cx, EASE, IconButton, Loading, toast } from "../../ui/atoms";
+import { AgentRow } from "./AgentRow";
 import { Icon } from "../../ui/icons";
 import { MetricChart, type ChartSeries } from "./MetricChart";
 import { MachineDeploy } from "./MachineDeploy";
@@ -238,7 +237,20 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
               <div key={g.key} className="overflow-hidden rounded-card bg-surface shadow-card" style={{ animation: `fade-up 420ms ${EASE} ${Math.min(gi, 6) * 50}ms both` }}>
                 <div className="flex items-center gap-2 border-b border-line px-4 py-2">
                   <Icon name={g.key ? "layers" : "agent"} size={13} className="shrink-0 text-ink-3" />
-                  <span className="truncate text-[12.5px] font-medium text-ink">{g.name}</span>
+                  {g.key ? (
+                    // a space's name opens its page (/space/…); agents outside any space have none
+                    <a
+                      href={href({ name: "space", mid, space: g.name })}
+                      onClick={(e) => onLinkClick(e, { name: "space", mid, space: g.name })}
+                      className="group/space flex min-w-0 items-center gap-0.5 truncate rounded-[5px] text-[12.5px] font-medium text-ink hover:text-accent-ink"
+                      title={t("machines-machinedetail.open_space", { name: g.name })}
+                    >
+                      <span className="truncate">{g.name}</span>
+                      <Icon name="chevronRight" size={11} stroke={2.4} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover/space:translate-x-0.5" />
+                    </a>
+                  ) : (
+                    <span className="truncate text-[12.5px] font-medium text-ink">{g.name}</span>
+                  )}
                   <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-3">{countsText(g.counts)}</span>
                   <span className="shrink-0 text-[11.5px] text-ink-3 tabular-nums">{g.sessions.length}</span>
                 </div>
@@ -391,34 +403,6 @@ function Heading({ title, count, right }: { title: string; count?: number; right
       <span className="flex-1" />
       {right}
     </div>
-  );
-}
-
-function AgentRow({ s }: { s: Session }) {
-  const st = stateOf(s);
-  const to = { name: "session" as const, mid: s.machine_id, sid: s.session_id };
-  const meta = agentMeta(s);
-  const preview = sessionPreview(s);
-  return (
-    <a href={href(to)} onClick={(e) => onLinkClick(e, to)} className="group flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover">
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        <StatusDot state={st} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-[13px] font-medium text-ink">{sessionTitle(s)}</span>
-          {meta && <span className="hidden shrink-0 font-mono text-[11px] text-ink-3 sm:inline">{meta}</span>}
-        </span>
-        {(preview || meta) && (
-          <span className="mt-0.5 block truncate text-[12px] text-ink-3">
-            {meta && <span className="font-mono text-[11px] sm:hidden">{meta}{preview ? " · " : ""}</span>}
-            {preview}
-          </span>
-        )}
-      </span>
-      {loudState(st) && <StatePill state={st} />}
-      <Icon name="chevronRight" size={13} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
-    </a>
   );
 }
 

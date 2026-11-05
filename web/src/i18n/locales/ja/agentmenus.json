@@ -25,5 +25,6 @@
   "mute_space": "このスペースをミュート",
   "space_header": "スペース {name}",
   "mark_all_seen": "すべて確認済みにする",
-  "mark_all_seen_body_other": "未確認のセッション{count}件を確認済みにしますか？スマートフォンやほかのブラウザーでも確認済みになります。"
+  "mark_all_seen_body_other": "未確認のセッション{count}件を確認済みにしますか？スマートフォンやほかのブラウザーでも確認済みになります。",
+  "open_space": "スペースページを開く"
 }

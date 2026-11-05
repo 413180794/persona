@@ -11,6 +11,7 @@ import { getState, markSeen, refresh, refreshTodos, setSpacesSupported, useStore
 import { findTodoForSpace, isLegacySpacesRouteError, unlinkAgentFromTodo, unlinkSpaceFromTodo } from "../lib/todos";
 import type { Session } from "../lib/types";
 import { sessionNode, type MenuNode } from "../lib/node-actions";
+import { navigate } from "../lib/router";
 import { Button, copyText, Dialog, toast, type MenuItem } from "../ui/atoms";
 import type { MenuAt } from "../ui/menu-model";
 import { NodeMenu } from "./NodeMenu";
@@ -64,6 +65,7 @@ export function SpaceMenu({
   onRename,
   onMarkSeen,
   onLinkTodo,
+  openPage = true,
 }: {
   sp: SpaceLike;
   anchor: HTMLElement;
@@ -75,6 +77,8 @@ export function SpaceMenu({
   onRename: (s: Session) => void;
   onMarkSeen: (list: Session[]) => void;
   onLinkTodo?: (sp: SpaceLike) => void;
+  /** 打开空间页 (/space/…) leads the menu; the space's own page leaves it out. */
+  openPage?: boolean;
 }) {
   const pins = useStore((st) => st.pins);
   const mutes = useStore((st) => st.mutes);
@@ -91,7 +95,9 @@ export function SpaceMenu({
   const supportSpaces = todosLoaded && todosSupported !== false && spacesSupported !== false;
   const linkedTodo = supportSpaces ? findTodoForSpace(todos, sp.machineId, sp.name) : undefined;
 
+  const page = { name: "space" as const, mid: sp.machineId, space: sp.name };
   const items: MenuItem[] = [
+    ...(openPage && first?.space_id ? [{ key: "open", label: t("agentmenus.open_space"), icon: "layers" as const, onSelect: () => navigate(page) }] : []),
     ...(unread.length ? [{ key: "seen", label: t("agentmenus.mark_all_seen_count", { count: unread.length }), icon: "check" as const, onSelect: () => onMarkSeen(unread) }] : []),
     ...(first?.space_id && !first.source_kind ? [{ key: "rename", label: t("agentmenus.rename_space"), icon: "pencil" as const, onSelect: () => onRename(first) }] : []),
     ...(supportSpaces
