@@ -21,6 +21,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -295,6 +296,11 @@ type inboxStore interface {
 	DeleteInboxItems(ctx context.Context, ids []string) error
 }
 
+// inboxBatchStore is an inboxStore that writes many items in one round trip (the database's PutInboxItems).
+type inboxBatchStore interface {
+	PutInboxItems(ctx context.Context, rows []db.InboxRow) error
+}
+
 func (s *Service) inboxDB() inboxStore {
 	st, _ := s.store().(inboxStore)
 	return st
@@ -464,31 +470,38 @@ func (s *Service) saveInbox(ctx context.Context, changed []*InboxItem) {
 		s.logf("inbox: %d changed items not saved: what is stored was not read", len(changed))
 		return
 	}
-	type row struct {
-		id      string
-		data    []byte
-		updated time.Time
-		done    *time.Time
-	}
 	var told []assistantwire.InboxChangedItem
 	b.mu.Lock()
-	rows := make([]row, 0, len(changed))
+	rows := make([]db.InboxRow, 0, len(changed))
 	for i, it := range changed {
 		raw, _ := json.Marshal(it)
-		rows = append(rows, row{it.ID, raw, it.UpdatedAt, it.DoneAt})
+		rows = append(rows, db.InboxRow{ID: it.ID, Data: raw, UpdatedAt: it.UpdatedAt, DoneAt: it.DoneAt})
 		if i < 50 { // a first round's hundreds: the plugin reads the inbox if it wants them all
 			told = append(told, assistantwire.InboxChangedItem{ID: it.ID, Source: it.Source, Kind: it.Kind, Title: it.Title})
 		}
 	}
 	b.mu.Unlock()
 	if st := s.inboxDB(); st != nil {
-		for _, r := range rows {
-			if err := st.PutInboxItem(ctx, r.id, r.data, r.updated, r.done); err != nil {
-				s.logf("inbox: save %s: %v", r.id, err)
-			}
-		}
+		s.putInboxRows(ctx, st, rows)
 	}
 	s.inboxChanged(ctx, told)
+}
+
+// putInboxRows writes rows in one go when the store can (a round's hundreds are one round trip, not hundreds); when
+// that fails, or the store can't, each row is written on its own so one that fails does not keep the others out.
+func (s *Service) putInboxRows(ctx context.Context, st inboxStore, rows []db.InboxRow) {
+	if bs, ok := st.(inboxBatchStore); ok && len(rows) > 1 {
+		err := bs.PutInboxItems(ctx, rows)
+		if err == nil {
+			return
+		}
+		s.logf("inbox: save %d items at once: %v (one by one)", len(rows), err)
+	}
+	for _, r := range rows {
+		if err := st.PutInboxItem(ctx, r.ID, r.Data, r.UpdatedAt, r.DoneAt); err != nil {
+			s.logf("inbox: save %s: %v", r.ID, err)
+		}
+	}
 }
 
 // inboxChanged tells the hub what changed (EventInboxChanged): it tells the extensions and the apps.

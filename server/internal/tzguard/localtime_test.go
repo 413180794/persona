@@ -4,6 +4,7 @@ package tzguard
 
 import (
 	"bufio"
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -45,13 +46,12 @@ func TestNoMachineTimeZone(t *testing.T) {
 				return nil
 			}
 		}
-		f, err := os.Open(p)
+		source, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
 		checked++
-		sc := bufio.NewScanner(f)
+		sc := bufio.NewScanner(bytes.NewReader(maskBooleanLocalCalls(source)))
 		sc.Buffer(make([]byte, 1<<20), 1<<20)
 		for n := 1; sc.Scan(); n++ {
 			code, _, _ := strings.Cut(sc.Text(), "//") // comments may name it
