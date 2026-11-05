@@ -95,7 +95,8 @@ func TestResidentNodeKeepsConversations(t *testing.T) {
 }
 
 // A relay finds a resident node that is restarting (its socket refuses) once it is back, instead of serving the
-// connection itself; with no resident node at all it does not wait.
+// connection itself, also while the new node has removed the stale socket and is not listening yet; with no
+// resident node at all it does not wait.
 func TestRelayWaitsForARestartingResidentNode(t *testing.T) {
 	dir, err := os.MkdirTemp("/tmp", "attach") // unix socket paths are short
 	if err != nil {
@@ -112,6 +113,8 @@ func TestRelayWaitsForARestartingResidentNode(t *testing.T) {
 	go func() {
 		time.Sleep(600 * time.Millisecond)
 		_ = os.Remove(path)
+		// As Attach does between removing the stale socket and listening, but long enough for a dial to land in it.
+		time.Sleep(500 * time.Millisecond)
 		ln, err := net.Listen("unix", path)
 		if err != nil {
 			return

@@ -55,12 +55,16 @@ func Relay(ctx context.Context, r io.Reader, w io.Writer) (ok bool, err error) {
 var residentRestartWait = 8 * time.Second
 
 // dialResident dials the resident node's socket, again while it refuses (restarting) for up to wait; no socket at all
-// (no resident node) returns at once.
+// (no resident node) returns at once. Once the socket has refused, a missing socket is the restarted node between
+// removing the stale socket and listening on a new one (Attach), so that is waited for too.
 func dialResident(ctx context.Context, path string, wait time.Duration) (net.Conn, error) {
 	deadline := time.Now().Add(wait)
+	restarting := false
 	for {
 		c, err := net.DialTimeout("unix", path, 2*time.Second)
-		if err == nil || !errors.Is(err, syscall.ECONNREFUSED) || time.Now().After(deadline) {
+		restarting = restarting || errors.Is(err, syscall.ECONNREFUSED)
+		again := errors.Is(err, syscall.ECONNREFUSED) || restarting && errors.Is(err, syscall.ENOENT)
+		if err == nil || !again || time.Now().After(deadline) {
 			return c, err
 		}
 		select {
