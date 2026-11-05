@@ -767,7 +767,7 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 - **HTML**：`AssistantHtmlSandbox.Accepted = false`，所有 html 组件都显示「这个页面在安卓上还不运行」和卡片的 fallback。沙箱代码已写好待验收：
   独立 WebView（支持时用单独的 Profile）、data: 文档（不透明源）、CSP 放在页面内容之前、`blockNetworkLoads`、所有请求在 `shouldInterceptRequest` 里答空、所有导航拒绝、
   不开窗口 / 弹框 / 权限、只对这个 WebView 拒第三方 cookie（不碰全局 cookie）；bridge 只用 `addWebMessageListener`，只收当前实例主 frame 的消息、一次一个确认、拒两次就不再问；
-  最多同时跑 2 个，离开屏幕销毁，有停止 / 重试，renderer 退出只停这一页。**还没做的验收**（这台 example-machine 没有模拟器）：真实 WebView 上逐项观察 fetch、XHR、图片、CSS、iframe、
+  最多同时跑 2 个，离开屏幕销毁，有停止 / 重试，renderer 退出只停这一页。**还没做的验收**（做这次改动的机器上没有模拟器）：真实 WebView 上逐项观察 fetch、XHR、图片、CSS、iframe、
   WebSocket、beacon、跳转、meta refresh、popup、表单、cookie / storage、伪造 bridge 消息、确认轰炸的请求次数（带不设防的对照）；`addWebMessageListener` 的 `*` 规则对不透明源是否注入；
   死循环和大分配：页面里的死循环会占住 App 共用的 renderer（链接卡片也会卡），停止只销毁这个 WebView，不是硬性的 CPU / 内存限制。这些都过了才能把 `Accepted` 改成 true。
 - 截图：`./gradlew :feature:settings:testDebugUnitTest --tests '*AssistantCardsShotsTest*'`，三套风格 × 深浅色：待回答（决策、表单）、已回答（已发送、发送失败、活卡片更新后）、
