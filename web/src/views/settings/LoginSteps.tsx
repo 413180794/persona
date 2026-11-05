@@ -3,10 +3,11 @@
 // asking a step again every interval until it is scanned / entered, and the note for a step this page cannot draw.
 import { useEffect } from "react";
 import type { ConnectorPrompt } from "../../lib/connectors";
+import { t } from "../../i18n";
 import { Button, IconButton, Spinner, toast } from "../../ui/atoms";
 
 /** A QR code from the hub's modules (rows of "0" / "1"), in the page's own colors, with its quiet zone. */
-export function QRCode({ rows, size = 184, label = "二维码" }: { rows: string[]; size?: number; label?: string }) {
+export function QRCode({ rows, size = 184, label = t("settings-loginsteps.qr_code") }: { rows: string[]; size?: number; label?: string }) {
   const n = rows.length;
   const quiet = 2;
   const cells: string[] = [];
@@ -35,7 +36,7 @@ export function saveQR(rows: string[], name: string) {
   });
   const a = document.createElement("a");
   a.href = canvas.toDataURL("image/png");
-  a.download = `${name}-二维码.png`;
+  a.download = t("settings-loginsteps.qr_file", { name });
   a.click();
 }
 
@@ -47,9 +48,9 @@ export function useStepPolling(polled: ConnectorPrompt | null, send: (step: stri
   useEffect(() => {
     if (!polled) return;
     let stop = false;
-    let t: ReturnType<typeof setTimeout>;
+    let timer: ReturnType<typeof setTimeout>;
     const tick = () => {
-      t = setTimeout(async () => {
+      timer = setTimeout(async () => {
         if (stop) return;
         if (!(await send(polled.step ?? "")) && !stop) tick();
       }, Math.max(polled.interval ?? fallback, 1) * 1000);
@@ -57,7 +58,7 @@ export function useStepPolling(polled: ConnectorPrompt | null, send: (step: stri
     tick();
     return () => {
       stop = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [polled?.step, polled?.user_code, polled?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 }
@@ -67,10 +68,10 @@ export function QRStep({ rows, app, label, onCancel }: { rows: string[]; app: st
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-4">
       <QRCode rows={rows} label={label} />
-      <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在{app}里扫码确认…</p>
+      <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-loginsteps.waiting_scan", { app })}</p>
       <div className="flex items-center gap-2">
-        <Button tone="secondary" icon="download" onClick={() => saveQR(rows, app)}>保存二维码</Button>
-        <Button tone="quiet" onClick={onCancel}>取消</Button>
+        <Button tone="secondary" icon="download" onClick={() => saveQR(rows, app)}>{t("settings-loginsteps.save_qr")}</Button>
+        <Button tone="quiet" onClick={onCancel}>{t("common.cancel")}</Button>
       </div>
     </div>
   );
@@ -80,18 +81,18 @@ export function QRStep({ rows, app, label, onCancel }: { rows: string[]; app: st
 export function QRLinkStep({ url, app, onCancel }: { url: string; app: string; onCancel: () => void }) {
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
-      <p className="text-[12.5px] leading-relaxed text-ink-2">这里画不出二维码。把下面的链接发到{app}里打开，确认后这里会自动继续。</p>
+      <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-loginsteps.qr_link", { app })}</p>
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink select-all">{url}</span>
         <IconButton
           icon="copy"
-          label="复制链接"
-          onClick={() => void navigator.clipboard?.writeText(url).then(() => toast("已复制链接", "ok"), () => toast("没复制上", "error"))}
+          label={t("settings-loginsteps.copy_link")}
+          onClick={() => void navigator.clipboard?.writeText(url).then(() => toast(t("settings-loginsteps.link_copied"), "ok"), () => toast(t("settings-loginsteps.copy_failed"), "error"))}
         />
       </div>
-      <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在{app}里确认…</p>
+      <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-loginsteps.waiting_confirm", { app })}</p>
       <div>
-        <Button tone="quiet" onClick={onCancel} className="-ml-2">取消</Button>
+        <Button tone="quiet" onClick={onCancel} className="-ml-2">{t("common.cancel")}</Button>
       </div>
     </div>
   );
@@ -105,11 +106,11 @@ export function UnsupportedStep({ elsewhere, onRestart, onCancel }: { elsewhere?
   return (
     <div className="flex flex-col gap-2.5 px-4 py-3">
       <p role="alert" className="text-[12.5px] leading-relaxed text-ink-2">
-        这一步当前页面画不了。刷新页面用上最新的网页版后点「重新开始」再试{elsewhere ? `；${elsewhere}` : "。"}
+        {elsewhere ? t("settings-loginsteps.unsupported_elsewhere", { elsewhere }) : t("settings-loginsteps.unsupported")}
       </p>
       <div className="flex items-center gap-2">
-        <Button tone="secondary" icon="retry" onClick={onRestart}>重新开始</Button>
-        <Button tone="quiet" onClick={onCancel}>取消</Button>
+        <Button tone="secondary" icon="retry" onClick={onRestart}>{t("settings-loginsteps.restart")}</Button>
+        <Button tone="quiet" onClick={onCancel}>{t("common.cancel")}</Button>
       </div>
     </div>
   );

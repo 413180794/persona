@@ -1,0 +1,14 @@
+{
+  "not_a_number": "「{field}」要是一个数",
+  "action_failed": "没有完成：{error}",
+  "nothing_here": "这个扩展在这里没有要显示的内容。",
+  "back": "返回",
+  "search": "搜索",
+  "update_failed_inline": "没有更新：{error}",
+  "draw_failed_inline": "扩展没画出来：{error}",
+  "update_failed": "没有更新",
+  "draw_failed": "扩展没画出来",
+  "retry": "重试",
+  "confirm_title": "确认",
+  "ok": "确定"
+}

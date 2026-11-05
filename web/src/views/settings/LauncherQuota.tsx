@@ -2,6 +2,7 @@
 // gateway, titled with the gateway's name the hub sends — a budget on the key, each account / provider with its
 // windows, the key's own use. Read once when the dialog opens (the hub keeps an answer a minute); ↻ reads again.
 import { useEffect, useState } from "react";
+import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import { gatewayName, poolTrouble, quotaAmount, quotaFooter, quotaPercent, quotaReset, quotaTone, quotaUnlimited, quotaUsage, type LauncherQuota as Quota, type LauncherQuotaAnswer, type QuotaPool, type QuotaWindow } from "../../lib/quota";
@@ -29,15 +30,15 @@ export function LauncherQuota({ name }: { name: string }) {
   }, [name, tick]);
 
   const q = answer?.quota;
-  const footer = answer && q ? quotaFooter(answer, (id) => machines.find((m) => m.id === id)?.name ?? id, (t) => ago(t)) : "";
+  const footer = answer && q ? quotaFooter(answer, (id) => machines.find((m) => m.id === id)?.name ?? id, (at) => ago(at)) : "";
 
   return (
     <div data-testid="launcher-quota">
       <div className="mb-1 flex min-h-6 items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-ink-3">{q ? `额度 · ${gatewayName(q)}` : "额度"}</span>
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-ink-3">{q ? t("settings-launcherquota.title_gateway", { gateway: gatewayName(q) }) : t("settings-launcherquota.title")}</span>
         {answer?.unsupported !== true && (
           <span className="-my-1 flex size-6 items-center justify-center">
-            {loading && answer ? <Spinner /> : <IconButton icon="retry" label="刷新额度" size={24} iconSize={13} disabled={loading} onClick={() => setTick((t) => t + 1)} />}
+            {loading && answer ? <Spinner /> : <IconButton icon="retry" label={t("settings-launcherquota.refresh")} size={24} iconSize={13} disabled={loading} onClick={() => setTick((n) => n + 1)} />}
           </span>
         )}
       </div>
@@ -50,10 +51,10 @@ export function LauncherQuota({ name }: { name: string }) {
         ) : !answer ? (
           <p className="flex items-center gap-2 py-2 text-[12px] text-ink-3">
             <Spinner />
-            正在读取额度…
+            {t("settings-launcherquota.loading")}
           </p>
         ) : !q ? (
-          <p className="py-2 text-[12px] text-ink-3">{answer.error || "读不到额度"}</p>
+          <p className="py-2 text-[12px] text-ink-3">{answer.error || t("settings-launcherquota.unavailable")}</p>
         ) : (
           <Report q={q} />
         )}
@@ -77,7 +78,7 @@ function Report({ q }: { q: Quota }) {
       ))}
       {q.usage && q.usage.length > 0 && (
         <div className="py-2">
-          <div className="mb-1 text-[11.5px] font-medium text-ink-3">这个 Key 的用量</div>
+          <div className="mb-1 text-[11.5px] font-medium text-ink-3">{t("settings-launcherquota.key_usage")}</div>
           {q.usage.map((u) => (
             <div key={u.label} className="flex items-baseline gap-3 py-0.5 text-[11.5px]">
               <span className="shrink-0 text-ink-2">{u.label}</span>
@@ -87,7 +88,7 @@ function Report({ q }: { q: Quota }) {
           ))}
         </div>
       )}
-      {quotaUnlimited(q) && <p className="py-2 text-[12px] text-ink-3">这个 Key 没有设额度上限。</p>}
+      {quotaUnlimited(q) && <p className="py-2 text-[12px] text-ink-3">{t("settings-launcherquota.unlimited")}</p>}
     </>
   );
 }
@@ -109,7 +110,7 @@ function PoolRow({ p }: { p: QuotaPool }) {
         <div>
           <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-medium text-ink-2 hover:text-ink">
             <Icon name="chevron" size={10} stroke={2.4} style={{ transform: open ? "none" : "rotate(-90deg)", transition: "transform 150ms" }} />
-            按模型 {models.length}
+            {t("settings-launcherquota.by_model", { count: models.length })}
           </button>
           {open && (
             <div className="mt-1.5 flex flex-col gap-2 pl-4">
@@ -141,7 +142,7 @@ function WindowRow({ w }: { w: QuotaWindow }) {
         <span className={cx("shrink-0 whitespace-nowrap tabular-nums", w.exhausted ? "text-red" : "text-ink-3")}>{quotaAmount(w)}</span>
       </div>
       {r !== undefined && (
-        <div className="h-1 overflow-hidden rounded-full bg-field" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={quotaPercent(r)} aria-label={`${w.label} 已用 ${quotaPercent(r)}%`}>
+        <div className="h-1 overflow-hidden rounded-full bg-field" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={quotaPercent(r)} aria-label={t("settings-launcherquota.used_percent", { label: w.label, percent: quotaPercent(r) })}>
           <div className={cx("h-full rounded-full", tone === "red" ? "bg-red" : tone === "orange" ? "bg-orange" : "bg-accent")} style={{ width: `${Math.max(2, quotaPercent(r))}%` }} />
         </div>
       )}

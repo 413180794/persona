@@ -1,0 +1,15 @@
+{
+  "tab_general": "一般",
+  "tab_assistant": "アシスタント",
+  "tab_models": "モデルプロバイダー",
+  "tab_model_config": "モデル設定",
+  "tab_channels": "チャネル",
+  "tab_connectors": "コネクタ",
+  "tab_extensions": "拡張機能",
+  "tab_translate": "翻訳",
+  "tab_shortcuts": "ショートカット",
+  "tab_devices": "デバイス",
+  "group_general": "一般",
+  "group_models": "モデルとエージェント",
+  "group_connections": "接続"
+}

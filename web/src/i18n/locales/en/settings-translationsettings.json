@@ -1,0 +1,23 @@
+{
+  "footer": "Content not in the target language is translated automatically; you can switch back to the original any time. The translation model in Models does the work.",
+  "auto": "Auto-translate",
+  "model": "Translation model",
+  "target": "Target language",
+  "scope": "What to translate",
+  "scope_footer": "Lark has a lot of messages, so they aren't translated by default. Only others' messages in the chats picked here are translated.",
+  "mail": "Mail",
+  "mail_switch": "Translate mail",
+  "lark_chats": "Lark chats",
+  "chat_count_one": "{count} chat",
+  "chat_count_other": "{count} chats",
+  "none": "Off",
+  "picked_title": "Lark chats to translate",
+  "stop": "Stop translating \"{name}\"",
+  "local_note": "These settings are kept in this browser only. Your phone has its own translation settings: the hub translates new mail ahead of time for it, and the web app uses an existing translation when you open a mail.",
+  "picker_title": "Chats to translate",
+  "done": "Done",
+  "search": "Search chats",
+  "loading": "Loading Lark chats",
+  "no_match": "No matching chats",
+  "no_chats": "No Lark chats"
+}

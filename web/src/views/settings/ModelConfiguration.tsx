@@ -7,6 +7,7 @@ import {
 } from "../../lib/model-config";
 import { effortChoices, providerModels, takesEffort } from "../../lib/launcher-models";
 import { useStore } from "../../lib/store";
+import { t } from "../../i18n";
 import { Button, Dialog, IconButton, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { ModelPicker, type ModelList } from "../../ui/ModelPicker";
@@ -21,7 +22,7 @@ export function ModelConfiguration({ open, onOpen, onProviders }: { open: string
       setData(await modelConfiguration());
       setError("");
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 404 ? "这个 hub 还不支持统一模型配置，请先更新服务器。" : errorText(e));
+      setError(e instanceof ApiError && e.status === 404 ? t("settings-modelconfiguration.unsupported") : errorText(e));
     }
   };
   useEffect(() => { void load(); }, []);
@@ -33,26 +34,26 @@ export function ModelConfiguration({ open, onOpen, onProviders }: { open: string
       <div className="mb-4 flex items-center gap-2">
         <label className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 shadow-btn focus-within:shadow-[inset_0_0_0_1px_var(--accent)]">
           <Icon name="search" size={13} stroke={2} className="text-ink-3" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索用途或模型" aria-label="搜索模型用途"
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("settings-modelconfiguration.search_placeholder")} aria-label={t("settings-modelconfiguration.search_label")}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3" />
-          {query && <IconButton icon="x" label="清除" size={22} iconSize={12} onClick={() => setQuery("")} />}
+          {query && <IconButton icon="x" label={t("settings-modelconfiguration.clear")} size={22} iconSize={12} onClick={() => setQuery("")} />}
         </label>
-        <IconButton icon="retry" label="刷新模型配置" onClick={() => void load()} />
+        <IconButton icon="retry" label={t("settings-modelconfiguration.refresh")} onClick={() => void load()} />
       </div>
-      <p className="mb-5 px-1 text-[12px] leading-relaxed text-ink-3">各功能下一次运行使用这里的配置；正在工作的任务不打断。连接和凭据在「模型供应商」中管理。</p>
+      <p className="mb-5 px-1 text-[12px] leading-relaxed text-ink-3">{t("settings-modelconfiguration.intro")}</p>
       {!data && !error && <Loading />}
       {error && <p role="alert" className="mb-4 text-[13px] text-red">{error}</p>}
-      {data && groups.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">{query ? `没有和「${query}」相关的用途` : "hub 暂无可配置的模型用途"}</p>}
+      {data && groups.length === 0 && <p className="py-10 text-center text-[13px] text-ink-3">{query ? t("settings-modelconfiguration.no_match", { query }) : t("settings-modelconfiguration.no_purposes")}</p>}
       {groups.map(([group, purposes]) => (
         <Group key={group} title={group}>
           {purposes.map((p) => (
             <Row key={p.id} label={p.name} hint={modelSummary(p, data?.providers)} onClick={() => onOpen(p.id)}>
-              <span className="hidden max-w-[180px] truncate text-[11.5px] text-ink-3 sm:inline">{p.status || (p.inherited_from ? `跟随 ${sourceName(p.inherited_from)}` : "自定义")}</span>
+              <span className="hidden max-w-[180px] truncate text-[11.5px] text-ink-3 sm:inline">{p.status || (p.inherited_from ? t("settings-modelconfiguration.follows", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.custom"))}</span>
             </Row>
           ))}
         </Group>
       ))}
-      <Button tone="quiet" onClick={onProviders}>管理模型供应商</Button>
+      <Button tone="quiet" onClick={onProviders}>{t("settings-modelconfiguration.manage_providers")}</Button>
       <PurposeEditor key={open} id={open} sourceName={sourceName} onClose={() => onOpen(null)} onSaved={() => void load()} />
     </>
   );
@@ -134,47 +135,47 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
       const r = await saveModelPurpose(p, restore ? { provider: "", model: "", effort: "" } : draft);
       setData(r);
       setDraft(draftFor(r.purpose));
-      toast(restore ? "已恢复继承" : "已保存，下一次运行生效", "ok");
+      toast(restore ? t("settings-modelconfiguration.restored") : t("settings-modelconfiguration.saved"), "ok");
       onSaved();
       onClose();
     } catch (e) {
       const changed = e instanceof ApiError && e.status === 409;
       setConflict(changed);
-      setError(changed ? "配置已在别处修改。你的编辑已保留；重新加载后再修改并保存。" : errorText(e));
+      setError(changed ? t("settings-modelconfiguration.conflict") : errorText(e));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog open={id !== null} onClose={() => { if (!busy) onClose(); }} width={480} title={p?.name ?? "模型配置"}
+    <Dialog open={id !== null} onClose={() => { if (!busy) onClose(); }} width={480} title={p?.name ?? t("settings-modelconfiguration.dialog_title")}
       footer={<>
-        <Button tone="quiet" disabled={busy || !p || conflict} onClick={() => void save(true)}>恢复继承</Button>
+        <Button tone="quiet" disabled={busy || !p || conflict} onClick={() => void save(true)}>{t("settings-modelconfiguration.restore")}</Button>
         <span className="flex-1" />
-        <Button tone="quiet" disabled={busy} onClick={onClose}>取消</Button>
-        <Button tone="primary" busy={busy} disabled={!p || conflict} onClick={() => void save()}>保存</Button>
+        <Button tone="quiet" disabled={busy} onClick={onClose}>{t("common.cancel")}</Button>
+        <Button tone="primary" busy={busy} disabled={!p || conflict} onClick={() => void save()}>{t("common.save")}</Button>
       </>}
     >
       {!p && !error && <Loading />}
       {p && <div className="flex flex-col gap-4">
-        <Group title="当前生效" footer={p.inherited_from ? `继承来源：${sourceName(p.inherited_from)}` : "用途的配置优先于默认值；会话或任务的临时选择仍可覆盖。"}>
-          <Row label="供应商" mono><span className="max-w-[220px] truncate">{data?.providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider ?? "未配置"}</span></Row>
-          <Row label="模型" mono><span className="max-w-[220px] truncate">{p.effective?.model || "供应商默认"}</span></Row>
-          {p.status && <Row label="状态"><Pill>{p.status}</Pill></Row>}
+        <Group title={t("settings-modelconfiguration.effective")} footer={p.inherited_from ? t("settings-modelconfiguration.inherited_from", { name: sourceName(p.inherited_from) ?? "" }) : t("settings-modelconfiguration.effective_footer")}>
+          <Row label={t("settings-modelconfiguration.provider")} mono><span className="max-w-[220px] truncate">{data?.providers.find((v) => v.id === p.effective?.provider)?.name ?? p.effective?.provider ?? t("settings-modelconfiguration.not_configured")}</span></Row>
+          <Row label={t("settings-modelconfiguration.model")} mono><span className="max-w-[220px] truncate">{p.effective?.model || t("settings-modelconfiguration.provider_default")}</span></Row>
+          {p.status && <Row label={t("settings-modelconfiguration.status")}><Pill>{p.status}</Pill></Row>}
         </Group>
         {supportsField(p, "provider") && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">模型供应商</span>
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.model_provider")}</span>
           <select className={inputClass} value={draft.provider} disabled={busy} onChange={(e) => setDraft((d) => chooseProvider(d, e.target.value))}>
-            <option value="">跟随默认</option>
-            {draft.provider && !candidates.some((v) => v.id === draft.provider) && <option value={draft.provider}>{draft.provider}（当前引用不可用）</option>}
-            {candidates.map((v) => <option key={v.id} value={v.id}>{v.name}{v.hidden ? "（已隐藏）" : ""}</option>)}
+            <option value="">{t("settings-modelconfiguration.follow_default")}</option>
+            {draft.provider && !candidates.some((v) => v.id === draft.provider) && <option value={draft.provider}>{t("settings-modelconfiguration.provider_unavailable", { id: draft.provider })}</option>}
+            {candidates.map((v) => <option key={v.id} value={v.id}>{v.hidden ? t("settings-modelconfiguration.provider_hidden", { name: v.name }) : v.name}</option>)}
           </select>
         </label>}
         {supportsField(p, "model") && <div className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">具体模型</span>
-          {p.kind === "plugin" ? <select aria-label="具体模型" className={inputClass} value={draft.model} disabled={busy || (!!modelsError && models.length === 0)} onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}>
-            <option value="">跟随扩展默认</option>
-            {draft.model && !models.some((m) => m.id === draft.model) && <option value={draft.model}>{draft.model}（当前引用）</option>}
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.specific_model")}</span>
+          {p.kind === "plugin" ? <select aria-label={t("settings-modelconfiguration.specific_model")} className={inputClass} value={draft.model} disabled={busy || (!!modelsError && models.length === 0)} onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))}>
+            <option value="">{t("settings-modelconfiguration.follow_extension_default")}</option>
+            {draft.model && !models.some((m) => m.id === draft.model) && <option value={draft.model}>{t("settings-modelconfiguration.model_current", { id: draft.model })}</option>}
             {models.map((m) => <option key={m.id} value={m.id}>{m.name || m.id}</option>)}
           </select> : picker ? <ModelPicker
             models={launcherList}
@@ -192,30 +193,32 @@ function PurposeEditor({ id, sourceName, onClose, onSaved }: { id: string | null
             }}
             onReload={reloadList}
             custom
-            failedNote="没读到模型列表"
-          /> : <input aria-label="具体模型" className={`${inputClass} font-mono`} value={draft.model} disabled={busy} placeholder={chosen?.model || p.effective?.model || "跟随默认"}
+            failedNote={t("settings-modelconfiguration.list_failed")}
+          /> : <input aria-label={t("settings-modelconfiguration.specific_model")} className={`${inputClass} font-mono`} value={draft.model} disabled={busy} placeholder={chosen?.model || p.effective?.model || t("settings-modelconfiguration.follow_default")}
             spellCheck={false} autoComplete="off" onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value }))} />}
           <span className="mt-1 block text-[11px] text-ink-3">
-            {picker ? `「默认」即留空：${draft.provider ? "用这个供应商的默认模型" : "继承上一级的设置"}。列表和在终端里输入 /model 看到的一样${listMachine ? `（来自 ${listMachine}）` : ""}，没有的可以直接输入 ID。` : "留空恢复继承；指定模型 ID 不代表已经通过真实请求验证。"}
+            {!picker ? t("settings-modelconfiguration.field_hint")
+              : listMachine ? (draft.provider ? t("settings-modelconfiguration.picker_hint_provider_machine", { machine: listMachine }) : t("settings-modelconfiguration.picker_hint_inherit_machine", { machine: listMachine }))
+              : draft.provider ? t("settings-modelconfiguration.picker_hint_provider") : t("settings-modelconfiguration.picker_hint_inherit")}
           </span>
-          {modelsError && <span role="alert" className="mt-1 block text-[11px] text-red">扩展模型列表未读取：{modelsError}</span>}
+          {modelsError && <span role="alert" className="mt-1 block text-[11px] text-red">{t("settings-modelconfiguration.extension_list_error", { error: modelsError })}</span>}
           {launcherList.status === "error" && (
             <span role="alert" className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
-              <span className="min-w-0 truncate" title={launcherList.error}>模型列表未读取：{launcherList.error}</span>
-              <button type="button" onClick={reloadList} className="shrink-0 font-medium whitespace-nowrap text-accent-ink hover:underline">重试</button>
+              <span className="min-w-0 truncate" title={launcherList.error}>{t("settings-modelconfiguration.list_error", { error: launcherList.error ?? "" })}</span>
+              <button type="button" onClick={reloadList} className="shrink-0 font-medium whitespace-nowrap text-accent-ink hover:underline">{t("settings-modelconfiguration.retry")}</button>
             </span>
           )}
         </div>}
         {effortAllowed && <label className="block">
-          <span className="mb-1 block text-[12px] font-medium text-ink-2">思考强度</span>
-          <input className={inputClass} value={draft.effort} disabled={busy} placeholder={p.effective?.effort || "跟随默认"} list="model-efforts"
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">{t("settings-modelconfiguration.effort")}</span>
+          <input className={inputClass} value={draft.effort} disabled={busy} placeholder={p.effective?.effort || t("settings-modelconfiguration.follow_default")} list="model-efforts"
             onChange={(e) => setDraft((d) => ({ ...d, effort: e.target.value }))} />
           <datalist id="model-efforts">{listedEfforts.map((v) => <option key={v} value={v} />)}</datalist>
         </label>}
-        <p className="text-[11.5px] leading-relaxed text-ink-3">保存只修改配置，不会发起模型请求或打断正在运行的任务。{p.kind === "plugin" && "语音模型是 Persona 的默认选择，不改变扩展自己的供应商或凭据。"}</p>
+        <p className="text-[11.5px] leading-relaxed text-ink-3">{p.kind === "plugin" ? t("settings-modelconfiguration.save_note_plugin") : t("settings-modelconfiguration.save_note")}</p>
       </div>}
       {error && <p role="alert" className="mt-3 text-[12px] text-red">{error}</p>}
-      {(conflict || (!p && error)) && <Button tone="secondary" disabled={busy} onClick={() => void load()}>{conflict ? "重新加载（丢弃编辑）" : "重试"}</Button>}
+      {(conflict || (!p && error)) && <Button tone="secondary" disabled={busy} onClick={() => void load()}>{conflict ? t("settings-modelconfiguration.reload_discard") : t("settings-modelconfiguration.retry")}</Button>}
     </Dialog>
   );
 }

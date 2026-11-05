@@ -5,6 +5,7 @@
 import { ChannelLink } from "./Channels";
 import { useCallback, useEffect, useState } from "react";
 import { errorText } from "../../lib/api";
+import { t } from "../../i18n";
 import { ago } from "../../lib/format";
 import {
   botStateText, botStatus, botSummary, botTone, credentialsChanged, credentialsOf, credentialsUpdate, DEFAULT_FEATURES, livePairing, pairBot, pairingLeft,
@@ -18,19 +19,19 @@ const controlClass = "h-8 rounded-control bg-field px-2.5 text-[12.5px] text-ink
 const dotClass = { green: "bg-green", red: "bg-red", orange: "bg-orange" } as const;
 
 const FEATURES: { key: keyof BotFeatures; icon: IconName; title: string; detail: string }[] = [
-  { key: "main", icon: "spark", title: "和 Persona 对话", detail: "消息发进主对话（/new、/list 换一段），回答发回飞书" },
-  { key: "cards", icon: "hand", title: "提问和批准", detail: "Persona 和飞书里驱动的 Agent 要你回答、批准时，在飞书里发卡片，点一下就行" },
-  { key: "all_cards", icon: "bell", title: "所有 Agent 的提问", detail: "各台电脑上所有 Agent 的提问和批准都发到飞书" },
-  { key: "pushes", icon: "send", title: "推送也发到飞书", detail: "Persona 的通知、定时任务的结果也发一份到飞书" },
-  { key: "sync", icon: "loop", title: "同步主对话", detail: "在 App 里、定时任务在主对话里的回答，也发到飞书" },
-  { key: "agents", icon: "agent", title: "驱动 Agent", detail: "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的" },
+  { key: "main", icon: "spark", title: t("settings-feishubot.feature_main_title"), detail: t("settings-feishubot.feature_main_detail") },
+  { key: "cards", icon: "hand", title: t("settings-feishubot.feature_cards_title"), detail: t("settings-feishubot.feature_cards_detail") },
+  { key: "all_cards", icon: "bell", title: t("settings-feishubot.feature_all_cards_title"), detail: t("settings-feishubot.feature_all_cards_detail") },
+  { key: "pushes", icon: "send", title: t("settings-feishubot.feature_pushes_title"), detail: t("settings-feishubot.feature_pushes_detail") },
+  { key: "sync", icon: "loop", title: t("settings-feishubot.feature_sync_title"), detail: t("settings-feishubot.feature_sync_detail") },
+  { key: "agents", icon: "agent", title: t("settings-feishubot.feature_agents_title"), detail: t("settings-feishubot.feature_agents_detail") },
 ];
 
 const STEPS = [
-  "在飞书开放平台建一个企业自建应用，开启「机器人」能力",
-  "权限里开通：读取与发送单聊消息（im:message、im:message:send_as_bot）、获取单聊中发给机器人的消息、上传和下载消息里的资源；能读通讯录名字更好（contact:user.base:readonly）",
-  "「事件与回调」里选「使用长连接接收事件」，订阅「接收消息」和「卡片回传交互」",
-  "发布版本（公司里可能要管理员审核），把 App ID、App Secret 填到上面",
+  t("settings-feishubot.step_create_app"),
+  t("settings-feishubot.step_permissions"),
+  t("settings-feishubot.step_events"),
+  t("settings-feishubot.step_publish"),
 ];
 
 /** The bot's state, kept by whoever shows it (the row and its page share one). */
@@ -42,7 +43,7 @@ function useBot() {
     setLoading(true);
     return botStatus()
       .then((s) => (setStatus(s), setError("")))
-      .catch((e) => setError(`读不到机器人的状态：${errorText(e)}`))
+      .catch((e) => setError(t("settings-feishubot.status_error", { error: errorText(e) })))
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => void load(), [load]);
@@ -55,16 +56,16 @@ export function FeishuBot({ onChannel }: { onChannel?: (id: string) => void } = 
   const tone = botTone(bot.status);
   return (
     <>
-      <Group title="飞书机器人" footer="在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。">
+      <Group title={t("settings-feishubot.title")} footer={t("settings-feishubot.footer")}>
         <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-3 text-left transition-colors hover:bg-hover">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-accent-tint text-accent-ink">
             <Icon name="send" size={16} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13.5px] font-medium text-ink">{bot.status?.bot_name || "飞书机器人"}</span>
+            <span className="block truncate text-[13.5px] font-medium text-ink">{bot.status?.bot_name || t("settings-feishubot.title")}</span>
             <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink-3">
               <span className={cx("size-1.5 shrink-0 rounded-full", tone ? dotClass[tone] : "bg-line-strong")} />
-              <span className="truncate">{bot.error ? "读不到状态" : botStateText(bot.status, bot.loading)}</span>
+              <span className="truncate">{bot.error ? t("settings-feishubot.status_unreadable") : botStateText(bot.status, bot.loading)}</span>
             </span>
           </span>
           {bot.status && <Pill tone={tone}>{botSummary(bot.status)}</Pill>}
@@ -115,7 +116,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
       if (done) toast(done, "ok");
       return true;
     } catch (e) {
-      setError(`${what}：${errorText(e)}`);
+      setError(t("settings-feishubot.error_with", { what, error: errorText(e) }));
       return false;
     } finally {
       setSaving(false);
@@ -126,10 +127,10 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
     setSaving(true);
     try {
       await testBot();
-      toast("已发一条测试消息到飞书", "ok");
+      toast(t("settings-feishubot.test_sent"), "ok");
       setError("");
     } catch (e) {
-      setError(`测试消息没发出去：${errorText(e)}`);
+      setError(t("settings-feishubot.test_failed", { error: errorText(e) }));
     } finally {
       setSaving(false);
     }
@@ -139,53 +140,53 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
   const agents = status?.agents ?? [];
 
   return (
-    <Dialog open onClose={onClose} title="飞书机器人" width={560}>
-      <Group footer="在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。">
+    <Dialog open onClose={onClose} title={t("settings-feishubot.title")} width={560}>
+      <Group footer={t("settings-feishubot.footer")}>
         <div className="flex items-center gap-3 px-4 py-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-accent-tint text-accent-ink">
             <Icon name="send" size={16} />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13.5px] font-medium text-ink">{status?.bot_name || "飞书机器人"}</div>
+            <div className="truncate text-[13.5px] font-medium text-ink">{status?.bot_name || t("settings-feishubot.title")}</div>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-ink-3">
               <span className={cx("size-1.5 shrink-0 rounded-full", tone ? dotClass[tone] : "bg-line-strong")} />
               <span className="truncate" title={botStateText(status, loading)}>{botStateText(status, loading)}</span>
             </div>
           </div>
-          {loading || saving ? <Spinner /> : <IconButton icon="retry" label="重新检查" onClick={() => void load()} />}
+          {loading || saving ? <Spinner /> : <IconButton icon="retry" label={t("settings-feishubot.recheck")} onClick={() => void load()} />}
         </div>
-        <Row label="打开飞书机器人">
-          <Switch on={status?.enabled ?? false} disabled={!status || saving} label="打开飞书机器人" onChange={(on) => void run(on ? "打开失败" : "关闭失败", () => updateBot({ enabled: on }))} />
+        <Row label={t("settings-feishubot.enable")}>
+          <Switch on={status?.enabled ?? false} disabled={!status || saving} label={t("settings-feishubot.enable")} onChange={(on) => void run(on ? t("settings-feishubot.enable_failed") : t("settings-feishubot.disable_failed"), () => updateBot({ enabled: on }))} />
         </Row>
-        {!!status?.last_event_at && <Row label="最近收到">{ago(new Date(status.last_event_at * 1000).toISOString())}</Row>}
+        {!!status?.last_event_at && <Row label={t("settings-feishubot.last_event")}>{ago(new Date(status.last_event_at * 1000).toISOString())}</Row>}
         {error && <p role="alert" className="px-4 py-2.5 text-[12px] break-words text-red">{error}</p>}
       </Group>
 
-      <Group title="应用凭证" footer={status?.from_config ? "现在用的是 hub.json 里的凭证；在这里保存会改用这里的。" : "App Secret 加密存在 hub 上，不会再显示出来。"}>
+      <Group title={t("settings-feishubot.credentials")} footer={status?.from_config ? t("settings-feishubot.credentials_from_config") : t("settings-feishubot.credentials_secret_note")}>
         <Row label="App ID">
-          <input value={form.appID} onChange={(e) => setForm({ ...form, appID: e.target.value })} placeholder="必填" aria-label="App ID" autoComplete="off" spellCheck={false} className={cx(controlClass, "w-[240px] font-mono")} />
+          <input value={form.appID} onChange={(e) => setForm({ ...form, appID: e.target.value })} placeholder={t("settings-feishubot.required")} aria-label="App ID" autoComplete="off" spellCheck={false} className={cx(controlClass, "w-[240px] font-mono")} />
         </Row>
         <Row label="App Secret">
           <input
             type="password"
             value={form.appSecret}
             onChange={(e) => setForm({ ...form, appSecret: e.target.value })}
-            placeholder={status?.has_secret ? "已保存，留空不改" : "必填"}
+            placeholder={status?.has_secret ? t("settings-feishubot.secret_saved") : t("settings-feishubot.required")}
             aria-label="App Secret"
             autoComplete="new-password"
             className={cx(controlClass, "w-[240px]")}
           />
         </Row>
-        <Row label="平台">
-          <select value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} aria-label="平台" className={cx(controlClass, "w-[240px]")}>
-            <option value="feishu">飞书</option>
+        <Row label={t("settings-feishubot.platform")}>
+          <select value={form.domain} onChange={(e) => setForm({ ...form, domain: e.target.value })} aria-label={t("settings-feishubot.platform")} className={cx(controlClass, "w-[240px]")}>
+            <option value="feishu">{t("settings-feishubot.platform_feishu")}</option>
             <option value="lark">Lark</option>
             {form.domain !== "feishu" && form.domain !== "lark" && <option value={form.domain}>{form.domain}</option>}
           </select>
         </Row>
         <div className="flex justify-end px-4 py-2.5">
-          <Button tone="accent" busy={saving && changed} disabled={!changed || !form.appID.trim() || saving} onClick={() => void run("保存失败", () => updateBot(credentialsUpdate(form)), "应用凭证已验证并保存")}>
-            验证并保存
+          <Button tone="accent" busy={saving && changed} disabled={!changed || !form.appID.trim() || saving} onClick={() => void run(t("settings-feishubot.save_failed"), () => updateBot(credentialsUpdate(form)), t("settings-feishubot.credentials_saved"))}>
+            {t("settings-feishubot.verify_save")}
           </Button>
         </div>
       </Group>
@@ -193,28 +194,28 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
       {status?.has_secret && (
         <>
           <Group
-            title="配对"
-            footer={status.owner || pairing ? undefined : status.enabled ? "点「配对」拿一个 6 位数字，10 分钟内在飞书里发给机器人。" : "先打开飞书机器人再配对。"}
+            title={t("settings-feishubot.pairing")}
+            footer={status.owner || pairing ? undefined : status.enabled ? t("settings-feishubot.pair_hint") : t("settings-feishubot.pair_enable_first")}
           >
             {status.owner ? (
               <>
-                <Row label="已配对">{status.owner.name || "飞书用户"}</Row>
-                {status.target && <Row label="消息现在发给">{status.target}</Row>}
+                <Row label={t("settings-feishubot.paired")}>{status.owner.name || t("settings-feishubot.lark_user")}</Row>
+                {status.target && <Row label={t("settings-feishubot.target")}>{status.target}</Row>}
                 {confirmUnpair ? (
                   <div className="flex items-center gap-2 bg-red-tint/50 px-4 py-2.5">
-                    <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink-2">解除配对？机器人会不再回应现在的飞书账号，直到重新配对。</span>
-                    <Button tone="quiet" onClick={() => setConfirmUnpair(false)}>取消</Button>
-                    <Button tone="danger" busy={saving} onClick={() => void run("解除失败", unpairBot, "已解除配对").then((ok) => ok && setConfirmUnpair(false))}>
-                      解除配对
+                    <span className="min-w-0 flex-1 text-[12px] leading-snug text-ink-2">{t("settings-feishubot.unpair_confirm")}</span>
+                    <Button tone="quiet" onClick={() => setConfirmUnpair(false)}>{t("common.cancel")}</Button>
+                    <Button tone="danger" busy={saving} onClick={() => void run(t("settings-feishubot.unpair_failed"), unpairBot, t("settings-feishubot.unpaired")).then((ok) => ok && setConfirmUnpair(false))}>
+                      {t("settings-feishubot.unpair")}
                     </Button>
                   </div>
                 ) : (
                   <div className="flex justify-end gap-2 px-4 py-2.5">
                     <Button tone="quiet" icon="x" onClick={() => setConfirmUnpair(true)} className="text-red enabled:hover:text-red">
-                      解除配对
+                      {t("settings-feishubot.unpair")}
                     </Button>
                     <Button icon="send" disabled={saving || !status.connected} onClick={() => void test()}>
-                      发一条测试消息
+                      {t("settings-feishubot.send_test")}
                     </Button>
                   </div>
                 )}
@@ -222,24 +223,24 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
             ) : pairing ? (
               <div className="flex items-end gap-3 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] text-ink-3">在飞书里把这串数字发给机器人</div>
+                  <div className="text-[12px] text-ink-3">{t("settings-feishubot.pair_code_prompt")}</div>
                   <div className="mt-1 font-mono text-[28px] font-semibold tracking-[0.12em] text-ink tabular-nums select-all">{pairing.code}</div>
                   <div className="mt-0.5 text-[11.5px] text-ink-3 tabular-nums">{pairingLeft(pairing.expires_at, now)}</div>
                 </div>
-                <Button icon="copy" onClick={() => void copyText(pairing.code).then(() => toast("已拷贝配对码", "ok"))}>
-                  拷贝配对码
+                <Button icon="copy" onClick={() => void copyText(pairing.code).then(() => toast(t("settings-feishubot.code_copied"), "ok"))}>
+                  {t("settings-feishubot.copy_code")}
                 </Button>
               </div>
             ) : (
               <div className="flex justify-end px-4 py-2.5">
-                <Button tone="accent" icon="link" disabled={saving || !status.enabled} onClick={() => void run("拿不到配对码", pairBot)}>
-                  配对
+                <Button tone="accent" icon="link" disabled={saving || !status.enabled} onClick={() => void run(t("settings-feishubot.pair_code_failed"), pairBot)}>
+                  {t("settings-feishubot.pair")}
                 </Button>
               </div>
             )}
           </Group>
 
-          <Group title="能做什么" footer="主对话能用你的全部数据（飞书、邮件、手机里的日历和位置……），机器人发出的消息会留在飞书里。替你出面的操作照常先问你。">
+          <Group title={t("settings-feishubot.features")} footer={t("settings-feishubot.features_footer")}>
             {FEATURES.map((f) => {
               const off = f.key === "all_cards" && !features.cards;
               return (
@@ -249,7 +250,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
                     <div className="text-[13px] text-ink">{f.title}</div>
                     <div className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{f.detail}</div>
                   </div>
-                  <Switch on={features[f.key]} disabled={saving || off} label={f.title} onChange={(on) => void run("保存失败", () => updateBot({ features: withFeature(features, f.key, on) }))} />
+                  <Switch on={features[f.key]} disabled={saving || off} label={f.title} onChange={(on) => void run(t("settings-feishubot.save_failed"), () => updateBot({ features: withFeature(features, f.key, on) }))} />
                 </div>
               );
             })}
@@ -258,7 +259,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
       )}
 
       {agents.length > 0 && (
-        <Group title="飞书里聊过的 Agent">
+        <Group title={t("settings-feishubot.agents")}>
           {agents.map((a) => (
             <Row key={a.session_id} label={a.title}>
               <span className="max-w-[160px] truncate">{a.machine_id}</span>
@@ -267,7 +268,7 @@ function FeishuBotDialog({ bot, onClose }: { bot: ReturnType<typeof useBot>; onC
         </Group>
       )}
 
-      <Group title="怎么建机器人" footer="长连接由 hub 主动连出去，hub 不需要公网地址。">
+      <Group title={t("settings-feishubot.howto")} footer={t("settings-feishubot.howto_footer")}>
         {STEPS.map((s, i) => (
           <div key={i} className="flex items-baseline gap-3 px-4 py-2">
             <span className="w-3 shrink-0 text-[11.5px] font-semibold text-accent tabular-nums">{i + 1}</span>

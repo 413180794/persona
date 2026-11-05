@@ -1,0 +1,14 @@
+{
+  "qr_code": "QRコード",
+  "qr_file": "{name}-QRコード.png",
+  "waiting_scan": "{app}でスキャンして確認してください…",
+  "save_qr": "QRコードを保存",
+  "qr_link": "ここではQRコードを表示できません。下のリンクを{app}で開いてください。確認すると自動で続行します。",
+  "copy_link": "リンクをコピー",
+  "link_copied": "リンクをコピーしました",
+  "copy_failed": "コピーできませんでした",
+  "waiting_confirm": "{app}で確認してください…",
+  "unsupported": "このページではこの手順を表示できません。ページを再読み込みして最新のWeb版にしてから「やり直す」を押してください。",
+  "unsupported_elsewhere": "このページではこの手順を表示できません。ページを再読み込みして最新のWeb版にしてから「やり直す」を押してください。{elsewhere}",
+  "restart": "やり直す"
+}

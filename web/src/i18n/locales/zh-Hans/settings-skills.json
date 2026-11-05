@@ -1,0 +1,9 @@
+{
+  "count_other": "{count} 个",
+  "footer_machine": "放在 {machine} 的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。",
+  "footer": "放在跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。",
+  "load_failed": "读不到 skill：{error}",
+  "empty": "还没有 skill。把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。",
+  "source_builtin": "内置",
+  "source_mine": "我的"
+}

@@ -1,0 +1,14 @@
+{
+  "qr_code": "二维码",
+  "qr_file": "{name}-二维码.png",
+  "waiting_scan": "等你在{app}里扫码确认…",
+  "save_qr": "保存二维码",
+  "qr_link": "这里画不出二维码。把下面的链接发到{app}里打开，确认后这里会自动继续。",
+  "copy_link": "复制链接",
+  "link_copied": "已复制链接",
+  "copy_failed": "没复制上",
+  "waiting_confirm": "等你在{app}里确认…",
+  "unsupported": "这一步当前页面画不了。刷新页面用上最新的网页版后点「重新开始」再试。",
+  "unsupported_elsewhere": "这一步当前页面画不了。刷新页面用上最新的网页版后点「重新开始」再试；{elsewhere}",
+  "restart": "重新开始"
+}

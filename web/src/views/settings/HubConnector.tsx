@@ -19,6 +19,7 @@ import { useLarkOn } from "../../lib/store";
 import { Button, cx, Dialog, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
 import { BrandMark } from "../../ui/BrandMark";
 import { Icon } from "../../ui/icons";
+import { t } from "../../i18n";
 import { ChannelLink } from "./Channels";
 import { QRLinkStep, QRStep, UnsupportedStep, useStepPolling } from "./LoginSteps";
 import { Group, Row, Switch } from "./SettingsParts";
@@ -56,9 +57,9 @@ export function ConnectorList({ onOpen }: { onOpen: (id: string) => void }) {
   const list = useMemo(() => all && otherConnectors(all, lark), [all, lark]);
   if (list?.length === 0) return null;
   return (
-    <Group title="更多连接器" footer="hub 自带的和扩展提供的连接器：点进去看状态、登录和设置。">
+    <Group title={t("settings-hubconnector.more_title")} footer={t("settings-hubconnector.more_footer")}>
       {!list && !error && <div className="px-4 py-3"><Loading /></div>}
-      {error && <p className="px-4 py-3 text-[12.5px] text-red">读不到连接器：{error}</p>}
+      {error && <p className="px-4 py-3 text-[12.5px] text-red">{t("settings-hubconnector.list_failed", { error })}</p>}
       {list?.map((c) => (
         <button key={c.id} type="button" onClick={() => onOpen(c.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left whitespace-nowrap transition-colors hover:bg-hover">
           <Mark id={c.id} size={32} />
@@ -86,9 +87,9 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
     try {
       const found = (await listConnectors()).find((x) => x.id === id) ?? null;
       setC(found);
-      setFailure(found ? "" : "hub 上没有这个连接器");
+      setFailure(found ? "" : t("settings-hubconnector.not_on_hub"));
     } catch (e) {
-      setFailure(`读不到连接器的状态：${errorText(e)}`);
+      setFailure(t("settings-hubconnector.status_failed", { error: errorText(e) }));
     } finally {
       setLoading(false);
     }
@@ -100,11 +101,11 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
   useEffect(() => {
     if (!starting) return;
     let n = 0;
-    const t = setInterval(() => {
-      if (++n > 15) clearInterval(t);
+    const timer = setInterval(() => {
+      if (++n > 15) clearInterval(timer);
       else void load(true);
     }, 1000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [starting, load]);
 
   const reload = () => load(true);
@@ -115,9 +116,9 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
   return (
     <div>
       <div className="mb-3 flex items-center gap-2">
-        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">连接器</Button>
+        <Button tone="quiet" icon="chevronLeft" onClick={onBack} className="-ml-2">{t("settings-hubconnector.back")}</Button>
         <span className="flex-1" />
-        <IconButton icon="retry" label="重新检查" onClick={() => void load()} disabled={loading} />
+        <IconButton icon="retry" label={t("settings-hubconnector.recheck")} onClick={() => void load()} disabled={loading} />
       </div>
 
       <section className="mb-6 overflow-hidden rounded-card bg-surface shadow-card">
@@ -127,19 +128,19 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
             <h2 className="truncate text-[15px] font-semibold text-ink">{c?.account || title}</h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-ink-3">
               <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", DOT[connectorTone(c)])} />
-              <span className="truncate">{c ? connectorState(c) : loading ? "正在检查…" : "读不到状态"}</span>
+              <span className="truncate">{c ? connectorState(c) : loading ? t("settings-hubconnector.checking") : t("settings-hubconnector.no_status")}</span>
             </div>
           </div>
           {loading && <Spinner />}
         </div>
-        {c?.via && <InfoRow k="登录" v={c.via} />}
-        {c?.last_sync && <InfoRow k="最近一次同步" v={ago(c.last_sync)} />}
+        {c?.via && <InfoRow k={t("settings-hubconnector.signed_in_via")} v={c.via} />}
+        {c?.last_sync && <InfoRow k={t("settings-hubconnector.last_sync")} v={ago(c.last_sync)} />}
         {err && <p className={cx("border-t border-line px-4 py-2.5 text-[12px] break-words select-text", rateLimited ? "text-ink-2" : "text-red")}>{err}</p>}
       </section>
       {onChannel && <ChannelLink id={id} onOpen={onChannel} />}
       {c && !signsInHere(c) && !undescribed(c) && (
         <p className="-mt-4 mb-6 px-1 text-[11.5px] leading-relaxed text-ink-3">
-          {id === "imessage" ? "「交给 Persona」和删除已存的数据在手机 App 的 设置 › 连接器 › 信息 里。" : "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。"}
+          {id === "imessage" ? t("settings-hubconnector.imessage_note") : t("settings-hubconnector.hub_side_note")}
         </p>
       )}
 
@@ -147,7 +148,7 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
       {c && id !== "github" && (signsInHere(c) || undescribed(c)) && <SignInSections c={c} reload={reload} />}
 
       {c && c.status !== "ok" && !!c.guide?.length && (
-        <Group title="怎么修好">
+        <Group title={t("settings-hubconnector.fix_title")}>
           {c.guide.map((step, i) => (
             <div key={i} className="flex items-baseline gap-3 px-4 py-2.5">
               <span className="w-4 shrink-0 text-[12px] font-semibold text-accent-ink tabular-nums">{i + 1}</span>
@@ -155,7 +156,7 @@ export function ConnectorDetail({ id, onBack, onChannel }: { id: string; onBack:
             </div>
           ))}
           <div className="px-4 py-2.5">
-            <Button tone="secondary" icon="retry" onClick={() => void load()} busy={loading}>重新检查</Button>
+            <Button tone="secondary" icon="retry" onClick={() => void load()} busy={loading}>{t("settings-hubconnector.recheck")}</Button>
           </div>
         </Group>
       )}
@@ -220,18 +221,18 @@ function FeedsGroup({ c, a }: { c: HubConnector; a: Actions }) {
   );
   return (
     <Group footer={<span className="whitespace-pre-line">{deleted || feedsFooter(c)}</span>}>
-      {c.archive !== undefined && toggle("进知识库", c.archive, "archive")}
-      {c.inbox !== undefined && toggle("进收件箱", c.inbox, "inbox")}
+      {c.archive !== undefined && toggle(t("settings-hubconnector.to_knowledge"), c.archive, "archive")}
+      {c.inbox !== undefined && toggle(t("settings-hubconnector.to_inbox"), c.inbox, "inbox")}
       {c.archive !== undefined && (
         <div className="px-4 py-2.5">
-          <button type="button" disabled={!!a.busy} onClick={() => setConfirm(true)} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">删除已存的知识库内容</button>
+          <button type="button" disabled={!!a.busy} onClick={() => setConfirm(true)} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">{t("settings-hubconnector.delete_archive")}</button>
         </div>
       )}
       <Confirm
         open={confirm}
-        title={`删除 ${c.name} 存进知识库的内容？`}
-        message={`知识库里从 ${c.name} 来的会话和人都会删掉，「进知识库」会关掉。收件箱和助手查 ${c.name} 不受影响。`}
-        action="删除"
+        title={t("settings-hubconnector.delete_archive_title", { name: c.name })}
+        message={t("settings-hubconnector.delete_archive_message", { name: c.name })}
+        action={t("settings-hubconnector.delete")}
         busy={a.busy === "deleteArchive"}
         onClose={() => setConfirm(false)}
         onConfirm={() => void a.run("deleteArchive", () => deleteConnectorArchive(c.id), (r) => (setDeleted(deletedLine(r as object, false)), setConfirm(false)))}
@@ -247,31 +248,31 @@ function DataGroup({ c, a, logout }: { c: HubConnector; a: Actions; logout: bool
   const stores = storesData(c); // a chat bot (WeChat) keeps nothing to delete
   if (!showsLogout && !stores) return null;
   return (
-    <Group footer={deleted || (stores ? "删除：知识库里从它来的会话和人、收件箱里它的条目，并关掉同步；登录状态不受影响。" : undefined)}>
+    <Group footer={deleted || (stores ? t("settings-hubconnector.data_footer") : undefined)}>
       {showsLogout && (
         <div className="px-4 py-2.5">
-          <button type="button" disabled={!!a.busy} onClick={() => setConfirm("logout")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">退出登录</button>
+          <button type="button" disabled={!!a.busy} onClick={() => setConfirm("logout")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">{t("settings-hubconnector.sign_out")}</button>
         </div>
       )}
       {stores && (
         <div className="px-4 py-2.5">
-          <button type="button" disabled={!!a.busy} onClick={() => setConfirm("delete")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">删除已存的数据</button>
+          <button type="button" disabled={!!a.busy} onClick={() => setConfirm("delete")} className="text-[13px] whitespace-nowrap text-red hover:underline disabled:opacity-50">{t("settings-hubconnector.delete_data")}</button>
         </div>
       )}
       <Confirm
         open={confirm === "logout"}
-        title={`退出 ${c.name} 登录？`}
+        title={t("settings-hubconnector.sign_out_title", { name: c.name })}
         message={logoutMessage(c)}
-        action="退出登录"
+        action={t("settings-hubconnector.sign_out")}
         busy={a.busy === "logout"}
         onClose={() => setConfirm("")}
         onConfirm={() => void a.run("logout", () => connectorLogout(c.id), () => setConfirm(""))}
       />
       <Confirm
         open={confirm === "delete"}
-        title={`删除 ${c.name} 存下的数据？`}
-        message={`知识库里从 ${c.name} 来的会话和人、收件箱里它的条目都会删掉，同步会关掉。项目的总结在下次更新时不再包含它们。`}
-        action="删除"
+        title={t("settings-hubconnector.delete_data_title", { name: c.name })}
+        message={t("settings-hubconnector.delete_data_message", { name: c.name })}
+        action={t("settings-hubconnector.delete")}
         busy={a.busy === "delete"}
         onClose={() => setConfirm("")}
         onConfirm={() => void a.run("delete", () => deleteConnectorData(c.id), (r) => (setDeleted(deletedLine(r as object)), setConfirm("")))}
@@ -297,7 +298,7 @@ function Confirm({ open, title, message, action, busy, onClose, onConfirm }: {
       width={420}
       footer={
         <>
-          <Button tone="quiet" onClick={onClose} disabled={busy}>取消</Button>
+          <Button tone="quiet" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
           <Button tone="danger" busy={busy} onClick={onConfirm}>{action}</Button>
         </>
       }
@@ -319,7 +320,7 @@ function SignInSections({ c, reload }: { c: HubConnector; reload: () => Promise<
         <SignInSteps c={c} reload={reload} footer={signInFooter(c)} />
       ) : (
         // Just switched on: its program has not started yet (the page asks again every second).
-        <Group><p className="px-4 py-3 text-[12.5px] text-ink-3">{c.name} 启动后就能登录。</p></Group>
+        <Group><p className="px-4 py-3 text-[12.5px] text-ink-3">{t("settings-hubconnector.starting", { name: c.name })}</p></Group>
       ))}
       <FeedsGroup c={c} a={a} />
       <DataGroup c={c} a={a} logout />
@@ -348,7 +349,7 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
       if (p.done) {
         setPrompt(null);
         setValues({});
-        toast(p.account ? `已登录 ${p.account}` : `已登录 ${c.name}`, "ok");
+        toast(t("settings-hubconnector.signed_in", { name: p.account || c.name }), "ok");
         await reload();
         return true;
       }
@@ -371,16 +372,16 @@ function SignInSteps({ c, reload, footer }: { c: HubConnector; reload: () => Pro
 
   if (!prompt) {
     return (
-      <Group title="登录" footer={footer}>
+      <Group title={t("settings-hubconnector.sign_in")} footer={footer}>
         <div className="px-4 py-3">
-          <Button tone="accent" busy={busy} onClick={() => void send("", {})}>登录 {c.name}</Button>
+          <Button tone="accent" busy={busy} onClick={() => void send("", {})}>{t("settings-hubconnector.sign_in_to", { name: c.name })}</Button>
         </div>
       </Group>
     );
   }
   const cancel = () => (setPrompt(null), setValues({}));
   return (
-    <Group title="登录" footer={footer}>
+    <Group title={t("settings-hubconnector.sign_in")} footer={footer}>
       <SignInStep
         name={c.name}
         prompt={prompt}
@@ -424,23 +425,23 @@ export function SignInStep({ name, prompt, values, busy, isChannel, onChange, on
             <span className="min-w-0 flex-1 truncate font-mono text-[26px] font-semibold tracking-[0.12em] text-ink select-all">{prompt.user_code}</span>
             <IconButton
               icon="copy"
-              label="复制验证码"
-              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast("已复制验证码", "ok"), () => toast("没复制上", "error"))}
+              label={t("settings-hubconnector.copy_code")}
+              onClick={() => void navigator.clipboard?.writeText(prompt.user_code ?? "").then(() => toast(t("settings-hubconnector.code_copied"), "ok"), () => toast(t("settings-hubconnector.copy_failed"), "error"))}
             />
           </div>
-          <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />等你在 {name} 上授权…</p>
+          <p className="flex items-center gap-2 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-hubconnector.waiting_auth", { name })}</p>
           {prompt.url && (
             <div>
-              <Button tone="accent" icon="external" onClick={() => window.open(prompt.url, "_blank", "noopener,noreferrer")}>打开 {name} 输入验证码</Button>
+              <Button tone="accent" icon="external" onClick={() => window.open(prompt.url, "_blank", "noopener,noreferrer")}>{t("settings-hubconnector.open_to_enter_code", { name })}</Button>
             </div>
           )}
         </div>
       ) : view === "qr" ? (
-        <QRStep rows={prompt.qr!.rows} app={name} label="登录用的二维码" onCancel={onCancel} />
+        <QRStep rows={prompt.qr!.rows} app={name} label={t("settings-hubconnector.qr_label")} onCancel={onCancel} />
       ) : view === "qr_link" ? (
         <QRLinkStep url={prompt.url!} app={name} onCancel={onCancel} />
       ) : view === "unsupported" ? (
-        <UnsupportedStep elsewhere={isChannel ? `也可以到 设置 › 渠道 › ${name} 里绑定。` : undefined} onRestart={onRestart} onCancel={onCancel} />
+        <UnsupportedStep elsewhere={isChannel ? t("settings-hubconnector.bind_in_channels", { name }) : undefined} onRestart={onRestart} onCancel={onCancel} />
       ) : (
         <form
           className="flex flex-col"
@@ -470,8 +471,8 @@ export function SignInStep({ name, prompt, values, busy, isChannel, onChange, on
             );
           })}
           <div className="flex items-center gap-2 px-4 py-2.5">
-            <Button type="submit" tone="accent" disabled={!canSend} busy={busy}>{busy ? "正在验证…" : "下一步"}</Button>
-            <Button tone="quiet" onClick={onCancel} disabled={busy}>取消</Button>
+            <Button type="submit" tone="accent" disabled={!canSend} busy={busy}>{busy ? t("settings-hubconnector.verifying") : t("settings-hubconnector.next")}</Button>
+            <Button tone="quiet" onClick={onCancel} disabled={busy}>{t("common.cancel")}</Button>
           </div>
         </form>
       )}
@@ -529,19 +530,19 @@ function GitHubSections({ c, reload }: { c: HubConnector; reload: () => Promise<
   return (
     <>
       <SwitchGroup c={c} a={a} />
-      <Group title="从哪里登录" footer="选一台电脑就用它上面 gh 的登录；设备码登录不依赖任何电脑。换一个就是退出上一个。">
-        <div role="radiogroup" aria-label="从哪里登录" className="divide-y divide-line">
-          {!auth && !authError && <p className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-ink-3"><Spinner size={11} />正在看各台电脑上的 gh 登录…</p>}
-          {authError && <p className="px-4 py-3 text-[12.5px] text-red">读不到登录方式：{authError}</p>}
+      <Group title={t("settings-hubconnector.source_title")} footer={t("settings-hubconnector.source_footer")}>
+        <div role="radiogroup" aria-label={t("settings-hubconnector.source_title")} className="divide-y divide-line">
+          {!auth && !authError && <p className="flex items-center gap-2 px-4 py-3 text-[12.5px] text-ink-3"><Spinner size={11} />{t("settings-hubconnector.source_loading")}</p>}
+          {authError && <p className="px-4 py-3 text-[12.5px] text-red">{t("settings-hubconnector.source_failed", { error: authError })}</p>}
           {auth?.machines.map((m) => row(m.id, "machine", m.name, githubMachineLine(m), githubMachineWarns(m), auth.source === "machine" && auth.machine === m.id, () => void choose(m.id)))}
-          {auth && row("device", "key", "设备码登录", "不用电脑：在 GitHub 上输入验证码授权", false, auth.source === "device", () => void choose(null))}
+          {auth && row("device", "key", t("settings-hubconnector.device_flow"), t("settings-hubconnector.device_flow_detail"), false, auth.source === "device", () => void choose(null))}
         </div>
       </Group>
       {auth?.source === "device" && isEnabled(c) && !isSignedIn(c) && (
-        <SignInSteps key={signIn} c={c} reload={async () => (await reload(), loadAuth())} footer="设备码登录的授权加密存在 hub 上；改用电脑上的 gh 登录时会忘掉。" />
+        <SignInSteps key={signIn} c={c} reload={async () => (await reload(), loadAuth())} footer={t("settings-hubconnector.device_flow_footer")} />
       )}
       {auth && missing.length > 0 && isSignedIn(c) && (
-        <Group title="权限不够">
+        <Group title={t("settings-hubconnector.missing_scopes")}>
           <div className="flex items-start gap-2.5 px-4 py-3">
             <Icon name="info" size={14} className="mt-0.5 shrink-0 text-orange" />
             <p className="min-w-0 text-[13px] leading-relaxed text-ink select-text">{githubScopeAdvice(auth, missing)}</p>
@@ -570,7 +571,7 @@ function GitHubInbox({ options, onSaved }: { options: GitHubInboxOptions; onSave
       setError("");
     } catch (e) {
       setO(before);
-      setError(`没存上：${errorText(e)}`);
+      setError(t("settings-hubconnector.save_failed", { error: errorText(e) }));
     } finally {
       setSaving(false);
     }
@@ -582,10 +583,10 @@ function GitHubInbox({ options, onSaved }: { options: GitHubInboxOptions; onSave
     void save({ ...o, muted_repos: [...o.muted_repos, r] });
   };
   return (
-    <Group title="收件箱" footer={githubInboxFooter(o)}>
-      <Row label="CI 失败">
+    <Group title={t("settings-hubconnector.inbox")} footer={githubInboxFooter(o)}>
+      <Row label={t("settings-hubconnector.ci_failures")}>
         {saving && <Spinner />}
-        <select value={o.ci} disabled={saving} onChange={(e) => void save({ ...o, ci: e.target.value })} aria-label="CI 失败" className={cx(fieldClass, "w-auto min-w-[140px]")}>
+        <select value={o.ci} disabled={saving} onChange={(e) => void save({ ...o, ci: e.target.value })} aria-label={t("settings-hubconnector.ci_failures")} className={cx(fieldClass, "w-auto min-w-[140px]")}>
           {CI_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </Row>
@@ -593,7 +594,7 @@ function GitHubInbox({ options, onSaved }: { options: GitHubInboxOptions; onSave
         <div key={r} className="flex items-center gap-3 px-4 py-2">
           <Icon name="bellOff" size={14} className="shrink-0 text-ink-3" />
           <span className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink">{r}</span>
-          <IconButton icon="trash" label={`不再静音 ${r}`} disabled={saving} onClick={() => void save({ ...o, muted_repos: o.muted_repos.filter((x) => x !== r) })} />
+          <IconButton icon="trash" label={t("settings-hubconnector.unmute", { repo: r })} disabled={saving} onClick={() => void save({ ...o, muted_repos: o.muted_repos.filter((x) => x !== r) })} />
         </div>
       ))}
       <form
@@ -603,8 +604,8 @@ function GitHubInbox({ options, onSaved }: { options: GitHubInboxOptions; onSave
           add();
         }}
       >
-        <input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="静音仓库：owner/name" aria-label="静音仓库" spellCheck={false} autoCapitalize="off" className={cx(fieldClass, "font-mono")} />
-        <Button type="submit" tone="secondary" icon="plus" disabled={!mutableRepo(repo, o.muted_repos) || saving}>添加</Button>
+        <input value={repo} onChange={(e) => setRepo(e.target.value)} placeholder={t("settings-hubconnector.mute_placeholder")} aria-label={t("settings-hubconnector.mute_repo")} spellCheck={false} autoCapitalize="off" className={cx(fieldClass, "font-mono")} />
+        <Button type="submit" tone="secondary" icon="plus" disabled={!mutableRepo(repo, o.muted_repos) || saving}>{t("settings-hubconnector.add")}</Button>
       </form>
       {error && <p className="px-4 py-2.5 text-[12px] text-red">{error}</p>}
     </Group>

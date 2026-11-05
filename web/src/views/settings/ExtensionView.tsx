@@ -19,6 +19,7 @@ import { onHubEvent } from "../../lib/store";
 import { ViewSections } from "../extensions/ViewBody";
 import { Button, cx, Dialog, Loading, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
+import { t } from "../../i18n";
 
 const inputClass =
   "h-8 w-full rounded-control bg-field px-2.5 text-[12.5px] text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
@@ -224,7 +225,7 @@ export function ExtensionUI({
     if (sent && view) {
       const bad = view.sections.flatMap((s) => s.items).find((it) => it.type === "field" && it.kind === "number" && it.name && numberProblem(sent[it.name] ?? ""));
       if (bad) {
-        toast(`「${bad.label || bad.name}」要是一个数`, "error");
+        toast(t("settings-extensionview.not_a_number", { field: bad.label || bad.name || "" }), "error");
         return;
       }
     }
@@ -240,7 +241,7 @@ export function ExtensionUI({
       if (r.reload) load();
     } catch (e) {
       if (isUnsupported(e)) (setUnsupported(true), onUnsupported?.());
-      else toast(`没有完成：${errorText(e)}`, "error");
+      else toast(t("settings-extensionview.action_failed", { error: errorText(e) }), "error");
     } finally {
       setBusy("");
     }
@@ -270,11 +271,11 @@ export function ExtensionUI({
   useEffect(() => {
     const s = view?.search;
     if (!s || query === searched.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       searched.current = query;
       void run(s.action, listValues());
     }, 300);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
   useEffect(() => {
@@ -283,12 +284,12 @@ export function ExtensionUI({
 
   if (unsupported) {
     return embedded || compact ? null : (
-      <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">这个扩展在这里没有要显示的内容。</p>
+      <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">{t("settings-extensionview.nothing_here")}</p>
     );
   }
 
   const heading = view?.title || top.title || (depth === 1 ? title : undefined);
-  const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || "返回" : "";
+  const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || t("settings-extensionview.back") : "";
   const light = embedded || compact;
   return (
     <div className={cx("flex flex-col", compact ? "gap-1" : embedded ? "gap-3" : "gap-6")}>
@@ -314,8 +315,8 @@ export function ExtensionUI({
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={view.search.placeholder || "搜索"}
-                aria-label={view.search.placeholder || "搜索"}
+                placeholder={view.search.placeholder || t("settings-extensionview.search")}
+                aria-label={view.search.placeholder || t("settings-extensionview.search")}
                 spellCheck={false}
                 autoComplete="off"
                 className={cx(inputClass, "pl-8")}
@@ -352,11 +353,10 @@ export function ExtensionUI({
       {error && compact && (
         <div className="flex items-center gap-2 px-4 py-2.5">
           <p className="min-w-0 flex-1 truncate text-[12px] text-red" title={error}>
-            {view ? "没有更新：" : "扩展没画出来："}
-            {error}
+            {view ? t("settings-extensionview.update_failed_inline", { error }) : t("settings-extensionview.draw_failed_inline", { error })}
           </p>
           <Button tone="quiet" icon="retry" busy={loading} onClick={() => load()}>
-            重试
+            {t("settings-extensionview.retry")}
           </Button>
         </div>
       )}
@@ -365,10 +365,10 @@ export function ExtensionUI({
           <span className="flex size-9 items-center justify-center rounded-[10px] bg-red-tint text-red">
             <Icon name="extension" size={16} />
           </span>
-          <p className="text-[13px] font-medium text-ink">{view ? "没有更新" : "扩展没画出来"}</p>
+          <p className="text-[13px] font-medium text-ink">{view ? t("settings-extensionview.update_failed") : t("settings-extensionview.draw_failed")}</p>
           <p className="max-w-[420px] text-[12px] leading-relaxed break-words text-ink-3 select-text">{error}</p>
           <Button tone="secondary" icon="retry" busy={loading} onClick={() => load()}>
-            重试
+            {t("settings-extensionview.retry")}
           </Button>
         </div>
       )}
@@ -390,11 +390,11 @@ export function ExtensionUI({
           open
           onClose={() => setConfirming(null)}
           width={400}
-          title="确认"
+          title={t("settings-extensionview.confirm_title")}
           footer={
             <>
               <Button tone="quiet" onClick={() => setConfirming(null)}>
-                取消
+                {t("common.cancel")}
               </Button>
               <Button
                 tone={confirming.destructive ? "danger" : "primary"}
@@ -404,7 +404,7 @@ export function ExtensionUI({
                   void run(a);
                 }}
               >
-                确定
+                {t("settings-extensionview.ok")}
               </Button>
             </>
           }

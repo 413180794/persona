@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import { Button, cx, EASE } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 
@@ -30,7 +31,7 @@ export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }
   return (
     <span className="flex shrink-0 items-center gap-1" style={{ animation: `pop-in 160ms ${EASE} both` }}>
       <Button tone="quiet" disabled={busy} onClick={onCancel}>
-        取消
+        {t("common.cancel")}
       </Button>
       <Button tone="danger" busy={busy} onClick={onConfirm}>
         {confirm}

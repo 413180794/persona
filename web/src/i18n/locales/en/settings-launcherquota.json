@@ -1,0 +1,11 @@
+{
+  "title": "Quota",
+  "title_gateway": "Quota · {gateway}",
+  "refresh": "Refresh quota",
+  "loading": "Loading quota…",
+  "unavailable": "Couldn't read the quota",
+  "key_usage": "This key's usage",
+  "unlimited": "This key has no quota limit.",
+  "by_model": "By model {count}",
+  "used_percent": "{label}: {percent}% used"
+}

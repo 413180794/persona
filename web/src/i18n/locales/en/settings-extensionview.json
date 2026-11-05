@@ -1,0 +1,14 @@
+{
+  "not_a_number": "“{field}” must be a number",
+  "action_failed": "Couldn't finish: {error}",
+  "nothing_here": "This extension has nothing to show here.",
+  "back": "Back",
+  "search": "Search",
+  "update_failed_inline": "Couldn't update: {error}",
+  "draw_failed_inline": "Extension didn't load: {error}",
+  "update_failed": "Couldn't update",
+  "draw_failed": "Extension didn't load",
+  "retry": "Retry",
+  "confirm_title": "Confirm",
+  "ok": "OK"
+}

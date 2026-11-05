@@ -1,0 +1,12 @@
+{
+  "title_first": "快捷键 · {scope}",
+  "reset_all": "全部恢复默认",
+  "footer_mac": "点一项，按下新的组合键；Esc 取消。每个快捷键都要带 {mod}，单个按键不会被抢走。按 {help} 随时查看当前的快捷键。",
+  "footer_other": "点一项，按下新的组合键；Esc 取消。每个快捷键都要带 {mod}，单个按键不会被抢走。Windows / Linux 上 Ctrl 组合键会盖过终端里同名的按键（比如 Ctrl+K），可以在这里改键。按 {help} 随时查看当前的快捷键。",
+  "reset_shortcut": "恢复「{name}」的默认快捷键",
+  "recording_label": "{name}：按下新的快捷键，Esc 取消",
+  "chord_label": "{name}：{chord}，点击改键",
+  "recording": "按下新的快捷键…",
+  "terminal_title": "终端里（固定）",
+  "terminal_footer": "这些键由终端自己处理，不能改，也不会被别的快捷键占用。"
+}

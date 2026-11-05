@@ -1,0 +1,9 @@
+{
+  "count_other": "{count}件",
+  "footer_machine": "{machine}の ~/.persona/skills/ に、1つずつフォルダー（SKILL.md を含む）で置かれています。personad を更新しても変わりません。変更は次の新しいチャットから反映されます。",
+  "footer": "アシスタントを実行しているコンピューターの ~/.persona/skills/ に、1つずつフォルダー（SKILL.md を含む）で置かれています。personad を更新しても変わりません。変更は次の新しいチャットから反映されます。",
+  "load_failed": "スキルを読み込めません：{error}",
+  "empty": "スキルはまだありません。アシスタントを実行しているコンピューターの ~/.persona/skills/ に、スキルごとにフォルダー（SKILL.md を含む）を置いてください。",
+  "source_builtin": "内蔵",
+  "source_mine": "マイ"
+}

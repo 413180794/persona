@@ -1,0 +1,14 @@
+{
+  "qr_code": "QR code",
+  "qr_file": "{name}-QR-code.png",
+  "waiting_scan": "Waiting for you to scan and confirm in {app}…",
+  "save_qr": "Save QR code",
+  "qr_link": "The QR code can't be shown here. Open the link below in {app}; once you confirm, this continues on its own.",
+  "copy_link": "Copy link",
+  "link_copied": "Link copied",
+  "copy_failed": "Couldn't copy",
+  "waiting_confirm": "Waiting for you to confirm in {app}…",
+  "unsupported": "This page can't show this step. Reload to get the latest web app, then click Start over.",
+  "unsupported_elsewhere": "This page can't show this step. Reload to get the latest web app, then click Start over. {elsewhere}",
+  "restart": "Start over"
+}

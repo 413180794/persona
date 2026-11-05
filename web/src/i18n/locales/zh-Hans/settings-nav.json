@@ -1,0 +1,15 @@
+{
+  "tab_general": "通用",
+  "tab_assistant": "助手",
+  "tab_models": "模型供应商",
+  "tab_model_config": "模型配置",
+  "tab_channels": "渠道",
+  "tab_connectors": "连接器",
+  "tab_extensions": "扩展",
+  "tab_translate": "翻译",
+  "tab_shortcuts": "快捷键",
+  "tab_devices": "设备",
+  "group_general": "通用",
+  "group_models": "模型和 Agent",
+  "group_connections": "连接"
+}

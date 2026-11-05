@@ -1,0 +1,11 @@
+{
+  "title": "利用枠",
+  "title_gateway": "利用枠 · {gateway}",
+  "refresh": "利用枠を更新",
+  "loading": "利用枠を読み込み中…",
+  "unavailable": "利用枠を読み込めません",
+  "key_usage": "このキーの使用量",
+  "unlimited": "このキーには利用上限が設定されていません。",
+  "by_model": "モデル別 {count}",
+  "used_percent": "{label} 使用済み{percent}%"
+}

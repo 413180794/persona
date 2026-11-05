@@ -1,0 +1,10 @@
+{
+  "count_one": "{count}",
+  "count_other": "{count}",
+  "footer_machine": "Stored in ~/.persona/skills/ on {machine}, one folder each (with a SKILL.md). Updating personad leaves them alone. Changes take effect from the next new chat.",
+  "footer": "Stored in ~/.persona/skills/ on the computer running the assistant, one folder each (with a SKILL.md). Updating personad leaves them alone. Changes take effect from the next new chat.",
+  "load_failed": "Couldn't load skills: {error}",
+  "empty": "No skills yet. Put each skill in its own folder (with a SKILL.md) under ~/.persona/skills/ on the computer running the assistant.",
+  "source_builtin": "Built-in",
+  "source_mine": "Mine"
+}

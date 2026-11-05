@@ -1,0 +1,14 @@
+{
+  "save_failed": "Couldn't save: {error}",
+  "title": "Session triage",
+  "footer": "Each time an agent stops, the hub reads its last reply with the triage model (once per turn, using the model you chose in {model}). Auto-continue and scheduled wake-ups run another turn on the agent's own model. The hub only asks you about things like pushing code, deploying or messaging other people; it never does them itself.",
+  "model_path": "Models › Session triage",
+  "model_path_quoted": "Models › Session triage",
+  "enabled_hint": "Shows what each agent is waiting for; finished ones no longer count as Unread",
+  "decide": "Card for decisions",
+  "decide_hint": "When an agent waits for your call, its question and options go to Needs you",
+  "auto_continue": "Continue after errors",
+  "auto_continue_hint": "Sends \"continue\" after a temporary model error (503 and the like), up to 3 times",
+  "wake": "Wake on schedule",
+  "wake_hint": "Agents waiting on a deploy, CI or another agent get woken up to check for themselves"
+}

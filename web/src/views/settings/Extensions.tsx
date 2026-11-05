@@ -21,6 +21,7 @@ import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./Extension
 import { ExtensionUI } from "./ExtensionView";
 import { dependencyText, dependentError, type Contribution, type Dependent } from "../../lib/extension-model";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
+import { formatList, t } from "../../i18n";
 
 /**
  * The tab's pages, by its `extension` parameter (lib/extension-market.ts extensionsRoute): the list, an extension, a page an extension
@@ -68,12 +69,15 @@ function ExtensionPage({ id, ui, onBack }: { id: string; ui: string; onBack: () 
           <span className="max-w-[240px] truncate">{d?.name ?? id}</span>
         </Button>
         <span className="flex-1" />
-        <IconButton icon="retry" label="重新画" onClick={() => setN((x) => x + 1)} />
+        <IconButton icon="retry" label={t("settings-extensions.redraw")} onClick={() => setN((x) => x + 1)} />
       </div>
       <ExtensionUI key={n} extension={id} ui={ui} title={title} />
     </>
   );
 }
+
+// A plain list (「a、b、c」, "a, b, c"): what these rows always showed in Chinese.
+const NARROW_LIST: Intl.ListFormatOptions = { type: "conjunction", style: "narrow" };
 
 const DOT: Record<ReturnType<typeof extensionTone>, string> = { red: "bg-red", orange: "bg-orange", green: "bg-green", idle: "bg-line-strong" };
 const TILE: Record<ReturnType<typeof extensionTone>, string> = {
@@ -106,17 +110,17 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
   return (
     <>
       <p className="mb-5 px-1 text-[12.5px] leading-relaxed text-ink-3">
-        扩展给 Persona 加上新的连接器、语音对话等能力：hub 自带的、写在 hub.json 里的和装在 hub 机器上的都列在这里。
+        {t("settings-extensions.intro")}
       </p>
       <Group
         title={
           <span className="flex items-center gap-2">
-            扩展
+            {t("settings-extensions.title")}
             {extensions && <span className="font-normal">{listSummary(extensions)}</span>}
           </span>
         }
-        right={<IconButton icon="retry" label="刷新扩展" onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
-        footer="扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。"
+        right={<IconButton icon="retry" label={t("settings-extensions.refresh")} onClick={load} disabled={loading} size={24} iconSize={13} className="-mb-1" />}
+        footer={t("settings-extensions.list_footer")}
       >
         {!extensions && !error && (
           <div className="px-4 py-3">
@@ -125,9 +129,9 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
         )}
         {error && (
           <div className="flex items-center gap-3 px-4 py-3">
-            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">读不到扩展：{error}</p>
+            <p className="min-w-0 flex-1 text-[12.5px] break-words text-red">{t("settings-extensions.list_error", { error })}</p>
             <Button tone="secondary" icon="retry" onClick={load} busy={loading}>
-              重试
+              {t("settings-extensions.retry")}
             </Button>
           </div>
         )}
@@ -136,8 +140,8 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
             <span className="flex size-10 items-center justify-center rounded-[10px] bg-inset text-ink-3 shadow-hairline">
               <Icon name="extension" size={18} />
             </span>
-            <p className="text-[13px] font-medium text-ink">没有扩展</p>
-            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">扩展在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。</p>
+            <p className="text-[13px] font-medium text-ink">{t("settings-extensions.empty_title")}</p>
+            <p className="max-w-[420px] text-[12px] leading-relaxed text-ink-3">{t("settings-extensions.empty_detail")}</p>
           </div>
         )}
         {extensions?.map((p, i) => (
@@ -158,26 +162,26 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
               </div>
               {(p.needs_setup?.length || p.error || p.description) && (
                 <div className={cx("mt-0.5 truncate text-[11.5px]", p.error ? "text-red" : p.needs_setup?.length ? "text-orange" : "text-ink-3")}>
-                  {p.error || (p.needs_setup?.length ? `还缺：${p.needs_setup.join("、")}` : p.description)}
+                  {p.error || (p.needs_setup?.length ? t("settings-extensions.needs_setup", { items: formatList(p.needs_setup, NARROW_LIST) }) : p.description)}
                 </div>
               )}
             </div>
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[12px] text-ink-2">
               <StateDot extension={p} />
               {extensionState(p)}
-              {p.upgrade?.state === "needs_permission" && " · 新版本待确认"}
+              {p.upgrade?.state === "needs_permission" && t("settings-extensions.upgrade_pending")}
             </span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
           </button>
         ))}
       </Group>
       {markets && (
-        <Group title="扩展市场" footer="市场是网站或 GitHub 仓库发布的扩展索引：在这里搜索、安装、升级，从市场装的也能在这里卸载。">
+        <Group title={t("settings-extensions.market_title")} footer={t("settings-extensions.market_footer")}>
           <Row
             label={
               <span className="flex items-center gap-2">
                 <Icon name="search" size={13} className="shrink-0 text-ink-3" />
-                浏览扩展市场
+                {t("settings-extensions.browse_market")}
               </span>
             }
             onClick={onMarket}
@@ -186,7 +190,7 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
             label={
               <span className="flex items-center gap-2">
                 <Icon name="gear" size={13} className="shrink-0 text-ink-3" />
-                管理市场
+                {t("settings-extensions.manage_markets")}
               </span>
             }
             onClick={onMarkets}
@@ -217,20 +221,20 @@ function UpgradeGroup({ p, busy, onToggle, onUpgrade }: { p: HubExtension; busy:
     </div>
   );
   return (
-    <Group title="升级" footer="扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。">
+    <Group title={t("settings-extensions.upgrade_title")} footer={t("settings-extensions.upgrade_footer")}>
       <div className="flex items-center gap-3 px-4 py-2.5">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">自动升级</span>
-        <Switch on={p.auto_upgrade ?? true} onChange={onToggle} disabled={busy} label="自动升级" />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensions.auto_upgrade")}</span>
+        <Switch on={p.auto_upgrade ?? true} onChange={onToggle} disabled={busy} label={t("settings-extensions.auto_upgrade")} />
       </div>
       {u &&
         (action ? (
           <button type="button" onClick={() => onUpgrade(u.market, u.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-hover">
-            {line(`有新版本 ${u.to}`, upgradeDetail(u), u.state === "needs_permission" || u.state === "skipped")}
+            {line(t("settings-extensions.new_version", { version: u.to }), upgradeDetail(u), u.state === "needs_permission" || u.state === "skipped")}
             <span className="shrink-0 whitespace-nowrap text-[12.5px] text-accent-ink">{action}</span>
             <Icon name="chevronRight" size={12} stroke={2} className="shrink-0 text-ink-3" />
           </button>
         ) : (
-          <div className="flex items-center gap-3 px-4 py-2.5">{line(`有新版本 ${u.to}`, upgradeDetail(u), false)}</div>
+          <div className="flex items-center gap-3 px-4 py-2.5">{line(t("settings-extensions.new_version", { version: u.to }), upgradeDetail(u), false)}</div>
         ))}
       {note && p.upgrade_note && <div className="flex items-center gap-3 px-4 py-2.5">{line(note, ago(p.upgrade_note.at), p.upgrade_note.kind === "rolled_back")}</div>}
     </Group>
@@ -297,11 +301,11 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     try {
       apply(await setExtensionConfig(id, compact(draft)));
       setTyped({});
-      toast("已保存，扩展会重新启动", "ok");
+      toast(t("settings-extensions.saved_restart"), "ok");
     } catch (e) {
       const ce = configError(e);
       if (ce) setFieldErrors({ [ce.field]: ce.message });
-      else toast(`没有保存：${errorText(e)}`, "error");
+      else toast(t("settings-extensions.not_saved", { error: errorText(e) }), "error");
     } finally {
       setSaving(false);
     }
@@ -311,9 +315,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     setToggling(true);
     try {
       setDetail(await setExtensionAutoUpgrade(id, on));
-      toast(on ? "已打开自动升级" : "已关掉自动升级", "ok");
+      toast(on ? t("settings-extensions.auto_upgrade_on") : t("settings-extensions.auto_upgrade_off"), "ok");
     } catch (e) {
-      toast(`没有${on ? "打开" : "关掉"}自动升级：${errorText(e)}`, "error");
+      toast(t(on ? "settings-extensions.auto_upgrade_on_failed" : "settings-extensions.auto_upgrade_off_failed", { error: errorText(e) }), "error");
     } finally {
       setToggling(false);
     }
@@ -326,11 +330,11 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
       // A switch never overwrites the unsaved configuration draft.
       setDetail(d);
       setDependents(null);
-      toast(on ? `已启用 ${d.name}` : `已停用 ${d.name}`, "ok");
+      toast(t(on ? "settings-extensions.enabled_name" : "settings-extensions.disabled_name", { name: d.name }), "ok");
     } catch (e) {
       const deps = dependentError(e);
       if (!on && deps) setDependents(deps);
-      else toast(`没有${on ? "启用" : "停用"}：${errorText(e)}`, "error");
+      else toast(t(on ? "settings-extensions.enable_failed" : "settings-extensions.disable_failed", { error: errorText(e) }), "error");
     } finally {
       setToggling(false);
     }
@@ -339,9 +343,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     setToggling(true);
     try {
       setDetail(await setContribution(id, c.point, c.id, on));
-      toast(on ? "已启用这一项" : "已关掉这一项", "ok");
+      toast(on ? t("settings-extensions.contribution_on") : t("settings-extensions.contribution_off"), "ok");
     } catch (e) {
-      toast(`没有改：${errorText(e)}`, "error");
+      toast(t("settings-extensions.change_failed", { error: errorText(e) }), "error");
     } finally {
       setToggling(false);
     }
@@ -358,7 +362,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
       setDraft((cur) => setAt(cur, path, valueAt(d.config ?? {}, path)));
     } catch (e) {
       setDraft((cur) => setAt(cur, path, valueAt(saved, path)));
-      toast(`没有保存：${errorText(e)}`, "error");
+      toast(t("settings-extensions.not_saved", { error: errorText(e) }), "error");
     }
   };
   const computers = !!detail?.contributes?.computer;
@@ -374,21 +378,21 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
     <div className={cx(dirty && "pb-16")}>
       <div className="relative mb-3 flex items-center gap-2">
         <Button tone="quiet" icon="chevronLeft" onClick={back} className="-ml-2">
-          扩展
+          {t("settings-extensions.title")}
         </Button>
         {leaving && (
           <span className="absolute top-full left-0 z-10 mt-1 flex items-center gap-1 rounded-control bg-surface p-1 shadow-overlay" style={{ animation: `pop-in 160ms ${EASE} both` }}>
-            <span className="px-2 text-[12px] whitespace-nowrap text-ink-2">设置改了还没保存</span>
+            <span className="px-2 text-[12px] whitespace-nowrap text-ink-2">{t("settings-extensions.unsaved")}</span>
             <Button tone="quiet" onClick={() => setLeaving(false)}>
-              接着改
+              {t("settings-extensions.keep_editing")}
             </Button>
             <Button tone="danger" onClick={onBack}>
-              不保存
+              {t("settings-extensions.discard")}
             </Button>
           </span>
         )}
         <span className="flex-1" />
-        <IconButton icon="retry" label="重新读取" onClick={load} disabled={loading} />
+        <IconButton icon="retry" label={t("settings-extensions.reload")} onClick={load} disabled={loading} />
       </div>
 
       {/* what it is and how it is doing */}
@@ -401,7 +405,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
             <h2 className="truncate text-[15px] font-semibold text-ink">{p?.name ?? id}</h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-ink-3">
               <StateDot extension={p} />
-              <span className="truncate">{p ? stateLine(p) : loading ? "正在读取…" : "读不到"}</span>
+              <span className="truncate">{p ? stateLine(p) : loading ? t("settings-extensions.loading") : t("settings-extensions.unavailable")}</span>
             </div>
           </div>
           {loading && !p && <Spinner />}
@@ -410,9 +414,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           <div className="flex flex-col gap-1.5 border-t border-line px-4 py-3">
             {p?.description && <p className="text-[12.5px] leading-relaxed text-ink-2">{p.description}</p>}
             {p && runNote(p) && <p className="text-[11.5px] text-ink-3">{runNote(p)}</p>}
-            {!!p?.needs_setup?.length && <p className="text-[12px] text-orange">还缺：{p.needs_setup.join("、")}</p>}
+            {!!p?.needs_setup?.length && <p className="text-[12px] text-orange">{t("settings-extensions.needs_setup", { items: formatList(p.needs_setup, NARROW_LIST) })}</p>}
             {p?.error && <p className="text-[12px] break-words text-red select-text">{p.error}</p>}
-            {error && <p className="text-[12px] break-words text-red select-text">读不到这个扩展：{error}</p>}
+            {error && <p className="text-[12px] break-words text-red select-text">{t("settings-extensions.detail_error", { error })}</p>}
           </div>
         )}
       </section>
@@ -420,18 +424,18 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
       {p && (
         <>
           {p.read_only ? (
-            <Group title="开关和设置">
+            <Group title={t("settings-extensions.switch_and_settings")}>
               <div className="flex items-start gap-3 px-4 py-3">
                 <Icon name="lock" size={14} className="mt-0.5 shrink-0 text-ink-3" />
-                <p className="text-[12.5px] leading-relaxed text-ink-2">这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改（hub.json 或管理界面），改完重启 hub。</p>
+                <p className="text-[12.5px] leading-relaxed text-ink-2">{t("settings-extensions.read_only")}</p>
               </div>
             </Group>
           ) : (
-            <Group footer="停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。">
+            <Group footer={t("settings-extensions.enable_footer")}>
               <div className="flex items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">启用</span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensions.enable")}</span>
                 {toggling && <Spinner />}
-                <Switch on={p.enabled ?? true} onChange={(on) => void toggle(on)} disabled={toggling} label="启用" />
+                <Switch on={p.enabled ?? true} onChange={(on) => void toggle(on)} disabled={toggling} label={t("settings-extensions.enable")} />
               </div>
             </Group>
           )}
@@ -439,7 +443,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           {p.auto_upgrade !== undefined && <UpgradeGroup p={p} busy={toggling} onToggle={(on) => void toggleAutoUpgrade(on)} onUpgrade={onUpgrade} />}
 
           {!!p.ui?.length && (
-            <Group title="页面" footer="这些页面由扩展画，按钮的动作交给扩展处理。">
+            <Group title={t("settings-extensions.pages_title")} footer={t("settings-extensions.pages_footer")}>
               {p.ui.map((u) => (
                 <Row
                   key={u.id}
@@ -457,9 +461,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
 
           {editable && fields.length > 0 && (
             <>
-              {fieldErrors[""] && <p role="alert" className="mb-3 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">没有保存：{fieldErrors[""]}</p>}
+              {fieldErrors[""] && <p role="alert" className="mb-3 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] break-words text-red">{t("settings-extensions.not_saved", { error: fieldErrors[""] })}</p>}
               {fields.some((f) => f.type !== "object") && (
-                <Group title="设置" footer={saveFooter(fields)}>
+                <Group title={t("settings-extensions.settings_title")} footer={saveFooter(fields)}>
                   {fields
                     .filter((f) => f.type !== "object")
                     .map((f) => (
@@ -480,7 +484,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           )}
 
           {editable && !!p.secrets?.length && (
-            <Group title="密钥" footer="密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。">
+            <Group title={t("settings-extensions.secrets_title")} footer={t("settings-extensions.secrets_footer")}>
               {p.secrets.map((s) => (
                 <Row
                   key={s.name}
@@ -500,38 +504,38 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           )}
 
           {!!p.depends?.length && (
-            <Group title="依赖" footer="要先安装并启用这些扩展，才能使用它。">
+            <Group title={t("settings-extensions.depends_title")} footer={t("settings-extensions.depends_footer")}>
               {p.depends.map((d) => <Row key={d.id} label={d.name || d.id} hint={d.version}><span className={cx(d.state !== "ok" && "text-orange")}>{dependencyText(d)}</span></Row>)}
             </Group>
           )}
           {!!p.extension_pack?.length && (
-            <Group title="合集成员" footer="卸载合集时可以只卸载合集，也可以选择一起卸载成员。">
+            <Group title={t("settings-extensions.pack_title")} footer={t("settings-extensions.pack_footer")}>
               {p.extension_pack.map((m) => <Row key={m.id} label={m.id} hint={m.market} mono>{m.version || ""}</Row>)}
             </Group>
           )}
           {!!p.contributions?.length && (
-            <Group title="贡献开关" footer="只关这一项，其余能力和设置不变；跟着连接器的项目请在连接器设置里改，跟着扩展设置的在上面的设置里改。">
+            <Group title={t("settings-extensions.contributions_title")} footer={t("settings-extensions.contributions_footer")}>
               {p.contributions.map((c) => (
-                <Row key={`${c.point}/${c.id}`} label={c.title || c.id} hint={`${pointText(c.point)} · ${c.id}${c.via === "connector" ? " · 跟着连接器" : c.via === "config" ? " · 跟着扩展设置" : ""}`}>
+                <Row key={`${c.point}/${c.id}`} label={c.title || c.id} hint={`${pointText(c.point)} · ${c.id}${c.via === "connector" ? t("settings-extensions.via_connector") : c.via === "config" ? t("settings-extensions.via_config") : ""}`}>
                   <Switch label={c.title || c.id} on={c.enabled} disabled={!editable || toggling || !c.can_disable} onChange={(on) => void toggleContribution(c, on)} />
                 </Row>
               ))}
             </Group>
           )}
           {!p.contributions?.length && p.contributes && Object.keys(p.contributes).length > 0 && (
-            <Group title="提供">
+            <Group title={t("settings-extensions.provides_title")}>
               {Object.keys(p.contributes)
                 .sort()
                 .map((point) => (
                   <Row key={point} label={pointText(point)} mono>
-                    <span className="truncate">{(p.contributes?.[point] ?? []).join("、")}</span>
+                    <span className="truncate">{formatList(p.contributes?.[point] ?? [], NARROW_LIST)}</span>
                   </Row>
                 ))}
             </Group>
           )}
 
           {!!p.permissions?.length && (
-            <Group title="它可以" footer="安装时你同意过这些；新版本要得更多时，升级前会再问一次。">
+            <Group title={t("settings-extensions.permissions_title")} footer={t("settings-extensions.permissions_footer")}>
               {p.permissions.map((perm) => (
                 <div key={perm.key} className="px-4 py-2.5">
                   <div className="text-[13px] text-ink">{perm.title}</div>
@@ -544,10 +548,10 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
           <About d={p} />
 
           {marketOf(p.origin) && (
-            <Group footer="这个扩展是从扩展市场装的：卸载后可以在市场里重新安装。">
+            <Group footer={t("settings-extensions.market_installed_footer")}>
               <button type="button" onClick={() => setRemoving(true)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] whitespace-nowrap text-red transition-colors hover:bg-red-tint">
                 <Icon name="trash" size={13} className="shrink-0" />
-                卸载
+                {t("settings-extensions.uninstall")}
               </button>
             </Group>
           )}
@@ -555,21 +559,21 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade }: { id: string; onBack
       )}
       {removing && p && <UninstallDialog id={p.id} name={p.name} pack={p.extension_pack} onClose={() => setRemoving(false)} onDone={onBack} />}
       {dependents && p && (
-        <Dialog open title={`停用「${p.name}」和依赖它的扩展？`} onClose={() => !toggling && setDependents(null)} footer={<><Button tone="quiet" disabled={toggling} onClick={() => setDependents(null)}>取消</Button><Button tone="danger" busy={toggling} onClick={() => void toggle(false, true)}>一起停用</Button></>}>
-          <p className="text-ink-2">这些扩展要用它：{dependents.map((d) => d.name).join("、")}。只停用，不卸载，配置和数据保留。</p>
+        <Dialog open title={t("settings-extensions.disable_dependents_title", { name: p.name })} onClose={() => !toggling && setDependents(null)} footer={<><Button tone="quiet" disabled={toggling} onClick={() => setDependents(null)}>{t("common.cancel")}</Button><Button tone="danger" busy={toggling} onClick={() => void toggle(false, true)}>{t("settings-extensions.disable_all")}</Button></>}>
+          <p className="text-ink-2">{t("settings-extensions.dependents_body", { names: formatList(dependents.map((d) => d.name), NARROW_LIST) })}</p>
         </Dialog>
       )}
 
       {dirty && (
         <div className="sticky bottom-3 z-10 mt-2 flex items-center gap-2 rounded-card bg-surface px-3 py-2 shadow-overlay" style={{ animation: `fade-up 220ms ${EASE} both` }}>
           <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
-            {Object.keys(problems).length ? "有一项不是数，改好才能保存" : "设置改了还没保存"}
+            {Object.keys(problems).length ? t("settings-extensions.not_a_number") : t("settings-extensions.unsaved")}
           </span>
           <Button tone="quiet" onClick={revert} disabled={saving}>
-            还原
+            {t("settings-extensions.revert")}
           </Button>
           <Button tone="accent" busy={saving} disabled={!canSave} onClick={() => void save()}>
-            保存
+            {t("common.save")}
           </Button>
         </div>
       )}
@@ -588,21 +592,21 @@ function About({ d }: { d: HubExtensionDetail }) {
     home = "";
   }
   return (
-    <Group title="关于">
-      {d.version && <Row label="版本" mono>{d.version}</Row>}
-      {d.previous_version && <Row label="上一个版本" mono>{d.previous_version}</Row>}
-      {source && <Row label="来源">{source}</Row>}
+    <Group title={t("settings-extensions.about_title")}>
+      {d.version && <Row label={t("settings-extensions.version")} mono>{d.version}</Row>}
+      {d.previous_version && <Row label={t("settings-extensions.previous_version")} mono>{d.previous_version}</Row>}
+      {source && <Row label={t("settings-extensions.source")}>{source}</Row>}
       {d.origin && (
-        <Row label="安装自" mono>
+        <Row label={t("settings-extensions.installed_from")} mono>
           <span className="max-w-[360px] truncate select-text" title={d.origin}>
             {d.origin}
           </span>
         </Row>
       )}
-      {d.publisher && <Row label="发布者">{d.publisher}</Row>}
+      {d.publisher && <Row label={t("settings-extensions.publisher")}>{d.publisher}</Row>}
       {home && (
         <a href={home} target="_blank" rel="noreferrer noopener" className="flex items-center gap-3 px-4 py-2.5 whitespace-nowrap transition-colors hover:bg-hover">
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">主页</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{t("settings-extensions.homepage")}</span>
           <span className="min-w-0 truncate text-[12.5px] text-ink-3">{new URL(home).host}</span>
           <Icon name="external" size={12} className="shrink-0 text-ink-3" />
         </a>
@@ -709,7 +713,7 @@ function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, comp
   if (f.type === "integer" || f.type === "number") {
     const key = path.join(".");
     const text = typed[key]?.text ?? (typeof v === "number" ? String(v) : "");
-    const range = [f.minimum !== undefined ? `最小 ${f.minimum}` : "", f.maximum !== undefined ? `最大 ${f.maximum}` : ""].filter(Boolean).join("，");
+    const range = [f.minimum !== undefined ? t("settings-extensions.min", { value: f.minimum }) : "", f.maximum !== undefined ? t("settings-extensions.max", { value: f.maximum }) : ""].filter(Boolean).join(t("settings-extensions.range_separator"));
     return (
       <div className="flex items-center gap-2">
         <input
@@ -762,9 +766,9 @@ function MachineSwitches({ field: f, path, draft, onSaveNow, computers, nodes, i
   const flip = (mid: string, name: string, on: boolean) => (on && f.confirm ? setAsking({ id: mid, name }) : save(mid, on));
   // The field picking where the plugin's program runs: a machine switched on says how the program is there.
   const status = (m: (typeof machines)[number]) =>
-    nodes && items.includes(m.id) ? `${m.online ? "在线" : "离线"} · ${nodeProgramStatus(nodes.find((n) => n.machine_id === m.id))}` : machineStatus(m, computers);
-  const rows = [...machines.map((m) => ({ id: m.id, name: m.name, status: status(m) })), ...unknown.map((x) => ({ id: x, name: x, status: "找不到这台机器" }))];
-  if (!rows.length) return <p className="text-[12.5px] text-ink-3">{os.join() === "darwin" ? "这个 hub 上还没有 Mac。" : "这个 hub 上还没有机器。"}</p>;
+    nodes && items.includes(m.id) ? `${m.online ? t("settings-extensions.online") : t("settings-extensions.offline")} · ${nodeProgramStatus(nodes.find((n) => n.machine_id === m.id))}` : machineStatus(m, computers);
+  const rows = [...machines.map((m) => ({ id: m.id, name: m.name, status: status(m) })), ...unknown.map((x) => ({ id: x, name: x, status: t("settings-extensions.machine_not_found") }))];
+  if (!rows.length) return <p className="text-[12.5px] text-ink-3">{os.join() === "darwin" ? t("settings-extensions.no_mac") : t("settings-extensions.no_machine")}</p>;
   return (
     <div id={id} role="group" className="flex flex-col divide-y divide-line rounded-control shadow-hairline">
       {rows.map((r) => (
@@ -779,11 +783,11 @@ function MachineSwitches({ field: f, path, draft, onSaveNow, computers, nodes, i
       <Dialog
         open={!!asking}
         onClose={() => setAsking(null)}
-        title={asking ? `打开「${asking.name}」？` : undefined}
+        title={asking ? t("settings-extensions.turn_on_title", { name: asking.name }) : undefined}
         footer={
           <>
-            <Button tone="quiet" onClick={() => setAsking(null)}>取消</Button>
-            <Button tone="primary" onClick={() => { if (asking) save(asking.id, true); setAsking(null); }}>打开</Button>
+            <Button tone="quiet" onClick={() => setAsking(null)}>{t("common.cancel")}</Button>
+            <Button tone="primary" onClick={() => { if (asking) save(asking.id, true); setAsking(null); }}>{t("settings-extensions.turn_on")}</Button>
           </>
         }
       >
@@ -838,7 +842,7 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
           {items.map((item, i) => (
             <li key={`${i}-${item}`} className="flex h-7 items-center gap-1 rounded-full bg-inset pr-1 pl-2.5 text-[12px] text-ink shadow-hairline">
               <span className="max-w-[240px] truncate">{item}</span>
-              <IconButton icon="x" label={`删除 ${item}`} size={20} iconSize={11} onClick={() => store(items.filter((_, j) => j !== i))} />
+              <IconButton icon="x" label={t("settings-extensions.remove_item", { item })} size={20} iconSize={11} onClick={() => store(items.filter((_, j) => j !== i))} />
             </li>
           ))}
         </ul>
@@ -854,13 +858,13 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
               add();
             }
           }}
-          placeholder="添加一项，回车确认"
+          placeholder={t("settings-extensions.add_placeholder")}
           spellCheck={false}
           autoComplete="off"
           className={cx(inputClass, ring)}
         />
         <Button tone="secondary" icon="plus" onClick={add} disabled={!adding.trim()}>
-          添加
+          {t("settings-extensions.add")}
         </Button>
       </div>
     </div>
@@ -883,7 +887,7 @@ function SecretDialog({ extension, secret, onClose, onDone }: { extension: strin
     try {
       const d = kind === "save" ? await setExtensionSecret(extension, secret.name, v) : await clearExtensionSecret(extension, secret.name);
       onDone(d);
-      toast(kind === "save" ? `已保存「${secret.title}」` : `已清除「${secret.title}」`, "ok");
+      toast(t(kind === "save" ? "settings-extensions.secret_saved" : "settings-extensions.secret_cleared", { title: secret.title }), "ok");
       onClose();
     } catch (e) {
       setError(errorText(e));
@@ -903,20 +907,20 @@ function SecretDialog({ extension, secret, onClose, onDone }: { extension: strin
             <span className="mr-auto">
               {confirm ? (
                 <Button tone="danger" busy={busy === "clear"} disabled={!!busy} onClick={() => void run("clear")}>
-                  确认清除
+                  {t("settings-extensions.confirm_clear")}
                 </Button>
               ) : (
                 <Button tone="quiet" icon="trash" disabled={!!busy} onClick={() => setConfirm(true)} className="text-red enabled:hover:text-red">
-                  清除
+                  {t("settings-extensions.clear")}
                 </Button>
               )}
             </span>
           )}
           <Button tone="quiet" onClick={onClose} disabled={!!busy}>
-            取消
+            {t("common.cancel")}
           </Button>
           <Button tone="primary" busy={busy === "save"} disabled={!value.trim() || !!busy} onClick={() => void run("save")}>
-            保存
+            {t("common.save")}
           </Button>
         </>
       }
@@ -939,13 +943,13 @@ function SecretDialog({ extension, secret, onClose, onDone }: { extension: strin
           autoFocus
           autoComplete="new-password"
           spellCheck={false}
-          placeholder={secret.set ? "输入新的值替换" : "输入"}
+          placeholder={secret.set ? t("settings-extensions.secret_replace_placeholder") : t("settings-extensions.secret_placeholder")}
           aria-label={secret.title}
           disabled={!!busy}
           className={cx(inputClass, "h-9 font-mono shadow-inset-field")}
         />
-        <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || "存在 hub 上，只交给这个扩展。"}</p>
-        {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">没有保存：{error}</p>}
+        <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || t("settings-extensions.secret_hint")}</p>
+        {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{t("settings-extensions.not_saved", { error })}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>

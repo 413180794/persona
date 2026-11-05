@@ -1,0 +1,14 @@
+{
+  "not_a_number": "「{field}」には数値を入力してください",
+  "action_failed": "完了できませんでした：{error}",
+  "nothing_here": "この拡張機能にはここに表示する内容がありません。",
+  "back": "戻る",
+  "search": "検索",
+  "update_failed_inline": "更新できませんでした：{error}",
+  "draw_failed_inline": "拡張機能を表示できませんでした：{error}",
+  "update_failed": "更新できませんでした",
+  "draw_failed": "拡張機能を表示できませんでした",
+  "retry": "再試行",
+  "confirm_title": "確認",
+  "ok": "OK"
+}

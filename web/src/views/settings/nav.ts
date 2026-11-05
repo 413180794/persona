@@ -1,6 +1,7 @@
 // Where 设置 is (#1996): which category the URL opens, and the list of them a phone shows first. Wide, the
 // categories are tabs in the bar and /settings is 通用; phone width, /settings is the list (as on iOS), a category is
 // /settings?tab=… pushed over it, and Back goes back to the list.
+import { t } from "../../i18n";
 import { settingsTab } from "../../lib/channels";
 import type { IconName } from "../../ui/icons";
 
@@ -10,26 +11,26 @@ export const TABS: Tab[] = ["general", "assistant", "models", "model-config", "c
 const SUB: Partial<Record<Tab, string>> = { "model-config": "purpose", channels: "channel", extensions: "extension", connectors: "connector" };
 
 export const TAB_INFO: Record<Tab, { label: string; icon: IconName }> = {
-  general: { label: "通用", icon: "gear" },
-  assistant: { label: "助手", icon: "spark" },
-  models: { label: "模型供应商", icon: "layers" },
-  "model-config": { label: "模型配置", icon: "gear" },
+  general: { label: t("settings-nav.tab_general"), icon: "gear" },
+  assistant: { label: t("settings-nav.tab_assistant"), icon: "spark" },
+  models: { label: t("settings-nav.tab_models"), icon: "layers" },
+  "model-config": { label: t("settings-nav.tab_model_config"), icon: "gear" },
   claude: { label: "Claude Code", icon: "terminal" },
   codex: { label: "Codex", icon: "terminal" },
-  channels: { label: "渠道", icon: "chat" },
-  connectors: { label: "连接器", icon: "link" },
-  extensions: { label: "扩展", icon: "extension" },
-  translate: { label: "翻译", icon: "translate" },
-  shortcuts: { label: "快捷键", icon: "keyboard" },
-  devices: { label: "设备", icon: "key" },
+  channels: { label: t("settings-nav.tab_channels"), icon: "chat" },
+  connectors: { label: t("settings-nav.tab_connectors"), icon: "link" },
+  extensions: { label: t("settings-nav.tab_extensions"), icon: "extension" },
+  translate: { label: t("settings-nav.tab_translate"), icon: "translate" },
+  shortcuts: { label: t("settings-nav.tab_shortcuts"), icon: "keyboard" },
+  devices: { label: t("settings-nav.tab_devices"), icon: "key" },
   hub: { label: "hub", icon: "hub" },
 };
 
 /** The phone's list: groups of categories, in the tab bar's order. */
 export const LIST_GROUPS: { title: string; tabs: Tab[] }[] = [
-  { title: "通用", tabs: ["general", "assistant", "translate", "shortcuts"] },
-  { title: "模型和 Agent", tabs: ["models", "model-config", "claude", "codex"] },
-  { title: "连接", tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
+  { title: t("settings-nav.group_general"), tabs: ["general", "assistant", "translate", "shortcuts"] },
+  { title: t("settings-nav.group_models"), tabs: ["models", "model-config", "claude", "codex"] },
+  { title: t("settings-nav.group_connections"), tabs: ["channels", "connectors", "extensions", "devices", "hub"] },
 ];
 
 /** The category and item a URL's query names; `tab` is null when it names none (the phone's list). */
