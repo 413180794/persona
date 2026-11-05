@@ -2,5 +2,7 @@
   "title": "Keyboard shortcuts",
   "edit_in_settings": "Change in Settings",
   "in_terminal": "In the terminal",
-  "in_terminal_fixed": "In the terminal (fixed)"
+  "in_terminal_fixed": "In the terminal (fixed)",
+  "off": "Off",
+  "unset": "None"
 }

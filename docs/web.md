@@ -507,9 +507,14 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 没有搬过来的：Moshi 的 Mod+Alt+1–3（在右面板里选 Web / 文件 / Diff）——Persona 的文件和 Git 是各自的面板，没有一个统一的选项卡；这三个面板还用头上的按钮开。
 **浏览器可能先截走**：Mac 的 Chrome 把 ⌘⌥← / → 留给切标签页，网页收不到，需要时在设置里换一个键；其它被浏览器和系统留着的键见下面的保留表。
 
-- **改键**（设置 › 快捷键，`views/settings/ShortcutSettings.tsx`）：点一行，按下新的组合键，Esc 取消；记在当前浏览器（`localStorage` 的 `persona.shortcuts`，只存改过的，值写成平台无关的 `Mod+Shift+P`）。
-  提示：「需要带 Ctrl / ⌘」（没带 Mod）、「已被「X」占用」（另一项在用，不抢）、「… 浏览器 / 文字编辑 / 终端 / 系统要用，换一个」（保留表 `RESERVED`：⌘T / W / N / R / L、⌘C / V / X / A / Z、对话框的 Mod+Enter、Windows / Linux 上终端的 Ctrl+W / R / L / U / D / Z…）。每行有自己的「恢复默认」，右上角「全部恢复默认」。
-  录入时全局快捷键暂停（`holdShortcuts`）；Tab 照常移走焦点。第 1–9 台电脑这一项只改修饰键，数字固定。侧边栏搜索框上的 ⌘K 提示在默认键时不变，改了键就显示新的。
+- **改键**（设置 › 快捷键，`views/settings/ShortcutSettings.tsx`）：点一行，按下新的组合键，Esc 取消；记在当前浏览器（`localStorage` 的 `persona.shortcuts`：`{overrides, disabled, off}`，只存和默认不同的，键写成平台无关的 `Mod+Shift+P`；第一版只存了 overrides 本身，照样读）。
+  hub 没有通用的按用户同步的偏好设置（`/agents/prefs` 只管 Agents 列表，`/devices/{id}/prefs` 是单台设备的推送），所以不跨浏览器同步；别的标签页改了经 `storage` 事件跟上。
+  提示：「需要带 Ctrl / ⌘」（没带 Mod）、「… 浏览器 / 文字编辑 / 终端 / 系统要用，换一个」（保留表 `RESERVED`：⌘T / W / N / R / L、⌘C / V / X / A / Z、对话框的 Mod+Enter、Windows / Linux 上终端的 Ctrl+W / R / L / U / D / Z…）。
+  另一项在用的键（#2586）：行里提示「X 已被「Y」占用」，「替换」把键给这一项、Y 清空，「取消」两边都不动；停用的项也算占用（重新打开时不撞）。
+  - **清除**（×）：这一项没有键（存成 `""`），按原来的键什么都不发生，也不回落到默认值；命令面板里照样能点。
+  - **停用**（每行的开关）：保留键、不生效；**启用快捷键**（页面顶部的总开关）关掉时所有快捷键都不生效，各项自己的设置保留。分发器、终端放行（`passesToApp`）、帮助、命令面板、侧边栏的提示都只读生效中的键（`getBindings` / `useBindings`，清除和停用的为 `""`）；设置页读设定的键（`getConfigured`）。
+  - **恢复默认**：每行（键回到默认、重新启用；默认键已被别的项占用时同样先问替换）和右上角「全部恢复默认」（连总开关一起，清掉存储）。
+  录入时全局快捷键暂停（`holdShortcuts`）；Tab 照常移走焦点。第 1–9 台电脑这一项只改修饰键，数字固定。侧边栏搜索框上的 ⌘K 提示在默认键时不变，改了键就显示新的，没有键时不显示。端到端：`scripts/test/web_shortcuts_e2e.py`。
 - **组件自己处理的键**（`LOCAL_SHORTCUTS`）：终端里的查找（Mac ⌘F；Windows / Linux Ctrl+Shift+F，没接管时 Ctrl+F 也行，#2350）由终端面板自己判断，不登记成命令、分发器看不到；
   只是列在帮助和设置「终端里（固定）」里，并进保留表（Ctrl+Shift+F）让别的命令占不了。放行函数 `passesToApp` 和终端的 `lineEdit`（⌘⌫ / ⌘← / ⌘→）是两件事，互不干扰。
 - **键怎么认**：字母按键面上写的（Dvorak / AZERTY 跟着标签），Mac 的 ⌥ 组合出的字符（⌥B 是 ∫）按物理键认，数字和标点按物理键认；AltGr（Windows 上的 Ctrl+Alt）不算 Mod+Alt；输入法组字中（`isComposing` / keyCode 229）不触发；按住不放的键只触发一次（上 / 下一行除外）。

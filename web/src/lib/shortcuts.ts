@@ -275,25 +275,50 @@ export const LOCAL_SHORTCUTS: readonly LocalShortcut[] = [
 
 // ── the user's bindings ──────────────────────────────────
 
-/** Only what differs from the defaults: command id → chord. */
+/** Only what differs from the defaults: command id → chord, "" for a command whose chord was cleared (no key, no default). */
 export type Overrides = Record<string, string>;
+/** Command id → chord; "" when it has none (cleared, or, for the active bindings, turned off). */
 export type Bindings = Record<string, string>;
+
+/** What the user set: the chords, the commands turned off one by one (they keep their chord), and the switch for all. */
+export interface ShortcutPrefs {
+  overrides: Overrides;
+  disabled: string[];
+  /** Every shortcut is off. */
+  off: boolean;
+}
+
+export const EMPTY_PREFS: ShortcutPrefs = { overrides: {}, disabled: [], off: false };
 
 export const STORAGE_KEY = "persona.shortcuts";
 
-/** The effective chord of every command: the default unless the user rebound it. */
+/** The chord of every command as set: the default unless the user rebound or cleared it. */
 export function bindingsOf(overrides: Overrides): Bindings {
   const out: Bindings = {};
   for (const s of SHORTCUTS) out[s.id] = overrides[s.id] ?? s.chord;
   return out;
 }
 
-export type Check = { ok: true; chord: string } | { ok: false; reason: "mod" | "key" | "reserved" | "conflict" | "digits"; message: string; with?: string };
+/** The chords that fire: as set, minus the commands turned off and everything while the switch for all is off. */
+export function activeBindings(prefs: ShortcutPrefs): Bindings {
+  const out = bindingsOf(prefs.overrides);
+  for (const id of Object.keys(out)) if (prefs.off || prefs.disabled.includes(id)) out[id] = "";
+  return out;
+}
+
+/** The command that has `chord` (or one of the digits it stands for), other than `id`; chords set count, on or off. */
+export function conflictOf(id: string, chord: string, bindings: Bindings): ShortcutDef | undefined {
+  const mine = new Set(expandChord(chord));
+  return SHORTCUTS.find((other) => other.id !== id && expandChord(bindings[other.id] ?? other.chord).some((c) => mine.has(c)));
+}
+
+/** On a conflict, `with` is the command that has the chord and `chord` the chord pressed (the settings offer 替换). */
+export type Check = { ok: true; chord: string } | { ok: false; reason: "mod" | "key" | "reserved" | "conflict" | "digits"; message: string; with?: string; chord?: string };
 
 /**
  * Whether `pressed` can be the chord of command `id`. `pressed` is what the user pressed (a Chord with `mod`); the
  * answer is the canonical chord, or why not: no Mod ("需要带 Ctrl"), a key chords do not use, a reserved chord, or
- * another command's ("已被「X」占用").
+ * another command's ("已被「X」占用"). `bindings` are the chords as set (getConfigured): a command turned off keeps its chord.
  */
 export function checkBinding(id: string, pressed: (Chord & { mod: boolean }) | null, bindings: Bindings, platform: Platform = currentPlatform()): Check {
   if (!pressed) return { ok: false, reason: "key", message: t("lib-shortcuts.check_key") };
@@ -306,81 +331,145 @@ export function checkBinding(id: string, pressed: (Chord & { mod: boolean }) | n
   }
   const why = reservedWhy(chord, platform);
   if (why) return { ok: false, reason: "reserved", message: t("lib-shortcuts.check_reserved", { chord: formatChord(chord, platform), why }) };
-  const mine = new Set(expandChord(chord));
-  for (const other of SHORTCUTS) {
-    if (other.id === id) continue;
-    if (expandChord(bindings[other.id] ?? other.chord).some((c) => mine.has(c))) return { ok: false, reason: "conflict", message: t("lib-shortcuts.check_conflict", { label: other.label }), with: other.id };
-  }
+  const other = conflictOf(id, chord, bindings);
+  if (other) return { ok: false, reason: "conflict", message: t("lib-shortcuts.check_conflict", { label: other.label }), with: other.id, chord };
   return { ok: true, chord };
 }
 
-/** What localStorage held, kept to what still makes sense: known commands, valid chords that are not reserved. */
+/** What localStorage held, kept to what still makes sense: known commands, valid chords that are not reserved, or "". */
 export function sanitizeOverrides(raw: unknown, platform: Platform = currentPlatform()): Overrides {
   const out: Overrides = {};
   if (!raw || typeof raw !== "object") return out;
   for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
     const def = shortcutDef(id);
-    const chord = typeof v === "string" ? canonChord(v) : null;
-    if (!def || !chord || chord === canonChord(def.chord) || reservedWhy(chord, platform)) continue;
+    if (!def || typeof v !== "string") continue;
+    if (v === "") {
+      out[id] = "";
+      continue;
+    }
+    const chord = canonChord(v);
+    if (!chord || chord === canonChord(def.chord) || reservedWhy(chord, platform)) continue;
     out[id] = chord;
   }
-  // two commands on one chord (a default moved since): the first keeps it, the other goes back to its default
+  // two commands on one chord (a default moved since): the first keeps it, the other goes back to its default (or, when
+  // that is taken too, to none)
   const seen = new Set<string>();
+  const taken = (chords: string[]) => chords.some((c) => seen.has(c));
   for (const s of SHORTCUTS) {
-    const chords = expandChord(out[s.id] ?? s.chord);
-    if (chords.some((c) => seen.has(c))) delete out[s.id];
-    for (const c of expandChord(out[s.id] ?? s.chord)) seen.add(c);
+    let chords = expandChord(out[s.id] ?? s.chord);
+    if (taken(chords)) {
+      if (out[s.id]) delete out[s.id];
+      chords = expandChord(s.chord);
+      if (taken(chords)) {
+        out[s.id] = "";
+        chords = [];
+      }
+    }
+    for (const c of chords) seen.add(c);
   }
   return out;
 }
 
-function load(): Overrides {
+/**
+ * What localStorage held, as prefs. The first version stored the overrides on their own ({"jump": "Mod+Shift+O"}); it is
+ * read as such.
+ */
+export function sanitizePrefs(raw: unknown, platform: Platform = currentPlatform()): ShortcutPrefs {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_PREFS };
+  const r = raw as Record<string, unknown>;
+  if (!("overrides" in r || "disabled" in r || "off" in r)) return { ...EMPTY_PREFS, overrides: sanitizeOverrides(r, platform) };
+  const disabled = Array.isArray(r.disabled) ? r.disabled.filter((id): id is string => typeof id === "string" && Boolean(shortcutDef(id))) : [];
+  return { overrides: sanitizeOverrides(r.overrides, platform), disabled: [...new Set(disabled)], off: r.off === true };
+}
+
+function load(): ShortcutPrefs {
   try {
-    return sanitizeOverrides(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
+    return sanitizePrefs(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
   } catch {
-    return {};
+    return { ...EMPTY_PREFS };
   }
 }
 
-let overrides: Overrides = typeof localStorage === "undefined" ? {} : load();
-let snapshot: Bindings = bindingsOf(overrides);
+const isEmpty = (p: ShortcutPrefs) => !Object.keys(p.overrides).length && !p.disabled.length && !p.off;
+
+let prefs: ShortcutPrefs = typeof localStorage === "undefined" ? { ...EMPTY_PREFS } : load();
+let configured: Bindings = bindingsOf(prefs.overrides);
+let snapshot: Bindings = activeBindings(prefs);
 const subscribers = new Set<() => void>();
 
-function commit(next: Overrides) {
-  overrides = next;
-  snapshot = bindingsOf(next);
-  try {
-    if (Object.keys(next).length) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // storage full or blocked: the bindings last until the page is closed
+function commit(next: ShortcutPrefs, save = true) {
+  prefs = next;
+  configured = bindingsOf(next.overrides);
+  snapshot = activeBindings(next);
+  if (save) {
+    try {
+      if (isEmpty(next)) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // storage full or blocked: the bindings last until the page is closed
+    }
   }
   subscribers.forEach((f) => f());
 }
 
+/** The chords that fire now (cleared and turned-off commands have ""). */
 export const getBindings = (): Bindings => snapshot;
-export const getOverrides = (): Overrides => overrides;
+/** The chords as set, whether on or off: what the settings show and check conflicts against. */
+export const getConfigured = (): Bindings => configured;
+export const getOverrides = (): Overrides => prefs.overrides;
+export const getShortcutPrefs = (): ShortcutPrefs => prefs;
 
-/** Binds a command to a chord (the caller has checked it); the default chord clears the override. */
+/** Binds a command to a chord (the caller has checked it), or clears it with ""; the default chord drops the override. */
 export function setBinding(id: string, chord: string) {
   const def = shortcutDef(id);
+  const canon = chord === "" ? "" : canonChord(chord);
+  if (!def || canon === null) return;
+  const overrides = { ...prefs.overrides };
+  if (canon === canonChord(def.chord)) delete overrides[id];
+  else overrides[id] = canon;
+  commit({ ...prefs, overrides });
+}
+
+/** Clears a command's chord: its key does nothing, and it does not fall back to its default. */
+export const clearBinding = (id: string) => setBinding(id, "");
+
+/** Binds `id` to `chord` and clears the command that had it (the settings' 替换). */
+export function replaceBinding(id: string, chord: string, other: string) {
+  const def = shortcutDef(id);
   const canon = canonChord(chord);
-  if (!def || !canon) return;
-  const next = { ...overrides };
-  if (canon === canonChord(def.chord)) delete next[id];
-  else next[id] = canon;
-  commit(next);
+  if (!def || !canon || !shortcutDef(other) || other === id) return;
+  const overrides = { ...prefs.overrides, [other]: "" };
+  if (canon === canonChord(def.chord)) delete overrides[id];
+  else overrides[id] = canon;
+  commit({ ...prefs, overrides });
 }
 
+/** Turns one command on or off; off keeps its chord. */
+export function setShortcutEnabled(id: string, on: boolean) {
+  if (!shortcutDef(id) || on === !prefs.disabled.includes(id)) return;
+  commit({ ...prefs, disabled: on ? prefs.disabled.filter((d) => d !== id) : [...prefs.disabled, id] });
+}
+
+/** The switch for all: off, no shortcut fires (each one's own setting is kept for when it is back on). */
+export function setShortcutsOn(on: boolean) {
+  if (on === !prefs.off) return;
+  commit({ ...prefs, off: !on });
+}
+
+/** Whether a command is as it came: its default chord, and on. */
+export const isDefault = (id: string, p: ShortcutPrefs = prefs) => !(id in p.overrides) && !p.disabled.includes(id);
+
+/** Back to the default chord, and on. The caller checks the default is free (conflictOf), or the other one is cleared. */
 export function resetBinding(id: string) {
-  if (!(id in overrides)) return;
-  const next = { ...overrides };
-  delete next[id];
-  commit(next);
+  if (isDefault(id)) return;
+  const overrides = { ...prefs.overrides };
+  delete overrides[id];
+  commit({ ...prefs, overrides, disabled: prefs.disabled.filter((d) => d !== id) });
 }
 
+/** Every command back to its default chord and on, and the switch for all on. */
 export function resetAllBindings() {
-  if (Object.keys(overrides).length) commit({});
+  if (!isEmpty(prefs)) commit({ ...EMPTY_PREFS });
 }
 
 function subscribe(f: () => void) {
@@ -391,19 +480,25 @@ function subscribe(f: () => void) {
 // another tab rebinding
 if (typeof addEventListener !== "undefined") {
   addEventListener("storage", (e) => {
-    if (e.key === STORAGE_KEY || e.key === null) commit(load());
+    if (e.key === STORAGE_KEY || e.key === null) commit(load(), false);
   });
 }
 
-/** The effective chords, live. */
+/** The chords that fire, live. */
 export function useBindings(): Bindings {
   return useSyncExternalStore(subscribe, getBindings, getBindings);
+}
+
+/** Everything the user set, live (the settings page). */
+export function useShortcutPrefs(): ShortcutPrefs {
+  return useSyncExternalStore(subscribe, getShortcutPrefs, getShortcutPrefs);
 }
 
 /** The hint on the sidebar's search box: the ⌘K it has always shown while 跳转 has its default chord, else the chord it has now. */
 export function jumpHint(bindings: Bindings, platform: Platform = currentPlatform()): string {
   const def = shortcutDef("jump")!;
-  return bindings.jump === def.chord || !bindings.jump ? "⌘K" : formatChord(bindings.jump, platform);
+  if (!bindings.jump) return "";
+  return bindings.jump === def.chord ? "⌘K" : formatChord(bindings.jump, platform);
 }
 
 // ── handlers and the dispatcher ──────────────────────────

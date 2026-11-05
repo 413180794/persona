@@ -1,20 +1,60 @@
-// 设置 › 快捷键: every shortcut with its chord; click one and press the new chord (Esc cancels), 恢复默认 per row and for
-// all. Stored in this browser (lib/shortcuts.ts). docs/web.md「快捷键」.
+// 设置 › 快捷键: the switch for all, then every shortcut with its chord; click one and press the new chord (Esc cancels),
+// a chord another command has offers 替换 (that one is cleared) or 取消. Each row can be cleared (its key does nothing,
+// no default either), turned off (keeps its chord), and put back to its default; 全部恢复默认 for the page. Stored in
+// this browser (lib/shortcuts.ts). docs/web.md「快捷键」.
 import { useEffect, useState } from "react";
-import { checkBinding, chordParts, currentPlatform, eventChord, getOverrides, holdShortcuts, LOCAL_SHORTCUTS, modName, resetAllBindings, resetBinding, SCOPE_LABEL, SHORTCUTS, setBinding, useBindings, type ShortcutDef, type ShortcutScope } from "../../lib/shortcuts";
+import {
+  checkBinding,
+  chordParts,
+  clearBinding,
+  conflictOf,
+  currentPlatform,
+  eventChord,
+  getConfigured,
+  holdShortcuts,
+  isDefault,
+  LOCAL_SHORTCUTS,
+  modName,
+  replaceBinding,
+  resetAllBindings,
+  resetBinding,
+  SCOPE_LABEL,
+  SHORTCUTS,
+  setBinding,
+  setShortcutEnabled,
+  setShortcutsOn,
+  shortcutDef,
+  useBindings,
+  useShortcutPrefs,
+  type ShortcutDef,
+  type ShortcutScope,
+} from "../../lib/shortcuts";
 import { t } from "../../i18n";
 import { Button, cx, IconButton, Kbd } from "../../ui/atoms";
-import { Group, Row } from "./SettingsParts";
+import { Group, Row, RowConfirm, Switch } from "./SettingsParts";
 
 const SCOPES: ShortcutScope[] = ["global", "session", "sidebar"];
 
+/** A chord that another command has: 替换 gives it to `id` and clears `with`. */
+interface Pending {
+  id: string;
+  chord: string;
+  with: string;
+  /** It is 恢复默认 that found the default taken. */
+  reset?: boolean;
+}
+
 export function ShortcutSettings() {
-  const bindings = useBindings();
+  const prefs = useShortcutPrefs();
+  // re-read on every change (useShortcutPrefs re-renders): the chords as set, on or off
+  const configured = getConfigured();
+  const active = useBindings();
   // the command whose new chord is awaited, and what was wrong with the last one pressed for it
   const [recording, setRecording] = useState<string | null>(null);
   const [problem, setProblem] = useState<{ id: string; text: string } | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
   const platform = currentPlatform();
-  const overridden = Object.keys(getOverrides());
+  const changed = prefs.off || SHORTCUTS.some((s) => !isDefault(s.id, prefs));
 
   // the app's own shortcuts stand aside while a chord is awaited
   useEffect(() => (recording ? holdShortcuts() : undefined), [recording]);
@@ -34,55 +74,127 @@ export function ShortcutSettings() {
     const pressed = eventChord(e.nativeEvent, platform);
     // a modifier on its own: still waiting for the key
     if (!pressed && ["Control", "Meta", "Alt", "Shift", "AltGraph"].includes(e.key)) return;
-    const check = checkBinding(def.id, pressed, bindings, platform);
-    if (!check.ok) return setProblem({ id: def.id, text: check.message });
+    const check = checkBinding(def.id, pressed, configured, platform);
+    if (!check.ok) {
+      if (check.reason === "conflict" && check.with && check.chord) {
+        stop();
+        return setPending({ id: def.id, chord: check.chord, with: check.with });
+      }
+      return setProblem({ id: def.id, text: check.message });
+    }
     setBinding(def.id, check.chord);
     stop();
   };
 
+  // 恢复默认 for one: its default chord may have been given to another command since
+  const reset = (def: ShortcutDef) => {
+    stop();
+    const other = configured[def.id] === def.chord ? undefined : conflictOf(def.id, def.chord, configured);
+    if (other) return setPending({ id: def.id, chord: def.chord, with: other.id, reset: true });
+    resetBinding(def.id);
+  };
+
+  const replace = (p: Pending) => {
+    replaceBinding(p.id, p.chord, p.with);
+    setShortcutEnabled(p.id, true);
+    setPending(null);
+  };
+
   return (
     <>
+      <Group
+        title={t("settings-shortcutsettings.title")}
+        right={
+          <Button tone="quiet" disabled={!changed} onClick={() => (stop(), setPending(null), resetAllBindings())}>
+            {t("settings-shortcutsettings.reset_all")}
+          </Button>
+        }
+        footer={prefs.off ? t("settings-shortcutsettings.all_off_footer") : undefined}
+      >
+        <Row label={t("settings-shortcutsettings.enable_all")} hint={t("settings-shortcutsettings.enable_all_hint")}>
+          <Switch on={!prefs.off} onChange={setShortcutsOn} label={t("settings-shortcutsettings.enable_all")} />
+        </Row>
+      </Group>
       {SCOPES.map((scope, n) => (
         <Group
           key={scope}
-          title={n === 0 ? t("settings-shortcutsettings.title_first", { scope: SCOPE_LABEL[scope] }) : SCOPE_LABEL[scope]}
-          right={n === 0 ? <Button tone="quiet" disabled={!overridden.length} onClick={() => (stop(), resetAllBindings())}>{t("settings-shortcutsettings.reset_all")}</Button> : undefined}
+          title={SCOPE_LABEL[scope]}
           footer={
             n === SCOPES.length - 1
               ? t(platform === "mac" ? "settings-shortcutsettings.footer_mac" : "settings-shortcutsettings.footer_other", {
                   mod: modName(platform),
-                  help: chordParts(bindings.help ?? "", platform).join(platform === "mac" ? "" : "+"),
+                  help: chordParts(active.help ?? "", platform).join(platform === "mac" ? "" : "+") || t("settings-shortcutsettings.help_command"),
                 })
               : undefined
           }
         >
           {SHORTCUTS.filter((s) => s.scope === scope).map((s) => {
             const waiting = recording === s.id;
-            const changed = overridden.includes(s.id);
+            const chord = configured[s.id] ?? s.chord;
+            const on = !prefs.disabled.includes(s.id);
+            const asking = pending?.id === s.id ? pending : null;
             const error = problem?.id === s.id ? problem.text : "";
+            const hint = asking ? (
+              <span className="text-orange">
+                {t(asking.reset ? "settings-shortcutsettings.default_taken" : "settings-shortcutsettings.taken", {
+                  chord: chordParts(asking.chord, platform).join(platform === "mac" ? "" : "+"),
+                  label: shortcutDef(asking.with)?.label ?? asking.with,
+                })}
+              </span>
+            ) : error ? (
+              <span className="text-red">{error}</span>
+            ) : !on ? (
+              t("settings-shortcutsettings.row_off")
+            ) : undefined;
             return (
-              <Row key={s.id} label={s.label} hint={error ? <span className="text-red">{error}</span> : undefined}>
-                {changed && !waiting && <IconButton icon="undo" label={t("settings-shortcutsettings.reset_shortcut", { name: s.label })} size={26} iconSize={13} onClick={() => resetBinding(s.id)} />}
-                <button
-                  type="button"
-                  aria-label={waiting ? t("settings-shortcutsettings.recording_label", { name: s.label }) : t("settings-shortcutsettings.chord_label", { name: s.label, chord: chordParts(bindings[s.id] ?? s.chord, platform).join(" ") })}
-                  onClick={() => {
-                    setProblem(null);
-                    setRecording(s.id);
-                  }}
-                  onKeyDown={waiting ? (e) => onKey(e, s) : undefined}
-                  onBlur={() => waiting && stop()}
-                  autoFocus={waiting}
-                  ref={(el) => {
-                    if (waiting) el?.focus();
-                  }}
-                  className={cx(
-                    "touch-hit flex min-h-7 items-center gap-1 whitespace-nowrap rounded-control px-1.5 transition-[background-color,box-shadow] duration-150",
-                    waiting ? "bg-accent-tint text-[12px] text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "hover:bg-hover",
-                  )}
-                >
-                  {waiting ? t("settings-shortcutsettings.recording") : chordParts(bindings[s.id] ?? s.chord, platform).map((k, i) => <Kbd key={i}>{k}</Kbd>)}
-                </button>
+              <Row key={s.id} label={<span className={cx((!on || prefs.off) && "text-ink-3")}>{s.label}</span>} hint={hint}>
+                <RowConfirm
+                  open={Boolean(asking)}
+                  confirm={t("settings-shortcutsettings.replace")}
+                  onCancel={() => setPending(null)}
+                  onConfirm={() => asking && replace(asking)}
+                  trigger={
+                    <>
+                      {!isDefault(s.id, prefs) && !waiting && <IconButton icon="undo" label={t("settings-shortcutsettings.reset_shortcut", { name: s.label })} size={26} iconSize={13} onClick={() => reset(s)} />}
+                      {chord && !waiting && <IconButton icon="x" label={t("settings-shortcutsettings.clear_shortcut", { name: s.label })} size={26} iconSize={13} onClick={() => (stop(), clearBinding(s.id))} />}
+                      <button
+                        type="button"
+                        aria-label={
+                          waiting
+                            ? t("settings-shortcutsettings.recording_label", { name: s.label })
+                            : chord
+                              ? t("settings-shortcutsettings.chord_label", { name: s.label, chord: chordParts(chord, platform).join(" ") })
+                              : t("settings-shortcutsettings.unset_label", { name: s.label })
+                        }
+                        onClick={() => {
+                          setProblem(null);
+                          setPending(null);
+                          setRecording(s.id);
+                        }}
+                        onKeyDown={waiting ? (e) => onKey(e, s) : undefined}
+                        onBlur={() => waiting && stop()}
+                        autoFocus={waiting}
+                        ref={(el) => {
+                          if (waiting) el?.focus();
+                        }}
+                        className={cx(
+                          "touch-hit flex min-h-7 min-w-[7.5rem] items-center justify-end gap-1 whitespace-nowrap rounded-control px-1.5 transition-[background-color,box-shadow,opacity] duration-150",
+                          waiting ? "bg-accent-tint text-[12px] text-accent-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "hover:bg-hover",
+                          !waiting && (!on || prefs.off) && "opacity-50",
+                        )}
+                      >
+                        {waiting ? (
+                          t("settings-shortcutsettings.recording")
+                        ) : chord ? (
+                          chordParts(chord, platform).map((k, i) => <Kbd key={i}>{k}</Kbd>)
+                        ) : (
+                          <span className="text-[12px] text-ink-3">{t("settings-shortcutsettings.unset")}</span>
+                        )}
+                      </button>
+                      <Switch on={on} onChange={(v) => setShortcutEnabled(s.id, v)} label={t("settings-shortcutsettings.enable_item", { name: s.label })} />
+                    </>
+                  }
+                />
               </Row>
             );
           })}

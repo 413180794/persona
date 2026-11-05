@@ -1,6 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  activeBindings,
   bindingsOf,
+  clearBinding,
+  conflictOf,
+  EMPTY_PREFS,
+  getBindings,
+  getConfigured,
+  getShortcutPrefs,
+  isDefault,
+  replaceBinding,
+  resetAllBindings,
+  resetBinding,
+  sanitizePrefs,
+  setBinding,
+  setShortcutEnabled,
+  setShortcutsOn,
   canonChord,
   checkBinding,
   chordOfEvent,
@@ -220,7 +235,7 @@ describe("rebinding", () => {
     expect(checkBinding("jump", eventChord(key("o", { shiftKey: true, altKey: true }), "mac"), defaults, "mac")).toMatchObject({ reason: "mod" });
   });
   it("names the command that already has the chord", () => {
-    expect(checkBinding("jump", pressed("j"), defaults, "other")).toEqual({ ok: false, reason: "conflict", message: "已被「终端 ⇄ 对话」占用", with: "terminal-chat" });
+    expect(checkBinding("jump", pressed("j"), defaults, "other")).toEqual({ ok: false, reason: "conflict", message: "已被「终端 ⇄ 对话」占用", with: "terminal-chat", chord: "Mod+J" });
     // its own chord is not a conflict with itself
     expect(checkBinding("jump", pressed("k"), defaults, "other")).toEqual({ ok: true, chord: "Mod+K" });
   });
@@ -521,5 +536,104 @@ describe("keys a component handles itself (the terminal's find bar)", () => {
     const e = event(ctrl("f", { shiftKey: true }), terminal);
     expect(dispatchKey(e, { platform: "other" })).toBe(false);
     expect(e.prevented).toBe(false);
+  });
+});
+
+describe("clearing, turning off and the switch for all", () => {
+  afterEach(() => resetAllBindings());
+
+  it("a cleared command has no chord, and does not fall back to its default", () => {
+    clearBinding("jump");
+    expect(getConfigured().jump).toBe("");
+    expect(getBindings().jump).toBe("");
+    expect(matchShortcut(ctrl("k"), getBindings(), "other")).toBeUndefined();
+    // a stored "" survives a reload
+    expect(sanitizePrefs(JSON.parse(JSON.stringify(getShortcutPrefs())), "other").overrides).toEqual({ jump: "" });
+    // and its old chord is free for another command
+    expect(conflictOf("help", "Mod+K", getConfigured())).toBeUndefined();
+  });
+  it("a cleared command's key does nothing: the event is left to the browser / the terminal", () => {
+    const run = vi.fn();
+    on("jump", run);
+    clearBinding("jump");
+    const e = event(ctrl("k"), page);
+    expect(dispatchKey(e, { platform: "other" })).toBe(false);
+    expect(passesToApp(ctrl("k"), undefined, "other")).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(e.prevented).toBe(false);
+  });
+  it("a command turned off keeps its chord, which does nothing until it is back on", () => {
+    const run = vi.fn();
+    on("jump", run);
+    setShortcutEnabled("jump", false);
+    expect(getConfigured().jump).toBe("Mod+K");
+    expect(getBindings().jump).toBe("");
+    expect(dispatchKey(event(ctrl("k"), page), { platform: "other" })).toBe(false);
+    // the others still work
+    expect(getBindings().commands).toBe("Mod+Shift+P");
+    // its chord still counts as taken: turning it back on must not clash
+    expect(checkBinding("help", eventChord(ctrl("k"), "other"), getConfigured(), "other")).toMatchObject({ reason: "conflict", with: "jump" });
+    setShortcutEnabled("jump", true);
+    expect(dispatchKey(event(ctrl("k"), page), { platform: "other" })).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+  it("the switch for all turns every shortcut off and back on, keeping each one's setting", () => {
+    const run = vi.fn();
+    on("jump", run);
+    setShortcutEnabled("help", false);
+    setBinding("commands", "Mod+Shift+O");
+    setShortcutsOn(false);
+    expect(Object.values(getBindings()).every((c) => c === "")).toBe(true);
+    expect(dispatchKey(event(ctrl("k"), page), { platform: "other" })).toBe(false);
+    expect(passesToApp(ctrl("k"), undefined, "other")).toBe(false);
+    setShortcutsOn(true);
+    expect(getBindings().jump).toBe("Mod+K");
+    expect(getBindings().help).toBe("");
+    expect(getBindings().commands).toBe("Mod+Shift+O");
+    expect(dispatchKey(event(ctrl("k"), page), { platform: "other" })).toBe(true);
+  });
+  it("替换 takes the chord and clears the command that had it", () => {
+    const check = checkBinding("jump", eventChord(ctrl("j"), "other"), getConfigured(), "other");
+    expect(check).toMatchObject({ ok: false, reason: "conflict", with: "terminal-chat", chord: "Mod+J" });
+    if (check.ok || !check.with || !check.chord) throw new Error("expected a conflict");
+    replaceBinding("jump", check.chord, check.with);
+    expect(getConfigured().jump).toBe("Mod+J");
+    expect(getConfigured()["terminal-chat"]).toBe("");
+    expect(matchShortcut(ctrl("j"), getBindings(), "other")?.def.id).toBe("jump");
+  });
+  it("恢复默认 brings back the chord and turns it on; for all, everything", () => {
+    clearBinding("jump");
+    setShortcutEnabled("help", false);
+    expect(isDefault("jump")).toBe(false);
+    expect(isDefault("help")).toBe(false);
+    resetBinding("jump");
+    resetBinding("help");
+    expect(getBindings().jump).toBe("Mod+K");
+    expect(getBindings().help).toBe("Mod+/");
+    setBinding("jump", "Mod+Shift+O");
+    setShortcutsOn(false);
+    resetAllBindings();
+    expect(getShortcutPrefs()).toEqual(EMPTY_PREFS);
+    expect(getBindings()).toEqual(bindingsOf({}));
+  });
+  it("finds the command a default would clash with before it is restored", () => {
+    // 跳转 cleared, and its ⌘K given to 帮助: restoring 跳转 would take 帮助's chord
+    const b = bindingsOf({ jump: "", help: "Mod+K" });
+    expect(conflictOf("jump", "Mod+K", b)?.id).toBe("help");
+    expect(conflictOf("jump", "Mod+K", bindingsOf({}))).toBeUndefined();
+  });
+  it("reads the prefs as stored, and the first version's plain overrides", () => {
+    expect(sanitizePrefs({ jump: "Mod+Shift+O" }, "other")).toEqual({ overrides: { jump: "Mod+Shift+O" }, disabled: [], off: false });
+    expect(sanitizePrefs({ overrides: { jump: "" }, disabled: ["help", "nope", "help", 3], off: true }, "other")).toEqual({ overrides: { jump: "" }, disabled: ["help"], off: true });
+    expect(sanitizePrefs(null)).toEqual(EMPTY_PREFS);
+    expect(sanitizePrefs({ off: "yes" })).toEqual(EMPTY_PREFS);
+  });
+  it("leaves a command with nothing when a stored chord took its default too", () => {
+    // 跳转 (first in the registry) was given 帮助's ⌘/ and 帮助's own override lost: 帮助's default is taken, so it gets none
+    expect(sanitizeOverrides({ jump: "Mod+/" }, "other")).toEqual({ jump: "Mod+/", help: "" });
+    expect(activeBindings({ overrides: {}, disabled: ["jump"], off: false }).jump).toBe("");
+  });
+  it("the search box shows no hint once 跳转 has no chord", () => {
+    expect(jumpHint(bindingsOf({ jump: "" }), "other")).toBe("");
   });
 });

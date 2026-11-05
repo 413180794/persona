@@ -1,12 +1,24 @@
 {
-  "title_first": "快捷键 · {scope}",
   "reset_all": "全部恢复默认",
-  "footer_mac": "点一项，按下新的组合键；Esc 取消。每个快捷键都要带 {mod}，单个按键不会被抢走。按 {help} 随时查看当前的快捷键。",
-  "footer_other": "点一项，按下新的组合键；Esc 取消。每个快捷键都要带 {mod}，单个按键不会被抢走。Windows / Linux 上 Ctrl 组合键会盖过终端里同名的按键（比如 Ctrl+K），可以在这里改键。按 {help} 随时查看当前的快捷键。",
+  "footer_mac": "点一项，按下新的组合键；Esc 取消。× 清除（不再触发，也不回到默认），开关单独停用。每个快捷键都要带 {mod}，单个按键不会被抢走。按 {help} 随时查看当前的快捷键。",
+  "footer_other": "点一项，按下新的组合键；Esc 取消。× 清除（不再触发，也不回到默认），开关单独停用。每个快捷键都要带 {mod}，单个按键不会被抢走。Windows / Linux 上 Ctrl 组合键会盖过终端里同名的按键（比如 Ctrl+K），可以在这里改键或停用。按 {help} 随时查看当前的快捷键。",
   "reset_shortcut": "恢复「{name}」的默认快捷键",
   "recording_label": "{name}：按下新的快捷键，Esc 取消",
   "chord_label": "{name}：{chord}，点击改键",
   "recording": "按下新的快捷键…",
   "terminal_title": "终端里（固定）",
-  "terminal_footer": "这些键由终端自己处理，不能改，也不会被别的快捷键占用。"
+  "terminal_footer": "这些键由终端自己处理，不能改，也不会被别的快捷键占用。",
+  "title": "快捷键",
+  "enable_all": "启用快捷键",
+  "enable_all_hint": "关掉后所有快捷键都不生效，各项的设置保留",
+  "all_off_footer": "快捷键已全部停用。命令面板里仍能点选执行。",
+  "row_off": "已停用",
+  "unset": "未设置",
+  "unset_label": "{name}：未设置，点击设置快捷键",
+  "clear_shortcut": "清除「{name}」的快捷键",
+  "enable_item": "启用「{name}」",
+  "replace": "替换",
+  "taken": "{chord} 已被「{label}」占用，替换会清空它的快捷键",
+  "default_taken": "默认的 {chord} 已被「{label}」占用，替换会清空它的快捷键",
+  "help_command": "「快捷键帮助」"
 }

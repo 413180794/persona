@@ -1,6 +1,6 @@
 // ⌘/: every shortcut with the chord it has now (the user's own, if rebound), grouped by where it works.
 import { closeHelp, openShortcutSettings, useHelpOpen } from "../lib/shortcut-help";
-import { chordParts, currentPlatform, LOCAL_SHORTCUTS, SCOPE_LABEL, SHORTCUTS, useBindings, type ShortcutScope } from "../lib/shortcuts";
+import { chordParts, currentPlatform, LOCAL_SHORTCUTS, SCOPE_LABEL, SHORTCUTS, useBindings, useShortcutPrefs, type ShortcutScope } from "../lib/shortcuts";
 import { navigate } from "../lib/router";
 import { Button, Dialog, Kbd } from "../ui/atoms";
 import { t } from "../i18n";
@@ -10,6 +10,7 @@ const SCOPES: ShortcutScope[] = ["global", "session", "sidebar"];
 export function ShortcutHelp() {
   const open = useHelpOpen();
   const bindings = useBindings();
+  const prefs = useShortcutPrefs();
   const platform = currentPlatform();
   return (
     <Dialog
@@ -38,9 +39,12 @@ export function ShortcutHelp() {
                 <li key={s.id} className="flex items-center gap-3 py-1.5">
                   <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{s.label}</span>
                   <span className="flex shrink-0 items-center gap-1">
-                    {chordParts(bindings[s.id] ?? s.chord).map((k, i) => (
-                      <Kbd key={i}>{k}</Kbd>
-                    ))}
+                    {bindings[s.id] ? (
+                      chordParts(bindings[s.id]!).map((k, i) => <Kbd key={i}>{k}</Kbd>)
+                    ) : (
+                      // cleared, turned off, or every shortcut off
+                      <span className="text-[12px] text-ink-3">{t(prefs.off || prefs.disabled.includes(s.id) ? "shortcuthelp.off" : "shortcuthelp.unset")}</span>
+                    )}
                   </span>
                 </li>
               ))}

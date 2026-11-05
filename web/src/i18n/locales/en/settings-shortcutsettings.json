@@ -1,12 +1,24 @@
 {
-  "title_first": "Shortcuts · {scope}",
   "reset_all": "Reset all",
-  "footer_mac": "Click a shortcut, then press the new keys. Esc cancels. Every shortcut includes {mod}, so single keys are never taken over. Press {help} any time to see your shortcuts.",
-  "footer_other": "Click a shortcut, then press the new keys. Esc cancels. Every shortcut includes {mod}, so single keys are never taken over. On Windows and Linux, Ctrl shortcuts override the same keys in the terminal (like Ctrl+K); you can change them here. Press {help} any time to see your shortcuts.",
+  "footer_mac": "Click a shortcut, then press the new keys. Esc cancels. × clears it (it won't fire or fall back to the default); the switch turns it off. Every shortcut includes {mod}, so single keys are never taken over. Press {help} any time to see your shortcuts.",
+  "footer_other": "Click a shortcut, then press the new keys. Esc cancels. × clears it (it won't fire or fall back to the default); the switch turns it off. Every shortcut includes {mod}, so single keys are never taken over. On Windows and Linux, Ctrl shortcuts override the same keys in the terminal (like Ctrl+K); you can change or turn them off here. Press {help} any time to see your shortcuts.",
   "reset_shortcut": "Reset \"{name}\" to default",
   "recording_label": "{name}: press the new shortcut, Esc to cancel",
   "chord_label": "{name}: {chord}, click to change",
   "recording": "Press new shortcut…",
   "terminal_title": "In the terminal (fixed)",
-  "terminal_footer": "The terminal handles these keys itself. They can't be changed, and no other shortcut takes them."
+  "terminal_footer": "The terminal handles these keys itself. They can't be changed, and no other shortcut takes them.",
+  "title": "Shortcuts",
+  "enable_all": "Enable shortcuts",
+  "enable_all_hint": "When off, no shortcut works. Each one's settings are kept",
+  "all_off_footer": "All shortcuts are off. You can still run commands from the command palette.",
+  "row_off": "Off",
+  "unset": "None",
+  "unset_label": "{name}: no shortcut, click to set one",
+  "clear_shortcut": "Clear the shortcut for \"{name}\"",
+  "enable_item": "Enable \"{name}\"",
+  "replace": "Replace",
+  "taken": "{chord} is used by \"{label}\". Replacing clears its shortcut",
+  "default_taken": "The default {chord} is used by \"{label}\". Replacing clears its shortcut",
+  "help_command": "\"Keyboard shortcuts\""
 }
