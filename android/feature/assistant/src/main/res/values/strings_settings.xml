@@ -127,4 +127,9 @@
         <item quantity="one">%1$d memory</item>
         <item quantity="other">%1$d memories</item>
     </plurals>
+    <string name="assistant_settings_quiet_header">Task notifications</string>
+    <string name="assistant_settings_quiet">Notify only in the main conversation</string>
+    <string name="assistant_settings_quiet_caption">Tasks the main conversation sends out stay out of the Live Activity, pushes and the badge; when one finishes, waits for your answer or fails, Persona tells you in the main conversation. Only affects tasks sent from now on.</string>
+    <string name="assistant_settings_unavailable">Assistant settings aren\'t available</string>
+    <string name="assistant_settings_unavailable_detail">Pair with a hub first, or leave the demo.</string>
 </resources>

@@ -209,6 +209,18 @@ internal class AssistantSettingsState(
         }
     }
 
+    /** 只在主对话里通知: moves at once; a failure puts it back and says so. */
+    suspend fun setMainTasksQuiet(on: Boolean) {
+        val config = state.value.config ?: return
+        if (config.mainTasksQuiet == null || config.mainTasksQuiet == on) return
+        set { copy(config = config.copy(mainTasksQuiet = on)) }
+        val ok = perform(SettingsText(R.string.assistant_settings_save_failed)) {
+            val updated = api.updateConfig(AssistantConfigUpdate(mainTasksQuiet = on))
+            set { copy(config = updated) }
+        }
+        if (!ok) set { copy(config = this.config?.copy(mainTasksQuiet = !on)) }
+    }
+
     suspend fun saveNotes(text: String): Boolean = perform(SettingsText(R.string.assistant_settings_save_failed)) {
         val updated = api.updateConfig(AssistantConfigUpdate(notes = text))
         set { copy(config = updated) }

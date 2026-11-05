@@ -71,22 +71,39 @@ internal fun DevicesPage(
 }
 
 @Composable
-internal fun NotificationPreferences(controller: DeviceSettingsState, available: Boolean): LazyListScope.() -> Unit {
+internal fun NotificationPreferences(
+    controller: DeviceSettingsState,
+    available: Boolean,
+    desktops: List<persona.core.contracts.HubDesktop> = emptyList(),
+    onDesktops: (() -> Unit)? = null,
+): LazyListScope.() -> Unit {
     val state by controller.state.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     LaunchedEffect(controller) { if (available) controller.loadPreferences() }
+    // The system's switch for the whole app (iOS: 通知没有打开 first): read again whenever the page comes back.
+    var systemOff by remember { mutableStateOf(false) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        systemOff = !androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
     val prefs = state.preferences?.takeIf { available }
     val enabled = !state.busy && !state.needsCleanup
     return {
+        if (systemOff) item("system-off") {
+            JNotice(stringResource(R.string.settings_notify_system_off_text), Modifier.padding(top = Tokens.Space.s),
+                title = stringResource(R.string.settings_notify_system_off), status = Status.NeedsYou, icon = PhIcons.BellSimple,
+                actionLabel = stringResource(R.string.settings_notify_system_settings), onAction = { PhoneReadiness.open(context, listOf(notificationSettings)) })
+        }
         item { JSectionHeader(stringResource(R.string.settings_notify_prefs_header)) }
         if (!available) item { JEmptyState(stringResource(R.string.settings_notify_prefs_unavailable), stringResource(R.string.settings_check_pairing_and_hub)) }
         if (prefs != null) {
             item {
                 JGroupItem(GroupPosition.Single) {
                     JSwitchRow(stringResource(R.string.settings_notify_needs_you), prefs.input, { scope.launch { controller.savePreferences(prefs.copy(input = it)) } },
-                        leadingIcon = PhIcons.BellSimple, enabled = enabled)
+                        subtitle = stringResource(R.string.settings_notify_needs_you_subtitle), leadingIcon = PhIcons.BellSimple, enabled = enabled)
                 }
             }
+            item { SettingsCaption(stringResource(R.string.settings_notify_needs_you_footer), Modifier.padding(horizontal = Tokens.Space.xs, vertical = Tokens.Space.s)) }
             item { JSectionHeader(stringResource(R.string.settings_notify_done_header)) }
             DoneNotification.entries.forEachIndexed { index, mode ->
                 item {
@@ -119,6 +136,7 @@ internal fun NotificationPreferences(controller: DeviceSettingsState, available:
                 }
             }
         }
+        if (prefs?.muteWhileDesktop != null) desktopMuteItems(controller, desktops, onDesktops)
         if (available && state.preferences == null) item {
             Action(stringResource(if (state.busy) R.string.settings_reading else R.string.settings_retry_read), enabled = !state.busy) { scope.launch { controller.loadPreferences() } }
         }

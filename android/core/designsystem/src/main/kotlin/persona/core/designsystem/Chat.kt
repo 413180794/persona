@@ -105,6 +105,10 @@ fun ChatTopBar(
     }
 }
 
+private const val BubbleSecondary = 0.82f
+private const val BubbleTertiary = 0.66f
+private const val BubbleLine = 0.24f
+
 /** The user's message: a glass bubble, a wash bubble, or a bordered box. Right-aligned, at most 86% wide. [own]: typed by
  *  the user, filled with [PersonaPalette.userBubble]; otherwise (another session's, Feishu's) the style's own tint. */
 @Composable
@@ -127,8 +131,16 @@ fun UserBubbleFrame(modifier: Modifier = Modifier, footer: (@Composable () -> Un
                     AppStyle.Board -> Modifier.background(if (own) palette.userBubble else palette.surface).border(1.dp, palette.line, shape)
                 })
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            content = content,
-        )
+        ) {
+            // A deep bubble of its own (珊瑚橙…): everything written in it, links too, takes the bubble's words.
+            val words = palette.userBubbleText?.takeIf { own }
+            if (words == null) content()
+            else CompositionLocalProvider(
+                LocalPalette provides palette.copy(ink = words, ink2 = words.copy(alpha = BubbleSecondary), ink3 = words.copy(alpha = BubbleTertiary),
+                    accent = words, line = words.copy(alpha = BubbleLine)),
+                LocalContentColor provides words,
+            ) { content() }
+        }
         footer?.let { Spacer(Modifier.height(4.dp)); it() }
     }
 }

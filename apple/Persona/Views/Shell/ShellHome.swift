@@ -410,6 +410,7 @@ struct ShellDestinations: ViewModifier {
                     case .inbox: InboxPage(path: $path, accountState: accounts, embedded: true)
                     case .todos: TodosView()
                     case .machines: MachinesView()
+                    case .extensionPage(let r): ExtensionNavPage(route: r)
                     }
                 }
                 .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id) }

@@ -41,8 +41,9 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 
 /**
- * 设置 › 界面风格: three styles, applied at once and remembered on this phone. Light and dark keep following the
- * system. Each option shows a small live preview drawn with the real components of that style.
+ * 设置 › 界面风格: three styles, applied at once and remembered on this phone, then 主题色 (iOS `ThemeColor`) and 深浅色
+ * (iOS `ColorSchemeChoice`); both default to what the app always did (the style's own colors, the system's appearance).
+ * Each style option shows a small live preview drawn with the real components of that style.
  */
 @Composable
 fun AppearanceSettings(modifier: Modifier = Modifier) {
@@ -57,7 +58,9 @@ fun AppearanceSettings(modifier: Modifier = Modifier) {
             StyleOption(style, selected = style == current) { store.setStyle(style) }
             Spacer(Modifier.height(12.dp))
         }
+        ThemeColorOptions(store)
         ExtensionThemeOptions()
+        SchemeOptions(store)
         if (current == AppStyle.Glass) {
             JSectionHeader(stringResource(R.string.settings_style_transparency))
             JSegmented(GlassPreference.entries.map { JSegment(it.label) }, GlassPreference.entries.indexOf(glass), { store.setGlass(GlassPreference.entries[it]) })
@@ -260,4 +263,65 @@ private fun PersonaOption(
         Spacer(Modifier.width(Tokens.Space.s))
         JRadio(selected, null)
     }
+}
+
+/**
+ * 主题色: 跟随界面风格 (the default), 跟随形象 (only while the chosen package brings colors, or while it is chosen), then
+ * the five fixed accents, each with its swatch in this appearance. Choosing one drops an extension's role theme, which
+ * would otherwise go over it.
+ */
+@Composable
+private fun ThemeColorOptions(store: AppStyleStore) {
+    val chosen by store.color.collectAsState()
+    val extension by store.themeKey.collectAsState()
+    val pack = LocalPersonaPack.current
+    val personaAccent = ThemeColors.persona(pack?.manifest?.colors)
+    val options = buildList {
+        add(ThemeColor.Style)
+        if (personaAccent != null || chosen == ThemeColor.Persona) add(ThemeColor.Persona)
+        addAll(ThemeColor.presets)
+    }
+    val dark = PersonaTheme.darkTheme
+    JSectionHeader(stringResource(R.string.settings_theme_color))
+    Column {
+        options.forEachIndexed { index, option ->
+            val swatch = when (option) {
+                ThemeColor.Style -> null
+                ThemeColor.Persona -> personaAccent?.swatch(dark)
+                else -> option.preset?.swatch(dark)
+            }
+            JGroupItem(GroupPosition.of(index, options.size)) {
+                JRow(option.label, chevron = false,
+                    subtitle = when (option) {
+                        ThemeColor.Style -> stringResource(R.string.settings_theme_color_style_detail)
+                        ThemeColor.Persona -> if (personaAccent == null) stringResource(R.string.settings_theme_color_persona_none)
+                            else stringResource(R.string.settings_theme_color_persona_detail, pack?.manifest?.name.orEmpty())
+                        else -> null
+                    },
+                    leading = { ColorSwatch(swatch) },
+                    onClick = { store.setColor(option); store.setTheme(null) },
+                    trailing = { JRadio(extension == null && option == chosen, null) })
+            }
+        }
+    }
+    SettingsCaption(stringResource(R.string.settings_theme_color_note), Modifier.padding(vertical = Tokens.Space.s))
+}
+
+/** A dot of the accent; the style's own is shown as the current accent, ringed, as "whatever the style has". */
+@Composable
+private fun ColorSwatch(color: androidx.compose.ui.graphics.Color?) {
+    val palette = PersonaTheme.palette
+    Box(Modifier.size(Tokens.Space.xl).clip(CircleShape)
+        .background(color ?: palette.surfaceStrong)
+        .border(Tokens.Space.xxs / 2, if (color == null) palette.accent else palette.line, CircleShape))
+}
+
+/** 深浅色: 跟随系统 (the default), 浅色, 深色, on this phone. */
+@Composable
+private fun SchemeOptions(store: AppStyleStore) {
+    val scheme by store.scheme.collectAsState()
+    JSectionHeader(stringResource(R.string.settings_scheme))
+    JSegmented(ColorSchemeChoice.entries.map { JSegment(it.label) }, ColorSchemeChoice.entries.indexOf(scheme), { store.setScheme(ColorSchemeChoice.entries[it]) })
+    Spacer(Modifier.height(Tokens.Space.s))
+    SettingsCaption(stringResource(R.string.settings_scheme_note))
 }

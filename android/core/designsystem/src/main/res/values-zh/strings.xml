@@ -262,4 +262,14 @@
     </plurals>
     <string name="designsystem_workflow_show_agents">展开 agent</string>
     <string name="designsystem_workflow_hide_agents">收起 agent</string>
+    <string name="designsystem_scheme_system">跟随系统</string>
+    <string name="designsystem_scheme_light">浅色</string>
+    <string name="designsystem_scheme_dark">深色</string>
+    <string name="designsystem_color_style">跟随界面风格</string>
+    <string name="designsystem_color_persona">跟随形象</string>
+    <string name="designsystem_color_blue">系统蓝</string>
+    <string name="designsystem_color_coral">珊瑚橙</string>
+    <string name="designsystem_color_lavender">薰衣草紫</string>
+    <string name="designsystem_color_teal">青</string>
+    <string name="designsystem_color_lark">飞书蓝</string>
 </resources>

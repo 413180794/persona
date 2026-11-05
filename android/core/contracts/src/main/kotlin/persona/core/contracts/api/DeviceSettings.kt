@@ -33,6 +33,8 @@ data class DeviceNotificationPreferences(
     val liveActivity: Boolean = true,
     /** What the hub has of this device's 设置 › 翻译; null from a hub without it. */
     val translate: HubTranslatePrefs? = null,
+    /** 手机静音: no 需要你 / 做完 pushes while a desktop app is connected; null from a hub without it. */
+    val muteWhileDesktop: Boolean? = null,
 )
 
 /** Bound to one pairing; preferenceDeviceId is the ID used by notification registration. */

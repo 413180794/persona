@@ -21,6 +21,11 @@ data class AssistantConfig(
     @SerialName("notes_effective") val notesEffective: String = "",
     /** The main conversation's session id; it lives on [machineId]. */
     val main: String? = null,
+    /**
+     * 只在主对话里通知: tasks the main conversation sends out stay out of pushes and the badge (the main conversation
+     * tells you instead); null from a hub without the setting.
+     */
+    @SerialName("main_tasks_quiet") val mainTasksQuiet: Boolean? = null,
 )
 
 /**
@@ -35,6 +40,7 @@ data class AssistantConfigUpdate(
     val notes: String? = null,
     /** "-" clears the main conversation: it stays on the machine it ran on and cannot continue elsewhere. */
     val main: String? = null,
+    @SerialName("main_tasks_quiet") val mainTasksQuiet: Boolean? = null,
 ) {
     companion object {
         const val CLEAR_MAIN = "-"

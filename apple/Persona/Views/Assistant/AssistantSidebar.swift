@@ -693,6 +693,9 @@ struct AssistantSidebar: View {
     var openInbox: (() -> Void)? = nil
     var openTodos: (() -> Void)? = nil
     var onMachines: (() -> Void)? = nil
+    /// Opens an extension's main-navigation page (nav_page, #2961): listed after the places to go, with its badge.
+    /// nil where they are listed elsewhere (the Mac's sections column).
+    var openExtension: ((ExtensionNavRoute) -> Void)? = nil
     private var isShell: Bool { openInbox != nil }
     @State private var query = ""
     @State private var searchOpen = false
@@ -903,6 +906,7 @@ struct AssistantSidebar: View {
                 action("定时任务", Theme.Icon.schedule, run: openRoutines)
                 action("知识库", Theme.Icon.knowledge, run: openKnowledge)
                 action("机器", Theme.Icon.machines, id: "sidebar-machines", run: onMachines)
+                extensionRows
             }
         } else {
             #if os(macOS)
@@ -924,7 +928,51 @@ struct AssistantSidebar: View {
             action("新对话", Theme.Icon.conversation, id: "sidebar-new", run: newConversation)
             action("定时任务", Theme.Icon.schedule, run: openRoutines)
             action("知识库", Theme.Icon.knowledge, run: openKnowledge)
+            extensionRows
         }
+    }
+
+    /// The extensions' pages on the main navigation (nav_page, docs/extensions.md「UI 插槽」): one row each, its icon,
+    /// title and badge, in the hub's order. Nothing with a hub without slots.
+    @ViewBuilder private var extensionRows: some View {
+        if let openExtension, ExtensionSlots.shared.available {
+            ForEach(ExtensionSlots.shared.pages) { p in
+                extensionRow(p) { openExtension(ExtensionNavRoute(p)) }
+            }
+        }
+    }
+
+    @ViewBuilder private func extensionRow(_ p: ExtensionUIPlace, run: @escaping () -> Void) -> some View {
+        let symbol = ExtensionSlots.icon(p.icon)
+        Group {
+            if AppStyle.current.usesBeautifulUI {
+                BUISidebarRow(p.title, symbol: symbol, action: run) {
+                    if let b = p.badge { ExtensionBadgeView(badge: b) }
+                }
+            } else {
+                Button(action: run) {
+                    HStack(spacing: Theme.Space.l) {
+                        Image(systemName: symbol).resizable().scaledToFit().fontWeight(isShell ? .medium : .regular)
+                            .foregroundStyle(Color.primary)
+                            .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
+                            .scaledFrame(width: Theme.Size.icon)
+                        Text(p.title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
+                        Spacer(minLength: 0)
+                        if let b = p.badge { ExtensionBadgeView(badge: b) }
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .scaledFrame(minHeight: isShell ? Theme.Size.box50 : Theme.Size.avatarL)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(p.title)
+        .accessibilityValue(p.badge?.text ?? "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { run() }
+        .accessibilityIdentifier("sidebar-extension-\(p.owner)-\(p.id)")
     }
 
     #if os(macOS)
@@ -1336,8 +1384,9 @@ struct AssistantSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .surface(interactive: true, in: .circle)
-                // The plugins' entries are in 设置 (docs/extensions.md「UI 插槽」角标): their badges add up here.
-                .overlay(alignment: .topTrailing) { ExtensionSettingsBadge() }
+                // The plugins' entries are in 设置 (docs/extensions.md「UI 插槽」角标): their badges add up here, unless the
+                // sidebar lists the entries itself.
+                .overlay(alignment: .topTrailing) { if openExtension == nil { ExtensionSettingsBadge() } }
                 .accessibilityLabel("设置")
                 .accessibilityIdentifier("sidebar-settings")
             }

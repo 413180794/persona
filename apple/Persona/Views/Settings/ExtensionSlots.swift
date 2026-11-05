@@ -6,7 +6,8 @@ import SwiftUI
 //
 // | placement        | iPhone / iPad                                             | Mac                                   |
 // | ---------------- | --------------------------------------------------------- | ------------------------------------- |
-// | nav_page         | 设置 home, the 扩展 section at the top (badges add to 设置's) | the sidebar, before 设置               |
+// | nav_page         | the sidebar / the shell's drawer after the places to go, and | the sidebar, before 设置               |
+// |                  | 设置 home's 扩展 section at the top                           |                                       |
 // | overview_card    | 设置 home, above those entries                              | 设置 › 扩展, above the list            |
 // | machine_section  | a machine's page, after its own sections                  | the same page                         |
 //
@@ -110,6 +111,31 @@ import SwiftUI
 
     /// An entry's icon: one of the few a plugin may ask for, anything else the plugin's.
     static func icon(_ name: String?) -> String { ExtensionUIStyle.icon(name) }
+}
+
+/// An extension's main-navigation page opened from the sidebar or the shell's drawer (#2961).
+nonisolated struct ExtensionNavRoute: Hashable, Sendable, Identifiable {
+    var owner: String
+    var ui: String
+    var title: String
+    var id: String { owner + "/" + ui }
+
+    init(owner: String, ui: String, title: String) {
+        self.owner = owner
+        self.ui = ui
+        self.title = title
+    }
+
+    init(_ p: ExtensionUIPlace) { self.init(owner: p.owner, ui: p.id, title: p.title) }
+}
+
+/// The page for it: the extension's View, drawn again from the start for another entry.
+struct ExtensionNavPage: View {
+    var route: ExtensionNavRoute
+
+    var body: some View {
+        ExtensionPageView(plugin: route.owner, ui: route.ui, title: route.title).id(route.id)
+    }
 }
 
 // MARK: Badges

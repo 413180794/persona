@@ -184,6 +184,9 @@ internal fun MachineManagement.inGroup(names: GroupNames): MachineManagement {
         override suspend fun codexSettings(machineId: String) = source.codexSettings(names.rawMachine(machineId))
         override suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement) =
             source.setCodexSetting(names.rawMachine(machineId), key, value)
+        override suspend fun claudeDirs(machineId: String) = source.claudeDirs(names.rawMachine(machineId))
+        override suspend fun setBlockedClaudeDirs(machineId: String, blocked: List<String>) =
+            source.setBlockedClaudeDirs(names.rawMachine(machineId), blocked)
         override suspend fun doctor(machineId: String) = source.doctor(names.rawMachine(machineId))
         override suspend fun fixDoctor(machineId: String) = source.fixDoctor(names.rawMachine(machineId))
         override suspend fun browser(machineId: String) = source.browser(names.rawMachine(machineId))

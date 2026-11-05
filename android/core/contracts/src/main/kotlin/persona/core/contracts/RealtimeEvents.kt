@@ -65,6 +65,18 @@ class InboxEvent : ServerEvent
 @Serializable(with = PersonasEventSerializer::class)
 class PersonasEvent : ServerEvent
 
+/**
+ * The desktop apps (the Mac app) connected to the hub now, like WeChat's「Mac 微信已登录」(server/internal/hub/desktops.go):
+ * sent on connecting and whenever one comes or goes.
+ */
+@KeepGeneratedSerializer
+@Serializable(with = DesktopsEventSerializer::class)
+data class DesktopsEvent(val desktops: List<HubDesktop> = emptyList()) : ServerEvent
+
+/** One connected desktop: [device] is its device token's id (what 退出 revokes), empty when it used the pairing token. */
+@Serializable
+data class HubDesktop(val device: String = "", val name: String = "", val since: String? = null)
+
 @KeepGeneratedSerializer
 @Serializable(with = TerminalEventSerializer::class)
 data class TerminalEvent(
@@ -120,6 +132,7 @@ object HookEventSerializer : WireSerializer<HookEvent>(HookEvent.generatedSerial
 object LarkEventSerializer : WireSerializer<LarkEvent>(LarkEvent.generatedSerializer())
 object InboxEventSerializer : WireSerializer<InboxEvent>(InboxEvent.generatedSerializer())
 object PersonasEventSerializer : WireSerializer<PersonasEvent>(PersonasEvent.generatedSerializer())
+object DesktopsEventSerializer : WireSerializer<DesktopsEvent>(DesktopsEvent.generatedSerializer())
 object TerminalEventSerializer : WireSerializer<TerminalEvent>(TerminalEvent.generatedSerializer())
 object TerminalControlEventSerializer : WireSerializer<TerminalControlEvent>(TerminalControlEvent.generatedSerializer())
 object ErrorEventSerializer : WireSerializer<ErrorEvent>(ErrorEvent.generatedSerializer())

@@ -72,12 +72,34 @@ class PersonaApp : Application() {
             connection.state.map { it == persona.core.contracts.api.ConnectionState.Online }.distinctUntilChanged()
                 .collect { online -> if (online) runCatching { personas.refresh() } }
         }
+        // 主题色 for the app's other windows (share, the capsule, dialogs): the main one provides the same accent itself.
+        scope.launch {
+            kotlinx.coroutines.flow.combine(appearance.color, personas.current) { color, pack ->
+                persona.core.designsystem.ThemeColors.accent(color, pack?.manifest?.colors)
+            }.collect { persona.core.designsystem.AppAppearance.accent = it }
+        }
+        // 深浅色 for what Compose does not draw (WebView pages, system dialogs) too: the app's own night mode.
+        scope.launch { appearance.scheme.collect { applyNightMode(it) } }
         // A tiered look moved to another tier: the new tier is downloaded whole before the face changes.
         scope.launch {
             connection.events.collect { event ->
                 if (event is persona.core.contracts.PersonasEvent) runCatching { personas.refresh() }
             }
         }
+    }
+
+    /** The desktop apps (the Mac app) connected to the selected hub now, from its `desktops` event. */
+    val desktops: StateFlow<List<persona.core.contracts.HubDesktop>> get() = runtime.desktops
+
+    /** Android 12+ keeps a night mode per app; on 11 the windows still follow the setting through [PersonaTheme]. */
+    private fun applyNightMode(choice: persona.core.designsystem.ColorSchemeChoice) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        val mode = when (choice.dark) {
+            null -> android.app.UiModeManager.MODE_NIGHT_AUTO
+            true -> android.app.UiModeManager.MODE_NIGHT_YES
+            false -> android.app.UiModeManager.MODE_NIGHT_NO
+        }
+        runCatching { getSystemService(android.app.UiModeManager::class.java)?.setApplicationNightMode(mode) }
     }
 
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim()

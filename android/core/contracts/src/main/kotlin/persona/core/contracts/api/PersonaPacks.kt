@@ -31,7 +31,7 @@ data class PersonaInfo(val id: String, val rev: String, val bytes: Long = 0, val
     private companion object { val REV = Regex("^[0-9a-f]{16}$") }
 }
 
-/** persona.json, format 1. Colors are not read on Android (no 主题色「跟随形象」 here). */
+/** persona.json, format 1. [colors] feed 主题色「跟随形象」 (docs/persona.md「色系」). */
 @Serializable
 data class PersonaManifest(
     val format: Int,
@@ -42,7 +42,14 @@ data class PersonaManifest(
     val about: String? = null,
     val avatar: Avatar,
     val dot: Dot,
+    /** One set of `#RRGGBB` per appearance; absent when the package only changes the face. */
+    val colors: Colors? = null,
 ) {
+    /** `colors.light` / `colors.dark`: `accent`, `bubble`, `bubble_text`, `primary`, `secondary` (each optional). */
+    @Serializable data class Colors(val light: Map<String, String> = emptyMap(), val dark: Map<String, String> = emptyMap()) {
+        /** Brings an accent in both appearances: the only colours 跟随形象 lays over the style. */
+        val hasAccent: Boolean get() = "accent" in light || "accent" in dark
+    }
     @Serializable data class Avatar(val sizes: Map<String, String>)
     @Serializable data class Dot(val size: Int? = null, val states: Map<String, DotState>)
     @Serializable data class DotState(val file: String, val fps: Double? = null)

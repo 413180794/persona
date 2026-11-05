@@ -57,6 +57,12 @@ interface MachineManagement {
     /** `PUT /api/v1/machines/{id}/codex-settings`: [value] [JsonNull] removes the key, back to Codex's default. */
     suspend fun setCodexSetting(machineId: String, key: String, value: JsonElement): List<ClaudeSetting>
 
+    /** `GET /api/v1/machines/{id}/claude-dirs`: its Claude Code config directories and the blocked patterns. */
+    suspend fun claudeDirs(machineId: String): ClaudeDirsState = throw UnsupportedOperationException()
+
+    /** `PUT /api/v1/machines/{id}/claude-dirs/blocked`: the whole list of patterns; the hub answers the new state. */
+    suspend fun setBlockedClaudeDirs(machineId: String, blocked: List<String>): ClaudeDirsState = throw UnsupportedOperationException()
+
     /** `GET /api/v1/machines/{id}/doctor`: what `personad node doctor` finds there (full devices only). */
     suspend fun doctor(machineId: String): DoctorReport = throw UnsupportedOperationException("doctor")
 
@@ -77,6 +83,31 @@ interface MachineManagement {
     /** `GET /api/v1/usage/windows` of the selected hub: the subscription accounts and their windows (#2432). */
     suspend fun usageWindows(): List<UsageAccount> = emptyList()
 }
+
+/** One Claude Code config directory of a machine (设置 › Claude Code › 屏蔽的配置目录, docs/claude-integration.md). */
+@Serializable
+data class ClaudeDir(
+    /** As Claude Code was given it ("~/…" or absolute). */
+    @SerialName("path") val path: String,
+    /** The node's own default (~/.claude): never blocked. */
+    @SerialName("default") val isDefault: Boolean = false,
+    @SerialName("blocked") val blocked: Boolean = false,
+    /** The pattern that blocks it, as written (a glob, or its own path). */
+    @SerialName("blocked_by") val blockedBy: String? = null,
+    /** default | config (hub.json) | found (a claude used it) */
+    @SerialName("source") val source: String = "found",
+    @SerialName("running") val running: Int = 0,
+    @SerialName("sessions") val sessions: Int = 0,
+)
+
+/** [live]: the node's own list (every directory it knows, with counts); false: the hub's record (offline, older node). */
+@Serializable
+data class ClaudeDirsState(
+    @SerialName("dirs") val dirs: List<ClaudeDir> = emptyList(),
+    @SerialName("blocked") val blocked: List<String> = emptyList(),
+    @SerialName("home") val home: String? = null,
+    @SerialName("live") val live: Boolean = false,
+)
 
 /**
  * One whitelisted `~/.claude/settings.json` (or `~/.codex/config.toml`) option of a machine. [value] null means unset:

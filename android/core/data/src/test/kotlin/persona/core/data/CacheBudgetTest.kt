@@ -40,4 +40,26 @@ class CacheBudgetTest {
         assertEquals(20 to 40, displayImageSize(20, 40, 300, 200))
         assertEquals(1 to 200, displayImageSize(1, 10000, 300, 200))
     }
+
+    @Test fun clearingKeepsPinnedReadsAndDownloadsInProgress() {
+        val directory = temporary.newFolder()
+        val cache = BudgetFileCache(directory, 64)
+        val idle = cache.put("idle", ByteArray(4))
+        cache.put("open", ByteArray(4))
+        val pinned = requireNotNull(cache.readPinned("open"))
+        val download = cache.begin("download")
+        download.write(ByteArray(4))
+        val part = requireNotNull(directory.listFiles { f -> f.name.endsWith(".part") }?.single())
+        val kept = CacheClearing.delete(directory.walkTopDown().filter { it.isFile }.toList())
+        assertEquals(2, kept)
+        assertFalse(idle.exists())
+        assertTrue(pinned.file.exists())
+        assertTrue(part.exists())
+        // The download still commits after a clear.
+        download.commit().use { assertTrue(it.file.exists()) }
+        download.close()
+        pinned.close()
+        assertEquals(0, CacheClearing.delete(listOf(pinned.file)))
+        assertFalse(pinned.file.exists())
+    }
 }

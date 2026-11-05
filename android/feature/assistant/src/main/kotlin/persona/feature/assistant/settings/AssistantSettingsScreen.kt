@@ -120,7 +120,8 @@ internal fun AssistantSettingsScreen(
     }
     when (part) {
         SettingsPart.Home -> SettingsHome(shown, machine, machineName, controller.phoneZone, onBack, ::refresh,
-            open = { part = it }, sheet = { sheet = it }, follow = { scope.launch { controller.setFollowPhone(it) } })
+            open = { part = it }, sheet = { sheet = it }, follow = { scope.launch { controller.setFollowPhone(it) } },
+            quietTasks = { scope.launch { controller.setMainTasksQuiet(it) } })
         SettingsPart.Notes -> NotesPart(shown, onBack = { part = SettingsPart.Home }) { text -> controller.saveNotes(text) }
         SettingsPart.Memory -> MemoryPart(shown, machine, machineName, onBack = { part = SettingsPart.Home },
             onRefresh = { scope.launch { controller.loadMemory() } },
@@ -189,6 +190,7 @@ private fun SettingsHome(
     state: AssistantSettingsUiState, machine: Machine?, machineName: String, phoneZone: String,
     onBack: () -> Unit, onRefresh: () -> Unit, open: (SettingsPart) -> Unit, sheet: (SettingsSheet) -> Unit,
     follow: (Boolean) -> Unit,
+    quietTasks: (Boolean) -> Unit = {},
 ) {
     val config = state.config
     val ready = config != null && !state.busy
@@ -253,6 +255,15 @@ private fun SettingsHome(
             ))
             item("you-caption") {
                 Caption(stringResource(R.string.assistant_settings_you_caption, machineName))
+            }
+
+            config.mainTasksQuiet?.let { quiet ->
+                item("quiet") { JSectionHeader(stringResource(R.string.assistant_settings_quiet_header)) }
+                rows("quiet", listOf(
+                    { JSwitchRow(stringResource(R.string.assistant_settings_quiet), quiet, quietTasks,
+                        leadingIcon = PhIcons.BellSimple, enabled = !state.busy) },
+                ))
+                item("quiet-caption") { Caption(stringResource(R.string.assistant_settings_quiet_caption)) }
             }
 
             item("zone") { JSectionHeader(stringResource(R.string.assistant_settings_zone)) }

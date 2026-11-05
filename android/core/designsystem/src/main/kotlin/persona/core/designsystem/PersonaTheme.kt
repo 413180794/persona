@@ -92,14 +92,17 @@ object PersonaTheme {
  */
 @Composable
 fun PersonaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = appDarkTheme(),
     @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     reduceMotion: Boolean = systemReduceMotion(),
     style: AppStyle = LocalAppStyle.current,
     content: @Composable () -> Unit,
 ) {
     val roleTheme = LocalExtensionRoleTheme.current
-    val palette = roleTheme?.let { ExtensionThemeColors.palette(it, style, darkTheme) } ?: Palettes.of(style, darkTheme)
+    // The main window provides its own; the app's other windows (share, capsule, dialogs) take the app-wide one.
+    val accent = LocalThemeAccent.current ?: AppAppearance.accent
+    val palette = roleTheme?.let { ExtensionThemeColors.palette(it, style, darkTheme) }
+        ?: accent?.let { ThemeColors.palette(Palettes.of(style, darkTheme), it) } ?: Palettes.of(style, darkTheme)
     val type = Types.of(style)
     val shapes = Shapes.of(style)
     CompositionLocalProvider(

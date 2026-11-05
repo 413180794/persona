@@ -29,6 +29,9 @@ class SettingsNavigationTest {
             SettingsPage.Capsule to "capsule",
             SettingsPage.Language to "language",
             SettingsPage.Codex to "codex",
+            SettingsPage.Providers to "providers",
+            SettingsPage.Storage to "storage",
+            SettingsPage.Desktops to "desktops",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

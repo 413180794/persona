@@ -71,6 +71,10 @@ private fun SettingsContent(
     var purpose by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var extension by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
     var channel by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    // 模型供应商's own steps when they open in place: one provider, adding one, importing from ~/.zshrc.
+    var provider by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    var providerStep by rememberSaveable(initialPage) { mutableStateOf<String?>(null) }
+    val desktops = services.desktops?.collectAsState()?.value.orEmpty()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val connection by services.connection.state.collectAsState()
@@ -78,6 +82,10 @@ private fun SettingsContent(
     val paired by services.pairing.isPaired.collectAsState()
     val deviceController = remember(services) { DeviceSettingsState(services.deviceSettings, services.disconnect) }
     val deviceState by deviceController.state.collectAsState()
+    // The signed-in Mac's row says 手机静音 when it is on: read this device's preferences once a desktop shows.
+    LaunchedEffect(desktops.isNotEmpty(), page) {
+        if (desktops.isNotEmpty() && page == "settings" && paired && services.deviceSettings != null && deviceState.preferences == null) deviceController.loadPreferences()
+    }
     var confirmDisconnect by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<AppUpdate?>(null) }
     var updateMessage by remember { mutableStateOf<Int?>(null) }
@@ -201,11 +209,29 @@ private fun SettingsContent(
                 onMarketExtension = onNavigate?.let { navigate -> { market, id -> navigate(persona.core.navigation.ExtensionCatalogRoute(market, id)) } })
         "ready", "notify" -> {
             val preferences: LazyListScope.() -> Unit =
-                if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null) else ({})
+                if (page == "notify") NotificationPreferences(deviceController, paired && services.deviceSettings != null,
+                    desktops, onDesktops = { open(SettingsPage.Desktops) }) else ({})
             ReadinessScreen(services.sessions, services.diagnostics,
                 notificationsOnly = page == "notify", showTitle = page == "notify",
                 onDiagnostics = { open(SettingsPage.Diagnostics) }, onDone = back, onBack = back,
-                header = preferences, footer = deviceFeedback)
+                header = preferences, footer = {
+                    if (page == "notify") SettingsCaption(stringResource(R.string.settings_notify_system_footer), Modifier.padding(vertical = Tokens.Space.s))
+                    deviceFeedback()
+                })
+        }
+        "desktops" -> DesktopsPage(deviceController, services.desktops.takeUnless { services.demo }, paired && services.deviceSettings != null, back)
+        "storage" -> StoragePage(back, services.clearCacheFiles, footer = deviceFeedback)
+        "providers" -> {
+            val providerService = services.providers.takeUnless { services.demo }
+            when {
+                providerStep == "add" && providerService != null -> NewProviderPage(providerService, onBack = { providerStep = null }, onSaved = { providerStep = null })
+                providerStep == "import" && providerService != null -> ProviderImportPage(providerService, machines, onBack = { providerStep = null }, onDone = { providerStep = null })
+                provider != null -> ProviderDetailPage(providerService, provider!!, machines, onBack = { provider = null })
+                else -> ProvidersPage(providerService, machines, back,
+                    onOpen = { name -> onNavigate?.invoke(persona.core.navigation.ModelProviderRoute(name)) ?: run { provider = name } },
+                    onAdd = { providerStep = "add" }, onImport = { providerStep = "import" },
+                    selected = { name -> detailKey == persona.core.navigation.ModelProviderRoute(name) })
+            }
         }
         "devices" -> DevicesPage(deviceController, paired && services.deviceSettings != null, back, deviceFeedback)
         "hub-update" -> HubUpdatePage(hubUpdates, machines, back, online = connection == ConnectionState.Online, onMachine = onNavigate)
@@ -283,12 +309,22 @@ private fun SettingsContent(
                     subtitle = stringResource(R.string.settings_row_capsule_subtitle), selected = detailKey == SettingsPageRoute(SettingsPage.Capsule),
                     onClick = { open(SettingsPage.Capsule) })
             } }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
-            item { JGroupItem(GroupPosition.of(1, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
+            // 「Mac 上的 Persona 已登录」 while a desktop app is connected (iOS shows it over the Agents list).
+            val notifyRows = if (desktops.isNotEmpty() && !services.demo) 3 else 2
+            item { JGroupItem(GroupPosition.of(0, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Notifications), title = stringResource(R.string.settings_ready_notifications), leadingIcon = PhIcons.BellSimple, subtitle = stringResource(R.string.settings_row_notifications_subtitle), onClick = { open(SettingsPage.Notifications) }) } }
+            item { JGroupItem(GroupPosition.of(1, notifyRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Readiness), title = stringResource(R.string.settings_row_background), leadingIcon = PhIcons.BatteryCharging, subtitle = stringResource(R.string.settings_row_background_subtitle), onClick = { open(SettingsPage.Readiness) }) } }
+            if (notifyRows == 3) item { DesktopPresenceRow(desktops, deviceState.preferences?.muteWhileDesktop == true,
+                selected = detailKey == SettingsPageRoute(SettingsPage.Desktops), GroupPosition.of(2, 3), onClick = { open(SettingsPage.Desktops) }) }
             item { JSectionHeader("AI") }
-            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = stringResource(R.string.settings_row_models), leadingIcon = PhIcons.Brain, subtitle = stringResource(R.string.settings_row_models_subtitle), onClick = { open(SettingsPage.ModelConfig) }) } }
-            item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = stringResource(R.string.settings_translation_title), leadingIcon = PhIcons.Translate, subtitle = stringResource(R.string.settings_row_translation_subtitle), value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
-            item { JGroupItem(GroupPosition.of(2, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Triage), title = stringResource(R.string.settings_triage_title), leadingIcon = PhIcons.ListChecks, subtitle = stringResource(R.string.settings_row_triage_subtitle), onClick = { open(SettingsPage.Triage) }) } }
+            // iOS's order: 模型供应商, 模型配置, 助手 (a page of the Persona tab, so only with a navigation host), then the uses.
+            val assistantRow = onNavigate != null
+            val aiRows = if (assistantRow) 5 else 4
+            item { JGroupItem(GroupPosition.of(0, aiRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Providers), title = stringResource(R.string.settings_providers_title), leadingIcon = PhIcons.Cpu, subtitle = stringResource(R.string.settings_row_providers_subtitle), onClick = { open(SettingsPage.Providers) }) } }
+            item { JGroupItem(GroupPosition.of(1, aiRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.ModelConfig), title = stringResource(R.string.settings_row_models), leadingIcon = PhIcons.Brain, subtitle = stringResource(R.string.settings_row_models_subtitle), onClick = { open(SettingsPage.ModelConfig) }) } }
+            if (assistantRow) item { JGroupItem(GroupPosition.of(2, aiRows)) { JRow(selected = detailKey == persona.core.navigation.AssistantSettingsRoute, title = stringResource(R.string.settings_row_assistant), leadingIcon = PhIcons.Sparkle, subtitle = stringResource(R.string.settings_row_assistant_subtitle), onClick = { onNavigate?.invoke(persona.core.navigation.AssistantSettingsRoute) }) } }
+            val translationAt = if (assistantRow) 3 else 2
+            item { JGroupItem(GroupPosition.of(translationAt, aiRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Translation), title = stringResource(R.string.settings_translation_title), leadingIcon = PhIcons.Translate, subtitle = stringResource(R.string.settings_row_translation_subtitle), value = translationValue, onClick = { open(SettingsPage.Translation) }) } }
+            item { JGroupItem(GroupPosition.of(translationAt + 1, aiRows)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Triage), title = stringResource(R.string.settings_triage_title), leadingIcon = PhIcons.ListChecks, subtitle = stringResource(R.string.settings_row_triage_subtitle), onClick = { open(SettingsPage.Triage) }) } }
             // Extension management and conversation channels are independent hub capabilities.
             if (extensionsAvailable) {
                 item { JSectionHeader(stringResource(R.string.settings_section_extensions)) }
@@ -368,8 +404,9 @@ private fun SettingsContent(
             item { JGroupItem(GroupPosition.of(1, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.Appearance), title = stringResource(R.string.settings_style_title), leadingIcon = PhIcons.SquaresFour, value = PersonaTheme.style.label, onClick = { open(SettingsPage.Appearance) }) } }
             item { JGroupItem(GroupPosition.of(2, 3)) { LanguageRow(selected = detailKey == SettingsPageRoute(SettingsPage.Language), onClick = { open(SettingsPage.Language) }) } }
             item { JSectionHeader(stringResource(R.string.settings_section_about)) }
-            item { JGroupItem(GroupPosition.of(0, 2)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = stringResource(R.string.settings_section_about), leadingIcon = PhIcons.Info, subtitle = stringResource(R.string.settings_row_about_subtitle), onClick = { open(SettingsPage.About) }) } }
-            item { JGroupItem(GroupPosition.of(1, 2)) {
+            item { JGroupItem(GroupPosition.of(0, 3)) { JRow(selected = detailKey == SettingsPageRoute(SettingsPage.About), title = stringResource(R.string.settings_section_about), leadingIcon = PhIcons.Info, subtitle = stringResource(R.string.settings_row_about_subtitle), onClick = { open(SettingsPage.About) }) } }
+            item { JGroupItem(GroupPosition.of(1, 3)) { StorageRow(selected = detailKey == SettingsPageRoute(SettingsPage.Storage), onClick = { open(SettingsPage.Storage) }) } }
+            item { JGroupItem(GroupPosition.of(2, 3)) {
                 JRow(stringResource(R.string.settings_update_check), value = when {
                     busy -> stringResource(R.string.settings_update_checking)
                     installing -> stringResource(R.string.settings_update_installing)
@@ -417,6 +454,7 @@ private fun SettingsContent(
     BackHandler(page == "models" && purpose != null) { purpose = null }
     BackHandler(page == "plugins" && extension != null) { extension = null }
     BackHandler(page == "channels" && channel != null) { channel = null }
+    BackHandler(page == "providers" && (provider != null || providerStep != null)) { if (providerStep != null) providerStep = null else provider = null }
     BackHandler(page == "hubs-add") { page = "hubs" }
     if (confirmDisconnect) JDialog(
         onDismiss = { confirmDisconnect = false }, title = stringResource(R.string.settings_disconnect_title),

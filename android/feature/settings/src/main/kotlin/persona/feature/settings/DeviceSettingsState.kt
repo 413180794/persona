@@ -54,6 +54,15 @@ class DeviceSettingsState(private val api: DeviceSettings?, private val unpair: 
         if (device.id == devices.currentId) cleanup()
     }
 
+    /** Revokes another device's credential by id (a desktop app's 退出): it has to pair again; the list is not needed. */
+    suspend fun revokeCredential(id: String) = perform(R.string.settings_devices_revoke_failed) {
+        if (id.isBlank()) return@perform
+        requireNotNull(api).revoke(id)
+        mutable.value.devices?.let { devices ->
+            mutable.value = mutable.value.copy(devices = devices.copy(devices = devices.devices.filterNot { it.id == id }))
+        }
+    }
+
     suspend fun disconnect() = perform(R.string.settings_disconnect_failed) { cleanup() }
 
     private suspend fun cleanup() {

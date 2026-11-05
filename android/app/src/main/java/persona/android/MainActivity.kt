@@ -99,8 +99,11 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { shell.restoreDemo() }
         persona.android.platform.GlassFrameMonitor.attach(this) { !shell.automation }
         setContent {
-            val forced = darkTheme.value
+            val scheme by app.appearance.scheme.collectAsStateWithLifecycle()
+            // A debug capture's pin, else 设置 › 外观 › 深浅色 (null: the system's).
+            val forced = darkTheme.value ?: scheme.dark
             val style by app.appearance.style.collectAsStateWithLifecycle()
+            val themeColor by app.appearance.color.collectAsStateWithLifecycle()
             val glassPreference by app.appearance.glass.collectAsStateWithLifecycle()
             val face by app.appearance.face.collectAsStateWithLifecycle()
             val pack by app.personas.current.collectAsStateWithLifecycle()
@@ -125,6 +128,7 @@ class MainActivity : ComponentActivity() {
                 LocalPersonaDesign provides face,
                 persona.core.designsystem.LocalPersonaStore provides app.personas,
                 persona.core.designsystem.LocalPersonaPack provides pack,
+                persona.core.designsystem.LocalThemeAccent provides persona.core.designsystem.ThemeColors.accent(themeColor, pack?.manifest?.colors),
                 persona.core.designsystem.LocalPersonaName provides (pack?.manifest?.name ?: "Persona"),
             ) {
                 val dark = isSystemInDarkTheme()

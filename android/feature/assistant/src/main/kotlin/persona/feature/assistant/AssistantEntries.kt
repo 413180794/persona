@@ -4,11 +4,32 @@ import androidx.compose.runtime.Composable
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.AssistantRoute
+import persona.core.navigation.AssistantSettingsRoute
+import persona.core.navigation.ChatRoute
+import persona.core.navigation.ConversationKind
 import persona.core.navigation.Navigator
+import persona.feature.assistant.settings.AssistantSettingsScreen
 
 fun EntryProviderScope<NavKey>.assistantEntries(
     navigator: Navigator,
     content: @Composable () -> Unit = { ConnectedAssistant(navigator) },
 ) {
     entry<AssistantRoute> { AssistantAppHost(navigator) { content() } }
+    // 设置 › AI › 助手: the same page the Persona tab opens in place, as a page of its own.
+    entry<AssistantSettingsRoute> { AssistantAppHost(navigator) { AssistantSettingsPage(navigator) } }
+}
+
+@Composable
+private fun AssistantSettingsPage(navigator: Navigator) {
+    val host = LocalAssistantHost.current
+    val management = host?.management
+    if (management == null) {
+        persona.core.designsystem.JListPage(title = androidx.compose.ui.res.stringResource(R.string.assistant_settings_title), onBack = navigator::back) {
+            item { persona.core.designsystem.JEmptyState(androidx.compose.ui.res.stringResource(R.string.assistant_settings_unavailable),
+                androidx.compose.ui.res.stringResource(R.string.assistant_settings_unavailable_detail)) }
+        }
+        return
+    }
+    AssistantSettingsScreen(management, host.machines, onBack = navigator::back,
+        onOpenConversation = { navigator.navigate(ChatRoute(it.machineId, it.sessionId, ConversationKind.Assistant)) })
 }

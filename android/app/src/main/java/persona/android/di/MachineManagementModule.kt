@@ -73,6 +73,13 @@ object MachineManagementModule {
         private fun api() = HttpProviderSetup(runtime.connection())
         override suspend fun presets() = api().presets()
         override suspend fun add(provider: NewProvider) = api().add(provider)
+        override suspend fun launchers() = api().launchers()
+        override suspend fun launcher(name: String) = api().launcher(name)
+        override suspend fun remove(name: String) = api().remove(name)
+        override suspend fun restore(name: String) = api().restore(name)
+        override suspend fun check(name: String, machine: String?) = api().check(name, machine)
+        override suspend fun importPreview(machine: String) = api().importPreview(machine)
+        override suspend fun import(machine: String, providers: List<String>) = api().import(machine, providers)
     }
 
     // A hub-level page too: the selected group's extensions.

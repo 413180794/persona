@@ -48,11 +48,15 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
     val drafts = remember { mutableStateMapOf<String, String>() }
     LaunchedEffect(online.map { it.id }) { model.follow(online) }
     LaunchedEffect(state.machineId) { drafts.clear(); model.load() }
+    // 屏蔽的配置目录 is Claude Code's alone.
+    val (dirs, dirsState) = rememberClaudeDirs(management, if (kind == AgentSettingsKind.Claude) state.machineId else "")
+    var dirInput by remember { mutableStateOf("") }
+    val saveDirs = claudeDirsSaver(dirs) { dirInput = "" }
     fun set(key: String, value: JsonElement) {
         scope.launch { model.set(key, value, online)?.let { feedback?.notice(it.resolve(res)) } }
     }
     JListPage(title = stringResource(kind.title), onBack = onBack, actions = {
-        JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.settings_src_refresh), { scope.launch { model.load() } }, enabled = !state.loading && state.machineId.isNotBlank())
+        JIconButton(PhIcons.ArrowClockwise, stringResource(R.string.settings_src_refresh), { scope.launch { model.load(); if (kind == AgentSettingsKind.Claude) dirs.load(state.machineId) } }, enabled = !state.loading && state.machineId.isNotBlank())
     }) {
         item("target") {
             JGroupItem(GroupPosition.of(0, 2), Modifier.padding(top = Tokens.Space.s)) {
@@ -98,6 +102,8 @@ internal fun ClaudeSettingsPage(sessions: SessionsRepository, management: Machin
                 }
             }
         }
+        if (kind == AgentSettingsKind.Claude && state.machineId.isNotBlank() && !dirsState.unsupported) claudeDirsSection(dirsState, dirInput, { dirInput = it },
+            onRetry = { scope.launch { dirs.load(state.machineId) } }, onSave = { blocked, key, done -> saveDirs(blocked, key, done) })
     }
     if (picking) JActionSheet(online.map { machine ->
         JAction(machine.displayName, PhIcons.Laptop, checked = machine.id == state.machineId, onClick = { model.choose(machine.id) })

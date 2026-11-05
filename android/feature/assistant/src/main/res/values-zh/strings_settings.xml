@@ -122,4 +122,9 @@
     <plurals name="assistant_settings_memory_count">
         <item quantity="other">%1$d 条</item>
     </plurals>
+    <string name="assistant_settings_quiet_header">任务通知</string>
+    <string name="assistant_settings_quiet">只在主对话里通知</string>
+    <string name="assistant_settings_quiet_caption">主对话派出去的任务不进实时活动、推送和角标，做完、等你回答或出错时由 Persona 在主对话里告诉你。只影响之后派的任务。</string>
+    <string name="assistant_settings_unavailable">暂时打不开助手设置</string>
+    <string name="assistant_settings_unavailable_detail">先配对 hub，或退出体验模式。</string>
 </resources>

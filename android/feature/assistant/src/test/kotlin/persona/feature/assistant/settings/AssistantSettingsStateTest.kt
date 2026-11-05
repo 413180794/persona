@@ -51,6 +51,7 @@ class AssistantSettingsStateTest {
                 notes = update.notes ?: config.notes,
                 notesEffective = update.notes ?: config.notesEffective,
                 main = if (update.main == AssistantConfigUpdate.CLEAR_MAIN) null else update.main ?: config.main,
+                mainTasksQuiet = update.mainTasksQuiet ?: config.mainTasksQuiet,
             )
             return config
         }
@@ -73,6 +74,24 @@ class AssistantSettingsStateTest {
     private val server = Machine("server", name = "服务器", kind = "local", online = true, home = "/home/me")
     private val laptop = Machine("laptop", name = "笔记本", kind = "ssh", online = true, home = "/Users/me")
     private val offline = Machine("lab", name = "实验室", kind = "ssh", online = false)
+
+    @Test fun quietTasksSwitchSavesAndComesBackOnFailure() = runTest {
+        val api = FakeApi()
+        val state = AssistantSettingsState(api, Zone())
+        state.load()
+        // A hub without the setting: nothing to switch.
+        state.setMainTasksQuiet(false)
+        assertTrue(api.updates.isEmpty())
+        api.config = api.config.copy(mainTasksQuiet = true)
+        state.load()
+        state.setMainTasksQuiet(false)
+        assertEquals(false, api.updates.single().mainTasksQuiet)
+        assertEquals(false, state.state.value.config?.mainTasksQuiet)
+        api.fail = true
+        state.setMainTasksQuiet(true)
+        assertEquals(false, state.state.value.config?.mainTasksQuiet)
+        assertTrue(state.state.value.notice?.error == true)
+    }
 
     @Test fun readsWhereItRuns() = runTest {
         val api = FakeApi()

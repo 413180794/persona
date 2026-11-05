@@ -61,6 +61,10 @@ fun EntryProviderScope<NavKey>.settingsDetailEntries(navigator: Navigator, servi
     entry<ChannelRoute> { route ->
         ChannelPage(services.channels.takeUnless { demo }, route.channelId, onBack = navigator::back, onOpen = navigator::navigate)
     }
+    entry<persona.core.navigation.ModelProviderRoute> { route ->
+        val machines by services.sessions.machines.collectAsState()
+        ProviderDetailPage(services.providers.takeUnless { demo }, route.name, machines, onBack = navigator::back)
+    }
     entry<LauncherRoute> { route ->
         // Only the machines' names (for 额度's footer): their live metrics change all the time and would redraw the page.
         val names by remember(services.sessions) {

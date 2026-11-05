@@ -4,6 +4,7 @@ import persona.core.contracts.JsonCodec
 import persona.core.contracts.Machine
 import persona.core.contracts.api.AgentLauncher
 import persona.core.contracts.api.ClaudeSetting
+import persona.core.contracts.api.ClaudeDirsState
 import persona.core.contracts.api.LauncherQuotaAnswer
 import persona.core.contracts.api.HerdrState
 import persona.core.contracts.api.MachineManagement
@@ -81,6 +82,14 @@ class HttpMachineManagement internal constructor(
             put("value", value)
         }))
     }
+
+    override suspend fun claudeDirs(machineId: String): ClaudeDirsState =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "claude-dirs"), "GET"))
+
+    override suspend fun setBlockedClaudeDirs(machineId: String, blocked: List<String>): ClaudeDirsState =
+        JsonCodec.decodeFromJsonElement(call(api("machines", machineId, "claude-dirs", "blocked"), "PUT", buildJsonObject {
+            put("blocked", JsonArray(blocked.map(::JsonPrimitive)))
+        }))
 
     // The hub gives the node 45 s to check and 60 s to rewrite and check again (server/internal/hub/node_doctor.go).
     override suspend fun doctor(machineId: String): DoctorReport =

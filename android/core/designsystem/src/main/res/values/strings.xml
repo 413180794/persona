@@ -294,4 +294,14 @@
     </plurals>
     <string name="designsystem_workflow_show_agents">Show agents</string>
     <string name="designsystem_workflow_hide_agents">Hide agents</string>
+    <string name="designsystem_scheme_system">Match system</string>
+    <string name="designsystem_scheme_light">Light</string>
+    <string name="designsystem_scheme_dark">Dark</string>
+    <string name="designsystem_color_style">Match style</string>
+    <string name="designsystem_color_persona">Match avatar</string>
+    <string name="designsystem_color_blue">System blue</string>
+    <string name="designsystem_color_coral">Coral</string>
+    <string name="designsystem_color_lavender">Lavender</string>
+    <string name="designsystem_color_teal">Teal</string>
+    <string name="designsystem_color_lark">Feishu blue</string>
 </resources>

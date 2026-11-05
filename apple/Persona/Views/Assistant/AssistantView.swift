@@ -25,6 +25,8 @@ struct AssistantView: View {
     @State private var showKnowledge = false
     @State private var showRoutines = false
     @State private var showTodos = false
+    /// An extension's main-navigation page opened from the sidebar (#2961).
+    @State private var openedExtension: ExtensionNavRoute?
     /// The sidebar (历史对话, or a drag to the right anywhere on the page): docs/ios.md「Persona 顶栏和侧边栏」.
     @State private var drawer = AssistantDrawer()
     /// Regular width (iPhone Duo open): the sidebar is a column beside the conversation; 历史对话 shows or hides it.
@@ -114,7 +116,8 @@ struct AssistantView: View {
                                 drawer: column ? nil : drawer,
                                 openInbox: places ? { show(.inbox) } : nil,
                                 openTodos: places ? { show(.todos) } : { drawer.close(); showTodos = true },
-                                onMachines: places ? { show(.machines) } : nil)
+                                onMachines: places ? { show(.machines) } : nil,
+                                openExtension: places ? { show(.extensionPage($0)) } : { r in drawer.close(); openedExtension = r })
     }
 
     /// 历史对话: the drawer on a phone, the sidebar column beside the conversation on a wide display.
@@ -130,7 +133,7 @@ struct AssistantView: View {
 
     /// Nothing pushed on the page: the sidebar's drag only works here (pushed pages have their own back swipe).
     private var atRoot: Bool {
-        var pushed = showProfile || showKnowledge || showRoutines || showTodos || !path.isEmpty
+        var pushed = showProfile || showKnowledge || showRoutines || showTodos || openedExtension != nil || !path.isEmpty
         #if DEBUG
         pushed = pushed || showAvatars
         #endif
@@ -185,6 +188,7 @@ struct AssistantView: View {
             .navigationDestination(isPresented: $showKnowledge) { KnowledgeView() }
             .navigationDestination(isPresented: $showRoutines) { AssistantRoutinesView() }
             .navigationDestination(isPresented: $showTodos) { TodosView() }
+            .navigationDestination(item: $openedExtension) { ExtensionNavPage(route: $0) }
             .modifier(ShellDestinations(path: $path, enabled: shell != nil || padPlaces))
             .modifier(ClassicTodoDetailDestination(enabled: shell == nil && !padPlaces))
             // On appear too (a cold launch onto 收件箱 asks before this page exists), but each request once: the root
@@ -259,6 +263,7 @@ struct AssistantView: View {
         case .inbox: path.append(ShellRoute.inbox)
         case .todos: path.append(ShellRoute.todos)
         case .machines: path.append(ShellRoute.machines)
+        case .extensionPage(let r): path.append(ShellRoute.extensionPage(r))
         }
     }
 
@@ -268,6 +273,7 @@ struct AssistantView: View {
         showRoutines = false
         showKnowledge = false
         showTodos = false
+        openedExtension = nil
         #if os(iOS)
         // A task pushed beside the sidebar (regular width, `detailPresentation`) is a page of this stack too: going
         // back to the root, or to another conversation, takes it away (else the next chat would push it again). A

@@ -106,6 +106,9 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
     private val mutableEvents = MutableSharedFlow<ServerEvent>()
     /** Every group's events, its machine ids as the merged lists show them. */
     override val events = mutableEvents.asSharedFlow()
+    private val groupDesktops = GroupDesktops(scope, selected.map { it?.id }.stateIn(scope, SharingStarted.Eagerly, null))
+    /** The desktop apps (the Mac app) signed in to the selected group's hub now. */
+    val desktops: StateFlow<List<HubDesktop>> = groupDesktops.selected
     override val lastHello: Hello? get() = selected.value?.hello?.value
     private var started = false
     private var startup: Job? = null
@@ -125,6 +128,12 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
     }
 
     init {
+        scope.launch {
+            groups.collectLatest { list ->
+                groupDesktops.retain(list.map { it.id }.toSet())
+                list.forEach { group -> launch { group.state.collect { groupDesktops.onState(group.id, it) } } }
+            }
+        }
         scope.launch {
             selected.collectLatest { group ->
                 if (group == null) {
@@ -451,6 +460,7 @@ class ConnectionRuntime @Inject constructor(application: Application) : HubConne
             mutableEvents.emit(FleetEvent(merged))
             return
         }
+        if (event is DesktopsEvent) groupDesktops.onDesktops(group.id, event.desktops)
         mutableEvents.emit(GroupNames(group.namespace).event(event))
     }
 

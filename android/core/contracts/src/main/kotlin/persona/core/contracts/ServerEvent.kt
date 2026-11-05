@@ -213,6 +213,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
                 require(it.conversation.isNotEmpty() && it.key.isNotEmpty()) { "A block names its conversation and key" }
             }
             "personas" -> input.json.decodeFromJsonElement<PersonasEvent>(obj)
+            "desktops" -> input.json.decodeFromJsonElement<DesktopsEvent>(obj)
             "terminal" -> input.json.decodeFromJsonElement<TerminalEvent>(obj).also { event ->
                 if (!event.streamEnded && (event.epoch == null || event.seq == null || event.frameBytes == null)) {
                     throw SerializationException("Terminal frame requires epoch, seq and base64 data")
@@ -255,6 +256,7 @@ object ServerEventSerializer : KSerializer<ServerEvent> {
             is AssistantViewActionEvent -> "assistant_view_action" to output.json.encodeToJsonElement(value)
             is AssistantViewBlockEvent -> "assistant_view_block" to output.json.encodeToJsonElement(value)
             is PersonasEvent -> "personas" to output.json.encodeToJsonElement(value)
+            is DesktopsEvent -> "desktops" to output.json.encodeToJsonElement(value)
             is TerminalEvent -> "terminal" to output.json.encodeToJsonElement(value)
             is TerminalControlEvent -> "terminal_control" to output.json.encodeToJsonElement(value)
             is ErrorEvent -> "error" to output.json.encodeToJsonElement(value)

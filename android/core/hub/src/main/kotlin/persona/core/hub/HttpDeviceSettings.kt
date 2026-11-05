@@ -79,6 +79,7 @@ class HttpDeviceSettings(
             put("done", preferences.done.wire)
             put("lock_details", preferences.lockDetails)
             put("live_activity", preferences.liveActivity)
+            preferences.muteWhileDesktop?.let { put("mute_while_desktop", it) }
         }))
     }
 
@@ -102,6 +103,7 @@ class HttpDeviceSettings(
         longTurnSeconds = data["long_turn_seconds"]?.jsonPrimitive?.intOrNull,
         doneDelaySeconds = data["done_delay_seconds"]?.jsonPrimitive?.intOrNull,
         liveActivity = data["live_activity"]?.jsonPrimitive?.booleanOrNull ?: true,
+        muteWhileDesktop = data["mute_while_desktop"]?.jsonPrimitive?.booleanOrNull,
         translate = (data["translate"] as? JsonObject)?.let {
             runCatching { JsonCodec.decodeFromJsonElement(HubTranslatePrefs.serializer(), it) }.getOrNull()
         },

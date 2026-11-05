@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * The three interface styles (设置 › 界面风格). Pages are written once against the components in this module;
- * each style supplies its own tokens, component skins and app chrome. Light and dark still follow the system.
+ * each style supplies its own tokens, component skins and app chrome. Light and dark follow the system unless
+ * 深浅色 ([ColorSchemeChoice]) pins one; the accent can be another 主题色 ([ThemeColor]).
  */
 enum class AppStyle(val key: String, @StringRes val labelRes: Int, @StringRes val summaryRes: Int) {
     Glass("glass", R.string.designsystem_style_glass, R.string.designsystem_style_glass_summary),
@@ -63,7 +64,28 @@ class AppStyleStore(context: Context) {
     /** The built-in face to draw: the chosen one, or the default while a package is chosen (it shows over this). */
     val face: StateFlow<PersonaDesign> = currentFace.asStateFlow()
 
-    init { ActiveStyle.value = currentStyle.value }
+    private val currentScheme = MutableStateFlow(ColorSchemeChoice.fromKey(preferences.getString(KEY_SCHEME, null)))
+    /** 设置 › 外观 › 深浅色: the system's (the default), or always light or dark. */
+    val scheme: StateFlow<ColorSchemeChoice> = currentScheme.asStateFlow()
+    private val currentColor = MutableStateFlow(ThemeColor.fromKey(preferences.getString(KEY_COLOR, null)))
+    /** 设置 › 外观 › 主题色: the style's own (the default), the persona's, or a fixed accent. */
+    val color: StateFlow<ThemeColor> = currentColor.asStateFlow()
+
+    init {
+        ActiveStyle.value = currentStyle.value
+        AppAppearance.scheme = currentScheme.value
+    }
+
+    fun setScheme(choice: ColorSchemeChoice) {
+        preferences.edit().putString(KEY_SCHEME, choice.key).apply()
+        currentScheme.value = choice
+        AppAppearance.scheme = choice
+    }
+
+    fun setColor(choice: ThemeColor) {
+        preferences.edit().putString(KEY_COLOR, choice.key).apply()
+        currentColor.value = choice
+    }
 
     fun setStyle(style: AppStyle) {
         preferences.edit().putString(KEY_STYLE, style.key).apply()
@@ -99,6 +121,8 @@ class AppStyleStore(context: Context) {
         const val KEY_GLASS = "glass"
         const val KEY_PERSONA = "persona"
         const val KEY_THEME = "extension-theme"
+        const val KEY_SCHEME = "scheme"
+        const val KEY_COLOR = "color"
     }
 }
 

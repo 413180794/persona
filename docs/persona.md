@@ -195,6 +195,8 @@ server/internal/hub/personas/nwverse/
 `colors` 是主题色的一个选项：设置 › 外观 › 主题色选「跟随形象」时（只有当前形象带配色才出现），它就是 App 的颜色
 （`ColorSpec(persona:over:)`），和别的主题色一样跟任何界面风格组合（`StyleSpec.compose`），各处照常读 token。
 包里没给的项用当前界面风格自己的颜色。选别的主题色时，形象只剩 `primary` 还在用（头像的光晕）。
+Android（#3048）读 `accent`、`bubble`、`bubble_text`（设置 › 界面风格 › 主题色 › 跟随形象，`ThemeColors.persona`），accent 同样往黑 / 往白调到过底线，气泡上的字不到 4.5:1 时调气泡；`primary` 还不读。
+
 网页（#2980）只读 `accent`：设置 › 通用 › 外观 › 主题色选「跟随形象」时换掉强调色那一组 token，气泡用它调出的淡色（网页的气泡是深色字），见 `docs/web.md`「主题色和字号」。
 
 | persona.json | token | 用在哪里 |

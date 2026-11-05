@@ -154,3 +154,14 @@ internal class BudgetFileCache(
         BudgetEntry(it, it.length(), it.lastModified())
     }.toList()
 }
+
+/**
+ * 设置 › 存储空间's clearing of the caches: deletes under the cache lock, so it never races a [BudgetFileCache]
+ * write, and keeps files still in use (a pinned read, a download's `.part` file being written).
+ */
+object CacheClearing {
+    /** Deletes [files] that are not in use; returns how many stayed because they were. */
+    fun delete(files: List<File>): Int = synchronized(CacheFiles.lock) {
+        files.count { file -> CacheFiles.pinned(file) || (!file.delete() && file.exists()) }
+    }
+}

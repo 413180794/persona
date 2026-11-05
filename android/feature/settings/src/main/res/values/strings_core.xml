@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Settings: the list, appearance, devices, readiness, diagnostics, translation and triage (#2453). English is the fallback; values-zh and values-ja hold the same keys. -->
 <resources>
-    <string name="settings_style_intro">Pick a look you like; it applies right away. Light and dark still follow the system.</string>
+    <string name="settings_style_intro">Pick a look you like; it applies right away. Theme color and appearance are below.</string>
     <string name="settings_style_transparency">Transparency</string>
     <string name="settings_style_glass_auto">Refractive glass on Android 13 and later, blurred glass on earlier versions; switches to opaque panels in battery saver or when scrolling drops frames.</string>
     <string name="settings_style_glass_reduced">All overlays use opaque panels: the most battery-friendly, with the clearest text.</string>

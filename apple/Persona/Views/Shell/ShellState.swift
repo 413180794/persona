@@ -159,11 +159,14 @@ import SwiftUI
 /// Pages the 助手 page pushes for the shell.
 enum ShellPage: Hashable, Sendable {
     case newConversation, profile, inbox, todos, routines, knowledge, machines
+    /// An extension's main-navigation page (nav_page) from the drawer.
+    case extensionPage(ExtensionNavRoute)
 }
 
 /// What the 助手 page pushes by value for the shell (the inbox and the machines push values of their own on top).
 enum ShellRoute: Hashable, Sendable {
     case inbox, todos, machines
+    case extensionPage(ExtensionNavRoute)
 }
 
 extension EnvironmentValues {

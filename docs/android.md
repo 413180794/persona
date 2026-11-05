@@ -21,7 +21,7 @@ minSdk 30（Android 11），compileSdk 37，targetSdk 36。界面中文。
 | 收件箱 | 飞书和邮件事项统一列表、筛选持久化、AI 操作、回复日志；飞书有窗口缓存、事件刷新、可见已读和基础消息渲染；邮件正文页已有，但 MailTransport 尚未接到 App |
 | 设置 | 配对、准备清单、后台引导、关于和更新；连接诊断里可以手动添加 / 编辑 / 删除 hub 地址、停用候选、拖动排序（列表顺序就是尝试顺序）、逐条测试（见「连接地址」）；设备管理与通知偏好页已有，但 DeviceSettings 尚未注入 |
 | 扩展模块 | 终端、文件、机器监控、知识库、手机工具和体验模式已接入 App，入口见「外壳」一节；体验模式没有示例数据的页面显示说明，不连真实 hub |
-| 界面 | 三套界面风格：玻璃（默认）、晨报、看板，在设置 › 界面风格切换，立刻生效并存在本机；深浅色跟随系统。设计规范、组件和写页面的规矩见 [Android 界面风格与设计系统](android-design.md) |
+| 界面 | 三套界面风格：玻璃（默认）、晨报、看板，在设置 › 界面风格切换，立刻生效并存在本机；同一页还有主题色（跟随界面风格（默认）/ 跟随形象 / 五个内置配色）和深浅色（跟随系统（默认）/ 浅色 / 深色），见「外观：主题色和深浅色」。设计规范、组件和写页面的规矩见 [Android 界面风格与设计系统](android-design.md) |
 
 ## Agents 列表和机器页的对齐（#3038）
 
@@ -447,15 +447,33 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
   - 选中的包在手机上就直接从磁盘显示，不等 hub（断网启动也是它）；hub 上没有了就用默认的团子，但保留选择（`AppStyleStore.personaId`），包回来了就恢复。
   - 播放：Android 只解 PNG 的第一帧，所以 `decodeApng` 自己拆 APNG：每帧的数据包成一张单独的 PNG 交给 `BitmapFactory`，再按帧的偏移、dispose 和 blend 合到画布上（生成脚本写的 APNG 只有第 0 帧是整张，后面都是局部帧）。只解当前用到的状态，最多缓存 6 个；帧按文件里的时长轮换，没写时长用 `fps`；「减少动画」或省电模式时停在第 0 帧。状态色画在帧里，App 不再叠环。
   - 选了包以后，Persona 页顶栏、对话列表顶部、菜单里的名字和输入框的「问 xxx…」换成包的 `name`（`LocalPersonaName`）；底部 tab、启动器快捷方式这些产品入口仍叫 Persona。
-  - 和 iOS 的差别：Android 没有主题色「跟随形象」，包里的 `colors` 不读。
+  - 包里的 `colors` 读进 `PersonaManifest.colors`，主题色选「跟随形象」时用它的 `accent`、`bubble`、`bubble_text`（见「外观：主题色和深浅色」）；`primary` 还不用。
 - 测试：`ApngTest`（局部帧按 dispose / blend 合成、时长回退到 fps、单帧 PNG、非 PNG），`PersonaManifestTest`（解析 hub 列表、hub 会拒的包手机也拒、挑头像尺寸、缺的状态用 idle）。实机：`make_persona.py demo` 出的演示包装进 hub 的 personas 目录，在形象页选它。
 - 截图核对：组件目录（调试包 `--es debug.openPage catalog`）的「形象」一节按形象各一行，并排画五个状态。
+
+## 外观：主题色和深浅色（#3048）
+
+对齐 iOS 的 `ThemeColor` / `ColorSchemeChoice`，都是新增选项，默认值下界面一像素不变。
+
+- 存储：`AppStyleStore.color`（`style` / `persona` / `blue` / `coral` / `lavender` / `teal` / `lark`）和 `AppStyleStore.scheme`（`system` / `light` / `dark`），和界面风格同一份偏好，不跟 hub 走。
+- 主题色（`core/designsystem` 的 `ThemeColors.kt`）：五个内置配色和 iOS 的 `ColorSpec` 一样，取 `Tokens.Semantic` 里各风格的 accent 和自己发的消息的气泡（系统蓝 = 液态玻璃、珊瑚橙 = Claude、薰衣草紫 = 黏土、青 = Island、飞书蓝 = 飞书）：系统蓝、飞书蓝是淡色气泡、页面的墨色字，珊瑚橙、薰衣草紫、青是深色实心气泡、自带浅色字（`PersonaPalette.userBubbleText`，`UserBubbleFrame` 把气泡里的字、链接都换成它）。「跟随形象」在当前形象包带 `colors` 的 `accent` 或 `bubble`（`bubble_text` 跟着 `bubble`）时出现，只带气泡的包保留界面风格自己的 accent。主窗口把选中的换成 `LocalThemeAccent`，`PersonaTheme` 在扩展角色主题之后、风格色板之前套上：换 accent、accentSoft 和气泡（包没给气泡时是 accent 的淡色）；晨报的按钮仍是墨色。颜色在某个风格的页面上不到 3:1 时往黑（浅色）/ 往白（深色）调到达标，气泡上的字不到 4.5:1 时把气泡往反方向调（`ThemeColorsTest` 每个配色 × 每种风格 × 深浅色都查）。选内置的主题色会清掉扩展主题（扩展主题仍在下面单独一节「扩展主题」）。
+- 深浅色和主题色对 App 的每个窗口都生效：`AppStyleStore` 把深浅色写进 `AppAppearance.scheme`，`PersonaApp` 把主题色算出的 accent 写进 `AppAppearance.accent`，`PersonaTheme` 的默认值读它们（`appDarkTheme()`），所以分享页、悬浮胶囊、「批准第一个」对话框、健康权限页这些不经 `MainActivity` 的窗口也跟着走（`AppAppearanceTest`）。安卓 12+ 还用 `UiModeManager.setApplicationNightMode` 设 App 自己的夜间模式，WebView 页面和系统对话框也跟着变；安卓 11 上这些仍跟系统。`MainActivity` 另外用 `AppearanceOverride` 换 Compose 的 Configuration，调试截图的 `debug.theme` 仍然优先。
+- 截图：`feature/settings` 的 `SettingsParityShotsTest`（`build/parity-shots/`）。
+
+## 设置的其他对齐项（#3048）
+
+- 模型供应商（设置 › AI › 模型供应商，`ProvidersScreen.kt` / `ProvidersState.kt`，对齐 iOS `ModelLaunchersView`）：`GET /api/v1/launchers` 按「Persona 管理 / 来自 ~/.zshrc / 已隐藏（默认收起，搜索时展开）」分组，搜名字、模型、网关和电脑名；长按行：~/.zshrc 的隐藏 / 恢复（不确认），Persona 的删除（确认，Key 一起删）；右上 + 选「新增供应商」（复用 `NewProviderPage`）或「从 ~/.zshrc 导入」（选电脑 → 预览合并后的供应商、默认全选 → 导入，Key 由 hub 自己去那台电脑上读；那台电脑的 personad 太旧（409 `node_outdated`）时提示去「设置 › 电脑」重新部署）。详情页（`ModelProviderRoute`）列设置、测试可用性（~/.zshrc 的在它在线的每台电脑上同时测、各行各自出结果，Persona 的和直接 API 在 hub 上测）、函数原文、隐藏 / 恢复 / 删除。接口在 `ProviderSetup`（`HttpProviderSetup`）。机器 id 是 hub 自己的，多组时用 `GroupKeys.raw` 对名字。
+- 存储空间（设置 › 关于 › 存储空间，`StorageScreen.kt`，对齐 iOS `StorageView`）：按「对话里的图片 / 飞书图片和文件 / 网页 / 其他缓存 / App 数据」量 `cacheDir` 和 App 自己的目录，单项或全部清除；正在用的 `items.db`、还没发出去的附件（`chat-uploads`、`chat-captures`）、别处正开着的文件（安装中的更新包 `jarvis-update-*.apk`、打开的 PDF `files-pdf`、分享出去的 `shared` / `files-share`）算 App 数据，不删。删文件经数据层的 `CacheClearing`：拿着缓存锁删，跳过正在读的（`readPinned`）和下载中的 `.part` / `.tmp`，不会和 `BudgetFileCache` 的写入抢。网页缓存只走 `WebView.clearCache`，不直接删它的文件。
+- 已登录的 Mac 和手机静音（对齐 iOS `DesktopPresenceRow` / `DesktopPresenceSheet`）：hub 的 `desktops` 事件（`DesktopsEvent`）按 hub 组分开存（`GroupDesktops`，事件本身不带组），设置只显示当前组的，那一组断线时清空它的；退出发给当前组的 hub（`GroupDesktopsTest`）。有电脑端在线时设置首页「通知与后台」一节多一行「Mac 上的 Persona 已登录」（iOS 放在 Agents 列表上方，Android 的 Agents 页这次没动）；通知页多「电脑在线时 › 手机静音」（`NotifyPrefs.mute_while_desktop`，旧 hub 没有这个字段时不显示）；「已登录的 Mac」页逐台显示登录时间、退出（撤销那台的设备凭据）。
+- 通知页细节（对齐 iOS `NotificationSettingsView`）：系统关了通知时页首提示「通知没有打开」和「系统通知设置」按钮；「需要你处理时」带副标题和「通知上可以直接允许 / 拒绝」的说明；页尾「声音、锁屏显示、勿扰在系统设置里改」。
+- Claude Code 设置 › 屏蔽的配置目录（`ClaudeDirs.kt`，对齐 iOS `ClaudeDirsSection`）：`GET /api/v1/machines/{id}/claude-dirs` 列当前电脑的配置目录，屏蔽 / 取消屏蔽（取消时去掉挡住它的那条规则），没挡住任何目录的规则单独列出可删，手填路径或通配（同 iOS 的校验）；`PUT …/claude-dirs/blocked` 发整份规则。
+- 助手设置 › 任务通知 › 只在主对话里通知（`main_tasks_quiet`，旧 hub 没有时不显示）。
 
 ## 助手设置（设置 › 助手）
 
 用户要求（2026-11-02）：「jarvis 的会话和记忆等等内容，是运行在哪个设备上的，现在也完全没有设置选项」。代码在 `feature/assistant/…/settings/`：页面 `AssistantSettingsScreen`，状态和请求 `AssistantSettingsState`，接口用 `AssistantManagement` 的 `config` / `updateConfig` / `launchers`（`GET` / `PUT /api/v1/assistant`、`GET /api/v1/machines/{id}/launchers`）和原有的记忆接口。
 
-- 入口：设置列表「助手 › Persona」（`SettingsPage.Assistant`，深链 `jarvis://open?target=settings&page=assistant`；宽窗口在设置列表右栏打开，页内的子页也在右栏）。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「启动器」在 Persona tab 里原地打开同一页（抽屉原来的「资料页」和 iOS 的「认识 Persona」一样挪进了设置，#2003）。体验模式没有这页，显示说明。
+- 入口：设置列表 AI 一节的「助手」（#3048 对齐 iOS 的 `SettingsPage.assistant`；`AssistantSettingsRoute`，在 `assistantEntries` 里注册，宽窗口在设置列表右栏打开）。#2196 去掉的是原来写成「Persona」的那一行（当时当成「认识 Persona」的重复入口），现在这一行叫「助手」、放在模型配置下面，和 iOS 一样。Persona tab 标题菜单的「助手设置」、右上角的「助手资料」按钮、抽屉里的「启动器」在 Persona tab 里原地打开同一页（抽屉原来的「资料页」和 iOS 的「认识 Persona」一样挪进了设置，#2003）。体验模式没有这页，显示说明。
 - 在哪运行：机器（在线状态；`kind: local` 的写「hub 所在的机器」）、工作目录（按那台机器的 home 缩成 `~/.persona/assistant`）。启动器和模型不在这里：统一在「设置 › 模型配置 › 主对话」里选（#1291），那里也显示供应商离线、缺失等状态。
 - 换机器：先确认，确认框写明「记忆和会话记录在原来那台机器上，不会跟过去」，目标离线时另外写明；确认后 `PUT {"machine_id":…,"main":"-"}`。主对话是原来那台机器上的 transcript，换过去接不上，所以一起清掉，下一条消息在新机器上开新的主对话；原来的会话和记忆留在那台机器上，换回来还在（原来的主对话成了普通会话）。换完刷新 Persona 的会话列表，重新读启动器和记忆。
   - 发件箱本地记着主对话绑在哪个会话（`main_conversation` 表）。换完要调 `MainConversationSender.mainChanged()` 问 hub：hub 不再认它（换了机器、别的设备新建了主对话）就忘掉，下一条发主对话的消息按 hub 的说法重新找或新开。不调的话，消息会继续发到旧机器上的那个会话，而它现在是普通会话（2026-11-05 用户反馈）。连上 hub 追平时（`OutboxMessageSender.onReady`）和打开 Persona tab 时也各查一次，用来修好已经绑错的手机；查不到 hub、超时都保留原绑定。Persona tab 里原地换完回到新对话页。

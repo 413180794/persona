@@ -194,6 +194,7 @@ Persona 管理的接入增加 `kind`（`launcher` / `api`，省略时维持旧�
 - iOS：`LauncherPresetModel`（`apple/Persona/Views/Settings/LauncherPresetModel.swift`，单元测试 `LauncherPresetModelTests`）、`LauncherPresetViews.swift`；
   DEBUG `-tab settings -openModelLaunchers YES -openLauncherEditor preset` 直接打开从插件添加（`-openLauncherEditor YES` 打开新增页）。
 - 网页：`web/src/lib/launcher-presets.ts`（测试同名 `.test.ts`），新增弹窗里同样的切换。
+- Android（#3048）：设置 › AI › 模型供应商列表页（分组、搜索、详情、测试可用性、隐藏 / 恢复 / 删除、从 ~/.zshrc 导入），见 `docs/android.md`「设置的其他对齐项」。
 - Android（#1331）：「新增模型供应商」页（`feature/settings` 的 `NewProviderScreen.kt`、`NewProviderState.kt`），入口在设置 › 模型配置右上角的「+」和用途页选供应商弹层里的「新增模型供应商…」（从用途页加的保存后直接选上，仍要点保存）；见 `docs/android.md`「新增模型供应商」。
 - 截图：假 hub 自带两个示例预设（`example-gateway/team`、`example-gateway/api`），`POST /api/v1/launchers` 在内存里补全并加进列表。
 

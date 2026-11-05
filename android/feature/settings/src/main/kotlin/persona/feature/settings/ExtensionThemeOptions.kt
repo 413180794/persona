@@ -23,7 +23,7 @@ internal fun ExtensionThemeOptions() {
 
 @Composable
 internal fun ExtensionThemeChoices(themes: List<ExtensionTheme>, selected: ExtensionTheme?, onChoose: (ExtensionTheme?) -> Unit) {
-    JSectionHeader(stringResource(R.string.settings_ext_themes))
+    JSectionHeader(stringResource(R.string.settings_ext_themes_extension))
     Column {
         JGroupItem(GroupPosition.of(0, themes.size + 1)) {
             JRow(stringResource(R.string.settings_ext_theme_default), onClick = { onChoose(null) }, trailing = { JRadio(selected == null, null) })

@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -164,7 +163,7 @@ class ApproveFirstActivity : ComponentActivity() {
 /** The app's theme for a window of its own: the user's style, light or dark with the system. */
 @Composable
 internal fun ShortcutTheme(style: AppStyle, dark: Boolean? = null, content: @Composable () -> Unit) =
-    PersonaTheme(darkTheme = dark ?: isSystemInDarkTheme(), style = style, content = content)
+    PersonaTheme(darkTheme = dark ?: persona.core.designsystem.appDarkTheme(), style = style, content = content)
 
 /** The dialog for each state; the debug preview draws the same one. */
 @Composable

@@ -26,6 +26,9 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Capsule -> "capsule"
     SettingsPage.Language -> "language"
     SettingsPage.Codex -> "codex"
+    SettingsPage.Providers -> "providers"
+    SettingsPage.Storage -> "storage"
+    SettingsPage.Desktops -> "desktops"
 }
 
 /** The root and unknown page names have no detail destination. */

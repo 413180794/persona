@@ -127,6 +127,9 @@ internal fun mergedMachineManagement(
     override suspend fun codexSettings(machineId: String) = routes.on(machineId) { it.codexSettings(machineId) }
     override suspend fun setCodexSetting(machineId: String, key: String, value: kotlinx.serialization.json.JsonElement) =
         routes.on(machineId) { it.setCodexSetting(machineId, key, value) }
+    override suspend fun claudeDirs(machineId: String) = routes.on(machineId) { it.claudeDirs(machineId) }
+    override suspend fun setBlockedClaudeDirs(machineId: String, blocked: List<String>) =
+        routes.on(machineId) { it.setBlockedClaudeDirs(machineId, blocked) }
     override suspend fun doctor(machineId: String) = routes.on(machineId) { it.doctor(machineId) }
     override suspend fun fixDoctor(machineId: String) = routes.on(machineId) { it.fixDoctor(machineId) }
     override suspend fun browser(machineId: String) = routes.on(machineId) { it.browser(machineId) }

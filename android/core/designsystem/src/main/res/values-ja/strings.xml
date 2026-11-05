@@ -262,4 +262,14 @@
     </plurals>
     <string name="designsystem_workflow_show_agents">agent を表示</string>
     <string name="designsystem_workflow_hide_agents">agent を隠す</string>
+    <string name="designsystem_scheme_system">システムに合わせる</string>
+    <string name="designsystem_scheme_light">ライト</string>
+    <string name="designsystem_scheme_dark">ダーク</string>
+    <string name="designsystem_color_style">スタイルに合わせる</string>
+    <string name="designsystem_color_persona">アバターに合わせる</string>
+    <string name="designsystem_color_blue">システムブルー</string>
+    <string name="designsystem_color_coral">コーラル</string>
+    <string name="designsystem_color_lavender">ラベンダー</string>
+    <string name="designsystem_color_teal">ティール</string>
+    <string name="designsystem_color_lark">Feishu ブルー</string>
 </resources>
