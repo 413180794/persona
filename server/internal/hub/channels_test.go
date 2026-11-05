@@ -10,6 +10,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -440,4 +441,34 @@ func TestChannelSaysTheAssistantIsAwayAndRecovers(t *testing.T) {
 	if sent := w.node.sent(t, 0); sent["client_msg_id"] != "examplechat-a2" {
 		t.Fatalf("send %v", sent)
 	}
+}
+
+// In the user's language: the hub's channel list, and what the assistant writes in a channel (its test message).
+// Until a client says one, it is Chinese (the tests above).
+func TestChannelsInTheUsersLanguage(t *testing.T) {
+	w := newChannelWorld(t)
+	w.h.setUserLang(i18n.En)
+	_, out := w.do(t, "GET", "/api/v1/channels", "")
+	var feishu, app map[string]any
+	for _, c := range out["channels"].([]any) {
+		switch m := c.(map[string]any); m["id"] {
+		case "feishu":
+			feishu = m
+		case "app":
+			app = m
+		}
+	}
+	if feishu["name"] != "Lark bot" || !strings.HasPrefix(app["description"].(string), "Persona's own apps") {
+		t.Fatalf("feishu %v, app %v", feishu, app)
+	}
+	// The assistant hears it a moment later (its hello again): a plugin channel's features are its.
+	waitFor(t, "the assistant's features in English", func() bool {
+		_, out := w.do(t, "GET", "/api/v1/channels/examplechat", "")
+		f, _ := out["features"].([]any)
+		return len(f) > 0 && f[0].(map[string]any)["title"] == "Questions and approvals"
+	})
+	if code, out := w.do(t, "POST", "/api/v1/channels/examplechat/test", ""); code != 200 {
+		t.Fatalf("%d %v", code, out)
+	}
+	w.ch.find(t, "This is a test message from Persona")
 }

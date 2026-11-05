@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -110,23 +111,16 @@ func (s *Service) channelReceive(id string, m channel.Message, action string) {
 	}
 	if err := s.channelForward(ctx, id, m); err != nil {
 		s.logf("channels: %s: send: %v", id, err)
-		_ = s.channelTell(ctx, id, m.ID, "没发出去："+clip(oneLine(err.Error()), 200), channel.OutNote)
+		_ = s.channelTell(ctx, id, m.ID, i18n.T(s.botLang(ctx), "assistant-channels_plugin.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}), channel.OutNote)
 	}
 }
-
-const channelHelp = `在这里说的话会发给 Persona 的主对话，回答发回这里。
-/new 开一段新对话（后面可以直接跟第一句话）
-/main 回到主对话
-/stop 停下正在做的这一轮
-/status 现在发给谁、在等几个回答
-/help 这些命令
-Agent 问你问题或要你批准时，直接回复序号或文字。`
 
 // channelCommand runs one of the commands every channel has; false (and the text to send on) for one it does not
 // know: it may be the conversation's own (/compact).
 func (s *Service) channelCommand(ctx context.Context, id string, m channel.Message, text string) (bool, string) {
 	name, rest, _ := strings.Cut(text, " ")
 	rest = strings.TrimSpace(rest)
+	l := s.botLang(ctx)
 	reply := func(t string) { _ = s.channelTell(ctx, id, m.ID, t, channel.OutNote) }
 	setTarget := func(t channel.Target) {
 		c := &s.chans
@@ -138,14 +132,14 @@ func (s *Service) channelCommand(ctx context.Context, id string, m channel.Messa
 	}
 	switch strings.ToLower(name) {
 	case "/help", "/帮助":
-		reply(channelHelp)
+		reply(i18n.T(l, "assistant-channels_plugin.help"))
 	case "/main", "/主对话":
 		setTarget(channel.Target{Kind: channel.TargetMain})
-		reply("之后的消息发给主对话。")
+		reply(i18n.T(l, "assistant-channels_plugin.now_to_main"))
 	case "/new", "/新对话":
 		setTarget(channel.Target{Kind: channel.TargetNew})
 		if rest == "" {
-			reply("好，下一条消息会开一段新对话。/main 回到主对话。")
+			reply(i18n.T(l, "assistant-channels_plugin.next_is_new"))
 			return true, ""
 		}
 		return false, rest // "/new 帮我…": the rest starts it
@@ -153,12 +147,12 @@ func (s *Service) channelCommand(ctx context.Context, id string, m channel.Messa
 		rt, err := s.channelTarget(ctx, id)
 		switch {
 		case err != nil:
-			reply("没停下来：" + err.Error())
+			reply(i18n.T(l, "assistant-channels_plugin.not_stopped", i18n.Args{"error": err.Error()}))
 		case rt.isNew:
-			reply("现在没有在做的。")
+			reply(i18n.T(l, "assistant-channels_plugin.nothing_running"))
 		default:
 			if err := s.call(ctx, rt.machine, "session.interrupt", map[string]any{"session_id": rt.session.SessionID}, nil); err != nil {
-				reply("没停下来：" + clip(oneLine(err.Error()), 200))
+				reply(i18n.T(l, "assistant-channels_plugin.not_stopped", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 				return true, ""
 			}
 			c := &s.chans
@@ -168,7 +162,7 @@ func (s *Service) channelCommand(ctx context.Context, id string, m channel.Messa
 			c.mu.Unlock()
 			s.channelsChanged()
 			extensionSink{s: s, id: id}.typing(ctx, false)
-			reply("已停下。")
+			reply(i18n.T(l, "assistant-channels_plugin.stopped"))
 		}
 	case "/status", "/状态":
 		reply(s.channelStatusText(ctx, id))
@@ -179,22 +173,23 @@ func (s *Service) channelCommand(ctx context.Context, id string, m channel.Messa
 }
 
 func (s *Service) channelStatusText(ctx context.Context, id string) string {
-	where := "主对话"
+	l := s.botLang(ctx)
+	where := i18n.T(l, "assistant-channels_plugin.main_chat")
 	if rt, err := s.channelTarget(ctx, id); err == nil {
 		switch {
 		case rt.isNew && !rt.main:
-			where = "下一条消息开的新对话"
+			where = i18n.T(l, "assistant-channels_plugin.next_new_chat")
 		case !rt.main:
 			where = rt.label
 		}
 	}
 	w := s.channelWaiting(id)
-	out := "消息发给：" + where
+	out := i18n.T(l, "assistant-channels_plugin.status_to", i18n.Args{"target": where})
 	if w.Answers > 0 {
-		out += fmt.Sprintf("\n在等 %d 个回答", w.Answers)
+		out += i18n.T(l, "assistant-channels_plugin.status_answers", i18n.Args{"count": w.Answers})
 	}
 	if w.Asks > 0 {
-		out += fmt.Sprintf("\n有 %d 个问题等你回复", w.Asks)
+		out += i18n.T(l, "assistant-channels_plugin.status_asks", i18n.Args{"count": w.Asks})
 	}
 	return out
 }
@@ -215,11 +210,11 @@ func (s *Service) channelTarget(ctx context.Context, id string) (resolvedTarget,
 	case channel.TargetConversation:
 		d, ok := s.device(ctx, t.MachineID)
 		if !ok {
-			return resolvedTarget{}, errors.New("那段对话所在的电脑不在了：发 /main 回到主对话")
+			return resolvedTarget{}, errors.New(i18n.T(s.botLang(ctx), "assistant-channels_plugin.machine_gone"))
 		}
 		sess, ok := s.session(ctx, d.ID, t.SessionID)
 		if !ok {
-			return resolvedTarget{}, errors.New("那段对话不见了：发 /main 回到主对话")
+			return resolvedTarget{}, errors.New(i18n.T(s.botLang(ctx), "assistant-channels_plugin.chat_gone"))
 		}
 		sess.SessionID, sess.MachineID = t.SessionID, d.ID
 		main := s.settings(ctx).Main
@@ -262,7 +257,7 @@ func (s *Service) channelForward(ctx context.Context, id string, m channel.Messa
 		}
 		path, err := s.uploadBytes(ctx, rt.machine, firstNonEmpty(f.Name, "file"), f.Data)
 		if err != nil {
-			return fmt.Errorf("把文件存到 %s：%w", rt.machineName, err)
+			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-channels_plugin.save_file", i18n.Args{"machine": rt.machineName}), err)
 		}
 		in.Files = append(in.Files, path)
 	}
@@ -276,7 +271,7 @@ func (s *Service) channelForward(ctx context.Context, id string, m channel.Messa
 	if rt.isNew {
 		sess, err := s.Start(ctx, StartParams{Text: text, Images: images, Main: rt.main})
 		if err != nil {
-			return fmt.Errorf("没开成新对话：%w", err)
+			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-channels_plugin.not_started"), err)
 		}
 		if !rt.main { // /new: the chat goes on in it
 			c := &s.chans
@@ -424,7 +419,7 @@ func (s *Service) askInChannel(ctx context.Context, id string, ix proto.Interact
 		return
 	}
 	a := channel.NewAsk(id, ix, now)
-	text, answerable := channel.AskText(ix, a)
+	text, answerable := channel.AskText(s.botLang(ctx), ix, a)
 	reply := ""
 	for _, r := range s.channelRuns(id) {
 		if r.MachineID == ix.MachineID && r.SessionID == ix.SessionID {
@@ -476,6 +471,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 		return false
 	}
 	pending := s.pendingIDs(ctx) // before s.chans.mu: a call to the hub is never made under it
+	l := s.botLang(ctx)
 	if pending == nil {
 		return false // the hub could not be asked: an ordinary message
 	}
@@ -495,7 +491,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 		c.mu.Unlock()
 		return false
 	}
-	r, done, again := channel.ReadAnswer(a, text)
+	r, done, again := channel.ReadAnswer(l, a, text)
 	s.saveChannelStateLocked()
 	c.mu.Unlock()
 	reply := func(t string) { _ = s.channelTell(ctx, id, m.ID, t, channel.OutNote) }
@@ -504,7 +500,7 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 		reply(again)
 		return true
 	case !done:
-		reply(channel.QuestionText(a, a.Step)) // a question answered, the next one asked
+		reply(channel.QuestionText(l, a, a.Step)) // a question answered, the next one asked
 		return true
 	}
 	ok, err := s.resolveInteraction(ctx, a.ID, r, action)
@@ -520,14 +516,14 @@ func (s *Service) channelAnswerAsk(ctx context.Context, id string, m channel.Mes
 	c.mu.Unlock()
 	switch {
 	case err != nil:
-		reply("没答上：" + clip(oneLine(err.Error()), 200))
+		reply(i18n.T(l, "assistant-channels_plugin.not_answered", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 	case !ok:
-		reply("这个已经在别处处理过了。")
+		reply(i18n.T(l, "assistant-channels_plugin.answered_elsewhere"))
 	default:
-		reply(channel.Answered(r))
+		reply(channel.Answered(l, r))
 	}
 	if left > 0 {
-		reply(fmt.Sprintf("还有 %d 个在等你回复，最近的那个是上面倒数第二条。", left))
+		reply(i18n.T(l, "assistant-channels_plugin.more_waiting", i18n.Args{"count": left}))
 	}
 	return true
 }
@@ -591,11 +587,12 @@ func (s *Service) extensionMirror(ctx context.Context, machine, session string) 
 		default:
 			continue
 		}
-		head := "主对话"
+		l := s.botLang(ctx)
+		head := i18n.T(l, "assistant-channels_plugin.main_chat")
 		if !main {
-			head = "定时任务「" + task + "」"
+			head = i18n.T(l, "assistant-channels_plugin.scheduled_task", i18n.Args{"task": task})
 		} else if asked != "" {
-			head += " · 在别处问：" + clip(oneLine(stripContext(asked)), 80)
+			head += i18n.T(l, "assistant-channels_plugin.asked_elsewhere", i18n.Args{"asked": clip(oneLine(stripContext(asked)), 80)})
 		}
 		_ = s.channelTell(ctx, v.ID, "", head+"\n\n"+answer, channel.OutPush)
 	}

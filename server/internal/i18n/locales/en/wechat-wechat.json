@@ -1,0 +1,10 @@
+{
+  "not_bound": "WeChat isn't bound yet",
+  "account": "WeChat user {id}",
+  "cannot_load": "Can't read the saved binding: {error}",
+  "bad_address": "WeChat's address is wrong: {error}",
+  "via": "iLink (WeChat AI bot)",
+  "revoked": "WeChat's authorization is no longer valid (bound again elsewhere, or revoked). Scan the code again to bind",
+  "refused": "WeChat refused the request: {error}",
+  "retrying": "Can't reach WeChat, retrying: {error}"
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistant"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -746,4 +747,15 @@ func TestBotFoldedMessagesAreAnsweredTogether(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The bot writes in the user's language: the pairing hint to someone not paired yet, the owner-only line.
+func TestBotRepliesInTheUsersLanguage(t *testing.T) {
+	w := newBotWorld(t)
+	w.h.setUserLang(i18n.Ja)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_early", "ou_me", "text", textContent("こんにちは"), nil))
+	w.api.find(t, "/messages", "まだペアリングされていません")
+	w.pair(t)
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_other", "ou_stranger", "text", textContent("hi"), nil))
+	w.api.find(t, "/messages", "このボットは所有者専用です")
 }

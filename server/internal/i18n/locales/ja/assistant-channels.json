@@ -1,0 +1,8 @@
+{
+  "not_set_here": "{name}はここでは設定できません",
+  "assistant_chats_only": "選べるのはアシスタントのチャットのみです",
+  "no_feature": "{name}には「{feature}」という機能はありません",
+  "not_connected": "{name}はまだ接続されていません",
+  "test_message": "Personaからのテストメッセージです。このチャネルで連絡が届きます。",
+  "ended": "終了"
+}

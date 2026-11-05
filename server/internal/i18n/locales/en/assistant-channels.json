@@ -1,0 +1,8 @@
+{
+  "not_set_here": "{name} isn't set up here",
+  "assistant_chats_only": "Only the assistant's chats can be picked",
+  "no_feature": "{name} has no “{feature}” feature",
+  "not_connected": "{name} isn't connected yet",
+  "test_message": "This is a test message from Persona: this channel can reach you.",
+  "ended": "Ended"
+}

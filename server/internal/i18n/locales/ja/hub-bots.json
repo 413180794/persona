@@ -1,0 +1,8 @@
+{
+  "no_credentials": "アプリの認証情報が未入力です",
+  "bot_off": "ボットがオフか、まだペアリングされていません",
+  "test_title": "テストメッセージ",
+  "test_body": "Personaからのテストメッセージです。ボットから連絡が届きます。",
+  "needs_secret": "App Secretが必要です",
+  "cannot_reach_app": "このアプリに接続できません：{error}（App ID / App Secretを確認し、開発者コンソールでアプリのボット機能を有効にしてください）"
+}

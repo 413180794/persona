@@ -119,6 +119,9 @@ type HubInfo struct {
 	// Timezone is the user's time zone by name (IANA, as their devices say it): for the times a plugin shows people
 	// ("today", a message's time). Empty while only the hub's own clock is known. Read at each start.
 	Timezone string `json:"timezone,omitempty"`
+	// Locale is the user's language (zh-Hans, en, ja; docs/i18n.md「协议」): what a plugin writes for people itself
+	// (its status, sign-in hints, a bot's replies) reads in it. Read at each start; empty means zh-Hans.
+	Locale string `json:"locale,omitempty"`
 	// Capabilities are what this hub does that a plugin may go by ("inbox_group": it relates a connector's batches of
 	// new messages to inbox events, docs/inbox.md「事件合成」). Absent or without one: the hub does not do it.
 	Capabilities []string `json:"capabilities,omitempty"`

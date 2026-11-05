@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Kind is what sort of way in a channel is.
@@ -150,19 +152,21 @@ const (
 	FeatureSync    = "sync"
 )
 
-// PluginFeatures are a plugin channel's features with what is on, in order; only those its capabilities allow.
-func PluginFeatures(c Capabilities, on map[string]bool) []Feature {
+// PluginFeatures are a plugin channel's features with what is on, in order, their names in l; only those its
+// capabilities allow.
+func PluginFeatures(l i18n.Lang, c Capabilities, on map[string]bool) []Feature {
 	var out []Feature
-	add := func(id, title, desc string) {
-		out = append(out, Feature{ID: id, Title: title, Description: desc, On: on[id]})
+	add := func(id string) {
+		out = append(out, Feature{ID: id, Title: i18n.T(l, "channel-channel."+id+"_title"),
+			Description: i18n.T(l, "channel-channel."+id+"_description"), On: on[id]})
 	}
 	if c.Asks == AsksText || c.Asks == AsksButtons {
-		add(FeatureAsks, "提问和批准", "它在驱动的对话（发到的对话、在等回答的）要你回答或批准时，发到这里")
-		add(FeatureAllAsks, "所有 Agent 的提问", "各台电脑上所有 Agent 的提问和批准都发到这里")
+		add(FeatureAsks)
+		add(FeatureAllAsks)
 	}
 	if c.Push {
-		add(FeaturePushes, "推送也发到这里", "通知推到手机的同时发一份；定时任务那段对话的回答也发")
-		add(FeatureSync, "同步主对话", "主对话里不是从这里发起的一轮结束时，把回答发过来")
+		add(FeaturePushes)
+		add(FeatureSync)
 	}
 	return out
 }

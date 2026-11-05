@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"sync"
@@ -13,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -326,6 +326,23 @@ func (s *Service) pluginChannelNow(ctx context.Context, id string) (channel.View
 	return channel.View{}, false, nil
 }
 
+// botLang is the language of what the bots and the channels write: the request's when the context carries one (the
+// app's request, withRequestLang), else the user's (docs/i18n.md「协议」), zh-Hans while no client has said one.
+func (s *Service) botLang(ctx context.Context) i18n.Lang {
+	if l := i18n.From(ctx); l != "" {
+		return l
+	}
+	return i18n.Lang(s.hello(ctx).Locale).Or(i18n.Default)
+}
+
+// withRequestLang is r with its Accept-Language (the hub relays the app's headers) in its context, for botLang.
+func withRequestLang(r *http.Request) *http.Request {
+	if l := i18n.FromRequest(r); l != "" {
+		return r.WithContext(i18n.With(r.Context(), l))
+	}
+	return r
+}
+
 // channelList is every channel as the app sees it: the hub's list with what is the assistant's filled in.
 func (s *Service) channelList(ctx context.Context) ([]channel.View, error) {
 	list, err := s.channelsFresh(ctx)
@@ -354,7 +371,7 @@ func (s *Service) filledChannel(ctx context.Context, v channel.View) channel.Vie
 		if pref.Target != nil {
 			t = *pref.Target
 		}
-		features := channel.PluginFeatures(v.Capabilities, pref.Features)
+		features := channel.PluginFeatures(s.botLang(ctx), v.Capabilities, pref.Features)
 		c.mu.Unlock()
 		if t.Kind == channel.TargetConversation && t.Title == "" {
 			t.Title = s.conversationTitle(ctx, t.MachineID, t.SessionID)
@@ -431,7 +448,10 @@ func (s *Service) isAssistantConversation(ctx context.Context, machine, session 
 // ---- the app's interface (relayed by the hub, assistantwire.Routes) ----
 
 func (s *Service) channelRoutes() {
-	s.handle("GET /api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
+	handle := func(pattern string, fn http.HandlerFunc) {
+		s.handle(pattern, func(w http.ResponseWriter, r *http.Request) { fn(w, withRequestLang(r)) })
+	}
+	handle("GET /api/v1/channels", func(w http.ResponseWriter, r *http.Request) {
 		list, err := s.channelList(r.Context())
 		if err != nil {
 			apierr.Write(w, http.StatusBadGateway, err)
@@ -439,7 +459,7 @@ func (s *Service) channelRoutes() {
 		}
 		apierr.WriteJSON(w, map[string]any{"channels": list})
 	})
-	s.handle("GET /api/v1/channels/{id}", func(w http.ResponseWriter, r *http.Request) {
+	handle("GET /api/v1/channels/{id}", func(w http.ResponseWriter, r *http.Request) {
 		d, ok, err := s.channelDetail(r.Context(), r.PathValue("id"))
 		switch {
 		case err != nil:
@@ -465,7 +485,7 @@ func (s *Service) channelRoutes() {
 				apierr.WriteCode(w, http.StatusNotFound, "not_found", errors.New("no such channel"))
 				return
 			case v.ReadOnly || v.Source == channel.SourceMarket:
-				apierr.WriteCode(w, http.StatusConflict, "read_only", fmt.Errorf("%s 不在这里设置", v.Name))
+				apierr.WriteCode(w, http.StatusConflict, "read_only", errors.New(i18n.T(s.botLang(r.Context()), "assistant-channels.not_set_here", i18n.Args{"name": v.Name})))
 				return
 			}
 			f(w, r, v)
@@ -480,7 +500,7 @@ func (s *Service) channelRoutes() {
 		}
 		apierr.WriteJSON(w, d)
 	}
-	s.handle("PUT /api/v1/channels/{id}", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
+	handle("PUT /api/v1/channels/{id}", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
 		var in struct {
 			Enabled  *bool           `json:"enabled"`
 			Target   *channel.Target `json:"target"`
@@ -501,7 +521,7 @@ func (s *Service) channelRoutes() {
 		}
 		detail(w, r, v.ID)
 	}))
-	s.handle("DELETE /api/v1/channels/{id}/binding", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
+	handle("DELETE /api/v1/channels/{id}/binding", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
 		if err := s.appCall(r.Context(), AppChannels, ChannelsUnbind, map[string]any{"channel": v.ID}, nil); err != nil {
 			apierr.Write(w, http.StatusBadGateway, err)
 			return
@@ -512,7 +532,7 @@ func (s *Service) channelRoutes() {
 		}
 		detail(w, r, v.ID)
 	}))
-	s.handle("POST /api/v1/channels/{id}/test", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
+	handle("POST /api/v1/channels/{id}/test", full(func(w http.ResponseWriter, r *http.Request, v channel.View) {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 		if err := s.testChannel(ctx, v); err != nil {
@@ -525,12 +545,13 @@ func (s *Service) channelRoutes() {
 
 // updateChannel applies the app's changes: only what is given.
 func (s *Service) updateChannel(ctx context.Context, v channel.View, enabled *bool, target *channel.Target, features map[string]bool) error {
+	l := s.botLang(ctx)
 	if target != nil {
 		if err := target.Check(); err != nil {
 			return err
 		}
 		if target.Kind == channel.TargetConversation && !s.isAssistantConversation(ctx, target.MachineID, target.SessionID) {
-			return errors.New("只能选助手的对话")
+			return errors.New(i18n.T(l, "assistant-channels.assistant_chats_only"))
 		}
 	}
 	known := map[string]bool{}
@@ -539,14 +560,14 @@ func (s *Service) updateChannel(ctx context.Context, v channel.View, enabled *bo
 	}
 	for id := range features {
 		if !known[id] {
-			return fmt.Errorf("%s 没有「%s」这个功能", v.Name, id)
+			return errors.New(i18n.T(l, "assistant-channels.no_feature", i18n.Args{"name": v.Name, "feature": id}))
 		}
 	}
 	if v.ID == channel.Feishu {
 		return s.updateFeishuChannel(ctx, enabled, target, features)
 	}
 	if v.Source != channel.SourcePlugin {
-		return fmt.Errorf("%s 不在这里设置", v.Name)
+		return errors.New(i18n.T(l, "assistant-channels.not_set_here", i18n.Args{"name": v.Name}))
 	}
 	if enabled != nil {
 		if err := s.appCall(ctx, AppChannels, ChannelsEnable, map[string]any{"channel": v.ID, "on": *enabled}, nil); err != nil {
@@ -576,12 +597,12 @@ func (s *Service) updateChannel(ctx context.Context, v channel.View, enabled *bo
 // testChannel sends the owner (only them) a line, to see the channel reaches them.
 func (s *Service) testChannel(ctx context.Context, v channel.View) error {
 	if v.State != channel.StateConnected {
-		return fmt.Errorf("%s 还没连上", v.Name)
+		return errors.New(i18n.T(s.botLang(ctx), "assistant-channels.not_connected", i18n.Args{"name": v.Name}))
 	}
 	if v.ID == channel.Feishu {
 		return s.appCall(ctx, AppFeishu, FeishuTest, map[string]any{}, nil)
 	}
-	return s.channelTell(ctx, v.ID, "", "这是来自 Persona 的测试消息：这个渠道能联系到你。", channel.OutNote)
+	return s.channelTell(ctx, v.ID, "", i18n.T(s.botLang(ctx), "assistant-channels.test_message"), channel.OutNote)
 }
 
 // ---- what the hub hands the channels (Handler) ----
@@ -643,9 +664,10 @@ func (s *Service) InteractionEnded(_ context.Context, p InteractionEnded) {
 	}
 	c.ended[p.Interaction.ID] = now
 	c.mu.Unlock()
-	how := "已结束"
+	l := s.botLang(context.Background())
+	how := i18n.T(l, "assistant-channels.ended")
 	if p.Resolution != nil {
-		how = resolutionText(p.Interaction, *p.Resolution)
+		how = resolutionText(l, p.Interaction, *p.Resolution)
 	}
 	s.feishuInteractionDone(p.Interaction, how)
 	s.channelInteractionDone(p.Interaction)
@@ -784,7 +806,7 @@ func (s *Service) channelsCatchUp(ctx context.Context) {
 	}
 	b.mu.Unlock()
 	for _, ix := range ended {
-		s.feishuInteractionDone(ix, "已结束")
+		s.feishuInteractionDone(ix, i18n.T(s.botLang(ctx), "assistant-channels.ended"))
 	}
 }
 

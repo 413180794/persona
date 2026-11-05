@@ -15,6 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -378,7 +379,8 @@ func (s *Service) FeishuOwner(_ context.Context, p FeishuOwner) {
 		if !p.Paired {
 			return
 		}
-		card := feishubot.NewCard("已配对", feishubot.Green, "已配对").Markdown("以后在这里说的话会交给 Persona。\n\n" + botHelp(st.Features))
+		l := s.botLang(ctx)
+		card := feishubot.NewCard(i18n.T(l, "assistant-feishu.paired"), feishubot.Green, i18n.T(l, "assistant-feishu.paired")).Markdown(i18n.T(l, "assistant-feishu.paired_body") + botHelp(l, st.Features))
 		if _, err := s.botPost(ctx, "", card, ""); err != nil {
 			s.logf("bots: paired note: %v", err)
 		}
@@ -567,25 +569,26 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
 		content.Text = rest
 	}
 	target := s.botTargetFor(msg.RootID, msg.ParentID)
-	if err := botAllowed(st.Features, target); err != nil {
+	if err := botAllowed(s.botLang(ctx), st.Features, target); err != nil {
 		s.botNote(ctx, msg.MessageID, err.Error())
 		return
 	}
 	if err := s.botSend(ctx, &ev, content, target); err != nil {
 		s.logf("bots: send: %v", err)
-		s.botNote(ctx, msg.MessageID, "没能发出去："+clip(oneLine(err.Error()), 200))
+		s.botNote(ctx, msg.MessageID, i18n.T(s.botLang(ctx), "assistant-feishu.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 	}
 }
 
-func botAllowed(f FeishuFeatures, t botTarget) error {
+// botAllowed says, in l, why the chat may not send to t now (nil: it may).
+func botAllowed(l i18n.Lang, f FeishuFeatures, t botTarget) error {
 	switch {
 	case t.agent() && !f.Agents:
-		return errors.New("在飞书里驱动 Agent 没有打开（App 设置 › 连接器 › 飞书机器人）。发 /main 回到主对话。")
+		return errors.New(i18n.T(l, "assistant-feishu.agents_off"))
 	case !t.agent() && !f.Main:
 		if f.Agents {
-			return errors.New("和 Persona 对话没有打开，只能驱动 Agent：发 /agents 选一个。")
+			return errors.New(i18n.T(l, "assistant-feishu.main_off_agents_on"))
 		}
-		return errors.New("飞书机器人的对话功能没有打开（App 设置 › 连接器 › 飞书机器人）。")
+		return errors.New(i18n.T(l, "assistant-feishu.chat_off"))
 	}
 	return nil
 }
@@ -601,21 +604,22 @@ type resolvedTarget struct {
 }
 
 func (s *Service) resolveBotTarget(ctx context.Context, t botTarget) (resolvedTarget, error) {
+	l := s.botLang(ctx)
 	switch t.Kind {
 	case targetAgent:
 		d, sess, err := s.findAgent(ctx, t.MachineID, t.SessionID)
 		if err != nil {
-			return resolvedTarget{}, fmt.Errorf("找不到这个 Agent（%s）：发 /agents 重新选", short(t.SessionID))
+			return resolvedTarget{}, errors.New(i18n.T(l, "assistant-feishu.agent_not_found", i18n.Args{"id": short(t.SessionID)}))
 		}
 		if sess.SourceKind != "" && (sess.Capabilities == nil || !sess.Capabilities.Send) {
-			return resolvedTarget{}, fmt.Errorf("这个 Agent 仅支持查看：%s", sess.ReadOnlyReason)
+			return resolvedTarget{}, errors.New(i18n.T(l, "assistant-feishu.agent_read_only", i18n.Args{"reason": sess.ReadOnlyReason}))
 		}
 		return resolvedTarget{machine: d.ID, machineName: d.Name, session: sess, label: agentLabel(sess) + " · " + d.Name}, nil
 	default:
 		cfg := s.settings(ctx)
 		d, ok := s.device(ctx, cfg.MachineID)
 		if !ok {
-			return resolvedTarget{}, errors.New("助手所在的机器没有配置")
+			return resolvedTarget{}, errors.New(i18n.T(l, "assistant-feishu.no_assistant_machine"))
 		}
 		sid := t.SessionID
 		if t.Kind == targetMain {
@@ -623,9 +627,9 @@ func (s *Service) resolveBotTarget(ctx context.Context, t botTarget) (resolvedTa
 		}
 		r := resolvedTarget{machine: d.ID, machineName: d.Name, main: sid != "" && sid == cfg.Main}
 		if sid == "" {
-			r.isNew, r.main, r.label = true, t.Kind == targetMain, "新对话"
+			r.isNew, r.main, r.label = true, t.Kind == targetMain, i18n.T(l, "assistant-feishu.new_chat")
 			if r.main {
-				r.label = "主对话"
+				r.label = i18n.T(l, "assistant-feishu.main_chat")
 			}
 			return r, nil
 		}
@@ -640,10 +644,10 @@ func (s *Service) resolveBotTarget(ctx context.Context, t botTarget) (resolvedTa
 func (s *Service) targetLabel(ctx context.Context, t botTarget) string {
 	r, err := s.resolveBotTarget(ctx, t)
 	if err != nil {
-		return "（找不到）"
+		return i18n.T(s.botLang(ctx), "assistant-feishu.not_found")
 	}
 	if t.Kind == targetJarvis && r.isNew {
-		return "新对话（下一条消息开始）"
+		return i18n.T(s.botLang(ctx), "assistant-feishu.new_chat_next")
 	}
 	return r.label
 }
@@ -689,7 +693,7 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 				TooLarge bool   `json:"too_large"`
 			}
 			if err := s.appCall(ctx, AppFeishu, FeishuResource, map[string]any{"message_id": msg.MessageID, "key": md.Key, "kind": md.Kind}, &res); err != nil {
-				return fmt.Errorf("下载图片：%w", err)
+				return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.download_image"), err)
 			}
 			mime := res.MIME
 			if !strings.HasPrefix(mime, "image/") {
@@ -710,13 +714,13 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 		}
 		if err := s.appCall(ctx, AppFeishu, FeishuSave, map[string]any{"message_id": msg.MessageID, "key": md.Key, "kind": md.Kind, "name": md.Name,
 			"machine_id": rt.machine}, &saved); err != nil {
-			return fmt.Errorf("把文件存到 %s：%w", rt.machineName, err)
+			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.save_file", i18n.Args{"machine": rt.machineName}), err)
 		}
 		in.Files = append(in.Files, saved.Path)
 	}
 	text := prompts.RenderBotMessage(in)
 	if strings.TrimSpace(content.Text) == "" && in.Quote == nil && in.Forward == "" && len(images) == 0 && len(in.Files) == 0 {
-		return errors.New("这种消息还读不了")
+		return errors.New(i18n.T(s.botLang(ctx), "assistant-feishu.cannot_read"))
 	}
 
 	run := &channel.Run{ID: "fb_" + msg.MessageID, Channel: channel.Feishu, ReplyTo: msg.MessageID, Started: time.Now().UTC(), Label: rt.label,
@@ -853,7 +857,7 @@ type feishuSink struct{ s *Service }
 
 func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Duration, steps []string, live string) {
 	s := f.s
-	c := progressCard(r.Label, took, steps, live)
+	c := progressCard(s.botLang(ctx), r.Label, took, steps, live)
 	if card := r.Ext["card"]; card != "" {
 		if err := s.botUpdateCard(ctx, card, c); err != nil {
 			s.logf("bots: progress update: %v", err)
@@ -871,7 +875,7 @@ func (f feishuSink) progress(ctx context.Context, r *channel.Run, took time.Dura
 
 func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 	if o.Ext["card"] != "" {
-		_ = f.s.botUpdateCard(ctx, o.Ext["card"], feishubot.NewCard("", "", "").Note("接着下一条消息一起回答"))
+		_ = f.s.botUpdateCard(ctx, o.Ext["card"], feishubot.NewCard("", "", "").Note(i18n.T(f.s.botLang(ctx), "assistant-feishu.folded")))
 	}
 }
 
@@ -880,7 +884,8 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 // is best effort (a card sent twice would show twice).
 func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note string, took time.Duration, final, quiet bool) error {
 	s := f.s
-	foot := r.Label + " · 用时 " + durationText(took)
+	l := s.botLang(ctx)
+	foot := i18n.T(l, "assistant-feishu.took", i18n.Args{"label": r.Label, "took": channel.Duration(l, took)})
 	if note != "" {
 		foot += "\n" + note
 	}
@@ -938,13 +943,13 @@ func unreachable(err error) bool {
 	return errors.Is(err, bus.ErrOffline) || errors.Is(err, rpc.ErrClosed) || errors.Is(err, context.DeadlineExceeded)
 }
 
-func progressCard(label string, took time.Duration, steps []string, live string) *feishubot.Card {
-	c := feishubot.NewCard("", "", "处理中…")
-	c.Note("⏳ " + label + " · 处理中 · " + durationText(took))
+func progressCard(l i18n.Lang, label string, took time.Duration, steps []string, live string) *feishubot.Card {
+	c := feishubot.NewCard("", "", i18n.T(l, "assistant-feishu.working_summary"))
+	c.Note("⏳ " + i18n.T(l, "assistant-feishu.working_note", i18n.Args{"label": label, "took": channel.Duration(l, took)}))
 	if n := len(steps); n > 0 {
 		var b strings.Builder
 		if n > 4 {
-			fmt.Fprintf(&b, "…前面还有 %d 步\n", n-4)
+			b.WriteString(i18n.T(l, "assistant-feishu.earlier_steps", i18n.Args{"count": n - 4}))
 			steps = steps[n-4:]
 		}
 		for _, st := range steps {
@@ -962,10 +967,8 @@ func progressCard(label string, took time.Duration, steps []string, live string)
 	return c
 }
 
-func durationText(d time.Duration) string { return channel.Duration(d) }
-
-// botStep is one line of the progress card for a tool call.
-func botStep(it proto.Item) string {
+// botStep is one line of the progress card for a tool call, in l.
+func botStep(l i18n.Lang, it proto.Item) string {
 	if it.Kind != proto.KindToolUse {
 		return ""
 	}
@@ -976,23 +979,23 @@ func botStep(it proto.Item) string {
 	detail := ""
 	switch name {
 	case "Bash":
-		name, detail = "运行", firstLine(str("command"))
+		name, detail = i18n.T(l, "assistant-feishu.step_run"), firstLine(str("command"))
 	case "Read":
-		name, detail = "读", path.Base(str("file_path"))
+		name, detail = i18n.T(l, "assistant-feishu.step_read"), path.Base(str("file_path"))
 	case "Edit", "MultiEdit", "Write", "NotebookEdit":
-		name, detail = "改", path.Base(str("file_path"))
+		name, detail = i18n.T(l, "assistant-feishu.step_edit"), path.Base(str("file_path"))
 	case "Grep", "Glob":
-		name, detail = "搜", str("pattern")
+		name, detail = i18n.T(l, "assistant-feishu.step_search"), str("pattern")
 	case "WebFetch":
-		name, detail = "打开网页", str("url")
+		name, detail = i18n.T(l, "assistant-feishu.step_open_web"), str("url")
 	case "WebSearch":
-		name, detail = "搜网页", str("query")
+		name, detail = i18n.T(l, "assistant-feishu.step_search_web"), str("query")
 	case "Task", "Agent":
-		name, detail = "子任务", str("description")
+		name, detail = i18n.T(l, "assistant-feishu.step_subtask"), str("description")
 	case "TodoWrite":
-		name = "更新待办"
+		name = i18n.T(l, "assistant-feishu.step_todos")
 	case "Skill":
-		name, detail = "技能", str("skill")
+		name, detail = i18n.T(l, "assistant-feishu.step_skill"), str("skill")
 	default:
 		if strings.HasPrefix(name, "mcp__") {
 			if i := strings.LastIndex(name, "__"); i > 4 {

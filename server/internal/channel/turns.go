@@ -1,11 +1,11 @@
 package channel
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -86,10 +86,11 @@ type Look struct {
 	Now time.Time
 	// Exists: the conversation is listed; Online: its machine is connected.
 	Exists, Online bool
-	Working        bool // working, or starting
-	Waiting        bool // blocked on the owner, or a card waits for an answer
-	Offline        bool // the conversation's own status is offline
-	Background     int  // background work still running (commands, Monitors, subagents)
+	Working        bool      // working, or starting
+	Waiting        bool      // blocked on the owner, or a card waits for an answer
+	Offline        bool      // the conversation's own status is offline
+	Background     int       // background work still running (commands, Monitors, subagents)
+	Lang           i18n.Lang // what the notes are written in (the user's language; zh-Hans when unknown)
 }
 
 // Action is what Check says to do.
@@ -115,11 +116,11 @@ func (r *Run) Check(l Look) Step {
 		return Step{Do: Finish}
 	}
 	if age > RunMost {
-		return Step{Do: Finish, Note: fmt.Sprintf("已经 %s 了还没做完，先不等了；结果到 App 里看。", Duration(age))}
+		return Step{Do: Finish, Note: i18n.T(l.Lang, "channel-turns.gave_up", i18n.Args{"took": Duration(l.Lang, age)})}
 	}
 	if !l.Exists {
 		if age > MissingAfter && l.Online {
-			return Step{Do: Finish, Note: "这段对话不见了（被关掉或删掉了）。"}
+			return Step{Do: Finish, Note: i18n.T(l.Lang, "channel-turns.gone")}
 		}
 		return Step{Do: Wait}
 	}
@@ -175,7 +176,7 @@ func (r *Run) Decide(rd Reading, l Look) *Result {
 	}
 	res := &Result{Answer: rd.Answer, Held: held, Last: rd.Last}
 	if held {
-		res.Note = fmt.Sprintf("后台还有 %d 个任务在跑，做完再告诉你。", l.Background)
+		res.Note = i18n.T(l.Lang, "channel-turns.background", i18n.Args{"count": l.Background})
 	}
 	return res
 }
@@ -260,14 +261,14 @@ func Probe(text string, fallbacks ...string) string {
 	return ""
 }
 
-// Duration is d for people: 「12 秒」「3 分 4 秒」「2 小时 5 分」.
-func Duration(d time.Duration) string {
+// Duration is d for people in l: 「12 秒」「3 分 4 秒」「2 小时 5 分」.
+func Duration(l i18n.Lang, d time.Duration) string {
 	s := int(d.Round(time.Second).Seconds())
 	switch {
 	case s < 60:
-		return fmt.Sprintf("%d 秒", s)
+		return i18n.T(l, "channel-turns.seconds", i18n.Args{"s": s})
 	case s < 3600:
-		return fmt.Sprintf("%d 分 %d 秒", s/60, s%60)
+		return i18n.T(l, "channel-turns.minutes", i18n.Args{"m": s / 60, "s": s % 60})
 	}
-	return fmt.Sprintf("%d 小时 %d 分", s/3600, s%3600/60)
+	return i18n.T(l, "channel-turns.hours", i18n.Args{"h": s / 3600, "m": s % 3600 / 60})
 }

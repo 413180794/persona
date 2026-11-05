@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
@@ -55,7 +56,7 @@ func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentia
 	}
 	if err := b.opt.Hub.Receive(ctx, msg); err != nil {
 		log.Printf("wechat: handing a message to the hub: %v", err)
-		b.send(ctx, c, m.From, m.ContextToken, "没交给 Persona：hub 那边出错了，等一下再发。")
+		b.send(ctx, c, m.From, m.ContextToken, i18n.T(b.lang(), "wechat-chat.hub_error"))
 	}
 }
 
@@ -75,7 +76,7 @@ func (b *Bot) stranger(ctx context.Context, c *ilink.Client, m ilink.Message) {
 		}
 	}
 	b.mu.Unlock()
-	b.send(ctx, c, m.From, m.ContextToken, "这个机器人只为绑定它的人服务。")
+	b.send(ctx, c, m.From, m.ContextToken, i18n.T(b.lang(), "wechat-chat.stranger"))
 }
 
 // send sends text to peer as the bot: WeChat's subset of Markdown, in pieces it takes. A failure is logged (never

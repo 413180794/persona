@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -380,6 +381,7 @@ func (s *Service) setRunExt(r *channel.Run, key, value string) {
 // SessionItems is session.items: new items of a conversation the runs follow; they note the steps.
 func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
 	s.registerInlineViews(ctx, p)
+	l := s.botLang(ctx) // before s.chans.mu
 	c := &s.chans
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -398,7 +400,7 @@ func (s *Service) SessionItems(ctx context.Context, p SessionItems) {
 			if it.Seq <= r.Base {
 				continue
 			}
-			if st := botStep(it); st != "" {
+			if st := botStep(l, it); st != "" {
 				lp.steps = append(lp.steps, st)
 				lp.dirty = true
 			}
@@ -471,7 +473,8 @@ func (s *Service) checkChannelRun(id string) {
 	if err != nil {
 		return // the hub could not be asked: next tick
 	}
-	look := channel.Look{Exists: exists, Working: working(sess), Offline: sess.Status == proto.StatusOffline, Background: channel.Background(sess)}
+	look := channel.Look{Exists: exists, Working: working(sess), Offline: sess.Status == proto.StatusOffline, Background: channel.Background(sess),
+		Lang: s.botLang(ctx)}
 	if !exists {
 		d, _, _ := s.deviceKnown(ctx, r.MachineID)
 		look.Online = d.Online
@@ -697,7 +700,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 		quiet := res.Quiet || strings.TrimSpace(res.Answer) == "" && res.Note == "" && snap.Held
 		answer := res.Answer
 		if strings.TrimSpace(answer) == "" && res.Note == "" && !quiet {
-			answer = "（这一轮没有文字回答）"
+			answer = i18n.T(s.botLang(ctx), "assistant-channels_runs.no_text")
 		}
 		if err := sink.answer(ctx, &snap, answer, res.Note, took, !res.Held, quiet); err != nil {
 			if s.answerAgain(prog, now) {

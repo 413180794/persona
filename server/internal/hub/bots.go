@@ -14,6 +14,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The Feishu bot (docs/bots.md): the user talks to Persona through a Feishu / Lark custom app's bot. The hub keeps its
@@ -273,7 +274,7 @@ func (h *Hub) botView(ctx context.Context) feishuBotView {
 			v.LastEventAt = st.LastEvent.Unix()
 		}
 	} else if s.Enabled && appID == "" {
-		v.Error = "还没填应用凭证"
+		v.Error = i18n.T(h.botLang(ctx), "hub-bots.no_credentials")
 	}
 	if s.Owner != nil {
 		v.Owner = &botOwnerView{Name: s.Owner.Name, PairedAt: s.Owner.At.Unix()}
@@ -358,7 +359,13 @@ func (h *Hub) unpairBot(ctx context.Context) {
 	_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventFeishuOwner, assistantwire.FeishuOwner{})
 }
 
-var errBotOff = errors.New("机器人没打开或还没配对")
+var errBotOff = i18n.Err("hub-bots.bot_off")
+
+// botLang is the language of what the bots and the channels write: the request's when the context carries one, else
+// the user's (docs/i18n.md「协议」).
+func (h *Hub) botLang(ctx context.Context) i18n.Lang {
+	return i18n.From(ctx).Or(h.userLang())
+}
 
 // testFeishuBot sends the owner a card.
 func (h *Hub) testFeishuBot(ctx context.Context) error {
@@ -366,7 +373,8 @@ func (h *Hub) testFeishuBot(ctx context.Context) error {
 	if api == nil {
 		return errBotOff
 	}
-	card := feishubot.NewCard("", "", "测试消息").Markdown("这是来自 Persona 的测试消息：机器人能联系到你。")
+	l := h.botLang(ctx)
+	card := feishubot.NewCard("", "", i18n.T(l, "hub-bots.test_title")).Markdown(i18n.T(l, "hub-bots.test_body"))
 	_, err := h.botPost(ctx, api, set.Owner.ChatID, "", card, "")
 	return err
 }
@@ -403,13 +411,13 @@ func (h *Hub) updateBot(ctx context.Context, enabled *bool, appID, secret, domai
 			next.AppID, next.SecretEnc, next.Domain = "", "", ""
 		} else {
 			if plain == "" {
-				return errors.New("需要 App Secret")
+				return i18n.Err("hub-bots.needs_secret")
 			}
 			vctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			_, err := feishubot.New(id, plain, dom).BotInfo(vctx)
 			cancel()
 			if err != nil {
-				return fmt.Errorf("连不上这个应用：%w（检查 App ID / App Secret，并在开放平台给应用开启机器人能力）", err)
+				return errors.New(i18n.T(h.botLang(ctx), "hub-bots.cannot_reach_app", i18n.Args{"error": err.Error()}))
 			}
 			sealed, err := h.sealKey(plain)
 			if err != nil {

@@ -1469,7 +1469,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 
 ```json
 {"protocol": 1,
- "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}, "role": "center", "timezone": "Asia/Shanghai",
+ "hub": {"build": 202611050000, "extension_points": {"computer": 1, "connectors": 2, "voice": 1}, "role": "center", "timezone": "Asia/Shanghai", "locale": "en",
          "capabilities": ["inbox_group"]},
  "extension": {"id": "example-notes", "version": "1.2.0", "dir": "…", "data_dir": "…"},
  "config": {"base_url": "https://notes.example.com", "folders": ["work"], "include_shared": false},
@@ -1481,6 +1481,7 @@ hub 管理界面（[admin.md](admin.md)）的「扩展」页（`web/src/admin/pa
 `active` 是这次要用的贡献，每个扩展点一项（关着的连接器、单独关掉的贡献不在里面，见「贡献的开关」）；导出了扩展点的扩展另有 `contributions_to_me`（见「依赖、导出和合集」）。`hub.role`（#1503）是这台 hub 在互联组里的角色：`center`（独自一台，或组的中心：服务 App、驱动电脑）或
 `member`（别的 hub 是中心：替组做的事，比如响应聊天服务的实时事件、跑 /agent、爬全量，交给中心那台）；角色变了，hub 重启贡献了 `connectors` 或 `api` 的扩展。
 `hub.timezone` 是用户的时区（IANA 名字，和用户设备上报的一样），给扩展显示时间用（「今天」、一条消息的时间）；只知道 hub 自己的时钟时为空，每次启动时读。
+`hub.locale` 是用户语言（`zh-Hans` / `en` / `ja`，`docs/i18n.md`「协议」），扩展自己写给人看的文字（状态、登录提示、机器人的回复）用它；每次启动时读，没有时当 `zh-Hans`。
 `hub.capabilities`（#1680）是这台 hub 做得了、扩展可以据此换做法的事：`inbox_group`（把连接器交来的一批新消息关联到收件箱里的事件，`docs/inbox.md`「事件合成」）。
 没有这个字段或里面没有某一项，就当这台 hub 不做。程序回 `{"protocol": 1, "id", "version", "contributes"?}`：`protocol` 不一致回错误 `wrong_protocol`
 （或 hub 看到不对就停掉它）；`id`、`version` 必须和清单一致；`contributes` 是清单的子集，和清单不一致时 hub 记日志、以清单为准。

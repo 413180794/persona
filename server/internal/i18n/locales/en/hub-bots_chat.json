@@ -1,0 +1,9 @@
+{
+  "pair_hint": "Not paired yet. In the Persona app, go to Settings › Connectors › Lark bot, tap Pair, and send me the 6-digit code it shows.",
+  "owner_only": "This bot only works for its owner.",
+  "not_sent": "Couldn't send it: {error}",
+  "owner_only_action": "Only the bot's owner can do this",
+  "paired": "Paired",
+  "paired_body": "From now on, what you say here goes to Persona. Send /help to see what you can do.",
+  "card_refused": "(This message couldn't be shown as a card. See it in the app.)"
+}

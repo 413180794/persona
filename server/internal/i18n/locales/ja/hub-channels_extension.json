@@ -1,0 +1,4 @@
+{
+  "not_running": "{name}は実行されていません",
+  "not_sent": "送信できませんでした：{error}"
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -41,7 +42,7 @@ func (h *Hub) extensionCall(ctx context.Context, id, method string, params, out 
 	}
 	hp := h.extensions.get(pc.extension.Record.ID)
 	if hp == nil || hp.proc == nil {
-		return fmt.Errorf("%s 没在运行", pc.item.Name)
+		return errors.New(i18n.T(h.botLang(ctx), "hub-channels_extension.not_running", i18n.Args{"name": pc.item.Name}))
 	}
 	p, err := extension.Targeted(params, id)
 	if err != nil {
@@ -177,7 +178,7 @@ func (h *Hub) channelReceive(id string, m channel.Message) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	h.channelTell(ctx, id, m.ID, "没发出去："+clip(oneLine(err.Error()), 200), channel.OutNote)
+	h.channelTell(ctx, id, m.ID, i18n.T(h.userLang(), "hub-channels_extension.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}), channel.OutNote)
 }
 
 // claimOfflineNote: the first time the hub tells the owner about this message (a chat app delivers some again).

@@ -19,6 +19,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 	"github.com/nwverse/persona/server/internal/wechat/spec"
 )
@@ -28,6 +29,9 @@ type Options struct {
 	// Hub takes the owner's messages (the plugin protocol's channel namespace).
 	Hub   channel.Hub
 	Agent string // the product token iLink sees ("Persona/<version>")
+	// Lang is the user's language as the hub said it at this start: what the bot writes for people reads in it
+	// (zh-Hans when not said).
+	Lang i18n.Lang
 	// NewClient makes the iLink client for a base URL and token (ilink.New when nil).
 	NewClient func(base, token string) (*ilink.Client, error)
 	Now       func() time.Time
@@ -71,8 +75,11 @@ func New(opt Options, secrets connector.Secrets) *Bot {
 		opt.Now = time.Now
 	}
 	return &Bot{opt: opt, secrets: secrets, wake: make(chan struct{}, 1), replied: map[string]time.Time{},
-		status: connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"}}
+		status: connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(opt.Lang.Or(i18n.Default), "wechat-wechat.not_bound")}}
 }
+
+// lang is the language of what the bot writes for people.
+func (b *Bot) lang() i18n.Lang { return b.opt.Lang.Or(i18n.Default) }
 
 func (*Bot) ID() string                   { return spec.ID }
 func (*Bot) Name() string                 { return spec.Name }
@@ -92,13 +99,13 @@ func (b *Bot) setStatus(s connector.Status) {
 	b.status = s
 }
 
-// account is how the bound WeChat is shown: iLink gives an id, not a name.
-func account(c *ilink.Credentials) string {
+// account is how the bound WeChat is shown, in l: iLink gives an id, not a name.
+func account(l i18n.Lang, c *ilink.Credentials) string {
 	id, _, _ := strings.Cut(c.UserID, "@")
 	if r := []rune(id); len(r) > 6 {
 		id = string(r[len(r)-6:])
 	}
-	return "微信用户 " + id
+	return i18n.T(l, "wechat-wechat.account", i18n.Args{"id": id})
 }
 
 func (b *Bot) load(ctx context.Context) error {
@@ -157,7 +164,7 @@ func (b *Bot) Run(ctx context.Context) {
 		if err := b.load(ctx); err == nil {
 			break
 		} else {
-			b.setStatus(connector.Status{State: connector.StateError, Error: "读不到存着的绑定：" + err.Error()})
+			b.setStatus(connector.Status{State: connector.StateError, Error: i18n.T(b.lang(), "wechat-wechat.cannot_load", i18n.Args{"error": err.Error()})})
 		}
 		if !sleep(ctx, 5*time.Second) {
 			return
@@ -169,7 +176,7 @@ func (b *Bot) Run(ctx context.Context) {
 		b.mu.Unlock()
 		if creds == nil {
 			if b.Status(ctx).State != connector.StateNotSignedIn { // keep why it was unbound
-				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"})
+				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.not_bound")})
 			}
 			select {
 			case <-ctx.Done():
@@ -188,7 +195,7 @@ var backoff = []time.Duration{time.Second, 2 * time.Second, 5 * time.Second, 10 
 func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 	c, err := b.opt.NewClient(creds.BaseURL, creds.Token)
 	if err != nil {
-		b.setStatus(connector.Status{State: connector.StateError, Account: account(&creds), Error: "微信的地址不对：" + err.Error()})
+		b.setStatus(connector.Status{State: connector.StateError, Account: account(b.lang(), &creds), Error: i18n.T(b.lang(), "wechat-wechat.bad_address", i18n.Args{"error": err.Error()})})
 		b.unbind(ctx, "")
 		return
 	}
@@ -200,7 +207,7 @@ func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 		b.client = nil
 		b.mu.Unlock()
 	}()
-	ok := connector.Status{State: connector.StateOK, Account: account(&creds), Via: "iLink（微信 AI 机器人）"}
+	ok := connector.Status{State: connector.StateOK, Account: account(b.lang(), &creds), Via: i18n.T(b.lang(), "wechat-wechat.via")}
 	if err := c.NotifyStart(ctx); err != nil {
 		log.Printf("wechat: notify start: %v", err) // not needed to receive messages
 	}
@@ -222,12 +229,12 @@ func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 			switch {
 			case ilink.CodeOf(err) == ilink.CodeReplaced:
 				b.unbind(ctx, creds.Token)
-				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: "微信那边的授权已经失效（在别处重新绑定过，或者被取消了），重新扫码绑定"})
+				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.revoked")})
 				return
 			case !ilink.Retryable(err):
-				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: "微信拒绝了请求：" + err.Error()})
+				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: i18n.T(b.lang(), "wechat-wechat.refused", i18n.Args{"error": err.Error()})})
 			default:
-				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: "连不上微信，正在重试：" + err.Error()})
+				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: i18n.T(b.lang(), "wechat-wechat.retrying", i18n.Args{"error": err.Error()})})
 			}
 			wait := backoff[min(failures, len(backoff)-1)]
 			failures++

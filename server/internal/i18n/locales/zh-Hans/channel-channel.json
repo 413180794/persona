@@ -1,0 +1,10 @@
+{
+  "asks_title": "提问和批准",
+  "asks_description": "它在驱动的对话（发到的对话、在等回答的）要你回答或批准时，发到这里",
+  "all_asks_title": "所有 Agent 的提问",
+  "all_asks_description": "各台电脑上所有 Agent 的提问和批准都发到这里",
+  "pushes_title": "推送也发到这里",
+  "pushes_description": "通知推到手机的同时发一份；定时任务那段对话的回答也发",
+  "sync_title": "同步主对话",
+  "sync_description": "主对话里不是从这里发起的一轮结束时，把回答发过来"
+}

@@ -1,0 +1,12 @@
+{
+  "enter_number": "Enter the number WeChat shows",
+  "wrong_number": "That number is wrong. Check what WeChat shows",
+  "qr_expired_too_often": "The QR code expired too many times. Start binding again",
+  "code_blocked": "Too many wrong codes. WeChat won't allow binding for now; try again later",
+  "bound_already": "This WeChat is already bound to this bot. Delete it in WeChat, then scan again",
+  "scan_hint": "Scan this QR code with WeChat and confirm on your phone; this continues by itself. On the same phone: save the QR code, then use Scan in WeChat and pick it from your photos.",
+  "scanned_hint": "Scanned. Tap Confirm in WeChat on your phone.",
+  "code_label": "Code",
+  "code_placeholder": "The number WeChat shows",
+  "code_hint": "WeChat wants to make sure it's you: enter the number shown in WeChat on your phone."
+}

@@ -1,0 +1,8 @@
+{
+  "no_credentials": "App credentials not entered yet",
+  "bot_off": "The bot is off or not paired yet",
+  "test_title": "Test message",
+  "test_body": "This is a test message from Persona: the bot can reach you.",
+  "needs_secret": "App Secret is required",
+  "cannot_reach_app": "Can't reach this app: {error} (check the App ID / App Secret, and turn on the bot capability for the app in the developer console)"
+}

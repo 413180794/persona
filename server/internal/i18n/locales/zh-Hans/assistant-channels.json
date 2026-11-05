@@ -1,0 +1,8 @@
+{
+  "not_set_here": "{name} 不在这里设置",
+  "assistant_chats_only": "只能选助手的对话",
+  "no_feature": "{name} 没有「{feature}」这个功能",
+  "not_connected": "{name} 还没连上",
+  "test_message": "这是来自 Persona 的测试消息：这个渠道能联系到你。",
+  "ended": "已结束"
+}

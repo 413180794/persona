@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/host"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // Channels (docs/channels.md): every way of talking to Persona in one list — the apps, the Feishu bot, /agent in
@@ -63,7 +63,7 @@ func (h *Hub) extensionChannel(id string) (extensionChannel, bool) {
 
 // channelList is every channel: the apps, the hub's own, the plugins', then the markets' not installed.
 func (h *Hub) channelList(ctx context.Context) []channel.View {
-	out := []channel.View{appChannel(), h.feishuChannel(ctx)}
+	out := []channel.View{appChannel(h.botLang(ctx)), h.feishuChannel(ctx)}
 	if v, ok := h.voiceChannel(ctx); ok {
 		out = append(out, v)
 	}
@@ -95,11 +95,11 @@ func (h *Hub) channelIDs() []string {
 	return ids
 }
 
-func appChannel() channel.View {
+func appChannel(l i18n.Lang) channel.View {
 	return channel.View{ID: channel.App, Name: "Persona", Kind: channel.KindApp, Source: channel.SourceBuiltin, Installed: true,
 		Enabled: true, State: channel.StateConnected, Bind: channel.BindNone, ReadOnly: true,
-		Description: "Persona 自己的各端：在哪一端说的话都进同一段对话，提问和批准在卡片上原地作答",
-		Surfaces:    []string{"iPhone", "Mac", "Apple Watch", "Android", "网页", "Siri"},
+		Description: i18n.T(l, "hub-channels.app_description"),
+		Surfaces:    []string{"iPhone", "Mac", "Apple Watch", "Android", i18n.T(l, "hub-channels.web"), "Siri"},
 		Capabilities: channel.Capabilities{ImagesIn: true, FilesIn: true, VoiceIn: true, Format: channel.FormatMarkdown, Asks: channel.AsksButtons,
 			Push: true, Typing: true, Progress: true}}
 }
@@ -113,27 +113,28 @@ var feishuCapabilities = channel.Capabilities{ImagesIn: true, FilesIn: true, Voi
 
 func (h *Hub) feishuChannel(ctx context.Context) channel.View {
 	v := h.botView(ctx)
-	out := channel.View{ID: channel.Feishu, Name: "飞书机器人", Kind: channel.KindIM, Source: channel.SourceBuiltin, Installed: true,
+	l := h.botLang(ctx)
+	out := channel.View{ID: channel.Feishu, Name: i18n.T(l, "hub-channels.feishu_name"), Kind: channel.KindIM, Source: channel.SourceBuiltin, Installed: true,
 		Enabled: v.Enabled, Bind: channel.BindFields, Capabilities: feishuCapabilities,
-		Description: "私聊飞书自建应用的机器人：消息进主对话，回答、进度和提问都是卡片"}
+		Description: i18n.T(l, "hub-channels.feishu_description")}
 	switch {
 	case !v.Enabled:
 		out.State = channel.StateDisabled
 	case v.Error != "":
 		out.State, out.Error = channel.StateError, v.Error
 	case !v.HasSecret:
-		out.State, out.Error = channel.StateNotConnected, "还没填应用凭证"
+		out.State, out.Error = channel.StateNotConnected, i18n.T(l, "hub-channels.no_credentials")
 	case v.Owner == nil:
-		out.State, out.Error = channel.StateNotConnected, "还没配对：在 App 里拿配对码，发给机器人"
+		out.State, out.Error = channel.StateNotConnected, i18n.T(l, "hub-channels.not_paired")
 	case !v.Connected:
-		out.State, out.Error = channel.StateError, "和飞书的长连接断了，正在重连"
+		out.State, out.Error = channel.StateError, i18n.T(l, "hub-channels.disconnected")
 	default:
 		out.State = channel.StateConnected
 	}
 	if v.Owner != nil {
 		out.Account = &channel.Account{Name: v.Owner.Name}
 		if out.Account.Name == "" {
-			out.Account.Name = "已配对"
+			out.Account.Name = i18n.T(l, "hub-channels.paired")
 		}
 	}
 	if v.LastEventAt > 0 {
@@ -141,12 +142,12 @@ func (h *Hub) feishuChannel(ctx context.Context) channel.View {
 	}
 	f := v.Features
 	out.Features = []channel.Feature{
-		{ID: "main", Title: "和 Persona 对话", Description: "消息发进主对话；/new 开新对话、/list 选最近的对话、/main 回主对话", On: f.Main},
-		{ID: "cards", Title: "提问和批准", Description: "飞书在驱动的对话要回答 / 批准时发卡片", On: f.Cards},
-		{ID: "all_cards", Title: "所有 Agent 的提问", Description: "各台电脑上所有 Agent 的提问和批准都发卡片", On: f.AllCards},
-		{ID: "pushes", Title: "推送也发到飞书", Description: "推到手机的同时发一份；定时任务那段对话的回答也发", On: f.Pushes},
-		{ID: "sync", Title: "同步主对话", Description: "主对话里不是从飞书发起的一轮结束时，把回答发到飞书", On: f.Sync},
-		{ID: "agents", Title: "驱动 Agent", Description: "/agents 列出各台电脑上的 Agent，选一个之后的消息发给它", On: f.Agents},
+		{ID: "main", On: f.Main}, {ID: "cards", On: f.Cards}, {ID: "all_cards", On: f.AllCards},
+		{ID: "pushes", On: f.Pushes}, {ID: "sync", On: f.Sync}, {ID: "agents", On: f.Agents},
+	}
+	for i := range out.Features {
+		id := out.Features[i].ID
+		out.Features[i].Title, out.Features[i].Description = i18n.T(l, "hub-channels.feature_"+id), i18n.T(l, "hub-channels.feature_"+id+"_description")
 	}
 	return out
 }
@@ -162,8 +163,9 @@ func (h *Hub) voiceChannel(ctx context.Context) (channel.View, bool) {
 		if v.Kind != "voice" {
 			continue
 		}
-		out := channel.View{ID: "voice", Name: "语音", Kind: channel.KindVoice, Source: channel.SourcePlugin, Plugin: p.Record.ID, Installed: true,
-			Enabled: p.Record.Enabled, Bind: channel.BindNone, ReadOnly: true, Description: "在 App 里和 Persona 语音对话；要做的事交给主对话",
+		l := h.botLang(ctx)
+		out := channel.View{ID: "voice", Name: i18n.T(l, "hub-channels.voice_name"), Kind: channel.KindVoice, Source: channel.SourcePlugin, Plugin: p.Record.ID, Installed: true,
+			Enabled: p.Record.Enabled, Bind: channel.BindNone, ReadOnly: true, Description: i18n.T(l, "hub-channels.voice_description"),
 			Capabilities: channel.Capabilities{VoiceIn: true, Format: channel.FormatPlain, Asks: channel.AsksNone}}
 		switch v.Status {
 		case extensionDisabled:
@@ -271,7 +273,7 @@ func (h *Hub) channelBindRoute(api *http.ServeMux) {
 			return
 		}
 		if v := list[i]; v.ReadOnly || v.Source == channel.SourceMarket {
-			writeErrCode(w, http.StatusConflict, "read_only", fmt.Errorf("%s 不在这里设置", v.Name))
+			writeErrCode(w, http.StatusConflict, "read_only", i18n.Err("hub-channels.not_set_here", i18n.Args{"name": v.Name}))
 			return
 		}
 		var in struct {
@@ -305,7 +307,7 @@ func (h *Hub) enableChannel(ctx context.Context, id string, on bool) error {
 	}
 	pc, ok := h.extensionChannel(id)
 	if !ok {
-		return fmt.Errorf("没有渠道 %s", id)
+		return errors.New(i18n.T(h.botLang(ctx), "hub-channels.no_channel", i18n.Args{"id": id}))
 	}
 	if on && !pc.extension.Record.Enabled {
 		if err := h.extensions.reg.SetEnabled(ctx, pc.extension.Record.ID, true, actorOf(ctx)); err != nil {
@@ -344,7 +346,7 @@ func (h *Hub) configureFeishu(ctx context.Context, enabled *bool, features map[s
 			case "agents":
 				f.Agents = on
 			default:
-				return fmt.Errorf("飞书机器人没有「%s」这个功能", id)
+				return errors.New(i18n.T(h.botLang(ctx), "hub-channels.no_feature", i18n.Args{"feature": id}))
 			}
 		}
 		fs = &f
@@ -371,21 +373,22 @@ func (h *Hub) bindChannel(ctx context.Context, id, step string, values map[strin
 	if id == channel.Feishu {
 		return h.bindFeishu(ctx, step, values)
 	}
+	lang := h.botLang(ctx)
 	pc, ok := h.extensionChannel(id)
 	if !ok {
-		return connector.Prompt{}, fmt.Errorf("没有渠道 %s", id)
+		return connector.Prompt{}, errors.New(i18n.T(lang, "hub-channels.no_channel", i18n.Args{"id": id}))
 	}
 	v := channel.View{Name: pc.item.Name}
 	if pc.item.Connector == "" {
-		return connector.Prompt{}, fmt.Errorf("%s 不用绑定", v.Name)
+		return connector.Prompt{}, errors.New(i18n.T(lang, "hub-channels.no_binding_needed", i18n.Args{"name": v.Name}))
 	}
 	c := h.connectors.Get(pc.item.Connector)
 	if c == nil {
-		return connector.Prompt{}, fmt.Errorf("%s 没在运行：先打开它", v.Name)
+		return connector.Prompt{}, errors.New(i18n.T(lang, "hub-channels.not_running_open", i18n.Args{"name": v.Name}))
 	}
 	l, ok := connector.As[connector.Login](c)
 	if !ok {
-		return connector.Prompt{}, fmt.Errorf("%s 没有绑定这一步", v.Name)
+		return connector.Prompt{}, errors.New(i18n.T(lang, "hub-channels.no_binding_step", i18n.Args{"name": v.Name}))
 	}
 	if !h.connectors.Enabled(pc.item.Connector) {
 		if err := h.setConnectorEnabled(ctx, pc.item.Connector, true); err != nil {
@@ -396,23 +399,24 @@ func (h *Hub) bindChannel(ctx context.Context, id, step string, values map[strin
 }
 
 func (h *Hub) bindFeishu(ctx context.Context, step string, values map[string]string) (connector.Prompt, error) {
+	l := h.botLang(ctx)
 	fields := []connector.Field{
 		{Name: "app_id", Label: "App ID", Placeholder: "cli_…"},
 		{Name: "app_secret", Label: "App Secret", Secret: true},
-		{Name: "domain", Label: "域名（feishu / lark，或私有部署的地址；不填是 feishu）"},
+		{Name: "domain", Label: i18n.T(l, "hub-channels.domain_label")},
 	}
 	if step == "credentials" && values != nil {
 		id, secret, domain := strings.TrimSpace(values["app_id"]), strings.TrimSpace(values["app_secret"]), strings.TrimSpace(values["domain"])
 		on := true
 		if err := h.updateBot(ctx, &on, &id, &secret, &domain, nil); err != nil {
-			return connector.Prompt{Step: "credentials", Fields: fields, Error: err.Error()}, nil
+			return connector.Prompt{Step: "credentials", Fields: fields, Error: i18n.Localize(err, l)}, nil
 		}
 		step = ""
 	}
 	v := h.botView(ctx)
 	if !v.HasSecret {
 		return connector.Prompt{Step: "credentials", Fields: fields,
-			Hint: "在飞书开放平台建企业自建应用、开启机器人能力，订阅方式选「使用长连接接收事件」（docs/bots.md「在开放平台上要做的」）"}, nil
+			Hint: i18n.T(l, "hub-channels.credentials_hint")}, nil
 	}
 	if !v.Enabled {
 		on := true
@@ -421,7 +425,7 @@ func (h *Hub) bindFeishu(ctx context.Context, step string, values map[string]str
 		}
 	}
 	if v.Owner != nil {
-		return connector.Prompt{Done: true, Account: firstNonEmpty(v.Owner.Name, "已配对")}, nil
+		return connector.Prompt{Done: true, Account: firstNonEmpty(v.Owner.Name, i18n.T(l, "hub-channels.paired"))}, nil
 	}
 	b := &h.bots
 	b.mu.Lock()
@@ -435,7 +439,7 @@ func (h *Hub) bindFeishu(ctx context.Context, step string, values map[string]str
 	code := p.Code
 	b.mu.Unlock()
 	return connector.Prompt{Step: "pair", Kind: PromptPairCode, UserCode: code, Interval: 3,
-		Hint: "在飞书里私聊机器人，把这 6 位数字发给它（10 分钟内有效）"}, nil
+		Hint: i18n.T(l, "hub-channels.pair_hint")}, nil
 }
 
 // unbindChannel undoes the binding: a plugin channel's connector signs out, the Feishu bot forgets its owner.
@@ -444,21 +448,22 @@ func (h *Hub) unbindChannel(ctx context.Context, id string) error {
 		h.unpairBot(ctx)
 		return nil
 	}
+	lang := h.botLang(ctx)
 	pc, ok := h.extensionChannel(id)
 	if !ok {
-		return fmt.Errorf("没有渠道 %s", id)
+		return errors.New(i18n.T(lang, "hub-channels.no_channel", i18n.Args{"id": id}))
 	}
 	v := channel.View{Name: pc.item.Name}
 	if pc.item.Connector == "" {
-		return fmt.Errorf("%s 没有绑定", v.Name)
+		return errors.New(i18n.T(lang, "hub-channels.not_bound", i18n.Args{"name": v.Name}))
 	}
 	c := h.connectors.Get(pc.item.Connector)
 	if c == nil {
-		return fmt.Errorf("%s 没在运行", v.Name)
+		return errors.New(i18n.T(lang, "hub-channels.not_running", i18n.Args{"name": v.Name}))
 	}
 	l, ok := connector.As[connector.Login](c)
 	if !ok {
-		return fmt.Errorf("%s 没有绑定", v.Name)
+		return errors.New(i18n.T(lang, "hub-channels.not_bound", i18n.Args{"name": v.Name}))
 	}
 	return l.Logout(ctx) // the assistant forgets what the channel waited on
 }

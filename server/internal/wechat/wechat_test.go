@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/channel"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
@@ -411,5 +412,22 @@ func TestTypingWhileTheHubSays(t *testing.T) {
 	r.ilink.mu.Unlock()
 	if len(typing) != 2 || !typing[0] || typing[1] {
 		t.Fatalf("typing %v", typing)
+	}
+}
+
+// What the bot writes for people reads in the language the hub said at its start; Chinese when it said none.
+func TestTextInTheUsersLanguage(t *testing.T) {
+	if got := New(Options{Lang: i18n.En}, nil).status.Error; got != "WeChat isn't bound yet" {
+		t.Fatal(got)
+	}
+	if got := New(Options{}, nil).status.Error; got != "还没绑定微信" {
+		t.Fatal(got)
+	}
+	if p := codePrompt(i18n.Ja, ""); p.Fields[0].Label != "確認コード" {
+		t.Fatal(p.Fields[0].Label)
+	}
+	c := &ilink.Credentials{UserID: "person@example.com"}
+	if got := account(i18n.En, c); got != "WeChat user 123456" {
+		t.Fatal(got)
 	}
 }

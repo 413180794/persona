@@ -1,0 +1,10 @@
+{
+  "not_bound": "WeChatはまだ連携されていません",
+  "account": "WeChatユーザー {id}",
+  "cannot_load": "保存された連携を読み込めません：{error}",
+  "bad_address": "WeChatのアドレスが正しくありません：{error}",
+  "via": "iLink（WeChat AIボット）",
+  "revoked": "WeChat側の認証が無効になりました（別の場所で再連携されたか、取り消されました）。もう一度スキャンして連携してください",
+  "refused": "WeChatがリクエストを拒否しました：{error}",
+  "retrying": "WeChatに接続できません。再試行しています：{error}"
+}

@@ -1,0 +1,9 @@
+{
+  "gave_up": "Still not done after {took}, so I stopped waiting. Check the result in the app.",
+  "gone": "This chat is gone (closed or deleted).",
+  "background_other": "{count} background tasks are still running. I'll tell you when they're done.",
+  "background_one": "{count} background task is still running. I'll tell you when it's done.",
+  "seconds": "{s}s",
+  "minutes": "{m}m {s}s",
+  "hours": "{h}h {m}m"
+}

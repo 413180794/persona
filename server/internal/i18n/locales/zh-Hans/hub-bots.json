@@ -1,0 +1,8 @@
+{
+  "no_credentials": "还没填应用凭证",
+  "bot_off": "机器人没打开或还没配对",
+  "test_title": "测试消息",
+  "test_body": "这是来自 Persona 的测试消息：机器人能联系到你。",
+  "needs_secret": "需要 App Secret",
+  "cannot_reach_app": "连不上这个应用：{error}（检查 App ID / App Secret，并在开放平台给应用开启机器人能力）"
+}

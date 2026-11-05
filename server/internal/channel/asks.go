@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -40,30 +41,29 @@ func NewAsk(channel string, ix proto.Interaction, now time.Time) *Ask {
 		Questions: ix.Questions, At: now}
 }
 
-// AskText is the text asking ix (it fills in a's options); false when it cannot be answered in a channel (the text
-// then says where).
-func AskText(ix proto.Interaction, a *Ask) (string, bool) {
+// AskText is the text asking ix in l (it fills in a's options); false when it cannot be answered in a channel (the
+// text then says where).
+func AskText(l i18n.Lang, ix proto.Interaction, a *Ask) (string, bool) {
 	head := ""
 	if a.Title != "" {
-		head = "【" + a.Title + "】"
+		head = i18n.T(l, "channel-asks.head", i18n.Args{"title": a.Title})
 	}
 	switch {
 	case len(ix.Fields) > 0:
-		return head + "有一步要在 App 里填写后才能批准：" + FirstLine(ix.Summary), false
+		return head + i18n.T(l, "channel-asks.fields_in_app", i18n.Args{"summary": FirstLine(ix.Summary)}), false
 	case ix.Kind == proto.IxPermission:
 		what := strings.TrimSpace(ix.Summary)
 		if what == "" {
 			what = toolBrief(ix.ToolInput)
 		}
 		if ix.Reason != "" {
-			what += "\n原因：" + ix.Reason
+			what += i18n.T(l, "channel-asks.reason", i18n.Args{"reason": ix.Reason})
 		}
-		return head + "要你批准「" + toolName(ix) + "」：\n" + Clip(what, 1500) + "\n\n回复「允许」让它做这一次，「拒绝」不让它做。", true
+		return head + i18n.T(l, "channel-asks.permission", i18n.Args{"tool": toolName(l, ix), "what": Clip(what, 1500)}), true
 	case ix.Kind == proto.IxPlan:
-		return head + "Agent 写好了计划：\n\n" + Clip(ix.Plan, 3000) +
-			"\n\n回复 1 批准并自动执行，2 批准、改文件时自动同意，「拒绝」打回；也可以直接写要改什么，会打回并带上你的话。", true
+		return head + i18n.T(l, "channel-asks.plan", i18n.Args{"plan": Clip(ix.Plan, 3000)}), true
 	case ix.Kind == proto.IxQuestion && len(ix.Questions) > 0:
-		return head + QuestionText(a, 0), true
+		return head + QuestionText(l, a, 0), true
 	case ix.Kind == proto.IxScreen && ix.Dialog != nil && len(ix.Dialog.Options) > 0 && !ix.Dialog.Multi:
 		a.Options = nil
 		var lines []string
@@ -75,21 +75,21 @@ func AskText(ix proto.Interaction, a *Ask) (string, bool) {
 		if ix.Dialog.Detail != "" {
 			q = strings.TrimSpace(ix.Dialog.Detail) + "\n" + q
 		}
-		return head + "终端里在问：\n" + Clip(q, 1500) + "\n" + strings.Join(lines, "\n") + "\n\n回复序号。", true
+		return head + i18n.T(l, "channel-asks.screen", i18n.Args{"question": Clip(q, 1500), "options": strings.Join(lines, "\n")}), true
 	}
-	return head + "有 Agent 在等你处理：" + FirstLine(ix.Summary) + "\n这种要在 App 里处理。", false
+	return head + i18n.T(l, "channel-asks.other", i18n.Args{"summary": FirstLine(ix.Summary)}), false
 }
 
-// QuestionText asks a's question i.
-func QuestionText(a *Ask, i int) string {
+// QuestionText asks a's question i in l.
+func QuestionText(l i18n.Lang, a *Ask, i int) string {
 	q := a.Questions[i]
 	var b strings.Builder
 	if len(a.Questions) > 1 {
-		fmt.Fprintf(&b, "（%d/%d）", i+1, len(a.Questions))
+		b.WriteString(i18n.T(l, "channel-asks.question_step", i18n.Args{"n": i + 1, "total": len(a.Questions)}))
 	}
-	b.WriteString("Agent 问你：")
+	b.WriteString(i18n.T(l, "channel-asks.question_asks"))
 	if q.Header != "" && q.Header != q.Question {
-		b.WriteString(q.Header + "：")
+		b.WriteString(i18n.T(l, "channel-asks.question_header", i18n.Args{"header": q.Header}))
 	}
 	b.WriteString(q.Question)
 	for j, o := range q.Options {
@@ -100,30 +100,36 @@ func QuestionText(a *Ask, i int) string {
 	}
 	switch {
 	case len(q.Options) > 0 && q.MultiSelect:
-		b.WriteString("\n\n回复序号（可以多选，用空格隔开），或者直接写回答。")
+		b.WriteString(i18n.T(l, "channel-asks.reply_numbers"))
 	case len(q.Options) > 0:
-		b.WriteString("\n\n回复序号，或者直接写回答。")
+		b.WriteString(i18n.T(l, "channel-asks.reply_number"))
 	default:
-		b.WriteString("\n\n直接回复你的回答。")
+		b.WriteString(i18n.T(l, "channel-asks.reply_free"))
 	}
 	return b.String()
 }
 
+// The words a reply answers with, in any of the three languages whatever the user's is now (the texts asking say the
+// user's language's, but someone may answer in another): compared lowercased, without trailing punctuation.
 var (
-	yes   = []string{"允许", "同意", "确认", "可以", "好", "好的", "行", "y", "yes", "ok", "allow"}
-	no    = []string{"拒绝", "不允许", "不同意", "不行", "不要", "取消", "n", "no", "deny"}
-	split = func(r rune) bool { return unicode.IsSpace(r) || r == ',' || r == '，' || r == '、' }
+	yes = []string{"允许", "同意", "确认", "可以", "好", "好的", "行", "y", "yes", "ok", "allow",
+		"sure", "approve", "許可", "はい", "承認", "いいよ", "いいです"}
+	no = []string{"拒绝", "不允许", "不同意", "不行", "不要", "取消", "n", "no", "deny",
+		"reject", "cancel", "拒否", "いいえ", "だめ", "ダメ", "キャンセル", "却下"}
+	planRun     = []string{"批准并自动执行", "自动执行", "approve and run", "run", "auto", "承認して自動実行", "自動実行"}
+	planApprove = []string{"批准", "approve", "承認"}
+	split       = func(r rune) bool { return unicode.IsSpace(r) || r == ',' || r == '，' || r == '、' }
 )
 
 func is(text string, words []string) bool {
-	t := strings.ToLower(strings.TrimRight(strings.TrimSpace(text), "。.!！"))
+	t := strings.ToLower(strings.TrimRight(strings.TrimSpace(text), "。.!！?？"))
 	return slices.Contains(words, t)
 }
 
-// ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say when text does not
-// answer it (again). A question of several takes one answer per message: a.Step moves on, and the caller asks
-// QuestionText(a, a.Step) next.
-func ReadAnswer(a *Ask, text string) (r proto.Resolution, done bool, again string) {
+// ReadAnswer reads text as the answer to a: the resolution once complete (done), or what to say in l when text does
+// not answer it (again). A question of several takes one answer per message: a.Step moves on, and the caller asks
+// QuestionText(l, a, a.Step) next.
+func ReadAnswer(l i18n.Lang, a *Ask, text string) (r proto.Resolution, done bool, again string) {
 	t, f := true, false
 	switch a.Kind {
 	case proto.IxPermission:
@@ -133,14 +139,14 @@ func ReadAnswer(a *Ask, text string) (r proto.Resolution, done bool, again strin
 		case is(text, no):
 			r.Allow = &f
 		default:
-			return r, false, "回复「允许」或「拒绝」。"
+			return r, false, i18n.T(l, "channel-asks.again_permission")
 		}
 		return r, true, ""
 	case proto.IxPlan:
 		switch {
-		case text == "1" || is(text, []string{"批准并自动执行", "自动执行"}):
+		case text == "1" || is(text, planRun):
 			r.Approve, r.Mode = &t, "bypassPermissions"
-		case text == "2" || is(text, append([]string{"批准"}, yes...)):
+		case text == "2" || is(text, planApprove) || is(text, yes):
 			r.Approve, r.Mode = &t, "acceptEdits"
 		case is(text, no):
 			r.Approve = &f
@@ -151,13 +157,13 @@ func ReadAnswer(a *Ask, text string) (r proto.Resolution, done bool, again strin
 	case proto.IxScreen:
 		n, err := strconv.Atoi(strings.TrimSpace(text))
 		if err != nil || n < 1 || n > len(a.Options) {
-			return r, false, fmt.Sprintf("回复 1 到 %d 的序号。", len(a.Options))
+			return r, false, i18n.T(l, "channel-asks.again_screen", i18n.Args{"max": len(a.Options)})
 		}
 		r.Option = a.Options[n-1]
 		return r, true, ""
 	case proto.IxQuestion:
 		if a.Step >= len(a.Questions) {
-			return r, false, "这个问题对不上了，到 App 里回答。"
+			return r, false, i18n.T(l, "channel-asks.again_question")
 		}
 		q := a.Questions[a.Step]
 		if a.Answers == nil {
@@ -171,7 +177,7 @@ func ReadAnswer(a *Ask, text string) (r proto.Resolution, done bool, again strin
 		r.Answers = a.Answers
 		return r, true, ""
 	}
-	return r, false, "这个要在 App 里处理。"
+	return r, false, i18n.T(l, "channel-asks.again_app")
 }
 
 // optionAnswer is text as an answer to q: option numbers become their labels (several for a multi-select), anything
@@ -192,28 +198,29 @@ func optionAnswer(q proto.Question, text string) string {
 	return strings.Join(labels, ", ")
 }
 
-// Answered is the line saying what a reply did.
-func Answered(r proto.Resolution) string {
+// Answered is the line in l saying what a reply did.
+func Answered(l i18n.Lang, r proto.Resolution) string {
+	key := "answered"
 	switch {
 	case r.Allow != nil && *r.Allow:
-		return "已允许。"
+		key = "allowed"
 	case r.Allow != nil:
-		return "已拒绝。"
+		key = "denied"
 	case r.Approve != nil && *r.Approve:
-		return "已批准。"
+		key = "approved"
 	case r.Approve != nil && r.Feedback != "":
-		return "已打回，带上了你的话。"
+		key = "sent_back_with_note"
 	case r.Approve != nil:
-		return "已打回。"
+		key = "sent_back"
 	}
-	return "已回答。"
+	return i18n.T(l, "channel-asks."+key)
 }
 
-func toolName(ix proto.Interaction) string {
+func toolName(l i18n.Lang, ix proto.Interaction) string {
 	if ix.ToolName != "" {
 		return ix.ToolName
 	}
-	return "一个操作"
+	return i18n.T(l, "channel-asks.an_action")
 }
 
 // toolBrief is a tool call's input in a line or two: its command, file or URL when it has one.

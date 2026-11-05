@@ -711,14 +711,15 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		if ps.h != nil {
 			build = ps.h.build.Number
 		}
-		role, tz := "center", ""
+		role, tz, locale := "center", "", ""
 		if ps.h != nil && ps.h.isMember() {
 			role = "member"
 		}
 		if ps.h != nil {
-			tz = ps.h.userTZName()
+			tz, locale = ps.h.userTZName(), string(ps.h.userLang())
 		}
 		params := extension.InitializeParams{Hub: extension.HubInfo{Build: build, ExtensionPoints: extension.PointVersions(), Role: role, Timezone: tz,
+			Locale:       locale,
 			Capabilities: extension.HubCapabilities()}, Extension: info,
 			Config: ps.reg.Config(p), Secrets: secrets, Granted: p.Record.Granted, Active: map[string][]string{}}
 		if g := p.Record.Granted; !g.FullHub() && len(g.Hub) > 0 && ps.h != nil {

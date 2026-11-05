@@ -1,0 +1,12 @@
+{
+  "enter_number": "WeChatに表示された数字を入力してください",
+  "wrong_number": "数字が違います。WeChatの表示をもう一度確認してください",
+  "qr_expired_too_often": "QRコードの期限切れが多すぎます。連携をやり直してください",
+  "code_blocked": "確認コードの誤りが多すぎるため、WeChatで一時的に連携できません。しばらくしてからもう一度お試しください",
+  "bound_already": "このWeChatはすでにこのボットと連携されています。WeChatで削除してからもう一度スキャンしてください",
+  "scan_hint": "WeChatでこのQRコードをスキャンし、スマートフォンで確認すると自動で続行します。同じスマートフォンの場合は、QRコードを保存してからWeChatのスキャンで写真から選んでください。",
+  "scanned_hint": "スキャンしました。スマートフォンのWeChatで確認をタップしてください。",
+  "code_label": "確認コード",
+  "code_placeholder": "WeChatに表示された数字",
+  "code_hint": "本人確認のため、スマートフォンのWeChatに表示された数字をここに入力してください。"
+}

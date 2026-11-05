@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/wechat/ilink"
 )
 
@@ -51,7 +52,7 @@ func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]stri
 	if step == stepCode {
 		code = strings.TrimSpace(values["code"])
 		if !verifyCode.MatchString(code) {
-			return codePrompt("填微信里显示的数字"), nil
+			return codePrompt(b.lang(), i18n.T(b.lang(), "wechat-login.enter_number")), nil
 		}
 	}
 	c, err := b.authClient()
@@ -61,58 +62,58 @@ func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]stri
 	st, err := c.PollQR(ctx, p.qr.Code, code, p.base, qrWait)
 	if err != nil {
 		if ilink.Retryable(err) {
-			return p.prompt(), nil // asked again in a moment
+			return p.prompt(b.lang()), nil // asked again in a moment
 		}
 		return connector.Prompt{}, err
 	}
 	switch st.State {
 	case ilink.QRWaiting:
-		return p.prompt(), nil
+		return p.prompt(b.lang()), nil
 	case ilink.QRScanned:
 		b.mu.Lock()
 		p.scanned = true
 		b.mu.Unlock()
-		return p.prompt(), nil
+		return p.prompt(b.lang()), nil
 	case ilink.QRRedirect:
 		b.mu.Lock()
 		p.base = st.RedirectBase
 		b.mu.Unlock()
-		return p.prompt(), nil
+		return p.prompt(b.lang()), nil
 	case ilink.QRNeedCode:
 		if step == stepCode {
-			return codePrompt("数字不对，再看一下微信里显示的"), nil
+			return codePrompt(b.lang(), i18n.T(b.lang(), "wechat-login.wrong_number")), nil
 		}
-		return codePrompt(""), nil
+		return codePrompt(b.lang(), ""), nil
 	case ilink.QRExpired:
 		if p.renewed >= 3 {
 			b.forgetQR(p)
-			return connector.Prompt{}, errors.New("二维码过期太多次了，重新开始绑定")
+			return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.qr_expired_too_often"))
 		}
 		return b.renewQR(ctx, p)
 	case ilink.QRCodeBlocked:
 		b.forgetQR(p)
-		return connector.Prompt{}, errors.New("验证码错太多次，微信暂时不让绑定了，过一会儿再试")
+		return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.code_blocked"))
 	case ilink.QRBoundAlready:
 		b.forgetQR(p)
-		return connector.Prompt{}, errors.New("这个微信已经绑定过这个机器人了：在微信里把它删掉后再扫")
+		return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.bound_already"))
 	case ilink.QRConfirmed:
 		b.forgetQR(p)
 		return b.bound(ctx, st.Credentials), nil
 	}
-	return p.prompt(), nil
+	return p.prompt(b.lang()), nil
 }
 
-func (p *pendingQR) prompt() connector.Prompt {
-	hint := "用微信扫一扫这个二维码，在手机上确认后这里会自动继续。在同一部手机上：先保存二维码，再在微信里扫一扫、从相册选它。"
+func (p *pendingQR) prompt(l i18n.Lang) connector.Prompt {
+	hint := i18n.T(l, "wechat-login.scan_hint")
 	if p.scanned {
-		hint = "已经扫码了，在手机微信上点确认。"
+		hint = i18n.T(l, "wechat-login.scanned_hint")
 	}
 	return connector.Prompt{Step: stepQR, Kind: connector.PromptQRCode, URL: p.qr.Content, Interval: qrInterval, Hint: hint}
 }
 
-func codePrompt(errText string) connector.Prompt {
-	return connector.Prompt{Step: stepCode, Fields: []connector.Field{{Name: "code", Label: "验证码", Placeholder: "微信里显示的数字"}},
-		Hint: "微信要确认是你：把手机微信上显示的数字填在这里。", Error: errText}
+func codePrompt(l i18n.Lang, errText string) connector.Prompt {
+	return connector.Prompt{Step: stepCode, Fields: []connector.Field{{Name: "code", Label: i18n.T(l, "wechat-login.code_label"), Placeholder: i18n.T(l, "wechat-login.code_placeholder")}},
+		Hint: i18n.T(l, "wechat-login.code_hint"), Error: errText}
 }
 
 func (b *Bot) beginQR(ctx context.Context) (connector.Prompt, error) {
@@ -134,7 +135,7 @@ func (b *Bot) beginQR(ctx context.Context) (connector.Prompt, error) {
 	b.mu.Lock()
 	b.qr = p
 	b.mu.Unlock()
-	return p.prompt(), nil
+	return p.prompt(b.lang()), nil
 }
 
 func (b *Bot) renewQR(ctx context.Context, old *pendingQR) (connector.Prompt, error) {
@@ -171,10 +172,10 @@ func (b *Bot) bound(ctx context.Context, creds ilink.Credentials) connector.Prom
 	}
 	b.st.Creds = &creds
 	b.saveLocked(ctx)
-	b.status = connector.Status{State: connector.StateOK, Account: account(&creds), Via: "iLink（微信 AI 机器人）", LastEvent: b.status.LastEvent}
+	b.status = connector.Status{State: connector.StateOK, Account: account(b.lang(), &creds), Via: i18n.T(b.lang(), "wechat-wechat.via"), LastEvent: b.status.LastEvent}
 	b.mu.Unlock()
 	b.kick()
-	return connector.Prompt{Done: true, Account: account(&creds)}
+	return connector.Prompt{Done: true, Account: account(b.lang(), &creds)}
 }
 
 // Logout tells iLink the bot is off line and forgets the token (kept among the old ones, so binding again is known
@@ -193,7 +194,7 @@ func (b *Bot) Logout(ctx context.Context) error {
 		cancel()
 	}
 	b.unbind(ctx, "")
-	b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: "还没绑定微信"})
+	b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.not_bound")})
 	b.kick()
 	return nil
 }

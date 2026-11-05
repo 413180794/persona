@@ -1,0 +1,4 @@
+{
+  "not_running": "{name} isn't running",
+  "not_sent": "Not sent: {error}"
+}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -33,20 +34,20 @@ func TestResolutionText(t *testing.T) {
 		{proto.Interaction{Kind: proto.IxPermission}, proto.Resolution{Allow: &no}, "已拒绝"},
 		{proto.Interaction{}, proto.Resolution{Dismiss: true}, "已忽略"},
 	} {
-		if got := resolutionText(c.ix, c.r); got != c.want {
+		if got := resolutionText("", c.ix, c.r); got != c.want {
 			t.Errorf("%+v: %q, want %q", c.r, got, c.want)
 		}
 	}
 }
 
 func TestBotStepAndStripContext(t *testing.T) {
-	if s := botStep(proto.Item{Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"go test ./...\nmore"}`)}); s != "运行 `go test ./...`" {
+	if s := botStep("", proto.Item{Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"go test ./...\nmore"}`)}); s != "运行 `go test ./...`" {
 		t.Fatalf("bash step %q", s)
 	}
-	if s := botStep(proto.Item{Kind: proto.KindToolUse, ToolName: "mcp__jarvis__kb_search", ToolInput: json.RawMessage(`{"query":"周报"}`)}); s != "kb_search `周报`" {
+	if s := botStep("", proto.Item{Kind: proto.KindToolUse, ToolName: "mcp__jarvis__kb_search", ToolInput: json.RawMessage(`{"query":"周报"}`)}); s != "kb_search `周报`" {
 		t.Fatalf("mcp step %q", s)
 	}
-	if s := botStep(proto.Item{Kind: proto.KindText}); s != "" {
+	if s := botStep("", proto.Item{Kind: proto.KindText}); s != "" {
 		t.Fatalf("text step %q", s)
 	}
 	in := "<jarvis-context kind=\"context\" title=\"x\" url=\"\">\n快照\n</jarvis-context>\n真正的问题"
@@ -422,5 +423,26 @@ func TestChannelsReadFailureNeverOverwrites(t *testing.T) {
 	_, _ = store.Setting(ctx, botStateKey, &bot)
 	if bot.Pairing == nil || *bot.Pairing != pairing || bot.Threads["om_old"] == nil {
 		t.Fatalf("the chat's state: %s", store.data[botStateKey])
+	}
+}
+
+// The bot's cards and lines read in the user's language; without one they are Chinese.
+func TestBotTextInLanguages(t *testing.T) {
+	yes := true
+	if got := resolutionText(i18n.En, proto.Interaction{}, proto.Resolution{Approve: &yes, Mode: "acceptEdits"}); got != "Approved, auto-accepting edits" {
+		t.Fatal(got)
+	}
+	if got := resolutionText("", proto.Interaction{}, proto.Resolution{Approve: &yes}); got != "已批准" {
+		t.Fatal(got)
+	}
+	bash := proto.Item{Kind: proto.KindToolUse, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"go test ./..."}`)}
+	if got := botStep(i18n.Ja, bash); got != "実行 `go test ./...`" {
+		t.Fatal(got)
+	}
+	if got := botHelp(i18n.En, FeishuFeatures{Main: true}); !strings.Contains(got, "`/main` back to the main chat") || strings.Contains(got, "/agents") {
+		t.Fatal(got)
+	}
+	if err := botAllowed(i18n.Ja, FeishuFeatures{}, botTarget{Kind: targetMain}); err == nil || !strings.Contains(err.Error(), "Larkボット") {
+		t.Fatal(err)
 	}
 }

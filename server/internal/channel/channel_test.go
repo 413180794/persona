@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -78,10 +79,10 @@ func TestPluginFeatures(t *testing.T) {
 		}
 		return strings.Join(out, ",")
 	}
-	if got := ids(PluginFeatures(Capabilities{Asks: AsksText, Push: true}, nil)); got != "asks,all_asks,pushes,sync" {
+	if got := ids(PluginFeatures("", Capabilities{Asks: AsksText, Push: true}, nil)); got != "asks,all_asks,pushes,sync" {
 		t.Fatal(got)
 	}
-	if got := ids(PluginFeatures(Capabilities{Asks: AsksNone}, nil)); got != "" {
+	if got := ids(PluginFeatures("", Capabilities{Asks: AsksNone}, nil)); got != "" {
 		t.Fatal(got)
 	}
 }
@@ -208,33 +209,85 @@ func TestAskAndReadAnswer(t *testing.T) {
 		{Question: "发给谁？", Options: []proto.QuestionOption{{Label: "张三"}, {Label: "李四"}}},
 		{Question: "哪些部分？", MultiSelect: true, Options: []proto.QuestionOption{{Label: "进展"}, {Label: "风险"}, {Label: "计划"}}}}}
 	a := NewAsk("wechat", ix, t0)
-	text, ok := AskText(ix, a)
+	text, ok := AskText("", ix, a)
 	if !ok || !strings.HasPrefix(text, "【周报】（1/2）") || !strings.Contains(text, "2. 李四") {
 		t.Fatalf("%q", text)
 	}
-	if _, done, again := ReadAnswer(a, "2"); done || again != "" || a.Step != 1 {
+	if _, done, again := ReadAnswer("", a, "2"); done || again != "" || a.Step != 1 {
 		t.Fatalf("first answer: done=%v again=%q step=%d", done, again, a.Step)
 	}
-	r, done, _ := ReadAnswer(a, "1 3")
+	r, done, _ := ReadAnswer("", a, "1 3")
 	if !done || r.Answers["发给谁？"] != "李四" || r.Answers["哪些部分？"] != "进展, 计划" {
 		t.Fatalf("%+v", r)
 	}
 	perm := proto.Interaction{Kind: proto.IxPermission, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"make deploy"}`)}
 	pa := NewAsk("wechat", perm, t0)
-	if text, _ := AskText(perm, pa); !strings.Contains(text, "make deploy") {
+	if text, _ := AskText("", perm, pa); !strings.Contains(text, "make deploy") {
 		t.Fatalf("%q", text)
 	}
-	if _, _, again := ReadAnswer(pa, "也许"); again == "" {
+	if _, _, again := ReadAnswer("", pa, "也许"); again == "" {
 		t.Fatal("a reply that is not one was taken")
 	}
-	if r, done, _ := ReadAnswer(pa, "拒绝。"); !done || r.Allow == nil || *r.Allow {
+	if r, done, _ := ReadAnswer("", pa, "拒绝。"); !done || r.Allow == nil || *r.Allow {
 		t.Fatalf("%+v", r)
 	}
 	plan := &Ask{Kind: proto.IxPlan}
-	if r, _, _ := ReadAnswer(plan, "先别改数据库"); r.Approve == nil || *r.Approve || r.Feedback != "先别改数据库" {
+	if r, _, _ := ReadAnswer("", plan, "先别改数据库"); r.Approve == nil || *r.Approve || r.Feedback != "先别改数据库" {
 		t.Fatalf("%+v", r)
 	}
-	if _, ok := AskText(proto.Interaction{Kind: proto.IxPermission, Fields: []proto.Field{{Key: "pw"}}}, &Ask{}); ok {
+	if _, ok := AskText("", proto.Interaction{Kind: proto.IxPermission, Fields: []proto.Field{{Key: "pw"}}}, &Ask{}); ok {
 		t.Fatal("a card with fields is answerable in text")
+	}
+}
+
+// The texts read in the user's language; a reply is understood in any of the three, whatever that language is.
+func TestAskInLanguages(t *testing.T) {
+	perm := proto.Interaction{Kind: proto.IxPermission, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"make deploy"}`)}
+	if text, _ := AskText(i18n.En, perm, NewAsk("wechat", perm, t0)); !strings.Contains(text, "Wants your approval for “Bash”") {
+		t.Fatalf("en: %q", text)
+	}
+	if text, _ := AskText(i18n.Ja, perm, NewAsk("wechat", perm, t0)); !strings.Contains(text, "「Bash」の承認") {
+		t.Fatalf("ja: %q", text)
+	}
+	if text, _ := AskText("", perm, NewAsk("wechat", perm, t0)); !strings.Contains(text, "要你批准「Bash」") {
+		t.Fatalf("no language: %q", text)
+	}
+	for text, allow := range map[string]bool{"允许": true, "Allow": true, "yes!": true, "許可": true, "はい。": true,
+		"拒绝": false, "deny": false, "No": false, "拒否": false, "いいえ": false} {
+		r, done, _ := ReadAnswer(i18n.En, &Ask{Kind: proto.IxPermission}, text)
+		if !done || r.Allow == nil || *r.Allow != allow {
+			t.Errorf("%q: done=%v %+v", text, done, r)
+		}
+	}
+	for text, mode := range map[string]string{"1": "bypassPermissions", "自动执行": "bypassPermissions", "approve and run": "bypassPermissions",
+		"自動実行": "bypassPermissions", "2": "acceptEdits", "批准": "acceptEdits", "Approve": "acceptEdits", "承認": "acceptEdits"} {
+		r, _, _ := ReadAnswer(i18n.Ja, &Ask{Kind: proto.IxPlan}, text)
+		if r.Approve == nil || !*r.Approve || r.Mode != mode {
+			t.Errorf("%q: %+v", text, r)
+		}
+	}
+	if _, _, again := ReadAnswer(i18n.En, &Ask{Kind: proto.IxPermission}, "maybe"); again != "Reply “allow” or “deny”." {
+		t.Fatalf("%q", again)
+	}
+	if got := Answered(i18n.Ja, proto.Resolution{Allow: new(bool)}); got != "拒否しました。" {
+		t.Fatal(got)
+	}
+	if got := Duration(i18n.En, 3*time.Minute+4*time.Second) + " / " + Duration(i18n.Ja, 2*time.Hour+5*time.Minute) + " / " +
+		Duration("", 12*time.Second); got != "3m 4s / 2時間5分 / 12 秒" {
+		t.Fatal(got)
+	}
+	r := &Run{Started: t0}
+	if s := r.Check(Look{Now: t0.Add(5 * time.Hour), Exists: true, Lang: i18n.En}); !strings.Contains(s.Note, "Still not done after 5h 0m") {
+		t.Fatal(s.Note)
+	}
+	if res := r.Decide(Reading{Answer: "done"}, Look{Now: t0.Add(time.Minute), Background: 1, Lang: i18n.En}); res.Note !=
+		"1 background task is still running. I'll tell you when it's done." {
+		t.Fatal(res.Note)
+	}
+	if f := PluginFeatures(i18n.Ja, Capabilities{Asks: AsksText}, nil); f[0].Title != "質問と承認" {
+		t.Fatal(f[0].Title)
+	}
+	if f := PluginFeatures("", Capabilities{Asks: AsksText}, nil); f[0].Title != "提问和批准" {
+		t.Fatal(f[0].Title)
 	}
 }

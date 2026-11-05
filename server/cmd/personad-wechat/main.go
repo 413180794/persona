@@ -16,6 +16,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/update"
 	"github.com/nwverse/persona/server/internal/wechat"
 )
@@ -49,7 +50,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	err := serve.MainWith(ctx, os.Stdin, os.Stdout, func(init serve.Init, secrets connector.Secrets) (connector.Connector, error) {
-		return wechat.New(wechat.Options{Hub: init.Channel, Agent: "Persona/" + version}, secrets), nil
+		return wechat.New(wechat.Options{Hub: init.Channel, Agent: "Persona/" + version, Lang: i18n.Lang(init.Locale)}, secrets), nil
 	})
 	if err != nil && ctx.Err() == nil && !errors.Is(err, io.EOF) { // EOF: the hub went away
 		log.Printf("stopped: %v", err)

@@ -12,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -93,8 +94,6 @@ func (h *Hub) botTell(api *feishubot.Client, openID, chatID, text string) {
 
 var regexpDigits = regexp.MustCompile(`^\d{4,8}$`)
 
-const botPairHint = "还没配对：在 Persona App 的「设置 › 连接器 › 飞书机器人」里点「配对」，把显示的 6 位配对码发给我。"
-
 func (h *Hub) botWelcome(openID, chatID string) {
 	b := &h.bots
 	b.mu.Lock()
@@ -103,7 +102,7 @@ func (h *Hub) botWelcome(openID, chatID string) {
 	if api == nil || owner != nil || openID == "" || chatID == "" {
 		return
 	}
-	h.botTell(api, openID, chatID, botPairHint)
+	h.botTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
 }
 
 // botMessage handles one message to the bot: the owner's go to the assistant.
@@ -126,7 +125,7 @@ func (h *Hub) botMessage(ev feishubot.MessageEvent, raw json.RawMessage) {
 		return
 	}
 	if sender != set.Owner.OpenID {
-		h.botTell(api, sender, msg.ChatID, "这个机器人只为它的主人服务。")
+		h.botTell(api, sender, msg.ChatID, i18n.T(h.userLang(), "hub-bots_chat.owner_only"))
 		return
 	}
 	if msg.ChatID != set.Owner.ChatID { // the owner's chat with the bot is the same one; keep it current anyway
@@ -146,14 +145,14 @@ func (h *Hub) botMessage(ev feishubot.MessageEvent, raw json.RawMessage) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	h.botNote(ctx, api, msg.MessageID, "没能发出去："+clip(oneLine(err.Error()), 200))
+	h.botNote(ctx, api, msg.MessageID, i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
 }
 
 // botCardAction answers a press on one of the bot's cards: only the owner's count, and the assistant answers them.
 func (h *Hub) botCardAction(ctx context.Context, a *feishubot.CardAction, raw json.RawMessage) any {
 	_, set := h.botAPI()
 	if set.Owner == nil || a.Operator.OpenID != set.Owner.OpenID {
-		return toast("error", "只有机器人的主人能操作")
+		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.owner_only_action"))
 	}
 	// The owner pressed it (checked here): the assistant answers the card with this, once (interactions.resolve).
 	action := ""
@@ -199,7 +198,7 @@ func (h *Hub) botPair(api *feishubot.Client, openID, chatID, text string) {
 	}
 	b.mu.Unlock()
 	if !ok {
-		h.botTell(api, openID, chatID, botPairHint)
+		h.botTell(api, openID, chatID, i18n.T(h.userLang(), "hub-bots_chat.pair_hint"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -214,7 +213,8 @@ func (h *Hub) botPair(api *feishubot.Client, openID, chatID, text string) {
 	if h.notifyBus(assistantwire.AssistantID, assistantwire.EventFeishuOwner, assistantwire.FeishuOwner{Paired: true}) == nil {
 		return
 	}
-	card := feishubot.NewCard("已配对", feishubot.Green, "已配对").Markdown("以后在这里说的话会交给 Persona。发 /help 看看能做什么。")
+	l := h.userLang()
+	card := feishubot.NewCard(i18n.T(l, "hub-bots_chat.paired"), feishubot.Green, i18n.T(l, "hub-bots_chat.paired")).Markdown(i18n.T(l, "hub-bots_chat.paired_body"))
 	if _, err := h.botPost(ctx, api, chatID, "", card, ""); err != nil {
 		h.logf("bots: paired note: %v", err)
 	}
@@ -276,7 +276,7 @@ func (h *Hub) botPostJSON(ctx context.Context, api *feishubot.Client, chatID, re
 	if err != nil && feishubot.CardRejected(err) {
 		h.logf("bots: card refused (%v); sending it as rich text", err)
 		if fallback == "" {
-			fallback = "（这条消息没能显示成卡片，请到 App 里看。）"
+			fallback = i18n.T(h.botLang(ctx), "hub-bots_chat.card_refused")
 		}
 		return send(feishubot.TypePost, feishubot.PostMarkdown(fallback))
 	}

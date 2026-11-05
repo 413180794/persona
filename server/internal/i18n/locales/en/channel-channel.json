@@ -1,0 +1,10 @@
+{
+  "asks_title": "Questions and approvals",
+  "asks_description": "When a chat it drives (one it sends to, or one waiting on an answer) needs your answer or approval, it comes here",
+  "all_asks_title": "All agents' questions",
+  "all_asks_description": "Questions and approvals from every agent on your computers come here",
+  "pushes_title": "Send notifications here too",
+  "pushes_description": "A copy of each notification sent to your phone, plus scheduled tasks' answers",
+  "sync_title": "Sync main chat",
+  "sync_description": "When a main chat turn started somewhere else ends, its answer comes here"
+}

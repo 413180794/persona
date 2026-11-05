@@ -233,6 +233,9 @@ type Init struct {
 	// Channel is the hub for a connector that is also a channel (docs/channels.md): it hands the owner's messages
 	// over. Plugin protocol only; nil under the bare opening.
 	Channel channel.Hub
+	// Locale is the user's language as the hub said it at this start (plugin protocol only; "" under the bare
+	// opening): what the connector writes for people reads in it.
+	Locale string
 }
 
 // Listener is a connector that also hears the hub's events: a plugin that contributes the events extension point
@@ -707,7 +710,7 @@ func (s *server) initialize(params json.RawMessage) (any, error) {
 		}
 	}
 	s.mu.Unlock()
-	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Extension.DataDir, Channel: channelHub{s}})
+	m, err := s.init(Init{Config: p.Config, Declared: p.Secrets, DataDir: p.Extension.DataDir, Channel: channelHub{s}, Locale: p.Hub.Locale})
 	if err != nil {
 		return nil, err
 	}
