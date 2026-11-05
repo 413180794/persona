@@ -11,7 +11,7 @@ import { basename, resolve } from 'node:path'
 import { createRuntime, light, page, RpcError, snippet } from '../../runtime-sdk/index.js'
 import {
   EFFORTS, MODES, RUNTIME, SESSION_LABEL, agentRoot, agentRow, appAgent, claudeId, defaultProvider, interactionOf,
-  launchersOf, linkedWorktree, providerRoots, responseOf, sessionIdOf, slotNameOf, spaceIdOf, spaceNames, strayRecord,
+  launchersOf, linkedWorktree, projectSpaces, providerRoots, responseOf, sessionIdOf, slotNameOf, spaceIdOf, strayRecord,
   timelineItems, transcriptOf,
 } from './map.js'
 import { PaseoClient } from './paseo.js'
@@ -52,6 +52,7 @@ export function createPaseoBridge(deps = {}, options = {}) {
   const lastTexts = new Map() // agent id → its last words (agents whose content is not a transcript)
   const lastTextTimers = new Map()
   const timelines = new Map() // agent id → { key, at, tl, history } (the last whole read)
+  const canonical = new Map() // path → the path with symbolic links resolved (canon)
   let runtimeOn = false
   let awayTimer
   let started = false
@@ -356,11 +357,12 @@ export function createPaseoBridge(deps = {}, options = {}) {
 
   async function listSessions() {
     const rows = []
-    const names = spaceNames(agents.values())
+    const s = spaces()
     for (const [sid, agentId] of bySession) {
       const a = agents.get(agentId)
+      const spaceId = a && s.idOf(a.project)
       const row = a && agentRow(a.agent,
-        { project: a.project, roots, labels, lastText: lastTexts.get(agentId), spaceName: names.get(spaceIdOf(a.project)) })
+        { project: a.project, roots, labels, lastText: lastTexts.get(agentId), spaceId, spaceName: s.names.get(spaceId) })
       if (row && row.session_id === sid) rows.push(row)
     }
     return rt.recent(rows, { days: 3650, max: LIST_MAX, pinned: (r) => r.status === 'working' || r.status === 'blocked' })
@@ -522,18 +524,32 @@ export function createPaseoBridge(deps = {}, options = {}) {
 
   function rowOf(agent) {
     const a = agents.get(agent.id)
-    const spaceName = spaceNames(agents.values()).get(spaceIdOf(a?.project))
-    return agentRow(agent, { project: a?.project, roots, labels, lastText: lastTexts.get(agent.id), spaceName })
+    const s = spaces()
+    const spaceId = s.idOf(a?.project)
+    return agentRow(agent, { project: a?.project, roots, labels, lastText: lastTexts.get(agent.id), spaceId, spaceName: s.names.get(spaceId) })
   }
+
+  /** A path as compared: symbolic links resolved (a home under another mount), else as written. */
+  function canon(p) {
+    let c = canonical.get(p)
+    if (c === undefined) {
+      try {
+        c = realpathSync(p)
+      } catch {
+        c = resolve(p)
+      }
+      if (canonical.size > 1000) canonical.clear()
+      canonical.set(p, c)
+    }
+    return c
+  }
+
+  /** The project spaces of the agents Persona knows (map.js projectSpaces). */
+  const spaces = () => projectSpaces(agents.values(), canon)
 
   function samePath(a, b) {
     if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false
-    if (resolve(a) === resolve(b)) return true
-    try {
-      return realpathSync(a) === realpathSync(b)
-    } catch {
-      return false
-    }
+    return resolve(a) === resolve(b) || canon(a) === canon(b)
   }
 
   /**
@@ -565,9 +581,10 @@ export function createPaseoBridge(deps = {}, options = {}) {
     const known = [...agents.values()]
     const a = (workspaceId && known.find(({ agent }) => agent.workspaceId === workspaceId)) ||
       known.find(({ agent, project }) => spaceIdOf(project) && (samePath(agent.cwd, cwd) || samePath(project.checkout?.cwd, cwd)))
-    const space = spaceIdOf(a?.project)
+    const s = spaces()
+    const space = s.idOf(a?.project)
     if (!space) return { space_id: cwd, space_name: basename(cwd) }
-    const place = { space_id: space, space_name: spaceNames(known).get(space) ?? a.project.projectName }
+    const place = { space_id: space, space_name: s.names.get(space) ?? a.project.projectName }
     return workspaceId ? { ...place, slot_id: workspaceId, slot_name: slotNameOf(a.project, cwd) } : place
   }
 

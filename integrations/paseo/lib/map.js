@@ -149,10 +149,9 @@ export function rowStatus(agent) {
 // ---- spaces ----
 
 /**
- * The space an agent's row is in: its Paseo project (docs/paseo.md「显示哪些会话」), so a repository's checkout and
- * all its worktrees are one group, as in Paseo's sidebar. By the project's key rather than Paseo's project record:
- * handed a worktree's directory alone, Paseo files it under a record of its own with the same key (#2784).
- * Undefined without a placement.
+ * The Paseo project of a placement (docs/paseo.md「显示哪些会话」): a repository's checkout and all its worktrees, as
+ * in Paseo's sidebar. The placement's projectKey is Paseo's project record id (its buildProjectPlacementForWorkspace),
+ * not the project's own key. Undefined without a placement.
  */
 export function spaceIdOf(project) {
   const key = project?.projectKey
@@ -181,22 +180,44 @@ export function slotNameOf(project, cwd) {
   return title || (typeof branch === 'string' && branch) || basename(cwd ?? '')
 }
 
+/** The repository a placement belongs to: the main checkout's directory for a worktree, else its own. */
+function repoRootOf(project) {
+  const c = project?.checkout
+  const root = linkedWorktree(project) ? c.mainRepoRoot : (c?.worktreeRoot ?? c?.cwd)
+  return typeof root === 'string' && root ? root : undefined
+}
+
 /**
- * The name of each project space: the project's name most of its agents' placements give, leaving out the records
- * Paseo made for a single worktree (strayRecord) unless there is nothing else; then the repository's folder.
- * @param {Iterable<{ project?: object }>} placed - what the bridge keeps per agent
- * @returns {Map<string, string>} space id → name
+ * The project spaces of what the bridge keeps per agent: each Paseo project is one. A record Paseo made for a single
+ * worktree (strayRecord: handed its directory alone, #2802) goes into its repository's project when Persona knows one
+ * (the main checkout's, or that of the repository's other worktrees), else stays a space of its own.
+ * Names: the project's name most placements give, leaving out stray records unless there is nothing else; then the
+ * repository's folder.
+ * @param {Iterable<{ project?: object }>} placed
+ * @param {(path: string) => string} [canon] - a path as compared (the bridge resolves symbolic links)
+ * @returns {{ idOf: (project?: object) => string | undefined, names: Map<string, string> }}
  */
-export function spaceNames(placed) {
-  const votes = new Map() // space id → Map(name → count)
-  const out = new Map()
-  for (const { project } of placed) {
+export function projectSpaces(placed, canon = (p) => p) {
+  const list = [...placed]
+  const byRepo = new Map() // repository → space id
+  for (const { project } of list) {
     const id = spaceIdOf(project)
+    const repo = repoRootOf(project)
+    if (id && repo && !strayRecord(project) && !byRepo.has(canon(repo))) byRepo.set(canon(repo), id)
+  }
+  const idOf = (project) => {
+    const id = spaceIdOf(project)
+    if (!id || !strayRecord(project)) return id
+    return byRepo.get(canon(repoRootOf(project))) ?? id
+  }
+  const votes = new Map() // space id → Map(name → count)
+  const names = new Map()
+  for (const { project } of list) {
+    const id = idOf(project)
     const name = typeof project?.projectName === 'string' ? project.projectName.trim() : ''
     if (!id || !name) continue
     if (strayRecord(project)) {
-      const main = project.checkout.mainRepoRoot
-      if (!out.has(id)) out.set(id, (typeof main === 'string' && main && basename(main)) || name)
+      if (!names.has(id)) names.set(id, basename(repoRootOf(project) ?? '') || name)
       continue
     }
     const v = votes.get(id) ?? new Map()
@@ -204,18 +225,18 @@ export function spaceNames(placed) {
     votes.set(id, v)
   }
   for (const [id, v] of votes) {
-    out.set(id, [...v].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0][0])
+    names.set(id, [...v].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0][0])
   }
-  return out
+  return { idOf, names }
 }
 
 /**
  * The runtime.sessions row of an agent (docs/runtimes.md「列表」), undefined for one not listed.
  * @param {object} agent - an AgentSnapshotPayload
  * @param {{ project?: object, roots?: Record<string, string>, labels?: Record<string, string>, lastText?: string,
- *   spaceName?: string }} [o]
+ *   spaceId?: string, spaceName?: string }} [o]
  *   project: its ProjectPlacement; labels: provider id → its label (the name of a provider the apps do not know);
- *   spaceName: its project space's name (spaceNames).
+ *   spaceId, spaceName: its project space and that space's name (projectSpaces).
  */
 export function agentRow(agent, o = {}) {
   const roots = o.roots ?? {}
@@ -224,7 +245,7 @@ export function agentRow(agent, o = {}) {
   const root = agentRoot(agent, roots)
   const cwd = typeof agent.cwd === 'string' ? agent.cwd : ''
   const p = o.project
-  const space = spaceIdOf(p)
+  const space = spaceIdOf(p) && (o.spaceId ?? spaceIdOf(p))
   const row = {
     session_id: id,
     title: (typeof agent.title === 'string' && agent.title.trim()) || basename(cwd),

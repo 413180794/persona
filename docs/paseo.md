@@ -48,10 +48,12 @@
   | `error` | 完成，最后一句是出错原因 |
   | `closed`：没在运行，进程退了 | 未运行（发消息时 Paseo 重新载入它） |
 
-- **空间和槽位**（#2784）：和 Paseo 的侧边栏一样分两层。
+- **空间和槽位**（#2784、#2802）：和 Paseo 的侧边栏一样分两层。
   - **空间是 Paseo 的项目**：同一个仓库的主检出和它的各个 worktree 在 App 里是一组，名字是项目名。
-    按 Paseo 给的项目 key（`projectKey`）归组，不按 Paseo 的项目记录：只把一个 worktree 的目录交给 Paseo 时，它会给这个 worktree
-    另记一个项目（key 一样，名字是 worktree 的目录名），这条记录也并进同一组，组名取主仓库那份的名字。
+    空间 id 是 Paseo 的项目记录 id：Paseo 给 Agent 的位置信息里那个 `projectKey` 字段填的就是它（不是项目自己的 key）。
+  - **Paseo 给 worktree 另记的项目并进主仓库**：只把一个 worktree 的目录交给 Paseo 时，它会给这个 worktree 另记一个项目
+    （名字是 worktree 的目录名）。这种记录按主仓库的路径（`checkout.mainRepoRoot`，解析符号链接后比较）并进主仓库那个项目的组；
+    Persona 还不知道主仓库的项目时（那边没有 Agent）它单独一组，组名取主仓库的目录名。
   - **槽位是 Paseo 的工作区**：一个 worktree，或者同一个目录里的一个任务。名字是工作区标题，没有标题时是分支名，再没有就是目录名。
   - Paseo 没给项目信息的 Agent 照旧：空间是它的工作区，没有槽位。
 - **逐字**：手机看着一个会话时，桥订阅这个 Agent 的 timeline，正在写的文字逐字显示。没人看着的会话桥不订阅。

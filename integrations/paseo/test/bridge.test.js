@@ -210,7 +210,7 @@ test("a project's worktrees are one space; a new session at a worktree goes into
   const wt = join(dir, 'brave-fox')
   mkdirSync(app)
   mkdirSync(wt)
-  const key = 'remote:example.com/me/app'
+  const key = 'prj_app' // the placement's projectKey: Paseo's project record id
   const checkout = (cwd, o = {}) => ({ cwd, isGit: true, currentBranch: null, remoteUrl: null, worktreeRoot: cwd,
     isPaseoOwnedWorktree: o.paseo ?? false, mainRepoRoot: o.main ?? null })
   const placed = [
@@ -218,9 +218,9 @@ test("a project's worktrees are one space; a new session at a worktree goes into
       project: { projectKey: key, projectName: 'app', workspaceName: '主线', checkout: checkout(app) } },
     { agent: agentSnapshot({ provider: 'my-codex', cwd: wt, workspaceId: 'wks_wt', title: 'W', updatedAt: '2026-11-02T00:00:00Z' }),
       project: { projectKey: key, projectName: 'app', workspaceName: '修登录', checkout: checkout(wt, { paseo: true, main: app }) } },
-    // A later record Paseo made when handed the worktree's directory alone (#2784): the same key, named after the folder.
+    // A later record Paseo made when handed the worktree's directory alone (#2802): a project of its own, named after the folder.
     { agent: agentSnapshot({ provider: 'my-codex', cwd: wt, workspaceId: 'wks_stray', title: 'S', updatedAt: '2026-11-03T00:00:00Z' }),
-      project: { projectKey: key, projectName: 'brave-fox', workspaceName: null, checkout: checkout(wt, { paseo: true, main: app }) } },
+      project: { projectKey: 'prj_stray', projectName: 'brave-fox', workspaceName: null, checkout: checkout(wt, { paseo: true, main: app }) } },
   ]
   const base = Object.values(agents()).map((agent) => ({ agent, project: PROJECT }))
   const { fake, node, rows } = await setup(t, { agents: [...base, ...placed] })
@@ -228,7 +228,7 @@ test("a project's worktrees are one space; a new session at a worktree goes into
   const byTitle = Object.fromEntries(rows().filter((r) => r.space_id === key).map((r) => [r.title, r]))
   assert.deepEqual(['M', 'W', 'S'].map((x) => [byTitle[x].space_name, byTitle[x].slot_id, byTitle[x].slot_name]),
     [['app', 'wks_main', '主线'], ['app', 'wks_wt', '修登录'], ['app', 'wks_stray', 'brave-fox']],
-    "one space named after the repository's project; each workspace a slot")
+    "one space named after the repository's project, the stray record's too; each workspace a slot")
 
   const started = (params) => call(node, 'session.start', { prompt: 'x', launcher: 'my-codex', ...params })
     .then(() => fake.requestsOf('agent.create.request').at(-1))

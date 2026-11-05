@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   agentRoot, agentRow, defaultProvider, interactionOf, launchersOf, linkedWorktree, providerRoots, responseOf, rowStatus,
-  sessionIdOf, slotNameOf, spaceIdOf, spaceNames, strayRecord, timelineItems, toolCall, transcriptOf,
+  projectSpaces, sessionIdOf, slotNameOf, spaceIdOf, strayRecord, timelineItems, toolCall, transcriptOf,
 } from '../lib/map.js'
 import { agentSnapshot, entry } from './fake-paseo.js'
 
@@ -81,31 +81,41 @@ test('a row: its space, the agent the apps know, model, modes and transcript', (
 })
 
 test("spaces: a project's checkout and its worktrees are one space, Paseo's workspaces its slots", () => {
-  const key = 'remote:example.com/me/app'
+  // The placement's projectKey is Paseo's project record id.
   const at = (dir, o = {}) => ({ cwd: dir, isGit: true, currentBranch: o.branch ?? null, remoteUrl: null, worktreeRoot: dir,
     isPaseoOwnedWorktree: o.paseo ?? false, mainRepoRoot: o.main ?? null })
-  const main = { projectKey: key, projectName: 'app', workspaceName: '主线', checkout: at('/w/app') }
-  const wt = { projectKey: key, projectName: 'app', workspaceName: '修登录', checkout: at('/wt/brave-fox', { paseo: true, main: '/w/app' }) }
-  // Paseo handed the worktree's directory alone: a record of its own, named after the folder, under the same key.
-  const stray = { projectKey: key, projectName: 'brave-fox', workspaceName: '  ', checkout: at('/wt/brave-fox', { paseo: true, main: '/w/app', branch: 'fix-login' }) }
-  const gitWt = { projectKey: key, projectName: 'app', workspaceName: null, checkout: at('/w/app-hotfix', { main: '/w/app' }) }
-  const folder = { projectKey: 'host:srv_1:/w/notes', projectName: 'notes', workspaceName: '周报', checkout: { cwd: '/w/notes', isGit: false } }
+  const main = { projectKey: 'prj_app', projectName: 'app', workspaceName: '主线', checkout: at('/w/app') }
+  const wt = { projectKey: 'prj_app', projectName: 'app', workspaceName: '修登录', checkout: at('/wt/brave-fox', { paseo: true, main: '/w/app' }) }
+  // Paseo handed the worktree's directory alone (#2802): a record of its own, named after the folder.
+  const stray = { projectKey: 'prj_stray', projectName: 'brave-fox', workspaceName: '  ',
+    checkout: at('/wt/brave-fox', { paseo: true, main: '/w/app', branch: 'fix-login' }) }
+  const gitWt = { projectKey: 'prj_app', projectName: 'app', workspaceName: null, checkout: at('/w/app-hotfix', { main: '/w/app' }) }
+  const folder = { projectKey: 'prj_notes', projectName: 'notes', workspaceName: '周报', checkout: { cwd: '/w/notes', isGit: false } }
   assert.deepEqual([main, wt, stray, gitWt, folder].map(linkedWorktree), [false, true, true, true, false])
   assert.deepEqual([main, wt, stray, gitWt, folder].map(strayRecord), [false, false, true, false, false])
-  assert.equal(spaceIdOf(wt), key)
+  assert.equal(spaceIdOf(wt), 'prj_app')
   assert.equal(spaceIdOf(undefined), undefined)
   assert.deepEqual([slotNameOf(wt, '/wt/brave-fox'), slotNameOf(stray, '/wt/brave-fox'), slotNameOf(gitWt, '/w/app-hotfix')],
     ['修登录', 'fix-login', 'app-hotfix'], "the workspace's title, else its branch, else its folder")
-  assert.deepEqual(spaceNames([main, wt, stray, gitWt, folder].map((project) => ({ project }))),
-    new Map([[key, 'app'], ['host:srv_1:/w/notes', 'notes']]))
-  assert.deepEqual(spaceNames([{ project: stray }]), new Map([[key, 'app']]), "only the stray record: the repository's folder")
+
+  const s = projectSpaces([main, wt, stray, gitWt, folder].map((project) => ({ project })))
+  assert.deepEqual([main, wt, stray, gitWt, folder, undefined].map(s.idOf), ['prj_app', 'prj_app', 'prj_app', 'prj_app', 'prj_notes', undefined],
+    "the stray record goes into its repository's project")
+  assert.deepEqual(Object.fromEntries(s.names), { prj_app: 'app', prj_notes: 'notes' })
+  const alone = projectSpaces([{ project: stray }])
+  assert.deepEqual([alone.idOf(stray), Object.fromEntries(alone.names)], ['prj_stray', { prj_stray: 'app' }],
+    "its repository's project unknown: a space of its own, named after the repository's folder")
+  // The main checkout reached through a symbolic link: compared as the bridge resolves it.
+  const linked = { ...main, checkout: at('/home/me/app') }
+  const viaLink = projectSpaces([linked, stray].map((project) => ({ project })), (p) => p.replace('/home/me/', '/w/'))
+  assert.equal(viaLink.idOf(stray), 'prj_app')
 
   const roots = providerRoots(CONFIG)
-  const row = (workspaceId, project, spaceName) => agentRow(agentSnapshot({ provider: 'grok', cwd: project.checkout.cwd, workspaceId }),
-    { roots, project, spaceName })
-  const rows = [row('wks_main', main, 'app'), row('wks_wt', wt, 'app'), row('wks_stray', stray, 'app')]
+  const row = (workspaceId, project) => agentRow(agentSnapshot({ provider: 'grok', cwd: project.checkout.cwd, workspaceId }),
+    { roots, project, spaceId: s.idOf(project), spaceName: s.names.get(s.idOf(project)) })
+  const rows = [row('wks_main', main), row('wks_wt', wt), row('wks_stray', stray)]
   assert.deepEqual(rows.map((r) => [r.space_id, r.space_name, r.slot_id, r.slot_name]), [
-    [key, 'app', 'wks_main', '主线'], [key, 'app', 'wks_wt', '修登录'], [key, 'app', 'wks_stray', 'fix-login'],
+    ['prj_app', 'app', 'wks_main', '主线'], ['prj_app', 'app', 'wks_wt', '修登录'], ['prj_app', 'app', 'wks_stray', 'fix-login'],
   ])
   const bare = agentRow(agentSnapshot({ provider: 'grok', cwd: '/w/x', workspaceId: 'wks_x' }), { roots })
   assert.deepEqual([bare.space_id, bare.space_name, bare.slot_id], ['wks_x', 'x', undefined], 'no placement: its workspace, as before')

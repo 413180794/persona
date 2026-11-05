@@ -108,7 +108,7 @@ Agents 列表另有「待唤醒」：状态是已看，但 `/loop` 还没到点�
 DSH（`docs/dsh.md`）：`space_kind` 是 `dsh`，空间是会话的目录（`space_id` = 目录、`space_name` = 目录名），没有槽位；
 状态由插件给：在跑 → working，有授权 / 提问等着 → blocked，其余 done（hub 照常按看没看过分完成未看 / 已看）。
 
-Paseo（`docs/paseo.md`「显示哪些会话」）：`space_kind` 是 `paseo`，空间是 Paseo 的项目（`space_id` = 项目 key、`space_name` = 项目名），
+Paseo（`docs/paseo.md`「显示哪些会话」）：`space_kind` 是 `paseo`，空间是 Paseo 的项目（`space_id` = 项目记录 id、`space_name` = 项目名），
 同一个仓库的主检出和各个 worktree 在一个空间；槽位是 Paseo 的工作区（`slot_id` = 工作区 id、`slot_name` = 工作区标题）。
 
 node 用 herdr 的 `session.snapshot`（一次拿到 workspace、tab、agent）填这些字段：herdr 经 `events.subscribe` 推来变化时取一次
