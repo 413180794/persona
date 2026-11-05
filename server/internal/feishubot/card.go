@@ -20,8 +20,9 @@ type Card struct {
 }
 
 type cardHeader struct {
-	Title    plain  `json:"title"`
-	Template string `json:"template,omitempty"`
+	Title       plain  `json:"title"`
+	Template    string `json:"template,omitempty"`
+	TextTagList []any  `json:"text_tag_list,omitempty"` // tags on the right of the title
 }
 
 type cardBody struct {
@@ -196,7 +197,7 @@ func (c *Card) Raw() *CardPayload { return &CardPayload{Type: "raw", Data: c} }
 // --- Markdown ---
 
 var (
-	fenceRe  = regexp.MustCompile("(?s)```.*?(?:```|$)")
+	fenceRe  = regexp.MustCompile("(?s)```.*?(?:```|$)|~~~.*?(?:~~~|$)")
 	inlineRe = regexp.MustCompile("`[^`\n]+`")
 )
 

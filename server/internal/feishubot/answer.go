@@ -1,0 +1,548 @@
+package feishubot
+
+import (
+	"encoding/json"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+// A model's final answer laid out as cards by plain rules (no model call): the first "# " heading becomes the
+// header, a status word in it (or on a short line of its own) a tag on the header, "## " headings and lines like
+// "一、…" start sections with a divider between them, pipe tables become table elements, "备注：" lines small grey
+// text, and the answer's web links a row of open_url buttons on the last card. What does not fit one card goes on to
+// the next; past maxParts cards the rest is left out (Answer.Clipped) and the app has the whole answer.
+
+// Answer is an answer laid out: the cards to send, in order.
+type Answer struct {
+	Parts   []AnswerPart
+	Clipped bool // more than maxParts cards: the rest was left out
+}
+
+// AnswerPart is one card of an answer.
+type AnswerPart struct {
+	header *cardHeader
+	els    []any
+	Text   string // the part as card Markdown: what is sent when Feishu refuses the card
+}
+
+// Card starts the part's card (its header on the first); summary is what the chat list shows.
+func (p AnswerPart) Card(summary string) *Card {
+	c := NewCard("", "", summary)
+	if p.header != nil {
+		h := *p.header
+		c.Header = &h
+	}
+	return c
+}
+
+// Fill adds the part's elements to c.
+func (p AnswerPart) Fill(c *Card) *Card {
+	c.Body.Elements = append(c.Body.Elements, p.els...)
+	return c
+}
+
+// Limits of what one answer shows.
+const (
+	answerMaxElements = 80    // per card (a card takes 200 components, a table's cells count)
+	answerMaxTables   = 5     // per card (what Feishu takes)
+	answerMaxRows     = 100   // per table; the table pages by 10
+	answerTableRows   = 30    // rows per table element: a longer table goes on as more tables
+	answerTableBytes  = 9000  // JSON bytes per table element, likewise
+	answerMaxBytes    = 24000 // JSON bytes of a card's answer (Feishu takes about 30 KB)
+	answerMaxCell     = 300   // runes per table cell
+	answerMaxTitle    = 50    // runes of the header's title
+	answerMaxLinks    = 4     // link buttons
+	answerMaxLabel    = 14    // runes of a link button's label
+)
+
+type answerBlock struct {
+	el    map[string]any
+	src   string // the block as the answer wrote it
+	size  int    // runes it takes
+	bytes int    // JSON bytes it takes
+	table bool
+	hr    bool
+	sect  bool
+}
+
+// Status words: tagged on the header, and they pick its color.
+type answerStatus struct {
+	words    []string
+	tag      string
+	color    string // the tag's color
+	template string // the header's color
+}
+
+var answerStatuses = []answerStatus{ // in order: "没有变动" holds "有变动"
+	{[]string{"请验收", "待验收"}, "请验收", "orange", Orange},
+	{[]string{"无变动", "没有变动", "没变动", "无改动", "没有改动"}, "无变动", "neutral", Grey},
+	{[]string{"有变动", "有改动"}, "有变动", "blue", Blue},
+}
+
+var (
+	answerSectionRe = regexp.MustCompile(`^[一二三四五六七八九十]{1,3}[、.．]\s*\S`)
+	answerNoteRe    = regexp.MustCompile(`^(?:>\s*)?(?:备注|注|附注|PS|P\.S\.)\s*[:：]`)
+	answerStatusRe  = regexp.MustCompile(`^(?:当前状态|状态|结论)\s*[:：]\s*`)
+	answerLinkRe    = regexp.MustCompile(`\[([^\]\n]+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)`)
+	answerURLRe     = regexp.MustCompile(`https?://[^\s<>\[\]（）【】，。；：、！？「」《》"'` + "`" + `]+`)
+	answerListRe    = regexp.MustCompile(`^(?:[-*+]|\d+[.)])\s`)
+	answerCellRe    = regexp.MustCompile(`^:?-{2,}:?$`)
+)
+
+// RenderAnswer lays out answer (GitHub Markdown) as cards of about budget runes each, at most maxParts of them.
+// There is always one part, empty for an empty answer.
+func RenderAnswer(answer string, budget, maxParts int) Answer {
+	lines := strings.Split(strings.ReplaceAll(answer, "\r\n", "\n"), "\n")
+	var (
+		title, status string
+		blocks        []answerBlock
+		prose         []string
+		links         []Button
+		seenURL       = map[string]bool{}
+		started       bool
+		fence         string
+	)
+	flush := func() {
+		text := strings.Trim(strings.Join(prose, "\n"), "\n")
+		prose = nil
+		if strings.TrimSpace(text) == "" {
+			return
+		}
+		for _, piece := range Split(text, budget) {
+			blocks = append(blocks, answerMarkdown(piece))
+		}
+	}
+	addLinks := func(line string) {
+		line = inlineRe.ReplaceAllString(line, "")
+		for _, m := range answerLinkRe.FindAllStringSubmatch(line, -1) {
+			links = addLink(links, seenURL, m[2], m[1])
+		}
+		for _, u := range answerURLRe.FindAllString(answerLinkRe.ReplaceAllString(line, ""), -1) {
+			links = addLink(links, seenURL, trimURL(u), "")
+		}
+	}
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		t := strings.TrimSpace(line)
+		if fence != "" {
+			prose = append(prose, line)
+			if strings.HasPrefix(t, fence) && strings.Trim(t, fence[:1]) == "" {
+				fence = ""
+			}
+			continue
+		}
+		if f := fenceMarker(t); f != "" {
+			fence = f
+			prose = append(prose, line)
+			started = true
+			continue
+		}
+		if t == "" {
+			prose = append(prose, line)
+			continue
+		}
+		addLinks(t)
+		if !started && strings.HasPrefix(t, "# ") {
+			started = true
+			title = plainHeading(t)
+			continue
+		}
+		started = true
+		if status == "" {
+			status = lineStatus(t)
+		}
+		switch {
+		case strings.HasPrefix(t, "## ") || isSectionLine(t):
+			flush()
+			blocks = append(blocks, answerSection(plainHeading(t)))
+		case t == "---" || t == "***" || t == "___":
+			flush()
+			blocks = append(blocks, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", hr: true})
+		case answerNoteRe.MatchString(t):
+			flush()
+			blocks = append(blocks, answerNote(t))
+		case isTableStart(lines, i):
+			flush()
+			j := i + 2
+			for j < len(lines) && isTableRow(lines[j]) {
+				addLinks(lines[j])
+				j++
+			}
+			blocks = append(blocks, answerTables(lines[i:j])...)
+			i = j - 1
+		default:
+			prose = append(prose, line)
+		}
+	}
+	flush()
+	if s := titleStatus(title); s != "" {
+		status = s
+	}
+
+	var header *cardHeader
+	for _, st := range answerStatuses {
+		if st.tag != status {
+			continue
+		}
+		if title == "" { // no title: the status is the header
+			header = &cardHeader{Title: text(st.tag), Template: st.template}
+		} else {
+			header = &cardHeader{Title: text(clipRunes(withoutStatus(title, st), answerMaxTitle)), Template: st.template,
+				TextTagList: []any{map[string]any{"tag": "text_tag", "text": text(st.tag), "color": st.color}}}
+		}
+	}
+	if header == nil && title != "" {
+		header = &cardHeader{Title: text(clipRunes(title, answerMaxTitle)), Template: Blue}
+	}
+
+	parts := packAnswer(blocks, budget)
+	out := Answer{}
+	if maxParts > 0 && len(parts) > maxParts {
+		parts, out.Clipped = parts[:maxParts], true
+	}
+	if len(parts) == 0 {
+		parts = []AnswerPart{{}}
+	}
+	parts[0].header = header
+	if title != "" {
+		parts[0].Text = strings.TrimSpace("**" + CardMarkdown(title) + "**\n\n" + parts[0].Text)
+	}
+	if len(links) > 0 {
+		last := &parts[len(parts)-1]
+		last.els = append(last.els, buttonRow(links))
+	}
+	out.Parts = parts
+	return out
+}
+
+// packAnswer puts the blocks on cards: a new card when the next block would take it past budget runes or the
+// element and table limits; a divider is drawn before each section but the first, and never at a card's edge.
+func packAnswer(blocks []answerBlock, budget int) []AnswerPart {
+	var parts []AnswerPart
+	var cur []answerBlock
+	size, bytes, tables := 0, 0, 0
+	// push ends the card. Unless it is the last, the last section on it (its heading and what follows it so far) goes
+	// on to the next card instead, so a heading stays with what it heads; one that starts the card stays.
+	push := func(last bool) {
+		var carry []answerBlock
+		if !last {
+			for k := len(cur) - 1; k > 0; k-- {
+				if cur[k].sect {
+					carry, cur = append([]answerBlock{}, cur[k:]...), cur[:k]
+					break
+				}
+			}
+		}
+		for len(cur) > 0 && cur[len(cur)-1].hr {
+			cur = cur[:len(cur)-1]
+		}
+		defer func() {
+			for _, b := range carry {
+				cur = append(cur, b)
+				size, bytes = size+b.size, bytes+b.bytes
+				if b.table {
+					tables++
+				}
+			}
+		}()
+		if len(cur) == 0 {
+			return
+		}
+		p := AnswerPart{}
+		var src []string
+		for _, b := range cur {
+			p.els = append(p.els, b.el)
+			src = append(src, b.src)
+		}
+		p.Text = CardMarkdown(strings.Join(src, "\n\n"))
+		parts = append(parts, p)
+		cur, size, bytes, tables = nil, 0, 0, 0
+	}
+	for _, b := range blocks {
+		need := 1 // elements b adds: a section after something takes a divider too
+		if b.sect && len(cur) > 0 && !cur[len(cur)-1].hr {
+			need = 2
+		}
+		if len(cur) > 0 && (size+b.size > budget || bytes+b.bytes > answerMaxBytes || len(cur)+need > answerMaxElements ||
+			b.table && tables >= answerMaxTables) {
+			push(false)
+		}
+		if b.hr && (len(cur) == 0 || cur[len(cur)-1].hr) {
+			continue
+		}
+		if b.sect && len(cur) > 0 && !cur[len(cur)-1].hr {
+			cur = append(cur, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", hr: true})
+		}
+		cur = append(cur, b)
+		size += b.size
+		bytes += b.bytes
+		if b.table {
+			tables++
+		}
+	}
+	push(true)
+	return parts
+}
+
+func answerMarkdown(md string) answerBlock {
+	return sized(answerBlock{el: map[string]any{"tag": "markdown", "content": CardMarkdown(md)}, src: md, size: utf8.RuneCountInString(md)})
+}
+
+func answerSection(title string) answerBlock {
+	md := "**" + CardMarkdown(title) + "**"
+	return sized(answerBlock{el: map[string]any{"tag": "markdown", "content": md, "text_size": "heading"}, src: "**" + title + "**",
+		size: utf8.RuneCountInString(title), sect: true})
+}
+
+func answerNote(line string) answerBlock {
+	md := "<font color='grey'>" + CardMarkdown(strings.TrimSpace(strings.TrimPrefix(line, ">"))) + "</font>"
+	return sized(answerBlock{el: map[string]any{"tag": "markdown", "content": md, "text_size": "notation"}, src: line, size: utf8.RuneCountInString(line)})
+}
+
+// answerTables is a pipe table's lines (header, separator, rows) as table elements: one for up to answerTableRows
+// rows and answerTableBytes of JSON, more (each with the header) for a longer table; past answerMaxRows a last row
+// says how many were left out.
+func answerTables(lines []string) []answerBlock {
+	head := tableCells(lines[0])
+	aligns := tableCells(lines[1])
+	cols := make([]any, len(head))
+	for i, h := range head {
+		col := map[string]any{"name": "c" + strconv.Itoa(i), "display_name": orSpace(stripBold(h)), "data_type": "lark_md", "width": "auto"}
+		if i < len(aligns) {
+			a := strings.TrimSpace(aligns[i])
+			switch {
+			case strings.HasPrefix(a, ":") && strings.HasSuffix(a, ":"):
+				col["horizontal_align"] = "center"
+			case strings.HasSuffix(a, ":"):
+				col["horizontal_align"] = "right"
+			}
+		}
+		cols[i] = col
+	}
+	var out []answerBlock
+	var rows []any
+	var src []string
+	size, bytes := 0, 0
+	flush := func() {
+		if len(rows) == 0 {
+			return
+		}
+		el := map[string]any{"tag": "table", "page_size": min(10, len(rows)), "row_height": "low",
+			"header_style": map[string]any{"text_align": "left", "text_size": "normal", "background_style": "grey", "bold": true, "lines": 1},
+			"columns":      cols, "rows": rows}
+		text := strings.Join(append([]string{lines[0], lines[1]}, src...), "\n")
+		out = append(out, sized(answerBlock{el: el, src: text, size: size, table: true}))
+		rows, src, size, bytes = nil, nil, 0, 0
+	}
+	body := lines[2:]
+	for n, l := range body {
+		if n == answerMaxRows {
+			rows = append(rows, map[string]any{"c0": "… +" + strconv.Itoa(len(body)-n)})
+			src = append(src, "| … +"+strconv.Itoa(len(body)-n)+" |")
+			break
+		}
+		cells := tableCells(l)
+		row := map[string]any{}
+		rs := 0
+		for i := range head {
+			v := ""
+			if i < len(cells) {
+				v = clipRunes(CardMarkdown(cells[i]), answerMaxCell)
+			}
+			row["c"+strconv.Itoa(i)] = v
+			rs += utf8.RuneCountInString(v)
+		}
+		j, _ := json.Marshal(row)
+		if len(rows) > 0 && (len(rows) >= answerTableRows || bytes+len(j) > answerTableBytes) {
+			flush()
+		}
+		rows = append(rows, row)
+		src = append(src, l)
+		size += rs
+		bytes += len(j)
+	}
+	if len(rows) == 0 { // a table with no rows still shows its header
+		rows = []any{}
+		el := map[string]any{"tag": "table", "page_size": 1, "row_height": "low",
+			"header_style": map[string]any{"text_align": "left", "text_size": "normal", "background_style": "grey", "bold": true, "lines": 1},
+			"columns":      cols, "rows": rows}
+		if len(out) == 0 {
+			return []answerBlock{sized(answerBlock{el: el, src: strings.Join(lines[:2], "\n"), table: true})}
+		}
+		return out
+	}
+	flush()
+	return out
+}
+
+func isTableStart(lines []string, i int) bool {
+	if i+1 >= len(lines) || !strings.Contains(lines[i], "|") {
+		return false
+	}
+	head, sep := tableCells(lines[i]), tableCells(lines[i+1])
+	if len(head) < 2 || len(sep) != len(head) {
+		return false
+	}
+	for _, c := range sep {
+		if !answerCellRe.MatchString(strings.TrimSpace(c)) {
+			return false
+		}
+	}
+	return true
+}
+
+func isTableRow(line string) bool {
+	t := strings.TrimSpace(line)
+	return t != "" && strings.Contains(t, "|") && fenceMarker(t) == ""
+}
+
+// tableCells splits a pipe table's line into its cells ("\|" is a pipe inside one).
+func tableCells(line string) []string {
+	t := strings.TrimSpace(line)
+	t = strings.TrimPrefix(t, "|")
+	if strings.HasSuffix(t, "|") && !strings.HasSuffix(t, `\|`) {
+		t = t[:len(t)-1]
+	}
+	var cells []string
+	var b strings.Builder
+	for i := 0; i < len(t); i++ {
+		switch {
+		case t[i] == '\\' && i+1 < len(t) && t[i+1] == '|':
+			b.WriteByte('|')
+			i++
+		case t[i] == '|':
+			cells = append(cells, strings.TrimSpace(b.String()))
+			b.Reset()
+		default:
+			b.WriteByte(t[i])
+		}
+	}
+	return append(cells, strings.TrimSpace(b.String()))
+}
+
+// fenceMarker is the backticks or tildes opening a code fence on line t, if it opens one.
+func fenceMarker(t string) string {
+	for _, f := range []string{"```", "~~~"} {
+		if strings.HasPrefix(t, f) {
+			n := len(t) - len(strings.TrimLeft(t, f[:1]))
+			return t[:n]
+		}
+	}
+	return ""
+}
+
+// isSectionLine: a line like "一、背景" or "**二、结论**" (short and without sentence punctuation: a heading).
+func isSectionLine(t string) bool {
+	s := stripBold(t)
+	if !answerSectionRe.MatchString(s) || utf8.RuneCountInString(s) > 24 {
+		return false
+	}
+	return !strings.ContainsAny(s, "。！？；，!?;") // "一、本周处理了两次，都解决了。" is a sentence
+}
+
+// plainHeading is a heading line's text: no "#", no bold.
+func plainHeading(t string) string {
+	return stripBold(strings.TrimSpace(strings.TrimLeft(t, "#")))
+}
+
+func stripBold(s string) string {
+	s = strings.TrimSpace(s)
+	for _, m := range []string{"**", "__"} {
+		if strings.HasPrefix(s, m) && strings.HasSuffix(s, m) && len(s) > 2*len(m) {
+			s = strings.TrimSpace(s[len(m) : len(s)-len(m)])
+		}
+	}
+	return s
+}
+
+// titleStatus is the status a title names anywhere in it.
+func titleStatus(title string) string {
+	for _, st := range answerStatuses {
+		for _, w := range st.words {
+			if strings.Contains(title, w) {
+				return st.tag
+			}
+		}
+	}
+	return ""
+}
+
+// lineStatus is the status a line of the body starts with ("状态：无变动", "**请验收**", "【有变动】…"): only at the
+// start, so "这次没有变动的文件" in a sentence does not count.
+func lineStatus(t string) string {
+	if answerListRe.MatchString(t) { // "- 无变动的文件已跳过" is an item, not the answer's status
+		return ""
+	}
+	s := strings.Trim(t, " >*_#`【】[]()（）-•·")
+	s = answerStatusRe.ReplaceAllString(s, "")
+	s = strings.TrimLeft(s, " *_【[（(")
+	for _, st := range answerStatuses {
+		for _, w := range st.words {
+			if strings.HasPrefix(s, w) {
+				return st.tag
+			}
+		}
+	}
+	return ""
+}
+
+// addLink adds a button opening u (http(s) only, each address once, at most answerMaxLinks).
+func addLink(bs []Button, seen map[string]bool, u, label string) []Button {
+	p, err := url.Parse(u)
+	if err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "" || seen[u] || len(bs) >= answerMaxLinks {
+		return bs
+	}
+	seen[u] = true
+	label = strings.TrimSpace(strings.Trim(stripBold(label), "`"))
+	if label == "" || strings.HasPrefix(label, "http") {
+		label = p.Host
+	}
+	return append(bs, LinkBtn(clipRunes(label, answerMaxLabel), u))
+}
+
+func orSpace(s string) string {
+	if s == "" {
+		return " "
+	}
+	return s
+}
+
+// sized notes the JSON bytes b's element takes.
+func sized(b answerBlock) answerBlock {
+	j, _ := json.Marshal(b.el)
+	b.bytes = len(j)
+	return b
+}
+
+// trimURL drops what follows a bare address in prose: closing punctuation, and a ")" it does not open.
+func trimURL(u string) string {
+	for {
+		t := strings.TrimRight(u, ".,;:!?'\"")
+		if strings.HasSuffix(t, ")") && strings.Count(t, "(") < strings.Count(t, ")") {
+			t = t[:len(t)-1]
+		}
+		if t == u {
+			return u
+		}
+		u = t
+	}
+}
+
+// withoutStatus is title without the status word the tag beside it already says ("登录页改版（请验收）" → "登录页改版"),
+// or title as it is when that would leave nothing.
+func withoutStatus(title string, st answerStatus) string {
+	for _, w := range st.words {
+		if i := strings.Index(title, w); i >= 0 {
+			t := strings.TrimSpace(title[:i]) + " " + strings.TrimSpace(title[i+len(w):])
+			t = strings.Trim(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(t, "（）", ""), "()", ""), "【】", ""), " -—·|:：，,")
+			if t = strings.TrimSpace(t); t != "" {
+				return t
+			}
+			return title
+		}
+	}
+	return title
+}

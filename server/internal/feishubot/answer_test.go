@@ -1,0 +1,587 @@
+package feishubot
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+// decoded is a rendered card as Feishu would get it.
+type decoded map[string]any
+
+// renderCards renders answer and decodes every part's card JSON.
+func renderCards(t *testing.T, answer string, budget, maxParts int) (Answer, []decoded) {
+	t.Helper()
+	a := RenderAnswer(answer, budget, maxParts)
+	var out []decoded
+	for i, p := range a.Parts {
+		c := p.Fill(p.Card("s"))
+		var m decoded
+		if err := json.Unmarshal([]byte(c.JSON()), &m); err != nil {
+			t.Fatalf("part %d: bad JSON %v\n%s", i, err, c.JSON())
+		}
+		out = append(out, m)
+	}
+	return a, out
+}
+
+func (m decoded) elements() []map[string]any {
+	body, _ := m["body"].(map[string]any)
+	raw, _ := body["elements"].([]any)
+	els := make([]map[string]any, len(raw))
+	for i, e := range raw {
+		els[i], _ = e.(map[string]any)
+	}
+	return els
+}
+
+func (m decoded) header() map[string]any {
+	h, _ := m["header"].(map[string]any)
+	return h
+}
+
+func (m decoded) title() string {
+	h := m.header()
+	if h == nil {
+		return ""
+	}
+	tt, _ := h["title"].(map[string]any)
+	s, _ := tt["content"].(string)
+	return s
+}
+
+// tags is the header's text_tag_list as "text/color".
+func (m decoded) tags() []string {
+	h := m.header()
+	if h == nil {
+		return nil
+	}
+	list, _ := h["text_tag_list"].([]any)
+	var out []string
+	for _, x := range list {
+		tag := x.(map[string]any)
+		txt := tag["text"].(map[string]any)["content"].(string)
+		out = append(out, txt+"/"+tag["color"].(string))
+	}
+	return out
+}
+
+func (m decoded) template() string {
+	h := m.header()
+	if h == nil {
+		return ""
+	}
+	s, _ := h["template"].(string)
+	return s
+}
+
+func tagsOf(els []map[string]any) []string {
+	out := make([]string, len(els))
+	for i, e := range els {
+		out[i], _ = e["tag"].(string)
+	}
+	return out
+}
+
+func byTag(els []map[string]any, tag string) []map[string]any {
+	var out []map[string]any
+	for _, e := range els {
+		if e["tag"] == tag {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// buttonURLs is the open_url addresses of the column_set buttons.
+func buttonURLs(els []map[string]any) (urls, labels []string) {
+	for _, cs := range byTag(els, "column_set") {
+		for _, col := range cs["columns"].([]any) {
+			for _, b := range col.(map[string]any)["elements"].([]any) {
+				btn := b.(map[string]any)
+				labels = append(labels, btn["text"].(map[string]any)["content"].(string))
+				beh := btn["behaviors"].([]any)[0].(map[string]any)
+				if beh["type"] != "open_url" {
+					panic("not open_url")
+				}
+				urls = append(urls, beh["default_url"].(string))
+			}
+		}
+	}
+	return
+}
+
+func allContent(els []map[string]any) string {
+	var b strings.Builder
+	for _, e := range els {
+		if s, ok := e["content"].(string); ok {
+			b.WriteString(s + "\n")
+		}
+	}
+	return b.String()
+}
+
+func TestAnswerEmpty(t *testing.T) {
+	for _, in := range []string{"", "\n\n  \n"} {
+		a, cards := renderCards(t, in, 1000, 5)
+		if len(a.Parts) != 1 || a.Clipped {
+			t.Fatalf("%q: %d parts, clipped %v", in, len(a.Parts), a.Clipped)
+		}
+		if a.Parts[0].Text != "" || len(cards[0].elements()) != 0 || cards[0].header() != nil {
+			t.Fatalf("%q: not empty: text %q, card %v", in, a.Parts[0].Text, cards[0])
+		}
+	}
+}
+
+func TestAnswerTitle(t *testing.T) {
+	tests := []struct {
+		name, in, title, template string
+		tags                      []string
+	}{
+		{"plain", "# 周报\n正文", "周报", Blue, nil},
+		{"after blank lines", "\n\n# 周报\n正文", "周报", Blue, nil},
+		{"bold title", "# **周报**\n正文", "周报", Blue, nil},
+		{"no title", "正文\n更多", "", "", nil},
+		{"not first line", "前言\n# 周报\n正文", "", "", nil},
+		{"h2 is not a title", "## 周报\n正文", "", "", nil},
+		{"status in title", "# 部署完成，请验收\n正文", "部署完成", Orange, []string{"请验收/orange"}},
+		{"待验收", "# 待验收：登录页\n正文", "登录页", Orange, []string{"请验收/orange"}},
+		{"没有变动 not 有变动", "# 巡检：没有变动\n正文", "巡检", Grey, []string{"无变动/neutral"}},
+		{"有改动", "# 巡检有改动\n正文", "巡检", Blue, []string{"有变动/blue"}},
+		{"long title clipped", "# " + strings.Repeat("长", 60) + "\nx", strings.Repeat("长", 49) + "…", Blue, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			a, cards := renderCards(t, tc.in, 1000, 5)
+			c := cards[0]
+			if c.title() != tc.title || c.template() != tc.template || fmt.Sprint(c.tags()) != fmt.Sprint(tc.tags) {
+				t.Fatalf("title %q template %q tags %v", c.title(), c.template(), c.tags())
+			}
+			if tc.name == "not first line" && !strings.Contains(allContent(c.elements()), "\n# 周报") {
+				t.Fatalf("heading not kept as text: %v", c.elements())
+			}
+			if tc.title != "" && !strings.HasPrefix(a.Parts[0].Text, "**") {
+				t.Fatalf("fallback lacks title: %q", a.Parts[0].Text)
+			}
+		})
+	}
+}
+
+func TestAnswerBodyStatus(t *testing.T) {
+	tests := []struct {
+		name, in, template string
+		tags               []string
+	}{
+		{"状态 line", "# 巡检\n状态：无变动\n细节", Grey, []string{"无变动/neutral"}},
+		{"bold line", "# 交付\n**请验收**\n细节", Orange, []string{"请验收/orange"}},
+		{"bracket line", "# 巡检\n【有变动】两个文件", Blue, []string{"有变动/blue"}},
+		{"结论 line", "# 巡检\n结论: 没有改动", Grey, []string{"无变动/neutral"}},
+		{"mid-sentence", "# 巡检\n这次没有变动的文件有三个", Blue, nil},
+		{"mid-sentence 请验收", "# 巡检\n做完了，请验收", Blue, nil},
+		{"title wins", "# 请验收\n状态：无变动", Orange, []string{"请验收/orange"}},
+		{"first body status wins", "# 巡检\n状态：有变动\n状态：无变动", Blue, []string{"有变动/blue"}},
+		{"inside fence ignored", "# 巡检\n```\n无变动\n```", Blue, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cards := renderCards(t, tc.in, 1000, 5)
+			c := cards[0]
+			if c.template() != tc.template || fmt.Sprint(c.tags()) != fmt.Sprint(tc.tags) {
+				t.Fatalf("template %q tags %v", c.template(), c.tags())
+			}
+		})
+	}
+}
+
+func TestAnswerSections(t *testing.T) {
+	in := "# 报告\n一、背景\n背景文字\n## 二级标题\n正文\n**二、结论**\n结论文字"
+	_, cards := renderCards(t, in, 1000, 5)
+	els := cards[0].elements()
+	want := "markdown markdown hr markdown markdown hr markdown markdown"
+	if got := strings.Join(tagsOf(els), " "); got != want {
+		t.Fatalf("elements %s, want %s", got, want)
+	}
+	heads := []string{}
+	for _, e := range els {
+		if e["text_size"] == "heading" {
+			heads = append(heads, e["content"].(string))
+		}
+	}
+	if fmt.Sprint(heads) != fmt.Sprint([]string{"**一、背景**", "**二级标题**", "**二、结论**"}) {
+		t.Fatalf("headings %q", heads)
+	}
+}
+
+func TestAnswerSectionLineTooLong(t *testing.T) {
+	line := "一、" + strings.Repeat("这是一句很长的话", 6) // > 40 runes
+	_, cards := renderCards(t, line+"\n下一行", 1000, 5)
+	for _, e := range cards[0].elements() {
+		if e["text_size"] == "heading" || e["tag"] == "hr" {
+			t.Fatalf("long 一、 line became a section: %v", cards[0].elements())
+		}
+	}
+}
+
+func TestAnswerNote(t *testing.T) {
+	for _, line := range []string{"备注：仅供参考", "注: 看这里", "PS: 顺便", "> 备注：引用里的"} {
+		_, cards := renderCards(t, "正文\n"+line, 1000, 5)
+		notes := []map[string]any{}
+		for _, e := range cards[0].elements() {
+			if e["text_size"] == "notation" {
+				notes = append(notes, e)
+			}
+		}
+		if len(notes) != 1 || !strings.HasPrefix(notes[0]["content"].(string), "<font color='grey'>") {
+			t.Fatalf("%q: notes %v", line, cards[0].elements())
+		}
+	}
+}
+
+func TestAnswerTable(t *testing.T) {
+	in := "结果如下\n| 名字 | **数量** | 说明 |\n|:--:|--:|---|\n| a | 1 | x<y |\n| b | 2 |\n"
+	_, cards := renderCards(t, in, 1000, 5)
+	tables := byTag(cards[0].elements(), "table")
+	if len(tables) != 1 {
+		t.Fatalf("tables %v", cards[0].elements())
+	}
+	tb := tables[0]
+	cols := tb["columns"].([]any)
+	if len(cols) != 3 {
+		t.Fatalf("columns %v", cols)
+	}
+	wantAlign := []any{"center", "right", nil}
+	wantName := []string{"名字", "数量", "说明"}
+	for i, c := range cols {
+		col := c.(map[string]any)
+		if col["name"] != fmt.Sprintf("c%d", i) || col["data_type"] != "lark_md" || col["horizontal_align"] != wantAlign[i] || col["display_name"] != wantName[i] {
+			t.Fatalf("column %d: %v", i, col)
+		}
+	}
+	rows := tb["rows"].([]any)
+	if len(rows) != 2 {
+		t.Fatalf("rows %v", rows)
+	}
+	r0, r1 := rows[0].(map[string]any), rows[1].(map[string]any)
+	if r0["c0"] != "a" || r0["c2"] != "x&#60;y" || r1["c1"] != "2" || r1["c2"] != "" {
+		t.Fatalf("rows %v", rows)
+	}
+}
+
+// A long table goes on as more tables with the same header; past 100 rows one row says how many were left out.
+func TestAnswerTableLimits(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("| k | v |\n|---|---|\n")
+	for i := 0; i < 105; i++ {
+		fmt.Fprintf(&b, "| %d | v%d |\n", i, i)
+	}
+	_, cards := renderCards(t, b.String(), 1_000_000, 5)
+	var rows []any
+	for _, c := range cards {
+		for _, tb := range byTag(c.elements(), "table") {
+			r := tb["rows"].([]any)
+			if len(r) > answerTableRows {
+				t.Fatalf("table of %d rows", len(r))
+			}
+			if n := len(tb["columns"].([]any)); n != 2 {
+				t.Fatalf("table of %d columns", n)
+			}
+			rows = append(rows, r...)
+		}
+	}
+	if len(rows) != 101 {
+		t.Fatalf("%d rows", len(rows))
+	}
+	if got := rows[100].(map[string]any)["c0"]; got != "… +5" {
+		t.Fatalf("overflow row %v", got)
+	}
+}
+
+// Wide CJK cells: each cell is clipped, and no card's JSON gets near Feishu's 30 KB.
+func TestAnswerTableBytes(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("| a | b | c |\n|---|---|---|\n")
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", strings.Repeat("字", 400), strings.Repeat("词", 60), strings.Repeat("句", 40))
+	}
+	a := RenderAnswer(b.String(), 6000, 50)
+	for i, p := range a.Parts {
+		c := p.Fill(p.Card("s"))
+		if n := len(c.JSON()); n > 28_000 {
+			t.Fatalf("card %d is %d bytes", i, n)
+		}
+		for _, tb := range byTag(decode(t, c).elements(), "table") {
+			for _, r := range tb["rows"].([]any) {
+				if n := utf8.RuneCountInString(r.(map[string]any)["c0"].(string)); n > answerMaxCell {
+					t.Fatalf("cell has %d runes", n)
+				}
+			}
+		}
+	}
+}
+
+func TestAnswerFences(t *testing.T) {
+	in := "前言\n```md\n# 不是标题\n## 也不是\n一、不是章节\n| a | b |\n|---|---|\n| 1 | 2 |\n备注：不是备注\nhttps://in.fence.example/x\n```\n后记"
+	_, cards := renderCards(t, in, 1000, 5)
+	c := cards[0]
+	els := c.elements()
+	if c.header() != nil || len(byTag(els, "table")) != 0 || len(byTag(els, "hr")) != 0 || len(byTag(els, "column_set")) != 0 {
+		t.Fatalf("fence content was parsed: %v", els)
+	}
+	for _, e := range els {
+		if e["text_size"] != nil {
+			t.Fatalf("fence content styled: %v", e)
+		}
+	}
+	if !strings.Contains(allContent(els), "```md\n# 不是标题\n## 也不是\n一、不是章节\n| a | b |\n|---|---|") {
+		t.Fatalf("fence not verbatim: %q", allContent(els))
+	}
+}
+
+// A fence before the first heading: the heading after it is not the title.
+func TestAnswerFenceBeforeHeading(t *testing.T) {
+	_, cards := renderCards(t, "```\ncode\n```\n# 标题", 1000, 5)
+	if cards[0].header() != nil {
+		t.Fatalf("header %v", cards[0].header())
+	}
+}
+
+func TestAnswerTableRightAfterFenceOpens(t *testing.T) {
+	in := "```\n| a | b |\n|---|---|\n| 1 | 2 |\n```"
+	_, cards := renderCards(t, in, 1000, 5)
+	if len(byTag(cards[0].elements(), "table")) != 0 {
+		t.Fatalf("table inside a fence: %v", cards[0].elements())
+	}
+}
+
+func TestAnswerEscapesAngleBrackets(t *testing.T) {
+	in := "## a<b\n正文 <at id=1></at> 和 `x<y`\n```\nif a<b {}\n```"
+	_, cards := renderCards(t, in, 1000, 5)
+	got := allContent(cards[0].elements())
+	for _, want := range []string{"**a&#60;b**", "正文 &#60;at id=1>&#60;/at> 和 `x<y`", "if a<b {}"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %q", want, got)
+		}
+	}
+}
+
+// "~~~" fences are code fences too: what is in them is shown as written.
+func TestAnswerTildeFenceVerbatim(t *testing.T) {
+	_, cards := renderCards(t, "~~~\nif a<b {}\n~~~", 1000, 5)
+	if got := allContent(cards[0].elements()); !strings.Contains(got, "if a<b {}") {
+		t.Fatalf("tilde fence changed: %q", got)
+	}
+}
+
+func TestAnswerLinks(t *testing.T) {
+	in := "# 结果\n见 [设计文档](https://a.example/doc) 和 https://b.example/x。\n" +
+		"再看 https://a.example/doc，以及 `https://code.example/no` 和 [坏的](javascript:alert(1))\n" +
+		"[c](http://c.example/) [d](https://d.example/) [e](https://e.example/)\n" +
+		"| k | v |\n|---|---|\n| [f](https://f.example) | 1 |"
+	_, cards := renderCards(t, in, 1000, 5)
+	els := cards[0].elements()
+	if els[len(els)-1]["tag"] != "column_set" {
+		t.Fatalf("buttons not last: %v", tagsOf(els))
+	}
+	urls, labels := buttonURLs(els)
+	want := []string{"https://a.example/doc", "https://b.example/x", "http://c.example/", "https://d.example/"}
+	if fmt.Sprint(urls) != fmt.Sprint(want) {
+		t.Fatalf("urls %v", urls)
+	}
+	if labels[0] != "设计文档" || labels[1] != "b.example" {
+		t.Fatalf("labels %v", labels)
+	}
+}
+
+func TestAnswerJavascriptLinkOnly(t *testing.T) {
+	_, cards := renderCards(t, "[x](javascript:alert(1)) and javascript://evil.example", 1000, 5)
+	if len(byTag(cards[0].elements(), "column_set")) != 0 {
+		t.Fatalf("buttons for javascript: %v", cards[0].elements())
+	}
+}
+
+// longAnswer is n sections, each with a paragraph of per runes.
+func longAnswer(n, per int) string {
+	var b strings.Builder
+	b.WriteString("# 长答案\n")
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "## 第%d节\n%s\n---\n", i, strings.Repeat("字", per))
+	}
+	b.WriteString("链接 https://x.example/end\n")
+	return b.String()
+}
+
+func TestAnswerBudgetSplit(t *testing.T) {
+	a, cards := renderCards(t, longAnswer(6, 300), 700, 10)
+	if len(cards) < 3 || a.Clipped {
+		t.Fatalf("%d parts, clipped %v", len(cards), a.Clipped)
+	}
+	for i, c := range cards {
+		els := c.elements()
+		if len(els) == 0 {
+			t.Fatalf("part %d empty", i)
+		}
+		if els[0]["tag"] == "hr" {
+			t.Fatalf("part %d starts with hr: %v", i, tagsOf(els))
+		}
+		content := els
+		if i == len(cards)-1 {
+			content = els[:len(els)-1] // the buttons
+		}
+		if content[len(content)-1]["tag"] == "hr" {
+			t.Fatalf("part %d ends with hr: %v", i, tagsOf(els))
+		}
+		if (i == 0) != (c.header() != nil) {
+			t.Fatalf("part %d header %v", i, c.header())
+		}
+		if (i == len(cards)-1) != (len(byTag(els, "column_set")) == 1) {
+			t.Fatalf("part %d buttons %v", i, tagsOf(els))
+		}
+		if strings.HasPrefix(a.Parts[i].Text, "---") || strings.HasSuffix(a.Parts[i].Text, "---") {
+			t.Fatalf("part %d fallback %q", i, a.Parts[i].Text)
+		}
+	}
+	if !strings.HasPrefix(a.Parts[0].Text, "**长答案**") || strings.Contains(a.Parts[1].Text, "长答案") {
+		t.Fatalf("fallbacks %q / %q", a.Parts[0].Text, a.Parts[1].Text)
+	}
+}
+
+func TestAnswerClipped(t *testing.T) {
+	a, cards := renderCards(t, longAnswer(10, 300), 400, 3)
+	if !a.Clipped || len(cards) != 3 {
+		t.Fatalf("%d parts, clipped %v", len(cards), a.Clipped)
+	}
+	if len(byTag(cards[2].elements(), "column_set")) != 1 {
+		t.Fatalf("no buttons on the last part kept")
+	}
+	if a2 := RenderAnswer(longAnswer(2, 10), 400, 3); a2.Clipped {
+		t.Fatal("short answer clipped")
+	}
+}
+
+func TestAnswerTableLimitPerCard(t *testing.T) {
+	var b strings.Builder
+	for i := 0; i < 7; i++ {
+		fmt.Fprintf(&b, "表%d\n| a | b |\n|---|---|\n| 1 | 2 |\n\n", i)
+	}
+	_, cards := renderCards(t, b.String(), 1_000_000, 5)
+	if len(cards) != 2 || len(byTag(cards[0].elements(), "table")) != 5 || len(byTag(cards[1].elements(), "table")) != 2 {
+		t.Fatalf("%d parts", len(cards))
+	}
+}
+
+// No card holds more than answerMaxElements elements, counting the dividers drawn before sections.
+func TestAnswerElementLimit(t *testing.T) {
+	tests := []struct{ name, in string }{
+		{"notes only", strings.Repeat("备注：x\n", 200)},
+		{"section after 79 notes", strings.Repeat("备注：x\n", 79) + "## 节\n正文"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, cards := renderCards(t, tc.in, 1_000_000, 10)
+			for i, c := range cards {
+				if n := len(c.elements()); n > answerMaxElements {
+					t.Fatalf("part %d has %d elements", i, n)
+				}
+			}
+		})
+	}
+}
+
+// decode is a card as Feishu would get it.
+func decode(t *testing.T, c *Card) decoded {
+	t.Helper()
+	var m decoded
+	if err := json.Unmarshal([]byte(c.JSON()), &m); err != nil {
+		t.Fatalf("bad JSON %v", err)
+	}
+	return m
+}
+
+// Addresses keep their own parentheses and drop the prose's punctuation around them.
+func TestAnswerLinkEdges(t *testing.T) {
+	in := "见 https://wiki.example.com/Go_(lang)。\n" +
+		"[doc](https://a.example.com/x_(y))\n" +
+		"（参考 https://c.example.com/z）\n" +
+		"地址 https://b.example.com/p：说明\n"
+	_, cards := renderCards(t, in, 6000, 5)
+	urls, _ := buttonURLs(cards[0].elements())
+	want := []string{"https://wiki.example.com/Go_(lang)", "https://a.example.com/x_(y)", "https://c.example.com/z", "https://b.example.com/p"}
+	if strings.Join(urls, " ") != strings.Join(want, " ") {
+		t.Fatalf("urls %q", urls)
+	}
+}
+
+// A status word on a list item is about that item, not the answer.
+func TestAnswerListItemNoStatus(t *testing.T) {
+	for _, in := range []string{"# 结果\n- 无变动的文件已跳过\n", "# 结果\n1. 请验收前先看日志\n"} {
+		_, cards := renderCards(t, in, 6000, 5)
+		if tags := cards[0].tags(); len(tags) != 0 {
+			t.Fatalf("%q: tags %v", in, tags)
+		}
+	}
+}
+
+// Without a title the status alone is the header; a title that is only the status stays as it is.
+func TestAnswerStatusHeader(t *testing.T) {
+	_, cards := renderCards(t, "状态：无变动\n细节", 6000, 5)
+	if c := cards[0]; c.title() != "无变动" || c.template() != Grey || len(c.tags()) != 0 {
+		t.Fatalf("title %q template %q tags %v", c.title(), c.template(), c.tags())
+	}
+	_, cards = renderCards(t, "# 请验收\n细节", 6000, 5)
+	if c := cards[0]; c.title() != "请验收" || c.template() != Orange {
+		t.Fatalf("title %q template %q", c.title(), c.template())
+	}
+}
+
+// A numbered line that is a sentence stays text.
+func TestAnswerSentenceNotSection(t *testing.T) {
+	for _, in := range []string{"一、本周处理了两次，都解决了。", "二、做完了！"} {
+		_, cards := renderCards(t, "# 周报\n"+in+"\n正文", 6000, 5)
+		for _, e := range cards[0].elements() {
+			if e["text_size"] == "heading" {
+				t.Fatalf("%q became a section", in)
+			}
+		}
+	}
+	_, cards := renderCards(t, "# 周报\n二、下周计划：\n正文", 6000, 5)
+	if n := len(byTag(cards[0].elements(), "markdown")); n < 2 || cards[0].elements()[0]["text_size"] != "heading" {
+		t.Fatalf("short heading with a colon is a section: %v", cards[0].elements())
+	}
+}
+
+// A section heading never ends a card: it goes on with what follows it.
+func TestAnswerHeadingKeptWithBody(t *testing.T) {
+	in := strings.Repeat("字", 50) + "\n## 下一节\n" + strings.Repeat("词", 50)
+	_, cards := renderCards(t, in, 60, 5)
+	if len(cards) != 2 {
+		t.Fatalf("%d cards", len(cards))
+	}
+	first, second := cards[0].elements(), cards[1].elements()
+	if last := first[len(first)-1]; last["text_size"] == "heading" || last["tag"] == "hr" {
+		t.Fatalf("card ends with %v", last)
+	}
+	if second[0]["text_size"] != "heading" {
+		t.Fatalf("second card starts with %v", second[0])
+	}
+}
+
+// A table that does not fit takes its section's heading and lead-in along to the next card; a heading at the very end
+// of the answer is kept.
+func TestAnswerSectionMovesWithTable(t *testing.T) {
+	table := "| a | b |\n|---|---|\n" + strings.Repeat("| "+strings.Repeat("字", 20)+" | x |\n", 3)
+	in := "开头\n## 第一节\n" + strings.Repeat("词", 30) + "\n## 第二节\n引言\n" + table
+	_, cards := renderCards(t, in, 100, 5)
+	if len(cards) < 2 {
+		t.Fatalf("%d cards", len(cards))
+	}
+	second := cards[1].elements()
+	if second[0]["text_size"] != "heading" || !strings.Contains(second[0]["content"].(string), "第二节") {
+		t.Fatalf("second card starts with %v", second[0])
+	}
+	_, cards = renderCards(t, "正文\n## 结尾", 6000, 5)
+	if !strings.Contains(allContent(cards[0].elements()), "结尾") {
+		t.Fatalf("last heading lost: %v", cards[0].elements())
+	}
+}

@@ -896,22 +896,14 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 	if note != "" {
 		foot += "\n" + note
 	}
-	var pieces []string
-	if !quiet {
-		pieces = feishubot.Split(feishubot.CardMarkdown(answer), botAnswerPiece)
-	}
 	// The process is in the agent message above the answer, or else folded into the answer's first card.
-	inCot := f.cotFinishNow(ctx, r)
+	var steps []string
+	if !f.cotFinishNow(ctx, r) {
+		steps = append([]string{}, f.s.runSteps(r.ID)...)
+	}
 	card := r.Ext["card"]
-	for i, piece := range pieces {
-		c := feishubot.NewCard("", "", answer)
-		if i == 0 && !inCot {
-			processPanel(f.s.botLang(ctx), c, f.s.runSteps(r.ID))
-		}
-		c.Markdown(piece)
-		if i == len(pieces)-1 {
-			c.Note(foot)
-		}
+	for i, ac := range answerCards(l, answer, quiet, steps, foot) {
+		c, piece := ac.card, ac.fallback
 		var mid string
 		var err error
 		if i == 0 && card != "" {
