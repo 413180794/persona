@@ -826,24 +826,54 @@ func (h *Hub) toSubscribers(machineID, sessionID string, v any) {
 }
 
 // toSubscribersWith is toSubscribers for the subscribers that asked for feature ("": all of them), on the WebSocket
-// URL's ?features= or in client_hello.
+// URL's ?features= or in client_hello. v is encoded only once some client follows the session: most streamed deltas
+// are for sessions no app has open.
 func (h *Hub) toSubscribersWith(machineID, sessionID, feature string, v any) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return
-	}
 	key := [2]string{machineID, sessionID}
+	var b []byte
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
 		c.mu.Lock()
 		sub := c.subs[key]
 		c.mu.Unlock()
-		if sub && (feature == "" || c.wants(feature)) {
-			c.queue(b) // a full queue drops the client (it asks again from its cursor), never just this message (#3036)
+		if !sub || (feature != "" && !c.wants(feature)) {
+			continue
 		}
+		if b == nil {
+			var err error
+			if b, err = json.Marshal(v); err != nil {
+				return
+			}
+		}
+		c.queue(b) // a full queue drops the client (it asks again from its cursor), never just this message (#3036)
 	}
 }
+
+// The live per-session pushes (session.delta, session.screen, session.live from a node), typed so a push costs no map
+// and no key sort. Fields are in sorted key order, the bytes the map[string]any each replaced encoded to.
+type (
+	deltaPush struct {
+		MachineID string `json:"machine_id"`
+		SessionID string `json:"session_id"`
+		Text      string `json:"text"`
+		Type      string `json:"type"` // "delta"
+	}
+	screenPush struct {
+		MachineID string    `json:"machine_id"`
+		SessionID string    `json:"session_id"`
+		Status    string    `json:"status"`
+		Text      string    `json:"text"`
+		TS        time.Time `json:"ts"`
+		Type      string    `json:"type"` // "screen"
+	}
+	livePush struct {
+		Live      *proto.SessionLive `json:"live"`
+		MachineID string             `json:"machine_id"`
+		SessionID string             `json:"session_id"`
+		Type      string             `json:"type"` // "live"
+	}
+)
 
 // itemsToSubscribers fans new items out, without image data to clients that load images on demand.
 func (h *Hub) itemsToSubscribers(machineID, sessionID string, items []proto.Item, span itemSpan) {

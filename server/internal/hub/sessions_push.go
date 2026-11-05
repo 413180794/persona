@@ -44,12 +44,35 @@ type sentSession struct {
 	raw     json.RawMessage
 }
 
+// encodeSessions encodes each session of list (the same bytes json.Marshal gives) into one buffer, each raw a slice
+// of it: one allocation for the list rather than a copy of every session and then a clone of its bytes, what a push
+// spent most of its memory on. The raws share the buffer and are only read from then on.
 func encodeSessions(list []proto.Session) []sentSession {
 	out := make([]sentSession, 0, len(list))
-	for _, s := range list {
-		if b, err := json.Marshal(s); err == nil {
-			out = append(out, sentSession{id: s.SessionID, history: s.SourceKind == "codex_history", raw: b})
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf) // escapes HTML as json.Marshal does
+	type span struct{ start, end int }
+	spans := make([]span, 0, len(list))
+	for i := range list {
+		start := buf.Len()
+		if err := enc.Encode(&list[i]); err != nil {
+			buf.Truncate(start)
+			spans = append(spans, span{-1, -1})
+			continue
 		}
+		spans = append(spans, span{start, buf.Len() - 1}) // without the '\n' Encode ends each value with
+		if start == 0 && i < len(list)-1 {
+			// Sized from the first session, room for the rest to differ a little, so the buffer is rarely regrown.
+			buf.Grow(buf.Len() * (len(list) - i - 1) * 5 / 4)
+		}
+	}
+	b := buf.Bytes()
+	for i, sp := range spans {
+		if sp.start < 0 {
+			continue
+		}
+		s := &list[i]
+		out = append(out, sentSession{id: s.SessionID, history: s.SourceKind == "codex_history", raw: b[sp.start:sp.end:sp.end]})
 	}
 	return out
 }
@@ -88,17 +111,27 @@ func forDelta(list []sentSession, have map[string][]byte) []sentSession {
 	return out
 }
 
-// sessionsDelta is the message taking an app from have to list (nil: nothing changed), and what it then has.
+// sessionsDelta is the message taking an app from have to list (nil: nothing changed), and what it then has. Run for
+// every delta app on every push, and most pushes change nothing for a given app's machine list, so that case is
+// checked first without allocating and gives back have itself. A list naming a session twice, which no node sends,
+// may then hide that one of have's sessions went; the next change removes it.
 func sessionsDelta(machine string, list []sentSession, have map[string][]byte) ([]byte, map[string][]byte) {
-	shown := forDelta(list, have)
-	next := make(map[string][]byte, len(shown))
-	upsert, remove := []json.RawMessage{}, []string{}
-	for _, s := range shown {
+	if unchanged(list, have) {
+		return nil, have
+	}
+	next := make(map[string][]byte, len(list))
+	var upsert []json.RawMessage
+	for _, s := range list {
+		old, had := have[s.id]
+		if s.history && !had {
+			continue
+		}
 		next[s.id] = s.raw
-		if old, ok := have[s.id]; !ok || !bytes.Equal(old, s.raw) {
+		if !had || !bytes.Equal(old, s.raw) {
 			upsert = append(upsert, s.raw)
 		}
 	}
+	var remove []string
 	for id := range have {
 		if _, ok := next[id]; !ok {
 			remove = append(remove, id)
@@ -108,33 +141,91 @@ func sessionsDelta(machine string, list []sentSession, have map[string][]byte) (
 		return nil, next
 	}
 	slices.Sort(remove)
-	b, _ := json.Marshal(map[string]any{"type": "sessions_delta", "machine_id": machine, "upsert": upsert, "remove": remove})
-	return b, next
+	return deltaMessage(machine, upsert, remove), next
+}
+
+// unchanged: an app with have needs nothing for list (what forDelta shows of it is have, byte for byte).
+func unchanged(list []sentSession, have map[string][]byte) bool {
+	n := 0
+	for _, s := range list {
+		old, had := have[s.id]
+		if s.history && !had {
+			continue
+		}
+		if !had || !bytes.Equal(old, s.raw) {
+			return false
+		}
+		n++
+	}
+	return n == len(have)
+}
+
+// deltaMessage is the sessions_delta message, the same bytes as marshalling a map of it (its keys sorted, empty
+// arrays as []) but put together from the encoded sessions, as sessionsMessage is.
+func deltaMessage(machine string, upsert []json.RawMessage, remove []string) []byte {
+	id, _ := json.Marshal(machine)
+	size := len(`{"machine_id":,"remove":[],"type":"sessions_delta","upsert":[]}`) + len(id) + len(upsert)
+	for _, raw := range upsert {
+		size += len(raw)
+	}
+	for _, r := range remove {
+		size += len(r) + 3 // quotes and comma; escapes grow the slice
+	}
+	b := make([]byte, 0, size)
+	b = append(b, `{"machine_id":`...)
+	b = append(b, id...)
+	b = append(b, `,"remove":[`...)
+	for i, r := range remove {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		q, _ := json.Marshal(r)
+		b = append(b, q...)
+	}
+	b = append(b, `],"type":"sessions_delta","upsert":[`...)
+	for i, raw := range upsert {
+		if i > 0 {
+			b = append(b, ',')
+		}
+		b = append(b, raw...)
+	}
+	return append(b, `]}`...)
+}
+
+// sameSessions: a and b are the same list, session for session in the same order (what the apps read of it).
+func sameSessions(a, b []sentSession) bool {
+	return slices.EqualFunc(a, b, func(x, y sentSession) bool { return x.id == y.id && bytes.Equal(x.raw, y.raw) })
 }
 
 // broadcastSessions sends every app a machine's session list: an older app the whole list unless it is the list
 // they last got (an interaction shown, a session seen, a node pass that changed nothing the app reads), a delta app
-// what changed for it. The lock is held until everything is queued, so what was recorded is what the apps got last.
+// what changed for it. The whole-list message (~150 KB) is put together only when the list changed and an older app
+// is connected, once for all of them. The lock is held until everything is queued, so what was recorded is what the
+// apps got last.
 func (h *Hub) broadcastSessions(m *Machine, list []proto.Session) {
 	enc := encodeSessions(h.shown(m.cfg.ID, list))
-	full := sessionsMessage(m.cfg.ID, enc)
 	h.sessionsMu.Lock()
 	defer h.sessionsMu.Unlock()
-	changed := !bytes.Equal(h.sessionsSent[m.cfg.ID], full)
+	prev, sent := h.sessionsSent[m.cfg.ID]
+	changed := !sent || !sameSessions(prev, enc)
 	if changed {
 		if h.sessionsSent == nil {
-			h.sessionsSent = map[string][]byte{}
+			h.sessionsSent = map[string][]sentSession{}
 		}
-		h.sessionsSent[m.cfg.ID] = full
+		h.sessionsSent[m.cfg.ID] = enc
 		h.live.changed() // what the Fleet activity is made of
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	var full []byte
 	for c := range h.clients {
 		var b []byte
 		if c.delta {
 			b, c.have[m.cfg.ID] = sessionsDelta(m.cfg.ID, enc, c.have[m.cfg.ID])
 		} else if changed {
+			if full == nil {
+				full = sessionsMessage(m.cfg.ID, enc)
+			}
 			b = full
 		}
 		if b != nil {

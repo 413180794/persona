@@ -135,6 +135,95 @@ func TestSessionsDelta(t *testing.T) {
 	}
 }
 
+// TestSessionsFullListOnlyForOlderApps: with only delta apps the hub still tracks the list (and the Fleet activity
+// still hears of changes), so an older app that connects later gets the next changed list whole; a list that did not
+// change goes to no older app and is not news for the Fleet activity.
+func TestSessionsFullListOnlyForOlderApps(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	h.machines, h.byID["box"] = append(h.machines, m), m
+	s1 := proto.Session{SessionID: "s1", Status: proto.StatusWorking, LastText: "reading"}
+	s2 := proto.Session{SessionID: "s2", Status: proto.StatusIdle}
+	m.sessions = []proto.Session{s1, s2}
+	app := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull, delta: true, have: map[string]map[string][]byte{}}
+	h.clients[app] = struct{}{}
+	h.snapshotSessions(app, m)
+	drainPushed(app)
+	broadcast := func() { h.broadcastSessions(m, h.decorated(m)) }
+	fired := func() bool {
+		select {
+		case <-h.live.signal:
+			return true
+		default:
+			return false
+		}
+	}
+	fired()
+
+	// Only delta apps: the change goes out as a delta, and the Fleet activity hears of it.
+	s1.LastText = "writing"
+	m.sessions = []proto.Session{s1, s2}
+	broadcast()
+	if d := drainPushed(app); len(d) != 1 || d[0].Type != "sessions_delta" {
+		t.Fatalf("delta app got %+v", d)
+	}
+	if !fired() {
+		t.Fatal("changed list did not signal the live activity")
+	}
+
+	// An older app connects; the same list again: nothing for anyone, no signal.
+	old := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull}
+	h.clients[old] = struct{}{}
+	broadcast()
+	if o, d := drainPushed(old), drainPushed(app); len(o)+len(d) != 0 {
+		t.Fatalf("unchanged list sent: %+v %+v", o, d)
+	}
+	if fired() {
+		t.Fatal("unchanged list signalled the live activity")
+	}
+
+	// Reordered is a change for an older app (it reads the order), though not for a delta app.
+	m.sessions = []proto.Session{s2, s1}
+	broadcast()
+	if o := drainPushed(old); len(o) != 1 || o[0].Type != "sessions" || len(o[0].Sessions) != 2 || o[0].Sessions[0].SessionID != "s2" {
+		t.Fatalf("older app got %+v", o)
+	}
+	if d := drainPushed(app); len(d) != 0 {
+		t.Fatalf("delta app got %+v", d)
+	}
+	if !fired() {
+		t.Fatal("reordered list did not signal the live activity")
+	}
+
+	// A session changes: the older app gets the whole list, the delta app the one session.
+	s2.Status = proto.StatusWorking
+	m.sessions = []proto.Session{s2, s1}
+	broadcast()
+	if o := drainPushed(old); len(o) != 1 || o[0].Type != "sessions" || len(o[0].Sessions) != 2 || o[0].Sessions[0].Status != proto.StatusWorking {
+		t.Fatalf("older app got %+v", o)
+	}
+	if d := drainPushed(app); len(d) != 1 || len(d[0].Upsert) != 1 || d[0].Upsert[0].SessionID != "s2" {
+		t.Fatalf("delta app got %+v", d)
+	}
+}
+
+// TestSessionsFirstEmptyList: a machine's first list goes to older apps even when it is empty.
+func TestSessionsFirstEmptyList(t *testing.T) {
+	h := newTestHub(t)
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	h.machines, h.byID["box"] = append(h.machines, m), m
+	old := &client{out: make(chan []byte, 64), subs: map[[2]string]bool{}, role: roleFull}
+	h.clients[old] = struct{}{}
+	h.broadcastSessions(m, nil)
+	if o := drainPushed(old); len(o) != 1 || o[0].Type != "sessions" || len(o[0].Sessions) != 0 {
+		t.Fatalf("older app got %+v", o)
+	}
+	h.broadcastSessions(m, nil)
+	if o := drainPushed(old); len(o) != 0 {
+		t.Fatalf("empty list sent twice: %+v", o)
+	}
+}
+
 // TestSessionsDeltaOverTheSocket: an app that asks (?features=sessions_delta) gets the snapshot without history and
 // then deltas; one that does not gets whole lists, history included (an older app on a newer hub).
 func TestSessionsDeltaOverTheSocket(t *testing.T) {
@@ -232,5 +321,38 @@ func TestSessionsMessage(t *testing.T) {
 	}
 	if per := int(total / runs); per > size+size/4 {
 		t.Fatalf("a %d-byte list message allocates %d bytes", size, per)
+	}
+}
+
+// Each encoded session is what json.Marshal gives for it, read from one shared buffer: HTML and non-ASCII text
+// escaped the same way, Codex history marked, and a raw never running into its neighbour.
+func TestEncodeSessionsMatchesMarshal(t *testing.T) {
+	list := []proto.Session{
+		{SessionID: "s1", Title: "<b>&</b> 标题 \u2028", LastText: "<script>alert(1)</script> 😀 \"q\" \\", Cwd: "/tmp/a&b"},
+		{SessionID: "s2", Status: proto.StatusWorking, Queued: []string{"next", "<i>"}, UpdatedAt: time.Unix(1700000000, 5)},
+		{SessionID: "s3", SourceKind: "codex_history", Title: "history", LastText: strings.Repeat("y", 5<<10)},
+		{SessionID: "s4"},
+	}
+	got := encodeSessions(list)
+	if len(got) != len(list) {
+		t.Fatalf("encoded %d of %d sessions", len(got), len(list))
+	}
+	for i, s := range got {
+		want, err := json.Marshal(list[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(s.raw) != string(want) {
+			t.Fatalf("session %d:\n got %s\nwant %s", i, s.raw, want)
+		}
+		if s.id != list[i].SessionID || s.history != (list[i].SourceKind == "codex_history") {
+			t.Fatalf("session %d: id %q history %v", i, s.id, s.history)
+		}
+		if cap(s.raw) != len(s.raw) {
+			t.Fatalf("session %d: raw has room to grow into the next one (len %d cap %d)", i, len(s.raw), cap(s.raw))
+		}
+	}
+	if len(encodeSessions(nil)) != 0 {
+		t.Fatal("nil list encoded to sessions")
 	}
 }

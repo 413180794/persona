@@ -64,9 +64,9 @@ type Hub struct {
 	mutesMu sync.Mutex
 	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
 
-	// sessionsSent: each machine's last session list sent to the apps, the whole message (broadcastSessions).
+	// sessionsSent: each machine's last session list sent to the apps, as encoded (broadcastSessions).
 	sessionsMu   sync.Mutex
-	sessionsSent map[string][]byte
+	sessionsSent map[string][]sentSession
 
 	mu      sync.Mutex
 	clients map[*client]struct{}

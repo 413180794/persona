@@ -365,8 +365,8 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
-		m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "screen", "machine_id": m.cfg.ID, "session_id": p.SessionID,
-			"text": p.Text, "status": p.Status, "ts": time.Now().UTC()})
+		m.hub.toSubscribers(m.cfg.ID, p.SessionID, screenPush{Type: "screen", MachineID: m.cfg.ID, SessionID: p.SessionID,
+			Text: p.Text, Status: p.Status, TS: time.Now().UTC()})
 	case "session.live": // a working Claude's status line as it is now: not kept, not replayed (docs/protocol.md「实时状态」)
 		var p struct {
 			SessionID string             `json:"session_id"`
@@ -374,7 +374,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil && p.SessionID != "" {
 			m.hub.toSubscribersWith(m.cfg.ID, p.SessionID, proto.FeatureSessionLive,
-				map[string]any{"type": "live", "machine_id": m.cfg.ID, "session_id": p.SessionID, "live": p.Live})
+				livePush{Type: "live", MachineID: m.cfg.ID, SessionID: p.SessionID, Live: p.Live})
 		}
 	case "terminal.frame":
 		m.hub.onTerminalFrame(m.cfg.ID, params)
@@ -406,7 +406,7 @@ func (m *Machine) onEvent(event string, params json.RawMessage) {
 		}
 		if json.Unmarshal(params, &p) == nil {
 			m.hub.rememberLiveText(m.cfg.ID, p.SessionID, p.Text)
-			m.hub.toSubscribers(m.cfg.ID, p.SessionID, map[string]any{"type": "delta", "machine_id": m.cfg.ID, "session_id": p.SessionID, "text": p.Text})
+			m.hub.toSubscribers(m.cfg.ID, p.SessionID, deltaPush{Type: "delta", MachineID: m.cfg.ID, SessionID: p.SessionID, Text: p.Text})
 			m.hub.followedDelta(m.cfg.ID, p.SessionID, p.Text)
 		}
 	case "codex.inventory":

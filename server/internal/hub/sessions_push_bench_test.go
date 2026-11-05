@@ -11,7 +11,13 @@ import (
 
 // BenchmarkBroadcastSessions is one session of a 150-session machine changing, pushed to two older apps and three
 // delta apps (docs/server.md「推送给 App 的量」): each change encodes the whole list again.
-func BenchmarkBroadcastSessions(b *testing.B) {
+func BenchmarkBroadcastSessions(b *testing.B) { benchmarkBroadcastSessions(b, 2) }
+
+// BenchmarkBroadcastSessionsDeltaOnly is the same with five delta apps and no older one: no whole-list message.
+func BenchmarkBroadcastSessionsDeltaOnly(b *testing.B) { benchmarkBroadcastSessions(b, 0) }
+
+// benchmarkBroadcastSessions: five apps, the first older of them older apps (whole lists), the rest delta apps.
+func benchmarkBroadcastSessions(b *testing.B, older int) {
 	h := newTestHub(&testing.T{})
 	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
 	h.machines, h.byID["box"] = append(h.machines, m), m
@@ -21,7 +27,7 @@ func BenchmarkBroadcastSessions(b *testing.B) {
 	}
 	for i := range 5 {
 		c := &client{out: make(chan []byte, 4), subs: map[[2]string]bool{}, role: roleFull}
-		if i >= 2 {
+		if i >= older {
 			c.delta, c.have = true, map[string]map[string][]byte{}
 		}
 		h.clients[c] = struct{}{}
