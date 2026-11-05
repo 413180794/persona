@@ -29,8 +29,8 @@ func TestQuietTaskConversation(t *testing.T) {
 	}
 }
 
-// The hub leaves out a quiet task's normal finish on Claude Code, but not once that conversation is the main one, nor
-// a headless Codex's (its failures are not on the session yet), nor an error.
+// The hub leaves out a quiet task's normal finish on Claude Code or a headless Codex, but not once that conversation is
+// the main one, nor a runtime's (its failures are not on the session), nor an error.
 func TestQuietTaskFinish(t *testing.T) {
 	h := newTestHub(t)
 	a := &h.assistant
@@ -49,11 +49,19 @@ func TestQuietTaskFinish(t *testing.T) {
 	}
 	codex := done
 	codex.Agent = "codex"
+	if !h.quietTaskFinish(codex) {
+		t.Fatal("a quiet task's normal finish on a headless Codex is not pushed (#2571 reports its failures)")
+	}
+	codexFailed := codex
+	codexFailed.TurnError, codexFailed.TurnErrorKind = "unexpected status 503 Service Unavailable", proto.TurnErrorTransient
+	runtime := done
+	runtime.Agent = "dsh"
 	cut := done
 	cut.LastText = "API Error: 529 overloaded"
 	other := done
 	other.SessionID = "main-1"
-	for name, s := range map[string]proto.Session{"headless codex": codex, "cut off": cut, "another conversation": other} {
+	for name, s := range map[string]proto.Session{"headless codex, failed turn": codexFailed, "a runtime": runtime, "cut off": cut,
+		"another conversation": other} {
 		if h.quietTaskFinish(s) {
 			t.Errorf("%s is pushed as ever", name)
 		}

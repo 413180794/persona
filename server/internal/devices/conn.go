@@ -473,9 +473,6 @@ func (m *Machine) markOffline(err error) {
 	m.d.changed()
 }
 
-// setOffline is detach for callers outside the run loop (tests that end a connection by hand).
-func (m *Machine) setOffline(err error) { m.detach(err, false) }
-
 func (m *Machine) activePath() *nodePath {
 	m.mu.Lock()
 	defer m.mu.Unlock()

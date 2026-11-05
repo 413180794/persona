@@ -32,14 +32,17 @@ func TestFinishedTextAndNormalFinish(t *testing.T) {
 	}
 }
 
-// Only a Claude Code conversation that is not the main one may go unpushed: a headless Codex's or a runtime's failed
-// turn is not on the session yet, and the main conversation's turns are the user's.
+// A Claude Code or headless Codex conversation that is not the main one may go unpushed: a runtime's failed turn is
+// not on the session, and the main conversation's turns are the user's. A Codex turn the model service cut off
+// carries TurnError (#2571) and is pushed as ever.
 func TestQuietTaskFinish(t *testing.T) {
 	ok := proto.Session{SessionID: "own-q", LastText: "没有新邮件。"}
 	codex, runtime := ok, ok
 	codex.Agent, runtime.Agent = "codex", "dsh"
 	failed := ok
 	failed.TurnError = "unexpected status 503"
+	codexFailed := codex
+	codexFailed.TurnError, codexFailed.TurnErrorKind = "unexpected status 503 Service Unavailable", proto.TurnErrorTransient
 	for _, c := range []struct {
 		name string
 		s    proto.Session
@@ -48,7 +51,9 @@ func TestQuietTaskFinish(t *testing.T) {
 	}{
 		{"claude, normal finish", ok, "main-1", true},
 		{"no main conversation yet", ok, "", true},
-		{"headless codex", codex, "main-1", false},
+		{"headless codex, normal finish", codex, "main-1", true},
+		{"headless codex, failed turn", codexFailed, "main-1", false},
+		{"headless codex, made the main conversation", codex, "own-q", false},
 		{"a runtime", runtime, "main-1", false},
 		{"made the main conversation", ok, "own-q", false},
 		{"model error", failed, "main-1", false},

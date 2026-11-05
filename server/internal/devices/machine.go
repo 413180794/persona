@@ -405,17 +405,6 @@ func (m *Machine) reachable() bool {
 	}
 }
 
-// notify sends the node a one-way event; events arrive in the order sent.
-func (m *Machine) notify(event string, params any) error {
-	m.mu.Lock()
-	p := m.peer
-	m.mu.Unlock()
-	if p == nil {
-		return fmt.Errorf("%s: %w", m.cfg.Name, errOffline)
-	}
-	return p.Notify(event, params)
-}
-
 // noteWatch keeps which sessions the hub watches (its apps' subscriptions): a new connection watches them again.
 func (m *Machine) noteWatch(method string, params json.RawMessage) {
 	if method != "session.watch" && method != "session.unwatch" {

@@ -90,7 +90,8 @@ func (h *Hub) quietTaskConversation(session string) bool {
 }
 
 // quietTaskFinish: s's finished turn is not pushed: a quiet task's own conversation (quietTaskConversation) that may
-// go unpushed now (assistantwire.QuietTaskFinish: Claude Code, not the main conversation, a normal finish).
+// go unpushed now (assistantwire.QuietTaskFinish: Claude Code or a headless Codex, not the main conversation, a normal
+// finish).
 func (h *Hub) quietTaskFinish(s proto.Session) bool {
 	a := &h.assistant
 	a.mu.RLock()

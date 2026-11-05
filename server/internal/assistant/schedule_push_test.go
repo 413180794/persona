@@ -219,8 +219,9 @@ func TestQuietTaskRunsInItsOwnConversation(t *testing.T) {
 	}
 }
 
-// The channels' mirror leaves out a quiet task's own conversation when its turn ended normally, like the hub's
-// finished push; an error, a cut-off, another conversation or a task that pushes every run is mirrored as ever.
+// The channels' mirror leaves out a quiet task's own conversation when its turn ended normally on Claude Code or a
+// headless Codex, like the hub's finished push; an error (a Codex turn the model service cut off too), a cut-off, a
+// runtime's, another conversation or a task that pushes every run is mirrored as ever.
 func TestQuietTaskTurn(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
@@ -238,7 +239,10 @@ func TestQuietTaskTurn(t *testing.T) {
 		{"cut off", proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "API Error: 529 overloaded"}, false},
 		{"a task that pushes every run", proto.Session{SessionID: "own-e", Status: proto.StatusDone, LastText: "早报好了。"}, false},
 		{"another conversation", proto.Session{SessionID: "main-1", Status: proto.StatusDone, LastText: "好的。"}, false},
-		{"headless codex", proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "没有新邮件。", Agent: "codex"}, false},
+		{"headless codex", proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "没有新邮件。", Agent: "codex"}, true},
+		{"headless codex, failed turn", proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "我先查一下收件箱。", Agent: "codex",
+			TurnError: "unexpected status 503 Service Unavailable", TurnErrorKind: proto.TurnErrorTransient}, false},
+		{"a runtime", proto.Session{SessionID: "own-q", Status: proto.StatusDone, LastText: "没有新邮件。", Agent: "dsh"}, false},
 	} {
 		n.setSessions("server", c.s)
 		if got := h.quietTaskTurn(ctx, "server", c.s.SessionID); got != c.want {

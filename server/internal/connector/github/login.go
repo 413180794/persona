@@ -87,13 +87,6 @@ func (c *Connector) saveDevice(ctx context.Context, d deviceLogin) error {
 	return s.Save(ctx, raw)
 }
 
-// viaDevice says whether the token in use is the device flow's.
-func (c *Connector) viaDevice() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.dev.Token != ""
-}
-
 func (p devicePending) prompt(err string) connector.Prompt {
 	return connector.Prompt{Step: "device", Kind: connector.PromptDeviceCode, URL: p.uri, UserCode: p.userCode, Interval: p.interval, Error: err,
 		Hint: "在 GitHub 的验证页输入这个验证码并授权（授权页上显示的是「GitHub CLI」）；授权后这里会自动继续。"}

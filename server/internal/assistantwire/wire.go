@@ -248,11 +248,18 @@ func NormalFinish(s proto.Session) bool {
 }
 
 // QuietTaskFinish: s, the own conversation of a task that pushes only what its runs send, may go unpushed now. Only
-// when it runs on Claude Code (Agent ""), whose model errors land in its last words: a headless Codex's failed turn
-// is not reported on the session yet, nor is a runtime's, so theirs are pushed as ever. Never the main conversation
-// (main: its session id), which the user may have made of the task's. And only a normal finish (NormalFinish).
+// when it runs on an agent whose failed turn is told on the session (reportsFailures), so that NormalFinish can tell
+// "nothing new" from an error. Never the main conversation (main: its session id), which the user may have made of
+// the task's. And only a normal finish (NormalFinish).
 func QuietTaskFinish(s proto.Session, main string) bool {
-	return s.Agent == "" && (main == "" || s.SessionID != main) && NormalFinish(s)
+	return reportsFailures(s) && (main == "" || s.SessionID != main) && NormalFinish(s)
+}
+
+// reportsFailures: s's agent tells a turn that failed on the model service. Claude Code (Agent "") writes the error
+// in its last words (CutOff); a headless Codex's node reports the failed turn/completed as TurnError (#2571). A
+// runtime's (Agent: its id, DSH…) is not known to, so its quiet task is pushed as ever.
+func reportsFailures(s proto.Session) bool {
+	return s.Agent == "" || s.Agent == "codex"
 }
 
 // SessionView is what the assistant reports about one of its conversations, put on the session lists the apps get.

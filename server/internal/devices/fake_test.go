@@ -188,9 +188,6 @@ func newTestDevices(t *testing.T) *Devices {
 // host is the fake hub of d.
 func (d *Devices) host() *fakeHost { return d.opts.Hub.(*fakeHost) }
 
-// store is d's settings in memory.
-func (d *Devices) store() *memStore { return d.opts.Store.(*memStore) }
-
 // addEntry makes m one of d's hub.json entries.
 func (d *Devices) addEntry(m *Machine) {
 	d.mu.Lock()
