@@ -249,7 +249,7 @@ nonisolated enum TodosLogic {
 
     private static func sessionRank(_ s: Session, isMuted: (Session) -> Bool) -> Int {
         let state = s.state
-        let waiting = (state == .idle || state == .unknown) && (s.loop != nil || !(s.background ?? []).isEmpty || (s.subagents ?? []).contains(where: \.running))
+        let waiting = (state == .idle || state == .unknown) && (s.loop != nil || !(s.background ?? []).isEmpty || (s.subagents ?? []).contains(where: \.running) || !s.runningWorkflows.isEmpty)
         let muted = isMuted(s)
         if state == .needsYou { return 0 }
         if muted && (state == .working || state == .unread || waiting) { return 4 }

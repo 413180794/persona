@@ -35,7 +35,7 @@ struct TabGroupRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(["标签页 \(name)", count, lead.state.label, folded ? "已折叠" : "已展开"].joined(separator: "，"))
+        .accessibilityLabel(["标签页 \(name)", count, lead.stateLabel, folded ? "已折叠" : "已展开"].joined(separator: "，"))
         .accessibilityHint(folded ? "展开这个标签页的 Agent" : "收起")
         .accessibilityAddTraits(.isButton)
     }

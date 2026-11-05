@@ -69,7 +69,7 @@ extension Session {
     /// 待唤醒 in the list.
     var isWaiting: Bool {
         isQuiet && (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running)
-            || work?.hubWaits == true)
+            || work?.hubWaits == true || !runningWorkflows.isEmpty)
     }
 }
 
@@ -2031,6 +2031,7 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
             x.updatedAt = nil
             x.subagents = (s.subagents ?? []).contains(where: \.running) ? [] : nil
             x.background = (s.background ?? []).isEmpty ? nil : []
+            x.workflows = s.runningWorkflows.isEmpty ? nil : []
             return x
         }, byTime: byTime)
     }
@@ -2439,7 +2440,8 @@ nonisolated struct SlotRow: View, Equatable {
                 TaskRow(TaskItem(id: session.key.sessionID, title: session.displayTitle,
                                  subtitle: session.listPreview, footnote: meta,
                                  status: .pending(step: 0)),
-                        shape: taskShape(), accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
+                        shape: taskShape(), isOpen: session.leadWorkflow != nil,
+                        accessory: surface == .none ? .none : .disclosure, titleLines: 2, subtitleLines: 1) {
                     // The badge's column is 24 pt: the source tag goes before the title (#3004), not beside the badge.
                     if dot { AgentStateBadge(state: session.state).padding(.leading, indented ? Theme.Space.l : 0) }
                 } trailing: {
@@ -2455,7 +2457,7 @@ nonisolated struct SlotRow: View, Equatable {
                         }
                     }
                 } detail: {
-                    EmptyView()
+                    if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
                 }
                 .titleLeading(rowSource.map { source in { SourceLabel(source: source, link: session.externalLink) } })
             } else {
@@ -2478,6 +2480,8 @@ nonisolated struct SlotRow: View, Equatable {
                         if let last = session.listPreview {
                             Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
                         }
+                        // A workflow running in the background (#2935): its name, phase and progress.
+                        if !session.runningWorkflows.isEmpty { WorkflowLine(runs: session.runningWorkflows) }
                         HStack(spacing: Theme.Space.xs) {
                             metaText.lineLimit(1)
                             if let todo = session.todo {

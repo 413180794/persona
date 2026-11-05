@@ -293,6 +293,14 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   按 `parent_id` 缩进，父的不在列表里的放顶层；同一层运行中的在前，再按开始时间新的在前）：每行状态点、描述、运行中 / 已结束、类型（分叉的标「分叉」）、多久前开始，点一行只读看它。
   截图用 `MOCK_CHAT_LINES=1` 的假 hub，`-openSession macbook/a1f3c2d4-0000-4000-8000-0000000c1e01`。
   开发列表里有子 Agent 在跑的 Agent 带「👥 子 Agent N」，不算空闲。会话 id 为「<主会话>@<agent id>」，历史 / 实时 / 分页和普通会话完全一样。
+- 后台 workflow（#2935，字段见 `docs/protocol.md` 的 `workflows`）：Claude 用 Workflow 工具在后台跑多 Agent 脚本时，这一轮结束、等完成通知，
+  hub 把它算成工作中（`state` 照旧决定颜色、计数、手表、待办状态）。App 里：状态字写「工作中（后台）」（`Session.stateLabel`）；
+  Agents 列表的行和待办卡片在最后一句下面多一行 `WorkflowLine`：「后台 workflow「parity-audit」· Verify 2/2 · 169/185 · 14 分钟」（几个就加「等 N 个」）；
+  对话页头部（展开的页头、侧栏页头、Mac 的上方一栏）在子 Agent 条上方是「后台 workflow」区块（`WorkflowSection`），在跑的和一小时内结束的各一张卡片：
+  名字、状态 Chip（在跑 ai 色、完成 positive、失败 / 已停止 danger、没动静了 caution）、耗时、阶段横排（当前高亮，前面打勾）、「169/185 个 agent 完成 · 16 个在跑」、
+  失败 / 停止的 error，「展开 agent」列出 agent（在跑的在前），点一行按 `session_id` 像子 Agent 一样只读看。手表的列表行和会话页是一个小 Chip「workflow 169/185」。
+  「后台 N」不重复数 `background` 里 kind 为 `workflow` 的那条（`Session.backgroundCount`）。实时活动不变（state 已是 working）。
+  解析都是宽松的：旧 hub 没有 `workflows` 时和原来一样，未知 status 当完成，单个坏条目不会丢会话（`WorkflowTests`）。截图：`MOCK_WORKFLOW=1` 的假 hub 跑 `PersonaUITests/WorkflowUITests`。
 - 后台任务：Claude 用 `run_in_background` 跑的命令 / 子代理还没回报时，输入框上方显示「N 个后台任务」（轮次结束后也在），展开看描述、命令和已运行时间，
   点一条打开它的输出文件。
 - 底部 tab 栏常驻，不随滚动收起。

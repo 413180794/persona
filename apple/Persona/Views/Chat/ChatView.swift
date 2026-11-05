@@ -265,6 +265,21 @@ struct ChatView: View {
         }
     }
 
+    /// A workflow runs in the background (#2935), or one just ended: its section shows (only in the chat pane).
+    private var hasWorkflows: Bool { pane == .chat && !(session?.shownWorkflows().isEmpty ?? true) }
+
+    /// 「后台 workflow」 above the subagents: a card per running workflow, its phases, progress and agents; an agent opens
+    /// here like a subagent (its `session_id` reads as one).
+    @ViewBuilder private var workflowBar: some View {
+        if hasWorkflows, let session {
+            WorkflowSection(runs: session.shownWorkflows()) { a in
+                guard let sid = a.sessionID else { return }
+                view(Subagent(id: a.id, sessionID: sid, type: "workflow", description: a.label, running: a.running,
+                              background: true, startedAt: a.startedAt, updatedAt: a.updatedAt, lastText: a.lastText))
+            }
+        }
+    }
+
     #if os(macOS)
     /// The Mac's chat header, in the title bar's row of the chat's column as a detail page's title (`MacDetailBack`,
     /// #2113): ‹ when there is somewhere to go back to (out of 文件 / Git, off a pushed page), the title over its state
@@ -341,7 +356,7 @@ struct ChatView: View {
         let title = s.title.isEmpty ? s.agentLabel : s.title
         let name = role.map { "\($0.name)\($0.launcher ? "（发起者）" : "") · \(title)" } ?? title
         Button { if s.key != key { switchTo(s.key) } } label: {
-            if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.state.label)") }
+            if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.stateLabel)") }
         }
     }
 
@@ -398,9 +413,10 @@ struct ChatView: View {
     @ViewBuilder private var macChrome: some View {
         let ports = session?.ports ?? []
         let all = session?.subagents ?? []
-        if !ports.isEmpty || (pane == .chat && !all.isEmpty) || session?.goal != nil {
+        if !ports.isEmpty || (pane == .chat && !all.isEmpty) || session?.goal != nil || hasWorkflows {
             VStack(spacing: Theme.Space.s) {
                 if let goal = session?.goal { GoalBar(goal: goal) }
+                workflowBar
                 if !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
                 if pane == .chat, !all.isEmpty {
                     AgentStrip(agents: all.filter { $0.running || $0.id == viewing?.id }, all: all, viewing: viewing?.id) { a in view(a) }
@@ -2375,6 +2391,8 @@ struct ChatView: View {
 
     /// "工作中 22 分" while a turn runs (minutes: the work line in the chat has the seconds), else the state's name.
     private func stateWords(_ s: Session, now: Date) -> String {
+        // Its turn ended and a workflow / background work keeps it going (#2935): 「工作中（后台）」, not the turn's time.
+        if s.isBackgroundWorking { return s.stateLabel }
         guard s.state == .working, status.isActive, case .turn(let t)? = store.blocks.last, let start = t.startedAt else { return s.state.label }
         let m = Int(now.timeIntervalSince(start)) / 60
         if m < 1 { return s.state.label }
@@ -2426,6 +2444,11 @@ struct ChatView: View {
                 // The goal it works toward (docs/agent-goal.md): a tap shows all of it.
                 if let goal = session?.goal {
                     GoalBar(goal: goal)
+                        .padding(.horizontal, Theme.Space.l)
+                        .padding(.bottom, Theme.Space.s)
+                }
+                if hasWorkflows {
+                    workflowBar
                         .padding(.horizontal, Theme.Space.l)
                         .padding(.bottom, Theme.Space.s)
                 }
@@ -2535,6 +2558,7 @@ struct ChatView: View {
             }
         }
         if let goal = session?.goal { GoalBar(goal: goal) }
+        workflowBar
         if let ports = session?.ports, !ports.isEmpty { SessionPortChips(machine: key.machineRef, ports: ports) }
         let all = session?.subagents ?? []
         let agents = all.filter { $0.running || $0.id == viewing?.id }
@@ -3011,7 +3035,7 @@ struct ChatView: View {
         }
         let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
-        return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.state.label].compactMap { $0 }.joined(separator: " · ")
+        return [s.sourceSubtitle, machine, place.isEmpty ? nil : place, s.hasSource ? nil : s.agentLabel, s.stateLabel].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder private func rowView(_ row: ChatRow, isLatest: Bool, live: Bool) -> some View {

@@ -308,6 +308,8 @@ struct WatchRootView: View {
                                              ? (model.machine(s.machineRef)?.title ?? s.machineID)
                                              : [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › "))
                                             .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                        // A workflow running in the background (#2935): working, not done.
+                                        if let run = s.leadWorkflow { WatchWorkflowChip(run: run) }
                                     }
                                 }
                             }
@@ -537,8 +539,9 @@ struct WatchSessionView: View {
             VStack(alignment: .leading, spacing: Theme.Watch.blockSpacing) {
                 HStack(spacing: Theme.Space.sm) {
                     Circle().fill(session.state.color).frame(width: 7, height: 7)
-                    Text(session.state.label).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
+                    Text(session.stateLabel).font(.caption2.weight(.semibold)).foregroundStyle(session.state.tone.text)
                 }
+                if let run = session.leadWorkflow { WatchWorkflowChip(run: run) }
                 ForEach(items.suffix(6)) { it in
                     if let n = Injected.of(it) {
                         // Persona's message for the model (a task's notice, a scheduled run…): its line, centered, never
@@ -768,4 +771,24 @@ struct WatchInboxItemView: View {
 private extension Error {
     /// The watch has no connection title (the phone's 等待网络 / 连接中…): no network is still worth a line here.
     var watchShown: String? { isOffline ? localizedDescription : shown }
+}
+
+/// A workflow its agent runs in the background (#2935), on the watch: a small chip 「workflow 169/185」, not expanded.
+struct WatchWorkflowChip: View {
+    var run: WorkflowRun
+
+    var body: some View {
+        let text = "workflow" + (run.progress.map { " \($0.done)/\($0.started)" } ?? "")
+        HStack(spacing: Theme.Space.xs) {
+            Image(systemName: Theme.Icon.workflow)
+            Text(text).lineLimit(1)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(Theme.ai)
+        .padding(.horizontal, Theme.Space.s)
+        .padding(.vertical, Theme.Space.xxs)
+        .background(Theme.ai.opacity(0.2), in: .capsule)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("后台 " + text)
+    }
 }

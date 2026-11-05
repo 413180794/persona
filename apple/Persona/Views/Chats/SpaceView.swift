@@ -101,7 +101,7 @@ struct SiblingTabs: View {
                 plainTab(s, label: label, launcher: launcher, on: on, tone: tone, quiet: quiet)
             }
         }
-        .accessibilityLabel("\(label)\(launcher ? "（发起者）" : "")，\(s.state.label)")
+        .accessibilityLabel("\(label)\(launcher ? "（发起者）" : "")，\(s.stateLabel)")
         .accessibilityAddTraits(on ? .isSelected : [])
         .contextMenu {
             if s.canTerminal {
@@ -259,7 +259,7 @@ private struct SiblingList: View {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(label).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 // The state in its color, then the model the tab runs on (2026-10-31: which tab is which model).
-                                (Text(s.state.label).foregroundStyle(s.state.tone.text)
+                                (Text(s.stateLabel).foregroundStyle(s.state.tone.text)
                                     + Text(role?.launcher == true ? " · 发起者" : "").foregroundStyle(.secondary)
                                     + Text(Fmt.model(s.model).map { " · " + $0 } ?? "").foregroundStyle(.secondary))
                                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
@@ -275,7 +275,7 @@ private struct SiblingList: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(label)\(role?.launcher == true ? "（发起者）" : "")，\(s.state.label)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
+                    .accessibilityLabel("\(label)\(role?.launcher == true ? "（发起者）" : "")，\(s.stateLabel)" + (Fmt.model(s.model).map { "，\($0)" } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -443,7 +443,7 @@ struct SlotCard: View {
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
             // The 发起者 says so beside its state: the header's chips are cut first in a narrow card.
-            Text(session.state.label + (pane?.launcher == true ? " · 发起者" : "") + (pending > 0 ? " · \(pending) 件待处理" : ""))
+            Text(session.stateLabel + (pane?.launcher == true ? " · 发起者" : "") + (pending > 0 ? " · \(pending) 件待处理" : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
             if let t = session.listPreview {

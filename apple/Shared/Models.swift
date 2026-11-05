@@ -572,6 +572,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var goal: GoalInfo?
     /// Agents it launched (the Agent tool); each reads like a session ("<id>@<agent id>").
     var subagents: [Subagent]?
+    /// Multi-agent workflows it runs in the background (Claude Code's Workflow tool, `Workflow.swift`); nil from older hubs.
+    var workflows: [WorkflowRun]? = nil
     /// The ports its processes listen on that answer HTTP (docs/ports.md): its dev servers, opened through the hub.
     var ports: [ListeningPort]? = nil
     var updatedAt: Date?
@@ -715,7 +717,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
              workspaceID = "workspace_id", agentName = "agent_name", startedByJarvis = "started_by_jarvis", assistant, archived, state,
              assistantSpace = "space",
              spaceKind = "space_kind", spaceID = "space_id", spaceName = "space_name", spaceIndex = "space_index", parentSpaceID = "parent_space_id",
-             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, ports,
+             slotID = "slot_id", slotName = "slot_name", slotIndex = "slot_index", paneIndex = "pane_index", seenAt = "seen_at", stateSince = "state_since", queued, background, loop, goal, subagents, workflows, ports,
              updatedAt = "updated_at", lastText = "last_text", activity, activityAt = "activity_at", pendingInteractions = "pending_interactions", rev, suggestion,
              starting, startError = "start_error", todo, quiet, hubGroup = "app_hub_group",
              attentionReason = "attention_reason", failureReason = "failure_reason", externalURL = "external_url", channels, compaction, work,
@@ -774,6 +776,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
         goal = try c.decodeIfPresent(GoalInfo.self, forKey: .goal)
         subagents = try c.decodeIfPresent([Subagent].self, forKey: .subagents)
+        // An odd workflow (or a shape this app does not know) never drops the session.
+        workflows = (try? c.decodeIfPresent([Lossy<WorkflowRun>].self, forKey: .workflows))?.compactMap(\.value)
         ports = try c.decodeIfPresent([ListeningPort].self, forKey: .ports)
         state = try c.decodeIfPresent(AgentState.self, forKey: .state) ?? AgentState(status: status)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
@@ -1027,17 +1031,23 @@ nonisolated struct BackgroundTask: Codable, Identifiable, Hashable, Sendable {
     var command: String?
     var outputFile: String?
     var startedAt: Date?
+    /// A Monitor stops by itself then; nil when it did not say.
+    var expiresAt: Date? = nil
+    /// A workflow's run: which of the session's `workflows` it is.
+    var runID: String? = nil
 
     var isAgent: Bool { kind == "agent" }
+    /// A multi-agent workflow (`kind: workflow`; its progress is in the session's `workflows`).
+    var isWorkflow: Bool { kind == "workflow" }
     /// What to call it in one line: the description Claude gave, else the command.
     var title: String {
         if let d = description, !d.isEmpty { return d }
-        return command?.components(separatedBy: "\n").first ?? (isAgent ? "子代理" : "后台命令")
+        return command?.components(separatedBy: "\n").first ?? (isWorkflow ? "Workflow" : isAgent ? "子代理" : "后台命令")
     }
 
     enum CodingKeys: String, CodingKey {
         case id, kind, description, command
-        case outputFile = "output_file", startedAt = "started_at"
+        case outputFile = "output_file", startedAt = "started_at", expiresAt = "expires_at", runID = "run_id"
     }
 }
 

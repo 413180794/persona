@@ -422,6 +422,10 @@ struct TaskNowLine: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            // A workflow its agent runs in the background (#2935): the task is not done while it does.
+            if state != .failed, let runs = lead?.runningWorkflows, !runs.isEmpty {
+                WorkflowLine(runs: runs)
+            }
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)

@@ -564,6 +564,34 @@ if os.environ.get("MOCK_STALE_DONE") == "1":
     for _s in SESSIONS:
         if _s["session_id"] == WIDGET: _s.update(status="done", state="idle")
 
+# MOCK_WORKFLOW=1 (#2935): the PR review agent ended its turn while a multi-agent workflow (Claude Code's Workflow tool) runs
+# in the background (shaped after a real run: parity-audit, phases Audit / Verify, 169 of 185 done, 16 running): the hub
+# counts it as working; the running one is also in `background` (kind workflow) for older apps. A killed one beside it.
+if os.environ.get("MOCK_WORKFLOW") == "1":
+    _wf_agents = [{"id": "a%03d" % i, "session_id": f"{REVIEW}@a%03d" % i, "label": label, "phase": phase, "running": running,
+                   "started_at": ago(minutes=m), "updated_at": ago(minutes=max(m - 2, 0)), **({"last_text": last} if last else {})}
+                  for i, (label, phase, running, m, last) in enumerate((
+                      ("audit:chat-rich", "Audit", False, 14, "对话页的富文本三端一致。"),
+                      ("audit:inbox", "Audit", False, 13, "收件箱少了批量已读：记一条。"),
+                      ("verify:inbox-bulk", "Verify", False, 6, "确认：Android 没有批量已读。"),
+                      ("verify:todo-dock", "Verify", True, 3, "在读 TaskViews.swift 的任务坞"),
+                      ("verify:watch", "Verify", True, 2, "在对比手表的 Agent 列表"),
+                      ("verify:island", "Verify", True, 1, None)))]
+    for _s in SESSIONS:
+        if _s["session_id"] == REVIEW:
+            _s.update(status="done", state="working", state_since=ago(minutes=14), seen_at=None,
+                      last_text="审计交给 workflow 在后台跑了，跑完我再汇总。",
+                      background=[{"id": "wdp5zxh37", "kind": "workflow", "description": "parity-audit", "run_id": "wf_c1d9daf8-cd2",
+                                   "started_at": ago(minutes=14)}],
+                      workflows=[
+                          {"task_id": "wdp5zxh37", "run_id": "wf_c1d9daf8-cd2", "name": "parity-audit", "summary": "各端功能对齐审计",
+                           "status": "running", "running": True, "phases": ["Audit", "Verify"], "phase": "Verify", "phase_index": 2,
+                           "agents_started": 185, "agents_done": 169, "agents_running": 16, "started_at": ago(minutes=14),
+                           "updated_at": ago(minutes=0), "agents": _wf_agents},
+                          {"task_id": "wk1lled00", "run_id": "wf_0a1b2c3d-4e5", "name": "docs-sweep", "status": "killed", "running": False,
+                           "phases": ["Scan", "Fix"], "phase": "Scan", "phase_index": 1, "agents_started": 4, "agents_done": 2, "agents_running": 0,
+                           "started_at": ago(minutes=50), "ended_at": ago(minutes=40), "error": "Error: Workflow aborted"}])
+
 # MOCK_WORKTREES=1 (#2108): the widget agent works in a working tree of weather's own, with an idle agent beside it; an
 # idle one in a second tree; and MacBook has a repository with nothing going on: every level of the Agents list's 按仓库.
 if os.environ.get("MOCK_WORKTREES") == "1":
