@@ -3117,6 +3117,8 @@ struct Composer: View, Equatable {
     @State private var selection: TextSelection?
     @State private var confirmClear = false
     @State private var clearing = false
+    /// The draft a "/" row was picked into: the list stays closed for it until the draft changes.
+    @State private var slashPicked: String?
     #if os(macOS)
     @State private var macWindow: Int?
     #endif
@@ -3157,6 +3159,26 @@ struct Composer: View, Equatable {
                 .disabled(status.isActive || clearing)
             }
         }
+    }
+
+    /// The "/" list for the draft (`SlashMenu`): an agent's chat in the composers without the prompt bar's own menu.
+    private var slashRows: [SlashMenuRow] {
+        guard !shellChat, model.session(key)?.assistant != true, usesShellComposer || !AppStyle.current.usesBeautifulUI,
+              text.hasPrefix("/"), text != slashPicked else { return [] }
+        return SlashMenuRow.matching(text, in: SlashMenuRow.rows(model: canPickModel, clear: canClear && !status.isActive && !clearing))
+    }
+
+    /// A "/" row picked: its text in the box to send or edit, as on the web; /clear asks first, as the + menu's.
+    private func pickSlash(_ row: SlashMenuRow) {
+        if row == .clear {
+            text = ""
+            confirmClear = true
+            return
+        }
+        text = row.text
+        slashPicked = row.text
+        selection = TextSelection(insertionPoint: row.text.endIndex)
+        focused = true
     }
 
     /// Effort and permission mode can change: Claude Code and the assistant (`SessionModeBar` shows them for the same).
@@ -3224,6 +3246,13 @@ struct Composer: View, Equatable {
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             if !images.isEmpty {
                 ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
+            }
+            // In the stack, not over it: the composer sits in its own hosting controller, which takes no touches
+            // outside its bounds (#518).
+            let slash = slashRows
+            if !slash.isEmpty {
+                SlashMenu(rows: slash, pick: pickSlash)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             if usesShellComposer {
                 // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
@@ -3316,6 +3345,11 @@ struct Composer: View, Equatable {
             let have = contexts.wrappedValue
             contexts.wrappedValue += ContextRef.samples.filter { s in !have.contains { $0.url == s.url } } // the task may run again
         }
+        .task { // `-openSlashMenu YES`: "/" in the box and its list open, for screenshots
+            guard UserDefaults.standard.bool(forKey: "openSlashMenu") else { return }
+            try? await Task.sleep(for: .seconds(4))
+            text = "/"
+        }
         .task { // `-focusComposer YES`: the keyboard up, for screenshots of the chat while typing
             if UserDefaults.standard.bool(forKey: "focusComposer") {
                 try? await Task.sleep(for: .seconds(6))
@@ -3324,6 +3358,7 @@ struct Composer: View, Equatable {
         }
         #endif
         .animation(Theme.Motion.standard, value: suggestion)
+        .animation(Theme.Motion.standard, value: slashRows.isEmpty)
         .onChange(of: focused) { _, f in onFocus?(f) }
         .onDisappear { if focused { onFocus?(false) } } // gone with the keyboard (a subagent opened, another pane)
         .modifier(CompactionTracking(key: key))
@@ -3539,6 +3574,93 @@ struct SlashCommand: Identifiable {
         SlashCommand(title: "提交并推送", symbol: "arrow.up.doc", word: "/提交", detail: "按规范提交并推送", text: "把当前改动按规范提交并推送"),
         SlashCommand(title: "汇报进展", symbol: Theme.Icon.list, word: "/汇报", detail: "汇报进展、还剩什么", text: "简要汇报一下目前的进展、还剩什么"),
     ]
+}
+
+/// A row of the list typing "/" opens over the composer, as the web's (`AGENT_COMMANDS` in web/src/views/chat/Composer.tsx):
+/// the word, what it does and, for a quick message, the words it puts in the box. The BeautifulUI prompt bar has its own.
+struct SlashMenuRow: Identifiable, Equatable {
+    var word: String
+    var detail: String
+    var text: String
+    var id: String { word }
+
+    /// What a quick message sends, shown at the row's end; a command is its own text.
+    var preview: String? { text.hasPrefix("/") ? nil : text }
+
+    static let model = SlashMenuRow(word: "/model", detail: "切换模型", text: "/model ")
+    static let clear = SlashMenuRow(word: "/clear", detail: "清空对话，从头开始", text: "/clear")
+
+    /// The web's order: its quick messages, then Claude Code's commands. A quick command added later goes after these.
+    private static let order = ["/继续", "/提交", "/汇报", "/compact", "/context"]
+
+    /// The rows an agent's chat offers: /model where the phone can pick one, /clear where the pane takes it.
+    static func rows(model: Bool, clear: Bool) -> [SlashMenuRow] {
+        let quick = SlashCommand.all.sorted { (order.firstIndex(of: $0.word) ?? order.count) < (order.firstIndex(of: $1.word) ?? order.count) }
+        var out = quick.map { SlashMenuRow(word: $0.word, detail: $0.detail, text: $0.text) }
+        if model { out.append(.model) }
+        if clear { out.append(.clear) }
+        return out
+    }
+
+    /// The rows for a draft: one word after a "/" at the start, matched at the start of the command or anywhere in its
+    /// description; nothing for any other draft.
+    static func matching(_ draft: String, in rows: [SlashMenuRow]) -> [SlashMenuRow] {
+        guard draft.hasPrefix("/"), !draft.contains(where: \.isWhitespace) else { return [] }
+        let query = draft.dropFirst().lowercased()
+        guard !query.isEmpty else { return rows }
+        return rows.filter { $0.word.dropFirst().lowercased().hasPrefix(query) || $0.detail.contains(query) }
+    }
+}
+
+/// The "/" list over the composer: a tap puts the row's text in the box (it does not send). Past five and a half rows it
+/// scrolls, the half row saying so: with the keyboard up a small phone has no room for all of them over the box.
+struct SlashMenu: View {
+    var rows: [SlashMenuRow]
+    var pick: (SlashMenuRow) -> Void
+    /// One row's height, as drawn (it follows the text size).
+    @State private var rowHeight: CGFloat = 0
+    private static let visibleRows: CGFloat = 5.5
+
+    var body: some View {
+        ScrollView {
+            list
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: rowHeight > 0 ? rowHeight * min(CGFloat(rows.count), Self.visibleRows) : nil)
+        .padding(.vertical, Theme.Space.xs)
+        .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("slash-menu")
+    }
+
+    private var list: some View {
+        VStack(spacing: 0) {
+            ForEach(rows) { row in
+                Button { pick(row) } label: {
+                    HStack(spacing: Theme.Space.s) {
+                        Text(row.word).font(Theme.Font.code).foregroundStyle(.primary).fixedSize()
+                        Text(row.detail).font(Theme.Font.secondary).foregroundStyle(.secondary).truncationMode(.tail)
+                        Spacer(minLength: Theme.Space.s)
+                        if let preview = row.preview {
+                            Text("「\(preview)」").font(Theme.Font.caption).foregroundStyle(.tertiary).truncationMode(.tail)
+                                .layoutPriority(-1)
+                        }
+                    }
+                    .lineLimit(1)
+                    .padding(.horizontal, Theme.Space.m)
+                    .scaledFrame(minHeight: Theme.Size.tapTarget)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(row.word)
+                .accessibilityHint(row.detail)
+                .accessibilityIdentifier("slash-menu.\(row.word)")
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+            if !rows.isEmpty { rowHeight = h / CGFloat(rows.count) }
+        }
+    }
 }
 
 extension UIImage {

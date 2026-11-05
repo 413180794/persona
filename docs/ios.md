@@ -156,6 +156,12 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
   `shellChat`（只有 `AssistantView` 设），Agents 页推进来的对话走的是另一套（`ComposerRow` / `PromptComposer`），所以两页长得不一样；
   现在条件是 `shellChat || shell != nil`（`usesShellComposer`）。Agent 页的 + 菜单比助手多一组「快捷指令」（含 /clear）；
   BeautifulUI 风格下 Agent 页因此没有了 Prompt Bar 的 @ 和 / 菜单（快捷指令在 + 里）。
+- **输入「/」弹出命令列表**（#2747，对齐网页的 `AGENT_COMMANDS`）：没有 Prompt Bar 的两个输入框（`ShellComposerBar`、`ComposerRow`，任何界面风格）里，
+  Agent 对话的草稿是「/」加一个词时，输入框上方出现 `SlashMenu`：/继续、/提交、/汇报、/compact、/context，能选模型时有 /model，能清空时有 /clear，
+  顺序和网页一样；每行是命令词、说明，快捷消息在右边显示要发的原文；继续打字按命令词的开头或说明里的字过滤。点一行把它的文字填进输入框，不发送
+  （/clear 弹原来的确认框）；填进去的就是一条命令（如 /context）时列表不再弹出，改了草稿才重新判断。超过五行半时列表内部滚动。
+  助手对话和网页一样没有这个列表。列表放在 `Composer` 的 VStack 里、不是浮层，因为输入框在自己的宿主控制器里，浮出边界的部分点不到（#518）。
+  + 菜单的「快捷指令」不变。截图用 `-openSlashMenu YES`；UI 测试 `PersonaUITests/SlashMenuTests`（两种布局都跑）。
 - 旧布局（`-ui.oldLayout YES`）和 Mac 不变：Agent 对话和助手新对话共用 `ComposerRow`（+、玻璃胶囊输入框、发送，Agent 工作中且没打字时是红色的中断，
   没有听写），输入框上方是权限 / 思考强度两个胶囊（`SessionModeBar`）。
 - **听写和中断按钮只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和
