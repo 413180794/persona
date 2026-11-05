@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -191,6 +192,7 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
     val pack = offered.firstOrNull { it.id == chosen }?.takeIf { packs?.onPhone(it) == true }
     val design = PersonaDesign.fromId(chosen)
     val palette = PersonaTheme.palette
+    val language = AppLanguages.shown(LocalContext.current).tag ?: "en"
     Column(modifier.fillMaxWidth()) {
         Text(stringResource(if (demo) R.string.settings_avatar_demo else R.string.settings_avatar_intro),
             style = PersonaTheme.type.callout, color = palette.ink2)
@@ -204,7 +206,8 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
         }
         if (packs != null) offered.forEach { p ->
             val busy = p.id in downloading || p.id == asked
-            PersonaOption(p.manifest.name, p.manifest.about ?: p.manifest.subtitle ?: stringResource(if (packs.onPhone(p)) R.string.settings_avatar_on_hub else R.string.settings_avatar_download), selected = p.id == chosen,
+            val from = p.manifest.source?.extensionName?.let { stringResource(R.string.settings_avatar_from_extension, it) }
+            PersonaOption(p.manifest.displayName(language), p.manifest.about ?: p.manifest.subtitle ?: from ?: stringResource(if (packs.onPhone(p)) R.string.settings_avatar_on_hub else R.string.settings_avatar_download), selected = p.id == chosen,
                 onClick = { if (!busy) scope.launch { asked = p.id; try { packs.choose(p) } finally { if (asked == p.id) asked = null } } }) {
                 Box(contentAlignment = Alignment.Center) {
                     PackAvatar(packs, p, Tokens.Space.xxxl * 2)
@@ -214,7 +217,7 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(Tokens.Space.m))
         }
         error?.let { JNotice(it, status = Status.NeedsYou); Spacer(Modifier.height(Tokens.Space.m)) }
-        JSectionHeader(stringResource(R.string.settings_avatar_states, pack?.manifest?.name ?: design.title))
+        JSectionHeader(stringResource(R.string.settings_avatar_states, pack?.manifest?.displayName(language) ?: design.title))
         Row(
             Modifier.fillMaxWidth().clip(PersonaTheme.shapes.cardShape).background(palette.surface).padding(vertical = Tokens.Space.m)
                 .semantics(mergeDescendants = true) {},
@@ -235,7 +238,8 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
 private fun PackAvatar(store: PersonaStore, p: PersonaInfo, size: Dp) {
     val pictures by store.pictures.collectAsState()
     val pixels = with(LocalDensity.current) { size.roundToPx() }
-    val image by produceState<ImageBitmap?>(null, p.id, p.rev, pictures) { value = store.avatar(p, pixels)?.asImageBitmap() }
+    val dark = PersonaTheme.darkTheme
+    val image by produceState<ImageBitmap?>(null, p.id, p.rev, pictures, dark) { value = store.avatar(p, pixels, dark)?.asImageBitmap() }
     Box(Modifier.size(size).clip(CircleShape).background(PersonaTheme.palette.surfaceStrong)) {
         image?.let { Image(it, contentDescription = null, Modifier.matchParentSize()) }
     }

@@ -10,7 +10,7 @@ import { EASE, IconButton, useNow } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { AssistantSettings } from "../settings/AssistantSettings";
 import { Group, Pill } from "../settings/SettingsParts";
-import { BuiltinFace, PersonaAvatar, PersonaPicker, usePersona } from "./Persona";
+import { PersonaAvatar, PersonaPicker, usePersona } from "./Persona";
 import { t } from "../../i18n";
 
 const REACH: { text: string; icon: IconName }[] = [
@@ -49,7 +49,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[760px] px-5 py-8 sm:px-8" style={{ animation: `fade-up 320ms ${EASE} both` }}>
           <div className="mb-8 flex flex-col items-center gap-2 text-center">
-            <PersonaAvatar size={88} fallback={<BuiltinFace size={88} />} className="shadow-raised" />
+            <PersonaAvatar size={88} className="shadow-raised" />
             <h2 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">{persona.name}</h2>
             <p className="max-w-full truncate text-[13px] text-ink-2">{t("assistant-profile.subtitle", { machine: machineName })}</p>
             <div className="mt-1 flex flex-wrap justify-center gap-1.5">
@@ -80,7 +80,7 @@ export function Profile({ onToggleSidebar }: { onToggleSidebar: () => void }) {
           )}
 
           <Group title={t("assistant-profile.avatar")} footer={t("assistant-profile.avatar_footer")}>
-            <PersonaPicker builtin={<BuiltinFace size={56} />} />
+            <PersonaPicker />
           </Group>
 
           <AssistantSettings bare />

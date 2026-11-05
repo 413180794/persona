@@ -4,11 +4,13 @@
   "no_colors": "配色なし",
   "mochi": "だんご",
   "default_avatar": "デフォルトのアバター",
-  "mark": "ロゴ",
-  "mark_sub": "サイトのロゴ",
   "avatar": "アバター",
   "mochi_default": "だんご（デフォルトのアバター）",
   "states_label": "{name}の5つの状態：待機、思考中、作業中、対応待ち、オフライン",
   "missing": "選択したアバターが今ハブにないため、デフォルトのアバターを表示しています。戻ると自動的に切り替わります。",
-  "none": "ハブにはまだほかのアバターがありません。アバターパッケージはハブのマシンの~/.persona/personas/に置きます（docs/persona.md）。"
+  "none": "ハブにはまだほかのアバターがありません。アバター付きの拡張機能を入れるか（docs/extensions.md）、ハブのマシンの~/.persona/personas/にアバターパッケージを置きます。",
+  "visor": "バイザー",
+  "circuit": "サーキット",
+  "follows_theme": "テーマカラーに合わせる",
+  "from_extension": "{name} から"
 }

@@ -7,6 +7,9 @@ import android.util.LruCache
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import persona.core.contracts.JsonCodec
+import persona.core.contracts.api.LookCurrent
 import persona.core.contracts.api.PersonaInfo
 import persona.core.contracts.api.PersonaPacks
 import persona.core.contracts.api.PersonaPacksUnsupported
@@ -26,6 +30,10 @@ import java.io.File
  * thumbnail each for 设置's cards. A package is used only once all of it is there (it is downloaded beside and moved
  * in whole); the chosen one shows from disk at launch, before the hub answers or without it. The choice itself is
  * [AppStyleStore.personaId], kept when its package leaves the hub, so it comes back with it.
+ *
+ * A hub that keeps the choice (GET /api/v1/looks, #3200) is the one truth of it: its choice wins over this phone's,
+ * this phone's old choice moves up once when the hub has none, a choice made here goes to the hub, and another
+ * device's arrives as a `look` push ([follow]). [AppStyleStore.personaId] is then this phone's copy of it.
  */
 class PersonaStore(context: Context, private val style: AppStyleStore, private val packs: () -> PersonaPacks?) {
     private val app = context.applicationContext
@@ -50,6 +58,10 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
     /** Bumped when pictures land on disk: the views that asked for one before ask again. */
     val pictures: StateFlow<Int> = _pictures.asStateFlow()
 
+    /** Whether the hub keeps the choice (it answered GET /api/v1/looks): choices go there. */
+    @Volatile private var synced = false
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private fun directory(p: PersonaInfo) = File(File(root, p.id), p.rev)
     fun onPhone(p: PersonaInfo) = directory(p).isDirectory
     private fun thumbnail(p: PersonaInfo) = File(thumbnails, "${p.id}-${p.rev}.png")
@@ -62,7 +74,12 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
     suspend fun refresh() = lock.withLock {
         val api = packs() ?: return@withLock
         val list = try {
-            api.list().filter { it.usable }
+            val looks = try { api.looks() } catch (e: PersonaPacksUnsupported) { null }
+            synced = looks != null
+            if (looks != null) {
+                settle(looks.current, api)
+                looks.looks.mapNotNull { it.pack }.filter { it.usable }
+            } else api.list().filter { it.usable }
         } catch (e: CancellationException) { throw e } catch (e: PersonaPacksUnsupported) {
             _error.value = e.message; return@withLock
         } catch (e: Exception) {
@@ -94,6 +111,17 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
         prune(list)
     }
 
+    /** The choice to keep given the hub's: the hub's once it has one; else this phone's moves up, once, if unset there. */
+    private suspend fun settle(current: LookCurrent, api: PersonaPacks) {
+        val id = current.id ?: if (style.personaChosen) {
+            runCatching { api.choose(style.personaId.value, ifUnset = true).id }.getOrNull()
+        } else null
+        if (id != null && id != style.personaId.value) {
+            choices++
+            style.setPersonaId(id)
+        }
+    }
+
     /** Picks a package, downloading it first; on failure the choice stays as it was and [error] says why. */
     suspend fun choose(p: PersonaInfo) {
         val asked = ++choices
@@ -104,6 +132,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
             style.setPersonaId(p.id)
             _current.value = p
         }
+        tellHub(p.id)
     }
 
     /** Picks a built-in face at once (a download under way for an earlier choice is then not applied). */
@@ -111,6 +140,33 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
         choices++
         style.setFace(design)
         _current.value = null
+        tellHub(design.id)
+    }
+
+    /** Sends a choice made here to a hub that keeps it, so every device follows; when that fails it stays this phone's. */
+    private fun tellHub(id: String) {
+        if (!synced) return
+        val api = packs() ?: return
+        background.launch { runCatching { api.choose(id) } }
+    }
+
+    /** Another device chose [id] (the hub's `look` push): show it here, downloading its package first. */
+    suspend fun follow(id: String) {
+        if (id.isEmpty() || id == style.personaId.value) return
+        val design = PersonaDesign.entries.firstOrNull { it.id == id }
+        if (design != null) {
+            choices++
+            style.setFace(design)
+            _current.value = null
+            return
+        }
+        val asked = ++choices
+        style.setPersonaId(id)
+        val p = _offered.value.firstOrNull { it.id == id } ?: run { refresh(); return }
+        lock.withLock {
+            if (!onPhone(p)) download(p, packs() ?: return@withLock)
+            if (asked == choices && onPhone(p)) _current.value = p
+        }
     }
 
     /** Counts choices, so a download finishing after a later choice does not undo it. */
@@ -162,9 +218,9 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
         }?.also { frameCache.put(file.path, it) }
     }
 
-    /** The face [pixels] wide, from the package, or its thumbnail while the package is not on the phone. */
-    suspend fun avatar(p: PersonaInfo, pixels: Int): Bitmap? = withContext(Dispatchers.IO) {
-        val file = if (onPhone(p)) p.manifest.avatarFile(pixels)?.let { File(directory(p), it) } else thumbnail(p)
+    /** The face [pixels] wide (its dark one when [dark]), from the package, or its thumbnail while the package is not on the phone. */
+    suspend fun avatar(p: PersonaInfo, pixels: Int, dark: Boolean = false): Bitmap? = withContext(Dispatchers.IO) {
+        val file = if (onPhone(p)) p.manifest.avatarFile(pixels, dark)?.let { File(directory(p), it) } else thumbnail(p)
         file?.takeIf { it.isFile }?.let { BitmapFactory.decodeFile(it.path) }
     }
 

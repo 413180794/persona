@@ -24,8 +24,8 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		state     string // the receipt's
 		summary   string
 		errText   string
-		notice    []string // in the main conversation's notice
-		closed    bool
+		notice    []string // in the main conversation's 督办 message
+		judged    bool
 	}{
 		{name: "no output", items: []proto.Item{prompt, {Kind: proto.KindThinking, Role: "assistant", Text: "…"}},
 			state: "interrupted", summary: interruptedSummary, errText: silentTurnError,
@@ -36,7 +36,7 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 		{name: "a reply", items: []proto.Item{prompt, {Kind: proto.KindToolUse, Role: "assistant", ToolName: "Edit"},
 			{Kind: proto.KindText, Role: "assistant", Text: "修好了，提了 https://github.com/o/r/pull/901"}},
 			state: "done", summary: "修好了，提了 https://github.com/o/r/pull/901",
-			notice: []string{"做完了", "修好了"}, closed: true},
+			notice: []string{"做完了，等你验收", "修好了"}, judged: true},
 		{name: "a model API error", items: []proto.Item{prompt}, turnError: "API Error: 529 overloaded",
 			state: "interrupted", summary: interruptedSummary, errText: "API Error: 529 overloaded",
 			notice: []string{"被模型服务出错打断了", "529 overloaded"}},
@@ -70,8 +70,9 @@ func TestTaskTurnEndWithoutOutputIsInterrupted(t *testing.T) {
 			f.mu.Lock()
 			judged := f.judged
 			f.mu.Unlock()
-			if closed := todoNow(s, todo.ID).DoneAt != nil; closed != c.closed || (judged > 0) != c.closed {
-				t.Fatalf("closed = %v after %d judgments, want %v", closed, judged, c.closed)
+			// Supervised (from the main conversation): never closed by the judge, only waiting for review.
+			if closed := todoNow(s, todo.ID).DoneAt != nil; closed || (judged > 0) != c.judged {
+				t.Fatalf("closed = %v after %d judgments, want judged %v", closed, judged, c.judged)
 			}
 		})
 	}

@@ -275,6 +275,12 @@ func QuietTaskFinish(s proto.Session, main string) bool {
 	return reportsFailures(s) && (main == "" || s.SessionID != main) && NormalFinish(s)
 }
 
+// SupervisedFinish: s, a conversation whose current turn a 督办 message started (SessionView.Supervising), may go
+// unpushed now: a normal finish (NormalFinish); an error, a cut-off or a stuck turn is pushed as ever.
+func SupervisedFinish(s proto.Session, supervising bool) bool {
+	return supervising && reportsFailures(s) && NormalFinish(s)
+}
+
 // reportsFailures: s's agent tells a turn that failed on the model service. Claude Code (Agent "") writes the error
 // in its last words (CutOff); a headless Codex's node reports the failed turn/completed as TurnError (#2571). A
 // runtime's (Agent: its id, DSH…) is not known to, so its quiet task is pushed as ever.
@@ -290,6 +296,9 @@ type SessionView struct {
 	Title    string   `json:"title,omitempty"`
 	Archived bool     `json:"archived,omitempty"`
 	Queued   []string `json:"queued,omitempty"` // messages from other conversations waiting for its turn to end
+	// Supervising: its current turn was started by a 督办 message about the tasks it handed out (#3124): the assistant
+	// does not push its normal finish (SupervisedFinish); it pushes what the user needs to know (notify_user).
+	Supervising bool `json:"supervising,omitempty"`
 }
 
 // ErrStaleSnapshot is manager.snapshot's stale_snapshot: a newer one came in first (two changes reported at once).

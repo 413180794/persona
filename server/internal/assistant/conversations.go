@@ -352,6 +352,10 @@ func (s *Service) queuedRelays() (map[string][]string, bool) {
 				out[id] = append(out[id], msg.FromTitle+"的通知")
 				continue
 			}
+			if msg.Tool == superviseTool { // the tasks to follow up (supervise.go)
+				out[id] = append(out[id], "督办消息")
+				continue
+			}
 			out[id] = append(out[id], "来自「"+msg.FromTitle+"」："+msg.Text)
 		}
 	}
@@ -362,11 +366,15 @@ func (s *Service) queuedRelays() (map[string][]string, bool) {
 // notice (quiet.go) is its own text, and the work it starts is not a hop of any chain.
 func (s *Service) deliverRelay(ctx context.Context, machine, to string, msg relayMsg) error {
 	text := relayText(msg)
-	if msg.Tool == noticeTool {
+	if msg.Tool == noticeTool || msg.Tool == superviseTool {
 		text = msg.Text
 	}
 	if err := s.call(ctx, machine, DeviceAssistantSend, map[string]any{"session_id": to, "text": text, "resume_only": true}, nil); err != nil {
 		return err
+	}
+	if msg.Tool == superviseTool {
+		s.holdPushes(ctx, to) // its answer is not pushed unless it pushes (supervise.go)
+		return nil
 	}
 	if msg.Tool == noticeTool {
 		return nil

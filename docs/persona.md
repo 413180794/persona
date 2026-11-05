@@ -19,8 +19,12 @@
   选过面罩的存的是 `jarvis`，照旧是面罩；选过汇流或形象包的同理。所以新默认换了 id，而不是把 `jarvis` 改画成团子（`PersonaTests.mochiIsTheDefaultAndAnEarlierChoiceStays`）。
 - **Android**（`core/designsystem` 的 `PersonaFace.kt`，`PersonaDesign.Mochi`）：同一份图标坐标的 Canvas 画法和五个状态，2026-11-04 起也是默认，迁移规则同上（`AppStyleStore.personaId`）。
 - **网页**（`web/src/views/assistant/MochiFace.tsx`）：同一份图标坐标画的 SVG，颜色是 `styles.css` 的 `--mochi-*`（浅色 / 深色两套），动画是 CSS、减弱动态效果时停。
-  网页以前的内置形象是页面自己的标志（id `jarvis`，选它时 `localStorage` 不存值），现在默认是团子，标志作为可选项「标志」留着；
+  网页以前的内置形象是页面自己的标志（id `jarvis`，选它时 `localStorage` 不存值），现在默认是团子；
   因为以前选内置的人什么都没存，分不出「没选过」和「选过标志」，网页上他们都换成团子，选过形象包的不变。
+  2026-11-06 起（#3200）网页的 `jarvis` 和各端一样是面罩，也能选汇流（`web/src/views/assistant/BuiltinFaces.tsx`，照安卓 `PersonaFace.kt` 的坐标画，颜色是强调色）；
+  「标志」不再是单独的选项：网页的品牌标（`AppMark`：侧边栏顶上、登录页）和标签页图标都跟着形象换（`web/src/lib/look-icon.ts`，团子就是 App 图标本身）。
+- **安卓**跟着形象换的：顶栏的脸、侧边栏 / 对话列表、悬浮胶囊、设置里的卡片（都经 `PersonaFace` / `LocalPersonaPack`）。不跟的：桌面图标（只打包了团子一个，见 extensions.md「形象」）、
+  通知的小图标、快捷设置磁贴和小组件的图标（`ic_stat`：系统要求单色的矢量资源，只能是打包时的图）。
 - **hub 内置形象**：编进 personad 的形象包（`server/internal/hub/personas/<id>/`），每台 hub 都有，不用手动安装；手机选中时下载并缓存。
   现在只有**奶蛙**（id `nwverse`）：按用户在 NWVERSE 贡献看板上的等级换样子的分级形象，见下面「分级形象」。
 - **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存；和内置形象同 id 时目录里的优先（在一台 hub 上先试新图）。

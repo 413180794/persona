@@ -84,6 +84,8 @@ class PersonaApp : Application() {
         scope.launch {
             connection.events.collect { event ->
                 if (event is persona.core.contracts.PersonasEvent) runCatching { personas.refresh() }
+                // Another device chose a look (#3200): this phone shows it too.
+                if (event is persona.core.contracts.LookEvent) runCatching { personas.follow(event.id) }
             }
         }
     }

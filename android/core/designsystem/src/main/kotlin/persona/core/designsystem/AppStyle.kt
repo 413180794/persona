@@ -100,6 +100,9 @@ class AppStyleStore(context: Context) {
 
     fun setFace(design: PersonaDesign) = setPersonaId(design.id)
 
+    /** Whether this phone chose a look itself (the key is written only by a choice): what moves up to a hub that keeps the choice. */
+    val personaChosen: Boolean get() = preferences.contains(KEY_PERSONA)
+
     fun setPersonaId(id: String) {
         preferences.edit().putString(KEY_PERSONA, id).apply()
         currentPersona.value = id

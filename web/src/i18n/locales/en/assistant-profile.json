@@ -17,7 +17,7 @@
   "next_up": "Next {day} {time}",
   "upcoming": "Up next",
   "avatar": "Avatar",
-  "avatar_footer": "Changing the avatar only changes Persona's name, picture and the animated status in chats, in this browser only. The page's colors stay the same.",
+  "avatar_footer": "Changing the avatar changes Persona's name, face, the site's logo and tab icon, and the moving state in conversations, on all your devices when the hub supports it. With the theme color set to follow the avatar, the site's colors change too.",
   "access": "Can access",
   "access_footer": "Anything that acts on your behalf, like sending Lark messages or email or creating events, asks you on your phone first."
 }

@@ -193,6 +193,7 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 	if retitle {
 		s.nameTodoLater(ctx, todo.ID, title, prompt)
 	}
+	s.superviseTodo(ctx, todo.ID, conversation, nil, 0) // the main conversation follows it up (supervise.go)
 	if err := s.linkTodoAgent(ctx, todo.ID, m.ID, sid, title, cwd, ""); err != nil {
 		s.logf("agent_start %s: link %s: %v", short(sid), todo.ID, err)
 	}
@@ -206,15 +207,17 @@ func (s *Service) quietAgentTask(ctx context.Context, conversation string, m Dev
 func (s *Service) InteractionRaised(ctx context.Context, r InteractionRaised) {
 	ix := r.Interaction
 	t, ok := s.taskOf(ctx, ix.MachineID, ix.SessionID)
-	if !ok || !t.Quiet {
+	if !ok || !t.Quiet && t.Supervision == nil {
 		return
 	}
 	name := ix.MachineID
 	if m, ok := s.device(ctx, ix.MachineID); ok {
 		name = m.Name
 	}
-	s.quietNotify(ctx, t, name, "needs", noticeAsk(ix), "")
-	s.taskReport(t, reportNeeds, name, [2]string{ix.MachineID, ix.SessionID}, noticeAsk(ix), &ix)
+	s.taskNotice(ctx, t, name, "needs", noticeAsk(ix), "")
+	if t.Quiet { // any other task's card is in the next report already (taskAsks)
+		s.taskReport(t, reportNeeds, name, [2]string{ix.MachineID, ix.SessionID}, noticeAsk(ix), &ix)
+	}
 }
 
 // noticeAsk is what the card asks, for the notice: the questions with their options, the plan, the tool.

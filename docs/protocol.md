@@ -369,6 +369,17 @@ Session 的空间还有可选字段 `parent_space_id`（#2073）：这个空间�
  "origin":"<助手对话 id>","plan_id":"plan_…",   // 只有从助手对话开的任务才有（docs/unified-entry.md）
  "start_error":"rpc: connection closed",         // 任务的 Agent 没开起来：hub 同时写 done_at，任务到此结束；重新打开时清空（#1077）
  "quiet":true,   // 主对话派的、当时开着「主对话派的任务只在主对话里通知」：建的时候定下、不再变（#1731）
+ "done_by":"auto|review",   // 空 = 用户点的；auto = hub 判断做完自动关的；review = 督办人验收后关的（#3124），理由在 done_reason
+ // 督办台账（#3124，docs/unified-entry.md「督办」）：只有主对话派出去的任务才有；不认识的客户端照常显示待办
+ "supervision":{"supervisor":"<主对话 id>",
+                "done_when":["PR 合并到 master","浅色 / 深色截图贴进 PR"],   // 验收标准，可能是空数组
+                "expect_minutes":30,                                    // 预计分钟数，0 / 没有 = 没写
+                "state":"",       // "" 进行中 | pending_review 待验收 | rework 返工中 | needs_user 等用户决定 | accepted 已验收 | cancelled 已取消
+                                  //（accepted / cancelled 时待办已完成；用户重新打开后按进行中算）
+                "round":1,        // 返工了几轮，最多 2
+                "reviews":[{"at":"...","verdict":"accepted|rework|needs_user|cancelled","round":1,   // round 只在 rework 上
+                            "checks":[{"criterion":"浅色 / 深色截图贴进 PR","met":false,"evidence":"只有浅色"}],"note":"补深色截图"}],
+                "updated_at":"..."},
  "spaces":[{"machine_id":"…","space":"group/alpha","linked_at":"..."}],
  "agents":[{"machine_id":"…","session_id":"…","linked_at":"...","released_at":null,
            "title":"…","cwd":"…","agent":"claude","start_error":"","source":"manual|space|spawned","via":""}]}
@@ -1678,11 +1689,12 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 {"id":"plan_…","conversation":"<助手对话 id>","state":"open|started|dismissed","created_at":"...","updated_at":"...",
  "tasks":[{"title":"修登录崩溃","prompt":"给 Agent 的第一条消息","machine":"<机器 id>","cwd":"/abs/path",
            "launcher":"","model":"","permission":"acceptEdits","readonly":false,"why":"一行理由",
+           "done_when":["PR 合并到 master"],"expect_minutes":30,   // 可选（#3124）：验收标准、预计分钟数；客户端只显示，开始时不用回传
            "todo_id":"todo_…",          // 开始后才有
            "error":""}]}                 // Agent 没开起来的原因
 
 // FeedItem：hub 插进助手对话的条目，不在 transcript 里；客户端按 at 和 transcript 合在一起画
-{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message","ref":"plan_…、todo_…、日期或收件箱条目 id",
+{"id":"feed_…","conversation":"…","at":"...","kind":"plan|task|answered|receipt|routed|today|message|review","ref":"plan_…、todo_…、日期或收件箱条目 id",
  "body":{…}}
 // plan：ref 是计划 id，没有 body；task：ref 是待办 id，没有 body
 // answered：{"question":"使用 Bash","answer":"批准了 · 以后同类不再问",
@@ -1695,7 +1707,9 @@ node → runtime 的请求（只发给这个会话所属的那条连接；hub �
 // receipt：{"title":"…","state":"done|failed|interrupted","summary":"Agent 最后一条回复（Markdown，按行截到约 600 字，不截在标记中间）","pr":"https://github.com/…/pull/N","machine":"…"}
 //   interrupted（#1516）：Agent 这一轮被模型服务出错打断，summary 是「模型服务出错，中断了」，error 是错误原文；客户端画成红色、带「继续」
 //   这一轮既没回复也没调工具、又没有报错（模型服务回了 200 但内容是空的，#2349）同样是 interrupted，error 是「这一轮没有任何输出：…」
-// routed：{"text":"…"}
+// routed：{"text":"…"}（督办返工时发给 Agent 的说明也是一条 routed）
+// review：ref 是待办 id；督办人验收了一次（#3124）：{"title","verdict":"accepted|rework|needs_user|cancelled","round":1,"note":"…",
+//         "checks":[{"criterion","met","evidence"}]}；不认识的客户端跳过这一条
 // message：ref 是收件箱条目 id；AI 分身给一条和任务有关的消息起草了回复：
 //         {"todo_id","source":"lark|mail|…","account","chat","sender","text":"原话（截断）","draft":"草稿"}；发送走收件箱的发送接口
 // today：ref 是用户那天的日期；{"date":"2026-11-03","done":[{"id","title"}],"waiting":[{"id","title"}],"working":2,
@@ -2014,6 +2028,7 @@ hub 会以「用户输入」的身份往对话里发一些给模型看的消息�
 | 定时任务、跟进到时间（`assistant/task_run.md`） | `⏰ 标题（你之前安排的跟进）` / `（定时任务）` / `（定时任务，每 30 分钟）` | `followup` | `once` / `daily` / `interval` | 跟进「x」到时间了 / 定时任务「x」开始运行 |
 | 叫醒等待中的 Agent（`agents/wake.md`，Agents 的对话） | `⏰（Persona 叫醒你，第 N 次）` | `followup` | `wake` | Persona 叫醒了它：看看「等的事」好了没有 |
 | node 重启丢了后台任务（`assistant/lost_tasks.md`） | `⚠️ 运行你的 node 刚重启过` | `system` | `lost_tasks` | node 重启过，N 个后台任务停了 |
+| 主对话的督办消息（`assistant/supervise.md`，#3124） | `📋 督办：你派出去的任务有 N 个要你处理`，第二行含「这是 Persona 的督办消息」 | `system` | `supervise` | 督办：N 个派出去的任务要处理 |
 
 **怎么显示**（各端一样）：
 
@@ -2029,7 +2044,7 @@ hub 会以「用户输入」的身份往对话里发一些给模型看的消息�
   第 2 组映射 `done` / `needs` / `interrupted` / `failed`，第 3 组是 `machine`。
 - `followup`：第一行匹配 `^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`：「你之前安排的跟进」是 `once`，「定时任务，每 …」是 `interval`，「定时任务」是 `daily`；
   `detail` 是第一个空行之后的正文（去掉末尾以「（知识库」开头的那段提示）。第一行以 `⏰（Persona 叫醒你，第` 开头的是 `wake`，`title` 取「在等「…」」里的那段。
-- `system`：以 `⚠️ 运行你的 node 刚重启过` 开头；`- ` 开头的行数是停掉的任务数。
+- `system`：以 `⚠️ 运行你的 node 刚重启过` 开头；`- ` 开头的行数是停掉的任务数。督办消息只有写它的新 hub 会发，hub 下发时一定带 `injected`，不在共用夹具里，客户端不用自己认。
 - 认不出的照旧是用户气泡（宁可漏认，不把用户的话藏起来）。
 - 共用夹具 `spec/fixtures/injected/cases.json`（Go 测试 `TestParseInjected` 按模板生成，`UPDATE_GOLDEN=1` 重写）：`input.text` → `expected`（`null` 是不认）；各端的兜底识别都跑这一份。
 

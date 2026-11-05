@@ -139,6 +139,28 @@
 - **会回传的对话**（#3192）：用 `report_tasks: true` 开的对话（插件的飞书 /agent）派出的任务（`task_plan`、`agent_start`）不看这个设置，一律是安静的任务，
   通知投进**派出它的那段对话**（`Reporting` 版的说法：照这段对话一开始的说明交代出去），不进主对话。登记在 `assistant/reporters.go`（`docs/lark-agent.md`）。
 
+### 督办（#3124）
+
+主对话派出去的任务（`task_plan`，以及安静任务模式下 `agent_start` 建的待办）由主对话**督办**：助手是这些任务的负责人，对完成情况和质量负责，而不是等「做完了」再转述。
+
+- **台账**：`task_plan` 每个任务可以带 `done_when`（验收标准，最多 6 条）和 `expect_minutes`（预计分钟数）；验收标准会接在派活 prompt 后面告诉 Agent，要它做完时逐条给证据。
+  待办记下督办人（开它的对话）、验收标准、预计时长和验收状态，存在 `todo_supervision` 表（一行一个督办的待办，跟待办一起删），待办的 JSON 多一个 `supervision`（`docs/protocol.md`）。
+  验收状态：进行中 → `pending_review`（待验收）→ `accepted`（已验收，待办完成，`done_by = review`）/ `rework`（返工，`round` 记轮次）/ `needs_user`（等用户决定）/ `cancelled`（取消，待办完成）。
+- **不再自动关**：督办的待办 hub 判断做完时（`docs/todos.md`「自动完成」那个判断）不写 `done_at`，改成「待验收」；判断没做完（`not_done` / `waiting` / `needs_user` / `unsure`）就告诉督办人「停下了但没做完」。用户手动点完成照旧。
+- **督办器**（`server/internal/assistant/supervise.go`，不调模型）：每 30 秒看一遍督办中的任务，加上任务的事件，算出信号：
+  `review` 待验收、`idle` 停下没做完、`needs_you` 等回答超过 3 分钟（安静的任务马上，用户没收到推送）、`stalled` 在做但超过 max(20 分钟, 预计 × 1.5) 没进展（会话没更新）、`interrupted` 被模型服务出错打断、`failed` 没开起来。
+  同一任务的同一信号对同一段状态只说一次（状态变了、有了新进展才再说）。几个任务的信号合成**一条「📋 督办」消息**投进主对话（`prompts/assistant/supervise.md`：任务、信号、验收标准、它在问什么、Agent 最后说的、链接，再说明怎么处理）：
+  第一条等 15 秒攒一攒，之后最多每 10 分钟一条，`needs_you` / `idle` / `interrupted` / `failed` 这类等决定的最短 2 分钟。主对话在跑就排进对话之间的队列（输入框上方「督办消息」），队列里还没投出的督办消息原地换成合并后的一条。
+  督办的任务不再发「🔔 任务…」通知（`quiet.go`），都在督办消息里；其他对话开的任务照旧。
+- **默认不推送**：督办消息开始的这一轮正常结束时，不发「完成」推送（`fleet_push.go`），渠道的镜像也不发（快照里主对话的 `SessionView.supervising` 标着）；出错、被打断照常推。用户在主对话说话、或别的消息投进来时恢复。要告诉用户就用 `notify_user`，要用户决定用 `ask_user`。
+- **验收**：MCP 工具 `task_review {todo_id, verdict, checks:[{criterion, met, evidence}], note}`。`accepted` 关掉待办（之后照「做完的任务关掉 Agent」关 Agent）；
+  `rework` 把逐条缺口和说明（`prompts/assistant/supervise_rework.md`）发给任务的 Agent（`session.send`，Agent 已被关掉的先按原启动器恢复），对话里留一条 `routed`，Agent 再停下时重新判断；**最多 2 轮**，第 3 次 `rework` 改成 `needs_user`；
+  `needs_user` 之后不再发督办信号，等助手问用户；`cancelled` 关掉待办（理由「取消：…」）。每次验收在对话动态里插一条 `review`，记进台账的 `reviews`。只有督办人那个对话能验收它的任务。
+- **派活查重**：`task_plan` 把每个新任务和正在进行的待办、在工作 / 等人的 Agent 比：提到同一个 issue / PR 号，或同一台电脑同一目录（一个在另一个里面）且标题相近，或标题很像，就在返回里列「疑似重复」，提示助手先看再决定合并还是取消；不拦。
+- **快照**：「从对话开的任务」里督办的任务带「督办：正常 / 卡住 N 分钟 / 等回答 N 分钟 / 待验收 / 返工第 N 轮 / 等你决定 / 已验收」和验收标准条数，要处理的排在前面。
+- **助手的做法**写在它的 CLAUDE.md（`prompts/assistant/claude_md.md`「做事方式」）：派活必填 `done_when`；收到督办消息能拍板的自己拍，卡住就催或换路，抢资源的排先后，重复的取消；验收前自己核对 PR / CI / 截图 / 线上状态；只把要用户决定的和已验收的结果告诉用户；下游的尾巴（部署、关 issue、TestFlight）拆成后续任务或跟进。
+- **客户端**：网页、安卓的任务卡和待办详情显示验收标准清单和验收状态；iOS / Mac 另做（#3124 的子 issue）。不认识 `supervision` 的客户端照常工作，待验收的任务在它们那里就是「停着 / 完成未看」。
+
 ## 数据和接口（hub）
 
 ### 任务 = 待办

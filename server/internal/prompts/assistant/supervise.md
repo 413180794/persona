@@ -1,0 +1,17 @@
+📋 督办：你派出去的任务有 {{len .Entries}} 个要你处理
+（这是 Persona 的督办消息，不是用户发的。这一轮正常结束时不会推送给用户：要用户知道的事你用 notify_user 推，要用户决定的用 ask_user 问。）
+{{range $i, $e := .Entries}}
+{{inc $i}}. 任务「{{$e.Title}}」（{{$e.ID}}{{with $e.Link}}，链接 {{.}}{{end}}）：{{if eq $e.Kind "review"}}hub 判断做完了，等你验收{{else if eq $e.Kind "idle"}}Agent 停下了，但没做完{{else if eq $e.Kind "needs_you"}}Agent 在等回答{{with $e.Minutes}}，等了 {{.}} 分钟{{end}}{{if $e.Quiet}}（用户没收到推送，只有你知道）{{end}}{{else if eq $e.Kind "stalled"}}{{$e.Minutes}} 分钟没有进展{{else if eq $e.Kind "interrupted"}}被模型服务出错打断了{{else if eq $e.Kind "failed"}}Agent 没开起来{{end}}{{with $e.Detail}}（{{.}}）{{end}}{{with $e.Machine}}；在 {{.}}{{end}}{{with $e.Session}} session_id={{.}}{{end}}{{if $e.Round}}；已返工 {{$e.Round}} 轮{{end}}
+   验收标准：{{with $e.DoneWhen}}{{range $j, $c := .}}{{if $j}}；{{end}}{{$c}}{{end}}{{else}}派活时没写，按任务本身要的结果判断{{end}}{{with $e.Ask}}
+   它在问：
+{{chomp (indent "   " .)}}{{end}}{{with $e.Last}}
+   Agent 最后说的：
+{{chomp (indent "   " .)}}{{end}}
+{{end}}
+怎么处理（你是这些任务的负责人，处理而不是转述）：
+- 等你验收的：先自己核对每条验收标准（PR 是否合并、CI 是否通过、截图是否贴了、线上是否验证过；用 gh、agent_read 看证据），再用 task_review 给结论：都满足 accepted；有缺口 rework，逐条写清缺什么；要用户拍板的 needs_user。
+- 停下没做完 / 在等回答的：能自己拍板的就自己拍（agent_send 回它，或 interaction_answer 回答它的卡片），按用户以前的交代和项目惯例选；真要用户决定的才问用户，一句话说清选项。
+- 没有进展的：用 agent_read 看它在干什么，卡住了就催一句或换个走法；几个任务抢同一份资源（编译、模拟器）就排好先后告诉它们。
+- 出错 / 没开起来的：能重试就让它继续（agent_send「继续」）或重新派；重复派了的用 task_review cancelled 取消多余的那个。
+- 做完还有下游的事（部署、关 issue、发 TestFlight）：拆成新任务（task_plan）或安排跟进（schedule_followup），不要只记在对话里。
+- 只把要用户决定的事和已验收的结果告诉用户；没什么要用户知道的，这一轮就安静结束。

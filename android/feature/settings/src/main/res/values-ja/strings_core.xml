@@ -17,7 +17,8 @@
     <string name="settings_preview_row3_time">25分前</string>
     <string name="settings_preview_detail">1スペース、3セッション</string>
     <string name="settings_avatar_demo">デモモードではデフォルトのアバターのみです。</string>
-    <string name="settings_avatar_intro">トップバーとチャット一覧に表示するPersonaの名前と顔です。色はUIスタイルに従い、アプリの色は変えません。アバターパックはハブの~/.persona/personasにあり、選ぶとスマートフォンにダウンロードされます。</string>
+    <string name="settings_avatar_intro">トップバーとチャット一覧に表示するPersonaの名前と顔です。ハブが対応していればすべてのデバイスで同じになります。色はUIスタイルに従い、アプリの色は変えません。拡張機能でアバターを追加でき、ハブのアバターパックや拡張機能のアバターは選ぶとスマートフォンにダウンロードされます。ホーム画面のアイコンは変わりません。</string>
+    <string name="settings_avatar_from_extension">%1$s から</string>
     <string name="settings_avatar_on_hub">ハブ上のアバター</string>
     <string name="settings_avatar_download">選ぶとダウンロード</string>
     <string name="settings_avatar_states">%1$sの5つの状態</string>

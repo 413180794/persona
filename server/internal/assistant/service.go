@@ -55,6 +55,7 @@ type Service struct {
 	archived   archiveBook       // conversations.go
 	relays     relayBook         // conversations.go
 	quiet      quietBook         // quiet.go
+	supervise  superviseBook     // supervise.go
 	reports    reportBook        // reports.go
 	accept     acceptBook        // acceptance.go
 	reporters  reporterBook      // reporters.go
@@ -156,6 +157,11 @@ func (s *Service) lang(ctx context.Context) i18n.Lang {
 
 // call is a DeviceCall whose answer is read into out (nil: not read).
 func (s *Service) call(ctx context.Context, device, method string, params, out any) error {
+	if p, ok := params.(map[string]any); ok && method == DeviceAssistantSend {
+		if id, _ := p["session_id"].(string); id != "" && s.supervising(id) {
+			s.releasePushes(ctx, id) // something else speaks there: its turns are pushed again (a 督办 message holds them anew)
+		}
+	}
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return err
@@ -324,6 +330,9 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	for id, q := range queued {
 		view(id, here).Queued = q // a conversation sent to is on the assistant's machine
 	}
+	for _, id := range s.heldConversations() {
+		view(id, here).Supervising = true // a 督办 message started its turn: not pushed (supervise.go)
+	}
 	if p := snap.Profile; p != nil && p.Main != "" {
 		view(p.Main, p.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
 	}
@@ -344,7 +353,8 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 
 // UserSpoke: the user is talking in the conversation again: back in the list, and it works for them, not for a chain
 // of conversations.
-func (s *Service) UserSpoke(_ context.Context, r SessionRef) {
+func (s *Service) UserSpoke(ctx context.Context, r SessionRef) {
+	s.releasePushes(ctx, r.SessionID) // the user speaks: its turns are pushed as ever (supervise.go)
 	s.unarchiveOnSend(r.MachineID, r.SessionID)
 	s.userSpoke(r.SessionID)
 }

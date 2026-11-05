@@ -1,0 +1,379 @@
+package assistant
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// shortSupervise makes 督办 messages come at once and often, for a test.
+func shortSupervise(t *testing.T) {
+	t.Helper()
+	g, e, u := superviseGather, superviseEvery, superviseUrgentEvery
+	superviseGather, superviseEvery, superviseUrgentEvery = 20*time.Millisecond, 150*time.Millisecond, 60*time.Millisecond
+	t.Cleanup(func() { superviseGather, superviseEvery, superviseUrgentEvery = g, e, u })
+}
+
+// The first signal waits superviseGather; after a message, a signal waits superviseEvery (an urgent one
+// superviseUrgentEvery) from it.
+func TestDigestWait(t *testing.T) {
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	review := superviseSignal{Kind: sigReview, At: now}
+	needs := superviseSignal{Kind: sigNeedsYou, At: now}
+	for _, c := range []struct {
+		name    string
+		last    time.Time
+		pending []superviseSignal
+		want    time.Duration
+		ok      bool
+	}{
+		{"none", time.Time{}, nil, 0, false},
+		{"first", time.Time{}, []superviseSignal{review}, superviseGather, true},
+		{"gathered", time.Time{}, []superviseSignal{{Kind: sigReview, At: now.Add(-time.Minute)}}, 0, true},
+		{"review after a message", now.Add(-time.Minute), []superviseSignal{review}, superviseEvery - time.Minute, true},
+		{"urgent after a message", now.Add(-time.Minute), []superviseSignal{needs}, superviseUrgentEvery - time.Minute, true},
+		{"the soonest of them", now.Add(-time.Minute), []superviseSignal{review, needs}, superviseUrgentEvery - time.Minute, true},
+		{"long after", now.Add(-time.Hour), []superviseSignal{review}, superviseGather, true},
+	} {
+		got, ok := digestWait(now, c.last, c.pending)
+		if got != c.want || ok != c.ok {
+			t.Errorf("%s: digestWait = %v, %v; want %v, %v", c.name, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+// What the agents' state alone says: waiting for an answer for 3 minutes (a quiet task's at once), working with
+// nothing moving for max(20 minutes, 1.5× the expected time); nothing for a task waiting for review or the user, done,
+// or not supervised. The key is the stretch of state: the same wait is the same key.
+func TestWatchSignals(t *testing.T) {
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	sup := &Supervision{Supervisor: "main", ExpectMinutes: 40}
+	waiting := func(ago time.Duration) proto.Session {
+		return proto.Session{MachineID: "box", SessionID: "s1", State: proto.StateNeedsYou, PendingInteractions: 1, StateSince: now.Add(-ago)}
+	}
+	working := func(ago time.Duration) proto.Session {
+		return proto.Session{MachineID: "box", SessionID: "s1", State: proto.StateWorking, UpdatedAt: now.Add(-ago), Activity: "在编译"}
+	}
+	kinds := func(list []superviseSignal) string {
+		var out []string
+		for _, g := range list {
+			out = append(out, g.Kind)
+		}
+		return strings.Join(out, ",")
+	}
+	done := now
+	for _, c := range []struct {
+		name   string
+		todo   Todo
+		agents []proto.Session
+		want   string
+	}{
+		{"waits a minute", Todo{ID: "t", Supervision: sup}, []proto.Session{waiting(time.Minute)}, ""},
+		{"waits long", Todo{ID: "t", Supervision: sup}, []proto.Session{waiting(4 * time.Minute)}, sigNeedsYou},
+		{"quiet waits", Todo{ID: "t", Supervision: sup, Quiet: true}, []proto.Session{waiting(time.Second)}, sigNeedsYou},
+		{"works", Todo{ID: "t", Supervision: sup}, []proto.Session{working(30 * time.Minute)}, ""},         // 40 × 1.5 = 60
+		{"stuck", Todo{ID: "t", Supervision: sup}, []proto.Session{working(61 * time.Minute)}, sigStalled}, // over 60
+		{"stuck, no estimate", Todo{ID: "t", Supervision: &Supervision{}}, []proto.Session{working(21 * time.Minute)}, sigStalled},
+		{"waits for review", Todo{ID: "t", Supervision: &Supervision{State: reviewPending}}, []proto.Session{waiting(time.Hour)}, sigReview},
+		{"waits for the user", Todo{ID: "t", Supervision: &Supervision{State: reviewNeedsUser}}, []proto.Session{working(time.Hour)}, ""},
+		{"done", Todo{ID: "t", Supervision: sup, DoneAt: &done}, []proto.Session{waiting(time.Hour)}, ""},
+		{"not supervised", Todo{ID: "t"}, []proto.Session{waiting(time.Hour)}, ""},
+	} {
+		if got := kinds(watchSignals(c.todo, c.agents, now)); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	a := watchSignals(Todo{ID: "t", Supervision: sup}, []proto.Session{waiting(4 * time.Minute)}, now)
+	b := watchSignals(Todo{ID: "t", Supervision: sup}, []proto.Session{waiting(4 * time.Minute)}, now.Add(time.Minute))
+	if a[0].Key != b[0].Key || a[0].Minutes != 4 || b[0].Minutes != 5 {
+		t.Fatalf("the same wait: %+v / %+v", a[0], b[0])
+	}
+}
+
+// newSupervisedService is newQuietService with a task handed out from the main conversation, its agent s1 on box
+// at work, and the criteria given.
+func newSupervisedService(t *testing.T) (*Service, *fakeHub, Todo) {
+	t.Helper()
+	s, f := newQuietService(t)
+	f.judge = `{"verdict":"done","reason":"PR 已合并"}`
+	raw, _ := json.Marshal(map[string]any{"tasks": []map[string]any{{
+		"title": "修登录崩溃", "prompt": "iPad 横屏时登录页崩溃，修好并补测试", "machine": "box", "cwd": "/code/app", "readonly": true,
+		"why": "这个仓库最近在 box 上", "done_when": []string{"PR 合并到 master", " ", "浅色 / 深色截图贴进 PR", "PR 合并到 master"},
+		"expect_minutes": 30,
+	}}})
+	if _, err := s.toolTaskPlan(context.Background(), "conv1", raw); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the link", func() bool { return len(onlyTodo(s).Agents) == 1 })
+	todo := onlyTodo(s)
+	if v := todo.Supervision; v == nil || len(v.DoneWhen) != 2 || v.ExpectMinutes != 30 || v.Supervisor != "conv1" {
+		t.Fatalf("supervision = %+v", todo.Supervision)
+	}
+	return s, f, todo
+}
+
+func sentToAgent(f *fakeHub) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, a := range f.agentSent {
+		text, _ := a["text"].(string)
+		out = append(out, text)
+	}
+	return out
+}
+
+// The whole round: the agent is told the criteria; it stops asking which way to go and the main conversation hears
+// it (one message, not pushed); it answers, stops with the work done: waits for review; rework sends the gaps back
+// (round 1, 2); a third rework goes to the user; accepted closes the todo by review.
+func TestSupervisedTaskRound(t *testing.T) {
+	s, f, todo := newSupervisedService(t)
+	ctx := context.Background()
+	f.mu.Lock()
+	prompt, _ := f.starts[0]["prompt"].(string)
+	f.mu.Unlock()
+	if !strings.Contains(prompt, "验收标准") || !strings.Contains(prompt, "- 浅色 / 深色截图贴进 PR") {
+		t.Fatalf("the agent was not told the criteria:\n%s", prompt)
+	}
+
+	// It stops to ask: the judge says it waits for the user; the main conversation is told so.
+	f.judge = `{"verdict":"needs_user","reason":"问用两种部署走法里的哪一种"}`
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "两种走法：A 先灰度，B 直接全量。你选一个？", 0)
+	waitFor(t, "the message", func() bool { return len(f.notices()) == 1 })
+	n := f.notices()[0]
+	for _, want := range []string{"📋 督办", "Agent 停下了，但没做完（要用户决定：问用两种部署走法里的哪一种）", "验收标准：PR 合并到 master；浅色 / 深色截图贴进 PR",
+		"A 先灰度，B 直接全量", "能自己拍板的就自己拍"} {
+		if !strings.Contains(n, want) {
+			t.Errorf("message lacks %q:\n%s", want, n)
+		}
+	}
+	if !s.supervising("conv1") {
+		t.Fatal("its turn would be pushed")
+	}
+	var held bool
+	for _, v := range s.snapshot(ctx).Sessions {
+		held = held || v.SessionID == "conv1" && v.Supervising
+	}
+	if !held {
+		t.Fatal("the snapshot does not say the turn is held")
+	}
+	s.UserSpoke(ctx, SessionRef{MachineID: "server", SessionID: "conv1"})
+	if s.supervising("conv1") {
+		t.Fatal("still held after the user spoke")
+	}
+
+	// The same stop is told once.
+	s.taskTurnEnded(ctx, "box", "s1")
+	time.Sleep(4 * superviseEvery)
+	if got := len(f.notices()); got != 1 {
+		t.Fatalf("%d messages", got)
+	}
+
+	// The assistant decided; the agent works and is done: waits for review, told again.
+	f.judge = `{"verdict":"done","reason":"PR 已合并"}`
+	agentTurn(s, f, proto.StatusWorking, "", 0)
+	agentTurn(s, f, proto.StatusDone, "按 A 做完了，PR https://github.com/o/r/pull/901 已合并", 0)
+	waitFor(t, "the review message", func() bool { return len(f.notices()) == 2 })
+	if n := f.notices()[1]; !strings.Contains(n, "hub 判断做完了，等你验收（PR 已合并）") || !strings.Contains(n, "pull/901") {
+		t.Fatalf("message:\n%s", n)
+	}
+	if now := todoNow(s, todo.ID); now.DoneAt != nil || now.Supervision.State != reviewPending {
+		t.Fatalf("not waiting for review: %+v", now.Supervision)
+	}
+
+	review := func(verdict, note string, checks ...ReviewCheck) string {
+		t.Helper()
+		raw, _ := json.Marshal(map[string]any{"todo_id": todo.ID, "verdict": verdict, "note": note, "checks": checks})
+		res, err := s.runTool(ctx, "server", "conv1", "task_review", raw)
+		if err != nil {
+			t.Fatalf("%s: %v", verdict, err)
+		}
+		return res
+	}
+	for round := 1; round <= maxReworkRounds; round++ {
+		res := review("rework", "截图只有浅色，补深色", ReviewCheck{Criterion: "PR 合并到 master", Met: true, Evidence: "pull/901 merged"},
+			ReviewCheck{Criterion: "浅色 / 深色截图贴进 PR", Met: false, Evidence: "只有浅色"})
+		if !strings.Contains(res, "Rework round") {
+			t.Fatalf("round %d: %s", round, res)
+		}
+		sent := sentToAgent(f)
+		if len(sent) != round || !strings.Contains(sent[round-1], "第 "+string(rune('0'+round))+" 轮返工") ||
+			!strings.Contains(sent[round-1], "❌ 浅色 / 深色截图贴进 PR：只有浅色") || !strings.Contains(sent[round-1], "补深色") {
+			t.Fatalf("round %d sent: %q", round, sent)
+		}
+		if v := todoNow(s, todo.ID).Supervision; v.State != reviewRework || v.Round != round {
+			t.Fatalf("round %d: %+v", round, v)
+		}
+		agentTurn(s, f, proto.StatusWorking, "", 0)
+		if v := todoNow(s, todo.ID).Supervision; v.State != reviewRework {
+			t.Fatalf("working on round %d: %+v", round, v)
+		}
+		agentTurn(s, f, proto.StatusDone, "补了深色截图", 0)
+		waitFor(t, "the review again", func() bool { return todoNow(s, todo.ID).Supervision.State == reviewPending })
+	}
+	if res := review("rework", "还是不对"); !strings.Contains(res, "waits for the user") {
+		t.Fatalf("third rework: %s", res)
+	}
+	if v := todoNow(s, todo.ID).Supervision; v.State != reviewNeedsUser || v.Round != maxReworkRounds || len(sentToAgent(f)) != maxReworkRounds {
+		t.Fatalf("after the third: %+v, sent %d", v, len(sentToAgent(f)))
+	}
+	if res := review("accepted", "用户看过截图，可以"); !strings.Contains(res, "accepted and closed") {
+		t.Fatalf("accepted: %s", res)
+	}
+	done := todoNow(s, todo.ID)
+	if done.DoneAt == nil || done.DoneBy != db.DoneByReview || done.DoneReason != "用户看过截图，可以" || done.Supervision.State != reviewAccepted ||
+		len(done.Supervision.Reviews) != maxReworkRounds+2 {
+		t.Fatalf("accepted: %+v %+v", done, done.Supervision)
+	}
+	if !strings.Contains(feedKinds(s, "conv1"), "review") {
+		t.Fatalf("feed: %s", feedKinds(s, "conv1"))
+	}
+	// Done: rework is refused (a new task for what is left).
+	raw, _ := json.Marshal(map[string]any{"todo_id": todo.ID, "verdict": "rework", "note": "x"})
+	if _, err := s.runTool(ctx, "server", "conv1", "task_review", raw); err == nil {
+		t.Fatal("rework on a done task")
+	}
+	// Another conversation does not review it.
+	raw, _ = json.Marshal(map[string]any{"todo_id": todo.ID, "verdict": "accepted"})
+	if _, err := s.runTool(ctx, "server", "conv2", "task_review", raw); err == nil {
+		t.Fatal("reviewed from another conversation")
+	}
+}
+
+// Several tasks' signals within the gather time are one message, what waits on a decision first; a message still
+// queued behind the main conversation's turn takes the next ones in instead of being followed by another.
+func TestDigestBatches(t *testing.T) {
+	s, f := newQuietService(t)
+	ctx := context.Background()
+	var ids []string
+	for _, title := range []string{"甲", "乙"} {
+		todo, err := s.createTodo(ctx, title, "做"+title, "conv1", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.superviseTodo(ctx, todo.ID, "conv1", []string{"PR 合并"}, 0)
+		ids = append(ids, todo.ID)
+	}
+	if _, _, err := s.updateSupervision(ctx, ids[0], func(v *Supervision) bool { v.State = reviewPending; return true }); err != nil {
+		t.Fatal(err)
+	}
+	s.signal(superviseSignal{Todo: ids[0], Kind: sigReview, Key: "1", Detail: "做完了"})
+	s.signal(superviseSignal{Todo: ids[1], Kind: sigFailed, Key: "x", Detail: "box 离线"})
+	waitFor(t, "the message", func() bool { return len(f.notices()) == 1 })
+	n := f.notices()[0]
+	if !strings.Contains(n, "有 2 个要你处理") || strings.Index(n, "任务「乙」") > strings.Index(n, "任务「甲」") {
+		t.Fatalf("message:\n%s", n)
+	}
+
+	busy := proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusWorking}
+	f.setSessions("server", busy)
+	s.signal(superviseSignal{Todo: ids[0], Kind: sigStalled, Key: "a", Minutes: 25})
+	waitFor(t, "the queued message", func() bool { return s.queuedFor("conv1") == 1 })
+	s.signal(superviseSignal{Todo: ids[1], Kind: sigIdle, Key: "b", Detail: "没做完"})
+	time.Sleep(3 * superviseEvery)
+	if got := s.queuedFor("conv1"); got != 1 {
+		t.Fatalf("%d queued", got)
+	}
+	idle := busy
+	idle.Status = proto.StatusIdle
+	f.setSessions("server", idle)
+	s.drainRelays("server", []proto.Session{idle})
+	waitFor(t, "the merged message", func() bool { return len(f.notices()) == 2 })
+	if n := f.notices()[1]; !strings.Contains(n, "25 分钟没有进展") || !strings.Contains(n, "Agent 停下了，但没做完（没做完）") {
+		t.Fatalf("merged:\n%s", n)
+	}
+}
+
+func TestTaskHealth(t *testing.T) {
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	done := now
+	for _, c := range []struct {
+		todo   Todo
+		agents []proto.Session
+		want   string
+	}{
+		{Todo{}, nil, ""},
+		{Todo{Supervision: &Supervision{}}, []proto.Session{{State: proto.StateWorking, UpdatedAt: now}}, "正常"},
+		{Todo{Supervision: &Supervision{}}, []proto.Session{{State: proto.StateWorking, UpdatedAt: now.Add(-25 * time.Minute)}}, "卡住 25 分钟"},
+		{Todo{Supervision: &Supervision{}}, []proto.Session{{State: proto.StateNeedsYou, StateSince: now.Add(-5 * time.Minute)}}, "等回答 5 分钟"},
+		{Todo{Supervision: &Supervision{State: reviewPending}}, nil, "待验收"},
+		{Todo{Supervision: &Supervision{State: reviewRework, Round: 2}}, []proto.Session{{State: proto.StateWorking, UpdatedAt: now}}, "返工第 2 轮"},
+		{Todo{Supervision: &Supervision{State: reviewNeedsUser}}, nil, "等你决定"},
+		{Todo{Supervision: &Supervision{State: reviewAccepted}, DoneAt: &done}, nil, "已验收"},
+		{Todo{Supervision: &Supervision{State: reviewAccepted}}, nil, "正常"}, // reopened by the user
+	} {
+		if got, _ := taskHealth(c.todo, c.agents, now); got != c.want {
+			t.Errorf("%+v: %q, want %q", c.todo.Supervision, got, c.want)
+		}
+	}
+}
+
+func TestDuplicateHints(t *testing.T) {
+	task := PlanTask{Title: "iOS 侧边栏显示扩展页面", Prompt: "做 #2813", Machine: "mac", Cwd: "/code/app"}
+	todos := []Todo{
+		{ID: "t1", Title: "iPad 侧边栏", Notes: "见 issues/2813", Agents: []TodoAgent{{MachineID: "box", Cwd: "/x"}}},
+		{ID: "t2", Title: "iOS 侧边栏显示扩展的页面", Agents: []TodoAgent{{MachineID: "box", Cwd: "/y"}}},
+		{ID: "t3", Title: "修登录崩溃", Agents: []TodoAgent{{MachineID: "mac", Cwd: "/code/app/ios"}}},
+		{ID: "t4", Title: "iOS 侧边栏显示扩展页面", DoneAt: new(time.Now())},
+	}
+	sessions := []proto.Session{
+		{MachineID: "mac", SessionID: "abcdef123456", Cwd: "/code/app", Title: "侧边栏扩展页面", State: proto.StateWorking},
+		{MachineID: "mac", SessionID: "zzz", Cwd: "/code/app", Title: "无关的事", State: proto.StateWorking},
+		{MachineID: "mac", SessionID: "yyy", Cwd: "/code/app", Title: "侧边栏扩展页面", State: proto.StateIdle},
+	}
+	got := strings.Join(duplicateHints(task, todos, sessions), "\n")
+	for _, want := range []string{"任务「iPad 侧边栏」（t1）也提到 #2813", "任务「iOS 侧边栏显示扩展的页面」（t2）标题相近", "Agent「侧边栏扩展页面」"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks %q:\n%s", want, got)
+		}
+	}
+	for _, not := range []string{"t3", "t4", "无关", "yyy"} {
+		if strings.Contains(got, not) {
+			t.Errorf("has %q:\n%s", not, got)
+		}
+	}
+	if refs := issueRefs("修 #12 和 #2813，见 https://github.com/o/r/pull/3001"); strings.Join(refs, ",") != "#2813,#3001" {
+		t.Fatalf("refs = %q", refs)
+	}
+}
+
+// task_plan says what looks like work already going on, and plans it all the same.
+func TestTaskPlanSaysDuplicates(t *testing.T) {
+	s, f := newQuietService(t)
+	f.setSessions("box", proto.Session{SessionID: "busy", MachineID: "box", Cwd: "/code/app", Title: "修登录崩溃的问题", State: proto.StateWorking,
+		Status: proto.StatusWorking})
+	res, err := s.toolTaskPlan(context.Background(), "conv1", planArgs(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res, "Possible duplicates") || !strings.Contains(res, "「修登录崩溃」可能和这些重复") {
+		t.Fatalf("result: %s", res)
+	}
+	waitFor(t, "the task", func() bool { return todoCount(s) == 1 })
+}
+
+func TestGoldenSupervise(t *testing.T) {
+	golden(t, "supervise.digest", prompts.RenderSupervise(prompts.Supervise{Entries: sortEntries([]prompts.SuperviseEntry{
+		{ID: "todo_1", Title: "修登录崩溃", Kind: sigReview, Detail: "PR 已合并", DoneWhen: []string{"PR 合并到 master", "浅色 / 深色截图贴进 PR"},
+			Machine: "box", Session: "a1b2c3d4", Last: "修好了，PR https://github.com/o/r/pull/901 已合并", Link: "https://hub.example.com/todos?id=todo_1"},
+		{ID: "todo_2", Title: "部署 hub", Kind: sigIdle, Detail: "要用户决定：两种走法选一个", Machine: "box", Round: 1, Last: "A 先灰度，B 直接全量。选哪个？"},
+		{ID: "todo_3", Title: "整理材料", Kind: sigNeedsYou, Minutes: 4, Quiet: true, Ask: "- 用哪个分支？（选项：main / dev）"},
+		{ID: "todo_4", Title: "跑 UI 测试", Kind: sigStalled, Minutes: 35, Detail: "在等编译"},
+	})}))
+	golden(t, "supervise.rework", prompts.RenderSuperviseRework(prompts.SuperviseRework{Round: 1, Max: 2, Note: "补深色截图",
+		Checks: []prompts.SuperviseCheck{{Criterion: "PR 合并到 master", Met: true, Evidence: "pull/901 merged"}, {Criterion: "浅色 / 深色截图贴进 PR", Evidence: "只有浅色"}}}))
+	golden(t, "supervise.done_when", prompts.RenderTaskDoneWhen([]string{"PR 合并到 master", "线上 hub 已部署并验证"}))
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC)
+	golden(t, "assistant_snapshot.supervised", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC", Tasks: []prompts.SnapshotTask{
+		{ID: "todo_2", Title: "部署 hub", State: "停着", Health: "等你决定", DoneWhen: 1},
+		{ID: "todo_1", Title: "修登录崩溃", State: "做完了（用户还没看）", Health: "待验收", DoneWhen: 2},
+		{ID: "todo_3", Title: "跑 UI 测试", State: "在做", Health: "卡住 35 分钟"},
+	}}))
+}

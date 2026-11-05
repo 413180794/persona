@@ -1,39 +1,64 @@
-// Persona's persona in the page (docs/persona.md, the app's PersonaStore / PersonaViews / PersonaPicker): the packages the
-// hub offers, the one chosen in this browser, and its face (a still avatar) and dot (the state's APNG, which the
-// browser animates by itself). The default is 团子 (MochiFace), also while a chosen package is not there (an older hub,
-// an empty list); with the page's mark chosen (the default before 2026-11-03) every place keeps what it showed before:
-// the views take that as `fallback`.
+// Persona's look in the page (形象, docs/persona.md, docs/extensions.md「形象」; the app's PersonaStore / PersonaViews /
+// PersonaPicker): the looks the hub offers (GET /looks: the built-in ones, its packages and the extensions'), the one
+// chosen — the user's, kept on the hub so every device shows it — and its face (a still avatar) and dot (the state's
+// APNG, which the browser animates by itself). The built-in ones the page draws: 团子 (the default, MochiFace), 面罩 and
+// 汇流 (BuiltinFaces); the default shows too while a chosen package is not there. An older hub without /looks gets the
+// packages from /personas and the choice stays this browser's.
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, errorText, getToken } from "../../lib/api";
 import {
-  avatarFile, BUILTIN_PERSONA, dotFile, isBuiltinPersona, MARK_PERSONA, PERSONA_STATES, personaFileURL, personaFiles, usablePersonas,
-  withChosenReady, type PersonaInfo, type PersonaState,
+  avatarFile, BUILTIN_PERSONA, CIRCUIT_PERSONA, dotFile, isBuiltinPersona, localized, lookPackages, MARK_PERSONA, PERSONA_STATES, personaFileURL,
+  personaFiles, usablePersonas, withChosenReady, type LookCurrent, type LookView, type PersonaInfo, type PersonaState,
 } from "../../lib/persona";
 import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
+import { CircuitFace, VisorFace } from "./BuiltinFaces";
 import { personaAccent, setPersonaAccent } from "../../ui/look";
-import { t } from "../../i18n";
+import { currentLanguage, t } from "../../i18n";
+import { setLookIcon } from "../../lib/look-icon";
 
 const CHOSEN_KEY = "jarvis.persona";
 
 interface PersonaStoreState {
   list: PersonaInfo[];
+  /** GET /looks's list; null on a hub without it. */
+  looks: LookView[] | null;
   loaded: boolean;
   error: string;
   chosen: string;
 }
 
-let ps: PersonaStoreState = { list: [], loaded: false, error: "", chosen: readChosen() };
+let ps: PersonaStoreState = { list: [], looks: null, loaded: false, error: "", chosen: readChosen() };
 const listeners = new Set<() => void>();
 let loading: Promise<void> | null = null;
+/** Whether the hub keeps the choice (it answered /looks): then choosing goes there. */
+let synced = false;
 
 function readChosen() {
   try {
     return localStorage.getItem(CHOSEN_KEY) || BUILTIN_PERSONA;
   } catch {
     return BUILTIN_PERSONA;
+  }
+}
+
+/** Whether this browser chose a look itself before the hub kept the choice (what moves up to the hub). */
+function choseHere(): string | null {
+  try {
+    return localStorage.getItem(CHOSEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveChosen(id: string) {
+  try {
+    if (id === BUILTIN_PERSONA) localStorage.removeItem(CHOSEN_KEY);
+    else localStorage.setItem(CHOSEN_KEY, id);
+  } catch {
+    // private mode: this page only
   }
 }
 
@@ -44,19 +69,44 @@ function setPS(patch: Partial<PersonaStoreState>) {
   const shown = ps.list.find((p) => p.id === ps.chosen);
   if (isBuiltinPersona(ps.chosen)) setPersonaAccent(null);
   else if (shown || (ps.loaded && !ps.error)) setPersonaAccent(personaAccent(shown?.manifest.colors));
+  setLookIcon(shown ?? null, isBuiltinPersona(ps.chosen) ? ps.chosen : BUILTIN_PERSONA);
   listeners.forEach((l) => l());
+}
+
+/** The choice to keep given the hub's: the hub's once it has one; else this browser's moves up (once, if unset there). */
+async function settleChoice(cur: LookCurrent): Promise<string> {
+  if (cur.id) return cur.id;
+  const mine = choseHere();
+  if (!mine) return BUILTIN_PERSONA;
+  try {
+    const r = await api<LookCurrent>("/looks/current", { method: "PUT", json: { id: mine, if_unset: true } });
+    return r.id ?? BUILTIN_PERSONA;
+  } catch {
+    // the hub does not know it (the page's old mark, a package gone): the default
+    return BUILTIN_PERSONA;
+  }
 }
 
 /** What the hub offers now (each time the picker opens, once per page load, and when the hub says the list changed). */
 export function refreshPersonas(): Promise<void> {
   if (loading) return loading;
-  loading = api<{ personas: PersonaInfo[] }>("/personas")
+  loading = api<{ looks: LookView[]; current: LookCurrent }>("/looks")
     .then(async (r) => {
-      const list = usablePersonas(r.personas);
-      const next = list.find((p) => p.id === ps.chosen);
-      const shown = ps.list.find((p) => p.id === ps.chosen);
+      synced = true;
+      return { list: usablePersonas(lookPackages(r.looks)), looks: r.looks, chosen: await settleChoice(r.current) };
+    })
+    .catch(async (e) => {
+      if (!(e instanceof ApiError && e.status === 404)) throw e;
+      synced = false; // an older hub: its packages, this browser's choice
+      const r = await api<{ personas: PersonaInfo[] }>("/personas");
+      return { list: usablePersonas(r.personas), looks: null, chosen: ps.chosen };
+    })
+    .then(async ({ list, looks, chosen }) => {
+      const next = list.find((p) => p.id === chosen);
+      const shown = ps.list.find((p) => p.id === chosen);
       const ready = !next || !shown || next.rev === shown.rev || (await preload(next));
-      setPS({ list: withChosenReady(list, ps.list, ps.chosen, ready), loaded: true, error: "" });
+      saveChosen(chosen);
+      setPS({ list: withChosenReady(list, ps.list, chosen, ready), looks, chosen, loaded: true, error: "" });
     })
     .catch((e) => setPS({ loaded: true, error: e instanceof ApiError && e.status === 404 ? t("assistant-persona.hub_unsupported") : t("assistant-persona.load_failed", { error: errorText(e) }) }))
     .finally(() => {
@@ -81,18 +131,23 @@ function preload(p: PersonaInfo): Promise<boolean> {
   ).then((all) => all.every(Boolean));
 }
 
-// A tiered look moved to another tier (docs/persona.md): list again, the new tier loaded before it shows.
+// The list changed (a tiered look moved, an extension with looks came or went): list again, the new files loaded first.
 onHubEvent("personas", () => void refreshPersonas());
-
-/** Choosing one keeps it when its package leaves the hub (the built-in shows meanwhile), as on the phone. */
-export function choosePersona(id: string) {
-  try {
-    if (id === BUILTIN_PERSONA) localStorage.removeItem(CHOSEN_KEY);
-    else localStorage.setItem(CHOSEN_KEY, id);
-  } catch {
-    // private mode: this page only
-  }
+// Another device chose a look (or the hub went back to the default when its extension went).
+onHubEvent("look", (m) => {
+  const id = typeof m.id === "string" ? m.id : "";
+  if (!id || id === ps.chosen) return;
+  saveChosen(id);
+  if (!isBuiltinPersona(id) && !ps.list.some((p) => p.id === id)) void refreshPersonas();
   setPS({ chosen: id });
+});
+
+/** Choosing one keeps it when its package leaves the hub (the built-in shows meanwhile), as on the phone; on a hub that
+ *  keeps the choice, every device follows. */
+export function choosePersona(id: string) {
+  saveChosen(id);
+  setPS({ chosen: id });
+  if (synced) void api("/looks/current", { method: "PUT", json: { id } }).catch(() => undefined);
 }
 
 function subscribe(l: () => void) {
@@ -105,7 +160,7 @@ function subscribe(l: () => void) {
 function usePersonaStore(): PersonaStoreState {
   const s = useSyncExternalStore(subscribe, () => ps);
   useEffect(() => {
-    if (!ps.loaded && !isBuiltinPersona(ps.chosen)) void refreshPersonas();
+    if (!ps.loaded && !loading) void refreshPersonas();
   }, []);
   return s;
 }
@@ -113,17 +168,41 @@ function usePersonaStore(): PersonaStoreState {
 export interface CurrentPersona {
   /** The package on screen; null: a built-in. */
   info: PersonaInfo | null;
-  /** 团子 is on screen (the default, or a chosen package that is not there); false with a package or the mark. */
+  /** The built-in look on screen (the chosen one, or the default while a chosen package is not there); null with a package. */
+  builtin: string | null;
+  /** 团子 is on screen. */
   mochi: boolean;
   name: string;
   chosen: string;
 }
 
-/** The persona on screen: the chosen package once the hub listed it, else the built-in named Persona. */
+/** The look on screen: the chosen package once the hub listed it, else the built-in (named Persona). */
 export function usePersona(): CurrentPersona {
   const s = usePersonaStore();
   const info = isBuiltinPersona(s.chosen) ? null : (s.list.find((p) => p.id === s.chosen) ?? null);
-  return { info, mochi: !info && s.chosen !== MARK_PERSONA, name: info?.manifest.name ?? "Persona", chosen: s.chosen };
+  const builtin = info ? null : isBuiltinPersona(s.chosen) ? s.chosen : BUILTIN_PERSONA;
+  const name = info ? localized(info.manifest.name, info.manifest.names, currentLanguage()) : "Persona";
+  return { info, builtin, mochi: builtin === BUILTIN_PERSONA, name, chosen: s.chosen };
+}
+
+/** Whether the page is dark now (the theme's class on <html>), for the dark avatar. */
+export function useDarkPage(): boolean {
+  const read = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const o = new MutationObserver(() => setDark(read()));
+    o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => o.disconnect();
+  }, []);
+  return dark;
+}
+
+/** A built-in look drawn at a size and state. */
+export function BuiltinLookFace({ id, size, state = "idle", className }: { id: string; size: number; state?: PersonaState; className?: string }) {
+  if (id === MARK_PERSONA) return <VisorFace size={size} state={state} className={className} />;
+  if (id === CIRCUIT_PERSONA) return <CircuitFace size={size} state={state} className={className} />;
+  return <MochiFace size={size} state={state} className={className} />;
 }
 
 function useReducedMotion(): boolean {
@@ -138,26 +217,19 @@ function useReducedMotion(): boolean {
   return reduce;
 }
 
-/** The page's own mark at a size (the same as 设置 › 助手): the built-in before 团子, still a choice. */
-export function BuiltinFace({ size }: { size: number }) {
-  return (
-    <span className="flex shrink-0 items-center justify-center rounded-full bg-ink text-surface" style={{ width: size, height: size }}>
-      <Icon name="spark" size={Math.round(size * 0.4)} />
-    </span>
-  );
-}
-
 /**
- * A still face in a circle: the package's avatar at the size it needs; 团子 when it is the one on screen; else `fallback`
- * (what the place showed before, for the page's mark).
+ * A still face in a circle: the package's avatar at the size it needs (its SVG, its dark one on a dark page), else the
+ * built-in look on screen. With `persona` given (a card in the picker), that package's, or `fallback` when its file
+ * does not load.
  */
-export function PersonaAvatar({ size, persona, fallback, className }: { size: number; persona?: PersonaInfo | null; fallback: React.ReactNode; className?: string }) {
+export function PersonaAvatar({ size, persona, fallback, className }: { size: number; persona?: PersonaInfo | null; fallback?: React.ReactNode; className?: string }) {
   const current = usePersona();
+  const dark = useDarkPage();
   const p = persona === undefined ? current.info : persona;
   const [broken, setBroken] = useState(false);
-  const file = p ? avatarFile(p.manifest, size * Math.max(2, Math.ceil(typeof devicePixelRatio === "number" ? devicePixelRatio : 2))) : undefined;
+  const file = p ? avatarFile(p.manifest, size * Math.max(2, Math.ceil(typeof devicePixelRatio === "number" ? devicePixelRatio : 2)), dark) : undefined;
   useEffect(() => setBroken(false), [p?.id, p?.rev]);
-  if (!p || !file || broken) return persona === undefined && current.mochi ? <MochiFace size={size} className={className} /> : <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined ? <BuiltinLookFace id={current.builtin ?? BUILTIN_PERSONA} size={size} className={className} /> : <>{fallback}</>;
   return (
     <img
       src={personaFileURL(p, file, getToken())}
@@ -175,10 +247,10 @@ export function PersonaAvatar({ size, persona, fallback, className }: { size: nu
 
 /**
  * The face moving for a state (the top bar's dot): the state's frames, looping. With reduced motion only the first frame,
- * which says the state by itself (a canvas draws an animated image's first frame). 团子 for the default, `fallback`
- * for the page's mark.
+ * which says the state by itself (a canvas draws an animated image's first frame). The built-in look drawn in that
+ * state when the look on screen is one; `fallback` for a given package whose frames do not load.
  */
-export function PersonaDot({ size, state, persona, fallback, className }: { size: number; state: PersonaState; persona?: PersonaInfo | null; fallback: React.ReactNode; className?: string }) {
+export function PersonaDot({ size, state, persona, fallback, className }: { size: number; state: PersonaState; persona?: PersonaInfo | null; fallback?: React.ReactNode; className?: string }) {
   const current = usePersona();
   const p = persona === undefined ? current.info : persona;
   const still = useReducedMotion();
@@ -186,7 +258,7 @@ export function PersonaDot({ size, state, persona, fallback, className }: { size
   const file = p ? dotFile(p.manifest, state) : undefined;
   const url = p && file ? personaFileURL(p, file, getToken()) : "";
   useEffect(() => setBroken(false), [url]);
-  if (!p || !file || broken) return persona === undefined && current.mochi ? <MochiFace size={size} state={state} className={className} /> : <>{fallback}</>;
+  if (!p || !file || broken) return persona === undefined ? <BuiltinLookFace id={current.builtin ?? BUILTIN_PERSONA} size={size} state={state} className={className} /> : <>{fallback}</>;
   if (still) return <StillFrame url={url} size={size} className={className} onError={() => setBroken(true)} />;
   return (
     <img
@@ -243,24 +315,38 @@ function Swatches({ p }: { p: PersonaInfo }) {
 }
 
 /**
- * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): 团子 (the default), the page's mark, then the hub's
- * packages, and the chosen one's dot in each state. `builtin` is the mark's face. Choosing changes the name, face and dot in this browser; the page's colors follow it only with 主题色「跟随形象」 (ui/look.ts).
+ * 形象 (设置 › 通用 and the profile page; the app's 设置 › 外观 › 形象): the one setting for Persona's face, name, the
+ * page's mark and icon (#3200): the built-in looks (团子 the default, 面罩, 汇流), then the hub's packages and the
+ * extensions' looks, and the chosen one's dot in each state. On a hub that keeps the choice every device follows it; the
+ * page's colors follow it only with 主题色「跟随形象」 (ui/look.ts).
  */
-export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
+export function PersonaPicker() {
   const s = usePersonaStore();
   const current = usePersona();
+  const lang = currentLanguage();
   useEffect(() => {
     void refreshPersonas();
   }, []);
-  const cards: { id: string; title: string; sub: React.ReactNode; face: React.ReactNode }[] = [
-    { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), sub: <span className="text-[11px] text-ink-3">{t("assistant-persona.default_avatar")}</span>, face: <MochiFace size={56} /> },
-    { id: MARK_PERSONA, title: t("assistant-persona.mark"), sub: <span className="text-[11px] text-ink-3">{t("assistant-persona.mark_sub")}</span>, face: builtin },
-    ...s.list.map((p) => ({
-      id: p.id,
-      title: p.manifest.name,
-      sub: p.manifest.about ? <span className="max-w-full truncate text-[11px] whitespace-nowrap text-ink-3">{p.manifest.about}</span> : <Swatches p={p} />,
-      face: <PersonaAvatar size={56} persona={p} fallback={<MochiFace size={56} />} />,
-    })),
+  const sub = (text: string) => <span className="max-w-full truncate text-[11px] whitespace-nowrap text-ink-3">{text}</span>;
+  const builtins: { id: string; title: string; sub: string }[] = [
+    { id: BUILTIN_PERSONA, title: t("assistant-persona.mochi"), sub: t("assistant-persona.default_avatar") },
+    { id: MARK_PERSONA, title: t("assistant-persona.visor"), sub: t("assistant-persona.follows_theme") },
+    { id: CIRCUIT_PERSONA, title: t("assistant-persona.circuit"), sub: t("assistant-persona.follows_theme") },
+  ];
+  const lookOf = (id: string) => s.looks?.find((l) => l.id === id);
+  const cards: { id: string; title: string; label: string; sub: React.ReactNode; face: React.ReactNode }[] = [
+    ...builtins.map((b) => ({ id: b.id, title: b.title, label: b.id === BUILTIN_PERSONA ? t("assistant-persona.mochi_default") : b.title, sub: sub(b.sub), face: <BuiltinLookFace id={b.id} size={56} /> })),
+    ...s.list.map((p) => {
+      const title = localized(p.manifest.name, p.manifest.names, lang);
+      const from = lookOf(p.id)?.extension_name ?? p.manifest.source?.extension_name;
+      return {
+        id: p.id,
+        title,
+        label: title,
+        sub: p.manifest.about ? sub(p.manifest.about) : from ? sub(t("assistant-persona.from_extension", { name: from })) : <Swatches p={p} />,
+        face: <PersonaAvatar size={56} persona={p} fallback={<MochiFace size={56} />} />,
+      };
+    }),
   ];
   const missing = !isBuiltinPersona(s.chosen) && s.loaded && !s.list.some((p) => p.id === s.chosen);
   return (
@@ -274,10 +360,10 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
               type="button"
               role="radio"
               aria-checked={selected}
-              aria-label={c.id === BUILTIN_PERSONA ? t("assistant-persona.mochi_default") : c.title}
+              aria-label={c.label}
               onClick={() => choosePersona(c.id)}
               className={cx(
-                "flex flex-col items-center gap-2 rounded-card px-2 pt-3.5 pb-2.5 transition-[background-color,box-shadow] duration-150",
+                "flex min-w-0 flex-col items-center gap-2 rounded-card px-2 pt-3.5 pb-2.5 transition-[background-color,box-shadow] duration-150",
                 selected ? "bg-accent-tint shadow-[inset_0_0_0_1.5px_var(--accent)]" : "bg-inset shadow-hairline hover:bg-hover",
               )}
             >
@@ -291,16 +377,14 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
           );
         })}
       </div>
-      {(current.info || current.mochi) && (
-        <div className="grid grid-cols-5 gap-1 rounded-card bg-inset py-2.5 shadow-hairline" aria-label={t("assistant-persona.states_label", { name: current.name })} role="img">
-          {PERSONA_STATES.map((st) => (
-            <span key={st.id} className="flex flex-col items-center gap-1">
-              <PersonaDot size={40} state={st.id} fallback={null} />
-              <span className="text-[11px] whitespace-nowrap text-ink-3">{st.title}</span>
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-5 gap-1 rounded-card bg-inset py-2.5 shadow-hairline" aria-label={t("assistant-persona.states_label", { name: current.name })} role="img">
+        {PERSONA_STATES.map((st) => (
+          <span key={st.id} className="flex flex-col items-center gap-1">
+            <PersonaDot size={40} state={st.id} />
+            <span className="text-[11px] whitespace-nowrap text-ink-3">{st.title}</span>
+          </span>
+        ))}
+      </div>
       {missing && <p className="px-1 text-[11.5px] text-ink-3">{t("assistant-persona.missing")}</p>}
       {s.error && <p role="alert" className="px-1 text-[11.5px] text-orange">{s.error}</p>}
       {s.loaded && !s.error && !s.list.length && <p className="px-1 text-[11.5px] leading-relaxed text-ink-3">{t("assistant-persona.none")}</p>}

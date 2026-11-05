@@ -103,6 +103,10 @@ type SnapshotTask struct {
 	// Workflows: that agent's background workflow runs still running (#2935): its turn ended to wait for them.
 	Workflows []SnapshotWorkflow
 	Link      string // the todo's page in the hub's web app ("" when the hub has no public_url)
+	// Health: how a task the main conversation supervises stands (正常, 卡住 N 分钟, 等回答, 待验收, 返工第 N 轮, 等你决定,
+	// 已验收; #3124), "" for any other; DoneWhen how many criteria it has.
+	Health   string
+	DoneWhen int
 }
 
 // SnapshotWorkflow is a Claude Code workflow run still running in an agent's background (#2935): the agent's turn
@@ -229,6 +233,48 @@ type TaskNotice struct {
 }
 
 func RenderTaskNotice(n TaskNotice) string { return render("assistant/task_notice", n) }
+
+// Supervise is a 督办 message: the tasks the main conversation handed out that need it now (#3124), what waits on a
+// decision first.
+type Supervise struct {
+	Entries []SuperviseEntry
+}
+
+// SuperviseEntry is one task in it, with what happened (Kind: review, idle, needs_you, stalled, interrupted, failed).
+type SuperviseEntry struct {
+	ID, Title, Kind string
+	Detail          string   // why: the judge's reason, the step it is stuck on, the model service's error, why it did not start
+	Minutes         int      // how long it has waited (needs_you) or not moved (stalled)
+	Ask             string   // needs_you: what it asks
+	DoneWhen        []string // what done means
+	Round           int      // reworks so far
+	Machine         string   // where its agent runs (a name)
+	Session         string   // its agent's session id (short)
+	Last            string   // what its agent said last
+	Link            string   // the task's page ("" when the hub has no public_url)
+	Quiet           bool     // the user was not pushed about it
+}
+
+func RenderSupervise(s Supervise) string { return render("assistant/supervise", s) }
+
+// SuperviseRework is what a task's agent is sent when its supervisor sends the work back.
+type SuperviseRework struct {
+	Round, Max int
+	Checks     []SuperviseCheck
+	Note       string
+}
+
+type SuperviseCheck struct {
+	Criterion, Evidence string
+	Met                 bool
+}
+
+func RenderSuperviseRework(r SuperviseRework) string { return render("assistant/supervise_rework", r) }
+
+// RenderTaskDoneWhen is what follows a supervised task's prompt: what done means, and that the agent shows it.
+func RenderTaskDoneWhen(criteria []string) string {
+	return render("assistant/task_done_when", struct{ Criteria []string }{criteria})
+}
 
 // Relay is a message one assistant conversation sends another (conversation_send / conversation_new): what was
 // written, behind a note saying where it comes from and how many hops it is from the user's own message.

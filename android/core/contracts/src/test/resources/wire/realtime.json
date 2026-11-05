@@ -7,5 +7,6 @@
   {"type":"lark","feed_ids":["feed_example"]},
   {"type":"inbox"},
   {"type":"error","machine_id":"m1","session_id":"s1","error":"结果待确认","code":"example","delivered":"unknown","retryable":false,"draft":"示例草稿","clearable":"示例草稿"},
-  {"type":"personas"}
+  {"type":"personas"},
+  {"type": "look", "id": "aurora", "effective": "aurora"}
 ]

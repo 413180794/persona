@@ -77,6 +77,11 @@ data class DesktopsEvent(val desktops: List<HubDesktop> = emptyList()) : ServerE
 @Serializable
 data class HubDesktop(val device: String = "", val name: String = "", val since: String? = null)
 
+/** The chosen look changed (another device chose one, or its extension went and the hub went back to the default, #3200). */
+@KeepGeneratedSerializer
+@Serializable(with = LookEventSerializer::class)
+data class LookEvent(val id: String = "", val effective: String = "persona") : ServerEvent
+
 @KeepGeneratedSerializer
 @Serializable(with = TerminalEventSerializer::class)
 data class TerminalEvent(
@@ -133,6 +138,7 @@ object LarkEventSerializer : WireSerializer<LarkEvent>(LarkEvent.generatedSerial
 object InboxEventSerializer : WireSerializer<InboxEvent>(InboxEvent.generatedSerializer())
 object PersonasEventSerializer : WireSerializer<PersonasEvent>(PersonasEvent.generatedSerializer())
 object DesktopsEventSerializer : WireSerializer<DesktopsEvent>(DesktopsEvent.generatedSerializer())
+object LookEventSerializer : WireSerializer<LookEvent>(LookEvent.generatedSerializer())
 object TerminalEventSerializer : WireSerializer<TerminalEvent>(TerminalEvent.generatedSerializer())
 object TerminalControlEventSerializer : WireSerializer<TerminalControlEvent>(TerminalControlEvent.generatedSerializer())
 object ErrorEventSerializer : WireSerializer<ErrorEvent>(ErrorEvent.generatedSerializer())

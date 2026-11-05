@@ -76,6 +76,10 @@ var funcs = template.FuncMap{
 		}
 		return strings.Join(lines, "\n") + "\n"
 	},
+	// chomp drops trailing newlines (indent's, where the template goes on on the same line).
+	"chomp": func(s string) string { return strings.TrimRight(s, "\n") },
+	// inc is i+1 (a list's numbers from a range's index).
+	"inc": func(i int) int { return i + 1 },
 	// blank: only whitespace.
 	"blank": func(s string) bool { return strings.TrimSpace(s) == "" },
 	// first is at most n elements of a slice.

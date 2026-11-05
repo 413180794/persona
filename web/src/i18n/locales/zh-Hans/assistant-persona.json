@@ -4,11 +4,13 @@
   "no_colors": "没带配色",
   "mochi": "团子",
   "default_avatar": "默认形象",
-  "mark": "标志",
-  "mark_sub": "网页的标志",
   "avatar": "形象",
   "mochi_default": "团子，默认形象",
   "states_label": "{name}的五种状态：空闲、思考中、工作中、等你处理、离线",
   "missing": "选中的形象现在不在 hub 上，先用默认形象；回来后会自动换回。",
-  "none": "hub 上还没有别的形象。形象包放在 hub 机器的 ~/.persona/personas/ 下（docs/persona.md）。"
+  "none": "hub 上还没有别的形象。装一个带形象的扩展（docs/extensions.md「形象」），或者把形象包放在 hub 机器的 ~/.persona/personas/ 下。",
+  "visor": "面罩",
+  "circuit": "汇流",
+  "follows_theme": "颜色随主题色",
+  "from_extension": "来自 {name}"
 }

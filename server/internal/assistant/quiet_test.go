@@ -11,13 +11,14 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// newQuietService is newTaskService with the main conversation conv1 (idle, on machine server) and a short notice
-// delay.
+// newQuietService is newTaskService with the main conversation conv1 (idle, on machine server), a short notice
+// delay and 督办 messages (supervise.go) that come at once and often.
 func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	t.Helper()
 	old := quietNoticeDelay
 	quietNoticeDelay = 30 * time.Millisecond
 	t.Cleanup(func() { quietNoticeDelay = old })
+	shortSupervise(t)
 	s, f := newTaskService(t)
 	f.hello.Assistant.MachineID = "server"
 	setSettings(t, s, func(v *Settings) { v.Main = "conv1" })
@@ -59,19 +60,21 @@ func agentTurn(s *Service, f *fakeHub, status, text string, pending int) {
 	}
 }
 
-// A task the main conversation opens is quiet: when it is done, the main conversation gets one notice with what its
-// agent said, as is (not wrapped like a message from another conversation); the receipt is there as always.
+// A task the main conversation opens is quiet and supervised: when it is done, the main conversation gets one 督办
+// message with what its agent said, as is (not wrapped like a message from another conversation), and the task waits
+// for review (not closed); the receipt is there as always.
 func TestQuietTaskTellsTheMainConversation(t *testing.T) {
 	s, f := newQuietService(t)
+	f.judge = `{"verdict":"done","reason":"修好了"}`
 	todo := startedTask(t, s, f)
-	if !todo.Quiet {
-		t.Fatalf("a task from the main conversation is not quiet: %+v", todo)
+	if !todo.Quiet || todo.Supervision == nil || todo.Supervision.Supervisor != "conv1" {
+		t.Fatalf("a task from the main conversation is not quiet and supervised: %+v", todo)
 	}
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, "修好了，提了 https://github.com/o/r/pull/901", 0)
 	waitFor(t, "the notice", func() bool { return len(f.notices()) == 1 })
 	n := f.notices()[0]
-	for _, want := range []string{"🔔 任务「修登录崩溃」做完了（box）", "修好了，提了 https://github.com/o/r/pull/901", "不是用户发的消息"} {
+	for _, want := range []string{"📋 督办", "任务「修登录崩溃」（" + todo.ID + "）：hub 判断做完了，等你验收（修好了）；在 box", "修好了，提了 https://github.com/o/r/pull/901", "不是用户发的"} {
 		if !strings.Contains(n, want) {
 			t.Errorf("notice lacks %q:\n%s", want, n)
 		}
@@ -82,16 +85,20 @@ func TestQuietTaskTellsTheMainConversation(t *testing.T) {
 	if !strings.Contains(feedKinds(s, "conv1"), "receipt") {
 		t.Error("no receipt")
 	}
+	if now := todoNow(s, todo.ID); now.DoneAt != nil || now.Supervision.State != reviewPending {
+		t.Fatalf("todo = %+v, %+v", now, now.Supervision)
+	}
 	time.Sleep(3 * quietNoticeDelay)
 	if got := len(f.notices()); got != 1 {
 		t.Fatalf("%d notices", got)
 	}
 }
 
-// A question and the end of the work within the delay are one notice: the latest state, saying the earlier one.
-// A question answered before the notice goes out is no notice.
+// A question and the end of the work within the delay are one message: the question answered meanwhile is left out.
+// A question answered before the message goes out is no message.
 func TestQuietNoticesMerge(t *testing.T) {
 	s, f := newQuietService(t)
+	f.judge = `{"verdict":"done","reason":"做完了"}`
 	startedTask(t, s, f)
 	ix := proto.Interaction{ID: "ix1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
 		Questions: []proto.Question{{Question: "用哪个分支？", Options: []proto.QuestionOption{{Label: "main"}, {Label: "dev"}}}}}
@@ -100,7 +107,7 @@ func TestQuietNoticesMerge(t *testing.T) {
 	agentTurn(s, f, proto.StatusDone, "用 main 做完了", 0)
 	waitFor(t, "the notice", func() bool { return len(f.notices()) == 1 })
 	n := f.notices()[0]
-	if !strings.Contains(n, "做完了") || !strings.Contains(n, "等过用户") || strings.Contains(n, "用哪个分支") {
+	if !strings.Contains(n, "做完了，等你验收") || strings.Contains(n, "用哪个分支") || strings.Count(n, "任务「") != 1 {
 		t.Fatalf("notice:\n%s", n)
 	}
 	time.Sleep(3 * quietNoticeDelay)
@@ -123,7 +130,8 @@ func TestQuietNoticesMerge(t *testing.T) {
 	agentTurn(s3, f3, proto.StatusBlocked, "", 1)
 	s3.InteractionRaised(context.Background(), InteractionRaised{Interaction: ix})
 	waitFor(t, "the question's notice", func() bool { return len(f3.notices()) == 1 })
-	if n := f3.notices()[0]; !strings.Contains(n, "在等用户") || !strings.Contains(n, "用哪个分支？（选项：main / dev）") {
+	if n := f3.notices()[0]; !strings.Contains(n, "Agent 在等回答") || !strings.Contains(n, "用户没收到推送") ||
+		!strings.Contains(n, "用哪个分支？（选项：main / dev）") {
 		t.Fatalf("notice:\n%s", n)
 	}
 }
@@ -132,6 +140,7 @@ func TestQuietNoticesMerge(t *testing.T) {
 // place in the queue instead of following it.
 func TestQuietNoticeWaitsForTheTurn(t *testing.T) {
 	s, f := newQuietService(t)
+	f.judge = `{"verdict":"done","reason":"做完了"}`
 	startedTask(t, s, f)
 	busy := proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusWorking}
 	f.setSessions("server", busy)
@@ -140,11 +149,11 @@ func TestQuietNoticeWaitsForTheTurn(t *testing.T) {
 	waitFor(t, "the notice to queue", func() bool { return s.queuedFor("conv1") == 1 })
 	agentTurn(s, f, proto.StatusWorking, "", 0)
 	agentTurn(s, f, proto.StatusDone, "第二次做完", 0)
-	time.Sleep(4 * quietNoticeDelay)
+	time.Sleep(4 * superviseEvery) // the next message is due: it takes the queued one's place
 	if n := s.queuedFor("conv1"); n != 1 {
 		t.Fatalf("%d queued", n)
 	}
-	if q, _ := s.queuedRelays(); len(q["conv1"]) != 1 || q["conv1"][0] != "任务「修登录崩溃」的通知" {
+	if q, _ := s.queuedRelays(); len(q["conv1"]) != 1 || q["conv1"][0] != "督办消息" {
 		t.Fatalf("shown waiting: %q", q["conv1"])
 	}
 	if len(f.notices()) != 0 {
@@ -155,31 +164,37 @@ func TestQuietNoticeWaitsForTheTurn(t *testing.T) {
 	f.setSessions("server", idle)
 	s.drainRelays("server", []proto.Session{idle})
 	waitFor(t, "the queued notice", func() bool { return len(f.notices()) == 1 })
-	if n := f.notices()[0]; !strings.Contains(n, "第二次做完") || strings.Contains(n, "来自对话") {
+	if n := f.notices()[0]; !strings.Contains(n, "第二次做完") || strings.Contains(n, "第一次做完") || strings.Contains(n, "来自对话") {
 		t.Fatalf("notice:\n%s", n)
+	}
+	if !s.supervising("conv1") {
+		t.Fatal("the turn the message started is pushed")
 	}
 }
 
-// Tasks from another conversation, or with the setting off, are not quiet: no notices (the hub pushes as always).
+// Tasks from another conversation are neither quiet nor supervised: no messages (the hub pushes as always). With
+// the setting off a task from the main conversation is not quiet (the hub pushes) but is still supervised.
 func TestNotQuietTasksAreNotTold(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		set  func(*Settings)
+		told bool
 	}{
-		{"side conversation", func(v *Settings) { v.Main = "conv-main" }},
-		{"setting off", func(v *Settings) { v.MainTasksQuiet = new(false) }},
+		{"side conversation", func(v *Settings) { v.Main = "conv-main" }, false},
+		{"setting off", func(v *Settings) { v.MainTasksQuiet = new(false) }, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, f := newQuietService(t)
+			f.judge = `{"verdict":"done","reason":"好了"}`
 			setSettings(t, s, c.set)
-			if todo := startedTask(t, s, f); todo.Quiet {
-				t.Fatal("quiet")
+			if todo := startedTask(t, s, f); todo.Quiet || (todo.Supervision != nil) != c.told {
+				t.Fatalf("todo = %+v", todo)
 			}
 			agentTurn(s, f, proto.StatusWorking, "", 0)
 			agentTurn(s, f, proto.StatusDone, "好了", 0)
 			time.Sleep(4 * quietNoticeDelay)
-			if len(f.notices()) != 0 {
-				t.Fatal("told")
+			if told := len(f.notices()) > 0; told != c.told {
+				t.Fatalf("told = %v: %q", told, f.notices())
 			}
 		})
 	}

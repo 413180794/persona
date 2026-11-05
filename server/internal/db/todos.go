@@ -39,6 +39,10 @@ type TodoRow struct {
 // DoneByAuto marks a todo the hub closed because its task's work was judged finished (docs/todos.md「自动完成」).
 const DoneByAuto = "auto"
 
+// DoneByReview marks a todo its supervisor (the main conversation's assistant) closed after reviewing the work, with
+// DoneReason (#3124).
+const DoneByReview = "review"
+
 type TodoSpaceRow struct {
 	TodoID    string    `json:"todo_id"`
 	MachineID string    `json:"machine_id"`

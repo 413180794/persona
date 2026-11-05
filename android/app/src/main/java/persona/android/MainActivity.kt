@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                 persona.core.designsystem.LocalPersonaStore provides app.personas,
                 persona.core.designsystem.LocalPersonaPack provides pack,
                 persona.core.designsystem.LocalThemeAccent provides persona.core.designsystem.ThemeColors.accent(themeColor, pack?.manifest?.colors),
-                persona.core.designsystem.LocalPersonaName provides (pack?.manifest?.name ?: "Persona"),
+                persona.core.designsystem.LocalPersonaName provides (pack?.manifest?.displayName(persona.core.designsystem.AppLanguages.shown(this@MainActivity).tag ?: "en") ?: "Persona"),
             ) {
                 val dark = isSystemInDarkTheme()
                 SideEffect {

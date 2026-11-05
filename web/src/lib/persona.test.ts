@@ -95,3 +95,33 @@ describe("persona state", () => {
     expect(personaState({ online: true, state: "unread" })).toBe("idle");
   });
 });
+
+describe("looks (#3200)", () => {
+  it("draws an extension's SVG, its dark one on a dark page, and dark PNGs over the light SVG", async () => {
+    const { avatarFile } = await import("./persona");
+    const m = pack({ avatar: { sizes: { "128": "a/128.png" }, svg: "a/a.svg", dark: { svg: "a/dark.svg" } } }).manifest;
+    expect(avatarFile(m, 64)).toBe("a/a.svg");
+    expect(avatarFile(m, 64, true)).toBe("a/dark.svg");
+    const pngDark = pack({ avatar: { sizes: { "128": "a/128.png" }, svg: "a/a.svg", dark: { sizes: { "128": "a/d128.png" } } } }).manifest;
+    expect(avatarFile(pngDark, 64, true)).toBe("a/d128.png");
+    expect(avatarFile(pack().manifest, 64, true)).toBe("avatar/64.png");
+  });
+
+  it("names a look in the interface language, else English, else its own", async () => {
+    const { localized } = await import("./persona");
+    expect(localized("极光", { en: "Aurora", ja: "オーロラ" }, "ja")).toBe("オーロラ");
+    expect(localized("极光", { en: "Aurora" }, "ja")).toBe("Aurora");
+    expect(localized("极光", { en: "Aurora" }, "zh-Hans")).toBe("极光");
+    expect(localized("极光", undefined, "en")).toBe("极光");
+  });
+
+  it("takes the packages of the looks, not the built-in ones", async () => {
+    const { lookPackages, isBuiltinPersona } = await import("./persona");
+    const got = lookPackages([
+      { id: "persona", source: "builtin", name: "团子", app_icon: "persona" },
+      { id: "doudou", source: "extension", name: "豆豆", app_icon: "persona", rev: "abc123", manifest: pack().manifest },
+    ]);
+    expect(got.map((p) => p.id)).toEqual(["doudou"]);
+    expect(isBuiltinPersona("jarvis-circuit")).toBe(true);
+  });
+});

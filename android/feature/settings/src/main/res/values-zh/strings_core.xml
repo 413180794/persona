@@ -17,7 +17,8 @@
     <string name="settings_preview_row3_time">25 分钟前</string>
     <string name="settings_preview_detail">1 个空间，3 个会话</string>
     <string name="settings_avatar_demo">体验模式只有默认形象。</string>
-    <string name="settings_avatar_intro">顶栏和对话列表里 Persona 的名字和脸。颜色跟着界面风格走，不另外改 App 的颜色。形象包放在 hub 的 ~/.persona/personas 里，选中时下载到手机。</string>
+    <string name="settings_avatar_intro">顶栏和对话列表里 Persona 的名字和脸；hub 支持时你的各台设备一起换。颜色跟着界面风格走，不另外改 App 的颜色。扩展可以加形象；hub 上的形象包和扩展的形象选中时下载到手机。桌面图标不变。</string>
+    <string name="settings_avatar_from_extension">来自 %1$s</string>
     <string name="settings_avatar_on_hub">hub 上的形象</string>
     <string name="settings_avatar_download">选中后下载</string>
     <string name="settings_avatar_states">%1$s的五种状态</string>

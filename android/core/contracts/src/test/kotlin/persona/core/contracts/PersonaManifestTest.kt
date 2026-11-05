@@ -54,4 +54,23 @@ class PersonaManifestTest {
         assertEquals("avatar/256.png", (manifest().avatarFile(1024)).zhAny())
         assertEquals("dot/idle.png", (manifest().dotState("working")?.file).zhAny())
     }
+
+    /** An extension's look (#3200): names in other languages, a dark avatar the phone downloads too, the SVG left to the web. */
+    @Test fun readsAnExtensionsLook() {
+        val body = """{"format":1,"id":"aurora","name":"极光","names":{"en":"Aurora","ja":"オーロラ"},
+            "avatar":{"sizes":{"128":"a/128.png","256":"a/256.png"},"svg":"a/a.svg","dark":{"sizes":{"256":"a/d256.png"},"svg":"a/d.svg"}},
+            "dot":{"size":144,"states":{"idle":{"file":"a/idle.png"}}},"app_icon_fallback":"persona",
+            "source":{"kind":"extension","extension":"example-looks","extension_name":"Example Looks"}}"""
+        val m = JsonCodec.decodeFromString<PersonaManifest>(body)
+        assertNull(m.problem)
+        assertEquals(listOf("a/128.png", "a/256.png", "a/d256.png", "a/idle.png"), m.files)
+        assertEquals("a/128.png", m.avatarFile(100))
+        assertEquals("a/d256.png", m.avatarFile(100, dark = true))
+        assertEquals("オーロラ", m.displayName("ja"))
+        assertEquals("Aurora", m.displayName("en"))
+        assertEquals("极光", m.displayName("zh-Hans"))
+        assertEquals("Example Looks", m.source?.extensionName)
+        assertEquals("豆豆", manifest().displayName("ja"))
+        assertEquals("avatar/64.png", manifest().avatarFile(10, dark = true))
+    }
 }

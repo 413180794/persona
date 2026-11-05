@@ -20,7 +20,8 @@ import (
 // went out, the judge model reads the task's title, the prompt it was handed out with and what its agents said last,
 // and only "done" closes the todo (done_by auto, with why). Anything else — not finished, waiting on someone,
 // needing the user, unsure, no model, a model error, an agent whose turn the model service cut off (#1516) — leaves
-// it open. A todo the user reopened is not closed again by the same stretch of work.
+// it open. A todo the user reopened is not closed again by the same stretch of work. A supervised task (supervise.go)
+// is not closed at all: finished, it waits for its supervisor's review.
 
 const (
 	verdictDone      = "done"
@@ -248,6 +249,13 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), taskDoneTimeout)
 	defer cancel()
 	c, err := s.judgeTaskDone(ctx, t)
+	if t.Supervision != nil {
+		if !worked {
+			work = t.CreatedAt
+		}
+		s.superviseJudged(ctx, t, work, c, err) // never closed here: its supervisor reviews it (supervise.go)
+		return
+	}
 	if err != nil {
 		if !ai.IsPaused(err) {
 			s.logf("task %s: done judge: %v (left open)", t.ID, err)

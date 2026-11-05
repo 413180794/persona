@@ -67,12 +67,25 @@ async function badged(src: string, text: string): Promise<string> {
 }
 
 let faviconSeq = 0;
+let faviconNeeds = 0;
+
+/** The look's icon (lib/look-icon.ts, #3200) under the badge: each link's original becomes the look's picture for its
+ *  scheme (index.html's light and dark links), or the files index.html names again with null. */
+export function setFaviconBase(icon: { light: string; dark: string } | null): void {
+  for (const link of document.querySelectorAll<HTMLLinkElement>(ICONS)) {
+    link.dataset.file ??= link.dataset.original ?? link.getAttribute("href") ?? "";
+    const dark = (link.getAttribute("media") ?? "").includes("dark");
+    link.dataset.original = icon ? (dark ? icon.dark : icon.light) : link.dataset.file;
+  }
+  setFaviconBadge(faviconNeeds);
+}
 
 /** Swaps the page's icon links (index.html has a light and a dark one, chosen by the browser's media query) for the
  *  badged copy of each, or back to the originals at 0. The files themselves come through the service worker like any
  *  other icon (lib/sw-routes.ts "static": the hub's, else the cached one), so this also works offline; the drawn
  *  copies are data: URLs and never touch the network or the cache. */
 export function setFaviconBadge(needs: number): void {
+  faviconNeeds = needs;
   const links = [...document.querySelectorAll<HTMLLinkElement>(ICONS)];
   const text = badgeText(needs);
   const seq = ++faviconSeq;

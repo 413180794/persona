@@ -18,7 +18,8 @@
     <string name="settings_preview_row3_time">25 min ago</string>
     <string name="settings_preview_detail">1 space, 3 sessions</string>
     <string name="settings_avatar_demo">Demo mode has only the default avatar.</string>
-    <string name="settings_avatar_intro">Persona\'s name and face in the top bar and chat list. Colors follow the interface style and don\'t change the app\'s colors. Avatar packs live in ~/.persona/personas on the hub and download to the phone when chosen.</string>
+    <string name="settings_avatar_intro">Persona\'s name and face in the top bar and chat list, the same on all your devices when the hub keeps the choice. Colors follow the interface style and don\'t change the app\'s colors. Extensions can add avatars; avatar packs on the hub and extensions\' avatars download to the phone when chosen. The launcher icon stays the app\'s.</string>
+    <string name="settings_avatar_from_extension">From %1$s</string>
     <string name="settings_avatar_on_hub">Avatar on the hub</string>
     <string name="settings_avatar_download">Downloads when chosen</string>
     <string name="settings_avatar_states">%1$s\'s five states</string>

@@ -827,6 +827,7 @@ func weekdayText(ds []int) string {
 // knowledge base.
 func (s *Service) Run(ctx context.Context) {
 	go s.taskCloseLoop(ctx)  // the agents of finished tasks (tasks_close.go)
+	go s.superviseLoop(ctx)  // the tasks the main conversation follows up (supervise.go)
 	go s.workLoop(ctx)       // due wakes and retries, cards past their day, missed turns (agents_work.go)
 	go s.channelLoop(ctx)    // the channels' runs that lost their watcher (channels.go)
 	go s.kbLoop(ctx)         // the knowledge base (kb.go)

@@ -66,6 +66,9 @@ type Todo struct {
 	// docs/unified-entry.md「安静的任务」): no pushes, Live Activity or task badges for its agents; the main
 	// conversation is told instead (quiet.go). Set when it is made, never changed.
 	Quiet bool `json:"quiet"`
+	// Supervision: the task's ledger when the main conversation handed it out and follows it up (#3124,
+	// supervise.go); nil for any other todo. Clients that do not know it show the todo as ever.
+	Supervision *Supervision `json:"supervision,omitempty"`
 	// Stage is how far its work got (plan, develop, review, merge, deploy, verify; "" not known) and PRURL the PR it
 	// named, read off its agents' replies (reports.go, #2768); the apps draw the stage bar from them.
 	Stage string `json:"stage,omitempty"`
@@ -254,6 +257,17 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 		}
 	}
 
+	if sst, ok := st.(supervisionStore); ok {
+		rows, err := sst.ListTodoSupervision(ctx)
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if t, ok := tmap[r.TodoID]; ok {
+				t.Supervision = supervisionFromRow(r)
+			}
+		}
+	}
 	for id, st := range s.todoStages(ctx) {
 		if t, ok := tmap[id]; ok {
 			t.Stage, t.PRURL = st.Stage, st.PR
@@ -353,6 +367,7 @@ func copyTodoLocked(t *Todo) Todo {
 			out.Agents[i].DismissedAt = &da
 		}
 	}
+	out.Supervision = t.Supervision.clone()
 	return out
 }
 

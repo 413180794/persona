@@ -133,3 +133,15 @@ func TestInjectedTemplatesKeepTheirHead(t *testing.T) {
 		}
 	}
 }
+
+// A 督办 message (#3124) is a system line, read off its head and marker; a user's line that looks like its head is not.
+func TestParseInjectedSupervise(t *testing.T) {
+	text := RenderSupervise(Supervise{Entries: []SuperviseEntry{{ID: "todo_1", Title: "部署", Kind: "review"}, {ID: "todo_2", Title: "修崩溃", Kind: "idle"}}})
+	got := ParseInjected("<jarvis-context>快照</jarvis-context>\n" + text)
+	if got == nil || got.Kind != proto.InjectedSystem || got.State != "supervise" || got.Line != "督办：2 个派出去的任务要处理" {
+		t.Fatalf("ParseInjected = %+v", got)
+	}
+	if ParseInjected("📋 督办：你派出去的任务有 2 个要你处理\n我自己写的") != nil {
+		t.Fatal("a user's text taken for a 督办 message")
+	}
+}

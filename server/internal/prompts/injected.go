@@ -18,11 +18,15 @@ var (
 	noticeHeadRe   = regexp.MustCompile(`^🔔 任务「(.+)」(做完了|在等用户|被模型服务出错打断了|没开起来)(?:（(.+)）)?$`)
 	followupHeadRe = regexp.MustCompile(`^⏰ (.+)（(你之前安排的跟进|定时任务(?:，每 [^）]+)?)）$`)
 	wakeHeadRe     = regexp.MustCompile(`^⏰（Persona 叫醒你，第 \d+ 次）你上一轮停下时说在等「(.*?)」`)
+	superviseRe    = regexp.MustCompile(`^📋 督办：你派出去的任务有 (\d+) 个要你处理$`)
 	leadContextRe  = regexp.MustCompile(`^(?s)\s*<(?:jarvis|persona)-context\b[^>]*>.*?</(?:jarvis|persona)-context>`)
 )
 
 // noticeMarker is in every task notice (assistant/task_notice): a first line alone could be the user's.
 const noticeMarker = "这是 Persona 的任务通知"
+
+// superviseMarker is in every 督办 message (assistant/supervise, #3124).
+const superviseMarker = "这是 Persona 的督办消息"
 
 // lostTasksHead starts assistant/lost_tasks.
 const lostTasksHead = "⚠️ 运行你的 node 刚重启过"
@@ -76,6 +80,13 @@ func ParseInjected(text string) *proto.Injected {
 			in.State, in.Line = "daily", "定时任务「"+m[1]+"」开始运行"
 		}
 		return in
+	case strings.HasPrefix(head, "📋 督办："):
+		// Only hubs that write it mark it: it is not in the shared fixtures the apps' own recognition runs.
+		m := superviseRe.FindStringSubmatch(head)
+		if m == nil || !strings.Contains(rest, superviseMarker) {
+			return nil
+		}
+		return &proto.Injected{Kind: proto.InjectedSystem, State: "supervise", Line: "督办：" + m[1] + " 个派出去的任务要处理"}
 	case strings.HasPrefix(head, lostTasksHead):
 		n := 0
 		for _, l := range strings.Split(rest, "\n") {

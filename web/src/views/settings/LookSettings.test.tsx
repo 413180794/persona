@@ -16,7 +16,9 @@ vi.mock("../../lib/api", async (orig) => {
   return {
     ...real,
     getToken: () => "",
-    api: vi.fn(() => (hub.fail ? Promise.reject(new Error("offline")) : Promise.resolve(hub.result))),
+    // An older hub (no /looks): the packages from /personas, the choice this browser's (Persona.test.tsx has /looks).
+    api: vi.fn((path: string) =>
+      hub.fail ? Promise.reject(new Error("offline")) : path === "/looks" ? Promise.reject(new real.ApiError(404, "not found", {})) : Promise.resolve(hub.result)),
   };
 });
 import { BUILTIN_PERSONA, type PersonaInfo } from "../../lib/persona";

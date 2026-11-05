@@ -1,21 +1,23 @@
-// Persona's persona (docs/persona.md): its name, its face and the animated dot, from a package on the hub
-// (GET /personas, files under /personas/{id}/{file}). The choice is this browser's (the phone keeps its own, as the
-// app does). The default is 团子, the app icon's character the page draws (MochiFace); the page's own mark, the
-// built-in before 2026-11-03, is still a choice: with it chosen every place shows what it did before.
+// Persona's look (形象, docs/persona.md, docs/extensions.md「形象」): its name, its face and the animated dot, from a
+// package on the hub or an extension (GET /looks, files under /personas/{id}/{file}), or one the page draws: 团子 (the
+// default, MochiFace), 面罩 and 汇流 (BuiltinFaces). The choice is the user's, kept on the hub (PUT /looks/current) so
+// every device shows the same one; localStorage keeps the last one for the first paint and for older hubs.
 // The pure parts (checks, which file, which state) are here; the views and the list are views/assistant/Persona.tsx.
 import { BASE } from "./base";
 import { t } from "../i18n";
 
 /** The default, 团子 (nothing saved means it). */
 export const BUILTIN_PERSONA = "persona";
-/** The page's mark, the default until 2026-11-03 (on the phone this id is 面罩, its default then). */
+/** 面罩, the apps' default until 2026-11-03 (the page showed its own mark for this id until #3200). */
 export const MARK_PERSONA = "jarvis";
-/** The built-ins (the phone's 汇流 too): a package may not take their ids. */
-const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, "jarvis-circuit"];
+/** 汇流. */
+export const CIRCUIT_PERSONA = "jarvis-circuit";
+/** The built-ins every app draws: a package may not take their ids. */
+const RESERVED = [BUILTIN_PERSONA, MARK_PERSONA, CIRCUIT_PERSONA];
 
 /** Whether a choice is drawn by the page rather than a package. */
 export function isBuiltinPersona(id: string): boolean {
-  return id === BUILTIN_PERSONA || id === MARK_PERSONA;
+  return RESERVED.includes(id);
 }
 
 export type PersonaState = "idle" | "thinking" | "working" | "needs_you" | "offline";
@@ -37,7 +39,14 @@ export interface PersonaManifest {
   subtitle?: string;
   /** A few words for the look's card in the picker, in place of its colors (奶蛙: where its level comes from). */
   about?: string;
-  avatar: { sizes: Record<string, string>; safe?: number };
+  /** Names in the other languages (an extension's look, docs/extensions.md「形象」). */
+  names?: Record<string, string>;
+  subtitles?: Record<string, string>;
+  /** sizes: PNGs by side; svg (an extension's look, cleaned by the hub); dark: the same for dark mode. */
+  avatar: { sizes: Record<string, string>; safe?: number; svg?: string; dark?: { sizes?: Record<string, string>; svg?: string } };
+  /** The built-in look whose icon stands for this one where only the app's own icons can be shown. */
+  app_icon_fallback?: string;
+  source?: { kind: string; extension?: string; extension_name?: string };
   dot: { size?: number; states: Record<string, { file: string; fps?: number; frames?: number }> };
   colors?: { light?: Record<string, string>; dark?: Record<string, string> };
 }
@@ -48,6 +57,39 @@ export interface PersonaInfo {
   rev: string;
   bytes?: number;
   manifest: PersonaManifest;
+}
+
+/** One look of GET /looks (#3200): a built-in one the page draws (no manifest), a hub package or an extension's. */
+export interface LookView {
+  id: string;
+  source: "builtin" | "hub" | "extension";
+  name: string;
+  names?: Record<string, string>;
+  subtitle?: string;
+  subtitles?: Record<string, string>;
+  app_icon: string;
+  extension?: string;
+  extension_name?: string;
+  rev?: string;
+  bytes?: number;
+  manifest?: PersonaManifest;
+}
+
+/** GET /looks's current: the chosen look (null: never chosen on this hub) and the one to show. */
+export interface LookCurrent {
+  id: string | null;
+  effective: string;
+  updated_at?: string;
+}
+
+/** The packages among the looks (the hub's and the extensions'), as persona entries. */
+export function lookPackages(looks: LookView[] | null | undefined): PersonaInfo[] {
+  return (looks ?? []).filter((l) => l.source !== "builtin" && l.manifest && l.rev).map((l) => ({ id: l.id, rev: l.rev!, bytes: l.bytes, manifest: l.manifest! }));
+}
+
+/** A text in the interface language: its own language's, else English, else the source (docs/i18n.md). */
+export function localized(text: string, others: Record<string, string> | undefined, lang: string): string {
+  return others?.[lang]?.trim() || (lang !== "zh-Hans" ? others?.en?.trim() : "") || text;
 }
 
 /** Why a package can't be used, or null (the hub checks the same: server/internal/hub/persona.go, PersonaManifest.problem). */
@@ -67,12 +109,24 @@ export function personaProblem(p: PersonaInfo): string | null {
 
 /** Every file the manifest names. */
 export function personaFiles(m: PersonaManifest): string[] {
-  return [...new Set([...Object.values(m.avatar?.sizes ?? {}), ...Object.values(m.dot?.states ?? {}).map((s) => s.file)])].sort();
+  const a = m.avatar ?? { sizes: {} };
+  return [...new Set([
+    ...Object.values(a.sizes ?? {}), ...Object.values(a.dark?.sizes ?? {}), ...[a.svg, a.dark?.svg].filter((f): f is string => !!f),
+    ...Object.values(m.dot?.states ?? {}).map((s) => s.file),
+  ])].sort();
 }
 
-/** The avatar file for a face `px` pixels wide: the smallest at least that big, else the largest. */
-export function avatarFile(m: PersonaManifest, px: number): string | undefined {
-  const sizes = Object.entries(m.avatar?.sizes ?? {})
+/**
+ * The avatar file for a face `px` pixels wide: the SVG when there is one, else the smallest PNG at least that big, else
+ * the largest; `dark` takes the dark variant's where it has them.
+ */
+export function avatarFile(m: PersonaManifest, px: number, dark = false): string | undefined {
+  const d = dark ? m.avatar?.dark : undefined;
+  const darkSizes = d?.sizes && Object.keys(d.sizes).length ? d.sizes : undefined;
+  if (d?.svg) return d.svg;
+  // Dark PNGs win over the light SVG: the variant is the point.
+  if (!darkSizes && m.avatar?.svg) return m.avatar.svg;
+  const sizes = Object.entries(darkSizes ?? m.avatar?.sizes ?? {})
     .map(([k, v]) => [Number(k), v] as const)
     .filter(([n]) => Number.isFinite(n))
     .sort((a, b) => a[0] - b[0]);

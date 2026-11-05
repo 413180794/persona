@@ -29,7 +29,7 @@
 - `updated_at` (timestamptz, NOT NULL)：最后修改时间。
 - `origin` (text, NOT NULL, DEFAULT '')：从哪段助手对话开的任务（会话 id），手动建的为空（[unified-entry.md](unified-entry.md)）。
 - `plan_id` (text, NOT NULL, DEFAULT '')：由哪个计划开的（`task_plans.id`）。
-- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = 助手判断任务做完后自动完成（见「自动完成」）。
+- `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = 助手判断任务做完后自动完成（见「自动完成」），`review` = 督办人验收后完成（#3124）。
 - `done_reason` (text, NOT NULL, DEFAULT '')：自动完成时判断模型给的理由（如「已合并 PR 并发了 TestFlight」），用户点完成或重新打开时清空。
 - `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，助手才会再判断要不要自动完成。
 
@@ -76,6 +76,14 @@
 - `supersedes_id` (text, FK → `todo_decisions(id)` ON DELETE SET NULL)：这条改判了哪一条更早的决策。
 - `created_at` (timestamptz, NOT NULL)。
 - 约束：部分唯一索引 `(todo_id, source_message, question) WHERE source_message <> ''`，同一张卡片的同一个问题只记一次。
+
+### 5. todo_supervision 表
+主对话督办的任务的台账（#3124，`docs/unified-entry.md`「督办」），一行一个，没有督办的待办没有行：
+- `todo_id` (text, PK, FK → `todos(id)` ON DELETE CASCADE)。
+- `supervisor` (text, NOT NULL)：督办人，开它的对话。
+- `done_when` (jsonb, NOT NULL, DEFAULT '[]')：验收标准（字符串数组）；`expect_minutes` (integer, NOT NULL, DEFAULT 0)：预计分钟数。
+- `state` (text, NOT NULL, DEFAULT '')：`''` 进行中、`pending_review`、`rework`、`needs_user`、`accepted`、`cancelled`；`round` (integer)：返工轮次。
+- `reviews` (jsonb, NOT NULL, DEFAULT '[]')：每次验收（`verdict`、逐条 `checks`、`note`），最多留 20 条；`updated_at` (timestamptz)。
 
 关联与释放语义：
 - 当一个 Agent 被关联到新待办时，如果它当前在其它待办上处于活跃状态，在同一个事务中将原关联记录标为 `released`（记录 `released_at` 时间），旧待办中将其展示为「参与过」。
@@ -215,7 +223,7 @@ curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <toke
 
 ## 自动完成
 
-从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由助手自动标成完成，不用用户逐个点；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
+从助手对话派出去的任务（`task_plan` 开的待办，`origin` 不为空）做完以后由助手自动标成完成，不用用户逐个点（主对话督办的任务除外：判断做完时改成「待验收」，由督办人用 `task_review` 验收后才完成，`done_by = review`，见 `docs/unified-entry.md`「督办」）；用户手建的待办（`origin` 为空）一律不自动完成，仍然是「用户点了完成」才算完成。
 
 **什么时候判断**：任务的 Agent 全部停下（没有在工作、没有等用户回答、没有待处理的卡片）、助手往对话里发 done 回执的同一处（`assistant/tasks.go` 的 `taskTurnEnded`，一段工作只发一次回执，也只判断一次）。
 

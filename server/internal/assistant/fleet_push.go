@@ -219,6 +219,10 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	if s.quietTaskFinish(sess) {
 		return
 	}
+	// A turn a 督办 message started, finished normally (#3124): what the user needs to know went out with notify_user.
+	if s.supervising(id) && assistantwire.SupervisedFinish(sess, true) {
+		return
+	}
 	if s.stopDuplicate(machine, id) {
 		return
 	}

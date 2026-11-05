@@ -24,7 +24,7 @@ import { ModelConfiguration } from "./settings/ModelConfiguration";
 import { AgentSettings } from "./settings/AgentSettings";
 import { AgentGroup } from "./settings/AgentGroup";
 import { AssistantSettings } from "./settings/AssistantSettings";
-import { BuiltinFace, PersonaPicker } from "./assistant/Persona";
+import { PersonaPicker } from "./assistant/Persona";
 import { Connectors } from "./settings/Connectors";
 import { TriageSettings } from "./settings/TriageSettings";
 import { TranslationSettings } from "./settings/TranslationSettings";
@@ -301,7 +301,7 @@ function General({ onTriageModel }: { onTriageModel: () => void }) {
       <AgentGroup />
 
       <Group title={t("settings.avatar")} footer={t("settings.avatar_footer")}>
-        <PersonaPicker builtin={<BuiltinFace size={56} />} />
+        <PersonaPicker />
       </Group>
 
       <Group title={t("settings.assistant")} footer={t("settings.assistant_footer", { machine: machineName ?? t("settings.hub_machine"), cwd: assistant?.cwd ?? "~/.persona/assistant" })}>

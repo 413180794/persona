@@ -27,7 +27,7 @@ var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedu
 	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "interaction_answer", "inbox_draft",
 	"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 	"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
-	"conversation_new", "conversation_send", "task_plan"}
+	"conversation_new", "conversation_send", "task_plan", "task_review"}
 
 // Tools are the assistant's tools (assistant.tools).
 func (s *Service) Tools(ctx context.Context) []proto.Tool {
@@ -83,6 +83,8 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		return s.toolView(ctx, machine, self, name, args)
 	case "task_plan":
 		return s.toolTaskPlan(ctx, self, args)
+	case "task_review":
+		return s.toolTaskReview(ctx, self, args) // supervise.go
 	case "kb_search", "kb_list", "kb_get", "kb_update":
 		return s.toolKB(ctx, name, args)
 	case "interaction_answer":

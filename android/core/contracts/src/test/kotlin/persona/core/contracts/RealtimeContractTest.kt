@@ -40,6 +40,7 @@ class RealtimeContractTest {
         assertEquals(SessionKey("m1", "s1"), (events[7] as ErrorEvent).sessionKey)
         assertEquals(DeliveryOutcome.Unknown, (events[7] as ErrorEvent).body.deliveryOutcome)
         assertTrue(events[8] is PersonasEvent)
+        assertEquals("aurora", (events[9] as LookEvent).id)
 
         val terminal = sample("terminal")
         assertArrayEquals(byteArrayOf(27, 91, 50, 74, 79, 75), (terminal[0] as TerminalEvent).frameBytes)

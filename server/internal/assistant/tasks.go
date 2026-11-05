@@ -45,6 +45,10 @@ type PlanTask struct {
 	// assistant.start_requested_tasks on it starts without the card's 开始.
 	UserRequested bool   `json:"user_requested,omitempty"`
 	Why           string `json:"why,omitempty"`
+	// DoneWhen: what done means, criteria the supervisor checks before it accepts the work; ExpectMinutes: how long it
+	// should take (#3124, supervise.go). Both optional; the agent is told the criteria with its prompt.
+	DoneWhen      []string `json:"done_when,omitempty"`
+	ExpectMinutes int      `json:"expect_minutes,omitempty"`
 	// Set once started: the todo the task is, and why its agent did not start.
 	TodoID string `json:"todo_id,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -259,6 +263,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		t := &a.Tasks[i]
 		t.TodoID, t.Error = "", ""
 		t.Title, t.Prompt, t.Cwd = strings.TrimSpace(t.Title), strings.TrimSpace(t.Prompt), strings.TrimSpace(t.Cwd)
+		t.DoneWhen, t.ExpectMinutes = cleanDoneWhen(t.DoneWhen), max(0, min(t.ExpectMinutes, 24*60))
 		if t.Title == "" || t.Prompt == "" || t.Cwd == "" {
 			return "", fmt.Errorf("task %d: title, prompt and cwd are required", i+1)
 		}
@@ -270,6 +275,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 	if err := s.ensureTodosLoaded(ctx); err != nil {
 		return "", fmt.Errorf("todos are unavailable: %v", err)
 	}
+	dups := s.planDuplicates(ctx, a.Tasks) // before the plan's own todos exist
 	now := time.Now().UTC()
 	p := &TaskPlan{ID: "plan_" + randomHex(6), Conversation: sessionID, Tasks: a.Tasks, State: planOpen, CreatedAt: now, UpdatedAt: now}
 	if err := s.savePlan(ctx, p); err != nil {
@@ -306,7 +312,7 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		}
 		s.push(ctx, Notification{Subtitle: machineName, DeviceID: here, SessionID: sessionID, Title: title, Body: body})
 		return fmt.Sprintf("Plan %s is on the user's screen as a card and pushed to their phone; nothing has started. "+
-			"Don't wait for it: carry on. When they start it, the tasks show up in the context snapshot.", p.ID), nil
+			"Don't wait for it: carry on. When they start it, the tasks show up in the context snapshot.", p.ID) + dups, nil
 	}
 	started, err := s.startPlan(ctx, p.ID, nil, false)
 	if err != nil {
@@ -318,6 +324,10 @@ func (s *Service) toolTaskPlan(ctx context.Context, sessionID string, args json.
 		fmt.Fprintf(&b, "- %s → todo %s on %s\n", t.Title, t.TodoID, t.Machine)
 	}
 	b.WriteString("Their progress shows in the context snapshot; the user sees them as cards.")
+	if s.isMain(ctx, sessionID) {
+		b.WriteString(" You supervise them: a 督办 message comes when one needs you (review it with task_review).")
+	}
+	b.WriteString(dups)
 	return b.String(), nil
 }
 
@@ -433,6 +443,9 @@ func (s *Service) startPlan(ctx context.Context, id string, edits []PlanTask, re
 			s.nameTodoLater(ctx, todo.ID, title, t.Prompt)
 		}
 		t.TodoID = todo.ID
+		if s.isMain(ctx, p.Conversation) { // the main conversation follows up what it hands out (supervise.go)
+			s.superviseTodo(ctx, todo.ID, p.Conversation, t.DoneWhen, t.ExpectMinutes)
+		}
 		if _, err := s.appendFeed(ctx, p.Conversation, feedTask, todo.ID, nil); err != nil {
 			s.logf("task %s: feed: %v", todo.ID, err)
 		}
@@ -543,7 +556,7 @@ func (s *Service) startPlanTask(planID, conversation string, i int, t PlanTask, 
 	_, _ = s.appendFeed(ctx, conversation, feedReceipt, t.TodoID, receiptBody{Title: t.Title, State: "failed",
 		Summary: i18n.T(s.lang(ctx), "assistant-tasks.failed_start", i18n.Args{"reason": reason})})
 	if todo, ok, err := s.todo(ctx, t.TodoID); err == nil && ok {
-		s.quietNotify(ctx, todo, t.Machine, "failed", "", reason)
+		s.taskNotice(ctx, todo, t.Machine, "failed", "", reason)
 		s.taskReport(todo, reportFailed, t.Machine, [2]string{}, reason, nil)
 	}
 }
@@ -752,7 +765,11 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid str
 	if !ok {
 		return "", "", fmt.Errorf("unknown machine %q", t.Machine)
 	}
-	params := map[string]any{"cwd": t.Cwd, "launcher": t.Launcher, "prompt": t.Prompt, "tab_name": s.tabName(ctx, t.Title)}
+	prompt := t.Prompt
+	if len(t.DoneWhen) > 0 { // what the supervisor will check (supervise.go)
+		prompt += "\n\n" + prompts.RenderTaskDoneWhen(t.DoneWhen)
+	}
+	params := map[string]any{"cwd": t.Cwd, "launcher": t.Launcher, "prompt": prompt, "tab_name": s.tabName(ctx, t.Title)}
 	if t.Model != "" {
 		params["model"] = t.Model
 	}
@@ -840,6 +857,9 @@ func (s *Service) taskWorking(ctx context.Context, mid, sid string) {
 	s.tasks.working[t.ID] = time.Now()
 	s.tasks.mu.Unlock()
 	s.setTaskStage(ctx, t.ID, "develop", "")
+	if t.Supervision != nil {
+		s.supervisedWorking(ctx, t)
+	}
 }
 
 type receiptBody struct {
@@ -915,7 +935,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
-		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
+		s.taskNotice(cctx, t, name, "interrupted", "", body.Error)
 		s.taskReport(t, reportInterrupted, name, where, body.Error, nil)
 		return
 	}
@@ -931,7 +951,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 		if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 			s.logf("task %s: receipt: %v", t.ID, err)
 		}
-		s.quietNotify(cctx, t, name, "interrupted", "", body.Error)
+		s.taskNotice(cctx, t, name, "interrupted", "", body.Error)
 		s.taskReport(t, reportInterrupted, name, where, body.Error, nil)
 		return
 	}
@@ -950,7 +970,7 @@ func (s *Service) taskTurnEnded(ctx context.Context, machine, sid string) {
 	if _, err := s.appendFeed(cctx, t.Origin, feedReceipt, t.ID, body); err != nil {
 		s.logf("task %s: receipt: %v", t.ID, err)
 	}
-	s.quietNotify(cctx, t, name, "done", "", clipMarkdown(text, 1500))
+	s.taskNotice(cctx, t, name, "done", "", clipMarkdown(text, 1500))
 	stage, pr := stageOf(text)
 	s.setTaskStage(cctx, t.ID, stage, pr)
 	if stageIndex(stage) >= stageIndex("deploy") {
@@ -976,22 +996,7 @@ func (s *Service) routeToTask(ctx context.Context, conversation, todoID, text st
 	if len(agents) == 0 {
 		return FeedItem{}, i18n.Err("assistant-tasks.route_no_agent")
 	}
-	rank := map[string]int{proto.StateNeedsYou: 0, proto.StateWorking: 1, proto.StateUnread: 2}
-	sort.SliceStable(agents, func(i, j int) bool {
-		ri, ok := rank[agents[i].State]
-		if !ok {
-			ri = 3
-		}
-		rj, ok := rank[agents[j].State]
-		if !ok {
-			rj = 3
-		}
-		if ri != rj {
-			return ri < rj
-		}
-		return agents[i].UpdatedAt.After(agents[j].UpdatedAt)
-	})
-	c := agents[0]
+	c := pickTaskAgent(agents)
 	if _, ok := s.device(ctx, c.MachineID); !ok {
 		return FeedItem{}, i18n.Err("assistant-tasks.route_offline")
 	}
@@ -1168,7 +1173,12 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 		}
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].CreatedAt.After(list[j].CreatedAt) })
-	var out []prompts.SnapshotTask
+	type ranked struct {
+		task prompts.SnapshotTask
+		rank int
+	}
+	var all []ranked
+	now := time.Now()
 	for _, t := range list {
 		agents := s.taskAgents(ctx, t)
 		st := taskState(t, agents)
@@ -1178,9 +1188,22 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 		if st == "done" && t.DoneBy == db.DoneByAuto {
 			st = "auto_done"
 		}
-		task := snapshotTask(t, st, agents, time.Now())
+		task := snapshotTask(t, st, agents, now)
 		task.Link = todoLink(web, t.ID)
-		out = append(out, task)
+		var rank int
+		task.Health, rank = taskHealth(t, agents, now) // supervised tasks: what needs the assistant first (supervise.go)
+		if t.Supervision != nil {
+			task.DoneWhen = len(t.Supervision.DoneWhen)
+		}
+		all = append(all, ranked{task, rank})
+		if len(all) == 30 {
+			break
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return all[i].rank < all[j].rank })
+	var out []prompts.SnapshotTask
+	for _, r := range all {
+		out = append(out, r.task)
 		if len(out) == 12 {
 			break
 		}
