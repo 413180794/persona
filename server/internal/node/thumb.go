@@ -204,6 +204,8 @@ const toolBackoff = 5 * time.Minute
 
 var toolTimeout = 12 * time.Second // a var for tests
 
+var runCmd = func(cmd *exec.Cmd) error { return cmd.Run() } // a var for tests: they count the tools started
+
 // toolThumb asks the system to draw the file into a temporary folder: Quick Look on a Mac, else pdftoppm for a
 // PDF and ffmpeg for a video when the machine has them. The picture it leaves is scaled again to size.
 func toolThumb(ctx context.Context, path, mime string, size int) *proto.FileThumb {
@@ -260,7 +262,7 @@ func runTool(ctx context.Context, name string, args ...string) bool {
 	defer cancel()
 	cmd := exec.CommandContext(tctx, bin, args...)
 	cmd.WaitDelay = time.Second
-	err = cmd.Run()
+	err = runCmd(cmd)
 	if ctx.Err() == nil && errors.Is(tctx.Err(), context.DeadlineExceeded) { // the tool hung, not the request gone
 		tools.mu.Lock()
 		tools.blockedUntil = time.Now().Add(toolBackoff)

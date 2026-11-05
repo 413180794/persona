@@ -9,8 +9,10 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -123,9 +125,14 @@ func TestAHungThumbnailToolIsSkippedForAWhile(t *testing.T) {
 	}
 	bin := filepath.Join(dir, "bin")
 	os.Mkdir(bin, 0700)
-	calls := filepath.Join(dir, "calls")
-	os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/sh\necho x >> "+calls+"\nexec /bin/sleep 30\n"), 0700)
+	os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/sh\nexec /bin/sleep 30\n"), 0700)
 	t.Setenv("PATH", bin)
+	// Counted here, not by the tool writing a file: on a busy machine the shell may not get that far before
+	// toolTimeout kills it.
+	var calls atomic.Int32
+	defer func(f func(*exec.Cmd) error) { runCmd = f }(runCmd)
+	run := runCmd
+	runCmd = func(cmd *exec.Cmd) error { calls.Add(1); return run(cmd) }
 	defer func(d time.Duration) { toolTimeout = d }(toolTimeout)
 	toolTimeout = 800 * time.Millisecond
 	t.Cleanup(func() { tools.mu.Lock(); tools.blockedUntil = time.Time{}; tools.mu.Unlock() })
@@ -141,7 +148,7 @@ func TestAHungThumbnailToolIsSkippedForAWhile(t *testing.T) {
 	if d := time.Since(start); d > 5*time.Second {
 		t.Fatalf("took %v", d)
 	}
-	if b, _ := os.ReadFile(calls); string(b) != "x\n" {
-		t.Fatalf("tool ran %q, want once and then skipped", b)
+	if c := calls.Load(); c != 1 {
+		t.Fatalf("tool ran %d times, want once and then skipped", c)
 	}
 }
