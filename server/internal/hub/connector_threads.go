@@ -169,7 +169,7 @@ func (h *Hub) connectorThreadRoutes(api *http.ServeMux) {
 		if byOwnDevice(r.Context()) {
 			res = h.connectors.Run(r.Context(), in.Action, raw)
 		} else {
-			res = h.callConnector(r.Context(), "", in.Action, raw)
+			res = h.callConnector(r.Context(), asker{}, in.Action, raw)
 		}
 		text := ""
 		if len(res.Content) > 0 {

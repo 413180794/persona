@@ -328,7 +328,7 @@ func (h *Hub) callComputerTool(ctx context.Context, sessionID, name string, args
 	}
 	apps, whole := callApps(name, a.App, a.Script, a.Steps)
 	if name == "computer_state" {
-		if _, ok := h.approveApps(ctx, m, name, apps, whole, args); !ok {
+		if _, ok := h.approveApps(ctx, m, h.assistantAsker(sessionID, m.cfg.ID), name, apps, whole, args); !ok {
 			return declined("look")
 		}
 		shot := a.Screenshot == nil || *a.Screenshot
@@ -356,8 +356,8 @@ func (h *Hub) callComputerTool(ctx context.Context, sessionID, name string, args
 		return proto.TextResult("give script (run_script) or steps (run_steps)", true)
 	}
 	what := computerSummary(h.userLang(), m.cfg.Name, tool, a.Script, a.Steps)
-	asked, ok := h.approveApps(ctx, m, name, apps, whole, args)
-	if !ok || (h.cua().Confirm && !asked && !h.approve(ctx, m.cfg.ID, name, what, args)) {
+	asked, ok := h.approveApps(ctx, m, h.assistantAsker(sessionID, m.cfg.ID), name, apps, whole, args)
+	if !ok || (h.cua().Confirm && !asked && !h.approve(ctx, h.assistantAsker(sessionID, m.cfg.ID), name, what, args)) {
 		return declined(computerLogWhat(tool, a.Script, a.Steps))
 	}
 	start := time.Now()

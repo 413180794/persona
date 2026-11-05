@@ -4,7 +4,9 @@
 // the phone reads natively, FeishuLinks.route) when the hub reads Feishu (feature `lark`; otherwise they are ordinary
 // pages), and jarvis://session links move to that conversation. This hub's own agent and task pages (/s/<machine>/
 // <session>, /todos?id=…, the links the assistant writes) open in the side panel next to where they were clicked, or
-// move there on a narrow screen, which has no room beside the page.
+// move there on a narrow screen, which has no room beside the page; its conversations (/j/<id>) move there. The
+// hub's own pages are those of this page's origin and of every address the hub advertises (hello's endpoints, its
+// public_url first: the address the assistant writes, which may not be the one this page was opened at).
 //
 // Also the hand-off between the reader and the composers: text picked in the panel goes to the composer the user is
 // writing in, as <jarvis-context> tags in the next message (docs/protocol.md「消息里的标签」).
@@ -14,7 +16,7 @@ import { uuid } from "./format";
 import { openPanel } from "./panel";
 import { navigate } from "./router";
 import { BASE, stripBase } from "./base";
-import { larkOn } from "./store";
+import { larkOn, onHubEvent } from "./store";
 import { mediaMatches, NARROW } from "./viewport";
 
 /** What a Feishu document link points at, from the link alone (FeishuDocsKind.from). A wiki link does not say. */
@@ -26,6 +28,7 @@ export type LinkRoute =
   | { kind: "session"; mid: string; sid: string } // jarvis://session/<machine>/<session>: that conversation
   | { kind: "agent"; mid: string; sid: string } // this hub's /s/<machine>/<session>: that agent's chat in the panel
   | { kind: "task"; id: string } // this hub's /todos?id=<todo>: that task in the panel
+  | { kind: "conversation"; sid: string } // this hub's /j/<id>: that assistant conversation, in place
   | { kind: "web" } // any other http(s) page: a new tab
   | { kind: "system" } // mailto: / tel:: the browser hands it to the system
   | { kind: "none" }; // anything else (javascript:, other apps' schemes, not a URL): not followed
@@ -99,12 +102,28 @@ function momentsPostID(u: URL): string | null {
   return /^\d+$/.test(id) ? id : null;
 }
 
-const pageOrigin = () => (typeof location !== "undefined" ? location.origin : "");
+// The origins of the addresses the hub advertises (hello's endpoints), kept from its last hello.
+let advertised: string[] = [];
+onHubEvent("hello", (msg) => {
+  advertised = hubOrigins(msg.endpoints);
+});
 
-/** An agent or task page of the hub this page is served by (router.ts's /s/… and /todos, under the sub-path the page is
- * served at), or null. */
-function hubPage(u: URL, origin: string, base: string): LinkRoute | null {
-  if (!origin || u.origin !== origin) return null;
+/** The origins of a hello's `endpoints` ({url}[]); anything else in the list is skipped. */
+export function hubOrigins(endpoints: unknown): string[] {
+  if (!Array.isArray(endpoints)) return [];
+  return endpoints.flatMap((e) => {
+    const u = typeof e === "object" && e && typeof (e as { url?: unknown }).url === "string" ? parse((e as { url: string }).url) : null;
+    return u && (u.protocol === "http:" || u.protocol === "https:") ? [u.origin] : [];
+  });
+}
+
+const pageOrigin = () => (typeof location !== "undefined" ? [location.origin, ...advertised] : advertised);
+
+/** An agent, task or conversation page of the hub this page is served by (router.ts's /s/…, /todos, /j/…, under the
+ * sub-path the page is served at), or null. */
+function hubPage(u: URL, origin: string | string[], base: string): LinkRoute | null {
+  const origins = (Array.isArray(origin) ? origin : [origin]).filter(Boolean);
+  if (!origins.includes(u.origin)) return null;
   if (base && u.pathname !== base && !u.pathname.startsWith(base + "/")) return null;
   let p: string[];
   try {
@@ -113,6 +132,7 @@ function hubPage(u: URL, origin: string, base: string): LinkRoute | null {
     return null;
   }
   if (p[0] === "s" && p[1] && p[2] && p.length === 3) return { kind: "agent", mid: p[1], sid: p[2] };
+  if (p[0] === "j" && p[1] && p[1] !== "new" && p.length === 2) return { kind: "conversation", sid: p[1] };
   if (p[0] === "todos" && p.length <= 2) {
     const id = p[1] || u.searchParams.get("id");
     if (id) return { kind: "task", id };
@@ -122,9 +142,9 @@ function hubPage(u: URL, origin: string, base: string): LinkRoute | null {
 
 /**
  * Where `url` opens. `lark`: whether the hub reads Feishu (store.larkOn); without it Feishu links are web pages.
- * `origin`: this page's, for telling the hub's own pages from other sites.
+ * `origin`: this page's and the hub's advertised ones, for telling the hub's own pages from other sites.
  */
-export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin(), base = BASE): LinkRoute {
+export function linkRoute(url: string, lark = larkOn(), origin: string | string[] = pageOrigin(), base = BASE): LinkRoute {
   const u = parse(url.trim());
   if (!u) return { kind: "none" };
   const scheme = u.protocol.toLowerCase();
@@ -158,7 +178,7 @@ export function linkRoute(url: string, lark = larkOn(), origin = pageOrigin(), b
  */
 export function opensInApp(url: string): boolean {
   const r = linkRoute(url);
-  return (r.kind === "doc" && r.doc !== "bitable") || r.kind === "moments" || r.kind === "session" || r.kind === "agent" || r.kind === "task";
+  return (r.kind === "doc" && r.doc !== "bitable") || r.kind === "moments" || r.kind === "session" || r.kind === "agent" || r.kind === "task" || r.kind === "conversation";
 }
 
 /** The href to put on an <a>: jarvis://session links become the in-app path, so ⌘-click opens a tab of that page. */
@@ -181,6 +201,9 @@ export function openLink(url: string, title?: string) {
     case "task":
       if (mediaMatches(NARROW)) navigate({ name: "todos", id: r.id });
       else openPanel({ kind: "task", todo: r.id });
+      return;
+    case "conversation":
+      navigate({ name: "jarvis", sid: r.sid });
       return;
     case "doc":
     case "moments":

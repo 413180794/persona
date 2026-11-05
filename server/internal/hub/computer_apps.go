@@ -162,7 +162,7 @@ func (h *Hub) putApprovedApps(ctx context.Context, all map[string][]approvedApp)
 
 // approveApps asks on the phone about the apps this call names that m has not always allowed (or every time: those
 // never remembered, a call whose apps are not all known). asked: a card was shown; ok: go ahead.
-func (h *Hub) approveApps(ctx context.Context, m *Machine, tool string, names []string, whole bool, args json.RawMessage) (asked, ok bool) {
+func (h *Hub) approveApps(ctx context.Context, m *Machine, by asker, tool string, names []string, whole bool, args json.RawMessage) (asked, ok bool) {
 	if !h.cua().approval() {
 		return false, true
 	}
@@ -199,7 +199,7 @@ func (h *Hub) approveApps(ctx context.Context, m *Machine, tool string, names []
 		summary = i18n.T(l, "hub-computer_apps.ask_unknown", i18n.Args{"summary": summary})
 	}
 	ix := proto.Interaction{
-		ID: "ix_" + randomHex(6), MachineID: m.cfg.ID, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
+		ID: "ix_" + randomHex(6), MachineID: by.machine, SessionID: by.session, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
 		ToolInput: args, SessionTitle: "Persona", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
 	}
 	if remember {

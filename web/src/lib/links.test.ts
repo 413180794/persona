@@ -15,6 +15,7 @@ import {
   docKind,
   editMessage,
   getContexts,
+  hubOrigins,
   linkHref,
   linkRoute,
   newContext,
@@ -105,6 +106,17 @@ describe("where a link opens", () => {
     expect(linkRoute(`${hub}/todos`, false, hub).kind).toBe("web");
     expect(linkRoute(`${hub}/inbox`, false, hub).kind).toBe("web");
     expect(linkRoute(`${hub}/s/m1/%E0%A4%A`, false, hub).kind).toBe("web");
+    // its conversations, but not /j/new (a fresh one) or the main conversation's bare /j
+    expect(linkRoute(`${hub}/j/conv-1`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
+    expect(linkRoute(`${hub}/j/conv-1?x=1#y`, false, hub)).toEqual({ kind: "conversation", sid: "conv-1" });
+    expect(linkRoute(`${hub}/j/new`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/j`, false, hub).kind).toBe("web");
+    expect(linkRoute(`${hub}/j/conv-1/more`, false, hub).kind).toBe("web");
+    // the hub's advertised addresses are its own too, whichever one this page was opened at
+    const lan = "http://192.0.2.10:18660";
+    expect(linkRoute(`${hub}/s/m1/abc-1`, false, [lan, hub])).toEqual({ kind: "agent", mid: "m1", sid: "abc-1" });
+    expect(linkRoute(`${lan}/todos?id=todo_1`, false, [hub, lan])).toEqual({ kind: "task", id: "todo_1" });
+    expect(linkRoute("https://other.example.com/s/m1/abc-1", false, [lan, hub]).kind).toBe("web");
     // the href stays the link itself, so ⌘-click opens that page in a tab
     expect(linkHref(`${hub}/todos?id=todo_1`)).toBe(`${hub}/todos?id=todo_1`);
   });
@@ -128,9 +140,23 @@ describe("where a link opens", () => {
       openLink(`${hub}/todos?id=todo_1`);
       expect(getPanel()).toBeNull();
       expect(vi.mocked(navigate).mock.calls.slice(-2)).toEqual([[{ name: "session", mid: "m1", sid: "abc-1" }], [{ name: "todos", id: "todo_1" }]]);
+      // a conversation moves there on any screen
+      narrow.value = false;
+      expect(opensInApp(`${hub}/j/conv-1`)).toBe(true);
+      openLink(`${hub}/j/conv-1`);
+      expect(getPanel()).toBeNull();
+      expect(vi.mocked(navigate).mock.calls.at(-1)).toEqual([{ name: "jarvis", sid: "conv-1" }]);
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("reads the hub's advertised origins from its hello", () => {
+    expect(hubOrigins([{ url: "https://hub.example.com/" }, { url: "http://192.0.2.10:18660" }, { url: "ftp://x" }, { url: 1 }, "x", null])).toEqual([
+      "https://hub.example.com",
+      "http://192.0.2.10:18660",
+    ]);
+    expect(hubOrigins(undefined)).toEqual([]);
   });
 
   it("ignores malformed percent escapes in conversation links", () => {

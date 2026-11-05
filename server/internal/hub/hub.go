@@ -1195,10 +1195,22 @@ func (h *Hub) callTool(ctx context.Context, machineID, name string, args json.Ra
 	return proto.TextResult("unknown tool "+name, true)
 }
 
+// asker is the conversation a card the hub makes itself belongs to: the clients put a card into the chat of its
+// machine and session, so one with no session shows only in 需要你, not in the conversation that is waiting on it.
+type asker struct{ machine, session string }
+
+// assistantAsker is the assistant conversation sessionID (on the assistant's machine); with none, a card of machine.
+func (h *Hub) assistantAsker(sessionID, machine string) asker {
+	if mid := h.assistantProfile().MachineID; sessionID != "" && mid != "" {
+		return asker{mid, sessionID}
+	}
+	return asker{machine, ""}
+}
+
 // approve asks the user on the phone to allow a sensitive tool call (e.g. sending an email).
-func (h *Hub) approve(ctx context.Context, machineID, tool, summary string, input json.RawMessage) bool {
+func (h *Hub) approve(ctx context.Context, by asker, tool, summary string, input json.RawMessage) bool {
 	ix := proto.Interaction{
-		ID: "ix_" + randomHex(6), MachineID: machineID, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
+		ID: "ix_" + randomHex(6), MachineID: by.machine, SessionID: by.session, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
 		ToolInput: input, SessionTitle: "Persona", CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
 	}
 	r, _ := h.waitInteraction(ctx, ix)

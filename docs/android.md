@@ -497,6 +497,23 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 - 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 云文档事项页 / 公司圈帖子页（云文档见「收件箱：云文档事项」）。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
+## 助手回答里的 hub 链接（#2680）
+
+对话里点 http(s) 链接时，`ChatLinkHost` 先问外壳（`LocalChatHubLinks`，`app` 的 `ShellLinks.kt` `openHubPage`）：链接的 host:port 是选中的 hub 组的地址
+（配对地址和备用线路、hub 下发的 endpoints（含 `public_url`）、组里其他 hub 的地址，`OkHttpHubConnection.knownAddresses`；hub 在反向代理子路径下时去掉前缀），
+路径又能对上 App 的页面，就直接导航，不开链接卡片；否则照旧在卡片里开。路径的解析是 `core/navigation` 的 `HubLinks.page`（和网页 `web/src/lib/router.ts` 同一套路径）：
+
+| 链接 | App 里 |
+| --- | --- |
+| `/s/<机器>/<会话>`、`/t/<机器>/<空间>/<槽位>/<会话>` | 那个 Agent 的对话（短会话 id 只对上一个会话时用它）；`/t/…` 没有会话时是 Agents 页 |
+| `/j/<对话>` | 助手的那段对话，在 Persona 首页里打开；`/`、`/j`、`/j/new` 是 Persona 页 |
+| `/todos?id=<待办>`、`/todos/<待办>`、`/todos` | 待办详情、待办列表 |
+| `/inbox/<id>`、`/inbox`、`/agents`、`/settings`、`/machines[/<机器>]` | 对应页 |
+
+机器 id 按 hub 的原样加上组后缀（`GroupKeys.machine`）。查询参数和锚点（`?view=`、以后的「定位到某条消息」）不影响识别，现在也不用。
+体验模式没有 hub 地址，什么都不拦。别的 App / 浏览器里点 hub 链接拉起 App（App Links）还没做（#2194 第 4 步的后半）。
+单测 `HubLinksTest`（`core:navigation`）、`ShellHubLinksTest`（`app`）。
+
 ## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）
 
 iPhone 的实时活动、小组件和快捷指令在 Android 上的对应物。四处说同样的话：文案和挑选规则在 `core:domain` 的 `FleetSummary` / `FleetText`（照 iOS `FleetText` 和 hub `buildFleet`），数据都来自 `:platform:notify` 的 `FleetFeed`。

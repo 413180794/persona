@@ -248,7 +248,7 @@ func TestInstalledConnectorExtension(t *testing.T) {
 	if m := h.connectors.Get("examplenotes").Manifest(); m.Has("future_example") || !m.Has(connector.CapTools) {
 		t.Fatalf("manifest %+v", m.Capabilities)
 	}
-	res := h.callConnector(context.Background(), "", "examplenotes_search", json.RawMessage(`{}`))
+	res := h.callConnector(context.Background(), asker{}, "examplenotes_search", json.RawMessage(`{}`))
 	if res.IsError || len(res.Content) != 1 || !strings.Contains(res.Content[0].Text, "examplenotes_search in work") {
 		t.Fatalf("%+v", res)
 	}

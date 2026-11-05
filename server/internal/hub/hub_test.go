@@ -536,7 +536,7 @@ func TestCancelMachineInteractions(t *testing.T) {
 func TestApproveAsksThePhone(t *testing.T) {
 	h := newTestHub(t)
 	done := make(chan bool, 1)
-	go func() { done <- h.approve(context.Background(), "server", "mail_send", "send it", nil) }()
+	go func() { done <- h.approve(context.Background(), asker{machine: "server"}, "mail_send", "send it", nil) }()
 
 	deadline := time.After(5 * time.Second)
 	for {
@@ -572,7 +572,7 @@ func TestApproveAsksThePhone(t *testing.T) {
 func TestApproveDeclined(t *testing.T) {
 	h := newTestHub(t)
 	done := make(chan bool, 1)
-	go func() { done <- h.approve(context.Background(), "server", "mail_send", "send it", nil) }()
+	go func() { done <- h.approve(context.Background(), asker{machine: "server"}, "mail_send", "send it", nil) }()
 	for len(h.pendingInteractions()) == 0 {
 		time.Sleep(5 * time.Millisecond)
 	}

@@ -85,6 +85,9 @@ class OkHttpHubConnection(
     private val _memberEndpoints = MutableStateFlow<Map<String, List<Endpoint>>>(emptyMap())
     /** Candidates the other hubs of the group sent in their hello / endpoints events while connected through them. */
     val memberEndpoints = _memberEndpoints.asStateFlow()
+    /** Every address this hub and the group's other hubs go by: the pairing's, the lists they sent, the members'. */
+    fun knownAddresses(): List<String> =
+        (config.endpoints + endpoints.value + members.flatMap { it.endpoints } + memberEndpoints.value.values.flatten()).map { it.url }.distinct()
     /** The hub a selected route belongs to; kept after the route is cleared, so a failure is charged to it. */
     @Volatile private var routeOwner: Pair<HubRoute, Owner>? = null
     @Volatile private var attemptOwner: Owner? = null

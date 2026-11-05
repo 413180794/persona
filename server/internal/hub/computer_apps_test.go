@@ -77,6 +77,10 @@ func TestComputerAppsAreAskedOnce(t *testing.T) {
 	if !strings.Contains(card.Summary, "「Calculator」") || card.AlwaysLabel != "以后操作「Calculator」不再问" {
 		t.Fatalf("asked about Calculator, with 一直允许: %+v", card)
 	}
+	// In the conversation that operates the Mac: there the chat shows the card (#2558).
+	if card.SessionID != "conv1234" || card.MachineID != h.assistantProfile().MachineID {
+		t.Fatalf("card of %s/%s, not the assistant's conversation", card.MachineID, card.SessionID)
+	}
 	if res := <-done; res.IsError {
 		t.Fatalf("%+v", res)
 	}

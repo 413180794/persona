@@ -39,8 +39,8 @@ internal val LocalChatLinkOpening = staticCompositionLocalOf { 0 }
 private enum class LinkDetent { Full, Peek, Hidden }
 
 /**
- * Shared URI boundary for Agent, assistant, and other conversation surfaces. http(s) opens in the sheet, `jarvis://`
- * links navigate ([LocalChatAppLinks]), mailto: / tel: / other apps' links go out after asking, the rest is refused.
+ * Shared URI boundary for Agent, assistant, and other conversation surfaces. http(s) opens in the sheet (the hub's own
+ * pages the app has a screen for navigate instead, [LocalChatHubLinks]), `jarvis://` links navigate ([LocalChatAppLinks]), mailto: / tel: / other apps' links go out after asking, the rest is refused.
  *
  * In a conversation ([onContext], [onEdit]) text picked on a page becomes 作为上下文 or AI 修改; with [onHandToPersona]
  * (pages with no conversation behind them: the app shell, the knowledge base) it is 交给 Persona instead.
@@ -65,6 +65,7 @@ fun ChatLinkHost(
     val lifecycleState by lifecycle.currentStateAsState()
     val feedback = LocalAppFeedback.current
     val appLinks by rememberUpdatedState(LocalChatAppLinks.current)
+    val hubLinks by rememberUpdatedState(LocalChatHubLinks.current)
     val lark = LocalLarkFeatures.current
     var url by remember { mutableStateOf<String?>(null) }
     /** "机器名 :端口" while the sheet shows one of the machine's ports (docs/ports.md「转发」). */
@@ -79,6 +80,8 @@ fun ChatLinkHost(
             when (ChatLinks.kind(uri)) {
                 ChatLinkKind.Web -> {
                     val target = ChatLinks.webUrl(uri)
+                    // A page of the hub's web app that the app shows itself opens there, not in the sheet.
+                    if (target != null && hubLinks?.invoke(target) == true) { if (url != null) closeRequest++; return }
                     // A link to this machine's localhost is one of its ports, opened through the hub (docs/ports.md).
                     val machine = ports
                     val port = machine?.let { PortLinks.link(uri, it.hostnames) }

@@ -2225,6 +2225,10 @@ nonisolated struct SlotRow: View, Equatable {
                 } trailing: {
                     VStack(alignment: .trailing, spacing: Theme.Space.xs) {
                         AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
+                        #if os(macOS)
+                        // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
+                        if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                        #endif
                         if session.state == .needsYou && !muted && !hideState { BUIPill(session.state.label, tone: .red) }
                         if muted {
                             Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知")
@@ -2245,6 +2249,10 @@ nonisolated struct SlotRow: View, Equatable {
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 4)
                             AgentTimeText(time: time, fallback: session.updatedAt, font: Theme.Font.label)
+                            #if os(macOS)
+                            // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
+                            if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+                            #endif
                         }
                         if let last = session.listPreview {
                             Text(last).font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary).lineLimit(2)
@@ -2374,6 +2382,10 @@ nonisolated struct CompactSlotRow: View, Equatable {
             Spacer(minLength: Theme.Space.xs)
             if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
             AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
+            #if os(macOS)
+            // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
+            if session.pendingInteractions > 0 { CountBadge(count: session.pendingInteractions, look: .solid(Theme.needsYou)) }
+            #endif
         }
         .opacity(muted ? 0.8 : 1)
     }

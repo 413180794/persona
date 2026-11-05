@@ -54,6 +54,8 @@ class ShellSession(
     val groups: HubGroups = HubGroups.None,
     val tasks: persona.core.domain.tasks.TasksStore? = null,
     val hubUpdates: persona.core.contracts.api.HubUpdates? = null,
+    /** The addresses the selected group's hubs go by (their links open in the app, ShellLinks.kt); none in 体验模式. */
+    val hubAddresses: () -> List<String> = { emptyList() },
 ) {
     val agents = object : AgentsDependencies {
         override fun sessions() = this@ShellSession.sessions
@@ -152,7 +154,8 @@ class AppServices @Inject constructor(
                 mutableSession.value = ShellSession(data.scope.path, runtime, sessions, chats, boundInteractions, sender,
                     assistant, inbox, preferences, HubTerminalTransport(socket), shell.files, mergedMetrics,
                     knowledgeConnection, shell.actions, phone, agentsWiring = agentsWiring, machines = machineManagement,
-                    voice = voice, groups = hubGroups, tasks = tasksStore, hubUpdates = hubUpdates)
+                    voice = voice, groups = hubGroups, tasks = tasksStore, hubUpdates = hubUpdates,
+                    hubAddresses = { listOf(data.credentials.hubAddress) + data.credentials.candidateAddresses + socket.knownAddresses() })
                 try {
                     coroutineScope {
                         launch {

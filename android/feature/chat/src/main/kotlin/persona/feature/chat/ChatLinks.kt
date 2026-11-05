@@ -30,6 +30,13 @@ sealed interface ChatAppLink {
 /** Supplied by the app shell: opens a conversation or a tab for a tapped `jarvis://` link. */
 val LocalChatAppLinks = staticCompositionLocalOf<((ChatAppLink) -> Unit)?> { null }
 
+/**
+ * Supplied by the app shell: opens a link to a page of the hub's web app (the assistant's `/s/…`, `/j/…`,
+ * `/todos?id=…` links) in the app instead, and says whether it did; a page it has no screen for, or another
+ * site, is left to the sheet.
+ */
+val LocalChatHubLinks = staticCompositionLocalOf<((String) -> Boolean)?> { null }
+
 /** What to ask before a link leaves for another app: a title and one line. */
 internal data class ExternalPrompt(val title: String, val text: String)
 

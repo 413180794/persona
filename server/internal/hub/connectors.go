@@ -59,11 +59,11 @@ func (h *Hub) connectorChanged(id string, scope connector.Scope) {
 	}
 }
 
-// callConnector runs a connector's tool for machineID's assistant; a write the gate leaves to the user is asked on
-// the phone like mail_send.
-func (h *Hub) callConnector(ctx context.Context, machineID, name string, args json.RawMessage) proto.ToolResult {
+// callConnector runs a connector's tool for an agent or assistant conversation (by: none when the user acts in a
+// connector's thread); a write the gate leaves to the user is asked on the phone like mail_send, in that conversation.
+func (h *Hub) callConnector(ctx context.Context, by asker, name string, args json.RawMessage) proto.ToolResult {
 	return h.connectors.Call(ctx, name, args, func(ctx context.Context, summary string, input json.RawMessage) bool {
-		return h.approve(ctx, machineID, name, summary, input)
+		return h.approve(ctx, by, name, summary, input)
 	})
 }
 

@@ -58,7 +58,7 @@ func TestMailSendAsksWithTheSameCard(t *testing.T) {
 	h.registerConnectors()
 	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"季度汇报","text":"附件已更新"}`)
 	done := make(chan proto.ToolResult, 1)
-	go func() { done <- h.callConnector(context.Background(), "box", "mail_send", args) }()
+	go func() { done <- h.callConnector(context.Background(), asker{machine: "box"}, "mail_send", args) }()
 	var ix []proto.Interaction
 	for i := 0; i < 500 && len(ix) == 0; i++ {
 		time.Sleep(5 * time.Millisecond)
@@ -73,5 +73,30 @@ func TestMailSendAsksWithTheSameCard(t *testing.T) {
 	}
 	if r := <-done; !r.IsError || len(m.sent) != 0 {
 		t.Fatalf("declined but sent: %+v %v", r, m.sent)
+	}
+}
+
+// A connector's write the assistant asks for is a card of its conversation, as a hook's is: the clients show a card
+// in the chat of its session, and one with none only in 需要你 (#2558). The user's own in a connector's thread has none.
+func TestConnectorCardsBelongToTheCallingConversation(t *testing.T) {
+	h := newTestHub(t)
+	h.mail = &replyMail{}
+	h.connectors = connector.NewRegistry(nil)
+	h.registerConnectors()
+	m := newMachine(h, MachineConfig{ID: "box", Name: "Box", Kind: "local"})
+	args := json.RawMessage(`{"account_id":"acc1","to":[{"email":"someone@example.com"}],"subject":"s","text":"t"}`)
+	params, _ := json.Marshal(map[string]any{"name": "mail_send", "args": args, "assistant": true, "session_id": "conv1"})
+	go func() { _, _ = m.onRequest(context.Background(), "mcp.call", params) }()
+	var ix []proto.Interaction
+	for i := 0; i < 500 && len(ix) == 0; i++ {
+		time.Sleep(5 * time.Millisecond)
+		ix = h.pendingInteractions()
+	}
+	if len(ix) != 1 || ix[0].MachineID != "box" || ix[0].SessionID != "conv1" {
+		t.Fatalf("card %+v, want one of box/conv1", ix)
+	}
+	deny := false
+	if err := h.resolve(ix[0].ID, proto.Resolution{Allow: &deny}); err != nil {
+		t.Fatal(err)
 	}
 }
