@@ -188,10 +188,10 @@ struct AssistantHTMLCard: View {
             }
             if executing {
                 Text("助手画的页面 · 隔离运行").font(Theme.Font.caption).foregroundStyle(.secondary)
-                SandboxedHTMLView(html: html) { request in
+                SandboxedHTMLView(html: html, onRequest: { request in
                     guard executing else { return }
                     actions.receive(request, answered: answered)
-                }
+                }, onUnavailable: { stop() })
                 .frame(height: Self.clampedHeight(height))
                 .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 .accessibilityIdentifier("html-card-page")
@@ -308,6 +308,7 @@ private func bridgeScript(instance: String) -> String {
 @MainActor
 final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     var onRequest: (HTMLCardRequest) -> Void
+    var onUnavailable: () -> Void = {}
     /// The page was put in: from now on every main-frame navigation is cancelled.
     private var started = false
     private var loaded: String?
@@ -424,6 +425,19 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
         acceptsMessages = true
     }
 
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        generation &+= 1
+        loadTask?.cancel()
+        loadTask = nil
+        loaded = nil
+        navigation = nil
+        instance = nil
+        acceptsMessages = false
+        started = false
+        webView.configuration.userContentController.removeAllUserScripts()
+        onUnavailable()
+    }
+
     // MARK: Navigation: the page itself, nothing else
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
@@ -435,8 +449,8 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
         if action.shouldPerformDownload { return .cancel }
         let scheme = action.request.url?.scheme?.lowercased() ?? ""
         if action.targetFrame?.isMainFrame == false {
-            // The page's own frames (srcdoc, data:); never one from the network (the rules block those anyway).
-            return ["about", "data"].contains(scheme) ? .allow : .cancel
+            // A same-origin srcdoc frame can call the parent's bridge. Cards do not need child frames.
+            return .cancel
         }
         // The main frame: the one load of the page, then no navigation away (links, location =, form posts).
         guard !started, scheme == "about" else { return .cancel }
@@ -487,8 +501,13 @@ private final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
 struct SandboxedHTMLView: UIViewRepresentable {
     let html: String
     var onRequest: (HTMLCardRequest) -> Void
+    var onUnavailable: () -> Void = {}
 
-    func makeCoordinator() -> SandboxedHTMLCoordinator { SandboxedHTMLCoordinator(onRequest: onRequest) }
+    func makeCoordinator() -> SandboxedHTMLCoordinator {
+        let coordinator = SandboxedHTMLCoordinator(onRequest: onRequest)
+        coordinator.onUnavailable = onUnavailable
+        return coordinator
+    }
 
     func makeUIView(context: Context) -> WKWebView {
         let web = SandboxedHTMLCoordinator.makeWebView(context.coordinator)
@@ -498,6 +517,7 @@ struct SandboxedHTMLView: UIViewRepresentable {
 
     func updateUIView(_ web: WKWebView, context: Context) {
         context.coordinator.onRequest = onRequest
+        context.coordinator.onUnavailable = onUnavailable
         context.coordinator.load(html, in: web)
     }
 
@@ -509,8 +529,13 @@ struct SandboxedHTMLView: UIViewRepresentable {
 struct SandboxedHTMLView: NSViewRepresentable {
     let html: String
     var onRequest: (HTMLCardRequest) -> Void
+    var onUnavailable: () -> Void = {}
 
-    func makeCoordinator() -> SandboxedHTMLCoordinator { SandboxedHTMLCoordinator(onRequest: onRequest) }
+    func makeCoordinator() -> SandboxedHTMLCoordinator {
+        let coordinator = SandboxedHTMLCoordinator(onRequest: onRequest)
+        coordinator.onUnavailable = onUnavailable
+        return coordinator
+    }
 
     func makeNSView(context: Context) -> WKWebView {
         let web = SandboxedHTMLCoordinator.makeWebView(context.coordinator)
@@ -520,6 +545,7 @@ struct SandboxedHTMLView: NSViewRepresentable {
 
     func updateNSView(_ web: WKWebView, context: Context) {
         context.coordinator.onRequest = onRequest
+        context.coordinator.onUnavailable = onUnavailable
         context.coordinator.load(html, in: web)
     }
 

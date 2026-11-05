@@ -987,3 +987,8 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
 - **原因**：隧道的 `onPhase` 回调捕获的是拨号时的 id（`pairing`），配对成功后 `adopt` 把隧道挪到 hub 的 id 下，回调里 `tunnels[id]` 再也对不上，状态全被丢掉。
 - **做法**：回调按对象本身去表里找它现在的 key（`SSHTunnels.key(of:in:)`），不捕获 key。另外，移除一组 hub 时要在改 registry **之前**取它的成员：改完之后成员已经不在 registry 里，id 就拿不到了（`AppModel.tunnelIDs(removing:from:)`）。
 
+## HTML 子帧能借父页面的 bridge，不能只检查主帧标记（2026-11-05，#2025）
+
+- 真实 WKWebView 验证中，直接从子帧发消息被 `isMainFrame` 拒绝，但同源 `srcdoc` 子帧借父页面 bridge 发出的消息会被识别为主帧消息；当前实例 nonce 也不能区别这两种调用。该用例中，CSP 的 `frame-src 'none'` 没有阻止子帧执行。
+- 助手卡片不需要子帧，导航代理不再放行 `about:`／`data:` 子帧，统一拒绝。回归必须保留借父 bridge 的真实请求用例，不能只测伪造 handler 参数。修复后九项常规 WebKit 安全用例通过；无限循环及宿主恢复单独验证，不能由常规测试推导。
+- 内容进程退出时撤销 bridge 实例、加载票据和脚本，转为原生 fallback；同一 HTML 的重试必须创建新实例，不能被 `loaded == html` 去重挡住。调用公开 delegate 回调能验证这条恢复逻辑，但不等于实际触发了 OS 终止。
