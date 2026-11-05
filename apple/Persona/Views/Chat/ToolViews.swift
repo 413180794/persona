@@ -1030,6 +1030,10 @@ struct Base64Image: View {
                     .scaledFrame(maxHeight: Theme.Size.box280)
                     .contentShape(.rect)
                     .onTapGesture { open() }
+                    #if os(macOS)
+                    // Dragged out to Finder or another app, as a picture in a Mac app is (#2113).
+                    .draggable(Image(nsImage: image)) { Image(nsImage: image).resizable().scaledToFit().scaledFrame(maxHeight: Theme.Size.box120) }
+                    #endif
                     .matchedTransitionSource(id: pageZoom == nil ? "image" : payload.identity, in: pageZoom ?? zoom)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("图片，点按查看大图")

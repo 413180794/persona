@@ -25,8 +25,9 @@ const ASCII = new RegExp(
   "g",
 );
 const CODE_SPAN = /`([^`\n]+)`/g;
-// A whole code span that is a path: ~/ or / then anything but a backtick (non-ASCII names too), and a line.
-const WHOLE = new RegExp(String.raw`^(~?/[^\s\`]+(?: [^\s\`]+)*?)${LINE}$`);
+// A whole code span that is a path: ~/ or / then anything but a backtick (non-ASCII names too), and a line (the path
+// takes as little as it can, so a line at the end is the line, not part of the name).
+const WHOLE = new RegExp(String.raw`^(~?/[^\s\`]+?(?: [^\s\`]+?)*?)${LINE}$`);
 
 /**
  * The paths in plain text, in order, at most `limit`. A code span is a candidate whole and also for the ASCII paths

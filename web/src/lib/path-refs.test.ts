@@ -38,6 +38,15 @@ describe("findPathRefs", () => {
     expect(paths("`/tmp/a.md 和 /tmp/b.md`")).toEqual(["/tmp/a.md 和 /tmp/b.md", "/tmp/a.md", "/tmp/b.md"]);
   });
 
+  it("takes the line off a whole path in backticks", () => {
+    // what fs.stat is asked about is the path alone; the line is where to open it
+    expect(codePathRef("/tmp/x/a.md:12")).toMatchObject({ path: "/tmp/x/a.md", line: 12 });
+    expect(codePathRef("~/报告/x.docx#L3")).toMatchObject({ path: "~/报告/x.docx", line: 3 });
+    expect(findPathRefs("在 `~/My Notes/todo.md:3:5`")[0]).toMatchObject({ path: "~/My Notes/todo.md", line: 3, col: 5 });
+    expect(uniquePaths(findPathRefs("见 `/tmp/x/a.md:12`"))).toEqual(["/tmp/x/a.md"]);
+    expect(codePathRef("/tmp/x/a.md")).toMatchObject({ path: "/tmp/x/a.md", line: undefined });
+  });
+
   it("asks about each path once", () => {
     expect(uniquePaths(findPathRefs("src/a.ts:1 src/a.ts:2 `src/a.ts`"))).toEqual(["src/a.ts"]);
   });

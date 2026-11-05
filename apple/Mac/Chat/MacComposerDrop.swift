@@ -79,6 +79,52 @@ extension View {
     }
 }
 
+extension View {
+    /// Files dropped anywhere on a chat's page (not only on its composer, #2113) go to its composer
+    /// (`AppModel.composerDrops`), with a 「松手添加到消息」 cover while they are over it.
+    func macChatDrop(_ key: SessionKey) -> some View { modifier(MacChatDrop(key: key)) }
+}
+
+private struct MacChatDrop: ViewModifier {
+    let key: SessionKey
+    @State private var over = false
+
+    func body(content: Content) -> some View {
+        content
+            .dropDestination(for: URL.self) { urls, _ in
+                let files = urls.filter(\.isFileURL)
+                guard !files.isEmpty else { return false }
+                AppModel.shared.composerDrops[key, default: []] += files
+                return true
+            } isTargeted: { over = $0 }
+            .overlay {
+                if over || MacChatDrop.showCover {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                            .fill(Theme.accent.opacity(0.08))
+                        RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                            .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: Theme.Size.line, dash: [Theme.Space.sm, Theme.Space.xs]))
+                        Label("松手添加到消息", systemImage: Theme.Icon.attachment)
+                            .font(Theme.Font.heading)
+                            .foregroundStyle(Theme.accent)
+                            .lineLimit(1)
+                    }
+                    .padding(Theme.Space.m)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+            }
+            .animation(Theme.Motion.standard, value: over)
+    }
+
+    /// `-showMacDropCover YES` (DEBUG): the cover as if files were over the page, for screenshots.
+    #if DEBUG
+    static let showCover = UserDefaults.standard.bool(forKey: "showMacDropCover")
+    #else
+    static let showCover = false
+    #endif
+}
+
 /// What ⌘V in a composer does with the pasteboard.
 nonisolated enum MacPaste {
     enum Plan: Equatable {

@@ -241,6 +241,9 @@ struct ChatView: View {
         // `-sideBars YES`: lay the chat out as under iPhone Duo's side bars on any simulator (screenshots, tests).
         .onAppear { if UserDefaults.standard.bool(forKey: "sideBars") { barsVertical = true } }
         #endif
+        #if os(macOS)
+        .macChatDrop(key) // files dropped anywhere on the page go to the composer (#2113)
+        #endif
         .overlay(alignment: .top) {
             #if os(macOS)
             if style == .dev { macChrome }
@@ -3318,6 +3321,15 @@ struct Composer: View, Equatable {
             for img in incoming { add(img) }
             focused = true
         }
+        #if os(macOS)
+        // Files dropped on the chat's page, not on the box (`macChatDrop`): as if dropped here.
+        .onChange(of: model.composerDrops[key]?.count ?? 0, initial: true) { _, n in
+            guard n > 0, let urls = model.composerDrops[key] else { return }
+            model.composerDrops[key] = nil
+            take(urls)
+            focused = true
+        }
+        #endif
         .fullScreenCover(item: Binding(get: { editingIndex.map(EditIndex.init) }, set: { if $0 == nil { editingIndex = nil } })) { e in
             if images.indices.contains(e.id) {
                 ImageEditor(image: images[e.id].0) { edited in

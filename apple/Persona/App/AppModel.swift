@@ -2146,6 +2146,11 @@ final class AppModel {
 
     /// Images handed to a chat's composer from elsewhere (an image edited in the viewer); the composer takes them.
     var composerInbox: [SessionKey: [UIImage]] = [:]
+    #if os(macOS)
+    /// Files dropped on a chat's page anywhere but its composer: the composer takes them as if dropped on
+    /// it (`MacDrop.take`: pictures attached, other files uploaded).
+    var composerDrops: [SessionKey: [URL]] = [:]
+    #endif
     /// Page excerpts picked as context for a chat's next message (`<jarvis-context>`).
     var composerContexts: [SessionKey: [ContextRef]] = [:]
     /// A chat asked for its composer's keyboard (a message just quoted, #1058); the composer takes it and clears it.
