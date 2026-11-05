@@ -476,6 +476,30 @@ type LauncherCheck struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// ClaudeAuthStatus is what a node's claude.auth_status found: `claude auth status --json` run as the launcher runs
+// claude (docs/onboarding.md 4.3). It spends no tokens. Only these fields leave the machine: never the account's
+// email or organization, never a key (KeySource names where a key came from, e.g. ANTHROPIC_API_KEY).
+type ClaudeAuthStatus struct {
+	State       string `json:"state"`                  // ClaudeLoggedIn, ClaudeNotLoggedIn or ClaudeAuthUnknown
+	AuthMethod  string `json:"auth_method,omitempty"`  // Claude Code's authMethod: claude.ai, api_key, api_key_helper, oauth_token, third_party, none
+	APIProvider string `json:"api_provider,omitempty"` // firstParty, bedrock, vertex…
+	KeySource   string `json:"key_source,omitempty"`
+	Version     string `json:"version,omitempty"` // Claude Code's, when known
+	Reason      string `json:"reason,omitempty"`  // why it is unknown: ClaudeAuthOld, ClaudeAuthNotClaude, ClaudeAuthUnreadable, ClaudeAuthTimeout
+}
+
+// ClaudeAuthStatus states and the reasons for an unknown one.
+const (
+	ClaudeLoggedIn    = "logged_in"
+	ClaudeNotLoggedIn = "not_logged_in"
+	ClaudeAuthUnknown = "unknown"
+
+	ClaudeAuthOld        = "old_claude" // a Claude Code before `claude auth` (2.1.41)
+	ClaudeAuthNotClaude  = "not_claude" // the launcher runs Codex or a runtime
+	ClaudeAuthUnreadable = "unreadable" // no status in what it printed (claude not found, a launcher that drops the arguments)
+	ClaudeAuthTimeout    = "timeout"
+)
+
 // LauncherRepair is what a node did for launchers.repair (docs/launcher-health.md): one of its fixed repairs.
 type LauncherRepair struct {
 	OK          bool   `json:"ok"`

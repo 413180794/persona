@@ -621,6 +621,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return map[string]any{"definition": def}, err
 	case "launchers.check":
 		return n.launcherCheck(ctx, p.Name), nil
+	case "claude.auth_status": // whether Claude Code is signed in as the launcher runs it, no model request (claudeauth.go)
+		return n.claudeAuthStatus(ctx, p.Name)
 	case "launchers.repair": // the hub's launcher health (docs/launcher-health.md)
 		if err := n.runnableLauncher(ctx, p.Name, false); err != nil {
 			return nil, err

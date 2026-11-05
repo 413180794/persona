@@ -3,6 +3,7 @@ package feishubot
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -583,5 +584,180 @@ func TestAnswerSectionMovesWithTable(t *testing.T) {
 	_, cards = renderCards(t, "正文\n## 结尾", 6000, 5)
 	if !strings.Contains(allContent(cards[0].elements()), "结尾") {
 		t.Fatalf("last heading lost: %v", cards[0].elements())
+	}
+}
+
+// cardComponents is a rendered card's Feishu component cost by packAnswer's count: one per element plus a table's wrapper, header row and cells.
+func cardComponents(c decoded) int {
+	n := 0
+	for _, e := range c.elements() {
+		n++
+		if e["tag"] == "table" {
+			n += (len(e["rows"].([]any)) + 1) * len(e["columns"].([]any))
+		}
+	}
+	return n
+}
+
+// pipeTable builds a cols x nrows pipe table with header "列<j>" and cell "<i>-<j>".
+func pipeTable(cols, nrows int) string {
+	var head, rows strings.Builder
+	for j := 0; j < cols; j++ {
+		fmt.Fprintf(&head, "| 列%d ", j)
+	}
+	for i := 0; i < nrows; i++ {
+		for j := 0; j < cols; j++ {
+			fmt.Fprintf(&rows, "| %d-%d ", i, j)
+		}
+		rows.WriteString("|\n")
+	}
+	return head.String() + "|\n|" + strings.Repeat("---|", cols) + "\n" + rows.String()
+}
+
+// Tables split by the component budget: no card passes it, no element holds more rows than its columns allow, every
+// real cell survives, and the overflow indicator gets its own element instead of overfilling a full batch.
+func TestAnswerTableComponentBudget(t *testing.T) {
+	for ncol := 2; ncol < 90; ncol++ {
+		if r := answerTableRowCap(ncol); 1+(r+1)*ncol > answerMaxComponents {
+			t.Fatalf("%d cols: cap %d over budget", ncol, r)
+		}
+	}
+
+	for _, tc := range []struct {
+		name       string
+		cols, rows int
+	}{
+		{"7 cols 30 rows", 7, 30},
+		{"2 cols 100 rows", 2, 100},
+		{"5 cols 40 rows", 5, 40},
+		{"29 cols 101 rows", 29, 101}, // rowCap 5 divides 100: the indicator used to overfill the batch
+		{"30 cols 101 rows", 30, 101}, // rowCap 4
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, cards := renderCards(t, pipeTable(tc.cols, tc.rows), 1_000_000, 50)
+			if a.Clipped {
+				t.Fatal("clipped")
+			}
+			var got int
+			cells := map[string]bool{}
+			for i, c := range cards {
+				if cc := cardComponents(c); cc > answerMaxComponents || len(c.elements()) > answerMaxElements {
+					t.Fatalf("card %d: %d comps, %d elements", i, cc, len(c.elements()))
+				}
+				for _, tb := range byTag(c.elements(), "table") {
+					r := tb["rows"].([]any)
+					if len(r) > answerTableRowCap(tc.cols) || len(tb["columns"].([]any)) != tc.cols {
+						t.Fatalf("bad element: %d rows, %d columns", len(r), len(tb["columns"].([]any)))
+					}
+					got += len(r)
+					for _, row := range r {
+						for j := 0; j < tc.cols; j++ {
+							if v, ok := row.(map[string]any)["c"+strconv.Itoa(j)].(string); ok {
+								cells[v] = true
+							}
+						}
+					}
+				}
+			}
+			wantRows := min(tc.rows, answerMaxRows)
+			if tc.rows > answerMaxRows {
+				wantRows++ // plus the indicator row
+			}
+			if got != wantRows {
+				t.Fatalf("%d rows survived, want %d", got, wantRows)
+			}
+			for i := 0; i < wantRows && i < answerMaxRows; i++ {
+				for j := 0; j < tc.cols; j++ {
+					if !cells[fmt.Sprintf("%d-%d", i, j)] {
+						t.Fatalf("cell %d-%d lost", i, j)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Prose, dividers and tables share one budget; what overspends moves on with its heading, never stacking two big tables.
+func TestAnswerTableMixedBudget(t *testing.T) {
+	a, cards := renderCards(t, strings.Repeat("备注：说明\n", 5)+pipeTable(3, 20), 1_000_000, 10)
+	if a.Clipped || len(cards) != 1 || cardComponents(cards[0]) != 5+1+(20+1)*3 {
+		t.Fatalf("notes+table: %d cards, clipped %v, %d comps", len(cards), a.Clipped, cardComponents(cards[0]))
+	}
+	a, cards = renderCards(t, pipeTable(7, 24)+"引言\n"+pipeTable(3, 20), 1_000_000, 10) // 176, then 1, then 64
+	if a.Clipped || len(cards) != 2 || cardComponents(cards[0]) != 177 || cardComponents(cards[1]) != 64 {
+		t.Fatalf("table+prose+table: %d cards, clipped %v", len(cards), a.Clipped)
+	}
+	if !strings.Contains(allContent(cards[0].elements()), "引言") {
+		t.Fatal("lead-in lost")
+	}
+	_, cards = renderCards(t, strings.Repeat("备注：x\n", 3)+"## 节\n"+pipeTable(7, 24), 1_000_000, 10) // 3+hr+heading+176 > budget
+	if len(cards) != 2 || cardComponents(cards[0]) != 3 || cardComponents(cards[1]) != 177 {
+		t.Fatalf("section+table: %d cards, %d/%d comps", len(cards), cardComponents(cards[0]), cardComponents(cards[1]))
+	}
+	if cards[1].elements()[0]["text_size"] != "heading" {
+		t.Fatal("section did not move with its table")
+	}
+	a, cards = renderCards(t, "引言\n## 节\n"+pipeTable(7, 24)+"\n"+pipeTable(7, 24), 1_000_000, 10)
+	if a.Clipped || len(cards) != 3 || cardComponents(cards[0]) != 1 || cardComponents(cards[1]) != 177 || cardComponents(cards[2]) != 176 {
+		t.Fatalf("carry+table: %d cards, clipped %v", len(cards), a.Clipped)
+	}
+}
+
+// The fallback a refused card is sent as rich text: rows are "- 列名：值" bullet lines and never carry a pipe, even one escaped inside a cell.
+func TestAnswerTableFallbackNoPipes(t *testing.T) {
+	for _, tc := range []struct {
+		name, in, want string
+		bullets        int // "- 列0：" bullets across all parts; -1 skips
+	}{
+		{"7x30", pipeTable(7, 30), "列1：0-1", 30},
+		{"2x100", pipeTable(2, 100), "列1：99-1", 100},
+		{"escaped pipe", "| 名 | 值 |\n|---|---|\n| a \\| b | x |\n", "名：a / b", -1},
+		{"bold header", "| **名** | 数量 |\n|---|---|\n| a | 1 |\n", "名：a，数量：1", -1},
+		{"ragged row", "| a | b |\n|---|---|\n| x |\n", "- a：x", -1},
+		{"overflow", pipeTable(2, 105), "… +5", -1},
+		{"header only", "| a | b |\n|---|---|\n", "a，b", -1},
+		{"plain prose", "普通正文\n第二行", "普通正文", -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var text string
+			for _, p := range RenderAnswer(tc.in, 1_000_000, 50).Parts {
+				text += p.Text
+				if strings.Contains(p.Text, "|") {
+					t.Fatalf("fallback carries pipe-table source: %q", p.Text)
+				}
+			}
+			if !strings.Contains(text, tc.want) {
+				t.Fatalf("fallback %q lacks %q", text, tc.want)
+			}
+			if tc.bullets >= 0 && strings.Count(text, "- 列0：") != tc.bullets {
+				t.Fatalf("%d bullets, want %d", strings.Count(text, "- 列0："), tc.bullets)
+			}
+		})
+	}
+}
+
+func TestAnswerWideTableBullets(t *testing.T) {
+	for _, tc := range []struct {
+		cols, rows, budget, parts, minCards int
+		want, lead                          string
+	}{
+		{90, 3, 1_000_000, 10, 1, "列89：2-89", "列0："},
+		{100, 3, 1_000_000, 10, 1, "列99：2-99", "列0："},
+		{90, 101, 1_000_000, 200, 1, "… +1", "列0："}, // past answerMaxRows on the wide bullet path
+		{90, 1, 60, 50, 2, "列89：0-89", "列0："},       // one fat row is rune-split, not one oversized block
+		{90, 0, 1_000_000, 5, 1, "列89", "列0"},       // header-only wide table degrades the same way
+	} {
+		a, cards := renderCards(t, pipeTable(tc.cols, tc.rows), tc.budget, tc.parts)
+		var text string
+		for i, c := range cards {
+			text += a.Parts[i].Text
+			if len(byTag(c.elements(), "table")) != 0 || cardComponents(c) > answerMaxComponents {
+				t.Fatalf("%dx%d card %d has a table or %d comps", tc.cols, tc.rows, i, cardComponents(c))
+			}
+		}
+		if a.Clipped || len(cards) < tc.minCards || strings.Contains(text, "|") ||
+			!strings.Contains(text, tc.lead) || !strings.Contains(text, tc.want) {
+			t.Fatalf("%dx%d: clipped %v, %d cards, %q", tc.cols, tc.rows, a.Clipped, len(cards), text)
+		}
 	}
 }

@@ -1078,3 +1078,8 @@ UIKit 的栈却还推着一页，上面只有系统的返回按钮「Agents」�
 - **现象**：`String(localized: "一条最多 \(n) 字")` 显示「3,500」，原来拼字符串时是「3500」；端口、id 也会变成「8,080」。
 - **原因**：本地化字符串里的整数按 locale 格式化（`Text("\(n)")` 一直是这样）。
 - **做法**：数量照用；端口、id、年份这种不是数量的写 `\(String(port))`。
+
+### 隔离方法直接当函数值传，会让 Xcode 26.6 的 IRGen 崩掉（#4157）
+- **现象**：`Binding(get:set:)` 里写 `set: pick`（`pick` 是 MainActor 隔离的实例方法），PersonaMac 构建必崩在 `LanguageSettingsView.swift` 的 IRGen：`report_at_maximum_capacity`，SIL 函数 demangle 出来是 `reabstraction thunk helper from ... (AppLanguage, Actor?) -> () to ... (AppLanguage) -> ()`。清 DerivedData 全量重建照样崩；同一版代码 iOS 不崩。
+- **原因**：Swift 6.3（Xcode 26.6）给「带隐式 actor 参数的隔离方法值」生成 reabstraction thunk 时编译器自身溢出，是编译器 bug，不是源码错误；日志里没有普通 `error:` 行，要看 `While emitting IR SIL function` 和 stack dump 才能认出。
+- **做法**：把方法值包成普通闭包：`set: { pick($0) }`，崩点消失。仓内其他 `flatMap(Type.init(rawValue:))` 不受影响（崩点在 Binding 的 setter，不在 flatMap，改 flatMap 没用，已实测）。规避处留英文注释写明编译器版本和 issue 号，防止被人当多余闭包改回去。

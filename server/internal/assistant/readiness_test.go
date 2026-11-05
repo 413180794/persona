@@ -371,3 +371,120 @@ func TestReadinessUnreadRecordKept(t *testing.T) {
 		t.Fatalf("record = %+v (%v)", rec, err)
 	}
 }
+
+// Claude Code signed out as the launcher runs it (claude.auth_status, free): the model step says sign in before any
+// message is sent. The answer is kept; once the user signs in, the next question after the short retry says so.
+func TestReadinessSignedOutStatus(t *testing.T) {
+	f, s, _ := readyMachine(t)
+	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeNotLoggedIn, AuthMethod: "none"}}
+	r := getReadiness(t, s, "", "")
+	m := readinessStep(t, r, StepModel)
+	if r.Mode != ReadinessSetup || nextOf(r) != StepModel || m.State != StepProblem || m.Code != proto.TurnErrorNotLoggedIn ||
+		m.Action.ID != "connect_model" || len(m.AltActions) != 1 || m.AltActions[0].ID != "login_claude" || m.Title != "Claude Code 还没登录" {
+		t.Fatalf("readiness = %+v", r)
+	}
+	getReadiness(t, s, "", "")
+	f.mu.Lock()
+	asked := append([]string(nil), f.authAsked...)
+	f.mu.Unlock()
+	if len(asked) != 1 || asked[0] != "server/claude" {
+		t.Fatalf("asked %v", asked)
+	}
+	// Signed in to claude.ai since: that is the model's evidence, and the main conversation can go.
+	old := readinessClaudeRetry
+	readinessClaudeRetry = 0
+	t.Cleanup(func() { readinessClaudeRetry = old })
+	f.mu.Lock()
+	f.auth["server/claude"] = proto.ClaudeAuthStatus{State: proto.ClaudeLoggedIn, AuthMethod: "claude.ai"}
+	f.mu.Unlock()
+	r = getReadiness(t, s, "", "")
+	if m := readinessStep(t, r, StepModel); r.Mode != ReadinessFull || m.State != StepOK {
+		t.Fatalf("after signing in: %+v", r)
+	}
+	if len(f.checked) != 0 {
+		t.Fatalf("spent tokens: %v", f.checked)
+	}
+}
+
+// Signed in with a key (or a gateway's token) says nothing of whether the key works: the model stays unverified, and
+// says what it runs on.
+func TestReadinessKeyStatusUnverified(t *testing.T) {
+	f, s, _ := readyMachine(t)
+	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeLoggedIn, AuthMethod: "api_key", KeySource: "ANTHROPIC_API_KEY"}}
+	r := getReadiness(t, s, "", "")
+	m := readinessStep(t, r, StepModel)
+	if r.Mode != ReadinessFull || m.State != StepUnknown || m.Code != "model_unverified" || m.Action.ID != "test_assistant" ||
+		m.Detail != "server 上的 Claude Code 用的是配好的账号或 Key，还没试过。发一句试试它能不能用。" {
+		t.Fatalf("readiness = %+v", r)
+	}
+	// An unknown status (an old Claude Code, a launcher that drops the arguments) is no evidence either way.
+	f2, s2, _ := readyMachine(t)
+	f2.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeAuthUnknown, Reason: proto.ClaudeAuthOld}}
+	if m := readinessStep(t, getReadiness(t, s2, "", ""), StepModel); m.State != StepUnknown || m.Detail != "发一句试试，确认模型能回答。" {
+		t.Fatalf("unknown status: %+v", m)
+	}
+}
+
+// The newest evidence wins: an answer in the main conversation after a signed-out status (signed in since, within
+// the cache) is the model working.
+func TestReadinessAnswerAfterSignedOutStatus(t *testing.T) {
+	f, s, _ := readyMachine(t)
+	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeNotLoggedIn}}
+	if m := readinessStep(t, getReadiness(t, s, "", ""), StepModel); m.Code != proto.TurnErrorNotLoggedIn {
+		t.Fatalf("model = %+v", m)
+	}
+	f.setSessions("server", proto.Session{SessionID: "m1", State: proto.StateIdle, LastText: "你好。", UpdatedAt: time.Now().Add(time.Second)})
+	if r := getReadiness(t, s, "", ""); readinessStep(t, r, StepModel).State != StepOK || r.Mode != ReadinessFull {
+		t.Fatalf("after an answer: %+v", r)
+	}
+}
+
+// Signed in to claude.ai only disproves signed out: a failure a turn met (a model the plan lacks, a rate limit) stays,
+// even when the sign-in status was asked after it.
+func TestReadinessSignedInKeepsTurnFailure(t *testing.T) {
+	for _, c := range []struct{ text, code string }{
+		{"There's an issue with the selected model (claude-x). It may not exist or you may not have access to it.", proto.TurnErrorModelRoute},
+		{"API Error: 429 rate limit", proto.TurnErrorRateLimited},
+	} {
+		f, s, _ := readyMachine(t, proto.Session{SessionID: "m1", State: proto.StateIdle, TurnError: c.text,
+			UpdatedAt: time.Now().Add(-time.Minute)})
+		f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeLoggedIn, AuthMethod: "claude.ai"}}
+		r := getReadiness(t, s, "", "")
+		if m := readinessStep(t, r, StepModel); m.State != StepProblem || m.Code != c.code {
+			t.Fatalf("%s: model = %+v", c.code, m)
+		}
+	}
+	// With nothing else known it is the model's evidence.
+	f, s, _ := readyMachine(t)
+	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeLoggedIn, AuthMethod: "claude.ai"}}
+	if m := readinessStep(t, getReadiness(t, s, "", ""), StepModel); m.State != StepOK {
+		t.Fatalf("nothing else: %+v", m)
+	}
+}
+
+// A status the node could not read in time is asked again after the short retry; an old node's unknown method waits
+// the long one.
+func TestReadinessAuthStatusRetry(t *testing.T) {
+	old := readinessClaudeRetry
+	readinessClaudeRetry = 0
+	t.Cleanup(func() { readinessClaudeRetry = old })
+	f, s, _ := readyMachine(t)
+	f.auth = map[string]proto.ClaudeAuthStatus{"server/claude": {State: proto.ClaudeAuthUnknown, Reason: proto.ClaudeAuthTimeout}}
+	getReadiness(t, s, "", "")
+	getReadiness(t, s, "", "")
+	f.mu.Lock()
+	asked := len(f.authAsked)
+	f.mu.Unlock()
+	if asked != 2 {
+		t.Fatalf("timeout asked %d times", asked)
+	}
+	f2, s2, _ := readyMachine(t) // f2.auth nil: unknown method
+	getReadiness(t, s2, "", "")
+	getReadiness(t, s2, "", "")
+	f2.mu.Lock()
+	asked = len(f2.authAsked)
+	f2.mu.Unlock()
+	if asked != 1 {
+		t.Fatalf("old node asked %d times", asked)
+	}
+}

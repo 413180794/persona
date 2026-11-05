@@ -21,8 +21,9 @@ import (
 // The main conversation's readiness (docs/onboarding.md 4.4, 5.1): whether it can answer now and, when not, the first
 // thing missing, for the clients' setup card and checklist. Four steps in a fixed order: the computer it runs on,
 // Claude Code there, the model, and a first answer. Everything comes from what the assistant already knows (the
-// machines, the launcher in effect, the main conversation's last turn, the launcher checks) plus the node's self-check
-// for Claude Code's version (cached); no tokens are spent unless the client asks for a probe. The last result and the
+// machines, the launcher in effect, the main conversation's last turn, the launcher checks) plus two free questions to
+// the node, both cached: its self-check for Claude Code's version, and claude.auth_status for whether Claude Code is
+// signed in as the launcher runs it. No tokens are spent unless the client asks for a probe. The last result and the
 // user's 以后再说 are kept in the settings (readinessKey).
 
 // readinessKey is the setting the readiness record is kept in.
@@ -35,6 +36,10 @@ var (
 	// one that read no version (a failed ask, Claude Code not there yet) is asked again after readinessClaudeRetry.
 	readinessClaudeFresh = 10 * time.Minute
 	readinessClaudeRetry = time.Minute
+	// readinessAuthFresh: how long a launcher's sign-in status (claude.auth_status) is used before it is asked again
+	// (also an old node's unknown method). Signed out, or not answered (a failed ask, a timeout, unreadable output), it
+	// is asked again after readinessClaudeRetry: in setup mode nothing else comes to say the user has signed in since.
+	readinessAuthFresh = 10 * time.Minute
 	// How long a readiness waits for the node's self-check before saying checking (the check goes on and is cached):
 	// GET waits for it, the warm-up answers quickly.
 	readinessWaitGet  = 12 * time.Second
@@ -159,7 +164,16 @@ type claudeSeen struct {
 	at      time.Time
 }
 
-// readinessBook keeps the record (read once from the settings) and the machines' Claude Code versions.
+// claudeAuth is a launcher's sign-in status on a machine as its node's claude.auth_status found it.
+type claudeAuth struct {
+	known bool // the node answered (an old one has no such method)
+	old   bool // the node has no claude.auth_status: asked again only after readinessAuthFresh
+	st    proto.ClaudeAuthStatus
+	at    time.Time
+}
+
+// readinessBook keeps the record (read once from the settings), the machines' Claude Code versions and the
+// launchers' sign-in status.
 type readinessBook struct {
 	mu      sync.Mutex
 	loaded  bool
@@ -168,6 +182,9 @@ type readinessBook struct {
 
 	claude   map[string]claudeSeen    // by machine
 	claudeIn map[string]chan struct{} // the self-checks on their way, closed when done
+
+	auth   map[string]claudeAuth    // by machine + "/" + launcher
+	authIn map[string]chan struct{} // the questions on their way, closed when done
 }
 
 // readinessLoadLocked reads the record once (with no database, or one that does not answer, it starts empty and
@@ -285,11 +302,13 @@ func (s *Service) readinessRoutes() {
 
 // ---- working it out ----
 
-// readinessEvidence is what something said of the model lately: it answered (ok), or failed with text.
+// readinessEvidence is what something said of the model lately: it answered (ok), or failed with text (or, said
+// outright, code).
 type readinessEvidence struct {
 	at   time.Time
 	ok   bool
 	text string
+	code string
 }
 
 // readiness works out the main conversation's readiness; probe runs the one-word check first (or reuses one made in
@@ -322,13 +341,16 @@ func (s *Service) readiness(ctx context.Context, probe bool, wait time.Duration)
 			out.Steps = append(out.Steps, ReadinessStep{ID: id, State: StepUnknown})
 		}
 	} else {
+		s.askAhead(d.ID, launcher)
 		if probe {
 			out.Probe = s.readinessProbe(ctx, d.ID, launcher)
 		}
+		deadline := time.Now().Add(wait) // the node's two answers are waited for together, not one after the other
 		rec := s.readinessRecordNow(ctx)
 		main, hasMain := s.readinessMain(ctx, d.ID, v.Main)
-		model, modelOK := s.readinessModel(ctx, lang, d, launcher, rec, main, hasMain)
-		out.Steps = append(out.Steps, s.readinessClaude(ctx, lang, d, launcher, rec, modelOK, wait), model)
+		auth, _ := s.claudeAuthStatus(ctx, d.ID, launcher, time.Until(deadline))
+		model, modelOK := s.readinessModel(ctx, lang, d, launcher, rec, main, hasMain, auth)
+		out.Steps = append(out.Steps, s.readinessClaude(ctx, lang, d, launcher, rec, modelOK, time.Until(deadline)), model)
 		out.Steps = append(out.Steps, s.readinessFirst(ctx, lang, d, rec, v, main, hasMain))
 	}
 
@@ -437,9 +459,11 @@ func answeredWell(sess proto.Session) bool {
 }
 
 // readinessModel is the model step from the newest of what is known: the last probe, the main conversation's last
-// turn, the launcher's health record. ok reports that the newest said it answered.
+// turn, the launcher's health record, Claude Code's sign-in status. ok reports that the newest said it answered (or
+// that Claude Code is signed in to claude.ai). Signed in with a key or a gateway's token says nothing of whether the
+// key works: no evidence, but an unknown step says what it runs on.
 func (s *Service) readinessModel(ctx context.Context, lang i18n.Lang, d Device, launcher string, rec readinessRecord,
-	main proto.Session, hasMain bool) (ReadinessStep, bool) {
+	main proto.Session, hasMain bool, auth claudeAuth) (ReadinessStep, bool) {
 	var ev []readinessEvidence
 	if p := rec.Probe; p != nil && p.Machine == d.ID && p.Launcher == launcher {
 		ev = append(ev, readinessEvidence{at: p.At, ok: p.Check.OK, text: p.Check.Error})
@@ -459,17 +483,42 @@ func (s *Service) readinessModel(ctx context.Context, lang i18n.Lang, d Device, 
 			ev = append(ev, readinessEvidence{at: h.CheckedAt, text: h.Error})
 		}
 	}
-	var newest *readinessEvidence
-	for i := range ev {
-		if newest == nil || ev[i].at.After(newest.at) {
-			newest = &ev[i]
+	newestOf := func() *readinessEvidence {
+		var n *readinessEvidence
+		for i := range ev {
+			if n == nil || ev[i].at.After(n.at) {
+				n = &ev[i]
+			}
+		}
+		return n
+	}
+	// The sign-in status: signed out is evidence like a turn that said so. Signed in to claude.ai only disproves
+	// signed out: it is the model's evidence when nothing else is known, or when the newest says not logged in; an
+	// expired token, a model the plan lacks or a rate limit that a turn met still stands.
+	keyed := false
+	if auth.known {
+		switch {
+		case auth.st.State == proto.ClaudeNotLoggedIn:
+			ev = append(ev, readinessEvidence{at: auth.at, code: proto.TurnErrorNotLoggedIn})
+		case auth.st.State == proto.ClaudeLoggedIn && auth.st.AuthMethod == "claude.ai":
+			if n := newestOf(); n == nil || n.code == proto.TurnErrorNotLoggedIn ||
+				n.code == "" && turnErrorCode(n.text) == proto.TurnErrorNotLoggedIn {
+				ev = append(ev, readinessEvidence{at: auth.at, ok: true})
+			}
+		case auth.st.State == proto.ClaudeLoggedIn:
+			keyed = true
 		}
 	}
+	newest := newestOf()
 	if newest != nil && newest.ok {
 		return ReadinessStep{ID: StepModel, State: StepOK, Machine: d.ID, Launcher: launcher}, true
 	}
 	if newest != nil {
-		if code := turnErrorCode(newest.text); code != "" {
+		code := newest.code
+		if code == "" {
+			code = turnErrorCode(newest.text)
+		}
+		if code != "" {
 			action, alt := "connect_model", ""
 			switch code {
 			case proto.TurnErrorNotLoggedIn:
@@ -488,6 +537,9 @@ func (s *Service) readinessModel(ctx context.Context, lang i18n.Lang, d Device, 
 	// Never verified, or it failed in a way that does not say what is wrong: unknown, not a problem.
 	st := s.readinessStep(lang, StepModel, StepUnknown, codeModelUnverified, d.Name, launcher, "test_assistant")
 	st.Machine = d.ID
+	if keyed && newest == nil {
+		st.Detail = i18n.T(lang, "assistant-readiness.model_key_unverified_detail", i18n.Args{"machine": d.Name})
+	}
 	return st, false
 }
 
@@ -754,6 +806,83 @@ func (s *Service) askClaudeVersion(machine string, done chan struct{}) {
 	}
 	b.claude[machine] = seen
 	delete(b.claudeIn, machine)
+	b.mu.Unlock()
+	close(done)
+}
+
+// askAhead starts the node's two free answers the readiness waits for (Claude Code's version, the launcher's sign-in
+// status) when they are not cached, so that they run at the same time.
+func (s *Service) askAhead(machine, launcher string) {
+	s.claudeVersion(context.Background(), machine, 0, time.Time{})
+	s.claudeAuthStatus(context.Background(), machine, launcher, 0)
+}
+
+// claudeAuthStatus is launcher's sign-in status on machine (claude.auth_status), cached readinessAuthFresh, and
+// readinessClaudeRetry when signed out or not answered (readinessAuthFresh for an old node). done false when the node did not answer within wait (the
+// question goes on, and is cached).
+func (s *Service) claudeAuthStatus(ctx context.Context, machine, launcher string, wait time.Duration) (claudeAuth, bool) {
+	key := machine + "/" + launcher
+	b := &s.ready
+	b.mu.Lock()
+	if a, ok := b.auth[key]; ok {
+		fresh := readinessAuthFresh
+		if !a.known && !a.old || a.st.State == proto.ClaudeNotLoggedIn ||
+			a.st.State == proto.ClaudeAuthUnknown && (a.st.Reason == proto.ClaudeAuthTimeout || a.st.Reason == proto.ClaudeAuthUnreadable) {
+			fresh = readinessClaudeRetry
+		}
+		if time.Since(a.at) < fresh {
+			b.mu.Unlock()
+			return a, true
+		}
+	}
+	ch := b.authIn[key]
+	if ch == nil {
+		ch = make(chan struct{})
+		if b.authIn == nil {
+			b.authIn = map[string]chan struct{}{}
+		}
+		b.authIn[key] = ch
+		go s.askClaudeAuth(machine, launcher, key, ch)
+	}
+	b.mu.Unlock()
+	if wait <= 0 {
+		return claudeAuth{}, false
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ch:
+	case <-t.C:
+		return claudeAuth{}, false
+	case <-ctx.Done():
+		return claudeAuth{}, false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.auth[key], true
+}
+
+// askClaudeAuth asks machine's node whether Claude Code is signed in as launcher runs it, and keeps the answer.
+func (s *Service) askClaudeAuth(machine, launcher, key string, done chan struct{}) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	a := claudeAuth{at: time.Now()}
+	if err := s.call(ctx, machine, assistantwire.DeviceClaudeAuthStatus, map[string]any{"name": launcher}, &a.st); err != nil {
+		// An old node has none: unknown, and not asked (or logged) again every minute.
+		a.old = strings.Contains(err.Error(), "unknown method")
+		if !a.old {
+			s.logf("assistant: readiness: claude.auth_status on %s: %v", machine, err)
+		}
+	} else {
+		a.known = true
+	}
+	b := &s.ready
+	b.mu.Lock()
+	if b.auth == nil {
+		b.auth = map[string]claudeAuth{}
+	}
+	b.auth[key] = a
+	delete(b.authIn, key)
 	b.mu.Unlock()
 	close(done)
 }

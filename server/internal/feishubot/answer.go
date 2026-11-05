@@ -56,13 +56,16 @@ const (
 	answerMaxTitle    = 50    // runes of the header's title
 	answerMaxLinks    = 4     // link buttons
 	answerMaxLabel    = 14    // runes of a link button's label
+
+	answerMaxComponents = 180 // per card; margin for the panel, notes and buttons added after packing
 )
 
 type answerBlock struct {
 	el    map[string]any
-	src   string // the block as the answer wrote it
+	src   string // fallback Markdown for the block (tables are bullet lines, never pipe-table source)
 	size  int    // runes it takes
 	bytes int    // JSON bytes it takes
+	comps int    // Feishu card components it takes (a table costs its cells plus its header)
 	table bool
 	hr    bool
 	sect  bool
@@ -160,7 +163,7 @@ func RenderAnswer(answer string, budget, maxParts int) Answer {
 			blocks = append(blocks, answerSection(plainHeading(t)))
 		case t == "---" || t == "***" || t == "___":
 			flush()
-			blocks = append(blocks, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", hr: true})
+			blocks = append(blocks, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", comps: 1, hr: true})
 		case answerNoteRe.MatchString(t):
 			flush()
 			blocks = append(blocks, answerNote(t))
@@ -171,7 +174,7 @@ func RenderAnswer(answer string, budget, maxParts int) Answer {
 				addLinks(lines[j])
 				j++
 			}
-			blocks = append(blocks, answerTables(lines[i:j])...)
+			blocks = append(blocks, answerTables(lines[i:j], budget)...)
 			i = j - 1
 		default:
 			prose = append(prose, line)
@@ -223,7 +226,7 @@ func RenderAnswer(answer string, budget, maxParts int) Answer {
 func packAnswer(blocks []answerBlock, budget int) []AnswerPart {
 	var parts []AnswerPart
 	var cur []answerBlock
-	size, bytes, tables := 0, 0, 0
+	size, bytes, tables, comps := 0, 0, 0, 0
 	// push ends the card. Unless it is the last, the last section on it (its heading and what follows it so far) goes
 	// on to the next card instead, so a heading stays with what it heads; one that starts the card stays.
 	push := func(last bool) {
@@ -242,7 +245,7 @@ func packAnswer(blocks []answerBlock, budget int) []AnswerPart {
 		defer func() {
 			for _, b := range carry {
 				cur = append(cur, b)
-				size, bytes = size+b.size, bytes+b.bytes
+				size, bytes, comps = size+b.size, bytes+b.bytes, comps+b.comps
 				if b.table {
 					tables++
 				}
@@ -255,30 +258,40 @@ func packAnswer(blocks []answerBlock, budget int) []AnswerPart {
 		var src []string
 		for _, b := range cur {
 			p.els = append(p.els, b.el)
-			src = append(src, b.src)
+			if b.src != "" {
+				src = append(src, b.src)
+			}
 		}
 		p.Text = CardMarkdown(strings.Join(src, "\n\n"))
 		parts = append(parts, p)
-		cur, size, bytes, tables = nil, 0, 0, 0
+		cur, size, bytes, tables, comps = nil, 0, 0, 0, 0
 	}
 	for _, b := range blocks {
 		need := 1 // elements b adds: a section after something takes a divider too
 		if b.sect && len(cur) > 0 && !cur[len(cur)-1].hr {
 			need = 2
 		}
-		if len(cur) > 0 && (size+b.size > budget || bytes+b.bytes > answerMaxBytes || len(cur)+need > answerMaxElements ||
-			b.table && tables >= answerMaxTables) {
+		over := func() bool {
+			return len(cur) > 0 && (size+b.size > budget || bytes+b.bytes > answerMaxBytes || len(cur)+need > answerMaxElements ||
+				comps+b.comps+need-1 > answerMaxComponents || b.table && tables >= answerMaxTables)
+		}
+		if over() {
 			push(false)
+		}
+		if over() { // the carried section fills a card on its own: ship it heading and all
+			push(true)
 		}
 		if b.hr && (len(cur) == 0 || cur[len(cur)-1].hr) {
 			continue
 		}
 		if b.sect && len(cur) > 0 && !cur[len(cur)-1].hr {
-			cur = append(cur, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", hr: true})
+			cur = append(cur, answerBlock{el: map[string]any{"tag": "hr"}, src: "---", comps: 1, hr: true})
+			comps++
 		}
 		cur = append(cur, b)
 		size += b.size
 		bytes += b.bytes
+		comps += b.comps
 		if b.table {
 			tables++
 		}
@@ -302,13 +315,13 @@ func answerNote(line string) answerBlock {
 	return sized(answerBlock{el: map[string]any{"tag": "markdown", "content": md, "text_size": "notation"}, src: line, size: utf8.RuneCountInString(line)})
 }
 
-// answerTables is a pipe table's lines (header, separator, rows) as table elements: one for up to answerTableRows
-// rows and answerTableBytes of JSON, more (each with the header) for a longer table; past answerMaxRows a last row
-// says how many were left out.
-func answerTables(lines []string) []answerBlock {
+// answerTables is a pipe table's lines as table elements: up to answerTableRows rows each, fewer for wide columns so
+// the cells fit a card's component budget; a table too wide for one row is rune-split bullet Markdown instead.
+func answerTables(lines []string, budget int) []answerBlock {
 	head := tableCells(lines[0])
 	aligns := tableCells(lines[1])
 	cols := make([]any, len(head))
+	ncol := len(head)
 	for i, h := range head {
 		col := map[string]any{"name": "c" + strconv.Itoa(i), "display_name": orSpace(stripBold(h)), "data_type": "lark_md", "width": "auto"}
 		if i < len(aligns) {
@@ -322,6 +335,12 @@ func answerTables(lines []string) []answerBlock {
 		}
 		cols[i] = col
 	}
+	names := make([]string, ncol)
+	for i, h := range head {
+		names[i] = clipRunes(strings.ReplaceAll(strings.TrimSpace(stripBold(h)), "|", "/"), answerMaxCell)
+	}
+	wide := 1+2*ncol > answerMaxComponents // no table element can hold even one row
+	rowCap := answerTableRowCap(ncol)
 	var out []answerBlock
 	var rows []any
 	var src []string
@@ -330,18 +349,29 @@ func answerTables(lines []string) []answerBlock {
 		if len(rows) == 0 {
 			return
 		}
+		if wide {
+			for _, t := range Split(tableFallback(names, src), budget) {
+				out = append(out, answerMarkdown(t))
+			}
+			rows, src, size, bytes = nil, nil, 0, 0
+			return
+		}
 		el := map[string]any{"tag": "table", "page_size": min(10, len(rows)), "row_height": "low",
 			"header_style": map[string]any{"text_align": "left", "text_size": "normal", "background_style": "grey", "bold": true, "lines": 1},
 			"columns":      cols, "rows": rows}
-		text := strings.Join(append([]string{lines[0], lines[1]}, src...), "\n")
-		out = append(out, sized(answerBlock{el: el, src: text, size: size, table: true}))
+		out = append(out, sized(answerBlock{el: el, src: tableFallback(names, src), size: size,
+			comps: 1 + (len(rows)+1)*ncol, table: true}))
 		rows, src, size, bytes = nil, nil, 0, 0
 	}
 	body := lines[2:]
 	for n, l := range body {
 		if n == answerMaxRows {
-			rows = append(rows, map[string]any{"c0": "… +" + strconv.Itoa(len(body)-n)})
-			src = append(src, "| … +"+strconv.Itoa(len(body)-n)+" |")
+			more := len(body) - n
+			if len(rows) >= rowCap { // the indicator row counts too: ship a full batch first
+				flush()
+			}
+			rows = append(rows, map[string]any{"c0": "… +" + strconv.Itoa(more)})
+			src = append(src, "| … +"+strconv.Itoa(more)+" |") // re-parsed by tableFallback, never sent with pipes
 			break
 		}
 		cells := tableCells(l)
@@ -356,7 +386,7 @@ func answerTables(lines []string) []answerBlock {
 			rs += utf8.RuneCountInString(v)
 		}
 		j, _ := json.Marshal(row)
-		if len(rows) > 0 && (len(rows) >= answerTableRows || bytes+len(j) > answerTableBytes) {
+		if len(rows) > 0 && (len(rows) >= rowCap || bytes+len(j) > answerTableBytes) {
 			flush()
 		}
 		rows = append(rows, row)
@@ -365,17 +395,63 @@ func answerTables(lines []string) []answerBlock {
 		bytes += len(j)
 	}
 	if len(rows) == 0 { // a table with no rows still shows its header
+		if wide {
+			if text := tableFallback(names, nil); text != "" {
+				for _, t := range Split(text, budget) {
+					out = append(out, answerMarkdown(t))
+				}
+			}
+			return out
+		}
 		rows = []any{}
 		el := map[string]any{"tag": "table", "page_size": 1, "row_height": "low",
 			"header_style": map[string]any{"text_align": "left", "text_size": "normal", "background_style": "grey", "bold": true, "lines": 1},
 			"columns":      cols, "rows": rows}
 		if len(out) == 0 {
-			return []answerBlock{sized(answerBlock{el: el, src: strings.Join(lines[:2], "\n"), table: true})}
+			return []answerBlock{sized(answerBlock{el: el, src: tableFallback(names, nil), comps: 1 + ncol, table: true})}
 		}
 		return out
 	}
 	flush()
 	return out
+}
+
+// answerTableRowCap is the most rows one element may hold: wrapper, header row and cells must fit a card alone.
+func answerTableRowCap(ncol int) int {
+	return min(answerTableRows, max(1, (answerMaxComponents-1)/ncol-1))
+}
+
+// tableFallback renders a table as "- 列名：值，…" bullet lines, never pipe source (the refused-card fallback is rich text, no GFM tables).
+func tableFallback(names, bodyLines []string) string {
+	var lines []string
+	if len(bodyLines) == 0 {
+		var shown []string
+		for _, n := range names {
+			if n != "" {
+				shown = append(shown, n)
+			}
+		}
+		if len(shown) > 0 {
+			lines = append(lines, "- "+strings.Join(shown, "，"))
+		}
+	}
+	for _, l := range bodyLines {
+		var parts []string
+		for i, c := range tableCells(l) {
+			v := strings.ReplaceAll(clipRunes(c, answerMaxCell), "|", "/")
+			if v == "" {
+				continue
+			}
+			if i < len(names) && names[i] != "" {
+				v = names[i] + "：" + v
+			}
+			parts = append(parts, v)
+		}
+		if len(parts) > 0 {
+			lines = append(lines, "- "+strings.Join(parts, "，"))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func isTableStart(lines []string, i int) bool {
@@ -514,6 +590,9 @@ func orSpace(s string) string {
 func sized(b answerBlock) answerBlock {
 	j, _ := json.Marshal(b.el)
 	b.bytes = len(j)
+	if b.comps == 0 {
+		b.comps = 1
+	}
 	return b
 }
 

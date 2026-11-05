@@ -867,3 +867,53 @@ func TestCodexCardAskedAgainIsAnnounced(t *testing.T) {
 		t.Fatalf("asked again later: pushed %d times", len(got))
 	}
 }
+
+// A Codex approval answered from the phone and asked again later rings again (#4105); listed again at once (the
+// screen lagging the answer) it stays quiet.
+func TestCodexCardAnsweredOnThePhoneAskedAgainIsAnnounced(t *testing.T) {
+	old := codexAskedAgain
+	codexAskedAgain = 50 * time.Millisecond
+	t.Cleanup(func() { codexAskedAgain = old })
+	ft, _ := newCardFleet(t, false)
+	s := ft.s
+	a := proto.Interaction{ID: "cxa_1", SessionID: "s2", Kind: proto.IxPermission, Agent: "codex", Summary: "npm test",
+		ExpiresAt: time.Now().Add(time.Hour)}
+	yes := true
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(got) != 1 {
+		t.Fatalf("first: pushed %d times", len(got))
+	}
+	if err := s.resolve("cxa_1", proto.Resolution{Allow: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	listCodex(s, a) // the screen still shows it for a moment
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, 200*time.Millisecond); len(got) != 1 {
+		t.Fatalf("listed again at once: pushed %d times", len(got))
+	}
+	if err := s.resolve("cxa_1", proto.Resolution{Allow: &yes}); err != nil {
+		t.Fatal(err)
+	}
+	listCodex(s)
+	time.Sleep(2 * codexAskedAgain)
+	listCodex(s, a)
+	if got := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(got) != 2 {
+		t.Fatalf("asked again later: pushed %d times", len(got))
+	}
+}
+
+// codexEnded is pruned on its own, also for an id codexAnnounced no longer holds.
+func TestCodexEndedPrunedOnItsOwn(t *testing.T) {
+	ft, _ := newCardFleet(t, false)
+	s := ft.s
+	s.fleet.mu.Lock()
+	s.fleet.codexEnded = map[string]time.Time{"cxa_old": time.Now().Add(-2 * codexAnnouncedFor), "cxa_new": time.Now()}
+	s.fleet.mu.Unlock()
+	listCodex(s)
+	s.fleet.mu.Lock()
+	_, old := s.fleet.codexEnded["cxa_old"]
+	_, fresh := s.fleet.codexEnded["cxa_new"]
+	s.fleet.mu.Unlock()
+	if old || !fresh {
+		t.Fatalf("pruned wrong: old kept %v, new kept %v", old, fresh)
+	}
+}

@@ -130,16 +130,12 @@ func (s *Service) loadInboxMutes(ctx context.Context) bool {
 	return true
 }
 
-// saveMutes keeps the mutes as they are now; under mutesMu.
-func (s *Service) saveMutes(ctx context.Context) error {
+// putMutes keeps the given mutes snapshot; the caller holds mutesMu. A nil store means mutes are memory-only.
+func (s *Service) putMutes(ctx context.Context, mutes []InboxMute) error {
 	st := s.store()
 	if st == nil {
 		return nil
 	}
-	b := &s.inbox
-	b.mu.Lock()
-	mutes := slices.Clone(b.mutes)
-	b.mu.Unlock()
 	return st.PutSetting(ctx, inboxMutesKey, mutes)
 }
 
@@ -160,26 +156,45 @@ func (s *Service) addMute(ctx context.Context, m InboxMute) (InboxMute, int, err
 		if m.CreatedAt.IsZero() {
 			m.CreatedAt = time.Now().UTC()
 		}
+	}
+	// Persist a new mute before it enters memory: a failed save leaves the mute and the items it would file
+	// untouched, so the failure shows to the user and a retry is idempotent (a mute already here files as before).
+	if i < 0 {
+		next := append(slices.Clone(b.mutes), m)
+		b.mu.Unlock()
+		if err := s.putMutes(ctx, next); err != nil {
+			return m, 0, err
+		}
+		b.mu.Lock()
 		b.mutes = append(b.mutes, m)
 	}
 	changed := b.applyMutes(time.Now())
 	b.mu.Unlock()
-	if err := s.saveMutes(ctx); err != nil {
-		return m, 0, err
-	}
 	s.saveInbox(ctx, changed)
 	return m, len(changed), nil
 }
 
-// removeMutes takes the mutes drop says yes to away; what they covered stays done.
+// removeMutes takes the mutes drop says yes to away; what they covered stays done. The mutes stay live until the
+// removal is persisted (a failed removal changes nothing); unmuting never reopens what a mute filed anyway.
 func (s *Service) removeMutes(ctx context.Context, drop func(InboxMute) bool) error {
 	b := &s.inbox
 	b.mutesMu.Lock()
 	defer b.mutesMu.Unlock()
 	b.mu.Lock()
-	b.mutes = slices.DeleteFunc(slices.Clone(b.mutes), drop)
+	next := slices.DeleteFunc(slices.Clone(b.mutes), drop)
+	removed := len(next) != len(b.mutes)
 	b.mu.Unlock()
-	return s.saveMutes(ctx)
+	// Persist the smaller set first: on failure the mutes in memory stay, so a retry removes them cleanly.
+	if !removed {
+		return nil
+	}
+	if err := s.putMutes(ctx, next); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	b.mutes = next
+	b.mu.Unlock()
+	return nil
 }
 
 // ---- a source's muted repositories ----

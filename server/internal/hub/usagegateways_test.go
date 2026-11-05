@@ -249,7 +249,8 @@ func TestUsageWindowsRouteIncludesGatewayAccounts(t *testing.T) {
 			t.Errorf("missing %s in %s", want, body)
 		}
 	}
-	if strings.Contains(body, `"local"`) || strings.Contains(body, "\"k\"") || strings.Contains(body, "c1") {
+	// quoted: an account's id is a hex hash, which can hold c1 by chance (#4178)
+	if strings.Contains(body, `"local"`) || strings.Contains(body, `"k"`) || strings.Contains(body, `"c1"`) {
 		t.Errorf("a gateway-only account is not local, and its key and ids stay out: %s", body)
 	}
 }

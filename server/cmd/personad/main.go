@@ -312,6 +312,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
+	if errors.Is(err, flag.ErrHelp) { // -h on a subcommand's flags: the flag package printed its help, nothing failed
+		os.Exit(0)
+	}
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -900,6 +900,10 @@ func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) 
 	for id, at := range s.fleet.codexAnnounced {
 		if now.Sub(at) > codexAnnouncedFor {
 			delete(s.fleet.codexAnnounced, id)
+		}
+	}
+	for id, at := range s.fleet.codexEnded { // on its own: an id no longer announced (handed back) is kept here too
+		if now.Sub(at) > codexAnnouncedFor {
 			delete(s.fleet.codexEnded, id)
 		}
 	}
@@ -949,6 +953,16 @@ func (s *Service) codexPending(machine string, ix proto.Interaction) *pending {
 		ctx, cancel := context.WithTimeout(context.Background(), codexAnswerTimeout)
 		defer cancel()
 		err := s.nodeCall(ctx, machine, "codex.answer", map[string]any{"session_id": ix.SessionID, "id": ix.ID, "resolution": r}, nil)
+		if err == nil && !r.Dismiss {
+			// Answered from the phone: the card is no longer pending, so the node's next list does not count it as
+			// gone. It ended now: listed again after codexAskedAgain, it is Codex asking again and rings (#4105).
+			s.fleet.mu.Lock()
+			if s.fleet.codexEnded == nil {
+				s.fleet.codexEnded = map[string]time.Time{}
+			}
+			s.fleet.codexEnded[ix.ID] = time.Now()
+			s.fleet.mu.Unlock()
+		}
 		var re *rpc.Error
 		if err != nil && !r.Dismiss && !(errors.As(err, &re) && re.Code == screen.PromptChanged) {
 			s.fleet.mu.Lock()

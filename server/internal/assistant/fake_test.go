@@ -103,6 +103,10 @@ type fakeHub struct {
 	onSend    func(f *fakeHub, p map[string]any) // runs (under the fake's lock) after each session.send
 	// doctor is each machine's node.doctor claude-version detail (none: the report has no such check).
 	doctor map[string]string
+	// auth is claude.auth_status's answer by "machine/launcher" (nil: the node has no such method), and the
+	// questions it got.
+	auth      map[string]proto.ClaudeAuthStatus
+	authAsked []string
 }
 
 type modelCall struct{ System, User string }
@@ -212,6 +216,17 @@ func (f *fakeHub) DeviceCall(_ context.Context, p DeviceCall) (json.RawMessage, 
 		_ = json.Unmarshal(p.Params, &m)
 		f.managed[p.Device] = m.Launchers
 		return json.RawMessage(`{"ok":true}`), nil
+	case assistantwire.DeviceClaudeAuthStatus:
+		name, _ := a["name"].(string)
+		f.authAsked = append(f.authAsked, p.Device+"/"+name)
+		if f.auth == nil {
+			return nil, errors.New("unknown method claude.auth_status")
+		}
+		st, ok := f.auth[p.Device+"/"+name]
+		if !ok {
+			st = proto.ClaudeAuthStatus{State: proto.ClaudeAuthUnknown, Reason: proto.ClaudeAuthUnreadable}
+		}
+		return json.Marshal(st)
 	case deviceNodeDoctor:
 		checks := []map[string]string{}
 		if detail, ok := f.doctor[p.Device]; ok {

@@ -135,7 +135,7 @@ class ApproveFirstActivity : ComponentActivity() {
                 ApproveFirstDialog(state, onDismiss = ::finish,
                     onOpen = { request ->
                         startActivity(request?.let {
-                            SurfaceLinks.conversation(this, it.sessionKey, dependencies.sessions().assistant(it.sessionKey))
+                            SurfaceLinks.conversation(this, it.sessionKey, dependencies.sessions().assistant(it.sessionKey), it.id)
                         } ?: SurfaceLinks.app(this))
                         finish()
                     },

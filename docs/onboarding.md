@@ -425,7 +425,9 @@ POST /api/v1/assistant/readiness/dismiss   {"dismissed": true}  →  {"ok": true
 实现（#3710，`server/internal/assistant/readiness.go`；接口细节以 `docs/protocol.md`「主对话就绪度」为准），和上面不同或补充的地方：
 
 - 只给 `full` 设备：probe 要花钱，hub 的规矩是能跑启动器的接口不给只能作答的设备；手表现在用不到它。
-- `claude.auth_status` 还没做（7.2 第 3 项），`model` 只看最近一次 probe、主对话最近一轮、启动器健康检查的记录，取最新的一条；失败但认不出原因时也是 `unknown` + `model_unverified`，不算 `problem`。
+- `model` 看最近一次 probe、主对话最近一轮、启动器健康检查的记录和 `claude.auth_status`（#4048），取最新的一条；失败但认不出原因时也是 `unknown` + `model_unverified`，不算 `problem`。
+- `claude.auth_status`（#4048）：node 用开对话同一条命令（`launcherCommand`：默认启动器就是登录 shell 里的 `claude`，带这台电脑的 `claude_start_dir`；Persona 管理的经 `personad launch <名字>`）和同一份 `--settings`（管理的启动器的网关盖过用户全局 settings 的 env）跑 `claude auth status --json`。`--settings` 放在子命令前面（`auth status` 自己不认它）。版本门是 2.1.41（`claude auth` 从这版才有），更老的不跑；跑 Codex / runtime 的启动器、读不出 JSON、20 秒没答完都回 `unknown` + `reason`。只回 `state`、`auth_method`、`api_provider`、Key 来源的变量名，账号的邮箱、组织不出这台电脑。默认启动器怎么找 claude 没改（#2854）。
+- 就绪度怎么用它：没登录是 `problem` + `not_logged_in`；`claude.ai` 登录只推翻「没登录」：没有别的证据、或最新的一条说没登录时才算模型能用（`ok`），主对话、probe、健康检查认出的 `auth_failed` / `model_route` / `rate_limited` 不会被它盖掉（登录了不代表令牌没过期、套餐里有这个模型）；Key、网关的令牌、Bedrock / Vertex（`api_key`、`api_key_helper`、`oauth_token`、`third_party`）不算证据，仍是 `unknown` + `model_unverified`，`detail` 换成「用的是配好的账号或 Key，还没试过」。和设计不同：登录了的结果缓存 10 分钟，没登录或没答上（问失败、`timeout`、`unreadable`）的只缓存 1 分钟，老 node 的 `unknown method` 缓存 10 分钟、不记日志（`setup` 时发送按钮被换掉，没有别的事会说用户已经登录了）；和版本自检同时问、共用 GET 的 12 秒 / warm 的 2 秒，没答完照样缓存给下一次。老 node 没有这个方法时和以前一样。
 - `rate_limited` 是 `problem`，但不让 `mode` 变成 `setup`（会自己好，不该把发送按钮换掉）。
 - `claude` 还读两样：上一次开对话被拒的码（`claude_missing` / `launcher_missing`，开成功一次、被拒之后的自检读到版本、或启动器又在了就清掉：`setup` 时发不出消息，不能只靠开成功来清），和启动器在这台电脑上还在不在；跑 Codex 或 runtime 的启动器这一步是 `skipped`。node 自检没在时限内答完是 `checking`。
 - `node_outdated` 只看 node 认不认模型配置：主对话每次开都带 `model_fingerprint`（`finishModel`），老 node 一定开不了。

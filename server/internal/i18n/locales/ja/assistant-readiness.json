@@ -20,6 +20,7 @@
   "rate_limited_detail": "今はモデルの利用が速すぎます。しばらくすると自動で回復します。",
   "model_unverified_title": "モデルはまだ確認されていません",
   "model_unverified_detail": "メッセージを送って、モデルが答えるか確認してください。",
+  "model_key_unverified_detail": "{machine} の Claude Code は設定済みのアカウントまたはキーを使っていますが、まだ試していません。メッセージを送って使えるか確認してください。",
   "never_tried_title": "話しかけてみる",
   "never_tried_detail": "「こんにちは」と送って、Persona が答えるか確かめましょう。",
   "suggest_what_can_you_do": "何を手伝ってくれるの？",

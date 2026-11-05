@@ -127,9 +127,9 @@ class PersonaWidget : GlanceAppWidget() {
 
     @Composable
     private fun Item(context: Context, look: WidgetLook, item: FleetItem, assistant: (persona.core.contracts.SessionKey) -> Boolean?) {
-        val key = FleetSummary.key(item)
+        val open = SurfaceLinks.row(context, item, assistant)
         val modifier = GlanceModifier.fillMaxWidth().padding(vertical = Tokens.Space.xs).let { base ->
-            if (key != null) base.clickable(actionStartActivity(SurfaceLinks.conversation(context, key, assistant(key)))) else base
+            if (open != null) base.clickable(actionStartActivity(open)) else base
         }
         Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             Dot(look.kind(item.kind), look.smallDotSize)

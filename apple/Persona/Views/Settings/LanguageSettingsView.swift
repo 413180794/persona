@@ -14,7 +14,10 @@ struct LanguageSettingsPage: View {
     var body: some View {
         SettingsForm {
             Section {
-                Picker("语言", selection: Binding(get: { choice }, set: pick)) {
+                // Wrap the MainActor-isolated method in a closure instead of passing `set: pick`: Xcode 26.6
+                // (Swift 6.3) crashes IRGen emitting the reabstraction thunk for the isolated method value when
+                // building for macOS (#4157). Keep the wrapper until the compiler is fixed.
+                Picker("语言", selection: Binding(get: { choice }, set: { pick($0) })) {
                     ForEach(AppLanguage.allCases) { language in
                         Text(language == .system ? systemTitle : language.title)
                             .lineLimit(1)
