@@ -19,9 +19,26 @@ fun failureReason(error: Throwable): String {
         return when (failure.kind) {
             HubError.NoNetwork, HubError.AddressNotFound, HubError.ConnectionRefused, HubError.Unreachable,
             HubError.Timeout, HubError.Transport -> "连不上 hub"
-            else -> operationFeedback(error).message.removeSuffix("。")
+            else -> operationFeedback(error).message.removeSuffix("。") // i18n-ignore: punctuation trimmed off, not shown
         }
     }
     if (error is SerializationException) return "hub 的回答读不懂"
     return error.message?.takeIf { it.isNotBlank() } ?: "出错了"
+}
+
+/** [failureReason] in the page's language: resolve it with [UiText.text] or [UiText.resolve]. */
+fun failureReasonText(error: Throwable): UiText {
+    if (error is IOException) {
+        val failure = HubFailure.from(error)
+        if (failure.status != null && failure.kind != HubError.PairingExpired) {
+            failure.message.takeIf { it.isNotBlank() && !it.startsWith("HTTP ") }?.let { return UiText.Plain(it) }
+        }
+        return when (failure.kind) {
+            HubError.NoNetwork, HubError.AddressNotFound, HubError.ConnectionRefused, HubError.Unreachable,
+            HubError.Timeout, HubError.Transport -> UiText.Res(R.string.designsystem_reason_unreachable)
+            else -> operationFeedback(error).text
+        }
+    }
+    if (error is SerializationException) return UiText.Res(R.string.designsystem_reason_unreadable)
+    return error.message?.takeIf { it.isNotBlank() }?.let { UiText.Plain(it) } ?: UiText.Res(R.string.designsystem_reason_unknown)
 }

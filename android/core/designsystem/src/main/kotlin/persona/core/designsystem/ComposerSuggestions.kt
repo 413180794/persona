@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,10 +54,11 @@ fun ComposerSuggestions(items: List<ComposerSuggestion>, onPick: (ComposerSugges
     }
     Column(modifier.fillMaxWidth().then(frame).heightIn(max = 272.dp).verticalScroll(rememberScrollState()).padding(vertical = 4.dp)) {
         items.forEachIndexed { index, item ->
+            val spoken = stringResource(R.string.designsystem_with_state, item.word, item.detail)
             if (index > 0) JDivider(Modifier.padding(horizontal = 14.dp))
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { onPick(item) }
-                    .semantics(mergeDescendants = true) { contentDescription = "${item.word}，${item.detail}" }
+                    .semantics(mergeDescendants = true) { contentDescription = spoken }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -36,19 +36,19 @@ object ExtensionThemeColors {
         for (dark in listOf(false, true)) {
             val values = if (dark) theme.dark else theme.light
             val mode = if (dark) "dark" else "light"
-            if ("accent" !in values) problems += "$mode 缺少 accent"
+            if ("accent" !in values) problems += "$mode 缺少 accent" // i18n-ignore: diagnostics, only checked for emptiness
             for ((role, raw) in values) {
                 val color = parse(raw)
-                if (role !in roles || color == null) { problems += "$mode.$role 不是可用的角色色"; continue }
+                if (role !in roles || color == null) { problems += "$mode.$role 不是可用的角色色"; continue } // i18n-ignore: diagnostics, only checked for emptiness
                 for (style in AppStyle.entries) {
                     val p = Palettes.of(style, dark)
                     val surfaces = listOf(p.background, p.surface.compositeOn(p.background), p.surfaceOpaque,
                         p.surfaceStrong.compositeOn(p.surfaceOpaque), p.sunken.compositeOn(p.surfaceOpaque))
                     val floor = if (role == "accent") AccentFloor else TextFloor
-                    if (surfaces.any { contrast(color, it) < floor }) problems += "${style.key} $mode.$role 对比度不足"
+                    if (surfaces.any { contrast(color, it) < floor }) problems += "${style.key} $mode.$role 对比度不足" // i18n-ignore: diagnostics, only checked for emptiness
                     if (role in setOf("positive", "caution", "danger")) {
                         if (surfaces.any { contrast(color, color.copy(alpha = SoftAlpha).compositeOn(it)) < TextFloor })
-                            problems += "${style.key} $mode.$role 提示底色上的对比度不足"
+                            problems += "${style.key} $mode.$role 提示底色上的对比度不足" // i18n-ignore: diagnostics, only checked for emptiness
                     }
                 }
             }

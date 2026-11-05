@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import android.graphics.Bitmap
 import android.graphics.Paint
 import androidx.compose.foundation.Canvas
@@ -69,7 +71,9 @@ import kotlin.math.abs
 
 /** One colour of the image editor's marks. */
 @Immutable
-class MarkupColor internal constructor(val name: String, val color: Color)
+class MarkupColor internal constructor(@StringRes val nameRes: Int, val color: Color) {
+    val name: String @Composable get() = stringResource(nameRes)
+}
 
 /**
  * The image editor's six mark colours. Fixed on purpose, not taken from a style: a mark has to read the same in every
@@ -77,12 +81,12 @@ class MarkupColor internal constructor(val name: String, val color: Color)
  * colours, white, black — as the iOS editor).
  */
 object MarkupColors {
-    val Red = MarkupColor("红色", Color(0xFFFF3B30))
-    val Yellow = MarkupColor("黄色", Color(0xFFFFCC00))
-    val Green = MarkupColor("绿色", Color(0xFF34C759))
-    val Blue = MarkupColor("蓝色", Color(0xFF007AFF))
-    val White = MarkupColor("白色", Color(0xFFFFFFFF))
-    val Black = MarkupColor("黑色", Color(0xFF000000))
+    val Red = MarkupColor(R.string.designsystem_markup_red, Color(0xFFFF3B30))
+    val Yellow = MarkupColor(R.string.designsystem_markup_yellow, Color(0xFFFFCC00))
+    val Green = MarkupColor(R.string.designsystem_markup_green, Color(0xFF34C759))
+    val Blue = MarkupColor(R.string.designsystem_markup_blue, Color(0xFF007AFF))
+    val White = MarkupColor(R.string.designsystem_markup_white, Color(0xFFFFFFFF))
+    val Black = MarkupColor(R.string.designsystem_markup_black, Color(0xFF000000))
     val all: List<MarkupColor> = listOf(Red, Yellow, Green, Blue, White, Black)
 }
 
@@ -93,7 +97,7 @@ object MarkupColors {
 @Immutable
 internal data class EditorMark(val box: Boolean, val color: Color, val width: Float, val points: List<Offset>)
 
-private enum class MarkupTool(val label: String) { Box("框选"), Pen("画笔") }
+private enum class MarkupTool(@StringRes val labelRes: Int) { Box(R.string.designsystem_markup_box), Pen(R.string.designsystem_markup_pen) }
 
 /** The stroke of a mark on screen. */
 private val MarkStroke = 3.5.dp
@@ -156,15 +160,15 @@ private fun EditorBody(source: Bitmap, finishing: Boolean, onFinishing: (Boolean
 
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().statusBarsPadding().height(56.dp).padding(horizontal = Tokens.Space.xs)) {
-            JTextButton("取消", onCancel, Modifier.align(Alignment.CenterStart), enabled = !finishing)
+            JTextButton(stringResource(R.string.designsystem_cancel), onCancel, Modifier.align(Alignment.CenterStart), enabled = !finishing)
             Text(
-                if (failed) "没能画进图片，请重试" else "编辑图片",
+                stringResource(if (failed) R.string.designsystem_editor_failed else R.string.designsystem_editor_title),
                 Modifier.align(Alignment.Center).widthIn(max = 220.dp),
                 style = PersonaTheme.type.title, color = if (failed) palette.danger.text else palette.ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             JButton(
-                "完成", ::finish, Modifier.align(Alignment.CenterEnd).padding(end = Tokens.Space.s),
+                stringResource(R.string.designsystem_done), ::finish, Modifier.align(Alignment.CenterEnd).padding(end = Tokens.Space.s),
                 size = JButtonSize.Small, loading = finishing,
             )
         }
@@ -189,7 +193,7 @@ private fun EditorBody(source: Bitmap, finishing: Boolean, onFinishing: (Boolean
                     }
                 },
         ) {
-            Image(picture, "要编辑的图片", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            Image(picture, stringResource(R.string.designsystem_editor_picture), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             Canvas(Modifier.fillMaxSize()) {
                 val area = latestFit
                 if (area.width > 0f) {
@@ -207,10 +211,10 @@ private fun EditorBody(source: Bitmap, finishing: Boolean, onFinishing: (Boolean
                 MarkupColors.all.forEach { option -> ColorSwatch(option, option == color) { color = option } }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                JSegmented(MarkupTool.entries.map { JSegment(it.label) }, tool.ordinal, { tool = MarkupTool.entries[it] })
+                JSegmented(MarkupTool.entries.map { JSegment(stringResource(it.labelRes)) }, tool.ordinal, { tool = MarkupTool.entries[it] })
                 Spacer(Modifier.weight(1f))
-                JIconButton(PhIcons.ArrowUUpLeft, "撤销", { marks.removeLastOrNull() }, enabled = marks.isNotEmpty() && !finishing)
-                JIconButton(PhIcons.Trash, "清除", { marks.clear() }, enabled = marks.isNotEmpty() && !finishing)
+                JIconButton(PhIcons.ArrowUUpLeft, stringResource(R.string.designsystem_editor_undo), { marks.removeLastOrNull() }, enabled = marks.isNotEmpty() && !finishing)
+                JIconButton(PhIcons.Trash, stringResource(R.string.designsystem_editor_clear), { marks.clear() }, enabled = marks.isNotEmpty() && !finishing)
             }
         }
     }
@@ -237,10 +241,11 @@ private fun DrawScope.drawMark(mark: EditorMark, area: Rect, scale: Float) {
 @Composable
 private fun ColorSwatch(option: MarkupColor, chosen: Boolean, onClick: () -> Unit) {
     val palette = PersonaTheme.palette
+    val name = option.name
     Box(
         Modifier.size(44.dp).clip(CircleShape)
             .clickable(role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = option.name; selected = chosen },
+            .semantics { contentDescription = name; selected = chosen },
         contentAlignment = Alignment.Center,
     ) {
         Box(

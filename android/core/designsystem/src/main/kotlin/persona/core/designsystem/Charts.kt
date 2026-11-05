@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -178,9 +179,13 @@ fun JChart(data: JChartData, modifier: Modifier = Modifier, compact: Boolean = f
                 Swatch(colors[i], s.name?.takeIf { data.series.size > 1 }, s.displays.getOrNull(index) ?: "—")
             }
         }
-        val summary = remember(data) {
-            data.series.joinToString("；") { s ->
-                (s.name?.let { "$it：" } ?: "") + data.labels.indices.joinToString("，") { "${data.labels[it]} ${s.displays.getOrNull(it).orEmpty()}" }
+        val separator = stringResource(R.string.designsystem_separator)
+        val seriesSeparator = stringResource(R.string.designsystem_series_separator)
+        val labeled = stringResource(R.string.designsystem_labeled)
+        val summary = remember(data, separator, seriesSeparator, labeled) {
+            data.series.joinToString(seriesSeparator) { s ->
+                val values = data.labels.indices.joinToString(separator) { "${data.labels[it]} ${s.displays.getOrNull(it).orEmpty()}" }
+                s.name?.let { labeled.format(it, values) } ?: values
             }
         }
         ChartPlot(data, colors, compact, index, onPick = { picked = it },

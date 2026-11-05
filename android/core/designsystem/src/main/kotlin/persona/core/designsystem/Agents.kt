@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,7 +94,8 @@ fun MachineChip(
         AppStyle.Brief -> null
         AppStyle.Board -> if (selected) palette.accent else palette.line
     }
-    val spoken = listOfNotNull(online?.let { if (it) "在线" else "离线" }, "$count 个会话").joinToString("，")
+    val spoken = listOfNotNull(online?.let { stringResource(if (it) R.string.designsystem_online else R.string.designsystem_offline) },
+        pluralStringResource(R.plurals.designsystem_sessions, count, count)).joinToString(stringResource(R.string.designsystem_separator))
     Row(
         modifier.heightIn(min = Action).clip(shape).background(fill).then(if (border != null) Modifier.border(Hairline, border, shape) else Modifier)
             .clickable(role = Role.Tab, onClick = onClick)
@@ -179,7 +182,7 @@ fun AgentTreeHeader(
                 .padding(top = Tokens.Space.m, bottom = Tokens.Space.xs),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开分组" else "折叠分组", size = Tokens.Space.l, tint = palette.ink3)
+            JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, stringResource(if (folded) R.string.designsystem_group_expand else R.string.designsystem_group_collapse), size = Tokens.Space.l, tint = palette.ink3)
             Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs))
             icon?.let { JIcon(it, null, size = Tokens.Space.xl, tint = palette.ink); Spacer(Modifier.width(Tokens.Space.s)) }
             Column(Modifier.weight(1f)) {
@@ -189,16 +192,17 @@ fun AgentTreeHeader(
                     tag?.let { Spacer(Modifier.width(Tokens.Space.s)); JTag(it) }
                     online?.let {
                         Spacer(Modifier.width(Tokens.Space.s))
+                        val onlineText = stringResource(if (it) R.string.designsystem_online else R.string.designsystem_offline)
                         Box(Modifier.size(Dot).clip(CircleShape).background(if (it) palette.positive else palette.offline.dot)
-                            .semantics { contentDescription = if (it) "在线" else "离线" })
-                        if (!it) { Spacer(Modifier.width(Tokens.Space.xs)); Text("离线", style = type.micro, color = palette.ink3, maxLines = 1) }
+                            .semantics { contentDescription = onlineText })
+                        if (!it) { Spacer(Modifier.width(Tokens.Space.xs)); Text(onlineText, style = type.micro, color = palette.ink3, maxLines = 1) }
                     }
                 }
                 detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             StateCounts(counts)
-            if (onMonitor != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(PhIcons.Gauge, "机器监控", onMonitor) }
-            if (onAction != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(actionIcon ?: PhIcons.CaretRight, actionLabel ?: "详情", onAction) }
+            if (onMonitor != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(PhIcons.Gauge, stringResource(R.string.designsystem_machine_monitor), onMonitor) }
+            if (onAction != null) { Spacer(Modifier.width(Tokens.Space.xs)); HeadingAction(actionIcon ?: PhIcons.CaretRight, actionLabel ?: stringResource(R.string.designsystem_details), onAction) }
         }
     }
 }
@@ -225,17 +229,18 @@ fun AgentSpaceHeader(
     flags: List<RowFlag> = emptyList(),
     menu: (@Composable () -> Unit)? = null,
     icon: PhIcon? = null,
-    kind: String = "空间",
+    kind: String = stringResource(R.string.designsystem_space),
 ) {
     val palette = PersonaTheme.palette
+    val foldState = stringResource(if (folded) R.string.designsystem_folded else R.string.designsystem_expanded)
     val type = PersonaTheme.type
     Row(
         modifier.fillMaxWidth().padding(top = if (first) Tokens.Space.xxs else Tokens.Space.s).heightIn(min = Action)
             .clickable(role = Role.Button, onClick = onToggle)
-            .semantics { heading(); stateDescription = if (folded) "已折叠" else "已展开" }.padding(start = Step * depth),
+            .semantics { heading(); stateDescription = foldState }.padding(start = Step * depth),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, if (folded) "展开$kind" else "折叠$kind", size = Caret, tint = palette.ink3)
+        JIcon(if (folded) PhIcons.CaretRight else PhIcons.CaretDown, stringResource(if (folded) R.string.designsystem_expand_named else R.string.designsystem_collapse_named, kind), size = Caret, tint = palette.ink3)
         Spacer(Modifier.width(Tokens.Space.s - Tokens.Space.xxs))
         icon?.let { JIcon(it, kind, size = Caret, tint = palette.ink2); Spacer(Modifier.width(Tokens.Space.xs)) }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
@@ -245,7 +250,7 @@ fun AgentSpaceHeader(
             )
             flags.forEach { Spacer(Modifier.width(Tokens.Space.xs)); JIcon(it.icon, it.label, size = Caret, tint = palette.ink3) }
         }
-        if (quiet) Text("$sessions 个会话", style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
+        if (quiet) Text(pluralStringResource(R.plurals.designsystem_sessions, sessions, sessions), style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
         else StateCounts(counts)
         menu?.invoke()
     }
@@ -260,7 +265,7 @@ fun AgentIdleRow(hidden: Int, onClick: () -> Unit, modifier: Modifier = Modifier
             .padding(start = start.coerceAtLeast(None) + markSize + Tokens.Space.s - Tokens.Space.xxs, top = Tokens.Space.s, bottom = Tokens.Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("还有 $hidden 个空闲", style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1)
+        Text(pluralStringResource(R.plurals.designsystem_idle_more, hidden, hidden), style = PersonaTheme.type.caption, color = PersonaTheme.palette.ink2, maxLines = 1)
         Spacer(Modifier.width(Tokens.Space.xs))
         JIcon(PhIcons.CaretDown, null, size = Caret, tint = PersonaTheme.palette.ink3)
     }

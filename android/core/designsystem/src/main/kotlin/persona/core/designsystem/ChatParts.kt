@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,7 +43,7 @@ fun ChatPictureFrame(
     onClick: (() -> Unit)?,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    description: String = "图片",
+    description: String = stringResource(R.string.designsystem_image),
     alignEnd: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -51,13 +52,14 @@ fun ChatPictureFrame(
     BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = if (alignEnd) Alignment.TopEnd else Alignment.TopStart) {
         val width = minOf(maxWidth, ChatPictureMaxHeight * aspect)
         val click = when {
-            failed -> Modifier.clickable(role = Role.Button, onClickLabel = "重试", onClick = onRetry)
-            onClick != null -> Modifier.clickable(role = Role.Image, onClickLabel = "查看大图", onClick = onClick)
+            failed -> Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.designsystem_retry), onClick = onRetry)
+            onClick != null -> Modifier.clickable(role = Role.Image, onClickLabel = stringResource(R.string.designsystem_view_full), onClick = onClick)
             else -> Modifier
         }
+        val spoken = if (failed) stringResource(R.string.designsystem_with_state, description, stringResource(R.string.designsystem_load_failed)) else description
         Box(
             Modifier.width(width).aspectRatio(aspect).clip(PersonaTheme.shapes.controlShape).background(palette.sunken)
-                .then(click).semantics { contentDescription = if (failed) "$description，加载失败" else description },
+                .then(click).semantics { contentDescription = spoken },
         ) {
             content()
             if (failed) Column(
@@ -66,7 +68,7 @@ fun ChatPictureFrame(
             ) {
                 JIcon(PhIcons.ArrowClockwise, null, size = 20.dp, tint = palette.ink2)
                 Spacer(Modifier.height(4.dp))
-                Text("加载失败，点一下重试", style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 2,
+                Text(stringResource(R.string.designsystem_load_failed_tap), style = PersonaTheme.type.caption, color = palette.ink2, maxLines = 2,
                     textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -89,16 +91,17 @@ fun PhotoThumbnail(
     onClick: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    description: String = "照片",
+    description: String = stringResource(R.string.designsystem_photo),
 ) {
+    val spoken = if (failed) stringResource(R.string.designsystem_with_state, description, stringResource(R.string.designsystem_load_failed)) else description
     val palette = PersonaTheme.palette
     // The photos sit in the user's bubble; brief's wells are that bubble's own colour (sunken == surface), so an empty
     // box (loading, failed) would not show there: it takes the stronger fill instead.
     val well = if (palette.sunken == palette.surface) palette.surfaceStrong else palette.sunken
     Box(
         modifier.size(if (single) SinglePhoto else GroupPhoto).clip(PersonaTheme.shapes.controlShape).background(well)
-            .clickable(role = Role.Button, onClickLabel = if (failed) "重试" else "查看大图", onClick = if (failed) onRetry else onClick)
-            .semantics { contentDescription = if (failed) "$description，加载失败" else description },
+            .clickable(role = Role.Button, onClickLabel = stringResource(if (failed) R.string.designsystem_retry else R.string.designsystem_view_full), onClick = if (failed) onRetry else onClick)
+            .semantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -107,7 +110,7 @@ fun PhotoThumbnail(
                 JIcon(PhIcons.ArrowClockwise, null, size = 18.dp, tint = palette.ink2)
                 if (single) {
                     Spacer(Modifier.height(4.dp))
-                    Text("加载失败", style = PersonaTheme.type.micro, color = palette.ink2, maxLines = 1)
+                    Text(stringResource(R.string.designsystem_load_failed), style = PersonaTheme.type.micro, color = palette.ink2, maxLines = 1)
                 }
             }
             else -> JSpinner(Modifier.size(18.dp))
@@ -161,10 +164,11 @@ fun ErrorCard(
     }
     val inner = if (style == AppStyle.Board) PaddingValues(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 12.dp)
         else PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+    val spoken = stringResource(R.string.designsystem_api_error, reason)
     Column(modifier.fillMaxWidth().padding(vertical = 6.dp).then(frame).padding(inner), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(
-            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = if (expanded) "收起详情" else "展开详情", onClick = onToggle)
-                .semantics { contentDescription = "API 错误：$reason" },
+            Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = stringResource(if (expanded) R.string.designsystem_details_collapse else R.string.designsystem_details_expand), onClick = onToggle)
+                .semantics { contentDescription = spoken },
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -266,7 +270,7 @@ fun ChatHint(text: String, icon: PhIcon, tint: androidx.compose.ui.graphics.Colo
  * name, one line.
  */
 @Composable
-fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier = Modifier, onClickLabel: String = "查看文件") {
+fun PathChip(text: String, icon: PhIcon, onClick: () -> Unit, modifier: Modifier = Modifier, onClickLabel: String = stringResource(R.string.designsystem_view_file)) {
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(PersonaTheme.shapes.chip)

@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -77,6 +78,7 @@ private fun rememberDrawn(kind: Kind, source: String, points: Float): Drawn {
     val dark = PersonaTheme.palette.dark
     val density = LocalDensity.current.density
     val cached = remember(kind, source, dark, points, density) { MarkdownRenderer.cached(kind, source, dark, points, density) }
+    val nothing = stringResource(R.string.designsystem_render_nothing)
     // Keyed by what is drawn: a fence still streaming in, the other appearance or text size draws again.
     val drawn by produceState<Drawn>(cached?.let { Drawn.Picture(it) } ?: Drawn.Loading, kind, source, dark, points, density, host) {
         MarkdownRenderer.cached(kind, source, dark, points, density)?.let { value = Drawn.Picture(it); return@produceState }
@@ -85,7 +87,7 @@ private fun rememberDrawn(kind: Kind, source: String, points: Float): Drawn {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Drawn.Failed(e.message ?: "没有画出内容")
+            Drawn.Failed(e.message ?: nothing)
         }
     }
     return drawn
@@ -120,7 +122,7 @@ fun RenderedFence(kind: Kind, source: String, color: Color = PersonaTheme.palett
         Drawn.Loading -> JLoading(Modifier.fillMaxWidth())
         is Drawn.Failed -> Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             fallback()
-            Text("没能画出来：${drawn.message}", style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText, maxLines = 2)
+            Text(stringResource(R.string.designsystem_render_failed, drawn.message), style = PersonaTheme.type.caption, color = PersonaTheme.palette.cautionText, maxLines = 2)
         }
         is Drawn.Picture -> if (kind == Kind.Mermaid) Diagram(drawn.bitmap, source) else Formula(drawn.bitmap, source, color)
     }
@@ -134,7 +136,7 @@ private fun Formula(bitmap: Bitmap, tex: String, color: Color) {
         val column = maxWidth
         Box(Modifier.horizontalScroll(rememberScrollState())) {
             Box(Modifier.widthIn(min = column), contentAlignment = Alignment.Center) {
-                Image(image, "公式：$tex", Modifier.testTag("rendered-math")
+                Image(image, stringResource(R.string.designsystem_render_formula, tex), Modifier.testTag("rendered-math")
                     .size(with(density) { bitmap.width.toDp() }, with(density) { bitmap.height.toDp() }),
                     colorFilter = ColorFilter.tint(color))
             }
@@ -150,13 +152,13 @@ private fun Diagram(bitmap: Bitmap, source: String) {
     val density = LocalDensity.current
     val image = remember(bitmap) { bitmap.asImageBitmap() }
     var full by remember { mutableStateOf(false) }
-    val label = "图：${source.take(80)}"
+    val label = stringResource(R.string.designsystem_render_diagram, source.take(80))
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val natural = with(density) { Size(bitmap.width.toDp().value, bitmap.height.toDp().value) }
         val scale = (maxWidth.value / natural.width).coerceIn(MIN_DIAGRAM_SCALE, 1f)
         val picture = Modifier.size((natural.width * scale).dp, (natural.height * scale).dp)
         Box(Modifier.horizontalScroll(rememberScrollState())) {
-            Image(image, label, picture.testTag("rendered-mermaid").clickable(onClickLabel = "全屏查看") { full = true })
+            Image(image, label, picture.testTag("rendered-mermaid").clickable(onClickLabel = stringResource(R.string.designsystem_render_full_screen)) { full = true })
         }
     }
     if (full) {
@@ -188,7 +190,8 @@ class MathImages(
             is Drawn.Failed -> remember(tex, points, density) { MarkdownRenderer.source(tex, points, density) }
         }
         val painter = remember(bitmap) { BitmapPainter(bitmap.asImageBitmap()) }
-        return ImageData(painter, Modifier.semantics { contentDescription = "公式：$tex" }, contentDescription = "公式：$tex",
+        val spoken = stringResource(R.string.designsystem_render_formula, tex)
+        return ImageData(painter, Modifier.semantics { contentDescription = spoken }, contentDescription = spoken,
             colorFilter = ColorFilter.tint(color))
     }
 

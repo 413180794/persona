@@ -154,16 +154,16 @@ object MarkdownRenderer {
         val answer = withTimeoutOrNull(20_000) { evaluate(web, call) } ?: run {
             // Still drawing: a fresh page, so what it draws late can't end up in the next picture.
             discard()
-            throw Failure("画得太久")
+            throw Failure(host.context.getString(R.string.designsystem_render_too_slow))
         }
         val json = answer.getOrElse {
             web.evaluateJavascript("clearOut()", null)
-            throw Failure(it.message ?: "没有画出内容", source = true)
+            throw Failure(it.message ?: host.context.getString(R.string.designsystem_render_nothing), source = true)
         }
-        val box = runCatching { JSONArray(json) }.getOrNull()?.takeIf { it.length() == 4 } ?: throw Failure("没有画出内容")
+        val box = runCatching { JSONArray(json) }.getOrNull()?.takeIf { it.length() == 4 } ?: throw Failure(host.context.getString(R.string.designsystem_render_nothing))
         val x = max(0.0, box.getDouble(0)); val y = max(0.0, box.getDouble(1))
         val w = min(box.getDouble(2), MAX_WIDTH.toDouble()); val h = min(box.getDouble(3), MAX_WIDTH * 4.0)
-        if (w <= 0 || h <= 0) throw Failure("没有画出内容")
+        if (w <= 0 || h <= 0) throw Failure(host.context.getString(R.string.designsystem_render_nothing))
         // The page must be as large as what was drawn: the capture covers only the WebView's own area.
         val needW = ceil((x + w) * density).toInt(); val needH = ceil((y + h) * density).toInt()
         if (web.width < needW || web.height < needH) {
@@ -222,8 +222,8 @@ object MarkdownRenderer {
     private suspend fun page(host: View): WebView {
         // The activity's own window, also for Markdown in a dialog, a sheet or a popup (their roots come and go, and a
         // popup's root takes no views).
-        val activity = host.context.activity() ?: throw Failure("没有可用的窗口")
-        val root = activity.window?.decorView as? FrameLayout ?: throw Failure("没有可用的窗口")
+        val activity = host.context.activity() ?: throw Failure(host.context.getString(R.string.designsystem_render_no_window))
+        val root = activity.window?.decorView as? FrameLayout ?: throw Failure(activity.getString(R.string.designsystem_render_no_window))
         web?.let { current ->
             if (current.isAttachedToWindow && current.parent === root) { loaded?.await(); return current }
             discard()
@@ -252,7 +252,7 @@ object MarkdownRenderer {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?) = true
                 override fun onPageFinished(view: WebView?, url: String?) { ready.complete(Unit) }
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
-                    if (request?.isForMainFrame == true) ready.completeExceptionally(Failure("缺少渲染页面"))
+                    if (request?.isForMainFrame == true) ready.completeExceptionally(Failure(activity.getString(R.string.designsystem_render_page_missing)))
                 }
             }
         }
@@ -273,7 +273,7 @@ object MarkdownRenderer {
         val ok = runCatching { withTimeoutOrNull(20_000) { ready.await() } }.getOrNull() != null
         if (!ok) {
             discard()
-            throw Failure("渲染页面没有加载")
+            throw Failure(activity.getString(R.string.designsystem_render_page_not_loaded))
         }
         return view
     }

@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -38,31 +39,31 @@ fun JModelSheet(
     // once the query is cleared would stay above the viewport.
     val scroll = rememberLazyListState()
     LaunchedEffect(query) { scroll.scrollToItem(0) }
-    JSheet(onDismiss = onDismiss, title = "模型") {
+    JSheet(onDismiss = onDismiss, title = stringResource(R.string.designsystem_model_title)) {
         Text(note, style = PersonaTheme.type.callout, color = PersonaTheme.palette.ink2)
         Spacer(Modifier.height(Tokens.Space.m))
-        JSearchField(query, { query = it }, if (custom) "搜索，或输入模型 ID" else "搜索名称或 ID")
+        JSearchField(query, { query = it }, stringResource(if (custom) R.string.designsystem_model_search_custom else R.string.designsystem_model_search))
         Spacer(Modifier.height(Tokens.Space.m))
         LazyColumn(Modifier.fillMaxWidth().weight(1f), scroll, contentPadding = PaddingValues(bottom = Tokens.Space.l)) {
-            error?.let { item("error") { JInlineStatus("没有刷新：$it", tone = InlineTone.Failed) } }
+            error?.let { item("error") { JInlineStatus(stringResource(R.string.designsystem_model_refresh_failed, it), tone = InlineTone.Failed) } }
             if (query.isBlank()) item("default") {
                 val rows = if (unlisted != null) 2 else 1
                 Column {
                     JGroupItem(GroupPosition.of(0, rows)) {
-                        ModelChoice("默认", defaultDetail, null, selected.isEmpty()) { onPick(""); onDismiss() }
+                        ModelChoice(stringResource(R.string.designsystem_model_default), defaultDetail, null, selected.isEmpty()) { onPick(""); onDismiss() }
                     }
                     if (unlisted != null) JGroupItem(GroupPosition.of(1, rows)) {
-                        ModelChoice(modelName(unlisted), "当前配置，列表里没有", null, true) { onDismiss() }
+                        ModelChoice(modelName(unlisted), stringResource(R.string.designsystem_model_unlisted), null, true) { onDismiss() }
                     }
                 }
             }
             item("all") {
-                JSectionHeader(if (query.isBlank()) "全部模型" else "搜索结果", count = shown.size, action = {
-                    if (loading) JSpinner() else JTextButton("刷新", onRefresh, icon = PhIcons.ArrowsClockwise)
+                JSectionHeader(stringResource(if (query.isBlank()) R.string.designsystem_model_all else R.string.designsystem_model_results), count = shown.size, action = {
+                    if (loading) JSpinner() else JTextButton(stringResource(R.string.designsystem_model_refresh), onRefresh, icon = PhIcons.ArrowsClockwise)
                 })
             }
             if (shown.isEmpty() && typed == null) item("none") {
-                JEmptyState("没有找到", "换个名称或 ID 试试。", icon = PhIcons.MagnifyingGlass)
+                JEmptyState(stringResource(R.string.designsystem_model_none), stringResource(R.string.designsystem_model_none_detail), icon = PhIcons.MagnifyingGlass)
             }
             itemsIndexed(shown, key = { _, model -> model.id }) { index, model ->
                 JGroupItem(GroupPosition.of(index, shown.size)) {
@@ -72,7 +73,7 @@ fun JModelSheet(
             typed?.let { id ->
                 item("custom") {
                     JGroupItem(GroupPosition.Single, Modifier.padding(top = Tokens.Space.m)) {
-                        ModelChoice("使用「$id」", "列表里没有，按这个 ID 保存", null, id == selected) { onPick(id); onDismiss() }
+                        ModelChoice(stringResource(R.string.designsystem_model_use, id), stringResource(R.string.designsystem_model_use_detail), null, id == selected) { onPick(id); onDismiss() }
                     }
                 }
             }
@@ -84,7 +85,7 @@ fun JModelSheet(
 private fun ModelChoice(title: String, detail: String?, description: String?, selected: Boolean, onClick: () -> Unit) {
     JRow(title, subtitle = listOfNotNull(detail, description?.takeIf { it.isNotBlank() }).joinToString("\n").ifEmpty { null },
         subtitleLines = 3, chevron = false, onClick = onClick,
-        trailing = if (selected) ({ JIcon(PhIcons.Check, "已选", tint = PersonaTheme.palette.ink) }) else null)
+        trailing = if (selected) ({ JIcon(PhIcons.Check, stringResource(R.string.designsystem_selected), tint = PersonaTheme.palette.ink) }) else null)
 }
 
 /** A model's second line: its id when the name is another word for it, and the model an alias stands for. */

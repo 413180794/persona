@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -130,7 +131,7 @@ fun MessageItem(
 
 /** A reply Persona drafted: highlighted label and a quoted draft in brief, a tinted box elsewhere. */
 @Composable
-fun DraftPreview(text: String, modifier: Modifier = Modifier, label: String = "Persona 拟好了回复", actions: (@Composable RowScope.() -> Unit)? = null) {
+fun DraftPreview(text: String, modifier: Modifier = Modifier, label: String = stringResource(R.string.designsystem_draft_ready), actions: (@Composable RowScope.() -> Unit)? = null) {
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     Column(modifier.fillMaxWidth().padding(top = 12.dp)) {

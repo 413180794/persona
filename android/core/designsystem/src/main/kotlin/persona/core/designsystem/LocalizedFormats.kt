@@ -19,6 +19,8 @@ import java.util.Locale
 object LocalizedFormats {
     /** A month and day: 11月5日 · Nov 5. */
     const val MONTH_DAY = "MMMd"
+    /** A month, day and weekday: 11月5日星期四 · Thursday, November 5. */
+    const val MONTH_DAY_WEEKDAY = "MMMMdEEEE"
     /** A month, day and time: 11月5日 14:30 · Nov 5, 2:30 PM. */
     const val MONTH_DAY_TIME = "MMMdjmm"
     /** A full date: 2026年11月5日 · Nov 5, 2026. */

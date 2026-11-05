@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -102,6 +103,12 @@ fun PaneDivider(
         tween(PersonaTheme.motion.quick), label = "pane-divider-height")
     val shape = if (style == AppStyle.Board) RoundedCornerShape(2.dp) else RoundedCornerShape(50)
     val reach = with(LocalDensity.current) { 48.dp.toPx() }
+    val expandLeft = stringResource(R.string.designsystem_pane_expand)
+    val resize = stringResource(R.string.designsystem_pane_resize)
+    val collapsedState = stringResource(R.string.designsystem_pane_collapsed)
+    val wider = stringResource(R.string.designsystem_pane_wider)
+    val narrower = stringResource(R.string.designsystem_pane_narrower)
+    val collapseLeft = stringResource(R.string.designsystem_pane_collapse)
     Box(
         modifier.width(PaneDividerTouch).fillMaxHeight()
             // Near the grip a swipe moves the divider, not the system's back gesture (at the window's edge when collapsed).
@@ -115,16 +122,16 @@ fun PaneDivider(
             .draggable(draggable, Orientation.Horizontal, interactionSource = interaction,
                 onDragStarted = { onDragStarted() }, onDragStopped = { velocity -> onDragStopped(velocity) })
             .then(if (state == PaneDividerState.Collapsed && onExpand != null)
-                Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = "展开左栏") { onExpand() }
+                Modifier.clickable(interactionSource = interaction, indication = null, role = Role.Button, onClickLabel = expandLeft) { onExpand() }
             else Modifier)
             .semantics {
-                contentDescription = "调整左右两栏的宽度"
-                if (state == PaneDividerState.Collapsed) stateDescription = "左栏已收起"
+                contentDescription = resize
+                if (state == PaneDividerState.Collapsed) stateDescription = collapsedState
                 customActions = listOfNotNull(
-                    CustomAccessibilityAction("左栏变宽") { onWider(); true }.takeIf { state != PaneDividerState.Collapsed },
-                    CustomAccessibilityAction("左栏变窄") { onNarrower(); true }.takeIf { state != PaneDividerState.Collapsed },
-                    onCollapse?.takeIf { state != PaneDividerState.Collapsed }?.let { collapse -> CustomAccessibilityAction("收起左栏") { collapse(); true } },
-                    onExpand?.takeIf { state == PaneDividerState.Collapsed }?.let { expand -> CustomAccessibilityAction("展开左栏") { expand(); true } },
+                    CustomAccessibilityAction(wider) { onWider(); true }.takeIf { state != PaneDividerState.Collapsed },
+                    CustomAccessibilityAction(narrower) { onNarrower(); true }.takeIf { state != PaneDividerState.Collapsed },
+                    onCollapse?.takeIf { state != PaneDividerState.Collapsed }?.let { collapse -> CustomAccessibilityAction(collapseLeft) { collapse(); true } },
+                    onExpand?.takeIf { state == PaneDividerState.Collapsed }?.let { expand -> CustomAccessibilityAction(expandLeft) { expand(); true } },
                 )
             },
         contentAlignment = Alignment.Center,

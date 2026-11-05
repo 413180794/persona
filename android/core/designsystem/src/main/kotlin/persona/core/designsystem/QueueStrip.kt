@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,12 +66,14 @@ fun QueueStrip(
             if (busy) JSpinner(Modifier.size(14.dp), stroke = 1.8.dp)
         }
         Column(Modifier.fillMaxWidth().heightIn(max = 184.dp).verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+            val itemActions = stringResource(R.string.designsystem_queue_actions)
             items.forEachIndexed { index, text ->
+                val spoken = stringResource(R.string.designsystem_queue_item, index + 1, text)
                 if (index > 0) JDivider(Modifier.padding(start = 50.dp, end = 14.dp))
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 44.dp)
-                        .clickable(enabled = active, role = Role.Button, onClickLabel = "排队消息的操作") { onItem(index) }
-                        .semantics(mergeDescendants = true) { contentDescription = "第 ${index + 1} 条：$text" }
+                        .clickable(enabled = active, role = Role.Button, onClickLabel = itemActions) { onItem(index) }
+                        .semantics(mergeDescendants = true) { contentDescription = spoken }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.Top,
                 ) {

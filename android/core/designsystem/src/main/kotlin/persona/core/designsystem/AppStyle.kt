@@ -3,8 +3,11 @@ package persona.core.designsystem
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,10 +16,13 @@ import kotlinx.coroutines.flow.asStateFlow
  * The three interface styles (设置 › 界面风格). Pages are written once against the components in this module;
  * each style supplies its own tokens, component skins and app chrome. Light and dark still follow the system.
  */
-enum class AppStyle(val key: String, val label: String, val summary: String) {
-    Glass("glass", "玻璃", "磨砂玻璃浮在状态光上，有事等你时泛起琥珀色"),
-    Brief("brief", "晨报", "白纸墨字，一支荧光笔只标 Persona 的建议和等你的事"),
-    Board("board", "看板", "每个 Agent 一条进程单，状态色一眼看清");
+enum class AppStyle(val key: String, @StringRes val labelRes: Int, @StringRes val summaryRes: Int) {
+    Glass("glass", R.string.designsystem_style_glass, R.string.designsystem_style_glass_summary),
+    Brief("brief", R.string.designsystem_style_brief, R.string.designsystem_style_brief_summary),
+    Board("board", R.string.designsystem_style_board, R.string.designsystem_style_board_summary);
+
+    val label: String @Composable get() = stringResource(labelRes)
+    val summary: String @Composable get() = stringResource(summaryRes)
 
     companion object {
         val Default = Glass
@@ -25,8 +31,10 @@ enum class AppStyle(val key: String, val label: String, val summary: String) {
 }
 
 /** What the user asked for in the glass style; the device and the frame monitor can still lower it. */
-enum class GlassPreference(val key: String, val label: String) {
-    Auto("auto", "自动"), Reduced("reduced", "减少透明");
+enum class GlassPreference(val key: String, @StringRes val labelRes: Int) {
+    Auto("auto", R.string.designsystem_glass_auto), Reduced("reduced", R.string.designsystem_glass_reduced);
+
+    val label: String @Composable get() = stringResource(labelRes)
 
     companion object { fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: Auto }
 }

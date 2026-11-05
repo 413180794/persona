@@ -1,6 +1,10 @@
 package persona.core.designsystem
 
+import android.content.Context
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 
 /** One status, three uses: the dot or holder, text in that colour, and a soft tint behind it. */
@@ -215,9 +219,30 @@ fun PersonaPalette.tone(tone: Tone): StatusColors = when (tone) {
     Tone.Neutral -> idle
 }
 
+/**
+ * An agent's state (docs/agent-states.md). Pages show [localizedLabel] (or [labelRes] outside composition); [label]
+ * stays the Simplified Chinese name for the code outside composition that still reads it.
+ */
 enum class Status(val label: String) {
     NeedsYou("需要你"), Working("工作中"), Unread("完成未看"), Idle("已看"),
-    Offline("未运行"), Unknown("未知"), Waiting("待唤醒"), Muted("已屏蔽"),
+    Offline("未运行"), Unknown("未知"), Waiting("待唤醒"), Muted("已屏蔽");
+
+    @get:StringRes val labelRes: Int get() = when (this) {
+        NeedsYou -> R.string.designsystem_status_needs_you
+        Working -> R.string.designsystem_status_working
+        Unread -> R.string.designsystem_status_unread
+        Idle -> R.string.designsystem_status_idle
+        Offline -> R.string.designsystem_status_offline
+        Unknown -> R.string.designsystem_status_unknown
+        Waiting -> R.string.designsystem_status_waiting
+        Muted -> R.string.designsystem_status_muted
+    }
+
+    /** The name in the page's language. */
+    val localizedLabel: String @Composable get() = stringResource(labelRes)
+
+    /** The name in [context]'s language, for notifications and other code outside composition. */
+    fun label(context: Context): String = context.getString(labelRes)
 }
 
 @Immutable

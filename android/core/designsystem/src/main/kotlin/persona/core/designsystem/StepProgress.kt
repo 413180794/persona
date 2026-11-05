@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,7 +13,12 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
 
-enum class StepState(val label: String) { Pending("等待中"), Active("进行中"), Complete("已完成"), Failed("未完成") }
+enum class StepState(@StringRes val labelRes: Int) {
+    Pending(R.string.designsystem_step_pending), Active(R.string.designsystem_step_active),
+    Complete(R.string.designsystem_step_complete), Failed(R.string.designsystem_step_failed);
+
+    val label: String @Composable get() = stringResource(labelRes)
+}
 
 data class ProgressStep(val title: String, val state: StepState = StepState.Pending)
 
@@ -20,7 +27,8 @@ data class ProgressStep(val title: String, val state: StepState = StepState.Pend
 fun StepProgress(steps: List<ProgressStep>, modifier: Modifier = Modifier) {
     if (steps.isEmpty()) return
     val palette = PersonaTheme.palette
-    val summary = steps.joinToString("，") { "${it.title}，${it.state.label}" }
+    val summary = steps.map { stringResource(R.string.designsystem_with_state, it.title, it.state.label) }
+        .joinToString(stringResource(R.string.designsystem_separator))
     val current = steps.firstOrNull { it.state == StepState.Failed }
         ?: steps.firstOrNull { it.state == StepState.Active }
         ?: steps.firstOrNull { it.state == StepState.Pending }
@@ -38,6 +46,6 @@ fun StepProgress(steps: List<ProgressStep>, modifier: Modifier = Modifier) {
                 Box(Modifier.weight(1f).height(4.dp).background(color, shape))
             }
         }
-        Text("${current.title}：${current.state.label}", style = PersonaTheme.type.caption, color = palette.ink2)
+        Text(stringResource(R.string.designsystem_labeled, current.title, current.state.label), style = PersonaTheme.type.caption, color = palette.ink2)
     }
 }

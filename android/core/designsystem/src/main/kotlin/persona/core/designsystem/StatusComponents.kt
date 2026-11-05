@@ -1,5 +1,8 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
+import android.content.Context
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -102,14 +105,33 @@ fun JStateLabel(text: String, status: Status, modifier: Modifier = Modifier, pro
 }
 
 @Composable
-fun StatusLabel(status: Status, modifier: Modifier = Modifier, text: String = status.label) {
+fun StatusLabel(status: Status, modifier: Modifier = Modifier, text: String = status.localizedLabel) {
     Text(text, modifier, color = PersonaTheme.palette.status(status).text, style = PersonaTheme.type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
+/**
+ * Where an outgoing message or operation stands. Pages show [localizedLabel] (or [labelRes] outside composition);
+ * [label] stays the Simplified Chinese words for the code outside composition that still reads it.
+ */
 enum class PendingStatus(val label: String) {
     Sending("发送中"), Waiting("连上后自动发送"), Unconfirmed("结果待确认"),
-    Verifying("正在核对"), NeedsReview("没能确认是否送达"), Refused("没有发出"),
-    WaitingForNetwork("等待网络"),
+    Verifying("正在核对"), NeedsReview("没能确认是否送达"), Refused("没有发出"), WaitingForNetwork("等待网络");
+
+    @get:StringRes val labelRes: Int get() = when (this) {
+        Sending -> R.string.designsystem_pending_sending
+        Waiting -> R.string.designsystem_pending_waiting
+        Unconfirmed -> R.string.designsystem_pending_unconfirmed
+        Verifying -> R.string.designsystem_pending_verifying
+        NeedsReview -> R.string.designsystem_pending_needs_review
+        Refused -> R.string.designsystem_pending_refused
+        WaitingForNetwork -> R.string.designsystem_pending_waiting_for_network
+    }
+
+    /** The words in the page's language. */
+    val localizedLabel: String @Composable get() = stringResource(labelRes)
+
+    /** The words in [context]'s language, for notifications and other code outside composition. */
+    fun label(context: Context): String = context.getString(labelRes)
 }
 
 @Composable
@@ -117,7 +139,8 @@ fun PendingBadge(status: PendingStatus, modifier: Modifier = Modifier, reason: S
     val palette = PersonaTheme.palette
     val caution = status != PendingStatus.Sending && status != PendingStatus.Waiting
     val color = if (caution) palette.cautionText else palette.ink2
-    val label = if (status == PendingStatus.Refused && !reason.isNullOrBlank()) "${status.label}：$reason" else status.label
+    val label = if (status == PendingStatus.Refused && !reason.isNullOrBlank()) stringResource(R.string.designsystem_pending_refused_reason, reason)
+        else status.localizedLabel
     val shape = RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 4.dp else 8.dp)
     Row(
         modifier.semantics(mergeDescendants = true) {}.clip(shape).background(if (caution) palette.needsYou.tint else palette.surfaceStrong)
@@ -153,29 +176,39 @@ data class StatusLineState(
     val waitingDetail: String? = null,
 )
 
-data class StatusLineContent(val kind: StatusLineKind, val text: String, val status: Status) {
+/**
+ * [text] is the line in Simplified Chinese for the code outside composition that still reads it; pages show
+ * [message] (`message.text()`, or [localizedText]) in their own language.
+ */
+data class StatusLineContent(val kind: StatusLineKind, val text: String, val status: Status, val message: UiText = UiText.Plain(text)) {
+    val localizedText: String @Composable get() = message.text()
+
     val actionable: Boolean get() = kind != StatusLineKind.Submitting && kind != StatusLineKind.Stopping
 }
 
 /** Resolves only session state. Hub connectivity belongs in the page title. */
 fun resolveStatusLine(state: StatusLineState): StatusLineContent? = with(state) {
+    fun line(kind: StatusLineKind, text: String, status: Status, @StringRes id: Int, vararg args: Any) =
+        StatusLineContent(kind, text, status, UiText.Res(id, args.toList()))
+    val minutes = lastUpdatedMinutes?.coerceAtLeast(0)
+    val detail = workDetail?.takeIf { it.isNotBlank() }
     when {
-        ended || replaced -> StatusLineContent(StatusLineKind.Ended, if (replaced) "已换成新会话" else "会话已结束", Status.Offline)
+        ended || replaced -> line(StatusLineKind.Ended, if (replaced) "已换成新会话" else "会话已结束", Status.Offline, if (replaced) R.string.designsystem_line_replaced else R.string.designsystem_line_ended)
         machineOffline -> StatusLineContent(StatusLineKind.MachineOffline,
-            "电脑离线，状态可能过时" + (lastUpdatedMinutes?.let { "（${it.coerceAtLeast(0)} 分钟前）" } ?: ""), Status.Offline)
-        submitting || answering -> StatusLineContent(StatusLineKind.Submitting,
-            if (answering) "正在回传你的选择…" else "正在发送…", Status.Idle)
-        unconfirmed -> StatusLineContent(StatusLineKind.Unconfirmed, "上次操作结果待确认", Status.Unknown)
-        pendingRequests > 0 || blocked -> StatusLineContent(StatusLineKind.NeedsYou,
-            when {
-                pendingRequests > 1 -> "等你处理 $pendingRequests 件"
-                !requestSummary.isNullOrBlank() -> "等你处理：$requestSummary"
-                else -> "等你处理"
-            }, Status.NeedsYou)
-        stopping -> StatusLineContent(StatusLineKind.Stopping, "已发出中断，等电脑确认", Status.Working)
-        working -> StatusLineContent(StatusLineKind.Working,
-            "正在工作" + (workDetail?.takeIf { it.isNotBlank() }?.let { "：$it" } ?: ""), Status.Working)
-        waiting -> StatusLineContent(StatusLineKind.Waiting, waitingDetail?.takeIf { it.isNotBlank() } ?: "等待下一次任务", Status.Waiting)
+            "电脑离线，状态可能过时" + (minutes?.let { "（$it 分钟前）" } ?: ""), Status.Offline,
+            minutes?.let { UiText.Plural(R.plurals.designsystem_line_machine_offline_since, it) } ?: UiText.Res(R.string.designsystem_line_machine_offline))
+        submitting || answering -> line(StatusLineKind.Submitting, if (answering) "正在回传你的选择…" else "正在发送…", Status.Idle, if (answering) R.string.designsystem_line_answering else R.string.designsystem_line_sending)
+        unconfirmed -> line(StatusLineKind.Unconfirmed, "上次操作结果待确认", Status.Unknown, R.string.designsystem_line_unconfirmed)
+        pendingRequests > 0 || blocked -> when {
+            pendingRequests > 1 -> StatusLineContent(StatusLineKind.NeedsYou, "等你处理 $pendingRequests 件", Status.NeedsYou,
+                UiText.Plural(R.plurals.designsystem_line_needs_you_count, pendingRequests))
+            !requestSummary.isNullOrBlank() -> line(StatusLineKind.NeedsYou, "等你处理：$requestSummary", Status.NeedsYou, R.string.designsystem_line_needs_you_about, requestSummary)
+            else -> line(StatusLineKind.NeedsYou, "等你处理", Status.NeedsYou, R.string.designsystem_line_needs_you)
+        }
+        stopping -> line(StatusLineKind.Stopping, "已发出中断，等电脑确认", Status.Working, R.string.designsystem_line_stopping)
+        working -> if (detail != null) line(StatusLineKind.Working, "正在工作：$detail", Status.Working, R.string.designsystem_line_working_on, detail) else line(StatusLineKind.Working, "正在工作", Status.Working, R.string.designsystem_line_working)
+        waiting -> waitingDetail?.takeIf { it.isNotBlank() }?.let { StatusLineContent(StatusLineKind.Waiting, it, Status.Waiting) }
+            ?: line(StatusLineKind.Waiting, "等待下一次任务", Status.Waiting, R.string.designsystem_line_waiting)
         else -> null
     }
 }
@@ -224,7 +257,7 @@ fun StatusLine(
                 style == AppStyle.Board -> JStatusMark(status, animated = line.kind == StatusLineKind.Working)
                 else -> JStatusDot(status, size = 8.dp)
             }
-            Text(line.text, color = color, style = PersonaTheme.type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(line.localizedText, color = color, style = PersonaTheme.type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         }
         if (chips.isNotEmpty()) {
             Spacer(Modifier.weight(1f))

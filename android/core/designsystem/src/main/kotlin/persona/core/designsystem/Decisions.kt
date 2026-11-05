@@ -1,5 +1,8 @@
 package persona.core.designsystem
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,14 +35,16 @@ import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 
 /** What a request asks of the user. */
-enum class DecisionKind(val label: String, val icon: PhIcon) {
-    Command("想运行一条命令", PhIcons.TerminalWindow),
-    Tool("想用一个工具", PhIcons.Wrench),
-    Plan("计划等你批准", PhIcons.ListChecks),
-    Question("有个问题问你", PhIcons.SealQuestion),
-    Form("要你填几项", PhIcons.NotePencil),
-    Screen("终端在等你", PhIcons.TerminalWindow),
-    Other("等你处理", PhIcons.Hand),
+enum class DecisionKind(@StringRes val labelRes: Int, val icon: PhIcon) {
+    Command(R.string.designsystem_decision_command, PhIcons.TerminalWindow),
+    Tool(R.string.designsystem_decision_tool, PhIcons.Wrench),
+    Plan(R.string.designsystem_decision_plan, PhIcons.ListChecks),
+    Question(R.string.designsystem_decision_question, PhIcons.SealQuestion),
+    Form(R.string.designsystem_decision_form, PhIcons.NotePencil),
+    Screen(R.string.designsystem_decision_screen, PhIcons.TerminalWindow),
+    Other(R.string.designsystem_decision_other, PhIcons.Hand);
+
+    val label: String @Composable get() = stringResource(labelRes)
 }
 
 /**
@@ -124,7 +129,7 @@ fun DecisionCard(
                         body()
                         advice?.let { Spacer(Modifier.height(10.dp)); DecisionAdvice(it) }
                         actions?.let { Spacer(Modifier.height(12.dp)); it() }
-                        onOpen?.let { Spacer(Modifier.height(4.dp)); JTextButton("打开对话", it, icon = PhIcons.ArrowSquareOut) }
+                        onOpen?.let { Spacer(Modifier.height(4.dp)); JTextButton(stringResource(R.string.designsystem_decision_open_chat), it, icon = PhIcons.ArrowSquareOut) }
                     } else {
                         summary?.let { Spacer(Modifier.height(8.dp)); Text(it, style = type.code, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         quickActions?.let { Spacer(Modifier.height(10.dp)); Row(horizontalArrangement = Arrangement.spacedBy(6.dp), content = it) }
@@ -210,16 +215,16 @@ fun DecisionDock(
                 color = if (style == AppStyle.Brief) palette.ink2 else palette.ink,
             )
             expires?.let { Text(it, style = type.micro, color = palette.ink3, maxLines = 1); Spacer(Modifier.width(4.dp)) }
-            onExpand?.let { JIconButton(PhIcons.ArrowSquareOut, "打开完整页", it, tint = palette.ink2) }
-            onCollapsedChange?.let { change -> JIconButton(if (collapsed) PhIcons.CaretUp else PhIcons.CaretDown, if (collapsed) "展开" else "收起", { change(!collapsed) }, tint = palette.ink2) }
+            onExpand?.let { JIconButton(PhIcons.ArrowSquareOut, stringResource(R.string.designsystem_decision_open_full), it, tint = palette.ink2) }
+            onCollapsedChange?.let { change -> JIconButton(if (collapsed) PhIcons.CaretUp else PhIcons.CaretDown, stringResource(if (collapsed) R.string.designsystem_expand else R.string.designsystem_collapse), { change(!collapsed) }, tint = palette.ink2) }
         }
         position?.takeIf { it.second > 1 }?.let { (current, total) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                JTextButton("上一项", onPrevious ?: {}, enabled = onPrevious != null && current > 1)
+                JTextButton(stringResource(R.string.designsystem_decision_previous), onPrevious ?: {}, enabled = onPrevious != null && current > 1)
                 Spacer(Modifier.weight(1f))
                 JTextButton("$current / $total", onList ?: {}, enabled = onList != null)
                 Spacer(Modifier.weight(1f))
-                JTextButton("下一项", onNext ?: {}, enabled = onNext != null && current < total)
+                JTextButton(stringResource(R.string.designsystem_decision_next), onNext ?: {}, enabled = onNext != null && current < total)
             }
         }
     }
@@ -258,7 +263,7 @@ fun DecisionAdvice(text: String, modifier: Modifier = Modifier) {
         AppStyle.Brief -> Row(modifier, verticalAlignment = Alignment.Top) {
             JIcon(PhIcons.Sparkle, null, size = 16.dp, tint = palette.ink, selected = true, modifier = Modifier.padding(top = 3.dp))
             Spacer(Modifier.width(4.dp))
-            MarkerText("Persona：$text", type.callout.copy(fontWeight = FontWeight.SemiBold))
+            MarkerText(stringResource(R.string.designsystem_decision_advice, text), type.callout.copy(fontWeight = FontWeight.SemiBold))
         }
         else -> Row(
             modifier.fillMaxWidth().clip(RoundedCornerShape(if (PersonaTheme.style == AppStyle.Board) 6.dp else 16.dp)).background(palette.accentSoft)
@@ -333,7 +338,7 @@ fun DecisionOption(
             Spacer(Modifier.width(8.dp))
             JIcon(PhIcons.Sparkle, null, size = 14.dp, tint = if (style == AppStyle.Board) palette.accent else ink, selected = true)
             Spacer(Modifier.width(3.dp))
-            Text("建议", style = type.micro.copy(fontWeight = FontWeight.Bold), color = if (style == AppStyle.Board) palette.accent else ink, maxLines = 1)
+            Text(stringResource(R.string.designsystem_decision_recommended), style = type.micro.copy(fontWeight = FontWeight.Bold), color = if (style == AppStyle.Board) palette.accent else ink, maxLines = 1)
         }
     }
 }

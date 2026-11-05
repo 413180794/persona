@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -141,7 +142,7 @@ fun JDialog(
     title: String,
     text: String? = null,
     confirm: Pair<String, () -> Unit>? = null,
-    dismiss: Pair<String, () -> Unit>? = "取消" to onDismiss,
+    dismiss: Pair<String, () -> Unit>? = stringResource(R.string.designsystem_cancel) to onDismiss,
     destructive: Boolean = false,
     confirmEnabled: Boolean = true,
     content: (@Composable ColumnScope.() -> Unit)? = null,

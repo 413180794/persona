@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -31,9 +33,11 @@ import persona.core.contracts.api.HubChannel
  * They are drawn as their owners publish them: not recolored, not redrawn as icons. A product with no mark here is
  * drawn as a monogram of its name ([JSourceMark]).
  */
-enum class Brand(@DrawableRes internal val drawable: Int, val label: String) {
+enum class Brand(@DrawableRes internal val drawable: Int, @StringRes val labelRes: Int) {
     /** 飞书 / Lark's bird: the Feishu bot and /agent in Feishu. */
-    Lark(R.drawable.brand_lark, "飞书"),
+    Lark(R.drawable.brand_lark, R.string.designsystem_brand_lark);
+
+    val label: String @Composable get() = stringResource(labelRes)
 }
 
 /** How large a source mark is drawn: in a line of text, at a list row's front, on top of a page. */
@@ -96,7 +100,7 @@ fun JChannelMark(channel: HubChannel, modifier: Modifier = Modifier, size: MarkS
 /** 「来自 微信」: the line under a message that came from a channel, its mark and its name in the secondary colour. */
 @Composable
 fun JChannelSource(channel: HubChannel, modifier: Modifier = Modifier) {
-    val text = "来自 ${channel.label}"
+    val text = stringResource(R.string.designsystem_channel_source, channel.label)
     Row(modifier.readAs(text), horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs), verticalAlignment = Alignment.CenterVertically) {
         JChannelMark(channel, size = MarkSize.Inline)
         Text(text, style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
@@ -38,7 +39,7 @@ private val QrSide = 220.dp
  * tile with the quiet zone around it. Read out as [label].
  */
 @Composable
-fun JQrCode(rows: List<String>, modifier: Modifier = Modifier, label: String = "二维码") {
+fun JQrCode(rows: List<String>, modifier: Modifier = Modifier, label: String = stringResource(R.string.designsystem_qr_code)) {
     Canvas(modifier.size(QrSide).aspectRatio(1f).clip(PersonaTheme.shapes.controlShape).clearAndSetSemantics { contentDescription = label }) {
         drawRect(ScanColors.ground)
         val n = rows.size + 2 * QuietZone

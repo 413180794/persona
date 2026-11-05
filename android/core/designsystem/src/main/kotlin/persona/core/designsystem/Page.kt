@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -46,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import persona.core.designsystem.icons.PhIcons
-import java.time.LocalDate
 import java.time.LocalTime
 
 /**
@@ -311,7 +311,7 @@ fun JTopBar(
     val style = PersonaTheme.style
     val leading: @Composable () -> Unit = {
         when {
-            onBack != null -> JIconButton(if (style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft, "返回", onBack)
+            onBack != null -> JIconButton(if (style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft, stringResource(R.string.designsystem_back), onBack)
             else -> LocalRootLeading.current?.invoke()
         }
     }
@@ -433,7 +433,7 @@ private fun PageTitle(title: String, subtitle: String?, summary: String?, greet:
             AppStyle.Brief -> if (summary != null) {
                 if (greet) Text(todayLabel(), style = type.caption, color = palette.ink3)
                 Spacer(Modifier.height(6.dp))
-                Text((if (greet) greeting() + "，" else "") + summary, style = type.voice, color = palette.ink, modifier = click.semantics { heading() })
+                Text(if (greet) stringResource(R.string.designsystem_greeting_summary, greeting(), summary) else summary, style = type.voice, color = palette.ink, modifier = click.semantics { heading() })
                 subtitle?.let { Spacer(Modifier.height(4.dp)); Text(it, style = type.voice.copy(fontSize = androidx.compose.ui.unit.TextUnit(17f, androidx.compose.ui.unit.TextUnitType.Sp), lineHeight = androidx.compose.ui.unit.TextUnit(27f, androidx.compose.ui.unit.TextUnitType.Sp), fontWeight = androidx.compose.ui.text.font.FontWeight.Normal), color = palette.ink2) }
             } else {
                 TitleRow(title, busy, type.largeTitle, click)
@@ -456,14 +456,13 @@ private fun TitleRow(title: String, busy: Boolean, style: androidx.compose.ui.te
     }
 }
 
-private fun greeting(): String = when (LocalTime.now().hour) {
-    in 5..10 -> "早上好"
-    in 11..12 -> "中午好"
-    in 13..17 -> "下午好"
-    else -> "晚上好"
-}
+@Composable
+private fun greeting(): String = stringResource(when (LocalTime.now().hour) {
+    in 5..10 -> R.string.designsystem_greeting_morning
+    in 11..12 -> R.string.designsystem_greeting_noon
+    in 13..17 -> R.string.designsystem_greeting_afternoon
+    else -> R.string.designsystem_greeting_evening
+})
 
-private fun todayLabel(): String {
-    val today = LocalDate.now()
-    return "${today.monthValue} 月 ${today.dayOfMonth} 日，星期" + "一二三四五六日"[today.dayOfWeek.value - 1]
-}
+@Composable
+private fun todayLabel(): String = LocalizedFormats.format(java.time.Instant.now(), LocalizedFormats.MONTH_DAY_WEEKDAY, currentLocale)

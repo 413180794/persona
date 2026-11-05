@@ -28,7 +28,8 @@ import java.io.File
  * [AppStyleStore.personaId], kept when its package leaves the hub, so it comes back with it.
  */
 class PersonaStore(context: Context, private val style: AppStyleStore, private val packs: () -> PersonaPacks?) {
-    private val root = File(context.applicationContext.filesDir, "personas")
+    private val app = context.applicationContext
+    private val root = File(app.filesDir, "personas")
     private val index = File(root, "index.json")
     private val thumbnails = File(root, ".thumbnails")
     private val lock = Mutex()
@@ -65,7 +66,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
         } catch (e: CancellationException) { throw e } catch (e: PersonaPacksUnsupported) {
             _error.value = e.message; return@withLock
         } catch (e: Exception) {
-            _error.value = "没取到形象列表：${e.message ?: e::class.simpleName}"; return@withLock
+            _error.value = app.getString(R.string.designsystem_avatars_list_failed, e.message ?: e::class.simpleName); return@withLock
         }
         _error.value = null
         _offered.value = list
@@ -125,9 +126,9 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
                 withContext(Dispatchers.IO) { File(part, file).apply { parentFile?.mkdirs() }.writeBytes(bytes) }
             }
             withContext(Dispatchers.IO) {
-                p.manifest.files.firstOrNull { !File(part, it).isFile }?.let { error("缺少 $it") }
+                p.manifest.files.firstOrNull { !File(part, it).isFile }?.let { error(app.getString(R.string.designsystem_avatars_missing_file, it)) }
                 directory(p).deleteRecursively()
-                check(part.renameTo(directory(p))) { "没能存到手机上" }
+                check(part.renameTo(directory(p))) { app.getString(R.string.designsystem_avatars_not_saved) }
             }
             _pictures.value++
             _error.value = null
@@ -135,7 +136,7 @@ class PersonaStore(context: Context, private val style: AppStyleStore, private v
             withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) { part.deleteRecursively() }; throw e
         } catch (e: Exception) {
             withContext(Dispatchers.IO) { part.deleteRecursively() }
-            _error.value = "「${p.manifest.name}」没下载下来：${e.message ?: e::class.simpleName}"
+            _error.value = app.getString(R.string.designsystem_avatars_download_failed, p.manifest.name, e.message ?: e::class.simpleName)
         } finally {
             _downloading.value -= p.id
         }

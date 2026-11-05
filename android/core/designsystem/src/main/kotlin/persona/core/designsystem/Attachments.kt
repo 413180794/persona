@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,17 +61,19 @@ fun AttachmentThumb(
         else -> Modifier
     }
     val retry = onRetry.takeIf { state == AttachmentState.Failed }
-    val label = contentDescription + when (state) {
-        AttachmentState.Ready -> ""
-        AttachmentState.Uploading -> "，正在上传"
-        AttachmentState.Waiting -> "，等待上传"
-        AttachmentState.Failed -> "，上传失败"
-        AttachmentState.Invalid -> "，已失效"
-    }
+    val label = when (state) {
+        AttachmentState.Ready -> null
+        AttachmentState.Uploading -> R.string.designsystem_attachment_uploading
+        AttachmentState.Waiting -> R.string.designsystem_attachment_waiting
+        AttachmentState.Failed -> R.string.designsystem_attachment_failed
+        AttachmentState.Invalid -> R.string.designsystem_attachment_invalid
+    }?.let { stringResource(R.string.designsystem_with_state, contentDescription, stringResource(it)) } ?: contentDescription
+    val retryLabel = stringResource(R.string.designsystem_retry)
+    val removeLabel = stringResource(R.string.designsystem_attachment_remove)
     Box(modifier.size(AttachmentThumbSize)) {
         Box(
             Modifier.matchParentSize().clip(shape).background(if (style == AppStyle.Glass) palette.surfaceStrong else palette.surface)
-                .then(if (retry != null) Modifier.clickable(role = Role.Button, onClickLabel = "重试", onClick = retry) else Modifier)
+                .then(if (retry != null) Modifier.clickable(role = Role.Button, onClickLabel = retryLabel, onClick = retry) else Modifier)
                 .semantics { this.contentDescription = label },
             contentAlignment = Alignment.Center,
         ) {
@@ -84,7 +87,7 @@ fun AttachmentThumb(
                     AttachmentState.Waiting -> JIcon(PhIcons.Clock, null, size = 22.dp, tint = OnPhoto)
                     AttachmentState.Failed -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         JIcon(PhIcons.ArrowClockwise, null, size = 20.dp, tint = OnPhoto)
-                        Text("重试", style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.Bold), color = OnPhoto, maxLines = 1)
+                        Text(retryLabel, style = PersonaTheme.type.micro.copy(fontWeight = FontWeight.Bold), color = OnPhoto, maxLines = 1)
                     }
                     else -> JIcon(PhIcons.WarningCircle, null, size = 22.dp, tint = OnPhoto)
                 }
@@ -94,7 +97,7 @@ fun AttachmentThumb(
         Box(Modifier.matchParentSize().then(rim))
         if (onRemove != null) Box(
             Modifier.align(Alignment.TopEnd).size(32.dp).clip(CircleShape)
-                .clickable(role = Role.Button, onClick = onRemove).semantics { this.contentDescription = "移除这张" },
+                .clickable(role = Role.Button, onClick = onRemove).semantics { this.contentDescription = removeLabel },
             contentAlignment = Alignment.TopEnd,
         ) {
             Box(

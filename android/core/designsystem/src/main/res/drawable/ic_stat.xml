@@ -1,4 +1,4 @@
-<!-- The app icon's character (团子, iOS AppIcon): the waving body with its eyes cut out and the three motion lines,
+<!-- The app icon's character (Mochi, iOS AppIcon): the waving body with its eyes cut out and the three motion lines,
      as a white silhouette. Paths are the icon's (web MochiFace / apple PersonaFace), in its 1024 px coordinates. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">

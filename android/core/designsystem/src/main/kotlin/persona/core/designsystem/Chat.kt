@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +84,7 @@ fun ChatTopBar(
             }
         }
     }
-    val back: @Composable () -> Unit = { onBack?.let { JIconButton(if (style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft, "返回", it) } }
+    val back: @Composable () -> Unit = { onBack?.let { JIconButton(if (style == AppStyle.Glass) PhIcons.CaretLeft else PhIcons.ArrowLeft, stringResource(R.string.designsystem_back), it) } }
     when (style) {
         AppStyle.Glass -> Box(modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 10.dp, vertical = 6.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).floatingSurface(RoundedCornerShape(30.dp)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -156,10 +158,12 @@ fun WorkGroup(
     val body: @Composable ColumnScope.() -> Unit = { if (expanded) content() else peek?.invoke(this) }
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
+    val spoken = stringResource(R.string.designsystem_with_state, summary,
+        stringResource(if (expanded || peek != null) R.string.designsystem_expanded else R.string.designsystem_collapsed))
     val header: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = onToggle)
-                .semantics { contentDescription = summary + if (expanded || peek != null) "，已展开" else "，已收起" }
+                .semantics { contentDescription = spoken }
                 .padding(horizontal = if (PersonaTheme.style == AppStyle.Brief) 0.dp else 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -212,13 +216,15 @@ fun PlanCard(
     val total = items.size
     val done = items.count { it.second == PlanItemState.Done }
     var open by rememberSaveable { mutableStateOf(true) }
+    val spoken = stringResource(R.string.designsystem_with_state, stringResource(R.string.designsystem_plan_spoken, step, total, current),
+        stringResource(if (open) R.string.designsystem_expanded else R.string.designsystem_collapsed))
     Column(
         modifier.fillMaxWidth().padding(horizontal = inset, vertical = 6.dp).clip(shape).background(palette.surface)
             .border(1.dp, palette.line, shape).animateContentSize(PersonaTheme.motion.size()),
     ) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(role = Role.Button) { open = !open }
-                .semantics { contentDescription = "计划，第 $step 步，共 $total 步，$current" + if (open) "，已展开" else "，已收起" }
+                .semantics { contentDescription = spoken }
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -232,8 +238,8 @@ fun PlanCard(
                 Modifier.clip(RoundedCornerShape(50)).border(1.dp, palette.line, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (total in 1..done) JIcon(PhIcons.Check, "全部完成", size = 12.dp, tint = palette.done.dot)
-                else Text("Step $step/$total", style = type.micro, color = palette.ink2)
+                if (total in 1..done) JIcon(PhIcons.Check, stringResource(R.string.designsystem_plan_all_done), size = 12.dp, tint = palette.done.dot)
+                else Text(stringResource(R.string.designsystem_plan_step, step, total), style = type.micro, color = palette.ink2)
             }
             Spacer(Modifier.width(6.dp))
             JIcon(if (open) PhIcons.CaretUp else PhIcons.CaretDown, null, size = 14.dp, tint = palette.ink3)
@@ -245,14 +251,17 @@ fun PlanCard(
         if (open) Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
             Spacer(Modifier.height(6.dp))
+            val doneLabel = stringResource(R.string.designsystem_plan_item_done)
+            val activeLabel = stringResource(R.string.designsystem_plan_item_active)
+            val pendingLabel = stringResource(R.string.designsystem_plan_item_pending)
             items.forEach { (text, state) ->
                 Row(Modifier.heightIn(min = 30.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
                         when (state) {
-                            PlanItemState.Done -> JIcon(PhIcons.CheckCircle, "已完成", size = 18.dp, tint = palette.ink3)
-                            PlanItemState.Active -> if (live) JSpinner(Modifier.size(15.dp).semantics { contentDescription = "进行中" }, stroke = 1.8.dp)
-                                else JIcon(PhIcons.CircleDashed, "进行中", size = 18.dp, tint = palette.ink)
-                            PlanItemState.Pending -> Box(Modifier.size(16.dp).border(1.5.dp, palette.ink2, CircleShape).semantics { contentDescription = "待办" })
+                            PlanItemState.Done -> JIcon(PhIcons.CheckCircle, doneLabel, size = 18.dp, tint = palette.ink3)
+                            PlanItemState.Active -> if (live) JSpinner(Modifier.size(15.dp).semantics { contentDescription = activeLabel }, stroke = 1.8.dp)
+                                else JIcon(PhIcons.CircleDashed, activeLabel, size = 18.dp, tint = palette.ink)
+                            PlanItemState.Pending -> Box(Modifier.size(16.dp).border(1.5.dp, palette.ink2, CircleShape).semantics { contentDescription = pendingLabel })
                         }
                     }
                     Spacer(Modifier.width(10.dp))
@@ -299,9 +308,9 @@ fun WorkStep(
     val mark: @Composable () -> Unit = {
         when (state) {
             WorkState.Running -> JSpinner(Modifier.size(14.dp), stroke = 1.8.dp)
-            WorkState.Failed -> JIcon(PhIcons.XCircle, "失败", size = 16.dp, tint = palette.danger.dot, selected = true)
-            WorkState.Waiting -> JIcon(PhIcons.Hand, "等你", size = 16.dp, tint = palette.needsYou.dot, selected = true)
-            WorkState.Unknown -> JIcon(PhIcons.Question, "没有结果记录", size = 16.dp, tint = palette.ink3)
+            WorkState.Failed -> JIcon(PhIcons.XCircle, stringResource(R.string.designsystem_work_failed), size = 16.dp, tint = palette.danger.dot, selected = true)
+            WorkState.Waiting -> JIcon(PhIcons.Hand, stringResource(R.string.designsystem_work_waiting), size = 16.dp, tint = palette.needsYou.dot, selected = true)
+            WorkState.Unknown -> JIcon(PhIcons.Question, stringResource(R.string.designsystem_work_unknown), size = 16.dp, tint = palette.ink3)
             WorkState.Done -> Unit
         }
     }
@@ -317,7 +326,7 @@ fun WorkStep(
                     detail?.let { Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                 }
                 diff(); Spacer(Modifier.width(6.dp)); mark()
-                if (state == WorkState.Done && added == 0 && removed == 0 && verb != null && verb.startsWith("运行")) JIcon(PhIcons.Check, null, size = 15.dp, tint = palette.done.dot)
+                if (state == WorkState.Done && added == 0 && removed == 0 && verb != null && verb.startsWith("运行")) JIcon(PhIcons.Check, null, size = 15.dp, tint = palette.done.dot) // i18n-ignore: matches the caller's verb for a command run
             }
         }
         AppStyle.Brief -> Row(modifier.fillMaxWidth().height(IntrinsicSize.Min).then(click)) {
@@ -336,7 +345,7 @@ fun WorkStep(
                 }
                 detail?.let {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (state == WorkState.Done && verb?.startsWith("运行") == true) { JIcon(PhIcons.Check, null, size = 13.dp, tint = palette.done.dot); Spacer(Modifier.width(4.dp)) }
+                        if (state == WorkState.Done && verb?.startsWith("运行") == true) { JIcon(PhIcons.Check, null, size = 13.dp, tint = palette.done.dot); Spacer(Modifier.width(4.dp)) } // i18n-ignore: matches the caller's verb for a command run
                         Text(it, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -447,9 +456,10 @@ fun SendButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Bool
     val shape = if (board) RoundedCornerShape(8.dp) else CircleShape
     val fill = when { kind == SendKind.Stop -> palette.danger.dot; enabled -> palette.action; else -> palette.surfaceStrong }
     val ink = when { kind == SendKind.Stop -> palette.danger.onDot; enabled -> palette.onAction; else -> palette.ink3 }
+    val spoken = stringResource(if (kind == SendKind.Stop) R.string.designsystem_send_stop else R.string.designsystem_send)
     Box(
         modifier.size(48.dp).clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = if (kind == SendKind.Stop) "停止" else "发送" },
+            .semantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(if (board) 40.dp else 38.dp).clip(shape).background(fill), contentAlignment = Alignment.Center) {
@@ -469,6 +479,7 @@ fun JumpToLatest(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier)
     val palette = PersonaTheme.palette
     val style = PersonaTheme.style
     val shape = if (style == AppStyle.Board) RoundedCornerShape(8.dp) else RoundedCornerShape(50)
+    val spoken = if (count > 0) pluralStringResource(R.plurals.designsystem_jump_latest_new, count, count) else stringResource(R.string.designsystem_jump_latest)
     Row(
         modifier.heightIn(min = 44.dp)
             .then(when (style) {
@@ -476,7 +487,7 @@ fun JumpToLatest(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier)
                 AppStyle.Brief -> Modifier.clip(shape).background(palette.action)
                 AppStyle.Board -> Modifier.clip(shape).background(palette.surface).border(1.dp, palette.line, shape)
             })
-            .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = if (count > 0) "回到最新，有 $count 条新消息" else "回到最新" }
+            .clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = spoken }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

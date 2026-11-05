@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -255,10 +256,11 @@ fun JTextField(
 
 @Composable
 fun JSearchField(query: String, onQueryChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+    val clear = stringResource(R.string.designsystem_search_clear)
     JTextField(
         query, onQueryChange, modifier, placeholder = placeholder, singleLine = true, leading = PhIcons.MagnifyingGlass,
         trailing = if (query.isEmpty()) null else ({
-            Box(Modifier.size(24.dp).clip(CircleShape).clickable(role = Role.Button) { onQueryChange("") }.semantics { contentDescription = "清空搜索" }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(24.dp).clip(CircleShape).clickable(role = Role.Button) { onQueryChange("") }.semantics { contentDescription = clear }, contentAlignment = Alignment.Center) {
                 JIcon(PhIcons.XCircle, null, size = 18.dp, tint = PersonaTheme.palette.ink3, selected = true)
             }
         }),
@@ -474,8 +476,9 @@ private fun JTagColored(text: String, modifier: Modifier, tone: StatusColors?) {
 @Composable
 fun JSpinner(modifier: Modifier = Modifier, color: Color = if (PersonaTheme.style == AppStyle.Brief) PersonaTheme.palette.ink else PersonaTheme.palette.accent, stroke: Dp = 2.2.dp) {
     val turning = !PersonaTheme.reduceMotion
+    val loading = stringResource(R.string.designsystem_loading)
     val angle = if (turning) rememberInfiniteTransition(label = "spin").animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "angle").value else 0f
-    Canvas(modifier.size(20.dp).clearAndSetSemantics { contentDescription = "加载中" }) {
+    Canvas(modifier.size(20.dp).clearAndSetSemantics { contentDescription = loading }) {
         val width = stroke.toPx()
         val inset = width / 2
         val arcSize = Size(size.width - width, size.height - width)

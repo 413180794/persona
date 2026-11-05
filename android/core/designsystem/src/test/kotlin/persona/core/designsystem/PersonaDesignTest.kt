@@ -15,7 +15,7 @@ class PersonaDesignTest {
     @Test fun mochiIsTheDefaultAndASavedVisorStays() {
         assertEquals(PersonaDesign.Mochi, PersonaDesign.Default)
         assertEquals(PersonaDesign.Visor, PersonaDesign.fromId("jarvis"))
-        assertEquals("团子", PersonaDesign.Default.title)
+        assertEquals(R.string.designsystem_face_mochi, PersonaDesign.Default.titleRes)
     }
 
     @Test fun mochiIsTracedInsideTheDisc() {

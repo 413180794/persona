@@ -1,5 +1,7 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import android.graphics.Paint
 import android.graphics.RectF
 import android.os.PowerManager
@@ -67,9 +69,12 @@ import kotlin.math.max
 import kotlin.math.sin
 
 /** What the persona's face shows (docs/persona.md「状态」); the wire values are persona.json's. */
-enum class PersonaState(val wire: String, val label: String) {
-    Idle("idle", "空闲"), Thinking("thinking", "思考中"), Working("working", "工作中"),
-    NeedsYou("needs_you", "等你处理"), Offline("offline", "离线");
+enum class PersonaState(val wire: String, @StringRes val labelRes: Int) {
+    Idle("idle", R.string.designsystem_persona_idle), Thinking("thinking", R.string.designsystem_persona_thinking),
+    Working("working", R.string.designsystem_persona_working), NeedsYou("needs_you", R.string.designsystem_persona_needs_you),
+    Offline("offline", R.string.designsystem_persona_offline);
+
+    val label: String @Composable get() = stringResource(labelRes)
 
     /** The states whose face moves every frame (idle only blinks now and then). */
     val moves: Boolean get() = this == Thinking || this == Working || this == NeedsYou
@@ -81,10 +86,13 @@ enum class PersonaState(val wire: String, val label: String) {
  * default before, id `jarvis`) and 汇流 are drawn in the theme's colour. The choice is only saved when one is tapped,
  * so a phone that never chose gets the default and one that chose 面罩 keeps it ([AppStyleStore.personaId]).
  */
-enum class PersonaDesign(val id: String, val title: String, val summary: String) {
-    Mochi("persona", "团子", "App 图标的配色"),
-    Visor("jarvis", "面罩", "颜色随主题色"),
-    Circuit("jarvis-circuit", "汇流", "走线汇进核心，颜色随主题色");
+enum class PersonaDesign(val id: String, @StringRes val titleRes: Int, @StringRes val summaryRes: Int) {
+    Mochi("persona", R.string.designsystem_face_mochi, R.string.designsystem_face_mochi_summary),
+    Visor("jarvis", R.string.designsystem_face_visor, R.string.designsystem_face_visor_summary),
+    Circuit("jarvis-circuit", R.string.designsystem_face_circuit, R.string.designsystem_face_circuit_summary);
+
+    val title: String @Composable get() = stringResource(titleRes)
+    val summary: String @Composable get() = stringResource(summaryRes)
 
     companion object {
         val Default = Mochi
@@ -483,10 +491,11 @@ private val RING_MIN = 1.5.dp
  */
 @Composable
 fun JPersonaButton(state: PersonaState, contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val stateText = stringResource(R.string.designsystem_persona_button_state, state.label)
     Box(
         modifier.size(48.dp).clip(CircleShape)
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription; stateDescription = "Persona，${state.label}" },
+            .semantics { this.contentDescription = contentDescription; stateDescription = stateText },
         contentAlignment = Alignment.Center,
     ) { PersonaFace(state, size = 40.dp) }
 }

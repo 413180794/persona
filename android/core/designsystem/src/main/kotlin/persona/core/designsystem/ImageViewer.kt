@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
@@ -91,7 +92,8 @@ import kotlin.math.abs
 @Immutable
 class ViewerImage(
     val key: String,
-    val description: String = "图片",
+    /** What TalkBack reads for the picture; empty reads 图片. */
+    val description: String = "",
     val width: Int? = null,
     val height: Int? = null,
     val load: suspend () -> ByteArray,
@@ -187,7 +189,6 @@ private val PullToClose = 120.dp
 private const val ZoomedAbove = 1.01f
 private const val DoubleTapScale = 2.5f
 private const val MaxScale = 6f
-private const val ActionFailed = "操作没有完成，请重试"
 
 @Composable
 private fun ViewerBody(
@@ -197,6 +198,7 @@ private fun ViewerBody(
     actions: List<ViewerAction>,
     modifier: Modifier,
 ) {
+    val actionFailed = stringResource(R.string.designsystem_viewer_action_failed)
     val palette = PersonaTheme.palette
     val motion = PersonaTheme.motion
     val reduce = PersonaTheme.reduceMotion
@@ -252,7 +254,7 @@ private fun ViewerBody(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                ActionFailed
+                actionFailed
             } finally {
                 running = null
             }
@@ -296,7 +298,7 @@ private fun ViewerBody(
                     Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Tokens.Space.m, vertical = Tokens.Space.s),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    JIconButton(PhIcons.X, "关闭", onDismiss, raised = true)
+                    JIconButton(PhIcons.X, stringResource(R.string.designsystem_close), onDismiss, raised = true)
                     Spacer(Modifier.weight(1f))
                     if (images.size > 1) Text(
                         "${page + 1} / ${images.size}",
@@ -413,10 +415,10 @@ private fun ViewerPage(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             JIcon(PhIcons.Image, null, size = 40.dp, tint = palette.ink3)
-            Text("图片加载失败", style = PersonaTheme.type.callout, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            JButton("重试", { attempt++ }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowClockwise)
+            Text(stringResource(R.string.designsystem_viewer_load_failed), style = PersonaTheme.type.callout, color = palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            JButton(stringResource(R.string.designsystem_retry), { attempt++ }, kind = JButtonKind.Secondary, size = JButtonSize.Medium, icon = PhIcons.ArrowClockwise)
         }
-        is ViewerPicture.Ready -> ZoomablePicture(picture.bitmap, image.description, pull, onZoomed, onTap, onPull, onPullEnd)
+        is ViewerPicture.Ready -> ZoomablePicture(picture.bitmap, image.description.ifEmpty { stringResource(R.string.designsystem_image) }, pull, onZoomed, onTap, onPull, onPullEnd)
     }
 }
 

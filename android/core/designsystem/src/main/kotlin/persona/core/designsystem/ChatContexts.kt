@@ -1,5 +1,6 @@
 package persona.core.designsystem
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,11 +66,12 @@ fun MessageContextGroup(
         modifier.fillMaxWidth().padding(vertical = Tokens.Space.xxs).animateContentSize(PersonaTheme.motion.size()),
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
     ) {
+        val spoken = stringResource(R.string.designsystem_with_state, summary, stringResource(if (open) R.string.designsystem_expanded else R.string.designsystem_collapsed))
         Row(
             Modifier.fillMaxWidth(0.86f).wrapContentWidth(if (alignEnd) Alignment.End else Alignment.Start)
                 .heightIn(min = 36.dp).clip(PersonaTheme.shapes.controlShape)
                 .clickable(role = Role.Button) { open = !open }
-                .semantics { contentDescription = summary + if (open) "，已展开" else "，已收起" }
+                .semantics { contentDescription = spoken }
                 .padding(horizontal = Tokens.Space.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -102,10 +104,11 @@ private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -
     val palette = PersonaTheme.palette
     val type = PersonaTheme.type
     var open by rememberSaveable(id) { mutableStateOf(false) }
+    val spoken = stringResource(R.string.designsystem_with_state, context.label, stringResource(if (open) R.string.designsystem_expanded else R.string.designsystem_collapsed))
     Column {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button) { open = !open }
-                .semantics { contentDescription = context.label + if (open) "，已展开" else "，已收起" }
+                .semantics { contentDescription = spoken }
                 .padding(horizontal = Tokens.Space.m),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -115,7 +118,7 @@ private fun ContextEntry(context: MessageContext, id: String, onOpen: (String) -
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (context.body.isEmpty()) {
                 Spacer(Modifier.width(Tokens.Space.s))
-                Text("空", style = type.micro, color = palette.ink3, maxLines = 1)
+                Text(stringResource(R.string.designsystem_context_empty), style = type.micro, color = palette.ink3, maxLines = 1)
             }
             Spacer(Modifier.width(Tokens.Space.xs))
             JIcon(if (open) PhIcons.CaretDown else PhIcons.CaretRight, null, size = 12.dp, tint = palette.ink3)
@@ -133,14 +136,14 @@ private fun ContextBody(context: MessageContext, onOpen: (String) -> Unit, modif
         modifier.fillMaxWidth().padding(start = Tokens.Space.m, end = Tokens.Space.m, bottom = Tokens.Space.s),
         verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
     ) {
-        if (context.body.isEmpty()) Text("没有内容", style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
+        if (context.body.isEmpty()) Text(stringResource(R.string.designsystem_context_no_content), style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink3, maxLines = 1)
         else Box(Modifier.fillMaxWidth().heightIn(max = ChatContextBodyMaxHeight).verticalScroll(rememberScrollState())) {
             SelectionContainer {
                 Text(context.body, style = type.caption.copy(fontWeight = FontWeight.Normal), color = palette.ink2)
             }
         }
         context.url?.let { url ->
-            JButton("打开", { onOpen(url) }, kind = JButtonKind.Quiet, size = JButtonSize.Small, icon = PhIcons.ArrowSquareOut)
+            JButton(stringResource(R.string.designsystem_open), { onOpen(url) }, kind = JButtonKind.Quiet, size = JButtonSize.Small, icon = PhIcons.ArrowSquareOut)
         }
     }
 }
