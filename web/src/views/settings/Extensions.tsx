@@ -15,6 +15,7 @@ import {
   type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSecret,
 } from "../../lib/extensions";
 import { Button, cx, Dialog, EASE, IconButton, Loading, Spinner, toast } from "../../ui/atoms";
+import { TriageRuleField } from "../../ui/TriageRuleField";
 import { Icon } from "../../ui/icons";
 import { MarketCatalog, MarketItem, Markets, UninstallDialog } from "./ExtensionMarket";
 import { ExtensionUI } from "./ExtensionView";
@@ -683,6 +684,8 @@ function FieldRow(props: FieldProps) {
 function Control({ field: f, path, draft, typed, onEdit, onType, onSaveNow, computers, nodes, id, invalid }: FieldProps & { id: string; invalid: boolean }) {
   const ring = invalid ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field";
   const v = valueAt(draft, path);
+
+  if (f.type === "string" && f.name === "triage_rules") return <TriageRuleField id={id} value={typeof v === "string" ? v : ""} placeholder={placeholder(f)} maxLength={f.max_length} invalid={invalid} onChange={(text) => onEdit(path, text || undefined)} />;
 
   if (f.type === "array" && f.items?.format === "machine") {
     return <MachineSwitches field={f} path={path} draft={draft} onSaveNow={onSaveNow} computers={computers} nodes={nodes?.field === f.name ? nodes.states : undefined} id={id} />;
