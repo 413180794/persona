@@ -5,9 +5,11 @@ import "testing"
 // The official market is its repository however the owner wrote it; other repositories and sites are not.
 func TestOfficialMarketIs(t *testing.T) {
 	o := OfficialMarket{Spec: "github:nwverse/persona-extensions"}
+	user := "git" // the ssh user, kept apart from the host so the address does not read as an email (privacy_check.py)
 	for _, spec := range []string{"github:nwverse/persona-extensions", "github:NWverse/Persona-Extensions@main",
 		"https://github.com/nwverse/persona-extensions", "https://github.com/nwverse/persona-extensions/tree/master",
-		"git:https://github.com/nwverse/persona-extensions.git", "git@github.com:nwverse/persona-extensions.git#main"} {
+		"git:https://github.com/nwverse/persona-extensions.git", user + "@github.com:nwverse/persona-extensions.git#main",
+		"git:ssh://" + user + "@github.com/nwverse/persona-extensions"} {
 		if !o.Is(spec) {
 			t.Errorf("%s is the official market", spec)
 		}

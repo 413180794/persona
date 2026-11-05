@@ -34,9 +34,17 @@ func (o OfficialMarket) Is(spec string) bool {
 		return strings.EqualFold(got.Owner, want.Owner) && strings.EqualFold(got.Repo, want.Repo)
 	}
 	if got.Kind == "git" {
-		u := strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(got.URL), "/"), ".git")
-		repo := strings.ToLower(want.Owner + "/" + want.Repo)
-		return u == "https://github.com/"+repo || u == "git@github.com:"+repo || u == "ssh://git@github.com/"+repo
+		// host/path of any of its forms: https://host/path, ssh://user@host/path, user@host:path.
+		u := strings.ToLower(got.URL)
+		if _, rest, ok := strings.Cut(u, "://"); ok {
+			u = rest
+		} else {
+			u = strings.Replace(u, ":", "/", 1)
+		}
+		if _, rest, ok := strings.Cut(u, "@"); ok {
+			u = rest
+		}
+		return strings.TrimSuffix(strings.TrimSuffix(u, "/"), ".git") == strings.ToLower("github.com/"+want.Owner+"/"+want.Repo)
 	}
 	return false
 }
