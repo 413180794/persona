@@ -35,7 +35,7 @@ type Service struct {
 	mu    sync.Mutex
 	accts map[string]*MailAccount // by ID, as loaded from disk
 	conns map[string]*conn        // by account ID
-	opMu  map[string]*sync.Mutex  // per-account IMAP serialization
+	opMu  map[string]accountLock  // per-account IMAP serialization (imap.go)
 
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -664,11 +664,16 @@ func (s *Service) withConn(ctx context.Context, a *MailAccount, fn func(*imapcli
 // slow mailbox) stops in time with it.
 func (s *Service) withConnAt(ctx context.Context, a *MailAccount, fn func(c *imapclient.Client, deadline time.Time) error) error {
 	// IMAP is stateful (SELECT), so a cached connection can only serve one
-	// command sequence at a time.
-	mu := s.accountMutex(a.ID)
-	mu.Lock()
-	defer mu.Unlock()
+	// command sequence at a time. The wait for the turn is the caller's ctx's:
+	// a caller that gave up leaves the queue (#2344).
+	mu := s.accountLock(a.ID)
+	if err := mu.acquire(ctx); err != nil {
+		return err
+	}
+	defer mu.release()
 
+	// The operation's own time starts once the account is free, on purpose: a
+	// slow mailbox ahead in the queue must not eat it.
 	deadline := time.Now().Add(networkTimeout)
 	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
 		deadline = d

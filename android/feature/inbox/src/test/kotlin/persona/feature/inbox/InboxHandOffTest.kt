@@ -78,6 +78,7 @@ class InboxHandOffTest {
         assertEquals("邮件", kindLabel(record("mail", mail = InboxMailRef("a1", direct = true))))
         assertEquals("邮件", kindLabel(record("mail")))
         assertEquals("群聊", kindLabel(record("group")))
-        assertEquals("", kindLabel(record("doc")))
+        // A document's notice is tagged as on the web and iOS (#2323): 「评论」 for a comment or reply, else 「@我」.
+        assertEquals("@我", kindLabel(record("doc")))
     }
 }

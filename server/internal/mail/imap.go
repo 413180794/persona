@@ -60,20 +60,44 @@ func (s *Service) pageFetchLimits() pageFetch {
 	return l
 }
 
-// accountMutex returns the mutex serializing IMAP use of one account. IMAP
-// connections are stateful (SELECT), so commands must not interleave.
-func (s *Service) accountMutex(id string) *sync.Mutex {
+// accountLock serializes IMAP use of one account: connections are stateful
+// (SELECT), so commands must not interleave. Unlike a sync.Mutex it is taken
+// with a ctx: a caller whose ctx ends while it waits leaves the queue with
+// ctx.Err() instead of taking its turn only to find out. Before (#2344) such
+// a caller held everyone up for nothing, and on its turn dropped the cached
+// connection on the way out, so the next live caller had to reconnect.
+type accountLock chan struct{}
+
+// acquire takes the lock, or returns ctx's error once ctx ends first. A ctx
+// that is already over never takes the lock, even a free one.
+func (l accountLock) acquire(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case l <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// release gives the lock back; the caller must hold it.
+func (l accountLock) release() { <-l }
+
+// accountLock returns the lock serializing IMAP use of one account.
+func (s *Service) accountLock(id string) accountLock {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.opMu == nil {
-		s.opMu = make(map[string]*sync.Mutex)
+		s.opMu = make(map[string]accountLock)
 	}
-	m, ok := s.opMu[id]
+	l, ok := s.opMu[id]
 	if !ok {
-		m = &sync.Mutex{}
-		s.opMu[id] = m
+		l = make(accountLock, 1)
+		s.opMu[id] = l
 	}
-	return m
+	return l
 }
 
 // Mailboxes lists the mailboxes of an account with their role and counters.

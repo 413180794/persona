@@ -59,6 +59,8 @@ fun MessageItem(
     onLongClick: (() -> Unit)? = null,
     selected: Boolean = false,
     avatar: Painter? = null,
+    /** In place of the initial when there is no [avatar]: what the item is (a Feishu document's type). */
+    avatarIcon: PhIcon? = null,
     /** A small mark after the title (the translate icon on a translated mail); none draws the title as always. */
     titleIcon: PhIcon? = null,
     titleIconLabel: String? = null,
@@ -73,7 +75,7 @@ fun MessageItem(
     val click = Modifier.selectedRow(selected).onSecondaryClick(onLongClick).combinedClickable(role = Role.Button, onClick = onClick, onLongClick = onLongClick)
     val body: @Composable ColumnScope.() -> Unit = {
         Row(verticalAlignment = Alignment.Top) {
-            JAvatar(group ?: sender, size = if (prominent) 42.dp else 38.dp, badge = badge, badgeColor = badgeColor, image = avatar)
+            JAvatar(group ?: sender, size = if (prominent) 42.dp else 38.dp, icon = avatarIcon, badge = badge, badgeColor = badgeColor, image = avatar)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

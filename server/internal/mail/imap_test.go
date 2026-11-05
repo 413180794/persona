@@ -2,9 +2,11 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"mime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -693,6 +695,74 @@ func TestReconnectAfterServerRestart(t *testing.T) {
 
 	if _, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test"}); err != nil {
 		t.Fatalf("list after close: %v", err)
+	}
+}
+
+// A caller waiting for an account's turn waits with its ctx: once the ctx ends it leaves the queue with ctx.Err(),
+// does not run, and does not touch the cached connection, which the next live caller reuses. Before (#2344) it waited
+// for its turn regardless of the ctx, and on its turn dropped the connection on the way out.
+func TestWaitForAccountTurnEndsWithTheContext(t *testing.T) {
+	srv := newTestIMAP(t)
+	s := newServiceWithAccount(t, srv)
+	ctx := context.Background()
+	if _, err := s.ListMessages(ctx, ListOptions{AccountID: "acc_test"}); err != nil {
+		t.Fatalf("first list: %v", err)
+	}
+	s.mu.Lock()
+	a, before := s.accts["acc_test"], s.conns["acc_test"]
+	s.mu.Unlock()
+	if before == nil {
+		t.Fatal("no cached connection after a list")
+	}
+
+	// One caller holds the account's turn for a while.
+	held, release := make(chan struct{}), make(chan struct{})
+	holder := make(chan error, 1)
+	go func() {
+		holder <- s.withConn(ctx, a, func(*imapclient.Client) error {
+			close(held)
+			<-release
+			return nil
+		})
+	}()
+	<-held
+	time.AfterFunc(1500*time.Millisecond, func() { close(release) })
+
+	// A second caller with a short ctx gives up on time: it does not run and leaves the connection alone.
+	short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	var ran atomic.Bool
+	start := time.Now()
+	err := s.withConn(short, a, func(*imapclient.Client) error { ran.Store(true); return nil })
+	waited := time.Since(start)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("waiting caller: %v, want context.DeadlineExceeded", err)
+	}
+	if waited > time.Second {
+		t.Fatalf("the caller waited %v for its turn, want about its own 100ms", waited.Round(time.Millisecond))
+	}
+	if ran.Load() {
+		t.Fatal("the caller that gave up ran")
+	}
+	s.mu.Lock()
+	after := s.conns["acc_test"]
+	s.mu.Unlock()
+	if after != before {
+		t.Fatal("the caller that gave up touched the cached connection")
+	}
+
+	// The holder finishes; the next live caller gets its turn on the same connection.
+	if err := <-holder; err != nil {
+		t.Fatalf("holder: %v", err)
+	}
+	if err := s.withConn(ctx, a, func(*imapclient.Client) error { return nil }); err != nil {
+		t.Fatalf("after the holder: %v", err)
+	}
+	s.mu.Lock()
+	after = s.conns["acc_test"]
+	s.mu.Unlock()
+	if after != before {
+		t.Fatal("the connection was not reused after the wait")
 	}
 }
 

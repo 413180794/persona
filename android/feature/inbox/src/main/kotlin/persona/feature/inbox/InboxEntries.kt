@@ -43,6 +43,12 @@ fun EntryProviderScope<NavKey>.inboxEntries(
             LarkScreen(source, route, navigator)
         }
     }
+    entry<InboxItemDetailRoute> { route ->
+        val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
+        CompositionLocalProvider(LocalInboxNavigator provides navigator) {
+            LarkLinkHost(source) { InboxItemDetailScreen(source, route, navigator) }
+        }
+    }
     entry<LarkMomentRoute> { route ->
         val source = repository ?: LocalInboxRepository.current ?: injectedInboxRepository()
         CompositionLocalProvider(LocalInboxNavigator provides navigator) {
@@ -56,5 +62,9 @@ data class MailRoute(val itemId: String) : NavKey
 
 @Serializable @SerialName("jarvis.feature.inbox.LarkMomentRoute")
 data class LarkMomentRoute(val postId: String, val itemId: String? = null) : NavKey
+
+/** The own page of an item that is neither a chat, a 公司圈 post nor a mail: a Feishu document's notice, or an unknown item. */
+@Serializable @SerialName("persona.feature.inbox.InboxItemDetailRoute")
+data class InboxItemDetailRoute(val itemId: String) : NavKey
 
 val LocalMailTransport = staticCompositionLocalOf<persona.core.contracts.api.MailTransport?> { null }

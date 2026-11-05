@@ -453,6 +453,16 @@ ADB="${ANDROID_HOME}/platform-tools/adb"
 - **标题**：从在线变成「连接中…」「更新中…」，要持续 1 秒才显示（`rememberSettledConnection`）；证书不符等其他状态立即显示。
 - **单测**：`InboxRepositoryTest.hubEventBurstsOverAShownListRefreshOnceWithoutLoading`、`emptyListShowsLoadingWhileRefreshing`，`InboxFeatureTest.backgroundRefreshToAnEmptyListEmptiesTheExperience`，`InboxBackgroundRefreshTest`。慢 hub 用 mock 的 `MOCK_INBOX_DELAY_MS`（[testing.md](testing.md)）。
 
+## 收件箱：云文档事项（#2323）
+
+飞书文档、表格、多维表格里 @我 / 评论我的通知（`kind: "doc"`，带 `doc` 块，没有 `lark.feed_id`，规格见 [inbox.md](inbox.md)「云文档」）以前落到邮件页，显示「邮件加载失败」。
+
+- **数据**：`RealInboxRepository` 用 `inboxDocRef`（`feature/inbox` 的 `InboxDocDetail.kt`）把 `doc` 读成 `InboxRecord.doc`：`url`（没有时用 `link`）、`type`、`notice`、`reply.label`、`error`、`rows`（标题、表名、字段、状态列的名字和值）；别的字段忽略。本地缓存（`CachedInboxRecord`）也存 `source` 和 `doc`，冷启动时点开照样是文档。
+- **分派**（`inboxItemPage`）：公司圈帖子 → 飞书会话（有 `feed_id`）→ 邮件（`mail` 块、`source: "mail"` 或 `kind: "mail"`，且不带 `doc`）→ 其余都进 `InboxItemDetailRoute`。连接器的条目和不认识的形状不再进邮件页。
+- **事项页**（`InboxItemDetailScreen`）：复用扩展事项页的外壳（`InboxItemExtensionScreen`：分拣档、来源标签、AI 摘要、AI 草拟 / 交给 AI、已处理），正文是「表格 · 李雷提及了你」、「打开表格」（经 `LarkLinkHost` 的 `LocalLarkLinkOpener`：hub 有 `lark` 时进原生文档阅读器，否则网页浮层）、回复会发到哪、读不到文档的原因、「提到你的行」（每行一张卡：字段 + 状态列的标签）。不认识的条目只显示预览。状态列在 Android 上只读，改状态还在网页 / iOS。
+- **列表**：文档事项的头像是文档类型的图标（`MessageItem` 的 `avatarIcon`：表格 `SquaresFour`、多维表格 `Kanban`、其他 `FileText`），类型标签「@我」/「评论」，没有摘要时第二行是「表格 · 李雷提及了你」。
+- **测试**：`InboxItemPagesTest.aDocumentsNoticeOpensItsOwnPageAndOnlyMailOpensTheMailPage`（解析、文档 / 飞书会话 / 公司圈 / 邮件 / 只有 kind 的邮件 / 连接器和不认识的条目的分派、缓存、选中、标签）；截图 `./gradlew :feature:inbox:testDebugUnitTest --tests '*InboxDocShotsTest*'`，三种风格 × 深浅色，并检查「打开表格」交给链接打开器，PNG 在 `build/inbox-doc-shots/`。
+
 ## 飞书经扩展：按 hub 的 features 显示（#1530）
 
 经 lark-connector 接飞书由私有扩展提供，hub 只在装了扩展时有 `/api/v1/lark/…`，扩展往 hello 的 features 里加 `lark`、`lark_moments`（还有 `lark_attachments`、`lark_native_encryption`）。
@@ -461,7 +471,7 @@ Android 用一个判断（`core/contracts` 的 `LarkFeatures.of(features)`，和
 
 - 设置 › 连接器的「飞书」一行（它的页读 `/api/v1/lark/status`）只在 `chats` 时出现，也只在这时去读状态（`connectorRows`）。
 - 对话里的链接（`ChatLinkHost`）和收件箱 / 飞书会话里的链接（`LarkLinkHost`）经 `larkNativeLink(url, lark)` 决定：飞书文档要 `chats` 才进原生阅读器，公司圈帖子要 `moments` 才进帖子浮层、会话里才画成公司圈卡片；没有时照普通网页打开。
-- 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 公司圈帖子页。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
+- 收件箱里带 `lark` / `doc` / `moment` 的事项只有扩展给，照常画，点开照旧进飞书会话 / 云文档事项页 / 公司圈帖子页（云文档见「收件箱：云文档事项」）。Android 没有「消息」页和后台拉飞书会话，知识库也不显示存档的公司圈帖子，这几处 iOS / 网页有的开关这里没有对应。
 - 「removed」一律叫「公司圈」。单测 `LarkFeaturesTest`（`core:contracts`）、`LarkNativeLinkTest`（`feature:inbox`）、`SettingsConnectorsTest.feishuRowOnlyWhileTheHubHasFeishu`；截图用 `MOCK_NO_LARK=1` 的假 hub 对比设置页。
 
 ## 常驻通知和桌面入口（2026-11-02 从主线旧 App 移植）

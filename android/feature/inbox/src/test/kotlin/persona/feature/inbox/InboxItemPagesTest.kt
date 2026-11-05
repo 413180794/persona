@@ -107,4 +107,49 @@ class InboxItemPagesTest {
         assertFalse(isInboxItemSelected(shown, "lark:F1:1200", "F1"))
         assertFalse(isInboxItemSelected(shown, "mail-1", null))
     }
+
+    // #2323: a Feishu document's notice (lark-connector's `doc` block, no chat behind it) opened the mail page, which failed
+    // with 「邮件加载失败」. Only a mail opens the mail page; a document, and an item of a shape the app does not know,
+    // open the item's detail page.
+    @Test fun aDocumentsNoticeOpensItsOwnPageAndOnlyMailOpensTheMailPage() {
+        val wire = kotlinx.serialization.json.Json.parseToJsonElement("""{"url":"https://example.larkoffice.com/wiki/W1",
+            "link":"https://example.larkoffice.com/wiki/W1","type":"sheet","notice":"mention","notice_id":"n1","read_at":0,
+            "reply":{"kind":"cell","label":"评论 @你的那个单元格"},"future":{"x":1},
+            "rows":[{"ref":"r1","table":"任务","title":"压测报告","fields":[{"name":"跟进人","value":"@示例同事"}],
+              "status":[{"field":"f1","name":"状态","value":"进行中","options":[{"name":"进行中"},{"name":"已完成"}]}]}]}""")
+        val ref = requireNotNull(inboxDocRef(wire as kotlinx.serialization.json.JsonObject))
+        assertEquals("https://example.larkoffice.com/wiki/W1", ref.url)
+        assertEquals("sheet", ref.type)
+        assertEquals("评论 @你的那个单元格", ref.reply)
+        assertEquals(listOf(InboxDocRow("压测报告", "任务", listOf(InboxDocField("跟进人", "@示例同事")), listOf(InboxDocField("状态", "进行中")))), ref.rows)
+        assertTrue(isLarkDocumentUrl(ref.url))
+        // Nothing to open: no block.
+        assertNull(inboxDocRef(kotlinx.serialization.json.Json.parseToJsonElement("""{"type":"docx"}""") as kotlinx.serialization.json.JsonObject))
+
+        val doc = InboxRecord(InboxItem("doc:T1:1730700000000", kind = "doc", title = "Q4 计划"), source = "lark", doc = ref)
+        val none = InboxItemPages()
+        assertEquals(InboxItemDetailRoute("doc:T1:1730700000000"), inboxItemPage(doc))
+        assertEquals(InboxItemDetailRoute("doc:T1:1730700000000"), inboxOpenPage(doc, none))
+        assertEquals(InboxItemDetailRoute("doc:T1:1730700000000"), inboxSourcePage("doc:T1:1730700000000", listOf(doc)))
+        // Chats, posts and mail open as before; a mail known only by its kind (a record cached without its source) too.
+        assertEquals(LarkRoute("F1", "lark:F1:1051", 1051), inboxItemPage(lark))
+        assertEquals(LarkMomentRoute("post-1", "moment-1"), inboxItemPage(moment))
+        assertEquals(MailRoute("mail-1"), inboxItemPage(mail))
+        assertEquals(MailRoute("mail-2"), inboxItemPage(InboxRecord(InboxItem("mail-2", kind = "mail"))))
+        // A shape the app does not know (a connector's thread, nothing to say what it is) is not a mail.
+        assertEquals(InboxItemDetailRoute("github:1"), inboxItemPage(InboxRecord(InboxItem("github:1", kind = "unknown"), source = "github")))
+        assertEquals(InboxItemDetailRoute("x"), inboxItemPage(InboxRecord(InboxItem("x"))))
+        // The list marks it, its row says what kind of notice, and a cached copy still opens as a document.
+        assertTrue(isInboxItemSelected(InboxItemDetailRoute("doc:T1:1730700000000"), "doc:T1:1730700000000", null))
+        assertEquals("@我", kindLabel(doc))
+        assertEquals("评论", kindLabel(doc.copy(doc = ref.copy(notice = "comment"))))
+        val cached = doc.cached().record()
+        assertEquals(ref, cached.doc)
+        assertEquals(InboxItemDetailRoute("doc:T1:1730700000000"), inboxItemPage(cached))
+        // An extension's page that was opened before the list was known gives way for a document too.
+        val pages = InboxItemPages(listOf(event))
+        val key = InboxItemDetailRoute("doc:T1:1730700000000")
+        assertEquals(listOf(key to InboxItemUiRoute("doc:T1:1730700000000", "lark-connector", "event", "Q4 计划")),
+            pages.swaps(listOf(key), setOf(key), listOf(doc)))
+    }
 }

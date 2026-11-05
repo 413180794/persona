@@ -880,6 +880,7 @@ class RealInboxRepository(
                     target to persona.core.contracts.api.ItemTranslation(t.string("subject"), t.string("preview"))
                 }
             }?.toMap().orEmpty(),
+            doc = persona.feature.inbox.inboxDocRef(data.obj("doc")),
         )
     }
 

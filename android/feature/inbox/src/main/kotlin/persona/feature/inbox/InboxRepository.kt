@@ -124,8 +124,12 @@ data class InboxRecord(
     val moment: InboxMomentRef? = null,
     /** The hub's translations of a mail item, by target language, done as it came in (设置 › 翻译). */
     val translations: Map<String, persona.core.contracts.api.ItemTranslation> = emptyMap(),
+    /** A Feishu document's notice (`doc`): no chat behind it, its own page (InboxDocDetail.kt). */
+    val doc: InboxDocRef? = null,
 ) {
     val isLark: Boolean get() = feedId != null || source == "lark"
+    /** A mail item: only these open the mail page; the kind says it too in records cached without their source. */
+    val isMail: Boolean get() = mail != null || source == "mail" || (source.isEmpty() && item.kind == "mail")
 }
 
 /** A 公司圈 post reference on an inbox item. */

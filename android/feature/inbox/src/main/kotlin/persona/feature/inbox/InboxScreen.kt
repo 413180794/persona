@@ -289,12 +289,13 @@ private fun InboxItemRow(record: InboxRecord, repository: InboxRepository, navig
         MessageItem(sender = item.sender.orEmpty().ifBlank { item.title }, title = translated?.subject?.ifBlank { null } ?: item.title,
             titleIcon = translated?.let { PhIcons.Translate }, titleIconLabel = translated?.let { "已翻译" },
             selected = isInboxItemSelected(LocalDetailKey.current, item.id, record.feedId),
-            position = position, avatar = rememberLarkAvatar(record.avatar, onlineSince),
+            position = position, avatar = rememberLarkAvatar(record.avatar.takeIf { record.doc == null }, onlineSince), avatarIcon = record.doc?.let { docIcon(it.type) },
             source = if (record.feedId != null || record.source == "lark") MessageSource.Lark else MessageSource.Mail,
             sourceLabel = if (record.feedId != null || record.source == "lark") "飞书" else "邮件",
             group = item.title.takeIf { record.feedId != null && item.kind in setOf("group", "mention", "bot") },
             time = item.updatedAt?.let(::displayTime),
-            preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null } ?: item.preview,
+            preview = item.summary?.takeIf { it.isNotBlank() } ?: translated?.preview?.ifBlank { null }
+                ?: record.doc?.let { listOf(docTypeName(it.type), item.preview).filter { s -> s.isNotBlank() }.joinToString(" · ") } ?: item.preview,
             status = when { done -> null; record.agent?.state in setOf("running", "queued") -> Status.Working; item.triage == InboxTier.Action -> Status.NeedsYou; else -> null },
             tags = listOfNotNull(kindLabel(record).takeIf { it.isNotBlank() }, record.sourceLabel.takeIf { it.isNotBlank() && it !in setOf("飞书", "邮件") },
                 "${record.count} 条消息".takeIf { record.count > 0 }),
@@ -332,6 +333,7 @@ internal fun kindLabel(record: InboxRecord): String = when {
     record.item.kind == "mention" && record.read -> "群聊"
     record.item.kind == "mention" && record.atAll -> "@所有人"
     record.item.kind == "mail" && record.mail?.direct == false -> "抄送"
+    record.doc != null || record.item.kind == "doc" -> docKindLabel(record.doc)
     record.moment != null || record.item.kind == "moment" ->
         if (record.moment?.notice?.startsWith("atIn") == true) "@我" else "公司圈"
     else -> kindLabel(record.item.kind)
