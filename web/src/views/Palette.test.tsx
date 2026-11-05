@@ -9,6 +9,9 @@ import { ShortcutSettings } from "./settings/ShortcutSettings";
 // the modules read the colour scheme and this browser's settings when they load
 vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
+  // The platform is read once and kept (lib/shortcuts.ts): set it before anything renders, or on a Mac (Node has a
+  // navigator there, platform MacIntel) the first render keeps ⌘ for the whole file.
+  Object.defineProperty(globalThis, "navigator", { value: { platform: "Linux x86_64" }, configurable: true, writable: true });
   g.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const kept = new Map<string, string>();
   g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
