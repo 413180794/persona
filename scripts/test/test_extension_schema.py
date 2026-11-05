@@ -125,6 +125,11 @@ class ExtensionSchemaTests(unittest.TestCase):
         r = subprocess.run([sys.executable, str(GENERATOR), "--check"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_open_object_codegen_is_generic(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts/test/test_extension_codegen.py")],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_examples_hold_to_the_schema(self):
         examples = sorted((SCHEMA_DIR / "examples").glob("*.json"))
         self.assertGreater(len(examples), 10)

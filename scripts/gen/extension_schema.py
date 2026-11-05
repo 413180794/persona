@@ -73,6 +73,7 @@ class Def:
     tag: str = ""  # a union variant's discriminator value
     since: int = 0  # x-since of a union variant
     union: str = ""  # the union a variant belongs to
+    extra: bool = False  # explicit additionalProperties: retain extra keys as opaque JSON
 
 
 def is_scalar(s: dict) -> bool:
@@ -151,7 +152,12 @@ def load() -> dict[str, Def]:
             for fname, fs in s.get("properties", {}).items():
                 fields.append(Field(fname, typeof(fs, f"{name}.{fname}"), fname in req, fs.get("description", ""),
                                     bool(fs.get("x-go-pointer"))))
-            defs[name] = Def(name, "struct", doc, fields=fields, since=s.get("x-since", 0))
+            extra = s.get("additionalProperties")
+            keep_extra = extra is True or isinstance(extra, dict)
+            if keep_extra and any(go_field(f.name) == "AdditionalProperties" or lower_camel(f.name) == "additionalProperties"
+                                  for f in fields):
+                raise SchemaError(f"{name}: additionalProperties is reserved for the extra-key map")
+            defs[name] = Def(name, "struct", doc, fields=fields, since=s.get("x-since", 0), extra=keep_extra)
         else:
             raise SchemaError(f"{name}: not a struct, string enum, discriminated union or x-untagged")
 
@@ -255,6 +261,13 @@ def comment(prefix: str, text: str, width: int = 118) -> list[str]:
     return lines
 
 
+def reserved_keys(defs: dict[str, Def], d: Def) -> list[str]:
+    keys = [f.name for f in d.fields]
+    if d.union:
+        keys.append(defs[d.union].discriminator)
+    return keys
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Go: one package, no dependencies. A union is one flat struct (its variants' fields, all optional) with the
 # discriminator: what the hub has always decoded views into.
@@ -319,7 +332,32 @@ def gen_go(defs: dict[str, Def]) -> str:
             out.append(f"type {d.name} struct {{")
             for f in d.fields:
                 out += field_line(f)
+            if d.extra:
+                out += ["\t// Extra keys stay at this object's level on the wire; they cannot replace declared fields.",
+                        '\tAdditionalProperties map[string]json.RawMessage `json:"-"`']
             out += ["}", ""]
+            if d.extra:
+                keys = ", ".join(json.dumps(k) for k in reserved_keys(defs, d))
+                out += [f"func (v *{d.name}) UnmarshalJSON(data []byte) error {{",
+                        "\tvar extra map[string]json.RawMessage",
+                        "\tif err := json.Unmarshal(data, &extra); err != nil { return err }",
+                        "\tdeclared := map[string]json.RawMessage{}",
+                        f"\tfor _, key := range []string{{{keys}}} {{",
+                        "\t\tif value, ok := extra[key]; ok { declared[key] = value; delete(extra, key) }", "\t}",
+                        "\tdata, err := json.Marshal(declared)", "\tif err != nil { return err }",
+                        f"\ttype known {d.name}", "\tvar fields known",
+                        "\tif err := json.Unmarshal(data, &fields); err != nil { return err }",
+                        "\tfields.AdditionalProperties = extra", f"\t*v = {d.name}(fields)",
+                        "\treturn nil", "}", "",
+                        f"func (v {d.name}) MarshalJSON() ([]byte, error) {{",
+                        f"\ttype known {d.name}", "\tdata, err := json.Marshal(known(v))",
+                        "\tif err != nil { return nil, err }",
+                        "\tvar fields map[string]json.RawMessage",
+                        "\tif err := json.Unmarshal(data, &fields); err != nil { return nil, err }",
+                        "\tfor key, value := range v.AdditionalProperties {"]
+                if keys:
+                    out += ["\t\tswitch key {", f"\t\tcase {keys}:", "\t\t\tcontinue", "\t\t}"]
+                out += ["\t\tfields[key] = value", "\t}", "\treturn json.Marshal(fields)", "}", ""]
         elif d.kind == "union":
             disc = d.discriminator
             out += comment("// ", named(d.name, d.doc) + f" One struct for every variant: {disc} says which fields "
@@ -401,6 +439,9 @@ def gen_ts(defs: dict[str, Def]) -> str:
             if d.union:
                 out.append(f"  {defs[d.union].discriminator}: {json.dumps(d.tag)};")
             out += fields(d.fields)
+            if d.extra:
+                out += ["  /** Extra keys are opaque JSON; declared properties keep their own types. */",
+                        "  [key: string]: unknown;"]
             out += ["}", ""]
         elif d.kind == "union":
             out += doc(d.doc)
@@ -437,6 +478,15 @@ def swift_ident(s: str) -> str:
 
 def gen_swift(defs: dict[str, Def]) -> str:
     out = [f"// {HEADER}", "// The extension protocol's and views' types (schema/extension/).", "", "import Foundation", ""]
+
+    if any(d.extra and d.fields for d in defs.values()):
+        out += ["// Open objects keep dictionary keys verbatim, independent of the caller's key-conversion strategy.",
+                "private nonisolated enum ExtensionWireJSON {",
+                "    static func decode<T: Decodable>(_ type: T.Type, from value: JSONValue?) -> T? {",
+                "        guard let value else { return nil }",
+                "        return try? JSONDecoder().decode(type, from: JSONEncoder().encode(value))", "    }", "",
+                "    static func encode<T: Encodable>(_ value: T) throws -> JSONValue {",
+                "        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))", "    }", "}", ""]
 
     def stype(t: TypeRef) -> str:
         k = t.kind
@@ -488,29 +538,67 @@ def gen_swift(defs: dict[str, Def]) -> str:
             lines += comment("    /// ", f.doc)
             typ = stype(f.type) + ("" if f.required else "?")
             lines.append(f"    var {swift_ident(lower_camel(f.name))}: {typ}")
+        if d.extra:
+            lines += ["    /// Extra keys stay at this object's level on the wire; declared fields always win.",
+                      "    var additionalProperties: [String: JSONValue]"]
         if d.fields:
             lines.append("")
             params = ", ".join(f"{swift_ident(lower_camel(f.name))}: {stype(f.type)}"
                                + (f" = {zero(f.type)}" if f.required else "? = nil") for f in d.fields)
+            if d.extra:
+                params += ", additionalProperties: [String: JSONValue] = [:]"
             lines.append(f"    init({params}) {{")
             for f in d.fields:
                 n = lower_camel(f.name)
                 lines.append(f"        self.{n} = {swift_ident(n)}")
+            if d.extra:
+                lines.append("        self.additionalProperties = additionalProperties")
             lines += ["    }", "", "    enum CodingKeys: String, CodingKey {"]
             for f in d.fields:
                 n = lower_camel(f.name)
                 lines.append(f"        case {swift_ident(n)}" + (f' = "{f.name}"' if n != f.name else ""))
-            lines += ["    }", "", "    init(from decoder: Decoder) throws {",
-                      "        let c = try decoder.container(keyedBy: CodingKeys.self)"]
+            lines += ["    }", "", "    init(from decoder: Decoder) throws {"]
+            if d.extra:
+                lines.append("        let raw = try decoder.singleValueContainer().decode([String: JSONValue].self)")
+            else:
+                lines.append("        let c = try decoder.container(keyedBy: CodingKeys.self)")
             for f in d.fields:
                 n = lower_camel(f.name)
                 key = swift_ident(n)
-                if f.required:
+                if d.extra:
+                    value = f"ExtensionWireJSON.decode({stype(f.type)}.self, from: raw[{json.dumps(f.name)}])"
+                    lines.append(f"        self.{n} = {value}" + (f" ?? {zero(f.type)}" if f.required else ""))
+                elif f.required:
                     lines.append(f"        self.{n} = (try? c.decodeIfPresent({stype(f.type)}.self, forKey: .{key})) "
                                  f"?? {zero(f.type)}")
                 else:
                     lines.append(f"        self.{n} = try? c.decodeIfPresent({stype(f.type)}.self, forKey: .{key})")
+            if d.extra:
+                keys = ", ".join(json.dumps(k) for k in reserved_keys(defs, d))
+                lines += [f"        let known: Set<String> = [{keys}]",
+                          "        additionalProperties = raw.filter { !known.contains($0.key) }"]
             lines.append("    }")
+            if d.extra:
+                lines += ["", "    func encode(to encoder: Encoder) throws {",
+                          f"        let known: Set<String> = [{keys}]",
+                          "        var fields = additionalProperties.filter { !known.contains($0.key) }"]
+                for f in d.fields:
+                    n = swift_ident(lower_camel(f.name))
+                    key = json.dumps(f.name)
+                    if f.required:
+                        lines.append(f"        fields[{key}] = try ExtensionWireJSON.encode({n})")
+                    else:
+                        lines.append(f"        if let value = {n} {{ fields[{key}] = try ExtensionWireJSON.encode(value) }}")
+                lines += ["        var container = encoder.singleValueContainer()",
+                          "        try container.encode(fields)", "    }"]
+        elif d.extra:
+            lines += ["", "    init(additionalProperties: [String: JSONValue] = [:]) {",
+                      "        self.additionalProperties = additionalProperties", "    }", "",
+                      "    init(from decoder: Decoder) throws {",
+                      "        additionalProperties = try decoder.singleValueContainer().decode([String: JSONValue].self)", "    }", "",
+                      "    func encode(to encoder: Encoder) throws {",
+                      "        var container = encoder.singleValueContainer()",
+                      "        try container.encode(additionalProperties)", "    }"]
         else:
             lines += ["    init() {}", "", "    init(from decoder: Decoder) throws {}", "",
                       "    func encode(to encoder: Encoder) throws {}"]
@@ -663,7 +751,7 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
         elif d.kind == "struct":
             name = swift_name(d.name)
             out += kdoc(d.doc)
-            out.append("@Serializable")
+            out.append(f"@Serializable(with = {name}Serializer::class)" if d.extra else "@Serializable")
             params = []
             if d.union:
                 disc = defs[d.union].discriminator
@@ -678,13 +766,52 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
                 else:
                     params.append(f"    {ser}val {kt_ident(n)}: {typ}? = null,")
             suffix = f" : {swift_name(d.union)}" if d.union else ""
-            if params:
+            if params or d.extra:
                 out.append(f"data class {name}(")
                 out += params
+                if d.extra:
+                    out += ["    /** Extra keys stay at this object's level on the wire; declared fields always win. */",
+                            "    val additionalProperties: Map<String, JsonElement> = emptyMap(),"]
                 out.append(f"){suffix}")
             else:
                 out.append(f"class {name}{suffix}")
             out.append("")
+            if d.extra:
+                # A separate, generated class lets kotlinx decode the known fields without recursively calling this
+                # object's custom serializer or leaking the extra-key map into a nested wire field.
+                known_name = name + "Known"
+                keys = ", ".join(json.dumps(k) for k in reserved_keys(defs, d))
+                out += ["@Serializable"]
+                if params:
+                    out += [f"private data class {known_name}("]
+                    out += [p.replace("override val ", "val ") for p in params]
+                    out += [")", ""]
+                else:
+                    out += [f"private class {known_name}", ""]
+                out += [f"object {name}Serializer : KSerializer<{name}> {{",
+                        f"    private val known = {known_name}.serializer()",
+                        f"    private val keys = setOf<String>({keys})",
+                        "    override val descriptor: SerialDescriptor = known.descriptor", "",
+                        f"    override fun deserialize(decoder: Decoder): {name} {{",
+                        f"        val input = decoder as? JsonDecoder ?: throw SerializationException(\"{name} needs JSON\")",
+                        "        val obj = input.decodeJsonElement() as? JsonObject",
+                        f"            ?: throw SerializationException(\"{name} needs an object\")",
+                        "        val fields = input.json.decodeFromJsonElement(known, JsonObject(obj.filterKeys { it in keys }))",
+                        f"        return {name}("]
+                member_names = [kt_ident(lower_camel(f.name)) for f in d.fields]
+                if d.union:
+                    member_names.insert(0, kt_ident(lower_camel(defs[d.union].discriminator)))
+                for n in member_names:
+                    out.append(f"            {n} = fields.{n},")
+                out += ["            additionalProperties = obj.filterKeys { it !in keys },", "        )", "    }", "",
+                        f"    override fun serialize(encoder: Encoder, value: {name}) {{",
+                        f"        val output = encoder as? JsonEncoder ?: throw SerializationException(\"{name} needs JSON\")",
+                        f"        val fields = {known_name}("]
+                for n in member_names:
+                    out.append(f"            {n} = value.{n},")
+                out += ["        )", "        val obj = output.json.encodeToJsonElement(known, fields) as JsonObject",
+                        "        output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))",
+                        "    }", "}", ""]
         elif d.kind == "union":
             name, disc = swift_name(d.name), d.discriminator
             dk = kt_ident(lower_camel(disc))

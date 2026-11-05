@@ -49,7 +49,7 @@ hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initia
 
 - 每个 schema 文件只有 `$defs`（清单的根另有一个 `$ref` 指向 `Manifest`，给校验用）；**定义名全局唯一**，跨文件引用写 `<文件>.json#/$defs/<名字>`。
 - 定义是下面之一：
-  - **结构体**：`"type": "object"` + `properties` + `required`。`additionalProperties: false` 只影响校验（清单是严格读的）；生成的类型只有声明了的字段。
+  - **结构体**：`"type": "object"` + `properties` + `required`。已知字段保持强类型；明确写了 `additionalProperties: true` 或子 schema 的对象另保留额外键（见下面「自定义贡献」），未写或写了 `false` 的保持原来的生成方式。
   - **字符串枚举**：`"type": "string"` + `enum`。各语言里字段仍是字符串（不认识的值能读进来），另给常量和列表。
   - **具名标量**：`"type": "string"`（或 integer / number / boolean）不带 `enum`，比如 `ID`、`Host`：引用它的地方直接是那个标量，`pattern` 等只用来校验。
   - **按字段区分的联合**：`oneOf` 全是 `$ref`，加 `"x-discriminator": "type"`；每个变体是结构体，必有这个字段且是 `const` 字符串，各不相同。
@@ -62,6 +62,24 @@ hub 查扩展画的 View（`extension.CheckView`）、一致性测试查 `initia
 - 同一个联合里，几个变体的同名字段在 Go 的平铺结构体里合成一个，所以类型必须一样（枚举都算字符串）；不一样生成器会报错，给新字段换个名字。
 - 校验用的关键字（`pattern`、`minLength`、`maxLength`、`minimum`、`maximum`、`minItems`、`maxItems`、`minProperties`、`const`）不影响生成，`scripts/test/test_extension_schema.py` 里的校验器认得它们。
   schema 说不清的规则（一页最多 300 个组件、图表各系列标签一致、字段名不重复、`state` 最多 16 KB）仍是 hub 手写的检查。
+
+## 自定义贡献（#2467）
+
+`Contributes` 明确允许 `additionalProperties`，所以内置的 `ui`、`providers` 等保持强类型，自定义 `<扩展 id>.<扩展点 id>` 键不会在官方类型的 JSON 往返中丢掉。
+生成器对其他明确开放的对象也用同一套处理，不单独判断名字是不是 `Contributes`。
+
+- Go 用 `AdditionalProperties map[string]json.RawMessage`，Swift 用 `additionalProperties: [String: JSONValue]`，Kotlin 用 `additionalProperties: Map<String, JsonElement>`。
+  这些只是代码里的存储位置，编码时额外键仍放在**原对象的同一层**，不会多包一层 `additionalProperties`。
+- TypeScript 保留已知属性的具体类型，再加 `[key: string]: unknown`。动态值需要调用方按自己的扩展点 schema 读取，不能把它当内置贡献。
+- 已知字段始终优先：即便手动往额外映射里写了 `ui`、`providers` 等保留键，也不能覆盖强类型字段或重新引入已省略的字段。
+  `UI` 不等于 `ui`；额外键的大小写、下划线、点号及嵌套的 `config`／`state`／`plugin`／`extension` 等键和值都原样保留。
+  Swift 的开放对象按字典编码，不受调用方的 snake_case 转换策略影响。
+- 这不是授权或安装时的豁免。自定义扩展点仍由 hub 按 `exports`、依赖、贡献 id 和导出的 schema 校验；`permissions` 等封闭对象没有被开放。
+- `examples/Manifest.custom-contributions.json` 是四语言共用的往返 fixture：内置 UI、多个自定义贡献点、嵌套 JSON、大小写近似键、字面 `additionalProperties`、`__proto__` 和 `constructor`。
+  后几个键专门测试 JSON 透传，**不表示它们能作为有效扩展点安装**。Go／TS SDK 的 manifest、initialize 协议测试也读取这份 fixture。
+
+修改生成器后跑 `python3 scripts/test/test_extension_schema.py`、`python3 scripts/test/test_sdk_bundle.py`、Go SDK 测试、TS SDK 的 `bun test`，并编译 Kotlin contracts 和 Swift 对应测试。
+`extension_schema.py` 还会确定性重建 `sdk/go/bundle/sdk.tar.gz`；生成类型和 bundle 一起提交，避免新建扩展拿到旧类型。
 
 ## 加一个组件
 

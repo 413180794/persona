@@ -3,6 +3,18 @@
 
 import Foundation
 
+// Open objects keep dictionary keys verbatim, independent of the caller's key-conversion strategy.
+private nonisolated enum ExtensionWireJSON {
+    static func decode<T: Decodable>(_ type: T.Type, from value: JSONValue?) -> T? {
+        guard let value else { return nil }
+        return try? JSONDecoder().decode(type, from: JSONEncoder().encode(value))
+    }
+
+    static func encode<T: Encodable>(_ value: T) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))
+    }
+}
+
 /// Values of ActivationEvent.
 nonisolated enum ExtensionActivationEvent {
     static let onStartup = "on_startup"
@@ -457,8 +469,10 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     var themes: [ExtensionThemeItem]?
     var triageTemplates: [ExtensionTriageTemplateItem]?
     var agentFilters: [ExtensionAgentFilterItem]?
+    /// Extra keys stay at this object's level on the wire; declared fields always win.
+    var additionalProperties: [String: JSONValue]
 
-    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil) {
+    init(connectors: [ExtensionConnectorItem]? = nil, voice: [ExtensionNamedItem]? = nil, computer: [ExtensionNamedItem]? = nil, browser: [ExtensionNamedItem]? = nil, quota: [ExtensionQuotaItem]? = nil, providers: [ExtensionProviderItem]? = nil, api: [ExtensionAPIItem]? = nil, assistant: [ExtensionAssistantItem]? = nil, ui: [ExtensionUIItem]? = nil, agentSources: [ExtensionAgentSourceItem]? = nil, channel: [ExtensionChannelItem]? = nil, events: [ExtensionEventsItem]? = nil, shortcuts: [ExtensionShortcutItem]? = nil, skills: [ExtensionSkillItem]? = nil, prompts: [ExtensionPromptItem]? = nil, themes: [ExtensionThemeItem]? = nil, triageTemplates: [ExtensionTriageTemplateItem]? = nil, agentFilters: [ExtensionAgentFilterItem]? = nil, additionalProperties: [String: JSONValue] = [:]) {
         self.connectors = connectors
         self.voice = voice
         self.computer = computer
@@ -477,6 +491,7 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
         self.themes = themes
         self.triageTemplates = triageTemplates
         self.agentFilters = agentFilters
+        self.additionalProperties = additionalProperties
     }
 
     enum CodingKeys: String, CodingKey {
@@ -501,25 +516,52 @@ nonisolated struct ExtensionContributes: Codable, Hashable, Sendable {
     }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.connectors = try? c.decodeIfPresent([ExtensionConnectorItem].self, forKey: .connectors)
-        self.voice = try? c.decodeIfPresent([ExtensionNamedItem].self, forKey: .voice)
-        self.computer = try? c.decodeIfPresent([ExtensionNamedItem].self, forKey: .computer)
-        self.browser = try? c.decodeIfPresent([ExtensionNamedItem].self, forKey: .browser)
-        self.quota = try? c.decodeIfPresent([ExtensionQuotaItem].self, forKey: .quota)
-        self.providers = try? c.decodeIfPresent([ExtensionProviderItem].self, forKey: .providers)
-        self.api = try? c.decodeIfPresent([ExtensionAPIItem].self, forKey: .api)
-        self.assistant = try? c.decodeIfPresent([ExtensionAssistantItem].self, forKey: .assistant)
-        self.ui = try? c.decodeIfPresent([ExtensionUIItem].self, forKey: .ui)
-        self.agentSources = try? c.decodeIfPresent([ExtensionAgentSourceItem].self, forKey: .agentSources)
-        self.channel = try? c.decodeIfPresent([ExtensionChannelItem].self, forKey: .channel)
-        self.events = try? c.decodeIfPresent([ExtensionEventsItem].self, forKey: .events)
-        self.shortcuts = try? c.decodeIfPresent([ExtensionShortcutItem].self, forKey: .shortcuts)
-        self.skills = try? c.decodeIfPresent([ExtensionSkillItem].self, forKey: .skills)
-        self.prompts = try? c.decodeIfPresent([ExtensionPromptItem].self, forKey: .prompts)
-        self.themes = try? c.decodeIfPresent([ExtensionThemeItem].self, forKey: .themes)
-        self.triageTemplates = try? c.decodeIfPresent([ExtensionTriageTemplateItem].self, forKey: .triageTemplates)
-        self.agentFilters = try? c.decodeIfPresent([ExtensionAgentFilterItem].self, forKey: .agentFilters)
+        let raw = try decoder.singleValueContainer().decode([String: JSONValue].self)
+        self.connectors = ExtensionWireJSON.decode([ExtensionConnectorItem].self, from: raw["connectors"])
+        self.voice = ExtensionWireJSON.decode([ExtensionNamedItem].self, from: raw["voice"])
+        self.computer = ExtensionWireJSON.decode([ExtensionNamedItem].self, from: raw["computer"])
+        self.browser = ExtensionWireJSON.decode([ExtensionNamedItem].self, from: raw["browser"])
+        self.quota = ExtensionWireJSON.decode([ExtensionQuotaItem].self, from: raw["quota"])
+        self.providers = ExtensionWireJSON.decode([ExtensionProviderItem].self, from: raw["providers"])
+        self.api = ExtensionWireJSON.decode([ExtensionAPIItem].self, from: raw["api"])
+        self.assistant = ExtensionWireJSON.decode([ExtensionAssistantItem].self, from: raw["assistant"])
+        self.ui = ExtensionWireJSON.decode([ExtensionUIItem].self, from: raw["ui"])
+        self.agentSources = ExtensionWireJSON.decode([ExtensionAgentSourceItem].self, from: raw["agent_sources"])
+        self.channel = ExtensionWireJSON.decode([ExtensionChannelItem].self, from: raw["channel"])
+        self.events = ExtensionWireJSON.decode([ExtensionEventsItem].self, from: raw["events"])
+        self.shortcuts = ExtensionWireJSON.decode([ExtensionShortcutItem].self, from: raw["shortcuts"])
+        self.skills = ExtensionWireJSON.decode([ExtensionSkillItem].self, from: raw["skills"])
+        self.prompts = ExtensionWireJSON.decode([ExtensionPromptItem].self, from: raw["prompts"])
+        self.themes = ExtensionWireJSON.decode([ExtensionThemeItem].self, from: raw["themes"])
+        self.triageTemplates = ExtensionWireJSON.decode([ExtensionTriageTemplateItem].self, from: raw["triage_templates"])
+        self.agentFilters = ExtensionWireJSON.decode([ExtensionAgentFilterItem].self, from: raw["agent_filters"])
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters"]
+        additionalProperties = raw.filter { !known.contains($0.key) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        let known: Set<String> = ["connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters"]
+        var fields = additionalProperties.filter { !known.contains($0.key) }
+        if let value = connectors { fields["connectors"] = try ExtensionWireJSON.encode(value) }
+        if let value = voice { fields["voice"] = try ExtensionWireJSON.encode(value) }
+        if let value = computer { fields["computer"] = try ExtensionWireJSON.encode(value) }
+        if let value = browser { fields["browser"] = try ExtensionWireJSON.encode(value) }
+        if let value = quota { fields["quota"] = try ExtensionWireJSON.encode(value) }
+        if let value = providers { fields["providers"] = try ExtensionWireJSON.encode(value) }
+        if let value = api { fields["api"] = try ExtensionWireJSON.encode(value) }
+        if let value = assistant { fields["assistant"] = try ExtensionWireJSON.encode(value) }
+        if let value = ui { fields["ui"] = try ExtensionWireJSON.encode(value) }
+        if let value = agentSources { fields["agent_sources"] = try ExtensionWireJSON.encode(value) }
+        if let value = channel { fields["channel"] = try ExtensionWireJSON.encode(value) }
+        if let value = events { fields["events"] = try ExtensionWireJSON.encode(value) }
+        if let value = shortcuts { fields["shortcuts"] = try ExtensionWireJSON.encode(value) }
+        if let value = skills { fields["skills"] = try ExtensionWireJSON.encode(value) }
+        if let value = prompts { fields["prompts"] = try ExtensionWireJSON.encode(value) }
+        if let value = themes { fields["themes"] = try ExtensionWireJSON.encode(value) }
+        if let value = triageTemplates { fields["triage_templates"] = try ExtensionWireJSON.encode(value) }
+        if let value = agentFilters { fields["agent_filters"] = try ExtensionWireJSON.encode(value) }
+        var container = encoder.singleValueContainer()
+        try container.encode(fields)
     }
 }
 

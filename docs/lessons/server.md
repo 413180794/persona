@@ -449,3 +449,9 @@ PR 冒烟按路径触发、不含 `integrations/**`，所以合并前没跑。�
   cua / ego 的清单加上 `node: {command: "builtin"}` 以后，十几处 `m.Node != nil` 会让它们去发包、出状态行、补确认、改同意摘要（界面就变了）。
   全改成 `NodeProgram() != nil`，再用一个测试守住「加了内置 node 段，摘要、权限行、`node_machines` 都和没有时一样」。新代码碰包、状态、同意时用访问器，不直接看字段。
 
+## 开放对象的生成类型必须保留额外 JSON（2026-11-05，#2467）
+
+- schema 写了 `additionalProperties: true`，生成类型却只有固定字段，解码再编码就会悄悄丢掉自定义扩展点。保留强类型字段，另外存原始额外键；写回时放在原对象的同一层，且额外映射不能覆盖或补入已知字段。
+- Go 的 `encoding/json` 会大小写不敏感地匹配结构体字段：先按精确的原始键把已知字段分出来再解码，否则额外的 `UI` 会被当成 `ui`。Swift 对开放对象用 single-value container 编解码 String-key 字典，避免调用方的 snake_case 策略改写额外键；直接调用字典的 `init(from:)`／`encode(to:)` 仍会走 key 转换，回归测试实测失败，不能拿它替代 container 的 `decode`／`encode`。
+- 四语言共用含嵌套 JSON、大小写近似键、`additionalProperties`、`__proto__`／`constructor` 的 fixture，同时跑 SDK 的 manifest／initialize 握手；schema 的透传能力不等于 hub 的授权或安装校验。
+

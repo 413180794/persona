@@ -204,7 +204,7 @@ data class ExtensionPermissions(
 /**
  * Contributions by extension point. A point this hub does not know installs with a warning, not taking effect.
  */
-@Serializable
+@Serializable(with = ExtensionContributesSerializer::class)
 data class ExtensionContributes(
     val connectors: List<ExtensionConnectorItem>? = null,
     val voice: List<ExtensionNamedItem>? = null,
@@ -224,7 +224,91 @@ data class ExtensionContributes(
     val themes: List<ExtensionThemeItem>? = null,
     @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
     @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+    /** Extra keys stay at this object's level on the wire; declared fields always win. */
+    val additionalProperties: Map<String, JsonElement> = emptyMap(),
 )
+
+@Serializable
+private data class ExtensionContributesKnown(
+    val connectors: List<ExtensionConnectorItem>? = null,
+    val voice: List<ExtensionNamedItem>? = null,
+    val computer: List<ExtensionNamedItem>? = null,
+    val browser: List<ExtensionNamedItem>? = null,
+    val quota: List<ExtensionQuotaItem>? = null,
+    val providers: List<ExtensionProviderItem>? = null,
+    val api: List<ExtensionAPIItem>? = null,
+    val assistant: List<ExtensionAssistantItem>? = null,
+    val ui: List<ExtensionUIItem>? = null,
+    @SerialName("agent_sources") val agentSources: List<ExtensionAgentSourceItem>? = null,
+    val channel: List<ExtensionChannelItem>? = null,
+    val events: List<ExtensionEventsItem>? = null,
+    val shortcuts: List<ExtensionShortcutItem>? = null,
+    val skills: List<ExtensionSkillItem>? = null,
+    val prompts: List<ExtensionPromptItem>? = null,
+    val themes: List<ExtensionThemeItem>? = null,
+    @SerialName("triage_templates") val triageTemplates: List<ExtensionTriageTemplateItem>? = null,
+    @SerialName("agent_filters") val agentFilters: List<ExtensionAgentFilterItem>? = null,
+)
+
+object ExtensionContributesSerializer : KSerializer<ExtensionContributes> {
+    private val known = ExtensionContributesKnown.serializer()
+    private val keys = setOf<String>("connectors", "voice", "computer", "browser", "quota", "providers", "api", "assistant", "ui", "agent_sources", "channel", "events", "shortcuts", "skills", "prompts", "themes", "triage_templates", "agent_filters")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionContributes {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionContributes needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionContributes needs an object")
+        val fields = input.json.decodeFromJsonElement(known, JsonObject(obj.filterKeys { it in keys }))
+        return ExtensionContributes(
+            connectors = fields.connectors,
+            voice = fields.voice,
+            computer = fields.computer,
+            browser = fields.browser,
+            quota = fields.quota,
+            providers = fields.providers,
+            api = fields.api,
+            assistant = fields.assistant,
+            ui = fields.ui,
+            agentSources = fields.agentSources,
+            channel = fields.channel,
+            events = fields.events,
+            shortcuts = fields.shortcuts,
+            skills = fields.skills,
+            prompts = fields.prompts,
+            themes = fields.themes,
+            triageTemplates = fields.triageTemplates,
+            agentFilters = fields.agentFilters,
+            additionalProperties = obj.filterKeys { it !in keys },
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionContributes) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionContributes needs JSON")
+        val fields = ExtensionContributesKnown(
+            connectors = value.connectors,
+            voice = value.voice,
+            computer = value.computer,
+            browser = value.browser,
+            quota = value.quota,
+            providers = value.providers,
+            api = value.api,
+            assistant = value.assistant,
+            ui = value.ui,
+            agentSources = value.agentSources,
+            channel = value.channel,
+            events = value.events,
+            shortcuts = value.shortcuts,
+            skills = value.skills,
+            prompts = value.prompts,
+            themes = value.themes,
+            triageTemplates = value.triageTemplates,
+            agentFilters = value.agentFilters,
+        )
+        val obj = output.json.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))
+    }
+}
 
 /**
  * A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.

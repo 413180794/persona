@@ -173,6 +173,8 @@ export interface Contributes {
   themes?: ThemeItem[];
   triage_templates?: TriageTemplateItem[];
   agent_filters?: AgentFilterItem[];
+  /** Extra keys are opaque JSON; declared properties keep their own types. */
+  [key: string]: unknown;
 }
 
 /**
