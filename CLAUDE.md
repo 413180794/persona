@@ -218,6 +218,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/claude-integration.md` | 如何在 herdr 里启动 / 驱动 Claude、hook 回答 AskUserQuestion / ExitPlanMode 的实测结论 |
+| `docs/script-cli.md` | 脚本命令 `personad ask`（阻塞到手机上回答，退出码 0/1/2/3/4）和 `personad notify`（尽力而为 / `--strict`）：走 node.sock，复用提问 / 授权卡和 `POST /api/v1/notify` 的投递，归属到所在窗格的会话、终端回退、重启续传 |
 | `docs/codex.md` | Codex 和 TRAEX（内部 Codex 分支）支持：怎么识别、rollout 格式怎么映射成对话、提问和审批卡片（读 rollout 和屏幕、各种界面状态下怎么作答）、改走 app-server 和审批 hook 的调研、还不支持什么 |
 | `docs/codex-app-server.md` | Codex app-server 多实例接入的研究：一台机器上多个已有 app-server 和 thread 怎么收进来、桌面 App 照常用、断线重连和授权边界 |
 | `docs/runtimes.md` | 接入 Agent 运行时（runtime）的规范：和宿主的区别、多机怎么汇总、driver 要实现什么、内容和交互的约定、命名、SDK、验收清单 |

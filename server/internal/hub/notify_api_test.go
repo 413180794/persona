@@ -327,3 +327,78 @@ func TestNotifyAPNs(t *testing.T) {
 	}
 }
 
+// --silent drops the sound and nothing else.
+func TestNotifyPayloadSilent(t *testing.T) {
+	aps := notifyPayload(notifyRequest{Title: "t", Level: levelTimeSensitive, Silent: true}, "", "")["aps"].(map[string]any)
+	if _, ok := aps["sound"]; ok || aps["interruption-level"] != levelTimeSensitive {
+		t.Fatalf("aps %v", aps)
+	}
+	if aps = notifyPayload(notifyRequest{Title: "t", Level: levelActive}, "", "")["aps"].(map[string]any); aps["sound"] != "default" {
+		t.Fatalf("aps %v", aps)
+	}
+}
+
+// A node's `personad notify` (the hub's "notify" request) goes out like one through the HTTP API, as that machine's, with the
+// same muting and the same preferences; it cannot carry an extension's actions.
+func TestNodeScriptNotify(t *testing.T) {
+	h := newTestHub(t)
+	c := &client{device: "phone-1", out: make(chan []byte, 8)}
+	h.clients[c] = struct{}{}
+	h.onClientMessage(context.Background(), c, []byte(`{"type":"client_hello","features":["ws_notify"]}`))
+	<-c.out // client_hello_ack
+	h.mutes = &Pins{Spaces: []string{}, Sessions: []string{"box1/muted"}}
+	m := &Machine{hub: h, cfg: MachineConfig{ID: "box1", Name: "Studio"}}
+	call := func(params string) (map[string]any, error) {
+		t.Helper()
+		out, err := m.onRequest(context.Background(), "notify", json.RawMessage(params))
+		if err != nil {
+			return nil, err
+		}
+		return out.(map[string]any), nil
+	}
+	next := func() map[string]any {
+		t.Helper()
+		select {
+		case raw := <-c.out:
+			var msg map[string]any
+			_ = json.Unmarshal(raw, &msg)
+			return msg
+		default:
+			return nil
+		}
+	}
+
+	out, err := call(`{"title":"⚠️ Tests failed","body":"3 failed","level":"time-sensitive","silent":true,"session_id":"s1","actions":[{"id":"x","title":"x"}],"ui":"u"}`)
+	if err != nil || out["sent"] != true {
+		t.Fatalf("send: %v %v", out, err)
+	}
+	msg := next()
+	if msg == nil || msg["kind"] != kindAlert || msg["machine_id"] != "box1" || msg["session_id"] != "s1" ||
+		msg["title"] != "⚠️ Tests failed" || msg["subtitle"] != "Studio" || msg["body"] != "3 failed" {
+		t.Fatalf("ws notify: %v", msg)
+	}
+	if _, ok := msg["extension_notification"]; ok {
+		t.Fatalf("a node is no extension: %v", msg)
+	}
+
+	// Without a session: the machine's name still says where it came from.
+	if out, err = call(`{"title":"Build done"}`); err != nil || out["sent"] != true {
+		t.Fatalf("send: %v %v", out, err)
+	}
+	if msg = next(); msg == nil || msg["machine_id"] != "" || msg["session_id"] != "" || msg["subtitle"] != "Studio" {
+		t.Fatalf("ws notify without a session: %v", msg)
+	}
+
+	if out, err = call(`{"title":"t","session_id":"muted"}`); err != nil || out["sent"] != false || out["reason"] != "muted" {
+		t.Fatalf("muted: %v %v", out, err)
+	}
+	if msg = next(); msg != nil {
+		t.Fatalf("muted session notified: %v", msg)
+	}
+	if _, err = call(`{"title":"  "}`); err == nil {
+		t.Fatal("an empty notification is refused")
+	}
+	if _, err = call(`{"title":"t","level":"critical"}`); err == nil {
+		t.Fatal("critical is not offered")
+	}
+}

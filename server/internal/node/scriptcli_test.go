@@ -1,0 +1,434 @@
+package node
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
+)
+
+// scriptHub is a node on a fake hub and a socket in front of it (no real node.sock, no phone): the hub's answers to
+// interaction.create and notify are the test's.
+type scriptHub struct {
+	n    *Node
+	sock string
+
+	mu        sync.Mutex
+	created   []proto.Interaction
+	notified  []map[string]any
+	cancelled []string
+}
+
+func newScriptHub(t *testing.T, create func(ctx context.Context, ix proto.Interaction) (any, error), notify func() (any, error)) *scriptHub {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	n, _ := testNode(t)
+	h := &scriptHub{n: n}
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer = rpc.New("n", n2hW)
+	hub := rpc.New("h", h2nW)
+	hub.OnRequest = func(ctx context.Context, method string, params json.RawMessage) (any, error) {
+		switch method {
+		case "interaction.create":
+			var p struct {
+				Interaction proto.Interaction `json:"interaction"`
+			}
+			_ = json.Unmarshal(params, &p)
+			h.mu.Lock()
+			h.created = append(h.created, p.Interaction)
+			h.mu.Unlock()
+			return create(ctx, p.Interaction)
+		case "notify":
+			var p map[string]any
+			_ = json.Unmarshal(params, &p)
+			h.mu.Lock()
+			h.notified = append(h.notified, p)
+			h.mu.Unlock()
+			return notify()
+		}
+		return nil, nil
+	}
+	hub.OnEvent = func(method string, params json.RawMessage) {
+		var p struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(params, &p)
+		if method == "interaction.cancel" {
+			h.mu.Lock()
+			h.cancelled = append(h.cancelled, p.ID)
+			h.mu.Unlock()
+		}
+	}
+	go func() { _ = hub.Serve(ctx, n2hR) }()
+	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+
+	h.sock = filepath.Join(t.TempDir(), "s")
+	ln, err := net.Listen("unix", h.sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go n.serveSock(ctx, c)
+		}
+	}()
+	return h
+}
+
+// dial is Dialer over the test's socket.
+func (h *scriptHub) dial(ctx context.Context, req any) ([]byte, error) {
+	var d net.Dialer
+	c, err := d.DialContext(ctx, "unix", h.sock)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+	defer context.AfterFunc(ctx, func() { c.Close() })() // as DialSocket: a cancelled ctx hangs up
+	b, _ := json.Marshal(req)
+	if _, err := c.Write(append(b, '\n')); err != nil {
+		return nil, err
+	}
+	return bufio.NewReader(c).ReadBytes('\n')
+}
+
+func (h *scriptHub) lastCreated(t *testing.T) proto.Interaction {
+	t.Helper()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.created) == 0 {
+		t.Fatal("the hub was asked nothing")
+	}
+	return h.created[len(h.created)-1]
+}
+
+func answerWith(res proto.Resolution) func(context.Context, proto.Interaction) (any, error) {
+	return func(context.Context, proto.Interaction) (any, error) { return res, nil }
+}
+
+func notifyOK() (any, error) { return map[string]any{"sent": true}, nil }
+
+func boolp(b bool) *bool { return &b }
+
+// A question with options is the question card AskUserQuestion already is, from "脚本", under the session of the
+// caller's pane; the option chosen comes back.
+func TestScriptAskOptionsIsAQuestionCard(t *testing.T) {
+	h := newScriptHub(t, answerWith(proto.Resolution{Answers: map[string]string{"Deploy where?": "staging"}}), notifyOK)
+	h.n.panes = map[string]string{"w1:p1": "sess-1"}
+	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "Deploy where?", Options: []string{"staging", " prod ", "staging", ""}, Cwd: "/work/app"}, "w1:p1")
+	if err != nil || rep.Status != AskAnswered || rep.Answer != "staging" {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+	ix := h.lastCreated(t)
+	if ix.Kind != proto.IxQuestion || len(ix.Questions) != 1 || ix.Questions[0].Question != "Deploy where?" || ix.Questions[0].MultiSelect {
+		t.Fatalf("interaction %+v", ix)
+	}
+	var labels []string
+	for _, o := range ix.Questions[0].Options {
+		labels = append(labels, o.Label)
+	}
+	if len(labels) != 2 || labels[0] != "staging" || labels[1] != "prod" {
+		t.Fatalf("options %v (trimmed, without repeats)", labels)
+	}
+	if ix.SessionID != "sess-1" || ix.Agent != "script" || ix.AgentLabel != "脚本" || ix.Cwd != "/work/app" || !ix.Resumable {
+		t.Fatalf("attribution: %+v", ix)
+	}
+	if ix.SessionTitle != "app" {
+		t.Fatalf("title %q: the directory when no transcript names the session", ix.SessionTitle)
+	}
+	if time.Until(ix.ExpiresAt) < 29*time.Minute {
+		t.Fatalf("expires %v: the hook's 30 minutes by default", ix.ExpiresAt)
+	}
+}
+
+// A card typed into ("Other") answers with what was typed.
+func TestScriptAskTypedAnswer(t *testing.T) {
+	h := newScriptHub(t, answerWith(proto.Resolution{Answers: map[string]string{"other key": " 手写的 "}}), notifyOK)
+	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q", Options: []string{"a", "b"}}, "")
+	if err != nil || rep.Status != AskAnswered || rep.Answer != "手写的" {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+	if ix := h.lastCreated(t); ix.SessionID != "" {
+		t.Fatalf("no pane, no session: %q", ix.SessionID)
+	}
+}
+
+// Without options it is an allow / deny permission card, so the phone's buttons (and the notification's) work.
+func TestScriptAskWithoutOptionsIsAPermissionCard(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		res  proto.Resolution
+		want string
+	}{
+		{"allow", proto.Resolution{Allow: boolp(true)}, AskAnswered},
+		{"deny", proto.Resolution{Allow: boolp(false), Message: "no"}, AskDenied},
+		{"handed back", proto.Resolution{Dismiss: true}, AskDismissed},
+		{"no verdict", proto.Resolution{}, AskDismissed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newScriptHub(t, answerWith(tc.res), notifyOK)
+			rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "Run the migration?"}, "")
+			if err != nil || rep.Status != tc.want || rep.Answer != "" {
+				t.Fatalf("reply %+v, %v", rep, err)
+			}
+			ix := h.lastCreated(t)
+			if ix.Kind != proto.IxPermission || ix.Summary != "Run the migration?" || ix.Agent != "script" || len(ix.Questions) != 0 {
+				t.Fatalf("interaction %+v", ix)
+			}
+		})
+	}
+}
+
+// Nobody answering is a timeout (not "unreachable"), and the card is withdrawn from the phone.
+func TestScriptAskTimeout(t *testing.T) {
+	h := newScriptHub(t, func(ctx context.Context, _ proto.Interaction) (any, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}, notifyOK)
+	start := time.Now()
+	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q", TimeoutSeconds: 1}, "")
+	if err != nil || rep.Status != AskTimeout {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+	if d := time.Since(start); d < 900*time.Millisecond || d > 5*time.Second {
+		t.Fatalf("took %v for a 1s timeout", d)
+	}
+}
+
+// The script going away (Ctrl-C) takes the card off the phone.
+func TestScriptAskCancelledWithTheCaller(t *testing.T) {
+	asked := make(chan struct{})
+	h := newScriptHub(t, func(ctx context.Context, _ proto.Interaction) (any, error) {
+		close(asked)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}, notifyOK)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := AskNode(ctx, h.dial, AskRequest{Question: "q"}, "")
+		done <- err
+	}()
+	<-asked
+	cancel()
+	<-done
+	waitFor(t, "the card to be withdrawn", func() bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return len(h.cancelled) == 1 && h.cancelled[0] == h.created[0].ID
+	})
+}
+
+func TestScriptAskUnavailableAndInvalid(t *testing.T) {
+	h := newScriptHub(t, answerWith(proto.Resolution{}), notifyOK)
+	rep, _ := AskNode(context.Background(), h.dial, AskRequest{Question: "   "}, "")
+	if rep.Status != AskInvalid || rep.Error == "" {
+		t.Fatalf("an empty question: %+v", rep)
+	}
+	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q", TimeoutSeconds: -1}, ""); rep.Status != AskInvalid {
+		t.Fatalf("a negative timeout: %+v", rep)
+	}
+	many := make([]string, askOptionsMost+1)
+	for i := range many {
+		many[i] = string(rune('a' + i))
+	}
+	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q", Options: many}, ""); rep.Status != AskInvalid {
+		t.Fatalf("too many options: %+v", rep)
+	}
+	h.mu.Lock()
+	asked := len(h.created)
+	h.mu.Unlock()
+	if asked != 0 {
+		t.Fatalf("the hub was asked %d invalid questions", asked)
+	}
+
+	h.n.peer = nil // a node with no hub
+	if rep, _ = AskNode(context.Background(), h.dial, AskRequest{Question: "q"}, ""); rep.Status != AskUnavailable {
+		t.Fatalf("no hub: %+v", rep)
+	}
+}
+
+// A hub that fails the request (not a timeout, not a hand back) is "unreachable" to the script.
+func TestScriptAskHubFailure(t *testing.T) {
+	h := newScriptHub(t, func(context.Context, proto.Interaction) (any, error) {
+		return nil, &rpc.Error{Message: "boom"}
+	}, notifyOK)
+	rep, err := AskNode(context.Background(), h.dial, AskRequest{Question: "q"}, "")
+	if err != nil || rep.Status != AskUnavailable {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+}
+
+// An ask whose node goes away reconnects with the same attempt and finds the same card id; no node at all is ErrNoNode.
+func TestAskNodeResumes(t *testing.T) {
+	defer func(d time.Duration) { resumeRetry = d }(resumeRetry)
+	resumeRetry = 10 * time.Millisecond
+	got := fakeNodes(t,
+		nil, // the node dies while the phone decides
+		map[string]any{"retry": true},
+		map[string]any{"status": "answered", "answer": "b"},
+	)
+	rep, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q", Options: []string{"a", "b"}}, "w1:p1")
+	if err != nil || rep.Status != AskAnswered || rep.Answer != "b" {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+	first, second, third := <-got, <-got, <-got
+	if first.Kind != "ask" || first.Attempt == "" || first.Attempt != second.Attempt || second.Attempt != third.Attempt {
+		t.Fatalf("attempts %+v %+v %+v", first, second, third)
+	}
+	if first.Resume || !second.Resume || !third.Resume || first.Pane != "w1:p1" {
+		t.Fatalf("only reconnects are resumes: %+v %+v %+v", first, second, third)
+	}
+	if scriptInteractionID(first.Attempt) != scriptInteractionID(third.Attempt) || scriptInteractionID("") == scriptInteractionID("") {
+		t.Fatal("one attempt is one card; no attempt is a random one")
+	}
+}
+
+func TestAskNodeGivesUpAfterResumeWait(t *testing.T) {
+	defer func(d, w time.Duration) { resumeRetry, ResumeWait = d, w }(resumeRetry, ResumeWait)
+	resumeRetry, ResumeWait = 10*time.Millisecond, 50*time.Millisecond
+	fakeNodes(t, nil) // dies, and no node comes back
+	if _, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q"}, ""); err == nil {
+		t.Fatal("the phone could not be asked: an error")
+	}
+}
+
+func TestAskNodeWithoutNode(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	if _, err := AskNode(context.Background(), DialSocket, AskRequest{Question: "q"}, ""); err == nil || !isNoNode(err) {
+		t.Fatalf("err %v, want ErrNoNode", err)
+	}
+	if _, err := NotifyNode(context.Background(), DialSocket, NotifyRequest{Title: "t"}, ""); err == nil || !isNoNode(err) {
+		t.Fatalf("err %v, want ErrNoNode", err)
+	}
+}
+
+// Only DialSocketInterruptible hangs up on a cancelled ctx (Ctrl-C in personad ask); DialSocket waits as it always did
+// (a hook, the MCP server and the launcher end by the deadline or the node's answer).
+func TestDialSocketCancel(t *testing.T) {
+	home, err := os.MkdirTemp("", "jh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	_ = os.MkdirAll(filepath.Join(home, ".jarvis"), 0o700)
+	ln, err := net.Listen("unix", SocketPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	conns := make(chan net.Conn, 2)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			conns <- c // a node that never answers
+		}
+	}()
+
+	dial := func(f Dialer) (cancel func(), done chan error) {
+		ctx, cancel := context.WithCancel(context.Background())
+		done = make(chan error, 1)
+		go func() { _, err := f(ctx, map[string]any{"kind": "x"}); done <- err }()
+		<-conns
+		return cancel, done
+	}
+	cancel, done := dial(DialSocketInterruptible)
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a hung-up dial is an error")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("DialSocketInterruptible kept waiting after its ctx was cancelled")
+	}
+
+	cancel, done = dial(DialSocket)
+	cancel()
+	select {
+	case err := <-done:
+		t.Fatalf("DialSocket gave up on a cancelled ctx: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func isNoNode(err error) bool { return err != nil && errors.Is(err, ErrNoNode) }
+
+// A notification goes to the hub as the notify request the HTTP API takes: the session of the caller's pane, the
+// level and the sound as asked, long texts cut to the hub's limits.
+func TestScriptNotify(t *testing.T) {
+	h := newScriptHub(t, answerWith(proto.Resolution{}), notifyOK)
+	h.n.panes = map[string]string{"w1:p1": "sess-1"}
+	rep, err := NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "Build done", Body: "all green", Silent: true}, "w1:p1")
+	if err != nil || !rep.Sent || rep.Error != "" {
+		t.Fatalf("reply %+v, %v", rep, err)
+	}
+	long := make([]rune, 3000)
+	for i := range long {
+		long[i] = '字'
+	}
+	if _, err = NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "Tests failed", Body: string(long), Error: true}, ""); err != nil {
+		t.Fatal(err)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.notified) != 2 {
+		t.Fatalf("notified %v", h.notified)
+	}
+	a, b := h.notified[0], h.notified[1]
+	if a["title"] != "Build done" || a["body"] != "all green" || a["level"] != "active" || a["silent"] != true || a["session_id"] != "sess-1" {
+		t.Fatalf("first %v", a)
+	}
+	if b["title"] != "⚠️ Tests failed" || b["level"] != "time-sensitive" || b["silent"] != false {
+		t.Fatalf("second %v", b)
+	}
+	if _, has := b["session_id"]; has {
+		t.Fatalf("no pane, no session: %v", b)
+	}
+	if got := len([]rune(b["body"].(string))); got != notifyBodyMost {
+		t.Fatalf("body of %d characters, want it cut to %d", got, notifyBodyMost)
+	}
+}
+
+func TestScriptNotifyFailures(t *testing.T) {
+	h := newScriptHub(t, answerWith(proto.Resolution{}), func() (any, error) {
+		return map[string]any{"sent": false, "reason": "muted"}, nil
+	})
+	rep, err := NotifyNode(context.Background(), h.dial, NotifyRequest{Title: "t"}, "")
+	if err != nil || rep.Sent || rep.Reason != "muted" {
+		t.Fatalf("muted: %+v, %v", rep, err)
+	}
+	if rep, _ = NotifyNode(context.Background(), h.dial, NotifyRequest{Title: " "}, ""); rep.Sent || rep.Error == "" {
+		t.Fatalf("empty: %+v", rep)
+	}
+	h2 := newScriptHub(t, answerWith(proto.Resolution{}), func() (any, error) { return nil, &rpc.Error{Message: "unknown method notify"} })
+	if rep, _ = NotifyNode(context.Background(), h2.dial, NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
+		t.Fatalf("an older hub: %+v", rep)
+	}
+	h2.n.peer = nil
+	if rep, _ = NotifyNode(context.Background(), h2.dial, NotifyRequest{Title: "t"}, ""); rep.Sent || rep.Error == "" {
+		t.Fatalf("no hub: %+v", rep)
+	}
+}

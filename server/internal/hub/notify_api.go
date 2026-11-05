@@ -32,6 +32,8 @@ type notifyRequest struct {
 	Level     string `json:"level,omitempty"` // active (default) | time-sensitive
 	// ID: the same id again replaces the earlier alert on the phone (apns-collapse-id) instead of stacking.
 	ID string `json:"id,omitempty"`
+	// Silent: no sound (`personad notify --silent`, docs/script-cli.md).
+	Silent bool `json:"silent,omitempty"`
 
 	// Extension notification: only accepted when the caller is an extension token (roleExtension, with the notify scope).
 	UI      string              `json:"ui,omitempty"`
@@ -146,6 +148,9 @@ func notifyPayload(r notifyRequest, machine, extID string) map[string]any {
 		alert["subtitle"] = machine
 	}
 	aps := map[string]any{"alert": alert, "sound": "default", "interruption-level": r.Level}
+	if r.Silent {
+		delete(aps, "sound")
+	}
 	if r.SessionID != "" {
 		aps["thread-id"] = r.SessionID
 	} else if extID != "" {
@@ -171,6 +176,61 @@ func notifyPayload(r notifyRequest, machine, extID string) map[string]any {
 	return payload
 }
 
+// extensionOf is the extension a caller is, "" for any other credential.
+func extensionOf(p principal) string {
+	if p.Role == roleExtension {
+		return p.Extension
+	}
+	return ""
+}
+
+// machineNameFor is the name shown under a notification that opens a session: its machine's.
+func (h *Hub) machineNameFor(in notifyRequest) string {
+	if in.SessionID == "" {
+		return ""
+	}
+	return h.machineName(in.MachineID)
+}
+
+// deliverNotify sends a validated notification to the devices that take them: the reply is {"sent":true}, or
+// {"sent":false,"reason":"muted"}. An error is the caller's (a payload too large for APNs). machine is the subtitle:
+// the machine's name, "" for none.
+func (h *Hub) deliverNotify(in notifyRequest, machine, extID string) (map[string]any, error) {
+	if in.SessionID != "" && h.muted(in.MachineID, in.SessionID) {
+		return map[string]any{"sent": false, "reason": "muted"}, nil
+	}
+	payload := notifyPayload(in, machine, extID)
+	if raw, _ := json.Marshal(payload); len(raw) > notifyPayloadMost {
+		return nil, errors.New("notification is too large")
+	}
+	collapse := ""
+	if in.ID != "" {
+		collapse = notifyCollapse + in.ID
+	}
+	// Something that needs you: devices that turned off 需要你 (prefs.input) get none of these either.
+	wants := pushWants{Kind: "input"}.fn()
+	h.push.send(payload, collapse, wants)
+	h.notifyWS(kindAlert, payload, wants)
+	return map[string]any{"sent": true}, nil
+}
+
+// scriptNotify is a node's `personad notify` (node/scriptcli.go): the machine is the node's own, the session the one
+// that runs in the caller's pane when a hook told the node. It carries no extension and no actions.
+func (m *Machine) scriptNotify(params json.RawMessage) (any, error) {
+	var in notifyRequest
+	if err := json.Unmarshal(params, &in); err != nil {
+		return nil, err
+	}
+	in.Actions, in.UI, in.State = nil, "", ""
+	if in.SessionID != "" {
+		in.MachineID = m.cfg.ID
+	}
+	if err := in.validate(); err != nil {
+		return nil, err
+	}
+	return m.hub.deliverNotify(in, m.cfg.Name, "")
+}
+
 func (h *Hub) notifyRoutes(api *http.ServeMux) {
 	api.HandleFunc("POST /api/v1/notify", func(w http.ResponseWriter, r *http.Request) {
 		p := principalOf(r.Context())
@@ -187,31 +247,11 @@ func (h *Hub) notifyRoutes(api *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		machine := ""
-		if in.SessionID != "" {
-			if h.muted(in.MachineID, in.SessionID) {
-				writeJSON(w, map[string]any{"sent": false, "reason": "muted"})
-				return
-			}
-			machine = h.machineName(in.MachineID)
-		}
-		extID := ""
-		if p.Role == roleExtension {
-			extID = p.Extension
-		}
-		payload := notifyPayload(in, machine, extID)
-		if raw, _ := json.Marshal(payload); len(raw) > notifyPayloadMost {
-			writeErr(w, http.StatusBadRequest, errors.New("notification is too large"))
+		res, err := h.deliverNotify(in, h.machineNameFor(in), extensionOf(p))
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
-		collapse := ""
-		if in.ID != "" {
-			collapse = notifyCollapse + in.ID
-		}
-		// Something that needs you: devices that turned off 需要你 (prefs.input) get none of these either.
-		wants := pushWants{Kind: "input"}.fn()
-		h.push.send(payload, collapse, wants)
-		h.notifyWS(kindAlert, payload, wants)
-		writeJSON(w, map[string]any{"sent": true})
+		writeJSON(w, res)
 	})
 }

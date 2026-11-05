@@ -165,6 +165,10 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		}
 	case "ping": // personad node doctor: a round trip that changes nothing
 		resp = map[string]any{"ok": true}
+	case "ask": // personad ask (scriptcli.go)
+		resp = n.handleAsk(ctx, req)
+	case "notify": // personad notify (scriptcli.go)
+		resp = n.handleNotify(ctx, req)
 	case "launcher.env": // jarvisd launch <name>
 		resp = n.launcherEnv(req.Name)
 	case "mcp.tools":
@@ -483,35 +487,52 @@ func Hook(ctx context.Context, input json.RawMessage, pane string) json.RawMessa
 	// A live node answers by the interaction's expiry; a socket that is there but never answers must not hold Claude.
 	ctx, cancel := context.WithTimeout(ctx, HookTimeout+ResumeWait)
 	defer cancel()
-	line, err := DialSocket(ctx, req)
-	if errors.Is(err, ErrNoNode) {
+	line, err := dialResumable(ctx, DialSocket, req)
+	if err != nil {
 		return nil
+	}
+	var resp struct {
+		Output json.RawMessage `json:"output"`
+	}
+	_ = json.Unmarshal(line, &resp)
+	if len(resp.Output) == 0 || string(resp.Output) == "null" {
+		return nil
+	}
+	return resp.Output
+}
+
+// dialResumable sends req to the node and returns its answer line. When the node goes away while the phone is deciding
+// (it answers {"retry":true}, or the connection breaks) it reconnects to the next one with the same request, marked
+// Resume, for up to ResumeWait. The error is ErrNoNode when nothing listens at the first try.
+func dialResumable(ctx context.Context, dial Dialer, req sockRequest) ([]byte, error) {
+	line, err := dial(ctx, req)
+	if errors.Is(err, ErrNoNode) {
+		return nil, err
 	}
 	var until time.Time
 	for {
-		var resp struct {
-			Output json.RawMessage `json:"output"`
-			Retry  bool            `json:"retry"`
+		var rep struct {
+			Retry bool `json:"retry"`
 		}
-		if err == nil && json.Unmarshal(line, &resp) == nil && !resp.Retry {
-			if len(resp.Output) == 0 || string(resp.Output) == "null" {
-				return nil
-			}
-			return resp.Output
+		if err == nil && json.Unmarshal(line, &rep) == nil && !rep.Retry {
+			return line, nil
 		}
 		if until.IsZero() {
 			until = time.Now().Add(ResumeWait)
 		}
 		if time.Now().After(until) {
-			return nil
+			if err == nil {
+				err = errors.New("the node went away")
+			}
+			return nil, err
 		}
 		select {
 		case <-ctx.Done():
-			return nil
+			return nil, ctx.Err()
 		case <-time.After(resumeRetry):
 		}
 		req.Resume = true
-		line, err = DialSocket(ctx, req)
+		line, err = dial(ctx, req)
 	}
 }
 
@@ -524,14 +545,27 @@ func DialSocket(ctx context.Context, req any) ([]byte, error) {
 	return dialSocketAt(ctx, SocketPath(), req)
 }
 
+// DialSocketInterruptible is DialSocket that also hangs up when ctx is cancelled (Ctrl-C in personad ask): the wait
+// ends at once and, with the connection, the node withdraws the card.
+func DialSocketInterruptible(ctx context.Context, req any) ([]byte, error) {
+	return dialSocket(ctx, SocketPath(), req, true)
+}
+
 // dialSocketAt is DialSocket for the node socket at path.
 func dialSocketAt(ctx context.Context, path string, req any) ([]byte, error) {
+	return dialSocket(ctx, path, req, false)
+}
+
+func dialSocket(ctx context.Context, path string, req any, hangUpOnCancel bool) ([]byte, error) {
 	var d net.Dialer
 	c, err := d.DialContext(ctx, "unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrNoNode, err)
 	}
 	defer c.Close()
+	if hangUpOnCancel {
+		defer context.AfterFunc(ctx, func() { c.Close() })()
+	}
 	if dl, ok := ctx.Deadline(); ok {
 		_ = c.SetDeadline(dl)
 	}

@@ -563,7 +563,7 @@ Session 新增可选 `workspace_cwd`：由 node 验证、解析符号链接的�
 | GET | `/api/v1/usage` | `{"usage": {tpm, tokens, output, requests, machines:[{id, tpm, tokens, load}]}}`：所有机器的 token 用量（今天按手机时区算，`load` 是 1 分钟负载 / 核数），见 `docs/live-activity.md`「用量」 |
 | GET / PUT | `/api/v1/devices/{id}/prefs` | 这台设备要哪些推送：`{"input":true,"done":"off|long|always"}`，另有 `translate`（设置 › 翻译：`{enabled,target,mail}`，收件箱（助手）据此提前翻译新邮件）、`live_activity`（默认 true）、`lock_details`（锁屏显示详情，默认 false）、`island`（灵动岛两侧：`{"preset":"a|b|c|custom","left","right","machine"}`，默认 `a`）、`mute_while_desktop`（手机静音，默认 false：有桌面端连着时不给这台设备推「需要你处理」「Agent 做完」；助手按你的要求发的提醒照推）；`look`（这台手机的实时活动画哪个形象：`{"design","light","dark","package"?}`，App 换形象时单独 PUT，hub 原样放进这台设备推送的 content-state，见 `docs/live-activity.md`「形象」；design 超过 32 字节或 package 超过 160 字节的不存）；PUT 可以只带要改的字段；返回值另带 hub 的 `long_turn_seconds`、`done_delay_seconds`（只读）。设备还没注册推送时也能设 |
 | PUT | `/api/v1/devices/{id}/widgets` | 这台设备屏幕上有哪些扩展的小组件 `{"widgets":[{extension,id,family}]}`（整份替换，最多 64 个）：扩展发 `ui.invalidate` 时 hub 给有这个小组件的设备发后台推送 `extension_widget`（每台每个 15 分钟最多一条），见 `docs/extensions.md`「系统级位置」 |
-| POST | `/api/v1/notify` | 给各台设备发一条提醒（给扩展用，见 `docs/extensions.md`「发通知」）：`{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"actions"?,"ui"?,"state"?}`，标题和正文至少一个（标题最多 120 字、正文 1000 字），`machine_id` 和 `session_id` 要么都给要么都不给，`level` 默认 `active`，同一个 `id` 在手机上替换上一条（apns-collapse-id，最长 64 字节）。扩展凭据可带最多 3 个 `actions`、`ui` 与 `state`（通知按钮规格见 `docs/extensions.md`「通知按钮」）。带会话时点开进那个会话；会话被屏蔽回 `{"sent":false,"reason":"muted"}`，不发。按设备的 `input` 开关（关掉「需要你」就不收），也照「手机静音」和桌面端在线的规则；常驻连接里是 `notify` 事件，`kind` 为 `alert`（没有会话时 `machine_id`、`session_id` 是空字符串）；推送的 collapse id 是 `notify:<id>`，不会和 hub 自己的推送撞。payload 编码后超过 3500 字节、`machine_id` / `session_id` 超过 128 字节回 400。完整权限的凭据与具有 `notify` 范围的扩展凭据可调用，非扩展凭据带 `actions`/`ui`/`state` 回 400。回 `{"sent":true}` 只表示交给了推送，不保证送到 |
+| POST | `/api/v1/notify` | 给各台设备发一条提醒（给扩展用，见 `docs/extensions.md`「发通知」）：`{"title","body","machine_id"?,"session_id"?,"level"?:"active\|time-sensitive","id"?,"silent"?,"actions"?,"ui"?,"state"?}`，标题和正文至少一个（标题最多 120 字、正文 1000 字），`machine_id` 和 `session_id` 要么都给要么都不给，`level` 默认 `active`，同一个 `id` 在手机上替换上一条（apns-collapse-id，最长 64 字节），`silent: true` 不带声音。扩展凭据可带最多 3 个 `actions`、`ui` 与 `state`（通知按钮规格见 `docs/extensions.md`「通知按钮」）。带会话时点开进那个会话；会话被屏蔽回 `{"sent":false,"reason":"muted"}`，不发。按设备的 `input` 开关（关掉「需要你」就不收），也照「手机静音」和桌面端在线的规则；常驻连接里是 `notify` 事件，`kind` 为 `alert`（没有会话时 `machine_id`、`session_id` 是空字符串）；推送的 collapse id 是 `notify:<id>`，不会和 hub 自己的推送撞。payload 编码后超过 3500 字节、`machine_id` / `session_id` 超过 128 字节回 400。完整权限的凭据与具有 `notify` 范围的扩展凭据可调用，非扩展凭据带 `actions`/`ui`/`state` 回 400。回 `{"sent":true}` 只表示交给了推送，不保证送到 |
 | GET | `/api/v1/personas` | 形象（`docs/persona.md`）：`{"personas":[{"id","rev","bytes","manifest":{persona.json 原样}}]}`，hub 机器 `~/.persona/personas/` 下检查通过的包（文件齐全、id 和目录同名、不超大小）；`rev` 是整个包内容的哈希，任何一个字节变了它就变，手机按 rev 缓存。没有目录时是空列表 |
 | GET | `/api/v1/personas/{id}/{file…}` | 包里的一个文件（PNG / persona.json），只给包目录里的普通文件（不跟软链、不给点开头的） |
 | GET | `/api/v1/plugins` | hub 的插件：`{"plugins":[{"id","name","kind","status","error"?, "version", "source", "enabled", "contributes", "needs_setup"?, …}], "can_install"}`，`status` 是 `disabled / needs_setup / incompatible / stopped / starting / running / error`（`docs/extensions.md`「hub 的接口」）；`features` 带 `plugins` 时才有 |
@@ -655,7 +655,7 @@ hub 发给所有客户端的广播（这张表里除 `hello`、连接快照、`s
 
 `notify` 是事件名，`ws_notify` 是双方声明的能力名。hub 复用 APNs 的提问和完成决策、屏蔽规则与设备偏好，在 `c.has("ws_notify")` 时才发给该连接。即使没有 APNs token 或密钥也能收到；旧 iOS 不声明就不会收到新事件。
 
-`interaction` 表示需要处理的交互，`done` 表示 Agent 完成，`assistant` 表示助手完成，`alert` 表示扩展经 `POST /api/v1/notify` 发的提醒（不认识的 kind 客户端忽略）。偏好按鉴权设备 ID 读取 `/api/v1/devices/{id}/prefs`：交互看 `input`，完成看原有完成策略；机器与空间屏蔽沿用已有判断。完成事件由 hub 决策，Android 不应根据 sessions 状态变化再次生成一条。原始 `interaction` 与 `interaction_resolved` 事件照旧发送，用于请求卡和撤回通知，不能把它们都当成新的提醒。
+`interaction` 表示需要处理的交互，`done` 表示 Agent 完成，`assistant` 表示助手完成，`alert` 表示扩展经 `POST /api/v1/notify`（或脚本的 `personad notify`，`script-cli.md`）发的提醒（不认识的 kind 客户端忽略）。偏好按鉴权设备 ID 读取 `/api/v1/devices/{id}/prefs`：交互看 `input`，完成看原有完成策略；机器与空间屏蔽沿用已有判断。完成事件由 hub 决策，Android 不应根据 sessions 状态变化再次生成一条。原始 `interaction` 与 `interaction_resolved` 事件照旧发送，用于请求卡和撤回通知，不能把它们都当成新的提醒。
 
 事件不持久回放，也不证明通知实际展示；断线后客户端仍须拉交互和会话核对。通知可靠性、锁屏展示和耗电未实测。
 
@@ -1101,6 +1101,7 @@ node → hub 事件：`terminal.frame {session_id, epoch, seq, full, cols, rows,
 node → hub 请求：
 - `interaction.create {interaction}` → `{resolution}`（阻塞到被处理 / 过期；过期返回 `{"dismiss":true}`）
 - `mcp.tools {}` → `{tools}`；`mcp.call {name, args, session_id}` → `{content, is_error}`
+- `notify {title, body?, level?, silent?, id?, session_id?}` → `{sent, reason?}`（`personad notify`：`machine_id` 是这条连接的机器，不接受扩展的 `actions` / `ui` / `state`；其余同 `POST /api/v1/notify`，静音和「需要你」偏好一样生效；旧 hub 报 unknown method）
 
 ### 电脑链路（jarvis-link，kind link）
 
@@ -1320,6 +1321,9 @@ hub 这一侧只有一份实现：`assistantLink`（`server/internal/hub/assista
   → `{"output":<要打印到 stdout 的 JSON 或 null>}`，或 `{"retry":true}`（node 正在退出，去问下一个 node）
 - `{"kind":"mcp.tools"}` → `{"tools":[…]}`
 - `{"kind":"mcp.call","name":"…","args":{},"session_id":"…"}` → `{"content":[…],"is_error":false}`
+- `{"kind":"ask","input":{"question","options?","timeout_seconds?","cwd?"},"pane":"…","attempt":"…","resume":…}`
+  → `{"status":"answered|denied|dismissed|timeout|unavailable|invalid","answer?","error?"}`，或 `{"retry":true}`（`personad ask`，选项给 `question` 卡、没有选项给 `permission` 卡，`script-cli.md`）
+- `{"kind":"notify","input":{"title","body?","silent?","error?"},"pane":"…"}` → `{"sent":true|false,"reason?","error?"}`（`personad notify`）
 
 连不上 node（hub 不在线）时 hook 立即退出 0、不输出，即 TUI 正常处理；mcp 返回错误文本。
 

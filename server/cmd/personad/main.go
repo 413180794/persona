@@ -27,6 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/nodeupdate"
 	"github.com/nwverse/persona/server/internal/office"
 	"github.com/nwverse/persona/server/internal/relay"
+	"github.com/nwverse/persona/server/internal/scriptcli"
 	"github.com/nwverse/persona/server/internal/sysmon"
 	"github.com/nwverse/persona/server/internal/toolcli"
 	"github.com/nwverse/persona/server/internal/tunnel"
@@ -88,6 +89,11 @@ const usage = `usage:
                            with another's home directory, which hubs would take for that one (docs/mesh.md)
   personad hook             Claude Code hook entry (reads hook JSON on stdin)
   personad mcp              Claude Code MCP server (stdio)
+  personad ask "question" [--options a,b,c] [--timeout 10m] [--require-remote]
+                           block until the question is answered on the phone; exit 0 allowed / option chosen (printed),
+                           1 denied, 2 usage, 3 timeout, 4 phone unreachable (docs/script-cli.md)
+  personad notify "title" [body] [--silent] [--error] [--strict]
+                           one notification to the phone; exit 0 whatever happens unless --strict (docs/script-cli.md)
   personad office docx|pptx|xlsx|check …
                            write a Word document or a deck from Markdown, a workbook from JSON / CSV, or say what is in
                            one (the office skill): personad office --help
@@ -246,6 +252,10 @@ func main() {
 		err = mcpserver.Serve(ctx, version, os.Stdin, os.Stdout)
 	case "tool": // a connector's tools and command line from the assistant's shell (internal/toolcli)
 		os.Exit(toolcli.Main(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	case "ask": // a script asks the phone (internal/scriptcli)
+		os.Exit(scriptcli.Ask(ctx, os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	case "notify":
+		os.Exit(scriptcli.Notify(ctx, os.Args[2:], os.Stdout, os.Stderr))
 	case "office":
 		os.Exit(office.Main(os.Args[2:], os.Stdout, os.Stderr))
 	case "voice":

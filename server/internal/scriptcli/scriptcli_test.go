@@ -1,0 +1,243 @@
+package scriptcli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/node"
+)
+
+// fake is a node socket that answers with canned lines (no real socket, no phone) and remembers what it was asked.
+type fake struct {
+	reply string
+	err   error
+	reqs  []map[string]any
+}
+
+func (f *fake) dial(_ context.Context, req any) ([]byte, error) {
+	b, _ := json.Marshal(req)
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	f.reqs = append(f.reqs, m)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return []byte(f.reply + "\n"), nil
+}
+
+func (f *fake) runner(tty bool) Runner {
+	env := map[string]string{"HERDR_PANE_ID": "w1:p2"}
+	return Runner{Dial: f.dial, Getenv: func(k string) string { return env[k] }, Getwd: func() (string, error) { return "/work/app", nil },
+		IsTerminal: func(io.Reader) bool { return tty }}
+}
+
+type result struct {
+	code        int
+	out, errOut string
+}
+
+func ask(f *fake, tty bool, stdin string, args ...string) result {
+	var out, errOut bytes.Buffer
+	code := f.runner(tty).Ask(context.Background(), args, strings.NewReader(stdin), &out, &errOut)
+	return result{code, out.String(), errOut.String()}
+}
+
+func notify(f *fake, args ...string) result {
+	var out, errOut bytes.Buffer
+	code := f.runner(false).Notify(context.Background(), args, &out, &errOut)
+	return result{code, out.String(), errOut.String()}
+}
+
+func input(t *testing.T, f *fake) map[string]any {
+	t.Helper()
+	if len(f.reqs) == 0 {
+		t.Fatal("the node was asked nothing")
+	}
+	in, _ := f.reqs[0]["input"].(map[string]any)
+	return in
+}
+
+func TestAskExitCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name, reply, out string
+		code             int
+	}{
+		{"option chosen", `{"status":"answered","answer":"staging"}`, "staging\n", ExitOK},
+		{"allowed", `{"status":"answered"}`, "", ExitOK},
+		{"denied", `{"status":"denied"}`, "", ExitDenied},
+		{"handed back, nobody at the terminal", `{"status":"dismissed"}`, "", ExitDenied},
+		{"timeout", `{"status":"timeout"}`, "", ExitTimeout},
+		{"hub not connected", `{"status":"unavailable","error":"this node is not connected to a hub"}`, "", ExitUnreachable},
+		{"node too old to know ask", `{"error":"unknown kind"}`, "", ExitUnreachable},
+		{"rejected by the node", `{"status":"invalid","error":"more than 12 options"}`, "", ExitUsage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ask(&fake{reply: tc.reply}, false, "", "Deploy where?", "--options", "staging,prod")
+			if r.code != tc.code || r.out != tc.out {
+				t.Fatalf("exit %d out %q err %q, want exit %d out %q", r.code, r.out, r.errOut, tc.code, tc.out)
+			}
+		})
+	}
+}
+
+// The request carries the question, the options, the timeout and the pane; flags may come after the question.
+func TestAskRequest(t *testing.T) {
+	f := &fake{reply: `{"status":"answered","answer":"b"}`}
+	if r := ask(f, false, "", "Which one?", "--options=a, b ,,c", "--timeout", "10m", "--require-remote"); r.code != 0 {
+		t.Fatalf("%+v", r)
+	}
+	req := f.reqs[0]
+	if req["kind"] != "ask" || req["pane"] != "w1:p2" || req["attempt"] == "" {
+		t.Fatalf("request %v", req)
+	}
+	in := input(t, f)
+	opts, _ := in["options"].([]any)
+	if in["question"] != "Which one?" || fmt.Sprint(opts) != "[a b c]" || in["timeout_seconds"] != float64(600) || in["cwd"] != "/work/app" {
+		t.Fatalf("input %v", in)
+	}
+
+	f = &fake{reply: `{"status":"answered"}`}
+	ask(f, false, "", "--timeout", "90", "--", "-1 is the question")
+	if in = input(t, f); in["question"] != "-1 is the question" || in["timeout_seconds"] != float64(90) {
+		t.Fatalf("after --: %v", in)
+	}
+}
+
+func TestAskUsage(t *testing.T) {
+	for name, args := range map[string][]string{
+		"no question":    {},
+		"two questions":  {"a", "b"},
+		"empty question": {"  "},
+		"bad timeout":    {"q", "--timeout", "soon"},
+		"zero timeout":   {"q", "--timeout", "0"},
+		"too long":       {"q", "--timeout", "25h"},
+		"unknown flag":   {"q", "--loud"},
+		"too many opts":  {"q", "--options", "a,b,c,d,e,f,g,h,i,j,k,l,m"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fake{reply: `{"status":"answered"}`}
+			if r := ask(f, true, "y\n", args...); r.code != ExitUsage || len(f.reqs) != 0 {
+				t.Fatalf("exit %d, asked %d times; err %q", r.code, len(f.reqs), r.errOut)
+			}
+		})
+	}
+	if r := ask(&fake{}, false, "", "--help"); r.code != ExitOK || !strings.Contains(r.out, "usage: personad ask") {
+		t.Fatalf("help: %+v", r)
+	}
+}
+
+// With no node (or no hub) and a person at the terminal, the question is asked there; --require-remote never does.
+func TestAskFallsBackToTheTerminal(t *testing.T) {
+	down := func() *fake { return &fake{err: fmt.Errorf("%w: no such file", node.ErrNoNode)} }
+
+	r := ask(down(), true, "2\n", "Which?", "--options", "a,b")
+	if r.code != ExitOK || r.out != "b\n" || !strings.Contains(r.errOut, "1) a") {
+		t.Fatalf("by number: %+v", r)
+	}
+	if r = ask(down(), true, "nope\nA\n", "Which?", "--options", "a,b"); r.code != ExitOK || r.out != "a\n" {
+		t.Fatalf("by label, after a miss: %+v", r)
+	}
+	if r = ask(down(), true, "", "Which?", "--options", "a,b"); r.code != ExitDenied || r.out != "" {
+		t.Fatalf("end of input: %+v", r)
+	}
+	if r = ask(down(), true, "y\n", "Go on?"); r.code != ExitOK || r.out != "" {
+		t.Fatalf("yes: %+v", r)
+	}
+	if r = ask(down(), true, "\n", "Go on?"); r.code != ExitDenied {
+		t.Fatalf("default is no: %+v", r)
+	}
+	// Nobody to type: unreachable, say so.
+	if r = ask(down(), false, "y\n", "Go on?"); r.code != ExitUnreachable || !strings.Contains(r.errOut, "Persona node") {
+		t.Fatalf("not a terminal: %+v", r)
+	}
+	if r = ask(down(), true, "y\n", "Go on?", "--require-remote"); r.code != ExitUnreachable {
+		t.Fatalf("--require-remote: %+v", r)
+	}
+	// "交回电脑" on the phone is the same hand back.
+	handed := &fake{reply: `{"status":"dismissed"}`}
+	if r = ask(handed, true, "y\n", "Go on?"); r.code != ExitOK {
+		t.Fatalf("handed back to the terminal: %+v", r)
+	}
+	if r = ask(&fake{reply: `{"status":"dismissed"}`}, true, "y\n", "Go on?", "--require-remote"); r.code != ExitDenied {
+		t.Fatalf("handed back with --require-remote: %+v", r)
+	}
+	// A timeout or a denial is an answer: no second try at the terminal.
+	if r = ask(&fake{reply: `{"status":"timeout"}`}, true, "y\n", "Go on?"); r.code != ExitTimeout {
+		t.Fatalf("timeout: %+v", r)
+	}
+	if r = ask(&fake{reply: `{"status":"denied"}`}, true, "y\n", "Go on?"); r.code != ExitDenied {
+		t.Fatalf("denied: %+v", r)
+	}
+}
+
+// Ctrl-C ends the wait without falling back to the terminal's prompt.
+func TestAskInterrupted(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &fake{}
+	r := f.runner(true)
+	r.Dial = func(ctx context.Context, _ any) ([]byte, error) {
+		cancel()
+		return nil, ctx.Err()
+	}
+	var out, errOut bytes.Buffer
+	if code := r.Ask(ctx, []string{"Go on?"}, strings.NewReader("y\n"), &out, &errOut); code != ExitInterrupted || out.Len() != 0 {
+		t.Fatalf("exit %d out %q err %q", code, out.String(), errOut.String())
+	}
+}
+
+func TestNotifyBestEffort(t *testing.T) {
+	f := &fake{reply: `{"sent":true}`}
+	if r := notify(f, "Build done", "all green", "--silent", "--error"); r.code != 0 || r.out != "" || r.errOut != "" {
+		t.Fatalf("%+v", r)
+	}
+	req := f.reqs[0]
+	in := input(t, f)
+	if req["kind"] != "notify" || req["pane"] != "w1:p2" || in["title"] != "Build done" || in["body"] != "all green" ||
+		in["silent"] != true || in["error"] != true {
+		t.Fatalf("request %v", req)
+	}
+
+	for name, f := range map[string]*fake{
+		"no node":      {err: fmt.Errorf("%w: gone", node.ErrNoNode)},
+		"muted":        {reply: `{"sent":false,"reason":"muted"}`},
+		"hub refuses":  {reply: `{"sent":false,"error":"unknown method notify"}`},
+		"broken reply": {reply: `nonsense`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if r := notify(f, "t"); r.code != 0 || !strings.Contains(r.errOut, "没发出去") {
+				t.Fatalf("best effort: %+v", r)
+			}
+			if r := notify(f, "t", "--strict"); r.code != 1 || !strings.Contains(r.errOut, "没发出去") {
+				t.Fatalf("--strict: %+v", r)
+			}
+		})
+	}
+	if r := notify(&fake{reply: `{"sent":true}`}, "t", "--strict", "b"); r.code != 0 {
+		t.Fatalf("--strict, sent: %+v", r)
+	}
+}
+
+func TestNotifyUsage(t *testing.T) {
+	for name, args := range map[string][]string{
+		"no title":      {},
+		"empty title":   {" "},
+		"three words":   {"a", "b", "c"},
+		"unknown flag":  {"a", "--loud"},
+		"strict, empty": {"--strict"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := &fake{reply: `{"sent":true}`}
+			if r := notify(f, args...); r.code != ExitUsage || len(f.reqs) != 0 {
+				t.Fatalf("exit %d, asked %d times; err %q", r.code, len(f.reqs), r.errOut)
+			}
+		})
+	}
+	if r := notify(&fake{}, "--help"); r.code != 0 || !strings.Contains(r.out, "usage: personad notify") {
+		t.Fatalf("help: %+v", r)
+	}
+}
