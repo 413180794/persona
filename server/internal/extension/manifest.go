@@ -51,6 +51,10 @@ type Manifest struct {
 	Node             *NodeRuntime               `json:"node,omitempty"`
 	ActivationEvents []string                   `json:"activation_events,omitempty"`
 	Contributes      map[string]json.RawMessage `json:"contributes,omitempty"`
+	// OffByDefault are contributions ("<point>/<id>") that start switched off: at install, and at an upgrade for the
+	// ones the version before did not have (docs/extensions.md「贡献的开关」). A connector's or a bound channel's
+	// switch is not the extension's, so they cannot be listed.
+	OffByDefault []string `json:"off_by_default,omitempty"`
 	// Depends, Exports and ExtensionPack are the extension model (docs/extensions.md「依赖、导出和合集」, model.go).
 	Depends       []Dependency    `json:"depends,omitempty"`
 	Exports       *Exports        `json:"exports,omitempty"`
@@ -512,6 +516,9 @@ func (m *Manifest) Validate() error {
 		}
 	}
 	for _, msg := range m.agentFilterSwitches() {
+		bad("%s", msg)
+	}
+	for _, msg := range m.offByDefaultProblems() {
 		bad("%s", msg)
 	}
 	if len(m.Secrets) > SecretsMost {

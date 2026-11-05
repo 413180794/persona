@@ -102,6 +102,44 @@ func ContributionTitle(m *Manifest, point, id string) string {
 	return id
 }
 
+// offByDefaultProblems are what is wrong with OffByDefault: each must be one of the manifest's contributions, once,
+// and one whose switch is the extension's.
+func (m *Manifest) offByDefaultProblems() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, key := range m.OffByDefault {
+		point, id, ok := strings.Cut(key, "/")
+		switch {
+		case seen[key]:
+			out = append(out, fmt.Sprintf("off_by_default: %q twice", key))
+		case !ok || !slices.Contains(m.Items(point), id):
+			out = append(out, fmt.Sprintf("off_by_default: %q is not one of the contributions (<point>/<id>)", key))
+		case m.SwitchedElsewhere(point, id) || m.switchedByConfig(point, id):
+			out = append(out, fmt.Sprintf("off_by_default: %q has a switch of its own (a connector's, a channel's or a setting)", key))
+		}
+		seen[key] = true
+	}
+	return out
+}
+
+// StartsOff is what a new install (prev nil) or an upgrade from prev switches off before it runs: the manifest's
+// OffByDefault, at an upgrade only the ones prev did not contribute (the user chose about the others already), added
+// to disabled (sorted, once each).
+func (m *Manifest) StartsOff(prev *Manifest, disabled []string) []string {
+	out := slices.Clone(disabled)
+	for _, key := range m.OffByDefault {
+		point, id, _ := strings.Cut(key, "/")
+		if prev != nil && slices.Contains(prev.Items(point), id) {
+			continue
+		}
+		if !slices.Contains(out, key) {
+			out = append(out, key)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // ErrSwitchedElsewhere: the contribution's switch is not the extension's (a connector's).
 var ErrSwitchedElsewhere = errors.New("这一项跟着连接器的开关")
 

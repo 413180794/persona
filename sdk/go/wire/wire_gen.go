@@ -34,6 +34,10 @@ type Manifest struct {
 	Node             *NodeRuntime `json:"node,omitempty"`
 	ActivationEvents []string     `json:"activation_events,omitempty"`
 	Contributes      *Contributes `json:"contributes,omitempty"`
+	// Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
+	// did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
+	// before it refuse the manifest.
+	OffByDefault []string `json:"off_by_default,omitempty"`
 	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
 	Depends []Dependency `json:"depends,omitempty"`
 	Exports *Exports     `json:"exports,omitempty"`
@@ -1456,12 +1460,10 @@ type MessagingReaction struct {
 	Key   string   `json:"key"`
 	Count int      `json:"count"`
 	Mine  bool     `json:"mine,omitempty"`
-	Users []string `json:"users,omitempty"``json:"text"`
-	Icon string `json:"icon,omitempty"`
-	Tone string `json:"tone,omitempty"`
+	Users []string `json:"users,omitempty"`
 }
 
-// MessagingAction: an action of the extension's on a message, in its long-press menu: POST
+// MessagingDecoration: A small line under a message''s on a message, in its long-press menu: POST
 // messages/{id}/actions/{id}.
 type MessagingAction struct {
 	ID          string `json:"id"`

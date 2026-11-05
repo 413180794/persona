@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -106,5 +107,73 @@ func TestWithoutKeepsTheManifest(t *testing.T) {
 	}
 	if full.Without([]string{"connectors/examplenotes"}) != full {
 		t.Fatal("a connector is not taken out here")
+	}
+}
+
+func TestOffByDefault(t *testing.T) {
+	ctx := context.Background()
+	r, store, _ := newTestRegistry(t)
+	pkg := t.TempDir()
+	write := func(version string, uis ...string) {
+		writePackage(t, pkg, func(m map[string]any) {
+			m["version"] = version
+			var items []any
+			for _, id := range uis {
+				items = append(items, map[string]any{"id": id, "title": id, "placement": "extension_page"})
+			}
+			m["contributes"].(map[string]any)["ui"] = items
+			m["off_by_default"] = []any{"ui/page", "ui/later"}[:len(uis)-1]
+		})
+	}
+	write("1.0.0", "usage", "page")
+	pv, err := r.Preview(ctx, "dir:"+pkg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := r.Install(ctx, pv.ID, pv.Digest, "cli")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Record.DisabledContributions; !slices.Equal(got, []string{"ui/page"}) {
+		t.Fatal("installed with the page off:", got)
+	}
+	if ids := p.Manifest.Items("ui"); !slices.Equal(ids, []string{"usage"}) || !p.Record.Enabled {
+		t.Fatal("the extension is on, the rest of it too:", ids, p.Record.Enabled)
+	}
+	// The user turns the page on; an upgrade that adds another off-by-default item keeps that choice and switches
+	// only the new one off.
+	if err := r.SetContribution(ctx, "example-notes", "ui", "page", true, "device:x"); err != nil {
+		t.Fatal(err)
+	}
+	write("1.1.0", "usage", "page", "later")
+	pv, err = r.Preview(ctx, "dir:"+pkg, "example-notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err = r.Upgrade(ctx, "example-notes", pv.ID, pv.Digest, "cli"); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.rows["example-notes"].DisabledContributions; !slices.Equal(got, []string{"ui/later"}) {
+		t.Fatal("after the upgrade:", got)
+	}
+	if ids := p.Manifest.Items("ui"); !slices.Equal(ids, []string{"usage", "page"}) {
+		t.Fatal("what takes effect:", ids)
+	}
+}
+
+func TestOffByDefaultChecked(t *testing.T) {
+	for name, off := range map[string][]any{
+		"not a contribution": {"ui/nope"},
+		"no point":           {"usage"},
+		"twice":              {"ui/usage", "ui/usage"},
+		"a connector":        {"connectors/examplenotes"},
+	} {
+		raw := with(t, func(m map[string]any) {
+			m["contributes"].(map[string]any)["ui"] = []any{map[string]any{"id": "usage", "title": "用量", "placement": "extension_page"}}
+			m["off_by_default"] = off
+		})
+		if _, err := Parse(raw); err == nil || !strings.Contains(err.Error(), "off_by_default") {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }

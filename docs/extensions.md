@@ -144,6 +144,7 @@ hub 不认识的扩展点：扩展照样能装（可能是给新版 hub 写的�
 | `node` | 否 | 在你选的电脑上运行的程序（#1830，`docs/plan-extensions.md`「七」）。`command`：只能按平台写 `{"darwin-<arch>" \| "linux-<arch>": 路径}`，路径规则同 `runtime`，不能是 `personad`；有哪些平台就是能在哪些电脑上跑，包里每个平台的程序都要在、要可执行（hub 不检查自己的平台）。`machines`：选电脑的配置字段名，这个字段必须是 `format: machine` 的数组，`items` 的 `x-os` 要写、且只能是 `command` 有程序的系统（要限定只能一台就写 `maxItems`）。`args`、`env`、`rpc`、`http` 同 `runtime`；`keep_running`：`lease`（默认，hub 半小时没续就停）/ `always`；`secrets`：发给电脑的密钥名（必须是 `secrets` 里的），其余只留在 hub；`permissions`：`network`（主机名）、`files`、`macos_privacy`，见「权限」。可以只有 `node` 没有 `runtime`（贡献的扩展点要不需要 hub 上的程序）。怎么跑见「在电脑上运行的程序」 |
 | `activation_events` | 否 | `on_startup` / `on_call` / `on_http`，见「什么时候跑」；有 `runtime` 时默认 `on_call`；`rpc: none` 的只能 `on_startup` |
 | `contributes` | 是（合集除外） | 见「扩展点」，至少一项；往别的扩展导出的扩展点贡献写 `"<扩展 id>.<扩展点 id>"`，见「依赖、导出和合集」 |
+| `off_by_default` | 否 | 装上时先关着的贡献（`["ui/github"]`，#2829），见「贡献的开关」。不能写连接器和绑在连接器上的渠道。加这个字段以前的 hub 严格读清单，带它的扩展装不上、市场里的条目被跳过（带一条警告）：用到它的扩展本来就要新 hub |
 | `depends`、`exports`、`extension_pack` | 否 | 依赖的扩展、开给别的扩展的扩展点、合集的成员，见「依赖、导出和合集」 |
 | `configuration` | 否 | 配置的 JSON Schema，只能用下面的子集 |
 | `secrets` | 否 | `[{name, title, description?, required?}]`，`name` 是 `^[a-z][a-z0-9_]{0,31}$`，最多 32 个 |
@@ -403,6 +404,9 @@ Finder 压缩的 `__MACOSX/`、`.DS_Store`），解包时一律跳过，不算�
   它们在列表里是 `via: "connector"`、`can_disable: false`，改的时候走连接器的开关（连接器还没起来时回 409 `not_running`）。
 - hub.json 来的扩展不能单独关（去 hub.json 改）。
 - 存在 `plugins.disabled_contributions`（迁移 `0363`，`["ui/usage", …]`）；升级、回滚后留着（新版本没有这一项了就不起作用）。
+- **默认关**（#2829）：清单的 `off_by_default: ["<扩展点>/<id>", …]` 是装上时先关着的贡献，比如扩展原有的功能装上就开、新加的侧边栏页面等用户自己去开。
+  第一次安装时这几项写进 `disabled_contributions`；升级时只有**上一个版本没有**、新版本写在 `off_by_default` 里的那几项先关上，用户对已有各项的选择不动；回滚不改。
+  扩展本身照旧装上就开。连接器、绑在连接器上的渠道、跟着设置走的贡献不能写（开关不是扩展的）；开发模式（`personad extension dev`）不先关。
 
 接口（完整权限的设备）：
 

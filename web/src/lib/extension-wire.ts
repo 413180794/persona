@@ -23,6 +23,12 @@ export interface Manifest {
   activation_events?: ActivationEvent[];
   contributes?: Contributes;
   /**
+   * Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
+   * did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
+   * before it refuse the manifest.
+   */
+  off_by_default?: string[];
+  /**
    * Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
    */
   depends?: Dependency[];
@@ -1491,7 +1497,16 @@ export interface MessagingReaction {
 }
 
 /**
- * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
+ */
+export interface MessagingDecoration {
+  text: string;
+  icon?: string;
+  tone?: Tone;
+}
+
+/**
+ * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 export interface MessagingAction {
   id: string;

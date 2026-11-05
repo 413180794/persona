@@ -32,6 +32,7 @@
         "node": {"$ref": "#/$defs/NodeRuntime"},
         "activation_events": {"type": "array", "items": {"$ref": "#/$defs/ActivationEvent"}},
         "contributes": {"$ref": "#/$defs/Contributes"},
+        "off_by_default": {"description": "Contributions (\"<point>/<id>\") that start switched off: at install, and at an upgrade the ones the version before did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs before it refuse the manifest.", "type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[a-z0-9_.-]+/[a-z0-9][a-z0-9_-]*$"}},
         "depends": {
           "description": "Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.",
           "type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/Dependency"}

@@ -710,6 +710,7 @@ func (r *Registry) Install(ctx context.Context, previewID, digest, actor string)
 	now := r.now()
 	row := Record{ID: m.ID, Source: SourceInstalled, Origin: pv.source.String(), Version: m.Version, Granted: m.Permissions,
 		GrantedDigest: pv.Digest, Enabled: true, Config: json.RawMessage(`{}`), InstalledAt: now, UpdatedAt: now}
+	row.DisabledContributions = m.StartsOff(nil, nil)
 	row.Manifest, _ = json.Marshal(m)
 	if pv.source.Kind == "remote" {
 		row.Remote = &Remote{RPCSocket: pv.source.RPCSocket, HTTPSocket: pv.source.HTTPSocket}
@@ -785,6 +786,7 @@ func (r *Registry) Upgrade(ctx context.Context, id, previewID, digest, actor str
 		return nil, errors.New("扩展在预览之后变了，重新预览一次")
 	}
 	row := old.Record
+	row.DisabledContributions = m.StartsOff(old.Full, row.DisabledContributions)
 	row.PreviousVersion, row.Version, row.UpdatedAt = row.Version, m.Version, r.now()
 	row.Manifest, _ = json.Marshal(m)
 	row.Granted, row.GrantedDigest = m.Permissions, pv.Digest

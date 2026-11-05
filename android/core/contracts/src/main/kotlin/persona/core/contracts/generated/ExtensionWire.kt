@@ -49,6 +49,12 @@ data class ExtensionManifest(
     @SerialName("activation_events") val activationEvents: List<String>? = null,
     val contributes: ExtensionContributes? = null,
     /**
+     * Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version
+     * before did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's).
+     * Hubs before it refuse the manifest.
+     */
+    @SerialName("off_by_default") val offByDefault: List<String>? = null,
+    /**
      * Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
      */
     val depends: List<ExtensionDependency>? = null,
@@ -2103,17 +2109,7 @@ data class ExtensionMessagingReaction(
 )
 
 /**
- * A small line under a message's body the extension adds ([removed] · 已解码, 加密消息 · 对外展示).
- */
-@Serializable
-data class ExtensionMessagingDecoration(
-    val text: String = "",
-    val icon: String? = null,
-    val tone: String? = null,
-)
-
-/**
- * An action of the extension's on a message, in its long-press menu: POST messages/{id}/actions/{id}.
+ * A small line under a message''s on a message, in its long-press menu: POST messages/{id}/actions/{id}.
  */
 @Serializable
 data class ExtensionMessagingAction(
