@@ -118,7 +118,7 @@ xcrun simctl launch --terminate-running-process $SIM <bundle id> \
   `-openPane terminal`，`-terminalWrap NO` 看不换行，`-terminalPages 1` 加载一页（mock 的 `/screen/before` 回一段带颜色的历史）。
 - 完整 herdr 界面（网页，`docs/terminal.md` 第二十四节）：`MOCK_TERMINAL_FULL=1`（hello 带 `herdr_client`，`herdr_open` 回一个编造的 herdr 客户端：侧边栏 / 标签页条 / 两个窗格，窄时单列；Ctrl+Y 让它发一次 OSC 52；`GET /mock/herdr_client` 看 hub 收到的 `herdr_*`），
   `MOCK_TERMINAL_FULL_EXEC="herdr session attach <临时会话>"` 在 PTY 里跑真客户端（只用自己建的临时会话），`MOCK_TERMINAL_FULL_END_AFTER=<秒>` 让视图过一会儿结束，`MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many` 拒绝。
-  端到端 `scripts/test/web_herdr_full_e2e.py`（用法见脚本开头，四个假 hub + 四个 Vite）和对真 herdr 的 `scripts/test/web_herdr_full_live.py`；Go 对真 herdr：`PERSONA_LIVE_FULL_SESSION=<临时会话> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`。
+  端到端 `scripts/test/web_herdr_full_e2e.py`（用法见脚本开头，四个假 hub + 四个 Vite）和对真 herdr 的 `scripts/test/web_herdr_full_live.py`；完整界面里 herdr 与 Persona 的冲突（右键、Ctrl+B、鼠标、粘贴 / 拖放，#2700）：`scripts/test/web_herdr_full_conflicts_e2e.py`（一个假 hub + 一个 Vite，用法见脚本开头）和对真 herdr 临时会话的 `scripts/test/web_herdr_full_conflicts_live.py`；Go 对真 herdr：`PERSONA_LIVE_FULL_SESSION=<临时会话> go test -tags herdrlive -run 'TestLiveFullClient|TestLiveFocusPane' ./internal/herdr/`。
 - 独立终端（网页，`docs/terminal.md` 第十九节）：再加 `MOCK_TERMINAL_PANES=1`（hello 带 `terminal_panes`，`GET/POST /api/v1/machines/{mid}/panes` 回编造的空间 / 标签页 / 窗格，`pane:` 地址打开的是编造的 zsh）。
 - 手机接管终端：再加 `MOCK_TERMINAL_CONTROL=1`（hello 带 `terminal_control`，按 App 给的列 × 行排编造的 Claude 界面，打的字出现在输入框，
   `GET /mock/terminal_input` 看收到的字节），`MOCK_TERMINAL_BUSY=1` 看「电脑上另一个程序正在使用这个终端」的弹窗；`-terminalSize phone|mirror` 选模式。

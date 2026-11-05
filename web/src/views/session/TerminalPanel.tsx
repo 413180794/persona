@@ -45,6 +45,7 @@ import { ModeToggle } from "./terminal/ModeToggle";
 import { ShortcutsEditor } from "./terminal/Shortcuts";
 import { Surface } from "./terminal/Surface";
 import { TerminalOptions } from "./terminal/TerminalOptions";
+import { UploadStatus } from "./terminal/UploadStatus";
 import { t } from "../../i18n";
 
 const nothing = () => () => {};
@@ -293,16 +294,7 @@ function PaneTerminal({
         {feed && v && (
           <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col gap-1.5">
             {v.stale && <LinkStatus feed={feed} />}
-            {v.uploading && (
-              <div
-                role="status"
-                className="flex items-center gap-2 rounded-control bg-surface px-2.5 py-1.5 text-[12px] text-ink-2 shadow-raised"
-                style={{ animation: "fade-in 160ms ease-out both" }}
-              >
-                <Spinner size={12} />
-                <span className="min-w-0 flex-1 truncate">{v.uploading}</span>
-              </div>
-            )}
+            {v.uploading && <UploadStatus text={v.uploading} />}
             {takeBack && (
               <div className="pointer-events-auto flex items-center gap-2 rounded-control bg-surface py-1.5 pr-1.5 pl-2.5 text-[12px] text-ink-2 shadow-raised" style={{ animation: "fade-in 160ms ease-out both" }}>
                 <Icon name="info" size={13} className="shrink-0 text-ink-3" />

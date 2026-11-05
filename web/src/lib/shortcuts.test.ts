@@ -356,6 +356,24 @@ describe("dispatching a key", () => {
     expect(run).toHaveBeenCalledWith(expect.objectContaining({ focus: "terminal" }));
     expect(e.prevented).toBe(true);
   });
+  it("leaves herdr's prefix to herdr in the full surface (Ctrl+B is 右侧面板 elsewhere), and only there", () => {
+    const run = vi.fn();
+    on("right-panel", run);
+    const full = el("[data-herdr-full]", ".xterm", "textarea");
+    const inFull = event(ctrl("b"), full);
+    expect(dispatchKey(inFull, { platform: "other" })).toBe(false);
+    expect(inFull.prevented).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    // the single-pane terminal and the page keep it
+    expect(dispatchKey(event(ctrl("b"), terminal), { platform: "other" })).toBe(true);
+    expect(dispatchKey(event(ctrl("b"), page), { platform: "other" })).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+    // another chord of the registry is still Persona's in the full surface
+    const jump = vi.fn();
+    on("jump", jump);
+    expect(dispatchKey(event(ctrl("k"), full), { platform: "other" })).toBe(true);
+    expect(jump).toHaveBeenCalledTimes(1);
+  });
   it("leaves bare keys alone, in a text field and in the terminal", () => {
     const run = vi.fn();
     for (const id of SHORTCUTS.map((s) => s.id)) on(id, run);

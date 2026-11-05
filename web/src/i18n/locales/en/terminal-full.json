@@ -37,5 +37,8 @@
   "select_first": "Select the text to copy with the mouse first",
   "copied": "Copied to the clipboard",
   "copy_prompt": "herdr wants to copy some text",
-  "copy": "Copy"
+  "copy": "Copy",
+  "paste_not_live": "Wait until the full view is connected to paste files",
+  "paste_changed": "The terminal changed during the upload, so nothing was pasted",
+  "paste_released": "The full view disconnected during the upload, so nothing was pasted"
 }

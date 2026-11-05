@@ -37,5 +37,8 @@
   "select_first": "先用鼠标选中要复制的文字",
   "copied": "已复制到剪贴板",
   "copy_prompt": "herdr 要复制一段文字",
-  "copy": "复制"
+  "copy": "复制",
+  "paste_not_live": "完整界面连上后才能粘贴文件",
+  "paste_changed": "上传期间终端已切换，没有粘贴",
+  "paste_released": "上传期间完整界面断开了，没有粘贴"
 }

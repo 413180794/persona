@@ -7,6 +7,7 @@
 import { t } from "../i18n";
 import { useSyncExternalStore } from "react";
 import type { IconName } from "../ui/icons";
+import { herdrOwnsKey, inFullSurface } from "./terminal-conflicts";
 
 // ── platform ─────────────────────────────────────────────
 
@@ -604,6 +605,8 @@ export interface DispatchEnv {
 /** Runs the command a keydown is for. true: it did, and the event is consumed (no browser action, no one else sees it). */
 export function dispatchKey(e: Dispatchable, env: DispatchEnv = {}): boolean {
   if (recording > 0 || e.defaultPrevented) return false;
+  // herdr's own key in its full surface (Ctrl+B, its prefix, where Mod is Ctrl) is not a shortcut there (lib/terminal-conflicts.ts)
+  if (herdrOwnsKey(e) && inFullSurface(e.target)) return false;
   const hit = matchShortcut(e, env.bindings, env.platform);
   if (!hit) return false;
   if (env.overlay && !hit.def.overlay) return false;

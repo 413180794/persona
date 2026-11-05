@@ -463,6 +463,8 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
     传到窗格所在的电脑（50 MB 以内），再把转义后的路径加一个空格敲进窗格（括号粘贴），Claude Code / Codex 按路径读图片。传的时候顶部有状态条；传完时已换会话或不再接管就不粘贴并提示。
     有选中文字时 ⌃C / ⌘C 复制（没有选中仍是 ^C），键栏也有复制键；页面不是 HTTPS 时退回 `execCommand` 并说明。载入 `@xterm/addon-clipboard`（程序的 OSC 52 写入剪贴板，读查询一律拒绝），herdr 的流目前不带程序的 OSC 52。
     输入法组字时页面不处理按键，打开 xterm 前等字体。
+  - **完整界面里的冲突**（#2700，`docs/terminal.md` 第二十六节，`lib/terminal-conflicts.ts`）：herdr 说了算——右键是 herdr 自己的菜单（Persona 的菜单是 Shift + 右键）、Ctrl+B（herdr 的前缀键）原样发给 herdr 而不是 Persona 的「右侧面板」、鼠标一律先给 herdr、链接要 ⌘ / Ctrl + 点击；
+    粘贴 / 拖放图片和文件、Files 面板的 `@path` 拖放也接到完整界面（Windows / Linux 的 Ctrl+V 先看剪贴板有没有文件，没有仍是 `^V`）。表格在 `docs/terminal.md` 第二十六节。
   #2331 补上（对照 Moshi 网页版的细节；逻辑在 `lib/terminal-details.ts`、`lib/terminal-search.ts`，都有单元测试）：
   - **输出里的网址可点**：载入 `@xterm/addon-web-links`，点一下经 `openLink` 打开（和对话里的链接同一条路），只认 http(s)（`webLink`），程序用 OSC 8 写的链接也走同一个过滤；
     点链接不会同时给程序发一次 `terminal_click`。换行模式下页面自己画屏幕，没有链接（同 OSC 8）。
@@ -554,7 +556,7 @@ Agent 的会话页（`/s/…`、`/t/…`）中间在**对话**和它的**终端*
 | Mod+1…9 | 切到第 N 台电脑（机器详情页，按侧边栏的顺序） | 切机器 |
 | Mod+J | 会话页：中间在对话和终端之间切换（记住每个 Agent 上次的）；终端页：Agent 的窗格回到它的对话（普通 shell 没有对话） | 终端 ⇄ 对话 |
 | Mod+Alt+F | 终端面板在前面时：单窗格 ⇄ 完整界面（hub 有 `herdr_client` 才有） | 终端 单窗格 ⇄ 完整界面 |
-| Mod+B | 右侧面板收起 / 恢复（恢复上一次关的；没有就开这条对话的文件） | 右面板 |
+| Mod+B | 右侧面板收起 / 恢复（恢复上一次关的；没有就开这条对话的文件）。终端的完整界面里，Windows / Linux 的 Ctrl+B 是 herdr 的前缀键，原样发给 herdr（#2700） | 右面板 |
 | Mod+Alt+B | 宽屏：侧边栏收成图标栏 / 展开（记在这个浏览器）；窄屏：抽屉 | 左侧栏 |
 | Mod+Shift+Enter | 宽屏：只留中间（侧边栏和右侧面板不画，面板里的终端照常挂着）；再按恢复 | 最大化中间 |
 | Mod+I | 聚焦这页的输入框（对话），没有就聚焦正在看的终端 | 聚焦输入 |

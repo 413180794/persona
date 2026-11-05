@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../../i18n";
-import { shouldRefocus, terminalMenu, wantsOwnMenu, type TerminalMenuKey } from "../../../lib/terminal-details";
+import { shouldRefocus, terminalMenu, type TerminalMenuKey } from "../../../lib/terminal-details";
 import { FIND_CLOSED, findReducer, isFindShortcut, queryFromSelection } from "../../../lib/terminal-search";
 import { STATUS_LABEL, canReconnect, type FullStatus } from "../../../lib/terminal-mode";
 import { Button, cx, IconButton, Loading, Menu, type MenuItem } from "../../../ui/atoms";
@@ -16,6 +16,7 @@ import { FullFeed, type FullView } from "./full";
 import { KeyBar } from "./KeyBar";
 import { saveKeyBar, savedKeyBar } from "./keybar-pref";
 import { ShortcutsEditor } from "./Shortcuts";
+import { UploadStatus } from "./UploadStatus";
 
 const nothing = () => () => {};
 
@@ -88,7 +89,7 @@ export function FullTerminal({
   useEffect(() => {
     const f = new FullFeed(mid, sid);
     setFeed(f);
-    void f.mount(host.current!, delayAtMount.current);
+    void f.mount(host.current!, delayAtMount.current, viewport.current!);
     return () => f.dispose();
   }, [mid, sid]);
 
@@ -138,15 +139,15 @@ export function FullTerminal({
     openFind();
   };
 
-  // ── right-click menu: Persona's where herdr is not taking the mouse (it is, nearly always: its own menus win) ──
+  // ── right-click: herdr's own menus (pane, space) win; Persona's menu is Shift + right click (lib/terminal-conflicts.ts) ──
   const onContextMenu = (e: React.MouseEvent) => {
-    if (!wantsOwnMenu({ shiftKey: e.shiftKey, pointerType: (e.nativeEvent as PointerEvent).pointerType })) return;
+    const route = feed ? feed.rightClick(e, (e.nativeEvent as PointerEvent).pointerType) : "menu";
+    if (route === "browser") return;
+    e.preventDefault(); // herdr's: the press already went to it as a mouse report; the browser's menu must not cover its own
+    if (route === "herdr") return;
     const own = Boolean(viewport.current && selectionInside(viewport.current));
-    const selection = Boolean(feed?.hasSelection()) || own;
-    if (feed?.mouseTracked && !selection) return; // the right click is herdr's
-    e.preventDefault();
     (document.activeElement as HTMLElement | null)?.blur();
-    setMenu({ x: e.clientX, y: e.clientY, selection });
+    setMenu({ x: e.clientX, y: e.clientY, selection: Boolean(feed?.hasSelection()) || own });
   };
   const menuItems = (): MenuItem[] => {
     const icons: Record<TerminalMenuKey, MenuItem["icon"]> = { copy: "copy", paste: "paste", selectAll: "list", search: "search", clearSelection: "x" };
@@ -195,13 +196,14 @@ export function FullTerminal({
     <div
       ref={root}
       onKeyDownCapture={onKeyDownCapture}
+      data-herdr-full=""
       onClick={(e) => !(e.target as Element).closest('[role="search"]') && setTimeout(refocus, 0)}
       tabIndex={-1}
       className="flex min-h-0 flex-1 flex-col outline-none"
     >
       {slot && on && createPortal(actions, slot)}
       <div className="relative flex min-h-0 flex-1 flex-col">
-        <div ref={viewport} onContextMenu={onContextMenu} className="relative min-h-0 flex-1 overflow-hidden p-2">
+        <div ref={viewport} onContextMenu={onContextMenu} className={cx("relative min-h-0 flex-1 overflow-hidden p-2", v?.dropping && "ring-2 ring-inset ring-accent")}>
           <div ref={host} className="h-full w-full font-mono" />
         </div>
         {feed && v && find.open && (
@@ -213,6 +215,11 @@ export function FullTerminal({
             onToggleCase={() => dispatchFind({ type: "toggleCase" })}
             onClose={closeFind}
           />
+        )}
+        {v?.uploading && (
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col gap-1.5">
+            <UploadStatus text={v.uploading} />
+          </div>
         )}
         {(!v || !v.ready || status === "connecting") && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

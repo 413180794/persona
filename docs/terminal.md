@@ -402,8 +402,9 @@ Claude 能滚是因为它在哪一行都接滚轮（第 0 行、输入框上都�
 **流程**（`lib/terminal-clipboard.ts`、`session/terminal/clipboard.ts`、`feed.ts` 的 `uploadFiles`）：
 
 1. 面板容器上抓 `paste`（捕获阶段）：`clipboardData.files`，没有就取 `items` 里 `kind=file` 的；拖放走 `drop`，同一条路。
-   键栏的「粘贴」键先试 `navigator.clipboard.read()` 里的图片（浏览器允许时），没有再读文字。浏览器里 ⌘V / Ctrl+V 本来就带着文件触发 `paste`，
-   所以不像 Moshi 原生端那样要拦 Ctrl+V 再决定发不发 `\x16`；剪贴板只有文字时走原来的文字粘贴，一个字没变。
+   键栏的「粘贴」键先试 `navigator.clipboard.read()` 里的图片（浏览器允许时），没有再读文字。⌘V（Mac）和 Ctrl+Shift+V 会带着文件触发 `paste`；
+   **Windows / Linux 上的 Ctrl+V 不会**：xterm 把它当 `^V` 发出去并取消按键，浏览器不粘贴（2026-11-05 在 #2700 里实测、读 xterm 源码确认；这一条原先写错了）。
+   单窗格里这一条还是这样（用 Ctrl+Shift+V 或键栏的「粘贴」）；完整界面里 Ctrl+V 已经处理，见第二十六节。剪贴板只有文字时走原来的文字粘贴，一个字没变。
 2. 只有**正在接管**时才收：只看（或被别处接管）时提示「接管终端后才能粘贴文件」，什么都不传。
 3. 每个文件 `POST /api/v1/machines/{mid}/files?name=<文件名>&dest=terminal`（原始字节，`application/octet-stream`，和对话页「发送文件」、新建 Agent 的附件是同一个接口，
    `docs/protocol.md`「发送文件」；网页端请求也共用 `lib/attachments.ts` 的 `sendFile`）。hub 每 1 MB 一块转给那台电脑的 node（`file.upload.begin / chunk / end`，`begin` 带 `dest`），
@@ -741,7 +742,7 @@ hub → 浏览器：`herdr_state {id, state: "open", cols, rows}`、`herdr_data 
 - **动画**：两个界面一个往里滑 + 淡入、一个往外滑 + 淡出（14 px、220 ms，`--ease-out-strong`），全是 CSS transition，没有新的动画库；`styles.css` 里已有的 reduced-motion 规则把时长压到 1 ms，面板另外在该设置下立刻卸掉退出的那个。
   滑动结束后元素上没有 transform（有 transform 的盒子会困住 fixed 定位的菜单）。单窗格 → 完整界面时，完整界面等单窗格淡出后才开（淡出期间单窗格还在接管自己的窗格）；完整界面 → 单窗格时，完整界面立刻放手。
 - **完整界面本身**：一个普通的 xterm（滚动历史 5000 行、`@xterm/addon-clipboard`（OSC 52 写进剪贴板，读一律拒绝）、`addon-web-links`、`addon-search`），行高 1（herdr 用框线字符画边框和条，行与行之间有缝就变成虚线）。
-  键栏、查找条（⌘F / Ctrl+Shift+F）、右键菜单（复制 / 粘贴 / 全选 / 搜索… / 清除选区）、存好的命令和单窗格共用同一批组件；herdr 开着鼠标上报时右键是 herdr 自己的（有选中文字时才出网页菜单）。按住 Shift 拖选是 xterm 自己的选择。
+  键栏、查找条（⌘F / Ctrl+Shift+F）、右键菜单（复制 / 粘贴 / 全选 / 搜索… / 清除选区）、存好的命令和单窗格共用同一批组件；herdr 开着鼠标上报时右键是 herdr 自己的，Persona 的菜单是 Shift + 右键（第二十六节，原先写的「有选中文字时才出网页菜单」已去掉）。按住 Shift 拖选是 xterm 自己的选择。
 - **应答 herdr 的提问**（Moshi 同样）：herdr 客户端启动时问 `CSI ? 996 n`（配色）、开 DEC 2031（配色变化通知）、问 `OSC 10;? / 11;?`（前景 / 背景色）、`CSI ? u`（kitty 键盘）、DA1、`CSI 16 t`。网页回答 `CSI ? 997 ; 1|2 n`（深 / 浅）、`CSI ? 2031 ; 1|2 $ y`，
   页面切深浅色时若 herdr 开了 2031 就主动再报一次颜色和配色；OSC 10/11、DA1 由 xterm 自己答。（第十八节说「颜色查询到不了浏览器」是单窗格流的事，这里它们到得了。）
 - **流控**：xterm 每解析完一段（`write` 的回调）累计字节数，满 64 KB 或距上次告诉 hub 过了 250 ms 就发一条 `herdr_ack`（Moshi 同样的数）。
@@ -856,3 +857,77 @@ herdr 二进制里有 `mouse_tracking_enabled`（它内部的终端），只是�
 `go test ./internal/herdr ./internal/hub ./internal/node`（编码、只有 driver 能发、顺序）、`npm test`（`terminal-mouse.test.ts`）、
 `scripts/test/web_terminal_mouse_e2e.py`（假 hub 记录 `terminal_input.mouse`，Playwright 点 / 拖 / 右键 / Shift / 设置）、
 `go test -tags herdrlive -run TestLiveControlMouse`（`JARVIS_LIVE_MOUSE_PANE`，真 herdr 临时标签里的 vim：单击把光标移到格子上，拖动选出可视选区）。
+
+## 二十六、完整界面里的冲突：herdr 的右键、前缀键、鼠标和粘贴（2026-11-05，网页，#2700）
+
+用户反馈（部署后的完整界面）：「右键好像有冲突啊在 herdr 里，而且也不能粘贴图片」，并要求把类似的冲突都查一遍。原则同 Moshi（把整个终端区域交给 herdr）：
+**完整界面里 herdr 说了算；Persona 只留 herdr 不用的东西，或者需要 herdr 不绑的修饰键的东西。** 单窗格的行为一个都没改。
+
+### herdr 0.9.5 自己的绑定和鼠标（实测）
+
+来源：`herdr --default-config`、`herdr config check`、客户端里的 `prefix+?` 键位表（逐页翻完）、`herdr --skill`，以及一个自己建的临时会话（`herdr --session persona-conflict-test`，
+在 PTY 里发 SGR 鼠标和按键，用 `pane read` / OSC 52 看结果；测完 `session stop` + `session delete`）。用户的 `config.toml` 只有 `[ui]` 的外观项，没有改键。
+
+- **前缀键** `ctrl+b`，**除它之外没有别的直接键**（`remote_image_paste = ctrl+v` 只在 `herdr --remote` 里生效，这里不是）。其余全是「前缀 + 键」：
+  `?` 键位表 · `s` 设置 · `q` 分离 · `shift+r` 重载配置 · `o` 打开通知目标 · `w` 空间导航 · `g` 会话导航 · `shift+n` 新空间 · `shift+g` 新 worktree · `shift+w` 重命名空间 · `shift+d` 关闭空间 ·
+  `c` 新标签页 · `shift+t` 重命名标签页 · `p` / `n` 上 / 下一个标签页 · `1..9` 切标签页 · `shift+x` 关标签页 · `v` 竖分 · `-` 横分 · `x` 关窗格 · `shift+p` 重命名窗格 · `e` 编辑回滚 ·
+  `[` 复制模式（键位表里有，默认配置里没写）· `z` 缩放 · `r` 调整大小模式 · `b` 收起侧边栏 · `h j k l` 聚焦窗格 · `tab` / `shift+tab` 轮换窗格。
+  导航模式里：`esc` 返回、上下选空间、`h j k l` / 左右移动焦点、`tab` 轮换、`enter` 打开、`1..9` 切空间。
+  默认没绑（用户自己才会绑，可以绑成 `ctrl+alt+…` 之类的直接键）：上 / 下一个空间、上 / 下一个 Agent、移动标签页、调整窗格大小、清屏、最近窗格。
+- **鼠标**（客户端一启动就开 `?1000/1002/1003/1006`）：
+  - 窗格上**右键**：herdr 自己的菜单「Rename pane / Split right / Split down / Zoom / Send right-clicks to pane / Close pane」；侧边栏的空间行上右键是「Rename」。
+    `right_click_passthrough_modifier` 可以把右键交给窗格里的程序（不支持 Shift，herdr 说终端常把 Shift+鼠标留给自己）。
+  - **左键拖动**：herdr 自己画选区，松开时发 OSC 52 复制（`copy_on_select`，默认开）；**双击**选词并立刻复制（实测选出 `bash` 并发了 OSC 52）。三击没有量到复制（探针里点得太快，没有结论）。
+  - **中键**：herdr 不处理（实测什么都没发生）。**滚轮**：滚窗格的回滚，每格 `mouse_scroll_lines`（默认 3 行），或交给开了鼠标的程序。
+  - 括号粘贴：客户端开了 `?2004`；窗格里的程序没开括号粘贴时 herdr 自己去掉 `ESC[200~ … ESC[201~`（实测 `cat -v` 里只看到粘进去的字），开了就原样转给程序。
+
+### 冲突表
+
+| Persona 的绑定 / 行为 | herdr 的绑定 / 行为 | 决定（完整界面里） |
+| --- | --- | --- |
+| 右键 → Persona 终端菜单（复制 / 粘贴 / 全选 / 搜索… / 清除选区） | 窗格 / 空间的右键菜单 | **herdr**：右键作为鼠标事件发给 herdr（xterm 的鼠标上报），并 `preventDefault` 压掉浏览器自己的菜单；**Shift + 右键**才是 Persona 的菜单（同单窗格 #2441）。herdr 没开鼠标时（还没启动、`mouse_capture = false`）没有冲突，普通右键仍是 Persona 的菜单。触屏长按留给手机选字 |
+| 右键时 xterm 选中光标下的词（xterm 在 Mac 上的默认 `rightClickSelectsWord`） | 右键是 herdr 的菜单，不该有本地选区 | 关掉（`rightClickSelectsWord: false`） |
+| 有 xterm 选区时普通右键也出 Persona 菜单（原先的例外） | 同上 | 去掉：只认 Shift |
+| Shift + 拖动 → xterm 本地选区 | 左键拖动是 herdr 自己的选区 + OSC 52 复制 | 都留：普通拖动是 herdr 的（复制由 OSC 52 到剪贴板，提示「已复制」）；Shift + 拖动是页面的 |
+| Ctrl/⌘ + C（有 xterm 选区时复制，没有选区仍是 `^C`） | `copy_on_select = false` 时 herdr 用 Ctrl+C 复制自己的选区 | 不冲突：Persona 只拦 xterm 本地选区；herdr 的选区不在 xterm 里，`^C` 照常给 herdr |
+| 双击 / 三击 | 双击选词并复制 | herdr（xterm 在鼠标上报时不自己选词） |
+| 中键 | herdr 不处理 | 不动：鼠标报告照发，Linux 上浏览器的 PRIMARY 粘贴照旧（是浏览器 + xterm 的行为，不是 Persona 的） |
+| 滚轮（单窗格里有自己的整行滚动处理） | 滚回滚 / 交给程序 | herdr：完整界面没有任何滚轮处理，xterm 只发 SGR 滚轮报告（e2e 里量了：只有 `ESC[<64;…M`，没有方向键，也没有第二个处理者） |
+| 点击网址（xterm 的链接，原先任意点击都打开） | 点击 = 聚焦窗格 / 选择；双击网址会选词 | herdr 开着鼠标时要 **⌘ / Ctrl + 点击**才打开（否则双击一个网址会开两次）；触屏轻点和 herdr 没开鼠标时照旧点一下就开 |
+| **Mod+B（右侧面板）**：Windows / Linux 上就是 **Ctrl+B** | **前缀键 `ctrl+b`** | **herdr**：完整界面里 Ctrl+B 原样发给 herdr，不触发右侧面板（`herdrOwnsKey`，xterm 的按键处理和全局 `dispatchKey` 都认）。右侧面板仍可以用命令面板（Mod+Shift+P）开，或者在完整界面外按 Ctrl+B；Mac 上 Mod 是 ⌘，⌘B 不冲突 |
+| 其余 Mod 键：Mod+K 跳转 · Mod+Shift+P 命令面板 · Mod+/ 快捷键 · Mod+, 设置 · Mod+1..9 电脑 · Mod+Alt+B 侧边栏 · Mod+Shift+Enter 最大化 · Mod+J 终端⇄对话 · Mod+Alt+F 界面 · Mod+I 输入框 · Mod+Alt+←/→ 标签页 · Mod+E · Mod+Alt+↑/↓ | 默认都没绑（herdr 只有前缀键，其余是「前缀 + 裸键 / Shift 键」，Persona 的键都带 Mod） | 留给 Persona（`terminal-conflicts.test.ts` 逐个核对了：非 Mac 上和 herdr 默认直接键重合的只有 Mod+B）。herdr 里用户自己绑了直接键（如 `ctrl+alt+…`）时 Persona 不知道，见「没做的」 |
+| ⌘⌫ / ⌘← / ⌘→ → `^U` / `^A` / `^E` | 浏览器不会把 ⌘ 键给终端，herdr 也不绑 ⌘ | 留：发给 herdr，由聚焦的窗格里的程序处理 |
+| Shift+Enter → `ESC CR`（Claude Code 的换行） | 不绑，原样转给窗格 | 留 |
+| 查找 ⌘F / Ctrl+Shift+F / 只看时 Ctrl+F | 不绑（`prefix+?` 键位表里的 `/` 是表里的过滤） | 留；只搜 xterm 屏幕上 herdr 画出来的字（herdr 用备用屏，没有回滚可搜） |
+| 键栏 Ctrl / Alt / Shift 修饰 + 一个键 | 先 Ctrl 再点 B 就是前缀键 | 不变（键栏没有专门的前缀键，见「没做的」） |
+| 点击面板 / 窗口重新获得焦点时把键盘还给 xterm（`shouldRefocus`） | herdr 的弹窗、菜单、对话框都画在终端屏幕里，没有 DOM 焦点；客户端开了 `?1004`，焦点真变了才发 `CSI I/O`（`redraw_on_focus_gained` 会整屏重画） | 不冲突：已经聚焦时 `focus()` 不会发新的焦点事件；有选区、浮层、别的输入框在用时本来就不抢 |
+| 粘贴文字（⌘V / Ctrl+Shift+V / 键栏 / 菜单） | 客户端开了括号粘贴 | 不变：xterm 的 `paste`，括号包起来，herdr 按窗格里的程序决定去不去括号 |
+| **Windows / Linux 的 Ctrl+V**（xterm 发 `^V` 并取消按键，浏览器不会粘贴） | `remote_image_paste = ctrl+v` 只在 `--remote` 里 | **完整界面里 Persona 先看剪贴板**：有图片 / 文件就上传并粘贴路径；没有就还是 `^V`（窗格里的程序要用：quoted-insert、vim 块选择）。文字粘贴用 Ctrl+Shift+V 或键栏 |
+| **⌘V（Mac）**：`paste` 事件带着文件，完整界面原先只认文字 | — | 捕获阶段先看 `clipboardData.files`：有就上传（下面），没有交给 xterm |
+| 拖放文件 / Files 面板的条目（`@path`）：完整界面原先没接 | herdr 不处理拖放 | 接上，同单窗格（下面） |
+
+### 粘贴和拖放（完整界面）
+
+共用模块 `views/session/terminal/transfer.ts`（`FileTransfer`，单窗格的 `feed.ts` 也改成用它，上传 / 提示 / 括号粘贴的逻辑只有一份）：
+
+- 来源：`paste` 事件的 `clipboardData.files`、键栏 / 菜单「粘贴」里的 `navigator.clipboard.read()` 图片、Windows / Linux 的 Ctrl+V（同样先读剪贴板）、拖进来的 OS 文件、Files 面板拖来的条目。
+- 文件 `POST /machines/{mid}/files?dest=terminal`（窗格所在的那台电脑，同第十八节），然后把转义后的路径加一个空格用 `term.paste` 敲进去：herdr 开了括号粘贴，所以到 herdr 的是 `ESC[200~路径 ESC[201~`（`herdr_input`），herdr 再按窗格里的程序决定。
+- 状态条（「正在上传…」）和拖入时的高亮圈用同一个组件（`UploadStatus.tsx`，`TerminalPanel` 也换成它，样子不变）；失败、太大、空文件的提示同单窗格。客户端不在线时提示「完整界面连上后才能粘贴文件」；上传期间界面断开或换了终端就不粘贴并提示。
+- Files 面板的条目写成**绝对路径**（`@/abs/path `）：完整界面里聚焦的是 herdr 的哪个窗格不由页面决定，页面不知道它的工作目录，所以不用相对路径。别的电脑的条目拒绝。
+
+### 没做的（有意留下）
+
+- **Persona 不读 herdr 的 `config.toml`**：用户改了前缀键，或者绑了 `ctrl+alt+…` 之类的直接键，Persona 的快捷键仍会先抢（在 Persona 的「快捷键」设置里改掉冲突的那个即可）。以后可以让 node 在 `herdr_state` 里报告 herdr 的键位，网页据此放行。
+- **单窗格里 Windows / Linux 的 Ctrl+V 还是发 `^V`**（xterm 的行为，上面第十八节已改正文档）；不在 #2700 范围，同样两行可以修。
+- 键栏没有「前缀」专用键（手机上要先点 Ctrl 再敲 B）。
+- Persona 的终端菜单在触屏上够不到（长按留给手机选字）；完整界面的头上也没有「⋯」菜单。
+- 中键粘贴（Linux 的 PRIMARY）、三击是否复制：没有改动，也没有量到结论。
+- 设置里的「鼠标：本地选择」只管单窗格；完整界面的鼠标一律先给 herdr，Shift 留给页面。
+
+### 验证
+
+- `cd web && npm test`：`terminal-conflicts.test.ts`（右键 / 链接 / 前缀键 / Ctrl+V 的决定、Persona 的默认键里只有 Mod+B 与 herdr 重合）、`transfer.test.ts`（上传、路径转义、断开 / 换终端不粘贴、拖放、Files 条目）、`shortcuts.test.ts`（完整界面里 Ctrl+B 不触发右侧面板，单窗格和页面里照旧）。
+- `scripts/test/web_herdr_full_conflicts_e2e.py`（假 hub：`MOCK_TERMINAL_FULL=1`，假 herdr 现在会像真的一样开鼠标上报和括号粘贴、右键出菜单、把括号粘贴打在提示符后，`herdr_input` 完整记在 `/mock/herdr_client`）：
+  右键 → 鼠标报告 + herdr 菜单、无 Persona 菜单、浏览器菜单被压掉（改动前这一条不过）；Shift + 右键 → Persona 菜单、herdr 收不到右键；Mac 上同样；Ctrl+B → `\x02` 给 herdr；Ctrl+K 仍开命令面板；
+  滚轮只有 SGR 滚轮报告；左键拖动是报告、Shift + 拖动不发；Ctrl+Shift+V 文字、Ctrl+V 只有文字时仍是 `^V`；Ctrl+V 图片 → 上传 + 括号粘贴的路径；键栏粘贴图片 / 文字；拖入文件（高亮圈）；Files 条目；别的电脑的条目被拒；Mac 的 `paste` 事件带文件。
+- `scripts/test/web_herdr_full_conflicts_live.py`（真 herdr，临时会话 `persona-conflict-test`，测完 stop + delete）：右键出 herdr 自己的窗格菜单、没有 Persona 菜单；Shift + 右键出 Persona 菜单、herdr 的不出；Ctrl+V 粘贴图片，路径到了真 herdr 窗格的提示符后。

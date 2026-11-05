@@ -66,20 +66,10 @@ import {
 } from "../../../lib/terminal-details";
 import { FIND_LIMIT, findIndex, findInLines, marksFor, stepFind, type FindMarks, type FindPos, type RowMatch } from "../../../lib/terminal-search";
 import { toast } from "../../../ui/atoms";
-import { dragHasEntry, dragIsDroppable, droppedEntry, terminalEntryDrop } from "../../../lib/entry-drag";
-import {
-  copyNotice,
-  copyWith,
-  osc52Text,
-  pastedPaths,
-  pasteVerdict,
-  refuseUpload,
-  transferFiles,
-  uploadName,
-  uploadingText,
-} from "../../../lib/terminal-clipboard";
+import { copyNotice, copyWith, osc52Text, transferFiles } from "../../../lib/terminal-clipboard";
 import { cjkFontStack, terminalFontReady } from "./cjk";
-import { browserClipboard, clipboardFiles, uploadFailure, uploadToMachine } from "./clipboard";
+import { browserClipboard, clipboardFiles } from "./clipboard";
+import { FileTransfer } from "./transfer";
 import { t } from "../../../i18n";
 
 /** Driving: not asked (off), asked (starting), granted (active), another program holds it and the user is to say
@@ -218,9 +208,8 @@ export class TerminalFeed {
   /** Too much arrived meanwhile: start over from a whole frame. */
   private heldOverflow = false;
   private screenFrame = 0;
-  /** Names of the files on their way to the computer (pasted or dropped), and how deep the drag is over the panel. */
-  private uploads: string[] = [];
-  private dragDepth = 0;
+  /** Files pasted or dropped (transfer.ts): sent to the computer, their paths typed in. */
+  private transfer: FileTransfer;
   /** A link was opened by this click (the click is not also a click in the terminal). */
   private linkHit = false;
   private webglAddon: { dispose(): void } | null = null;
@@ -244,6 +233,28 @@ export class TerminalFeed {
     readonly mid: string,
     readonly sid: string,
   ) {
+    this.transfer = new FileTransfer(
+      {
+        mid,
+        get cwd() {
+          return feed.cwd;
+        },
+        get driving() {
+          return feed.driving;
+        },
+        get disposed() {
+          return feed.disposed;
+        },
+        setUploading: (uploading) => this.patch({ uploading }),
+        setDropping: (dropping) => this.patch({ dropping }),
+        paste: (text) => {
+          this.term?.paste(text); // bracketed when the program asked for it; the keys go through type()
+          this.term?.focus();
+        },
+      },
+      { notDriving: t("session-terminal-feed.take_control_to_paste"), changed: t("session-terminal-feed.switched_during_upload"), released: t("session-terminal-feed.released_during_upload") },
+    );
+    const feed = this;
     this.view = {
       ready: false,
       mode: "poll",
@@ -360,10 +371,10 @@ export class TerminalFeed {
     term.attachCustomKeyEventHandler(this.key);
     term.attachCustomWheelEventHandler(this.wheelEvent);
     host.addEventListener("paste", this.paste, true);
-    viewport.addEventListener("dragenter", this.dragEnter, true);
-    viewport.addEventListener("dragover", this.dragOver, true);
-    viewport.addEventListener("dragleave", this.dragLeave, true);
-    viewport.addEventListener("drop", this.drop, true);
+    viewport.addEventListener("dragenter", this.transfer.dragEnter, true);
+    viewport.addEventListener("dragover", this.transfer.dragOver, true);
+    viewport.addEventListener("dragleave", this.transfer.dragLeave, true);
+    viewport.addEventListener("drop", this.transfer.drop, true);
     host.addEventListener("pointerdown", this.pointerDown, true);
     host.addEventListener("mousedown", this.mouseDownEvent, true);
     host.addEventListener("contextmenu", this.mouseContextMenu, true);
@@ -387,10 +398,10 @@ export class TerminalFeed {
       () => cancelAnimationFrame(this.screenFrame),
       () => cancelAnimationFrame(this.recountFrame),
       () => host.removeEventListener("paste", this.paste, true),
-      () => viewport.removeEventListener("dragenter", this.dragEnter, true),
-      () => viewport.removeEventListener("dragover", this.dragOver, true),
-      () => viewport.removeEventListener("dragleave", this.dragLeave, true),
-      () => viewport.removeEventListener("drop", this.drop, true),
+      () => viewport.removeEventListener("dragenter", this.transfer.dragEnter, true),
+      () => viewport.removeEventListener("dragover", this.transfer.dragOver, true),
+      () => viewport.removeEventListener("dragleave", this.transfer.dragLeave, true),
+      () => viewport.removeEventListener("drop", this.transfer.drop, true),
       () => host.removeEventListener("pointerdown", this.pointerDown, true),
       () => host.removeEventListener("mousedown", this.mouseDownEvent, true),
       () => host.removeEventListener("contextmenu", this.mouseContextMenu, true),
@@ -722,7 +733,7 @@ export class TerminalFeed {
   async pasteClipboard() {
     if (!this.driving) return;
     const files = await clipboardFiles();
-    if (files.length) return void this.uploadFiles(files);
+    if (files.length) return void this.transfer.uploadFiles(files);
     let text = "";
     try {
       text = (await navigator.clipboard?.readText?.()) ?? "";
@@ -832,7 +843,7 @@ export class TerminalFeed {
     e.preventDefault();
     e.stopPropagation();
     const files = transferFiles(e.clipboardData);
-    if (files.length) return void this.uploadFiles(files);
+    if (files.length) return void this.transfer.uploadFiles(files);
     if (this.view.control !== "active") return;
     const text = e.clipboardData?.getData("text/plain") ?? "";
     if (!text) return;
@@ -844,84 +855,7 @@ export class TerminalFeed {
     }
   };
 
-  // ── files: pasted or dropped, sent to the computer, their paths typed in (docs/terminal.md「粘贴图片 / 文件」) ──
-
-  /**
-   * Sends the files to the computer the pane is on, then types their escaped paths into it as one paste: Claude Code
-   * and Codex take a path to an image as the image. Only while this browser drives the pane — before, and again when
-   * the uploads end (taken over, 只看 or another terminal meanwhile: nothing is pasted).
-   */
-  async uploadFiles(files: File[]) {
-    if (!this.driving) return void toast(t("session-terminal-feed.take_control_to_paste"));
-    const sending = files.filter((f) => {
-      const why = refuseUpload(f);
-      if (why) toast(why, "error");
-      return !why;
-    });
-    if (!sending.length) return;
-    const names = sending.map(uploadName);
-    this.uploads.push(...names);
-    this.patch({ uploading: uploadingText(this.uploads) });
-    const results = await Promise.allSettled(sending.map((f) => uploadToMachine(this.mid, f)));
-    for (const n of names) this.uploads.splice(this.uploads.indexOf(n), 1);
-    this.patch({ uploading: this.uploads.length ? uploadingText(this.uploads) : null });
-    const paths: string[] = [];
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") paths.push(r.value);
-      else if (!this.disposed) toast(uploadFailure(names[i], r.reason), "error");
-    });
-    if (!paths.length) return;
-    const verdict = pasteVerdict({ disposed: this.disposed, driving: this.driving });
-    if (verdict === "changed") return void toast(t("session-terminal-feed.switched_during_upload"), "error");
-    if (verdict === "watching") return void toast(t("session-terminal-feed.released_during_upload"), "error");
-    this.term?.paste(pastedPaths(paths)); // bracketed when the program asked for it; the keys go through type()
-    this.term?.focus();
-  }
-
-  private dragEnter = (e: DragEvent) => {
-    if (!dragIsDroppable(e.dataTransfer)) return;
-    this.dragDepth++;
-    if (this.driving) this.patch({ dropping: true });
-  };
-
-  private dragOver = (e: DragEvent) => {
-    if (!dragIsDroppable(e.dataTransfer)) return;
-    e.preventDefault(); // without it the browser does not offer the drop (and opens the file instead)
-    // a Files panel entry is accepted while watching too: the drop says why nothing was typed
-    if (e.dataTransfer) e.dataTransfer.dropEffect = this.driving || dragHasEntry(e.dataTransfer) ? "copy" : "none";
-  };
-
-  private dragLeave = (e: DragEvent) => {
-    if (!dragIsDroppable(e.dataTransfer)) return;
-    this.dragDepth = Math.max(0, this.dragDepth - 1);
-    if (!this.dragDepth) this.patch({ dropping: false });
-  };
-
-  private drop = (e: DragEvent) => {
-    const files = transferFiles(e.dataTransfer);
-    this.dragDepth = 0;
-    this.patch({ dropping: false });
-    if (this.dropEntry(e)) return;
-    if (!files.length) return;
-    e.preventDefault();
-    e.stopPropagation();
-    void this.uploadFiles(files);
-  };
-
-  /** A Files panel entry dropped on the terminal: its `@path ` is typed in, nothing is uploaded. */
-  private dropEntry(e: DragEvent): boolean {
-    const entry = droppedEntry(e.dataTransfer);
-    if (!entry) return false;
-    e.preventDefault();
-    e.stopPropagation();
-    const drop = terminalEntryDrop(entry, { mid: this.mid, cwd: this.cwd, driving: this.driving });
-    if (drop.action === "refuse") toast(drop.toast);
-    else {
-      this.term?.paste(drop.text); // bracketed when the program asked for it
-      this.term?.focus();
-    }
-    return true;
-  }
+  // ── files: pasted or dropped, sent to the computer, their paths typed in (transfer.ts) ──
 
   confirmPaste(ok: boolean) {
     const text = this.view.pasting;

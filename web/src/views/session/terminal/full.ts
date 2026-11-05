@@ -10,7 +10,8 @@ import type { SearchAddon as XSearch } from "@xterm/addon-search";
 import { t as tr } from "../../../i18n";
 import { openLink } from "../../../lib/links";
 import { getState, isOpen, onHubEvent, send } from "../../../lib/store";
-import { passesToApp } from "../../../lib/shortcuts";
+import { currentPlatform, passesToApp } from "../../../lib/shortcuts";
+import { herdrOwnsKey, isCtrlV, linkOpens, rightClickRoute, type RightClick } from "../../../lib/terminal-conflicts";
 import {
   NO_MODIFIERS,
   encodeKey,
@@ -28,7 +29,7 @@ import {
   type Modifiers,
   type TerminalPalette,
 } from "../../../lib/terminal";
-import { copyNotice, copyWith, osc52Text } from "../../../lib/terminal-clipboard";
+import { copyNotice, copyWith, osc52Text, transferFiles } from "../../../lib/terminal-clipboard";
 import { hex6, lineEditBytes, parseCursorStyle, parseFlag, webLink, type CursorStyle } from "../../../lib/terminal-details";
 import { FIND_LIMIT } from "../../../lib/terminal-search";
 import {
@@ -47,7 +48,8 @@ import {
 } from "../../../lib/terminal-mode";
 import { toast } from "../../../ui/atoms";
 import { cjkFontStack, terminalFontReady } from "./cjk";
-import { browserClipboard } from "./clipboard";
+import { browserClipboard, clipboardFiles } from "./clipboard";
+import { FileTransfer } from "./transfer";
 
 export interface FullView {
   /** xterm is loaded and open. */
@@ -65,6 +67,10 @@ export interface FullView {
   palette: TerminalPalette | null;
   /** The view ended before it was ever live and the reason is the computer's or the hub's, not a lost connection: this machine cannot show it. */
   failedToStart: boolean;
+  /** Files on their way to the computer (pasted or dropped), in words; null when none. */
+  uploading: string | null;
+  /** A drag of files is over the surface. */
+  dropping: boolean;
 }
 
 const RESIZE_MS = 120;
@@ -104,11 +110,36 @@ export class FullFeed {
   private schemeNotify = false;
   private found = { query: "", cs: false, busy: false };
   private everLive = false;
+  /** Files pasted or dropped (transfer.ts): sent to the computer, their paths typed in. */
+  private transfer: FileTransfer;
+  /** The pointer of the last press (a link opens on a tap but, with herdr holding the mouse, on ⌘ / Ctrl + click). */
+  private pointer = "mouse";
 
   constructor(
     readonly mid: string,
     readonly sid: string,
   ) {
+    const feed = this;
+    this.transfer = new FileTransfer(
+      {
+        mid,
+        // "" = by absolute path: the pane herdr has focused is not the session's, so its folder is not known here
+        cwd: "",
+        get driving() {
+          return feed.driving;
+        },
+        get disposed() {
+          return feed.disposed;
+        },
+        setUploading: (uploading) => this.patch({ uploading }),
+        setDropping: (dropping) => this.patch({ dropping }),
+        paste: (text) => {
+          this.term?.paste(text); // bracketed when herdr asked for it; the keys go through type()
+          this.term?.focus();
+        },
+      },
+      { notDriving: tr("terminal-full.paste_not_live"), changed: tr("terminal-full.paste_changed"), released: tr("terminal-full.paste_released") },
+    );
     this.view = {
       ready: false,
       status: "connecting",
@@ -121,6 +152,8 @@ export class FullFeed {
       find: null,
       palette: null,
       failedToStart: false,
+      uploading: null,
+      dropping: false,
     };
   }
 
@@ -144,8 +177,8 @@ export class FullFeed {
 
   // ── lifecycle ─────────────────────────────────────────
 
-  /** Builds xterm in `host`, then opens the view once there is a grid and a connection. `delay`: wait this long first. */
-  async mount(host: HTMLElement, delay = 0) {
+  /** Builds xterm in `host` (`area` around it is where files are dropped), then opens the view once there is a grid and a connection. `delay`: wait this long first. */
+  async mount(host: HTMLElement, delay = 0, area: HTMLElement = host) {
     let mod: typeof import("./xterm");
     try {
       mod = await import("./xterm");
@@ -170,12 +203,13 @@ export class FullFeed {
       cursorInactiveStyle: "outline",
       allowProposedApi: true, // the search addon marks its matches with decorations
       macOptionIsMeta: true,
+      rightClickSelectsWord: false, // xterm's default on a Mac: a right click would select a word of herdr's screen under herdr's own menu
       theme: palette,
-      linkHandler: { activate: (_e, uri) => this.openWebLink(uri) }, // OSC 8 links
+      linkHandler: { activate: (e, uri) => this.openWebLink(e, uri) }, // OSC 8 links
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
-    term.loadAddon(new WebLinksAddon((_e, uri) => this.openWebLink(uri)));
+    term.loadAddon(new WebLinksAddon((e, uri) => this.openWebLink(e, uri)));
     const search = new SearchAddon({ highlightLimit: FIND_LIMIT });
     term.loadAddon(search);
     // herdr's own client copies with OSC 52 (a selection, or a pane's program): a write goes to the clipboard, a read is
@@ -205,6 +239,13 @@ export class FullFeed {
     const selected = term.onSelectionChange(() => this.patch({ selection: term.hasSelection() }));
     const results = search.onDidChangeResults((r) => this.found.query && this.patch({ find: { index: r.resultIndex, count: r.resultCount } }));
     term.attachCustomKeyEventHandler(this.key);
+    const track = (e: PointerEvent) => void (this.pointer = e.pointerType);
+    host.addEventListener("pointerdown", track, true);
+    host.addEventListener("paste", this.pasted, true);
+    area.addEventListener("dragenter", this.transfer.dragEnter, true);
+    area.addEventListener("dragover", this.transfer.dragOver, true);
+    area.addEventListener("dragleave", this.transfer.dragLeave, true);
+    area.addEventListener("drop", this.transfer.drop, true);
     const colors = new MutationObserver(() => {
       const next = this.theme();
       this.patch({ palette: next });
@@ -220,6 +261,12 @@ export class FullFeed {
       () => data.dispose(),
       () => selected.dispose(),
       () => results.dispose(),
+      () => host.removeEventListener("pointerdown", track, true),
+      () => host.removeEventListener("paste", this.pasted, true),
+      () => area.removeEventListener("dragenter", this.transfer.dragEnter, true),
+      () => area.removeEventListener("dragover", this.transfer.dragOver, true),
+      () => area.removeEventListener("dragleave", this.transfer.dragLeave, true),
+      () => area.removeEventListener("drop", this.transfer.drop, true),
       () => colors.disconnect(),
       () => sizes.disconnect(),
       ...offs,
@@ -464,9 +511,27 @@ export class FullFeed {
     this.term?.focus();
   }
 
-  /** The key bar's paste: what the clipboard has, as ⌘V does. */
+  /** ⌘V / Ctrl+V with files on the clipboard (a screenshot): uploaded, the paths typed in. Text is xterm's own paste. */
+  private pasted = (e: ClipboardEvent) => {
+    const files = transferFiles(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void this.transfer.uploadFiles(files);
+  };
+
+  /** Ctrl+V off the Mac (lib/terminal-conflicts.ts): files on the clipboard are uploaded, otherwise the ^V xterm would have sent. */
+  private async ctrlV() {
+    const files = await clipboardFiles();
+    if (files.length) return void this.transfer.uploadFiles(files);
+    this.raw("\x16");
+  }
+
+  /** The key bar's and the menu's paste: files on the clipboard (where the browser lets a page look), else the text, as ⌘V does. */
   async pasteClipboard() {
     if (!this.driving) return;
+    const files = await clipboardFiles();
+    if (files.length) return void this.transfer.uploadFiles(files);
     if (!navigator.clipboard?.readText) return void toast(tr("terminal-full.clipboard_https"));
     let text = "";
     try {
@@ -482,9 +547,14 @@ export class FullFeed {
     this.term?.focus();
   }
 
-  /** Whether the program under it takes the mouse (herdr does): then a right click is its own, not the page's menu. */
+  /** Whether the program under it takes the mouse (herdr does, as soon as it starts). */
   get mouseTracked() {
     return (this.term?.modes.mouseTrackingMode ?? "none") !== "none";
+  }
+
+  /** Who a right click is for (lib/terminal-conflicts.ts): herdr's own menus while it has the mouse, Persona's with Shift. */
+  rightClick(e: { shiftKey: boolean }, pointerType?: string): RightClick {
+    return rightClickRoute(e, this.mouseTracked, pointerType);
   }
 
   /**
@@ -492,7 +562,7 @@ export class FullFeed {
    * as a new line, Mac line editing; an IME composition is left alone (keyDecision).
    */
   private key = (e: KeyboardEvent) => {
-    if (passesToApp(e)) return false;
+    if (!herdrOwnsKey(e) && passesToApp(e)) return false; // herdr's prefix (Ctrl+B off the Mac) is herdr's, not a shortcut here
     if (this.driving) {
       const bytes = lineEditBytes(e);
       if (bytes) {
@@ -501,6 +571,12 @@ export class FullFeed {
         this.raw(bytes);
         return false;
       }
+    }
+    if (this.driving && isCtrlV(e, currentPlatform())) {
+      if (e.type === "keydown" && !e.repeat) void this.ctrlV();
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
     }
     const d = keyDecision(e, this.term?.hasSelection() ?? false);
     if (d === "xterm") return true;
@@ -513,7 +589,8 @@ export class FullFeed {
     return false;
   };
 
-  private openWebLink(uri: string) {
+  private openWebLink(e: MouseEvent, uri: string) {
+    if (!linkOpens(e, this.mouseTracked, this.pointer)) return; // the click is herdr's (lib/terminal-conflicts.ts)
     const url = webLink(uri);
     if (url) openLink(url);
   }

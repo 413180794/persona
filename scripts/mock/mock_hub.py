@@ -2623,7 +2623,10 @@ def phone_screen(cols, rows, typed="", tick=0):
 # MOCK_TERMINAL_FULL=1: the hub says herdr_client and answers herdr_open with a made-up herdr client (a sidebar, a tab bar
 # and two panes, or one pane at a phone's width as herdr's mobile layout). What it is told is kept (GET
 # /mock/herdr_client): open, input, resize, ack, close. Typing shows in the shell pane's prompt; Ctrl+Y makes it copy
-# "copied by herdr" the way herdr does (OSC 52). MOCK_TERMINAL_FULL_EXEC="cmd args": instead run that command in a PTY and
+# "copied by herdr" the way herdr does (OSC 52). Like the real client it turns on mouse reporting (?1000/1002/1003/1006) and
+# bracketed paste (?2004) when it starts, opens a small pane menu (Rename pane / Split right / Close pane…) on a right-click
+# report (any other press, or Esc, closes it), and types a bracketed paste into the shell pane's prompt; what it is sent
+# is in the log (the whole of `data`: herdr_input is logged unabridged). MOCK_TERMINAL_FULL_EXEC="cmd args": instead run that command in a PTY and
 # relay its bytes, with the same window of unacknowledged bytes the node keeps (a real herdr client, for a live test).
 # MOCK_TERMINAL_FULL_REFUSE=forbidden|unsupported|too_many answers herdr_open with that end; MOCK_TERMINAL_FULL_END_AFTER=
 # seconds ends a view after that long (the Reconnect button).
@@ -2642,7 +2645,7 @@ def _fit(s, n):
     return out + " " * (n - w)
 
 
-def herdr_screen(cols, rows, typed="", tick=0):
+def herdr_screen(cols, rows, typed="", tick=0, menu=None):
     """What herdr's client draws at cols × rows: the sidebar (wide), the tab bar, the panes, the status line."""
     E = "\x1b["
     mobile = cols <= 64
@@ -2687,6 +2690,12 @@ def herdr_screen(cols, rows, typed="", tick=0):
         box(top, x0 + lw, w - lw, h, "zsh", shell, True)
         cur = (top + len(shell), x0 + lw + 1 + sum(cell_width(c) for c in prompt + typed))
     at(rows, x0, E + "2m" + _fit(" %d×%d · prefix ctrl+b" % (cols, rows), w) + E + "0m")
+    if menu:  # herdr's own right-click menu, at the cell that was clicked
+        mc, mr = max(1, min(menu[0], cols - 18)), max(1, min(menu[1], rows - 8))
+        items = ["Rename pane", "Split right", "Split down", "Zoom", "Close pane"]
+        at(mr, mc, E + "0m┌" + "─" * 16 + "┐")
+        for i, it in enumerate(items): at(mr + 1 + i, mc, E + "0m│" + _fit(it, 16) + "│")
+        at(mr + 1 + len(items), mc, "└" + "─" * 16 + "┘")
     out.append(E + "%d;%dH" % cur + E + "?25h" + E + "?2026l")
     return "".join(out)
 
@@ -2695,10 +2704,10 @@ class HerdrFake:
     """The made-up client of one view: redraws on a size or a key, and every MOCK_TERMINAL_INTERVAL for its spinner."""
 
     def __init__(self, vid, cols, rows, send):
-        self.id, self.cols, self.rows, self.send, self.typed, self.tick, self.alive = vid, cols, rows, send, "", 0, True
+        self.id, self.cols, self.rows, self.send, self.typed, self.tick, self.alive, self.menu = vid, cols, rows, send, "", 0, True, None
         self.lock = threading.Lock()
-        # what a herdr client asks of the terminal it is in: the colour scheme, to be told of changes, the colours
-        self.emit("\x1b[?2031h\x1b[?996n\x1b]11;?\x1b\\")
+        # what a herdr client asks of the terminal it is in: the colour scheme, to be told of changes, the colours, the mouse, bracketed paste
+        self.emit("\x1b[?2031h\x1b[?996n\x1b]11;?\x1b\\\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h\x1b[?2004h")
         self.draw()
         threading.Thread(target=self.ticks, daemon=True).start()
         end = os.environ.get("MOCK_TERMINAL_FULL_END_AFTER")
@@ -2718,7 +2727,7 @@ class HerdrFake:
 
     def draw(self):
         with self.lock:
-            self.emit(herdr_screen(self.cols, self.rows, self.typed, self.tick))
+            self.emit(herdr_screen(self.cols, self.rows, self.typed, self.tick, self.menu))
 
     def ticks(self):
         while self.alive:
@@ -2730,7 +2739,19 @@ class HerdrFake:
     def input(self, data):
         if data == "\x19":  # Ctrl+Y: herdr copies (OSC 52)
             return self.emit("\x1b]52;c;" + base64.b64encode(b"copied by herdr").decode() + "\x07")
-        if data.startswith("\x1b"): return  # mouse reports, arrows, replies to its questions: nothing to type
+        m = re.fullmatch(r"\x1b\[<(\d+);(\d+);(\d+)([Mm])", data)
+        if m:  # an SGR mouse report: a right press opens herdr's menu, any other press closes it
+            btn = int(m.group(1))
+            if m.group(4) == "M" and btn < 32:  # a press (not motion, a drag or the wheel)
+                self.menu = (int(m.group(2)), int(m.group(3))) if btn & 3 == 2 else None
+                self.draw()
+            return
+        if data == "\x1b" and self.menu:
+            self.menu = None
+            return self.draw()
+        if data.startswith("\x1b[200~"):  # a bracketed paste: typed at the prompt, as the pane's shell shows it
+            data = data[6:].removesuffix("\x1b[201~")
+        elif data.startswith("\x1b"): return  # arrows, replies to its questions: nothing to type
         for ch in data:
             if ch == "\x7f": self.typed = self.typed[:-1]
             elif ch == "\r": self.typed = ""
@@ -2808,7 +2829,7 @@ def herdr_message(msg, send, views):
     """The app's herdr_* messages on one connection; True when it was one."""
     t, vid = msg.get("type"), msg.get("id")
     if not (isinstance(t, str) and t.startswith("herdr_")): return False
-    entry = {k: v for k, v in msg.items() if k != "data" or len(str(v)) < 200}
+    entry = {k: v for k, v in msg.items() if k != "data" or len(str(v)) < 4000}
     FULL_LOG.append(entry)
     if t == "herdr_open":
         refuse = os.environ.get("MOCK_TERMINAL_FULL_REFUSE")
@@ -4049,54 +4070,71 @@ def _lm(pos, who, text, mine=False, mins=60):
 LARK_MESSAGES = {"f2": [
     _lm("200", "Lucy Wang", "The new icon set is in the shared folder. Could you take a look before the review this afternoon?", mins=58),
     _lm("201", "李雷", "我先看了一下，标签栏的图标偏细", mins=57),
-    _lm("202", "Lucy Wang", "Agreed. I''s [removed] words for text (apple/Persona/Views/Inbox/Lark/LarkBraveClimb.swift)."""
-    n, out = int.from_bytes(b"\x01" + text.encode(), "big"), ""
-    while True:
-        n, d = divmod(n, 34)
-        out = BRAVE_CLIMB_ALPHABET[d] + out
-        if n == 0:
-            return "**字" + out + "**""MOCK_LARK_BRAVE_CLIMB"):
-    whole = _lm("210", "李雷", brave_climb("周五下午三点评审，带上新图标"), mins=40)
-    whole["parts"] = [{"kind": "text", "text": whole["text"]}]
-    words = brave_climb("标签栏改粗一号")
-    split = _lm("211", "Lucy Wang", words, mins=39)
-    split["parts"] = [{"kind": "text", "text": words[:7]}, {"kind": "text", "text": words[7:]}]
-    inline = _lm("212", "李雷", "结论：" + brave_climb("空状态先不改") + "，下周再看", mins=38)
-    inline["parts"] = [{"kind": "text", "text": inline["text"]}]
-    legacy = _lm("213", "Lucy Wang", "**" + "".join("[removed]"[b >> s & 3] for b in "收到".encode() for s in (6, 4, 2, 0)) + "**", mins=37)
-    legacy["parts"] = [{"kind": "text", "text": legacy["text"]}]
-    reply = _lm("214", "我", "好的", mine=True, mins=36)
-    reply["reply_to"] = {"id": whole["id"], "sender_name": "李雷", "text": whole["text"]}
-    LARK_MESSAGES["f2"] = LARK_MESSAGES["f2"] + [whole, split, inline, legacy, reply]
-    LARK_CHATS[0]["preview"] = whole["text"]
-if os.environ.get("MOCK_LARK_TRAINER"):
-    retained = _lm("200", "李雷", "已留存的评审时间：周五下午", mins=55)
-    retained.update(recalled=True, retained=True, parts=[{"kind": "text", "text": retained["text"]}])
-    missing = _lm("201", "李雷", "不能展示的占位原文", mins=54)
-    missing.update(recalled=True, retained=False)
-    edited = _lm("202", "李雷", "评审地点改为线上", mins=53)
-    edited.update(edited=True, edit_history=[
-        {"edited_at": "2026-01-01T10:00:00.123Z", "text": "原定会议室 A", "parts": [{"kind": "text", "text": "原定会议室 A"}]},
-        {"edited_at": "2026-01-01T10:05:00Z", "text": "不得缓存的旧加密正文", "olk": {
-            "version": 1, "state": "locked", "publicParts": [{"kind": "text", "text": "稍后确认"}]}}
-    ])
-    quoted = _lm("203", "我", "收到，按新的安排。", mine=True, mins=52)
-    quoted["reply_to"] = {"id": retained["id"], "sender_name": "李雷", "text": retained["text"], "recalled": True, "retained": True}
-    recalled_system = _lm("204", "系统成员", "不得展示的系统撤回原文", mins=51)
-    recalled_system.update(type="SYSTEM", recalled=True, retained=True)
-    anonymous_system = _lm("205", "", "不得展示的匿名系统原文", mins=50)
-    anonymous_system.update(type="SYSTEM", recalled=True, retained=True)
-    LARK_MESSAGES["f2"] = [retained, missing, edited, quoted, recalled_system, anonymous_system]
+    _lm("202", "Lucy Wang", "Agreed. I'll make the tab bar icons one weight heavier and send an update by 3 pm.", mins=56),
+    _lm("203", "我", "Sounds good, thanks!", mine=True, mins=55),
+]}
+LARK_DOCUMENT = {"title": "新版图标评审", "partial": False, "authority": {"copy": True}, "content": {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 1}, "content": [{"type": "text", "text": "新版图标评审"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "这一版统一了圆角和描边，深色模式单独调了对比度。"}]},
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "待确认"}]},
+    {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "主色是否再暖一点"}]}]},
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "小尺寸下的描边粗细"}]}]}]},
+    {"type": "codeBlock", "attrs": {"language": "text"}, "content": [{"type": "text", "text": "icon-v2/\n  app.svg\n  widget.svg"}]},
+]}}
 
-# The 周末徒步群 chat (inbox f3): what the chat page has to draw. Three days of history (day separators), more than
-# one page (40) before the first unread (paging back, has_older), an image, a quoted reply, reactions, a bot and a
-# thread with more replies than one thread page. Unread from 300 (12 messages), read up to 299.
-# MOCK_LARK_LOGGED_OUT=1: every chat and thread read answers 502 with code lark_not_logged_in, like a hub whose lark-connector
-# lost its Feishu session.
-LARK_LOGGED_OUT = "lark: lark-connector 未登录飞书 (AUTH_SESSION_EXPIRED)"
-_LARK_EMOJI_SET = (("THUMBSUP", "赞"), ("OK", "OK"), ("JIAYI", "+1"), ("HEART", "爱心"), ("SMILE", "微笑"), ("LAUGH", "大笑"),
-                   ("SURPRISED", "惊讶"), ("CRY", "流泪"), ("DONE", "完成"))
-# Keyed in lower case like the hub's catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
+LARK_NATIVE_OLK = {"locked": True, "prepared": {}, "sent": {}}
+
+# MOCK_LARK_OLK=1 exercises the authorized read projection with synthetic content only.
+if os.environ.get("MOCK_LARK_OLK"):
+    def _olk(pos, state, body, cover, handout=False):
+        m = _lm(str(pos), "李雷", body or "加密群密钥分发消息", mins=55)
+        m["parts"] = [{"kind": "text", "text": m["text"]}]
+        m["olk"] = {"version": 1, "state": state,
+                    "publicParts": [{"kind": "text", "text": cover}] if cover else []}
+        if state == "decrypted":
+            m["olk"].update(bodyParts=[{"kind": "text", "text": body}] if body else [], keyHandout=handout)
+        return m
+    LARK_MESSAGES["f2"] = [
+        _olk(200, "decrypted", "", "稍等", True),
+        _olk(201, "decrypted", "评审文档已更新，请看第二页。", "我看看"),
+        _olk(202, "decrypted", "我把调整后的版本发到这里。", "等下", True),
+        _olk(203, "locked", "不可见的正文", "午饭后再聊"),
+        _lm("204", "李雷", "加密群密钥分发消息是一个普通文本示例", mins=55),
+    ]
+    LARK_MESSAGES["f2"][2]["reply_to"] = {
+        "id": "m201", "sender_name": "李雷", "text": "旧接口摘要",
+        "olk": LARK_MESSAGES["f2"][1]["olk"],
+    }
+    LARK_MESSAGES["f2"][4]["reply_to"] = {
+        "id": "m203", "sender_name": "李雷", "text": "不可见的正文",
+        "olk": LARK_MESSAGES["f2"][3]["olk"],
+    }
+
+LARK_ACCOUNT_ID = "123" if os.environ.get("MOCK_LARK_NATIVE_OLK") else "trainer-account" if os.environ.get("MOCK_LARK_TRAINER") else "mock-lark-account"
+# Isolated pin shelf fixtures: real list endpoints, account checks and realtime changes.
+LARK_PIN_FIXTURE = {"count": 18, "account": "pin-account-one", "offline": False, "reverse": False, "unread": 3, "newest": False, "requests": 0}
+def lark_pin_rows():
+    rows = [dict(c) for c in LARK_CHATS]
+    for i in range(1, 81):
+        rows.append({"id": f"pin-{i}", "name": f"会话 {i:02d}", "is_group": i % 2 == 0,
+                     "unread": i % 4, "at_me": False, "muted": i % 3 == 0, "is_mine": False,
+                     "preview": f"第 {i} 条会话摘要", "updated_at": ago(minutes=i)})
+    rows[0]["unread"] = LARK_PIN_FIXTURE["unread"]
+    if LARK_PIN_FIXTURE["newest"]:
+        rows.insert(0, dict(rows[0], id="incoming", name="新会话", preview="实时更新的摘要"))
+        rows = [dict(c, preview="实时更新 · " + c["preview"]) for c in rows]
+    if LARK_PIN_FIXTURE["account"] != "pin-account-one":
+        rows = [dict(c, id="other-" + c["id"], name="新账号 " + c["name"]) for c in rows]
+    return rows
+
+LARK_DISPLAY = {"account_id": LARK_ACCOUNT_ID, "anti_recall": False, "show_edit_history": False,
+                "brave_climb_codec": bool(os.environ.get("MOCK_LARK_BRAVE_CLIMB""MOCK_LARK_OLD_DISPLAY"):
+    del LARK_DISPLAY["brave_climb_codec"]
+
+BRAVE_CLIMB_ALPHABET = "[removed]"
+def brave_climb(text):
+    """lark-connector''s catalogue (lark.Client.Emojis): the app looks keys up lower-cased. Each picture is a
 # flat made-up colour (fs_media), so the long-press bar's emoji tell apart.
 LARK_EMOJIS = {k.lower(): {"label": label, "url": "/api/v1/lark/media/emoji-" + k} for k, label in _LARK_EMOJI_SET}
 LARK_MEDIA = {"trail-photo": (480, 320), **{"emoji-" + k: (32, 32) for k, _ in _LARK_EMOJI_SET}}

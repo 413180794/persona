@@ -51,3 +51,5 @@
 - PTY 里的客户端要「视图一结束就没有进程」：关 PTY 主端（挂断）→ TERM 进程组 → KILL 进程组，三步都要等；`yes` 这样的洪流不 ack 时读 PTY 的线程要在 ack 窗口满时停读，否则 node 里无限攒。测试里 `pgrep` 查不到残留才算过。
 - xterm 的 DOM 渲染器下行高大于 1 时 herdr 画的框线（`│`）会断成虚线（框线字符画不到行间的缝）；完整界面用行高 1。单窗格的行高 1.15 是老样子，没动。
 - Playwright 截切换中间态：一张截图的时间和 220 ms 的过渡差不多长，要在点击后立刻截、事后确认两个界面还都在页面上，没抓到就换个方向再试（`web_herdr_full_e2e.py` 的 `transition_shot`）。
+- xterm.js 在 Windows / Linux 上把 Ctrl+V 当成 `^V` 发出去并取消按键，浏览器不粘贴、也没有 `paste` 事件：剪贴板里的截图到不了页面（⌘V 和 Ctrl+Shift+V 才有）。要在 `attachCustomKeyEventHandler` 里自己拦下，先读 `navigator.clipboard.read()`，没有文件再补发 `^V`（`terminal-conflicts.ts` 的 `isCtrlV`，#2700）。
+- 完整界面里右键必须 `preventDefault`：xterm 的鼠标上报只管把按下发给 herdr，浏览器自己的右键菜单照样弹出来盖在 herdr 的菜单上（e2e 里看最后一个 `contextmenu` 事件的 `defaultPrevented`）；xterm 的 `rightClickSelectsWord` 在 Mac 上默认开，要关掉。herdr 的前缀键 Ctrl+B 和 Persona 的「右侧面板」（Mod+B，Windows / Linux 上就是 Ctrl+B）是同一个键，全局快捷键派发和 xterm 的按键处理都要放行。（`docs/terminal.md` 第二十六节）
