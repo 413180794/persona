@@ -62,6 +62,12 @@ class PersonaApp : Application() {
             connection.state.map { it == persona.core.contracts.api.ConnectionState.Online }.distinctUntilChanged()
                 .collect { online -> if (online) runCatching { personas.refresh() } }
         }
+        // A tiered look moved to another tier: the new tier is downloaded whole before the face changes.
+        scope.launch {
+            connection.events.collect { event ->
+                if (event is persona.core.contracts.PersonasEvent) runCatching { personas.refresh() }
+            }
+        }
     }
 
     val deviceName: String get() = "${Build.MANUFACTURER} ${Build.MODEL}".trim()

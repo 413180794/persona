@@ -1,0 +1,188 @@
+{
+  "id": "nwverse",
+  "name": "奶蛙",
+  "about": "NWVERSE 等级",
+  "source": {
+    "kind": "nwverse-board",
+    "url": "https://nwverse.github.io/contribution/data/board.json"
+  },
+  "default": "unhatched",
+  "center": "weight",
+  "style": "Render it as a polished, cute 3D character: a soft vinyl toy look, smooth rounded forms, gentle subsurface shading and soft studio light, crisp and clean. The attached pictures are flat icons of the same character: keep their shapes, proportions, colors and face, but make it a 3D figure, not a flat drawing.",
+  "identity": "奶蛙 (a milk frog): a yellow frog whose body is shaped like a bell or a pear (a narrow head flowing into a wide round bottom), a cream belly, small dark gray hands and feet, a warm golden yellow skin",
+  "refs": ["refs/{key}.png", "refs/frog.png", "refs/face.png"],
+  "tiers": [
+    {
+      "key": "unhatched",
+      "motion": "rock",
+      "framing": {"*": {"scale": 0.74, "dy": 0.05}},
+      "condition": "默认：没登录 GitHub、看板上还没有你，或新手考核没通过",
+      "name": "未孵化",
+      "when": {"newbie": "failed"},
+      "theme": "shell",
+      "primary": "#D8CBB0",
+      "secondary": "#B9AE9C",
+      "accent_light": "#7A6A52",
+      "accent_dark": "#958469",
+      "describe": "an egg that has not hatched yet: a smooth glossy cream-white egg standing upright, a small zigzag crack across its middle, and through the crack two tiny shiny black bead eyes peek out; no frog body is visible yet, only the egg and the eyes in the crack",
+      "camera": "the whole egg, centered, the top of the egg about 10% below the top edge and its bottom about 6% above the bottom edge",
+      "poses": {
+        "avatar": "standing upright, the two bead eyes peeking out of the crack at the viewer, friendly and curious",
+        "blink": "the same picture with the two eyes in the crack closed in a relaxed blink; nothing else changes",
+        "think": "the egg tilted a little to one side, the eyes in the crack looking up to one side, wondering",
+        "work_a": "the egg wobbling hard and leaning to the left, the eyes in the crack squeezed with effort as if trying to hatch",
+        "work_b": "the next beat of the same wobble: leaning to the right instead; nothing else changes",
+        "wave_a": "a tiny yellow hand pokes out of the crack and waves at the viewer, the eyes smiling",
+        "wave_b": "the next beat of the wave: the tiny hand tilted the other way; nothing else changes",
+        "sleep": "resting, tilted a little, the eyes in the crack closed, peaceful"
+      }
+    },
+    {
+      "key": "egg",
+      "vertical": "ground",
+      "motion": "peek",
+      "framing": {"*": {"scale": 0.86}},
+      "condition": "新手考核中",
+      "name": "蛙卵",
+      "when": {"newbie": "pending"},
+      "theme": "hearts",
+      "primary": "#F6C23E",
+      "secondary": "#F3DFB5",
+      "describe": "a tiny round yellow blob with two shiny black bead eyes and a small smile, peeking out of the lower half of a cracked cream eggshell with a zigzag rim; only its head and tiny hands show above the shell",
+      "camera": "the whole shell and the blob, centered, the top of the head about 12% below the top edge and the bottom of the shell about 6% above the bottom edge",
+      "poses": {
+        "avatar": "peeking out of the shell, looking at the viewer, happy and curious",
+        "blink": "the same picture with both bead eyes closed in a relaxed blink; nothing else changes",
+        "think": "leaning on the shell rim with one tiny hand at its chin, eyes looking up to one side",
+        "work_a": "both tiny hands gripping the shell rim, pushing itself up with effort, determined",
+        "work_b": "the next beat of the same push: bounced a little higher, hands pressing down on the rim; nothing else changes",
+        "wave_a": "one tiny hand raised above the shell rim, waving at the viewer, beaming",
+        "wave_b": "the next beat of the wave: the raised hand tilted the other way; nothing else changes",
+        "sleep": "sunk down into the shell, only the top of the head and the closed eyes showing, peaceful"
+      }
+    },
+    {
+      "key": "tadpole",
+      "vertical": "weight",
+      "motion": "swim",
+      "framing": {"*": {"scale": 0.88}},
+      "condition": "通过新手考核",
+      "name": "蝌蚪",
+      "when": {"level": 0},
+      "theme": "bubbles",
+      "primary": "#F6C23E",
+      "secondary": "#7CC8E8",
+      "accent_light": "#1F78A8",
+      "accent_dark": "#2A8DC8",
+      "describe": "a chubby yellow tadpole of the same frog: a big round yellow head with a cream belly patch, two big glossy green bulging eyes with black pupils, a small smile, and a short yellow tail curling out to the right; it has no arms or legs yet",
+      "camera": "the whole tadpole, the head centered and large, the top of the head about 12% below the top edge, the tail reaching toward the right edge",
+      "poses": {
+        "avatar": "floating calmly, looking at the viewer, the tail curled softly",
+        "blink": "the same picture with both eyes closed in a relaxed blink; nothing else changes",
+        "think": "the head tilted, eyes looking up to one side, the tail curled up like a question mark",
+        "work_a": "swimming hard, determined eyes, the tail swished up to the right",
+        "work_b": "the next beat of the same swim: the tail swished down instead; nothing else changes",
+        "wave_a": "looking straight at the viewer, the tail raised high and waving like a hand",
+        "wave_b": "the next beat of the wave: the tail tilted the other way; nothing else changes",
+        "sleep": "asleep, eyes closed, the tail curled around the body, peaceful"
+      }
+    },
+    {
+      "key": "froglet",
+      "motion": "hop",
+      "condition": "魔力 ≥ 50",
+      "name": "小奶蛙",
+      "when": {"level": 1},
+      "theme": "meadow",
+      "primary": "#F6C23E",
+      "secondary": "#8FD6A0",
+      "accent_light": "#23804A",
+      "accent_dark": "#20984F",
+      "describe": "a small young version of the frog: a little bell-shaped yellow body, a cream belly, tiny dark gray hands and feet, two small shiny black bead eyes and a tiny beak-like brown mouth; small and round, very cute",
+      "poses": {
+        "avatar": "standing, looking at the viewer, arms relaxed, sweet and shy",
+        "think": "the head tilted, eyes looking up to one side, one tiny hand at the chin",
+        "work_a": "hopping with energy, both tiny fists raised, the left fist forward, determined",
+        "work_b": "the next beat of the same hop: the right fist forward, the left pulled back; nothing else changes",
+        "wave_a": "looking straight at the viewer, one tiny hand raised beside the head, waving happily",
+        "sleep": "asleep, eyes closed, the head drooping a little, peaceful"
+      }
+    },
+    {
+      "key": "frog",
+      "motion": "breathe",
+      "framing": {"*": {"scale": 0.9, "dy": 0.04}},
+      "condition": "魔力 ≥ 150",
+      "name": "奶蛙",
+      "when": {"level": 2},
+      "theme": "sunny",
+      "primary": "#F6C23E",
+      "secondary": "#6FBF4A",
+      "describe": "the grown frog: a bell-shaped yellow body, a cream belly, small dark gray hands and feet, two big glossy green bulging eyes with black pupils on top of the head, and a gentle smile; confident and kind",
+      "poses": {}
+    },
+    {
+      "key": "laugh",
+      "motion": "shake",
+      "condition": "魔力 ≥ 400",
+      "name": "大笑奶蛙",
+      "when": {
+        "level": 3
+      },
+      "theme": "blaze",
+      "primary": "#FF9A1F",
+      "secondary": "#3A2414",
+      "accent_light": "#B85600",
+      "accent_dark": "#CA6E10",
+      "refs": [
+        "refs/photo_laugh.png",
+        "refs/photo_wings.png"
+      ],
+      "identity": "奶蛙 (a milk frog) exactly as in the attached photos: a tall pear-shaped yellow frog, a small rounded head flowing straight into a big round belly, a pale cream belly patch, small round eyes on the sides of the head (a black pupil in a green ring with a white rim), a short beak-like mouth, short yellow arms with small hands; a smooth soft matte 3D render",
+      "style": "The attached photos are 3D renders of this very character: match them exactly (the smooth soft matte yellow skin, the soft studio light, the shape and proportions, the colors, the small green-ringed eyes on the sides of the head, the beak-like mouth). Only the pose, the expression and what is asked below change.",
+      "describe": "laughing hard: the beak-like mouth thrown wide open into a huge laugh showing the dark inside and a pink tongue, both hands on its round belly as in the laughing photo; lit by a warm orange rim light, bold",
+      "poses": {
+        "avatar": "laughing out loud with the mouth wide open, both hands on its belly, as in the laughing photo, facing the viewer",
+        "blink": "the same picture with the eyes squeezed shut in the laugh; nothing else changes",
+        "think": "the mouth closed into a sly smug grin, eyes narrowed, one hand at the chin, scheming",
+        "work_a": "shouting a battle cry with the mouth wide open, both fists up, the left fist punching forward",
+        "work_b": "the next beat of the same move: the right fist punching forward, the left pulled back; nothing else changes",
+        "wave_a": "laughing with the mouth open, one hand raised beside the head waving at the viewer",
+        "wave_b": "the next beat of the wave: the raised hand tilted the other way; nothing else changes",
+        "sleep": "asleep, eyes closed, the mouth hanging open in a snore, hands resting on the belly"
+      }
+    },
+    {
+      "key": "cosmic",
+      "motion": "float",
+      "framing": {"*": {"scale": 1.5}},
+      "condition": "魔力 ≥ 1000",
+      "name": "宇宙奶蛙",
+      "when": {
+        "level": 4
+      },
+      "theme": "cosmic",
+      "primary": "#8E7CF0",
+      "secondary": "#FAB219",
+      "accent_light": "#5B45D6",
+      "accent_dark": "#8170FF",
+      "refs": [
+        "refs/photo_vsign.png"
+      ],
+      "identity": "奶蛙 (a milk frog) exactly as in the attached photo: a tall pear-shaped yellow frog, a small rounded head flowing into a big round belly, a pale cream belly patch, small shiny black eyes with a cheeky look, a wide mouth, short yellow arms with dark gray hands, short legs; a smooth soft matte 3D render",
+      "style": "The attached photo is a 3D render of this very character: match it exactly (the smooth soft matte yellow skin, the soft studio light, the shape and proportions, the colors, the face). Only the pose, the expression and what is asked below change. Its socks are plain white with no logo or brand mark of any kind.",
+      "describe": "its coolest form: a cheeky playful expression, a mischievous grin with the tongue sticking out, squatting with its legs apart in plain white socks; lit by a violet and gold rim light, swaggering and cool",
+      "camera": "the whole character from the top of its raised hands down to its feet, centered, filling the frame, the face large and clear",
+      "poses": {
+        "avatar": "squatting with its legs apart, both hands making V (peace) signs beside its head, a cheeky grin with the tongue sticking out, as in the photo",
+        "blink": "the same picture with one eye winking shut; nothing else changes",
+        "think": "standing, one finger tapping its cheek, eyes looking up to one side, the tongue poking out a little, mischievous",
+        "work_a": "a cool dance move: squatting, one V sign raised high above its head, the other hand at its chest, a focused grin",
+        "work_b": "the next beat of the same move: the hands swapped, the other V sign raised high; nothing else changes",
+        "wave_a": "squatting, waving at the viewer with one hand, the other hand making a V sign, the tongue out",
+        "wave_b": "the next beat of the wave: the waving hand tilted the other way; nothing else changes",
+        "sleep": "asleep in its squat, eyes closed, the tongue lolling out, hands resting on its knees, peaceful"
+      }
+    }
+  ]
+}

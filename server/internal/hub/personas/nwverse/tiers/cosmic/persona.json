@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "id": "nwverse",
+  "name": "奶蛙",
+  "avatar": {
+    "sizes": {
+      "64": "tiers/cosmic/avatar/64.png",
+      "128": "tiers/cosmic/avatar/128.png",
+      "256": "tiers/cosmic/avatar/256.png"
+    },
+    "safe": 1.0
+  },
+  "dot": {
+    "size": 144,
+    "states": {
+      "idle": {
+        "file": "tiers/cosmic/dot/idle.png",
+        "fps": 8,
+        "frames": 24
+      },
+      "thinking": {
+        "file": "tiers/cosmic/dot/thinking.png",
+        "fps": 8,
+        "frames": 16
+      },
+      "working": {
+        "file": "tiers/cosmic/dot/working.png",
+        "fps": 10,
+        "frames": 12
+      },
+      "needs_you": {
+        "file": "tiers/cosmic/dot/needs_you.png",
+        "fps": 6,
+        "frames": 12
+      },
+      "offline": {
+        "file": "tiers/cosmic/dot/offline.png",
+        "fps": 4,
+        "frames": 12
+      }
+    }
+  },
+  "colors": {
+    "light": {
+      "primary": "#8E7CF0",
+      "secondary": "#FAB219",
+      "accent": "#5B45D6",
+      "bubble": "#5A44D7",
+      "bubble_text": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#8E7CF0",
+      "secondary": "#FAB219",
+      "accent": "#8170FF",
+      "bubble": "#6C58FF",
+      "bubble_text": "#FFFFFF"
+    }
+  },
+  "subtitle": "宇宙奶蛙",
+  "about": "NWVERSE 等级"
+}

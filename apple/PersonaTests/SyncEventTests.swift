@@ -29,6 +29,13 @@ struct SyncEventTests {
         #expect(ids == ["removedbridge:agent:grok_bot:a:b/"])
     }
 
+    /// A tiered look moved to another tier (docs/persona.md): the app lists the personas again.
+    @Test func decodesPersonas() throws {
+        guard case .personas = try #require(ServerEvent.decode(Data(#"{"type":"personas"}"#.utf8))) else {
+            Issue.record("not personas"); return
+        }
+    }
+
     @Test func personalAgentPathEncodesSlashAndColon() {
         #expect(APIClient.agentPath("removedbridge:agent:x:y/") == "/api/v1/agents/sessions/removedbridge%3Aagent%3Ax%3Ay%2F")
     }

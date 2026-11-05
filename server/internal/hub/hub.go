@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -133,6 +134,10 @@ type Hub struct {
 	media    mediaCache // connectors' media as the app's thread pages show them (connector_threads.go)
 	// connectorsOff start switched off until the user turns them on (addConnectorOff).
 	connectorsOff map[string]bool
+
+	// The looks built into personad (persona.go; nil in unit tests) and the tier each tiered look shows (persona_tiers.go).
+	builtinLooks fs.FS
+	tiers        personaTierState
 }
 
 // Mail is implemented by internal/mail; kept as an interface so the hub can run without it.
@@ -276,6 +281,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 		byID: map[string]*Machine{}, clients: map[*client]struct{}{}, interactions: map[string]*pending{},
 		calls: map[string]chan proto.ToolResult{}, notified: map[string]time.Time{}, turns: newTurnTracker(),
 	}
+	h.builtinLooks = builtinPersonaFS()
 	h.live = newLiveActivities(h)
 	h.upd = newUpdater(h)
 	h.upd.confirmed = !updating // an update under way is confirmed by this process (its watchdog waits for that)
@@ -377,6 +383,7 @@ func runHub(ctx context.Context, b update.Build, cfg *Config, budget *shutdownBu
 	h.extensions.stats.redact = h.redactOwnSecrets
 	h.loadAssistantProfile(ctx) // the user's zone and the main conversation before the assistant reports (assistant_profile.go)
 	h.startConnectors(ctx)      // the plugins' connectors join here (attachPlugins)
+	go h.personaTiersLoop(ctx)
 	h.upd.start(ctx)
 	h.startExtensions(ctx)
 	// Market plugins' newer versions (plugin_autoupgrade.go).

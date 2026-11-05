@@ -91,6 +91,8 @@ struct PersonaPicker: View {
                     }
                     if p.isBuiltin {
                         Text(p.builtinNote).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    } else if let about = p.manifest?.about, !about.isEmpty {
+                        Text(about).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
                     } else {
                         PersonaSwatches(palette: p.palette).frame(height: Theme.Space.l)
                     }

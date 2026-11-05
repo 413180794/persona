@@ -220,3 +220,14 @@ WindowInsets 回给浮层 View 的 IME bottom 可能只是该窗口与键盘的�
 活动摘要曾把收起胶囊撑到 248 dp 宽，“优先状态数 / 活跃总数”的比例又容易被误解为未读数或会话位置。收起只保留小形象和提醒，具体数量放在含义明确的“未读 / 主对话 / 收件箱”入口；未读使用现有 seen 版本投影，工作中与完成未看分开。
 
 浮层体积由 WindowManager.LayoutParams 和 Compose 内容共同决定；只缩 Compose 里的头像或 maxWidth 仍可能留下宽大的透明触摸区域。修改收起尺寸时同步调整原生窗口宽度、拖动头部高度、展开最大高度，并在其他 App 上验证实际边界和输入法位置。
+
+## 没有 Android Studio 的 Linux 机器上编译和跑单测（2026-11-04，#984）
+
+- **JDK 21 工具链**：构建要 JDK 21，命令行的 `-Porg.gradle.java.installations.paths=` 只给根构建，`build-logic` 这个包含构建看不到，
+  报「Cannot find a Java installation … languageVersion=21」。把它写进 `GRADLE_USER_HOME/gradle.properties`（用一个临时的 Gradle 用户目录，不改机器上的 `~/.gradle`）。
+- **SDK**：新的 cmdline-tools 说 `--licenses` 已经不需要了，直接 `sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"`。
+  compileSdk 37 对应的包名是 `android-37.0`，不是 `android-37`。
+- **Robolectric 运行时自己下 android-all**：不走 Gradle 的仓库，Maven Central 不通时 `AgentRowTest` 这类用例报 `MavenArtifactFetcher` 的 `ConnectException`。
+  用 `JAVA_TOOL_OPTIONS=-Drobolectric.dependency.repo.url=<镜像>` 传给测试进程。
+- **单测读仓库根目录下的文件**（`jarvis.repo.root`）：`spec/fixtures`、`apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`。
+  只拷 `android/` 过去跑，会多出几条 `FileNotFoundException`，看着像测试坏了。

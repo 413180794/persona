@@ -27,6 +27,17 @@ class PersonaManifestTest {
         assertEquals(false, p.copy(id = "other", rev = "0123456789abcdef").usable)
     }
 
+    /** A tier of a tiered look (奶蛙): a plain manifest whose files sit under the tier, and the words for its card. */
+    @Test fun readsATierWithAbout() {
+        val body = """{"format":1,"id":"nwverse","name":"奶蛙","subtitle":"蝌蚪","about":"NWVERSE 等级",
+            "avatar":{"sizes":{"64":"tiers/tadpole/avatar/64.png"}},"dot":{"size":144,"states":{"idle":{"file":"tiers/tadpole/dot/idle.png"}}}}"""
+        val m = JsonCodec.decodeFromString<PersonaManifest>(body)
+        assertNull(m.problem)
+        assertEquals("NWVERSE 等级", m.about)
+        assertEquals(listOf("tiers/tadpole/avatar/64.png", "tiers/tadpole/dot/idle.png"), m.files)
+        assertNull(manifest().about)
+    }
+
     @Test fun refusesWhatTheHubWouldLeaveOut() {
         assertNull(manifest().problem)
         assertEquals("id jarvis-circuit", manifest(id = "jarvis-circuit").problem)

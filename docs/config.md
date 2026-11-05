@@ -297,6 +297,8 @@ Unix socket 与直接父目录必须属于当前用户且不对组/其他用户�
   这时设备码登录拿不到验证码，就要配它。填错了不会退回直连：GitHub 的每个请求都失败，设置页写明「hub.json 的 github.proxy 不对」。具体地址只写在 hub 自己的 hub.json 里。
   `github.inbox`（可选）是收件箱的默认规则（App 里改过以 App 为准，`docs/inbox.md`「降噪」）：`ci`（`off` / `default_branch` / `mine`（默认）/ `all`）、
   `muted_repos`（`["owner/name"]`）、`ignore_branches`（不提醒的分支，`path.Match` 模式，默认 `["train/*"]`）。
+- `personas.github_login`（可选）：分级形象（奶蛙）按谁在 NWVERSE 看板上的等级显示。不写就用 GitHub 连接器登录的账号；
+  两个都没有时显示默认档「未孵化」（`docs/persona.md`「分级形象」）。
 - `imessage`（可选，**旧写法，保留一个版本，只读**）：现在在 App 的 设置 › 扩展 › 信息 选读哪台 Mac（#1830）。这里写了的话，hub 启动时会迁过去一次，
   扩展没开或没选 Mac 时照旧读这里。信息连接器。`{"machine": "<机器 id>"}`：App 里能看哪台 Mac 的「信息」（经那台 Mac 的 node 只读 `~/Library/Messages/chat.db`，
   要给它完全磁盘访问权限，App 的 设置 › 连接器 › 信息 会说怎么开）。只写一台（同一个 Apple ID 的几台 Mac 消息是同一份）。

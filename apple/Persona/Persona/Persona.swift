@@ -64,6 +64,8 @@ nonisolated struct PersonaManifest: Codable, Sendable, Hashable {
     var id: String
     var name: String
     var subtitle: String?
+    /// A few words on the look's card in 设置 › 外观 › 形象, in place of its colors (奶蛙: where its level comes from).
+    var about: String?
     var avatar: Avatar
     var dot: Dot
     var colors: Colors?

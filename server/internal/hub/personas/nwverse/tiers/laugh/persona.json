@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "id": "nwverse",
+  "name": "奶蛙",
+  "avatar": {
+    "sizes": {
+      "64": "tiers/laugh/avatar/64.png",
+      "128": "tiers/laugh/avatar/128.png",
+      "256": "tiers/laugh/avatar/256.png"
+    },
+    "safe": 1.0
+  },
+  "dot": {
+    "size": 144,
+    "states": {
+      "idle": {
+        "file": "tiers/laugh/dot/idle.png",
+        "fps": 8,
+        "frames": 24
+      },
+      "thinking": {
+        "file": "tiers/laugh/dot/thinking.png",
+        "fps": 8,
+        "frames": 16
+      },
+      "working": {
+        "file": "tiers/laugh/dot/working.png",
+        "fps": 10,
+        "frames": 12
+      },
+      "needs_you": {
+        "file": "tiers/laugh/dot/needs_you.png",
+        "fps": 6,
+        "frames": 12
+      },
+      "offline": {
+        "file": "tiers/laugh/dot/offline.png",
+        "fps": 4,
+        "frames": 12
+      }
+    }
+  },
+  "colors": {
+    "light": {
+      "primary": "#FF9A1F",
+      "secondary": "#3A2414",
+      "accent": "#B85600",
+      "bubble": "#B85600",
+      "bubble_text": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#FF9A1F",
+      "secondary": "#3A2414",
+      "accent": "#CA6E10",
+      "bubble": "#B0600E",
+      "bubble_text": "#FFFFFF"
+    }
+  },
+  "subtitle": "大笑奶蛙",
+  "about": "NWVERSE 等级"
+}

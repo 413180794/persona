@@ -33,6 +33,8 @@ export interface PersonaManifest {
   id: string;
   name: string;
   subtitle?: string;
+  /** A few words for the look's card in the picker, in place of its colors (奶蛙: where its level comes from). */
+  about?: string;
   avatar: { sizes: Record<string, string>; safe?: number };
   dot: { size?: number; states: Record<string, { file: string; fps?: number; frames?: number }> };
   colors?: { light?: Record<string, string>; dark?: Record<string, string> };
@@ -84,6 +86,17 @@ export function dotFile(m: PersonaManifest, s: PersonaState): string | undefined
 export function personaFileURL(p: Pick<PersonaInfo, "id" | "rev">, file: string, token: string): string {
   const path = file.split("/").map(encodeURIComponent).join("/");
   return `/api/v1/personas/${encodeURIComponent(p.id)}/${path}?rev=${encodeURIComponent(p.rev)}&token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * The list to show after a refresh: the chosen package at its new rev once its files are in the browser (`ready`),
+ * else still at the rev on screen, as the phone keeps its copy until the new one is downloaded whole (a tiered look
+ * moving to another tier never shows half a face).
+ */
+export function withChosenReady(next: PersonaInfo[], prev: PersonaInfo[], chosen: string, ready: boolean): PersonaInfo[] {
+  if (ready) return next;
+  const old = prev.find((p) => p.id === chosen);
+  return old ? next.map((p) => (p.id === chosen ? old : p)) : next;
 }
 
 /** The packages that check out, in the hub's order. */

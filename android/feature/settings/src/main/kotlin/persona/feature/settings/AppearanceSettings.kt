@@ -198,7 +198,7 @@ fun PersonaSettings(demo: Boolean, modifier: Modifier = Modifier) {
         }
         if (packs != null) offered.forEach { p ->
             val busy = p.id in downloading || p.id == asked
-            PersonaOption(p.manifest.name, p.manifest.subtitle ?: if (packs.onPhone(p)) "hub 上的形象" else "选中后下载", selected = p.id == chosen,
+            PersonaOption(p.manifest.name, p.manifest.about ?: p.manifest.subtitle ?: if (packs.onPhone(p)) "hub 上的形象" else "选中后下载", selected = p.id == chosen,
                 onClick = { if (!busy) scope.launch { asked = p.id; try { packs.choose(p) } finally { if (asked == p.id) asked = null } } }) {
                 Box(contentAlignment = Alignment.Center) {
                     PackAvatar(packs, p, Tokens.Space.xxxl * 2)

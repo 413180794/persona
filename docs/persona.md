@@ -21,18 +21,23 @@
 - **网页**（`web/src/views/assistant/MochiFace.tsx`）：同一份图标坐标画的 SVG，颜色是 `styles.css` 的 `--mochi-*`（浅色 / 深色两套），动画是 CSS、减弱动态效果时停。
   网页以前的内置形象是页面自己的标志（id `jarvis`，选它时 `localStorage` 不存值），现在默认是团子，标志作为可选项「标志」留着；
   因为以前选内置的人什么都没存，分不出「没选过」和「选过标志」，网页上他们都换成团子，选过形象包的不变。
-- **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存。
+- **hub 内置形象**：编进 personad 的形象包（`server/internal/hub/personas/<id>/`），每台 hub 都有，不用手动安装；手机选中时下载并缓存。
+  现在只有**奶蛙**（id `nwverse`）：按用户在 NWVERSE 贡献看板上的等级换样子的分级形象，见下面「分级形象」。
+- **其他形象**：放在 hub 机器的 `~/.persona/personas/<id>/`，手机选中时下载并缓存；和内置形象同 id 时目录里的优先（在一台 hub 上先试新图）。
 - 体验模式只有默认形象（`AppModel.persona`）。
 
-## 为什么形象放 hub、不进仓库和 App 包
+## 为什么形象放 hub、不进 App 包
 
 形象常常是网上找来的第三方角色（图上还带着别的平台的水印），而 TestFlight 是公开链接、仓库会给朋友看。所以：
 
-- **不进仓库、不进 App**：这类角色的原图和生成出来的资源都不进仓库，也不打进 App 包。
-- **仓库里放的**：协议、加载代码、生成脚本，以及原创的东西：默认形象和脚本现画的演示形象 `demo`（不存图片）。
+- **第三方角色不进仓库、不进 App**：原图和生成出来的资源都不进仓库，也不打进 App 包，只装在自己的 hub 上。
+- **版权确认过的官方形象进仓库、编进 personad**（2026-11-03 用户确认奶蛙的版权没问题，要给所有 Persona 用户用）：
+  成品包和生成参数（`scripts/assets/personas/<id>.json`）进仓库，拉代码自己部署、发布版、Docker 的 hub 都自带；
+  原始生图（每张约 1.6 MB）不进仓库。App 包里仍然没有：手机从 hub 下载，和别的形象一样。
+- **仓库里还放的**：协议、加载代码、生成脚本，以及原创的东西：默认形象和脚本现画的演示形象 `demo`（不存图片）。
 - **生成时的工作目录**：要放在仓库外（或不提交的 `.lane/`）。
 - **发版检查照常**：`check_bundle_privacy.py` 和隐私钩子都照常跑。
-- **以后要改**：如果要把某个形象正式放进 App，先确认版权，再改这一节。
+- **以后要改**：要把别的形象放进仓库或 App，先确认版权，再改这一节。
 
 ## 包格式（format 1）
 
@@ -77,6 +82,8 @@
 | `dot.size` | 帧的边长（像素）。顶栏显示 46 pt，144 px 正好是 48 pt @3x |
 | `dot.states` | 五个状态各一个 APNG（只有一帧时就是普通 PNG）；必须有 `idle`，缺的状态 App 用 `idle` 的。`fps` 在文件里没写每帧时长时才用；`frames` 只是给人看的 |
 | `colors` | 每个外观一套 `#RRGGBB`，见下面「色系」。整块可以省略（只换脸不换颜色） |
+| `about` | 可选，几个字（不超过 10 个，奶蛙是「NWVERSE 等级」）：设置 › 外观 › 形象里卡片的第二行，代替配色色块（内置形象那一行写「颜色随主题色」）；Android 是选项的说明行 |
+| `tiers` | 可选，只有分级形象有：等级从哪来、默认档、每一档的 manifest，见下面「分级形象」。hub 不发给手机 |
 
 **检查规则**
 
@@ -87,6 +94,50 @@
   - 状态名只能是这五个。
 - **App 端**（`PersonaManifest.problem`）：再查一遍同样的规则。
 - **脚本**：`make_persona.py check` 把这些规则和对比度底线一起查。
+
+## 分级形象（奶蛙）
+
+一个形象，几套样子：hub 按用户的等级挑一档给手机。对手机来说它就是一个普通的 format 1 包，换档等于这个包的 rev 变了，
+所以旧版 App、Android、网页都能用，不用发版。
+
+```
+server/internal/hub/personas/nwverse/
+  persona.json                     # 默认档（未孵化）的 manifest + tiers：没有分级的旧 hub 当普通包用
+  tiers/<档>/persona.json          # 这一档的 manifest，文件从包的根写起：tiers/<档>/avatar/64.png …
+  tiers/<档>/avatar/{64,128,256}.png  tiers/<档>/dot/<状态>.png
+```
+
+```json
+"tiers": {
+  "source": {"kind": "nwverse-board", "url": "https://nwverse.github.io/contribution/data/board.json"},
+  "default": "unhatched",
+  "levels": [{"key": "egg", "name": "蛙卵", "when": {"newbie": "pending"}, "manifest": "tiers/egg/persona.json"},
+             {"key": "tadpole", "name": "蝌蚪", "when": {"level": 0}, "manifest": "tiers/tadpole/persona.json"}, "…"]
+}
+```
+
+| 档 | 看板上的条件 | 样子 | 动作 |
+| --- | --- | --- | --- |
+| 未孵化（默认） | 没登录 GitHub、看板上没有你，或新手考核没通过 | 奶白色的蛋，裂缝里眨眼，暖灰底 | 摇晃：底着地晃，工作时用力晃，叫你时蹦 |
+| 蛙卵 | 新手考核中 | 小黄团从蛋壳里探头，奶油底冒爱心 | 探头：一探一探，工作时弹，叫你时蹿起来 |
+| 蝌蚪 | 通过新手考核（level 0） | 圆脑袋加小尾巴，浅水蓝底吐泡泡 | 游动：左右漂，工作时用力游，叫你时上下浮 |
+| 小奶蛙 | 魔力 ≥ 50（level 1） | 小个子黑豆眼，薄荷底草地小花 | 蹦跳：时不时蹦一下，工作时原地蹦，叫你时大跳 |
+| 奶蛙 | ≥ 150（level 2） | 标准站姿绿鼓眼，黄绿底转着的柔光 | 呼吸（默认的动法） |
+| 大笑奶蛙 | ≥ 400（level 3） | 照参考图的立体奶蛙（梨形身体、侧面绿圈小眼、鸟嘴）：张嘴大笑露粉舌、手捂肚子；深底橙金放射线、火星和火光外圈 | 笑得发抖，工作时前冲出拳；工作弧线是彗星 |
+| 宇宙奶蛙 | ≥ 1000（level 4） | 照参考图的立体奶蛙：蹲着双手比耶、吐舌头、白袜子（不画商标）；深空星云、闪烁的星和霓虹外圈 | 悬浮，工作时蓄力脉动；工作弧线是彗星 |
+
+低档浅底、软，高档深底、发光、动得多（`make_persona.py` 的 `THEMES`、`MOTIONS`）。状态的提示（思考的气泡、工作的弧线、需要你的红圈、离线变灰）
+每档都一样，只换角色自己怎么动，免得认不出状态。名字一直是「奶蛙」，卡片第二行是 `about`「NWVERSE 等级」。
+
+**hub 怎么挑档**（`server/internal/hub/persona_tiers.go`）：
+
+- **你是谁**：GitHub 连接器登录的账号（登录只用来认出你是看板上的哪个人；看板是公开的，拉它不用登录）；hub.json 的 `personas.github_login` 可以覆盖。
+- **看板**：每 10 分钟带 ETag 拉一次（看板每 30 分钟发布、GitHub Pages 缓存 10 分钟，没变就是 304）。启动后先等 1 分钟，让 GitHub 连接器认出账号。
+- **对应**：`level` 有值时取不高于它的最高一档（看板以后多了等级，先显示这里最高的）；还没孵化时按 `newbie.status`；看板上没有你就是默认档。
+- **没登录 → 默认档；拉不到看板 → 保持上次的档**。上次的档存在 Postgres（设置 `persona_tiers`），重新部署后不会先闪回默认档。
+- **换档就广播 `personas`**：手机重拉列表，新档的包下载完整后才换（iOS、Android 下到旁边再整个挪过去，网页先预加载每个文件），下载失败就还是旧的。
+  没升级的旧 App 收不到广播，下次连上 hub 或打开设置时换。
+- **一档不完整**（文件缺了）就给默认档，不会给手机半个形象。
 
 ## 状态（顶栏的圆点）
 
@@ -170,7 +221,7 @@
 
 - **缓存目录**：`Application Support/Personas/<id>/<rev>/`。下载时先写到旁边的 `.<rev>.part`，全部下完再整个挪过去，所以不会用到半个包。`index.json` 是上次的列表。
 - **启动**：直接从磁盘显示选中的形象，不等 hub。
-- **刷新列表**：每次连上 hub 和打开设置时各刷新一次。rev 变了就下载新的，再删掉没人用的旧 rev。
+- **刷新列表**：每次连上 hub、打开设置和收到 `personas` 广播时各刷新一次。rev 变了就下载新的（下完整个包才换上），再删掉没人用的旧 rev。
 - **hub 上没有了**：用默认形象，但保留用户的选择，包回来了就恢复。
 - **旧 hub**（没有这个接口，404）：设置里提示「这个 hub 还不能放形象：更新 hub 后再看」。
 
@@ -204,6 +255,27 @@
 5. **装到 hub**：`python3 scripts/assets/make_persona.py install ~/personas/doudou/package/doudou`。会先解到旁边，再整个换上去；hub 机器默认读 `~/.config/persona/config.json`。
 6. **手机上选**：设置 › 外观 › 形象。
 
+**分级形象**（奶蛙）的每一档也是这 8 个姿势，参数都写在 `scripts/assets/personas/nwverse.json`（每档的描述、姿势、取景 `framing`、背景主题、配色）：
+
+```sh
+# <work>/refs/<档>.png：nwverse/contribution 的 index.html 里每档的 SVG 渲染成 1024 的透明 PNG（face、frog 当身份参考）
+python3 scripts/assets/make_persona.py tiers generate --spec scripts/assets/personas/nwverse.json --work ~/personas/nwverse \
+  --model gpt-6-astra --proxy http://127.0.0.1:7897      # 7 档同时画，每档一个 codex，约 20 分钟
+python3 scripts/assets/make_persona.py tiers build --spec scripts/assets/personas/nwverse.json --work ~/personas/nwverse \
+  --out server/internal/hub/personas/nwverse              # 打包进仓库，写 <work>/review.html
+```
+
+- **一档可以有自己的参考图**：tier 的 `refs` 换掉 spec 的 `refs`，`identity`、`style` 跟着换成照片该用的说法（「照片就是这个角色，照着画」，
+  而不是「扁平图标画成立体」）。大笑、宇宙两档照用户给的立体奶蛙参考图画（2026-11-04 用户要求；参考图上的品牌标志不画）；参考图放 `<work>/refs/`，不进仓库。
+- **review.html** 是一个文件（图都在里面），每档的头像、五个状态（会动）、浅色深色和配色：先发给人看，点头了再提交。
+- **编进 personad 的包要小**：动图用 256 色共享调色板、不出 512 的头像，整包不超过 5 MB（现在约 3 MB），每次 hub 更新都要下载。
+- 扁平的参考图要画成立体的：spec 的 `style` 写明「3D、软胶玩具质感、保持形状和颜色」，不然 Codex 会照着画成扁平的。
+- **居中**：默认按头顶居中（头横着放在正中），带尾巴、往一边歪的姿势整体就偏了（蝌蚪偏到圆的 13%）。spec 的 `"center": "weight"`
+  按整只角色的重心横向居中，一个姿势和它改出来的第二拍一起算，两拍之间不跳。
+- **上下居中**：默认把头顶放在离圆顶 12% 处，适合「头和上半身、身体出画」的构图；整只都在圆里的角色这样会偏上（蛙卵、蝌蚪、宇宙奶蛙的中点在 0.43 左右）。
+  tier 的 `"vertical": "ground"` 让每个姿势站在同一条地平线上、空闲时整只上下居中（蛋缩进壳里时壳不往上跳）；`"weight"` 把每个姿势的重心放在圆心高度（蝌蚪甩尾时头不跳）。
+- **每档的动作**：tier 的 `motion` 选 `MOTIONS` 里的一种（`breathe`、`rock`、`peek`、`swim`、`hop`、`shake`、`float`），不写就是 `breathe`（别的形象包照旧）。
+
 一步做完生成和打包：`make_persona.py new --id doudou --name 豆豆 a.jpg b.jpg c.jpg`。不用 AI 也行：把自己画的 8 张透明 PNG 按上面的名字放进 `<work>/poses/`，直接 `build`。只有 `avatar` 是必须的，缺的姿势用它代替。
 
 脚本第一次运行会把 Pillow、numpy 装进 `~/.cache/jarvis/persona-venv`。
@@ -233,8 +305,13 @@
 | 测试 | 内容 |
 | --- | --- |
 | `server/internal/hub/persona_test.go` | 只列出完整的包；rev 跟着内容变；文件不出包目录；没有令牌拿不到 |
+| `server/internal/hub/persona_tiers_test.go` | 内置包在前、同 id 的目录优先、坏目录不挡内置包；按看板换档（大小写不敏感、超过的等级取最高档、304、看板不通保持、不在看板上回默认）并广播；没登录是默认档；重启后保持上次的档；一档不完整给默认档；`tiers` 的规则；personad 内置的包都检查通过 |
 | `apple/PersonaTests/PersonaTests.swift` | 解析 persona.json；hub 会拒绝的包 App 也拒绝；颜色被拉到底线；作为主题色「跟随形象」时用形象的主色、气泡和飞书链接（飞书风格也是），没给的用风格自己的；下载整包、按 rev 换新删旧；下载失败什么都不变；APNG 解帧 |
 | `apple/PersonaUITests/PersonaPickerTests.swift` | 起 `MOCK_PERSONAS=demo python3 scripts/mock/mock_hub.py`：设置里选 hub 上的形象，顶栏换成它的名字；选回 Persona 又变回来 |
+| `apple/PersonaTests`（`tierManifestWithAbout`、`decodesPersonas`）、Android `PersonaManifestTest` / `RealtimeContractTest`、`web/src/lib/persona.test.ts` | 一档的 manifest 和 `about`；`personas` 事件；网页在新档的文件到齐前留着旧档 |
+
+mock hub 里看奶蛙：`MOCK_PERSONAS=builtin`（或 `demo,builtin`）列出编进 personad 的包，`MOCK_PERSONA_TIER=<档>` 固定档位，
+`GET /mock/persona-tier?tier=<档>` 运行中换档并推 `personas`（看 App 不进设置就换脸）。
 
 截图和录屏用的 DEBUG 启动参数：
 

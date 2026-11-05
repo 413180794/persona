@@ -5809,45 +5809,90 @@ def file_read(path, cwd, offset, stream=False):
 
 # ---------- personas (docs/persona.md) ----------
 # MOCK_PERSONAS=<dir>: the packages in it, as the hub lists and serves ~/.jarvis/personas. MOCK_PERSONAS=demo: the
-# original placeholder (scripts/assets/make_persona.py demo), made into a temporary directory at start.
-PERSONAS_DIR = os.environ.get("MOCK_PERSONAS", "")
-if PERSONAS_DIR == "demo":
-    import subprocess, tempfile
-    PERSONAS_DIR = tempfile.mkdtemp(prefix="mock-personas-")
-    subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "make_persona.py"),
-                    "demo", "--out", PERSONAS_DIR], check=True, stdout=sys.stderr)
+# original placeholder (scripts/assets/make_persona.py demo), made into a temporary directory at start. With "builtin"
+# among them (MOCK_PERSONAS=builtin, demo,builtin): the packages built into personad too (server/internal/hub/personas,
+# 奶蛙), first, as the hub lists them. A tiered one shows MOCK_PERSONA_TIER (default: its default tier); GET
+# /mock/persona-tier?tier=<key> moves it and pushes "personas", as the hub does when the board moves the user.
+_PERSONA_ARGS = [x for x in os.environ.get("MOCK_PERSONAS", "").split(",") if x]
+BUILTIN_PERSONAS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "server", "internal", "hub", "personas")
+PERSONA_ROOTS = []  # directories of packages, the built-in one first
+if "builtin" in _PERSONA_ARGS:
+    PERSONA_ROOTS.append(os.path.realpath(BUILTIN_PERSONAS))
+for arg in _PERSONA_ARGS:
+    if arg == "demo":
+        import subprocess, tempfile
+        d = tempfile.mkdtemp(prefix="mock-personas-")
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "make_persona.py"),
+                        "demo", "--out", d], check=True, stdout=sys.stderr)
+        PERSONA_ROOTS.append(d)
+    elif arg != "builtin":
+        PERSONA_ROOTS.append(arg)
+PERSONA_TIER = {"tier": os.environ.get("MOCK_PERSONA_TIER", "")}
+
+
+def _persona_files(root):
+    return sorted(os.path.relpath(os.path.join(r, f), root) for r, ds, fs in os.walk(root) for f in fs
+                  if not f.startswith(".") and not any(x.startswith(".") for x in os.path.relpath(r, root).split(os.sep) if x != "."))
+
+
+def _persona_rev(root, files, salt=b""):
+    h, total = hashlib.sha256(), 0
+    h.update(salt)
+    for f in sorted(files):
+        b = open(os.path.join(root, f), "rb").read()
+        h.update(("%s\0%d\0" % (f, len(b))).encode()); h.update(b)
+        total += len(b)
+    return h.hexdigest()[:16], total
 
 
 def personas():
-    out = []
-    if not PERSONAS_DIR or not os.path.isdir(PERSONAS_DIR):
-        return out
-    for pid in sorted(os.listdir(PERSONAS_DIR)):
-        root = os.path.join(PERSONAS_DIR, pid)
-        mpath = os.path.join(root, "persona.json")
-        if pid.startswith(".") or not os.path.isfile(mpath):
+    out, seen = [], set()
+    for base in PERSONA_ROOTS:
+        if not os.path.isdir(base):
             continue
-        files = sorted(os.path.relpath(os.path.join(r, f), root) for r, ds, fs in os.walk(root) for f in fs
-                       if not f.startswith(".") and not any(x.startswith(".") for x in os.path.relpath(r, root).split(os.sep) if x != "."))
-        h, total = hashlib.sha256(), 0
-        for f in files:
-            b = open(os.path.join(root, f), "rb").read()
-            h.update(("%s\0%d\0" % (f, len(b))).encode()); h.update(b)
-            total += len(b)
-        out.append({"id": pid, "rev": h.hexdigest()[:16], "bytes": total, "manifest": json.load(open(mpath))})
+        for pid in sorted(os.listdir(base)):
+            root = os.path.join(base, pid)
+            mpath = os.path.join(root, "persona.json")
+            if pid.startswith(".") or pid in seen or not os.path.isfile(mpath):
+                continue
+            seen.add(pid)
+            m = json.load(open(mpath))
+            tiers = m.get("tiers")
+            if not tiers:
+                rev, total = _persona_rev(root, _persona_files(root))
+                out.append({"id": pid, "rev": rev, "bytes": total, "manifest": m})
+                continue
+            levels = {t["key"]: t for t in tiers["levels"]}
+            key = PERSONA_TIER["tier"] if PERSONA_TIER["tier"] in levels else tiers["default"]
+            raw = open(os.path.join(root, levels[key]["manifest"]), "rb").read()
+            tm = json.loads(raw)
+            named = sorted(set(tm["avatar"]["sizes"].values()) | {st["file"] for st in tm["dot"]["states"].values()})
+            rev, total = _persona_rev(root, named, ("tier:%s\0" % key).encode() + raw)
+            out.append({"id": pid, "rev": rev, "bytes": total + len(raw), "manifest": tm})
     return out
 
 
 def persona_file(rest):
-    """<id>/<file> inside the directory, or None."""
-    if not PERSONAS_DIR:
-        return None
+    """<id>/<file> inside its package, or None."""
     pid, _, f = rest.partition("/")
-    root = os.path.realpath(os.path.join(PERSONAS_DIR, pid))
-    p = os.path.realpath(os.path.join(root, f))
-    if not p.startswith(root + os.sep) or not os.path.isfile(p) or os.path.basename(p).startswith("."):
-        return None
-    return p
+    for base in PERSONA_ROOTS:
+        root = os.path.realpath(os.path.join(base, pid))
+        p = os.path.realpath(os.path.join(root, f))
+        if p.startswith(root + os.sep) and os.path.isfile(p) and not os.path.basename(p).startswith("."):
+            return p
+    return None
+
+
+def set_persona_tier(key):
+    """Moves the tiered looks to that tier and tells every app, as the hub does (persona_tiers.go)."""
+    PERSONA_TIER["tier"] = key
+    for send, _ in list(LIVE):
+        try:
+            send({"type": "personas"})
+        except Exception:
+            pass
+
+
 # MOCK_STREAM=1: the first conversation keeps working after it is opened: every 2 s a thought, a tool call or a reply
 # arrives (a reply then folds into the work line), 12 times. For checking that reading history holds still.
 STREAM = os.environ.get("MOCK_STREAM") == "1"
@@ -8508,6 +8553,9 @@ class H(BaseHTTPRequestHandler):
                                                  q.get("real", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/persona-tier":
+            set_persona_tier(q.get("tier", [""])[0])
+            return self.send_json({"ok": True, "tier": PERSONA_TIER["tier"]})
         if p == "/mock/lark_churn":
             LARK_CHURN["rounds"] = 0
             threading.Thread(target=lark_churn, args=(q.get("feed", ["f3"])[0], int(q.get("n", ["16"])[0]), int(q.get("ms", ["500"])[0]),

@@ -6,5 +6,6 @@
   {"type":"hook_event","machine_id":"m1","session_id":"s1","event":"Stop","message":"示例事件","last_assistant_message":"示例回复","tool_name":"Example","cwd":"/example"},
   {"type":"lark","feed_ids":["feed_example"]},
   {"type":"inbox"},
-  {"type":"error","machine_id":"m1","session_id":"s1","error":"结果待确认","code":"example","delivered":"unknown","retryable":false,"draft":"示例草稿","clearable":"示例草稿"}
+  {"type":"error","machine_id":"m1","session_id":"s1","error":"结果待确认","code":"example","delivered":"unknown","retryable":false,"draft":"示例草稿","clearable":"示例草稿"},
+  {"type":"personas"}
 ]

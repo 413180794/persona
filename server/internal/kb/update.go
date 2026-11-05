@@ -187,7 +187,7 @@ type Update struct {
 	Note           string   `json:"note,omitempty"` // people / items
 	Importance     string   `json:"importance,omitempty"`
 	Relevance      *int     `json:"relevance,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
+	Tags           []string `json:"tags,omitempty"`    // nil preserves; non-nil replaces, including an empty slice
 	Summary        string   `json:"summary,omitempty"` // replaces summary.md
 	Log            string   `json:"log,omitempty"`     // projects: appended to the timeline
 	Source         string   `json:"source,omitempty"`  // who writes the log line (default Persona)
@@ -212,7 +212,7 @@ func (u Update) tag(t *Tagging) {
 	if u.Relevance != nil && *u.Relevance >= 0 && *u.Relevance <= 100 {
 		t.Relevance = *u.Relevance
 	}
-	if len(u.Tags) > 0 {
+	if u.Tags != nil {
 		t.Tags = u.Tags
 	}
 }

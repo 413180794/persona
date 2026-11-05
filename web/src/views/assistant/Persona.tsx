@@ -6,8 +6,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { api, ApiError, errorText, getToken } from "../../lib/api";
 import {
-  avatarFile, BUILTIN_PERSONA, dotFile, isBuiltinPersona, MARK_PERSONA, PERSONA_STATES, personaFileURL, usablePersonas, type PersonaInfo, type PersonaState,
+  avatarFile, BUILTIN_PERSONA, dotFile, isBuiltinPersona, MARK_PERSONA, PERSONA_STATES, personaFileURL, personaFiles, usablePersonas,
+  withChosenReady, type PersonaInfo, type PersonaState,
 } from "../../lib/persona";
+import { onHubEvent } from "../../lib/store";
 import { cx } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { MochiFace } from "./MochiFace";
@@ -38,17 +40,42 @@ function setPS(patch: Partial<PersonaStoreState>) {
   listeners.forEach((l) => l());
 }
 
-/** What the hub offers now (each time the picker opens, and once per page load). */
+/** What the hub offers now (each time the picker opens, once per page load, and when the hub says the list changed). */
 export function refreshPersonas(): Promise<void> {
   if (loading) return loading;
   loading = api<{ personas: PersonaInfo[] }>("/personas")
-    .then((r) => setPS({ list: usablePersonas(r.personas), loaded: true, error: "" }))
+    .then(async (r) => {
+      const list = usablePersonas(r.personas);
+      const next = list.find((p) => p.id === ps.chosen);
+      const shown = ps.list.find((p) => p.id === ps.chosen);
+      const ready = !next || !shown || next.rev === shown.rev || (await preload(next));
+      setPS({ list: withChosenReady(list, ps.list, ps.chosen, ready), loaded: true, error: "" });
+    })
     .catch((e) => setPS({ loaded: true, error: e instanceof ApiError && e.status === 404 ? "这个 hub 还不能放形象：更新 hub 后再看" : `没取到形象列表：${errorText(e)}` }))
     .finally(() => {
       loading = null;
     });
   return loading;
 }
+
+/** Every file of the package in the browser's cache before it is shown; false when one did not come. */
+function preload(p: PersonaInfo): Promise<boolean> {
+  const token = getToken();
+  return Promise.all(
+    personaFiles(p.manifest).map(
+      (f) =>
+        new Promise<boolean>((done) => {
+          const img = new Image();
+          img.onload = () => done(true);
+          img.onerror = () => done(false);
+          img.src = personaFileURL(p, f, token);
+        }),
+    ),
+  ).then((all) => all.every(Boolean));
+}
+
+// A tiered look moved to another tier (docs/persona.md): list again, the new tier loaded before it shows.
+onHubEvent("personas", () => void refreshPersonas());
 
 /** Choosing one keeps it when its package leaves the hub (the built-in shows meanwhile), as on the phone. */
 export function choosePersona(id: string) {
@@ -221,7 +248,12 @@ export function PersonaPicker({ builtin }: { builtin: React.ReactNode }) {
   const cards: { id: string; title: string; sub: React.ReactNode; face: React.ReactNode }[] = [
     { id: BUILTIN_PERSONA, title: "团子", sub: <span className="text-[11px] text-ink-3">默认形象</span>, face: <MochiFace size={56} /> },
     { id: MARK_PERSONA, title: "标志", sub: <span className="text-[11px] text-ink-3">网页的标志</span>, face: builtin },
-    ...s.list.map((p) => ({ id: p.id, title: p.manifest.name, sub: <Swatches p={p} />, face: <PersonaAvatar size={56} persona={p} fallback={<MochiFace size={56} />} /> })),
+    ...s.list.map((p) => ({
+      id: p.id,
+      title: p.manifest.name,
+      sub: p.manifest.about ? <span className="max-w-full truncate text-[11px] whitespace-nowrap text-ink-3">{p.manifest.about}</span> : <Swatches p={p} />,
+      face: <PersonaAvatar size={56} persona={p} fallback={<MochiFace size={56} />} />,
+    })),
   ];
   const missing = !isBuiltinPersona(s.chosen) && s.loaded && !s.list.some((p) => p.id === s.chosen);
   return (

@@ -1322,6 +1322,9 @@ final class AppModel {
             if isHub { InboxStore.shared.reload() }
         case .todos:
             if isHub { TodoStore.shared.reload() }
+        case .personas:
+            // The new tier's package is downloaded whole before the face changes (PersonaStore.load).
+            if isHub { Task { await personas.refresh(api) } }
         case .assistantFeed(let item):
             if isHub { TasksStore.shared.received(item) }
         case .taskPlan(let plan):
@@ -1403,6 +1406,7 @@ final class AppModel {
         case .agents: "agents"
         case .inbox: "inbox"
         case .todos: "todos"
+        case .personas: "personas"
         case .assistantFeed: "assistant_feed"
         case .taskPlan: "task_plan"
         case .fleet: "fleet"

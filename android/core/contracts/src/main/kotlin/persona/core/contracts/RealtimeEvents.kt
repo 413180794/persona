@@ -60,6 +60,11 @@ data class LarkEvent(
 @Serializable(with = InboxEventSerializer::class)
 class InboxEvent : ServerEvent
 
+/** The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again. */
+@KeepGeneratedSerializer
+@Serializable(with = PersonasEventSerializer::class)
+class PersonasEvent : ServerEvent
+
 @KeepGeneratedSerializer
 @Serializable(with = TerminalEventSerializer::class)
 data class TerminalEvent(
@@ -113,6 +118,7 @@ object ToolCallEventSerializer : WireSerializer<ToolCallEvent>(ToolCallEvent.gen
 object HookEventSerializer : WireSerializer<HookEvent>(HookEvent.generatedSerializer())
 object LarkEventSerializer : WireSerializer<LarkEvent>(LarkEvent.generatedSerializer())
 object InboxEventSerializer : WireSerializer<InboxEvent>(InboxEvent.generatedSerializer())
+object PersonasEventSerializer : WireSerializer<PersonasEvent>(PersonasEvent.generatedSerializer())
 object TerminalEventSerializer : WireSerializer<TerminalEvent>(TerminalEvent.generatedSerializer())
 object TerminalControlEventSerializer : WireSerializer<TerminalControlEvent>(TerminalControlEvent.generatedSerializer())
 object ErrorEventSerializer : WireSerializer<ErrorEvent>(ErrorEvent.generatedSerializer())

@@ -168,6 +168,8 @@ type Config struct {
 	Bots BotsConfig `json:"bots,omitempty"`
 	// Mesh tunes the links to other hubs (docs/mesh.md, config_mesh.go).
 	Mesh MeshConfig `json:"mesh,omitempty"`
+	// Personas tunes the looks: whose level a tiered look shows (persona_tiers.go, docs/persona.md).
+	Personas PersonasConfig `json:"personas,omitempty"`
 
 	dir string
 }

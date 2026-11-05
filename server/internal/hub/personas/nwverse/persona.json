@@ -1,0 +1,126 @@
+{
+  "format": 1,
+  "id": "nwverse",
+  "name": "奶蛙",
+  "avatar": {
+    "sizes": {
+      "64": "tiers/unhatched/avatar/64.png",
+      "128": "tiers/unhatched/avatar/128.png",
+      "256": "tiers/unhatched/avatar/256.png"
+    },
+    "safe": 1.0
+  },
+  "dot": {
+    "size": 144,
+    "states": {
+      "idle": {
+        "file": "tiers/unhatched/dot/idle.png",
+        "fps": 8,
+        "frames": 24
+      },
+      "thinking": {
+        "file": "tiers/unhatched/dot/thinking.png",
+        "fps": 8,
+        "frames": 16
+      },
+      "working": {
+        "file": "tiers/unhatched/dot/working.png",
+        "fps": 10,
+        "frames": 12
+      },
+      "needs_you": {
+        "file": "tiers/unhatched/dot/needs_you.png",
+        "fps": 6,
+        "frames": 12
+      },
+      "offline": {
+        "file": "tiers/unhatched/dot/offline.png",
+        "fps": 4,
+        "frames": 12
+      }
+    }
+  },
+  "colors": {
+    "light": {
+      "primary": "#D8CBB0",
+      "secondary": "#B9AE9C",
+      "accent": "#7A6A52",
+      "bubble": "#996920",
+      "bubble_text": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#D8CBB0",
+      "secondary": "#B9AE9C",
+      "accent": "#958469",
+      "bubble": "#9A6B21",
+      "bubble_text": "#FFFFFF"
+    }
+  },
+  "subtitle": "未孵化",
+  "about": "NWVERSE 等级",
+  "tiers": {
+    "source": {
+      "kind": "nwverse-board",
+      "url": "https://nwverse.github.io/contribution/data/board.json"
+    },
+    "default": "unhatched",
+    "levels": [
+      {
+        "key": "unhatched",
+        "name": "未孵化",
+        "when": {
+          "newbie": "failed"
+        },
+        "manifest": "tiers/unhatched/persona.json"
+      },
+      {
+        "key": "egg",
+        "name": "蛙卵",
+        "when": {
+          "newbie": "pending"
+        },
+        "manifest": "tiers/egg/persona.json"
+      },
+      {
+        "key": "tadpole",
+        "name": "蝌蚪",
+        "when": {
+          "level": 0
+        },
+        "manifest": "tiers/tadpole/persona.json"
+      },
+      {
+        "key": "froglet",
+        "name": "小奶蛙",
+        "when": {
+          "level": 1
+        },
+        "manifest": "tiers/froglet/persona.json"
+      },
+      {
+        "key": "frog",
+        "name": "奶蛙",
+        "when": {
+          "level": 2
+        },
+        "manifest": "tiers/frog/persona.json"
+      },
+      {
+        "key": "laugh",
+        "name": "大笑奶蛙",
+        "when": {
+          "level": 3
+        },
+        "manifest": "tiers/laugh/persona.json"
+      },
+      {
+        "key": "cosmic",
+        "name": "宇宙奶蛙",
+        "when": {
+          "level": 4
+        },
+        "manifest": "tiers/cosmic/persona.json"
+      }
+    ]
+  }
+}

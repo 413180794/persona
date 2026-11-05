@@ -83,6 +83,10 @@ func (s *Store) putEntity(kind, id string, v any, t *Tagging, manual bool) error
 		return nil
 	} // forgotten during an external call
 	incoming := entityMap(v)
+	// Keep an explicit clear in metadata; omitting it makes detail clients fall back to cached tags.
+	if t.Tags != nil && len(t.Tags) == 0 {
+		incoming["tags"] = json.RawMessage(`[]`)
+	}
 	if exists {
 		var protected Tagging
 		raw, _ := json.Marshal(current)

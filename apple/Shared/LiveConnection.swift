@@ -52,6 +52,8 @@ nonisolated enum ServerEvent: Sendable {
     /// Tasks from an assistant conversation (docs/unified-entry.md): the todos changed (pull them), a conversation's
     /// feed grew, a plan changed.
     case todos
+    /// The personas the hub offers changed, e.g. a tiered look moved to another tier (docs/persona.md): list them again.
+    case personas
     case assistantFeed(FeedItem)
     case taskPlan(TaskPlan)
     case terminal(SessionKey, TerminalEvent)
@@ -185,6 +187,7 @@ nonisolated enum ServerEvent: Sendable {
         case "agents.prefs": return .agents(sessionIDs: ["agents.prefs"])
         case "inbox": return .inbox
         case "todos": return .todos
+        case "personas": return .personas
         case "assistant_feed": return e.item.map { .assistantFeed($0) }
         case "task_plan": return e.plan.map { .taskPlan($0) }
         case "fleet": return e.fleet.map { .fleet($0) }
@@ -229,7 +232,7 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .assistantFeed, .taskPlan, .pluginBadge, .extensionInvalidate: return self
+             .personas, .assistantFeed, .taskPlan, .pluginBadge, .extensionInvalidate: return self
         }
     }
 }

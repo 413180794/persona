@@ -37,6 +37,19 @@ struct PersonaTests {
         #expect(m.dotState(.needsYou)?.file == "dot/needs_you.png")
     }
 
+    /// A tier of a tiered look (奶蛙) as the hub sends it: a plain manifest, its files under the tier's directory, and
+    /// the few words its card shows in place of the colors.
+    @Test func tierManifestWithAbout() throws {
+        let m = try Self.decode(Self.manifest
+            .replacingOccurrences(of: #""subtitle":"圆滚滚","#, with: #""subtitle":"蝌蚪","about":"NWVERSE 等级","#)
+            .replacingOccurrences(of: #""avatar/"#, with: #""tiers/tadpole/avatar/"#)
+            .replacingOccurrences(of: #""dot/"#, with: #""tiers/tadpole/dot/"#))
+        #expect(m.problem == nil)
+        #expect(m.about == "NWVERSE 等级")
+        #expect(m.files.allSatisfy { $0.hasPrefix("tiers/tadpole/") })
+        #expect(try Self.decode().about == nil)
+    }
+
     @Test func manifestsTheHubWouldLeaveOut() throws {
         func problem(_ from: String, _ to: String) throws -> String? {
             try Self.decode(Self.manifest.replacingOccurrences(of: from, with: to)).problem

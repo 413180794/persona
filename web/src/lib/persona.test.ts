@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { avatarFile, dotFile, isBuiltinPersona, personaFileURL, personaProblem, personaState, usablePersonas, type PersonaInfo } from "./persona";
+import { avatarFile, dotFile, isBuiltinPersona, personaFileURL, personaProblem, personaState, usablePersonas, withChosenReady, type PersonaInfo } from "./persona";
 
 const pack = (patch: Partial<PersonaInfo["manifest"]> = {}, id = "doudou"): PersonaInfo => ({
   id,
@@ -51,6 +51,26 @@ describe("persona packages", () => {
 
   it("puts the token and the rev in a file's address, each path part escaped", () => {
     expect(personaFileURL({ id: "doudou", rev: "r 1" }, "dot/idle.png", "jd_x&y")).toBe("/api/v1/personas/doudou/dot/idle.png?rev=r%201&token=jd_x%26y");
+  });
+});
+
+describe("a tiered look moving to another tier", () => {
+  const before = [{ ...pack(), rev: "rev-egg" }, pack({}, "other")];
+  const after = [{ ...pack({ about: "NWVERSE 等级" }), rev: "rev-frog" }, pack({}, "other")];
+
+  it("shows the new tier once its files are in", () => {
+    expect(withChosenReady(after, before, "doudou", true)).toBe(after);
+  });
+
+  it("keeps the tier on screen while the new one has not come", () => {
+    const shown = withChosenReady(after, before, "doudou", false);
+    expect(shown[0].rev).toBe("rev-egg");
+    expect(shown[1]).toBe(after[1]);
+  });
+
+  it("reads the words for the card", () => {
+    expect(after[0].manifest.about).toBe("NWVERSE 等级");
+    expect(personaProblem(after[0])).toBeNull();
   });
 });
 

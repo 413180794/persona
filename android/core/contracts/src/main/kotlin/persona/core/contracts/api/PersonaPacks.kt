@@ -35,6 +35,8 @@ data class PersonaManifest(
     val id: String,
     val name: String,
     val subtitle: String? = null,
+    /** A few words for the look's card in 设置 › 外观 › 形象, before the subtitle (奶蛙: where its level comes from). */
+    val about: String? = null,
     val avatar: Avatar,
     val dot: Dot,
 ) {

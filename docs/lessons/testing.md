@@ -141,6 +141,33 @@
 - hooks 文件存在不等于启用：`core.hooksPath` 是克隆本地配置，启用后用隔离临时仓库验证真实 `git commit`，不拿主工作区做拒绝测试。网页构建前也检查，避免未启用钩子的克隆直接发布。
 - 测试递归失败要明确控制或模拟递归限制，不要假定固定嵌套层数在所有 Python 版本都会报错；Python 回归测试单独运行，`npm test` 不会自动覆盖它。
 
+## hub 上的 Go 比仓库旧时（2026-11-03，#984）
+
+- `test-server.sh` 只说「server test environment preparation failed; tests were not started」：`server_test_env.py` 先跑 `go env`，
+  hub 机器上的 go 比 `server/go.mod` 要的旧时会去下载工具链，而那台机器 `go env -w` 过 `GOSUMDB=off`，下载出来的工具链也校验不了，`go env` 失败。
+  不是数据库配置的问题。先用 `GOPROXY=https://goproxy.cn,direct GOSUMDB=sum.golang.google.cn go version` 在仓库目录里下好工具链，
+  再把 `~/go/pkg/mod/golang.org/toolchain@v0.0.1-go<版本>.linux-amd64/bin` 放进 PATH、`GOTOOLCHAIN=local`、`GOPROXY=https://goproxy.cn,direct` 跑同样的命令。
+- 只在 hub 上缓存过的依赖能编过：`proxy.golang.org` 不通时其他包报 `[setup failed]`，看着像一半的测试坏了。
+- hub 的 Postgres 是系统装的（没有 `jarvis-postgres` 容器）时，`db.sh` 建不了 `jarvis_test`（它的输出被丢掉了），`jarvis` 角色也没有 CREATEDB：
+  `internal/db`、`internal/db/dbtest`、`internal/hub` 报 `database "jarvis_test" does not exist`，其他包照常通过。
+  这三个包在本机临时起 `postgres:18-alpine`（`-p 127.0.0.1:<端口>:5432`），设 `JARVIS_TEST_DATABASE_URL` 跑，跑完删掉容器。
+
+## 只有 macOS 15 的 Mac 上本地跑 iOS（2026-11-04，#984）
+
+- **最高只能装 Xcode 26.3**：26.4 起要求 macOS 26.2。`xcodes` 下载被 403 拦住，是因为 Apple ID 没在 developer.apple.com 同意过开发者协议；
+  xcodes 会把苹果返回的「页面不存在」网页当成 `.xip` 存下来，解压时报 trace trap，先 `file` 看一眼再说。浏览器下好 `.xip` 后用 `xcodes install --path` 最省事。
+- **编译 iOS 也要先装 iOS 平台**（模拟器运行时，8.4 GB），不只是跑模拟器需要。`xcodebuild -downloadPlatform iOS` 走系统服务，只认系统代理：
+  代理软件把苹果 CDN 走慢线路时只有约 20 KB/s，把 `*.apple.com`、`*.cdn-apple.com` 加进系统代理的例外（`networksetup -setproxybypassdomains`）后有 4 MB/s。
+- **Persona scheme 嵌着手表 App**：测试这个 scheme 要先装 watchOS 平台；装了之后，没有配对手表模拟器时测试运行器还是会「timed out while preparing」。
+  只跑 iOS 单测：临时生成一份去掉 `PersonaWatch` 依赖、另起名字的工程（`xcodegen --spec <改过的副本> --project apple`），必须生成在 `apple/` 里（Info.plist、xcconfig 都是相对工程的路径），用完删掉。
+- **不签名时共享钥匙串组拿不到**：`CODE_SIGNING_ALLOWED=NO` 编的包跑 `NotificationServiceTests` 会失败；模拟器上用 `CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=` 临时签名就过。
+- **Xcode 26.3 下两个现有问题（master 一样）**：
+  - `FileViewerTests.pathsAreLinkedOnlyWhenThereAndAskedInOneBatch` 在 `FakeHub` 的回调里触发 Swift 并发的隔离断言，测试宿主崩溃重启，xcodebuild 判失败，
+    统计也只到崩溃前（576 个，实际 766 个）。原因是测试结构体标了 `@MainActor`，闭包随之被认定只能在主线程跑，`FakeHub` 却在后台线程调用它；闭包写成 `{ @Sendable req in` 就过；
+  - 新外壳的助手抽屉（`AssistantDrawerLayout`）让主线程一直在重算视图，主线程上排队的任务轮不到：形象列表永远不刷新、runtime CLI 只回一次 ping。截图用 `-ui.oldLayout YES`。
+- **卸载 App 不清钥匙串**：配对信息在模拟器的钥匙串里，卸载重装后 App 一启动又是已配对，直接进新外壳，测试运行器报「timed out while preparing」。先 `xcrun simctl keychain <udid> reset`。
+- **Mac App 的部署目标是 macOS 26**：macOS 15 上只能编译，跑不了 App 和 `PersonaMacTests`。
+
 ## 网页分组与折叠
 
 - 对齐 iOS 状态分组时，不能直接按原始 `state` 分桶：idle / unknown 但带 loop、后台工作或运行中子 Agent 的是「待唤醒」；屏蔽读取 `/mutes`，项目屏蔽按机器 / 项目名称匹配，Agent 的单独允许项可覆盖项目屏蔽，但不能覆盖 Agent 自己的屏蔽。
