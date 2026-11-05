@@ -560,12 +560,12 @@ pending 的电脑：`pushManaged` 跳过；`defaultAssistantMachine` 和助手�
 
 | 端 | 本期内容 | 在哪做 |
 | --- | --- | --- |
-| 服务端 | 错误码、就绪度、node 的 Claude Code 状态、预设和 `assign`、pending 电脑和 Key 过滤、添加电脑、回执推送、定时任务门槛、`hub setup`、命令行文案 | example-machine，连真实 Postgres 跑测试 |
-| 网页 | 引导卡、失败卡片、空状态、登录页、设备去重、清单、模型向导、添加 / 确认电脑 | example-machine，Playwright 截图 |
-| Android | 清单加四项、按 code 出文案、首屏、连接新设备、测试连接、内置预设、添加 / 确认电脑 | example-machine；没有 KVM 时 PR 里写明未截图 |
+| 服务端 | 错误码、就绪度、node 的 Claude Code 状态、预设和 `assign`、pending 电脑和 Key 过滤、添加电脑、回执推送、定时任务门槛、`hub setup`、命令行文案 | Linux 开发机，连真实 Postgres 跑测试 |
+| 网页 | 引导卡、失败卡片、空状态、登录页、设备去重、清单、模型向导、添加 / 确认电脑 | Linux 开发机，Playwright 截图 |
+| Android | 清单加四项、按 code 出文案、首屏、连接新设备、测试连接、内置预设、添加 / 确认电脑 | Linux 开发机；没有 KVM 时 PR 里写明未截图 |
 | iOS / macOS / Persona Link | 第 7.3 节的 issue | Mac |
-| 部署 | Docker 入口脚本和 compose | example-machine |
-| 文档 / 官网 | 开始使用、README、Persona Link 配对步骤、官网首屏和 FAQ（FAQ 等拍板 15） | example-machine，发布按 `docs/site.md` |
+| 部署 | Docker 入口脚本和 compose | Linux 开发机 |
+| 文档 / 官网 | 开始使用、README、Persona Link 配对步骤、官网首屏和 FAQ（FAQ 等拍板 15） | Linux 开发机，发布按 `docs/site.md` |
 
 ### 7.2 PR 顺序
 
@@ -595,7 +595,7 @@ P1 各开一个 issue：「只聊天」模式（拍板 9 之后）、node 的 `c
 
 ### 7.3 派到 Mac 上做的 iOS / macOS 工作项
 
-每个 issue 引用第 5 节的协议，写明「example-machine 编不了 Swift；Xcode 26.0 未验证时在 PR 里注明」。界面只用设计系统（`.surface`、`EmptyStateView(action:)`、`Theme.*`），`TokenRatchetTests` 不升基线；按钮单行；深浅色截图。
+每个 issue 引用第 5 节的协议，写明「Linux 开发机 编不了 Swift；Xcode 26.0 未验证时在 PR 里注明」。界面只用设计系统（`.surface`、`EmptyStateView(action:)`、`Theme.*`），`TokenRatchetTests` 不升基线；按钮单行；深浅色截图。
 
 | # | 标题 | 改什么 | 验收 |
 | --- | --- | --- | --- |
@@ -610,7 +610,7 @@ P1 各开一个 issue：「只聊天」模式（拍板 9 之后）、node 的 `c
 
 ### 8.1 自动化
 
-- **服务端单测**（example-machine 连真实 Postgres，`go test -p 1 ./...`）：
+- **服务端单测**（Linux 开发机 连真实 Postgres，`go test -p 1 ./...`）：
   - 老 hub.json 加载后的配置和改动前一致（golden，含只有 `database_url` 的 db.sh 文件、没有 `public` 段的手写文件）；`newInstallConfig()` 带 TLS、局域网 `public_url`、`admin.first_setup`。
   - pending：设备码加的电脑是 pending，收不到 Key，不会被选成助手机器，不在新建 Agent 列表里，24 小时清理；升级前的机器、`/admin` 和回环加的都是已确认；手表、link、配对码身份不能出电脑码。
   - `assign` 只改还是默认值的用途；预设添加名字可空、重名加后缀；内置预设字段齐全。
@@ -619,12 +619,12 @@ P1 各开一个 issue：「只聊天」模式（拍板 9 之后）、node 的 `c
   - `no_machine` 等码回 409，`error` 是中文。
 - **文案守门**：在 `scripts/test/` 里新加 test_onboarding_copy.py，扫引导、空状态、错误码对应的文案（网页 i18n、Android `values-zh`、iOS 字符串、服务端 i18n），禁止出现 `hub.json`、`token`（「配对码」不算）、`jq`、`personad`、`TLS`、`node`、`herdr`、`launcher`、`localhost`、`~/.`。「高级」「详情」里的键在白名单里。和 `privacy_check.py` 一样进测试。
 - **故障场景**：`mock_hub.py` / `mock_scenarios.py` 加七种就绪状态（零电脑、离线、pending、没装 Claude Code、没登录、Key 错、一切正常）和第 4.6 节每个码的错误，网页 Playwright、Android `android.sh shots`、iOS 截图共用一套。
-- **全新用户端到端**（example-machine）：隔离测试 hub（自己的端口、数据目录、数据库，`JARVIS_LOCAL_NODE=0`）上，Playwright 走网页：登录 → 引导卡出现 → 用假网关加一个预设供应商 → `assign` 生效 → 就绪度的 `model` 变化。断言首屏和引导里没有文案守门禁止的词。
+- **全新用户端到端**（Linux 开发机）：隔离测试 hub（自己的端口、数据目录、数据库，`JARVIS_LOCAL_NODE=0`）上，Playwright 走网页：登录 → 引导卡出现 → 用假网关加一个预设供应商 → `assign` 生效 → 就绪度的 `model` 变化。断言首屏和引导里没有文案守门禁止的词。
 - **升级回归**：拿一份手写 hub.json、`~/.zshrc` 启动器和带 Persona 管理供应商的库，升级后 Key 照常下发、机器都已确认、主对话照常；`./scripts/test/test-server.sh` 全过。
 
 ### 8.2 截图
 
-每个界面 PR：上面每种状态深浅色各一张，网页另加 390 宽。Android 在有 KVM 的机器上补截，example-machine 截不了时 PR 里写明。iOS / Mac 按 7.3 的验收在 Mac 上截。
+每个界面 PR：上面每种状态深浅色各一张，网页另加 390 宽。Android 在有 KVM 的机器上补截，Linux 开发机 截不了时 PR 里写明。iOS / Mac 按 7.3 的验收在 Mac 上截。
 
 ### 8.3 找非技术用户实测
 

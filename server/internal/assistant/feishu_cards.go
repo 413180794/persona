@@ -14,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Cards for what Persona and the agents ask (the bot's cards switch): a question, a plan, a permission or a terminal
@@ -356,7 +357,7 @@ func (s *Service) answeredCard(ctx context.Context, ix proto.Interaction, how st
 }
 
 func (s *Service) ixWhere(ctx context.Context, ix proto.Interaction) string {
-	where := ix.SessionTitle
+	where := transcript.Title(ix.SessionTitle)
 	if where == "" {
 		where = "Persona"
 	}

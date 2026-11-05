@@ -226,7 +226,7 @@ token 存在 `localStorage`；`<img>` 带不了请求头，图片走 `?token=`�
   - **图片查看器**（`ImageViewer.tsx`）：整段对话里已加载的图片左右翻（←/→、两侧箭头、左右滑），顶部 n / m，按屏幕大小适配（小图也放大）；缩放（#1753，`lib/image-zoom.ts`，同 Android 的 1–6×）：滚轮、触控板捏合、触屏双指以指针为中心缩放，放大后拖动平移、不拖出边，双击 / 双击屏幕在那一点放大（2.5×，原图更大时到原始大小，最多 6×）或还原，`+` / `-` / `0` 也行；放大时左右滑是平移、点旁边不关闭（双击还原），翻页时复位；
     「编辑」（`ImageEditor.tsx`，canvas）：框选、画笔、6 种颜色、撤销、清除，按原图分辨率导出加到输入框；输入框里的图片附件点一下也能标注。「拷贝」只在 HTTPS / localhost 出现（明文 HTTP 写不了图片剪贴板）。
   - **为什么等你、在飞书打开**（#1752，iOS `AttentionNote`，`lib/format.ts` 的 `sessionPreview` / `externalLink`）：会话「需要你」且 hub 带了 `attention_reason`（botmux 举手的原因，`docs/engines.md`「botmux」）时，
-    列表行（总览、机器页、侧边栏的悬停提示）用原因代替最后一句话，输入框上方一条提示写原因；有 `external_url`（只认 https）时提示条、对话 ⋯ 和「会话信息」里有「在飞书打开」（经 `openLink`，新标签页）。列表行还包括知识库详情的会话。没有这两个字段时界面不变。截图用 `MOCK_BOTMUX=1` 的假 hub。
+    列表行（总览、机器页、侧边栏 Agent 行标题下那一行，#3195）用原因代替最后一句话，输入框上方一条提示写原因；有 `external_url`（只认 https）时提示条、对话 ⋯ 和「会话信息」里有「在飞书打开」（经 `openLink`，新标签页）。列表行还包括知识库详情的会话。没有这两个字段时界面不变。截图用 `MOCK_BOTMUX=1` 的假 hub。
 - **会话在等什么**（#1837，[agent-work.md](agent-work.md)）：hub 分诊过的停着的会话，列表行的那一行字换成工作态：做完的「✓ 结论」，在等的「在等什么（N 分钟后叫醒）」；
   hub 会替它等的（自动重试、到点叫醒）排进「待唤醒」；后台任务还在跑的 hub 直接算工作中（#2228）。开关在「设置 › 通用 › 会话分诊」（默认全关）。截图用 `MOCK_WORK=1` 的假 hub。
   - **排队消息**（`QueueStrip.tsx`，`POST …/queue {keep}`，hub 转 node 的 `session.queue.edit`）：输入框上方「排队中 N 条」，每条「撤回编辑」（取回放进输入框末尾）、拷贝、删除；
@@ -734,8 +734,9 @@ Agent 行的菜单保留原来的全部项（置顶 P、重命名 R、拷贝目�
 - **`/terminal` 页**：机器、工作区、标签页三层都能折叠（点标题；左边出一个小箭头，悬停时显示，折叠后一直显示；键 `fold:term:…`，机器 / 工作区名为键，herdr 重启后 id 变了也保留），搜索时不管折叠。
   行尾悬停出 ⋯（触屏一直在）。
 - **侧边栏显示终端**（设置 › 通用 › 外观，默认关，只对这个浏览器；`lib/sidebar-terminals.ts`）：Agents 按机器分组里，每台电脑的 Agent 下面多一组「终端」，列它终端里的**普通 shell**（Agent 在上面已经有了），点开是 `/terminal/<机器>/<id>`（有会话的 Agent 窗格进它的会话页的终端视图），同一套菜单。
+- **Agent 行的第二行**（#3195，`lib/row-line.ts` 的 `rowLine`，`Sidebar.tsx` 的 `SessionRow`）：侧边栏里「需要你」的 Agent 标题下直接写它要你做什么，有卡片时是卡片的种类加内容（「在问你：用哪个测试框架？」「需要授权：swift test」「计划待批准」，前缀红色，说法同待办页的 Agent 行），没有卡片时是原因（`attention_reason` / 出错原因 / 分诊结果，同 `sessionPreview`）；「完成未看」的写它做了什么（分诊的「✓ 结论」，没有就是最后一句话，去掉 Markdown 记号）。工作中、已看、未运行的行和 Persona 对话还是一行；悬停提示照旧。不用再悬停或点进去才知道它为什么红、为什么绿。
 - **Agent 行显示详情 / 上下文显示为已用**（#2430，设置 › 通用 › 外观，都默认关，只对这个浏览器；`lib/context-usage.ts`）：开了「Agent 行显示详情」，侧边栏每个 Agent 行标题下多一行小字「模型 · 上下文 · 多久没动 · 目录」（放不下的从末尾起折到看不见，不挤别的）。会话顶栏标题行末**始终**有模型名和一条细的上下文条（`views/chat/ContextMeter.tsx`，照 Moshi 的会话头部，用户要求照 Moshi 做；窄屏只剩条和百分比），悬停写「还剩 N% 上下文」；「上下文显示为已用」改成「已用 N%」，两处一起变。已用 ≥ 80% 变警告色（`--orange`）。两个开关都关时侧边栏和以前一像素不差。数字来自会话的 `context_tokens` / `context_window`（node 从 transcript 尾部读，见 `protocol.md`）；没有这两个字段（还没回复、node 不认识的模型、老 node）就不画上下文，只剩模型和其余几项。iOS / Mac 在会话信息的「用量」里画同样的余量条（#3289），不在顶栏。
-  关着时侧边栏和以前逐像素一样。
+  关着时没有这一行（「需要你」「完成未看」的行另有一行写在问什么 / 做了什么，见上「Agent 行的第二行」，#3195）。
 - **命令面板**：`lib/node-palette.ts` 向 `registerContextCommands` 登记，在 `>` 命令模式里把当前节点的菜单项列在最前（「Workspace · 窗格标题」「Workspace · 工作区名」两节）；
   重命名弹一个小对话框问名字，危险的再确认一次，失败弹 toast。当前节点来自会话页的对话（`ctx.pane`）或终端页的窗格（终端页把读到的树交给它）。
 - 测试：`ui/menu-model.test.ts`（键、字母、确认、重命名、右键位置）、`ui/atoms.test.tsx`、`ui/overlay.test.ts`、`lib/node-actions.test.ts`、`lib/node-palette.test.ts`；浏览器里用

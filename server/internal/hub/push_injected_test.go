@@ -23,7 +23,11 @@ func TestInteractionPushStripsContextBlocks(t *testing.T) {
 	if got := alertOf(t, payload)["subtitle"]; got != "现在把 hub 部署到最新 master · m1" {
 		t.Fatalf("subtitle = %q", got)
 	}
-	ix.SessionTitle = `<jarvis-context kind="context" title="快照">` + "\n截断了" // only a block: just the machine
+	ix.SessionTitle = `<jarvis-context kind="context" title="快照">` + "\n截断了" // only a block: its title
+	if got := notifyMessage("interaction", interactionPayloadIn(i18n.ZhHans, ix, "m1"))["subtitle"]; got != "快照 · m1" {
+		t.Fatalf("ws subtitle = %q", got)
+	}
+	ix.SessionTitle = `<jarvis-context kind="context" title="接上…` // clipped inside the tag: just the machine
 	if got := notifyMessage("interaction", interactionPayloadIn(i18n.ZhHans, ix, "m1"))["subtitle"]; got != "m1" {
 		t.Fatalf("ws subtitle = %q", got)
 	}

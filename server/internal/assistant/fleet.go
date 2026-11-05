@@ -14,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // What comes from the nodes is the manager's (docs/machines.md「谁处理电脑的事件」). The hub did all of this until the
@@ -693,6 +694,8 @@ func (s *Service) setSessions(machine string, list []proto.Session) {
 	now := time.Now()
 	for i := range list {
 		list[i].MachineID = machine
+		// A node from before titles were stripped first sends a clipped injected tag as the title.
+		list[i].Title = transcript.Title(list[i].Title)
 	}
 	for _, sess := range list {
 		// Any agent (herdr or headless, started by Persona or not) finishing a turn may notify the phone.

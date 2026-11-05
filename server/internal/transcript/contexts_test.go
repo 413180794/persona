@@ -105,9 +105,35 @@ func TestStripInjected(t *testing.T) {
 		{"<persona-context>\n快照\n</persona-context>\n" + `<jarvis-context kind="doc" title="文档">正文</jarvis-context>` + "\n看看这个", "看看这个"},
 		{`<persona-context kind="context" title="快照">` + "\n很长的快照被截断", ""},
 		{"问题\n<persona-context>\n被截断", "问题"},
+		// Clipped inside the opening tag, before or after its name ended (titles made by clipping first).
+		{`<jarvis-context kind="context" title="接上…`, ""},
+		{`<persona-context kind="context" title="接上…`, ""},
+		{"看看<jarvis-con…", "看看"},
+		{"看看<persona-co...", "看看"},
+		{"<system-rem", ""},
+		{"x <p", "x <p"},
+		{"a <b…", "a <b…"},
 	} {
 		if got := StripInjected(c.in); got != c.want {
 			t.Errorf("StripInjected(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestTitle(t *testing.T) {
+	handoff := `<jarvis-context kind="context" title="接上旧主对话" url="">` + "\n旧对话的摘要\n</jarvis-context>"
+	for _, c := range []struct{ in, want string }{
+		{"修一下登录", "修一下登录"},
+		{handoff + "\n接着做部署", "接着做部署"},
+		{handoff, "接上旧主对话"}, // only a block: its title
+		{strings.Replace(handoff, "jarvis-context", "persona-context", 2), "接上旧主对话"},
+		{`<jarvis-context kind="context" title="来自对话「A &amp; B」">` + "\n摘要被截", "来自对话「A & B」"},
+		// The title in the screenshot: the first message clipped at 40 characters inside the opening tag.
+		{`<jarvis-context kind="context" title="接上…`, ""},
+		{"<jarvis-context>\n快照\n</jarvis-context>", ""},
+	} {
+		if got := Title(c.in); got != c.want {
+			t.Errorf("Title(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }

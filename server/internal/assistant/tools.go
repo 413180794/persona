@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Tools only the assistant (the 对话 tab's headless Claude) gets: asking on the phone (headless claude has no
@@ -277,8 +278,8 @@ func (s *Service) toolAskUser(ctx context.Context, machine, sessionID string, ar
 	}
 	if c, ok := s.session(ctx, machine, sessionID); ok {
 		ix.Cwd = c.Cwd
-		if c.Title != "" {
-			ix.SessionTitle = c.Title
+		if t := transcript.Title(c.Title); t != "" {
+			ix.SessionTitle = t
 		}
 	}
 	for _, q := range a.Questions {

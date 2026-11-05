@@ -28,6 +28,7 @@ import { href, navigate, routePath, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
 import { refresh, reset, useLarkOn, useStore } from "../lib/store";
+import { rowLine } from "../lib/row-line";
 import { BREATHING, connPhase, connStatus, phaseTone, type ConnPhase } from "../lib/connection";
 import { useWorkspaceBoardSetting } from "../lib/workspace-board-setting";
 import { buildTodoTree, treeStateLabel, type TodoTree, type TreeAgent, type TreeState, type TreeTodo } from "../lib/todo-tree";
@@ -1624,6 +1625,9 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
   const aside = active ? undefined : "group-hover/row:invisible";
   // one ref per key, so letting go takes out only this row's entry (keyedRefs)
   const regRow = useMemo(() => reg(k), [reg, k]);
+  // what it asks you, or what it did, under its title (#3195): no hover or click needed to see why it is red or green
+  const ix = useStore((st) => st.interactions.find((i) => i.machine_id === s.machine_id && i.session_id === s.session_id));
+  const line = showState && !s.assistant ? rowLine(s, ix) : undefined;
   const link = (
     <a
       ref={(el) => {
@@ -1647,11 +1651,17 @@ export const SessionRow = memo(function SessionRow({ s, k, reg, hover, active, t
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState ? <StatusDot state={st} size={7} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SourceTag s={s} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
-      {detail.length > 0 || workflow ? (
+      {detail.length > 0 || workflow || line ? (
         <span className="flex min-w-0 flex-1 flex-col">
           <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
             {label ?? sessionTitle(s)}
           </span>
+          {line && (
+            <span data-row-line className="truncate text-[11.5px] leading-4 text-ink-3">
+              {line.lead && <span className="font-medium text-red">{line.lead}</span>}
+              {line.text}
+            </span>
+          )}
           {/* one line high: a piece that does not fit wraps out of sight instead of squeezing the others */}
           {workflow && (
             <span data-workflow-line title={workflowTitle} aria-label={workflowTitle} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-orange">

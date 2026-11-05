@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // The interactions (docs/protocol.md「交互」): the cards the user answers on the phone — a hook's permission, question
@@ -333,6 +335,18 @@ func trimScreen(text string) string {
 	return strings.Join(lines, "\n")
 }
 
+// cleanTitle is ix with its conversation's title as the apps, pushes and channels show it: a node may name it by a
+// first message that starts with injected blocks (an older one clipped inside one). Nothing left: the project.
+func cleanTitle(ix proto.Interaction) proto.Interaction {
+	if ix.SessionTitle == "" {
+		return ix
+	}
+	if ix.SessionTitle = transcript.Title(ix.SessionTitle); ix.SessionTitle == "" && ix.Cwd != "" {
+		ix.SessionTitle = path.Base(ix.Cwd)
+	}
+	return ix
+}
+
 // ---- telling ----
 
 // announce puts a new card on the apps (through the hub), pushes it, and gives it to the channels.
@@ -376,6 +390,7 @@ func (s *Service) nodeInteraction(ctx context.Context, ix proto.Interaction) (pr
 // interaction: the wait resumes on it, or returns the answer given meanwhile. One the history has as still pending
 // (the manager restarted with it on the phone) is shown again without a second push.
 func (s *Service) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
+	ix = cleanTitle(ix)
 	if ix.ExpiresAt.IsZero() {
 		ix.ExpiresAt = time.Now().Add(s.notifyTimings().hookTimeout()).UTC()
 	}
@@ -816,6 +831,7 @@ func (s *Service) syncCodexInteractions(machine string, params json.RawMessage) 
 	listed := map[string]proto.Interaction{}
 	for _, ix := range p.Interactions {
 		ix.MachineID = machine
+		ix = cleanTitle(ix)
 		listed[ix.ID] = ix
 	}
 	s.fleet.mu.Lock()

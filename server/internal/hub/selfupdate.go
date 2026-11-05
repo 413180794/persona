@@ -707,7 +707,7 @@ func (h *Hub) updateBusy() []busyItem {
 
 // agentTitle is an agent's title for the update's busy list.
 func agentTitle(s proto.Session) string {
-	t := transcript.StripInjected(s.Title)
+	t := transcript.Title(s.Title)
 	if t == "" || t == "Claude Code" {
 		t = path.Base(s.Cwd)
 	}

@@ -724,7 +724,7 @@ func interactionPayloadIn(l i18n.Lang, ix proto.Interaction, machine string) map
 	case proto.IxScreen:
 		body = i18n.T(l, "push.screen_body")
 	}
-	subtitle := transcript.StripInjected(ix.SessionTitle)
+	subtitle := transcript.Title(ix.SessionTitle)
 	if inHealth(ix.Cwd) { // a health conversation's card: the lock screen does not say what it is about (assistant.go)
 		subtitle, body = i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
 	}

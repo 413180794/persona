@@ -3,6 +3,7 @@ package channel
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // A channel without buttons (asks: text) gets what an agent asks — a question, a permission, a plan, a terminal
@@ -37,16 +39,25 @@ type Ask struct {
 
 // NewAsk is ix as something to ask in channel.
 func NewAsk(channel string, ix proto.Interaction, now time.Time) *Ask {
-	return &Ask{ID: ix.ID, Channel: channel, MachineID: ix.MachineID, SessionID: ix.SessionID, Kind: ix.Kind, Title: ix.SessionTitle,
+	return &Ask{ID: ix.ID, Channel: channel, MachineID: ix.MachineID, SessionID: ix.SessionID, Kind: ix.Kind, Title: askTitle(ix),
 		Questions: ix.Questions, At: now}
+}
+
+// askTitle is the 【…】 an ask starts with: its conversation's title without the blocks a first message starts with
+// (stripped before anything clips it), else the project.
+func askTitle(ix proto.Interaction) string {
+	if t := transcript.Title(ix.SessionTitle); t != "" || ix.SessionTitle == "" || ix.Cwd == "" {
+		return t
+	}
+	return path.Base(ix.Cwd)
 }
 
 // AskText is the text asking ix in l (it fills in a's options); false when it cannot be answered in a channel (the
 // text then says where).
 func AskText(l i18n.Lang, ix proto.Interaction, a *Ask) (string, bool) {
 	head := ""
-	if a.Title != "" {
-		head = i18n.T(l, "channel-asks.head", i18n.Args{"title": a.Title})
+	if t := FirstLine(transcript.Title(a.Title)); t != "" { // an ask kept from before NewAsk cleaned it
+		head = i18n.T(l, "channel-asks.head", i18n.Args{"title": t})
 	}
 	switch {
 	case len(ix.Fields) > 0:

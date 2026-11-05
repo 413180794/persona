@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"fmt"
+	"html"
 	"regexp"
 	"sort"
 	"strings"
@@ -128,5 +129,48 @@ func StripInjected(s string) string {
 	if loc := injectedOpenRe.FindStringIndex(s); loc != nil {
 		s = s[:loc[0]]
 	}
+	s = cutPartialTag(s)
 	return strings.TrimSpace(pastedRe.ReplaceAllString(s, ""))
+}
+
+// injectedNames are the injected blocks' tag names, for an opening tag a clip cut inside its name.
+var injectedNames = []string{"jarvis-context", "persona-context", "persona-view-errors", "system-reminder"}
+
+// cutPartialTag drops an opening tag clipped before its name ended ("…<jarvis-con…"), which injectedOpenRe cannot
+// tell from text: what follows the last "<" is a start of one of the names, behind which a clip's "…" ends the text
+// (or which is long enough not to be someone's "<p").
+func cutPartialTag(s string) string {
+	i := strings.LastIndexByte(s, '<')
+	if i < 0 {
+		return s
+	}
+	rest := strings.TrimSpace(s[i+1:])
+	clipped := strings.HasSuffix(rest, "…") || strings.HasSuffix(rest, "...")
+	rest = strings.TrimSuffix(strings.TrimSuffix(rest, "…"), "...")
+	if rest == "" || (!clipped && len(rest) < 4) {
+		return s
+	}
+	for _, name := range injectedNames {
+		if strings.HasPrefix(name, rest) {
+			return s[:i]
+		}
+	}
+	return s
+}
+
+// blockTitleRe is an attributed block's whole opening tag with its title.
+var blockTitleRe = regexp.MustCompile(`<(?:jarvis|persona)-context\b[^>]*?\stitle="([^"]*)"[^>]*>`)
+
+// Title is a message (or a title someone made of one) as a title or a preview line: what the user wrote, else the
+// title of the first attributed block (「接上旧主对话」 for a main conversation handed over), else "" (the caller
+// falls back to the agent's project). A tag cut off by a clip ("<jarvis-context kind="context" title="接上…") has
+// no title to take: it is dropped. Strip first, then clip: a clip first can end inside a tag.
+func Title(s string) string {
+	if t := StripInjected(s); t != "" {
+		return t
+	}
+	if m := blockTitleRe.FindStringSubmatch(s); m != nil {
+		return strings.TrimSpace(html.UnescapeString(m[1]))
+	}
+	return ""
 }

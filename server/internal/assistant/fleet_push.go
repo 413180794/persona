@@ -11,6 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // When a "finished" push is worth sending (docs/server.md 推送), and the pushes of the cards. Borrowed from Ovis
@@ -243,7 +244,7 @@ func doneAlert(l i18n.Lang, sess proto.Session) (head, text string) {
 	if spaceOf(sess) == SpaceHealth { // the lock screen hears there is news, not what it is, nor the conversation's title
 		return "✅ " + i18n.T(l, "push.health_title"), i18n.T(l, "push.health_body")
 	}
-	title := sess.Title
+	title := transcript.Title(sess.Title)
 	if title == "" || title == "Claude Code" {
 		title = path.Base(sess.Cwd)
 	}

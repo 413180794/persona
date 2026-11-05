@@ -518,7 +518,7 @@ node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来
 现在 `killGroupOnCancel` 用 `osproc.SessionGroupAttr()`（`Setsid`）：子进程在自己的会话里，没有控制终端，整组杀掉照旧。
 
 测试挂住时先给测试进程发 `kill -QUIT`，看是哪个测试、卡在哪个系统调用上，再判断是不是环境问题；要起交互式 shell 的子进程，要么用新会话，要么不开单独的进程组。
-## 在 example-machine 上起测试 hub 测扩展（#3136，2026-11-06）
+## 在 Linux 开发机 上起测试 hub 测扩展（#3136，2026-11-06）
 
 - hub.json 里不写 `machines` 时 hub 当作第一次运行，自动接上本机的 node（会探本机的 herdr / claude）：测试 hub 要写 `"machines": []` 并带 `JARVIS_LOCAL_NODE=0` 启动。
 - 扩展默认在沙箱里，出网只能连清单里的 host（经 hub 的出网代理），连不到本机的 `127.0.0.1:<端口>` 代理：GitHub 扩展的「代理」设置指向本机代理时，测试 hub 上要 `personad extension sandbox github off`。

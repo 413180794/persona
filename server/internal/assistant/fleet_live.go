@@ -239,7 +239,7 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 }
 
 func agentTitle(sess proto.Session) string {
-	t := transcript.StripInjected(sess.Title)
+	t := transcript.Title(sess.Title)
 	if t == "" || t == "Claude Code" {
 		t = path.Base(sess.Cwd)
 	}
