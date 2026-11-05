@@ -988,9 +988,15 @@ func (h *Hub) forgetConnector(ctx context.Context, id string) {
 	if h.store == nil {
 		return
 	}
-	_ = h.store.DeleteConnectorSecret(ctx, id)
+	if err := h.store.DeleteConnectorSecret(ctx, id); err != nil {
+		h.logf("connector %s: removed, but its sign-in is still stored: %v", id, err)
+	}
 	var cs connectorSettings
-	if ok, err := h.store.Setting(ctx, connectorSettingsKey, &cs); err != nil || !ok {
+	ok, err := h.store.Setting(ctx, connectorSettingsKey, &cs)
+	if err != nil {
+		h.logf("connector %s: removed, but its settings could not be read to drop it: %v", id, err)
+	}
+	if err != nil || !ok {
 		return
 	}
 	delete(cs.Switch, id)
@@ -998,7 +1004,9 @@ func (h *Hub) forgetConnector(ctx context.Context, id string) {
 	for _, f := range []connector.Feed{connector.FeedArchive, connector.FeedInbox} {
 		delete(*cs.feeds(f), id)
 	}
-	_ = h.store.PutSetting(ctx, connectorSettingsKey, cs)
+	if err := h.store.PutSetting(ctx, connectorSettingsKey, cs); err != nil {
+		h.logf("connector %s: removed, but its settings are still stored: %v", id, err)
+	}
 }
 
 func logLines(r io.Reader, f func(string)) {
