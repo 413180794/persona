@@ -46,13 +46,21 @@ export function useModalFocus(ref: RefObject<HTMLElement | null>, open = true): 
     el.addEventListener("keydown", tab);
     return () => {
       el.removeEventListener("keydown", tab);
-      // Only give focus back when it is still ours: inside the panel, or lost to body when the panel left the DOM.
-      // A close that moved focus on purpose (attaching an image focuses the composer) keeps it there.
-      const active = document.activeElement;
-      const ours = !active || active === document.body || el.contains(active);
-      if (ours && back?.isConnected) back.focus({ preventScroll: true });
+      returnFocus(el, back);
     };
   }, [ref, open]);
+}
+
+/** An overlay or panel `el` closed: the focus goes back to `back` (what opened it), or to `fallback` when `back` is gone
+ *  or can't take it (hidden). Only when the focus is still ours: inside `el`, or lost to body when `el` left the DOM. A
+ *  close that moved focus on purpose (attaching an image focuses the composer) keeps it there. */
+export function returnFocus(el: HTMLElement, back: Element | null, fallback?: () => void): void {
+  const active = document.activeElement;
+  const ours = !active || active === document.body || el.contains(active);
+  if (!ours) return;
+  const to = back instanceof HTMLElement && back !== document.body && back.isConnected ? back : null;
+  to?.focus({ preventScroll: true });
+  if (!to || document.activeElement !== to) fallback?.();
 }
 
 export interface MenuPlace {

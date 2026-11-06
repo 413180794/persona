@@ -2,7 +2,9 @@
 // terminal is not one: it is the agent page's own view, lib/session-view.ts.)
 // Wide screens (lg+) get a resizable column that pushes the page; narrower ones an overlay over the page.
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { directoryPanelKey, closePanel, usePanel, type Panel } from "../lib/panel";
+import { directoryPanelKey, closePanel, panelOpener, usePanel, type Panel } from "../lib/panel";
+import { activeComposer } from "../lib/links";
+import { returnFocus } from "../ui/overlay";
 import { useLayout } from "../lib/layout";
 import { cx, EASE, IconButton, Loading } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
@@ -10,7 +12,7 @@ import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 import { SubagentPanel } from "./chat/SubagentPanel";
 import { subagentParent } from "../lib/tasks";
 import { useCloseOnBack } from "../lib/back-close";
-import { NARROW, useMedia } from "../lib/viewport";
+import { mediaMatches, NARROW, PHONE, useMedia } from "../lib/viewport";
 import { t } from "../i18n";
 import { PageBoundary } from "./PageBoundary";
 
@@ -37,6 +39,15 @@ export function SidePanel() {
   useCloseOnBack(Boolean(panel), closePanel, useMedia(NARROW));
   const [width, setWidth] = useState(() => clampWidth(Number(localStorage.getItem(WIDTH_KEY)) || 600));
   const drag = useRef<{ x: number; w: number } | null>(null);
+  const aside = useRef<HTMLElement>(null);
+  const open = Boolean(panel);
+  // Closed (×, Esc, its button again): the focus goes back to the button that opened it, else to the message box, not
+  // to the page (#5155). Not the message box on a phone: that would bring the keyboard up.
+  useEffect(() => {
+    const el = aside.current;
+    if (!open || !el) return;
+    return () => returnFocus(el, panelOpener(), mediaMatches(PHONE) ? undefined : () => activeComposer()?.focus());
+  }, [open]);
 
   useEffect(() => {
     const move = (e: PointerEvent) => {
@@ -61,6 +72,7 @@ export function SidePanel() {
   if (!panel) return null;
   return (
     <aside
+      ref={aside}
       aria-label={panelLabel(panel)}
       // narrow: over the visible part of the page (--kb-top / --kb-h, lib/viewport.ts), so on iOS the terminal's key
       // bar sits on the keyboard instead of under it

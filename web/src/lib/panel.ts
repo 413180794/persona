@@ -34,9 +34,14 @@ export function directoryPanelKey(panel: { mid: string; sid: string; cwd: string
 }
 
 let current: Panel | null = null;
+let opener: Element | null = null;
 const listeners = new Set<() => void>();
 
 export function openPanel(p: Panel | null) {
+  // what had the focus when the panel opened (its header button): closing gives the focus back to it (#5155). Called
+  // from the click, before the panel renders, so it is never something inside the panel; a panel replacing another keeps
+  // the first one's.
+  if (!current && p) opener = typeof document === "undefined" ? null : document.activeElement;
   current = p;
   listeners.forEach((l) => l());
 }
@@ -47,6 +52,11 @@ export function closePanel() {
 
 export function getPanel() {
   return current;
+}
+
+/** What had the focus when the open panel was opened (see openPanel). */
+export function panelOpener(): Element | null {
+  return opener;
 }
 
 /** Toggle a session panel from a header button: the same kind for the same session closes it. */
