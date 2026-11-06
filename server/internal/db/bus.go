@@ -88,12 +88,22 @@ func (d *DB) RenameBusIdentity(ctx context.Context, id, name string) (bool, erro
 	return err == nil && tag.RowsAffected() > 0, err
 }
 
-// DeleteBusIdentity removes identity id, and its install codes; it reports whether there was one. It is one
-// statement, so the codes never go without the identity.
+// DeleteBusIdentity removes identity id, and its install codes; it reports whether there was one. One transaction, so
+// the codes never go without the identity, in two statements, codes first: a join in flight holds its code's row, so
+// the first waits for it to commit, and the second, with a snapshot taken after that, sees the identity the join
+// saved and removes it too. (In one statement the identity would be looked for in the snapshot from before the join
+// committed, and the manager it installed would stay.)
 func (d *DB) DeleteBusIdentity(ctx context.Context, id string) (bool, error) {
-	tag, err := d.pool.Exec(ctx, `WITH codes AS (DELETE FROM manager_install_codes WHERE manager_id = $1)
-		DELETE FROM bus_identities WHERE id = $1`, id)
-	return err == nil && tag.RowsAffected() > 0, err
+	var ok bool
+	err := pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM manager_install_codes WHERE manager_id = $1`, id); err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `DELETE FROM bus_identities WHERE id = $1`, id)
+		ok = err == nil && tag.RowsAffected() > 0
+		return err
+	})
+	return err == nil && ok, err
 }
 
 // ManagerInstallCode is a one-time code a new manager trades for its bus token (hub/managers.go).
@@ -119,9 +129,15 @@ func (d *DB) AddManagerInstallCode(ctx context.Context, hash string, c ManagerIn
 		   OR c.expires_at < now() - make_interval(secs => $1)`, ManagerInstallKept.Seconds()); err != nil {
 		return err
 	}
-	_, err := d.pool.Exec(ctx, `INSERT INTO manager_install_codes (code_hash, manager_id, name, expires_at)
-		VALUES ($1, $2, $3, $4)`, hash, c.ManagerID, c.Name, c.ExpiresAt)
-	return err
+	// A new code voids the manager's codes not used yet: only the latest one handed out installs it.
+	return pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM manager_install_codes WHERE manager_id = $1 AND used_at IS NULL`, c.ManagerID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO manager_install_codes (code_hash, manager_id, name, expires_at)
+			VALUES ($1, $2, $3, $4)`, hash, c.ManagerID, c.Name, c.ExpiresAt)
+		return err
+	})
 }
 
 // RedeemManagerInstallCode trades the code that hashes to codeHash for a manager token, once: in one transaction it
@@ -141,6 +157,11 @@ func (d *DB) RedeemManagerInstallCode(ctx context.Context, codeHash, tokenHash s
 			return nil
 		}
 		if err != nil {
+			return err
+		}
+		// Its other codes not used yet are used up with it: none of them may take the token from the one installed.
+		if _, err := tx.Exec(ctx, `UPDATE manager_install_codes SET used_at = now() WHERE manager_id = $1 AND used_at IS NULL`,
+			used.ManagerID); err != nil {
 			return err
 		}
 		name = used.Name
@@ -179,6 +200,18 @@ func (d *DB) ManagerInstallCodeByHash(ctx context.Context, hash string) (*Manage
 		return nil, err
 	}
 	return &c, nil
+}
+
+// ExpireManagerInstallCode voids the code that hashes to hash without trading it, when it is still good: it expires
+// now (the roster shows its manager's code as expired, and the app offers a new one). For a code that crossed the
+// internet in the clear (hub/managers.go): whoever saw it on the way can't trade it. It reports whether there was one.
+func (d *DB) ExpireManagerInstallCode(ctx context.Context, hash string) (bool, error) {
+	tag, err := d.pool.Exec(ctx, `UPDATE manager_install_codes SET expires_at = now()
+		WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()`, hash)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 // PendingManagerInstalls are the managers made and not installed yet (a code not used, no identity), by id, each with

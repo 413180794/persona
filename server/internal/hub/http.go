@@ -350,13 +350,28 @@ func logRequests(h *Hub, next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 		// Auth and ingress refusals are logged by securityError (masked, rate limited), WebSocket ones included.
 		if !sw.securityFailure && (sw.status >= 400 || (!longLived(r.URL.Path) && time.Since(start) > 2*time.Second)) {
+			path := loggedPath(r.URL.Path)
 			if client.Platform != "" {
-				h.logf("[%s] %s %s -> %d (%s) client=%q", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond), client.Platform+"/"+client.Version)
+				h.logf("[%s] %s %s -> %d (%s) client=%q", id, r.Method, path, sw.status, time.Since(start).Round(time.Millisecond), client.Platform+"/"+client.Version)
 			} else {
-				h.logf("[%s] %s %s -> %d (%s)", id, r.Method, r.URL.Path, sw.status, time.Since(start).Round(time.Millisecond))
+				h.logf("[%s] %s %s -> %d (%s)", id, r.Method, path, sw.status, time.Since(start).Round(time.Millisecond))
 			}
 		}
 	})
+}
+
+// loggedPath is a request's path as the log may show it: an install code in /i/<code> (a credential) is masked.
+func loggedPath(p string) string {
+	if rest, ok := strings.CutPrefix(p, installScriptPath); ok {
+		code, tail, _ := strings.Cut(rest, "/")
+		if code != "" {
+			if tail != "" {
+				tail = "/" + tail
+			}
+			return installScriptPath + "<code>" + tail
+		}
+	}
+	return p
 }
 
 // longLived requests (WebSockets, a plugin's sockets and streams, a forwarded port's connections: ports.go) are not

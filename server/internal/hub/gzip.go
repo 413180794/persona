@@ -41,7 +41,7 @@ func gzipResponses(logf func(format string, args ...any), next http.Handler) htt
 		if !gw.close() {
 			// The request log has already counted this as a success; say that the client got a broken response.
 			logf("[%s] %s %s: aborted a gzipped response after %d of %d declared bytes",
-				w.Header().Get("X-Request-Id"), r.Method, r.URL.Path, gw.written, gw.declared)
+				w.Header().Get("X-Request-Id"), r.Method, loggedPath(r.URL.Path), gw.written, gw.declared)
 			panic(http.ErrAbortHandler)
 		}
 	})

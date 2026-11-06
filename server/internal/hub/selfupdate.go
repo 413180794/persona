@@ -43,6 +43,14 @@ const (
 	updateHistoryKeep  = 50
 	updateSettingsKey  = "hub_update"
 	updateRequestLimit = 30 * time.Second
+
+	// An install script (GET /i/<code>, managers_install.go) carries the release's sha256s: when the hub last read
+	// latest.json longer than releaseFreshFor ago it reads it again first, waiting at most releaseRefreshLimit, and
+	// tries that at most once every releaseRefreshEvery whatever the requests. Fresh for no longer than that: someone
+	// whose download failed its checksum right after a release gets the new sums by asking again a minute later.
+	releaseRefreshEvery = time.Minute
+	releaseFreshFor     = releaseRefreshEvery
+	releaseRefreshLimit = 5 * time.Second
 )
 
 var (
@@ -114,6 +122,13 @@ type updater struct {
 	running     bool
 	now         bool // the user confirmed "Update now": stop waiting for idle
 	confirmed   bool // no update to confirm, or this process confirmed it
+
+	// refreshing is held by the one request reading latest.json for an install script (freshRelease); refreshTried
+	// is when one last did. releaseRead is when release was read: a read that worked (lastCheck is when the hub last
+	// tried, which the app shows).
+	refreshing   sync.Mutex
+	refreshTried time.Time
+	releaseRead  time.Time
 }
 
 func newUpdater(h *Hub) *updater {
@@ -470,7 +485,7 @@ func (u *updater) check(ctx context.Context) (*update.Published, error) {
 	u.mu.Lock()
 	u.lastCheck = time.Now()
 	if err == nil {
-		u.release = r
+		u.release, u.releaseRead = r, u.lastCheck
 	}
 	u.mu.Unlock()
 	if err != nil {
@@ -483,6 +498,44 @@ func (u *updater) check(ctx context.Context) (*update.Published, error) {
 		u.set("idle", "", "")
 	}
 	return r, nil
+}
+
+// freshRelease reads latest.json again for an install script when the release the hub has is older than
+// releaseFreshFor: the script checks the download (the newest one on the site) against its sha256s, so sums from
+// before the last release would fail every install until the next check. Bounded by releaseRefreshLimit and tried at
+// most once every releaseRefreshEvery across requests; when it fails the release the hub had stays. Nothing for a
+// Docker hub or a build with nowhere to look.
+func (u *updater) freshRelease(ctx context.Context) {
+	if u == nil || u.h.build.Channel == update.Docker || u.h.build.UpdateURL == "" {
+		return
+	}
+	u.refreshing.Lock()
+	defer u.refreshing.Unlock()
+	now := time.Now()
+	u.mu.Lock()
+	stale := now.Sub(u.releaseRead) >= releaseFreshFor && now.Sub(u.refreshTried) >= releaseRefreshEvery
+	if stale {
+		u.refreshTried = now
+	}
+	u.mu.Unlock()
+	if !stale {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, releaseRefreshLimit)
+	defer cancel()
+	r, err := update.Check(cctx, u.client, u.h.build.UpdateURL)
+	if err != nil {
+		u.h.logf("update: reading the release for an install script: %v (keeping the one read before)", err)
+		return
+	}
+	u.mu.Lock()
+	u.lastCheck = time.Now()
+	u.release, u.releaseRead = r, u.lastCheck
+	available := u.state == "idle" && u.h.build.Newer(r.Manifest.Build)
+	u.mu.Unlock()
+	if available {
+		u.setState("available")
+	}
 }
 
 // begin starts an update the user asked for; now skips waiting for idle ("Update now" in the second confirmation).

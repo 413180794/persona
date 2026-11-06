@@ -132,6 +132,7 @@ type ownerCache struct {
 	mu    sync.Mutex
 	def   string
 	until time.Time
+	gen   uint64 // bumped by ownersChanged: a read that began before it does not keep what it read
 }
 
 const defaultOwnerTTL = 2 * time.Second
@@ -145,10 +146,16 @@ func (h *Hub) defaultOwner(ctx context.Context) string {
 		c.mu.Unlock()
 		return def
 	}
+	gen := c.gen
 	c.mu.Unlock()
-	def := h.defaultManager(ctx)
+	def, err := h.defaultManagerOrErr(ctx)
+	if err != nil {
+		return def // the assistant, because the store did not answer: not kept
+	}
 	c.mu.Lock()
-	c.def, c.until = def, time.Now().Add(defaultOwnerTTL)
+	if c.gen == gen { // the roster did not change while it was read
+		c.def, c.until = def, time.Now().Add(defaultOwnerTTL)
+	}
 	c.mu.Unlock()
 	return def
 }
@@ -158,6 +165,7 @@ func (h *Hub) ownersChanged() {
 	c := &h.owners
 	c.mu.Lock()
 	c.def = ""
+	c.gen++
 	c.mu.Unlock()
 }
 

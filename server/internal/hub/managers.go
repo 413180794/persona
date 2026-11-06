@@ -3,14 +3,17 @@ package hub
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -44,9 +47,9 @@ type managerStore interface {
 	RenameBusIdentity(ctx context.Context, id, name string) (bool, error)
 	AddManagerInstallCode(ctx context.Context, hash string, c db.ManagerInstallCode) error
 	RedeemManagerInstallCode(ctx context.Context, codeHash, tokenHash string) (*db.ManagerInstallCode, string, error)
+	ExpireManagerInstallCode(ctx context.Context, hash string) (bool, error)
 	ManagerInstallCodeByHash(ctx context.Context, hash string) (*db.ManagerInstallCode, error)
 	PendingManagerInstalls(ctx context.Context) ([]db.ManagerInstallCode, error)
-	DropManagerInstallCodes(ctx context.Context, id string) (int64, error)
 	Setting(ctx context.Context, key string, out any) (bool, error)
 	PutSetting(ctx context.Context, key string, v any) error
 }
@@ -84,18 +87,32 @@ type managerInfo struct {
 // defaultManager is the manager the entries that belong to none go to (Siri, the shortcuts, the assistant page as
 // the app opens): the user's pick when it is still in the roster, else the assistant.
 func (h *Hub) defaultManager(ctx context.Context) string {
+	id, _ := h.defaultManagerOrErr(ctx)
+	return id
+}
+
+// defaultManagerOrErr is defaultManager saying when it is the assistant only because the store did not answer.
+func (h *Hub) defaultManagerOrErr(ctx context.Context) (string, error) {
 	s := h.managerStore()
 	if s == nil {
-		return assistantwire.AssistantID
+		return assistantwire.AssistantID, nil
 	}
 	var id string
-	if ok, err := s.Setting(ctx, managerDefaultKey, &id); err != nil || !ok || id == "" {
-		return assistantwire.AssistantID
+	ok, err := s.Setting(ctx, managerDefaultKey, &id)
+	if err != nil {
+		return assistantwire.AssistantID, err
 	}
-	if b, err := s.BusIdentityByID(ctx, id); err != nil || b == nil || b.Role != bus.RoleManager {
-		return assistantwire.AssistantID
+	if !ok || id == "" {
+		return assistantwire.AssistantID, nil
 	}
-	return id
+	b, err := s.BusIdentityByID(ctx, id)
+	if err != nil {
+		return assistantwire.AssistantID, err
+	}
+	if b == nil || b.Role != bus.RoleManager {
+		return assistantwire.AssistantID, nil
+	}
+	return id, nil
 }
 
 // managerList is the roster: every manager, then the ones being installed; the default first, then by name.
@@ -213,6 +230,49 @@ func (h *Hub) redeemInstallCode(ctx context.Context, code string) (id, name, tok
 
 var errInstallCode = errors.New("this install code is unknown, expired or used already")
 
+// refusePlaintext answers a request from the internet over plaintext that carries install code code (the join,
+// /i/<code>): 403 tls_required, and the code voided (voidPlaintextCode). A source past its limit gets 429
+// rate_limited first, as over TLS, and the store is not asked.
+func (h *Hub) refusePlaintext(w http.ResponseWriter, r *http.Request, code string) {
+	key := authSourceKey(r)
+	if retry := h.devtok.failures.retry(key, time.Now(), h.cfg.Security); retry > 0 {
+		retryAfter(w, retry)
+		h.securityError(w, r, http.StatusTooManyRequests, "rate_limited", 0)
+		return
+	}
+	h.voidPlaintextCode(r.Context(), key, code)
+	h.securityError(w, r, http.StatusForbidden, "tls_required", 0)
+}
+
+// voidPlaintextCode voids an install code that came over plaintext from the internet (refused): it crossed the
+// internet in the clear, so whoever saw it on the way must not trade it over TLS. The manager shows as its code
+// expired, and the app offers a new one. A code that voided nothing (not one, unknown or used already) counts against
+// the source key, as an unknown code over TLS does, so no source makes the store look codes up unbounded. The store
+// not answering counts nothing (as on the bus: an outage must not lock an address out), and is logged at most once
+// a minute.
+func (h *Hub) voidPlaintextCode(ctx context.Context, key, code string) {
+	s := h.managerStore()
+	if s == nil || code == "" {
+		return
+	}
+	if !installCodeShape.MatchString(code) {
+		h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
+		return
+	}
+	ok, err := s.ExpireManagerInstallCode(ctx, hashToken(code))
+	switch {
+	case err != nil:
+		if h.bus.voidErrLog.Allow(time.Now()) {
+			h.logf("managers: could not void an install code sent over plaintext from the internet: %v", err)
+		}
+	case ok:
+		h.logf("managers: voided an install code sent over plaintext from the internet")
+		h.managersChanged()
+	default:
+		h.devtok.failures.fail(key, time.Now(), h.cfg.Security)
+	}
+}
+
 // newManagerID is an id for a manager made in the app: m- and six hex digits, not one in the roster.
 func (h *Hub) newManagerID(ctx context.Context) (string, error) {
 	s := h.managerStore()
@@ -233,7 +293,17 @@ func (h *Hub) newManagerID(ctx context.Context) (string, error) {
 	return "", errors.New("no free manager id")
 }
 
-// managerName checks a manager's name: 1–40 characters, no control characters.
+// bidiFormat: r is a bidirectional formatting character (marks, embeddings, overrides, isolates).
+func bidiFormat(r rune) bool {
+	switch {
+	case r == 0x061C, r == 0x200E, r == 0x200F, r >= 0x202A && r <= 0x202E, r >= 0x2066 && r <= 0x2069:
+		return true
+	}
+	return false
+}
+
+// managerName checks a manager's name: 1–40 characters, no control characters (C0 and C1) and no bidirectional
+// formatting characters (they would let a name show as another in the apps).
 func managerName(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -243,8 +313,11 @@ func managerName(s string) (string, error) {
 		return "", errors.New("name is longer than 40 characters")
 	}
 	for _, r := range s {
-		if r < 0x20 || r == 0x7f {
+		if unicode.IsControl(r) {
 			return "", errors.New("name has a control character")
+		}
+		if bidiFormat(r) {
+			return "", errors.New("name has a bidirectional formatting character")
 		}
 	}
 	return s, nil
@@ -452,13 +525,11 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 			writeErrCode(w, http.StatusConflict, "default_manager", errors.New("make another manager the default first"))
 			return
 		}
-		s := h.managerStore()
-		// Once the moves to or from it under way are done; the ones after find it gone (ownership.go).
+		// Installed or not, its codes and then its identity go in one transaction (DeleteBusIdentity): a join that
+		// commits while this runs leaves no manager behind, and one connected meanwhile is hung up. A manager never
+		// installed has no identity (false): calling it off is still a 200. Once the moves to or from it under way
+		// are done; the ones after find it gone (ownership.go).
 		err := h.removingManager(func() error {
-			if info.Installing != nil {
-				_, err := s.DropManagerInstallCodes(r.Context(), id)
-				return err
-			}
 			if _, err := h.revokeBusToken(r.Context(), id); err != nil {
 				return err
 			}
@@ -521,6 +592,18 @@ func (h *Hub) installedManager(w http.ResponseWriter, r *http.Request, id string
 // source's limit, as a bad token does.
 func (h *Hub) managerJoinRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+bus.JoinPath, func(w http.ResponseWriter, r *http.Request) {
+		if h.sourceOf(r) == sourcePublic && r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext {
+			// The token would cross the internet in the clear, and the code it would be traded for just did: refused,
+			// and the code voided.
+			var req struct {
+				Code string `json:"code"`
+			}
+			if b, err := io.ReadAll(io.LimitReader(r.Body, 1<<10)); err == nil {
+				_ = json.Unmarshal(b, &req)
+			}
+			h.refusePlaintext(w, r, strings.TrimSpace(req.Code))
+			return
+		}
 		key := authSourceKey(r)
 		if retry := h.devtok.failures.retry(key, time.Now(), h.cfg.Security); retry > 0 {
 			retryAfter(w, retry)

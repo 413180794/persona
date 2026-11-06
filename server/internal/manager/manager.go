@@ -11,7 +11,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,6 +30,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/link"
 	"github.com/nwverse/persona/server/internal/managerconf"
+	"github.com/nwverse/persona/server/internal/netaddr"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -87,6 +91,11 @@ type JoinOptions struct {
 	// Warn gets what the user should know beyond the join itself (a database container left unused); nil: nobody.
 	Warn       io.Writer
 	HTTPClient *http.Client // tests
+	// AllowPlaintext lets an http:// hub address on the public internet through (--allow-plaintext): the token would
+	// cross it in the clear.
+	AllowPlaintext bool
+	// PublicHost says whether a hub address's host is on the public internet; nil: publicHost (tests stand in).
+	PublicHost func(ctx context.Context, host string) bool
 }
 
 // joinReply is POST /api/v1/bus/join's answer (hub/managers.go).
@@ -108,6 +117,15 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	code := strings.TrimSpace(o.Code)
 	if code == "" {
 		return "", nil, errors.New("没有安装码：在 App 的「设置 › 管理者 › 新建」里拿一个")
+	}
+	if u, err := url.Parse(hub); err == nil && u.Scheme == "http" && !o.AllowPlaintext {
+		public := o.PublicHost
+		if public == nil {
+			public = publicHost
+		}
+		if public(ctx, u.Hostname()) {
+			return "", nil, ConfigError{fmt.Errorf("hub 地址 %s 是公网上的明文 http：换来的 token 会明文经过公网。用 hub 的 https 地址（TLS 端口），确实要明文就加 --allow-plaintext", hub)}
+		}
 	}
 	if o.DatabaseURL != "" {
 		if _, err := db.WithDatabase(o.DatabaseURL, "x"); err != nil {
@@ -153,7 +171,24 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized:
-		return "", nil, errors.New("hub 不认这个安装码：它不对、过期了（10 分钟）或者已经用过；在 App 里给这个管理者重新拿一个")
+		// Trying again with the same code cannot help: a configuration error (manager join exits 2; manager run
+		// --join waits for manager.json instead, as a container would be restarted on any exit).
+		return "", nil, ConfigError{errors.New("hub 不认这个安装码：它不对、过期了（10 分钟）或者已经用过；在 App 里给这个管理者重新拿一个")}
+	case http.StatusForbidden:
+		var e struct {
+			Code  string `json:"code"`
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(raw, &e) == nil && e.Code == "tls_required" {
+			// The hub refused a plaintext join from the public internet, and voided the code that crossed it: the
+			// same command can never work.
+			return "", nil, ConfigError{fmt.Errorf("hub 不接受经公网明文换码，这个安装码也作废了：在 App 里重新拿一个，用 hub 的 https 地址（TLS 端口）")}
+		}
+		// Some other refusal (a proxy's, say): nothing says the same command can't work later.
+		if e.Error != "" {
+			return "", nil, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(e.Error))
+		}
+		return "", nil, fmt.Errorf("hub 拒绝了换码（HTTP 403）：%s", firstLine(string(raw)))
 	case http.StatusTooManyRequests:
 		return "", nil, errors.New("试错太多次，hub 暂时不接受这台电脑换码：过几分钟再试")
 	case http.StatusNotFound, http.StatusMethodNotAllowed:
@@ -216,6 +251,7 @@ func cmdJoin(ctx context.Context, e *env, args []string) error {
 	dir := fs.String("dir", "", "管理者的目录（默认 ~/.persona/managers/<id>）")
 	dbURL := fs.String("database-url", "", "它的 Postgres 库（默认 install 时在 Docker 里给它建一个）")
 	fp := fs.String("fingerprint", "", "hub 的 TLS 指纹（https 地址用 hub 自己的证书时）")
+	plain := fs.Bool("allow-plaintext", false, "允许公网上的明文 http hub 地址（token 会明文经过公网）")
 	install := fs.Bool("install", false, "换好以后接着装成常驻服务（manager install）")
 	pos, err := parseInterleaved(fs, args)
 	if err != nil {
@@ -225,7 +261,7 @@ func cmdJoin(ctx context.Context, e *env, args []string) error {
 		return errUsage
 	}
 	d, c, err := Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: *dir, DatabaseURL: *dbURL, Fingerprint: *fp,
-		CheckDocker: e.dockerProblem, Warn: e.stdout})
+		CheckDocker: e.dockerProblem, Warn: e.stdout, AllowPlaintext: *plain})
 	if err != nil {
 		return err
 	}
@@ -240,6 +276,72 @@ func cmdJoin(ctx context.Context, e *env, args []string) error {
 	fmt.Fprintf(e.stdout, "下一步：%s manager install --dir %s（装成常驻服务），或者在前台 %s manager run --dir %s\n",
 		e.self(), shellQuote(d), e.self(), shellQuote(d))
 	return nil
+}
+
+// publicHost: host (a hub address's) is on the public internet: an address of a public range, or a name that
+// resolves to one. Loopback, private, link-local, shared (CGNAT) and ULA addresses, localhost, .local names and
+// single-label names are not; a name that does not resolve is not either (the dial fails anyway). A NAT64 address
+// is what the IPv4 address in it is.
+func publicHost(ctx context.Context, host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "" || host == "localhost" || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".localhost") {
+		return false
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return publicAddr(ip)
+	}
+	if !strings.Contains(host, ".") {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if publicAddr(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// NAT64 prefixes: RFC 6052's well-known 64:ff9b::/96, whose last 32 bits are the IPv4 address, and RFC 8215's
+// local-use 64:ff9b:1::/48, which a network may use whole or as any longer prefix inside it.
+var (
+	nat64WellKnown = netip.MustParsePrefix("64:ff9b::/96")
+	nat64LocalUse  = netip.MustParsePrefix("64:ff9b:1::/48")
+)
+
+// publicAddr: ip is on the public internet. A NAT64 address is what the IPv4 address in it is. In the local-use
+// prefix that is read where RFC 6052 (section 2.2) puts it for the /48 itself (bytes 6, 7, 9 and 10; the u octet and
+// the suffix zero) or for 64:ff9b:1::/96 (the last 32 bits); an address of a longer prefix inside it, whose length
+// it doesn't say, is taken for public.
+func publicAddr(ip netip.Addr) bool {
+	ip = ip.Unmap().WithZone("")
+	b := ip.As16()
+	switch {
+	case nat64WellKnown.Contains(ip):
+		return publicClass(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+	case nat64LocalUse.Contains(ip):
+		if b[6]|b[7]|b[8]|b[9]|b[10]|b[11] == 0 { // 64:ff9b:1::/96
+			return publicClass(netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}))
+		}
+		if b[8]|b[11]|b[12]|b[13]|b[14]|b[15] == 0 { // the /48
+			return publicClass(netip.AddrFrom4([4]byte{b[6], b[7], b[9], b[10]}))
+		}
+		return true
+	}
+	return publicClass(ip)
+}
+
+func publicClass(ip netip.Addr) bool {
+	switch netaddr.Classify(ip) {
+	case netaddr.PublicIPv4, netaddr.GlobalIPv6, netaddr.TransitionIPv6:
+		return true
+	}
+	return false
 }
 
 // --- run ----------------------------------------------------------------------------------------------------------
@@ -262,6 +364,7 @@ func cmdRun(ctx context.Context, e *env, build update.Build, args []string) erro
 	join := fs.Bool("join", false, "目录里还没有 manager.json 时，先用后面的 <hub 地址> <安装码> 换码")
 	dbURL := fs.String("database-url", "", "和 --join 一起：它自己的 Postgres 库（容器里经环境变量 "+databaseEnv+" 给，不放命令行）")
 	fp := fs.String("fingerprint", "", "和 --join 一起：hub 的 TLS 指纹")
+	plain := fs.Bool("allow-plaintext", false, "和 --join 一起：允许公网上的明文 http hub 地址")
 	pos, err := parseInterleaved(fs, args)
 	if err != nil {
 		return err
@@ -271,15 +374,35 @@ func cmdRun(ctx context.Context, e *env, build update.Build, args []string) erro
 	}
 	d := *dir
 	if *join && (d == "" || !fileExists(filepath.Join(d, assistant.ManagerFile))) {
-		url := *dbURL
-		if url == "" {
-			url = e.getenv(databaseEnv)
+		dbAt := *dbURL
+		if dbAt == "" {
+			dbAt = e.getenv(databaseEnv)
 		}
-		if d, _, err = Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: d, DatabaseURL: url, Fingerprint: *fp,
-			CheckDocker: e.dockerProblem, Warn: e.stdout}); err != nil {
+		joined, _, err := Join(ctx, JoinOptions{Hub: pos[0], Code: pos[1], Dir: d, DatabaseURL: dbAt, Fingerprint: *fp,
+			CheckDocker: e.dockerProblem, Warn: e.stdout, AllowPlaintext: *plain})
+		var ce ConfigError
+		switch {
+		case err == nil:
+			d = joined
+			fmt.Fprintf(e.stdout, "加入了 hub，目录 %s\n", d)
+		case errors.As(err, &ce) && d == "":
+			// No directory to wait on: watching for "the one manager of this computer" would take up another
+			// manager's directory when there is exactly one. A container always names its --dir; anyone else gets the
+			// configuration error (exit 2).
+			return err
+		case errors.As(err, &ce):
+			// The same command can't do better next time (a used or expired code, a refused plaintext join, no
+			// database it can have), and a container's --restart unless-stopped starts it again on any exit, exit 2 too: wait,
+			// not dialing, until a join run by hand into the directory writes manager.json, as after a revoke.
+			fmt.Fprintf(e.stdout, "manager: 没加入 hub，同样的命令再试也不会成：%v。在等：在 App 里拿一个新安装码，"+
+				"再运行一次新的安装命令（没加入过的容器会用新码重建），或者运行 personad manager join <hub 地址> <安装码> --dir %s\n", err, shellQuote(d))
+			if err = waitJoined(ctx, d); err != nil {
+				return err
+			}
+			fmt.Fprintf(e.stdout, "manager: 有了 manager.json，目录 %s\n", d)
+		default:
 			return err
 		}
-		fmt.Fprintf(e.stdout, "加入了 hub，目录 %s\n", d)
 	}
 	if d == "" {
 		if d, err = onlyManager(); err != nil {
@@ -411,6 +534,19 @@ func waitNewToken(ctx context.Context, dir string, before *assistant.ManagerConf
 	}
 }
 
+// waitJoined returns once dir has a manager.json, or with ctx's error.
+func waitJoined(ctx context.Context, dir string) error {
+	for {
+		renewed, err := waitNewToken(ctx, dir, nil, time.Hour)
+		if err != nil {
+			return err
+		}
+		if renewed {
+			return nil
+		}
+	}
+}
+
 // managersRoot is where the managers of this machine are by default (~/.persona/managers).
 func managersRoot() string { return filepath.Dir(assistant.DefaultManagerDir("x")) }
 
@@ -466,7 +602,8 @@ func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 }
 
 // ConfigError is a mistake in the manager's configuration (no manager.json, no database to use): personad exits 2,
-// which its service does not restart on.
+// which its systemd service does not restart on (RestartPreventExitStatus=2; a container's restart policy does, so
+// manager run --join waits instead).
 type ConfigError struct{ Err error }
 
 func (e ConfigError) Error() string { return e.Err.Error() }

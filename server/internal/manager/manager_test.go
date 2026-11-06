@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -108,8 +110,8 @@ func TestJoin(t *testing.T) {
 	}
 }
 
-// Without Docker (to make its own Postgres) and no --database-url, join and run --join stop with a configuration
-// error (exit 2: not restarted) before the code is traded.
+// Without Docker (to make its own Postgres) and no --database-url, nothing is traded: join stops with a
+// configuration error (exit 2), and run --join says so once and waits (a container is restarted on exit 2 too).
 func TestNoDatabaseSpendsNoCode(t *testing.T) {
 	isolate(t)
 	t.Setenv("PATH", t.TempDir()) // no docker
@@ -117,11 +119,17 @@ func TestNoDatabaseSpendsNoCode(t *testing.T) {
 	srv := httptest.NewServer(j)
 	defer srv.Close()
 	dir := filepath.Join(t.TempDir(), "m")
-	for _, args := range [][]string{{"join", srv.URL, "mi_good"}, {"run", "--dir", dir, "--join", srv.URL, "mi_good"}} {
-		var ce ConfigError
-		if err := Main(context.Background(), update.Build{}, args, io.Discard); !errors.As(err, &ce) || !strings.Contains(err.Error(), "--database-url") {
-			t.Errorf("%q: %v", args, err)
-		}
+	var ce ConfigError
+	if err := Main(context.Background(), update.Build{}, []string{"join", srv.URL, "mi_good"}, io.Discard); !errors.As(err, &ce) ||
+		!strings.Contains(err.Error(), "--database-url") {
+		t.Errorf("join: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	var out bytes.Buffer
+	if err := Main(ctx, update.Build{}, []string{"run", "--dir", dir, "--join", srv.URL, "mi_good"}, &out); !errors.Is(err, context.DeadlineExceeded) ||
+		!strings.Contains(out.String(), "--database-url") || strings.Count(out.String(), "\n") != 1 {
+		t.Errorf("run --join: %v %q", err, out.String())
 	}
 	if j.trades.Load() != 0 {
 		t.Fatalf("%d codes traded", j.trades.Load())
@@ -257,6 +265,187 @@ func TestInstallSystemd(t *testing.T) {
 		t.Fatalf("without systemd: %v", err)
 	}
 }
+
+// An http:// hub on the public internet is refused before the code is traded (the token would cross it in the
+// clear) unless --allow-plaintext; a code the hub doesn't take is a configuration error (exit 2), so a container's
+// restart doesn't loop on it.
+func TestJoinPlaintextAndBadCode(t *testing.T) {
+	isolate(t)
+	j := &joinHub{}
+	srv := httptest.NewServer(j)
+	defer srv.Close()
+	own := "postgres://jarvis:pw@[fd00::20]:5432/jarvis"
+	public := func(context.Context, string) bool { return true }
+	var ce ConfigError
+	_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own, PublicHost: public})
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "--allow-plaintext") || j.trades.Load() != 0 {
+		t.Fatalf("public plaintext: %v (%d trades)", err, j.trades.Load())
+	}
+	if _, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own, PublicHost: public,
+		AllowPlaintext: true}); err != nil {
+		t.Fatalf("with --allow-plaintext: %v", err)
+	}
+	if _, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own}); !errors.As(err, &ce) {
+		t.Fatalf("a used code: %v", err)
+	}
+}
+
+func TestPublicHost(t *testing.T) {
+	ctx := context.Background()
+	// The private IPv4 ranges are built, not written: no private address in the repository's text.
+	v4 := func(a, b, c, d byte) string { return netip.AddrFrom4([4]byte{a, b, c, d}).String() }
+	for host, want := range map[string]bool{"203.0.113.9": false, "8.8.8.8": true, "2001:4860:4860::8888": true,
+		"127.0.0.1": false, "::1": false, v4(192, 168, 1, 2): false, v4(10, 0, 0, 1): false, v4(100, 64, 1, 1): false,
+		"fd00::20": false, "fe80::1": false, "localhost": false, "nas.local": false, "nas": false,
+		// NAT64: as the IPv4 address in it.
+		"64:ff9b::808:808": true, "64:ff9b::" + v4(10, 0, 0, 1): false, "64:ff9b::" + v4(192, 168, 1, 2): false,
+		"64:ff9b:1::808:808": true, "64:ff9b:1::" + v4(100, 64, 1, 1): false, "64:ff9b::7f00:1": false,
+		// The local-use /48 itself: the IPv4 address in bytes 6, 7, 9 and 10 (RFC 6052).
+		"64:ff9b:1:808:8:800::": true, nat64At48(10, 0, 0, 1): false, nat64At48(192, 168, 1, 2): false,
+		nat64At48(127, 0, 0, 1): false, nat64At48(8, 8, 8, 8): true,
+		// A longer prefix inside it (here a /64, the IPv4 address in bytes 9 to 12): its length unknown, public.
+		"64:ff9b:1:0:8:808:800:0": true, nat64At64(10, 0, 0, 1): true} {
+		if got := publicHost(ctx, host); got != want {
+			t.Errorf("%s: %v", host, got)
+		}
+	}
+}
+
+// nat64At48 is IPv4 address a.b.c.d in NAT64 prefix 64:ff9b:1::/48 (RFC 6052, section 2.2).
+func nat64At48(a, b, c, d byte) string {
+	return netip.AddrFrom16([16]byte{0, 0x64, 0xff, 0x9b, 0, 1, a, b, 0, c, d}).String()
+}
+
+// nat64At64 is a.b.c.d in the NAT64 prefix 64:ff9b:1::/64.
+func nat64At64(a, b, c, d byte) string {
+	return netip.AddrFrom16([16]byte{0, 0x64, 0xff, 0x9b, 0, 1, 0, 0, 0, a, b, c, d}).String()
+}
+
+// Only the hub's own refusal of a plaintext join (403 tls_required) is a configuration error; any other 403 (a
+// proxy's, say) is a plain one.
+func TestJoinForbidden(t *testing.T) {
+	isolate(t)
+	var body atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(body.Load().(string)))
+	}))
+	defer srv.Close()
+	own := "postgres://jarvis:pw@[fd00::20]:5432/jarvis"
+	var ce ConfigError
+	body.Store(`{"error":"TLS is required for public requests","code":"tls_required"}`)
+	_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own})
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "https") {
+		t.Fatalf("tls_required: %v", err)
+	}
+	for _, b := range []string{`{"error":"blocked by policy","code":"forbidden"}`, "<html>forbidden</html>"} {
+		body.Store(b)
+		_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", DatabaseURL: own})
+		if err == nil || errors.As(err, &ce) || !strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "明文") {
+			t.Fatalf("%s: %v", b, err)
+		}
+	}
+}
+
+// A code the hub refuses (used, expired) makes run --join wait instead of exiting (a container's restart would
+// try it again and again): one line says what to do, and once a join by hand writes manager.json it goes on.
+func TestRunJoinWaitsOnARefusedCode(t *testing.T) {
+	isolate(t)
+	t.Setenv("PATH", t.TempDir()) // no docker
+	j := &joinHub{}
+	srv := httptest.NewServer(j)
+	defer srv.Close()
+	old := revokedPoll
+	revokedPoll = 10 * time.Millisecond
+	t.Cleanup(func() { revokedPoll = old })
+	dir := filepath.Join(t.TempDir(), "m")
+	own := "postgres://u:p@[fd00::20]:5432/own?sslmode=disable"
+	out := &lockedBuffer{}
+	done := make(chan error, 1)
+	go func() {
+		done <- Main(context.Background(), update.Build{}, []string{"run", "--dir", dir, "--join", srv.URL, "mi_used", "--database-url", own}, out)
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(out.String(), "manager join") {
+		select {
+		case err := <-done:
+			t.Fatalf("run --join exited on a refused code: %v %q", err, out.String())
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no line about the refused code: %q", out.String())
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !strings.Contains(out.String(), "--dir "+dir) || strings.Count(out.String(), "\n") != 1 {
+		t.Fatalf("the waiting line: %q", out.String())
+	}
+	// manager.json appears (a join by hand): it goes on to run the manager in it, which here stops at once on the
+	// database this manager.json does not name (no Docker to make it).
+	if err := assistant.WriteManagerConfig(dir, assistant.ManagerConfig{ID: "m-0a1b2c", Name: "工作", Hub: srv.URL, Token: "jb_secret"}); err != nil {
+		t.Fatal(err)
+	}
+	var ce ConfigError
+	select {
+	case err := <-done:
+		if !errors.As(err, &ce) {
+			t.Fatalf("after manager.json: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("still waiting after manager.json was written")
+	}
+	if !strings.Contains(out.String(), "有了 manager.json") {
+		t.Fatalf("output: %q", out.String())
+	}
+}
+
+// Without --dir, a refused code is the configuration error (exit 2): there is no directory to wait on, and waiting
+// for "the one manager of this computer" would run another manager's directory when there is exactly one.
+func TestRunJoinWithoutDirDoesNotTakeAnotherManager(t *testing.T) {
+	isolate(t)
+	t.Setenv("PATH", t.TempDir()) // no docker
+	j := &joinHub{}
+	srv := httptest.NewServer(j)
+	defer srv.Close()
+	old := revokedPoll
+	revokedPoll = 10 * time.Millisecond
+	t.Cleanup(func() { revokedPoll = old })
+	other := filepath.Join(managersRoot(), "m-0d0d0d")
+	if err := assistant.WriteManagerConfig(other, assistant.ManagerConfig{ID: "m-0d0d0d", Name: "别的", Hub: srv.URL, Token: "jb_other"}); err != nil {
+		t.Fatal(err)
+	}
+	own := "postgres://u:p@[fd00::20]:5432/own?sslmode=disable"
+	out := &lockedBuffer{}
+	done := make(chan error, 1)
+	go func() {
+		done <- Main(context.Background(), update.Build{}, []string{"run", "--join", srv.URL, "mi_used", "--database-url", own}, out)
+	}()
+	var ce ConfigError
+	select {
+	case err := <-done:
+		if !errors.As(err, &ce) || !strings.Contains(err.Error(), "安装码") {
+			t.Fatalf("run --join without --dir: %v %q", err, out.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("still running: %q", out.String())
+	}
+	if strings.Contains(out.String(), other) || strings.Contains(out.String(), "manager.json") {
+		t.Fatalf("took up the other manager: %q", out.String())
+	}
+}
+
+// lockedBuffer is a bytes.Buffer safe to write from one goroutine and read from another.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+func (l *lockedBuffer) String() string { l.mu.Lock(); defer l.mu.Unlock(); return l.b.String() }
 
 // A manager whose token was refused waits for a new one in manager.json, and tries the same token again after
 // revokedRetry with none.

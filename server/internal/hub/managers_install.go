@@ -4,6 +4,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,10 +23,23 @@ import (
 // installScriptPath is where the script is: /i/<code>.
 const installScriptPath = "/i/"
 
-// managerAddress is the hub as a manager installed from request r reaches it: the address r came to (it reached the
-// hub from where the command runs), https when it came over TLS or through a proxy that says so; fp is the hub's TLS
-// pin when r came to its own TLS port (its self-signed certificate), else "".
+// managerAddress is the hub as a manager installed from request r reaches it, with fp the hub's TLS pin when that is
+// its own TLS port (its self-signed certificate), else "".
+//
+//   - Straight from the app: the address r came to (it reached the hub from where the command runs), https when it
+//     came over TLS or through a proxy that says so, pinned when it came to the hub's own TLS port. An https
+//     public_url goes first: the address the user set up for the world (a reverse proxy, a subpath). An http one does
+//     not: every hub writes one for its host name (docs/config.md), only for the private network.
+//   - Through a member hub (the Host is the mesh's, "peer", which no computer reaches): this hub's own addresses
+//     (ownAddress).
 func (h *Hub) managerAddress(r *http.Request) (base, fp string) {
+	if _, forwarded := forwardedOf(r); forwarded {
+		if base, fp, ok := h.ownAddress(); ok {
+			return base, fp
+		}
+	} else if base, fp, ok := h.addressOf(h.cfg.PublicURL); ok && strings.HasPrefix(base, "https://") {
+		return base, fp
+	}
 	scheme := "http"
 	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		scheme = "https"
@@ -36,6 +52,61 @@ func (h *Hub) managerAddress(r *http.Request) (base, fp string) {
 		return strings.TrimRight(h.cfg.PublicURL, "/"), ""
 	}
 	return scheme + "://" + host, fp
+}
+
+// ownAddress is this hub as computers reach it, from its own configuration, most secure first: its endpoints on its
+// own TLS port (pinned), an https public_url, its other https endpoints, an http public_url, then any other endpoint.
+func (h *Hub) ownAddress() (base, fp string, ok bool) {
+	port, _ := h.tlsPin()
+	eps := h.endpointList()
+	pub := h.cfg.PublicURL
+	pubTLS := strings.HasPrefix(strings.ToLower(strings.TrimSpace(pub)), "https://")
+	var urls []string
+	for _, e := range eps {
+		if e.Scheme == "https" && port > 0 && e.Port == port {
+			urls = append(urls, e.URL)
+		}
+	}
+	if pubTLS {
+		urls = append(urls, pub)
+	}
+	for _, e := range eps {
+		if e.Scheme == "https" {
+			urls = append(urls, e.URL)
+		}
+	}
+	if !pubTLS {
+		urls = append(urls, pub)
+	}
+	for _, e := range eps {
+		urls = append(urls, e.URL)
+	}
+	for _, raw := range urls {
+		if base, fp, ok := h.addressOf(raw); ok {
+			return base, fp, true
+		}
+	}
+	return "", "", false
+}
+
+// addressOf is raw (an http(s) URL of the hub's configuration) as the commands' hub address: its path kept (a reverse
+// proxy's subpath, docs/network.md), with the hub's TLS pin when it is https to the hub's own TLS port.
+func (h *Hub) addressOf(raw string) (base, fp string, ok bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" || u.User != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", "", false
+	}
+	if u.Scheme == "https" {
+		port, pin := h.tlsPin()
+		p := u.Port()
+		if p == "" {
+			p = "443"
+		}
+		if port > 0 && p == strconv.Itoa(port) {
+			fp = pin
+		}
+	}
+	return u.Scheme + "://" + u.Host + strings.TrimRight(u.EscapedPath(), "/"), fp, true
 }
 
 // managerCommands are the commands that install manager id with code, from where r came: service (a computer, the
@@ -57,6 +128,24 @@ func (h *Hub) managerCommands(r *http.Request, id, code string) map[string]strin
 		out["docker"] = fmt.Sprintf("%s %s | sh", curl, shellWord(base+installScriptPath+code+"/docker"))
 	}
 	return out
+}
+
+// versionLabel is " <version>" for the script's comment, "" without one.
+func versionLabel(v string) string {
+	if v == "" || !shellSafeName(v) {
+		return ""
+	}
+	return " " + v
+}
+
+// shellSafeName: s can go between single quotes and in a comment as it is (an archive name, a version).
+func shellSafeName(s string) bool {
+	return s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-") == ""
+}
+
+// shellSafeHex: s is a sha256 in lower-case hex.
+func shellSafeHex(s string) bool {
+	return len(s) == 64 && strings.Trim(s, "0123456789abcdef") == ""
 }
 
 // managerImage is the image a manager's container runs: the one this Docker hub runs, else the one it was built as;
@@ -110,9 +199,17 @@ if ! docker inspect "$N-pg" >/dev/null 2>&1; then
 fi
 docker start "$N-pg" >/dev/null
 if docker inspect "$N" >/dev/null 2>&1; then
-	docker start "$N" >/dev/null
-	echo "persona manager: $N was there already: started it"
-	exit 0
+	# One that never joined (no manager.json in its volume: the hub refused its code, and it waits for one) is made
+	# again with this script's code; one that joined is started as it is, and so is one docker could not look into.
+	joined=$(docker run --rm -v "$N-home:/home/jarvis/.jarvis" --entrypoint sh "$IMAGE" -c \
+		"if [ -f /home/jarvis/.jarvis/managers/$ID/manager.json ]; then echo yes; else echo no; fi" 2>/dev/null || true)
+	if [ "$joined" != no ]; then
+		docker start "$N" >/dev/null
+		echo "persona manager: $N was there already: started it"
+		exit 0
+	fi
+	docker rm -f "$N" >/dev/null
+	echo "persona manager: $N never joined the hub: making it again with this install code"
 fi
 ` + databaseEnvName + `="postgres://` + pgdocker.User + `:$pw@$N-pg:5432/` + pgdocker.Database + `?sslmode=disable" docker run -d --name "$N" --network "$N" \
 	--restart unless-stopped -v "$N-home:/home/jarvis/.jarvis" -e ` + databaseEnvName + ` "$IMAGE" \
@@ -151,7 +248,9 @@ func (h *Hub) managerInstallRoutes(mux *http.ServeMux) {
 // serveInstallScript answers GET /i/<code> (docker: …/docker) with its script.
 func (h *Hub) serveInstallScript(w http.ResponseWriter, r *http.Request, docker bool) {
 	if h.sourceOf(r) == sourcePublic && r.TLS == nil && !h.cfg.Security.AllowPublicPlaintext {
-		h.securityError(w, r, http.StatusForbidden, "tls_required", 0) // the code would cross the internet in the clear
+		// The code (and the script with it) would cross the internet in the clear: refused, and the code, which just
+		// did, voided.
+		h.refusePlaintext(w, r, r.PathValue("code"))
 		return
 	}
 	key := authSourceKey(r)
@@ -182,8 +281,7 @@ func (h *Hub) serveInstallScript(w http.ResponseWriter, r *http.Request, docker 
 		return
 	}
 	base, fp := h.managerAddress(r)
-	script := managerInstallScript(managerScript{ID: c.ManagerID, Name: c.Name, Hub: base, Code: code,
-		Fingerprint: fp, DL: strings.TrimRight(h.build.UpdateURL, "/")})
+	var script string
 	if docker {
 		image := h.managerImage()
 		if image == "" {
@@ -191,6 +289,12 @@ func (h *Hub) serveInstallScript(w http.ResponseWriter, r *http.Request, docker 
 			return
 		}
 		script = managerDockerScript(c.ManagerID, image, base, code, fp)
+	} else {
+		h.upd.freshRelease(r.Context()) // the sums of the release the download will be
+		version, sums := h.releaseSums()
+		script = managerInstallScript(managerScript{ID: c.ManagerID, Name: c.Name, Hub: base, Code: code,
+			Fingerprint: fp, DL: strings.TrimRight(h.build.UpdateURL, "/"), Version: version, Sums: sums,
+			HubVersion: h.build.Version})
 	}
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -201,13 +305,57 @@ func (h *Hub) serveInstallScript(w http.ResponseWriter, r *http.Request, docker 
 type managerScript struct {
 	ID, Name, Hub, Code, Fingerprint string
 	DL                               string // where the publisher's binaries are (the build's update URL); "" none
+	// Version and Sums are the published release the hub last read (latest.json: its version, and each download's
+	// sha256 by archive name): the script checks the download against these, which came from the hub (over its
+	// pinned TLS port when the command used it), not against a SHA256SUMS from the same place as the download.
+	Version string
+	Sums    map[string]string
+	// HubVersion is this hub's own, to say so when the published release is another.
+	HubVersion string
+}
+
+// releaseSums are the published release's version and its downloads' sha256s by archive name, as the hub last read
+// latest.json; "" and nil before it did (or for a build that does not update itself).
+func (h *Hub) releaseSums() (string, map[string]string) {
+	if h.upd == nil {
+		return "", nil
+	}
+	h.upd.mu.Lock()
+	r := h.upd.release
+	h.upd.mu.Unlock()
+	if r == nil || r.Manifest == nil || len(r.Manifest.Files) == 0 {
+		return "", nil
+	}
+	sums := map[string]string{}
+	for _, f := range r.Manifest.Files {
+		if f.Name != "" && f.SHA256 != "" {
+			sums[f.Name] = f.SHA256
+		}
+	}
+	return r.Manifest.Version, sums
 }
 
 // managerInstallScript is the POSIX sh script GET /i/<code> answers. It uses the personad of this computer (the
-// hub's own on the hub machine) or downloads this hub's release the way install.sh does (checked against
-// SHA256SUMS), then joins and installs. Arguments after `sh -s --` go to the join (--dir, --database-url).
+// hub's own on the hub machine) or downloads the published release the way install.sh does, checked against the
+// sha256 the hub put in the script (m.Sums; SHA256SUMS from the download site only when the hub had none), then joins
+// and installs. Arguments after `sh -s --` go to the join (--dir, --database-url).
 func managerInstallScript(m managerScript) string {
 	q := shellWord
+	names := make([]string, 0, len(m.Sums))
+	for n := range m.Sums {
+		if shellSafeName(n) && shellSafeHex(m.Sums[n]) {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	var sums strings.Builder
+	for _, n := range names {
+		sums.WriteString(m.Sums[n] + "  " + n + "\n")
+	}
+	versionNote := ""
+	if shellSafeName(m.Version) && shellSafeName(m.HubVersion) && m.Version != m.HubVersion {
+		versionNote = "\techo \"persona manager: this hub runs " + m.HubVersion + "; installing the published " + m.Version + "\"\n"
+	}
 	name := strings.NewReplacer("\n", " ", "\r", " ").Replace(m.Name)
 	fp := ""
 	if m.Fingerprint != "" {
@@ -220,6 +368,8 @@ set -eu
 HUB=` + q(m.Hub) + `
 CODE=` + q(m.Code) + `
 DL=` + q(m.DL) + `
+# The published downloads' sha256s, as the hub knows them (latest.json` + versionLabel(m.Version) + `); empty: the hub had none.
+SUMS='` + sums.String() + `'
 fail() { echo "persona manager: $*" >&2; exit 1; }
 
 find_personad() {
@@ -245,10 +395,15 @@ if [ -z "$BIN" ]; then
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' EXIT
 	archive="jarvisd-$os-$arch.gz"
-	fetch "$DL/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $DL/SHA256SUMS"
+` + versionNote + `	if [ -n "$SUMS" ]; then
+		printf '%s' "$SUMS" > "$tmp/SHA256SUMS"
+	else
+		echo "persona manager: the hub knows no checksums for the release: checking against $DL/SHA256SUMS" >&2
+		fetch "$DL/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $DL/SHA256SUMS"
+	fi
 	fetch "$DL/$archive" "$tmp/$archive" || fail "could not download $DL/$archive"
 	want="$(awk -v n="$archive" '$2 == n || $2 == "*" n { print $1 }' "$tmp/SHA256SUMS")"
-	[ -n "$want" ] && [ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed"
+	[ -n "$want" ] && [ "$(sum "$tmp/$archive")" = "$want" ] || fail "checksum mismatch for $archive: not installed. A release may have come out since the hub last checked: get the install command from the app again"
 	dest="${PERSONA_HOME:-$HOME/.persona}/bin"
 	mkdir -p "$dest"
 	gzip -dc "$tmp/$archive" > "$tmp/jarvisd" && chmod 755 "$tmp/jarvisd" && mv "$tmp/jarvisd" "$dest/jarvisd" || fail "could not unpack $archive"

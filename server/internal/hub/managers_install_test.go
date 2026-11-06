@@ -24,6 +24,7 @@ import (
 // 404 and count against the source.
 func TestManagerInstallScript(t *testing.T) {
 	h, srv, _ := managersHub(t)
+	h.cfg.PublicURL = "" // the commands follow the address the app used (TestManagerCommandsUseTheHubsOwnAddress)
 	t.Setenv("JARVIS_IMAGE", "")
 	t.Setenv("PERSONA_IMAGE", "")
 	var made struct {
@@ -136,14 +137,16 @@ case "$1 $2" in
 	*) touch "$S/vol-$name-home"; printf '%s' "$PERSONA_MANAGER_DATABASE_URL" > "$S/mdb" ;;
 	esac ;;
 "inspect "*) [ -e "$S/c-$2" ] ;;
+"rm -f") rm -f "$S/c-$3" ;;
 *) exit 0 ;;
 esac
 `
 
 // runDockerScript runs the docker install script against fakeDockerScript: it makes the network and both containers
-// with one password, given only through the environment; runs again without making anything; after the containers
-// are gone (volumes kept) it makes them again with the same password; and with the database volume left alone (its
-// password lost) it stops and says so.
+// with one password, given only through the environment; run again (a new code) before the manager joined, it makes
+// the manager's container again with the new code and the same password, keeping one docker could not look into;
+// once it joined it runs again without making anything; after the containers are gone (volumes kept) it makes them
+// again with the same password; and with the database volume left alone (its password lost) it stops and says so.
 func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	t.Helper()
 	stub, state := t.TempDir(), t.TempDir()
@@ -154,7 +157,7 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	if err := os.WriteFile(f, []byte(script), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	run := func() (string, error) {
+	runScript := func(f string) (string, error) {
 		_ = os.Remove(filepath.Join(state, "log"))
 		cmd := exec.Command("sh", f)
 		cmd.Env = append(os.Environ(), "PATH="+stub+":"+os.Getenv("PATH"), "STATE="+state)
@@ -162,6 +165,7 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 		log, _ := os.ReadFile(filepath.Join(state, "log"))
 		return string(out) + "\n--- log\n" + string(log), err
 	}
+	run := func() (string, error) { return runScript(f) }
 	read := func(name string) string { b, _ := os.ReadFile(filepath.Join(state, name)); return string(b) }
 	hex48 := regexp.MustCompile(`[0-9a-f]{48}`)
 
@@ -169,13 +173,36 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	pw := read("c-" + n + "-pg")
 	if err != nil || len(pw) != 48 || read("c-"+n) != "" || !strings.Contains(out, "ARGV network create "+n) ||
 		!strings.Contains(out, "ARGV run -d --name "+n+" --network "+n+" --restart unless-stopped -v "+n+"-home:/home/jarvis/.jarvis -e PERSONA_MANAGER_DATABASE_URL registry.example/persona-hub:1 manager run --dir /home/jarvis/.jarvis/managers/"+id+" --join "+hub+" "+code) ||
-		!strings.Contains(out, "mdb=postgres://jarvis:"+pw+"@"+n+"-pg:5432/jarvis?sslmode=disable") {
+		!strings.Contains(out, "mdb=postgres://user:removed-password@"+n+"-pg:5432/jarvis?sslmode=disable") {
 		t.Fatalf("first run: %v\n%s", err, out)
 	}
 	for _, line := range strings.Split(out, "\n") {
 		if strings.HasPrefix(line, "ARGV") && hex48.MatchString(line) {
 			t.Fatalf("a password on docker's command line: %s", line)
 		}
+	}
+
+	// Run again before the manager joined, with the command of a new code (the hub refused the first: the container
+	// waits for a manager.json that won't come). Docker can't look into its volume: the container is kept.
+	fresh := "mi_" + strings.Repeat("f", 32)
+	f2 := filepath.Join(t.TempDir(), "docker.sh")
+	if err := os.WriteFile(f2, []byte(strings.Replace(script, "CODE="+code+"\n", "CODE="+fresh+"\n", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runScript(f2)
+	if err != nil || strings.Contains(out, "ARGV rm") || strings.Contains(out, "ARGV run -d") || !strings.Contains(out, "there already") {
+		t.Fatalf("run again, docker unsure: %v\n%s", err, out)
+	}
+	// Its volume there, no manager.json in it: made again with the new code, over the same database and password.
+	if err := os.MkdirAll(filepath.Join(state, "homevol"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runScript(f2)
+	if err != nil || !strings.Contains(out, "ARGV rm -f "+n+"\n") || !strings.Contains(out, "never joined") ||
+		!strings.Contains(out, "ARGV run -d --name "+n+" ") || !strings.Contains(out, "--join "+hub+" "+fresh) ||
+		strings.Contains(out, "ARGV run -d --name "+n+"-pg") || read("c-"+n+"-pg") != pw ||
+		!strings.Contains(out, "mdb=postgres://user:removed-password@"+n+"-pg:5432/jarvis?sslmode=disable") {
+		t.Fatalf("run again before it joined: %v\n%s", err, out)
 	}
 
 	// What the manager writes on its first start: manager.json with the URL it was given, in its home volume.
@@ -185,8 +212,9 @@ func runDockerScript(t *testing.T, n, id, hub, code, script string) {
 	}
 
 	out, err = run()
-	if err != nil || strings.Contains(out, "ARGV run") || strings.Contains(out, "ARGV network create") || !strings.Contains(out, "there already") {
-		t.Fatalf("second run: %v\n%s", err, out)
+	if err != nil || strings.Contains(out, "ARGV run -d") || strings.Contains(out, "ARGV rm") || strings.Contains(out, "ARGV network create") ||
+		!strings.Contains(out, "there already") {
+		t.Fatalf("run again once it joined: %v\n%s", err, out)
 	}
 
 	_ = os.Remove(filepath.Join(state, "c-"+n+"-pg"))

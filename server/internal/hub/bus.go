@@ -112,6 +112,9 @@ type busState struct {
 	// dials are answered 503 without a lookup after one failed.
 	storeErrLog everyMinute
 	storeDown   atomic.Int64
+	// voidErrLog throttles the line for an install code sent over public plaintext that the store could not void
+	// (managers.go, voidPlaintextCode).
+	voidErrLog everyMinute
 	// saidOld: the managers already said to be from before manager.json (no config.own), once each while the hub runs.
 	saidOld map[string]bool
 }
