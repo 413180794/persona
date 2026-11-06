@@ -84,12 +84,16 @@ struct Sparkline: View {
         Canvas { context, size in
             for line in lines {
                 let runs = SparklineGeometry.runs(line.values, domain: domain, top: top, size: size)
+                let stroke = StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
                 if wash {
-                    for run in runs { context.fill(SparklineGeometry.wash(run, bottom: size.height), with: .color(line.color.opacity(0.12))) }
-                }
-                for run in runs {
-                    context.stroke(SparklineGeometry.line(run), with: .color(line.color),
-                                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    let paths = runs.map { (points: $0, path: SparklineGeometry.line($0)) }
+                    for run in paths {
+                        context.fill(SparklineGeometry.wash(run.points, line: run.path, bottom: size.height),
+                                     with: .color(line.color.opacity(0.12)))
+                    }
+                    for run in paths { context.stroke(run.path, with: .color(line.color), style: stroke) }
+                } else {
+                    for run in runs { context.stroke(SparklineGeometry.line(run), with: .color(line.color), style: stroke) }
                 }
             }
         }
@@ -138,7 +142,12 @@ enum SparklineGeometry {
 
     /// The line closed down to `bottom` (the value 0): the wash under it.
     static func wash(_ p: [CGPoint], bottom: CGFloat) -> Path {
-        var path = line(p)
+        wash(p, line: line(p), bottom: bottom)
+    }
+
+    /// Close a copy of the already-built stroke; the Canvas can reuse its original monotone path.
+    static func wash(_ p: [CGPoint], line: Path, bottom: CGFloat) -> Path {
+        var path = line
         guard let first = p.first, let last = p.last else { return path }
         path.addLine(to: CGPoint(x: last.x, y: bottom))
         path.addLine(to: CGPoint(x: first.x, y: bottom))

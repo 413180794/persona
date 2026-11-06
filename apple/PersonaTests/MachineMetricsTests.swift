@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Jarvis
 
@@ -104,5 +105,83 @@ struct MachineMetricsTests {
             if case .curve(let to, let c1, let c2) = e { ys += [to.y, c1.y, c2.y] }
         }
         #expect(!ys.isEmpty && ys.allSatisfy { (0...10).contains($0) })
+    }
+
+    @Test @MainActor func reusingTheStrokePreservesWashAndOriginalPath() {
+        let cases: [[CGPoint]] = [
+            [], [CGPoint(x: 0, y: 7)],
+            [CGPoint(x: 0, y: 10), CGPoint(x: 10, y: 0)],
+            [CGPoint(x: 0, y: 10), CGPoint(x: 1, y: 10), CGPoint(x: 2, y: 0), CGPoint(x: 3, y: 0)],
+            [CGPoint(x: 0, y: 5), CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 10), CGPoint(x: 2, y: 5)],
+            [CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 10)],
+            [CGPoint(x: 1, y: 0), CGPoint(x: 1, y: 10), CGPoint(x: 1, y: 5)],
+        ]
+        for points in cases {
+            let stroke = SparklineGeometry.line(points)
+            let original = pathElements(stroke)
+            for bottom in [CGFloat(0), 20, 37.5] {
+                let reused = SparklineGeometry.wash(points, line: stroke, bottom: bottom)
+                let expected = pathElements(legacyWash(points, bottom: bottom))
+                #expect(pathElements(reused) == expected)
+                #expect(pathElements(SparklineGeometry.wash(points, bottom: bottom)) == expected)
+                #expect(pathElements(stroke) == original)
+            }
+        }
+    }
+
+    @Test @MainActor func washUsesTheSuppliedPathInsteadOfRebuildingIt() {
+        let points = [CGPoint(x: 0, y: 3), CGPoint(x: 10, y: 7)]
+        var supplied = Path()
+        supplied.move(to: points[0])
+        supplied.addLine(to: points[1])
+        let prefix = pathElements(supplied)
+        let wash = SparklineGeometry.wash(points, line: supplied, bottom: 17)
+        #expect(Array(pathElements(wash).prefix(prefix.count)) == prefix)
+        #expect(prefix != pathElements(SparklineGeometry.line(points)))
+        #expect(pathElements(supplied) == prefix)
+    }
+
+    @Test @MainActor func reusingPathsKeepsGapRunsSeparate() {
+        let start = Date(timeIntervalSince1970: 0)
+        let values = [ChartValue(series: "first", name: "CPU", date: start, value: 0),
+                      ChartValue(series: "first", name: "CPU", date: start.addingTimeInterval(10), value: 50),
+                      ChartValue(series: "singleton", name: "CPU", date: start.addingTimeInterval(20), value: 100),
+                      ChartValue(series: "last", name: "CPU", date: start.addingTimeInterval(50), value: 25),
+                      ChartValue(series: "last", name: "CPU", date: start.addingTimeInterval(60), value: 25)]
+        let runs = SparklineGeometry.runs(values, domain: start...start.addingTimeInterval(60),
+                                         top: 100, size: CGSize(width: 60, height: 20))
+        #expect(runs.count == 2)
+        for run in runs {
+            let stroke = SparklineGeometry.line(run)
+            let fill = SparklineGeometry.wash(run, line: stroke, bottom: 20)
+            #expect(pathElements(fill) == pathElements(legacyWash(run, bottom: 20)))
+            #expect(pathElements(stroke) == pathElements(SparklineGeometry.line(run)))
+        }
+    }
+
+    /// Independent reference for the old renderer's close-to-baseline sequence.
+    @MainActor private func legacyWash(_ points: [CGPoint], bottom: CGFloat) -> Path {
+        var path = SparklineGeometry.line(points)
+        if let first = points.first, let last = points.last {
+            path.addLine(to: CGPoint(x: last.x, y: bottom))
+            path.addLine(to: CGPoint(x: first.x, y: bottom))
+            path.closeSubpath()
+        }
+        return path
+    }
+
+    @MainActor private func pathElements(_ path: Path) -> [CGFloat] {
+        var values: [CGFloat] = []
+        path.forEach { element in
+            switch element {
+            case .move(let point): values += [0, point.x, point.y]
+            case .line(let point): values += [1, point.x, point.y]
+            case .quadCurve(let point, let control): values += [2, point.x, point.y, control.x, control.y]
+            case .curve(let point, let first, let second):
+                values += [3, point.x, point.y, first.x, first.y, second.x, second.y]
+            case .closeSubpath: values += [4]
+            }
+        }
+        return values
     }
 }

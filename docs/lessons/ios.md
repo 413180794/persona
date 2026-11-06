@@ -381,6 +381,8 @@ Use an invalidation revision as the task key and handle the flag after completio
   Points outside `chartXScale(domain:)` domain still draw past axes / cards; use `.chartPlotStyle { $0.clipped() }`.
 - Avoid Swift Charts for a dozen mini-charts (2026-11-04, #390): per-chart scale / plot layout is expensive, adding ~130 ms for 12 machine sparklines on Mac;
   vectorized `LinePlot` / `AreaPlot` save nothing (cost per chart, not per point). Draw axis-free, noninteractive mini-charts in `Canvas` (`Sparkline`).
+  - 2026-11-06，#5730：单系列的填充和描边不要各算一次单调插值路径；复用开放路径，关闭副本用于填充，仍保持所有填充先于所有描边。不同 gap 不合并，多系列没有填充时不建立额外缓存数组。
+  - 同一优化模拟器构建、28 台机器、5 轮正式 glide：路径复用前后 custom hitch 中位数 8.3 → 4.2 ms/s，cadence 59.5 → 59.7。它不是 GPU 呈现帧率或全页面 60 FPS 验收；主机负载和离群长帧仍须注明。
 - `Menu` label overlays / glass surfaces become part of the menu button: glass covers avatar + name, and overlay text is absent from XCUITest (button reports initial label only).
   Put temporary button hints in a sibling ZStack (`AssistantTopBar.face`).
 - Floating-header fog must cover status bar: use GeometryReader `safeAreaInsets.top` and shift background upward; direct `ignoresSafeArea` computes insufficient height.
