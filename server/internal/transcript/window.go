@@ -168,7 +168,7 @@ func (f *File) openWindow(fh *os.File, size int64) (fresh []proto.Item, ok bool,
 	}
 	var kept []proto.Item
 	f.cut = nil
-	f.tree = &branchTree{}
+	f.tree = f.freshTree()
 	f.parseLines(data, starts[b-1], b, &meta, f.tree, &kept, &fresh)
 	tail := make([]byte, size-lastNL)
 	if _, err := fh.ReadAt(tail, lastNL); err != nil && err != io.EOF {

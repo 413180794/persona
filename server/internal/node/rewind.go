@@ -9,6 +9,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // session.rewind drives Claude Code's own /rewind for an idle session (#2436). The pane is a TUI with no API, so the
@@ -351,18 +352,24 @@ func (n *Node) forgetRewound(id string, o rewindOpts) {
 	mu.Lock()
 	defer mu.Unlock()
 	if span, ok := f.Rewound(o.Prompt, o.Occurrence); ok {
-		n.mu.Lock()
-		_, watched := n.watches[id]
-		// The session list's quick read is told too, and reads the file again at once: its last words, and an API error
-		// in them, may be the rewound turn's.
-		path := f.Where()
-		m := n.metas[path]
-		m.rewound, m.mtime, m.readAt = f.RewoundLines(), time.Time{}, time.Time{}
-		n.metas[path] = m
-		n.mu.Unlock()
-		if watched {
-			n.pushItems(id, nil, span)
-		}
+		n.applyRewound(id, f, span)
+	}
+}
+
+// applyRewound passes on that the file left a rewound turn out (span: where it stands now, with its new token). The
+// caller holds the session's push lock.
+func (n *Node) applyRewound(id string, f *transcript.File, span transcript.Span) {
+	n.mu.Lock()
+	_, watched := n.watches[id]
+	// The session list's quick read is told too, and reads the file again at once: its last words, and an API error
+	// in them, may be the rewound turn's.
+	path := f.Where()
+	m := n.metas[path]
+	m.rewound, m.mtime, m.readAt = f.RewoundLines(), time.Time{}, time.Time{}
+	n.metas[path] = m
+	n.mu.Unlock()
+	if watched {
+		n.pushItems(id, nil, span)
 	}
 }
 

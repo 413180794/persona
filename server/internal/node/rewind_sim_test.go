@@ -38,6 +38,8 @@ type claudeSim struct {
 	quoteOther string
 	// boxAfter is what the box holds after a rewind instead of the prompt (something typed at the computer).
 	boxAfter string
+	// ansiReads counts the reads with colors.
+	ansiReads int
 }
 
 type simPrompt struct {
@@ -275,7 +277,12 @@ func (c *claudeSim) serve(t *testing.T) *herdr.Client {
 			var result any = map[string]any{}
 			switch req.Method {
 			case "pane.read":
-				result = map[string]any{"read": map[string]any{"text": c.screen()}}
+				text := c.screen()
+				if req.Params["format"] == "ansi" { // the rules grey, as Claude draws them: a read with colors
+					c.ansiReads++
+					text = strings.ReplaceAll(text, simLine, "\x1b[38;2;136;136;136m"+simLine+"\x1b[0m")
+				}
+				result = map[string]any{"read": map[string]any{"text": text}}
 			case "pane.send_keys":
 				for _, k := range req.Params["keys"].([]any) {
 					c.key(k.(string))

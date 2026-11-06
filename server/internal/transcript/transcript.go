@@ -1330,6 +1330,38 @@ func (f *File) Refresh() ([]proto.Item, error) {
 func (f *File) RefreshSpan() ([]proto.Item, Span, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	fresh, span, err := f.refresh()
+	if err != nil || f.tree == nil || len(f.tree.revoked) == 0 {
+		return fresh, span, err
+	}
+	// Claude went on from a turn the node took for rewound (RewoundAt): it was not. Its items are gone from those kept,
+	// so the file is read again from the start without it, under a new token (the clients start over, as for a file
+	// rewritten).
+	manual := map[string]bool{}
+	for u := range f.tree.manual {
+		manual[u] = true
+	}
+	for _, u := range f.tree.revoked {
+		delete(manual, u)
+	}
+	f.offset, f.lines, f.partial, f.items, f.cut, f.meta = 0, 0, nil, nil, nil, Meta{Sidechain: f.meta.Sidechain}
+	f.base, f.win, f.partialMeta, f.firstHash = 0, nil, false, 0
+	f.tree = &branchTree{manual: manual, marked: f.tree.marked}
+	f.gen++
+	return f.refresh()
+}
+
+// freshTree is a new tree for the file read again from somewhere: the roots the node set stay (none after a file
+// replaced, whose tree is nil), with the lines that were under them then (branchTree.marked).
+func (f *File) freshTree() *branchTree {
+	if f.tree == nil {
+		return &branchTree{}
+	}
+	t := f.tree.kept()
+	return &t
+}
+
+func (f *File) refresh() ([]proto.Item, Span, error) {
 	fh, err := os.Open(f.Path)
 	if err != nil {
 		return nil, Span{}, err

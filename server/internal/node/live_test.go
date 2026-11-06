@@ -12,7 +12,9 @@ import (
 
 	"github.com/nwverse/persona/server/internal/herdr"
 	"github.com/nwverse/persona/server/internal/host"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Against a real claude pane: JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_WANT=<code or ""> [JARVIS_LIVE_CLEAR=<draft>]
@@ -171,5 +173,156 @@ func TestLiveRewind(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// #5396 against a real Claude pane: the user's own /rewind ("Restore conversation" to before the last prompt), pressed
+// here as keys and not through session.rewind, is seen on the screen and the turn leaves the session list; then the
+// prompt left in the box is sent again (JARVIS_LIVE_RESEND=1) and the turn gone back over stays out.
+// With JARVIS_LIVE_RETYPE=1 the words are only typed into the box again, and must not be taken for a rewind.
+// JARVIS_LIVE_ESC=1 opens the panel with Esc Esc instead of /rewind.
+// JARVIS_LIVE_PANE=<pane> JARVIS_LIVE_SESSION=<id> JARVIS_LIVE_TRANSCRIPT=<path>
+// go test -tags herdrlive -run TestLiveTerminalRewind ./internal/node/
+func TestLiveTerminalRewind(t *testing.T) {
+	pane, id, path := os.Getenv("JARVIS_LIVE_PANE"), os.Getenv("JARVIS_LIVE_SESSION"), os.Getenv("JARVIS_LIVE_TRANSCRIPT")
+	if pane == "" || id == "" || path == "" {
+		t.Skip("JARVIS_LIVE_PANE / JARVIS_LIVE_SESSION / JARVIS_LIVE_TRANSCRIPT not set")
+	}
+	old := paneDialogEvery
+	paneDialogEvery = time.Second
+	t.Cleanup(func() { paneDialogEvery = old })
+	ctx := context.Background()
+	n := &Node{hosts: herdrHosts(herdr.New()), state: newState(),
+		agents: map[string]host.Agent{id: {PaneID: pane, Agent: "claude", AgentStatus: "done"}},
+		paths:  map[string]string{id: path}, metas: map[string]quickMeta{}, bgScans: map[string]*bgScan{},
+		files: map[string]*transcript.File{}, watches: map[string]*watch{}}
+	row := func() proto.Session {
+		for _, s := range n.sessionList(ctx, false) {
+			if s.SessionID == id {
+				return s
+			}
+		}
+		t.Fatal("no row")
+		return proto.Session{}
+	}
+	before := row()
+	f, err := n.file(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.refresh(id, f)
+	target, ok := f.LastPrompt()
+	if !ok {
+		t.Fatal("the last prompt is not one a rewind could go back over")
+	}
+	st0, _ := os.Stat(path)
+	t.Logf("before: last text %q, transcript %d bytes", before.LastText, st0.Size())
+
+	// The user's rewind: /rewind, Up to the last prompt, Enter, the cursor to "Restore conversation", Enter.
+	read := func() string { s, _ := n.readPane(ctx, pane, "visible", 60); return s }
+	wait := func(what string, ok func(string) bool) string {
+		for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(100 * time.Millisecond) {
+			if s := read(); ok(s) {
+				return s
+			}
+		}
+		t.Fatalf("no %s on screen:\n%s", what, read())
+		return ""
+	}
+	keys := func(k ...string) {
+		if err := n.sendKeys(ctx, pane, k...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if os.Getenv("JARVIS_LIVE_RETYPE") != "" {
+		// No rewind: the last prompt's words typed into the box again. Not taken for one.
+		_, _, was := f.Page(0, 1)
+		if err := n.sendText(ctx, pane, target.Text); err != nil {
+			t.Fatal(err)
+		}
+		for end := time.Now().Add(8 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+			row()
+		}
+		_, _, span := f.Page(0, 1)
+		keys(screen.ClearKeys...)
+		t.Logf("retyped: last text %q, history %q (was %q)", row().LastText, span.History, was.History)
+		if span.History != was.History {
+			t.Fatal("the words typed again were taken for a rewind")
+		}
+		return
+	}
+	_, _, was := f.Page(0, 1)
+	if os.Getenv("JARVIS_LIVE_ESC") != "" { // Esc Esc opens the same panel
+		keys("esc")
+		time.Sleep(150 * time.Millisecond)
+		keys("esc")
+	} else {
+		if err := n.sendText(ctx, pane, "/rewind"); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(300 * time.Millisecond)
+		keys("enter")
+	}
+	wait("list", func(s string) bool { return panel(s, screen.RewindList) != nil })
+	keys("up")
+	time.Sleep(300 * time.Millisecond)
+	keys("enter")
+	s := wait("options", func(s string) bool { return panel(s, screen.RewindOptions) != nil })
+	for i := 0; i < 6; i++ {
+		o := panel(s, screen.RewindOptions)
+		cur, want := o.SelectedChoice(), o.Choice(screen.RewindChoiceConversation)
+		if cur == nil || want == nil {
+			t.Fatalf("choices:\n%s", s)
+		}
+		if cur.Number == want.Number {
+			break
+		}
+		keys(map[bool]string{true: "down", false: "up"}[cur.Number < want.Number])
+		time.Sleep(300 * time.Millisecond)
+		s = read()
+	}
+	keys("enter")
+	rewoundAt := time.Now()
+	wait("the panel closed", func(s string) bool { return screen.ParseRewind(s) == nil })
+
+	var after proto.Session
+	for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(200 * time.Millisecond) {
+		if after = row(); after.LastText != before.LastText {
+			break
+		}
+	}
+	st1, _ := os.Stat(path)
+	_, _, span := f.Page(0, 1)
+	t.Logf("after %.1fs: last text %q, history %q, transcript %d bytes (was %d)", time.Since(rewoundAt).Seconds(),
+		after.LastText, span.History, st1.Size(), st0.Size())
+	if after.LastText == before.LastText || span.History == was.History {
+		t.Fatal("the rewind in the terminal was not seen")
+	}
+	if os.Getenv("JARVIS_LIVE_RESEND") == "" {
+		return
+	}
+	keys("enter") // the prompt left in the box, sent again
+	for end := time.Now().Add(90 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
+		n.refresh(id, f)
+		if lp, ok := f.LastPrompt(); ok && lp.UUID != target.UUID && lp.Text == target.Text {
+			break
+		}
+	}
+	n.mu.Lock()
+	m := n.metas[path]
+	m.readAt = time.Time{}
+	n.metas[path] = m
+	n.mu.Unlock()
+	again := row()
+	items, _, span2 := f.Page(0, 1000)
+	var texts []string
+	for _, it := range items {
+		if it.Kind == proto.KindText {
+			texts = append(texts, it.Role+": "+it.Text)
+		}
+	}
+	t.Logf("resent: last text %q, history %q, items %q", again.LastText, span2.History, texts)
+	if span2.History != span.History {
+		t.Fatalf("history %q after the resend", span2.History)
 	}
 }

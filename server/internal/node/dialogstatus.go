@@ -21,6 +21,10 @@ type paneDialog struct {
 	at      time.Time // when the last read was started
 	head    string    // the dialog's first line on the last read, "" when none
 	reading bool
+	session string // the session in the pane, for terminalrewind.go
+	// rewindLooked: what the last look for a rewind in the terminal was made on (terminalrewind.go): the same is not
+	// looked at again.
+	rewindLooked string
 }
 
 // paneDialogs remembers, per pane, the dialog its last screen read showed.
@@ -32,7 +36,7 @@ type paneDialogs struct {
 // dialogOn is the first line of the dialog the pane showed when last read, "" when none (or not read yet). The first
 // read comes once the pane has rested paneDialogEvery (a turn that just ended is not read at once), then each read
 // older than that starts a new one in the background; a change it finds pushes the list again.
-func (n *Node) dialogOn(pane string) string {
+func (n *Node) dialogOn(id, pane string) string {
 	d := &n.dialogs
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -44,6 +48,7 @@ func (n *Node) dialogOn(pane string) string {
 		p = &paneDialog{at: time.Now()}
 		d.m[pane] = p
 	}
+	p.session = id
 	if !p.reading && time.Since(p.at) >= paneDialogEvery {
 		p.reading, p.at = true, time.Now()
 		go n.readDialog(pane, p)
@@ -58,6 +63,12 @@ func (n *Node) readDialog(pane string, p *paneDialog) {
 	head := ""
 	if err == nil {
 		head = screen.DialogHead(text)
+	}
+	if err == nil && head == "" {
+		n.dialogs.mu.Lock()
+		id := p.session
+		n.dialogs.mu.Unlock()
+		n.seeTerminalRewind(id, pane, text, p) // a rewind done in the terminal leaves its prompt in the box
 	}
 	n.dialogs.mu.Lock()
 	changed := err == nil && head != p.head

@@ -1260,6 +1260,9 @@ Typing into someone else's terminal is the riskiest thing this App does. Before 
   When the node's own rewind succeeds, it marks the segment right away (`File.Rewound`) without waiting for the next message. How clients find out: `history` (see "Continuity of items") gains a trailing `.r<number of abandoned branches>`, and when it changes they drop local content and re-fetch,
   the same mechanism as a rewritten file, so the web, iOS and Android need no changes (iOS's `ChatStore.apply`, Android's `reducer.history` and the web's `useTranscript` already handle it this way),
   and the hub's assistant snapshots, notifications and knowledge-base archiving also read the node's items. The token is determined only by the file content and doesn't change across node restarts.
+  **A rewind done in the terminal** (`/rewind` or Esc Esc, then "Restore conversation") writes nothing either, and while the rewound prompt sits in the input box Claude writes no recap (#5396). The node sees it on the screen of a resting Claude
+  (the box holds the words of the transcript's last prompt, which was answered and whose turn ended, and the conversation above the box no longer shows that prompt) and marks the segment the same way (`File.RewoundAt`), so `history` changes within a few seconds.
+  If Claude then writes a message or a reply **under** the segment (the guess was wrong: the user had typed the same words again), the segment comes back: the node reads the file again and `history` changes once more (it then differs from what a freshly started node would compute, so clients re-fetch once more after a node restart).
 
 ### Matching pending messages
 

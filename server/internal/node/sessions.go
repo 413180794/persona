@@ -177,8 +177,8 @@ type quickMeta struct {
 	// turnError / turnErrorKind: the latest turn failed on the model service, as a Codex rollout records it
 	// (transcript.Meta.TurnError, #2185); Session.TurnError / TurnErrorKind.
 	turnError, turnErrorKind string
-	// rewound: the lines session.rewind went back over (File.RewoundLines), which Claude writes nothing for; kept from
-	// read to read, the tail leaves them out (forgetRewound).
+	// rewound: the lines session.rewind, or a rewind seen in the terminal, went back over (File.RewoundLines), which
+	// Claude writes nothing for; kept from read to read, the tail leaves them out (applyRewound).
 	rewound []string
 }
 
@@ -301,6 +301,9 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 			}
 			tail.Line(&tm, transcript.ParseLine(0, line, &tm))
 		}
+	}
+	if rest, ok := tail.Revoked(); ok { // Claude went on from a turn the node took for rewound (transcript.File.RewoundAt)
+		m.rewound = rest
 	}
 	rewound := tail.Settle(&tm)
 	m.title, m.cwd, m.model, m.lastText, m.first, m.activity, m.queue = tm.Title, tm.Cwd, tm.Model, tm.LastText, first, tm.LastActivity, tm.Queue
@@ -687,7 +690,7 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		}
 		if restingClaude(a, s.Status) && !onList[id] && !n.isDriving(id) {
 			livePanes[a.PaneID] = true
-			if head := n.dialogOn(a.PaneID); head != "" { // a dialog holds its terminal (dialogstatus.go)
+			if head := n.dialogOn(id, a.PaneID); head != "" { // a dialog holds its terminal (dialogstatus.go)
 				s.Status, s.AttentionReason = proto.StatusBlocked, head
 			}
 		}
