@@ -68,6 +68,13 @@ func (s *Service) ownSettings() []ownSetting {
 			Value: "a whole number of days, 1–365"},
 			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.recordingDays(ctx)), nil },
 			set: s.setRecordingDays},
+		{Setting: Setting{Key: "assistant.done_needs_delivery", Title: "上线并实测才算做完", Actions: getSet,
+			About: "off (the default): a task_plan task closes when its work is judged done; on: only once it is live and checked " +
+				"(or has nothing to ship): stopped at a PR, merged or off by default it stays open with where it is held, its agent is told " +
+				"so with its prompt, and the ones waiting for the user's nod are listed together in the snapshot. Applies from the next judgment / task",
+			Value: "true or false"},
+			get: func(ctx context.Context) (string, error) { return fmt.Sprint(s.doneNeedsDelivery(ctx)), nil },
+			set: s.setDoneNeedsDelivery},
 		{Setting: Setting{Key: "assistant.launcher", Title: "Persona 的启动器", Actions: getSet,
 			About: "which launcher (model) new Persona conversations start with by default",
 			Value: "a launcher name from this setting's get"},
@@ -178,7 +185,7 @@ func orNone(s string) string {
 // what the assistant reads).
 var settingTitles = map[string]string{"assistant.notes": "title_notes", "assistant.main_tasks_quiet": "title_main_tasks_quiet",
 	"assistant.start_requested_tasks": "title_start_requested_tasks", "assistant.launcher": "title_launcher",
-	"assistant.recording_days": "title_recording_days"}
+	"assistant.recording_days": "title_recording_days", "assistant.done_needs_delivery": "title_done_needs_delivery"}
 
 // clipped is a value as the card shows it, in l.
 func clipped(l i18n.Lang, s string) string {
@@ -285,6 +292,31 @@ func (s *Service) setRecordingDays(ctx context.Context, v json.RawMessage) (*own
 			s.settingsChanged(ctx)
 			s.kbWake() // a shorter retention prunes now
 			return fmt.Sprintf("assistant.recording_days is %d: recordings older than that leave the knowledge base.", days), nil
+		}}, nil
+}
+
+func (s *Service) setDoneNeedsDelivery(ctx context.Context, v json.RawMessage) (*ownChange, error) {
+	var on bool
+	if err := json.Unmarshal(v, &on); err != nil {
+		return nil, errors.New("value must be true or false")
+	}
+	before := s.doneNeedsDelivery(ctx)
+	if on == before {
+		return &ownChange{summary: "「上线并实测才算做完」没有变化"}, nil
+	}
+	if s.store() == nil {
+		return nil, errors.New("no database on this hub")
+	}
+	word := map[bool]string{true: "assistant-settings_tool.on", false: "assistant-settings_tool.off"}
+	return &ownChange{cardText: func(l i18n.Lang) string {
+		return i18n.T(l, "assistant-settings_tool.change_done_needs_delivery", i18n.Args{"before": i18n.T(l, word[before]), "after": i18n.T(l, word[on])})
+	},
+		apply: func(ctx context.Context) (string, error) {
+			if _, err := s.updateSettings(ctx, func(v *Settings) error { v.DoneNeedsDelivery = &on; return nil }); err != nil {
+				return "", err
+			}
+			s.settingsChanged(ctx)
+			return fmt.Sprintf("assistant.done_needs_delivery is %v from the next judgment and task on.", on), nil
 		}}, nil
 }
 

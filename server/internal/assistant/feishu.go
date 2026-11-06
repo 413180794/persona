@@ -359,6 +359,7 @@ func (s *Service) feishuReset() {
 	b.st = botState{Current: botTarget{Kind: targetMain}, Threads: map[string]*botThread{}, Seen: b.st.Seen, Pairing: pairing}
 	b.cards = nil
 	b.status = nil
+	b.cotOff = false // paired afresh (maybe another app): agent messages are tried again
 	s.saveBotStateLocked()
 	b.mu.Unlock()
 }

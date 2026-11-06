@@ -570,6 +570,9 @@ const (
 	CodeNodeClosed       = "node_closed"       // the link to the machine's node dropped during the call (rpc.ErrClosed)
 	CodeStaleSnapshot    = "stale_snapshot"    // ErrStaleSnapshot
 	CodeAssistantOffline = "assistant_offline" // the hub has no connection from the assistant
+	// CodeFeishuAPI: Feishu answered the bot's call with an error code (Data: {"code": n}): a refusal or a passing
+	// failure the assistant tells apart (the agent messages, feishu_cot.go).
+	CodeFeishuAPI = "feishu_api"
 )
 
 // HTTPRequest is http.request's params: an app's request on one of Routes, with an escaped URL path (header without

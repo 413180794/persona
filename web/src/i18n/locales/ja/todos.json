@@ -124,5 +124,12 @@
   "agent_unlinked": "関連付けを解除しました",
   "unlink_failed": "関連付けを解除できませんでした：{error}",
   "unlink_agent": "「{name}」の関連付けを解除",
-  "kicker_elicitation": "MCPリクエスト"
+  "kicker_elicitation": "MCPリクエスト",
+  "delivery_pr": "PR で止まっています",
+  "delivery_merged": "マージ済み・未リリース",
+  "delivery_off": "リリース済み・既定でオフ",
+  "delivery_gate": "「{gate}」で止まっています",
+  "unblock_user": "あなたの承認待ち",
+  "unblock_agent": "エージェントが続行できます",
+  "unblock_other": "他の人 / CI / 環境待ち"
 }

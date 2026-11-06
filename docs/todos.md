@@ -32,6 +32,7 @@
 - `done_by` (text, NOT NULL, DEFAULT '')：谁把它标成完成的：空 = 用户点的（或没开起来，见 `start_error`），`auto` = 助手判断任务做完后自动完成（见「自动完成」），`review` = 督办人验收后完成（#3124）。
 - `done_reason` (text, NOT NULL, DEFAULT '')：自动完成时判断模型给的理由（如「已合并 PR 并发了 TestFlight」），用户点完成或重新打开时清空。
 - `reopened_at` (timestamptz)：用户最近一次把已完成的待办重新打开的时间；在它之后有新的一轮工作，助手才会再判断要不要自动完成。
+- （不在表里）`stage`、`pr_url`、`delivery`：阶段条、PR 和交付卡在哪，存在 settings `assistant.todo_stages`，读待办时并进去（见「交付」）。
 
 ### 2. todo_spaces 表
 记录整组挂到待办的项目工作区（herdr workspace）：
@@ -257,6 +258,26 @@ curl -X POST '<hub 地址>/api/v1/todos/retitle' -H 'Authorization: Bearer <toke
 ```
 
 `skip` 不为空时表示这次自动流程不会判断它（`not_a_task` 手建的待办、`done` 已经完成、`reopened` 重新打开后还没有新一轮工作），但接口照样给出模型的结论，方便看。
+开着「交付」（下一节）时多一个 `delivery`，`verdict` 可能是 hub 自己给的 `undelivered`。
+
+## 交付
+
+（#3306，经验见 `docs/lessons/delivery.md`）改代码的任务「做完」= 改动上线并实测过，不是开了 PR 或合了。只看 Agent 说没说做完，大量任务会停在「开了 PR」「合了但默认关」「没部署」却显示「已完成」。
+助手设置 `done_needs_delivery`，**默认关**（关着就是只看 `verdict` 的老行为）。打开的办法任选一个：
+对助手说「打开『上线并实测才算做完』」（`jarvis_settings` 的 `assistant.done_needs_delivery`，手机上弹确认卡片），或 `PUT /api/v1/assistant` 带 `{"done_needs_delivery": true}`；
+从下一次判断、下一个派出去的任务起生效。打开以后：
+
+- **派活时说清标准**：`task_plan` 开的非只读任务，hub 在 Agent 的第一条消息（派活 prompt）后面接上交付标准（`prompts/assistant/task_delivery.md`）：做完 = 上线并实测、附读数；
+  规矩允许自己合并 / 部署 / 启用的就做到底；要用户当次点头的（合并不归用户的仓库、部署到线上、打开默认关的功能、对外发消息）做到点头前一步，写清要批什么；
+  卡在 CI、别人、环境上先自己解，解不了写清卡在哪、谁能解。最后一行固定写 `交付：<已上线并实测 | 停在 PR | 已合未上线 | 默认关待启用 | 不涉及上线>；卡点：…；谁来解：…`。只读任务不带。
+- **判断时多判一样**：「自动完成」的判断模型同时回 `delivery`（`live` / `pr` / `merged` / `off` / `none`）、`gate`（卡在哪道闸）、`unblock`（`user` / `agent` / `other`），以 Agent 的那一行为准，除非正文和它矛盾。
+  模型没给就用 Agent 的那一行；都没有算 `none`。说 `live`（或没判）而回复里点了 PR、却没有部署或 TestFlight 构建号的字样，按 `pr` / `merged` 算，除非 Agent 那一行写着已上线。
+- **只有 `live` 和 `none` 才自动完成**：`verdict` 是 `done` 而交付没到位的，结论改成 `undelivered`，待办留着。
+  主对话督办的任务（#3124，本来就不由 hub 关）这时不进「等验收」，督办消息写「做完了但还没上线：…（停在 PR，卡在「…」）」，交给主对话去追或拿给用户批。
+- **待办上写着卡在哪**：判断结果（除了 `not_done`）记在待办的 `delivery`（`{"state", "gate", "unblock", "at"}`，和阶段条一起存在 settings `assistant.todo_stages`，没有新表），阶段条至少走到对应的一步（PR → 审查、合入 → 合入、默认关 / 上线 → 部署）。
+  网页的待办行在开着、`state` 是 `pr` / `merged` / `off` 时多一行「停在 PR · 卡在「…」· 要你点头」；iOS / Android 还没画（字段可选，老客户端不受影响）。
+- **等用户点头的一次批**：助手的实时快照里，每个任务后面写着交付卡在哪；`unblock = user` 的开着的任务另列一组「等用户点头才能上线的」（最早的十件）。
+  助手的 CLAUDE.md 让它把这些合成一条一次列给用户，用户一句话批完后用 `agent_send` 分头告诉对应的 Agent，不再每冒出一件就单独问一次。
 
 ## 做完的任务关掉 Agent
 

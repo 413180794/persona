@@ -58,6 +58,22 @@ export interface Todo {
   stage?: string;
   /** The pull request the work is in, when the hub knows one (#2776). */
   pr_url?: string;
+  /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/todos.md「交付」). */
+  delivery?: TodoDelivery;
+}
+
+export interface TodoDelivery {
+  state: "live" | "pr" | "merged" | "off" | "none" | string;
+  gate?: string;
+  unblock?: "user" | "agent" | "other" | string;
+  at?: string;
+}
+
+/** An open task whose work is finished but held short of live (stopped at a PR, merged, off by default); else null. */
+export function heldDelivery(todo: Todo): TodoDelivery | null {
+  const d = todo.delivery;
+  if (todo.done_at || !d) return null;
+  return d.state === "pr" || d.state === "merged" || d.state === "off" ? d : null;
 }
 
 export type TodoStatus = "done" | "needs_you" | "interrupted" | "unread" | "working" | "follow_up" | "not_started" | "failed";

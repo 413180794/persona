@@ -251,6 +251,8 @@ func TestGoldenChannelMessage(t *testing.T) {
 // Closing a finished task (docs/todos.md「自动完成」): the judge's system prompt and its input, with and without hints.
 func TestGoldenTaskDone(t *testing.T) {
 	golden(t, "task_done", prompts.RenderTaskDone(prompts.TaskDone{Owner: "示例用户"}))
+	golden(t, "task_done.delivery", prompts.RenderTaskDone(prompts.TaskDone{Owner: "示例用户", Delivery: true}))
+	golden(t, "task_delivery", prompts.RenderTaskDelivery()) // handed to a task's agent after its prompt (#3306)
 	golden(t, "task_done_input.hints", prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: "修登录崩溃",
 		Prompt:   "iPad 横屏时登录页崩溃，修好并补测试，走 PR 合并后发 TestFlight",
 		Replies:  []prompts.TaskDoneReply{{Machine: "box", Text: "修好了，PR https://github.com/o/r/pull/901 已合并，TestFlight 构建号 202611041200"}},

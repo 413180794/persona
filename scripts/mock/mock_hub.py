@@ -1467,6 +1467,21 @@ TODOS_INIT = [
         "agents": [],
     },
     {
+        # A task done as asked but held short of live (docs/todos.md「交付」, #3306): stays open, says where it is held.
+        "id": "todo_held_pr",
+        "title": "登录页加验证码",
+        "notes": "登录页加图形验证码，走 PR 合并后部署。",
+        "done_at": None,
+        "created_at": ago(hours=6),
+        "updated_at": ago(minutes=30),
+        "origin": "conv_demo",
+        "stage": "review",
+        "pr_url": "https://github.com/example/app/pull/7",
+        "delivery": {"state": "pr", "gate": "等你批准合并", "unblock": "user", "at": ago(minutes=30)},
+        "spaces": [],
+        "agents": [],
+    },
+    {
         # A task the hub closed itself (docs/todos.md「自动完成」).
         "id": "todo_done_auto",
         "title": "统一连接器 logo 尺寸",

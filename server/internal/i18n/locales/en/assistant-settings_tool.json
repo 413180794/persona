@@ -11,5 +11,7 @@
   "change_start_requested_tasks": "“Start what I asked for in the chat right away”: {before} → {after}",
   "change_launcher": "Persona’s default launcher: {before} → {after}",
   "title_recording_days": "Keep recordings in the knowledge base",
-  "change_recording_days": "Keep recordings in the knowledge base: {before} → {after} days"
+  "change_recording_days": "Keep recordings in the knowledge base: {before} → {after} days",
+  "title_done_needs_delivery": "Done means live and checked",
+  "change_done_needs_delivery": "“Done means live and checked”: {before} → {after}"
 }

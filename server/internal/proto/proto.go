@@ -321,6 +321,9 @@ const (
 	// smaller: what an agent reads by path is a screenshot or a document, not a video.
 	UploadDestTerminal     = "terminal"
 	MaxTerminalUploadBytes = 50 << 20
+	// A checkup report or lab result for the health space (dest=health, docs/health.md「体检报告」): it lands in the
+	// health directory's reports/ and stays, where the health conversations read it and the others are denied.
+	UploadDestHealth = "health"
 	// CodeTooLarge: over MaxUploadBytes (413); CodeNodeOutdated: the machine's node predates the feature (409).
 	CodeTooLarge     = "too_large"
 	CodeNodeOutdated = "node_outdated"

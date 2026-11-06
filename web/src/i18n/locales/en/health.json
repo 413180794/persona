@@ -20,7 +20,7 @@
   "source_write": "Log a sample",
   "source_write_body": "Say “log my weight” or “I drank 300 ml of water”; it's saved to Health after you confirm on the phone.",
   "source_upload": "Lab results and reports",
-  "source_upload_body": "Send a photo; each item is read out and the ones outside the reference range are marked.",
+  "source_upload_body": "Send a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared.",
   "memory": "Health memory",
   "memory_count": "{count}",
   "memory_empty": "Nothing yet. Goals, allergies, medication and the like remembered in health chats show up here.",

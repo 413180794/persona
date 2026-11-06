@@ -21,12 +21,13 @@ import (
 // The app cancelling the request (or going away) aborts the upload and the node removes what it wrote.
 // dest=terminal (the web terminal's paste and drop, docs/terminal.md): the node keeps the file under its Persona
 // directory for a week instead of the temp directory, and the limit is proto.MaxTerminalUploadBytes.
+// dest=health (a report for the health space): the node keeps it in the health directory's reports/.
 func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	name := strings.TrimSpace(r.URL.Query().Get("name"))
 	size := r.ContentLength
 	dest, limit := r.URL.Query().Get("dest"), int64(proto.MaxUploadBytes)
 	switch dest {
-	case "":
+	case "", proto.UploadDestHealth:
 	case proto.UploadDestTerminal:
 		limit = proto.MaxTerminalUploadBytes
 	default:

@@ -123,6 +123,9 @@ type SnapshotTask struct {
 	// 已验收; #3124), "" for any other; DoneWhen how many criteria it has.
 	Health   string
 	DoneWhen int
+	// Delivery: how far its finished work was delivered when that is short of live ("停在 PR，卡在「CI 排队」"), ""
+	// otherwise (docs/todos.md「交付」).
+	Delivery string
 }
 
 // SnapshotWorkflow is a Claude Code workflow run still running in an agent's background (#2935): the agent's turn
@@ -160,6 +163,14 @@ type Snapshot struct {
 	// briefing brings them up again.
 	Unaccepted      []SnapshotAccept
 	UnacceptedTotal int // all of them (Unaccepted is the oldest eight)
+	// Approvals: open tasks whose finished work waits for the user's nod to go live (merge, deploy, turn on, send),
+	// oldest first: told to the user as one list to approve at once (docs/todos.md「交付」).
+	Approvals []SnapshotApproval
+}
+
+// SnapshotApproval is a task held short of live until the user approves: what it is, how far it got, where it is held.
+type SnapshotApproval struct {
+	ID, Title, Stage, Gate, Link string
 }
 
 // SnapshotAccept is a deployed task waiting for the user to check it: what changed, where to look, since when.
@@ -364,9 +375,16 @@ func RenderTurnContext(c TurnContext) string { return render("assistant/turn_con
 // hub can mark its todo done (assistant/task_done, docs/todos.md「自动完成」).
 type TaskDone struct {
 	Owner string
+	// Delivery: also say how far the work was delivered (assistant.done_needs_delivery, docs/todos.md「交付」): only
+	// live or nothing to ship closes the task.
+	Delivery bool
 }
 
 func RenderTaskDone(d TaskDone) string { return render("assistant/task_done", d) }
+
+// RenderTaskDelivery is the delivery standard a task's agent is handed after its prompt (assistant/task_delivery,
+// docs/todos.md「交付」): done is live and checked, and its last line says how far it got.
+func RenderTaskDelivery() string { return render("assistant/task_delivery", nil) }
 
 // TaskDoneInput is the task as it was handed out and what its agents said when they stopped (assistant/task_done_input).
 type TaskDoneInput struct {

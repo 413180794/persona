@@ -137,10 +137,10 @@ func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	n.mu.Lock()
 	n.procs[assistant] = &assistantProc{id: assistant, agent: "claude", exited: make(chan struct{})}
 	n.mu.Unlock()
-	read := func(session string) string {
+	call := func(session, tool string) string {
 		t.Helper()
-		raw, _ := json.Marshal(hookInput{HookEventName: "PermissionRequest", SessionID: session, ToolName: "Read",
-			ToolUseID: "toolu_" + session[:4], ToolInput: json.RawMessage(`{"file_path":"/home/me/work/report.md"}`)})
+		raw, _ := json.Marshal(hookInput{HookEventName: "PermissionRequest", SessionID: session, ToolName: tool,
+			ToolUseID: "toolu_" + session[:4] + tool, ToolInput: json.RawMessage(`{"file_path":"/home/me/work/report.md"}`)})
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		out, err := n.handleHook(ctx, sockRequest{Input: raw, Attempt: "a1"})
@@ -150,6 +150,7 @@ func TestPermissionHookAlwaysFileScope(t *testing.T) {
 		b, _ := json.Marshal(out)
 		return string(b)
 	}
+	read := func(session string) string { return call(session, "Read") }
 	out := read(assistant)
 	ix := fh.interactions()
 	if got := ix[len(ix)-1].AlwaysKeys; !slices.Equal(got, []string{"tool:Read(//home/me/work/**)"}) {
@@ -160,5 +161,14 @@ func TestPermissionHookAlwaysFileScope(t *testing.T) {
 	}
 	if out := read(agent); strings.Contains(out, "ruleContent") || !strings.Contains(out, `"toolName":"Read"`) {
 		t.Fatalf("an Agents session's rule changed: %s", out)
+	}
+	// A write's rule is an Edit rule: Claude Code never matches Write(path).
+	out = call(assistant, "Write")
+	ix = fh.interactions()
+	if got := ix[len(ix)-1].AlwaysKeys; !slices.Equal(got, []string{"tool:Edit(//home/me/work/**)"}) {
+		t.Fatalf("a write's always keys %q", got)
+	}
+	if !strings.Contains(out, `"toolName":"Edit"`) || !strings.Contains(out, `"ruleContent":"//home/me/work/**"`) {
+		t.Fatalf("a write's session rule: %s", out)
 	}
 }

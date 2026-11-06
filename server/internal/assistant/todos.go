@@ -74,6 +74,9 @@ type Todo struct {
 	// named, read off its agents' replies (reports.go, #2768); the apps draw the stage bar from them.
 	Stage string `json:"stage,omitempty"`
 	PRURL string `json:"pr_url,omitempty"`
+	// Delivery: how far its finished work went out, and while short of live where it is held and who can unhold it
+	// (delivery.go, #3306); nil until judged.
+	Delivery *TodoDelivery `json:"delivery,omitempty"`
 }
 
 // todoStore is what the todos keep in the database (internal/db). A Store without it (the unit tests' memStore) keeps
@@ -271,7 +274,7 @@ func (s *Service) loadTodosLocked(ctx context.Context) error {
 	}
 	for id, st := range s.todoStages(ctx) {
 		if t, ok := tmap[id]; ok {
-			t.Stage, t.PRURL = st.Stage, st.PR
+			t.Stage, t.PRURL, t.Delivery = st.Stage, st.PR, st.Delivery
 		}
 	}
 

@@ -150,8 +150,9 @@ type reportBook struct {
 }
 
 type todoStage struct {
-	Stage string `json:"stage"`
-	PR    string `json:"pr,omitempty"`
+	Stage    string        `json:"stage"`
+	PR       string        `json:"pr,omitempty"`
+	Delivery *TodoDelivery `json:"delivery,omitempty"` // delivery.go
 }
 
 const reportStagesKey = "assistant.todo_stages"

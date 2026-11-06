@@ -24,6 +24,7 @@ import {
   mostUrgentAgent,
   sortTodos,
   TODO_STATUS_INFO,
+  heldDelivery,
   isAutoDone,
   todoStatusLabel,
   todoStatus,
@@ -391,6 +392,7 @@ function TodoListItem({
   const status = todoStatus(todo, lookup);
   const statusInfo = TODO_STATUS_INFO[status];
   const urgent = mostUrgentAgent(todo, lookup);
+  const held = heldDelivery(todo);
   const urgentNow = urgent?.session && taskNow(urgent.session, stateOf(urgent.session) === "working");
   const activeCount = (todo.agents ?? []).filter((a) => !a.released_at).length;
 
@@ -483,6 +485,15 @@ function TodoListItem({
         {/* Why the hub closed it */}
         {isAutoDone(todo) && todo.done_reason && (
           <div className="mt-1 truncate text-[11.5px] text-ink-3">{todo.done_reason}</div>
+        )}
+
+        {/* Where its finished work is held short of live */}
+        {held && (
+          <div className="mt-1 truncate text-[11.5px] text-ink-3">
+            <span className="font-medium text-orange">{t(`todos.delivery_${held.state}`)}</span>
+            {held.gate && <> · {t("todos.delivery_gate", { gate: held.gate })}</>}
+            {held.unblock && ["user", "agent", "other"].includes(held.unblock) && <> · {t(`todos.unblock_${held.unblock}`)}</>}
+          </div>
         )}
 
         {/* Most Urgent Agent Line */}

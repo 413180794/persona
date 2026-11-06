@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Machine, Session } from "./types";
 import {
+  heldDelivery,
   isAutoDone,
   isRemovable,
   TODO_STATUS_INFO,
@@ -589,6 +590,21 @@ describe("自动完成 (docs/todos.md「自动完成」)", () => {
     const reopened = { ...base, done_at: null, done_by: "auto", reopened_at: "2026-11-04T09:00:00Z" };
     expect(isAutoDone(reopened)).toBe(false);
     expect(todoStatusLabel(reopened, todoStatus(reopened))).toBe("未开始");
+  });
+});
+
+describe("交付 (docs/todos.md「交付」)", () => {
+  const base = { id: "t", title: "修登录", created_at: "2026-11-06T06:00:00Z", updated_at: "2026-11-06T08:00:00Z" };
+  it("没做到上线的开着的任务显示卡在哪", () => {
+    const todo = { ...base, delivery: { state: "pr", gate: "等用户批准合并", unblock: "user" } };
+    expect(heldDelivery(todo)?.gate).toBe("等用户批准合并");
+    expect(heldDelivery({ ...base, delivery: { state: "merged" } })?.state).toBe("merged");
+  });
+  it("上线了、不涉及上线、已经关掉的都不显示", () => {
+    expect(heldDelivery({ ...base, delivery: { state: "live" } })).toBeNull();
+    expect(heldDelivery({ ...base, delivery: { state: "none" } })).toBeNull();
+    expect(heldDelivery({ ...base, done_at: "2026-11-06T09:00:00Z", delivery: { state: "pr" } })).toBeNull();
+    expect(heldDelivery(base)).toBeNull();
   });
 });
 

@@ -167,6 +167,13 @@ func TestUploadForTerminal(t *testing.T) {
 	if rec.Code != 200 || len(f.dests) != 1 || f.dests[0] != proto.UploadDestTerminal {
 		t.Fatalf("%d %s %v", rec.Code, rec.Body, f.dests)
 	}
+	// dest=health (a report for the health space) reaches the node too.
+	hf := &uploadNode{}
+	rec = httptest.NewRecorder()
+	uploadHub(t, hf).ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=report.pdf&dest=health", strings.NewReader("pdf")))
+	if rec.Code != 200 || len(hf.dests) != 1 || hf.dests[0] != proto.UploadDestHealth {
+		t.Fatalf("health: %d %s %v", rec.Code, rec.Body, hf.dests)
+	}
 	// Without dest the node hears none (an old node never has to understand it).
 	plain := &uploadNode{}
 	rec = httptest.NewRecorder()

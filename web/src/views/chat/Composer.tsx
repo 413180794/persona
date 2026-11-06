@@ -71,6 +71,7 @@ export function Composer({
   draftKey,
   placeholder,
   machineId,
+  uploadDest,
   working,
   needsYou,
   disabled,
@@ -89,6 +90,8 @@ export function Composer({
   draftKey: string;
   placeholder: string;
   machineId?: string;
+  /** Where a file sent to machineId lands: "health" keeps it in the health space's reports/ (docs/health.md「体检报告」). */
+  uploadDest?: "health";
   working?: boolean;
   /** Waits on a question, plan or approval card: no suggestion pill then (iOS status.isActive). */
   needsYou?: boolean;
@@ -367,7 +370,7 @@ export function Composer({
   const upload = async (f: File) => {
     setUploading((n) => n + 1);
     try {
-      const path = await sendFile(machineId!, f);
+      const path = await sendFile(machineId!, f, { dest: uploadDest });
       const el = input.current;
       const p = quotePath(path);
       setDraft((d) => {

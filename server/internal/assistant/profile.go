@@ -57,6 +57,10 @@ type Settings struct {
 	StartRequestedTasks *bool `json:"start_requested_tasks,omitempty"`
 	// RecordingDays: how many days the phone's recordings stay in the knowledge base (#3235); nil is 14.
 	RecordingDays *int `json:"recording_days,omitempty"`
+	// DoneNeedsDelivery: a finished task closes only once its work is live and checked; stopped at a PR, merged or
+	// off by default it stays open with where it is held, and its agent is told so with its prompt (#3306,
+	// delivery.go). nil is off (the default).
+	DoneNeedsDelivery *bool `json:"done_needs_delivery,omitempty"`
 }
 
 // FormerMain is a main conversation that was replaced, and until when it was the main one.
@@ -296,8 +300,9 @@ type assistantView struct {
 	MainTasksQuiet bool            `json:"main_tasks_quiet"` // in effect (the setting's own is left out while unset)
 	// StartRequestedTasks is in effect, like MainTasksQuiet.
 	StartRequestedTasks bool `json:"start_requested_tasks"`
-	// RecordingDays is in effect, like MainTasksQuiet.
-	RecordingDays int `json:"recording_days"`
+	// RecordingDays and DoneNeedsDelivery are in effect, like MainTasksQuiet.
+	RecordingDays     int  `json:"recording_days"`
+	DoneNeedsDelivery bool `json:"done_needs_delivery"`
 }
 
 // view is GET /api/v1/assistant; withArchived lists archived conversations too (flagged `archived`). It lists the
@@ -311,7 +316,8 @@ func (s *Service) view(ctx context.Context, withArchived bool, space ...string) 
 	v := s.settings(ctx)
 	v.Launcher = s.launcherNow(ctx)
 	out := assistantView{Settings: v, Conversations: []proto.Session{}, NotesEffective: s.notes(ctx), MainTasksQuiet: quietOn(v.MainTasksQuiet),
-		StartRequestedTasks: quietOn(v.StartRequestedTasks), RecordingDays: s.recordingDays(ctx)}
+		StartRequestedTasks: quietOn(v.StartRequestedTasks), RecordingDays: s.recordingDays(ctx),
+		DoneNeedsDelivery: v.DoneNeedsDelivery != nil && *v.DoneNeedsDelivery}
 	if d, ok := s.device(ctx, v.MachineID); ok {
 		out.Cwd = spaceCwd(d, sp)
 		list, _ := s.sessions(ctx, d.ID)
@@ -456,6 +462,9 @@ func (s *Service) putSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.RecordingDays != nil {
 			v.RecordingDays = in.RecordingDays
+		}
+		if in.DoneNeedsDelivery != nil {
+			v.DoneNeedsDelivery = in.DoneNeedsDelivery
 		}
 		return nil
 	}); err != nil {

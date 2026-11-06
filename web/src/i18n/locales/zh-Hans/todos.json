@@ -124,5 +124,12 @@
   "agent_unlinked": "已解除关联",
   "unlink_failed": "解除关联失败：{error}",
   "unlink_agent": "解除「{name}」的关联",
-  "kicker_elicitation": "MCP 请求"
+  "kicker_elicitation": "MCP 请求",
+  "delivery_pr": "停在 PR",
+  "delivery_merged": "已合未上线",
+  "delivery_off": "默认关待启用",
+  "delivery_gate": "卡在「{gate}」",
+  "unblock_user": "要你点头",
+  "unblock_agent": "Agent 能接着做",
+  "unblock_other": "等别人 / CI / 环境"
 }

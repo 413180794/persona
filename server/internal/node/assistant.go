@@ -625,6 +625,7 @@ func (n *Node) claudeAssistantMCPAndTools(id, cwd string) (mcpJSON string, toolF
 		servers[name] = s
 	}
 	mcp, _ := json.Marshal(map[string]any{"mcpServers": servers})
+	allow = append(allow, healthReportRules(cwd)...) // healthdeny.go
 	toolFlags = []string{"--mcp-config", string(mcp), "--allowedTools", strings.Join(append([]string{n.assistantTools()}, allow...), ",")}
 	// One --disallowedTools with a word per rule (it takes several, up to the next flag): a path may hold a comma.
 	if len(deny) > 0 {
@@ -699,7 +700,7 @@ func (n *Node) spawnClaude(id, cwd, launcher string, resume, spare bool, options
 			"command": n.bin, "args": []string{"mcp"}, "env": map[string]string{"PERSONA_ASSISTANT": "1", "JARVIS_ASSISTANT": "1", "PERSONA_SESSION_ID": id, "JARVIS_SESSION_ID": id},
 		}}}
 		start := sdkStart{id: id, cwd: cwd, model: execution.Model, permissionMode: startMode, resume: resume, mcp: mcpConfig,
-			allowedTools: n.assistantTools(), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}
+			allowedTools: strings.Join(append([]string{n.assistantTools()}, healthReportRules(cwd)...), ","), deny: n.healthDenyRules(cwd), settings: settings, plugin: hooks}
 		var err error
 		if cmd, first, err = n.sdkCommand(bridge, launcher, start, env); err != nil {
 			return nil, err

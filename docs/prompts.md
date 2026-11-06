@@ -19,7 +19,8 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `assistant/view_errors.md` | 接在 `<persona-context>` 后的 `<persona-view-errors>`：前几条回复没通过校验的卡片和原因（已限长、去掉卡片原文），说明不是用户的要求 | `assistant/context_view_errors.go` |
 | `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
 | `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `assistant/schedule.go` `taskPrompt` |
-| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；用判断模型 `inbox.judge` | `assistant/done.go` |
+| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；开着「交付」时同时判断交付到了哪一步、卡在哪、谁来解（`docs/todos.md`「交付」）；用判断模型 `inbox.judge` | `assistant/done.go`、`assistant/delivery.go` |
+| `assistant/task_delivery.md` | 接在非只读任务的派活 prompt 后面的交付标准：做完 = 上线并实测，最后一行写交付状态（`docs/todos.md`「交付」） | `assistant/tasks.go` |
 | `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
 | `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
 | `assistant/usage_retry.md` | 网关报了不可能的用量、Claude Code 回「Prompt is too long」，修好 transcript 后续上这一轮（只有 `<persona-context>`，App 不显示，`docs/assistant.md`「网关报的不可能的用量」） | `node/assistant_usage.go` |

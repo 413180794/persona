@@ -22,4 +22,16 @@ verdict 五选一：
 
 reason：不超过 20 个字，说结果或卡在哪（如「已合并 PR 并发了 TestFlight」「还差两处没改」「等 App 审核」）。
 
-回复 JSON：{"verdict":"done","reason":"…"}
+{{if .Delivery}}再判断交付到了哪一步（delivery 五选一）：
+- live：已经上线（部署、发布，或合入后自动上线），并且回复里有在真实环境实测的读数。
+- pr：停在 PR（开了、Draft、等 review、等 CI）。
+- merged：合入了，但没部署 / 发布，或部署了没有实测的读数。
+- off：上线了，但功能默认关，还没启用。
+- none：要求的事不涉及上线（调研、给结论、只改本地文件、回答问题）。
+回复最后一行写着「交付：…；卡点：…；谁来解：…」时以它为准，除非回复正文和它矛盾（比如写着已上线，正文却说还没部署）。
+delivery 是 pr / merged / off 时：
+- gate：卡在哪道闸，不超过 20 个字（如「等用户批准合并」「CI 排队」「等对方 review」「缺测试环境」「默认关待启用」）。
+- unblock：谁来解。user：要用户点头或动手（合并、部署、启用、对外发消息）；agent：Agent 自己能接着做（重跑 CI、自己有权限却没部署）；other：CI、别人或外部环境。
+delivery 是 live / none 时 gate、unblock 留空。delivery 不影响 verdict：verdict 照上面判，交付没到位的 hub 自己会留着这件事。
+
+回复 JSON：{"verdict":"done","reason":"…","delivery":"pr","gate":"…","unblock":"user"}{{else}}回复 JSON：{"verdict":"done","reason":"…"}{{end}}

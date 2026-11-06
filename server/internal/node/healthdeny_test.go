@@ -60,3 +60,25 @@ func TestSDKOptionsCarryTheDenyRules(t *testing.T) {
 		t.Fatalf("deny %v", deny)
 	}
 }
+
+// A health conversation may write its reports' records without asking; nothing else gets that rule.
+func TestHealthReportRules(t *testing.T) {
+	n, home := testNode(t)
+	t.Setenv("HOME", home)
+	health := filepath.Join(home, ".persona", "health")
+	reports := "/" + filepath.Join(health, "reports") + "/**"
+	if got := healthReportRules(health); !slices.Equal(got, []string{"Edit(" + reports + ")"}) {
+		t.Fatalf("rules %q", got)
+	}
+	if got := healthReportRules(filepath.Join(home, ".persona", "assistant")); got != nil {
+		t.Fatalf("the assistant's own conversations got %q", got)
+	}
+	if got := healthReportRules("/home/a,b/.persona/health"); got != nil {
+		t.Fatalf("a path with a comma got %q", got)
+	}
+	_, flags := n.claudeAssistantMCPAndTools("sess-123", health)
+	i := slices.Index(flags, "--allowedTools")
+	if i < 0 || !slices.Contains(strings.Split(flags[i+1], ","), "Edit("+reports+")") {
+		t.Fatalf("flags %q", flags)
+	}
+}

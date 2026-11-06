@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/nwverse/persona/server/internal/identity"
 )
@@ -50,4 +51,15 @@ func (n *Node) healthDenyRules(cwd string) []string {
 		}
 	}
 	return rules
+}
+
+// healthReportRules let a health conversation write the records of the reports uploaded to it (reports/, docs/health.md
+// 「体检报告」) without the phone asking each time; nil outside the health space, and for a path the comma-joined
+// --allowedTools could not carry.
+func healthReportRules(cwd string) []string {
+	if cwd == "" || identity.SpaceOf(cwd) != identity.SpaceHealth || strings.Contains(cwd, ",") {
+		return nil
+	}
+	// Edit(path) covers Write too: Claude Code matches path rules on Read and Edit only.
+	return []string{"Edit(/" + filepath.Join(cwd, "reports") + "/**)"}
 }

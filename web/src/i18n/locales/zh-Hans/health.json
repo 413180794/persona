@@ -20,7 +20,7 @@
   "source_write": "记一条数据",
   "source_write_body": "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。",
   "source_upload": "化验单和报告",
-  "source_upload_body": "发图片，逐项读出来并标出超出参考范围的。",
+  "source_upload_body": "发 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。",
   "memory": "健康记忆",
   "memory_count": "{count} 条",
   "memory_empty": "还没有。健康对话里记下的目标、过敏、用药等会出现在这里。",

@@ -3,7 +3,6 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,7 +25,7 @@ func TestCotEventsHoldTheAnswerBack(t *testing.T) {
 		{ID: "c", Role: "user", Kind: proto.KindToolResult, ToolUseID: "tu1", Text: "a.txt"},
 		{ID: "d", Role: "assistant", Kind: proto.KindText, Text: "最终结论"},
 	}
-	ev, para := cotEvents("", &p, items, "", start)
+	ev, para := cotEvents("", &p, items, "", start, false)
 	types := []string{}
 	all := ""
 	for _, e := range ev {
@@ -42,14 +41,20 @@ func TestCotEventsHoldTheAnswerBack(t *testing.T) {
 	}
 	// More comes: the held words go in once a call follows them, and the run is not started again.
 	more := []proto.Item{{ID: "e", Role: "assistant", Kind: proto.KindToolUse, ToolUseID: "tu2", ToolName: "Read", ToolInput: json.RawMessage(`{"file_path":"/x/y.go"}`)}}
-	ev, para = cotEvents("", &p, more, para, start)
+	ev, para = cotEvents("", &p, more, para, start, false)
 	if para != "p-d" || ev[0].Type != "REASONING_MESSAGE_START" || !strings.Contains(ev[1].Content, "最终结论") {
 		t.Fatalf("second batch %v (para %q)", ev, para)
 	}
 	// A result whose call it did not see is left out.
-	if ev, _ := cotEvents("", &p, []proto.Item{{Kind: proto.KindToolResult, ToolUseID: "other"}}, para, start); len(ev) != 0 {
+	if ev, _ := cotEvents("", &p, []proto.Item{{Kind: proto.KindToolResult, ToolUseID: "other"}}, para, start, false); len(ev) != 0 {
 		t.Fatalf("stray result %v", ev)
 	}
+}
+
+// feishuAPIError is Feishu's error code as the hub puts it on the bus.
+func feishuAPIError(code int) error {
+	data, _ := json.Marshal(map[string]int{"code": code})
+	return &rpc.Error{Code: CodeFeishuAPI, Message: fmt.Sprintf("feishu: code %d", code), Data: data}
 }
 
 // cotHub is the Feishu fake with agent messages: refused when refuse is set.
@@ -59,7 +64,7 @@ func cotHub(t *testing.T, refuse bool) (*Service, *[]map[string]any, *[]string) 
 	f.answerApp(AppFeishu, FeishuCotCreate, func(json.RawMessage) (any, error) {
 		calls = append(calls, "create")
 		if refuse {
-			return nil, errors.New("feishu cot create: code 99991672: no permission")
+			return nil, feishuAPIError(99991672)
 		}
 		return map[string]any{"cot_id": "cot1", "message_id": "om_cot"}, nil
 	})
@@ -413,5 +418,214 @@ func TestProcessPanelPathologicalBounded(t *testing.T) {
 	}
 	if strings.Contains(js, "运行19") {
 		t.Fatalf("an oldest step was kept: %s", js)
+	}
+}
+
+// Another conversation's refusal does not touch an agent message already open: it is finished, not left spinning.
+func TestCotRefusalLeavesOpenAgentMessagesAlone(t *testing.T) {
+	s, posts, calls := cotHub(t, false)
+	r, _ := cotRun(s)
+	withCot(s, r)
+	sink := feishuSink{s}
+	sink.progress(context.Background(), r, time.Second, nil, "")
+	s.fbot.mu.Lock()
+	s.fbot.cotOff = true // another conversation was refused meanwhile
+	s.fbot.mu.Unlock()
+	sink.progress(context.Background(), r, 6*time.Second, nil, "")
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	if got := strings.Join(*calls, " "); !strings.HasSuffix(got, "RUN_FINISHED") || len(*posts) != 1 {
+		t.Fatalf("calls %s, posts %v", got, *posts)
+	}
+}
+
+// An append of more than 50 events that fails part way goes on from the chunk that failed; nothing is sent twice.
+func TestCotAppendGoesOnFromTheFailedChunk(t *testing.T) {
+	s, _, _ := cotHub(t, false)
+	r, prog := cotRun(s)
+	withCot(s, r)
+	var items []proto.Item
+	for i := 0; i < 30; i++ {
+		id := fmt.Sprint("tu", i)
+		items = append(items, proto.Item{ID: "u" + id, Role: "assistant", Kind: proto.KindToolUse, ToolUseID: id, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"ls"}`)},
+			proto.Item{ID: "r" + id, Role: "user", Kind: proto.KindToolResult, ToolUseID: id, Text: "ok"})
+	}
+	prog.items = items
+	var got []feishubot.CotEvent
+	n := 0
+	s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(p json.RawMessage) (any, error) {
+		n++
+		if n == 2 {
+			return nil, feishuAPIError(99991400)
+		}
+		var m struct {
+			Events []feishubot.CotEvent `json:"events"`
+		}
+		_ = json.Unmarshal(p, &m)
+		got = append(got, m.Events...)
+		return map[string]any{}, nil
+	})
+	sink := feishuSink{s}
+	sink.progress(context.Background(), r, time.Second, nil, "")
+	sink.progress(context.Background(), r, 4*time.Second, nil, "")
+	seen := map[string]int{}
+	for _, e := range got {
+		seen[e.Type+e.Content]++
+	}
+	for k, c := range seen {
+		if c > 1 && !strings.HasPrefix(k, "TOOL_CALL_END") {
+			t.Fatalf("sent %d times: %s", c, k)
+		}
+	}
+	if len(got) != 2+3+30*3 { // run + section, the placeholder paragraph, start/end/result of each call
+		t.Fatalf("%d events", len(got))
+	}
+}
+
+// After a restart mid-turn the calls already shown get their output; one whose output never came is settled at the end.
+func TestCotCallsShownBeforeARestartAreSettled(t *testing.T) {
+	s, _, _ := cotHub(t, false)
+	r, prog := cotRun(s)
+	withCot(s, r)
+	prog.items = prog.items[:2] // thinking, a call without its output yet
+	var events []string
+	s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(p json.RawMessage) (any, error) {
+		var m struct {
+			Events []feishubot.CotEvent `json:"events"`
+		}
+		_ = json.Unmarshal(p, &m)
+		for _, e := range m.Events {
+			events = append(events, e.Type)
+		}
+		return map[string]any{}, nil
+	})
+	feishuSink{s}.progress(context.Background(), r, time.Second, nil, "")
+	if r.Ext["cot_calls"] != "tu1" {
+		t.Fatalf("open calls %q", r.Ext["cot_calls"])
+	}
+	prog.cot = cotProgress{} // the assistant restarted: only Ext is left
+	prog.items = []proto.Item{{ID: "c", Role: "user", Kind: proto.KindToolResult, ToolUseID: "tu1", Text: "a.txt"},
+		{ID: "d", Role: "assistant", Kind: proto.KindToolUse, ToolUseID: "tu2", ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"pwd"}`)}}
+	events = nil
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	if got := strings.Join(events, " "); got != "TOOL_CALL_RESULT TOOL_CALL_START TOOL_CALL_END TOOL_CALL_RESULT REASONING_END RUN_FINISHED" {
+		t.Fatalf("after the restart: %s", got)
+	}
+}
+
+// Words, then thinking, then a tool call: the process shows them in the conversation's order (the words are not
+// held back behind the thinking that came after them); thinking after the turn's last words goes in as it ends.
+func TestCotThinkingWaitsForTheWordsBeforeIt(t *testing.T) {
+	var p cotProgress
+	start := func(first string) []feishubot.CotEvent { return feishubot.CotStart("c1", "cot1", first) }
+	paras := func(ev []feishubot.CotEvent) string {
+		var out []string
+		for _, e := range ev {
+			if e.Type == "REASONING_MESSAGE_CONTENT" {
+				var m struct {
+					Delta string `json:"delta"`
+				}
+				_ = json.Unmarshal([]byte(e.Content), &m)
+				out = append(out, m.Delta)
+			}
+		}
+		return strings.Join(out, "|")
+	}
+	ev, para := cotEvents("", &p, []proto.Item{
+		{ID: "a", Role: "assistant", Kind: proto.KindText, Text: "我先查一下"},
+		{ID: "b", Role: "assistant", Kind: proto.KindThinking, Text: "想一想"},
+	}, "", start, false)
+	if len(ev) != 0 {
+		t.Fatalf("shown before a call follows: %s", paras(ev))
+	}
+	ev, para = cotEvents("", &p, []proto.Item{
+		{ID: "c", Role: "assistant", Kind: proto.KindToolUse, ToolUseID: "tu1", ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"ls"}`)},
+		{ID: "d", Role: "assistant", Kind: proto.KindText, Text: "结论"},
+		{ID: "e", Role: "assistant", Kind: proto.KindThinking, Text: "再核对"},
+	}, para, start, false)
+	if got := paras(ev); got != "我先查一下|想一想" || para != "p-b" {
+		t.Fatalf("order %q (para %q)", got, para)
+	}
+	ev, _ = cotEvents("", &p, nil, para, start, true)
+	if got := paras(ev); got != "再核对" {
+		t.Fatalf("at the end %q", got)
+	}
+}
+
+// The end of the turn failing for now (a rate limit, no answer from Feishu): the answer still goes out and the agent
+// message is ended, not left spinning.
+func TestCotEndFailingForNowStillEndsIt(t *testing.T) {
+	for _, code := range []int{99991400, feishuTransport} {
+		s, posts, calls := cotHub(t, false)
+		r, _ := cotRun(s)
+		withCot(s, r)
+		feishuSink{s}.progress(context.Background(), r, time.Second, nil, "")
+		s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(json.RawMessage) (any, error) { return nil, feishuAPIError(code) })
+		s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+		if got := strings.Join(*calls, " "); !strings.HasSuffix(got, "complete") {
+			t.Fatalf("code %d: not ended: %s", code, got)
+		}
+		if len(*posts) != 1 || r.Ext["cot_off"] != "" {
+			t.Fatalf("code %d: answer %v, ext %v", code, *posts, r.Ext)
+		}
+	}
+}
+
+// An append that went out and got no reply (it may have been applied) is not sent again: the rest goes on after it,
+// and the end is made sure of with cot_complete.
+func TestCotAppendWithoutReplyIsNotSentAgain(t *testing.T) {
+	for _, fail := range []error{rpc.ErrDropped, feishuAPIError(feishuTransport)} {
+		s, posts, calls := cotHub(t, false)
+		r, _ := cotRun(s)
+		withCot(s, r)
+		n := 0
+		s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(p json.RawMessage) (any, error) {
+			n++
+			var m struct {
+				Events []feishubot.CotEvent `json:"events"`
+			}
+			_ = json.Unmarshal(p, &m)
+			for _, e := range m.Events {
+				*calls = append(*calls, e.Type)
+			}
+			if n == 1 {
+				return nil, fail
+			}
+			return map[string]any{}, nil
+		})
+		feishuSink{s}.progress(context.Background(), r, time.Second, nil, "")
+		s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+		got := strings.Join(*calls, " ")
+		if strings.Count(got, "RUN_STARTED") != 1 || strings.Count(got, "TOOL_CALL_START") != 1 {
+			t.Fatalf("%v: sent again: %s", fail, got)
+		}
+		if !strings.HasSuffix(got, "REASONING_END RUN_FINISHED") || len(*posts) != 1 || r.Ext["cot_off"] != "" {
+			t.Fatalf("%v: end %s, posts %v, ext %v", fail, got, *posts, r.Ext)
+		}
+	}
+}
+
+// The end of the turn failing, then cot_complete failing for a moment too: it is tried again, and only counts as ended
+// once it went through.
+func TestCotEndIsTriedAgain(t *testing.T) {
+	saved := cotEndTries
+	cotEndTries = []time.Duration{0, 0, 0}
+	defer func() { cotEndTries = saved }()
+	s, posts, calls := cotHub(t, false)
+	r, _ := cotRun(s)
+	withCot(s, r)
+	feishuSink{s}.progress(context.Background(), r, time.Second, nil, "")
+	s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotAppend, func(json.RawMessage) (any, error) { return nil, feishuAPIError(99991400) })
+	n := 0
+	s.hub.(*fakeHub).answerApp(AppFeishu, FeishuCotComplete, func(json.RawMessage) (any, error) {
+		n++
+		if n < 3 {
+			return nil, feishuAPIError(99991400)
+		}
+		*calls = append(*calls, "complete")
+		return map[string]any{}, nil
+	})
+	s.finishChannelRun(r, &channel.Result{Answer: "结论"})
+	if n != 3 || !strings.HasSuffix(strings.Join(*calls, " "), "complete") || len(*posts) != 1 {
+		t.Fatalf("tries %d, calls %v, posts %v", n, *calls, *posts)
 	}
 }

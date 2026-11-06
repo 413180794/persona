@@ -22,7 +22,9 @@ import (
 // and only "done" closes the todo (done_by auto, with why). Anything else — not finished, waiting on someone,
 // needing the user, unsure, no model, a model error, an agent whose turn the model service cut off (#1516) — leaves
 // it open. A todo the user reopened is not closed again by the same stretch of work. A supervised task (supervise.go)
-// is not closed at all: finished, it waits for its supervisor's review.
+// is not closed at all: finished, it waits for its supervisor's review. While assistant.done_needs_delivery is on (off
+// by default), done also needs the work live and checked (or nothing to ship): one done but held at a PR, merged or off
+// by default stays open as undelivered, with where it is held (delivery.go).
 
 const (
 	verdictDone      = "done"
@@ -30,6 +32,8 @@ const (
 	verdictWaiting   = "waiting"
 	verdictNeedsUser = "needs_user"
 	verdictUnsure    = "unsure"
+	// verdictUndelivered: done as asked, but its work is not live yet (delivery.go); the hub's own, not the model's.
+	verdictUndelivered = "undelivered"
 )
 
 // taskDoneTimeout bounds one judgment (reading the replies and the model).
@@ -67,6 +71,8 @@ type taskDoneCheck struct {
 	Skip       string          `json:"skip"` // why the automatic pass would not judge it now; "" when it would
 	Replies    int             `json:"replies"`
 	Signals    taskDoneSignals `json:"signals"`
+	// Delivery: how far the work went out, when the delivery is judged (done_needs_delivery).
+	Delivery *TodoDelivery `json:"delivery,omitempty"`
 }
 
 // autoDoneSkip says why the hub would not judge t now: "" when it would. work is when one of its agents last started
@@ -217,12 +223,16 @@ func (s *Service) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, err
 			return c, nil
 		}
 	}
-	system := prompts.RenderTaskDone(prompts.TaskDone{Owner: s.owner(ctx)})
+	delivery := s.doneNeedsDelivery(ctx)
+	system := prompts.RenderTaskDone(prompts.TaskDone{Owner: s.owner(ctx), Delivery: delivery})
 	input := prompts.RenderTaskDoneInput(prompts.TaskDoneInput{Title: t.Title, Prompt: clipMiddle(strings.TrimSpace(t.Notes), 1500),
 		Replies: replies, MergedPR: c.Signals.MergedPR, Build: c.Signals.Build})
 	var out struct {
-		Verdict string `json:"verdict"`
-		Reason  string `json:"reason"`
+		Verdict  string `json:"verdict"`
+		Reason   string `json:"reason"`
+		Delivery string `json:"delivery"`
+		Gate     string `json:"gate"`
+		Unblock  string `json:"unblock"`
 	}
 	if err := s.purposeModel("inbox.judge").JSON(ctx, system, input, &out); err != nil {
 		return c, err
@@ -235,6 +245,14 @@ func (s *Service) judgeTaskDone(ctx context.Context, t Todo) (taskDoneCheck, err
 	}
 	c.Reason = clip(oneLine(out.Reason), 40)
 	c.WouldClose = c.Verdict == verdictDone
+	if delivery {
+		d := judgedDelivery(out.Delivery, out.Gate, out.Unblock, replies)
+		d.At = time.Now()
+		c.Delivery = &d
+		if c.Verdict == verdictDone && !deliveryClosable(d.State) {
+			c.Verdict, c.WouldClose = verdictUndelivered, false
+		}
+	}
 	return c, nil
 }
 
@@ -250,6 +268,9 @@ func (s *Service) autoFinishTask(t Todo, work time.Time, worked bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), taskDoneTimeout)
 	defer cancel()
 	c, err := s.judgeTaskDone(ctx, t)
+	if err == nil && c.Delivery != nil && c.Verdict != verdictNotDone {
+		s.setTaskDelivery(ctx, t.ID, *c.Delivery) // where it is held, on its card (delivery.go)
+	}
 	if t.Supervision != nil {
 		if !worked {
 			work = t.CreatedAt

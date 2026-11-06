@@ -1243,6 +1243,7 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
 - `?dest=terminal`（网页终端的粘贴 / 拖放，`docs/terminal.md` 第十八节）：node 不放系统临时目录，存到自己的 `uploads/terminal/<日期>/<随机>-<文件名>`
   （0700 / 0600，7 天后在 node 启动时清掉），上限 50 MB（`proto.MaxTerminalUploadBytes`，超过同样回 413 `too_large`，带 `limit`）。别的 `dest` 回 400；
   旧 hub / 旧 node 忽略这个参数，照旧放临时目录。
+- `?dest=health`（健康空间的体检报告，`docs/health.md`「体检报告」）：node 存到健康目录的 `reports/`（`原名-YYYYMMDD-HHMMSS.扩展名`，0700 / 0600，不过期），上限同 `MaxUploadBytes`。
 
 ### 发送视频
 

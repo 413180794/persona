@@ -109,6 +109,7 @@ const (
 	FeishuCotCreate       = assistantwire.FeishuCotCreate
 	FeishuCotAppend       = assistantwire.FeishuCotAppend
 	FeishuCotComplete     = assistantwire.FeishuCotComplete
+	CodeFeishuAPI         = assistantwire.CodeFeishuAPI
 	FeishuReact           = assistantwire.FeishuReact
 	FeishuUnreact         = assistantwire.FeishuUnreact
 	FeishuMessages        = assistantwire.FeishuMessages

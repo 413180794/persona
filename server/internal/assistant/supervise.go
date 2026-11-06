@@ -472,12 +472,19 @@ func (s *Service) superviseJudged(ctx context.Context, t Todo, work time.Time, c
 		if c.Reason != "" {
 			detail += "：" + c.Reason
 		}
+		if d := c.Delivery; c.Verdict == verdictUndelivered && d.held() { // where it is held, to chase (delivery.go)
+			detail += "（" + deliveryLabels[d.State]
+			if d.Gate != "" {
+				detail += "，卡在「" + d.Gate + "」"
+			}
+			detail += "）"
+		}
 	}
 	s.signal(superviseSignal{Todo: t.ID, Kind: sigIdle, Key: key, Detail: detail})
 }
 
 var verdictWords = map[string]string{verdictNotDone: "没做完", verdictWaiting: "在等别人或别的事", verdictNeedsUser: "要用户决定",
-	verdictUnsure: "看不出做没做完"}
+	verdictUnsure: "看不出做没做完", verdictUndelivered: "做完了但还没上线"}
 
 // supervisedWorking: one of supervised task t's agents started a turn: a review waiting is moot (the work goes on).
 func (s *Service) supervisedWorking(ctx context.Context, t Todo) {

@@ -11,5 +11,7 @@
   "change_start_requested_tasks": "「会話で頼んだタスクはすぐ開始」：{before} → {after}",
   "change_launcher": "Personaのデフォルトランチャー：{before} → {after}",
   "title_recording_days": "録音をナレッジベースに保存する日数",
-  "change_recording_days": "録音をナレッジベースに保存：{before} → {after} 日"
+  "change_recording_days": "録音をナレッジベースに保存：{before} → {after} 日",
+  "title_done_needs_delivery": "リリースして確認できたら完了",
+  "change_done_needs_delivery": "「リリースして確認できたら完了」：{before} → {after}"
 }

@@ -402,8 +402,14 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 		if n.isAssistantSession(in.SessionID) {
 			alwaysKey := "tool:" + in.ToolName
 			if scope := fileRuleScope(in.ToolName, in.ToolInput); scope != "" {
-				rule["ruleContent"] = scope
-				alwaysKey += "(" + scope + ")"
+				// Claude Code matches path rules on Read and Edit only; Edit(path) covers every file-editing tool,
+				// a Write(path) rule is never matched.
+				tool := "Edit"
+				if in.ToolName == "Read" {
+					tool = "Read"
+				}
+				rule["toolName"], rule["ruleContent"] = tool, scope
+				alwaysKey = "tool:" + tool + "(" + scope + ")"
 			}
 			// What the session rule below allows, kept by the hub past this process (a resumed one has no rules).
 			ix.AlwaysKeys = []string{alwaysKey}

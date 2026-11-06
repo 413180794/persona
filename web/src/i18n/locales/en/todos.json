@@ -124,5 +124,12 @@
   "agent_unlinked": "Unlinked",
   "unlink_failed": "Couldn't unlink: {error}",
   "unlink_agent": "Unlink “{name}”",
-  "kicker_elicitation": "MCP request"
+  "kicker_elicitation": "MCP request",
+  "delivery_pr": "Stopped at a PR",
+  "delivery_merged": "Merged, not live",
+  "delivery_off": "Live, off by default",
+  "delivery_gate": "held at “{gate}”",
+  "unblock_user": "needs your OK",
+  "unblock_agent": "the agent can go on",
+  "unblock_other": "waiting on others / CI / an environment"
 }

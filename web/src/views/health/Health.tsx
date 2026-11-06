@@ -68,6 +68,8 @@ export function Health({ sid, onToggleSidebar }: { sid?: string; onToggleSidebar
 
 function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { list, error, reload } = useHealthConversations();
+  // a report picked in the box goes to the assistant's machine, into the health space's reports/
+  const assistant = useStore((s) => s.assistant);
   const [seed, setSeed] = useState(0);
 
   const start = async (out: Outgoing): Promise<boolean> => {
@@ -106,7 +108,7 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             <p className="mt-1.5 max-w-[520px] text-[13px] leading-relaxed text-ink-2">{t("health.hero_body")}</p>
           </div>
 
-          <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} onSend={start} autoFocus commands={[]} />
+          <Composer key={seed} draftKey="health-new" placeholder={t("health.ask_placeholder")} machineId={assistant?.machine_id} uploadDest={HEALTH_SPACE} onSend={start} autoFocus commands={[]} />
           <div className="mt-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {SUGGESTIONS.map((s) => (
               <button key={s} type="button" onClick={() => fill(s)} className="flex items-center gap-2 rounded-control px-3 py-2 text-left text-[12.5px] text-ink-2 shadow-hairline transition-colors hover:bg-hover hover:text-ink">

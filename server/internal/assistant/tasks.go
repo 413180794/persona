@@ -779,6 +779,9 @@ func (s *Service) startTaskAgent(ctx context.Context, t *PlanTask) (mid, sid str
 	if len(t.DoneWhen) > 0 { // what the supervisor will check (supervise.go)
 		prompt += "\n\n" + prompts.RenderTaskDoneWhen(t.DoneWhen)
 	}
+	if !t.Readonly && s.doneNeedsDelivery(ctx) { // what done means: live and checked (delivery.go)
+		prompt += "\n\n" + prompts.RenderTaskDelivery()
+	}
 	// The project background, and the todo's decisions (a task started again may have some), go before the prompt
 	// (#2820, #1618); the tab is named from the title.
 	prompt = s.withProjectContext(ctx, m.ID, t.Cwd, s.withTodoDecisions(ctx, t.TodoID, prompt))
@@ -1214,6 +1217,7 @@ func (s *Service) snapshotTasks(ctx context.Context, web string) []prompts.Snaps
 			task.Last = clip(oneLine(t.StartError), 80) // why it did not start, for the 早报 (#4124)
 		}
 		task.Link = todoLink(web, t.ID)
+		task.Delivery = deliverySummary(t)
 		var rank int
 		task.Health, rank = taskHealth(t, agents, now) // supervised tasks: what needs the assistant first (supervise.go)
 		if t.Supervision != nil {

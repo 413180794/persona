@@ -131,11 +131,11 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
 	case assistantwire.FeishuCotCreate:
 		cot, id, err := api.CotCreate(ctx, set.Owner.ChatID, a.ReplyTo)
-		return map[string]any{"cot_id": cot, "message_id": id}, err
+		return map[string]any{"cot_id": cot, "message_id": id}, feishuCoded(err)
 	case assistantwire.FeishuCotAppend:
-		return map[string]any{}, api.CotAppend(ctx, a.CotID, a.MessageID, a.Events)
+		return map[string]any{}, feishuCoded(api.CotAppend(ctx, a.CotID, a.MessageID, a.Events))
 	case assistantwire.FeishuCotComplete:
-		return map[string]any{}, api.CotComplete(ctx, a.CotID, a.MessageID, a.Reason)
+		return map[string]any{}, feishuCoded(api.CotComplete(ctx, a.CotID, a.MessageID, a.Reason))
 	case assistantwire.FeishuReact:
 		id, err := api.React(ctx, a.MessageID, a.Emoji)
 		return map[string]any{"reaction_id": id}, err
@@ -200,4 +200,20 @@ func (h *Manager) channelsCall(ctx context.Context, method string, params json.R
 		return map[string]any{}, h.unbindChannel(ctx, a.Channel)
 	}
 	return nil, fmt.Errorf("app %s has no method %s", assistantwire.AppChannels, method)
+}
+
+// feishuCoded gives a Feishu API error its code on the bus: the assistant tells Feishu refusing agent messages from a
+// call that failed for now (a rate limit, a busy server). A call that got no answer from Feishu (a timeout, a dropped
+// connection, a gateway's page) has code -1: it failed for now too.
+func feishuCoded(err error) error {
+	if err == nil {
+		return nil
+	}
+	code := -1
+	var ae *feishubot.APIError
+	if errors.As(err, &ae) {
+		code = ae.Code
+	}
+	data, _ := json.Marshal(map[string]int{"code": code})
+	return &rpc.Error{Code: assistantwire.CodeFeishuAPI, Message: err.Error(), Data: data}
 }

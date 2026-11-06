@@ -11,5 +11,7 @@
   "change_start_requested_tasks": "「我在对话里说过的，直接开始」：{before} → {after}",
   "change_launcher": "Persona 的默认启动器：{before} → {after}",
   "title_recording_days": "录音在知识库里保留",
-  "change_recording_days": "录音在知识库里保留：{before} → {after} 天"
+  "change_recording_days": "录音在知识库里保留：{before} → {after} 天",
+  "title_done_needs_delivery": "上线并实测才算做完",
+  "change_done_needs_delivery": "「上线并实测才算做完」：{before} → {after}"
 }

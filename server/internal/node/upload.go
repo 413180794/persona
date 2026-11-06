@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -244,12 +245,18 @@ func randHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
+// healthReportsDir is where the health space's reports go (dest=health): reports/ in the health directory, kept for
+// good. The health conversations run there; the others are denied the directory (healthdeny.go).
+func healthReportsDir(home string) string {
+	return filepath.Join(identity.HealthDir(home), "reports")
+}
+
 // uploadCall serves the file.upload.* methods.
 func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 	var p struct {
 		UploadID string `json:"upload_id"`
 		Name     string `json:"name"`
-		Dest     string `json:"dest"` // "terminal": a paste into a terminal (uploadDir); "" the temp directory
+		Dest     string `json:"dest"` // "terminal": a paste into a terminal (uploadDir); "health": a report (healthReportsDir); "" the temp directory
 		Size     int64  `json:"size"`
 		Offset   int64  `json:"offset"`
 		Data     []byte `json:"data"` // base64 in JSON
@@ -268,6 +275,11 @@ func (n *Node) uploadCall(method string, params json.RawMessage) (any, error) {
 			dir := terminalUploadDir(n.dir, time.Now())
 			if err = os.MkdirAll(dir, 0o700); err == nil {
 				id, err = n.ups.beginIn(dir, p.Name, p.Size, proto.MaxTerminalUploadBytes, true)
+			}
+		case proto.UploadDestHealth:
+			dir := healthReportsDir(n.home)
+			if err = os.MkdirAll(dir, 0o700); err == nil {
+				id, err = n.ups.beginIn(dir, p.Name, p.Size, proto.MaxUploadBytes, false)
 			}
 		default:
 			err = fmt.Errorf("unknown upload destination %q", p.Dest)
