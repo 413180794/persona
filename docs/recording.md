@@ -1,75 +1,75 @@
-# 录音进知识库
+# Recordings in the knowledge base
 
-录音用于把口述、会议和现场信息交给 Persona，不做第二套录音产品。手机和 Apple Watch 都分段录音；手表经 WatchConnectivity 回传手机，手机本机转写。
-转写出来的文字（带时间戳的分段）自动同步进知识库的 `recordings`，助手和 Agent 用 `kb_search` / `kb_list` / `kb_get` 查到；知识库只留最近 N 天（默认 14 天）。
+Recordings feed spoken notes, meetings, and information captured on site to Persona; this is not a second recording product. Both iPhone and Apple Watch record in segments; the watch sends them to the phone via WatchConnectivity, and the phone transcribes locally.
+The resulting text (timestamped segments) automatically syncs into `recordings` in the knowledge base, where the assistant and Agents can find it with `kb_search` / `kb_list` / `kb_get`. The knowledge base retains only the most recent N days (14 by default).
 
-2026-11-05 起（#3235）不再有「输入框 + › 录音上下文」：用户反馈这个入口不对，录音应该沉淀进知识库、靠搜索和查询拿到，而不是每次手动塞进输入框。
+Since 2026-11-05 (#3235), there is no longer a "Composer + › Recording context" entry: user feedback was that this entry was wrong. Recordings should be stored in the knowledge base and retrieved by search and queries, not manually inserted into the composer each time.
 
-## 为什么只传文字
+## Why send only text
 
-- 音频约 14 MB / 小时，知识库是文本检索，文字足够；助手要的是「那天会上谁说了什么」，不是音频本身。
-- 隐私：原始音频只留在手机本机（手表的回传到手机后照旧清理），不离开设备；hub 上只有转写文字。
-- 录音条目和会议（`meetings`）分开：会议是飞书日历里的外部条目、一个 JSON、由模型批量打标；录音有全文转写、自己的保留期、由手机按 UUID 写入和删除，生命周期不同，混在一起清理和展示都别扭。
+- Audio is roughly 14 MB / hour; the knowledge base searches text, so text is enough. The assistant needs "who said what at that day's meeting," not the audio itself.
+- Privacy: original audio stays on the phone (watch audio is still cleaned up after transfer to the phone) and never leaves the device; the hub holds only transcripts.
+- Recording entries are separate from meetings (`meetings`): a meeting is an external item from the Lark calendar, stored as one JSON document and batch-tagged by a model; a recording has a full transcript, its own retention period, and UUID-based writes and deletes from the phone. Their lifecycles differ, and combining them complicates cleanup and display.
 
-## 同步
+## Synchronization
 
-接口见 [protocol.md](protocol.md)「录音同步」，知识库里怎么存见 [knowledge.md](knowledge.md)「录音」。
+See [protocol.md](protocol.md) ("Recording synchronization") for the API and [knowledge.md](knowledge.md) ("Recordings") for storage in the knowledge base.
 
-- 手机每条录音以 UUID 为键 `PUT /api/v1/recordings/{id}`，每次带到目前为止的完整状态（整份覆盖），`revision` 单调递增：重放、乱序都只留最新的一份。
-- 转写没完成就先传已有的分段（`complete: false`），转写推进、录音结束、换语言重新转写都再传一次；`complete: true` 后 hub 生成摘要和打标。
-- 手机上删除录音 → `DELETE /api/v1/recordings/{id}`，知识库同步删；hub 留墓碑，迟到的上传回 410，手机丢掉这条待传。
-- 离线、hub 重启、管理者没连着（503）时手机排队重试；`GET /api/v1/recordings` 对账（补传 hub 没有或 revision 落后的，清掉 hub 已删的）。
-- 保留期：助手设置 `recording_days`（默认 14 天，1–365），`jarvis_settings` 的 `assistant.recording_days` 能读改；超过的条目 hub 连文件和索引一起删，早于保留期的录音也不再上传。
-  手机按对账拿到的 `days` 同样清掉本机超期的录音（音频和文字一起，录音中的不动）：文字以 hub 为准，本机不比知识库留得久。
-- iOS 的实现是 `RecordingSync`（`apple/Persona/Recording/`）：每次 `RecordingLibrary.save` 都触发一轮（1 秒去抖），`revision` 是这份状态的 `updatedAt`（毫秒，保存时保证只增不减）；
-  已传的 revision、待删、被拒（400）和 `days` 记在录音目录的 `sync.json`，重启只传变了的。连不上 / 503 按 5 秒起翻倍、最多 10 分钟重试，回到前台、新的保存都会立刻再试；
-  启动、回到前台（最多每 10 分钟一次）对账。410 或对账里 `deleted` 有的：在别处（网页等）删过，本机也删。没有一句文字的录音（没识别到语音）不上传。
+- The phone uses each recording's UUID as the key for `PUT /api/v1/recordings/{id}`, sending the complete state so far each time (full replacement). `revision` increases monotonically: replayed or out-of-order uploads retain only the newest copy.
+- Upload available segments before transcription finishes (`complete: false`), then upload again as transcription progresses, recording ends, or a language change triggers retranscription; once `complete: true`, the hub generates a summary and tags.
+- Deleting a recording on the phone → `DELETE /api/v1/recordings/{id}`, deleting it from the knowledge base too; the hub retains a tombstone, returns 410 for late uploads, and the phone discards the pending upload.
+- When offline, after hub restarts, or when the manager is disconnected (503), the phone queues retries; `GET /api/v1/recordings` reconciles state (uploading recordings absent from the hub or with an older revision there, and removing those deleted on the hub).
+- Retention: the assistant setting `recording_days` (14 days by default, 1–365) can be read or changed through `assistant.recording_days` in `jarvis_settings`; the hub deletes expired files and index entries together, and recordings older than the retention window are no longer uploaded.
+  The phone uses `days` from reconciliation to remove expired local recordings as well (audio and text together, leaving active recordings untouched): the hub is authoritative for text, and local retention never exceeds knowledge-base retention.
+- The iOS implementation is `RecordingSync` (`apple/Persona/Recording/`): every `RecordingLibrary.save` triggers a round (1-second debounce); `revision` is this state's `updatedAt` (milliseconds, guaranteed to increase on save).
+  Uploaded revisions, pending deletions, rejections (400), and `days` are stored in `sync.json` in the recording directory; after restart, only changed recordings are uploaded. Connection failures / 503 retry with exponential backoff starting at 5 seconds, up to 10 minutes; returning to the foreground or a new save triggers an immediate retry.
+  Reconcile on startup and return to the foreground (at most once every 10 minutes). A 410 or an entry in `deleted` during reconciliation means it was deleted elsewhere (such as the web), so delete it locally too. Recordings without any text (no recognized speech) are not uploaded.
 
-手机录音可以选眼镜或蓝牙耳机的麦克风（蓝牙 HFP），见 `docs/meta-glasses.md`。
+Phone recordings can use the microphone on glasses or a Bluetooth headset (Bluetooth HFP); see `docs/meta-glasses.md`.
 
-## 迁移来源与边界
+## Migration sources and boundaries
 
-复用 Hourhand 的 `Shared/SegmentRecorder.swift`（AAC 分段）、`HourhandWatch/TransferQueue.swift`（持久化、回传退避）、`Hourhand/Transcription/SpeechEngines.swift`（本机引擎和时间戳）。迁移后统一使用 `Recording` 前缀，去掉产品账号、付费、云端、位置和独立录音库导航。
+Reuse Hourhand's `Shared/SegmentRecorder.swift` (segmented AAC), `HourhandWatch/TransferQueue.swift` (persistence and transfer backoff), and `Hourhand/Transcription/SpeechEngines.swift` (on-device engines and timestamps). After migration, standardize on the `Recording` prefix and remove product accounts, payments, cloud services, location, and separate recording-library navigation.
 
-- 音频：16 kHz 单声道 AAC，32 kbps，约 14 MB / 小时；前台 30 秒、后台 60 秒一段。watchOS 11 及以上用 `AVAudioFile.close()` 定稿；watchOS 10 在回调前释放最后一个文件引用，不能在写入循环中保留局部引用。
-- 存储：各设备 Application Support/Recordings，每条 UUID 目录，`recording.json` 原子更新。不是缓存，不能因清理缓存而删除。
-- 异常退出：保留已定稿分段，删除未定稿的尾段；不自动重启麦克风。最多丢当前 30–60 秒。
-- 隐私：不采集位置，不上传音频；转写文字同步进 hub 的知识库（上面「同步」），不自动发给任何对话。转写只用 Apple 本机模型，不隐式回退到 Apple 服务器或云端 API。
-- 初始版本不带录音摘要、说话人识别、路线地图、付费或云端服务。录音语言由用户明确选择。
+- Audio: 16 kHz mono AAC, 32 kbps, roughly 14 MB / hour; segments are 30 seconds in the foreground and 60 seconds in the background. watchOS 11 and later finalize with `AVAudioFile.close()`; watchOS 10 releases the last file reference before the callback and must not retain a local reference inside the write loop.
+- Storage: Application Support/Recordings on each device, one UUID directory per recording, with atomic updates to `recording.json`. This is not a cache and must not be deleted by cache cleanup.
+- Abnormal exit: retain finalized segments and delete the unfinished tail; do not automatically restart the microphone. At most the current 30–60 seconds are lost.
+- Privacy: no location collection and no audio uploads; transcript text syncs into the hub's knowledge base ("Synchronization" above) and is not automatically sent to any chat. Transcription uses only Apple's on-device models, with no implicit fallback to Apple servers or cloud APIs.
+- The initial version has no recording summaries, speaker identification, route maps, payments, or cloud services. The user explicitly selects the recording language.
 
-## 分步提交
+## Incremental commits
 
-1. 共用录音格式、分段引擎、持久化与异常退出恢复。
-2. 本机转写、时间戳、断点恢复和上下文生成。
-3. 手表录音、持久化回传、结束消息和确认后清理。
-4. 手机录音页、预览／删除、截图与回归验证。
-5. 同步进知识库（#3235）：hub 的 `recordings` 和接口、保留期、网页 / 安卓知识库页；iOS 去掉输入框入口、改成自动同步。
+1. Shared recording format, segmentation engine, persistence, and recovery after abnormal exits.
+2. On-device transcription, timestamps, resumability, and context generation.
+3. Watch recording, persistent transfer, end messages, and cleanup after acknowledgment.
+4. Phone recording page, preview / deletion, screenshots, and regression verification.
+5. Knowledge-base synchronization (#3235): hub `recordings` and APIs, retention, web / Android knowledge pages; remove the iOS composer entry and switch to automatic sync.
 
-## 使用入口
+## Entry points
 
-- 手机：知识库 › 「录音」（类型胶囊的最后一个；截图参数 `-tab assistant -openAssistantPage knowledge -showKnowledgeKind recordings`，`-showRecordingSample YES` 放一条虚构录音，再加 `-openRecording YES` 打开它）。
-  这一类在手机上列的是本机的录音（含录音中、转写中的），不是 hub 的副本；Mac 上没有录音，列 hub 的 `recordings`。原有界面风格和布局都保留。
-- Apple Watch：首页「录音」，未配对和 hub 离线时也能先录。开始、暂停／继续、书签、结束；watchOS 11 起支持双指互点开始或加书签。
-- 手机录音分区：选择中文／英语／日语，开始录音；离开页面、锁屏后继续，回到这里结束。列表每行写来源、时长和状态：录音中、等待手表回传、转写中、等待同步、正在同步、已同步到知识库（已同步一部分）、知识库没有收下；hub 不通时列表下面写原因。
-- 详情：书签、带时间戳的文字稿；可继续转写、更改语言重新转写（重新同步覆盖）、删除（确认后本机立刻删，知识库同步删，离线时排队）。原始音频不上传。
-- 知识库：iOS、网页、安卓的知识库页都有「录音」一类，列表看名字、时间、时长、来源设备，详情看摘要、书签和带时间戳的全文。
-- 手表收到手机的应用层落盘确认才清理已回传音频，传输成功但手机尚未确认的部分仍保留；结束消息独立回传，避免在分段边界结束时永远显示录音中。
-- iOS 使用 `SpeechTranscriber`，语言不支持时尝试 `DictationTranscriber`；系统模型按需下载。没有可用模型时显示原因，保留录音供重试，不走云端。
-- 听写与长录音使用同一个麦克风所有权锁，不能互相重配或关闭音频会话。删除后保留 UUID 墓碑，迟到的手表分段不会把录音重新创建。
+- Phone: Knowledge › "Recordings" (the last type capsule; screenshot arguments `-tab assistant -openAssistantPage knowledge -showKnowledgeKind recordings`, with `-showRecordingSample YES` to add a fictional recording and `-openRecording YES` to open it).
+  On the phone, this category lists local recordings (including those being recorded or transcribed), not hub copies; Mac has no recording feature and lists hub `recordings`. Existing interface styles and layout are preserved.
+- Apple Watch: "Record" on the home screen; recording can start even when unpaired or the hub is offline. Start, pause / resume, bookmark, stop; watchOS 11 and later support Double Tap to start or add a bookmark.
+- Phone recording section: choose Chinese / English / Japanese, then start recording; recording continues after leaving the page or locking the screen, and is stopped on return. Each list row shows source, duration, and state: Recording, Waiting for watch transfer, Transcribing, Waiting to sync, Syncing, Synced to knowledge base (Partially synced), or Not accepted by knowledge base; when the hub is unreachable, the reason appears below the list.
+- Details: bookmarks and timestamped transcript; resume transcription, change the language and retranscribe (resync replaces the old version), or delete (immediate local deletion after confirmation, synchronized deletion from the knowledge base, queued offline). Original audio is not uploaded.
+- Knowledge base: iOS, web, and Android knowledge pages all have a "Recordings" category. Lists show name, time, duration, and source device; details show summary, bookmarks, and full timestamped text.
+- The watch cleans up transferred audio only after receiving the phone's application-level persistence acknowledgment; segments whose transfer succeeded but have not been acknowledged remain. The end message transfers independently to avoid displaying Recording forever when stopped at a segment boundary.
+- iOS uses `SpeechTranscriber`, trying `DictationTranscriber` if the language is unsupported; system models download on demand. If no model is available, show the reason and retain the recording for retry, without using the cloud.
+- Dictation and long recordings share one microphone ownership lock, so neither can reconfigure or close the other's audio session. Deletion retains a UUID tombstone so late watch segments cannot recreate the recording.
 
-## 已验证（#3235 起）
+## Verified (from #3235 onward)
 
-- iOS / 手表模拟器、Mac（`CODE_SIGNING_ALLOWED=NO`）编译；`RecordingSyncTests`：只传一次直到变了、离线排队重试、离线时删除后补删、知识库里删了本机跟着删、对账补传 hub 丢了的、超期连音频清掉、没有文字不上传。
-- 端到端 UI（`RecordingKnowledgeUITests`，`TEST_RUNNER_JARVIS_MOCK_HUB`，mock hub 的 `/api/v1/recordings`、`/mock/recordings` 读回）：虚构录音出现在知识库 › 录音并自动同步到 hub（只有文字和时间戳），详情里删除后 hub 也删、之后不再上传；新对话输入框的 + 菜单里没有录音。
-  `TEST_RUNNER_JARVIS_SHOTS=<目录>`、`TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` 存列表、详情、+ 菜单三张图。
+- iOS / watch simulator and Mac (`CODE_SIGNING_ALLOWED=NO`) builds; `RecordingSyncTests`: upload only once until changed, queued offline retries, eventual deletion after deleting offline, local deletion following knowledge-base deletion, reconciliation restoring recordings lost by the hub, expiry removing audio too, and no upload without text.
+- End-to-end UI (`RecordingKnowledgeUITests`, `TEST_RUNNER_JARVIS_MOCK_HUB`, read back through mock hub `/api/v1/recordings` and `/mock/recordings`): a fictional recording appears in Knowledge › Recordings and automatically syncs to the hub (only text and timestamps); deleting from details also deletes it from the hub, with no later upload; no recording entry in the + menu of the new-chat composer.
+  `TEST_RUNNER_JARVIS_SHOTS=<directory>` and `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE=light|dark` save three screenshots: list, details, and + menu.
 
-## 已验证（输入框入口时期，#3235 之前）
+## Verified (composer-entry era, before #3235)
 
-- 手机与手表模拟器构建；Mac 共用输入框构建。
-- 录音格式、乱序与重复、异常退出恢复、转写断点、时间戳和 XML 上下文单元测试。
-- 端到端 UI：选「作为上下文」后 mock hub 没有消息，点发送后收到时间戳文字且不带音频。
-- 手机文字稿预览深色／浅色截图；手表入口截图。手表 Picker 被压成细条后改用单行语言切换按钮。
+- Phone and watch simulator builds; Mac shared composer build.
+- Unit tests for recording format, out-of-order and duplicate segments, abnormal-exit recovery, transcription checkpoints, timestamps, and XML context.
+- End-to-end UI: selecting "Use as context" sends no message to the mock hub; tapping Send delivers timestamped text without audio.
+- Phone transcript preview screenshots in dark / light mode; watch entry screenshot. A watch Picker compressed into a narrow strip was replaced with single-line language-switch buttons.
 
-## 验证限制
+## Verification limits
 
-模拟器的配对 `transferFile` 不投递，麦克风和语音模型也不能代替真机验收。单元测试覆盖乱序、重复、结束在分段边界、恢复和转写断点；手机和手表页面用独立模拟器截图。最终需真机检查：锁屏继续、来电、手表离线积压后回传、长录音、模型下载与权限拒绝。
+Paired simulator `transferFile` does not deliver, and simulator microphones and speech models cannot replace real-device acceptance. Unit tests cover out-of-order delivery, duplicates, stopping at segment boundaries, recovery, and transcription checkpoints; phone and watch pages were screenshotted on dedicated simulators. Final real-device checks are required for continued recording while locked, incoming calls, transfer of watch offline backlogs, long recordings, model downloads, and permission denial.

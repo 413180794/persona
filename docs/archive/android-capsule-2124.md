@@ -1,34 +1,34 @@
-# Android 悬浮胶囊（#2124）
+# Android floating capsule (#2124)
 
-## 结果与证据
+## Results and evidence
 
-Android 原生模块提供跨 App 可开关的胶囊，拖动贴边、展开卡片，复用现有会话发送与状态；扩展能向胶囊贡献声明式内容和动作。以模拟器跨 App 录屏、深浅色截图、相关单测及构建 / lint 为验收证据。语音和当前屏幕上下文属于 #2124 的后续交付项，完成前保持 Issue 开启。
+The native Android module provides a capsule that can be toggled across apps, dragged to snap to an edge, and expanded into a card. It reuses existing session sending and state; extensions can contribute declarative content and actions. Acceptance evidence includes cross-app screen recordings on an emulator, light/dark screenshots, relevant unit tests, and build / lint results. Voice and current-screen context are follow-up deliverables under #2124; keep the issue open until they are complete.
 
-## 阶段
+## Stages
 
-- [x] 原生浮层、默认关闭的三档设置、权限引导、位置记忆、焦点和退出清理。
-- [x] App 适配现有会话 / 主对话与多 hub 选路，发送、回复和完整会话跳转。
-- [x] 开放声明式胶囊内容 / 动作插槽，扩展执行仍在 hub，原生权限由客户端负责。
-- [x] 单元 / 集成测试、APK / lint、模拟器跨 App 深浅色截图与录屏，独立审查，PR。
+- [x] Native overlay, three-mode setting disabled by default, permission guidance, remembered position, focus handling, and cleanup on exit.
+- [x] App adapters for existing sessions / main chat and multi-hub routing, sending, replies, and navigation to the full chat.
+- [x] Declarative capsule content / action slots; extension execution stays on the hub, and native permissions belong to the client.
+- [x] Unit / integration tests, APK / lint, cross-app emulator screenshots and recordings in light/dark mode, independent review, and PR.
 
-## 分工与边界
+## Responsibilities and boundaries
 
-原生模块负责窗口和通用内容接口；App 组合根提供业务适配；设置使用原有设置入口；扩展复用现有声明式 UI 渲染与动作协议。研究、实现、测试、审查分别核验，不新增 WebSocket 或另一套消息 / 授权模型。所有改动在 codex/2124-android-capsule 工作树。
+The native module owns the window and generic content interface; the app composition root supplies business adapters; settings use the existing settings entry; extensions reuse the existing declarative UI rendering and action protocol. Research, implementation, testing, and review are verified separately. No new WebSocket or separate messaging / authorization model. All changes are in the codex/2124-android-capsule worktree.
 
-## 测试设计
+## Test design
 
-覆盖关闭 / 有任务 / 常驻，前后台与配对清理、无权限、位置钳制和旋转；覆盖真实发送调用和结果、跨 hub 路由、断线状态、重复操作和扩展卡片动作；模拟器使用隔离应用 ID 与假 hub，录下其他 App 背景上的收起、拖动、展开、输入和关闭。
+Cover Off / When tasks exist / Always, foreground/background transitions and unpairing cleanup, missing permissions, position clamping, and rotation; actual send calls and results, cross-hub routing, disconnected state, duplicate operations, and extension card actions. The emulator uses an isolated app ID and mock hub, recording collapse, drag, expansion, input, and dismissal over other apps.
 
 
-## 验证结果（2026-11-05）
+## Verification results (2026-11-05)
 
-- Android：App 68、设置 186、原生策略 10、导航 9，共 273 项相关测试通过；Debug APK 和 lint 通过。
-- Go：扩展模块、真实 hub / 扩展进程的胶囊渲染与动作测试、SDK 测试通过；schema / bundle / 文档路径一致性和 mock HTTP 测试通过；网页类型检查通过。
-- 独立 Android 14 模拟器：三档设置、系统授权、左右拖动贴边和位置记忆、转屏、前台隐藏、关闭与撤权恢复、跨普通 App 悬浮、深浅色、键盘下实际发送、扩展卡片动作均通过。
-- 最新 APK 连续 10 轮冷启动 / 前后台切换通过，保留每轮进程和 crash buffer 证据；系统受保护的设置页会主动隐藏浮层，普通 Clock App 中已核验悬浮。
-- 复现并修复注册后未 attach 的生命周期竞态、Compose 与原生拖动竞争、IME 局部坐标误作全屏坐标。见 Android lessons。
-- 录屏、截图、测试日志和测试 APK 留在开发机的本轮证据 / 交付目录，包含的对话与扩展均为 mock 数据。没有真实硬件的厂商后台保活或耗电测量。
+- Android: 68 app, 186 settings, 10 native policy, and 9 navigation tests, totaling 273 relevant tests passed; Debug APK and lint passed.
+- Go: extension module, capsule rendering and action tests with a real hub / extension process, and SDK tests passed; schema / bundle / document-path consistency and mock HTTP tests passed; web type checking passed.
+- Dedicated Android 14 emulator: all passed for the three setting modes, system permission grant, left/right edge snapping and position memory, rotation, hiding in the foreground, recovery after disabling and revoking permission, overlays over regular apps, light/dark mode, actual sending with the keyboard open, and extension card actions.
+- The latest APK passed 10 consecutive cold-start / foreground-background cycles, with process and crash-buffer evidence retained for each round; protected system settings pages deliberately hide overlays, and the overlay was verified in the regular Clock app.
+- Reproduced and fixed a lifecycle race where registration occurred before attachment, competing Compose and native drag handling, and IME local coordinates being mistaken for full-screen coordinates. See Android lessons.
+- Recordings, screenshots, test logs, and the test APK remain in this round's evidence / delivery directory on the development computer; chats and extensions contain only mock data. No vendor-specific background survival or power measurements on real hardware.
 
-## 本轮交付边界
+## Delivery scope for this round
 
-基础原生胶囊、开关、会话入口、声明式内容 / 动作扩展插槽已完成。长按语音、双击当前屏幕上下文和原地完成全部审批继续留在 #2124，PR 使用 Refs，保持 Issue 开启。
+The basic native capsule, toggle, session entry, and declarative content / action extension slots are complete. Long-press voice, double-tap current-screen context, and completing all approvals in place remain under #2124. The PR uses Refs to keep the issue open.

@@ -1,365 +1,365 @@
-# 交互与界面规格（两端共用）
+# Interaction and UI specification (shared by both platforms)
 
-> **2026-10-31 起，本文讲 Android 外观、布局和交互的部分已被 [Android 界面风格与设计系统](../android-design.md) 取代**：用户要求视觉和交互整体重做，做成玻璃（默认）、晨报、看板三套界面风格。功能、数据、协议、门禁的规格仍以本文为准。
+> **Since 2026-10-31, the Android appearance, layout, and interaction sections here have been superseded by [Android interface styles and design system](../android-design.md)**: the user requested a complete visual and interaction redesign into three styles: Glass (default), Morning, and Board. This document remains authoritative for functionality, data, protocol, and gate specifications.
 
-> 草案 v1（2026-10-30），属于 [重设计方案](README.md)。这里写「改成什么样」，iOS 和 Android 按同一份规格实现。
-> **这一轮只在 Android 上落地，iOS 维持现状**（只读不改），以后再跟进。文中写「两端」「iOS 也……」的地方，对 iOS 来说都是以后的事。
-> Android 上形态不同的地方集中在第 9 节。优先级 P0 / P1 / P2 的含义同 [parity.md](parity.md)。
+> Draft v1 (2026-10-30), part of the [redesign proposal](README.md). This describes the target design, with iOS and Android implementing the same specification.
+> **This round ships only on Android; iOS stays unchanged** (read-only, no edits), with follow-up later. References to "both platforms" or "iOS also…" are future work for iOS.
+> Android-specific forms are collected in section 9. P0 / P1 / P2 priorities have the same meanings as in [parity.md](parity.md).
 
-## 1. 原则
+## 1. Principles
 
-1. **信息架构不变**：四个 tab（Persona / Agents / 收件箱 / 设置）和现有的状态模型、分组、展示逻辑都保留，这些是 Persona 比 removed 强的地方。
-2. **补「读」和「拍板」**：在手机上看清 Agent 做了什么（搜索、任务进度、全文、失败可见），把决定做准（拒绝原因、计划意见、倒计时、来源）。
-3. **不确定就说不确定**：「已回传」不等于「已执行」，「暂无结果」不等于「仍在执行」，「根据已加载的记录整理」要写出来。结果未知是正式状态，有名字、有图标、有核对入口，不显示成红色错误，也不悄悄重发。
-4. **一处状态**：会话现在怎样，只在输入区上方一条状态行里说。顶栏只放身份，列表行只用圆点。
-5. **同一个东西只有一种画法**：状态、计数、待定状态、确认浮层都是设计系统里的组件，两端同名、同参数。
-6. **沿用现有约定**：按钮文字不换行；链接在 App 内打开；取消、超时、离线不弹错；不做第二个飞书。
+1. **Keep the information architecture**: retain the four tabs (Persona / Agents / Inbox / Settings), current state model, grouping, and display logic. These are Persona's strengths over the reference client.
+2. **Improve reading and decisions**: make Agent work clear on the phone (search, task progress, full text, visible failures) and decisions precise (denial reasons, plan comments, countdowns, provenance).
+3. **State uncertainty explicitly**: "Returned" is not "Executed," "No result yet" is not "Still running," and "Based on loaded records" must be shown. Unknown results are a formal state with a name, icon, and verification entry, not red errors or silent retries.
+4. **One place for state**: describe the session's current state only in a line above the composer. The header shows identity only; list rows use dots only.
+5. **One rendering per concept**: states, counts, pending states, and confirmation overlays are design-system components with the same names and parameters on both platforms.
+6. **Keep existing conventions**: button text never wraps; links open in-app; cancellation, timeout, and offline states do not show error popups; do not build a second Lark.
 
-## 2. 信息架构
+## 2. Information architecture
 
-| Tab | 不变的 | 新增 / 改动 |
+| Tab | Unchanged | Additions / changes |
 | --- | --- | --- |
-| Persona | 首页、主对话、历史、知识库、资料页 / 定时任务 / 记忆 | 助手对话也用统一的状态行和待定状态；首句发送走统一的发送用例（现在直连 hub，断网直接失败） |
-| Agents | 三种分组、置顶 / 屏蔽、空间页、机器页、新建会话 | 行上的草稿摘要和待核对标记；「需要你处理」升级为跨会话请求收件箱；「历史」范围 |
-| 收件箱 | 统一列表、AI 分拣、分段、筛选、已处理、AI 分身草稿 | 飞书会话页换列表引擎、补阅读锚点、分界线、已读门禁、幂等发送、缺口检测；行上显示本机状态（草稿 / 发送中 / 发送失败） |
-| 设置 | 各子页 | 配对和首次接入流程重做；设备页显示平台；通知页在 Android 上换成通知渠道和 Live Updates 的设置 |
+| Persona | Home, main chat, history, knowledge base, profile / scheduled tasks / memory | Assistant chats use the unified status line and pending state; first messages use the shared send use case (currently connect directly to hub and fail immediately offline) |
+| Agents | Three grouping modes, pin / hide, space page, machine page, new session | Draft previews and verification markers on rows; "Needs your attention" becomes a cross-session request inbox; "History" scope |
+| Inbox | Unified list, AI sorting, sections, filters, done state, AI twin drafts | Replace the Lark chat list engine, add reading anchors, dividers, read gates, idempotent sending, and gap detection; show local state (draft / sending / send failed) on rows |
+| Settings | Subpages | Redesign pairing and first connection; device page shows platform; Android notification page uses notification channels and Live Updates settings |
 
-## 3. 逐页规格
+## 3. Page specifications
 
-### 3.1 Agents 列表
+### 3.1 Agents list
 
-- **行**（`SlotRow`）保持「状态点 + 标题 + 时间 / 最新一句 / 元信息」三行。新增两样，都放在元信息行最前：
-  - 有草稿时显示橙色「草稿 · <前 20 字>」，只有附件时显示「草稿 · [附件]」。
-  - 有结果待确认的操作时显示「⏱ 待确认」，用 caution 色、时钟问号图标，点行进入会话后状态行会说明。
-- **「需要你处理」区升级为请求收件箱**（P1）：
-  - 每个待处理请求一行：类型图标、问什么、会话名 · 机器、剩余时间（`CountdownLabel`）、来源标记（子 Agent / MCP 服务器 / 终端）。
-  - 单题单选且选项不超过 4 个时可以直接点答案，授权可以直接允许 / 拒绝（现有能力）。
-  - 其他请求点开**直接是完整交互页**（3.4），不必先进会话。完整页里有「打开会话」。
-  - 超过 3 个时折成「还有 N 个 ›」，进全屏请求列表，按到期时间排。
-- **「历史」范围**（P2）：
-  - 左上菜单的分组旁边加「范围：运行中 / 全部 / 历史」，默认「运行中」，和现在一样。
-  - 「历史」按项目（目录）列出没在运行的会话，标题优先用 Claude 的自定义名称。
-  - 点开是**只读**的对话页：输入栏换成一个按钮「继续这个会话」，点了才 `--resume`。这样不会因为误点就在电脑上拉起进程。
-- **排序稳定**：同一状态内按 `state_since` / 最后更新时间排；列表刷新不能让行跳来跳去。这是现有规则，写进规格和夹具，两端共用 `rank`。
-- **已有、两端都照做的**（iOS 最近加的）：搜索框下的快速筛选「全部 / 需要你 / 未读 / 工作中」带计数，筛选后看过的行留在原位，方便逐个看完；「未读」可以全部标为已读；细列表（一行一个 Agent，记住选择）；点空间标题折叠空间，「全部折叠 / 全部展开」。
+- **Rows** (`SlotRow`) retain three lines: "state dot + title + time / latest line / metadata." Add two items at the start of the metadata line:
+  - Orange "Draft · <first 20 characters>" when a draft exists, or "Draft · [Attachment]" for attachment-only drafts.
+  - "⏱ Awaiting confirmation" for operations with unconfirmed results, using caution color and clock-question icon; entering the chat shows the explanation in the status line.
+- **Upgrade "Needs your attention" to a request inbox** (P1):
+  - One row per pending request: type icon, question, session name · computer, time remaining (`CountdownLabel`), source tag (subagent / MCP server / terminal).
+  - Single-question, single-choice requests with at most 4 options can be answered directly; authorizations can be allowed / denied directly (existing capability).
+  - Other requests open **directly into the full interaction page** (3.4), without entering the chat first. The full page includes "Open chat."
+  - Above 3 requests, collapse into "N more ›," opening a full-screen request list ordered by expiry.
+- **"History" scope** (P2):
+  - Beside grouping in the top-left menu, add "Scope: Running / All / History," defaulting to Running, as today.
+  - History lists non-running sessions by project (directory), preferring Claude custom titles.
+  - Open a **read-only** chat: replace the composer with "Continue this session," calling `--resume` only after tapping. Accidental taps therefore do not start a process on the computer.
+- **Stable ordering**: within a state, sort by `state_since` / last update; refreshes must not make rows jump. This existing rule becomes part of the specification and fixtures, with shared `rank` on both platforms.
+- **Existing behavior both platforms follow** (recent iOS additions): counted quick filters under search (All / Needs you / Unread / Working); seen rows stay in place after filtering so they can be reviewed one by one; Unread supports marking all seen; compact list (one Agent per row, remembered choice); tap a space heading to collapse it, with Collapse all / Expand all.
 
-### 3.2 对话页骨架
+### 3.2 Chat page skeleton
 
-从上到下：
+Top to bottom:
 
-1. **顶栏**（保留 Persona 跟手收起的 `ChromeHeader`）：
-   - 返回 / 标题 + 身份副标题（机器 · 空间 › tab）/ 终端 / ⋯。
-   - 副标题**不再写状态字**：标题左边保留一个状态圆点，文字状态交给状态行。
-   - 第二行（同伴菜单、子 Agent 条）规则不变。
-2. **可选横条**：「任务进度 · 3/7 ›」，只在有结构化任务结果时出现（3.3）。
-3. **正文**：倒置列表、工作行、消息行（3.5）。
-4. **状态行**（`StatusLine`，新增，P0）：贴在输入区上方，**只有它每秒重绘**。左边是确定的状态（5.1），右边是本轮用时、工具数和终端按钮。状态是「已看 / 完成未看」时整行收起，不占位置。带说明的状态（待确认、电脑离线、会话已结束）整行可点，打开「会话状态」浮层（3.3）。
-5. **附属条**：排队消息、循环、后台任务。现在的三种 strip 统一成一行小标签「排队 2 · 循环 · 后台 3」，点开看详情。离开期间回顾、Claude 的建议保持现状。
-6. **交互面板**：贴在输入框上方（3.4）。
-7. **输入栏**（`ComposerRow`）：[+] / 输入框 / 发送或中断，保持现状；模式和思考强度的小标签保持现状。
+1. **Header** (retain Persona's gesture-following collapsible `ChromeHeader`):
+   - Back / title + identity subtitle (computer · space › tab) / terminal / ⋯.
+   - Subtitle **no longer includes state text**: keep one state dot to the title's left; text state belongs in the status line.
+   - Second-row rules (peer menu, subagent strip) remain unchanged.
+2. **Optional banner**: "Task progress · 3/7 ›," shown only with structured task results (3.3).
+3. **Body**: inverted list, work rows, message rows (3.5).
+4. **Status line** (`StatusLine`, new, P0): immediately above the composer; **only this redraws every second**. Left shows the definitive state (5.1), right shows turn duration, tool count, and terminal button. Hide the whole line for Seen / Unread, taking no space. Explanatory states (unconfirmed result, computer offline, session ended) make the whole line tappable to open "Session status" (3.3).
+5. **Accessory strip**: queued messages, loops, background tasks. Combine the existing three strips into one small-label row: "Queued 2 · Loop · Background 3," opening details on tap. Keep away-period recap and Claude suggestions unchanged.
+6. **Interaction panel**: above the composer (3.4).
+7. **Composer** (`ComposerRow`): [+] / text field / Send or Interrupt, unchanged; mode and reasoning-effort tags unchanged.
 
-### 3.3 阅读工具
+### 3.3 Reading tools
 
-| 能力 | 规格 | 优先级 |
+| Capability | Specification | Priority |
 | --- | --- | --- |
-| **工作行显示失败数** | 工作行在计数后面常显「· 2 项失败」（danger 文字色）和「· 1 项无结果」（次要灰；文案写「无结果记录」，不写「运行中」）。用时只取对话记录里的轮次时长，没有就不显示，不用时间戳去估 | P1 |
-| **展开后吸附「收起」** | 展开的工作过程滚出顶部后，顶部浮出一条「收起 N 步」，点了就收起，并回到工作行的位置。Android 的倒置列表不能直接用 `stickyHeader`，要按 `layoutInfo` 自己画浮层 | P2 |
-| **会话内搜索** | ⋯ 菜单「搜索」打开全屏搜索。范围是已加载的正文、思考、工具名、工具输入（JSON 里的所有字符串）、工具输出和系统事件；200ms 防抖，在后台跑，最多 100 条命中（超出提示缩小范围）；底部「加载更早的记录并继续搜」。点一条命中后关闭搜索、展开对应的工作行、滚到那里并描边高亮 3 秒，顶部出现胶囊「返回搜索前位置」（`ReturnChip`）。往更早翻页只能连续地向前翻，每次最多 20 页并显示「已加载 N 轮」，保持列表窗口连续 | P1 |
-| **任务进度** | 按工具结果在对话里的顺序，从 TodoWrite / TaskCreate / TaskUpdate / TaskList 的结果重建任务表（纯逻辑，放在 Core，有夹具）。顶部横条「任务进度 · 3/7」；全屏页每项显示状态、说明、「查看相关记录」（跳到那次调用，带 `ReturnChip`）；页脚写「根据已加载的记录整理，可能和电脑上此刻不同」 | P1 |
-| **全文阅读器** | 长工具输出「看全文」（现有的 `/items/{id}/full`）打开全文阅读器（`FullTextReader`）：打开时冻结内容快照；按 8192 个 UTF-16 码元分页，不切开代理对和字素；首页 / 末页 / 上一页 / 下一页；文内前后搜索；完整复制 | P2 |
-| **工具卡统一入口** | 每张工具卡展开后最下面都有「原始输入 / 原始输出 / 复制」三个入口；Edit 的 diff 加「上一处 / 下一处」改动导航 | P2 |
-| **会话状态浮层** | 状态行带说明时点开：结果待确认的操作（自动核对的进度、「确认已送达 / 确认没送达，保留输入」两个人工处置）、电脑离线（上次更新时间、「重连这台电脑」）、会话已结束或被替换（「打开新会话 / 恢复」）、草稿保存失败的原因 | P1 |
+| **Work row shows failure count** | Always show "· 2 failed" after counts (danger text) and "· 1 without result" (secondary gray; wording is "No result recorded," not "Running"). Duration comes only from recorded turn duration; omit if absent, never estimate from timestamps | P1 |
+| **Sticky Collapse after expansion** | When expanded work scrolls above the top, float "Collapse N steps" at the top; tapping collapses and returns to the work row. Android's inverted list cannot directly use `stickyHeader`; draw the overlay using `layoutInfo` | P2 |
+| **In-chat search** | ⋯ › Search opens full-screen search over loaded body text, reasoning, tool names, inputs (all JSON strings), outputs, and system events; 200ms debounce, background execution, at most 100 hits (prompt to narrow if exceeded); footer "Load earlier records and keep searching." Tap a hit to close search, expand its work row, scroll there, and outline-highlight for 3 seconds; show a "Return to pre-search position" capsule (`ReturnChip`) at the top. Earlier pagination must remain contiguous, at most 20 pages per action, showing "Loaded N turns" and preserving a continuous list window | P1 |
+| **Task progress** | Reconstruct the task table from TodoWrite / TaskCreate / TaskUpdate / TaskList results in transcript order (pure logic in Core, with fixtures). Top banner "Task progress · 3/7"; full-screen page shows each item's state, description, and "View related record" (jump to the call, with `ReturnChip`); footer "Based on loaded records; may differ from the computer's current state" | P1 |
+| **Full-text reader** | "Read full text" for long tool outputs (existing `/items/{id}/full`) opens `FullTextReader`: freeze a content snapshot on opening; paginate by 8192 UTF-16 code units without splitting surrogate pairs or graphemes; first / last / previous / next page; forward/backward text search; copy all | P2 |
+| **Unified tool-card entries** | Every expanded tool card ends with Raw input / Raw output / Copy; Edit diffs add Previous change / Next change navigation | P2 |
+| **Session-status overlay** | Tap explanatory status lines: unconfirmed operations (automatic verification progress and two manual actions: Confirm delivered / Confirm not delivered, keep input), offline computer (last update, Reconnect this computer), ended or replaced session (Open new session / Resume), draft-save failure reason | P1 |
 
-### 3.4 交互（提问 / 计划 / 授权 / 终端对话框 / MCP 表单）
+### 3.4 Interactions (questions / plans / authorization / terminal dialogs / MCP forms)
 
-**呈现层级**：
+**Presentation hierarchy**:
 
-- **一个请求**：贴在输入框上方的交互面板（现状），面板右上角「⤢」打开完整页。
-- **同一会话有多个请求**：面板顶部「1 / 3」，可以左右切换，「全部」打开这个会话的请求列表。
-- **跨会话**：Agents 的请求收件箱（3.1）和收件箱 tab 的「等你的 Agent」（现状）。
-- **完整页**（`InteractionSheet`）从下面推上来，各平台的写法：iOS 用 sheet 的 large 档，Android 用全屏的 `ModalBottomSheet`。从上到下：
-  1. 类型标题；
-  2. 来源行：会话名 · 机器，子 Agent「来自子 Agent · Explore」，MCP「来自 MCP 服务器 X（配置来源：…）」，终端来源「这个请求来自终端：请不要同时在电脑上处理」；
-  3. 倒计时（`CountdownLabel`）或「已处理 / 已过期 / 会话已变化」；
-  4. 主体：参数字段、diff、计划原文、问题、表单、链接；
-  5. 可选的原因或意见输入框；
-  6. 固定在底部的操作区。辅助字号下操作区随正文滚动，按钮纵向排。
+- **One request**: interaction panel above the composer (current behavior); top-right "⤢" opens the full page.
+- **Multiple requests in one session**: "1 / 3" at the top, swipe left/right, and All opens that session's request list.
+- **Across sessions**: Agents request inbox (3.1) and "Agents waiting for you" in the Inbox tab (existing).
+- **Full page** (`InteractionSheet`) pushes up from the bottom: iOS large sheet detent; Android full-screen `ModalBottomSheet`. Top to bottom:
+  1. Type heading;
+  2. Source row: session name · computer; subagent "From subagent · Explore"; MCP "From MCP server X (configuration source: …)"; terminal "This request comes from the terminal; do not handle it on the computer at the same time";
+  3. Countdown (`CountdownLabel`) or Handled / Expired / Session changed;
+  4. Body: parameter fields, diff, original plan, questions, forms, links;
+  5. Optional reason/comment field;
+  6. Bottom-pinned actions. At accessibility text sizes, actions scroll with the body and buttons stack vertically.
 
-**各类型的规则**：
+**Rules by type**:
 
-| 类型 | 规则 | 优先级 |
+| Type | Rules | Priority |
 | --- | --- | --- |
-| 授权 | 按钮「拒绝 / 允许 / 本会话总是允许」（现有）。**新增可选的拒绝原因**（≤4000 字），原因随这次拒绝交给 Claude（`Resolution.message`，hub 早就支持，App 从没填过）；**填了原因时「允许」禁用**，提示「要允许请先清空原因」。MCP 工具显示服务器名和配置来源，没给就写「未提供」，不从工具名推断 | P0（原因）/ P1（MCP 来源） |
-| 计划 | 计划原文 + 全屏；「批准并自动执行」「批准，只自动接受编辑」「打回」。**写了意见时只能「打回」**，两个批准按钮禁用，清空意见才能批准。「批准并自动执行」等于全部放行，按钮下面一行小字写出风险。**所有入口用同一张审批策略表**（通知、实时活动、快捷入口、手表都只能「批准，只自动接受编辑」，因为在那些地方看不全计划；全部放行只能在 App 里看过全文后选） | P0 |
-| 提问 | 现有规则不变（单题单选点一下就提交、多题翻页、「推荐」标签、「其他回答…」）。新增：没提交的选择和自填内容按请求 id 保存，关掉再开能恢复；请求被替换就丢掉 | P1 |
-| 终端对话框（屏幕卡） | 现有规则不变（hub 解析对话框，按键前比对 `rev`，变了返回 `prompt_changed`）。新增：命令类的审批如果对话记录里有对应的完整 tool_use，用完整命令代替屏幕上可能被截断的文字显示（需要 node 关联，见 hub-changes.md） | P2 |
-| MCP 表单 / 链接（新类型 `elicitation`） | 表单支持字符串 / 数字 / 布尔 / 单选 / 多选，客户端先校验一遍；链接模式显示服务器、请求说明、目标主机和完整 URL。只有链接真的打开之后，「已打开，继续」才可点，并说明「打开链接不代表授权成功」。三种结局「提交 / 拒绝 / 取消」分别回传。需要 node 接 hook 并新增交互类型；旧客户端不认识时由 hub 降级成「去终端处理」（能力协商） | P1 |
+| Authorization | Deny / Allow / Always allow in this chat (existing). **Add optional denial reason** (≤4000 characters), passed to Claude with the denial (`Resolution.message`, supported by hub long ago but never filled by the app); **disable Allow while a reason is entered**, prompting "Clear the reason to allow." MCP tools show server name and configuration source; if absent, say "Not provided," never infer from tool name | P0 (reason) / P1 (MCP source) |
+| Plan | Original plan + full screen; Approve and run automatically / Approve, auto-accept edits only / Send back. **With comments entered, only Send back is available**; disable both approval buttons until cleared. Approve and run automatically means allow everything; state the risk below the button. **Every entry uses the same approval policy table** (notifications, Live Activities, quick entries, and Watch can only Approve, auto-accept edits only, since the full plan is not visible there; allow-all can be selected only after reading the full plan in-app) | P0 |
+| Question | Existing rules unchanged (single-question single-choice submits on tap; multiple-question pagination; Recommended tag; Other answer…). Add persistence of unsubmitted selections and custom input by request id, restored after closing/reopening; discard if the request is replaced | P1 |
+| Terminal dialog (screen card) | Existing rules unchanged (hub parses dialog, compares `rev` before keystrokes, returns `prompt_changed` if changed). Add: command approvals with a matching full tool_use in the transcript show the full command rather than potentially truncated screen text (requires node association, see hub-changes.md) | P2 |
+| MCP form / link (new type `elicitation`) | Forms support string / number / boolean / single-choice / multi-choice, validated client-side first; link mode shows server, request description, target host, and full URL. Enable "Opened, continue" only after actually opening the link, explaining "Opening the link does not mean authorization succeeded." Return Submit / Deny / Cancel distinctly. Requires node hook and a new interaction type; hub downgrades for unaware old clients to "Handle in terminal" (capability negotiation) | P1 |
 
-**共同规则**：
+**Shared rules**:
 
-- 回答时先在本机记下（请求 id，操作 id），**不记答案本身**；回执丢了就按 id 查，不重发。
-- 成功后的文案是「已回传你的选择」，执行结果看对话记录。
-- 请求已在别处处理（410）时，卡片原地换成「已在电脑上处理」后淡出。
-- 过期的请求不能再提交，显示「已过期，回到终端处理」和「打开终端」。
-- 通知上的按钮：「允许 / 批准」要先解锁，「拒绝 / 打回」不用。
-  - Android 的「拒绝」和「打回」都可以在通知里直接输入原因或意见；iOS 维持现状，只有「打回」能直接输入。
-  - 单选提问、屏幕对话框的前 3 个选项也做成按钮：Android 首版就有（PR #84 已有）；iOS 要按交互动态注册通知类别，排 P2。
-  - 请求在别处处理后撤回通知：Android 首版就有；iOS 在 App 运行时用 `removeDeliveredNotifications`，排 P2。
+- Before answering, record request id and operation id locally, **not the answer itself**; if the receipt is lost, query by id rather than resending.
+- Success wording is "Your choice has been returned"; execution results are in the transcript.
+- If handled elsewhere (410), replace the card in place with "Handled on the computer," then fade out.
+- Expired requests cannot submit; show "Expired; handle in terminal" and "Open terminal."
+- Notification buttons: Allow / Approve require unlocking; Deny / Send back do not.
+  - Android allows both denial reasons and plan comments directly in notifications; iOS stays unchanged, with direct input only for Send back.
+  - Single-choice questions and the first 3 screen-dialog options also become buttons: Android has these in the first release (already in PR #84); iOS needs dynamically registered notification categories per interaction, scheduled P2.
+  - Withdraw notifications after handling elsewhere: Android first release; iOS uses `removeDeliveredNotifications` while the app runs, scheduled P2.
 
-### 3.5 聊天列表引擎（Agents 对话、助手对话、飞书会话共用）
+### 3.5 Chat list engine (shared by Agent, assistant, and Lark chats)
 
-现在 Agents 对话是倒置列表，飞书会话是另一套非倒置实现（用固定的 sleep 定位）。重设计后**共用一个列表引擎**（`ChatList`），差别只在行的样式和数据源。
+Agent chats currently use an inverted list; Lark uses a separate non-inverted implementation (positioning with fixed sleeps). After redesign, **share one list engine** (`ChatList`), differing only in row styling and data source.
 
-| 规则 | 说明 |
+| Rule | Description |
 | --- | --- |
-| 倒置 | 最新一条在偏移 0。跳到最新永远精确；历史加在远端，不推动正在看的位置 |
-| 贴底跟随（`followsEnd`） | 只由用户手势改变：手指一拖就关；回到底部、点 ↓、自己发消息时再开。图片加载这类布局变化不能悄悄关掉它 |
-| 冻结 | 离开最新端时按「当时的 item 快照」冻结，新来的行等回到最新端再出现（现有规则 E1 / E3）；更早的页和补上的断档照常出现 |
-| 进入定位 | 完成未看的会话：顶部只露出你最后一条消息的最后一行。其他会话：回到上次离开时屏幕最上面那一行。飞书从收件箱打开时，停在「这件事的第一条」，上方加分界线 |
-| 阅读位置 | 按（作用域，会话 / 飞书会话）存锚点（消息 id，行内偏移）和展开状态。离开、进后台时立即写，平时 250ms 防抖。恢复时只在打开后第一次布局里尝试，用户一滚动就作废 |
-| 定位纪律 | 先按 id 跳，再按实测位置修正；只在空闲时修正，差 1pt 以内忽略；用户手势、主动跳转、进后台、换会话都让旧的修正作废；锚点行被懒加载回收时最多重新实例化一次 |
-| 分页 | Agents 按轮分页（`turns=2`），飞书按消息窗口分页（`olderCursor` / `newerCursor`）；滑到远端自动加载，只在用户拖动过之后才生效 |
-| 长会话折叠 | Agents 的页请求带 `fold_work`：hub 把一长串工具调用、结果和思考折成一个 fold item（带计数和范围），显示成工作行；点开时用 `from_seq` / `through_seq` 取回原来的步骤替换它（「正在载入 N 步…」，失败可重试）。实时推送和补发不折叠（iOS 已有，`docs/protocol.md`） |
-| 刷新与缺口 | 只往已有窗口的末尾接（`after_seq` / `after`），接不上就整屏换成最新一页，并给「有更多新消息」提示；**不拼接不连续的页** |
-| 「回到最新」按钮 | 数字只数已加载、确实在屏幕下方、别人发的未读；后面还没加载时显示「N+」；不知道数量时只显示箭头 |
-| 已读 / 看过的门禁 | 页面在前台 + 初次定位完成 + 没有浮层遮挡 + 不在程序滚动中 + 窗口不是没核对过的缓存，同时满足才算「看到」。450ms 合并一次，只往前报。用于飞书已读上报，也用于 Agents 的「完成未看 → 已看」 |
-| 行 | 每条消息、每个工作步骤都是独立的懒加载行，有稳定 key 和内容类型。不要把一组可能很多的行包成一个子视图（现有经验） |
+| Inverted | Newest item at offset 0. Jumping to latest is always exact; history is added at the far end without moving the reading position |
+| Follow end (`followsEnd`) | Changed only by user gestures: dragging turns it off; reaching the bottom, tapping ↓, or sending a message turns it on. Image loading and other layout changes cannot silently turn it off |
+| Freeze | Away from the latest end, freeze the item snapshot from that moment; new rows appear only after returning to latest (existing E1 / E3 rules); earlier pages and gap fills still appear normally |
+| Entry position | Unread completed sessions: show only the last line of the user's last message at the top. Others: return to the topmost visible row when last leaving. Lark opened from Inbox: stop at the first message for this item, with a divider above |
+| Reading position | Store anchor (message id, within-row offset) and expanded state by (scope, session / Lark chat). Write immediately on leaving or entering background, otherwise debounce 250ms. Restore only on the first layout after opening; user scrolling invalidates restoration |
+| Positioning discipline | Jump by id, then correct using measured position; correct only while idle, ignoring differences within 1pt. User gestures, explicit jumps, backgrounding, and session changes invalidate old corrections; reinstantiate a recycled lazy anchor row at most once |
+| Pagination | Agents paginate by turn (`turns=2`), Lark by message window (`olderCursor` / `newerCursor`); reaching the far end auto-loads only after the user has dragged |
+| Long-session folding | Agent page requests carry `fold_work`: hub folds long sequences of tool calls, results, and reasoning into one fold item (counts and range), shown as a work row. On expansion, retrieve original steps through `from_seq` / `through_seq` and replace it ("Loading N steps…," retry on failure). Live pushes and catch-up are not folded (already on iOS, `docs/protocol.md`) |
+| Refresh and gaps | Append only to the existing window's end (`after_seq` / `after`); if not contiguous, replace the whole screen with the latest page and show "More new messages"; **never concatenate discontinuous pages** |
+| Back to latest button | Count only loaded unread messages from others actually below the screen; show "N+" when more remains unloaded; arrow only when count is unknown |
+| Read / seen gates | Count as seen only when the page is foreground + initial positioning complete + no covering overlay + no programmatic scrolling + window is not unverified cache. Coalesce every 450ms and report only forward. Used for Lark read reporting and Agent Unread → Seen |
+| Rows | Each message and work step is an independent lazy row with stable key and content type. Do not wrap a potentially large group of rows in one child view (existing lesson) |
 
-### 3.6 收件箱与飞书会话页
+### 3.6 Inbox and Lark chat page
 
-- **收件箱行**：在现有的头像、标题、类型标签、时间、摘要基础上，显示本机状态「草稿 · …」「发送中」「发送失败 ›」，都用待定状态组件。
-- **飞书会话页**：
-  - 发送走统一的 outbox：手机生成 clientId 并先落盘，hub 透传给飞书网关，飞书网关按 clientId 幂等。发出的消息以气泡上屏，确认只认 clientId 或服务端消息 id，**不按文字比**。
-  - 草稿按（作用域，飞书会话）持久化。
-  - 话题回复浮层可以往前翻（现在只能看到最新 60 条）。
-  - 连续消息分组按发送者 id，不按名字；分界线打断分组。
-- **收件箱入口的语义**（2026-10-31 用户确认）：
-  - 打开这件事 = 看过的消息报已读，按 3.5 的门禁上报：从收件箱打开时，第一屏真正看到的消息也报飞书已读，不再对初始窗口免报。
-  - 「已处理」仍然只记在 Persona。
-- **AI 草拟回复浮层**：编辑内容持久化。发送走 outbox，带幂等 id；hub 的 `/inbox/{id}/reply` 也要透传。
+- **Inbox rows**: alongside existing avatar, title, type tag, time, and summary, show local "Draft · …," "Sending," or "Send failed ›," using pending-state components.
+- **Lark chat page**:
+  - Send through the unified outbox: phone generates and persists clientId first, hub forwards it to the Lark gateway, which is idempotent by clientId. Sent messages appear as bubbles; confirmation matches only clientId or server message id, **never text**.
+  - Persist drafts by (scope, Lark chat).
+  - Thread-reply overlays can paginate backward (currently only the latest 60 replies).
+  - Group consecutive messages by sender id, not name; dividers break grouping.
+- **Inbox entry semantics** (confirmed 2026-10-31):
+  - Opening an item reports seen messages as read through the 3.5 gates: messages actually seen on the first screen after opening from Inbox also count for Lark read reporting; the initial window is no longer exempt.
+  - Done still records only in Persona.
+- **AI draft-reply overlay**: persist edits. Send through outbox with an idempotency id; hub `/inbox/{id}/reply` must forward it too.
 
-### 3.7 配对与首次接入
+### 3.7 Pairing and first connection
 
-手机经公网直连 hub，优先 IPv6（[README.md](README.md) D9）。下面的流程这一轮只在 Android 上落地；hub 那边的配合见 [hub-changes.md](hub-changes.md) 第 1 节。
+Phone connects directly to the hub over the public internet, preferring IPv6 ([README.md](README.md) D9). This round implements the following only on Android; hub cooperation is in [hub-changes.md](hub-changes.md) section 1.
 
-1. **欢迎页**（现状）：「连接 hub」→ 扫码，或手动输入。
-   - 手动输入时，地址和 token 分两个框；粘贴整条 `jarvis://pair?…` 会自动拆开。
-   - 二维码由 `personad hub pair` 生成：格式不变，token 换成 10 分钟内有效、只能用一次的临时 token，附加 `hub`（hub_id）、`fp`（公钥指纹）、`tls`（TLS 端口）、`alt`（一两个外部地址）。
-   - 旧格式的二维码（`--legacy`，或旧 hub）照样认：只走内网明文，设置里提示「hub 版本太旧，不能公网直连」。
-2. **分段进度**（`StepProgress`，P0）：
-   - 步骤：解析二维码 → 探测地址 → 校验证书和 hub → 换本设备 token → 读机器列表 → 完成。
-   - 「探测地址」这一步展开显示每个候选（公网 IPv6 / 域名 / 内网 / 公网 IPv4）的状态：探测中、已连上（往返时间）、失败（原因）。先连上的那个获胜，其余的停掉。
-   - 每段有时间戳；不显示假百分比；减少动态效果时动画停住。
-   - 失败按原因提示（错误分类见 [android.md](android.md) 5.1）：
+1. **Welcome page** (existing): Connect hub → scan QR code or enter manually.
+   - Manual entry separates address and token; pasting a complete `jarvis://pair?…` automatically splits it.
+   - QR codes come from `personad hub pair`: format unchanged, token replaced with a single-use temporary token valid for 10 minutes, adding `hub` (hub_id), `fp` (public-key fingerprint), `tls` (TLS port), and `alt` (one or two external addresses).
+   - Legacy codes (`--legacy` or old hub) still work, but only over plaintext LAN; settings show "Hub version is too old for direct internet connections."
+2. **Step progress** (`StepProgress`, P0):
+   - Steps: Parse QR code → Probe addresses → Verify certificate and hub → Exchange device token → Read machine list → Complete.
+   - Probe addresses expands to show each candidate (public IPv6 / domain / LAN / public IPv4): Probing, Connected (round-trip time), Failed (reason). First connected wins; stop the others.
+   - Each step has a timestamp; no fake percentages; stop animations under Reduce Motion.
+   - Failure guidance by cause (classification in [android.md](android.md) 5.1):
 
-     | 原因 | 提示 | 按钮 |
+     | Cause | Guidance | Button |
      | --- | --- | --- |
-     | 找不到地址（DNS） | 「找不到这个地址」 | 重新探测 |
-     | 拒绝连接 | 「hub 没有在这个端口上监听，确认 hub 在运行」 | 重新探测 |
-     | 超时，手机在家里 Wi-Fi 上 | 先查本地网络权限，没授权就是下一行；授权了再按「超时」提示 | — |
-     | 超时 | 「连不上 hub。在家里，确认手机和 hub 所在的电脑连着同一个网络；在外面，确认家里的路由器允许从外网连进来」（端口、IPv6 这些细节只在连接诊断里，#4444） | 连接诊断 |
-     | Android 没有本地网络权限 | 「在家里连 hub 需要允许 Persona 访问本地网络」 | 去授权 |
-     | 证书不符 | 「这个地址上的服务不是你配对的 hub，或者 hub 换了证书。请在 hub 机器上重新运行 `personad hub pair` 扫码」 | 重新扫码 |
-     | 401 / 403 | 「配对码已失效或已被用过，在 hub 机器上重新运行 `personad hub pair`」 | 重新扫码 |
-     | hub 版本太旧，不兼容 | 「请更新 hub」 | — |
+     | Address not found (DNS) | "Address not found" | Probe again |
+     | Connection refused | "Hub is not listening on this port; check that it is running" | Probe again |
+     | Timeout on home Wi-Fi | Check local network permission first; if denied, use the next row; if granted, use timeout guidance | — |
+     | Timeout | "Cannot connect to hub. At home, make sure the phone and hub computer are on the same network; away from home, make sure your home router allows incoming connections" (ports, IPv6, and other details only in connection diagnostics, #4444) | Connection diagnostics |
+     | Android lacks local network permission | "Connecting to hub at home requires allowing Persona local network access" | Authorize |
+     | Certificate mismatch | "The service at this address is not your paired hub, or the hub changed certificates. Run `personad hub pair` again on the hub computer and scan the code" | Scan again |
+     | 401 / 403 | "Pairing code expired or was already used; run `personad hub pair` again on the hub computer" | Scan again |
+     | Incompatible old hub | "Update hub" | — |
 
-3. **说明浮层**「配对会保存什么」：
-   - 手机上：设备 token、hub 的公钥指纹、地址列表，存在 Keychain / Keystore 加密的存储里。
-   - hub 上：这台设备的凭据（只存哈希），可以在 设置 › 设备 里撤销；配对时 hub 给已有设备发一条「有新设备配对」的通知。
-   - 推送：iPhone 注册推送令牌；Android 不注册，靠常驻连接。
-   - 明文 HTTP 地址：提示「HTTP 不加密，只在内网或 VPN 里用；在外面一律走加密连接」。
-4. **准备清单**（P1）：
-   - 各台机器是否在线；node 和 hub 是不是同一次部署；herdr 和 Claude 的版本；
-   - 通知权限；Android 上的本地网络权限；
-   - Android 的后台设置（[android.md](android.md) 5.18）：能查的（通知总开关、各渠道级别、电池优化、后台限制）显示真实状态；查不了的（自启动、无限制、最近任务加锁、华为的静默通知和休眠时保持网络、荣耀的智能省流量）按识别出的系统给步骤和「去设置」，用户点「已完成」；
-   - **锁屏测试**：锁屏 30 秒后 hub 发一条测试通知，问用户响没响、亮没亮屏，没响就回到上一项；
-   - **在外面能不能连上**：提示用户关掉 Wi-Fi 用蜂窝网络试一次，结果写进连接诊断页；没有公网地址时建议配 DDNS。
-   - 每项可以跳过，并写明跳过会少什么。
+3. **Explanation overlay**, "What pairing saves":
+   - Phone: device token, hub public-key fingerprint, address list, in Keychain / Keystore-encrypted storage.
+   - Hub: device credential (hash only), revocable under Settings › Devices; pairing notifies existing devices that a new device paired.
+   - Push: iPhone registers a push token; Android does not and uses a persistent connection.
+   - Plain HTTP addresses: "HTTP is unencrypted; use only on LAN or VPN. Outside, always use an encrypted connection."
+4. **Readiness checklist** (P1):
+   - Online state of each computer; whether node and hub came from the same deployment; herdr and Claude versions;
+   - Notification permission; Android local network permission;
+   - Android background settings ([android.md](android.md) 5.18): show actual state for queryable items (master notification toggle, channel levels, battery optimization, background restrictions). For unqueryable items (autostart, unrestricted mode, locking recent tasks, Huawei silent notifications and network retention during sleep, Honor smart data saving), give OS-specific steps and Open settings, with the user tapping Done;
+   - **Lock-screen test**: after locking for 30 seconds, hub sends a test notification; ask whether it sounded and lit the screen, returning to the previous item if not;
+   - **Connect away from home**: ask the user to disable Wi-Fi and test cellular, recording the result in connection diagnostics; suggest DDNS if no public address exists.
+   - Every item can be skipped, with the resulting limitations explained.
 
-### 3.8 设置
+### 3.8 Settings
 
-- **设备**：每台设备显示平台（iPhone / Android / 手表）、角色（完整 / 只能回答）、最近使用。撤销本机等于退出配对，退出时清掉这个作用域的全部本地数据。
-- **连接诊断**（设置 › 连接，P0）：
-  - 当前路径（公网 IPv6 / 域名 / 内网 / 公网 IPv4）和往返时间；
-  - 每个候选最近一次的探测结果和时间；
-  - 手机这边：有没有 IPv6、是不是经 VPN、是不是在需要网页登录的 Wi-Fi 后面；
-  - hub 的证书指纹（前 16 位，点开看全部）；
-  - 当前的心跳间隔（前台 / 后台）和最近一次断线的原因；
-  - 「重新探测」按钮。
-  - 地址找不回来时的说明：家宽换了前缀，人在外面又没有 DDNS 名字，要等回家连上内网；建议给 hub 配一个 DDNS 名字。
-- **通知**：
-  - iOS：现状。
-  - Android：「需要你处理时」「Agent 做完时」两项设置照搬，同时对应系统的通知渠道（需要你 / 做完了 / Persona / 实时状态），可以一键跳到系统设置。实时活动那一组换成「锁屏常驻通知」开关、「状态栏胶囊显示什么」（复用 `island` 设置的结构），以及「锁屏显示详情」（对应 Android 的锁屏隐藏版本）。
-  - Android 还有「后台保活」一组：电池优化、自启动、各家系统的后台设置，显示当前状态并能跳过去（[android.md](android.md) 5.18）。
-- **手机数据**：按平台列出能用的数据源。Android 没有提醒事项；剪贴板旁边写「只能在 App 打开时读」。
-- **风格**：
-  - iOS 五套不变。
-  - Android 首版只有「原生（Material You）」，第二批加 Claude / 黏土 / Island / 飞书。
-  - 组件目录页（DEBUG 才有）：浏览全部组件 × 深浅色 × 字号，截图测试也用它。
+- **Devices**: each shows platform (iPhone / Android / Watch), role (full / answer-only), last use. Revoking this device unpairs it and clears all local data in that scope.
+- **Connection diagnostics** (Settings › Connection, P0):
+  - Current route (public IPv6 / domain / LAN / public IPv4) and round-trip time;
+  - Latest probe result and time per candidate;
+  - Phone side: IPv6 availability, VPN use, captive-portal Wi-Fi;
+  - Hub certificate fingerprint (first 16 characters, tap for full);
+  - Current foreground / background heartbeat interval and last disconnect reason;
+  - Probe again button.
+  - Explain unrecoverable addresses: if home broadband changes prefix while the user is away without a DDNS name, wait until returning to LAN; suggest configuring DDNS for hub.
+- **Notifications**:
+  - iOS: unchanged.
+  - Android: keep When you are needed and When an Agent finishes, also mapped to system notification channels (Needs you / Complete / Persona / Live status), with one-tap system settings. Replace Live Activities settings with Persistent lock-screen notification, What the status-bar capsule shows (reuse the `island` structure), and Show details on lock screen (Android's hidden-on-lock-screen variant).
+  - Android also has Background persistence: battery optimization, autostart, vendor background settings, with current state and direct settings navigation ([android.md](android.md) 5.18).
+- **Phone data**: list available sources per platform. Android has no Reminders; clipboard notes "Readable only while the app is open."
+- **Style**:
+  - Keep the five iOS styles.
+  - Android first release has only Native (Material You), with Claude / Clay / Island / Lark in the second batch.
+  - Component catalog (DEBUG only): browse all components × light/dark × text sizes; also used for screenshot tests.
 
-### 3.9 Persona 助手 tab
+### 3.9 Persona assistant tab
 
-结构不变。改动只有一处：首句发送、「交给 Persona」「问 Persona」都走 `MessageSender`，断网时像普通消息一样排队，不再直接报错。另外有两项随统一组件自动得到：状态行、待定状态。
+Structure unchanged. One change: first messages, Hand to Persona, and Ask Persona all use `MessageSender`, queuing offline like ordinary messages instead of failing immediately. Two more benefits come automatically through shared components: status line and pending state.
 
 ---
 
-## 4. 组件清单（两端同名、同参数）
+## 4. Component catalog (same names and parameters on both platforms)
 
-| 族 | 组件 | 要点 |
+| Family | Components | Notes |
 | --- | --- | --- |
-| 基础 | `Surface`、`Card`、`Panel`、`PageBackground`、`Hairline` | 表面处理按风格 token（glass / solid / soft / hairline）；Android 的原生风格用 tonal surface |
-| 按钮 | `PrimaryButton`、`SecondaryButton`、`DestructiveButton`、`IconButton` | 文字单行，放不下就缩字、改图标或收进菜单；最小触控区 44pt / 48dp；`IconButton` 必须带读屏名称；有进行中的状态，比如「正在保存…」并禁用 |
-| 状态 | `StatusDot`、`StatusLabel`、`Chip`（中性 / 着色 / 描边）、`CountBadge`、`SessionAvatar`、`MonogramAvatar` | 状态色只有一张表；`CountBadge` 视觉上写 99+，读屏读完整数字；`MonogramAvatar` 按名字哈希取色 |
-| 页面状态 | `EmptyState`、`ServiceState`（整页：未配对 / 连不上 hub / hub 太旧）、`InlineError`（就近显示 + 重试）、`Notice`（caution / info）、`CachedNote`（「显示的是本机缓存 · N 分钟前」）、`ConnectionTitle` | 取消、超时、离线类的错误不进 `InlineError`，连接状态由标题位负责 |
-| 待定状态 | `PendingBadge`、`PendingBubble`、`VerifySheet` | 状态和文案见 5.6；只读的核对入口 + 人工处置 |
-| 流程 | `StepProgress`、`ConfirmSheet`、`CountdownLabel`、`ReturnChip` | `ConfirmSheet` 写清是什么、在哪、后果，红色主按钮 + 取消（`CloseAgentSheet` 的写法）；用两步确认 token，状态变了旧确认就提交不了 |
-| 表单 | `FormSection`、`LabeledField`、`SecretField` | 读屏名称、键盘类型；`SecretField` 失焦后隐藏内容，离开页面清空 |
-| 产品件（放在各 Feature 里，只准用 token） | `ChatList`、`ComposerRow`、`StatusLine`、`WorkLine`、`InteractionPanel` / `InteractionSheet`（`QuestionForm`、`PlanForm`、`PermissionForm`、`ScreenForm`、`ElicitationForm`）、`RequestInbox`、`DiffView`、`MonoText`、`FullTextReader`、`TaskProgressBanner`、`SearchOverlay`、`TerminalKeyBar` | 每个组件一页规格（尺寸、状态、读屏名称、最小触控区、是否允许换行），放 `docs/components/` |
+| Basics | `Surface`, `Card`, `Panel`, `PageBackground`, `Hairline` | Surface treatment follows style tokens (glass / solid / soft / hairline); Android Native uses tonal surfaces |
+| Buttons | `PrimaryButton`, `SecondaryButton`, `DestructiveButton`, `IconButton` | Single-line text; shrink, switch to icon, or move into a menu if it does not fit; minimum touch target 44pt / 48dp; `IconButton` requires a screen-reader label; in-progress state such as Saving… disables the button |
+| State | `StatusDot`, `StatusLabel`, `Chip` (neutral / tinted / outlined), `CountBadge`, `SessionAvatar`, `MonogramAvatar` | One state-color table; `CountBadge` visually shows 99+ but reads the full number; `MonogramAvatar` hashes names to colors |
+| Page state | `EmptyState`, `ServiceState` (whole page: unpaired / hub unreachable / hub too old), `InlineError` (nearby + retry), `Notice` (caution / info), `CachedNote` ("Showing local cache · N minutes ago"), `ConnectionTitle` | Cancellation, timeout, and offline errors do not enter `InlineError`; connection state belongs in the title area |
+| Pending state | `PendingBadge`, `PendingBubble`, `VerifySheet` | State and wording in 5.6; read-only verification entry + manual resolution |
+| Flows | `StepProgress`, `ConfirmSheet`, `CountdownLabel`, `ReturnChip` | `ConfirmSheet` identifies what, where, and consequences, with red primary action + Cancel (`CloseAgentSheet` approach); two-step confirmation token, so stale confirmation cannot submit after state changes |
+| Forms | `FormSection`, `LabeledField`, `SecretField` | Screen-reader labels, keyboard types; `SecretField` hides contents on blur and clears on leaving the page |
+| Product components (inside Features, tokens only) | `ChatList`, `ComposerRow`, `StatusLine`, `WorkLine`, `InteractionPanel` / `InteractionSheet` (`QuestionForm`, `PlanForm`, `PermissionForm`, `ScreenForm`, `ElicitationForm`), `RequestInbox`, `DiffView`, `MonoText`, `FullTextReader`, `TaskProgressBanner`, `SearchOverlay`, `TerminalKeyBar` | One specification page per component (dimensions, states, screen-reader labels, minimum touch target, wrapping policy), in `docs/components/` |
 
 ---
 
-## 5. 状态机与文案
+## 5. State machines and wording
 
-### 5.1 会话状态行（`StatusLine`，客户端合成）
+### 5.1 Session status line (`StatusLine`, synthesized by client)
 
-按优先级取第一个成立的：
+Take the first matching state in priority order:
 
-| 状态 | 条件 | 左边的文案 | 点了 |
+| State | Condition | Left-side text | On tap |
 | --- | --- | --- | --- |
-| `ended` | 会话已关闭，或被 `/clear` 换成了新会话 | 「会话已结束」/「已换成新会话」 | 打开新会话 / 恢复 |
-| `machineOffline` | 会话所在机器的 node 断开 | 「电脑离线，状态可能过时 · N 分钟前」 | 重连这台电脑 |
-| `submitting` | 这个会话有写操作还没回执 | 「正在发送…」/「正在回传你的选择…」 | — |
-| `unconfirmed` | 有结果待确认的操作 | 「上次操作结果待确认」 | 会话状态浮层 |
-| `needsYou` | 有待处理的请求，或 herdr 报 blocked | 「等你处理：允许运行 Bash」/「等你处理 3 件」 | 交互面板 / 请求列表 |
-| `stopping` | 已发出中断，还没离开工作中 | 「已发出中断，等电脑确认」 | — |
-| `working` | 工作中 | 「正在工作 · 3 分 12 秒 · 工具 14」 | 打开终端 |
-| `waiting` | 已看，但 `/loop` 没到点或后台任务还在跑 | 「循环中 · 下次 11:56」/「等后台任务 · 2 个」 | 详情 |
-| （收起） | 完成未看 / 已看 / 未运行 | 不显示 | — |
+| `ended` | Session closed or replaced with a new one by `/clear` | "Session ended" / "Replaced with a new session" | Open new session / Resume |
+| `machineOffline` | Node disconnected on the session computer | "Computer offline; state may be stale · N minutes ago" | Reconnect this computer |
+| `submitting` | A write in this session has no receipt yet | "Sending…" / "Returning your choice…" | — |
+| `unconfirmed` | An operation has an unconfirmed result | "Last operation's result unconfirmed" | Session-status overlay |
+| `needsYou` | Pending request or herdr blocked | "Needs you: allow Bash" / "3 items need you" | Interaction panel / request list |
+| `stopping` | Interrupt sent, still Working | "Interrupt sent; waiting for computer confirmation" | — |
+| `working` | Working | "Working · 3 min 12 sec · 14 tools" | Open terminal |
+| `waiting` | Seen, but `/loop` not due or background tasks running | "Looping · next 11:56" / "Waiting for 2 background tasks" | Details |
+| (hidden) | Unread / Seen / Not running | Nothing | — |
 
-hub 连不上时由标题位显示（现有的 `ConnectionTitle`），状态行不重复。Claude 的转圈实况文字（`Cogitating… 12s`）要读屏才能拿到，现在只在打开终端时才读（为省 node 开销，`docs/archive/lanes/msg-render-plan.md` C4），状态行不显示它。
+Hub-unreachable state appears in the title area (existing `ConnectionTitle`), not again in this line. Claude spinner text (`Cogitating… 12s`) requires screen reading, currently done only when opening terminal (to save node work, `docs/archive/lanes/msg-render-plan.md` C4), so it is not shown in the status line.
 
-### 5.2 发出的消息
+### 5.2 Outgoing messages
 
 ```
-draft ──发送──▶ queued（先写进 outbox 再清空输入框）
-queued ──在线──▶ sending
-queued ──没网──▶ waiting「连上后自动发送」──恢复且补拉完成──▶ sending
-sending ──hub 收下（新 hub 落库后回 accepted）──▶ accepted ──node 打完字──▶ delivered ──对话记录里出现同一个 id 或同样的文字──▶ shown（气泡换成真消息）
-sending ──请求没发出去（DNS / 拒绝连接 / 没网）──▶ waiting
-sending ──发出去但没回音（超时 / 连接断开）──▶ unknown
-    新 hub（有 client_ops）：同一个 id 自动重试，hub 返回原结果 ──▶ accepted / refused …
-    旧 hub：保持「结果待确认」，等对话记录里出现它，超时后交给用户（重发 / 不发了）
-sending ──确定的拒绝（input_draft / dialog_open / op_id_reused / invalid）──▶ refused「没有发出：<原因>」+ 可选操作（清空并发送 / 编辑）
-delivered 之前 node 报 delivered:unknown ──▶ verifying「正在核对」──记录里出现──▶ shown
-                                                    └──超过时限──▶ needsReview「没能确认是否送达」+ 重发 / 不发了
-取消：只有 queued / waiting 能直接取消；其他状态的取消由 hub 在同一个事务里和派发比先后
+draft ──send──▶ queued (persist in outbox before clearing composer)
+queued ──online──▶ sending
+queued ──offline──▶ waiting "Sends automatically when connected" ──reconnected and catch-up complete──▶ sending
+sending ──hub receives (new hub returns accepted after persistence)──▶ accepted ──node finishes typing──▶ delivered ──same id or text appears in transcript──▶ shown (bubble becomes real message)
+sending ──request never sent (DNS / connection refused / offline)──▶ waiting
+sending ──sent without response (timeout / disconnect)──▶ unknown
+    New hub (client_ops): automatically retry same id; hub returns original result ──▶ accepted / refused …
+    Old hub: keep "Result unconfirmed," wait for transcript appearance, then ask user after timeout (Resend / Discard)
+sending ──definitive rejection (input_draft / dialog_open / op_id_reused / invalid)──▶ refused "Not sent: <reason>" + optional action (Clear and send / Edit)
+Before delivered, node reports delivered:unknown ──▶ verifying "Verifying" ──appears in transcript──▶ shown
+                                                    └──deadline exceeded──▶ needsReview "Could not confirm delivery" + Resend / Discard
+Cancel: only queued / waiting can be canceled directly; other states race cancellation against dispatch in the same hub transaction
 ```
 
-### 5.3 交互请求
+### 5.3 Interaction requests
 
-`pending(截止时间)` → `answering` → `answered`（hook 已取走，文案「已回传你的选择」）| `expired` | `resolvedElsewhere`（在电脑上或别的设备上处理了）| `handedToTerminal` | `unknown`（回答请求丢了回执，按请求 id 查 hub 的交互列表：不在了就算处理过）。
+`pending(deadline)` → `answering` → `answered` (hook collected it; wording "Your choice has been returned") | `expired` | `resolvedElsewhere` (handled on computer or another device) | `handedToTerminal` | `unknown` (answer request receipt lost; query hub interaction list by request id: if absent, count as handled).
 
-### 5.4 一次性操作（中断、改名、关闭、改模式 / 思考强度、停止循环、`/clear`）
+### 5.4 One-off operations (interrupt, rename, close, change mode / reasoning effort, stop loop, `/clear`)
 
-`pending` → `sent` → `done` | `failed`（确定的失败，显示原因）| `unknown` → `verifying`（重读权威状态或查 `GET /api/v1/ops/{id}`）→ `done` | `failed`。同一会话有 `unknown` 时，下一次**同类**操作要先核对完。中断不等于取消排队消息。
+`pending` → `sent` → `done` | `failed` (definitive failure, show reason) | `unknown` → `verifying` (reread authoritative state or query `GET /api/v1/ops/{id}`) → `done` | `failed`. If a session has an `unknown`, verify before another operation **of the same type**. Interrupt does not cancel queued messages.
 
-### 5.5 连接（现有，写进规格）
+### 5.5 Connection (existing, recorded in specification)
 
-- iOS 现状：四态 `online` / `waitingForNetwork` / `connecting` / `updating`，1.5 秒去抖，ping 5 秒没回算弱网，45 秒没有任何消息判定连接已死，退避 1→20 秒，网络恢复立即重连。
-- Android 照搬，另外：
-  - 多两个状态：`needsLocalNetworkPermission`（「需要本地网络权限」+「去授权」）、`certificateMismatch`（「hub 的证书变了」+「重新扫码」）。这两个状态不自动重试，等用户处理。
-  - 弱网判断靠应用层 ping（[hub-changes.md](hub-changes.md) 3.8）；hub 不支持时只能在断线后才知道。
-  - 「连接已死」的判定按当前心跳：前台照 45 秒；后台是「协商的心跳间隔 + pong 超时」内没收到 hub 的任何数据（[hub-changes.md](hub-changes.md) 1.6）。
-  - 收到 401 不再重连，显示「配对已失效」+「重新扫码」。
-  - 状态行上点「连接中…」可以打开连接诊断页（3.8）。
+- Current iOS: four states `online` / `waitingForNetwork` / `connecting` / `updating`, 1.5-second debounce, weak network if ping gets no reply for 5 seconds, dead connection after 45 seconds without any message, 1→20-second backoff, immediate reconnect when network recovers.
+- Android adopts this, plus:
+  - Two more states: `needsLocalNetworkPermission` ("Local network permission required" + Authorize), `certificateMismatch` ("Hub certificate changed" + Scan again). Neither retries automatically; wait for user action.
+  - Weak-network detection uses application ping ([hub-changes.md](hub-changes.md) 3.8); with unsupported hubs, it is known only after disconnect.
+  - Dead-connection detection follows current heartbeat: 45 seconds in foreground; in background, no hub data within "negotiated heartbeat interval + pong timeout" ([hub-changes.md](hub-changes.md) 1.6).
+  - A 401 stops reconnection and shows "Pairing no longer valid" + Scan again.
+  - Tap "Connecting…" in the status line to open connection diagnostics (3.8).
 
-### 5.6 文案词表
+### 5.6 Wording glossary
 
-| 场景 | 文案 | 图标 | 颜色 |
+| Scenario | Text | Icon | Color |
 | --- | --- | --- | --- |
-| 正在发 | 发送中 | 转圈 | 次要灰 |
-| 没网排队 | 连上后自动发送 | 时钟 | 次要灰 |
-| 发出去没回音 | 结果待确认 | 时钟问号 | caution |
-| 自动核对中 | 正在核对 | 转圈 | caution |
-| 核对不出来 | 没能确认是否送达 | 感叹号圆 | caution |
-| 被拒 | 没有发出：<原因> | 感叹号圆 | caution（可以操作，不算错误） |
-| 一次性操作断网 | 连不上 hub，刚才的操作没有生效 | 信息 | info 蓝（现有规则，4 秒内最多一条） |
-| 交互回传成功 | 已回传你的选择 | 勾 | positive |
-| 被别处处理 | 已在电脑上处理 | 勾 | 次要灰 |
-| 过期 | 已过期，回到终端处理 | 时钟 | 次要灰 |
-| 结果未知的任务 | 无结果记录（不写「运行中」） | — | 次要灰 |
-| 推导出来的视图 | 根据已加载的记录整理，可能和电脑上此刻不同 | — | 次要灰 |
+| Sending | Sending | Spinner | Secondary gray |
+| Queued offline | Sends automatically when connected | Clock | Secondary gray |
+| Sent without response | Result unconfirmed | Clock-question | caution |
+| Automatic verification | Verifying | Spinner | caution |
+| Unable to verify | Could not confirm delivery | Exclamation circle | caution |
+| Rejected | Not sent: <reason> | Exclamation circle | caution (actionable, not an error) |
+| One-off operation offline | Cannot connect to hub; the last operation did not take effect | Info | info blue (existing rule, at most one in 4 seconds) |
+| Interaction successfully returned | Your choice has been returned | Checkmark | positive |
+| Handled elsewhere | Handled on the computer | Checkmark | Secondary gray |
+| Expired | Expired; handle in terminal | Clock | Secondary gray |
+| Task with unknown result | No result recorded (not Running) | — | Secondary gray |
+| Derived view | Based on loaded records; may differ from the computer's current state | — | Secondary gray |
 
-图标：iOS 用 SF Symbols（`clock`、`clock.badge.questionmark`、`exclamationmark.circle`、`info.circle`、`checkmark`），Android 用对应的 Material Symbols（`schedule`、`pending`、`error`、`info`、`check`）。
+Icons: iOS uses SF Symbols (`clock`, `clock.badge.questionmark`, `exclamationmark.circle`, `info.circle`, `checkmark`); Android uses corresponding Material Symbols (`schedule`, `pending`, `error`, `info`, `check`).
 
 ---
 
-## 6. 页面模型规范（两端同一套）
+## 6. Page model rules (same on both platforms)
 
-1. 页面模型持有并负责取消自己的任务；离开页面、切会话、进后台时取消。
-2. 每次 await 之前记下版本号（`revision`），回来先比对，不一致就丢掉结果。切会话、跳转、进后台都让版本号加一。
-3. 忙时来的刷新只做标记，当前这次结束后再补一次，合并成一次。
-4. 多个页面看同一个会话时共用一个订阅（引用计数），最后一个离开才退订。
-5. 内部的事件流都有上限：缓冲满了发「需要全量核对」信号，由消费者整体重读，不默默丢。
-6. 需要确认的操作分两步：`prepare()` 生成带版本的确认对象，`commit(token)` 时版本变了就拒绝。
-7. 派生数据（行、Markdown 解析、链接和路径识别）按 id 缓存，在后台预热，不在视图的求值里跑正则。
-8. 取消不是错误；超时、离线由连接状态负责展示。
+1. Page models own and cancel their tasks on leaving, switching sessions, or entering background.
+2. Capture `revision` before each await and compare on return; discard mismatches. Switching sessions, navigation, and backgrounding increment it.
+3. Refreshes arriving while busy set a flag; run one coalesced follow-up after the current operation finishes.
+4. Pages viewing the same session share a reference-counted subscription; unsubscribe only when the last leaves.
+5. All internal event streams are bounded: a full buffer signals "Full reconciliation required," causing consumers to reread everything rather than silently dropping events.
+6. Confirmation is two-step: `prepare()` creates a versioned confirmation object; `commit(token)` rejects if the version changed.
+7. Cache derived data (rows, Markdown parsing, link/path recognition) by id and warm it in the background; no regex work during view evaluation.
+8. Cancellation is not an error; connection state displays timeout/offline conditions.
 
 | | iOS | Android |
 | --- | --- | --- |
-| 模型 | `@MainActor @Observable final class` | `ViewModel` + `StateFlow<UiState>` |
-| 共享可变状态 | `actor` | `Mutex` 或 `limitedParallelism(1)` |
-| 有界流 | `AsyncStream(bufferingPolicy: .bufferingNewest(n))` | `MutableSharedFlow(extraBufferCapacity = n, onBufferOverflow = DROP_OLDEST)` |
-| 生命周期 | `scenePhase`、`.task(id:)` | `repeatOnLifecycle(STARTED)`、`LifecycleEventEffect` |
-| 测试闸门 | `CheckedContinuation` | `CompletableDeferred` |
+| Model | `@MainActor @Observable final class` | `ViewModel` + `StateFlow<UiState>` |
+| Shared mutable state | `actor` | `Mutex` or `limitedParallelism(1)` |
+| Bounded stream | `AsyncStream(bufferingPolicy: .bufferingNewest(n))` | `MutableSharedFlow(extraBufferCapacity = n, onBufferOverflow = DROP_OLDEST)` |
+| Lifecycle | `scenePhase`, `.task(id:)` | `repeatOnLifecycle(STARTED)`, `LifecycleEventEffect` |
+| Test gate | `CheckedContinuation` | `CompletableDeferred` |
 
 ---
 
-## 7. 设计 token 结构（`spec/tokens/`）
+## 7. Design token structure (`spec/tokens/`)
 
-| 文件 | 内容 |
+| File | Contents |
 | --- | --- |
-| `color.semantic.json` | 按风格 × 深浅色取值：`accent`、`userBubble`、`userBubbleText`、`pageBackground`、`card`、`cardStroke`；不随风格变的：`brand`、`danger`、`positive`、`caution`、`cautionText`、`ai`、`loop`、`countBadge`、`diff.*`、`hue.*`；`fill.well/chip/pressed`（iOS 现在用系统 fill，Android 没有对应物，要显式写色值） |
-| `color.status.json` | 需要你 / 工作中 / 完成未看 / 已看 / 未运行 × `dot` / `text` / `tint` |
-| `dimension.json` | `radius`（6 / 10 / 14 / 20 / 22 + 胶囊）、`space`（2…32）、`minTouch`（iOS 44，Android 48）、手表尺寸 |
-| `type.json` | 按角色：`panelTitle`、`rowTitle`、`body`、`cardBody`、`preview`、`meta`、`chip`、`micro`、`code`、`greeting`；iOS 映射到文本样式（跟随动态字体），Android 映射到 sp 的 `TextStyle`（跟随字体缩放） |
-| `motion.json` | `state` 0.25s snappy、`layout` 0.3s smooth；「减少动态效果」时一律为 0 |
-| `surface.json` | 每种风格的表面处理（glass / solid / soft / hairline）、阴影、描边 |
-| `rules.json` | 对比度规则：`onAccent / accent ≥ 3.5`、`userBubbleText / userBubble ≥ 4.5`、`accent / pageBackground ≥ 3`、`status.text / pageBackground ≥ 4.5`，在所有风格 × 深浅色上检查 |
+| `color.semantic.json` | Values by style × light/dark: `accent`, `userBubble`, `userBubbleText`, `pageBackground`, `card`, `cardStroke`; style-independent: `brand`, `danger`, `positive`, `caution`, `cautionText`, `ai`, `loop`, `countBadge`, `diff.*`, `hue.*`; `fill.well/chip/pressed` (iOS currently uses system fills, Android has no equivalent and needs explicit colors) |
+| `color.status.json` | Needs you / Working / Unread / Seen / Not running × `dot` / `text` / `tint` |
+| `dimension.json` | `radius` (6 / 10 / 14 / 20 / 22 + capsule), `space` (2…32), `minTouch` (iOS 44, Android 48), watch dimensions |
+| `type.json` | Roles: `panelTitle`, `rowTitle`, `body`, `cardBody`, `preview`, `meta`, `chip`, `micro`, `code`, `greeting`; iOS maps to text styles (Dynamic Type), Android to sp `TextStyle` (font scaling) |
+| `motion.json` | `state` 0.25s snappy, `layout` 0.3s smooth; all 0 under Reduce Motion |
+| `surface.json` | Per-style surface treatment (glass / solid / soft / hairline), shadows, strokes |
+| `rules.json` | Contrast rules: `onAccent / accent ≥ 3.5`, `userBubbleText / userBubble ≥ 4.5`, `accent / pageBackground ≥ 3`, `status.text / pageBackground ≥ 4.5`, checked across every style × light/dark |
 
-固定字号的例外沿用现有白名单：终端网格、灵动岛、分享卡片、飞书卡片和文档。
-
----
-
-## 8. 无障碍与动效
-
-- **辅助字号**：iOS 用 `isAccessibilitySize`，Android 用 `fontScale` 超过阈值（阈值待实测确定）。触发后：
-  - 横排的分段控件改成竖排；
-  - 隐藏行首的装饰图标；
-  - 标题和路径放开行数；
-  - 按钮放不下时改图标、缩短文案或收进菜单，**不许换行**。
-- **减少动态效果**：iOS 读 `accessibilityReduceMotion`，Android 读系统的动画缩放（为 0 时）。设计系统提供 `reduceMotion` 环境值。需要你的圆点呼吸、转圈之外的动画、分段进度的光点都要停。
-- **读屏**：装饰图标隐藏；计数读完整数字；分段进度只读一行文字状态；状态点必须配文字（列表行的元信息里有「需要你」）。
-- **触感**：发出、回答成功用 success，新交互用 warning，出错用 error。Android 用 `HapticFeedbackConstants.CONFIRM / REJECT`。
+Fixed-font exceptions keep the existing allowlist: terminal grid, Dynamic Island, share cards, Lark cards, and documents.
 
 ---
 
-## 9. Android 上的形态差异
+## 8. Accessibility and motion
 
-| 地方 | iOS | Android |
+- **Accessibility text sizes**: iOS uses `isAccessibilitySize`; Android uses `fontScale` above a threshold (to be determined by testing). When triggered:
+  - Horizontal segmented controls become vertical;
+  - Hide decorative leading icons;
+  - Allow titles and paths more lines;
+  - If buttons do not fit, use icons, shorter text, or menus; **never wrap**.
+- **Reduce Motion**: iOS reads `accessibilityReduceMotion`, Android the system animation scale (when 0). Design system supplies a `reduceMotion` environment value. Stop Needs-you dot breathing, non-spinner animations, and step-progress light dots.
+- **Screen readers**: hide decorative icons; read full counts; step progress reads one text status line; state dots require text (list metadata includes Needs you).
+- **Haptics**: success for sending and successful answers, warning for new interactions, error for failures. Android uses `HapticFeedbackConstants.CONFIRM / REJECT`.
+
+---
+
+## 9. Android-specific forms
+
+| Area | iOS | Android |
 | --- | --- | --- |
-| 返回 | 系统返回；对话页自绘顶栏后手动恢复边缘右滑 | 预测性返回（`PredictiveBackHandler`），不自绘边缘手势；浮层和交互完整页跟着系统返回关闭，关闭时按请求 id 保存草稿 |
-| 对话页切到文件 / Git | 往左划 | 屏幕边缘被系统返回手势占用：改成 ⋯ 菜单和顶部的三段切换（对话 / 文件 / Git），不做整页横滑 |
-| 选择文字 | 长按「选择」弹出纯文本页（SwiftUI Text 不能跨块选） | `SelectionContainer` 原地跨段落选择，长按操作条里没有「选择」这一项 |
-| 长按消息 | 深色操作条（复制 / 选择 / 引用 / 分享 / 编辑） | 同样的操作条（`Popup`），少一个「选择」 |
-| 浮层 | sheet + detents | `ModalBottomSheet`；链接浮层需要「背后可交互」，用非模态的两档可拖动浮层（android.md 5.6） |
-| 滑动操作 | 列表行多按钮 swipe | 首版用长按菜单，满滑「已处理」用 `SwipeToDismissBox`；多按钮滑动第二批再做 |
-| 通知 | APNs；类别 + 按钮；只有「打回」能直接输入 | 只走常驻连接，不依赖 Google 服务（android.md 5.8）；渠道 + 动作 + `RemoteInput`：拒绝原因和计划意见都能在通知里输入；提问和屏幕卡的选项能直接点；处理完撤回通知 |
-| 实时活动 | 锁屏 + 灵动岛 | 常驻通知；Android 16+ 申请成 Live Update，状态栏胶囊只放一段短文字（≤ 6 字最稳） |
-| 连接 hub | 内网明文或 VPN，单个地址（这一轮不改） | 公网直连优先 IPv6：多地址探测、TLS 公钥钉扎、连接诊断页；在家里 Wi-Fi 上要本地网络权限（3.7、3.8、5.5） |
-| 后台 | 推送唤醒 | 前台服务常驻连接，后台心跳由 hub 发；各家国产系统要放开自启动和电池限制（准备清单，android.md 5.18） |
-| 安装和更新 | TestFlight | 没有 Play 商店：APK 由 hub 托管，App 内检查更新（android.md 第 9 节） |
-| 字体 | 系统字体 + 动态字体 | 系统字体 + sp；终端用打包的 JetBrains Mono |
-| 图标 | SF Symbols | Material Symbols（约一百个图标逐个映射，建对照表） |
-| Persona tab 的侧边栏 | 自绘的可拖出侧边栏（像 ChatGPT），宽屏时是双栏的一列 | `ModalNavigationDrawer`；宽屏时是常驻的一列 |
-| 宽屏双栏 | iPhone Duo 打开时列表 + 详情双栏，按宽度判断、不按设备 | Navigation 3 的列表-详情布局，同样按宽度判断（平板、折叠屏） |
+| Back | System back; manually restore edge-right-swipe after a custom chat header | Predictive back (`PredictiveBackHandler`), no custom edge gesture; overlays and full interaction pages dismiss with system back, saving drafts by request id |
+| Chat to files / Git | Swipe left | System back owns screen edges: use ⋯ menu and a top three-way switch (Chat / Files / Git), no whole-page horizontal swipe |
+| Text selection | Long-press Select opens plain-text page (SwiftUI Text cannot select across blocks) | `SelectionContainer` selects across paragraphs in place; no Select entry in long-press actions |
+| Long-press message | Dark action bar (Copy / Select / Quote / Share / Edit) | Same action bar (`Popup`), minus Select |
+| Overlays | sheet + detents | `ModalBottomSheet`; links need interaction behind them, so use a nonmodal draggable two-detent overlay (android.md 5.6) |
+| Swipe actions | Multi-button row swipe | First release long-press menus, full-swipe Done via `SwipeToDismissBox`; multi-button swipes in second batch |
+| Notifications | APNs; categories + buttons; direct input only for Send back | Persistent connection only, no Google-services dependency (android.md 5.8); channels + actions + `RemoteInput`: denial reasons and plan comments both entered in notifications; question/screen-card options tappable; withdraw after handling |
+| Live Activities | Lock screen + Dynamic Island | Persistent notification; request Live Update on Android 16+, with only short status-bar capsule text (≤ 6 characters most reliable) |
+| Hub connection | Plaintext LAN or VPN, one address (unchanged this round) | Direct internet, IPv6 preferred: multi-address probing, TLS public-key pinning, diagnostics; home Wi-Fi requires local network permission (3.7, 3.8, 5.5) |
+| Background | Push wakeup | Foreground service with persistent connection, hub-originated background heartbeat; Chinese vendor systems need autostart and battery restrictions relaxed (readiness checklist, android.md 5.18) |
+| Installation and updates | TestFlight | No Play Store: hub-hosted APK, in-app update checks (android.md section 9) |
+| Fonts | System font + Dynamic Type | System font + sp; bundled JetBrains Mono for terminal |
+| Icons | SF Symbols | Material Symbols (map roughly one hundred icons individually, with a mapping table) |
+| Persona tab sidebar | Custom draggable sidebar (like ChatGPT), a column in wide-screen dual-column mode | `ModalNavigationDrawer`; persistent column on wide screens |
+| Wide-screen dual columns | iPhone Duo shows list + detail based on width, not device | Navigation 3 list-detail layout, also width-based (tablets, foldables) |

@@ -1,141 +1,141 @@
-# 手机数据工具
+# Phone data tools
 
-`apple/Persona/PhoneTools/`：把 iPhone 能力包装成 MCP 工具，让 Claude 在电脑上操作手机数据。开关和授权在 设置 › 连接器 › 这台 iPhone（2026-11-01 以前叫「手机数据」）。
+`apple/Persona/PhoneTools/`: wraps iPhone capabilities as MCP tools so Claude on a computer can operate phone data. Toggles and authorization are under Settings › Connectors › This iPhone (called "Phone data" before 2026-11-01).
 
-链路：Claude 调 `phone_*` 工具 → `personad mcp` → node.sock → hub → 在线的手机（iPhone、安卓或 Mac，WebSocket `tool_call`）→
-App 在本地查询/写入 → `tool_result` 原路返回。
+Route: Claude calls a `phone_*` tool → `personad mcp` → node.sock → hub → an online device (iPhone, Android, or Mac, WebSocket `tool_call`) →
+the app queries/writes locally → `tool_result` returns along the same route.
 
-工具的描述和 schema 由 App 注册（iOS `apple/Persona/PhoneTools/`，安卓 `android/platform/phonetools/`（`PhoneToolCatalog.kt`）），不在服务端的 `server/internal/prompts/mcp/`（`docs/prompts.md`「MCP 工具」）。
-两端同名的工具描述和参数必须一字不差（hub 把各台手机的工具按名字合成一份，`PhoneToolCatalogTest` 对照 iOS 导出的清单）。
+Tool descriptions and schemas are registered by the app (iOS `apple/Persona/PhoneTools/`, Android `android/platform/phonetools/` (`PhoneToolCatalog.kt`)), not in the server's `server/internal/prompts/mcp/` (`docs/prompts.md`, "MCP tools").
+Descriptions and parameters for tools with the same name must match exactly on both platforms (the hub merges tools from all phones by name; `PhoneToolCatalogTest` compares against the catalog exported by iOS).
 
-邮箱工具 `mail_*` 走同一个 `personad mcp`，但在 hub 里执行、不经过手机，见下面「邮箱工具（mail_*）」。
+Mail tools `mail_*` use the same `personad mcp`, but execute on the hub without going through the phone; see "Mail tools (mail_*)" below.
 
-## 注册与开关
+## Registration and toggles
 
-| 入口 | 作用 |
+| Entry | Purpose |
 | --- | --- |
-| `PhoneToolRegistry.all` | 全部工具（不看开关），测试和设置页用 |
-| `PhoneToolRegistry.enabledSpecs()` | 只含用户打开的数据源，连上 hub 后 `register_phone` 发这个 |
-| `PhoneToolRegistry.call(name:args:confirm:)` | 执行一次调用，永不抛错：失败变成 `isError=true` + 说明 |
-| `PhoneToolRegistry.authorizationStatus(_:)` / `requestAccess(_:)` | 设置页显示状态、请求权限 |
+| `PhoneToolRegistry.all` | All tools (ignoring toggles), used by tests and settings |
+| `PhoneToolRegistry.enabledSpecs()` | Only user-enabled data sources; sent in `register_phone` after connecting to the hub |
+| `PhoneToolRegistry.call(name:args:confirm:)` | Executes one call, never throws: failure becomes `isError=true` + explanation |
+| `PhoneToolRegistry.authorizationStatus(_:)` / `requestAccess(_:)` | Displays status and requests permission in settings |
 
-每个数据源（通讯录 / 日历 / 提醒 / 位置 / 健康 / 照片 / 设备 / 剪贴板 / 通知）在设置里可单独关掉；关掉后
-`enabledSpecs()` 里不再出现，模型看不到这些工具，调用也会被拒绝（防止旧会话继续调）。
+Each data source (contacts / calendar / reminders / location / health / photos / device / clipboard / notifications) can be disabled individually in settings. Disabled sources
+no longer appear in `enabledSpecs()`, so the model cannot see their tools, and calls are rejected too (preventing old sessions from continuing to call them).
 
-上表是 iOS（Mac 同一份代码）。**安卓**的对应是 `android/platform/phonetools/` 里的 `PhoneToolRegistry.kt`，同样有 `all`、`enabledSpecs()`、`call(…)`，所有调用都过它这一道关：
+The table above is for iOS (Mac uses the same code). **Android** uses `PhoneToolRegistry.kt` in `android/platform/phonetools/`, also with `all`, `enabledSpecs()`, and `call(…)`; all calls pass through this single gate:
 
-- **开关**在 设置 › 手机数据（安卓没有「连接器」分组），按数据源（通讯录 / 日历 / 位置 / 健康 / 照片 / 剪贴板 / 设备信息 / 通知，没有提醒事项）各一个，默认全关，按配对分开保存（`PhoneToolSettings`）。
-- **前台限制**写在工具目录里：`PhoneToolCatalog.kt` 给 `phone_location_current` 和剪贴板的两个工具标了 `foreground = true`。App 不在前台时 `enabledSpecs()` 不带它们，调用会被拒绝，并提示模型请用户打开 Persona 再试，执行到一半 App 退到后台也会中断。
-- **注册给 hub**由 `PhoneToolsRuntime.kt` 负责：连上 hub 后发 `register_phone`。开关、前后台、常驻服务一变（每次回到前台也会重新查权限），就重新算 `enabledSpecs()`，有变化再发一次。断线或解除配对时发空列表。App 在前台或常驻服务开着时才提供工具，两样都没有就一个都不提供。
-- 执行前依次查开关、权限、前台、在线；要确认的写操作（只有新建日程）在用户点了允许以后再查一遍。同一个 `call_id` 重复送来时直接返回上次的结果，不会再执行一次。
+- **Toggles** are under Settings › Phone data (Android has no "Connectors" group), one per data source (contacts / calendar / location / health / photos / clipboard / device information / notifications, no reminders). All default to off and are stored separately per pairing (`PhoneToolSettings`).
+- **Foreground restrictions** are declared in the tool catalog: `PhoneToolCatalog.kt` marks `phone_location_current` and the two clipboard tools with `foreground = true`. When the app is not in the foreground, `enabledSpecs()` omits them and calls are rejected, telling the model to ask the user to open Persona and retry. Moving to the background during execution also interrupts the call.
+- **Hub registration** is handled by `PhoneToolsRuntime.kt`: send `register_phone` after connecting. When toggles, foreground/background state, or the persistent service change (permissions are also rechecked on every return to the foreground), recalculate `enabledSpecs()` and resend only if it changed. Send an empty list on disconnect or unpairing. Tools are offered only while the app is in the foreground or the persistent service is enabled; with neither, none are offered.
+- Before execution, check toggles, permissions, foreground state, and online status in order; writes requiring confirmation (only event creation) recheck after the user taps Allow. Duplicate delivery of the same `call_id` returns the previous result without executing again.
 
-接线和细节见 `docs/android.md`「App 外壳与页面直达」（设置 › 手机数据那条）、「手机数据工具和 iOS 对齐（2026-11-02）」，以及 `android/platform/phonetools/README.md`。
+See `docs/android.md` ("App shell and direct page navigation," the Settings › Phone data item; "Phone data tools aligned with iOS (2026-11-02)") and `android/platform/phonetools/README.md` for wiring and details.
 
-## 工具一览
+## Tool catalog
 
-| 工具 | 需要权限 | 需确认 | 说明 |
+| Tool | Permission required | Confirmation | Description |
 | --- | --- | --- | --- |
-| `phone_contacts_search {query, limit?}` | 通讯录 | 否 | 按姓名、公司、职位、邮箱、电话号码模糊搜索（号码可带空格/横线）；返回姓名、公司、职位、带标签的电话和邮箱、生日（没有年份时返回 `--MM-DD`） |
-| `phone_calendar_events {start?, end?, query?, limit?}` | 日历（完全访问） | 否 | 默认今天 0 点到 7 天后；返回 id、标题、起止、全天标记、日历名、地点、备注前 300 字、参与人 |
-| `phone_calendar_create_event {title, start, end, location?, notes?, all_day?, calendar?}` | 日历 | **是** | 新建日程，按名字选日历，默认日历兜底 |
-| `phone_reminders_list {list?, include_completed?, limit?}` | 提醒事项 | 否 | 默认只列未完成；返回 id、标题、到期、是否完成、优先级、所属列表、备注前 300 字 |
-| `phone_reminders_create {title, due?, notes?, list?, priority?}` | 提醒事项 | **是** | 新建提醒，优先级 0/1–4/5/6–9 |
-| `phone_reminders_complete {id}` | 提醒事项 | **是** | 标记完成（用 `phone_reminders_list` 返回的 id） |
-| `phone_location_current {}` | 位置（使用期间） | 否 | 一次性定位，最多等 15 秒；返回经纬度、精度、海拔、时间、时区、反向地理编码地址 |
-| `phone_health_summary {metrics?, days?}` | 健康（读） | 否 | 默认步数、近 7 天；指标 steps / distance / active_energy / heart_rate / resting_heart_rate / sleep / weight |
-| `phone_health_write_sample {metric, value?, start, end?}` | 健康（写） | **是** | 写一条：steps（整数）/ distance（米）/ active_energy（千卡）/ weight（千克，一个时刻）/ sleep（一段睡着的时间，不要 value）；一段最长 24 小时、不能是将来；一次一条，不批量导入、不删数据 |
-| `phone_photos_recent {limit?, days?, screenshots_only?}` | 照片（读） | 否 | 最近照片和视频的元数据：本地 id、时间、类型、尺寸、截图/收藏、时长、经纬度 |
-| `phone_photo_get {id, max_size?}` | 照片（读） | 否 | 返回 JPEG 图片本身（长边默认 1280，质量 0.7）+ 一段元数据 |
-| `phone_device_info {}` | 无 | 否 | 机型标识、iOS 版本、电量与充电状态、低电量模式、存储、网络类型、时区、语言、热状态 |
-| `phone_clipboard_get {}` | 无（有系统粘贴提示） | 否 | 读剪贴板文本 |
-| `phone_clipboard_set {text}` | 无 | 否 | 覆盖剪贴板文本 |
-| `phone_notify {title, body, delay_seconds?}` | 通知 | 否 | 本地通知，可延迟最多 24 小时 |
-| `phone_notifications_list {limit?}` | 无 | 否 | **只有安卓**：Persona 自己正在显示的通知（id、标题、正文、时间），新的在前，默认 50、最多 100；不含确认卡的通知，看不到别的 App 的通知 |
+| `phone_contacts_search {query, limit?}` | Contacts | No | Fuzzy search by name, company, job title, email, or phone number (numbers may contain spaces/dashes); returns name, company, job title, labeled phone numbers and emails, and birthday (`--MM-DD` if no year) |
+| `phone_calendar_events {start?, end?, query?, limit?}` | Calendar (full access) | No | Defaults to midnight today through 7 days later; returns id, title, start/end, all-day flag, calendar name, location, first 300 characters of notes, and attendees |
+| `phone_calendar_create_event {title, start, end, location?, notes?, all_day?, calendar?}` | Calendar | **Yes** | Creates an event, selects a calendar by name, falls back to the default calendar |
+| `phone_reminders_list {list?, include_completed?, limit?}` | Reminders | No | Defaults to incomplete only; returns id, title, due date, completion, priority, list, and first 300 characters of notes |
+| `phone_reminders_create {title, due?, notes?, list?, priority?}` | Reminders | **Yes** | Creates a reminder; priority 0/1–4/5/6–9 |
+| `phone_reminders_complete {id}` | Reminders | **Yes** | Marks complete (using the id returned by `phone_reminders_list`) |
+| `phone_location_current {}` | Location (while in use) | No | One-shot location, waits up to 15 seconds; returns latitude/longitude, accuracy, altitude, time, time zone, and reverse-geocoded address |
+| `phone_health_summary {metrics?, days?}` | Health (read) | No | Defaults to steps over the last 7 days; metrics steps / distance / active_energy / heart_rate / resting_heart_rate / sleep / weight |
+| `phone_health_write_sample {metric, value?, start, end?}` | Health (write) | **Yes** | Writes one sample: steps (integer) / distance (meters) / active_energy (kilocalories) / weight (kilograms, one instant) / sleep (an asleep interval, no value); intervals at most 24 hours, not in the future; one sample at a time, no bulk import or deletion |
+| `phone_photos_recent {limit?, days?, screenshots_only?}` | Photos (read) | No | Recent photo/video metadata: local id, time, type, dimensions, screenshot/favorite flags, duration, latitude/longitude |
+| `phone_photo_get {id, max_size?}` | Photos (read) | No | Returns the JPEG image itself (default longest edge 1280, quality 0.7) + metadata |
+| `phone_device_info {}` | None | No | Model identifier, iOS version, battery and charging state, Low Power Mode, storage, network type, time zone, language, thermal state |
+| `phone_clipboard_get {}` | None (system paste prompt) | No | Reads clipboard text |
+| `phone_clipboard_set {text}` | None | No | Replaces clipboard text |
+| `phone_notify {title, body, delay_seconds?}` | Notifications | No | Local notification, optionally delayed up to 24 hours |
+| `phone_notifications_list {limit?}` | None | No | **Android only**: Persona's own currently displayed notifications (id, title, body, time), newest first, default 50, maximum 100; excludes confirmation-card notifications and cannot see other apps' notifications |
 
-各端有哪些工具：
+Tools by platform:
 
-- **iOS**：上表除 `phone_notifications_list` 外全有。
-- **Mac**（`PersonaMac`）：没有健康工具（Mac 没有健康数据，`PhoneToolRegistry.healthTools`），其余同 iOS。
-- **安卓**：没有提醒事项的三个工具和 `phone_health_write_sample`；多一个 `phone_notifications_list`。`phone_location_current` 只在 App 在前台时提供。
+- **iOS**: everything above except `phone_notifications_list`.
+- **Mac** (`PersonaMac`): no health tools (Mac has no health data, `PhoneToolRegistry.healthTools`); otherwise the same as iOS.
+- **Android**: no three reminder tools or `phone_health_write_sample`; adds `phone_notifications_list`. `phone_location_current` is available only while the app is in the foreground.
 
-返回统一是 pretty-printed JSON 文本（`ToolContent.text`），时间一律 ISO 8601 带本机时区偏移，日期字段用
-`yyyy-MM-dd`。`phone_photo_get` 额外带一个 `ToolContent.image`。
+Results are consistently pretty-printed JSON text (`ToolContent.text`), with all timestamps in ISO 8601 including the local time-zone offset; date fields use
+`yyyy-MM-dd`. `phone_photo_get` also includes a `ToolContent.image`.
 
-## 确认流程
+## Confirmation flow
 
-写操作（建日程、建提醒、完成提醒、写健康数据）带 `confirmation` 闭包，执行前 App 弹确认卡片（安卓上只有建日程要确认，它没有另外三个写工具），展示「新建日程『…』14:00 → 15:00」
-「写入健康：体重 72.5 千克」这种摘要；用户点拒绝时工具返回 `isError=true`，内容是 `The user declined on the phone.`。确认只针对单次调用，
-Claude 再调一次会再问一次。
+Writes (create event, create reminder, complete reminder, write health data) carry a `confirmation` closure; before execution, the app shows a confirmation card (Android only confirms event creation, since it lacks the other three write tools), with a summary such as "Create event ‘…’ 14:00 → 15:00"
+or "Write health: weight 72.5 kg". If the user denies, the tool returns `isError=true` with `The user declined on the phone.`. Confirmation covers only one call;
+if Claude calls again, it asks again.
 
-读操作不打扰用户，但每一次调用都会在会话里留下 `tool_call` / `tool_result` 记录。
+Reads do not interrupt the user, but every call leaves a `tool_call` / `tool_result` record in the session.
 
-`phone_clipboard_set` 和 `phone_notify` 也会改手机上的东西，但不弹确认。确认在 App 里做，hub 的闸门 `connector_gate` 管不到手机工具；`mail_send` 的确认是 hub 问的，规则不一样，见下节。
+`phone_clipboard_set` and `phone_notify` also change things on the phone, but do not show confirmation. Confirmation happens in the app; the hub's `connector_gate` does not govern phone tools. `mail_send` confirmation is requested by the hub under different rules; see the next section.
 
-## 邮箱工具（mail_*）
+## Mail tools (mail_*)
 
-邮箱工具由 hub 的邮件连接器提供（`server/internal/extmgr/mail_connector.go` 的 `mailConnector`，描述和参数在 `server/internal/prompts/mcp/mail/`），在 hub 上连 IMAP / SMTP，不经过手机。
-助手和 Agent 都能用（连接器的 `AgentTools: mail_*`）。账号和凭据见 `docs/mail.md`。
+Mail tools are supplied by the hub's mail connector (`mailConnector` in `server/internal/extmgr/mail_connector.go`, with descriptions and parameters in `server/internal/prompts/mcp/mail/`). They connect to IMAP / SMTP on the hub, without going through the phone.
+Both the assistant and Agents can use them (connector `AgentTools: mail_*`). See `docs/mail.md` for accounts and credentials.
 
-| 工具 | 需确认 | 说明 |
+| Tool | Confirmation | Description |
 | --- | --- | --- |
-| `mail_accounts {}` | 否 | 列出已配置的邮箱账号（id、名字、地址、服务商），搜索和发信前先调它拿 `account_id` |
-| `mail_search {account_id?, mailbox?, query?, limit?, before_uid?}` | 否 | 搜邮件，返回 uid、主题、发件人、时间、摘要；不填 `account_id` 就同时搜所有账号的收件箱；`mailbox` 默认 INBOX；`limit` 默认 20、最多 200；`before_uid` 往前翻页。Gmail 用 Gmail 搜索语法，其他服务商在服务端全文搜，服务端搜不到时改由 hub 在最新的一段邮件里匹配主题、发件人、收件人（不搜正文），结果里给出往前翻用的 `before_uid` |
-| `mail_read {account_id, uid, mailbox?}` | 否 | 读一封的全文：邮件头、纯文本、HTML、附件列表；不标已读 |
-| `mail_send {account_id, to, cc?, bcc?, subject, text, html?, in_reply_to?, references?}` | **是**（hub 问） | 发信；`to` / `cc` / `bcc` 是 `{name?, email}` 的数组；回复时 `in_reply_to` 填原信的 Message-ID，`references` 填原来的 References 加上它 |
+| `mail_accounts {}` | No | Lists configured email accounts (id, name, address, provider); call before search or sending to get `account_id` |
+| `mail_search {account_id?, mailbox?, query?, limit?, before_uid?}` | No | Searches mail, returning uid, subject, sender, time, and summary; omitting `account_id` searches all accounts' inboxes; `mailbox` defaults to INBOX; `limit` defaults to 20, maximum 200; `before_uid` pages backward. Gmail uses Gmail search syntax; other providers use server-side full-text search. If server search is unavailable, the hub matches subject, sender, and recipients in a recent batch (not body), returning `before_uid` for backward pagination |
+| `mail_read {account_id, uid, mailbox?}` | No | Reads one message in full: headers, plain text, HTML, attachment list; does not mark read |
+| `mail_send {account_id, to, cc?, bcc?, subject, text, html?, in_reply_to?, references?}` | **Yes** (hub asks) | Sends mail; `to` / `cc` / `bcc` are arrays of `{name?, email}`; for replies, set `in_reply_to` to the original Message-ID and `references` to its original References plus that ID |
 
-`mail_send` 的确认和手机写操作不是一套：它是连接器的写操作，过 hub 的闸门（`server/internal/connector/gate.go`）。
-没有规则命中时默认 confirm：hub 在手机上发一张批准卡（「Send mail to …: 主题」），用户拒绝时返回 `The user declined mail_send.`；
-hub.json 的 `connector_gate` 规则可以改成 allow（不问直接发）或 deny（直接拒绝）。健康对话里的写操作每次都问，allow 规则不放行（`docs/health.md`）。
+`mail_send` confirmation is separate from phone writes: it is a connector write passing through the hub gate (`server/internal/connector/gate.go`).
+If no rule matches, the default is confirm: the hub sends an approval card to the phone ("Send mail to …: subject"), returning `The user declined mail_send.` if denied;
+`connector_gate` rules in hub.json can set allow (send without asking) or deny (reject outright). Writes in health chats always ask; allow rules do not bypass confirmation (`docs/health.md`).
 
-## 权限
+## Permissions
 
-系统权限在两个时机请求：用户在设置页点「授权」（`PhoneToolRegistry.requestAccess`），或者第一次真正用到该工具时。
-通知是例外：`phone_notify` 第一次调用时自己弹授权框。其余工具遇到「尚未请求」只会返回错误、告诉模型去让用户授权，
-不会在工具执行中途弹系统框（健康数据也只会在授予之后重新请求一次读权限，用来补上新增的类型）。已拒绝的权限只能
-去 iOS 设置里改。
+System permissions are requested at two points: when the user taps "Authorize" in settings (`PhoneToolRegistry.requestAccess`), or on the first actual use of a tool.
+Notifications are an exception: `phone_notify` displays its own permission prompt on the first call. Other tools encountering "Not requested" only return an error and tell the model to ask the user to authorize;
+they do not show system dialogs mid-execution (health only requests read permission again after a grant, to add newly introduced types). Previously denied permissions can only
+be changed in iOS Settings.
 
-| 数据源 | Info.plist key | 授权方式 |
+| Data source | Info.plist key | Authorization |
 | --- | --- | --- |
-| 通讯录 | `NSContactsUsageDescription` | `requestAccess(for: .contacts)`，完整或 limited |
-| 日历 | `NSCalendarsFullAccessUsageDescription` | iOS 17+ `requestFullAccessToEvents()` |
-| 提醒事项 | `NSRemindersFullAccessUsageDescription` | iOS 17+ `requestFullAccessToReminders()` |
-| 位置 | `NSLocationWhenInUseUsageDescription` | `requestWhenInUseAuthorization()` |
-| 健康 | `NSHealthShareUsageDescription`、`NSHealthUpdateUsageDescription`（+ entitlement） | `requestAuthorization(toShare: 五种写入类型, read: …)` |
-| 照片 | `NSPhotoLibraryUsageDescription` | `.readWrite`，可能是 limited（只能读到用户选中的照片） |
-| 通知 | 无（运行时授权） | `requestAuthorization([.alert, .sound, .badge])` |
+| Contacts | `NSContactsUsageDescription` | `requestAccess(for: .contacts)`, full or limited |
+| Calendar | `NSCalendarsFullAccessUsageDescription` | iOS 17+ `requestFullAccessToEvents()` |
+| Reminders | `NSRemindersFullAccessUsageDescription` | iOS 17+ `requestFullAccessToReminders()` |
+| Location | `NSLocationWhenInUseUsageDescription` | `requestWhenInUseAuthorization()` |
+| Health | `NSHealthShareUsageDescription`, `NSHealthUpdateUsageDescription` (+ entitlement) | `requestAuthorization(toShare: five write types, read: …)` |
+| Photos | `NSPhotoLibraryUsageDescription` | `.readWrite`, possibly limited (only user-selected photos are readable) |
+| Notifications | None (runtime authorization) | `requestAuthorization([.alert, .sound, .badge])` |
 
-写健康数据只写他在手机上确认过的那一条：确认卡片的摘要和写入的数据出自同一份参数解析（`HealthSample`，数值最多两位小数，确认卡上显示的就是写进去的），参数不对时卡片直接说「参数有误，不会写入」。写入的样本标成手动输入（`HKMetadataKeyWasUserEntered`）。写权限和读不一样，系统会告诉 App：以前只授权过读的（写入功能之前），第一次写时在他确认之后再弹一次系统的健康授权；被拒绝时返回错误，告诉他去 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。
+Health writes write only the one sample confirmed on the phone: the confirmation summary and written data come from the same argument parsing (`HealthSample`, values to at most two decimal places; what the card shows is what gets written). Invalid arguments make the card say "Invalid parameters; nothing will be written." Samples are marked as manually entered (`HKMetadataKeyWasUserEntered`). Unlike read access, the system reports write permission to the app: users who previously granted only read access (before writes existed) see another system health permission prompt after confirming their first write. Denial returns an error telling them to enable access in iOS Settings › Health › Data Access & Devices › Persona.
 
-健康有一个 iOS 的硬限制：**系统永远不告诉 App 读权限有没有被授予**（防泄漏）。所以设置页显示的是「是否已经
-请求过」，实际的拒绝会表现为查询结果为空。工具描述里已经写明这一点，模型不会把空结果当成「没数据」以外的结论。
+Health has a hard iOS limitation: **the system never tells an app whether read permission was granted** (to prevent information leakage). Settings therefore show whether permission has
+been requested; denial appears as empty query results. The tool description explains this, so the model cannot infer anything beyond "no data" from empty results.
 
-安卓的 `phone_health_summary`（#278 做过，#632 合入集成分支时没带过来，重做见 #820）读 Health Connect，工具名、说明、参数和 iOS 一字不差（描述里
-「读权限永远不报告给 App」这句也照留，hub 只存一份工具列表）。不同的地方：Health Connect 会告诉 App 哪些读权限给了，
-所以设置页能显示「只允许了部分数据」，结果里没授权的指标列在 `not_granted`；一个都没授权时直接返回错误，而不是空结果。
-安卓 14 起 Health Connect 是系统自带，8–13 要另装（没有 Google 服务的手机通常没有），这时工具返回「这台手机没有 Health Connect」。
+Android's `phone_health_summary` (implemented in #278, omitted when #632 merged into the integration branch, rebuilt in #820) reads Health Connect; its name, description, and parameters match iOS exactly (including
+"read permission is never reported to the app," because the hub stores a single tool catalog). The difference: Health Connect tells the app which read permissions were granted,
+so settings can show "Only some data allowed," and unauthorized metrics appear in `not_granted`; if none are granted, return an error rather than an empty result.
+Health Connect is built into Android 14 and later; on 8–13 it must be installed separately (usually absent on phones without Google services), in which case the tool returns "This phone has no Health Connect."
 
-## 实现要点
+## Implementation notes
 
-- 连接复用：每个账号不适用——这里每个工具自己建查询；EventKit 的 `EKEventStore`、`CNContactStore`、
-  `HKHealthStore` 都是按需创建，避免跨 actor 传递非 Sendable 对象。
-- 所有网络/系统回调转 async：用 `withCheckedContinuation` + 一次性 `SingleResume` 包装，保证回调被多次触发
-  （Photos 的降质图 → 原图、HealthKit 的错误回调）时不会重复 resume。
-- 定位、网络状态、通讯录枚举这类会阻塞或需要 delegate 的东西放在非 MainActor 的 helper 里
-  （`OneShotLocation`、`NetworkProbe`、`ContactsTool.fetch` 走后台队列）。
-- EventKit 的对象不是 Sendable，提醒事项在 callback 里就转成值类型 `ReminderRow` 再交回。
-- 图片缩放用 `UIGraphicsImageRenderer`，保证长边不超过 `max_size`（默认 1280，最大 2048）。
+- Connection reuse per account does not apply: each tool creates its own query. EventKit's `EKEventStore`, `CNContactStore`,
+  and `HKHealthStore` are created on demand to avoid passing non-Sendable objects across actors.
+- Convert all network/system callbacks to async with `withCheckedContinuation` + a one-shot `SingleResume` wrapper, ensuring callbacks triggered multiple times
+  (Photos degraded image → original, HealthKit error callbacks) do not resume twice.
+- Blocking or delegate-based operations such as location, network state, and contact enumeration live in helpers outside MainActor
+  (`OneShotLocation`, `NetworkProbe`, `ContactsTool.fetch` use background queues).
+- EventKit objects are not Sendable; reminders are converted to value-type `ReminderRow` in the callback before being returned.
+- Image scaling uses `UIGraphicsImageRenderer`, keeping the longest edge within `max_size` (default 1280, maximum 2048).
 
-## iOS 的限制
+## iOS limitations
 
-- **没有 API 读短信 / iMessage / 通话记录**（`MessageUI` 只能写不能读）。
-- **没有 API 读备忘录、微信、其他 App 的数据**。要读只能靠「截图 + `phone_photo_get` 看图片」或用户手动贴到剪贴板。
-- **App 必须连着 hub**：hub 只能把 `tool_call` 发给已 `register_phone` 的手机。App 在前台或刚切到后台时 WebSocket
-  还在，能收到；iPhone 被系统挂起时，hub 先发静默推送在后台叫醒 App、最多等 20 秒让它连上（`hub.go` `wakePhone`）。只叫最近注册过的那一台；它 30 秒内叫过就这次不再叫，但仍会等这 20 秒；要 hub 配了推送；安卓不叫。
-  叫不醒就返回错误，让模型请用户打开 Persona 再试。一次调用最多等手机 2 分钟，超时也返回错误。
-- **后台定位不可用**：只有「使用期间」权限，App 不在前台时定位会失败。
-- **剪贴板会弹系统提示**：读别的 App 复制的内容时，iOS 会问「允许粘贴吗」，用户必须点允许。
-- **健康数据只能按天汇总**：没有逐条记录查询；步数/能量是累计值，心率是当天平均/最小/最大，睡眠是每天睡着时长
-  （`asleep` 系列，不含「在床上」）。
-- **照片可能是 limited**：用户只授权部分照片时，`phone_photos_recent` 只返回选中的那些。
-- **通知只能在 App 有执行机会时发**：延迟通知交给系统调度，会准时；但这次调用本身要成功，也就是 App 连着 hub 或能被叫醒。
-- 返回内容（包括邮件/照片元数据）会进入 Claude 的上下文，等于交给模型处理。
+- **No API to read SMS / iMessage / call history** (`MessageUI` can write, not read).
+- **No API to read Notes, WeChat, or other apps' data**. The only routes are "screenshot + `phone_photo_get` to inspect the image" or the user manually pasting into the clipboard.
+- **The app must be connected to the hub**: the hub can send `tool_call` only to a phone that has sent `register_phone`. In the foreground or just after entering the background, the WebSocket
+  remains available to receive calls; when iOS suspends the iPhone app, the hub first sends a silent push to wake it in the background and waits up to 20 seconds for connection (`hub.go`, `wakePhone`). Only the most recently registered device is woken; if it was woken within 30 seconds, skip the push but still wait 20 seconds. Hub push configuration is required; Android is not woken.
+  If waking fails, return an error asking the model to have the user open Persona and retry. A call waits at most 2 minutes for the phone; timeout also returns an error.
+- **Background location is unavailable**: only "While Using" permission is requested, so location fails outside the foreground.
+- **Clipboard reads trigger a system prompt**: when reading content copied in another app, iOS asks "Allow Paste?" and the user must allow it.
+- **Health data is aggregated by day only**: no individual-record queries; steps/energy are totals, heart rate is daily average/minimum/maximum, and sleep is daily time asleep
+  (the `asleep` types, excluding "In Bed").
+- **Photos access may be limited**: if the user grants only selected photos, `phone_photos_recent` returns only those.
+- **Notifications can be sent only when the app has execution time**: delayed notifications are scheduled by the system and arrive on time, but the call itself must succeed, meaning the app is connected to the hub or can be woken.
+- Returned content (including mail/photo metadata) enters Claude's context and is therefore given to the model for processing.
