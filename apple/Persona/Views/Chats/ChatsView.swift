@@ -461,11 +461,9 @@ struct ChatsView: View {
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) { searching = true }
-        withAnimation(Theme.Motion.state) { header.up = true } completion: {
-            // Up: laid out for searching, where it is drawn already.
-            guard searching else { return }
-            header.setCompact(true)
-        }
+        // Laid out for searching once the list has slid up with it (`ListShift.arrived`).
+        header.rising = true
+        withAnimation(Theme.Motion.state) { header.up = true }
         #endif
     }
 
@@ -953,7 +951,10 @@ private struct AgentsList: View {
         #if os(iOS) || os(visionOS)
         // Between the two layouts, slid with the field (`AgentsHeader.compact`); the page's color behind it.
         .modifier(ListShift(progress: ownsTop && header.up ? 1 : 0, compact: ownsTop && header.compact,
-                            shift: AgentsHeader.shift(shell: shell != nil)))
+                            shift: AgentsHeader.shift(shell: shell != nil)) { [header] in
+            // Up: laid out for searching, where it is drawn already.
+            if header.rising, searching { header.setCompact(true) }
+        })
         #endif
         #if os(macOS)
         .modifier(MacListKeys(current: { macOpenNow }, delete: { key in deletingSession = session(key) }, move: macMove))

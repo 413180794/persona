@@ -41,6 +41,9 @@ import UIKit
     /// follows it (`AgentsSearchOverlay`, `ListShift`, `AgentsTopBarFade`); the page's `searching` changes without an
     /// animation, so the list's rows (links at rest, buttons while searching) are not cross-faded.
     var up = false
+    /// On the way up and not laid out for searching yet: what `ListShift.arrived` does it for. `setCompact` clears it
+    /// either way, so a slide still at the top as a search closes is not taken for an arrival.
+    @ObservationIgnored var rising = false
     /// The page laid out for searching: no field band in the list's row, no shell room over the list. Flipped at once
     /// where the two layouts look the same, the list shifted by the difference (`ListShift`): at the end of the field's
     /// way up, at the start of its way down. Between, the list only slides, as a picture, with the field.
@@ -130,6 +133,7 @@ import UIKit
 
     /// Laid out for searching or at rest (`compact`): the field's band above the list's top or not, the list at its top.
     func setCompact(_ on: Bool) {
+        rising = false
         var still = Transaction()
         still.disablesAnimations = true
         withTransaction(still) { compact = on }
@@ -295,17 +299,30 @@ struct AgentsSearchOverlay: View {
 
 /// The list while the field goes up or down: shifted, as a picture (no layout), by what is between where it is laid
 /// out and where it is drawn. `progress` is the field's (`AgentsSearchOverlay`), so they move as one.
+///
+/// `arrived`: the list has slid all the way up still laid out at rest, where laying it out for searching (`setCompact`)
+/// moves nothing. Not the rise's animation completion: when the first keyboard of a launch stalled the main thread, the
+/// change reached the list only after the stall, the transaction had nothing animating yet and completed at once, and
+/// the list was laid out for searching before it had slid: a 54 pt jump in one frame (#5999).
 struct ListShift: ViewModifier, Animatable {
     var progress: Double
     var compact: Bool
     var shift: CGFloat
+    var arrived: () -> Void = {}
     var animatableData: Double {
         get { progress }
         set { progress = newValue }
     }
 
     func body(content: Content) -> some View {
+        let _ = arrive()
         content.offset(y: (compact ? shift : 0) - shift * progress)
+    }
+
+    /// With each value it is drawn at (every frame of the slide): up (a spring's overshoot counts), not laid out for
+    /// searching yet.
+    private func arrive() {
+        if progress >= 1, !compact { DispatchQueue.main.async(execute: arrived) }
     }
 }
 
