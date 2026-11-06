@@ -649,6 +649,19 @@ func TestBotTextInLanguages(t *testing.T) {
 	}
 }
 
+// A permission card with no summary shows the call's input with every credential's value masked, as the summaries
+// and the channels' approval text do (#4734, #4762): the card goes to a Feishu chat.
+func TestFeishuPermissionCardWithoutSummaryMasksCredentials(t *testing.T) {
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	s := newTestService(t, f)
+	ix := proto.Interaction{ID: "p1", MachineID: "server", SessionID: "a1", Kind: proto.IxPermission, ToolName: "mcp__x__call",
+		ToolInput: json.RawMessage(`{"api_key":"sk-live-123","repo":"demo","auth":{"password":"hunter2"}}`)}
+	b, _ := json.Marshal(s.interactionCard(context.Background(), ix))
+	if got := string(b); strings.Contains(got, "sk-live-123") || strings.Contains(got, "hunter2") || !strings.Contains(got, "demo") {
+		t.Fatalf("card %s", got)
+	}
+}
+
 // An MCP server asking to authorize or to fill in a form says on the card what it asks: its message, the link as a
 // button; a form's fields by name only (filled in the app), no inputs in Feishu.
 func TestFeishuElicitationCardSaysWhatItAsks(t *testing.T) {

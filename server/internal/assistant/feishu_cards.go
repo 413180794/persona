@@ -351,8 +351,8 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 		c.Markdown(b.String())
 		if sum := strings.TrimSpace(ix.Summary); sum != "" {
 			c.Markdown("```\n" + strings.ReplaceAll(clip(sum, 2500), "```", "'''") + "\n```")
-		} else if len(ix.ToolInput) > 0 {
-			c.Markdown("```json\n" + strings.ReplaceAll(clip(string(ix.ToolInput), 2500), "```", "'''") + "\n```")
+		} else if in := proto.RedactArgs(ix.ToolInput); in != "" { // a credential's value never goes to the chat (#4734)
+			c.Markdown("```json\n" + strings.ReplaceAll(clip(in, 2500), "```", "'''") + "\n```")
 		}
 		if len(ix.Fields) > 0 {
 			// A password or a code is typed in the app, never in a chat.
