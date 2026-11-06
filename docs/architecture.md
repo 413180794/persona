@@ -80,12 +80,35 @@ the data for the assistant, Inbox, to-dos, usage limits, board, extensions and d
 - **Routes the hub answers itself** = `testdata/hub_routes_allowed.txt` (registered with literals in the hub package and not in the three forwarding tables above). New business endpoints go in a manager,
   and the route is added to the matching forwarding table; only routes that truly belong to the hub (connections, pairing / auth, admin, push delivery, relays) get a line added to the list by hand. Removing a route means removing its line too (extra lines fail as well).
   While a piece of business logic is being moved into a manager, its line can be marked `# moving to the manager` at the end, and the line is removed once the move is done (usage windows `docs/usage-windows.md` ("Who owns this") and the workspace board `docs/workspace-board.md` ("Who owns the board") have both been moved).
-- **Dependencies**: the hub's dependencies must not include manager packages (`assistant`, `assistantskills`, `devices`, `extmgr`, `extension/host`, `agents`, `mail`, `office`, `feishubot`, `wechat`, `node`, `mcpserver`)
-  or connector implementations under `connector/`; `connector` and `kb` may only come in indirectly through wire packages, and the hub does not import them itself.
-- **No model calls**: the hub only uses `ai.Config` from `internal/ai` (reading config and passing it on), and no model API addresses appear in its code.
+- **Dependencies**: the hub's dependencies must not include manager packages (`assistant`, `assistantskills`, `devices`, `extmgr`, `extension/host`, `agents`, `mail`, `office`, `feishubot`, `wechat`, `node`, `mcpserver`),
+  the knowledge base (`kb`), the connectors (`connector` and everything under it) or the model client (`ai`): the types it carries for them come from the contract packages below.
+- **No model calls**: the hub imports nothing of `internal/ai` (a model setting it hands on is an `aiwire.Config`), and no model API addresses appear in its code.
 - **Store** methods = `testdata/hub_store_methods.txt`: new business tables go in the manager's own storage, not in `hub.Store`.
 
 The lists are edited by hand, with no auto-rewrite switch: the changed line shows up in the PR diff, so a reviewer can see whether it really belongs to the hub.
+
+## Contract packages
+
+The parts (the hub, the managers, the node on each computer, extensions) talk only through contracts, and the Go packages that define them hold only types, constants and trivial pure helpers:
+
+| Package | What it carries |
+| --- | --- |
+| `assistantwire`, `devicewire`, `extwire` | The bus between the hub and a manager: methods, events, routes the hub relays, extension scopes and manifest types the bus carries |
+| `kbwire` | Knowledge-base entities, identity hints, updates and chat context as they cross the bus and the connector protocol |
+| `connectorwire` | Inbox things and replies, conversation batches, posts and snapshots from connectors (`docs/connector-protocol.md`) |
+| `aiwire` | A model setting (`aiwire.Config`) |
+| `dialogwire` | A terminal dialog read off a screen, as the node and the apps see it |
+| `proto`, `rpc`, `relayproto` | The client API and node protocol types, the JSON-RPC framing, the push relay |
+
+The business packages alias the contract types so their callers keep the old names (`type InboxThing = connectorwire.InboxThing` in `connector`, `type Update = kbwire.Update` in `kb`).
+A contract type cannot carry business methods: logic moves into the business package as a function (`kb`'s `tagUpdate`, `screen`'s `hash`).
+Where the business type needs fields of its own, it stays a separate type with the same JSON and a converter (`kb.Item` keeps store bookkeeping; connectors hand over a `kbwire.Item`, and `kb.ItemFromWire` turns it into one; `kb`'s `TestItemMatchesTheContract` keeps the two in step).
+
+`server/internal/archguard` (tests only) keeps it that way:
+
+- **Pure contracts**: every package in `testdata/contracts.txt` depends only on the standard library and other listed packages, and every package named `*wire` must be listed.
+- **Part boundaries**: the hub (`hub`, `hubedge`) depends on no manager (`assistant`, `devices`, `extmgr`, `manager`) or node package, a manager on no hub package, and the node (`node`) on neither.
+  Known violations would go into `testdata/boundary_allowed.txt` (shrink-only, each line naming the step that removes it); it is empty, and a line that no longer applies fails too.
 
 ## Key flows
 

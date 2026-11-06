@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connectorwire"
 )
 
 // The inbox (docs/inbox.md) is the manager's: the items and their state (admission, triage, events, mutes, done,
@@ -69,17 +69,17 @@ const (
 	// InboxReplyMail: {account_id, uid, mailbox, text, send_id} → InboxSent: the reply to that mail, sent from the
 	// account that got it.
 	InboxReplyMail = "inbox.reply_mail"
-	// InboxReply: {source, reply: connector.InboxReply, send_id} → InboxSent: a reply (or a document's status moves)
+	// InboxReply: {source, reply: connectorwire.InboxReply, send_id} → InboxSent: a reply (or a document's status moves)
 	// through a connector (the source's, or the plugin's that took Feishu over).
 	InboxReply = "inbox.reply"
 	// InboxSettle: {source, threads} → {over: {thread: why}}: the connector's open threads its rules now leave out.
 	InboxSettle = "inbox.settle"
-	// InboxGroupTool: {source, call: connector.GroupToolCall} → {result}: one of the connector's tools for relating a
+	// InboxGroupTool: {source, call: connectorwire.GroupToolCall} → {result}: one of the connector's tools for relating a
 	// batch, its answer cut for the model; the connector's coded refusal (unknown_method…) comes back as it is.
 	InboxGroupTool = "inbox.group_tool"
-	// InboxGroupFallback: {source, fallback: connector.GroupFallback} → connector.GroupFallbackResult.
+	// InboxGroupFallback: {source, fallback: connectorwire.GroupFallback} → connectorwire.GroupFallbackResult.
 	InboxGroupFallback = "inbox.group_fallback"
-	// InboxGroupAppend: {source, append: connector.GroupAppend, append_id} → {thing: connector.InboxThing}: the same
+	// InboxGroupAppend: {source, append: connectorwire.GroupAppend, append_id} → {thing: connectorwire.InboxThing}: the same
 	// append_id again (the answer lost on the way) is answered from what the connector said, not sent again.
 	InboxGroupAppend = "inbox.group_append"
 )
@@ -140,7 +140,7 @@ type InboxSource struct {
 	// Extension: a plugin provides it (installed, or hub.json's; not a built-in one's): its new items are triaged
 	// before they enter, and without a model and a fallback they wait.
 	Extension bool `json:"extension,omitempty"`
-	// Migrated: it took one of the hub's own connectors over (connector.MigratableConnectors): its things with extra
+	// Migrated: it took one of the hub's own connectors over (connectorwire.MigratableConnectors): its things with extra
 	// keep the items' own blocks.
 	Migrated bool `json:"migrated,omitempty"`
 	// Group: it relates batches of new messages to events (group.tool, group.fallback); Meta: it writes the events'
@@ -151,8 +151,8 @@ type InboxSource struct {
 	// Settles: it closes open items its rules now leave out (InboxSettle).
 	Settles bool `json:"settles,omitempty"`
 	// Kinds are its kinds of things as it describes them, for the models.
-	Kinds  map[string]string      `json:"kinds,omitempty"`
-	Things []connector.InboxThing `json:"things"`
+	Kinds  map[string]string          `json:"kinds,omitempty"`
+	Things []connectorwire.InboxThing `json:"things"`
 	// ReadError: its Collect failed this round (Things is empty and means nothing; what it had stays): a short code,
 	// never the error's text (ReadTimeout, ReadRateLimited, ReadFailed). The apps say which source is behind.
 	ReadError string `json:"read_error,omitempty"`

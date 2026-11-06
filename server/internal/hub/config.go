@@ -23,7 +23,7 @@ import (
 
 	"github.com/mdp/qrterminal/v3"
 
-	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/aiwire"
 	"github.com/nwverse/persona/server/internal/lark"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -116,7 +116,7 @@ type Config struct {
 	// DatabaseURL points at the Postgres container (scripts/deploy/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
 	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
-	AI ai.Config `json:"ai"`
+	AI aiwire.Config `json:"ai"`
 	// Lark is how the hub and the assistant run lark-cli, and the gateway account Feishu items a plugin hands over
 	// came to (internal/lark). The Lark gateway itself is an extension's now; its old fields here are not read.
 	Lark lark.Config `json:"lark"`
@@ -428,9 +428,9 @@ func writePair(w io.Writer, cfg *Config) {
 // InboxConfig is hub.json's inbox: the hub reads the triage models (its model configuration's defaults) and the
 // rules (jarvis_settings); the inbox's sources are the manager's (internal/extmgr), which reads the same section.
 type InboxConfig struct {
-	Rules    string     `json:"rules,omitempty"`
-	TriageAI *ai.Config `json:"triage_ai,omitempty"`
-	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
+	Rules    string         `json:"rules,omitempty"`
+	TriageAI *aiwire.Config `json:"triage_ai,omitempty"`
+	JudgeAI  *aiwire.Config `json:"judge_ai,omitempty"`
 	// Agent (model 3) works on the items the judge hands over and drafts the reply (the manager's inbox_agent.go).
 	Agent assistantwire.InboxAgentConfig `json:"agent,omitempty"`
 }

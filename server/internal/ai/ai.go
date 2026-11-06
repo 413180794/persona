@@ -17,56 +17,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/aiwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
-type Config struct {
-	// API is "messages" (Anthropic Messages, the default) or "responses" (OpenAI Responses, streamed).
-	API        string `json:"api"`
-	BaseURL    string `json:"base_url"`
-	APIKeyFile string `json:"api_key_file"`
-	// APIKey is an in-memory credential supplied by the hub's encrypted provider store.
-	APIKey string `json:"-"`
-	Model  string `json:"model"`
-	// ReasoningEffort is sent as reasoning.effort to the Responses API when set (e.g. "low").
-	ReasoningEffort string `json:"reasoning_effort"`
-	// Bearer sends the key to the Messages API as Authorization: Bearer instead of x-api-key, for gateways that take
-	// only that (what Claude Code does with ANTHROPIC_AUTH_TOKEN). The Responses API always uses Bearer.
-	Bearer bool `json:"bearer,omitempty"`
-}
-
-// Over is c with its empty fields taken from base: a task that uses another model names only what differs.
-func (c Config) Over(base Config) Config {
-	if c.API == "" {
-		c.API = base.API
-	}
-	if c.BaseURL == "" { // the gateway, and how it takes the key
-		c.BaseURL, c.Bearer = base.BaseURL, base.Bearer
-	}
-	if c.APIKeyFile == "" {
-		c.APIKeyFile = base.APIKeyFile
-	}
-	if c.Model == "" {
-		c.Model = base.Model
-	}
-	if c.ReasoningEffort == "" {
-		c.ReasoningEffort = base.ReasoningEffort
-	}
-	return c
-}
-
-// configured: there is a model to call. Nothing is assumed (it used to default to one person's gateway and key file):
-// without hub.json's "ai" the helpers that need a model say so.
-func (c Config) configured() bool {
-	return c.BaseURL != "" && c.Model != "" && (c.APIKeyFile != "" || c.APIKey != "")
-}
+// Defined in the contract package aiwire (docs/architecture.md "Contract packages"); the old names stay.
+type Config = aiwire.Config
 
 // errNotConfigured is shown in the app as is (e.g. under "AI Draft Reply"), so it says where to fix it there.
 var errNotConfigured = errors.New("还没有能直接调用的模型：在 设置 › 模型供应商 添加带 Key 的接入，再到 设置 › 模型配置 为这项选择它" +
 	`（或在 hub.json 写 "ai"）`)
-
-// Configured says whether there is a model to call: an address, a model and a key (or a key file).
-func (c Config) Configured() bool { return c.configured() }
 
 // IsNotConfigured tells a request that had no model to go to (nothing set up for it) from one that failed.
 func IsNotConfigured(err error) bool { return errors.Is(err, errNotConfigured) }
@@ -121,7 +81,7 @@ func (c *Client) complete(ctx context.Context, system, user string, maxTokens in
 		}
 		return resolved.complete(ctx, system, user, maxTokens)
 	}
-	if !c.cfg.configured() {
+	if !c.cfg.Configured() {
 		return "", false, errNotConfigured
 	}
 	key, err := c.key()

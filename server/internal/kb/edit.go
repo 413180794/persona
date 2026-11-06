@@ -170,7 +170,7 @@ func removeStrings(list, remove []string) []string {
 	return slices.DeleteFunc(slices.Clone(list), func(v string) bool { return slices.Contains(remove, v) })
 }
 
-func (u Update) protect(t *Tagging) {
+func protectUpdate(u Update, t *Tagging) {
 	fields := []string{}
 	for key, set := range map[string]bool{
 		"name": u.Name != "", "project_kind": u.Kind != "", "status": u.Status != "", "goal": u.Goal != "", "my_role": u.MyRole != "", "note": u.Note != "", "summary": u.Summary != "",

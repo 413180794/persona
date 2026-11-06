@@ -26,7 +26,7 @@ import (
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
-	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -200,7 +200,7 @@ type (
 	}
 	// ItemsResult is the knowledge base's items (connector.Items: documents, meetings, events).
 	ItemsResult struct {
-		Items []kb.Item `json:"items"`
+		Items []kbwire.Item `json:"items"`
 	}
 	DocTitleParams struct {
 		URL string `json:"url"`
@@ -696,7 +696,7 @@ func (s *server) handle(ctx context.Context, method string, params json.RawMessa
 		}
 		items, err := is.ItemSource().Items(ctx)
 		if items == nil {
-			items = []kb.Item{}
+			items = []kbwire.Item{}
 		}
 		return ItemsResult{Items: items}, err
 	case MDocTitle:

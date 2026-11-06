@@ -1,9 +1,8 @@
 package assistantwire
 
 import (
-	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/kb"
-	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/connectorwire"
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // The knowledge base is the assistant's (docs/knowledge.md "Who owns what"): its engine and loop, its files under the data
@@ -17,13 +16,13 @@ const (
 	// ConnectorsArchives: {} → Archives: the connectors whose conversations go into the knowledge base now (signed in,
 	// "Add to knowledge base" on), and those with documents, meetings and events.
 	ConnectorsArchives = "connectors.archives"
-	// ConnectorsChanges: {id, cursor, limit} → {batches: [connector.ChatBatch], next, more}: what moved in a connector's
+	// ConnectorsChanges: {id, cursor, limit} → {batches: [connectorwire.ChatBatch], next, more}: what moved in a connector's
 	// account since cursor ("" the first time), and the cursor to go on from (connector.Archive).
 	ConnectorsChanges = "connectors.changes"
-	// ConnectorsArchiveMedia: {id, ref} → {media: connector.Media}: an archived message's attachment, at most
-	// connector.ArchiveMediaMost bytes (connector.ArchiveMedia).
+	// ConnectorsArchiveMedia: {id, ref} → {media: connectorwire.Media}: an archived message's attachment, at most
+	// connectorwire.ArchiveMediaMost bytes (connector.ArchiveMedia).
 	ConnectorsArchiveMedia = "connectors.archive_media"
-	// ConnectorsItems: {id} → {items: [kb.Item]}: a connector's documents, meetings and events (connector.Items).
+	// ConnectorsItems: {id} → {items: [kbwire.Item]}: a connector's documents, meetings and events (connector.Items).
 	ConnectorsItems = "connectors.items"
 	// ConnectorsDocTitle: {id, url} → {title}: a document's title ("" when the connector cannot tell).
 	ConnectorsDocTitle = "connectors.doc_title"
@@ -49,14 +48,14 @@ type ArchiveSource struct {
 
 // ChangesResult is connectors.changes' answer.
 type ChangesResult struct {
-	Batches []connector.ChatBatch `json:"batches"`
-	Next    string                `json:"next"`
-	More    bool                  `json:"more,omitempty"`
+	Batches []connectorwire.ChatBatch `json:"batches"`
+	Next    string                    `json:"next"`
+	More    bool                      `json:"more,omitempty"`
 }
 
 // The hub asks the knowledge base (calls), and tells it (events).
 const (
-	// MethodKBContext: {chat_id} → {context: prompts.KBContext | null}: what the knowledge base knows about one chat
+	// MethodKBContext: {chat_id} → {context: kbwire.ChatContext | null}: what the knowledge base knows about one chat
 	// and its first three projects (the inbox's AI twin starts with it); null without such a chat.
 	MethodKBContext = "kb.context"
 	// MethodKBProjects: {machine_id, cwd} → {projects: [KBProject]}: the projects whose code directories hold cwd on
@@ -69,8 +68,8 @@ const (
 	// for that connector (KBPosts.Connector; the hub checked it may write now):
 	//   kb.posts_put {connector, sources, posts} → {statuses}
 	//   kb.posts_comments {connector, id, count, comments} → {}
-	//   kb.posts_pending {connector, limit} → {posts: [connector.PendingPost]}
-	//   kb.archived_chats {connector, sources, source} → {chats: [connector.ArchivedChat]}
+	//   kb.posts_pending {connector, limit} → {posts: [connectorwire.PendingPost]}
+	//   kb.archived_chats {connector, sources, source} → {chats: [connectorwire.ArchivedChat]}
 	MethodKBPostsPut      = "kb.posts_put"
 	MethodKBPostsComments = "kb.posts_comments"
 	MethodKBPostsPending  = "kb.posts_pending"
@@ -110,20 +109,20 @@ type KBForgotten struct {
 
 // KBContextResult is kb.context's answer.
 type KBContextResult struct {
-	Context *prompts.KBContext `json:"context"`
+	Context *kbwire.ChatContext `json:"context"`
 }
 
 // KBPosts is the params of the kb.posts_* and kb.archived_chats calls (each takes the fields its line above names).
 type KBPosts struct {
 	Connector string `json:"connector"`
 	// Sources are the names the connector's conversations are filed under: its id, then its manifest's ArchiveSources.
-	Sources  []string                `json:"sources,omitempty"`
-	Posts    []connector.PostPut     `json:"posts,omitempty"`
-	ID       string                  `json:"id,omitempty"`
-	Count    int                     `json:"count,omitempty"`
-	Comments []connector.PostComment `json:"comments"`
-	Limit    int                     `json:"limit,omitempty"`
-	Source   string                  `json:"source,omitempty"`
+	Sources  []string                    `json:"sources,omitempty"`
+	Posts    []connectorwire.PostPut     `json:"posts,omitempty"`
+	ID       string                      `json:"id,omitempty"`
+	Count    int                         `json:"count,omitempty"`
+	Comments []connectorwire.PostComment `json:"comments"`
+	Limit    int                         `json:"limit,omitempty"`
+	Source   string                      `json:"source,omitempty"`
 }
 
 // KBAgentTurn is kb.agent_turn's params: the agent, where it works, and what its turn comes to (the hub's verdict
@@ -138,5 +137,5 @@ type KBAgentTurn struct {
 
 // KBItems is connectors.items' answer.
 type KBItems struct {
-	Items []kb.Item `json:"items"`
+	Items []kbwire.Item `json:"items"`
 }

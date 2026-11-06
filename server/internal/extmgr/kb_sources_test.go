@@ -10,6 +10,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // sourceExample has an archive (polled every minute, filing under "posts" too, with attachments) and items.
@@ -37,8 +38,8 @@ func (s *sourceExample) ItemSource() kb.ItemSource { return exampleItems{} }
 
 type exampleItems struct{}
 
-func (exampleItems) Items(context.Context) ([]kb.Item, error) {
-	return []kb.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "周会"}}, nil
+func (exampleItems) Items(context.Context) ([]kbwire.Item, error) {
+	return []kbwire.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "周会"}}, nil
 }
 func (exampleItems) DocTitle(context.Context, string) string { return "发布计划" }
 

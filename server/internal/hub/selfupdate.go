@@ -21,7 +21,6 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 
-	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/hubedge"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/transcript"
@@ -374,10 +373,10 @@ func (u *updater) updateNodes(ctx context.Context, staged string) {
 			if strings.HasSuffix(f, ".gz") || strings.HasSuffix(f, ".part") {
 				continue
 			}
-			if err := os.MkdirAll(devicewire.NodeBinaryDir(), 0o755); err == nil {
-				_, err = update.Swap(filepath.Join(devicewire.NodeBinaryDir(), filepath.Base(f)), f)
+			if err := os.MkdirAll(identity.NodeBinaryDir(), 0o755); err == nil {
+				_, err = update.Swap(filepath.Join(identity.NodeBinaryDir(), filepath.Base(f)), f)
 				if err != nil && errors.Is(err, os.ErrNotExist) {
-					err = copyInto(f, filepath.Join(devicewire.NodeBinaryDir(), filepath.Base(f)))
+					err = copyInto(f, filepath.Join(identity.NodeBinaryDir(), filepath.Base(f)))
 				}
 				if err != nil {
 					u.h.logf("update: node binary %s: %v", filepath.Base(f), err)

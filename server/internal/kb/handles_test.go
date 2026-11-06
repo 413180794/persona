@@ -24,34 +24,34 @@ func (named) Download(context.Context, string, string) error { return nil }
 func TestHashHandle(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	same := [][2]Handle{
-		{{HandleEmail, "Alice@Example.com "}, {HandleEmail, "alice@example.com"}},
-		{{HandlePhone, "+1 (555) 010-0100"}, {HandlePhone, "+15550100100"}},
+		{{Kind: HandleEmail, Value: "Alice@Example.com "}, {Kind: HandleEmail, Value: "alice@example.com"}},
+		{{Kind: HandlePhone, Value: "+1 (555) 010-0100"}, {Kind: HandlePhone, Value: "+15550100100"}},
 	}
 	for _, p := range same {
 		if a, b := HashHandle(key, p[0]), HashHandle(key, p[1]); a == "" || a != b {
 			t.Errorf("%v and %v: %q %q", p[0], p[1], a, b)
 		}
 	}
-	if HashHandle(key, Handle{HandleGitHub, "alice"}) == HashHandle(key, Handle{HandleTelegram, "alice"}) {
+	if HashHandle(key, Handle{Kind: HandleGitHub, Value: "alice"}) == HashHandle(key, Handle{Kind: HandleTelegram, Value: "alice"}) {
 		t.Error("kinds share a hash")
 	}
-	if h := HashHandle(key, Handle{HandleEmail, "alice@example.com"}); !strings.HasPrefix(h, "email:") || len(h) != len("email:")+32 ||
+	if h := HashHandle(key, Handle{Kind: HandleEmail, Value: "alice@example.com"}); !strings.HasPrefix(h, "email:") || len(h) != len("email:")+32 ||
 		strings.Contains(h, "alice") {
 		t.Errorf("hash %q", h)
 	}
-	if HashHandle(nil, Handle{HandleEmail, "a@b"}) != "" || HashHandle(key, Handle{HandlePhone, "+ ()"}) != "" {
+	if HashHandle(nil, Handle{Kind: HandleEmail, Value: "a@b"}) != "" || HashHandle(key, Handle{Kind: HandlePhone, Value: "+ ()"}) != "" {
 		t.Error("hashed without a key or a value")
 	}
-	if HashHandle([]byte("another key, also 32 bytes long!"), Handle{HandleEmail, "a@b"}) == HashHandle(key, Handle{HandleEmail, "a@b"}) {
+	if HashHandle([]byte("another key, also 32 bytes long!"), Handle{Kind: HandleEmail, Value: "a@b"}) == HashHandle(key, Handle{Kind: HandleEmail, Value: "a@b"}) {
 		t.Error("the key does not matter")
 	}
 	for _, vector := range []struct {
 		hint Handle
 		want string
 	}{
-		{Handle{HandlePhone, handleTestPhone}, handleTestPhoneHash},
-		{Handle{HandlePhone, handleTestPhoneE164}, handleTestPhoneHash},
-		{Handle{HandleEmail, handleTestEmail}, handleTestEmailHash},
+		{Handle{Kind: HandlePhone, Value: handleTestPhone}, handleTestPhoneHash},
+		{Handle{Kind: HandlePhone, Value: handleTestPhoneE164}, handleTestPhoneHash},
+		{Handle{Kind: HandleEmail, Value: handleTestEmail}, handleTestEmailHash},
 	} {
 		if got := HashHandle(key, vector.hint); got != vector.want {
 			t.Errorf("HMAC differs from independently calculated vector: %q", got)
@@ -75,26 +75,26 @@ func TestPeopleKeepHashedHandles(t *testing.T) {
 	// Source IDs are opaque so a legitimate identity cannot mask a leaked email hint.
 	if _, err := e.Ingest(ctx, named("imessage"), SourceChat{ID: "c1", Name: "示例"}, []SourceMessage{
 		{ID: "1", SenderID: "0a1b2c", SenderName: "张三", Text: "在吗", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandlePhone, handleTestPhone}, {HandleEmail, handleTestEmail}}},
+			SenderHandles: []Handle{{Kind: HandlePhone, Value: handleTestPhone}, {Kind: HandleEmail, Value: handleTestEmail}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-2", Name: "张三 · 邮件"}, []SourceMessage{
 		{ID: "2", SenderID: "sender-2", SenderName: "张三", Text: "附件", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandleEmail, strings.ToLower(handleTestEmail)}}},
+			SenderHandles: []Handle{{Kind: HandleEmail, Value: strings.ToLower(handleTestEmail)}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Seen again with different formatting: neither a duplicate nor a different hash may be added.
 	if _, err := e.Ingest(ctx, named("mail"), SourceChat{ID: "acc-2", Name: "张三 · 邮件"}, []SourceMessage{
 		{ID: "3", SenderID: "sender-2", SenderName: "张三", Text: "再发一次", At: at.Add(time.Minute), Type: "TEXT",
-			SenderHandles: []Handle{{HandleEmail, strings.ToUpper(handleTestEmail)}}},
+			SenderHandles: []Handle{{Kind: HandleEmail, Value: strings.ToUpper(handleTestEmail)}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.Ingest(ctx, named("imessage"), SourceChat{ID: "c1", Name: "示例"}, []SourceMessage{
 		{ID: "4", SenderID: "0a1b2c", SenderName: "张三", Text: "再发一次", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandlePhone, handleTestPhoneE164}}},
+			SenderHandles: []Handle{{Kind: HandlePhone, Value: handleTestPhoneE164}}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestPeopleKeepHashedHandles(t *testing.T) {
 	noKeyID := PersonID("github", "sender-3")
 	if _, err := e.Ingest(ctx, named("github"), SourceChat{ID: "pr1", Name: "PR"}, []SourceMessage{
 		{ID: "5", SenderID: "sender-3", SenderName: "alice", Text: "LGTM", At: at, Type: "TEXT",
-			SenderHandles: []Handle{{HandleGitHub, "alice"}, {HandlePhone, handleTestPhone}, {HandleEmail, handleTestEmail}}},
+			SenderHandles: []Handle{{Kind: HandleGitHub, Value: "alice"}, {Kind: HandlePhone, Value: handleTestPhone}, {Kind: HandleEmail, Value: handleTestEmail}}},
 	}); err != nil {
 		t.Fatal(err)
 	}

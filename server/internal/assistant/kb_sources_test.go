@@ -12,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // archiveFake hands out one batch per cursor step and records the cursors it was given.
@@ -253,7 +254,7 @@ func TestKBCollectsItemsThroughTheHub(t *testing.T) {
 		return assistantwire.Archives{Items: []string{"example"}}, nil
 	})
 	f.answerApp(AppConnectors, assistantwire.ConnectorsItems, func(json.RawMessage) (any, error) {
-		return assistantwire.KBItems{Items: []kb.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "周会", At: time.Now()}}}, nil
+		return assistantwire.KBItems{Items: []kbwire.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "周会", At: time.Now()}}}, nil
 	})
 	f.answerApp(AppConnectors, assistantwire.ConnectorsDocTitle, func(json.RawMessage) (any, error) {
 		return map[string]any{"title": "发布计划"}, nil

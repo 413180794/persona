@@ -223,3 +223,14 @@ func isStateDir(path, name string) bool {
 	b, err := os.Stat(expected)
 	return err == nil && os.SameFile(a, b)
 }
+
+// NodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own (the hub's updates put the release's
+// there too, the manager deploys them from there); JARVIS_NODE_BINARIES points elsewhere (the Docker image carries
+// them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
+func NodeBinaryDir() string {
+	if d := Getenv("JARVIS_NODE_BINARIES"); d != "" {
+		return d
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(DataDir(home), "bin", "nodes")
+}

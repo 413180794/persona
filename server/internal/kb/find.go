@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // Searching for the app (docs/knowledge.md "Search"): results are entries, not lines. Every line containing all the
@@ -452,11 +454,8 @@ func messages(raw string) []message {
 	return out
 }
 
-// DayMessage is one message of a day page.
-type DayMessage struct {
-	N    int    `json:"n"`
-	Text string `json:"text"`
-}
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type DayMessage = kbwire.DayMessage
 
 // Day returns a chat's messages of one day ("2006-01-02") and the days before and after it that have any.
 func (e *Engine) Day(chatID, day string) (msgs []DayMessage, prev, next string, err error) {

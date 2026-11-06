@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/ai"
+	"github.com/nwverse/persona/server/internal/aiwire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
 
@@ -12,10 +12,10 @@ import (
 // the hub hands it this section in its hello (kbSettings; also to an assistant on another machine), refuses the
 // sources while it is off, and reads ai itself (its model configuration's default for the kb.* purposes).
 type KBConfig struct {
-	Enabled        *bool      `json:"enabled,omitempty"`         // default on
-	TextDays       int        `json:"text_days,omitempty"`       // full text kept (365)
-	AttachmentDays int        `json:"attachment_days,omitempty"` // images / files kept (30)
-	AI             *ai.Config `json:"ai,omitempty"`              // compression model (default inbox.triage_ai, then ai)
+	Enabled        *bool          `json:"enabled,omitempty"`         // default on
+	TextDays       int            `json:"text_days,omitempty"`       // full text kept (365)
+	AttachmentDays int            `json:"attachment_days,omitempty"` // images / files kept (30)
+	AI             *aiwire.Config `json:"ai,omitempty"`              // compression model (default inbox.triage_ai, then ai)
 	// ExtraDirs are directories on the assistant's machine that kb_search also reads (Markdown, read only), e.g. a
 	// repository of notes the user keeps; "~/" is the home there (docs/knowledge.md).
 	ExtraDirs []string `json:"extra_dirs,omitempty"`

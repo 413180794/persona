@@ -13,6 +13,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -151,11 +152,11 @@ type ProviderItem struct {
 	KeyHint string `json:"key_hint,omitempty"`
 }
 
-// ProviderModel is one model of a provider.
-type ProviderModel struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-}
+// Defined in the contract package extwire (docs/architecture.md "Contract packages"); the old names stay.
+type (
+	APIReceipt    = extwire.APIReceipt
+	ProviderModel = extwire.ProviderModel
+)
 
 // APIItem is a contribution to api: a part of the app's API the plugin serves on its HTTP side, under /api/v1/<prefix>/
 // (docs/extensions.md "App API").
@@ -168,32 +169,6 @@ type APIItem struct {
 	Events []string `json:"events,omitempty"`
 	// Receipts are its sends the hub keeps a receipt of (GET /api/v1/ops/{id}): a retry reaches the plugin once.
 	Receipts []APIReceipt `json:"receipts,omitempty"`
-}
-
-// APIReceipt is one route of a plugin's API with a send receipt: Method and Path (under the prefix, "*" one segment)
-// and the receipt's Kind. The receipt's id comes from the body's client_id, or the caller's X-Jarvis-Op-Id.
-type APIReceipt struct {
-	Method string `json:"method"`
-	Path   string `json:"path"`
-	Kind   string `json:"kind"`
-}
-
-// Matches says whether a request (its path under the prefix) is the receipt's route.
-func (r APIReceipt) Matches(method, path string) bool {
-	if !strings.EqualFold(r.Method, method) {
-		return false
-	}
-	want := strings.Split(strings.Trim(r.Path, "/"), "/")
-	got := strings.Split(strings.Trim(path, "/"), "/")
-	if len(want) != len(got) {
-		return false
-	}
-	for i := range want {
-		if want[i] != "*" && want[i] != got[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // AssistantItem is a contribution to assistant: skills and a part of the assistant's instructions, in the package

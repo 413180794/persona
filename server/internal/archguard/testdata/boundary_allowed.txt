@@ -1,0 +1,4 @@
+# Known part-boundary violations, shrink-only: "<part> <dependency>" (paths under the module, e.g.
+# "node internal/hub"), each with a comment naming the step of docs/architecture.md's plan that removes it.
+# Never add a line to make a new import pass: reach the other part through a contract package instead.
+# (empty: no known violation)

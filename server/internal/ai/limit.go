@@ -77,7 +77,7 @@ func IsPaused(err error) bool {
 
 // Held is the pause on cfg's connection, nil when requests go out.
 func Held(cfg Config) *Pause {
-	if !cfg.configured() {
+	if !cfg.Configured() {
 		return nil
 	}
 	key, err := New(cfg).key()

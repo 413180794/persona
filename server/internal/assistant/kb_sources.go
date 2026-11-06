@@ -14,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // The sources are the hub's connectors (docs/knowledge.md "Pipeline"): the knowledge base asks the hub which of them
@@ -118,7 +119,7 @@ type busItems struct {
 	id string
 }
 
-func (b busItems) Items(ctx context.Context) ([]kb.Item, error) {
+func (b busItems) Items(ctx context.Context) ([]kbwire.Item, error) {
 	var out assistantwire.KBItems
 	err := b.s.appCall(ctx, AppConnectors, assistantwire.ConnectorsItems, map[string]any{"id": b.id}, &out)
 	return out.Items, err

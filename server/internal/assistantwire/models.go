@@ -1,8 +1,8 @@
 package assistantwire
 
 import (
-	"github.com/nwverse/persona/server/internal/ai"
-	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/aiwire"
+	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -17,10 +17,10 @@ import (
 // runs), inbox.agent.machine when the hub has that machine, and each machine's configured launchers
 // (machines[].launchers: wrappers the node does not list, a type the user gave).
 type HubModels struct {
-	AI                ai.Config                       `json:"ai"`
-	TriageAI          *ai.Config                      `json:"triage_ai,omitempty"`
-	JudgeAI           *ai.Config                      `json:"judge_ai,omitempty"`
-	KBAI              *ai.Config                      `json:"kb_ai,omitempty"`
+	AI                aiwire.Config                   `json:"ai"`
+	TriageAI          *aiwire.Config                  `json:"triage_ai,omitempty"`
+	JudgeAI           *aiwire.Config                  `json:"judge_ai,omitempty"`
+	KBAI              *aiwire.Config                  `json:"kb_ai,omitempty"`
 	InboxAgentMachine string                          `json:"inbox_agent_machine,omitempty"`
 	Launchers         map[string][]ConfiguredLauncher `json:"launchers,omitempty"`
 }
@@ -61,17 +61,17 @@ const (
 // LauncherPreset is one model provider Settings › Model providers offers: a plugin's (docs/extensions.md "Model providers") or a built-in
 // one (plugin "builtin", docs/onboarding.md 4.3).
 type LauncherPreset struct {
-	ID          string                    `json:"id"` // <plugin>/<provider>
-	Extension   string                    `json:"plugin"`
-	Name        string                    `json:"name"`
-	Description string                    `json:"description,omitempty"`
-	Kind        string                    `json:"kind"`
-	API         string                    `json:"api,omitempty"`
-	BaseURL     string                    `json:"base_url"`
-	Model       string                    `json:"model,omitempty"`
-	SmallModel  string                    `json:"small_model,omitempty"`
-	Models      []extension.ProviderModel `json:"models,omitempty"`
-	KeyHint     string                    `json:"key_hint,omitempty"`
+	ID          string                  `json:"id"` // <plugin>/<provider>
+	Extension   string                  `json:"plugin"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Kind        string                  `json:"kind"`
+	API         string                  `json:"api,omitempty"`
+	BaseURL     string                  `json:"base_url"`
+	Model       string                  `json:"model,omitempty"`
+	SmallModel  string                  `json:"small_model,omitempty"`
+	Models      []extwire.ProviderModel `json:"models,omitempty"`
+	KeyHint     string                  `json:"key_hint,omitempty"`
 	// Auth is how the gateway takes the key: api_key (x-api-key, the default) or bearer. Built-in presets only.
 	Auth string `json:"auth,omitempty"`
 	// SignupURL is the page to open an account or buy a key at (built-in presets only; the apps open it in-app).

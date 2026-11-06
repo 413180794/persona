@@ -9,69 +9,22 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/nwverse/persona/server/internal/dialogwire"
 )
 
-// Dialog is a choice a terminal agent waits on (AskUserQuestion without the hook, a permission prompt, a picker),
-// read off its screen: header chip, question, options, and Rev, a hash of what it asks. The node checks Rev again
-// right before pressing keys, so an answer never lands in a dialog that changed after the card was made.
-type Dialog struct {
-	Header   string `json:"header,omitempty"`
-	Question string `json:"question"`
-	Detail   string `json:"detail,omitempty"` // lines above the question that belong to it (the command asked about)
-	// Warning is what the agent adds in a box above the question about why it asks (Claude Code's "Dangerous rm
-	// operation on possibly-empty variable…"); Deadline its "⚠ … will automatically block this request in 1:59",
-	// whose countdown moves every second. Neither is in Rev: a card stays answerable while the clock runs.
-	Warning  string   `json:"warning,omitempty"`
-	Deadline string   `json:"deadline,omitempty"`
-	Options  []Option `json:"options"`
-	// Multi: a multi-select question (AskUserQuestion's multiSelect, Claude Code 2.1.316): its options are check
-	// boxes ("[ ]" / "[✔]") that enter or their number toggles, and the row under them sends what is checked —
-	// Submit, which opens the review tab, or Next when another question follows.
-	Multi  bool   `json:"multi,omitempty"`
-	Submit string `json:"submit,omitempty"` // that row's label: "Submit" or "Next"
-	// Steps are the questions of a multi-question AskUserQuestion, from its tab bar ("←  ☒ Env  ☐ Platform  ✔ Submit  →",
-	// the Submit tab left out). A single question's one tab is its Header.
-	Steps []Step `json:"steps,omitempty"`
-	// Review is the Submit tab ("Review your answers", "1. Submit answers / 2. Cancel"); Incomplete when it warns
-	// that a question has no answer yet.
-	Review     bool   `json:"review,omitempty"`
-	Incomplete bool   `json:"incomplete,omitempty"`
-	Rev        string `json:"rev"`
-	// Cursor is where the dialog's ❯ is: an option's key, CursorSubmit on the Submit / Next row, "" when unseen.
-	Cursor string `json:"-"`
-	// window is hashed into Rev and shown nowhere: where a scrolled list's rows sit in it (the /rewind list's
-	// "↑ 1 more"), so the same rows one step further down are another dialog.
-	window string
-}
+// Defined in the contract package dialogwire (docs/architecture.md "Contract packages"); the old names stay.
+type (
+	Dialog = dialogwire.Dialog
+	Option = dialogwire.Option
+	Step   = dialogwire.Step
+)
 
-// Step is a question of a multi-question dialog: its header, and whether it has an answer.
-type Step struct {
-	Label string `json:"label"`
-	Done  bool   `json:"done"`
-}
-
-// CursorSubmit is Dialog.Cursor on a multi-select question's Submit / Next row.
-const CursorSubmit = "submit"
-
-// Option kinds besides a plain choice.
 const (
-	KindTypeSomething = "type_something" // picks a free-text field: answer with text
-	KindChat          = "chat"           // "Chat about this": back to the conversation
+	CursorSubmit      = dialogwire.CursorSubmit
+	KindChat          = dialogwire.KindChat
+	KindTypeSomething = dialogwire.KindTypeSomething
 )
-
-type Option struct {
-	Key    string `json:"key"` // its number; for unnumbered dialogs (Claude's trust prompt) its position, 1-based
-	Label  string `json:"label"`
-	Detail string `json:"detail,omitempty"`
-	Kind   string `json:"kind,omitempty"`
-	// Keys pick it: its number, or arrow moves from the cursor plus enter for an unnumbered dialog. A type_something
-	// option takes them before its text, and enter after. A multi-select option's number only toggles it.
-	Keys []string `json:"keys"`
-	// Checked: a multi-select option's box is ticked, or the ✔ after the option an answered question had picked.
-	Checked bool `json:"checked,omitempty"`
-	// Text is what is typed into a type_something option: the terminal shows it in place of the label.
-	Text string `json:"text,omitempty"`
-}
 
 // DialogLines is how much of the screen a dialog is read from, the same when the card is made (hub) and when its
 // answer is checked (node): the revision covers what the window shows.
@@ -128,7 +81,8 @@ func rewindList(lines []string) *Dialog {
 		return nil
 	}
 	// The prompts often repeat ("continue" with no code changes): scrolled one row, the window looks the same.
-	d := &Dialog{Question: rewindListQuestion, window: fmt.Sprintf("%d/%d", r.Above, r.Below)}
+	d := &Dialog{Question: rewindListQuestion}
+	window := fmt.Sprintf("%d/%d", r.Above, r.Below)
 	for i, row := range r.Rows {
 		if row.Current {
 			continue
@@ -146,7 +100,7 @@ func rewindList(lines []string) *Dialog {
 		}
 		d.Options = append(d.Options, Option{Key: key, Label: row.Text, Detail: row.Changes, Keys: append(keys, "enter")})
 	}
-	d.hash()
+	hash(d, window)
 	return d
 }
 
@@ -257,15 +211,15 @@ func numbered(lines []string) *Dialog {
 		}
 		d.Options = append(d.Options, o)
 	}
-	d.typedOption()
-	d.describe(lines, block[0].i)
+	typedOption(d)
+	describe(d, lines, block[0].i)
 	return d
 }
 
 // typedOption: text typed into AskUserQuestion's free-text field shows in place of its "Type something" label (and
 // checks it, in a multi-select question). The field is the option above "Chat about this": it keeps its label and
 // kind, the text goes in Text, so the dialog's revision does not change with what is typed.
-func (d *Dialog) typedOption() {
+func typedOption(d *Dialog) {
 	for k, o := range d.Options {
 		if o.Kind != KindChat || k == 0 {
 			continue
@@ -330,7 +284,7 @@ func unnumbered(lines []string) *Dialog {
 		}
 		d.Options = append(d.Options, Option{Key: strconv.Itoa(i - first + 1), Label: label, Keys: append(keys, "enter")})
 	}
-	d.describe(lines, first)
+	describe(d, lines, first)
 	return d
 }
 
@@ -364,7 +318,7 @@ func steps(bar string) []Step {
 }
 
 // describe fills header, question and detail from the lines above the options, up to the rule that opens the dialog.
-func (d *Dialog) describe(lines []string, first int) {
+func describe(d *Dialog, lines []string, first int) {
 	top := 0
 	for i := first - 1; i >= 0; i-- {
 		if isRule(lines[i]) {
@@ -425,15 +379,16 @@ func (d *Dialog) describe(lines []string, first int) {
 	default:
 		d.Question, d.Header = d.Header, ""
 	}
-	d.hash()
+	hash(d, "")
 }
 
-// hash sets Rev from what the dialog asks and offers.
-func (d *Dialog) hash() {
+// hash sets Rev from what the dialog asks and offers, and window: where a scrolled list's rows sit in it (the /rewind
+// list's "↑ 1 more"), so the same rows one step further down are another dialog. window is shown nowhere.
+func hash(d *Dialog, window string) {
 	h := sha256.New()
 	h.Write([]byte(d.Header + "\x00" + d.Question + "\x00" + d.Detail))
-	if d.window != "" {
-		h.Write([]byte("\x00" + d.window))
+	if window != "" {
+		h.Write([]byte("\x00" + window))
 	}
 	for _, o := range d.Options {
 		label := o.Label
@@ -452,16 +407,6 @@ var (
 	deadlineRE = regexp.MustCompile(`(?i)^⚠?\s*.*\bwill automatically (block|deny|allow|approve|accept|reject)\b.*\bin \d+:\d{2}\b`)
 	dashedRE   = regexp.MustCompile(`^[╌┄┈╍┅┉-]{8,}$`)
 )
-
-// Option by key, or nil.
-func (d *Dialog) Option(key string) *Option {
-	for i := range d.Options {
-		if d.Options[i].Key == key {
-			return &d.Options[i]
-		}
-	}
-	return nil
-}
 
 // joinWrapped puts rows the terminal wrapped back into one text: no space where a row ends inside CJK text.
 func joinWrapped(rows []string) string {

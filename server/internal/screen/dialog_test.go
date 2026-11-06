@@ -176,7 +176,7 @@ func TestParseMultiSelect(t *testing.T) {
 	}
 
 	single := parse("questions-single-100")
-	want := []Step{{"环境", false}, {"平台", false}, {"通知", false}}
+	want := []Step{{Label: "环境", Done: false}, {Label: "平台", Done: false}, {Label: "通知", Done: false}}
 	if single.Multi || single.Header != "" || !slices.Equal(single.Steps, want) || single.Question != "示例一：先发哪个环境？" {
 		t.Fatalf("questions, single %+v", single)
 	}
@@ -184,7 +184,7 @@ func TestParseMultiSelect(t *testing.T) {
 		t.Fatalf("questions, single: %+v", single.Options)
 	}
 	next := parse("questions-multi-next-100")
-	if !next.Multi || next.Submit != "Next" || !slices.Equal(next.Steps, []Step{{"环境", true}, {"平台", true}, {"通知", false}}) ||
+	if !next.Multi || next.Submit != "Next" || !slices.Equal(next.Steps, []Step{{Label: "环境", Done: true}, {Label: "平台", Done: true}, {Label: "通知", Done: false}}) ||
 		!slices.Equal(checked(next), []string{"1", "3"}) || next.Cursor != "1" {
 		t.Fatalf("questions, next %+v", next)
 	}

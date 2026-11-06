@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // Identity hints (docs/connectors.md "2 · 6"): who a sender is in a form two sources can share — an email address,
@@ -13,24 +15,20 @@ import (
 // under the hub's own key (Engine.HandleKey), is kept: in the person's handles.json, never in meta.json, so no tool
 // or prompt shows them (they mean nothing to a model). Merging people is not done here.
 
-// Handle kinds.
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type Handle = kbwire.Handle
+
 const (
-	HandleEmail    = "email"
-	HandlePhone    = "phone"
-	HandleGitHub   = "github"
-	HandleTelegram = "telegram"
-	HandleLark     = "lark"
+	HandleEmail    = kbwire.HandleEmail
+	HandleGitHub   = kbwire.HandleGitHub
+	HandleLark     = kbwire.HandleLark
+	HandlePhone    = kbwire.HandlePhone
+	HandleTelegram = kbwire.HandleTelegram
 )
 
-// Handle is a raw hint as a connector gives it, in memory only: hashed before it is written.
-type Handle struct {
-	Kind  string `json:"kind"`
-	Value string `json:"value"`
-}
-
-// normalize is the form two sources agree on: an address in lower case, a number as + and digits, the rest trimmed
+// normalizeHandle is the form two sources agree on: an address in lower case, a number as + and digits, the rest trimmed
 // and lower case. "" when nothing is left.
-func (h Handle) normalize() string {
+func normalizeHandle(h Handle) string {
 	v := strings.TrimSpace(h.Value)
 	switch h.Kind {
 	case HandlePhone:
@@ -51,7 +49,7 @@ func (h Handle) normalize() string {
 
 // HashHandle is h as kept: "<kind>:<HMAC-SHA256 under key, 32 hex digits>", "" when h is empty or there is no key.
 func HashHandle(key []byte, h Handle) string {
-	v := h.normalize()
+	v := normalizeHandle(h)
 	if len(key) == 0 || v == "" || h.Kind == "" {
 		return ""
 	}

@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // Ingest appends messages of one chat that a source pushes (mail), creating the chat. Same lines, people and
@@ -52,32 +54,12 @@ func (e *Engine) Ingest(ctx context.Context, src Source, sc SourceChat, msgs []S
 	return len(lines), nil
 }
 
-// Detail is everything about one entity: its metadata, compressed context, a project's timeline, a chat's latest text.
-type Detail struct {
-	Kind    string          `json:"kind"`
-	ID      string          `json:"id"`
-	Path    string          `json:"path"` // absolute, for reading more with file tools
-	Meta    json.RawMessage `json:"meta"`
-	Summary string          `json:"summary,omitempty"`
-	Log     []string        `json:"log,omitempty"`
-	Recent  string          `json:"recent,omitempty"`
-	// Links are the linked projects, chats and people, named and ranked.
-	Links []Entry `json:"links,omitempty"`
-	// Moments: a project's Moments posts (LinkMoments), newest first.
-	Moments []MomentRef `json:"moments,omitempty"`
-	// Segments: a recording's transcript (the app shows it; Recent has it as text for the assistant).
-	Segments []RecordingSegment `json:"segments,omitempty"`
-}
-
-// MomentRef is a Moments post as a project shows it.
-type MomentRef struct {
-	ID       string    `json:"id"`
-	Author   string    `json:"author"`
-	Text     string    `json:"text"` // clipped
-	At       time.Time `json:"at"`
-	Comments int       `json:"comments"`
-	Note     string    `json:"note,omitempty"` // how it bears on the project
-}
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type (
+	Detail    = kbwire.Detail
+	MomentRef = kbwire.MomentRef
+	Update    = kbwire.Update
+)
 
 var ErrNotFound = errors.New("not found")
 
@@ -189,36 +171,7 @@ func KindTags(list []Entry, n int) []string {
 	return tags[:min(len(tags), n)]
 }
 
-// Update is a change by hand (the app) or by the assistant. Set fields only; tagging set here is locked.
-type Update struct {
-	Pinned         *string  `json:"pinned,omitempty"`
-	Lock           *bool    `json:"lock,omitempty"`
-	RemovePeople   []string `json:"remove_people,omitempty"`
-	RemoveChats    []string `json:"remove_chats,omitempty"`
-	RemoveAliases  []string `json:"remove_aliases,omitempty"`
-	RemoveProjects []string `json:"remove_projects,omitempty"`
-	Name           string   `json:"name,omitempty"`
-	Kind           string   `json:"project_kind,omitempty"` // projects: short | long
-	Status         string   `json:"status,omitempty"`
-	Goal           string   `json:"goal,omitempty"`
-	MyRole         string   `json:"my_role,omitempty"`
-	Note           string   `json:"note,omitempty"` // people / items
-	Importance     string   `json:"importance,omitempty"`
-	Relevance      *int     `json:"relevance,omitempty"`
-	Tags           []string `json:"tags,omitempty"`    // nil preserves; non-nil replaces, including an empty slice
-	Summary        string   `json:"summary,omitempty"` // replaces summary.md
-	Log            string   `json:"log,omitempty"`     // projects: appended to the timeline
-	Source         string   `json:"source,omitempty"`  // who writes the log line (default Persona)
-	Aliases        []string `json:"aliases,omitempty"`
-	Chats          []string `json:"chats,omitempty"`    // projects: chat ids to link
-	People         []string `json:"people,omitempty"`   // projects: person ids to link
-	Dirs           []string `json:"dirs,omitempty"`     // projects: "<machine>:<path>" code directories
-	Projects       []string `json:"projects,omitempty"` // chats / people / items: project slugs to link
-	// MergeInto (projects): fold this project into that one (MergeProjects); nothing else in the update applies.
-	MergeInto string `json:"merge_into,omitempty"`
-}
-
-func (u Update) tag(t *Tagging) {
+func tagUpdate(u Update, t *Tagging) {
 	if u.Importance != "" || u.Relevance != nil {
 		if u.Lock == nil || *u.Lock {
 			t.Locked = true
@@ -288,8 +241,8 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if u.MyRole != "" {
 			p.MyRole = oneLine(u.MyRole)
 		}
-		u.tag(&p.Tagging)
-		u.protect(&p.Tagging)
+		tagUpdate(u, &p.Tagging)
+		protectUpdate(u, &p.Tagging)
 		p.Aliases = addUnique(p.Aliases, u.Aliases...)
 		p.Dirs = addUnique(p.Dirs, u.Dirs...)
 		p.People = addUnique(p.People, u.People...)
@@ -351,8 +304,8 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if !ok {
 			return "", ErrNotFound
 		}
-		u.tag(&c.Tagging)
-		u.protect(&c.Tagging)
+		tagUpdate(u, &c.Tagging)
+		protectUpdate(u, &c.Tagging)
 		if u.Name != "" {
 			c.Name = u.Name
 		}
@@ -388,8 +341,8 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if !ok {
 			return "", ErrNotFound
 		}
-		u.tag(&p.Tagging)
-		u.protect(&p.Tagging)
+		tagUpdate(u, &p.Tagging)
+		protectUpdate(u, &p.Tagging)
 		if u.Note != "" {
 			p.Note = oneLine(u.Note)
 		}
@@ -421,8 +374,8 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if !ok {
 			return "", ErrNotFound
 		}
-		u.tag(&it.Tagging)
-		u.protect(&it.Tagging)
+		tagUpdate(u, &it.Tagging)
+		protectUpdate(u, &it.Tagging)
 		if u.Note != "" {
 			it.Note = oneLine(u.Note)
 		}
@@ -456,8 +409,8 @@ func (e *Engine) Apply(kind, id string, u Update) (string, error) {
 		if !ok {
 			return "", ErrNotFound
 		}
-		u.tag(&r.Tagging)
-		u.protect(&r.Tagging)
+		tagUpdate(u, &r.Tagging)
+		protectUpdate(u, &r.Tagging)
 		for _, slug := range u.Projects {
 			if pr, ok := e.Store.Project(slug); ok {
 				r.Projects = addUnique(r.Projects, pr.Slug)

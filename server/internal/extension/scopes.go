@@ -1,24 +1,25 @@
 package extension
 
-import "strings"
+import (
+	"strings"
 
-// The scopes of the hub's API an extension may ask for (permissions.hub; docs/extensions.md"Permissions"). Each route of the
-// hub an extension's token may call names one (extmgr/extension_scopes.go); a route naming none is for full tokens
-// only.
+	"github.com/nwverse/persona/server/internal/extwire"
+)
+
+// Defined in the contract package extwire (docs/architecture.md "Contract packages"); the old names stay.
 const (
-	ScopeKBRead        = "kb.read"
-	ScopeKBWrite       = "kb.write"
-	ScopeInboxRead     = "inbox.read"
-	ScopeInboxWrite    = "inbox.write"
-	ScopeAgentsRead    = "agents.read"
-	ScopeAgentsControl = "agents.control"
-	ScopeMachinesRead  = "machines.read"
-	ScopeNotify        = "notify"
-	ScopeAssistantAsk  = "assistant.ask"
-	ScopeTodosRead     = "todos.read"
-	ScopeTodosWrite    = "todos.write"
-	// ScopeCallPrefix and an extension's id: calling that extension's own HTTP (/api/v1/extensions/<id>/…).
-	ScopeCallPrefix = "extensions.call:"
+	ScopeAgentsControl = extwire.ScopeAgentsControl
+	ScopeAgentsRead    = extwire.ScopeAgentsRead
+	ScopeAssistantAsk  = extwire.ScopeAssistantAsk
+	ScopeCallPrefix    = extwire.ScopeCallPrefix
+	ScopeInboxRead     = extwire.ScopeInboxRead
+	ScopeInboxWrite    = extwire.ScopeInboxWrite
+	ScopeKBRead        = extwire.ScopeKBRead
+	ScopeKBWrite       = extwire.ScopeKBWrite
+	ScopeMachinesRead  = extwire.ScopeMachinesRead
+	ScopeNotify        = extwire.ScopeNotify
+	ScopeTodosRead     = extwire.ScopeTodosRead
+	ScopeTodosWrite    = extwire.ScopeTodosWrite
 )
 
 // HubScopes are the scopes, in the order the install screen lists them.

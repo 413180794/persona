@@ -133,7 +133,7 @@ type AppCall struct {
 const (
 	// AppConnectors is the hub's connectors (docs/connectors.md).
 	AppConnectors = "connectors"
-	// ConnectorsSnapshots: {tz} → {snapshots: [connector.SnapshotData]}, the live states of the signed-in connectors
+	// ConnectorsSnapshots: {tz} → {snapshots: [connectorwire.SnapshotData]}, the live states of the signed-in connectors
 	// that keep one (the chats waiting on the user, today's meetings), those that answered within a few seconds.
 	ConnectorsSnapshots = "connectors.snapshots"
 

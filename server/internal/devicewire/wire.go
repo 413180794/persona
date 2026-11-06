@@ -8,24 +8,10 @@ package devicewire
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 )
-
-// NodeBinaryDir is where deploy.sh puts the node binaries next to the hub's own (the hub's updates put the release's
-// there too, the manager deploys them from there); JARVIS_NODE_BINARIES points elsewhere (the Docker image carries
-// them in /opt/jarvis/nodes: ~/.jarvis is the data volume there).
-func NodeBinaryDir() string {
-	if d := identity.Getenv("JARVIS_NODE_BINARIES"); d != "" {
-		return d
-	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(identity.DataDir(home), "bin", "nodes")
-}
 
 // Manager → hub.
 const (

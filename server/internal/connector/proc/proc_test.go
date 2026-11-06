@@ -20,6 +20,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension/host"
 	pserve "github.com/nwverse/persona/server/internal/extension/serve"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -155,8 +156,8 @@ func (*exampleProgram) ItemSource() kb.ItemSource { return exampleItems{} }
 
 type exampleItems struct{}
 
-func (exampleItems) Items(context.Context) ([]kb.Item, error) {
-	return []kb.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "示例周会", At: time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC), Where: "meetings"}}, nil
+func (exampleItems) Items(context.Context) ([]kbwire.Item, error) {
+	return []kbwire.Item{{Kind: kb.KindMeeting, ID: "m1", Title: "示例周会", At: time.Date(2026, 1, 2, 3, 0, 0, 0, time.UTC), Where: "meetings"}}, nil
 }
 
 func (exampleItems) DocTitle(_ context.Context, u string) string {

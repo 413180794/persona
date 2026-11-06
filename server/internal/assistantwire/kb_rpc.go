@@ -1,6 +1,6 @@
 package assistantwire
 
-import "github.com/nwverse/persona/server/internal/kb"
+import "github.com/nwverse/persona/server/internal/kbwire"
 
 // Extension-facing knowledge-base calls. The hub checks the extension's granted scope before forwarding these.
 const (
@@ -19,10 +19,10 @@ type KBListParams struct {
 }
 
 type KBListResult struct {
-	Items      []kb.Entry `json:"items"`
-	Tags       []string   `json:"tags"`
-	Total      int        `json:"total"`
-	NextOffset *int       `json:"next_offset,omitempty"`
+	Items      []kbwire.Entry `json:"items"`
+	Tags       []string       `json:"tags"`
+	Total      int            `json:"total"`
+	NextOffset *int           `json:"next_offset,omitempty"`
 }
 
 type KBGetParams struct {
@@ -32,7 +32,7 @@ type KBGetParams struct {
 }
 
 type KBGetResult struct {
-	Detail *kb.Detail `json:"detail"`
+	Detail *kbwire.Detail `json:"detail"`
 }
 
 type KBDayParams struct {
@@ -41,10 +41,10 @@ type KBDayParams struct {
 }
 
 type KBDayResult struct {
-	Day      string          `json:"day"`
-	Messages []kb.DayMessage `json:"messages"` // n is the first source-file line, 1-based
-	Prev     string          `json:"prev"`
-	Next     string          `json:"next"`
+	Day      string              `json:"day"`
+	Messages []kbwire.DayMessage `json:"messages"` // n is the first source-file line, 1-based
+	Prev     string              `json:"prev"`
+	Next     string              `json:"next"`
 }
 
 type KBSearchParams struct {
@@ -54,13 +54,13 @@ type KBSearchParams struct {
 }
 
 type KBSearchResult struct {
-	Hits []kb.Hit `json:"hits"`
+	Hits []kbwire.Hit `json:"hits"`
 }
 
 type KBUpdateParams struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
-	kb.Update
+	kbwire.Update
 }
 
 type KBUpdateResult struct {

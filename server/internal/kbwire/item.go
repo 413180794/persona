@@ -1,0 +1,31 @@
+package kbwire
+
+import "time"
+
+// Item is a document, meeting or calendar event as a connector hands it over (connectors.items, docs/connectors.md):
+// the same JSON as the knowledge base's own item (kb.Item), which adds what only the store keeps.
+type Item struct {
+	Kind     string    `json:"kind"` // docs | meetings | events
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	URL      string    `json:"url,omitempty"`
+	At       time.Time `json:"at,omitempty"`
+	Where    string    `json:"where,omitempty"` // where it came from (a chat id, "calendar"…)
+	Projects []string  `json:"projects,omitempty"`
+	Note     string    `json:"note,omitempty"`
+	Seen     time.Time `json:"seen"`
+	Tagging
+}
+
+// Tagging is how an entity is tagged, as the knowledge base writes it into the entity's metadata.
+type Tagging struct {
+	Importance string    `json:"importance,omitempty"` // P0 (critical) … P3 (ignorable)
+	Relevance  int       `json:"relevance"`            // 0–100: how much it concerns the owner
+	Tags       []string  `json:"tags,omitempty"`
+	Locked     bool      `json:"locked,omitempty"`
+	TaggedAt   time.Time `json:"tagged_at,omitempty"`
+	// Pinned contains confirmed facts; pipeline writes cannot replace or clear it.
+	Pinned string `json:"pinned,omitempty"`
+	// LockedFields names update fields that automatic writes must preserve.
+	LockedFields []string `json:"locked_fields,omitempty"`
+}

@@ -17,7 +17,7 @@ func TestSearchAndFindSkipBookkeeping(t *testing.T) {
 	if err := st.PutPerson(&Person{ID: "mail-a", Name: "Alice"}); err != nil {
 		t.Fatal(err)
 	}
-	if !e.addHandles("mail-a", []Handle{{HandleEmail, handleTestEmail}}) {
+	if !e.addHandles("mail-a", []Handle{{Kind: HandleEmail, Value: handleTestEmail}}) {
 		t.Fatal("addHandles")
 	}
 	if err := st.PutProject(&Project{Slug: "p1", Name: "Plan"}); err != nil {

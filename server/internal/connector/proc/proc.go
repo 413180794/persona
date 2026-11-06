@@ -27,6 +27,7 @@ import (
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/extension/host"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -879,7 +880,7 @@ func (c *Conn) ItemSource() kb.ItemSource { return connItems{c} }
 
 type connItems struct{ c *Conn }
 
-func (s connItems) Items(ctx context.Context) ([]kb.Item, error) {
+func (s connItems) Items(ctx context.Context) ([]kbwire.Item, error) {
 	var out serve.ItemsResult
 	err := s.c.call(ctx, serve.MItems, struct{}{}, &out)
 	return out.Items, err

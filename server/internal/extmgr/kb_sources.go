@@ -12,6 +12,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/kbwire"
 )
 
 // The hub keeps the knowledge base's sources (docs/knowledge.md "Who owns what"): the knowledge base, the assistant's,
@@ -90,10 +91,10 @@ func (h *Manager) kbSourcesCall(ctx context.Context, p assistantwire.AppCall) (j
 			out = map[string]any{"title": is.ItemSource().DocTitle(ctx, a.URL)}
 			break
 		}
-		var items []kb.Item
+		var items []kbwire.Item
 		items, err = is.ItemSource().Items(ctx)
 		if items == nil {
-			items = []kb.Item{}
+			items = []kbwire.Item{}
 		}
 		out = assistantwire.KBItems{Items: items}
 	}

@@ -3,17 +3,13 @@ package connector
 import (
 	"context"
 
-	"github.com/nwverse/persona/server/internal/kb"
+	"github.com/nwverse/persona/server/internal/connectorwire"
 )
 
-// ChatBatch is one conversation's new messages, oldest first.
-type ChatBatch struct {
-	// Source is the name the conversation is filed under: "" is the connector's id, else one of its manifest's
-	// ArchiveSources (the chat is "<source>-<chat id>").
-	Source   string             `json:"source,omitempty"`
-	Chat     kb.SourceChat      `json:"chat,omitempty"`
-	Messages []kb.SourceMessage `json:"messages,omitempty"`
-}
+// Defined in the contract package connectorwire (docs/architecture.md "Contract packages"); the old names stay.
+type ChatBatch = connectorwire.ChatBatch
+
+const ArchiveMediaMost = connectorwire.ArchiveMediaMost
 
 // Archive is a connector whose conversations go into the knowledge base by one cursor for the whole account
 // (GitHub's updated_at, mail's UID, iMessage's ROWID) rather than one per conversation: Changes gives what moved
@@ -29,6 +25,3 @@ type Archive interface {
 type ArchiveMedia interface {
 	ArchiveMedia(ctx context.Context, ref string) (Media, error)
 }
-
-// ArchiveMediaMost is the largest attachment archive.media hands over.
-const ArchiveMediaMost = 20 << 20

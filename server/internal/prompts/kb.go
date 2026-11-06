@@ -1,6 +1,10 @@
 package prompts
 
-import "time"
+import (
+	"time"
+
+	"github.com/nwverse/persona/server/internal/kbwire"
+)
 
 // KBOwner is the knowledge base models' system prompts: compressing a chat (kb/compress), rewriting a project
 // (kb/project), tagging documents, meetings and events (kb/items).
@@ -146,13 +150,8 @@ type KBDigest struct {
 
 func RenderKBDigest(d KBDigest) string { return render("kb/digest", d) }
 
-// KBProject and KBContext are what the knowledge base knows about a chat and its projects (shared/kb_blocks.md).
-type KBProject struct {
-	Name, Summary string
-}
-
-type KBContext struct {
-	ChatID, ChatName string
-	Summary          string // "" leaves the chat's block out
-	Projects         []KBProject
-}
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type (
+	KBContext = kbwire.ChatContext
+	KBProject = kbwire.ChatProject
+)

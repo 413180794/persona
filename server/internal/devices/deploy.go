@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
 )
 
 // Redeploying a node from the hub (POST /api/v1/machines/{id}/deploy, the button where a machine is not the hub's
@@ -20,7 +20,7 @@ import (
 // if there is one (launchd starts it again from the new binary; `launchctl kickstart` from an ssh session did not always
 // take, which is how two Macs kept an old node through deploys), and connects again.
 
-func nodeBinaryDir() string { return devicewire.NodeBinaryDir() }
+func nodeBinaryDir() string { return identity.NodeBinaryDir() }
 
 // nodeBinary is the hub's build for a machine's OS and architecture.
 func nodeBinary(goos, arch string) (string, error) {

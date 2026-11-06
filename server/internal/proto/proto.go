@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/screen"
+	"github.com/nwverse/persona/server/internal/dialogwire"
 )
 
 type Machine struct {
@@ -1276,7 +1276,7 @@ type Interaction struct {
 	Elicitation     *Elicitation    `json:"elicitation,omitempty"`
 	// Dialog is the screen's dialog read on the hub (screen interactions); answers name an option and are checked
 	// against Dialog.Rev before any key is pressed. Absent when the screen shows no dialog it could read.
-	Dialog *screen.Dialog `json:"dialog,omitempty"`
+	Dialog *dialogwire.Dialog `json:"dialog,omitempty"`
 	// Secret: the screen asks for a password. The app takes it in a password field and keeps no copy; the hub never
 	// stores what is typed into a terminal card anyway.
 	Secret bool `json:"secret,omitempty"`

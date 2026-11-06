@@ -8,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/kbwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
 // ItemSource lists documents, meetings and calendar events (Feishu through the Lark extension).
 type ItemSource interface {
-	Items(ctx context.Context) ([]Item, error)
+	Items(ctx context.Context) ([]kbwire.Item, error)
 	// DocTitle looks up a document's title by its link ("" when it cannot).
 	DocTitle(ctx context.Context, url string) string
 }
@@ -25,7 +26,8 @@ func (e *Engine) CollectItems(ctx context.Context, src ItemSource) error {
 		return err
 	}
 	now := time.Now().UTC()
-	for _, it := range items {
+	for _, w := range items {
+		it := ItemFromWire(w)
 		old, ok := e.Store.Item(it.Kind, it.ID)
 		if ok {
 			if old.Title == it.Title && old.At.Equal(it.At) {
@@ -36,7 +38,6 @@ func (e *Engine) CollectItems(ctx context.Context, src ItemSource) error {
 		} else {
 			it.Seen = now
 		}
-		it := it
 		if err := e.Store.PutItem(&it); err != nil {
 			return err
 		}
@@ -138,11 +139,11 @@ func (e *Engine) TagItems(ctx context.Context) error {
 
 // --- reading ---
 
-// Hit is one search result.
-type Hit struct {
-	Path string `json:"path"` // relative to the data dir; absolute for a file in one of the ExtraDirs
-	Line string `json:"line"`
-}
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type (
+	Entry = kbwire.Entry
+	Hit   = kbwire.Hit
+)
 
 // Search finds lines containing every word of the query (case-insensitive) in summaries, metadata, timelines, the
 // Markdown of the ExtraDirs and (when messages is set) the message archive; newest message days first. At most limit
@@ -237,19 +238,6 @@ func clip(s string, n int) string {
 		return string(r[:n]) + "…"
 	}
 	return s
-}
-
-// Entry is a row of a ranked list.
-type Entry struct {
-	Kind       string    `json:"kind"`
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	OneLine    string    `json:"one_line,omitempty"`
-	Importance string    `json:"importance,omitempty"`
-	Relevance  int       `json:"relevance"`
-	Tags       []string  `json:"tags,omitempty"`
-	Updated    time.Time `json:"updated"`
-	Extra      string    `json:"extra,omitempty"` // projects: short / long · status; chats: dm / group…
 }
 
 // Rank orders by importance, then relevance, then recency.

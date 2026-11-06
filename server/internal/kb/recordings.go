@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/kbwire"
 	"github.com/nwverse/persona/server/internal/prompts"
 )
 
@@ -33,12 +34,8 @@ const (
 	maxRecordingText     = 4 << 20
 )
 
-// RecordingSegment is one transcribed stretch: seconds from the recording's start.
-type RecordingSegment struct {
-	Start float64 `json:"start"`
-	End   float64 `json:"end"`
-	Text  string  `json:"text"`
-}
+// Defined in the contract package kbwire (docs/architecture.md "Contract packages"); the old names stay.
+type RecordingSegment = kbwire.RecordingSegment
 
 // RecordingBookmark is a mark the user set while recording: seconds from the start.
 type RecordingBookmark struct {

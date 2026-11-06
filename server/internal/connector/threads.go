@@ -3,6 +3,8 @@ package connector
 import (
 	"context"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/connectorwire"
 )
 
 // Threads is a connector whose inbox threads the app opens as a conversation of their own (CapThreads): a page of
@@ -130,8 +132,5 @@ type (
 	}
 )
 
-// Media is one media's bytes and what they are.
-type Media struct {
-	Mime string `json:"mime"`
-	Data []byte `json:"data"`
-}
+// Defined in the contract package connectorwire (docs/architecture.md "Contract packages"); the old names stay.
+type Media = connectorwire.Media

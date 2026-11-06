@@ -8,8 +8,6 @@ package extwire
 
 import (
 	"encoding/json"
-
-	"github.com/nwverse/persona/server/internal/extension"
 )
 
 // Routes are the routes the manager answers (net/http patterns): the hub relays each request on them to the manager
@@ -160,8 +158,8 @@ type LookPackage struct {
 // APIPrefix is one extension's part of the API. Receipts: the sends under it the hub keeps a receipt for, as for its
 // own (GET /api/v1/ops/{id}).
 type APIPrefix struct {
-	Prefix   string                 `json:"prefix"`
-	Receipts []extension.APIReceipt `json:"receipts,omitempty"`
+	Prefix   string       `json:"prefix"`
+	Receipts []APIReceipt `json:"receipts,omitempty"`
 }
 
 // MachineExtras is one machine's computer (Cua) and browser (ego) state, nil when not on.
