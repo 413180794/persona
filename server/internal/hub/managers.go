@@ -377,6 +377,10 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 		switch {
 		case errors.Is(err, errNotMovable):
 			writeErrCode(w, http.StatusBadRequest, "not_movable", err)
+		case errors.Is(err, errUnknownManager): // removed meanwhile
+			writeErrCode(w, http.StatusNotFound, "no_manager", err)
+		case errors.Is(err, errOwnersUnknown):
+			writeErrCode(w, http.StatusServiceUnavailable, "owners_unknown", err)
 		case err != nil:
 			writeErr(w, http.StatusInternalServerError, err)
 		default:
@@ -412,6 +416,10 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 		switch {
 		case errors.Is(err, errMoveOffline):
 			writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, err)
+		case errors.Is(err, errUnknownManager): // removed meanwhile
+			writeErrCode(w, http.StatusNotFound, "no_manager", err)
+		case errors.Is(err, errSourceInDoubt): // the new one may have it: moving it again finds out
+			writeErrCode(w, http.StatusBadGateway, "source_in_doubt", err)
 		case src == "" && errors.As(err, &coded) && coded.Code == extwire.CodeNoSource:
 			writeErrCode(w, http.StatusNotFound, coded.Code, err)
 		case src == "" && errors.As(err, &coded) && (coded.Code == extwire.CodeSourceExists || coded.Code == extwire.CodeSourceKind):
@@ -441,17 +449,23 @@ func (h *Hub) managerRoutes(api *http.ServeMux) {
 			return
 		}
 		s := h.managerStore()
-		if info.Installing != nil {
-			if _, err := s.DropManagerInstallCodes(r.Context(), id); err != nil {
-				writeErr(w, http.StatusInternalServerError, err)
-				return
+		// Once the moves to or from it under way are done; the ones after find it gone (ownership.go).
+		err := h.removingManager(func() error {
+			if info.Installing != nil {
+				_, err := s.DropManagerInstallCodes(r.Context(), id)
+				return err
 			}
-		} else if _, err := h.revokeBusToken(r.Context(), id); err != nil {
+			if _, err := h.revokeBusToken(r.Context(), id); err != nil {
+				return err
+			}
+			h.releaseMachines(r.Context(), id) // its machines go back to the carrier, their sessions with them (ownership.go)
+			h.forgetManagerState(id)           // what it reported, its cards too (manager_state.go)
+			return nil
+		})
+		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		h.releaseMachines(r.Context(), id) // its machines go back to the carrier (ownership.go)
-		h.forgetManagerState(id)           // what it reported (manager_state.go)
 		h.logf("managers: [%s] removed", id)
 		h.managersChanged()
 		writeJSON(w, map[string]any{"ok": true})

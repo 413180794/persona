@@ -18,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -25,10 +26,12 @@ import (
 // the manager it belongs to. This file is the one place that says who that is, so moving a machine or a source to
 // another manager (step 3) changes ownership here and nowhere else:
 //
-//   - a machine: the manager that reports it (its devices.state); before any did, the one that carries hub.json's
-//     machines (devicesOwner);
-//   - a session: its machine's manager, unless it is one of a manager's own conversations (its snapshot lists it);
-//   - an interaction: the manager that reported it;
+//   - a machine: one of hub.json's, the manager it was moved to (moveMachine), else the one that carries hub.json's
+//     machines (devicesOwner); any other (a mesh member's), devicesOwner. Only the roster and the moves decide it,
+//     never what a manager reports;
+//   - a session: its machine's manager (a manager's own conversations run on its own machines; moving a machine
+//     moves its sessions with it);
+//   - an interaction: the manager that reported it, taken only on a machine of its own (cardAllowed);
 //   - what names no thing the hub can place (the assistant's pages, the inbox, the knowledge base, the model
 //     configuration, the todos, the extensions and sources…): the manager the request names (ManagerHeader, or the
 //     query parameter ManagerQuery), else the default manager. An item of such a list (an inbox item, an extension)
@@ -82,6 +85,23 @@ func (h *Hub) knownManager(ctx context.Context, id string) bool {
 	return err == nil && b != nil && b.Role == bus.RoleManager
 }
 
+// rosterHas: id is a manager of the roster (has), and whether the roster could tell (sure: a failed lookup is not
+// "no").
+func (h *Hub) rosterHas(ctx context.Context, id string) (has, sure bool) {
+	if id == assistantwire.AssistantID || h.busConnOf(id) != nil {
+		return true, true
+	}
+	s := h.managerStore()
+	if s == nil {
+		return false, true
+	}
+	b, err := s.BusIdentityByID(ctx, id)
+	if err != nil {
+		return false, false
+	}
+	return b != nil && b.Role == bus.RoleManager, true
+}
+
 // ownerCache keeps the default manager for a moment: it is asked on every forwarded request.
 type ownerCache struct {
 	mu    sync.Mutex
@@ -116,19 +136,17 @@ func (h *Hub) ownersChanged() {
 	c.mu.Unlock()
 }
 
-// machineOwner is the manager machine mid belongs to: the one that reported it, else the one that carries
-// hub.json's machines.
+// machineOwner is the manager machine mid belongs to, the only one that may act on it or its sessions.
+//
+// It comes from the roster and the moves alone: a machine of hub.json's is its entry's (moved, else the carrier's);
+// any other (a mesh member's: only the carrier is handed the mesh) the carrier's. Nothing a manager reports about
+// itself (a derived report, its snapshot's sessions, its main conversation) makes a machine its own.
 func (h *Hub) machineOwner(mid string) string {
-	if m := h.localMachine(mid); m != nil {
-		if id := m.ownerID(); id != "" {
-			return id
-		}
-	}
 	return h.entryOwner(mid)
 }
 
-// entryOwner is the manager that carries hub.json's machine mid: the one it was moved to (moveMachine), else the
-// carrier. A machine that is not hub.json's (a mesh member's) is its reporter's.
+// entryOwner is the manager that carries machine mid: the one hub.json's machine was moved to (moveMachine), else
+// the carrier. Only hub.json's machines move (assign has no other), so any other machine is the carrier's.
 func (h *Hub) entryOwner(mid string) string {
 	d := &h.devices
 	d.mu.Lock()
@@ -136,12 +154,9 @@ func (h *Hub) entryOwner(mid string) string {
 	return cmp.Or(d.assign[mid], devicesOwner)
 }
 
-// sessionOwner is the manager session sid on machine mid belongs to: the manager whose own conversation it is, else
-// its machine's.
-func (h *Hub) sessionOwner(mid, sid string) string {
-	if id := h.conversationOwner(sid); id != "" {
-		return id
-	}
+// sessionOwner is the manager session sid on machine mid belongs to: its machine's (a manager's own conversation runs
+// on a machine of its own).
+func (h *Hub) sessionOwner(mid, _ string) string {
 	return h.machineOwner(mid)
 }
 
@@ -464,7 +479,59 @@ const machineOwnersKey = "managers.machines"
 var (
 	errNotMovable  = errors.New("only a computer of this hub's own list can move to another manager")
 	errMoveOffline = errors.New("the manager is not connected")
+	// errOwnersUnknown: the hub could not read which manager carries which machine; a move now would overwrite it.
+	errOwnersUnknown = errors.New("the hub could not read which manager carries which machine; try again")
+	// errSourceInDoubt: the import did not answer; whether the new manager has the source could not be told either.
+	errSourceInDoubt = errors.New("the new manager did not say whether it took the source")
 )
+
+// moves orders a manager's removal against the moves to or from it: moves (machines and sources) hold managers
+// shared, a removal exclusive, so it waits for them and the ones after it find the manager gone. A machine's moves
+// are one at a time on top of that (d.moving); a source's too (sources).
+type moves struct {
+	managers sync.RWMutex
+	mu       sync.Mutex             // guards sources
+	sources  map[string]*sourceLock // a source being moved, while one is
+}
+
+// sourceLock is one source's move lock, kept while a move of it runs or waits.
+type sourceLock struct {
+	mu    sync.Mutex
+	users int
+}
+
+// lockSource holds source's move lock (one move of a source at a time) and returns its unlock, which forgets the lock
+// once no move of it waits.
+func (mv *moves) lockSource(source string) func() {
+	mv.mu.Lock()
+	if mv.sources == nil {
+		mv.sources = map[string]*sourceLock{}
+	}
+	l := mv.sources[source]
+	if l == nil {
+		l = &sourceLock{}
+		mv.sources[source] = l
+	}
+	l.users++
+	mv.mu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		mv.mu.Lock()
+		if l.users--; l.users == 0 {
+			delete(mv.sources, source)
+		}
+		mv.mu.Unlock()
+	}
+}
+
+// removingManager runs remove (a manager's removal) once no move to or from a manager is under way, and keeps new
+// ones waiting until it is done.
+func (h *Hub) removingManager(remove func() error) error {
+	h.moving.managers.Lock()
+	defer h.moving.managers.Unlock()
+	return remove()
+}
 
 // loadMachineOwners reads machineOwnersKey (a hub that starts, before any manager connects). An error leaves assign
 // unread: the machines go to the carrier meanwhile, and the next move reads it again before it writes (moveMachine).
@@ -476,9 +543,25 @@ func (h *Hub) loadMachineOwners(ctx context.Context) error {
 			return err
 		}
 	}
+	// A machine hub.json no longer has, or an owner the roster no longer has: back to the carrier.
+	kept := map[string]string{}
+	for mid, o := range m {
+		if h.cfgEntry(mid) == nil || o == "" || o == devicesOwner {
+			continue
+		}
+		if has, sure := h.rosterHas(ctx, o); sure && !has {
+			continue // its manager was removed (a failed lookup keeps it: it is asked again at the next read)
+		}
+		kept[mid] = o
+	}
+	if s := h.managerStore(); s != nil && len(kept) != len(m) {
+		if err := s.PutSetting(ctx, machineOwnersKey, kept); err != nil {
+			h.logf("managers: which manager carries which machine: %v", err)
+		}
+	}
 	d := &h.devices
 	d.mu.Lock()
-	d.assign, d.assignRead = m, true
+	d.assign, d.assignRead = kept, true
 	d.mu.Unlock()
 	return nil
 }
@@ -495,6 +578,8 @@ func (h *Hub) moveMachine(ctx context.Context, mid, to string) (from string, err
 	if h.cfgEntry(mid) == nil {
 		return "", errNotMovable
 	}
+	h.moving.managers.RLock() // not while its manager is being removed (removingManager)
+	defer h.moving.managers.RUnlock()
 	d := &h.devices
 	d.moving.Lock()
 	defer d.moving.Unlock()
@@ -507,7 +592,11 @@ func (h *Hub) moveMachineMoving(ctx context.Context, mid, to string) (from strin
 	if err := h.readOwnersMoving(ctx); err != nil {
 		return h.machineOwner(mid), err
 	}
-	from = h.machineOwner(mid)
+	// Still in the roster (a removal does not run while this does: removingManager).
+	if to != devicesOwner && !h.knownManager(ctx, to) {
+		return h.entryOwner(mid), fmt.Errorf("%w: %q", errUnknownManager, clip(to, 64))
+	}
+	from = h.entryOwner(mid)
 	if from == to {
 		return from, nil
 	}
@@ -546,7 +635,7 @@ func (h *Hub) readOwnersMoving(ctx context.Context) error {
 		return nil
 	}
 	if err := h.loadMachineOwners(ctx); err != nil {
-		return fmt.Errorf("which manager carries which machine: %w", err)
+		return fmt.Errorf("%w: %v", errOwnersUnknown, err)
 	}
 	for _, mc := range h.cfgEntries() {
 		if m := h.localMachine(mc.ID); m != nil && m.ownerOrCarrier() != h.entryOwner(mc.ID) {
@@ -557,8 +646,9 @@ func (h *Hub) readOwnersMoving(ctx context.Context) error {
 }
 
 // machineHandedOver makes machine mid manager to's in what the hub shows and routes, offline until it reports it,
-// and hands every manager its machines again.
+// withdraws the other managers' cards on it, and hands every manager its machines again.
 func (h *Hub) machineHandedOver(mid, to string) {
+	h.withdrawCardsOn(mid, to)
 	if m := h.localMachine(mid); m != nil {
 		m.mu.Lock()
 		m.owner = to
@@ -572,7 +662,7 @@ func (h *Hub) machineHandedOver(mid, to string) {
 	h.devicesConfigChanged()
 }
 
-// releaseMachines gives the machines removed manager id carried back to the carrier.
+// releaseMachines gives the machines removed manager id carried back to the carrier. Called under removingManager.
 func (h *Hub) releaseMachines(ctx context.Context, id string) {
 	d := &h.devices
 	d.moving.Lock() // the whole release: a move meanwhile is not undone by it, nor one of its machines missed
@@ -598,9 +688,18 @@ func (h *Hub) releaseMachines(ctx context.Context, id string) {
 
 // moveSource moves source (extwire.SourceRef: "mail:<account>") from manager from to manager to: the old one
 // exports it (its secrets in plaintext, over the bus only: the hub neither keeps nor logs the bundle), the new one
-// imports it (sealing them with its own key), and the old one lets it go. Both have to be connected. When the
-// import fails the old one keeps it; when the release fails both have it, and the error says so.
+// imports it (sealing them with its own key), and the old one lets it go. Both have to be connected; one move of a
+// source at a time. When the new one says it has the source already (a move whose release failed, done again), the
+// hub checks it has that source and goes on to the release. When the import does not answer, the hub asks the new
+// one whether it has the source: yes, it goes on; no, the old one keeps it; no answer, errSourceInDoubt. When the
+// release fails both have it, and the error says so: moving it again releases it.
 func (h *Hub) moveSource(ctx context.Context, source, from, to string) (string, error) {
+	h.moving.managers.RLock()
+	defer h.moving.managers.RUnlock()
+	defer h.moving.lockSource(source)()
+	if !h.knownManager(ctx, from) || !h.knownManager(ctx, to) {
+		return "", errUnknownManager
+	}
 	if h.busConnOf(from) == nil || h.busConnOf(to) == nil {
 		return "", errMoveOffline
 	}
@@ -611,21 +710,147 @@ func (h *Hub) moveSource(ctx context.Context, source, from, to string) (string, 
 	var ref extwire.SourceRef
 	err := h.callBus(ctx, to, extwire.MethodSourceImport, bundle, &ref)
 	clear(bundle)
-	if err != nil {
-		return "", fmt.Errorf("%s: import: %w", to, err)
+	var coded *rpc.Error
+	switch {
+	case err == nil:
+	case errors.As(err, &coded) && coded.Code == extwire.CodeSourceExists:
+		// A move whose release failed, done again: the new one has it if it can export that very source.
+		if !h.sourceAt(ctx, to, source) {
+			return "", fmt.Errorf("%s: import: %w", to, err)
+		}
+		ref.Source = source
+	case errors.As(err, &coded):
+		return "", fmt.Errorf("%s: import: %w", to, err) // refused: the old one keeps it
+	default:
+		// No answer (dropped, timed out): whether it took it decides.
+		qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		has, known := h.sourceKnownAt(qctx, to, source)
+		cancel()
+		switch {
+		case !known:
+			return "", fmt.Errorf("%w: %v", errSourceInDoubt, err)
+		case !has:
+			return "", fmt.Errorf("%s: import: %w", to, err)
+		}
+		ref.Source = source
 	}
-	if err := h.callBus(ctx, from, extwire.MethodSourceRelease, extwire.SourceRef{Source: source}, nil); err != nil {
-		return ref.Source, fmt.Errorf("%s has it now, but %s did not let it go: %w", to, from, err)
+	// The new one has it: the release is asked for even when the caller stopped waiting.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	if err := h.callBus(rctx, from, extwire.MethodSourceRelease, extwire.SourceRef{Source: source}, nil); err != nil {
+		return cmp.Or(ref.Source, source), fmt.Errorf("%s has it now, but %s did not let it go: %w", to, from, err)
 	}
 	h.logf("managers: source %s moved from %s to %s", clip(source, 80), from, to)
-	return ref.Source, nil
+	return cmp.Or(ref.Source, source), nil
 }
 
-// ownsMachine: manager c carries machine mid (what only its manager may ask for: its credential); else a coded
-// refusal.
+// sourceAt: manager id has source (it exports it; what it exports is dropped at once).
+func (h *Hub) sourceAt(ctx context.Context, id, source string) bool {
+	has, known := h.sourceKnownAt(ctx, id, source)
+	return known && has
+}
+
+// sourceKnownAt asks manager id whether it has source: has, and whether it answered.
+func (h *Hub) sourceKnownAt(ctx context.Context, id, source string) (has, known bool) {
+	var b extwire.SourceBundle
+	err := h.callBus(ctx, id, extwire.MethodSourceExport, extwire.SourceRef{Source: source}, &b)
+	clear(b.Data)
+	var coded *rpc.Error
+	switch {
+	case err == nil && b.Source == source:
+		return true, true
+	case err == nil: // an answer naming no source, or another: it did not say it has this one
+		return false, false
+	case errors.As(err, &coded) && coded.Code == extwire.CodeNoSource:
+		return false, true
+	}
+	return false, false
+}
+
+// ownsMachine: manager c carries machine mid (what only its manager may do or ask for: report it, answer for its
+// node, its credential); else a coded refusal.
 func (h *Hub) ownsMachine(c *busConn, mid string) error {
 	if h.machineOwner(mid) != c.managerID() {
 		return &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("machine %q is another manager's", clip(mid, 64))}
 	}
 	return nil
+}
+
+// cardAllowed: manager owner may report pending card ix. A card naming a machine, or a session (by the machine it is
+// on: a machine's list or a manager's conversation), only on a machine of its own, so no card looks like it comes
+// from another manager's session and gets its answer; a card naming neither is its own.
+func (h *Hub) cardAllowed(owner string, ix proto.Interaction) bool {
+	if ix.MachineID != "" {
+		return h.machineOwner(ix.MachineID) == owner
+	}
+	if ix.SessionID == "" {
+		return true
+	}
+	if id, _ := h.conversation(ix.SessionID); id != "" && id != owner {
+		return false
+	}
+	for _, m := range h.machinesNow() {
+		if _, ok := m.session(ix.SessionID); ok && h.machineOwner(m.cfg.ID) != owner {
+			return false
+		}
+	}
+	return true
+}
+
+// withdrawCardsOn drops the pending cards on machine mid of another manager than to (mid moved to it: its sessions
+// and the questions about them are to's now); the apps are told they are over.
+func (h *Hub) withdrawCardsOn(mid, to string) {
+	f := &h.reported
+	f.mu.Lock()
+	var gone []string
+	for id, ix := range f.interactions {
+		if ix.MachineID == mid && cmp.Or(ix.Manager, assistantwire.AssistantID) != to {
+			gone = append(gone, id)
+			delete(f.interactions, id)
+		}
+	}
+	f.mu.Unlock()
+	for _, id := range gone {
+		h.broadcast(map[string]any{"type": "interaction_resolved", "id": id})
+	}
+}
+
+// forgetMachineOwner drops who carries machine mid, a hub.json entry removed (removeMachineLive): an entry added
+// again later starts at the carrier.
+func (h *Hub) forgetMachineOwner(ctx context.Context, mid string) {
+	d := &h.devices
+	d.moving.Lock()
+	defer d.moving.Unlock()
+	d.mu.Lock()
+	_, had := d.assign[mid]
+	next := make(map[string]string, len(d.assign))
+	for k, v := range d.assign {
+		if k != mid {
+			next[k] = v
+		}
+	}
+	read := d.assignRead
+	d.mu.Unlock()
+	if !had || !read {
+		return
+	}
+	if s := h.managerStore(); s != nil {
+		if err := s.PutSetting(ctx, machineOwnersKey, next); err != nil {
+			h.logf("managers: [%s] forget who carried it: %v", mid, err)
+			return
+		}
+	}
+	d.mu.Lock()
+	d.assign = next
+	d.mu.Unlock()
+}
+
+// deviceCallAllowed: manager id may make device.call p: on a machine of its own only (the calls about every machine,
+// devices.list, answer with its own machines). Another manager's machine, its sessions and its node are refused
+// no_device and never reached; the assistant the hub starts is a manager like the others.
+func (h *Hub) deviceCallAllowed(id string, p assistantwire.DeviceCall) error {
+	if p.Device == assistantwire.DeviceAll || h.machineOwner(p.Device) == id {
+		return nil
+	}
+	return &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("%s on machine %q: another manager's", clip(p.Method, 64), clip(p.Device, 64))}
 }

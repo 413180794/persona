@@ -45,10 +45,10 @@ type fleetCache struct {
 }
 
 func init() {
-	handleBusEvent(assistantwire.EventFleetSessions, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(assistantwire.EventFleetSessions, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetSessions
-		if json.Unmarshal(params, &p) != nil {
-			return
+		if json.Unmarshal(params, &p) != nil || h.ownsMachine(c, p.MachineID) != nil {
+			return // only its manager lists a machine's sessions (ownership.go)
 		}
 		h.takeFleetSessions(p)
 	})
@@ -57,9 +57,17 @@ func init() {
 		if json.Unmarshal(params, &p) != nil || p.Interaction.ID == "" {
 			return
 		}
+		if !h.cardAllowed(c.managerID(), p.Interaction) {
+			h.logf("fleet: [%s] card %s on another manager's machine %q: dropped", c.managerID(), clip(p.Interaction.ID, 64), clip(p.Interaction.MachineID, 64))
+			return
+		}
 		p.Interaction.Manager = c.managerID() // its manager's (ownership.go)
 		f := &h.reported
 		f.mu.Lock()
+		if o, ok := f.interactions[p.Interaction.ID]; ok && o.Manager != p.Interaction.Manager {
+			f.mu.Unlock()
+			return // another manager's card: not replaced
+		}
 		if f.interactions == nil {
 			f.interactions = map[string]proto.Interaction{}
 		}
@@ -148,14 +156,20 @@ func (h *Hub) takeFleetInteractions(list []proto.Interaction) {
 // takeFleetInteractionsFrom replaces manager owner's pending interactions with what it has now that it
 // (re)connected: those gone are over for the apps, the others are sent as they are. The other managers' stay.
 func (h *Hub) takeFleetInteractionsFrom(owner string, list []proto.Interaction) {
+	// Only cards on its own machines, or naming none (ownership.go cardAllowed).
+	list = slices.DeleteFunc(slices.Clone(list), func(ix proto.Interaction) bool { return !h.cardAllowed(owner, ix) })
 	f := &h.reported
-	list = slices.Clone(list)
+	f.mu.Lock()
+	// Another manager's card with the same id stays its (it is not this one's to replace).
+	list = slices.DeleteFunc(list, func(ix proto.Interaction) bool {
+		o, ok := f.interactions[ix.ID]
+		return ok && o.Manager != owner && o.Manager != ""
+	})
 	now := make(map[string]proto.Interaction, len(list))
 	for i := range list {
 		list[i].Manager = owner
 		now[list[i].ID] = list[i]
 	}
-	f.mu.Lock()
 	old := map[string]proto.Interaction{}
 	all := make(map[string]proto.Interaction, len(f.interactions)+len(now))
 	for id, ix := range f.interactions {
@@ -195,25 +209,11 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 	return list
 }
 
-// stampSessions puts on each of m's sessions the manager it belongs to (ownership.go).
-// A conversation of another manager than the machine's (which listed it) shows as that manager reported it: its
-// title, archived, an assistant conversation.
+// stampSessions puts on each of m's sessions the manager it belongs to: its machine's (ownership.go).
 func (h *Hub) stampSessions(m *Machine, list []proto.Session) {
-	owner := m.ownerOrCarrier()
+	owner := h.machineOwner(m.cfg.ID)
 	for i := range list {
-		id, v := h.conversation(list[i].SessionID)
-		if id == "" || v.MachineID != "" && v.MachineID != m.cfg.ID {
-			list[i].Manager = owner
-			continue
-		}
-		list[i].Manager = id
-		if id != owner {
-			list[i].Assistant = true
-			list[i].Archived = v.Archived
-			if v.Title != "" {
-				list[i].Title = v.Title
-			}
-		}
+		list[i].Manager = owner
 	}
 }
 

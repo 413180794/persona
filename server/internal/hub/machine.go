@@ -69,7 +69,8 @@ type Machine struct {
 	// one the manager will report); snap is the machine as it said; connected, a call would reach the node now;
 	// hookedAt, the connection the hub did its part for (devices.connected); paths, its ways for the admin page.
 	managed bool
-	// owner is the manager that reported it (ownership.go); "" before one did.
+	// owner is the manager that carries it (ownership.go machineOwner) as of its last report or hand-over; "" before
+	// either.
 	owner     string
 	snap      *proto.Machine
 	connected bool

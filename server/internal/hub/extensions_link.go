@@ -246,7 +246,7 @@ func (h *Hub) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Handler 
 		}
 		// The manager whose extension serves the prefix answers, unless the request names another.
 		relay := func(w http.ResponseWriter, r *http.Request) {
-			if id := h.extPrefixOwner(seg); id != "" && namedManager(r) == "" {
+			if id := h.extPrefixOwner(seg, namedManager(r), h.defaultOwner(r.Context())); id != "" && (namedManager(r) == "" || id == namedManager(r)) {
 				h.relayTo(w, r, false, id)
 				return
 			}

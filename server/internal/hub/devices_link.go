@@ -86,10 +86,10 @@ func init() {
 		}
 		h.applyDeviceStatesFrom(c.managerID(), st)
 	})
-	handleBusEvent(devicewire.EventNode, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(devicewire.EventNode, func(h *Hub, c *busConn, params json.RawMessage) {
 		var ev devicewire.NodeEvent
-		if json.Unmarshal(params, &ev) != nil {
-			return
+		if json.Unmarshal(params, &ev) != nil || h.ownsMachine(c, ev.MachineID) != nil {
+			return // only its manager speaks for a machine's node (ownership.go)
 		}
 		m := h.machineByID(ev.MachineID)
 		if m == nil {
@@ -100,18 +100,25 @@ func init() {
 		}
 		m.onEvent(ev.Event, ev.Params)
 	})
-	handleBusCall(devicewire.MethodRequest, func(h *Hub, ctx context.Context, p devicewire.NodeCall) (any, error) {
+	handleBus(devicewire.MethodRequest, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p devicewire.NodeCall
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: devicewire.MethodRequest + ": " + err.Error()}
+		}
+		if err := h.ownsMachine(c, p.MachineID); err != nil {
+			return nil, err
+		}
 		m := h.machineByID(p.MachineID)
 		if m == nil {
 			return nil, &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("no machine %q", p.MachineID)}
 		}
-		params := p.Params
-		if len(params) == 0 {
-			params = json.RawMessage(`{}`)
+		args := p.Params
+		if len(args) == 0 {
+			args = json.RawMessage(`{}`)
 		}
 		ctx, done := h.requestScope(ctx, p.Request)
 		defer done()
-		return m.onRequest(ctx, p.Method, params)
+		return m.onRequest(ctx, p.Method, args)
 	})
 	handleBusEvent(devicewire.EventRequestEnd, func(h *Hub, _ *busConn, params json.RawMessage) {
 		var p devicewire.RequestEnd
@@ -119,7 +126,14 @@ func init() {
 			h.requestEnded(p.Request)
 		}
 	})
-	handleBusCall(devicewire.MethodConnected, func(h *Hub, ctx context.Context, p devicewire.Connected) (devicewire.ConnectedReply, error) {
+	handleBus(devicewire.MethodConnected, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p devicewire.Connected
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: devicewire.MethodConnected + ": " + err.Error()}
+		}
+		if err := h.ownsMachine(c, p.MachineID); err != nil {
+			return nil, err
+		}
 		m := h.machineByID(p.MachineID)
 		if m == nil {
 			return devicewire.ConnectedReply{}, &rpc.Error{Code: devicewire.CodeNoDevice, Message: fmt.Sprintf("no machine %q", p.MachineID)}
@@ -395,6 +409,7 @@ func (h *Hub) removeMachineLive(id string) {
 		return
 	}
 	h.logf("[%s] removed: the manager lets it go", id)
+	h.forgetMachineOwner(context.Background(), id) // added again, it starts at the carrier
 	h.devicesConfigChanged()
 	h.meshTouch()
 }
@@ -626,8 +641,9 @@ func (h *Hub) awaitManager(ctx context.Context, limit time.Duration) bool {
 func (h *Hub) applyDeviceStates(st devicewire.States) { h.applyDeviceStatesFrom(devicesOwner, st) }
 
 // applyDeviceStatesFrom takes devices.state from manager owner: every machine it carries, in the apps' order. The
-// other managers' machines stay as they were; a machine another manager reported before is owner's now
-// (ownership.go). The apps get the managers' machines grouped: devicesOwner's first, then the others' by id.
+// other managers' machines stay as they were, and only the machines owner carries are taken (ownership.go
+// machineOwner: another manager's, and a mesh member's from any manager but the carrier, are dropped). The apps get
+// the managers' machines grouped: devicesOwner's first, then the others' by id.
 func (h *Hub) applyDeviceStatesFrom(owner string, st devicewire.States) {
 	now := time.Now()
 	type change struct {
@@ -646,10 +662,12 @@ func (h *Hub) applyDeviceStatesFrom(owner string, st devicewire.States) {
 		if id == "" || byID[id] != nil {
 			continue
 		}
-		if !s.Derived && h.cfgEntry(id) != nil && h.entryOwner(id) != owner {
-			continue // handed to another manager (ownership.go): this one is letting it go
-		}
 		m := prev[id]
+		// Only its manager reports a machine (ownership.go): hub.json's, its entry's, derived or not (another one is
+		// letting it go, or claims what is not its own); any other (a mesh member's), the carrier's only.
+		if h.cfgEntry(id) != nil && h.entryOwner(id) != owner || h.cfgEntry(id) == nil && owner != devicesOwner {
+			continue
+		}
 		if m == nil || !m.managed {
 			// Its entry stays as it was made (it is read without m.mu everywhere, as when the hub connected it).
 			m = newMachine(h, h.mirrorConfig(s))

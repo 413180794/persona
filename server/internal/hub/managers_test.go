@@ -221,6 +221,11 @@ func TestManagersRevokeWithdrawsItsCards(t *testing.T) {
 	if err := r.call("manager.hello", map[string]any{"id": "m-abc123"}, nil); err != nil {
 		t.Fatal(err)
 	}
+	// Its card is on its own machine (a card on another manager's is not taken: ownership.go cardAllowed).
+	h.cfg.Machines = []MachineConfig{{ID: "mb", Name: "mb", Kind: "local"}}
+	if _, err := h.moveMachine(context.Background(), "mb", "m-abc123"); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.peer.Notify(assistantwire.EventFleetInteraction, assistantwire.FleetInteraction{Interaction: proto.Interaction{
 		ID: "ix-gone", MachineID: "mb", SessionID: "s1", Kind: "question", CreatedAt: time.Now()}}); err != nil {
 		t.Fatal(err)

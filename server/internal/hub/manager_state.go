@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"sort"
@@ -91,8 +92,16 @@ func (h *Hub) forgetManagerState(id string) {
 	}
 }
 
-// conversation is the manager whose snapshot lists conversation sid, and how it lists it; "" for none.
+// conversation is the manager whose own conversation sid is, and how its snapshot lists it; "" for none. A session
+// is its machine's manager's (docs/managers.md "Ownership"): a snapshot counts only on a machine of its own manager's,
+// so listing another manager's session takes nothing.
 func (h *Hub) conversation(sid string) (string, assistantwire.SessionView) {
+	return h.conversationOn("", sid)
+}
+
+// conversationOn is conversation for session sid on machine mid ("": the machine its snapshot names). A view naming
+// no machine (an old row) counts for the manager of the machine asked about.
+func (h *Hub) conversationOn(mid, sid string) (string, assistantwire.SessionView) {
 	if sid == "" {
 		return "", assistantwire.SessionView{}
 	}
@@ -101,17 +110,27 @@ func (h *Hub) conversation(sid string) (string, assistantwire.SessionView) {
 		a.mu.RLock()
 		v, ok := a.sessions[sid]
 		a.mu.RUnlock()
-		if ok {
+		if !ok {
+			continue
+		}
+		on := cmp.Or(v.MachineID, mid)
+		if on != "" && (mid == "" || on == mid) && h.mayClaim(id, on) {
 			return id, v
 		}
 	}
 	return "", assistantwire.SessionView{}
 }
 
-// mainOf: session on machine is some manager's main conversation, as it reported (the assistant's as the hub
-// kept it).
+// mayClaim: manager id may count a session on machine mid as its own conversation: the machine is its own. Nothing a
+// manager reports about itself makes another's machine or session its.
+func (h *Hub) mayClaim(id, mid string) bool {
+	return mid != "" && h.machineOwner(mid) == id
+}
+
+// mainOf: session on machine is some manager's main conversation, as it reported (the assistant's as the hub kept
+// it), on a machine of that manager's own.
 func (h *Hub) mainOf(machine, session string) bool {
-	if p := h.assistantProfile(); p.Main != "" && p.Main == session && p.MachineID == machine {
+	if p := h.assistantProfile(); p.Main != "" && p.Main == session && p.MachineID == machine && h.mayClaim(assistantwire.AssistantID, machine) {
 		return true
 	}
 	for _, id := range h.managerStateIDs()[1:] {
@@ -119,7 +138,7 @@ func (h *Hub) mainOf(machine, session string) bool {
 		a.mu.RLock()
 		p := a.profile
 		a.mu.RUnlock()
-		if p != nil && p.Main != "" && p.Main == session && p.MachineID == machine {
+		if p != nil && p.Main != "" && p.Main == session && p.MachineID == machine && h.mayClaim(id, machine) {
 			return true
 		}
 	}
@@ -230,8 +249,18 @@ func (h *Hub) extReporters() []string {
 	return append([]string{assistantwire.AssistantID}, ids...)
 }
 
-// extPrefixOwner is the manager whose extensions serve /api/v1/<prefix>/ ("": none).
-func (h *Hub) extPrefixOwner(prefix string) string {
+// extPrefixOwner is the manager whose extensions serve /api/v1/<prefix>/ ("": none). Several serve it: the one the
+// request names (named), else the default manager (def), else the first that reports it (the assistant first).
+func (h *Hub) extPrefixOwner(prefix, named, def string) string {
+	serves := func(id string) bool {
+		r := h.extReportOf(id)
+		return r != nil && slices.ContainsFunc(r.APIs, func(a extwire.APIPrefix) bool { return a.Prefix == prefix })
+	}
+	for _, id := range []string{named, def} {
+		if id != "" && serves(id) {
+			return id
+		}
+	}
 	for _, id := range h.extReporters() {
 		if r := h.extReportOf(id); r != nil && slices.ContainsFunc(r.APIs, func(a extwire.APIPrefix) bool { return a.Prefix == prefix }) {
 			return id

@@ -141,13 +141,18 @@ func (f *stateManager) has(source string) bool {
 }
 
 // Each manager's snapshot, tools, extensions' report and Live Activity are its own: a second manager's do not
-// replace the assistant's, its conversations show in the session lists as it reported them.
+// replace the assistant's; its conversations are its own on the machine moved to it, and only there.
 func TestManagerStateIsKeptByManager(t *testing.T) {
 	h, srv, _ := newBusHub(t)
+	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
 	a := connectStateManager(t, h, srv, assistantwire.AssistantID)
 	b := connectStateManager(t, h, srv, "m-0b0b0b")
+	if _, err := h.moveMachine(context.Background(), "mb", "m-0b0b0b"); err != nil {
+		t.Fatal(err)
+	}
 	a.notify(t, devicewire.EventState, devicewire.States{Machines: []devicewire.State{{Machine: proto.Machine{ID: "ma", Name: "ma"}, Connected: true}}})
-	eventually(t, 5*time.Second, "ma reported", func() bool { return h.localMachine("ma") != nil })
+	b.notify(t, devicewire.EventState, devicewire.States{Machines: []devicewire.State{{Machine: proto.Machine{ID: "mb", Name: "mb"}, Connected: true}}})
+	eventually(t, 5*time.Second, "ma and mb reported", func() bool { return h.localMachine("ma") != nil && h.localMachine("mb") != nil })
 
 	var res assistantwire.SnapshotResult
 	if err := a.call(t, assistantwire.MethodSnapshot, assistantwire.Snapshot{Epoch: "a", Seq: 1,
@@ -155,32 +160,36 @@ func TestManagerStateIsKeptByManager(t *testing.T) {
 		Profile:  &assistantwire.Profile{MachineID: "ma", Main: "conv-a", Timezone: "Europe/Paris"}}, &res); err != nil || !res.OK {
 		t.Fatalf("the assistant's snapshot: %v %+v", err, res)
 	}
-	// The second manager's conversation runs on the assistant's machine.
+	// The second manager's conversation runs on its own machine mb; what it lists on the assistant's (conv-x) takes
+	// nothing.
 	if err := b.call(t, assistantwire.MethodSnapshot, assistantwire.Snapshot{Epoch: "b", Seq: 1,
-		Sessions: []assistantwire.SessionView{{MachineID: "ma", SessionID: "conv-b", Title: "B's"}},
-		Profile:  &assistantwire.Profile{MachineID: "ma", Main: "conv-b", Timezone: "Asia/Tokyo"}}, &res); err != nil || !res.OK {
+		Sessions: []assistantwire.SessionView{{MachineID: "mb", SessionID: "conv-b", Title: "B's"}, {MachineID: "ma", SessionID: "conv-x"}},
+		Profile:  &assistantwire.Profile{MachineID: "mb", Main: "conv-b", Timezone: "Asia/Tokyo"}}, &res); err != nil || !res.OK {
 		t.Fatalf("the second manager's snapshot: %v %+v", err, res)
 	}
-	if h.conversationOwner("conv-a") != assistantwire.AssistantID || h.conversationOwner("conv-b") != "m-0b0b0b" {
-		t.Fatalf("conversations: %q %q", h.conversationOwner("conv-a"), h.conversationOwner("conv-b"))
+	if h.conversationOwner("conv-a") != assistantwire.AssistantID || h.conversationOwner("conv-b") != "m-0b0b0b" || h.conversationOwner("conv-x") != "" {
+		t.Fatalf("conversations: %q %q %q", h.conversationOwner("conv-a"), h.conversationOwner("conv-b"), h.conversationOwner("conv-x"))
 	}
 	// The hub's profile stays the assistant's; both main conversations are known.
 	if p := h.assistantProfile(); p.Timezone != "Europe/Paris" || p.Main != "conv-a" {
 		t.Fatalf("the hub's profile: %+v", p)
 	}
-	if !h.isMainOn("ma", "conv-a") || !h.isMainOn("ma", "conv-b") || h.isMainOn("ma", "conv-x") {
+	if !h.isMainOn("ma", "conv-a") || !h.isMainOn("mb", "conv-b") || h.isMainOn("ma", "conv-x") {
 		t.Fatal("main conversations")
 	}
 	h.takeFleetSessions(assistantwire.FleetSessions{MachineID: "ma", Sessions: []proto.Session{
-		{MachineID: "ma", SessionID: "conv-a", Title: "A"}, {MachineID: "ma", SessionID: "conv-b", Title: "claude"}, {MachineID: "ma", SessionID: "s3"}}})
+		{MachineID: "ma", SessionID: "conv-a", Title: "A"}, {MachineID: "ma", SessionID: "conv-x"}, {MachineID: "ma", SessionID: "s3"}}})
+	h.takeFleetSessions(assistantwire.FleetSessions{MachineID: "mb", Sessions: []proto.Session{{MachineID: "mb", SessionID: "conv-b", Title: "B's"}}})
 	got := map[string]proto.Session{}
-	for _, s := range h.decorated(h.localMachine("ma")) {
-		got[s.SessionID] = s
+	for _, m := range []string{"ma", "mb"} {
+		for _, s := range h.decorated(h.localMachine(m)) {
+			got[s.SessionID] = s
+		}
 	}
-	if got["conv-a"].Manager != assistantwire.AssistantID || got["s3"].Manager != assistantwire.AssistantID {
+	if got["conv-a"].Manager != assistantwire.AssistantID || got["s3"].Manager != assistantwire.AssistantID || got["conv-x"].Manager != assistantwire.AssistantID {
 		t.Fatalf("the assistant's: %+v", got)
 	}
-	if s := got["conv-b"]; s.Manager != "m-0b0b0b" || s.Title != "B's" || !s.Assistant {
+	if s := got["conv-b"]; s.Manager != "m-0b0b0b" {
 		t.Fatalf("the second manager's conversation: %+v", s)
 	}
 
@@ -195,7 +204,7 @@ func TestManagerStateIsKeptByManager(t *testing.T) {
 	a.notify(t, extwire.EventReport, extwire.Report{Features: []string{"fa"}, APIs: []extwire.APIPrefix{{Prefix: "pa"}}})
 	b.notify(t, extwire.EventReport, extwire.Report{Features: []string{"fb", "fa"}, APIs: []extwire.APIPrefix{{Prefix: "pb"}}})
 	eventually(t, 5*time.Second, "both reports", func() bool { return len(h.extReport().Features) == 2 })
-	if r := h.extReport(); r.Features[0] != "fa" || r.Features[1] != "fb" || h.extPrefixOwner("pb") != "m-0b0b0b" || h.extPrefixOwner("pa") != assistantwire.AssistantID {
+	if r := h.extReport(); r.Features[0] != "fa" || r.Features[1] != "fb" || h.extPrefixOwner("pb", "", "") != "m-0b0b0b" || h.extPrefixOwner("pa", "", "") != assistantwire.AssistantID {
 		t.Fatalf("merged: %+v", r)
 	}
 
@@ -219,7 +228,7 @@ func TestManagerStateIsKeptByManager(t *testing.T) {
 	if code, _ := ownershipGet(t, h, srv, http.MethodDelete, "/api/v1/managers/m-0b0b0b", nil); code != http.StatusOK {
 		t.Fatalf("delete: %d", code)
 	}
-	if h.conversationOwner("conv-b") != "" || h.extPrefixOwner("pb") != "" || h.isMainOn("ma", "conv-b") {
+	if h.conversationOwner("conv-b") != "" || h.extPrefixOwner("pb", "", "") != "" || h.isMainOn("mb", "conv-b") {
 		t.Fatal("the removed manager's state stayed")
 	}
 }

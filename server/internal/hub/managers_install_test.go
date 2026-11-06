@@ -241,17 +241,18 @@ func TestSecondManagerBesideTheAssistant(t *testing.T) {
 	if !a.Online || !a.Default || !m.Online || m.Default || m.Deploy != "service" {
 		t.Fatalf("roster: %+v", list)
 	}
-	// Its snapshot is kept as its own: the assistant's stays as it was (manager_state.go).
+	// Its snapshot is kept as its own: the assistant's stays as it was (manager_state.go). A conversation it lists on
+	// the hub's machine m1 is not its (it owns no machine).
 	var res assistantwire.SnapshotResult
 	if err := c.Call(ctx, assistantwire.MethodSnapshot, map[string]any{"epoch": "x", "seq": 1,
 		"sessions": []map[string]any{{"machine_id": "m1", "session_id": "conv-2"}}}, &res); err != nil || !res.OK {
 		t.Fatalf("its snapshot: %+v %v", res, err)
 	}
-	if got := h.conversationOwner("conv-2"); got != joined.ID {
-		t.Fatalf("its conversation is %q's", got)
+	if got := h.conversationOwner("conv-2"); got != "" {
+		t.Fatalf("its claim on m1's conversation counted: %q", got)
 	}
-	if a := h.assistantOf(assistantwire.AssistantID); func() bool { a.mu.RLock(); defer a.mu.RUnlock(); return a.sessions["conv-2"].SessionID != "" }() {
-		t.Fatal("its snapshot went into the assistant's")
+	if a := h.assistantOf(joined.ID); func() bool { a.mu.RLock(); defer a.mu.RUnlock(); return a.sessions["conv-2"].SessionID == "" }() {
+		t.Fatal("its snapshot was not kept as its own")
 	}
 	if err := c.Call(ctx, "ping", nil, nil); err != nil {
 		t.Fatalf("ping: %v", err)

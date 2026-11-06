@@ -20,8 +20,9 @@ func TestTodoReportConflictUsesSessionOwner(t *testing.T) {
 		want         string
 	}{
 		{"machine owner", owner, "", []string{builtIn, owner, other}, owner},
-		{"conversation owner overrides machine", other, owner, []string{builtIn, owner, other}, owner},
-		{"built-in conversation overrides machine", owner, builtIn, []string{builtIn, owner, other}, builtIn},
+		// A session is its machine's owner's (ownership.go): a conversation another manager lists there overrides nothing.
+		{"conversation on another manager's machine", other, owner, []string{builtIn, owner, other}, other},
+		{"built-in conversation on another manager's machine", owner, builtIn, []string{builtIn, owner, other}, owner},
 		{"built-in machine owner", builtIn, "", []string{builtIn, owner, other}, builtIn},
 		{"owner has no link", owner, "", []string{builtIn, other}, builtIn},
 		{"owner without built-in", owner, "", []string{owner, other}, owner},
@@ -33,6 +34,7 @@ func TestTodoReportConflictUsesSessionOwner(t *testing.T) {
 			// Exercise both arrival orders; the merge also ranges over unordered maps.
 			for _, reverse := range []bool{false, true} {
 				h := &Hub{byID: map[string]*Machine{"machine": {owner: tc.machineOwner}}}
+				h.devices.assign = map[string]string{"machine": tc.machineOwner} // the roster's say (ownership.go)
 				if tc.conversation != "" {
 					h.assistantOf(tc.conversation).sessions = map[string]assistantwire.SessionView{
 						"session": {SessionID: "session"},
@@ -68,6 +70,7 @@ func TestTodoReportConflictUsesSessionOwner(t *testing.T) {
 func TestTodoReportsReplaceOnlyTheirOwnLinks(t *testing.T) {
 	const owner = "m-owner"
 	h := &Hub{byID: map[string]*Machine{"machine": {owner: owner}}}
+	h.devices.assign = map[string]string{"machine": owner} // the roster's say (ownership.go)
 	key := [2]string{"machine", "session"}
 	owned := assistantwire.TodoLink{MachineID: key[0], SessionID: key[1], TodoID: "todo-owned", Title: "Owned", Task: true}
 	fallback := assistantwire.TodoLink{MachineID: key[0], SessionID: key[1], TodoID: "todo-fallback", Title: "Fallback", Task: true}

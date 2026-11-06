@@ -48,7 +48,8 @@ func init() {
 	})
 }
 
-// newBusHub is a hub on the lane's test database with no bus identities, served over plain HTTP on loopback.
+// newBusHub is a hub on the lane's test database with no bus identities and no machine moved to a manager, served
+// over plain HTTP on loopback.
 func newBusHub(t *testing.T) (*Hub, *httptest.Server, *db.DB) {
 	t.Helper()
 	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
@@ -67,6 +68,8 @@ func newBusHub(t *testing.T) (*Hub, *httptest.Server, *db.DB) {
 		for _, b := range list {
 			_, _ = store.DeleteBusIdentity(context.Background(), b.ID)
 		}
+		// A test's moves are kept in the database: the next test's hub would read them (ownership.go).
+		_ = store.PutSetting(context.Background(), machineOwnersKey, map[string]string{})
 	}
 	clearBus()
 	t.Cleanup(clearBus)

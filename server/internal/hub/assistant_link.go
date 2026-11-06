@@ -127,6 +127,12 @@ func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 }
 
 func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCall) (json.RawMessage, error) {
+	return l.deviceCallFrom(ctx, assistantwire.AssistantID, p)
+}
+
+// deviceCallFrom is DeviceCall from manager from: the machines it lists are its own (the others' are in "others":
+// known, not its to use).
+func (l assistantLink) deviceCallFrom(ctx context.Context, from string, p assistantwire.DeviceCall) (json.RawMessage, error) {
 	h := l.h
 	if p.Device == assistantwire.DeviceAll {
 		switch p.Method {
@@ -134,7 +140,7 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 			list := []assistantwire.Device{}
 			others := []string{} // ids the hub knows that are not listed: untrusted for now, or absorbed by another entry
 			for _, m := range h.machinesNow() {
-				if h.machineUntrusted(m.cfg.ID) { // the assistant lists and uses none (machine_trust.go)
+				if h.machineUntrusted(m.cfg.ID) || h.machineOwner(m.cfg.ID) != from { // none of these (machine_trust.go, ownership.go)
 					others = append(others, m.cfg.ID)
 					continue
 				}
@@ -293,8 +299,16 @@ func (l assistantLink) snapshotFrom(_ context.Context, from string, s assistantw
 // ---- on the bus: what the assistant calls ----
 
 func init() {
-	handleBusCall(assistantwire.MethodDevice, func(h *Hub, ctx context.Context, p assistantwire.DeviceCall) (json.RawMessage, error) {
-		out, err := assistantLink{h}.DeviceCall(ctx, p)
+	handleBus(assistantwire.MethodDevice, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p assistantwire.DeviceCall
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: assistantwire.MethodDevice + ": " + err.Error()}
+		}
+		// A manager acts only on its own machines (ownership.go deviceCallAllowed); the list of them is its own too.
+		if err := h.deviceCallAllowed(c.managerID(), p); err != nil {
+			return nil, err
+		}
+		out, err := assistantLink{h}.deviceCallFrom(ctx, c.managerID(), p)
 		return out, busCodedError(err)
 	})
 	handleBusCall(assistantwire.MethodApp, func(h *Hub, ctx context.Context, p assistantwire.AppCall) (json.RawMessage, error) {

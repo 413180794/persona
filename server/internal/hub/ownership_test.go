@@ -15,6 +15,8 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
+	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -92,8 +94,12 @@ func ownershipGet(t *testing.T, h *Hub, srv *httptest.Server, method, path strin
 // default; lists merge both, each item stamped; an offline owner is 503, an unknown one 404.
 func TestOwnershipRoutesByManager(t *testing.T) {
 	h, srv, _ := newBusHub(t)
+	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
 	a := connectFakeManager(t, h, srv, assistantwire.AssistantID)
 	b := connectFakeManager(t, h, srv, "m-0a0b0c")
+	if _, err := h.moveMachine(context.Background(), "mb", "m-0a0b0c"); err != nil { // the roster says mb is its
+		t.Fatal(err)
+	}
 	a.report(t, "ma")
 	b.report(t, "mb")
 	eventually(t, 5*time.Second, "both machines reported", func() bool {
@@ -262,10 +268,18 @@ func TestInboxSuggestionGoesToTheItemsManager(t *testing.T) {
 
 // ownersStore keeps settings for the moves' tests: the first readFails reads fail, and each write takes a while.
 type ownersStore struct {
-	managerStore // only Setting and PutSetting are used
+	managerStore // only Setting, PutSetting and BusIdentityByID are used
 	mu           sync.Mutex
 	kept         map[string]json.RawMessage
 	readFails    int
+}
+
+// BusIdentityByID: every "m-…" id is a manager of the roster (a move checks its target is: ownership.go).
+func (s *ownersStore) BusIdentityByID(_ context.Context, id string) (*db.BusIdentity, error) {
+	if !strings.HasPrefix(id, "m-") {
+		return nil, nil
+	}
+	return &db.BusIdentity{ID: id, Name: id, Role: bus.RoleManager}, nil
 }
 
 func (s *ownersStore) Setting(_ context.Context, key string, out any) (bool, error) {
