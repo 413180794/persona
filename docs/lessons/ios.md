@@ -1094,6 +1094,30 @@ but UIKit still had a page with only Agents Back and empty content.
 ### `Localizable.xcstrings` rebase conflicts require key-based merging
 - Both sides adding entries can line-merge into invalid JSON (`The data couldn't be read because it isn't in the correct format`), breaking all targets.
 - Extract `git show ORIG_HEAD:<catalog> > ours`, `git show origin/master:<catalog> > theirs`; run `python3 scripts/i18n/apple_l10n.py merge ours theirs apple/Shared/Localization/Localizable.xcstrings` (merge keys, prefer complete `en` / ja on duplicates), then `check`.
+- **`merge` brings back keys master deleted, and rewrites the whole file** (2026-11-06, #5451): it keeps every key of both sides, so an entry master
+  removed (6 of them in one merge, for example "No Claude running") comes back as if the branch had added it. Its output also changes the
+  format and order (+78k / −77k lines against master for 40 new keys). Use its merged entries, but write master's file back in master's key order and format
+  (`json.dumps(d, ensure_ascii=False, indent=2) + "\n"`), add only the keys the branch added, and drop keys that were in the merge base but master
+  no longer has. `git diff origin/master --stat` should then show only `+` lines for your keys. Git's own text merge of two branches that added the
+  same key leaves a duplicate JSON key, which `check` rejects: keep one copy.
+
+### An interpolated String looks up a `%@` key the catalog doesn't have (#5544)
+- `String(localized: "Exit code \(code)")` with `code` a `String` (or a regex match's `Substring`) asks for `"Exit code %@"`. The catalog had
+  `"Exit code %lld"`, so the lookup missed and every language, Chinese too, showed the English key. The specifier comes from each
+  interpolated value's type (String → `%@`, Int → `%lld`, Double → `%lf`), and only the compiler knows the types: `check` matches keys by shape and
+  cannot see this. Convert to the type the catalog expects, or add the key with that specifier.
+- `apple_l10n.py strict <DerivedData>` (after a `SWIFT_EMIT_LOC_STRINGS=YES` build) lists every extracted key that differs from a catalog key only
+  in its specifiers, for the app targets, BeautifulUI and PersonaKit. An incremental build keeps the unchanged files' `.stringsdata` in
+  `Intermediates.noindex`, so the sweep still sees them. What can mislead is stale files left from deleted or renamed sources: build clean, or
+  delete DerivedData, for an exact sweep.
+
+### BeautifulUI's keys in the app catalog (#5574)
+- The library's text is looked up in the app's `Localizable.xcstrings`, so its keys are plain English shared with the app. `"Keep"` (zh 保留,
+  ja 残す) is the Managers page's button (#5451), and SelectionActions uses the same key. If SelectionActions is adopted where Keep means something
+  else in Chinese or Japanese, it needs its own contextual key in the library.
+- `"%lld %@ applied"` / `"Apply %lld %@"` (DiffTable) interpolate the English `"edit"` / `"edits"` as a `String`. The translations can't drop that
+  `%@`: `check` requires the same placeholders in every language, so zh-Hans reads 已应用 3 edits. If DiffTable is adopted, the noun has to become
+  part of a pluralized key in the library.
 
 ### Passing isolated methods as function values crashes Xcode 26.6 IRGen (#4157)
 - `Binding(get:set:)` with `set: pick` (MainActor instance method) reliably crashes PersonaMac `LanguageSettingsView.swift` IRGen `report_at_maximum_capacity`; demangled SIL is `reabstraction thunk helper from ... (AppLanguage, Actor?) -> () to ... (AppLanguage) -> ()`. Clean DerivedData rebuild still fails; same code builds iOS.

@@ -4,10 +4,14 @@
   apple_l10n.py check                 English-source catalogs have translated en / zh-Hans / ja units, compatible
                                       numbered format arguments, and no Chinese or Japanese keys; Chinese source
                                       literals require `// i18n-ignore`, explicit localized literals require their
-                                      own table's key, and InfoPlist catalogs' en matches Info.plist
+                                      own table's key, BeautifulUI's LocalizedStringKey literals have app-catalog keys
+                                      (the library looks them up in the main bundle, #5574), and InfoPlist catalogs'
+                                      en matches Info.plist
                                       (fast, no build; run by scripts/test/test_apple_l10n.py)
   apple_l10n.py strict <DerivedData>  after a build with SWIFT_EMIT_LOC_STRINGS=YES: every Chinese literal the
-                                      compiler did not extract as localizable is marked `// i18n-ignore`
+                                      compiler did not extract as localizable is marked `// i18n-ignore`, and no
+                                      extracted key differs from a catalog key only in its format specifiers
+                                      (an interpolated String where the catalog expects an Int, #5544)
   apple_l10n.py sync <DerivedData>    adds the strings the compiler extracted to the catalogs (xcstringstool sync),
                                       the step Xcode's IDE does on build and xcodebuild does not
   apple_l10n.py merge <ours> <theirs> <out>
@@ -558,6 +562,79 @@ def source_problems(src, catalog_keys, rel="source"):
     return problems
 
 
+# BeautifulUI (apple/Packages/BeautifulUI) is a library Persona does not edit (CLAUDE.md), but its views look their
+# text up in the app's main bundle: SwiftUI's LocalizedStringKey initializers and modifiers below, called with a
+# literal and no `bundle:`. So the app's Localizable catalog must have every such key, or the BeautifulUI style shows
+# English in every language (#5574).
+BEAUTIFULUI = "Packages/BeautifulUI/Sources"
+LOCALIZED_KEY_CALLS = {
+    "Text", "Button", "Label", "TextField", "SecureField", "Toggle", "Section", "Picker", "LabeledContent", "Link",
+    "Menu", "DisclosureGroup", "ContentUnavailableView", "navigationTitle", "accessibilityLabel", "accessibilityHint",
+    "accessibilityValue", "help", "alert", "confirmationDialog",
+}
+
+
+def key_literals(src, streams=None):
+    """Yield (literal, raw hashes) for a LocalizedStringKey call's first, unlabelled literal argument, with no
+    `bundle:` (which names the library's own bundle). `Text(verbatim:)` and a labelled first argument are not keys."""
+    for tokens in _swift_tokens(src) if streams is None else streams:
+        for i, token in enumerate(tokens):
+            if token[0] != "code" or token[1] != "(" or i == 0 or tokens[i - 1][0] != "code":
+                continue
+            if tokens[i - 1][1] not in LOCALIZED_KEY_CALLS:
+                continue
+            args = _arguments(tokens, i)
+            if not args or any(len(a) >= 2 and a[0][1] == "bundle" and a[1][1] == ":" for a in args[1:]):
+                continue
+            for lit, start in _key_operands(args[0]):
+                yield lit, len(src[start:]) - len(src[start:].lstrip("#"))
+
+
+def _key_operands(arg):
+    """The literals a first argument passes as LocalizedStringKey: a literal, both branches of `c ? "a" : "b"`, or every
+    element of `["a", "b"][i]`. Anything that mixes in another expression is a String and is not looked up."""
+    if len(arg) == 1:
+        return [(arg[0][1], arg[0][2])] if arg[0][0] == "literal" else []
+    if len(arg) >= 2 and arg[0][0] == "code" and arg[1][1] == ":":
+        return []  # a labelled first argument (verbatim:, key: …) is not this overload
+    texts = [t[1] if t[0] == "code" else None for t in arg]
+    depth, question, colon = 0, None, None
+    for n, text in enumerate(texts):
+        if text in ("(", "[", "{"):
+            depth += 1
+        elif text in (")", "]", "}"):
+            depth -= 1
+        elif depth == 0 and text == "?" and question is None and n + 1 < len(arg) and arg[n + 1][0] == "literal":
+            question = n
+        elif depth == 0 and text == ":" and question is not None:
+            colon = n
+    if question is not None and colon == question + 2 and len(arg) == colon + 2 and arg[colon + 1][0] == "literal":
+        return [(arg[question + 1][1], arg[question + 1][2]), (arg[colon + 1][1], arg[colon + 1][2])]
+    if texts and texts[0] == "[":
+        close = texts.index("]") if "]" in texts else -1
+        elements = arg[1:close]
+        if close > 1 and texts[close + 1:close + 2] == ["["] and \
+                all(t[0] == "literal" for t in elements[0::2]) and all(t[1] == "," for t in elements[1::2]):
+            return [(t[1], t[2]) for t in elements[0::2]]
+    return []
+
+
+def beautifului_problems(src, keys, rel="source"):
+    """Every key a BeautifulUI view looks up (with a letter in it: a lone dash or symbol reads the same in every
+    language) must be in the app's Localizable catalog."""
+    problems = []
+    normalized = {normalize(key) for key in keys}
+    for lit, hashes in key_literals(src):
+        key = normalize(lit.text, literal=True, raw_hashes=hashes, formats=False)
+        if not re.search(r"[^\W\d_]", key.replace("\x00", "")):
+            continue
+        known = key in normalized if "\x00" in key else key in keys
+        if not known:
+            problems.append(f"{rel}:{lit.line}: BeautifulUI looks this key up in the app's Localizable.xcstrings, "
+                            f"which lacks it: {lit.text[:70]}")
+    return problems
+
+
 def check():
     problems, catalog_keys = [], {}
     for c in CATALOGS:
@@ -575,19 +652,53 @@ def check():
     for path in source_files():
         with open(path, encoding="utf-8") as f:
             problems.extend(source_problems(f.read(), catalog_keys, os.path.relpath(path, ROOT)))
+    for path in sorted(glob.glob(os.path.join(APPLE, BEAUTIFULUI, "**", "*.swift"), recursive=True)):
+        with open(path, encoding="utf-8") as f:
+            problems.extend(beautifului_problems(f.read(), catalog_keys.get("Localizable", set()), os.path.relpath(path, ROOT)))
     return problems
 
 
-def stringsdata(derived):
+def stringsdata(derived, targets=TARGETS):
     pattern = os.path.join(derived, "Build", "Intermediates.noindex", "**", "*.stringsdata")
     for f in glob.glob(pattern, recursive=True):
         parts = f.split(os.sep)
-        if not any(f"{t}.build" in parts for t in TARGETS):
+        if not any(f"{t}.build" in parts for t in targets):
             continue
         yield f
 
 
-def strict(derived):
+def specifier_mismatches(derived, keys):
+    """Keys the compiler extracted that the catalog has only with other format specifiers (#5544): the lookup key
+    follows each interpolated value's type (String or Substring → %@, Int → %lld, Double → %lf…), so "Exit code
+    \\(text)" asks for "Exit code %@" while the catalog has "Exit code %lld", and every language shows the English
+    key. Only the compiler knows the types, so this reads its .stringsdata (the app targets, and BeautifulUI and
+    PersonaKit, which look their text up in the app's catalog)."""
+    shapes = {}
+    for key in keys:
+        shapes.setdefault(normalize(key), []).append(key)
+    problems, seen = [], set()
+    for f in stringsdata(derived, TARGETS + ["BeautifulUI", "PersonaKit"]):
+        with open(f, encoding="utf-8") as stream:
+            d = json.load(stream)
+        src = d.get("source", "")
+        rel = os.path.relpath(src, ROOT) if src.startswith(ROOT) else src.split("/apple/", 1)[-1]
+        for e in d.get("tables", {}).get("Localizable", []):
+            key = e.get("key", "")
+            if key in keys or not SPEC.search(key.replace("%%", "")):
+                continue
+            others = sorted(set(shapes.get(normalize(key), [])) - {key})
+            line = e.get("location", {}).get("startingLine", "?")
+            if others and (rel, line, key) not in seen:
+                seen.add((rel, line, key))
+                problems.append(f"{rel}:{line}: looks up {key!r}, but the catalog has {', '.join(map(repr, others))} "
+                                "(the interpolated value's type picks the specifier)")
+    return problems
+
+
+def strict(derived, keys=None):
+    if keys is None:
+        with open(os.path.join(APPLE, "Shared/Localization/Localizable.xcstrings"), encoding="utf-8") as f:
+            keys = set(json.load(f).get("strings", {}))
     extracted = {}
     for f in stringsdata(derived):
         with open(f, encoding="utf-8") as stream:
@@ -611,7 +722,7 @@ def strict(derived):
                 continue
             if lit.line not in lines:
                 problems.append(f"{os.path.relpath(path, ROOT)}:{lit.line}: not localized: {lit.text[:70]}")
-    return problems
+    return problems + specifier_mismatches(derived, keys)
 
 
 def sync(derived):

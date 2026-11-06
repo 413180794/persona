@@ -237,6 +237,24 @@ class SourceKeysTest(unittest.TestCase):
                          'Button("Missing") {}', 'String("Missing")', 'print("String(localized: \\"Missing\\")")'))
         self.assertEqual(self.check_source(src), [])
 
+    def bui(self, src, keys=("Open",)):
+        return apple_l10n.beautifului_problems(src, set(keys))
+
+    def test_beautifului_key_calls_need_app_catalog_entries(self):
+        # BeautifulUI's Text/Button/… literals are looked up in the app's main bundle (#5574).
+        for call in ('Text("Missing")', 'Button("Missing") {}', 'Label("Missing", systemImage: "x")',
+                     '.accessibilityLabel("Missing")', '.accessibilityValue(open ? "Open" : "Missing")',
+                     '.accessibilityLabel(["Open", "Missing"][i])', 'Text(done ? "\\(n) Missing" : "—")'):
+            self.assertTrue(any("Missing" in p for p in self.bui(call)), call)
+        self.assertEqual(self.bui('Text("Open")\n.help(open ? "Open" : "Open")'), [])
+        self.assertEqual(self.bui('Text("Files: \\(n)")', ("Files: %lld",)), [])
+
+    def test_beautifului_non_keys_are_not_guessed(self):
+        # Not a LocalizedStringKey: verbatim, another bundle, a String expression, or no letters to translate.
+        src = "\n".join(('Text(verbatim: "Missing")', 'Text("Missing", bundle: .module)', 'Text(name ?? "Missing")',
+                         'Text(open ? title : "Missing")', 'Text(format("Missing"))', 'Text("—")', 'Text("\\(a) / \\(b)")'))
+        self.assertEqual(self.bui(src), [])
+
     def test_chinese_catalog_membership_never_excuses_a_source_literal(self):
         problems = self.check_source('Text("打开")', ("打开",))
         self.assertEqual(len(problems), 1)
@@ -314,6 +332,21 @@ class WorkflowTest(unittest.TestCase):
             with patch.object(apple_l10n, "source_files", return_value=[str(source)]), \
                     patch.object(apple_l10n, "stringsdata", return_value=[]):
                 self.assertTrue(apple_l10n.strict(tmp))
+
+
+    def test_strict_flags_specifiers_that_differ_from_the_catalog(self):
+        # The compiler's key follows the interpolated types: a String asks for "%@" where the catalog has "%lld" (#5544).
+        with tempfile.TemporaryDirectory() as tmp:
+            extracted = Path(tmp) / "Source.stringsdata"
+            extracted.write_text(json.dumps({"source": str(ROOT / "apple/Persona/Source.swift"), "tables": {"Localizable": [
+                {"key": "Exit code %@", "location": {"startingLine": 7}},
+                {"key": "Files: %lld", "location": {"startingLine": 8}},
+                {"key": "Not in the catalog %@", "location": {"startingLine": 9}}]}}))
+            keys = {"Exit code %lld", "Files: %lld", "100%% done"}
+            with patch.object(apple_l10n, "stringsdata", return_value=[str(extracted)]):
+                problems = apple_l10n.specifier_mismatches(tmp, keys)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertIn("apple/Persona/Source.swift:7: looks up 'Exit code %@', but the catalog has 'Exit code %lld'", problems[0])
 
 
 class InfoPlistDriftTest(unittest.TestCase):
