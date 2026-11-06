@@ -122,7 +122,6 @@
   "internal/voice/session.go": 11,
   "internal/voice/target.go": 3,
   "internal/voice/tools.go": 5,
-  "internal/wechat/chat.go": 8,
   "internal/wechat/spec/spec.go": 2,
   "internal/workspaceboard/board.go": 4
 }

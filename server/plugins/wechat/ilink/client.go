@@ -238,8 +238,12 @@ func str(m map[string]any, k string) string {
 }
 
 // NotifyStart and NotifyStop tell iLink the bot went on or off line.
-func (c *Client) NotifyStart(ctx context.Context) error { return c.lifecycle(ctx, "ilink/bot/msg/notifystart", "start") }
-func (c *Client) NotifyStop(ctx context.Context) error  { return c.lifecycle(ctx, "ilink/bot/msg/notifystop", "stop") }
+func (c *Client) NotifyStart(ctx context.Context) error {
+	return c.lifecycle(ctx, "ilink/bot/msg/notifystart", "start")
+}
+func (c *Client) NotifyStop(ctx context.Context) error {
+	return c.lifecycle(ctx, "ilink/bot/msg/notifystop", "stop")
+}
 
 func (c *Client) lifecycle(ctx context.Context, path, what string) error {
 	out, err := c.call(ctx, http.MethodPost, path, map[string]any{"base_info": c.baseInfo()}, true, 5*time.Second, nil)

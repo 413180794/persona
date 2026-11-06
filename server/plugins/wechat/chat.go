@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"log"
 	"net/http"
@@ -12,12 +13,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/channel"
-	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/wechat/ilink"
+	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/plugins/wechat/ilink"
 )
 
 const (
+	// imagesMost is how many pictures one message brings the hub (docs/channels.md "Protocol").
+	imagesMost = 4
+	// typingEvery is how often "typing…" is shown again while the hub keeps asking for it.
+	typingEvery = 5 * time.Second
 	maxSeen     = 200
 	strangerGap = 10 * time.Minute
 	// typingFor: "typing…" is let go when the hub has not asked for it again in this long (it asks every 5 s while a
@@ -52,7 +56,7 @@ func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentia
 		return
 	}
 	msg := b.compose(ctx, c, m)
-	if msg.Empty() {
+	if empty(msg) {
 		return
 	}
 	if b.opt.Hub == nil {
@@ -61,7 +65,7 @@ func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentia
 	}
 	if err := b.opt.Hub.Receive(ctx, msg); err != nil {
 		log.Printf("wechat: handing a message to the hub: %v", err)
-		b.send(ctx, c, m.From, m.ContextToken, "", i18n.T(b.lang(), "wechat-chat.hub_error"))
+		b.send(ctx, c, m.From, m.ContextToken, "", t(b.lang(), "chat.hub_error"))
 	}
 }
 
@@ -81,7 +85,7 @@ func (b *Bot) stranger(ctx context.Context, c *ilink.Client, m ilink.Message) {
 		}
 	}
 	b.mu.Unlock()
-	b.send(ctx, c, m.From, m.ContextToken, "", i18n.T(b.lang(), "wechat-chat.stranger"))
+	b.send(ctx, c, m.From, m.ContextToken, "", t(b.lang(), "chat.stranger"))
 }
 
 // send sends text to peer as the bot: WeChat's subset of Markdown, in pieces it takes. A failure is logged (never
@@ -112,25 +116,30 @@ func (b *Bot) send(ctx context.Context, c *ilink.Client, peer, contextToken, ref
 }
 
 // Send is the hub's channel.send: text to the owner, in the chat of their latest message. Before the owner has
-// written to the bot there is no context token, and nothing can be sent: channel.ErrCannotSend.
-func (b *Bot) Send(ctx context.Context, p channel.SendParams) (channel.SendResult, error) {
+// written to the bot there is no context token, and nothing can be sent: errCannotSend.
+func (b *Bot) Send(ctx context.Context, p wire.ChannelSendParams) (wire.ChannelSendResult, error) {
 	b.mu.Lock()
 	c, creds, contextToken := b.client, b.st.Creds, b.st.Context
 	b.mu.Unlock()
 	if creds == nil || c == nil || contextToken == "" {
-		return channel.SendResult{}, channel.ErrCannotSend
+		return wire.ChannelSendResult{}, errCannotSend
 	}
 	if !b.send(ctx, c, creds.UserID, contextToken, p.Ref, p.Text) {
-		return channel.SendResult{}, errSendFailed
+		return wire.ChannelSendResult{}, sendFailed{b.lang()}
 	}
-	return channel.SendResult{}, nil
+	return wire.ChannelSendResult{}, nil
 }
 
-type sendError string
+// sendFailed: WeChat did not take the message (logged by the hub, which sends it again with the same ref).
+type sendFailed struct{ lang string }
 
-func (e sendError) Error() string { return string(e) }
+func (e sendFailed) Error() string { return t(e.lang, "chat.send_failed") }
 
-const errSendFailed = sendError("微信没收下这条消息")
+// empty says whether m has nothing to hand on.
+func empty(m wire.ChannelMessage) bool {
+	return strings.TrimSpace(m.Text) == "" && len(m.Images) == 0 && len(m.Files) == 0 && m.Quote == "" && m.Forward == "" &&
+		len(m.Unsupported) == 0
+}
 
 // clientID is piece i's iLink client_id: derived from the hub's ref when there is one, random otherwise.
 func clientID(ref string, i int) string {
@@ -145,36 +154,36 @@ func clientID(ref string, i int) string {
 
 // compose is the owner's message as the hub takes it: the text (a voice message's transcript), the quote, the
 // pictures; files and videos are only named, the bot cannot pass them on yet.
-func (b *Bot) compose(ctx context.Context, c *ilink.Client, m ilink.Message) channel.Message {
-	out := channel.Message{ID: m.ID, Text: strings.TrimSpace(m.Text), Quote: m.Quote}
+func (b *Bot) compose(ctx context.Context, c *ilink.Client, m ilink.Message) wire.ChannelMessage {
+	out := wire.ChannelMessage{ID: m.ID, Text: strings.TrimSpace(m.Text), Quote: m.Quote}
 	for _, md := range m.Media {
 		switch md.Kind {
 		case ilink.MediaImage:
-			if len(out.Images) >= channel.ImagesMost {
-				out.Unsupported = append(out.Unsupported, "更多的图片")
+			if len(out.Images) >= imagesMost {
+				out.Unsupported = append(out.Unsupported, "更多的图片") // i18n-ignore: what the assistant reads
 				continue
 			}
 			data, err := c.Download(ctx, md)
 			if err != nil {
 				log.Printf("wechat: downloading a picture: %v", err)
-				out.Unsupported = append(out.Unsupported, "一张没下载下来的图片")
+				out.Unsupported = append(out.Unsupported, "一张没下载下来的图片") // i18n-ignore: what the assistant reads
 				continue
 			}
-			out.Images = append(out.Images, channel.Blob{MIME: http.DetectContentType(data), Data: data})
+			out.Images = append(out.Images, wire.ChannelBlob{Mime: http.DetectContentType(data), Data: base64.StdEncoding.EncodeToString(data)})
 		case ilink.MediaVoice:
 			if out.Text == "" {
-				out.Unsupported = append(out.Unsupported, "一段没有转写的语音")
+				out.Unsupported = append(out.Unsupported, "一段没有转写的语音") // i18n-ignore: what the assistant reads
 			}
 		case ilink.MediaFile:
 			name := md.FileName
 			if name == "" {
-				name = "一个文件"
+				name = "一个文件" // i18n-ignore: what the assistant reads
 			} else {
-				name = "文件「" + name + "」"
+				name = "文件「" + name + "」" // i18n-ignore: what the assistant reads
 			}
 			out.Unsupported = append(out.Unsupported, name)
 		case ilink.MediaVideo:
-			out.Unsupported = append(out.Unsupported, "一段视频")
+			out.Unsupported = append(out.Unsupported, "一段视频") // i18n-ignore: what the assistant reads
 		}
 	}
 	out.Unsupported = slices.Compact(out.Unsupported)
@@ -209,7 +218,7 @@ func (b *Bot) Typing(ctx context.Context, on bool) error {
 		b.mu.Lock()
 		t.at = now
 		b.mu.Unlock()
-		if now.Sub(t.shown) < channel.TypingEvery {
+		if now.Sub(t.shown) < typingEvery {
 			return nil
 		}
 		b.mu.Lock()

@@ -13,6 +13,8 @@ Extensions come from three places; the App and the API show them as one list:
 | `hub.json` | `extensions[]` in hub.json, written by hand by the owner (the current voice extension), see "Extensions in hub.json" below | Read-only: change it in hub.json or the admin UI |
 | `installed` | A package installed on the hub machine with `personad extension install`, or an extension running elsewhere and attached over a socket | Everything: toggle, configure, secrets, upgrade, roll back, uninstall |
 
+A built-in extension with a program of its own (the WeChat bot) is a plugin like any other: its code is in `server/plugins/<id>`, written against the Go SDK (`sdk/go`) and its own packages only (`server/plugins/guard_test.go` fails on any `server/internal` dependency), and its program is built, released and bundled with personad (`server/cmd/personad-<id>`). The hub registers it before it runs from a declaration of its own, held to the plugin's by a test.
+
 Three forms: **declarative only** (just a manifest, no code runs), **process extension** (the hub starts a child process that speaks the process extension protocol on stdin / stdout, and may also serve HTTP on a unix socket),
 **remote** (runs elsewhere; the hub attaches to it over a unix socket).
 

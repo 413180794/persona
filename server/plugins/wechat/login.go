@@ -7,12 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/wechat/ilink"
+	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/plugins/wechat/ilink"
 )
 
-// Binding is the connector's sign-in: a QR code to scan with WeChat (connector.PromptQRCode, asked again every
+// Binding is the connector's sign-in: a QR code to scan with WeChat (wire.ConnectorPromptKindQr, asked again every
 // interval), WeChat's confirmation on the phone, sometimes a number WeChat shows to type in here.
 
 // pendingQR is the authorization under way; only in memory (a restart starts over with a new code).
@@ -38,9 +37,9 @@ var verifyCode = regexp.MustCompile(`^\d{1,12}$`)
 // authClient is an iLink client for authorizing (no token).
 func (b *Bot) authClient() (*ilink.Client, error) { return b.opt.NewClient(ilink.AuthOrigin, "") }
 
-func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]string) (connector.Prompt, error) {
+func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]string) (wire.ConnectorPrompt, error) {
 	if err := b.load(ctx); err != nil {
-		return connector.Prompt{}, err
+		return wire.ConnectorPrompt{}, err
 	}
 	b.mu.Lock()
 	p := b.qr
@@ -52,19 +51,19 @@ func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]stri
 	if step == stepCode {
 		code = strings.TrimSpace(values["code"])
 		if !verifyCode.MatchString(code) {
-			return codePrompt(b.lang(), i18n.T(b.lang(), "wechat-login.enter_number")), nil
+			return codePrompt(b.lang(), t(b.lang(), "login.enter_number")), nil
 		}
 	}
 	c, err := b.authClient()
 	if err != nil {
-		return connector.Prompt{}, err
+		return wire.ConnectorPrompt{}, err
 	}
 	st, err := c.PollQR(ctx, p.qr.Code, code, p.base, qrWait)
 	if err != nil {
 		if ilink.Retryable(err) {
 			return p.prompt(b.lang()), nil // asked again in a moment
 		}
-		return connector.Prompt{}, err
+		return wire.ConnectorPrompt{}, err
 	}
 	switch st.State {
 	case ilink.QRWaiting:
@@ -81,21 +80,21 @@ func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]stri
 		return p.prompt(b.lang()), nil
 	case ilink.QRNeedCode:
 		if step == stepCode {
-			return codePrompt(b.lang(), i18n.T(b.lang(), "wechat-login.wrong_number")), nil
+			return codePrompt(b.lang(), t(b.lang(), "login.wrong_number")), nil
 		}
 		return codePrompt(b.lang(), ""), nil
 	case ilink.QRExpired:
 		if p.renewed >= 3 {
 			b.forgetQR(p)
-			return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.qr_expired_too_often"))
+			return wire.ConnectorPrompt{}, errors.New(t(b.lang(), "login.qr_expired_too_often"))
 		}
 		return b.renewQR(ctx, p)
 	case ilink.QRCodeBlocked:
 		b.forgetQR(p)
-		return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.code_blocked"))
+		return wire.ConnectorPrompt{}, errors.New(t(b.lang(), "login.code_blocked"))
 	case ilink.QRBoundAlready:
 		b.forgetQR(p)
-		return connector.Prompt{}, errors.New(i18n.T(b.lang(), "wechat-login.bound_already"))
+		return wire.ConnectorPrompt{}, errors.New(t(b.lang(), "login.bound_already"))
 	case ilink.QRConfirmed:
 		b.forgetQR(p)
 		return b.bound(ctx, st.Credentials), nil
@@ -103,23 +102,23 @@ func (b *Bot) LoginStep(ctx context.Context, step string, values map[string]stri
 	return p.prompt(b.lang()), nil
 }
 
-func (p *pendingQR) prompt(l i18n.Lang) connector.Prompt {
-	hint := i18n.T(l, "wechat-login.scan_hint")
+func (p *pendingQR) prompt(l string) wire.ConnectorPrompt {
+	hint := t(l, "login.scan_hint")
 	if p.scanned {
-		hint = i18n.T(l, "wechat-login.scanned_hint")
+		hint = t(l, "login.scanned_hint")
 	}
-	return connector.Prompt{Step: stepQR, Kind: connector.PromptQRCode, URL: p.qr.Content, Interval: qrInterval, Hint: hint}
+	return wire.ConnectorPrompt{Step: stepQR, Kind: wire.ConnectorPromptKindQr, URL: p.qr.Content, Interval: qrInterval, Hint: hint}
 }
 
-func codePrompt(l i18n.Lang, errText string) connector.Prompt {
-	return connector.Prompt{Step: stepCode, Fields: []connector.Field{{Name: "code", Label: i18n.T(l, "wechat-login.code_label"), Placeholder: i18n.T(l, "wechat-login.code_placeholder")}},
-		Hint: i18n.T(l, "wechat-login.code_hint"), Error: errText}
+func codePrompt(l string, errText string) wire.ConnectorPrompt {
+	return wire.ConnectorPrompt{Step: stepCode, Fields: []wire.ConnectorField{{Name: "code", Label: t(l, "login.code_label"), Placeholder: t(l, "login.code_placeholder")}},
+		Hint: t(l, "login.code_hint"), Error: errText}
 }
 
-func (b *Bot) beginQR(ctx context.Context) (connector.Prompt, error) {
+func (b *Bot) beginQR(ctx context.Context) (wire.ConnectorPrompt, error) {
 	c, err := b.authClient()
 	if err != nil {
-		return connector.Prompt{}, err
+		return wire.ConnectorPrompt{}, err
 	}
 	b.mu.Lock()
 	tokens := append([]string(nil), b.st.Old...)
@@ -129,7 +128,7 @@ func (b *Bot) beginQR(ctx context.Context) (connector.Prompt, error) {
 	b.mu.Unlock()
 	q, err := c.BeginQR(ctx, tokens)
 	if err != nil {
-		return connector.Prompt{}, err
+		return wire.ConnectorPrompt{}, err
 	}
 	p := &pendingQR{qr: q, started: b.opt.Now()}
 	b.mu.Lock()
@@ -138,7 +137,7 @@ func (b *Bot) beginQR(ctx context.Context) (connector.Prompt, error) {
 	return p.prompt(b.lang()), nil
 }
 
-func (b *Bot) renewQR(ctx context.Context, old *pendingQR) (connector.Prompt, error) {
+func (b *Bot) renewQR(ctx context.Context, old *pendingQR) (wire.ConnectorPrompt, error) {
 	pr, err := b.beginQR(ctx)
 	if err != nil {
 		return pr, err
@@ -162,7 +161,7 @@ func (b *Bot) forgetQR(p *pendingQR) {
 
 // bound keeps the new credentials and starts serving them. The same bot (bound again) keeps its cursor; another
 // starts fresh.
-func (b *Bot) bound(ctx context.Context, creds ilink.Credentials) connector.Prompt {
+func (b *Bot) bound(ctx context.Context, creds ilink.Credentials) wire.ConnectorPrompt {
 	b.mu.Lock()
 	if old := b.st.Creds; old != nil {
 		b.st.Old = rememberToken(b.st.Old, old.Token)
@@ -172,10 +171,10 @@ func (b *Bot) bound(ctx context.Context, creds ilink.Credentials) connector.Prom
 	}
 	b.st.Creds = &creds
 	b.saveLocked(ctx)
-	b.status = connector.Status{State: connector.StateOK, Account: account(b.lang(), &creds), Via: i18n.T(b.lang(), "wechat-wechat.via"), LastEvent: b.status.LastEvent}
+	b.status = wire.ConnectorStatus{State: wire.ConnectorStateOk, Account: account(b.lang(), &creds), Via: t(b.lang(), "wechat.via"), LastEvent: b.status.LastEvent}
 	b.mu.Unlock()
 	b.kick()
-	return connector.Prompt{Done: true, Account: account(b.lang(), &creds)}
+	return wire.ConnectorPrompt{Done: true, Account: account(b.lang(), &creds)}
 }
 
 // Logout tells iLink the bot is off line and forgets the token (kept among the old ones, so binding again is known
@@ -194,7 +193,7 @@ func (b *Bot) Logout(ctx context.Context) error {
 		cancel()
 	}
 	b.unbind(ctx, "")
-	b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.not_bound")})
+	b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateNotSignedIn, Error: t(b.lang(), "wechat.not_bound")})
 	b.kick()
 	return nil
 }

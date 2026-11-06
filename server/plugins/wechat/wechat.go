@@ -1,37 +1,58 @@
-// Package wechat is the WeChat plugin's program (jarvisd-wechat, docs/wechat.md): a bot in the user's personal WeChat
-// through iLink (wechat/ilink), contributed as a channel (docs/channels.md). The user binds it by scanning a QR code
-// (the connector's sign-in); the owner's messages to the bot go to the hub (channel.receive), which sends them into a
-// conversation, follows the turn and asks what agents ask — all of that is the hub's. This program only talks to
-// WeChat: it receives, sends what the hub gives it (channel.send) and shows "typing…".
+// Package wechat is the WeChat plugin (personad-wechat, docs/wechat.md): a bot in the user's personal WeChat through
+// iLink (wechat/ilink), contributed as a channel (docs/channels.md) with a connector for its binding. The user binds it
+// by scanning a QR code (the connector's sign-in); the owner's messages to the bot go to the hub (channel.receive),
+// which sends them into a conversation, follows the turn and asks what agents ask: all of that is the hub's. This
+// program only talks to WeChat: it receives, sends what the hub gives it (channel.send) and shows "typing…".
 //
-// It keeps its own in one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor and the
-// owner's latest context token, so a restart picks up where it was.
+// It is a plugin like any other: it speaks the plugin protocol through the Go SDK (sdk/go: ext and the
+// schema/extension wire types) and depends on nothing of the server's (plugins_guard_test.go). It keeps its own in
+// one sealed blob in the hub (the connector's secrets): the bot token, the polling cursor and the owner's latest
+// context token, so a restart picks up where it was.
 package wechat
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/channel"
-	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/wechat/ilink"
-	"github.com/nwverse/persona/server/internal/wechat/spec"
+	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/plugins/wechat/ilink"
 )
+
+// ID is the plugin's, its connector's and its channel's; Name is how WeChat calls itself, as the hub registers it.
+const (
+	ID   = "wechat"
+	Name = "微信" // i18n-ignore: the name the hub registers the built-in with
+)
+
+// Hub is the hub as the bot hands it the owner's messages (channel.receive).
+type Hub interface {
+	Receive(ctx context.Context, m wire.ChannelMessage) error
+}
+
+// Secrets is the connector's sealed blob in the hub (connector.secrets.*): nil from Load when nothing is kept.
+type Secrets interface {
+	Load(ctx context.Context) ([]byte, error)
+	Save(ctx context.Context, data []byte) error
+	Delete(ctx context.Context) error
+}
+
+// errCannotSend: there is nowhere to send to yet (before the owner's first message); the hub hears cannot_send.
+var errCannotSend = errors.New("nowhere to send to yet")
 
 // Clock and iLink are what tests replace.
 type Options struct {
 	// Hub takes the owner's messages (the plugin protocol's channel namespace).
-	Hub   channel.Hub
+	Hub   Hub
 	Agent string // the product token iLink sees ("Persona/<version>")
-	// Lang is the user's language as the hub said it at this start: what the bot writes for people reads in it
-	// (zh-Hans when not said).
-	Lang i18n.Lang
+	// Lang is the user's language as the hub said it at this start (en, zh-Hans, ja): what the bot writes for people
+	// reads in it (zh-Hans when not said).
+	Lang string
 	// NewClient makes the iLink client for a base URL and token (ilink.New when nil).
 	NewClient func(base, token string) (*ilink.Client, error)
 	Now       func() time.Time
@@ -40,12 +61,12 @@ type Options struct {
 // Bot is the connector and the bot behind it.
 type Bot struct {
 	opt     Options
-	secrets connector.Secrets
+	secrets Secrets
 
 	mu      sync.Mutex
 	st      state
 	loaded  bool
-	status  connector.Status
+	status  wire.ConnectorStatus
 	client  *ilink.Client // for the bound token; nil while not bound
 	qr      *pendingQR
 	wake    chan struct{}
@@ -65,7 +86,7 @@ type state struct {
 	Seen []string `json:"seen,omitempty"`
 }
 
-func New(opt Options, secrets connector.Secrets) *Bot {
+func New(opt Options, secrets Secrets) *Bot {
 	if opt.NewClient == nil {
 		opt.NewClient = func(base, token string) (*ilink.Client, error) {
 			return ilink.New(ilink.Options{BaseURL: base, Token: token, Agent: opt.Agent})
@@ -75,24 +96,20 @@ func New(opt Options, secrets connector.Secrets) *Bot {
 		opt.Now = time.Now
 	}
 	return &Bot{opt: opt, secrets: secrets, wake: make(chan struct{}, 1), replied: map[string]time.Time{},
-		status: connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(opt.Lang.Or(i18n.Default), "wechat-wechat.not_bound")}}
+		status: wire.ConnectorStatus{State: wire.ConnectorStateNotSignedIn, Error: t(langOf(opt.Lang), "wechat.not_bound")}}
 }
 
 // lang is the language of what the bot writes for people.
-func (b *Bot) lang() i18n.Lang { return b.opt.Lang.Or(i18n.Default) }
-
-func (*Bot) ID() string                   { return spec.ID }
-func (*Bot) Name() string                 { return spec.Name }
-func (*Bot) Manifest() connector.Manifest { return spec.Manifest() }
+func (b *Bot) lang() string { return langOf(b.opt.Lang) }
 
 // Status is answered from memory.
-func (b *Bot) Status(context.Context) connector.Status {
+func (b *Bot) Status(context.Context) wire.ConnectorStatus {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.status
 }
 
-func (b *Bot) setStatus(s connector.Status) {
+func (b *Bot) setStatus(s wire.ConnectorStatus) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	s.LastEvent = b.status.LastEvent
@@ -100,12 +117,12 @@ func (b *Bot) setStatus(s connector.Status) {
 }
 
 // account is how the bound WeChat is shown, in l: iLink gives an id, not a name.
-func account(l i18n.Lang, c *ilink.Credentials) string {
+func account(l string, c *ilink.Credentials) string {
 	id, _, _ := strings.Cut(c.UserID, "@")
 	if r := []rune(id); len(r) > 6 {
 		id = string(r[len(r)-6:])
 	}
-	return i18n.T(l, "wechat-wechat.account", i18n.Args{"id": id})
+	return t(l, "wechat.account", "id", id)
 }
 
 func (b *Bot) load(ctx context.Context) error {
@@ -158,7 +175,7 @@ func (b *Bot) Run(ctx context.Context) {
 		if err := b.load(ctx); err == nil {
 			break
 		} else {
-			b.setStatus(connector.Status{State: connector.StateError, Error: i18n.T(b.lang(), "wechat-wechat.cannot_load", i18n.Args{"error": err.Error()})})
+			b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateError, Error: t(b.lang(), "wechat.cannot_load", "error", err.Error())})
 		}
 		if !sleep(ctx, 5*time.Second) {
 			return
@@ -169,8 +186,8 @@ func (b *Bot) Run(ctx context.Context) {
 		creds := b.st.Creds
 		b.mu.Unlock()
 		if creds == nil {
-			if b.Status(ctx).State != connector.StateNotSignedIn { // keep why it was unbound
-				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.not_bound")})
+			if b.Status(ctx).State != wire.ConnectorStateNotSignedIn { // keep why it was unbound
+				b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateNotSignedIn, Error: t(b.lang(), "wechat.not_bound")})
 			}
 			select {
 			case <-ctx.Done():
@@ -189,7 +206,7 @@ var backoff = []time.Duration{time.Second, 2 * time.Second, 5 * time.Second, 10 
 func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 	c, err := b.opt.NewClient(creds.BaseURL, creds.Token)
 	if err != nil {
-		b.setStatus(connector.Status{State: connector.StateError, Account: account(b.lang(), &creds), Error: i18n.T(b.lang(), "wechat-wechat.bad_address", i18n.Args{"error": err.Error()})})
+		b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateError, Account: account(b.lang(), &creds), Error: t(b.lang(), "wechat.bad_address", "error", err.Error())})
 		b.unbind(ctx, "")
 		return
 	}
@@ -201,7 +218,7 @@ func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 		b.client = nil
 		b.mu.Unlock()
 	}()
-	ok := connector.Status{State: connector.StateOK, Account: account(b.lang(), &creds), Via: i18n.T(b.lang(), "wechat-wechat.via")}
+	ok := wire.ConnectorStatus{State: wire.ConnectorStateOk, Account: account(b.lang(), &creds), Via: t(b.lang(), "wechat.via")}
 	if err := c.NotifyStart(ctx); err != nil {
 		log.Printf("wechat: notify start: %v", err) // not needed to receive messages
 	}
@@ -223,12 +240,12 @@ func (b *Bot) serve(ctx context.Context, creds ilink.Credentials) {
 			switch {
 			case ilink.CodeOf(err) == ilink.CodeReplaced:
 				b.unbind(ctx, creds.Token)
-				b.setStatus(connector.Status{State: connector.StateNotSignedIn, Error: i18n.T(b.lang(), "wechat-wechat.revoked")})
+				b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateNotSignedIn, Error: t(b.lang(), "wechat.revoked")})
 				return
 			case !ilink.Retryable(err):
-				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: i18n.T(b.lang(), "wechat-wechat.refused", i18n.Args{"error": err.Error()})})
+				b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateError, Account: ok.Account, Error: t(b.lang(), "wechat.refused", "error", err.Error())})
 			default:
-				b.setStatus(connector.Status{State: connector.StateError, Account: ok.Account, Error: i18n.T(b.lang(), "wechat-wechat.retrying", i18n.Args{"error": err.Error()})})
+				b.setStatus(wire.ConnectorStatus{State: wire.ConnectorStateError, Account: ok.Account, Error: t(b.lang(), "wechat.retrying", "error", err.Error())})
 			}
 			wait := backoff[min(failures, len(backoff)-1)]
 			failures++

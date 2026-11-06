@@ -42,8 +42,9 @@ var hardcodedDirs = []string{
 	"internal/quota",
 	"internal/update",
 	"internal/voice",
-	"internal/wechat",
+	"internal/wechat", // its spec, as the hub registers the built-in
 	"internal/workspaceboard",
+	"plugins",
 }
 
 // hardcodedSkip are files in those packages that only write for a terminal or must keep the original, with why.

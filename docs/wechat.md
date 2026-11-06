@@ -24,9 +24,9 @@ the plugin no longer holds a hub token or subscribes to events. What used to liv
 
 The process follows the connector's toggle: WeChat messages are only received while it is on.
 
-Code: program entry `server/cmd/personad-wechat` (the old name `jarvisd-wechat` is an alias); the iLink protocol is `server/internal/wechat/ilink` (stateless, no logging, accepts only Tencent's
-HTTPS origins); the bot is `server/internal/wechat` (`wechat.go` main loop and storage, `login.go` QR login, `chat.go` receiving, sending, "typing"); declarations in `server/internal/wechat/spec`
-(connector and channel); hub registration in `server/internal/extmgr/wechat.go`. The pipeline is in `server/internal/assistant/channels*.go` (the extension side is `extmgr/channels_extension.go`), rules in `server/internal/channel`,
+Code: the plugin is `server/plugins/wechat`, a plugin like any other: it speaks the plugin protocol through the Go SDK (`sdk/go`: `ext` and the `schema/extension` wire types) and depends on nothing in `server/internal` (`server/plugins/guard_test.go` fails otherwise). Program entry `server/cmd/personad-wechat` (the old name `jarvisd-wechat` is an alias), built, released and bundled with personad as before;
+the iLink protocol is `server/plugins/wechat/ilink` (stateless, no logging, accepts only Tencent's HTTPS origins); the bot is `server/plugins/wechat` (`wechat.go` main loop and storage, `login.go` QR login, `chat.go` receiving, sending, "typing", `program.go` the SDK program, its manifest and `version -v`), with its own texts in `locales/<lang>.json` (en, zh-Hans, ja).
+The hub registers the built-in from `server/internal/wechat/spec` (connector and channel, known before the program runs) in `server/internal/extmgr/wechat.go`; `TestWeChatPluginDeclaresWhatTheHubRegisters` holds the two to the same declarations. The pipeline is in `server/internal/assistant/channels*.go` (the extension side is `extmgr/channels_extension.go`), rules in `server/internal/channel`,
 and the note added when sending into a chat is `server/internal/prompts/channel/message.md`.
 
 ## Binding
@@ -91,8 +91,8 @@ Group chats (iLink only has DMs with the bot), sending voice and files, WeChat m
 
 ## Verification
 
-- `go test ./internal/wechat/...`: the iLink protocol against a fake iLink server (every QR state, redirects only to Tencent origins, long-poll timeouts, being signed in elsewhere, encryption/decryption, Markdown filtering and splitting);
-  the program against a fake iLink and a fake hub (binding, handing the owner's messages to the hub, strangers, unbinding when signed in elsewhere, images and files, dedup on redelivery, `cannot_send` without a `context_token`, "typing"); connector conformance tests.
+- `go test ./plugins/...`: the dependency guard; the program against the SDK's fake hub (`exttest.CheckConnectors` / `CheckChannels`, every message held to `schema/extension`); the iLink protocol against a fake iLink server (every QR state, redirects only to Tencent origins, long-poll timeouts, being signed in elsewhere, encryption/decryption, Markdown filtering and splitting);
+  the program against a fake iLink and a fake hub (binding, handing the owner's messages to the hub, strangers, unbinding when signed in elsewhere, images and files, dedup on redelivery, `cannot_send` without a `context_token`, "typing"); its `version -v` and locales.
 - `go test ./internal/hub -run 'WeChat|Channel'`: the manifest the hub registers (connector, channel, permissions); conformance tests of the program against the process-extension protocol and the channel protocol (`channel/conformance`);
   the shared pipeline against a fake channel program and a fake node (message into the main chat and answer sent back, splitting, dedup, text approvals, already answered in the App, can't send, commands, targets); migration of old state.
 - App: run `QRSignInTests` against the mock hub with `MOCK_WECHAT=signed_out` (`docs/testing.md`).

@@ -127,7 +127,7 @@ func TestHubDoesNotImportTheManager(t *testing.T) {
 	forbidden := []string{ // anywhere in the hub's dependencies
 		"internal/agents", "internal/ai", "internal/assistant", "internal/assistantskills", "internal/connector",
 		"internal/devices", "internal/extmgr", "internal/extension/host", "internal/feishubot", "internal/kb",
-		"internal/mail", "internal/mcpserver", "internal/node", "internal/office", "internal/wechat",
+		"internal/mail", "internal/mcpserver", "internal/node", "internal/office", "internal/wechat", "plugins",
 	}
 	goBin, err := exec.LookPath("go")
 	if err != nil {

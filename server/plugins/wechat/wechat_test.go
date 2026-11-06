@@ -2,6 +2,7 @@ package wechat
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,11 +18,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nwverse/persona/server/internal/channel"
-
-	"github.com/nwverse/persona/server/internal/connector"
-	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/wechat/ilink"
+	"github.com/nwverse/persona/sdk/go/wire"
+	"github.com/nwverse/persona/server/plugins/wechat/ilink"
 )
 
 // memSecrets keeps the sealed blob in memory.
@@ -184,22 +182,20 @@ func (f *fakeILink) texts() []sentText {
 // fakeHub is the hub as the program reaches it (channel.receive): what it was handed.
 type fakeHub struct {
 	mu   sync.Mutex
-	msgs []channel.Message
+	msgs []wire.ChannelMessage
 }
 
-func (h *fakeHub) Receive(_ context.Context, m channel.Message) error {
+func (h *fakeHub) Receive(_ context.Context, m wire.ChannelMessage) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.msgs = append(h.msgs, m)
 	return nil
 }
 
-func (h *fakeHub) Status(context.Context, channel.StatusParams) error { return nil }
-
-func (h *fakeHub) got() []channel.Message {
+func (h *fakeHub) got() []wire.ChannelMessage {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return append([]channel.Message(nil), h.msgs...)
+	return append([]wire.ChannelMessage(nil), h.msgs...)
 }
 
 type clock struct {
@@ -223,13 +219,13 @@ type rig struct {
 	cancel  context.CancelFunc
 }
 
-const owner = "person@example.com"
+const owner = "owner@im.wechat"
 
 // newRig is a bot bound to owner's WeChat, running against the fakes.
 func newRig(t *testing.T, bound bool) *rig {
 	r := &rig{t: t, ilink: newFakeILink(t), hub: &fakeHub{}, secrets: &memSecrets{}, clock: &clock{t: time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)}}
 	if bound {
-		st := state{Creds: &ilink.Credentials{Token: "BT", BotID: "person@example.com", UserID: owner, BaseURL: "https://ilinkai.weixin.qq.com/"}}
+		st := state{Creds: &ilink.Credentials{Token: "BT", BotID: "bot@im.bot", UserID: owner, BaseURL: "https://ilinkai.weixin.qq.com/"}}
 		data, _ := json.Marshal(st)
 		r.secrets.data = data
 	}
@@ -275,11 +271,11 @@ func (r *rig) sentTo(peer, want string) sentText {
 func TestBindByQRCode(t *testing.T) {
 	r := newRig(t, false)
 	ctx := context.Background()
-	eventually(t, "not signed in", func() bool { return r.bot.Status(ctx).State == connector.StateNotSignedIn })
+	eventually(t, "not signed in", func() bool { return r.bot.Status(ctx).State == wire.ConnectorStateNotSignedIn })
 	r.ilink.statuses = []map[string]any{{"status": "scaned"}, {"status": "need_verifycode"},
-		{"status": "confirmed", "bot_token": "BT", "ilink_bot_id": "person@example.com", "ilink_user_id": owner, "baseurl": "https://ilinkai.weixin.qq.com"}}
+		{"status": "confirmed", "bot_token": "BT", "ilink_bot_id": "bot@im.bot", "ilink_user_id": owner, "baseurl": "https://ilinkai.weixin.qq.com"}}
 	p, err := r.bot.LoginStep(ctx, "", nil)
-	if err != nil || p.Kind != connector.PromptQRCode || p.URL != "https://liteapp.weixin.qq.com/q/example" || p.Interval == 0 {
+	if err != nil || p.Kind != wire.ConnectorPromptKindQr || p.URL != "https://liteapp.weixin.qq.com/q/example" || p.Interval == 0 {
 		t.Fatalf("%+v %v", p, err)
 	}
 	if p, _ = r.bot.LoginStep(ctx, "qr", nil); !strings.Contains(p.Hint, "已经扫码") {
@@ -297,7 +293,7 @@ func TestBindByQRCode(t *testing.T) {
 	if st := r.secrets.state(t); st.Creds == nil || st.Creds.Token != "BT" || st.Creds.UserID != owner {
 		t.Fatalf("stored %+v", st)
 	}
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
+	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == wire.ConnectorStateOk })
 	if err := r.bot.Logout(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +301,7 @@ func TestBindByQRCode(t *testing.T) {
 	if st.Creds != nil || len(st.Old) != 1 || st.Old[0] != "BT" {
 		t.Fatalf("after logout %+v", st)
 	}
-	if s := r.bot.Status(ctx); s.State != connector.StateNotSignedIn {
+	if s := r.bot.Status(ctx); s.State != wire.ConnectorStateNotSignedIn {
 		t.Fatalf("status %+v", s)
 	}
 }
@@ -313,9 +309,9 @@ func TestBindByQRCode(t *testing.T) {
 // The owner's message goes to the hub as it is; someone else hears once whose bot it is, and nothing reaches the hub.
 func TestOwnerMessageGoesToTheHubStrangerHearsOnce(t *testing.T) {
 	r := newRig(t, true)
-	r.ilink.say("person@example.com", "你好")
-	r.sentTo("person@example.com", "只为绑定它的人服务")
-	r.ilink.say("person@example.com", "在吗")
+	r.ilink.say("someone@im.wechat", "你好")
+	r.sentTo("someone@im.wechat", "只为绑定它的人服务")
+	r.ilink.say("someone@im.wechat", "在吗")
 	r.ilink.say(owner, "明天有什么会？")
 	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
 	m := r.hub.got()[0]
@@ -324,7 +320,7 @@ func TestOwnerMessageGoesToTheHubStrangerHearsOnce(t *testing.T) {
 	}
 	n := 0
 	for _, s := range r.ilink.texts() {
-		if s.To == "person@example.com" {
+		if s.To == "someone@im.wechat" {
 			n++
 		}
 	}
@@ -339,13 +335,13 @@ func TestOwnerMessageGoesToTheHubStrangerHearsOnce(t *testing.T) {
 func TestTokenReplacedUnbinds(t *testing.T) {
 	r := newRig(t, true)
 	ctx := context.Background()
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
+	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == wire.ConnectorStateOk })
 	r.ilink.mu.Lock()
 	r.ilink.replaced = true
 	r.ilink.mu.Unlock()
 	eventually(t, "unbound", func() bool {
 		s := r.bot.Status(ctx)
-		return s.State == connector.StateNotSignedIn && strings.Contains(s.Error, "失效")
+		return s.State == wire.ConnectorStateNotSignedIn && strings.Contains(s.Error, "失效")
 	})
 	if st := r.secrets.state(t); st.Creds != nil || len(st.Old) != 1 {
 		t.Fatalf("%+v", st)
@@ -366,7 +362,7 @@ func TestPictureGoesWithTheMessage(t *testing.T) {
 		map[string]any{"type": 4, "file_item": map[string]any{"file_name": "合同.pdf", "media": map[string]any{"encrypt_query_param": "F"}}})
 	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
 	m := r.hub.got()[0]
-	if len(m.Images) != 1 || m.Images[0].MIME != "image/png" || string(m.Images[0].Data) != string(png) ||
+	if len(m.Images) != 1 || m.Images[0].Mime != "image/png" || m.Images[0].Data != base64.StdEncoding.EncodeToString(png) ||
 		len(m.Unsupported) != 1 || m.Unsupported[0] != "文件「合同.pdf」" {
 		t.Fatalf("handed %+v", m)
 	}
@@ -392,13 +388,13 @@ func TestDuplicateMessageHandledOnce(t *testing.T) {
 func TestSendNeedsTheOwnersChat(t *testing.T) {
 	r := newRig(t, true)
 	ctx := context.Background()
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
-	if _, err := r.bot.Send(ctx, channel.SendParams{Ref: "a", Text: "早"}); !errors.Is(err, channel.ErrCannotSend) {
+	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == wire.ConnectorStateOk })
+	if _, err := r.bot.Send(ctx, wire.ChannelSendParams{Ref: "a", Text: "早"}); !errors.Is(err, errCannotSend) {
 		t.Fatalf("before the first message: %v", err)
 	}
 	r.ilink.say(owner, "在吗")
 	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
-	if _, err := r.bot.Send(ctx, channel.SendParams{Ref: "b", Text: "**明天** 10 点有周会。![图](x.png)", Kind: channel.OutAnswer}); err != nil {
+	if _, err := r.bot.Send(ctx, wire.ChannelSendParams{Ref: "b", Text: "**明天** 10 点有周会。![图](x.png)", Kind: wire.ChannelSendKindAnswer}); err != nil {
 		t.Fatal(err)
 	}
 	got := r.sentTo(owner, "10 点有周会")
@@ -417,11 +413,11 @@ func TestSendRetryKeepsTheClientID(t *testing.T) {
 	ctx := context.Background()
 	r.ilink.say(owner, "在吗")
 	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
-	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
+	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == wire.ConnectorStateOk })
 	r.ilink.mu.Lock()
 	r.ilink.failSends, r.ilink.clientIDs, r.ilink.sent = 3, nil, nil // every attempt of the first Send loses its answer
 	r.ilink.mu.Unlock()
-	p := channel.SendParams{Ref: "run-1:4", Text: "答案", Kind: channel.OutAnswer}
+	p := wire.ChannelSendParams{Ref: "run-1:4", Text: "答案", Kind: wire.ChannelSendKindAnswer}
 	if _, err := r.bot.Send(ctx, p); err == nil {
 		t.Fatal("the first Send should fail: no attempt got an answer")
 	}
@@ -465,17 +461,17 @@ func TestTypingWhileTheHubSays(t *testing.T) {
 
 // What the bot writes for people reads in the language the hub said at its start; Chinese when it said none.
 func TestTextInTheUsersLanguage(t *testing.T) {
-	if got := New(Options{Lang: i18n.En}, nil).status.Error; got != "WeChat isn't bound yet" {
+	if got := New(Options{Lang: langEn}, nil).status.Error; got != "WeChat isn't bound yet" {
 		t.Fatal(got)
 	}
 	if got := New(Options{}, nil).status.Error; got != "还没绑定微信" {
 		t.Fatal(got)
 	}
-	if p := codePrompt(i18n.Ja, ""); p.Fields[0].Label != "確認コード" {
+	if p := codePrompt(langJa, ""); p.Fields[0].Label != "確認コード" {
 		t.Fatal(p.Fields[0].Label)
 	}
-	c := &ilink.Credentials{UserID: "person@example.com"}
-	if got := account(i18n.En, c); got != "WeChat user 123456" {
+	c := &ilink.Credentials{UserID: "owner-fixture@example.invalid"}
+	if got := account(langEn, c); got != "WeChat user ixture" {
 		t.Fatal(got)
 	}
 }

@@ -235,7 +235,7 @@ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 
 ## openclaw-weixin
 
-`server/internal/wechat/ilink` (the iLink client for the WeChat bot, docs/wechat.md) follows the wire behavior of Tencent's
+`server/plugins/wechat/ilink` (the iLink client for the WeChat bot, docs/wechat.md) follows the wire behavior of Tencent's
 openclaw-weixin v2.4.6: its API types and calls, the QR authorization, the media AES-128-ECB, and its markdown filter. The Go
 code is written for Persona; nothing of the plugin's runtime is copied.
 
