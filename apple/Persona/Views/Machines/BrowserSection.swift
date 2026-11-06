@@ -7,6 +7,7 @@ import SwiftUI
 /// runs or the setup is under way.
 struct BrowserSection: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     let ref: MachineRef
     var browser: MachineBrowser
     var online: Bool
@@ -47,7 +48,9 @@ struct BrowserSection: View {
         .task(id: online && shown.enabled) {
             if online && shown.enabled { await refresh() }
         }
-        .task(id: watching) {
+        // Only while the page is in front: not behind another tab or with the app in the background.
+        .tabActiveTask(id: watching && phase == .active) {
+            guard phase == .active else { return }
             while watching, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 await refresh()

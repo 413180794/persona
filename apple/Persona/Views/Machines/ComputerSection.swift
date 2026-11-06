@@ -6,6 +6,7 @@ import SwiftUI
 /// progress while it works. The node is asked again when the page opens, and every few seconds while a job runs.
 struct ComputerSection: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
     let ref: MachineRef
     var computer: MachineComputer
     var online: Bool
@@ -55,7 +56,9 @@ struct ComputerSection: View {
         .task(id: online && shown.enabled) {
             if online && shown.enabled { await refresh() }
         }
-        .task(id: watching) {
+        // Only while the page is in front: not behind another tab or with the app in the background.
+        .tabActiveTask(id: watching && phase == .active) {
+            guard phase == .active else { return }
             while watching, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
                 await refresh()

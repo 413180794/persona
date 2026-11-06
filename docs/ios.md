@@ -388,7 +388,7 @@ the hidden page is merely transparent and noninteractive, **still mounted**, so 
 - Pass down `tabIsActive` (true outside any page): `ShellPageSlide` sets it from `ShellState.page` in the new shell; old layout, iPad and open Duo `TabView` use `TabActivityScope` on each tab's content.
 - `.tabActiveTask` / `.tabActiveTask(id:)` cancels when the page goes behind and restarts from scratch when foregrounded. `.onTabVisibility(appear:disappear:)` replaces paired
   `onAppear` / `onDisappear`, each called once; the system briefly remounting the old tab during a switch does not count as appearance.
-- Used for Lark chat's 60-second fallback polling and read reporting (catch up on foregrounding), and Machines-page (`MachinesView`) / machine-detail (`MachineDetailView`) polling.
+- Used for Lark chat's 60-second fallback polling and read reporting (catch up on foregrounding), and Machines-page (`MachinesView`) / machine-detail (`MachineDetailView`, including its computer-control and browser sections) polling.
 - **Not for** chat subscriptions, generating replies, Agent tasks, dictation or timers (work-row stopwatch, terminal 250ms tick, header auto-collapse). These continue regardless of the foreground page.
 - Under system `TabView`, timing matches window removal, so UI and behavior stay unchanged. New polling and read reporting must use these helpers, not direct `onDisappear` / `.task`.
 

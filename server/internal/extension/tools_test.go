@@ -363,3 +363,24 @@ func TestToolsManifestRules(t *testing.T) {
 		t.Fatal(added)
 	}
 }
+
+func TestToolsInstallUnderSymlinkDir(t *testing.T) {
+	noMachineTools(t)
+	f, nodeSpec, _ := toolFixtures(t)
+	f.install(t)
+	realDir := t.TempDir()
+	linkDir := filepath.Join(t.TempDir(), "symlink-registry")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatal(err)
+	}
+	store := newMemStore()
+	r := NewRegistry(linkDir, store, rot13{}, 202611100000)
+	p, _ := installWithTools(t, r, func(m map[string]any) { m["tools"] = []any{nodeSpec} })
+	tools := r.Tools(p.Record.ID, p.Record.Version)
+	if len(tools) != 1 || tools[0].Name != "fakenode" || tools[0].Reused {
+		t.Fatalf("%+v", tools)
+	}
+	if _, err := os.Stat(tools[0].Path); err != nil {
+		t.Fatal(err)
+	}
+}

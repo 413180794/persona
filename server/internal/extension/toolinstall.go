@@ -216,7 +216,11 @@ func (r *Registry) machineTool(ctx context.Context, t ToolSpec, env []string, ro
 			return ""
 		}
 	}
-	if within(p, filepath.Dir(filepath.Dir(root))) { // one of the hub's own (another extension's tools)
+	hubDir := filepath.Dir(filepath.Dir(root))
+	if h, err := filepath.EvalSymlinks(hubDir); err == nil {
+		hubDir = h
+	}
+	if within(p, hubDir) { // one of the hub's own (another extension's tools)
 		return ""
 	}
 	v, err := runCheck(ctx, p, t.Check, env)
@@ -384,7 +388,11 @@ func fetchTool(ctx context.Context, t ToolSpec, platform, dir string) error {
 	if err != nil {
 		return fmt.Errorf("包里没有 %s", strings.TrimPrefix(target, dir+string(filepath.Separator)))
 	}
-	if !within(real, dir) {
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		realDir = dir
+	}
+	if !within(real, realDir) {
 		return errors.New("程序指向了包外面")
 	}
 	if st, err := os.Stat(real); err != nil || !st.Mode().IsRegular() {
