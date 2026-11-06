@@ -351,7 +351,7 @@ func (c *Connector) request(ctx context.Context, method, path string, hdr http.H
 		if _, text := out.(*[]byte); text {
 			limit = 32 << 20 // a job's log, of which the end is kept
 		}
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, limit))
 		code := resp.StatusCode
 		switch {
 		case code == http.StatusUnauthorized:
@@ -364,6 +364,9 @@ func (c *Connector) request(ctx context.Context, method, path string, hdr http.H
 			}
 			_ = json.Unmarshal(raw, &e)
 			return code, resp.Header, fmt.Errorf("GitHub %s %s: %d %s", method, path, code, Scrub(e.Message))
+		}
+		if readErr != nil {
+			return code, resp.Header, fmt.Errorf("GitHub %s %s: read response: %s", method, path, Scrub(readErr.Error()))
 		}
 		if text, ok := out.(*[]byte); ok {
 			*text = raw

@@ -232,9 +232,12 @@ func (c *Connector) postForm(ctx context.Context, path string, form url.Values, 
 		return errors.New(Scrub(err.Error()))
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusUnauthorized {
 		return fmt.Errorf("GitHub %s: %d", path, resp.StatusCode)
+	}
+	if readErr != nil {
+		return fmt.Errorf("GitHub %s: read response: %s", path, Scrub(readErr.Error()))
 	}
 	return json.Unmarshal(raw, out)
 }
