@@ -318,8 +318,7 @@ type readinessEvidence struct {
 // the last readinessProbeReuse); wait bounds how long it waits for the node's self-check.
 func (s *Service) readiness(ctx context.Context, probe bool, wait time.Duration) Readiness {
 	lang := s.requestCtxLang(ctx)
-	saved, _ := s.savedSettings(ctx)
-	v := s.effective(ctx, saved)
+	v := s.settings(ctx)
 	launcher := s.launcherNow(ctx)
 	out := Readiness{Version: 1, Launcher: launcher, CheckedAt: time.Now().UTC().Truncate(time.Second)}
 

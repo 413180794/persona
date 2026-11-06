@@ -360,7 +360,8 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	snap.Partial = snap.Partial || snap.Profile == nil
 	snap.Channels = s.channelsReport()
 	snap.Partial = snap.Partial || snap.Channels == nil
-	here := s.settings(ctx).MachineID
+	cfg := s.settings(ctx)
+	here := cfg.MachineID
 	queued, ok := s.queuedRelays()
 	snap.Partial = snap.Partial || !ok
 	for id, q := range queued {
@@ -369,8 +370,8 @@ func (s *Service) snapshot(ctx context.Context) Snapshot {
 	for _, id := range s.heldConversations() {
 		view(id, here).Supervising = true // a 督办 message started its turn: not pushed (supervise.go)
 	}
-	if p := snap.Profile; p != nil && p.Main != "" {
-		view(p.Main, p.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
+	if cfg.Main != "" { // not snap.Profile: that is left out while a settings read fails
+		view(cfg.Main, cfg.MachineID).Title = mainTitle // never its first message, a model's name or a rename (#1313)
 	}
 	snap.Inbox = s.inboxReport(ctx)
 	snap.Partial = snap.Partial || snap.Inbox == nil

@@ -137,9 +137,11 @@ func (s *Service) updateSettings(ctx context.Context, fn func(*Settings) error) 
 
 // settings are the settings in effect, what the rest of the package reads (the main conversation, the machine, the time
 // zone; isMain and mainTasksQuiet for short): the machine one the hub has (else the hub's default), the launcher the
-// assistant's own (else hub.json's, else claude; 模型配置 › 主对话 goes over it: launcherNow).
+// assistant's own (else hub.json's, else claude; 模型配置 › 主对话 goes over it: launcherNow). A read that fails once
+// they were read serves those (settingsLastGood): the zero value would say there is no main conversation, which
+// would let it be archived and title it by its first message for that moment.
 func (s *Service) settings(ctx context.Context) Settings {
-	v, _ := s.savedSettings(ctx)
+	v, _ := s.settingsLastGood(ctx)
 	return s.effective(ctx, v)
 }
 
