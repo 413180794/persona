@@ -64,7 +64,9 @@ import Observation
             edited = false
             return true
         } catch {
-            self.error = String(localized: "Couldn't save: \(error.localizedDescription) [Image Viewer fcc6eb]")
+            // Timeouts and no network get a calm line, not the raw URL error: the pairing step needs a reason to stay.
+            self.error = error.shown.map { String(localized: "Couldn't save: \($0) [Image Viewer fcc6eb]") }
+                ?? String(localized: "Couldn't save: can't reach the hub, nothing was saved")
             return false
         }
     }

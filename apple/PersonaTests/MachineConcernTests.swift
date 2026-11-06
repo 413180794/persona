@@ -34,4 +34,23 @@ import Testing
         let t = AgentTally(try ["needs_you", "working", "working", "unread", "idle", "unknown"].map(s))
         #expect(t.needsYou == 1 && t.working == 2 && t.idle == 3)
     }
+
+    /// A Reconnect that did not take says why and what to do in plain words, never the raw ssh error (#3837).
+    @Test func stillOfflineSaysWhatToDo() {
+        func off(_ error: String?, kind: String = "ssh", mismatch: Bool? = nil) -> Machine {
+            var m = Machine(id: "a", name: "a", kind: kind, online: false, nodeMismatch: mismatch)
+            m.error = error
+            return m
+        }
+        let timeout = MachineDetailView.stillOffline(off("ssh: connect to host x port 22: Operation timed out"))
+        #expect(timeout.contains("连接超时") && !timeout.contains("ssh:"))
+        #expect(MachineDetailView.stillOffline(off("Permission denied (publickey)")).contains("SSH 密钥"))
+        #expect(MachineDetailView.stillOffline(off("Permission denied", kind: "link")).contains("Persona Link"))
+        #expect(MachineDetailView.stillOffline(off("connection refused")).contains("node 在运行"))
+        #expect(MachineDetailView.stillOffline(off(nil, mismatch: true)).contains("重新部署"))
+        #expect(MachineDetailView.stillOffline(off("version mismatch", kind: "local")).contains("本地升级"))
+        #expect(MachineDetailView.stillOffline(off("something odd")) == "还没连上，原因见上方卡片")
+        #expect(MachineDetailView.stillOffline(off(nil)) == "还没连上，稍后再试一次")
+        #expect(MachineDetailView.stillOffline(nil) == "还没连上，稍后再试一次")
+    }
 }

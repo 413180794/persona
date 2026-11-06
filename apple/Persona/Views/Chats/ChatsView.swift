@@ -2891,7 +2891,7 @@ struct IdleFoldRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            Image(systemName: "chevron.down.circle")
+            Image(systemName: Theme.Icon.idleFold)
                 .foregroundStyle(.secondary)
             Text("\(sessions.count) more idle")
                 .font(Theme.Font.secondaryMedium)
@@ -3063,7 +3063,7 @@ struct SpaceMenuItems: View {
 
     var body: some View {
         if let open {
-            Button(action: open) { Label("Open Space", systemImage: "arrow.right.square") }
+            Button(action: open) { Label("Open Space", systemImage: Theme.Icon.openSpace) }
         }
         let unread = group.sessions.filter { $0.state == .unread }.map(\.key)
         if !unread.isEmpty {

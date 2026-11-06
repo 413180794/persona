@@ -30,14 +30,31 @@ struct PersonaApp: App {
                         model.toast = Toast(String(localized: "Open this link on the computer you're adding"))
                         return
                     }
-                    guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
+                    guard let cfg = ServerConfig(pairURL: url.absoluteString) else {
+                        // A pairing link without its address or token did nothing at all: tapped again and again (#4273).
+                        if ServerConfig.isPairLink(url.absoluteString) {
+                            model.toast = Toast(String(localized: "The pairing link is incomplete. Copy it again."), style: .error)
+                            Haptics.error()
+                        }
+                        return
+                    }
                     Task {
                         do {
                             try await model.pair(cfg)
                             let host = cfg.url.host() ?? String(localized: "Server")
                             model.toast = Toast(String(localized: "Connected to \(host)"), style: .success)
                         }
-                        catch { model.showPairing(error) }
+                        catch {
+                            // An expired code says so (showPairing); anything else is said too, not through `show`, which
+                            // keeps quiet about a timeout or no network: a hub out of reach then said nothing after 30 s on
+                            // the welcome page (#4273).
+                            if PairError.isExpiredCode(error) {
+                                model.showPairing(error)
+                            } else if !error.isCancellation {
+                                model.toast = Toast(String(localized: "Couldn't connect: \(error.localizedDescription)"), style: .error)
+                                Haptics.error()
+                            }
+                        }
                     }
                 }
         }

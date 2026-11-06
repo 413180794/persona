@@ -18,6 +18,12 @@ struct VNCPage: View {
     @State private var screenView: VNCScreenUIView?
     @State private var modifiers = VNCModifiers()
     @State private var pipLog = false
+    /// The app went to the background with the page up (not just Control Center or an alert over it).
+    @State private var wentBackground = false
+    /// When the app came back from the background with the connection not (yet) known to be down: a drop reported
+    /// within `returnWindow` is the suspension's, so it reconnects once by itself (#4243).
+    @State private var returnedAt: Date?
+    private static let returnWindow: TimeInterval = 5
     #endif
 
     private var name: String { model.machine(ref)?.name ?? ref.id }
@@ -61,7 +67,28 @@ struct VNCPage: View {
                 unlocked = true
                 session?.unlockWithKeptPassword()
             }
+            #if os(iOS) || os(visionOS)
+            if case .closed? = phase, let at = returnedAt, Date.now.timeIntervalSince(at) < Self.returnWindow {
+                returnedAt = nil
+                session?.start()
+            }
+            #endif
         }
+        #if os(iOS) || os(visionOS)
+        // Back from the background: the suspended app's connection is usually gone. Reconnect instead of waiting on
+        // Reconnect being tapped; a sign-in asked for, or a connection still up, is left as it is.
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in wentBackground = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            guard wentBackground, let s = session else { return }
+            wentBackground = false
+            if case .closed = s.phase {
+                returnedAt = nil
+                s.start()
+            } else {
+                returnedAt = .now
+            }
+        }
+        #endif
         .sheet(isPresented: $help) { VNCHelp() }
         #if os(iOS)
         .sheet(isPresented: $pipLog) { VNCPiPDiagnostics() }

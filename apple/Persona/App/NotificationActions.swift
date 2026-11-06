@@ -32,7 +32,7 @@ nonisolated enum NotificationActions {
                                      icon: UNNotificationActionIcon(systemImageName: "checkmark")),
                 UNTextInputNotificationAction(identifier: rejectPlan, title: String(localized: "Send Back [Notification Actions cd3150]"), options: [.authenticationRequired],
                                               icon: UNNotificationActionIcon(systemImageName: "arrow.uturn.backward"),
-                                              textInputButtonTitle: String(localized: "Send Back [Notification Actions a20f13]"), textInputPlaceholder: String(localized: "Tell Claude what to change…")),
+                                              textInputButtonTitle: String(localized: "Send Back [Notification Actions a20f13]"), textInputPlaceholder: String(localized: "Tell the agent what to change…")),
             ],
             intentIdentifiers: [], options: [])
         // Questions and terminal prompts need the screen: no buttons, a tap opens the session. Registered anyway so

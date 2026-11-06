@@ -185,6 +185,8 @@ extension Theme {
         static let filterActive = "line.3.horizontal.decrease.circle.fill"
         /// A plain list layout.
         static let listView = "list.bullet"
+        /// A card layout (the Agents list's Display › Cards, beside `listView`).
+        static let cardView = "rectangle.grid.1x2"
         /// A list's view menu: how rows are grouped (Group By), a custom group added or removed (New Group /
         /// Delete Group), and the view put back to its defaults (Reset to Default).
         static let groupBy = "square.stack"
@@ -205,6 +207,7 @@ extension Theme {
         static let mute = "bell.slash"
         static let unmute = "bell"
         static let collapseAll = "rectangle.compress.vertical"
+        static let expandAll = "rectangle.expand.vertical"
         static let newConversation = "plus.bubble"
         /// Compact a conversation's context on demand (Compact context, #1727).
         static let compactContext = "arrow.down.and.line.horizontal.and.arrow.up"
@@ -262,6 +265,10 @@ extension Theme {
         static let contexts = "rectangle.stack"
         static let space = "square.stack.3d.up"
         static let spaceFilled = "square.stack.3d.up.fill"
+        /// Open Space: go into a space from its menu.
+        static let openSpace = "arrow.right.square"
+        /// A busy space's idle agents folded into one row (N more idle).
+        static let idleFold = "chevron.down.circle"
         static let conversation = "text.bubble"
         static let file = "doc"
         static let document = "doc.text"
@@ -278,7 +285,7 @@ extension Theme {
         /// and the web mark it).
         static let home = "house"
         static let folderFilled = "folder.fill"
-        /// Up one folder (the new chat's directory browser, 上一级).
+        /// Up one folder (the new chat's directory browser, Parent Folder).
         static let parentFolder = "arrow.turn.left.up"
         /// A folder that is a git repository (the new chat's directory browser).
         static let gitRepository = "folder.badge.gearshape"
@@ -290,6 +297,8 @@ extension Theme {
         static let list = "list.bullet.rectangle"
         static let text = "text.alignleft"
         static let machines = "macbook.and.iphone"
+        /// Every machine, no filter (the Agents list's Machines › All Machines).
+        static let allMachines = "square.grid.2x2"
         /// Personal Agents: the Lark gateway's personal agents page (the Agents list's toolbar).
         static let personalAgents = "person.crop.circle.badge.checkmark"
         /// A computer whose kind is not known.
@@ -443,7 +452,17 @@ extension Theme {
         static let attachment = "paperclip"
         static let video = "video"
         static let voiceMessage = "waveform"
-        /// A video''s, the sidebar's).
+        /// A video's thumbnail: it plays elsewhere (the chat app).
+        static let playMedia = "play.circle.fill"
+        /// Send someone a message.
+        static let message = "bubble.left.fill"
+        static let credentials = "key"
+        /// Cannot be changed from here: a session the phone cannot send to, a launcher that fixes its own model.
+        static let locked = "lock"
+        /// Feishu 「[removed]」 words: encoded for the eye, not encrypted.
+        static let braveClimb = "shield"
+        static let memory = "brain"
+        /// Search (a list's, the sidebar's).
         static let search = "magnifyingglass"
         /// The knowledge base (~/.jarvis/data).
         static let knowledge = "books.vertical"

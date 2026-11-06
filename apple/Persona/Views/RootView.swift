@@ -27,6 +27,10 @@ struct RootView: View {
         #endif
     }
 
+    /// The shell is on screen, and with it its toast window (`ToastWindow`): not on the welcome page, the engine step or
+    /// the checklist after pairing (the same branches as `body`).
+    private var shellShown: Bool { usesShell && model.isPaired && model.pairingEngineMachine == nil && !model.showsChecklist }
+
     var body: some View {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("RootView")
@@ -86,8 +90,9 @@ struct RootView: View {
         // List and sheet below. UIKit scroll views (MonoTextView, the terminal, web views) turn theirs off themselves.
         .scrollIndicators(.hidden)
         .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas in every Markdown (MathMarkdown)
-        // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`).
-        .overlay(alignment: .top) { if !usesShell || model.extensionOpen != nil { ToastOverlay() } }
+        // The shell shows the toasts in a window of its own, over its sheets too (`ToastWindow`). Before the shell is on
+        // screen there is no such window: a pairing link that failed on the welcome page said nothing (#4273).
+        .overlay(alignment: .top) { if !shellShown || model.extensionOpen != nil { ToastOverlay() } }
         #if os(iOS) || os(visionOS)
         // Settings › Appearance › Light & Dark on this scene's window (and any other open one) as it first shows.
         .onAppear { model.colorScheme.apply() }

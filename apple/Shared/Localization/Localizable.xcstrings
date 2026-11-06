@@ -30241,6 +30241,29 @@
       },
       "extractionState": "manual"
     },
+    "Couldn't save: can't reach the hub, nothing was saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't save: can't reach the hub, nothing was saved"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存できませんでした：hub に接続できず、保存されていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存失败：连不上 hub，没有保存"
+          }
+        }
+      }
+    },
     "Couldn't send back the plan": {
       "localizations": {
         "en": {
@@ -33969,6 +33992,29 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Didn't refresh: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn't refresh: %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新できませんでした：%1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没刷新：%1$@"
+          }
+        }
+      }
     },
     "Didn't start: %@ [Chat View 38dec8]": {
       "localizations": {
@@ -61140,6 +61186,98 @@
       },
       "extractionState": "manual"
     },
+    "Not connected yet. Make sure this computer is on and Persona Link is running, then reconnect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet. Make sure this computer is on and Persona Link is running, then reconnect"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。このコンピューターの電源が入っていて Persona Link が動作していることを確認してから、再接続してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上。确认这台电脑开着，Persona Link 在运行，然后重新连接"
+          }
+        }
+      }
+    },
+    "Not connected yet. Make sure this computer is on, the network is up and the node is running, then reconnect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet. Make sure this computer is on, the network is up and the node is running, then reconnect"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。このコンピューターの電源が入っていて、ネットワークがつながり、ノードが動作していることを確認してから、再接続してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上。确认这台电脑开着、网络通、node 在运行，然后重新连接"
+          }
+        }
+      }
+    },
+    "Not connected yet. See the card above for the reason": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet. See the card above for the reason"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。理由は上のカードをご覧ください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，原因见上方卡片"
+          }
+        }
+      }
+    },
+    "Not connected yet. Try again in a moment": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet. Try again in a moment"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。しばらくしてからもう一度お試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，稍后再试一次"
+          }
+        }
+      }
+    },
     "Not connected yet: %@": {
       "localizations": {
         "en": {
@@ -61162,6 +61300,121 @@
         }
       },
       "extractionState": "manual"
+    },
+    "Not connected yet: authentication failed. Check that this computer's SSH key and account are still valid, then reconnect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet: authentication failed. Check that this computer's SSH key and account are still valid, then reconnect"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。認証に失敗しました。このコンピューターの SSH キーとアカウントが有効か確認してから、再接続してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，认证没通过。检查这台电脑的 SSH 密钥和账号是否还有效，然后重新连接"
+          }
+        }
+      }
+    },
+    "Not connected yet: authentication failed. Pair Persona Link again on this computer, then reconnect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet: authentication failed. Pair Persona Link again on this computer, then reconnect"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。認証に失敗しました。このコンピューターで Persona Link をペアリングし直してから、再接続してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，认证没通过。在这台电脑上重新配对 Persona Link，然后重新连接"
+          }
+        }
+      }
+    },
+    "Not connected yet: the connection timed out. The network is unstable or the computer is asleep. Wait for it to wake up or switch networks, then reconnect": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet: the connection timed out. The network is unstable or the computer is asleep. Wait for it to wake up or switch networks, then reconnect"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。接続がタイムアウトしました。ネットワークが不安定か、コンピューターがスリープ中です。復帰を待つかネットワークを変えてから、再接続してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，连接超时。网络不稳或电脑在休眠：等它醒来或换个网络，然后重新连接"
+          }
+        }
+      }
+    },
+    "Not connected yet: version mismatch. Redeploy to update the node to the same version as the hub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet: version mismatch. Redeploy to update the node to the same version as the hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。バージョンが一致しません。再デプロイして、ノードをハブと同じバージョンに更新してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，版本不一致。重新部署，把 node 更新到和 hub 同一版"
+          }
+        }
+      }
+    },
+    "Not connected yet: version mismatch. Upgrade the node on this computer so it matches the hub": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet: version mismatch. Upgrade the node on this computer so it matches the hub"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ接続できません。バージョンが一致しません。このコンピューターでノードをアップグレードして、ハブと同じバージョンにしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没连上，版本不一致。在这台电脑上本地升级 node，和 hub 保持同一版"
+          }
+        }
+      }
     },
     "Not connected: %@": {
       "localizations": {
@@ -90088,6 +90341,29 @@
       },
       "extractionState": "manual"
     },
+    "Tell the agent what to change…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tell the agent what to change…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントに変更点を伝える…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "告诉 Agent 要怎么改…"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Tell the agent what to do…": {
       "localizations": {
         "en": {
@@ -94031,6 +94307,28 @@
         }
       },
       "extractionState": "manual"
+    },
+    "The pairing link is incomplete. Copy it again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing link is incomplete. Copy it again."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペアリングリンクが不完全です。もう一度コピーしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配对链接不完整，请重新拷贝"
+          }
+        }
+      }
     },
     "The pairing link it used no longer works either. To add a computer, start again.": {
       "localizations": {

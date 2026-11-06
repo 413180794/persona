@@ -156,7 +156,10 @@ struct TaskTrustView: View {
                     }
                 }
             } else if let error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Couldn't load [Quick Results a4ce9d]"), message: error).listRowBackground(Color.clear)
+                // A button, not only pull to refresh: the Mac's list has no pull.
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Couldn't load [Quick Results a4ce9d]"), message: error,
+                               action: (title: String(localized: "Retry [Components b8784c]"), run: { Task { await load() } }))
+                    .listRowBackground(Color.clear)
             } else {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
@@ -164,11 +167,24 @@ struct TaskTrustView: View {
         .themedPage()
         .navigationTitle("Auto-Start Tasks")
         .task { await load() }
+        .refreshable { await load() }
     }
 
     private func load() async {
-        guard let api = AppModel.shared.api else { return }
-        do { kinds = try await api.taskTrust() } catch { self.error = error.localizedDescription }
+        guard let api = AppModel.shared.api else {
+            error = String(localized: "Not connected to the hub yet")
+            return
+        }
+        do {
+            kinds = try await api.taskTrust()
+            error = nil
+        } catch {
+            // The page leaving cancels the read: nothing to show. A timeout or no network gets plain words.
+            guard !error.isCancellation else { return }
+            let text = error.shown ?? String(localized: "Can't reach the hub")
+            // With the list on screen the error line is not drawn: a failed refresh says so in a toast.
+            if kinds != nil { AppModel.shared.toast = Toast(String(localized: "Didn't refresh: \(text)"), style: .error) } else { self.error = text }
+        }
     }
 
     private func forget(_ list: [APIClient.TrustKind]) async {

@@ -62,6 +62,7 @@ The prototype is the UI and interaction standard; compare screen by screen durin
   which would leave the card stuck on the message from the last state change (`docs/lessons/ios.md`).
 - Progress **does not insert new chat messages**. Only three cases append at the bottom: needs your answer (question card), answered (collapsed line), finished (receipt).
 - Card footers offer "Message" (targeting this task; see "Routing" below) and "Stop" (interrupt, with confirmation first). Tapping the card opens task details.
+- When the to-do has a PR URL (`pr_url`, #2768), the card adds a "PR #N" line under the current step; tapping it opens the PR in the in-app link sheet, matching "Open PR" on the Feishu task report card (#5033). Cards without a PR are unchanged.
 - Task cards from previous days collapse to one line (state dot + title + result); tap to expand.
 
 ### Needs you

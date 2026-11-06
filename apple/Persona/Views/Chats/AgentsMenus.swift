@@ -92,7 +92,7 @@ struct AgentsListMenu: View {
                 }
             }
             Picker("Display", selection: $compact) {
-                Label("Cards", systemImage: "rectangle.grid.1x2").tag(false)
+                Label("Cards", systemImage: Theme.Icon.cardView).tag(false)
                 Label("Compact List [Agents Menus 06829c]", systemImage: Theme.Icon.listView).tag(true)
             }
             if shownGrouping != .recent {
@@ -102,7 +102,7 @@ struct AgentsListMenu: View {
                     } label: { Label("Collapse All", systemImage: Theme.Icon.collapseAll) }
                     Button {
                         withAnimation(Theme.Motion.standard) { actions.expand() }
-                    } label: { Label("Expand All", systemImage: "rectangle.expand.vertical") }
+                    } label: { Label("Expand All", systemImage: Theme.Icon.expandAll) }
                 }
             }
             if model.isMultiHub {
@@ -115,7 +115,7 @@ struct AgentsListMenu: View {
                 }
             }
             Picker("Machines", selection: $machineFilter) {
-                Label("All Machines", systemImage: "square.grid.2x2").tag("")
+                Label("All Machines", systemImage: Theme.Icon.allMachines).tag("")
                 ForEach(machines.filter { m in HubFilter.matches(hubFilter, MachineRef(path: m.id).group) }) { m in
                     Label(m.name, systemImage: m.symbol).tag(m.id)
                 }

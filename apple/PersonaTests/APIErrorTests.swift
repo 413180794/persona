@@ -19,6 +19,17 @@ struct APIErrorTests {
         }
         #expect(!ServerConfig.isComputerLink(URL(string: "jarvis://pair?url=https%3A%2F%2Fhub.example.com&token=t")!))
     }
+    /// A pairing link cut short is still told apart from other links, so opening it says so instead of nothing (#4273).
+    @Test func anIncompletePairingLinkIsStillAPairingLink() {
+        for link in ["persona://pair?url=https%3A%2F%2Fhub.example.com", "JARVIS://PAIR?token=fixture", "jarvis://pair", " persona://pair?url= \n"] {
+            #expect(ServerConfig(pairURL: link) == nil)
+            #expect(ServerConfig.isPairLink(link), "\(link)")
+        }
+        for other in ["jarvis://open?machine=m&session=s", "persona://extension/x?group=g", "https://pair?url=x&token=t", "pair", ""] {
+            #expect(!ServerConfig.isPairLink(other), "\(other)")
+        }
+        #expect(ServerConfig.isPairLink("persona://pair?url=https%3A%2F%2Fhub.example.com&token=fixture"))
+    }
     /// An id the caller escaped (a Knowledge project slug with Chinese in it) reaches the hub once escaped, not twice (404).
     @MainActor @Test func escapedIdsAreNotEscapedAgain() throws {
         let cfg = try #require(ServerConfig(pairURL: "jarvis://pair?url=http%3A%2F%2Fhub.example.com%3A18660&token=t"))

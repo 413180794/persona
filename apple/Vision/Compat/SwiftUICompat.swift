@@ -11,6 +11,14 @@ extension View {
 
     /// visionOS scroll views have no soft edge blur to hide.
     func scrollEdgeEffectHidden(_ hidden: Bool = true, for edges: Edge.Set = .all) -> some View { self }
+
+    /// Nor a hard or soft edge to choose between.
+    func scrollEdgeEffectStyle(_ style: ScrollEdgeEffectStyleCompat?, for edges: Edge.Set) -> some View { self }
+}
+
+/// iOS's `ScrollEdgeEffectStyle` cases, which visionOS does not have.
+enum ScrollEdgeEffectStyleCompat {
+    case automatic, hard, soft
 }
 
 /// visionOS has no Liquid Glass containers: its windows are glass already, so the group just lays its content out.

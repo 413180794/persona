@@ -17,6 +17,13 @@ nonisolated struct ServerConfig: Codable, Hashable, Sendable {
         self.token = token
     }
 
+    /// A `persona://pair` / `jarvis://pair` link, whether or not `init(pairURL:)` can read it: one cut short (no `url`
+    /// or no `token`: copied in part, wrapped in a chat) is still someone trying to pair, and is told so (#4273).
+    static func isPairLink(_ link: String) -> Bool {
+        guard let comps = URLComponents(string: link.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
+        return ["persona", "jarvis"].contains(comps.scheme?.lowercased() ?? "") && comps.host?.lowercased() == "pair"
+    }
+
     /// `jarvis://link?…` / `persona://link?…`: the pairing link a signed-in device made for one computer (「添加电脑」, Add computer).
     /// It is opened on that computer, by Persona Link; a phone or the Mac app only says so.
     static func isComputerLink(_ url: URL) -> Bool {

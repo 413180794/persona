@@ -72,7 +72,9 @@ struct ToastOverlay: View {
                         // In a window that takes no touches VoiceOver does not come to it: it is read out as it comes.
                         if !tapToDismiss { AccessibilityNotification.Announcement(toast.message).post() }
                         #endif
-                        try? await Task.sleep(for: ToastCapsule.shown(toast))
+                        // Cancelled (this overlay went away: the engine step giving way to the shell's toast window), the
+                        // toast stays for the overlay that shows next, which starts its own timer (#4273).
+                        do { try await Task.sleep(for: ToastCapsule.shown(toast)) } catch { return }
                         guard model.toast?.id == toast.id else { return }
                         withAnimation(Theme.Motion.standard) { model.toast = nil }
                     }

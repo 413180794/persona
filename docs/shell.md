@@ -128,6 +128,7 @@ As long as room is made through the window's safe area, it can't be fixed cleanl
   short (info / success 2.5 s, error 4 s), one at a time, the new one replacing the old. It looks like the design system's `ToastCapsule`; connection status is `ShellLinkPill` (the same capsule:
   Liquid Glass, or the raised capsule under the BeautifulUI style). The keyboard is at the bottom and these are at the top, so they're never covered.
 - Old Layout, iPad, Mac: the toast is `ToastOverlay` (the same `ToastCapsule`, tap to dismiss), and connection status is in the title.
+  Before the shell is on screen (the welcome page, the engine step and the checklist after pairing) there is no `ToastWindow` either, so `ToastOverlay` is used there too: otherwise an error from opening a pairing link on the welcome page (hub out of reach, incomplete link) would never show (#4273).
 
 DEBUG: `-showConnectionCycle connecting:7:4` (from second 7, show Connecting… for 4 seconds, then recover; `waiting` / `connecting` / `updating`),
 `-showToasts "5:info:text;5.4:error:text"` (pop toasts at those times).

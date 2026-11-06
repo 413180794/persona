@@ -305,6 +305,8 @@ struct TaskCard: View {
     var todoID: String
     var conversation: String
     @State private var removing: TodoItem?
+    /// The conversation's link handler: web links open in the in-app link sheet (ChatView).
+    @Environment(\.openURL) private var openURL
     private var store: TasksStore { .shared }
 
     var body: some View {
@@ -326,6 +328,17 @@ struct TaskCard: View {
                     Text(TaskPlace.line(todo, lead: lead))
                         .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     TaskNowLine(todo: todo, state: state, lead: lead)
+                    // The PR its work is in (`pr_url`, #2768), as the Feishu bot's task report links it (#5033).
+                    if let pr = todo.prLink {
+                        Button {
+                            openURL(pr)
+                        } label: {
+                            Label(todo.prLabel ?? String(localized: "View PR"), systemImage: Theme.Icon.pullRequest).lineLimit(1)
+                        }
+                        .font(Theme.Font.captionStrong)
+                        .foregroundStyle(Theme.accent)
+                        .buttonStyle(.plain)
+                    }
                     if state != .done {
                         HStack(spacing: Theme.Space.l) {
                             Text(state.label).font(Theme.Font.captionMedium).foregroundStyle(state.labelColor).lineLimit(1)
