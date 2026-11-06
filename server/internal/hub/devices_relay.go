@@ -165,7 +165,8 @@ func (h *Hub) serveLinkStream(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire.Accept, opts *websocket.AcceptOptions, limit int64) {
 	// Right after the hub started (its listeners come up before the manager does) the link waits for the manager a
 	// little, within what Persona Link gives a handshake; otherwise it is told to come back.
-	if !h.awaitManager(r.Context(), linkManagerWait) {
+	if owner := h.machineOwner(a.MachineID); owner == devicesOwner && !h.awaitManager(r.Context(), linkManagerWait) ||
+		owner != devicesOwner && h.busConnOf(owner) == nil {
 		writeErrCode(w, http.StatusServiceUnavailable, "assistant_offline", errAssistantOffline)
 		return
 	}
@@ -228,7 +229,7 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 					return
 				}
 				if err == nil && !l.stream { // the link's round trip, for the manager's choice of paths
-					_ = h.notifyBus(devicesOwner, devicewire.EventLinkRTT, devicewire.LinkRTT{ID: taken.id,
+					_ = h.notifyBus(h.machineOwner(a.MachineID), devicewire.EventLinkRTT, devicewire.LinkRTT{ID: taken.id,
 						RTTMS: max(1, int(time.Since(start).Milliseconds()))})
 				}
 			}
@@ -240,7 +241,7 @@ func (h *Hub) relayLinkConn(w http.ResponseWriter, r *http.Request, a devicewire
 // handToManager has the manager take a connection the hub holds: it dials the relay with the id and the hub waits
 // for it.
 func (h *Hub) handToManager(ctx context.Context, a devicewire.Accept) (*relayTaken, error) {
-	return h.handToManagerVia(ctx, devicesOwner, devicewire.MethodAccept, &a)
+	return h.handToManagerVia(ctx, h.machineOwner(a.MachineID), devicewire.MethodAccept, &a) // its manager (ownership.go)
 }
 
 // handToManagerVia is handToManager with the manager's method that takes it: the devices' (devices.accept, a) or the

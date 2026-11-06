@@ -226,6 +226,18 @@ SMTP 不给时按端口推断（465 = TLS，587/25 = STARTTLS，其余 TLS）。
 
 API 响应里只有 `status` / `error`，永远拿不到密码或 refresh token。
 
+### Moving an account
+
+An account can move from one manager to another (docs/managers.md). Each manager has its own Postgres database and
+its own `secret.key`, so the sealed secrets cannot be copied as ciphertext. The hub asks the old manager for
+`extensions.source_export` (source `mail:<account id>`): `(*Service).ExportAccount` gives the whole account, ID, name,
+servers and credentials (password or OAuth client ID and refresh token), in plaintext. The hub passes it as it is to
+the new manager's `extensions.source_import`: `ImportAccount` keeps the ID, refuses an address or ID it already has
+(`source_exists`), skips the connection test and seals the secrets again with its own key. Then the hub calls the old
+manager's `extensions.source_release`, which deletes the account and its secrets there (not the mail already filed
+into the knowledge base). The secrets cross the bus in plaintext once; the hub never stores or logs the bundle, and
+the managers never put it in logs or error messages.
+
 ## 连接与超时
 
 - 每个账号缓存一条已登录的 IMAP 连接，10 分钟没人用就关掉（30 秒扫一次）。比收件箱邮件轮（3 分钟）和知识库邮件轮（6 分钟）都长，

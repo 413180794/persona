@@ -98,10 +98,7 @@ func (h *Hub) assistantProfile() assistantwire.Profile {
 }
 
 // isMainOn: session on machine is the assistant's main conversation, as it reported.
-func (h *Hub) isMainOn(machine, session string) bool {
-	p := h.assistantProfile()
-	return p.Main != "" && p.Main == session && p.MachineID == machine
-}
+func (h *Hub) isMainOn(machine, session string) bool { return h.mainOf(machine, session) }
 
 // defaultAssistantMachine is where hub.json runs the assistant: its assistant.machine when the hub has it, else the
 // hub's own machine, else the first one; never a computer waiting to be confirmed (machine_trust.go).

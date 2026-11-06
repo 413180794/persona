@@ -49,6 +49,9 @@ type Mail interface {
 	Send(ctx context.Context, req mail.SendRequest) error
 	AddAccount(req mail.AddAccountRequest) (*mail.MailAccount, error)
 	DeleteAccount(id string) error
+	// ExportAccount and ImportAccount move an account to another manager (sources.go); the JSON holds its secrets.
+	ExportAccount(id string) ([]byte, error)
+	ImportAccount(data []byte) (*mail.MailAccount, error)
 }
 
 // NewMail is set by the mail integration (mail_glue.go).

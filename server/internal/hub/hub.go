@@ -84,7 +84,8 @@ type Hub struct {
 	ports portOpens // ports the user opened in the app (ports.go)
 	// assistant: what the assistant (internal/assistant, its own process on the bus) last reported (assistant_link.go).
 	assistant assistantState
-	owners    ownerCache // the default manager, kept a moment (ownership.go)
+	owners    ownerCache    // the default manager, kept a moment (ownership.go)
+	others    managerStates // the other managers' (manager_state.go)
 	// userLocale: the user's language, an i18n.Lang (locale.go)
 	userLocale atomic.Value
 	deleted    deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)

@@ -53,11 +53,12 @@ func (h *Hub) todoStartText(ctx context.Context, p assistantwire.TodoHandoff) st
 // injected.go); replaced, never written into.
 type todoLinks struct {
 	mu    sync.RWMutex
-	links map[[2]string]assistantwire.TodoLink
+	links map[[2]string]assistantwire.TodoLink // every manager's, merged (the assistant's win a clash)
+	by    map[string]map[[2]string]assistantwire.TodoLink
 }
 
 // takeTodoReport keeps the assistant's report (nil: it could not read the todos; the last one stands).
-func (h *Hub) takeTodoReport(r *assistantwire.TodoReport) {
+func (h *Hub) takeTodoReport(from string, r *assistantwire.TodoReport) {
 	if r == nil {
 		return
 	}
@@ -67,8 +68,20 @@ func (h *Hub) takeTodoReport(r *assistantwire.TodoReport) {
 	}
 	tl := &h.todoLinks
 	tl.mu.Lock()
-	tl.links = links
-	tl.mu.Unlock()
+	defer tl.mu.Unlock()
+	if tl.by == nil {
+		tl.by = map[string]map[[2]string]assistantwire.TodoLink{}
+	}
+	tl.by[from] = links
+	merged := map[[2]string]assistantwire.TodoLink{}
+	for id, m := range tl.by {
+		for k, l := range m {
+			if _, has := merged[k]; !has || id == assistantwire.AssistantID {
+				merged[k] = l
+			}
+		}
+	}
+	tl.links = merged
 }
 
 // freshStarts are the agents started for a todo with nothing to say yet (the apps start Claude in the background and

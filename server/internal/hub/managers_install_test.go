@@ -133,16 +133,20 @@ func TestSecondManagerBesideTheAssistant(t *testing.T) {
 	if !a.Online || !a.Default || !m.Online || m.Default || m.Deploy != "service" {
 		t.Fatalf("roster: %+v", list)
 	}
-	// What the hub keeps only one of (the snapshot), another manager's is not taken: it would replace the assistant's.
-	if err := c.Call(ctx, assistantwire.MethodSnapshot, map[string]any{"epoch": "x", "seq": 1}, nil); rpcCode(err) != bus.CodeNotRouted {
-		t.Fatalf("its snapshot: %v", err)
+	// Its snapshot is kept as its own: the assistant's stays as it was (manager_state.go).
+	var res assistantwire.SnapshotResult
+	if err := c.Call(ctx, assistantwire.MethodSnapshot, map[string]any{"epoch": "x", "seq": 1,
+		"sessions": []map[string]any{{"machine_id": "m1", "session_id": "conv-2"}}}, &res); err != nil || !res.OK {
+		t.Fatalf("its snapshot: %+v %v", res, err)
+	}
+	if got := h.conversationOwner("conv-2"); got != joined.ID {
+		t.Fatalf("its conversation is %q's", got)
+	}
+	if a := h.assistantOf(assistantwire.AssistantID); func() bool { a.mu.RLock(); defer a.mu.RUnlock(); return a.sessions["conv-2"].SessionID != "" }() {
+		t.Fatal("its snapshot went into the assistant's")
 	}
 	if err := c.Call(ctx, "ping", nil, nil); err != nil {
 		t.Fatalf("ping: %v", err)
-	}
-	// What the hub keeps by manager, or keeps nothing of, it takes from any manager.
-	if err := c.Call(ctx, assistantwire.MethodNotify, map[string]any{}, nil); rpcCode(err) == bus.CodeNotRouted {
-		t.Fatalf("its notify.request: %v", err)
 	}
 	var out struct {
 		Got json.RawMessage `json:"got"`

@@ -87,7 +87,7 @@ func TestLinkHeartbeatReachesPersonaLink(t *testing.T) {
 	eventually(t, 5*time.Second, "the manager has the heartbeat", func() bool {
 		h.devices.mu.Lock()
 		defer h.devices.mu.Unlock()
-		return strings.Contains(string(h.devices.sent), `"link_ping_ms":1000`)
+		return strings.Contains(string(h.devices.sent[devicesOwner]), `"link_ping_ms":1000`)
 	})
 	token, _ := linkToken(t, h, "laptop")
 	c, _, err := dialLink(t, srv, token)

@@ -335,6 +335,8 @@ agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/machines/{mid}/worktree/prepare
 -                    POST /api/v1/managers
 -                    POST /api/v1/managers/{id}/code
+-                    POST /api/v1/managers/{id}/machines
+-                    POST /api/v1/managers/{id}/sources
 notify               POST /api/v1/notify
 -                    POST /api/v1/phone/runtime-cli
 agents.control       POST /api/v1/sessions

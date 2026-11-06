@@ -1,7 +1,6 @@
 package hub
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,11 +25,12 @@ import (
 // apps get are decorated with it), and assistantRemote is what the hub asks of the assistant, as messages on its
 // connection. The hub never runs the assistant's code.
 
-// assistantState is what the assistant last reported and told the hub.
+// assistantState is what one manager last reported and was told: h.assistant is the assistant the hub starts
+// (assistantwire.AssistantID), every other manager has its own (manager_state.go).
 type assistantState struct {
 	mu       sync.RWMutex
 	got      bool   // a snapshot came in
-	from     string // the manager that sent it (ownership.go: its conversations are its)
+	from     string // the manager it is of (ownership.go: its conversations are its)
 	partial  bool
 	epoch    string
 	seq      uint64
@@ -42,6 +42,8 @@ type assistantState struct {
 
 	toolsMu sync.Mutex
 	tools   []proto.Tool // its MCP tools (assistant.tools), asked for when it connects
+	// toolsFresh: tools were asked for since it last connected (another manager's are asked when needed).
+	toolsFresh bool
 
 	helloMu   sync.Mutex
 	lastHello string      // the hello answer it last got (manager.hello, manager.updated), as JSON
@@ -82,14 +84,17 @@ func (h *Hub) assistantTasks() ([]assistantwire.TaskView, bool) {
 // assistantReported is the last snapshot, read-locked. With none yet, or a partial one (the database did not answer
 // it), the assistant is asked for the whole of it again (manager.resync, at most every few seconds); it answers with
 // a snapshot, which pushes the lists it changes.
-func (h *Hub) assistantReported() *assistantState {
-	a := &h.assistant
+func (h *Hub) assistantReported() *assistantState { return h.reportedOf(assistantwire.AssistantID) }
+
+// reportedOf is assistantReported for manager id.
+func (h *Hub) reportedOf(id string) *assistantState {
+	a := h.assistantOf(id)
 	a.mu.RLock()
 	need := !a.got || a.partial
 	a.mu.RUnlock()
 	if now := time.Now().UnixNano(); need && now-a.resyncAt.Load() > int64(5*time.Second) {
 		a.resyncAt.Store(now)
-		_ = h.notifyBus(cmp.Or(a.from, assistantwire.AssistantID), assistantwire.EventResync, map[string]any{})
+		_ = h.notifyBus(id, assistantwire.EventResync, map[string]any{})
 	}
 	a.mu.RLock()
 	return a
@@ -246,7 +251,7 @@ func (l assistantLink) Snapshot(ctx context.Context, s assistantwire.Snapshot) (
 // snapshotFrom is Snapshot from manager from.
 func (l assistantLink) snapshotFrom(_ context.Context, from string, s assistantwire.Snapshot) (assistantwire.SnapshotResult, error) {
 	h := l.h
-	a := &h.assistant
+	a := h.assistantOf(from)
 	views := make(map[string]assistantwire.SessionView, len(s.Sessions))
 	for _, v := range s.Sessions {
 		views[v.SessionID] = v
@@ -262,14 +267,15 @@ func (l assistantLink) snapshotFrom(_ context.Context, from string, s assistantw
 		a.profile = s.Profile
 	}
 	a.mu.Unlock()
-	if s.Profile != nil && !jsonSame(oldProfile, s.Profile) {
+	// The hub keeps one profile as its own (assistant_profile.go): the assistant it starts.
+	if s.Profile != nil && !jsonSame(oldProfile, s.Profile) && from == assistantwire.AssistantID {
 		h.keepAssistantProfile(context.Background(), s.Profile)
 	}
 	// What the nodes keep listing (s.Profile.Keep) the manager tells them itself (internal/devices SetKeep).
 	// The session lists' decoration (its titles, todos, work, channels, inbox agents) and its own cards on the phone
 	// are the manager's (fleet.go there).
 	_ = old
-	h.takeTodoReport(s.Todos) // the task notices on the items (injected.go)
+	h.takeTodoReport(from, s.Todos) // the task notices on the items (injected.go)
 	return assistantwire.SnapshotResult{OK: true, Seq: s.Seq}, nil
 }
 
@@ -328,9 +334,14 @@ func busCodedError(err error) error {
 
 // assistantHello is manager.hello's answer for the assistant, kept as what it last got.
 func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
+	return h.assistantHelloFor(ctx, assistantwire.AssistantID)
+}
+
+// assistantHelloFor is assistantHello for manager id.
+func (h *Hub) assistantHelloFor(ctx context.Context, id string) assistantwire.Hello {
 	hello, _ := assistantLink{h}.Hello(ctx)
 	raw, _ := json.Marshal(hello)
-	a := &h.assistant
+	a := h.assistantOf(id)
 	a.helloMu.Lock()
 	a.lastHello = string(raw)
 	a.helloMu.Unlock()
@@ -341,14 +352,24 @@ func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
 // machines (and with them the default machine). It is called wherever one of them may have changed, often (every
 // machine update): bursts are taken together, and only a different answer is sent.
 func (h *Hub) assistantUpdated() {
-	a := &h.assistant
+	for _, p := range h.busRoster() {
+		if p.Role == bus.RoleManager && p.ID != assistantwire.AssistantID {
+			h.managerUpdated(p.ID)
+		}
+	}
+	h.managerUpdated(assistantwire.AssistantID)
+}
+
+// managerUpdated is assistantUpdated for manager id.
+func (h *Hub) managerUpdated(id string) {
+	a := h.assistantOf(id)
 	if !a.updating.CompareAndSwap(false, true) {
 		return
 	}
 	go func() {
 		time.Sleep(200 * time.Millisecond)
 		a.updating.Store(false)
-		if h.busConnOf(assistantwire.AssistantID) == nil {
+		if h.busConnOf(id) == nil {
 			return // it gets a fresh one when it connects
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -360,7 +381,7 @@ func (h *Hub) assistantUpdated() {
 		a.lastHello = string(raw)
 		a.helloMu.Unlock()
 		if !same {
-			_ = h.notifyBus(assistantwire.AssistantID, assistantwire.EventUpdated, hello)
+			_ = h.notifyBus(id, assistantwire.EventUpdated, hello)
 		}
 	}()
 }
@@ -432,6 +453,9 @@ var assistantToolsWait = 10 * time.Second
 // Tools are the assistant's own MCP tools, as it said when it last connected; while it has not connected since the
 // hub started, the hub waits a little for it (a node that asks right then keeps the list for its conversation's life).
 func (a assistantRemote) Tools(ctx context.Context) []proto.Tool {
+	if id := a.to(ctx); id != assistantwire.AssistantID {
+		return a.h.managerTools(ctx, id)
+	}
 	for wait := time.Now().Add(assistantToolsWait); ; {
 		tools := a.h.assistantToolsNow()
 		if tools != nil || time.Now().After(wait) || ctx.Err() != nil {

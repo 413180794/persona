@@ -31,7 +31,7 @@ The install commands handed out (`curl … /i/<code> | sh`, `docker run …`) an
 
 ## Revoking
 
-`DELETE /api/v1/managers/{id}` deletes its identity and codes: the token stops working at once and a connection using it is closed with 4002; for a manager still being installed it calls off the code. The default manager can't be deleted (make another one the default first: `409 default_manager`), nor can the assistant the hub starts (`409 builtin_manager`). Revoking the sources and computer credentials attached to it comes in step 3.
+`DELETE /api/v1/managers/{id}` deletes its identity and codes: the token stops working at once and a connection using it is closed with 4002; for a manager still being installed it calls off the code. The default manager can't be deleted (make another one the default first: `409 default_manager`), nor can the assistant the hub starts (`409 builtin_manager`). Its machines go back to the carrier (below, "Moving a machine or a source").
 
 ## Ownership
 
@@ -49,14 +49,11 @@ Who owns a thing is decided in one place: `server/internal/hub/ownership.go`. Wh
 - The hub caches the default manager for 2 seconds (every forwarded request needs it) and reads it again when the roster changes (`managersChanged`).
 - How lists are merged, the `manager` field and what offline looks like are in `docs/protocol.md`, "Per-manager routing". An offline manager's things get no extra field: the app uses its `online` and `last_seen` in the roster to show "Last synced…".
 
-Not done yet, left for step 3:
-
-- The hub keeps one assistant snapshot (`manager.snapshot`), one extensions report (`extensions.report`) and one tool set (`assistant.tools`); if a second manager reported them it would overwrite the first, so step 3 keeps one per manager.
-- hub.json's computers, computers whose Persona Link dials in, monitoring, the usage sources' admin page and jarvis_settings still go to `assistant` (`devicesOwner`); a manager that connects doesn't get `fleet.clients` right after its handshake (only once the app's capabilities change).
+What the hub keeps of each manager and how a machine or a source moves are in "What the hub keeps of each manager" and "Moving a machine or a source" below.
 
 ## A second manager (first half of step 3)
 
-A manager made in the app installs and runs on its own: its own id, directory and database; it connects to the hub, shows in the roster and is online. Its assistant page, conversations and the other assistant endpoints reach it through `X-Persona-Manager: <id>` (or `?manager=<id>`, see "Ownership" above). It may report everything the hub already keeps per manager: computers (`devices.*`), pending cards (`fleet.interaction(s)`, `fleet.interaction_resolved`) and messages for the apps (`ws.broadcast`); it may also call `device.call` and `app.call`. What the hub still keeps only one of (the assistant snapshot `manager.snapshot`, the extensions report `extensions.report`, `fleet.live`, the tools `assistant.tools`) is taken only from the assistant the hub starts; other managers' calls get `not_routed` and their events are dropped (`busRouted` / `busOpen` in `hub/bus.go`), so they can't overwrite the default manager's. That goes once those are kept per manager. Moving a computer or a source to it is the second half of step 3.
+A manager made in the app installs and runs on its own: its own id, directory and database; it connects to the hub, shows in the roster and is online. Its assistant page, conversations and the other assistant endpoints reach it through `X-Persona-Manager: <id>` (or `?manager=<id>`, see "Ownership" above). It may report everything the hub already keeps per manager: computers (`devices.*`), pending cards (`fleet.interaction(s)`, `fleet.interaction_resolved`) and messages for the apps (`ws.broadcast`); it may also call `device.call` and `app.call`. Its snapshot, tools, extensions' report and Live Activity are kept as its own too (below, "What the hub keeps of each manager"); every bus method and event is open to every manager. Moving a computer or a source to it is in "Moving a machine or a source" below.
 
 ### Directory and manager.json
 
@@ -110,3 +107,33 @@ Same image as the hub. When the entrypoint sees `manager` it writes no `hub.json
 ### After it is revoked
 
 When the hub deletes it (or it was installed again somewhere else), the connection is closed with 4002 and the next dial gets 401. It says once that the hub no longer accepts its token and **stops dialing**; the process stays up and checks `manager.json` every 10 seconds. Once you get a new code in the app and `personad manager join … --dir <the same directory>` writes a new token, it restarts itself in place (exec), with nothing to change in the service. The assistant the hub starts is not affected (it doesn't take this path and keeps retrying every minute).
+
+## What the hub keeps of each manager
+
+Nothing one manager reports replaces another's (`server/internal/hub/manager_state.go`). The assistant the hub starts (`assistant`) keeps its state where it always did; every other manager gets its own when it first reports, dropped when it is removed (`DELETE /api/v1/managers/{id}`).
+
+| What | Kept | Where the hub needs one |
+| --- | --- | --- |
+| Snapshot (`manager.snapshot`): conversations, tasks, profile, todo links | By manager | A conversation belongs to the manager whose snapshot lists it (`conversationOwner`). In the session lists a conversation of another manager than the machine's shows as that manager reported it: its title, archived, `assistant: true`, `manager: <id>`. |
+| Profile (in the snapshot) | By manager in memory; only the assistant's is kept in the database (`hub.assistant_profile`) | The hub's own features (the user's time zone, where skills go) use the assistant's: it is always there, its copy survives a restart, and the default manager can change or go offline. Every manager's main conversation counts as a main conversation (`isMainOn`). |
+| Tools (`assistant.tools`) | By manager | The assistant's are asked for when it connects (as before); another manager's the first time they are needed after it connected. |
+| Extensions' report (`extensions.report`) | By manager; only the assistant's is kept across a restart | Merged: features and looks of all, a machine's extras (Cua, ego) from its own manager, an API prefix (`/api/v1/<prefix>/`) served by the first manager that reports it, the assistant's first. |
+| Live Activity (`fleet.live`) | By manager | The default manager's, else the assistant's (the Live Activity is one per phone). |
+
+There is no gate on the bus any more: every manager may call every method and publish every event.
+
+## Moving a machine or a source
+
+**A machine** (one of the hub's own list, hub.json or added in the admin page): `POST /api/v1/managers/{id}/machines {"machine_id"}` → `{machine_id, manager, from}`. `id` `assistant` moves it back to the carrier.
+
+- The hub keeps who carries it (setting `managers.machines`, `{machine: manager}`, absent: the carrier), and from then on sends what concerns the machine to the new manager (`moveMachine` in `ownership.go`, the one place).
+- Each connected manager is handed its machines again (`devices.config`, and the hello's `devices` section now goes to every manager with only its own machines): the old one lets it go, the new one connects it. A report of the machine from the old one (it is still letting go) is not taken. Until the new one reports it, the machine shows offline.
+- Credentials the hub keeps for it stay with the hub and go only to the machine's manager: a service machine's (`devices.connector_cred`, `devices.connector_paired` from another manager are refused `no_device`), a Persona Link's (the link relay is handed to the machine's manager). An ssh machine is connected with the new manager's own ssh setup.
+- A mesh member's machines are not movable (`400 not_movable`), nor unknown ones.
+
+**A source** (only a mail account so far, `mail:<account id>`): `POST /api/v1/managers/{id}/sources {"source", "from"?}` → `{source, manager, from}`; `from` is the manager that has it (the stamp on its list item), the default when not given.
+
+- The hub asks `from` for it (`extensions.source_export`: the account with its credentials in plaintext, over the bus only; the hub neither keeps nor logs it), hands it to `id` (`extensions.source_import`: sealed again with that manager's own key), then has `from` let it go (`extensions.source_release`: it deletes the account and its secrets; what it already filed stays in its knowledge base). See `docs/mail.md`.
+- Both have to be connected (`503 assistant_offline`). `404 no_source`: `from` does not have it; `409 source_exists` / `source_kind`: `id` has it already, or it is a kind that cannot move yet. When the import worked but the release did not, `502 source_not_released`: both have it; move it again or delete it at `from`.
+
+**Revoking a manager** (`DELETE /api/v1/managers/{id}`): its machines go back to the carrier (`assistant`), what the hub kept of it goes. Its sources live in its own database, which the hub cannot reach once it is gone: move them away first (`POST /api/v1/managers/assistant/sources`); the app should say so before it removes one.

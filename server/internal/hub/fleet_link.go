@@ -2,7 +2,6 @@ package hub
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,9 +37,10 @@ import (
 type fleetCache struct {
 	mu           sync.Mutex
 	interactions map[string]proto.Interaction
-	muted        map[string][]string // machine → its sessions whose pushes are off, as the manager said
-	live         *assistantwire.FleetLive
-	elicitation  bool // what fleet.clients said last
+	muted        map[string][]string                 // machine → its sessions whose pushes are off, as the manager said
+	live         *assistantwire.FleetLive            // the assistant's
+	lives        map[string]*assistantwire.FleetLive // the other managers' (manager_state.go)
+	elicitation  bool                                // what fleet.clients said last
 	clientsSent  bool
 }
 
@@ -99,14 +99,21 @@ func init() {
 		}
 		h.takeFleetInteractionsFrom(c.managerID(), p.Interactions)
 	})
-	handleBusEvent(assistantwire.EventFleetLive, func(h *Hub, _ *busConn, params json.RawMessage) {
+	handleBusEvent(assistantwire.EventFleetLive, func(h *Hub, c *busConn, params json.RawMessage) {
 		var p assistantwire.FleetLive
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
 		f := &h.reported
 		f.mu.Lock()
-		f.live = &p
+		if id := c.managerID(); id == assistantwire.AssistantID {
+			f.live = &p
+		} else {
+			if f.lives == nil {
+				f.lives = map[string]*assistantwire.FleetLive{}
+			}
+			f.lives[id] = &p
+		}
 		f.mu.Unlock()
 		h.live.changed()
 	})
@@ -192,10 +199,24 @@ func (h *Hub) decorated(m *Machine) []proto.Session {
 }
 
 // stampSessions puts on each of m's sessions the manager it belongs to (ownership.go).
+// A conversation of another manager than the machine's (which listed it) shows as that manager reported it: its
+// title, archived, an assistant conversation.
 func (h *Hub) stampSessions(m *Machine, list []proto.Session) {
 	owner := m.ownerOrCarrier()
 	for i := range list {
-		list[i].Manager = cmp.Or(h.conversationOwner(list[i].SessionID), owner)
+		id, v := h.conversation(list[i].SessionID)
+		if id == "" || v.MachineID != "" && v.MachineID != m.cfg.ID {
+			list[i].Manager = owner
+			continue
+		}
+		list[i].Manager = id
+		if id != owner {
+			list[i].Assistant = true
+			list[i].Archived = v.Archived
+			if v.Title != "" {
+				list[i].Title = v.Title
+			}
+		}
 	}
 }
 
@@ -255,14 +276,20 @@ func (h *Hub) pendingInteraction(id string) (proto.Interaction, bool) {
 }
 
 // fleetLive is the Live Activity's content and numbers as the manager told them last.
+// The Live Activity is one per phone: it shows the default manager's, else the assistant's (manager_state.go).
 func (h *Hub) fleetLive() (FleetState, FleetStats) {
+	def := h.defaultOwner(context.Background())
 	f := &h.reported
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.live == nil {
+	live := f.live
+	if l := f.lives[def]; l != nil && def != assistantwire.AssistantID {
+		live = l
+	}
+	if live == nil {
 		return FleetState{}, FleetStats{}
 	}
-	return f.live.State, f.live.Stats
+	return live.State, live.Stats
 }
 
 // waitInteraction asks the user on the phone for one of the hub's own features (a mail send, Cua's apps, ego's

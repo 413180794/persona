@@ -17,7 +17,6 @@ import (
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
-	"github.com/nwverse/persona/server/internal/extwire"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -252,9 +251,6 @@ func (h *Hub) busRequest(ctx context.Context, c *busConn, method string, params 
 	if !h.busCurrent(c) {
 		return nil, &rpc.Error{Code: bus.CodeStaleConnection, Message: "say " + busHello + " on the current connection first"}
 	}
-	if !busRouted(c, method) {
-		return nil, &rpc.Error{Code: bus.CodeNotRouted, Message: method + ": the hub keeps only " + busAssistant + "'s yet"}
-	}
 	fn, ok := busMethods[method]
 	if !ok {
 		return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + clip(method, 80)}
@@ -266,41 +262,9 @@ func (h *Hub) busEvent(c *busConn, event string, params json.RawMessage) {
 	if !h.busCurrent(c) {
 		return // before the handshake, or replaced: not heard
 	}
-	if !busRouted(c, event) {
-		return // another manager's report: not taken until the hub routes by manager
-	}
 	if f := busEvents[event]; f != nil {
 		f(h, c, params)
 	}
-}
-
-// busRouted: what connection c calls or publishes (method, or event) is taken. What the hub keeps by manager
-// (docs/managers.md, "Ownership") every manager may report (busOpen); what it still keeps one of (busSingle: the assistant's
-// snapshot, the extensions' report, the live fleet) only the assistant the hub starts (busAssistant) may, so another
-// manager that connects cannot overwrite the default manager's. Those answer not_routed until they are kept by
-// manager too. busAssistant takes everything, as before.
-func busRouted(c *busConn, method string) bool {
-	return c.ident.ID == busAssistant || busOpen[method]
-}
-
-// busOpen are the methods and events every manager's connection may use; tests add their own. Every one the hub
-// registers is here or in busSingle (TestBusMethodsAreOpenOrSingle).
-var busOpen = map[string]bool{
-	"ping": true,
-	// its computers (devices_link.go): devices.state replaces only that manager's machines
-	devicewire.EventState: true, devicewire.EventNode: true, devicewire.MethodRequest: true, devicewire.EventRequestEnd: true,
-	devicewire.MethodConnected: true, devicewire.MethodConnectorCred: true, devicewire.MethodConnectorPaired: true,
-	// its cards and the sessions of the machines it names (fleet_link.go), stamped with it
-	assistantwire.EventFleetInteraction: true, assistantwire.EventFleetInteractions: true, assistantwire.EventFleetResolved: true,
-	assistantwire.EventFleetSessions: true,
-	// what it asks of the hub and the apps: nothing kept
-	assistantwire.MethodDevice: true, assistantwire.MethodApp: true, assistantwire.MethodNotify: true, assistantwire.EventBroadcast: true,
-}
-
-// busSingle are the reports the hub keeps one of, the assistant's: other managers' are not taken yet.
-var busSingle = map[string]bool{
-	assistantwire.MethodSnapshot: true, assistantwire.EventFleetLive: true,
-	extwire.EventReport: true, extwire.EventLooksGone: true,
 }
 
 // refuse answers a handshake it will not take and hangs up a moment later, once the answer went out.
@@ -351,7 +315,7 @@ func (h *Hub) managerHello(ctx context.Context, c *busConn, params json.RawMessa
 		Deploy: clip(p.Deploy, 40), Version: clip(p.Version, 80)}); err != nil {
 		return nil, err
 	}
-	return busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHello(ctx),
+	return busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHelloFor(ctx, c.ident.ID),
 		Devices: h.devicesHello(c.ident.ID)}, nil
 }
 
@@ -385,6 +349,8 @@ func (h *Hub) busAccept(ctx context.Context, c *busConn, p busPresence) error {
 	h.busRosterChanged(ctx, c)
 	if c.ident.ID == assistantwire.AssistantID {
 		go h.assistantConnected()
+	} else {
+		h.managerReconnected(c.ident.ID) // its tools are asked for again (manager_state.go)
 	}
 	if c.ident.Role == bus.RoleManager {
 		h.devicesConnected(c.ident.ID) // its first report: the sessions the apps watch, watched again (devices_link.go)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -61,7 +62,9 @@ type devicesState struct {
 	// apps watch.
 	fresh map[string]bool
 	// sent is the config last handed over; due: a devices.config is to go out.
-	sent    []byte
+	sent map[string][]byte // by manager
+	// assign: hub.json's machines handed to another manager than the carrier (ownership.go), machine → manager.
+	assign  map[string]string
 	due     bool
 	started bool
 	// reqs are the nodes' requests being answered (devices.request) by the manager's key; reqEnded the keys whose
@@ -119,10 +122,25 @@ func init() {
 		}
 		return h.machineConnected(ctx, m, p.ConnectedAt), nil
 	})
-	handleBusCall(devicewire.MethodConnectorCred, func(h *Hub, ctx context.Context, p devicewire.ConnectorCred) (devicewire.ConnectorCred, error) {
+	// A service machine's credential goes only to the manager that carries it (ownership.go).
+	handleBus(devicewire.MethodConnectorCred, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p devicewire.ConnectorCred
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: err.Error()}
+		}
+		if err := h.ownsMachine(c, p.MachineID); err != nil {
+			return nil, err
+		}
 		return h.connectorCred(ctx, p.MachineID)
 	})
-	handleBusCall(devicewire.MethodConnectorPaired, func(h *Hub, ctx context.Context, p devicewire.ConnectorCred) (map[string]any, error) {
+	handleBus(devicewire.MethodConnectorPaired, func(h *Hub, ctx context.Context, c *busConn, params json.RawMessage) (any, error) {
+		var p devicewire.ConnectorCred
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, &rpc.Error{Code: bus.CodeInvalidParams, Message: err.Error()}
+		}
+		if err := h.ownsMachine(c, p.MachineID); err != nil {
+			return nil, err
+		}
 		return map[string]any{}, h.keepConnectorCred(ctx, p)
 	})
 }
@@ -181,9 +199,16 @@ func (h *Hub) requestEnded(key string) {
 // ---- the handover ----
 
 // devicesConfig is what the hub hands the manager now.
-func (h *Hub) devicesConfig() devicewire.Config {
+func (h *Hub) devicesConfig() devicewire.Config { return h.devicesConfigFor(devicesOwner) }
+
+// devicesConfigFor is what the hub hands manager id: the machines it carries (ownership.go); the mesh's members
+// only to the carrier.
+func (h *Hub) devicesConfigFor(id string) devicewire.Config {
 	out := devicewire.Config{Machines: []json.RawMessage{}, HubID: h.hubID(), HubName: h.hubName(), HubVersion: h.version}
 	for _, mc := range h.cfgEntries() {
+		if h.entryOwner(mc.ID) != id {
+			continue
+		}
 		if b, err := json.Marshal(mc); err == nil {
 			out.Machines = append(out.Machines, b)
 		}
@@ -199,8 +224,14 @@ func (h *Hub) devicesConfig() devicewire.Config {
 	for _, e := range msg.Endpoints {
 		out.Endpoints = append(out.Endpoints, devicewire.LinkEndpoint{URL: e.URL, Kind: e.Kind})
 	}
-	out.Mesh = h.devicesMesh()
-	out.Pending = h.pendingMachineIDs()
+	if id == devicesOwner {
+		out.Mesh = h.devicesMesh()
+	}
+	for _, mid := range h.pendingMachineIDs() {
+		if h.entryOwner(mid) == id {
+			out.Pending = append(out.Pending, mid)
+		}
+	}
 	return out
 }
 
@@ -261,32 +292,39 @@ func (h *Hub) devicesConfigChanged() {
 		d.mu.Lock()
 		d.due = false
 		d.mu.Unlock()
-		cfg := h.devicesConfig()
-		b, _ := json.Marshal(cfg)
-		d.mu.Lock()
-		same := string(b) == string(d.sent)
-		d.mu.Unlock()
-		if same {
-			return
-		}
-		if err := h.notifyBus(devicesOwner, devicewire.EventConfig, json.RawMessage(b)); err == nil {
+		for _, p := range h.busRoster() {
+			if p.Role != bus.RoleManager {
+				continue
+			}
+			b, _ := json.Marshal(h.devicesConfigFor(p.ID))
 			d.mu.Lock()
-			d.sent = b
+			same := string(b) == string(d.sent[p.ID])
 			d.mu.Unlock()
+			if same {
+				continue
+			}
+			if err := h.notifyBus(p.ID, devicewire.EventConfig, json.RawMessage(b)); err == nil {
+				d.mu.Lock()
+				if d.sent == nil {
+					d.sent = map[string][]byte{}
+				}
+				d.sent[p.ID] = b
+				d.mu.Unlock()
+			}
 		}
 	})
 }
 
-// devicesHello is the hello's devices section for identity id (the one that carries the machines).
+// devicesHello is the hello's devices section for manager id: the machines it carries (none, for most).
 func (h *Hub) devicesHello(id string) *devicewire.Config {
-	if id != devicesOwner {
-		return nil
-	}
-	cfg := h.devicesConfig()
+	cfg := h.devicesConfigFor(id)
 	b, _ := json.Marshal(cfg)
 	d := &h.devices
 	d.mu.Lock()
-	d.sent = b
+	if d.sent == nil {
+		d.sent = map[string][]byte{}
+	}
+	d.sent[id] = b
 	d.mu.Unlock()
 	return &cfg
 }
@@ -398,6 +436,7 @@ func (h *Hub) startDevices(ctx context.Context) {
 		d.up = make(chan struct{})
 	}
 	d.mu.Unlock()
+	h.loadMachineOwners(ctx) // which of them another manager carries (ownership.go)
 	var saved struct {
 		Machines map[string]struct {
 			Info     proto.NodeInfo  `json:"info"`
@@ -421,6 +460,7 @@ func (h *Hub) startDevices(ctx context.Context) {
 		}
 		m := newMachine(h, mc)
 		m.managed, m.peer = true, &busNode{h: h, id: mc.ID, done: make(chan struct{})}
+		m.owner = h.entryOwner(mc.ID)
 		m.engine = saved.Engines[mc.ID]
 		if w, ok := saved.Machines[mc.ID]; ok {
 			m.info, m.sessions, m.warmUntil = w.Info, w.Sessions, until
@@ -553,6 +593,9 @@ func (h *Hub) applyDeviceStatesFrom(owner string, st devicewire.States) {
 		id := s.Machine.ID
 		if id == "" || byID[id] != nil {
 			continue
+		}
+		if !s.Derived && h.cfgEntry(id) != nil && h.entryOwner(id) != owner {
+			continue // handed to another manager (ownership.go): this one is letting it go
 		}
 		m := prev[id]
 		if m == nil || !m.managed {
@@ -804,20 +847,8 @@ func (h *Hub) devicesGone(owner string) {
 			m.mu.Unlock()
 			continue
 		}
-		mux := m.streams
-		m.streams, m.connected = nil, false
-		m.online, m.err = false, i18n.Localize(errAssistantOffline, h.userLang())
-		m.endWarmLocked()
-		if m.snap != nil {
-			s := *m.snap
-			s.Online, s.Error, s.Transport, s.TailcatPath, s.Link = false, m.err, "", "", nil
-			m.snap = &s
-		}
-		markUnknownLocked(m.sessions)
 		m.mu.Unlock()
-		if mux != nil {
-			mux.CloseAll()
-		}
+		h.offlineLocal(m, i18n.Localize(errAssistantOffline, h.userLang()))
 		off = append(off, m)
 	}
 	for _, m := range off {
@@ -829,6 +860,26 @@ func (h *Hub) devicesGone(owner string) {
 		for _, m := range off {
 			h.sessionsChanged(m)
 		}
+	}
+}
+
+// offlineLocal shows m offline with error why until its manager reports it again: its streams close, its sessions'
+// states are unknown (the caller ends what ran on its connection and tells the apps).
+func (h *Hub) offlineLocal(m *Machine, why string) {
+	m.mu.Lock()
+	mux := m.streams
+	m.streams, m.connected = nil, false
+	m.online, m.err = false, why
+	m.endWarmLocked()
+	if m.snap != nil {
+		s := *m.snap
+		s.Online, s.Error, s.Transport, s.TailcatPath, s.Link = false, m.err, "", "", nil
+		m.snap = &s
+	}
+	markUnknownLocked(m.sessions)
+	m.mu.Unlock()
+	if mux != nil {
+		mux.CloseAll()
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 
 func TestWithInjected(t *testing.T) {
 	h := &Hub{}
-	h.takeTodoReport(&assistantwire.TodoReport{Links: []assistantwire.TodoLink{
+	h.takeTodoReport(assistantwire.AssistantID, &assistantwire.TodoReport{Links: []assistantwire.TodoLink{
 		{MachineID: "m1", SessionID: "a", TodoID: "td_1", Title: "跑测试", Task: true},
 		{MachineID: "m1", SessionID: "b", TodoID: "td_1", Title: "跑测试", Task: true}, // one task, two agents
 		{MachineID: "m1", SessionID: "c", TodoID: "td_2", Title: "重名", Task: true},

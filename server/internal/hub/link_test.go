@@ -410,7 +410,7 @@ func TestLinkTellsWhatTheHubIsCalled(t *testing.T) {
 	eventually(t, 5*time.Second, "the manager has the new name", func() bool {
 		h.devices.mu.Lock()
 		defer h.devices.mu.Unlock()
-		return strings.Contains(string(h.devices.sent), "家里")
+		return strings.Contains(string(h.devices.sent[devicesOwner]), "家里")
 	})
 	token, _ := linkToken(t, h, "laptop")
 	statuses, path, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
@@ -435,7 +435,7 @@ func TestLinkTellsItIsPending(t *testing.T) {
 	eventually(t, 5*time.Second, "the manager has the pending computer", func() bool {
 		h.devices.mu.Lock()
 		defer h.devices.mu.Unlock()
-		return strings.Contains(string(h.devices.sent), `"pending":["laptop"]`)
+		return strings.Contains(string(h.devices.sent[devicesOwner]), `"pending":["laptop"]`)
 	})
 	token, _ := linkToken(t, h, "laptop")
 	statuses, _, _ := runLink(t, linkConfig(h, srv, token), fakeResidentNode(t))
@@ -451,7 +451,7 @@ func TestLinkTellsItIsPending(t *testing.T) {
 	eventually(t, 5*time.Second, "the manager has the other pending computer", func() bool {
 		h.devices.mu.Lock()
 		defer h.devices.mu.Unlock()
-		return strings.Contains(string(h.devices.sent), `"pending":["elsewhere"]`)
+		return strings.Contains(string(h.devices.sent[devicesOwner]), `"pending":["elsewhere"]`)
 	})
 	select {
 	case s := <-statuses:

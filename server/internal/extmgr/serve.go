@@ -315,6 +315,12 @@ func (h *Manager) Request(ctx context.Context, method string, params json.RawMes
 		}
 		out, err := h.hubCall(ctx, c.Method, c.Params)
 		return out, true, err
+	case extwire.MethodSourceExport, extwire.MethodSourceImport, extwire.MethodSourceRelease:
+		if !h.ready(ctx) {
+			return nil, true, errAssistantOffline
+		}
+		out, err := h.sourceCall(method, params)
+		return out, true, err
 	}
 	return nil, false, nil
 }

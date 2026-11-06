@@ -47,7 +47,6 @@ const (
 const (
 	CodeWrongIdentity   = "wrong_identity"   // the handshake names another identity than the token's: the hub hangs up
 	CodeStaleConnection = "stale_connection" // no handshake on this connection yet, or a newer one replaced it
-	CodeNotRouted       = "not_routed"       // a report the hub keeps only the assistant's of yet (another manager's is not taken)
 	CodeUnknownMethod   = "unknown_method"
 	CodeInvalidParams   = "invalid_params"
 )

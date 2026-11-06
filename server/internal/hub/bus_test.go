@@ -30,9 +30,6 @@ var busTestEvents struct {
 }
 
 func init() {
-	for _, m := range []string{"test.event", "test.echo", "test.typed"} {
-		busOpen[m] = true // the test's own: any identity may use them (bus.go busRouted)
-	}
 	handleBusEvent("test.event", func(_ *Hub, c *busConn, params json.RawMessage) {
 		busTestEvents.Lock()
 		busTestEvents.got = append(busTestEvents.got, c.ident.ID+" "+string(params))
@@ -579,19 +576,4 @@ func TestBusFromTheInternet(t *testing.T) {
 	requireCode(t, securityRequest(mux, "GET", bus.Path, "jb_wrong", "", "198.51.100.1:1", true), 401, "")
 	requireCode(t, securityRequest(mux, "GET", bus.Path, "jb_wrong", "", "198.51.100.1:1", true), 429, "rate_limited")
 	requireCode(t, securityRequest(mux, "GET", bus.Path, "jb_wrong", "", "127.0.0.1:1", false), 401, "")
-}
-
-// Every method and event the hub takes from managers is decided: open to all of them (kept by manager, or nothing
-// kept), or single (the assistant's only, until it is kept by manager). A new one has to be put in one of the two.
-func TestBusMethodsAreOpenOrSingle(t *testing.T) {
-	for name := range busMethods {
-		if !strings.HasPrefix(name, "test.") && busOpen[name] == busSingle[name] {
-			t.Errorf("bus method %q: put it in busOpen or busSingle (hub/bus.go)", name)
-		}
-	}
-	for name := range busEvents {
-		if !strings.HasPrefix(name, "test.") && busOpen[name] == busSingle[name] {
-			t.Errorf("bus event %q: put it in busOpen or busSingle (hub/bus.go)", name)
-		}
-	}
 }

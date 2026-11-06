@@ -38,9 +38,12 @@ import (
 
 // extLink is what the hub keeps of the manager's extensions.
 type extLink struct {
-	report atomic.Pointer[extwire.Report]
-	keptMu sync.Mutex
-	kept   map[string]keptAnswer // GET path?query → its last answer
+	report atomic.Pointer[extwire.Report] // the assistant's
+	// reports are the other managers' (manager_state.go).
+	reportsMu sync.Mutex
+	reports   map[string]*extwire.Report
+	keptMu    sync.Mutex
+	kept      map[string]keptAnswer // GET path?query → its last answer
 	// calls are the requests being relayed, by caller, so a revoked device's end (extension_calls.go).
 	calls relayedCalls
 }
@@ -60,16 +63,16 @@ func init() {
 			h.logf("bus: [%s] extensions.report: %v", c.ident.ID, err)
 			return
 		}
-		old := h.ext.report.Swap(&r)
-		if old == nil || !slices.Equal(old.Features, r.Features) || !machineExtrasEqual(old.Machines, r.Machines) {
+		// Each manager's report is its own; what the hub shows is all of them merged (manager_state.go).
+		from := c.managerID()
+		before := h.extReport()
+		old := h.keepExtReport(from, &r)
+		after := h.extReport()
+		if old == nil || !slices.Equal(before.Features, after.Features) || !machineExtrasEqual(before.Machines, after.Machines) {
 			h.broadcastMachines()
 		}
-		var oldLooks []extwire.LookPackage
-		if old != nil {
-			oldLooks = old.Looks
-		}
-		h.looksReported(oldLooks, r.Looks) // the extensions' looks (looks.go)
-		if h.store != nil {
+		h.looksReported(before.Looks, after.Looks)               // the extensions' looks (looks.go)
+		if h.store != nil && from == assistantwire.AssistantID { // kept across a restart: the assistant's
 			if err := h.store.PutSetting(context.Background(), extReportKey, r); err != nil {
 				h.logf("extensions: keep the report: %v", err)
 			}
@@ -111,14 +114,6 @@ func machineExtrasEqual(a, b map[string]extwire.MachineExtras) bool {
 		}
 	}
 	return true
-}
-
-// extReport is the manager's last report (empty before the first).
-func (h *Hub) extReport() extwire.Report {
-	if r := h.ext.report.Load(); r != nil {
-		return *r
-	}
-	return extwire.Report{}
 }
 
 // features are the hub's features with those of the extensions serving part of the API.
@@ -240,13 +235,21 @@ func (h *Hub) extensionAPIs(next http.Handler, mux *http.ServeMux) http.Handler 
 			next.ServeHTTP(w, r)
 			return
 		}
+		// The manager whose extension serves the prefix answers, unless the request names another.
+		relay := func(w http.ResponseWriter, r *http.Request) {
+			if id := h.extPrefixOwner(seg); id != "" && namedManager(r) == "" {
+				h.relayTo(w, r, false, id)
+				return
+			}
+			h.relayToManager(w, r, false)
+		}
 		for _, rc := range api.Receipts {
 			if rc.Matches(r.Method, "/"+under) {
-				h.withReplyReceipt(rc.Kind, func(w http.ResponseWriter, r *http.Request) { h.relayToManager(w, r, false) })(w, r)
+				h.withReplyReceipt(rc.Kind, relay)(w, r)
 				return
 			}
 		}
-		h.relayToManager(w, r, false)
+		relay(w, r)
 	})
 }
 
