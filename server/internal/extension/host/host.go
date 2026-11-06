@@ -6,6 +6,7 @@ package host
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/identity"
@@ -757,33 +759,40 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	cmd.Env = identity.Environment(base, env...)
 	cmd.SysProcAttr = osproc.GroupAttr() // so stopping it takes its children too
 	ch := &child{cmd: cmd, exited: make(chan struct{})}
+	// The log pipe is ours, not cmd.StderrPipe: Wait closes those once the program exits, dropping whatever is
+	// still in them, which is usually why it died. Ours is read to EOF, which comes when the program and its
+	// children have all closed their end.
+	logs, logsW, err := os.Pipe()
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd.Stderr = logsW
 	var out io.Reader
 	if p.spec.RPC {
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
+			logs.Close()
+			logsW.Close()
 			return nil, nil, err
 		}
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return nil, nil, err
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
+			logs.Close()
+			logsW.Close()
+			stdin.Close()
 			return nil, nil, err
 		}
 		ch.stdin, out = stdin, stdout
-		go p.logLines(stderr)
 	} else {
-		logs, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, nil, err
-		}
-		cmd.Stderr = cmd.Stdout
-		go p.logLines(logs)
+		cmd.Stdout = logsW
 	}
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	logsW.Close() // the program holds its own copy now; with ours open the reader never sees EOF
+	if err != nil {
+		logs.Close()
 		return nil, nil, fmt.Errorf("%s 的程序起不来：%v", p.spec.Name, err)
 	}
+	go p.logLines(logs)
 	go func() {
 		ch.waitErr = cmd.Wait()
 		close(ch.exited)
@@ -832,22 +841,51 @@ func (p *Proc) end(ch *child, peer *rpc.Peer) {
 	}
 }
 
-// logLines keeps what the program writes (its own log), a line at a time, each cut to LogLineMost.
-func (p *Proc) logLines(r io.Reader) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64<<10), 1<<20)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
+// logLines keeps what the program writes (its own log), a line at a time, each cut to LogLineMost. It owns the read
+// end and is its only reader, so it reads to EOF whatever comes: the rest of a line too long to keep is dropped, not
+// left in the pipe for the program to block on.
+func (p *Proc) logLines(r io.ReadCloser) {
+	defer r.Close()
+	keep := LogLineMost + 256 // a little past the cut, so trailing spaces do not count as a longer line
+	br := bufio.NewReaderSize(r, 64<<10)
+	var line []byte
+	dropped := false
+	for {
+		chunk, err := br.ReadSlice('\n')
+		if len(line) == 0 {
+			chunk = bytes.TrimLeftFunc(chunk, unicode.IsSpace)
+		}
+		if room := keep - len(line); len(chunk) > room {
+			chunk, dropped = chunk[:room], true
+		}
+		line = append(line, chunk...)
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue // the same line goes on
+		}
+		p.logLine(line, dropped)
+		line, dropped = line[:0], false
+		if err == nil {
 			continue
 		}
-		if len(line) > LogLineMost {
-			line = line[:LogLineMost] + "…"
+		if !errors.Is(err, io.EOF) && !errors.Is(err, os.ErrClosed) {
+			p.note("reading its output: %v", err)
 		}
-		p.spec.Logf("plugin %s: %s", p.spec.ID, line)
-		if p.spec.Observe != nil {
-			p.spec.Observe.Log(LogProgram, line)
-		}
+		return
+	}
+}
+
+// logLine passes on one line of the program's log; dropped means some of it was not kept.
+func (p *Proc) logLine(raw []byte, dropped bool) {
+	line := strings.TrimSpace(string(raw))
+	if line == "" {
+		return
+	}
+	if dropped || len(line) > LogLineMost {
+		line = line[:min(len(line), LogLineMost)] + "…"
+	}
+	p.spec.Logf("plugin %s: %s", p.spec.ID, line)
+	if p.spec.Observe != nil {
+		p.spec.Observe.Log(LogProgram, line)
 	}
 }
 

@@ -340,7 +340,7 @@ func (p *Proxy) handler(fixed string) http.Handler {
 			p.tunnel(w, r, dial)
 			return
 		}
-		p.forward(w, r, dial)
+		p.forward(w, r, ext, dial)
 	})
 }
 
@@ -473,6 +473,17 @@ type bufferedConn struct {
 
 func (b *bufferedConn) Read(p []byte) (int, error) { return b.r.Read(p) }
 
+// CloseWrite half-closes the connection underneath, so a tunnel through the hub's proxy keeps a half-close too.
+func (b *bufferedConn) CloseWrite() error { return closeWrite(b.Conn) }
+
+// closeWrite shuts the write side of c, when c can (a TCP or Unix connection).
+func closeWrite(c net.Conn) error {
+	if cw, ok := c.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return errors.ErrUnsupported
+}
+
 // tunnel is CONNECT (and an upgrade on plain HTTP: a WebSocket): the bytes both ways once the far end is reached.
 func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, dial func() (net.Conn, error)) {
 	far, err := dial()
@@ -507,15 +518,21 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, dial func() (net.
 		far.Close()
 		return
 	}
+	// The extension ending its side (EOF) only half-closes the far end: the reply still on its way comes back, as
+	// the hub's other relays keep a half-close. Both close once the far end is done, or on an error either way.
 	var once sync.Once
 	done := func() { near.Close(); far.Close() }
 	go func() {
 		if buf != nil && buf.Reader.Buffered() > 0 {
 			b, _ := buf.Reader.Peek(buf.Reader.Buffered())
-			_, _ = far.Write(b)
+			if _, err := far.Write(b); err != nil {
+				once.Do(done)
+				return
+			}
 		}
-		_, _ = io.Copy(far, near)
-		once.Do(done)
+		if _, err := io.Copy(far, near); err != nil || closeWrite(far) != nil {
+			once.Do(done)
+		}
 	}()
 	_, _ = io.Copy(near, far)
 	once.Do(done)
@@ -525,8 +542,8 @@ func (p *Proxy) tunnel(w http.ResponseWriter, r *http.Request, dial func() (net.
 var hop = []string{"Connection", "Proxy-Connection", "Keep-Alive", "Proxy-Authorization", "Proxy-Authenticate", "Te",
 	"Trailer", "Transfer-Encoding", "Upgrade"}
 
-// forward is a plain http:// request: sent on over a connection dial makes, the answer back.
-func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, dial func() (net.Conn, error)) {
+// forward is a plain http:// request of extension ext: sent on over a connection dial makes, the answer back.
+func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, ext string, dial func() (net.Conn, error)) {
 	tr := &http.Transport{
 		Proxy:                 nil,
 		DialContext:           func(context.Context, string, string) (net.Conn, error) { return dial() },
@@ -557,5 +574,30 @@ func (p *Proxy) forward(w http.ResponseWriter, r *http.Request, dial func() (net
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	_, _ = io.Copy(w, resp.Body)
+	body := &readErr{r: resp.Body}
+	if _, err := io.Copy(w, body); err != nil {
+		// Returning normally would let net/http end a chunked answer cleanly, handing the extension a
+		// truncated body as a complete one; aborting drops the connection so its client sees the cut.
+		// Only a failed read is an upstream cut-off; a failed write or a canceled request means the
+		// extension's own client gave up, which is not worth a log line.
+		if body.err != nil && r.Context().Err() == nil {
+			p.logf("extension %s: %s: answer cut off: %v", ext, r.URL.Host, body.err)
+		}
+		panic(http.ErrAbortHandler)
+	}
+}
+
+// readErr remembers the first read error other than io.EOF, so a copy failure can be told apart
+// as a read (upstream) or a write (client) failure.
+type readErr struct {
+	r   io.Reader
+	err error
+}
+
+func (e *readErr) Read(b []byte) (int, error) {
+	n, err := e.r.Read(b)
+	if err != nil && err != io.EOF && e.err == nil {
+		e.err = err
+	}
+	return n, err
 }

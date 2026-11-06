@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -37,6 +38,11 @@ func TestMain(m *testing.M) {
 		_ = peer.Serve(context.Background(), os.Stdin)
 	case "quit": // a program that ends by itself as soon as it starts
 		os.Exit(3)
+	case "lastwords": // a program that says why it is dying right before it exits, like a panic
+		os.Stderr.WriteString("first\n")
+		time.Sleep(100 * time.Millisecond)
+		os.Stderr.WriteString("last words\n")
+		os.Exit(1)
 	case "http":
 		ln, err := net.Listen("unix", os.Getenv("PERSONA_PLUGIN_SOCKET"))
 		if err != nil {
@@ -335,6 +341,47 @@ func TestAProgramThatQuitsIsStartedAgainAndStops(t *testing.T) {
 	}
 }
 
+// What a program writes right before it exits (a panic, the reason it dies) reaches the log. The pipes came from
+// cmd.StderrPipe/StdoutPipe, which Wait closes once the program exits, so lines still in the pipe were dropped.
+func TestLogsKeepWhatAProgramWritesBeforeItExits(t *testing.T) {
+	for _, rpc := range []bool{true, false} {
+		dir, err := os.MkdirTemp("", "hst")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(dir)
+		var mu sync.Mutex
+		var lines []string
+		got := make(chan struct{})
+		s := spec(t, "lastwords")
+		if !rpc {
+			s.RPC, s.HTTP, s.Socket = false, true, filepath.Join(dir, "demo.sock")
+		}
+		s.Startup = true
+		s.Logf = func(format string, args ...any) {
+			line := fmt.Sprintf(format, args...)
+			if strings.HasSuffix(line, ": first") {
+				time.Sleep(500 * time.Millisecond) // a slow log: the program has exited and been waited for by now
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			lines = append(lines, line)
+			if strings.HasSuffix(line, ": last words") && !slices.ContainsFunc(lines[:len(lines)-1], func(l string) bool { return strings.HasSuffix(l, ": last words") }) {
+				close(got)
+			}
+		}
+		p := Start(context.Background(), s)
+		select {
+		case <-got:
+		case <-time.After(5 * time.Second):
+			mu.Lock()
+			t.Errorf("rpc=%v: the program's last line was not logged: %q", rpc, lines)
+			mu.Unlock()
+		}
+		p.Stop()
+	}
+}
+
 func TestElsewhere(t *testing.T) {
 	dir, err := os.MkdirTemp("", "hst")
 	if err != nil {
@@ -455,5 +502,53 @@ func TestObserver(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("the host's line about the exit: %q", logs)
+	}
+}
+
+// A line longer than any buffer is cut and the rest of it dropped; the host keeps reading, so the program never
+// blocks writing its log.
+func TestLogLinesKeepsReadingPastALongLine(t *testing.T) {
+	o := &observed{}
+	var mu sync.Mutex
+	var logged []string
+	p := &Proc{spec: Spec{ID: "demo", Observe: o, Logf: func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		logged = append(logged, fmt.Sprintf(format, args...))
+	}}}
+	pr, pw := io.Pipe()
+	read := make(chan struct{})
+	go func() {
+		p.logLines(pr)
+		close(read)
+	}()
+	wrote := make(chan error, 1)
+	go func() {
+		_, err := pw.Write([]byte(strings.Repeat("x", 2<<20)))
+		if err == nil {
+			_, err = pw.Write([]byte("\nafter\n"))
+		}
+		_ = pw.Close()
+		wrote <- err
+	}()
+	select {
+	case err := <-wrote:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		_ = pr.Close()
+		t.Fatal("the program is stuck writing its log")
+	}
+	<-read
+	_, _, logs := o.snapshot()
+	want := []string{LogProgram + ": " + strings.Repeat("x", LogLineMost) + "…", LogProgram + ": after"}
+	if !slices.Equal(logs, want) {
+		t.Fatalf("observed %d lines %.80q", len(logs), logs)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(logged) != 2 || logged[1] != "plugin demo: after" {
+		t.Fatalf("logged %.80q", logged)
 	}
 }

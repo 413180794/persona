@@ -3,6 +3,7 @@ package egress
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newProxy is a proxy whose open internet is the test server at target: every name resolves to 192.0.2.1, which
@@ -432,5 +434,144 @@ func TestRuleLocal(t *testing.T) {
 		if got := (Rule{Hosts: c.hosts}).Local(); got != c.ok {
 			t.Errorf("%v: %v", c.hosts, got)
 		}
+	}
+}
+
+// TestProxyTunnelHalfClose: an extension that shuts its write side of a CONNECT tunnel (nc -N, the sandbox's relay
+// passing on a half-close) still gets the reply the far end sends after reading to EOF.
+func TestProxyTunnelHalfClose(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer c.Close()
+				if b, _ := io.ReadAll(c); string(b) == "ping" {
+					_, _ = io.WriteString(c, "reply")
+				}
+			}()
+		}
+	}()
+	p := newProxy(t, ln.Addr().String(), nil)
+	purl := p.Register("notes", Rule{Hosts: []string{"api.example.com"}})
+	pu, _ := url.Parse(purl)
+	dir, err := os.MkdirTemp("/tmp", "egress")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "proxy.sock")
+	if err := p.ListenUnix("notes", sock); err != nil {
+		t.Fatal(err)
+	}
+	auth := ""
+	if pass, ok := pu.User.Password(); ok {
+		auth = "Proxy-Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte(pu.User.Username()+":"+pass)) + "\r\n"
+	}
+	for _, c := range []struct{ name, network, addr, auth string }{
+		{"loopback", "tcp", pu.Host, auth},
+		{"unix socket", "unix", sock, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			conn, err := net.Dial(c.network, c.addr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+			fmt.Fprintf(conn, "CONNECT api.example.com:443 HTTP/1.1\r\nHost: api.example.com:443\r\n%s\r\n", c.auth)
+			br := bufio.NewReader(conn)
+			resp, err := http.ReadResponse(br, &http.Request{Method: http.MethodConnect})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != 200 {
+				t.Fatalf("CONNECT: %d", resp.StatusCode)
+			}
+			if _, err := io.WriteString(conn, "ping"); err != nil {
+				t.Fatal(err)
+			}
+			if err := conn.(interface{ CloseWrite() error }).CloseWrite(); err != nil {
+				t.Fatal(err)
+			}
+			b, err := io.ReadAll(br)
+			if err != nil || string(b) != "reply" {
+				t.Fatalf("after a half-close: %q %v", b, err)
+			}
+		})
+	}
+}
+
+func TestProxyForwardCutOff(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// More than the proxy's own write buffer, so its head and part of the body reach the client first.
+		_, _ = io.WriteString(w, "{\"half\":\""+strings.Repeat("x", 16<<10))
+		w.(http.Flusher).Flush() // chunked, the head and the first chunk are out
+		conn, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		conn.Close() // the far server goes away mid-body
+	}))
+	defer srv.Close()
+	p := newProxy(t, strings.TrimPrefix(srv.URL, "http://"), nil)
+	logged := make(chan string, 4)
+	p.Logf = func(format string, args ...any) { logged <- fmt.Sprintf(format, args...) }
+	purl := p.Register("notes", Rule{Hosts: []string{"api.example.com"}})
+
+	resp, err := client(purl).Get("http://api.example.com/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err == nil {
+		t.Fatalf("a body cut off upstream reads as complete: %d bytes", len(b))
+	}
+	select {
+	case m := <-logged:
+		if !strings.Contains(m, "notes") || !strings.Contains(m, "cut off") {
+			t.Fatalf("log %q", m)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the cut off answer is not logged")
+	}
+}
+
+func TestProxyForwardClientGivesUp(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, strings.Repeat("x", 16<<10))
+		w.(http.Flusher).Flush()
+		select { // keep the body open until the proxy drops the request
+		case <-r.Context().Done():
+		case <-time.After(10 * time.Second):
+		}
+	}))
+	defer srv.Close()
+	p := newProxy(t, strings.TrimPrefix(srv.URL, "http://"), nil)
+	logged := make(chan string, 4)
+	p.Logf = func(format string, args ...any) { logged <- fmt.Sprintf(format, args...) }
+	purl := p.Register("notes", Rule{Hosts: []string{"api.example.com"}})
+
+	resp, err := client(purl).Get("http://api.example.com/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resp.Body.Read(make([]byte, 1024)); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close() // the extension's client gives up mid-download
+	select {
+	case m := <-logged:
+		t.Fatalf("a client giving up is logged as an upstream cut-off: %q", m)
+	case <-time.After(time.Second):
 	}
 }
