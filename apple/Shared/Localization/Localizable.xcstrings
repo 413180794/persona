@@ -966,6 +966,28 @@
         }
       }
     },
+    "%@ · 机器上已有": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · already on the machine"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · マシンにあるもの"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 机器上已有"
+          }
+        }
+      }
+    },
     "%@ · 读入了同目录的 %lld 个文件": {
       "localizations": {
         "zh-Hans": {
@@ -12964,6 +12986,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "タブを閉じられませんでした"
+          }
+        }
+      }
+    },
+    "npm：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "npm: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "npm：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "npm：%@"
           }
         }
       }
@@ -25338,6 +25382,28 @@
         }
       }
     },
+    "出错：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラー：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出错：%@"
+          }
+        }
+      }
+    },
     "函数原文": {
       "localizations": {
         "en": {
@@ -33668,6 +33734,28 @@
         }
       }
     },
+    "启用后才能登录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn it on to sign in."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有効にするとログインできます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用后才能登录。"
+          }
+        }
+      }
+    },
     "告诉 %@ 该怎么做": {
       "localizations": {
         "en": {
@@ -33972,6 +34060,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "命令"
+          }
+        }
+      }
+    },
+    "命令行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command line"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドライン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令行"
           }
         }
       }
@@ -36437,6 +36547,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "在新设备的 Persona 配对页扫这个码。Mac 和 Android 也可以拷贝配对链接后粘贴。"
+          }
+        }
+      }
+    },
+    "在本机打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open on This Device"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスで開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在本机打开"
           }
         }
       }
@@ -39032,6 +39164,50 @@
         }
       }
     },
+    "安装命令行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install command-line tools"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドラインツールをインストール"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装命令行"
+          }
+        }
+      }
+    },
+    "安装命令行程序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install command-line programs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドラインプログラムをインストール"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装命令行程序"
+          }
+        }
+      }
+    },
     "安装失败": {
       "localizations": {
         "en": {
@@ -39072,6 +39248,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "安装时你同意过这些；新版本要得更多时，升级前会再问一次。"
+          }
+        }
+      }
+    },
+    "安装更多命令行程序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install more command-line programs"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "さらにコマンドラインプログラムをインストール"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装更多命令行程序"
           }
         }
       }
@@ -44609,6 +44807,28 @@
         }
       }
     },
+    "已登录：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed in: %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン済み：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已登录：%@"
+          }
+        }
+      }
+    },
     "已看": {
       "localizations": {
         "en": {
@@ -45013,6 +45233,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@に自動アップデートしました（以前は%2$@）"
+          }
+        }
+      }
+    },
+    "已装好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已装好"
           }
         }
       }
@@ -51301,6 +51543,28 @@
         }
       }
     },
+    "打开登录页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Sign-In Page"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインページを開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开登录页面"
+          }
+        }
+      }
+    },
     "打开的数据，Claude 可以通过 phone_* 工具读取；新建日程、提醒等写操作会先在手机上问你。打开时会请求系统权限，以前拒绝过的会跳到系统设置。Persona 在前台（或刚切到后台）时，hub 才能调到手机。iOS 不开放短信、备忘录、第三方 App 的数据。": {
       "localizations": {
         "en": {
@@ -51697,6 +51961,28 @@
         }
       }
     },
+    "扩展启动后才知道": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Known once the extension starts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能の起動後にわかります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展启动后才知道"
+          }
+        }
+      }
+    },
     "扩展在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。": {
       "localizations": {
         "en": {
@@ -51737,6 +52023,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。"
+          }
+        }
+      }
+    },
+    "扩展存的登录凭据会删掉，要用时再登录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sign-in the extension saved is deleted; sign in again when you need it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能が保存したログイン情報は削除されます。必要なときにもう一度ログインしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展存的登录凭据会删掉，要用时再登录。"
           }
         }
       }
@@ -75521,6 +75829,28 @@
         }
       }
     },
+    "用这台机器上的": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses the one on this machine"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このマシンにあるものを使用"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用这台机器上的"
+          }
+        }
+      }
+    },
     "用这张": {
       "localizations": {
         "en": {
@@ -76137,6 +76467,28 @@
         }
       }
     },
+    "登录凭据只存在 hub 上这个扩展自己的目录里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The sign-in is kept only in this extension's own folder on the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン情報は hub 上のこの拡張機能専用のフォルダにだけ保存されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录凭据只存在 hub 上这个扩展自己的目录里。"
+          }
+        }
+      }
+    },
     "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。": {
       "localizations": {
         "en": {
@@ -76155,6 +76507,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。"
+          }
+        }
+      }
+    },
+    "登录已过期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign-in expired"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインの有効期限切れ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录已过期"
           }
         }
       }
@@ -79527,6 +79901,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "等你在 %@ 上授权…"
+          }
+        }
+      }
+    },
+    "等你在打开的页面上确认…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for you to confirm on the page you opened…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開いたページでの確認を待っています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你在打开的页面上确认…"
           }
         }
       }
@@ -83362,6 +83758,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "装不了"
+          }
+        }
+      }
+    },
+    "装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed in the extension's own folder, no administrator rights needed; a usable copy already on the machine is used as is."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能専用のフォルダにインストールされ、管理者権限は不要です。マシンに使えるものがあればそのまま使います。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用。"
           }
         }
       }
@@ -90659,6 +91077,28 @@
         }
       }
     },
+    "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This version of the app can't show this step. Update the app, then tap Start Over."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このバージョンのアプリではこのステップを表示できません。アプリを更新してから「最初からやり直す」をタップしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。"
+          }
+        }
+      }
+    },
     "这一版上次装完起不来，已经回滚过；自动更新不会再装它。": {
       "localizations": {
         "en": {
@@ -94851,6 +95291,28 @@
         }
       }
     },
+    "退出%@？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign out of %@?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ からログアウトしますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出%@？"
+          }
+        }
+      }
+    },
     "退出「%@」上的 Persona？": {
       "localizations": {
         "en": {
@@ -96894,6 +97356,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新生成 Persona 的文件"
+          }
+        }
+      }
+    },
+    "重新登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign In Again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再ログイン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新登录"
           }
         }
       }

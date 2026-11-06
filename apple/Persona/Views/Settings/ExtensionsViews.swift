@@ -87,12 +87,12 @@ private struct ExtensionRowLabel: View {
 
     var body: some View {
         if AppStyle.current.usesBeautifulUI {
-            SettingsRow(title: plugin.name, symbol: Theme.Icon.plugins, tint: ExtensionStateDot.tone(plugin), value: ExtensionText.summary(plugin))
+            SettingsRow(title: plugin.name, symbol: Theme.Icon.plugins, tint: ExtensionStateDot.tone(plugin), value: ExtensionText.summary(plugin, auth: ExtensionAuthStore.shared.auth(plugin.id, else: plugin.auth)))
         } else {
             LabeledContent {
                 HStack(spacing: Theme.Space.sm) {
                     ExtensionStateDot(plugin: plugin)
-                    Text(ExtensionText.summary(plugin)).lineLimit(1)
+                    Text(ExtensionText.summary(plugin, auth: ExtensionAuthStore.shared.auth(plugin.id, else: plugin.auth))).lineLimit(1)
                 }
             } label: {
                 Label {
@@ -151,7 +151,19 @@ struct ExtensionDetailView: View {
     @State private var connectorInbox = ExtensionConnectorsModel()
     @Environment(\.scenePhase) private var phase
 
-    init(id: String) { _page = State(initialValue: ExtensionModel(id: id)) }
+    @State private var signIn: ExtensionSignInModel
+    private var authStore: ExtensionAuthStore { .shared }
+
+    init(id: String) {
+        _page = State(initialValue: ExtensionModel(id: id))
+        _signIn = State(initialValue: ExtensionSignInModel(id: id))
+    }
+
+    /// Its sign-in, with a hub that has them (#4507): the latest of the page's and the pushes'.
+    private var auth: ExtensionAuth? {
+        guard ExtensionAuthStore.available(AppModel.shared.hubFeatures), let d = page.detail else { return nil }
+        return authStore.auth(d.plugin.id, else: d.plugin.auth)
+    }
 
     private struct ConnectorSectionsKey: Equatable {
         var ids: [String]
@@ -169,6 +181,9 @@ struct ExtensionDetailView: View {
         SettingsForm {
             header
             if let d = page.detail {
+                if let auth {
+                    ExtensionAuthSection(auth: auth, enabled: d.plugin.enabled ?? true, model: signIn)
+                }
                 if d.readOnly {
                     Section {
                         Text("这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。").font(Theme.Font.label).foregroundStyle(.secondary)
@@ -237,6 +252,16 @@ struct ExtensionDetailView: View {
             await declarations.refreshWhileActive(api: AppModel.shared.api)
         }
         .refreshable { await page.load() }
+        // What the page read is the hub's latest word on the sign-in too; an install that ended waiting for a sign-in
+        // opens it here (`next: "auth"`).
+        .onChange(of: page.detail?.plugin.auth, initial: true) { _, a in
+            if let a, let id = page.detail?.plugin.id { authStore.received(id, a) }
+        }
+        .task(id: auth != nil) {
+            guard let auth, authStore.openSignIn == page.id else { return }
+            authStore.openSignIn = nil
+            if !auth.isSignedIn, !signIn.signingIn, page.detail?.plugin.enabled ?? true { await signIn.start() }
+        }
     }
 
     // MARK: sections
@@ -320,9 +345,11 @@ struct ExtensionDetailView: View {
 
     /// The pages it draws (docs/extensions.md「声明式 UI」), a row each.
     @ViewBuilder private func pages(_ d: HubExtensionDetail) -> some View {
-        if !d.ui.isEmpty {
+        // The extension's own sign-in page is for apps without the 登录 section.
+        let ui = auth?.page.map { page in d.ui.filter { $0.id != page } } ?? d.ui
+        if !ui.isEmpty {
             Section {
-                ForEach(d.ui) { place in
+                ForEach(ui) { place in
                     NavigationLink(value: SettingsPage.pluginPage(plugin: d.plugin.id, ui: place.id, title: place.title)) {
                         Label { Text(place.title).lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginPage) }
                     }
@@ -476,7 +503,7 @@ struct ExtensionDetailView: View {
             Section {
                 ForEach(d.permissions) { p in
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(p.title).font(Theme.Font.body)
+                        Text(ExtensionText.permissionTitle(p)).font(Theme.Font.body)
                         if let detail = p.detail, !detail.isEmpty {
                             Text(detail).font(Theme.Font.label).foregroundStyle(.secondary)
                         }
@@ -500,14 +527,26 @@ struct ExtensionDetailView: View {
                 LabeledContent("安装自") { Text(o).lineLimit(2).truncationMode(.middle).textSelection(.enabled) }
             }
             if let p = d.publisher, !p.isEmpty { LabeledContent("发布者", value: p) }
+
             if let h = d.homepage, let url = URL(string: h) {
                 Link(destination: url) { Label("主页", systemImage: Theme.Icon.openExternal).lineLimit(1) }
             }
-            ForEach(d.plugin.warnings ?? [], id: \.self) { w in
+            ForEach(ExtensionAuthText.warnings(d.plugin.warnings, shown: auth), id: \.self) { w in
                 Label { Text(w).font(Theme.Font.label) } icon: { Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution) }
             }
         } header: {
             SettingsHeading(String(localized: "关于"))
+        }
+        // The command-line programs this version runs with (#4507), the machine's own marked.
+        if let tools = d.plugin.tools, !tools.isEmpty {
+            Section {
+                ForEach(tools) { t in
+                    LabeledContent(ExtensionAuthText.toolName(t), value: ExtensionAuthText.toolVersion(t))
+                        .accessibilityIdentifier("plugin-tool-\(t.name)")
+                }
+            } header: {
+                SettingsHeading(String(localized: "命令行"))
+            }
         }
     }
 }

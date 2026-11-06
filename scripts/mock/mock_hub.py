@@ -13368,6 +13368,169 @@ if os.environ.get("MOCK_EXTENSION_NOTIFICATIONS") == "1" and EXTENSIONS_API:
         return _plugins_route_without_notifications(handler, p, body)
 
 
+# ---------- MOCK_EXTENSION_AUTH: CLI tools and sign-in (docs/extensions.md「命令行程序（tools）」「登录（auth）」, #4507) ----------
+# MOCK_EXTENSION_AUTH=1 (with MOCK_PLUGINS and MOCK_EXTENSION_OPS): the hub says extension_auth, and the first market lists
+# 「Example 查询」, which installs two command-line programs (node: the machine's own; example-cli: downloaded in four
+# parts in the operation's tools step, between consent and install) and signs in. The install ends with next "auth";
+# signing in is a QR step (=1, or =device: a device code with its link) asked again until the third poll
+# (MOCK_EXTENSION_AUTH_POLLS) says done; logout signs out. =installed / =device-installed: installed already, not signed
+# in. Every change is pushed as extension_auth.
+EXT_AUTH = os.environ.get("MOCK_EXTENSION_AUTH", "") if EXT_OPS and EXTENSIONS_API else ""
+if EXT_AUTH:
+    _AUTH_ID = "example-lookup"
+    _AUTH_POLLS = int(os.environ.get("MOCK_EXTENSION_AUTH_POLLS", "3"))
+    _AUTH_TOOLS = [
+        {"name": "node", "title": "Node.js", "version": "22.23.4", "check": {"args": ["--version"], "min_version": "18.0.0"},
+         "archive": {"linux-amd64": {"url": "https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.gz", "sha256": "0" * 64,
+                                     "path": "node-v22.23.4-linux-x64/bin/node"}}},
+        {"name": "example-cli", "version": "2.3.4", "requires": ["node"], "check": {"args": ["--version"], "min_version": "2.0.0"},
+         "npm": {"package": "@example/example-cli", "version": "2.3.4", "registry": "https://registry.example.com", "integrity": "sha512-AAAA",
+                 "bin": "example-cli"}}]
+    _AUTH_SPEC = {"title": "Example 登录", "description": "用 Example 扫码确认身份后才能查。", "page": "login"}
+    AUTH_STATE = dict(_AUTH_SPEC, state="signed_out")
+    _AUTH_STEP = {"polls": 0}
+    _AUTH_ITEM = {"market": _MARKET_A, "id": _AUTH_ID, "name": "Example 查询", "version": "1.0.0",
+                  "description": "用 example-cli 查公司内部的项目和人，助手也能用。", "publisher": "example", "tags": ["命令行", "登录"],
+                  "contributes": {"assistant": ["tools"]},
+                  "permissions": [_RUNS, _NET("api.example.com"),
+                                  {"key": "tools", "title": "安装命令行程序",
+                                   "detail": "Node.js（node） 22.23.4（nodejs.org）、example-cli 2.3.4（npm：registry.example.com）。装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用"}],
+                  "tools": _AUTH_TOOLS, "auth": _AUTH_SPEC}
+    CATALOG.append(_AUTH_ITEM)
+    _PLUGIN_VIEW += ["auth", "tools"]
+
+    def _auth_push():
+        AUTH_STATE["checked_at"] = _ext_now()
+        pl = PLUGINS.get(_AUTH_ID)
+        if pl:
+            pl["auth"] = AUTH_STATE
+            warn = "还没登录（%s）：在扩展详情里登录" % AUTH_STATE["title"] if AUTH_STATE["state"] in ("signed_out", "expired") else None
+            pl["warnings"] = [warn] if warn else None
+        msg = {"type": "extension_auth", "extension": _AUTH_ID, "auth": dict(AUTH_STATE)}
+        for send, _ in list(LIVE):
+            try: send(msg)
+            except Exception: pass
+
+    def _auth_installed(pl):
+        pl.update(auth=AUTH_STATE, tools=[{"name": "node", "title": "Node.js", "version": "22.23.4", "reused": True},
+                                          {"name": "example-cli", "version": "2.3.4"}],
+                  ui=[{"id": "login", "title": "登录", "placement": "plugin_page"}])
+        _auth_push()
+
+    def _auth_qr(text):
+        """A made-up QR code (finder squares in three corners, the rest from text), as rows of 0 / 1."""
+        n, seed = 25, int(hashlib.sha1(text.encode()).hexdigest(), 16)
+        rows = []
+        for y in range(n):
+            row = ""
+            for x in range(n):
+                finder = next(((x - ox, y - oy) for ox, oy in ((0, 0), (n - 7, 0), (0, n - 7)) if 0 <= x - ox < 7 and 0 <= y - oy < 7), None)
+                if finder:
+                    fx, fy = finder
+                    row += "1" if fx in (0, 6) or fy in (0, 6) or (2 <= fx <= 4 and 2 <= fy <= 4) else "0"
+                else:
+                    row += "1" if (seed >> ((x * 7 + y * 13) % 150)) & 1 else "0"
+            rows.append(row)
+        return {"size": n, "rows": rows}
+
+    def _auth_prompt():
+        if EXT_AUTH.startswith("device"):
+            url = "https://login.example.com/device"
+            return {"step": "device", "kind": "device_code", "url": url, "user_code": "WDJB-MJHT", "interval": 1,
+                    "hint": "在打开的页面上输入验证码，或用另一台手机扫码。", "qr": _auth_qr(url)}
+        url = "https://login.example.com/qr?code=4f2a"
+        return {"step": "scan", "kind": "qr", "url": url, "interval": 1, "hint": "用 Example App 扫码确认。", "qr": _auth_qr(url)}
+
+    _ext_op_new_without_tools = _ext_op_new
+
+    def _ext_op_new(kind, ext, name, version=None, frm=None, market=None):
+        op = _ext_op_new_without_tools(kind, ext, name, version=version, frm=frm, market=market)
+        if kind != "uninstall" and ext == _AUTH_ID:
+            with _EXT_OPS_LOCK:
+                i = next(i for i, st in enumerate(op["steps"]) if st["id"] == "consent")
+                op["steps"].insert(i + 1, {"id": "tools", "state": "pending"})
+        return op
+
+    _ext_install_run_without_tools = _ext_install_run
+
+    def _ext_install_run(op, c):
+        if c["id"] != _AUTH_ID: return _ext_install_run_without_tools(op, c)
+        with _EXT_OPS_LOCK:
+            op.update(state="running"); op.pop("preview_id", None)
+            EXT_OP_JOBS[op["id"]]["consented"] = "d-" + c["id"]
+        _ext_step(op, "consent", "done")
+        tools = [{"name": "node", "state": "running"}, {"name": "example-cli", "state": "pending"}]
+        _ext_step(op, "tools", "running", tools=copy.deepcopy(tools)); time.sleep(EXT_OPS_STEP)
+        tools[0].update(state="done", reused=True); tools[1]["state"] = "running"
+        total = 30 * 1024 * 1024
+        for part in range(1, 5):
+            _ext_step(op, "tools", "running", tools=copy.deepcopy(tools), bytes=total * part // 4, total=total); time.sleep(EXT_OPS_STEP)
+        tools[1]["state"] = "done"
+        with _EXT_OPS_LOCK:
+            for st in op["steps"]:
+                if st["id"] == "tools": st.pop("bytes", None); st.pop("total", None)
+        _ext_step(op, "tools", "done", tools=copy.deepcopy(tools))
+        for sid in ("install", "start"):
+            _ext_step(op, sid, "running"); time.sleep(EXT_OPS_STEP)
+            if sid == "install": _auth_installed(_ext_install(c))
+            _ext_step(op, sid, "done")
+        _ext_step(op, "nodes", "skipped")
+        with _EXT_OPS_LOCK:
+            op.update(state="succeeded", step=None, updated_at=_ext_now(), ended_at=_ext_now())
+            if AUTH_STATE["state"] != "signed_in": op["next"] = "auth"
+        _ext_op_push(op)
+
+    _ext_make_preview_without_tools = _ext_make_preview
+
+    def _ext_make_preview(c):
+        pv = _ext_make_preview_without_tools(c)
+        if c.get("tools"): pv["manifest"]["tools"] = c["tools"]
+        if c.get("auth"): pv["manifest"]["auth"] = c["auth"]
+        return pv
+
+    if EXT_AUTH.endswith("installed"):
+        _auth_installed(_ext_install(_AUTH_ITEM))
+
+    _features_without_auth = features
+
+    def features():
+        # MOCK_EXTENSION_AUTH_OLD=1: a hub from before extension_auth (no 登录 section; its warning and own page instead).
+        return _features_without_auth() + ([] if os.environ.get("MOCK_EXTENSION_AUTH_OLD") else ["extension_auth"])
+
+    _plugins_route_without_auth = plugins_route
+
+    def plugins_route(handler, p, body):
+        base = "/api/v1/extensions/%s/-/auth" % _AUTH_ID
+        if not p.startswith(base) or _AUTH_ID not in PLUGINS: return _plugins_route_without_auth(handler, p, body)
+        rest, method = p[len(base):], handler.command
+        if rest == "" and method == "GET":
+            AUTH_STATE["checked_at"] = _ext_now()
+            handler.send_json(AUTH_STATE); return True
+        if rest == "/step" and method == "POST":
+            req = json.loads(body or b"{}") if body else {}
+            if not PLUGINS[_AUTH_ID]["enabled"]:
+                handler.send_json({"error": "扩展停用了，先启用", "code": "disabled"}, 409); return True
+            if req.get("step", "") == "":
+                _AUTH_STEP["polls"] = 0
+                AUTH_STATE.update(state="pending"); AUTH_STATE.pop("account", None)
+                _auth_push()
+                handler.send_json(_auth_prompt()); return True
+            _AUTH_STEP["polls"] += 1
+            if _AUTH_POLLS and _AUTH_STEP["polls"] >= _AUTH_POLLS:
+                AUTH_STATE.update(state="signed_in", account="me@example.com")
+                _auth_push()
+                handler.send_json({"step": req.get("step"), "done": True, "account": "me@example.com"}); return True
+            handler.send_json(_auth_prompt()); return True
+        if rest == "/logout" and method == "POST":
+            AUTH_STATE.update(state="signed_out"); AUTH_STATE.pop("account", None)
+            _auth_push()
+            handler.send_json(AUTH_STATE); return True
+        handler.send_json({"error": "not found"}, 404); return True
+
+
+MOCK_HELP.append("MOCK_EXTENSION_AUTH=1|device|installed|device-installed  （配合 MOCK_PLUGINS、MOCK_EXTENSION_OPS）扩展市场里的「Example 查询」装两个命令行程序（安装步骤多一步「安装命令行」）并要登录：装完 next=auth，登录是扫码（device：验证码和链接），第 3 次轮询登录成功（MOCK_EXTENSION_AUTH_POLLS）；installed：已经装好、未登录；MOCK_EXTENSION_AUTH_OLD=1 不说 extension_auth（旧 hub，#4507）")
+
+
 # ---------- area: adding a computer from a signed-in device (#287, docs/onboarding.md 4.2, 5.3) ----------
 # MOCK_ADD_COMPUTER=1: the hub says machines_add and machine_trust. POST /api/v1/auth/pair-codes {"add": {name, os}} adds a
 # pending kind-link computer (never connected), {"machine": id} gives one a new code; MOCK_ADD_COMPUTER_JOIN seconds later

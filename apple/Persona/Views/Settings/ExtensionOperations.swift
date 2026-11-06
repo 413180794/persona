@@ -284,6 +284,7 @@ enum ExtensionOperationText {
         case "unpack": String(localized: "解包")
         case "check": String(localized: "检查权限和依赖")
         case "consent": String(localized: "等你同意权限")
+        case "tools": String(localized: "安装命令行")
         case "install": kind == .upgrade ? String(localized: "换上新版本") : String(localized: "装进 hub")
         case "start": String(localized: "启动")
         case "nodes": String(localized: "同步到各台电脑")
@@ -312,6 +313,17 @@ enum ExtensionOperationText {
             return line
         }
         return nil
+    }
+
+    /// A program of the tools step: 用这台机器上的 when the hub machine's own copy is used; else where it is.
+    static func tool(_ t: ExtensionOperationStep.Tool) -> String? {
+        if t.reused == true { return String(localized: "用这台机器上的") }
+        switch t.state {
+        case .running: return String(localized: "正在安装")
+        case .done: return String(localized: "已装好")
+        case .failed: return String(localized: "没装上")
+        case .pending, .skipped: return nil
+        }
     }
 
     /// 正在安装 / 等你同意权限 / 安装没有完成 / 已安装 / 已取消.

@@ -139,7 +139,7 @@ private struct ExtensionOperationStepRow: View {
                     .font(current ? Theme.Font.secondaryMedium : Theme.Font.secondary)
                     .foregroundStyle(step.state == .pending ? Color.secondary : Color.primary)
                     .lineLimit(1)
-                if step.state == .running, step.id == "download" {
+                if step.state == .running, step.id == "download" || (step.id == "tools" && step.bytes != nil) {
                     // A size the hub does not know: a bar that cannot say how far.
                     Group {
                         if let f = step.fraction { ProgressView(value: f) } else { ProgressView() }
@@ -151,6 +151,10 @@ private struct ExtensionOperationStepRow: View {
                 if let d = ExtensionOperationText.detail(step) {
                     Text(d).font(Theme.Font.label).foregroundStyle(.secondary).monospacedDigit().lineLimit(2)
                 }
+                // The tools step's programs (#4507), a line each: which one downloads, which use the machine's own.
+                ForEach(step.tools ?? []) { tool in
+                    ExtensionOperationToolLine(tool: tool)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -159,8 +163,33 @@ private struct ExtensionOperationStepRow: View {
         .accessibilityValue(step.state.rawValue)
     }
 
-    @ViewBuilder private var mark: some View {
-        switch step.state {
+    private var mark: some View { ExtensionOperationMark(state: step.state) }
+}
+
+/// One program of the tools step: its state's mark, its name and what it is doing.
+private struct ExtensionOperationToolLine: View {
+    var tool: ExtensionOperationStep.Tool
+
+    var body: some View {
+        HStack(spacing: Theme.Space.s) {
+            ExtensionOperationMark(state: tool.state)
+                .scaledFrame(width: Theme.Size.markS, height: Theme.Size.markS)
+            Text(tool.name).font(Theme.Font.code).lineLimit(1)
+            if let note = ExtensionOperationText.tool(tool) {
+                Text(note).font(Theme.Font.label).foregroundStyle(tool.state == .failed ? Theme.danger : Color.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityIdentifier("extension-operation-tool-\(tool.name)")
+    }
+}
+
+/// A step's (or a program's) mark: done, going, failed or waiting.
+private struct ExtensionOperationMark: View {
+    var state: ExtensionOperationStep.State
+
+    var body: some View {
+        switch state {
         case .done:
             Image(systemName: Theme.Icon.successFilled).resizable().scaledToFit().foregroundStyle(Theme.positive)
         case .running:

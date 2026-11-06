@@ -107,9 +107,11 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
         var version: String?
         var description: String?
         var extensionPack: [ExtensionPackMember]?
+        /// The command-line programs it installs (#4507): the 安装命令行程序 line lists them.
+        var tools: [ExtensionToolSpec]?
 
         enum CodingKeys: String, CodingKey {
-            case id, name, version, description
+            case id, name, version, description, tools
             case extensionPack = "extension_pack"
         }
     }

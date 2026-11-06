@@ -5,7 +5,7 @@ import Foundation
 // `extension_operation` event every time it moves on. Only with a hub that says `extension_operations`; an older hub
 // answers the request itself when it is done. Unknown states and steps are kept as they come: a newer hub may add some.
 
-/// One step of an operation (download, verify, unpack, check, consent, install, start, nodes; stop, remove).
+/// One step of an operation (download, verify, unpack, check, consent, tools, install, start, nodes; stop, remove).
 nonisolated struct ExtensionOperationStep: Codable, Hashable, Sendable, Identifiable {
     enum State: String, Codable, Sendable {
         case pending, running, done, failed, skipped
@@ -36,14 +36,38 @@ nonisolated struct ExtensionOperationStep: Codable, Hashable, Sendable, Identifi
         }
     }
 
+    /// One command-line program of the `tools` step (#4507): pending, running, done or failed; `reused` when it is the
+    /// hub machine's own copy (nothing downloaded).
+    struct Tool: Codable, Hashable, Sendable, Identifiable {
+        var name: String
+        var state: State
+        var reused: Bool?
+        var id: String { name }
+
+        init(name: String, state: State, reused: Bool? = nil) {
+            self.name = name
+            self.state = state
+            self.reused = reused
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+            state = try c.decodeIfPresent(State.self, forKey: .state) ?? .pending
+            reused = try? c.decodeIfPresent(Bool.self, forKey: .reused)
+        }
+    }
+
     var id: String
     var state: State
-    /// The download's bytes so far and of the whole (the total can be unknown).
+    /// The download's bytes so far and of the whole (the total can be unknown); for `tools`, of the program downloading.
     var bytes: Int64?
     var total: Int64?
     /// The package came from the hub's cache: nothing downloaded.
     var cached: Bool?
     var machines: Machines?
+    /// The `tools` step's programs, in the order they install.
+    var tools: [Tool]?
     var startedAt: Date?
     var endedAt: Date?
 
@@ -54,11 +78,13 @@ nonisolated struct ExtensionOperationStep: Codable, Hashable, Sendable, Identifi
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, state, bytes, total, cached, machines
+        case id, state, bytes, total, cached, machines, tools
         case startedAt = "started_at", endedAt = "ended_at"
     }
 
-    init(id: String, state: State, bytes: Int64? = nil, total: Int64? = nil, cached: Bool? = nil, machines: Machines? = nil) {
+    init(id: String, state: State, bytes: Int64? = nil, total: Int64? = nil, cached: Bool? = nil, machines: Machines? = nil,
+         tools: [Tool]? = nil) {
+        self.tools = tools
         self.id = id
         self.state = state
         self.bytes = bytes
@@ -75,6 +101,7 @@ nonisolated struct ExtensionOperationStep: Codable, Hashable, Sendable, Identifi
         total = try? c.decodeIfPresent(Int64.self, forKey: .total)
         cached = try? c.decodeIfPresent(Bool.self, forKey: .cached)
         machines = try? c.decodeIfPresent(Machines.self, forKey: .machines)
+        tools = try? c.decodeIfPresent([Tool].self, forKey: .tools)
         startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
         endedAt = try? c.decodeIfPresent(Date.self, forKey: .endedAt)
     }
@@ -123,6 +150,8 @@ nonisolated struct ExtensionOperation: Codable, Hashable, Sendable, Identifiable
     var previewID: String?
     /// The hub can start it again (`POST …/-/operations/{id}/retry`).
     var retryable: Bool
+    /// What the user should do once it succeeded: "auth", the extension signs in and is not signed in yet (#4507).
+    var next: String?
     var startedAt: Date?
     var updatedAt: Date?
     var endedAt: Date?
@@ -130,6 +159,8 @@ nonisolated struct ExtensionOperation: Codable, Hashable, Sendable, Identifiable
     /// Going on: running, or waiting for the user's yes.
     var isActive: Bool { state == .running || state == .needsConsent }
     var isRunning: Bool { state == .running }
+    /// Done, and the extension waits for the user to sign in (the app opens its sign-in).
+    var needsSignIn: Bool { state == .succeeded && next == "auth" }
     var current: ExtensionOperationStep? {
         steps.first { $0.id == step } ?? steps.first { $0.state == .running || $0.state == .failed }
     }
@@ -140,7 +171,7 @@ nonisolated struct ExtensionOperation: Codable, Hashable, Sendable, Identifiable
     var shownSteps: [ExtensionOperationStep] { steps.filter { $0.state != .skipped } }
 
     enum CodingKeys: String, CodingKey {
-        case id, kind, name, market, version, from, actor, state, step, steps, error, retryable
+        case id, kind, name, market, version, from, actor, state, step, steps, error, retryable, next
         case extensionID = "extension", plugin
         case errorCode = "error_code", previewID = "preview_id"
         case startedAt = "started_at", updatedAt = "updated_at", endedAt = "ended_at"
@@ -186,6 +217,7 @@ nonisolated struct ExtensionOperation: Codable, Hashable, Sendable, Identifiable
         errorCode = try c.decodeIfPresent(String.self, forKey: .errorCode)
         previewID = try c.decodeIfPresent(String.self, forKey: .previewID)
         retryable = try c.decodeIfPresent(Bool.self, forKey: .retryable) ?? false
+        next = try? c.decodeIfPresent(String.self, forKey: .next)
         startedAt = try? c.decodeIfPresent(Date.self, forKey: .startedAt)
         updatedAt = try? c.decodeIfPresent(Date.self, forKey: .updatedAt)
         endedAt = try? c.decodeIfPresent(Date.self, forKey: .endedAt)
@@ -208,6 +240,7 @@ nonisolated struct ExtensionOperation: Codable, Hashable, Sendable, Identifiable
         try c.encodeIfPresent(errorCode, forKey: .errorCode)
         try c.encodeIfPresent(previewID, forKey: .previewID)
         try c.encode(retryable, forKey: .retryable)
+        try c.encodeIfPresent(next, forKey: .next)
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
         try c.encodeIfPresent(endedAt, forKey: .endedAt)

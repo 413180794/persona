@@ -1406,6 +1406,8 @@ final class AppModel {
             link(group)?.desktops = list
         case .extensionOperation(let op):
             if isHub { ExtensionOperations.shared.received(op) }
+        case .extensionAuth(let id, let auth):
+            if isHub { ExtensionAuthStore.shared.received(id, auth) }
         case .pluginBadge(let plugin, let id, let badge):
             if isHub { ExtensionSlots.shared.received(plugin: plugin, id: id, badge: badge) }
         case .extensionInvalidate(let ext, let id):
@@ -1492,6 +1494,7 @@ final class AppModel {
         case .fleet: "fleet"
         case .hubUpdate: "hub_update"
         case .extensionOperation: "extension_operation"
+        case .extensionAuth: "extension_auth"
         case .desktops: "desktops"
         case .terminal: "terminal"
         case .fsChanged: "fs_changed"

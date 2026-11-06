@@ -181,6 +181,8 @@ struct MarketExtensionDetailView: View {
     @Environment(AppModel.self) private var app
     @State private var page: MarketExtensionModel
     @State private var confirmRemove = false
+    /// The install ended waiting for a sign-in: the extension's page opens over this one.
+    @State private var openSignIn = false
 
     init(market: String, id: String) { _page = State(initialValue: MarketExtensionModel(market: market, id: id)) }
 
@@ -258,8 +260,15 @@ struct MarketExtensionDetailView: View {
         }
         // One started earlier (the page left and opened again) ends while this page is up: read it again.
         .onChange(of: ExtensionOperations.shared.operation(for: page.pluginID, market: page.market)?.state) { old, new in
-            if old == .running, new == .succeeded { Task { await page.load() } }
+            guard old == .running, new == .succeeded else { return }
+            Task { await page.load() }
+            // Installed and waiting for a sign-in (#4507): its page, with the sign-in started.
+            if ExtensionOperations.shared.operation(for: page.pluginID, market: page.market)?.needsSignIn == true {
+                ExtensionAuthStore.shared.openSignIn = page.pluginID
+                openSignIn = true
+            }
         }
+        .navigationDestination(isPresented: $openSignIn) { ExtensionDetailView(id: page.pluginID) }
     }
 
     private func done(_ kind: ExtensionOperation.Kind) {
@@ -382,13 +391,32 @@ struct MarketExtensionDetailView: View {
 private struct PermissionLine: View {
     var permission: ExtensionPermission
     var tone: Color? = nil
+    /// The package's command-line programs (#4507): the 安装命令行程序 line lists them one per line, with where they come
+    /// from and where they go, instead of the hub's sentence.
+    var tools: [ExtensionToolSpec]? = nil
+
+    private var programs: [ExtensionToolSpec] {
+        permission.key == "tools" && !permission.title.contains("更多") ? tools ?? [] : [] // i18n-ignore
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(permission.title).font(Theme.Font.body).foregroundStyle(tone ?? Color.primary)
-            if let d = permission.detail, !d.isEmpty { Text(d).font(Theme.Font.label).foregroundStyle(.secondary) }
+            Text(ExtensionText.permissionTitle(permission)).font(Theme.Font.body).foregroundStyle(tone ?? Color.primary)
+            if !programs.isEmpty {
+                ForEach(programs, id: \.name) { t in
+                    HStack(spacing: Theme.Space.s) {
+                        Image(systemName: Theme.Icon.terminal).font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text(ExtensionAuthText.spec(t)).font(Theme.Font.label)
+                    }
+                }
+                Text(ExtensionAuthText.toolsNote).font(Theme.Font.label).foregroundStyle(.secondary)
+            } else if let d = permission.detail, !d.isEmpty {
+                Text(d).font(Theme.Font.label).foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, Theme.Space.xxs)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("permission-\(permission.key)")
     }
 }
 
@@ -434,7 +462,7 @@ private struct ExtensionInstallSheet: View {
                     ForEach(bundle) { member in
                         Section {
                             LabeledContent(member.manifest.name ?? member.manifest.id, value: member.manifest.version ?? "")
-                            ForEach(member.permissions) { PermissionLine(permission: $0) }
+                            ForEach(member.permissions) { PermissionLine(permission: $0, tools: member.manifest.tools) }
                         } header: { SettingsHeading(String(localized: "一起安装")) }
                     }
                 }
@@ -465,7 +493,7 @@ private struct ExtensionInstallSheet: View {
                              ? "合集本身不申请额外权限；成员按上方各自的权限运行。" : "这个包不申请额外权限。")
                             .font(Theme.Font.secondary).foregroundStyle(.secondary)
                     } else {
-                        ForEach(preview.permissions) { PermissionLine(permission: $0) }
+                        ForEach(preview.permissions) { PermissionLine(permission: $0, tools: preview.manifest.tools) }
                     }
                 } header: {
                     SettingsHeading(upgrade ? String(localized: "新版本可以") : String(localized: "它可以"))

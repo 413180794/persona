@@ -49,6 +49,8 @@ nonisolated enum ServerEvent: Sendable {
     case hubUpdate(HubUpdateStatus)
     /// An extension install / upgrade / removal moved on (#3307): the whole operation as it stands.
     case extensionOperation(ExtensionOperation)
+    /// An extension's sign-in changed (#4507): signed in, out, expired; nil, it no longer signs in.
+    case extensionAuth(extension: String, ExtensionAuth?)
     /// The desktop apps connected to the hub now (sent on connect and whenever one comes or goes).
     case desktops([DesktopDevice])
     /// Tasks from an assistant conversation (docs/unified-entry.md): the todos changed (pull them), a conversation's
@@ -113,6 +115,7 @@ nonisolated enum ServerEvent: Sendable {
         var publicURL: String?
         var update: HubUpdateStatus?
         var operation: ExtensionOperation?
+        var auth: LenientAuth?
         var epoch: String?
         var seq: Int?
         var full: Bool?
@@ -143,7 +146,7 @@ nonisolated enum ServerEvent: Sendable {
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, key, conversation, plan
-            case plugin, badge, invalidate, cwd, dirs, git, operation
+            case plugin, badge, invalidate, cwd, dirs, git, operation, auth
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
@@ -151,6 +154,12 @@ nonisolated enum ServerEvent: Sendable {
                  moreAfter = "more_after", fromSeq = "from_seq", toSeq = "to_seq",
                  lastAssistantMessage = "last_assistant_message", feedIDs = "feed_ids", sessionIDs = "session_ids"
         }
+    }
+
+    /// An `extension_auth`'s sign-in; anything else under `auth` (another event's) does not lose the event.
+    private struct LenientAuth: Decodable {
+        var value: ExtensionAuth?
+        init(from decoder: Decoder) throws { value = try? ExtensionAuth(from: decoder) }
     }
 
     /// The hello's `mesh`; anything else there is no mesh rather than a lost hello.
@@ -171,6 +180,7 @@ nonisolated enum ServerEvent: Sendable {
                                              minAppBuild: e.minAppBuild, publicURL: e.publicURL.flatMap { URL(string: $0) }))
         case "hub_update": return e.update.map { .hubUpdate($0) }
         case "extension_operation", "plugin_operation": return e.operation.map { .extensionOperation($0) }
+        case "extension_auth": return e.extensionID.map { .extensionAuth(extension: $0, e.auth?.value) }
         case "machines": return e.machines.map { .machines($0) }
         case "sessions":
             guard let m = e.machineID else { return nil }
@@ -268,7 +278,8 @@ nonisolated extension ServerEvent {
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
         case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation: return self
+             .personas, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation,
+             .extensionAuth: return self
         }
     }
 }

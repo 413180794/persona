@@ -32,9 +32,13 @@ nonisolated struct HubExtension: Codable, Hashable, Sendable, Identifiable {
     var upgradeNote: ExtensionUpgradeNote?
     /// An extension with a program on computers: how that program is on each machine it is switched on for.
     var nodes: [ExtensionNodeState]?
+    /// Its sign-in (a hub with extension_auth, #4507): the hub's last word on it.
+    var auth: ExtensionAuth?
+    /// The command-line programs this version runs with.
+    var tools: [ExtensionToolUse]?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade, nodes
+        case id, name, kind, status, error, version, source, enabled, description, contributes, warnings, upgrade, nodes, auth, tools
         case needsSetup = "needs_setup", autoUpgrade = "auto_upgrade", upgradeNote = "upgrade_note"
     }
 }
@@ -339,8 +343,18 @@ enum ExtensionText {
     }
 
     /// The row's value: its state (the version is on its page).
-    static func summary(_ p: HubExtension) -> String {
-        p.upgrade?.state == "needs_permission" ? String(localized: "\(state(p)) · 新版本待确认") : state(p)
+    static func summary(_ p: HubExtension, auth: ExtensionAuth? = nil) -> String {
+        let base = p.upgrade?.state == "needs_permission" ? String(localized: "\(state(p)) · 新版本待确认") : state(p)
+        // Not signed in (#4507): said after the state, as the hub's warning says it to older apps.
+        guard p.enabled ?? true, let suffix = ExtensionAuthText.listSuffix(auth ?? p.auth) else { return base }
+        return base + " · " + suffix // i18n-ignore
+    }
+
+    /// A permission's title; the hub's lines for command-line programs (#4507) in this app's words.
+    static func permissionTitle(_ p: ExtensionPermission) -> String {
+        guard p.key == "tools" else { return p.title }
+        let more = p.title.contains("更多") // i18n-ignore: the hub's title for an upgrade's added programs
+        return more ? String(localized: "安装更多命令行程序") : String(localized: "安装命令行程序")
     }
 
     /// Under the form: which switches take effect at once (lists of machines, `ExtensionModel.saveNow`) and that the rest
@@ -441,6 +455,7 @@ enum ExtensionText {
             guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
             let list = try await api.pluginList()
             plugins = list.plugins
+            ExtensionAuthStore.shared.received(list.plugins.filter { $0.auth != nil })
             markets = list.markets
             error = nil
             missing = false
