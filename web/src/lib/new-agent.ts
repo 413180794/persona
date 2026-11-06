@@ -7,6 +7,7 @@ import { uuid } from "./format";
 import { currentPlatform, modName, type Platform } from "./shortcuts";
 import { href, navigate } from "./router";
 import { getState, putLaunch, upsertSession } from "./store";
+import { ultracodeErrorText, ultracodeRefused } from "./ultracode";
 import type { Session } from "./types";
 
 export interface AgentLaunch {
@@ -21,6 +22,8 @@ export interface AgentLaunch {
   permissionMode?: string;
   /** The engine host to open in (#2576), when the user picked one other than the machine's default; none: the default. */
   host?: string;
+  /** Turn ultracode on once Claude is up (#3428); only ever true: off is what a new Claude is (docs/protocol.md). */
+  ultracode?: boolean;
   text: string;
   attachments: LocalAttachment[];
   todoId?: string;
@@ -36,7 +39,7 @@ export interface AgentLaunch {
   draft?: string;
 }
 
-export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "model" | "effort" | "permissionMode" | "host" | "text" | "attachments" | "todoId">) {
+export function launchAgent(input: Pick<AgentLaunch, "machineId" | "cwd" | "launcher" | "model" | "effort" | "permissionMode" | "host" | "ultracode" | "text" | "attachments" | "todoId">) {
   const launch: AgentLaunch = { ...input, id: `local-${uuid()}`, phase: "creating", uploaded: {} };
   putLaunch(launch);
   navigate({ name: "session", mid: launch.machineId, sid: launch.id });
@@ -78,7 +81,7 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     if (!launch.session) {
       let session: Session;
       try {
-        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, effort: launch.effort || undefined, permission_mode: launch.permissionMode || undefined, host: launch.host || undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
+        const r = await api<{ session: Session }>("/sessions", { method: "POST", signal: controller.signal, json: { machine_id: launch.machineId, cwd: launch.cwd, launcher: launch.launcher || undefined, model: launch.model || undefined, effort: launch.effort || undefined, permission_mode: launch.permissionMode || undefined, host: launch.host || undefined, ultracode: launch.ultracode === true ? true : undefined, async: true, name_hint: launch.text || undefined, todo_id: launch.todoId || undefined } });
         session = r.session;
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "codex_needs_prompt") throw e;
@@ -132,8 +135,12 @@ export async function deliverLaunch(id: string, clearDraft?: string) {
     const sending = phase === "sending";
     const creating = phase === "creating";
     const uncertain = (creating || sending) && (e instanceof TypeError || (e instanceof DOMException && e.name === "AbortError") || (e instanceof ApiError && (e.body.delivered === "unknown" || (e.status >= 500 && e.body.delivered !== "none"))));
+    // the hub won't start it with ultracode here (an old node, a CLI or engine that can't take it): asking again would
+    // get the same answer, so "Retry" starts it without, and the card says so (#3428)
+    const noUltracode = creating && launch.ultracode === true && ultracodeRefused(e);
     update({ phase: "failed", uncertain, retryNeedsNewId: e instanceof ApiError && e.body.delivered === "unknown",
-      error: t(creating ? "lib-new-agent.start_failed" : sending ? "lib-new-agent.first_message_failed" : "lib-new-agent.attachments_failed", { error: errorText(e) }),
+      ...(noUltracode ? { ultracode: undefined } : {}),
+      error: noUltracode ? t("ultracode.start_refused", { error: ultracodeErrorText(e) }) : t(creating ? "lib-new-agent.start_failed" : sending ? "lib-new-agent.first_message_failed" : "lib-new-agent.attachments_failed", { error: errorText(e) }),
       clearable: e instanceof ApiError && e.code === "input_draft" && typeof e.body.clearable === "string" ? e.body.clearable : undefined,
       draft: e instanceof ApiError && e.code === "input_draft" ? String(e.body.draft ?? "") : undefined,
     });

@@ -57,6 +57,8 @@ import { seekCall } from "./jump";
 import { ChatLineView, closedRecap, closeRecap, OpenRecapLine } from "./Lines";
 import { useTranscript } from "./useTranscript";
 import { CloseAgentDialog, DeleteSessionDialog, ModeChips, RenameDialog, RenameSpaceDialog, SessionInfoDialog } from "./SessionDialogs";
+import { UltracodeLostNote } from "./Ultracode";
+import { isUltracodeQueued, ultracodeQueueDone } from "../../lib/ultracode";
 import { ChatActionsContext, type ChatActions } from "./chat-actions";
 import { QueueStrip } from "./QueueStrip";
 import { ChatSearch, type LoadOutcome } from "./ChatSearch";
@@ -108,7 +110,12 @@ interface Pending {
   id: string;
   msg: UserMessage;
   at: number;
+  /** The node held it back until an ultracode change waiting for the turn is through (#3428): it goes again then. */
+  waits?: boolean;
 }
+
+/** How many times a message held back for an ultracode change goes again before it is taken as not sent. */
+const ULTRACODE_SEND_TRIES = 4;
 
 /** "Branch to new chat" (#2137): the node copies the conversation up to this reply's turn into a new one, which opens here. */
 async function forkAt(mid: string, sid: string, itemId: string, assistant: boolean, space?: string) {
@@ -278,7 +285,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
     if (!pending.length) return;
     setPending((ps) => {
       const shown = echoed(ps, users, (p) => ({ id: p.id, text: p.msg.text, images: p.msg.images, at: p.at }), claimed.current);
-      return ps.filter((p) => !shown.has(p) && Date.now() - p.at < 30_000);
+      // one held back for an ultracode change waits as long as the turn does
+      return ps.filter((p) => !shown.has(p) && (p.waits || Date.now() - p.at < 30_000));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segs]);
@@ -491,7 +499,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
 
   // ── sending ──
   const deliver = useCallback(
-    async (out: Outgoing, id: string, clearDraft?: string, fromBox = false): Promise<boolean> => {
+    async (out: Outgoing, id: string, clearDraft?: string, fromBox = false, attempt = 0): Promise<boolean> => {
       // the main conversation's setup gate holds every path that sends, not only the composer (4.4)
       if (blockedRef.current) {
         blockedRef.current.onClick?.();
@@ -516,28 +524,49 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         });
         return true;
       } catch (e) {
-        setPending((ps) => ps.filter((x) => x.id !== id));
-        if (e instanceof ApiError && e.code === "input_draft") {
-          setDraftRefusal({ out, id, draft: String(e.body.draft ?? ""), clearable: typeof e.body.clearable === "string" ? e.body.clearable : undefined });
-        } else if (e instanceof ApiError && e.body.delivered === "unknown") {
-          toast(t("chat-chatview.delivery_unknown"), "error");
-        } else if (assistant && !(e instanceof ApiError && e.code === "dialog_open")) {
-          setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e), fromBox });
-          void refreshReadiness({ force: true });
-        } else if (fromBox) {
-          // a card that stays until "Send again" or an edit of the box (#4270): a 5 s toast is gone by the time you are back
-          const why = e instanceof ApiError && e.code === "dialog_open" ? t("chat-chatview.dialog_open") : errorText(e);
-          setSendFailure({ chat: `${mid}/${sid}`, failure: { code: "", error: t("chat-chatview.unsent", { error: why }) }, fromBox });
-        } else if (e instanceof ApiError && e.code === "dialog_open") {
-          toast(t("chat-chatview.dialog_open"), "error");
-        } else {
-          toast(t("chat-chatview.send_failed", { error: errorText(e) }), "error");
+        // An ultracode change waits for the turn (docs/protocol.md "Claude Code ultracode"): the node holds messages back
+        // so the next turn cannot overtake it. The bubble stays and says so, the box is free (and its stop button there),
+        // and the message goes again once the change is through, with a new id (the hub keeps its answer to this one).
+        if (!assistant && isUltracodeQueued(e) && attempt < ULTRACODE_SEND_TRIES) {
+          setPending((ps) => ps.map((x) => (x.id === id ? { ...x, waits: true } : x)));
+          void ultracodeQueueDone(mid, sid).then((through) => {
+            setPending((ps) => ps.filter((x) => x.id !== id));
+            // from the box, the words go back into it if this try does not get through either (the box emptied when it went)
+            if (through) void deliver(out, uuid(), clearDraft, fromBox, attempt + 1);
+            else failed(e, out, id, fromBox, true);
+          });
+          return true;
         }
+        setPending((ps) => ps.filter((x) => x.id !== id));
+        failed(e, out, id, fromBox, attempt > 0);
         return false;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `failed` reads only stable setters and these
     [mid, sid, session, assistant, follow],
   );
+
+  /** Says why a message did not go. `later`: it was held back for an ultracode change and tried again after the box had
+   *  emptied, so the words go back into the box first (the card's "Send again" sends the box). */
+  function failed(e: unknown, out: Outgoing, id: string, fromBox: boolean, later: boolean) {
+    if (later && fromBox && !(e instanceof ApiError && (e.code === "input_draft" || e.body.delivered === "unknown"))) sendDraft(draftKey, { type: "unsent", text: out.text });
+    if (e instanceof ApiError && e.code === "input_draft") {
+      setDraftRefusal({ out, id, draft: String(e.body.draft ?? ""), clearable: typeof e.body.clearable === "string" ? e.body.clearable : undefined });
+    } else if (e instanceof ApiError && e.body.delivered === "unknown") {
+      toast(t("chat-chatview.delivery_unknown"), "error");
+    } else if (assistant && !(e instanceof ApiError && e.code === "dialog_open")) {
+      setSendFailure({ chat: `${mid}/${sid}`, failure: codedFailure(e), fromBox });
+      void refreshReadiness({ force: true });
+    } else if (fromBox) {
+      // a card that stays until "Send again" or an edit of the box (#4270): a 5 s toast is gone by the time you are back
+      const why = e instanceof ApiError && e.code === "dialog_open" ? t("chat-chatview.dialog_open") : errorText(e);
+      setSendFailure({ chat: `${mid}/${sid}`, failure: { code: "", error: t("chat-chatview.unsent", { error: why }) }, fromBox });
+    } else if (e instanceof ApiError && e.code === "dialog_open") {
+      toast(t("chat-chatview.dialog_open"), "error");
+    } else {
+      toast(t("chat-chatview.send_failed", { error: errorText(e) }), "error");
+    }
+  }
 
   const onSend = async (out: Outgoing, fromBox?: boolean): Promise<boolean> => {
     // Routed to a task ("Tell "xx""): straight to its agent, not to Persona (docs/unified-entry.md "Who it points at").
@@ -977,7 +1006,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
             {!readOnly && <OutboxBubbles mid={mid} sid={sid} entries={outbox} />}
             {!readOnly && (shownPending.length > 0 || outbox.some((e) => e.state === "sending") || (starting && outgoing > 0)) && (
               <div className="flex items-center gap-2.5">
-                <Loading label={starting ? t("chat-chatview.preparing") : t("chat-chatview.delivering")} />
+                <Loading label={starting ? t("chat-chatview.preparing") : shownPending.some((p) => p.waits) ? t("ultracode.send_waits") : t("chat-chatview.delivering")} />
               </div>
             )}
           </div>
@@ -1042,6 +1071,8 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
         {gate.dialog}
         {session && !assistant && <AttentionNote session={session} />}
         {session && !assistant && <ConflictNote session={session} />}
+        {/* a resume turned ultracode off (#3428): one line with "Turn back on" */}
+        {session && !assistant && !readOnly && <UltracodeLostNote session={session} />}
         {session && !assistant && showsFailureNote(session, { readOnly, retried }) && (
           <FailureNote
             session={session}

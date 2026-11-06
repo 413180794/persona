@@ -164,6 +164,54 @@ describe("本地优先启动", () => {
     expect(JSON.parse(plain.mock.calls[0][1].body)).not.toHaveProperty("permission_mode");
   });
 
+  it("sends ultracode only when it was turned on, never false (#3428), and not to a Codex", async () => {
+    const on = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", on);
+    launchAgent({ ...input, launcher: "claude", ultracode: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(on.mock.calls[0][1].body)).toMatchObject({ launcher: "claude", ultracode: true });
+
+    for (const ultracode of [false, undefined]) {
+      const off = vi.fn().mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+      vi.stubGlobal("fetch", off);
+      launchAgent({ ...input, launcher: "claude", ultracode });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(JSON.parse(off.mock.calls[0][1].body)).not.toHaveProperty("ultracode");
+    }
+
+    const codex = vi.fn().mockResolvedValueOnce(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409)).mockResolvedValueOnce(response({ session: { ...session, agent: "codex" } }));
+    vi.stubGlobal("fetch", codex);
+    launchAgent({ ...input, launcher: "codex", ultracode: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(JSON.parse(codex.mock.calls[1][1].body)).not.toHaveProperty("ultracode");
+  });
+
+  it("a start the hub refuses with ultracode retries without it, and the card says so (#3428)", async () => {
+    for (const code of ["node_outdated", "ultracode_unsupported"]) {
+      const fetcher = vi.fn()
+        .mockResolvedValueOnce(response({ code, error: "这台电脑的 Claude Code 太旧，不能开 ultracode" }, 409))
+        .mockResolvedValueOnce(response({ session }))
+        .mockResolvedValueOnce(response({}));
+      vi.stubGlobal("fetch", fetcher);
+      const id = launchAgent({ ...input, launcher: "claude", ultracode: true });
+      await vi.advanceTimersByTimeAsync(0);
+      const failed = getState().launches[id];
+      expect(failed.phase).toBe("failed");
+      expect(failed.ultracode).toBeUndefined();
+      expect(failed.error).toBe("没能带 ultracode 开始：这台电脑的 Claude Code 太旧，不能开 ultracode。重试会不带 ultracode");
+      await deliverLaunch(id);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(JSON.parse(fetcher.mock.calls[1][1].body)).not.toHaveProperty("ultracode");
+      expect(getState().launches[id].phase).toBe("ready");
+    }
+    // another failure keeps it: the retry asks again
+    const other = vi.fn().mockResolvedValueOnce(response({ error: "busy" }, 503)).mockResolvedValueOnce(response({ session })).mockResolvedValueOnce(response({}));
+    vi.stubGlobal("fetch", other);
+    const id = launchAgent({ ...input, launcher: "claude", ultracode: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getState().launches[id].ultracode).toBe(true);
+  });
+
   it("does not replace a Codex multimodal first message with a fake initialization prompt", async () => {
     const fetcher = vi.fn().mockResolvedValue(response({ error: "needs prompt", code: "codex_needs_prompt" }, 409));
     vi.stubGlobal("fetch", fetcher);

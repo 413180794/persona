@@ -181,6 +181,15 @@ export interface Session {
   context_window?: number;
   /** The levels `effort` may be set to when they are not Claude Code's: a Codex thread driven through its app-server (only its effort changes; docs/protocol.md). */
   efforts?: string[];
+  /** Claude Code's session-only ultracode switch as the node last saw it (docs/protocol.md "Claude Code ultracode"):
+   *  absent is unknown, not off. */
+  ultracode?: boolean;
+  /** Why the switch can't be used, was refused or could not be confirmed (the node's words, in Chinese). */
+  ultracode_note?: string;
+  /** A switch request waits for the turn to end ("Applies next turn"); not the requested value. */
+  ultracode_pending?: boolean;
+  /** It was on before the agent resumed, and the resumed process has it off: the chat offers to turn it back on. */
+  ultracode_lost_at?: string;
   assistant?: boolean;
   /** The assistant's space it runs in: "health" for the health space's (docs/health.md). */
   space?: string;

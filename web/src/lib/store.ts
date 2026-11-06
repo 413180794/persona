@@ -124,6 +124,13 @@ function set(patch: Partial<State>) {
   else notify();
 }
 
+/** Tells the views now of the pushes still waiting for the next frame, if any: for code that keeps something tied to
+ *  the session the page draws, read from the state right after a request returns (lib/ultracode.ts setUltracode), so
+ *  the page draws that same session with it rather than an older one for a frame. */
+export function flushPushes() {
+  if (notifyTimer !== undefined) notify();
+}
+
 export function getState() {
   return state;
 }

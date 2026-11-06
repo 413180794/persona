@@ -1,0 +1,22 @@
+{
+  "subtitle": "Runs every task as a multi-agent workflow · uses a lot of quota · this session only",
+  "pending": "Applies next turn",
+  "pending_other": "A change is queued for the next turn",
+  "on": "ultracode on",
+  "icon_title": "ultracode is on: every task runs as a multi-agent workflow, which uses a lot of quota",
+  "codex_ultra_title": "Ultra: splits the work across several subagents, which uses a lot of quota",
+  "lost": "ultracode off after resume",
+  "reopen": "Turn back on",
+  "dismiss": "Dismiss",
+  "version_low": "Claude Code on this computer is {version}; ultracode needs {min} or later",
+  "node_outdated": "personad on this computer is too old for ultracode. Update its node",
+  "unsupported": "This session can't use ultracode",
+  "failed": "Couldn't switch ultracode: {error}",
+  "dismiss_failed": "Couldn't dismiss the notice: {error}",
+  "quota": "{name} quota: {windows}",
+  "quota_5h": "5h {percent}",
+  "quota_week": "weekly {percent}",
+  "quota_warn": "Quota is running low; ultracode uses it up faster",
+  "start_refused": "Couldn't start with ultracode: {error}. Retry starts without it",
+  "send_waits": "Sends once the ultracode change applies after this turn"
+}

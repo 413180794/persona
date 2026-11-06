@@ -1,5 +1,5 @@
 // Start an agent on one of your computers: machine, folder (recent ones first), launcher, model and effort for this
-// start, the first message.
+// start, Claude Code's ultracode switch (#3428: off each time, never remembered), the first message.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { hubLabel } from "../lib/mesh";
 import { api, ApiError, enc, errorText, isAbort } from "../lib/api";
@@ -18,6 +18,8 @@ import type { Launcher } from "../lib/types";
 import { AgentMark } from "../ui/AgentMark";
 import { Button, cx, Dialog, Spinner, toast } from "../ui/atoms";
 import { Pill } from "./settings/SettingsParts";
+import { startBlocked, ultracodeStartOffered } from "../lib/ultracode";
+import { UltracodeStartRow } from "./chat/Ultracode";
 import { Icon } from "../ui/icons";
 import { ModelPicker, type ModelList } from "../ui/ModelPicker";
 import { t } from "../i18n";
@@ -54,6 +56,9 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const [models, setModels] = useState<ModelList>({ status: "idle" });
   const [model, setModel] = useState("");
   const [effort, setEffort] = useState("");
+  // ultracode for this start: off whenever the sheet opens, never saved (the server's rule: no choice carries over)
+  const [ultracode, setUltracode] = useState(false);
+  const features = useStore((s) => s.features);
   // Claude Code's permission mode for this start ("": the launcher's), remembered per computer like iOS's mode.<machine>
   const [mode, setMode] = useState("");
   const [host, setHost] = useState(""); // the engine host to open in (#2576); "": the machine's default
@@ -80,6 +85,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
     if (!open) return;
     submitted.current = false;
     setEffort("");
+    setUltracode(false);
   }, [open]);
   useEffect(() => {
     if (!open || !preset) return;
@@ -210,6 +216,9 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
   const efforts = effortChoices(models.list, model, followed);
   const effortsKey = efforts.join(" ");
   useEffect(() => { setEffort((e) => fitEffort(e, effortsKey ? effortsKey.split(" ") : [])); }, [effortsKey]);
+  // offered with Claude Code whose effort can be set here; grayed when this computer's Claude Code is known to be too old
+  const ultracodeShown = !loadingModels && efforts.length > 0 && ultracodeStartOffered(features, agent);
+  const ultracodeBlocked = ultracodeShown ? startBlocked(picked?.claude_version) : "";
 
   const start = () => {
     if (submitted.current || loadingModels || !online.some((m) => m.id === mid) || !cwd.trim()) return;
@@ -224,7 +233,9 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
       else localStorage.removeItem(`new.mode.${mid}`);
     }
     const opensIn = host && host !== currentHosts(picked ?? {}).default ? host : undefined; // only a choice away from the default
-    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, host: opensIn, text: prompt.trim(), attachments });
+    // only an explicit "on" is sent: off is what a new Claude is anyway
+    const ultra = ultracodeShown && !ultracodeBlocked && ultracode ? true : undefined;
+    launchAgent({ machineId: mid, cwd: cwd.trim(), launcher, ...picks, permissionMode: permissionMode || undefined, host: opensIn, ultracode: ultra, text: prompt.trim(), attachments });
     attachmentsRef.current = [];
     setAttachments([]);
     setPrompt("");
@@ -432,6 +443,7 @@ export function NewAgent({ open, onClose, preset }: { open: boolean; onClose: ()
                   {pickedModel ? t("newagent.effort_unsupported", { model: modelName(pickedModel) }) : t("newagent.effort_unsupported_default")}
                 </p>
               )}
+              {ultracodeShown && <div className="mt-2"><UltracodeStartRow on={ultracode} onChange={setUltracode} blocked={ultracodeBlocked} /></div>}
             </Field>
           )}
 

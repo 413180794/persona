@@ -44,11 +44,13 @@ import { Collapse, cx, EASE, Kbd, Menu, useMenu, useNow, type MenuItem } from ".
 import { StatusMark, StateTally } from "../ui/StatusMark";
 import { foldedCounts, hasFoldedCounts } from "../lib/folded-counts";
 import { runningWorkflows, workflowLine, workflowShortLine } from "../lib/workflows";
+import { ultracodeOn } from "../lib/ultracode";
 import { AppMark } from "../ui/AppMark";
 import { Icon, type IconName } from "../ui/icons";
 import { HerdrNotices } from "./agents/HerdrNotices";
 import { HubNoticeLine } from "./agents/HubNoticeRow";
 import { CloseAgentDialog, DeleteSessionDialog, RenameDialog, RenameSpaceDialog } from "./chat/SessionDialogs";
+import { UltraMark } from "./chat/Ultracode";
 import { AgentRowMenu, MarkSeenDialog, SpaceMenu } from "./AgentMenus";
 import { NodeMenu } from "./NodeMenu";
 import { NodePrompt } from "./NodePrompt";
@@ -1955,6 +1957,9 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
   // words left unsent in its box, once you are not in it (#5568): in place of what it asks or did
   const draft = draftLine(useLeftDraft(`${given.machine_id}/${given.session_id}`));
   const line = draft ?? (showState && !s.assistant ? rowLine(s, ix, awaiting) : undefined);
+  // ultracode on (#3428): the workflow mark in the AI colour right after the title; a row without it is drawn as before.
+  // Not on an offline row: the node keeps the last value it saw after the process is gone, and a resume starts it off.
+  const ultra = showState && st !== "offline" && ultracodeOn(s);
   const link = (
     <a
       ref={(el) => {
@@ -1978,11 +1983,22 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
       <span className="flex size-3.5 shrink-0 items-center justify-center">{showState || st === "working" ? <StatusMark state={st} awaiting={awaiting} /> : <Icon name={icon} size={12} className="text-ink-3" />}</span>
       {showState && !s.assistant && <SessionMark s={s} size={14} />}
       {prefix && <span className={prefixClass}>{prefix}</span>}
-      {detail.length > 0 || workflow || line || plan ? (
+      {/* with the mark, the title sits in the column whether a second line shows or not: the same element through a
+          workflow's start and end, so the mark does not fade in again */}
+      {ultra || detail.length > 0 || workflow || line || plan ? (
         <span className={cx("flex flex-1 flex-col", titleMin)}>
-          <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
-            {label ?? sessionTitle(s)}
-          </span>
+          {ultra ? (
+            <span className="flex min-w-0 items-center gap-1">
+              <span className={cx("min-w-0 truncate text-[13px]", active ? "font-medium text-ink" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+                {label ?? sessionTitle(s)}
+              </span>
+              <UltraMark size={10} />
+            </span>
+          ) : (
+            <span className={cx("truncate text-[13px]", active ? "font-medium text-ink" : st === "offline" ? "text-ink-3" : "text-ink-2", st === "unread" && !active && "font-medium text-ink")}>
+              {label ?? sessionTitle(s)}
+            </span>
+          )}
           {line && <SecondLine line={line} draft={!!draft} />}
           {plan && (
             <span data-plan-line title={planLabel(s)} aria-label={planLabel(s)} className="flex h-4 min-w-0 items-center gap-1 text-[11px] leading-4 text-ink-3">

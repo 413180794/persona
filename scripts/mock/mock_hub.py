@@ -14775,6 +14775,110 @@ MOCK_HELP.append("MOCK_READINESS=zero|offline|pending|no_claude|not_logged_in|ba
                  "内置供应商预设，features 有 assistant_readiness / machines_add / machine_trust / builtin_presets；MOCK_START_ERROR=<码> 让开对话一律按这个码拒绝；"
                  "MOCK_BUILTIN_PRESETS=1 只加内置供应商预设")
 
+# MOCK_ULTRACODE=1 (#3428, docs/protocol.md "Claude Code ultracode"): the hub has the `ultracode` feature and the agents show
+# each state of Claude Code's session-only switch: on (the widget, working; its chat has the node's "on" notice), a request
+# queued for the turn (the tests one, needs you), off after a resume with the notice (the PR review), grayed by the node's
+# version note (the release notes), plain off (the blog), and an offline agent whose node still remembers it on (the recipe
+# site: its row has no mark); the Codex orders thread sits on its "ultra" effort; Mac Studio's Claude Code is too old for
+# "New agent" to start with it. POST …/modes {"ultracode": …} switches a resting agent at once and queues it on a working
+# one (applied after MOCK_ULTRACODE_SECONDS, default 4), {"ultracode_dismiss_lost": true} takes the notice away, turning
+# on a session with a note answers 409 ultracode_unsupported with the note; other /modes requests go on as before. A
+# message to a session with a change queued is held back (409 ultracode_pending, the node on master) and goes once it is
+# through. GET /mock/ultracode: the requests, the starts that asked for it and the messages (held or not); ?reset=1 puts
+# the states back. Off: nothing changes.
+ULTRACODE_MODE = os.environ.get("MOCK_ULTRACODE", "")
+ULTRACODE_LOG = []
+ULTRACODE_SENDS = []
+ULTRACODE_NOTE = "请升级到 Claude Code 2.1.284 或更新版本，旧版不支持独立的 ultracode 开关"
+ULTRACODE_FIELDS = ("ultracode", "ultracode_note", "ultracode_pending", "ultracode_lost_at")
+ULTRACODE_CODEX_EFFORTS = ["low", "medium", "high", "xhigh", "ultra"]
+
+
+def ultracode_reset():
+    states = {WIDGET: {"ultracode": True}, TESTS: {"ultracode": False, "ultracode_pending": True},
+              REVIEW: {"ultracode": False, "ultracode_lost_at": ago(minutes=12)},
+              RELEASE: {"ultracode": False, "ultracode_note": ULTRACODE_NOTE}, BLOG: {"ultracode": False}, RECIPE: {"ultracode": True}}
+    for x in SESSIONS:
+        for k in ULTRACODE_FIELDS: x.pop(k, None)
+        x.update(states.get(x["session_id"], {}))
+        if x["session_id"] == ORDERS: x.update(effort="ultra", efforts=ULTRACODE_CODEX_EFFORTS)
+    del ULTRACODE_LOG[:]
+    del ULTRACODE_SENDS[:]
+
+
+def ultracode_apply(s, on):
+    s.pop("ultracode_pending", None)
+    s["ultracode"] = on
+    if on: s.pop("ultracode_lost_at", None)
+    s["rev"] = (s.get("rev") or 0) + 1
+    push_machine(s["machine_id"])
+
+
+def ultracode_route(handler, p, body):
+    if not ULTRACODE_MODE: return False
+    if p == "/mock/ultracode":
+        if parse_qs(urlparse(handler.path).query).get("reset"):
+            ultracode_reset()
+            for m in MACHINES: push_machine(m["id"])
+        handler.send_json({"requests": ULTRACODE_LOG, "started": [b for b in STARTED if "ultracode" in b], "sends": ULTRACODE_SENDS})
+        return True
+    m = re.fullmatch(r"/api/v1/sessions/([^/]+)/([^/]+)/messages", p)
+    if m and handler.command == "POST":
+        s = next((x for x in SESSIONS if x["machine_id"] == m.group(1) and x["session_id"] == m.group(2)), None)
+        text = json.loads(body or b"{}").get("text", "")
+        held = bool(s and s.get("ultracode_pending"))
+        ULTRACODE_SENDS.append({"session_id": m.group(2), "text": text, "held": held})
+        if held:
+            return handler.send_json({"error": "ultracode 等这一轮结束后生效，请稍后再发送消息", "code": "ultracode_pending"}, 409) or True
+        return False
+    m = re.fullmatch(r"/api/v1/sessions/([^/]+)/([^/]+)/modes", p)
+    if not m or handler.command != "POST": return False
+    req = json.loads(body or b"{}")
+    if "ultracode" not in req and "ultracode_dismiss_lost" not in req: return False
+    s = next((x for x in SESSIONS if x["machine_id"] == m.group(1) and x["session_id"] == m.group(2)), None)
+    if s is None: return handler.send_json({"error": "Session not found"}, 404) or True
+    ULTRACODE_LOG.append({"session_id": s["session_id"], **{k: req[k] for k in ("ultracode", "ultracode_dismiss_lost") if k in req}})
+    if req.get("ultracode_dismiss_lost") and "ultracode" not in req:
+        s.pop("ultracode_lost_at", None)
+        push_machine(s["machine_id"])
+        return handler.send_json({"ok": True}) or True
+    on = bool(req.get("ultracode"))
+    if on and s.get("ultracode_note"):
+        return handler.send_json({"error": s["ultracode_note"], "code": "ultracode_unsupported"}, 409) or True
+    if s.get("state") in ("working", "needs_you"):  # the node waits for the turn to end
+        s["ultracode_pending"] = True
+        push_machine(s["machine_id"])
+        threading.Timer(float(os.environ.get("MOCK_ULTRACODE_SECONDS", "4")), ultracode_apply, args=(s, on)).start()
+    else:
+        ultracode_apply(s, on)
+    return handler.send_json({"ok": True}) or True
+
+
+if ULTRACODE_MODE:
+    ultracode_reset()
+    for _m in MACHINES:
+        if _m["id"] == "studio": _m["claude_version"] = "2.1.250"
+    ITEMS[WIDGET] = ITEMS.get(WIDGET, []) + [it("system", "notice", 0, text="已开启 ultracode（只对本会话）")]
+
+_plugins_route_without_ultracode = plugins_route
+
+
+def plugins_route(handler, p, body):
+    return ultracode_route(handler, p, body) or _plugins_route_without_ultracode(handler, p, body)
+
+
+_features_without_ultracode = features
+
+
+def features():
+    return _features_without_ultracode() + (["ultracode"] if ULTRACODE_MODE else [])
+
+
+MOCK_HELP.append("MOCK_ULTRACODE=1  Claude Code 的 ultracode 开关（#3428）：features 带 ultracode；小组件开着、补测试那个排队等这一轮、检查 PR 那个恢复后被关了（有提示）、"
+                 "发布说明那个带版本太旧的原因、博客那个关着、菜谱那个离线（node 还记着开）；Codex 的订单会话在「极高」档；Mac Studio 的 Claude Code 太旧，新建时不能开。"
+                 "POST …/modes 的 ultracode 闲着立刻生效、工作中排队 MOCK_ULTRACODE_SECONDS 秒（默认 4）；有排队时发消息回 409 ultracode_pending；"
+                 "GET /mock/ultracode 看请求和消息，?reset=1 复原")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="用于客户端测试的 mock hub")
     parser.add_argument("--tls-port", type=int, help="额外的 TLS 监听端口；0 表示自动分配")

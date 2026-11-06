@@ -1,0 +1,22 @@
+{
+  "subtitle": "每个任务都编排多 Agent workflow · 很费额度 · 只对本会话",
+  "pending": "下一轮生效",
+  "pending_other": "有一次切换在排队，这一轮结束后生效",
+  "on": "ultracode 开",
+  "icon_title": "ultracode 开着：每个任务都编排多 Agent workflow，很费额度",
+  "codex_ultra_title": "极高档：会分给多个子 Agent 一起做，很费额度",
+  "lost": "恢复后 ultracode 已关",
+  "reopen": "重新打开",
+  "dismiss": "关掉这条提示",
+  "version_low": "这台电脑的 Claude Code 是 {version}，要 {min} 或更新才能开 ultracode",
+  "node_outdated": "这台电脑上的 personad 太旧，还不支持 ultracode，需要更新 node",
+  "unsupported": "这个会话不能开 ultracode",
+  "failed": "ultracode 没有切换成：{error}",
+  "dismiss_failed": "提示没有关掉：{error}",
+  "quota": "{name} 额度：{windows}",
+  "quota_5h": "5 小时 {percent}",
+  "quota_week": "每周 {percent}",
+  "quota_warn": "额度快用完了，开着 ultracode 会用得更快",
+  "start_refused": "没能带 ultracode 开始：{error}。重试会不带 ultracode",
+  "send_waits": "等 ultracode 的切换在这一轮结束后生效，再发这条"
+}

@@ -34,5 +34,5 @@
   "codex_effort_max": "Max",
   "codex_effort_max_detail": "Slowest and most careful",
   "codex_effort_ultra": "Ultra",
-  "codex_effort_ultra_detail": "Most careful, and splits work across several subagents"
+  "codex_effort_ultra_detail": "Most careful, and splits work across several subagents · uses a lot of quota"
 }

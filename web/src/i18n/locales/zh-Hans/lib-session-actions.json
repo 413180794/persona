@@ -34,5 +34,5 @@
   "codex_effort_max": "最高",
   "codex_effort_max_detail": "最慢最仔细",
   "codex_effort_ultra": "极高",
-  "codex_effort_ultra_detail": "最仔细，还会主动分给多个子 Agent 一起做"
+  "codex_effort_ultra_detail": "最仔细，还会主动分给多个子 Agent 一起做 · 很费额度"
 }

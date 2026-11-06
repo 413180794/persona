@@ -1,0 +1,22 @@
+{
+  "subtitle": "すべてのタスクをマルチエージェントの workflow で進めます · 使用量を大きく消費 · このセッションのみ",
+  "pending": "次のターンから有効",
+  "pending_other": "切り替えが待機中です。次のターンから有効",
+  "on": "ultracode オン",
+  "icon_title": "ultracode がオン：すべてのタスクをマルチエージェントの workflow で進め、使用量を大きく消費します",
+  "codex_ultra_title": "ウルトラ：複数のサブエージェントに作業を分担させ、使用量を大きく消費します",
+  "lost": "再開後 ultracode オフ",
+  "reopen": "再びオン",
+  "dismiss": "閉じる",
+  "version_low": "このコンピュータの Claude Code は {version} です。ultracode には {min} 以降が必要です",
+  "node_outdated": "このマシンの personad が古いため、ultracode に対応していません。node を更新してください",
+  "unsupported": "このセッションでは ultracode を使えません",
+  "failed": "ultracode を切り替えられませんでした：{error}",
+  "dismiss_failed": "通知を閉じられませんでした：{error}",
+  "quota": "{name} の使用量：{windows}",
+  "quota_5h": "5時間 {percent}",
+  "quota_week": "週 {percent}",
+  "quota_warn": "使用量が上限に近づいています。ultracode をオンにするとさらに早く消費します",
+  "start_refused": "ultracode をオンにして開始できませんでした：{error}。再試行すると ultracode なしで開始します",
+  "send_waits": "このターンの後に ultracode の切り替えが済んでから送信します"
+}

@@ -123,18 +123,5 @@ export function Pill({ children, tone, animated }: { children: React.ReactNode; 
   );
 }
 
-export function Switch({ on, onChange, disabled, label }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!on)}
-      className={cx("touch-hit relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50", on ? "bg-accent" : "bg-hover-2")}
-    >
-      <span className="absolute left-[2px] size-[18px] rounded-full bg-white shadow-btn transition-transform duration-200" style={{ transform: on ? "translateX(16px)" : "none", transitionTimingFunction: EASE }} />
-    </button>
-  );
-}
+// The switch lives with the other atoms now (the chat's ultracode switch uses it too, #3428); settings pages keep importing it from here.
+export { Switch } from "../../ui/atoms";

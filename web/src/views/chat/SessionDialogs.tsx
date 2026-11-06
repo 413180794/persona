@@ -5,6 +5,7 @@ import { ago, externalLink, resumeCommand, sessionCan, sessionTitle, shortPath, 
 import { openLink } from "../../lib/links";
 import { BYPASS_MODE, BYPASS_WARNING, effortOptions, effortTitle, modeTitle, renameBody, switchableModes } from "../../lib/session-actions";
 import { canSwitchModel, onModelPicker } from "../../lib/model-switch";
+import { CODEX_ULTRA, ultracodeOn } from "../../lib/ultracode";
 import { href, navigate, parse, showsSession } from "../../lib/router";
 import { stripBase } from "../../lib/base";
 import { dropSession, getSession, refresh, refreshAssistant, upsertSession } from "../../lib/store";
@@ -12,6 +13,7 @@ import type { Session } from "../../lib/types";
 import { Button, copyText, cx, Dialog, Loading, Menu, toast, useMenu } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
 import { ModelEffortPopover } from "./ModelEffortPopover";
+import { UltraMark } from "./Ultracode";
 import { t } from "../../i18n";
 import { AlwaysPermissions } from "./AlwaysPermissions";
 
@@ -250,7 +252,9 @@ function Field({ label, value, onChange, autoFocus }: { label: string; value: st
 // thread on its app-server gets the effort alone, among its own levels (effortOnly; `Session.efforts`). An assistant
 // conversation may also switch to "Allow everything" (#2416). On a Claude Code session the effort chip opens the model and effort
 // popover instead of the effort menu (issue #2434; the chip itself reads as before), and `/model` Enter in the composer
-// opens it too.
+// opens it too. Claude Code's ultracode switch (#3428) is a row under the popover's efforts (a session that has it always
+// gets the popover, so the effort menu has no such row); while it is on, the chip carries the workflow mark, as a Codex
+// thread on its "ultra" effort does (the same thing: several agents, a lot of quota).
 export function ModeChips({ session, effortOnly, assistant, withInfo }: { session: Session; effortOnly?: boolean; assistant?: boolean; withInfo?: boolean }) {
   const modeMenu = useMenu();
   const effortMenu = useMenu();
@@ -262,6 +266,7 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
   useEffect(() => {
     if (!withModel) setPopover(null);
   }, [withModel]);
+  const mark = ultracodeOn(session) ? {} : effortOnly && session.effort === CODEX_ULTRA ? { label: t("ultracode.codex_ultra_title"), title: t("ultracode.codex_ultra_title") } : undefined;
   // the popover applies the model and then the effort: the second must build on the session the first changed
   const latest = useRef(session);
   latest.current = session;
@@ -284,8 +289,10 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
     // A Persona conversation has its launcher chip after these and no text to give way: these keep their width up to
     // the row less 5.5rem (the row's 0.5rem gap and 5rem of launcher chip), so that chip truncates first (#3575). At
     // phone width that chip is an icon (#4142): 3rem leaves its 2.5rem and the gap, 5rem also the footer's 22px ⓘ
-    // button and its gap (`withInfo`, #3533).
-    <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]", assistant && (withInfo ? "max-sm:max-w-[calc(100%-5rem)]" : "max-sm:max-w-[calc(100%-3rem)]"))}>
+    // button and its gap (`withInfo`, #3533). An agent's chips keep their width on a wide screen, where the path beside
+    // them truncates first; at phone width (the path hidden) they may shrink, their labels truncating, so the ⓘ after
+    // them never slides under the composer's stop or send button (the ultracode mark, #3428, made the English row too wide).
+    <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]", assistant && (withInfo ? "max-sm:max-w-[calc(100%-5rem)]" : "max-sm:max-w-[calc(100%-3rem)]"), !assistant && "max-sm:min-w-0 max-sm:shrink")}>
       {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} narrow={{ icon: "shield", label: modeShort(mode) }} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
       <Chip
         buttonRef={effortChip}
@@ -294,6 +301,7 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
         onClick={withModel ? (e) => setPopover((a) => (a ? null : e.currentTarget)) : effortMenu.open}
         active={Boolean(withModel ? popover : effortMenu.anchor)}
         title={withModel ? t("composer.model_effort") : t("chat-sessiondialogs.effort")}
+        mark={mark}
       />
       {modeMenu.anchor && !effortOnly && (
         <Menu
@@ -338,7 +346,7 @@ export function modeShort(mode?: string): string {
  *  the chips beside it keep their words (#4142); wider, the chip is as before.
  *  `narrow`: below 340 px (a 320 px phone, #4316) the label gives way to this icon and short word, which still say the
  *  setting (the chevron goes, for room); the full label stays for screen readers. From 340 px up the chip is as before. */
-export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIcon, narrow }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement>; phoneIcon?: IconName; narrow?: { icon: IconName; label: string } }) {
+export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIcon, narrow, mark }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement>; phoneIcon?: IconName; narrow?: { icon: IconName; label: string }; /** The workflow mark after the label (ultracode on, a Codex "ultra" effort; #3428): an icon, no words. */ mark?: { label?: string; title?: string } }) {
   return (
     <button
       ref={buttonRef}
@@ -357,6 +365,7 @@ export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIc
       {narrow && <Icon name={narrow.icon} size={12} className="shrink-0 xs:hidden" />}
       {narrow && <span aria-hidden className="min-w-0 truncate xs:hidden">{narrow.label}</span>}
       <span className={cx("min-w-0 truncate", phoneIcon && "max-sm:sr-only", narrow && "max-xs:sr-only")}>{label}</span>
+      {mark && <UltraMark size={10} label={mark.label} title={mark.title} className="ml-0.5" />}
       <Icon name="chevron" size={9} stroke={2.4} className={cx("shrink-0", narrow && "max-xs:hidden")} />
     </button>
   );

@@ -156,6 +156,14 @@ describe("chatLines", () => {
     expect(kinds(ls)).toEqual(["segment", "notice"]);
   });
 
+  // #3428: the node's notices for switching ultracode (transcript/ultracode.go) are ordinary notices
+  it("keeps the ultracode on / off notices as notices", () => {
+    for (const text of ["已开启 ultracode（只对本会话）", "已关闭 ultracode"]) {
+      const [line] = chatLines([u(1, "go"), tool(2, "x"), notice(3, text), a(4, "ok")]);
+      expect(line.kind === "segment" && line.seg.steps.map((st) => st.kind === "notice" ? st.item.text : st.kind)).toEqual(["tool", text]);
+    }
+  });
+
   it("folds recaps in a row into one line", () => {
     const ls = chatLines([u(1, "go"), a(2, "done"), recap(3, "one"), recap(4, "two"), u(5, "back"), a(6, "ok"), recap(7, "three")]);
     expect(kinds(ls)).toEqual(["segment", "recaps", "segment", "recaps"]);

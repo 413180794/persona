@@ -34,5 +34,5 @@
   "codex_effort_max": "最高",
   "codex_effort_max_detail": "最も遅く、最も丁寧",
   "codex_effort_ultra": "ウルトラ",
-  "codex_effort_ultra_detail": "最も丁寧。複数のサブエージェントに作業を分担させます"
+  "codex_effort_ultra_detail": "最も丁寧。複数のサブエージェントに作業を分担させます · 使用量を大きく消費"
 }

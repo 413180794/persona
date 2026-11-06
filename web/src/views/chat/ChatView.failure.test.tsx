@@ -65,6 +65,13 @@ vi.mock("../assistant/Tasks", () => ({
   TaskQuestions: () => null,
 }));
 
+// the wait for an ultracode change to go through (#3428): the test says when
+const ultra = vi.hoisted(() => ({ release: undefined as ((through: boolean) => void) | undefined }));
+vi.mock("../../lib/ultracode", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../lib/ultracode")>(),
+  ultracodeQueueDone: () => new Promise<boolean>((resolve) => (ultra.release = resolve)),
+}));
+
 const { ChatView } = await import("./ChatView");
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -132,5 +139,51 @@ describe("a message from the box that did not go, in an agent's chat (#4270)", (
     act(() => captured.onEdit!());
     await flush();
     expect(card()).toBeNull();
+  });
+});
+
+describe("a message the node held back for an ultracode change (#3428)", () => {
+  const HELD = { code: "ultracode_pending", error: "ultracode 等这一轮结束后生效，请稍后再发送消息" };
+  let bodies: { client_msg_id: string; text: string }[];
+  beforeEach(() => {
+    bodies = [];
+    ultra.release = undefined;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).endsWith("/messages")) return Promise.resolve(json({}));
+      bodies.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(reply());
+    }));
+  });
+
+  it("waits in its bubble saying so, leaves the box free, and goes again with a new id once the change is through", async () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" />));
+    await flush();
+    reply = () => json(HELD, 409);
+    let went: boolean | undefined;
+    await act(async () => void (went = await captured.onSend!({ text: "再看看测试", images: [] }, true)));
+    await flush();
+    expect(went).toBe(true); // the box is free: its stop button too, while the turn runs
+    expect(host.textContent).toContain("等 ultracode 的切换在这一轮结束后生效，再发这条");
+    expect(host.textContent).toContain("再看看测试");
+    expect(host.querySelector('[data-testid="readiness-failure"]')).toBeNull();
+    reply = () => json({});
+    await act(async () => ultra.release!(true));
+    await flush();
+    expect(bodies.map((b) => b.text)).toEqual(["再看看测试", "再看看测试"]);
+    expect(bodies[1].client_msg_id).not.toBe(bodies[0].client_msg_id);
+    expect(host.textContent).not.toContain("等 ultracode 的切换");
+  });
+
+  it("not through in time: the words go back into the box and the card says why", async () => {
+    act(() => root.render(<ChatView mid="hub" sid="c1" />));
+    await flush();
+    reply = () => json(HELD, 409);
+    await act(async () => void (await captured.onSend!({ text: "再看看测试", images: [] }, true)));
+    await flush();
+    await act(async () => ultra.release!(false));
+    await flush();
+    expect(bodies).toHaveLength(1);
+    expect(localStorage.getItem("draft:hub/c1")).toBe("再看看测试");
+    expect(host.querySelector('[data-testid="readiness-failure"]')?.textContent).toContain("ultracode 等这一轮结束后生效");
   });
 });

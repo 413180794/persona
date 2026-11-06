@@ -212,6 +212,25 @@ export function Spinner({ size = 12 }: { size?: number }) {
   );
 }
 
+/** An on / off switch (role=switch): the knob slides over 200 ms with the design system's ease (reduced motion: at once).
+ *  Settings' rows, and the chat's and "New agent"'s ultracode switch (#3428). `className`: added to the track (a place
+ *  that needs its grayed state drawn more clearly); without it the switch is as before. */
+export function Switch({ on, onChange, disabled, label, className }: { on: boolean; onChange: (on: boolean) => void; disabled?: boolean; label: string; className?: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      className={cx("touch-hit relative inline-flex h-[22px] w-[38px] shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50", on ? "bg-accent" : "bg-hover-2", className)}
+    >
+      <span className="absolute left-[2px] size-[18px] rounded-full bg-white shadow-btn transition-transform duration-200" style={{ transform: on ? "translateX(16px)" : "none", transitionTimingFunction: EASE }} />
+    </button>
+  );
+}
+
 export function Kbd({ children }: { children: React.ReactNode }) {
   return <kbd className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-[5px] bg-surface px-1 font-sans text-[10px] text-ink-3 shadow-hairline">{children}</kbd>;
 }

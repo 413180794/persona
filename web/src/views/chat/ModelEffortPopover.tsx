@@ -1,7 +1,8 @@
 // The popover of the composer's "Thinking" chip on a Claude Code session (issue #2434, after Moshi's model pill): effort tabs on
 // top, the agent's model list below. ↑↓ choose a model, ←→ an effort, Enter applies, Esc cancels, a click outside
 // closes. The models are what the launcher's agent lists in its own /model menu (lib/launcher-models.ts); applying
-// goes through the chip's `apply` (the model first, then the effort), each its own POST …/modes.
+// goes through the chip's `apply` (the model first, then the effort), each its own POST …/modes. Under the effort tabs,
+// Claude Code's ultracode switch (#3428) applies at once, its own request.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t as tr } from "../../i18n";
@@ -10,10 +11,13 @@ import { keyboardFrame } from "../../lib/viewport";
 import { launcherModels, modelDetail, modelName, type AgentModel, type LauncherModels } from "../../lib/launcher-models";
 import { effortOptions, EFFORTS } from "../../lib/session-actions";
 import { effortTabs, isCurrentModel, modelBusy, pickerKey, pickerPatch, sessionLauncher } from "../../lib/model-switch";
+import { useStore } from "../../lib/store";
+import { ultracodeOffered } from "../../lib/ultracode";
 import type { Session } from "../../lib/types";
 import { Button, cx, EASE, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { NARROW_QUERY, placeMenu, useMedia, type MenuPlace } from "../../ui/overlay";
+import { UltracodeSwitchRow } from "./Ultracode";
 
 const WIDTH = 340;
 
@@ -43,6 +47,22 @@ export function ModelEffortPopover({
   const rows = useRef<(HTMLButtonElement | null)[]>([]);
   const narrow = useMedia(NARROW_QUERY);
   const [pos, setPos] = useState<React.CSSProperties>({ visibility: "hidden" });
+  const ultracode = useStore((s) => ultracodeOffered(session, s.features));
+  // what grows inside it after it opened (the ultracode row's reason or quota line) places it again
+  const [height, setHeight] = useState(0);
+  const [rowHeight, setRowHeight] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const row = el.querySelector<HTMLElement>("[data-popover-switch]");
+    const ro = new ResizeObserver(() => {
+      setHeight(el.offsetHeight);
+      setRowHeight(row?.offsetHeight ?? 0);
+    });
+    ro.observe(el);
+    if (row) ro.observe(row);
+    return () => ro.disconnect();
+  }, [ultracode]);
 
   useEffect(() => {
     if (cache.has(cacheKey)) return;
@@ -110,8 +130,8 @@ export function ModelEffortPopover({
     };
     const key = (e: KeyboardEvent) => {
       const l = live.current;
-      // Enter on the footer's own buttons is theirs ("Cancel" must cancel)
-      if ((e.key === "Enter" || e.key === " ") && (e.target as Element | null)?.closest?.("[data-popover-footer]")) return;
+      // Enter on the footer's own buttons is theirs ("Cancel" must cancel), and on the ultracode switch its own
+      if ((e.key === "Enter" || e.key === " ") && (e.target as Element | null)?.closest?.("[data-popover-footer],[data-popover-switch]")) return;
       const r = pickerKey({ model: l.pick, effort: l.tabs.indexOf(l.effort) }, { models: l.models.length, efforts: l.tabs.length }, e);
       if (!r.handled) return;
       e.preventDefault();
@@ -139,8 +159,12 @@ export function ModelEffortPopover({
     const view = narrow ? keyboardFrame(innerHeight, window.visualViewport) : undefined;
     const at: MenuPlace = placeMenu(anchor.getBoundingClientRect(), ref.current.offsetHeight, { width: WIDTH, align: "left", side: "top", screenW: innerWidth, screenH: innerHeight, view });
     const { maxHeight, ...rest } = at;
-    setPos(maxHeight === undefined ? rest : { ...rest, maxHeight: `min(80vh, 520px, ${maxHeight}px)` });
-  }, [anchor, narrow, loading, models.length, error, busyNote, tabs.length]);
+    // the ultracode row (#3428) brings its own height on top of the 520 px cap, so the models keep the room they had
+    // without it (still within the room there is and 80% of the window); without the row it is as before
+    const extra = ref.current.querySelector<HTMLElement>("[data-popover-switch]")?.offsetHeight ?? 0;
+    if (extra) setPos({ ...rest, maxHeight: `min(80vh, ${520 + extra}px${maxHeight === undefined ? "" : `, ${maxHeight}px`})` });
+    else setPos(maxHeight === undefined ? rest : { ...rest, maxHeight: `min(80vh, 520px, ${maxHeight}px)` });
+  }, [anchor, narrow, loading, models.length, error, busyNote, tabs.length, height, rowHeight]);
 
   return createPortal(
     <div
@@ -174,6 +198,7 @@ export function ModelEffortPopover({
           );
         })}
       </div>
+      {ultracode && <UltracodeSwitchRow session={session} />}
 
       {(loading || models.length > 0 || error) && <div className="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-[10.5px] font-medium tracking-[0.06em] text-ink-3 uppercase">{tr("composer.models")}</div>}
       {loading && (
