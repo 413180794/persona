@@ -1130,6 +1130,8 @@ if os.environ.get("MOCK_TAB_PANES"):
 ORIG_STATE = {s["session_id"]: (s["state"], s["status"]) for s in SESSIONS}
 SEEN = []  # session ids marked seen (GET /mock/seen)
 SESSION_CLOSE = {"fail": False, "attempts": [], "closed": [], "interactions": []}
+# GET /mock/send-fail?on=1: sends to sessions fail (502) until ?on=0, as MOCK_SEND_FAIL=1 makes them for the whole run.
+SEND_FAIL = {"on": False}
 # Delete conversation (DELETE /api/v1/sessions/{mid}/{sid}): what was taken out, so /mock/reset puts it back.
 SESSION_DELETED = []
 PINS = {"spaces": ["macbook/weather"], "sessions": []}  # GET / PUT /api/v1/pins: what the Agents list keeps on top
@@ -11347,6 +11349,9 @@ class H(BaseHTTPRequestHandler):
                                                  q.get("real", ["0"])[0] == "1"), daemon=True).start()
             return self.send_json({"ok": True})
         if p == "/mock/churned": return self.send_json(CHURN)
+        if p == "/mock/send-fail":
+            SEND_FAIL["on"] = q.get("on", ["1"])[0] == "1"
+            return self.send_json(SEND_FAIL)
         if p == "/mock/persona-tier":
             set_persona_tier(q.get("tier", [""])[0])
             return self.send_json({"ok": True, "tier": PERSONA_TIER["tier"]})
@@ -11507,6 +11512,7 @@ class H(BaseHTTPRequestHandler):
             return self.send_json({"left": len(REPLAY["left"])})
         if p == "/mock/reset":  # MachinePagesTests: each test starts from the same machines
             BOTMUX_ON.clear()
+            SEND_FAIL["on"] = False  # a FailedSendPlacementTests run that died before turning it off
             COOKIES_FAILED[0] = False  # MOCK_COOKIES_FAIL: the next read fails again
             HERDR_STOPPED.clear(); HERDR_STOPPED.update(herdr_env()); HERDR_STARTS.clear()  # the herdr row (#1916)
             HERDR_MODE["start"] = os.environ.get("MOCK_HERDR_START", ""); HERDR_MODE["gen"] += 1
@@ -12727,8 +12733,9 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.last_body or b"{}")
             # MOCK_SEND_DELAY_MS: the hub takes this long to hand a message to the agent (one starting up takes seconds).
             if os.environ.get("MOCK_SEND_DELAY_MS"): time.sleep(int(os.environ["MOCK_SEND_DELAY_MS"]) / 1000)
-            # MOCK_SEND_FAIL=1: it does not get there (502).
-            if os.environ.get("MOCK_SEND_FAIL"): return self.send_json({"error": "node unreachable"}, 502)
+            # MOCK_SEND_FAIL=1 (or GET /mock/send-fail?on=1 until ?on=0): it does not get there (502).
+            if os.environ.get("MOCK_SEND_FAIL") or SEND_FAIL["on"]:
+                return self.send_json({"error": "node unreachable", "code": "node_unreachable", "delivered": "none"}, 502)
             if os.environ.get("MOCK_ECHO_SENT") and not body.get("todo_id"):
                 echo_sent(p.split("/"), body)
             todo_id = body.get("todo_id")

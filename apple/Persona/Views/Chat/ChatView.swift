@@ -1400,7 +1400,9 @@ struct ChatView: View {
             return
         }
         let order = currentLines().map(\.id)
-        let top = scratch.visibleLines.min { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }
+        // Lines only: a failed message's bubble among them (#6023) is no place to come back to.
+        guard let top = scratch.visibleLines.filter({ order.contains($0) })
+            .min(by: { (order.firstIndex(of: $0) ?? .max) < (order.firstIndex(of: $1) ?? .max) }) else { return }
         UserDefaults.standard.set(top, forKey: readKey)
     }
 
@@ -1499,7 +1501,8 @@ struct ChatView: View {
     /// A message of yours is the newest thing and the agent has not begun on it: no turn running yet, the session at
     /// work or starting up, or the message just sent and the hub not saying working yet (#3853).
     private func startingTurn(_ pending: [PendingMessage]) -> Bool {
-        guard !pending.isEmpty, liveTurnID == nil else { return false }
+        // A failed one is going nowhere (and may sit up in the chat, #6023).
+        guard pending.contains(where: { $0.state != .failed }), liveTurnID == nil else { return false }
         return status.isActive || session?.starting == true || awaiting == .sending
     }
 
@@ -2021,7 +2024,8 @@ struct ChatView: View {
     private func chatRows(store: ChatStore, lines: [ChatLine], pending: [PendingMessage]) -> some View {
         let rows = store.rows
         return LazyVStack(alignment: .leading, spacing: Theme.Space.l) {
-            // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines.
+            // Newest first (the list is drawn upside down): the end sentinel, live text, unsent messages, lines (a failed
+            // message among them, before the first line written after it).
             Color.clear
                 .frame(height: Theme.Size.line)
                 .id(Self.bottomID)
@@ -2046,12 +2050,12 @@ struct ChatView: View {
                     .flippedBack()
                     .id("starting-turn")
             }
-            // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead).
-            ForEach((frozen.map { f in pending.filter { f.pending.contains($0.id) } } ?? pending).reversed()) { msg in
-                PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
-                    .flippedBack()
-                    .id(msg.id.uuidString)
-            }
+            // Sent from here, not in the transcript yet (ones Claude queued show in the queue strip instead). One that
+            // failed with messages sent after it sits before the first of them, among the lines below (#6023); not
+            // while history is read (`Frozen`): nothing moves under the reader then.
+            let placed = frozen.map { f in (before: [String: [PendingMessage]](), rest: pending.filter { f.pending.contains($0.id) }) }
+                ?? ChatLines.placeFailed(lines, pending, writtenAt: store.writtenAt)
+            ForEach(placed.rest.reversed()) { msg in pendingBubble(msg) }
             // The first message of a conversation, not in the transcript yet: its day over it, as the new-conversation
             // page drew it (`FirstMessagePending`) and the transcript's lines will (#1911).
             if style == .assistant, lines.isEmpty, !pending.isEmpty { DayLine(date: .now).flippedBack() }
@@ -2072,6 +2076,8 @@ struct ChatView: View {
                     .id(line.id)
                     .onAppear { if prefetch.contains(line.id) { prefetchOlder() } }
                     .zIndex(menu.selected != nil && line.holds(menu.selected) ? 1 : 0)
+                // Upside down: drawn after the line is drawn above it, where it was written.
+                ForEach((placed.before[line.id] ?? []).reversed()) { msg in pendingBubble(msg) }
             }
             switch ChatLines.placeholder(lines: lines, hasTranscript: !rows.isEmpty,
                                          hasPending: !pending.isEmpty || !store.pending.isEmpty || !store.arriving.isEmpty,
@@ -2096,6 +2102,13 @@ struct ChatView: View {
         .scrollTargetLayout()
         .coordinateSpace(.named(ChatPin.space))
         .background { ChatPin.Finder(pin: pin) }
+    }
+
+    /// A message sent from here, not in the transcript yet: its bubble with Retry / Discard when it failed.
+    private func pendingBubble(_ msg: PendingMessage) -> some View {
+        PendingBubble(msg: msg, retry: { model.retry(key, msg) }, discard: { model.discard(key, msg) })
+            .flippedBack()
+            .id(msg.id.uuidString)
     }
 
     private func chatScroll() -> some View {

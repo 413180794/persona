@@ -405,8 +405,13 @@ final class ChatStore {
     var screenUpdatedAt: Date?
     var error: String?
     var isLoadingOlder = false
-    /// Messages sent from this phone that the transcript has not shown yet (drawn at the end right away).
+    /// Messages sent from this phone that the transcript has not shown yet: drawn at the end right away, and a failed one
+    /// before the first message written after it (`ChatLines.placeFailed`).
     var pending: [PendingMessage] = []
+    /// When this phone wrote the messages it sent whose copies have arrived, by their id (`Item.clientMsgID`, upper
+    /// case): a failed message goes by the phone's own times, not by when the computer wrote a copy (a queued message
+    /// is written when the agent takes it in, minutes later; its clock may differ) (#6023). This run's only.
+    @ObservationIgnored private(set) var writtenAt: [String: Date] = [:]
     /// A pending message's real copy arrived and its bubble went (the app saves its outbox).
     @ObservationIgnored var onArrived: (() -> Void)?
     /// A queued message taken back out of the agent (Take Back to Edit, Delete) never reaches the transcript. Its sent bubble, hidden
@@ -526,7 +531,14 @@ final class ChatStore {
         if !pending.isEmpty { // the real message arrived: drop the local copy, one per message
             let before = pending.count
             for it in added {
-                if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) { arriving.append(pending.remove(at: i)) }
+                if let i = pending.firstIndex(where: { PendingMessage.arrived($0, as: it) }) {
+                    let p = pending.remove(at: i)
+                    if let at = p.createdAt {
+                        if writtenAt.count >= 500 { writtenAt = writtenAt.filter { $0.value > at.addingTimeInterval(-86400) } }
+                        writtenAt[p.id.uuidString] = at
+                    }
+                    arriving.append(p)
+                }
             }
             if pending.count != before { onArrived?() }
         }

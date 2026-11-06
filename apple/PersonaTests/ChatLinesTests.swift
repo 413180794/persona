@@ -317,4 +317,67 @@ struct ChatLinesTests {
         guard case .work(_, let work, _, _, _)? = lines.first(where: { if case .work = $0.content { true } else { false } })?.content else { return }
         #expect(!work.contains(where: ChatLines.isCompaction))
     }
+
+    /// A message that failed to send sits before the first message sent after it, not under everything (#6023); one with
+    /// nothing after it, one without a time and one still on its way stay at the end, in the order they were written.
+    @Test func aFailedMessageSitsWhereItWasWritten() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        func at(_ seq: Int, _ kind: ItemKind, role: String, text: String, _ s: TimeInterval, client: String? = nil) -> Item {
+            var i = item(seq, kind, role: role, text: text)
+            i.ts = t0.addingTimeInterval(s)
+            i.clientMsgID = client
+            return i
+        }
+        let lines = ChatLines(openWork: []).build(blocks([
+            at(1, .text, role: "user", text: "first", 0), at(2, .text, role: "assistant", text: "done", 1),
+            at(3, .text, role: "user", text: "second", 300), at(4, .text, role: "assistant", text: "done again", 301),
+        ]), live: nil)
+        let failed = PendingMessage(text: "lost", images: [], state: .failed, createdAt: t0.addingTimeInterval(50))
+        let newest = PendingMessage(text: "last", images: [], state: .failed, createdAt: t0.addingTimeInterval(900))
+        let untimed = PendingMessage(text: "old outbox", images: [], state: .failed, createdAt: nil)
+        let waiting = PendingMessage(text: "offline", images: [], state: .waiting, createdAt: t0.addingTimeInterval(60))
+        let placed = ChatLines.placeFailed(lines, [newest, failed, waiting, untimed])
+        #expect(placed.before == ["3#0": [failed]])
+        #expect(placed.rest == [untimed, waiting, newest]) // the order they were written, an untimed one first
+        // Nothing failed: everything stays at the end.
+        #expect(ChatLines.placeFailed(lines, [waiting]).rest == [waiting])
+        // Two failed before the same message, oldest first.
+        let earlier = PendingMessage(text: "lost too", images: [], state: .failed, createdAt: t0.addingTimeInterval(40))
+        #expect(ChatLines.placeFailed(lines, [failed, earlier]).before == ["3#0": [earlier, failed]])
+        // A message typed on the computer within two minutes after it (the clocks may differ): it stays below.
+        let close = PendingMessage(text: "close", images: [], state: .failed, createdAt: t0.addingTimeInterval(250))
+        #expect(ChatLines.placeFailed(lines, [close]).rest == [close])
+    }
+
+    /// A message this phone sent before the failed one but the agent took in later (queued): its copy is written then,
+    /// yet it was written first, and the phone's own time says so.
+    @Test func aQueuedMessageSentEarlierStaysAbove() {
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        let queued = UUID()
+        var b = item(3, .text, role: "user", text: "sent first")
+        b.ts = t0.addingTimeInterval(400) // the agent took it in minutes later
+        b.clientMsgID = queued.uuidString.lowercased()
+        var a = item(1, .text, role: "user", text: "before")
+        a.ts = t0
+        let lines = ChatLines(openWork: []).build(blocks([a, b]), live: nil)
+        let failed = PendingMessage(text: "lost", images: [], state: .failed, createdAt: t0.addingTimeInterval(50))
+        #expect(ChatLines.placeFailed(lines, [failed]).before == ["3#0": [failed]]) // without the phone's time
+        let placed = ChatLines.placeFailed(lines, [failed], writtenAt: [queued.uuidString: t0.addingTimeInterval(45)])
+        #expect(placed.before.isEmpty && placed.rest == [failed])
+    }
+
+    /// The next day's header and a later feed card stop it too; photos the user sent count as a message.
+    @Test func aFailedMessageStopsAtTheNextDayAndPhotos() {
+        let day1 = Date(timeIntervalSince1970: 1_800_000_000)
+        var u1 = item(1, .text, role: "user", text: "evening")
+        u1.ts = day1
+        var photo = item(5, .image, role: "user")
+        photo.ts = day1.addingTimeInterval(86400 * 2)
+        let day2 = Calendar.current.startOfDay(for: day1.addingTimeInterval(86400))
+        let lines = [ChatLine.row(.user(u1)), ChatLine.day(day2), ChatLine.userImages(id: "imgs", items: [photo])]
+        let late = PendingMessage(text: "late", images: [], state: .failed, createdAt: day1.addingTimeInterval(60))
+        #expect(ChatLines.placeFailed(lines, [late]).before == [lines[1].id: [late]])
+        let next = PendingMessage(text: "next day", images: [], state: .failed, createdAt: day2.addingTimeInterval(3600))
+        #expect(ChatLines.placeFailed(lines, [next]).before == ["imgs": [next]])
+    }
 }

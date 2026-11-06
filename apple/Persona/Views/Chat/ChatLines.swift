@@ -372,6 +372,51 @@ extension ChatLines {
         return out
     }
 
+    /// Where messages that failed to send go (#6023): one written before a message sent after it goes right before the
+    /// first such message (or the day, or the feed card, that came after it), at the end of the exchange it was written
+    /// in, as a feed item does (`mergeFeed`). The chat then reads in the order things were written instead of keeping it
+    /// under everything sent since. One with nothing after it, one without a time (an outbox from before `createdAt`),
+    /// and every message still on its way stay at the end, in the order they were written. `before`: by the id of the
+    /// line each goes before, in the order they were written. `writtenAt`: when this phone wrote the messages it sent
+    /// (`ChatStore.writtenAt`); a line typed elsewhere goes by the computer's time, two minutes' slack for its clock, so
+    /// a near tie leaves the failed message below.
+    static func placeFailed(_ lines: [ChatLine], _ pending: [PendingMessage], writtenAt: [String: Date] = [:])
+        -> (before: [String: [PendingMessage]], rest: [PendingMessage]) {
+        let ordered = pending.enumerated().sorted { a, b in
+            let x = a.element.createdAt ?? .distantPast, y = b.element.createdAt ?? .distantPast
+            return x != y ? x < y : a.offset < b.offset
+        }.map(\.element)
+        guard ordered.contains(where: { $0.state == .failed }) else { return ([:], ordered) }
+        let after = lines.compactMap { line in placeTime(line, writtenAt).map { (id: line.id, at: $0) } }
+        var before: [String: [PendingMessage]] = [:]
+        var rest: [PendingMessage] = []
+        for msg in ordered {
+            guard msg.state == .failed, let at = msg.createdAt, let next = after.first(where: { $0.at > at }) else {
+                rest.append(msg)
+                continue
+            }
+            before[next.id, default: []].append(msg)
+        }
+        return (before, rest)
+    }
+
+    /// When a line was written, for `placeFailed`: a message the user sent (this phone's time for one sent from it), a
+    /// day's header, a feed card; nil for every other line.
+    private static func placeTime(_ line: ChatLine, _ writtenAt: [String: Date]) -> Date? {
+        func sent(_ i: Item) -> Date? {
+            if let id = i.clientMsgID?.uppercased(), let at = writtenAt[id] { return at }
+            return i.ts?.addingTimeInterval(-120)
+        }
+        switch line.content {
+        case .row(.user(let i)): return sent(i)
+        case .row(.image(let i)) where i.role == "user": return sent(i)
+        case .userImages(_, let items): return items.first.flatMap(sent)
+        case .day(let d): return d
+        case .feed(let f): return f.at
+        default: return nil
+        }
+    }
+
     /// When a line the user sent was sent; nil for every other line.
     private static func inputTime(_ line: ChatLine) -> Date? {
         switch line.content {
