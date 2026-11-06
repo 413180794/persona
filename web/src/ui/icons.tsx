@@ -29,6 +29,8 @@ const P: Record<string, React.ReactNode> = {
   clip: <path d="m21.4 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />,
   home: <g><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /></g>,
   machine: <g><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></g>,
+  phone: <g><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M11 18h2" /></g>,
+  watch: <g><rect x="6" y="7" width="12" height="10" rx="2" /><path d="M9 7V2h6v5M9 17v5h6v-5" /></g>,
   layers: <g><path d="M12 2 2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5M2 12l10 5 10-5" /></g>,
   chat: <path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z" />,
   sun: <g><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></g>,
