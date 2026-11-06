@@ -1,6 +1,6 @@
 import BeautifulUI
 import SwiftUI
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
@@ -51,7 +51,7 @@ extension VoiceSupport {
         case .model:
             break
         case .system:
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
             #endif
         }
