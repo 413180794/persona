@@ -44,6 +44,63 @@ func TestFeishuUUIDKeys(t *testing.T) {
 	}
 }
 
+// A reply into the parent's thread has its own key: the same parent and content as a plain reply must not be dropped
+// by the gateway as a repeat. Not in a thread, the key is byte for byte what it was before the flag existed.
+func TestFeishuReplyUUIDThreadFlag(t *testing.T) {
+	plain, thread := feishuReplyUUIDIn("om_1", "c", "card-a", false), feishuReplyUUIDIn("om_1", "c", "card-a", true)
+	if plain == thread {
+		t.Fatalf("a thread reply shares the plain reply's key %q", plain)
+	}
+	if thread != feishuReplyUUIDIn("om_1", "c", "card-a", true) {
+		t.Fatalf("the thread key is not deterministic: %q", thread)
+	}
+	if len(thread) > feishuMaxUUID {
+		t.Fatalf("thread key %q is %d long", thread, len(thread))
+	}
+	if long := feishuReplyUUIDIn(strings.Repeat("om_long", 20), "c", "x", true); len(long) != feishuMaxUUID {
+		t.Fatalf("long parent thread key %q is %d long", long, len(long))
+	}
+	// Keys fixed from the code before the flag (r:<parent>:<kind><first 6 bytes of sha256(content), hex>).
+	for _, c := range []struct{ parent, kind, content, want string }{
+		{"om_1", "c", "card-a", "r:om_1:cd022eae1f8ee"},
+		{"om_9", "t", "hello", "r:om_9:t2cf24dba5fb0"},
+	} {
+		if got := feishuReplyUUIDIn(c.parent, c.kind, c.content, false); got != c.want {
+			t.Errorf("not in a thread: %q, want %q", got, c.want)
+		}
+		if got := feishuReplyUUID(c.parent, c.kind, c.content); got != c.want {
+			t.Errorf("feishuReplyUUID: %q, want %q", got, c.want)
+		}
+	}
+}
+
+// Through the bus: a plain reply and then a thread reply to the same message with the same text go out under two
+// keys, and each repeat of one keeps its own.
+func TestChannelFeishuThreadReplyKeepsItsOwnKey(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	const text = "same words 5279"
+	for _, inThread := range []bool{false, true, false, true} {
+		w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279", "in_thread": inThread})
+	}
+	var keys []string
+	var threaded []bool
+	w.api.mu.Lock()
+	for _, c := range w.api.calls {
+		if m := uuidInCall.FindStringSubmatch(c); m != nil && strings.Contains(c, "/messages/om_5279/reply") {
+			keys = append(keys, m[1])
+			threaded = append(threaded, strings.Contains(c, `"reply_in_thread":true`))
+		}
+	}
+	w.api.mu.Unlock()
+	if len(keys) != 4 || keys[0] == keys[1] || keys[0] != keys[2] || keys[1] != keys[3] {
+		t.Fatalf("keys %v, want plain, thread, plain, thread with two distinct values", keys)
+	}
+	if threaded[0] || !threaded[1] || threaded[2] || !threaded[3] {
+		t.Fatalf("thread flags %v", threaded)
+	}
+}
+
 type fakeUUIDAPI struct {
 	srv         *httptest.Server
 	mu          sync.Mutex
@@ -246,7 +303,7 @@ func TestBotPostJSONKeyed(t *testing.T) {
 	api := feishubot.New("cli", "sec", f.srv.URL)
 	card := feishubot.NewCard("t", "green", "a").Markdown("card-a").JSON()
 	for range [2]int{} {
-		if _, err := h.botPostJSONKeyed(context.Background(), api, "chat", "", card, "fb", "mcafe00a10"); err != nil {
+		if _, err := h.botPostJSONKeyed(context.Background(), api, "chat", "", card, "fb", "mcafe00a10", false); err != nil {
 			t.Fatal(err)
 		}
 	}

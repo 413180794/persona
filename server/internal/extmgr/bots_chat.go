@@ -113,6 +113,17 @@ const feishuMaxUUID = 50
 // different content (the several cards of one turn, or the card vs its fallback) gets a different key, so the
 // gateway does not dedupe it.
 func feishuReplyUUID(messageID, kind, content string) string {
+	return feishuReplyUUIDIn(messageID, kind, content, false)
+}
+
+// feishuReplyUUIDIn is feishuReplyUUID for a reply that may go into the parent's thread. The thread flag is part of
+// the key: otherwise a plain reply and a thread reply with the same parent and content would share one, and the
+// gateway would drop whichever came second within its dedupe window. Not in a thread, the key is the same bytes as
+// ever.
+func feishuReplyUUIDIn(messageID, kind, content string, inThread bool) string {
+	if inThread {
+		content = "thread\x00" + content
+	}
 	sum := sha256.Sum256([]byte(content))
 	fp := hex.EncodeToString(sum[:6])
 	u := "r:" + messageID + ":" + kind + fp
@@ -409,13 +420,14 @@ func (h *Manager) botName(ctx context.Context, api *feishubot.Client, openID str
 // replyOrSend replies to replyTo when its parent still stands, or sends into chatID when replyTo is "". A definitive
 // 230011/230110 (parent withdrawn/deleted, which proves the reply never landed) reroutes the same content to a chat
 // send with a fresh one-shot key and rerouted=true; transport or other failures come back untouched, so one blip
-// never becomes two messages.
-func (h *Manager) replyOrSend(ctx context.Context, api *feishubot.Client, chatID, replyTo, msgType, content, replyUUID string) (id string, rerouted bool, err error) {
+// never becomes two messages. inThread puts a reply in the parent's thread (reply_in_thread); it means nothing for a
+// send into the chat, so a rerouted send ignores it too.
+func (h *Manager) replyOrSend(ctx context.Context, api *feishubot.Client, chatID, replyTo, msgType, content, replyUUID string, inThread bool) (id string, rerouted bool, err error) {
 	if replyTo == "" {
 		id, err = api.Send(ctx, "chat_id", chatID, msgType, content, feishuSendUUID())
 		return
 	}
-	id, err = api.Reply(ctx, replyTo, msgType, content, replyUUID, false)
+	id, err = api.Reply(ctx, replyTo, msgType, content, replyUUID, inThread)
 	if !feishubot.MessageGone(err) {
 		return
 	}
@@ -425,10 +437,33 @@ func (h *Manager) replyOrSend(ctx context.Context, api *feishubot.Client, chatID
 	return
 }
 
+var errBotChatDenied = errors.New("feishu: the bot only sends into the owner's private chat")
+
+// botChatAllowed says whether the bot may send into chatID on the assistant's behalf: only the owner's private chat.
+// A group chat joins this when the hub has a list of chats the owner opted in; until then everything else is refused.
+func botChatAllowed(set FeishuBotSettings, chatID string) bool {
+	return set.Owner != nil && set.Owner.ChatID != "" && chatID == set.Owner.ChatID
+}
+
+// botSendChat is the chat a feishu.post / feishu.text goes into: the owner's private chat when the caller names none,
+// else the one it names, if botChatAllowed lets it.
+func botSendChat(set FeishuBotSettings, chatID string) (string, error) {
+	if set.Owner == nil {
+		return "", errBotOff
+	}
+	if chatID == "" {
+		return set.Owner.ChatID, nil
+	}
+	if !botChatAllowed(set, chatID) {
+		return "", errBotChatDenied
+	}
+	return chatID, nil
+}
+
 // botNote replies to a message with a line of text; a parent withdrawn meanwhile gets the note in the chat instead.
 func (h *Manager) botNote(ctx context.Context, api *feishubot.Client, chatID, messageID, text string) {
 	content := feishubot.TextContent(text)
-	if _, _, err := h.replyOrSend(ctx, api, chatID, messageID, feishubot.TypeText, content, feishuReplyUUID(messageID, "n", text)); err != nil {
+	if _, _, err := h.replyOrSend(ctx, api, chatID, messageID, feishubot.TypeText, content, feishuReplyUUID(messageID, "n", text), false); err != nil {
 		h.logf("bots: note: %v", err)
 	}
 }
@@ -440,19 +475,20 @@ func (h *Manager) botPost(ctx context.Context, api *feishubot.Client, chatID, re
 }
 
 func (h *Manager) botPostJSON(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback string) (string, error) {
-	return h.botPostJSONKeyed(ctx, api, chatID, replyTo, card, fallback, "")
+	return h.botPostJSONKeyed(ctx, api, chatID, replyTo, card, fallback, "", false)
 }
 
 // botPostJSONKeyed is botPostJSON with the caller's key for a send into the chat (no parent): the same key, the
 // card and its fallback each land once however often the send is made again. "" is a fresh one-shot key.
-func (h *Manager) botPostJSONKeyed(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback, key string) (string, error) {
+// inThread puts a reply (and its rich-text fallback) in the parent's thread.
+func (h *Manager) botPostJSONKeyed(ctx context.Context, api *feishubot.Client, chatID, replyTo, card, fallback, key string, inThread bool) (string, error) {
 	if len(key) > feishuMaxUUID-4 {
 		key = key[:feishuMaxUUID-4]
 	}
 	cardUUID := feishuSendUUID()
 	switch {
 	case replyTo != "":
-		cardUUID = feishuReplyUUID(replyTo, "c", card)
+		cardUUID = feishuReplyUUIDIn(replyTo, "c", card, inThread)
 	case key != "":
 		cardUUID = "k:" + key + ":c"
 	}
@@ -460,7 +496,7 @@ func (h *Manager) botPostJSONKeyed(ctx context.Context, api *feishubot.Client, c
 		if replyTo == "" && key != "" {
 			return api.Send(ctx, "chat_id", chatID, typ, content, uuid) // the caller's key, not a fresh one
 		}
-		id, rerouted, err := h.replyOrSend(ctx, api, chatID, replyTo, typ, content, uuid)
+		id, rerouted, err := h.replyOrSend(ctx, api, chatID, replyTo, typ, content, uuid, inThread)
 		if rerouted {
 			replyTo = "" // a fallback after the detour must go to the chat too, never retry the dead reply
 		}
@@ -475,7 +511,7 @@ func (h *Manager) botPostJSONKeyed(ctx context.Context, api *feishubot.Client, c
 		fallbackUUID := feishuSendUUID()
 		switch {
 		case replyTo != "":
-			fallbackUUID = feishuReplyUUID(replyTo, "f", fallback)
+			fallbackUUID = feishuReplyUUIDIn(replyTo, "f", fallback, inThread)
 		case key != "":
 			fallbackUUID = "k:" + key + ":f"
 		}

@@ -857,8 +857,12 @@ const (
 	// FeishuPost: {reply_to?, card, fallback?, uuid?} → {message_id}: a card (JSON 2.0) as a reply, else into the
 	// owner's chat; one Feishu refuses goes again as rich text (fallback, Markdown). uuid (≤ 40 chars) is the caller's
 	// key for a send into the chat that may be made again (a retried morning brief): the same key lands once.
+	// chat_id? names another chat to send into (and to fall back to when the parent was withdrawn) and in_thread? puts
+	// a reply in the parent's thread; the hub refuses any chat but the owner's private chat, and with neither field
+	// the call is what it always was.
 	FeishuPost = "feishu.post"
-	// FeishuText: {reply_to?, text} → {message_id}: plain text as a reply, else into the owner's chat.
+	// FeishuText: {reply_to?, text, chat_id?, in_thread?} → {message_id}: plain text as a reply, else into the owner's
+	// chat; chat_id and in_thread are FeishuPost's.
 	FeishuText = "feishu.text"
 	// FeishuUpdateCard: {message_id, card} → {}.
 	FeishuUpdateCard = "feishu.update_card"

@@ -419,6 +419,30 @@ func (s *Service) botPost(ctx context.Context, replyTo string, card *feishubot.C
 
 // botPostKeyed is botPost with a key for a send into the chat that may be made again: the same key lands once.
 func (s *Service) botPostKeyed(ctx context.Context, replyTo string, card *feishubot.Card, fallback, key string) (string, error) {
+	return s.botPostTo(ctx, feishuTarget{}, replyTo, card, fallback, key)
+}
+
+// feishuTarget says where a feishu.post / feishu.text goes beyond the default: the chat to send into (ChatID; "" is the
+// owner's private chat, the only one the hub accepts for now) and whether a reply goes into the parent's thread. The
+// zero value is what the calls always did.
+type feishuTarget struct {
+	ChatID   string
+	InThread bool
+}
+
+// params adds the target's fields to p; the zero target adds none, so the call is the same as before.
+func (t feishuTarget) params(p map[string]any) map[string]any {
+	if t.ChatID != "" {
+		p["chat_id"] = t.ChatID
+	}
+	if t.InThread {
+		p["in_thread"] = true
+	}
+	return p
+}
+
+// botPostTo is botPostKeyed to a target.
+func (s *Service) botPostTo(ctx context.Context, to feishuTarget, replyTo string, card *feishubot.Card, fallback, key string) (string, error) {
 	var res struct {
 		MessageID string `json:"message_id"`
 	}
@@ -426,13 +450,19 @@ func (s *Service) botPostKeyed(ctx context.Context, replyTo string, card *feishu
 	if key != "" {
 		p["uuid"] = key
 	}
+	to.params(p)
 	err := s.appCall(ctx, AppFeishu, FeishuPost, p, &res)
 	return res.MessageID, err
 }
 
 // botNote replies to a message with a line of text.
 func (s *Service) botNote(ctx context.Context, messageID, text string) {
-	if err := s.appCall(ctx, AppFeishu, FeishuText, map[string]any{"reply_to": messageID, "text": text}, nil); err != nil {
+	s.botNoteTo(ctx, feishuTarget{}, messageID, text)
+}
+
+// botNoteTo is botNote to a target.
+func (s *Service) botNoteTo(ctx context.Context, to feishuTarget, messageID, text string) {
+	if err := s.appCall(ctx, AppFeishu, FeishuText, to.params(map[string]any{"reply_to": messageID, "text": text}), nil); err != nil {
 		s.logf("bots: note: %v", err)
 	}
 }

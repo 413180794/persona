@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -659,4 +660,98 @@ func TestBotRecallTellsTheAssistant(t *testing.T) {
 	}
 	recall("oc_p2p", "message_owner")
 	eventually(t, 5*time.Second, "the assistant told of the recall", func() bool { return w.a.wasTold(assistantwire.EventFeishuRecalled) })
+}
+
+// feishu.post and feishu.text with in_thread put a reply in the parent's thread; without it the request is what it
+// was (no reply_in_thread at all), and a chat_id naming the owner's own chat changes nothing.
+func TestChannelFeishuInThread(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	card := feishubot.NewCard("t", "green", "a").Markdown("thread card").JSON()
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "thread text", "reply_to": "om_t1", "in_thread": true})
+	w.feishu(t, assistantwire.FeishuPost, map[string]any{"card": card, "reply_to": "om_t2", "in_thread": true, "chat_id": "oc_p2p"})
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "plain text", "reply_to": "om_t3"})
+	w.feishu(t, assistantwire.FeishuPost, map[string]any{"card": card, "reply_to": "om_t4"})
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "chat text", "in_thread": true}) // no parent: nothing to thread under
+
+	w.api.find(t, "/messages/om_t1/reply", "thread text", `"reply_in_thread":true`)
+	w.api.find(t, "/messages/om_t2/reply", "thread card", `"reply_in_thread":true`)
+	for _, c := range []string{w.api.find(t, "/messages/om_t3/reply", "plain text"), w.api.find(t, "/messages/om_t4/reply", "thread card"),
+		w.api.find(t, "POST /open-apis/im/v1/messages ", "chat text", `"receive_id":"oc_p2p"`)} {
+		if strings.Contains(c, "reply_in_thread") {
+			t.Fatalf("a call without a thread to join carried reply_in_thread: %s", c)
+		}
+	}
+	if n := w.api.count("reply_in_thread"); n != 2 {
+		t.Fatalf("%d calls carry reply_in_thread, want 2", n)
+	}
+}
+
+// Only the owner's private chat is a chat the assistant may name; any other is refused before anything is sent.
+func TestChannelFeishuRefusesOtherChats(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	card := feishubot.NewCard("t", "green", "a").Markdown("refused card").JSON()
+	before := w.api.count("/open-apis/im/v1/messages")
+	for method, params := range map[string]map[string]any{
+		assistantwire.FeishuPost: {"card": card, "chat_id": "oc_test"},
+		assistantwire.FeishuText: {"text": "refused text", "chat_id": "oc_test", "reply_to": "om_x", "in_thread": true},
+	} {
+		raw, _ := json.Marshal(params)
+		_, ok, err := w.h.AppCall(context.Background(), assistantwire.AppCall{AppID: assistantwire.AppFeishu, Method: method, Params: raw})
+		if !ok || err == nil || !errors.Is(err, errBotChatDenied) {
+			t.Fatalf("%s to another chat: handled %v, err %v; want %v", method, ok, err, errBotChatDenied)
+		}
+	}
+	if after := w.api.count("/open-apis/im/v1/messages"); after != before || w.api.count("oc_test") != 0 {
+		t.Fatalf("something was sent for a refused chat (%d calls before, %d after)", before, after)
+	}
+}
+
+func TestBotChatAllowed(t *testing.T) {
+	owner := FeishuBotSettings{Owner: &BotOwner{OpenID: "ou_owner", ChatID: "oc_p2p"}}
+	for _, c := range []struct {
+		name string
+		set  FeishuBotSettings
+		chat string
+		want bool
+	}{
+		{"the owner's private chat", owner, "oc_p2p", true},
+		{"another chat", owner, "oc_test", false},
+		{"no chat", owner, "", false},
+		{"not paired", FeishuBotSettings{}, "oc_p2p", false},
+		{"paired without a chat id", FeishuBotSettings{Owner: &BotOwner{OpenID: "ou_owner"}}, "", false},
+	} {
+		if got := botChatAllowed(c.set, c.chat); got != c.want {
+			t.Errorf("%s: botChatAllowed = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if chat, err := botSendChat(owner, ""); err != nil || chat != "oc_p2p" {
+		t.Errorf("no chat named: %q, %v; want the owner's chat", chat, err)
+	}
+	if _, err := botSendChat(FeishuBotSettings{}, ""); !errors.Is(err, errBotOff) {
+		t.Errorf("not paired: %v, want errBotOff", err)
+	}
+}
+
+// A reply whose parent was withdrawn is sent into the chat the call carried (not a fixed one), as a plain message:
+// the thread flag does not follow it into the chat send.
+func TestBotReplyDetoursIntoTheCallsChat(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	w.api.rejectReply = 230011
+	api, _ := w.h.botAPI()
+	if _, rerouted, err := w.h.replyOrSend(context.Background(), api, "oc_test", "om_gone", feishubot.TypeText, feishubot.TextContent("detour text"), "k1", true); err != nil || !rerouted {
+		t.Fatalf("replyOrSend: rerouted %v, err %v", rerouted, err)
+	}
+	w.api.find(t, "/messages/om_gone/reply", "detour text", `"reply_in_thread":true`) // the threaded reply was tried first
+	send := w.api.find(t, "POST /open-apis/im/v1/messages ", "detour text")
+	if !strings.Contains(send, `"receive_id":"oc_test"`) || strings.Contains(send, "reply_in_thread") {
+		t.Fatalf("the detoured send: %s", send)
+	}
+	// Through the bus the same happens into the owner's chat.
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "bus detour", "reply_to": "om_gone2", "in_thread": true, "chat_id": "oc_p2p"})
+	if send := w.api.find(t, "POST /open-apis/im/v1/messages ", "bus detour"); !strings.Contains(send, `"receive_id":"oc_p2p"`) {
+		t.Fatalf("the bus detour: %s", send)
+	}
 }

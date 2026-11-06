@@ -94,6 +94,8 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		CotID      string               `json:"cot_id"`
 		Events     []feishubot.CotEvent `json:"events"`
 		Reason     string               `json:"reason"`
+		ChatID     string               `json:"chat_id"`   // feishu.post / feishu.text: the chat to send into (default: the owner's)
+		InThread   bool                 `json:"in_thread"` // feishu.post / feishu.text: a reply goes into the parent's thread
 	}
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &a); err != nil {
@@ -125,11 +127,19 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if a.Card == "" {
 			return nil, errors.New("feishu.post needs a card")
 		}
-		id, err := h.botPostJSONKeyed(ctx, api, set.Owner.ChatID, a.ReplyTo, a.Card, a.Fallback, a.UUID)
+		chatID, err := botSendChat(set, a.ChatID)
+		if err != nil {
+			return nil, err
+		}
+		id, err := h.botPostJSONKeyed(ctx, api, chatID, a.ReplyTo, a.Card, a.Fallback, a.UUID, a.InThread)
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuText:
+		chatID, err := botSendChat(set, a.ChatID)
+		if err != nil {
+			return nil, err
+		}
 		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.
-		id, _, err := h.replyOrSend(ctx, api, set.Owner.ChatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUID(a.ReplyTo, "t", a.Text))
+		id, _, err := h.replyOrSend(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUIDIn(a.ReplyTo, "t", a.Text, a.InThread), a.InThread)
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
