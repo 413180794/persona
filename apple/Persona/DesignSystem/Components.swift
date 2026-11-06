@@ -360,7 +360,7 @@ struct EmptyStateView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let action {
-                Button(action.title, action: action.run)
+                Button(action: action.run) { Text(action.title).lineLimit(1) }
                     .themedButton(prominent: true)
                     .padding(.top, Theme.Space.xs)
             }
@@ -618,7 +618,7 @@ struct LoadableContent<Value, Content: View>: View {
                 ContentUnavailableView {
                     Label(message, systemImage: Theme.Icon.error)
                 } actions: {
-                    if let retry { Button("Retry [Components b8784c]", action: retry).themedButton() }
+                    if let retry { Button(action: retry) { Text("Retry [Components b8784c]").lineLimit(1) }.themedButton() }
                 }
             }
         }

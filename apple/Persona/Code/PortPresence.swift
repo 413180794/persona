@@ -37,6 +37,16 @@ final class PortPresence {
 
     private var known: [Key: (state: State, at: Date)] = [:]
     @ObservationIgnored private var asking: Set<Key> = []
+    /// When asking about a port last failed (no hub, a timeout, an old hub without the endpoint): a badge scrolled
+    /// back into view within `failureHold` waits for nothing instead of asking again.
+    @ObservationIgnored private var failed: [Key: Date] = [:]
+    /// How many times each group's socket connected: a question that fails after a reconnect it started before is
+    /// not remembered (the hub is back).
+    @ObservationIgnored private var connects: [String: Int] = [:]
+
+    /// How long a failed question holds: long enough that scrolling a chat back and forth asks once, short enough
+    /// that a hub back without a reconnect (a network that only hiccuped) is asked again within the minute.
+    static let failureHold: TimeInterval = 20
 
     /// A port's state: listed by an agent on the machine, else what the hub said last; nil while unknown.
     func state(_ port: Int, machine: MachineRef, listed: [ListeningPort]) -> State? {
@@ -44,27 +54,48 @@ final class PortPresence {
         return known[Key(machine: machine, port: port)]?.state
     }
 
-    /// Asks about ports not listed and not known (or known over a minute ago, half that when gone).
+    /// Asks about ports not listed and not known (or known over a minute ago, half that when gone), skipping those
+    /// whose question failed within `failureHold`.
     func ask(_ ports: [Int], machine: MachineRef, listed: [ListeningPort], api: APIClient?) {
         guard let api, !api.config.isDemo else { return }
         for port in ports where !listed.contains(where: { $0.port == port }) {
             let key = Key(machine: machine, port: port)
             if let k = known[key], Date.now.timeIntervalSince(k.at) < (k.state == .gone ? 30 : 60) { continue }
+            if let at = failed[key], Date.now.timeIntervalSince(at) < Self.failureHold { continue }
             guard !asking.contains(key) else { continue }
             asking.insert(key)
+            let connect = connects[machine.group, default: 0]
             Task { [weak self] in
                 let res = try? await api.probePort(machine: machine.id, port: port)
                 guard let self else { return }
                 self.asking.remove(key)
-                if let res { self.known[key] = (res.listening ? .live(title: res.title) : .gone, .now) }
+                if let res {
+                    self.known[key] = (res.listening ? .live(title: res.title) : .gone, .now)
+                    self.failed[key] = nil
+                } else if self.connects[machine.group, default: 0] == connect {
+                    self.failed[key] = .now
+                }
             }
         }
     }
 
-    func noteGone(_ port: Int, machine: MachineRef) { known[Key(machine: machine, port: port)] = (.gone, .now) }
+    func noteGone(_ port: Int, machine: MachineRef) {
+        let key = Key(machine: machine, port: port)
+        known[key] = (.gone, .now)
+        failed[key] = nil
+    }
 
     func noteLive(_ port: Int, machine: MachineRef, title: String?) {
-        known[Key(machine: machine, port: port)] = (.live(title: title), .now)
+        let key = Key(machine: machine, port: port)
+        known[key] = (.live(title: title), .now)
+        failed[key] = nil
+    }
+
+    /// A group's socket connected (again): the hub is back, so ports whose question failed are asked again as their
+    /// badges appear.
+    func reconnected(group: String) {
+        connects[group, default: 0] += 1
+        failed = failed.filter { $0.key.machine.group != group }
     }
 }
 

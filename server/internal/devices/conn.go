@@ -317,7 +317,7 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 			m.mu.Unlock()
 		}
 	}
-	go m.watchPaths(sctx, c)
+	go m.watchPaths(sctx, ctx, c)
 	if info.ClaudeVersion == "" {
 		go m.retryClaudeVersion(sctx, c.peer)
 	}
@@ -352,8 +352,9 @@ func (m *Machine) serve(ctx context.Context, c *nodeConn) error {
 
 // watchPaths, while c is the connection, leaves it for a clearly better path once that has stayed better long
 // enough (connecting the new one first), and lets it go when its path now reaches another computer or this machine
-// is to be parked.
-func (m *Machine) watchPaths(ctx context.Context, c *nodeConn) {
+// is to be parked. ctx is c's (it ends with c); runCtx the run loop's, which the new connection lives on: made on ctx,
+// it was cancelled the moment c let go — its node's requests failed and an ssh or local node was killed.
+func (m *Machine) watchPaths(ctx, runCtx context.Context, c *nodeConn) {
 	since := map[string]time.Time{}
 	t := time.NewTicker(pathCheckEvery)
 	defer t.Stop()
@@ -379,14 +380,29 @@ func (m *Machine) watchPaths(ctx context.Context, c *nodeConn) {
 			continue
 		}
 		m.d.logf("[%s] trying a better path: %s instead of %s", m.cfg.ID, pathName(m.d, q), pathName(m.d, c.path))
-		next, err := m.establish(ctx, q)
+		// Given up if c ends while connecting; once connected, the new connection outlives c.
+		ectx, cancel := context.WithCancel(runCtx)
+		stop := context.AfterFunc(ctx, cancel)
+		next, err := m.establish(ectx, q)
+		stop()
 		if err != nil {
+			cancel()
+			if ctx.Err() != nil {
+				return
+			}
 			m.d.pathEnded(q, false, err, 0, false)
 			m.d.logf("[%s] the better path did not work: %v", m.cfg.ID, err)
 			delete(since, q.key)
 			continue
 		}
+		inner := next.cancel
+		next.cancel = func() { inner(); cancel() } // ectx goes when the new connection does
 		m.mu.Lock()
+		if ctx.Err() != nil { // c ended meanwhile and run looked for m.next already (serve returns before takeNext)
+			m.mu.Unlock()
+			next.close()
+			return
+		}
 		m.next = next
 		m.mu.Unlock()
 		c.peer.Close(errSwitched)

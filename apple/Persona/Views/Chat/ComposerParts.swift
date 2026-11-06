@@ -135,6 +135,7 @@ struct ComposerImages: View {
                                     .foregroundStyle(.white, .black.opacity(0.6))
                             }
                             .offset(x: 5, y: -5)
+                            .accessibilityLabel("Remove Image \(idx + 1)") // same key as the Mac thumbnail
                         }
                     #endif
                 }

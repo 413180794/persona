@@ -1208,6 +1208,8 @@ final class AppModel {
         if plan.refetch { AgentSync.shared.schedule() }
         // A new socket is a new client for the hub: the Files / Git panes' folders are told again and refreshed (#3089).
         fsLive.reconnected(group: group)
+        // Ports whose question failed while the hub was unreachable are asked again (#4302).
+        portPresence.reconnected(group: group)
         let mine = subscribed.filter { $0.group == group }
         // Updating… until the open chats' backlog and the pending interactions are in (ConnectionStatus); nothing when
         // resumed (an empty catch-up only lets the outbox go).

@@ -314,6 +314,9 @@ export function Menu({
   const asking = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const loads = useRef(0);
   const rows = useRef<(HTMLElement | null)[][]>([]);
+  // On a narrow screen Back closes the menu first, like the drawer and the sheets, instead of leaving the page (#5132).
+  // A row that opens a sheet or a panel takes the menu's entry over (back-close reuses an entry closed a tick before).
+  useCloseOnBack(true, onClose, useMedia(NARROW_QUERY));
 
   const levels = [items, ...subs.map((s) => s.items)];
   // the key handler is registered once and reads this: what the menu is now
