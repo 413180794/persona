@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -53,5 +54,37 @@ func TestAgentStartWithoutWorktreeMakesNone(t *testing.T) {
 	}
 	if len(f.worktrees) != 0 || len(f.starts) != 1 || f.starts[0]["cwd"] != "/code/app" || f.starts[0]["workspace_id"] != nil {
 		t.Fatalf("worktrees %v, starts %v", f.worktrees, f.starts)
+	}
+}
+
+// A branch with letters the slug drops (a Chinese name) still gets a folder of its own under the engine's worktrees
+// directory: never that directory itself (an empty slug), nor another branch's (fix/登录 and fix/注册 both slug to
+// "fix"); an ASCII branch keeps the dialog's name (#5775).
+func TestAgentStartWorktreeForABranchWithNoASCIIName(t *testing.T) {
+	paths := map[string]string{}
+	for _, branch := range []string{"修复登录", "需求/重构", "fix/登录", "fix/注册"} {
+		s, f := newTaskService(t)
+		if _, err := s.runTool(context.Background(), "server", "conv9", "agent_start",
+			json.RawMessage(`{"machine":"box","cwd":"/code/app","prompt":"修登录","worktree":{"branch":"`+branch+`"}}`)); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.worktrees) != 2 {
+			t.Fatalf("%s: worktree calls %v", branch, f.worktrees)
+		}
+		p := f.worktrees[1]["path"].(string)
+		if filepath.Dir(p) != "/wt/app" || filepath.Base(p) == "" || filepath.Base(p) == "app" {
+			t.Fatalf("%s: checkout at %q, want a folder of its own in /wt/app", branch, p)
+		}
+		paths[branch] = p
+	}
+	if got := worktreeDirName("feat/2431-worktree"); got != "feat-2431-worktree" {
+		t.Fatalf("an ASCII branch is named %q", got)
+	}
+	seen := map[string]string{}
+	for b, p := range paths {
+		if other, dup := seen[p]; dup {
+			t.Fatalf("%s and %s share the checkout %q", b, other, p)
+		}
+		seen[p] = b
 	}
 }
