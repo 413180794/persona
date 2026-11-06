@@ -19,6 +19,7 @@
   "section_upcoming": "今後の予定",
   "run_count_other": "{count}回",
   "section_runs": "実行履歴",
+  "runs_load_failed": "実行履歴を読み込めません：{error}",
   "runs_empty": "まだ実行されていません。定期タスクとフォローアップの実行は、失敗やスキップも含めてすべてここに記録されます。",
   "show_all_runs_other": "{count}回分をすべて表示",
   "row_label": "{title}、{rule}、{next}",

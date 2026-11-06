@@ -20,6 +20,7 @@
   "run_count_one": "{count} run",
   "run_count_other": "{count} runs",
   "section_runs": "Run history",
+  "runs_load_failed": "Couldn't load run history: {error}",
   "runs_empty": "No runs yet. Every run of a scheduled task or follow-up, including failed and skipped ones, shows up here.",
   "show_all_runs_one": "Show {count} run",
   "show_all_runs_other": "Show all {count} runs",

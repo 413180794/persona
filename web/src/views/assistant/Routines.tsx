@@ -44,6 +44,7 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [error, setError] = useState("");
+  const [runsError, setRunsError] = useState("");
   const [editing, setEditing] = useState<Task | null>(null);
   const [allRuns, setAllRuns] = useState(false);
   const [rowMenu, setRowMenu] = useState<{ task: Task; at: MenuAt } | null>(null);
@@ -62,7 +63,10 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       setTasks(task.value.tasks ?? []);
       setError("");
     } else setError(errorText(task.reason));
-    if (r.status === "fulfilled") setRuns(r.value.runs ?? []);
+    if (r.status === "fulfilled") {
+      setRuns(r.value.runs ?? []);
+      setRunsError("");
+    } else setRunsError(errorText(r.reason));
   }, []);
 
   useEffect(() => {
@@ -236,7 +240,12 @@ export function Routines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
             )}
             <section>
               <SectionTitle right={runs && runs.length > 0 ? <span className="text-[11px] text-ink-3 tabular-nums">{t("assistant-routines.run_count", { count: runs.length })}</span> : undefined}>{t("assistant-routines.section_runs")}</SectionTitle>
-              {runs === null ? (
+              {runsError ? (
+                <div className="flex items-center gap-3 rounded-card bg-surface px-4 py-3 shadow-card">
+                  <p role="alert" className="min-w-0 flex-1 text-[12.5px] break-words text-red">{t("assistant-routines.runs_load_failed", { error: runsError })}</p>
+                  <Button tone="secondary" icon="retry" onClick={() => void load()}>{t("settings-channels.retry")}</Button>
+                </div>
+              ) : runs === null ? (
                 <div className="rounded-card bg-surface px-4 py-6 shadow-card">
                   <Loading />
                 </div>

@@ -175,6 +175,14 @@ describe("catalogs", () => {
     }
   });
 
+  it("explains the purpose of the Chinese Lark display settings title", () => {
+    expect(source["settings-larkdisplay"].title).toContain("消息显示");
+  });
+
+  it.each(LANGS)("points the Brave Climb hint to the displayed settings title in %s", (lang) => {
+    expect(all[lang]["inbox-larkbraveclimb"].switch_off).toContain(all[lang]["settings-larkdisplay"].title);
+  });
+
   // A file in this repository means nothing to someone using the app and is nowhere they can open it (#3597): say what
   // to do or link to the page. The ones still left may only go away.
   it("names no file of the repository's docs", () => {

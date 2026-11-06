@@ -19,6 +19,7 @@
   "section_upcoming": "接下来",
   "run_count_other": "{count} 次",
   "section_runs": "运行记录",
+  "runs_load_failed": "读不到运行记录：{error}",
   "runs_empty": "还没有运行过。定时任务和跟进每跑一次（包括失败和跳过的）都记在这里。",
   "show_all_runs_other": "显示全部 {count} 次",
   "row_label": "{title}，{rule}，{next}",
