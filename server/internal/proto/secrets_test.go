@@ -11,13 +11,13 @@ func TestSecretKey(t *testing.T) {
 		"password", "PASSWORD", "passwd", "client_secret", "cookie", "Set-Cookie", "credentials", "session_id", "sessionId",
 		"private_key", "privateKey", "headers", "bearer", "Bearer", "totp", "pin", "dsn", "database_dsn", "connection_string",
 		"connStr", "webhook_url", "slackWebhook", "pwd", "pass", "jwt", "access_key", "accessKeyId", "key", "signature", "auth",
-		"x-auth", "auth_code", "otp"} {
+		"x-auth", "auth_code", "otp", "SSHKey", "GPGKey", "AWSKey", "DBPass", "HTTPAuth", "MFAPin", "PGPKeys"} {
 		if !SecretKey(k) {
 			t.Errorf("%s: want a credential", k)
 		}
 	}
 	for _, k := range []string{"author", "authorName", "oauth_scope", "session_name", "keyword", "passage", "monkey",
-		"repo", "user", "name", "region", ""} {
+		"repo", "user", "name", "region", "OAuthScope", "URLPath", "HTTPMethod", "IDList", ""} {
 		if SecretKey(k) {
 			t.Errorf("%s: not a credential", k)
 		}

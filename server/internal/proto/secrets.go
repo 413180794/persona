@@ -16,7 +16,9 @@ var (
 	secretWords = map[string]bool{"key": true, "keys": true, "pass": true, "pwd": true, "pin": true, "auth": true,
 		"authorization": true, "authentication": true, "authn": true, "sig": true, "otp": true, "dsn": true}
 	camelBreak = regexp.MustCompile(`([a-z0-9])([A-Z])`)
-	nonWord    = regexp.MustCompile(`[^a-z0-9]+`)
+	// an acronym before a word (SSHKey, DBPass): two capitals or more, so OAuth stays one word
+	acronymBreak = regexp.MustCompile(`([A-Z]{2,})([A-Z][a-z])`)
+	nonWord      = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
 // Redacted is what a credential's value becomes in RedactArgs.
@@ -25,7 +27,7 @@ const Redacted = "***"
 // SecretKey is whether an argument's name says its value is a credential, case and separators aside.
 func SecretKey(k string) bool {
 	var words []string
-	for _, w := range nonWord.Split(strings.ToLower(camelBreak.ReplaceAllString(k, "${1}_${2}")), -1) {
+	for _, w := range nonWord.Split(strings.ToLower(camelBreak.ReplaceAllString(acronymBreak.ReplaceAllString(k, "${1}_${2}"), "${1}_${2}")), -1) {
 		if w != "" {
 			words = append(words, w)
 		}

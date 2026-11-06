@@ -67,9 +67,10 @@ const SUMMARY_KEYS = ['command', 'file_path', 'path', 'url', 'pattern', 'query',
 const SECRET_PARTS = /token|passw|secret|apikey|accesskey|privatekey|credential|cookie|bearer|jwt|signature|sessionid|sessionkey|header|totp|webhook|connectionstring|connstr/
 const SECRET_WORDS = new Set(['key', 'keys', 'pass', 'pwd', 'pin', 'auth', 'authorization', 'authentication', 'authn', 'sig', 'otp', 'dsn'])
 
-/** Whether an argument's name says its value is a credential. */
+/** Whether an argument's name says its value is a credential. An acronym before a word (SSHKey, DBPass) is split off
+ *  first: two capitals or more, so OAuth stays one word. */
 function secretKey(k) {
-  const words = String(k).replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  const words = String(k).replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1_$2').replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
   return SECRET_PARTS.test(words.join('')) || words.some((w) => SECRET_WORDS.has(w))
 }
 

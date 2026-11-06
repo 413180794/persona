@@ -15,11 +15,11 @@ test('summaryOf says what a call does, not just which tool', () => {
   assert.equal(summaryOf('x', { api_key: 'sk-live-123', repo: 'a' }), 'repo: a', 'a credential is skipped')
   for (const k of ['token', 'api_key', 'apiKey', 'APIKey', 'x-api-key', 'authorization', 'Authorization', 'password', 'client_secret', 'cookie', 'credentials',
     'session_id', 'sessionId', 'private_key', 'headers', 'bearer', 'Bearer', 'totp', 'pin', 'dsn', 'database_dsn', 'connection_string', 'connStr', 'webhook_url', 'slackWebhook', 'pwd', 'pass', 'jwt', 'access_key', 'accessKeyId', 'key', 'signature', 'auth',
-    'x-auth', 'auth_code', 'otp']) {
+    'x-auth', 'auth_code', 'otp', 'SSHKey', 'GPGKey', 'AWSKey', 'DBPass', 'HTTPAuth', 'MFAPin', 'PGPKeys']) {
     assert.equal(summaryOf('mcp__x__call', { [k]: 'secret-value' }), 'mcp__x__call', `${k} alone: the tool name`)
   }
   assert.equal(summaryOf('x', { password: 'hunter2', user: 'bob' }), 'user: bob')
-  for (const k of ['author', 'authorName', 'oauth_scope', 'session_name', 'keyword', 'passage', 'monkey']) {
+  for (const k of ['author', 'authorName', 'oauth_scope', 'session_name', 'keyword', 'passage', 'monkey', 'OAuthScope', 'URLPath', 'HTTPMethod', 'IDList']) {
     assert.equal(summaryOf('x', { [k]: 'v' }), `${k}: v`, `${k} is no credential: shown`)
   }
 })
