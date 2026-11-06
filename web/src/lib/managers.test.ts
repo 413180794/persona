@@ -1,6 +1,6 @@
 // Settings › Managers' words (docs/managers.md): where one runs, its status line, why Delete is off, and the hub's refusals.
 import { describe, expect, it } from "vitest";
-import { ApiError } from "./api";
+import { ApiError, errorText } from "./api";
 import { deleteBlocked, deployText, managerError, minutesLeft, statusLine, unsupported, validName, whereText, type Manager } from "./managers";
 
 const NOW = Date.parse("2026-11-05T12:00:00Z");
@@ -50,7 +50,9 @@ describe("管理者", () => {
     expect(managerError(err(409, "installing"))).toBe("它还没装好，装好后才能改名或设为默认");
     expect(managerError(err(400))).toBe("名字要 1 到 40 个字");
     expect(managerError(err(403))).toBe("这台设备没有修改权限");
-    expect(managerError(err(500))).toBe("raw");
+    // anything else is the shared explanation (#3849: a next step, the status and the hub's own words kept)
+    expect(managerError(err(500))).toBe(errorText(err(500)));
+    expect(managerError(err(500))).toContain("raw");
     expect(unsupported(err(404))).toBe(true);
     expect(unsupported(err(404, "no_manager"))).toBe(false);
   });
