@@ -34,18 +34,19 @@ type fakeHub struct {
 	delivered map[string]bool
 	full      map[string]string // item id -> its whole text (a page cuts it)
 
-	reply  func(text string) string       // the main conversation's answer (nil: a fixed Chinese line, "a meeting at 3 pm tomorrow")
-	onSend func(m sentMsg) (int, string)  // answers a send instead of taking it (status 0: take it)
-	manual bool                           // a message is put in the transcript and left there: the test answers it
-	work   time.Duration                  // how long a turn works (0: 50 ms)
-	delay  time.Duration                  // how long a send takes
-	pageAt int                            // items per after_seq page (0: all)
-	noWS   bool                           // /api/v1/ws is not there
-	cut    bool                           // a send's connection is dropped before the hub answers
-	toSeq  func(sid string, last int) int // what turns=1 says is the last line (nil: the last item's)
-	ws     map[*websocket.Conn]map[string]bool
-	wsSaw  []map[string]any
-	looks  int // GET /api/v1/sessions?machine_id= (a run's check, or a send's look first)
+	reply    func(text string) string       // the main conversation's answer (nil: a fixed Chinese line, "a meeting at 3 pm tomorrow")
+	onSend   func(m sentMsg) (int, string)  // answers a send instead of taking it (status 0: take it)
+	manual   bool                           // a message is put in the transcript and left there: the test answers it
+	work     time.Duration                  // how long a turn works (0: 50 ms)
+	delay    time.Duration                  // how long a send takes
+	subDelay time.Duration                  // how long a subscribe takes to get here
+	pageAt   int                            // items per after_seq page (0: all)
+	noWS     bool                           // /api/v1/ws is not there
+	cut      bool                           // a send's connection is dropped before the hub answers
+	toSeq    func(sid string, last int) int // what turns=1 says is the last line (nil: the last item's)
+	ws       map[*websocket.Conn]map[string]bool
+	wsSaw    []map[string]any
+	looks    int // GET /api/v1/sessions?machine_id= (a run's check, or a send's look first)
 	// onLook runs as GET /api/v1/sessions?machine_id= is asked, onRead as an after_seq page is, before they answer
 	// (unlocked).
 	onLook, onRead func()
@@ -113,9 +114,8 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		h.mu.Lock()
 		h.main = "main1"
 		h.sessions["main1"] = &fakeSession{id: "main1", assistant: true, status: "working"}
-		h.sent = append(h.sent, sentMsg{Session: "main1", Text: in.Prompt})
 		h.mu.Unlock()
-		go h.take(sentMsg{Session: "main1", Text: in.Prompt})
+		h.take(sentMsg{Session: "main1", Text: in.Prompt})
 		_ = json.NewEncoder(w).Encode(map[string]any{"session": map[string]any{"machine_id": "m", "session_id": "main1", "assistant": true}})
 	})
 	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -150,12 +150,9 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		h.mu.Lock()
 		again := h.delivered[m.ID]
 		h.delivered[m.ID] = true
-		if !again {
-			h.sent = append(h.sent, m)
-		}
 		h.mu.Unlock()
 		if !again { // the hub sends an id once: the same one again answers 200 and does nothing
-			go h.take(m)
+			h.take(m)
 		}
 		_, _ = io.WriteString(w, `{}`)
 	})
@@ -353,16 +350,21 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 			sid, _ := f["session_id"].(string)
 			switch f["type"] {
 			case "subscribe":
+				if d := h.subDelay; d > 0 {
+					h.mu.Unlock()
+					time.Sleep(d)
+					h.mu.Lock()
+				}
 				h.ws[c][sid] = true
 				// What came after since_seq is sent at once, as the hub's sendBacklog does: a line written before the
-				// subscription got here is not missed (#5554). A subscription from 0 gets nothing (the hub would send
-				// the last exchanges: no test here needs them).
-				if since, _ := f["since_seq"].(float64); since > 0 && h.sessions[sid] != nil {
-					var after []proto.Item
-					for _, it := range h.sessions[sid].items {
-						if it.Seq > int(since) {
-							after = append(after, it)
-						}
+				// subscription got here is not missed (#5554). From 0 (an empty conversation's base), the last two
+				// exchanges, as the hub sends them: a turn that ended while the subscription was on its way is not
+				// missed either (#6068).
+				if s := h.sessions[sid]; s != nil {
+					since, _ := f["since_seq"].(float64)
+					after := lastExchanges(s.items, 2)
+					if since > 0 {
+						after = slices.DeleteFunc(slices.Clone(s.items), func(it proto.Item) bool { return it.Seq <= int(since) })
 					}
 					if len(after) > 0 {
 						ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -413,15 +415,37 @@ func (h *fakeHub) listLocked() []proto.Session {
 	return out
 }
 
-// take puts a message into its conversation and, unless manual, works on it and answers.
+// lastExchanges is items from the n-th last user message on (the hub's turns=n).
+func lastExchanges(items []proto.Item, n int) []proto.Item {
+	from := len(items)
+	for k := 0; from > 0 && k < n; {
+		from--
+		if it := items[from]; it.Role == "user" && it.Kind == proto.KindText {
+			k++
+		}
+	}
+	return items[from:]
+}
+
+// take puts a message into its conversation and, unless manual, works on it and answers in the background. The
+// message is in the transcript before it counts as sent (waitSent): a test that answers it by hand cannot get its
+// answer in ahead of it, which no hub does (#6068).
 func (h *fakeHub) take(m sentMsg) {
 	h.add(m.Session, proto.Item{Role: "user", Kind: proto.KindText, Text: m.Text, ClientMsgID: m.ID})
 	h.mu.Lock()
-	manual, work, reply := h.manual, h.work, h.reply
+	h.sent = append(h.sent, m)
+	manual := h.manual
 	h.mu.Unlock()
-	if manual {
-		return
+	if !manual {
+		go h.answer(m)
 	}
+}
+
+// answer works on a message taken and answers it.
+func (h *fakeHub) answer(m sentMsg) {
+	h.mu.Lock()
+	work, reply := h.work, h.reply
+	h.mu.Unlock()
 	if work == 0 {
 		work = 50 * time.Millisecond
 	}

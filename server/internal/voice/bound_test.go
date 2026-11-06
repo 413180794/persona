@@ -985,3 +985,32 @@ func TestBoundTurnBetweenTheLookAndTheRead(t *testing.T) {
 		t.Fatalf("first: %s", got)
 	}
 }
+
+// A run looked at while its message is in and its turn not started yet waits for the turn's end, which comes over the
+// hub link: from an empty conversation (base 0) the link subscribes from 0, and a turn that ended before that
+// subscription got to the hub is in what the hub sends back on it (its last exchanges, #6068).
+func TestBoundTurnEndsBeforeTheLinkSubscribes(t *testing.T) {
+	hub := agentHub(t)
+	hub.manual = true
+	hub.subDelay = 2 * time.Second
+	up := boundUpstream(t, false)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "跑一下全部测试"})
+	m := hub.waitSent(1)
+	looks := hub.lookCount()
+	for deadline := time.Now().Add(5 * time.Second); hub.lookCount() < looks+2; {
+		if time.Now().After(deadline) {
+			t.Fatal("the run was never looked at")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	hub.status("a1", "working")
+	hub.add("a1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "测试在后台跑了，单元测试都过了。"})
+	hub.edit("a1", func(s *fakeSession) { s.background = 1 })
+	hub.end("a1")
+	if states := a.runStates(m.ID, runHeld); slices.Contains(states, runDone) {
+		t.Fatalf("run states %v", states)
+	}
+}

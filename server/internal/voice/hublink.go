@@ -87,7 +87,7 @@ func (h *hubLink) listen() *linkListener {
 	if h.cancel == nil {
 		ctx, cancel := context.WithCancel(context.Background())
 		h.cancel = cancel
-		go h.run(ctx)
+		go h.run(ctx, linkBackoff) // read here: a test sets it back while a closed link's loop is still on its way out
 	}
 	return l
 }
@@ -176,8 +176,8 @@ func (h *hubLink) subscribe(conn *websocket.Conn, typ string, k linkKey, since i
 	_ = writeJSON(ctx, conn, f)
 }
 
-// run keeps the link up while there are listeners.
-func (h *hubLink) run(ctx context.Context) {
+// run keeps the link up while there are listeners, waiting backoff between attempts.
+func (h *hubLink) run(ctx context.Context, backoff []time.Duration) {
 	for attempt := 0; ctx.Err() == nil; attempt++ {
 		connected, err := h.session(ctx)
 		if ctx.Err() != nil {
@@ -195,7 +195,7 @@ func (h *hubLink) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(linkBackoff[min(attempt, len(linkBackoff)-1)]):
+		case <-time.After(backoff[min(attempt, len(backoff)-1)]):
 		}
 	}
 }
