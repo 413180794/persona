@@ -61,6 +61,7 @@ type goldenMeta struct {
 	Cwd            string                 `json:"cwd,omitempty"`
 	PermissionMode string                 `json:"permission_mode,omitempty"`
 	Effort         string                 `json:"effort,omitempty"`
+	Ultracode      *bool                  `json:"ultracode,omitempty"`
 	Turns          int                    `json:"turns"`
 	Compactions    int                    `json:"compactions"`
 	ContextTokens  int                    `json:"context_tokens"`
@@ -79,7 +80,7 @@ func snapshot(f *File) golden {
 	items, _, _ := f.Page(0, 1<<30)
 	return golden{Items: items, Meta: goldenMeta{
 		Title: m.Title, FirstUser: m.FirstUser, LastText: m.LastText, Model: m.Model, Cwd: m.Cwd,
-		PermissionMode: m.PermissionMode, Effort: m.Effort, Turns: m.Turns, Compactions: m.Compactions,
+		PermissionMode: m.PermissionMode, Effort: m.Effort, Ultracode: m.Ultracode, Turns: m.Turns, Compactions: m.Compactions,
 		ContextTokens: m.ContextTokens, OutputTokens: m.OutputTokens, Queue: m.Queue, Background: m.Background,
 		TurnOpen: m.TurnOpen, LastTurnWake: m.LastTurnWake, TurnError: m.TurnError, TurnErrorKind: m.TurnErrorKind,
 		LastActivity: m.LastActivity,

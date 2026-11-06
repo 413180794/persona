@@ -1,0 +1,15 @@
+{"type":"system","subtype":"local_command","uuid":"ultra-1","timestamp":"2026-01-01T08:00:00Z","content":"<command-name>/effort</command-name><command-args>ultracode on</command-args>"}
+{"type":"system","subtype":"local_command","uuid":"ultra-2","timestamp":"2026-01-01T08:00:01Z","content":"<local-command-stdout>Ultracode on (this session only): dynamic workflows on every task. Effort stays high.</local-command-stdout>"}
+{"type":"user","uuid":"ultra-3","timestamp":"2026-01-01T08:01:00Z","message":{"role":"user","content":"Check the parser."}}
+{"type":"attachment","uuid":"ultra-4","timestamp":"2026-01-01T08:01:01Z","attachment":{"type":"ultra_effort_enter","reminderType":"full"}}
+{"type":"assistant","uuid":"ultra-5","timestamp":"2026-01-01T08:01:02Z","message":{"role":"assistant","model":"claude-sonnet-4-6","content":[{"type":"text","text":"The parser looks good."}]}}
+{"type":"user","uuid":"ultra-6","timestamp":"2026-01-01T08:02:00Z","message":{"role":"user","content":"Check the notices too."}}
+{"type":"attachment","uuid":"ultra-7","timestamp":"2026-01-01T08:02:01Z","attachment":{"type":"ultra_effort_enter","reminderType":"sparse"}}
+{"type":"assistant","uuid":"ultra-8","timestamp":"2026-01-01T08:02:02Z","message":{"role":"assistant","model":"claude-sonnet-4-6","content":[{"type":"text","text":"The notices are consistent."}]}}
+{"type":"system","subtype":"local_command","uuid":"ultra-9","timestamp":"2026-01-01T08:03:00Z","content":"<command-name>/effort</command-name><command-args>ultracode off</command-args>"}
+{"type":"system","subtype":"local_command","uuid":"ultra-10","timestamp":"2026-01-01T08:03:01Z","content":"<local-command-stdout>Ultracode off. Effort stays high.</local-command-stdout>"}
+{"type":"attachment","uuid":"ultra-11","timestamp":"2026-01-01T08:04:00Z","attachment":{"type":"ultra_effort_exit"}}
+{"type":"attachment","uuid":"ultra-12","timestamp":"2026-01-01T08:05:00Z","attachment":{"type":"ultra_effort_enter","reminderType":"full"}}
+{"type":"attachment","uuid":"ultra-13","timestamp":"2026-01-01T08:06:00Z","attachment":{"type":"ultra_effort_enter","reminderType":"sparse"}}
+{"type":"attachment","uuid":"ultra-14","timestamp":"2026-01-01T08:07:00Z","attachment":{"type":"ultra_effort_exit"}}
+{"type":"attachment","uuid":"ultra-15","timestamp":"2026-01-01T08:08:00Z","isSidechain":true,"attachment":{"type":"ultra_effort_enter","reminderType":"full"}}

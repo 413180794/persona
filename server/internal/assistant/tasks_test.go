@@ -435,7 +435,7 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 	running := runningWorkflows(wfLead, now)
 	running[0].Agent, running[0].Machine, running[0].Session = "各端对齐审计", "mac-a", "d4a7f6ff"
 	golden(t, "assistant_snapshot.workflows", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
-		Working: []string{"各端对齐审计"}, Workflows: running, Tasks: []prompts.SnapshotTask{wfTask}}))
+		Working: []prompts.SnapshotAgent{{Label: "各端对齐审计"}}, Workflows: running, Tasks: []prompts.SnapshotTask{wfTask}}))
 	linked := got
 	linked.Link = todoLink("https://hub.example.com", "todo_1")
 	golden(t, "assistant_snapshot.links", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",

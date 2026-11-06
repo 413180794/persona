@@ -389,7 +389,8 @@ func (d *DB) PhoneTools(ctx context.Context) ([]PhoneToolRegistration, error) {
 
 // ---- node sessions ----
 
-// NodeSession is what a node remembers about a session it started (see internal/node).
+// NodeSession is what a node remembers about its sessions, including observations
+// of external Claude processes that Persona did not start (see internal/node).
 type NodeSession struct {
 	Model            string    `json:"model,omitempty"`
 	ModelFingerprint string    `json:"model_fingerprint,omitempty"`
@@ -402,9 +403,14 @@ type NodeSession struct {
 	// The permission mode / effort the app set on an assistant conversation (node/modes.go); kept with the model.
 	AppMode   string `json:"app_mode,omitempty"`
 	AppEffort string `json:"app_effort,omitempty"`
+	// Opaque node-owned process observation, not a preference for later starts.
+	UltracodeProcess json.RawMessage `json:"ultracode_process,omitempty"`
 }
 
 func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSession) error {
+	// The table needs a timestamp for retention, but an external process observation
+	// must return its unknown start time: node uses that to identify its own starts.
+	unknownStart := s.StartedAt.IsZero() && len(s.UltracodeProcess) > 0
 	if s.StartedAt.IsZero() {
 		s.StartedAt = time.Now()
 	}
@@ -420,9 +426,11 @@ func (d *DB) PutNodeSession(ctx context.Context, machine, id string, s NodeSessi
 	) INSERT INTO settings (key, value, updated_at)
 		SELECT 'node_model.' || machine_id || '.' || session_id,
 		jsonb_build_object('model', $8::text, 'model_fingerprint', $9::text, 'model_effort', $10::text,
-			'app_mode', $11::text, 'app_effort', $12::text), now() FROM saved
+			'app_mode', $11::text, 'app_effort', $12::text, 'ultracode_process', $13::jsonb,
+			'started_at_unknown', $14::bool), now() FROM saved
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort)
+		machine, id, s.Pane, s.Launcher, s.Cwd, s.StartedAt, tasks, s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort,
+		s.UltracodeProcess, unknownStart)
 	return err
 }
 
@@ -443,6 +451,9 @@ type nodeModel struct {
 	ModelEffort      string `json:"model_effort"`
 	AppMode          string `json:"app_mode"`
 	AppEffort        string `json:"app_effort"`
+	// UltracodeProcess and StartedAtUnknown: an external Claude process's ultracode observation (see PutNodeSession).
+	UltracodeProcess json.RawMessage `json:"ultracode_process"`
+	StartedAtUnknown bool            `json:"started_at_unknown"`
 }
 
 // NodeSessions returns a machine's sessions from the last 60 days.
@@ -461,6 +472,12 @@ func (d *DB) NodeSessions(ctx context.Context, machine string) (map[string]NodeS
 			return nil, err
 		}
 		s.Model, s.ModelFingerprint, s.ModelEffort, s.AppMode, s.AppEffort = m.Model, m.ModelFingerprint, m.ModelEffort, m.AppMode, m.AppEffort
+		if len(m.UltracodeProcess) > 0 && string(m.UltracodeProcess) != "null" {
+			s.UltracodeProcess = m.UltracodeProcess
+		}
+		if m.StartedAtUnknown {
+			s.StartedAt = time.Time{}
+		}
 		out[id] = s
 	}
 	return out, rows.Err()

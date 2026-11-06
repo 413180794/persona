@@ -1,0 +1,80 @@
+{
+  "items": [
+    {
+      "id": "ultra-2#0",
+      "seq": 2,
+      "ts": "2026-01-01T08:00:01Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "已开启 ultracode（只对本会话）"
+    },
+    {
+      "id": "ultra-3#0",
+      "seq": 3,
+      "ts": "2026-01-01T08:01:00Z",
+      "role": "user",
+      "kind": "text",
+      "text": "Check the parser."
+    },
+    {
+      "id": "ultra-5#0",
+      "seq": 5,
+      "ts": "2026-01-01T08:01:02Z",
+      "role": "assistant",
+      "kind": "text",
+      "text": "The parser looks good."
+    },
+    {
+      "id": "ultra-6#0",
+      "seq": 6,
+      "ts": "2026-01-01T08:02:00Z",
+      "role": "user",
+      "kind": "text",
+      "text": "Check the notices too."
+    },
+    {
+      "id": "ultra-8#0",
+      "seq": 8,
+      "ts": "2026-01-01T08:02:02Z",
+      "role": "assistant",
+      "kind": "text",
+      "text": "The notices are consistent."
+    },
+    {
+      "id": "ultra-10#0",
+      "seq": 10,
+      "ts": "2026-01-01T08:03:01Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "已关闭 ultracode"
+    },
+    {
+      "id": "ultra-12#0",
+      "seq": 12,
+      "ts": "2026-01-01T08:05:00Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "已开启 ultracode（只对本会话）"
+    },
+    {
+      "id": "ultra-14#0",
+      "seq": 14,
+      "ts": "2026-01-01T08:07:00Z",
+      "role": "system",
+      "kind": "notice",
+      "text": "已关闭 ultracode"
+    }
+  ],
+  "meta": {
+    "first_user": "Check the parser.",
+    "last_text": "The notices are consistent.",
+    "model": "claude-sonnet-4-6",
+    "ultracode": false,
+    "turns": 2,
+    "compactions": 0,
+    "context_tokens": 0,
+    "output_tokens": 0,
+    "turn_open": true,
+    "last_activity": "2026-01-01T08:02:02Z"
+  }
+}

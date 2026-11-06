@@ -17,6 +17,7 @@ type modelExecution struct {
 	Effort      string
 	UseEffort   bool
 	Fingerprint string
+	Ultracode   *bool `json:"-"` // explicit TUI start request; never a default or execution fingerprint
 	// Runtime: the assistant's runtime, proto.AssistantRuntimeAgentSDK or "" (the CLI; "cli" reads as ""). Omitted
 	// when empty so a fingerprint from before #2455 stays the same.
 	Runtime string `json:",omitempty"`

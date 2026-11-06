@@ -215,6 +215,7 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 
 type hookInput struct {
 	HookEventName        string          `json:"hook_event_name"`
+	Source               string          `json:"source"`
 	SessionID            string          `json:"session_id"`
 	TranscriptPath       string          `json:"transcript_path"`
 	Cwd                  string          `json:"cwd"`
@@ -275,6 +276,7 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 	if req.ReportOnly && !n.takesReport(in) {
 		return nil, nil // before the counters: a session the plugin reports for would count each prompt twice
 	}
+	n.ultracodeHook(req, in)
 	if repair := n.assistantViewStop(ctx, req, in); repair != nil {
 		return repair, nil
 	}

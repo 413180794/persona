@@ -72,6 +72,7 @@ type SnapshotAgent struct {
 	Label, Machine, Session string // Session: the short id
 	Line                    string // what it waits for, or what it concluded ("" when not known)
 	Link                    string // its page in the hub's web app ("" when the hub has no public_url)
+	Ultracode               string // "on" / "off"; empty when the node does not know
 }
 
 type SnapshotChat struct {
@@ -168,7 +169,7 @@ type Snapshot struct {
 	// Muted: agents (or their spaces) the user turned notifications off for that would be in one of the above; in
 	// none of them, as the Live Activity and the Agents badge count none of them (#4562).
 	Muted         []SnapshotAgent
-	Working       []string
+	Working       []SnapshotAgent
 	Workflows     []SnapshotWorkflow // background workflow runs still running, newest first
 	PhoneOnline   bool
 	KB            string            // RenderKBDigest, "" leaves it out

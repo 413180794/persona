@@ -67,6 +67,7 @@ type entry struct {
 		Type             string          `json:"type"`
 		Prompt           json.RawMessage `json:"prompt"`
 		CommandMode      string          `json:"commandMode"`
+		ReminderType     string          `json:"reminderType"` // ultra_effort_enter: full or sparse
 		claudeGoalStatus                 // type goal_status (goal.go)
 		Origin           *struct {
 			Kind string `json:"kind"`
@@ -111,6 +112,12 @@ type Meta struct {
 	ModeAt   time.Time
 	Effort   string
 	EffortAt time.Time
+	// Ultracode is independent of effort: nil means the transcript has no dated evidence. Since, when set by a
+	// caller, ignores observations from before the current Claude process (resume resets the session-only switch).
+	Ultracode        *bool
+	UltracodeAt      time.Time
+	UltracodeSince   time.Time
+	ultracodeCommand *bool // a command's confirmed value, consumed by its next delayed attachment
 	// CodexSandbox: Codex rollouts' sandbox of the latest turn (read-only, workspace-write…); PermissionMode is its approval policy.
 	CodexSandbox  string
 	ContextTokens int // input + cache read + cache creation of the latest reply: what the model last saw
@@ -384,6 +391,9 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 		// Input typed while Claude was working is queued, then absorbed into the running turn; it is stored as a
 		// queued_command attachment instead of a user message, so without this it never shows up in the chat.
 		a := e.Attachment
+		if a != nil && !e.IsSidechain && (a.Type == "ultra_effort_enter" || a.Type == "ultra_effort_exit") {
+			return meta.claudeUltracodeAttachment(a.Type, a.ReminderType, e.Timestamp, func() proto.Item { return mk(0, "system", proto.KindNotice) })
+		}
 		if a != nil && a.Type == "goal_status" && !e.IsSidechain {
 			return meta.claudeGoal(a.claudeGoalStatus, meta.Updated, func() proto.Item { return mk(0, "system", proto.KindNotice) })
 		}
@@ -1007,6 +1017,11 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 	if strings.HasPrefix(trimmed, "<command-name>") || strings.HasPrefix(trimmed, "<command-message>") {
 		name := firstTag(trimmed, "command-name")
 		args := firstTag(trimmed, "command-args")
+		if name == "/effort" && isUltracodeCommand(args) && !meta.tree.sidechain {
+			// The command's confirmed output becomes one notice; the command itself is not a user prompt.
+			meta.localInput = true
+			return nil
+		}
 		if name == "/compact" && strings.TrimSpace(args) == "" {
 			// Persona compacts an idle assistant conversation itself (node/assistant.go): a notice, not a message the
 			// user sent, and not activity that would make the conversation unread.
@@ -1027,6 +1042,11 @@ func userText(mk func(int, string, string) proto.Item, s string, meta *Meta) []p
 			return nil
 		}
 		meta.claudeGoalOutput(it.Text, meta.Updated)
+		if strings.HasPrefix(trimmed, "<local-command-stdout>") && !meta.tree.sidechain {
+			if items, ok := meta.claudeUltracodeOutput(it.Text, it.TS, it); ok {
+				return items
+			}
+		}
 		return []proto.Item{it}
 	}
 	if strings.HasPrefix(trimmed, "<task-notification>") {

@@ -70,3 +70,44 @@ func TestSnapshotLinksAgentsToTheWebApp(t *testing.T) {
 		t.Fatalf("a link without a web address, or the agent is gone:\n%s", got)
 	}
 }
+
+// The assistant sees the same three states as clients, including working agents whose workflows need time.
+func TestGoldenSnapshotAndAgentsListUltracode(t *testing.T) {
+	on, off := true, false
+	f := newFakeHub()
+	f.setSessions("box",
+		proto.Session{SessionID: "needson", Title: "审查方案", State: proto.StateNeedsYou, Ultracode: &on, UpdatedAt: time.Now()},
+		proto.Session{SessionID: "doneoff", Title: "修复测试", State: proto.StateUnread, Ultracode: &off, UpdatedAt: time.Now()},
+		proto.Session{SessionID: "unknown", Title: "读代码", State: proto.StateWorking},
+		proto.Session{SessionID: "workingon", Title: "实现功能", State: proto.StateWorking, Ultracode: &on},
+		proto.Session{SessionID: "assistant", Title: "主对话", State: proto.StateWorking, Assistant: true, Ultracode: &on})
+	s := newStorelessService(t, f)
+	snap := prompts.Snapshot{Now: time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC), Zone: "UTC"}
+	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Muted, snap.Working, snap.Workflows = s.snapshotAgents(context.Background(),
+		[]Device{{ID: "box", Name: "电脑", Online: true}}, "")
+	if len(snap.Needs) != 1 || snap.Needs[0].Ultracode != "on" || len(snap.Unread) != 1 || snap.Unread[0].Ultracode != "off" ||
+		len(snap.Working) != 2 || snap.Working[0].Ultracode != "" || snap.Working[1].Ultracode != "on" {
+		t.Fatalf("states changed in the snapshot: %+v", snap)
+	}
+	golden(t, "assistant_snapshot.ultracode", prompts.RenderSnapshot(snap))
+	text := s.describeAgents(context.Background(), "all", "", "")
+	for _, line := range strings.Split(text, "\n") {
+		switch {
+		case strings.Contains(line, "session_id=needson"), strings.Contains(line, "session_id=workingon"):
+			if !strings.Contains(line, "ultracode=on") {
+				t.Errorf("on missing: %s", line)
+			}
+		case strings.Contains(line, "session_id=doneoff"):
+			if !strings.Contains(line, "ultracode=off") {
+				t.Errorf("off missing: %s", line)
+			}
+		case strings.Contains(line, "session_id=unknown"):
+			if strings.Contains(line, "ultracode=") {
+				t.Errorf("unknown claimed a value: %s", line)
+			}
+		}
+	}
+	if strings.Contains(text, "session_id=assistant") || strings.Count(text, "ultracode=") != 3 {
+		t.Fatalf("agents_list lost state or included the assistant:\n%s", text)
+	}
+}

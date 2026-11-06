@@ -261,6 +261,7 @@ var Features = []string{
 	"ws_notify",              // notification alerts for capable connected clients
 	"elicitation",            // MCP forms and URLs for opted-in clients
 	"lock_test",              // scheduled device notification tests with durable receipts
+	"ultracode",              // session-only Claude Code workflow switch, queued changes and resume-loss notices
 	"model_configuration",    // unified per-purpose models and provider selection
 	"client_msg_id",          // session.send dedupes retries
 	"client_ops",             // durable operation receipts and read-only status queries
@@ -742,6 +743,13 @@ type Session struct {
 	// drives through its app-server has an Effort too (Codex's levels, see Efforts) but never a PermissionMode.
 	PermissionMode string `json:"permission_mode,omitempty"`
 	Effort         string `json:"effort,omitempty"`
+	// Ultracode is Claude Code's independent session-only workflow switch: nil means unknown.
+	// Pending means a requested change waits for an idle input box; LostAt asks the client to offer reopening
+	// after a resumed process reset an enabled switch. Reopening or dismissing the notice clears LostAt.
+	Ultracode        *bool      `json:"ultracode,omitempty"`
+	UltracodeNote    string     `json:"ultracode_note,omitempty"`
+	UltracodePending bool       `json:"ultracode_pending,omitempty"`
+	UltracodeLostAt  *time.Time `json:"ultracode_lost_at,omitempty"`
 	// ContextTokens is what the model saw in the agent's latest reply (Claude: input + cache read + cache creation;
 	// Codex: the last token_count's input) and ContextWindow the model's window, both read off the transcript tail the
 	// node already reads (#2430). ContextTokens is omitted while unknown (no reply yet); ContextWindow too, when the

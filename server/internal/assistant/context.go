@@ -138,7 +138,7 @@ func (s *Service) ProfileChanged(context.Context) {
 // space) are in none of the others: the Live Activity, the Agents badge and the inbox leave them out
 // (docs/live-activity.md), so "Needs you" here does too; they are told apart, for when the user asks about them (#4562).
 func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done, muted []prompts.SnapshotAgent,
-	working []string, workflows []prompts.SnapshotWorkflow) {
+	working []prompts.SnapshotAgent, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
 		list, off, _ := s.sessionsMuted(ctx, m.ID)
 		for _, c := range list {
@@ -146,7 +146,7 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 				continue
 			}
 			a := prompts.SnapshotAgent{Label: agentLabel(c), Machine: m.ID, Session: short(c.SessionID),
-				Link: sessionLink(web, m.ID, c.SessionID, false)}
+				Link: sessionLink(web, m.ID, c.SessionID, false), Ultracode: ultracodeState(c.Ultracode)}
 			for _, w := range runningWorkflows(c, time.Now()) {
 				w.Agent, w.Machine, w.Session = a.Label, a.Machine, a.Session
 				workflows = append(workflows, w)
@@ -162,7 +162,7 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 				into = &needs
 			case c.State == proto.StateWorking:
 				if !off[c.SessionID] {
-					working = append(working, agentLabel(c))
+					working = append(working, a)
 					continue
 				}
 				into = &muted
@@ -350,4 +350,15 @@ func (s *Service) snapshotPlans(ctx context.Context, loc *time.Location, now tim
 		out = out[:5]
 	}
 	return out, total
+}
+
+// ultracodeState preserves unknown separately from a switch explicitly read back as off.
+func ultracodeState(v *bool) string {
+	if v == nil {
+		return ""
+	}
+	if *v {
+		return "on"
+	}
+	return "off"
 }

@@ -1,6 +1,6 @@
 # 在 herdr 里驱动 Claude Code
 
-结论均在 Claude Code 2.1.310（mac）/ 2.1.308（Linux 的 hub 机器）、herdr 0.8.0 上实测（2026-10-24）。
+除另行注明的章节外，结论在 Claude Code 2.1.310（mac）/ 2.1.308（Linux 的 hub 机器）、herdr 0.8.0 上实测（2026-10-24）。
 
 ## 启动会话
 
@@ -36,6 +36,33 @@ Persona 启动的会话，启动器记在 node 状态里。在电脑上手动用
 base URL 和模型都相同的启动器只有一个就是它；否则如果这个 base URL 只有一个启动器（模型是运行时选的、显示成 `(claude-choose)` 的那种）也算它；
 其余情况（多个启动器共用 base URL 又对不上模型、没设 base URL）留空，不在候选之间猜。列会话不等启动器列表（它要跑登录 shell）：用缓存，过期就后台刷新，
 所以 node 刚启动时第一次列表可能还没有推断出的启动器。
+
+## ultracode 独立开关（#3427）
+
+ultracode 让 Claude 把每个实质任务编排成多 Agent workflow，和思考强度独立。服务端支持 Claude Code `2.1.284` 起的开关语义，
+低于这个版本提示升级（包括 `2.1.203–2.1.283` 把它放在滑块末端并锁住档位的版本）；运行中看 transcript 版本，新建前看机器的 Claude 版本。
+版本未知可试，仍须读回结果。默认关闭，只对当前进程有效，不保存用户上次选择，恢复后不自动重开；无头助手（含主对话）不开放。
+
+node 的 `ultracode.go` 只输入 `/effort ultracode on|off`。新建时等 Claude 就绪，在首条 prompt 前执行；不使用 `--effort ultracode`、
+会话专用 `--settings` 或改用户的默认值，避免覆盖思考强度、启动器设置和登录信息。修改和普通消息共用打字锁，并保留空输入框 / 无对话框检查。
+working / blocked 时记下待切换值，等这一轮结束并且输入框为空再执行；手机的下一条消息若先到，待切换命令排在这条消息前面。
+仍未到安全切换时机的发送返回 `ultracode_pending`，保留给客户端重发，不把这条消息先排进 Claude 的下一轮。
+`background_working` 的 workflow 仍按现有工作态处理，不能因为主轮停下就当成整个任务完成。
+
+读回按证据时间取最新值，而不是以请求值代替实际状态：命令后的屏幕判词、transcript 的 `/effort` 输出、
+`ultra_effort_enter` / `ultra_effort_exit` 附件（排除 sidechain）。`/effort` 明确的状态行没有 `· Ultracode on` 后缀时是关闭；普通回复文本不算。
+附件的 `reminderType` 是 `full` / `sparse`，都能证明开启，只有 full 和 exit 生成对话提示。附件要等真实 prompt 才产生，
+而 sparse 按间隔产生，不能假定每一轮都有；长 transcript 的状态要靠增量扫描保留，不能只读末尾窗口。
+
+Persona 自己启动 / 恢复、或收到 `SessionStart` 的 `startup` / `resume` 时建立新的进程边界，之前的证据失效；
+会话创建时间不是进程开始时间，`clear` / `compact` 也不是新进程。原来开启的会话恢复后记为关闭并带 `ultracode_lost_at`，
+直到明确重新开启或关闭提示。进程边界、读回值和恢复提示通过现有 node 状态存入 hub 的 Postgres，node 重连后继续过滤旧进程记录；它们不是下次启动的偏好。首次大文件扫描未完成时，先关闭，再按恢复前的文件范围异步补提示；关闭提示或重新开启后，迟到的扫描不会让提示重新出现。模型拒绝原因按模型记，换模型后清除；需要动态工作流时可通过「Claude Code 设置」的 `enableWorkflows` 开启。
+该设置未指定时由账号方案决定默认值（`default:null`），不保证能绕过组织策略或功能可用性限制。
+
+协议、恢复提示的关闭请求和旧 node 的 `409 node_outdated` 见 [protocol.md](protocol.md)「Claude Code ultracode」。
+本次只交付服务端：网页 #3428、Android #3429、Apple #3430 接控件和恢复提示，派活 / 待办 #3431；Apple 的 `ChatCache` 版本升级也在 #3430。
+判词和附件键名在已安装的 `2.1.318` CLI 静态代码中核对，测试使用合成屏幕 / transcript fixture，未启动真实会话。
+default 权限下 workflow 子 Agent 的授权数量、固定 `CLAUDE_CODE_EFFORT_LEVEL` 后的实际终端回显、完整开关 / 恢复链路仍须在隔离会话验收。
 
 ## 会话 id 与 transcript
 

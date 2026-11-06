@@ -53,6 +53,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if kind != "claude" && kind != "codex" && kind != traexAgent {
 		return nil, fmt.Errorf("unsupported agent type %q", kind)
 	}
+	if err := n.checkUltracodeStart(ctx, execution.Ultracode, kind); err != nil {
+		return nil, err
+	}
 	if execution.Model != "" {
 		agent, err := n.launcherModelCheck(ctx, launcher, execution.Model)
 		if err != nil {
@@ -134,11 +137,13 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	st := sessionState{Pane: pane, Launcher: launcher, Cwd: cwd, StartedAt: time.Now().UTC(), Model: execution.Model, ModelFingerprint: execution.Fingerprint}
 	if prev, ok := n.state.get(id); ok && resume != "" {
 		st.StartedAt = prev.StartedAt
+		st.Ultracode = prev.Ultracode
 	}
 	n.state.put(id, st)
 	n.noteModes(id, mode, effort) // shown before the first prompt writes them down
 	// Give the fresh shell a moment to load ~/.zshrc; typed input is buffered either way.
 	time.Sleep(300 * time.Millisecond)
+	n.beginUltracodeProcess(id, resume != "", true, time.Now())
 	if err := launch.Run(ctx, created.Pane, cmd); err != nil {
 		return nil, fmt.Errorf("run launcher: %w", err)
 	}
@@ -161,6 +166,9 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	n.bindPane(pane, id)
 	_ = launch.NameAgent(ctx, created.Pane, "j-"+id[:6])
 	n.holdResume(ctx, launch, pane, id, spec) // herdr's restore resumes it through the launcher (herdrresume.go)
+	if err := n.startUltracode(ctx, id, pane, execution.Ultracode); err != nil {
+		return nil, err
+	}
 	if prompt != "" {
 		// Checked against the transcript and typed again when it was dropped; one that never goes in leaves the
 		// session needing the user, with why, not idle (firstprompt.go).
@@ -554,15 +562,15 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 }
 
 func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, opts sendOpts) error {
+	// A start's first-prompt confirmation takes the input lock too.
+	if err := n.starts.wait(ctx, id); err != nil {
+		return err
+	}
 	// Two sends at once (quick taps, two phones) would both find the box empty and type into each other, or the second
 	// would see the first still in the box and be refused as a draft: one at a time.
 	defer n.typing.lock(id)()
 	if n.externalCodex(id) {
 		return n.sendCodex(ctx, id, text, images)
-	}
-	// Written while the session still starts (the app opens the chat at once): it goes in once claude is ready.
-	if err := n.starts.wait(ctx, id); err != nil {
-		return err
 	}
 	if r := n.agentsListRefusal(id); r != nil { // claudebg.go
 		return r
@@ -612,6 +620,18 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		// start returns early when Claude comes up blocked (a dialog of its own): the text would answer it.
 		if err := n.checkPane(ctx, pane, "claude", ""); err != nil {
 			return err
+		}
+	}
+	if kind == "claude" {
+		if err := n.applyPendingUltracode(ctx, id, pane); err != nil {
+			return err
+		}
+		// A busy agent may accept a queued prompt, but it must not overtake the pending switch.
+		n.mu.Lock()
+		pending := n.ultracodeLocked(id).pending != nil
+		n.mu.Unlock()
+		if pending {
+			return refusal("ultracode_pending", "ultracode 等这一轮结束后生效，请稍后再发送消息", nil)
 		}
 	}
 	paths, err := n.saveImages(images)

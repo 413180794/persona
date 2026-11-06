@@ -11,6 +11,7 @@
 | `claude-background.jsonl` | 两个真实会话的 10 行 | 没写 description 的后台 heredoc 命令（通知里是整条命令、带 `&gt;` `&lt;`）、Monitor 启动（`Monitor started (task …`）、Monitor 事件（只有 task-id）、Monitor 结束（带最后几行） |
 | `claude-workflow-notices.jsonl` | 本机真实会话的 2 条完成通知；只读核对后仅保留消息结构，路径、id、时间和内容全换为占位值 | `Dynamic workflow "…" completed` 的 user 消息和 queued_command attachment；保留 task-id / tool-use-id 供卡片跳转。本机没有 failed / was stopped 语料，这两种按 issue 原文写在单测里 |
 | `claude-synthetic.jsonl` | 手写（照真实行的结构） | 本机样本里没有的：api_error 重试、/loop 到点（scheduled_task_fire）、同一通知的两处记录、`/model` 的 local_command、continued-in |
+| `claude-ultracode.jsonl` | 合成；判词前缀按 #3427，附件字段按 Claude Code 2.1.318 的静态代码核对，没有启动真实会话 | 开 → 两轮 → 关、电脑上切换的 full / sparse / exit、sidechain 过滤、命令与延迟附件只出一次 notice；进程边界另有单测 |
 | `codex-turn-failed.jsonl` | 真实 Codex 0.166 rollout 的 6 行（2026-11-05，指向一个只回 503 的本地假服务；基础指令裁短，路径换成 `/work/project/f1`） | 被模型服务打断的一轮：没有 Agent 回复，`task_complete.error` 带 `codex_error_info.http_connection_failed.http_status_code`（错误文字脱敏成了随机词，种类只能从结构化字段来），`turn_error` / `turn_error_kind`（#2185） |
 | `claude-duration.jsonl` / `codex-duration.jsonl` | 手写结构夹具；两种字段均已对照上面的真实脱敏 fixture，Codex 另核对了本机只读 rollout | 显式轮次耗时、原生关联、零值和缺失值；时间戳差故意与记录耗时不同，禁止推算 |
 

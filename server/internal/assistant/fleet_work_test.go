@@ -308,7 +308,7 @@ func TestSnapshotLeavesMutedAgentsOut(t *testing.T) {
 	if len(needs) != live.NeedsYou || live.NeedsYou != 1 || needs[0].Session != "aaaaaaaa" {
 		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want only the agent not muted", needs, live.NeedsYou)
 	}
-	if len(working) != live.Working || live.Working != 1 || !strings.HasSuffix(working[0], "空间里开着通知") {
+	if len(working) != live.Working || live.Working != 1 || !strings.HasSuffix(working[0].Label, "空间里开着通知") {
 		t.Fatalf("工作中: snapshot %v, Live Activity %d; want the one turned back on in the muted space", working, live.Working)
 	}
 	if len(unread) != live.Unread || live.Unread != 0 {

@@ -20,9 +20,10 @@ import (
 // (Meta), outside the file's lock.
 //
 // The items are exactly the ones a full read gives: what a line turns into depends on earlier lines only through
-// three things, and a window starts with all three as they would be — the background-task notifications already
+// the state below, and a window starts with it as it would be — the background-task notifications already
 // shown (a repeat is dropped) and the last "! cmd" input (its output line becomes the call) are read from the earlier
-// lines that mention them (found by a byte search while counting lines), so a Claude window may start at any line; a
+// lines that mention them, as is ultracode's pending command (its delayed attachment repeats command output).
+// Those lines are found by a byte search while counting lines, so a Claude window may start at any line; a
 // Codex rollout records an item twice only within its turn, so its windows start at a turn (task_started).
 
 // windowBytes is how much of a big file's end a cold open parses (and how much more each step back parses).
@@ -31,12 +32,13 @@ var windowBytes int64 = 8 << 20
 // window is what a File keeps while lines at its start are not parsed: where each of those lines starts (and where
 // the first parsed one does), and which of them carry state for later lines.
 type window struct {
-	starts []int64 // starts[i]: offset of line i+1, for the lines before the first window and its first line
-	notif  []notifSeed
-	bash   []int // lines mentioning a "! cmd" (input or output)
-	codex  bool
-	start  int             // the first window's first line: the File's meta parses from there
-	ids    map[string]bool // tasks whose earlier notifications the File's meta has seen
+	starts    []int64 // starts[i]: offset of line i+1, for the lines before the first window and its first line
+	notif     []notifSeed
+	bash      []int // lines mentioning a "! cmd" (input or output)
+	ultracode []int // lines mentioning ultracode attachments or local command output
+	codex     bool
+	start     int             // the first window's first line: the File's meta parses from there
+	ids       map[string]bool // tasks whose earlier notifications the File's meta has seen
 }
 
 // notifSeed is a line mentioning a background-task notification, and the task's id ("" when it could not be read).
@@ -48,19 +50,22 @@ type notifSeed struct {
 var (
 	seedNotification = []byte("<task-notification>")
 	seedBash         = []byte("<bash-")
+	seedUltracode    = []byte("ultra_effort_")
+	seedStdout       = []byte("local-command-stdout")
 )
 
 // scanLines reads a file once without parsing it: where each complete line starts, which lines mention a seed marker,
 // the first line, and where the last complete line ends (what follows is a line still being written). Big blocks and
 // byte searches: a few hundred MB in a fraction of a second.
-func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash []int, first []byte, lastNL int64, err error) {
+func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash, ultracode []int, first []byte, lastNL int64, err error) {
 	const block = 4 << 20
-	keep := int64(len(seedNotification) - 1) // a marker split across two blocks
+	keep := int64(max(len(seedNotification), len(seedStdout)) - 1) // a marker split across two blocks
 	buf := make([]byte, block+keep)
 	type hit struct {
-		off  int64
-		id   string // a notification's task id; bash: "!"
-		bash bool
+		off       int64
+		id        string // a notification's task id; bash: "!"
+		bash      bool
+		ultracode bool
 	}
 	var hits []hit
 	starts = append(starts, 0)
@@ -68,18 +73,18 @@ func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash
 	for off := int64(0); off < size; off += block {
 		n := min(block+keep, size-off)
 		if _, err := fh.ReadAt(buf[:n], off); err != nil && err != io.EOF {
-			return nil, nil, nil, nil, 0, err
+			return nil, nil, nil, nil, nil, 0, err
 		}
 		data := buf[:n]
 		own := min(int64(block), n) // bytes this block owns; the rest is the next block's start, read for markers
-		for _, m := range [][]byte{seedNotification, seedBash} {
+		for _, m := range [][]byte{seedNotification, seedBash, seedUltracode, seedStdout} {
 			for i := 0; ; {
 				j := bytes.Index(data[i:], m)
 				if j < 0 || int64(i+j) >= own {
 					break
 				}
-				h := hit{off: off + int64(i+j), bash: m[1] == 'b'}
-				if !h.bash { // the task id follows the marker: "<task-notification>\n<task-id>…</task-id>"
+				h := hit{off: off + int64(i+j), bash: bytes.Equal(m, seedBash), ultracode: bytes.Equal(m, seedUltracode) || bytes.Equal(m, seedStdout)}
+				if !h.bash && !h.ultracode { // the task id follows the marker: "<task-notification>\n<task-id>…</task-id>"
 					near := data[i+j : min(len(data), i+j+300)]
 					if a := bytes.Index(near, []byte("<task-id>")); a >= 0 {
 						if z := bytes.Index(near[a:], []byte("</task-id>")); z > 0 {
@@ -115,7 +120,11 @@ func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash
 			break
 		}
 		line := sort.Search(len(starts), func(i int) bool { return starts[i] > h.off }) // 1-based line holding h
-		if h.bash {
+		if h.ultracode {
+			if len(ultracode) == 0 || ultracode[len(ultracode)-1] != line {
+				ultracode = append(ultracode, line)
+			}
+		} else if h.bash {
 			if len(bash) == 0 || bash[len(bash)-1] != line {
 				bash = append(bash, line)
 			}
@@ -123,13 +132,13 @@ func scanLines(fh *os.File, size int64) (starts []int64, notif []notifSeed, bash
 			notif = append(notif, notifSeed{line, h.id})
 		}
 	}
-	return starts, notif, bash, first, lastNL, nil
+	return starts, notif, bash, ultracode, first, lastNL, nil
 }
 
 // openWindow reads a big file cold: counts its lines, parses the window at its end. ok is false when no turn start
 // is close enough to the end to make a window worth it (the caller reads the file whole). Callers hold f.mu.
 func (f *File) openWindow(fh *os.File, size int64) (fresh []proto.Item, ok bool, err error) {
-	starts, notif, bash, first, lastNL, err := scanLines(fh, size)
+	starts, notif, bash, ultracode, first, lastNL, err := scanLines(fh, size)
 	if err != nil {
 		return nil, false, err
 	}
@@ -137,7 +146,7 @@ func (f *File) openWindow(fh *os.File, size int64) (fresh []proto.Item, ok bool,
 	if n == 0 {
 		return nil, false, nil
 	}
-	w := &window{starts: starts, notif: notif, bash: bash, codex: isCodexLine(first)}
+	w := &window{starts: starts, notif: notif, bash: bash, ultracode: ultracode, codex: isCodexLine(first)}
 	// The window starts at the line windowBytes before the end (Codex: the turn starting there or before).
 	from := sort.Search(n, func(i int) bool { return starts[i] >= size-windowBytes })
 	b := max(from, 1)
@@ -307,7 +316,22 @@ func (f *File) seeded(fh *os.File, w *window, b int, end int64, window []byte) M
 			break
 		}
 	}
-	return Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: scratch.notified, bashInput: bash}
+	ultra := Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, UltracodeSince: f.meta.UltracodeSince}
+	for _, n := range w.ultracode {
+		if n >= b {
+			break
+		}
+		// Request blobs repeat command output and reminders from the entire conversation. Like node's bgScan,
+		// skip huge lines before allocating or decoding them, preserving the bounded cold-open window.
+		if w.lineStart(n+1, end)-w.starts[n-1] > 64<<10 {
+			continue
+		}
+		if line := readLine(n); line != nil {
+			ParseLine(n, line, &ultra)
+		}
+	}
+	return Meta{Sidechain: f.meta.Sidechain, Codex: w.codex, notified: scratch.notified, bashInput: bash,
+		Ultracode: ultra.Ultracode, UltracodeAt: ultra.UltracodeAt, UltracodeSince: ultra.UltracodeSince, ultracodeCommand: ultra.ultracodeCommand}
 }
 
 var taskIDRe = regexp.MustCompile(`<task-id>([^<]{1,200})</task-id>`)

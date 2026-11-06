@@ -7,7 +7,7 @@
 {{end}}{{with .Waiting}}  - 在等的（hub 到时会叫醒它们，不用管）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Done}}  - 做完的（24 小时内）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Muted}}  - 已屏蔽（用户关了它们的通知，上面的数不算它们；别主动提，问到再说）：{{template "assistant/snapshot_agents" .}}
-{{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
+{{end}}{{with .Working}}  - 工作中：{{range $i, $a := first 8 .}}{{if $i}}；{{end}}{{$a.Label}}{{with $a.Ultracode}}〔ultracode={{.}}{{if eq . "on"}}：每个实质任务都会跑多 Agent workflow，等结果时别催{{end}}〕{{end}}{{end}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Workflows}}  - 后台 workflow 在跑（这些 Agent 这一轮停着是在等结果，不是做完了，结果回来会叫醒它们；别关它们）：{{range $i, $w := first 6 .}}{{if $i}}；{{end}}{{$w.Agent}}（{{$w.Machine}}，session_id={{$w.Session}}）的{{template "assistant/snapshot_workflow" $w}}{{end}}{{if gt (len .) 6}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
 {{range .}}{{$t := .}}  - {{.Title}}（{{.ID}}{{with .Link}}，链接 {{.}}{{end}}）：{{.State}}{{with .Health}}；督办：{{.}}{{if $t.DoneWhen}}，验收标准 {{$t.DoneWhen}} 条{{else}}，没写验收标准{{end}}{{end}}{{with .Machine}}，{{.}}{{end}}{{with .Session}} session_id={{.}}{{end}}{{with .Last}}：{{.}}{{end}}{{with .Doing}}{{if $t.Last}}；{{else}}：{{end}}现在{{.}}{{with $t.DoingFor}}（{{.}}了）{{end}}{{end}}{{with .Subagents}}；子 Agent 在跑：{{join . "、"}}{{end}}{{with .Workflows}}；后台 workflow 在跑（在等它的结果，没做完）：{{range $i, $w := .}}{{if $i}}、{{end}}{{template "assistant/snapshot_workflow" $w}}{{end}}{{end}}{{with .Delivery}}；交付：{{.}}{{end}}

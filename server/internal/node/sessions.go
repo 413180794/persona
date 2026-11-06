@@ -55,7 +55,8 @@ type sessionState struct {
 	Compaction *proto.Compaction `json:"compaction,omitempty"`
 	// Guest: a guest conversation's tools (assistant_guest.go): every process it runs in has no built-in tools and
 	// only these of Persona's. Nil is an ordinary conversation.
-	Guest []string `json:"guest,omitempty"`
+	Guest     []string         `json:"guest,omitempty"`
+	Ultracode *ultracodeRecord `json:"ultracode_process,omitempty"`
 }
 
 func newState() *stateFile { return &stateFile{Sessions: map[string]sessionState{}} }
@@ -147,15 +148,18 @@ type quickMeta struct {
 	// lastPromptAt is when the latest message to the agent came in.
 	lastPromptAt time.Time
 	// doing / doingAt: what the agent's latest tool call does, when no text came after it (transcript.Activity).
-	doing    string
-	doingAt  time.Time
-	wake     bool // the latest turn was a background task waking the agent
-	readAt   time.Time
-	mode     string
-	modeAt   time.Time
-	effort   string
-	effortAt time.Time
-	sandbox  string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
+	doing       string
+	doingAt     time.Time
+	wake        bool // the latest turn was a background task waking the agent
+	readAt      time.Time
+	mode        string
+	modeAt      time.Time
+	effort      string
+	effortAt    time.Time
+	version     string
+	ultracode   *bool
+	ultracodeAt time.Time
+	sandbox     string // Codex: the turn's sandbox, which with mode (its approval policy) gives the app's mode back
 	// contextTokens / contextWindow: the latest reply's input tokens and, for Codex, the window its rollout records
 	// (transcript.Meta; Session.ContextTokens / ContextWindow, #2430). Carried over from the last read when the tail
 	// holds no reply (one huge line can fill it).
@@ -196,6 +200,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 		if m.bgWait { // the background read may be done now
 			m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 			m.wf, m.wfScript = n.bgWorkflows(path)
+			m.ultracode, m.ultracodeAt = n.bgUltracode(path)
 			n.mu.Lock()
 			n.metas[path] = m
 			n.mu.Unlock()
@@ -211,6 +216,7 @@ func (n *Node) meta(path string, st os.FileInfo) quickMeta {
 	m.readAt = time.Now()
 	m.bg, m.loop, m.goal, m.bgWait = n.backgroundTasks(path)
 	m.wf, m.wfScript = n.bgWorkflows(path)
+	m.ultracode, m.ultracodeAt = n.bgUltracode(path)
 	n.mu.Lock()
 	n.metas[path] = m
 	n.mu.Unlock()
@@ -301,6 +307,7 @@ func readQuickMetaSince(path string, st os.FileInfo, prev quickMeta) quickMeta {
 	m.claudeTurn = !tm.Codex && tm.TurnOpen
 	m.turnError, m.turnErrorKind = tm.TurnError, tm.TurnErrorKind
 	m.mode, m.modeAt, m.effort, m.effortAt, m.sandbox = tm.PermissionMode, tm.ModeAt, tm.Effort, tm.EffortAt, tm.CodexSandbox
+	m.version, m.ultracode, m.ultracodeAt = tm.Version, tm.Ultracode, tm.UltracodeAt
 	m.contextTokens, m.contextWindow = tm.ContextTokens, tm.ContextWindow
 	if m.contextTokens == 0 && prev.size > 0 && prev.size <= st.Size() {
 		m.contextTokens, m.contextWindow = prev.contextTokens, prev.contextWindow // no reply in the tail: the last read's stands
@@ -953,7 +960,7 @@ func untitled(s *proto.Session, m quickMeta) {
 
 func (n *Node) decorate(s *proto.Session) {
 	if st, ok := n.state.get(s.SessionID); ok {
-		s.StartedByJarvis = true
+		s.StartedByJarvis = st.Ultracode == nil || !st.StartedAt.IsZero()
 		s.Launcher = st.Launcher
 		s.Compaction = st.Compaction
 		if s.Cwd == "" {
@@ -966,6 +973,7 @@ func (n *Node) decorate(s *proto.Session) {
 	if s.Title == "" {
 		s.Title = filepath.Base(s.Cwd)
 	}
+	n.ultracodeRow(s)
 }
 
 func snippet(s string) string {
@@ -1842,6 +1850,7 @@ func listKeySized(list []proto.Session, size int) string {
 		w.b.WriteByte('|')
 		w.str(s.Suggestion, '|')
 		w.str(s.SpawnFrom, '\n')
+		writeUltracodeKey(&w, s)
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
 			w.b.WriteString("activity:")
 			w.str(s.Activity, '/')
@@ -2525,7 +2534,7 @@ func scanBackground(f *os.File, off *int64, m *transcript.Meta, size int64) {
 			return
 		}
 		// api-request blobs repeat everything; skip them
-		if !long && len(line) <= 64<<10 && (containsAny(line, bgMarkers) || containsAny(line, transcript.GoalMarkers)) {
+		if !long && len(line) <= 64<<10 && (containsAny(line, bgMarkers) || containsAny(line, transcript.GoalMarkers) || containsAny(line, transcript.UltracodeMarkers)) {
 			transcript.ParseLine(0, bytes.TrimSuffix(line, []byte("\n")), m)
 		}
 		long = false

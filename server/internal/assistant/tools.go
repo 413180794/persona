@@ -654,6 +654,9 @@ func (s *Service) describeAgents(ctx context.Context, state, machine, query stri
 		if !c.UpdatedAt.IsZero() {
 			fmt.Fprintf(&b, " · %s", ago(c.UpdatedAt))
 		}
+		if mode := ultracodeState(c.Ultracode); mode != "" {
+			fmt.Fprintf(&b, " · ultracode=%s", mode)
+		}
 		if c.Loop != nil {
 			b.WriteString(" · /loop")
 		}

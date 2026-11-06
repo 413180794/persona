@@ -50,3 +50,38 @@ func TestClaudeSettingsKeepOtherKeys(t *testing.T) {
 		t.Fatalf("list = %+v, %v", list, err)
 	}
 }
+
+func TestClaudeWorkflowsSetting(t *testing.T) {
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	n := &Node{home: t.TempDir()}
+	read := func() ClaudeSetting {
+		t.Helper()
+		list, err := n.getClaudeSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, setting := range list {
+			if setting.Key == "enableWorkflows" {
+				return setting
+			}
+		}
+		t.Fatal("workflows setting is missing")
+		return ClaudeSetting{}
+	}
+	setting := read()
+	// Claude's schema leaves the default to the account's plan, not a fixed bool.
+	if setting.Type != "bool" || setting.Default != nil || setting.Value != nil {
+		t.Fatalf("unset setting = %+v", setting)
+	}
+	if err := n.setClaudeSetting("enableWorkflows", "true"); err == nil {
+		t.Fatal("non-boolean workflows value accepted")
+	}
+	for _, value := range []any{true, false, nil} {
+		if err := n.setClaudeSetting("enableWorkflows", value); err != nil {
+			t.Fatal(err)
+		}
+		if got := read().Value; got != value {
+			t.Fatalf("value = %v, want %v", got, value)
+		}
+	}
+}

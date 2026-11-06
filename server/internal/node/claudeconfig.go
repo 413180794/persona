@@ -23,6 +23,7 @@ type ClaudeSetting struct {
 var claudeSettings = []ClaudeSetting{
 	{Key: "awaySummaryEnabled", Title: "回来时先说进展", Detail: "离开 5 分钟以上再回来时，Claude 先简单说说这段时间做了什么", Type: "bool", Default: true},
 	{Key: "alwaysThinkingEnabled", Title: "每次都先想清楚", Detail: "每次回答前都先仔细想一想，更准，但更慢、更费额度", Type: "bool", Default: false},
+	{Key: "enableWorkflows", Title: "动态工作流", Detail: "允许 Claude 一次安排好几个 Agent 一起干活，开 ultracode 要先打开它。不设时由账号方案决定，组织策略也可能不让用", Type: "bool", Default: nil},
 	// "auto" (the model's default) is never written: Claude Code ignores it there, so choosing it removes the key.
 	{Key: "effortLevel", Title: "思考强度", Detail: "越高想得越仔细，也越慢；auto 用模型自己的默认档", Type: "enum", Options: effortLevels, Default: effortAuto},
 	{Key: "language", Title: "回复语言", Detail: "Claude 回答用哪种语言，比如「中文」", Type: "string", Default: ""},

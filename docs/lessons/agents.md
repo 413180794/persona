@@ -92,12 +92,19 @@
   node 的内存去重在重连 / hub 重启后就没了，而 App 恰恰在这时候自动重发。会话读取和发送的完整验证、每一跳的耗时见 `docs/archive/lanes/session-verify.md`。
 - `/model <别名>` 和 `/effort` 一样会写进 `~/.claude/settings.json`（`model` / `effortLevel`）当以后新会话的默认，不只是这一个会话；
   对话已经被缓存时它先弹「Switch model?」确认（换模型要重读整段历史）。测试时别在自己常用的配置里试，试了要把这两个键改回去。
-- Claude Code 2.1.206 的 `/effort` 换成了滑块（「←/→ to adjust · Enter to confirm」，最左是 low、max 右边还有 ultracode），不再有旧列表的「for this session only」；
+- Claude Code 2.1.206 的 `/effort` 换成了滑块（「←/→ to adjust · Enter to confirm」，最左是 low），不再有旧列表的「for this session only」；
   node 的 `tuiSetEffort` 两种都认（`effortPicker`）。滑块确认后会写进 `~/.claude/settings.json` 的 `effortLevel`（「saved as your default for new sessions」），
   不只是这一个会话。环境里有 `CLAUDE_CODE_EFFORT_LEVEL`（settings.json 的 `env` 或启动器）时它优先，Claude 只回「… overrides this session」、什么都不改，App 会如实提示。
 - 思考强度 `auto`（Claude Code 2.1.316）只有 `/effort auto` 命令认：`--effort auto` 被警告后忽略，settings.json 的 `effortLevel` 写 auto
   被静默丢掉（`max` 也一样，settings 只认 low…xhigh），选择器里没有这一格。`/effort auto` 会清掉 settings 里这个模型的默认档，
   手机上的 auto 要按各条路分开做（`docs/ios.md`「思考强度和权限模式」）。在开发机上试 `/effort …` 也会改真实的 settings.json，别在自己的配置里试。
+- ultracode 是第二条轴（#3427）：`2.1.203–2.1.283` 曾是 max 右边的档位，会锁住思考强度；`2.1.284` 起改成独立的 `/effort ultracode on|off`，
+  不写默认值、恢复后关闭。Persona 只支持后者，不把 ultracode 加进 `EffortLevels`，也不发 `--effort ultracode` 或为了它新增 `--settings`。
+  版本未知时靠判词确认，命令成功返回不等于已经开启。`enableWorkflows` 未设置时默认由账号方案决定，不能伪造固定开 / 关默认。
+- ultracode 的 `ultra_effort_enter` 附件用 `reminderType: full|sparse`，等下一条真实 prompt 才生成，sparse 也不保证每轮都有；
+  不能靠 assistant 行或尾部窗口推断关闭。进程内按证据时间取最新值，跨 `startup` / `resume` 丢掉旧证据；会话的 `StartedAt` 在恢复时保留，不能当进程边界。
+  `SessionStart` 的 `clear` / `compact`、hook 重传和 sidechain 不应重新关闭主会话的开关。打字锁还要区分已持锁的发送路径和异步启动，避免启动等消息、消息又等启动。
+  以上判词、设置 schema 和附件键名本次只在安装的 `2.1.318` CLI 静态代码中核对，单测是合成 fixture，不代表真实会话端到端验收。
 - 带图的消息有一次停在了 Claude 的输入框里没发出去（2026-10-31，Claude Code 2.1.206：框里是 `[Image #1]` 和文字，Agent `done`，在电脑上按回车才发出），
   之后在单独的 herdr 会话里试了 42 次（小 PNG、1.8 MB JPEG、CPU 跑满）都没再出现，原因没找到；11-01 用手机拍的照片又出现一次。node 的兜底（`ensureSubmitted`）：发完 2 秒后
   看一次输入框，还是刚发的那段（`[Image #n]` / `[Pasted text #n]` 去掉后比开头几个字）就补一次回车；框空了、或者是别的内容，什么都不按。

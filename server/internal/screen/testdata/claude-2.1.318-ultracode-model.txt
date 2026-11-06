@@ -1,0 +1,7 @@
+❯ /effort ultracode on
+  ⎿  Ultracode isn't available on Sonnet. Switch to Opus to use it.
+
+────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────
+  ? for shortcuts

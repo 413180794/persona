@@ -109,8 +109,8 @@ func (h *Hub) routes() http.Handler {
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/queue", h.proxyBody("session.queue.edit"))
 	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/rename", h.withClientOp("rename", h.withMachine(h.renameSession)))
 	api.HandleFunc("DELETE /api/v1/sessions/{mid}/{sid}", h.withMachine(h.deleteSession))
-	// {"permission_mode": …, "effort": …}: either may be left out (node/modes.go).
-	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.withClientOp("modes", h.proxyBody("session.modes")))
+	// Model, permission, effort and the independent ultracode switch may each be left out (ultracode.go).
+	api.HandleFunc("POST /api/v1/sessions/{mid}/{sid}/modes", h.withClientOp("modes", h.withMachine(h.sessionModes)))
 	api.HandleFunc("POST /api/v1/machines/{mid}/spaces/{wid}/rename", h.withMachine(h.renameSpace))
 	api.HandleFunc("GET /api/v1/sessions/{mid}/{sid}/info", h.proxy("session.info", func(r *http.Request) any {
 		return map[string]any{"session_id": r.PathValue("sid")}
@@ -556,6 +556,7 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		WorkspaceID     string `json:"workspace_id"`
 		PermissionMode  string `json:"permission_mode,omitempty"`
 		Effort          string `json:"effort,omitempty"`
+		Ultracode       *bool  `json:"ultracode,omitempty"`
 		// TabName names the herdr tab; empty: one made from the first message (tabName, assistant/agents_start.go),
 		// else agent-<n>.
 		TabName string `json:"tab_name,omitempty"`

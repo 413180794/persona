@@ -427,6 +427,8 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Title          *string         `json:"title"`
 		PermissionMode string          `json:"permission_mode"`
 		Effort         string          `json:"effort"`
+		Ultracode      *bool           `json:"ultracode"`
+		DismissLost    bool            `json:"dismiss_lost"`
 		ResumeOnly     bool            `json:"resume_only"`
 		AtItemID       string          `json:"at_item_id"` // session.fork: the reply to branch off at
 		Refresh        bool            `json:"refresh"`    // launchers.models: ask again, not the kept list
@@ -468,6 +470,9 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 	if method == "session.retire" { // before the runtimes: a session another tool owns is refused, not handed on
 		closed, err := n.retire(ctx, p.SessionID)
 		return map[string]any{"closed": closed}, err
+	}
+	if method == "session.ultracode" {
+		return ok(n.setUltracode(ctx, p.SessionID, p.Ultracode, p.DismissLost))
 	}
 	// A session of a runtime (runtimes.go): the runtime answers every call about it, also for an older session it no
 	// longer lists; one whose runtime is away is refused, never resumed in a terminal as a Claude session. An
@@ -666,6 +671,21 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		n.useBotmux(true, true) // and one that lists without saying botmux keeps it, as before (hostbotmux.go)
 		return map[string]any{"sessions": n.sessionList(ctx, true)}, nil
 	case "session.start":
+		if p.Ultracode != nil {
+			kind := p.AgentType
+			if kind == "" {
+				kind = launcherAgentType(p.Launcher)
+			}
+			if _, runtime := engineRuntimes[n.engine()]; runtime {
+				kind = "runtime"
+			}
+			if n.runtimes.launcherRuntime(p.Launcher) != nil && !shellLauncherNames()[p.Launcher] {
+				kind = "runtime"
+			}
+			if err := n.checkUltracodeStart(ctx, p.Ultracode, kind); err != nil {
+				return nil, err
+			}
+		}
 		tab := ""
 		if p.TabName != nil {
 			tab = *p.TabName
@@ -683,10 +703,10 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		}
 		// Only Claude Code has a session id before it starts; another agent picks its own (start_agent.go).
 		if p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude") {
-			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode})
 			return map[string]any{"session": s}, err
 		}
-		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint})
+		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode})
 		return map[string]any{"session": s}, err
 	case "session.fork": // "Branch to new chat" (fork.go)
 		id, err := n.fork(ctx, p.SessionID, p.AtItemID)

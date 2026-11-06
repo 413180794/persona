@@ -559,6 +559,11 @@ herdr 里的 Claude Code 会话，思考强度标签的菜单下面还有「模�
   - 设置 › Claude Code 设置里的思考强度选 auto 就是删掉 `effortLevel`（`claudeconfig.go`）。
 - 选择器开着时 herdr 把 Agent 报成 blocked，hub 1.5 秒后会把它当成要处理的终端对话框推给手机：node 操作期间不报 blocked。
 
+ultracode 的服务端契约已在 #3427 增加（[protocol.md](protocol.md)「Claude Code ultracode」）：它是独立于思考强度的会话开关，
+默认关、不记选择、恢复后不自动重开。Session 的 `ultracode` 缺失表示未知，`ultracode_pending` 表示等下一轮生效，
+`ultracode_note` 是不能开启的原因，`ultracode_lost_at` 用于恢复后的提示和重新打开。Apple 的开关、提示、按钮和 `ChatCache` 目录版本升级由 #3430 实现；
+此处只记录接口，不表示当前 iOS / Mac / 手表已经有这些控件，主对话也不开放 ultracode。
+
 ## 会话分诊（设置 › 会话分诊，#3078）
 
 在「助手」下面，和网页、安卓一样四个开关（`GET / PUT /api/v1/agents/triage`，存在 hub，各端一致，默认全关；含义和花谁的 token 见 `docs/agent-work.md`「开关」）：
