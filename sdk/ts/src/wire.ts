@@ -13,8 +13,9 @@ export interface Manifest {
   publisher?: string;
   homepage?: string;
   /**
-   * What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry
-   * the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.
+   * What the market shows and searches (docs "Extension market"): at most 16, each 1 to 24 characters. Packages and
+   * indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
+   * instead.
    */
   tags?: string[];
   engines?: Engines;
@@ -24,27 +25,30 @@ export interface Manifest {
   contributes?: Contributes;
   /**
    * Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
-   * did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
-   * before it refuse the manifest.
+   * did not have (docs "Contribution switches"). Not a connector or a channel bound to one (their switch is the
+   * connector's). Hubs before it refuse the manifest.
    */
   off_by_default?: string[];
   /**
-   * Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+   * Extensions it needs installed and on (docs "Dependencies"): while one is missing, off or too old it waits in
+   * needs_setup.
    */
   depends?: Dependency[];
   exports?: Exports;
   /**
-   * An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its
-   * own.
+   * An extension pack (docs "Extension packs"): installing it installs these. A pack has no runtime and no
+   * contributes of its own.
    */
   extension_pack?: PackMember[];
-  /** The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」). */
+  /**
+   * The configuration's JSON Schema, in the subset every app draws as a form (docs "Configuration: the form subset").
+   */
   configuration?: unknown;
   secrets?: SecretSpec[];
   permissions?: Permissions;
   /**
-   * Command-line programs the hub installs into the extension's own directory and puts first on its PATH
-   * (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+   * Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
+   * "Command-line programs (tools)", #4507). Installing them is a permission. Hubs before them refuse the manifest.
    */
   tools?: ToolSpec[];
   auth?: AuthSpec;
@@ -101,7 +105,7 @@ export interface ToolNPM {
 }
 
 /**
- * The extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+ * The extension signs in: its program answers auth.status, auth.step and auth.logout (docs "Sign-in (auth)").
  */
 export interface AuthSpec {
   title: string;
@@ -132,7 +136,8 @@ export interface ExportedPoint {
   version: number;
   description?: string;
   /**
-   * Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+   * Each contribution's JSON Schema, in the configuration's subset (docs "Configuration: the form subset"); id is
+   * always there and required.
    */
   schema?: unknown;
 }
@@ -168,8 +173,8 @@ export interface Runtime {
 }
 
 /**
- * The most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU in percent
- * of one core. Unset: 1024 MB, 100%.
+ * The most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in MB, CPU in
+ * percent of one core. Unset: 1024 MB, 100%.
  */
 export interface Resources {
   memory_mb?: number;
@@ -182,8 +187,9 @@ export interface Resources {
 export type Command = unknown;
 
 /**
- * The extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* / linux-*), on the
- * machines picked in the configuration field `machines` (an array of format machine, x-os the programs' systems).
+ * The extension's program on computers (docs/extensions.md "Programs running on computers"): one per platform
+ * (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format machine,
+ * x-os the programs' systems).
  */
 export interface NodeRuntime {
   command: unknown;
@@ -267,7 +273,8 @@ export interface Contributes {
 }
 
 /**
- * A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+ * A skill (docs "Declarative contributions"): a directory of the package with SKILL.md, put in with the assistant's
+ * skills.
  */
 export interface SkillItem {
   id: string;
@@ -354,7 +361,7 @@ export interface LookAvatar {
 }
 
 /**
- * An appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+ * An appearance's colors, #RRGGBB (docs/persona.md "Palettes", the apps' PersonaPalette).
  */
 export interface LookPalette {
   primary?: string;
@@ -396,7 +403,7 @@ export interface LookDot {
 }
 
 /**
- * A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package.
+ * A look (docs/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
  * app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
  */
 export interface LookItem {
@@ -421,8 +428,8 @@ export interface TriageTemplateItem {
 }
 
 /**
- * A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an in-app tunnel
- * core built into the app, going to the configuration's target_host and target_port.
+ * A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app tunnels"): an
+ * in-app tunnel core built into the app, going to the configuration's target_host and target_port.
  */
 export interface TunnelItem {
   id: string;
@@ -430,8 +437,8 @@ export interface TunnelItem {
 }
 
 /**
- * Agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and any of the matchers
- * fits it.
+ * Agent sessions kept out of Agents (docs "Agent filters"): a session goes when it is one of agents and any of the
+ * matchers fits it.
  */
 export interface AgentFilterItem {
   id: string;
@@ -532,9 +539,9 @@ export interface AssistantItem {
 }
 
 /**
- * An MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine, its tools as
- * mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell or
- * an interpreter.
+ * An MCP server for the Claude assistant (docs "MCP servers"): a command line on the assistant's machine, its tools
+ * as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment. Not a shell
+ * or an interpreter.
  */
 export interface MCPServerItem {
   /** The server's name for the assistant; not jarvis or persona. */
@@ -556,7 +563,7 @@ export interface MCPServerItem {
 }
 
 /**
- * A place in the apps the extension draws (docs「UI 插槽」).
+ * A place in the apps the extension draws (docs "UI slots").
  */
 export interface UIItem {
   id: string;
@@ -611,8 +618,8 @@ export interface EventsItem {
 }
 
 /**
- * An action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple Watch. The
- * hub asks the extension shortcut.run with the values.
+ * An action of the extension the system runs (docs "System placements"): Shortcuts and Siri on iPhone, Mac and Apple
+ * Watch. The hub asks the extension shortcut.run with the values.
  */
 export interface ShortcutItem {
   id: string;
@@ -892,7 +899,7 @@ export interface UIPlaces {
 }
 
 /**
- * A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+ * A widget an extension draws outside the app (GET …/extensions/-/widgets; docs "System placements").
  */
 export interface WidgetPlace {
   extension: string;
@@ -1039,8 +1046,8 @@ export type ButtonRole = "normal" | "destructive" | (string & {});
 export const BUTTON_ROLES = ["normal", "destructive"] as const;
 
 /**
- * A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI version 3):
- * the hub takes both and answers the new API with extension_page, the old one with plugin_page.
+ * A slot in the apps an extension draws at (docs "UI slots"). extension_page is plugin_page's new name (UI version
+ * 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.
  */
 export type Placement = "plugin_page" | "launcher_section" | "nav_page" | "overview_card" | "machine_section" | "inbox_item" | "extension_page" | "widget" | "capsule_card" | (string & {});
 export const PLACEMENTS = ["plugin_page", "launcher_section", "nav_page", "overview_card", "machine_section", "inbox_item", "extension_page", "widget", "capsule_card"] as const;
@@ -1053,8 +1060,8 @@ export type Size = "compact" | "full" | "small" | "medium" | "large" | "accessor
 export const SIZES = ["compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"] as const;
 
 /**
- * A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock Screen or
- * watch face complication's accessory_*.
+ * A widget's size outside the app (docs "System placements"): a home screen widget's small / medium / large, a Lock
+ * Screen or watch face complication's accessory_*.
  */
 export type WidgetFamily = "small" | "medium" | "large" | "accessory_circular" | "accessory_rectangular" | "accessory_inline" | (string & {});
 export const WIDGET_FAMILIES = ["small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"] as const;
@@ -1898,13 +1905,14 @@ export interface CardPart {
 }
 
 /**
- * What a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is ignored.
+ * What a source supports (docs "3. Capabilities"). The apps show only what is supported; an unknown one is ignored.
  */
 export type MessagingCapability = "accounts" | "pinned" | "mentions" | "attachments" | "attachment_replies" | "threads" | "topics" | "reactions" | "read_receipts" | "chat_pins" | "profiles" | "url_previews" | "documents" | "doc_comments" | "posts" | "edit_history" | "translation" | (string & {});
 export const MESSAGING_CAPABILITIES = ["accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation"] as const;
 
 /**
- * A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension (encoded, sealed).
+ * A message box mode besides plain (docs "7. Composer modes"): what is sent is handled by the extension (encoded,
+ * sealed).
  */
 export interface MessagingComposerMode {
   id: string;
@@ -1934,7 +1942,7 @@ export interface MessagingLink {
 }
 
 /**
- * The manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+ * The manifest's contributes.messaging[]: one messaging source (docs "2. Manifest").
  */
 export interface MessagingItem {
   id: string;
@@ -2161,8 +2169,8 @@ export interface MessagingPreview {
 }
 
 /**
- * A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws its text, or
- * skips it.
+ * A piece of a message's body, told apart by kind (docs "5. Conversations and messages"). An app that does not know a
+ * kind draws its text, or skips it.
  */
 export type MessagingPart =
   | MessagingTextPart
@@ -2310,7 +2318,7 @@ export interface MessagingMention {
 }
 
 /**
- * POST conversations/{id}/messages (docs「六、发送」).
+ * POST conversations/{id}/messages (docs "6. Sending").
  */
 export interface MessagingOutgoing {
   client_id: string;
@@ -2572,7 +2580,7 @@ export interface MessagingConversationRef {
 }
 
 /**
- * An error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with input_required.
+ * An error answer. code is one of the codes the apps act on (docs "4. API"); view comes with input_required.
  */
 export interface MessagingError {
   error: string;

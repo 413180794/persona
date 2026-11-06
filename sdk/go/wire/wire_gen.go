@@ -26,8 +26,9 @@ type Manifest struct {
 	Description     string `json:"description,omitempty"`
 	Publisher       string `json:"publisher,omitempty"`
 	Homepage        string `json:"homepage,omitempty"`
-	// What the market shows and searches (docs「扩展市场」): at most 16, each 1 to 24 characters. Packages and indexes carry
-	// the manifest without them (hubs before tags refuse an unknown field); the index entry carries them instead.
+	// What the market shows and searches (docs "Extension market"): at most 16, each 1 to 24 characters. Packages and
+	// indexes carry the manifest without them (hubs before tags refuse an unknown field); the index entry carries them
+	// instead.
 	Tags             []string     `json:"tags,omitempty"`
 	Engines          *Engines     `json:"engines,omitempty"`
 	Runtime          *Runtime     `json:"runtime,omitempty"`
@@ -35,20 +36,22 @@ type Manifest struct {
 	ActivationEvents []string     `json:"activation_events,omitempty"`
 	Contributes      *Contributes `json:"contributes,omitempty"`
 	// Contributions ("<point>/<id>") that start switched off: at install, and at an upgrade the ones the version before
-	// did not have (docs「贡献的开关」). Not a connector or a channel bound to one (their switch is the connector's). Hubs
-	// before it refuse the manifest.
+	// did not have (docs "Contribution switches"). Not a connector or a channel bound to one (their switch is the
+	// connector's). Hubs before it refuse the manifest.
 	OffByDefault []string `json:"off_by_default,omitempty"`
-	// Extensions it needs installed and on (docs「依赖」): while one is missing, off or too old it waits in needs_setup.
+	// Extensions it needs installed and on (docs "Dependencies"): while one is missing, off or too old it waits in
+	// needs_setup.
 	Depends []Dependency `json:"depends,omitempty"`
 	Exports *Exports     `json:"exports,omitempty"`
-	// An extension pack (docs「扩展合集」): installing it installs these. A pack has no runtime and no contributes of its own.
+	// An extension pack (docs "Extension packs"): installing it installs these. A pack has no runtime and no contributes
+	// of its own.
 	ExtensionPack []PackMember `json:"extension_pack,omitempty"`
-	// The configuration's JSON Schema, in the subset every app draws as a form (docs「配置：表单的子集」).
+	// The configuration's JSON Schema, in the subset every app draws as a form (docs "Configuration: the form subset").
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
 	Permissions   *Permissions    `json:"permissions,omitempty"`
-	// Command-line programs the hub installs into the extension's own directory and puts first on its PATH
-	// (docs「命令行程序（tools）」, #4507). Installing them is a permission. Hubs before them refuse the manifest.
+	// Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
+	// "Command-line programs (tools)", #4507). Installing them is a permission. Hubs before them refuse the manifest.
 	Tools []ToolSpec `json:"tools,omitempty"`
 	Auth  *AuthSpec  `json:"auth,omitempty"`
 }
@@ -95,7 +98,8 @@ type ToolNPM struct {
 	Bin string `json:"bin,omitempty"`
 }
 
-// AuthSpec: the extension signs in: its program answers auth.status, auth.step and auth.logout (docs「登录（auth）」).
+// AuthSpec: the extension signs in: its program answers auth.status, auth.step and auth.logout (docs "Sign-in
+// (auth)").
 type AuthSpec struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
@@ -120,7 +124,8 @@ type ExportedPoint struct {
 	ID          string `json:"id"`
 	Version     int    `json:"version"`
 	Description string `json:"description,omitempty"`
-	// Each contribution's JSON Schema, in the configuration's subset (docs「配置：表单的子集」); id is always there and required.
+	// Each contribution's JSON Schema, in the configuration's subset (docs "Configuration: the form subset"); id is
+	// always there and required.
 	Schema json.RawMessage `json:"schema,omitempty"`
 }
 
@@ -150,8 +155,8 @@ type Runtime struct {
 	Resources *Resources        `json:"resources,omitempty"`
 }
 
-// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md「沙箱」): memory in MB, CPU
-// in percent of one core. Unset: 1024 MB, 100%.
+// Resources: the most a program may use when the hub runs it in a sandbox (docs/extensions.md "Sandbox"): memory in
+// MB, CPU in percent of one core. Unset: 1024 MB, 100%.
 type Resources struct {
 	MemoryMb   int `json:"memory_mb,omitempty"`
 	CpuPercent int `json:"cpu_percent,omitempty"`
@@ -160,9 +165,9 @@ type Resources struct {
 // A path in the package, or one per platform ({"linux-amd64": "bin/x"}).
 type Command = json.RawMessage
 
-// NodeRuntime: the extension's program on computers (docs/extensions.md「在电脑上运行的程序」): one per platform (darwin-* /
-// linux-*), on the machines picked in the configuration field `machines` (an array of format machine, x-os the
-// programs' systems).
+// NodeRuntime: the extension's program on computers (docs/extensions.md "Programs running on computers"): one per
+// platform (darwin-* / linux-*), on the machines picked in the configuration field `machines` (an array of format
+// machine, x-os the programs' systems).
 type NodeRuntime struct {
 	Command     json.RawMessage   `json:"command"`
 	Args        []string          `json:"args,omitempty"`
@@ -281,7 +286,8 @@ func (v Contributes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fields)
 }
 
-// SkillItem: A skill (docs「纯声明贡献」): a directory of the package with SKILL.md, put in with the assistant's skills.
+// SkillItem: A skill (docs "Declarative contributions"): a directory of the package with SKILL.md, put in with the
+// assistant's skills.
 type SkillItem struct {
 	ID string `json:"id"`
 	// The directory, relative to the package.
@@ -407,7 +413,7 @@ type LookAvatar struct {
 	Dark *LookAvatarDark `json:"dark,omitempty"`
 }
 
-// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md「色系」, the apps' PersonaPalette).
+// LookPalette: an appearance's colors, #RRGGBB (docs/persona.md "Palettes", the apps' PersonaPalette).
 type LookPalette struct {
 	Primary    string `json:"primary,omitempty"`
 	Secondary  string `json:"secondary,omitempty"`
@@ -443,7 +449,7 @@ type LookDot struct {
 	States LookDotStates `json:"states"`
 }
 
-// LookItem: A look (docs/extensions.md「形象」): Persona's name, face, colors and dot, served as a persona package.
+// LookItem: A look (docs/extensions.md "Looks"): Persona's name, face, colors and dot, served as a persona package.
 // app_icon_fallback is the built-in icon used where only the app's own icons can be shown.
 type LookItem struct {
 	ID              string      `json:"id"`
@@ -464,15 +470,15 @@ type TriageTemplateItem struct {
 	Text  string `json:"text"`
 }
 
-// TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs「App 内隧道」): an
-// in-app tunnel core built into the app, going to the configuration's target_host and target_port.
+// TunnelItem: A tunnel the apps can reach this hub through when its own addresses do not answer (docs "In-app
+// tunnels"): an in-app tunnel core built into the app, going to the configuration's target_host and target_port.
 type TunnelItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-// AgentFilterItem: agent sessions kept out of Agents (docs「Agent 过滤」): a session goes when it is one of agents and
-// any of the matchers fits it.
+// AgentFilterItem: agent sessions kept out of Agents (docs "Agent filters"): a session goes when it is one of agents
+// and any of the matchers fits it.
 type AgentFilterItem struct {
 	ID string `json:"id"`
 	// What the extension's contributions list calls it.
@@ -561,9 +567,9 @@ type AssistantItem struct {
 	Gate         string   `json:"gate,omitempty"`
 }
 
-// MCPServerItem: an MCP server for the Claude assistant (docs「MCP 服务器」): a command line on the assistant's machine,
-// its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its environment.
-// Not a shell or an interpreter.
+// MCPServerItem: an MCP server for the Claude assistant (docs "MCP servers"): a command line on the assistant's
+// machine, its tools as mcp__<id>__<tool>. The command reads its own configuration; Persona adds nothing to its
+// environment. Not a shell or an interpreter.
 type MCPServerItem struct {
 	// The server's name for the assistant; not jarvis or persona.
 	ID string `json:"id"`
@@ -581,7 +587,7 @@ type MCPServerItem struct {
 	Deny []string `json:"deny,omitempty"`
 }
 
-// UIItem: A place in the apps the extension draws (docs「UI 插槽」).
+// UIItem: A place in the apps the extension draws (docs "UI slots").
 type UIItem struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
@@ -634,8 +640,8 @@ type EventsItem struct {
 	Subscribe []string `json:"subscribe"`
 }
 
-// ShortcutItem: an action of the extension the system runs (docs「系统级位置」): Shortcuts and Siri on iPhone, Mac and Apple
-// Watch. The hub asks the extension shortcut.run with the values.
+// ShortcutItem: an action of the extension the system runs (docs "System placements"): Shortcuts and Siri on iPhone,
+// Mac and Apple Watch. The hub asks the extension shortcut.run with the values.
 type ShortcutItem struct {
 	ID          string          `json:"id"`
 	Title       string          `json:"title"`
@@ -933,7 +939,7 @@ type UIPlaces struct {
 	UI []UIPlace `json:"ui"`
 }
 
-// WidgetPlace: A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).
+// WidgetPlace: A widget an extension draws outside the app (GET …/extensions/-/widgets; docs "System placements").
 type WidgetPlace struct {
 	Extension      string   `json:"extension"`
 	ExtensionName  string   `json:"extension_name,omitempty"`
@@ -1095,7 +1101,7 @@ const (
 // ButtonRoles are the values of ButtonRole, in order.
 var ButtonRoles = []string{"normal", "destructive"}
 
-// Placement: A slot in the apps an extension draws at (docs「UI 插槽」). extension_page is plugin_page's new name (UI
+// Placement: A slot in the apps an extension draws at (docs "UI slots"). extension_page is plugin_page's new name (UI
 // version 3): the hub takes both and answers the new API with extension_page, the old one with plugin_page.
 const (
 	PlacementPluginPage      = "plugin_page"
@@ -1128,8 +1134,8 @@ const (
 // Sizes are the values of Size, in order.
 var Sizes = []string{"compact", "full", "small", "medium", "large", "accessory_circular", "accessory_rectangular", "accessory_inline"}
 
-// WidgetFamily: A widget's size outside the app (docs「系统级位置」): a home screen widget's small / medium / large, a Lock
-// Screen or watch face complication's accessory_*.
+// WidgetFamily: A widget's size outside the app (docs "System placements"): a home screen widget's small / medium /
+// large, a Lock Screen or watch face complication's accessory_*.
 const (
 	WidgetFamilySmall                = "small"
 	WidgetFamilyMedium               = "medium"
@@ -1788,8 +1794,8 @@ type CardPart struct {
 	Note  string  `json:"note,omitempty"`
 }
 
-// MessagingCapability: what a source supports (docs「三、能力」). The apps show only what is supported; an unknown one is
-// ignored.
+// MessagingCapability: what a source supports (docs "3. Capabilities"). The apps show only what is supported; an
+// unknown one is ignored.
 const (
 	MessagingCapabilityAccounts          = "accounts"
 	MessagingCapabilityPinned            = "pinned"
@@ -1813,8 +1819,8 @@ const (
 // MessagingCapabilities are the values of MessagingCapability, in order.
 var MessagingCapabilities = []string{"accounts", "pinned", "mentions", "attachments", "attachment_replies", "threads", "topics", "reactions", "read_receipts", "chat_pins", "profiles", "url_previews", "documents", "doc_comments", "posts", "edit_history", "translation"}
 
-// MessagingComposerMode: A message box mode besides plain (docs「七、输入框模式」): what is sent is handled by the extension
-// (encoded, sealed).
+// MessagingComposerMode: A message box mode besides plain (docs "7. Composer modes"): what is sent is handled by the
+// extension (encoded, sealed).
 type MessagingComposerMode struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
@@ -1840,7 +1846,7 @@ type MessagingLink struct {
 	Opens string   `json:"opens"`
 }
 
-// MessagingItem: the manifest's contributes.messaging[]: one messaging source (docs「二、清单」).
+// MessagingItem: the manifest's contributes.messaging[]: one messaging source (docs "2. Manifest").
 type MessagingItem struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -2083,8 +2089,9 @@ type MessagingPreview struct {
 	Text       string `json:"text"`
 }
 
-// MessagingPart: A piece of a message's body, told apart by kind (docs「五」). An app that does not know a kind draws
-// its text, or skips it. One struct for every variant: kind says which fields mean something.
+// MessagingPart: A piece of a message's body, told apart by kind (docs "5. Conversations and messages"). An app that
+// does not know a kind draws its text, or skips it. One struct for every variant: kind says which fields mean
+// something.
 type MessagingPart struct {
 	Kind  string         `json:"kind"`
 	Text  string         `json:"text,omitempty"`
@@ -2144,7 +2151,7 @@ type MessagingMention struct {
 	Name   string `json:"name"`
 }
 
-// MessagingOutgoing: POST conversations/{id}/messages (docs「六、发送」).
+// MessagingOutgoing: POST conversations/{id}/messages (docs "6. Sending").
 type MessagingOutgoing struct {
 	ClientID string             `json:"client_id"`
 	Text     string             `json:"text"`
@@ -2404,7 +2411,7 @@ type MessagingConversationRef struct {
 	MentionPosition string `json:"mention_position,omitempty"`
 }
 
-// MessagingError: an error answer. code is one of the codes the apps act on (docs「四、接口」); view comes with
+// MessagingError: an error answer. code is one of the codes the apps act on (docs "4. API"); view comes with
 // input_required.
 type MessagingError struct {
 	Error string `json:"error"`

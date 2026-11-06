@@ -264,7 +264,7 @@
       "required": ["ui"]
     },
     "WidgetPlace": {
-      "description": "A widget an extension draws outside the app (GET …/extensions/-/widgets; docs「系统级位置」).",
+      "description": "A widget an extension draws outside the app (GET …/extensions/-/widgets; docs \"System placements\").",
       "type": "object",
       "properties": {
         "extension": {"type": "string"},
