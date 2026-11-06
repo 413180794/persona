@@ -113,7 +113,7 @@ describe("scrubbing", () => {
   });
   it("makes API paths a pattern without ids", () => {
     expect(pathPattern("/sessions/my-box/0b5c-11/items/abc/full")).toBe("/sessions/:id/:id/items/:id/full");
-    expect(pathPattern("/machines/example-machine/panes?x=1")).toBe("/machines/:id/panes");
+    expect(pathPattern("/machines/box1/panes?x=1")).toBe("/machines/:id/panes");
     expect(pathPattern("/api/v1/todos/123")).toBe("/todos/:id");
   });
   it("tells the system coarsely", () => {
@@ -231,7 +231,7 @@ describe("the page's breadcrumbs", () => {
     const { r } = setup();
     setReporterForTest(r);
     navigationCrumb("session");
-    requestCrumb("get", "/machines/example-machine/files?path=/home/me", 502);
+    requestCrumb("get", "/machines/box1/files?path=/home/me", 502);
     requestCrumb("POST", "/todos", 0);
     requestCrumb("POST", "/error-reports", 503);
     r.capture(err("x"));
