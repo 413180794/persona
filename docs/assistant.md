@@ -597,7 +597,7 @@ Assistant MCP tools (`assistant/conversations.go`, descriptions `prompts/mcp/ass
 | Tool | Purpose |
 | --- | --- |
 | `conversations_list` | Sidebar chats: id, title, last activity, main / current / running / Codex flags, last text; `query` filters title / last text; archived excluded by default (`include_archived`) |
-| `conversation_read` | Read another chat's latest N turns (default 2, max 10), same `agent_read` truncation (`transcriptText`: one line per tool call, only failed results, final 40k bytes overall) |
+| `conversation_read` | Read another chat's latest N turns (default 2, max 10), same `agent_read` truncation (`transcriptText`: one line per tool call, only failed results, at most the final 40000 bytes, starting at a UTF-8 rune boundary; the earlier-part-cut marker is added separately) |
 | `conversation_rename` | Set title with `kind` + `topic`; hub formats `MMDD \| Type \| Topic` (start date, previous section). User titles stay unless explicitly requested (`user_asked`, then user-owned); assistant titles marked `assistant`, no autonaming override, App user renames still win. Main chat has no title to rename |
 | `conversation_archive` / `conversation_unarchive` | Archive / unarchive, below |
 | `conversation_new` | Start a chat with an opening message, return id immediately without waiting; normal auto-title after first turn, excluding opening source context |

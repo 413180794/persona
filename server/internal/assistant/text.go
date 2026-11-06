@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/proto"
@@ -24,9 +25,9 @@ var (
 )
 
 // transcriptText is a conversation's recent items for a model to read (agent_read, conversation_read): the
-// messages, tool calls in one line each, failed results, cut to the last 40 000 bytes. link is the conversation's web
-// page ("" for none): each message then carries its own link (<page>?at=<item id>, #2194), which opens the page
-// scrolled to it.
+// messages, tool calls in one line each, failed results, cut to at most the last 40 000 bytes at a rune boundary.
+// link is the conversation's web page ("" for none): each message then carries its own link
+// (<page>?at=<item id>, #2194), which opens the page scrolled to it.
 func transcriptText(head, link string, items []proto.Item) string {
 	var b strings.Builder
 	b.WriteString(head + "\n\n")
@@ -68,7 +69,11 @@ func transcriptText(head, link string, items []proto.Item) string {
 	}
 	out := b.String()
 	if len(out) > 40000 {
-		out = "…(earlier part cut)\n" + out[len(out)-40000:]
+		start := len(out) - 40000
+		for start < len(out) && !utf8.RuneStart(out[start]) {
+			start++
+		}
+		out = "…(earlier part cut)\n" + out[start:]
 	}
 	return out
 }

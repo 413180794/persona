@@ -1,11 +1,61 @@
 package assistant
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
+
+func TestTranscriptTextByteLimit(t *testing.T) {
+	const marker = "…(earlier part cut)\n"
+	for _, size := range []int{39999, 40000, 40001} {
+		t.Run(fmt.Sprint(size), func(t *testing.T) {
+			head := strings.Repeat("a", size-2)
+			want := head + "\n\n"
+			if size > 40000 {
+				want = marker + strings.Repeat("a", 39998) + "\n\n"
+			}
+			if got := transcriptText(head, "", nil); got != want {
+				t.Fatalf("transcript at %d bytes: got %d bytes, want %d", size, len(got), len(want))
+			}
+		})
+	}
+}
+
+func TestTranscriptTextTruncatesAtRuneBoundary(t *testing.T) {
+	const marker = "…(earlier part cut)\n"
+	recentText := strings.Repeat("a", 3990)
+	// Ten complete messages occupy 39990 bytes, leaving the cut in the older message.
+	recent := strings.Repeat("Agent: "+recentText+"\n\n", 10)
+	for _, char := range []string{"a", "é", "界", "あ", "😀"} {
+		for keepBytes := 0; keepBytes <= len(char); keepBytes++ {
+			t.Run(fmt.Sprintf("%s/keep_%d_bytes", char, keepBytes), func(t *testing.T) {
+				padding := strings.Repeat("x", 8-keepBytes)
+				items := []proto.Item{{Kind: proto.KindText, Role: "user", Text: "earlier" + char + padding}}
+				for range 10 {
+					items = append(items, proto.Item{Kind: proto.KindText, Role: "assistant", Text: recentText})
+				}
+				wantTail := padding + "\n\n" + recent
+				if keepBytes == len(char) {
+					wantTail = char + wantTail
+				}
+				got := transcriptText("head", "", items)
+				if !utf8.ValidString(got) {
+					t.Fatal("truncation produced invalid UTF-8")
+				}
+				if got != marker+wantTail {
+					t.Fatalf("transcript did not preserve the expected complete suffix: got %d bytes, want %d", len(got), len(marker+wantTail))
+				}
+				if len(strings.TrimPrefix(got, marker)) > 40000 {
+					t.Fatal("transcript exceeds the byte limit")
+				}
+			})
+		}
+	}
+}
 
 // With the conversation's page known, each message carries its own link (?at=<item id>, #2194); without it the text
 // is as before.
