@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -647,7 +648,8 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		// herdr refuses to prompt a Codex with an async question open; its box (checked above) takes the message.
 		err = n.codexType(ctx, pane, text, func(draft string) bool { return stillPrompted(draft, text) || pastedRE.MatchString(draft) })
 	}
-	if r := deliveryRefusal(err); r != nil { // the host refused it with nothing typed (herdr-core)
+	if r := deliveryRefusal(err); r != nil { // the host refused it with nothing typed (herdr-core, Orca's front)
+		log.Printf("send %s: the host refused it, nothing typed: %v", id, err) // which check refused, in its words
 		return r
 	}
 	if err == nil {

@@ -576,7 +576,7 @@ func TestOrcaProcessParsing(t *testing.T) {
 		"  100 node /opt/lib/node_modules/@openai/codex/bin/codex.js ORCA_PANE_KEY=tab4:leaf4",
 		"  999 /usr/local/bin/claude ORCA_PANE_KEY=tab9:leaf9", // not a candidate
 	}, "\n")
-	got := parseOrcaPSEnv(env, cands)
+	got := parseOrcaPSEnv(env, cands, nil) // the pty owners: TestOrcaNestedPtysAreNotThePanes
 	pids := map[string][]int{}
 	for pane, ps := range got {
 		for _, p := range ps {
@@ -628,17 +628,15 @@ func TestHookPaneOrca(t *testing.T) {
 }
 
 // Text goes in only when an agent is in front: Orca writes anything else raw into whatever is there (a shell would run
-// it). Not in front — Orca sees no agent (suspended, background, nested), our scan finds none, or the scan failed —
-// is refused before anything is typed, for prompts, typed text and keys that type; enter / esc / ctrl+c still go
-// (a stuck pane can be interrupted and closed).
+// it). Not in front — our scan finds none (suspended, background, nested: TestOrcaProcessParsing), or the scan failed
+// — is refused before anything is typed, for prompts, typed text and keys that type; enter / esc / ctrl+c still go
+// (a stuck pane can be interrupted and closed). Orca's own "no agent" is not a refusal (TestOrcaSendsWhileClaudeHas
+// BackgroundTasks).
 func TestOrcaRefusesTextWithoutAnAgentInFront(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		setup func(o *orcarttest.Fake, p *fakeProcs)
 	}{
-		{"Orca sees no agent in front (suspended, background, nested herdr)", func(o *orcarttest.Fake, _ *fakeProcs) {
-			o.SetAgentStatus("term_1", false, "")
-		}},
 		{"no agent process in front", func(_ *orcarttest.Fake, p *fakeProcs) { p.set("tab1:leaf1") }},
 		{"the process scan failed", func(_ *orcarttest.Fake, p *fakeProcs) {
 			p.mu.Lock()

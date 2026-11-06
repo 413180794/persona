@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"maps"
 	"os"
 	"path/filepath"
@@ -1478,6 +1479,19 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 	defer n.mu.Unlock()
 	if n.engEpoch != epoch {
 		return false
+	}
+	// A pane that now runs another session than it did: rare, and the first thing to look at when a session drops off
+	// the live list while its agent runs (#5463: a tmux worker took its manager's pane).
+	was := map[string]string{}
+	for id, a := range n.agents {
+		if a.PaneID != "" {
+			was[a.PaneID] = id
+		}
+	}
+	for id, a := range m {
+		if old := was[a.PaneID]; a.PaneID != "" && old != "" && old != id {
+			log.Printf("agents: pane %s runs session %s now, not %s", a.PaneID, id, old)
+		}
 	}
 	n.agents = m
 	n.onAgentsList = onList

@@ -469,9 +469,12 @@ func (h *orcaHost) onTerminal(ctx context.Context, t orcart.Terminal, write bool
 var errNotInFront = errors.New("no agent is in front in the pane")
 
 // front makes sure an agent is in front in the pane before text goes in, and returns its terminal: our own process
-// scan finds a claude or codex in front with this pane key, and Orca (terminal.agentStatus) says it runs an agent
-// there. Anything else — including not being able to tell — refuses with nothing typed. prompt: the text is a prompt,
-// which a permission dialog would take as its answer (refused as a dialog).
+// scan finds a claude or codex in front with this pane key (not suspended, not in the background, not inside a nested
+// host). Anything else — including not being able to tell — refuses with nothing typed. Orca's terminal.agentStatus
+// is asked too, for a permission dialog (prompt: the text is a prompt, which the dialog would take as its answer); its
+// isRunningAgent is not required on macOS and Linux: Orca says false while Claude Code has background tasks, though
+// its input box takes text then (#5463), and the scan already tells what is in front of the pane's own pty (ptyOwner).
+// On Windows, whose scan cannot tell, it still is.
 func (h *orcaHost) front(ctx context.Context, paneKey string, prompt bool) (orcart.Terminal, error) {
 	t, err := h.terminal(ctx, paneKey, false)
 	if err != nil {
@@ -493,7 +496,8 @@ func (h *orcaHost) front(ctx context.Context, paneKey string, prompt bool) (orca
 	if err != nil {
 		return t, host.Mark(fmt.Errorf("orca: cannot tell what runs in %s: %w", paneKey, err), host.ErrNotDelivered)
 	}
-	if !st.IsRunningAgent {
+	if !st.IsRunningAgent && runtime.GOOS == "windows" {
+		// Windows' scan has no foreground or stopped state to tell by (scan_windows.go): Orca's answer stays the gate.
 		return t, host.Mark(fmt.Errorf("orca: %w %s (Orca sees none)", errNotInFront, paneKey), host.ErrNotDelivered)
 	}
 	if prompt && st.Status == "permission" {
@@ -722,7 +726,9 @@ var (
 	orcaPaneRe       = paneEnvRe(orcaPaneEnv)
 	orcaLegacyPaneRe = paneEnvRe(orcaLegacyPaneEnv)
 	// A process with a pane of a host nested in Orca's terminal (herdr, herdr-core) belongs to that host: it inherited
-	// the Orca terminal's ORCA_PANE_KEY, but Orca's terminal shows the nested host, not it.
+	// the Orca terminal's ORCA_PANE_KEY, but Orca's terminal shows the nested host, not it. Other nested ptys (tmux,
+	// zellij, screen, script…) are told by their owner instead (ptyOwner), not by a variable: Orca's own Claude agent
+	// teams set TMUX in a real pane.
 	nestedPaneRes = []*regexp.Regexp{paneEnvRe(herdrPaneEnv), paneEnvRe(herdrCorePaneEnv)}
 )
 
@@ -785,16 +791,73 @@ func scanOrcaProcs() (map[string][]orcaProc, error) {
 	if len(cands) == 0 {
 		return map[string][]orcaProc{}, nil
 	}
-	pids := make([]string, 0, len(cands))
+	// Every process (not only the user's: /usr/bin/login sits between Orca's terminal host and the shell), for the
+	// owner of each candidate's pty (ptyOwner).
+	t, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,ppid=,tty=").Output()
+	if err != nil {
+		return nil, fmt.Errorf("ps -A: %w", err)
+	}
+	tree := parsePSTree(string(t))
+	owners := map[int]int{}
+	pids := make([]string, 0, 2*len(cands))
 	for pid := range cands {
 		pids = append(pids, strconv.Itoa(pid))
+		if q := ptyOwner(tree, pid); q > 0 {
+			owners[pid] = q
+			pids = append(pids, strconv.Itoa(q))
+		}
 	}
 	slices.Sort(pids)
+	pids = slices.Compact(pids)
 	b, err = exec.CommandContext(ctx, "ps", "-E", "-ww", "-o", "pid=,command=", "-p", strings.Join(pids, ",")).Output()
 	if err != nil && len(b) == 0 { // ps exits 1 when one of the pids is gone; the others are still listed
 		return nil, fmt.Errorf("ps -E: %w", err)
 	}
-	return parseOrcaPSEnv(string(b), cands), nil
+	return parseOrcaPSEnv(string(b), cands, owners), nil
+}
+
+// psNode is a process in `ps -A -o pid=,ppid=,tty=`: its parent and its controlling terminal ("??" for none).
+type psNode struct {
+	ppid int
+	tty  string
+}
+
+func parsePSTree(s string) map[int]psNode {
+	out := map[int]psNode{}
+	for line := range strings.SplitSeq(s, "\n") {
+		f := strings.Fields(line)
+		if len(f) < 3 {
+			continue
+		}
+		pid, err1 := strconv.Atoi(f[0])
+		ppid, err2 := strconv.Atoi(f[1])
+		if err1 == nil && err2 == nil {
+			out[pid] = psNode{ppid: ppid, tty: f[2]}
+		}
+	}
+	return out
+}
+
+// ptyOwner is the process that owns pid's pty: the first ancestor on another terminal (or none). For an agent in an
+// Orca pane that is Orca's terminal host; for one inside tmux, zellij, screen, script or any other pty a program in
+// the pane made, it is that program, which inherited the pane's ORCA_PANE_KEY (#5463). 0 when the chain is broken.
+func ptyOwner(tree map[int]psNode, pid int) int {
+	tty := tree[pid].tty
+	if tty == "" || tty == "??" {
+		return 0
+	}
+	for cur, i := pid, 0; i < 64; i++ {
+		p := tree[cur].ppid
+		node, ok := tree[p]
+		if !ok || p == cur {
+			return 0
+		}
+		if node.tty != tty {
+			return p
+		}
+		cur = p
+	}
+	return 0
 }
 
 // parseOrcaPSArgs reads `ps -o pid=,stat=,etime=,args=`: the claude / codex processes in front (stat holds "+", the
@@ -852,26 +915,35 @@ func parseEtime(s string) (time.Duration, bool) {
 	return time.Duration(days)*24*time.Hour + time.Duration(total)*time.Second, true
 }
 
-// parseOrcaPSEnv reads `ps -E -o pid=,command=` of the candidates (the command line followed by the environment):
-// each one's Orca pane.
-func parseOrcaPSEnv(s string, cands map[int]orcaProc) map[string][]orcaProc {
-	out := map[string][]orcaProc{}
+// parseOrcaPSEnv reads `ps -E -o pid=,command=` of the candidates and their pty owners (the command line followed by
+// the environment): each candidate's Orca pane. owners (candidate → ptyOwner; nil: not checked) drops a candidate
+// whose pty is not the pane's own: its owner carries the same pane key (a nested pty), its owner's environment cannot
+// be read (ps -E shows none for Apple's own binaries, /usr/bin/script and screen among them: unknown is not "no
+// key"), or it has no known owner.
+func parseOrcaPSEnv(s string, cands map[int]orcaProc, owners map[int]int) map[string][]orcaProc {
+	panes, readable := map[int]string{}, map[int]bool{}
 	for line := range strings.SplitSeq(s, "\n") {
 		f := strings.Fields(line)
 		if len(f) < 2 {
 			continue
 		}
-		pid, err := strconv.Atoi(f[0])
-		if err != nil {
+		if pid, err := strconv.Atoi(f[0]); err == nil {
+			panes[pid] = orcaPaneOf(line)
+			readable[pid] = strings.Contains(line, " HOME=") // every login environment has it
+		}
+	}
+	out := map[string][]orcaProc{}
+	for pid, p := range cands {
+		pane := panes[pid]
+		if pane == "" {
 			continue
 		}
-		p, ok := cands[pid]
-		if !ok {
-			continue
+		if owners != nil {
+			if q := owners[pid]; q == 0 || !readable[q] || panes[q] == pane {
+				continue
+			}
 		}
-		if pane := orcaPaneOf(line); pane != "" {
-			out[pane] = append(out[pane], p)
-		}
+		out[pane] = append(out[pane], p)
 	}
 	sortOrcaProcs(out)
 	return out
@@ -905,6 +977,16 @@ func scanOrcaProcsLinux() (map[string][]orcaProc, error) {
 		}
 		env, _ := os.ReadFile(dir + "/environ")
 		if pane := orcaPaneOf(string(env)); pane != "" {
+			// A nested pty (tmux, zellij, script…) a program in the pane made: its owner carries the pane key too.
+			q := ptyOwnerLinux(pid)
+			if q == 0 {
+				continue
+			}
+			// Unreadable (a setuid / setgid owner such as screen is not dumpable) is not "no key": not taken.
+			if qenv, err := os.ReadFile("/proc/" + strconv.Itoa(q) + "/environ"); err != nil || len(qenv) == 0 ||
+				orcaPaneOf(string(qenv)) == pane {
+				continue
+			}
 			p := orcaProc{pid: pid, agent: agent}
 			p.cwd, _ = os.Readlink(dir + "/cwd")
 			if st, err := os.Stat(dir); err == nil {
@@ -915,6 +997,48 @@ func scanOrcaProcsLinux() (map[string][]orcaProc, error) {
 	}
 	sortOrcaProcs(out)
 	return out, nil
+}
+
+// statPPIDTTY reads /proc/<pid>/stat's ppid and tty_nr.
+func statPPIDTTY(pid int) (ppid int, tty string, ok bool) {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, "", false
+	}
+	s := string(b)
+	i := strings.LastIndexByte(s, ')')
+	if i < 0 {
+		return 0, "", false
+	}
+	f := strings.Fields(s[i+1:]) // state ppid pgrp session tty_nr …
+	if len(f) < 5 {
+		return 0, "", false
+	}
+	ppid, err = strconv.Atoi(f[1])
+	return ppid, f[4], err == nil
+}
+
+// ptyOwnerLinux is ptyOwner from /proc: the first ancestor of pid on another terminal, 0 when the chain is broken.
+func ptyOwnerLinux(pid int) int {
+	_, tty, ok := statPPIDTTY(pid)
+	if !ok || tty == "0" {
+		return 0
+	}
+	for cur, i := pid, 0; i < 64; i++ {
+		p, _, ok := statPPIDTTY(cur)
+		if !ok || p <= 0 || p == cur {
+			return 0
+		}
+		_, t, ok := statPPIDTTY(p)
+		if !ok {
+			return 0
+		}
+		if t != tty {
+			return p
+		}
+		cur = p
+	}
+	return 0
 }
 
 // procInFront reads /proc/<pid>/stat: not stopped, and its process group is the terminal's foreground group.

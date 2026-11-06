@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -509,10 +510,12 @@ func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
 	if pane != "" {
 		if ph, ref := n.hosts.Pane(pane); ph != nil {
 			if _, err := ph.Agent(ctx, ref); err == nil {
+				log.Printf("send %s: not on the live list; its last pane %s still runs an agent: refused as not in front", id, pane)
 				return refusal(notInFront, inFrontReason, nil)
 			}
 		}
 	}
+	log.Printf("send %s: not on the live list (last pane %q): refused as not running", id, pane)
 	name := n.defaultEngineName()
 	return refusal(notRunning, fmt.Sprintf("这个会话现在没有在运行（可能被挂起或已退出），%s 里的会话要在电脑上重新打开，这次没有发送。", name), nil)
 }
