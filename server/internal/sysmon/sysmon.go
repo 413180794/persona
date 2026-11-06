@@ -7,6 +7,8 @@ package sysmon
 import (
 	"bufio"
 	"bytes"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -371,22 +373,108 @@ func diskUsage(blocks, bfree, bavail, bsize uint64) (used, total int64) {
 // diskMounts picks, from /proc/self/mounts, one mount point per local block device: a box with its data disk on
 // /data00 has most of its space there, so counting only / would show a 118 GB disk on a 5 TB machine. Loop devices
 // (snaps, images) and read-only image filesystems are not storage anyone fills; bind mounts repeat a device.
+// Used when /proc/self/mountinfo cannot be read; diskMountinfo also drops bind mounts of a directory.
 func diskMounts(b []byte) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, line := range strings.Split(string(b), "\n") {
 		f := strings.Fields(line)
-		if len(f) < 3 || !strings.HasPrefix(f[0], "/dev/") || strings.HasPrefix(f[0], "/dev/loop") || seen[f[0]] {
-			continue
-		}
-		switch f[2] {
-		case "squashfs", "iso9660", "erofs", "udf":
+		if len(f) < 3 || !diskDevice(f[0], f[2]) || seen[f[0]] {
 			continue
 		}
 		seen[f[0]] = true
 		out = append(out, unescapeMount(f[1]))
 	}
 	return out
+}
+
+// diskMountinfo is diskMounts over /proc/self/mountinfo, which also says which directory of the filesystem a mount
+// shows (its root). In a container, Kubernetes and Docker bind single directories of the host's disks in: an
+// emptyDir on /tmp, /etc/hosts, /etc/hostname, log directories. That disk is shared by every pod on the host, so
+// counting it showed a 2 TB disk at 28% on a box whose own / was 83% full. A mount whose root is not / is such a
+// directory and is skipped, except / itself and btrfs subvolumes (Ubuntu mounts / and /home as /@ and /@home; each
+// reports the whole filesystem).
+func diskMountinfo(b []byte) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, line := range strings.Split(string(b), "\n") {
+		pre, post, ok := strings.Cut(line, " - ")
+		f, g := strings.Fields(pre), strings.Fields(post)
+		if !ok || len(f) < 5 || len(g) < 2 {
+			continue
+		}
+		dev, root, point, fstype, source := f[2], unescapeMount(f[3]), unescapeMount(f[4]), g[0], g[1]
+		if !diskDevice(source, fstype) || seen[dev] || (root != "/" && point != "/" && fstype != "btrfs") {
+			continue
+		}
+		seen[dev] = true
+		out = append(out, point)
+	}
+	return out
+}
+
+// diskDevice: a local block device someone stores files on (not a loop device or a read-only image filesystem).
+func diskDevice(source, fstype string) bool {
+	if !strings.HasPrefix(source, "/dev/") || strings.HasPrefix(source, "/dev/loop") {
+		return false
+	}
+	switch fstype {
+	case "squashfs", "iso9660", "erofs", "udf":
+		return false
+	}
+	return true
+}
+
+// cgroupMemory reads the memory limit and use of the cgroup mounted at root (/sys/fs/cgroup), v2 or v1. In a
+// container that is the container's own cgroup, and /proc/meminfo is the host's (unless lxcfs is mounted over it):
+// a pod limited to 32 GiB on a 512 GiB host showed 31% used while it was close to being OOM-killed. On a machine
+// that is not in a container it is the root cgroup, which has no limit (v2 has no memory.max there, v1 reports
+// about 2^63), so ok is false. Used is like docker stats and kubectl top: usage minus the inactive page cache,
+// which the kernel reclaims before it kills anything.
+func cgroupMemory(root string) (limit, used int64, ok bool) {
+	read := func(name string) []byte { b, _ := os.ReadFile(filepath.Join(root, name)); return b }
+	if b := read("memory.max"); b != nil {
+		if limit, ok = cgroupLimit(b); ok {
+			used = cgroupUsed(read("memory.current"), read("memory.stat"), "inactive_file")
+		}
+		return
+	}
+	if b := read("memory/memory.limit_in_bytes"); b != nil {
+		if limit, ok = cgroupLimit(b); ok {
+			used = cgroupUsed(read("memory/memory.usage_in_bytes"), read("memory/memory.stat"), "total_inactive_file", "inactive_file")
+		}
+	}
+	return
+}
+
+// noCgroupLimit: v1 writes "no limit" as the largest page-aligned int64; anything at 2^60 or above is no limit.
+const noCgroupLimit = 1 << 60
+
+func cgroupLimit(b []byte) (int64, bool) {
+	n, err := strconv.ParseInt(strings.TrimSpace(string(b)), 10, 64) // v2 writes "max"
+	if err != nil || n <= 0 || n >= noCgroupLimit {
+		return 0, false
+	}
+	return n, true
+}
+
+// cgroupUsed is usage minus the first of keys found in memory.stat.
+func cgroupUsed(usage, stat []byte, keys ...string) int64 {
+	u, _ := strconv.ParseInt(strings.TrimSpace(string(usage)), 10, 64)
+	vals := map[string]int64{}
+	for _, line := range strings.Split(string(stat), "\n") {
+		if k, v, ok := strings.Cut(line, " "); ok {
+			if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
+				vals[k] = n
+			}
+		}
+	}
+	for _, k := range keys {
+		if n, ok := vals[k]; ok {
+			return max(u-n, 0)
+		}
+	}
+	return max(u, 0)
 }
 
 // unescapeMount undoes the kernel's octal escapes in mount points (\040 for a space).

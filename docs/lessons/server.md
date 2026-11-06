@@ -99,6 +99,8 @@ Pitfalls, odd behavior, and the trade-offs made at the time (formerly "Lessons" 
   and `vm.page_*` sysctls lack anonymous-page and compressor counts. macOS CPU / memory come from persistent `iostat -n 0 -w 10` / `vm_stat 10` (one line per 10 seconds, not a new process per sample),
   the rest from sysctl, route socket (`NET_RT_IFLIST2`), and statfs. Before manually decoding C structs (`if_msghdr2`, `struct loadavg`), print `offsetof` with a small C program to confirm offsets (`#pragma pack(4)` exists).
   Linux virtual interfaces are identified by whether `/sys/class/net/<name>` points into `/sys/devices/virtual/`, more reliable than names (TUN proxies use varied names).
+  When the node runs in a container, `/proc/meminfo` and `/proc/self/mounts` show the host: a pod limited to 32 GiB on a 512 GiB host showed 31% memory while it was close to an OOM kill,
+  and the host's 1.7 TB data disk came in as directory binds (`/tmp`, `/etc/hosts`) at 28% while the container's own `/` was 83% full. Memory uses the cgroup limit; disks use mountinfo's mount root to skip directory mounts (#3520).
 - macOS Desktop, Documents, and Downloads are privacy-protected (TCC): jarvisd running over SSH gets `operation not permitted` without authorization,
   so the phone can't open files there. node explains the error (`explainDenied`): enable sshd-keygen-wrapper in Full Disk Access or use another folder.
   Put user-visible files (screenshots etc.) in an ordinary directory under `~/`, not Desktop.

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -209,5 +210,86 @@ func TestSampleHere(t *testing.T) {
 	}
 	if sys := ReadSystem(context.Background()); sys.Cores == 0 || sys.Kernel == "" || sys.Name == "" {
 		t.Fatalf("system = %+v", sys)
+	}
+}
+
+func TestDiskMountinfo(t *testing.T) {
+	// A Kubernetes pod: / is its own disk; the host's data disk comes in as directories (emptyDir on /tmp,
+	// /etc/hosts, a log directory) and the root disk again under /host. Only / counts.
+	pod := "2049 1801 8:1 / / rw,relatime master:1 - ext4 /dev/sda1 rw\n" +
+		"2050 2049 0:310 / /proc rw - proc proc rw\n" +
+		"2061 2049 8:17 /k8s/pods/0f/volumes/kubernetes.io~empty-dir/tmp /tmp rw - ext4 /dev/sdb1 rw\n" +
+		"2062 2049 8:1 / /host rw - ext4 /dev/sda1 rw\n" +
+		"2063 2049 8:17 /k8s/pods/0f/etc-hosts /etc/hosts rw - ext4 /dev/sdb1 rw\n" +
+		"2064 2049 8:17 /var/log/pods/0f /var/log/app rw - ext4 /dev/sdb1 rw\n" +
+		"2065 2049 0:52 / /dev/shm rw - tmpfs shm rw\n"
+	if got := strings.Join(diskMountinfo([]byte(pod)), "|"); got != "/" {
+		t.Fatalf("pod mounts %q", got)
+	}
+	// A plain machine: whole disks on / and /data00 count, a bind of a directory of /data00 does not repeat it,
+	// loop and image filesystems are skipped, escapes are undone.
+	box := "22 1 252:1 / / rw - ext4 /dev/vda1 rw\n" +
+		"30 22 252:16 / /data00 rw - ext4 /dev/vdb rw\n" +
+		"31 22 252:16 /home /home rw - ext4 /dev/vdb rw\n" +
+		"32 22 7:3 / /snap/core/1 ro - squashfs /dev/loop3 ro\n" +
+		"33 22 11:0 / /media/cd ro - iso9660 /dev/sr0 ro\n" +
+		"34 22 8:33 / /mnt/my\\040disk rw - xfs /dev/sdc1 rw\n"
+	if got := strings.Join(diskMountinfo([]byte(box)), "|"); got != "/|/data00|/mnt/my disk" {
+		t.Fatalf("box mounts %q", got)
+	}
+	// btrfs mounts subvolumes (Ubuntu's /@ on /, /@home on /home): each reports the whole filesystem, and both are
+	// one device, so it counts once, whichever comes first.
+	btrfs := "25 1 0:25 /@ / rw - btrfs /dev/nvme0n1p2 rw\n" +
+		"26 25 0:25 /@home /home rw - btrfs /dev/nvme0n1p2 rw\n" +
+		"27 25 0:26 /@data /srv rw - btrfs /dev/sdb1 rw\n"
+	if got := strings.Join(diskMountinfo([]byte(btrfs)), "|"); got != "/|/srv" {
+		t.Fatalf("btrfs mounts %q", got)
+	}
+}
+
+func TestCgroupMemory(t *testing.T) {
+	write := func(t *testing.T, files map[string]string) string {
+		dir := t.TempDir()
+		for name, body := range files {
+			p := filepath.Join(dir, name)
+			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return dir
+	}
+	cases := []struct {
+		name        string
+		files       map[string]string
+		limit, used int64
+		ok          bool
+	}{
+		{"v2 limited", map[string]string{
+			"memory.max": "34359738368\n", "memory.current": "31321325568\n",
+			"memory.stat": "anon 3451019264\nfile 24192638976\ninactive_file 15724765184\nactive_file 8461402112\n",
+		}, 34359738368, 31321325568 - 15724765184, true},
+		{"v2 unlimited", map[string]string{"memory.max": "max\n", "memory.current": "1000\n"}, 0, 0, false},
+		{"v1 limited", map[string]string{
+			"memory/memory.limit_in_bytes": "34359738368\n", "memory/memory.usage_in_bytes": "31321325568\n",
+			"memory/memory.stat": "cache 24192638976\nrss 3451019264\ninactive_file 1\ntotal_inactive_file 15724765184\n",
+		}, 34359738368, 31321325568 - 15724765184, true},
+		{"v1 unlimited", map[string]string{
+			"memory/memory.limit_in_bytes": "9223372036854771712\n", "memory/memory.usage_in_bytes": "115230494720\n",
+		}, 0, 0, false},
+		{"v1 no stat", map[string]string{
+			"memory/memory.limit_in_bytes": "1073741824\n", "memory/memory.usage_in_bytes": "536870912\n",
+		}, 1073741824, 536870912, true},
+		{"no cgroup", map[string]string{}, 0, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			limit, used, ok := cgroupMemory(write(t, c.files))
+			if limit != c.limit || used != c.used || ok != c.ok {
+				t.Fatalf("got %d / %d %v, want %d / %d %v", used, limit, ok, c.used, c.limit, c.ok)
+			}
+		})
 	}
 }

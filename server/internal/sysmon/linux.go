@@ -34,11 +34,17 @@ func ReadSystem(ctx context.Context) proto.System {
 	if b, err := os.ReadFile("/proc/meminfo"); err == nil {
 		s.Memory = parseMeminfo(b)["MemTotal"]
 	}
+	if limit, _, ok := cgroupMemory(cgroupRoot); ok && limit < s.Memory {
+		s.Memory = limit
+	}
 	if b, err := os.ReadFile("/proc/stat"); err == nil {
 		_, _, s.BootTime = parseProcStat(b)
 	}
 	return s
 }
+
+// cgroupRoot is where the cgroup hierarchy is mounted (cgroupMemory).
+const cgroupRoot = "/sys/fs/cgroup"
 
 type linuxCollector struct {
 	cpu   cpuTimes
@@ -74,6 +80,10 @@ func (c *linuxCollector) Sample(now time.Time) proto.MetricSample {
 	if b, err := os.ReadFile("/proc/meminfo"); err == nil {
 		s.MemUsed, s.MemTotal, s.SwapUsed, s.SwapTotal = linuxMemory(parseMeminfo(b))
 	}
+	// In a container the limit is what it can use, not the host's memory (cgroupMemory).
+	if limit, used, ok := cgroupMemory(cgroupRoot); ok && limit < s.MemTotal {
+		s.MemTotal, s.MemUsed = limit, min(used, limit)
+	}
 	if b, err := os.ReadFile("/proc/net/dev"); err == nil {
 		cur := netCounters{at: now}
 		for name, v := range parseNetDev(b) {
@@ -86,7 +96,11 @@ func (c *linuxCollector) Sample(now time.Time) proto.MetricSample {
 		c.net = cur
 	}
 	mounts := []string{"/"}
-	if b, err := os.ReadFile("/proc/self/mounts"); err == nil {
+	if b, err := os.ReadFile("/proc/self/mountinfo"); err == nil {
+		if m := diskMountinfo(b); len(m) > 0 {
+			mounts = m
+		}
+	} else if b, err := os.ReadFile("/proc/self/mounts"); err == nil {
 		if m := diskMounts(b); len(m) > 0 {
 			mounts = m
 		}
