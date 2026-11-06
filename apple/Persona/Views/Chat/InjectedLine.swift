@@ -71,7 +71,7 @@ struct InjectedLine: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("injected-\(injected.kind)")
         .accessibilityAddTraits(todo != nil || expandable ? .isButton : [])
-        .accessibilityHint(todo != nil ? "打开任务" : expandable ? (open ? "收起任务的要求" : "看任务的要求") : "")
+        .accessibilityHint(todo != nil ? String(localized: "Open Task") : expandable ? (open ? String(localized: "Shows the task's request [Injected Line b3e725]") : String(localized: "Shows the task's request [Injected Line 95b98b]")) : "")
     }
 
     private func toggle() {

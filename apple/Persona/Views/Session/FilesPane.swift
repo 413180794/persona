@@ -27,14 +27,14 @@ struct FilesPane: View {
                 if let listing, listed == path {
                     let entries = listing.entries.filter { showHidden || !$0.name.hasPrefix(".") }
                     if entries.isEmpty {
-                        Text(listing.entries.isEmpty ? "空文件夹" : "只有隐藏文件").foregroundStyle(.secondary)
+                        Text(listing.entries.isEmpty ? String(localized: "Empty folder") : String(localized: "Only hidden files")).foregroundStyle(.secondary)
                     }
                     ForEach(entries) { e in entryRow(e) }
                     if listing.truncated {
-                        Text("文件太多，只列出了前 2000 个").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("Too many files; showing the first 2,000").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 } else if let error {
-                    ContentUnavailableView("打不开这个文件夹", systemImage: "folder.badge.questionmark", description: Text(error))
+                    ContentUnavailableView("Can't Open This Folder", systemImage: "folder.badge.questionmark", description: Text(error))
                         .listRowBackground(Color.clear)
                 } else {
                     HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
@@ -67,7 +67,7 @@ struct FilesPane: View {
                 }
                 .themedButton()
                 .clipShape(.circle)
-                .accessibilityLabel("上一级")
+                .accessibilityLabel("Parent Folder")
             }
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -83,8 +83,8 @@ struct FilesPane: View {
                 .onChange(of: stack.count) { _, n in withAnimation { proxy.scrollTo(n, anchor: .trailing) } }
             }
             Menu {
-                Toggle(isOn: $showHidden) { Label("显示隐藏文件", systemImage: Theme.Icon.view) }
-                Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                Toggle(isOn: $showHidden) { Label("Show Hidden Files", systemImage: Theme.Icon.view) }
+                Button { UIPasteboard.general.string = path } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
             } label: {
                 Image(systemName: Theme.Icon.more).font(Theme.Font.captionStrong).scaledFrame(width: Theme.Size.wellS, height: Theme.Size.wellS)
             }
@@ -167,7 +167,7 @@ struct FilesPane: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button { UIPasteboard.general.string = full } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+            Button { UIPasteboard.general.string = full } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
         }
     }
 

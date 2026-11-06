@@ -11,13 +11,13 @@ nonisolated struct ExtensionDependencyStatus: Codable, Hashable, Sendable, Ident
     var title: String { name?.isEmpty == false ? name! : id }
     var description: String {
         switch state {
-        case "ok": return installed.map { String(localized: "已就绪 · \($0)") } ?? String(localized: "已就绪")
-        case "missing": return String(localized: "先安装这个扩展")
-        case "disabled": return String(localized: "先启用这个扩展")
+        case "ok": return installed.map { String(localized: "Ready · \($0)") } ?? String(localized: "Ready [Extension Management ab27f8]")
+        case "missing": return String(localized: "Install this extension first")
+        case "disabled": return String(localized: "Turn on this extension first")
         case "old":
-            let needed = version ?? String(localized: "更新的版本"), current = installed ?? String(localized: "未知")
-            return String(localized: "需要 \(needed)，当前 \(current)")
-        default: return String(localized: "状态未知")
+            let needed = version ?? String(localized: "a newer version"), current = installed ?? String(localized: "Unknown [Session Modes 4d8c1c]")
+            return String(localized: "Needs \(needed), has \(current)")
+        default: return String(localized: "Unknown [Connectors Views 93e474]")
         }
     }
 }
@@ -50,7 +50,7 @@ nonisolated struct ExtensionDisableConfirmation {
             item["name"]?.string ?? item["id"]?.string
         }
         let names = dependents.joined(separator: "、")
-        message = dependents.isEmpty ? error.message : String(localized: "以下扩展依赖它，将一起停用：\(names)。只停用，不卸载；设置和数据保留。")
+        message = dependents.isEmpty ? error.message : String(localized: "These extensions depend on it and will be turned off too: \(names). They're only turned off, not uninstalled; their settings and data stay.")
     }
 }
 

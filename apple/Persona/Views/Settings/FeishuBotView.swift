@@ -16,7 +16,7 @@ struct FeishuBotView: View {
                 featuresSection
             }
             if let agents = model.status?.agents, !agents.isEmpty {
-                Section("飞书里聊过的 Agent") {
+                Section("Agents You've Chatted With in Lark") {
                     ForEach(agents, id: \.sessionID) { a in
                         LabeledContent(a.title) { Text(a.machineID).lineLimit(1) }
                     }
@@ -25,7 +25,7 @@ struct FeishuBotView: View {
             setupSection
         }
         .themedPage()
-        .detailTitle(String(localized: "飞书机器人"))
+        .detailTitle(String(localized: "Lark Bot"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }
         .refreshable { await model.load() }
@@ -36,10 +36,10 @@ struct FeishuBotView: View {
                 await model.load()
             }
         }
-        .confirmationDialog("解除配对？", isPresented: $confirmUnpair, titleVisibility: .visible) {
-            Button("解除配对", role: .destructive) { Task { await model.unpair() } }
+        .confirmationDialog("Unpair?", isPresented: $confirmUnpair, titleVisibility: .visible) {
+            Button("Unpair", role: .destructive) { Task { await model.unpair() } }
         } message: {
-            Text("机器人会不再回应现在的飞书账号，直到重新配对。")
+            Text("The bot will stop responding to the current Lark account until you pair again.")
         }
     }
 
@@ -50,7 +50,7 @@ struct FeishuBotView: View {
             HStack(spacing: Theme.Space.m) {
                 BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(model.status?.botName ?? String(localized: "飞书机器人")).font(Theme.Font.heading).lineLimit(1)
+                    Text(model.status?.botName ?? String(localized: "Lark Bot")).font(Theme.Font.heading).lineLimit(1)
                     HStack(spacing: Theme.Space.sm) {
                         Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                         Text(model.stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -60,10 +60,10 @@ struct FeishuBotView: View {
                 if model.loading || model.saving { ProgressView() }
             }
             .padding(.vertical, Theme.Space.xs)
-            Toggle("打开飞书机器人", isOn: Binding(get: { model.status?.enabled ?? false }, set: { on in Task { await model.setEnabled(on) } }))
+            Toggle("Turn On Lark Bot", isOn: Binding(get: { model.status?.enabled ?? false }, set: { on in Task { await model.setEnabled(on) } }))
                 .disabled(model.status == nil || model.saving)
             if let at = model.status?.lastEventAt, at > 0 {
-                LabeledContent("最近收到") {
+                LabeledContent("Last Received") {
                     TimelineView(.periodic(from: .now, by: 30)) { ctx in
                         Text(Fmt.relative(Date(timeIntervalSince1970: TimeInterval(at)), now: ctx.date)).lineLimit(1)
                     }
@@ -73,7 +73,7 @@ struct FeishuBotView: View {
                 LoadProblem(text: e, labeled: false)
             }
         } footer: {
-            Text("在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。")
+            Text("Messaging this bot directly in Lark is talking to Persona. The bot only responds to you after pairing, and never in groups.")
         }
     }
 
@@ -82,17 +82,17 @@ struct FeishuBotView: View {
             #if os(macOS)
             // A Mac form puts the title on the left and the field on the right: the title stays the field's name, what
             // to type goes in the prompt (#1221).
-            TextField("App ID", text: $model.appID, prompt: Text("必填")).autocorrectionDisabled()
-            SecureField("App Secret", text: $model.appSecret, prompt: Text(model.status?.hasSecret == true ? "已保存，留空不改" : "必填"))
+            TextField("App ID", text: $model.appID, prompt: Text("Required")).autocorrectionDisabled()
+            SecureField("App Secret", text: $model.appSecret, prompt: Text(model.status?.hasSecret == true ? String(localized: "Saved. Leave empty to keep") : String(localized: "Required")))
             #else
             TextField("App ID", text: $model.appID)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .font(Theme.Font.code)
-            SecretField(model.status?.hasSecret == true ? String(localized: "App Secret（已保存，留空不改）") : "App Secret", filled: String(localized: "已填写，点验证并保存"),
+            SecretField(model.status?.hasSecret == true ? String(localized: "App Secret (saved, leave empty to keep)") : "App Secret", filled: String(localized: "Entered. Tap Verify and Save"),
                         text: $model.appSecret, identifier: "bot.appSecret")
             #endif
-            Picker("平台", selection: $model.domain) {
-                Text("飞书").tag("feishu")
+            Picker("Platform", selection: $model.domain) {
+                Text("Lark [Inbox Event Views 7e4419]").tag("feishu")
                 Text("Lark").tag("lark")
                 if model.domain != "feishu" && model.domain != "lark" { Text(model.domain).tag(model.domain) }
             }
@@ -100,7 +100,7 @@ struct FeishuBotView: View {
             // A standard button at the group's trailing end, not a bar the width of the form (#1221).
             HStack {
                 Spacer(minLength: 0)
-                Button { Task { await model.saveCredentials() } } label: { Text("验证并保存").lineLimit(1) }
+                Button { Task { await model.saveCredentials() } } label: { Text("Verify and Save").lineLimit(1) }
                     .formButton(prominent: true)
                     .disabled(!model.credentialsChanged || model.appID.isEmpty || model.saving)
             }
@@ -108,17 +108,17 @@ struct FeishuBotView: View {
             Button {
                 Task { await model.saveCredentials() }
             } label: {
-                Text("验证并保存").lineLimit(1).frame(maxWidth: .infinity)
+                Text("Verify and Save").lineLimit(1).frame(maxWidth: .infinity)
             }
             .disabled(!model.credentialsChanged || model.appID.isEmpty || model.saving)
             #endif
         } header: {
-            Text("应用凭证")
+            Text("App Credentials")
         } footer: {
             if model.status?.fromConfig == true {
-                Text("现在用的是 hub.json 里的凭证；在这里保存会改用这里的。")
+                Text("Currently using the credentials in hub.json. Saving here switches to these.")
             } else {
-                Text("App Secret 加密存在 hub 上，不会再显示出来。")
+                Text("The App Secret is stored encrypted on the hub and won't be shown again.")
             }
         }
     }
@@ -126,76 +126,76 @@ struct FeishuBotView: View {
     @ViewBuilder private var pairingSection: some View {
         Section {
             if let owner = model.status?.owner {
-                LabeledContent("已配对") { Text(owner.name.isEmpty ? String(localized: "飞书用户") : owner.name).lineLimit(1) }
+                LabeledContent("Paired") { Text(owner.name.isEmpty ? String(localized: "Lark user") : owner.name).lineLimit(1) }
                 if let target = model.status?.target, !target.isEmpty {
-                    LabeledContent("消息现在发给") { Text(target).lineLimit(1) }
+                    LabeledContent("Messages Go To") { Text(target).lineLimit(1) }
                 }
                 Button {
                     Task { await model.test() }
                 } label: {
-                    Label("发一条测试消息", systemImage: Theme.Icon.sendMail).lineLimit(1)
+                    Label("Send Test Message", systemImage: Theme.Icon.sendMail).lineLimit(1)
                 }
                 .disabled(model.saving || model.status?.connected != true)
                 Button(role: .destructive) { confirmUnpair = true } label: {
-                    Label("解除配对", systemImage: Theme.Icon.close).lineLimit(1)
+                    Label("Unpair", systemImage: Theme.Icon.close).lineLimit(1)
                 }
             } else if let p = model.status?.pairing, Date(timeIntervalSince1970: TimeInterval(p.expiresAt)) > .now {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    Text("在飞书里把这串数字发给机器人").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    Text("Send this number to the bot in Lark").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     Text(p.code).font(Theme.Font.display).monospacedDigit().textSelection(.enabled)
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         let left = max(0, Int(Date(timeIntervalSince1970: TimeInterval(p.expiresAt)).timeIntervalSince(ctx.date)))
-                        Text("\(left / 60) 分 \(left % 60) 秒内有效").font(Theme.Font.label).foregroundStyle(.tertiary).monospacedDigit()
+                        Text("Valid for \(left / 60) min \(left % 60) s").font(Theme.Font.label).foregroundStyle(.tertiary).monospacedDigit()
                     }
                 }
                 .padding(.vertical, Theme.Space.xs)
                 Button { UIPasteboard.general.string = p.code; Haptics.success() } label: {
-                    Label("拷贝配对码", systemImage: Theme.Icon.copy).lineLimit(1)
+                    Label("Copy Pairing Code [Feishu Bot View f5d60b]", systemImage: Theme.Icon.copy).lineLimit(1)
                 }
             } else {
                 Button {
                     Task { await model.pair() }
                 } label: {
-                    Label("配对", systemImage: Theme.Icon.pairing).lineLimit(1)
+                    Label("Pair", systemImage: Theme.Icon.pairing).lineLimit(1)
                 }
                 .disabled(model.saving || model.status?.enabled != true)
             }
         } header: {
-            Text("配对")
+            Text("Pair")
         } footer: {
             if model.status?.owner == nil {
-                Text(model.status?.enabled == true ? "点「配对」拿一个 6 位数字，10 分钟内在飞书里发给机器人。" : "先打开飞书机器人再配对。")
+                Text(model.status?.enabled == true ? String(localized: "Tap Pair to get a 6-digit number, then send it to the bot in Lark within 10 minutes.") : String(localized: "Turn on the Lark bot before pairing."))
             }
         }
     }
 
     private var featuresSection: some View {
         Section {
-            feature(\.main, Theme.Icon.jarvis, "和 Persona 对话", "消息发进主对话（/new、/list 换一段），回答发回飞书")
-            feature(\.cards, Theme.Icon.needsYou, "提问和批准", "Persona 和飞书里驱动的 Agent 要你回答、批准时，在飞书里发卡片，点一下就行")
-            feature(\.allCards, Theme.Icon.notifications, "所有 Agent 的提问", "各台电脑上所有 Agent 的提问和批准都发到飞书")
+            feature(\.main, Theme.Icon.jarvis, String(localized: "Chat with Persona"), String(localized: "Messages go to the main chat (/new, /list to switch threads); replies come back to Lark"))
+            feature(\.cards, Theme.Icon.needsYou, String(localized: "Questions and Approvals"), String(localized: "When Persona or an agent you drive from Lark needs an answer or approval, you get a card in Lark. One tap does it"))
+            feature(\.allCards, Theme.Icon.notifications, String(localized: "Questions from All Agents"), String(localized: "Questions and approvals from every agent on all your computers go to Lark"))
                 .disabled(!features.cards)
-            feature(\.pushes, Theme.Icon.unmute, "推送也发到飞书", "Persona 的通知、定时任务的结果也发一份到飞书")
-            feature(\.sync, Theme.Icon.inProgress, "同步主对话", "在 App 里、定时任务在主对话里的回答，也发到飞书")
-            feature(\.reports, Theme.Icon.inProgress, "任务进展发到飞书", "主对话派出的任务做完、在等你、被打断时，几条合成一张卡片发到飞书，带阶段和链接")
-            feature(\.agents, Theme.Icon.agents, "驱动 Agent", "/agents 选各台电脑上的 Claude Code / Codex，在飞书里和它聊；/start 开新的")
+            feature(\.pushes, Theme.Icon.unmute, String(localized: "Also Send Notifications to Lark"), String(localized: "Persona's notifications and scheduled task results are also sent to Lark"))
+            feature(\.sync, Theme.Icon.inProgress, String(localized: "Sync Main Chat"), String(localized: "Replies in the main chat, from the app or scheduled tasks, are also sent to Lark"))
+            feature(\.reports, Theme.Icon.inProgress, String(localized: "Send Task Progress to Lark"), String(localized: "When tasks from the main chat finish, wait for you or get interrupted, they're combined into one card sent to Lark, with stages and links"))
+            feature(\.agents, Theme.Icon.agents, String(localized: "Drive Agents"), String(localized: "/agents picks Claude Code / Codex on any of your computers to chat with in Lark; /start opens a new one"))
         } header: {
-            Text("能做什么")
+            Text("What It Can Do")
         } footer: {
-            Text("主对话能用你的全部数据（飞书、邮件、手机里的日历和位置……），机器人发出的消息会留在飞书里。替你出面的操作照常先问你。")
+            Text("The main chat can use all your data (Lark, email, your phone's calendar and location…), and the bot's messages stay in Lark. Anything done on your behalf still asks you first.")
         }
     }
 
     private var setupSection: some View {
         Section {
-            step(1, "在飞书开放平台建一个企业自建应用，开启「机器人」能力")
-            step(2, "权限里开通：读取与发送单聊消息（im:message、im:message:send_as_bot）、获取单聊中发给机器人的消息、上传和下载消息里的资源；能读通讯录名字更好（contact:user.base:readonly）")
-            step(3, "「事件与回调」里选「使用长连接接收事件」，订阅「接收消息」和「卡片回传交互」")
-            step(4, "发布版本（公司里可能要管理员审核），把 App ID、App Secret 填到上面")
+            step(1, String(localized: "Create a custom app on the Lark Open Platform and enable the Bot capability"))
+            step(2, String(localized: "Under Permissions, enable: read and send direct messages (im:message, im:message:send_as_bot), receive direct messages sent to the bot, and upload and download message resources. Reading contact names helps too (contact:user.base:readonly)"))
+            step(3, String(localized: "In Events & Callbacks, choose “Receive events through persistent connection” and subscribe to “Receive messages” and “Card action callbacks”"))
+            step(4, String(localized: "Publish a version (your company's admin may need to approve it), then enter the App ID and App Secret above"))
         } header: {
-            Text("怎么建机器人")
+            Text("How to Set Up the Bot")
         } footer: {
-            Text("长连接由 hub 主动连出去，hub 不需要公网地址。")
+            Text("The hub opens the persistent connection itself, so it doesn't need a public address.")
         }
     }
 

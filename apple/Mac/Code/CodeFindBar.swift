@@ -101,10 +101,10 @@ struct CodeFindBar: View {
                 Image(systemName: Theme.Icon.search)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField("在文件中查找", text: $find.query)
+                TextField(String(localized: "Find in file"), text: $find.query)
                     .textFieldStyle(.plain)
                     .focused($focused)
-                    .accessibilityLabel("在文件中查找")
+                    .accessibilityLabel("Find in file")
                 if !find.query.isEmpty {
                     Text(count)
                         .font(Theme.Font.caption)
@@ -113,9 +113,9 @@ struct CodeFindBar: View {
                         .lineLimit(1)
                         .fixedSize()
                 }
-                option("Aa", String(localized: "区分大小写"), on: $find.options.caseSensitive)
-                option(String(localized: "整词"), String(localized: "全字匹配"), on: $find.options.wholeWord)
-                option(".*", String(localized: "正则表达式"), on: $find.options.regex)
+                option("Aa", String(localized: "Match Case"), on: $find.options.caseSensitive)
+                option(String(localized: "Word"), String(localized: "Whole Word"), on: $find.options.wholeWord)
+                option(".*", String(localized: "Regular Expression"), on: $find.options.regex)
             }
             .padding(.horizontal, Theme.Space.s)
             .padding(.vertical, Theme.Space.xs)
@@ -123,21 +123,21 @@ struct CodeFindBar: View {
             Button { find.step(forward: false) } label: {
                 Image(systemName: Theme.Icon.findPrevious)
             }
-            .help("上一个（⇧⏎ 或 ⇧⌘G）")
+            .help("Previous (⇧⏎ or ⇧⌘G)")
             .disabled(find.matches.isEmpty)
-            .accessibilityLabel("上一个")
+            .accessibilityLabel("Previous [Code Find Bar bd4b97]")
             Button { find.step(forward: true) } label: {
                 Image(systemName: Theme.Icon.findNext)
             }
-            .help("下一个（⏎ 或 ⌘G）")
+            .help("Next (⏎ or ⌘G)")
             .disabled(find.matches.isEmpty)
-            .accessibilityLabel("下一个")
+            .accessibilityLabel("Next [Code Find Bar a898d7]")
             // An icon, not Done: the file viewer's own Done is just below.
             Button { find.close() } label: {
                 Image(systemName: Theme.Icon.close)
             }
-            .help("关闭查找（Esc）")
-            .accessibilityLabel("关闭查找")
+            .help("Close find (Esc)")
+            .accessibilityLabel("Close find")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, Theme.Space.m)
@@ -196,8 +196,8 @@ struct CodeFindBar: View {
     }
 
     private var count: String {
-        if find.invalid { return String(localized: "正则有误") }
-        guard !find.matches.isEmpty else { return String(localized: "没有找到") }
+        if find.invalid { return String(localized: "Invalid regex") }
+        guard !find.matches.isEmpty else { return String(localized: "No results") }
         return "\((find.current ?? 0) + 1) / \(find.matches.count)"
     }
 }

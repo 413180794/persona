@@ -67,11 +67,11 @@ nonisolated struct ContextRef: Identifiable, Hashable, Sendable, Codable {
 
     /// What the row of a message's contexts says, folded: the one context's title, or how many.
     static func summary(_ refs: [ContextRef]) -> String {
-        if refs.count == 1, let r = refs.first { return r.kind == "edit" ? String(localized: "要改的内容 · \(r.label)") : String(localized: "上下文 · \(r.label)") }
-        return String(localized: "上下文 · \(refs.count) 项")
+        if refs.count == 1, let r = refs.first { return r.kind == "edit" ? String(localized: "To Edit · \(r.label)") : String(localized: "Context · \(r.label)") }
+        return String(localized: "Context · \(refs.count) items")
     }
 
-    var label: String { title.isEmpty ? (url.isEmpty ? String(localized: "引用") : host) : title }
+    var label: String { title.isEmpty ? (url.isEmpty ? String(localized: "Quote") : host) : title }
 
     var icon: String {
         switch kind {
@@ -136,10 +136,10 @@ struct LinkSheet: View {
         .presentationBackground(Theme.pageBackground) // pages with a clear background let the chat show through
         .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.6))) // the chat stays usable behind
         .presentationContentInteraction(.resizes) // a swipe up grows the sheet before it scrolls the page
-        .alert("让 Agent 改这段", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
-            TextField("怎么改？", text: $instruction)
-            Button("取消", role: .cancel) { instruction = "" }
-            Button("发送") { sendEdit() }
+        .alert("Have an Agent Edit This", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            TextField(String(localized: "How should it change?"), text: $instruction)
+            Button("Cancel", role: .cancel) { instruction = "" }
+            Button("Send") { sendEdit() }
         } message: {
             Text(editing.map { String($0.text.prefix(120)) } ?? "")
         }
@@ -148,7 +148,7 @@ struct LinkSheet: View {
     private var header: some View {
         HStack(spacing: Theme.Space.m) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(title.isEmpty ? (isFeishuDoc ? String(localized: "飞书文档") : feishuRoute != nil ? String(localized: "公司圈") : (target.forwarded != nil ? nil : target.url.host) ?? String(localized: "网页")) : title)
+                Text(title.isEmpty ? (isFeishuDoc ? String(localized: "Lark Doc") : feishuRoute != nil ? String(localized: "Moments") : (target.forwarded != nil ? nil : target.url.host) ?? String(localized: "Web Pages")) : title)
                     .font(Theme.Font.secondaryStrong).lineLimit(1)
                 Text(target.forwarded ?? target.url.host ?? target.url.absoluteString).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -156,19 +156,19 @@ struct LinkSheet: View {
             if isFeishuDoc, key != nil {
                 // The native reader has no custom selection menu: the whole doc can still go along.
                 Button { pick("", kind: "context") } label: { Image(systemName: Theme.Icon.addContext) }
-                    .accessibilityLabel("把这篇文档作为上下文")
+                    .accessibilityLabel("Add this document as context")
             }
             if feishuRoute == nil {
                 Button { Haptics.tap(); WebViewPool.shared.reload(target.url) } label: { Image(systemName: Theme.Icon.reload) }
-                    .accessibilityLabel("刷新")
+                    .accessibilityLabel("Refresh")
                     .accessibilityIdentifier("link-reload")
             }
             Menu {
-                Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
+                Button { UIPasteboard.general.url = target.url; Haptics.success() } label: { Label("Copy Link", systemImage: Theme.Icon.link) }
                 if target.forwarded == nil { browserItems } // the phone's loopback means nothing to another app
             } label: { Image(systemName: Theme.Icon.moreMenu) }
             Button { dismiss() } label: { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
-                .accessibilityLabel("关闭")
+                .accessibilityLabel("Close")
                 .accessibilityIdentifier("link-close")
         }
         .font(Theme.Font.title)
@@ -179,16 +179,16 @@ struct LinkSheet: View {
 
     @ViewBuilder private var browserItems: some View {
         #if os(iOS) || os(visionOS)
-        Button { UIApplication.shared.open(target.url) } label: { Label("在 Safari 打开", systemImage: Theme.Icon.safari) }
+        Button { UIApplication.shared.open(target.url) } label: { Label("Open in Safari", systemImage: Theme.Icon.safari) }
         #else
-        Button { UIApplication.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
+        Button { UIApplication.shared.open(target.url) } label: { Label("Open in Browser", systemImage: Theme.Icon.safari) }
         #endif
-        ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
+        ShareLink(item: target.url) { Label("Share", systemImage: Theme.Icon.share) }
     }
 
     private func pick(_ text: String, kind: String) {
         guard let key else {
-            model.toast = Toast(String(localized: "请从会话打开链接，再交给 Agent 处理"), style: .info)
+            model.toast = Toast(String(localized: "Open the link from a chat to hand it to an agent."), style: .info)
             return
         }
         let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.url.host ?? "") : title, url: target.url.absoluteString,
@@ -199,7 +199,7 @@ struct LinkSheet: View {
         } else {
             model.composerContexts[key, default: []].append(ref)
             Haptics.success()
-            model.toast = Toast(String(localized: "已作为上下文，会随下一条消息发送"), style: .success)
+            model.toast = Toast(String(localized: "Added as context. It'll be sent with your next message."), style: .success)
         }
     }
 
@@ -297,8 +297,8 @@ final class SelectableWebView: WKWebView {
     override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
         let actions = UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "AI 修改"), image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
-            UIAction(title: String(localized: "作为上下文"), image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
+            UIAction(title: String(localized: "Edit with AI"), image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
+            UIAction(title: String(localized: "Add as Context"), image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
         ])
         builder.insertChild(actions, atStartOfMenu: .root)
     }
@@ -387,7 +387,7 @@ struct ContextGroup: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(ContextRef.summary(refs))
-            .accessibilityValue(open ? "已展开" : "已折叠")
+            .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]"))
 
             if open {
                 VStack(alignment: .leading, spacing: 0) {
@@ -429,7 +429,7 @@ private struct ContextRow: View {
                         .scaledFrame(width: Theme.Size.markM)
                     Text(ref.label).font(Theme.Font.secondary).foregroundStyle(Color.primary).lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: Theme.Space.s)
-                    if ref.text.isEmpty { Text("空").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }
+                    if ref.text.isEmpty { Text("Empty").font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1) }
                     Image(systemName: Theme.Icon.disclosure).font(Theme.Font.label).foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(open ? 90 : 0))
                 }
@@ -438,7 +438,7 @@ private struct ContextRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityValue(open ? "已展开" : "已折叠")
+            .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]"))
             if open { ContextBody(ref: ref).unfolding(unfold) }
         }
         .chatPinned(key)
@@ -453,7 +453,7 @@ private struct ContextBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if ref.text.isEmpty {
-                Text("没有内容").font(Theme.Font.caption).foregroundStyle(.tertiary)
+                Text("No content").font(Theme.Font.caption).foregroundStyle(.tertiary)
             } else if ref.text.count > 1200 {
                 ScrollView { text }.scaledFrame(height: Theme.Size.box300)
             } else {
@@ -461,7 +461,7 @@ private struct ContextBody: View {
             }
             if let u = URL(string: ref.url), !ref.url.isEmpty {
                 Button { openLink?(u) } label: {
-                    Label("打开 \(ref.host)", systemImage: Theme.Icon.open).font(Theme.Font.labelMedium).lineLimit(1)
+                    Label("Open \(ref.host) [Git Hub Thread View eb8679]", systemImage: Theme.Icon.open).font(Theme.Font.labelMedium).lineLimit(1)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
@@ -487,10 +487,10 @@ struct DocPickMenu: View {
     @Binding var selecting: Bool
 
     var body: some View {
-        Button { pick(text, "edit") } label: { Label("AI 修改这段", systemImage: Theme.Icon.ai) }
-        Button { pick(text, "context") } label: { Label("这段作为上下文", systemImage: Theme.Icon.addContext) }
-        Button { selecting = true } label: { Label("选择文字…", systemImage: Theme.Icon.select) }
-        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+        Button { pick(text, "edit") } label: { Label("Edit This with AI", systemImage: Theme.Icon.ai) }
+        Button { pick(text, "context") } label: { Label("Add This as Context", systemImage: Theme.Icon.addContext) }
+        Button { selecting = true } label: { Label("Select Text…", systemImage: Theme.Icon.select) }
+        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
     }
 }
 
@@ -501,8 +501,8 @@ struct PickAction: Hashable, Sendable {
     var kind: String
 
     /// The chat's link sheet: Edit with AI and Add as Context.
-    static let ai = [PickAction(title: String(localized: "AI 修改"), icon: Theme.Icon.ai, kind: "edit"),
-                     PickAction(title: String(localized: "作为上下文"), icon: Theme.Icon.addContext, kind: "context")]
+    static let ai = [PickAction(title: String(localized: "Edit with AI"), icon: Theme.Icon.ai, kind: "edit"),
+                     PickAction(title: String(localized: "Add as Context"), icon: Theme.Icon.addContext, kind: "context")]
 }
 
 /// The paragraph in a text view where any span can be selected; its selection menu has `actions` (Edit with AI and
@@ -519,9 +519,9 @@ struct PickTextSheet: View {
                 dismiss()
                 pick(t, kind)
             }
-            .navigationTitle("选择文字")
+            .navigationTitle("Select Text [Link Sheet 409a5a]")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
     }

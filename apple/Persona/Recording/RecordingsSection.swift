@@ -16,12 +16,12 @@ struct RecordingsSection: View {
         Section {
             RecordingCaptureControls()
         } footer: {
-            Text("音频只留在本机，手表录音会回传这里。本机转写后文字自动同步到知识库，保留最近 \(sync.store.days) 天，助手和 Agent 用知识库搜索就能找到。")
+            Text("Audio stays on this device; watch recordings come back here. After on-device transcription the text syncs to Knowledge automatically and is kept for the last \(sync.store.days) days, so the Assistant and agents can find it with a Knowledge search.")
         }
         Section {
             if library.entries.isEmpty {
-                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "还没有录音"),
-                               message: String(localized: "用手机或 Apple Watch 录下会议、口述和现场的内容，转写好的文字会进知识库。"))
+                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "No Recordings Yet"),
+                               message: String(localized: "Record meetings, dictation and on-site notes with your phone or Apple Watch; the transcribed text goes into Knowledge."))
                     .listRowBackground(Color.clear)
             }
             ForEach(library.entries) { entry in
@@ -31,7 +31,7 @@ struct RecordingsSection: View {
         } header: {
             if !library.entries.isEmpty {
                 HStack(spacing: Theme.Space.sm) {
-                    Text("最近的录音")
+                    Text("Recent Recordings")
                     Text("\(library.entries.count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
                 }
             }
@@ -77,17 +77,17 @@ struct RecordingStatusText: View {
     }
 
     static func status(_ entry: RecordingEntry, transcription: RecordingTranscription, sync: RecordingSync) -> (String, Color) {
-        if entry.active { return (String(localized: "录音中"), Theme.danger) }
+        if entry.active { return (String(localized: "Recording [Recordings Section e35a14]"), Theme.danger) }
         if let error = transcription.errors[entry.id] { return (error, Theme.danger) }
-        if transcription.current == entry.id { return (String(localized: "转写中"), Theme.accent) }
-        if !entry.receivedAll { return (entry.expectedSegments == 0 ? String(localized: "没有录到音频") : String(localized: "等待手表回传"), .secondary) }
+        if transcription.current == entry.id { return (String(localized: "Transcribing"), Theme.accent) }
+        if !entry.receivedAll { return (entry.expectedSegments == 0 ? String(localized: "No audio recorded") : String(localized: "Waiting for Apple Watch"), .secondary) }
         switch sync.status(entry) {
-        case .synced: return (entry.transcribedAll ? String(localized: "已同步到知识库") : String(localized: "已同步一部分"), Theme.positive)
-        case .uploading: return (String(localized: "正在同步"), Theme.accent)
-        case .rejected: return (String(localized: "知识库没有收下"), Theme.danger)
-        case .expired: return (String(localized: "已过保留期"), .secondary)
-        case .pending: return (entry.transcribedAll ? String(localized: "等待同步") : String(localized: "等待转写"), .secondary)
-        case .waiting: return (entry.transcribedAll ? String(localized: "没有识别到语音") : String(localized: "等待转写"), .secondary)
+        case .synced: return (entry.transcribedAll ? String(localized: "Synced to Knowledge") : String(localized: "Partly synced"), Theme.positive)
+        case .uploading: return (String(localized: "Syncing"), Theme.accent)
+        case .rejected: return (String(localized: "Not accepted by Knowledge"), Theme.danger)
+        case .expired: return (String(localized: "Past retention"), .secondary)
+        case .pending: return (entry.transcribedAll ? String(localized: "Waiting to sync") : String(localized: "Waiting to transcribe"), .secondary)
+        case .waiting: return (entry.transcribedAll ? String(localized: "No speech detected") : String(localized: "Waiting to transcribe"), .secondary)
         }
     }
 }
@@ -124,44 +124,44 @@ struct RecordingCaptureControls: View {
 
     @ViewBuilder private var controls: some View {
         if capture.state == .idle {
-            Picker("录音语言", selection: $locale) {
-                Text("中文").tag("zh-CN")
-                Text("英语").tag("en-US")
-                Text("日语").tag("ja-JP")
+            Picker("Recording Language", selection: $locale) {
+                Text("Chinese").tag("zh-CN")
+                Text("English").tag("en-US")
+                Text("Japanese").tag("ja-JP")
             }.font(Theme.Font.body)
             #if os(iOS)
             if hasBluetooth {
-                Picker("麦克风", selection: $inputRaw) {
+                Picker("Microphone", selection: $inputRaw) {
                     ForEach(RecordingInput.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 }.font(Theme.Font.body)
             }
             #endif
             Button { let chosen = input; Task { await capture.start(locale: locale, input: chosen) } } label: {
-                Label("开始录音", systemImage: Theme.Icon.recording).lineLimit(1)
+                Label("Start Recording", systemImage: Theme.Icon.recording).lineLimit(1)
             }.accessibilityIdentifier("recording-start")
         } else if capture.state == .starting {
-            ProgressView("等待麦克风权限").font(Theme.Font.secondary)
-            Button("取消") { capture.cancelStarting() }.lineLimit(1)
+            ProgressView(String(localized: "Waiting for microphone access")).font(Theme.Font.secondary)
+            Button("Cancel") { capture.cancelStarting() }.lineLimit(1)
         } else {
             HStack(spacing: Theme.Space.s) {
                 Text(RecordingFormat.clock(capture.elapsed)).font(Theme.Font.title.monospacedDigit())
                 Spacer()
-                Text(capture.state == .paused ? "已暂停" : "正在录音").font(Theme.Font.secondary).foregroundStyle(Theme.danger)
+                Text(capture.state == .paused ? String(localized: "Paused") : String(localized: "Recording [Recordings Section 5254d3]")).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
             }
             #if os(iOS)
             if hasBluetooth, RecordingInput(rawValue: inputRaw) == .bluetooth, let name = capture.inputName {
-                Text("麦克风：\(name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text("Microphone: \(name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             #endif
             HStack(spacing: Theme.Space.m) {
                 Button { capture.togglePause() } label: {
-                    Label(capture.state == .paused ? "继续" : "暂停", systemImage: capture.state == .paused ? Theme.Icon.run : Theme.Icon.pause).lineLimit(1)
+                    Label(capture.state == .paused ? String(localized: "Continue") : String(localized: "Pause"), systemImage: capture.state == .paused ? Theme.Icon.run : Theme.Icon.pause).lineLimit(1)
                 }.themedButton()
-                Button { capture.addMark() } label: { Label("书签", systemImage: Theme.Icon.pin).lineLimit(1) }.themedButton()
-                Button { _ = capture.stop() } label: { Label("结束", systemImage: Theme.Icon.interrupt).lineLimit(1) }
+                Button { capture.addMark() } label: { Label("Bookmark", systemImage: Theme.Icon.pin).lineLimit(1) }.themedButton()
+                Button { _ = capture.stop() } label: { Label("Stop [Car Play Voice Screen c7b24e]", systemImage: Theme.Icon.interrupt).lineLimit(1) }
                     .themedButton().tint(Theme.danger).accessibilityIdentifier("recording-stop")
             }
-            Text("离开此页或锁屏仍会继续录音，结束时请点「结束」。").font(Theme.Font.caption).foregroundStyle(.secondary)
+            Text("Recording continues if you leave this page or lock the screen. Tap End when you're done.").font(Theme.Font.caption).foregroundStyle(.secondary)
         }
         if let error = capture.error { Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger) }
         if let notice = capture.notice { Text(notice).font(Theme.Font.secondary).foregroundStyle(.secondary) }
@@ -187,20 +187,20 @@ struct RecordingDetailView: View {
     var body: some View {
         Group {
             if let entry = library.entry(id) { content(entry) } else {
-                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "录音已删除"), message: String(localized: "这条录音和它在知识库里的文字都已经删掉了。"))
+                EmptyStateView(symbol: Theme.Icon.recording, title: String(localized: "Recording Deleted"), message: String(localized: "This recording and its text in Knowledge have both been deleted."))
             }
         }
         .themedPage()
-        .navigationTitle("录音")
+        .navigationTitle("Record [Recordings Section ef2821]")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("删除这条录音？", isPresented: $deleting, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+        .confirmationDialog("Delete This Recording?", isPresented: $deleting, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
                 transcription.cancel(id)
-                do { try sync.delete(id); dismiss() } catch { failure = String(localized: "录音没有删除，请稍后重试") }
+                do { try sync.delete(id); dismiss() } catch { failure = String(localized: "The recording wasn't deleted. Try again later.") }
             }
-        } message: { Text("本机的音频和知识库里的文字都会删掉。") }
-        .alert("录音操作未完成", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
-            Button("知道了") { failure = nil }.lineLimit(1)
+        } message: { Text("The audio on this device and the text in Knowledge will both be deleted.") }
+        .alert("Couldn't Finish", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+            Button("OK [Recordings Section de32e2]") { failure = nil }.lineLimit(1)
         } message: { Text(failure ?? "") }
     }
 
@@ -214,16 +214,16 @@ struct RecordingDetailView: View {
                 }
                 .font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 if !entry.marks.isEmpty {
-                    Label(String(localized: "书签 \(entry.marks.map(RecordingFormat.clock).joined(separator: "、"))"), systemImage: Theme.Icon.pin)
+                    Label(String(localized: "Bookmarks \(entry.marks.map(RecordingFormat.clock).joined(separator: "、"))"), systemImage: Theme.Icon.pin)
                         .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
                 if transcription.current == id { ProgressView().tint(Theme.accent) }
             } footer: {
-                Text("只有文字和时间戳进知识库，原始音频不上传；过了保留期（\(sync.store.days) 天）本机和知识库里都会清掉。")
+                Text("Only the text and timestamps go into Knowledge; the original audio isn't uploaded. After the retention period (\(sync.store.days) days) it's cleared from this device and Knowledge.")
             }
-            Section("文字稿") {
+            Section("Transcript") {
                 if entry.sentences.isEmpty {
-                    Text("还没有文字稿。").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    Text("No transcript yet.").font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
                 ForEach(Array(entry.sentences.enumerated()), id: \.offset) { _, sentence in
                     VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -234,15 +234,15 @@ struct RecordingDetailView: View {
             }
             if !entry.active {
                 Section {
-                    Picker("重新转写语言", selection: Binding(get: { entry.locale }, set: { transcription.setLocale(id, $0) })) {
-                        Text("中文").tag("zh-CN"); Text("英语").tag("en-US"); Text("日语").tag("ja-JP")
+                    Picker("Transcription Language", selection: Binding(get: { entry.locale }, set: { transcription.setLocale(id, $0) })) {
+                        Text("Chinese").tag("zh-CN"); Text("English").tag("en-US"); Text("Japanese").tag("ja-JP")
                     }.disabled(transcription.current == id)
                     if transcription.current == id {
-                        Button("停止转写") { transcription.cancel(id) }.lineLimit(1)
+                        Button("Stop Transcribing") { transcription.cancel(id) }.lineLimit(1)
                     } else if !entry.transcribedAll {
-                        Button("继续转写") { transcription.enqueue(id) }.lineLimit(1)
+                        Button("Resume Transcribing") { transcription.enqueue(id) }.lineLimit(1)
                     }
-                    Button("删除录音", role: .destructive) { deleting = true }.lineLimit(1)
+                    Button("Delete Recording", role: .destructive) { deleting = true }.lineLimit(1)
                         .accessibilityIdentifier("recording-delete")
                 }
             }

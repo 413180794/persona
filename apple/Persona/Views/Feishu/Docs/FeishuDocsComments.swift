@@ -23,9 +23,9 @@ struct FeishuDocsCommentsView: View {
         let model = model
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
-                Picker("状态", selection: $resolved) {
-                    Text("未解决 \(model?.threads(resolved: false).count ?? 0)").tag(false)
-                    Text("已解决 \(model?.threads(resolved: true).count ?? 0)").tag(true)
+                Picker("Status", selection: $resolved) {
+                    Text("Open \(model?.threads(resolved: false).count ?? 0)").tag(false)
+                    Text("Resolved \(model?.threads(resolved: true).count ?? 0)").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .padding(.bottom, Theme.Space.xs)
@@ -35,8 +35,8 @@ struct FeishuDocsCommentsView: View {
                         FeishuDocsListState(loading: model.loadError == nil, error: model.loadError, empty: ("text.bubble", "", ""),
                                             retry: { await model.load() })
                     } else if shown.isEmpty {
-                        EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? String(localized: "没有已解决的评论") : String(localized: "没有未解决的评论"),
-                                       message: resolved ? String(localized: "解决后的评论会收在这里") : (writes ? String(localized: "在下面写一条，或者划选正文评论") : String(localized: "在飞书里对文档发表的评论会出现在这里")))
+                        EmptyStateView(symbol: Theme.Icon.conversation, title: resolved ? String(localized: "No resolved comments") : String(localized: "No open comments"),
+                                       message: resolved ? String(localized: "Resolved comments are kept here.") : (writes ? String(localized: "Comments on this doc in Lark show up here. [Feishu Docs Comments af32fa]") : String(localized: "Comments on this doc in Lark show up here. [Feishu Docs Comments 5274c8]")))
                             .padding(.top, Theme.Space.xxl)
                     } else {
                         ForEach(shown) { t in
@@ -52,14 +52,14 @@ struct FeishuDocsCommentsView: View {
         .safeAreaInset(edge: .bottom) {
             if writes, let model { composer(model) }
         }
-        .navigationTitle("评论")
+        .navigationTitle("Comments")
         .navigationBarTitleDisplayMode(.inline)
         #if os(macOS)
         .macSheetDone { dismiss() }
         #else
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { dismiss() } label: { Label("关闭", systemImage: Theme.Icon.close) }
+                Button { dismiss() } label: { Label("Close", systemImage: Theme.Icon.close) }
             }
         }
         #endif
@@ -113,16 +113,16 @@ struct FeishuDocsCommentsView: View {
 
     private func placeholder(_ t: FeishuDocsCommentsModel.Target) -> String {
         switch t {
-        case .document: String(localized: "评论全文")
-        case .thread: String(localized: "回复")
-        case .passage: String(localized: "评论这段")
+        case .document: String(localized: "Comment on the doc")
+        case .thread: String(localized: "Reply")
+        case .passage: String(localized: "Comment on This")
         }
     }
 
     /// Comment on This over the box while it comments on a passage; × goes back to commenting on the document.
     private func passageBar(_ model: FeishuDocsCommentsModel) -> (heading: String, summary: String, removeLabel: String, remove: () -> Void)? {
         guard case .passage(let quote, _) = model.target else { return nil }
-        return (String(localized: "评论这段"), quote, String(localized: "不评论这段"), { model.target = .document })
+        return (String(localized: "Comment on This"), quote, String(localized: "Don't comment on this"), { model.target = .document })
     }
 
     private func replyBar(_ t: FeishuDocsCommentsModel.Target) -> LarkReplyTo? {
@@ -147,7 +147,7 @@ struct FeishuDocsThreadCard: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.sm) {
                 if thread.whole {
-                    Text("全文评论").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Doc comments").font(Theme.Font.label).foregroundStyle(.secondary)
                 } else if !thread.quote.isEmpty {
                     Text(thread.quote)
                         .font(Theme.Font.caption)
@@ -157,8 +157,8 @@ struct FeishuDocsThreadCard: View {
                         .overlay(alignment: .leading) { Capsule().fill(LarkColor.hue("yellow")).frame(width: Theme.Size.bar) }
                 }
                 Spacer(minLength: 0)
-                if thread.resolved { FeishuDocsTag(text: String(localized: "已解决"), hue: "green") }
-                if thread.visibility != nil { FeishuDocsTag(text: String(localized: "部分可见"), hue: "grey") }
+                if thread.resolved { FeishuDocsTag(text: String(localized: "Resolved"), hue: "green") }
+                if thread.visibility != nil { FeishuDocsTag(text: String(localized: "Limited [Feishu Docs Comments 6af1b6]"), hue: "grey") }
             }
             ForEach(thread.replies) { r in
                 HStack(alignment: .top, spacing: Theme.Space.s) {
@@ -167,11 +167,11 @@ struct FeishuDocsThreadCard: View {
                         HStack(spacing: Theme.Space.sm) {
                             Text(r.author.name).font(Theme.Font.captionStrong).lineLimit(1)
                             Text(FeishuTime.short(r.created)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
-                            if r.edited == true { Text("已编辑").font(Theme.Font.label).foregroundStyle(.tertiary) }
+                            if r.edited == true { Text("Edited").font(Theme.Font.label).foregroundStyle(.tertiary) }
                         }
                         Text(replyText(r)).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         if let n = r.imageCount, n > 0 {
-                            Label("\(n) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
+                            Label("\(n) images", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                         if let rs = r.reactions, !rs.isEmpty {
                             HStack(spacing: Theme.Space.sm) {
@@ -206,7 +206,7 @@ struct FeishuDocsThreadCard: View {
         HStack(spacing: Theme.Space.l) {
             if !thread.resolved {
                 Button(action: a.reply) {
-                    Label("回复", systemImage: Theme.Icon.reply).lineLimit(1)
+                    Label("Reply", systemImage: Theme.Icon.reply).lineLimit(1)
                 }
                 .accessibilityIdentifier("docComments.reply." + thread.id)
             }
@@ -214,7 +214,7 @@ struct FeishuDocsThreadCard: View {
                 if a.resolving {
                     ProgressView().controlSize(.small)
                 } else {
-                    Label(thread.resolved ? "重新打开" : "解决", systemImage: thread.resolved ? Theme.Icon.undo : Theme.Icon.done).lineLimit(1)
+                    Label(thread.resolved ? String(localized: "Reopen") : String(localized: "Resolve"), systemImage: thread.resolved ? Theme.Icon.undo : Theme.Icon.done).lineLimit(1)
                 }
             }
             .disabled(a.resolving)
@@ -266,13 +266,13 @@ struct FeishuDocsCommentable: ViewModifier {
         content
             .contextMenu {
                 if copyable {
-                    Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+                    Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
                 }
-                Button { comment(text, blockID) } label: { Label("评论这段", systemImage: Theme.Icon.conversation) }
-                Button { picking = true } label: { Label("选一段评论…", systemImage: Theme.Icon.select) }
+                Button { comment(text, blockID) } label: { Label("Comment on This", systemImage: Theme.Icon.conversation) }
+                Button { picking = true } label: { Label("Select Text to Comment…", systemImage: Theme.Icon.select) }
             }
             .sheet(isPresented: $picking) {
-                PickTextSheet(text: text, actions: [PickAction(title: String(localized: "评论"), icon: Theme.Icon.conversation, kind: "comment")]) { picked, _ in
+                PickTextSheet(text: text, actions: [PickAction(title: String(localized: "Comments"), icon: Theme.Icon.conversation, kind: "comment")]) { picked, _ in
                     comment(picked, blockID)
                 }
             }

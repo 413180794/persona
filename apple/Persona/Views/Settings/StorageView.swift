@@ -9,27 +9,27 @@ nonisolated enum StorageKind: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .agentChats: String(localized: "Agent 对话")
-        case .chatImages: String(localized: "对话里的图片")
-        case .feishuMedia: String(localized: "飞书图片和文件")
-        case .pageState: String(localized: "列表和飞书会话")
-        case .web: String(localized: "网页")
-        case .network: String(localized: "网络缓存")
-        case .other: String(localized: "其他缓存")
-        case .appData: String(localized: "App 数据")
+        case .agentChats: String(localized: "Agent Chats")
+        case .chatImages: String(localized: "Images in Chats")
+        case .feishuMedia: String(localized: "Lark Images and Files")
+        case .pageState: String(localized: "Lists and Lark Chats")
+        case .web: String(localized: "Web Pages")
+        case .network: String(localized: "Network Cache")
+        case .other: String(localized: "Other Caches")
+        case .appData: String(localized: "App Data")
         }
     }
 
     var detail: String {
         switch self {
-        case .agentChats: String(localized: "每个对话最近两轮，打开时先显示，后台同步也写在这里")
-        case .chatImages: String(localized: "截图等图片，看过一次就不再下载")
-        case .feishuMedia: String(localized: "飞书消息里的图片、视频和文件")
-        case .pageState: String(localized: "Agents、收件箱列表和飞书会话最近的消息")
-        case .web: String(localized: "App 内打开的网页（不含登录状态）")
-        case .network: String(localized: "系统为网络请求保存的副本")
-        case .other: String(localized: "临时文件和其他缓存")
-        case .appData: String(localized: "设置、配对信息，清除缓存时保留")
+        case .agentChats: String(localized: "The last two turns of each chat, shown first when you open it; background sync writes here too")
+        case .chatImages: String(localized: "Screenshots and other images, downloaded only once")
+        case .feishuMedia: String(localized: "Images, videos, and files from Lark messages")
+        case .pageState: String(localized: "Agents and Inbox lists, and recent messages in Lark chats")
+        case .web: String(localized: "Web pages opened in the app (sign-ins not included)")
+        case .network: String(localized: "Copies the system keeps for network requests")
+        case .other: String(localized: "Temporary files and other caches")
+        case .appData: String(localized: "Settings and pairing info, kept when you clear caches")
         }
     }
 
@@ -197,12 +197,12 @@ struct StorageView: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.m) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(usage == nil ? String(localized: "计算中…") : total.storageText)
+                        Text(usage == nil ? String(localized: "Calculating…") : total.storageText)
                             .font(Theme.Font.display).fontDesign(.rounded)
                             .contentTransition(.numericText())
                         Spacer()
                         if usage != nil {
-                            Text("其中缓存 \(clearableTotal.storageText)").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                            Text("Including \(clearableTotal.storageText) of caches").font(Theme.Font.secondary).foregroundStyle(.secondary)
                         }
                     }
                     bar
@@ -210,9 +210,9 @@ struct StorageView: View {
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
                 #if os(macOS)
-                Text("Persona 在这台 Mac 上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                Text("Space Persona uses on this Mac. Caches can all be fetched again from the hub: after clearing, chats and images download again when you open them.")
                 #else
-                Text("Persona 在这台手机上占用的空间。缓存都能从 hub 重新取回：清除后，打开对话、看图片时会重新下载。")
+                Text("Space Persona uses on this phone. Caches can all be fetched again from the hub: after clearing, chats and images download again when you open them.")
                 #endif
             }
 
@@ -226,7 +226,7 @@ struct StorageView: View {
                 HStack(spacing: Theme.Space.s) {
                     Spacer(minLength: 0)
                     if clearing != nil { ProgressView().controlSize(.small) }
-                    Button("清除全部缓存…", role: .destructive) { confirmAll = true }
+                    Button("Clear All Caches…", role: .destructive) { confirmAll = true }
                         .lineLimit(1)
                         .formButton()
                         .disabled(usage == nil || clearing != nil || clearableTotal == 0)
@@ -235,7 +235,7 @@ struct StorageView: View {
                 Button(role: .destructive) { confirmAll = true } label: {
                     HStack {
                         Spacer()
-                        if clearing != nil { ProgressView() } else { Text("清除全部缓存").lineLimit(1) }
+                        if clearing != nil { ProgressView() } else { Text("Clear All Caches").lineLimit(1) }
                         Spacer()
                     }
                 }
@@ -244,16 +244,16 @@ struct StorageView: View {
             }
         }
         .themedPage()
-        .detailTitle(String(localized: "存储空间"))
+        .detailTitle(String(localized: "Storage"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await measure() }
         .refreshable { await measure() }
-        .confirmationDialog("清除全部 \(clearableTotal.storageText) 缓存？设置和配对信息会保留。", isPresented: $confirmAll, titleVisibility: .visible) {
-            Button("清除", role: .destructive) { Task { await clear(StorageKind.allCases.filter(\.clearable)) } }
+        .confirmationDialog("Clear all \(clearableTotal.storageText) of caches? Settings and pairing info are kept.", isPresented: $confirmAll, titleVisibility: .visible) {
+            Button("Clear [Image Editor bce237]", role: .destructive) { Task { await clear(StorageKind.allCases.filter(\.clearable)) } }
         }
-        .confirmationDialog(confirmOne.map { String(localized: "清除「\($0.title)」\((usage?[$0] ?? 0).storageText)？") } ?? "",
+        .confirmationDialog(confirmOne.map { String(localized: "Clear “\($0.title)” (\((usage?[$0] ?? 0).storageText))?") } ?? "",
                             isPresented: Binding(get: { confirmOne != nil }, set: { if !$0 { confirmOne = nil } }), titleVisibility: .visible) {
-            Button("清除", role: .destructive) { if let k = confirmOne { Task { await clear([k]) } } }
+            Button("Clear [Image Editor bce237]", role: .destructive) { if let k = confirmOne { Task { await clear([k]) } } }
         }
     }
 
@@ -303,12 +303,12 @@ struct StorageView: View {
         .contentShape(.rect)
         .swipeActions {
             if kind.clearable, (usage?[kind] ?? 0) > 0 {
-                Button("清除", role: .destructive) { confirmOne = kind }
+                Button("Clear [Image Editor bce237]", role: .destructive) { confirmOne = kind }
             }
         }
         .contextMenu {
             if kind.clearable, (usage?[kind] ?? 0) > 0 {
-                Button(role: .destructive) { confirmOne = kind } label: { Label("清除", systemImage: Theme.Icon.delete) }
+                Button(role: .destructive) { confirmOne = kind } label: { Label("Clear [Image Editor bce237]", systemImage: Theme.Icon.delete) }
             }
         }
         .accessibilityElement(children: .combine)

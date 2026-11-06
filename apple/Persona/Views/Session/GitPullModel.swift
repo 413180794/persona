@@ -27,7 +27,7 @@ final class GitPullModel {
         defer { isPulling = false }
         do {
             let result = try await deps.pull(machine, cwd)
-            message = result.updated ? String(localized: "已拉取最新代码") : String(localized: "已经是最新代码")
+            message = result.updated ? String(localized: "Pulled the latest code") : String(localized: "Already up to date")
             return result.status
         } catch {
             failed = true

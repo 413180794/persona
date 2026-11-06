@@ -52,7 +52,7 @@ final class MetaGlasses {
             try Wearables.configure()
             sdkReady = true
         } catch {
-            self.error = String(localized: "Meta 眼镜没有准备好：\(error.localizedDescription)")
+            self.error = String(localized: "The Meta glasses are not ready: \(error.localizedDescription)")
             return
         }
         registered = Wearables.shared.registrationState == .registered
@@ -82,7 +82,7 @@ final class MetaGlasses {
     /// Switches to the Meta AI app to register the glasses. Call only after the user tapped a button that says so.
     func connect() async throws {
         error = nil
-        guard sdkReady else { throw GlassesError(String(localized: "Meta 眼镜还没有准备好")) }
+        guard sdkReady else { throw GlassesError(String(localized: "The Meta glasses are not ready yet")) }
         guard Wearables.shared.registrationState != .registering else { return }
         do {
             try await Wearables.shared.startRegistration()
@@ -100,7 +100,7 @@ final class MetaGlasses {
     /// Switches to the Meta AI app to allow the camera. Call only after the user tapped a button that says so.
     func requestCamera() async throws -> Bool {
         error = nil
-        guard sdkReady else { throw GlassesError(String(localized: "Meta 眼镜还没有准备好")) }
+        guard sdkReady else { throw GlassesError(String(localized: "The Meta glasses are not ready yet")) }
         do {
             return try await Wearables.shared.requestPermission(.camera) == .granted
         } catch {
@@ -112,7 +112,7 @@ final class MetaGlasses {
     /// Starts the session and the camera's preview stream. Does nothing when a session already runs.
     func startPreview() async throws {
         guard session == nil else { return }
-        guard sdkReady else { throw GlassesError(String(localized: "Meta 眼镜还没有准备好")) }
+        guard sdkReady else { throw GlassesError(String(localized: "The Meta glasses are not ready yet")) }
         error = nil
         let newSession: DeviceSession
         do {
@@ -186,10 +186,10 @@ final class MetaGlasses {
         while newSession.state != .started {
             guard self.session === newSession else { throw CancellationError() }
             if newSession.state == .stopped {
-                throw GlassesError(String(localized: "没有连上眼镜，请确认眼镜已戴上并和 Meta AI 连接"))
+                throw GlassesError(String(localized: "The glasses are not connected. Make sure you are wearing them and they are connected to Meta AI"))
             }
             guard ContinuousClock.now < deadline else {
-                throw GlassesError(String(localized: "没有连上眼镜，请确认眼镜已戴上并和 Meta AI 连接"))
+                throw GlassesError(String(localized: "The glasses are not connected. Make sure you are wearing them and they are connected to Meta AI"))
             }
             try await Task.sleep(for: .milliseconds(200))
         }
@@ -198,7 +198,7 @@ final class MetaGlasses {
     private func addCamera(to newSession: DeviceSession) throws {
         let config = StreamConfiguration(videoCodec: .raw, resolution: .medium, frameRate: 24)
         guard let newCamera = try newSession.addCamera(config: config) else {
-            throw GlassesError(String(localized: "打不开眼镜的摄像头，请再试一次"))
+            throw GlassesError(String(localized: "Couldn't open the glasses' camera. Try again"))
         }
         camera = newCamera
         newCamera.stream.videoFramePublisher.listen { @Sendable [weak self, weak newSession] frame in
@@ -237,20 +237,20 @@ final class MetaGlasses {
         camera = nil
         session = nil
         preview = nil
-        finishPhoto(.failure(GlassesError(String(localized: "眼镜已断开，没有拍到照片"))))
+        finishPhoto(.failure(GlassesError(String(localized: "The glasses disconnected; no photo was taken"))))
     }
 
     // MARK: - Photo
 
     private func takePhoto() async throws -> UIImage {
-        guard let camera = self.camera, session != nil else { throw GlassesError(String(localized: "还没有连上眼镜，请先等预览出现")) }
-        guard photoContinuation == nil else { throw GlassesError(String(localized: "正在拍照，请稍等")) }
+        guard let camera = self.camera, session != nil else { throw GlassesError(String(localized: "The glasses aren't connected yet. Wait for the preview first")) }
+        guard photoContinuation == nil else { throw GlassesError(String(localized: "Taking a photo, one moment")) }
         guard camera.stream.capturePhoto(format: .jpeg) else {
             if let preview { return preview }
-            throw GlassesError(String(localized: "拍照没有成功，请再试一次"))
+            throw GlassesError(String(localized: "The photo didn't work. Try again"))
         }
         let bytes = try await nextPhotoData()
-        guard let image = UIImage(data: bytes) else { throw GlassesError(String(localized: "照片读不出来，请再拍一次")) }
+        guard let image = UIImage(data: bytes) else { throw GlassesError(String(localized: "Couldn't read the photo. Take it again")) }
         return image
     }
 
@@ -264,7 +264,7 @@ final class MetaGlasses {
             } catch {
                 return
             }
-            self?.finishPhoto(.failure(GlassesError(String(localized: "拍照超时，请确认眼镜还连着再试"))))
+            self?.finishPhoto(.failure(GlassesError(String(localized: "Taking the photo timed out. Check the glasses are still connected and try again"))))
         }
         return try await withCheckedThrowingContinuation { continuation in
             photoContinuation = continuation
@@ -308,13 +308,13 @@ final class MetaGlasses {
     func handle(_ url: URL) -> Bool { false }
 
     func connect() async throws {
-        throw GlassesError(String(localized: "这个版本没有内置 Meta 眼镜支持"))
+        throw GlassesError(String(localized: "This build has no Meta glasses support"))
     }
 
     func cameraAllowed() async -> Bool { false }
 
     func requestCamera() async throws -> Bool {
-        throw GlassesError(String(localized: "这个版本没有内置 Meta 眼镜支持"))
+        throw GlassesError(String(localized: "This build has no Meta glasses support"))
     }
 
     func stop() {}
@@ -323,11 +323,11 @@ final class MetaGlasses {
     private(set) var preview: UIImage?
 
     func startPreview() async throws {
-        throw GlassesError(String(localized: "这个版本没有内置 Meta 眼镜支持"))
+        throw GlassesError(String(localized: "This build has no Meta glasses support"))
     }
 
     func capture() async throws -> UIImage {
-        throw GlassesError(String(localized: "这个版本没有内置 Meta 眼镜支持"))
+        throw GlassesError(String(localized: "This build has no Meta glasses support"))
     }
     #endif
 }

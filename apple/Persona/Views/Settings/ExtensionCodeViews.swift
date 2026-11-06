@@ -11,7 +11,7 @@ import SwiftUI
 enum CodeDiffLook: String, CaseIterable, Identifiable {
     case unified, split
     var id: String { rawValue }
-    var title: String { self == .unified ? String(localized: "统一") : String(localized: "并排") }
+    var title: String { self == .unified ? String(localized: "Unified") : String(localized: "Side by Side") }
 }
 
 /// What a diff line's colors are.
@@ -43,9 +43,9 @@ enum CodeDiffInk {
     /// What VoiceOver says for a line: its kind, its number, its text.
     static func spoken(_ l: CodeDiffLine) -> String {
         switch l.kind {
-        case .add: String(localized: "新增第 \(l.new ?? 0) 行：\(l.text)")
-        case .del: String(localized: "删除原第 \(l.old ?? 0) 行：\(l.text)")
-        case .context: String(localized: "第 \(l.new ?? 0) 行：\(l.text)")
+        case .add: String(localized: "Added line \(l.new ?? 0): \(l.text)")
+        case .del: String(localized: "Removed old line \(l.old ?? 0): \(l.text)")
+        case .context: String(localized: "Line \(l.new ?? 0): \(l.text)")
         case .note: l.text
         }
     }
@@ -98,7 +98,7 @@ struct CodeDiffRow: View {
         .background(CodeDiffInk.fill(line.kind))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(CodeDiffInk.spoken(line))
-        .accessibilityAction(named: String(localized: "评论这一行")) { comment?() }
+        .accessibilityAction(named: String(localized: "Comment on This Line")) { comment?() }
     }
 
     @ViewBuilder private var gutter: some View {
@@ -111,7 +111,7 @@ struct CodeDiffRow: View {
         if let comment, line.anchor != nil {
             Button(action: comment) { numbers.contentShape(.rect) }
                 .buttonStyle(.plain)
-                .help(String(localized: "评论这一行"))
+                .help(String(localized: "Comment on This Line"))
         } else {
             numbers
         }
@@ -142,7 +142,7 @@ struct CodeDiffPairRow: View {
                 if let l, let comment, l.anchor != nil {
                     Button { comment(l) } label: { Text(number.map(String.init) ?? "").contentShape(.rect) }
                         .buttonStyle(.plain)
-                        .help(String(localized: "评论这一行"))
+                        .help(String(localized: "Comment on This Line"))
                 } else {
                     Text(number.map(String.init) ?? "")
                 }
@@ -161,8 +161,8 @@ struct CodeDiffPairRow: View {
         .frame(maxHeight: .infinity, alignment: .top)
         .background(l.map { CodeDiffInk.fill($0.kind) } ?? Theme.Fill.chip)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(l.map(CodeDiffInk.spoken) ?? String(localized: "空"))
-        .accessibilityAction(named: String(localized: "评论这一行")) { if let l, l.anchor != nil { comment?(l) } }
+        .accessibilityLabel(l.map(CodeDiffInk.spoken) ?? String(localized: "Empty"))
+        .accessibilityAction(named: String(localized: "Comment on This Line")) { if let l, l.anchor != nil { comment?(l) } }
     }
 }
 
@@ -195,7 +195,7 @@ struct CodeHunkHeader: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
-                .accessibilityLabel(String(localized: "展开上面的行"))
+                .accessibilityLabel(String(localized: "Show Lines Above"))
             }
             Text(verbatim: header).lineLimit(1).truncationMode(.tail).foregroundStyle(.secondary)
             Spacer(minLength: 0)
@@ -213,10 +213,10 @@ struct CodeHunkHeader: View {
 enum CodeFileStatus {
     static func word(_ s: String?) -> String? {
         switch s {
-        case "added": String(localized: "新增")
-        case "modified": String(localized: "修改")
-        case "deleted": String(localized: "删除")
-        case "renamed": String(localized: "重命名")
+        case "added": String(localized: "Added")
+        case "modified": String(localized: "Edit [Inbox Event Views 37090f]")
+        case "deleted": String(localized: "Delete")
+        case "renamed": String(localized: "Rename [Chats View 0d0cba]")
         default: nil
         }
     }
@@ -254,7 +254,7 @@ struct CodeChangeCounts: View {
         .font(Theme.Font.caption.monospacedDigit())
         .lineLimit(1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([additions.map { String(localized: "新增 \($0) 行") }, deletions.map { String(localized: "删除 \($0) 行") }].compactMap { $0 }.joined(separator: String(localized: "，")))
+        .accessibilityLabel([additions.map { String(localized: "\($0) lines added") }, deletions.map { String(localized: "\($0) lines removed") }].compactMap { $0 }.joined(separator: String(localized: ", ")))
     }
 }
 
@@ -293,8 +293,8 @@ struct CodeDiffFileHeader: View {
         .buttonStyle(.plain)
         .background(Theme.Fill.chip)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([path, CodeFileStatus.word(status)].compactMap { $0 }.joined(separator: String(localized: "，")))
-        .accessibilityValue(folded ? String(localized: "已折叠") : String(localized: "已展开"))
+        .accessibilityLabel([path, CodeFileStatus.word(status)].compactMap { $0 }.joined(separator: String(localized: ", ")))
+        .accessibilityValue(folded ? String(localized: "Collapsed [Readiness Card ee6046]") : String(localized: "Expanded"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { toggle() }
     }
@@ -356,7 +356,7 @@ struct CodeTreeRowView: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityValue(n.isDir && !drills ? (row.open ? String(localized: "已展开") : String(localized: "已折叠")) : "")
+        .accessibilityValue(n.isDir && !drills ? (row.open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]")) : "")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { tap() }
         .accessibilityIdentifier("code-tree-\(n.path)")
@@ -364,12 +364,12 @@ struct CodeTreeRowView: View {
 
     private var accessibilityText: String {
         let n = row.node
-        var parts = [n.isDir ? String(localized: "文件夹 \(n.name)") : n.name]
+        var parts = [n.isDir ? String(localized: "Folder \(n.name)") : n.name]
         if let w = CodeFileStatus.word(n.entry?.status) { parts.append(w) }
-        if let a = n.entry?.additions { parts.append(String(localized: "新增 \(a) 行")) }
-        if let d = n.entry?.deletions { parts.append(String(localized: "删除 \(d) 行")) }
-        if let c = n.entry?.comments, c > 0 { parts.append(String(localized: "\(c) 条评论")) }
-        return parts.joined(separator: String(localized: "，"))
+        if let a = n.entry?.additions { parts.append(String(localized: "\(a) lines added")) }
+        if let d = n.entry?.deletions { parts.append(String(localized: "\(d) lines removed")) }
+        if let c = n.entry?.comments, c > 0 { parts.append(String(localized: "\(c) comments")) }
+        return parts.joined(separator: String(localized: ", "))
     }
 }
 
@@ -469,7 +469,7 @@ struct CodeComposerView: View {
                 .font(Theme.Font.body)
                 .padding(Theme.Space.m)
                 .background(Theme.Fill.chip, in: RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous))
-                .accessibilityLabel(placeholder.isEmpty ? String(localized: "输入内容") : placeholder)
+                .accessibilityLabel(placeholder.isEmpty ? String(localized: "Type here") : placeholder)
                 .accessibilityIdentifier(identifier)
             HStack(spacing: Theme.Space.s) {
                 Spacer(minLength: 0)

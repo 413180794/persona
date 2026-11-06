@@ -116,9 +116,9 @@ nonisolated enum MetricRange: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .hour: String(localized: "1 小时")
-        case .sixHours: String(localized: "6 小时")
-        case .day: String(localized: "24 小时")
+        case .hour: String(localized: "1 Hour")
+        case .sixHours: String(localized: "6 Hours")
+        case .day: String(localized: "24 Hours")
         }
     }
     var seconds: TimeInterval {
@@ -151,14 +151,14 @@ nonisolated struct MetricAlert: Hashable, Sendable {
     static func of(_ s: MetricSample, cores: Int?) -> [MetricAlert] {
         var out: [MetricAlert] = []
         let cpu = MetricLevel.of(s.cpu, warn: 75, crit: 90)
-        if cpu > .normal { out.append(.init(label: String(localized: "CPU 高"), level: cpu)) }
+        if cpu > .normal { out.append(.init(label: String(localized: "High CPU"), level: cpu)) }
         let mem = MetricLevel.of(s.memPercent, warn: 80, crit: 90)
-        if mem > .normal { out.append(.init(label: String(localized: "内存紧张"), level: mem)) }
+        if mem > .normal { out.append(.init(label: String(localized: "Low memory"), level: mem)) }
         let disk = MetricLevel.of(s.diskPercent, warn: 80, crit: 90)
-        if disk > .normal { out.append(.init(label: String(localized: "磁盘快满"), level: disk)) }
+        if disk > .normal { out.append(.init(label: String(localized: "Disk almost full"), level: disk)) }
         if let load = s.load, let cores, cores > 0 {
             let l = MetricLevel.of(load / Double(cores), warn: 1, crit: 2)
-            if l > .normal { out.append(.init(label: String(localized: "负载高"), level: l)) }
+            if l > .normal { out.append(.init(label: String(localized: "High load"), level: l)) }
         }
         return out.sorted { $0.level > $1.level }
     }
@@ -191,8 +191,8 @@ nonisolated enum MetricFormat {
     static func uptime(since boot: Date, now: Date = .now) -> String {
         let s = max(0, Int(now.timeIntervalSince(boot)))
         let d = s / 86400, h = s % 86400 / 3600, m = s % 3600 / 60
-        if d > 0 { return h > 0 ? String(localized: "\(d) 天 \(h) 小时") : String(localized: "\(d) 天") }
-        if h > 0 { return String(localized: "\(h) 小时 \(m) 分钟") }
-        return String(localized: "\(m) 分钟")
+        if d > 0 { return h > 0 ? String(localized: "\(d)d \(h)h") : String(localized: "\(d)d") }
+        if h > 0 { return String(localized: "\(h)h \(m)m [Machine Metrics 204e89]") }
+        return String(localized: "\(m) min [Task Views 135d12]")
     }
 }

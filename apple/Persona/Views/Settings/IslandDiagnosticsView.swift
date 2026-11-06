@@ -30,20 +30,20 @@ struct IslandDiagnosticsView: View {
             }
             Section {
                 Button(action: redraw) {
-                    Label("重新写入并重画", systemImage: Theme.Icon.retry).lineLimit(1)
+                    Label("Rewrite and Redraw", systemImage: Theme.Icon.retry).lineLimit(1)
                 }
                 Button {
                     UIPasteboard.general.string = IslandDiagnostics.text(sections)
-                    model.toast = Toast(String(localized: "已复制"), style: .success)
+                    model.toast = Toast(String(localized: "Copied [V N C Pi P Diagnostics 8f6f8d]"), style: .success)
                 } label: {
-                    Label("复制全部", systemImage: Theme.Icon.copy).lineLimit(1)
+                    Label("Copy All [V N C Pi P Diagnostics 75c393]", systemImage: Theme.Icon.copy).lineLimit(1)
                 }
             } footer: {
-                Text("「扩展最近一次」在灵动岛每次重画后更新（同样的内容最多十分钟写一次）。看不到它时，扩展可能用不了 App Group，这时只有系统日志里有它的记录（控制台，子系统 jarvis，类别 island）。")
+                Text("“Extension, last run” updates each time the Dynamic Island redraws (identical content is written at most once every ten minutes). If it's missing, the extension may not be able to use the App Group; then only the system log has its records (Console, subsystem jarvis, category island).")
             }
         }
         .themedPage()
-        .navigationTitle("灵动岛诊断")
+        .navigationTitle("Dynamic Island Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .task { reload() }
         .refreshable { reload() }
@@ -104,40 +104,40 @@ nonisolated enum IslandDiagnostics {
         func shown(_ l: FleetLook??, none: String, missing: String) -> String {
             switch l { case .none: none; case .some(.none): missing; case .some(.some(let l)): FleetLookReport.describe(l) }
         }
-        var out = [Section(title: String(localized: "结论"), rows: [Row(label: String(localized: "看起来"), value: verdict(i), wide: true)])]
-        out.append(Section(title: String(localized: "形象"), rows: [
-            Row(label: String(localized: "设置里"), value: current),
-            Row(label: String(localized: "颜色"), value: String(format: "%06X / %06X", i.look.light, i.look.dark)),
-            Row(label: String(localized: "hub 记下的"), value: shown(i.hub, none: String(localized: "还没问到"), missing: String(localized: "没有（hub 太旧，或还没告诉它）"))),
-            Row(label: String(localized: "实时活动的内容里"), value: shown(i.activity, none: String(localized: "没有正在显示的实时活动"), missing: String(localized: "没有"))),
+        var out = [Section(title: String(localized: "Conclusion"), rows: [Row(label: String(localized: "Looks like"), value: verdict(i), wide: true)])]
+        out.append(Section(title: String(localized: "Avatar"), rows: [
+            Row(label: String(localized: "In Settings"), value: current),
+            Row(label: String(localized: "Colors [Image Editor 070a80]"), value: String(format: "%06X / %06X", i.look.light, i.look.dark)),
+            Row(label: String(localized: "Stored on Hub"), value: shown(i.hub, none: String(localized: "Not asked yet"), missing: String(localized: "None (the hub is too old, or hasn't been told)"))),
+            Row(label: String(localized: "In Live Activity Content"), value: shown(i.activity, none: String(localized: "No Live Activity showing"), missing: String(localized: "None [V N C Pi P Diagnostics f12780]"))),
         ]))
         let written = [FleetLookStore.lookFile, FleetLookStore.facesDir].map { name in
             guard let hit = i.writes.first(where: { $0.key == name || $0.key.hasPrefix(name + "/") }) else {
-                return Row(label: name, value: String(localized: "还没写过（和已存的一样时不写）"))
+                return Row(label: name, value: String(localized: "Not written yet (skipped when unchanged)"))
             }
             let w = hit.value
-            return Row(label: hit.key, value: [w.error.map { String(localized: "失败：\($0)") } ?? String(localized: "成功"), w.bytes.map { String(localized: "\($0) 字节") }, time(w.at, now)].compactMap { $0 }.joined(separator: " · "))
+            return Row(label: hit.key, value: [w.error.map { String(localized: "Failed: \($0)") } ?? String(localized: "Succeeded"), w.bytes.map { String(localized: "\($0) bytes") }, time(w.at, now)].compactMap { $0 }.joined(separator: " · "))
         }
-        out.append(Section(title: String(localized: "App 这次启动写进 App Group"), rows: [
-            Row(label: "App Group", value: i.group ?? String(localized: "无：安装包的 Info.plist 里没有")),
-            Row(label: String(localized: "容器"), value: i.root ?? String(localized: "没有：签名里没有这个 App Group")),
+        out.append(Section(title: String(localized: "Written to App Group This Launch"), rows: [
+            Row(label: "App Group", value: i.group ?? String(localized: "None: not in the app's Info.plist")),
+            Row(label: String(localized: "Container"), value: i.root ?? String(localized: "None: this App Group isn't in the signature")),
         ] + written))
         let listed = i.files.isEmpty
-            ? [Row(label: String(localized: "文件"), value: String(localized: "没有"))]
-            : i.files.map { Row(label: $0.name, value: String(localized: "\($0.bytes) 字节") + ($0.modified.map { " · " + time($0, now) } ?? "")) }
-        out.append(Section(title: String(localized: "容器里"), rows: listed))
+            ? [Row(label: String(localized: "Files"), value: String(localized: "None [V N C Pi P Diagnostics f12780]"))]
+            : i.files.map { Row(label: $0.name, value: String(localized: "\($0.bytes) bytes") + ($0.modified.map { " · " + time($0, now) } ?? "")) }
+        out.append(Section(title: String(localized: "In Container"), rows: listed))
         if let seen = i.seen {
-            out.append(Section(title: String(localized: "扩展最近一次"), rows: [
-                Row(label: String(localized: "时间"), value: time(seen.at, now)),
-                Row(label: String(localized: "画的形象"), value: seen.content ?? String(localized: "内容里没有形象")),
-                Row(label: String(localized: "容器"), value: seen.container == false ? String(localized: "没有") : String(localized: "有")),
-                Row(label: String(localized: "存下的形象"), value: seen.saved ?? String(localized: "没有")),
-                Row(label: String(localized: "形象包的图"), value: seen.facesPackage.map { p in
-                    seen.faceFile.map { String(localized: "\($0) · \(seen.faceBytes ?? 0) 字节 · \(p)") } ?? String(localized: "没有 \(p) 的图")
-                } ?? String(localized: "没读（内置形象）")),
+            out.append(Section(title: String(localized: "Extension, Last Run"), rows: [
+                Row(label: String(localized: "Time"), value: time(seen.at, now)),
+                Row(label: String(localized: "Avatar Drawn"), value: seen.content ?? String(localized: "No avatar in content")),
+                Row(label: String(localized: "Container"), value: seen.container == false ? String(localized: "None [V N C Pi P Diagnostics f12780]") : String(localized: "Yes [V N C Pi P Diagnostics 90ce0f]")),
+                Row(label: String(localized: "Saved Avatar"), value: seen.saved ?? String(localized: "None [V N C Pi P Diagnostics f12780]")),
+                Row(label: String(localized: "Avatar Pack Images"), value: seen.facesPackage.map { p in
+                    seen.faceFile.map { String(localized: "\($0) · \(seen.faceBytes ?? 0) bytes · \(p)") } ?? String(localized: "No images for \(p)")
+                } ?? String(localized: "Not read (built-in avatar)")),
             ]))
         } else {
-            out.append(Section(title: String(localized: "扩展最近一次"), rows: [Row(label: String(localized: "报告"), value: String(localized: "没有"))]))
+            out.append(Section(title: String(localized: "Extension, Last Run"), rows: [Row(label: String(localized: "Report"), value: String(localized: "None [V N C Pi P Diagnostics f12780]"))]))
         }
         return out
     }
@@ -146,32 +146,32 @@ nonisolated enum IslandDiagnostics {
     /// the island draws), then the App Group container (a package's pictures).
     static func verdict(_ i: Input) -> String {
         if case .some(let hub) = i.hub, hub != i.look {
-            return hub == nil ? String(localized: "hub 没有这台手机的形象：hub 要更新，或 App 还没告诉它（推送里不会带形象）") : String(localized: "hub 记下的不是设置里的形象（App 告诉它时失败了）")
+            return hub == nil ? String(localized: "The hub has no avatar for this phone: update the hub, or the app hasn't told it yet (pushes won't carry the avatar)") : String(localized: "The hub's avatar doesn't match Settings (the app failed to tell it)")
         }
-        if case .some(let content) = i.activity, content != i.look { return String(localized: "正在显示的实时活动内容里不是设置里的形象（还没重画）") }
+        if case .some(let content) = i.activity, content != i.look { return String(localized: "The Live Activity showing doesn't have the avatar from Settings (not redrawn yet)") }
         if i.group == nil || i.root == nil {
-            let group = i.group ?? String(localized: "这个组")
-            return String(localized: "App 拿不到 App Group 容器（签名里没有 \(group)）：形象包的图送不到扩展，画的是默认形象换成它的颜色")
+            let group = i.group ?? String(localized: "this group")
+            return String(localized: "The app can't get the App Group container (\(group) isn't in the signature): avatar pack images can't reach the extension, so it draws the default avatar in the pack's colors")
         }
         if let failed = i.writes.first(where: { $0.key.hasPrefix(FleetLookStore.facesDir) && $0.value.error != nil }) {
             let error = failed.value.error ?? ""
-            return String(localized: "App 把形象包的图写进 App Group 失败（\(failed.key)）：\(error)")
+            return String(localized: "The app failed to write avatar pack images to the App Group (\(failed.key)): \(error)")
         }
         guard let seen = i.seen else {
-            return i.look.package == nil ? String(localized: "形象随实时活动的内容送到；扩展没留下报告（它可能写不了 App Group，内置形象不受影响）")
-                : String(localized: "扩展没留下报告：它可能用不了 App Group，形象包的图就画不出来（岛上是形象包的图就没事）")
+            return i.look.package == nil ? String(localized: "The avatar arrives with the Live Activity content; the extension left no report (it may not be able to write to the App Group; built-in avatars aren't affected)")
+                : String(localized: "The extension left no report: it may not be able to use the App Group, so avatar pack images can't be drawn (fine if the island shows the pack's images)")
         }
-        if seen.content != FleetLookReport.describe(i.look) { return String(localized: "扩展上次画的不是设置里的形象（还没重画过）") }
-        if seen.container == false { return String(localized: "扩展拿不到 App Group 容器（签名里没有这个组）：画的是默认形象换成它的颜色") }
+        if seen.content != FleetLookReport.describe(i.look) { return String(localized: "The extension last drew a different avatar than Settings (not redrawn yet)") }
+        if seen.container == false { return String(localized: "The extension can't get the App Group container (the group isn't in its signature): it draws the default avatar in the pack's colors") }
         if let package = i.look.package, seen.facesPackage != package || seen.faceFile == nil {
-            return String(localized: "扩展读不到这个形象包的图，画的是默认形象换成它的颜色")
+            return String(localized: "The extension can't read this avatar pack's images, so it draws the default avatar in the pack's colors")
         }
-        return String(localized: "扩展画的和设置一致")
+        return String(localized: "The extension's drawing matches Settings")
     }
 
     static func time(_ date: Date, _ now: Date) -> String {
         let s = Int(now.timeIntervalSince(date))
-        return s < 60 ? String(localized: "\(max(s, 0)) 秒前") : s < 3600 ? String(localized: "\(s / 60) 分钟前") : date.formatted(date: .abbreviated, time: .standard)
+        return s < 60 ? String(localized: "\(max(s, 0)) seconds ago") : s < 3600 ? String(localized: "\(s / 60) min ago") : date.formatted(date: .abbreviated, time: .standard)
     }
 
     /// Everything on the page as text, to paste into a message.

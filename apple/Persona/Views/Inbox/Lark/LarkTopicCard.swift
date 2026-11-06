@@ -77,12 +77,12 @@ struct LarkTopicCard: View {
             LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: Theme.Size.well)
                 .onTapGesture { showProfile() }
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("\(m.senderName) 的资料")
+                .accessibilityLabel("\(m.senderName)'s profile")
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.xs) {
                     Text(m.senderName).font(Theme.Font.secondaryMedium).lineLimit(1)
                         .onTapGesture { showProfile() }
-                    if m.senderType == "bot" { LarkNameTag(text: String(localized: "机器人")) }
+                    if m.senderType == "bot" { LarkNameTag(text: String(localized: "Bot")) }
                 }
                 Text(LarkChatLayout.dayLabel(m.createdAt)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
@@ -109,14 +109,14 @@ struct LarkTopicCard: View {
     private var actions: some View {
         HStack(spacing: Theme.Space.s) {
             if react != nil && !topic.recalled {
-                action(Theme.Icon.react, String(localized: "表情回复"), id: "lark.topic.react") { picking = true }
+                action(Theme.Icon.react, String(localized: "Add Reaction"), id: "lark.topic.react") { picking = true }
             }
             if canOpen {
-                action(Theme.Icon.reply, String(localized: "回复"), id: "lark.topic.reply") { openThread(focus: true) }
+                action(Theme.Icon.reply, String(localized: "Reply"), id: "lark.topic.reply") { openThread(focus: true) }
             }
             Spacer(minLength: 0)
             Group {
-                if topic.recalled { Text("已撤回") }
+                if topic.recalled { Text("Recalled") }
                 if topic.edited == true { editedMark }
             }
             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -127,10 +127,10 @@ struct LarkTopicCard: View {
     /// Edited: with Edit History on and old versions kept, a button to them (`LarkEditHistoryView`).
     @ViewBuilder private var editedMark: some View {
         if display.showsHistory(of: topic) {
-            Button("已编辑") { showHistory = true }.buttonStyle(.plain)
-                .accessibilityLabel("查看编辑历史").accessibilityIdentifier("lark.editHistory.\(topic.id)")
+            Button("Edited") { showHistory = true }.buttonStyle(.plain)
+                .accessibilityLabel("View edit history").accessibilityIdentifier("lark.editHistory.\(topic.id)")
         } else {
-            Text("已编辑")
+            Text("Edited")
         }
     }
 
@@ -188,14 +188,14 @@ private struct LarkTopicReplyPreview: View {
         Button { open?() } label: {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 if earlier > 0 {
-                    Text("查看更早 \(earlier) 条回复").font(Theme.Font.label).foregroundStyle(LarkColor.blue).lineLimit(1)
+                    Text("View \(earlier) earlier replies").font(Theme.Font.label).foregroundStyle(LarkColor.blue).lineLimit(1)
                 }
                 ForEach(shown) { r in
-                    Text("\(Text(r.senderName).font(Theme.Font.secondaryMedium))：\(said(r))")
+                    Text("\(Text(r.senderName).font(Theme.Font.secondaryMedium)): \(said(r))")
                         .font(Theme.Font.secondary).lineLimit(1)
                 }
                 ForEach(0..<pending, id: \.self) { _ in
-                    Text("\(Text("某某").font(Theme.Font.secondaryMedium))：回复内容回复内容")
+                    Text("\(Text("Someone [Lark Topic Card 8ea02f]").font(Theme.Font.secondaryMedium)): Reply text goes here")
                         .font(Theme.Font.secondary).lineLimit(1).redacted(reason: .placeholder)
                 }
             }
@@ -211,18 +211,18 @@ private struct LarkTopicReplyPreview: View {
         .accessibilityIdentifier("lark.topic.replies")
         if preview?.failed == true, shown.isEmpty, let replies {
             HStack(spacing: Theme.Space.s) {
-                Text("回复没读到").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
-                Button("重试") { replies.retry(topic) }.font(Theme.Font.labelMedium).lineLimit(1)
+                Text("Couldn't load replies").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Button("Retry [Components b8784c]") { replies.retry(topic) }.font(Theme.Font.labelMedium).lineLimit(1)
             }
         }
     }
 
     /// VoiceOver reads the preview as one line: what it shows, in order.
     private func spoken(count: Int, earlier: Int, shown: [LarkMessage]) -> String {
-        guard !shown.isEmpty else { return String(localized: "\(count) 条回复，正在读取") }
-        let lines = shown.map { String(localized: "\($0.senderName)：\(said($0))") }
-        return ((earlier > 0 ? [String(localized: "查看更早 \(earlier) 条回复")] : []) + lines)
-            .joined(separator: String(localized: "，", comment: "Separator between the lines of a spoken summary"))
+        guard !shown.isEmpty else { return String(localized: "\(count) replies, loading") }
+        let lines = shown.map { String(localized: "\($0.senderName): \(said($0))") }
+        return ((earlier > 0 ? [String(localized: "View \(earlier) earlier replies")] : []) + lines)
+            .joined(separator: String(localized: ", ", comment: "Separator between the lines of a spoken summary"))
     }
 
     private func said(_ r: LarkMessage) -> String { LarkTopicReplies.line(of: r, display: display) }
@@ -297,7 +297,7 @@ private struct LarkTopicFold<Content: View>: View {
         Button {
             withAnimation(Theme.Motion.layout) { open.toggle() }
         } label: {
-            Text(open ? "收起" : "展开")
+            Text(open ? String(localized: "Collapse") : String(localized: "Expand"))
                 .font(Theme.Font.labelMedium)
                 .lineLimit(1)
                 .padding(.horizontal, Theme.Space.l)

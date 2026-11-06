@@ -13,11 +13,11 @@ struct LarkHistoryPaging {
     struct Problem: Equatable {
         let text: String
         let short: String
-        static let stopped = Problem(text: String(localized: "暂时无法加载更早的消息"), short: String(localized: "暂时无法加载"))
-        static let failed = Problem(text: String(localized: "更早的消息未加载，点击重试"), short: String(localized: "加载失败，点击重试"))
-        static let accountChanged = Problem(text: String(localized: "飞书账号已切换，请重新打开会话"), short: String(localized: "飞书账号已切换"))
-        static let upgrade = Problem(text: String(localized: "更新 Hub 后可加载更早的消息"), short: String(localized: "请更新 Hub"))
-        static let signedOut = Problem(text: String(localized: "飞书已退出登录，请重新连接"), short: String(localized: "飞书已退出登录"))
+        static let stopped = Problem(text: String(localized: "Can't load earlier messages right now"), short: String(localized: "Can't load right now"))
+        static let failed = Problem(text: String(localized: "Earlier messages didn't load. Tap to retry."), short: String(localized: "Failed. Tap to retry."))
+        static let accountChanged = Problem(text: String(localized: "Your Lark account changed. Open the chat again."), short: String(localized: "Lark account changed"))
+        static let upgrade = Problem(text: String(localized: "Update the hub to load earlier messages"), short: String(localized: "Update the hub"))
+        static let signedOut = Problem(text: String(localized: "Signed out of Lark. Connect again."), short: String(localized: "Signed out of Lark"))
     }
     private(set) var pending: Request?
     private(set) var problem: Problem?
@@ -77,10 +77,10 @@ extension APIClient {
         let page: LarkMessages = try await getDecodedOffMain("/api/v1/lark/conversations/\(feed)/messages",
             query: ["before": before, "limit": "40", "topic": topic ? "1" : "", "account_id": account])
         guard let owner = page.accountID else {
-            throw APIError(status: 426, message: String(localized: "更新 Hub 后可加载更早的消息"), fields: ["code": "lark_history_upgrade_required"])
+            throw APIError(status: 426, message: String(localized: "Update the hub to load earlier messages"), fields: ["code": "lark_history_upgrade_required"])
         }
         guard owner == account else {
-            throw APIError(status: 409, message: String(localized: "飞书账号已切换"), fields: ["code": "lark_account_changed"])
+            throw APIError(status: 409, message: String(localized: "Lark account changed"), fields: ["code": "lark_account_changed"])
         }
         return page
     }

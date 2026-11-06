@@ -7,7 +7,7 @@ import Foundation
 
 /// A personal-agent session as Siri sees it. Indexed in Spotlight when the Agents page loads (`PersonalAgentIndex`).
 struct PersonalAgentEntity: IndexedEntity, Hashable, Sendable {
-    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "个人 Agent")
+    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Personal Agents")
     nonisolated static let defaultQuery = PersonalAgentEntityQuery()
 
     /// The hub's session id, "<source>:<sessionKey>".
@@ -62,18 +62,18 @@ struct PersonalAgentEntityQuery: EntityQuery, EntityStringQuery {
 
 /// "Give an Agent a Task": one message into a personal agent session, with a fresh clientId (the hub dedupes retries).
 struct AgentTaskIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "让 Agent 去做"
+    nonisolated static let title: LocalizedStringResource = "Give an Agent a Task"
     nonisolated static let description = IntentDescription(
-        "把一件事发给某个个人 Agent 会话（飞书网关的 agent-bridge），由它去做。不选会话时发给最近活跃、能发送的那个。",
-        categoryName: "个人 Agent",
-        searchKeywords: ["Agent", "个人 Agent", "任务", "让它去做", "task"]
+        "Sends a task to a personal agent session (the Lark gateway's agent-bridge) to carry out. With no session chosen, it goes to the most recently active one that can receive messages.",
+        categoryName: "Personal Agents",
+        searchKeywords: ["Agent", "Personal Agents", "Tasks", "have it do", "task"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 
-    @Parameter(title: "会话")
+    @Parameter(title: "Session")
     var agent: PersonalAgentEntity?
 
-    @Parameter(title: "要做的事", requestValueDialog: "要让 Agent 做什么？")
+    @Parameter(title: "Task", requestValueDialog: "What should the agent do?")
     var task: String
 
     nonisolated init() {}
@@ -82,11 +82,11 @@ struct AgentTaskIntent: AppIntent {
         self.task = task
     }
 
-    nonisolated static var parameterSummary: some ParameterSummary { Summary("让 \(\.$agent) 去做 \(\.$task)") }
+    nonisolated static var parameterSummary: some ParameterSummary { Summary("Have \(\.$agent) do \(\.$task)") }
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         let body = task.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "要让 Agent 做什么？")) }
+        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "What should the agent do?")) }
         do {
             let api = try IntentSupport.client()
             let target: PersonalAgentEntity
@@ -111,11 +111,11 @@ struct AgentTaskIntent: AppIntent {
 
 /// "Personal Agent Unread": unread counts across personal agent sessions, the busiest first.
 struct AgentsStatusIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "个人 Agent 未读"
+    nonisolated static let title: LocalizedStringResource = "Personal Agent Unread"
     nonisolated static let description = IntentDescription(
-        "最近的个人 Agent 会话和各自的未读条数。",
-        categoryName: "个人 Agent",
-        searchKeywords: ["Agent", "未读", "最近", "unread"]
+        "Your recent personal agent sessions and how many unread messages each has.",
+        categoryName: "Personal Agents",
+        searchKeywords: ["Agent", "Unread [Personal Agent Intents 4d0680]", "Recent", "unread"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 
@@ -134,10 +134,10 @@ struct AgentsStatusIntent: AppIntent {
 
 /// Opens the app on the personal agents list (Spotlight results and the dialog buttons land here).
 struct OpenPersonalAgentIntent: OpenIntent {
-    nonisolated static let title: LocalizedStringResource = "打开个人 Agent"
+    nonisolated static let title: LocalizedStringResource = "Open Personal Agent"
     nonisolated static var supportedModes: IntentModes { .foreground(.immediate) }
 
-    @Parameter(title: "会话")
+    @Parameter(title: "Session")
     var target: PersonalAgentEntity
 
     nonisolated init() {}
@@ -167,7 +167,7 @@ nonisolated enum PersonalAgentIntentPicker {
 }
 
 nonisolated enum PersonalAgentIntentText {
-    static let noSession = String(localized: "还没有能发消息的个人 Agent 会话。先在飞书网关里开一个。")
+    static let noSession = String(localized: "No personal agent session can receive messages yet. Open one in the Lark gateway first.")
 
     static func name(title: String, id: String) -> String {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,31 +175,31 @@ nonisolated enum PersonalAgentIntentText {
     }
 
     static func subtitle(provider: String, unread: Int) -> String {
-        unread > 0 ? String(localized: "\(provider) · \(unread) 条未读") : provider
+        unread > 0 ? String(localized: "\(provider) · \(unread) unread") : provider
     }
 
-    static func cannotSend(_ title: String) -> String { String(localized: "「\(title)」不能从这里发消息。") }
+    static func cannotSend(_ title: String) -> String { String(localized: "You can't message “\(title)” from here.") }
 
     static func sent(status: String, to title: String, error: String?) -> String {
         switch status {
-        case "failed": String(localized: "发给「\(title)」失败：\(error ?? String(localized: "未知错误"))")
-        case "sending": String(localized: "正在发给「\(title)」")
-        default: String(localized: "已交给「\(title)」")
+        case "failed": String(localized: "Couldn't send to “\(title)”: \(error ?? String(localized: "Unknown error"))")
+        case "sending": String(localized: "Sending to “\(title)”")
+        default: String(localized: "Handed to “\(title)”")
         }
     }
 
     static func status(_ all: [PersonalAgentEntity], limit: Int = 3) -> String {
-        guard !all.isEmpty else { return String(localized: "没有个人 Agent 会话。") }
+        guard !all.isEmpty else { return String(localized: "No personal agent sessions.") }
         let unread = all.filter { $0.unread > 0 }
         guard !unread.isEmpty else {
             let recent = all.prefix(limit).map { String(localized: "「\($0.title)」") }
                 .joined(separator: String(localized: "、", comment: "Separator between quoted session titles"))
-            return String(localized: "没有未读。最近的是：\(recent)")
+            return String(localized: "Nothing unread. Most recent: \(recent)")
         }
         let total = unread.reduce(0) { $0 + $1.unread }
-        let list = unread.prefix(limit).map { String(localized: "「\($0.title)」\($0.unread) 条") }
-            .joined(separator: String(localized: "，", comment: "Separator between sessions in the unread list"))
-        return String(localized: "\(unread.count) 个会话共 \(total) 条未读：\(list)")
+        let list = unread.prefix(limit).map { String(localized: "“\($0.title)” (\($0.unread))") }
+            .joined(separator: String(localized: ", ", comment: "Separator between sessions in the unread list"))
+        return String(localized: "\(total) unread in \(unread.count) sessions: \(list)")
     }
 }
 

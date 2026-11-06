@@ -12,8 +12,8 @@ nonisolated enum Rewind {
 
         var title: String {
             switch self {
-            case .conversation: String(localized: "只回退对话")
-            case .codeAndConversation: String(localized: "回退代码和对话")
+            case .conversation: String(localized: "Rewind Chat Only")
+            case .codeAndConversation: String(localized: "Rewind Code and Chat")
             }
         }
     }
@@ -90,10 +90,10 @@ nonisolated enum Rewind {
     /// thread another source lists). Nil when it does not; otherwise why it is off right now ("" when it is on).
     static func block(_ session: Session?) -> String? {
         guard let s = session, !s.assistant, s.sourceKind == nil, !s.sessionID.contains("@") else { return nil }
-        if let agent = s.agent, agent != "claude" { return String(localized: "仅 Claude") }
-        if s.state == .offline || s.starting == true { return String(localized: "未运行") }
-        if s.state == .needsYou || s.pendingInteractions > 0 { return String(localized: "待回答") }
-        if s.state == .working { return String(localized: "工作中") }
+        if let agent = s.agent, agent != "claude" { return String(localized: "Claude only") }
+        if s.state == .offline || s.starting == true { return String(localized: "Not running [Rewind 62cdc8]") }
+        if s.state == .needsYou || s.pendingInteractions > 0 { return String(localized: "Waiting for your answer [Rewind 916bc7]") }
+        if s.state == .working { return String(localized: "Working [Assistant Profile View f42082]") }
         return ""
     }
 
@@ -112,21 +112,21 @@ nonisolated enum Rewind {
 
     /// What the toast says after it went through.
     static func done(_ result: Result, asked: Restore) -> String {
-        if asked == .codeAndConversation, result.codeRestored != true { return String(localized: "已回退对话（这条之后没有代码改动）") }
-        return result.codeRestored == true ? String(localized: "已回退代码和对话") : String(localized: "已回退对话")
+        if asked == .codeAndConversation, result.codeRestored != true { return String(localized: "Chat rewound (no code changes after this message)") }
+        return result.codeRestored == true ? String(localized: "Code and chat rewound") : String(localized: "Chat rewound")
     }
 
     /// The input box on the computer still holds the message (it could not be emptied).
-    static var inputKept: String { String(localized: "已回退，但电脑上 Claude 的输入框里还留着这条消息") }
+    static var inputKept: String { String(localized: "Rewound, but the message is still in Claude's input box on the computer") }
 
     /// The hub's refusal in words for the toast.
     static func failure(_ error: Error) -> String {
         if let e = error as? APIError {
-            if (e.status == 404 || e.status == 405) && e.code != "gone" { return String(localized: "这个 hub 还不支持回退，需要更新") }
-            if e.status == 403 { return String(localized: "回退要用完整权限的设备") }
+            if (e.status == 404 || e.status == 405) && e.code != "gone" { return String(localized: "This hub doesn't support rewinding yet. Update it first.") }
+            if e.status == 403 { return String(localized: "Rewinding needs a device with full access") }
             return e.localizedDescription
         }
-        if (error as? URLError)?.code == .timedOut { return String(localized: "回退超时：电脑上的 Claude 没有按预期响应") }
+        if (error as? URLError)?.code == .timedOut { return String(localized: "Rewind timed out: Claude on the computer didn't respond as expected") }
         return error.localizedDescription
     }
 }
@@ -144,7 +144,7 @@ private struct RewindDialogs: ViewModifier {
     func body(content: Content) -> some View {
         let block = menu.rewindBlock() ?? ""
         content
-            .confirmationDialog("回退到这里", isPresented: Binding(get: { menu.rewinding != nil }, set: { if !$0 { menu.rewinding = nil } }),
+            .confirmationDialog("Rewind to Here", isPresented: Binding(get: { menu.rewinding != nil }, set: { if !$0 { menu.rewinding = nil } }),
                                 titleVisibility: .visible, presenting: menu.rewinding) { ask in
                 if block.isEmpty {
                     Button(Rewind.Restore.conversation.title) { menu.rewind?(ask.id, ask.text, .conversation) }
@@ -156,16 +156,16 @@ private struct RewindDialogs: ViewModifier {
                         }
                     }
                 }
-                Button("取消", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: { _ in
-                Text(block.isEmpty ? "回到发这条消息之前：之后的对话从 Claude 里移除，这条消息放回输入框。" : "现在不能回退：\(block)")
+                Text(block.isEmpty ? String(localized: "Go back to before this message: everything after it is removed from Claude, and this message goes back into the input box.") : String(localized: "Can't rewind right now: \(block)"))
             }
-            .alert("确认回退代码", isPresented: Binding(get: { confirmCode != nil }, set: { if !$0 { confirmCode = nil } }),
+            .alert("Rewind Code?", isPresented: Binding(get: { confirmCode != nil }, set: { if !$0 { confirmCode = nil } }),
                    presenting: confirmCode) { ask in
-                Button("回退代码和对话", role: .destructive) { menu.rewind?(ask.id, ask.text, .codeAndConversation) }
-                Button("取消", role: .cancel) {}
+                Button("Rewind Code and Chat", role: .destructive) { menu.rewind?(ask.id, ask.text, .codeAndConversation) }
+                Button("Cancel", role: .cancel) {}
             } message: { _ in
-                Text("电脑上的文件也会回到这条消息之前的样子，之后的改动会丢掉。")
+                Text("Files on the computer also go back to how they were before this message, and later changes are lost.")
             }
     }
 }

@@ -16,43 +16,43 @@ struct TranslationSettingsView: View {
     var body: some View {
         SettingsForm {
             Section {
-                Toggle(isOn: $enabled) { Label("自动翻译", systemImage: Theme.Icon.translate) }
-                ModelConfigurationLink(title: String(localized: "翻译模型"), purposeID: "translate")
+                Toggle(isOn: $enabled) { Label("Auto-Translate", systemImage: Theme.Icon.translate) }
+                ModelConfigurationLink(title: String(localized: "Translation Model"), purposeID: "translate")
             } footer: {
-                Text("内容不是目标语言时自动翻译，原文随时可以切回来。翻译由「模型配置」中的翻译模型处理。")
+                Text("Content not in the target language is translated automatically, and you can switch back to the original anytime. Translation uses the translation model in Model Configuration.")
             }
             if enabled {
                 Section {
-                    Picker("目标语言", selection: $target) {
+                    Picker("Target Language", selection: $target) {
                         ForEach(TranslationPrefs.languages) { Text($0.name).tag($0.code) }
                     }
                 }
                 Section {
-                    Toggle(isOn: $mail) { Label("邮件", systemImage: Theme.Icon.mail) }
+                    Toggle(isOn: $mail) { Label("Mail [Assistant View 3d708e]", systemImage: Theme.Icon.mail) }
                     // Feishu chats are picked from the hub's (`/api/v1/lark/…`, the Lark extension's).
                     if larkChats {
                         Button { picking = true } label: {
                             LabeledContent {
-                                Text(chats.isEmpty ? "不翻译" : "\(chats.count) 个会话").foregroundStyle(.secondary).lineLimit(1)
+                                Text(chats.isEmpty ? String(localized: "None [Translation Settings View bcb53d]") : String(localized: "\(chats.count) Chats [Claude Dirs Section 537bee]")).foregroundStyle(.secondary).lineLimit(1)
                             } label: {
-                                Label { Text("飞书会话").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.conversation) }
+                                Label { Text("Lark Chats").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.conversation) }
                             }
                         }
-                        .accessibilityHint("选择要翻译的飞书会话")
+                        .accessibilityHint("Choose Lark chats to translate")
                     }
                 } header: {
-                    Text("翻译范围")
+                    Text("What to Translate")
                 } footer: {
-                    if larkChats { Text("飞书消息很多，默认不翻译；只翻译这里选中的会话里别人发的消息。") }
+                    if larkChats { Text("Lark has a lot of messages, so they aren't translated by default. Only messages from others in the chats selected here are translated.") }
                 }
                 if larkChats, !chats.isEmpty {
-                    Section("要翻译的飞书会话") {
+                    Section("Lark Chats to Translate") {
                         ForEach(chats) { c in
                             Text(c.name).lineLimit(1)
                                 #if os(macOS)
                                 // A Mac form has no swipe to delete: the row's menu takes it off (#1221).
                                 .contextMenu {
-                                    Button("不再翻译", role: .destructive) {
+                                    Button("Stop Translating", role: .destructive) {
                                         chatsRaw = TranslationPrefs.encode(chats.filter { $0.id != c.id })
                                     }
                                 }
@@ -68,7 +68,7 @@ struct TranslationSettingsView: View {
             }
         }
         .themedGroupedPage()
-        .detailTitle(String(localized: "翻译"))
+        .detailTitle(String(localized: "Translation"))
         .navigationBarTitleDisplayMode(.inline)
         .animation(Theme.Motion.state, value: enabled)
         // The hub translates new mail before it is opened: it needs to know.
@@ -128,14 +128,14 @@ struct TranslationChatPicker: View {
                 }
             }
             .overlay { if loading && conversations.isEmpty { ProgressView() } }
-            .pageSearchable(text: $query, prompt: String(localized: "搜索会话"))
-            .navigationTitle("要翻译的会话")
+            .pageSearchable(text: $query, prompt: String(localized: "Search Chats [Personal Agent List View feb955]"))
+            .navigationTitle("Chats to Translate")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: opened.map { $0 != Set(selected.map(\.id)) } ?? false) { dismiss() }
             .onAppear { if opened == nil { opened = Set(selected.map(\.id)) } }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") {
+                    Button("Done [Extension System Presentation c0b3fb]") {
                         save(selected)
                         dismiss()
                     }

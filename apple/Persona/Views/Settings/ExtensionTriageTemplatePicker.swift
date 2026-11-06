@@ -15,20 +15,20 @@ struct ExtensionTriageTemplatePicker: View {
                         .accessibilityIdentifier("extension-triage-template-\(template.id)")
                 }
             } label: {
-                Label { Text("从模板填").lineLimit(1) } icon: { Image(systemName: Theme.Icon.insert) }
+                Label { Text("Fill from Template").lineLimit(1) } icon: { Image(systemName: Theme.Icon.insert) }
             }
-            .confirmationDialog("替换当前的规则草稿？", isPresented: Binding(
+            .confirmationDialog("Replace the Current Rule Draft?", isPresented: Binding(
                 get: { selected != nil }, set: { if !$0 { selected = nil } }), titleVisibility: .visible) {
                 if let template = selected {
                     Button {
                         text = ExtensionTextContributions.filling(template)
                         selected = nil
-                    } label: { Text("替换草稿").lineLimit(1) }
+                    } label: { Text("Replace Draft").lineLimit(1) }
                     .accessibilityIdentifier("extension-triage-template-confirm")
                 }
-                Button("取消", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("现有草稿会被模板替换；不会自动保存到 hub。")
+                Text("The template replaces your current draft. It isn't saved to the hub automatically.")
             }
         }
     }

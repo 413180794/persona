@@ -50,7 +50,7 @@ nonisolated enum LarkChatLayout {
         let style = Date.FormatStyle(locale: .current, calendar: cal, timeZone: cal.timeZone)
         return switch LarkTime.tier(of: d, now: now, calendar: cal) {
         case .today: time
-        case .yesterday: String(localized: "昨天 \(time)")
+        case .yesterday: String(localized: "Yesterday \(time)")
         case .thisWeek: d.formatted(style.weekday(.wide)) + " " + time
         case .thisYear: d.formatted(style.month().day()) + " " + time
         case .older: d.formatted(style.year().month().day()) + " " + time

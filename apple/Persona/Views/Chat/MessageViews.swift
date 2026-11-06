@@ -73,7 +73,7 @@ extension MarkdownUI.Theme {
         }
         .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
         .macHoverActions {
-            MacHoverButton(title: String(localized: "拷贝代码"), symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: String(localized: "已拷贝代码")) }
+            MacHoverButton(title: String(localized: "Copy Code [Message Views fa2611]"), symbol: Theme.Icon.copy) { MacHover.copy(config.content, said: String(localized: "Code copied")) }
         }
     }
 }
@@ -184,7 +184,7 @@ struct UserBubble: View, Equatable {
             // Came in from a channel (WeChat, the Feishu bot…): 「来自 微信」 under it.
             if ChannelSource.possible(item.clientMsgID) { ChannelSourceLine(clientMsgID: item.clientMsgID) }
             if d.cardSource != nil {
-                Text("来自卡片").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text("From a card").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     .accessibilityIdentifier("assistant-card-source")
             }
         }
@@ -244,7 +244,7 @@ struct PeerMessage: View {
     var body: some View {
         let d = RowMemo.assistant(RowMemo.key(memoScope, item.id)) { _ in AssistantRowText(item.text ?? "") } // once per message
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Label("来自 \(from)", systemImage: "arrow.left.arrow.right.circle")
+            Label("From \(from)", systemImage: "arrow.left.arrow.right.circle")
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -294,7 +294,7 @@ struct PendingBubble: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(viewImages == nil)
-                        .accessibilityLabel("图片 \(i + 1)，点按查看大图")
+                        .accessibilityLabel("Image \(i + 1), tap to view full size")
                     }
                 }
             }
@@ -305,29 +305,29 @@ struct PendingBubble: View {
                 case .sent: EmptyView()
                 case .waiting:
                     Menu {
-                        Button(action: retry) { Label("现在重试", systemImage: Theme.Icon.retry) }
-                        Button(role: .destructive, action: discard) { Label("不发了", systemImage: Theme.Icon.delete) }
+                        Button(action: retry) { Label("Retry Now [Message Views f40f4f]", systemImage: Theme.Icon.retry) }
+                        Button(role: .destructive, action: discard) { Label("Don't Send", systemImage: Theme.Icon.delete) }
                     } label: {
                         Image(systemName: Theme.Icon.time).font(Theme.Font.caption).foregroundStyle(.secondary)
                             .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                             .contentShape(.rect)
                     }
-                    .accessibilityLabel("等网络，连上后自动发送")
+                    .accessibilityLabel("Waiting for network, will send once connected")
                 case .failed:
                     Menu {
-                        Button(action: retry) { Label("重发", systemImage: Theme.Icon.retry) }
-                        Button(role: .destructive, action: discard) { Label("删除", systemImage: Theme.Icon.delete) }
+                        Button(action: retry) { Label("Resend", systemImage: Theme.Icon.retry) }
+                        Button(role: .destructive, action: discard) { Label("Delete", systemImage: Theme.Icon.delete) }
                     } label: {
                         Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.body).foregroundStyle(Theme.danger)
                     }
-                    .accessibilityLabel("发送失败，重发或删除")
+                    .accessibilityLabel("Failed to send. Resend or delete.")
                 }
                 let parsed = ContextRef.parse(msg.text)
                 UserBubbleBody(quotes: ContextRef.quotes(parsed.refs) ?? [], text: AttachedFile.parse(parsed.rest).rest)
                     .opacity(msg.state == .failed || msg.state == .waiting ? 0.6 : 1)
             }
             if msg.state == .waiting {
-                Text("连上后自动发送").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text("Sends when connected").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     .transition(.opacity)
             }
         }
@@ -361,7 +361,7 @@ struct SentPhotos: View {
                         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.control, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 0.5))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("图片 \(i + 1)，点按查看大图")
+                .accessibilityLabel("Image \(i + 1), tap to view full size")
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -387,7 +387,7 @@ struct AttachedImages: View {
             ForEach(Array(paths.enumerated()), id: \.element) { i, path in
                 Button { open(i) } label: { thumb(path) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("图片 \(i + 1)")
+                    .accessibilityLabel("Image \(i + 1) [Composer Parts 0d2e3a]")
             }
         }
         .task(id: paths) {
@@ -527,9 +527,9 @@ private struct AnswerHoverActions: ViewModifier {
     func body(content: Content) -> some View {
         if on {
             content.macHoverFooter {
-                MacHoverButton(title: String(localized: "拷贝"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
+                MacHoverButton(title: String(localized: "Copy [Readiness Views d37380]"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
                 if let quote = menu?.quote {
-                    MacHoverButton(title: String(localized: "引用"), symbol: Theme.Icon.quote) { quote(text, id, false) }
+                    MacHoverButton(title: String(localized: "Quote"), symbol: Theme.Icon.quote) { quote(text, id, false) }
                 }
             }
         } else {
@@ -542,8 +542,8 @@ private struct AnswerHoverActions: ViewModifier {
 struct CopyButton: View {
     var text: String
     var body: some View {
-        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
-        ShareLink(item: text) { Label("分享", systemImage: Theme.Icon.share) }
+        Button { UIPasteboard.general.string = text; Haptics.success() } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
+        ShareLink(item: text) { Label("Share", systemImage: Theme.Icon.share) }
     }
 }
 
@@ -573,7 +573,7 @@ struct ThinkingRow: View {
             } label: {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.memory).font(Theme.Font.label)
-                    Text(open ? String(localized: "思考过程") : ToolPresentation.firstLine(item.text ?? ""))
+                    Text(open ? String(localized: "Thinking [Message Views a62acb]") : ToolPresentation.firstLine(item.text ?? ""))
                         .font(Theme.Font.label)
                         .lineLimit(1)
                     Spacer(minLength: 0)
@@ -602,7 +602,7 @@ struct ThinkingRow: View {
     private var chipRow: some View {
         let text = item.text ?? ""
         return VStack(alignment: .leading, spacing: 0) {
-            ToolChipRow(BeautifulUI.ToolCall(id: item.id, .think, label: String(localized: "思考"), chip: ToolPresentation.firstLine(text), monospacedChip: false),
+            ToolChipRow(BeautifulUI.ToolCall(id: item.id, .think, label: String(localized: "Thinking [Message Views 8cf010]"), chip: ToolPresentation.firstLine(text), monospacedChip: false),
                         isOpen: open) {
                 Haptics.tap()
                 toggleInPlace(pin, pinKey, animation: Theme.Motion.state, unfold: $unfold, closing: open) { open.toggle() }
@@ -629,7 +629,7 @@ struct ThinkingRow: View {
         return ThinkingState(
             .reasoning,
             isWorking: false,
-            doneTitle: open ? String(localized: "思考过程") : ToolPresentation.firstLine(text),
+            doneTitle: open ? String(localized: "Thinking [Message Views a62acb]") : ToolPresentation.firstLine(text),
             rows: [BeautifulUI.ThinkingRow(id: item.id, text)],
             isExpanded: Binding(get: { open }, set: { v in toggleInPlace(pin, pinKey, animation: Theme.Motion.standard) { open = v } }),
             maxWidth: .infinity
@@ -655,7 +655,7 @@ struct CompactDivider: View {
         var n = item.compact?.notes ?? [item.text ?? ""]
         if let ts = item.ts {
             let at = ts.formatted(date: .abbreviated, time: .shortened)
-            n.append(String(localized: "压缩于 \(at)"))
+            n.append(String(localized: "Compacted \(at)"))
         }
         return n.filter { !$0.isEmpty }
     }
@@ -695,7 +695,7 @@ struct CompactDivider: View {
             }
             .buttonStyle(.plain)
             .chatPinned("compact-" + item.id)
-            .accessibilityLabel(open ? String(localized: "\(title)，收起说明") : String(localized: "\(title)，展开说明"))
+            .accessibilityLabel(open ? String(localized: "\(title), hide notes") : String(localized: "\(title), show notes"))
             .accessibilityIdentifier("compact-divider")
             if open {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
@@ -793,23 +793,23 @@ struct NoticeRow: View {
     private static func computeWakeSummary(_ s: String) -> (text: String, failed: Bool) {
         guard let m = s.firstMatch(of: /^(.*?)\s*"(.+)"\s*(.*)$/) else { return (s, false) }
         let kind = switch String(m.1) {
-        case "Background command": String(localized: "后台命令")
-        case "Agent": String(localized: "子 Agent ")
-        case "Monitor": String(localized: "监控")
-        default: String(localized: "后台任务")
+        case "Background command": String(localized: "Background command")
+        case "Agent": String(localized: "Subagent [Message Views e6e12c]")
+        case "Monitor": String(localized: "Monitor [Message Views fdc390]")
+        default: String(localized: "Background Task")
         }
         let rest = m.3.lowercased()
         let code = rest.firstMatch(of: /exit code (\d+)/).flatMap { Int($0.1) }
         let failed = rest.contains("fail") || rest.contains("error") || (code ?? 0) != 0
         let what = String(m.2)
         let text = if failed {
-            String(localized: "\(kind)失败 · \(what)")
+            String(localized: "\(kind) failed · \(what)")
         } else if rest.contains("kill") || rest.contains("stop") {
-            String(localized: "\(kind)已停止 · \(what)")
+            String(localized: "\(kind) stopped · \(what)")
         } else if rest.contains("complet") {
-            String(localized: "\(kind)完成 · \(what)")
+            String(localized: "\(kind) done · \(what)")
         } else {
-            String(localized: "\(kind)有更新 · \(what)")
+            String(localized: "\(kind) updated · \(what)")
         }
         return (text, failed)
     }
@@ -832,7 +832,7 @@ struct WakeChip: View {
                     Image(systemName: failed ? Theme.Icon.errorFilled : "bell.fill")
                         .foregroundStyle(failed ? Theme.danger : Theme.accent)
                 }
-                Text(live ? String(localized: "后台任务完成 · 正在处理") : summary?.text ?? String(localized: "\(notices.count) 个后台任务完成"))
+                Text(live ? String(localized: "Background task done · Processing") : summary?.text ?? String(localized: "\(notices.count) background tasks done"))
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
@@ -846,7 +846,7 @@ struct WakeChip: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel("后台任务完成，查看之后的消息")
+        .accessibilityLabel("Background task done, view the messages after it")
     }
 }
 
@@ -865,9 +865,9 @@ struct WakeDrawer<Content: View>: View {
                 .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
-            .navigationTitle(notices.count > 1 ? "\(notices.count) 个后台任务完成" : "后台任务完成")
+            .navigationTitle(notices.count > 1 ? String(localized: "\(notices.count) background tasks done") : String(localized: "Background Task Done"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
@@ -894,8 +894,8 @@ struct RecapCard: View {
         } label: {
             HStack(spacing: Theme.Space.sm) {
                 Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
-                Text("离开期间回顾").lineLimit(1)
-                if items.count > 1 { Text("· \(items.count) 次").lineLimit(1) }
+                Text("While You Were Away").lineLimit(1)
+                if items.count > 1 { Text("· \(items.count)×").lineLimit(1) }
                 if let ts = newest.ts, ts.isMeaningful { Text("· " + Fmt.relative(ts)).lineLimit(1) }
                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
             }
@@ -909,7 +909,7 @@ struct RecapCard: View {
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu { CopyButton(text: newest.text ?? "") }
-        .accessibilityLabel(items.count > 1 ? "\(items.count) 次离开期间回顾，点击查看" : "离开期间回顾，点击查看")
+        .accessibilityLabel(items.count > 1 ? String(localized: "\(items.count) recaps while you were away, tap to view") : String(localized: "Recap while you were away, tap to view"))
         .sheet(isPresented: $open) { RecapDrawer(items: items) }
         #if DEBUG
         .task { if UserDefaults.standard.bool(forKey: "showRecapDrawer") { try? await Task.sleep(for: .seconds(3)); open = true } }
@@ -934,7 +934,7 @@ struct RecapStrip: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(Theme.accent)
-                        Text("离开期间回顾").font(Theme.Font.captionStrong).lineLimit(1)
+                        Text("While You Were Away").font(Theme.Font.captionStrong).lineLimit(1)
                         if let ts = item.ts, ts.isMeaningful {
                             Text("· " + Fmt.relative(ts)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
@@ -957,7 +957,7 @@ struct RecapStrip: View {
         }
         .buttonStyle(.plain)
         .contextMenu { CopyButton(text: item.text ?? "") }
-        .accessibilityLabel(String(localized: "离开期间回顾：\(recap)。点按关闭"))
+        .accessibilityLabel(String(localized: "Recap while you were away: \(recap). Tap to close"))
         .accessibilityIdentifier("chat.recapStrip")
     }
 }
@@ -971,7 +971,7 @@ struct RecapDrawer: View {
     /// When a recap was written; the newest of several says so.
     private static func written(_ ts: Date, latest: Bool) -> String {
         let when = Fmt.relative(ts)
-        return latest ? String(localized: "最新 · 写于 \(when)") : String(localized: "写于 \(when)")
+        return latest ? String(localized: "Latest · Written \(when)") : String(localized: "Written \(when)")
     }
 
     var body: some View {
@@ -995,9 +995,9 @@ struct RecapDrawer: View {
                 .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
-            .navigationTitle(items.count > 1 ? "离开期间回顾 · \(items.count) 次" : "离开期间回顾")
+            .navigationTitle(items.count > 1 ? String(localized: "While You Were Away · \(items.count)") : String(localized: "While You Were Away"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

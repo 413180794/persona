@@ -241,13 +241,13 @@ struct ShellNeedsYou: View {
     /// are among them it says Needs You, and with only agents left it opens Agents.
     private func more(_ hidden: ArraySlice<Line>) -> (text: String, open: () -> Void) {
         let agents = hidden.filter { if case .agent = $0 { true } else { false } }.count
-        let text = agents > 0 ? String(localized: "还有 \(hidden.count) 件需要你") : String(localized: "还有 \(hidden.count) 件在收件箱")
+        let text = agents > 0 ? String(localized: "\(hidden.count) more need you") : String(localized: "\(hidden.count) more in Inbox")
         return (text, { [model] in model.selectedTab = agents == hidden.count ? .chats : .mail })
     }
 
     /// BeautifulUI's list card: a heading with how many wait, then one row per thing (its mark, who, what, a chevron).
     private func beautiful(_ all: [Line], shown: Int) -> some View {
-        BUIListSection(String(localized: "需要你"), count: all.count) {
+        BUIListSection(String(localized: "Needs You [Chats View e60ec4]"), count: all.count) {
             ForEach(all.prefix(shown)) { line in beautifulRow(line) }
             if all.count > shown {
                 let rest = more(all.dropFirst(shown))

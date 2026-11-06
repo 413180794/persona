@@ -22,7 +22,7 @@ struct TaskDetailSheet: View {
     init(agent: SessionKey) { agentKey = agent }
 
     /// What an agent no task stands for says about itself (in ⋯, and the header while it has no page).
-    static var agentNote: String { String(localized: "Agent · 不是从对话开的") }
+    static var agentNote: String { String(localized: "Agent · Not started from a chat") }
 
     var body: some View {
         DetailStack {
@@ -32,7 +32,7 @@ struct TaskDetailSheet: View {
                 } else if let todo = todoID.flatMap({ store.todos[$0] }) {
                     content(todo)
                 } else {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "没有这个任务了"), message: String(localized: "它可能被删了。"))
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "This task is gone"), message: String(localized: "It may have been deleted."))
                 }
             }
             // The agent's page hides the bar (it draws its own header), and so does the page while it has none.
@@ -63,10 +63,10 @@ struct TaskDetailSheet: View {
                 Divider()
                 Group {
                     if let failure = store.startFailure(todo) ?? todo.agents.first?.startError {
-                        EmptyStateView(symbol: Theme.Icon.errorFilled, title: String(localized: "Agent 没开起来"), message: failure,
-                                       action: (title: String(localized: "移除任务"), run: { store.askRemove(todo, pending: $removing) }))
+                        EmptyStateView(symbol: Theme.Icon.errorFilled, title: String(localized: "The agent didn't start"), message: failure,
+                                       action: (title: String(localized: "Remove Task"), run: { store.askRemove(todo, pending: $removing) }))
                     } else {
-                        EmptyStateView(symbol: Theme.Icon.working, title: String(localized: "正在开 Agent"), message: String(localized: "开好以后这里就是它的对话。"))
+                        EmptyStateView(symbol: Theme.Icon.working, title: String(localized: "Starting the agent"), message: String(localized: "Once it's up, its chat appears here."))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -96,7 +96,7 @@ struct TaskDetailSheet: View {
                 }
                 .themedButton()
                 .clipShape(.circle)
-                .accessibilityLabel("更多")
+                .accessibilityLabel("More")
             }
             if !pushed { closeButton }
         }
@@ -118,7 +118,7 @@ extension TaskDetailSheet {
             } else {
                 header(title: String(localized: "Agent"), line: Self.agentNote) { EmptyView() } menu: { EmptyView() }
                 Divider()
-                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有这个 Agent 了"), message: String(localized: "它可能已经关掉了。"))
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "This agent is gone"), message: String(localized: "It may have been closed."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -161,7 +161,7 @@ extension TaskDetailSheet {
         }
         .themedButton()
         .clipShape(.circle)
-        .accessibilityLabel(pushed ? "返回" : "关闭")
+        .accessibilityLabel(pushed ? String(localized: "Back [Task Sheets 572cf4]") : String(localized: "Close"))
     }
 }
 
@@ -192,23 +192,23 @@ struct TaskBoardSheet: View {
             let agents = store.agents(of: conversation)
             List {
                 if rows.isEmpty && agents.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "还没有任务"), message: String(localized: "在对话里说要做的事，Persona 会把它变成任务。"))
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "No tasks yet"), message: String(localized: "Tell Persona what needs doing in a chat, and it'll turn it into a task."))
                         .listRowBackground(Color.clear)
                 }
-                section(String(localized: "等你"), rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
-                section(String(localized: "在做"), rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
-                section(String(localized: "做完了"), rows.filter { $0.state == .unread })
-                section(String(localized: "停着"), rows.filter { $0.state == .followup })
-                section(String(localized: "已完成"), rows.filter { $0.state == .done })
-                section(String(localized: "没开起来"), rows.filter { $0.state == .failed })
+                section(String(localized: "Needs You [Task Sheets f98bd9]"), rows.filter { $0.state == .needsYou }, agents: agents.filter(\.isWaiting))
+                section(String(localized: "Working [Task Sheets 595753]"), rows.filter { $0.state == .working || $0.state == .notStarted }, agents: agents.filter { !$0.isWaiting })
+                section(String(localized: "Done [Task Sheets 825cf0]"), rows.filter { $0.state == .unread })
+                section(String(localized: "Stopped [Task Sheets 2cb954]"), rows.filter { $0.state == .followup })
+                section(String(localized: "Done [Task Sheets f28461]"), rows.filter { $0.state == .done })
+                section(String(localized: "Didn't Start"), rows.filter { $0.state == .failed })
             }
             .themedGroupedPage()
-            .navigationTitle("任务")
+            .navigationTitle("Tasks")
             .navigationBarTitleDisplayMode(.inline)
             .pageToolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: Theme.Icon.close) }
-                        .accessibilityLabel("关闭")
+                        .accessibilityLabel("Close")
                 }
             }
         }
@@ -242,7 +242,7 @@ struct TaskBoardSheet: View {
                     .swipeActions(edge: .trailing) {
                         if row.state.isRemovable {
                             Button { store.askRemove(row.todo, pending: $removing) } label: {
-                                Label("移除", systemImage: Theme.Icon.delete)
+                                Label("Remove [Task Sheets 6135d4]", systemImage: Theme.Icon.delete)
                             }
                             .tint(Theme.danger)
                         }

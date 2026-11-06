@@ -106,7 +106,7 @@ struct DocumentCards: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("file-card-" + p)
-                    .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) } }
+                    .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("Copy Path", systemImage: Theme.Icon.copy) } }
                 }
             }
         }
@@ -122,15 +122,15 @@ struct DocumentCards: View {
     /// What a document is, as the Files app says it.
     static func kind(_ path: String) -> String {
         switch (path as NSString).pathExtension.lowercased() {
-        case "docx", "doc": String(localized: "Word 文档")
-        case "xlsx", "xls": String(localized: "Excel 表格")
-        case "pptx", "ppt": String(localized: "PowerPoint 演示文稿")
-        case "pages": String(localized: "Pages 文稿")
-        case "numbers": String(localized: "Numbers 表格")
-        case "key": String(localized: "Keynote 演示文稿")
-        case "rtf": String(localized: "RTF 文档")
-        case "pdf": String(localized: "PDF 文档")
-        default: String(localized: "文档")
+        case "docx", "doc": String(localized: "Word document")
+        case "xlsx", "xls": String(localized: "Excel spreadsheet")
+        case "pptx", "ppt": String(localized: "PowerPoint presentation")
+        case "pages": String(localized: "Pages document")
+        case "numbers": String(localized: "Numbers spreadsheet")
+        case "key": String(localized: "Keynote presentation")
+        case "rtf": String(localized: "RTF document")
+        case "pdf": String(localized: "PDF document")
+        default: String(localized: "Document")
         }
     }
 }
@@ -185,14 +185,14 @@ struct ViewedImagesRow: View, Equatable {
             .buttonStyle(.plain)
             .matchedTransitionSource(id: "viewed-" + im.id, in: pageZoom ?? fallbackZoom)
             .accessibilityLabel(caption)
-            .accessibilityHint("查看大图")
+            .accessibilityHint("View full size")
             .accessibilityIdentifier("viewed-image-\(index)")
             #if os(macOS)
             .help(caption)
             #endif
             .contextMenu {
                 if let path = im.path {
-                    Button { UIPasteboard.general.string = path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                    Button { UIPasteboard.general.string = path } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
                 }
             } preview: {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -223,9 +223,9 @@ struct ViewedImagesRow: View, Equatable {
     /// The name of the file, or what took the picture.
     func title(_ im: ViewedImage) -> String {
         switch im.source {
-        case .screenshot: String(localized: "屏幕截图")
-        case .browser: String(localized: "网页截图")
-        case .read, .mcp, .tool: im.name ?? (im.source == .mcp ? Self.toolName(im.tool) : String(localized: "图片"))
+        case .screenshot: String(localized: "Screenshot")
+        case .browser: String(localized: "Web page screenshot")
+        case .read, .mcp, .tool: im.name ?? (im.source == .mcp ? Self.toolName(im.tool) : String(localized: "images"))
         }
     }
 

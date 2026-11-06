@@ -68,7 +68,7 @@ final class CompareModel {
         loading = true
         defer { loading = false }
         guard let api else {
-            error = String(localized: "尚未连接 hub")
+            error = String(localized: "Not connected to the hub [App Model 93d955]")
             return
         }
         do {
@@ -116,7 +116,7 @@ struct CompareView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "比较不了这两个版本"), message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Compare These Versions"), message: error)
             } else if model.loading {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.kind == .image {
@@ -132,9 +132,9 @@ struct CompareView: View {
 
     private var openBar: some View {
         HStack(spacing: Theme.Space.m) {
-            Button("打开旧版") { model.old.map { open = ref($0) } }
+            Button("Open Old") { model.old.map { open = ref($0) } }
                 .disabled(model.old == nil)
-            Button("打开新版") { model.new.map { open = ref($0) } }
+            Button("Open New") { model.new.map { open = ref($0) } }
                 .disabled(model.new == nil)
         }
         .lineLimit(1)
@@ -156,8 +156,8 @@ private struct TextCompareView: View {
 
     var body: some View {
         if result.rows.isEmpty {
-            EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "文字没有变化"),
-                           message: String(localized: "两个版本的文字一样，改的可能是格式、图片或版式：用下面的按钮分别打开看"))
+            EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "Text Unchanged"),
+                           message: String(localized: "Both versions have the same text; the change may be in formatting, images, or layout. Open each one with the buttons below."))
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -171,8 +171,8 @@ private struct TextCompareView: View {
     }
 
     private var summary: String {
-        var parts = [added ? String(localized: "新文件") : deleted ? String(localized: "已删除") : String(localized: "+\(result.added) −\(result.removed) 行")]
-        if result.capped { parts.append(String(localized: "太长，只比较了前 \(TextCompare.maxLines) 行")) }
+        var parts = [added ? String(localized: "New file") : deleted ? String(localized: "Deleted") : String(localized: "+\(result.added) −\(result.removed) lines")]
+        if result.capped { parts.append(String(localized: "Too long; compared only the first \(TextCompare.maxLines) lines")) }
         return parts.joined(separator: " · ")
     }
 
@@ -182,7 +182,7 @@ private struct TextCompareView: View {
             Text(label).font(Theme.Font.captionStrong).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.page).padding(.top, Theme.Space.m).padding(.bottom, Theme.Space.xs)
         case .folded(let n):
-            Text("… \(n) 行没变").font(Theme.Font.label).foregroundStyle(.tertiary)
+            Text("… \(n) unchanged lines").font(Theme.Font.label).foregroundStyle(.tertiary)
                 .padding(.horizontal, Theme.Space.page).padding(.vertical, Theme.Space.xs)
         case .same(let t): text(" ", t, color: .primary, fill: .clear)
         case .added(let t): text("+", t, color: Theme.Diff.add, fill: Theme.Diff.addFill)
@@ -212,7 +212,7 @@ private struct ImageCompareView: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            SegmentedChoice("", [(false, String(localized: "并排")), (true, String(localized: "滑块"))], selection: $slider)
+            SegmentedChoice("", [(false, String(localized: "Side by Side")), (true, String(localized: "Slider"))], selection: $slider)
                 .padding(.horizontal, Theme.Space.page)
             if slider, let o = image(model.old), let n = image(model.new) {
                 GeometryReader { g in
@@ -225,13 +225,13 @@ private struct ImageCompareView: View {
                 }
                 .padding(.horizontal, Theme.Space.page)
                 Slider(value: $split, in: 0...1).padding(.horizontal, Theme.Space.page)
-                    .accessibilityLabel("旧版和新版的分界")
-                HStack { Text("旧版"); Spacer(); Text("新版") }.font(Theme.Font.label).foregroundStyle(.secondary)
+                    .accessibilityLabel("Divider between old and new")
+                HStack { Text("Old"); Spacer(); Text("New") }.font(Theme.Font.label).foregroundStyle(.secondary)
                     .padding(.horizontal, Theme.Space.page)
             } else {
                 HStack(alignment: .top, spacing: Theme.Space.m) {
-                    side(String(localized: "旧版"), model.old, missing: model.oldMissing ? String(localized: "这个版本里还没有") : nil)
-                    side(String(localized: "新版"), model.new, missing: model.newMissing ? String(localized: "这个版本里已删除") : nil)
+                    side(String(localized: "Old"), model.old, missing: model.oldMissing ? String(localized: "Not in this version yet") : nil)
+                    side(String(localized: "New"), model.new, missing: model.newMissing ? String(localized: "Deleted in this version") : nil)
                 }
                 .padding(.horizontal, Theme.Space.page)
             }
@@ -254,7 +254,7 @@ private struct ImageCompareView: View {
                     .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
                 if let v { Text(Int64(v.data.count).storageText).font(Theme.Font.label).foregroundStyle(.tertiary) }
             } else {
-                Text(missing ?? String(localized: "读不出这张图")).font(Theme.Font.caption).foregroundStyle(.secondary)
+                Text(missing ?? String(localized: "Can't read this image")).font(Theme.Font.caption).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: Theme.Size.box120)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             }

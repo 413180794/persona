@@ -77,14 +77,14 @@ final class ShareViewController: UIViewController {
         guard canSend else { return }
         phase = .sending
         let payload = images.compactMap(ShareModel.jpeg)
-        let body = message.isEmpty ? String(localized: "请看图片") : message
+        let body = message.isEmpty ? String(localized: "Please look at the image [Assistant View 5ad878]") : message
         do {
             try await ShareHub.sendToMain(text: body, images: payload)
             finish(true)
         } catch let e as ShareHub.Failure {
             phase = .failed(e.sentence)
         } catch {
-            phase = .failed(String(localized: "连不上 hub，稍后再试"))
+            phase = .failed(String(localized: "Can't reach the hub. Try again later."))
         }
     }
 
@@ -108,19 +108,19 @@ struct ShareView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("说点什么（可选）", text: $model.note, axis: .vertical)
+                    TextField(String(localized: "Add a note (optional)"), text: $model.note, axis: .vertical)
                         .lineLimit(2...6)
                         .focused($noteFocused)
                 } footer: {
-                    Text("发到 Persona 主对话")
+                    Text("Goes to Persona's main conversation")
                 }
                 if !model.text.isEmpty || !model.images.isEmpty {
-                    Section("分享的内容") {
+                    Section("Shared") {
                         if !model.text.isEmpty {
                             Text(model.text).font(.callout).foregroundStyle(.secondary).lineLimit(6)
                         }
                         if !model.images.isEmpty {
-                            Label("\(model.images.count) 张图片", systemImage: "photo.on.rectangle")
+                            Label("\(model.images.count) images", systemImage: "photo.on.rectangle")
                         }
                     }
                 }
@@ -128,15 +128,15 @@ struct ShareView: View {
                     Section { Label(why, systemImage: "exclamationmark.triangle") }
                 }
             }
-            .navigationTitle("发给 Persona")
+            .navigationTitle("Send to Persona")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { model.cancel() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.cancel() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if model.phase == .sending {
                         ProgressView()
                     } else {
-                        Button("发送") { Task { await model.send() } }.disabled(!model.canSend && !isFailed)
+                        Button("Send") { Task { await model.send() } }.disabled(!model.canSend && !isFailed)
                     }
                 }
             }
@@ -157,10 +157,10 @@ enum ShareHub {
 
         var sentence: String {
             switch self {
-            case .notPaired: String(localized: "还没有配对 hub：先在 Persona 里配对")
-            case .unauthorized: String(localized: "配对失效了：在 Persona 里重新配对")
-            case .noMain: String(localized: "还没有主对话：先在 Persona 里发一句")
-            case .unreachable: String(localized: "连不上 hub，稍后再试")
+            case .notPaired: String(localized: "No hub paired yet: pair one in Persona first")
+            case .unauthorized: String(localized: "The pairing no longer works: pair again in Persona")
+            case .noMain: String(localized: "No main conversation yet: send something in Persona first")
+            case .unreachable: String(localized: "Can't reach the hub. Try again later.")
             }
         }
     }

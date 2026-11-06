@@ -53,11 +53,11 @@ struct AutoConversationsView: View {
             .themedPage()
             .overlay {
                 if shown.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.autoConversations, title: String(localized: "这里没有对话"),
-                                   message: String(localized: "收件箱的 AI 分身、定时任务、飞书 /agent 开的对话会按来源收在这里。"))
+                    EmptyStateView(symbol: Theme.Icon.autoConversations, title: String(localized: "No Chats Here"),
+                                   message: String(localized: "Chats started by the Inbox's AI twin, scheduled tasks and Lark /agent are collected here by source."))
                 }
             }
-            .navigationTitle("全部对话")
+            .navigationTitle("All Chats")
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -66,7 +66,7 @@ struct AutoConversationsView: View {
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.lineLimit(1)
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1)
                 }
             }
             #endif
@@ -87,8 +87,8 @@ struct AutoConversationsView: View {
     /// All, Mine and each source, the chosen one tinted.
     private func filters(_ groups: [AutoConversations.Group], all: Int, mine: Int) -> some View {
         FlowLayoutRow {
-            chip(String(localized: "全部"), symbol: Theme.Icon.list, count: all, filter: .all)
-            chip(String(localized: "我的"), symbol: Theme.Icon.user, count: mine, filter: .mine)
+            chip(String(localized: "All"), symbol: Theme.Icon.list, count: all, filter: .all)
+            chip(String(localized: "Mine"), symbol: Theme.Icon.user, count: mine, filter: .mine)
             ForEach(groups, id: \.source) { g in chip(g.source.name, symbol: g.source.symbol, count: g.sessions.count, filter: .source(g.source.id)) }
         }
         .padding(.vertical, Theme.Space.xs)
@@ -104,13 +104,13 @@ struct AutoConversationsView: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(name)，\(count) 个")
+        .accessibilityLabel("\(name), \(count) [Auto Conversations View 9c72ba]")
         .accessibilityAddTraits(chosen ? .isSelected : [])
         .accessibilityIdentifier("auto-filter-" + f.id)
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "New Chat [Quick Actions ea4b29]") : s.title
         let from = AutoConversations.source(of: s, tasks: taskChats.known)
         let detail = [filter == .all ? from?.name : nil, [.working, .needsYou, .unread].contains(s.state) ? s.state.label : s.updatedAt.map { Fmt.relative($0) }]
             .compactMap { $0 }.joined(separator: " · ")
@@ -135,17 +135,17 @@ struct AutoConversationsView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel([title, detail.isEmpty ? nil : detail].compactMap { $0 }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
+        .accessibilityLabel([title, detail.isEmpty ? nil : detail].compactMap { $0 }.joined(separator: String(localized: ", ", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityIdentifier("auto-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button { Task { await model.archiveConversation(s.key, true) } } label: {
-                Label("归档", systemImage: Theme.Icon.archive)
+                Label("Archive", systemImage: Theme.Icon.archive)
             }
             .tint(Theme.accent)
         }
         .contextMenu {
             Button { Task { await model.archiveConversation(s.key, true) } } label: {
-                Label("归档", systemImage: Theme.Icon.archive)
+                Label("Archive", systemImage: Theme.Icon.archive)
             }
         }
     }

@@ -18,7 +18,7 @@ struct DesktopPresenceRow: View {
                     .lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 if model.muteWhileDesktop {
-                    Label("手机静音", systemImage: Theme.Icon.muted)
+                    Label("Phone Muted", systemImage: Theme.Icon.muted)
                         .labelStyle(.titleAndIcon)
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
@@ -51,47 +51,47 @@ struct DesktopPresenceSheet: View {
             List {
                 Section {
                     Toggle(isOn: Binding(get: { model.muteWhileDesktop }, set: { on in Task { await model.setMuteWhileDesktop(on) } })) {
-                        Label("手机静音", systemImage: Theme.Icon.muted)
+                        Label("Phone Muted", systemImage: Theme.Icon.muted)
                     }
                     .accessibilityIdentifier("desktops.mute")
                 } footer: {
-                    Text("Mac 上的 Persona 在线时，这台 iPhone 不再推送「需要你处理」和「Agent 做完」的通知，由 Mac 提醒你；你让 Persona 定的提醒照常推送。")
+                    Text("While Persona is online on a Mac, this iPhone stops sending “Needs you” and “Agent done” notifications and the Mac alerts you instead. Reminders you asked Persona to set still come through.")
                 }
 
                 ForEach(model.desktops) { d in
                     Section {
                         LabeledContent {
                             if let since = d.since {
-                                Text(String(localized: "登录于 \(since.formatted(.relative(presentation: .named)))")).lineLimit(1)
+                                Text(String(localized: "Signed in \(since.formatted(.relative(presentation: .named)))")).lineLimit(1)
                             }
                         } label: {
                             Label(d.name, systemImage: Theme.Icon.laptop).lineLimit(1)
                         }
                         if !d.device.isEmpty {
                             Button(role: .destructive) { signingOut = d } label: {
-                                Text("退出这台 Mac 上的 Persona").lineLimit(1)
+                                Text("Sign Out Persona on This Mac").lineLimit(1)
                             }
                         }
                     } footer: {
                         if d.device.isEmpty {
-                            Text("这台 Mac 直接用配对凭据连着 hub，不能单独退出。")
+                            Text("This Mac connects to the hub with its own pairing credentials and can't be signed out here.")
                         }
                     }
                 }
             }
-            .navigationTitle("已登录的 Mac")
+            .navigationTitle("Signed-In Macs")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
             }
-            .confirmationDialog(signingOut.map { String(localized: "退出「\($0.name)」上的 Persona？") } ?? "",
+            .confirmationDialog(signingOut.map { String(localized: "Sign out Persona on “\($0.name)”?") } ?? "",
                                 isPresented: Binding(get: { signingOut != nil }, set: { if !$0 { signingOut = nil } }),
                                 titleVisibility: .visible) {
-                Button("退出", role: .destructive) {
+                Button("Sign Out [Desktop Presence 498e1d]", role: .destructive) {
                     if let d = signingOut { Task { await model.signOutDesktop(d) } }
                 }
             } message: {
-                Text("退出后，那台 Mac 要重新配对才能再用 Persona。")
+                Text("That Mac will need to pair again to use Persona.")
             }
             .onChange(of: model.desktops.isEmpty) { _, none in if none { dismiss() } }
         }

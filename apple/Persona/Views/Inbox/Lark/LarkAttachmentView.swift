@@ -17,7 +17,7 @@ struct LarkAttachmentView: View {
                 LarkFileCard(part: LarkPart(kind: "file", text: attachment.name, url: "draft",
                                            metadata: .object(["size": .string(String(attachment.size))])))
                     .environment(\.larkOpenFile, { _, _ in preview = attachment.file })
-                    .accessibilityLabel("预览 \(attachment.name)")
+                    .accessibilityLabel("Preview \(attachment.name)")
             } else {
                 Button {
                     if attachment.kind == .file { preview = attachment.file }
@@ -52,7 +52,7 @@ struct LarkAttachmentView: View {
                     .overlay { if loading { ProgressView() } }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("预览 \(attachment.name)")
+                .accessibilityLabel("Preview \(attachment.name)")
             }
         }
         .quickLookPreview($preview)
@@ -76,7 +76,7 @@ struct LarkDraftAttachments: View {
                             Image(systemName: Theme.Icon.close).font(Theme.Font.secondary)
                                 .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                         }
-                        .buttonStyle(.plain).accessibilityLabel("移除 \(attachment.name)")
+                        .buttonStyle(.plain).accessibilityLabel("Remove \(attachment.name) [Beautiful U I Bridge 271f20]")
                     }
                 }
             }
@@ -104,7 +104,7 @@ struct LarkAttachmentPicker: ViewModifier {
                     Task {
                         defer { preparing = false }
                         let available = max(0, LarkAttachment.selectionLimit - attachments.count)
-                        if urls.count > available { model.toast = Toast(String(localized: "一次最多选择 4 个附件"), style: .error) }
+                        if urls.count > available { model.toast = Toast(String(localized: "You can choose up to 4 attachments at a time."), style: .error) }
                         for url in urls.prefix(available) {
                             do { try append(try await LarkAttachment.stageFile(url)) } catch { model.show(error) }
                         }
@@ -128,7 +128,7 @@ struct LarkAttachmentPicker: ViewModifier {
     }
 
     private func append(_ attachment: LarkAttachment) throws {
-        guard attachments.count < LarkAttachment.selectionLimit else { throw APIError(status: 400, message: String(localized: "一次最多选择 4 个附件")) }
+        guard attachments.count < LarkAttachment.selectionLimit else { throw APIError(status: 400, message: String(localized: "You can choose up to 4 attachments at a time.")) }
         attachments.append(attachment)
     }
 }

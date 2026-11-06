@@ -73,13 +73,13 @@ nonisolated struct AssistantTaskChats: Equatable, Sendable {
 
     /// What a chat's link says: when a run last went into it (Today 09:05, Yesterday 21:30, Nov 1 09:00), else its place.
     static func label(_ chat: Chat, index: Int, now: Date = .now) -> String {
-        guard let at = chat.at else { return String(localized: "对话 \(index + 1)") }
+        guard let at = chat.at else { return String(localized: "Chat \(index + 1)") }
         let cal = Calendar.current
         let time = String(format: "%02d:%02d", cal.component(.hour, from: at), cal.component(.minute, from: at))
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: at), to: cal.startOfDay(for: now)).day ?? 0
         switch days {
-        case 0: return String(localized: "今天 \(time)")
-        case 1: return String(localized: "昨天 \(time)")
+        case 0: return String(localized: "Today \(time)")
+        case 1: return String(localized: "Yesterday \(time)")
         default: return String(localized: "\(at.formatted(.dateTime.month().day())) \(time)", comment: "A day and a time of day")
         }
     }

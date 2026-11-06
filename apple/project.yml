@@ -17,7 +17,7 @@ options:
     visionOS: "26.0"
   # The String Catalogs' source language: the Chinese text is the key (docs/ios.md「界面语言」). The Info.plists say
   # CFBundleDevelopmentRegion en, so a language the app does not have falls back to English (docs/i18n.md).
-  developmentLanguage: zh-Hans
+  developmentLanguage: en
   createIntermediateGroups: true
 packages:
   MarkdownUI:

@@ -4,6 +4,15 @@ Pitfalls, odd behavior and the decisions made at the time (formerly "Lessons" in
 
 - Helper extensions referenced by shared views must compile into every target too: after replacing `Color.mix` with `blended` for watchOS 10 compatibility, leaving the helper in `Theme.swift` causes Release archives to fail for Dynamic Island widgets that only include `PersonaFace`. Compile the helper with `PersonaFace.swift` into every target; do not drag the entire app theme into extensions or declare it twice.
 
+## Compiler-free English catalog keys (#5090)
+
+Changing the catalog's development language also changes the identity the Swift compiler extracts. Preserve each colliding English translation in its own contextual key and keep explicit English values; do not merge different Chinese or Japanese meanings. Reorder interpolation expressions together with translated argument numbers, and audit reordered expressions for side effects. Named App Intent parameters follow their names, not their old position.
+
+Keep `LocalizedStringResource` and `LocalizedStringKey` arguments as localization values: wrapping a literal in `String(localized:)` is correct for a `String`, but breaks a helper requiring either localization type. Read each helper's signature rather than guessing from its name. Migrate nested literals from the inside out. Without a Swift compiler, reject unresolved raw literals and ambiguous argument types instead of silently guessing.
+
+Source percent signs are literal text, while catalog `%%` is an escaped percent. Parsing `% left` as a printf specifier (`% le`) falsely rejects a valid key. Source-key checks must not run printf normalization twice. Compiler-free checks complement, but do not replace, Apple builds, Swift tests and three-language screenshots.
+
+
 ## Asynchronous HTML sandbox loading and teardown (#2025)
 
 Rule-list compilation is asynchronous; calling only `stopLoading()` in `dismantleUIView` cannot stop an unfinished compilation from reloading the page later. Cancel the previous task and advance the generation on every load; after compilation, check both cancellation and generation. At teardown, remove scripts, message handlers and delegates, then clear the page. A pausable rule-list loader tests both late completion of an older compilation and completion after teardown, without depending on accidental compilation speed.

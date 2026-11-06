@@ -38,14 +38,14 @@ struct HTMLFileView: View {
 
     private var note: String {
         let base = switch (scripts, network) {
-        case (false, false): String(localized: "隔离预览：脚本和网络已关闭，在 ⋯ 里可以打开")
-        case (true, false): String(localized: "脚本已打开，网络仍关闭")
-        case (false, true): String(localized: "网络已打开，脚本仍关闭")
-        case (true, true): String(localized: "脚本和网络都已打开")
+        case (false, false): String(localized: "Isolated preview: scripts and network are off. Turn them on in ⋯")
+        case (true, false): String(localized: "Scripts on, network still off")
+        case (false, true): String(localized: "Network on, scripts still off")
+        case (true, true): String(localized: "Scripts and network are on")
         }
         guard let page, page.loaded + page.missing > 0 else { return base }
-        return page.missing > 0 ? String(localized: "\(base) · 同目录文件读到 \(page.loaded) 个，\(page.missing) 个没读到")
-            : String(localized: "\(base) · 读入了同目录的 \(page.loaded) 个文件")
+        return page.missing > 0 ? String(localized: "\(base) · \(page.loaded) files from the same folder loaded, \(page.missing) missing")
+            : String(localized: "\(base) · loaded \(page.loaded) files from the same folder")
     }
 }
 
@@ -133,7 +133,7 @@ final class IsolatedWebViewCoordinator: NSObject, WKNavigationDelegate, WKUIDele
                 web.loadHTMLString(html, baseURL: Self.blank)
             } else {
                 // No rules, no page: never show it with the network open by accident.
-                web.loadHTMLString("<p>\(String(localized: "无法隔离网络，不显示这个页面"))</p>", baseURL: Self.blank)
+                web.loadHTMLString("<p>\(String(localized: "Can't isolate the network, so this page isn't shown"))</p>", baseURL: Self.blank)
             }
         }
     }

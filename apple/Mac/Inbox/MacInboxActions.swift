@@ -85,8 +85,8 @@ struct MacInboxActions: View {
     @ViewBuilder private var listButton: some View {
         if reading, showsListToggle {
             let state = MacInboxState.shared
-            action(state.listWhileReading ? String(localized: "收起列表") : String(localized: "显示列表"), Theme.Icon.list, iconsOnly: true,
-                   help: state.listWhileReading ? String(localized: "收起列表，把地方留给文档") : String(localized: "显示收件箱列表（关掉文档也会回来）")) {
+            action(state.listWhileReading ? String(localized: "Hide List") : String(localized: "Show List"), Theme.Icon.list, iconsOnly: true,
+                   help: state.listWhileReading ? String(localized: "Hide the list to give the document more room") : String(localized: "Show the Inbox list (it also comes back when you close the document)")) {
                 state.listWhileReading.toggle()
             }
         }
@@ -110,8 +110,8 @@ struct MacInboxActions: View {
         } else if item.agentWorking {
             HStack(spacing: Theme.Space.sm) {
                 ProgressView().controlSize(.mini)
-                Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中")
-                     : item.agent?.task.map { String(localized: "AI 分身正在处理：\($0)") } ?? String(localized: "AI 分身正在处理"))
+                Text(item.agent?.state == "queued" ? String(localized: "AI twin is queued")
+                     : item.agent?.task.map { String(localized: "AI twin is working: \($0)") } ?? String(localized: "AI twin is working"))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(column ? 3 : 1)
             }
         }
@@ -124,19 +124,19 @@ struct MacInboxActions: View {
             // A suggested reply has its own send / edit in the card (inbox phase 1): no second way to the same draft.
         } else if item.connector.map({ $0.canReply == true }) ?? true {
             // Another suggestion has its own buttons in the card: draft reply steps back to a plain button.
-            action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), Theme.Icon.draftReply,
+            action(item.agentDraft == nil ? String(localized: "AI Draft Reply") : String(localized: "View Draft"), Theme.Icon.draftReply,
                    prominent: item.currentSuggestion == nil, iconsOnly: iconsOnly,
-                   help: item.agentDraft == nil ? String(localized: "让 AI 用你的口吻草拟一条回复") : String(localized: "AI 分身草拟好了回复，看看再发"), perform: draft)
+                   help: item.agentDraft == nil ? String(localized: "Have AI draft a reply in your voice") : String(localized: "Your AI twin drafted a reply. Review it before sending."), perform: draft)
         } else if let open = item.connector?.openURL, let url = InboxActionBar.systemURL(open, draft: item.agentDraft) {
             let sms = url.scheme == "sms"
             action(InboxActionBar.openTitle(item, sms: sms), sms ? Theme.Icon.messagesApp : Theme.Icon.openExternal,
-                   prominent: true, iconsOnly: iconsOnly, help: String(localized: "在它自己的 App 里回复")) { openURL(url) }
+                   prominent: true, iconsOnly: iconsOnly, help: String(localized: "Reply in its own app")) { openURL(url) }
         }
-        action(String(localized: "交给 AI"), Theme.Icon.handToAI, iconsOnly: iconsOnly, help: String(localized: "把这件事交给 Persona 或一个 Agent"), perform: handOff)
+        action(String(localized: "Hand to AI"), Theme.Icon.handToAI, iconsOnly: iconsOnly, help: String(localized: "Hand this to Persona or an agent"), perform: handOff)
         if item.isDone {
-            action(String(localized: "移回"), Theme.Icon.undo, iconsOnly: iconsOnly, help: String(localized: "移回收件箱")) { InboxStore.shared.setDone(item, false) }
+            action(String(localized: "Move Back"), Theme.Icon.undo, iconsOnly: iconsOnly, help: String(localized: "Move Back to Inbox")) { InboxStore.shared.setDone(item, false) }
         } else {
-            action(String(localized: "已处理"), Theme.Icon.done, iconsOnly: iconsOnly, help: String(localized: "标为已处理（列表里按 E）")) {
+            action(String(localized: "Done [Inbox View 59f6c8]"), Theme.Icon.done, iconsOnly: iconsOnly, help: String(localized: "Mark as done (press E in the list)")) {
                 MacInboxState.shared.toggleDone([.item(item.id)], model: model)
             }
         }

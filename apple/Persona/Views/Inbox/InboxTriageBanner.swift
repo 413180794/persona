@@ -9,11 +9,11 @@ import SwiftUI
 nonisolated enum InboxTriageText {
     /// What each state means when the hub gives no reason of its own.
     static let reasons: [String: String] = [
-        "unconfigured": String(localized: "还没配分拣模型"),
-        "paused": String(localized: "分拣模型暂停了"),
-        "error": String(localized: "分拣模型出错了"),
-        "timeout": String(localized: "分拣模型太慢了"),
-        "behind": String(localized: "新消息太多，正在排队"),
+        "unconfigured": String(localized: "No triage model set up"),
+        "paused": String(localized: "The triage model is paused"),
+        "error": String(localized: "The triage model hit an error"),
+        "timeout": String(localized: "The triage model is too slow"),
+        "behind": String(localized: "Lots of new messages, waiting in line"),
     ]
 
     /// The model purpose Set Up opens: inbox triage.
@@ -27,8 +27,8 @@ nonisolated enum InboxTriageText {
         let why = own.isEmpty ? reasons[t.state] : own
         let sources = (t.sources ?? []).filter { $0.waiting > 0 }
         let name = sources.count == 1 ? sources[0].name ?? "" : ""
-        let head = name.isEmpty ? String(localized: "有 \(t.waiting) 条消息在等分拣") : String(localized: "有 \(t.waiting) 条\(name)消息在等分拣")
-        return why.map { String(localized: "\(head)：\($0)") } ?? head
+        let head = name.isEmpty ? String(localized: "\(t.waiting) messages waiting for triage") : String(localized: "\(t.waiting) \(name) messages waiting for triage")
+        return why.map { String(localized: "\(head): \($0)") } ?? head
     }
 
     /// Set Up is offered: no model is set up for triage, and this device may change settings.
@@ -48,7 +48,7 @@ struct InboxTriageBanner: View {
     var body: some View {
         NoticeBanner(text: line, symbol: Theme.Icon.time) { // a clock: they wait, as on the web and Android
             if configurable {
-                Button("去配置") { configuring = true }
+                Button("Set Up") { configuring = true }
                     .accessibilityIdentifier("inbox.triage.configure")
             }
         }

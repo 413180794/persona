@@ -33,7 +33,7 @@ final class FeishuDocsReaderModel {
     var loading = false
 
     func load(url: String, title: String?) async {
-        guard let api = AppModel.shared.api else { error = String(localized: "还没有连接 hub"); return }
+        guard let api = AppModel.shared.api else { error = String(localized: "Not connected to a hub yet"); return }
         loading = true
         defer { loading = false }
         async let header: FeishuDocsHeader? = try? api.feishuDocsGet("documents/header", query: ["url": url])
@@ -54,7 +54,7 @@ final class FeishuDocsReaderModel {
     static func read(_ api: APIClient, url: String, title: String?) async throws -> FeishuDocsContent {
         let kind = FeishuDocsKind.from(url: url)
         if kind == .bitable {
-            return .unsupported(.init(kind: .bitable, title: title ?? String(localized: "多维表格"), message: String(localized: "多维表格暂不支持在 Persona 中查看"), file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: title ?? String(localized: "Base"), message: String(localized: "Bases can't be viewed in Persona yet."), file: nil, image: nil))
         }
         if kind != .file && kind != .whiteboard {
             do {
@@ -68,24 +68,24 @@ final class FeishuDocsReaderModel {
         do {
             view = try await api.feishuDocsGet("documents/read", query: ["url": url, "format": "json"])
         } catch let e as FeishuDocsFailure where e.code == "DOCUMENT_FORMAT_UNSUPPORTED" || e.status == 422 {
-            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: String(localized: "这种内容暂不支持在 Persona 中查看"), file: nil, image: nil))
+            return .unsupported(.init(kind: kind, title: title ?? kind.label, message: String(localized: "This kind of content can't be viewed in Persona yet."), file: nil, image: nil))
         }
         let name = view.title.isEmpty ? (title ?? kind.label) : view.title
         if view.isBase {
-            return .unsupported(.init(kind: .bitable, title: name, message: String(localized: "多维表格暂不支持在 Persona 中查看"), file: nil, image: nil))
+            return .unsupported(.init(kind: .bitable, title: name, message: String(localized: "Bases can't be viewed in Persona yet."), file: nil, image: nil))
         }
         if let o = view.object {
             switch o.kind {
             case "file":
-                return .unsupported(.init(kind: .file, title: name, message: String(localized: "云空间文件，可以下载后预览"), file: (o.token, o.extension), image: nil))
+                return .unsupported(.init(kind: .file, title: name, message: String(localized: "A file in Lark Drive. Download it to preview."), file: (o.token, o.extension), image: nil))
             case "whiteboard":
-                return .unsupported(.init(kind: .whiteboard, title: name, message: o.empty == true ? String(localized: "这是一个空白画板") : String(localized: "画板"), file: nil, image: o.image))
+                return .unsupported(.init(kind: .whiteboard, title: name, message: o.empty == true ? String(localized: "This whiteboard is empty.") : String(localized: "Whiteboard"), file: nil, image: o.image))
             default:
-                return .unsupported(.init(kind: kind, title: name, message: String(localized: "这种内容暂不支持在 Persona 中查看"), file: nil, image: nil))
+                return .unsupported(.init(kind: kind, title: name, message: String(localized: "This kind of content can't be viewed in Persona yet."), file: nil, image: nil))
             }
         }
         if view.isSpreadsheet && view.content.children.isEmpty {
-            return .unsupported(.init(kind: .sheet, title: name, message: String(localized: "作者禁止导出这个表格，请在飞书中查看"), file: nil, image: nil))
+            return .unsupported(.init(kind: .sheet, title: name, message: String(localized: "The owner doesn't allow exporting this sheet. View it in Lark."), file: nil, image: nil))
         }
         return .tree(view)
     }
@@ -141,10 +141,10 @@ struct FeishuDocReader: View {
                         FeishuDocsUnsupportedView(info: u, url: url)
                     case nil:
                         if let e = model.error {
-                            EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "打不开这篇文档"), message: e,
-                                           action: (String(localized: "重试"), { Task { await model.load(url: url, title: title) } }))
+                            EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "Can't open this doc"), message: e,
+                                           action: (String(localized: "Retry [Components b8784c]"), { Task { await model.load(url: url, title: title) } }))
                                 .padding(.top, 60)
-                            Button("在飞书中打开") { FeishuDocsLinks.openInFeishu(url) }
+                            Button("Open in Lark [Feishu Doc Reader 76d0eb]") { FeishuDocsLinks.openInFeishu(url) }
                                 .lineLimit(1).frame(maxWidth: .infinity)
                         } else {
                             FeishuDocsSkeleton(title: title)
@@ -219,9 +219,9 @@ struct FeishuDocReader: View {
     private var docTitle: String {
         switch model.content {
         case .markdown(_, let t, _): t
-        case .tree(let v): v.title.isEmpty ? (title ?? String(localized: "文档")) : v.title
+        case .tree(let v): v.title.isEmpty ? (title ?? String(localized: "Document")) : v.title
         case .unsupported(let u): u.title
-        case nil: title ?? String(localized: "文档")
+        case nil: title ?? String(localized: "Document")
         }
     }
 
@@ -259,7 +259,7 @@ struct FeishuDocReader: View {
     private var breadcrumb: String? {
         guard let h = model.header else { return nil }
         let names = (h.path ?? []).map(\.name)
-        if h.inMySpace == true { return ([String(localized: "我的空间")] + names).joined(separator: " / ") }
+        if h.inMySpace == true { return ([String(localized: "My Space")] + names).joined(separator: " / ") }
         return names.isEmpty ? nil : names.joined(separator: " / ")
     }
 
@@ -270,17 +270,17 @@ struct FeishuDocReader: View {
         guard let when else { return nil }
         let t = FeishuTime.short(when)
         let owner = (model.info?.owner ?? treeOwner)?.name
-        if let who = model.header?.editorName, !who.isEmpty, who != owner { return String(localized: "\(who) 更新于 \(t)") }
-        return String(localized: "更新于 \(t)")
+        if let who = model.header?.editorName, !who.isEmpty, who != owner { return String(localized: "Updated by \(who) \(t)") }
+        return String(localized: "Updated \(t)")
     }
 
     private var statsLine: String? {
         guard let i = model.info else { return nil }
         var parts: [String] = []
-        if let v = i.views, v > 0 { parts.append(String(localized: "\(v) 次阅读")) }
-        if let v = i.visitors, v > 0 { parts.append(String(localized: "\(v) 人看过")) }
-        if let l = i.likes, l > 0 { parts.append(String(localized: "\(l) 个赞")) }
-        if let c = i.comments, c > 0 { parts.append(String(localized: "\(c) 条评论")) }
+        if let v = i.views, v > 0 { parts.append(String(localized: "\(v) views")) }
+        if let v = i.visitors, v > 0 { parts.append(String(localized: "\(v) visitors")) }
+        if let l = i.likes, l > 0 { parts.append(String(localized: "\(l) likes")) }
+        if let c = i.comments, c > 0 { parts.append(String(localized: "\(c) comments")) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -289,9 +289,9 @@ struct FeishuDocReader: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.ai).foregroundStyle(LarkColor.hue("purple"))
-                    Text("AI 摘要").font(Theme.Font.secondaryStrong)
+                    Text("AI Summary").font(Theme.Font.secondaryStrong)
                     Spacer()
-                    Button(summaryExpanded ? "收起" : "展开") { withAnimation(Theme.Motion.standard) { summaryExpanded.toggle() } }
+                    Button(summaryExpanded ? String(localized: "Collapse") : String(localized: "Expand")) { withAnimation(Theme.Motion.standard) { summaryExpanded.toggle() } }
                         .font(Theme.Font.caption).lineLimit(1)
                 }
                 Markdown(Links.markdown(s.summary))
@@ -318,17 +318,17 @@ struct FeishuDocReader: View {
             HStack(spacing: Theme.Space.m) {
                 if (model.info?.comments ?? 0) > 0 {
                     Button { showComments = true } label: {
-                        Label("\(model.info?.comments ?? 0) 条评论", systemImage: Theme.Icon.conversation).lineLimit(1)
+                        Label("\(model.info?.comments ?? 0) comments", systemImage: Theme.Icon.conversation).lineLimit(1)
                     }
                     .themedButton()
                 } else if app.larkFeatures.docComments {
                     Button { showComments = true } label: {
-                        Label("写评论", systemImage: Theme.Icon.conversation).lineLimit(1)
+                        Label("Comment", systemImage: Theme.Icon.conversation).lineLimit(1)
                     }
                     .themedButton()
                 }
                 Button { FeishuDocsLinks.openInFeishu(url) } label: {
-                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1)
+                    Label("Open in Lark [Feishu Doc Reader 76d0eb]", systemImage: Theme.Icon.openExternal).lineLimit(1)
                 }
                 .themedButton()
             }
@@ -349,7 +349,7 @@ struct FeishuDocReader: View {
                 .id(FeishuDocsTree.rowKey(node, index: i))
         }
         if view.partial == true {
-            Label("文档较长，只显示了前面的部分", systemImage: Theme.Icon.moreMenu).font(Theme.Font.caption).foregroundStyle(.secondary)
+            Label("This doc is long. Only the beginning is shown.", systemImage: Theme.Icon.moreMenu).font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -415,7 +415,7 @@ struct FeishuDocReader: View {
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if !outline.isEmpty {
-                Button { showOutline = true } label: { Label("目录", systemImage: "list.bullet.indent") }
+                Button { showOutline = true } label: { Label("Folder [Task Views 52daa7]", systemImage: "list.bullet.indent") }
             }
             if model.content != nil, case .unsupported = model.content {} else if model.content != nil {
                 Button { showComments = true } label: {
@@ -432,14 +432,14 @@ struct FeishuDocReader: View {
                             }
                         }
                 }
-                .accessibilityLabel("评论")
+                .accessibilityLabel("Comments")
             }
             Menu {
                 FeishuDocsLinkMenu(url: url)
                 Divider()
-                Button { Task { await model.load(url: url, title: title) } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
+                Button { Task { await model.load(url: url, title: title) } } label: { Label("Refresh", systemImage: Theme.Icon.retry) }
             } label: { Image(systemName: Theme.Icon.more) }
-            .accessibilityLabel("更多")
+            .accessibilityLabel("More")
         }
     }
 }
@@ -591,12 +591,12 @@ struct FeishuDocsUnsupportedView: View {
                     Button {
                         request = ("/api/v1/lark/raw/documents/drive/files/\(f.token)/download", info.title)
                     } label: {
-                        Label("预览文件", systemImage: Theme.Icon.view).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
+                        Label("Preview File", systemImage: Theme.Icon.view).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
                     }
                     .themedButton(prominent: true)
                 }
                 Button { FeishuDocsLinks.openInFeishu(url) } label: {
-                    Label("在飞书中打开", systemImage: Theme.Icon.openExternal).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
+                    Label("Open in Lark [Feishu Doc Reader 76d0eb]", systemImage: Theme.Icon.openExternal).lineLimit(1).scaledFrame(minWidth: Theme.Size.box180)
                 }
                 .themedButton(prominent: info.file == nil)
             }
@@ -630,7 +630,7 @@ struct FeishuDocsOutlineSheet: View {
                 .buttonStyle(.plain)
             }
             .listStyle(.plain)
-            .navigationTitle("目录")
+            .navigationTitle("Folder [Task Views 52daa7]")
             .navigationBarTitleDisplayMode(.inline)
             .macSheetDone { dismiss() }
         }
@@ -642,8 +642,8 @@ struct FeishuDocsLinkMenu: View {
     var url: String
 
     var body: some View {
-        Button { FeishuDocsLinks.openInFeishu(url) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
-        Button { UIPasteboard.general.string = url } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
-        if let u = URL(string: url) { ShareLink(item: u) { Label("分享", systemImage: Theme.Icon.share) } }
+        Button { FeishuDocsLinks.openInFeishu(url) } label: { Label("Open in Lark [Feishu Doc Reader 76d0eb]", systemImage: Theme.Icon.openExternal) }
+        Button { UIPasteboard.general.string = url } label: { Label("Copy Link", systemImage: Theme.Icon.link) }
+        if let u = URL(string: url) { ShareLink(item: u) { Label("Share", systemImage: Theme.Icon.share) } }
     }
 }

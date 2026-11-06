@@ -23,8 +23,8 @@ struct TodoHandoffSheet: View {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .newAgent: String(localized: "新开一个")
-            case .existingAgent: String(localized: "交给已有的")
+            case .newAgent: String(localized: "New Agent [Todo Handoff Sheet d7ba99]")
+            case .existingAgent: String(localized: "Existing Agent")
             }
         }
     }
@@ -42,7 +42,7 @@ struct TodoHandoffSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("模式", selection: $mode) {
+                    Picker("Mode", selection: $mode) {
                         ForEach(Mode.allCases) { m in
                             Text(m.title).tag(m)
                         }
@@ -52,7 +52,7 @@ struct TodoHandoffSheet: View {
 
                 if mode == .newAgent {
                     Section {
-                        Text("下一步选电脑、目录和启动器。这个待办和下面的说明会作为第一条消息一起发过去。")
+                        Text("Next, choose a computer, folder and launcher. This to-do and the notes below are sent together as the first message.")
                             .font(Theme.Font.secondary)
                             .foregroundStyle(.secondary)
                     }
@@ -60,12 +60,12 @@ struct TodoHandoffSheet: View {
                     existingAgentSection
                 }
 
-                Section("要它做什么") {
-                    TextField("输入要 Agent 做什么…", text: $instruction, axis: .vertical)
+                Section("Instructions") {
+                    TextField(String(localized: "Tell the agent what to do…"), text: $instruction, axis: .vertical)
                         .lineLimit(3...8)
                 }
 
-                Section("会一起发过去") {
+                Section("Sent Along") {
                     TodoPreviewCard(title: todo.title, notes: todo.notes)
                 }
 
@@ -78,7 +78,7 @@ struct TodoHandoffSheet: View {
                 }
             }
             .themedPage()
-            .navigationTitle("交给 Agent")
+            .navigationTitle("Hand to Agent")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedSessionKey != nil) {
                 dismiss()
@@ -94,7 +94,7 @@ struct TodoHandoffSheet: View {
                     HStack(spacing: Theme.Space.s) {
                         if isSubmitting { ProgressView().tint(.white) }
                         Image(systemName: Theme.Icon.handToAI)
-                        Text(mode == .newAgent ? "选择电脑和启动器" : "交给 Agent")
+                        Text(mode == .newAgent ? String(localized: "Choose Computer and Launcher") : String(localized: "Hand to Agent"))
                     }
                     .font(Theme.Font.heading)
                     .lineLimit(1)
@@ -134,7 +134,7 @@ struct TodoHandoffSheet: View {
     private var existingAgentSection: some View {
         Section {
             if openSessions.isEmpty {
-                Text("暂无运行中的 Agent 会话")
+                Text("No running agent sessions")
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(openSessions) { s in
@@ -161,7 +161,7 @@ struct TodoHandoffSheet: View {
                     }
                 }
             }
-        } header: { Text("选择已有 Agent") }
+        } header: { Text("Choose Existing Agent") }
     }
 
     private func submit() async {
@@ -173,7 +173,7 @@ struct TodoHandoffSheet: View {
         let instr = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         let fullMessage = instr.isEmpty ? contextTag : "\(contextTag)\n\n\(instr)"
         guard let api = model.api(key.group) else {
-            errorMessage = String(localized: "连不上这个 Agent 所在的 hub，请稍后再试。")
+            errorMessage = String(localized: "Can't reach this agent's hub. Try again later.")
             return
         }
         do {
@@ -202,7 +202,7 @@ struct TodoPreviewCard: View {
                 HStack(spacing: Theme.Space.xs) {
                     Image(systemName: Theme.Icon.todo)
                         .font(Theme.Font.caption)
-                    Text("待办 · \(title)")
+                    Text("To-do · \(title)")
                         .font(Theme.Font.bodyStrong)
                         .lineLimit(1)
                 }

@@ -6,11 +6,11 @@ struct MacInboxMenu: Commands {
     let model: AppModel
 
     var body: some Commands {
-        CommandMenu("收件箱") {
+        CommandMenu(String(localized: "Inbox")) {
             let state = MacInboxState.shared
             let onScreen = MacSection.shown(override: MacShellState.shared.section, tab: model.selectedTab) == .inbox
             let off = !onScreen || state.openInView.isEmpty
-            Button("全部清理") { state.clean() }
+            Button("Clean up all") { state.clean() }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
                 .disabled(off)
         }

@@ -437,7 +437,7 @@ struct CloseAgentSheet: View {
                 .scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                 .background(Theme.danger.opacity(0.12), in: .circle)
                 .padding(.top, 28)
-            Text("停止并关闭这个 Agent？")
+            Text("Stop and Close This Agent?")
                 .font(Theme.Font.title)
                 .padding(.top, Theme.Space.l)
             VStack(spacing: Theme.Space.xs) {
@@ -457,8 +457,8 @@ struct CloseAgentSheet: View {
             .padding(.horizontal, Theme.Space.xl)
 
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                fact(Theme.Icon.end, String(localized: "停止当前任务并退出 \(session.agentLabel)，关闭它的终端标签（分屏时只关这个窗格）"))
-                fact(Theme.Icon.retry, String(localized: "对话记录保留，之后可以用 \(session.resumeCommand) 接着聊"))
+                fact(Theme.Icon.end, String(localized: "Stops the current task, quits \(session.agentLabel), and closes its terminal tab (only this pane when split)"))
+                fact(Theme.Icon.retry, String(localized: "The chat history is kept; continue later with \(session.resumeCommand)"))
             }
             .padding(Theme.Space.l)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -485,13 +485,13 @@ struct CloseAgentSheet: View {
                             onClosed(session.key)
                             dismiss()
                         } else {
-                            failure = model.toast?.message ?? String(localized: "停止失败，Agent 和标签已保留，请重试")
+                            failure = model.toast?.message ?? String(localized: "Couldn't stop. The agent and its tab were kept; try again.")
                             closing = false
                         }
                     }
                 } label: {
                     Group {
-                        if closing { ProgressView().tint(Theme.onSolid) } else { Text("停止并关闭").lineLimit(1) }
+                        if closing { ProgressView().tint(Theme.onSolid) } else { Text("Stop and Close").lineLimit(1) }
                     }
                     .font(Theme.Font.heading)
                     .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
@@ -501,7 +501,7 @@ struct CloseAgentSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(closing)
                 Button { dismiss() } label: {
-                    Text("取消").lineLimit(1).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
+                    Text("Cancel").lineLimit(1).font(Theme.Font.heading).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
                 }
                 .themedButton()
                 .keyboardShortcut(.cancelAction)
@@ -536,12 +536,12 @@ struct DeleteSessionConfirmation: ViewModifier {
     var onDeleted: (SessionKey) -> Void = { _ in }
 
     func body(content: Content) -> some View {
-        content.alert("删除这个对话？", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } }),
+        content.alert("Delete This Chat?", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } }),
                       presenting: session) { s in
-            Button("删除", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 Task { if await model.deleteSession(s.key) { onDeleted(s.key) } }
             }
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: { s in
             Text(DeleteSessionText.message(title: s.displayTitle, machine: model.machine(s.machineRef)?.title,
                                            resume: s.canTerminal ? s.resumeCommand : nil))
@@ -604,7 +604,7 @@ struct LoadableContent<Value, Content: View>: View {
         case .loading:
             if AppStyle.current.usesBeautifulUI {
                 // A page loading, not a row: BeautifulUI's pixel loader is fine here.
-                LoadingState(String(localized: "正在载入"), pattern: .dots).frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingState(String(localized: "Loading [Components d0676d]"), pattern: .dots).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -612,13 +612,13 @@ struct LoadableContent<Value, Content: View>: View {
             content(value)
         case .failed(let message):
             if AppStyle.current.usesBeautifulUI {
-                BUIEmptyState(symbol: Theme.Icon.error, title: message, actionTitle: retry == nil ? nil : String(localized: "重试"), action: retry)
+                BUIEmptyState(symbol: Theme.Icon.error, title: message, actionTitle: retry == nil ? nil : String(localized: "Retry [Components b8784c]"), action: retry)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ContentUnavailableView {
                     Label(message, systemImage: Theme.Icon.error)
                 } actions: {
-                    if let retry { Button("重试", action: retry).themedButton() }
+                    if let retry { Button("Retry [Components b8784c]", action: retry).themedButton() }
                 }
             }
         }

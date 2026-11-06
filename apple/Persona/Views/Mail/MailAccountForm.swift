@@ -11,8 +11,8 @@ struct MailAccountForm: Equatable {
             switch self {
             case .gmail: "Gmail"
             case .outlook: "Outlook"
-            case .feishu: String(localized: "飞书")
-            case .imap: String(localized: "其他 IMAP")
+            case .feishu: String(localized: "Lark [Inbox Event Views 7e4419]")
+            case .imap: String(localized: "Other IMAP")
             }
         }
     }

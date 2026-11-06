@@ -33,12 +33,12 @@ struct ComputerSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("操控电脑").font(Theme.Font.heading).padding(.horizontal, Theme.Space.xs)
+            Text("Control Computer").font(Theme.Font.heading).padding(.horizontal, Theme.Space.xs)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Toggle(isOn: Binding(get: { shown.enabled }, set: { on in Task { await set(on) } })) {
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text("允许助手操控这台电脑").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
-                        Text(shown.backend == "lcu" ? "经 LCU 看屏幕、点按、输入。确认在手机和网页上" : "经 Cua Driver 看屏幕、点按、输入、截图")
+                        Text("Let the Assistant Control This Computer").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(shown.backend == "lcu" ? String(localized: "Sees the screen, clicks and types through LCU. Confirmations happen on your phone and the web") : String(localized: "Sees the screen, taps, types and takes screenshots through Cua Driver"))
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
@@ -66,14 +66,14 @@ struct ComputerSection: View {
             oneTap = ScreenUnlock.isOn(ref)
             if model.screenOpen == nil, online, shown.enabled { await refresh() }
         }
-        .confirmationDialog("打开\(Self.oneTapTitle)？", isPresented: $askOneTap, titleVisibility: .visible) {
-            Button(String(localized: "action.turnOn", defaultValue: "打开")) {
+        .confirmationDialog("Turn On \(Self.oneTapTitle)?", isPresented: $askOneTap, titleVisibility: .visible) {
+            Button(String(localized: "action.turnOn", defaultValue: "Turn On")) {
                 ScreenUnlock.set(true, for: ref)
                 oneTap = true
             }
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("这台 Mac 锁屏时，点「一键解锁」并验证\(Self.oneTapAuthName)（或设备密码），就把记住的登录密码输入它的锁屏。解开后它不会自己再锁上，用完点「锁上」。")
+            Text("When this Mac is locked, tap One-Tap Unlock and verify with \(Self.oneTapAuthName) (or your passcode) to type the saved login password on its lock screen. Once unlocked it won't lock again by itself; tap Lock when you're done.")
         }
     }
 
@@ -82,57 +82,57 @@ struct ComputerSection: View {
     @ViewBuilder private var state: some View {
         let c = shown
         if !online {
-            line(String(localized: "机器离线，连上后才能操控"), ok: false)
+            line(String(localized: "Machine is offline. You can control it once it's connected."), ok: false)
         } else if let job = c.job, job.running, job.kind == "grant" {
             grantGuide(c, asking: true)
         } else if let job = c.job, job.running {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text(job.step ?? String(localized: "正在安装"))
+                    Text(job.step ?? String(localized: "Installing…"))
                         .font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("computer-status")
-                if job.kind == "install" { action(String(localized: "取消"), "cancel", identifier: "computer-cancel") }
+                if job.kind == "install" { action(String(localized: "Cancel"), "cancel", identifier: "computer-cancel") }
             }
         } else if !c.installed {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if let job = c.job, job.kind == "install", job.state == "failed" {
-                    line(job.error.map { String(localized: "没装上：\($0)") } ?? String(localized: "没装上：安装器出错了"), ok: false)
+                    line(job.error.map { String(localized: "Didn't install: \($0)") } ?? String(localized: "Couldn't install: the installer failed"), ok: false)
                 } else {
-                    line(c.backend == "lcu" ? String(localized: "这台 Mac 上还没有装 LCU") : String(localized: "这台 Mac 上还没有装 Cua Driver"), ok: false)
+                    line(c.backend == "lcu" ? String(localized: "LCU isn't installed on this Mac yet") : String(localized: "Cua Driver isn't installed on this Mac yet"), ok: false)
                 }
                 Text(c.backend == "lcu"
-                     ? "从 GitHub 下载 LCU 的发行包并校验。不注册 Claude / Codex 的审批界面，也不安装 ChatGPT；ChatGPT 桌面版要自己先装好。"
-                     : "从 Cua 官网下载安装器，校验后装进「应用程序」，并关掉它的使用统计。")
+                     ? String(localized: "Downloads the LCU release from GitHub and verifies it. It doesn't register Claude / Codex approval screens or install ChatGPT; install the ChatGPT desktop app yourself first.")
+                     : String(localized: "Downloads the installer from Cua's website, verifies it, installs it in Applications and turns off its usage statistics."))
                     .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                action(c.job?.state == "failed" ? String(localized: "重新安装") : (c.backend == "lcu" ? String(localized: "安装 LCU") : String(localized: "安装 Cua Driver")), "install", prominent: true, identifier: "computer-install")
+                action(c.job?.state == "failed" ? String(localized: "Reinstall") : (c.backend == "lcu" ? String(localized: "Install LCU") : String(localized: "Install Cua Driver")), "install", prominent: true, identifier: "computer-install")
             }
         } else if c.desktop == "locked" {
             // Locked: nothing gets through to its apps (Cua refuses, screen_locked), so unlocking comes first. Its live
             // screen shows the lock screen, where the password is typed (docs/computer-use.md「锁屏」).
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                line(String(localized: "这台 Mac 锁屏了，解锁后才能操控"), ok: false)
+                line(String(localized: "This Mac is locked. Unlock it to control it."), ok: false)
                 if !c.screenSharing {
-                    Text("在那台 Mac 上解锁；打开它的「屏幕共享」后，也能在这里用 VNC 远程解锁。")
+                    Text("Unlock it on that Mac. With its Screen Sharing on, you can also unlock it remotely here over VNC.")
                         .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 } else if oneTap {
-                    Text("点「一键解锁」，验证后把记住的密码输入它的锁屏。")
+                    Text("Tap One-Tap Unlock; after you verify, the saved password is typed on its lock screen.")
                         .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: Theme.Space.s) {
                         Button { Task { await unlockNow() } } label: {
-                            Label("一键解锁", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
+                            Label("One-Tap Unlock", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
                         }
                         .themedButton(prominent: true)
                         .accessibilityIdentifier("computer-unlock-now")
                         look(prominent: false)
                     }
                 } else {
-                    Text("点「解锁」打开它的画面，切到「接管」，在锁屏上输那台 Mac 的登录密码。")
+                    Text("Tap Unlock to open its screen, switch to Take Over, and type that Mac's login password on the lock screen.")
                         .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button { model.openScreen(ref) } label: {
-                        Label("解锁", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
+                        Label("Unlock", systemImage: Theme.Icon.screen).font(Theme.Font.labelStrong).lineLimit(1)
                     }
                     .themedButton(prominent: true)
                     .accessibilityIdentifier("computer-unlock")
@@ -143,7 +143,7 @@ struct ComputerSection: View {
             grantGuide(c, asking: false)
         } else if c.ready {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                line(String(localized: "现在可以操控") + (c.version.map { " · \(c.backend == "lcu" ? "LCU" : "Cua Driver") \($0)" } ?? ""), ok: true)
+                line(String(localized: "Ready to control") + (c.version.map { " · \(c.backend == "lcu" ? "LCU" : "Cua Driver") \($0)" } ?? ""), ok: true)
                 if c.screenSharing {
                     HStack(spacing: Theme.Space.s) {
                         look(prominent: false)
@@ -157,7 +157,7 @@ struct ComputerSection: View {
                 if !apps.isEmpty { allowedApps }
             }
         } else {
-            line(c.note ?? String(localized: "还不知道能不能操控"), ok: false)
+            line(c.note ?? String(localized: "Not sure yet whether it can be controlled"), ok: false)
         }
     }
 
@@ -173,7 +173,7 @@ struct ComputerSection: View {
                 } else {
                     Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                 }
-                Text(failed.map { String(localized: "没能请求授权：\($0)") } ?? GrantGuide.header(c, asking: asking))
+                Text(failed.map { String(localized: "Couldn't request permission: \($0)") } ?? GrantGuide.header(c, asking: asking))
                     .font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
@@ -191,13 +191,13 @@ struct ComputerSection: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("computer-step-\(step.id)")
-                .accessibilityValue(step.done ? "已完成" : "待做")
+                .accessibilityValue(step.done ? String(localized: "Done [Task Sheets f28461]") : String(localized: "To do"))
             }
             HStack(spacing: Theme.Space.s) {
-                if !asking { action(String(localized: "去授权"), "grant", prominent: !c.screenSharing, identifier: "computer-grant") }
+                if !asking { action(String(localized: "Grant Access"), "grant", prominent: !c.screenSharing, identifier: "computer-grant") }
                 if c.screenSharing { look(prominent: true) }
                 Button { Task { await recheck() } } label: {
-                    if checking { ProgressView().controlSize(.small) } else { Text("再检查一次").font(Theme.Font.labelStrong).lineLimit(1) }
+                    if checking { ProgressView().controlSize(.small) } else { Text("Check Again [Browser Section 953cf0]").font(Theme.Font.labelStrong).lineLimit(1) }
                 }
                 .themedButton()
                 .disabled(checking)
@@ -238,7 +238,7 @@ struct ComputerSection: View {
         .accessibilityIdentifier("computer-screen")
     }
 
-    static let noScreenSharing = Text("在那台 Mac 的「系统设置 › 通用 › 共享」里打开「屏幕共享」，这里就能看它的画面、远程点「允许」。")
+    static let noScreenSharing = Text("Turn on Screen Sharing in System Settings › General › Sharing on that Mac, and you can see its screen here and tap Allow remotely.")
         .font(Theme.Font.label).foregroundStyle(.secondary)
 
     // MARK: Calls
@@ -256,16 +256,16 @@ struct ComputerSection: View {
     }
 
     #if os(macOS)
-    static let oneTapTitle = String(localized: "在这台 Mac 上一键解锁")
+    static let oneTapTitle = String(localized: "One-Tap Unlock from This Mac")
     #else
-    static let oneTapTitle = String(localized: "在这台手机上一键解锁")
+    static let oneTapTitle = String(localized: "One-Tap Unlock from This iPhone")
     #endif
 
     /// deviceOwnerAuthentication is Touch ID (or the password) on macOS, Face ID (or the password) on iOS.
     #if os(macOS)
-    static let oneTapAuthName = String(localized: "触控 ID")
+    static let oneTapAuthName = String(localized: "Touch ID")
     #else
-    static let oneTapAuthName = String(localized: "面容")
+    static let oneTapAuthName = String(localized: "Face ID")
     #endif
 
     /// One-Tap Unlock on this device (it needs the sign-in kept), and Lock while it is on (#1507 a-2).
@@ -281,13 +281,13 @@ struct ComputerSection: View {
             })) {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(Self.oneTapTitle).font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
-                    Text("锁屏时验证一下，就把记住的密码输入它的锁屏").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("When it's locked, verify once and the saved password is typed on its lock screen").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
             .accessibilityIdentifier("computer-one-tap")
             if oneTap, !locked {
                 Button { Task { await run("lock") } } label: {
-                    Label("锁上", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
+                    Label("Lock", systemImage: Theme.Icon.locked).font(Theme.Font.labelStrong).lineLimit(1)
                 }
                 .themedButton()
                 .disabled(asking)
@@ -297,7 +297,7 @@ struct ComputerSection: View {
         .padding(.top, Theme.Space.xs)
     }
 
-    static let noLockWarning = String(localized: "打开后这台 Mac 在扩展开着时一直不会因为空闲锁屏，坐在它前面的人能直接用它。和 hub 断开 30 分钟后自动恢复。")
+    static let noLockWarning = String(localized: "While the extension is on, this Mac won't lock when idle, so anyone sitting at it can use it. This turns itself off after 30 minutes without the hub.")
 
     /// Don't Auto-Lock While On for this Mac (the plugin's no_auto_lock; asked about first): its node holds caffeinate.
     private func noLockRow(_ c: MachineComputer) -> some View {
@@ -305,16 +305,16 @@ struct ComputerSection: View {
             if on { askNoLock = true } else { Task { await setNoLock(false) } }
         })) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("扩展开着时不自动锁屏").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
-                Text("不改系统设置，和 hub 断开 30 分钟后自动恢复").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text("Don't Auto-Lock While On").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
+                Text("Doesn't change System Settings; turns off after 30 minutes without the hub").font(Theme.Font.label).foregroundStyle(.secondary)
             }
         }
         .disabled(saving)
         .accessibilityIdentifier("computer-no-lock")
         .padding(.top, Theme.Space.xs)
-        .confirmationDialog("打开「扩展开着时不自动锁屏」？", isPresented: $askNoLock, titleVisibility: .visible) {
-            Button(String(localized: "action.turnOn", defaultValue: "打开")) { Task { await setNoLock(true) } }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog("Turn On “Don't Auto-Lock While On”?", isPresented: $askNoLock, titleVisibility: .visible) {
+            Button(String(localized: "action.turnOn", defaultValue: "Turn On")) { Task { await setNoLock(true) } }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(Self.noLockWarning)
         }
@@ -328,7 +328,7 @@ struct ComputerSection: View {
             fresh = try await api.setComputerNoAutoLock(machine: ref.id, on)
             Haptics.success()
         } catch {
-            if let m = error.shown { model.toast = Toast(on ? String(localized: "打开失败：\(m)") : String(localized: "关掉失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(on ? String(localized: "Couldn't turn on: \(m)") : String(localized: "Couldn't turn off: \(m)"), style: .error) }
         }
     }
 
@@ -342,13 +342,13 @@ struct ComputerSection: View {
     /// The apps always allowed here (#1507): each can be taken back, and is asked about again the next time.
     private var allowedApps: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text("已允许助手操作的 App").font(Theme.Font.label).foregroundStyle(.secondary)
+            Text("Apps Allowed for the Assistant").font(Theme.Font.label).foregroundStyle(.secondary)
             ForEach(apps) { app in
                 HStack(spacing: Theme.Space.s) {
                     Text(app.name).font(Theme.Font.secondary).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
                     Button { Task { await remove(app) } } label: {
-                        Text("移除").font(Theme.Font.labelStrong).lineLimit(1)
+                        Text("Remove [Task Sheets 6135d4]").font(Theme.Font.labelStrong).lineLimit(1)
                     }
                     .themedButton()
                     .accessibilityIdentifier("computer-app-remove")
@@ -366,7 +366,7 @@ struct ComputerSection: View {
             apps = try await api.removeComputerApp(machine: ref.id, bundleID: app.bundleID)
             Haptics.success()
         } catch {
-            if let m = error.shown { model.toast = Toast(String(localized: "移除失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "Couldn't remove: \(m) [Computer Section 5005cd]"), style: .error) }
         }
     }
 
@@ -378,7 +378,7 @@ struct ComputerSection: View {
             fresh = try await api.setComputer(machine: ref.id, enabled: on)
             Haptics.success()
         } catch {
-            if let m = error.shown { model.toast = Toast(on ? String(localized: "打开失败：\(m)") : String(localized: "关掉失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(on ? String(localized: "Couldn't turn on: \(m)") : String(localized: "Couldn't turn off: \(m)"), style: .error) }
         }
     }
 
@@ -408,19 +408,19 @@ nonisolated enum GrantGuide {
         let accessibility = c.accessibility == "granted", screen = c.screenRecording == "granted"
         var done: [Step] = [], todo: [Step] = []
         if accessibility {
-            done.append(Step(id: "accessibility", done: true, text: String(localized: "辅助功能：已允许 Cua Driver")))
+            done.append(Step(id: "accessibility", done: true, text: String(localized: "Accessibility: Cua Driver is allowed")))
         } else {
-            todo.append(Step(id: "accessibility", done: false, text: String(localized: "在那台 Mac 上打开「系统设置 › 隐私与安全性 › 辅助功能」，打开「Cua Driver」的开关")))
+            todo.append(Step(id: "accessibility", done: false, text: String(localized: "On that Mac, open System Settings › Privacy & Security › Accessibility and turn on Cua Driver")))
         }
         if screen {
-            done.append(Step(id: "screen", done: true, text: String(localized: "录屏与系统录音：已允许 Cua Driver")))
+            done.append(Step(id: "screen", done: true, text: String(localized: "Screen & System Audio Recording: Cua Driver is allowed")))
         } else {
             todo.append(Step(id: "screen", done: false, text: accessibility
-                ? String(localized: "在那台 Mac 上打开「系统设置 › 隐私与安全性 › 录屏与系统录音」（旧版 macOS 叫「屏幕录制」），打开「Cua Driver」的开关")
-                : String(localized: "同一处的「录屏与系统录音」（旧版 macOS 叫「屏幕录制」）里，也打开「Cua Driver」的开关")))
-            todo.append(Step(id: "prompt", done: false, text: String(localized: "系统要是提示退出并重新打开 Cua Driver，或问它能否直接访问屏幕，都选允许")))
+                ? String(localized: "On that Mac, open System Settings › Privacy & Security › Screen & System Audio Recording (Screen Recording on older macOS) and turn on Cua Driver")
+                : String(localized: "In Screen & System Audio Recording in the same place (Screen Recording on older macOS), turn on Cua Driver too")))
+            todo.append(Step(id: "prompt", done: false, text: String(localized: "If macOS asks to quit and reopen Cua Driver, or whether it may access the screen directly, choose Allow")))
         }
-        todo.append(Step(id: "recheck", done: false, text: String(localized: "回到这里点「再检查一次」")))
+        todo.append(Step(id: "recheck", done: false, text: String(localized: "Come back here and tap Check Again")))
         return done + todo
     }
 
@@ -430,8 +430,8 @@ nonisolated enum GrantGuide {
     }
 
     static func header(_ c: MachineComputer, asking: Bool) -> String {
-        if asking { return String(localized: "那台 Mac 上弹出了授权窗口，按下面的步骤允许") }
+        if asking { return String(localized: "A permission prompt is open on that Mac. Follow the steps below to allow it.") }
         let missing = [c.accessibility, c.screenRecording].filter { $0 != "granted" }.count
-        return missing == 2 ? String(localized: "Cua Driver 还需要两项权限") : String(localized: "Cua Driver 还需要一项权限")
+        return missing == 2 ? String(localized: "Cua Driver needs two more permissions") : String(localized: "Cua Driver needs one more permission")
     }
 }

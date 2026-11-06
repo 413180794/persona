@@ -94,20 +94,20 @@ struct SiblingTabs: View {
             if AppStyle.current.usesBeautifulUI {
                 // Its filter chip: the state's dot (none for a quiet, seen or idle one) and the tab's name; the current
                 // one is the raised capsule.
-                BUIFilterChip(launcher ? String(localized: "\(label) · 发起", comment: "Chip of the agent that started the tab") : label, dot: quiet ? nil : tone.dot, isActive: on) {
+                BUIFilterChip(launcher ? String(localized: "\(label) · Starter", comment: "Chip of the agent that started the tab") : label, dot: quiet ? nil : tone.dot, isActive: on) {
                     if !on { Haptics.tap(); select(s.key) }
                 }
             } else {
                 plainTab(s, label: label, launcher: launcher, on: on, tone: tone, quiet: quiet)
             }
         }
-        .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: "（发起者）") : "")，\(s.stateLabel)"))
+        .accessibilityLabel(String(localized: "\(label)\(launcher ? String(localized: " (starter)") : ""), \(s.stateLabel)"))
         .accessibilityAddTraits(on ? .isSelected : [])
         .accessibilityIdentifier("chat.sibling")
         .contextMenu {
             if s.canTerminal {
                 Button(role: .destructive) { requestClose(s) } label: {
-                    Label("停止并关闭 Agent", systemImage: Theme.Icon.end).lineLimit(1)
+                    Label("Stop & Close Agent", systemImage: Theme.Icon.end).lineLimit(1)
                 }
                 .disabled(stopping != nil)
             }
@@ -123,7 +123,7 @@ struct SiblingTabs: View {
                     .lineLimit(1)
                     .font(on ? Theme.Font.labelHeavy : Theme.Font.labelMedium)
                 // The starter's mark, quieter than the name (the web's "Starter").
-                if launcher { Text("发起").font(Theme.Font.caption).opacity(0.75).lineLimit(1).fixedSize() }
+                if launcher { Text("Starter").font(Theme.Font.caption).opacity(0.75).lineLimit(1).fixedSize() }
             }
                 .padding(.horizontal, Theme.Space.m)
                 .scaledFrame(height: Theme.Size.wellS)
@@ -151,8 +151,8 @@ struct SiblingTabs: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(waiting ? String(localized: "同一空间的 \(siblings.count) 个 Agent，有 Agent 需要你")
-                                    : String(localized: "同一空间的 \(siblings.count) 个 Agent"))
+        .accessibilityLabel(waiting ? String(localized: "\(siblings.count) agents in this space, one needs you")
+                                    : String(localized: "\(siblings.count) agents in this space [Space View 359a45]"))
         #if DEBUG
         // `-showSpaceTabs YES`: open this sheet (screenshots); `new` opens its new-tab form on top.
         .task { if ["YES", "new"].contains(UserDefaults.standard.string(forKey: "showSpaceTabs")) { try? await Task.sleep(for: .seconds(2)); showAll = true } }
@@ -190,7 +190,7 @@ private struct SiblingList: View {
                 if await model.close(latest.key) {
                     closed(latest.key, closeOrder)
                 } else {
-                    failure = model.toast?.message ?? String(localized: "停止失败，标签已保留，请重试")
+                    failure = model.toast?.message ?? String(localized: "Couldn't stop it. The tab is still open; try again.")
                 }
                 stopping = nil
             }
@@ -207,18 +207,18 @@ private struct SiblingList: View {
         List {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: Theme.Space.s) {
-                    Text("\(siblings.count) 个 Agent").font(Theme.Font.heading).lineLimit(1)
+                    Text("\(siblings.count) agents").font(Theme.Font.heading).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
                     if preset != nil {
                         Button { Haptics.tap(); showNew = true } label: {
-                            Label("新标签", systemImage: Theme.Icon.add).font(Theme.Font.secondaryStrong).lineLimit(1)
+                            Label("New Tab", systemImage: Theme.Icon.add).font(Theme.Font.secondaryStrong).lineLimit(1)
                         }
                         .themedButton()
-                        .accessibilityLabel("在这个空间开新标签")
+                        .accessibilityLabel("Open a new tab in this space")
                     }
                     #if os(macOS)
                     // A Mac sheet has no swipe down or tap outside to close it; Esc presses this.
-                    Button("完成") { dismiss() }.lineLimit(1).keyboardShortcut(.cancelAction)
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1).keyboardShortcut(.cancelAction)
                     #endif
                 }
                 .padding(.horizontal, Theme.Space.l).padding(.top, Theme.Space.l).padding(.bottom, Theme.Space.s)
@@ -235,7 +235,7 @@ private struct SiblingList: View {
                     Button { openSpace(k) } label: {
                         HStack(spacing: Theme.Space.m) {
                             Image(systemName: Theme.Icon.space).foregroundStyle(Theme.accent).scaledFrame(width: Theme.Size.iconS)
-                            Text("空间 \(name) 的所有 Agent").font(Theme.Font.secondaryStrong).lineLimit(1)
+                            Text("All agents in space \(name)").font(Theme.Font.secondaryStrong).lineLimit(1)
                             Spacer(minLength: 8)
                             Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)
                         }
@@ -262,7 +262,7 @@ private struct SiblingList: View {
                                 Text(label).font(on ? Theme.Font.secondaryStrong : Theme.Font.secondary).lineLimit(1)
                                 // The state in its color, then the model the tab runs on (2026-10-31: which tab is which model).
                                 (Text(s.stateLabel).foregroundStyle(s.state.tone.text)
-                                    + Text(role?.launcher == true ? " · 发起者" : "").foregroundStyle(.secondary)
+                                    + Text(role?.launcher == true ? String(localized: " · Started It") : "").foregroundStyle(.secondary)
                                     + Text(Fmt.model(s.model).map { " · " + $0 } ?? "").foregroundStyle(.secondary))
                                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                             }
@@ -277,7 +277,7 @@ private struct SiblingList: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "\(label)\(role?.launcher == true ? String(localized: "（发起者）") : "")，\(s.stateLabel)") + (Fmt.model(s.model).map { String(localized: "，\($0)") } ?? ""))
+                    .accessibilityLabel(String(localized: "\(label)\(role?.launcher == true ? String(localized: " (starter)") : ""), \(s.stateLabel)") + (Fmt.model(s.model).map { String(localized: ", \($0)") } ?? ""))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
@@ -285,16 +285,16 @@ private struct SiblingList: View {
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         if s.canTerminal {
                             Button { requestClose(s) } label: {
-                                Label("关闭", systemImage: Theme.Icon.end).lineLimit(1)
+                                Label("Close", systemImage: Theme.Icon.end).lineLimit(1)
                             }
                             .tint(Theme.danger)
-                            .accessibilityLabel("停止并关闭 \(label)")
+                            .accessibilityLabel("Stop and Close \(label)")
                         }
                     }
                     .contextMenu {
                         if s.canTerminal {
                             Button(role: .destructive) { requestClose(s) } label: {
-                                Label("停止并关闭 Agent", systemImage: Theme.Icon.end).lineLimit(1)
+                                Label("Stop & Close Agent", systemImage: Theme.Icon.end).lineLimit(1)
                             }
                         }
                     }
@@ -360,7 +360,7 @@ struct SpaceView: View {
                         }
                         .buttonStyle(.plain)
                         .layoutPriority(1)
-                        .accessibilityLabel("\(model.machine(first.machineRef)?.title ?? first.machineID) 上的所有项目")
+                        .accessibilityLabel("All projects on \(model.machine(first.machineRef)?.title ?? first.machineID)")
                         Text(Fmt.path(first.cwd, home: model.machine(first.machineRef)?.home)).lineLimit(1).truncationMode(.head)
                     }
                     .font(Theme.Font.caption)
@@ -374,7 +374,7 @@ struct SpaceView: View {
                     Button { showNew = true } label: {
                         VStack(spacing: Theme.Space.s) {
                             Image(systemName: Theme.Icon.add).font(Theme.Font.title)
-                            Text("在这个空间开新标签").font(Theme.Font.captionMedium)
+                            Text("Open a new tab in this space").font(Theme.Font.captionMedium)
                         }
                         .foregroundStyle(Theme.accent)
                         // Same box as a SlotCard (min height + the card's 12pt padding), and it fills its grid row
@@ -392,15 +392,15 @@ struct SpaceView: View {
             .padding(Theme.Space.l)
         }
         .themedGroupedPage()
-        .navigationTitle(first?.spaceName ?? String(localized: "空间"))
+        .navigationTitle(first?.spaceName ?? String(localized: "Space [Space View 3347e0]"))
         .navigationBarTitleDisplayMode(.large)
         .pageToolbar {
             if let g = SpaceGroup.build(sessions).first {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu { SpaceMenuItems(group: g) { renaming = g } } label: {
-                        Label("空间设置", systemImage: model.isMuted(g) ? Theme.Icon.mute : Theme.Icon.more)
+                        Label("Space Settings", systemImage: model.isMuted(g) ? Theme.Icon.mute : Theme.Icon.more)
                     }
-                    .accessibilityLabel("空间操作")
+                    .accessibilityLabel("Space actions")
                 }
             }
         }
@@ -445,7 +445,7 @@ struct SlotCard: View {
             }
             Text(session.displayTitle).font(Theme.Font.secondaryStrong).lineLimit(2)
             // The starter says so beside its state: the header's chips are cut first in a narrow card.
-            Text(session.stateLabel + (pane?.launcher == true ? String(localized: " · 发起者") : "") + (pending > 0 ? String(localized: " · \(pending) 件待处理") : ""))
+            Text(session.stateLabel + (pane?.launcher == true ? String(localized: " · Started It") : "") + (pending > 0 ? String(localized: " · \(pending) pending") : ""))
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(tone.text)
             if let t = session.listPreview {

@@ -43,9 +43,9 @@ final class LarkTopicReplies {
     /// kept, then marked Recalled, as a chat's row shows it (`LarkMessageDisplay.showsBody`); an encrypted one by its cover,
     /// as the Lark gateway's card.
     static func line(of reply: LarkMessage, display: LarkMessageDisplay) -> String {
-        guard display.showsBody(of: reply) else { return String(localized: "消息已撤回") }
+        guard display.showsBody(of: reply) else { return String(localized: "Message recalled") }
         let text = reply.olk.map { $0.cached.summary } ?? display.summary(LarkReply.summary(of: reply))
-        return reply.recalled ? String(localized: "\(text) · 已撤回") : text
+        return reply.recalled ? String(localized: "\(text) · Recalled") : text
     }
 
     /// A card came on screen or its reply count changed: read the topic's newest replies unless they are known at that count.

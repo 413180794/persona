@@ -14,7 +14,7 @@ struct ConnectionTitle: View {
             if phase != .online {
                 Button { Haptics.tap(); details = true } label: { ConnectionLabel(phase: phase) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(phase.title)，查看连接详情")
+                    .accessibilityLabel("\(phase.title), view connection details")
                     .accessibilityIdentifier("connection-title")
                     .transition(.opacity)
             } else if let title {
@@ -47,7 +47,7 @@ struct ConnectionLabel: View {
                 ProgressView().controlSize(compact ? .mini : .small)
             }
             // The hub restarting into a new version: the connection going away is expected (docs/hub-update.md).
-            Text(phase == .connecting && model.hubUpdate?.restarting == true ? String(localized: "hub 正在更新…") : phase.title)
+            Text(phase == .connecting && model.hubUpdate?.restarting == true ? String(localized: "Hub updating…") : phase.title)
                 .font(compact ? Theme.Font.label : Theme.Font.heading)
                 .foregroundStyle(compact ? .secondary : .primary)
                 .lineLimit(1)
@@ -79,13 +79,13 @@ struct ConnectionDetails: View {
                 HStack(spacing: Theme.Space.s) {
                     if phase == .online {
                         Image(systemName: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
-                        Text("已连上 hub").font(Theme.Font.heading)
+                        Text("Connected to Hub").font(Theme.Font.heading)
                     } else {
                         ConnectionLabel(phase: phase)
                     }
                 }
                 Text(phase == .connecting && model.hubUpdate?.restarting == true
-                     ? String(localized: "hub 正在更新到新版本，重启期间会断开一会儿，好了自动连上。")
+                     ? String(localized: "The hub is updating to a new version. It'll disconnect briefly while it restarts, then reconnect automatically.")
                      : Self.explanation(phase, stalled: model.live.stalled)).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 let lines = Self.facts(phase: phase, link: model.live.state, nextTry: model.live.nextTry, lastOnline: status.lastOnline,
@@ -102,7 +102,7 @@ struct ConnectionDetails: View {
                         Haptics.tap()
                         pairing = true
                     } label: {
-                        Text("重新配对").lineLimit(1).frame(maxWidth: .infinity)
+                        Text("Pair Again").lineLimit(1).frame(maxWidth: .infinity)
                     }
                     .themedButton(prominent: true)
                     .padding(.top, Theme.Space.xxs)
@@ -114,7 +114,7 @@ struct ConnectionDetails: View {
                         model.live.reconnectNow()
                         Task { await model.refresh() }
                     } label: {
-                        Text("立即重试").lineLimit(1).frame(maxWidth: .infinity)
+                        Text("Retry Now [Connection Title 77c30e]").lineLimit(1).frame(maxWidth: .infinity)
                     }
                     .themedButton(prominent: phase != .rejected)
                     .padding(.top, Theme.Space.xxs)
@@ -144,20 +144,20 @@ struct ConnectionDetails: View {
 
     static func explanation(_ phase: ConnectionStatus.Phase, stalled: Bool) -> String {
         switch phase {
-        case .online: String(localized: "消息和状态都是最新的。")
+        case .online: String(localized: "Messages and status are up to date.")
         #if os(macOS)
-        case .waitingForNetwork: String(localized: "这台 Mac 现在没有网络。网络恢复后会自动连上，期间写的消息会自动发出去。")
+        case .waitingForNetwork: String(localized: "This Mac is offline. It'll reconnect when the network is back, and messages you write in the meantime will be sent automatically.")
         #else
-        case .waitingForNetwork: String(localized: "iPhone 现在没有网络。网络恢复后会自动连上，期间写的消息会自动发出去。")
+        case .waitingForNetwork: String(localized: "Your iPhone is offline. It'll reconnect when the network is back, and messages you write in the meantime will be sent automatically.")
         #endif
         case .connecting:
-            stalled ? String(localized: "网络很慢：hub 好几秒没有回应了，正在等它。")
-                : String(localized: "有网络，但连不上 hub（它所在的机器可能关机、休眠或断网）。会一直自动重试。")
-        case .updating: String(localized: "已经连上，正在补上断开期间的消息和待处理的请求。")
+            stalled ? String(localized: "The network is slow: the hub hasn't responded for several seconds. Waiting for it.")
+                : String(localized: "You're online but can't reach the hub (the hub machine may be off, asleep, or offline). Persona keeps retrying automatically.")
+        case .updating: String(localized: "Connected. Catching up on messages and pending requests from while you were disconnected.")
         #if os(macOS)
-        case .rejected: String(localized: "hub 不再认这台 Mac 的凭据：它可能在「设置 › 设备」里被撤销了，或者上次配对没有完成。重新粘贴配对链接就能恢复。")
+        case .rejected: String(localized: "The hub no longer accepts this Mac's credentials. They may have been revoked in Settings › Devices, or the last pairing didn't finish. Paste the pairing link again to fix it.")
         #else
-        case .rejected: String(localized: "hub 不再认这台设备的凭据：它可能在「设置 › 设备」里被撤销了，或者上次配对没有完成。在 hub 所在的机器上生成新的配对码，重新扫码就能恢复。")
+        case .rejected: String(localized: "The hub no longer accepts this device's credentials. They may have been revoked in Settings › Devices, or the last pairing didn't finish. Generate a new pairing code on the hub machine and scan it again to fix it.")
         #endif
         }
     }
@@ -179,32 +179,32 @@ struct ConnectionDetails: View {
         var out: [String] = []
         if let ssh {
             if let name = ssh.inApp {
-                out.append(ssh.routed ? String(localized: "线路：经\(name)") : String(localized: "线路：直连"))
-                if phase != .online, let why = ssh.problem { out.append(String(localized: "\(name)：\(why)")) }
+                out.append(ssh.routed ? String(localized: "Route: via \(name)") : String(localized: "Route: direct"))
+                if phase != .online, let why = ssh.problem { out.append(String(localized: "\(name): \(why)")) }
             } else {
-                out.append(ssh.routed ? String(localized: "线路：经 SSH 隧道（\(ssh.server)）") : String(localized: "线路：直连"))
-                if phase != .online, let why = ssh.problem { out.append(String(localized: "SSH 隧道：\(why)")) }
+                out.append(ssh.routed ? String(localized: "Route: SSH tunnel (\(ssh.server))") : String(localized: "Route: direct"))
+                if phase != .online, let why = ssh.problem { out.append(String(localized: "SSH tunnel: \(why)")) }
             }
         }
-        if phase == .connecting || phase == .rejected, case .failed(let why) = link { out.append(String(localized: "上次失败：\(why)")) }
+        if phase == .connecting || phase == .rejected, case .failed(let why) = link { out.append(String(localized: "Last failure: \(why)")) }
         if phase == .connecting || phase == .rejected, let nextTry {
             let s = Int(ceil(nextTry.timeIntervalSince(now)))
-            out.append(s > 0 ? String(localized: "\(s) 秒后重试") : String(localized: "正在重试…"))
+            out.append(s > 0 ? String(localized: "Retrying in \(s) seconds") : String(localized: "Retrying…"))
         }
-        if phase != .online, let lastOnline { out.append(String(localized: "上次连上：\(ago(lastOnline, now: now))")) }
+        if phase != .online, let lastOnline { out.append(String(localized: "Last connected: \(ago(lastOnline, now: now))")) }
         if phase == .online, let rtt {
             let ms = String(format: "%.0f", rtt * 1000)
-            out.append(String(localized: "延迟 \(ms) 毫秒"))
+            out.append(String(localized: "Latency \(ms) ms"))
         }
-        if outbox > 0 { out.append(String(localized: "\(outbox) 条消息连上后自动发送")) }
+        if outbox > 0 { out.append(String(localized: "\(outbox) messages will be sent when connected")) }
         return out
     }
 
     /// "12 seconds ago", "3 minutes ago", then the time of day.
     static func ago(_ date: Date, now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(date)))
-        if s < 60 { return String(localized: "\(s) 秒前") }
-        if s < 3600 { return String(localized: "\(s / 60) 分钟前") }
+        if s < 60 { return String(localized: "\(s) seconds ago") }
+        if s < 3600 { return String(localized: "\(s / 60) min ago") }
         return Fmt.relative(date, now: now)
     }
 }

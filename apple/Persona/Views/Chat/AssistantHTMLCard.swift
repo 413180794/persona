@@ -186,14 +186,14 @@ struct AssistantHTMLCard: View {
                 }
                 Spacer(minLength: Theme.Space.s)
                 if executing {
-                    Button("停止", systemImage: Theme.Icon.interrupt) { stop() }
+                    Button("Stop [Assistant H T M L Card ca4d97]", systemImage: Theme.Icon.interrupt) { stop() }
                         .labelStyle(.iconOnly)
                         .themedButton()
                         .accessibilityIdentifier("html-card-stop")
                 }
             }
             if executing {
-                Text("助手画的页面 · 隔离运行").font(Theme.Font.caption).foregroundStyle(.secondary)
+                Text("Page drawn by the assistant · Sandboxed").font(Theme.Font.caption).foregroundStyle(.secondary)
                 SandboxedHTMLView(html: html, onRequest: { request in
                     guard executing, bridgeEnabled else { return }
                     actions.receive(request, answered: answered)
@@ -233,7 +233,7 @@ struct AssistantHTMLCard: View {
                 pendingVersion = nil
                 Task { await accept(request, version: expectedVersion) }
             }
-            Button("取消", role: .cancel) { actions.decline() }
+            Button("Cancel", role: .cancel) { actions.decline() }
         } message: { request in
             switch request {
             case .reply(let text): Text(text)
@@ -252,26 +252,26 @@ struct AssistantHTMLCard: View {
             }
             if enabled {
                 Button { running = true; stopped = false; actions.restart() } label: {
-                    Label(autoRun ? "重试" : "运行", systemImage: Theme.Icon.run).lineLimit(1)
+                    Label(autoRun ? String(localized: "Retry [Components b8784c]") : String(localized: "Runtime"), systemImage: Theme.Icon.run).lineLimit(1)
                 }
                 .themedButton(prominent: true)
                 .accessibilityIdentifier("html-card-run")
             }
-            Text(enabled ? "助手画的页面 · 隔离运行；回复或打开链接前需要确认。" : "助手画的页面 · 已显示文字摘要")
+            Text(enabled ? String(localized: "Page drawn by the assistant · Sandboxed. Replies and links need your confirmation.") : String(localized: "Page drawn by the assistant · Showing text summary"))
                 .font(Theme.Font.caption).foregroundStyle(.secondary)
         }
     }
 
     private var alertTitle: String {
         switch actions.pending {
-        case .open: String(localized: "卡片要打开链接")
-        default: String(localized: "卡片要替你回复")
+        case .open: String(localized: "The Card Wants to Open a Link")
+        default: String(localized: "The Card Wants to Reply for You")
         }
     }
 
     private func confirmTitle(_ r: HTMLCardRequest) -> String {
-        if case .open = r { return String(localized: "打开") }
-        return String(localized: "发送")
+        if case .open = r { return String(localized: "Open") }
+        return String(localized: "Send")
     }
 
     private func stop() {
@@ -415,7 +415,7 @@ final class SandboxedHTMLCoordinator: NSObject, WKNavigationDelegate, WKUIDelega
             guard !Task.isCancelled, let self, let web, generation == ticket else { return }
             started = false
             guard let rules else {
-                web.loadHTMLString("<p>\(String(localized: "无法隔离网络，不运行这张卡片"))</p>", baseURL: nil)
+                web.loadHTMLString("<p>\(String(localized: "Couldn't isolate the network, so this card won't run"))</p>", baseURL: nil)
                 return
             }
             let controller = web.configuration.userContentController

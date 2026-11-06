@@ -28,7 +28,7 @@ struct HostedChat {
 
     /// The leading button's symbol and its name.
     var leaveSymbol: String { closes ? Theme.Icon.close : Theme.Icon.back }
-    var leaveLabel: String { closes ? String(localized: "关闭") : String(localized: "返回") }
+    var leaveLabel: String { closes ? String(localized: "Close") : String(localized: "Back [Task Sheets 572cf4]") }
 }
 
 extension EnvironmentValues {

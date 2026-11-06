@@ -22,10 +22,10 @@ final class OnboardingChecklistModel {
 
     /// The step ids in their order, and their names.
     static let steps: [(id: String, name: String)] = [
-        ("computer", String(localized: "电脑")),
+        ("computer", String(localized: "Computers")),
         ("claude", "Claude Code"),
-        ("model", String(localized: "模型")),
-        ("first_message", String(localized: "试一句")),
+        ("model", String(localized: "Model [Assistant View c98e11]")),
+        ("first_message", String(localized: "Try a message")),
     ]
 
     /// The rows for a readiness. A state this app does not know looks like a step still to do (docs/onboarding.md 5).
@@ -73,8 +73,8 @@ struct OnboardingChecklistView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
                     VStack(alignment: .leading, spacing: Theme.Space.s) {
-                        Text("还差几步就能用").font(Theme.Font.display)
-                        Text("Persona 要在你的一台电脑上、用一个模型干活。下面每一步做完会自己打勾，不用刷新。")
+                        Text("A few steps to go").font(Theme.Font.display)
+                        Text("Persona works on one of your computers, with a model. Each step below ticks itself once it's done; no need to refresh.")
                             .font(Theme.Font.secondary).lineHeight(.secondary).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -96,7 +96,7 @@ struct OnboardingChecklistView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) { footer }
             .toolbar {
                 if fromSettings {
-                    ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Text("完成").lineLimit(1) } }
+                    ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Text("Done [Extension System Presentation c0b3fb]").lineLimit(1) } }
                 }
             }
             #if os(iOS)
@@ -112,17 +112,17 @@ struct OnboardingChecklistView: View {
         VStack(spacing: Theme.Space.s) {
             if OnboardingChecklistModel.allDone(readiness) {
                 Button { close(dismissing: false) } label: {
-                    Text("开始使用").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+                    Text("Get started").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
                 }
                 .themedButton(prominent: true)
                 .accessibilityIdentifier("checklist.done")
             } else if !fromSettings {
                 Button { close(dismissing: true) } label: {
-                    Text("以后再说").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
+                    Text("Later [Readiness Card 9d2055]").font(Theme.Font.heading).lineLimit(1).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well)
                 }
                 .themedButton()
                 .accessibilityIdentifier("checklist.later")
-                Text("之后可以在「设置」顶部回到这里。").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                Text("You can come back here from the top of Settings.").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
             }
         }
         .padding(.horizontal, Theme.Space.xl)
@@ -167,7 +167,7 @@ private struct ChecklistRow: View {
                     Text(detail).font(Theme.Font.secondary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 if let probe {
-                    Text(probe.ok == true ? String(localized: "试过了，回答：\(probe.answer ?? "")") : String(localized: "试了一句，没成功：\(probe.error ?? "")"))
+                    Text(probe.ok == true ? String(localized: "Tried it; it answered: \(probe.answer ?? "")") : String(localized: "Tried a message, it didn't work: \(probe.error ?? "")"))
                         .font(Theme.Font.secondary).foregroundStyle(probe.ok == true ? Theme.positive : Theme.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -222,8 +222,8 @@ struct ChecklistSettingsRow: View {
                     HStack(spacing: Theme.Space.m) {
                         Image(systemName: Theme.Icon.todo).font(Theme.Font.heading).foregroundStyle(Theme.caution)
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("还有 \(n) 步就能用").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
-                            Text("接上电脑和模型，Persona 才能回答").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            Text("\(n) steps to go").font(Theme.Font.heading).foregroundStyle(Color.primary).lineLimit(1)
+                            Text("Connect a computer and a model so Persona can answer").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
                         Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong).foregroundStyle(.tertiary)

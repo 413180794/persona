@@ -38,7 +38,7 @@ extension MacDrop {
     @MainActor @discardableResult
     static func take(_ urls: [URL], images: Int, attach: (UIImage) -> Void, upload: ([URL]) -> Void) -> Bool {
         let split = split(urls, already: images)
-        if split.folders > 0 { AppModel.shared.toast = Toast(String(localized: "文件夹发不了，拖里面的文件进来"), style: .error) }
+        if split.folders > 0 { AppModel.shared.toast = Toast(String(localized: "Folders can't be sent. Drag in the files inside instead."), style: .error) }
         guard !split.images.isEmpty || !split.files.isEmpty else { return split.folders > 0 }
         // A picture NSImage cannot read is uploaded as a file, not dropped.
         var unreadable: [URL] = []
@@ -61,7 +61,7 @@ extension MacDrop {
     /// Adds a pasted / dropped picture to a starter composer's pictures, with the Agent composer's「一次最多 4 张」.
     @MainActor static func append(_ img: UIImage, to images: inout [(UIImage, ImagePayload)]) {
         guard images.count < maxImages else {
-            AppModel.shared.toast = Toast(String(localized: "一次最多 4 张"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Up to 4 at a time"), style: .error)
             return
         }
         if let p = payload(img) { images.append(p) }
@@ -104,7 +104,7 @@ private struct MacChatDrop: ViewModifier {
                             .fill(Theme.accent.opacity(0.08))
                         RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
                             .strokeBorder(Theme.accent, style: StrokeStyle(lineWidth: Theme.Size.line, dash: [Theme.Space.sm, Theme.Space.xs]))
-                        Label("松手添加到消息", systemImage: Theme.Icon.attachment)
+                        Label("Drop to add to the message", systemImage: Theme.Icon.attachment)
                             .font(Theme.Font.heading)
                             .foregroundStyle(Theme.accent)
                             .lineLimit(1)

@@ -77,7 +77,7 @@ enum HealthTool {
                     do {
                         return try HealthSample(args).summary
                     } catch {
-                        return String(localized: "参数有误，不会写入健康：\(ToolErrors.describe(error))")
+                        return String(localized: "Invalid arguments; nothing will be saved to Health: \(ToolErrors.describe(error))")
                     }
                 },
                 run: { args in try await write(args) }
@@ -329,8 +329,8 @@ struct HealthSample {
     /// What one sample can hold: more is a slip (grams for kilograms, a week's steps at once).
     private static let limits: [String: Double] = ["steps": 100_000, "distance": 300_000, "active_energy": 10_000, "weight": 500]
 
-    private static let names = ["steps": String(localized: "步数"), "distance": String(localized: "步行和跑步距离"), "active_energy": String(localized: "活动能量"), "weight": String(localized: "体重"), "sleep": String(localized: "睡眠")]
-    private static let shownUnits = ["steps": String(localized: "步"), "distance": String(localized: "米"), "active_energy": String(localized: "千卡"), "weight": String(localized: "千克")]
+    private static let names = ["steps": String(localized: "Steps"), "distance": String(localized: "Walking + running distance"), "active_energy": String(localized: "Active energy"), "weight": String(localized: "Sleep [Health Tool 38f7c7]"), "sleep": String(localized: "Sleep [Health Tool 01324e]")]
+    private static let shownUnits = ["steps": String(localized: "steps"), "distance": String(localized: "m"), "active_energy": String(localized: "kcal"), "weight": String(localized: "kg")]
 
     var metric: String
     /// The amount in the metric's unit; nil for sleep, whose length is the period.
@@ -378,9 +378,9 @@ struct HealthSample {
     var summary: String {
         let name = Self.names[metric] ?? metric
         let what = value.map { "\(name) \(Self.format($0)) \(Self.shownUnits[metric] ?? "")" }
-            ?? String(localized: "\(name) \(Self.format(end.timeIntervalSince(start) / 3600)) 小时")
+            ?? String(localized: "\(name) \(Self.format(end.timeIntervalSince(start) / 3600)) h")
         let when = start == end ? ToolDate.string(start) : "\(ToolDate.string(start)) → \(ToolDate.string(end))"
-        return String(localized: "写入健康：\(what)\n\(when)")
+        return String(localized: "Save to Health: \(what)\\n\(when)")
     }
 
     static func type(of metric: String) -> HKSampleType? {

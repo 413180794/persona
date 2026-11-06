@@ -48,10 +48,10 @@ nonisolated enum LarkReadMark: Equatable {
     /// What VoiceOver reads.
     var label: String {
         switch self {
-        case .read: String(localized: "已读")
-        case .unread: String(localized: "未读")
-        case .allRead: String(localized: "全部已读")
-        case .progress(let read, let total): String(localized: "\(total - read) 人未读")
+        case .read: String(localized: "Read [Lark Read Receipts efdd1a]")
+        case .unread: String(localized: "Unread [Personal Agent Intents 4d0680]")
+        case .allRead: String(localized: "All read")
+        case .progress(let read, let total): String(localized: "\(total - read) unread [Lark Read Receipts 3df1e3]")
         }
     }
 }
@@ -142,9 +142,9 @@ struct LarkReadMarkView: View {
         Group {
             switch mark {
             case .read:
-                Text("已读").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text("Read [Lark Read Receipts efdd1a]").font(Theme.Font.label).foregroundStyle(.secondary)
             case .unread:
-                Text("未读").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
+                Text("Unread [Personal Agent Intents 4d0680]").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
             case .allRead:
                 Image(systemName: Theme.Icon.success).resizable().scaledToFit().foregroundStyle(.secondary)
                     .scaledFrame(width: Theme.Size.markS, height: Theme.Size.markS)

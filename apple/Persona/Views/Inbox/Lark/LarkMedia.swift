@@ -247,7 +247,7 @@ struct LarkPlayerView: View {
                 .themedButton()
                 .clipShape(.circle)
                 .padding(Theme.Space.l)
-                .accessibilityLabel("关闭")
+                .accessibilityLabel("Close")
         }
         .task {
             guard let cfg = AppModel.shared.config else { return }
@@ -272,7 +272,7 @@ struct LarkFileOpener: ViewModifier {
             .quickLookPreview($local)
             .overlay {
                 if loading {
-                    ProgressView("下载中…").padding(Theme.Space.xl).surface(in: .rect(cornerRadius: Theme.Radius.card))
+                    ProgressView(String(localized: "Downloading…")).padding(Theme.Space.xl).surface(in: .rect(cornerRadius: Theme.Radius.card))
                 }
             }
             .onChange(of: request?.url) {

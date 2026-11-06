@@ -93,10 +93,10 @@ final class PersonaStore {
         do {
             list = try await api.personas().filter { $0.manifest.problem == nil && $0.manifest.id == $0.id }
         } catch let e as APIError where e.status == 404 {
-            error = String(localized: "这个 hub 还不能放形象：更新 hub 后再看")
+            error = String(localized: "This hub can't host avatars yet. Update the hub and check again.")
             return
         } catch {
-            if !error.isCancellation { self.error = String(localized: "没取到形象列表：\(error.localizedDescription)") }
+            if !error.isCancellation { self.error = String(localized: "Couldn't load the avatar list: \(error.localizedDescription)") }
             return
         }
         self.error = nil
@@ -156,7 +156,7 @@ final class PersonaStore {
             // Every file there before it is used (nothing else may touch the .part, but a package missing a face
             // would show the built-in's for good).
             if let lost = m.files.first(where: { !fm.fileExists(atPath: part.appending(path: $0).path(percentEncoded: false)) }) {
-                throw APIError(status: 0, message: String(localized: "缺少 \(lost)"))
+                throw APIError(status: 0, message: String(localized: "Missing \(lost)"))
             }
             let final = directory(p)
             try? fm.removeItem(at: final)
@@ -165,7 +165,7 @@ final class PersonaStore {
             error = nil
         } catch {
             try? fm.removeItem(at: part)
-            if !error.isCancellation { self.error = String(localized: "「\(p.name)」没下载下来：\(error.localizedDescription)") }
+            if !error.isCancellation { self.error = String(localized: "Couldn’t download “\(p.name)”: \(error.localizedDescription)") }
         }
     }
 

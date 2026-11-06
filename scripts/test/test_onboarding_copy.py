@@ -7,8 +7,9 @@ The setup card, the main conversation's coded errors, the login page, adding a c
 wizard and the empty states must not ask a beginner to know hub.json, a token (配对码 is fine), jq, personad, TLS, a
 node, herdr, a launcher, localhost or a ~/. path. SCOPES lists where those words are read, in every language the
 client has: the web's i18n catalogs, Android's string resources, the hub's catalogs (the words it sends for the codes
-and the readiness), and the Swift files whose Chinese literals are the iOS / macOS screens (Apple has no catalog yet,
-docs/i18n.md). What a 高级 / 详情 section shows may name them: ALLOW, with the reason. What is known to be wrong and
+and the readiness). Apple scopes resolve source keys through the shared String Catalog, independent of its development
+language; the existing Chinese beginner-copy baseline stays unchanged. Text in an Advanced / Details section may name
+these concepts: ALLOW, with a reason. What is known to be wrong and
 has an owner fixing it is PENDING: it must still be wrong (a fixed one has to leave the list), and nothing new may be.
 Standard library only.
 """
@@ -16,10 +17,16 @@ import glob
 import json
 import os
 import re
+import sys
 import unittest
 import xml.etree.ElementTree as ET
+from functools import lru_cache
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, 'scripts', 'i18n'))
+import apple_l10n
+import swift_literals
+
 
 # The words, each a pattern that does not fire inside a longer ASCII word (Chinese next to it is fine: 「用token登录」 is
 # caught, 「https」 is not TLS). Case does not matter. The ja catalogs spell some of them in katakana.
@@ -48,7 +55,7 @@ def banned_words(text):
 
 class Scope:
     """Where beginner words live: kind json (a catalog per language, {lang} in the path), android (the values,
-    values-zh, values-ja resources of a module, file glob under them) or swift (Chinese string literals of a file).
+    values-zh, values-ja resources of a module, file glob under them) or swift (source keys resolved to catalog values).
     keys: a regex on the key (json / android) or a selector (swift: "struct <Name>" or a regex the line must match);
     None is all of it."""
 
@@ -103,7 +110,7 @@ SCOPES = [
     Scope("android/agents-empty", "android", "android/feature/agents/src/main/res/{dir}/strings*.xml", r"agents_empty_"),
     Scope("android/machines-empty", "android", "android/feature/machines/src/main/res/{dir}/strings*.xml", r"machines_empty"),
     Scope("android/inbox-empty", "android", "android/feature/inbox/src/main/res/{dir}/strings*.xml", r"inbox_empty"),
-    # iOS / macOS (Chinese literals only: the screens are Chinese until the String Catalog lands).
+    # iOS / macOS: preserve the Chinese baseline, resolving English source keys through the catalog.
     Scope("apple/welcome", "swift", "apple/Persona/Views/Settings/SettingsView.swift", "struct WelcomeView", langs=("zh-Hans",)),
     Scope("apple/agents-empty", "swift", "apple/Persona/Views/Chats/ChatsView.swift", r"\bempty[A-Z]\w*\s*=", langs=("zh-Hans",)),
     Scope("apple/machines", "swift", "apple/Persona/Views/Machines/MachinesView.swift", langs=("zh-Hans",)),
@@ -125,13 +132,13 @@ SCOPES = [
 ALLOW = {
     ("web/login", "master_placeholder"): "登录页「高级」里用 hub 的总钥匙登录（Login.tsx 的 advanced Disclosure），只有自己装 hub 的人用",
     ("web/settings-providerwizard", "auth_bearer_hint"): "选了「自定义」才出现的网关表单（connect 步），说的是网关认的环境变量名；内置厂商只粘 Key，不经过这一步",
-    ("apple/provider-wizard", "网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。Key 加密存在 hub，不会返回到客户端。"):
-        "选了「自定义兼容网关」才出现的网关表单（connect 步），说的是网关认的环境变量名；内置厂商只粘 Key，不经过这一步（#4197）",
-    ("apple/provider-wizard", "从 ~/.zshrc 导入"): "向导第一步的「高级」里（#4197）；老 hub 的向导保持原样",
-    ("apple/provider-wizard", "读这台电脑的 ~/.zshrc，找出形如 alias x=\\\"K=V … claude\\\" 的行，按网关和 Key 合成供应商。Key 只在 hub 里转手，加密保存。"):
-        "「高级」里的从 ~/.zshrc 导入（#4197），给已经有 alias 的研发用户",
-    ("apple/provider-wizard", "在「设置 › 电脑」里重新部署这台电脑的 personad 后再试。"): "「高级」里的从 ~/.zshrc 导入（#4197）出错时",
-    ("apple/provider-wizard", "这台电脑的 ~/.zshrc 里没有调用 claude 的 alias。"): "「高级」里的从 ~/.zshrc 导入（#4197）",
+    ("apple/provider-wizard", "Choose Bearer if the gateway only accepts Authorization: Bearer (ANTHROPIC_AUTH_TOKEN). The key is stored encrypted on the hub and never sent back to apps."):
+        "Only the custom compatible gateway form (connect step) names this environment variable; built-in providers only ask for a key (#4197).",
+    ("apple/provider-wizard", "Import from ~/.zshrc"): "The first step's Advanced section (#4197); older hubs retain their wizard.",
+    ("apple/provider-wizard", 'Reads this computer\'s ~/.zshrc, finds lines like alias x=\\"K=V … claude\\", and turns them into providers by gateway and key. Keys only pass through the hub and are stored encrypted.'):
+        "Import from ~/.zshrc in Advanced (#4197), for developers who already have aliases.",
+    ("apple/provider-wizard", "Redeploy personad on this computer in Settings › Computers, then try again."): "An error from Import from ~/.zshrc in Advanced (#4197).",
+    ("apple/provider-wizard", "This computer's ~/.zshrc has no aliases that call claude."): "Import from ~/.zshrc in Advanced (#4197).",
 }
 
 # (scope, key) → who is fixing it (the issue or the design's work item). Each must still be wrong somewhere.
@@ -139,8 +146,6 @@ PENDING = {
 }
 
 ANDROID_DIRS = {"zh-Hans": "values-zh", "en": "values", "ja": "values-ja"}
-_CJK = re.compile(r"[぀-ヿ一-鿿]")
-_LITERAL = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 
 
 def _json_strings(path):
@@ -175,6 +180,30 @@ def _swift_lines(path, selector):
     return lines
 
 
+@lru_cache(maxsize=1)
+def _apple_catalog():
+    with open(os.path.join(ROOT, 'apple/Shared/Localization/Localizable.xcstrings'), encoding='utf-8') as file:
+        return json.load(file)['strings']
+
+
+def _swift_catalog_strings(source, catalog, lang):
+    by_shape = {}
+    for key in catalog:
+        by_shape.setdefault(apple_l10n.normalize(key), []).append(key)
+    out = []
+    marked = apple_l10n.ignored_lines(source)
+    if marked is None:
+        return out
+    for literal in swift_literals.literals(source):
+        if literal.line in marked:
+            continue
+        normalized = apple_l10n.normalize(literal.text, literal=True)
+        for key in by_shape.get(normalized, []):
+            holder = catalog[key].get('localizations', {}).get(lang, {})
+            out.extend((key, value['value']) for value in apple_l10n.values(holder))
+    return out
+
+
 def scope_strings(scope):
     """(lang, file, key, text) of every string the scope covers; swift's key is the literal."""
     out = []
@@ -189,10 +218,8 @@ def scope_strings(scope):
         else:
             path = os.path.join(ROOT, scope.path)
             if os.path.exists(path):
-                for line in _swift_lines(path, scope.keys):
-                    if line.lstrip().startswith("//"):
-                        continue
-                    out += [(lang, path, m.group(1), m.group(1)) for m in _LITERAL.finditer(line) if _CJK.search(m.group(1))]
+                source = '\n'.join(_swift_lines(path, scope.keys))
+                out += [(lang, path, key, value) for key, value in _swift_catalog_strings(source, _apple_catalog(), lang)]
     return out
 
 
@@ -228,6 +255,24 @@ class BannedWordsTest(unittest.TestCase):
         self.assertEqual(banned_words("トークンを貼り付け"), ["token"])
         self.assertEqual(banned_words("ノードを更新"), ["node"])
         self.assertEqual(banned_words("ランチャーを選ぶ"), ["launcher"])
+
+
+class AppleCatalogCopyTest(unittest.TestCase):
+    def test_english_source_keys_resolve_each_declared_language(self):
+        catalog = {'Sign In': {'localizations': {
+            'en': {'stringUnit': {'value': 'Sign In'}},
+            'zh-Hans': {'stringUnit': {'value': '用token登录'}},
+            'ja': {'stringUnit': {'value': 'ログイン'}}}}}
+        source = 'Text("Sign In")\n'
+        self.assertEqual(_swift_catalog_strings(source, catalog, 'en'), [('Sign In', 'Sign In')])
+        chinese = _swift_catalog_strings(source, catalog, 'zh-Hans')
+        self.assertEqual(chinese, [('Sign In', '用token登录')])
+        self.assertEqual(banned_words(chinese[0][1]), ['token'])
+        self.assertEqual(_swift_catalog_strings(source, catalog, 'ja'), [('Sign In', 'ログイン')])
+
+    def test_comments_and_explicit_non_ui_values_do_not_count(self):
+        catalog = {'Open': {'localizations': {'zh-Hans': {'stringUnit': {'value': '打开'}}}}}
+        self.assertEqual(_swift_catalog_strings('// Text("Open")\nlet data = "Open" // i18n-ignore\n', catalog, 'zh-Hans'), [])
 
 
 class OnboardingCopyTest(unittest.TestCase):

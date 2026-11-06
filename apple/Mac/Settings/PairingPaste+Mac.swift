@@ -25,12 +25,12 @@ struct QRScanner: View {
                     failed = true
                 }
             } label: {
-                Label("粘贴配对链接", systemImage: Theme.Icon.paste).lineLimit(1)
+                Label("Paste Pairing Link", systemImage: Theme.Icon.paste).lineLimit(1)
             }
             .themedButton(prominent: true)
             .controlSize(.large)
             if failed {
-                Text("剪贴板里不是配对链接").font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                Text("The clipboard doesn't contain a pairing link").font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }
         }
         .frame(maxWidth: .infinity)

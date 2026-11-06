@@ -26,10 +26,10 @@ private struct MacRefreshButton: View {
                 busy = false
             }
         } label: {
-            Label("刷新", systemImage: Theme.Icon.retry)
+            Label("Refresh", systemImage: Theme.Icon.retry)
         }
         .disabled(busy)
-        .help("刷新（⌘R）")
+        .help("Refresh (⌘R)")
     }
 }
 #endif

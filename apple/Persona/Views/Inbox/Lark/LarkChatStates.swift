@@ -23,22 +23,22 @@ nonisolated struct LarkLoadProblem: Equatable, Sendable {
     static let notLoggedInCode = "lark_not_logged_in"
 
     /// `subject` names what did not load in the catch-all title (this chat, this topic).
-    static func of(_ error: Error, subject: String = String(localized: "这个会话")) -> LarkLoadProblem {
+    static func of(_ error: Error, subject: String = String(localized: "this chat")) -> LarkLoadProblem {
         if isNotLoggedIn(error) {
-            return LarkLoadProblem(kind: .notLoggedIn, title: String(localized: "飞书登录已失效"),
-                                   message: String(localized: "hub 所在机器上的飞书网关没有登录飞书。在那台机器上重新登录飞书网关，再回来重试。"),
+            return LarkLoadProblem(kind: .notLoggedIn, title: String(localized: "Lark Sign-in Expired"),
+                                   message: String(localized: "The Lark gateway on the hub machine isn't signed in to Lark. Sign in to the Lark gateway again on that machine, then come back and retry."),
                                    symbol: Theme.Icon.credentials,
-                                   inline: String(localized: "飞书登录已失效：在 hub 所在的机器上重新登录飞书网关"))
+                                   inline: String(localized: "Lark sign-in expired: sign in to the Lark gateway again on the hub machine"))
         }
         if error.isOffline {
-            return LarkLoadProblem(kind: .offline, title: String(localized: "连不上 hub"), message: String(localized: "检查网络连接后重试。"),
+            return LarkLoadProblem(kind: .offline, title: String(localized: "Can't reach the hub"), message: String(localized: "Check your network connection and try again."),
                                    symbol: Theme.Icon.offline, inline: nil)
         }
         if error.isTimeout {
-            return LarkLoadProblem(kind: .timeout, title: String(localized: "加载超时"), message: String(localized: "hub 一直没有回应，稍后重试。"),
+            return LarkLoadProblem(kind: .timeout, title: String(localized: "Loading timed out"), message: String(localized: "The hub didn't respond. Try again later."),
                                    symbol: Theme.Icon.error, inline: nil)
         }
-        return LarkLoadProblem(kind: .other, title: String(localized: "没能加载\(subject)"), message: error.localizedDescription,
+        return LarkLoadProblem(kind: .other, title: String(localized: "Couldn't load \(subject)"), message: error.localizedDescription,
                                symbol: Theme.Icon.error, inline: error.shown)
     }
 

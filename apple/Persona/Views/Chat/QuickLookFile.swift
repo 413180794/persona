@@ -71,7 +71,7 @@ final class QuickLookFileModel {
         error = nil
         received = 0
         guard let api else {
-            error = String(localized: "尚未连接 hub")
+            error = String(localized: "Not connected to the hub [App Model 93d955]")
             return
         }
         let mine = generation
@@ -103,14 +103,14 @@ struct QuickLookFileView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "无法预览"), message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Preview"), message: error)
             } else if let url = model.localURL {
                 QuickLookView(url: url)
                     .accessibilityIdentifier("file-quicklook")
             } else {
                 VStack(spacing: Theme.Space.m) {
                     ProgressView(value: Double(model.received), total: Double(max(model.total, 1)))
-                    Text("正在下载文件…")
+                    Text("Downloading file…")
                         .font(Theme.Font.body)
                     Text(ByteCountFormatter.string(fromByteCount: model.received, countStyle: .file) + " / " +
                          ByteCountFormatter.string(fromByteCount: model.total, countStyle: .file))

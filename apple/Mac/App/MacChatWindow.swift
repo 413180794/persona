@@ -15,9 +15,9 @@ struct MacChatWindow: View {
                         // The first page of its own window: nothing to go back to (no back arrow).
                         .environment(\.splitDetail, SplitDetail(isFirstPage: true, ownWindow: true))
                 }
-                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "对话"))
+                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "Chat"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有对话"), message: String(localized: "这个窗口打开的对话已经不在了。"))
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "No Chat"), message: String(localized: "The chat this window opened is gone."))
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)
@@ -36,7 +36,7 @@ struct MacOpenInWindowButton: View {
 
     var body: some View {
         Button { openWindow(id: MacChatWindow.id, value: key) } label: {
-            Label("在新窗口打开", systemImage: Theme.Icon.newWindow)
+            Label("Open in New Window", systemImage: Theme.Icon.newWindow)
         }
     }
 }
@@ -72,9 +72,9 @@ struct MacTerminalWindow: View {
             if let key {
                 TerminalPanel(key: key, switchTo: nil, grab: TerminalGrab(dragged: { _ in }, released: { _, _ in }, close: { NSApp.keyWindow?.close() }))
                     .padding(Theme.Space.xs)
-                    .navigationTitle(String(localized: "终端 · \(model.session(key)?.displayTitle ?? key.sessionID)"))
+                    .navigationTitle(String(localized: "Terminal · \(model.session(key)?.displayTitle ?? key.sessionID)"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "没有终端"), message: String(localized: "这个窗口打开的 Agent 已经不在了。"))
+                EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "No Terminal"), message: String(localized: "The agent this window opened is gone."))
             }
         }
         .frame(minWidth: Theme.Size.macWindowMinWidth, minHeight: Theme.Size.macWindowMinHeight)

@@ -105,7 +105,7 @@ struct VNCShortcutBar: View {
                     }
                     .themedButton(prominent: on)
                     .accessibilityIdentifier("vnc-key-\(id)")
-                    .accessibilityValue(on ? "按住" : "")
+                    .accessibilityValue(on ? String(localized: "Held") : "")
                 }
                 ForEach(Self.keys) { k in
                     Button { session.press(k.keysym, with: Array(Set(k.with + modifiers.keys))) } label: {

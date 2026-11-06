@@ -69,7 +69,7 @@ struct ConnectorThreadView: View {
             if !model.loaded {
                 ProgressView()
             } else if model.messages.isEmpty && model.failure == nil {
-                EmptyStateView(symbol: Theme.Icon.messagesApp, title: String(localized: "没有消息"), message: String(localized: "这个会话里还没有能显示的消息。"))
+                EmptyStateView(symbol: Theme.Icon.messagesApp, title: String(localized: "No Messages"), message: String(localized: "There are no messages to show in this conversation yet."))
             }
         }
         .safeAreaInset(edge: .top) {
@@ -102,7 +102,7 @@ struct ConnectorThreadView: View {
             Group {
                 if olderFailed {
                     Button { Task { await older() } } label: {
-                        Label("加载更早的消息", systemImage: Theme.Icon.retry).font(Theme.Font.label).lineLimit(1)
+                        Label("Load Earlier Messages", systemImage: Theme.Icon.retry).font(Theme.Font.label).lineLimit(1)
                     }
                     .buttonStyle(.borderless)
                 } else {
@@ -113,7 +113,7 @@ struct ConnectorThreadView: View {
             .padding(.vertical, Theme.Space.m)
             .accessibilityIdentifier("thread.older")
         } else if model.loaded, !model.messages.isEmpty {
-            Text("没有更早的消息了").font(Theme.Font.caption).foregroundStyle(.tertiary)
+            Text("No earlier messages").font(Theme.Font.caption).foregroundStyle(.tertiary)
                 .frame(maxWidth: .infinity).padding(.vertical, Theme.Space.m)
         }
     }
@@ -132,7 +132,7 @@ struct ConnectorThreadView: View {
     /// Back to what a quote answers: the message shown, highlighted; read back a few pages for one not loaded yet.
     private func jump(to id: String) async -> Bool {
         guard await model.reach(id) else {
-            notice = String(localized: "原消息太早了，往上翻几页再找")
+            notice = String(localized: "The original message is further back. Scroll up a few pages to find it.")
             return false
         }
         withAnimation(Theme.Motion.standard) { position.scrollTo(id: id, anchor: .center) }
@@ -147,8 +147,8 @@ struct ConnectorThreadView: View {
     }
 
     private var composer: some View {
-        ThreadComposer(placeholder: String(localized: "回复 \(model.chat?.name ?? "")"), text: $text, selection: $selection, focused: $focused,
-                       quote: replyTo.map { ($0.isMine ? String(localized: "回复 自己") : String(localized: "回复 \($0.sender.name)"), $0.summary) }, sending: model.sending,
+        ThreadComposer(placeholder: String(localized: "Replying to \(model.chat?.name ?? "")"), text: $text, selection: $selection, focused: $focused,
+                       quote: replyTo.map { ($0.isMine ? String(localized: "Replying to yourself") : String(localized: "Replying to \($0.sender.name)"), $0.summary) }, sending: model.sending,
                        cancelQuote: { replyTo = nil }, send: send)
     }
 
@@ -238,7 +238,7 @@ struct ConnectorThreadRow: View {
         } else {
             WidestColumn(spacing: Theme.Space.sm) {
                 if let q = m.replyTo {
-                    QuoteCard(heading: q.from ?? String(localized: "消息"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "（原消息）"), tint: LarkColor.blue,
+                    QuoteCard(heading: q.from ?? String(localized: "Messages [Quote Views 4da199]"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "(Original message)"), tint: LarkColor.blue,
                               ink: .primary) {
                         Task {
                             if await jump(q.id) { Haptics.tap() } else { Haptics.attention() }
@@ -265,13 +265,13 @@ struct ConnectorThreadRow: View {
 
     @ViewBuilder private var menu: some View {
         if canReply {
-            Button { reply(m) } label: { Label("回复", systemImage: Theme.Icon.reply) }
+            Button { reply(m) } label: { Label("Reply", systemImage: Theme.Icon.reply) }
         }
         if !m.summary.isEmpty {
             Button {
                 UIPasteboard.general.string = m.text?.isEmpty == false ? m.text : m.summary
                 Haptics.success()
-            } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+            } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
         }
         if let s = m.url, let u = URL(string: s) {
             Button { openURL(u) } label: { Label(openTitle, systemImage: Theme.Icon.openExternal) }
@@ -295,9 +295,9 @@ struct ThreadMediaView: View {
             if let ref = media.picture {
                 LarkRemoteImage(url: ConnectorMedia.url(connector, ref: ref), maxPixel: 400, contentMode: .fit)
                     .scaledFrame(width: Theme.Size.box120, height: Theme.Size.box120)
-                    .accessibilityLabel("贴纸 \(media.emoji ?? "")")
+                    .accessibilityLabel("Sticker \(media.emoji ?? "")")
             } else {
-                placeholder(Theme.Icon.photo, String(localized: "贴纸 \(media.emoji ?? "")"))
+                placeholder(Theme.Icon.photo, String(localized: "Sticker \(media.emoji ?? "")"))
             }
         case "video":
             ZStack(alignment: .bottomLeading) {
@@ -310,7 +310,7 @@ struct ThreadMediaView: View {
                             Image(systemName: Theme.Icon.playMedia).font(Theme.Font.display).foregroundStyle(.white.opacity(0.9))
                         }
                 } else {
-                    placeholder(Theme.Icon.video, String(localized: "视频"))
+                    placeholder(Theme.Icon.video, String(localized: "Video"))
                 }
                 Text(ThreadMediaText.duration(media.duration ?? 0))
                     .font(Theme.Font.caption).monospacedDigit().foregroundStyle(.white)
@@ -319,16 +319,16 @@ struct ThreadMediaView: View {
                     .padding(Theme.Space.s)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("视频 \(ThreadMediaText.duration(media.duration ?? 0))")
+            .accessibilityLabel("Video \(ThreadMediaText.duration(media.duration ?? 0))")
         case "voice":
             Label {
-                Text("语音 \(ThreadMediaText.duration(media.duration ?? 0))").font(Theme.Font.secondaryMedium).monospacedDigit()
+                Text("Voice \(ThreadMediaText.duration(media.duration ?? 0))").font(Theme.Font.secondaryMedium).monospacedDigit()
             } icon: {
                 Image(systemName: Theme.Icon.voiceMessage)
             }
             .foregroundStyle(.primary)
         default:
-            let name = media.name ?? String(localized: "文件")
+            let name = media.name ?? String(localized: "Files")
             HStack(spacing: Theme.Space.m) {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     Text(name).font(Theme.Font.secondaryMedium).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
@@ -356,9 +356,9 @@ struct ThreadMediaView: View {
                 .matchedTransitionSource(id: url, in: zoom)
                 .onTapGesture { viewing = true }
                 .fullScreenCover(isPresented: $viewing) { ImageViewer(urls: [url], index: 0).navigationTransition(.zoom(sourceID: url, in: zoom)) }
-                .accessibilityLabel("图片")
+                .accessibilityLabel("images")
         } else {
-            placeholder(Theme.Icon.photo, String(localized: "图片"))
+            placeholder(Theme.Icon.photo, String(localized: "images"))
         }
     }
 

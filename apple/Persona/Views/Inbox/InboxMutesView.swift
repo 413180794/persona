@@ -17,18 +17,18 @@ struct InboxMutesView: View {
                 .listStyle(.plain)
                 .overlay {
                     if mutes.isEmpty {
-                        EmptyStateView(symbol: Theme.Icon.mute, title: String(localized: "没有静音的"), message: String(localized: "在收件箱里长按一条，可以静音它的仓库、会话或发件人。"))
+                        EmptyStateView(symbol: Theme.Icon.mute, title: String(localized: "Nothing Muted"), message: String(localized: "Touch and hold an item in the Inbox to mute its repo, conversation, or sender."))
                     }
                 }
             }
             .themedPage()
-            .navigationTitle("已静音")
+            .navigationTitle("Muted [Inbox Mutes View e5e468]")
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.lineLimit(1)
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1)
                 }
             }
             .task { await load() }
@@ -48,10 +48,10 @@ struct InboxMutesView: View {
         .padding(.vertical, Theme.Space.xs)
         .accessibilityIdentifier("inbox-mute")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button { unmute(m) } label: { Label("取消静音", systemImage: Theme.Icon.unmute) }.tint(Theme.accent)
+            Button { unmute(m) } label: { Label("Unmute [Inbox Mutes View 8d0173]", systemImage: Theme.Icon.unmute) }.tint(Theme.accent)
         }
         .contextMenu {
-            Button { unmute(m) } label: { Label("取消静音", systemImage: Theme.Icon.unmute) }
+            Button { unmute(m) } label: { Label("Unmute [Inbox Mutes View 8d0173]", systemImage: Theme.Icon.unmute) }
         }
     }
 

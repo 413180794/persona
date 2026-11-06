@@ -10,54 +10,54 @@ struct LauncherPresetSections: View {
         Section {
             ForEach(model.presets) { p in row(p) }
         } header: {
-            Text("供应商")
+            Text("Provider")
         } footer: {
             if let p = model.selected {
                 // A built-in one is the hub's own, not an extension called "builtin" (#3621).
                 if p.isBuiltin {
-                    Text("地址、接入方式和模型都已经填好；加好以后和自己填写的一样可以编辑。")
+                    Text("The address, connection type and models are already filled in; once added, you can edit it like one you set up yourself.")
                 } else {
-                    Text("地址、接入方式和模型由扩展「\(p.plugin)」提供；加好以后和自己填写的一样可以编辑。")
+                    Text("The address, connection type, and models come from the “\(p.plugin)” extension. Once added, you can edit it like one you set up yourself.")
                 }
             }
         }
         Section {
-            TextField("名字，比如 jv_team", text: $model.name)
+            TextField(String(localized: "Name, e.g. jv_team"), text: $model.name)
                 .font(Theme.Font.body.monospaced())
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .accessibilityIdentifier("launcher.preset.name")
         } header: {
-            Text("名字")
+            Text("Name [Add Computer View 677331]")
         } footer: {
             if let problem = model.nameProblem {
                 Text(problem).foregroundStyle(Theme.danger)
             } else {
-                Text("字母、数字、_ 和 -；按这个名字选择供应商。")
+                Text("Letters, digits, _, and -. This is the name you pick the provider by.")
             }
         }
         Section {
-            SecretField("API Key", filled: String(localized: "已填写，点保存"), text: $model.apiKey, identifier: "launcher.preset.key")
+            SecretField("API Key", filled: String(localized: "Filled in; tap Save [Extension Market Views 94348c]"), text: $model.apiKey, identifier: "launcher.preset.key")
         } header: {
             Text("Key")
         } footer: {
-            Text([model.selected?.keyHint, String(localized: "Key 加密存在 hub，不会返回到客户端。")].compactMap { $0 }.joined(separator: "\n"))
+            Text([model.selected?.keyHint, String(localized: "The key is stored encrypted on the hub and never sent back to clients.")].compactMap { $0 }.joined(separator: "\n"))
         }
         if let p = model.selected {
             Section {
                 if p.choices.isEmpty {
-                    TextField("默认模型", text: $model.model).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    TextField(String(localized: "Default Model"), text: $model.model).textInputAutocapitalization(.never).autocorrectionDisabled()
                 } else {
-                    Picker("默认模型", selection: $model.model) {
+                    Picker("Default Model", selection: $model.model) {
                         ForEach(p.choices) { m in Text(m.label).tag(m.id) }
                     }
                 }
             } header: {
-                Text("默认模型")
+                Text("Default Model")
             } footer: {
                 if let e = p.modelsError, !e.isEmpty {
-                    Text("读不到扩展的模型列表（\(e)），这里是它声明的。")
+                    Text("Couldn't load the extension's model list (\(e)). These are the models it declares.")
                 } else {
-                    Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。")
+                    Text("Choices for each use are managed in “Model Configuration”. Uses without their own choice get the default here.")
                 }
             }
         }

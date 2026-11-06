@@ -18,10 +18,10 @@ struct ArchivedConversationsView: View {
             .themedPage()
             .overlay {
                 if list.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.archive, title: String(localized: "没有归档的对话"), message: String(localized: "在对话列表里左滑一个对话就能归档，它会收在这里。"))
+                    EmptyStateView(symbol: Theme.Icon.archive, title: String(localized: "No archived chats"), message: String(localized: "Swipe left on a chat in the list to archive it. It'll show up here."))
                 }
             }
-            .navigationTitle("已归档")
+            .navigationTitle("Archived")
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -30,7 +30,7 @@ struct ArchivedConversationsView: View {
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.lineLimit(1)
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1)
                 }
             }
             #endif
@@ -41,7 +41,7 @@ struct ArchivedConversationsView: View {
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "New Chat [Quick Actions ea4b29]") : s.title
         return Button { open(s.key) } label: {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 if let t = ConversationTitle(title) {
@@ -62,13 +62,13 @@ struct ArchivedConversationsView: View {
         .accessibilityIdentifier("archived-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button { Task { await model.archiveConversation(s.key, false) } } label: {
-                Label("取消归档", systemImage: Theme.Icon.unarchive)
+                Label("Unarchive", systemImage: Theme.Icon.unarchive)
             }
             .tint(Theme.accent)
         }
         .contextMenu {
             Button { Task { await model.archiveConversation(s.key, false) } } label: {
-                Label("取消归档", systemImage: Theme.Icon.unarchive)
+                Label("Unarchive", systemImage: Theme.Icon.unarchive)
             }
         }
     }

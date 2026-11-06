@@ -14,8 +14,8 @@ final class SelectableWebView: WKWebView {
         // WebKit puts Copy into the menu only when text is selected.
         guard menu.items.contains(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierCopy" }) else { return }
         let ours = UIMenu(options: .displayInline, children: [
-            UIAction(title: String(localized: "AI 修改"), image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
-            UIAction(title: String(localized: "作为上下文"), image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
+            UIAction(title: String(localized: "Edit with AI"), image: UIImage(systemName: Theme.Icon.ai)) { [weak self] _ in self?.pickSelection("edit") },
+            UIAction(title: String(localized: "Add as Context"), image: UIImage(systemName: Theme.Icon.addContext)) { [weak self] _ in self?.pickSelection("context") },
         ])
         menu.insertItem(.separator(), at: 0)
         for item in ours.children.reversed() { menu.insertItem(item.nsMenuItem(), at: 0) }

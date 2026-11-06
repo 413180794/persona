@@ -25,10 +25,10 @@ struct GitPane: View {
                 changes(s)
                 history(s)
             } else if let error {
-                ContentUnavailableView("读不到 Git 状态", systemImage: Theme.Icon.error, description: Text(error))
+                ContentUnavailableView("Can't Read Git Status", systemImage: Theme.Icon.error, description: Text(error))
                     .listRowBackground(Color.clear)
             } else if status?.isRepo == false {
-                ContentUnavailableView("不是 Git 仓库", systemImage: Theme.Icon.gitBranch, description: Text(cwd))
+                ContentUnavailableView("Not a Git Repository", systemImage: Theme.Icon.gitBranch, description: Text(cwd))
                     .listRowBackground(Color.clear)
             } else {
                 HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
@@ -68,7 +68,7 @@ struct GitPane: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.gitBranch).foregroundStyle(Theme.accent)
-                Text(s.branch ?? String(localized: "分离的 HEAD")).font(Theme.Font.heading).lineLimit(1)
+                Text(s.branch ?? String(localized: "Detached HEAD")).font(Theme.Font.heading).lineLimit(1)
                 Spacer(minLength: Theme.Space.xs)
                 if s.ahead > 0 { sync(Theme.Icon.send, s.ahead, .secondary) }
                 if s.upstream != nil { pullButton(s) }
@@ -76,11 +76,11 @@ struct GitPane: View {
             HStack(spacing: Theme.Space.sm) {
                 if let up = s.upstream {
                     Label(up, systemImage: Theme.Icon.gitUpstream).lineLimit(1)
-                    if s.ahead == 0 && s.behind == 0 { Text("· 已同步") }
+                    if s.ahead == 0 && s.behind == 0 { Text("· Up to date") }
                 } else {
-                    Label("没有上游分支", systemImage: Theme.Icon.gitNoUpstream).lineLimit(1)
+                    Label("No upstream branch", systemImage: Theme.Icon.gitNoUpstream).lineLimit(1)
                 }
-                if s.stashes > 0 { Text("· 暂存 \(s.stashes)") }
+                if s.stashes > 0 { Text("· \(s.stashes) stashes") }
             }
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
@@ -103,7 +103,7 @@ struct GitPane: View {
         } label: {
             HStack(spacing: Theme.Space.xs) {
                 if pullModel.isPulling { ProgressView().controlSize(.mini) }
-                Chip(text: pullModel.isPulling ? String(localized: "拉取中") : s.behind > 0 ? String(localized: "拉取 \(s.behind)") : String(localized: "拉取"),
+                Chip(text: pullModel.isPulling ? String(localized: "Pulling") : s.behind > 0 ? String(localized: "Pull \(s.behind)") : String(localized: "Pull"),
                      symbol: pullModel.isPulling ? nil : Theme.Icon.down,
                      look: .tint(s.behind > 0 ? Theme.cautionText : Theme.accent))
                     .monospacedDigit()
@@ -115,9 +115,9 @@ struct GitPane: View {
         .buttonStyle(.borderless)
         .disabled(pullModel.isPulling || loadingMore || s.branch == nil)
         .accessibilityIdentifier("git-pull")
-        .accessibilityLabel("拉取最新代码")
-        .accessibilityValue(pullModel.isPulling ? "拉取中" : "落后 \(s.behind) 个提交")
-        .help("安全拉取上游最新代码，不自动合并或覆盖本地改动")
+        .accessibilityLabel("Pull Latest Code")
+        .accessibilityValue(pullModel.isPulling ? String(localized: "Pulling") : String(localized: "\(s.behind) commits behind"))
+        .help("Safely pulls the latest upstream code without merging or overwriting local changes")
     }
 
     private func sync(_ symbol: String, _ n: Int, _ color: Color) -> some View {
@@ -127,20 +127,20 @@ struct GitPane: View {
     @ViewBuilder private func changes(_ s: GitStatus) -> some View {
         Section {
             if s.files.isEmpty {
-                Label("工作区是干净的", systemImage: Theme.Icon.success).foregroundStyle(.secondary)
+                Label("Working tree is clean", systemImage: Theme.Icon.success).foregroundStyle(.secondary)
             }
             ForEach(s.files) { f in
                 Button { diff = GitDiffTarget(file: f, staged: f.isStaged && !f.hasUnstaged) } label: { GitFileRow(file: f) }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button { UIPasteboard.general.string = f.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                        Button { UIPasteboard.general.string = f.path } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
                     }
             }
         } header: {
             if !s.files.isEmpty {
                 let added = s.files.reduce(0) { $0 + $1.added }, deleted = s.files.reduce(0) { $0 + $1.deleted }
                 HStack {
-                    Text("改动 \(s.files.count)")
+                    Text("Changes \(s.files.count)")
                     Spacer()
                     Text("+\(added)").foregroundStyle(Theme.Diff.add)
                     Text("−\(deleted)").foregroundStyle(Theme.Diff.del)
@@ -151,7 +151,7 @@ struct GitPane: View {
     }
 
     @ViewBuilder private func history(_ s: GitStatus) -> some View {
-        Section(String(localized: "git.commits", defaultValue: "提交")) {
+        Section(String(localized: "git.commits", defaultValue: "Commits")) {
             ForEach(s.commits + older) { c in
                 Button { commit = c } label: { GitCommitRow(commit: c, isHead: c.hash == s.head?.hash) }
                     .buttonStyle(.plain)
@@ -162,7 +162,7 @@ struct GitPane: View {
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         if loadingMore { ProgressView().controlSize(.mini) }
-                        Text("加载更早的提交").lineLimit(1)
+                        Text("Load Earlier Commits").lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -256,7 +256,7 @@ struct GitFileRow: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(file.name).font(Theme.Font.secondaryMedium).lineLimit(1)
                 HStack(spacing: Theme.Space.xs) {
-                    if showsStage, file.isStaged { Text(file.hasUnstaged ? "部分已暂存" : "已暂存").foregroundStyle(.primary) }
+                    if showsStage, file.isStaged { Text(file.hasUnstaged ? String(localized: "Partly staged") : String(localized: "Staged")).foregroundStyle(.primary) }
                     if let orig = file.origPath { Text("← " + (orig as NSString).lastPathComponent) }
                     if !file.folder.isEmpty { Text(file.folder).truncationMode(.head) }
                 }
@@ -266,7 +266,7 @@ struct GitFileRow: View {
             }
             Spacer(minLength: 6)
             if file.binary == true {
-                Text("二进制").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text("Binary").font(Theme.Font.label).foregroundStyle(.secondary)
             } else if file.added + file.deleted > 0 {
                 HStack(spacing: Theme.Space.xs) {
                     Text("+\(file.added)").foregroundStyle(Theme.Diff.add)
@@ -331,7 +331,7 @@ struct GitDiffSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if target.file.isStaged && target.file.hasUnstaged {
-                    SegmentedChoice("", [(false, String(localized: "未暂存")), (true, String(localized: "已暂存"))], selection: $target.staged)
+                    SegmentedChoice("", [(false, String(localized: "Unstaged")), (true, String(localized: "Staged"))], selection: $target.staged)
                     .padding(.horizontal, Theme.Space.l)
                     .padding(.vertical, Theme.Space.s)
                 }
@@ -342,20 +342,20 @@ struct GitDiffSheet: View {
                 } else if let diff {
                     DiffText(diff: diff.diff, truncated: diff.truncated)
                 } else if let error {
-                    ContentUnavailableView("读不到改动", systemImage: Theme.Icon.error, description: Text(error))
+                    ContentUnavailableView("Can't Read Changes", systemImage: Theme.Icon.error, description: Text(error))
                 } else {
                     ProgressView().frame(maxHeight: .infinity)
                 }
             }
             .navigationTitle(target.file.name)
-            .navigationSubtitle(target.file.folder.isEmpty ? String(localized: "仓库根目录") : target.file.folder)
+            .navigationSubtitle(target.file.folder.isEmpty ? String(localized: "Repository root") : target.file.folder)
             .navigationBarTitleDisplayMode(.inline)
             .pageToolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
-                        Button { UIPasteboard.general.string = diff?.diff } label: { Label("拷贝 diff", systemImage: Theme.Icon.copy) }
-                        Button { UIPasteboard.general.string = target.file.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+                        Button { UIPasteboard.general.string = diff?.diff } label: { Label("Copy Diff", systemImage: Theme.Icon.copy) }
+                        Button { UIPasteboard.general.string = target.file.path } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
                     } label: { Image(systemName: Theme.Icon.more) }
                 }
             }
@@ -411,7 +411,7 @@ struct GitCommitSheet: View {
                 }
                 if let show {
                     let chunks = DiffText.split(show.diff)
-                    Section("\(show.files.count) 个文件") {
+                    Section("\(show.files.count) files") {
                         ForEach(show.files) { f in
                             NavigationLink {
                                 Group {
@@ -439,7 +439,7 @@ struct GitCommitSheet: View {
             .themedPage()
             .navigationTitle(commit.short)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
             .task {
                 do { show = try await model.api(group)?.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
                 catch { self.error = error.shown }
@@ -488,12 +488,12 @@ struct DiffText: View {
     var body: some View {
         let content = GitDiffMemo.content(diff)
         if content.lines.isEmpty {
-            ContentUnavailableView("没有文本改动", systemImage: Theme.Icon.document, description: Text("可能是二进制文件、只改了权限，或者改动已被撤销。"))
+            ContentUnavailableView("No Text Changes", systemImage: Theme.Icon.document, description: Text("It may be a binary file, a permissions-only change, or a change that was undone."))
         } else {
             VStack(spacing: 0) {
                 MonoTextView(text: content.text, inset: UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 12))
                 if truncated {
-                    Text("改动太大，只显示了前 512 KB").font(Theme.Font.label).foregroundStyle(.secondary).padding(Theme.Space.s)
+                    Text("Change too large; showing the first 512 KB").font(Theme.Font.label).foregroundStyle(.secondary).padding(Theme.Space.s)
                 }
             }
             .background(Theme.codeBackground)

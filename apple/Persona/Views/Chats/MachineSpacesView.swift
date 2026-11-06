@@ -31,20 +31,20 @@ struct MachineSpacesView: View {
                 Section {
                     ForEach(active) { g in row(g, busy: true) }
                 } header: {
-                    SectionHeader(title: String(localized: "进行中"), count: active.count, tone: StatusPalette.working)
+                    SectionHeader(title: String(localized: "Active"), count: active.count, tone: StatusPalette.working)
                 }
             }
             if !quiet.isEmpty {
                 Section {
                     ForEach(quiet) { g in row(g, busy: false) }
                 } header: {
-                    SectionHeader(title: String(localized: "空闲"), count: quiet.count, tone: StatusPalette.idle)
+                    SectionHeader(title: String(localized: "Idle"), count: quiet.count, tone: StatusPalette.idle)
                 }
             }
             if groups.isEmpty {
                 Section {
-                    EmptyStateView(symbol: machine?.symbol ?? Theme.Icon.machine, title: String(localized: "没有在跑的 Agent"),
-                                   message: machine?.online == false ? String(localized: "这台机器现在离线。") : String(localized: "在这台机器的 herdr 里启动 Claude、Codex 或 TRAEX，就会出现在这里。"))
+                    EmptyStateView(symbol: machine?.symbol ?? Theme.Icon.machine, title: String(localized: "No agents running [Machine Spaces View e5db75]"),
+                                   message: machine?.online == false ? String(localized: "This machine is offline.") : String(localized: "Start Claude, Codex, or TRAEX in herdr on this machine and it shows up here."))
                 }
                 .listRowBackground(Color.clear)
             }
@@ -56,7 +56,7 @@ struct MachineSpacesView: View {
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 // By value, like the chats the details page opens (MachineDetailRoute).
-                NavigationLink(value: MachineDetailRoute(ref)) { Label("机器详情", systemImage: Theme.Icon.info) }
+                NavigationLink(value: MachineDetailRoute(ref)) { Label("Machine Details", systemImage: Theme.Icon.info) }
             }
         }
     }
@@ -71,11 +71,11 @@ struct MachineSpacesView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.sm) {
                     Circle().fill(m.online ? Theme.positive : Color.secondary).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
-                    Text(m.online ? "在线" : "离线").font(Theme.Font.secondaryStrong)
+                    Text(m.online ? String(localized: "Online") : String(localized: "Offline [Machine Entity be1b4f]")).font(Theme.Font.secondaryStrong)
                     if let h = m.hostname, !h.isEmpty { Text(h).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 // Two counts, two plural rules: localize each piece, join with a neutral separator.
-                Text(verbatim: "\(String(localized: "\(spaces) 个项目")) · \(String(localized: "\(sessions.count) 个 Agent"))").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text(verbatim: "\(String(localized: "\(spaces) projects")) · \(String(localized: "\(sessions.count) agents"))").font(Theme.Font.label).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             StateCounts(group: SpaceGroup(id: "m-" + m.id, machineID: m.id, spaceID: "-", name: m.name, index: 0, sessions: sessions))
@@ -110,8 +110,8 @@ private struct BusySpaceRow: View {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.spaceFilled).foregroundStyle(muted ? Color.secondary : group.state.color)
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                if pinned { Image(systemName: Theme.Icon.pinned).font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-                if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽") }
+                if pinned { Image(systemName: Theme.Icon.pinned).font(Theme.Font.label).foregroundStyle(Theme.accent).accessibilityLabel("Pinned [Personal Agent List View fb47db]") }
+                if muted { Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("Muted [Chats View b66705]") }
                 Spacer(minLength: 4)
                 StateCounts(group: group).opacity(muted ? 0.6 : 1)
             }

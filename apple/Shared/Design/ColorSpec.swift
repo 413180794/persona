@@ -63,7 +63,7 @@ nonisolated struct ColorSpec: Sendable {
     init(extensionTheme theme: ExtensionThemePalette, over base: ColorSpec) {
         self = base
         title = theme.name
-        subtitle = String(localized: "扩展主题")
+        subtitle = String(localized: "Extension Theme")
         accent = theme.accent.color
         larkBlue = accent
         larkMyBubble = accent.opacity(0.16)
@@ -75,7 +75,7 @@ nonisolated struct ColorSpec: Sendable {
     init(persona p: PersonaPalette, over base: ColorSpec) {
         self = base
         title = ThemeColor.persona.title
-        subtitle = String(localized: "形象的配色")
+        subtitle = String(localized: "Avatar's colors")
         if let a = p.accent {
             accent = a.color
             wash = Wash(accent: a)
@@ -116,9 +116,9 @@ nonisolated enum ThemeColor: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .style: String(localized: "跟随界面风格")
-        case .persona: String(localized: "跟随形象")
-        case .extensionTheme: ExtensionThemePalette.current.map { String(localized: "扩展 · \($0.name)") } ?? String(localized: "扩展主题")
+        case .style: String(localized: "Match Interface Style")
+        case .persona: String(localized: "Match Avatar")
+        case .extensionTheme: ExtensionThemePalette.current.map { String(localized: "Extension · \($0.name)") } ?? String(localized: "Extension Theme")
         default: preset?.title ?? ""
         }
     }

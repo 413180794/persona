@@ -8,12 +8,12 @@ nonisolated struct AutoConversationSource: Hashable, Identifiable, Sendable {
     var name: String
     var symbol: String
 
-    static let inbox = AutoConversationSource(id: "inbox", name: String(localized: "收件箱"), symbol: Theme.Icon.inbox)
-    static let task = AutoConversationSource(id: "task", name: String(localized: "定时任务"), symbol: Theme.Icon.schedule)
-    static let larkAgent = AutoConversationSource(id: "lark_agent", name: String(localized: "飞书 /agent"), symbol: Theme.Icon.feishuChats)
-    static let spawned = AutoConversationSource(id: "spawned", name: String(localized: "对话派生"), symbol: Theme.Icon.conversation)
-    static let extensionSource = AutoConversationSource(id: "extension", name: String(localized: "扩展"), symbol: Theme.Icon.plugins)
-    static let other = AutoConversationSource(id: "other", name: String(localized: "其他"), symbol: Theme.Icon.ai)
+    static let inbox = AutoConversationSource(id: "inbox", name: String(localized: "Inbox"), symbol: Theme.Icon.inbox)
+    static let task = AutoConversationSource(id: "task", name: String(localized: "Scheduled Tasks"), symbol: Theme.Icon.schedule)
+    static let larkAgent = AutoConversationSource(id: "lark_agent", name: String(localized: "Lark /agent"), symbol: Theme.Icon.feishuChats)
+    static let spawned = AutoConversationSource(id: "spawned", name: String(localized: "Spawned from Chats"), symbol: Theme.Icon.conversation)
+    static let extensionSource = AutoConversationSource(id: "extension", name: String(localized: "Extensions"), symbol: Theme.Icon.plugins)
+    static let other = AutoConversationSource(id: "other", name: String(localized: "Other"), symbol: Theme.Icon.ai)
 
     /// All of them, in the order the sidebar lists them.
     static let all: [AutoConversationSource] = [inbox, task, larkAgent, spawned, extensionSource, other]

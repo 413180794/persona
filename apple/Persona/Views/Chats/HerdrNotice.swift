@@ -41,7 +41,7 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
             return
         }
         var detail = e.message + "\nHTTP \(e.status)"
-        if let id = e.requestID { detail += String(localized: "\n请求 \(id)") }
+        if let id = e.requestID { detail += String(localized: "\\nRequest ID: \(id)") }
         self.init(text: Self.says(e.message), detail: detail)
     }
 
@@ -51,19 +51,19 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
         let m = message.trimmingCharacters(in: .whitespacesAndNewlines)
         if let r = m.range(of: "herdr server stopped right after starting") {
             let why = m[r.upperBound...]
-            if let code = (why.firstMatch(of: /exit status (-?\d+)/)?.1).map(String.init) { return String(localized: "herdr 起来后马上退出了（退出码 \(code)）") }
-            if let sig = (why.firstMatch(of: /signal: ([\w ]+)/)?.1).map(String.init) { return String(localized: "herdr 起来后马上被结束了（\(sig)）") }
-            return String(localized: "herdr 起来后马上退出了")
+            if let code = (why.firstMatch(of: /exit status (-?\d+)/)?.1).map(String.init) { return String(localized: "herdr exited right after starting (exit code \(code))") }
+            if let sig = (why.firstMatch(of: /signal: ([\w ]+)/)?.1).map(String.init) { return String(localized: "herdr was killed right after starting (\(sig))") }
+            return String(localized: "herdr exited right after starting")
         }
-        if m.contains("herdr is not installed") { return String(localized: "这台电脑上没装 herdr（PATH 和登录 shell 里都找不到 herdr 命令）") }
+        if m.contains("herdr is not installed") { return String(localized: "herdr isn't installed on this computer (no herdr command in PATH or the login shell)") }
         if m.contains("herdr did not answer on") {
-            if let s = (m.firstMatch(of: /within (\d+)s/)?.1).map(String.init) { return String(localized: "herdr 启动了，但 \(s) 秒内没有应答") }
-            return String(localized: "herdr 启动了，但一直没有应答")
+            if let s = (m.firstMatch(of: /within (\d+)s/)?.1).map(String.init) { return String(localized: "herdr started but didn't respond within \(s)s") }
+            return String(localized: "herdr started but never responded")
         }
-        if m.contains("start herdr server:") { return String(localized: "没能运行 herdr 命令") }
-        if m.contains("unknown method herdr.server.start") { return String(localized: "这台电脑上的 Persona 版本太旧，不会启动 herdr，更新后再试") }
-        if m.contains("machine is offline") { return String(localized: "这台电脑现在离线") }
-        if APIError.isTimeoutText(m) { return String(localized: "等了很久 herdr 还没起来，稍后再看看") }
+        if m.contains("start herdr server:") { return String(localized: "Couldn't run the herdr command") }
+        if m.contains("unknown method herdr.server.start") { return String(localized: "Persona on this computer is too old to start herdr. Update it and try again.") }
+        if m.contains("machine is offline") { return String(localized: "This computer is offline") }
+        if APIError.isTimeoutText(m) { return String(localized: "herdr still isn't up after a long wait. Check back later.") }
         return m
     }
 }
@@ -136,7 +136,7 @@ nonisolated struct HerdrFailure: Equatable, Sendable {
                 started.insert(m.ref)
                 withAnimation(Theme.Motion.state) { _ = stopped.remove(m.ref) }
             } else {
-                failures[m.ref] = HerdrFailure(text: String(localized: "叫它启动了，但 herdr 还没有应答"), detail: "herdr.server.start: running false")
+                failures[m.ref] = HerdrFailure(text: String(localized: "Asked herdr to start, but it hasn't responded yet"), detail: "herdr.server.start: running false")
             }
         } catch {
             failures[m.ref] = HerdrFailure(error)
@@ -181,11 +181,11 @@ struct HerdrNoticeRow: View {
             // Square: the Mac's spinner asks for more height than it draws, and the row grew by a line while it starts.
             .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(starting ? "正在启动 \(machine.title) 的 herdr…" : "\(machine.title) 的 herdr 没在运行")
+                Text(starting ? String(localized: "Starting herdr on \(machine.title)…") : String(localized: "herdr isn't running on \(machine.title)"))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if !starting, let failure = watch.failures[machine.ref] {
-                    Text("没启动：\(failure.text)")
+                    Text("Didn't start: \(failure.text) [Herdr Notice f90f43]")
                         .foregroundStyle(Theme.danger)
                         .lineLimit(3)
                         .accessibilityIdentifier("herdrNotice.failure")
@@ -194,14 +194,14 @@ struct HerdrNoticeRow: View {
                             Button {
                                 UIPasteboard.general.string = failure.detail
                                 Haptics.success()
-                            } label: { Label("复制详情", systemImage: Theme.Icon.copy).lineLimit(1) }
+                            } label: { Label("Copy Details", systemImage: Theme.Icon.copy).lineLimit(1) }
                         }
                 }
             }
             Spacer(minLength: Theme.Space.s)
             // Kept while it starts, unseen: the row keeps its height (on the Mac it is over the list, which moved when
             // the row did).
-            Button("启动") {
+            Button("On [Herdr Notice 56410f]") {
                 Haptics.tap()
                 press()
             }

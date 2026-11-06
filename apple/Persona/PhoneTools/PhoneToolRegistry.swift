@@ -17,11 +17,11 @@ enum PhoneAuthStatus: String, Sendable {
 
     var title: String {
         switch self {
-        case .notDetermined: String(localized: "未授权")
-        case .granted: String(localized: "已授权")
-        case .denied: String(localized: "已拒绝")
-        case .limited: String(localized: "部分授权")
-        case .notNeeded: String(localized: "无需授权")
+        case .notDetermined: String(localized: "Not Allowed Yet")
+        case .granted: String(localized: "Allowed [Phone Tool Registry 521e65]")
+        case .denied: String(localized: "Denied")
+        case .limited: String(localized: "Limited [Phone Tool Registry 027f40]")
+        case .notNeeded: String(localized: "Not Needed")
         }
     }
 }

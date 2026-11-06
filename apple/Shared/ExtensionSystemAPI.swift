@@ -9,7 +9,7 @@ nonisolated extension APIClient {
 
     func extensionWidget(_ place: ExtensionWidgetPlace, family: String) async throws -> ExtensionWidgetAnswer {
         guard place.families.contains(family), ExtensionWidgetFamily.all.contains(family) else {
-            throw APIError(status: 400, message: String(localized: "这个扩展不支持该小组件尺寸"))
+            throw APIError(status: 400, message: String(localized: "This extension doesn't support this widget size"))
         }
         let request = ExtensionWidgetRequest(context: .here(size: family))
         return try JSON.decoder.decode(ExtensionWidgetAnswer.self, from: try await self.request(

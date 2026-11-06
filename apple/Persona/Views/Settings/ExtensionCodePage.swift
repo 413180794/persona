@@ -213,12 +213,12 @@ enum CodePageBlock: Identifiable {
         defer { out.append(.gap(id: "gap:" + key)) }
         guard !folded else { return out }
         if d.binary == true {
-            out.append(.diffNote(id: "bin:" + key, text: String(localized: "二进制文件，不显示改动")))
+            out.append(.diffNote(id: "bin:" + key, text: String(localized: "Binary file; changes not shown")))
             return out
         }
         if hunks.isEmpty {
             if d.load != nil { out.append(.diffLoad(id: "load:" + key, diff: d)) }
-            else { out.append(.diffNote(id: "none:" + key, text: String(localized: "没有可显示的改动"))) }
+            else { out.append(.diffNote(id: "none:" + key, text: String(localized: "No changes to show"))) }
             return out
         }
         let language = d.language.flatMap(SyntaxLanguage.named) ?? SyntaxLanguage.detect(name: d.path)
@@ -275,7 +275,7 @@ enum CodePageBlock: Identifiable {
         var out: [CodePageBlock] = []
         if let title = t.title, !title.isEmpty { out.append(.threadTitle(id: "tt:" + key, title: title, resolved: t.resolved == true)) }
         for (i, c) in t.comments.enumerated() { out.append(.comment(id: "cm:\(key):\(c.id ?? "\(i)")", c)) }
-        if let r = t.reply { out.append(.reply(id: "rp:" + key, action: r, placeholder: String(localized: "回复…"))) }
+        if let r = t.reply { out.append(.reply(id: "rp:" + key, action: r, placeholder: String(localized: "Reply…"))) }
         return out
     }
 }
@@ -385,7 +385,7 @@ struct ExtensionCodePage: View {
         let stay = rest.filter { !movable.contains($0) }
         if state.mainOpen, !movable.isEmpty {
             VStack(spacing: Theme.Space.flush) {
-                CodeBackRow(title: String(localized: "文件")) { withAnimation(Theme.Motion.layout) { state.showMain(false) } }
+                CodeBackRow(title: String(localized: "Files")) { withAnimation(Theme.Motion.layout) { state.showMain(false) } }
                 CodeMainPage(model: model, state: state, link: $link, sections: movable)
             }
             .transition(.move(edge: .trailing))
@@ -398,7 +398,7 @@ struct ExtensionCodePage: View {
                 if let tree, let dir {
                     let parent = (dir as NSString).deletingLastPathComponent
                     let known = CodeTree.node(parent, in: CodeTree.build(tree.1.entries.map(CodeTreeEntry.init))) != nil
-                    CodeBackRow(title: known && !parent.isEmpty ? (parent as NSString).lastPathComponent : String(localized: "全部文件")) {
+                    CodeBackRow(title: known && !parent.isEmpty ? (parent as NSString).lastPathComponent : String(localized: "All Files")) {
                         withAnimation(Theme.Motion.layout) { state.enter(known && !parent.isEmpty ? parent : nil, tree: tree.0) }
                     }
                 }
@@ -427,7 +427,7 @@ struct ExtensionCodePage: View {
 
     private func mainTitle(_ v: ExtensionView, _ sections: [Int]) -> String {
         let diffs = sections.flatMap { v.sections[$0].items }.filter { if case .diff = $0 { true } else { false } }.count
-        return diffs > 0 ? String(localized: "查看全部改动 · \(diffs)") : String(localized: "查看文件")
+        return diffs > 0 ? String(localized: "All Changes · \(diffs)") : String(localized: "View File")
     }
 
     // MARK: Main column

@@ -40,13 +40,13 @@ struct ChannelsEntryRow: View {
                 Group {
                     NavigationLink(value: SettingsPage.channels) {
                         if AppStyle.current.usesBeautifulUI {
-                            SettingsRow(title: String(localized: "渠道"), symbol: Theme.Icon.channels, tint: Theme.accent, value: ChannelText.summary(channels), look: .oneLine)
+                            SettingsRow(title: String(localized: "Channels"), symbol: Theme.Icon.channels, tint: Theme.accent, value: ChannelText.summary(channels), look: .oneLine)
                         } else {
                             LabeledContent {
                                 Text(ChannelText.summary(channels)).lineLimit(1)
                                     .foregroundStyle(ChannelText.hasProblem(channels) ? Theme.danger : Color.secondary)
                             } label: {
-                                Label { Text("渠道").lineLimit(1) } icon: { Image(systemName: Theme.Icon.channels) }
+                                Label { Text("Channels").lineLimit(1) } icon: { Image(systemName: Theme.Icon.channels) }
                             }
                         }
                     }
@@ -55,7 +55,7 @@ struct ChannelsEntryRow: View {
                 }
                 .bareListRow()
             } footer: {
-                Text("在哪儿能和 Persona 对话：Persona 自己的各端、微信、飞书机器人……")
+                Text("Where you can talk to Persona: its own apps, WeChat, the Lark bot…")
             }
             .task(id: model.settingsPath.count) { // again when a channel's page closes
                 if let l = try? await model.api?.channels() {
@@ -75,7 +75,7 @@ struct ChannelsView: View {
         SettingsForm {
             if let list = page.channels, list.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.channels, title: String(localized: "没有渠道"), message: String(localized: "这个 hub 还没列出任何渠道。"))
+                    EmptyStateView(symbol: Theme.Icon.channels, title: String(localized: "No Channels"), message: String(localized: "This hub doesn't list any channels yet."))
                         .listRowBackground(Color.clear)
                 }
             }
@@ -100,7 +100,7 @@ struct ChannelsView: View {
         }
         .themedPage()
         .overlay { if page.channels == nil && page.loading { ProgressView() } }
-        .detailTitle(String(localized: "渠道"))
+        .detailTitle(String(localized: "Channels"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -187,14 +187,14 @@ struct ChannelDetailView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.channel?.name ?? String(localized: "渠道"))
+        .detailTitle(page.channel?.name ?? String(localized: "Channels"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: model.config) { await page.load() }
         .refreshable { await page.load() }
-        .confirmationDialog("解除和\(unbindName)的绑定？", isPresented: $confirmUnbind, titleVisibility: .visible) {
-            Button("解除绑定", role: .destructive) { Task { await page.unbind() } }
+        .confirmationDialog("Unbind \(unbindName)?", isPresented: $confirmUnbind, titleVisibility: .visible) {
+            Button("Unbind", role: .destructive) { Task { await page.unbind() } }
         } message: {
-            Text("解除后它不再把消息交给 Persona，在等的回答和提问一起清掉。再用要重新绑定。")
+            Text("It will stop passing messages to Persona, and pending answers and questions are cleared. To use it again, bind it again.")
         }
     }
 
@@ -227,7 +227,7 @@ struct ChannelDetailView: View {
                     Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
                 if let at = c.lastEventAt, at.timeIntervalSince1970 > 0 {
-                    LabeledContent("最近一条消息") {
+                    LabeledContent("Last Message") {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(Fmt.relative(at, now: ctx.date)).lineLimit(1)
                         }
@@ -245,16 +245,16 @@ struct ChannelDetailView: View {
             }
         } footer: {
             if let c = page.channel, c.readOnly, !c.isApp {
-                Text("这个渠道在别处设置（hub.json 或它自己的页面），这里只看状态。")
+                Text("This channel is set up elsewhere (hub.json or its own page); this page only shows its status.")
             }
         }
     }
 
     /// The channel in the unbind question.
-    private var unbindName: String { page.channel?.name ?? String(localized: "它", comment: "The channel, when its name is unknown") }
+    private var unbindName: String { page.channel?.name ?? String(localized: "it", comment: "The channel, when its name is unknown") }
 
     private var stateText: String {
-        guard let c = page.channel else { return page.loading ? String(localized: "正在读取…") : String(localized: "读不到") }
+        guard let c = page.channel else { return page.loading ? String(localized: "Loading… [File Viewer 86b6d0]") : String(localized: "Couldn't load [Connector Thread Models 153e20]") }
         var parts = [ChannelText.state(c)]
         if let a = c.account?.name, !a.isEmpty, !c.isMarket { parts.append(a) }
         return parts.joined(separator: " · ")
@@ -263,49 +263,49 @@ struct ChannelDetailView: View {
     private func market(_ c: HubChannel) -> some View {
         Section {
             NavigationLink(value: ChannelsView.destination(c)) {
-                Label { Text("去扩展市场安装").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
+                Label { Text("Install from Extension Market").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
             }
             .accessibilityIdentifier("channel-install")
         } footer: {
-            Text("装好以后回到这里绑定。")
+            Text("After installing, come back here to bind it.")
         }
     }
 
     private func enabled(_ c: HubChannel) -> some View {
         Section {
             Toggle(isOn: Binding(get: { c.enabled }, set: { on in Task { await page.setEnabled(on) } })) {
-                Text("启用").lineLimit(1)
+                Text("Enabled").lineLimit(1)
             }
             .disabled(page.busy)
             .accessibilityIdentifier("channel-enabled")
         } footer: {
-            Text(c.enabled ? "关掉后它不再把消息交给 Persona；绑定和设置留着。" : "打开后才能绑定和收消息。")
+            Text(c.enabled ? String(localized: "When off, it stops passing messages to Persona; the binding and settings stay.") : String(localized: "Turn it on to bind it and receive messages."))
         }
     }
 
     @ViewBuilder private func bind(_ c: HubChannel) -> some View {
         if c.isBound {
             Section {
-                LabeledContent("绑定的账号") { Text(c.account?.name ?? String(localized: "已绑定")).lineLimit(1) }
-                Button(role: .destructive) { confirmUnbind = true } label: { Text("解除绑定").lineLimit(1) }
+                LabeledContent("Bound Account") { Text(c.account?.name ?? String(localized: "Bound")).lineLimit(1) }
+                Button(role: .destructive) { confirmUnbind = true } label: { Text("Unbind").lineLimit(1) }
                     .disabled(page.busy)
                     .accessibilityIdentifier("channel-unbind")
             } header: {
-                SettingsHeading(String(localized: "绑定"))
+                SettingsHeading(String(localized: "Bind"))
             } footer: {
-                Text("只有绑定的这个人发给机器人的消息会交给 Persona；别人发来只回一句说明，群里一律不处理。")
+                Text("Only messages from the bound person go to Persona. Others get a short explanation, and group chats are ignored.")
             }
         } else if c.enabled {
             ConnectorSignInSteps(name: c.name, model: binding, reload: { await page.load(quietly: true) },
-                                 footer: bindFooter(c), heading: String(localized: "绑定"), start: ChannelText.bindTitle(c))
+                                 footer: bindFooter(c), heading: String(localized: "Bind"), start: ChannelText.bindTitle(c))
         }
     }
 
     private func bindFooter(_ c: HubChannel) -> String {
         switch c.bind {
-        case "qr": String(localized: "用\(c.name)扫码，扫码的人就是这个渠道的主人；登录状态加密存在 hub 上，解除绑定时删掉。")
-        case "code": String(localized: "把配对码发给机器人，发码的人就是这个渠道的主人。")
-        default: String(localized: "凭据加密存在 hub 上，只交给这个渠道；之后可能还要配对一次，配对的人就是这个渠道的主人。")
+        case "qr": String(localized: "Scan with \(c.name); whoever scans becomes this channel's owner. The sign-in is stored encrypted on the hub and deleted when you unbind.")
+        case "code": String(localized: "Send the pairing code to the bot; whoever sends it becomes this channel's owner.")
+        default: String(localized: "Credentials are stored encrypted on the hub and only given to this channel. You may need to pair once afterward; whoever pairs becomes this channel's owner.")
         }
     }
 
@@ -317,20 +317,20 @@ struct ChannelDetailView: View {
                 guard let t = targetFor(tag), tag != Self.tag(c.target) else { return }
                 Task { await page.setTarget(t) }
             })) {
-                Text("主对话").tag("main")
-                Text("新对话（下一条消息开）").tag("new")
+                Text("Main Chat").tag("main")
+                Text("New chat (starts with the next message)").tag("new")
                 ForEach(choices(c)) { s in
                     Text(s.title).lineLimit(1).tag(s.tag)
                 }
                 if c.target?.kind == "agent" { Text(ChannelText.target(c.target)).lineLimit(1).tag("agent") }
             } label: {
-                Text("消息发到").lineLimit(1)
+                Text("Send Messages To").lineLimit(1)
             }
             .disabled(page.busy)
             .accessibilityIdentifier("channel-target")
         } footer: {
-            Text(c.target?.kind == "agent" ? "现在发给在飞书里用 /agents 选的 Agent；在这里改回 Persona 的对话也行。"
-                 : "在\(c.name)里也能用 /new 开新对话、/main 回主对话。")
+            Text(c.target?.kind == "agent" ? String(localized: "Messages now go to the agent picked with /agents in Lark. You can switch back to a Persona chat here.")
+                 : String(localized: "In \(c.name) you can also use /new for a new chat and /main to go back to the main chat."))
         }
     }
 
@@ -344,7 +344,7 @@ struct ChannelDetailView: View {
     private func choices(_ c: HubChannel) -> [Choice] {
         let main = model.assistantMain
         var out = model.assistantConversations.filter { $0.key != main }.prefix(15).map { s in
-            Choice(tag: "c:" + s.machineID + "/" + s.sessionID, title: s.title.isEmpty ? String(localized: "新对话") : s.title)
+            Choice(tag: "c:" + s.machineID + "/" + s.sessionID, title: s.title.isEmpty ? String(localized: "New Chat [Quick Actions ea4b29]") : s.title)
         }
         if let t = c.target, t.kind == "conversation", case let tag = Self.tag(t), !out.contains(where: { $0.tag == tag }) {
             out.insert(Choice(tag: tag, title: ChannelText.target(t)), at: 0)
@@ -388,7 +388,7 @@ struct ChannelDetailView: View {
                 .accessibilityIdentifier("channel-feature-\(f.id)")
             }
         } header: {
-            SettingsHeading(String(localized: "功能"))
+            SettingsHeading(String(localized: "Features"))
         }
     }
 
@@ -397,10 +397,10 @@ struct ChannelDetailView: View {
         if d.waiting.answers > 0 || d.waiting.asks > 0 || !d.conversations.isEmpty {
             Section {
                 if d.waiting.answers > 0 {
-                    LabeledContent("在等的回答") { Text("\(d.waiting.answers) 个").monospacedDigit() }
+                    LabeledContent("Pending Answers") { Text("\(d.waiting.answers) [Chats View cb60bd]").monospacedDigit() }
                 }
                 if d.waiting.asks > 0 {
-                    LabeledContent("发到这里的提问") { Text("\(d.waiting.asks) 个").monospacedDigit() }
+                    LabeledContent("Questions Sent Here") { Text("\(d.waiting.asks) [Chats View cb60bd]").monospacedDigit() }
                 }
                 ForEach(d.conversations) { conv in
                     Button {
@@ -409,7 +409,7 @@ struct ChannelDetailView: View {
                         LabeledContent {
                             if let at = conv.at { Text(Fmt.relative(at)).lineLimit(1) }
                         } label: {
-                            Label { Text(conv.title?.isEmpty == false ? conv.title! : String(localized: "一段对话")).lineLimit(1) } icon: {
+                            Label { Text(conv.title?.isEmpty == false ? conv.title! : String(localized: "A chat")).lineLimit(1) } icon: {
                                 Image(systemName: Theme.Icon.conversation)
                             }
                         }
@@ -417,7 +417,7 @@ struct ChannelDetailView: View {
                     .foregroundStyle(Color.primary)
                 }
             } header: {
-                SettingsHeading(String(localized: "最近"))
+                SettingsHeading(String(localized: "Recent"))
             }
         }
     }
@@ -426,7 +426,7 @@ struct ChannelDetailView: View {
         Section {
             Text(c.surfaces.joined(separator: "、")).font(Theme.Font.body)
         } header: {
-            SettingsHeading(String(localized: "这些地方都能用"))
+            SettingsHeading(String(localized: "Works In"))
         }
     }
 
@@ -436,7 +436,7 @@ struct ChannelDetailView: View {
                 Text(line).font(Theme.Font.body)
             }
         } header: {
-            SettingsHeading(String(localized: "能做什么"))
+            SettingsHeading(String(localized: "What It Can Do"))
         }
     }
 
@@ -445,12 +445,12 @@ struct ChannelDetailView: View {
             Button {
                 Task { await page.test() }
             } label: {
-                Text(page.busy ? "正在发…" : "发一条测试消息").lineLimit(1)
+                Text(page.busy ? String(localized: "Sending… [Channels Views 98c8e5]") : String(localized: "Send Test Message")).lineLimit(1)
             }
             .disabled(page.busy)
             .accessibilityIdentifier("channel-test")
         } footer: {
-            Text(page.testResult ?? String(localized: "只发给绑定的你自己，看看\(c.name)能不能收到。"))
+            Text(page.testResult ?? String(localized: "Sent only to you, the bound person, to check that \(c.name) receives it."))
         }
     }
 
@@ -467,9 +467,9 @@ struct ChannelDetailView: View {
 
     private func moreTitle(_ dest: SettingsPage) -> String {
         switch dest {
-        case .modelConfiguration: String(localized: "模型配置")
-        case .plugin: String(localized: "扩展设置")
-        default: String(localized: "更多设置")
+        case .modelConfiguration: String(localized: "Model Settings [Launcher Model Picker 8cbcf7]")
+        case .plugin: String(localized: "Extension Settings")
+        default: String(localized: "More Settings")
         }
     }
 }
@@ -485,8 +485,8 @@ struct ChannelLinkSection: View {
                 NavigationLink(value: SettingsPage.channel(channelID)) {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("这是一个对话渠道").lineLimit(1)
-                            Text("在 设置 › 渠道 里设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            Text("This is a chat channel").lineLimit(1)
+                            Text("Set it up in Settings › Channels").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.channels).foregroundStyle(Theme.accent)
@@ -508,7 +508,7 @@ struct ChannelSourceLine: View {
         if let c = ChannelSource.of(clientMsgID, in: ChannelDirectory.shared.list) {
             HStack(spacing: Theme.Space.xs) {
                 ChannelMark(channel: c, side: Theme.Size.markS)
-                Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text("From \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("message-channel")
@@ -541,7 +541,7 @@ struct ConversationChannelMark: View {
             let c = ChannelDirectory.shared.list.first { $0.id == id } ?? HubChannel(id: id, name: id)
             ChannelMark(channel: c, side: Theme.Size.markS)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("来自 \(c.name)")
+                .accessibilityLabel("From \(c.name)")
         }
     }
 }

@@ -33,11 +33,11 @@ struct BrowserLoginsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
-                Text("浏览器登录").font(Theme.Font.heading)
+                Text("Browser Sign-ins").font(Theme.Font.heading)
                 if let sites { Text("\(sites.count)").font(Theme.Font.secondary.monospacedDigit()).foregroundStyle(.secondary) }
                 Spacer(minLength: Theme.Space.s)
                 Button { picking = true } label: {
-                    Label("导入", systemImage: Theme.Icon.file).lineLimit(1)
+                    Label("Import", systemImage: Theme.Icon.file).lineLimit(1)
                 }
                 .themedButton()
                 .disabled(busy || !online)
@@ -52,9 +52,9 @@ struct BrowserLoginsSection: View {
             Group {
                 #if os(macOS)
                 // read(_:) runs on this machine on every platform, so on the Mac the file is parsed locally, not on a phone.
-                Text("只列网站和条数，不显示 cookie 的内容。导入的文件就在本机解析，只把你勾选的网站经 hub 直接发给目标机器，hub 不保存；助手看不到也导不了。")
+                Text("Only sites and counts are listed, never cookie contents. Imported files are read on this machine, and only the sites you check go through the hub straight to the target machine. The hub keeps nothing, and the assistant can't see or import them.")
                 #else
-                Text("只列网站和条数，不显示 cookie 的内容。导入的文件在手机上解析，只把你勾选的网站经 hub 直接发给这台 Mac，hub 不保存；助手看不到也导不了。")
+                Text("Only sites and counts are listed, never cookie contents. Imported files are read on your phone, and only the sites you check go through the hub straight to this Mac. The hub keeps nothing, and the assistant can't see or import them.")
                 #endif
             }
             .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -75,31 +75,31 @@ struct BrowserLoginsSection: View {
             CookiePickSheet(file: $file, busy: busy) { await importTicked() }
         }
         .confirmationDialog(clearTitle, isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } }), titleVisibility: .visible) {
-            Button("清除", role: .destructive) {
+            Button("Clear [Image Editor bce237]", role: .destructive) {
                 let what = clearing
                 Task { await clear(what) }
             }
             .accessibilityIdentifier("browser-logins-clear-confirm")
         } message: {
-            Text(clearing.map { if case .all = $0 { String(localized: "这台 Mac 上 ego lite 的所有 cookie 都会删掉，所有网站都要重新登录。你自己在 ego 里的登录也一样。") } else { String(localized: "这个网站在这台 Mac 的 ego lite 里会退出登录。你自己在 ego 里的登录也一样。") } } ?? "")
+            Text(clearing.map { if case .all = $0 { String(localized: "All of ego lite's cookies on this Mac will be deleted, and every site will need you to sign in again. This includes your own sign-ins in ego.") } else { String(localized: "This site will be signed out in ego lite on this Mac. This includes your own sign-in in ego.") } } ?? "")
         }
     }
 
     private var clearTitle: String {
         switch clearing {
-        case .site(let s): String(localized: "清除 \(s) 的登录？")
-        case .all: String(localized: "清除所有网站的登录？")
+        case .site(let s): String(localized: "Clear Sign-in for \(s)?")
+        case .all: String(localized: "Clear Sign-ins for All Sites?")
         case nil: ""
         }
     }
 
     @ViewBuilder private var content: some View {
         if !online {
-            Text("这台 Mac 在线时才能查看和导入。").font(Theme.Font.secondary).foregroundStyle(.secondary)
+            Text("This Mac must be online to view and import.").font(Theme.Font.secondary).foregroundStyle(.secondary)
         } else if let error {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger).fixedSize(horizontal: false, vertical: true)
-                Button("再试一次") { Task { await load() } }
+                Button("Try Again") { Task { await load() } }
                     .lineLimit(1)
                     .themedButton()
                     .accessibilityIdentifier("browser-logins-retry")
@@ -107,7 +107,7 @@ struct BrowserLoginsSection: View {
             .padding(.vertical, Theme.Space.s)
         } else if let sites {
             if sites.isEmpty {
-                Text("ego lite 里还没有登录过的网站。导入另一台电脑或浏览器导出的 cookie 文件，助手就能用你的登录打开那些网站。")
+                Text("No sites are signed in to ego lite yet. Import a cookie file exported from another computer or browser, and the assistant can open those sites as you.")
                     .font(Theme.Font.secondary).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             } else {
                 ForEach(Array(sites.enumerated()), id: \.element.id) { i, s in
@@ -116,7 +116,7 @@ struct BrowserLoginsSection: View {
                 }
                 Divider()
                 Button(role: .destructive) { clearing = .all } label: {
-                    Text("全部清除").font(Theme.Font.secondary).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Clear All").font(Theme.Font.secondary).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.danger)
@@ -127,7 +127,7 @@ struct BrowserLoginsSection: View {
         } else {
             HStack(spacing: Theme.Space.s) {
                 ProgressView().controlSize(.small)
-                Text("正在读取").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                Text("Reading").font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
         }
     }
@@ -140,7 +140,7 @@ struct BrowserLoginsSection: View {
                 Text(Self.detail(count: s.count, expires: s.expires)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: Theme.Space.s)
-            Button("清除") { clearing = .site(s.domain) }
+            Button("Clear [Image Editor bce237]") { clearing = .site(s.domain) }
                 .lineLimit(1)
                 .themedButton()
                 .disabled(busy)
@@ -152,9 +152,9 @@ struct BrowserLoginsSection: View {
     static func detail(count: Int, expires: Date?) -> String {
         if let expires {
             let date = expires.formatted(date: .numeric, time: .omitted)
-            return String(localized: "\(count) 条 · 最晚 \(date) 过期")
+            return String(localized: "\(count) cookies · expire by \(date)")
         }
-        return String(localized: "\(count) 条 · 关掉浏览器就失效")
+        return String(localized: "\(count) cookies · end when the browser closes")
     }
 
     // MARK: Calls
@@ -188,9 +188,9 @@ struct BrowserLoginsSection: View {
             file = nil // the file's contents are gone once sent
             let skipped = a.skipped ?? 0
             let imported = a.imported ?? 0
-            model.toast = Toast(skipped > 0 ? String(localized: "已导入 \(imported) 条，跳过 \(skipped) 条过期或格式不对的") : String(localized: "已导入 \(imported) 条"), style: .success)
+            model.toast = Toast(skipped > 0 ? String(localized: "Imported \(imported); skipped \(skipped) expired or malformed") : String(localized: "Imported \(imported) cookies"), style: .success)
         } catch {
-            if let m = error.shown { model.toast = Toast(String(localized: "导入失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "Couldn't import: \(m)"), style: .error) }
         }
     }
 
@@ -203,9 +203,9 @@ struct BrowserLoginsSection: View {
             let a = try await api.clearBrowserCookies(machine: ref.id, site: site)
             sites = a.sites
             let removed = a.removed ?? 0
-            model.toast = Toast(String(localized: "已清除 \(removed) 条"), style: .success)
+            model.toast = Toast(String(localized: "Cleared \(removed) cookies"), style: .success)
         } catch {
-            if let m = error.shown { model.toast = Toast(String(localized: "清除失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "Couldn't clear: \(m)"), style: .error) }
         }
     }
 }
@@ -243,21 +243,21 @@ private struct CookiePickSheet: View {
                             .accessibilityIdentifier("browser-logins-pick")
                         }
                     } header: {
-                        Text(f.bad > 0 ? String(localized: "\(f.name) · \(f.sites.count) 个网站 · \(f.bad) 行读不懂，已略过") : String(localized: "\(f.name) · \(f.sites.count) 个网站"))
+                        Text(f.bad > 0 ? String(localized: "\(f.name) · \(f.sites.count) sites · skipped \(f.bad) unreadable lines") : String(localized: "\(f.name) · \(f.sites.count) sites"))
                     } footer: {
-                        Text("默认一个都不勾，只导你勾选的。导进这台 Mac 的 ego lite 默认配置：你自己在 ego 里浏览时也会用这些登录。")
+                        Text("Nothing is checked at first; only what you check is imported. They go into ego lite's default profile on this Mac, so your own browsing in ego uses these sign-ins too.")
                     }
                 }
             }
-            .navigationTitle("选择要导入的网站")
+            .navigationTitle("Choose Sites to Import")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { file = nil }.lineLimit(1).disabled(busy)
+                    Button("Cancel") { file = nil }.lineLimit(1).disabled(busy)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     let n = file?.cookies.count ?? 0
-                    Button(n > 0 ? "导入 \(n) 条" : "导入") { Task { await run() } }
+                    Button(n > 0 ? String(localized: "Import \(n)") : String(localized: "Import")) { Task { await run() } }
                         .lineLimit(1)
                         .disabled(busy || n == 0)
                         .accessibilityIdentifier("browser-logins-confirm")
@@ -271,10 +271,10 @@ private struct CookiePickSheet: View {
         let count = s.cookies.count
         let date = s.expires.map { Date(timeIntervalSince1970: $0).formatted(date: .numeric, time: .omitted) }
         switch (date, s.expired > 0) {
-        case let (date?, true): return String(localized: "\(count) 条 · 最晚 \(date) 过期 · \(s.expired) 条已过期，不导入")
-        case let (date?, false): return String(localized: "\(count) 条 · 最晚 \(date) 过期")
-        case (nil, true): return String(localized: "\(count) 条 · \(s.expired) 条已过期，不导入")
-        case (nil, false): return String(localized: "cookies.count", defaultValue: "\(count) 条")
+        case let (date?, true): return String(localized: "\(count) cookies · expire by \(date) · \(s.expired) expired, not imported")
+        case let (date?, false): return String(localized: "\(count) cookies · expire by \(date)")
+        case (nil, true): return String(localized: "\(count) cookies · \(s.expired) expired, not imported")
+        case (nil, false): return String(localized: "cookies.count", defaultValue: "\(count) cookies")
         }
     }
 }

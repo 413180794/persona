@@ -70,9 +70,9 @@ struct LarkReactionPicker: View {
                 }
                 .padding(Theme.Space.l)
             }
-            .navigationTitle("表情回复")
+            .navigationTitle("Add Reaction")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             .onAppear { media.loadEmojiCatalog() }
         }
         .presentationDetents([.medium, .large])
@@ -117,7 +117,7 @@ struct LarkMomentsCard: View {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: "circle.hexagongrid.fill").font(Theme.Font.label).foregroundStyle(LarkColor.blue)
-                    Text(preview?.title ?? String(localized: "公司圈动态")).font(Theme.Font.secondaryStrong).lineLimit(1)
+                    Text(preview?.title ?? String(localized: "Moments post")).font(Theme.Font.secondaryStrong).lineLimit(1)
                 }
                 if let author = card?.author {
                     HStack(spacing: Theme.Space.s) {
@@ -195,7 +195,7 @@ struct LarkMomentsPostView: View {
                             }
                         }
                         Divider()
-                        Text("\(p.commentCount ?? comments.count) 条评论").font(Theme.Font.secondaryStrong)
+                        Text("\(p.commentCount ?? comments.count) comments").font(Theme.Font.secondaryStrong)
                         ForEach(comments) { c in
                             VStack(alignment: .leading, spacing: Theme.Space.sm) {
                                 author(name: c.userName ?? "", avatar: c.userAvatarUrl, id: c.userId, time: c.createTime, small: true)
@@ -209,15 +209,15 @@ struct LarkMomentsPostView: View {
                 }
                 .padding(Theme.Space.l)
             }
-            .navigationTitle("公司圈")
+            .navigationTitle("Moments")
             .navigationBarTitleDisplayMode(.inline)
             .pageToolbar {
                 if !pushed {
-                    ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.tint(LarkColor.blue) }
+                    ToolbarItem(placement: .cancellationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.tint(LarkColor.blue) }
                 }
                 if let link, let u = URL(string: link) {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { openURL(u) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
+                        Button { openURL(u) } label: { Label("Open in Lark [Feishu Doc Reader 76d0eb]", systemImage: Theme.Icon.openExternal) }
                     }
                 }
             }

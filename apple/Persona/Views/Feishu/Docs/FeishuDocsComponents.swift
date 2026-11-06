@@ -26,17 +26,17 @@ extension Error {
         if isCancellation { return nil }
         if let e = self as? URLError {
             switch e.code {
-            case .notConnectedToInternet, .networkConnectionLost: return String(localized: "网络不可用")
-            case .timedOut: return String(localized: "请求超时，请稍后重试")
+            case .notConnectedToInternet, .networkConnectionLost: return String(localized: "No network connection")
+            case .timedOut: return String(localized: "The request timed out. Try again later.")
             #if os(macOS)
-            case .cannotConnectToHost, .cannotFindHost: return String(localized: "连不上 hub（确认这台 Mac 能访问 hub）")
+            case .cannotConnectToHost, .cannotFindHost: return String(localized: "Can't reach the hub. Make sure this Mac can reach it.")
             #else
-            case .cannotConnectToHost, .cannotFindHost: return String(localized: "连不上 hub（确认手机能访问 hub）")
+            case .cannotConnectToHost, .cannotFindHost: return String(localized: "Can't reach the hub. Make sure your phone can reach it.")
             #endif
             default: break
             }
         }
-        if self is DecodingError { return String(localized: "飞书返回了无法识别的数据") }
+        if self is DecodingError { return String(localized: "Lark returned data Persona can't read.") }
         return localizedDescription
     }
 }
@@ -73,7 +73,7 @@ struct FeishuDocsListState: View {
             if loading {
                 ProgressView().controlSize(.large).scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.box260)
             } else if let error {
-                EmptyStateView(symbol: Theme.Icon.offline, title: String(localized: "加载失败"), message: error, action: (String(localized: "重试"), { Task { await retry() } }))
+                EmptyStateView(symbol: Theme.Icon.offline, title: String(localized: "Couldn't Load"), message: error, action: (String(localized: "Retry [Components b8784c]"), { Task { await retry() } }))
             } else {
                 EmptyStateView(symbol: empty.symbol, title: empty.title, message: empty.message)
             }

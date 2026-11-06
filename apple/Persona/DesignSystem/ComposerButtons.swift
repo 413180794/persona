@@ -24,7 +24,7 @@ struct ComposerMicButton: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(dictation.isListening ? "停止听写" : "听写")
+        .accessibilityLabel(dictation.isListening ? String(localized: "Stop Dictation") : String(localized: "Dictate"))
         .accessibilityIdentifier(id)
         .shellScaled()
     }
@@ -69,7 +69,7 @@ struct ComposerRoundButton: View {
 extension ComposerRoundButton {
     /// Interrupts the agent: shown in send's place while it works and nothing is typed.
     static func stop(id: String = "composer-stop", _ action: @escaping () -> Void) -> ComposerRoundButton {
-        ComposerRoundButton(symbol: Theme.Icon.interrupt, label: String(localized: "中断"), id: id, action: action)
+        ComposerRoundButton(symbol: Theme.Icon.interrupt, label: String(localized: "Interrupt [Composer Buttons f9d193]"), id: id, action: action)
     }
 }
 

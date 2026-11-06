@@ -30,8 +30,8 @@ struct MacComposerThumb: View {
                 .focused($removeFocused)
                 .padding(Theme.Space.xxs)
                 .opacity(shown ? 1 : 0)
-                .help("移除")
-                .accessibilityLabel("移除图片 \(index + 1)")
+                .help("Remove [Task Sheets 6135d4]")
+                .accessibilityLabel("Remove Image \(index + 1)")
             }
             .onHover { inside in withAnimation(Theme.Motion.standard) { hovering = inside } }
     }
@@ -43,10 +43,10 @@ struct MacComposerThumb: View {
         if editable {
             Button(action: edit) { thumb }
                 .buttonStyle(.plain)
-                .help("点一下标注后再发")
-                .accessibilityLabel("编辑图片 \(index + 1)")
+                .help("Click to mark up before sending")
+                .accessibilityLabel("Edit Image \(index + 1)")
         } else {
-            thumb.accessibilityLabel("图片 \(index + 1)")
+            thumb.accessibilityLabel("Image \(index + 1) [Composer Parts 0d2e3a]")
         }
     }
 

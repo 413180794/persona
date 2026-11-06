@@ -27,7 +27,7 @@ struct EngineSelectionView: View {
                 #if os(iOS) || os(visionOS)
                 if pairing {
                     Section {
-                        Text("这台电脑用哪个引擎").font(Theme.Font.title)
+                        Text("Which engine does this computer use?").font(Theme.Font.title)
                         Text(machine.name).font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                 }
@@ -67,39 +67,39 @@ struct EngineSelectionView: View {
                     // The Mac's pairing step fills the window: the question heads the page, not a card of its own.
                     if pairing {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text("这台电脑用哪个引擎").font(Theme.Font.title).foregroundStyle(.primary)
+                            Text("Which engine does this computer use?").font(Theme.Font.title).foregroundStyle(.primary)
                             Text(machine.name).font(Theme.Font.secondary).foregroundStyle(.secondary)
                         }
                         .textCase(nil)
                         .padding(.bottom, Theme.Space.s)
                     } else {
-                        Text("引擎")
+                        Text("Engine")
                     }
                     #else
-                    Text("引擎")
+                    Text("Engine")
                     #endif
                 } footer: {
                     if selection.selected == .herdrBoth {
                         #if os(macOS)
-                        Text(machine.online ? "同时显示 herdr 和 Herdr App 里的会话；从这台 Mac 新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。同时显示两个引擎里的会话。")
+                        Text(machine.online ? String(localized: "Shows sessions from both herdr and Herdr App. Sessions you start from this Mac still open in herdr. You can change this anytime in Settings › Machines.") : String(localized: "The machine is offline; your choice takes effect once it connects. Sessions from both engines are shown."))
                         #else
-                        Text(machine.online ? "同时显示 herdr 和 Herdr App 里的会话；从手机新建的会话仍开在 herdr 里。随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。同时显示两个引擎里的会话。")
+                        Text(machine.online ? String(localized: "Shows sessions from both herdr and Herdr App. Sessions you start from your phone still open in herdr. You can change this anytime in Settings › Machines.") : String(localized: "The machine is offline; your choice takes effect once it connects. Sessions from both engines are shown."))
                         #endif
                     } else {
-                        Text(machine.online ? "只显示所选引擎里的会话，随时可在设置 › 机器里修改。" : "机器离线，选择会在连接后生效。只显示所选引擎里的会话。")
+                        Text(machine.online ? String(localized: "Only sessions in the selected engine are shown. You can change this anytime in Settings › Machines.") : String(localized: "The machine is offline; your choice takes effect once it connects. Only sessions in the selected engine are shown."))
                     }
                 }
                 if let error = selection.error {
                     Section {
                         Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
-                        if pairing { Text("必须选一个引擎才能继续，检查网络后再点一次确认。").font(Theme.Font.secondary) }
+                        if pairing { Text("Choose an engine to continue. Check your network and tap Confirm again.").font(Theme.Font.secondary) }
                     }
                 }
                 #if os(iOS) || os(visionOS)
                 Section {
                     Button { save(selection) } label: {
                         HStack {
-                            Text(pairing ? "确认并继续" : "保存").lineLimit(1)
+                            Text(pairing ? String(localized: "Confirm and Continue") : String(localized: "Save")).lineLimit(1)
                             Spacer()
                             if selection.saving { ProgressView() }
                         }
@@ -112,7 +112,7 @@ struct EngineSelectionView: View {
                     // Saved as soon as it is flipped, not with Save: it is not part of the engine choice (#2575).
                     Section {
                         Toggle(isOn: Binding(get: { on }, set: { next in Task { await botmux.set(next) } })) {
-                            Text("同时显示 botmux 会话").font(Theme.Font.body).lineLimit(1)
+                            Text("Also Show botmux Sessions").font(Theme.Font.body).lineLimit(1)
                         }
                         .disabled(botmux.saving)
                         .accessibilityIdentifier("engine.botmux")
@@ -120,13 +120,13 @@ struct EngineSelectionView: View {
                             Text(error).font(Theme.Font.secondary).foregroundStyle(Theme.danger)
                         }
                     } footer: {
-                        Text("这台电脑装了 botmux 时，botmux 里的会话和所选引擎的会话一起列出。关掉后不再列出，也不再运行 botmux。")
+                        Text("When botmux is installed on this computer, its sessions are listed along with the selected engine's. Turn this off to stop listing them and stop running botmux.")
                     }
                 }
             } else {
                 Section {
-                    Text("暂时读不到这台机器")
-                    if pairing { Button { finish() } label: { Text("先继续").lineLimit(1) } }
+                    Text("Can't read this machine right now")
+                    if pairing { Button { finish() } label: { Text("Continue Anyway").lineLimit(1) } }
                 }
             }
         }
@@ -138,7 +138,7 @@ struct EngineSelectionView: View {
             if let machine, let selection { saveBar(selection, machine) }
         }
         #endif
-        .detailTitle(String(localized: "选择引擎"))
+        .detailTitle(String(localized: "Choose Engine"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: ref) {
             guard let machine else { return }
@@ -147,11 +147,11 @@ struct EngineSelectionView: View {
             let api = { [ref] in app.api(ref.group) }
             let model = BotmuxSwitchModel(deps: .init(
                 load: { [ref] in
-                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                     return try await api.botmux(machine: ref.id)
                 },
                 save: { [ref] on in
-                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                    guard let api = api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                     return try await api.setBotmux(machine: ref.id, on: on)
                 }))
             botmux = model
@@ -163,9 +163,9 @@ struct EngineSelectionView: View {
     }
 
     private func detection(_ engine: MachineEngine, _ machine: Machine) -> String {
-        guard machine.online else { return String(localized: "离线，暂无检测信息") }
-        guard let found = machine.engines.first(where: { $0.id == engine.rawValue }) else { return String(localized: "暂无检测信息") }
-        let status = found.available ? String(localized: "检测到可用") : String(localized: "没检测到")
+        guard machine.online else { return String(localized: "Offline, not detected yet") }
+        guard let found = machine.engines.first(where: { $0.id == engine.rawValue }) else { return String(localized: "Not detected yet") }
+        let status = found.available ? String(localized: "Available [Engine Selection View 10dd90]") : String(localized: "Not found")
         return found.available && !(found.version ?? "").isEmpty ? "\(status) · \(found.version!)" : status
     }
 
@@ -179,7 +179,7 @@ struct EngineSelectionView: View {
             Spacer()
             if selection.saving { ProgressView().controlSize(.small) }
             Button { save(selection) } label: {
-                Text(pairing ? "确认并继续" : "保存").lineLimit(1)
+                Text(pairing ? String(localized: "Confirm and Continue") : String(localized: "Save")).lineLimit(1)
             }
             .themedButton(prominent: true)
             .controlSize(.large)

@@ -111,7 +111,7 @@ final class MarkdownRenderer {
             throw Failure(message: Self.scriptMessage(error))
         }
         guard let box = answer as? [NSNumber], box.count == 4, box[2].doubleValue > 0, box[3].doubleValue > 0 else {
-            throw Failure(message: String(localized: "没有画出内容"))
+            throw Failure(message: String(localized: "Nothing was drawn"))
         }
         let rect = CGRect(x: max(0, box[0].doubleValue), y: max(0, box[1].doubleValue),
                           width: min(box[2].doubleValue, Self.maxWidth), height: min(box[3].doubleValue, Self.maxWidth * 4))
@@ -183,7 +183,7 @@ final class MarkdownRenderer {
                 forIdentifier: "persona-render-offline", encodedContentRuleList: Self.offline) {
                 web.configuration.userContentController.add(rules)
             }
-            guard let html = Bundle.main.url(forResource: "render", withExtension: "html") else { throw Failure(message: String(localized: "缺少渲染页面")) }
+            guard let html = Bundle.main.url(forResource: "render", withExtension: "html") else { throw Failure(message: String(localized: "The render page is missing")) }
             let loader = Loader()
             web.navigationDelegate = loader
             web.loadFileURL(html, allowingReadAccessTo: html.deletingLastPathComponent())
@@ -324,7 +324,7 @@ struct RenderedBlock<Fallback: View>: View {
             } else if let error {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
                     fallback
-                    Label("没能画出来：\(error)", systemImage: Theme.Icon.error)
+                    Label("Couldn't draw this: \(error)", systemImage: Theme.Icon.error)
                         .font(Theme.Font.label)
                         .foregroundStyle(Theme.cautionText)
                         .lineLimit(2)
@@ -343,7 +343,7 @@ struct RenderedBlock<Fallback: View>: View {
                 self.error = error.localizedDescription
             }
         }
-        .fullScreenCover(item: $full) { full in ImageViewer(items: [ViewerImage(payload: full.payload, title: String(localized: "图表"))], index: 0) }
+        .fullScreenCover(item: $full) { full in ImageViewer(items: [ViewerImage(payload: full.payload, title: String(localized: "Chart"))], index: 0) }
     }
 
     @ViewBuilder private func picture(_ image: UIImage) -> some View {
@@ -352,7 +352,7 @@ struct RenderedBlock<Fallback: View>: View {
             FittedDiagram(image: image)
                 .contentShape(.rect)
                 .onTapGesture { full = Self.payload(image).map { Full(payload: $0) } }
-                .accessibilityLabel("图：\(source.prefix(80))")
+                .accessibilityLabel("Diagram: \(source.prefix(80))")
                 .accessibilityAddTraits(.isImage)
                 .accessibilityIdentifier("rendered-mermaid")
         default:
@@ -362,7 +362,7 @@ struct RenderedBlock<Fallback: View>: View {
                 formula.frame(maxWidth: .infinity)
                 ScrollView(.horizontal, showsIndicators: false) { formula }
             }
-            .accessibilityLabel("公式：\(source)")
+            .accessibilityLabel("Formula: \(source)")
             .accessibilityIdentifier("rendered-math")
         }
     }

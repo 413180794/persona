@@ -28,12 +28,12 @@ struct TodoDetailView: View {
                 content(todo)
             } else {
                 VStack(spacing: Theme.Space.l) {
-                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "待办不存在或已删除"), message: "")
+                    EmptyStateView(symbol: Theme.Icon.todo, title: String(localized: "This to-do doesn't exist or was deleted"), message: "")
                 }
                 .themedPage()
             }
         }
-        .detailTitle(currentTodo?.title ?? String(localized: "待办详情"))
+        .detailTitle(currentTodo?.title ?? String(localized: "To-Do Details"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -41,7 +41,7 @@ struct TodoDetailView: View {
                     Button(role: .destructive) {
                         showDeleteConfirm = true
                     } label: {
-                        Label("删除待办", systemImage: Theme.Icon.delete)
+                        Label("Delete To-Do", systemImage: Theme.Icon.delete)
                     }
                 } label: {
                     Image(systemName: Theme.Icon.more)
@@ -60,13 +60,13 @@ struct TodoDetailView: View {
             LinkSheet(target: target, key: model.assistantMain ?? model.assistantCurrent)
         }
         #endif
-        .alert("删除待办", isPresented: $showDeleteConfirm) {
-            Button("删除", role: .destructive) {
+        .alert("Delete To-Do", isPresented: $showDeleteConfirm) {
+            Button("Delete", role: .destructive) {
                 Task { await deleteTodo() }
             }
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("确定要删除这个待办吗？关联的 Agent 会话不会被删除。")
+            Text("Delete this to-do? Its linked agent sessions won't be deleted.")
         }
         .onChange(of: currentTodo) { _, todo in
             // Another todo (the Mac list picked it), or an edit made elsewhere: take the stored text, but never over a
@@ -110,7 +110,7 @@ struct TodoDetailView: View {
         return List {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    TextField("待办标题", text: $text.title)
+                    TextField(String(localized: "To-do title"), text: $text.title)
                         .font(Theme.Font.title)
                         .focused($titleFocused)
                         .onSubmit {
@@ -126,13 +126,13 @@ struct TodoDetailView: View {
                         Chip(text: todo.statusLabel(status), look: .tone(status.todoTone))
                         Text("·")
                             .foregroundStyle(.secondary)
-                        Text("\(activeAgents.count) 个 Agent")
+                        Text("\(activeAgents.count) agents")
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                         if let d = todo.createdAt {
                             Text("·")
                                 .foregroundStyle(.secondary)
-                            Text("\(Fmt.relative(d))创建")
+                            Text("Created \(Fmt.relative(d))")
                                 .font(Theme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -140,8 +140,8 @@ struct TodoDetailView: View {
 
                     if todo.autoDone {
                         // The hub closed it (docs/todos.md「自动完成」): say why, and how to undo it.
-                        Text(todo.autoDoneReason.map { "Agent 停下后判断已经做完，自动标成了完成：\($0)。没做完就点「重新打开」。" }
-                             ?? "Agent 停下后判断已经做完，自动标成了完成。没做完就点「重新打开」。")
+                        Text(todo.autoDoneReason.map { String(localized: "The agent stopped and the work looked finished, so it was marked done: \($0). If it isn't, tap “Reopen”.") }
+                             ?? String(localized: "The agent stopped and the work looked finished, so it was marked done. If it isn't, tap “Reopen”."))
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -155,11 +155,11 @@ struct TodoDetailView: View {
             Section {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     HStack {
-                        Text("说明")
+                        Text("Notes")
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button(isEditingNotes ? "完成" : "编辑") {
+                        Button(isEditingNotes ? String(localized: "Done [Extension System Presentation c0b3fb]") : String(localized: "Edit [Message Menu 051836]")) {
                             if isEditingNotes {
                                 let n = editingNotesText.trimmingCharacters(in: .whitespacesAndNewlines)
                                 Task {
@@ -183,7 +183,7 @@ struct TodoDetailView: View {
                     }
 
                     if isEditingNotes {
-                        TextField("待办说明", text: $editingNotesText, axis: .vertical)
+                        TextField(String(localized: "To-do notes"), text: $editingNotesText, axis: .vertical)
                             .lineLimit(3...8)
                             .textFieldStyle(.plain)
                             .padding(Theme.Space.s)
@@ -193,7 +193,7 @@ struct TodoDetailView: View {
                             .font(Theme.Font.body)
                             .foregroundStyle(Color.primary)
                     } else {
-                        Text("暂无说明")
+                        Text("No notes yet")
                             .font(Theme.Font.body)
                             .foregroundStyle(.tertiary)
                     }
@@ -206,7 +206,7 @@ struct TodoDetailView: View {
 
             Section {
                 if activeAgents.isEmpty {
-                    Text("暂无运行中的 Agent，点击下方「交给 Agent」指派。")
+                    Text("No agents are running. Tap “Hand to Agent” below to assign one.")
                         .font(Theme.Font.secondary)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, Theme.Space.xs)
@@ -228,7 +228,7 @@ struct TodoDetailView: View {
                             agentRow(a, todo: todo, isReleased: true, lookup: lookup)
                         }
                     } label: {
-                        Text("参与过 · \(releasedAgents.count)")
+                        Text("Earlier · \(releasedAgents.count)")
                             .font(Theme.Font.sectionHeader)
                             .foregroundStyle(.secondary)
                     }
@@ -254,7 +254,7 @@ struct TodoDetailView: View {
                     }
                     if let pr {
                         Button { link = LinkTarget(url: pr) } label: {
-                            Label(todo.prLabel ?? String(localized: "查看 PR"), systemImage: Theme.Icon.pullRequest)
+                            Label(todo.prLabel ?? String(localized: "View PR"), systemImage: Theme.Icon.pullRequest)
                                 .font(Theme.Font.captionStrong)
                                 .lineLimit(1)
                         }
@@ -276,13 +276,13 @@ struct TodoDetailView: View {
         let key = SessionKey(group: model.hub?.group ?? "", machineID: a.machineID, sessionID: a.sessionID)
         let s = lookup(a.machineID, a.sessionID)
         let isFailed = a.startError.map { !$0.isEmpty } ?? false
-        let title = a.title ?? s?.displayTitle ?? String(localized: "Agent 会话")
+        let title = a.title ?? s?.displayTitle ?? String(localized: "Agent Session")
         let subtitle: String = {
             if isFailed, let err = a.startError {
-                return String(localized: "启动失败：\(err)")
+                return String(localized: "Failed to start: \(err)")
             }
             if isReleased {
-                return String(localized: "已结束")
+                return String(localized: "Ended")
             }
             if let s, let last = s.lastText, !last.isEmpty {
                 return Fmt.plain(last)
@@ -356,7 +356,7 @@ struct TodoDetailView: View {
                     }
                 }
             } label: {
-                Label(isFailed ? "移除" : "解除关联", systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
+                Label(isFailed ? String(localized: "Remove [Task Sheets 6135d4]") : String(localized: "Unlink"), systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
             }
         }
         #if os(macOS)
@@ -371,7 +371,7 @@ struct TodoDetailView: View {
                     }
                 }
             } label: {
-                Label(isFailed ? "移除" : "解除关联", systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
+                Label(isFailed ? String(localized: "Remove [Task Sheets 6135d4]") : String(localized: "Unlink"), systemImage: isFailed ? Theme.Icon.delete : Theme.Icon.link)
             }
         }
         #endif
@@ -384,7 +384,7 @@ struct TodoDetailView: View {
             } label: {
                 HStack(spacing: Theme.Space.xs) {
                     Image(systemName: Theme.Icon.handToAI)
-                    Text("交给 Agent").lineLimit(1).minimumScaleFactor(0.8)
+                    Text("Hand to Agent").lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .font(Theme.Font.heading)
                 .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)
@@ -397,7 +397,7 @@ struct TodoDetailView: View {
             } label: {
                 HStack(spacing: Theme.Space.xs) {
                     Image(systemName: todo.isDone ? Theme.Icon.undo : Theme.Icon.done)
-                    Text(todo.isDone ? "重新打开" : "完成").lineLimit(1).minimumScaleFactor(0.8)
+                    Text(todo.isDone ? String(localized: "Reopen") : String(localized: "Done [Extension System Presentation c0b3fb]")).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .font(Theme.Font.heading)
                 .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.wellS)

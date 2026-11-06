@@ -42,7 +42,7 @@ nonisolated enum MainConversationActions {
         case .failed:
             guard dismissed != key, sawIt || age <= failedRecent else { return nil }
             let e = (c.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return .failed(key: key, error: e.isEmpty ? String(localized: "未知错误") : e)
+            return .failed(key: key, error: e.isEmpty ? String(localized: "Unknown error") : e)
         }
     }
 
@@ -52,16 +52,16 @@ nonisolated enum MainConversationActions {
         style.calendar = calendar
         style.timeZone = calendar.timeZone
         style.locale = .interface
-        return String(localized: "旧主对话 · 至 \(now.formatted(style))", comment: "Title of the archived main chat, with the day it was archived")
+        return String(localized: "Old main chat · until \(now.formatted(style))", comment: "Title of the archived main chat, with the day it was archived")
     }
 }
 
 nonisolated extension Compaction {
     /// The divider's words, as the web and Android draw it: 「以上内容已压缩 · 手动 · 压缩前 18.1 万 token」 (the parts known).
     var dividerTitle: String {
-        var parts = [String(localized: "以上内容已压缩")]
+        var parts = [String(localized: "Earlier messages compacted")]
         if let source { parts.append(source) }
-        if let t = preTokens, t > 0 { parts.append(String(localized: "压缩前 \(Self.tokens(t)) token")) }
+        if let t = preTokens, t > 0 { parts.append(String(localized: "\(Self.tokens(t)) tokens before")) }
         return parts.joined(separator: " · ")
     }
 

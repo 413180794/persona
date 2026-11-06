@@ -129,7 +129,7 @@ struct ConnectorDeps {
         defer { busy = false }
         do {
             let r = try await api.deleteConnectorData(id)
-            deleted = String(localized: "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人，收件箱里 \(r.inbox ?? 0) 条。")
+            deleted = String(localized: "Deleted. Knowledge: chats \(r.chats ?? 0), people \(r.people ?? 0). Inbox: items \(r.inbox ?? 0).")
         } catch {
             deps.report(error)
         }
@@ -151,7 +151,7 @@ struct ConnectorDeps {
         defer { busy = false }
         do {
             let r = try await api.deleteConnectorArchive(id)
-            archiveDeleted = String(localized: "已删除：知识库里 \(r.chats ?? 0) 个会话、\(r.people ?? 0) 个人。")
+            archiveDeleted = String(localized: "Deleted. Knowledge: chats \(r.chats ?? 0), people \(r.people ?? 0).")
         } catch {
             deps.report(error)
         }
@@ -179,7 +179,7 @@ struct ConnectorSignInSections: View {
             } else {
                 // Just switched on: its program has not started yet (the page asks again every second).
                 Section {
-                    Text("\(connector.name) 启动后就能登录。").foregroundStyle(.secondary)
+                    Text("You can sign in once \(connector.name) is on.").foregroundStyle(.secondary)
                         .accessibilityIdentifier("connector.starting")
                 }
             }
@@ -208,7 +208,7 @@ struct ConnectorSwitchSection: View {
                     await reload()
                 }
             })) {
-                Text(connector.storesData ? "同步 \(connector.name)" : "启用 \(connector.name)").lineLimit(1)
+                Text(connector.storesData ? String(localized: "Sync \(connector.name)") : String(localized: "Enable \(connector.name)")).lineLimit(1)
             }
             .accessibilityIdentifier("connector.enabled")
         } footer: {
@@ -217,12 +217,12 @@ struct ConnectorSwitchSection: View {
     }
 
     private var footer: String {
-        let reads = ConnectorText.profile(connector.id).reads ?? String(localized: "它的内容")
+        let reads = ConnectorText.profile(connector.id).reads ?? String(localized: "its content")
         return switch (connector.isEnabled, connector.storesData) {
-        case (true, true): String(localized: "关掉后不再读 \(connector.name)；登录状态和已经存下的数据都留着。")
-        case (true, false): String(localized: "关掉后 \(connector.name) 停下来；登录状态留着。")
-        case (false, false): String(localized: "打开后才能登录。")
-        case (false, true): String(localized: "打开后才能登录，登录后\(reads)进知识库和收件箱，助手也能查。")
+        case (true, true): String(localized: "When it's off, \(connector.name) is no longer read. Your sign-in and the data already saved are kept.")
+        case (true, false): String(localized: "When it's off, \(connector.name) stops. Your sign-in is kept.")
+        case (false, false): String(localized: "Turn it on to sign in. [Connector Sign In Views 823277]")
+        case (false, true): String(localized: "Turn it on to sign in. Once you're signed in, \(reads) will be added to Knowledge and the Inbox, and the Assistant can search them too.")
         }
     }
 }
@@ -238,28 +238,28 @@ struct ConnectorFeedsSection: View {
         if connector.archive != nil || connector.inbox != nil {
             Section {
                 if let on = connector.archive {
-                    toggle(String(localized: "进知识库"), on: on, feed: .archive).accessibilityIdentifier("connector.archive")
+                    toggle(String(localized: "Save to Knowledge"), on: on, feed: .archive).accessibilityIdentifier("connector.archive")
                 }
                 if let on = connector.inbox {
-                    toggle(String(localized: "进收件箱"), on: on, feed: .inbox).accessibilityIdentifier("connector.inbox")
+                    toggle(String(localized: "Show in Inbox"), on: on, feed: .inbox).accessibilityIdentifier("connector.inbox")
                 }
                 if connector.archive != nil {
-                    Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的知识库内容").lineLimit(1) }
+                    Button(role: .destructive) { confirmDelete = true } label: { Text("Delete Saved Knowledge").lineLimit(1) }
                         .disabled(model.busy)
                         .accessibilityIdentifier("connector.deleteArchive")
                 }
             } footer: {
                 Text(model.archiveDeleted ?? footer)
             }
-            .confirmationDialog("删除 \(connector.name) 存进知识库的内容？", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("删除", role: .destructive) {
+            .confirmationDialog("Delete what \(connector.name) saved to Knowledge?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
                     Task {
                         await model.deleteArchive()
                         await reload()
                     }
                 }
             } message: {
-                Text("知识库里从 \(connector.name) 来的会话和人都会删掉，「进知识库」会关掉。收件箱和助手查 \(connector.name) 不受影响。")
+                Text("Chats and people from \(connector.name) are deleted from Knowledge, and “Save to Knowledge” is turned off. The Inbox and the assistant's searches of \(connector.name) aren't affected.")
             }
         }
     }
@@ -267,11 +267,11 @@ struct ConnectorFeedsSection: View {
     private var footer: String {
         var lines: [String] = []
         if connector.archive != nil {
-            lines.append(connector.archive == true ? String(localized: "进知识库：\(connector.name) 的内容存进知识库，助手和 AI 分身都能查。关掉后不再存新的，已存的留着。")
-                         : String(localized: "不进知识库：不再存新的内容。收件箱和助手查 \(connector.name) 照常。"))
+            lines.append(connector.archive == true ? String(localized: "Save to Knowledge: content from \(connector.name) is saved to Knowledge, where the assistant and AI twin can search it. When off, nothing new is saved; what's saved stays.")
+                         : String(localized: "Not saving to Knowledge: nothing new is saved. The Inbox and the assistant's searches of \(connector.name) work as usual."))
         }
         if connector.inbox == false {
-            lines.append(String(localized: "不进收件箱：不再收新的，已有的条目留着。"))
+            lines.append(String(localized: "Not showing in Inbox: nothing new arrives; existing items stay."))
         }
         return lines.joined(separator: "\n")
     }
@@ -308,12 +308,12 @@ struct ConnectorDataSection: View {
     private var sections: some View {
         Section {
             if logout {
-                Button(role: .destructive) { confirmLogout = true } label: { Text("退出登录").lineLimit(1) }
+                Button(role: .destructive) { confirmLogout = true } label: { Text("Sign Out [Connector Sign In Views 3ab8cc]").lineLimit(1) }
                     .disabled(model.busy)
                     .accessibilityIdentifier("connector.logout")
             }
             if connector.storesData {
-                Button(role: .destructive) { confirmDelete = true } label: { Text("删除已存的数据").lineLimit(1) }
+                Button(role: .destructive) { confirmDelete = true } label: { Text("Delete Saved Data").lineLimit(1) }
                     .disabled(model.busy)
                     .accessibilityIdentifier("connector.deleteData")
             }
@@ -321,11 +321,11 @@ struct ConnectorDataSection: View {
             if let deleted = model.deleted {
                 Text(deleted)
             } else if connector.storesData {
-                Text("删除：知识库里从它来的会话和人、收件箱里它的条目，并关掉同步；登录状态不受影响。")
+                Text("Deletes its chats and people in Knowledge and its Inbox items, and turns off syncing. The sign-in isn't affected.")
             }
         }
-        .confirmationDialog("退出 \(connector.name) 登录？", isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button("退出登录", role: .destructive) {
+        .confirmationDialog("Sign out of \(connector.name)? [Connector Sign In Views b5b019]", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button("Sign Out [Connector Sign In Views 3ab8cc]", role: .destructive) {
                 Task {
                     await model.logout()
                     await reload()
@@ -334,15 +334,15 @@ struct ConnectorDataSection: View {
         } message: {
             Text(ConnectorText.logoutMessage(connector))
         }
-        .confirmationDialog("删除 \(connector.name) 存下的数据？", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+        .confirmationDialog("Delete data saved from \(connector.name)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
                 Task {
                     await model.deleteData()
                     await reload()
                 }
             }
         } message: {
-            Text("知识库里从 \(connector.name) 来的会话和人、收件箱里它的条目都会删掉，同步会关掉。项目的总结在下次更新时不再包含它们。")
+            Text("Chats and people from \(connector.name) in Knowledge and its Inbox items are deleted, and syncing is turned off. Project summaries leave them out the next time they update.")
         }
     }
 }
@@ -356,7 +356,7 @@ struct ConnectorSignInSteps: View {
     var reload: () async -> Void
     var footer: String
     /// The section's heading and the first button: Sign In for a connector, Bind / Bind with QR Code for a channel.
-    var heading = String(localized: "登录")
+    var heading = String(localized: "Sign In")
     var start: String?
 
     var body: some View {
@@ -397,7 +397,7 @@ struct ConnectorSignInSteps: View {
                         HStack {
                             Spacer(minLength: 0)
                             Link(destination: url) {
-                                Label("打开 \(name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1)
+                                Label("Open \(name) to Enter Code", systemImage: Theme.Icon.openExternal).lineLimit(1)
                             }
                             .formButton(prominent: true)
                             .accessibilityIdentifier("connector.openVerification")
@@ -405,7 +405,7 @@ struct ConnectorSignInSteps: View {
                         .listRowBackground(Color.clear)
                         #else
                         Link(destination: url) {
-                            Label("打开 \(name) 输入验证码", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
+                            Label("Open \(name) to Enter Code", systemImage: Theme.Icon.openExternal).lineLimit(1).frame(maxWidth: .infinity)
                         }
                         .themedButton(prominent: true)
                         .listRowBackground(Color.clear)
@@ -419,7 +419,7 @@ struct ConnectorSignInSteps: View {
                         Button {
                             Task { await model.restart() }
                         } label: {
-                            Text("重新开始").lineLimit(1).formActionWidth()
+                            Text("Start Over").lineLimit(1).formActionWidth()
                         }
                         .formButton(prominent: true)
                         .disabled(model.busy)
@@ -428,8 +428,8 @@ struct ConnectorSignInSteps: View {
                 } else if p.isQRCode {
                     if let image = model.qrImage {
                         FormAction {
-                            ShareLink(item: Image(uiImage: image), preview: SharePreview("二维码", image: Image(uiImage: image))) {
-                                Label("保存二维码", systemImage: Theme.Icon.share).lineLimit(1).formActionWidth()
+                            ShareLink(item: Image(uiImage: image), preview: SharePreview(String(localized: "QR Code"), image: Image(uiImage: image))) {
+                                Label("Save QR Code", systemImage: Theme.Icon.share).lineLimit(1).formActionWidth()
                             }
                             .formButton(prominent: false)
                             .accessibilityIdentifier("connector.shareQR")
@@ -443,7 +443,7 @@ struct ConnectorSignInSteps: View {
                                 await reload() // the status above follows (credentials saved: api_id shown; signed in)
                             }
                         } label: {
-                            Text(model.busy ? "正在验证…" : "下一步").lineLimit(1).formActionWidth()
+                            Text(model.busy ? String(localized: "Verifying…") : String(localized: "Next [Inbox Line acfc4e]")).lineLimit(1).formActionWidth()
                         }
                         .formButton(prominent: true)
                         .disabled(!model.canSend)
@@ -459,7 +459,7 @@ struct ConnectorSignInSteps: View {
                     Button {
                         Task { await model.start() }
                     } label: {
-                        Text(start ?? String(localized: "登录 \(name)")).lineLimit(1).formActionWidth()
+                        Text(start ?? String(localized: "Sign In to \(name)")).lineLimit(1).formActionWidth()
                     }
                     .formButton(prominent: true)
                     .disabled(model.busy)
@@ -485,14 +485,14 @@ struct ConnectorSignInSteps: View {
                 UIPasteboard.general.string = p.userCode
                 Haptics.success()
             } label: {
-                Label("复制", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
+                Label("Copy [Message Menu 63d90d]", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(p.isPairCode ? "复制配对码" : "复制验证码")
+            .accessibilityLabel(p.isPairCode ? String(localized: "Copy Pairing Code [Connector Sign In Views 43e714]") : String(localized: "Copy Code [Connector Sign In Views 85a0b9]"))
         }
         HStack(spacing: Theme.Space.s) {
             ProgressView()
-            Text(p.isPairCode ? "等你把它发给机器人…" : "等你在 \(name) 上授权…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+            Text(p.isPairCode ? String(localized: "Waiting for you to send it to the bot…") : String(localized: "Waiting for you to authorize on \(name)…")).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
@@ -505,7 +505,7 @@ struct ConnectorSignInSteps: View {
             .accessibilityIdentifier("connector.qrCode")
         HStack(spacing: Theme.Space.s) {
             ProgressView()
-            Text("等你扫码确认…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+            Text("Waiting for you to scan and confirm…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
         }
     }
 
@@ -532,7 +532,7 @@ struct ConnectorSignInSteps: View {
         #if os(iOS) || os(visionOS)
         if f.secret == true {
             // A token, an API hash, another service's password: never offered to the system's passwords (#1598).
-            SecretField(f.placeholder ?? f.label, filled: String(localized: "已填写"), text: text, identifier: "connector.field." + f.name)
+            SecretField(f.placeholder ?? f.label, filled: String(localized: "Filled in"), text: text, identifier: "connector.field." + f.name)
         } else {
             TextField(f.label, text: text, prompt: prompt)
                 .keyboardType(Self.keyboard(f.name))

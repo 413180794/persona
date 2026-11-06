@@ -40,10 +40,10 @@ struct ModelLaunchersView: View {
                 if query.isEmpty || !managed.isEmpty { Section {
                     if managed.isEmpty {
                         #if os(macOS)
-                        Text("还没有。用下面的「新增供应商…」添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。")
+                        Text("No providers yet. Use “Add Provider…” below to set up the connection type, gateway, key, and default model, then pick one for each use in “Model Configuration”.")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                         #else
-                        Text("还没有。点右上角 + 添加接入方式、网关、Key 和默认模型，再在「模型配置」里按用途选择。")
+                        Text("No providers yet. Tap + at the top right to set up the connection type, gateway, key, and default model, then pick one for each use in “Model Configuration”.")
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                         #endif
                     }
@@ -53,18 +53,18 @@ struct ModelLaunchersView: View {
                     // the search field took the trailing end and the + went to the window's middle, over the settings list.
                     HStack {
                         Spacer(minLength: 0)
-                        Button("从 ~/.zshrc 导入…") { adding = .importZshrc }.lineLimit(1).formButton()
-                        Button("新增供应商…") { adding = .pick }.lineLimit(1).formButton()
+                        Button("Import from ~/.zshrc…") { adding = .importZshrc }.lineLimit(1).formButton()
+                        Button("Add Provider…") { adding = .pick }.lineLimit(1).formButton()
                     }
                     #endif
-                } header: { header(String(localized: "Persona 管理"), managed.count) } footer: {
-                    if !managed.isEmpty { Text("Key 加密存在 hub，启动时才交给那台电脑，不写进文件。") }
+                } header: { header(String(localized: "Managed by Persona"), managed.count) } footer: {
+                    if !managed.isEmpty { Text("Keys are stored encrypted on the hub and only handed to the computer at launch. They're never written to a file.") }
                 } }
                 if !zshrc.isEmpty {
                     Section {
                         ForEach(zshrc) { row($0) }
-                    } header: { header(String(localized: "来自 ~/.zshrc"), zshrc.count) } footer: {
-                        Text("各台电脑 ~/.zshrc 里调用 claude 的函数，每次打开这页时同步；新加的函数会自动出现。")
+                    } header: { header(String(localized: "From ~/.zshrc"), zshrc.count) } footer: {
+                        Text("Functions in ~/.zshrc on your computers that call claude. They sync each time you open this page, and new ones show up automatically.")
                     }
                 }
                 if !hidden.isEmpty {
@@ -76,7 +76,7 @@ struct ModelLaunchersView: View {
                             withAnimation(Theme.Motion.standard) { showHidden.toggle() }
                         } label: {
                             HStack(spacing: Theme.Space.xs) {
-                                header(String(localized: "已隐藏"), hidden.count)
+                                header(String(localized: "Hidden"), hidden.count)
                                 Image(systemName: Theme.Icon.disclosure).font(Theme.Font.labelStrong)
                                     .rotationEffect(.degrees(open ? 90 : 0))
                                 Spacer(minLength: 0)
@@ -86,10 +86,10 @@ struct ModelLaunchersView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(!query.isEmpty)
-                        .accessibilityLabel(open ? String(localized: "已隐藏 \(hidden.count) 个，已展开") : String(localized: "已隐藏 \(hidden.count) 个，已折叠"))
+                        .accessibilityLabel(open ? String(localized: "\(hidden.count) hidden providers, expanded") : String(localized: "\(hidden.count) hidden providers, collapsed"))
                         .accessibilityAddTraits(.isButton)
                     } footer: {
-                        if open { Text("只是在 Persona 里不显示，~/.zshrc 没有改。点进去可以恢复。") }
+                        if open { Text("They're only hidden in Persona; ~/.zshrc isn't changed. Open one to unhide it.") }
                     }
                 }
             } else if let error {
@@ -98,17 +98,17 @@ struct ModelLaunchersView: View {
                 Section { ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl) }.listRowBackground(Color.clear)
             }
         }
-        .detailTitle(String(localized: "模型供应商"))
+        .detailTitle(String(localized: "Model Providers"))
         .navigationBarTitleDisplayMode(.inline)
-        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "名字、模型、网关或电脑"))
+        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "Name, model, gateway, or computer"))
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { adding = .pick } label: { Label("新增供应商", systemImage: Theme.Icon.add) }
-                    Button { adding = .importZshrc } label: { Label("从 ~/.zshrc 导入", systemImage: Theme.Icon.terminal) }
+                    Button { adding = .pick } label: { Label("Add Provider", systemImage: Theme.Icon.add) }
+                    Button { adding = .importZshrc } label: { Label("Import from ~/.zshrc", systemImage: Theme.Icon.terminal) }
                 } label: { Image(systemName: Theme.Icon.add) } primaryAction: { adding = .pick }
-                .accessibilityLabel("新增供应商")
+                .accessibilityLabel("Add Provider")
                 .accessibilityIdentifier("launchers.add")
             }
         }
@@ -128,10 +128,10 @@ struct ModelLaunchersView: View {
             if let s = UserDefaults.standard.string(forKey: "openProviderWizard") { adding = ProviderWizardStep(rawValue: s) ?? .pick }
         }
         #endif
-        .confirmationDialog("删除启动器「\(pendingDelete?.name ?? "")」？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+        .confirmationDialog("Delete Launcher “\(pendingDelete?.name ?? "")”?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { l in
-            Button("删除", role: .destructive) { Task { await delete(l) } }
-        } message: { _ in Text("hub 里存的 Key 也一起删掉，不能恢复。") }
+            Button("Delete", role: .destructive) { Task { await delete(l) } }
+        } message: { _ in Text("The key stored on the hub is deleted too. This can't be undone.") }
         // Again whenever a launcher changes anywhere, its own page included (hide, restore, delete): this page stays
         // built under the one pushed on it, so without this it showed the old list when you came back (#1433).
         .task(id: model.launchersRevision) { await load() }
@@ -168,23 +168,23 @@ struct ModelLaunchersView: View {
         // A Mac form has no swipe: the same actions in the row's menu (#1221).
         .contextMenu {
             if l.managed {
-                Button("删除…", role: .destructive) { pendingDelete = l }
+                Button("Delete…", role: .destructive) { pendingDelete = l }
             } else if l.hidden == true {
-                Button("恢复") { Task { await setHidden(l, false) } }
+                Button("Unhide [Lark Chat View e0534b]") { Task { await setHidden(l, false) } }
             } else {
-                Button("隐藏") { Task { await setHidden(l, true) } }
+                Button("Hide") { Task { await setHidden(l, true) } }
             }
         }
         #endif
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if l.managed {
-                Button { pendingDelete = l } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
+                Button { pendingDelete = l } label: { Label("Delete", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
             } else {
                 if l.hidden == true {
-                    Button { Task { await setHidden(l, false) } } label: { Label("恢复", systemImage: Theme.Icon.view) }
+                    Button { Task { await setHidden(l, false) } } label: { Label("Unhide [Lark Chat View e0534b]", systemImage: Theme.Icon.view) }
                         .tint(Theme.accent)
                 } else {
-                    Button { Task { await setHidden(l, true) } } label: { Label("隐藏", systemImage: Theme.Icon.hide) }
+                    Button { Task { await setHidden(l, true) } } label: { Label("Hide", systemImage: Theme.Icon.hide) }
                         .tint(Theme.caution)
                 }
             }
@@ -305,33 +305,33 @@ struct ModelLauncherDetailView: View {
         SettingsForm {
             if let l = launcher {
                 Section {
-                    LabeledContent("来源", value: l.managed ? String(localized: "Persona 管理") : String(localized: "~/.zshrc 里的函数"))
-                    if l.kind == "api" { LabeledContent("接入方式", value: String(localized: "直接 API · \(l.api == "responses" ? "Responses" : "Messages")")) }
+                    LabeledContent("Source", value: l.managed ? String(localized: "Managed by Persona") : String(localized: "Function in ~/.zshrc"))
+                    if l.kind == "api" { LabeledContent("Connection Type", value: String(localized: "Direct API · \(l.api == "responses" ? "Responses" : "Messages")")) }
                     // A ~/.zshrc launcher's gateway and models are in the sections it was probed into below.
                     if l.managed || (l.details ?? [:]).isEmpty {
                         if let u = l.baseURL, !u.isEmpty { mono("Base URL", u) }
-                        if let m = l.model, !m.isEmpty { mono("模型", m) }
+                        if let m = l.model, !m.isEmpty { mono("Model [Assistant View c98e11]", m) }
                     }
-                    if let s = l.smallModel, !s.isEmpty { mono("小模型", s) }
-                    if let s = l.subagentModel, !s.isEmpty { mono("子 Agent 模型", s) }
+                    if let s = l.smallModel, !s.isEmpty { mono("Small Model", s) }
+                    if let s = l.subagentModel, !s.isEmpty { mono("Subagent Model", s) }
                     if let c = l.customModel, !c.isEmpty {
-                        mono("自定义模型", c)
-                        if let n = l.customModelName, !n.isEmpty { LabeledContent("自定义模型名", value: n) }
-                        if let d = l.customModelDescription, !d.isEmpty { LabeledContent("自定义模型说明", value: d) }
+                        mono("Custom Model", c)
+                        if let n = l.customModelName, !n.isEmpty { LabeledContent("Custom Model Name", value: n) }
+                        if let d = l.customModelDescription, !d.isEmpty { LabeledContent("Custom Model Description", value: d) }
                     }
-                    if let o = l.origin, o.hasPrefix("zshrc:") { mono("导入自", "~/.zshrc · " + o.dropFirst("zshrc:".count)) }
-                    if let ms = l.models, ms.count > 1 { mono("可用模型", ms.map(\.id).joined(separator: "、")) }
-                    if l.hasHeaders == true { LabeledContent("请求头", value: String(localized: "已设置（不显示）")) }
-                    if l.managed { LabeledContent("API Key", value: l.hasKey == true ? String(localized: "已设置（不显示）") : String(localized: "未设置")) }
-                    if l.managed, l.api != "responses" { LabeledContent("认证方式", value: l.bearerAuth ? "Bearer" : "x-api-key") }
-                    if let a = l.args, !a.isEmpty { mono("额外参数", a.joined(separator: " ")) }
+                    if let o = l.origin, o.hasPrefix("zshrc:") { mono("Imported From", "~/.zshrc · " + o.dropFirst("zshrc:".count)) }
+                    if let ms = l.models, ms.count > 1 { mono("Available Models", ms.map(\.id).joined(separator: "、")) }
+                    if l.hasHeaders == true { LabeledContent("Headers", value: String(localized: "Set (hidden)")) }
+                    if l.managed { LabeledContent("API Key", value: l.hasKey == true ? String(localized: "Set (hidden)") : String(localized: "Not set")) }
+                    if l.managed, l.api != "responses" { LabeledContent("Authentication [Model Launchers View d1ff8f]", value: l.bearerAuth ? "Bearer" : "x-api-key") }
+                    if let a = l.args, !a.isEmpty { mono("Extra Arguments", a.joined(separator: " ")) }
                     if let ids = l.machines, !ids.isEmpty {
-                        LabeledContent("电脑", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between computer names in a list")))
+                        LabeledContent("Computers", value: ids.map { model.machine(model.hubRef($0))?.name ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between computer names in a list")))
                     }
                 }
                 if l.managed {
                     Section {
-                        Text(l.kind == "api" ? "hub 直接请求此 API，不在电脑上启动 Agent。各用途在「模型配置」中选择它。" : "在任何电脑上都以 `personad launch \(l.name)` 运行：从本机的 node 取到这些设置再启动 claude。")
+                        Text(l.kind == "api" ? String(localized: "The hub calls this API directly; no agent is launched on a computer. Pick it for each use in “Model Configuration”.") : String(localized: "Runs as `personad launch \(l.name)` on any computer: it gets these settings from the local node, then starts claude."))
                             .font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
@@ -354,23 +354,23 @@ struct ModelLauncherDetailView: View {
                                     Text(def).font(Theme.Font.code).textSelection(.enabled)
                                 }
                             }
-                        } label: { Label("函数原文", systemImage: Theme.Icon.agents).lineLimit(1) }
-                    } footer: { Text("看起来像 Key、Token 的值已经换成 •••。") }
+                        } label: { Label("Function Source", systemImage: Theme.Icon.agents).lineLimit(1) }
+                    } footer: { Text("Values that look like keys or tokens are replaced with •••.") }
                 }
                 Section {
                     if l.hidden == true {
-                        Button { Task { await restore() } } label: { Label("恢复显示", systemImage: Theme.Icon.view).lineLimit(1) }
+                        Button { Task { await restore() } } label: { Label("Unhide [Model Launchers View 38f0f1]", systemImage: Theme.Icon.view).lineLimit(1) }
                     } else {
                         // The confirmation comes up right where the button is (2026-10-31 user request), not as a sheet.
                         Button(role: .destructive) { confirmDelete = true } label: {
-                            Label(l.managed ? "删除启动器" : "在 Persona 里隐藏", systemImage: l.managed ? Theme.Icon.delete : Theme.Icon.hide).lineLimit(1)
+                            Label(l.managed ? String(localized: "Delete Launcher") : String(localized: "Hide in Persona"), systemImage: l.managed ? Theme.Icon.delete : Theme.Icon.hide).lineLimit(1)
                         }
                         .popover(isPresented: $confirmDelete, arrowEdge: .top) {
                             Button(role: .destructive) {
                                 confirmDelete = false
                                 Task { await delete() }
                             } label: {
-                                Text(l.managed ? "确认删除" : "确认隐藏").font(Theme.Font.heading).lineLimit(1)
+                                Text(l.managed ? String(localized: "Confirm Delete") : String(localized: "Confirm Hide")).font(Theme.Font.heading).lineLimit(1)
                                     .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.m)
                             }
                             .foregroundStyle(Theme.danger)
@@ -388,7 +388,7 @@ struct ModelLauncherDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             if launcher?.managed == true {
-                ToolbarItem(placement: .topBarTrailing) { Button("编辑") { editing = true }.lineLimit(1) }
+                ToolbarItem(placement: .topBarTrailing) { Button("Edit [Message Menu 051836]") { editing = true }.lineLimit(1) }
             }
         }
         .sheet(isPresented: $editing) {
@@ -441,13 +441,13 @@ struct ModelLauncherDetailView: View {
             }
             Button { Task { await check(machines) } } label: {
                 HStack {
-                    Label(checks.isEmpty ? "测试可用性" : "再测一次", systemImage: Theme.Icon.tryOut).lineLimit(1)
+                    Label(checks.isEmpty ? String(localized: "Test Availability") : String(localized: "Test Again"), systemImage: Theme.Icon.tryOut).lineLimit(1)
                     if running { Spacer(); ProgressView() }
                 }
             }
             .disabled(running || machines.isEmpty)
-        } header: { Text("可用性") } footer: {
-            Text(machines.isEmpty ? "有这个启动器的电脑都不在线。" : "真的发一个只回答一个词的请求（花几个 token），看能不能回答、要多久、是哪个模型答的。")
+        } header: { Text("Availability") } footer: {
+            Text(machines.isEmpty ? String(localized: "None of the computers with this launcher are online.") : String(localized: "Sends a real one-word request (a few tokens) to see whether it answers, how long it takes, and which model replies."))
         }
     }
 
@@ -458,7 +458,7 @@ struct ModelLauncherDetailView: View {
             for id in machines {
                 group.addTask {
                     let c = (try? await api.checkLauncher(name, machine: id.isEmpty ? nil : id))
-                        ?? LauncherCheck(ok: false, millis: 0, error: String(localized: "请求没有完成"))
+                        ?? LauncherCheck(ok: false, millis: 0, error: String(localized: "The request didn't finish"))
                     return (id, c)
                 }
             }
@@ -541,9 +541,9 @@ struct LauncherEditor: View {
             Form {
                 if isNew, !presets.presets.isEmpty {
                     Section {
-                        Picker("来源", selection: $fromExtension) {
-                            Text("自己填写").tag(false)
-                            Text("从扩展添加").tag(true)
+                        Picker("Source", selection: $fromExtension) {
+                            Text("Manual [Model Launchers View e98ba2]").tag(false)
+                            Text("From Extension").tag(true)
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
@@ -556,12 +556,12 @@ struct LauncherEditor: View {
                     manualSections
                 }
             }
-            .navigationTitle(isNew ? "新增供应商" : "编辑 \(existing?.name ?? "")")
+            .navigationTitle(isNew ? String(localized: "Add Provider") : String(localized: "Edit \(existing?.name ?? "")"))
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: opened.map { $0 != fields } ?? false) { dismiss() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { usesPreset ? await savePreset() : await save() } }.lineLimit(1)
+                    Button("Save") { Task { usesPreset ? await savePreset() : await save() } }.lineLimit(1)
                         .disabled(usesPreset ? !presets.canSave
                                   : saving || name.isEmpty || baseURL.isEmpty || modelName.isEmpty || (isNew && apiKey.isEmpty))
                 }
@@ -598,61 +598,61 @@ struct LauncherEditor: View {
     /// Manual: the name, the kind, the gateway and key, the models, the flags.
     @ViewBuilder private var manualSections: some View {
         Section {
-            TextField("名字，比如 jv_strong", text: $name)
+            TextField(String(localized: "Name, e.g. jv_strong"), text: $name)
                 .font(Theme.Font.body.monospaced())
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                 .disabled(!isNew)
-        } header: { Text("名字") } footer: { Text("字母、数字、_ 和 -；按这个名字选择供应商。") }
+        } header: { Text("Name [Add Computer View 677331]") } footer: { Text("Letters, digits, _, and -. This is the name you pick the provider by.") }
         Section {
-            Picker("接入方式", selection: $kind) {
-                Text("Claude Code 启动器").tag("launcher")
-                Text("直接 API").tag("api")
+            Picker("Connection Type", selection: $kind) {
+                Text("Claude Code Launcher").tag("launcher")
+                Text("Direct API").tag("api")
             }
             if kind == "api" {
-                Picker("API 协议", selection: $protocolName) {
+                Picker("API Protocol", selection: $protocolName) {
                     Text("Messages").tag("messages")
                     Text("Responses").tag("responses")
                 }
             }
         } footer: {
-            Text(kind == "api" ? "hub 直接请求模型，供分拣、翻译和知识处理等用途选择。" : "在你的电脑上启动 Claude Code，供对话和 Agent 等用途选择。")
+            Text(kind == "api" ? String(localized: "The hub calls the model directly. Available for uses like triage, translation, and knowledge processing.") : String(localized: "Launches Claude Code on your computer. Available for uses like chats and agents."))
         }
         Section {
             TextField("https://…", text: $baseURL)
                 .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-            SecretField(isNew || existing?.hasKey != true ? "API Key" : String(localized: "API Key（不改就留空）"), filled: String(localized: "已填写，点保存"),
+            SecretField(isNew || existing?.hasKey != true ? "API Key" : String(localized: "API Key (leave empty to keep)"), filled: String(localized: "Filled in; tap Save [Extension Market Views 94348c]"),
                         text: $apiKey, identifier: "launcher.editor.key")
             if !usesResponses {
-                Picker("认证方式", selection: $auth) {
+                Picker("Authentication [Model Launchers View d1ff8f]", selection: $auth) {
                     Text("x-api-key").tag("api_key")
                     Text("Bearer").tag("bearer")
                 }
             }
-        } header: { Text("网关") } footer: {
-            Text(usesResponses ? "填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。"
-                : "填写所选协议兼容的地址。Key 加密存在 hub，不会返回到客户端。网关只认 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN）时选 Bearer。")
+        } header: { Text("Gateway") } footer: {
+            Text(usesResponses ? String(localized: "Enter an address compatible with the selected protocol. The key is stored encrypted on the hub and never sent back to clients.")
+                : String(localized: "Enter an address compatible with the selected protocol. The key is stored encrypted on the hub and never sent back to clients. Choose Bearer if the gateway only accepts Authorization: Bearer (ANTHROPIC_AUTH_TOKEN)."))
         }
         Section {
-            TextField("默认模型", text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
+            TextField(String(localized: "Default Model"), text: $modelName).textInputAutocapitalization(.never).autocorrectionDisabled()
             if kind == "launcher" {
-                TextField("小模型（可选，默认同上）", text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("子 Agent 模型（可选，默认同上）", text: $subagentModel)
+                TextField(String(localized: "Small model (optional, defaults to the above)"), text: $smallModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                TextField(String(localized: "Subagent model (optional, defaults to the above)"), text: $subagentModel)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
             }
-        } header: { Text("默认模型") } footer: { Text("各用途的具体选择在「模型配置」里统一管理；未单独指定时使用这里的默认。子 Agent 模型用于 workflow 等多 Agent 运行。") }
+        } header: { Text("Default Model") } footer: { Text("Choices for each use are managed in “Model Configuration”. Uses without their own choice get the default here. The subagent model is used for multi-agent runs such as workflows.") }
         if kind == "launcher" {
             Section {
-                TextField("自定义模型（可选）", text: $customModel)
+                TextField(String(localized: "Custom model (optional)"), text: $customModel)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField("显示名（可选）", text: $customModelName)
-                TextField("说明（可选）", text: $customModelDescription)
-            } header: { Text("自定义模型项（可选）") } footer: { Text("在 /model 里多一个可选项，模型 ID 以网关为准。") }
+                TextField(String(localized: "Display name (optional)"), text: $customModelName)
+                TextField(String(localized: "Description (optional)"), text: $customModelDescription)
+            } header: { Text("Custom Model Entry (Optional)") } footer: { Text("Adds an extra option to /model. The gateway decides which model IDs are valid.") }
         }
         if kind == "launcher" {
             Section {
-                TextField("比如 --dangerously-skip-permissions", text: $args)
+                TextField(String(localized: "e.g. --dangerously-skip-permissions"), text: $args)
                     .font(Theme.Font.body.monospaced()).textInputAutocapitalization(.never).autocorrectionDisabled()
-            } header: { Text("额外参数（可选）") } footer: { Text("加在 claude 后面，空格分隔，每个都以 - 开头。") }
+            } header: { Text("Extra Arguments (Optional)") } footer: { Text("Added after claude, separated by spaces. Each must start with -.") }
         }
         if let error {
             Section { LoadProblem(text: error) }
@@ -706,13 +706,13 @@ struct LauncherDetailSections: View {
 
     var body: some View {
         if let e = detail.error {
-            Section { Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary) } header: { title("运行") }
+            Section { Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary) } header: { title("Runtime") }
         } else {
             Section {
                 LabeledContent("Agent", value: detail.agentName)
-                if let u = detail.baseURL, !u.isEmpty { mono("网关", u) }
-                if let a = detail.auth { mono("Key", String(localized: "已设置 · \(a)")) }
-            } header: { title("运行") }
+                if let u = detail.baseURL, !u.isEmpty { mono("Gateway", u) }
+                if let a = detail.auth { mono("Key", String(localized: "Set · \(a)")) }
+            } header: { title("Runtime") }
             if let models = detail.models, !models.isEmpty {
                 Section {
                     ForEach(models, id: \.self) { m in
@@ -725,20 +725,20 @@ struct LauncherDetailSections: View {
                             }
                         }
                     }
-                } header: { title("模型") }
+                } header: { title("Model [Assistant View c98e11]") }
             }
             if detail.contextWindow != nil || detail.compactWindow != nil || detail.effort != nil || detail.timeoutMS != nil {
                 Section {
-                    if let w = detail.contextWindow, w > 0 { LabeledContent("上下文窗口", value: String(localized: "\(LauncherDetail.tokens(w)) tokens")) }
-                    if let c = detail.compactWindow, c > 0 { LabeledContent("自动压缩窗口", value: String(localized: "\(LauncherDetail.tokens(c)) tokens")) }
-                    if let e = detail.effort, !e.isEmpty { LabeledContent("思考强度", value: e) }
-                    if let t = detail.timeoutMS, t > 0 { LabeledContent("请求超时", value: t >= 60_000 ? String(localized: "\(t / 60_000) 分钟") : String(localized: "\(t / 1000) 秒")) }
-                } header: { title("上下文") }
+                    if let w = detail.contextWindow, w > 0 { LabeledContent("Context Window", value: String(localized: "\(LauncherDetail.tokens(w)) tokens")) }
+                    if let c = detail.compactWindow, c > 0 { LabeledContent("Auto-Compact Window", value: String(localized: "\(LauncherDetail.tokens(c)) tokens")) }
+                    if let e = detail.effort, !e.isEmpty { LabeledContent("Thinking Effort", value: e) }
+                    if let t = detail.timeoutMS, t > 0 { LabeledContent("Request Timeout", value: t >= 60_000 ? String(localized: "\(t / 60_000) min [Task Views 135d12]") : String(localized: "\(t / 1000) s")) }
+                } header: { title("Context") }
             }
             if let args = detail.args, !args.isEmpty {
                 Section {
                     Text(args.joined(separator: " ")).font(Theme.Font.code).textSelection(.enabled)
-                } header: { title("启动参数") }
+                } header: { title("Launch Arguments") }
             }
             if let env = detail.env, !env.isEmpty {
                 Section {
@@ -748,7 +748,7 @@ struct LauncherDetailSections: View {
                             Text(e.value).font(Theme.Font.body.monospaced()).lineLimit(3).textSelection(.enabled)
                         }
                     }
-                } header: { title("其他设置 \(env.count)") }
+                } header: { title("Other Settings (\(env.count))") }
             }
         }
     }
@@ -784,23 +784,23 @@ struct LauncherCheckRow: View {
             .frame(width: Theme.Size.iconS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
-                    Text(machine ?? String(localized: "hub 所在的机器")).font(Theme.Font.heading).lineLimit(1)
+                    Text(machine ?? String(localized: "Hub Machine")).font(Theme.Font.heading).lineLimit(1)
                     if let c = check { Text(Self.seconds(c.millis)).font(Theme.Font.label.monospacedDigit()).foregroundStyle(.secondary) }
                 }
                 if let c = check {
                     if c.ok {
-                        Text([c.model, c.answer.map { String(localized: "回答「\($0)」") }].compactMap { $0 }.joined(separator: " · "))
+                        Text([c.model, c.answer.map { String(localized: "Answered “\($0)”") }].compactMap { $0 }.joined(separator: " · "))
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                     } else if let e = c.error {
                         Text(e).font(Theme.Font.code).foregroundStyle(Theme.danger).lineLimit(6).textSelection(.enabled)
                     }
                 } else {
-                    Text("正在请求…").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Requesting…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
         }
         .padding(.vertical, Theme.Space.xxs)
     }
 
-    static func seconds(_ ms: Int) -> String { ms >= 10_000 ? String(localized: "\(ms / 1000) 秒") : String(localized: "\((Double(ms) / 1000).formatted(.number.precision(.fractionLength(1)))) 秒") }
+    static func seconds(_ ms: Int) -> String { ms >= 10_000 ? String(localized: "\(ms / 1000) s") : String(localized: "\((Double(ms) / 1000).formatted(.number.precision(.fractionLength(1)))) s") }
 }

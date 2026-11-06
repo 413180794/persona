@@ -13,10 +13,10 @@ enum TaskNoteText {
     /// "Background command" / "Monitor event" / "Monitor ended" / "Subagent".
     static func label(_ n: TaskNote) -> String {
         switch n.kind {
-        case "shell": String(localized: "后台命令")
-        case "monitor": n.status == "event" ? String(localized: "Monitor 事件") : String(localized: "Monitor 结束")
-        case "agent": String(localized: "子 Agent")
-        default: String(localized: "后台任务")
+        case "shell": String(localized: "Background command")
+        case "monitor": n.status == "event" ? String(localized: "Monitor event") : String(localized: "Monitor ended")
+        case "agent": String(localized: "Subagent [Task Note Row 70da69]")
+        default: String(localized: "Background Task")
         }
     }
 
@@ -31,10 +31,10 @@ enum TaskNoteText {
         var parts: [String] = []
         switch n.status {
         case "completed", "ended": parts.append("✓")
-        case "failed": parts.append(n.exitCode.map { String(localized: "✗ 退出码 \($0)") } ?? "✗")
-        case "killed", "stopped": parts.append(String(localized: "已停止"))
-        case "waiting": parts.append(String(localized: "等待中"))
-        default: if let c = n.exitCode, c != 0 { parts.append(String(localized: "✗ 退出码 \(c)")) }
+        case "failed": parts.append(n.exitCode.map { String(localized: "✗ Exit code \($0)") } ?? "✗")
+        case "killed", "stopped": parts.append(String(localized: "Stopped [Port Chips f00645]"))
+        case "waiting": parts.append(String(localized: "Waiting [File Attach 26c8cf]"))
+        default: if let c = n.exitCode, c != 0 { parts.append(String(localized: "✗ Exit code \(c)")) }
         }
         if n.status != "event", let s = startedAt, let e = at, e > s { parts.append(took(Int(e.timeIntervalSince(s)))) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -42,9 +42,9 @@ enum TaskNoteText {
 
     /// How long it ran, short (the row keeps room for its description): "40 s", "5 min", "2 h 5 min".
     static func took(_ s: Int) -> String {
-        if s < 60 { return String(localized: "\(s) 秒") }
-        if s < 3600 { return String(localized: "\(s / 60) 分") }
-        return s % 3600 / 60 == 0 ? String(localized: "\(s / 3600) 小时") : String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分")
+        if s < 60 { return String(localized: "\(s) s") }
+        if s < 3600 { return String(localized: "\(s / 60) min [Chat View a38788]") }
+        return s % 3600 / 60 == 0 ? String(localized: "\(s / 3600) hr") : String(localized: "\(s / 3600) hr \(s % 3600 / 60) min")
     }
 
     /// The outcome as a status pill: done in green, failed in red, stopped plain, waiting in amber; with how long it ran.
@@ -53,12 +53,12 @@ enum TaskNoteText {
         if n.status != "event", let s = startedAt, let e = at, e > s { ran = took(Int(e.timeIntervalSince(s))) }
         func with(_ word: String) -> String { ran.map { word + " · " + $0 } ?? word }
         switch n.status {
-        case "completed", "ended": return (with(String(localized: "已完成")), .green)
-        case "failed": return (with(n.exitCode.map { String(localized: "退出码 \($0)") } ?? String(localized: "失败")), .red)
-        case "killed", "stopped": return (with(String(localized: "已停止")), .neutral)
-        case "waiting": return (String(localized: "等待中"), .orange)
+        case "completed", "ended": return (with(String(localized: "Done [Task Sheets f28461]")), .green)
+        case "failed": return (with(n.exitCode.map { String(localized: "Exit code \($0)") } ?? String(localized: "Failed")), .red)
+        case "killed", "stopped": return (with(String(localized: "Stopped [Port Chips f00645]")), .neutral)
+        case "waiting": return (String(localized: "Waiting [File Attach 26c8cf]"), .orange)
         default:
-            if let c = n.exitCode, c != 0 { return (with(String(localized: "退出码 \(c)")), .red) }
+            if let c = n.exitCode, c != 0 { return (with(String(localized: "Exit code \(c)")), .red) }
             return nil
         }
     }
@@ -76,16 +76,16 @@ enum TaskNoteText {
     static func badge(_ notes: [TaskNote]) -> (text: String, failed: Bool) {
         let events = notes.filter { $0.status == "event" }.count
         guard let last = notes.last(where: { $0.status != "event" }) else {
-            return (events > 0 ? String(localized: "后台 · \(events) 个事件") : String(localized: "后台 · 运行中"), false)
+            return (events > 0 ? String(localized: "Background · \(events) events") : String(localized: "Background · Running"), false)
         }
         let state = switch last.status {
-        case "failed": String(localized: "失败")
-        case "killed", "stopped": String(localized: "已停止")
-        case "waiting": String(localized: "等待中")
-        case "ended": String(localized: "已结束")
-        default: String(localized: "已完成")
+        case "failed": String(localized: "Failed")
+        case "killed", "stopped": String(localized: "Stopped [Port Chips f00645]")
+        case "waiting": String(localized: "Waiting [File Attach 26c8cf]")
+        case "ended": String(localized: "Ended")
+        default: String(localized: "Done [Task Sheets f28461]")
         }
-        return (events > 0 ? String(localized: "后台 · \(state) · \(events) 个事件") : String(localized: "后台 · \(state)"), last.failed)
+        return (events > 0 ? String(localized: "Background · \(state) · \(events) events") : String(localized: "Background · \(state)"), last.failed)
     }
 
     static func firstLine(_ s: String) -> String? {
@@ -194,10 +194,10 @@ struct TaskNoteRow: View {
             }
             HStack(spacing: Theme.Space.l) {
                 if let f = n.outputFile, !f.isEmpty, let openFile {
-                    Button { openFile(f) } label: { Label("查看输出", systemImage: Theme.Icon.document).lineLimit(1) }
+                    Button { openFile(f) } label: { Label("View Output [Task Note Row d70cf6]", systemImage: Theme.Icon.document).lineLimit(1) }
                 }
                 if let call, let jumpToCall {
-                    Button { jumpToCall(call) } label: { Label("跳到发起的这一步", systemImage: "arrow.up.forward").lineLimit(1) }
+                    Button { jumpToCall(call) } label: { Label("Jump to Starting Step", systemImage: "arrow.up.forward").lineLimit(1) }
                 }
             }
             .font(Theme.Font.captionMedium)

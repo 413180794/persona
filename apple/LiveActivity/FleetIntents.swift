@@ -7,11 +7,11 @@ import OSLog
 // that talk to the hub are app-only. Saying yes needs the phone unlocked, saying no does not, as on notifications.
 
 struct AllowPermissionIntent: LiveActivityIntent {
-    nonisolated static let title: LocalizedStringResource = "允许"
+    nonisolated static let title: LocalizedStringResource = "Allow [Notification Actions ce7ef2]"
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
 
-    @Parameter(title: "交互") var interactionID: String?
+    @Parameter(title: "Interaction") var interactionID: String?
 
     nonisolated init() {}
     nonisolated init(interactionID: String?) { self.interactionID = interactionID }
@@ -29,11 +29,11 @@ struct AllowPermissionIntent: LiveActivityIntent {
 }
 
 struct DenyPermissionIntent: LiveActivityIntent {
-    nonisolated static let title: LocalizedStringResource = "拒绝"
+    nonisolated static let title: LocalizedStringResource = "Deny"
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
 
-    @Parameter(title: "交互") var interactionID: String?
+    @Parameter(title: "Interaction") var interactionID: String?
 
     nonisolated init() {}
     nonisolated init(interactionID: String?) { self.interactionID = interactionID }
@@ -53,11 +53,11 @@ struct DenyPermissionIntent: LiveActivityIntent {
 /// Approves a plan in acceptEdits, like the notification button: from the lock screen you have not read the plan in
 /// full, so commands still ask. "Approve & Auto-Run" stays in the app.
 struct ApprovePlanIntent: LiveActivityIntent {
-    nonisolated static let title: LocalizedStringResource = "批准"
+    nonisolated static let title: LocalizedStringResource = "Approve [Notification Actions 8cbe69]"
     nonisolated static let isDiscoverable = false
     nonisolated static var authenticationPolicy: IntentAuthenticationPolicy { .requiresAuthentication }
 
-    @Parameter(title: "交互") var interactionID: String?
+    @Parameter(title: "Interaction") var interactionID: String?
 
     nonisolated init() {}
     nonisolated init(interactionID: String?) { self.interactionID = interactionID }

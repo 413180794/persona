@@ -9,7 +9,7 @@ import SwiftUI
 enum ConnectTarget: String, CaseIterable, Identifiable, Sendable {
     case app, web
     var id: String { rawValue }
-    var title: String { self == .app ? "Persona App" : String(localized: "浏览器") }
+    var title: String { self == .app ? "Persona App" : String(localized: "Browser") }
 }
 
 /// The words and arithmetic, kept apart from the view to test.
@@ -51,8 +51,8 @@ enum ConnectDeviceText {
     }
 
     static func hint(_ t: ConnectTarget) -> String {
-        t == .app ? String(localized: "在新设备的 Persona 配对页扫这个码。Mac 和 Android 也可以拷贝配对链接后粘贴。")
-            : String(localized: "用手机相机扫码直接在浏览器里打开，或把登录链接拷到另一台电脑的浏览器。")
+        t == .app ? String(localized: "Scan this code on the new device's Persona pairing screen. On a Mac or Android you can also copy the pairing link and paste it.")
+            : String(localized: "Scan with a phone camera to open it in the browser, or copy the sign-in link to a browser on another computer.")
     }
 }
 
@@ -98,7 +98,7 @@ enum ConnectDeviceText {
     func make() async {
         phase = .loading
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             hubURL = api.config.url
             // The credentials there are now: the one that shows up later is the device that used this code.
             known = Set(try await api.deviceTokens().tokens.map(\.id))
@@ -151,7 +151,7 @@ struct ConnectDeviceSheet: View {
             SettingsForm {
                 if case .paired = page.phase {} else {
                     Section {
-                        Picker("连接什么", selection: $target) {
+                        Picker("Connect [Connect Device View 9164a4]", selection: $target) {
                             ForEach(ConnectTarget.allCases) { Text($0.title).lineLimit(1).tag($0) }
                         }
                         .pickerStyle(.segmented)
@@ -162,10 +162,10 @@ struct ConnectDeviceSheet: View {
                 content
             }
             .themedPage()
-            .navigationTitle("连接新设备")
+            .navigationTitle("Connect New Device")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
             }
         }
         .presentationDetents([.large])
@@ -187,7 +187,7 @@ struct ConnectDeviceSheet: View {
         case .failed(let message):
             Section {
                 Button { Task { await page.make() } } label: {
-                    Label("重试", systemImage: Theme.Icon.reload).lineLimit(1)
+                    Label("Retry [Components b8784c]", systemImage: Theme.Icon.reload).lineLimit(1)
                 }
                 .accessibilityIdentifier("connectDevice.retry")
             } header: {
@@ -199,8 +199,8 @@ struct ConnectDeviceSheet: View {
                     Image(systemName: Theme.Icon.successFilled)
                         .font(Theme.Font.display)
                         .foregroundStyle(Theme.positive)
-                    Text("已连接：\(name)").font(Theme.Font.heading).lineLimit(1)
-                    Text("它已经有了自己的凭据，可以在设备列表里单独撤销。")
+                    Text("Connected: \(name)").font(Theme.Font.heading).lineLimit(1)
+                    Text("It now has its own credentials, which you can revoke on their own in the device list.")
                         .font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -208,18 +208,18 @@ struct ConnectDeviceSheet: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("connectDevice.paired")
                 Button { Task { await page.make() } } label: {
-                    Label("再连一台", systemImage: Theme.Icon.pairing).lineLimit(1)
+                    Label("Connect Another", systemImage: Theme.Icon.pairing).lineLimit(1)
                 }
             }
         case .showing(let code):
             if page.expired {
                 Section {
                     Button { Task { await page.make() } } label: {
-                        Label("重新生成", systemImage: Theme.Icon.reload).lineLimit(1)
+                        Label("Regenerate", systemImage: Theme.Icon.reload).lineLimit(1)
                     }
                     .accessibilityIdentifier("connectDevice.renew")
                 } header: {
-                    Text("这个码已经过期。").textCase(nil)
+                    Text("This code has expired.").textCase(nil)
                 }
             } else {
                 showing(code)
@@ -235,16 +235,16 @@ struct ConnectDeviceSheet: View {
                 if let qr {
                     QRCodeView(rows: qr.rows)
                         .scaledFrame(width: Theme.Size.box240, height: Theme.Size.box240)
-                        .accessibilityLabel(target == .app ? "App 配对二维码" : "网页登录二维码")
+                        .accessibilityLabel(target == .app ? String(localized: "App pairing QR code") : String(localized: "Web sign-in QR code"))
                         .accessibilityIdentifier("connectDevice.qr")
                 }
                 Text(ConnectDeviceText.hint(target))
                     .font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 if target == .web, let hub = page.hubURL, ConnectDeviceText.loopbackOnly(hub) {
-                    Text("这个地址只有这台设备能打开。要在别的设备上登录，先换成 hub 的地址连接，再生成。")
+                    Text("Only this device can open this address. To sign in on another device, connect through the hub's address first, then generate a code.")
                         .font(Theme.Font.caption).foregroundStyle(Theme.caution).multilineTextAlignment(.center)
                 }
-                Text("\(ConnectDeviceText.clock(page.secondsLeft)) 后失效，只能用一次")
+                Text("Expires in \(ConnectDeviceText.clock(page.secondsLeft)), single use")
                     .font(Theme.Font.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                     .accessibilityIdentifier("connectDevice.countdown")
             }
@@ -253,14 +253,14 @@ struct ConnectDeviceSheet: View {
         }
         Section {
             if target == .app {
-                LabeledContent("临时码") {
+                LabeledContent("Temporary Code") {
                     Text(code.token).font(Theme.Font.code).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 }
                 .accessibilityIdentifier("connectDevice.code")
             }
             if let link {
-                Button { copy(link, said: target == .app ? String(localized: "已拷贝配对链接") : String(localized: "已拷贝登录链接")) } label: {
-                    Label(target == .app ? "拷贝配对链接" : "拷贝登录链接", systemImage: Theme.Icon.copy).lineLimit(1)
+                Button { copy(link, said: target == .app ? String(localized: "Pairing link copied") : String(localized: "Sign-in link copied")) } label: {
+                    Label(target == .app ? String(localized: "Copy Pairing Link") : String(localized: "Copy Sign-In Link"), systemImage: Theme.Icon.copy).lineLimit(1)
                 }
                 .accessibilityIdentifier("connectDevice.copy")
             }

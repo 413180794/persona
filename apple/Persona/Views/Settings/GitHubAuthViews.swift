@@ -65,7 +65,7 @@ struct GitHubConnectorSections: View {
         sourceSection
         if auth?.source == "device", connector.isEnabled, !connector.isSignedIn {
             ConnectorSignInSteps(name: connector.name, model: model, reload: { await reload(); await load() },
-                                 footer: String(localized: "设备码登录的授权加密存在 hub 上；改用电脑上的 gh 登录时会忘掉。"))
+                                 footer: String(localized: "Device-code authorization is stored encrypted on the hub; it's forgotten when you switch to gh on a computer."))
         }
         if let auth, let missing = auth.missing, !missing.isEmpty, connector.isSignedIn {
             scopeSection(auth, missing)
@@ -83,20 +83,20 @@ struct GitHubConnectorSections: View {
                         choose(machine: m.id)
                     }
                 }
-                row(key: "device", icon: Theme.Icon.deviceCode, title: String(localized: "设备码登录"), subtitle: String(localized: "不用电脑：在 GitHub 上输入验证码授权"),
+                row(key: "device", icon: Theme.Icon.deviceCode, title: String(localized: "Device Code Sign-In"), subtitle: String(localized: "No computer needed: enter a code on GitHub to authorize"),
                     warn: false, selected: auth.source == "device") {
                     choose(machine: nil)
                 }
             } else {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView()
-                    Text("正在看各台电脑上的 gh 登录…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                    Text("Checking gh sign-in on your computers…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         } header: {
-            SettingsHeading(String(localized: "从哪里登录"))
+            SettingsHeading(String(localized: "Sign In From"))
         } footer: {
-            Text("选一台电脑就用它上面 gh 的登录；设备码登录不依赖任何电脑。换一个就是退出上一个。")
+            Text("Pick a computer to use its gh sign-in; device code sign-in doesn't depend on any computer. Switching signs out of the previous one.")
         }
         .task(id: app.config) { await load() }
     }
@@ -129,26 +129,26 @@ struct GitHubConnectorSections: View {
     private func subtitle(_ m: GitHubAuth.Machine) -> String {
         switch m.state {
         case "signed_in":
-            let who = m.account.map { String(localized: "gh 已登录 · \($0)") } ?? String(localized: "gh 已登录")
-            if let missing = m.missing, !missing.isEmpty { return String(localized: "\(who) · 少 \(GitHubAuth.names(missing)) 权限") }
+            let who = m.account.map { String(localized: "gh signed in · \($0)") } ?? String(localized: "gh signed in")
+            if let missing = m.missing, !missing.isEmpty { return String(localized: "\(who) · missing \(GitHubAuth.names(missing)) scope") }
             return who
-        case "not_signed_in": return String(localized: "gh 没有登录")
-        case "no_gh": return String(localized: "没装 gh")
-        case "too_old": return String(localized: "jarvisd 太旧，读不了 gh 的登录")
-        case "offline": return String(localized: "离线")
-        default: return m.error.map { String(localized: "读不了 gh 的登录：\($0)") } ?? String(localized: "读不了 gh 的登录")
+        case "not_signed_in": return String(localized: "gh not signed in")
+        case "no_gh": return String(localized: "gh not installed")
+        case "too_old": return String(localized: "jarvisd is too old to read gh sign-in")
+        case "offline": return String(localized: "Offline [Machine Entity be1b4f]")
+        default: return m.error.map { String(localized: "Can't read gh sign-in: \($0)") } ?? String(localized: "Can't read gh sign-in")
         }
     }
 
     @ViewBuilder private func scopeSection(_ auth: GitHubAuth, _ missing: [GitHubAuth.Missing]) -> some View {
         let names = GitHubAuth.names(missing)
         let flags = missing.map(\.scope).joined(separator: ",")
-        let machine = auth.machines.first { $0.id == auth.machine }?.name ?? String(localized: "这台电脑")
+        let machine = auth.machines.first { $0.id == auth.machine }?.name ?? String(localized: "This computer")
         Section {
             Label {
                 Text(auth.source == "device"
-                     ? "设备码登录少了 \(names) 权限：先换成别的登录方式，再用设备码重新登录一次。"
-                     : "\(machine) 的 gh 少了 \(names) 权限：在那台电脑上运行 gh auth refresh -s \(flags)，或者改用设备码登录。")
+                     ? String(localized: "Device code sign-in is missing the \(names) scope: switch to another sign-in method, then sign in with a device code again.")
+                     : String(localized: "gh on \(machine) is missing the \(names) scope: run gh auth refresh -s \(flags) on that computer, or use device code sign-in."))
                     .font(Theme.Font.body).textSelection(.enabled)
             } icon: {
                 Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
@@ -158,7 +158,7 @@ struct GitHubConnectorSections: View {
                 Text(a).font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
         } header: {
-            SettingsHeading(String(localized: "权限不够"))
+            SettingsHeading(String(localized: "Missing Permissions"))
         }
     }
 

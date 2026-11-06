@@ -126,7 +126,7 @@ struct MacMenuBarLabel: View {
             Image(systemName: Theme.Icon.ai)
             if let c = MacMenuBar.count(needsYou: n) { Text(c).monospacedDigit() }
         }
-        .accessibilityLabel(n > 0 ? "Persona，\(n) 个需要你" : "Persona")
+        .accessibilityLabel(n > 0 ? String(localized: "Persona, \(n) need you") : "Persona")
         // Always there (unlike the main window): what reopens the main window for the Dock menu and notifications.
         .onAppear { MacShellState.shared.openMain = { openWindow(id: "main") } }
         // Also always there: opens the windows the menus ask for, with or without a main window.
@@ -145,34 +145,34 @@ struct MacMenuBarMenu: View {
         #endif
         let s = MacMenuBarState.shared.shown
         if !s.paired {
-            Text("还没有连接 hub")
+            Text("Not connected to a hub yet")
         } else if s.isEmpty {
-            Text("没有需要你处理的")
+            Text("Nothing needs you")
         }
         if !s.needsYou.isEmpty {
-            Section("需要你") {
+            Section("Needs You [Chats View e60ec4]") {
                 ForEach(s.needsYou) { item in needsYouItem(item) }
             }
         }
         if !s.working.isEmpty {
-            Section("正在工作") {
+            Section("Working [Mac Menu Bar e556fe]") {
                 ForEach(s.working) { item in Button(item.label) { open(item.key) } }
             }
         }
         if !s.unread.isEmpty {
-            Section("做完了，还没看") {
+            Section("Unread [Mac Menu Bar e7cdbc]") {
                 ForEach(s.unread) { item in Button(item.label) { open(item.key) } }
             }
         }
         Divider()
-        Button("打开 Persona") { show() }
-        Button("新建 Agent 对话…") {
+        Button("Open Persona") { show() }
+        Button("New Agent Chat…") {
             show()
             MacShellState.shared.newAgent = true
         }
         .disabled(!s.paired)
         Divider()
-        Button("退出 Persona") { NSApp.terminate(nil) }
+        Button("Quit Persona") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 
@@ -185,7 +185,7 @@ struct MacMenuBarMenu: View {
                     Button(q.title) { Task { await model.resolve(ix, q.resolution) } }
                 }
                 Divider()
-                Button("打开对话") { open(item.key) }
+                Button("Open Chat") { open(item.key) }
             }
         } else {
             Button(item.label) { open(item.key) }
@@ -219,13 +219,13 @@ extension MacMenuBar {
             return q.options.map { o in
                 // The card's Recommended tag, in words; the answer keeps the label as it came.
                 let (name, recommended) = QuestionOption.display(o.label)
-                return QuickAnswer(title: recommended ? String(localized: "\(name)（推荐）") : name, resolution: Resolution(answers: [q.question: o.label]))
+                return QuickAnswer(title: recommended ? String(localized: "\(name) (Recommended)") : name, resolution: Resolution(answers: [q.question: o.label]))
             }
         case .permission:
-            return [QuickAnswer(title: String(localized: "允许"), resolution: Resolution(allow: true)),
-                    QuickAnswer(title: String(localized: "拒绝"), resolution: Resolution(allow: false))]
+            return [QuickAnswer(title: String(localized: "Allow [Notification Actions ce7ef2]"), resolution: Resolution(allow: true)),
+                    QuickAnswer(title: String(localized: "Deny"), resolution: Resolution(allow: false))]
         case .plan:
-            return [QuickAnswer(title: String(localized: "批准"), resolution: Resolution(approve: true, mode: "acceptEdits"))]
+            return [QuickAnswer(title: String(localized: "Approve [Notification Actions 8cbe69]"), resolution: Resolution(approve: true, mode: "acceptEdits"))]
         case .screen:
             guard ix.dialog != nil, let d = ix.screenDialog else { return nil }
             let plain = d.options.filter { $0.kind == .plain && $0.label.count <= 24 }
@@ -239,8 +239,8 @@ extension MacMenuBar {
         // Cards whose text the hub did not fill keep the menu bar's generic wording.
         let fallback: String
         switch ix.kind {
-        case .question: fallback = String(localized: "Claude 在问你")
-        case .screen: fallback = String(localized: "终端在问你")
+        case .question: fallback = String(localized: "Claude Has a Question")
+        case .screen: fallback = String(localized: "The terminal is asking you")
         case .plan, .permission: fallback = ""
         }
         return String((ix.askLine(includeToolName: true) ?? fallback).prefix(80))

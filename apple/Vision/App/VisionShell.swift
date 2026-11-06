@@ -34,12 +34,12 @@ private struct NeedsYouOrnament: View {
             Image(systemName: Theme.Icon.needsYou)
                 .foregroundStyle(Theme.needsYou)
                 .accessibilityHidden(true)
-            Text("需要你")
+            Text("Needs You [Chats View e60ec4]")
                 .font(Theme.Font.bodyStrong)
                 .lineLimit(1)
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
             Button(action: openNext) {
-                Label("去处理", systemImage: Theme.Icon.forward)
+                Label("Go [Vision Shell a7e9f6]", systemImage: Theme.Icon.forward)
                     .labelStyle(.titleAndIcon)
                     .lineLimit(1)
             }
@@ -49,7 +49,7 @@ private struct NeedsYouOrnament: View {
         .fixedSize()
         .visionOrnamentPanel()
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(waiting) 个在等你")
+        .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
     }
 
     /// The waiting ones as the badges count them, longest waiting first; the one after the conversation on screen.

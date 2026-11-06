@@ -59,13 +59,13 @@ struct MacViewMenu: Commands {
     var body: some Commands {
         CommandGroup(after: .toolbar) {
             Divider()
-            Button("放大字号") { model.textSize = MacViewCommands.step(model.textSize, by: 1) }
+            Button("Increase Text Size") { model.textSize = MacViewCommands.step(model.textSize, by: 1) }
                 .keyboardShortcut("+", modifiers: .command)
                 .disabled(model.textSize == TextSize.allCases.last)
-            Button("缩小字号") { model.textSize = MacViewCommands.step(model.textSize, by: -1) }
+            Button("Decrease Text Size") { model.textSize = MacViewCommands.step(model.textSize, by: -1) }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(model.textSize == TextSize.allCases.first)
-            Button("标准字号") { model.textSize = .standard }
+            Button("Standard Text Size") { model.textSize = .standard }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(model.textSize == .standard)
             Divider()
@@ -73,39 +73,39 @@ struct MacViewMenu: Commands {
         CommandGroup(after: .sidebar) {
             // The window's sections column (MacShell), as the toolbar button beside the traffic lights does; the pages'
             // list columns have no button on the Mac (SplitColumns).
-            Button(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏") {
+            Button(sidebarHidden ? String(localized: "Show Sidebar") : String(localized: "Hide Sidebar")) {
                 withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() }
             }
             .keyboardShortcut("s", modifiers: [.command, .control])
             .disabled(!model.isPaired)
             Divider()
-            Toggle("紧凑列表", isOn: $compact)
+            Toggle("Compact List [Mac View Commands a92bf4]", isOn: $compact)
             // the grouping in use: a stored By To-do is By Project on a hub without todos
-            Picker("分组方式", selection: Binding(get: { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) },
+            Picker("Group By [Personal Agent List View 72148c]", selection: Binding(get: { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) },
                                                 set: { grouping = $0 })) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { Text($0.title).tag($0) }
             }
-            Picker("排序方式", selection: $sort) {
+            Picker("Sort By", selection: $sort) {
                 ForEach(AgentSort.allCases) { Text($0.title).tag($0) }
             }
             // sectioned by state, the rows in a section by time already; Recently Used is by time only
             .disabled(grouping == .state || grouping == .recent)
             // The Agents list is kept behind other sections (`MacPageStack`): only while it shows.
-            Button("全部折叠") { MacShellState.shared.agentsList?.collapse() }
+            Button("Collapse All") { MacShellState.shared.agentsList?.collapse() }
                 .disabled(MacShellState.shared.agentsList == nil || !agentsShown || grouping == .recent)
-            Button("全部展开") { MacShellState.shared.agentsList?.expand() }
+            Button("Expand All") { MacShellState.shared.agentsList?.expand() }
                 .disabled(MacShellState.shared.agentsList == nil || !agentsShown || grouping == .recent)
             Divider()
             // The iPhone's pull to refresh: a Mac list has no pull. The one ⌘R in the app (the toolbars' Refresh buttons
             // have none, so two never claim it).
-            Button("刷新") { refresh() }
+            Button("Refresh") { refresh() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!model.isPaired)
             Divider()
-            Button("上一个 Agent") { go(-1) }
+            Button("Previous Agent") { go(-1) }
                 .keyboardShortcut("[", modifiers: .command)
                 .disabled(!model.isPaired)
-            Button("下一个 Agent") { go(1) }
+            Button("Next Agent") { go(1) }
                 .keyboardShortcut("]", modifiers: .command)
                 .disabled(!model.isPaired)
             Divider()

@@ -19,7 +19,7 @@ struct ThreadComposer: View {
             VStack(alignment: .leading, spacing: 0) {
                 if let quote {
                     QuoteBarRow(heading: quote.heading, summary: quote.summary, lines: 1, tint: LarkColor.blue,
-                                removeLabel: String(localized: "取消回复"), remove: cancelQuote)
+                                removeLabel: String(localized: "Cancel Reply"), remove: cancelQuote)
                         .padding(.leading, Theme.Space.l)
                         .padding(.trailing, Theme.Space.xs)
                         .padding(.top, Theme.Space.s)
@@ -42,7 +42,7 @@ struct ThreadComposer: View {
                 }
                 .themedButton(prominent: true)
                 .clipShape(.circle)
-                .accessibilityLabel("发送")
+                .accessibilityLabel("Send")
                 .accessibilityIdentifier("thread.send")
                 .transition(.scale.combined(with: .opacity))
             }

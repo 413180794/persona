@@ -51,9 +51,9 @@ enum CalendarTool {
                     let start = ToolArgs.string(args, "start") ?? "?"
                     let end = ToolArgs.string(args, "end") ?? "?"
                     let location = ToolArgs.string(args, "location")
-                    var summary = String(localized: "新建日程「\(title)」\n\(start) → \(end)")
-                    if ToolArgs.bool(args, "all_day") == true { summary += String(localized: "（全天）") }
-                    if let location { summary += String(localized: "\n地点：\(location)") }
+                    var summary = String(localized: "New event “\(title)”\\n\(start) → \(end)")
+                    if ToolArgs.bool(args, "all_day") == true { summary += String(localized: " (all day)") }
+                    if let location { summary += String(localized: "\\nLocation: \(location)") }
                     return summary
                 },
                 run: { args in try await create(args) }

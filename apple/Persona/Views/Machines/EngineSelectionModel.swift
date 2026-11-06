@@ -57,14 +57,14 @@ import Observation
         error = nil
         defer { saving = false }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let saved = try await api.setEngine(machine: machineID, engine: selected)
             deps.updated(saved)
             selected = saved.engine
             edited = false
             return true
         } catch {
-            self.error = String(localized: "保存失败：\(error.localizedDescription)")
+            self.error = String(localized: "Couldn't save: \(error.localizedDescription) [Image Viewer fcc6eb]")
             return false
         }
     }

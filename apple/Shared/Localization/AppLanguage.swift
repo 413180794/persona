@@ -26,7 +26,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     /// The option's name in the picker: the languages' own names never change with the interface language.
     var title: String {
         switch self {
-        case .system: String(localized: "跟随系统")
+        case .system: String(localized: "Match System")
         case .zhHans: "简体中文" // i18n-ignore
         case .en: "English"
         case .ja: "日本語" // i18n-ignore

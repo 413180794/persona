@@ -142,7 +142,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                         Menu { modes() } label: { modesLabel(modesTitle) }
                             .menuStyle(.button)
                             .buttonStyle(.plain)
-                            .accessibilityLabel("模型和思考强度")
+                            .accessibilityLabel("Model and thinking effort")
                             .accessibilityValue(modesTitle.spoken)
                             .accessibilityIdentifier("shell-composer-modes")
                     }
@@ -150,7 +150,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     if let gate {
                         SendGateButton(gate: gate)
                     } else if canSend {
-                        round(Theme.Icon.send, label: String(localized: "发送"), id: "shell-composer-send", action: sendTyped)
+                        round(Theme.Icon.send, label: String(localized: "Send"), id: "shell-composer-send", action: sendTyped)
                             .keyboardShortcut(sendShortcut)
                     } else if let stop {
                         stopButton(stop)
@@ -198,7 +198,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     /// where the composer's buttons are: over the field's corner it would cover the text or make it wrap anew.
     private var enlargeButton: some View {
         Button(action: enlarge) {
-            Label("展开", systemImage: Theme.Icon.enlarge)
+            Label("Expand", systemImage: Theme.Icon.enlarge)
                 .labelStyle(.titleAndIcon)
                 .font(Theme.Font.secondary)
                 .foregroundStyle(ink)
@@ -209,7 +209,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                 .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("展开输入框")
+        .accessibilityLabel("Expand the message box")
         .accessibilityIdentifier("shell-composer-expand")
         .transition(.opacity)
     }
@@ -263,7 +263,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .accessibilityLabel("添加照片或文件")
+        .accessibilityLabel("Add photo or file")
         .accessibilityIdentifier("shell-composer-add")
     }
 
@@ -400,16 +400,16 @@ private struct ComposerPageEditor: View {
                     Button {
                         commitTyped()
                         collapse()
-                    } label: { Label("收起", systemImage: Theme.Icon.shrink) }
-                        .accessibilityLabel("收起输入框")
+                    } label: { Label("Collapse", systemImage: Theme.Icon.shrink) }
+                        .accessibilityLabel("Collapse the message box")
                         .accessibilityIdentifier("composer-page-collapse")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if !canSend, let stop {
-                        Button(action: stop) { Label("中断", systemImage: Theme.Icon.interrupt) }
+                        Button(action: stop) { Label("Interrupt [Composer Buttons f9d193]", systemImage: Theme.Icon.interrupt) }
                             .accessibilityIdentifier("composer-page-stop")
                     } else {
-                        Button(action: sendOnce) { Label("发送", systemImage: Theme.Icon.send) }
+                        Button(action: sendOnce) { Label("Send", systemImage: Theme.Icon.send) }
                             .keyboardShortcut(.return, modifiers: .command) // the box's, which is off meanwhile
                             .disabled(!canSend)
                             .accessibilityIdentifier("composer-page-send")

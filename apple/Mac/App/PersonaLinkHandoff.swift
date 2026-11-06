@@ -40,8 +40,8 @@ extension AppModel {
     /// A computer's pairing link: on to Persona Link, or how to get it. Nothing is paired here.
     func openComputerLink(_ url: URL) {
         guard let app = PersonaLinkHandoff.installedApp(for: url) else {
-            toast = Toast(String(localized: "这是给 Persona Link 的配对链接，先装 Persona Link"), style: .info,
-                          action: Toast.Action(title: String(localized: "安装说明")) {
+            toast = Toast(String(localized: "This pairing link is for Persona Link. Install Persona Link first"), style: .info,
+                          action: Toast.Action(title: String(localized: "Install guide")) {
                               NSWorkspace.shared.open(PersonaLinkHandoff.installDoc)
                           })
             return
@@ -50,7 +50,7 @@ extension AppModel {
             guard let error else { return }
             let reason = error.localizedDescription
             Task { @MainActor in
-                AppModel.shared.toast = Toast(String(localized: "打不开 Persona Link：\(reason)"), style: .error)
+                AppModel.shared.toast = Toast(String(localized: "Couldn't open Persona Link: \(reason)"), style: .error)
             }
         }
     }

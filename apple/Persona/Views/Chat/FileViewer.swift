@@ -105,7 +105,7 @@ struct FileChips: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("file-chip-" + p)
-                        .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) } }
+                        .contextMenu { Button { UIPasteboard.general.string = p } label: { Label("Copy Path", systemImage: Theme.Icon.copy) } }
                     }
                 }
             }
@@ -155,9 +155,9 @@ struct FileViewer: View {
                 .pageToolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         if let back = history.last {
-                            Button { history.removeLast(); ref = back } label: { Label("返回", systemImage: Theme.Icon.back) }
+                            Button { history.removeLast(); ref = back } label: { Label("Back [Task Sheets 572cf4]", systemImage: Theme.Icon.back) }
                         } else {
-                            Button("完成") { dismiss() }
+                            Button("Done [Extension System Presentation c0b3fb]") { dismiss() }
                                 .lineLimit(1)
                                 .accessibilityIdentifier("file-close")
                         }
@@ -271,11 +271,11 @@ struct FileViewer: View {
             case .audio:
                 if let audio = page.audio { AudioFileView(model: audio) }
             case .binary:
-                EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "无法预览"),
-                               message: "\(file.mime ?? String(localized: "二进制文件")) · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
+                EmptyStateView(symbol: Theme.Icon.missingFile, title: String(localized: "Can't Preview"),
+                               message: "\(file.mime ?? String(localized: "Binary file")) · \(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))")
             }
         } else if let error = page?.error {
-            EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "打不开这个文件"), message: error)
+            EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Open This File"), message: error)
         } else {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -287,53 +287,53 @@ struct FileViewer: View {
                 switch page.kind {
                 case .markdown:
                     Button { page.showSource.toggle() } label: {
-                        Label(page.showSource ? "渲染 Markdown" : "查看源文件", systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
+                        Label(page.showSource ? String(localized: "Render Markdown") : String(localized: "View Source [File Viewer 4731a3]"), systemImage: page.showSource ? "doc.richtext" : Theme.Icon.code)
                     }
                 case .html:
                     Button { page.showSource.toggle() } label: {
-                        Label(page.showSource ? "按网页预览" : "查看源文件", systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
+                        Label(page.showSource ? String(localized: "Preview as Web Page") : String(localized: "View Source [File Viewer 4731a3]"), systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
                     }
                     if !page.showSource {
                         Toggle(isOn: Binding(get: { page.htmlScripts }, set: { page.htmlScripts = $0 })) {
-                            Label("允许运行脚本", systemImage: Theme.Icon.code)
+                            Label("Allow Scripts", systemImage: Theme.Icon.code)
                         }
                         Toggle(isOn: Binding(get: { page.htmlNetwork }, set: { page.htmlNetwork = $0 })) {
-                            Label("允许联网", systemImage: Theme.Icon.openExternal)
+                            Label("Allow Network Access", systemImage: Theme.Icon.openExternal)
                         }
                     }
                 case .notebook where page.notebook != nil:
                     Button { page.showSource.toggle() } label: {
-                        Label(page.showSource ? "按笔记本查看" : "查看源文件", systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
+                        Label(page.showSource ? String(localized: "View as Notebook") : String(localized: "View Source [File Viewer 4731a3]"), systemImage: page.showSource ? Theme.Icon.document : Theme.Icon.code)
                     }
                 case .table:
                     Button { page.showSource.toggle() } label: {
-                        Label(page.showSource ? "按表格查看" : page.preview != nil ? "用快速查看打开" : "查看源文件",
+                        Label(page.showSource ? String(localized: "View as Table") : page.preview != nil ? String(localized: "View Source [File Viewer 1d8406]") : String(localized: "View Source [File Viewer 4731a3]"),
                               systemImage: page.showSource ? Theme.Icon.sheet : page.preview != nil ? Theme.Icon.document : Theme.Icon.code)
                     }
                 case .json where page.outline != nil:
                     Button { page.showSource.toggle() } label: {
-                        Label(page.showSource ? "按层级查看" : "查看源文件", systemImage: page.showSource ? "list.triangle" : Theme.Icon.code)
+                        Label(page.showSource ? String(localized: "View as Tree") : String(localized: "View Source [File Viewer 4731a3]"), systemImage: page.showSource ? "list.triangle" : Theme.Icon.code)
                     }
                     if !page.showSource, let outline = page.outline {
-                        Button { outline.setAll(open: false) } label: { Label("全部折叠", systemImage: Theme.Icon.shrink) }
+                        Button { outline.setAll(open: false) } label: { Label("Collapse All", systemImage: Theme.Icon.shrink) }
                         if outline.canOpenAll {
-                            Button { outline.setAll(open: true) } label: { Label("全部展开", systemImage: Theme.Icon.enlarge) }
+                            Button { outline.setAll(open: true) } label: { Label("Expand All", systemImage: Theme.Icon.enlarge) }
                         }
                     }
                 default:
                     EmptyView()
                 }
             }
-            Button { UIPasteboard.general.string = ref.path } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
+            Button { UIPasteboard.general.string = ref.path } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
             if let text = page?.text {
-                Button { UIPasteboard.general.string = text } label: { Label("拷贝内容", systemImage: Theme.Icon.copy) }
-                ShareLink(item: text, subject: Text(page?.file?.name ?? "")) { Label("分享", systemImage: Theme.Icon.share) }
+                Button { UIPasteboard.general.string = text } label: { Label("Copy Contents", systemImage: Theme.Icon.copy) }
+                ShareLink(item: text, subject: Text(page?.file?.name ?? "")) { Label("Share", systemImage: Theme.Icon.share) }
             } else if let local = page?.localFile {
-                ShareLink(item: local) { Label("分享", systemImage: Theme.Icon.share) }
+                ShareLink(item: local) { Label("Share", systemImage: Theme.Icon.share) }
             }
         } label: { Image(systemName: Theme.Icon.moreMenu) }
         .arrowlessMenu()
-        .accessibilityLabel("更多")
+        .accessibilityLabel("More")
     }
 
     /// The path, the size, and what is not shown yet: pages still on the machine, lines past the coloring caps, why
@@ -401,7 +401,7 @@ private struct MarkdownFile: View {
                     }
                     if page.next > 0 {
                         Button { Task { await page.loadMore() } } label: {
-                            Label(page.loadingMore ? "正在读取…" : "继续读取后面的内容", systemImage: "arrow.down.doc").lineLimit(1)
+                            Label(page.loadingMore ? String(localized: "Loading… [File Viewer 86b6d0]") : String(localized: "Read More"), systemImage: "arrow.down.doc").lineLimit(1)
                         }
                         .themedButton()
                         .disabled(page.loadingMore)
@@ -479,7 +479,7 @@ final class FileViewerModel {
 
     var shownNote: String? {
         let parts = [note, shownSource === code ? colorNote : nil].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: String(localized: "；", comment: "Separator between two notes about a file"))
+        return parts.isEmpty ? nil : parts.joined(separator: String(localized: "; ", comment: "Separator between two notes about a file"))
     }
     /// Bumped when the shown source is a new one.
     private(set) var version = 0
@@ -581,7 +581,7 @@ final class FileViewerModel {
         case .notebook: await buildNotebook()
         default: break
         }
-        if f.truncated, f.next == nil { note = String(localized: "文件太大，只显示了前 \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))") }
+        if f.truncated, f.next == nil { note = String(localized: "File too large; showing the first \(ByteCountFormatter.string(fromByteCount: Int64(text.utf8.count), countStyle: .file))") }
     }
 
     /// Opened at a line (a message's `path:12`): the source, read up to that line, with the line marked. Rendered
@@ -617,7 +617,7 @@ final class FileViewerModel {
         source.onColored = { [weak self, weak source] in
             guard let self, let source else { return }
             self.perf.mark("colored", bytes: 0)
-            self.colorNote = source.doc.capped ? String(localized: "只给前 \(source.doc.highlightedLines) 行上了色，后面是纯文本") : nil
+            self.colorNote = source.doc.capped ? String(localized: "Only the first \(source.doc.highlightedLines) lines are highlighted; the rest is plain text") : nil
         }
         version += 1
         updateNote()
@@ -628,7 +628,7 @@ final class FileViewerModel {
         if next > 0 {
             let read = ByteCountFormatter.string(fromByteCount: next, countStyle: .file)
             let all = ByteCountFormatter.string(fromByteCount: f.size, countStyle: .file)
-            note = kind == .json ? String(localized: "已读 \(read) / \(all)，正在读完整个文件…") : String(localized: "已读 \(read) / \(all)，往下滑接着读")
+            note = kind == .json ? String(localized: "Read \(read) of \(all), reading the whole file…") : String(localized: "Read \(read) of \(all); scroll down to read more")
             progressNote = note
         } else if note != nil, note == progressNote {
             note = nil
@@ -676,7 +676,7 @@ final class FileViewerModel {
         let parsed = await Task.detached(priority: .userInitiated) { Result { try Notebook(data: data) } }.value
         switch parsed {
         case .success(let n): notebook = n
-        case .failure(let e): note = next > 0 ? String(localized: "文件太大，按文本显示") : e.localizedDescription
+        case .failure(let e): note = next > 0 ? String(localized: "File too large; showing as text") : e.localizedDescription
         }
     }
 
@@ -694,8 +694,8 @@ final class FileViewerModel {
             version += 1
             perf.mark("outline", bytes: o.bytes.count)
         case .failure(let e):
-            let why = (e as? JSONOutline.ParseError).map { String(localized: "\($0.message)（第 \($0.offset) 字节）") } ?? e.localizedDescription
-            note = next > 0 ? String(localized: "文件太大，按文本显示") : String(localized: "不是有效的 JSON，按文本显示：\(why)")
+            let why = (e as? JSONOutline.ParseError).map { String(localized: "\($0.message) (byte \($0.offset))") } ?? e.localizedDescription
+            note = next > 0 ? String(localized: "File too large; showing as text") : String(localized: "Not valid JSON, showing as text: \(why)")
         }
     }
 }

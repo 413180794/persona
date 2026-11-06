@@ -44,7 +44,7 @@ import SwiftUI
     }
 
     /// One-tap questions (the web's): each starts a health conversation with it.
-    static let suggestions = [String(localized: "这周我睡得怎么样？"), String(localized: "最近 7 天步数和上周比怎么样"), String(localized: "我的静息心率最近有变化吗"), String(localized: "帮我记一下今天体重 62.5 kg")]
+    static let suggestions = [String(localized: "How did I sleep this week?"), String(localized: "How do my steps over the last 7 days compare with last week?"), String(localized: "Log my weight today: 62.5 kg [Health View 1a24cb]"), String(localized: "Log my weight today: 62.5 kg [Health View c5fdcd]")]
 }
 
 struct HealthView: View {
@@ -66,7 +66,7 @@ struct HealthView: View {
         let send = send
         reports.startAll(urls, machine: machine, model: model, dest: Session.healthSpace) { paths in
             let names = paths.map(PathInsert.quoted).joined(separator: " ")
-            send(String(localized: "这是我的体检报告，帮我逐项看看：\(names)"), [])
+            send(String(localized: "This is my checkup report. Please go through it item by item: \(names)"), [])
         }
     }
 
@@ -78,9 +78,9 @@ struct HealthView: View {
             if !reports.items.isEmpty { UploadsBar(uploads: reports).padding(.horizontal, Theme.Space.page) }
             Group {
                 if AppStyle.current.usesBeautifulUI {
-                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "问健康相关的问题…"), uploadDest: Session.healthSpace, send: send)
+                    BeautifulStarterComposer(disabled: disabled, launcher: $launcher, placeholder: String(localized: "Ask about your health…"), uploadDest: Session.healthSpace, send: send)
                 } else {
-                    StarterComposer(disabled: disabled, placeholder: String(localized: "问健康相关的问题…"), uploadDest: Session.healthSpace, send: send)
+                    StarterComposer(disabled: disabled, placeholder: String(localized: "Ask about your health…"), uploadDest: Session.healthSpace, send: send)
                 }
             }
             .padding(.horizontal, Theme.Space.m)
@@ -91,7 +91,7 @@ struct HealthView: View {
             .background(Theme.groupedPage.ignoresSafeArea(edges: .bottom))
         }
         .background(Theme.groupedPage)
-        .pageTitle(String(localized: "健康"))
+        .pageTitle(String(localized: "Health"))
         .fileUploadPicker(isPresented: $showReports) { uploadReports($0) }
         #if DEBUG
         .task { // `-showReportUpload <name>`: a made-up report uploaded as if picked, to check the whole way without the picker
@@ -115,7 +115,7 @@ struct HealthView: View {
                     .listRowInsets(EdgeInsets())
                 Section {
                     Button { showReports = true } label: {
-                        Label { Text("上传体检报告").foregroundStyle(Theme.Hue.pink).lineLimit(1) } icon: {
+                        Label { Text("Upload a Checkup Report").foregroundStyle(Theme.Hue.pink).lineLimit(1) } icon: {
                             Image(systemName: Theme.Icon.document).foregroundStyle(Theme.Hue.pink)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -137,15 +137,15 @@ struct HealthView: View {
                         .accessibilityIdentifier("health-suggestion")
                     }
                 } header: {
-                    Text("问问看")
+                    Text("Try Asking")
                 }
                 Section {
                     NavigationLink { HealthReportsView(machine: machine) } label: {
                         HStack {
-                            Label { Text("体检报告").lineLimit(1) } icon: { Image(systemName: Theme.Icon.document) }
+                            Label { Text("Checkup reports").lineLimit(1) } icon: { Image(systemName: Theme.Icon.document) }
                             Spacer(minLength: Theme.Space.s)
                             if let n = page.reportCount, n > 0 {
-                                Text("\(n) 份").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(n) [Health View cb8680]").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
@@ -157,37 +157,37 @@ struct HealthView: View {
                     } else if !page.loaded {
                         ProgressView().frame(maxWidth: .infinity)
                     } else if let error = page.error {
-                        Text("没读到健康对话：\(error)").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        Text("Couldn't load health chats: \(error)").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     } else {
-                        Text("还没有健康对话。在下面问一个问题，就会开始第一段。").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        Text("No health chats yet. Ask a question below to start the first one.").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("健康对话")
+                    Text("Health Chats")
                 }
                 Section {
                     NavigationLink { AssistantMemoryView(space: Session.healthSpace) } label: {
                         HStack {
-                            Label { Text("健康记忆").lineLimit(1) } icon: { Image(systemName: Theme.Icon.memory) }
+                            Label { Text("Health Memory").lineLimit(1) } icon: { Image(systemName: Theme.Icon.memory) }
                             Spacer(minLength: Theme.Space.s)
                             if let n = page.memoryCount, n > 0 {
-                                Text("\(n) 条").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(n) items [Assistant Profile View 29b8db]").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
                     .accessibilityIdentifier("health-memory")
                 } footer: {
-                    Text("健康对话里记下的目标、过敏、用药等，单独存放，不会流到其他对话；可以随时查看和删除。")
+                    Text("Goals, allergies, medications and other things noted in health chats are kept separately and never flow into other chats. You can view and delete them anytime.")
                 }
                 Section {
-                    source(Theme.Icon.health, "Apple Health", String(localized: "经你的 iPhone 读取步数、睡眠、心率、体重等汇总，需要 Persona 在手机上打开并授权。"))
-                    source(Theme.Icon.edit, String(localized: "记一条数据"), String(localized: "说「记一下体重」「喝了 300 毫升水」，手机上确认后写进健康。"))
-                    source(Theme.Icon.document, String(localized: "体检报告和化验单"), String(localized: "点「上传体检报告」选 PDF 或图片：逐项读出来、标出超出参考范围的，原件和整理好的记录留在健康里，能按年份对比。"))
+                    source(Theme.Icon.health, "Apple Health", String(localized: "Reads summaries of steps, sleep, heart rate, weight and more through your iPhone. Persona needs to be open on the phone with access granted."))
+                    source(Theme.Icon.edit, String(localized: "Log Data"), String(localized: "Say “log my weight” or “I drank 300 ml of water”; after you confirm on the phone it's saved to Health."))
+                    source(Theme.Icon.document, String(localized: "Checkup Reports and Lab Results"), String(localized: "Choose Upload a checkup report and pick a PDF or a photo: each item is read out and the ones outside the reference range are marked. The original and its record stay in Health, so years can be compared."))
                 } header: {
-                    Text("数据来源")
+                    Text("Data Sources")
                 }
                 Section {
                     VStack(alignment: .leading, spacing: Theme.Space.s) {
-                        Label { Text("隐私").font(Theme.Font.heading) } icon: { Image(systemName: Theme.Icon.privacy) }
+                        Label { Text("Privacy").font(Theme.Font.heading) } icon: { Image(systemName: Theme.Icon.privacy) }
                         ForEach(Self.privacy, id: \.self) { line in
                             Text("· " + line).font(Theme.Font.secondary).foregroundStyle(.secondary)
                         }
@@ -208,9 +208,9 @@ struct HealthView: View {
     }
 
     private static let privacy = [
-        String(localized: "健康对话只在这里：Persona 的其他对话看不到、读不到。"),
-        String(localized: "对话和记忆都留在 hub 所在的机器上，不进知识库。"),
-        String(localized: "这里给的是解释和建议，不能替代医生的诊断和治疗。"),
+        String(localized: "Health chats stay here: Persona's other chats can't see or read them."),
+        String(localized: "Chats and memory stay on the hub machine and never go into Knowledge."),
+        String(localized: "This offers explanations and suggestions, not a substitute for a doctor's diagnosis or treatment."),
     ]
 
     private var hero: some View {
@@ -221,8 +221,8 @@ struct HealthView: View {
                 .scaledFrame(width: Theme.Size.box56, height: Theme.Size.box56)
                 .background(Theme.Hue.pink.opacity(0.14), in: .circle)
                 .accessibilityHidden(true)
-            Text("问问你的健康").font(Theme.Font.title).lineLimit(1)
-            Text("睡眠、步数、心率、体重、饮食，基于你手机里的健康数据回答。这里的对话和记忆与 Persona 的其他对话分开。")
+            Text("Ask About Your Health").font(Theme.Font.title).lineLimit(1)
+            Text("Sleep, steps, heart rate, weight and diet, answered from the health data on your phone. Chats and memory here are kept apart from Persona's other chats.")
                 .font(Theme.Font.secondary)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -232,7 +232,7 @@ struct HealthView: View {
     }
 
     private func row(_ s: Session) -> some View {
-        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "新对话") : s.title
+        let title = s.title.isEmpty || s.title == "Claude Code" ? String(localized: "New Chat [Quick Actions ea4b29]") : s.title
         return Button { model.openAssistantConversation(s.key) } label: {
             HStack(spacing: Theme.Space.m) {
                 Image(systemName: Theme.Icon.healthFilled)
@@ -258,12 +258,12 @@ struct HealthView: View {
         .accessibilityIdentifier("health-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button { Task { await model.archiveConversation(s.key, true); await page.load(machine: machine.id) } } label: {
-                Label("归档", systemImage: Theme.Icon.archive)
+                Label("Archive", systemImage: Theme.Icon.archive)
             }
         }
         .contextMenu {
             Button { Task { await model.archiveConversation(s.key, true); await page.load(machine: machine.id) } } label: {
-                Label("归档", systemImage: Theme.Icon.archive)
+                Label("Archive", systemImage: Theme.Icon.archive)
             }
         }
     }

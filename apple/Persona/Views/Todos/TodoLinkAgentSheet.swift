@@ -17,8 +17,8 @@ struct TodoLinkAgentSheet: View {
 
     private var currentTodoID: String? { target.currentTodoID(in: store.todos) }
     private var title: String {
-        if target.isSpace { return currentTodoID == nil ? String(localized: "挂到待办") : String(localized: "改挂到其他待办") }
-        return currentTodoID == nil ? String(localized: "关联到待办") : String(localized: "改挂到其他待办")
+        if target.isSpace { return currentTodoID == nil ? String(localized: "Add to To-Do") : String(localized: "Move to Another To-Do") }
+        return currentTodoID == nil ? String(localized: "Link to To-Do") : String(localized: "Move to Another To-Do")
     }
 
     private var openTodos: [TodoItem] {
@@ -33,9 +33,9 @@ struct TodoLinkAgentSheet: View {
             List {
                 Section {
                     if case .space(let project) = target {
-                        Text("选择一个未完成的待办，把项目「\(project.space)」整组挂上：")
+                        Text("Choose an open to-do to add the whole “\(project.space)” project to:")
                     } else {
-                        Text("选择要将此 Agent 关联到的待办：")
+                        Text("Choose a to-do to link this agent to:")
                     }
                 }
                 .font(Theme.Font.secondary)
@@ -44,7 +44,7 @@ struct TodoLinkAgentSheet: View {
 
                 Section {
                     if openTodos.isEmpty {
-                        Text("暂无未完成的待办").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        Text("No open to-dos").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                     ForEach(openTodos) { todo in
                         Button { draft.selectedTodoID = todo.id } label: {
@@ -61,19 +61,19 @@ struct TodoLinkAgentSheet: View {
 
                 Section {
                     if draft.creating {
-                        TextField("输入新待办标题…", text: $draft.newTitle)
+                        TextField(String(localized: "New to-do title…"), text: $draft.newTitle)
                             .font(Theme.Font.body)
                             .onSubmit { createAndLink() }
-                        Button("创建并挂上") { createAndLink() }
+                        Button("Create and Add") { createAndLink() }
                             .lineLimit(1)
                             .disabled(draft.newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     } else {
                         Button { draft.creating = true; draft.newTitle = "" } label: {
-                            Label("新建待办…", systemImage: Theme.Icon.add).lineLimit(1)
+                            Label("New To-Do…", systemImage: Theme.Icon.add).lineLimit(1)
                         }
                     }
                     if let currentTodoID {
-                        Button(target.isSpace ? "移出待办" : "解除关联", role: .destructive) {
+                        Button(target.isSpace ? String(localized: "Remove from To-Do") : String(localized: "Unlink"), role: .destructive) {
                             submit { try await store.unlink(target, from: currentTodoID) }
                         }
                         .lineLimit(1)
@@ -87,10 +87,10 @@ struct TodoLinkAgentSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }.lineLimit(1).disabled(draft.busy)
+                    Button("Cancel") { dismiss() }.lineLimit(1).disabled(draft.busy)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(target.isSpace ? "挂上" : "关联") {
+                    Button(target.isSpace ? String(localized: "Add [Todo Link Agent Sheet ecf9c1]") : String(localized: "Link [Todo Link Agent Sheet 748cd8]")) {
                         submit { try await store.link(target, to: draft.selectedTodoID) }
                     }
                     .lineLimit(1)

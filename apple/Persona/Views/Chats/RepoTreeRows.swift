@@ -44,7 +44,7 @@ struct WorktreeRow: View {
                 .foregroundStyle(quiet ? Color.secondary : Color.primary)
                 .lineLimit(1)
             Spacer(minLength: Theme.Space.xs)
-            Text(quiet ? "空闲" : "\(count) 个 Agent")
+            Text(quiet ? String(localized: "Idle") : String(localized: "\(count) agents"))
                 .font(compact ? CompactList.meta : Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -54,10 +54,10 @@ struct WorktreeRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([main ? String(localized: "主工作树") : String(localized: "工作树"), name,
-                             quiet ? String(localized: "空闲") : String(localized: "\(count) 个 Agent"),
-                             open ? String(localized: "已展开") : String(localized: "已折叠")]
-            .joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
+        .accessibilityLabel([main ? String(localized: "Main worktree") : String(localized: "Worktree"), name,
+                             quiet ? String(localized: "Idle") : String(localized: "\(count) agents"),
+                             open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]")]
+            .joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -77,7 +77,7 @@ struct ChildSpacesRow: View {
                 .font(compact ? CompactList.meta : Theme.Font.caption)
                 .foregroundStyle(.secondary)
                 .scaledFrame(width: compact ? CompactList.mark : Theme.Size.iconXS)
-            Text("\(count) 个子项")
+            Text("\(count) items [Repo Tree Rows 8af700]")
                 .font(compact ? CompactList.metaStrong : Theme.Font.secondaryMedium)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -89,8 +89,8 @@ struct ChildSpacesRow: View {
         .padding(.vertical, compact ? 0 : Theme.Space.xxs)
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([String(localized: "\(count) 个子项"), StateCounts.spoken(group), open ? String(localized: "已展开") : String(localized: "已折叠")].filter { !$0.isEmpty }
-            .joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
+        .accessibilityLabel([String(localized: "\(count) items [Repo Tree Rows 8af700]"), StateCounts.spoken(group), open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]")].filter { !$0.isEmpty }
+            .joined(separator: String(localized: ", ", comment: "Separator between the parts of a VoiceOver label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -105,7 +105,7 @@ struct RepoMenuItems: View, Equatable {
 
     var body: some View {
         if !unread.isEmpty {
-            Button { model.markSeen(unread) } label: { Label("全部标为已读（\(unread.count)）", systemImage: Theme.Icon.success) }
+            Button { model.markSeen(unread) } label: { Label("Mark All as Read (\(unread.count))", systemImage: Theme.Icon.success) }
         }
     }
 }

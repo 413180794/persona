@@ -296,8 +296,8 @@ struct WatchRootView: View {
                             ForEach(model.groupFailures, id: \.self) { g in
                                 Label {
                                     Text(model.names[g].flatMap { $0.isEmpty ? nil : $0 }
-                                         .map { String(localized: "「\($0)」暂时连不上，下面是较早的数据") }
-                                         ?? String(localized: "一组 hub 暂时连不上，下面是较早的数据"))
+                                         .map { String(localized: "Can't reach “\($0)”; showing older data") }
+                                         ?? String(localized: "Can't reach a hub group; showing older data"))
                                         .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
                                 } icon: {
                                     Image(systemName: Theme.Icon.offline).foregroundStyle(Theme.caution)
@@ -307,19 +307,19 @@ struct WatchRootView: View {
                         }
                     }
                     NavigationLink { WatchRecordingView() } label: {
-                        Label("录音", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
+                        Label("Record [Recordings Section ef2821]", systemImage: Theme.Icon.recording).font(Theme.Font.secondaryMedium).lineLimit(1)
                     }.watchCard()
                     // A group the phone could not get the watch a credential for: none of its agents is below (#1185).
                     if !model.missing.isEmpty {
                         Section {
-                            Text("「\(model.missing.map { model.names[$0] ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between names in a list")))」还没有手表的凭据")
+                            Text("No watch credential yet for “\(model.missing.map { model.names[$0] ?? $0 }.joined(separator: String(localized: "、", comment: "Separator between names in a list")))”")
                                 .font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                                 .watchCard()
                             WatchSyncButton().watchCard()
                         }
                     }
                     if !model.interactions.isEmpty || !model.inbox.isEmpty, !Self.runningFirst {
-                        Section("需要你") {
+                        Section("Needs You [Chats View e60ec4]") {
                             ForEach(Self.inboxFirst ? [] : model.interactions, id: \.uid) { ix in
                                 NavigationLink { WatchInteractionView(interaction: ix) } label: {
                                     VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
@@ -327,7 +327,7 @@ struct WatchRootView: View {
                                             .font(.footnote.weight(.semibold))
                                             .foregroundStyle(Theme.needsYou)
                                         Text(ix.watchSummary).font(.headline).lineLimit(3)
-                                        Text(ix.taskTitle.map { String(localized: "任务 · \($0)") } ?? ix.sessionTitle ?? "")
+                                        Text(ix.taskTitle.map { String(localized: "Task · \($0)") } ?? ix.sessionTitle ?? "")
                                             .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                 }
@@ -344,9 +344,9 @@ struct WatchRootView: View {
                         Section {
                             Label {
                                 VStack(alignment: .leading, spacing: Theme.Watch.lineSpacing) {
-                                    Text("连不上 hub").font(.headline)
+                                    Text("Can't reach the hub").font(.headline)
                                     if let t = model.lastUpdate {
-                                        Text("下面是 \(t.formatted(.relative(presentation: .named))) 的数据").font(.footnote).foregroundStyle(.secondary)
+                                        Text("Data from \(t.formatted(.relative(presentation: .named)))").font(.footnote).foregroundStyle(.secondary)
                                     }
                                     Text(e).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                                 }
@@ -354,20 +354,20 @@ struct WatchRootView: View {
                                 Image(systemName: Theme.Icon.offline).foregroundStyle(Theme.danger)
                             }
                             .watchCard()
-                            Button { Task { await model.refresh() } } label: { Text("重试").lineLimit(1) }
+                            Button { Task { await model.refresh() } } label: { Text("Retry [Components b8784c]").lineLimit(1) }
                                 .watchCard()
                         }
                     }
                     if model.lastUpdate != nil || model.error == nil {
-                    Section("运行中") {
+                    Section("Running [Session Panes 1f0eb9]") {
                         if model.lastUpdate == nil {
                             HStack(spacing: Theme.Space.s) {
                                 ProgressView().frame(width: 22, height: 22)
-                                Text("加载中").font(.footnote).foregroundStyle(.secondary)
+                                Text("Loading [Persona Watch App d04fcb]").font(.footnote).foregroundStyle(.secondary)
                             }
                             .watchCard()
                         } else if model.sessions.isEmpty {
-                            Text("没有运行中的 Claude").font(.footnote).foregroundStyle(.secondary)
+                            Text("No Claude running").font(.footnote).foregroundStyle(.secondary)
                                 .watchCard()
                         }
                         ForEach(model.sessions) { s in
@@ -443,10 +443,10 @@ extension View {
 extension InteractionKind {
     var watchTitle: String {
         switch self {
-        case .question: String(localized: "提问")
-        case .plan: String(localized: "计划审批")
-        case .permission: String(localized: "授权")
-        case .screen: String(localized: "终端")
+        case .question: String(localized: "Question [Tool Views 387441]")
+        case .plan: String(localized: "Plan Approval")
+        case .permission: String(localized: "Permission")
+        case .screen: String(localized: "Terminal")
         }
     }
 
@@ -464,9 +464,9 @@ extension Interaction {
     var watchSummary: String {
         switch kind {
         case .question: questions?.first?.question ?? ""
-        case .plan: (plan ?? "").split(separator: "\n").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? String(localized: "执行计划")
-        case .permission: [toolName, summary].compactMap { $0 }.joined(separator: String(localized: "：", comment: "Separator between a label and its value"))
-        case .screen: String(localized: "终端里有对话框")
+        case .plan: (plan ?? "").split(separator: "\n").first.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "# ")) } ?? String(localized: "Plan [Interaction Text 2619dd]")
+        case .permission: [toolName, summary].compactMap { $0 }.joined(separator: String(localized: ": ", comment: "Separator between a label and its value"))
+        case .screen: String(localized: "A dialog is open in the terminal")
         }
     }
 }
@@ -500,7 +500,7 @@ struct WatchInteractionView: View {
                                 HStack(spacing: Theme.Space.sm) {
                                     Text(text).font(.footnote).lineLimit(1).minimumScaleFactor(0.8)
                                     if recommended {
-                                        Text(LocalizedStringResource("watch.recommended", defaultValue: "推荐", comment: "Tag on the recommended answer, beside it on one watch button: as short as possible")).font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
+                                        Text(LocalizedStringResource("watch.recommended", defaultValue: "Pick", comment: "Tag on the recommended answer, beside it on one watch button: as short as possible")).font(.caption2.weight(.semibold)).foregroundStyle(Theme.ai)
                                             .padding(.horizontal, 5).padding(.vertical, 1)
                                             .background(Theme.ai.opacity(0.2), in: .capsule)
                                             .fixedSize()
@@ -512,21 +512,21 @@ struct WatchInteractionView: View {
                         }
                     }
                     if (interaction.questions ?? []).count > 1 || (interaction.questions ?? []).contains(where: \.multiSelect) {
-                        Button("提交") { submit() }.buttonStyle(.borderedProminent)
+                        Button("Submit") { submit() }.buttonStyle(.borderedProminent)
                     }
                 case .plan:
                     Text(WatchText.shown(interaction.plan ?? "")).font(.footnote)
-                    Button("批准并执行") { act(Resolution(approve: true, mode: "bypassPermissions")) }.buttonStyle(.borderedProminent)
+                    Button("Approve & Run") { act(Resolution(approve: true, mode: "bypassPermissions")) }.buttonStyle(.borderedProminent)
                     Button("打回") { act(Resolution(approve: false, feedback: "请重新考虑这个计划")) } // i18n-ignore: feedback sent to the agent
                 case .permission:
                     Text(interaction.summary ?? "").font(.caption2.monospaced())
                     if interaction.requiresInput {
-                        Text("请在 iPhone 上填写后允许").font(Theme.Font.caption)
+                        Text("Fill this in on your iPhone to allow it").font(Theme.Font.caption)
                     } else {
-                        Button { act(Resolution(allow: true)) } label: { Text("允许").lineLimit(1) }
+                        Button { act(Resolution(allow: true)) } label: { Text("Allow [Notification Actions ce7ef2]").lineLimit(1) }
                             .buttonStyle(.borderedProminent)
                     }
-                    Button { act(Resolution(allow: false)) } label: { Text("拒绝").lineLimit(1) }
+                    Button { act(Resolution(allow: false)) } label: { Text("Deny").lineLimit(1) }
                 case .screen:
                     Text(interaction.screen ?? "").font(.caption2.monospaced())
                     if let d = interaction.dialog, d.multi == true { // check boxes: ticked here, sent together
@@ -545,7 +545,7 @@ struct WatchInteractionView: View {
                             }
                             .font(.caption2)
                         }
-                        Button(d.submit == "Next" ? "下一题" : "提交") {
+                        Button(d.submit == "Next" ? String(localized: "Next [Interaction Views f82c68]") : String(localized: "Submit")) {
                             act(Resolution(options: d.options.map(\.key).filter(ticked.contains)))
                         }
                         .buttonStyle(.borderedProminent)
@@ -570,7 +570,7 @@ struct WatchInteractionView: View {
                         Button("⏎") { act(Resolution(keys: ["enter"])) }
                     }
                 }
-                Button("交给电脑处理") { act(.dismissed) }.font(.caption2).foregroundStyle(.secondary)
+                Button("Handle on Computer") { act(.dismissed) }.font(.caption2).foregroundStyle(.secondary)
             }
         }
         .navigationTitle(interaction.kind.watchTitle)
@@ -645,11 +645,11 @@ struct WatchSessionView: View {
                             .frame(maxWidth: .infinity, alignment: it.role == "user" ? .trailing : .leading)
                         // Came in from a channel (WeChat, the Feishu bot…), as under the phone's bubble.
                         if it.role == "user", AssistantActionSource.parse(it.text ?? "") != nil {
-                            Text("来自卡片").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text("From a card").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                         if it.role == "user", let c = ChannelSource.of(it.clientMsgID, in: channels ?? []) {
-                            Text("来自 \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text("From \(c.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
@@ -663,7 +663,7 @@ struct WatchSessionView: View {
                 if let source = session.sourceSubtitle {
                     Text(source).font(Theme.Font.caption).foregroundStyle(.secondary)
                 }
-                TextField("回复（可听写）", text: $reply)
+                TextField(String(localized: "Reply (dictation OK)"), text: $reply)
                     .disabled(!session.canSend)
                     .onSubmit {
                         guard session.canSend else { return }
@@ -673,7 +673,7 @@ struct WatchSessionView: View {
                         Task { await model.send(session.key, t); await load() }
                     }
                 HStack {
-                    Button("继续") { Task { await model.send(session.key, String(localized: "继续")) } }.lineLimit(1).disabled(!session.canSend)
+                    Button("Continue") { Task { await model.send(session.key, String(localized: "Continue")) } }.lineLimit(1).disabled(!session.canSend)
                     if session.status.isActive && session.canInterrupt {
                         Button { Task { await model.interrupt(session.key) } } label: { Image(systemName: Theme.Icon.interrupt) }
                             .tint(Theme.danger)
@@ -725,18 +725,18 @@ struct WatchPairView: View {
             VStack(spacing: 10) {
                 Image(systemName: Theme.Icon.handoff).font(.title2).foregroundStyle(Theme.accent)
                 if model.missing.isEmpty {
-                    Text("还没有配对").font(.headline)
-                    Text("iPhone 上的 Persona 配对好之后，点下面从 iPhone 同步。").font(.footnote).foregroundStyle(.secondary)
+                    Text("Not paired yet").font(.headline)
+                    Text("Once Persona on your iPhone is paired, tap Sync from iPhone below.").font(.footnote).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 } else {
-                    Text("还没有手表的凭据").font(.headline)
-                    Text("iPhone 联网后，点下面重新同步。")
+                    Text("No watch credential yet").font(.headline)
+                    Text("When your iPhone is online, tap below to sync again.")
                         .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 }
                 WatchSyncButton()
                 // In the scroll view: beside it, it squeezed the page until the sync button was out of sight.
                 NavigationLink { WatchRecordingView() } label: {
-                    Label("录音", systemImage: Theme.Icon.recording).lineLimit(1)
+                    Label("Record [Recordings Section ef2821]", systemImage: Theme.Icon.recording).lineLimit(1)
                 }
                 .padding(.top, Theme.Space.s)
             }
@@ -764,13 +764,13 @@ struct WatchSyncButton: View {
             } label: {
                 HStack {
                     if syncing { ProgressView() }
-                    Text("从 iPhone 同步").lineLimit(1)
+                    Text("Sync from iPhone").lineLimit(1)
                 }
             }
             .buttonStyle(.borderedProminent)
             .disabled(syncing)
             if failed {
-                Text("连不上 iPhone：打开 iPhone 上的 Persona，或在 设置 › 同步到 Apple Watch。").font(.caption2).foregroundStyle(Theme.cautionText)
+                Text("Can't reach your iPhone. Open Persona on your iPhone, or go to Settings › Sync to Apple Watch.").font(.caption2).foregroundStyle(Theme.cautionText)
                     .multilineTextAlignment(.center)
             }
         }
@@ -785,9 +785,9 @@ struct WatchInboxRow: View {
     var item: InboxItem
 
     private var source: String {
-        if item.isLark { return item.kindLabel ?? String(localized: "飞书") }
+        if item.isLark { return item.kindLabel ?? String(localized: "Lark [Inbox Event Views 7e4419]") }
         if item.connector != nil { return WatchInboxText.connectorSource(item) }
-        return String(localized: "邮件")
+        return String(localized: "Mail [Assistant View 3d708e]")
     }
 
     var body: some View {
@@ -823,10 +823,10 @@ struct WatchInboxItemView: View {
                 if let s = item.summary, !s.isEmpty {
                     Text(s).font(.headline)
                 }
-                Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between a label and its value")))
+                Text([item.sender, item.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: ": ", comment: "Separator between a label and its value")))
                     .font(.footnote).foregroundStyle(.secondary)
                 if item.connector != nil {
-                    Text("在手机上打开回复").font(.footnote).foregroundStyle(.tertiary)
+                    Text("Reply on Your iPhone").font(.footnote).foregroundStyle(.tertiary)
                 } else if let draft {
                     Text(draft)
                         .font(.footnote)
@@ -840,7 +840,7 @@ struct WatchInboxItemView: View {
                             sending = false
                         }
                     } label: {
-                        if sending { ProgressView() } else { Text("发送").lineLimit(1) }
+                        if sending { ProgressView() } else { Text("Send").lineLimit(1) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(sending)
@@ -853,7 +853,7 @@ struct WatchInboxItemView: View {
                             if draft == nil { WKInterfaceDevice.current().play(.failure) }
                         }
                     } label: {
-                        if drafting { ProgressView() } else { Label("AI 回复", systemImage: Theme.Icon.ai).lineLimit(1) }
+                        if drafting { ProgressView() } else { Label("AI Reply", systemImage: Theme.Icon.ai).lineLimit(1) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(drafting)
@@ -863,7 +863,7 @@ struct WatchInboxItemView: View {
                         await model.setDone(item)
                         dismiss()
                     }
-                } label: { Label("已处理", systemImage: Theme.Icon.done).lineLimit(1) }
+                } label: { Label("Done [Inbox View 59f6c8]", systemImage: Theme.Icon.done).lineLimit(1) }
             }
         }
         .navigationTitle(item.title)
@@ -892,6 +892,6 @@ struct WatchWorkflowChip: View {
         .padding(.vertical, Theme.Space.xxs)
         .background(Theme.ai.opacity(0.2), in: .capsule)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "后台 \(text)"))
+        .accessibilityLabel(String(localized: "Background \(text)"))
     }
 }

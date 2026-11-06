@@ -21,8 +21,8 @@ struct NotificationSettingsView: View {
                 Section {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text("通知没有打开").font(Theme.Font.heading)
-                            Text("下面的设置要在系统设置里允许 Persona 发通知后才生效。").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("Notifications are off").font(Theme.Font.heading)
+                            Text("The settings below take effect only after you allow Persona to send notifications in Settings.").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.muted).foregroundStyle(Theme.caution)
@@ -35,8 +35,8 @@ struct NotificationSettingsView: View {
                 Toggle(isOn: binding(\.input)) {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("需要你处理时")
-                            Text("提问、计划审批、工具授权、终端等你输入").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("When You're Needed")
+                            Text("Questions, plan approvals, tool permissions, a terminal waiting for input").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "exclamationmark.bubble").foregroundStyle(StatusPalette.needsYou.dot)
@@ -44,19 +44,19 @@ struct NotificationSettingsView: View {
                 }
             } footer: {
                 #if os(macOS)
-                Text("授权和计划的通知上可以直接「允许 / 批准」或「拒绝 / 打回」（把鼠标移到通知上，点「选项」）。")
+                Text("On permission and plan notifications you can Allow/Approve or Deny/Reject directly (hover over the notification and click Options).")
                 #else
-                Text("授权和计划的通知上可以直接「允许 / 批准」（要先解锁）或「拒绝 / 打回」。")
+                Text("On permission and plan notifications you can Allow/Approve (after unlocking) or Deny/Reject directly.")
                 #endif
             }
 
             Section {
                 Picker(selection: binding(\.done)) {
-                    Text("不推送").tag(NotifyPrefs.Done.off)
-                    Text("只推长任务").tag(NotifyPrefs.Done.long)
-                    Text("每次都推").tag(NotifyPrefs.Done.always)
+                    Text("Off [Notification Settings View b3253d]").tag(NotifyPrefs.Done.off)
+                    Text("Long Tasks Only").tag(NotifyPrefs.Done.long)
+                    Text("Always [Notification Settings View 30ec51]").tag(NotifyPrefs.Done.always)
                 } label: {
-                    Label("Agent 做完时", systemImage: Theme.Icon.success)
+                    Label("When an Agent Finishes", systemImage: Theme.Icon.success)
                 }
                 #if os(macOS)
                 .pickerStyle(.radioGroup) // a Mac form's one-of-several (#1221)
@@ -65,7 +65,7 @@ struct NotificationSettingsView: View {
                 #endif
                 .labelsHidden() // the section header says it
             } header: {
-                Text("Agent 做完时")
+                Text("When an Agent Finishes")
             } footer: {
                 Text(doneFooter)
             }
@@ -76,8 +76,8 @@ struct NotificationSettingsView: View {
                 Toggle(isOn: binding(\.liveActivity)) {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("锁屏和灵动岛")
-                            Text("一个实时活动汇总需要你、在工作、做完了的 Agent").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("Lock Screen and Dynamic Island")
+                            Text("One Live Activity sums up agents that need you, are working, or are done").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.jarvis).foregroundStyle(Theme.brand)
@@ -86,8 +86,8 @@ struct NotificationSettingsView: View {
                 Toggle(isOn: binding(\.lockDetails)) {
                     Label {
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("锁屏显示详情")
-                            Text("关着时锁屏只显示数量和「有个授权等你」，不显示 Agent 名字和内容").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("Show Details on Lock Screen")
+                            Text("When off, the Lock Screen shows only counts and “A permission is waiting”, not agent names or content").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: Theme.Icon.view).foregroundStyle(.secondary)
@@ -100,26 +100,26 @@ struct NotificationSettingsView: View {
                     LabeledContent {
                         Text((prefs?.island ?? IslandPrefs()).preset.title).lineLimit(1)
                     } label: {
-                        Label("灵动岛", systemImage: "capsule.fill")
+                        Label("Dynamic Island", systemImage: "capsule.fill")
                     }
                 }
                 .disabled(prefs?.liveActivity == false)
                 if !activitiesAllowed {
                     Label {
-                        Text("系统设置里关掉了 Persona 的实时活动").font(Theme.Font.caption)
+                        Text("Live Activities for Persona are turned off in Settings").font(Theme.Font.caption)
                     } icon: {
                         Image(systemName: Theme.Icon.errorFilled).foregroundStyle(Theme.caution)
                     }
                     Button {
                         UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
                     } label: {
-                        Label("打开系统设置", systemImage: "gear").lineLimit(1)
+                        Label("Open Settings", systemImage: "gear").lineLimit(1)
                     }
                 }
             } header: {
-                Text("实时活动")
+                Text("Live Activities")
             } footer: {
-                Text("锁屏上可以直接「允许 / 批准」（要先解锁）或「拒绝」；灵动岛只在解锁时显示，总是带详情。")
+                Text("On the Lock Screen you can Allow/Approve (after unlocking) or Deny directly. The Dynamic Island appears only when unlocked and always shows details.")
             }
             #endif
 
@@ -131,7 +131,7 @@ struct NotificationSettingsView: View {
             #endif
         }
         .themedPage()
-        .detailTitle(String(localized: "通知"))
+        .detailTitle(String(localized: "Notifications"))
         .navigationBarTitleDisplayMode(.inline)
         .disabled(prefs == nil)
         .overlay { if prefs == nil { ProgressView() } }
@@ -173,7 +173,7 @@ struct NotificationSettingsView: View {
         Section {
             openSystemSettings
         } footer: {
-            Text("声音、锁屏显示、专注模式在系统设置里改。")
+            Text("Change sounds, Lock Screen display, and Focus in Settings.")
         }
     }
 
@@ -181,14 +181,14 @@ struct NotificationSettingsView: View {
         Button {
             UIApplication.shared.open(URL(string: UIApplication.openNotificationSettingsURLString)!)
         } label: {
-            Label("系统通知设置", systemImage: "gear").lineLimit(1)
+            Label("Notification Settings", systemImage: "gear").lineLimit(1)
         }
     }
 
     private var doneFooter: String {
         let delay = NotifyPrefs.duration(prefs?.doneDelaySeconds)
         let long = NotifyPrefs.duration(prefs?.longTurnSeconds)
-        return String(localized: "做完后等 \(delay)，这期间在电脑上或 App 里看过就不推；后台任务、子 Agent 都结束后才推一次。「长任务」指干了 \(long)以上的那一轮，秒回的问题在哪问的就在哪看。")
+        return String(localized: "After finishing, Persona waits \(delay) and skips the notification if you've already looked on your computer or in the app. It notifies once, after background tasks and subagents are all done. A “long task” is a turn that ran \(long) or longer; quick answers are best read where you asked.")
     }
 
     private func binding<V>(_ path: WritableKeyPath<NotifyPrefs, V>) -> Binding<V> {

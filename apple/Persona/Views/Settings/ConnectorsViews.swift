@@ -9,42 +9,42 @@ enum ConnectorText {
     /// This device as a connector: This iPhone / iPad / Mac.
     static var device: String {
         #if os(macOS)
-        String(localized: "这台 Mac")
+        String(localized: "This Mac")
         #else
-        UIDevice.current.userInterfaceIdiom == .pad ? String(localized: "这台 iPad") : String(localized: "这台 iPhone")
+        UIDevice.current.userInterfaceIdiom == .pad ? String(localized: "This iPad") : String(localized: "This iPhone")
         #endif
     }
 
     static func deviceSummary() -> String {
         let on = PhoneDataSource.onThisDevice.filter(\.isEnabled).count
-        return on == 0 ? String(localized: "未打开") : String(localized: "\(on) 项已打开")
+        return on == 0 ? String(localized: "Off [Connectors Views a0a4c7]") : String(localized: "\(on) on [Connectors Views 8df743]")
     }
 
     static func mailSummary(_ accounts: [MailAccount]?) -> String {
         guard let accounts else { return "" }
-        if accounts.isEmpty { return String(localized: "未添加") }
-        if accounts.contains(where: { $0.status == "error" }) { return String(localized: "\(accounts.count) 个 · 有错误") }
-        return String(localized: "\(accounts.count) 个账户")
+        if accounts.isEmpty { return String(localized: "None added") }
+        if accounts.contains(where: { $0.status == "error" }) { return String(localized: "\(accounts.count) · Error") }
+        return String(localized: "\(accounts.count) accounts")
     }
 
     static func larkSummary(_ st: LarkStatus?) -> String {
         guard let st else { return "" }
-        if !st.configured { return String(localized: "未配置") }
-        return st.connected ? (st.name ?? String(localized: "已连接")) : String(localized: "连不上")
+        if !st.configured { return String(localized: "Not set up") }
+        return st.connected ? (st.name ?? String(localized: "Connected [V N C Page 5be032]")) : String(localized: "Can't connect")
     }
 
     /// A hub connector's state in a word or two (its row, its page). Only "error" is Something Went Wrong: a state this app does not
     /// know yet (a newer hub's) is not one.
     static func state(_ c: HubConnector) -> String {
         switch c.status {
-        case "ok": String(localized: "已连接")
-        case "not_configured": String(localized: "未配置")
-        case "not_signed_in": String(localized: "未登录")
-        case "no_permission": String(localized: "没有权限")
-        case "rate_limited": String(localized: "请求太多，暂停中")
-        case "disabled": String(localized: "已关闭")
-        case "error": String(localized: "出错了")
-        default: String(localized: "状态未知")
+        case "ok": String(localized: "Connected [V N C Page 5be032]")
+        case "not_configured": String(localized: "Not set up")
+        case "not_signed_in": String(localized: "Not signed in")
+        case "no_permission": String(localized: "No permission")
+        case "rate_limited": String(localized: "Too many requests; paused")
+        case "disabled": String(localized: "Off [Git Hub Thread Models 6744b4]")
+        case "error": String(localized: "Something Went Wrong")
+        default: String(localized: "Unknown [Connectors Views 93e474]")
         }
     }
 
@@ -79,8 +79,8 @@ enum ConnectorText {
     nonisolated static func profile(_ id: String) -> ConnectorProfile {
         switch id {
         case "github": ConnectorProfile(brand: Theme.Brand.github)
-        case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: String(localized: "它的私聊和群"),
-                                          signInFooter: String(localized: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"),
+        case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: String(localized: "its private chats and groups"),
+                                          signInFooter: String(localized: "The API credentials and sign-in are stored encrypted on the hub; only the api_id is shown. Both are deleted when you sign out."),
                                           logoutEndsRemoteSession: true)
         default: ConnectorProfile()
         }
@@ -88,22 +88,22 @@ enum ConnectorText {
 
     /// The sign-in step's footer: where the credentials live.
     nonisolated static func signInFooter(_ c: HubConnector) -> String {
-        profile(c.id).signInFooter ?? String(localized: "登录状态加密存在 hub 上，退出登录时删掉。")
+        profile(c.id).signInFooter ?? String(localized: "Your sign-in is stored encrypted on the hub and deleted when you sign out.")
     }
 
     /// The sign-out confirmation. Only a connector known to end the session at the service says so; signing out of any
     /// other (GitHub's device token, a plugin's key) only has the hub forget its copy, and the authorization stays there.
     nonisolated static func logoutMessage(_ c: HubConnector) -> String {
         profile(c.id).logoutEndsRemoteSession
-            ? String(localized: "hub 上存的 API 凭据和登录状态都会删掉，\(c.name) 那边这个设备会话也会结束。再用要重新登录。")
-            : String(localized: "hub 上存的凭据和登录状态会删掉，再用要重新登录。对方服务里的授权不会自动撤销，需要的话到那边撤销。")
+            ? String(localized: "The API credentials and sign-in saved on the hub will be deleted, and this device's session with \(c.name) will end too. You'll need to sign in again to use it.")
+            : String(localized: "The credentials and sign-in saved on the hub will be deleted, and you'll need to sign in again to use it. Access granted in the other service isn't revoked automatically; revoke it there if needed.")
     }
 
     /// A conversation's message opened where it came from: Open in Telegram; a connector without an app of its own
     /// says its name.
     nonisolated static func openInTitle(_ id: String, name: String) -> String {
         let place = profile(id).app ?? name
-        return String(localized: "在 \(place) 里打开")
+        return String(localized: "Open in \(place) [Connectors Views 25f065]")
     }
 }
 
@@ -325,12 +325,12 @@ struct ConnectorsSection: View {
                     switch row {
                     case .mail:
                         NavigationLink(value: SettingsPage.mail) {
-                            ConnectorRowLabel(title: String(localized: "邮箱"), symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
+                            ConnectorRowLabel(title: String(localized: "Mail [Mail Views 730752]"), symbol: Theme.Icon.mailAccounts, value: ConnectorText.mailSummary(accounts))
                         }
                         .settingsListRow(SettingsPage.mail)
                     case .lark:
                         NavigationLink(value: SettingsPage.feishu) {
-                            ConnectorRowLabel(title: String(localized: "飞书"), symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
+                            ConnectorRowLabel(title: String(localized: "Lark [Inbox Event Views 7e4419]"), symbol: Theme.Icon.mailAccounts, brand: Theme.Brand.lark, value: ConnectorText.larkSummary(lark))
                         }
                         .settingsListRow(SettingsPage.feishu)
                     case .hub(let c):
@@ -341,15 +341,15 @@ struct ConnectorsSection: View {
                     }
                 }
                 NavigationLink(value: SettingsPage.feishuBot) {
-                    ConnectorRowLabel(title: String(localized: "飞书机器人"), symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
+                    ConnectorRowLabel(title: String(localized: "Lark Bot"), symbol: Theme.Icon.chatBot, value: FeishuBotModel.summary(bot))
                 }
                 .settingsListRow(SettingsPage.feishuBot)
             }
             .bareListRow()
         } header: {
-            SettingsHeading(String(localized: "连接器"))
+            SettingsHeading(String(localized: "Connectors"))
         } footer: {
-            Text("Persona 能读、能替你操作的数据来源：助手、AI 分身和 Agent 通过它们查日程、读消息、发邮件；替你出面的操作都会先问你。")
+            Text("Data sources Persona can read and act on for you: the assistant, AI twin and agents use them to check your calendar, read messages and send email. Anything done on your behalf asks you first.")
         }
         .task(id: model.settingsPath.count) { await load() } // again when a page closes: it may have changed them
     }
@@ -413,7 +413,7 @@ struct FeishuConnectorView: View {
                 HStack(spacing: Theme.Space.m) {
                     BrandMark(Theme.Brand.lark, side: Theme.Size.wellM)
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text(status?.name ?? String(localized: "飞书")).font(Theme.Font.heading).lineLimit(1)
+                        Text(status?.name ?? String(localized: "Lark [Inbox Event Views 7e4419]")).font(Theme.Font.heading).lineLimit(1)
                         HStack(spacing: Theme.Space.sm) {
                             Circle().fill(tint).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                             Text(stateText).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -424,7 +424,7 @@ struct FeishuConnectorView: View {
                 }
                 .padding(.vertical, Theme.Space.xs)
                 if let at = status?.lastEventAt, at > 0 {
-                    LabeledContent("最近一条实时消息") {
+                    LabeledContent("Last Live Message") {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(Fmt.relative(Date(timeIntervalSince1970: TimeInterval(at)), now: ctx.date)).lineLimit(1)
                         }
@@ -435,8 +435,8 @@ struct FeishuConnectorView: View {
                 }
             } footer: {
                 Text(status?.configured == false
-                     ? "hub 还没接飞书：在 hub 所在的机器上运行飞书网关，并在 hub.json 的 lark 里填上它（docs/feishu.md）。"
-                     : "飞书账号在 hub 所在机器的飞书网关里登录，会话与收件箱共用这个账号，无需再次登录。")
+                     ? String(localized: "The hub isn't connected to Lark yet: run the Lark gateway on the hub machine and add it under lark in hub.json (docs/feishu.md).")
+                     : String(localized: "The Lark account is signed in through the Lark gateway on the hub machine. Chats share this account with the Inbox, so there's no need to sign in again."))
             }
 
             if let accounts, accounts.accounts.count > 1 {
@@ -445,41 +445,41 @@ struct FeishuConnectorView: View {
                         accountRow(account, isDefault: account.id == accounts.default)
                     }
                 } header: {
-                    Text("账号")
+                    Text("Accounts")
                 } footer: {
-                    Text("已登录的账号都会收进收件箱，「消息」页可以切换账号。/agent、助手和知识库使用默认账号；在飞书网关里添加或退出账号。")
+                    Text("Every signed-in account goes into the Inbox, and you can switch accounts on the Messages page. /agent, the Assistant and Knowledge use the default account. Add or sign out of accounts in the Lark gateway.")
                 }
             }
 
             Section {
-                Toggle("首页显示消息", isOn: $larkHome.enabled)
+                Toggle("Show Messages on Home", isOn: $larkHome.enabled)
                 .accessibilityIdentifier("feishu-home-enabled")
             } footer: {
                 #if os(macOS)
-                Text("在侧边栏增加「消息」，查看全部私聊和群聊。与收件箱共用账号和聊天记录。")
+                Text("Adds Messages to the sidebar to browse all direct and group chats. It shares accounts and chat history with the Inbox.")
                 #else
-                Text("在首页增加「消息」入口，查看全部私聊和群聊。与收件箱共用账号和聊天记录。")
+                Text("Adds a Messages entry on Home to browse all direct and group chats. It shares accounts and chat history with the Inbox.")
                 #endif
             }
 
             Section {
-                NavigationLink("风灵月影") { LarkMessageDisplaySettingsView() }
+                NavigationLink("Message Tweaks") { LarkMessageDisplaySettingsView() }
             }
 
-            Section("Persona 用飞书做什么") {
-                use(Theme.Icon.inbox, String(localized: "收件箱"), String(localized: "私聊、@我、群消息和云文档里提到你的地方，AI 先分拣、起草回复"))
-                use(Theme.Icon.knowledge, String(localized: "知识库"), String(localized: "会话、人、群、项目归档下来，给助手和 AI 分身做上下文"))
+            Section("What Persona Does with Lark") {
+                use(Theme.Icon.inbox, String(localized: "Inbox"), String(localized: "Direct messages, @mentions, group messages and mentions in docs; AI sorts them and drafts replies"))
+                use(Theme.Icon.knowledge, String(localized: "Knowledge"), String(localized: "Chats, people, groups and projects are archived as context for the assistant and AI twin"))
                 #if os(macOS)
-                use(Theme.Icon.ai, String(localized: "助手"), String(localized: "Persona 能搜消息、读文档；发消息等写操作先在 App 里问你"))
+                use(Theme.Icon.ai, String(localized: "Assistant"), String(localized: "Persona can search messages and read docs; sending messages and other changes ask you in the app first"))
                 #else
-                use(Theme.Icon.ai, String(localized: "助手"), String(localized: "Persona 能搜消息、读文档；发消息等写操作先在手机上问你"))
+                use(Theme.Icon.ai, String(localized: "Assistant"), String(localized: "Persona can search messages and read docs; sending messages and other changes ask you on your phone first"))
                 #endif
-                use(Theme.Icon.agents, "/agent", String(localized: "在飞书任何地方以 /agent 开头说一句，就起一个 Agent 处理并替你回复"))
-                ModelConfigurationLink(title: String(localized: "/agent 模型"), purposeID: "lark.agent")
+                use(Theme.Icon.agents, "/agent", String(localized: "Start a message with /agent anywhere in Lark to have an agent handle it and reply for you"))
+                ModelConfigurationLink(title: String(localized: "/agent Model"), purposeID: "lark.agent")
             }
         }
         .themedPage()
-        .detailTitle(String(localized: "飞书"))
+        .detailTitle(String(localized: "Lark [Inbox Event Views 7e4419]"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
@@ -491,9 +491,9 @@ struct FeishuConnectorView: View {
     }
 
     private var stateText: String {
-        guard let st = status else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
-        if !st.configured { return String(localized: "未配置") }
-        return st.connected ? String(localized: "已连接") : String(localized: "连不上飞书网关")
+        guard let st = status else { return loading ? String(localized: "Checking…") : String(localized: "Couldn't get status") }
+        if !st.configured { return String(localized: "Not set up") }
+        return st.connected ? String(localized: "Connected [V N C Page 5be032]") : String(localized: "Can't reach the Lark gateway")
     }
 
     private func accountRow(_ account: LarkAccount, isDefault: Bool) -> some View {
@@ -505,7 +505,7 @@ struct FeishuConnectorView: View {
                     .foregroundStyle(account.signedIn ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.danger))
             }
             Spacer(minLength: Theme.Space.s)
-            if isDefault { Chip(text: String(localized: "默认")) }
+            if isDefault { Chip(text: String(localized: "Default [Prompt Composer 844b8c]")) }
             if account.signedIn, account.unread > 0 { CountBadge(count: account.unread) }
         }
         .padding(.vertical, Theme.Space.xxs)
@@ -514,9 +514,9 @@ struct FeishuConnectorView: View {
     }
 
     private func accountDetail(_ account: LarkAccount) -> String {
-        if account.quarantined == true { return String(localized: "无法打开，请在飞书网关里重试或移除") }
-        if !account.signedIn { return String(localized: "未登录") }
-        return account.tenant?.isEmpty == false ? account.tenant! : String(localized: "已登录")
+        if account.quarantined == true { return String(localized: "Can't open it. Retry or remove it in the Lark gateway.") }
+        if !account.signedIn { return String(localized: "Not signed in") }
+        return account.tenant?.isEmpty == false ? account.tenant! : String(localized: "Signed in")
     }
 
     private func use(_ symbol: String, _ title: String, _ detail: String) -> some View {
@@ -539,7 +539,7 @@ struct FeishuConnectorView: View {
             status = try await model.api?.larkStatus()
             failure = nil
         } catch {
-            failure = error.shown.map { String(localized: "读不到飞书的状态：\($0)") }
+            failure = error.shown.map { String(localized: "Couldn't get Lark's status: \($0)") }
         }
         accounts = await list
     }
@@ -577,10 +577,10 @@ struct HubConnectorView: View {
                 }
                 .padding(.vertical, Theme.Space.xs)
                 if let via = connector?.via, !via.isEmpty {
-                    LabeledContent("登录") { Text(via).lineLimit(2).multilineTextAlignment(.trailing) }
+                    LabeledContent("Sign In") { Text(via).lineLimit(2).multilineTextAlignment(.trailing) }
                 }
                 if let at = connector?.lastSync {
-                    LabeledContent("最近一次同步") {
+                    LabeledContent("Last Sync") {
                         TimelineView(.periodic(from: .now, by: 30)) { ctx in
                             Text(Fmt.relative(at, now: ctx.date)).lineLimit(1)
                         }
@@ -594,7 +594,7 @@ struct HubConnectorView: View {
                 }
             } footer: {
                 if let connector, !connector.signsInHere, !connector.undescribed {
-                    Text("登录在 hub 一侧设置（hub.json，见 docs/config.md），这里只看状态。")
+                    Text("Sign-in is set up on the hub (hub.json, see docs/config.md); this page only shows the status.")
                 }
             }
             // Telegram switched off lists nothing until it runs: its switch is here all the same.
@@ -612,11 +612,11 @@ struct HubConnectorView: View {
                         }
                     }
                     Button { Task { await load() } } label: {
-                        Label("重新检查", systemImage: Theme.Icon.retry).lineLimit(1)
+                        Label("Check Again [Lark Chat View c25fb8]", systemImage: Theme.Icon.retry).lineLimit(1)
                     }
                     .disabled(loading)
                 } header: {
-                    SettingsHeading(String(localized: "怎么修好"))
+                    SettingsHeading(String(localized: "How to Fix"))
                 }
             }
             if id == "github", let connector, let options = GitHubInboxOptions(connector.options) {
@@ -655,7 +655,7 @@ struct HubConnectorView: View {
     private var tint: Color { ConnectorText.tone(connector) }
 
     private var stateText: String {
-        guard let connector else { return loading ? String(localized: "正在检查…") : String(localized: "读不到状态") }
+        guard let connector else { return loading ? String(localized: "Checking…") : String(localized: "Couldn't get status") }
         return ConnectorText.state(connector)
     }
 
@@ -666,9 +666,9 @@ struct HubConnectorView: View {
         defer { loading = false }
         do {
             connector = try await api.connectors().first { $0.id == id }
-            failure = connector == nil ? String(localized: "hub 上没有这个连接器") : nil
+            failure = connector == nil ? String(localized: "The hub doesn't have this connector") : nil
         } catch {
-            failure = error.shown.map { String(localized: "读不到连接器的状态：\($0)") }
+            failure = error.shown.map { String(localized: "Couldn't get the connector's status: \($0)") }
         }
     }
 }

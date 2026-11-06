@@ -52,8 +52,8 @@ nonisolated enum CookieFile {
         case unreadable, empty(json: Bool)
         var errorDescription: String? {
             switch self {
-            case .unreadable: String(localized: "读不懂这个文件：既不是 cookies.txt，也不是 JSON")
-            case .empty(let json): json ? String(localized: "JSON 里没有 cookie") : String(localized: "文件里没有 cookie（应是 cookies.txt：每行用制表符分隔的 7 列）")
+            case .unreadable: String(localized: "Can't read this file: it's neither cookies.txt nor JSON")
+            case .empty(let json): json ? String(localized: "No cookies in the JSON") : String(localized: "No cookies in the file (expected cookies.txt: 7 tab-separated columns per line)")
             }
         }
     }

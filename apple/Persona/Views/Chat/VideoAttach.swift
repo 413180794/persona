@@ -95,7 +95,7 @@ nonisolated enum VideoPrep {
     static func name(_ picked: String) -> String {
         let ext = (picked as NSString).pathExtension
         guard picked.contains("="), picked.contains("&") || picked.contains("uuid") else { return picked }
-        return ext.isEmpty ? String(localized: "视频") : String(localized: "视频") + "." + ext
+        return ext.isEmpty ? String(localized: "Video") : String(localized: "Video") + "." + ext
     }
 
     static func size(_ url: URL) -> Int64 {
@@ -146,7 +146,7 @@ nonisolated enum VideoPrep {
         init(url: URL, preset: String) throws {
             let asset = AVURLAsset(url: url)
             guard let created = AVAssetExportSession(asset: asset, presetName: preset) else {
-                throw APIError(status: 0, message: String(localized: "这个视频没法压缩"))
+                throw APIError(status: 0, message: String(localized: "This video can't be compressed"))
             }
             created.shouldOptimizeForNetworkUse = true
             session = created
@@ -225,7 +225,7 @@ final class VideoAttachments {
 
     /// Videos picked in Photos, for machine.
     func start(_ picks: [PhotosPickerItem], machine: MachineRef, model: AppModel) {
-        for p in picks { add(.pick(p), name: String(localized: "视频"), machine: machine, model: model) }
+        for p in picks { add(.pick(p), name: String(localized: "Video"), machine: machine, model: model) }
     }
 
     /// A video file of this app's (DEBUG screenshots and tests): moved in like a picked one.
@@ -245,11 +245,11 @@ final class VideoAttachments {
     private func add(_ source: Source, name: String, machine: MachineRef, model: AppModel) {
         let features = model.features(machine.group)
         if !features.isEmpty, !features.contains("file_upload") {
-            model.toast = Toast(String(localized: "hub 版本太旧，还不能发送视频：更新 hub 后再试"), style: .error)
+            model.toast = Toast(String(localized: "The hub is too old to send videos. Update the hub and try again."), style: .error)
             return
         }
         guard items.count < Self.most else {
-            model.toast = Toast(String(localized: "一次最多 \(Self.most) 个视频"), style: .error)
+            model.toast = Toast(String(localized: "Up to \(Self.most) videos at a time"), style: .error)
             return
         }
         let item = Item(name: name)
@@ -266,7 +266,7 @@ final class VideoAttachments {
 
     private func run(_ id: UUID, source: Source, machine: MachineRef, model: AppModel) async {
         defer { tasks[id] = nil }
-        var name = items.first { $0.id == id }?.name ?? String(localized: "视频")
+        var name = items.first { $0.id == id }?.name ?? String(localized: "Video")
         var staged: URL?
         defer { if let staged { try? FileManager.default.removeItem(at: staged.deletingLastPathComponent()) } }
         do {
@@ -291,7 +291,7 @@ final class VideoAttachments {
             let size = VideoPrep.size(fitted)
             name = fitted.lastPathComponent
             update(id) { $0.name = name; $0.size = size; $0.step = .uploading }
-            guard let api = model.api(machine.group) else { throw APIError(status: 0, message: String(localized: "尚未连接 hub")) }
+            guard let api = model.api(machine.group) else { throw APIError(status: 0, message: String(localized: "Not connected to the hub [App Model 93d955]")) }
             let out = try await api.upload(file: fitted, name: name, machine: machine.id) { sent in
                 Task { @MainActor in self.update(id) { $0.sent = max($0.sent, sent) } }
             }
@@ -318,13 +318,13 @@ final class VideoAttachments {
         if (error as? VideoPrep.Failure) == .tooLong {
             if let duration {
                 let clock = RecordingFormat.clock(duration.rounded())
-                return String(localized: "「\(name)」有 \(clock)，压缩到 540p 也超过 200 MB，发不了：先在「照片」里剪短再发")
+                return String(localized: "\"\(name)\" is \(clock) long and still over 200 MB at 540p, so it can't be sent. Trim it in Photos first.")
             }
-            return String(localized: "「\(name)」压缩到 540p 也超过 200 MB，发不了：先在「照片」里剪短再发")
+            return String(localized: "\"\(name)\" is still over 200 MB at 540p, so it can't be sent. Trim it in Photos first.")
         }
         if error.isCancellation { return nil }
         if let e = error as? CocoaError, e.code == .fileReadUnknown || e.code == .fileReadNoSuchFile {
-            return String(localized: "有视频读不出来（可能还在 iCloud 里没下载完）")
+            return String(localized: "Couldn't read a video (it may still be downloading from iCloud)")
         }
         return FileUploads.message(error, name: name)
     }
@@ -338,7 +338,7 @@ struct VideoAttachmentsBar: View {
         VStack(spacing: Theme.Space.sm) {
             ForEach(videos.items) { item in
                 AttachmentRow(symbol: Theme.Icon.video, name: item.name, status: Self.status(item), progress: Self.progress(item),
-                              removeLabel: item.file == nil ? String(localized: "取消 \(item.name)") : String(localized: "移除 \(item.name)")) {
+                              removeLabel: item.file == nil ? String(localized: "Cancel \(item.name)") : String(localized: "Remove \(item.name) [Beautiful U I Bridge 271f20]")) {
                     videos.remove(item.id)
                 }
                 .accessibilityElement(children: .contain)
@@ -349,9 +349,9 @@ struct VideoAttachmentsBar: View {
 
     static func status(_ item: VideoAttachments.Item) -> String {
         switch item.step {
-        case .waiting: String(localized: "等待中")
-        case .reading: String(localized: "正在读取")
-        case .compressing(let p): String(localized: "正在压缩 \(Int(p * 100))%")
+        case .waiting: String(localized: "Waiting [File Attach 26c8cf]")
+        case .reading: String(localized: "Reading")
+        case .compressing(let p): String(localized: "Compressing \(Int(p * 100))%")
         case .uploading: "\(item.sent.storageText) / \(item.size.storageText)"
         case .ready: item.file?.detail ?? ""
         }

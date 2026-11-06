@@ -247,16 +247,16 @@ struct IslandPreview: View {
         .background(Capsule().fill(.black))
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(interfaceText("\(IslandPreview.describe(sides.left))，\(IslandPreview.describe(sides.right))"))
+        .accessibilityLabel(interfaceText("\(IslandPreview.describe(sides.left)), \(IslandPreview.describe(sides.right))"))
     }
 
     static func describe(_ cell: IslandCell) -> String {
         switch cell {
-        case let .needsYou(n): interfaceText("\(n) 个需要你")
-        case let .working(n): interfaceText("\(n) 个在工作")
-        case let .unread(n): interfaceText("\(n) 个做完未看")
-        case .timer: interfaceText(LocalizedStringResource("计时", comment: "VoiceOver: the island side shows a timer"))
-        case .empty: interfaceText(LocalizedStringResource("空", comment: "VoiceOver: the island side is empty"))
+        case let .needsYou(n): interfaceText("\(n) need you [Fleet State ea2671]")
+        case let .working(n): interfaceText("\(n) working [Fleet State 2224bf]")
+        case let .unread(n): interfaceText("\(n) unread [Fleet Island Views a597f0]")
+        case .timer: interfaceText(LocalizedStringResource("Timer", comment: "VoiceOver: the island side shows a timer"))
+        case .empty: interfaceText(LocalizedStringResource("Empty", comment: "VoiceOver: the island side is empty"))
         default: FleetText.stat(cell) ?? ""
         }
     }
@@ -287,7 +287,7 @@ struct IslandSharedPreview: View {
         }
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(interfaceText("和其他 App 共用时：\(IslandPreview.describe(cell))"))
+        .accessibilityLabel(interfaceText("Shared with another app: \(IslandPreview.describe(cell))"))
     }
 }
 

@@ -41,9 +41,9 @@ nonisolated struct DoctorCheck: Decodable, Hashable, Sendable {
 
     var statusLabel: String {
         switch status {
-        case .ok: String(localized: "正常")
-        case .warn: String(localized: "注意")
-        case .fail: String(localized: "有问题")
+        case .ok: String(localized: "OK [Node Health Model 296de0]")
+        case .warn: String(localized: "Warning")
+        case .fail: String(localized: "Problem")
         }
     }
 
@@ -79,10 +79,10 @@ nonisolated enum NodeHealth {
 
         var label: String {
             switch self {
-            case .ready: String(localized: "就绪")
-            case .partial: String(localized: "部分可用")
-            case .broken: String(localized: "有问题")
-            case .off: String(localized: "未启用")
+            case .ready: String(localized: "Ready [Node Health Model b073db]")
+            case .partial: String(localized: "Partly Working")
+            case .broken: String(localized: "Problem")
+            case .off: String(localized: "Off [Machine Detail View f95ea7]")
             }
         }
     }
@@ -114,14 +114,14 @@ nonisolated enum NodeHealth {
     static let infoCheckNames = ["global-permission-hooks"]
 
     static let features: [FeatureSpec] = [
-        FeatureSpec(id: "approvals", name: String(localized: "手机审批卡片"), detail: String(localized: "在手机上回答提问、批准工具和计划"),
+        FeatureSpec(id: "approvals", name: String(localized: "Approval Cards on Phone"), detail: String(localized: "Answer questions and approve tools and plans on your phone"),
                     checks: ["node.sock", "claude-settings.json", "claude-hooks", "assistant-settings.json", "assistant-hooks", "command-paths"]),
-        FeatureSpec(id: "status", name: String(localized: "状态与通知"), detail: String(localized: "Agent 的状态变化和完成通知"), checks: ["node.sock", "command-paths"]),
-        FeatureSpec(id: "terminal", name: String(localized: "终端与引擎"), detail: String(localized: "手机上看和操作这台电脑的终端"), checks: ["herdr"], optional: true,
+        FeatureSpec(id: "status", name: String(localized: "Status and Notifications"), detail: String(localized: "Agent status changes and completion notifications"), checks: ["node.sock", "command-paths"]),
+        FeatureSpec(id: "terminal", name: String(localized: "Terminal and Engine"), detail: String(localized: "View and use this computer's terminal from your phone"), checks: ["herdr"], optional: true,
                     needed: { $0 == .herdr || $0 == .herdrBoth }),
-        FeatureSpec(id: "mcp", name: String(localized: "MCP 工具"), detail: String(localized: "Agent 里能用 Persona 的工具"), checks: ["node.sock", "mcp.json", "command-paths"]),
-        FeatureSpec(id: "skills", name: String(localized: "技能"), detail: String(localized: "Persona 启动的 Agent 自带的技能"), checks: ["agent-plugin", "claude-version"]),
-        FeatureSpec(id: "runtimes", name: String(localized: "运行时接入"), detail: String(localized: "DSH、pi 这类 runtime 连到这台电脑"), checks: ["runtime.sock"], optional: true),
+        FeatureSpec(id: "mcp", name: String(localized: "MCP Tools"), detail: String(localized: "Persona's tools available inside agents"), checks: ["node.sock", "mcp.json", "command-paths"]),
+        FeatureSpec(id: "skills", name: String(localized: "Skill"), detail: String(localized: "Skills that agents started by Persona come with"), checks: ["agent-plugin", "claude-version"]),
+        FeatureSpec(id: "runtimes", name: String(localized: "Runtime Connections"), detail: String(localized: "Runtimes like DSH and pi connect to this computer"), checks: ["runtime.sock"], optional: true),
     ]
 
     private static func rank(_ s: DoctorCheck.Status) -> Int { s == .ok ? 0 : s == .warn ? 1 : 2 }
@@ -135,8 +135,8 @@ nonisolated enum NodeHealth {
     /// A stale or missing generated file has Repair here, so the node's hint (a command line) is not repeated.
     private static func note(_ c: DoctorCheck?) -> String {
         guard let c else { return "" }
-        if c.state == "stale" { return String(localized: "Persona 生成的文件过期了，点「修复」重新生成") }
-        if c.state == "missing" { return String(localized: "Persona 生成的文件不见了，点「修复」重新生成") }
+        if c.state == "stale" { return String(localized: "Files Persona generated are out of date. Tap Repair to regenerate them.") }
+        if c.state == "missing" { return String(localized: "Files Persona generated are missing. Tap Repair to regenerate them.") }
         return c.hint.isEmpty ? c.detail : c.hint
     }
 
@@ -161,7 +161,7 @@ nonisolated enum NodeHealth {
         let covered = Set(features.flatMap(\.checks) + infoCheckNames)
         let rest = report.checks.filter { !covered.contains($0.name) }
         if let w = worst(rest) {
-            out.append(Feature(id: "other", name: String(localized: "其他检查"), detail: String(localized: "这个版本的 node 多报的项"),
+            out.append(Feature(id: "other", name: String(localized: "Other Checks"), detail: String(localized: "Extra items this node version reports"),
                                state: w.status == .fail ? .broken : .partial, checks: rest, note: note(w)))
         }
         return out
@@ -178,8 +178,8 @@ nonisolated enum NodeHealth {
     static func summarize(_ features: [Feature]) -> Summary {
         let attention = features.filter { $0.state == .broken || $0.state == .partial }.count
         let off = features.filter { $0.state == .off }.map(\.name)
-        return Summary(attention: attention, title: attention == 0 ? String(localized: "一切正常") : String(localized: "\(attention) 项功能需要处理"),
-                       off: off.isEmpty ? "" : String(localized: "没有设置：\(off.joined(separator: "、"))"))
+        return Summary(attention: attention, title: attention == 0 ? String(localized: "All Good") : String(localized: "\(attention) features need attention"),
+                       off: off.isEmpty ? "" : String(localized: "Not set up: \(off.joined(separator: "、"))"))
     }
 
     /// The checks Repair would put right: Persona's own generated files that are stale or missing.
@@ -193,7 +193,7 @@ nonisolated enum NodeHealth {
     /// What the toast says after Repair: the node re-checks after writing, so the report is already the new one.
     static func fixResult(_ report: DoctorReport) -> (text: String, failed: Bool) {
         if let failed = report.checks.first(where: { $0.name == "fix" && $0.status == .fail }) { return (failed.detail, true) }
-        return report.fixed.isEmpty ? (String(localized: "没有需要重新生成的文件"), false) : (String(localized: "已重新生成 \(report.fixed.count) 项"), false)
+        return report.fixed.isEmpty ? (String(localized: "No files needed regenerating"), false) : (String(localized: "Regenerated \(report.fixed.count) items"), false)
     }
 
     enum Unavailable: Equatable, Sendable { case oldNode, oldHub, offline, forbidden }
@@ -215,8 +215,8 @@ nonisolated enum NodeHealth {
     /// Why an old node cannot be updated from here, when it cannot.
     static func deployReason(_ m: Machine) -> String? {
         switch m.kind {
-        case "local": String(localized: "这是 hub 所在的机器，请在本机升级 hub 和 node。")
-        case "link", "service": String(localized: "请先在这台电脑上本地升级 node，并将 hub 升级到支持链路更新的版本。")
+        case "local": String(localized: "This is the hub machine. Upgrade the hub and node on it directly.")
+        case "link", "service": String(localized: "First upgrade node locally on this computer, and upgrade the hub to a version that supports updates over the link.")
         default: nil
         }
     }
@@ -294,7 +294,7 @@ nonisolated enum NodeHealth {
             if mine == seq { load = .report(r) }
             return NodeHealth.fixResult(r)
         } catch {
-            return (String(localized: "修复失败：\(error.shown ?? error.localizedDescription)"), true)
+            return (String(localized: "Repair failed: \(error.shown ?? error.localizedDescription)"), true)
         }
     }
 }

@@ -69,8 +69,8 @@ struct VoiceOrb: View {
         .disabled(!isButton)
         .allowsHitTesting(isButton)
         .accessibilityHidden(!isButton)
-        .accessibilityLabel("打断语音")
-        .accessibilityHint("只让语音停下，正在做的事照常继续")
+        .accessibilityLabel("Interrupt Voice")
+        .accessibilityHint("Stops only the voice; the work in progress carries on")
         .accessibilityIdentifier("voice-orb")
     }
 

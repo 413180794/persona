@@ -310,7 +310,7 @@ private struct MessageActionBarHost: ViewModifier {
                     }
                 }
                 .gesture(LeftDrag(moved: moved, ended: ended))
-                .accessibilityAction(named: "引用") { menu.quote?(text, id, isUser) }
+                .accessibilityAction(named: "Quote") { menu.quote?(text, id, isUser) }
         } else {
             content
         }
@@ -368,24 +368,24 @@ struct MessageActionBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            action(String(localized: "复制"), "doc.on.doc") {
+            action(String(localized: "Copy [Message Menu 63d90d]"), "doc.on.doc") {
                 UIPasteboard.general.string = text
                 Haptics.success()
             }
             // "Select Text", not "Select": next to Copy a bare Select reads as picking messages (WeChat's multi-select).
-            action(String(localized: "选择文本"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser) }
-            action(String(localized: "引用"), "quote.opening") { menu.quote?(text, id, isUser) }
-            action(String(localized: "分享"), "square.and.arrow.up") {
+            action(String(localized: "Select Text [Message Menu 4d8efc]"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser) }
+            action(String(localized: "Quote"), "quote.opening") { menu.quote?(text, id, isUser) }
+            action(String(localized: "Share"), "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
             }
             if isUser {
-                action(String(localized: "编辑"), "pencil") { menu.edit?(text) }
+                action(String(localized: "Edit [Message Menu 051836]"), "pencil") { menu.edit?(text) }
             }
             if Self.rewinds(id: id, isUser: isUser, menu: menu) {
-                action(String(localized: "回退"), Theme.Icon.rewindChat) { menu.rewinding = RewindAsk(id: id, text: text) }
+                action(String(localized: "Rewind"), Theme.Icon.rewindChat) { menu.rewinding = RewindAsk(id: id, text: text) }
             }
             if Self.forks(id: id, isUser: isUser, menu: menu) {
-                action(String(localized: "更多"), Theme.Icon.more) { menu.more = id }
+                action(String(localized: "More"), Theme.Icon.more) { menu.more = id }
             }
         }
         .padding(.horizontal, Theme.Space.sm)
@@ -426,18 +426,18 @@ struct SelectableTextSheet: View {
     var body: some View {
         NavigationStack {
             SelectableTextView(text: text, plain: plain)
-                .navigationTitle("选择文本")
+                .navigationTitle("Select Text [Message Menu 4d8efc]")
                 .navigationBarTitleDisplayMode(.inline)
                 .pageToolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button { dismiss() } label: { Label("完成", systemImage: Theme.Icon.done) }
+                        Button { dismiss() } label: { Label("Done [Extension System Presentation c0b3fb]", systemImage: Theme.Icon.done) }
                     }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             UIPasteboard.general.string = text
                             Haptics.success()
                             dismiss()
-                        } label: { Label("全部拷贝", systemImage: Theme.Icon.copy).labelStyle(.titleAndIcon).lineLimit(1) }
+                        } label: { Label("Copy All [Message Menu 911a2b]", systemImage: Theme.Icon.copy).labelStyle(.titleAndIcon).lineLimit(1) }
                     }
                 }
         }

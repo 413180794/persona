@@ -31,13 +31,13 @@ struct LarkPinnedShelf: View {
                                 }
                             }
                             .dynamicTypeSize(...Theme.Shell.topBarLargestTypeSize)
-                        Text(interaction.isExpanded ? "收起" : "展开").font(Theme.Font.caption)
+                        Text(interaction.isExpanded ? String(localized: "Collapse") : String(localized: "Expand")).font(Theme.Font.caption)
                             .foregroundStyle(.secondary).lineLimit(1)
                     }.frame(maxWidth: .infinity).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(interaction.isExpanded ? "收起置顶会话" : "展开置顶会话")
-                .accessibilityValue("\(conversations.count - firstCount) 个会话，\(hiddenUnread) 条未读")
+                .accessibilityLabel(interaction.isExpanded ? String(localized: "Collapse pinned chats") : String(localized: "Expand pinned chats"))
+                .accessibilityValue("\(conversations.count - firstCount) chats, \(hiddenUnread) unread")
                 .accessibilityIdentifier("feishu-pins-toggle")
             }
             if interaction.isExpanded { ForEach(conversations.dropFirst(firstCount)) { pin($0) } }
@@ -64,8 +64,8 @@ struct LarkPinnedShelf: View {
             }.frame(maxWidth: .infinity).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "置顶：\(conversation.name)"))
-        .accessibilityValue(conversation.badge > 0 ? "\(conversation.badge) 条未读" : "无未读消息")
+        .accessibilityLabel(String(localized: "Pinned: \(conversation.name)"))
+        .accessibilityValue(conversation.badge > 0 ? String(localized: "\(conversation.badge) unread [Lark Pinned Shelf be6134]") : String(localized: "No unread messages"))
         .accessibilityIdentifier("feishu-pin-" + conversation.id)
     }
 }

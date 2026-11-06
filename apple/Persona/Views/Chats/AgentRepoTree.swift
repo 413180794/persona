@@ -94,9 +94,9 @@ nonisolated struct RepoTree {
     }
 
     /// The name a repository goes by when its agents have no working directory.
-    static let unnamed = String(localized: "其他")
+    static let unnamed = String(localized: "Other")
     /// A working tree's「N 个子项」fold id: its id and this.
-    static let childFoldSuffix = String(localized: "/子项")
+    static let childFoldSuffix = String(localized: "/sub-items")
 
     /// A session's space on its machine, unique across hosts; nil outside a space.
     static func spaceKey(_ s: Session) -> String? {

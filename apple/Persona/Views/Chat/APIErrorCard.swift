@@ -25,11 +25,11 @@ struct APIErrorCard: View {
             out.append(ToolChipGroup.Chip(symbol: Theme.Icon.error, label: "\(s)", isError: true))
         }
         switch info.transient {
-        case true?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.retry, label: String(localized: "临时故障")))
-        case false?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.askFirst, label: String(localized: "要处理")))
+        case true?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.retry, label: String(localized: "Temporary")))
+        case false?: out.append(ToolChipGroup.Chip(symbol: Theme.Icon.askFirst, label: String(localized: "Action Needed")))
         case nil: break
         }
-        if count > 1 { out.append(ToolChipGroup.Chip(symbol: Theme.Icon.recurring, label: String(localized: "连续 \(count) 次"))) }
+        if count > 1 { out.append(ToolChipGroup.Chip(symbol: Theme.Icon.recurring, label: String(localized: "\(count) times in a row"))) }
         return out
     }
 
@@ -42,8 +42,8 @@ struct APIErrorCard: View {
     /// Whether it passes by itself, under the reason.
     private var subtitle: String? {
         switch info.transient {
-        case true?: String(localized: "临时故障，过一会儿多半会好")
-        case false?: String(localized: "要你处理，重试没有用")
+        case true?: String(localized: "Temporary. It will likely clear up soon.")
+        case false?: String(localized: "Needs you. Retrying won't help.")
         case nil: nil
         }
     }
@@ -74,14 +74,14 @@ struct APIErrorCard: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("API 错误：\(info.reason)")
-            .accessibilityValue(open ? "已展开" : "已折叠")
+            .accessibilityLabel("API error: \(info.reason)")
+            .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]"))
 
             if open {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    if let id = info.requestID { field(String(localized: "请求 ID"), id) }
+                    if let id = info.requestID { field(String(localized: "Request ID"), id) }
                     if let s = info.session { field("Session", s) }
-                    if let at { field(String(localized: "时间"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
+                    if let at { field(String(localized: "Time"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
                     // Wrapped, not a sideways-scrolling block: the raw text is usually one long line.
                     Text(info.raw)
                         .font(Theme.Font.code)
@@ -94,7 +94,7 @@ struct APIErrorCard: View {
                     Button {
                         copy(info.raw)
                     } label: {
-                        Label("复制原文", systemImage: Theme.Icon.copy).font(Theme.Font.labelMedium).lineLimit(1)
+                        Label("Copy Raw Text", systemImage: Theme.Icon.copy).font(Theme.Font.labelMedium).lineLimit(1)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Theme.accent)
@@ -108,7 +108,7 @@ struct APIErrorCard: View {
                     Haptics.tap()
                     retry()
                 } label: {
-                    Label("重试", systemImage: Theme.Icon.retry).font(Theme.Font.secondaryStrong).lineLimit(1)
+                    Label("Retry [Components b8784c]", systemImage: Theme.Icon.retry).font(Theme.Font.secondaryStrong).lineLimit(1)
                         .padding(.horizontal, Theme.Space.xs)
                 }
                 .themedButton()
@@ -135,18 +135,18 @@ struct APIErrorCard: View {
                     Haptics.tap()
                     retry()
                 } label: {
-                    BUIPill(String(localized: "重试"), tone: .red, icon: .retry)
+                    BUIPill(String(localized: "Retry [Components b8784c]"), tone: .red, icon: .retry)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("重试")
+                .accessibilityLabel("Retry [Components b8784c]")
             } else {
-                BUIPill(info.transient == false ? String(localized: "要处理") : String(localized: "失败"), tone: info.transient == false ? .orange : .red)
+                BUIPill(info.transient == false ? String(localized: "Action Needed") : String(localized: "Failed"), tone: info.transient == false ? .orange : .red)
             }
         } detail: {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                if let id = info.requestID { field(String(localized: "请求 ID"), id) }
+                if let id = info.requestID { field(String(localized: "Request ID"), id) }
                 if let s = info.session { field("Session", s) }
-                if let at { field(String(localized: "时间"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
+                if let at { field(String(localized: "Time"), at.formatted(.dateTime.month().day().hour().minute().second()), copyable: false) }
                 // Wrapped, not a sideways-scrolling block: the raw text is usually one long line.
                 Text(info.raw)
                     .font(Theme.Font.code)
@@ -159,7 +159,7 @@ struct APIErrorCard: View {
                 Button {
                     copy(info.raw)
                 } label: {
-                    Label("复制原文", systemImage: Theme.Icon.copy).font(Theme.Font.labelMedium).lineLimit(1)
+                    Label("Copy Raw Text", systemImage: Theme.Icon.copy).font(Theme.Font.labelMedium).lineLimit(1)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Theme.accent)
@@ -179,7 +179,7 @@ struct APIErrorCard: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("复制\(name)")
+                .accessibilityLabel("Copy \(name)")
             }
         }
     }
@@ -187,6 +187,6 @@ struct APIErrorCard: View {
     private func copy(_ s: String) {
         UIPasteboard.general.string = s
         Haptics.tap()
-        model.toast = Toast(String(localized: "已复制"))
+        model.toast = Toast(String(localized: "Copied [V N C Pi P Diagnostics 8f6f8d]"))
     }
 }

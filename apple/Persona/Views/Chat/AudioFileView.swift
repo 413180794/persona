@@ -51,7 +51,7 @@ final class AudioFileModel {
         error = nil
         received = 0
         guard let api else {
-            error = String(localized: "尚未连接 hub")
+            error = String(localized: "Not connected to the hub [App Model 93d955]")
             return
         }
         let mine = generation
@@ -68,7 +68,7 @@ final class AudioFileModel {
             guard generation == mine else { return }
             let asset = AVURLAsset(url: fetched)
             guard try await asset.load(.isPlayable) else {
-                throw APIError(status: 0, message: String(localized: "这个音频的格式在这台设备上放不了，可以转成 MP3、AAC（M4A）或 WAV 再试"))
+                throw APIError(status: 0, message: String(localized: "This audio format can't play on this device. Convert it to MP3, AAC (M4A), or WAV and try again."))
             }
             let seconds = try await asset.load(.duration).seconds
             guard generation == mine else { return }
@@ -132,13 +132,13 @@ struct AudioFileView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "音频放不了"), message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Play Audio"), message: error)
             } else if model.player != nil {
                 player
             } else {
                 VStack(spacing: Theme.Space.m) {
                     ProgressView(value: Double(model.received), total: Double(max(model.total, 1)))
-                    Text("正在下载音频…").font(Theme.Font.body)
+                    Text("Downloading audio…").font(Theme.Font.body)
                     Text(ByteCountFormatter.string(fromByteCount: model.received, countStyle: .file) + " / " +
                          ByteCountFormatter.string(fromByteCount: model.total, countStyle: .file))
                         .font(Theme.Font.caption)
@@ -172,7 +172,7 @@ struct AudioFileView: View {
                         scrub = nil
                     }
                 }
-                .accessibilityLabel("播放位置")
+                .accessibilityLabel("Playback position")
                 .accessibilityIdentifier("audio-position")
                 HStack {
                     Text(AudioFileType.clock(scrub ?? model.position))
@@ -185,26 +185,26 @@ struct AudioFileView: View {
             }
             HStack(spacing: Theme.Space.xxl) {
                 Button { model.skip(-15) } label: { Image(systemName: Theme.Icon.skipBack) }
-                    .accessibilityLabel("后退 15 秒")
+                    .accessibilityLabel("Back 15 Seconds")
                 Button { model.toggle() } label: {
                     Image(systemName: model.playing ? Theme.Icon.pause : Theme.Icon.run)
                         .font(Theme.Font.display)
                         .scaledFrame(width: Theme.Size.avatarXL, height: Theme.Size.avatarXL)
                 }
-                .accessibilityLabel(model.playing ? "暂停" : "播放")
+                .accessibilityLabel(model.playing ? String(localized: "Pause") : String(localized: "Play"))
                 .accessibilityIdentifier("audio-play")
                 Button { model.skip(15) } label: { Image(systemName: Theme.Icon.skipForward) }
-                    .accessibilityLabel("前进 15 秒")
+                    .accessibilityLabel("Forward 15 Seconds")
             }
             .font(Theme.Font.title)
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
             Menu {
-                Picker("速度", selection: Binding(get: { model.speed }, set: { model.speed = $0 })) {
+                Picker("Speed", selection: Binding(get: { model.speed }, set: { model.speed = $0 })) {
                     ForEach(AudioFileType.speeds, id: \.self) { s in Text(Self.speedText(s)).tag(s) }
                 }
             } label: {
-                Text("速度 \(Self.speedText(model.speed))").font(Theme.Font.caption).lineLimit(1)
+                Text("Speed \(Self.speedText(model.speed))").font(Theme.Font.caption).lineLimit(1)
             }
             .arrowlessMenu()
             .accessibilityIdentifier("audio-speed")

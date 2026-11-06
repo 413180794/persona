@@ -19,24 +19,24 @@ nonisolated enum ComputerSteps {
         let base = ToolPresentation.baseName(name)
         switch base {
         case "computer_state":
-            if let app = input["app"]?.string, !app.isEmpty { return String(localized: "看 \(app)", comment: "A computer tool step: look at an app's window") }
-            return String(localized: "看整个屏幕")
+            if let app = input["app"]?.string, !app.isEmpty { return String(localized: "Look at \(app)", comment: "A computer tool step: look at an app's window") }
+            return String(localized: "Look at the whole screen")
         case "computer_run":
             if let steps = input["steps"]?.array, !steps.isEmpty {
                 return join(steps.compactMap { step(of: $0, defaultApp: input["app"]?.string) })
             }
             if let script = input["script"]?.string {
                 let first = firstLine(script.trimmingCharacters(in: .whitespacesAndNewlines))
-                return first.isEmpty ? String(localized: "运行脚本") : String(localized: "运行脚本：\(first)")
+                return first.isEmpty ? String(localized: "Run script") : String(localized: "Run script: \(first)")
             }
-            return String(localized: "操控电脑")
+            return String(localized: "Control Computer")
         default:
             // Cua Driver's own tool: its name is the action, its input the target.
             let tool = base.replacingOccurrences(of: "-", with: "_")
             if tool == "run_steps", let steps = input["steps"]?.array {
                 return join(steps.compactMap { step(of: $0, defaultApp: input["app"]?.string) })
             }
-            if tool == "run_script" { return String(localized: "运行脚本") }
+            if tool == "run_script" { return String(localized: "Run script") }
             return action(tool, args: input) ?? tool
         }
     }
@@ -60,43 +60,43 @@ nonisolated enum ComputerSteps {
         for (key, args) in o where !["wait_for", "expect", "args", "tool"].contains(key) {
             return action(key, args: args)
         }
-        return o["expect"] != nil || o["wait_for"] != nil ? String(localized: "检查", comment: "A computer tool step that only checks the screen") : nil
+        return o["expect"] != nil || o["wait_for"] != nil ? String(localized: "Check", comment: "A computer tool step that only checks the screen") : nil
     }
 
     /// A click's verb, kept once for a run of clicks by `join` (Click AC → 6 → ×): the target follows it directly.
-    static var clickVerb: String { String(localized: "点 ", comment: "Click verb prefix, followed by a button name; a run of clicks shows it once: 点 AC → 6 → ×") }
+    static var clickVerb: String { String(localized: "Click ", comment: "Click verb prefix, followed by a button name; a run of clicks shows it once: 点 AC → 6 → ×") }
 
     /// One action: its verb and what it acts on.
     static func action(_ tool: String, args: JSONValue) -> String? {
-        let target = targetName(args) ?? String(localized: "一处", comment: "An unnamed spot on screen that a click acts on")
+        let target = targetName(args) ?? String(localized: "a spot", comment: "An unnamed spot on screen that a click acts on")
         switch tool {
         case "click": return clickVerb + target
-        case "double_click": return String(localized: "双击 \(target)")
-        case "right_click": return String(localized: "右键 \(target)")
+        case "double_click": return String(localized: "Double-click \(target)")
+        case "right_click": return String(localized: "Right-click \(target)")
         case "type_text":
             let text = short(args["text"]?.string ?? "")
-            return String(localized: "输入「\(text)」")
+            return String(localized: "Type “\(text)”")
         case "set_value":
             let value = short(args["value"]?.string ?? "")
-            return String(localized: "填「\(value)」")
+            return String(localized: "Fill in “\(value)”")
         case "press_key":
             let k = key(args["key"]?.string ?? "")
-            return String(localized: "按 \(k)", comment: "A computer tool step: press a key or shortcut")
+            return String(localized: "Press \(k)", comment: "A computer tool step: press a key or shortcut")
         case "hotkey":
             let keys = (args["keys"]?.array?.compactMap(\.string) ?? []).map(key).joined()
-            return String(localized: "按 \(keys)", comment: "A computer tool step: press a key or shortcut")
-        case "scroll": return String(localized: "滚动")
-        case "drag": return String(localized: "拖动")
+            return String(localized: "Press \(keys)", comment: "A computer tool step: press a key or shortcut")
+        case "scroll": return String(localized: "Scroll")
+        case "drag": return String(localized: "Drag")
         case "launch_app":
             let app = args["name"]?.string ?? args["bundle_id"]?.string ?? "App"
-            return String(localized: "打开 \(app)", comment: "A computer tool step: launch an app")
+            return String(localized: "Open \(app) [Git Hub Thread View eb8679]", comment: "A computer tool step: launch an app")
         case "bring_to_front":
-            if let app = args["app"]?.string ?? args["name"]?.string { return String(localized: "切到 \(app)") }
-            return String(localized: "切到前台")
-        case "get_window_state": return String(localized: "看窗口")
-        case "get_desktop_state", "screenshot": return String(localized: "截屏")
-        case "get_accessibility_tree", "list_windows", "list_apps": return String(localized: "看屏幕上有什么")
-        case "zoom": return String(localized: "放大看")
+            if let app = args["app"]?.string ?? args["name"]?.string { return String(localized: "Switch to \(app)") }
+            return String(localized: "Bring to front")
+        case "get_window_state": return String(localized: "Look at the window")
+        case "get_desktop_state", "screenshot": return String(localized: "Take screenshot")
+        case "get_accessibility_tree", "list_windows", "list_apps": return String(localized: "See what's on screen")
+        case "zoom": return String(localized: "Zoom in")
         default: return nil
         }
     }
@@ -122,7 +122,7 @@ nonisolated enum ComputerSteps {
         case "return", "enter": "⏎"
         case "escape", "esc": "esc"
         case "tab": "⇥"
-        case "space": String(localized: "空格", comment: "The space bar key")
+        case "space": String(localized: "Space [Computer Steps bfa4a6]", comment: "The space bar key")
         case "delete", "backspace": "⌫"
         default: k.count == 1 ? k.uppercased() : k
         }

@@ -14,12 +14,12 @@ struct TaskMark: View {
             Image(systemName: Theme.Icon.errorFilled)
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(Theme.danger)
-                .accessibilityLabel("没开起来")
+                .accessibilityLabel("Didn't Start")
         } else if state == .done || state == .unread {
             Image(systemName: Theme.Icon.successFilled)
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(state == .done ? Color.secondary : Theme.positive)
-                .accessibilityLabel(state == .done ? "完成" : "做完了")
+                .accessibilityLabel(state == .done ? String(localized: "Done [Extension System Presentation c0b3fb]") : String(localized: "Done [Task Sheets 825cf0]"))
         } else {
             StatusDot(state: state.agentState, size: size)
         }
@@ -29,13 +29,13 @@ struct TaskMark: View {
 extension TaskState {
     var label: String {
         switch self {
-        case .needsYou: String(localized: "等你")
-        case .working: String(localized: "在做")
-        case .unread: String(localized: "做完了")
-        case .followup: String(localized: "停着")
-        case .notStarted: String(localized: "正在开")
-        case .done: String(localized: "完成")
-        case .failed: String(localized: "没开起来")
+        case .needsYou: String(localized: "Needs You [Task Sheets f98bd9]")
+        case .working: String(localized: "Working [Task Sheets 595753]")
+        case .unread: String(localized: "Done [Task Sheets 825cf0]")
+        case .followup: String(localized: "Stopped [Task Sheets 2cb954]")
+        case .notStarted: String(localized: "Starting [Task Views d14c3a]")
+        case .done: String(localized: "Done [Extension System Presentation c0b3fb]")
+        case .failed: String(localized: "Didn't Start")
         }
     }
 
@@ -51,13 +51,13 @@ struct TaskRemoval: ViewModifier {
     @Binding var pending: TodoItem?
 
     func body(content: Content) -> some View {
-        content.confirmationDialog(pending.map { String(localized: "移除「\($0.title)」？") } ?? "",
+        content.confirmationDialog(pending.map { String(localized: "Remove “\($0.title)”?") } ?? "",
                                    isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                                    titleVisibility: .visible, presenting: pending) { todo in
-            Button("移除", role: .destructive) { Task { await TasksStore.shared.remove(todo) } }
-            Button("取消", role: .cancel) {}
+            Button("Remove [Task Sheets 6135d4]", role: .destructive) { Task { await TasksStore.shared.remove(todo) } }
+            Button("Cancel", role: .cancel) {}
         } message: { _ in
-            Text("任务从这段对话里拿掉；它的 Agent 和对话记录还在 Agents 页。")
+            Text("The task is removed from this chat. Its agent and chat history stay on the Agents tab.")
         }
     }
 }
@@ -82,7 +82,7 @@ struct TaskRemoveMenuItem: View {
     var body: some View {
         if state.isRemovable {
             Button(role: .destructive) { TasksStore.shared.askRemove(todo, pending: pending) } label: {
-                Label("移除任务", systemImage: Theme.Icon.delete)
+                Label("Remove Task", systemImage: Theme.Icon.delete)
             }
         }
     }
@@ -96,10 +96,10 @@ enum TaskClock {
     static func since(_ date: Date?, now: Date = .now) -> String? {
         guard let date, date.isMeaningful else { return nil }
         let m = max(0, Int(now.timeIntervalSince(date) / 60))
-        if m < 1 { return String(localized: "刚开始") }
-        if m < 60 { return String(localized: "\(m) 分钟") }
+        if m < 1 { return String(localized: "Just started") }
+        if m < 60 { return String(localized: "\(m) min [Task Views 135d12]") }
         let h = m / 60
-        return m % 60 == 0 ? String(localized: "\(h) 小时") : String(localized: "\(h) 小时 \(m % 60) 分")
+        return m % 60 == 0 ? String(localized: "\(h) hr") : String(localized: "\(h) hr \(m % 60) min")
     }
 }
 
@@ -137,14 +137,14 @@ struct PlanCard: View {
     var body: some View {
         switch plan.state {
         case .open: open
-        case .started: settled(symbol: Theme.Icon.done, text: String(localized: "开了 \(plan.tasks.count) 个任务"), failed: plan.tasks.filter { $0.error != nil })
-        case .dismissed, .unknown: settled(symbol: Theme.Icon.close, text: String(localized: "没开 · \(plan.tasks.count) 个任务"), failed: [])
+        case .started: settled(symbol: Theme.Icon.done, text: String(localized: "Started \(plan.tasks.count) tasks"), failed: plan.tasks.filter { $0.error != nil })
+        case .dismissed, .unknown: settled(symbol: Theme.Icon.close, text: String(localized: "Not started · \(plan.tasks.count) tasks"), failed: [])
         }
     }
 
     private var open: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Label(plan.tasks.count > 1 ? "拆成 \(plan.tasks.count) 件事，这样开" : "这样开", systemImage: Theme.Icon.taskPlan)
+            Label(plan.tasks.count > 1 ? String(localized: "Split into \(plan.tasks.count) tasks, started like this") : String(localized: "Start like this"), systemImage: Theme.Icon.taskPlan)
                 .font(Theme.Font.captionStrong)
                 .foregroundStyle(.secondary)
             ForEach(Array(plan.tasks.enumerated()), id: \.offset) { n, task in
@@ -154,7 +154,7 @@ struct PlanCard: View {
             Button {
                 withAnimation(Theme.Motion.state) { remember.toggle() }
             } label: {
-                Label("这类以后直接开", systemImage: remember ? Theme.Icon.successFilled : Theme.Icon.unchecked)
+                Label("Start These Directly", systemImage: remember ? Theme.Icon.successFilled : Theme.Icon.unchecked)
                     .font(Theme.Font.caption)
                     .foregroundStyle(remember ? Theme.accent : .secondary)
                     .lineLimit(1)
@@ -165,15 +165,15 @@ struct PlanCard: View {
                 Button {
                     Task { await store.start(plan, remember: remember) }
                 } label: {
-                    Text(plan.tasks.count > 1 ? "开始 \(plan.tasks.count) 个任务" : "开始").lineLimit(1)
+                    Text(plan.tasks.count > 1 ? String(localized: "Start \(plan.tasks.count) Tasks") : String(localized: "Started")).lineLimit(1)
                         .frame(maxWidth: .infinity)
                 }
                 .themedButton(prominent: true)
-                Button { editing = true } label: { Text("改一下").lineLimit(1) }
+                Button { editing = true } label: { Text("Edit [Task Views 928324]").lineLimit(1) }
                     .themedButton()
                 Button {
                     Task { await store.dismiss(plan) }
-                } label: { Text("不开").lineLimit(1) }
+                } label: { Text("Don't Start").lineLimit(1) }
                     .themedButton()
             }
             .disabled(store.busyPlans.contains(plan.id))
@@ -194,7 +194,7 @@ struct PlanCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             ForEach(failed, id: \.title) { t in
-                Label("「\(t.title)」没开起来：\(t.error ?? "")", systemImage: Theme.Icon.error)
+                Label("“\(t.title)” didn't start: \(t.error ?? "")", systemImage: Theme.Icon.error)
                     .font(Theme.Font.caption)
                     .foregroundStyle(Theme.danger)
                     .lineLimit(2)
@@ -225,10 +225,10 @@ struct PlanTaskRow: View {
             FlowLayoutRow(spacing: Theme.Space.xs) {
                 Chip(text: TaskPlace.machineName(task.machine), symbol: Theme.Icon.laptop)
                 Chip(text: task.project, symbol: Theme.Icon.folder)
-                Chip(text: task.model.flatMap { $0.isEmpty ? nil : $0 } ?? task.launcher.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "默认模型"),
+                Chip(text: task.model.flatMap { $0.isEmpty ? nil : $0 } ?? task.launcher.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Default Model"),
                      symbol: Theme.Icon.cpu)
                 if task.isReadOnly {
-                    Chip(text: String(localized: "只读"), symbol: Theme.Icon.view, look: .tint(Theme.accent))
+                    Chip(text: String(localized: "Read-only"), symbol: Theme.Icon.view, look: .tint(Theme.accent))
                 } else if let p = task.permission, !p.isEmpty {
                     Chip(text: Self.permissionLabel(p))
                 }
@@ -241,10 +241,10 @@ struct PlanTaskRow: View {
 
     static func permissionLabel(_ mode: String) -> String {
         switch mode {
-        case "acceptEdits": String(localized: "可以改文件")
-        case "plan": String(localized: "先出方案")
-        case "bypassPermissions": String(localized: "全部放行")
-        default: String(localized: "每步都问")
+        case "acceptEdits": String(localized: "Can edit files")
+        case "plan": String(localized: "Plan first")
+        case "bypassPermissions": String(localized: "Allow Everything")
+        default: String(localized: "Ask every step")
         }
     }
 }
@@ -260,35 +260,35 @@ struct PlanEditSheet: View {
         NavigationStack {
             Form {
                 ForEach(tasks.indices, id: \.self) { i in
-                    Section(tasks.count > 1 ? "任务 \(i + 1)" : "任务") {
-                        TextField("标题", text: $tasks[i].title)
-                        Picker("电脑", selection: $tasks[i].machine) {
+                    Section(tasks.count > 1 ? String(localized: "Task \(i + 1)") : String(localized: "Tasks")) {
+                        TextField(String(localized: "Title"), text: $tasks[i].title)
+                        Picker("Computers", selection: $tasks[i].machine) {
                             ForEach(AppModel.shared.hubMachines, id: \.id) { m in Text(m.name).tag(m.id) }
                             if !AppModel.shared.hubMachines.contains(where: { $0.id == tasks[i].machine }) {
                                 Text(tasks[i].machine).tag(tasks[i].machine)
                             }
                         }
-                        TextField("目录", text: $tasks[i].cwd)
+                        TextField(String(localized: "Folder [Task Views 52daa7]"), text: $tasks[i].cwd)
                             .font(Theme.Font.code)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        TextField("模型（空着用默认）", text: Binding(get: { tasks[i].model ?? "" }, set: { tasks[i].model = $0 }))
+                        TextField(String(localized: "Model (blank for default)"), text: Binding(get: { tasks[i].model ?? "" }, set: { tasks[i].model = $0 }))
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        Picker("权限", selection: Binding(get: { tasks[i].permission ?? "default" }, set: { tasks[i].permission = $0 })) {
+                        Picker("Permissions", selection: Binding(get: { tasks[i].permission ?? "default" }, set: { tasks[i].permission = $0 })) {
                             ForEach(["default", "acceptEdits", "plan", "bypassPermissions"], id: \.self) { Text(PlanTaskRow.permissionLabel($0)).tag($0) }
                         }
                     }
-                    Section("交给 Agent 的话") {
-                        TextField("第一条消息", text: $tasks[i].prompt, axis: .vertical).lineLimit(3...8)
+                    Section("Message for the Agent") {
+                        TextField(String(localized: "First Message"), text: $tasks[i].prompt, axis: .vertical).lineLimit(3...8)
                     }
                 }
             }
-            .navigationTitle("改一下")
+            .navigationTitle("Edit [Task Views 928324]")
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: !tasks.isEmpty && tasks != plan.tasks) { dismiss() }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("开始") { start(tasks) }.bold() }
+                ToolbarItem(placement: .confirmationAction) { Button("Started") { start(tasks) }.bold() }
             }
         }
         #if os(macOS)
@@ -335,7 +335,7 @@ struct TaskCard: View {
                                 Button {
                                     store.askRemove(todo, pending: $removing)
                                 } label: {
-                                    Label("移除", systemImage: Theme.Icon.delete).lineLimit(1)
+                                    Label("Remove [Task Sheets 6135d4]", systemImage: Theme.Icon.delete).lineLimit(1)
                                 }
                                 .font(Theme.Font.captionStrong)
                                 .foregroundStyle(Theme.danger)
@@ -344,7 +344,7 @@ struct TaskCard: View {
                                 Button {
                                     store.routes[conversation] = todo.id
                                 } label: {
-                                    Label("说一句", systemImage: Theme.Icon.routeToTask).lineLimit(1)
+                                    Label("Message [Task Views 7e7db6]", systemImage: Theme.Icon.routeToTask).lineLimit(1)
                                 }
                                 .font(Theme.Font.captionStrong)
                                 .foregroundStyle(Theme.accent)
@@ -384,10 +384,10 @@ struct TaskNowLine: View {
         let now = TaskNow(lead: lead, working: state == .working)
         let text: String = {
             if state == .needsYou { return TaskAsk.waitingLine(store.interactions(todo)) }
-            if state == .failed { return String(localized: "没开起来：\(store.startFailure(todo) ?? String(localized: "原因不明"))") }
+            if state == .failed { return String(localized: "Didn't start: \(store.startFailure(todo) ?? String(localized: "unknown reason")) [Tasks Store 38bbb7]") }
             if let now { return now.text }
-            if let e = todo.agents.first?.startError, !e.isEmpty { return String(localized: "没开起来：\(e)") }
-            return state == .notStarted ? String(localized: "正在开 Agent") : String(localized: "还没有动静")
+            if let e = todo.agents.first?.startError, !e.isEmpty { return String(localized: "Didn't start: \(e) [Tasks Store 38bbb7]") }
+            return state == .notStarted ? String(localized: "Starting the agent") : String(localized: "No activity yet")
         }()
         let tint: Color? = state == .needsYou ? state.agentState.tone.text : state == .failed ? Theme.danger : nil
         let since: Date? = if state != .needsYou, state != .failed, case .step(_, let at)? = now { at } else { nil }
@@ -501,11 +501,11 @@ struct FeedLine: View {
         }
     }
 
-    private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? String(localized: "任务") }
+    private var taskTitle: String { item.ref.flatMap { store.todos[$0]?.title } ?? String(localized: "Tasks") }
 
     private var routed: some View {
         VStack(alignment: .trailing, spacing: Theme.Space.xs) {
-            Label("对「\(taskTitle)」说", systemImage: Theme.Icon.routeToTask)
+            Label("Message “\(taskTitle)”", systemImage: Theme.Icon.routeToTask)
                 .font(Theme.Font.captionMedium)
                 .foregroundStyle(Theme.accent)
                 .lineLimit(1)
@@ -579,7 +579,7 @@ struct AnsweredLine: View {
                 } else {
                     Text(taskTitle).lineLimit(1)
                 }
-                Text("· \(item.answer ?? String(localized: "回答了"))").lineLimit(1)
+                Text("· \(item.answer ?? String(localized: "Answered"))").lineLimit(1)
             }
             if expandable {
                 Image(systemName: Theme.Icon.disclosure)
@@ -597,9 +597,9 @@ struct AnsweredLine: View {
         .onTapGesture { if expandable { toggle() } }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("answered-line")
-        .accessibilityValue(expandable ? (open ? "已展开" : "已收起") : "")
-        .accessibilityAction(named: open ? "收起" : "展开") { if expandable { toggle() } }
-        .accessibilityAction(named: "打开任务") { if let id = item.ref, store.todos[id] != nil { store.detailTask = id } }
+        .accessibilityValue(expandable ? (open ? String(localized: "Expanded") : String(localized: "Collapsed [Assistant Sidebar e64447]")) : "")
+        .accessibilityAction(named: open ? String(localized: "Collapse") : String(localized: "Expand")) { if expandable { toggle() } }
+        .accessibilityAction(named: "Open Task") { if let id = item.ref, store.todos[id] != nil { store.detailTask = id } }
     }
 
     private func toggle() {
@@ -661,12 +661,12 @@ struct MessageCard: View {
                 .buttonStyle(.plain)
             }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Label(settled ? "已以你的名义回复" : "按任务进度起草的回复", systemImage: settled ? Theme.Icon.done : Theme.Icon.draftReply)
+                Label(settled ? String(localized: "Replied as you") : String(localized: "Reply drafted from the task's progress"), systemImage: settled ? Theme.Icon.done : Theme.Icon.draftReply)
                     .font(Theme.Font.captionStrong)
                     .foregroundStyle(settled ? Theme.positive : Theme.accent)
                     .lineLimit(1)
                 if editing {
-                    TextField("回复", text: $text, axis: .vertical)
+                    TextField(String(localized: "Reply"), text: $text, axis: .vertical)
                         .font(Theme.Font.body)
                         .lineLimit(2...8)
                 } else {
@@ -685,14 +685,14 @@ struct MessageCard: View {
                             sending = false
                             editing = false
                         }
-                    } label: { Text("发送").lineLimit(1).frame(maxWidth: .infinity) }
+                    } label: { Text("Send").lineLimit(1).frame(maxWidth: .infinity) }
                         .themedButton(prominent: true)
                     Button {
                         if text.isEmpty { text = item.draft ?? "" }
                         withAnimation(Theme.Motion.state) { editing.toggle() }
-                    } label: { Text(editing ? "改好了" : "改一下").lineLimit(1) }
+                    } label: { Text(editing ? String(localized: "Done [Task Views 9b8ee8]") : String(localized: "Edit [Task Views 928324]")).lineLimit(1) }
                         .themedButton()
-                    Button { withAnimation(Theme.Motion.state) { store.later(itemID) } } label: { Text("稍后").lineLimit(1) }
+                    Button { withAnimation(Theme.Motion.state) { store.later(itemID) } } label: { Text("Later [Task Views 9d2ca2]").lineLimit(1) }
                         .themedButton()
                 }
                 .disabled(sending)
@@ -716,7 +716,7 @@ struct ReceiptCard: View {
                 .font(Theme.Font.heading)
                 .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(item.failed ? "\(item.title ?? String(localized: "任务"))没开起来" : "\(item.title ?? String(localized: "任务")) 完成")
+                Text(item.failed ? String(localized: "\(item.title ?? String(localized: "Tasks")) didn't start") : String(localized: "\(item.title ?? String(localized: "Tasks")) is done [Task Views cd37f3]"))
                     .font(Theme.Font.bodyStrong)
                 if let s = item.summary, !s.isEmpty {
                     Text(s).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(4)
@@ -727,7 +727,7 @@ struct ReceiptCard: View {
                             .themedButton()
                     }
                     if let id = item.ref, store.todos[id] != nil, !item.failed {
-                        Button { store.detailTask = id } label: { Text("看看").lineLimit(1) }
+                        Button { store.detailTask = id } label: { Text("View [Task Views d87059]").lineLimit(1) }
                             .themedButton()
                     }
                 }
@@ -758,7 +758,7 @@ struct TaskQuestions: View {
                 HStack(spacing: Theme.Space.s) {
                     Label(first.todo.title, systemImage: Theme.Icon.askFirst).lineLimit(1)
                     Spacer(minLength: Theme.Space.s)
-                    if asks.count > 1 { Text("还有 \(asks.count - 1) 件").lineLimit(1).fixedSize() }
+                    if asks.count > 1 { Text("\(asks.count - 1) more").lineLimit(1).fixedSize() }
                 }
                 .font(Theme.Font.captionStrong)
                 .foregroundStyle(AgentState.needsYou.tone.text)
@@ -823,7 +823,7 @@ struct TaskDock: View {
         Button {
             store.showBoard = true
         } label: {
-            Text("全部 \(count)")
+            Text("All \(count) [Task Views b479ca]")
                 .font(Theme.Font.captionMedium)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -865,7 +865,7 @@ struct TaskDock: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Agent \(agent.title)，\(agent.isWaiting ? String(localized: "等你") : String(localized: "在做"))")
+        .accessibilityLabel("Agent \(agent.title), \(agent.isWaiting ? String(localized: "Needs You [Task Sheets f98bd9]") : String(localized: "Working [Task Sheets 595753]"))")
         .accessibilityIdentifier("task-dock.agent")
         .transition(.scale.combined(with: .opacity))
     }
@@ -884,7 +884,7 @@ struct DockPillLabel<Marks: View>: View {
         HStack(spacing: Theme.Space.sm) {
             marks
             Text(title).lineLimit(1)
-            if waiting { Text("等你").lineLimit(1).fixedSize() } // the title gives way, the ask does not
+            if waiting { Text("Needs You [Task Sheets f98bd9]").lineLimit(1).fixedSize() } // the title gives way, the ask does not
         }
         .font(Theme.Font.captionStrong)
         .foregroundStyle(waiting ? state.tone.text : .primary)
@@ -905,7 +905,7 @@ struct RouteChip: View {
     var body: some View {
         if let id = store.routes[conversation], let todo = store.todos[id] {
             HStack(spacing: Theme.Space.xs) {
-                Label("对「\(todo.title)」说", systemImage: Theme.Icon.routeToTask).lineLimit(1)
+                Label("Message “\(todo.title)”", systemImage: Theme.Icon.routeToTask).lineLimit(1)
                 Button {
                     withAnimation(Theme.Motion.state) { store.routes[conversation] = nil }
                 } label: {
@@ -914,7 +914,7 @@ struct RouteChip: View {
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("交给 Persona")
+                .accessibilityLabel("Hand to Persona")
             }
             .font(Theme.Font.captionStrong)
             .foregroundStyle(Theme.accent)
@@ -937,7 +937,7 @@ struct TaskMentionList: View {
     var body: some View {
         let tasks = store.tasks(of: conversation).filter { store.state($0) != .done && store.state($0) != .failed }
         VStack(alignment: .leading, spacing: 0) {
-            Text(tasks.isEmpty ? "这段对话还没有任务" : "对一个任务说")
+            Text(tasks.isEmpty ? String(localized: "No tasks in this chat yet") : String(localized: "Message a Task"))
                 .font(Theme.Font.sectionHeader)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.m)

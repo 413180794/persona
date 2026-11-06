@@ -5,10 +5,10 @@ import SwiftUI
 extension InteractionKind {
     var title: String {
         switch self {
-        case .question: String(localized: "Claude 在问你")
-        case .plan: String(localized: "计划等你审批")
-        case .permission: String(localized: "需要你授权")
-        case .screen: String(localized: "终端等你处理")
+        case .question: String(localized: "Claude Has a Question")
+        case .plan: String(localized: "Plan Awaiting Approval")
+        case .permission: String(localized: "Needs Your Permission")
+        case .screen: String(localized: "Terminal Needs You")
         }
     }
 
@@ -26,11 +26,11 @@ extension Interaction {
     /// The assistant asks through its ask_user tool: it is Persona asking, not a Claude Code agent; a Codex card names
     /// Codex.
     var title: String {
-        if toolName == "ask_user" { return String(localized: "Persona 在问你") }
+        if toolName == "ask_user" { return String(localized: "Persona Has a Question") }
         if let name = agentName {
             switch kind {
-            case .question: return String(localized: "\(name) 在问你")
-            case .permission: return String(localized: "\(name) 需要你授权")
+            case .question: return String(localized: "\(name) Has a Question")
+            case .permission: return String(localized: "\(name) Needs Your Permission")
             default: break
             }
         }
@@ -131,7 +131,7 @@ struct InteractionPreviewCard: View {
     /// A terminal dialog that reads as a question is titled like one (as in the chat's panel).
     private var title: String {
         if interaction.kind == .screen, interaction.screenDialog != nil {
-            return String(localized: "\(agentLabel) 在问你")
+            return String(localized: "\(agentLabel) Has a Question")
         }
         return interaction.title
     }
@@ -156,13 +156,13 @@ struct InteractionPreviewCard: View {
             }
         case .permission:
             if interaction.requiresInput {
-                Button { open() } label: { Text("打开填写").lineLimit(1) }
+                Button { open() } label: { Text("Open to Fill In").lineLimit(1) }
                     .themedButton(prominent: true)
             } else {
                 HStack {
-                    Button(interaction.agentName == nil ? "允许" : "同意") { Task { await model.resolve(interaction, Resolution(allow: true)) } }
+                    Button(interaction.agentName == nil ? String(localized: "Allow [Notification Actions ce7ef2]") : String(localized: "Approve [Interaction Views 905819]")) { Task { await model.resolve(interaction, Resolution(allow: true)) } }
                         .themedButton(prominent: true)
-                    Button("拒绝") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
+                    Button("Deny") { Task { await model.resolve(interaction, Resolution(allow: false)) } }
                         .themedButton()
                 }
                 .controlSize(.small)
@@ -205,7 +205,7 @@ struct FlowButtons: View {
                     }
                     .themedButton()
                     .controlSize(.small)
-                    .accessibilityLabel(text + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : ""))
+                    .accessibilityLabel(text + (recommended ? String(localized: ", recommended", comment: "Accessibility suffix: the recommended option") : ""))
                 }
             }
         }
@@ -217,7 +217,7 @@ struct FlowButtons: View {
 /// terminal dialog and the quick answers on the Agents card draw the same tag, in the AI's color (it is Claude's
 /// suggestion; the accent would read as something to tap).
 struct RecommendedTag: View {
-    var body: some View { Chip(text: String(localized: "推荐"), look: .tint(Theme.ai)) }
+    var body: some View { Chip(text: String(localized: "Recommended"), look: .tint(Theme.ai)) }
 }
 
 /// Full interaction UI pinned above the composer in a chat. Capped in height (scrolls inside) and collapsible,
@@ -293,11 +293,11 @@ struct InteractionPanel: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("全屏查看计划")
+                .accessibilityLabel("View plan full screen")
             }
             Menu {
                 Button { Task { await model.resolve(interaction, .dismissed) } } label: {
-                    Label("交给电脑上的终端处理", systemImage: Theme.Icon.machine)
+                    Label("Handle in Terminal on Computer", systemImage: Theme.Icon.machine)
                 }
             } label: {
                 Image(systemName: Theme.Icon.more)
@@ -308,7 +308,7 @@ struct InteractionPanel: View {
             }
             .labelOnlyMenu() // just the ⋯, next to the fold ⌄
             #if os(macOS)
-            .help("更多")
+            .help("More")
             #endif
             Image(systemName: Theme.Icon.expand)
                 .font(Theme.Font.captionStrong)
@@ -344,7 +344,7 @@ struct InteractionPanel: View {
     private var panelTitle: String {
         if interaction.kind == .screen, interaction.screenDialog != nil {
             let name = model.session(interaction.sessionKey)?.agentLabel ?? "Claude"
-            return String(localized: "\(name) 在问你")
+            return String(localized: "\(name) Has a Question")
         }
         return interaction.title
     }
@@ -376,7 +376,7 @@ struct QuestionForm: View {
                 if questions.count > 1 || q.header != nil || q.multiSelect {
                     Text([q.header.flatMap { $0.isEmpty ? nil : $0 },
                           questions.count > 1 ? "\(page + 1)/\(questions.count)" : nil,
-                          q.multiSelect ? String(localized: "可多选") : nil].compactMap { $0 }.joined(separator: " · "))
+                          q.multiSelect ? String(localized: "Select multiple") : nil].compactMap { $0 }.joined(separator: " · "))
                         .monospacedDigit()
                     .font(Theme.Font.labelStrong)
                     .foregroundStyle(.secondary)
@@ -440,7 +440,7 @@ struct QuestionForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending)
-        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : "") + (selected ? String(localized: "，已选", comment: "Accessibility suffix: a selected option") : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: ", recommended", comment: "Accessibility suffix: the recommended option") : "") + (selected ? String(localized: ", selected", comment: "Accessibility suffix: a selected option") : ""))
     }
 
     /// "Other": a quiet row; tapping it turns it into a field with its own send arrow.
@@ -453,7 +453,7 @@ struct QuestionForm: View {
                 .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Theme.Fill.chip, in: .circle)
             if writing {
-                TextField("写下你的回答", text: text, axis: .vertical)
+                TextField(String(localized: "Write your answer"), text: text, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($otherFocused)
                     .onChange(of: text.wrappedValue) { _, v in
@@ -464,10 +464,10 @@ struct QuestionForm: View {
                         Image(systemName: Theme.Icon.submit).font(Theme.Font.title).foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("发送回答")
+                    .accessibilityLabel("Send answer")
                 }
             } else {
-                Text("其他回答…").foregroundStyle(.secondary)
+                Text("Other answer…").foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
         }
@@ -488,14 +488,14 @@ struct QuestionForm: View {
     private var footer: some View {
         HStack(spacing: Theme.Space.m) {
             if page > 0 {
-                Button { withAnimation(Theme.Motion.standard) { page -= 1 } } label: { Text("上一题").lineLimit(1) }
+                Button { withAnimation(Theme.Motion.standard) { page -= 1 } } label: { Text("Previous [Interaction Views 39b1c2]").lineLimit(1) }
                     .themedButton()
             }
             Spacer(minLength: 0)
             Button { advance() } label: {
                 HStack(spacing: Theme.Space.sm) {
                     if sending { ProgressView().controlSize(.small).tint(.white) }
-                    Text(isLast ? "提交" : "下一题").lineLimit(1)
+                    Text(isLast ? String(localized: "Submit") : String(localized: "Next [Interaction Views f82c68]")).lineLimit(1)
                 }
                 .padding(.horizontal, Theme.Space.s)
             }
@@ -583,30 +583,30 @@ struct PlanForm: View {
             .scaledFrame(maxHeight: Theme.Size.box200)
             .scrollBounceBehavior(.basedOnSize)
             if rejecting {
-                TextField("告诉 Claude 要怎么改…", text: $feedback, axis: .vertical)
+                TextField(String(localized: "Tell Claude what to change…"), text: $feedback, axis: .vertical)
                     .lineLimit(2...6)
                     .padding(Theme.Space.m)
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 HStack {
-                    Button("取消") { withAnimation { rejecting = false } }.themedButton()
+                    Button("Cancel") { withAnimation { rejecting = false } }.themedButton()
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: false, feedback: feedback)) }
-                    } label: { Text("打回修改").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
+                    } label: { Text("Send Back [Notification Actions cd3150]").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                         .themedButton(prominent: true)
                 }
             } else {
                 Button {
                     Task { await model.resolve(interaction, Resolution(approve: true, mode: "bypassPermissions")) }
                 } label: {
-                    Label("批准并自动执行", systemImage: Theme.Icon.run).lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Label("Approve & Auto-Run", systemImage: Theme.Icon.run).lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton(prominent: true)
                 .controlSize(.large)
                 HStack {
                     Button {
                         Task { await model.resolve(interaction, Resolution(approve: true, mode: "acceptEdits")) }
-                    } label: { Text("自动接受编辑").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
-                    Button { withAnimation { rejecting = true } } label: { Text("打回").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
+                    } label: { Text("Auto-Accept Edits").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
+                    Button { withAnimation { rejecting = true } } label: { Text("Send Back [Notification Actions a20f13]").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity) }
                 }
                 .themedButton()
             }
@@ -618,7 +618,7 @@ struct PlanForm: View {
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showFull = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { showFull = false } } }
             }
         }
     }
@@ -637,7 +637,7 @@ struct PermissionForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.toolName ?? String(localized: "工具")).font(Theme.Font.secondaryStrong)
+                Text(interaction.toolName ?? String(localized: "Tool")).font(Theme.Font.secondaryStrong)
             }
             Text(interaction.summary ?? interaction.toolInput?.pretty ?? "")
                 .font(Theme.Font.code)
@@ -647,17 +647,17 @@ struct PermissionForm: View {
                 .textSelection(.enabled)
             HStack {
                 Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
-                    Text("拒绝").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Text("Deny").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton()
                 Button { Task { await model.resolve(interaction, Resolution(allow: true)) } } label: {
-                    Text("允许").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Text("Allow [Notification Actions ce7ef2]").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton(prominent: true)
             }
             .controlSize(.large)
             if interaction.sessionID != "" {
-                Button("本会话总是允许") {
+                Button("Always Allow in Session") {
                     Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
                 }
                 #if os(macOS)
@@ -692,7 +692,7 @@ struct AgentPermissionForm: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: ToolPresentation.symbol(interaction.toolName ?? "")).foregroundStyle(Theme.accent)
-                Text(interaction.toolName ?? String(localized: "工具")).font(Theme.Font.secondaryStrong)
+                Text(interaction.toolName ?? String(localized: "Tool")).font(Theme.Font.secondaryStrong)
             }
             if let reason = interaction.reason, !reason.isEmpty {
                 Text(reason)
@@ -708,11 +708,11 @@ struct AgentPermissionForm: View {
                 .textSelection(.enabled)
             HStack {
                 Button { Task { await model.resolve(interaction, Resolution(allow: false)) } } label: {
-                    Text("拒绝").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Text("Deny").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton()
                 Button { Task { await model.resolve(interaction, Resolution(allow: true)) } } label: {
-                    Text("同意").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
+                    Text("Approve [Interaction Views 905819]").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity)
                 }
                 .themedButton(prominent: true)
             }
@@ -721,7 +721,7 @@ struct AgentPermissionForm: View {
                 Button {
                     Task { await model.resolve(interaction, Resolution(allow: true, always: true)) }
                 } label: {
-                    Text("总是同意 · \(always)").lineLimit(1).minimumScaleFactor(0.8)
+                    Text("Always Approve · \(always)").lineLimit(1).minimumScaleFactor(0.8)
                 }
                 #if os(macOS)
                 .buttonStyle(.link)
@@ -738,7 +738,7 @@ struct AgentPermissionForm: View {
     @ViewBuilder private var reasonRow: some View {
         if explaining {
             HStack(alignment: .center, spacing: Theme.Space.m) {
-                TextField("告诉 \(name) 该怎么做", text: $why, axis: .vertical)
+                TextField(String(localized: "Tell \(name) what to do instead"), text: $why, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($whyFocused)
                     .accessibilityIdentifier("codex-deny-reason")
@@ -754,7 +754,7 @@ struct AgentPermissionForm: View {
                             .background(Theme.accent, in: .circle)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("拒绝并发送理由")
+                    .accessibilityLabel("Deny and send reason")
                 }
             }
             .padding(.horizontal, Theme.Space.l)
@@ -765,7 +765,7 @@ struct AgentPermissionForm: View {
                 withAnimation(Theme.Motion.standard) { explaining = true }
                 whyFocused = true
             } label: {
-                Text("拒绝并说明理由…").lineLimit(1)
+                Text("Deny and Explain…").lineLimit(1)
             }
             #if os(macOS)
             .buttonStyle(.link)
@@ -828,7 +828,7 @@ struct ScreenForm: View {
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             }
             if d.review && d.incomplete {
-                Label("还有题没回答", systemImage: Theme.Icon.error)
+                Label("Some questions are unanswered", systemImage: Theme.Icon.error)
                     .font(Theme.Font.captionMedium)
                     .foregroundStyle(Theme.caution)
             }
@@ -849,13 +849,13 @@ struct ScreenForm: View {
             HStack(spacing: Theme.Space.l) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
                     Button { send(chat.key, answer(chat)) } label: {
-                        Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
+                        Label("Reply in Chat Instead", systemImage: "bubble.left").lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
                 // The whole live terminal of that session, the one Terminal opens in its chat (#563): its keys, its scrolling.
                 Button { Haptics.tap(); showTerminal = true } label: {
-                    Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
+                    Label("View Terminal", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
                 .accessibilityIdentifier("screen-card-terminal")
             }
@@ -897,12 +897,12 @@ struct ScreenForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending != nil)
-        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: ", recommended", comment: "Accessibility suffix: the recommended option") : ""))
     }
 
     /// The header, and Select multiple for a multi-select question.
     nonisolated static func eyebrow(_ d: ScreenParser.Dialog) -> String? {
-        let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? String(localized: "可多选") : nil].compactMap { $0 }
+        let parts = [d.steps.isEmpty ? d.header.flatMap { $0.isEmpty ? nil : $0 } : nil, d.multi ? String(localized: "Select multiple") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -955,7 +955,7 @@ struct ScreenForm: View {
         }
         .buttonStyle(.plain)
         .disabled(sending != nil)
-        .accessibilityLabel(label + (recommended ? String(localized: "，推荐", comment: "Accessibility suffix: the recommended option") : "") + (on ? String(localized: "，已选", comment: "Accessibility suffix: a selected option") : ""))
+        .accessibilityLabel(label + (recommended ? String(localized: ", recommended", comment: "Accessibility suffix: the recommended option") : "") + (on ? String(localized: ", selected", comment: "Accessibility suffix: a selected option") : ""))
     }
 
     /// The free-text field of a multi-select question: sent with the ticks, checked when it holds something.
@@ -966,7 +966,7 @@ struct ScreenForm: View {
                 .foregroundStyle(.secondary)
                 .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Theme.Fill.chip, in: .circle)
-            TextField("其他回答（可不填）", text: Binding(get: { freeText ?? opt.text ?? "" }, set: { freeText = $0 }), axis: .vertical)
+            TextField(String(localized: "Other answer (optional)"), text: Binding(get: { freeText ?? opt.text ?? "" }, set: { freeText = $0 }), axis: .vertical)
                 .lineLimit(1...4)
                 .focused($focused)
                 .disabled(sending != nil)
@@ -987,7 +987,7 @@ struct ScreenForm: View {
             } label: {
                 HStack(spacing: Theme.Space.sm) {
                     if sending == "multi" { ProgressView().controlSize(.small).tint(.white) }
-                    Text(d.submit == "Next" ? "下一题" : "提交").lineLimit(1)
+                    Text(d.submit == "Next" ? String(localized: "Next [Interaction Views f82c68]") : String(localized: "Submit")).lineLimit(1)
                 }
                 .padding(.horizontal, Theme.Space.s)
             }
@@ -1006,7 +1006,7 @@ struct ScreenForm: View {
                 .scaledFrame(width: Theme.Size.icon, height: Theme.Size.icon)
                 .background(Theme.Fill.chip, in: .circle)
             if writing {
-                TextField("写下你的回答", text: $text, axis: .vertical)
+                TextField(String(localized: "Write your answer"), text: $text, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($focused)
                     .submitLabel(.send)
@@ -1021,10 +1021,10 @@ struct ScreenForm: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(sending != nil)
-                    .accessibilityLabel("发送回答")
+                    .accessibilityLabel("Send answer")
                 }
             } else {
-                Text("其他回答…").foregroundStyle(.secondary)
+                Text("Other answer…").foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
         }
@@ -1047,9 +1047,9 @@ struct ScreenForm: View {
             Group {
                 if interaction.secret == true {
                     // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
-                    SecretField(String(localized: "输入密码（不会保存）"), filled: String(localized: "已填写，点发送"), text: $text, identifier: "terminal.secret")
+                    SecretField(String(localized: "Enter password (not saved)"), filled: String(localized: "Filled in, tap Send"), text: $text, identifier: "terminal.secret")
                 } else {
-                    TextField("输入文字发送到终端", text: $text)
+                    TextField(String(localized: "Type text to send to the terminal"), text: $text)
                 }
             }
             .textFieldStyle(.plain)
@@ -1110,7 +1110,7 @@ struct ScreenSteps: View {
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("共 \(steps.count) 个问题，已答 \(steps.filter(\.done).count) 个")
+        .accessibilityLabel("\(steps.count) questions, \(steps.filter(\.done).count) answered")
     }
 }
 
@@ -1248,8 +1248,8 @@ struct BUIQuestionForm: View {
     private var questions: [Question] { interaction.questions ?? [] }
 
     var body: some View {
-        ApprovalCard(questions: questions.map(Self.card), skipLabel: nil, continueLabel: String(localized: "下一题"), sendLabel: String(localized: "提交"),
-                     customPlaceholder: String(localized: "其他回答…"), sentMessage: String(localized: "已发送"), options: .panel()) { answers in
+        ApprovalCard(questions: questions.map(Self.card), skipLabel: nil, continueLabel: String(localized: "Next [Interaction Views f82c68]"), sendLabel: String(localized: "Submit"),
+                     customPlaceholder: String(localized: "Other answer…"), sentMessage: String(localized: "Sent"), options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Resolution(answers: Self.answers(answers, questions))) }
         }
@@ -1260,7 +1260,7 @@ struct BUIQuestionForm: View {
             id: q.question, q.question, kind: q.multiSelect ? .multiple : .single,
             choices: q.options.map { o in
                 let (label, recommended) = display(o.label)
-                return ApprovalQuestion.Choice(label, detail: o.description, tag: recommended ? String(localized: "推荐") : nil)
+                return ApprovalQuestion.Choice(label, detail: o.description, tag: recommended ? String(localized: "Recommended") : nil)
             },
             eyebrow: eyebrow(q)
         )
@@ -1268,7 +1268,7 @@ struct BUIQuestionForm: View {
 
     /// "header · Select multiple" above the question, when there is either.
     private static func eyebrow(_ q: Question) -> String? {
-        let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? String(localized: "可多选") : nil].compactMap { $0 }
+        let parts = [q.header.flatMap { $0.isEmpty ? nil : $0 }, q.multiSelect ? String(localized: "Select multiple") : nil].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -1299,14 +1299,14 @@ struct BUIPlanForm: View {
     @Binding var showFull: Bool
 
     private static let choices = [
-        ApprovalQuestion.Choice(String(localized: "批准并自动执行"), detail: String(localized: "之后不再逐个确认")),
-        ApprovalQuestion.Choice(String(localized: "批准，自动接受编辑"), detail: String(localized: "改文件不问，其他操作照常确认")),
+        ApprovalQuestion.Choice(String(localized: "Approve & Auto-Run"), detail: String(localized: "No more confirmations after this")),
+        ApprovalQuestion.Choice(String(localized: "Approve, Auto-Accept Edits"), detail: String(localized: "File edits go through; other actions still ask")),
     ]
 
     var body: some View {
-        ApprovalCard(questions: [ApprovalQuestion(String(localized: "按这个计划做吗？"), choices: Self.choices,
-                                                  customPlaceholder: String(localized: "打回并说明要怎么改…"))],
-                     skipLabel: nil, sendLabel: String(localized: "发送"), sentMessage: String(localized: "已发送"),
+        ApprovalCard(questions: [ApprovalQuestion(String(localized: "Go ahead with this plan?"), choices: Self.choices,
+                                                  customPlaceholder: String(localized: "Send back with what to change…"))],
+                     skipLabel: nil, sendLabel: String(localized: "Send"), sentMessage: String(localized: "Sent"),
                      options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Self.resolution(answers)) }
@@ -1326,7 +1326,7 @@ struct BUIPlanForm: View {
                 }
                 .navigationTitle(PlanText.title(interaction.plan ?? ""))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showFull = false } } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { showFull = false } } }
             }
         }
     }
@@ -1352,24 +1352,24 @@ struct BUIPermissionForm: View {
 
     private var choices: [ApprovalQuestion.Choice] {
         if interaction.agentName != nil {
-            var c = [ApprovalQuestion.Choice(String(localized: "同意"))]
-            if let always = interaction.alwaysLabel, !always.isEmpty { c.append(ApprovalQuestion.Choice(String(localized: "总是同意"), detail: always)) }
-            c.append(ApprovalQuestion.Choice(String(localized: "拒绝")))
+            var c = [ApprovalQuestion.Choice(String(localized: "Approve [Interaction Views 905819]"))]
+            if let always = interaction.alwaysLabel, !always.isEmpty { c.append(ApprovalQuestion.Choice(String(localized: "Always Approve"), detail: always)) }
+            c.append(ApprovalQuestion.Choice(String(localized: "Deny")))
             return c
         }
-        var c = [ApprovalQuestion.Choice(String(localized: "允许"))]
-        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice(String(localized: "本会话总是允许"), detail: String(localized: "这个会话里同样的操作不再问"))) }
-        c.append(ApprovalQuestion.Choice(String(localized: "拒绝")))
+        var c = [ApprovalQuestion.Choice(String(localized: "Allow [Notification Actions ce7ef2]"))]
+        if interaction.sessionID != "" { c.append(ApprovalQuestion.Choice(String(localized: "Always Allow in Session"), detail: String(localized: "Won't ask again for the same action in this session"))) }
+        c.append(ApprovalQuestion.Choice(String(localized: "Deny")))
         return c
     }
 
     var body: some View {
         let choices = choices
-        let tool = interaction.toolName ?? String(localized: "这个工具")
-        let ask = interaction.agentName == nil ? String(localized: "允许 \(tool) 吗？") : String(localized: "同意 \(tool) 吗？")
+        let tool = interaction.toolName ?? String(localized: "this tool")
+        let ask = interaction.agentName == nil ? String(localized: "Allow \(tool)?") : String(localized: "Approve \(tool)?")
         ApprovalCard(questions: [ApprovalQuestion(ask, choices: choices,
-                                                  customPlaceholder: String(localized: "拒绝并说明原因…"))],
-                     skipLabel: nil, sendLabel: String(localized: "发送"), sentMessage: String(localized: "已发送"),
+                                                  customPlaceholder: String(localized: "Deny and explain why…"))],
+                     skipLabel: nil, sendLabel: String(localized: "Send"), sentMessage: String(localized: "Sent"),
                      options: .panel()) { answers in
             Haptics.tap()
             Task { await model.resolve(interaction, Self.resolution(answers, choices: choices)) }
@@ -1405,8 +1405,8 @@ struct BUIPermissionForm: View {
         if !reason.isEmpty { return Resolution(allow: false, message: reason) }
         // The labels are localized: compare with the same localized words the choices were built from.
         switch a.picks[0]?.first.map({ choices[$0].label }) {
-        case String(localized: "允许"), String(localized: "同意"): return Resolution(allow: true)
-        case String(localized: "本会话总是允许"), String(localized: "总是同意"): return Resolution(allow: true, always: true)
+        case String(localized: "Allow [Notification Actions ce7ef2]"), String(localized: "Approve [Interaction Views 905819]"): return Resolution(allow: true)
+        case String(localized: "Always Allow in Session"), String(localized: "Always Approve"): return Resolution(allow: true, always: true)
         default: return Resolution(allow: false)
         }
     }
@@ -1457,12 +1457,12 @@ struct BUIScreenForm: View {
                     d.question.isEmpty ? (d.header ?? "") : d.question, kind: d.multi ? .multiple : .single,
                     choices: choices.map { o in
                         let (label, recommended) = QuestionForm.display(o.label)
-                        return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? String(localized: "推荐") : nil)
+                        return ApprovalQuestion.Choice(label, detail: o.detail, tag: recommended ? String(localized: "Recommended") : nil)
                     },
                     eyebrow: d.question.isEmpty ? nil : ScreenForm.eyebrow(d),
-                    allowsCustom: typing != nil, customPlaceholder: String(localized: "其他回答…"))],
+                    allowsCustom: typing != nil, customPlaceholder: String(localized: "Other answer…"))],
                 answers: shown,
-                skipLabel: nil, sendLabel: d.multi ? (d.submit == "Next" ? String(localized: "下一题") : String(localized: "提交")) : String(localized: "发送"), sentMessage: String(localized: "已发送"),
+                skipLabel: nil, sendLabel: d.multi ? (d.submit == "Next" ? String(localized: "Next [Interaction Views f82c68]") : String(localized: "Submit")) : String(localized: "Send"), sentMessage: String(localized: "Sent"),
                 options: .panel(sending: sending != nil)
             ) { answers in
                 let text = (answers.custom[0] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1478,7 +1478,7 @@ struct BUIScreenForm: View {
                 }
             } context: { _ in
                 if d.review && d.incomplete {
-                    Label("还有题没回答", systemImage: Theme.Icon.error)
+                    Label("Some questions are unanswered", systemImage: Theme.Icon.error)
                         .font(Theme.Font.captionMedium)
                         .foregroundStyle(Theme.caution)
                 }
@@ -1494,13 +1494,13 @@ struct BUIScreenForm: View {
             HStack(spacing: Theme.Space.l) {
                 if let chat = d.options.first(where: { $0.kind == .chat }) {
                     Button { send(chat.key, answer(chat)) } label: {
-                        Label("改在对话里说", systemImage: "bubble.left").lineLimit(1)
+                        Label("Reply in Chat Instead", systemImage: "bubble.left").lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
                 // The whole live terminal of that session, the one Terminal opens in its chat (#563): its keys, its scrolling.
                 Button { Haptics.tap(); showTerminal = true } label: {
-                    Label("查看终端", systemImage: Theme.Icon.terminal).lineLimit(1)
+                    Label("View Terminal", systemImage: Theme.Icon.terminal).lineLimit(1)
                 }
                 .accessibilityIdentifier("screen-card-terminal")
             }
@@ -1519,9 +1519,9 @@ struct BUIScreenForm: View {
             Group {
                 if interaction.secret == true {
                     // A password the terminal asks for (sudo, ssh): typed once, never offered to the system's passwords.
-                    SecretField(String(localized: "输入密码（不会保存）"), filled: String(localized: "已填写，点发送"), text: $text, identifier: "terminal.secret")
+                    SecretField(String(localized: "Enter password (not saved)"), filled: String(localized: "Filled in, tap Send"), text: $text, identifier: "terminal.secret")
                 } else {
-                    TextField("输入文字发送到终端", text: $text)
+                    TextField(String(localized: "Type text to send to the terminal"), text: $text)
                 }
             }
             .textFieldStyle(.plain)
@@ -1571,7 +1571,7 @@ struct BUIScreenSteps: View {
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("共 \(steps.count) 个问题，已答 \(steps.filter(\.done).count) 个")
+        .accessibilityLabel("\(steps.count) questions, \(steps.filter(\.done).count) answered")
     }
 }
 
@@ -1591,7 +1591,7 @@ struct SessionlessCardSheet: View {
                     .padding(.vertical, Theme.Space.l)
             }
             .themedPage()
-            .navigationTitle(interaction.sessionlessPlace ?? String(localized: "脚本"))
+            .navigationTitle(interaction.sessionlessPlace ?? String(localized: "Script"))
             #if os(iOS) || os(visionOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -1600,7 +1600,7 @@ struct SessionlessCardSheet: View {
             #else
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.lineLimit(1)
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1)
                 }
             }
             #endif
@@ -1619,7 +1619,7 @@ extension Interaction {
     /// The line under a card's title in a list: its session's title; a sessionless card says where it comes from, and
     /// Script when its title does not already name who asks (`personad ask` labels its cards Script, docs/script-cli.md).
     func placeLine(machine: String?) -> String {
-        let mark = (agentLabelHint ?? "").isEmpty ? String(localized: "脚本") : nil
+        let mark = (agentLabelHint ?? "").isEmpty ? String(localized: "Script") : nil
         let parts: [String?] = isSessionless ? [mark, sessionlessPlace, machine] : [sessionTitle, machine]
         return parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }

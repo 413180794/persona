@@ -75,16 +75,16 @@ nonisolated enum PairReceiptActions {
         let receipt = UNNotificationCategory(
             identifier: receiptCategory,
             actions: [
-                UNNotificationAction(identifier: revoke, title: String(localized: "不是你？撤销"), options: [.destructive, .authenticationRequired],
+                UNNotificationAction(identifier: revoke, title: String(localized: "Not you? Revoke"), options: [.destructive, .authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: Theme.Icon.close)),
             ],
             intentIdentifiers: [], options: [])
         let joining = UNNotificationCategory(
             identifier: joiningCategory,
             actions: [
-                UNNotificationAction(identifier: confirm, title: String(localized: "是我的电脑"), options: [.authenticationRequired],
+                UNNotificationAction(identifier: confirm, title: String(localized: "It's Mine"), options: [.authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: Theme.Icon.done)),
-                UNNotificationAction(identifier: reject, title: String(localized: "不是"), options: [.destructive, .authenticationRequired],
+                UNNotificationAction(identifier: reject, title: String(localized: "Not Mine"), options: [.destructive, .authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: Theme.Icon.close)),
             ],
             intentIdentifiers: [], options: [])
@@ -139,17 +139,17 @@ nonisolated enum PairReceiptActions {
 
     static func failureTitle(_ request: Request) -> String {
         switch request {
-        case .revokeDevice: String(localized: "没能撤销")
-        case .rejectComputer: String(localized: "没能拒绝")
-        case .confirmComputer: String(localized: "没能确认")
+        case .revokeDevice: String(localized: "Couldn't revoke")
+        case .rejectComputer: String(localized: "Couldn't deny")
+        case .confirmComputer: String(localized: "Couldn't confirm")
         }
     }
 
     /// Why, in words: a device or computer that is gone, else what any other button says (no network, unpaired…).
     static func reason(_ error: Error, _ request: Request, host: String?) -> String {
         if let e = error as? APIError, e.status == 404 {
-            if case .revokeDevice = request { return String(localized: "这台设备已经撤销了，或者已经不在了。") }
-            return String(localized: "这台电脑已经不在了。")
+            if case .revokeDevice = request { return String(localized: "This device was already revoked or is no longer there.") }
+            return String(localized: "This computer is no longer there.")
         }
         return IntentFailure.sentence(for: error, host: host)
     }
@@ -159,17 +159,17 @@ nonisolated enum PairReceiptActions {
         let c = UNMutableNotificationContent()
         switch outcome {
         case .revoked:
-            c.title = String(localized: "已撤销配对")
-            c.body = String(localized: "那台设备不能再连接 hub 了。")
+            c.title = String(localized: "Pairing revoked")
+            c.body = String(localized: "That device can no longer connect to the hub.")
         case .rejected:
-            c.title = String(localized: "已拒绝这台电脑")
-            c.body = String(localized: "它不会加入。")
+            c.title = String(localized: "Computer rejected")
+            c.body = String(localized: "It won't join.")
         case .confirmed:
-            c.title = String(localized: "已确认这台电脑")
-            c.body = String(localized: "它可以开始工作了。")
+            c.title = String(localized: "Computer confirmed")
+            c.body = String(localized: "It's ready to work.")
         case .alreadyConfirmed(let ref):
-            c.title = String(localized: "这台电脑已经确认过了")
-            c.body = String(localized: "点这里打开它的详情，决定要不要移除。")
+            c.title = String(localized: "This computer is already confirmed")
+            c.body = String(localized: "Tap to open its details and decide whether to remove it.")
             c.userInfo = PairPush(kind: .machine, machine: ref.id, hubID: push.hubID, keyGroup: push.keyGroup).userInfo
         case .failed(let title, let reason):
             c.title = title

@@ -13,13 +13,13 @@ struct LarkEncryptionModeBar: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
             Menu {
-                Button { draft = nil; climbing = false } label: { Text("普通消息").lineLimit(1) }
+                Button { draft = nil; climbing = false } label: { Text("Regular").lineLimit(1) }
                     .accessibilityIdentifier("lark.encryption.plain")
-                Button(action: selectEncrypted) { Text("加密消息").lineLimit(1) }
+                Button(action: selectEncrypted) { Text("Encrypted message").lineLimit(1) }
                     .disabled(!canEncrypt)
                     .accessibilityIdentifier("lark.encryption.encrypted")
                 if canClimb || climbing {
-                    Button { draft = nil; climbing = true } label: { Text("").lineLimit(1) }
+                    Button { draft = nil; climbing = true } label: { Text("Brave Climb Encoding").lineLimit(1) }
                         .disabled(!canClimb)
                         .accessibilityIdentifier("lark.encryption.braveClimb")
                 }
@@ -33,17 +33,17 @@ struct LarkEncryptionModeBar: View {
             .accessibilityIdentifier("lark.encryption.mode")
             if let draft {
                 Button(action: pickCover) {
-                    Text(draft.cover.isEmpty ? "选择对外展示" : "对外展示：\(draft.cover)")
+                    Text(draft.cover.isEmpty ? String(localized: "Choose public text") : String(localized: "Public text: \(draft.cover)"))
                         .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
                 }
                 .accessibilityIdentifier("lark.encryption.cover")
                 .disabled(checking)
             }
             if climbing && draft == nil {
-                Text(canClimb ? "可还原的编码，不是加密" : "")
+                Text(canClimb ? String(localized: "Reversible encoding, not encryption") : String(localized: "Turn on Brave Climb encoding in Settings first"))
                     .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)
             }
-            if checking { ProgressView().controlSize(.small).accessibilityLabel("正在检查加密服务") }
+            if checking { ProgressView().controlSize(.small).accessibilityLabel("Checking encryption service") }
             Spacer(minLength: 0)
         }
         .foregroundStyle(.secondary)
@@ -52,9 +52,9 @@ struct LarkEncryptionModeBar: View {
     }
 
     private var mode: (title: String, icon: String) {
-        if draft != nil { (String(localized: "加密消息"), Theme.Icon.locked) }
-        else if climbing { (String(localized: ""), Theme.Icon.braveClimb) }
-        else { (String(localized: "普通消息"), Theme.Icon.message) }
+        if draft != nil { (String(localized: "Encrypted message"), Theme.Icon.locked) }
+        else if climbing { (String(localized: "Brave Climb Encoding"), Theme.Icon.braveClimb) }
+        else { (String(localized: "Regular"), Theme.Icon.message) }
     }
 }
 
@@ -72,12 +72,12 @@ struct LarkEncryptionCoverPicker: View {
         NavigationStack {
             List {
                 Section {
-                    if loading { ProgressView("加载历史内容…") }
+                    if loading { ProgressView(String(localized: "Loading history…")) }
                     else if let problem {
                         Text(problem).font(Theme.Font.secondary)
-                        Button("重试") { Task { await load() } }.lineLimit(1)
+                        Button("Retry [Components b8784c]") { Task { await load() } }.lineLimit(1)
                     } else if lines.isEmpty {
-                        Text("暂无可用的历史内容").foregroundStyle(.secondary)
+                        Text("No history available yet").foregroundStyle(.secondary)
                     } else {
                         ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                             Button { select(line); dismiss() } label: {
@@ -87,13 +87,13 @@ struct LarkEncryptionCoverPicker: View {
                         }
                     }
                 } footer: {
-                    Text("选一段历史消息，作为无法解密时看到的内容。")
+                    Text("Choose an earlier message to show to people who can't decrypt this one.")
                 }
             }
             .themedGroupedPage()
-            .navigationTitle("对外展示")
+            .navigationTitle("Public Text")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.lineLimit(1) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.lineLimit(1) } }
             .task { await load() }
         }
     }
@@ -101,7 +101,7 @@ struct LarkEncryptionCoverPicker: View {
         loading = true; problem = nil
         defer { loading = false }
         do { lines = try await api.larkEncryptionCovers(account: account, feed: feed) }
-        catch { if !error.isCancellation { problem = error.shown ?? String(localized: "暂时无法加载，请重试") } }
+        catch { if !error.isCancellation { problem = error.shown ?? String(localized: "Couldn't load. Try again.") } }
     }
 }
 
@@ -119,7 +119,7 @@ struct LarkEncryptionUnlockSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField(unified ? "飞书网关登录密码" : "密钥库密码", text: $password)
+                    SecureField(unified ? String(localized: "Lark gateway password") : String(localized: "Keystore password"), text: $password)
                         .textContentType(.password)
                         .accessibilityIdentifier("lark.encryption.password")
                     if let problem { Text(problem).font(Theme.Font.secondary).foregroundStyle(Theme.danger) }
@@ -135,22 +135,22 @@ struct LarkEncryptionUnlockSheet: View {
                                 guard result.accountId == account, !result.locked else { throw LarkOutboxIdentity.Failure.changed }
                                 dismiss()
                                 unlocked()
-                            } catch { problem = error.shown ?? String(localized: "解锁失败，请重试") }
+                            } catch { problem = error.shown ?? String(localized: "Couldn't unlock. Try again.") }
                         }
                     } label: {
                         HStack(spacing: Theme.Space.s) {
                             if busy { ProgressView().controlSize(.small) }
-                            Text(busy ? "正在解锁…" : "解锁并发送").lineLimit(1)
+                            Text(busy ? String(localized: "Unlocking…") : String(localized: "Unlock and Send")).lineLimit(1)
                         }
                     }
                     .disabled(busy || password.isEmpty)
                     .accessibilityIdentifier("lark.encryption.unlock")
-                } footer: { Text("密码仅用于本次解锁，不会保存。") }
+                } footer: { Text("Your password is used only for this unlock and isn't saved.") }
             }
             .themedGroupedPage()
-            .navigationTitle("解锁加密消息")
+            .navigationTitle("Unlock Encrypted Messages")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { password = ""; dismiss() }.lineLimit(1).disabled(busy) } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { password = ""; dismiss() }.lineLimit(1).disabled(busy) } }
             .interactiveDismissDisabled(busy)
             .onDisappear { password = "" }
         }

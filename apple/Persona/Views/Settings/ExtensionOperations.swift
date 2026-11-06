@@ -141,7 +141,7 @@ extension APIClient {
     /// Downloads and checks a market's extension in the background; the result is the operation once it waits for
     /// consent, failed or was canceled.
     func preview(market: String, extension id: String) async throws -> ExtensionOperation {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         let op = try await api.startCatalogPreview(market: market, extension: id)
         received(op)
         return await follow(op.id) { $0.state != .running }
@@ -149,7 +149,7 @@ extension APIClient {
 
     /// The preview the operation waits on.
     func consentPreview(_ id: String) async throws -> ExtensionPreview? {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         let detail = try await api.extensionOperation(id)
         received(detail.operation)
         return detail.preview
@@ -157,7 +157,7 @@ extension APIClient {
 
     /// The user agreed: the operation installs and the result is how it ended.
     func agree(_ id: String, preview: ExtensionPreview) async throws -> ExtensionOperation {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         let op = try await api.agreeExtensionInstall(id, preview: preview)
         received(op)
         return await follow(op.id) { !$0.isRunning }
@@ -165,7 +165,7 @@ extension APIClient {
 
     /// Starts a failed one again; the result once it waits for consent again or ended (a new operation).
     func retry(_ op: ExtensionOperation) async throws -> ExtensionOperation {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         let next = try await api.retryExtensionOperation(op.id)
         operations[op.id] = nil
         received(next)
@@ -183,7 +183,7 @@ extension APIClient {
                                        startedAt: .now, updatedAt: .now)
         received(local)
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             if upgrade { _ = try await api.upgradeExtension(id, preview: preview) } else { _ = try await api.installExtension(preview: preview) }
             return finish(local, error: nil)
         } catch {
@@ -198,7 +198,7 @@ extension APIClient {
                                                        startedAt: .now, updatedAt: .now)
         if let local { received(local) }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let result = try await api.uninstallExtension(id, cascade: cascade, members: members)
             if let local { _ = finish(local, error: nil) }
             return result
@@ -238,7 +238,7 @@ extension APIClient {
             if Date.now.timeIntervalSince(started) > deps.patience || Task.isCancelled {
                 var late = operations[id] ?? ExtensionOperation(id: id, kind: .install, extensionID: "")
                 late.state = .failed
-                late.error = String(localized: "等了很久 hub 还没说做完没有，下拉刷新看看。")
+                late.error = String(localized: "The hub hasn’t said whether it finished after a long wait. Pull down to refresh.")
                 late.retryable = false
                 return late
             }
@@ -270,33 +270,33 @@ extension ExtensionOperation {
 enum ExtensionOperationText {
     static func verb(_ kind: ExtensionOperation.Kind) -> String {
         switch kind {
-        case .install: String(localized: "安装")
-        case .upgrade: String(localized: "升级")
-        case .uninstall: String(localized: "卸载")
+        case .install: String(localized: "Install")
+        case .upgrade: String(localized: "Update [Extension Market Views 94996c]")
+        case .uninstall: String(localized: "Uninstall")
         }
     }
 
     /// A step's name; one this app does not know shows as its id.
     static func step(_ id: String, kind: ExtensionOperation.Kind) -> String {
         switch id {
-        case "download": String(localized: "下载扩展包")
-        case "verify": String(localized: "核对校验和")
-        case "unpack": String(localized: "解包")
-        case "check": String(localized: "检查权限和依赖")
-        case "consent": String(localized: "等你同意权限")
-        case "tools": String(localized: "安装命令行")
-        case "install": kind == .upgrade ? String(localized: "换上新版本") : String(localized: "装进 hub")
-        case "start": String(localized: "启动")
-        case "nodes": String(localized: "同步到各台电脑")
-        case "stop": String(localized: "停下扩展")
-        case "remove": String(localized: "删除文件和记录")
+        case "download": String(localized: "Download package")
+        case "verify": String(localized: "Verify checksum")
+        case "unpack": String(localized: "Unpack")
+        case "check": String(localized: "Check permissions and dependencies")
+        case "consent": String(localized: "Waiting for your consent")
+        case "tools": String(localized: "Install command-line tools")
+        case "install": kind == .upgrade ? String(localized: "Switch to new version") : String(localized: "Install on hub")
+        case "start": String(localized: "On [Herdr Notice 56410f]")
+        case "nodes": String(localized: "Sync to computers")
+        case "stop": String(localized: "Stop extension")
+        case "remove": String(localized: "Delete files and records")
         default: id
         }
     }
 
     /// What a step says under its name: a download's bytes, the computers done, the cache.
     static func detail(_ s: ExtensionOperationStep) -> String? {
-        if s.cached == true { return String(localized: "用了 hub 上缓存的包") }
+        if s.cached == true { return String(localized: "Used the package cached on the hub") }
         if let bytes = s.bytes, bytes > 0 {
             let done = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
             if let total = s.total, total > 0, s.state == .running {
@@ -306,7 +306,7 @@ enum ExtensionOperationText {
             return done
         }
         if let m = s.machines, m.total > 0 {
-            var line = String(localized: "\(m.done) / \(m.total) 台电脑")
+            var line = String(localized: "\(m.done) of \(m.total) computers")
             if let errors = m.errors, !errors.isEmpty {
                 line += " · " + errors.sorted { $0.key < $1.key }.map { "\($0.key)：\($0.value)" }.joined(separator: "；") // i18n-ignore
             }
@@ -317,11 +317,11 @@ enum ExtensionOperationText {
 
     /// A program of the tools step: "Uses the one on this machine" when the hub machine's own copy is used; else where it is.
     static func tool(_ t: ExtensionOperationStep.Tool) -> String? {
-        if t.reused == true { return String(localized: "用这台机器上的") }
+        if t.reused == true { return String(localized: "Uses the one on this machine") }
         switch t.state {
-        case .running: return String(localized: "正在安装")
-        case .done: return String(localized: "已装好")
-        case .failed: return String(localized: "没装上")
+        case .running: return String(localized: "Installing…")
+        case .done: return String(localized: "Installed [Extension Operations 11d8f1]")
+        case .failed: return String(localized: "Didn't install")
         case .pending, .skipped: return nil
         }
     }
@@ -329,30 +329,30 @@ enum ExtensionOperationText {
     /// Installing… / Waiting for your consent / Install didn't finish / Installed / Canceled.
     static func title(_ op: ExtensionOperation) -> String {
         switch (op.state, op.kind) {
-        case (.running, .install): String(localized: "正在安装")
-        case (.running, .upgrade): String(localized: "正在升级")
-        case (.running, .uninstall): String(localized: "正在卸载")
-        case (.needsConsent, _): String(localized: "等你同意权限")
-        case (.failed, .install): String(localized: "安装没有完成")
-        case (.failed, .upgrade): String(localized: "升级没有完成")
-        case (.failed, .uninstall): String(localized: "卸载没有完成")
-        case (.succeeded, .install): String(localized: "已安装")
-        case (.succeeded, .upgrade): String(localized: "已升级")
-        case (.succeeded, .uninstall): String(localized: "已卸载")
-        case (.canceled, _): String(localized: "已取消")
+        case (.running, .install): String(localized: "Installing…")
+        case (.running, .upgrade): String(localized: "Upgrading [Extension Operations bc572b]")
+        case (.running, .uninstall): String(localized: "Uninstalling [Extension Operations e557ff]")
+        case (.needsConsent, _): String(localized: "Waiting for your consent")
+        case (.failed, .install): String(localized: "Install didn’t finish")
+        case (.failed, .upgrade): String(localized: "Upgrade didn’t finish")
+        case (.failed, .uninstall): String(localized: "Uninstall didn’t finish")
+        case (.succeeded, .install): String(localized: "Installed [Extension Market Views a8b6c3]")
+        case (.succeeded, .upgrade): String(localized: "Updated [Extension Operations 45cb2f]")
+        case (.succeeded, .uninstall): String(localized: "Uninstalled")
+        case (.canceled, _): String(localized: "Canceled")
         }
     }
 
     /// The row's chip in the market's list: Installing / Waiting for You / Install failed.
     static func chip(_ op: ExtensionOperation) -> String? {
         switch (op.state, op.kind) {
-        case (.running, .install): String(localized: "安装中")
-        case (.running, .upgrade): String(localized: "升级中")
-        case (.running, .uninstall): String(localized: "卸载中")
-        case (.needsConsent, _): String(localized: "等你同意")
-        case (.failed, .install): String(localized: "安装失败")
-        case (.failed, .upgrade): String(localized: "升级失败")
-        case (.failed, .uninstall): String(localized: "卸载失败")
+        case (.running, .install): String(localized: "Installing")
+        case (.running, .upgrade): String(localized: "Upgrading [Extension Operations e4ff1b]")
+        case (.running, .uninstall): String(localized: "Uninstalling [Extension Operations ce2a05]")
+        case (.needsConsent, _): String(localized: "Waiting for You")
+        case (.failed, .install): String(localized: "Install failed")
+        case (.failed, .upgrade): String(localized: "Upgrade failed")
+        case (.failed, .uninstall): String(localized: "Uninstall failed")
         case (.succeeded, _), (.canceled, _): nil
         }
     }
@@ -369,26 +369,26 @@ enum ExtensionOperationText {
         guard !shown.isEmpty else { return nil }
         let done = shown.filter { $0.state == .done }.count
         let at = shown.firstIndex { $0.id == op.current?.id }.map { $0 + 1 } ?? done
-        return String(localized: "第 \(max(at, 1)) 步，共 \(shown.count) 步")
+        return String(localized: "Step \(max(at, 1)) of \(shown.count)")
     }
 
     /// 12s elapsed / 1m 5s elapsed.
     static func elapsed(since start: Date, now: Date) -> String {
         let s = max(0, Int(now.timeIntervalSince(start)))
-        return s < 60 ? String(localized: "已过 \(s) 秒") : String(localized: "已过 \(s / 60) 分 \(s % 60) 秒")
+        return s < 60 ? String(localized: "\(s)s elapsed") : String(localized: "\(s / 60)m \(s % 60)s elapsed")
     }
 
     /// What an older hub is doing while the request is out (no steps of its own).
     static func waitingNote(_ kind: ExtensionOperation.Kind) -> String {
         switch kind {
-        case .install, .upgrade: String(localized: "hub 在下载、校验、解包并启动它，大的扩展要一两分钟。可以先离开这一页，回来还能看到。")
-        case .uninstall: String(localized: "hub 在停下它、删掉它的文件和数据。可以先离开这一页，回来还能看到。")
+        case .install, .upgrade: String(localized: "The hub is downloading, verifying, unpacking and starting it; a large extension takes a minute or two. You can leave this page and come back to it.")
+        case .uninstall: String(localized: "The hub is stopping it and deleting its files and data. You can leave this page and come back to it.")
         }
     }
 
     /// Who started it, when it was not this device's doing worth saying (the hub's automatic upgrade, the CLI).
     static func actor(_ op: ExtensionOperation) -> String? {
         guard let a = op.actor, !a.isEmpty else { return nil }
-        return String(localized: "由 \(a) 发起")
+        return String(localized: "Started by \(a)")
     }
 }

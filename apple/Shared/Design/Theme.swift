@@ -595,12 +595,12 @@ nonisolated enum Theme {
 extension AgentState {
     var label: String {
         switch self {
-        case .needsYou: String(localized: "需要你")
-        case .working: String(localized: "工作中")
-        case .unread: String(localized: "完成未看")
-        case .idle: String(localized: "已看")
-        case .offline: String(localized: "未运行")
-        case .unknown: String(localized: "未知")
+        case .needsYou: String(localized: "Needs You [Chats View e60ec4]")
+        case .working: String(localized: "Working [Assistant Profile View f42082]")
+        case .unread: String(localized: "Unread [Chats View f9bf93]")
+        case .idle: String(localized: "Seen")
+        case .offline: String(localized: "Not running [Rewind 62cdc8]")
+        case .unknown: String(localized: "Unknown [Session Modes 4d8c1c]")
         }
     }
 
@@ -621,12 +621,12 @@ extension AgentState {
 extension SessionStatus {
     var label: String {
         switch self {
-        case .working: String(localized: "工作中")
-        case .blocked: String(localized: "等你处理")
-        case .idle: String(localized: "空闲")
-        case .done: String(localized: "已完成")
-        case .unknown: String(localized: "未知")
-        case .offline: String(localized: "未运行")
+        case .working: String(localized: "Working [Assistant Profile View f42082]")
+        case .blocked: String(localized: "Waiting for you [Persona Face 66ea80]")
+        case .idle: String(localized: "Idle")
+        case .done: String(localized: "Done [Task Sheets f28461]")
+        case .unknown: String(localized: "Unknown [Session Modes 4d8c1c]")
+        case .offline: String(localized: "Not running [Rewind 62cdc8]")
         }
     }
 }
@@ -635,11 +635,11 @@ nonisolated enum Fmt {
     static func relative(_ date: Date?, now: Date = .now) -> String {
         guard let date, date.isMeaningful else { return "" }
         let s = now.timeIntervalSince(date)
-        if s < 45 { return String(localized: "刚刚") }
-        if s < 3600 { return String(localized: "\(max(1, Int(s / 60))) 分钟前") }
+        if s < 45 { return String(localized: "Just now") }
+        if s < 3600 { return String(localized: "\(max(1, Int(s / 60))) min ago") }
         let cal = Calendar.current
         if cal.isDateInToday(date) { return date.formatted(.dateTime.hour().minute()) }
-        if cal.isDateInYesterday(date) { return String(localized: "昨天") }
+        if cal.isDateInYesterday(date) { return String(localized: "Yesterday") }
         if s < 6 * 86400 { return date.formatted(.dateTime.weekday(.wide)) }
         return date.formatted(.dateTime.month().day())
     }

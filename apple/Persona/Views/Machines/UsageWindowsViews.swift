@@ -101,7 +101,7 @@ struct UsageAccountBlock: View {
     /// The note for VoiceOver: the plan, then where the numbers came from, as one sentence.
     static func sourceLabel(plan: String, from: [String]) -> String {
         let names = from.joined(separator: "、")
-        return plan.isEmpty ? String(localized: "来源：\(names)") : String(localized: "\(plan)，来源：\(names)")
+        return plan.isEmpty ? String(localized: "Source: \(names)") : String(localized: "\(plan), source: \(names)")
     }
 }
 
@@ -135,8 +135,8 @@ struct UsageWindowRow: View {
             UsageMeter(used: w.usedPercent, expected: pace?.expected, tall: true)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([name, w.label, w.model, String(localized: "已用 \(used)"), pace.flatMap { $0.state == .on ? nil : UsageWindows.paceLabel($0.state) }, reset]
-            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label")))
+        .accessibilityLabel([name, w.label, w.model, String(localized: "\(used) used"), pace.flatMap { $0.state == .on ? nil : UsageWindows.paceLabel($0.state) }, reset]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: ", ", comment: "Separator between the parts of a VoiceOver label")))
     }
 }
 
@@ -167,7 +167,7 @@ struct UsageWindowsCard: View {
         let live = UsageWindows.live(store.accounts)
         if !live.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Text("订阅额度").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+                Text("Subscription Usage").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                     .padding(.horizontal, Theme.Space.xs)
                     .accessibilityAddTraits(.isHeader)
                 UsageAccountsList(accounts: store.accounts)

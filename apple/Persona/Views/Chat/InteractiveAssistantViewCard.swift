@@ -40,12 +40,12 @@ struct InteractiveAssistantViewCard: View {
                 HStack(spacing: Theme.Space.s) {
                     if model.page != nil {
                         Button { model.back() } label: { Image(systemName: Theme.Icon.back) }
-                            .themedButton().accessibilityLabel("返回卡片上一页")
+                            .themedButton().accessibilityLabel("Back to the card's previous page")
                     }
                     Text(title).font(Theme.Font.heading).accessibilityAddTraits(.isHeader)
                 }
             } else if model.page != nil {
-                Button { model.back() } label: { Label("返回", systemImage: Theme.Icon.back).lineLimit(1) }
+                Button { model.back() } label: { Label("Back [Task Sheets 572cf4]", systemImage: Theme.Icon.back).lineLimit(1) }
                     .themedButton()
             }
             if supported {
@@ -73,12 +73,12 @@ struct InteractiveAssistantViewCard: View {
                 if let error = record.error, !error.isEmpty { Text(error).font(Theme.Font.caption).foregroundStyle(Theme.danger) }
                 if let text = record.text, !text.isEmpty { Text(text).font(Theme.Font.secondary).textSelection(.enabled) }
                 ForEach((record.values ?? [:]).keys.sorted(), id: \.self) { name in
-                    Text("\(name)：\(record.values?[name] ?? "")").font(Theme.Font.secondary).textSelection(.enabled)
+                    Text("\(name): \(record.values?[name] ?? "")").font(Theme.Font.secondary).textSelection(.enabled)
                 }
             } else if let attempt = model.attempt, !attempt.sending {
-                Text("提交结果尚未确认，不会改选或重复发送。").font(Theme.Font.caption).foregroundStyle(Theme.caution)
+                Text("The submission isn't confirmed yet; it won't change the choice or send twice.").font(Theme.Font.caption).foregroundStyle(Theme.caution)
                 Button { Task { ExtensionOutcome.show(await model.retry(), app: app, link: link) } } label: {
-                    Label("重试原选择", systemImage: Theme.Icon.retry).lineLimit(1)
+                    Label("Retry Original Choice", systemImage: Theme.Icon.retry).lineLimit(1)
                 }
                 .themedButton().accessibilityIdentifier("assistant-view-retry")
             }
@@ -87,15 +87,15 @@ struct InteractiveAssistantViewCard: View {
         .card(padding: Theme.Space.m)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("assistant-view-card")
-        .accessibilityValue(model.pending != nil ? String(localized: "等待确认") : model.record != nil ? String(localized: "已选择") : String(localized: "可以操作"))
-        .alert(model.pending?.action.confirm ?? (model.changed ? String(localized: "卡片已更新，按新内容提交？") : String(localized: "确认卡片操作")), isPresented: Binding(
+        .accessibilityValue(model.pending != nil ? String(localized: "Waiting for confirmation") : model.record != nil ? String(localized: "Selected [Interactive Assistant View Card 3f4ebc]") : String(localized: "Ready [Interactive Assistant View Card 1ee890]"))
+        .alert(model.pending?.action.confirm ?? (model.changed ? String(localized: "The card changed. Submit with the new content?") : String(localized: "Confirm Card Action")), isPresented: Binding(
             get: { model.pending != nil }, set: { if !$0 { model.decline() } }), presenting: model.pending) { _ in
                 Button {
                     guard let selection = model.claimConfirmation() else { return }
                     Task { ExtensionOutcome.show(await model.confirm(selection), app: app, link: link) }
-                } label: { Text("确定").lineLimit(1) }
+                } label: { Text("OK [Interactive Assistant View Card fac2a6]").lineLimit(1) }
                     .accessibilityIdentifier("assistant-view-confirm")
-                Button("取消", role: .cancel) { model.decline() }
+                Button("Cancel", role: .cancel) { model.decline() }
             } message: { _ in
                 Text(confirmationText)
             }
@@ -132,27 +132,27 @@ struct InteractiveAssistantViewCard: View {
             openedFile = FileRef(group: location.scope.group, machineID: parts[0], path: parts[1])
         case "kb" where parts.count >= 2:
             guard KBKind(rawValue: parts[0]) != nil else {
-                app.toast = Toast(String(localized: "不能打开这个知识库路径"), style: .error)
+                app.toast = Toast(String(localized: "Can't open this Knowledge path"), style: .error)
                 return
             }
             app.selectHub(location.scope.group)
             let id = parts.dropFirst().joined(separator: "/")
             openedKnowledge = KBEntry(kind: parts[0], id: id, name: id, relevance: 0)
-        default: app.toast = Toast(String(localized: "不能打开这个卡片目标"), style: .error)
+        default: app.toast = Toast(String(localized: "Can't open this card target"), style: .error)
         }
     }
     private var confirmationText: String {
         guard let selection = model.pending else { return "" }
         var text = selection.action.reply ?? selection.action.open ?? ""
-        for (name, value) in selection.values.sorted(by: { $0.key < $1.key }) { text += String(localized: "\n\(name)：\(value)") }
+        for (name, value) in selection.values.sorted(by: { $0.key < $1.key }) { text += String(localized: "\\n\(name): \(value)") }
         return text
     }
     private func status(_ record: ExtensionViewAction) -> String {
         switch record.status {
-        case "pending": String(localized: "已选择 · 等待发送")
-        case "sent": String(localized: "已选择 · 已发送")
-        case "failed": String(localized: "已选择 · 发送失败")
-        default: String(localized: "已选择 · 正在同步状态")
+        case "pending": String(localized: "Selected · Waiting to send")
+        case "sent": String(localized: "Selected · Sent")
+        case "failed": String(localized: "Selected · Send failed")
+        default: String(localized: "Selected · Syncing status")
         }
     }
 }

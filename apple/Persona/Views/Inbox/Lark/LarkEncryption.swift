@@ -12,12 +12,12 @@ nonisolated struct LarkEncryption: Codable, Hashable, Sendable {
     var visibleParts: [LarkPart] { isOpen ? (bodyParts ?? []) : publicParts }
     var sharesKey: Bool { isOpen && keyHandout == true }
     var hasBody: Bool { !visibleParts.isEmpty }
-    var coverLabel: String { state == "unavailable" ? String(localized: "加密消息 · 仅显示公开内容") : String(localized: "加密消息 · 对外展示") }
+    var coverLabel: String { state == "unavailable" ? String(localized: "Encrypted message · Public text only") : String(localized: "Encrypted message · Public text") }
     var textSummary: String { visibleParts.compactMap(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines) }
     var summary: String {
         let text = textSummary
         if !text.isEmpty { return text }
-        return sharesKey ? String(localized: "分发了本群的加密钥匙") : String(localized: "加密消息")
+        return sharesKey ? String(localized: "Shared this group's encryption key") : String(localized: "Encrypted message")
     }
     var cached: Self { Self(version: version, state: "unavailable", publicParts: publicParts) }
 }
@@ -53,25 +53,25 @@ struct LarkEncryptedContent: View {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
                     if encryption.isOpen {
                         Image(systemName: Theme.Icon.locked).font(Theme.Font.caption).foregroundStyle(.secondary)
-                            .accessibilityLabel("加密消息")
+                            .accessibilityLabel("Encrypted message")
                     }
                     LarkPartsView(parts: encryption.visibleParts)
                 }
             }
             if encryption.isOpen && encryption.hasBody && !encryption.publicParts.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
-                    Text("对外展示：").font(Theme.Font.caption).foregroundStyle(.secondary)
+                    Text("Public text:").font(Theme.Font.caption).foregroundStyle(.secondary)
                     LarkPartsView(parts: encryption.publicParts, base: LarkTextBase(size: Theme.Level.caption.size, color: .secondary))
                 }
                 .accessibilityElement(children: .combine)
             }
             if encryption.sharesKey {
-                Label("分发了本群的加密钥匙", systemImage: Theme.Icon.locked)
+                Label("Shared this group's encryption key", systemImage: Theme.Icon.locked)
                     .font(encryption.hasBody ? Theme.Font.label : Theme.Font.body)
                     .foregroundStyle(encryption.hasBody ? .secondary : .primary)
             }
             if !encryption.hasBody && !encryption.sharesKey {
-                Label("加密消息", systemImage: Theme.Icon.locked).font(Theme.Font.body).foregroundStyle(.secondary)
+                Label("Encrypted message", systemImage: Theme.Icon.locked).font(Theme.Font.body).foregroundStyle(.secondary)
             }
         }
     }
@@ -131,8 +131,8 @@ extension LarkReplyTo {
     nonisolated var displayText: String {
         guard let olk else { return text }
         guard !olk.isOpen else { return olk.summary }
-        guard olk.hasBody else { return String(localized: "加密消息") }
-        return olk.textSummary.isEmpty ? olk.coverLabel : String(localized: "\(olk.coverLabel)：\(olk.textSummary)")
+        guard olk.hasBody else { return String(localized: "Encrypted message") }
+        return olk.textSummary.isEmpty ? olk.coverLabel : String(localized: "\(olk.coverLabel): \(olk.textSummary)")
     }
 
     nonisolated func encode(to encoder: Encoder) throws {

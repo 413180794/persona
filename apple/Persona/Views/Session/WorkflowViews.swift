@@ -31,7 +31,7 @@ struct WorkflowLine: View {
     private func text(_ run: WorkflowRun, now: Date) -> String {
         var s = run.line
         if let t = run.elapsed(now: now) { s += " · " + WorkflowRun.duration(t, seconds: false) }
-        if runs.count > 1 { s += String(localized: " · 等 \(runs.count - 1) 个") }
+        if runs.count > 1 { s += String(localized: " · and \(runs.count - 1) more") }
         return s
     }
 }
@@ -138,8 +138,8 @@ struct WorkflowCard: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel([run.progress.map(progressText), expanded ? String(localized: "收起 agent") : String(localized: "展开 agent（\(agents.count)）")]
-                        .compactMap { $0 }.joined(separator: String(localized: "，", comment: "List separator")))
+                    .accessibilityLabel([run.progress.map(progressText), expanded ? String(localized: "Hide Agents") : String(localized: "Show Agents (\(agents.count))")]
+                        .compactMap { $0 }.joined(separator: String(localized: ", ", comment: "List separator")))
                     .accessibilityIdentifier("workflow.agents")
                 } else if let pr = run.progress {
                     Text(progressText(pr)).font(Theme.Font.labelStrong).foregroundStyle(.secondary).monospacedDigit()
@@ -163,7 +163,7 @@ struct WorkflowCard: View {
     private func progressText(_ pr: (done: Int, started: Int)) -> String {
         let running = run.runningAgents
         let done = "\(pr.done)/\(pr.started)"
-        return run.isRunning && running > 0 ? done + String(localized: " · \(running) 个在跑") : done
+        return run.isRunning && running > 0 ? done + String(localized: " · \(running) running") : done
     }
 }
 
@@ -248,8 +248,8 @@ struct WorkflowAgentList: View {
 struct WorkflowPhases: View {
     /// VoiceOver: 「阶段：Plan、Build（当前）、Verify」.
     static func spokenPhases(_ phases: [String], current: Int) -> String {
-        let list = phases.enumerated().map { i, p in i + 1 == current ? String(localized: "\(p)（当前）") : p }.joined(separator: "、")
-        return String(localized: "阶段：\(list)")
+        let list = phases.enumerated().map { i, p in i + 1 == current ? String(localized: "\(p) (current) [Workflow Views 576d71]") : p }.joined(separator: "、")
+        return String(localized: "Phases: \(list)")
     }
     var phases: [String]
     /// From 1; 0: not known.
@@ -315,7 +315,7 @@ struct WorkflowAgentRow: View {
         if let open {
             Button { Haptics.tap(); open() } label: { content }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(agent.title)，\(agent.running ? String(localized: "在跑") : String(localized: "已结束"))，点按查看")
+                .accessibilityLabel("\(agent.title), \(agent.running ? String(localized: "Running [Workflow Views 828e7c]") : String(localized: "Ended")). Tap to view.")
         } else {
             content.accessibilityElement(children: .combine)
         }
@@ -335,20 +335,20 @@ enum WorkflowLook {
 
     static func word(_ run: WorkflowRun) -> String {
         switch run.outcome {
-        case .running: String(localized: "在跑")
-        case .completed: String(localized: "完成")
-        case .failed: String(localized: "失败")
-        case .stopped: String(localized: "已停止")
-        case .stalled: String(localized: "没动静了")
+        case .running: String(localized: "Running [Workflow Views 828e7c]")
+        case .completed: String(localized: "Done [Extension System Presentation c0b3fb]")
+        case .failed: String(localized: "Failed")
+        case .stopped: String(localized: "Stopped [Port Chips f00645]")
+        case .stalled: String(localized: "Stalled")
         }
     }
 
     /// VoiceOver: 「后台 workflow parity-audit，在跑，阶段 Verify 2/2，169/185 个 agent 完成」.
     static func spoken(_ run: WorkflowRun) -> String {
-        var s = String(localized: "后台 workflow \(run.title)，\(word(run))")
-        if let p = run.phaseLabel { s += String(localized: "，阶段 \(p)") }
-        if let pr = run.progress { s += String(localized: "，\(pr.done)/\(pr.started) 个 agent 完成") }
-        if let e = run.error, !e.isEmpty, run.outcome == .failed || run.outcome == .stopped { s += "，" + e }
+        var s = String(localized: "Background workflow \(run.title), \(word(run))")
+        if let p = run.phaseLabel { s += String(localized: ", phase \(p)") }
+        if let pr = run.progress { s += String(localized: ", \(pr.done)/\(pr.started) agents done") }
+        if let e = run.error, !e.isEmpty, run.outcome == .failed || run.outcome == .stopped { s += String(localized: ", ") + e }
         return s
     }
 }

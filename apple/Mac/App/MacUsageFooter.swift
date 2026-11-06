@@ -33,12 +33,12 @@ struct MacUsageFooter: View {
                 .onHover { hovering = $0 }
                 .help(Self.tooltip(top))
                 .accessibilityLabel(Self.summary(top))
-                .accessibilityHint("查看每个账号的窗口")
+                .accessibilityHint("Shows each account's usage windows")
                 .accessibilityIdentifier("mac.usage")
                 .popover(isPresented: $open, arrowEdge: .trailing) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: Theme.Space.m) {
-                            Text("订阅额度").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
+                            Text("Subscription Usage").font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                                 .accessibilityAddTraits(.isHeader)
                             UsageAccountsList(accounts: store.accounts)
                         }
@@ -76,9 +76,9 @@ struct MacUsageFooter: View {
     static func summary(_ accounts: [UsageAccount]) -> String {
         let parts = accounts.map { a in
             let used = UsageWindows.percentText(UsageWindows.fullest(a))
-            return String(localized: "\(a.name) 已用 \(used)")
-        }.joined(separator: String(localized: "，", comment: "Separator between the parts of a VoiceOver label"))
-        return String(localized: "订阅额度：\(parts)")
+            return String(localized: "\(a.name) \(used) used")
+        }.joined(separator: String(localized: ", ", comment: "Separator between the parts of a VoiceOver label"))
+        return String(localized: "Subscription usage: \(parts)")
     }
 
     static func tooltip(_ accounts: [UsageAccount]) -> String {
@@ -87,9 +87,9 @@ struct MacUsageFooter: View {
             var parts = [a.name]
             if !from.isEmpty {
                 let names = from.joined(separator: " · ")
-                parts.append(String(localized: "来源：\(names)"))
+                parts.append(String(localized: "Source: \(names)"))
             }
-            if a.stale { parts.append(String(localized: "数据已过期")) }
+            if a.stale { parts.append(String(localized: "Data outdated")) }
             return parts.joined(separator: " · ")
         }.joined(separator: "\n")
     }

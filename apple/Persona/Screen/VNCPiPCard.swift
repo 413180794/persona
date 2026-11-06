@@ -18,16 +18,16 @@ struct VNCPiPCard: View {
             case .live where pictured: return nil
             case .connecting, .live: self = .connecting
             case .signIn: self = .signIn
-            case .closed(let why): self = .failed(why ?? String(localized: "连接断了"))
+            case .closed(let why): self = .failed(why ?? String(localized: "Connection lost"))
             }
         }
 
         /// For Picture in Picture Diagnostics (and the source's accessibility value under DEBUG -showPiPSource).
         var line: String {
             switch self {
-            case .connecting: String(localized: "连接中")
-            case .signIn: String(localized: "要重新登录")
-            case .failed(let why): String(localized: "没连上：\(why)")
+            case .connecting: String(localized: "Connecting")
+            case .signIn: String(localized: "Sign in again")
+            case .failed(let why): String(localized: "Not connected: \(why)")
             }
         }
     }
@@ -70,8 +70,8 @@ struct VNCPiPCard: View {
 
     private var status: String {
         switch state {
-        case .connecting: String(localized: "连接中…")
-        case .signIn: String(localized: "记住的密码不对了")
+        case .connecting: String(localized: "Connecting… [Connection Status ee9ebe]")
+        case .signIn: String(localized: "Saved password no longer works")
         case .failed(let why): why
         }
     }
@@ -80,8 +80,8 @@ struct VNCPiPCard: View {
         let back = Image(systemName: Theme.Icon.pictureInPictureExit)
         switch state {
         case .connecting: return nil
-        case .signIn: return Text("点 \(back) 回到 App 重新登录")
-        case .failed: return Text("点 \(Image(systemName: Theme.Icon.pictureInPicturePlay)) 重新连接，或点 \(back) 回到 App")
+        case .signIn: return Text("Tap \(back) to go back to the app and sign in again")
+        case .failed: return Text("Tap \(Image(systemName: Theme.Icon.pictureInPicturePlay)) to reconnect, or \(back) to go back to the app")
         }
     }
 

@@ -27,15 +27,15 @@ struct PersonaApp: App {
                     if let link = ExtensionSystemLink(url: url) { model.openExtension(link); return }
                     // A computer's pairing link (「添加电脑」, Add computer) is for Persona Link on that computer, not for this device (#4198).
                     if ServerConfig.isComputerLink(url) {
-                        model.toast = Toast(String(localized: "在要加入的那台电脑上打开这条链接"))
+                        model.toast = Toast(String(localized: "Open this link on the computer you're adding"))
                         return
                     }
                     guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
                     Task {
                         do {
                             try await model.pair(cfg)
-                            let host = cfg.url.host() ?? String(localized: "服务器")
-                            model.toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
+                            let host = cfg.url.host() ?? String(localized: "Server")
+                            model.toast = Toast(String(localized: "Connected to \(host)"), style: .success)
                         }
                         catch { model.showPairing(error) }
                     }

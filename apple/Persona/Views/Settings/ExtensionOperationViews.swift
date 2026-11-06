@@ -38,14 +38,14 @@ struct ExtensionOperationSection: View {
             }
             if cancelable {
                 Button(action: dismiss) {
-                    Text("取消").lineLimit(1).formActionWidth()
+                    Text("Cancel").lineLimit(1).formActionWidth()
                 }
                 .themedButton()
                 .padding(.vertical, Theme.Space.xs)
                 .accessibilityIdentifier("extension-operation-cancel")
             }
         } header: {
-            SettingsHeading(failed ? String(localized: "没有完成") : waiting ? String(localized: "等你同意") : String(localized: "进行中"))
+            SettingsHeading(failed ? String(localized: "Didn’t Finish") : waiting ? String(localized: "Waiting for You") : String(localized: "Active"))
         }
     }
 
@@ -86,7 +86,7 @@ struct ExtensionOperationSection: View {
     @ViewBuilder private var failure: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             if let step = operation.failedStep {
-                Text("停在「\(ExtensionOperationText.step(step.id, kind: operation.kind))」")
+                Text("Stopped at “\(ExtensionOperationText.step(step.id, kind: operation.kind))”")
                     .font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
             }
             if let e = operation.error, !e.isEmpty {
@@ -95,15 +95,15 @@ struct ExtensionOperationSection: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("extension-operation-error")
-        buttons(primary: String(localized: "重试"), id: "extension-operation-retry", action: retry,
-                secondary: String(localized: "关闭"), secondaryID: "extension-operation-dismiss")
+        buttons(primary: String(localized: "Retry [Components b8784c]"), id: "extension-operation-retry", action: retry,
+                secondary: String(localized: "Close"), secondaryID: "extension-operation-dismiss")
     }
 
     @ViewBuilder private var consent: some View {
-        Text("已经下载并检查好了，看一下它要的权限，同意后接着安装。")
+        Text("Downloaded and checked. Review the permissions it asks for; installing goes on once you agree.")
             .font(Theme.Font.label).foregroundStyle(.secondary)
-        buttons(primary: String(localized: "查看权限"), id: "extension-operation-review", action: review,
-                secondary: String(localized: "取消"), secondaryID: "extension-operation-cancel")
+        buttons(primary: String(localized: "Review Permissions"), id: "extension-operation-review", action: review,
+                secondary: String(localized: "Cancel"), secondaryID: "extension-operation-cancel")
     }
 
     /// Two buttons in the card (a FormAction's clear row would cut the card in two).

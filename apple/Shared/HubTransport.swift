@@ -137,7 +137,7 @@ nonisolated struct InAppTunnelRoute: Codable, Hashable, Sendable {
     /// What the app calls the tunnel: the hub's name for it, else 「内网隧道」.
     var title: String {
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return n.isEmpty ? String(localized: "内网隧道") : n
+        return n.isEmpty ? String(localized: "Tunnel [Hub Transport e248d4]") : n
     }
 
     /// `host:port` as the core's forward takes it (IPv6 in brackets).

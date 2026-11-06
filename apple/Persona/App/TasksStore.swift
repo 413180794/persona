@@ -246,7 +246,7 @@ final class TasksStore {
             Haptics.success()
             inbox.reload()
         } catch {
-            AppModel.shared.toast = Toast(String(localized: "回复没发出去：\(error.localizedDescription)"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Reply not sent: \(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -267,7 +267,7 @@ final class TasksStore {
             undone.insert(result.callID)
             Haptics.success()
         } catch {
-            AppModel.shared.toast = Toast(String(localized: "没撤销成功：\(error.localizedDescription)"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Couldn't undo: \(error.localizedDescription)"), style: .error)
         }
     }
 
@@ -281,7 +281,7 @@ final class TasksStore {
             Haptics.success()
         } catch {
             self.error = error.localizedDescription
-            AppModel.shared.toast = Toast(String(localized: "没开起来：\(error.localizedDescription)"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Didn't start: \(error.localizedDescription) [Tasks Store 38bbb7]"), style: .error)
         }
     }
 
@@ -295,7 +295,7 @@ final class TasksStore {
             if detailTask == todo.id { detailTask = nil }
             Haptics.success()
         } catch {
-            AppModel.shared.toast = Toast(String(localized: "没移除：\(error.localizedDescription)"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Couldn't remove: \(error.localizedDescription) [Tasks Store ab04c7]"), style: .error)
         }
     }
 
@@ -318,7 +318,7 @@ final class TasksStore {
             do {
                 received(try await api.route(conversation: conversation, todoID: todoID, text: text))
             } catch {
-                AppModel.shared.toast = Toast(String(localized: "没送到：\(error.localizedDescription)"), style: .error)
+                AppModel.shared.toast = Toast(String(localized: "Couldn't deliver: \(error.localizedDescription)"), style: .error)
             }
         }
         return true

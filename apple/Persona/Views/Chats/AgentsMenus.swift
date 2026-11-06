@@ -73,8 +73,8 @@ struct AgentsListMenu: View {
             items(machines)
         } else {
             Menu { items(machines) } label: { label(chosen, hub: hub) }
-                .accessibilityLabel((hub.map { String(localized: "当前 hub：\($0)，") } ?? "") + (chosen.map { String(localized: "当前机器：\($0.name)，") } ?? "")
-                                    + String(localized: "分组：\(shownGrouping.title)"))
+                .accessibilityLabel((hub.map { String(localized: "Current hub: \($0), ") } ?? "") + (chosen.map { String(localized: "Current machine: \($0.name), ") } ?? "")
+                                    + String(localized: "Grouping: \(shownGrouping.title)"))
         }
     }
 
@@ -82,47 +82,47 @@ struct AgentsListMenu: View {
             #if DEBUG || PERF_SIGNPOST
             let _ = PerfTrace.body("ListMenu.content")
             #endif
-            Picker("分组", selection: groupingChoice) {
+            Picker("Group By [Agents Menus 399ee6]", selection: groupingChoice) {
                 ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in Label(g.title, systemImage: g.symbol).tag(g) }
             }
             if shownGrouping != .state, shownGrouping != .recent {
                 // By Status is sectioned by state, and the rows in a section are by time already; Recently Used is by time only.
-                Picker("排序", selection: $sort) {
+                Picker("Sort", selection: $sort) {
                     ForEach(AgentSort.allCases) { o in Label(o.title, systemImage: o.symbol).tag(o) }
                 }
             }
-            Picker("显示", selection: $compact) {
-                Label("卡片", systemImage: "rectangle.grid.1x2").tag(false)
-                Label("细列表", systemImage: Theme.Icon.listView).tag(true)
+            Picker("Display", selection: $compact) {
+                Label("Cards", systemImage: "rectangle.grid.1x2").tag(false)
+                Label("Compact List [Agents Menus 06829c]", systemImage: Theme.Icon.listView).tag(true)
             }
             if shownGrouping != .recent {
                 Section {
                     Button {
                         withAnimation(Theme.Motion.standard) { actions.collapse() }
-                    } label: { Label("全部折叠", systemImage: Theme.Icon.collapseAll) }
+                    } label: { Label("Collapse All", systemImage: Theme.Icon.collapseAll) }
                     Button {
                         withAnimation(Theme.Motion.standard) { actions.expand() }
-                    } label: { Label("全部展开", systemImage: "rectangle.expand.vertical") }
+                    } label: { Label("Expand All", systemImage: "rectangle.expand.vertical") }
                 }
             }
             if model.isMultiHub {
                 // Several groups of hubs (docs/multi-hub.md「按组筛选」): one group's agents only.
                 Picker("hub", selection: Binding(get: { hubFilter }, set: { hubFilter = $0; machineFilter = "" })) {
-                    Label("全部 hub", systemImage: Theme.Icon.hubGroup).tag("")
+                    Label("All Hubs", systemImage: Theme.Icon.hubGroup).tag("")
                     ForEach(model.groupIDs, id: \.self) { g in
                         Label(model.groupName(g), systemImage: Theme.Icon.hubGroup).tag(HubFilter.value(g))
                     }
                 }
             }
-            Picker("机器", selection: $machineFilter) {
-                Label("全部机器", systemImage: "square.grid.2x2").tag("")
+            Picker("Machines", selection: $machineFilter) {
+                Label("All Machines", systemImage: "square.grid.2x2").tag("")
                 ForEach(machines.filter { m in HubFilter.matches(hubFilter, MachineRef(path: m.id).group) }) { m in
                     Label(m.name, systemImage: m.symbol).tag(m.id)
                 }
             }
             Section {
                 Button { actions.machinesPage() } label: {
-                    Label("机器", systemImage: Theme.Icon.machines)
+                    Label("Machines", systemImage: Theme.Icon.machines)
                 }
             }
     }
@@ -208,13 +208,13 @@ struct AgentRowMenu: View, Equatable {
         Divider()
         #endif
         Button { model.togglePin(key) } label: {
-            Label(pinned ? "取消置顶" : "置顶", systemImage: pinned ? Theme.Icon.unpin : Theme.Icon.pin)
+            Label(pinned ? String(localized: "Unpin [Personal Agent List View c92179]") : String(localized: "Pin [Personal Agent List View 173f88]"), systemImage: pinned ? Theme.Icon.unpin : Theme.Icon.pin)
         }
         if terminal {
-            Button { if let s = now() { actions.rename(s) } } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
+            Button { if let s = now() { actions.rename(s) } } label: { Label("Rename… [Assistant Sidebar ec4cd0]", systemImage: Theme.Icon.edit) }
         }
         Button { model.toggleMute(key) } label: {
-            Label(muted ? "开启通知" : "屏蔽通知", systemImage: muted ? Theme.Icon.unmute : Theme.Icon.mute)
+            Label(muted ? String(localized: "Unmute [Chat View 3834f9]") : String(localized: "Mute"), systemImage: muted ? Theme.Icon.unmute : Theme.Icon.mute)
         }
         // TodoItem actions only for an Agent on the selected hub: the todos and their links live there.
         if TodoStore.shared.isSupported, let current = now(),
@@ -224,7 +224,7 @@ struct AgentRowMenu: View, Equatable {
                 Button {
                     if let s = now() { actions.linkTodo(s) }
                 } label: {
-                    Label("改挂到其他待办…", systemImage: Theme.Icon.todo)
+                    Label("Move to Another To-do…", systemImage: Theme.Icon.todo)
                 }
                 Button {
                     guard let s = now() else { return }
@@ -236,45 +236,45 @@ struct AgentRowMenu: View, Equatable {
                         }
                     }
                 } label: {
-                    Label("解除关联", systemImage: Theme.Icon.link)
+                    Label("Unlink", systemImage: Theme.Icon.link)
                 }
             } else {
                 Button {
                     if let s = now() { actions.linkTodo(s) }
                 } label: {
-                    Label("关联到待办…", systemImage: Theme.Icon.todo)
+                    Label("Link to To-do…", systemImage: Theme.Icon.todo)
                 }
             }
         }
         if looping {
-            Button(role: .destructive) { model.stopLoop(key) } label: { Label("停止循环", systemImage: Theme.Icon.stopLoop) }
+            Button(role: .destructive) { model.stopLoop(key) } label: { Label("Stop Loop", systemImage: Theme.Icon.stopLoop) }
         }
         Button {
             guard let s = now() else { return }
             Task { await model.askJarvis(AgentHandoff.prompt(s, machine: model.machine(s.machineRef)?.name)) }
         } label: {
-            Label("交给 Persona", systemImage: Theme.Icon.ai)
+            Label("Hand to Persona", systemImage: Theme.Icon.ai)
         }
-        Button { UIPasteboard.general.string = now()?.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
+        Button { UIPasteboard.general.string = now()?.cwd } label: { Label("Copy Directory", systemImage: Theme.Icon.folder) }
         if attachable {
-            Button { Task { await model.attach(key) } } label: { Label("实时接入", systemImage: Theme.Icon.link).lineLimit(1) }
+            Button { Task { await model.attach(key) } } label: { Label("Attach Live", systemImage: Theme.Icon.link).lineLimit(1) }
         }
         if terminal {
             Button {
                 guard let s = now(), s.canTerminal else { return }
                 UIPasteboard.general.string = "\(s.resumeCommand) \(s.sourceThreadID ?? s.sessionID)"
-            } label: { Label("拷贝恢复命令", systemImage: Theme.Icon.terminal).lineLimit(1) }
+            } label: { Label("Copy Resume Command", systemImage: Theme.Icon.terminal).lineLimit(1) }
         }
         if paneActions {
             Section { AgentNodeMenuItems(now: now) }
         }
         if live && terminal {
-            Button(role: .destructive) { if let s = now() { actions.close(s) } } label: { Label("关闭 Agent…", systemImage: Theme.Icon.end) }
+            Button(role: .destructive) { if let s = now() { actions.close(s) } } label: { Label("Close Agent…", systemImage: Theme.Icon.end) }
         }
         if deletable {
             Button(role: .destructive) {
                 if let s = now(), s.canDelete { actions.delete(s) }
-            } label: { Label("删除对话…", systemImage: Theme.Icon.delete).lineLimit(1) }
+            } label: { Label("Delete Chat…", systemImage: Theme.Icon.delete).lineLimit(1) }
         }
     }
 }

@@ -42,10 +42,10 @@ enum RemindersTool {
                 ),
                 source: .reminders,
                 confirmation: { args in
-                    let title = ToolArgs.string(args, "title") ?? String(localized: "(无标题)")
-                    var summary = String(localized: "新建提醒事项「\(title)」")
-                    if let due = ToolArgs.string(args, "due") { summary += String(localized: "\n到期：\(due)") }
-                    if let list = ToolArgs.string(args, "list") { summary += String(localized: "\n列表：\(list)") }
+                    let title = ToolArgs.string(args, "title") ?? String(localized: "(Untitled)")
+                    var summary = String(localized: "New reminder “\(title)”")
+                    if let due = ToolArgs.string(args, "due") { summary += String(localized: "\\nDue: \(due)") }
+                    if let list = ToolArgs.string(args, "list") { summary += String(localized: "\\nList: \(list)") }
                     return summary
                 },
                 run: { args in try await create(args) }
@@ -227,12 +227,12 @@ enum RemindersTool {
     static func completeSummary(id: String?, target: CompletionTarget?) -> String {
         guard let target else {
             let shown = id ?? "?"
-            return String(localized: "找不到这条提醒（或没有提醒事项权限）：\(shown)")
+            return String(localized: "Can't find this reminder (or Persona has no access to Reminders): \(shown)")
         }
-        let title = target.title.isEmpty ? String(localized: "(无标题)") : target.title
-        var summary = target.list.map { list in String(localized: "把「\(title)」（\(list)）标记为已完成") }
-            ?? String(localized: "把「\(title)」标记为已完成")
-        if let due = target.due { summary += String(localized: "\n到期：\(due)") }
+        let title = target.title.isEmpty ? String(localized: "(Untitled)") : target.title
+        var summary = target.list.map { list in String(localized: "Mark “\(title)” (\(list)) as completed") }
+            ?? String(localized: "Mark “\(title)” as completed")
+        if let due = target.due { summary += String(localized: "\\nDue: \(due)") }
         return summary
     }
 

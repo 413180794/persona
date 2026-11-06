@@ -67,11 +67,11 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
     /// A task notice in one sentence per state, so a translation can put the title where it belongs.
     private static func noticeLine(_ state: String, title: String) -> String {
         switch state {
-        case "done": String(localized: "任务「\(title)」做完了")
-        case "needs": String(localized: "任务「\(title)」在等你")
-        case "interrupted": String(localized: "任务「\(title)」被打断了")
-        case "failed": String(localized: "任务「\(title)」没开起来")
-        default: String(localized: "任务「\(title)」")
+        case "done": String(localized: "Task “\(title)” is done")
+        case "needs": String(localized: "Task “\(title)” needs you")
+        case "interrupted": String(localized: "Task “\(title)” was interrupted")
+        case "failed": String(localized: "Task “\(title)” didn't start")
+        default: String(localized: "Task “\(title)”")
         }
     }
 
@@ -100,7 +100,7 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
         if head.hasPrefix("⏰（") { // i18n-ignore
             guard let g = groups(wakeHead, head) else { return nil }
             let wait = g[0] ?? ""
-            return Injected(kind: "followup", state: "wake", title: wait, line: String(localized: "Persona 叫醒了它：看看「\(wait)」好了没有"))
+            return Injected(kind: "followup", state: "wake", title: wait, line: String(localized: "Persona woke it up to check whether “\(wait)” is ready"))
         }
         if head.hasPrefix("⏰ ") {
             guard let g = groups(followupHead, head) else { return nil }
@@ -108,14 +108,14 @@ nonisolated struct Injected: Codable, Hashable, Sendable {
             let detail = followupDetail(rest)
             let d = detail.isEmpty ? nil : detail
             if what == "你之前安排的跟进" { // i18n-ignore
-                return Injected(kind: "followup", state: "once", title: title, line: String(localized: "跟进「\(title)」到时间了"), detail: d)
+                return Injected(kind: "followup", state: "once", title: title, line: String(localized: "Follow-up “\(title)” is due"), detail: d)
             }
             return Injected(kind: "followup", state: what.hasPrefix("定时任务，每 ") ? "interval" : "daily", title: title, // i18n-ignore
-                            line: String(localized: "定时任务「\(title)」开始运行"), detail: d)
+                            line: String(localized: "Scheduled task “\(title)” started"), detail: d)
         }
         if head.hasPrefix(lostTasksHead) {
             let n = rest.split(separator: "\n", omittingEmptySubsequences: false).filter { $0.hasPrefix("- ") }.count
-            return Injected(kind: "system", state: "lost_tasks", line: n > 0 ? String(localized: "node 重启过，\(n) 个后台任务停了") : String(localized: "node 重启过，后台任务停了"))
+            return Injected(kind: "system", state: "lost_tasks", line: n > 0 ? String(localized: "The node restarted; \(n) background tasks stopped") : String(localized: "The node restarted; background tasks stopped"))
         }
         return nil
     }

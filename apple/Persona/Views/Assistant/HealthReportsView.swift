@@ -54,7 +54,7 @@ struct HealthReportsView: View {
     var body: some View {
         content
             .themedPage()
-            .pageTitle(String(localized: "体检报告"))
+            .pageTitle(String(localized: "Checkup reports"))
             .task { await page.load() }
             .refreshable { await page.load() }
             #if DEBUG
@@ -66,15 +66,15 @@ struct HealthReportsView: View {
             #endif
             .sheet(item: $file) { FileViewer(ref: $0) }
             .confirmationDialog(
-                "删除这份报告？",
+                "Delete this report?",
                 isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
                 titleVisibility: .visible,
                 presenting: deleting
             ) { report in
-                Button("确定删除", role: .destructive) { Task { await page.delete(report) } }
-                Button("不删了", role: .cancel) {}
+                Button("Delete for good", role: .destructive) { Task { await page.delete(report) } }
+                Button("Keep it", role: .cancel) {}
             } message: { _ in
-                Text("原件和整理好的记录会永久删除，不能恢复。健康对话和健康记忆里已经提到的内容不会一起删，要清掉需要单独处理。")
+                Text("The original and its summary will be deleted for good. Anything your health conversations and health memory already mention stays; remove that separately.")
             }
     }
 
@@ -83,10 +83,10 @@ struct HealthReportsView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if page.reports.isEmpty {
             if let error = page.error {
-                EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "没读到体检报告"), message: error)
+                EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "Couldn't read checkup reports"), message: error)
             } else {
-                EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "还没有体检报告"),
-                               message: String(localized: "在健康页点「上传体检报告」，传过的报告会留在这里，可以随时查看和删除。"))
+                EmptyStateView(symbol: Theme.Icon.document, title: String(localized: "No checkup reports yet"),
+                               message: String(localized: "Tap \"Upload checkup report\" on the Health page. Reports you upload stay here, and you can view or delete them anytime."))
             }
         } else {
             List(page.reports) { report in row(report) }
@@ -97,12 +97,12 @@ struct HealthReportsView: View {
 
     @ViewBuilder private func actions(_ report: APIClient.HealthReport) -> some View {
         if let record = report.recordPath {
-            Button { open(record) } label: { Label("查看整理记录", systemImage: Theme.Icon.document) }
+            Button { open(record) } label: { Label("View summary", systemImage: Theme.Icon.document) }
         }
         if let path = report.path {
-            Button { open(path) } label: { Label("打开原件", systemImage: Theme.Icon.file) }
+            Button { open(path) } label: { Label("Open original", systemImage: Theme.Icon.file) }
         }
-        Button(role: .destructive) { deleting = report } label: { Label("删除", systemImage: Theme.Icon.delete) }
+        Button(role: .destructive) { deleting = report } label: { Label("Delete", systemImage: Theme.Icon.delete) }
     }
 
     /// Every action is one tap away, in a menu: a report has two things to open and they read differently.
@@ -117,7 +117,7 @@ struct HealthReportsView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(report.title).font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
-                    Text(report.recordPath == nil ? "还没整理" : "已整理")
+                    Text(report.recordPath == nil ? String(localized: "Not summarized yet") : String(localized: "Summarized"))
                         .font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: Theme.Space.s)
@@ -131,7 +131,7 @@ struct HealthReportsView: View {
         .menuStyle(.button)
         .accessibilityIdentifier("health-report")
         .swipeActions(edge: .trailing) {
-            Button { deleting = report } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
+            Button { deleting = report } label: { Label("Delete", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
         }
     }
 }

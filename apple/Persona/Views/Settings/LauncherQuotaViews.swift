@@ -17,24 +17,24 @@ struct LauncherQuotaSection: View {
                 Label(failed, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
             } else if let a = answer {
                 if let q = a.quota { report(q) } else {
-                    Text(a.error ?? String(localized: "读不到额度")).font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text(a.error ?? String(localized: "Couldn't read quota")).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             } else {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView()
-                    Text("正在读取额度…").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Reading quota…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
         } header: {
             HStack {
-                Text(answer?.quota.map { String(localized: "额度 · \($0.gatewayName)") } ?? String(localized: "额度"))
+                Text(answer?.quota.map { String(localized: "Quota · \($0.gatewayName)") } ?? String(localized: "Quota"))
                 Spacer()
                 if answer?.unsupported != true {
                     Button { Task { await load(refresh: true) } } label: {
                         if loading { ProgressView().controlSize(.mini) } else { Image(systemName: Theme.Icon.retry) }
                     }
                     .disabled(loading)
-                    .accessibilityLabel("刷新额度")
+                    .accessibilityLabel("Refresh Quota")
                 }
             }
         } footer: {
@@ -51,7 +51,7 @@ struct LauncherQuotaSection: View {
         ForEach(q.pools ?? [], id: \.name) { p in QuotaPoolRow(pool: p) }
         if let usage = q.usage, !usage.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text("这个 Key 的用量").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
+                Text("Usage for This Key").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
                 ForEach(usage, id: \.label) { u in
                     LabeledContent(u.label) {
                         Text(QuotaText.usage(u)).font(Theme.Font.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -62,16 +62,16 @@ struct LauncherQuotaSection: View {
             .padding(.vertical, Theme.Space.xxs)
         }
         if (q.pools ?? []).isEmpty, (q.budget ?? []).isEmpty, q.note == nil {
-            Text("这个 Key 没有设额度上限。").font(Theme.Font.label).foregroundStyle(.secondary)
+            Text("This key has no quota limit.").font(Theme.Font.label).foregroundStyle(.secondary)
         }
     }
 
     private func footer(_ a: LauncherQuotaAnswer) -> String {
         var parts: [String] = []
-        if let k = a.quota?.keyName, !k.isEmpty { parts.append(String(localized: "网关上的 Key 名：\(k)")) }
-        if let m = a.machine, !m.isEmpty { parts.append(String(localized: "由 \(model.machine(model.hubRef(m))?.name ?? m) 读取，Key 不离开那台电脑")) }
-        if let t = a.checkedAt { parts.append(String(localized: "\(Fmt.relative(t))读的，一分钟内再打开用这次的")) }
-        return parts.joined(separator: String(localized: "；", comment: "Separator between footer sentences")) + String(localized: "。", comment: "Sentence-ending period after the quota footer")
+        if let k = a.quota?.keyName, !k.isEmpty { parts.append(String(localized: "Key name on the gateway: \(k)")) }
+        if let m = a.machine, !m.isEmpty { parts.append(String(localized: "Read by \(model.machine(model.hubRef(m))?.name ?? m), and the key never leaves that computer")) }
+        if let t = a.checkedAt { parts.append(String(localized: "Checked \(Fmt.relative(t)); opening again within a minute reuses this result")) }
+        return parts.joined(separator: String(localized: "; ", comment: "Separator between footer sentences")) + String(localized: "。", comment: "Sentence-ending period after the quota footer")
     }
 
     private func load(refresh: Bool) async {
@@ -115,7 +115,7 @@ struct QuotaPoolRow: View {
                         }
                     }
                 } label: {
-                    Text("按模型 \(models.count)").font(Theme.Font.caption).lineLimit(1)
+                    Text("By Model (\(models.count))").font(Theme.Font.caption).lineLimit(1)
                 }
             }
         }
@@ -138,7 +138,7 @@ struct QuotaWindowRow: View {
             if let r = window.usedRatio {
                 ProgressView(value: min(max(r, 0), 1))
                     .tint(QuotaText.tint(r, exhausted: window.exhausted == true))
-                    .accessibilityLabel("\(window.label) 已用 \(Int((r * 100).rounded()))%")
+                    .accessibilityLabel("\(window.label): \(Int((r * 100).rounded()))% used")
             }
             if let reset = window.resetsAt {
                 Text(QuotaText.reset(reset)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
@@ -157,30 +157,30 @@ enum QuotaText {
 
     /// "64% used", "6401 / 10000", "$2,100 / $3,000", "Used up".
     static func amount(_ w: LauncherQuota.Window) -> String {
-        if w.exhausted == true && (w.usedRatio ?? 1) >= 1 { return String(localized: "已用完") }
+        if w.exhausted == true && (w.usedRatio ?? 1) >= 1 { return String(localized: "Used up") }
         switch w.unit {
         case "usd":
             if let u = w.used, let l = w.limit { return "$\(money(u)) / $\(money(l))" }
         case "tokens":
             if let u = w.used, let l = w.limit { return String(localized: "\(count(u)) / \(count(l)) token") }
         case "requests":
-            if let u = w.used, let l = w.limit { return String(localized: "\(count(u)) / \(count(l)) 次") }
+            if let u = w.used, let l = w.limit { return String(localized: "\(count(u)) / \(count(l)) requests") }
         case "credits":
             if let u = w.used, let l = w.limit { return "\(count(u)) / \(count(l))" }
         default: break
         }
-        if let r = w.usedRatio { return String(localized: "已用 \(Int((r * 100).rounded()))%") }
+        if let r = w.usedRatio { return String(localized: "\(Int((r * 100).rounded()))% used") }
         return "—"
     }
 
     static func usage(_ u: LauncherQuota.Usage) -> String {
-        var s = String(localized: "\(count(Double(u.requests))) 次 · \(count(Double(u.tokens))) token")
+        var s = String(localized: "\(count(Double(u.requests))) requests · \(count(Double(u.tokens))) tokens")
         if let c = u.costUSD { s += " · $\(money(c))" }
         return s
     }
 
     static func reset(_ d: Date) -> String {
-        d.timeIntervalSinceNow <= 0 ? String(localized: "已重置") : String(localized: "\(d.formatted(.dateTime.month().day().hour().minute())) 重置")
+        d.timeIntervalSinceNow <= 0 ? String(localized: "Reset") : String(localized: "Resets \(d.formatted(.dateTime.month().day().hour().minute()))")
     }
 
     /// 「1.2 万」, 「3.4 亿」 (Chinese); other languages: 12K, 340M.

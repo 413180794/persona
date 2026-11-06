@@ -29,8 +29,8 @@ struct HubInAppTunnelPage: View {
                 }
                 #endif
         } else {
-            EmptyStateView(symbol: Theme.Icon.inAppTunnel, title: String(localized: "这台 hub 没有内网隧道"),
-                           message: String(localized: "在 hub 上装好并打开提供内网隧道的扩展，再回到这里。"))
+            EmptyStateView(symbol: Theme.Icon.inAppTunnel, title: String(localized: "This hub has no tunnel"),
+                           message: String(localized: "Install and turn on an extension that provides a tunnel on the hub, then come back here."))
         }
     }
 
@@ -39,7 +39,7 @@ struct HubInAppTunnelPage: View {
             if !InAppTunnel.available {
                 Section {
                     Label {
-                        Text("这个版本的 App 没有内网隧道核心。").font(Theme.Font.secondary)
+                        Text("This build of the app has no tunnel core.").font(Theme.Font.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
@@ -54,29 +54,29 @@ struct HubInAppTunnelPage: View {
                 LabeledContent {
                     Text(verbatim: route.targetHost).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 } label: {
-                    Text("地址").lineLimit(1)
+                    Text("Address").lineLimit(1)
                 }
                 .accessibilityIdentifier("tunnel.targetHost")
                 LabeledContent {
                     Text(verbatim: String(route.targetPort)).foregroundStyle(.secondary).lineLimit(1)
                 } label: {
-                    Text("端口").lineLimit(1)
+                    Text("Port").lineLimit(1)
                 }
                 .accessibilityIdentifier("tunnel.targetPort")
             } header: {
-                SettingsHeading(String(localized: "隧道目标"))
+                SettingsHeading(String(localized: "Tunnel Target"))
             } footer: {
-                Text("hub 在隧道那一侧网络里的地址和 HTTP 端口，在 hub 上这个扩展的设置里改。")
+                Text("The hub's address and HTTP port in the network on the other side of the tunnel. Change them in this extension's settings on the hub.")
             }
             Section {
                 Toggle(isOn: Binding(get: { route.always }, set: { on in
                     var r = route
                     r.always = on
                     model.setInAppTunnel(r, hub: hubID)
-                })) { Text("总是走隧道").lineLimit(1) }
+                })) { Text("Always Use the Tunnel").lineLimit(1) }
                     .accessibilityIdentifier("tunnel.always")
             } footer: {
-                Text("关闭时先直连 hub，连不上才走隧道。只有 Persona 连 hub 的流量经过它，其他 App 不受影响；Persona 进后台时隧道断开，回到前台再连上。")
+                Text("When off, the hub is tried directly first and the tunnel is used only if that fails. Only Persona's traffic to the hub goes through it; other apps aren't affected. The tunnel disconnects when Persona goes to the background and reconnects when it comes back.")
             }
             if let problem {
                 Section {
@@ -92,7 +92,7 @@ struct HubInAppTunnelPage: View {
                 Button { Task { await test(route) } } label: {
                     HStack(spacing: Theme.Space.s) {
                         if checking { ProgressView() }
-                        Text(checking ? String(localized: "正在测试…") : String(localized: "测试连接")).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(checking ? String(localized: "Testing…") : String(localized: "Test Connection")).lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -102,7 +102,7 @@ struct HubInAppTunnelPage: View {
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             } footer: {
-                Text("会连上隧道，再经隧道访问一次 hub。")
+                Text("Connects the tunnel, then reaches the hub through it once.")
             }
         }
         .themedPage()
@@ -112,16 +112,16 @@ struct HubInAppTunnelPage: View {
         let tunnels = InAppTunnels.shared
         let routed = tunnels.routed.contains(hub.id)
         let live = model.isLive(hub.group)
-        let now: String = routed ? (live ? String(localized: "正在经隧道连 hub") : String(localized: "正在经隧道连接…"))
-            : live ? String(localized: "没有使用：直连 hub 正常") : String(localized: "未连接")
+        let now: String = routed ? (live ? String(localized: "Connected to the hub through the tunnel") : String(localized: "Connecting through the tunnel…"))
+            : live ? String(localized: "Not in use: direct connection to the hub works") : String(localized: "Not Connected")
         return Section {
             SettingsRow(title: now, symbol: routed ? Theme.Icon.inAppTunnel : Theme.Icon.server, tint: routed ? Theme.positive : Theme.Hue.gray)
                 .accessibilityIdentifier("tunnel.status")
             if case .down(let why) = tunnels.states[hub.id] {
-                Text("上次失败：\(why)").font(Theme.Font.caption).foregroundStyle(Theme.danger)
+                Text("Last failure: \(why)").font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }
         } header: {
-            SettingsHeading(String(localized: "状态"))
+            SettingsHeading(String(localized: "Status"))
         }
     }
 
@@ -129,10 +129,10 @@ struct HubInAppTunnelPage: View {
 
     @ViewBuilder private func account(_ route: InAppTunnelRoute) -> some View {
         Section {
-            SettingsRow(title: String(localized: "账号"), symbol: Theme.Icon.siteLogin, tint: Theme.Hue.blue, value: accountValue, look: .oneLine)
+            SettingsRow(title: String(localized: "Accounts"), symbol: Theme.Icon.siteLogin, tint: Theme.Hue.blue, value: accountValue, look: .oneLine)
                 .accessibilityIdentifier("tunnel.account")
             Button { Task { await openPanel(route) } } label: {
-                SettingsRow(title: String(localized: "登录和选节点"), symbol: Theme.Icon.openExternal, tint: Theme.accent)
+                SettingsRow(title: String(localized: "Sign In and Pick a Node"), symbol: Theme.Icon.openExternal, tint: Theme.accent)
             }
             .modifier(SettingsButtonLook())
             .disabled(!InAppTunnel.available)
@@ -142,18 +142,18 @@ struct HubInAppTunnelPage: View {
                 Text(coreProblem).font(Theme.Font.caption).foregroundStyle(Theme.danger)
             }
         } header: {
-            SettingsHeading(String(localized: "隧道账号"))
+            SettingsHeading(String(localized: "Tunnel Account"))
         } footer: {
-            Text("第一次使用时在面板里登录，再选一个节点。登录信息只存在这台设备上，不上传 hub。")
+            Text("The first time, sign in on the panel, then pick a node. The sign-in stays on this device and isn't uploaded to the hub.")
         }
     }
 
     private var accountValue: String {
-        guard let core else { return String(localized: "未启动") }
-        if !core.loggedIn || !core.hasServer { return String(localized: "未登录") }
-        if core.needsMfa == true { return String(localized: "需要二次验证") }
-        if core.connected { return core.serverName.map { String(localized: "已连接 · \($0)") } ?? String(localized: "已连接") }
-        return String(localized: "已登录")
+        guard let core else { return String(localized: "Not Started") }
+        if !core.loggedIn || !core.hasServer { return String(localized: "Not signed in") }
+        if core.needsMfa == true { return String(localized: "Needs Two-Step Verification") }
+        if core.connected { return core.serverName.map { String(localized: "Connected · \($0)") } ?? String(localized: "Connected [V N C Page 5be032]") }
+        return String(localized: "Signed in")
     }
 
     private func openPanel(_ route: InAppTunnelRoute) async {
@@ -181,7 +181,7 @@ struct HubInAppTunnelPage: View {
         do {
             try await InAppTunnels.shared.verify(route)
             Haptics.tap()
-            model.toast = Toast(String(localized: "经隧道连上了 hub"), style: .success)
+            model.toast = Toast(String(localized: "Reached the hub through the tunnel"), style: .success)
         } catch {
             problem = error.localizedDescription
         }
@@ -210,9 +210,9 @@ struct InAppTunnelPanelSheet: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button { store.reload() } label: { Image(systemName: Theme.Icon.reload) }
-                            .accessibilityLabel(String(localized: "重新加载"))
+                            .accessibilityLabel(String(localized: "Reload [Lark Chat Pins View 7bdd5c]"))
                     }
-                    ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                    ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
                 }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -285,12 +285,12 @@ final class InAppTunnelPanelStore: NSObject, WKNavigationDelegate, WKUIDelegate 
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo) async {
-        _ = await present(message, cancel: nil, ok: String(localized: "好"))
+        _ = await present(message, cancel: nil, ok: String(localized: "OK [In App Tunnel View f867f3]"))
     }
 
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
                  initiatedByFrame frame: WKFrameInfo) async -> Bool {
-        await present(message, cancel: String(localized: "取消"), ok: String(localized: "确定"))
+        await present(message, cancel: String(localized: "Cancel"), ok: String(localized: "OK [Interactive Assistant View Card fac2a6]"))
     }
 
     private func present(_ message: String, cancel: String?, ok: String) async -> Bool {

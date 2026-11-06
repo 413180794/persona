@@ -106,7 +106,7 @@ struct HubSettingsPage: View {
         SettingsForm {
             if model.unsupported {
                 Section {
-                    Text("这个 hub 的版本太旧，不支持在 App 里查看和更新版本。在 hub 所在的机器上用 install.sh 更新一次以后就可以了。")
+                    Text("This hub is too old to check or update its version from the app. Update it once with install.sh on the hub machine and it will work.")
                         .foregroundStyle(.secondary)
                 }
             } else if let s = model.status {
@@ -128,10 +128,10 @@ struct HubSettingsPage: View {
         .onChange(of: app.hubUpdate) { _, s in
             if let s, s != model.status { model.apply(s) }
         }
-        .confirmationDialog("现在就更新？", isPresented: $confirmNow, titleVisibility: .visible) {
-            Button("现在就更新", role: .destructive) { Task { await model.update(now: true) } }
+        .confirmationDialog("Update Now?", isPresented: $confirmNow, titleVisibility: .visible) {
+            Button("Update Now", role: .destructive) { Task { await model.update(now: true) } }
         } message: {
-            Text("不再等它们结束：会中断正在等 hub 的操作（助手这一轮、正在上传的文件、终端连接）。herdr 里的 Agent 不受影响，hub 起来后会自己连回来。")
+            Text("This won't wait for them to finish: anything waiting on the hub is interrupted (the assistant's current turn, uploads in progress, terminal connections). Agents in herdr aren't affected and reconnect once the hub is back.")
         }
     }
 
@@ -140,14 +140,14 @@ struct HubSettingsPage: View {
     private func versionSection(_ s: HubUpdateStatus) -> some View {
         Section {
             Group {
-                info(String(localized: "版本"), s.version, code: true)
-                info(String(localized: "渠道"), s.channelTitle)
-                if let at = s.lastCheck { info(String(localized: "上次检查"), Fmt.relative(at)) }
+                info(String(localized: "Version"), s.version, code: true)
+                info(String(localized: "Channels"), s.channelTitle)
+                if let at = s.lastCheck { info(String(localized: "Last Checked"), Fmt.relative(at)) }
                 Button {
                     Task { await model.check() }
                 } label: {
                     HStack {
-                        Text(model.checking ? "正在检查…" : "检查更新").lineLimit(1)
+                        Text(model.checking ? String(localized: "Checking…") : String(localized: "Check for Updates")).lineLimit(1)
                         if model.checking { Spacer(); ProgressView().controlSize(.small) }
                     }
                 }
@@ -163,16 +163,16 @@ struct HubSettingsPage: View {
             if s.channel == "docker" {
                 dockerRows(s)
             } else if !s.canUpdate {
-                Text(s.whyNot.map { String(localized: "这个 hub 不会自己更新：\($0)。") } ?? String(localized: "这个 hub 不会自己更新。")).foregroundStyle(.secondary)
+                Text(s.whyNot.map { String(localized: "This hub doesn't update itself: \($0).") } ?? String(localized: "This hub doesn't update itself.")).foregroundStyle(.secondary)
             } else if let l = s.latest, l.newer {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    Text("新版本 \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
+                    Text("New Version \(l.version) [Hub Update Views cf4c45]").font(Theme.Font.bodyStrong).lineLimit(1)
                     if let notes = l.notes, !notes.isEmpty { Text(notes).font(Theme.Font.secondary).foregroundStyle(.secondary) }
                     if l.bad {
-                        Label("这一版上次装完起不来，已经回滚过；自动更新不会再装它。", systemImage: Theme.Icon.error)
+                        Label("This version failed to start last time and was rolled back; auto-update won't install it again.", systemImage: Theme.Icon.error)
                             .font(Theme.Font.secondary).foregroundStyle(Theme.caution)
                     } else if let why = l.held, s.auto {
-                        Label("自动更新不会装这一版：\(why)。确认没问题可以手动更新。", systemImage: Theme.Icon.error)
+                        Label("Auto-update won't install this version: \(why). If you're sure it's fine, update manually.", systemImage: Theme.Icon.error)
                             .font(Theme.Font.secondary).foregroundStyle(Theme.caution)
                             .accessibilityIdentifier("hub.held")
                     }
@@ -184,7 +184,7 @@ struct HubSettingsPage: View {
                     // A standard button at the group's trailing end, not a bar the width of the form (#1221).
                     HStack {
                         Spacer(minLength: 0)
-                        Button { Task { await model.update(now: false) } } label: { Text("更新 hub").lineLimit(1) }
+                        Button { Task { await model.update(now: false) } } label: { Text("Update Hub").lineLimit(1) }
                             .formButton(prominent: true)
                             .accessibilityIdentifier("hub.update")
                     }
@@ -192,7 +192,7 @@ struct HubSettingsPage: View {
                     Button {
                         Task { await model.update(now: false) }
                     } label: {
-                        Text("更新 hub").lineLimit(1).frame(maxWidth: .infinity) // the version is right above
+                        Text("Update Hub").lineLimit(1).frame(maxWidth: .infinity) // the version is right above
                     }
                     .themedButton(prominent: true)
                     .listRowBackground(Color.clear)
@@ -202,16 +202,16 @@ struct HubSettingsPage: View {
             } else if s.working {
                 progressRows(s)
             } else {
-                Label("已是最新", systemImage: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
+                Label("Up to Date", systemImage: Theme.Icon.successFilled).foregroundStyle(Theme.positive)
             }
             if let e = s.error, !e.isEmpty, !s.working {
                 Text(e).font(Theme.Font.secondary).foregroundStyle(s.state == "rolled_back" ? Theme.caution : Theme.danger)
             }
         } header: {
-            SettingsHeading(String(localized: "更新"))
+            SettingsHeading(String(localized: "Update [Hub Update Views 3055a0]"))
         } footer: {
             if s.canUpdate {
-                Text("更新会等助手和所有 Agent 都空闲时再重启 hub；新版本起不来会自动回到上一版。重启期间连接会断开一会儿。")
+                Text("Updates wait until the assistant and all agents are idle before restarting the hub; if the new version doesn't start, it rolls back automatically. Connections drop briefly during the restart.")
             }
         }
     }
@@ -232,24 +232,24 @@ struct HubSettingsPage: View {
                     Image(systemName: Theme.Icon.inProgress).foregroundStyle(Theme.busy)
                 }
             }
-            Button(role: .destructive) { confirmNow = true } label: { Text("现在就更新…").lineLimit(1) }
+            Button(role: .destructive) { confirmNow = true } label: { Text("Update Now…").lineLimit(1) }
                 .accessibilityIdentifier("hub.updateNow")
         }
     }
 
     @ViewBuilder private func dockerRows(_ s: HubUpdateStatus) -> some View {
         if let l = s.latest, l.newer {
-            Text("新镜像 \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
+            Text("New Image \(l.version)").font(Theme.Font.bodyStrong).lineLimit(1)
             if let im = s.image, im.pinned {
                 // `pull` alone keeps the version the tag names: the tag changes first.
-                Text("在 hub 所在的机器（NAS）上，把 compose 文件旁边 .env 里的 JARVIS_IMAGE 改成：").foregroundStyle(.secondary)
+                Text("On the hub machine (NAS), change JARVIS_IMAGE in the .env next to the compose file to:").foregroundStyle(.secondary)
                 copyRow(im.name + ":" + l.version)
-                Text("再在那个目录里运行：").foregroundStyle(.secondary)
+                Text("Then run this in that directory:").foregroundStyle(.secondary)
             } else {
-                Text("在 hub 所在的机器（NAS）上，compose 文件所在的目录里运行：").foregroundStyle(.secondary)
+                Text("On the hub machine (NAS), run this in the compose file's directory:").foregroundStyle(.secondary)
             }
         } else {
-            Text("Docker 部署的 hub 由新镜像更新：有新镜像时在 compose 文件所在的目录里运行").foregroundStyle(.secondary)
+            Text("A Docker hub updates with a new image: when one is out, run this in the compose file's directory").foregroundStyle(.secondary)
         }
         copyRow(Self.dockerCommand)
     }
@@ -262,7 +262,7 @@ struct HubSettingsPage: View {
                 Image(systemName: Theme.Icon.copy)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("复制")
+            .accessibilityLabel("Copy [Message Menu 63d90d]")
         }
     }
 
@@ -271,11 +271,11 @@ struct HubSettingsPage: View {
     private func autoSection(_ s: HubUpdateStatus) -> some View {
         Section {
             Toggle(isOn: Binding(get: { s.auto }, set: { on in Task { await model.setAuto(on) } })) {
-                Text("自动更新 hub").lineLimit(1)
+                Text("Update Hub Automatically").lineLimit(1)
             }
             .accessibilityIdentifier("hub.auto")
         } footer: {
-            Text("开着时，有新版本就在助手和所有 Agent 都空闲时自己装上，装完推一条通知。")
+            Text("When on, new versions install themselves once the assistant and all agents are idle, and you get a notification afterward.")
         }
     }
 
@@ -286,16 +286,16 @@ struct HubSettingsPage: View {
                     HStack(spacing: Theme.Space.s) {
                         Text(m.name).lineLimit(1)
                         Spacer(minLength: Theme.Space.s)
-                        if m.nodeMismatch == true { Chip(text: String(localized: "版本不同"), look: .tone(StatusPalette.working)) }
-                        Text(m.nodeVersion ?? (m.online ? String(localized: "未知") : String(localized: "离线")))
+                        if m.nodeMismatch == true { Chip(text: String(localized: "Mismatch"), look: .tone(StatusPalette.working)) }
+                        Text(m.nodeVersion ?? (m.online ? String(localized: "Unknown [Session Modes 4d8c1c]") : String(localized: "Offline [Machine Entity be1b4f]")))
                             .font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
             }
         } header: {
-            SettingsHeading(String(localized: "各台电脑上的 personad"))
+            SettingsHeading(String(localized: "personad on Your Computers"))
         } footer: {
-            Text("hub 更新后会把各台电脑上的 personad 也换成同一个版本；没换上的可以点进去「重新部署」。")
+            Text("After the hub updates, it moves personad on your computers to the same version. For any that didn't update, tap it and choose Redeploy.")
         }
     }
 
@@ -307,7 +307,7 @@ struct HubSettingsPage: View {
                         Text(r.resultTitle).font(Theme.Font.bodyStrong)
                             .foregroundStyle(r.result == "updated" ? Theme.positive : ["rolled_back", "held"].contains(r.result) ? Theme.caution : Theme.danger)
                             .lineLimit(1)
-                        if r.auto { Chip(text: String(localized: "自动"), look: .outline) }
+                        if r.auto { Chip(text: String(localized: "Auto"), look: .outline) }
                         Spacer(minLength: Theme.Space.s)
                         if let at = r.ended ?? r.started { Text(Fmt.relative(at)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1) }
                     }
@@ -316,7 +316,7 @@ struct HubSettingsPage: View {
                 }
             }
         } header: {
-            SettingsHeading(String(localized: "更新记录"))
+            SettingsHeading(String(localized: "Update History"))
         }
     }
 
@@ -361,19 +361,19 @@ struct HubNoticeRow: View {
 
     private var closeButton: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button { page = false } label: { Image(systemName: Theme.Icon.close) }.accessibilityLabel("关闭")
+            Button { page = false } label: { Image(systemName: Theme.Icon.close) }.accessibilityLabel("Close")
         }
     }
 
     private func text(_ n: HubNotice) -> String {
         switch n {
-        case .appTooOld: String(localized: "App 版本太旧，配不上这个 hub：请到 TestFlight 更新")
-        case .hubTooOld: String(localized: "hub 版本太旧，部分功能用不了")
-        case .updating(let what): String(localized: "hub 正在更新：\(what)")
+        case .appTooOld: String(localized: "This app is too old for this hub. Update it in TestFlight")
+        case .hubTooOld: String(localized: "The hub is out of date; some features won't work")
+        case .updating(let what): String(localized: "Hub updating: \(what)")
         case .rolledBack(let why, _): why
-        case .autoOn: String(localized: "hub 会在空闲时自动更新")
-        case .available(let v, _): String(localized: "hub 有新版本 \(v)")
-        case .newImage(let v): String(localized: "hub 有新镜像 \(v)")
+        case .autoOn: String(localized: "The hub updates itself when idle")
+        case .available(let v, _): String(localized: "Hub update available: \(v)")
+        case .newImage(let v): String(localized: "New hub image: \(v)")
         }
     }
 
@@ -394,10 +394,10 @@ struct HubNoticeRow: View {
     @ViewBuilder private func actions(_ n: HubNotice) -> some View {
         switch n {
         case .autoOn:
-            Button(String(localized: "action.turnOff", defaultValue: "关闭")) { Task { await HubUpdateModel().setAuto(false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.autoOff")
-            Button("知道了") { Task { await HubUpdateModel().noticeSeen() } }.lineLimit(1).accessibilityIdentifier("hubNotice.seen")
+            Button(String(localized: "action.turnOff", defaultValue: "Turn Off")) { Task { await HubUpdateModel().setAuto(false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.autoOff")
+            Button("OK [Recordings Section de32e2]") { Task { await HubUpdateModel().noticeSeen() } }.lineLimit(1).accessibilityIdentifier("hubNotice.seen")
         case .available:
-            Button("更新") { Task { await HubUpdateModel().update(now: false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.update")
+            Button("Update [Hub Update Views 3055a0]") { Task { await HubUpdateModel().update(now: false) } }.lineLimit(1).accessibilityIdentifier("hubNotice.update")
             dismiss(n)
         case .rolledBack, .hubTooOld, .newImage: // a Docker hub's new image: the page has the command to run
             dismiss(n)
@@ -409,7 +409,7 @@ struct HubNoticeRow: View {
     @ViewBuilder private func dismiss(_ n: HubNotice) -> some View {
         if let key = n.dismissKey {
             Button { model.dismissHubNotice(key) } label: { Image(systemName: Theme.Icon.close) }
-                .accessibilityLabel("不再提示")
+                .accessibilityLabel("Don't Show Again")
                 .accessibilityIdentifier("hubNotice.dismiss")
         }
     }
@@ -431,7 +431,7 @@ struct HubNoticeRow: View {
             let r = try await api.skills()
             (skills, machine, error) = (r.skills, r.machine, nil)
         } catch {
-            self.error = error.shown ?? String(localized: "读不到")
+            self.error = error.shown ?? String(localized: "Couldn't load [Connector Thread Models 153e20]")
         }
         loaded = true
     }
@@ -446,8 +446,8 @@ struct SkillsPage: View {
         SettingsForm {
             if model.loaded && model.skills.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? String(localized: "还没有 skill") : String(localized: "读不到 skill"),
-                                   message: model.error ?? String(localized: "把 skill 放进跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。"))
+                    EmptyStateView(symbol: Theme.Icon.skills, title: model.error == nil ? String(localized: "No Skills Yet") : String(localized: "Couldn't Load Skills"),
+                                   message: model.error ?? String(localized: "Put skills in ~/.persona/skills/ on the computer that runs the assistant, one directory each (with a SKILL.md inside)."))
                 }
             } else {
                 Section {
@@ -456,7 +456,7 @@ struct SkillsPage: View {
                             HStack(spacing: Theme.Space.s) {
                                 Text(s.name).font(Theme.Font.bodyStrong).lineLimit(1)
                                 Spacer(minLength: Theme.Space.s)
-                                Chip(text: s.source == "builtin" ? String(localized: "内置") : String(localized: "我的"), look: s.source == "builtin" ? .outline : .neutral)
+                                Chip(text: s.source == "builtin" ? String(localized: "Built-in") : String(localized: "Mine"), look: s.source == "builtin" ? .outline : .neutral)
                             }
                             if let d = s.description, !d.isEmpty {
                                 Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
@@ -464,8 +464,8 @@ struct SkillsPage: View {
                         }
                     }
                 } footer: {
-                    Text(model.machine.map { String(localized: "放在 \($0) 的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。") }
-                         ?? String(localized: "放在跑助手的那台电脑的 ~/.persona/skills/，每个一个目录（里面有 SKILL.md）。更新 personad 不会动它们；改了以后，下一段新对话起生效。"))
+                    Text(model.machine.map { String(localized: "Stored in ~/.persona/skills/ on \($0), one directory each (with a SKILL.md inside). Updating personad leaves them alone; changes take effect from the next new chat.") }
+                         ?? String(localized: "Stored in ~/.persona/skills/ on the computer that runs the assistant, one directory each (with a SKILL.md inside). Updating personad leaves them alone; changes take effect from the next new chat."))
                 }
             }
         }

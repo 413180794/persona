@@ -53,7 +53,7 @@ import UIKit
                 out.setAttributes(attributes(t.kind), range: NSRange(location: a, length: b - a))
             }
         }
-        if cut { out.append(NSAttributedString(string: String(localized: "  … 这一行太长，后面省略了"), attributes: attributes(.comment))) }
+        if cut { out.append(NSAttributedString(string: String(localized: "  … line too long, the rest is cut off"), attributes: attributes(.comment))) }
         return out
     }
 
@@ -158,9 +158,9 @@ import UIKit
     func menu(_ i: Int) -> UIMenu? {
         let line = doc.text(i)
         let all = doc
-        return UIMenu(title: String(localized: "第 \(i + 1) 行"), children: [
-            UIAction(title: String(localized: "拷贝这一行"), image: UIImage(systemName: Theme.Icon.copy)) { _ in UIPasteboard.general.string = line },
-            UIAction(title: String(localized: "拷贝全部"), image: UIImage(systemName: Theme.Icon.paste)) { _ in UIPasteboard.general.string = all.string },
+        return UIMenu(title: String(localized: "Line \(i + 1)"), children: [
+            UIAction(title: String(localized: "Copy Line"), image: UIImage(systemName: Theme.Icon.copy)) { _ in UIPasteboard.general.string = line },
+            UIAction(title: String(localized: "Copy All [Code File Source 197a4d]"), image: UIImage(systemName: Theme.Icon.paste)) { _ in UIPasteboard.general.string = all.string },
         ])
     }
 }

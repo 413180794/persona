@@ -181,7 +181,7 @@ struct ExtensionItemRow: View {
                 ExtensionActionButton(action: b.action, title: b.title, destructive: b.role == "destructive", model: model, link: $link) {
                     HStack(spacing: Theme.Space.s) {
                         if model.selected(b.action.id) {
-                            Image(systemName: Theme.Icon.success).foregroundStyle(Theme.positive).accessibilityLabel("已选")
+                            Image(systemName: Theme.Icon.success).foregroundStyle(Theme.positive).accessibilityLabel("Selected [Extension Components 7ecf1c]")
                         }
                         Text(b.title).lineLimit(1).minimumScaleFactor(0.8)
                         if model.running == b.action.id { ProgressView().controlSize(.small) }
@@ -204,7 +204,7 @@ struct ExtensionItemRow: View {
         case .loading(let l):
             HStack(spacing: Theme.Space.s) {
                 ProgressView().controlSize(.small)
-                Text(l.title?.isEmpty == false ? l.title! : String(localized: "加载中…")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                Text(l.title?.isEmpty == false ? l.title! : String(localized: "Loading… [Personal Agent Session View 4927a5]")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             .accessibilityIdentifier("plugin-ui-loading")
         // A divider splits sections before this; a component this app does not know (a newer extension's) is left out.
@@ -471,13 +471,13 @@ struct ExtensionPageView: View {
                 ExtensionViewRenderer(view: v, model: page, link: $link)
             } else if let e = page.error {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "读不到这一页"), message: e,
-                                   action: (String(localized: "重试"), { Task { await page.load() } }))
+                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Couldn't Load This Page"), message: e,
+                                   action: (String(localized: "Retry [Components b8784c]"), { Task { await page.load() } }))
                 }
                 .listRowBackground(Color.clear)
             } else if page.unsupported {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "这里没有内容"), message: String(localized: "扩展现在不在这里显示东西。"))
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "Nothing Here"), message: String(localized: "The extension isn't showing anything here right now."))
                 }
                 .listRowBackground(Color.clear)
             }
@@ -501,7 +501,7 @@ private struct ExtensionSearchField: ViewModifier {
         if let s = page.view?.search {
             content
                 .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always),
-                            prompt: s.placeholder?.isEmpty == false ? s.placeholder! : String(localized: "搜索"))
+                            prompt: s.placeholder?.isEmpty == false ? s.placeholder! : String(localized: "Search"))
                 .task(id: page.query) {
                     // Only what was typed since the last search: coming back to the page asks nothing again.
                     guard page.query != page.searchedQuery else { return }
@@ -532,12 +532,12 @@ struct ExtensionLauncherSections: View {
                 Section {
                     if let e = entry.model.error {
                         Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
-                        Button { Task { await entry.model.load() } } label: { Text("重试").lineLimit(1) }
+                        Button { Task { await entry.model.load() } } label: { Text("Retry [Components b8784c]").lineLimit(1) }
                             .accessibilityIdentifier("plugin-ui-retry")
                     } else {
                         HStack(spacing: Theme.Space.s) {
                             ProgressView()
-                            Text("正在读取…").font(Theme.Font.label).foregroundStyle(.secondary)
+                            Text("Loading… [File Viewer 86b6d0]").font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                     }
                 } header: {

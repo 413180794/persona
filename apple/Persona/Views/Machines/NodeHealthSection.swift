@@ -15,7 +15,7 @@ struct NodeHealthSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("这台电脑能做什么").font(Theme.Font.heading)
+            Text("What This Computer Can Do").font(Theme.Font.heading)
                 .padding(.horizontal, Theme.Space.xs)
             VStack(alignment: .leading, spacing: 0) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -28,9 +28,9 @@ struct NodeHealthSection: View {
             guard machine.online else { m.reset(); return }
             await m.check()
         }
-        .confirmationDialog("重新生成 Persona 的文件", isPresented: $confirmsFix, titleVisibility: .visible) {
-            Button("修复") { Task { await fix() } }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog("Regenerate Persona's Files", isPresented: $confirmsFix, titleVisibility: .visible) {
+            Button("Repair") { Task { await fix() } }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(fixMessage)
         }
@@ -41,31 +41,31 @@ struct NodeHealthSection: View {
     private func makeModel() -> NodeHealthModel {
         NodeHealthModel(deps: .init(
             check: { [ref, app] in
-                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                 return try await api.nodeDoctor(machine: ref.id)
             },
             fix: { [ref, app] in
-                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                guard let api = app.api(ref.group) else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                 return try await api.fixNodeDoctor(machine: ref.id)
             }))
     }
 
     private var fixMessage: String {
         let files = model?.report.map { NodeHealth.fixable($0).map(\.name).joined(separator: "、") } ?? ""
-        return String(localized: "在这台电脑上把 Persona 自己生成的 hooks、MCP 配置和技能文件按当前版本重写一遍（\(files)），写完再检查一次。不会改你自己的 Claude Code 设置。")
+        return String(localized: "Rewrites the hooks, MCP config and skill files Persona generated on this computer for the current version (\(files)), then checks again. Your own Claude Code settings aren't changed.")
     }
 
     // MARK: Content
 
     @ViewBuilder private var content: some View {
         if !machine.online {
-            line(String(localized: "机器离线，连上后可以检查这台电脑能做什么"))
+            line(String(localized: "The machine is offline. Once it's connected you can check what this computer can do."))
         } else if let model {
             switch model.load {
             case .idle, .loading:
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text("正在检查这台电脑…").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                    Text("Checking this computer…").font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.vertical, Theme.Space.m)
@@ -73,7 +73,7 @@ struct NodeHealthSection: View {
                 unavailable(why)
             case .error(let text):
                 HStack(spacing: Theme.Space.m) {
-                    Text("检查没做成：\(text)").font(Theme.Font.secondary).foregroundStyle(Theme.danger)
+                    Text("Check failed: \(text)").font(Theme.Font.secondary).foregroundStyle(Theme.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     recheckButton(model)
                 }
@@ -83,7 +83,7 @@ struct NodeHealthSection: View {
                 reportView(report, model: model)
             }
         } else {
-            line(String(localized: "正在检查这台电脑…"))
+            line(String(localized: "Checking this computer…"))
         }
     }
 
@@ -119,19 +119,19 @@ struct NodeHealthSection: View {
         .padding(.vertical, Theme.Space.m)
         if !fixable.isEmpty {
             HStack(spacing: Theme.Space.m) {
-                Text("\(fixable.count) 个 Persona 生成的文件过期或不见了")
+                Text("\(fixable.count) files Persona generated are out of date or missing")
                     .font(Theme.Font.label).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button { confirmsFix = true } label: {
                     if model.fixing {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("修复", systemImage: Theme.Icon.repair).font(Theme.Font.labelStrong).lineLimit(1)
+                        Label("Repair", systemImage: Theme.Icon.repair).font(Theme.Font.labelStrong).lineLimit(1)
                     }
                 }
                 .themedButton(prominent: true)
                 .disabled(model.busy)
-                .accessibilityLabel(model.fixing ? "正在修复" : "修复")
+                .accessibilityLabel(model.fixing ? String(localized: "Repairing") : String(localized: "Repair"))
                 .accessibilityIdentifier("machine.health.fix")
             }
             .padding(.horizontal, Theme.Space.l)
@@ -162,7 +162,7 @@ struct NodeHealthSection: View {
             withAnimation(Theme.Motion.layout) { showsAll.toggle() }
         } label: {
             HStack(spacing: Theme.Space.s) {
-                Text(showsAll ? "收起全部检查" : "查看全部检查（\(report.checks.count)）")
+                Text(showsAll ? String(localized: "Hide All Checks") : String(localized: "Show All Checks (\(report.checks.count))"))
                     .font(Theme.Font.secondaryMedium).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
                 Image(systemName: showsAll ? Theme.Icon.collapse : Theme.Icon.expand)
@@ -188,12 +188,12 @@ struct NodeHealthSection: View {
             if model.busy && !model.fixing {
                 ProgressView().controlSize(.small)
             } else {
-                Label("重新检查", systemImage: Theme.Icon.retry).font(Theme.Font.labelStrong).lineLimit(1)
+                Label("Check Again [Lark Chat View c25fb8]", systemImage: Theme.Icon.retry).font(Theme.Font.labelStrong).lineLimit(1)
             }
         }
         .themedButton()
         .disabled(model.busy)
-        .accessibilityLabel(model.busy && !model.fixing ? "正在检查" : "重新检查")
+        .accessibilityLabel(model.busy && !model.fixing ? String(localized: "Checking") : String(localized: "Check Again [Lark Chat View c25fb8]"))
         .accessibilityIdentifier("machine.health.recheck")
     }
 
@@ -201,7 +201,7 @@ struct NodeHealthSection: View {
         switch why {
         case .oldNode:
             HStack(spacing: Theme.Space.m) {
-                Text(NodeHealth.deployReason(machine).map { "这台电脑的 node 太旧，更新后可以在这里自检。\($0)" } ?? "这台电脑的 node 太旧，更新后可以在这里自检")
+                Text(NodeHealth.deployReason(machine).map { String(localized: "This computer's node is too old. Update it to run the self-check here. \($0)") } ?? String(localized: "This computer's node is too old. Update it to run the self-check here."))
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if NodeHealth.canDeploy(machine) {
@@ -210,22 +210,22 @@ struct NodeHealthSection: View {
                         if busy {
                             ProgressView().controlSize(.small)
                         } else {
-                            Text("重新部署").font(Theme.Font.labelStrong).lineLimit(1)
+                            Text("Redeploy").font(Theme.Font.labelStrong).lineLimit(1)
                         }
                     }
                     .themedButton()
                     .disabled(busy)
-                    .accessibilityLabel(busy ? "正在部署" : "重新部署")
+                    .accessibilityLabel(busy ? String(localized: "Deploying") : String(localized: "Redeploy"))
                 }
             }
             .padding(.horizontal, Theme.Space.l)
             .padding(.vertical, Theme.Space.m)
         case .oldHub:
-            line(String(localized: "hub 的版本还不支持自检，更新 hub 后可以在这里看"))
+            line(String(localized: "This hub version doesn't support the self-check yet. Update the hub to see it here."))
         case .forbidden:
-            line(String(localized: "这个设备只能回答问题，自检要用完整权限的设备"))
+            line(String(localized: "This device can only answer questions. The self-check needs a device with full access."))
         case .offline:
-            line(String(localized: "这台电脑刚离线，连上后再检查"))
+            line(String(localized: "This computer just went offline. Check again once it's connected."))
         }
     }
 
@@ -252,7 +252,7 @@ struct NodeHealthSection: View {
             Haptics.tap()
             await app.refresh()
         } catch {
-            if let m = error.shown { app.toast = Toast(String(localized: "部署失败：\(m)"), style: .error) }
+            if let m = error.shown { app.toast = Toast(String(localized: "Deploy failed: \(m)"), style: .error) }
         }
     }
 }

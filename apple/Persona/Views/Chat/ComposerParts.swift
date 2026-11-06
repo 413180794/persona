@@ -74,7 +74,7 @@ struct ComposerRow<MenuItems: View>: View {
                 .clipShape(.circle)
                 #endif
                 .tint(Theme.danger)
-                .accessibilityLabel("中断")
+                .accessibilityLabel("Interrupt [Composer Buttons f9d193]")
             } else {
                 Button(action: sendTyped) {
                     Image(systemName: Theme.Icon.send).font(Theme.Font.heading).frame(width: Self.glyph, height: Self.glyph)
@@ -87,7 +87,7 @@ struct ComposerRow<MenuItems: View>: View {
                 #endif
                 .disabled(!canSend)
                 .keyboardShortcut(.return, modifiers: .command)
-                .accessibilityLabel("发送")
+                .accessibilityLabel("Send")
             }
         }
     }
@@ -128,7 +128,7 @@ struct ComposerImages: View {
                             }
                         }
                         .onTapGesture { edit?(idx) }
-                        .accessibilityLabel(edit == nil ? "图片 \(idx + 1)" : "图片 \(idx + 1)，点按编辑")
+                        .accessibilityLabel(edit == nil ? String(localized: "Image \(idx + 1) [Composer Parts 0d2e3a]") : String(localized: "Image \(idx + 1), tap to edit"))
                         .overlay(alignment: .topTrailing) {
                             Button { images.remove(at: idx) } label: {
                                 Image(systemName: Theme.Icon.clear).symbolRenderingMode(.palette)

@@ -147,7 +147,7 @@ struct ImagePager<Page: View>: View {
         .themedButton()
         .clipShape(.circle)
         .padding(.horizontal, Theme.Space.l)
-        .accessibilityLabel(by < 0 ? "上一张" : "下一张")
+        .accessibilityLabel(by < 0 ? String(localized: "Previous image") : String(localized: "Next image"))
     }
 }
 #endif

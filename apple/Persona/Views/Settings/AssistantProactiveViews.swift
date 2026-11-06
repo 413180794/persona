@@ -11,10 +11,10 @@ import SwiftUI
 enum AssistantScheduleText {
     /// Short weekday names, Monday first.
     static var dayNames: [String] {
-        [String(localized: "一", comment: "Weekday, short: Monday"), String(localized: "二", comment: "Weekday, short: Tuesday"),
-         String(localized: "三", comment: "Weekday, short: Wednesday"), String(localized: "四", comment: "Weekday, short: Thursday"),
-         String(localized: "五", comment: "Weekday, short: Friday"), String(localized: "六", comment: "Weekday, short: Saturday"),
-         String(localized: "日", comment: "Weekday, short: Sunday")]
+        [String(localized: "Mon [Assistant Proactive Views 51a75f]", comment: "Weekday, short: Monday"), String(localized: "Tue [Assistant Proactive Views 084b42]", comment: "Weekday, short: Tuesday"),
+         String(localized: "Wed [Assistant Proactive Views a4c331]", comment: "Weekday, short: Wednesday"), String(localized: "Thu", comment: "Weekday, short: Thursday"),
+         String(localized: "Fri [Assistant Proactive Views c9b87f]", comment: "Weekday, short: Friday"), String(localized: "Sat [Assistant Proactive Views de07b5]", comment: "Weekday, short: Saturday"),
+         String(localized: "Sun [Assistant Proactive Views 85217f]", comment: "Weekday, short: Sunday")]
     }
     /// "Mon, Wed, Fri": the separator between weekday names.
     private static func dayList(_ days: Set<Int>) -> String {
@@ -25,11 +25,11 @@ enum AssistantScheduleText {
     /// "Every Day" / "Weekdays" / "Weekends" / "Every Mon, Wed, Fri".
     static func repeats(_ days: [Int]) -> String {
         let d = Set(days)
-        if d.isEmpty || d.count == 7 { return String(localized: "每天") }
-        if d == Set(workdays) { return String(localized: "工作日") }
-        if d == [6, 7] { return String(localized: "周末") }
+        if d.isEmpty || d.count == 7 { return String(localized: "Every Day") }
+        if d == Set(workdays) { return String(localized: "Weekdays") }
+        if d == [6, 7] { return String(localized: "Weekends") }
         let list = dayList(d)
-        return String(localized: "每周\(list)")
+        return String(localized: "Every \(list)")
     }
 
     /// The rule in words, as Reminders says it: "Every weekday 9:00 AM" / "Every Day 9:30 PM" / "Every Fri 5:00 PM" /
@@ -37,15 +37,15 @@ enum AssistantScheduleText {
     static func sentence(_ r: APIClient.ScheduledTask) -> String {
         switch r.repeats {
         case .interval: return every(r.everyMinutes)
-        case .once: return r.at.map { String(localized: "一次 · \(moment($0))") } ?? String(localized: "一次")
+        case .once: return r.at.map { String(localized: "Once · \(moment($0))") } ?? String(localized: "Once")
         case .daily: break
         }
         let d = Set(r.weekdays)
         let days: String
-        if d.isEmpty || d.count == 7 { days = String(localized: "每天") }
-        else if d == Set(workdays) { days = String(localized: "每个工作日") }
-        else if d == [6, 7] { days = String(localized: "每个周末") }
-        else { let list = dayList(d); days = String(localized: "每周\(list)") }
+        if d.isEmpty || d.count == 7 { days = String(localized: "Every Day") }
+        else if d == Set(workdays) { days = String(localized: "Every weekday") }
+        else if d == [6, 7] { days = String(localized: "Every weekend") }
+        else { let list = dayList(d); days = String(localized: "Every \(list)") }
         let time = clock(r.time)
         return String(localized: "\(days) \(time)", comment: "Repeat rule and time of day, e.g. Every weekday 9:00 AM")
     }
@@ -58,31 +58,31 @@ enum AssistantScheduleText {
         let h12 = h % 12 == 0 ? 12 : h % 12
         let time = String(format: "%d:%02d", h12, m)
         return switch h {
-        case 0..<5: String(localized: "凌晨 \(time)", comment: "12-hour time, 0:00–4:59")
-        case 5..<9: String(localized: "早上 \(time)", comment: "12-hour time, 5:00–8:59")
-        case 9..<12: String(localized: "上午 \(time)", comment: "12-hour time, 9:00–11:59")
-        case 12..<13: String(localized: "中午 \(time)", comment: "12-hour time, 12:00–12:59")
-        case 13..<18: String(localized: "下午 \(time)", comment: "12-hour time, 13:00–17:59")
-        default: String(localized: "晚上 \(time)", comment: "12-hour time, 18:00–23:59")
+        case 0..<5: String(localized: "\(time) AM [Assistant Proactive Views 44e8c1]", comment: "12-hour time, 0:00–4:59")
+        case 5..<9: String(localized: "\(time) AM [Assistant Proactive Views 699a88]", comment: "12-hour time, 5:00–8:59")
+        case 9..<12: String(localized: "\(time) AM [Assistant Proactive Views 125b02]", comment: "12-hour time, 9:00–11:59")
+        case 12..<13: String(localized: "\(time) PM [Assistant Proactive Views 989511]", comment: "12-hour time, 12:00–12:59")
+        case 13..<18: String(localized: "\(time) PM [Assistant Proactive Views c3a451]", comment: "12-hour time, 13:00–17:59")
+        default: String(localized: "\(time) PM [Assistant Proactive Views af60c6]", comment: "12-hour time, 18:00–23:59")
         }
     }
 
     /// The day part of a moment: "Today" / "Tomorrow" / "Yesterday" / "Wed" / "Nov 2".
     static func day(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
-        if cal.isDateInToday(date) { return String(localized: "今天") }
-        if cal.isDateInTomorrow(date) { return String(localized: "明天") }
-        if cal.isDateInYesterday(date) { return String(localized: "昨天") }
+        if cal.isDateInToday(date) { return String(localized: "Today") }
+        if cal.isDateInTomorrow(date) { return String(localized: "Tomorrow") }
+        if cal.isDateInYesterday(date) { return String(localized: "Yesterday") }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-        if abs(days) < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "周\(name)") }
+        if abs(days) < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "\(name) [Assistant Proactive Views 918479]") }
         return date.formatted(.dateTime.month().day())
     }
 
     /// "Every 30 min" / "Every 2 hr" / "Every 1 hr 30 min".
     static func every(_ minutes: Int) -> String {
-        if minutes < 60 { return String(localized: "每 \(minutes) 分钟") }
+        if minutes < 60 { return String(localized: "Every \(minutes) minutes") }
         let hours = minutes / 60, rest = minutes % 60
-        return rest == 0 ? String(localized: "每 \(hours) 小时") : String(localized: "每 \(hours) 小时 \(rest) 分钟")
+        return rest == 0 ? String(localized: "Every \(hours) hours") : String(localized: "Every \(hours) hr \(rest) min")
     }
 
     /// The intervals the editor offers.
@@ -96,25 +96,25 @@ enum AssistantScheduleText {
 
     /// The rule in words; a one-off says where it runs.
     static func rule(_ r: APIClient.ScheduledTask) -> String {
-        r.repeats == .once ? (r.sessionID == nil ? String(localized: "一次 · 新对话") : String(localized: "一次 · 接着原来的对话")) : sentence(r)
+        r.repeats == .once ? (r.sessionID == nil ? String(localized: "Once · New chat") : String(localized: "Once · Continues the chat")) : sentence(r)
     }
 
     /// The mark for a task whose Push When Done is Only Its Alerts; nil when it pushes after every run.
     static func pushMark(_ r: APIClient.ScheduledTask) -> String? {
-        r.pushesOnlyAsked ? String(localized: "只在提醒时推送") : nil
+        r.pushesOnlyAsked ? String(localized: "Pushes only when it alerts you") : nil
     }
 
     /// The capsule row's rule line: the rule, then the push mark (on the line rather than as a second pill, which
     /// squeezes the title on a phone). The plain row puts the mark on a line of its own, since its rule line is one line.
     static func ruleLine(_ r: APIClient.ScheduledTask) -> String {
         let rule = rule(r)
-        return r.pushesOnlyAsked ? String(localized: "\(rule) · 只在提醒时推送") : rule
+        return r.pushesOnlyAsked ? String(localized: "\(rule) · Pushes only when it alerts you") : rule
     }
 
     /// What it runs with when that isn't the default, in a few words: "claude-fast · Auto-Edit · Thinking Low"; `danger`
     /// for Allow Everything.
     static func runsWith(_ r: APIClient.ScheduledTask) -> (text: String, danger: Bool)? {
-        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { let e = SessionModes.effortLabel($0) ?? $0; return String(localized: "思考\(e)") }]
+        let parts = [r.launcher, SessionModes.modeLabel(r.permissionMode), r.effort.map { let e = SessionModes.effortLabel($0) ?? $0; return String(localized: "Thinking \(e) [Session Modes e77236]") }]
             .compactMap { $0 }
         return parts.isEmpty ? nil : (parts.joined(separator: " · "), r.permissionMode == "bypassPermissions")
     }
@@ -123,13 +123,13 @@ enum AssistantScheduleText {
     static func lastRun(_ r: APIClient.ScheduledTask) -> (text: String, failed: Bool)? {
         guard let at = r.lastRun else { return nil }
         let word = switch r.lastStatus {
-        case "failed": String(localized: "失败")
-        case "skipped": String(localized: "已跳过")
-        case "ok": String(localized: "已运行")
-        default: String(localized: "已运行")
+        case "failed": String(localized: "Failed")
+        case "skipped": String(localized: "Skipped")
+        case "ok": String(localized: "Ran")
+        default: String(localized: "Ran")
         }
         let when = moment(at)
-        return (String(localized: "上次 \(when) · \(word)"), r.lastStatus == "failed")
+        return (String(localized: "Last \(when) · \(word)"), r.lastStatus == "failed")
     }
 
     /// An SF Symbol for a task, from its title.
@@ -151,16 +151,16 @@ enum AssistantScheduleText {
     /// A future moment, roughly: "Soon" / "in 25 min" / "in 2 hr" / "in 3 days".
     static func until(_ date: Date, now: Date = .now) -> String {
         let s = date.timeIntervalSince(now)
-        if s < 60 { return s < -60 ? String(localized: "已过时间") : String(localized: "马上") }
-        if s < 3600 { let minutes = Int(s / 60); return String(localized: "\(minutes) 分钟后") }
+        if s < 60 { return s < -60 ? String(localized: "Overdue") : String(localized: "Soon") }
+        if s < 3600 { let minutes = Int(s / 60); return String(localized: "in \(minutes) minutes") }
         if s < 86400 {
             let h = Int(s / 3600), m = Int(s.truncatingRemainder(dividingBy: 3600) / 60)
-            return h < 3 && m >= 10 ? String(localized: "\(h) 小时 \(m) 分钟后") : String(localized: "\(h) 小时后")
+            return h < 3 && m >= 10 ? String(localized: "in \(h) hr \(m) min") : String(localized: "in \(h) hours")
         }
         let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: now),
                                                    to: Calendar.current.startOfDay(for: date)).day ?? 0
         let n = max(days, 1)
-        return String(localized: "\(n) 天后")
+        return String(localized: "in \(n) days")
     }
 
     /// "17:05", always 24-hour: `.hour(.twoDigits(amPM: .omitted))` in a Chinese locale gives the 12-hour "05:05".
@@ -176,10 +176,10 @@ enum AssistantScheduleText {
     static func moment(_ date: Date, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = hm(date)
-        if cal.isDateInToday(date) { return String(localized: "今天 \(time)") }
-        if cal.isDateInTomorrow(date) { return String(localized: "明天 \(time)") }
+        if cal.isDateInToday(date) { return String(localized: "Today \(time)") }
+        if cal.isDateInTomorrow(date) { return String(localized: "Tomorrow \(time)") }
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
-        if days > 1, days < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "周\(name) \(time)") }
+        if days > 1, days < 7 { let name = dayNames[(cal.component(.weekday, from: date) + 5) % 7]; return String(localized: "\(name) \(time) [Assistant Proactive Views a5627f]") }
         let day = date.formatted(.dateTime.month().day())
         return String(localized: "\(day) \(time)", comment: "Date and 24-hour time, e.g. Nov 2 09:00")
     }
@@ -203,29 +203,29 @@ struct AssistantRoutinesView: View {
                 Section {
                     ForEach(upcoming) { u in AssistantUpcomingRow(item: u) }
                 } header: {
-                    Text("接下来")
+                    Text("Up Next")
                 }
             }
             if !repeating.isEmpty {
                 Section {
                     ForEach(repeating) { t in row(t) }
                 } header: {
-                    Text("定时任务")
+                    Text("Scheduled Tasks")
                 }
             }
             if !oneOff.isEmpty {
                 Section {
                     ForEach(oneOff) { t in row(t) }
                 } header: {
-                    Text("一次性跟进")
+                    Text("One-Time Follow-ups")
                 }
             }
             if !lastRuns.isEmpty {
                 Section {
                     ForEach(lastRuns.prefix(3)) { r in AssistantRunRow(run: r) }
-                    NavigationLink { AssistantRunsView() } label: { Text("全部运行记录").lineLimit(1) }
+                    NavigationLink { AssistantRunsView() } label: { Text("All Runs").lineLimit(1) }
                 } header: {
-                    Text("最近运行")
+                    Text("Recent Runs")
                 }
             }
         }
@@ -234,26 +234,26 @@ struct AssistantRoutinesView: View {
             if !page.loaded {
                 ProgressView()
             } else if let error = page.error, page.tasks.isEmpty {
-                ContentUnavailableView("读不到定时任务", systemImage: Theme.Icon.error, description: Text(error))
+                ContentUnavailableView("Couldn't Load Scheduled Tasks", systemImage: Theme.Icon.error, description: Text(error))
             } else if page.tasks.isEmpty {
-                ContentUnavailableView("没有定时任务", systemImage: Theme.Icon.schedule,
-                                       description: Text("点右上角的 ＋，或者在对话里说「每天 9 点给我早报」「每 30 分钟巡检一次」，让 Persona 定时做一件事。"))
+                ContentUnavailableView("No Scheduled Tasks", systemImage: Theme.Icon.schedule,
+                                       description: Text("Tap + at the top right, or say “give me a morning briefing at 9 every day” or “check in every 30 minutes” in a chat to have Persona do something on a schedule."))
             }
         }
-        .pageTitle(String(localized: "定时任务"))
+        .pageTitle(String(localized: "Scheduled Tasks"))
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Section("从模板开始") {
+                    Section("Start from a Template") {
                         ForEach(AssistantRoutineTemplate.all) { t in
                             Button { creating = t.routine } label: { Label(t.routine.title, systemImage: t.symbol) }
                         }
                     }
-                    Button { creating = AssistantRoutineTemplate.blank } label: { Label("空白", systemImage: Theme.Icon.compose) }
+                    Button { creating = AssistantRoutineTemplate.blank } label: { Label("Blank", systemImage: Theme.Icon.compose) }
                 } label: {
                     Image(systemName: Theme.Icon.add)
                 }
-                .accessibilityLabel("新建定时任务")
+                .accessibilityLabel("New Scheduled Task")
             }
         }
         .navigationDestination(item: $editing) { t in
@@ -278,12 +278,12 @@ struct AssistantRoutinesView: View {
         }
         .modifier(AssistantTaskRowLook())
         .swipeActions(edge: .trailing, allowsFullSwipe: t.repeats == .once) {
-            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
+            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("Delete", systemImage: Theme.Icon.delete) }
         }
         .contextMenu {
-            Button { Task { await page.run(t) } } label: { Label("立即运行", systemImage: Theme.Icon.run) }
-            Button { editing = t } label: { Label("编辑", systemImage: Theme.Icon.compose) }
-            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("删除", systemImage: Theme.Icon.delete) }
+            Button { Task { await page.run(t) } } label: { Label("Run Now", systemImage: Theme.Icon.run) }
+            Button { editing = t } label: { Label("Edit [Message Menu 051836]", systemImage: Theme.Icon.compose) }
+            Button(role: .destructive) { Task { await page.delete(t) } } label: { Label("Delete", systemImage: Theme.Icon.delete) }
         }
     }
 
@@ -302,7 +302,7 @@ struct AssistantRoutinesView: View {
                         Chip(text: label, symbol: Theme.Icon.conversation, look: .tint(Theme.accent))
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("打开「\(AssistantScheduleText.title(t))」\(label)的对话")
+                    .accessibilityLabel("Open the \(label) chat of “\(AssistantScheduleText.title(t))”")
                     .accessibilityIdentifier("task-chat-\(t.id)-\(i)")
                 }
             }
@@ -343,9 +343,9 @@ struct AssistantTaskRow: View {
         let t = task
         let with = AssistantScheduleText.runsWith(t)
         let next = t.enabled ? (t.nextRun ?? t.at) : nil
-        let notes = [t.enabled ? next.map { let m = AssistantScheduleText.moment($0); return String(localized: "下次 \(m)") } : String(localized: "已关闭"),
+        let notes = [t.enabled ? next.map { let m = AssistantScheduleText.moment($0); return String(localized: "Next \(m) [Session Panes 0881ca]") } : String(localized: "Off [Git Hub Thread Models 6744b4]"),
                      with?.text, AssistantScheduleText.lastRun(t)?.text,
-                     t.createdBy == "assistant" && t.repeats != .once ? String(localized: "Persona 建的") : nil].compactMap { $0 }
+                     t.createdBy == "assistant" && t.repeats != .once ? String(localized: "By Persona") : nil].compactMap { $0 }
         return TaskRow(TaskItem(id: t.id, title: AssistantScheduleText.title(t),
                                 subtitle: AssistantScheduleText.ruleLine(t),
                                 footnote: notes.joined(separator: " · "), status: .pending(step: 0)),
@@ -379,7 +379,7 @@ struct AssistantTaskRow: View {
                 HStack(spacing: Theme.Space.sm) {
                     Text(AssistantScheduleText.title(t)).font(Theme.Font.heading).lineLimit(1)
                     if t.createdBy == "assistant" && t.repeats != .once {
-                        Text("Persona 建的").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
+                        Text("By Persona").font(Theme.Font.labelMedium).foregroundStyle(Theme.accent)
                             .padding(.horizontal, Theme.Space.sm).padding(.vertical, 1)
                             .background(Theme.accent.opacity(0.12), in: .capsule)
                             .lineLimit(1)
@@ -392,9 +392,9 @@ struct AssistantTaskRow: View {
                     .lineLimit(1)
                 Group {
                     if !t.enabled {
-                        Text("已关闭")
+                        Text("Off [Git Hub Thread Models 6744b4]")
                     } else if let next = t.nextRun ?? t.at {
-                        Text("下次 \(AssistantScheduleText.moment(next)) · \(AssistantScheduleText.until(next))")
+                        Text("Next \(AssistantScheduleText.moment(next)) · \(AssistantScheduleText.until(next))")
                     }
                 }
                 .font(Theme.Font.label)
@@ -447,19 +447,19 @@ struct AssistantRoutineTemplate: Identifiable {
     static let blank = APIClient.ScheduledTask(title: "", prompt: "", time: "09:00", weekdays: AssistantScheduleText.workdays)
 
     static let all: [AssistantRoutineTemplate] = [
-        .init(routine: .init(title: String(localized: "会前准备"),
+        .init(routine: .init(title: String(localized: "Meeting Prep"),
                              prompt: "看看今天飞书日历和 iPhone 日历里的会。对每个需要准备的会，用 schedule_followup 在会前 10 分钟" + // i18n-ignore: prompt for the assistant (docs/i18n.md: prompts stay Chinese)
                              "安排一次会前准备：相关文档、上次的会议纪要、还没定的事、我该说的要点。今天没有要准备的会就简单说一声。", // i18n-ignore
                              time: "08:45", weekdays: AssistantScheduleText.workdays), symbol: "person.2.badge.gearshape"),
-        .init(routine: .init(title: String(localized: "周报"),
+        .init(routine: .init(title: String(localized: "Weekly Report"),
                              prompt: "帮我起草这周的周报：从飞书日历、会议纪要、文档和消息里整理这周做了什么、进展和结果、" + // i18n-ignore
                              "遇到的问题、下周计划；各台电脑上的 Agent 这周完成的主要改动也算进去。先给我草稿，问我要不要改，不要直接发出去。", // i18n-ignore
                              time: "17:00", weekdays: [5]), symbol: Theme.Icon.document),
-        .init(routine: .init(title: String(localized: "Agent 巡检"),
+        .init(routine: .init(title: String(localized: "Agent Check-in"),
                              prompt: "看看各台电脑上的 Agent：哪些在等我、哪些卡住或报错了、哪些跑完了没人看。" + // i18n-ignore
                              "有要我处理的就列出来（一行一个，说清楚在哪台电脑、等什么）；都正常就回一句「都正常」。", // i18n-ignore
                              repeats: .interval, everyMinutes: 30), symbol: "binoculars"),
-        .init(routine: .init(title: String(localized: "下班前盘点"),
+        .init(routine: .init(title: String(localized: "End-of-Day Review"),
                              prompt: "下班前盘点：今天还有哪些消息没回、答应别人的事还没做、各台电脑上还在跑或在等我的 Agent，" + // i18n-ignore
                              "明天上午有哪些会要准备。按紧急程度列出来，最后问我哪些要设提醒。", // i18n-ignore
                              time: "18:30", weekdays: AssistantScheduleText.workdays), symbol: Theme.Icon.todo),
@@ -514,24 +514,24 @@ struct AssistantTaskEditor: View {
     var body: some View {
         Form {
             Section {
-                TextField(draft.repeats == .once ? "标题（可不填）" : "标题，比如「早报」", text: $draft.title)
-                Toggle("开启", isOn: $draft.enabled)
+                TextField(draft.repeats == .once ? String(localized: "Title (optional)") : String(localized: "Title, e.g. “Morning briefing”"), text: $draft.title)
+                Toggle("On [Assistant Proactive Views 8da97d]", isOn: $draft.enabled)
             }
             whenSection
             Section {
                 #if os(macOS)
                 // A grouped Mac form shows a titled field as label + trailing value: the prompt took the right half.
-                TextField("要 Persona 做什么", text: $draft.prompt, prompt: Text("要 Persona 做什么"), axis: .vertical)
+                TextField(String(localized: "What should Persona do?"), text: $draft.prompt, prompt: Text("What should Persona do?"), axis: .vertical)
                     .labelsHidden()
                     .lineLimit(8...)
                 #else
-                TextField("要 Persona 做什么", text: $draft.prompt, axis: .vertical)
+                TextField(String(localized: "What should Persona do?"), text: $draft.prompt, axis: .vertical)
                     .lineLimit(8...)
                 #endif
             } header: {
-                Text("提示词")
+                Text("Prompt")
             } footer: {
-                Text("像在对话里一样写：看哪些数据、怎么汇报。它可以用 schedule_followup 再安排一次性的跟进，比如会前 10 分钟。")
+                Text("Write it as you would in a chat: what to look at and how to report. It can use schedule_followup to set up one-time follow-ups, like 10 minutes before a meeting.")
             }
             runsWithSection
             if showsPush { pushSection }
@@ -539,7 +539,7 @@ struct AssistantTaskEditor: View {
             Section {
                 Button { Task { await runNow() } } label: {
                     HStack {
-                        Label("立即运行", systemImage: Theme.Icon.run).lineLimit(1)
+                        Label("Run Now", systemImage: Theme.Icon.run).lineLimit(1)
                         Spacer()
                         if running { ProgressView() }
                     }
@@ -549,7 +549,7 @@ struct AssistantTaskEditor: View {
                 if let last = saved?.lastSessionID, !last.isEmpty, last != saved?.runSessionID {
                     Button { open(SessionKey(machineID: machineID, sessionID: last)) } label: {
                         HStack {
-                            Label("查看上次结果", systemImage: Theme.Icon.conversation).lineLimit(1)
+                            Label("View Last Result", systemImage: Theme.Icon.conversation).lineLimit(1)
                             Spacer()
                             if let at = saved?.lastRun {
                                 Text(Fmt.relative(at)).font(Theme.Font.body).foregroundStyle(.secondary).lineLimit(1)
@@ -559,58 +559,58 @@ struct AssistantTaskEditor: View {
                 }
             } footer: {
                 if saved?.lastStatus == "failed", let err = saved?.lastError {
-                    Text("上次没有跑起来：\(err)").foregroundStyle(Theme.danger)
+                    Text("The last run didn't start: \(err)").foregroundStyle(Theme.danger)
                 } else {
-                    Text("立即运行不改它的时间，跑完在「对话」里看结果。")
+                    Text("Running now doesn't change its schedule. See the result in the chat when it's done.")
                 }
             }
             if !runs.isEmpty {
                 Section {
                     ForEach(runs.prefix(5)) { r in AssistantRunRow(run: r, showTitle: false) }
                     if runs.count > 5, let id = saved?.id {
-                        NavigationLink { AssistantRunsView(ref: id) } label: { Text("全部 \(runs.count) 次").lineLimit(1) }
+                        NavigationLink { AssistantRunsView(ref: id) } label: { Text("All \(runs.count) Runs").lineLimit(1) }
                     }
                 } header: {
-                    Text("历史记录")
+                    Text("History")
                 }
             }
             if !creating {
                 Section {
                     Button(role: .destructive) { confirmDelete = true } label: {
-                        Label("删除定时任务", systemImage: Theme.Icon.delete).lineLimit(1)
+                        Label("Delete Scheduled Task [Assistant Proactive Views 1c8557]", systemImage: Theme.Icon.delete).lineLimit(1)
                     }
                 }
             }
         }
         .themedPage()
-        .navigationTitle(creating ? String(localized: "新建定时任务") : (draft.title.isEmpty ? String(localized: "定时任务") : draft.title))
+        .navigationTitle(creating ? String(localized: "New Scheduled Task") : (draft.title.isEmpty ? String(localized: "Scheduled Tasks") : draft.title))
         .navigationBarTitleDisplayMode(.inline)
         .sheetCancel(unsaved: !Self.same(opened, draft), when: creating) { dismiss() }
         .toolbar {
             if creating {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
+                    Button("Add [Beautiful U I Bridge 7a8a11]") {
                         Task { if await persist(leaving: false) != nil { dismiss() } }
                     }
                     .disabled(!isValid || running)
                 }
             }
         }
-        .confirmationDialog("删除「\(AssistantScheduleText.title(draft))」？", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+        .confirmationDialog("Delete “\(AssistantScheduleText.title(draft))”?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
                 guard let s = saved else { return }
                 deleted = true
                 Task { await delete(s) }
                 dismiss()
             }
         } message: {
-            Text("删除后不再定时运行，已经跑过的对话还在。")
+            Text("It won't run again. Chats from earlier runs stay.")
         }
-        .alert("全部放行？", isPresented: $confirmBypass) {
-            Button("全部放行", role: .destructive) { draft.permissionMode = "bypassPermissions" }
-            Button("取消", role: .cancel) {}
+        .alert("Allow Everything?", isPresented: $confirmBypass) {
+            Button("Allow Everything", role: .destructive) { draft.permissionMode = "bypassPermissions" }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("这个任务运行时，跑任何命令、改任何文件、用任何工具都不再问你，也没有人能中途拦下。只给你信得过、出了错也能接受的提示词用。")
+            Text("When this task runs, it won't ask before running any command, changing any file or using any tool, and no one can stop it midway. Use it only for prompts you trust and whose mistakes you can live with.")
         }
         .onDisappear { if !creating { Task { await persist(leaving: true) } } }
         .task(id: saved?.id) {
@@ -628,13 +628,13 @@ struct AssistantTaskEditor: View {
         Section {
             // A task that pushes only what it sends runs in its own conversation (the hub clears session_id too).
             if conversation != nil && !draft.pushesOnlyAsked {
-                Toggle("接着原来的对话", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
+                Toggle("Continue in Original Chat", isOn: Binding(get: { draft.sessionID != nil }, set: { draft.sessionID = $0 ? conversation : nil }))
             }
             if draft.sessionID == nil {
                 if let own = saved?.ownConversation {
                     Button { open(own) } label: {
                         HStack {
-                            Label("在同一个对话里运行", systemImage: Theme.Icon.conversation).lineLimit(1)
+                            Label("Runs in the Same Chat", systemImage: Theme.Icon.conversation).lineLimit(1)
                             Spacer()
                             Image(systemName: Theme.Icon.disclosure).font(Theme.Font.caption).foregroundStyle(.tertiary)
                         }
@@ -642,7 +642,7 @@ struct AssistantTaskEditor: View {
                     .accessibilityIdentifier("task.ownConversation")
                     Button { Task { await startOver() } } label: {
                         HStack {
-                            Label("下次开新对话", systemImage: Theme.Icon.newConversation).lineLimit(1)
+                            Label("New Chat Next Time", systemImage: Theme.Icon.newConversation).lineLimit(1)
                             Spacer()
                             if resetting { ProgressView() }
                         }
@@ -650,31 +650,31 @@ struct AssistantTaskEditor: View {
                     .disabled(resetting)
                     .accessibilityIdentifier("task.freshConversation")
                 } else {
-                    Label("在同一个对话里运行", systemImage: Theme.Icon.conversation).lineLimit(1)
+                    Label("Runs in the Same Chat", systemImage: Theme.Icon.conversation).lineLimit(1)
                         .accessibilityIdentifier("task.ownConversation")
                 }
             }
         } header: {
-            Text("对话")
+            Text("Chat")
         } footer: {
-            Text(draft.sessionID != nil ? "每次运行都发进安排它的那段对话，带着那里的上下文接着做。"
-                 : saved?.ownConversation != nil ? "每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。"
-                 : "第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。")
+            Text(draft.sessionID != nil ? String(localized: "Each run goes into the chat that scheduled it and continues with its context.")
+                 : saved?.ownConversation != nil ? String(localized: "Each run goes into this task's own chat and can see earlier results. When it gets too long or you want a fresh start, tap “New Chat Next Time”; the old chat stays.")
+                 : String(localized: "The first run starts a new chat; later runs continue in it and can see earlier results."))
         }
     }
 
     /// Push When Done (docs/assistant.md「跑完推送」): every run's answer is pushed, or only what a run sends with notify_user.
     private var pushSection: some View {
         Section {
-            SegmentedChoice(String(localized: "跑完推送"), [(value: "", label: String(localized: "每次")), (value: APIClient.ScheduledTask.pushAsked, label: String(localized: "只在它自己提醒时"))],
+            SegmentedChoice(String(localized: "Push When Done"), [(value: "", label: String(localized: "Every Run")), (value: APIClient.ScheduledTask.pushAsked, label: String(localized: "Only Its Alerts"))],
                             selection: push)
                 .accessibilityIdentifier("task-push")
         } header: {
-            Text("跑完推送")
+            Text("Push When Done")
         } footer: {
             Text(draft.pushesOnlyAsked
-                 ? "只有这次运行判断你需要知道、主动提醒你时才推送，没事就不打扰；出错、被打断照常推送。这种任务固定在它自己的对话里跑，你在那段对话里发的消息做完也不推送。"
-                 : "每次运行完都把回答推送到手机。")
+                 ? String(localized: "Pushes only when a run decides you need to know and alerts you; otherwise it stays quiet. Errors and interruptions are pushed as usual. These tasks always run in their own chat, and messages you send in that chat aren't pushed when done either.")
+                 : String(localized: "Pushes the answer to your phone after every run."))
         }
     }
 
@@ -698,7 +698,7 @@ struct AssistantTaskEditor: View {
             saved?.runMachineID = t.runMachineID
             saved?.runSessionID = t.runSessionID
             Haptics.success()
-            model.toast = Toast(String(localized: "下次运行会开一段新对话"), style: .success)
+            model.toast = Toast(String(localized: "The next run will start a new chat"), style: .success)
         } catch {
             model.show(error)
         }
@@ -708,13 +708,13 @@ struct AssistantTaskEditor: View {
         Section {
             Group {
                 if AppStyle.current.usesBeautifulUI {
-                    BUISegmented([.init(APIClient.ScheduledTask.Repeat.once, String(localized: "一次")), .init(.daily, String(localized: "每天")), .init(.interval, String(localized: "每隔"))],
+                    BUISegmented([.init(APIClient.ScheduledTask.Repeat.once, String(localized: "Once")), .init(.daily, String(localized: "Every Day")), .init(.interval, String(localized: "Interval [Assistant Proactive Views 100107]"))],
                                  selection: repeats, fills: true)
                 } else {
-                    Picker("重复", selection: repeats) {
-                        Text("一次").tag(APIClient.ScheduledTask.Repeat.once)
-                        Text("每天").tag(APIClient.ScheduledTask.Repeat.daily)
-                        Text("每隔").tag(APIClient.ScheduledTask.Repeat.interval)
+                    Picker("Repeat", selection: repeats) {
+                        Text("Once").tag(APIClient.ScheduledTask.Repeat.once)
+                        Text("Every Day").tag(APIClient.ScheduledTask.Repeat.daily)
+                        Text("Interval [Assistant Proactive Views 100107]").tag(APIClient.ScheduledTask.Repeat.interval)
                     }
                     .pickerStyle(.segmented)
                 }
@@ -722,30 +722,30 @@ struct AssistantTaskEditor: View {
             .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
             switch draft.repeats {
             case .once:
-                DatePicker("时间", selection: at, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                DatePicker("Time", selection: at, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
             case .daily:
-                DatePicker("时间", selection: time, displayedComponents: .hourAndMinute)
+                DatePicker("Time", selection: time, displayedComponents: .hourAndMinute)
                 AssistantWeekdayPicker(days: $draft.weekdays)
                     .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
             case .interval:
-                Picker("间隔", selection: $draft.everyMinutes) {
+                Picker("Interval [Assistant Proactive Views 4f5df7]", selection: $draft.everyMinutes) {
                     ForEach(intervals, id: \.self) { m in Text(AssistantScheduleText.every(m)).tag(m) }
                 }
             }
         } header: {
-            Text("什么时候")
+            Text("When")
         } footer: {
             if draft.enabled, let next = saved?.nextRun, saved.map({ Self.same($0, draft) }) == true {
-                Text("下次运行：\(AssistantScheduleText.moment(next))（\(AssistantScheduleText.until(next))）")
+                Text("Next run: \(AssistantScheduleText.moment(next)) (\(AssistantScheduleText.until(next)))")
             } else {
                 switch draft.repeats {
-                case .once: Text("到点运行一次，跑完就从列表里拿掉（运行记录里还在）。")
+                case .once: Text("Runs once at the set time, then leaves the list (it stays in the run history).")
                 #if os(macOS)
-                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按你所在的时区。")
+                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) at \(draft.time), in your time zone.")
                 #else
-                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) \(draft.time)，按手机所在的时区。")
+                case .daily: Text("\(AssistantScheduleText.repeats(draft.weekdays)) at \(draft.time), in your phone's time zone.")
                 #endif
-                case .interval: Text("\(AssistantScheduleText.every(draft.everyMinutes))运行一次，从保存时算起。")
+                case .interval: Text("Runs \(AssistantScheduleText.every(draft.everyMinutes)), counting from when it's saved.")
                 }
             }
         }
@@ -754,39 +754,39 @@ struct AssistantTaskEditor: View {
     /// The model (launcher), permission mode and effort a run starts claude with; "" in a picker = the default.
     private var runsWithSection: some View {
         Section {
-            ModelConfigurationLink(title: draft.id.isEmpty ? String(localized: "任务默认模型") : String(localized: "任务模型"),
+            ModelConfigurationLink(title: draft.id.isEmpty ? String(localized: "Default Task Model") : String(localized: "Task Model"),
                                    purposeID: draft.id.isEmpty ? "schedule" : "task.\(draft.id)")
             // A Menu around an inline picker: a menu-style Picker greys out a value that has an icon, and Allow Everything is red.
             LabeledContent {
                 Menu {
-                    Picker("权限模式", selection: mode) {
-                        Label { Text("默认"); Text("和平时一样：改文件、跑命令前先问你") } icon: { Image(systemName: Theme.Icon.askFirst) }.tag("")
+                    Picker("Permission Mode", selection: mode) {
+                        Label { Text("Default [Prompt Composer 844b8c]"); Text("As usual: asks before changing files or running commands") } icon: { Image(systemName: Theme.Icon.askFirst) }.tag("")
                         ForEach(SessionModes.permissionModes.filter { $0.id != "default" }) { o in
-                            Label { Text(o.title); Text(o.id == "bypassPermissions" ? String(localized: "什么都不问，有风险") : o.detail) } icon: { Image(systemName: o.symbol) }
+                            Label { Text(o.title); Text(o.id == "bypassPermissions" ? String(localized: "Never asks; risky") : o.detail) } icon: { Image(systemName: o.symbol) }
                                 .tag(o.id)
                         }
                     }
                     .pickerStyle(.inline)
                 } label: {
                     HStack(spacing: Theme.Space.xs) {
-                        Text(SessionModes.modeLabel(draft.permissionMode) ?? String(localized: "默认")).lineLimit(1)
+                        Text(SessionModes.modeLabel(draft.permissionMode) ?? String(localized: "Default [Prompt Composer 844b8c]")).lineLimit(1)
                         Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).imageScale(.small)
                     }
                     .foregroundStyle(draft.permissionMode == "bypassPermissions" ? Theme.danger : Theme.accent)
                 }
                 .accessibilityIdentifier("task-mode")
             } label: {
-                Label("权限模式", systemImage: Theme.Icon.askFirst).lineLimit(1)
+                Label("Permission Mode", systemImage: Theme.Icon.askFirst).lineLimit(1)
             }
         } header: {
-            Text("运行方式")
+            Text("How It Runs")
         } footer: {
             if draft.permissionMode == "bypassPermissions" {
-                Label("全部放行：运行时跑命令、改文件都不再问你。", systemImage: "exclamationmark.shield.fill")
+                Label("Allow Everything: it won't ask before running commands or changing files.", systemImage: "exclamationmark.shield.fill")
                     .foregroundStyle(Theme.danger)
             } else {
-                Text(String(localized: "定时任务在后台跑，要你批准时会推送到手机，没人点就一直等着。要它跑命令也不问你，可以选「自动」（自己判断风险）。")
-                     + (draft.sessionID != nil ? String(localized: "接着原来的对话运行时，那段对话也会换成这里的设置。", comment: "Appended right after the previous sentence") : ""))
+                Text(String(localized: "Scheduled tasks run in the background. When one needs your approval you get a notification, and it waits until someone responds. To let it run commands without asking, choose “Auto” (it judges the risk itself).")
+                     + (draft.sessionID != nil ? String(localized: " When it continues in the original chat, that chat switches to these settings too.", comment: "Appended right after the previous sentence") : ""))
             }
         }
     }
@@ -853,7 +853,7 @@ struct AssistantTaskEditor: View {
         guard !deleted, changed else { return saved }
         guard isValid else {
             if leaving {
-                model.toast = Toast(draft.repeats == .once ? String(localized: "提示词要填，这次的修改没有保存") : String(localized: "标题和提示词都要填，这次的修改没有保存"), style: .error)
+                model.toast = Toast(draft.repeats == .once ? String(localized: "A prompt is required; your changes weren't saved") : String(localized: "A title and prompt are required; your changes weren't saved"), style: .error)
             }
             return nil
         }
@@ -906,15 +906,15 @@ struct AssistantWeekdayPicker: View {
                             .background(Circle().fill(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.14))))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "周\(AssistantScheduleText.dayNames[d - 1])"))
+                    .accessibilityLabel(String(localized: "\(AssistantScheduleText.dayNames[d - 1]) [Assistant Proactive Views 918479]"))
                     .accessibilityAddTraits(on ? .isSelected : [])
                     .frame(maxWidth: .infinity)
                 }
             }
             HStack(spacing: Theme.Space.s) {
-                shortcut(String(localized: "每天"), [])
-                shortcut(String(localized: "工作日"), AssistantScheduleText.workdays)
-                shortcut(String(localized: "周末"), [6, 7])
+                shortcut(String(localized: "Every Day"), [])
+                shortcut(String(localized: "Weekdays"), AssistantScheduleText.workdays)
+                shortcut(String(localized: "Weekends"), [6, 7])
                 Spacer(minLength: 0)
             }
         }
@@ -994,10 +994,10 @@ struct AssistantMemoryEntry: Identifiable, Hashable {
 
     var typeTitle: String? {
         switch type {
-        case "user": String(localized: "用户", comment: "Memory kind")
-        case "feedback": String(localized: "反馈", comment: "Memory kind")
-        case "project": String(localized: "项目", comment: "Memory kind")
-        case "reference": String(localized: "参考", comment: "Memory kind")
+        case "user": String(localized: "User", comment: "Memory kind")
+        case "feedback": String(localized: "Feedback", comment: "Memory kind")
+        case "project": String(localized: "Project", comment: "Memory kind")
+        case "reference": String(localized: "Reference", comment: "Memory kind")
         default: type
         }
     }
@@ -1061,29 +1061,29 @@ struct AssistantMemoryView: View {
                             row(e, title: t?.title ?? e.name ?? e.file.name, detail: e.description ?? t?.hook)
                         }
                         .swipeActions(edge: .trailing) {
-                            Button { pendingDelete = e } label: { Label("删除", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
+                            Button { pendingDelete = e } label: { Label("Delete", systemImage: Theme.Icon.delete) }.tint(Theme.danger)
                         }
                         #if os(macOS)
                         // A swipe needs a trackpad: the right click deletes too.
                         .contextMenu {
-                            Button(role: .destructive) { pendingDelete = e } label: { Label("删除", systemImage: Theme.Icon.delete) }
+                            Button(role: .destructive) { pendingDelete = e } label: { Label("Delete", systemImage: Theme.Icon.delete) }
                         }
                         #endif
                     }
                 } footer: {
-                    Text(health ? "健康对话里记下的事，只有健康对话会读，Persona 的其他对话看不到。说错的地方可以直接改，或者在健康对话里告诉它。"
-                                : "Persona 记住的事，一条一个文件，新对话开始时会读。说错的地方可以直接改，或者在对话里告诉它。")
+                    Text(health ? String(localized: "What's noted in health chats is read only by health chats; Persona's other chats can't see it. Fix anything wrong right here, or tell it in a health chat.")
+                                : String(localized: "What Persona remembers, one file per memory, read at the start of each new chat. Fix anything that's wrong here, or tell it in a chat."))
                 }
             }
             if let index, !entries.isEmpty {
                 Section {
                     NavigationLink {
-                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: String(localized: "索引"), space: page.space, onSaved: nil)
+                        AssistantMemoryDetail(entry: AssistantMemoryEntry(index), title: String(localized: "Index"), space: page.space, onSaved: nil)
                     } label: {
-                        Label { Text("索引").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
+                        Label { Text("Index").foregroundStyle(Color.primary) } icon: { Image(systemName: Theme.Icon.list) }
                     }
                 } footer: {
-                    Text("MEMORY.md：Persona 自己维护的目录，删除记忆时会一起更新。")
+                    Text("MEMORY.md: the table of contents Persona keeps itself; it's updated when you delete a memory.")
                 }
             }
         }
@@ -1092,19 +1092,19 @@ struct AssistantMemoryView: View {
             if !loaded {
                 ProgressView()
             } else if let error, files.isEmpty {
-                ContentUnavailableView("读不到记忆", systemImage: Theme.Icon.error, description: Text(error))
+                ContentUnavailableView("Couldn't Load Memory", systemImage: Theme.Icon.error, description: Text(error))
             } else if entries.isEmpty {
-                ContentUnavailableView("还没有记忆", systemImage: Theme.Icon.memory,
-                                       description: Text(health ? "健康对话里记下的目标、过敏、用药等会出现在这里。"
-                                                                : "Persona 会把你的偏好、纠正过它的地方记在这里。"))
+                ContentUnavailableView("No Memories Yet", systemImage: Theme.Icon.memory,
+                                       description: Text(health ? String(localized: "Goals, allergies, medications and more noted in health chats appear here.")
+                                                                : String(localized: "Persona keeps your preferences and the corrections you've made here.")))
             }
         }
-        .pageTitle(health ? String(localized: "健康记忆") : String(localized: "记忆"))
-        .confirmationDialog("删除这条记忆？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+        .pageTitle(health ? String(localized: "Health Memory") : String(localized: "Memory [Assistant Profile View 7a6335]"))
+        .confirmationDialog("Delete This Memory?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                             titleVisibility: .visible, presenting: pendingDelete) { e in
-            Button("删除", role: .destructive) { Task { await delete(e) } }
+            Button("Delete", role: .destructive) { Task { await delete(e) } }
         } message: { e in
-            Text("\(health ? String(localized: "健康对话") : "Persona")以后不再记得「\(titles[e.file.name]?.title ?? e.name ?? e.file.name)」。")
+            Text("\(health ? String(localized: "Health Chats") : "Persona") will no longer remember “\(titles[e.file.name]?.title ?? e.name ?? e.file.name)”.")
         }
         .navigationDestination(item: $debugOpen) { e in
             AssistantMemoryDetail(entry: e, title: titles[e.file.name]?.title, space: page.space, onSaved: { await load() })
@@ -1176,7 +1176,7 @@ struct AssistantMemoryDetail: View {
                         HStack(spacing: Theme.Space.s) {
                             if let t = entry.typeTitle { AssistantMemoryTag(title: t, color: entry.typeColor) }
                             if let at = entry.file.updatedAt {
-                                Text("更新于 \(Fmt.relative(at))").font(Theme.Font.label).foregroundStyle(.secondary)
+                                Text("Updated \(Fmt.relative(at))").font(Theme.Font.label).foregroundStyle(.secondary)
                             }
                         }
                         if let d = entry.description {
@@ -1185,7 +1185,7 @@ struct AssistantMemoryDetail: View {
                     }
                     Divider()
                 }
-                Markdown(entry.body.isEmpty ? String(localized: "（空）") : Links.markdown(entry.body))
+                Markdown(entry.body.isEmpty ? String(localized: "(Empty)") : Links.markdown(entry.body))
                     .markdownTheme(.jarvis)
                     .textSelection(.enabled)
                     .environment(\.openURL, OpenURLAction { url in
@@ -1205,7 +1205,7 @@ struct AssistantMemoryDetail: View {
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             if onSaved != nil {
-                ToolbarItem(placement: .primaryAction) { Button("编辑") { editing = true } }
+                ToolbarItem(placement: .primaryAction) { Button("Edit [Message Menu 051836]") { editing = true } }
             }
         }
         .sheet(isPresented: $editing) {
@@ -1248,7 +1248,7 @@ struct AssistantMemoryEditor: View {
                 .sheetCancel(unsaved: opened.map { $0 != text } ?? false) { dismiss() }
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("保存") } }
+                        Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("Save") } }
                             .disabled(saving)
                     }
                 }
@@ -1297,15 +1297,15 @@ struct AssistantNotesView: View {
                     .focused($focused)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
             } footer: {
-                Text("这些内容会附在 Persona 的说明最后；改了以后新对话生效。可以写代码放在哪、常用哪些 skills、哪些机器或目录别碰、你习惯的汇报方式。")
+                Text("This is added to the end of Persona's instructions and applies to new chats. You might note where your code lives, which skills you use, which machines or folders to leave alone, and how you like to get updates.")
             }
         }
         .themedPage()
-        .pageTitle(String(localized: "关于我"))
+        .pageTitle(String(localized: "About Me"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("保存") } }
+                Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("Save") } }
                     .disabled(!changed || saving)
             }
         }
@@ -1329,7 +1329,7 @@ struct AssistantNotesView: View {
             focused = false
             await model.refreshAssistant()
             Haptics.success()
-            model.toast = Toast(String(localized: "已保存，新对话生效"), style: .success)
+            model.toast = Toast(String(localized: "Saved; applies to new chats"), style: .success)
         } catch {
             model.show(error)
         }

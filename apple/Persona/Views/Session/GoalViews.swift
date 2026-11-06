@@ -20,10 +20,10 @@ extension GoalInfo {
         if let s = seconds, s > 0 {
             if s < 3600 {
                 let m = max(s / 60, 1)
-                parts.append(String(localized: "\(m) 分钟"))
+                parts.append(String(localized: "\(m) min [Task Views 135d12]"))
             } else {
                 let h = s / 3600, m = s / 60
-                parts.append(String(localized: "\(h) 小时 \(m % 60) 分"))
+                parts.append(String(localized: "\(h) hr \(m % 60) min"))
             }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -62,7 +62,7 @@ struct GoalBar: View {
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("目标，\(goal.statusLabel)：\(goal.headline)，点按查看")
+        .accessibilityLabel("Goal, \(goal.statusLabel): \(goal.headline). Tap to view.")
         .sheet(isPresented: $showing) { GoalSheet(goal: goal) }
     }
 }
@@ -90,20 +90,20 @@ struct GoalSheet: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let reason = goal.reason, !reason.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                            Text(goal.isComplete ? "为什么算达成" : "最近一次检查").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
+                            Text(goal.isComplete ? String(localized: "Why It's Achieved") : String(localized: "Last Check")).font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
                             Text(reason).font(Theme.Font.secondary).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
-                    Text("设置或清除目标：在输入框里发 /goal <条件> 或 /goal clear（Claude Code）。")
+                    Text("To set or clear a goal, send /goal <condition> or /goal clear in the message field (Claude Code).")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.tertiary)
                 }
                 .padding(Theme.Space.l)
             }
             .background(Theme.pageBackground)
-            .navigationTitle("目标")
+            .navigationTitle("Goal")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

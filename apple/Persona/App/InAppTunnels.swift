@@ -193,7 +193,7 @@ final class InAppTunnels {
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200,
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], obj["ok"] as? Bool == true else {
-            throw InAppTunnel.Failure(message: String(localized: "连上了 \(route.target)，但它不像 hub（/api/v1/health 没有正常应答）"))
+            throw InAppTunnel.Failure(message: String(localized: "Reached \(route.target), but it doesn't look like a hub (/api/v1/health didn't answer properly)"))
         }
     }
 }

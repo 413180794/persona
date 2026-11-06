@@ -115,7 +115,7 @@ private struct OutputText: View {
             .accessibilityIdentifier("notebook-output")
             .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.badge, style: .continuous))
             if folded {
-                Button("显示全部 \(lines.count) 行") { all = true }
+                Button("Show All \(lines.count) Lines [Notebook File View 18a740]") { all = true }
                     .font(Theme.Font.label)
                     .lineLimit(1)
                     .buttonStyle(.plain)
@@ -139,7 +139,7 @@ private struct NotebookHTMLOutput: View {
             } else {
                 HTMLSnippetView(html: html, failed: { asText = true })
             }
-            Button(asText ? "显示网页版" : "显示文本版") { asText.toggle() }
+            Button(asText ? String(localized: "Show Rendered") : String(localized: "Show Text")) { asText.toggle() }
                 .font(Theme.Font.label)
                 .lineLimit(1)
                 .buttonStyle(.plain)

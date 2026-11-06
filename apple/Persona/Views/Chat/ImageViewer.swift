@@ -88,10 +88,10 @@ struct ImageViewer: View {
         }
         .sheet(item: $openedFile) { ref in FileViewer(ref: ref) }
         .fullScreenCover(item: Binding(get: { editing.map(EditTarget.init) }, set: { if $0 == nil { editing = nil } })) { t in
-            ImageEditor(image: t.image, doneTitle: String(localized: "加到输入框")) { edited in
+            ImageEditor(image: t.image, doneTitle: String(localized: "Add to Message")) { edited in
                 attach?(edited)
                 Haptics.success()
-                AppModel.shared.toast = Toast(String(localized: "已加到输入框，补一句话就能发"), style: .success)
+                AppModel.shared.toast = Toast(String(localized: "Added to the message. Add a few words and send."), style: .success)
                 dismiss()
             }
         }
@@ -175,7 +175,7 @@ struct ImageViewer: View {
         ViewerTopBar {
             Button { dismiss() } label: { ViewerIcon(symbol: Theme.Icon.back) }
                 .viewerRound()
-                .accessibilityLabel("关闭")
+                .accessibilityLabel("Close")
                 .accessibilityIdentifier("viewer-close")
                 .keyboardShortcut(.cancelAction)
         } center: {
@@ -186,7 +186,7 @@ struct ImageViewer: View {
     }
 
     private var titleCapsule: some View {
-        let title = current?.title ?? String(localized: "图片")
+        let title = current?.title ?? String(localized: "images")
         let detail = detailLine
         return VStack(spacing: 0) {
             Text(title).font(Theme.Font.secondaryStrong).lineLimit(1).truncationMode(.middle)
@@ -212,24 +212,24 @@ struct ImageViewer: View {
     private var moreMenu: some View {
         Menu {
             if let img = currentImage {
-                Button { copy(img) } label: { Label("拷贝图片", systemImage: Theme.Icon.copy) }
+                Button { copy(img) } label: { Label("Copy Image", systemImage: Theme.Icon.copy) }
                 if attach != nil {
-                    Button { editing = img } label: { Label("标注后加到输入框", systemImage: Theme.Icon.markup) }
+                    Button { editing = img } label: { Label("Mark Up and Add to Message", systemImage: Theme.Icon.markup) }
                 }
             }
             if let file = current?.file {
                 Button {
                     UIPasteboard.general.string = file.path
                     Haptics.success()
-                    AppModel.shared.toast = Toast(String(localized: "已拷贝路径"), style: .success)
-                } label: { Label("拷贝路径", systemImage: Theme.Icon.copy) }
-                Button { openedFile = file } label: { Label("在文件页打开", systemImage: Theme.Icon.folder) }
+                    AppModel.shared.toast = Toast(String(localized: "Path copied"), style: .success)
+                } label: { Label("Copy Path", systemImage: Theme.Icon.copy) }
+                Button { openedFile = file } label: { Label("Open in Files", systemImage: Theme.Icon.folder) }
             }
-            Button { showInfo = true } label: { Label("信息", systemImage: Theme.Icon.info) }
+            Button { showInfo = true } label: { Label("Messages [Image Viewer e70286]", systemImage: Theme.Icon.info) }
         } label: { ViewerIcon(symbol: Theme.Icon.more) }
             .labelOnlyMenu()
             .chromeSurface(in: Circle())
-            .accessibilityLabel("更多")
+            .accessibilityLabel("More")
             .accessibilityIdentifier("viewer-more")
     }
 
@@ -239,31 +239,31 @@ struct ImageViewer: View {
         } actions: {
             Button { Task { await save() } } label: { ViewerIcon(symbol: Theme.Icon.save) }
                 .disabled(saving || currentImage == nil)
-                .accessibilityLabel(saving ? "保存中" : "保存")
+                .accessibilityLabel(saving ? String(localized: "Saving [Image Viewer a1a172]") : String(localized: "Save"))
             if attach != nil {
                 Button { editing = currentImage } label: { ViewerIcon(symbol: Theme.Icon.markup) }
                     .disabled(currentImage == nil)
-                    .accessibilityLabel("标注")
+                    .accessibilityLabel("Markup")
             }
             Button { showInfo = true } label: { ViewerIcon(symbol: Theme.Icon.info) }
-                .accessibilityLabel("信息")
+                .accessibilityLabel("Messages [Image Viewer e70286]")
                 .popover(isPresented: $showInfo) { info.presentationCompactAdaptation(.popover) }
         } trailing: {
             Button { if let img = currentImage { copy(img) } } label: { ViewerIcon(symbol: Theme.Icon.copy) }
                 .disabled(currentImage == nil)
-                .accessibilityLabel("拷贝")
+                .accessibilityLabel("Copy [Readiness Views d37380]")
         }
     }
 
     @ViewBuilder private var shareButton: some View {
         if let img = currentImage {
-            ShareLink(item: Image(uiImage: img), preview: SharePreview(current?.title ?? String(localized: "图片"), image: Image(uiImage: img))) {
+            ShareLink(item: Image(uiImage: img), preview: SharePreview(current?.title ?? String(localized: "images"), image: Image(uiImage: img))) {
                 ViewerIcon(symbol: Theme.Icon.share)
             }
-            .accessibilityLabel("分享")
+            .accessibilityLabel("Share")
         } else {
             ViewerIcon(symbol: Theme.Icon.share, enabled: false)
-                .accessibilityLabel("分享")
+                .accessibilityLabel("Share")
                 .accessibilityAddTraits(.isButton)
         }
     }
@@ -271,12 +271,12 @@ struct ImageViewer: View {
     /// Info: the picture's name, size and where it is.
     private var info: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text(current?.title ?? String(localized: "图片")).font(Theme.Font.heading).lineLimit(2)
-            if let s = current?.pixelSize ?? currentImage.map(Self.pixels) { infoRow(String(localized: "尺寸"), s) }
-            if let bytes = current?.payload?.size { infoRow(String(localized: "大小"), Int64(bytes).storageText) }
-            if let mime = current?.payload?.mime, !mime.isEmpty { infoRow(String(localized: "格式"), mime) }
-            if let d = current?.detail { infoRow(String(localized: "来源"), d) }
-            if let f = current?.file { infoRow(String(localized: "路径"), f.path) }
+            Text(current?.title ?? String(localized: "images")).font(Theme.Font.heading).lineLimit(2)
+            if let s = current?.pixelSize ?? currentImage.map(Self.pixels) { infoRow(String(localized: "Size [Image Viewer 246df7]"), s) }
+            if let bytes = current?.payload?.size { infoRow(String(localized: "Size [Image Viewer 50db74]"), Int64(bytes).storageText) }
+            if let mime = current?.payload?.mime, !mime.isEmpty { infoRow(String(localized: "Format"), mime) }
+            if let d = current?.detail { infoRow(String(localized: "Source"), d) }
+            if let f = current?.file { infoRow(String(localized: "Path"), f.path) }
         }
         .padding(Theme.Space.l)
         .scaledFrame(minWidth: Theme.Size.box240, alignment: .leading)
@@ -304,7 +304,7 @@ struct ImageViewer: View {
     private func copy(_ img: UIImage) {
         UIPasteboard.general.image = img
         Haptics.success()
-        AppModel.shared.toast = Toast(String(localized: "已拷贝图片"), style: .success)
+        AppModel.shared.toast = Toast(String(localized: "Image copied"), style: .success)
     }
 
     private func decode(_ i: Int) async {
@@ -319,17 +319,17 @@ struct ImageViewer: View {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             Haptics.error()
-            AppModel.shared.toast = Toast(String(localized: "没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "No access to Photos. In Settings › Persona › Photos, allow “Add Photos Only”."), style: .error)
             return
         }
         do {
             // `@Sendable`: Photos runs the block on its own queue, where main-actor code is a crash (BackgroundCallbackTests).
             try await PHPhotoLibrary.shared().performChanges { @Sendable in PHAssetChangeRequest.creationRequestForAsset(from: img) }
             Haptics.success()
-            AppModel.shared.toast = Toast(String(localized: "已保存到相册"), style: .success)
+            AppModel.shared.toast = Toast(String(localized: "Saved to Photos"), style: .success)
         } catch {
             Haptics.error()
-            if !error.isCancellation { AppModel.shared.toast = Toast(String(localized: "保存失败：\(error.localizedDescription)"), style: .error) }
+            if !error.isCancellation { AppModel.shared.toast = Toast(String(localized: "Couldn't save: \(error.localizedDescription) [Image Viewer fcc6eb]"), style: .error) }
         }
     }
 }
@@ -371,7 +371,7 @@ private struct WebMarkdownImage: View {
             }
             .buttonStyle(.plain)
             .matchedTransitionSource(id: "markdown-image", in: zoom)
-            .accessibilityLabel("图片，点按查看大图")
+            .accessibilityLabel("Image, tap to enlarge")
             .fullScreenCover(isPresented: $open) {
                 ImageViewer(urls: [url.absoluteString], index: 0).navigationTransition(.zoom(sourceID: "markdown-image", in: zoom))
             }
@@ -415,7 +415,7 @@ private struct ViewerThumbStrip: View {
                 }
                 .buttonStyle(.plain)
                 .id(i)
-                .accessibilityLabel("第 \(i + 1) 张")
+                .accessibilityLabel("Image \(i + 1) [Image Viewer 73d641]")
                 .accessibilityAddTraits(i == index ? .isSelected : [])
             }
         }

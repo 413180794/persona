@@ -39,11 +39,11 @@ extension APIClient {
 enum ChannelText {
     static func state(_ c: HubChannel) -> String {
         switch c.state {
-        case "connected": String(localized: "已连接")
-        case "error": String(localized: "出错了")
-        case "disabled": String(localized: "已停用")
-        case "not_installed": String(localized: "没安装")
-        default: String(localized: "未连接")
+        case "connected": String(localized: "Connected [V N C Page 5be032]")
+        case "error": String(localized: "Something Went Wrong")
+        case "disabled": String(localized: "Disabled")
+        case "not_installed": String(localized: "Not Installed")
+        default: String(localized: "Not Connected")
         }
     }
 
@@ -73,11 +73,11 @@ enum ChannelText {
 
     /// The list's three sections (the empty ones left out): the apps, the installed ones, those a market has.
     static func sections(_ list: [HubChannel]) -> [Section] {
-        [Section(title: "Persona", footer: String(localized: "在 Persona 的哪一端说都进同一段对话，提问和批准在卡片上原地作答。"),
+        [Section(title: "Persona", footer: String(localized: "Wherever you talk to Persona, it's the same chat. Answer questions and approvals right on their cards."),
                  channels: list.filter(\.isApp)),
-         Section(title: String(localized: "已接入"), footer: String(localized: "这些地方发给机器人的消息会交给 Persona，回答和 Agent 的提问发回原处。只认绑定的那一个人。"),
+         Section(title: String(localized: "Connected [Channels Model fa1876]"), footer: String(localized: "Messages sent to the bot in these places go to Persona, and answers and agent questions go back there. Only the one bound person is recognized."),
                  channels: list.filter { !$0.isApp && !$0.isMarket }),
-         Section(title: String(localized: "可以安装"), footer: String(localized: "扩展市场里提供渠道的扩展：装好后在这里绑定。"), channels: list.filter(\.isMarket))]
+         Section(title: String(localized: "Available [Channels Model 6473b1]"), footer: String(localized: "Extensions in the extension market that add channels. Install one, then bind it here."), channels: list.filter(\.isMarket))]
             .filter { !$0.channels.isEmpty }
     }
 
@@ -86,41 +86,41 @@ enum ChannelText {
         guard let list else { return "" }
         let on = list.filter { !$0.isApp && $0.state == "connected" }.count
         let bad = list.filter { $0.state == "error" }.count
-        return bad > 0 ? String(localized: "\(on) 个已连接 · \(bad) 个出错") : String(localized: "\(on) 个已连接")
+        return bad > 0 ? String(localized: "\(on) connected · \(bad) with errors") : String(localized: "\(on) connected")
     }
 
     static func hasProblem(_ list: [HubChannel]?) -> Bool { list?.contains { $0.state == "error" } ?? false }
 
     static func target(_ t: ChannelTarget?) -> String {
         switch t?.kind {
-        case "new": String(localized: "新对话（下一条消息开）")
-        case "conversation": t?.title?.isEmpty == false ? t!.title! : String(localized: "一段对话")
-        case "agent": t?.title?.isEmpty == false ? "Agent · " + t!.title! : String(localized: "一个 Agent")
-        default: String(localized: "主对话")
+        case "new": String(localized: "New chat (starts with the next message)")
+        case "conversation": t?.title?.isEmpty == false ? t!.title! : String(localized: "A chat")
+        case "agent": t?.title?.isEmpty == false ? "Agent · " + t!.title! : String(localized: "An agent")
+        default: String(localized: "Main Chat")
         }
     }
 
     /// What the channel can do, in a few words a line.
     static func capabilities(_ c: HubChannel.Capabilities) -> [String] {
         var out: [String] = []
-        let takes = [String(localized: "文字"), c.imagesIn == true ? String(localized: "图片") : nil,
-                     c.filesIn == true ? String(localized: "文件") : nil, c.voiceIn == true ? String(localized: "语音") : nil]
+        let takes = [String(localized: "text"), c.imagesIn == true ? String(localized: "images") : nil,
+                     c.filesIn == true ? String(localized: "Files") : nil, c.voiceIn == true ? String(localized: "voice") : nil]
         let kinds = takes.compactMap { $0 }.joined(separator: String(localized: "、", comment: "Separator between list items"))
-        out.append(String(localized: "收\(kinds)", comment: "What a channel receives: text, images, files, voice"))
-        out.append(c.format == "plain" ? String(localized: "回答是纯文字") : String(localized: "回答带格式（Markdown）"))
-        if let n = c.maxText, n > 0 { out.append(String(localized: "一条最多 \(n) 字，长的拆开发")) }
-        if c.asks == "text" { out.append(String(localized: "提问和批准回复序号或文字")) } else if c.asks == "buttons" { out.append(String(localized: "提问和批准点按钮")) }
-        if c.typing == true { out.append(String(localized: "处理时显示「正在输入」")) }
-        if c.progress == true { out.append(String(localized: "处理时显示进度")) }
+        out.append(String(localized: "Receives \(kinds)", comment: "What a channel receives: text, images, files, voice"))
+        out.append(c.format == "plain" ? String(localized: "Answers are plain text") : String(localized: "Answers are formatted (Markdown)"))
+        if let n = c.maxText, n > 0 { out.append(String(localized: "Up to \(n) characters per message; longer ones are split")) }
+        if c.asks == "text" { out.append(String(localized: "Answer questions and approvals with a number or text")) } else if c.asks == "buttons" { out.append(String(localized: "Answer questions and approvals with buttons")) }
+        if c.typing == true { out.append(String(localized: "Shows “typing” while working")) }
+        if c.progress == true { out.append(String(localized: "Shows progress while working")) }
         return out
     }
 
     /// The bind section's heading and first button.
     static func bindTitle(_ c: HubChannel) -> String {
         switch c.bind {
-        case "qr": String(localized: "扫码绑定")
-        case "code": String(localized: "配对")
-        default: String(localized: "绑定")
+        case "qr": String(localized: "Bind with QR Code")
+        case "code": String(localized: "Pair")
+        default: String(localized: "Bind")
         }
     }
 
@@ -219,7 +219,7 @@ enum ChannelText {
         loading = true
         defer { loading = false }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let l = try await api.channels()
             channels = l
             ChannelDirectory.shared.update(l)
@@ -290,11 +290,11 @@ enum ChannelText {
         defer { busy = false }
         do {
             try await api.testChannel(id)
-            let place = channel?.name ?? String(localized: "那边", comment: "The channel, when its name is unknown")
-            testResult = String(localized: "发出去了：去\(place)看看收到没有。")
+            let place = channel?.name ?? String(localized: "the other end", comment: "The channel, when its name is unknown")
+            testResult = String(localized: "Sent. Check \(place) to see if it arrived.")
         } catch {
             let why = error.shown ?? error.localizedDescription
-            testResult = String(localized: "没发出去：\(why)")
+            testResult = String(localized: "Couldn't send: \(why)")
         }
     }
 
@@ -306,7 +306,7 @@ enum ChannelText {
 
     @discardableResult private func run(_ call: @escaping (APIClient) async throws -> HubChannelDetail) async -> Bool {
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             detail = try await call(api)
             error = nil
             return true

@@ -62,7 +62,7 @@ struct TodosView: View {
                                 Button {
                                     store.toggleDone(todo)
                                 } label: {
-                                    Label("完成", systemImage: Theme.Icon.done)
+                                    Label("Done [Extension System Presentation c0b3fb]", systemImage: Theme.Icon.done)
                                 }
                                 .tint(Theme.positive)
                             }
@@ -70,13 +70,13 @@ struct TodosView: View {
                                 Button(role: .destructive) {
                                     Task { do { try await store.delete(id: todo.id) } catch { AppModel.shared.show(error) } }
                                 } label: {
-                                    Label("删除", systemImage: Theme.Icon.delete)
+                                    Label("Delete", systemImage: Theme.Icon.delete)
                                 }
                             }
                         }
                     } header: {
                         HStack(spacing: Theme.Space.sm) {
-                            Text("没完成 · \(openList.count)")
+                            Text("Open · \(openList.count)")
                                 .font(Theme.Font.sectionHeader)
                                 .foregroundStyle(.secondary)
                         }
@@ -94,7 +94,7 @@ struct TodosView: View {
                                     Button {
                                         store.toggleDone(todo)
                                     } label: {
-                                        Label("重新打开", systemImage: Theme.Icon.undo)
+                                        Label("Reopen", systemImage: Theme.Icon.undo)
                                     }
                                     .tint(Theme.accent)
                                 }
@@ -102,13 +102,13 @@ struct TodosView: View {
                                     Button(role: .destructive) {
                                         Task { do { try await store.delete(id: todo.id) } catch { AppModel.shared.show(error) } }
                                     } label: {
-                                        Label("删除", systemImage: Theme.Icon.delete)
+                                        Label("Delete", systemImage: Theme.Icon.delete)
                                     }
                                 }
                             }
                         } label: {
                             HStack {
-                                Text("已完成 · \(doneList.count)")
+                                Text("Done · \(doneList.count)")
                                     .font(Theme.Font.sectionHeader)
                                     .foregroundStyle(.secondary)
                             }
@@ -118,7 +118,7 @@ struct TodosView: View {
             }
         }
         .themedPage()
-        .detailTitle(String(localized: "待办"))
+        .detailTitle(String(localized: "To-dos"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -129,7 +129,7 @@ struct TodosView: View {
                 } label: {
                     Image(systemName: Theme.Icon.add)
                 }
-                .accessibilityLabel("新建待办")
+                .accessibilityLabel("New To-Do")
             }
         }
         .sheet(isPresented: $showCreate) {
@@ -157,7 +157,7 @@ struct TodosView: View {
             Image(systemName: Theme.Icon.search)
                 .font(Theme.Font.secondaryMedium)
                 .foregroundStyle(.secondary)
-            TextField("搜索待办", text: $query)
+            TextField(String(localized: "Search to-dos"), text: $query)
                 .textFieldStyle(.plain)
             if !query.isEmpty {
                 Button { query = "" } label: {
@@ -177,9 +177,9 @@ struct TodosView: View {
         Section {
             EmptyStateView(
                 symbol: Theme.Icon.todo,
-                title: query.isEmpty ? String(localized: "没有待办") : String(localized: "没有找到待办"),
-                message: query.isEmpty ? String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。") : String(localized: "换个搜索词试试"),
-                action: query.isEmpty ? (String(localized: "新建待办"), { showCreate = true }) : nil
+                title: query.isEmpty ? String(localized: "No to-dos yet") : String(localized: "No matching to-dos"),
+                message: query.isEmpty ? String(localized: "Write down something to do, hand it to an agent, and track its progress.") : String(localized: "Try a different search"),
+                action: query.isEmpty ? (String(localized: "New To-Do"), { showCreate = true }) : nil
             )
         }
         .listRowBackground(Color.clear)
@@ -190,23 +190,23 @@ struct TodosView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("标题", text: $creatingTitle)
+                    TextField(String(localized: "Title"), text: $creatingTitle)
                         .lineLimit(1)
                         .onSubmit { add() }
-                    TextField("说明（交给 Agent 时会一起发过去）", text: $creatingNotes, axis: .vertical)
+                    TextField(String(localized: "Notes (sent along when handed to an agent)"), text: $creatingNotes, axis: .vertical)
                         .lineLimit(3...8)
                 }
             }
             .themedPage()
-            .navigationTitle("新建待办")
+            .navigationTitle("New To-Do")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showCreate = false }
+                    Button("Cancel") { showCreate = false }
                         .lineLimit(1)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") { add() }
+                    Button("Add [Beautiful U I Bridge 7a8a11]") { add() }
                         .lineLimit(1)
                         .disabled(creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -274,7 +274,7 @@ struct TodoRow: View {
                         .font(Theme.Font.labelStrong)
                         .foregroundStyle(status.todoTone.text)
                     if !activeAgents.isEmpty {
-                        Text("· \(activeAgents.count) 个 Agent")
+                        Text("· \(activeAgents.count) agents")
                             .font(Theme.Font.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -296,7 +296,7 @@ struct TodoRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
-                    Text("还没交给 Agent")
+                    Text("Not handed to an agent yet")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -309,7 +309,7 @@ struct TodoRow: View {
     private func mostUrgentSummary(urgent: TodoMostUrgent?) -> String? {
         guard let urgent else { return nil }
         if urgent.isFailed, let err = urgent.agent.startError, !err.isEmpty {
-            return String(localized: "启动失败：\(err)")
+            return String(localized: "Failed to start: \(err)")
         }
         if let s = urgent.session {
             if let last = s.lastText, !last.isEmpty {

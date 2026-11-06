@@ -37,7 +37,7 @@ import Observation
         // Main Chat on the Agent SDK says so; the CLI is the default and goes unsaid.
         let runtime = p.effective.runtime == AssistantRuntime.agentSDK ? AssistantRuntime.title(AssistantRuntime.agentSDK) : nil
         let result = [model, effort, runtime].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-        return result.isEmpty ? String(localized: "未配置") : result
+        return result.isEmpty ? String(localized: "Not set up") : result
     }
 
     func summary(_ p: ModelPurpose) -> String {
@@ -74,7 +74,7 @@ import Observation
         loading = true
         defer { loading = false; loaded = true }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             if let purposeID {
                 var result = try await api.modelPurpose(purposeID)
                 if let category = result.purpose.categoryID, category != result.purpose.id {
@@ -82,7 +82,7 @@ import Observation
                 }
                 guard result.purpose.kind == "plugin" || (result.purpose.categoryID == result.purpose.id && result.purpose.uses != nil) else {
                     purpose = nil
-                    throw APIError(status: 0, message: String(localized: "hub 尚不支持四类模型配置，请先更新服务器。"))
+                    throw APIError(status: 0, message: String(localized: "This hub doesn't support model configuration by category yet. Update the server first."))
                 }
                 purpose = result.purpose
                 providers = result.providers
@@ -92,7 +92,7 @@ import Observation
                 purposes = result.purposes
                 providers = result.providers
                 if !purposes.isEmpty && categories.isEmpty {
-                    error = String(localized: "hub 尚不支持四类模型配置，请先更新服务器。")
+                    error = String(localized: "This hub doesn't support model configuration by category yet. Update the server first.")
                     return
                 }
             }
@@ -108,7 +108,7 @@ import Observation
         saving = true
         defer { saving = false }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let binding = ModelBinding(provider: Self.trim(draft.provider), model: Self.trim(draft.model), effort: Self.trim(draft.effort),
                                        runtime: Self.trim(draft.runtime))
             let patch = ModelConfigurationPatch(revision: purpose.revision, binding: binding,
@@ -123,7 +123,7 @@ import Observation
             return true
         } catch {
             conflict = (error as? APIError)?.status == 409
-            self.error = conflict ? String(localized: "这项配置已在别处修改。你的编辑仍在，重新加载后再保存。") : Self.message(error, singlePurpose: true)
+            self.error = conflict ? String(localized: "This setting was changed elsewhere. Your edits are still here; reload, then save again.") : Self.message(error, singlePurpose: true)
             return false
         }
     }
@@ -135,8 +135,8 @@ import Observation
 
     private static func message(_ error: Error, singlePurpose: Bool = false) -> String {
         if (error as? APIError)?.status == 404 {
-            return singlePurpose ? String(localized: "此用途已不存在，或 hub 尚不支持统一模型配置。请刷新用途列表或更新服务器。")
-                : String(localized: "hub 尚不支持统一模型配置，请先更新服务器。")
+            return singlePurpose ? String(localized: "This use no longer exists, or the hub doesn't support unified model configuration yet. Refresh the list of uses or update the server.")
+                : String(localized: "This hub doesn't support unified model configuration yet. Update the server first.")
         }
         return error.localizedDescription
     }

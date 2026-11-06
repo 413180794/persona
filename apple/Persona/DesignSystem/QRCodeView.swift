@@ -25,7 +25,7 @@ struct QRCodeView: View {
         }
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement()
-        .accessibilityLabel("二维码")
+        .accessibilityLabel("QR Code")
     }
 
     /// The code as a picture to save or share (scanned from the photo library by the other app).

@@ -6,8 +6,8 @@ struct LarkNameTag: View {
 
     var body: some View {
         let hue: Color = switch text {
-        case String(localized: "机器人"), "AI": LarkColor.hue("orange")
-        case String(localized: "公开"): LarkColor.hue("green")
+        case String(localized: "Bot"), "AI": LarkColor.hue("orange")
+        case String(localized: "Public"): LarkColor.hue("green")
         default: LarkColor.blue
         }
         Text(text)
@@ -43,7 +43,7 @@ nonisolated enum LarkTime {
         guard let d, d.isMeaningful else { return "" }
         return switch tier(of: d, now: now, calendar: calendar) {
         case .today: d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-        case .yesterday: String(localized: "昨天")
+        case .yesterday: String(localized: "Yesterday")
         case .thisWeek: d.formatted(.dateTime.weekday(.wide))
         case .thisYear: d.formatted(.dateTime.month().day())
         case .older: d.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits))

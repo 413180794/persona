@@ -30,7 +30,7 @@ import Observation
         } catch let e as APIError where e.status == 404 {
             unsupported = true
         } catch {
-            if switches == nil { self.error = error.shown.map { String(localized: "没读到：\($0)") } }
+            if switches == nil { self.error = error.shown.map { String(localized: "Couldn't load: \($0)") } }
         }
     }
 
@@ -53,8 +53,8 @@ import Observation
             switches = try await deps.save(next)
         } catch {
             switches = before
-            let why = error.shown ?? String(localized: "连不上 hub")
-            self.error = String(localized: "没改成：\(why)")
+            let why = error.shown ?? String(localized: "Can't reach the hub")
+            self.error = String(localized: "Couldn't change it: \(why) [Messages Views 87cfe2]")
         }
     }
 }

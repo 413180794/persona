@@ -43,37 +43,37 @@ enum ToolPresentation {
         let n = baseName(name)
         if let own = PersonaToolNames.verb(name) { return own }
         if n.hasPrefix("phone_") { return "iPhone" }
-        if n.hasPrefix("mail_") { return String(localized: "邮件") }
+        if n.hasPrefix("mail_") { return String(localized: "Mail [Assistant View 3d708e]") }
         switch n {
         // Persona managing its own conversations (docs/assistant.md「管理自己的对话」).
-        case "conversations_list": return String(localized: "查看对话列表")
-        case "conversation_read": return String(localized: "读对话")
-        case "conversation_rename": return String(localized: "重命名对话")
-        case "conversation_archive": return String(localized: "归档对话")
-        case "conversation_unarchive": return String(localized: "取消归档")
-        case "conversation_new": return String(localized: "新开对话")
-        case "conversation_send": return String(localized: "发到对话")
+        case "conversations_list": return String(localized: "List Chats")
+        case "conversation_read": return String(localized: "Read Chat")
+        case "conversation_rename": return String(localized: "Rename Chat")
+        case "conversation_archive": return String(localized: "Archive Chat")
+        case "conversation_unarchive": return String(localized: "Unarchive")
+        case "conversation_new": return String(localized: "New Chat [Tool Views 3f0830]")
+        case "conversation_send": return String(localized: "Send to Chat")
         // Operating a Mac through Cua Driver (docs/computer-use.md).
-        case "computer_state": return String(localized: "看电脑")
-        case "computer_run": return String(localized: "操控电脑")
-        case "browser_run": return String(localized: "用浏览器")
-        case "browser_look": return String(localized: "看浏览器")
-        case "Bash": return String(localized: "运行")
-        case "Read": return String(localized: "读取")
-        case "Edit", "MultiEdit": return String(localized: "编辑")
-        case "Write": return String(localized: "写入")
-        case "Grep": return String(localized: "搜索")
-        case "Glob", "LS": return String(localized: "查找")
-        case "WebFetch": return String(localized: "打开网页")
-        case "WebSearch": return String(localized: "网页搜索")
-        case "Task", "Agent": return String(localized: "子任务")
-        case "TodoWrite": return String(localized: "更新待办")
-        case "AskUserQuestion", "ask_user": return String(localized: "提问")
-        case "ExitPlanMode": return String(localized: "提交计划")
-        case "EnterPlanMode": return String(localized: "进入计划模式")
-        case "ToolSearch": return String(localized: "加载工具")
-        case "Skill": return String(localized: "使用技能")
-        case "Monitor": return String(localized: "监视")
+        case "computer_state": return String(localized: "View Computer")
+        case "computer_run": return String(localized: "Control Computer")
+        case "browser_run": return String(localized: "Use Browser")
+        case "browser_look": return String(localized: "View Browser")
+        case "Bash": return String(localized: "Runtime")
+        case "Read": return String(localized: "Read [Tool Views 534cb3]")
+        case "Edit", "MultiEdit": return String(localized: "Edit [Message Menu 051836]")
+        case "Write": return String(localized: "Write")
+        case "Grep": return String(localized: "Search")
+        case "Glob", "LS": return String(localized: "Find")
+        case "WebFetch": return String(localized: "Open Web Page")
+        case "WebSearch": return String(localized: "Web Search")
+        case "Task", "Agent": return String(localized: "Subtask")
+        case "TodoWrite": return String(localized: "Update To-dos")
+        case "AskUserQuestion", "ask_user": return String(localized: "Question [Tool Views 387441]")
+        case "ExitPlanMode": return String(localized: "Submit Plan")
+        case "EnterPlanMode": return String(localized: "Enter Plan Mode")
+        case "ToolSearch": return String(localized: "Load Tools")
+        case "Skill": return String(localized: "Use Skill")
+        case "Monitor": return String(localized: "Monitor [Tool Views 22be42]")
         default: return n
         }
     }
@@ -106,7 +106,7 @@ enum ToolPresentation {
         case "conversation_new", "conversation_send": return firstLine(s("text") ?? "")
         case "conversation_read", "conversation_archive", "conversation_unarchive": return String((s("id") ?? "").prefix(8))
         case "ToolSearch": return s("query") ?? ""
-        case "computer_state": return [mac(), s("app") ?? String(localized: "整个屏幕")].compactMap { $0 }.joined(separator: " · ")
+        case "computer_state": return [mac(), s("app") ?? String(localized: "Entire screen")].compactMap { $0 }.joined(separator: " · ")
         case "browser_look": return mac() ?? ""
         case "browser_run": return [mac(), s("script").map { firstLine($0.trimmingCharacters(in: .whitespacesAndNewlines)) }].compactMap { $0 }.joined(separator: " · ")
         case "computer_run": return [mac(), ComputerSteps.describe(call.name, input: i)].compactMap { $0 }.joined(separator: " · ")
@@ -150,7 +150,7 @@ struct ToolGroupView: View {
                 } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: Theme.Icon.space).font(Theme.Font.label)
-                        Text("\(calls.count) 个步骤").font(Theme.Font.labelMedium)
+                        Text("\(calls.count) steps").font(Theme.Font.labelMedium)
                         Text(summary(calls)).font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
                         Spacer(minLength: 0)
                         Image(systemName: Theme.Icon.expand).font(Theme.Font.labelStrong)
@@ -174,7 +174,7 @@ struct ToolGroupView: View {
                 }
                 .unfolding(unfold)
                 if calls.count > 2 && !flat {
-                    Button("收起") { toggleInPlace(pin, pinKey, animation: Theme.Motion.standard, unfold: $unfold, closing: true) { expanded = false } }
+                    Button("Collapse") { toggleInPlace(pin, pinKey, animation: Theme.Motion.standard, unfold: $unfold, closing: true) { expanded = false } }
                         .font(Theme.Font.labelMedium)
                         .padding(.leading, Theme.Space.m)
                 }
@@ -222,7 +222,7 @@ struct ToolRunRow: View, Equatable {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { WorkCardSlice(top: first, bottom: false) }
         .overlay(alignment: .top) { if !first { WorkCardSlice.separator } }
-        .accessibilityHint(open ? "收起这 \(calls.count) 步" : "展开这 \(calls.count) 步")
+        .accessibilityHint(open ? String(localized: "Collapse \(calls.count) steps [Tool Views 05f314]") : String(localized: "Expand \(calls.count) steps"))
         .accessibilityIdentifier("tool-run")
     }
 }
@@ -265,16 +265,16 @@ enum ToolRunSummary {
                                monospacedDetail: one && ascii, isError: error)
         }
         switch kind {
-        case .read: return named(String(localized: "读取"), many: String(localized: "\(calls.count) 个文件"))
-        case .search: return named(ToolPresentation.verb(first.name), many: String(localized: "\(calls.count) 次"))
-        case .run: return named(String(localized: "运行"), many: String(localized: "\(calls.count) 条命令"))
+        case .read: return named(String(localized: "Read [Tool Views 534cb3]"), many: String(localized: "\(calls.count) files"))
+        case .search: return named(ToolPresentation.verb(first.name), many: String(localized: "\(calls.count) times"))
+        case .run: return named(String(localized: "Runtime"), many: String(localized: "\(calls.count) commands"))
         case .todo:
             // The latest list is the state of the to-dos.
-            return ToolChipGroup.Chip(symbol: Theme.Icon.todo, label: String(localized: "待办"), detail: ToolPresentation.subject(calls[calls.count - 1]),
+            return ToolChipGroup.Chip(symbol: Theme.Icon.todo, label: String(localized: "To-dos"), detail: ToolPresentation.subject(calls[calls.count - 1]),
                                       monospacedDetail: true, isError: error)
         case .other(let verb):
             return ToolChipGroup.Chip(symbol: ToolPresentation.symbol(first.name), label: verb,
-                                      detail: one ? subject : String(localized: "\(calls.count) 次"), monospacedDetail: one && ascii, isError: error)
+                                      detail: one ? subject : String(localized: "\(calls.count) times"), monospacedDetail: one && ascii, isError: error)
         case .edit:
             var adds = 0, dels = 0
             var files: [String] = []
@@ -287,8 +287,8 @@ enum ToolRunSummary {
             }
             return ToolChipGroup.Chip(
                 symbol: ToolPresentation.symbol(first.name),
-                label: files.count == 1 ? ToolPresentation.verb(first.name) : String(localized: "编辑"),
-                detail: files.count == 1 ? (files[0] as NSString).lastPathComponent : String(localized: "\(files.count) 个文件"),
+                label: files.count == 1 ? ToolPresentation.verb(first.name) : String(localized: "Edit [Message Menu 051836]"),
+                detail: files.count == 1 ? (files[0] as NSString).lastPathComponent : String(localized: "\(files.count) files"),
                 monospacedDetail: files.count == 1,
                 additions: adds, deletions: dels, isError: error
             )
@@ -526,7 +526,7 @@ struct ToolDetail: View {
             } else if call.isRunning {
                 HStack(spacing: Theme.Space.sm) {
                     ProgressView().controlSize(.mini)
-                    Text("运行中…").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Running…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
             ForEach(Array(call.images.enumerated()), id: \.offset) { i, img in Base64Image(payload: img, gallery: call.images, index: i) }
@@ -551,7 +551,7 @@ struct ToolDetail: View {
             if let openFile {
                 Button { openFile(p) } label: { header.contentShape(.rect) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("查看文件 \((p as NSString).lastPathComponent)，新增 \(adds) 行，删除 \(dels) 行")
+                    .accessibilityLabel("View file \((p as NSString).lastPathComponent), \(adds) added, \(dels) removed")
             } else {
                 header
             }
@@ -571,7 +571,7 @@ struct ToolDetail: View {
                     .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("查看文件 \((p as NSString).lastPathComponent)")
+                .accessibilityLabel("View file \((p as NSString).lastPathComponent)")
             } else {
                 Text(p).font(Theme.Font.code).foregroundStyle(.secondary).lineLimit(2).truncationMode(.head).textSelection(.enabled)
             }
@@ -669,7 +669,7 @@ struct AskUserDetail: View {
                 }
             }
             if let result = call.result, result.isError != true, answers.isEmpty {
-                Text("没有回答").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text("No answer").font(Theme.Font.label).foregroundStyle(.secondary)
             }
         }
         .accessibilityIdentifier("ask-user-detail")
@@ -705,10 +705,10 @@ struct CodeBlock: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.codeBackground, in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             .macHoverActions {
-                MacHoverButton(title: String(localized: "拷贝"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
+                MacHoverButton(title: String(localized: "Copy [Readiness Views d37380]"), symbol: Theme.Icon.copy) { MacHover.copy(text) }
             }
             if clipped {
-                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.labelMedium)
+                Button("Show All \(lines.count) Lines [Tool Views 3aed77]") { withAnimation { full = true } }.font(Theme.Font.labelMedium)
             }
         }
     }
@@ -733,18 +733,18 @@ struct ResultBlock: View {
 
     var body: some View {
         if text.isEmpty && cut == nil {
-            Text(isError ? "失败" : "完成，无输出").font(Theme.Font.label).foregroundStyle(isError ? Theme.danger : .secondary)
+            Text(isError ? String(localized: "Failed") : String(localized: "Done, no output")).font(Theme.Font.label).foregroundStyle(isError ? Theme.danger : .secondary)
         } else {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 // Above the output: over it, the mark covered the end of the first line.
                 if isError {
-                    Label("出错了", systemImage: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
+                    Label("Something Went Wrong", systemImage: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
                         .lineLimit(1)
                 }
                 CodeBlock(text: text, maxLines: 10)
                 if let cut {
                     Button { showFull = true } label: {
-                        Label("已截断，看全文（\(ByteCountFormatter.string(fromByteCount: Int64(cut.size), countStyle: .file))）",
+                        Label("Truncated. View full text (\(ByteCountFormatter.string(fromByteCount: Int64(cut.size), countStyle: .file)))",
                               systemImage: Theme.Icon.text)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -782,29 +782,29 @@ struct FullOutputSheet: View {
                 if let text {
                     MonoTextView(text: MonoText.plain(text, color: .label, size: 12))
                 } else if let error {
-                    ContentUnavailableView("加载失败", systemImage: Theme.Icon.error, description: Text(error))
+                    ContentUnavailableView("Couldn't Load", systemImage: Theme.Icon.error, description: Text(error))
                 } else {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .background(Theme.codeBackground)
-            .navigationTitle("工具输出")
+            .navigationTitle("Tool Output")
             .navigationBarTitleDisplayMode(.inline)
             .pageToolbar {
                 #if os(macOS)
                 // A Mac sheet has no navigation bar: only its bottom row of actions is drawn, and the leading item that
                 // maps to `.navigation` never showed (#743). Copy All goes in that row, before Done.
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                ToolbarItem(placement: .cancellationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
                 if let text {
                     ToolbarItem(placement: .primaryAction) {
-                        Button { UIPasteboard.general.string = text } label: { Text("拷贝全文").lineLimit(1) }
+                        Button { UIPasteboard.general.string = text } label: { Text("Copy All [Tool Views 1c5144]").lineLimit(1) }
                     }
                 }
                 #else
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
                 if let text {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button { UIPasteboard.general.string = text } label: { Label("拷贝全文", systemImage: Theme.Icon.copy) }
+                        Button { UIPasteboard.general.string = text } label: { Label("Copy All [Tool Views 1c5144]", systemImage: Theme.Icon.copy) }
                     }
                 }
                 #endif
@@ -939,7 +939,7 @@ struct DiffView: View {
             .background(Theme.codeBackground)
             .clipShape(.rect(cornerRadius: Theme.Radius.control, style: .continuous))
             if clipped {
-                Button("展开全部 \(lines.count) 行") { withAnimation { full = true } }.font(Theme.Font.labelMedium).lineLimit(1)
+                Button("Show All \(lines.count) Lines [Tool Views 3aed77]") { withAnimation { full = true } }.font(Theme.Font.labelMedium).lineLimit(1)
             }
         }
     }
@@ -1049,7 +1049,7 @@ struct Base64Image: View {
                     #endif
                     .matchedTransitionSource(id: pageZoom == nil ? "image" : payload.identity, in: pageZoom ?? zoom)
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("图片，点按查看大图")
+                    .accessibilityLabel("Image, tap to enlarge")
             } else if let aspect = payload.aspect { // lazy: hold the image's shape while it downloads
                 RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Theme.Fill.well)
                     .aspectRatio(aspect, contentMode: .fit)
@@ -1107,9 +1107,9 @@ struct FoldedWorkRow: View {
         HStack(spacing: Theme.Space.s) {
             if let failed {
                 Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
-                Text("\(steps) 步没载入：\(failed)").lineLimit(2)
+                Text("\(steps) steps didn't load: \(failed)").lineLimit(2)
                 Spacer(minLength: 0)
-                Button("重试") {
+                Button("Retry [Components b8784c]") {
                     self.failed = nil
                     attempt += 1
                 }
@@ -1117,7 +1117,7 @@ struct FoldedWorkRow: View {
                 .fixedSize()
             } else {
                 ProgressView().controlSize(.small)
-                Text("正在载入 \(steps) 步…").lineLimit(1)
+                Text("Loading \(steps) steps…").lineLimit(1)
                 Spacer(minLength: 0)
             }
         }
@@ -1163,7 +1163,7 @@ struct ComputerToolDetail: View {
             Button {
                 withAnimation(Theme.Motion.state) { raw.toggle() }
             } label: {
-                Label(raw ? "收起原始参数" : "原始参数", systemImage: raw ? Theme.Icon.collapse : Theme.Icon.expand)
+                Label(raw ? String(localized: "Hide Raw Input") : String(localized: "Raw Input"), systemImage: raw ? Theme.Icon.collapse : Theme.Icon.expand)
                     .font(Theme.Font.label).lineLimit(1)
             }
             .buttonStyle(.plain)

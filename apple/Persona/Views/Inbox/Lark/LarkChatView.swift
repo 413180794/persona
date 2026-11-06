@@ -177,7 +177,7 @@ struct LarkChatView: View {
         .background(pageBackground)
         .themedPage()
         .navigationTitle(conversation.name)
-        .navigationSubtitle([isTopic ? String(localized: "飞书话题群") : String(localized: "飞书"), conversation.accountName].compactMap { $0 }.joined(separator: " · "))
+        .navigationSubtitle([isTopic ? String(localized: "Lark Topic Group") : String(localized: "Lark [Inbox Event Views 7e4419]"), conversation.accountName].compactMap { $0 }.joined(separator: " · "))
         .navigationBarTitleDisplayMode(.inline)
         // Keep the bar's material during push/pop instead of resolving its scroll-edge state after arrival.
         .toolbarBackground(.bar, for: .navigationBar)
@@ -185,11 +185,11 @@ struct LarkChatView: View {
         .hidesTabBarWhenShown()
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(action: openPins) { Label("Pin 消息", systemImage: Theme.Icon.pin) }
+                Button(action: openPins) { Label("Pinned Messages", systemImage: Theme.Icon.pin) }
                     .accessibilityIdentifier("lark.pins.open")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button { Task { await askJarvis() } } label: { Label("让 Persona 总结", systemImage: Theme.Icon.ai) }
+                Button { Task { await askJarvis() } } label: { Label("Summarize with Persona", systemImage: Theme.Icon.ai) }
             }
         }
         .task {
@@ -395,9 +395,9 @@ struct LarkChatView: View {
                 LarkEncryptionUnlockSheet(api: api, account: account, unified: encryptionStatus?.unifiedPassword == true) { send() }
             }
         }
-        .alert("暂时无法使用加密消息", isPresented: Binding(get: { encryptionProblem != nil }, set: { if !$0 { encryptionProblem = nil } })) {
-            Button("重新检查") { checkEncryption(openCovers: encryptionRetryOpensCovers) }
-            Button("稍后", role: .cancel) { }
+        .alert("Encrypted Messages Unavailable", isPresented: Binding(get: { encryptionProblem != nil }, set: { if !$0 { encryptionProblem = nil } })) {
+            Button("Check Again [Lark Chat View c25fb8]") { checkEncryption(openCovers: encryptionRetryOpensCovers) }
+            Button("Later [Task Views 9d2ca2]", role: .cancel) { }
         } message: { Text(encryptionProblem ?? "") }
         .sheet(item: $debugPick) { m in LarkReactionPicker(message: m) { react(m, $0) } }
         .sheet(isPresented: Binding(get: { debugPost != nil }, set: { if !$0 { debugPost = nil } })) {
@@ -407,8 +407,8 @@ struct LarkChatView: View {
             VStack(spacing: Theme.Space.s) {
                 if legacyDraft != nil {
                     HStack(spacing: Theme.Space.s) {
-                        Text("发现旧版草稿").font(Theme.Font.label).foregroundStyle(.secondary)
-                        Button("恢复") { confirmLegacyDraft = true }.lineLimit(1)
+                        Text("Found an older draft").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Button("Unhide [Lark Chat View e0534b]") { confirmLegacyDraft = true }.lineLimit(1)
                     }
                     .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                     .frame(maxWidth: .infinity).background(barBackground)
@@ -417,9 +417,9 @@ struct LarkChatView: View {
                     HStack(spacing: Theme.Space.s) {
                         Text(problem).font(Theme.Font.label).foregroundStyle(.secondary)
                         if outbox.canRecover {
-                            Button("恢复输入") { confirmDraftRecovery = true }.lineLimit(1)
+                            Button("Restore Input") { confirmDraftRecovery = true }.lineLimit(1)
                         } else {
-                            Button("重试") { Task { await restoreDraft() } }.lineLimit(1)
+                            Button("Retry [Components b8784c]") { Task { await restoreDraft() } }.lineLimit(1)
                         }
                     }
                     .padding(.horizontal, Theme.Space.m)
@@ -430,24 +430,24 @@ struct LarkChatView: View {
                 composer
             }
         }
-        .confirmationDialog("重新开始编辑？", isPresented: $confirmDraftRecovery, titleVisibility: .visible) {
-            Button("清除草稿并重新开始", role: .destructive) {
+        .confirmationDialog("Start Over?", isPresented: $confirmDraftRecovery, titleVisibility: .visible) {
+            Button("Clear Draft and Start Over", role: .destructive) {
                 Task {
                     do {
                         try await outbox.recover()
                         applyDraft()
-                    } catch { model.toast = Toast(String(localized: "未能恢复，请检查本机存储空间后重试"), style: .error) }
+                    } catch { model.toast = Toast(String(localized: "Couldn't restore. Check this device's storage and try again."), style: .error) }
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("将清除此会话的本机草稿、待发送记录及附件。已发出的飞书消息不受影响。")
+            Text("This clears this chat's draft, pending messages and attachments on this device. Messages already sent in Lark aren't affected.")
         }
-        .confirmationDialog("恢复到当前飞书账号？", isPresented: $confirmLegacyDraft, titleVisibility: .visible) {
-            Button("确认属于当前账号，恢复") { restoreLegacyDraft() }.lineLimit(1)
-            Button("取消", role: .cancel) {}
+        .confirmationDialog("Restore to Current Lark Account?", isPresented: $confirmLegacyDraft, titleVisibility: .visible) {
+            Button("It's This Account, Restore") { restoreLegacyDraft() }.lineLimit(1)
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("旧版草稿没有记录所属账号。确认后恢复到当前会话，待发送内容不会自动发送。")
+            Text("Older drafts don't record their account. Once you confirm, it's restored to this chat. Pending content won't be sent automatically.")
         }
         .onChange(of: draft) { _, _ in saveDraft() }
         .onChange(of: attachments) { _, _ in saveDraft(immediately: true) }
@@ -482,16 +482,16 @@ struct LarkChatView: View {
             }
             if !messageComposer, encryptionDraft != nil {
                 #if os(iOS) || os(visionOS)
-                Button("前往消息，继续编辑加密草稿") { model.selectedTab = .feishu }
+                Button("Go to Messages to Edit Encrypted Draft") { model.selectedTab = .feishu }
                     .font(Theme.Font.label).lineLimit(1)
                     .padding(.horizontal, Theme.Space.page)
                 #else
                 if LarkHomePreference.shared.shows {
-                    Button("前往消息，继续编辑加密草稿") { MacShellState.shared.go(.messages, model) }
+                    Button("Go to Messages to Edit Encrypted Draft") { MacShellState.shared.go(.messages, model) }
                         .font(Theme.Font.label).lineLimit(1)
                         .padding(.horizontal, Theme.Space.page)
                 } else {
-                    Text("请从消息列表继续编辑加密草稿")
+                    Text("Continue editing the encrypted draft from the message list.")
                         .font(Theme.Font.label).padding(.horizontal, Theme.Space.page)
                 }
                 #endif
@@ -499,8 +499,8 @@ struct LarkChatView: View {
             if !attachments.isEmpty {
                 LarkDraftAttachments(attachments: $attachments)
                 if replyTo != nil || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(replyTo == nil ? "文字和附件将分别发送"
-                         : model.larkFeatures.attachmentReplies ? "文字和附件将分别引用发送" : "更新 Hub 上的飞书扩展后才能引用发送附件")
+                    Text(replyTo == nil ? String(localized: "Text and attachments will be sent separately.")
+                         : model.larkFeatures.attachmentReplies ? String(localized: "Text and attachments will be sent separately, each as a reply.") : String(localized: "Update the Lark extension on the hub to reply with attachments."))
                         .font(Theme.Font.label).foregroundStyle(.secondary)
                         .padding(.horizontal, Theme.Space.m)
                 }
@@ -508,11 +508,11 @@ struct LarkChatView: View {
             if preparingAttachment {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text("正在准备附件…").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Preparing attachments…").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
             // What is sent to a topic group is a new topic (a reply goes into its thread from the topic's card).
-            LarkComposer(placeholder: isTopic ? String(localized: "发布话题") : String(localized: "回复 \(conversation.name)"), text: $text, focused: $composerFocused,
+            LarkComposer(placeholder: isTopic ? String(localized: "Post a topic") : String(localized: "Replying to \(conversation.name)"), text: $text, focused: $composerFocused,
                          replyTo: replyTo, cancelReply: { replyTo = nil },
                          attachmentPicker: { pickAttachment(photo: $0) },
                          canAddAttachments: encryptionDraft == nil && !climbing && attachments.count < LarkAttachment.selectionLimit,
@@ -548,7 +548,7 @@ struct LarkChatView: View {
                 HStack(spacing: Theme.Space.sm) {
                     if jumping { ProgressView().controlSize(.small) }
                     else { Image(systemName: Theme.Icon.expand).font(.system(size: 13, weight: .bold)) }
-                    if n > 0 { (n > 99 ? Text("99+ 条新消息") : Text("\(n) 条新消息")).font(Theme.Font.captionMedium).lineLimit(1) }
+                    if n > 0 { (n > 99 ? Text("99+ new messages") : Text("\(n) new messages")).font(Theme.Font.captionMedium).lineLimit(1) }
                 }
                 .foregroundStyle(LarkColor.blue)
                 .padding(.horizontal, n > 0 ? 12 : 0)
@@ -559,8 +559,8 @@ struct LarkChatView: View {
             .buttonStyle(.plain)
             .padding(.trailing, Theme.Space.l)
             .padding(.bottom, Theme.Space.s)
-            .accessibilityLabel(n > 0 ? "\(n) 条新消息，回到最新" : "回到最新")
-            .accessibilityValue(jumping ? "正在加载" : "")
+            .accessibilityLabel(n > 0 ? String(localized: "\(n) new messages, jump to latest") : String(localized: "Jump to Latest"))
+            .accessibilityValue(jumping ? String(localized: "Loading [Lark Chat View f020e4]") : "")
             .accessibilityIdentifier("lark.jumpLatest")
             .transition(.scale.combined(with: .opacity))
         }
@@ -569,7 +569,7 @@ struct LarkChatView: View {
     @ViewBuilder private var mentionButton: some View {
         if let mention, !pager.seen.contains(mention) {
             Button { Task { await jump(to: mention) } } label: {
-                Label("有人@你", systemImage: Theme.Icon.mention).font(Theme.Font.captionMedium).lineLimit(1)
+                Label("You Were Mentioned", systemImage: Theme.Icon.mention).font(Theme.Font.captionMedium).lineLimit(1)
                     .foregroundStyle(LarkColor.hue("red"))
                     .padding(.horizontal, Theme.Space.m).scaledFrame(minHeight: Theme.Size.wellM)
                     .surface(interactive: true, in: .capsule)
@@ -613,12 +613,12 @@ struct LarkChatView: View {
             LoadableContent(state: Loadable<Void>.loading, retry: nil) { _ in EmptyView() }
         case .empty:
             if isTopic {
-                EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "暂时没有话题"), message: String(localized: "在下面发布第一个话题。"))
+                EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "No topics yet"), message: String(localized: "Post the first topic below."))
             } else {
-                EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "还没有消息"), message: String(localized: "发出的第一条消息会出现在这里。"))
+                EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "No messages yet"), message: String(localized: "The first message you send will show up here."))
             }
         case .failed(let p):
-            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: String(localized: "重试"), run: retry))
+            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: String(localized: "Retry [Components b8784c]"), run: retry))
         case nil:
             EmptyView()
         }
@@ -763,10 +763,10 @@ struct LarkChatView: View {
             .accessibilityLabel(problem.text)
             .accessibilityIdentifier("lark.history.retry")
         } else if isTopic {
-            LarkLoadOlderButton(title: String(localized: "加载更早的话题"), loading: history.pending != nil) { requestHistory(retry: true) }
+            LarkLoadOlderButton(title: String(localized: "Load Earlier Topics"), loading: history.pending != nil) { requestHistory(retry: true) }
         } else {
             Group {
-                if history.pending != nil { ProgressView().controlSize(.small).accessibilityLabel("正在加载更早的消息") }
+                if history.pending != nil { ProgressView().controlSize(.small).accessibilityLabel("Loading earlier messages") }
                 else { Color.clear }
             }
             .scaledFrame(maxWidth: .infinity, minHeight: Theme.Size.well, maxHeight: Theme.Size.well)
@@ -898,7 +898,7 @@ struct LarkChatView: View {
             defer { changingPin = false }
             do {
                 try await api.larkChangePin(conversation.id, message: message.id, pin: nil, account: account)
-                model.toast = Toast(String(localized: "已添加 Pin"), style: .success)
+                model.toast = Toast(String(localized: "Pinned [Lark Chat View b57df9]"), style: .success)
             } catch {
                 pinNeedsRecheck = (error as? APIError)?.code == "lark_pin_result_unknown" || error.isTimeout || error.isOffline
                 model.toast = Toast(LarkChatPinsModel.problemText(error), style: .error)
@@ -912,7 +912,7 @@ struct LarkChatView: View {
     /// Toggles my reaction at once, then tells Feishu; the next poll brings the server's version (names…).
     private func react(_ m: LarkMessage, _ key: String) {
         guard let i = pager.messages.firstIndex(where: { $0.id == m.id }) else { return }
-        let me = pager.messages.last(where: \.isMine)?.senderName ?? String(localized: "我")
+        let me = pager.messages.last(where: \.isMine)?.senderName ?? String(localized: "Me")
         let (next, remove) = pager.messages[i].togglingReaction(key, me: me)
         withAnimation(Theme.Motion.standard) { pager.messages[i] = next }
         Haptics.tap()
@@ -994,7 +994,7 @@ struct LarkChatView: View {
 
     private func pickAttachment(photo: Bool) {
         guard model.hubFeatures.isEmpty || model.hubFeatures.contains("lark_attachments") else {
-            model.toast = Toast(String(localized: "请先更新 Hub，再发送附件"), style: .error)
+            model.toast = Toast(String(localized: "Update the hub before sending attachments."), style: .error)
             return
         }
         if photo { showPhotos = true } else { showFiles = true }
@@ -1017,14 +1017,14 @@ struct LarkChatView: View {
                 if draftLoaded {
                     saveDraft(immediately: true)
                     await outbox.flushDraft()
-                    model.toast = Toast(String(localized: "飞书账号已切换，草稿按账号分别保留"))
+                    model.toast = Toast(String(localized: "Lark account switched. Drafts are kept per account."))
                 }
                 await bindDraft(account: account, link: link)
             }
             accountProblem = nil
             await findLegacyDraft(link: link)
         } catch {
-            if !draftLoaded { accountProblem = String(localized: "暂时无法确认飞书账号，请检查连接后重试") }
+            if !draftLoaded { accountProblem = String(localized: "Can't confirm your Lark account right now. Check the connection and try again.") }
         }
     }
 
@@ -1050,7 +1050,7 @@ struct LarkChatView: View {
             do {
                 try await queue.checkAccount(using: api)
                 guard outbox === queue, text.isEmpty, replyTo == nil, attachments.isEmpty, queue.items.isEmpty else {
-                    model.toast = Toast(String(localized: "请先发送或清空当前草稿，再恢复旧版草稿")); return
+                    model.toast = Toast(String(localized: "Send or clear the current draft before restoring the older one.")); return
                 }
                 savingOutgoing = true
                 defer { savingOutgoing = false }
@@ -1060,7 +1060,7 @@ struct LarkChatView: View {
                 LarkDrafts.shared.set(LarkDraft(), for: .chat(conversation.id))
                 LarkDrafts.shared.flush()
                 self.legacyDraft = nil; legacyStore = nil
-            } catch { model.toast = Toast(String(localized: "旧版草稿尚未恢复，请检查账号和本机存储空间后重试"), style: .error) }
+            } catch { model.toast = Toast(String(localized: "The older draft wasn't restored. Check the account and this device's storage, then try again."), style: .error) }
         }
     }
 
@@ -1117,13 +1117,13 @@ struct LarkChatView: View {
                 guard encryptionDraft != nil else { return }
                 encryptionStatus = status
                 guard status.configured else {
-                    encryptionProblem = String(localized: "请先在飞书网关的网页创建密钥库，再回来重新检查。已输入的内容会保留。")
+                    encryptionProblem = String(localized: "Create a key vault on the Lark gateway's web page first, then come back and check again. What you've entered is kept.")
                     return
                 }
                 if openCovers { showEncryptionCovers = true }
             } catch {
                 if !error.isCancellation, outbox === queue, encryptionDraft != nil {
-                    encryptionProblem = error.shown ?? String(localized: "暂时无法连接加密服务，请稍后重新检查。已输入的内容会保留。")
+                    encryptionProblem = error.shown ?? String(localized: "Can't reach the encryption service right now. Check again later. What you've typed is kept.")
                 }
             }
         }
@@ -1132,7 +1132,7 @@ struct LarkChatView: View {
     /// The durable composer-to-outbox transaction finishes before the input clears and sending starts.
     private func send() {
         guard let api = chatAPI, let identity = outbox.identity else {
-            model.toast = Toast(String(localized: "请重新打开此会话后发送"), style: .error); return
+            model.toast = Toast(String(localized: "Reopen this chat, then send."), style: .error); return
         }
         let queue = outbox
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1140,12 +1140,12 @@ struct LarkChatView: View {
         // A picture or file quoting a message needs the hub to carry the quote (#1035); an older one would send it on
         // its own, so nothing goes and the draft stays.
         if replyTo != nil, !attachments.isEmpty, !model.larkFeatures.attachmentReplies {
-            model.toast = Toast(String(localized: "需要更新 Hub 上的飞书扩展，才能引用消息发送图片和文件"), style: .error); return
+            model.toast = Toast(String(localized: "Update the Lark extension on the hub to reply to a message with images and files."), style: .error); return
         }
         let encrypted = encryptionDraft
         if let encrypted {
             guard messageComposer, attachments.isEmpty, !isTopic else {
-                model.toast = Toast(String(localized: "请从消息页发送加密文字"), style: .error); return
+                model.toast = Toast(String(localized: "Send encrypted text from the Messages page."), style: .error); return
             }
             guard !encrypted.cover.isEmpty else { checkEncryption(openCovers: true); return }
         }
@@ -1153,13 +1153,13 @@ struct LarkChatView: View {
         if climbing {
             // The words go encoded, as the web sends them; the Lark gateway refuses them while the switch is off.
             guard chatLink?.larkDisplay.policy.climbs == true else {
-                model.toast = Toast(String(localized: ""), style: .error); return
+                model.toast = Toast(String(localized: "Turn on Brave Climb encoding in Settings › Message Tweaks first."), style: .error); return
             }
             guard attachments.isEmpty, !isTopic else {
-                model.toast = Toast(String(localized: ""), style: .error); return
+                model.toast = Toast(String(localized: "Brave Climb encoding only works for text messages."), style: .error); return
             }
             guard let words = try? LarkBraveClimbCodec.encode(t) else {
-                model.toast = Toast(String(localized: ""), style: .error); return
+                model.toast = Toast(String(localized: "The text is too long to send with Brave Climb encoding."), style: .error); return
             }
             batch.append(LarkOutgoing(text: words, replyTo: replyTo, mentions: []))
         } else if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
@@ -1173,7 +1173,7 @@ struct LarkChatView: View {
                     guard status.accountId == identity.account, outbox === queue, !queue.invalidated else { throw LarkOutboxIdentity.Failure.changed }
                     encryptionStatus = status
                     guard status.configured else {
-                        model.toast = Toast(String(localized: "请先在飞书网关的网页创建密钥库"), style: .error); return
+                        model.toast = Toast(String(localized: "Create a key vault on the Lark gateway's web page first"), style: .error); return
                     }
                     if status.locked { showEncryptionUnlock = true; return }
                     let payload = try await api.larkPrepareEncryption(account: identity.account, feed: conversation.id, text: t, cover: encrypted.cover)
@@ -1182,13 +1182,13 @@ struct LarkChatView: View {
                     batch[0].mentions = []
                 } catch {
                     if (error as? APIError)?.code == "OLK_VAULT_LOCKED" { showEncryptionUnlock = true }
-                    else { model.toast = Toast(error.shown ?? String(localized: "未能加密，消息保留在输入框"), style: .error) }
+                    else { model.toast = Toast(error.shown ?? String(localized: "Couldn't encrypt. The message stays in the input field."), style: .error) }
                     return
                 }
             }
             do { try await queue.enqueue(batch) }
             catch {
-                model.toast = Toast(String(localized: "消息未发送，无法保存到本机，请检查存储空间"), style: .error); return
+                model.toast = Toast(String(localized: "Message not sent: couldn't save it on this device. Check your storage."), style: .error); return
             }
             if outbox === queue {
                 // Animated like the rows the outbox just added: the box shrinking back to a line (and the quote bar
@@ -1221,19 +1221,19 @@ struct LarkChatView: View {
                 try await queue.settle(latest.messages)
                 guard let item = queue.items.first(where: { $0.id == id }) else { return }
                 guard item.canRetry else {
-                    model.toast = Toast(String(localized: "尚未确认文件是否发出，请稍后再检查"), style: .error)
+                    model.toast = Toast(String(localized: "Not yet confirmed whether the file was sent. Check again later."), style: .error)
                     return
                 }
                 try await queue.retry(id)
                 deliver(id, using: api, queue: queue)
-            } catch { model.toast = Toast(String(localized: "暂时无法重试，请检查连接和本机存储空间"), style: .error) }
+            } catch { model.toast = Toast(String(localized: "Can't retry right now. Check the connection and this device's storage."), style: .error) }
         }
     }
 
     private func discard(_ id: UUID) {
         Task {
             do { try await outbox.discard(id) }
-            catch { model.toast = Toast(String(localized: "未能删除，请检查本机存储空间"), style: .error) }
+            catch { model.toast = Toast(String(localized: "Couldn't delete. Check this device's storage."), style: .error) }
         }
     }
 
@@ -1244,7 +1244,7 @@ struct LarkChatView: View {
         let words = outgoing.encrypted == nil && outgoing.attachment == nil ? LarkBraveClimbCodec.decodeMessage(outgoing.text) : nil
         if outgoing.encrypted != nil && (!text.isEmpty || !attachments.isEmpty) || outgoing.encrypted == nil && encryptionDraft != nil
             || words != nil && (!attachments.isEmpty || !climbing && !text.isEmpty) || words == nil && climbing && outgoing.attachment == nil {
-            model.toast = Toast(String(localized: "请先处理输入框中的草稿，再恢复这条消息"), style: .error)
+            model.toast = Toast(String(localized: "Deal with the draft in the input field before restoring this message."), style: .error)
             return
         }
         var draft = self.draft, files = attachments
@@ -1252,7 +1252,7 @@ struct LarkChatView: View {
         if words != nil { draft.braveClimb = true }
         if let attachment = outgoing.attachment {
             guard files.count < LarkAttachment.selectionLimit else {
-                model.toast = Toast(String(localized: "请先移除一个附件，再放回输入框"), style: .error)
+                model.toast = Toast(String(localized: "Remove an attachment before putting this back in the input field."), style: .error)
                 return
             }
             files.append(attachment)
@@ -1268,7 +1268,7 @@ struct LarkChatView: View {
             do {
                 try await queue.restore(outgoing.id, draft: draft, attachments: files)
                 if outbox === queue { applyDraft() }
-            } catch { model.toast = Toast(String(localized: "未能放回输入框，请检查本机存储空间"), style: .error) }
+            } catch { model.toast = Toast(String(localized: "Couldn't put it back in the input field. Check this device's storage."), style: .error) }
         }
     }
 
@@ -1299,13 +1299,13 @@ struct LarkChatView: View {
             do {
                 try await queue.settle(messages)
             }
-            catch { model.toast = Toast(String(localized: "发送结果尚未保存，请检查本机存储空间"), style: .error) }
+            catch { model.toast = Toast(String(localized: "The send result hasn't been saved. Check this device's storage."), style: .error) }
         }
     }
 
     private func askJarvis() async {
         guard let api = chatAPI else { return }
-        let prompt = String(localized: "读取我飞书会话「\(conversation.name)」（飞书网关 feedId \(conversation.id)）最近的消息，总结要点，列出需要我回复或处理的事，并给出建议的回复。")
+        let prompt = String(localized: "Read the recent messages in my Lark chat “\(conversation.name)” (Lark gateway feedId \(conversation.id)), summarize the key points, list what I need to reply to or handle, and suggest replies.")
         do {
             let s = try await api.startConversation(prompt: prompt)
             model.began(s, text: prompt)
@@ -1357,7 +1357,7 @@ struct LarkNewMessagesDivider: View {
     var body: some View {
         HStack(spacing: Theme.Space.m) {
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: Theme.Size.line)
-            Text("以下为新消息").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
+            Text("New Messages").font(Theme.Font.labelMedium).foregroundStyle(LarkColor.blue).lineLimit(1).fixedSize()
             Rectangle().fill(LarkColor.blue.opacity(0.35)).frame(height: Theme.Size.line)
         }
         .padding(.vertical, Theme.Space.m)
@@ -1404,7 +1404,7 @@ struct LarkTranslationLine: View {
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, Theme.Space.xs)
-                    .accessibilityLabel(String(localized: "译文：\(t)"))
+                    .accessibilityLabel(String(localized: "Translation: \(t)"))
                 }
             }
             .task(id: message.id + target) { translator.request(message.text, to: target) }
@@ -1460,7 +1460,7 @@ struct LarkMessageRow: View {
                         LarkAvatarImage(name: m.senderName, url: m.senderAvatar, size: Theme.Size.wellM)
                             .onTapGesture { showProfile() }
                             .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel("\(m.senderName) 的资料")
+                            .accessibilityLabel("\(m.senderName)'s profile")
                     } else { Color.clear }
                 }
                 .scaledFrame(width: Theme.Size.wellM, height: avatar ? Theme.Size.wellM : Theme.Size.line)
@@ -1470,7 +1470,7 @@ struct LarkMessageRow: View {
                             Text(m.senderName).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 .onTapGesture { showProfile() }
                             if m.senderType == "bot" {
-                                Text("机器人").font(Theme.Font.labelStrong).foregroundStyle(LarkColor.blue)
+                                Text("Bot").font(Theme.Font.labelStrong).foregroundStyle(LarkColor.blue)
                                     .padding(.horizontal, Theme.Space.xs).padding(.vertical, 1).background(LarkColor.blue.opacity(0.12), in: .rect(cornerRadius: 3))
                             }
                         }
@@ -1606,7 +1606,7 @@ struct LarkMessageRow: View {
                             .scaledFrame(width: Theme.Size.well, height: Theme.Size.iconL).background(Color.primary.opacity(0.05), in: .capsule)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("表情回复")
+                    .accessibilityLabel("Add Reaction")
                 }
             }
             .scaledFrame(maxWidth: Theme.Size.box300, alignment: LarkChatLayout.side(of: m).alignment)
@@ -1614,21 +1614,21 @@ struct LarkMessageRow: View {
         let replies = max(m.threadReplyCount ?? 0, m.replyCount)
         // No time here: it is in the separators above (LarkChatLayout).
         if m.recalled && display.showsBody(of: m) {
-            Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
+            Text("Recalled").font(Theme.Font.caption).foregroundStyle(.secondary)
         }
         if (!m.recalled && replies > 0) || (m.edited == true && display.showsBody(of: m)) {
             HStack(spacing: Theme.Space.s) {
                 if replies > 0 && !inThread && !m.recalled {
                     Button { showThread = true } label: {
-                        Label("\(replies) 条回复", systemImage: Theme.Icon.reply).foregroundStyle(LarkColor.blue)
+                        Label("\(replies) replies", systemImage: Theme.Icon.reply).foregroundStyle(LarkColor.blue)
                     }
                     .buttonStyle(.plain)
                 }
                 if m.edited == true {
                     if display.showsHistory(of: m) {
-                        Button("已编辑") { showHistory = true }.buttonStyle(.plain).lineLimit(1)
-                            .accessibilityLabel("查看编辑历史").accessibilityIdentifier("lark.editHistory.\(m.id)")
-                    } else { Text("已编辑") }
+                        Button("Edited") { showHistory = true }.buttonStyle(.plain).lineLimit(1)
+                            .accessibilityLabel("View edit history").accessibilityIdentifier("lark.editHistory.\(m.id)")
+                    } else { Text("Edited") }
                 }
             }
             .font(Theme.Font.label)
@@ -1669,9 +1669,9 @@ extension LarkMessage {
     /// What a recalled message says where its body is not shown (`LarkMessageDisplay.showsBody`): a chat's row, a topic
     /// group's card.
     var recallNotice: String {
-        if isMine { return String(localized: "你撤回了一条消息") }
+        if isMine { return String(localized: "You recalled a message") }
         let name = senderName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? String(localized: "消息已撤回") : String(localized: "\(name) 撤回了一条消息")
+        return name.isEmpty ? String(localized: "Message recalled") : String(localized: "\(name) recalled a message [Lark Chat View 9d25f6]")
     }
 }
 
@@ -1712,21 +1712,21 @@ struct LarkMessageMenu: View {
             .menuActionDismissBehavior(.enabled) // a palette keeps the menu up after a tap; Feishu closes it
         }
         if let reply {
-            Button(action: reply) { Label("回复", systemImage: Theme.Icon.reply) }
+            Button(action: reply) { Label("Reply", systemImage: Theme.Icon.reply) }
         }
         if react != nil && !message.recalled {
-            Button(action: pickReaction) { Label("表情回复", systemImage: Theme.Icon.react) }
+            Button(action: pickReaction) { Label("Add Reaction", systemImage: Theme.Icon.react) }
         }
         Button {
             UIPasteboard.general.string = message.displayText
             Haptics.success()
-        } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+        } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
         if let addPin, message.canPin == true && !message.recalled && message.deleted != true && message.localState != "pending" && message.localState != "failed" {
-            Button { addPin(message) } label: { Label("添加 Pin", systemImage: Theme.Icon.pin) }
+            Button { addPin(message) } label: { Label("Pin [Lark Chat Pins View 638562]", systemImage: Theme.Icon.pin) }
                 .accessibilityIdentifier("lark.pin.add")
         }
         if let showProfile, let id = message.senderID, !id.isEmpty {
-            Button(action: showProfile) { Label("查看 \(message.senderName) 的资料", systemImage: Theme.Icon.person) }
+            Button(action: showProfile) { Label("View \(message.senderName)'s Profile", systemImage: Theme.Icon.person) }
         }
     }
 }
@@ -1740,8 +1740,8 @@ struct LarkReplyQuote: View {
 
     var body: some View {
         let summary = reply.recalled == true && !(display.antiRecall && reply.retained == true)
-            ? String(localized: "消息已撤回")
-            : reply.recalled == true ? String(localized: "\(Fmt.plain(display.summary(reply.displayText))) · 已撤回") : Fmt.plain(display.summary(reply.displayText))
+            ? String(localized: "Message recalled")
+            : reply.recalled == true ? String(localized: "\(Fmt.plain(display.summary(reply.displayText))) · Recalled") : Fmt.plain(display.summary(reply.displayText))
         QuoteCard(heading: reply.senderName, summary: summary, tint: LarkColor.blue, ink: .primary) {
             if jump?(reply.id) == true { Haptics.tap() } else { Haptics.attention() }
         }

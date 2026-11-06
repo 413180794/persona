@@ -63,15 +63,15 @@ import Synchronization
             return true
         }
         end()
-        guard Self.supported else { return note(String(localized: "这台设备不支持画中画")) }
+        guard Self.supported else { return note(String(localized: "This device doesn't support Picture in Picture")) }
         let audio = AVAudioSession.sharedInstance()
         do {
             try audio.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
             try audio.setActive(true)
         } catch {
-            note(String(localized: "音频会话没打开：\(error.localizedDescription)"))
+            note(String(localized: "Couldn't start the audio session: \(error.localizedDescription)"))
         }
-        guard let window = Self.mainWindow() else { return note(String(localized: "找不到 App 的主窗口")) }
+        guard let window = Self.mainWindow() else { return note(String(localized: "Can't find the app's main window")) }
         let session = VNC.hold(ref)
         let size = Self.size(session.size, width: Theme.Size.pictureInPictureSource)
         let v = VNCScreenUIView(frame: CGRect(x: 0, y: window.bounds.maxY - size.height, width: size.width, height: size.height))
@@ -82,7 +82,7 @@ import Synchronization
         if Self.showsSource {
             v.frame.origin = CGPoint(x: window.bounds.maxX - size.width - Theme.Space.page, y: window.safeAreaInsets.top + Theme.Space.xxl)
             v.accessibilityIdentifier = "vnc-pip-source"
-            v.accessibilityLabel = String(localized: "小窗：实时画面") // until the card says otherwise (draw)
+            v.accessibilityLabel = String(localized: "Picture in Picture: live screen") // until the card says otherwise (draw)
             window.addSubview(v)
         } else {
             v.accessibilityElementsHidden = true
@@ -122,7 +122,7 @@ import Synchronization
     func start(_ ref: MachineRef, from: SessionKey? = nil) {
         if self.ref == ref, active { return }
         VNCPiPLog.add("要小窗") // i18n-ignore
-        guard prepare(ref, from: from, automatic: true) else { return fallBack(ref, from, why: VNCPiPLog.last ?? String(localized: "这台设备不支持画中画")) }
+        guard prepare(ref, from: from, automatic: true) else { return fallBack(ref, from, why: VNCPiPLog.last ?? String(localized: "This device doesn't support Picture in Picture")) }
         wanted = true
         starting = false
         tries = 0
@@ -140,7 +140,7 @@ import Synchronization
             }
             guard let self, !Task.isCancelled, self.wanted, !self.active, self.ref == ref else { return }
             if Self.showsSource { return VNCPiPLog.add("没有画中画（DEBUG）：只把源摆在前面") } // i18n-ignore
-            self.fallBack(ref, self.from, why: self.tries == 0 ? String(localized: "系统说现在不能开") : String(localized: "开了 \(self.tries) 次，系统都没反应"))
+            self.fallBack(ref, self.from, why: self.tries == 0 ? String(localized: "The system says it can't start now") : String(localized: "Tried \(self.tries) times; the system didn’t respond"))
         }
     }
 
@@ -174,7 +174,7 @@ import Synchronization
             let failed = if case .failed = now { true } else { false }
             paused.withLock { $0 = failed }
             controller?.invalidatePlaybackState()
-            if Self.showsSource { host.accessibilityLabel = now.map { String(localized: "小窗：\($0.line)") } ?? String(localized: "小窗：实时画面") }
+            if Self.showsSource { host.accessibilityLabel = now.map { String(localized: "Picture in Picture: \($0.line)") } ?? String(localized: "Picture in Picture: live screen") }
         }
         if now == .signIn, wanted || active, UIApplication.shared.applicationState == .active, AppModel.shared.screenOpen?.machine != ref {
             VNCPiPLog.add("整页重新登录") // i18n-ignore
@@ -223,7 +223,7 @@ import Synchronization
         end()
         if let why {
             VNCPiPLog.add("改用整页：\(why)") // i18n-ignore
-            AppModel.shared.toast = Toast(String(localized: "小窗打不开：\(why)，已改用整页"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "Picture in Picture didn't open: \(why). Switched to full screen."), style: .error)
         }
         if !pageUp { AppModel.shared.openScreen(ref, from: from) }
     }
@@ -326,7 +326,7 @@ import Synchronization
         MainActor.assumeIsolated {
             starting = false
             guard let ref else { return }
-            fallBack(ref, from, why: String(localized: "系统没让开（\(error.localizedDescription)）"))
+            fallBack(ref, from, why: String(localized: "The system didn't allow it (\(error.localizedDescription))"))
         }
     }
 

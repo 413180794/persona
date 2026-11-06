@@ -42,7 +42,7 @@ extension AppModel {
             sendRefusal = SendRefusal(key: key, messageID: msg.id, draft: e.fields["draft"] ?? "", clearable: e.fields["clearable"])
             return .failed
         } catch let e as APIError where e.fields["delivered"] == "unknown" || e.code == OpReceipt.unknownCode {
-            toast = Toast(String(localized: "可能已经送到电脑上了：先看看对话里有没有，再决定要不要重发"), style: .error)
+            toast = Toast(String(localized: "It may have reached the computer already. Check the chat before sending it again."), style: .error)
             if let i = chat(key).pending.firstIndex(where: { $0.id == msg.id }) { chat(key).pending[i].mayHaveArrived = true }
             return .failed
         } catch where error.isOffline || error.isTimeout || error.isGap {
@@ -114,19 +114,19 @@ private nonisolated struct SavedDraft: Codable, Sendable {
 extension View {
     /// The alert for a send the computer refused because of a draft in its input box.
     func sendRefusalAlert(_ model: AppModel) -> some View {
-        alert("电脑上的输入框里有字", isPresented: Binding(
+        alert(String(localized: "There's Text in the Computer's Input Box"), isPresented: Binding(
             get: { model.sendRefusal != nil },
             set: { if !$0 { model.sendRefusal = nil } }
         ), presenting: model.sendRefusal) { r in
             if r.clearable != nil {
-                Button("清空并发送") { model.clearDraftAndSend(r); model.sendRefusal = nil }
+                Button("Clear and Send") { model.clearDraftAndSend(r); model.sendRefusal = nil }
             }
-            Button("先不发", role: .cancel) { model.sendRefusal = nil }
+            Button("Not Now", role: .cancel) { model.sendRefusal = nil }
         } message: { r in
             let shown = r.draft.count > 200 ? String(r.draft.prefix(200)) + "…" : r.draft
             Text(r.clearable != nil
-                 ? "「\(shown)」\n这条消息还没发，免得和它拼在一起。清空电脑上的这段文字再发？"
-                 : "「\(shown)」\n这条消息还没发，免得和它拼在一起。这段内容要在电脑上处理掉，再点消息旁的感叹号重发。")
+                 ? String(localized: "“\(shown)”\\nYour message wasn’t sent so it wouldn’t merge with this text. Clear it on the computer and send?")
+                 : String(localized: "“\(shown)”\\nYour message wasn’t sent so it wouldn’t merge with this text. Deal with it on the computer, then tap the exclamation mark next to your message to resend."))
         }
     }
 }

@@ -173,7 +173,7 @@ extension UIApplication: AppIconSetting {}
                 switching = false
             } catch {
                 switching = false
-                failure = String(localized: "桌面图标没换成：\(error.localizedDescription)")
+                failure = String(localized: "Couldn't change the app icon: \(error.localizedDescription)")
                 return
             }
         }

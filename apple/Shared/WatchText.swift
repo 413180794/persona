@@ -9,9 +9,9 @@ nonisolated enum WatchText {
         pattern: #"<(?:jarvis|persona)-context\b(?:[^>]*?title="([^"]*)")?[^>]*>[\s\S]*?</(?:jarvis|persona)-context>\s*"#)
     /// The marks a phone shows for what the watch cannot draw, in the interface language.
     private static var rules: [(String, String)] {
-        let image = String(localized: "〔图片〕", comment: "Watch: stands in for an image in a message")
-        let video = String(localized: "〔视频〕", comment: "Watch: stands in for a video in a message")
-        let file = String(localized: "〔文件〕", comment: "Watch: stands in for a file in a message")
+        let image = String(localized: "[Photo]", comment: "Watch: stands in for an image in a message")
+        let video = String(localized: "[Video] [Watch Text ec48e4]", comment: "Watch: stands in for a video in a message")
+        let file = String(localized: "[File] [Watch Text f29940]", comment: "Watch: stands in for a file in a message")
         return [
             (#"\s*<attached_images>[\s\S]*?</attached_images>\s*"#, "\n" + image + "\n"),
             // Videos sent as files (<jarvis-file kind="video" …/>, VideoAttach.swift).
@@ -44,7 +44,7 @@ nonisolated enum WatchText {
         var t = context.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
         if let first = blocks.first {
             let title = first.range(at: 1).location == NSNotFound ? "" : ns.substring(with: first.range(at: 1))
-            t = (blocks.count == 1 && !title.isEmpty ? "〔\(title)〕\n" : String(localized: "〔上下文 \(blocks.count) 项〕") + "\n") + t
+            t = (blocks.count == 1 && !title.isEmpty ? "〔\(title)〕\n" : String(localized: "[\(blocks.count) context items]") + "\n") + t
         }
         for (pattern, with) in rules {
             t = t.replacingOccurrences(of: pattern, with: with, options: .regularExpression)

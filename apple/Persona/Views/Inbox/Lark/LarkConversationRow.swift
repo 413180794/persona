@@ -45,6 +45,6 @@ struct LarkAccountChips: View {
             }
             .padding(.horizontal, Theme.Space.page)
         }
-        .accessibilityLabel("飞书账号")
+        .accessibilityLabel("Lark account")
     }
 }

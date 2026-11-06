@@ -19,20 +19,20 @@ nonisolated enum NotificationActions {
         let permission = UNNotificationCategory(
             identifier: category(.permission),
             actions: [
-                UNNotificationAction(identifier: allow, title: String(localized: "允许"), options: [.authenticationRequired],
+                UNNotificationAction(identifier: allow, title: String(localized: "Allow [Notification Actions ce7ef2]"), options: [.authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: "checkmark")),
-                UNNotificationAction(identifier: deny, title: String(localized: "拒绝"), options: [.destructive],
+                UNNotificationAction(identifier: deny, title: String(localized: "Deny"), options: [.destructive],
                                      icon: UNNotificationActionIcon(systemImageName: "xmark")),
             ],
             intentIdentifiers: [], options: [])
         let plan = UNNotificationCategory(
             identifier: category(.plan),
             actions: [
-                UNNotificationAction(identifier: approvePlan, title: String(localized: "批准"), options: [.authenticationRequired],
+                UNNotificationAction(identifier: approvePlan, title: String(localized: "Approve [Notification Actions 8cbe69]"), options: [.authenticationRequired],
                                      icon: UNNotificationActionIcon(systemImageName: "checkmark")),
-                UNTextInputNotificationAction(identifier: rejectPlan, title: String(localized: "打回修改"), options: [.authenticationRequired],
+                UNTextInputNotificationAction(identifier: rejectPlan, title: String(localized: "Send Back [Notification Actions cd3150]"), options: [.authenticationRequired],
                                               icon: UNNotificationActionIcon(systemImageName: "arrow.uturn.backward"),
-                                              textInputButtonTitle: String(localized: "打回"), textInputPlaceholder: String(localized: "告诉 Claude 要怎么改…")),
+                                              textInputButtonTitle: String(localized: "Send Back [Notification Actions a20f13]"), textInputPlaceholder: String(localized: "Tell Claude what to change…")),
             ],
             intentIdentifiers: [], options: [])
         // Questions and terminal prompts need the screen: no buttons, a tap opens the session. Registered anyway so
@@ -43,9 +43,9 @@ nonisolated enum NotificationActions {
         let done = UNNotificationCategory(
             identifier: doneCategory,
             actions: [
-                UNTextInputNotificationAction(identifier: reply, title: String(localized: "回复"), options: [.authenticationRequired],
+                UNTextInputNotificationAction(identifier: reply, title: String(localized: "Reply"), options: [.authenticationRequired],
                                               icon: UNNotificationActionIcon(systemImageName: "arrowshape.turn.up.left"),
-                                              textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: String(localized: "接下来做什么…")),
+                                              textInputButtonTitle: String(localized: "Send"), textInputPlaceholder: String(localized: "What next…")),
             ],
             intentIdentifiers: [], options: [])
         // Pairing receipts (#4199): Not you? Revoke, It's Mine / Not Mine (PairReceiptActions).
@@ -108,12 +108,12 @@ nonisolated enum NotificationActions {
     /// while the agent moved on, the hub was unreachable, and so on.
     static func failureTitle(action: String) -> String {
         switch action {
-        case allow: String(localized: "没能允许")
-        case deny: String(localized: "没能拒绝")
-        case approvePlan: String(localized: "没能批准计划")
-        case rejectPlan: String(localized: "没能打回计划")
-        case reply: String(localized: "没能发出回复")
-        default: String(localized: "没能完成操作")
+        case allow: String(localized: "Couldn't allow")
+        case deny: String(localized: "Couldn't deny")
+        case approvePlan: String(localized: "Couldn't approve the plan")
+        case rejectPlan: String(localized: "Couldn't send back the plan")
+        case reply: String(localized: "Couldn't send the reply")
+        default: String(localized: "Couldn't complete the action")
         }
     }
 }

@@ -9,7 +9,7 @@ struct ImageEditor: View {
     @Environment(\.dismiss) private var dismiss
     let image: UIImage
     /// Title of the done button (what happens with the result: "Add to Message", "Done").
-    var doneTitle: String = String(localized: "完成")
+    var doneTitle: String = String(localized: "Done [Extension System Presentation c0b3fb]")
     var onDone: (UIImage) -> Void
 
     enum Tool: String, CaseIterable { case pen, box }
@@ -53,12 +53,12 @@ struct ImageEditor: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { toolbar }
-            .navigationTitle("编辑图片")
+            .navigationTitle("Edit Image")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.black, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(doneTitle) {
                         onDone(render())
@@ -81,17 +81,17 @@ struct ImageEditor: View {
                             .overlay(Circle().stroke(.white, lineWidth: color == c ? 3 : 1).opacity(color == c ? 1 : 0.4))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("颜色")
+                    .accessibilityLabel("Colors [Image Editor 070a80]")
                 }
             }
             HStack(spacing: Theme.Space.m) {
-                toolButton(.box, String(localized: "框选"), "rectangle")
-                toolButton(.pen, String(localized: "画笔"), "scribble")
+                toolButton(.box, String(localized: "Box"), "rectangle")
+                toolButton(.pen, String(localized: "Pen"), "scribble")
                 Spacer(minLength: 0)
                 Button { _ = marks.popLast() } label: { Image(systemName: Theme.Icon.undo).scaledFrame(width: Theme.Size.icon) }
-                    .themedButton().disabled(marks.isEmpty).accessibilityLabel("撤销")
+                    .themedButton().disabled(marks.isEmpty).accessibilityLabel("Undo")
                 Button { marks = [] } label: { Image(systemName: Theme.Icon.delete).scaledFrame(width: Theme.Size.icon) }
-                    .themedButton().disabled(marks.isEmpty).accessibilityLabel("清除")
+                    .themedButton().disabled(marks.isEmpty).accessibilityLabel("Clear [Image Editor bce237]")
             }
         }
         .padding(.horizontal, Theme.Space.l)

@@ -28,7 +28,7 @@ struct ThemeColorPicker: View {
                 ForEach(options) { swatch($0) }
             }
             if !ExtensionThemesModel.shared.offers.isEmpty {
-                Text("扩展主题").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
+                Text("Extension Theme").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
                 ForEach(ExtensionThemesModel.shared.offers) { offer in
                     if let palette = ExtensionThemeContrast.palette(offer) {
                         Button {
@@ -50,7 +50,7 @@ struct ThemeColorPicker: View {
                         }
                         .themedButton(prominent: false)
                         .accessibilityIdentifier("extension-theme-\(offer.id)")
-                        .accessibilityValue(model.themeColor == .extensionTheme && ExtensionThemesModel.shared.palette?.id == offer.id ? "已选择" : "未选择")
+                        .accessibilityValue(model.themeColor == .extensionTheme && ExtensionThemesModel.shared.palette?.id == offer.id ? String(localized: "Selected [Interactive Assistant View Card 3f4ebc]") : String(localized: "Not selected"))
                     }
                 }
             }
@@ -62,7 +62,7 @@ struct ThemeColorPicker: View {
     private func origin(_ c: ThemeColor) -> String {
         switch c {
         case .style: model.style.component.colors.title
-        case .persona: model.persona.palette == nil ? String(localized: "这个形象没带") : model.persona.name
+        case .persona: model.persona.palette == nil ? String(localized: "Not included in this avatar") : model.persona.name
         default: c.preset?.subtitle ?? ""
         }
     }
@@ -96,7 +96,7 @@ struct ThemeColorPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(c.title)，\(origin(c))")
+        .accessibilityLabel("\(c.title), \(origin(c))")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("color-\(c.rawValue)")
     }
@@ -107,7 +107,7 @@ struct ThemeColorPicker: View {
 private struct LookSample: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text("明天出门要带伞吗？")
+            Text("Do I need an umbrella tomorrow?")
                 .font(Theme.Font.secondary)
                 .foregroundStyle(Theme.userBubbleText)
                 .padding(.horizontal, Theme.Space.m)
@@ -115,15 +115,15 @@ private struct LookSample: View {
                 .background(Theme.userBubbleFill, in: .rect(cornerRadius: Theme.Radius.bubble, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: .trailing)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text("上午有小雨，带一把折叠伞。").font(Theme.Font.secondary)
-                Text("查看逐小时天气").font(Theme.Font.secondaryMedium).foregroundStyle(Theme.accent)
+                Text("Light rain in the morning. Bring a folding umbrella.").font(Theme.Font.secondary)
+                Text("See Hourly Forecast").font(Theme.Font.secondaryMedium).foregroundStyle(Theme.accent)
             }
             .padding(Theme.Space.m)
             .frame(maxWidth: .infinity, alignment: .leading)
             .surface(in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
             HStack(spacing: Theme.Space.s) {
-                Button("加到提醒") {}.themedButton(prominent: true)
-                Button("不用了") {}.themedButton()
+                Button("Add to Reminders") {}.themedButton(prominent: true)
+                Button("No Thanks") {}.themedButton()
             }
             .font(Theme.Font.secondaryMedium)
             .lineLimit(1)
@@ -133,7 +133,7 @@ private struct LookSample: View {
         .background(Theme.groupedPage, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).stroke(Theme.cardStroke, lineWidth: Theme.Size.line))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("预览：现在的主题色和界面风格")
+        .accessibilityLabel("Preview: current theme color and interface style")
         .accessibilityIdentifier("look-sample")
     }
 }
@@ -162,7 +162,7 @@ struct StylePicker: View {
                               selected: s == model.style)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(s.title)，\(s.subtitle)")
+                .accessibilityLabel("\(s.title), \(s.subtitle)")
                 .accessibilityAddTraits(s == model.style ? .isSelected : [])
                 .accessibilityIdentifier("style-\(s.rawValue)")
             }

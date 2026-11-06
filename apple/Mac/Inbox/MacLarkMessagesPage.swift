@@ -123,7 +123,7 @@ private struct MacLarkMessagesContent: View {
             if !store.conversations.isEmpty {
                 if store.failed {
                     Button { Task { await store.refresh() } } label: {
-                        Label(store.needsUpgrade ? "更新 Hub 后可同步置顶 · 重新检查" : "暂未更新 · 重试", systemImage: Theme.Icon.retry)
+                        Label(store.needsUpgrade ? String(localized: "Update the hub to sync pinned chats · Check Again") : String(localized: "Not updated · Retry"), systemImage: Theme.Icon.retry)
                             .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .buttonStyle(.plain)
@@ -140,23 +140,23 @@ private struct MacLarkMessagesContent: View {
                         }
                 }
                 if rows.isEmpty, !query.isEmpty, !searchingOn {
-                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到「\(query)」"),
-                                   message: store.nextCursor == nil ? String(localized: "会话的名称和最近消息都能搜，换个词试试。")
-                                                                    : String(localized: "已搜索最近 \(store.conversations.count) 个会话。"))
+                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "No Results for “\(query)”"),
+                                   message: store.nextCursor == nil ? String(localized: "You can search chat names and recent messages. Try another word.")
+                                                                    : String(localized: "Searched the latest \(store.conversations.count) chats."))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Theme.pageBackground)
                 }
                 if store.nextCursor != nil {
                     Group {
                         if store.pageFailed {
-                            Button("重试加载") { Task { await store.more() } }.lineLimit(1)
+                            Button("Retry [Lark Conversations View 8924c7]") { Task { await store.more() } }.lineLimit(1)
                         } else if !query.isEmpty, searchPages >= Self.searchPageLimit {
-                            Button("搜索更早的会话") { searchPages = 0; Task { await loadAtEnd() } }.lineLimit(1)
+                            Button("Search Older Chats") { searchPages = 0; Task { await loadAtEnd() } }.lineLimit(1)
                         } else {
                             VStack(spacing: Theme.Space.xs) {
                                 ProgressView().controlSize(.small)
                                 if !query.isEmpty {
-                                    Text("已搜索 \(store.conversations.count) 个会话，正在找更早的")
+                                    Text("Searched \(store.conversations.count) chats, looking further back")
                                         .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                                 }
                             }
@@ -186,12 +186,12 @@ private struct MacLarkMessagesContent: View {
         .pageToolbar {
             MacToolbarMiddle() // the buttons by the search field, not over the chat's title (#830)
             ToolbarItem(placement: .primaryAction) {
-                Button { openConnectionSettings() } label: { Label("飞书设置", systemImage: Theme.Icon.settings) }
-                    .help("飞书设置")
+                Button { openConnectionSettings() } label: { Label("Lark Settings", systemImage: Theme.Icon.settings) }
+                    .help("Lark Settings")
                     .accessibilityIdentifier("feishu-settings")
             }
         }
-        .pageSearchable(text: $query, placement: .toolbar, prompt: String(localized: "lark.searchChats", defaultValue: "搜索会话", comment: "Search field over the Lark chats list"))
+        .pageSearchable(text: $query, placement: .toolbar, prompt: String(localized: "lark.searchChats", defaultValue: "Search chats", comment: "Search field over the Lark chats list"))
     }
 
     /// A chat: opens beside the list, the open one in the shell's selected shade (as Knowledge's rows, `KBEntryLink`).
@@ -216,16 +216,16 @@ private struct MacLarkMessagesContent: View {
         if store.loading {
             ProgressView()
         } else if store.status?.configured == false {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "还没有连接飞书"), message: String(localized: "连接 Hub 上的飞书账号后，会话会显示在这里。"),
-                           action: (String(localized: "连接设置"), { openConnectionSettings() }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "Lark isn't connected yet"), message: String(localized: "Connect a Lark account on the hub and your chats will show up here."),
+                           action: (String(localized: "Connection Settings"), { openConnectionSettings() }))
         } else if store.needsUpgrade {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "需要更新 Hub"), message: String(localized: "更新后可显示置顶会话，并同步当前飞书账号。"),
-                           action: (String(localized: "重新检查"), { Task { await store.refresh() } }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "Hub update needed"), message: String(localized: "After updating, pinned chats show up and your current Lark account syncs."),
+                           action: (String(localized: "Check Again [Lark Chat View c25fb8]"), { Task { await store.refresh() } }))
         } else if store.failed {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "暂时无法加载会话"), message: String(localized: "请检查飞书连接，稍后重试。"),
-                           action: (String(localized: "重试"), { Task { await store.refresh() } }))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "Couldn't load chats"), message: String(localized: "Check the Lark connection and try again later."),
+                           action: (String(localized: "Retry [Components b8784c]"), { Task { await store.refresh() } }))
         } else {
-            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "暂无会话"), message: String(localized: "飞书的私聊和群聊会显示在这里。"))
+            EmptyStateView(symbol: Theme.Icon.feishuChats, title: String(localized: "No chats yet"), message: String(localized: "Your Lark direct messages and group chats show up here."))
         }
     }
 
@@ -270,7 +270,7 @@ private struct MacLarkChatColumn: View {
                         // Over the part kept below the row, not inside it: clipped there, the title did not show.
                         .pageTitle(conversation.name, subtitle: subtitle(conversation))
                 } else {
-                    SplitPlaceholder(symbol: Theme.Icon.feishuChats, title: String(localized: "选一个会话"), message: String(localized: "左边列表里选一个会话，聊天会在这里打开。"))
+                    SplitPlaceholder(symbol: Theme.Icon.feishuChats, title: String(localized: "Select a Chat"), message: String(localized: "Select a chat from the list on the left to open it here."))
                         .modifier(MacBelowTitleRow())
                 }
             }
@@ -291,6 +291,6 @@ private struct MacLarkChatColumn: View {
     }
 
     private func subtitle(_ c: LarkConversation) -> String {
-        [c.isTopic == true ? String(localized: "飞书话题群") : c.isGroup ? String(localized: "飞书群聊") : String(localized: "飞书"), c.accountName].compactMap { $0 }.joined(separator: " · ")
+        [c.isTopic == true ? String(localized: "Lark Topic Group") : c.isGroup ? String(localized: "Lark Group [Mac Inbox Detail 98c8c6]") : String(localized: "Lark [Inbox Event Views 7e4419]"), c.accountName].compactMap { $0 }.joined(separator: " · ")
     }
 }

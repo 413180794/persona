@@ -21,10 +21,10 @@ final class ConnectionStatus {
         var title: String {
             switch self {
             case .online: ""
-            case .waitingForNetwork: String(localized: "等待网络")
-            case .connecting: String(localized: "连接中…")
-            case .updating: String(localized: "更新中…")
-            case .rejected: String(localized: "配对已失效")
+            case .waitingForNetwork: String(localized: "Waiting for Network")
+            case .connecting: String(localized: "Connecting… [Connection Status ee9ebe]")
+            case .updating: String(localized: "Updating…")
+            case .rejected: String(localized: "Pairing Expired")
             }
         }
     }

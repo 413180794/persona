@@ -7,17 +7,17 @@ import Observation
 
 nonisolated enum AgentGroupBy: String, Codable, CaseIterable, Sendable {
     case date, provider, none
-    var label: String { switch self { case .date: String(localized: "日期"); case .provider: String(localized: "来源"); case .none: String(localized: "不分组") } }
+    var label: String { switch self { case .date: String(localized: "Date"); case .provider: String(localized: "Source"); case .none: String(localized: "None [Personal Agent Prefs fcd40e]") } }
 }
 
 nonisolated enum AgentSortBy: String, Codable, CaseIterable, Sendable {
     case updated, unread, name
-    var label: String { switch self { case .updated: String(localized: "最近更新"); case .unread: String(localized: "未读数"); case .name: String(localized: "名称") } }
+    var label: String { switch self { case .updated: String(localized: "Recently Updated"); case .unread: String(localized: "Unread Count"); case .name: String(localized: "Name [Personal Agent Prefs d44e9b]") } }
 }
 
 nonisolated enum AgentShow: String, Codable, CaseIterable, Sendable {
     case all, unread, sendable
-    var label: String { switch self { case .all: String(localized: "全部"); case .unread: String(localized: "仅未读"); case .sendable: String(localized: "仅可发送") } }
+    var label: String { switch self { case .all: String(localized: "All"); case .unread: String(localized: "Unread Only"); case .sendable: String(localized: "Sendable Only") } }
 }
 
 nonisolated struct PersonalAgentView: Codable, Hashable, Sendable {
@@ -87,18 +87,18 @@ nonisolated struct PersonalAgentGroup: Identifiable, Hashable, Sendable {
 
 nonisolated enum PersonalAgentArrange {
     static func providerLabel(_ p: String) -> String {
-        ["grok_bot": "Grok Bot", "muse": "Muse", "cue": "Cue", "dots": "Dots", "claude_duet": "Claude Duet"][p] ?? (p.isEmpty ? String(localized: "其他") : p)
+        ["grok_bot": "Grok Bot", "muse": "Muse", "cue": "Cue", "dots": "Dots", "claude_duet": "Claude Duet"][p] ?? (p.isEmpty ? String(localized: "Other") : p)
     }
 
     static func bucket(_ ms: Int64, now: Date, calendar: Calendar = .current) -> (key: String, label: String, order: Int) {
         let t = Date(timeIntervalSince1970: Double(ms) / 1000)
         let today = calendar.startOfDay(for: now)
         let day: TimeInterval = 86_400
-        if t >= today { return ("today", String(localized: "今天"), 0) }
-        if t >= today.addingTimeInterval(-day) { return ("yesterday", String(localized: "昨天"), 1) }
-        if t >= today.addingTimeInterval(-7 * day) { return ("week", String(localized: "近 7 天"), 2) }
-        if t >= today.addingTimeInterval(-30 * day) { return ("month", String(localized: "近 30 天"), 3) }
-        return ("older", String(localized: "更早"), 4)
+        if t >= today { return ("today", String(localized: "Today"), 0) }
+        if t >= today.addingTimeInterval(-day) { return ("yesterday", String(localized: "Yesterday"), 1) }
+        if t >= today.addingTimeInterval(-7 * day) { return ("week", String(localized: "Last 7 Days"), 2) }
+        if t >= today.addingTimeInterval(-30 * day) { return ("month", String(localized: "Last 30 Days"), 3) }
+        return ("older", String(localized: "Earlier"), 4)
     }
 
     /// Same order as the web's arrangeSessions: filter, Pinned (pin order), custom sections, then the grouping.
@@ -115,7 +115,7 @@ nonisolated enum PersonalAgentArrange {
         var out: [PersonalAgentGroup] = []
         let pinned = prefs.pins.compactMap { byID[$0] }
         var used = Set(pinned.map(\.id))
-        if !pinned.isEmpty { out.append(PersonalAgentGroup(id: "pinned", label: String(localized: "已置顶"), sessions: pinned)) }
+        if !pinned.isEmpty { out.append(PersonalAgentGroup(id: "pinned", label: String(localized: "Pinned [Personal Agent List View fb47db]"), sessions: pinned)) }
         let cmp: (PersonalAgentSession, PersonalAgentSession) -> Bool = { a, b in
             switch v.sortBy {
             case .unread: a.unreadCount != b.unreadCount ? a.unreadCount > b.unreadCount : a.rankTimeMs > b.rankTimeMs
@@ -131,7 +131,7 @@ nonisolated enum PersonalAgentArrange {
         let rest = keep.filter { !used.contains($0.id) }.sorted(by: cmp)
         switch v.groupBy {
         case .none:
-            if !rest.isEmpty { out.append(PersonalAgentGroup(id: "all", label: out.isEmpty ? "" : String(localized: "其他"), sessions: rest)) }
+            if !rest.isEmpty { out.append(PersonalAgentGroup(id: "all", label: out.isEmpty ? "" : String(localized: "Other"), sessions: rest)) }
         case .provider:
             var order: [String] = []
             var by: [String: [PersonalAgentSession]] = [:]

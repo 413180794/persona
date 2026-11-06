@@ -31,7 +31,7 @@ import Observation
             on = try await deps.save(next)
         } catch {
             on = before
-            self.error = String(localized: "保存失败：\(error.localizedDescription)")
+            self.error = String(localized: "Couldn't save: \(error.localizedDescription) [Image Viewer fcc6eb]")
         }
     }
 }

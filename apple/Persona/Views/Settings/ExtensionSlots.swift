@@ -195,7 +195,7 @@ struct ExtensionSlotsSettingsSection: View {
                     }
                     .bareListRow()
                 } header: {
-                    SettingsHeading(String(localized: "扩展"))
+                    SettingsHeading(String(localized: "Extensions"))
                 }
             }
         }
@@ -280,13 +280,13 @@ struct ExtensionCard: View {
                     HStack(spacing: Theme.Space.s) {
                         Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(2)
                         Spacer(minLength: Theme.Space.s)
-                        Button { Task { await model.load() } } label: { Text("重试").lineLimit(1) }
+                        Button { Task { await model.load() } } label: { Text("Retry [Components b8784c]").lineLimit(1) }
                             .buttonStyle(.borderless)
                     }
                 } else {
                     HStack(spacing: Theme.Space.s) {
                         ProgressView().controlSize(.small)
-                        Text("正在读取…").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("Loading… [File Viewer 86b6d0]").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -363,7 +363,7 @@ private struct ExtensionMachineSection: View {
             } else if let e = model.error {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     Label(e, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
-                    Button { Task { await model.load() } } label: { Text("重试").lineLimit(1) }
+                    Button { Task { await model.load() } } label: { Text("Retry [Components b8784c]").lineLimit(1) }
                         .accessibilityIdentifier("plugin-ui-retry")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -371,7 +371,7 @@ private struct ExtensionMachineSection: View {
             } else {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text("正在读取…").font(Theme.Font.label).foregroundStyle(.secondary)
+                    Text("Loading… [File Viewer 86b6d0]").font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()

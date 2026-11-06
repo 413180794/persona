@@ -94,15 +94,15 @@ enum AddComputerText {
         let theirs = e?.message.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let message: String
         switch code {
-        case "forbidden": message = String(localized: "这个设备不能添加电脑。用已经登录好的手机或电脑上的 Persona 再试。")
+        case "forbidden": message = String(localized: "This device can't add computers. Try again from Persona on a phone or computer that is already signed in.")
         // The hub's words, in plain language and in the user's language (the acceptance of #4196).
-        case "tls_required": message = theirs.isEmpty ? String(localized: "hub 还没打开安全连接，电脑接不进来。到 hub 的管理界面里打开安全连接后再试。") : theirs
-        case "mesh_member": message = String(localized: "这台 hub 是组里的成员，到中心 hub 上添加电脑。")
-        case "too_many_pending": message = String(localized: "已经加了 3 台电脑还没处理完（有的可能还没连上来过）。到「机器」页删掉用不上的，再添加。")
-        case "not_pending": message = String(localized: "这台电脑已经确认过了。要给它重新配对，到 hub 的管理界面里做。")
-        case "not_found": message = String(localized: "这台电脑已经不在了。")
-        case "invalid_name": message = String(localized: "名字不能为空，最多 40 个字。")
-        case "invalid_os": message = String(localized: "选一个系统：Mac、Linux 或 Windows。")
+        case "tls_required": message = theirs.isEmpty ? String(localized: "The hub hasn't turned on secure connections yet, so computers can't join. Turn them on in the hub's admin page, then try again.") : theirs
+        case "mesh_member": message = String(localized: "This hub is a member of a group. Add computers on the group's central hub.")
+        case "too_many_pending": message = String(localized: "3 computers you added are still waiting (some may never have connected). Remove the ones you don't need on the Machines page, then add again.")
+        case "not_pending": message = String(localized: "This computer is already confirmed. To pair it again, use the hub's admin page.")
+        case "not_found": message = String(localized: "This computer is no longer there.")
+        case "invalid_name": message = String(localized: "Give it a name of up to 40 characters.")
+        case "invalid_os": message = String(localized: "Pick a system: Mac, Linux or Windows.")
         default: message = error.shown ?? error.localizedDescription
         }
         return AddComputerFailure(message: message, code: code)
@@ -111,10 +111,10 @@ enum AddComputerText {
     /// A machine's `error_code` in words (docs/onboarding.md 5.3); nil for a code this app does not know (show `error`).
     static func machineProblem(_ code: String?) -> String? {
         switch code {
-        case "node_service_down": String(localized: "这台电脑上的 Persona 后台服务没在运行，打开 Persona Link 让它重新装一次。")
-        case "link_offline": String(localized: "这台电脑离线了：Persona Link 没在运行，或者电脑睡着了。")
-        case "never_connected": String(localized: "还没连上过：在那台电脑上用配对链接配对一次。")
-        case "node_outdated": String(localized: "这台电脑上的 Persona 版本太旧，没法从这里更新。在那台电脑上重新安装一次。")
+        case "node_service_down": String(localized: "Persona's background service isn't running on this computer. Open Persona Link to install it again.")
+        case "link_offline": String(localized: "This computer is offline: Persona Link isn't running, or the computer is asleep.")
+        case "never_connected": String(localized: "Never connected: pair it once on that computer with the pairing link.")
+        case "node_outdated": String(localized: "Persona on this computer is too old to update from here. Install it again on that computer.")
         default: nil
         }
     }
@@ -122,7 +122,7 @@ enum AddComputerText {
     /// What the machine's line says under its name: the known code in words, else the hub's own `error`.
     static func machineLine(_ m: Machine) -> String? {
         if let p = machineProblem(m.errorCode) { return p }
-        if m.isPending { return m.online ? String(localized: "有一台电脑想加入，等你确认是不是你的。") : nil }
+        if m.isPending { return m.online ? String(localized: "A computer wants to join. Confirm whether it's yours.") : nil }
         return m.error.flatMap { $0.isEmpty ? nil : $0 }
     }
 
@@ -165,9 +165,9 @@ enum AddComputerText {
 
     static func namePlaceholder(_ os: ComputerOS) -> String {
         switch os {
-        case .mac: String(localized: "比如：我的 MacBook")
-        case .linux: String(localized: "比如：家里的服务器")
-        case .windows: String(localized: "比如：办公室的台式机")
+        case .mac: String(localized: "e.g. My MacBook")
+        case .linux: String(localized: "e.g. Home server")
+        case .windows: String(localized: "e.g. Office desktop")
         }
     }
 }
@@ -256,7 +256,7 @@ enum AddComputerText {
     /// Next: adds the computer and shows its code.
     func submit() async {
         guard let n = validName else {
-            failure = AddComputerFailure(message: String(localized: "名字不能为空，最多 40 个字。"), code: "invalid_name")
+            failure = AddComputerFailure(message: String(localized: "Give it a name of up to 40 characters."), code: "invalid_name")
             return
         }
         guard let api = deps.api(group) else { failure = Self.disconnected; return }
@@ -376,7 +376,7 @@ enum AddComputerText {
     }
 
     private static var disconnected: AddComputerFailure {
-        AddComputerFailure(message: String(localized: "还没连接 hub"), code: nil)
+        AddComputerFailure(message: String(localized: "Not connected to the hub yet"), code: nil)
     }
 }
 
@@ -447,7 +447,7 @@ struct AddComputerSheet: View {
         NavigationStack {
             SettingsForm { content }
                 .themedPage()
-                .navigationTitle(confirming ? String(localized: "确认电脑") : String(localized: "添加电脑"))
+                .navigationTitle(confirming ? String(localized: "Confirm Computer") : String(localized: "Add Computer"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
                 .pluginLinks($docLink)
@@ -473,15 +473,15 @@ struct AddComputerSheet: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         if page.stage == .form || page.stage == .working {
-            ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Text("取消").lineLimit(1) } }
+            ToolbarItem(placement: .cancellationAction) { Button { dismiss() } label: { Text("Cancel").lineLimit(1) } }
             ToolbarItem(placement: .confirmationAction) {
-                Button { Task { await page.submit() } } label: { Text("下一步").lineLimit(1) }
+                Button { Task { await page.submit() } } label: { Text("Next [Inbox Line acfc4e]").lineLimit(1) }
                     .disabled(page.validName == nil || page.stage == .working)
                     .accessibilityIdentifier("addComputer.next")
             }
         } else {
             ToolbarItem(placement: .confirmationAction) {
-                Button { dismiss() } label: { (isEnd ? Text("完成") : Text("关闭")).lineLimit(1) }
+                Button { dismiss() } label: { (isEnd ? Text("Done [Extension System Presentation c0b3fb]") : Text("Close")).lineLimit(1) }
                     .accessibilityIdentifier("addComputer.done")
             }
         }
@@ -496,12 +496,12 @@ struct AddComputerSheet: View {
         case .waiting: waiting
         case .joined: joined
         case .offline: offline
-        case .confirmed: outcome(symbol: Theme.Icon.successFilled, tone: Theme.positive, title: String(localized: "已添加：\(page.computerName)"),
-                                 hint: String(localized: "它会出现在机器列表里，新建 Agent 时可以选它。"), id: "addComputer.confirmed")
-        case .rejected: outcome(symbol: Theme.Icon.delete, tone: .secondary, title: String(localized: "已删掉「\(page.computerName)」"),
-                                hint: String(localized: "它用过的配对链接也作废了。要加电脑，重新添加一次。"), id: "addComputer.rejected")
-        case .gone: outcome(symbol: Theme.Icon.info, tone: .secondary, title: String(localized: "「\(page.computerName)」已经不在了"),
-                            hint: String(localized: "它可能在别处被删掉了，或者等确认等得太久。要加电脑，重新添加一次。"), id: "addComputer.gone")
+        case .confirmed: outcome(symbol: Theme.Icon.successFilled, tone: Theme.positive, title: String(localized: "Added: \(page.computerName)"),
+                                 hint: String(localized: "It appears in the machine list, and you can pick it when you start a new agent."), id: "addComputer.confirmed")
+        case .rejected: outcome(symbol: Theme.Icon.delete, tone: .secondary, title: String(localized: "Removed “\(page.computerName)”"),
+                                hint: String(localized: "The pairing link it used no longer works either. To add a computer, start again."), id: "addComputer.rejected")
+        case .gone: outcome(symbol: Theme.Icon.info, tone: .secondary, title: String(localized: "“\(page.computerName)” is no longer there"),
+                            hint: String(localized: "It may have been removed elsewhere, or it waited too long to be confirmed. To add a computer, start again."), id: "addComputer.gone")
         }
     }
 
@@ -518,14 +518,14 @@ struct AddComputerSheet: View {
     @ViewBuilder private var form: some View {
         @Bindable var page = page
         Section {
-            Picker("这台电脑的系统", selection: $page.os) {
+            Picker("This computer's system", selection: $page.os) {
                 ForEach(ComputerOS.allCases) { Text($0.title).lineLimit(1).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .accessibilityIdentifier("addComputer.os")
         } header: {
-            Text("这台电脑的系统").textCase(nil)
+            Text("This computer's system").textCase(nil)
         }
         Section {
             TextField(AddComputerText.namePlaceholder(page.os), text: $page.name)
@@ -534,9 +534,9 @@ struct AddComputerSheet: View {
                 .onSubmit { Task { await page.submit() } }
                 .accessibilityIdentifier("addComputer.name")
         } header: {
-            Text("名字").textCase(nil)
+            Text("Name [Add Computer View 677331]").textCase(nil)
         } footer: {
-            Text("在 App 和网页里显示，可以用中文，最多 40 个字。")
+            Text("Shown in the apps and on the web. Any language, up to 40 characters.")
         }
         if page.stage == .working {
             Section { ProgressView().frame(maxWidth: .infinity) }
@@ -550,11 +550,11 @@ struct AddComputerSheet: View {
             if page.expired {
                 Section {
                     Button { Task { await page.reissue() } } label: {
-                        Label("重新生成", systemImage: Theme.Icon.reload).lineLimit(1)
+                        Label("Regenerate", systemImage: Theme.Icon.reload).lineLimit(1)
                     }
                     .accessibilityIdentifier("addComputer.renew")
                 } header: {
-                    Text("这个链接已经过期，那台电脑还没连上来。").textCase(nil)
+                    Text("This link has expired, and that computer hasn't connected yet.").textCase(nil)
                 }
             } else {
                 instructions(code)
@@ -562,8 +562,8 @@ struct AddComputerSheet: View {
                     HStack(spacing: Theme.Space.m) {
                         ProgressView()
                         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                            Text("等「\(page.computerName)」连上来…").font(Theme.Font.body).lineLimit(2)
-                            Text("\(ConnectDeviceText.clock(page.secondsLeft)) 后失效")
+                            Text("Waiting for “\(page.computerName)” to connect…").font(Theme.Font.body).lineLimit(2)
+                            Text("Expires in \(ConnectDeviceText.clock(page.secondsLeft))")
                                 .font(Theme.Font.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
                                 .accessibilityIdentifier("addComputer.countdown")
                         }
@@ -580,35 +580,35 @@ struct AddComputerSheet: View {
         case .linux:
             let line = AddComputerText.linuxCommand(code)
             Section {
-                step(line.installs ? String(localized: "在那台电脑上打开终端，粘贴下面这一行，回车。它会装好 Persona 并连上来。")
-                                   : String(localized: "先在那台电脑上装好 Persona Link，再打开终端，粘贴下面这一行，回车。"))
-                if !line.installs { docButton(String(localized: "怎么装"), AddComputerText.linuxInstallDoc) }
+                step(line.installs ? String(localized: "On that computer, open a terminal, paste the line below and press Return. It installs Persona and connects.")
+                                   : String(localized: "Install Persona Link on that computer first, then open a terminal, paste the line below and press Return."))
+                if !line.installs { docButton(String(localized: "How to install [Add Computer View e8921c]"), AddComputerText.linuxInstallDoc) }
                 command(line.line)
             } footer: {
-                Text("看到「已配对」就好了，这一屏会自己往下走。")
+                Text("Once it says it's paired, you're done: this screen moves on by itself.")
             }
         case .mac:
             Section {
-                step(String(localized: "在那台 Mac 上装好 Persona Link。目前还没有安装包，要自己从源码编译。"))
-                docButton(String(localized: "安装说明"), AddComputerText.macInstallDoc)
+                step(String(localized: "Install Persona Link on that Mac. There is no installer yet: you build it from source."))
+                docButton(String(localized: "Install guide"), AddComputerText.macInstallDoc)
             }
             Section {
-                step(String(localized: "把配对链接发到那台 Mac，点菜单栏里的 Persona Link 图标 › 配对…，粘贴进去。"))
+                step(String(localized: "Send the pairing link to that Mac, click the Persona Link icon in the menu bar › Pair…, and paste it."))
                 if let url = URL(string: code.pairLink) {
-                    ShareLink(item: url, subject: Text("Persona 配对链接")) {
-                        Label("分享配对链接", systemImage: Theme.Icon.share).lineLimit(1)
+                    ShareLink(item: url, subject: Text("Persona pairing link")) {
+                        Label("Share Pairing Link", systemImage: Theme.Icon.share).lineLimit(1)
                     }
                     .accessibilityIdentifier("addComputer.share")
                 }
-                copyButton(code.pairLink, title: String(localized: "拷贝配对链接"), said: String(localized: "已拷贝配对链接"))
+                copyButton(code.pairLink, title: String(localized: "Copy Pairing Link"), said: String(localized: "Pairing link copied"))
             }
         case .windows:
             Section {
-                step(String(localized: "在那台电脑上把 Persona 的两个程序放在同一个文件夹里。目前还没有安装包，要自己编译，托盘程序也还在做。"))
-                step(String(localized: "在这个文件夹里打开 PowerShell，粘贴下面这一行，回车。"))
+                step(String(localized: "On that computer, put Persona's two programs in one folder. There is no installer yet: you build them yourself, and the tray app is still being made."))
+                step(String(localized: "Open PowerShell in that folder, paste the line below and press Enter."))
                 command(AddComputerText.windowsCommand(code))
             } footer: {
-                Text("它会装成登录时自动启动的后台任务，不弹窗口，也不用管理员权限。")
+                Text("It installs as a background task that starts when you sign in, with no window and no administrator rights.")
             }
         }
     }
@@ -624,7 +624,7 @@ struct AddComputerSheet: View {
             .lineLimit(4)
             .truncationMode(.middle)
             .accessibilityIdentifier("addComputer.command")
-        copyButton(line, title: String(localized: "拷贝"), said: String(localized: "已拷贝"))
+        copyButton(line, title: String(localized: "Copy [Readiness Views d37380]"), said: String(localized: "Copied [Mac Hover 07d6bb]"))
     }
 
     private func copyButton(_ text: String, title: String, said: String) -> some View {
@@ -652,10 +652,10 @@ struct AddComputerSheet: View {
                 Image(systemName: page.machine.map { ComputerOS(reported: $0.os)?.symbol ?? $0.symbol } ?? page.os.symbol)
                     .font(Theme.Font.display)
                     .foregroundStyle(Theme.accent)
-                Text(system.map { String(localized: "有一台电脑想加入：\(page.computerName)（\($0)），是你的吗？") }
-                     ?? String(localized: "有一台电脑想加入：\(page.computerName)，是你的吗？"))
+                Text(system.map { String(localized: "A computer wants to join: \(page.computerName) (\($0)). Is it yours?") }
+                     ?? String(localized: "A computer wants to join: \(page.computerName). Is it yours?"))
                     .font(Theme.Font.heading).multilineTextAlignment(.center)
-                Text("确认之后，Persona 才会在上面替你干活、把模型的 Key 给它。不认识就拒绝，它会被删掉。")
+                Text("Only once you confirm does Persona work on it and give it your model keys. If you don't recognize it, say no and it is removed.")
                     .font(Theme.Font.secondary).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
@@ -671,7 +671,7 @@ struct AddComputerSheet: View {
             FormAction {
                 Button { Task { await page.confirm() } } label: {
                     Group {
-                        if page.busy { ProgressView() } else { Text("是我的电脑").lineLimit(1) }
+                        if page.busy { ProgressView() } else { Text("It's Mine").lineLimit(1) }
                     }
                     .formActionWidth()
                 }
@@ -681,7 +681,7 @@ struct AddComputerSheet: View {
             }
             FormAction {
                 Button(role: .destructive) { Task { await page.reject() } } label: {
-                    Text("不是").lineLimit(1).formActionWidth()
+                    Text("Not Mine").lineLimit(1).formActionWidth()
                 }
                 .themedButton()
                 .disabled(page.busy)
@@ -698,9 +698,9 @@ struct AddComputerSheet: View {
     @ViewBuilder private var offline: some View {
         Section {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                Text("「\(page.computerName)」还没连上来").font(Theme.Font.heading)
-                (page.canReissue ? Text("它连上来以后，这里会问你是不是你的电脑。那台电脑还没拿到配对链接，就重新出一个。")
-                                 : Text("它连上来以后，这里会问你是不是你的电脑。"))
+                Text("“\(page.computerName)” hasn't connected yet").font(Theme.Font.heading)
+                (page.canReissue ? Text("Once it connects, you'll be asked here whether it's yours. If that computer never got the pairing link, make a new one.")
+                                 : Text("Once it connects, you'll be asked here whether it's yours."))
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             .padding(.vertical, Theme.Space.xs)
@@ -708,13 +708,13 @@ struct AddComputerSheet: View {
             .accessibilityIdentifier("addComputer.offline")
             if page.canReissue {
                 Button { Task { await page.reissue() } } label: {
-                    Label("重新出链接", systemImage: Theme.Icon.reload).lineLimit(1)
+                    Label("New Link", systemImage: Theme.Icon.reload).lineLimit(1)
                 }
                 .accessibilityIdentifier("addComputer.reissue")
             }
             if app.canConfirmComputer(page.group) {
                 Button(role: .destructive) { Task { await page.reject() } } label: {
-                    Label("删掉", systemImage: Theme.Icon.delete).lineLimit(1)
+                    Label("Remove [Add Computer View c94330]", systemImage: Theme.Icon.delete).lineLimit(1)
                 }
                 .disabled(page.busy)
             }

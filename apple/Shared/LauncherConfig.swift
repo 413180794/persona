@@ -291,7 +291,7 @@ nonisolated struct LauncherDefault: Codable, Hashable, Sendable {
         guard let l = launcher else { return nil }
         let m = model.flatMap { $0.isEmpty ? nil : (Fmt.model($0) ?? $0) }
         let s = [l, m].compactMap { $0 }.joined(separator: " · ")
-        return String(localized: "默认：\(s)")
+        return String(localized: "Default: \(s)")
     }
 }
 

@@ -30,7 +30,7 @@ struct SecretField: View {
     var identifier: String?
     var onSubmitAction: (() -> Void)?
 
-    init(_ placeholder: String, filled: String = String(localized: "已填写"), text: Binding<String>, identifier: String? = nil) {
+    init(_ placeholder: String, filled: String = String(localized: "Filled in"), text: Binding<String>, identifier: String? = nil) {
         self.placeholder = placeholder
         self.filled = filled
         _text = text

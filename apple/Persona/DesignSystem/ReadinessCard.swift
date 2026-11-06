@@ -54,7 +54,7 @@ struct ReadinessCard: View {
                         Image(systemName: Theme.Icon.close).font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(Text("以后再说"))
+                    .accessibilityLabel(Text("Later [Readiness Card 9d2055]"))
                 }
             }
             buttons.padding(.leading, Theme.Space.l)
@@ -99,12 +99,12 @@ struct ReadinessCard: View {
         Button {
             withAnimation(Theme.Motion.state) { open.toggle() }
         } label: {
-            Label("详情", systemImage: open ? Theme.Icon.collapse : Theme.Icon.expand)
+            Label("Details [Readiness Card 979a33]", systemImage: open ? Theme.Icon.collapse : Theme.Icon.expand)
                 .font(Theme.Font.label).lineLimit(1)
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
-        .accessibilityValue(open ? Text("已展开") : Text("已折叠"))
+        .accessibilityValue(open ? Text("Expanded") : Text("Collapsed [Readiness Card ee6046]"))
     }
 
     private var detailsBlock: some View {
@@ -128,7 +128,7 @@ struct ReadinessCard: View {
                 } trailing: {
                     if busy { BUISpinner() }
                     if let dismiss {
-                        Button(action: dismiss) { BUIPill(String(localized: "以后再说"), tone: .neutral) }
+                        Button(action: dismiss) { BUIPill(String(localized: "Later [Readiness Card 9d2055]"), tone: .neutral) }
                             .buttonStyle(.plain)
                     }
                 }

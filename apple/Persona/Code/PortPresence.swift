@@ -72,8 +72,8 @@ final class PortPresence {
 extension AppModel {
     /// The phone's address for the link, or why it cannot be opened (nothing listens there: the badge turns gray).
     func forwardedURL(_ link: PortLink, machine: MachineRef) async throws -> URL {
-        guard let api = api(machine.group) else { throw APIError(status: 0, message: String(localized: "没有连接 hub")) }
-        if api.config.isDemo { throw APIError(status: 403, message: String(localized: "体验模式不能打开端口")) }
+        guard let api = api(machine.group) else { throw APIError(status: 0, message: String(localized: "Not connected to a hub [Port Presence c03cfc]")) }
+        if api.config.isDemo { throw APIError(status: 403, message: String(localized: "Ports can't be opened in demo mode")) }
         let listed = agentPorts(on: machine)
         if !listed.contains(where: { $0.port == link.port }) {
             do {
@@ -81,7 +81,7 @@ extension AppModel {
                 portPresence.noteLive(link.port, machine: machine, title: res.title)
             } catch let e as APIError where e.status == 404 {
                 portPresence.noteGone(link.port, machine: machine)
-                throw APIError(status: 404, message: String(localized: "端口 :\(String(link.port)) 已经没有在监听"))
+                throw APIError(status: 404, message: String(localized: "Nothing is listening on port :\(String(link.port)) anymore"))
             }
         }
         return try await PortForwarder.shared.url(for: link, machine: machine.id, config: api.config)

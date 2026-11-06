@@ -61,23 +61,23 @@ extension BUITheme {
 extension BUIStrings {
     /// What the components show and VoiceOver says. The open state uses the Agents list's words.
     static let jarvis: BUIStrings = {
-        var w = BUIStrings(expanded: String(localized: "已展开"), collapsed: String(localized: "已折叠"))
-        w.prompt = String(localized: "输入框")
-        w.listening = String(localized: "正在听…")
-        w.attach = String(localized: "添加") // the + of the old composer read so too
-        w.mention = String(localized: "提及文件或会话")
-        w.commands = String(localized: "指令")
-        w.chooseModel = String(localized: "选择模型")
-        w.startDictation = String(localized: "听写")
-        w.stopDictation = String(localized: "停止听写")
-        w.send = String(localized: "发送")
-        w.stop = String(localized: "中断")
-        w.connect = String(localized: "连接")
-        w.connected = String(localized: "已连接")
-        w.sourcesHint = String(localized: "接着输入可以筛选")
-        w.commandsHint = String(localized: "选中后会填进输入框，点发送才发出")
-        w.noMatches = String(localized: "没有「%@」")
-        w.remove = String(localized: "移除 %@")
+        var w = BUIStrings(expanded: String(localized: "Expanded"), collapsed: String(localized: "Collapsed [Readiness Card ee6046]"))
+        w.prompt = String(localized: "Input Field")
+        w.listening = String(localized: "Listening…")
+        w.attach = String(localized: "Add [Beautiful U I Bridge 7a8a11]") // the + of the old composer read so too
+        w.mention = String(localized: "Mention a file or session")
+        w.commands = String(localized: "Commands [Beautiful U I Bridge 6ee4a9]")
+        w.chooseModel = String(localized: "Choose Model")
+        w.startDictation = String(localized: "Dictate")
+        w.stopDictation = String(localized: "Stop Dictation")
+        w.send = String(localized: "Send")
+        w.stop = String(localized: "Interrupt [Composer Buttons f9d193]")
+        w.connect = String(localized: "Connect [V N C Page a55741]")
+        w.connected = String(localized: "Connected [V N C Page 5be032]")
+        w.sourcesHint = String(localized: "Keep typing to filter")
+        w.commandsHint = String(localized: "Picking one fills it in; it's sent only when you tap Send")
+        w.noMatches = String(localized: "No “%@”")
+        w.remove = String(localized: "Remove %@ [Beautiful U I Bridge 271f20]")
         return w
     }()
 }

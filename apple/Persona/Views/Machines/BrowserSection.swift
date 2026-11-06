@@ -26,12 +26,12 @@ struct BrowserSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("浏览器").font(Theme.Font.heading).padding(.horizontal, Theme.Space.xs)
+            Text("Browser").font(Theme.Font.heading).padding(.horizontal, Theme.Space.xs)
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Toggle(isOn: Binding(get: { shown.enabled }, set: { on in Task { await set(on) } })) {
                     VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        Text("允许助手用这台的浏览器").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
-                        Text("经 ego lite 打开网页、点按、填表、截图").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("Let the Assistant Use This Browser").font(Theme.Font.body).lineLimit(1).minimumScaleFactor(0.8)
+                        Text("Opens pages, taps, fills forms and takes screenshots through ego lite").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
                 .disabled(saving || !online)
@@ -60,33 +60,33 @@ struct BrowserSection: View {
     @ViewBuilder private var state: some View {
         let b = shown
         if !online {
-            line(String(localized: "机器离线，连上后才能用"), ok: false)
+            line(String(localized: "Machine is offline. Available once it's connected."), ok: false)
         } else if let job = b.job, job.running, job.kind == "install" {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 HStack(spacing: Theme.Space.s) {
                     ProgressView().controlSize(.small)
-                    Text(job.step ?? String(localized: "正在安装")).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(job.step ?? String(localized: "Installing…")).font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("browser-status")
-                action(String(localized: "取消"), "cancel", identifier: "browser-cancel")
+                action(String(localized: "Cancel"), "cancel", identifier: "browser-cancel")
             }
         } else if !b.installed {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 if let job = b.job, job.kind == "install", job.state == "failed" {
-                    line(job.error.map { String(localized: "没装上：\($0)") } ?? String(localized: "没装上：安装出错了"), ok: false)
+                    line(job.error.map { String(localized: "Didn't install: \($0)") } ?? String(localized: "Couldn't install: the installation failed"), ok: false)
                 } else {
-                    line(String(localized: "这台 Mac 上还没有装 ego lite"), ok: false)
+                    line(String(localized: "ego lite isn't installed on this Mac yet"), ok: false)
                 }
-                Text("从 ego 官网下载安装包，核对 Citro Labs 的签名和苹果的公证后装进「应用程序」。")
+                Text("Downloads the installer from ego's website, checks Citro Labs' signature and Apple's notarization, then installs it in Applications.")
                     .font(Theme.Font.label).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                action(b.job?.state == "failed" ? String(localized: "重新安装") : String(localized: "安装 ego lite"), "install", prominent: true, identifier: "browser-install")
+                action(b.job?.state == "failed" ? String(localized: "Reinstall") : String(localized: "Install ego lite"), "install", prominent: true, identifier: "browser-install")
             }
         } else if !b.setUp {
             setUpGuide(b)
         } else if !b.ready {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
-                line(b.note ?? String(localized: "ego-browser 还没跑通"), ok: false)
+                line(b.note ?? String(localized: "ego-browser isn't working yet"), ok: false)
                 recheckButton
             }
         } else {
@@ -102,14 +102,14 @@ struct BrowserSection: View {
                 if b.job?.running == true { ProgressView().controlSize(.small) } else {
                     Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                 }
-                Text(b.job?.kind == "open" ? "那台 Mac 上打开了 ego lite，按下面的步骤做完首次设置" : "ego lite 已经装好，还要做完首次设置")
+                Text(b.job?.kind == "open" ? String(localized: "ego lite is open on that Mac. Follow the steps below to finish its first-run setup.") : String(localized: "ego lite is installed. Its first-run setup still needs to be finished."))
                     .font(Theme.Font.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("browser-status")
             stepList(steps)
             HStack(spacing: Theme.Space.s) {
-                action(String(localized: "打开 ego lite"), "open", prominent: !b.screenSharing, identifier: "browser-open")
+                action(String(localized: "Open ego lite"), "open", prominent: !b.screenSharing, identifier: "browser-open")
                 if b.screenSharing { look(prominent: true) }
                 recheckButton
             }
@@ -119,7 +119,7 @@ struct BrowserSection: View {
     /// Ready in green, then what else there is: the browser data imported, its usage statistics.
     private func readyList(_ b: MachineBrowser) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            line(b.version.map { String(localized: "就绪 · 助手能用这台的浏览器 · ego lite \($0)") } ?? String(localized: "就绪 · 助手能用这台的浏览器"), ok: true)
+            line(b.version.map { String(localized: "Ready · the assistant can use this browser · ego lite \($0)") } ?? String(localized: "Ready · the assistant can use this browser"), ok: true)
             stepList(BrowserGuide.readySteps(b))
             if b.analytics == "on" { recheckButton }
         }
@@ -139,7 +139,7 @@ struct BrowserSection: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("browser-step-\(step.id)")
-            .accessibilityValue(step.done ? "已完成" : "待做")
+            .accessibilityValue(step.done ? String(localized: "Done [Task Sheets f28461]") : String(localized: "To do"))
         }
     }
 
@@ -165,7 +165,7 @@ struct BrowserSection: View {
 
     private var recheckButton: some View {
         Button { Task { await recheck() } } label: {
-            if checking { ProgressView().controlSize(.small) } else { Text("再检查一次").font(Theme.Font.labelStrong).lineLimit(1) }
+            if checking { ProgressView().controlSize(.small) } else { Text("Check Again [Browser Section 953cf0]").font(Theme.Font.labelStrong).lineLimit(1) }
         }
         .themedButton()
         .disabled(checking)
@@ -204,7 +204,7 @@ struct BrowserSection: View {
             fresh = try await api.setBrowser(machine: ref.id, enabled: on)
             Haptics.success()
         } catch {
-            if let m = error.shown { model.toast = Toast(on ? String(localized: "打开失败：\(m)") : String(localized: "关掉失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(on ? String(localized: "Couldn't turn on: \(m)") : String(localized: "Couldn't turn off: \(m)"), style: .error) }
         }
     }
 
@@ -226,28 +226,28 @@ nonisolated enum BrowserGuide {
         // Build the platform-specific line first: a conditional compilation directive can't sit
         // between elements of an array literal (it is only valid in statement or result-builder position).
         #if os(macOS)
-        let open = String(localized: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在这台 Mac 上远程操作）")
+        let open = String(localized: "Tap Open ego lite and it opens on that Mac (with Screen Sharing on, you can use VNC to control it remotely from this Mac)")
         #else
-        let open = String(localized: "点「打开 ego lite」，它会在那台 Mac 上打开（屏幕共享开着时可以用「VNC」在手机上操作）")
+        let open = String(localized: "Tap Open ego lite and it opens on that Mac (with Screen Sharing on, you can use VNC to work on it from your phone)")
         #endif
         return [
             GrantGuide.Step(id: "open", done: false, text: open),
-            GrantGuide.Step(id: "import", done: false, text: String(localized: "首次设置里选从 Chrome（或别的浏览器）导入数据：网站的登录状态会一起带过来。macOS 会多次要钥匙串密码，每次都输那台 Mac 的登录密码。不想导入可以跳过")),
-            GrantGuide.Step(id: "finish", done: false, text: String(localized: "做完首次设置，它会装上 ego-browser 命令")),
-            GrantGuide.Step(id: "recheck", done: false, text: String(localized: "回到这里点「再检查一次」")),
+            GrantGuide.Step(id: "import", done: false, text: String(localized: "In the first-run setup, choose to import data from Chrome (or another browser): your site sign-ins come along. macOS asks for the keychain password several times; enter that Mac's login password each time. You can skip importing")),
+            GrantGuide.Step(id: "finish", done: false, text: String(localized: "Finish the first-run setup; it installs the ego-browser command")),
+            GrantGuide.Step(id: "recheck", done: false, text: String(localized: "Come back here and tap Check Again")),
         ]
     }
 
     static func readySteps(_ b: MachineBrowser) -> [GrantGuide.Step] {
-        var out = [GrantGuide.Step(id: "setup", done: true, text: String(localized: "首次设置做完了"))]
+        var out = [GrantGuide.Step(id: "setup", done: true, text: String(localized: "First-run setup is done"))]
         out.append(b.imported
-            ? GrantGuide.Step(id: "import", done: true, text: String(localized: "已导入另一个浏览器的数据，助手能用那些网站的登录"))
-            : GrantGuide.Step(id: "import", done: true, text: String(localized: "没有导入别的浏览器的数据：要用的网站先在 ego lite 里登录一次")))
+            ? GrantGuide.Step(id: "import", done: true, text: String(localized: "Data from another browser was imported; the assistant can use those sites' sign-ins"))
+            : GrantGuide.Step(id: "import", done: true, text: String(localized: "No data was imported from another browser: sign in to the sites you need in ego lite first")))
         switch b.analytics {
         case "on":
-            out.append(GrantGuide.Step(id: "analytics", done: false, text: String(localized: "关掉 ego 的使用统计：在那台 Mac 的 ego lite 里打开「设置 › 同步和服务」，关掉「Automatically sends usage statistics and crash reports to Citro Labs」")))
+            out.append(GrantGuide.Step(id: "analytics", done: false, text: String(localized: "Turn off ego's usage statistics: in ego lite on that Mac, open Settings › Sync and services and turn off “Automatically sends usage statistics and crash reports to Citro Labs”")))
         case "off":
-            out.append(GrantGuide.Step(id: "analytics", done: true, text: String(localized: "ego 的使用统计已关")))
+            out.append(GrantGuide.Step(id: "analytics", done: true, text: String(localized: "ego's usage statistics are off")))
         default:
             break
         }

@@ -3,7 +3,7 @@ import Foundation
 
 /// A session as Siri sees it, so `AskClaudeIntent` can hand the phone straight to that chat.
 struct SessionEntity: AppEntity, Hashable, Sendable {
-    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "会话")
+    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Session")
     nonisolated static let defaultQuery = SessionEntityQuery()
 
     /// `machine/session` (`group|machine/session` for another group of hubs): the same shape as `-openSession`.
@@ -57,10 +57,10 @@ struct SessionEntityQuery: EntityQuery {
 
 /// Opens the app on one chat. The app is in the foreground here, so touching `AppModel` is fine.
 struct OpenSessionIntent: OpenIntent {
-    nonisolated static let title: LocalizedStringResource = "打开会话"
+    nonisolated static let title: LocalizedStringResource = "Open Session"
     nonisolated static var supportedModes: IntentModes { .foreground(.immediate) }
 
-    @Parameter(title: "会话")
+    @Parameter(title: "Session")
     var target: SessionEntity
 
     nonisolated init() {}

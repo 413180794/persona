@@ -305,7 +305,7 @@ struct ChatView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help(pane == .git || pane == .files ? "回到对话" : backLabel)
+                .help(pane == .git || pane == .files ? String(localized: "Back to Chat") : backLabel)
                 .accessibilityLabel(backLabel)
             }
             if pane == .chat, let expand = host?.expand {
@@ -315,8 +315,8 @@ struct ChatView: View {
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help("全屏查看")
-                .accessibilityLabel("全屏查看")
+                .help("Full Screen")
+                .accessibilityLabel("Full Screen")
                 .accessibilityIdentifier("task-detail.fullscreen")
             }
             Button {
@@ -337,7 +337,7 @@ struct ChatView: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .help("会话信息")
+            .help("Session Info")
             .layoutPriority(-1) // the title gives way to the buttons
             Spacer(minLength: Theme.Space.s)
             if session?.canTerminal == true, pane == .chat || pane == .terminal { macViewSwitch }
@@ -357,12 +357,12 @@ struct ChatView: View {
 
     /// Terminal | Chat (the web's session switch, #2445): the middle of the page is one or the other, ⇧⌘J flips it.
     private var macViewSwitch: some View {
-        SegmentedChoice(String(localized: "显示"), [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
+        SegmentedChoice(String(localized: "Display"), [(SessionPane.terminal, SessionPane.terminal.title), (SessionPane.chat, SessionPane.chat.title)],
                         selection: Binding(get: { pane == .terminal ? .terminal : .chat }, set: { setMacView($0) }))
             .labelsHidden()
             .fixedSize()
-            .help("终端 / 对话（⇧⌘J）")
-            .accessibilityLabel("终端或对话")
+            .help("Terminal / Chat (⇧⌘J)")
+            .accessibilityLabel("Terminal or Chat")
     }
 
     /// Shows the terminal or the chat in place; the one going away stays mounted, the keyboard goes with the one shown.
@@ -375,7 +375,7 @@ struct ChatView: View {
     /// One agent of the Mac's sibling menu: its title (its agent beside its tab mates), its state; the open one ticked.
     @ViewBuilder private func macSiblingButton(_ s: Session, role: TabPanes.Role?) -> some View {
         let title = s.title.isEmpty ? s.agentLabel : s.title
-        let name = role.map { $0.launcher ? String(localized: "\($0.name)（发起者） · \(title)") : "\($0.name) · \(title)" } ?? title
+        let name = role.map { $0.launcher ? String(localized: "\($0.name) (started it) · \(title)") : "\($0.name) · \(title)" } ?? title
         Button { if s.key != key { switchTo(s.key) } } label: {
             if s.key == key { Label(name, systemImage: Theme.Icon.success) } else { Text("\(name) · \(s.stateLabel)") }
         }
@@ -399,8 +399,8 @@ struct ChatView: View {
                 }
                 .labelOnlyMenu()
                 .fixedSize()
-                .help("这个任务的 \(host.agents.count) 个 Agent")
-                .accessibilityLabel("切换 Agent")
+                .help("This task's \(host.agents.count) agents")
+                .accessibilityLabel("Switch Agent")
             }
         } else if siblings.count > 1 {
             Menu {
@@ -410,7 +410,7 @@ struct ChatView: View {
                     case .agent(let s):
                         macSiblingButton(s, role: nil)
                     case .tab(let g):
-                        Section(String(localized: "\(g.label ?? String(localized: "标签页")) · \(g.sessions.count) 个 Agent")) {
+                        Section(String(localized: "\(g.label ?? String(localized: "Tab")) · \(g.sessions.count) agents")) {
                             ForEach(g.sessions) { s in macSiblingButton(s, role: g.role(of: s)) }
                         }
                     }
@@ -422,8 +422,8 @@ struct ChatView: View {
             }
             .labelOnlyMenu()
             .fixedSize()
-            .help("同空间的 \(siblings.count) 个 Agent")
-            .accessibilityLabel("同空间的 Agent")
+            .help("\(siblings.count) agents in this space [Chat View 037674]")
+            .accessibilityLabel("Agents in This Space")
         }
         if session?.loop != nil || !(session?.background ?? []).isEmpty {
             MacTitleRowButton(macActivityTitle, symbol: session?.loop != nil ? Theme.Icon.inProgress : Theme.Icon.backgroundTaskFilled) {
@@ -437,19 +437,19 @@ struct ChatView: View {
         }
         .labelOnlyMenu()
         .fixedSize()
-        .help("更多")
-        .accessibilityLabel("更多")
+        .help("More")
+        .accessibilityLabel("More")
     }
 
     /// The activity button's name: the /loop's next run and the background work, as their chips said.
     private var macActivityTitle: String {
         let loop = session?.loop.map { l in
             let next = ActivityChips.shortLoopLabel(l, now: .now)
-            return String(localized: "循环 · \(next)")
+            return String(localized: "Loop · \(next)")
         }
         let count = (session?.background ?? []).count
-        let background = count == 0 ? nil : String(localized: "后台 \(count)")
-        return [loop, background].compactMap { $0 }.joined(separator: String(localized: "，", comment: "List separator"))
+        let background = count == 0 ? nil : String(localized: "Background \(count) [Chat View e7404d]")
+        return [loop, background].compactMap { $0 }.joined(separator: String(localized: ", ", comment: "List separator"))
     }
 
     /// What of the header has no place in the toolbar: the goal, the ports it listens on and the running subagents, a row over
@@ -1114,7 +1114,7 @@ struct ChatView: View {
     private func turnErrorCard(_ line: ChatLine, raw: String?) -> ReadinessCard? {
         guard let fix = turnFix, currentLines().last?.id == line.id else { return nil }
         return ReadinessCard(title: fix.title, detail: fix.detail, tone: .danger,
-                             actionTitle: String(localized: "去修"),
+                             actionTitle: String(localized: "Fix it"),
                              action: { readinessRoute = fix.action == "edit_provider" ? .provider(session?.launcher) : .providerWizard },
                              details: [raw].compactMap { $0 })
     }
@@ -1163,7 +1163,7 @@ struct ChatView: View {
                 Button { toggleWork(group, fromHeader: false) } label: {
                     HStack(spacing: Theme.Space.sm) {
                         Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
-                        Text("收起 \(count) 步").lineLimit(1).fixedSize()
+                        Text("Collapse \(count) steps [Chat View 608bfc]").lineLimit(1).fixedSize()
                     }
                     .font(Theme.Font.caption)
                     .foregroundStyle(.secondary)
@@ -1176,7 +1176,7 @@ struct ChatView: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("收起过程")
+                .accessibilityLabel("Collapse steps")
                 .accessibilityIdentifier("work-fold-bottom")
                 .unfolding(stepUnfolding(group))
             }
@@ -1796,11 +1796,11 @@ struct ChatView: View {
                 Button(action: jumpToEnd) {
                     Image(systemName: Theme.Icon.down).font(Theme.Font.bodyStrong).scaledFrame(width: Theme.Size.avatar, height: Theme.Size.avatar)
                 }
-                .accessibilityLabel("回到最新")
+                .accessibilityLabel("Jump to Latest")
                 #if os(macOS)
                 // ⌘↓ as in Safari / Mail; only while the arrow shows (scrolled up), so the composer keeps it otherwise.
                 .keyboardShortcut(.downArrow, modifiers: .command)
-                .help("回到最新 ⌘↓")
+                .help("Jump to Latest ⌘↓")
                 #endif
                 .themedButton()
                 .clipShape(.circle)
@@ -1891,7 +1891,7 @@ struct ChatView: View {
                 if let s = session, !s.canSend, let reason = s.sourceSubtitle {
                     Text(reason).font(Theme.Font.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
-                Composer(key: key, status: status, placeholder: style == .assistant ? String(localized: "问 \(model.persona.name)…") : String(localized: "给 \(session?.agentLabel ?? "Claude") 发消息"),
+                Composer(key: key, status: status, placeholder: style == .assistant ? String(localized: "Ask \(model.persona.name)…") : String(localized: "Message \(session?.agentLabel ?? "Claude") [Chat View c6f021]"),
                          onCleared: { switchTo($0) }, onFocus: { composerTyping = $0 })
                     // The shell's expanding field stays in the page's layout graph; so does BeautifulUI's prompt bar,
                     // whose menus hang above it: an island's hosting view takes no touches outside its bounds.
@@ -1977,7 +1977,7 @@ struct ChatView: View {
             // (`FirstMessagePending`), where the turn's work line comes in. Without it the chat that took over showed
             // the message a line lower, then pushed it up when the turn began (#1911).
             if frozen == nil, startingTurn(pending) {
-                TypingIndicator(text: String(localized: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) 正在准备…"))
+                TypingIndicator(text: String(localized: "\(style == .assistant ? model.persona.name : (session?.agentLabel ?? "Claude")) is getting ready…"))
                     .flippedBack()
                     .id("starting-turn")
             }
@@ -2015,7 +2015,7 @@ struct ChatView: View {
             case .loading:
                 ChatSkeleton().flippedBack().accessibilityIdentifier("chat-loading-placeholder")
             case .empty:
-                EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "还没有消息"), message: String(localized: "发一句话开始吧。"))
+                EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "No messages yet"), message: String(localized: "Send a message to get started."))
                     .flippedBack().accessibilityIdentifier("chat-empty-placeholder")
             case .none: EmptyView()
             }
@@ -2133,11 +2133,11 @@ struct ChatView: View {
         #endif
         .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text, plain: t.plain) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
-        .confirmationDialog("这条回复", isPresented: Binding(get: { menu.more != nil }, set: { if !$0 { menu.more = nil } })) {
+        .confirmationDialog("This Reply", isPresented: Binding(get: { menu.more != nil }, set: { if !$0 { menu.more = nil } })) {
             if let id = menu.more {
                 // A new conversation with what was said up to here (#2137). Opened once the dialog is gone: a navigation
                 // made while it is still going away is dropped, and the chat stayed on the original.
-                Button("分支到新聊天") {
+                Button("Branch to New Chat") {
                     Task {
                         try? await Task.sleep(for: .milliseconds(400))
                         menu.fork?(id)
@@ -2304,8 +2304,8 @@ struct ChatView: View {
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.connection.shown != .online ? "\(model.connection.shown.title)，显示标题和标签"
-                                : "\(compactPlace)，显示标题和标签")
+            .accessibilityLabel(model.connection.shown != .online ? String(localized: "\(model.connection.shown.title), show title and tags")
+                                : String(localized: "\(compactPlace), show title and tags"))
             Spacer(minLength: 0)
             // A goal, a loop or background work: a small mark each. Files, the terminal and Git are in the ··· menu (a tap opens the header).
             hostedMarks
@@ -2327,14 +2327,14 @@ struct ChatView: View {
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("目标，\(goal.statusLabel)：\(goal.headline)，点按查看")
+                    .accessibilityLabel("Goal, \(goal.statusLabel): \(goal.headline). Tap to view.")
                     .sheet(isPresented: $showGoal) { GoalSheet(goal: goal) }
                 }
                 if session?.loop != nil || !(session?.background ?? []).isEmpty {
                     Button { Haptics.tap(); showActivity = true } label: { activityMark }
                         .buttonStyle(.plain)
                         .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.wellM)
-                        .accessibilityLabel("循环与后台任务，点按查看")
+                        .accessibilityLabel("Loop and background tasks, tap to view")
                 }
             }
     }
@@ -2366,29 +2366,29 @@ struct ChatView: View {
             }
             if style == .dev {
                 if session?.canTerminal == true {
-                    Button { openTerminal() } label: { Label("终端", systemImage: Theme.Icon.terminal).lineLimit(1) }
+                    Button { openTerminal() } label: { Label("Terminal", systemImage: Theme.Icon.terminal).lineLimit(1) }
                 }
                 if pane != .chat {
-                    Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("回到对话", systemImage: SessionPane.chat.symbol) }
+                    Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("Back to Chat", systemImage: SessionPane.chat.symbol) }
                 }
                 ForEach(panes.filter { $0 == .files || $0 == .git }) { p in
                     Button { withAnimation(Theme.Motion.standard) { pane = p } } label: {
-                        Label(paneBadges[p].map { String(localized: "\(p.title)（\($0)）") } ?? p.title, systemImage: p.symbol)
+                        Label(paneBadges[p].map { String(localized: "\(p.title) (\($0))") } ?? p.title, systemImage: p.symbol)
                     }
                 }
             }
             if session?.canAttach == true {
-                Button { Task { await model.attach(key) } } label: { Label("实时接入", systemImage: Theme.Icon.link).lineLimit(1) }
+                Button { Task { await model.attach(key) } } label: { Label("Attach Live", systemImage: Theme.Icon.link).lineLimit(1) }
             }
             if status.isActive, session?.canInterrupt == true {
-                Button { Task { await model.interrupt(key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
+                Button { Task { await model.interrupt(key) } } label: { Label("Interrupt [Composer Buttons f9d193]", systemImage: Theme.Icon.interrupt) }
             }
             if style == .dev, let s = session, s.canTerminal {
-                Button { renaming = s } label: { Label("重命名…", systemImage: Theme.Icon.edit) }
+                Button { renaming = s } label: { Label("Rename… [Assistant Sidebar ec4cd0]", systemImage: Theme.Icon.edit) }
             }
             if style == .dev {
                 Button { model.toggleMute(key) } label: {
-                    Label(model.isMuted(key) ? "开启通知" : "屏蔽通知", systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
+                    Label(model.isMuted(key) ? String(localized: "Unmute [Chat View 3834f9]") : String(localized: "Mute"), systemImage: model.isMuted(key) ? Theme.Icon.unmute : Theme.Icon.mute)
                 }
             }
             ScreenMenu(machine: session?.assistant == true ? nil : key.machineRef, recent: computerActivity?.machine, from: key)
@@ -2396,21 +2396,21 @@ struct ChatView: View {
             if let s = session {
                 if s.canTerminal {
                     Button { UIPasteboard.general.string = "\(s.resumeCommand) \(s.sourceThreadID ?? s.sessionID)" } label: {
-                        Label("拷贝恢复命令", systemImage: Theme.Icon.copy).lineLimit(1)
+                        Label("Copy Resume Command", systemImage: Theme.Icon.copy).lineLimit(1)
                     }
                 }
-                Button { UIPasteboard.general.string = s.cwd } label: { Label("拷贝目录", systemImage: Theme.Icon.folder) }
+                Button { UIPasteboard.general.string = s.cwd } label: { Label("Copy Directory", systemImage: Theme.Icon.folder) }
                 if host == nil, let space = s.spaceKey, let openSpace {
-                    Button { openSpace(space) } label: { Label("空间里的所有 Agent", systemImage: Theme.Icon.space) }
+                    Button { openSpace(space) } label: { Label("All Agents in Space", systemImage: Theme.Icon.space) }
                 }
                 if s.status.isLive && s.canTerminal {
                     Button(role: .destructive) { closing = s } label: {
-                        Label("停止并关闭 Agent…", systemImage: Theme.Icon.end).lineLimit(1)
+                        Label("Stop and Close Agent…", systemImage: Theme.Icon.end).lineLimit(1)
                     }
                 }
                 if s.canDelete {
                     Button(role: .destructive) { deleting = s } label: {
-                        Label("删除对话…", systemImage: Theme.Icon.delete).lineLimit(1)
+                        Label("Delete Chat…", systemImage: Theme.Icon.delete).lineLimit(1)
                     }
                 }
             }
@@ -2424,7 +2424,7 @@ struct ChatView: View {
         // The switch stays while the hub is out of reach (its line then says so, and the menu explains the link).
         if style == .dev, let host, host.agents.count > 1 {
             Menu {
-                Section("切换 Agent") {
+                Section("Switch Agent") {
                     ForEach(host.agents) { s in
                         Button { if s.key != key { host.select(s.key) } } label: {
                             if s.key == key {
@@ -2436,16 +2436,16 @@ struct ChatView: View {
                     }
                 }
                 if model.connection.shown != .online {
-                    Button { showLink = true } label: { Label("连接详情", systemImage: Theme.Icon.info) }
+                    Button { showLink = true } label: { Label("Connection Details", systemImage: Theme.Icon.info) }
                 } else {
-                    Button { showInfo = true } label: { Label("会话信息", systemImage: Theme.Icon.info) }
+                    Button { showInfo = true } label: { Label("Session Info", systemImage: Theme.Icon.info) }
                 }
             } label: {
                 titleLabel(chevron: true)
             }
             .labelOnlyMenu()
             .tint(Color.primary) // a title, not a button: the menu's accent tint would color it blue
-            .accessibilityLabel("\(title)，\(host.agents.count) 个 Agent，点按切换")
+            .accessibilityLabel("\(title), \(host.agents.count) agents, tap to switch")
             .accessibilityIdentifier("chat.title")
             .connectionDetails($showLink)
         } else {
@@ -2494,7 +2494,7 @@ struct ChatView: View {
             titleLabel(chevron: false)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(link != .online ? "\(title)，\(link.title)，查看连接详情" : "\(title)，查看会话信息")
+        .accessibilityLabel(link != .online ? String(localized: "\(title), \(link.title), view connection details") : String(localized: "\(title), view session info"))
         .accessibilityIdentifier("chat.title")
         .connectionDetails($showLink)
     }
@@ -2515,7 +2515,7 @@ struct ChatView: View {
     @ViewBuilder private func hostedMenuActions(_ host: HostedChat) -> some View {
         host.menu
         Button { host.openInAgents(key) } label: {
-            Label("在 Agents 里打开", systemImage: Theme.Icon.agents).lineLimit(1)
+            Label("Open in Agents", systemImage: Theme.Icon.agents).lineLimit(1)
         }
     }
 
@@ -2576,7 +2576,7 @@ struct ChatView: View {
         guard s.state == .working, status.isActive, case .turn(let t)? = store.blocks.last, let start = t.startedAt else { return s.state.label }
         let m = Int(now.timeIntervalSince(start)) / 60
         if m < 1 { return s.state.label }
-        return s.state.label + " " + (m < 60 ? String(localized: "\(m) 分") : String(localized: "\(m / 60) 小时 \(m % 60) 分"))
+        return s.state.label + " " + (m < 60 ? String(localized: "\(m) min [Chat View a38788]") : String(localized: "\(m / 60) hr \(m % 60) min"))
     }
 
     /// The Agents header: back, title (with the state), the terminal and ⋯; under them, when there are any, the other
@@ -2603,7 +2603,7 @@ struct ChatView: View {
                         }
                         .labelOnlyMenu()
                         .surface(interactive: true, in: .circle)
-                        .accessibilityLabel("更多")
+                        .accessibilityLabel("More")
                     }
                 }
                 .padding(.horizontal, Theme.Space.l)
@@ -2682,22 +2682,22 @@ struct ChatView: View {
     @ToolbarContentBuilder private var sideBarItems: some ToolbarContent {
         if !hidesBack {
             ToolbarItem(placement: .cancellationAction) {
-                Button { back() } label: { Label("返回", systemImage: Theme.Icon.back) }
+                Button { back() } label: { Label("Back [Task Sheets 572cf4]", systemImage: Theme.Icon.back) }
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if pane != .chat {
-                Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("对话", systemImage: SessionPane.chat.symbol) }
+                Button { withAnimation(Theme.Motion.standard) { pane = .chat } } label: { Label("Chat", systemImage: SessionPane.chat.symbol) }
             }
             if session?.canTerminal == true {
-                Button { Haptics.tap(); openTerminal() } label: { Label("终端", systemImage: SessionPane.terminal.symbol).lineLimit(1) }
+                Button { Haptics.tap(); openTerminal() } label: { Label("Terminal", systemImage: SessionPane.terminal.symbol).lineLimit(1) }
             }
             ForEach(panes.filter { ($0 == .git || $0 == .files) && $0 != pane }) { p in
                 Button { Haptics.tap(); withAnimation(Theme.Motion.standard) { pane = p } } label: {
-                    Label(paneBadges[p].map { String(localized: "\(p.title)（\($0)）") } ?? p.title, systemImage: p.symbol)
+                    Label(paneBadges[p].map { String(localized: "\(p.title) (\($0))") } ?? p.title, systemImage: p.symbol)
                 }
             }
-            Menu { moreMenuItems } label: { Label("更多", systemImage: Theme.Icon.more) }
+            Menu { moreMenuItems } label: { Label("More", systemImage: Theme.Icon.more) }
         }
     }
 
@@ -2760,7 +2760,7 @@ struct ChatView: View {
 
     /// The header's leading button: back to the chat from files / Git; on the chat ‹, or a hosting page's ✕ / ‹.
     private var backSymbol: String { pane == .git || pane == .files ? Theme.Icon.back : host?.leaveSymbol ?? Theme.Icon.back }
-    private var backLabel: String { pane == .git || pane == .files ? String(localized: "返回") : host?.leaveLabel ?? String(localized: "返回") }
+    private var backLabel: String { pane == .git || pane == .files ? String(localized: "Back [Task Sheets 572cf4]") : host?.leaveLabel ?? String(localized: "Back [Task Sheets 572cf4]") }
 
     /// The open header's ‹. Inside the row's glass container `noBackWhen` does not hide it: the container draws the
     /// button's glass and symbol itself, so a disabled ‹ that did nothing showed on every chat on the Mac, where the
@@ -2797,7 +2797,7 @@ struct ChatView: View {
         }
         .buttonStyle(.plain)
         .surface(interactive: true, in: .circle)
-        .accessibilityLabel("全屏查看")
+        .accessibilityLabel("Full Screen")
         .accessibilityIdentifier("task-detail.fullscreen")
     }
 
@@ -3157,7 +3157,7 @@ struct ChatView: View {
     /// with your old message.
     private func bindMenu() {
         menu.quote = { [model, key] text, id, isUser in
-            let from = isUser ? String(localized: "我") : (model.session(key)?.agentLabel ?? "Claude")
+            let from = isUser ? String(localized: "Me") : (model.session(key)?.agentLabel ?? "Claude")
             var quotes = model.composerContexts[key] ?? []
             guard !quotes.contains(where: { $0.kind == "quote" && $0.msg == id && !id.isEmpty }) else { return }
             quotes.append(.quote(text, from: from, msg: id))
@@ -3177,7 +3177,7 @@ struct ChatView: View {
             Task { await model.rewind(key, items: model.chat(key).items, at: itemID, text: text, restore: restore) }
         }
         menu.rewindBlock = { [model, key] in
-            model.rewinding.contains(key) ? String(localized: "正在回退") : Rewind.block(model.session(key))
+            model.rewinding.contains(key) ? String(localized: "Rewinding") : Rewind.block(model.session(key))
         }
         menu.agent = { [model, key] in model.session(key)?.agentLabel ?? "Claude" }
         menu.source = { [model, key] in
@@ -3232,15 +3232,15 @@ struct ChatView: View {
         if style == .dev, let t = host?.title, !t.isEmpty { return t }
         let t = session?.title ?? ""
         if style == .assistant { return t.isEmpty || t == "Claude Code" ? "Persona" : t }
-        return t.isEmpty ? String(localized: "对话") : t
+        return t.isEmpty ? String(localized: "Chat") : t
     }
 
     private var subtitle: String {
         guard let s = session else { return "" }
         if style == .assistant {
-            if !model.interactions(for: key).isEmpty { return String(localized: "等你确认") }
+            if !model.interactions(for: key).isEmpty { return String(localized: "Waiting for you [Chat View 99e510]") }
             let launcher = model.assistantLaunchers[key] ?? s.launcher
-            return s.status.isActive ? String(localized: "正在处理…") : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
+            return s.status.isActive ? String(localized: "Working…") : ([launcher, Fmt.model(s.model)].compactMap { $0 }.joined(separator: " · "))
         }
         let machine = model.namedMachine(s.machineRef)?.title ?? s.machineID
         let place = [s.spaceName, s.slotLabel].compactMap { $0 }.joined(separator: " › ")
@@ -3302,10 +3302,10 @@ struct StartingNote: View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
             if let error {
                 Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
-                Text("没有启动起来：\(error)").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
+                Text("Didn't start: \(error) [Chat View 38dec8]").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
             } else {
                 ProgressView().controlSize(.mini)
-                Text("正在启动 \(agent)，消息会在它就绪后发出").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
+                Text("Starting \(agent). Your message will be sent once it's ready.").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 0)
         }
@@ -3355,7 +3355,7 @@ struct NextNeedsYouStrip: View {
         Button(action: open) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: Theme.Icon.needsYou).font(Theme.Font.labelStrong).foregroundStyle(Theme.caution)
-                Text("下一个需要你的").font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
+                Text("Next Needing You").font(Theme.Font.secondaryStrong).foregroundStyle(Color.primary).lineLimit(1)
                 Text(title).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
                 Image(systemName: Theme.Icon.forward).font(Theme.Font.label).foregroundStyle(.secondary)
@@ -3383,7 +3383,7 @@ struct FailureNote: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: Theme.Space.m) {
-                Button(action: retry) { Label("重试", systemImage: Theme.Icon.retry).lineLimit(1) }
+                Button(action: retry) { Label("Retry [Components b8784c]", systemImage: Theme.Icon.retry).lineLimit(1) }
                     .font(Theme.Font.secondaryStrong)
                     .accessibilityIdentifier("chat.failure.retry")
                 if let link { FeishuLink(url: link).font(Theme.Font.secondaryStrong) }
@@ -3404,7 +3404,7 @@ struct FeishuLink: View {
     var url: URL
 
     var body: some View {
-        Link(destination: url) { Label("在飞书打开", systemImage: Theme.Icon.openExternal).lineLimit(1) }
+        Link(destination: url) { Label("Open in Lark [Chat View aa5c01]", systemImage: Theme.Icon.openExternal).lineLimit(1) }
             .environment(\.openURL, OpenURLAction { _ in .systemAction })
             .accessibilityIdentifier("chat.openFeishu")
     }
@@ -3424,7 +3424,7 @@ struct SuggestionPill: View {
                 Image(systemName: Theme.Icon.ai).font(Theme.Font.labelStrong).foregroundStyle(Theme.ai)
                 Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
-                Text("采用").font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
+                Text("Use").font(Theme.Font.labelStrong).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.vertical, Theme.Space.s)
@@ -3433,14 +3433,14 @@ struct SuggestionPill: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button { Haptics.success(); send() } label: { Label("直接发送", systemImage: "arrow.up.circle") }
-            Button(action: fill) { Label("填入输入框", systemImage: Theme.Icon.insert) }
+            Button { Haptics.success(); send() } label: { Label("Send Now", systemImage: "arrow.up.circle") }
+            Button(action: fill) { Label("Fill In", systemImage: Theme.Icon.insert) }
         } preview: {
             Text(text).font(Theme.Font.body).padding(Theme.Space.l).frame(maxWidth: 320, alignment: .leading)
         }
-        .accessibilityLabel("Claude 建议：\(text)")
-        .accessibilityHint("填入输入框；长按可直接发送")
-        .accessibilityAction(named: "直接发送", send)
+        .accessibilityLabel("Claude suggests: \(text)")
+        .accessibilityHint("Fills the input box. Touch and hold to send right away.")
+        .accessibilityAction(named: "Send Now", send)
     }
 }
 
@@ -3581,7 +3581,7 @@ struct Composer: View, Equatable {
 
     @ViewBuilder private var extensionPrompts: some View {
         if !declarations.prompts.isEmpty {
-            Section("扩展提示") {
+            Section("Extension Prompts") {
                 ForEach(declarations.prompts) { prompt in
                     Button {
                         text = ExtensionTextContributions.filling(prompt)
@@ -3598,13 +3598,13 @@ struct Composer: View, Equatable {
 
     private var promptCommands: [PromptCommand] {
         PromptItems.commands(clear: canClear && !status.isActive && !clearing, loop: canLoop) + declarations.prompts.map {
-            PromptCommand(String(localized: "/扩展/\($0.title)", comment: "Menu name of a prompt an extension adds"), detail: $0.ownerName, insert: $0.text)
+            PromptCommand(String(localized: "/extension/\($0.title)", comment: "Menu name of a prompt an extension adds"), detail: $0.ownerName, insert: $0.text)
         }
     }
 
     /// Quick messages and /clear in the + menu (`ComposerRow`, and an agent's in the shell).
     @ViewBuilder private var quickCommands: some View {
-        Section("快捷指令") {
+        Section("Quick Commands [Chat View c813e6]") {
             ForEach(SlashCommand.commands(loop: canLoop)) { cmd in
                 Button {
                     if cmd.drafts { startDraft(cmd.text) } else { Task { await sendText(cmd.text) } }
@@ -3612,7 +3612,7 @@ struct Composer: View, Equatable {
             }
             if canClear {
                 Button(role: .destructive) { confirmClear = true } label: {
-                    Label("清空上下文 /clear", systemImage: "eraser")
+                    Label("Clear Context /clear", systemImage: "eraser")
                 }
                 .disabled(status.isActive || clearing)
             }
@@ -3651,7 +3651,7 @@ struct Composer: View, Equatable {
     /// The model button's title; with nothing to show or pick, no button.
     private var modesTitle: SessionModes.ComposerTitle? {
         let effort = setsModes || setsEffortOnly
-        return SessionModesMenu.title(model.session(key), setsModes: effort) ?? (effort || canPickModel ? .init(model: String(localized: "模型")) : nil)
+        return SessionModesMenu.title(model.session(key), setsModes: effort) ?? (effort || canPickModel ? .init(model: String(localized: "Model [Assistant View c98e11]")) : nil)
     }
 
     /// The @ menu: files this chat's tools touched, then other agents' sessions.
@@ -3741,8 +3741,8 @@ struct Composer: View, Equatable {
             }
             if usesShellComposer {
                 // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
-                ShellComposerBar(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）")
-                                     : (suggestion ?? (shellChat ? String(localized: "问 \(model.persona.name)") : placeholder ?? String(localized: "给 Claude 发消息"))),
+                ShellComposerBar(placeholder: status.isActive ? String(localized: "Add a note (queued)")
+                                     : (suggestion ?? (shellChat ? String(localized: "Ask \(model.persona.name)") : placeholder ?? String(localized: "Message Claude"))),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
@@ -3752,14 +3752,14 @@ struct Composer: View, Equatable {
                                  history: key.path,
                                  gate: gate,
                                  send: { if let gate { gate.action() } else { Task { await sendText(text) } } }) {
-                    Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
+                    Button { showPhotos = true } label: { Label("Photos", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
-                        Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
+                        Button { showCamera = true } label: { Label("Take Photo [Chat View 6e3a10]", systemImage: Theme.Icon.camera) }
                     }
                     if MetaGlasses.isBuiltIn {
-                        Button { showGlasses = true } label: { Label("眼镜拍照", systemImage: Theme.Icon.glasses).lineLimit(1) }
+                        Button { showGlasses = true } label: { Label("Glasses Photo", systemImage: Theme.Icon.glasses).lineLimit(1) }
                     }
-                    Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+                    Button { showFiles = true } label: { Label("Files", systemImage: Theme.Icon.file) }
                     extensionPrompts
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
@@ -3768,7 +3768,7 @@ struct Composer: View, Equatable {
                 }
             } else if AppStyle.current.usesBeautifulUI {
                 // The BeautifulUI style's prompt bar; every other style keeps the original input line.
-                PromptComposer(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）") : (suggestion ?? placeholder ?? String(localized: "给 Claude 发消息")),
+                PromptComposer(placeholder: status.isActive ? String(localized: "Add a note (queued)") : (suggestion ?? placeholder ?? String(localized: "Message Claude")),
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
@@ -3812,20 +3812,20 @@ struct Composer: View, Equatable {
                                    Task { await sendText(t) }
                                })
             } else {
-                ComposerRow(placeholder: status.isActive ? String(localized: "补充说明（会排队发送）") : (suggestion ?? placeholder ?? String(localized: "给 Claude 发消息")),
+                ComposerRow(placeholder: status.isActive ? String(localized: "Add a note (queued)") : (suggestion ?? placeholder ?? String(localized: "Message Claude")),
                             text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                             stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
                             send: { if let gate { gate.action() } else { Task { await sendText(text) } } }, quotes: contexts, history: key.path,
                             gate: gate) {
                     // A PhotosPicker inside a Menu never presents (the menu dismisses first): present it from here.
-                    Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
+                    Button { showPhotos = true } label: { Label("Photos", systemImage: Theme.Icon.photos) }
                     if CameraPicker.isAvailable {
-                        Button { showCamera = true } label: { Label("拍照", systemImage: Theme.Icon.camera) }
+                        Button { showCamera = true } label: { Label("Take Photo [Chat View 6e3a10]", systemImage: Theme.Icon.camera) }
                     }
                     if MetaGlasses.isBuiltIn {
-                        Button { showGlasses = true } label: { Label("眼镜拍照", systemImage: Theme.Icon.glasses).lineLimit(1) }
+                        Button { showGlasses = true } label: { Label("Glasses Photo", systemImage: Theme.Icon.glasses).lineLimit(1) }
                     }
-                    Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+                    Button { showFiles = true } label: { Label("Files", systemImage: Theme.Icon.file) }
                     extensionPrompts
                     quickCommands
                 }
@@ -3914,8 +3914,8 @@ struct Composer: View, Equatable {
         }
         #endif
         return top
-        .confirmationDialog("清空上下文？", isPresented: $confirmClear, titleVisibility: .visible) {
-            Button("清空", role: .destructive) {
+        .confirmationDialog("Clear Context?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Clear [Chat View 1ef3de]", role: .destructive) {
                 clearing = true
                 Task {
                     let next = await model.clearContext(key)
@@ -3924,7 +3924,7 @@ struct Composer: View, Equatable {
                 }
             }
         } message: {
-            Text("\(model.session(key)?.agentLabel ?? "Claude") 会开一个新会话，这段对话留在历史里，页面会跳到新会话。")
+            Text("\(model.session(key)?.agentLabel ?? "Claude") will start a new session. This chat stays in your history, and the page moves to the new session.")
         }
         .mediaPicker(isPresented: $showPhotos, selection: $picks)
         .fileUploadPicker(isPresented: $showFiles) { urls in
@@ -4000,7 +4000,7 @@ struct Composer: View, Equatable {
         let files = videos.ready
         guard !t.isEmpty || !images.isEmpty || !files.isEmpty || !ctx.isEmpty else { return }
         // Picked page excerpts ride along as <jarvis-context> tags before what was typed, videos as <jarvis-file> after.
-        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "参考上面的内容。") : String(localized: "请看视频")) : String(localized: "请看图片")) : t, files: files)
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "See the context above.") : String(localized: "Please look at the image [Assistant View a3e0a0]")) : String(localized: "Please look at the image [Assistant View 5ad878]")) : t, files: files)
         let message = ctx.isEmpty ? body : ctx.map(\.xml).joined(separator: "\n") + "\n\n" + body
         // Routed to a task ("Tell “xx”"): straight to its agent, not to Persona (docs/unified-entry.md「指向谁」).
         // Not with videos: they are on this conversation's machine, the task's agent may be on another.
@@ -4020,7 +4020,7 @@ struct Composer: View, Equatable {
     /// A send while a video is still on its way: nothing goes; what was typed goes back in the box (the prompt bar
     /// clears it right after asking to send).
     private func holdForVideos(restoring raw: String? = nil) {
-        model.toast = Toast(String(localized: "视频还在上传，传完再发送"))
+        model.toast = Toast(String(localized: "The video is still uploading. Send once it's done."))
         if let raw, text.isEmpty { Task { text = raw } }
     }
 
@@ -4055,13 +4055,13 @@ struct Composer: View, Equatable {
         }
         picks = []
         if failed > 0 {
-            model.toast = Toast(String(localized: "有 \(failed) 张照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
+            model.toast = Toast(String(localized: "Couldn't read \(failed) photos (they may still be downloading from iCloud) [Chat View 5712c0]"), style: .error)
         }
     }
 
     private func add(_ img: UIImage) {
         guard images.count < 4 else {
-            model.toast = Toast(String(localized: "一次最多 4 张"), style: .error)
+            model.toast = Toast(String(localized: "Up to 4 at a time"), style: .error)
             return
         }
         let scaled = img.scaledDown(maxSide: 1600)
@@ -4088,15 +4088,15 @@ struct SlashCommand: Identifiable {
     var id: String { word }
 
     static let all: [SlashCommand] = [
-        SlashCommand(title: String(localized: "继续", comment: "Slash command title: let the agent keep going"), symbol: "forward", word: String(localized: "/继续", comment: "Slash command word the user can type"), detail: String(localized: "让它接着做"), text: String(localized: "继续")),
-        SlashCommand(title: String(localized: "压缩上下文 /compact"), symbol: Theme.Icon.collapseAll, word: "/compact", detail: String(localized: "压缩上下文"), text: "/compact"),
-        SlashCommand(title: String(localized: "查看上下文 /context"), symbol: "chart.pie", word: "/context", detail: String(localized: "查看上下文"), text: "/context"),
-        SlashCommand(title: String(localized: "提交并推送"), symbol: "arrow.up.doc", word: String(localized: "/提交", comment: "Slash command word the user can type"), detail: String(localized: "按规范提交并推送"), text: String(localized: "把当前改动按规范提交并推送", comment: "Message sent to the agent when the command is picked")),
-        SlashCommand(title: String(localized: "汇报进展"), symbol: Theme.Icon.list, word: String(localized: "/汇报", comment: "Slash command word the user can type"), detail: String(localized: "汇报进展、还剩什么"), text: String(localized: "简要汇报一下目前的进展、还剩什么", comment: "Message sent to the agent when the command is picked")),
+        SlashCommand(title: String(localized: "Continue", comment: "Slash command title: let the agent keep going"), symbol: "forward", word: String(localized: "/continue", comment: "Slash command word the user can type"), detail: String(localized: "Let it keep going"), text: String(localized: "Continue")),
+        SlashCommand(title: String(localized: "Compact Context /compact"), symbol: Theme.Icon.collapseAll, word: "/compact", detail: String(localized: "Compact context"), text: "/compact"),
+        SlashCommand(title: String(localized: "View Context /context"), symbol: "chart.pie", word: "/context", detail: String(localized: "View context"), text: "/context"),
+        SlashCommand(title: String(localized: "Commit and Push"), symbol: "arrow.up.doc", word: String(localized: "/commit", comment: "Slash command word the user can type"), detail: String(localized: "Commit by the conventions and push"), text: String(localized: "Commit the current changes following the conventions and push them", comment: "Message sent to the agent when the command is picked")),
+        SlashCommand(title: String(localized: "Report Progress"), symbol: Theme.Icon.list, word: String(localized: "/report", comment: "Slash command word the user can type"), detail: String(localized: "Report progress and what's left"), text: String(localized: "Briefly report your progress so far and what's left", comment: "Message sent to the agent when the command is picked")),
     ]
 
     /// Claude Code's /loop (#2601): `/loop [interval] <what to do>` re-runs the prompt on a schedule.
-    static let loop = SlashCommand(title: String(localized: "定时重复 /loop"), symbol: Theme.Icon.inProgress, word: "/loop", detail: String(localized: "定时重复做一件事"),
+    static let loop = SlashCommand(title: String(localized: "Repeat on a schedule /loop"), symbol: Theme.Icon.inProgress, word: "/loop", detail: String(localized: "Repeat a task on a schedule"),
                                    text: LoopCommand.text, drafts: true)
 
     /// What a session's composer offers: /loop only to Claude agents (`LoopCommand.offered`).
@@ -4134,16 +4134,16 @@ struct SlashMenuRow: Identifiable, Equatable {
     /// What a quick message sends, shown at the row's end; a command is its own text.
     var preview: String? { text.hasPrefix("/") ? nil : text }
 
-    static let model = SlashMenuRow(word: "/model", detail: String(localized: "切换模型"), text: "/model ")
-    static let clear = SlashMenuRow(word: "/clear", detail: String(localized: "清空对话，从头开始"), text: "/clear")
+    static let model = SlashMenuRow(word: "/model", detail: String(localized: "Switch model"), text: "/model ")
+    static let clear = SlashMenuRow(word: "/clear", detail: String(localized: "Clear the chat and start over"), text: "/clear")
     /// Picked from this list the draft is only the "/word" typed so far, so the row's text replaces it as any row's does.
     static let loop = SlashMenuRow(word: SlashCommand.loop.word, detail: SlashCommand.loop.detail, text: SlashCommand.loop.text)
 
     /// The web's order: its quick messages, then Claude Code's commands. A quick command added later goes after these.
     /// The words as `SlashCommand.all` has them (localized), so the order holds in every language.
-    private static let order = [String(localized: "/继续", comment: "Slash command word the user can type"),
-                                String(localized: "/提交", comment: "Slash command word the user can type"),
-                                String(localized: "/汇报", comment: "Slash command word the user can type"), "/compact", "/context"]
+    private static let order = [String(localized: "/continue", comment: "Slash command word the user can type"),
+                                String(localized: "/commit", comment: "Slash command word the user can type"),
+                                String(localized: "/report", comment: "Slash command word the user can type"), "/compact", "/context"]
 
     /// The rows an agent's chat offers: /model where the phone can pick one, /loop for a Claude agent
     /// (`LoopCommand.offered`), /clear where the pane takes it.
@@ -4279,7 +4279,7 @@ struct QueueStrip: View {
         } label: {
             HStack(spacing: Theme.Space.sm) {
                 Image(systemName: "tray.and.arrow.down").accessibilityHidden(true)
-                Text("排队中 \(queued.count) 条 · Claude 忙完会依次处理").lineLimit(1)
+                Text("\(queued.count) queued · Claude will handle them in order").lineLimit(1)
                 Spacer(minLength: 0)
                 if busy { ProgressView().controlSize(.mini) }
             }
@@ -4298,9 +4298,9 @@ struct QueueStrip: View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
             ForEach(Array(queued.enumerated()), id: \.offset) { i, q in
                 Menu {
-                    Button { act(i, delete: false) } label: { Label("撤回编辑", systemImage: Theme.Icon.edit) }
-                    Button { UIPasteboard.general.string = q } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
-                    Button(role: .destructive) { act(i, delete: true) } label: { Label("删除", systemImage: Theme.Icon.delete) }
+                    Button { act(i, delete: false) } label: { Label("Take Back to Edit", systemImage: Theme.Icon.edit) }
+                    Button { UIPasteboard.general.string = q } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
+                    Button(role: .destructive) { act(i, delete: true) } label: { Label("Delete", systemImage: Theme.Icon.delete) }
                 } label: {
                     HStack(alignment: .top, spacing: Theme.Space.s) {
                         Text("\(i + 1)")
@@ -4317,8 +4317,8 @@ struct QueueStrip: View {
                     .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                 }
                 .disabled(busy)
-                .accessibilityLabel(Text("第 \(i + 1) 条：\(q)"))
-                .accessibilityHint(Text("撤回编辑、拷贝或删除"))
+                .accessibilityLabel(Text("Item \(i + 1): \(q)"))
+                .accessibilityHint(Text("Edit, copy or delete"))
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
@@ -4397,33 +4397,33 @@ struct SessionInfoSheet: View {
                     .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
                 if let link = session?.externalLink { Section { FeishuLink(url: link) } }
                 if let info {
-                    Section("运行") {
-                        row(Theme.Icon.model, String(localized: "模型"), Fmt.model(info.model) ?? info.model)
-                        if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", String(localized: "启动器"), l) }
+                    Section("Runtime") {
+                        row(Theme.Icon.model, String(localized: "Model [Assistant View c98e11]"), Fmt.model(info.model) ?? info.model)
+                        if let l = info.launcher ?? session?.launcher, !l.isEmpty { row("bolt", String(localized: "Launcher"), l) }
                         if let r = AssistantRuntime.status(runtime: session?.runtime, fallback: session?.runtimeFallback) {
-                            row(Theme.Icon.terminal, String(localized: "运行方式"), r)
+                            row(Theme.Icon.terminal, String(localized: "How It Runs"), r)
                         }
                         row("shippingbox", agent, info.version)
                         if let route = session?.codexRoute { routeRow(route, note: session?.codexRouteNote) }
-                        row("lock.open", String(localized: "权限"), SessionModes.modeLabel(info.permissionMode))
-                        row("gauge.with.dots.needle.50percent", String(localized: "思考强度"), SessionModes.effortLabel(info.effort))
+                        row("lock.open", String(localized: "Permissions"), SessionModes.modeLabel(info.permissionMode))
+                        row("gauge.with.dots.needle.50percent", String(localized: "Thinking Effort"), SessionModes.effortLabel(info.effort))
                     }
-                    Section("用量") {
-                        row(Theme.Icon.context, String(localized: "上下文"), Self.tokens(info.contextTokens) + " tokens")
+                    Section("Usage") {
+                        row(Theme.Icon.context, String(localized: "Context"), Self.tokens(info.contextTokens) + " tokens")
                         // The share of the window, live from the session list (#3289); nil while the window is unknown.
                         if let usage = ContextUsage(model.session(key) ?? session) { ContextUsageRow(usage: usage) }
-                        if info.compactions > 0 { row("rectangle.compress.vertical", String(localized: "压缩"), String(localized: "\(info.compactions) 次")) }
-                        row(Theme.Icon.conversation, String(localized: "对话"), String(localized: "\(info.turns) 轮"))
-                        row("text.word.spacing", String(localized: "共生成"), Self.tokens(info.outputTokens) + " tokens")
+                        if info.compactions > 0 { row("rectangle.compress.vertical", String(localized: "Compactions"), String(localized: "\(info.compactions) times")) }
+                        row(Theme.Icon.conversation, String(localized: "Chat"), String(localized: "\(info.turns) turns"))
+                        row("text.word.spacing", String(localized: "Output"), Self.tokens(info.outputTokens) + " tokens")
                         if let started = info.startedAt, started.isMeaningful {
-                            row(Theme.Icon.time, String(localized: "开始"), started.formatted(date: .abbreviated, time: .shortened))
+                            row(Theme.Icon.time, String(localized: "Started"), started.formatted(date: .abbreviated, time: .shortened))
                         }
                     }
-                    Section("位置") {
+                    Section("Location") {
                         if let s = session, let todo = s.todo,
                             TodosLogic.isOnTodosHub(sessionGroup: s.key.group, hubGroup: model.hub?.group) {
                             Button { showTodo = true } label: {
-                                row(Theme.Icon.todo, String(localized: "待办"), todo.title)
+                                row(Theme.Icon.todo, String(localized: "To-dos"), todo.title)
                             }
                             .sheet(isPresented: $showTodo) {
                                 NavigationStack { TodoDetailView(todoID: todo.id).macSheetDone { showTodo = false } }
@@ -4436,13 +4436,13 @@ struct SessionInfoSheet: View {
                                     #endif
                             }
                         }
-                        row(Theme.Icon.folder, String(localized: "目录"), Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.namedMachine(key.machineRef)?.home), mono: true)
-                        if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", String(localized: "分支"), b, mono: true) }
+                        row(Theme.Icon.folder, String(localized: "Folder [Task Views 52daa7]"), Fmt.path(info.cwd ?? session?.cwd ?? "", home: model.namedMachine(key.machineRef)?.home), mono: true)
+                        if let b = info.gitBranch, !b.isEmpty { row("arrow.triangle.branch", String(localized: "Branch"), b, mono: true) }
                     }
                     Section {
-                        copyButton(String(localized: "拷贝 session id"), symbol: Theme.Icon.id, text: info.sessionID, toast: String(localized: "已拷贝 session id"))
+                        copyButton(String(localized: "Copy Session ID [Chat View e63671]"), symbol: Theme.Icon.id, text: info.sessionID, toast: String(localized: "Session ID copied"))
                         if session?.canTerminal == true {
-                            copyButton(String(localized: "拷贝恢复命令"), symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: String(localized: "已拷贝恢复命令"))
+                            copyButton(String(localized: "Copy Resume Command"), symbol: Theme.Icon.terminal, text: "cd \(info.cwd ?? "") && " + resume(session?.sourceThreadID ?? info.sessionID), toast: String(localized: "Resume command copied"))
                         }
                     } footer: {
                         Text(info.sessionID).font(Theme.Font.label.monospaced()).textSelection(.enabled)
@@ -4456,10 +4456,10 @@ struct SessionInfoSheet: View {
             .listStyle(.insetGrouped)
             .listSectionSpacing(.compact)
             #if os(iOS) || os(visionOS)
-            .navigationTitle("会话信息")
+            .navigationTitle("Session Info")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) }
+                ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) }
             }
             #endif
         }
@@ -4488,7 +4488,7 @@ struct SessionInfoSheet: View {
         let place = [model.namedMachine(key.machineRef)?.title ?? key.machineID, s?.spaceName, s?.slotLabel]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " › ")
         return VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Text(s?.displayTitle ?? String(localized: "会话")).font(Theme.Font.title).lineLimit(2)
+            Text(s?.displayTitle ?? String(localized: "Session")).font(Theme.Font.title).lineLimit(2)
             HStack(spacing: Theme.Space.sm) {
                 if let st = s?.state {
                     HStack(spacing: Theme.Space.xs) {
@@ -4521,7 +4521,7 @@ struct SessionInfoSheet: View {
     /// How Persona reaches this Codex (docs/codex.md「守护进程上的会话」): its shared app-server, or the terminal and why.
     private func routeRow(_ route: String, note: String?) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            row(Theme.Icon.link, String(localized: "连接"), route == "app_server" ? String(localized: "app-server（结构化）") : String(localized: "终端（读屏幕）"))
+            row(Theme.Icon.link, String(localized: "Connect [V N C Page a55741]"), route == "app_server" ? String(localized: "app-server (structured)") : String(localized: "Terminal (screen reading)"))
             if route != "app_server", let note, !note.isEmpty {
                 Text(note).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -4691,7 +4691,7 @@ struct WorkStepView: View, Equatable {
                     ToolCallRow(call: c, autoExpand: false, grouped: true)
                     if c.name == "Agent" || c.name == "Task", let open = openSubagent, let id = c.use.toolUseID {
                         Button { open(id) } label: {
-                            Label("查看子 Agent", systemImage: Theme.Icon.open).font(Theme.Font.labelStrong).lineLimit(1)
+                            Label("View Subagent", systemImage: Theme.Icon.open).font(Theme.Font.labelStrong).lineLimit(1)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
@@ -4876,7 +4876,7 @@ struct WorkEndView: View, Equatable {
             if !files.isEmpty {
                 let list = all ? files : Array(files.prefix(Self.shown))
                 FileDiffChips(list.map { FileDiff(file: ($0.path as NSString).lastPathComponent, additions: $0.adds, deletions: $0.dels) },
-                              moreLabel: files.count > list.count ? String(localized: "+\(files.count - list.count) 个文件") : nil,
+                              moreLabel: files.count > list.count ? String(localized: "+\(files.count - list.count) files") : nil,
                               onMore: { all = true },
                               onSelect: openFile.map { open in { diff in
                                   if let f = files.first(where: { ($0.path as NSString).lastPathComponent == diff.file }) { open(f.path) }
@@ -4888,7 +4888,7 @@ struct WorkEndView: View, Equatable {
             Button(action: collapse) {
                 HStack(spacing: Theme.Space.sm) {
                     Image(systemName: Theme.Icon.collapse).font(Theme.Font.labelStrong)
-                    Text("收起 \(count) 步").lineLimit(1).fixedSize()
+                    Text("Collapse \(count) steps [Chat View 608bfc]").lineLimit(1).fixedSize()
                 }
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
@@ -4899,7 +4899,7 @@ struct WorkEndView: View, Equatable {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("收起过程")
+            .accessibilityLabel("Collapse steps")
             .accessibilityIdentifier("work-fold-bottom")
         }
         .background { WorkCardSlice(top: false, bottom: true) }
@@ -4964,17 +4964,17 @@ nonisolated struct WorkSummary: Equatable {
         var short: [String] = []
         if AppStyle.current.usesBeautifulUI {
             // BeautifulUI's header words: "5 tool calls, 2 messages".
-            if calls > 0 { full.append(String(localized: "\(calls) 次工具调用")); short.append(String(localized: "\(calls) 次工具调用")) }
-            if thoughts > 0 { full.append(String(localized: "\(thoughts) 次思考")) }
-            if texts > 0 { full.append(String(localized: "\(texts) 条消息")) }
-            if full.isEmpty && notices > 0 { full.append(String(localized: "\(notices) 条后台通知")) }
-            if short.isEmpty && notices > 0 { short.append(String(localized: "\(notices) 条后台通知")) }
+            if calls > 0 { full.append(String(localized: "\(calls) tool calls")); short.append(String(localized: "\(calls) tool calls")) }
+            if thoughts > 0 { full.append(String(localized: "\(thoughts) thoughts")) }
+            if texts > 0 { full.append(String(localized: "\(texts) messages")) }
+            if full.isEmpty && notices > 0 { full.append(String(localized: "\(notices) background notices")) }
+            if short.isEmpty && notices > 0 { short.append(String(localized: "\(notices) background notices")) }
         } else {
-            if calls > 0 { full.append(String(localized: "工具 \(calls)")); short.append(String(localized: "工具 \(calls)")) }
-            if thoughts > 0 { full.append(String(localized: "思考 \(thoughts)")) }
-            if texts > 0 { full.append(String(localized: "回复 \(texts)")) }
-            if full.isEmpty && notices > 0 { full.append(String(localized: "后台通知 \(notices)")) }
-            if short.isEmpty && notices > 0 { short.append(String(localized: "后台通知 \(notices)")) }
+            if calls > 0 { full.append(String(localized: "Tools \(calls)")); short.append(String(localized: "Tools \(calls)")) }
+            if thoughts > 0 { full.append(String(localized: "Thinking \(thoughts)")) }
+            if texts > 0 { full.append(String(localized: "Replies \(texts)")) }
+            if full.isEmpty && notices > 0 { full.append(String(localized: "Background \(notices) [Chat View 999fb8]")) }
+            if short.isEmpty && notices > 0 { short.append(String(localized: "Background \(notices) [Chat View 999fb8]")) }
         }
         self.full = full
         self.short = short
@@ -5033,14 +5033,14 @@ struct WorkLine: View, Equatable {
             }
             .buttonStyle(.plain)
             .disabled(isEmpty)
-            .accessibilityLabel(open ? "收起过程" : "展开过程")
+            .accessibilityLabel(open ? String(localized: "Collapse steps") : String(localized: "Expand steps"))
             .accessibilityValue(label(now: end ?? .now, short: false))
             .accessibilityIdentifier("work-head")
             Spacer(minLength: 0)
             if let openTerminal {
                 Button(action: openTerminal) { Image(systemName: Theme.Icon.terminal).font(Theme.Font.caption).foregroundStyle(.secondary) }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("打开终端")
+                    .accessibilityLabel("Open terminal")
             }
         }
     }
@@ -5072,14 +5072,14 @@ struct WorkLine: View, Equatable {
                 }
                 .buttonStyle(.plain)
                 .disabled(isEmpty)
-                .accessibilityLabel(open ? "收起过程" : "展开过程")
+                .accessibilityLabel(open ? String(localized: "Collapse steps") : String(localized: "Expand steps"))
                 .accessibilityValue(label(now: end ?? .now, short: false))
                 .accessibilityIdentifier("work-head")
                 Spacer(minLength: 0)
                 if let openTerminal {
                     Button(action: openTerminal) { Image(systemName: Theme.Icon.terminal).font(Theme.Font.caption).foregroundStyle(.secondary) }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("打开终端")
+                        .accessibilityLabel("Open terminal")
                 }
             }
         }
@@ -5099,21 +5099,21 @@ struct WorkLine: View, Equatable {
         guard AppStyle.current.usesBeautifulUI else {
             // Persona' own: "Tool 3 · Thinking 1 · 1 min 20 s", "Working 39s · Tool 2".
             var p = parts
-            if live { p.insert(String(localized: "正在工作 \(took)"), at: 0) } else if !took.isEmpty { p.append(took) }
-            return p.isEmpty ? String(localized: "已完成") : p.joined(separator: " · ")
+            if live { p.insert(String(localized: "Working \(took)"), at: 0) } else if !took.isEmpty { p.append(took) }
+            return p.isEmpty ? String(localized: "Done [Task Sheets f28461]") : p.joined(separator: " · ")
         }
-        let what = parts.joined(separator: String(localized: "，", comment: "List separator"))
-        if live { return what.isEmpty ? String(localized: "正在工作 \(took)") : String(localized: "正在工作 \(took) · \(what)") }
-        if what.isEmpty { return took.isEmpty ? String(localized: "已完成") : String(localized: "已完成 · \(took)") }
+        let what = parts.joined(separator: String(localized: ", ", comment: "List separator"))
+        if live { return what.isEmpty ? String(localized: "Working \(took)") : String(localized: "Working \(took) · \(what)") }
+        if what.isEmpty { return took.isEmpty ? String(localized: "Done [Task Sheets f28461]") : String(localized: "Done · \(took)") }
         return took.isEmpty ? what : what + " · " + took
     }
 
     static func duration(from start: Date?, to end: Date) -> String {
         guard let start else { return "" }
         let s = max(0, Int(end.timeIntervalSince(start)))
-        if s < 60 { return String(localized: "\(s) 秒") }
-        if s < 3600 { return s % 60 == 0 ? String(localized: "\(s / 60) 分") : String(localized: "\(s / 60) 分 \(s % 60) 秒") }
-        return String(localized: "\(s / 3600) 小时 \(s % 3600 / 60) 分")
+        if s < 60 { return String(localized: "\(s) s") }
+        if s < 3600 { return s % 60 == 0 ? String(localized: "\(s / 60) min [Chat View a38788]") : String(localized: "\(s / 60)m \(s % 60)s") }
+        return String(localized: "\(s / 3600) hr \(s % 3600 / 60) min")
     }
 }
 

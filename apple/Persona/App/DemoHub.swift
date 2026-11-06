@@ -45,7 +45,7 @@ final class DemoHub {
     private var made = 0
 
     private static let history = "demo-1"
-    static let reply = String(localized: "这是体验模式：消息没有真的发到电脑上，这里的 Agent 也只是演示数据。连接你自己的 hub 之后，Claude 会在那台电脑上接着做。")
+    static let reply = String(localized: "This is demo mode: your message didn't actually reach a computer, and the agents here are sample data. Once you connect your own hub, Claude carries on on that computer.")
 
     /// The demo's agents and conversations (drafts typed into them go with the demo).
     var sessionKeys: Set<SessionKey> {
@@ -141,7 +141,7 @@ final class DemoHub {
         req.body.flatMap { try? JSON.decoder.decode(JSONValue.self, from: $0) } ?? .object([:])
     }
 
-    private func notFound() -> APIError { APIError(status: 404, message: String(localized: "体验模式里没有这项数据")) }
+    private func notFound() -> APIError { APIError(status: 404, message: String(localized: "Demo mode doesn't have this data")) }
 
     private func logMiss(_ req: LocalRequest) {
         #if DEBUG
@@ -310,7 +310,7 @@ final class DemoHub {
             let id = p[2]
             let catalog = DemoModelCatalog.configuration(tasks: tasks, overrides: modelBindings)
             guard let purpose = catalog["purposes"]?.array?.first(where: { $0["id"]?.string == id }) else { throw notFound() }
-            guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: String(localized: "配置已修改，请重新加载")) }
+            guard body["revision"]?.int == purpose["revision"]?.int else { throw APIError(status: 409, message: String(localized: "The settings changed. Reload and try again.")) }
             var binding = purpose["override"]?.object ?? [:]
             for field in ["provider", "model", "effort", "runtime"] {
                 guard let value = body[field] else { continue }
@@ -322,7 +322,7 @@ final class DemoHub {
         if let answer = try providers.change(method, p, body) { return answer }
         switch p {
         case ["sessions"]:
-            throw APIError(status: 403, message: String(localized: "体验模式下不能新建会话：连接你自己的 hub 后再试"))
+            throw APIError(status: 403, message: String(localized: "Can't start a new session in demo mode. Connect your own hub and try again."))
         case ["assistant", "conversations"]:
             return ["session": startConversation(body["prompt"]?.string ?? "")]
         case ["assistant", "tasks"]: // a new one: saved as it is, next run at its time
@@ -334,7 +334,7 @@ final class DemoHub {
             return ["task": .object(t)]
         case ["inbox", "refresh"]: return ["items": .array(inbox)]
         case ["translate"], ["translate", "mail"]:
-            throw APIError(status: 403, message: String(localized: "体验模式里不翻译：连接你自己的 hub 后再试"))
+            throw APIError(status: 403, message: String(localized: "Translation isn't available in demo mode. Connect your own hub and try again."))
         case ["todos"]:
             made += 1
             let newTodo: JSONValue = .object([
@@ -474,7 +474,7 @@ final class DemoHub {
             guard let raw = body["engine"]?.string,
                   MachineEngine.allCases.contains(MachineEngine(rawValue: raw)) ||
                     machine["engines"]?.array?.contains(where: { $0["id"]?.string == raw && $0["available"]?.bool == true }) == true else {
-                throw APIError(status: 400, message: String(localized: "未知引擎"))
+                throw APIError(status: 400, message: String(localized: "Unknown engine"))
             }
             machine["engine"] = .string(raw)
             machines[i] = .object(machine)
@@ -577,7 +577,7 @@ final class DemoHub {
         broadcastSessions(m)
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            respond(k, String(localized: "收到，按你的选择接着做。\n\n\(Self.reply)"))
+            respond(k, String(localized: "Got it, continuing with your choice.\\n\\n\(Self.reply)"))
         }
     }
 

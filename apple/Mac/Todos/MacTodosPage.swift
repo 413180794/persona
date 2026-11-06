@@ -112,7 +112,7 @@ struct MacTodosPage: View {
             List(selection: $selectedTodoID) {
                 if !(openList.isEmpty && doneList.isEmpty) {
                     if !openList.isEmpty {
-                        Section("没完成 · \(openList.count)") {
+                        Section("Open · \(openList.count)") {
                             ForEach(openList) { todo in
                                 row(todo)
                             }
@@ -126,7 +126,7 @@ struct MacTodosPage: View {
                                     row(todo)
                                 }
                             } label: {
-                                Text("已完成 · \(doneList.count)")
+                                Text("Done · \(doneList.count)")
                                     .font(Theme.Font.sectionHeader)
                                     .foregroundStyle(.secondary)
                             }
@@ -141,9 +141,9 @@ struct MacTodosPage: View {
                 if openList.isEmpty && doneList.isEmpty {
                     EmptyStateView(
                         symbol: Theme.Icon.todo,
-                        title: isSearching ? String(localized: "没有找到待办") : String(localized: "没有待办"),
-                        message: isSearching ? String(localized: "换个搜索词试试") : String(localized: "记下一件要做的事，交给 Agent 执行并跟踪进度。"),
-                        action: isSearching ? nil : (String(localized: "新建待办"), { showCreate = true })
+                        title: isSearching ? String(localized: "No matching to-dos") : String(localized: "No to-dos yet"),
+                        message: isSearching ? String(localized: "Try a different search") : String(localized: "Write down something to do, hand it to an agent, and track its progress."),
+                        action: isSearching ? nil : (String(localized: "New To-Do"), { showCreate = true })
                     )
                 }
             }
@@ -155,7 +155,7 @@ struct MacTodosPage: View {
         // In the list column's own title row, at its trailing edge, as the Agents list's buttons (#1223, #2318): as a
         // window toolbar item its glyph came out gray, as if disabled; the open todo's menu keeps the window's edge.
         .overlay(alignment: .topTrailing) {
-            MacTitleRowButton(String(localized: "新建待办"), symbol: Theme.Icon.add) {
+            MacTitleRowButton(String(localized: "New To-Do"), symbol: Theme.Icon.add) {
                 creatingTitle = ""
                 creatingNotes = ""
                 showCreate = true
@@ -206,7 +206,7 @@ struct MacTodosPage: View {
                             .font(Theme.Font.labelStrong)
                             .foregroundStyle(status.todoTone.text)
                         if !activeAgents.isEmpty {
-                            Text("· \(activeAgents.count) 个 Agent")
+                            Text("· \(activeAgents.count) agents")
                                 .font(Theme.Font.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -231,7 +231,7 @@ struct MacTodosPage: View {
         .buttonStyle(.plain)
         .tag(todo.id)
         .contextMenu {
-            Button(todo.isDone ? "重新打开" : "完成") {
+            Button(todo.isDone ? String(localized: "Reopen") : String(localized: "Done [Extension System Presentation c0b3fb]")) {
                 store.toggleDone(todo)
             }
             Divider()
@@ -240,7 +240,7 @@ struct MacTodosPage: View {
                     do { try await store.delete(id: todo.id) } catch { AppModel.shared.show(error) }
                 }
             } label: {
-                Label("删除", systemImage: Theme.Icon.delete)
+                Label("Delete", systemImage: Theme.Icon.delete)
             }
         }
     }
@@ -248,7 +248,7 @@ struct MacTodosPage: View {
     private func mostUrgentSummary(urgent: TodoMostUrgent?) -> String? {
         guard let urgent else { return nil }
         if urgent.isFailed, let err = urgent.agent.startError, !err.isEmpty {
-            return String(localized: "启动失败：\(err)")
+            return String(localized: "Failed to start: \(err)")
         }
         if let s = urgent.session {
             if let last = s.lastText, !last.isEmpty {
@@ -267,7 +267,7 @@ struct MacTodosPage: View {
             Image(systemName: Theme.Icon.search)
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
-            TextField("搜索待办", text: $query)
+            TextField(String(localized: "Search to-dos"), text: $query)
                 .textFieldStyle(.plain)
             if !query.isEmpty {
                 Button { query = "" } label: {
@@ -293,7 +293,7 @@ struct MacTodosPage: View {
             // One empty state a page (docs/mac-design.md): the list's says there is nothing, the detail stays plain.
             Color.clear
         } else {
-            SplitPlaceholder(symbol: Theme.Icon.todo, title: String(localized: "选一个待办"), message: String(localized: "左边列表里选一个待办，详情会在这里打开。"))
+            SplitPlaceholder(symbol: Theme.Icon.todo, title: String(localized: "Select a To-do"), message: String(localized: "Select a to-do in the list on the left to see its details here."))
         }
     }
 
@@ -301,19 +301,19 @@ struct MacTodosPage: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("标题", text: $creatingTitle)
+                    TextField(String(localized: "Title"), text: $creatingTitle)
                         .onSubmit { add() }
-                    TextField("说明（交给 Agent 时会一起发过去）", text: $creatingNotes, axis: .vertical)
+                    TextField(String(localized: "Notes (sent along when handed to an agent)"), text: $creatingNotes, axis: .vertical)
                         .lineLimit(3...8)
                 }
             }
-            .navigationTitle("新建待办")
+            .navigationTitle("New To-Do")
             .sheetCancel(unsaved: !(creatingTitle + creatingNotes).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                 showCreate = false
             }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") { add() }
+                    Button("Add [Beautiful U I Bridge 7a8a11]") { add() }
                         .lineLimit(1)
                         .disabled(creatingTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }

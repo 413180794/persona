@@ -75,7 +75,7 @@ final class FileUploads {
     func start(_ urls: [URL], machine: MachineRef, model: AppModel, dest: String? = nil, done: @escaping (String) -> Void) {
         let features = model.features(machine.group)
         if !features.isEmpty, !features.contains("file_upload") {
-            model.toast = Toast(String(localized: "hub 版本太旧，还不能发送文件：更新 hub 后再试"), style: .error)
+            model.toast = Toast(String(localized: "The hub is too old to receive files. Update the hub and try again."), style: .error)
             return
         }
         for url in urls {
@@ -83,7 +83,7 @@ final class FileUploads {
             let size = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
             if size > Self.limit {
                 if scoped { url.stopAccessingSecurityScopedResource() }
-                model.toast = Toast(String(localized: "「\(url.lastPathComponent)」有 \(size.storageText)，超过 200 MB，发不了"), style: .error)
+                model.toast = Toast(String(localized: "“\(url.lastPathComponent)” is \(size.storageText), over the 200 MB limit, and can't be sent"), style: .error)
                 continue
             }
             let item = Item(name: url.lastPathComponent, size: size)
@@ -170,13 +170,13 @@ final class FileUploads {
         if error.isCancellation { return nil }
         if let e = error as? APIError {
             switch e.code {
-            case "too_large": return String(localized: "「\(name)」超过 200 MB，发不了")
+            case "too_large": return String(localized: "“\(name)” is over 200 MB and can't be sent")
             case "node_outdated": return e.message
             default: break
             }
-            if e.status == 404 { return String(localized: "hub 版本太旧，还不能发送文件：更新 hub 后再试") }
+            if e.status == 404 { return String(localized: "The hub is too old to receive files. Update the hub and try again.") }
         }
-        return String(localized: "「\(name)」没发出去：\(error.localizedDescription)")
+        return String(localized: "Couldn't send “\(name)”: \(error.localizedDescription)")
     }
 }
 
@@ -188,9 +188,9 @@ struct UploadsBar: View {
         VStack(spacing: Theme.Space.sm) {
             ForEach(uploads.items) { item in
                 AttachmentRow(symbol: Theme.Icon.file, name: item.name,
-                              status: item.waiting ? String(localized: "等待中") : "\(item.sent.storageText) / \(item.size.storageText)",
+                              status: item.waiting ? String(localized: "Waiting [File Attach 26c8cf]") : "\(item.sent.storageText) / \(item.size.storageText)",
                               progress: item.size > 0 ? Double(min(item.sent, item.size)) / Double(item.size) : 0,
-                              removeLabel: String(localized: "取消上传 \(item.name)")) { uploads.cancel(item.id) }
+                              removeLabel: String(localized: "Cancel upload of \(item.name)")) { uploads.cancel(item.id) }
             }
         }
     }

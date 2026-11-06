@@ -10,17 +10,17 @@ nonisolated enum HealthTrendMetric: String, CaseIterable, Identifiable, Sendable
 
     var title: String {
         switch self {
-        case .steps: String(localized: "步数")
-        case .sleep: String(localized: "睡眠")
-        case .weight: String(localized: "体重")
+        case .steps: String(localized: "Steps")
+        case .sleep: String(localized: "Sleep [Health Tool 01324e]")
+        case .weight: String(localized: "Sleep [Health Tool 38f7c7]")
         }
     }
 
     var unit: String {
         switch self {
-        case .steps: String(localized: "步")
-        case .sleep: String(localized: "小时")
-        case .weight: String(localized: "千克")
+        case .steps: String(localized: "steps")
+        case .sleep: String(localized: "hr")
+        case .weight: String(localized: "kg")
         }
     }
 
@@ -34,7 +34,7 @@ nonisolated enum HealthTrendRange: Int, CaseIterable, Identifiable, Sendable {
     case month = 30
 
     var id: Int { rawValue }
-    var title: String { self == .week ? String(localized: "近 7 天") : String(localized: "近 30 天") }
+    var title: String { self == .week ? String(localized: "Last 7 Days") : String(localized: "Last 30 Days") }
 }
 
 nonisolated enum HealthTrends {
@@ -70,7 +70,7 @@ nonisolated enum HealthTrends {
         var g = Calendar(identifier: .gregorian)
         g.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
         guard let date = g.date(from: c) else { return key }
-        let names = [String(localized: "周日"), String(localized: "周一"), String(localized: "周二"), String(localized: "周三"), String(localized: "周四"), String(localized: "周五"), String(localized: "周六")]
+        let names = [String(localized: "Sun [Health Trends ee239f]"), String(localized: "Mon [Health Trends c430f4]"), String(localized: "Tue [Health Trends d1378a]"), String(localized: "Wed [Health Trends 296116]"), String(localized: "Fri [Health Trends e9d3b0]"), String(localized: "Sat [Health Trends 572388]"), String(localized: "Sat [Health Trends f9aa11]")]
         return names[(g.component(.weekday, from: date) - 1) % 7]
     }
 
@@ -83,7 +83,7 @@ nonisolated enum HealthTrends {
         let subtitle = range.title
         if known.count == 1 && metric != .steps {
             return ExtensionPersonaCard(type: ExtensionPersonaCardKind.stat, title: metric.title, value: last.value, unit: metric.unit,
-                                        note: String(localized: "\(label(last.day, range: range))的记录"))
+                                        note: String(localized: "Entry from \(label(last.day, range: range))"))
         }
         let points: [ExtensionCardPart]
         if metric == .steps {
@@ -102,10 +102,10 @@ nonisolated enum HealthTrends {
         case .weight:
             let change = last - first
             let sign = change > 0.05 ? "+" : ""
-            return String(localized: "期间变化 \(sign)\(ExtensionPersonaCard.amount(change, metric.unit))")
+            return String(localized: "Change over the period \(sign)\(ExtensionPersonaCard.amount(change, metric.unit))")
         case .steps, .sleep:
             let average = values.reduce(0, +) / Double(values.count)
-            return String(localized: "日均 \(ExtensionPersonaCard.amount(average, metric.unit))（\(values.count) 天有记录）")
+            return String(localized: "Daily average \(ExtensionPersonaCard.amount(average, metric.unit)) (\(values.count) days with data)")
         }
     }
 }

@@ -24,7 +24,7 @@ struct InboxActionBar: View {
             HStack(spacing: Theme.Space.s) {
                 // A connector's thread that cannot be answered (a CI run) has only Hand to AI.
                 if item.connector.map({ $0.canReply == true }) ?? true {
-                    action(item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"), symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
+                    action(item.agentDraft == nil ? String(localized: "AI Draft Reply") : String(localized: "View Draft"), symbol: Theme.Icon.draftReply, prominent: true, perform: draft)
                 } else if let open = item.connector?.openURL, let url = Self.systemURL(open, draft: item.agentDraft) {
                     // Answered in the source's own app (Reply in Messages: Messages with the number, and the AI twin's draft;
                     // Reply in Telegram: the conversation in Telegram; else Open).
@@ -33,7 +33,7 @@ struct InboxActionBar: View {
                         openURL(url)
                     }
                 }
-                action(String(localized: "交给 AI"), symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
+                action(String(localized: "Hand to AI"), symbol: Theme.Icon.handToAI, prominent: false, perform: handOff)
             }
         }
         .padding(.horizontal, Theme.Space.l)
@@ -45,9 +45,9 @@ struct InboxActionBar: View {
 
     /// What the button that opens the item's `open_url` says: where the user answers it, else just Open.
     nonisolated static func openTitle(_ item: InboxItem, sms: Bool) -> String {
-        if sms { return String(localized: "在信息里回复") }
-        if let app = ConnectorText.profile(item.source).app { return String(localized: "在 \(app) 里回复") }
-        return String(localized: "打开")
+        if sms { return String(localized: "Reply in Messages") }
+        if let app = ConnectorText.profile(item.source).app { return String(localized: "Reply in \(app)") }
+        return String(localized: "Open")
     }
 
     /// The item's `open_url` for the system; an sms: one carries the draft as its body.
@@ -115,7 +115,7 @@ struct InboxDraftSheet: View {
                     if loading {
                         HStack(spacing: Theme.Space.s) {
                             ProgressView()
-                            Text("AI 正在起草…").foregroundStyle(.secondary)
+                            Text("AI is drafting…").foregroundStyle(.secondary)
                         }
                         .padding(Theme.Space.xl)
                     }
@@ -126,13 +126,13 @@ struct InboxDraftSheet: View {
                 }
                 Divider()
                 HStack(spacing: Theme.Space.s) {
-                    TextField("让 AI 改：语气、要点…", text: $instruction, axis: .vertical)
+                    TextField(String(localized: "Ask AI to change the tone, key points…"), text: $instruction, axis: .vertical)
                         .lineLimit(1...3)
                         .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                         .background(Color.secondary.opacity(0.12), in: .rect(cornerRadius: Theme.Radius.card))
                         .onSubmit { Task { await load() } }
                     Button { Task { await load() } } label: {
-                        Label("重写", systemImage: Theme.Icon.retry).labelStyle(.titleAndIcon).lineLimit(1)
+                        Label("Rewrite", systemImage: Theme.Icon.retry).labelStyle(.titleAndIcon).lineLimit(1)
                     }
                     .buttonStyle(.bordered)
                     .disabled(loading)
@@ -144,10 +144,10 @@ struct InboxDraftSheet: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        Text("发送").lineLimit(1)
+                        Text("Send").lineLimit(1)
                     }
                     .disabled(loading || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && keptChanges.isEmpty)
                 }
@@ -173,7 +173,7 @@ struct InboxDraftSheet: View {
                     model.selectedTab = .assistant
                     dismiss()
                 } label: {
-                    Label("查看 AI 分身的处理过程", systemImage: Theme.Icon.list).font(Theme.Font.captionMedium).lineLimit(1)
+                    Label("See How the AI Twin Handled It", systemImage: Theme.Icon.list).font(Theme.Font.captionMedium).lineLimit(1)
                 }
                 .buttonStyle(.borderless)
             }
@@ -186,12 +186,12 @@ struct InboxDraftSheet: View {
 
     // Spelled out instead of one nested ternary: Swift 6.2 (Xcode 26.0) cannot type-check that in reasonable time.
     private var title: String {
-        if item.moment != nil { return String(localized: "评论公司圈") }
-        if item.doc != nil { return String(localized: "评论 \(item.title)") }
+        if item.moment != nil { return String(localized: "Comment on Moments") }
+        if item.doc != nil { return String(localized: "Comment on \(item.title)") }
         if let connector = item.connector {
-            return String(localized: "评论 \(connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)")
+            return String(localized: "Comment on \(connector.reference?.split(separator: "/").last.map(String.init) ?? item.title)")
         }
-        return item.isLark ? String(localized: "回复 \(item.title)") : String(localized: "回复邮件")
+        return item.isLark ? String(localized: "Replying to \(item.title)") : String(localized: "Reply to Email")
     }
 
     private var keptChanges: [InboxItem.DocChange] { proposed.filter { (kept ?? Set(proposed)).contains($0) } }
@@ -199,7 +199,7 @@ struct InboxDraftSheet: View {
     /// The status moves the AI twin proposes, each one a toggle; the kept ones are made when the reply is sent.
     private var changesList: some View {
         VStack(alignment: .leading, spacing: Theme.Space.sm) {
-            Text("发送时一起改").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
+            Text("Also apply when sending").font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             ForEach(proposed, id: \.self) { c in
                 let on = (kept ?? Set(proposed)).contains(c)
                 Button {
@@ -261,7 +261,7 @@ struct InboxHandOffSheet: View {
     @State private var sending = false
     @State private var error: String?
 
-    private static let presets = [String(localized: "总结一下，告诉我要做什么，给出建议的回复"), String(localized: "查清楚背景再告诉我"), String(localized: "直接帮我处理，回复前先问我")]
+    private static let presets = [String(localized: "Summarize it, tell me what to do, and suggest a reply"), String(localized: "Handle it for me, but ask before replying [Inbox Actions 6612fa]"), String(localized: "Handle it for me, but ask before replying [Inbox Actions 616ea2]")]
 
     private var agents: [Session] {
         model.allSessions.filter { !$0.assistant }
@@ -272,7 +272,7 @@ struct InboxHandOffSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("要它做什么") {
+                Section("Instructions") {
                     #if os(macOS)
                     // A grouped Mac form shows a titled field as label + trailing value: the request took the right half.
                     TextField(Self.presets[0], text: $instruction, prompt: Text(Self.presets[0]), axis: .vertical)
@@ -293,9 +293,9 @@ struct InboxHandOffSheet: View {
                         }
                     }
                 }
-                Section("交给谁") {
-                    Picker("交给谁", selection: $target) {
-                        Label("Persona（新对话）", systemImage: Theme.Icon.ai).tag(SessionKey?.none)
+                Section("Hand To") {
+                    Picker("Hand To", selection: $target) {
+                        Label("Persona (New Chat)", systemImage: Theme.Icon.ai).tag(SessionKey?.none)
                         ForEach(agents) { s in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(s.displayTitle).lineLimit(1)
@@ -308,17 +308,17 @@ struct InboxHandOffSheet: View {
                     .labelsHidden()
                 }
                 Section {
-                    Toggle("同时标为已处理", isOn: $markDone)
+                    Toggle("Also Mark as Done", isOn: $markDone)
                 }
                 if let error { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
-            .navigationTitle("交给 AI")
+            .navigationTitle("Hand to AI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        if sending { ProgressView() } else { Text("发送").lineLimit(1) }
+                        if sending { ProgressView() } else { Text("Send").lineLimit(1) }
                     }
                     .disabled(sending)
                 }
@@ -354,7 +354,7 @@ struct InboxHandOffSheet: View {
 
     /// The item as context the chat shows as a chip, then the ask.
     static func message(_ it: InboxItem, ask: String) -> String {
-        let title = it.connector != nil ? "\(it.accountName) · \(it.title)" : it.isLark ? String(localized: "飞书 · \(it.title)") : String(localized: "邮件 · \(it.title)")
+        let title = it.connector != nil ? "\(it.accountName) · \(it.title)" : it.isLark ? String(localized: "Lark · \(it.title)") : String(localized: "Email · \(it.title)")
         var text = it.context?.isEmpty == false ? it.context! : [it.sender ?? "", it.preview].filter { !$0.isEmpty }.joined(separator: "：") // i18n-ignore: context for the agent
         if let l = it.lark {
             let account = l.olAccount.map { "，在飞书账号 \($0)（lark_messages 传 account=\($0)）" } ?? "" // i18n-ignore: context for the agent

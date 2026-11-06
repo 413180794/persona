@@ -181,7 +181,7 @@ struct FittedTable: View {
                     .scaledFrame(width: Theme.Size.wellL)
                     .allowsHitTesting(false)
                     .accessibilityElement()
-                    .accessibilityLabel("表格可以横向滑动")
+                    .accessibilityLabel("Table scrolls horizontally")
                     .accessibilityIdentifier("table-more")
             }
         }

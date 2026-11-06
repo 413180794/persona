@@ -53,9 +53,9 @@ struct AttachedVideoCard: View {
             .contentShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("视频 \(file.name)")
+        .accessibilityLabel("Video \(file.name)")
         .accessibilityValue(status)
-        .accessibilityHint(received == nil ? "播放" : "停止下载")
+        .accessibilityHint(received == nil ? String(localized: "Play") : String(localized: "Stop download"))
         .accessibilityIdentifier("video-card")
         .onDisappear { task?.cancel() }
         #if os(macOS)
@@ -64,7 +64,7 @@ struct AttachedVideoCard: View {
                 .macLargeSheet()
                 .onAppear { v.player.play() }
                 .onDisappear { v.player.pause() }
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { playing = nil }.lineLimit(1) } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done [Extension System Presentation c0b3fb]") { playing = nil }.lineLimit(1) } }
         }
         #endif
     }
@@ -72,7 +72,7 @@ struct AttachedVideoCard: View {
     private var status: String {
         guard let received else { return file.detail }
         let total = max(file.size, 1)
-        return String(localized: "正在下载 \(Int(Double(min(received, total)) / Double(total) * 100))%")
+        return String(localized: "Downloading \(Int(Double(min(received, total)) / Double(total) * 100))%")
     }
 
     private func tap() {
@@ -85,7 +85,7 @@ struct AttachedVideoCard: View {
         guard let machine else { return }
         if let local = AttachedVideos.local(machine, file.path) { return play(local) }
         guard let api = model.api(machine.group) else {
-            model.toast = Toast(String(localized: "尚未连接 hub"), style: .error)
+            model.toast = Toast(String(localized: "Not connected to the hub [App Model 93d955]"), style: .error)
             return
         }
         received = 0
@@ -105,12 +105,12 @@ struct AttachedVideoCard: View {
                 }
                 try Task.checkCancellation()
                 guard try await AVURLAsset(url: dest).load(.isPlayable) else {
-                    throw APIError(status: 0, message: String(localized: "格式或编码在这台设备上放不了"))
+                    throw APIError(status: 0, message: String(localized: "This format or codec can't play on this device"))
                 }
                 try Task.checkCancellation()
                 play(AttachedVideos.keep(dest, machine, file.path) ?? dest)
             } catch {
-                if !error.isCancellation, let shown = error.shown { model.toast = Toast(String(localized: "「\(file.name)」放不了：\(shown)"), style: .error) }
+                if !error.isCancellation, let shown = error.shown { model.toast = Toast(String(localized: "Can't play “\(file.name)”: \(shown)"), style: .error) }
             }
         }
     }

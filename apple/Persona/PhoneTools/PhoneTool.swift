@@ -26,15 +26,15 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .contacts: String(localized: "通讯录")
-        case .calendar: String(localized: "日历")
-        case .reminders: String(localized: "提醒事项")
-        case .location: String(localized: "位置")
-        case .health: String(localized: "健康")
-        case .photos: String(localized: "照片")
-        case .device: String(localized: "设备信息")
-        case .clipboard: String(localized: "剪贴板")
-        case .notifications: String(localized: "通知")
+        case .contacts: String(localized: "Contacts")
+        case .calendar: String(localized: "Calendar")
+        case .reminders: String(localized: "Reminders")
+        case .location: String(localized: "Location")
+        case .health: String(localized: "Health")
+        case .photos: String(localized: "Photos")
+        case .device: String(localized: "Device Info")
+        case .clipboard: String(localized: "Clipboard")
+        case .notifications: String(localized: "Notifications")
         }
     }
 
@@ -67,15 +67,15 @@ enum PhoneDataSource: String, CaseIterable, Identifiable, Codable {
 
     var detail: String {
         switch self {
-        case .contacts: String(localized: "查找联系人的电话、邮箱、公司")
-        case .calendar: String(localized: "查看日程，经你确认后新建日程")
-        case .reminders: String(localized: "查看和新建提醒事项")
-        case .location: String(localized: "当前位置和地址")
-        case .health: String(localized: "步数、心率、睡眠等汇总，经你确认后写入")
-        case .photos: String(localized: "最近的照片和截图")
-        case .device: String(localized: "电量、存储、系统版本、网络")
-        case .clipboard: String(localized: "读取和写入剪贴板")
-        case .notifications: String(localized: "让 Claude 给你发本地通知")
+        case .contacts: String(localized: "Look up contacts' phone numbers, emails, and companies")
+        case .calendar: String(localized: "View events, and create them once you confirm")
+        case .reminders: String(localized: "View and create reminders")
+        case .location: String(localized: "Current location and address")
+        case .health: String(localized: "Summaries of steps, heart rate, sleep, and more; saves once you confirm")
+        case .photos: String(localized: "Recent photos and screenshots")
+        case .device: String(localized: "Battery, storage, OS version, network")
+        case .clipboard: String(localized: "Read and write the clipboard")
+        case .notifications: String(localized: "Let Claude send you local notifications")
         }
     }
 

@@ -9,12 +9,12 @@ nonisolated enum TodoStage: String, CaseIterable, Sendable {
     /// The step's name on the bar (App copy is Chinese, docs/i18n.md).
     var label: String {
         switch self {
-        case .plan: String(localized: "方案")
-        case .develop: String(localized: "开发")
-        case .review: String(localized: "审查")
-        case .merge: String(localized: "合入")
-        case .deploy: String(localized: "部署")
-        case .verify: String(localized: "已验证")
+        case .plan: String(localized: "Plan [Todo Models 6f949a]")
+        case .develop: String(localized: "Develop")
+        case .review: String(localized: "Review [Todo Models 747dd8]")
+        case .merge: String(localized: "Merge")
+        case .deploy: String(localized: "Deploy")
+        case .verify: String(localized: "Verified [Todo Models 0a1b6f]")
         }
     }
 
@@ -53,7 +53,7 @@ nonisolated extension TodoItem {
 
     /// The state's label for this todo: 「自动完成」 for one the hub closed (docs/todos.md「自动完成」).
     func statusLabel(_ state: TaskState) -> String {
-        state == .done && autoDone ? String(localized: "自动完成") : state.todoLabel
+        state == .done && autoDone ? String(localized: "Auto-completed") : state.todoLabel
     }
 
     /// Why the hub closed it, when it did.
@@ -66,13 +66,13 @@ nonisolated extension TodoItem {
 nonisolated extension TaskState {
     var todoLabel: String {
         switch self {
-        case .done: String(localized: "已完成")
-        case .needsYou: String(localized: "等你")
-        case .unread: String(localized: "待查看")
-        case .working: String(localized: "进行中")
-        case .followup: String(localized: "待跟进")
-        case .notStarted: String(localized: "未开始")
-        case .failed: String(localized: "没开起来")
+        case .done: String(localized: "Done [Task Sheets f28461]")
+        case .needsYou: String(localized: "Needs You [Task Sheets f98bd9]")
+        case .unread: String(localized: "Unread [Todo Models 0b2e58]")
+        case .working: String(localized: "Active")
+        case .followup: String(localized: "Follow up")
+        case .notStarted: String(localized: "Not started")
+        case .failed: String(localized: "Didn't Start")
         }
     }
 
@@ -154,15 +154,15 @@ nonisolated enum TodosLogic {
         case "space":
             let via = agent.via ?? ""
             let name = via.firstIndex(of: "/").map { String(via[via.index(after: $0)...]) } ?? via
-            return name.isEmpty ? String(localized: "随项目") : String(localized: "随项目 \(name)")
+            return name.isEmpty ? String(localized: "With project") : String(localized: "With project \(name)")
         case "spawned":
             if let via = agent.via, let slash = via.firstIndex(of: "/"),
                let parent = lookup?(String(via[..<slash]), String(via[via.index(after: slash)...])),
                !parent.title.isEmpty {
-                return String(localized: "由 \(parent.title) 派出")
+                return String(localized: "Spawned by \(parent.title)")
             }
-            return String(localized: "派生")
-        case "chat": return String(localized: "同群")
+            return String(localized: "Spawned")
+        case "chat": return String(localized: "Same Group")
         default: return nil
         }
     }
@@ -184,8 +184,8 @@ nonisolated enum TodosLogic {
 
     static func createdLinkFailure(_ error: Error, isSpace: Bool) -> String {
         isSpace
-            ? String(localized: "待办已创建，但挂到待办失败：\(error.localizedDescription)")
-            : String(localized: "待办已创建，但关联失败：\(error.localizedDescription)")
+            ? String(localized: "To-do created, but adding the project failed: \(error.localizedDescription)")
+            : String(localized: "To-do created, but linking failed: \(error.localizedDescription)")
     }
 
     /// Whether a session may take a todo's actions here. The todos are the selected hub's (`AppModel.hub`), so a
@@ -396,7 +396,7 @@ nonisolated enum TodosLogic {
         // todo), so they get a section of their own, open, before Unassigned (#2608, #2917).
         let manual = rest.filter(isManualHerdr).sorted(by: byRank)
         if !manual.isEmpty {
-            groups.append(TodoAgentGroup(key: "todo:manual", name: String(localized: "手动开的"), sessions: manual, todoID: nil, todoStatus: nil))
+            groups.append(TodoAgentGroup(key: "todo:manual", name: String(localized: "Started Manually"), sessions: manual, todoID: nil, todoStatus: nil))
         }
 
         let unassigned = rest.filter { !isManualHerdr($0) }
@@ -404,7 +404,7 @@ nonisolated enum TodosLogic {
             let sortedUnassigned = unassigned.sorted(by: byRank)
             groups.append(TodoAgentGroup(
                 key: "todo:none",
-                name: String(localized: "未归属"),
+                name: String(localized: "Unassigned"),
                 sessions: sortedUnassigned,
                 todoID: nil,
                 todoStatus: nil,

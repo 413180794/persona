@@ -128,7 +128,7 @@ struct MailDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
-                Text(translated.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? (summary.subject?.isEmpty == false ? summary.subject! : String(localized: "（无主题）")))
+                Text(translated.flatMap { $0.subject.isEmpty ? nil : $0.subject } ?? (summary.subject?.isEmpty == false ? summary.subject! : String(localized: "(No subject)")))
                     .font(Theme.Font.title)
                 HStack(alignment: .top, spacing: Theme.Space.m) {
                     Monogram(name: summary.from?.display ?? "", fill: Theme.accent.opacity(0.15), ink: Theme.accent)
@@ -136,7 +136,7 @@ struct MailDetailView: View {
                         Text(summary.from?.display ?? "").font(Theme.Font.secondaryStrong)
                         Text(summary.from?.email ?? "").font(Theme.Font.label).foregroundStyle(.secondary)
                         if let to = message?.to, !to.isEmpty {
-                            Text("收件人：\(Self.recipients(to))").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                            Text("To: \(Self.recipients(to))").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
                     Spacer()
@@ -148,7 +148,7 @@ struct MailDetailView: View {
                     if let t = translated {
                         Text(t.text).font(Theme.Font.body).lineHeight(.body).textSelection(.enabled)
                         if t.clipped == true {
-                            Text("邮件很长，只翻译了前面一部分；全文看原文。").font(Theme.Font.caption).foregroundStyle(.secondary)
+                            Text("This email is long, so only the beginning was translated. See the original for the full text.").font(Theme.Font.caption).foregroundStyle(.secondary)
                         }
                     } else if let text = m.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(text).font(Theme.Font.body).lineHeight(.body).textSelection(.enabled)
@@ -158,7 +158,7 @@ struct MailDetailView: View {
                     if let atts = m.attachments, !atts.isEmpty {
                         VStack(alignment: .leading, spacing: Theme.Space.sm) {
                             ForEach(Array(atts.enumerated()), id: \.offset) { _, a in
-                                Label("\(a.filename ?? String(localized: "附件"))  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: Theme.Icon.attachment)
+                                Label("\(a.filename ?? String(localized: "Attachment"))  \(ByteCountFormatter.string(fromByteCount: Int64(a.size ?? 0), countStyle: .file))", systemImage: Theme.Icon.attachment)
                                     .font(Theme.Font.caption)
                             }
                         }
@@ -174,7 +174,7 @@ struct MailDetailView: View {
         }
         .pageToolbar {
             ToolbarItemGroup(placement: .bottomBar) {
-                Button { askClaude = true } label: { Label("让 Claude 处理", systemImage: Theme.Icon.ai) }
+                Button { askClaude = true } label: { Label("Ask Claude [Mail Views c931e0]", systemImage: Theme.Icon.ai) }
                 Spacer()
                 Button {
                     reply = ComposeDraft.reply(to: summary, message: message)
@@ -184,7 +184,7 @@ struct MailDetailView: View {
         }
         .sheet(item: $reply) { d in ComposeView(draft: d, accounts: accounts) }
         .sheet(isPresented: $askClaude) {
-            NewChatPrefilled(prompt: String(localized: "请用 mail_read 读取邮件（account_id: \(summary.accountID)，mailbox: \(summary.mailbox)，uid: \(summary.uid)，主题：\(summary.subject ?? "")），总结要点，并给出建议的回复草稿。"))
+            NewChatPrefilled(prompt: String(localized: "Use mail_read to read the email (account_id: \(summary.accountID), mailbox: \(summary.mailbox), uid: \(summary.uid), subject: \(summary.subject ?? "")), summarize the key points, and draft a suggested reply."))
         }
         #if DEBUG && os(macOS)
         // `-showMailAskClaude YES` (with an inbox mail open): the 「让 Claude 处理」 sheet.
@@ -206,7 +206,7 @@ struct MailDetailView: View {
 extension MailDetailView {
     /// The recipients' names in one line, joined with the language's separator.
     static func recipients(_ to: [MailAddress]) -> String {
-        to.map(\.display).joined(separator: String(localized: "，", comment: "Separator between mail recipients"))
+        to.map(\.display).joined(separator: String(localized: ", ", comment: "Separator between mail recipients"))
     }
 
     /// While translating, or once translated: what happened and the way back to the original (or to the translation).
@@ -214,14 +214,14 @@ extension MailDetailView {
         if translating {
             HStack(spacing: Theme.Space.s) {
                 ProgressView().controlSize(.small)
-                Text("正在翻译成\(TranslationPrefs.name(of: target))…").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text("Translating to \(TranslationPrefs.name(of: target))…").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         } else if translation != nil {
             HStack(spacing: Theme.Space.s) {
-                Label(showOriginal ? "原文" : "已翻译成\(TranslationPrefs.name(of: target))", systemImage: Theme.Icon.translate)
+                Label(showOriginal ? String(localized: "Original") : String(localized: "Translated to \(TranslationPrefs.name(of: target))"), systemImage: Theme.Icon.translate)
                     .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: Theme.Space.s)
-                Button(showOriginal ? "显示译文" : "显示原文") {
+                Button(showOriginal ? String(localized: "Show Translation") : String(localized: "Show Original")) {
                     withAnimation(Theme.Motion.state) { showOriginal.toggle() }
                 }
                 .font(Theme.Font.captionMedium)
@@ -229,7 +229,7 @@ extension MailDetailView {
                 .buttonStyle(.borderless)
             }
         } else if let translateError {
-            Label("没能翻译：\(translateError)", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
+            Label("Couldn't translate: \(translateError)", systemImage: Theme.Icon.error).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
         }
     }
 
@@ -347,7 +347,7 @@ struct ComposeDraft: Identifiable {
         d.inReplyTo = message?.messageID ?? s.messageID
         d.references = (message?.references ?? []) + [message?.messageID ?? s.messageID].compactMap { $0 }
         let quoted = (message?.text ?? "").split(separator: "\n", omittingEmptySubsequences: false).prefix(40).map { "> " + $0 }.joined(separator: "\n")
-        d.body = String(localized: "\n\n\(s.date.map { $0.formatted() } ?? "")，\(s.from?.display ?? "") 写道：\n") + quoted
+        d.body = String(localized: "\\n\\nOn \(s.date.map { $0.formatted() } ?? ""), \(s.from?.display ?? "") wrote:\\n") + quoted
         return d
     }
 }
@@ -363,30 +363,30 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("发件人", selection: $draft.accountID) {
+                Picker("From", selection: $draft.accountID) {
                     ForEach(accounts) { a in Text(a.email).tag(a.id) }
                 }
-                TextField("收件人（逗号分隔）", text: $draft.to).keyboardType(.emailAddress).textInputAutocapitalization(.never)
-                TextField("抄送", text: $draft.cc).keyboardType(.emailAddress).textInputAutocapitalization(.never)
-                TextField("主题", text: $draft.subject)
+                TextField(String(localized: "To (comma-separated)"), text: $draft.to).keyboardType(.emailAddress).textInputAutocapitalization(.never)
+                TextField(String(localized: "Cc"), text: $draft.cc).keyboardType(.emailAddress).textInputAutocapitalization(.never)
+                TextField(String(localized: "Subject"), text: $draft.subject)
                 Section {
                     #if os(macOS)
                     // A grouped Mac form shows a titled field as label + trailing value: the body took the right half.
-                    TextField("正文", text: $draft.body, prompt: Text("正文"), axis: .vertical).labelsHidden().lineLimit(10...40)
+                    TextField(String(localized: "Message [Mail Views d661c3]"), text: $draft.body, prompt: Text("Message [Mail Views d661c3]"), axis: .vertical).labelsHidden().lineLimit(10...40)
                     #else
-                    TextField("正文", text: $draft.body, axis: .vertical).lineLimit(10...40)
+                    TextField(String(localized: "Message [Mail Views d661c3]"), text: $draft.body, axis: .vertical).lineLimit(10...40)
                     #endif
                 }
                 if let error { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
             }
             .themedPage()
-            .navigationTitle("写邮件")
+            .navigationTitle("New Email")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await send() } } label: {
-                        if sending { ProgressView() } else { Label("发送", systemImage: Theme.Icon.sendMail) }
+                        if sending { ProgressView() } else { Label("Send", systemImage: Theme.Icon.sendMail) }
                     }
                     .disabled(sending || draft.to.isEmpty)
                 }
@@ -409,7 +409,7 @@ struct ComposeView: View {
                                          subject: draft.subject, text: draft.body, inReplyTo: draft.inReplyTo,
                                          references: draft.references?.joined(separator: " ")))
             Haptics.success()
-            model.toast = Toast(String(localized: "已发送"), style: .success)
+            model.toast = Toast(String(localized: "Sent"), style: .success)
             dismiss()
         } catch {
             self.error = error.shown
@@ -427,7 +427,7 @@ struct MailAccountsView: View {
 
     var body: some View {
         if inSheet {
-            NavigationStack { page.toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } } }
+            NavigationStack { page.toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } } }
         } else {
             page
         }
@@ -441,14 +441,14 @@ struct MailAccountsView: View {
                             MailProviderMark(provider: a.provider ?? "")
                             VStack(alignment: .leading) {
                                 Text(a.email).font(Theme.Font.heading)
-                                Text(a.status == "error" ? (a.error ?? String(localized: "错误")) : a.auth == "oauth2" ? (a.provider == "outlook" ? String(localized: "Outlook · Microsoft 账号登录") : String(localized: "Gmail · Google 账号登录")) : (a.provider == "feishu" ? String(localized: "飞书邮箱") : (a.imapHost ?? "")))
+                                Text(a.status == "error" ? (a.error ?? String(localized: "Error")) : a.auth == "oauth2" ? (a.provider == "outlook" ? String(localized: "Outlook · Microsoft account") : String(localized: "Gmail · Google account")) : (a.provider == "feishu" ? String(localized: "Lark Mail") : (a.imapHost ?? "")))
                                     .font(Theme.Font.label).foregroundStyle(a.status == "error" ? Theme.danger : .secondary)
                             }
                         }
                         #if os(macOS)
                         // A Mac form has no swipe to delete: the row's menu removes the account (#1221).
                         .contextMenu {
-                            Button("删除账户", role: .destructive) {
+                            Button("Delete Account", role: .destructive) {
                                 Task { try? await model.api?.deleteMailAccount(a.id); await load() }
                             }
                         }
@@ -463,11 +463,11 @@ struct MailAccountsView: View {
                     }
                 }
                 Section {
-                    Button { adding = true } label: { Label("添加邮箱", systemImage: "plus.circle.fill") }
+                    Button { adding = true } label: { Label("Add Mail Account", systemImage: "plus.circle.fill") }
                 }
             }
             .themedPage()
-            .detailTitle(String(localized: "邮箱"))
+            .detailTitle(String(localized: "Mail [Mail Views 730752]"))
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { AddMailAccountView() }
             .task { await load() }
@@ -488,12 +488,12 @@ private struct CodeGuideSteps: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             switch guide.provider {
             case .qq:
-                Text("服务器会自动填好。密码要填授权码，不是 QQ 密码：在电脑上打开网页版 QQ 邮箱，进入 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，把 16 位授权码粘贴到上面。")
+                Text("Servers fill in automatically. The password is an authorization code, not your QQ password: on a computer, open QQ Mail on the web, go to Settings › Account & Security › Security Settings, turn on “POP3/IMAP/SMTP/Exchange/CardDAV service”, verify as prompted, then tap “Generate authorization code” and paste the 16-character code above.")
             case .netease:
-                Text("服务器会自动填好。密码要填授权码，不是登录密码：在电脑上打开网页版网易邮箱，进入 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，把它粘贴到上面。")
+                Text("Servers fill in automatically. The password is an authorization code, not your login password: on a computer, open NetEase Mail on the web, go to Settings › POP3/SMTP/IMAP and turn on “IMAP/SMTP service”. After you verify with your phone as prompted, the code is shown: paste it above.")
             }
             Button { openURL(guide.webMail) } label: {
-                Label(guide.provider == .qq ? String(localized: "打开 QQ 邮箱网页版") : String(localized: "打开网易邮箱网页版"), systemImage: Theme.Icon.safari)
+                Label(guide.provider == .qq ? String(localized: "Open QQ Mail on the web") : String(localized: "Open NetEase Mail on the web"), systemImage: Theme.Icon.safari)
                     .lineLimit(1)
             }
             .font(Theme.Font.caption)
@@ -556,48 +556,48 @@ struct AddMailAccountView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("类型", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.title).tag($0) } }
+                Picker("Type", selection: $form.kind) { ForEach(Kind.allCases) { Text($0.title).tag($0) } }
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
                 if form.kind == .gmail {
                     Section {
                         Button { Task { await signInWithGoogle() } } label: {
-                            AccountSignInLabel(mark: Theme.Brand.google, title: saving ? String(localized: "正在连接 Gmail…") : String(localized: "使用 Google 账号登录"), busy: saving)
+                            AccountSignInLabel(mark: Theme.Brand.google, title: saving ? String(localized: "Connecting to Gmail…") : String(localized: "Sign In with Google"), busy: saving)
                         }
                         .buttonStyle(.plain)
                         .disabled(saving)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets())
                     } footer: {
-                        Text("跳到 Google 选择账号并授权 Persona 收发邮件，不需要密码。授权随时可以在 Google 账号的「第三方应用和服务」里撤销；授权失效时再登录一次即可恢复。")
+                        Text("Choose an account on Google and let Persona send and receive mail. No password needed. You can revoke access anytime under “Third-party apps & services” in your Google Account; if access expires, just sign in again.")
                     }
                 } else if form.kind == .outlook {
                     OutlookSignInSection(error: $error) { dismiss() }
                 } else {
                     Section {
-                        TextField("邮箱地址", text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField(String(localized: "Email address"), text: $form.email).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                         // The mail server's password or a code made for one client, handed to the hub (kept there,
                         // encrypted): not this app's password, so not offered to the system's passwords (#1598).
-                        SecretField(String(localized: "密码 / 授权码"), filled: String(localized: "已填写，点连接"), text: $form.password, identifier: "mail.password")
+                        SecretField(String(localized: "Password / app password"), filled: String(localized: "Filled in. Tap Connect."), text: $form.password, identifier: "mail.password")
                     } footer: {
                         switch form.kind {
                         case .gmail, .outlook: EmptyView()
-                        case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
+                        case .feishu: Text("Lark Mail: the servers are always imap.larkoffice.com:993 and smtp.larkoffice.com:465 (SSL), so just enter your address and password. Use the third-party client password from your Lark Mail settings.")
                         case .imap:
                             if let guide = form.codeGuide {
                                 CodeGuideSteps(guide: guide)
                             } else {
-                                Text("QQ / 163 / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。Outlook 用上面的「Outlook」登录。")
+                                Text("Servers fill in automatically for QQ, 163, iCloud and similar. Most mail providers in China need an authorization code instead of your login password. For Outlook, use the “Outlook” option above.")
                             }
                         }
                     }
                 }
                 if form.kind == .imap {
-                    Section("服务器（可留空自动识别）") {
-                        TextField("IMAP 服务器", text: $form.imapHost).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("IMAP 端口", text: $form.imapPort).keyboardType(.numberPad)
-                        TextField("SMTP 服务器", text: $form.smtpHost).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        TextField("SMTP 端口", text: $form.smtpPort).keyboardType(.numberPad)
+                    Section("Servers (Optional, Auto-Detected)") {
+                        TextField(String(localized: "IMAP server"), text: $form.imapHost).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField(String(localized: "IMAP port"), text: $form.imapPort).keyboardType(.numberPad)
+                        TextField(String(localized: "SMTP server"), text: $form.smtpHost).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        TextField(String(localized: "SMTP port"), text: $form.smtpPort).keyboardType(.numberPad)
                     }
                 }
                 if let error { Section { Text(error).foregroundStyle(Theme.danger).font(Theme.Font.caption) } }
@@ -606,20 +606,20 @@ struct AddMailAccountView: View {
                     // 2026-11-01: 「AI 一键添加」 (paste and recognize) is gone; Persona adds accounts itself (mail_account_add).
                     #if os(macOS)
                     // On macOS the add-account confirmation card appears in the Mac app, not on a phone (#4070).
-                    Label("也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在 App 里确认后就加好了。", systemImage: Theme.Icon.ai)
+                    Label("You can also just tell Persona “Add a mail account for me”, give it the address and password, and confirm in the app.", systemImage: Theme.Icon.ai)
                     #else
-                    Label("也可以直接在 Persona 里说「帮我添加邮箱」，把邮箱和密码告诉它，在手机上确认后就加好了。", systemImage: Theme.Icon.ai)
+                    Label("You can also just tell Persona “Add a mail account for me”, give it the address and password, and confirm on your phone.", systemImage: Theme.Icon.ai)
                     #endif
                 }
             }
             .themedPage()
-            .navigationTitle("添加邮箱")
+            .navigationTitle("Add Mail Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 if form.kind != .gmail && form.kind != .outlook {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("连接") } }
+                        Button { Task { await save() } } label: { if saving { ProgressView() } else { Text("Connect [V N C Page a55741]") } }
                             .disabled(saving || form.email.isEmpty || form.password.isEmpty)
                     }
                 }

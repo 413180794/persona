@@ -27,7 +27,7 @@ final class InboxSuggestionModel {
     /// The app's own: the hub of the moment and the inbox store.
     static func live(_ itemID: String) -> InboxSuggestionModel {
         InboxSuggestionModel(itemID: itemID, send: { id, body in
-            guard let api = AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "没有连接到 hub")) }
+            guard let api = AppModel.shared.api else { throw APIError(status: 0, message: String(localized: "Not connected to the hub [Inbox Suggestion Model e21521]")) }
             return try await api.inboxSuggestion(id, body)
         }, apply: { InboxStore.shared.put($0) })
     }
@@ -68,7 +68,7 @@ final class InboxSuggestionModel {
             apply(item)
         case .stale(let item):
             if let item { apply(item) }
-            notice = String(localized: "建议已更新")
+            notice = String(localized: "Suggestion updated")
         case .failed(let words, let item):
             if let item { apply(item) }
             error = words

@@ -91,12 +91,12 @@ enum DevGrouping: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .repo: String(localized: "按仓库")
-        case .space: String(localized: "按项目")
-        case .todo: String(localized: "按待办")
-        case .state: String(localized: "按状态")
-        case .machine: String(localized: "按机器")
-        case .recent: String(localized: "最近使用")
+        case .repo: String(localized: "By Repository")
+        case .space: String(localized: "By Project")
+        case .todo: String(localized: "By To-do")
+        case .state: String(localized: "By Status [Chats View 5aa882]")
+        case .machine: String(localized: "By Machine")
+        case .recent: String(localized: "Recently Used")
         }
     }
     var symbol: String {
@@ -118,8 +118,8 @@ enum AgentSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .state: String(localized: "状态优先")
-        case .updated: String(localized: "最近更新")
+        case .state: String(localized: "By Status [Chats View 8464f8]")
+        case .updated: String(localized: "Recently Updated")
         }
     }
     var symbol: String {
@@ -138,10 +138,10 @@ nonisolated enum AgentFilter: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .all: String(localized: "全部")
-        case .needsYou: String(localized: "需要你")
-        case .unread: String(localized: "未读")
-        case .working: String(localized: "工作中")
+        case .all: String(localized: "All")
+        case .needsYou: String(localized: "Needs You [Chats View e60ec4]")
+        case .unread: String(localized: "Unread [Personal Agent Intents 4d0680]")
+        case .working: String(localized: "Working [Assistant Profile View f42082]")
         case .feishu: SessionSource.feishu.label
         case .terminal: SessionSource.terminal.label
         }
@@ -279,10 +279,10 @@ struct ChatsView: View {
                         // On the Mac the shell shows it, next to its sidebar button (MacShell).
                         ToolbarItem(placement: .topBarLeading) { AgentsListMenu(actions: menuActions) }
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button { openFromList(PersonalAgentsRoute()) } label: { Label("个人 Agent", systemImage: Theme.Icon.personalAgents) }
+                            Button { openFromList(PersonalAgentsRoute()) } label: { Label("Personal Agents", systemImage: Theme.Icon.personalAgents) }
                         }
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button { showNew = true } label: { Label("新建会话", systemImage: Theme.Icon.compose) }
+                            Button { showNew = true } label: { Label("New Session [Chats View 58e21b]", systemImage: Theme.Icon.compose) }
                         }
                     }
                 }
@@ -292,8 +292,8 @@ struct ChatsView: View {
                 .overlay(alignment: .topTrailing) {
                     if shell == nil { // always on the Mac: its window is not the phone's shell
                         HStack(spacing: Theme.Space.s) {
-                            MacTitleRowButton(String(localized: "个人 Agent"), symbol: Theme.Icon.personalAgents) { openFromList(PersonalAgentsRoute()) }
-                            MacTitleRowButton(String(localized: "新建会话"), symbol: Theme.Icon.compose) { showNew = true }
+                            MacTitleRowButton(String(localized: "Personal Agents"), symbol: Theme.Icon.personalAgents) { openFromList(PersonalAgentsRoute()) }
+                            MacTitleRowButton(String(localized: "New Session [Chats View 58e21b]"), symbol: Theme.Icon.compose) { showNew = true }
                         }
                         .padding(.trailing, Theme.Space.l)
                         .frame(height: Theme.Size.macToolbarHeight)
@@ -348,8 +348,8 @@ struct ChatsView: View {
                     if !machineFilter.isEmpty, !model.machines.isEmpty, model.machine(MachineRef(path: machineFilter)) == nil { machineFilter = "" }
                 }
         } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.agents, title: String(localized: "选一个 Agent"),
-                             message: String(localized: "左边列表里点一个 Agent，对话会在这里打开。"))
+            SplitPlaceholder(symbol: Theme.Icon.agents, title: String(localized: "Choose an Agent"),
+                             message: String(localized: "Click an agent in the list on the left to open its chat here."))
         }
         // While searching the field rises into the bar the shell's floats over: the bar makes way (the field has its
         // own Cancel), as a system search takes the navigation bar, and comes back when the search closes (TestFlight 70:
@@ -487,13 +487,13 @@ struct ChatsView: View {
 /// The Agents list itself: what follows the hub's pushes (`ChatsView` holds the navigation and the toolbar).
 private struct AgentsList: View {
     #if os(macOS)
-    static let emptyMessage = String(localized: "在你的任意一台电脑上开一个 Agent，在这里实时看、随时接手。")
+    static let emptyMessage = String(localized: "Start an agent on any of your computers, then follow it live and take over here.")
     #else
-    static let emptyMessage = String(localized: "在你的任意一台电脑上开一个 Agent，手机上实时看、随时接手。")
+    static let emptyMessage = String(localized: "Start an agent on any of your computers, then follow it live and take over from your phone.")
     #endif
     /// No computer yet (a hub with machines_add): as the machines page says it (docs/onboarding.md 4.5「空状态改写」).
-    static let emptyNoComputerTitle = String(localized: "还没有电脑")
-    static let emptyNoComputerMessage = String(localized: "添加一台，Persona 就能在上面替你干活。")
+    static let emptyNoComputerTitle = String(localized: "No computers yet")
+    static let emptyNoComputerMessage = String(localized: "Add one and Persona can work on it for you.")
     @Environment(AppModel.self) private var model
     @Environment(\.shell) private var shell
     /// Regular width (iPhone Duo open): the list is the sidebar column of a split.
@@ -812,7 +812,7 @@ private struct AgentsList: View {
                         }
                     }
                 } header: {
-                    SectionHeader(title: String(localized: "需要你处理"), count: interactions.count, tone: StatusPalette.needsYou)
+                    SectionHeader(title: String(localized: "Needs You [Chats View f50a99]"), count: interactions.count, tone: StatusPalette.needsYou)
                         .searchTraceMark("needs")
                 }
             }
@@ -826,22 +826,22 @@ private struct AgentsList: View {
                         if compact {
                             HStack(spacing: CompactList.gap) {
                                 Image(systemName: Theme.Icon.success).font(CompactList.metaStrong).scaledFrame(width: CompactList.mark)
-                                Text("全部标为已读").font(CompactList.title).lineLimit(1)
+                                Text("Mark All as Read").font(CompactList.title).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) 个完成未看").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
                             }
                         } else if capsules {
                             HStack {
-                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
+                                Label("Mark All as Read", systemImage: Theme.Icon.success).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .card(padding: Theme.Space.m)
                         } else {
                             HStack {
-                                Label("全部标为已读", systemImage: Theme.Icon.success).lineLimit(1)
+                                Label("Mark All as Read", systemImage: Theme.Icon.success).lineLimit(1)
                                 Spacer()
-                                Text("\(unreadShown.count) 个完成未看").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                                Text("\(unreadShown.count) unread [Chats View 3ef9c7]").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
                     }
@@ -856,7 +856,7 @@ private struct AgentsList: View {
                     // No state word: the dot and the name's color already say it.
                     ForEach(pinnedAgents) { s in slotRow(s, context: true, inStateSection: true) }
                 } header: {
-                    SectionHeader(title: String(localized: "section.pinned", defaultValue: "置顶"), count: nil, tone: StatusPalette.idle)
+                    SectionHeader(title: String(localized: "section.pinned", defaultValue: "Pinned"), count: nil, tone: StatusPalette.idle)
                 }
             }
 
@@ -877,32 +877,32 @@ private struct AgentsList: View {
             if base.isEmpty, !query.isEmpty {
                 // Nothing matches the search: not Start Your First Session with its New Session, which read as if the agents were gone.
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到「\(query)」"),
-                                   message: String(localized: "空间、标签、会话的标题和内容都能搜，换个词试试。"))
+                    EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "No Results for “\(query)”"),
+                                   message: String(localized: "You can search space, tab and session titles and content. Try another word."))
                 }
                 .listRowBackground(Color.clear)
             } else if base.isEmpty, machineFilter.isEmpty, machines.isEmpty, model.canAddComputer {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.machines, title: Self.emptyNoComputerTitle, message: Self.emptyNoComputerMessage,
-                                   action: (String(localized: "添加电脑"), { model.openAddComputer() }))
+                                   action: (String(localized: "Add Computer"), { model.openAddComputer() }))
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(capsules ? .hidden : .automatic)
             } else if base.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.agents,
-                                   title: machineFilter.isEmpty ? String(localized: "开始第一个开发会话") : String(localized: "这台机器上没有会话"),
+                                   title: machineFilter.isEmpty ? String(localized: "Start Your First Session") : String(localized: "No Sessions on This Machine"),
                                    message: Self.emptyMessage,
-                                   action: (String(localized: "新建会话"), { showNew = true }))
+                                   action: (String(localized: "New Session [Chats View 58e21b]"), { showNew = true }))
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(capsules ? .hidden : .automatic)
             } else if filtered.isEmpty, let st = quick.state {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.success, title: String(localized: "没有\(st.label)的会话"),
-                                   message: machineFilter.isEmpty ? String(localized: "各台电脑上的 Agent 有新动静会出现在这里。")
-                                                                  : String(localized: "这台机器上的 Agent 有新动静会出现在这里。"),
-                                   action: (String(localized: "看全部"), { choose(.all, base) }))
+                    EmptyStateView(symbol: Theme.Icon.success, title: String(localized: "No Sessions: \(st.label)"),
+                                   message: machineFilter.isEmpty ? String(localized: "Agents on your computers show up here when something happens.")
+                                                                  : String(localized: "Agents on this machine show up here when something happens."),
+                                   action: (String(localized: "Show All"), { choose(.all, base) }))
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(capsules ? .hidden : .automatic)
@@ -1037,14 +1037,14 @@ private struct AgentsList: View {
                 Haptics.tap()
                 withAnimation(Theme.Motion.standard) { machineFilter = "" }
             } label: {
-                Chip(text: "只看 \(chosen.name)", symbol: Theme.Icon.clear, look: .tint(Theme.accent))
+                Chip(text: String(localized: "Only \(chosen.name)"), symbol: Theme.Icon.clear, look: .tint(Theme.accent))
             }
             .buttonStyle(.plain)
             .padding(.horizontal, Theme.Space.page)
             .padding(.bottom, Theme.Space.sm)
             .accessibilityIdentifier("agents.machineFilter")
-            .accessibilityLabel("只看 \(chosen.name)")
-            .accessibilityHint("显示全部机器")
+            .accessibilityLabel("Only \(chosen.name)")
+            .accessibilityHint("Shows all machines")
         }
     }
 
@@ -1195,12 +1195,12 @@ private struct AgentsList: View {
                 let still = quiet.filter { $0.machineRef == ref }
                 hostGroup(ref, sessions: (mine + still).flatMap(\.sessions)) {
                     ForEach(mine) { g in spaceSection(g, namesMachine: false) }
-                    quietSection(still, title: String(localized: "空闲的空间"), namesMachine: false)
+                    quietSection(still, title: String(localized: "Idle Spaces"), namesMachine: false)
                 }
             }
         } else {
             ForEach(active) { g in spaceSection(g, namesMachine: machineFilter.isEmpty) }
-            quietSection(quiet, title: String(localized: "空闲的空间"), namesMachine: machineFilter.isEmpty)
+            quietSection(quiet, title: String(localized: "Idle Spaces"), namesMachine: machineFilter.isEmpty)
         }
     }
 
@@ -1239,7 +1239,7 @@ private struct AgentsList: View {
             let idle = rows.idle.flatMap(\.sessions)
             if expandedIdle.contains(key) || !query.isEmpty {
                 ForEach(rows.idle) { e in entryRows(e, depth: depth) }
-                if query.isEmpty { collapseRow(String(localized: "收起空闲的 \(idle.count) 个"), key: key, depth: depth) }
+                if query.isEmpty { collapseRow(String(localized: "Hide \(idle.count) Idle"), key: key, depth: depth) }
             } else {
                 expandRow(idle, key: key, depth: depth)
             }
@@ -1295,7 +1295,7 @@ private struct AgentsList: View {
             // Compact List: as quiet as the counts beside it (a Menu's label takes the accent otherwise).
             .tint(compact ? Color.secondary : nil)
             .labelOnlyMenu()
-            .accessibilityLabel("\(g.name) 的更多操作")
+            .accessibilityLabel("More actions for \(g.name) [Chats View 661d12]")
         }
     }
 
@@ -1360,7 +1360,7 @@ private struct AgentsList: View {
         quietSection(host.repos.filter(isQuiet).map { r in
             SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0,
                        sessions: ordered(r.sessions))
-        }, title: String(localized: "空闲的仓库"), namesMachine: false, repos: true)
+        }, title: String(localized: "Idle Repositories"), namesMachine: false, repos: true)
     }
 
     /// A machine's heading and, unless the machine is folded, the sections under it (its quiet ones last). iOS: the heading is a section of its own, the sections follow it.
@@ -1448,7 +1448,7 @@ private struct AgentsList: View {
                 }
                 .tint(compact ? Color.secondary : nil)
                 .labelOnlyMenu()
-                .accessibilityLabel("\(r.name) 的更多操作")
+                .accessibilityLabel("More actions for \(r.name) [Chats View 661d12]")
             }
         }
     }
@@ -1506,7 +1506,7 @@ private struct AgentsList: View {
             listSection {
                 ForEach(AgentListOrder.recent(sessions)) { s in slotRow(s, context: true) }
             } header: {
-                SectionHeader(title: String(localized: "最近使用"), count: sessions.count, tone: StatusPalette.idle)
+                SectionHeader(title: String(localized: "Recently Used"), count: sessions.count, tone: StatusPalette.idle)
             }
         }
     }
@@ -1557,10 +1557,10 @@ private struct AgentsList: View {
     private func ordered(_ list: [Session]) -> [Session] { order.ordered(list) }
 
     private static let stateTitles: [(key: String, title: String, tint: StatusTone)] = [
-        ("needs", String(localized: "需要你"), StatusPalette.needsYou), ("unread", String(localized: "完成未看"), StatusPalette.unread),
-        ("working", String(localized: "工作中"), StatusPalette.working),
-        ("waiting", String(localized: "待唤醒"), StatusTone(dot: Theme.loop, text: Theme.loop)),
-        ("muted", String(localized: "已屏蔽"), StatusPalette.idle), ("idle", String(localized: "已看"), StatusPalette.idle),
+        ("needs", String(localized: "Needs You [Chats View e60ec4]"), StatusPalette.needsYou), ("unread", String(localized: "Unread [Chats View f9bf93]"), StatusPalette.unread),
+        ("working", String(localized: "Working [Assistant Profile View f42082]"), StatusPalette.working),
+        ("waiting", String(localized: "Waiting [Chats View 66441e]"), StatusTone(dot: Theme.loop, text: Theme.loop)),
+        ("muted", String(localized: "Muted [Chats View b66705]"), StatusPalette.idle), ("idle", String(localized: "Seen"), StatusPalette.idle),
     ]
 
     /// The fold ids of the sections By Status / By Machine shows now (Collapse All).
@@ -1585,7 +1585,7 @@ private struct AgentsList: View {
                         ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(rows.count) 个")) { toggleFold(id) } label: {
+                    FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(rows.count) [Chats View cb60bd]")) { toggleFold(id) } label: {
                         SectionHeader(title: b.title, count: rows.count, tone: b.tint)
                     }
                     .modifier(FoldAnchor(id: id, reader: feed.reader))
@@ -1610,7 +1610,7 @@ private struct AgentsList: View {
                         ForEach(g.sessions) { s in slotRow(s, context: true, showHost: mixedHosts) }
                     }
                 } header: {
-                    FoldButton(title: g.name, folded: folded, detail: String(localized: "\(g.sessions.count) 个")) { toggleFold(id, shown: folded) } label: {
+                    FoldButton(title: g.name, folded: folded, detail: String(localized: "\(g.sessions.count) [Chats View cb60bd]")) { toggleFold(id, shown: folded) } label: {
                         HStack(spacing: Theme.Space.sm) {
                             if compact {
                                 Text(g.name).font(CompactList.sectionTitle).foregroundStyle(Color.primary).textCase(nil).lineLimit(1)
@@ -1634,7 +1634,7 @@ private struct AgentsList: View {
                                         .contentShape(.rect)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("查看待办详情")
+                                .accessibilityLabel("View to-do details")
                             }
                         }
                     }
@@ -1654,7 +1654,7 @@ private struct AgentsList: View {
                 if !isFolded(id) {
                     if quick == .all {
                         ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
-                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: String(localized: "空闲"))
+                        foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: String(localized: "Idle"))
                     } else {
                         ForEach(rows) { s in slotRow(s, context: true) }
                     }
@@ -1673,7 +1673,7 @@ private struct AgentsList: View {
         if !rows.isEmpty {
             if expandedIdle.contains(key) || !query.isEmpty {
                 ForEach(rows) { s in slotRow(s, context: true, inStateSection: inStateSection) }
-                if query.isEmpty { collapseRow(String(localized: "收起\(label)的 \(rows.count) 个"), key: key) }
+                if query.isEmpty { collapseRow(String(localized: "Hide \(rows.count) \(label)"), key: key) }
             } else {
                 expandRow(rows, key: key)
             }
@@ -1887,7 +1887,7 @@ private struct AgentsList: View {
                            : rowInsets(level: level)) // a card's rows touch (the card is one surface); capsules keep a little air between them
             .swipeActions(edge: .trailing) {
                 if closes {
-                    Button { closingSession = s } label: { Label("关闭", systemImage: Theme.Icon.close) }.tint(Theme.danger)
+                    Button { closingSession = s } label: { Label("Close", systemImage: Theme.Icon.close) }.tint(Theme.danger)
                 }
             }
             #if os(iOS) || os(visionOS)
@@ -1896,15 +1896,15 @@ private struct AgentsList: View {
             #endif
             .swipeActions(edge: .leading) {
                 Button { model.togglePin(s.key) } label: {
-                    Label(model.isPinned(s.key) ? "取消置顶" : "置顶", systemImage: model.isPinned(s.key) ? "pin.slash.fill" : Theme.Icon.pinned)
+                    Label(model.isPinned(s.key) ? String(localized: "Unpin [Personal Agent List View c92179]") : String(localized: "Pin [Personal Agent List View 173f88]"), systemImage: model.isPinned(s.key) ? "pin.slash.fill" : Theme.Icon.pinned)
                 }
                 .tint(Theme.accent)
                 if (s.state == .working || s.state == .needsYou) && s.canInterrupt {
-                    Button { Task { await model.interrupt(s.key) } } label: { Label("中断", systemImage: Theme.Icon.interrupt) }
+                    Button { Task { await model.interrupt(s.key) } } label: { Label("Interrupt [Composer Buttons f9d193]", systemImage: Theme.Icon.interrupt) }
                         .tint(Theme.busy)
                 }
                 if s.state == .unread {
-                    Button { model.markSeen(s.key) } label: { Label("标为已看", systemImage: Theme.Icon.view) }
+                    Button { model.markSeen(s.key) } label: { Label("Mark as Seen", systemImage: Theme.Icon.view) }
                         .tint(.gray)
                 }
             }
@@ -2343,7 +2343,7 @@ struct QuickFilterBar: View, Equatable {
         if !AppStyle.current.usesBeautifulUI {
             // The Mac's segmented control (#2113), every filter always there with its count: segments that came and
             // went with the counts moved under the pointer.
-            Picker("筛选", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
+            Picker("Filter", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
                 ForEach(AgentFilter.allCases) { f in
                     Text(f == .all ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
                 }
@@ -2445,8 +2445,8 @@ struct FoldButton<Content: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([title, folded ? String(localized: "已折叠") : String(localized: "已展开"), detail].filter { !$0.isEmpty }
-            .joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
+        .accessibilityLabel([title, folded ? String(localized: "Collapsed [Readiness Card ee6046]") : String(localized: "Expanded"), detail].filter { !$0.isEmpty }
+            .joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -2513,8 +2513,8 @@ struct SpaceHeader: View {
                 Text(group.name).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
             let small = compact ? CompactList.meta : Theme.Font.label
-            if pinned { Image(systemName: Theme.Icon.pinned).font(small).foregroundStyle(Theme.accent).accessibilityLabel("已置顶") }
-            if muted { Image(systemName: Theme.Icon.muted).font(small).foregroundStyle(Color.secondary).accessibilityLabel("已屏蔽") }
+            if pinned { Image(systemName: Theme.Icon.pinned).font(small).foregroundStyle(Theme.accent).accessibilityLabel("Pinned [Personal Agent List View fb47db]") }
+            if muted { Image(systemName: Theme.Icon.muted).font(small).foregroundStyle(Color.secondary).accessibilityLabel("Muted [Chats View b66705]") }
             if showMachine, let machine {
                 Text(machine.title).font(small).foregroundStyle(Color.secondary).textCase(nil).lineLimit(1)
             }
@@ -2524,10 +2524,10 @@ struct SpaceHeader: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([group.name, folded ? String(localized: "已折叠") : String(localized: "已展开"),
-                             pinned ? String(localized: "已置顶") : "", muted ? String(localized: "已屏蔽") : "",
+        .accessibilityLabel([group.name, folded ? String(localized: "Collapsed [Readiness Card ee6046]") : String(localized: "Expanded"),
+                             pinned ? String(localized: "Pinned [Personal Agent List View fb47db]") : "", muted ? String(localized: "Muted [Chats View b66705]") : "",
                              showMachine ? machine?.title ?? "" : "", StateCounts.spoken(group)]
-            .filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
+            .filter { !$0.isEmpty }.joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -2539,8 +2539,8 @@ struct StateCounts: View {
     /// "3 need you, 12 working, 35 unread, 4 idle" for VoiceOver (and the UI tests).
     static func spoken(_ group: SpaceGroup) -> String {
         let idle = group.count(.idle) + group.count(.unknown)
-        return ([AgentState.needsYou, .working, .unread].compactMap { st in group.count(st) > 0 ? String(localized: "\(group.count(st)) 个\(st.label)") : nil }
-            + (idle > 0 ? [String(localized: "\(idle) 个空闲")] : [])).joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label"))
+        return ([AgentState.needsYou, .working, .unread].compactMap { st in group.count(st) > 0 ? String(localized: "\(group.count(st)) \(st.label)") : nil }
+            + (idle > 0 ? [String(localized: "\(idle) idle")] : [])).joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label"))
     }
 
     var body: some View {
@@ -2558,7 +2558,7 @@ struct StateCounts: View {
                             .contentTransition(.numericText(value: Double(n)))
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(n) 个\(st.label)")
+                    .accessibilityLabel("\(n) \(st.label)")
                 }
             }
             // Idle as a gray dot and a number like the others: "4 idle" wrapped to two lines in a busy header.
@@ -2570,7 +2570,7 @@ struct StateCounts: View {
                         .foregroundStyle(Color.secondary)
                         .contentTransition(.numericText(value: Double(idle)))
                 }
-                .accessibilityLabel("\(idle) 个空闲")
+                .accessibilityLabel("\(idle) idle")
             }
         }
         .lineLimit(1)
@@ -2590,7 +2590,7 @@ struct SourceLabel: View {
         if source == .feishu, let link {
             Button { openURL(link) } label: { chip }
                 .buttonStyle(.plain)
-                .accessibilityLabel("飞书群，在飞书里打开这个话题")
+                .accessibilityLabel("Lark group. Opens this topic in Lark.")
                 .accessibilityIdentifier("agents.row.source")
         } else {
             chip.accessibilityIdentifier("agents.row.source")
@@ -2670,7 +2670,7 @@ nonisolated struct SlotRow: View, Equatable {
                         #endif
                         if session.state == .needsYou && !muted && !hideState && !pendingCount { BUIPill(session.state.label, tone: .red) }
                         if muted {
-                            Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知")
+                            Image(systemName: Theme.Icon.muted).font(Theme.Font.label).foregroundStyle(.secondary).accessibilityLabel("Notifications muted")
                         }
                     }
                 } detail: {
@@ -2705,7 +2705,7 @@ nonisolated struct SlotRow: View, Equatable {
                                     }
                                 }
                                 if muted {
-                                    Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("已屏蔽通知")
+                                    Image(systemName: Theme.Icon.muted).font(Theme.Font.label).accessibilityLabel("Notifications muted")
                                 }
                             }
                             .font(Theme.Font.caption)
@@ -2754,9 +2754,9 @@ nonisolated struct SlotRow: View, Equatable {
         if session.state == .needsYou && !muted && !hideState && !pendingCount {
             parts.append(Text(session.state.label).fontWeight(.semibold).foregroundStyle(session.state.tone.text))
         }
-        if hasDraft { parts.append(Text("草稿").fontWeight(.semibold).foregroundStyle(Theme.needsYou)) }
+        if hasDraft { parts.append(Text("Draft").fontWeight(.semibold).foregroundStyle(Theme.needsYou)) }
         parts.append(Text(pane?.name ?? session.sourceSubtitle ?? session.agentLabel))
-        if pane?.launcher == true { parts.append(Text("发起者").fontWeight(.semibold)) }
+        if pane?.launcher == true { parts.append(Text("Started It").fontWeight(.semibold)) }
         if let host { parts.append(Text(host)) }
         let slot = pane == nil ? session.slotLabel : nil
         if let space, !space.isEmpty {
@@ -2770,9 +2770,9 @@ nonisolated struct SlotRow: View, Equatable {
 
     /// "Claude · app › tests · MacBook": the end gives way when the line is short.
     @MainActor private var meta: String {
-        var parts = hasDraft ? [String(localized: "草稿")] : []
+        var parts = hasDraft ? [String(localized: "Draft")] : []
         parts.append(pane?.name ?? session.sourceSubtitle ?? session.agentLabel)
-        if pane?.launcher == true { parts.append(String(localized: "发起者")) }
+        if pane?.launcher == true { parts.append(String(localized: "Started It")) }
         if let host { parts.append(host) }
         let slot = pane == nil ? session.slotLabel : nil
         if let space, !space.isEmpty {
@@ -2781,7 +2781,7 @@ nonisolated struct SlotRow: View, Equatable {
             parts.append(slot)
         }
         if let machine { parts.append(machine) }
-        if let todo = session.todo { parts.append(String(localized: "待办：\(todo.title)")) }
+        if let todo = session.todo { parts.append(String(localized: "To-do: \(todo.title)")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -2843,7 +2843,7 @@ nonisolated struct CompactSlotRow: View, Equatable {
                     .lineLimit(1)
                     .layoutPriority(1)
                 // The starter mark stays whole: the line's other words give way to the title.
-                if pane?.launcher == true { Text("发起者").font(CompactList.metaStrong).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
+                if pane?.launcher == true { Text("Started It").font(CompactList.metaStrong).foregroundStyle(.secondary).lineLimit(1).fixedSize() }
                 if let place, !place.isEmpty {
                     // Tail: "photo-sy…" still says where; the head cut to "…to-sync › #1".
                     Text(place).font(CompactList.meta).foregroundStyle(.secondary).lineLimit(1)
@@ -2856,7 +2856,7 @@ nonisolated struct CompactSlotRow: View, Equatable {
                 }
             }
             Spacer(minLength: Theme.Space.xs)
-            if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("已屏蔽通知") }
+            if muted { Image(systemName: Theme.Icon.muted).font(CompactList.meta).foregroundStyle(.secondary).accessibilityLabel("Notifications muted") }
             AgentTimeText(time: time, fallback: session.updatedAt, font: CompactList.meta.monospacedDigit())
             #if os(macOS)
             // Questions and approvals waiting, a red count at the row's end, as the web's (#2695).
@@ -2893,7 +2893,7 @@ struct IdleFoldRow: View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: "chevron.down.circle")
                 .foregroundStyle(.secondary)
-            Text("还有 \(sessions.count) 个空闲")
+            Text("\(sessions.count) more idle")
                 .font(Theme.Font.secondaryMedium)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -2910,7 +2910,7 @@ struct IdleFoldRow: View {
         .contentShape(.rect)
         // One element: on the stack alone the label went to each of its three children (read out three times, #405).
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("展开 \(sessions.count) 个空闲的 agent")
+        .accessibilityLabel("Show \(sessions.count) idle agents")
     }
 }
 
@@ -2928,7 +2928,7 @@ struct QuietSpaceRow: View {
             Image(systemName: repo ? Theme.Icon.folder : Theme.Icon.space).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text(group.name).font(Theme.Font.heading).lineLimit(1)
-                Text([showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) 个 Agent"),
+                Text([showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) agents"),
                       group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                     .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
@@ -3014,7 +3014,7 @@ struct QuietSpaceCardHead: View {
 
     var body: some View {
         TaskRow(TaskItem(id: group.id, title: group.name,
-                         subtitle: [showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) 个 Agent"),
+                         subtitle: [showMachine ? machine?.title : nil, String(localized: "\(group.sessions.count) agents"),
                                     group.sessions.compactMap(\.slotLabel).prefix(3).joined(separator: " · ")]
                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                          status: .pending(step: 0)),
@@ -3031,7 +3031,7 @@ struct QuietSpaceCardHead: View {
             EmptyView()
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(open ? "已展开" : "已折叠")
+        .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]"))
     }
 }
 
@@ -3063,23 +3063,23 @@ struct SpaceMenuItems: View {
 
     var body: some View {
         if let open {
-            Button(action: open) { Label("打开空间", systemImage: "arrow.right.square") }
+            Button(action: open) { Label("Open Space", systemImage: "arrow.right.square") }
         }
         let unread = group.sessions.filter { $0.state == .unread }.map(\.key)
         if !unread.isEmpty {
-            Button { model.markSeen(unread) } label: { Label("全部标为已读（\(unread.count)）", systemImage: Theme.Icon.success) }
+            Button { model.markSeen(unread) } label: { Label("Mark All as Read (\(unread.count))", systemImage: Theme.Icon.success) }
         }
         if let rename, group.spaceID != "-" {
-            Button(action: rename) { Label("重命名空间", systemImage: Theme.Icon.edit) }
+            Button(action: rename) { Label("Rename Space", systemImage: Theme.Icon.edit) }
         }
         if let linkTodo {
             SpaceTodoMenu(group: group, link: linkTodo)
         }
         Button { model.togglePin(group) } label: {
-            Label(model.isPinned(group) ? "取消置顶空间" : "置顶空间", systemImage: model.isPinned(group) ? Theme.Icon.unpin : Theme.Icon.pin)
+            Label(model.isPinned(group) ? String(localized: "Unpin Space") : String(localized: "Pin Space"), systemImage: model.isPinned(group) ? Theme.Icon.unpin : Theme.Icon.pin)
         }
         Button { model.toggleMute(group) } label: {
-            Label(model.isMuted(group) ? "取消屏蔽空间" : "屏蔽这个空间", systemImage: model.isMuted(group) ? Theme.Icon.unmute : Theme.Icon.mute)
+            Label(model.isMuted(group) ? String(localized: "Unmute Space") : String(localized: "Mute Space"), systemImage: model.isMuted(group) ? Theme.Icon.unmute : Theme.Icon.mute)
         }
     }
 }
@@ -3098,14 +3098,14 @@ private struct RenameSpaceAlert: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("重命名空间", isPresented: Binding(get: { group != nil }, set: { if !$0 { group = nil } })) {
-                TextField("空间名", text: $name)
-                Button("取消", role: .cancel) {}
-                Button("保存") {
+            .alert("Rename Space", isPresented: Binding(get: { group != nil }, set: { if !$0 { group = nil } })) {
+                TextField(String(localized: "Space name"), text: $name)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") {
                     if let g = group { Task { await model.renameSpace(g, to: name) } }
                 }
             } message: {
-                Text("同时改 herdr 里这个 workspace 的名字。")
+                Text("Also renames this workspace in herdr.")
             }
             .onChange(of: group?.id) { _, _ in name = group?.name ?? "" }
     }
@@ -3119,11 +3119,11 @@ private struct RenameSessionAlert: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .alert("重命名", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } })) {
-                if session?.paneID != nil { TextField("标签名（herdr tab）", text: $tab) }
-                TextField("会话名", text: $title)
-                Button("取消", role: .cancel) {}
-                Button("保存") {
+            .alert("Rename [Chats View 0d0cba]", isPresented: Binding(get: { session != nil }, set: { if !$0 { session = nil } })) {
+                if session?.paneID != nil { TextField(String(localized: "Tab name (herdr tab)"), text: $tab) }
+                TextField(String(localized: "Session name"), text: $title)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") {
                     guard let s = session else { return }
                     let newTab = s.paneID != nil && tab != (s.slotName ?? "") ? tab : nil
                     let newTitle = title != s.title ? title : nil
@@ -3131,7 +3131,7 @@ private struct RenameSessionAlert: ViewModifier {
                     Task { await model.renameSession(s.key, tab: newTab, title: newTitle) }
                 }
             } message: {
-                Text("标签名同步到 herdr；会话名用 Claude 的 /rename，Mac 上 claude --resume 也看得到。")
+                Text("The tab name syncs to herdr. The session name uses Claude's /rename, so claude --resume on the Mac shows it too.")
             }
             .onChange(of: session?.id) { _, _ in
                 tab = session?.slotName ?? ""
@@ -3156,7 +3156,7 @@ struct MachineSectionHeader: View {
                 Text(machine.title).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).textCase(nil).lineLimit(1)
             }
             if !machine.online {
-                Text("离线").font(Theme.Font.labelStrong).foregroundStyle(.secondary).textCase(nil)
+                Text("Offline [Machine Entity be1b4f]").font(Theme.Font.labelStrong).foregroundStyle(.secondary).textCase(nil)
             }
             Spacer(minLength: 4)
             StateCounts(group: group)
@@ -3244,7 +3244,7 @@ private struct AgentsSystemSearch: ViewModifier {
 }
 
 enum AgentsSearchPrompt {
-    static var text: String { String(localized: "搜索空间、标签、会话、内容") }
+    static var text: String { String(localized: "Search spaces, tabs, sessions, content") }
 }
 
 /// A bar above a list in a stack (the split's sidebar column). Otherwise nothing: on a phone the bar is the list's
@@ -3492,7 +3492,7 @@ struct AgentsTopBar: View, Equatable {
         HStack(alignment: .top, spacing: Theme.Space.s) {
             ShellPersonaButton(id: "work-sidebar-button") { shell.drawer.open() }
             Spacer(minLength: 0)
-            ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "新建会话"), id: "agents-new", action: newSession)
+            ShellCircleButton(symbol: Theme.Icon.compose, label: String(localized: "New Session [Chats View 58e21b]"), id: "agents-new", action: newSession)
         }
         .overlay(alignment: .top) {
             ShellSwitch(tab: $model.selectedTab) { EmptyView() } workMenu: {

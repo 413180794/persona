@@ -16,9 +16,9 @@ struct MacInboxFilters: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                MacSidebarHeading(title: String(localized: "来源")) // the page's title says Inbox above it (#830)
+                MacSidebarHeading(title: String(localized: "Source")) // the page's title says Inbox above it (#830)
                 ForEach(state.sources) { row($0) }
-                MacSidebarHeading(title: String(localized: "类型"))
+                MacSidebarHeading(title: String(localized: "Type"))
                 ForEach(state.kinds) { row($0) }
             }
             .padding(.horizontal, Theme.Space.s)
@@ -74,7 +74,7 @@ struct MacInboxList: View {
                 Section {
                     if state.expanded.contains("done") { ForEach(sections.done) { row($0) } }
                 } header: {
-                    header(String(localized: "已处理"), count: sections.done.count, key: "done", clear: nil)
+                    header(String(localized: "Done [Inbox View 59f6c8]"), count: sections.done.count, key: "done", clear: nil)
                 }
             }
         }
@@ -83,8 +83,8 @@ struct MacInboxList: View {
         .scrollContentBackground(.hidden) // the page's color (MacInboxPage)
         .overlay {
             if sections.isEmpty && !store.loading {
-                EmptyStateView(symbol: Theme.Icon.success, title: state.query.isEmpty ? String(localized: "都处理完了") : String(localized: "没有匹配的"),
-                               message: state.query.isEmpty ? String(localized: "新的飞书消息和邮件会出现在这里。") : String(localized: "换个关键词试试。"))
+                EmptyStateView(symbol: Theme.Icon.success, title: state.query.isEmpty ? String(localized: "All Caught Up") : String(localized: "No Matches"),
+                               message: state.query.isEmpty ? String(localized: "New Lark messages and emails show up here.") : String(localized: "Try a different search."))
             } else if store.loading && store.items.isEmpty {
                 ProgressView()
             }
@@ -110,7 +110,7 @@ struct MacInboxList: View {
         .onChange(of: model.pendingInteractions) { _, interactions in
             state.pruneStale(items: store.items, interactions: interactions)
         }
-        .pageSearchable(text: $state.query, placement: .toolbar, prompt: String(localized: "搜索标题、发件人、内容"))
+        .pageSearchable(text: $state.query, placement: .toolbar, prompt: String(localized: "Search Titles, Senders, and Content"))
         .pageToolbar { toolbar }
         .sheet(isPresented: $state.showAccounts, onDismiss: { Task { await state.loadAccounts(model) } }) {
             MailAccountsView().macSheet()
@@ -119,7 +119,7 @@ struct MacInboxList: View {
         .confirmationDialog(InboxBulk.confirmTitle, isPresented: $state.confirming) {
             Button(InboxBulk.confirmButton(count: state.openInView.count)) { state.clean(confirmed: true) }
                 .accessibilityIdentifier("mac.inbox.cleanConfirm")
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(InboxBulk.confirmMessage(count: state.openInView.count, filters: state.scopeFilters, query: state.query))
         }
@@ -152,23 +152,23 @@ struct MacInboxList: View {
         MacToolbarMiddle() // at the narrowest window these buttons covered Inbox (#830)
         ToolbarItemGroup(placement: .primaryAction) {
             // ⌘R is View › Refresh's, which refreshes the inbox while it is on screen.
-            Button { Task { await store.refresh() } } label: { Label("刷新", systemImage: Theme.Icon.retry) }
-                .help("刷新（⌘R）")
+            Button { Task { await store.refresh() } } label: { Label("Refresh", systemImage: Theme.Icon.retry) }
+                .help("Refresh (⌘R)")
             // ⇧⌘E is the Inbox menu's (MacInboxMenu), which holds the same action.
             Button { state.clean() } label: {
-                Label("全部清理", systemImage: Theme.Icon.cleanUpAll)
+                Label("Clean up all", systemImage: Theme.Icon.cleanUpAll)
             }
             .disabled(state.openInView.isEmpty)
-            .help(String(localized: "全部清理：\(state.cleanUpScope)（⇧⌘E）"))
+            .help(String(localized: "Clean up all: \(state.cleanUpScope) (⇧⌘E)"))
             .accessibilityIdentifier("mac.inbox.cleanUpAll")
             Button { state.composing = ComposeDraft(accountID: state.accounts.first?.id ?? "") } label: {
-                Label("写邮件", systemImage: Theme.Icon.compose)
+                Label("New Email", systemImage: Theme.Icon.compose)
             }
             .disabled(state.accounts.isEmpty)
             .keyboardShortcut("n", modifiers: [.command, .option])
-            .help(state.accounts.isEmpty ? "先在「管理邮箱」里添加一个邮箱" : "写邮件（⌥⌘N）")
-            Button { state.showAccounts = true } label: { Label("管理邮箱", systemImage: Theme.Icon.mailAccounts) }
-                .help("管理邮箱")
+            .help(state.accounts.isEmpty ? String(localized: "Add an email account in Manage Accounts first") : String(localized: "New email (⌥⌘N)"))
+            Button { state.showAccounts = true } label: { Label("Manage Accounts", systemImage: Theme.Icon.mailAccounts) }
+                .help("Manage Accounts")
         }
     }
 
@@ -200,7 +200,7 @@ struct MacInboxList: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .help(state.expanded.contains(key) ? "收起" : "展开")
+            .help(state.expanded.contains(key) ? String(localized: "Collapse") : String(localized: "Expand"))
             }
             if let clear {
                 Button(clear.0) { withAnimation(Theme.Motion.standard) { clear.1() } }
@@ -231,9 +231,9 @@ struct MacInboxList: View {
             .macHoverRow(.item(it.id))
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
-                    Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
+                    Button { store.setDone(it, false) } label: { Label("Move Back", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
                 } else {
-                    Button { state.toggleDone([.item(it.id)], model: model) } label: { Label("已处理", systemImage: Theme.Icon.done) }.tint(Theme.positive)
+                    Button { state.toggleDone([.item(it.id)], model: model) } label: { Label("Done [Inbox View 59f6c8]", systemImage: Theme.Icon.done) }.tint(Theme.positive)
                 }
             }
     }
@@ -246,32 +246,32 @@ struct MacInboxList: View {
             if case .agent(let id) = s { return model.pendingInteractions.first { $0.id == id } } else { return nil }
         }
         if items.count == 1, let it = items.first {
-            Button { openWindow(id: MacInboxItemWindow.id, value: it.id) } label: { Label("在新窗口打开", systemImage: Theme.Icon.newWindow) }
+            Button { openWindow(id: MacInboxItemWindow.id, value: it.id) } label: { Label("Open in New Window", systemImage: Theme.Icon.newWindow) }
             Divider()
             if !it.isDone {
                 Button { state.drafting = it; state.selection = [.item(it.id)] } label: {
-                    Label(it.agentDraft == nil ? "AI 草拟回复" : "查看草稿", systemImage: Theme.Icon.draftReply)
+                    Label(it.agentDraft == nil ? String(localized: "AI Draft Reply") : String(localized: "View Draft"), systemImage: Theme.Icon.draftReply)
                 }
-                Button { state.handingOff = it; state.selection = [.item(it.id)] } label: { Label("交给 AI", systemImage: Theme.Icon.handToAI) }
+                Button { state.handingOff = it; state.selection = [.item(it.id)] } label: { Label("Hand to AI", systemImage: Theme.Icon.handToAI) }
                 Divider()
             }
         }
         if !items.isEmpty {
             let allDone = items.allSatisfy(\.isDone)
             Button { state.toggleDone(Set(items.map { .item($0.id) }), model: model) } label: {
-                Label(allDone ? "移回收件箱" : items.count > 1 ? "\(items.count) 件都标为已处理" : "已处理",
+                Label(allDone ? String(localized: "Move Back to Inbox") : items.count > 1 ? String(localized: "Mark All \(items.count) as Done") : String(localized: "Done [Inbox View 59f6c8]"),
                       systemImage: allDone ? Theme.Icon.undo : Theme.Icon.done)
             }
         }
         if items.count == 1, let it = items.first {
             Divider()
-            Button { copy(it.title + "\n" + (it.summary ?? it.preview)) } label: { Label("拷贝内容", systemImage: Theme.Icon.copy) }
+            Button { copy(it.title + "\n" + (it.summary ?? it.preview)) } label: { Label("Copy Contents", systemImage: Theme.Icon.copy) }
             if let url = it.doc.map { $0.link ?? $0.url }, let u = URL(string: url) {
-                Button { NSWorkspace.shared.open(u) } label: { Label("在飞书中打开", systemImage: Theme.Icon.openExternal) }
+                Button { NSWorkspace.shared.open(u) } label: { Label("Open in Lark [Feishu Doc Reader 76d0eb]", systemImage: Theme.Icon.openExternal) }
             }
         }
         if agents.count == 1, let ix = agents.first {
-            Button { state.open(ix, model: model) } label: { Label("打开对话", systemImage: Theme.Icon.conversation) }
+            Button { state.open(ix, model: model) } label: { Label("Open Chat", systemImage: Theme.Icon.conversation) }
         }
     }
 
@@ -288,7 +288,7 @@ struct MacInboxList: View {
     private func copy(_ s: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(s, forType: .string)
-        model.toast = Toast(String(localized: "已拷贝"), style: .success)
+        model.toast = Toast(String(localized: "Copied [Mac Hover 07d6bb]"), style: .success)
     }
 }
 

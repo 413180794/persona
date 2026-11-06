@@ -52,8 +52,8 @@ struct MacDetailBack: ViewModifier {
         }
         .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
-        .help("返回")
-        .accessibilityLabel("返回")
+        .help("Back [Task Sheets 572cf4]")
+        .accessibilityLabel("Back [Task Sheets 572cf4]")
         .accessibilityIdentifier("mac.detail.back")
     }
 }

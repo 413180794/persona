@@ -101,17 +101,17 @@ nonisolated enum FeishuDocsKind: String, Sendable {
 
     var label: String {
         switch self {
-        case .folder: String(localized: "文件夹")
-        case .doc: String(localized: "文档")
-        case .sheet: String(localized: "表格")
-        case .bitable: String(localized: "多维表格")
-        case .mindnote: String(localized: "思维笔记")
-        case .file: String(localized: "文件")
-        case .slides: String(localized: "幻灯片")
-        case .wiki: String(localized: "知识库")
-        case .page: String(localized: "页面")
-        case .whiteboard: String(localized: "画板")
-        case .other: String(localized: "文档")
+        case .folder: String(localized: "Folder [Feishu Docs Models 7c7802]")
+        case .doc: String(localized: "Document")
+        case .sheet: String(localized: "Sheet [Feishu Docs Models 22d9e7]")
+        case .bitable: String(localized: "Base")
+        case .mindnote: String(localized: "Mindnote")
+        case .file: String(localized: "Files")
+        case .slides: String(localized: "Slides")
+        case .wiki: String(localized: "Knowledge")
+        case .page: String(localized: "Pages")
+        case .whiteboard: String(localized: "Whiteboard")
+        case .other: String(localized: "Document")
         }
     }
 
@@ -706,7 +706,7 @@ nonisolated struct FeishuDocsMarkdownTable: Equatable, Sendable {
     /// One cell's Markdown as display text: `<br>` → line break, images → [Image].
     static func cellMarkdown(_ s: String) -> String {
         s.replacingOccurrences(of: #"<br\s*/?>"#, with: "\n", options: [.regularExpression, .caseInsensitive])
-            .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: String(localized: "[图片]"), options: .regularExpression)
+            .replacingOccurrences(of: #"!\[[^\]]*\]\([^)]*\)"#, with: String(localized: "[Image]"), options: .regularExpression)
     }
 }
 
@@ -719,18 +719,18 @@ nonisolated struct FeishuDocsFailure: LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch code {
-        case "DOCUMENT_EXPORT_FORBIDDEN": String(localized: "作者禁止导出这篇文档")
-        case "DOCUMENT_FORMAT_UNSUPPORTED": String(localized: "这种文档暂不支持在 Persona 中阅读")
-        case "DOCUMENT_NOT_FOUND": String(localized: "文档不存在或已被删除")
-        case "DOCUMENT_FORBIDDEN", "DOCUMENT_PERMISSION_DENIED": String(localized: "没有这篇文档的访问权限")
-        case "DOCUMENT_TIMEOUT": String(localized: "飞书响应超时，请稍后重试")
-        case "DOCUMENT_INVALID_URL": String(localized: "无法识别的文档链接")
+        case "DOCUMENT_EXPORT_FORBIDDEN": String(localized: "The owner doesn't allow exporting this doc.")
+        case "DOCUMENT_FORMAT_UNSUPPORTED": String(localized: "This kind of doc can't be read in Persona yet.")
+        case "DOCUMENT_NOT_FOUND": String(localized: "This doc doesn't exist or was deleted.")
+        case "DOCUMENT_FORBIDDEN", "DOCUMENT_PERMISSION_DENIED": String(localized: "You don't have access to this doc.")
+        case "DOCUMENT_TIMEOUT": String(localized: "Lark timed out. Try again later.")
+        case "DOCUMENT_INVALID_URL": String(localized: "Unrecognized doc link")
         default:
             switch status {
-            case 401: String(localized: "飞书登录已失效")
-            case 403: String(localized: "没有访问权限")
-            case 404: String(localized: "内容不存在或已被删除")
-            case 502, 503, 504: String(localized: "飞书服务暂时不可用，请稍后重试")
+            case 401: String(localized: "Lark Sign-in Expired")
+            case 403: String(localized: "You don't have access.")
+            case 404: String(localized: "This content doesn't exist or was deleted.")
+            case 502, 503, 504: String(localized: "Lark is unavailable right now. Try again later.")
             default: code ?? HTTPURLResponse.localizedString(forStatusCode: status)
             }
         }

@@ -196,9 +196,9 @@ struct FleetCounts: View {
     var short = false
     var body: some View {
         HStack(spacing: short ? 8 : 10) {
-            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", interfaceText("\(state.needsYou) 需要你"), FleetPalette.needsYou) }
-            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", interfaceText("\(state.working) 在工作"), FleetPalette.working) }
-            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", interfaceText("\(state.unread) 未看"), FleetPalette.unread) }
+            if state.needsYou > 0 { chip(Image(systemName: FleetSymbol.needsYou), "\(state.needsYou)", interfaceText("\(state.needsYou) need you [Mac Attention d01e4f]"), FleetPalette.needsYou) }
+            if state.working > 0 { chip(Image(systemName: FleetSymbol.working), "\(state.working)", interfaceText("\(state.working) working [Fleet Live Activity 2e2586]"), FleetPalette.working) }
+            if state.unread > 0 { chip(Image(systemName: FleetSymbol.unread).font(.system(size: 7)), "\(state.unread)", interfaceText("\(state.unread) unread [Fleet Live Activity 9d55cb]"), FleetPalette.unread) }
         }
         .layoutPriority(1)
     }
@@ -248,21 +248,21 @@ struct FleetActionRow: View {
                 // Deny / View: the system's neutral fill with primary words (white on gray was 1.6:1 on a light lock
                 // screen); Allow / Approve: a blue dark enough for white words.
                 case .permission:
-                    Button(intent: DenyPermissionIntent(interactionID: id)) { label("拒绝", "xmark") }
+                    Button(intent: DenyPermissionIntent(interactionID: id)) { label("Deny", "xmark") }
                         .buttonStyle(.bordered)
                         .tint(.primary)
-                    Button(intent: AllowPermissionIntent(interactionID: id)) { label("允许", "checkmark") }
+                    Button(intent: AllowPermissionIntent(interactionID: id)) { label("Allow [Notification Actions ce7ef2]", "checkmark") }
                         .buttonStyle(.borderedProminent)
                         .tint(FleetPalette.button)
                         .foregroundStyle(.white)
                 case .plan:
                     Link(destination: FleetLink.url(item)!) {
-                        label("查看", "doc.text")
+                        label("View [Fleet Live Activity db8db0]", "doc.text")
                             .padding(.vertical, 7)
                             .background(Color.primary.opacity(0.12), in: .capsule)
                     }
                     .foregroundStyle(.primary)
-                    Button(intent: ApprovePlanIntent(interactionID: id)) { label("批准", "checkmark") }
+                    Button(intent: ApprovePlanIntent(interactionID: id)) { label("Approve [Notification Actions 8cbe69]", "checkmark") }
                         .buttonStyle(.borderedProminent)
                         .tint(FleetPalette.button)
                         .foregroundStyle(.white)
@@ -316,7 +316,7 @@ struct FleetLockScreen: View {
                 FleetRow(item: first, showTitle: false)
             }
             if stale {
-                Label("等待 hub 更新…", systemImage: "wifi.exclamationmark").font(.caption2).foregroundStyle(.secondary)
+                Label("Waiting for hub…", systemImage: "wifi.exclamationmark").font(.caption2).foregroundStyle(.secondary)
             } else if state.details, state.firstActionable == nil, state.hidden(showing: FleetLiveActivity.rows) > 0 {
                 Text(FleetText.more(state.hidden(showing: FleetLiveActivity.rows))).font(.caption).foregroundStyle(.secondary)
                     .padding(.leading, 15)
@@ -333,9 +333,9 @@ struct FleetLockScreen: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(FleetText.headline(state)).font(.headline).lineLimit(1).minimumScaleFactor(0.8)
                 if state.phase == .needsYou, state.working > 0 {
-                    Text("\(state.working) 个在工作").font(.caption).foregroundStyle(.secondary)
+                    Text("\(state.working) working [Fleet State 2224bf]").font(.caption).foregroundStyle(.secondary)
                 } else if state.phase != .done, state.unread > 0 {
-                    Text("\(state.unread) 个未看").font(.caption).foregroundStyle(.secondary)
+                    Text("\(state.unread) unread [Fleet Live Activity 5c77e7]").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)

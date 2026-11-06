@@ -73,7 +73,7 @@ struct MacQuickOpenPanel: View {
                 Image(systemName: Theme.Icon.search)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                TextField(place == nil ? "快速打开：Agent、Persona 对话、收件箱…" : "快速打开：Agent、文件、收件箱…", text: $query)
+                TextField(place == nil ? String(localized: "Quick Open: agents, Persona chats, Inbox…") : String(localized: "Quick Open: agents, files, Inbox…"), text: $query)
                     .textFieldStyle(.plain)
                     .font(Theme.Font.title)
                     .focused($focused)
@@ -81,7 +81,7 @@ struct MacQuickOpenPanel: View {
                     .onKeyPress(.downArrow) { selected = MacQuickOpen.move(selected, by: 1, count: hits.count); return .handled }
                     .onKeyPress(.upArrow) { selected = MacQuickOpen.move(selected, by: -1, count: hits.count); return .handled }
                     .onKeyPress(.escape) { close(); return .handled }
-                    .accessibilityLabel("快速打开")
+                    .accessibilityLabel("Quick Open")
             }
             .padding(Theme.Space.m)
             if !hits.isEmpty {
@@ -122,7 +122,7 @@ struct MacQuickOpenPanel: View {
                 if case .loading = files {
                     fileStatus.padding(Theme.Space.l)
                 } else {
-                    Text("没有找到「\(query)」")
+                    Text("No Results for “\(query)”")
                         .foregroundStyle(.secondary)
                         .padding(Theme.Space.l)
                 }
@@ -149,9 +149,9 @@ struct MacQuickOpenPanel: View {
         if !query.trimmingCharacters(in: .whitespaces).isEmpty {
             switch files {
             case .loading:
-                Text("正在建立文件索引…").font(Theme.Font.caption).foregroundStyle(.secondary)
+                Text("Indexing Files…").font(Theme.Font.caption).foregroundStyle(.secondary)
             case .failed:
-                Text("读不到这个目录的文件").font(Theme.Font.caption).foregroundStyle(.secondary)
+                Text("Can't read the files in this folder").font(Theme.Font.caption).foregroundStyle(.secondary)
             default: EmptyView()
             }
         }

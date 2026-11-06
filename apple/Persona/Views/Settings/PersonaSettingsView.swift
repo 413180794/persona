@@ -49,7 +49,7 @@ struct PersonaPicker: View {
         .padding(.vertical, Theme.Space.s)
         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.persona.name)在顶栏的五种状态：空闲、思考中、工作中、等你处理、离线")
+        .accessibilityLabel("\(model.persona.name)'s five states in the top bar: idle, thinking, working, waiting for you, offline")
         .accessibilityIdentifier("persona-states")
     }
 
@@ -102,8 +102,8 @@ struct PersonaPicker: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(p.id == Persona.builtinID ? String(localized: "\(p.cardTitle)，默认形象")
-                            : p.isBuiltin ? p.cardTitle : here ? p.name : String(localized: "\(p.name)，选中后下载"))
+        .accessibilityLabel(p.id == Persona.builtinID ? String(localized: "\(p.cardTitle), default avatar")
+                            : p.isBuiltin ? p.cardTitle : here ? p.name : String(localized: "\(p.name), downloads when selected"))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("persona-\(p.id)")
     }

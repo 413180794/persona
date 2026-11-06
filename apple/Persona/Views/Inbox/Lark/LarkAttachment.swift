@@ -33,10 +33,10 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
         case invalid, empty, tooLarge, imageTooLarge
         var errorDescription: String? {
             switch self {
-            case .invalid: String(localized: "无法读取附件，请重新选择")
-            case .empty: String(localized: "不能发送空文件")
-            case .tooLarge: String(localized: "文件不能超过 100 MiB")
-            case .imageTooLarge: String(localized: "图片过大，请选择较小的图片")
+            case .invalid: String(localized: "Couldn't read the attachment. Choose it again.")
+            case .empty: String(localized: "Can't send an empty file.")
+            case .tooLarge: String(localized: "Files can't be larger than 100 MiB.")
+            case .imageTooLarge: String(localized: "This image is too large. Choose a smaller one.")
             }
         }
     }
@@ -83,7 +83,7 @@ nonisolated final class LarkAttachment: Identifiable, Equatable, Sendable {
             let file = dir.appending(path: "photo.jpg")
             do { try bytes.write(to: file, options: .atomic) }
             catch { try? FileManager.default.removeItem(at: dir); throw error }
-            return LarkAttachment(kind: .image, file: file, name: String(localized: "照片.jpg"), mime: "image/jpeg", size: bytes.count, thumbnail: thumb)
+            return LarkAttachment(kind: .image, file: file, name: String(localized: "Photo.jpg"), mime: "image/jpeg", size: bytes.count, thumbnail: thumb)
         }.value
     }
 
@@ -112,7 +112,7 @@ nonisolated struct LarkSendReceipt: Decodable, Sendable {
 
     enum Failure: LocalizedError {
         case missing
-        var errorDescription: String? { String(localized: "尚未收到有效的发送结果，请稍后检查") }
+        var errorDescription: String? { String(localized: "No valid send result yet. Check again later.") }
     }
 }
 

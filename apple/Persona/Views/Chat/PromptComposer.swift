@@ -181,10 +181,10 @@ struct PromptComposer: View {
 /// What the composer's menus offer.
 enum PromptItems {
     static func attachments(camera: Bool, glasses: Bool = false) -> [PromptSource] {
-        var out = [PromptSource(id: "photo", name: String(localized: "照片"), detail: String(localized: "照片或视频，最多 4 个"), icon: .symbol("photo.on.rectangle"), kind: .attach)]
-        if camera { out.append(PromptSource(id: "camera", name: String(localized: "拍照"), detail: String(localized: "用相机拍一张"), icon: .symbol("camera"), kind: .attach)) }
-        if glasses { out.append(PromptSource(id: "glasses", name: String(localized: "眼镜拍照"), detail: String(localized: "用 Meta 眼镜拍一张"), icon: .symbol(Theme.Icon.glasses), kind: .attach)) }
-        out.append(PromptSource(id: "file", name: String(localized: "文件"), detail: String(localized: "传到那台电脑，路径插进输入框"), icon: .symbol("doc"), kind: .attach))
+        var out = [PromptSource(id: "photo", name: String(localized: "Photos"), detail: String(localized: "Photos or videos, up to 4"), icon: .symbol("photo.on.rectangle"), kind: .attach)]
+        if camera { out.append(PromptSource(id: "camera", name: String(localized: "Take Photo [Chat View 6e3a10]"), detail: String(localized: "Take one with the camera"), icon: .symbol("camera"), kind: .attach)) }
+        if glasses { out.append(PromptSource(id: "glasses", name: String(localized: "Glasses Photo"), detail: String(localized: "Take one with the Meta glasses"), icon: .symbol(Theme.Icon.glasses), kind: .attach)) }
+        out.append(PromptSource(id: "file", name: String(localized: "Files"), detail: String(localized: "Uploads to that computer and inserts the path"), icon: .symbol("doc"), kind: .attach))
         return out
     }
 
@@ -192,16 +192,16 @@ enum PromptItems {
     /// Code's own commands.
     static func commands(clear: Bool, loop: Bool = false) -> [PromptCommand] {
         var out = SlashCommand.commands(loop: loop).map { PromptCommand($0.word, detail: $0.detail, insert: $0.text) }
-        if clear { out.append(PromptCommand("/clear", detail: String(localized: "清空上下文，开新会话"))) }
+        if clear { out.append(PromptCommand("/clear", detail: String(localized: "Clear context and start a new session"))) }
         return out
     }
 
     /// Claude Code's `/model` aliases: picking one sends `/model <alias>` to the session.
     static let claudeModels: [PromptModel] = [
-        PromptModel(id: "default", name: String(localized: "默认"), tag: String(localized: "账号默认")),
-        PromptModel(id: "opus", name: "Opus", tag: String(localized: "最强")),
-        PromptModel(id: "sonnet", name: "Sonnet", tag: String(localized: "均衡")),
-        PromptModel(id: "haiku", name: "Haiku", tag: String(localized: "最快")),
+        PromptModel(id: "default", name: String(localized: "Default [Prompt Composer 844b8c]"), tag: String(localized: "Account default")),
+        PromptModel(id: "opus", name: "Opus", tag: String(localized: "Smartest")),
+        PromptModel(id: "sonnet", name: "Sonnet", tag: String(localized: "Balanced")),
+        PromptModel(id: "haiku", name: "Haiku", tag: String(localized: "Fastest")),
     ]
 
     /// The alias a session's model reads as ("claude-opus-…" → opus).
@@ -221,7 +221,7 @@ enum PromptItems {
             let rel = !cwd.isEmpty && path.hasPrefix(cwd + "/") ? String(path.dropFirst(cwd.count + 1)) : path
             let name = (rel as NSString).lastPathComponent
             let dir = (rel as NSString).deletingLastPathComponent
-            out.append(PromptSource(id: "file:" + path, name: name, detail: dir.isEmpty ? String(localized: "本会话用过的文件") : dir,
+            out.append(PromptSource(id: "file:" + path, name: name, detail: dir.isEmpty ? String(localized: "Used in this session") : dir,
                                     icon: .symbol("doc.text"), insert: "@\(rel) "))
             if out.count == 12 { break }
         }
@@ -283,16 +283,16 @@ final class Dictation {
     /// Starts listening; `update` gets the whole transcript so far. Returns what went wrong, if it could not start.
     func start(update: @escaping (String) -> Void) async -> String? {
         #if os(iOS) || os(visionOS)
-        guard RecordingCapture.shared.state == .idle else { return String(localized: "录音正在进行，请先结束录音再听写") }
+        guard RecordingCapture.shared.state == .idle else { return String(localized: "A recording is in progress. Stop it before dictating.") }
         #endif
-        guard await Self.allowed() else { return String(localized: "没有麦克风或语音识别的权限，可以到 设置 › Persona 打开") }
+        guard await Self.allowed() else { return String(localized: "No access to the microphone or speech recognition. Turn it on in Settings › Persona.") }
         #if os(iOS) || os(visionOS)
-        guard RecordingCapture.shared.state == .idle else { return String(localized: "录音正在进行，请先结束录音再听写") }
+        guard RecordingCapture.shared.state == .idle else { return String(localized: "A recording is in progress. Stop it before dictating.") }
         #endif
         guard let recognizer = Self.recognizer(), recognizer.isAvailable else {
-            return String(localized: "语音识别现在用不了")
+            return String(localized: "Speech recognition isn't available right now")
         }
-        guard RecordingMicrophone.shared.claim(microphoneOwner) else { return String(localized: "麦克风正在使用，请先结束录音或听写") }
+        guard RecordingMicrophone.shared.claim(microphoneOwner) else { return String(localized: "The microphone is in use. Stop the recording or dictation first.") }
         #if os(iOS) || os(visionOS) // a Mac has no audio session to configure: the engine takes the input as it is
         do {
             let session = AVAudioSession.sharedInstance()
@@ -300,7 +300,7 @@ final class Dictation {
             try session.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             RecordingMicrophone.shared.release(microphoneOwner)
-            return String(localized: "麦克风打不开")
+            return String(localized: "Couldn't open the microphone")
         }
         #endif
         let engine = AVAudioEngine()
@@ -314,7 +314,7 @@ final class Dictation {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             #endif
             RecordingMicrophone.shared.release(microphoneOwner)
-            return String(localized: "麦克风打不开")
+            return String(localized: "Couldn't open the microphone")
         }
         self.engine = engine
         self.request = request

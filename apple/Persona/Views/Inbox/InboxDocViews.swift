@@ -32,8 +32,8 @@ struct DocStatusMenu: View {
                 } else {
                     Circle().fill(DocStatusColor.dot(status, in: status.value)).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
                 }
-                let value = status.value.isEmpty ? String(localized: "未设置") : status.value
-                Text(showName ? String(localized: "\(status.name)：\(value)") : value)
+                let value = status.value.isEmpty ? String(localized: "Not set") : status.value
+                Text(showName ? String(localized: "\(status.name): \(value)") : value)
                 Image(systemName: Theme.Icon.choices).font(Theme.Font.labelStrong).foregroundStyle(.secondary)
             }
             .font(Theme.Font.captionMedium)
@@ -45,7 +45,7 @@ struct DocStatusMenu: View {
         }
         .tint(.primary) // the label keeps its own colors, not the app's accent
         .disabled(moving || item.isDone)
-        .accessibilityLabel("\(status.name)：\(status.value.isEmpty ? String(localized: "未设置") : status.value)，点按修改")
+        .accessibilityLabel("\(status.name): \(status.value.isEmpty ? String(localized: "Not set") : status.value). Tap to change.")
     }
 }
 
@@ -87,7 +87,7 @@ struct InboxDocRowsPreview: View {
                     DocStatusMenu(item: item, row: first, status: st)
                 }
                 if rows.count > 1 {
-                    Text("+\(rows.count - 1) 行").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                    Text("+\(rows.count - 1) rows").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                 }
                 Spacer(minLength: 0)
             }
@@ -139,11 +139,11 @@ struct InboxDocDetailView: View {
                     Button {
                         feishuOpen?(.doc(url: url.absoluteString, title: item.title))
                     } label: {
-                        Label("打开\(doc.typeName)", systemImage: Theme.Icon.openDocument).lineLimit(1)
+                        Label("Open \(doc.typeName) [Inbox Doc Views 4f91d8]", systemImage: Theme.Icon.openDocument).lineLimit(1)
                     }
                 }
                 if let error = doc?.error, !error.isEmpty {
-                    Label("读不到文档内容：\(error)", systemImage: Theme.Icon.error)
+                    Label("Couldn't read the doc: \(error)", systemImage: Theme.Icon.error)
                         .font(Theme.Font.caption).foregroundStyle(Theme.danger)
                 }
             }
@@ -151,14 +151,14 @@ struct InboxDocDetailView: View {
                 Section {
                     ForEach(rows) { row in rowCard(row) }
                 } header: {
-                    Text("提到你的行").textCase(nil)
+                    Text("Rows that mention you").textCase(nil)
                 } footer: {
-                    Text("改状态会直接写进\(doc?.typeName ?? String(localized: "文档"))。").textCase(nil)
+                    Text("Status changes are written straight to the \(doc?.typeName ?? String(localized: "Document")).").textCase(nil)
                 }
             }
             if let reply = doc?.reply {
                 Section {
-                    Label("回复会\(reply.label)", systemImage: Theme.Icon.conversation).font(Theme.Font.caption).foregroundStyle(.secondary)
+                    Label("Replies go to: \(reply.label)", systemImage: Theme.Icon.conversation).font(Theme.Font.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -193,7 +193,7 @@ struct InboxDocDetailView: View {
 enum DocChangeText {
     static func line(_ change: InboxItem.DocChange, in doc: InboxItem.Doc?) -> String {
         guard let (row, st) = doc?.describe(change) else { return change.value }
-        let from = st.value.isEmpty ? String(localized: "未设置") : st.value
-        return String(localized: "\(st.name)：\(from) → \(change.value) · \(row.title)")
+        let from = st.value.isEmpty ? String(localized: "Not set") : st.value
+        return String(localized: "\(st.name): \(from) → \(change.value) · \(row.title)")
     }
 }

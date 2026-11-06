@@ -56,7 +56,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
     var details: JSONValue?
     var errorDescription: String? {
         guard status >= 500, let requestID else { return message }
-        return String(localized: "\(message)（请求 \(requestID)）")
+        return String(localized: "\(message) (request \(requestID))")
     }
     var code: String? { fields["code"] }
 
@@ -80,7 +80,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
         let message = err["message"]?.string
         let code = err["code"]?.string
         switch (message, code) {
-        case let (m?, c?): return String(localized: "\(m)（\(c)）", comment: "An error message and its code")
+        case let (m?, c?): return String(localized: "\(m) (\(c))", comment: "An error message and its code")
         case let (m?, nil): return m
         case let (nil, c?): return c
         default: return nil
@@ -90,7 +90,7 @@ nonisolated struct APIError: LocalizedError, Sendable {
 
 nonisolated enum DemoText {
     /// What a Demo Mode action that would reach a computer, Feishu or mail says instead.
-    static var notSent: String { String(localized: "体验模式下不会真的发送") }
+    static var notSent: String { String(localized: "Nothing is actually sent in demo mode") }
     /// `APIError.code` of such a refusal.
     static let code = "demo"
 }
@@ -184,7 +184,7 @@ nonisolated struct APIClient: Sendable {
             if opID != nil { try Self.checkReceipt(data, status: nil) }
             return data
         }
-        if config.isDemo { throw APIError(status: 503, message: String(localized: "体验模式不可用")) }
+        if config.isDemo { throw APIError(status: 503, message: String(localized: "Demo mode isn't available")) }
         var req = URLRequest(url: url(path, query: query), timeoutInterval: timeout)
         req.httpMethod = method
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
@@ -210,8 +210,8 @@ nonisolated struct APIClient: Sendable {
               case .object(let obj)? = try? JSON.decoder.decode(JSONValue.self, from: data), obj.count == 1,
               let state = obj["state"]?.string else { return }
         switch state {
-        case "pending": throw APIError(status: 202, message: String(localized: "上一次的请求还在处理"), fields: ["code": OpReceipt.pendingCode])
-        case "unknown": throw APIError(status: 202, message: String(localized: "不确定上一次有没有执行"), fields: ["code": OpReceipt.unknownCode])
+        case "pending": throw APIError(status: 202, message: String(localized: "The last request is still being processed"), fields: ["code": OpReceipt.pendingCode])
+        case "unknown": throw APIError(status: 202, message: String(localized: "Not sure whether the last request went through"), fields: ["code": OpReceipt.unknownCode])
         default: return
         }
     }
@@ -317,7 +317,7 @@ nonisolated struct APIClient: Sendable {
         try Task.checkCancellation()
         let size = (try FileManager.default.attributesOfItem(atPath: temp.path)[.size] as? NSNumber)?.int64Value ?? 0
         if response.expectedContentLength >= 0, size != response.expectedContentLength {
-            throw APIError(status: 0, message: String(localized: "文件没有下载完整，请重试"))
+            throw APIError(status: 0, message: String(localized: "The file didn't fully download. Try again."))
         }
         try FileManager.default.moveItem(at: temp, to: destination)
         progress(size, size)

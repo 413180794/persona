@@ -28,7 +28,7 @@ final class RecordingLibrary {
                       entry.id.uuidString == dir.lastPathComponent else { return nil }
                 return entry
             }.sorted { $0.createdAt > $1.createdAt }
-        } catch { self.error = String(localized: "录音目录读不出来") }
+        } catch { self.error = String(localized: "Can't read the recordings folder") }
     }
 
     nonisolated func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
@@ -70,7 +70,7 @@ final class RecordingLibrary {
     func change(_ id: UUID, _ edit: (inout RecordingEntry) -> Void) {
         guard var entry = entry(id) else { return }
         edit(&entry)
-        do { try save(entry) } catch { self.error = String(localized: "录音信息没有保存，请保留 App 并重试") }
+        do { try save(entry) } catch { self.error = String(localized: "The recording info wasn't saved. Keep the app installed and try again.") }
     }
 
     func addSegment(_ id: UUID, _ segment: RecordingSegment) {
@@ -118,7 +118,7 @@ final class RecordingLibrary {
             }
             entry.active = false
             entry.expectedSegments = (entry.segments.map(\.index).max() ?? -1) + 1
-            do { try save(entry) } catch { self.error = String(localized: "上次录音的收尾信息没有保存") }
+            do { try save(entry) } catch { self.error = String(localized: "The end of the last recording wasn't saved") }
         }
     }
 }

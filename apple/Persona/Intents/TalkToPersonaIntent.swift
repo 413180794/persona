@@ -4,11 +4,11 @@ import Foundation
 /// "Talk to Persona": starts the hands-free voice conversation on the CarPlay screen (or says where it is not there yet).
 /// Runs in the background; the conversation itself is `VoiceConversation(surface: .carPlay)` via `VoiceCalls`.
 struct TalkToPersonaIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "跟 Persona 聊聊"
+    nonisolated static let title: LocalizedStringResource = "Talk to Persona"
     nonisolated static let description = IntentDescription(
-        "在 CarPlay 上开始和 Persona 连续、免提的语音对话：你说，它答，你随时可以插话。",
-        categoryName: "对话",
-        searchKeywords: ["Persona", "语音", "聊聊", "聊天", "CarPlay", "voice", "chat"]
+        "Start a continuous, hands-free voice chat with Persona on CarPlay: you talk, it answers, and you can cut in anytime.",
+        categoryName: "Chat",
+        searchKeywords: ["Persona", "voice", "talk", "chat", "CarPlay", "voice", "chat"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 

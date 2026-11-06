@@ -28,7 +28,7 @@ nonisolated enum ExtensionNotificationActions {
             if action.foreground == true { options.formUnion([.foreground, .authenticationRequired]) }
             if let input = action.input {
                 buttons.append(UNTextInputNotificationAction(identifier: action.id, title: action.title, options: options,
-                    textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: input.placeholder ?? String(localized: "输入内容")))
+                    textInputButtonTitle: String(localized: "Send"), textInputPlaceholder: input.placeholder ?? String(localized: "Type here")))
             } else {
                 buttons.append(UNNotificationAction(identifier: action.id, title: action.title, options: options))
             }

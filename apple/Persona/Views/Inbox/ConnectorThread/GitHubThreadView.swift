@@ -72,8 +72,8 @@ struct GitHubThreadView: View {
         }
         .safeAreaInset(edge: .bottom) {
             if model.chat?.reply != nil {
-                ThreadComposer(placeholder: String(localized: "评论到 #\(String(model.thread.split(separator: "#").last ?? ""))"), text: $text, selection: $selection,
-                               focused: $focused, quote: quoted.map { ($0.isMine ? String(localized: "引用 自己") : String(localized: "引用 \($0.sender.name)"), $0.summary) },
+                ThreadComposer(placeholder: String(localized: "Comment on #\(String(model.thread.split(separator: "#").last ?? ""))"), text: $text, selection: $selection,
+                               focused: $focused, quote: quoted.map { ($0.isMine ? String(localized: "Quoting yourself") : String(localized: "Quoting \($0.sender.name)"), $0.summary) },
                                sending: model.sending, cancelQuote: { quoted = nil }, send: send)
             }
         }
@@ -102,7 +102,7 @@ struct GitHubThreadView: View {
                     if model.loadingOlder {
                         ProgressView()
                     } else {
-                        Label(olderFailed ? "重新加载更早的动态" : "显示更早的动态", systemImage: olderFailed ? Theme.Icon.retry : Theme.Icon.expand)
+                        Label(olderFailed ? String(localized: "Reload Earlier Activity") : String(localized: "Show Earlier Activity"), systemImage: olderFailed ? Theme.Icon.retry : Theme.Icon.expand)
                             .font(Theme.Font.captionStrong)
                             .lineLimit(1)
                     }
@@ -163,11 +163,11 @@ struct GitHubThreadHeader: View {
             HStack(spacing: Theme.Space.s) {
                 Chip(text: GitHubThread.stateTitle(chat.state), symbol: stateSymbol, look: .tint(stateColor))
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("状态：\(GitHubThread.stateTitle(chat.state))") // not the symbol's name
+                    .accessibilityLabel("Status: \(GitHubThread.stateTitle(chat.state))") // not the symbol's name
                     .accessibilityIdentifier("github.state")
                 if let a = chat.author {
                     ThreadAvatar(connector: connector, name: a.name, ref: a.avatar, size: Theme.Size.iconS)
-                    Text("\(a.name) 发起").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text("Opened by \(a.name)").font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             if let b = chat.branch {
@@ -177,7 +177,7 @@ struct GitHubThreadHeader: View {
                     Image(systemName: Theme.Icon.gitBranch).font(Theme.Font.caption)
                 }
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("从 \(b.head) 合并到 \(b.base)")
+                .accessibilityLabel("Merge \(b.head) into \(b.base)")
             }
             if let labels = chat.labels, !labels.isEmpty {
                 FlowLayoutRow {
@@ -187,7 +187,7 @@ struct GitHubThreadHeader: View {
             if let url = chat.url {
                 Divider().padding(.vertical, Theme.Space.xs)
                 Button { open(url) } label: {
-                    Label("在 GitHub 打开", systemImage: Theme.Icon.safari).font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Label("Open in GitHub", systemImage: Theme.Icon.safari).font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("github.open")
@@ -237,12 +237,12 @@ struct GitHubDescription: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if let a = chat.author {
-                GitHubByline(connector: connector, person: a, detail: String(localized: "描述"), at: nil)
+                GitHubByline(connector: connector, person: a, detail: String(localized: "description"), at: nil)
             }
             if let body = chat.body, !body.isEmpty {
                 GitHubMarkdown(text: body)
             } else {
-                Text("没有描述").font(Theme.Font.secondary).foregroundStyle(.tertiary)
+                Text("No description").font(Theme.Font.secondary).foregroundStyle(.tertiary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -299,12 +299,12 @@ struct GitHubCommentCard: View {
             GitHubByline(connector: connector, person: m.sender, detail: detail, detailSymbol: reviewSymbol, detailColor: reviewColor, at: m.at)
             if let code = m.code { GitHubCodeRef(code: code) }
             if let q = m.replyTo {
-                QuoteCard(heading: q.from ?? String(localized: "评论"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "（原评论）"), tint: LarkColor.blue,
+                QuoteCard(heading: q.from ?? String(localized: "Comments"), summary: q.text.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "(Original comment)"), tint: LarkColor.blue,
                           ink: .primary) {}
             }
             if !words.isEmpty { GitHubMarkdown(text: words) }
             if m.edited == true {
-                Text("已编辑").font(Theme.Font.caption).foregroundStyle(.tertiary)
+                Text("Edited").font(Theme.Font.caption).foregroundStyle(.tertiary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -326,7 +326,7 @@ struct GitHubCommentCard: View {
     private var detail: String? {
         switch m.kind {
         case "review": GitHubThread.reviewTitle(m.review)
-        case "code": String(localized: "评论了代码")
+        case "code": String(localized: "commented on code")
         default: nil
         }
     }
@@ -352,16 +352,16 @@ struct GitHubCommentCard: View {
 
     @ViewBuilder private var menu: some View {
         if canReply {
-            Button { quote(m) } label: { Label("引用回复", systemImage: Theme.Icon.reply) }
+            Button { quote(m) } label: { Label("Quote Reply", systemImage: Theme.Icon.reply) }
         }
         if !words.isEmpty {
             Button {
                 UIPasteboard.general.string = words
                 Haptics.success()
-            } label: { Label("拷贝", systemImage: Theme.Icon.copy) }
+            } label: { Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy) }
         }
         if let u = m.url {
-            Button { open(u) } label: { Label("在 GitHub 打开", systemImage: Theme.Icon.safari) }
+            Button { open(u) } label: { Label("Open in GitHub", systemImage: Theme.Icon.safari) }
         }
     }
 }
@@ -456,7 +456,7 @@ struct GitHubChecksCard: View {
                             shown = s
                         }
                     } label: {
-                        Label(isOpen ? "收起日志" : "日志", systemImage: isOpen ? Theme.Icon.collapse : Theme.Icon.expand)
+                        Label(isOpen ? String(localized: "Hide Logs") : String(localized: "Logs"), systemImage: isOpen ? Theme.Icon.collapse : Theme.Icon.expand)
                             .font(Theme.Font.label).lineLimit(1)
                     }
                     .buttonStyle(.borderless)
@@ -465,7 +465,7 @@ struct GitHubChecksCard: View {
                         Image(systemName: Theme.Icon.disclosure).font(Theme.Font.label).foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("打开 \(c.name)")
+                    .accessibilityLabel("Open \(c.name) [Git Hub Thread View eb8679]")
                 }
             }
             if hasLog, isOpen, let log = c.log {

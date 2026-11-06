@@ -36,8 +36,8 @@ nonisolated struct RecordingEntry: Codable, Identifiable, Hashable, Sendable {
     var revision: Int64 { Int64(((updatedAt ?? createdAt).timeIntervalSince1970 * 1000).rounded()) }
 
     var duration: Double { segments.map { $0.start + $0.duration }.max() ?? 0 }
-    var displayTitle: String { title.isEmpty ? String(localized: "录音 · \(createdAt.formatted(date: .abbreviated, time: .shortened))") : title }
-    var sourceTitle: String { source == .watch ? "Apple Watch" : String(localized: "手机") }
+    var displayTitle: String { title.isEmpty ? String(localized: "Recording · \(createdAt.formatted(date: .abbreviated, time: .shortened))") : title }
+    var sourceTitle: String { source == .watch ? "Apple Watch" : String(localized: "iPhone") }
     var receivedAll: Bool {
         guard !active, let count = expectedSegments, count > 0 else { return false }
         return Set(segments.map(\.index)) == Set(0..<count)

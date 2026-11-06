@@ -9,7 +9,7 @@ struct VisionChatScene: Scene {
     let model: AppModel
 
     var body: some Scene {
-        WindowGroup("对话", id: VisionChatWindow.id, for: SessionKey.self) { $key in
+        WindowGroup(String(localized: "Chat"), id: VisionChatWindow.id, for: SessionKey.self) { $key in
             VisionChatWindow(key: key).environment(model)
         }
         .defaultSize(width: Theme.Size.visionChatWindowWidth, height: Theme.Size.visionChatWindowHeight)
@@ -32,9 +32,9 @@ struct VisionChatWindow: View {
                         // The first page of its own window: nothing to go back to (no back arrow).
                         .environment(\.splitDetail, SplitDetail(isFirstPage: true))
                 }
-                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "对话"))
+                .navigationTitle(model.session(key)?.displayTitle ?? String(localized: "Chat"))
             } else {
-                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "没有对话"), message: String(localized: "这个窗口打开的对话已经不在了。"))
+                EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "No Chat"), message: String(localized: "The chat this window opened is gone."))
             }
         }
         .frame(minWidth: Theme.Size.visionChatWindowMinWidth, minHeight: Theme.Size.visionChatWindowMinHeight)
@@ -50,7 +50,7 @@ struct VisionOpenInWindowButton: View {
 
     var body: some View {
         Button { openWindow(id: VisionChatWindow.id, value: key) } label: {
-            Label("在新窗口打开", systemImage: Theme.Icon.newWindow)
+            Label("Open in New Window", systemImage: Theme.Icon.newWindow)
         }
     }
 }

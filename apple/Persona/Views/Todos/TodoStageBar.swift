@@ -31,7 +31,7 @@ struct TodoStageBar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("阶段：\(stage.label)（第 \(stage.stepNumber) 步，共 \(TodoStage.stepCount) 步）")
+        .accessibilityLabel("Stage: \(stage.label) (step \(stage.stepNumber) of \(TodoStage.stepCount))")
         .accessibilityIdentifier("todo.stage")
     }
 

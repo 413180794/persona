@@ -61,7 +61,7 @@ final class VNCScreenUIView: UIView, UIGestureRecognizerDelegate {
             addGestureRecognizer(g)
         }
         isAccessibilityElement = true
-        accessibilityLabel = String(localized: "Mac 的画面")
+        accessibilityLabel = String(localized: "Mac's screen")
         accessibilityIdentifier = "vnc-screen"
     }
 

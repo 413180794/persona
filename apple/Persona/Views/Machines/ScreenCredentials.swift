@@ -78,7 +78,7 @@ nonisolated enum ScreenUnlock {
         #if DEBUG
         if UserDefaults.standard.bool(forKey: "showUnlockWithoutAuth") { return true } // UI tests: no Face ID on the simulator
         #endif
-        return (try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: String(localized: "在「\(name)」的锁屏上输入记住的密码"))) ?? false
+        return (try? await LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: String(localized: "Type the saved password on \(name)'s lock screen"))) ?? false
     }
 }
 
@@ -94,7 +94,7 @@ struct ScreenForgetButton: View {
             kept = false
             Haptics.success()
         } label: {
-            Text("忘记屏幕共享密码").font(Theme.Font.labelStrong).lineLimit(1).minimumScaleFactor(0.8)
+            Text("Forget Screen Sharing Password").font(Theme.Font.labelStrong).lineLimit(1).minimumScaleFactor(0.8)
         }
         .themedButton()
         .accessibilityIdentifier("screen-forget")

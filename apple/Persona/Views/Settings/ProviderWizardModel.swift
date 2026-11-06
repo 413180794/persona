@@ -8,10 +8,10 @@ enum LauncherName {
         let n = name.trimmingCharacters(in: .whitespaces)
         guard !n.isEmpty else { return nil }
         if n.range(of: "^[A-Za-z_][A-Za-z0-9_-]*$", options: .regularExpression) == nil {
-            return String(localized: "名字只能用字母、数字、_ 和 -，以字母或 _ 开头")
+            return String(localized: "Names can only use letters, digits, _, and -, and must start with a letter or _")
         }
         // The hub's reservedLauncherNames: claude itself and the /api/v1/launchers/<word> routes.
-        if ["claude", "presets", "test", "discover", "import"].contains(n) { return String(localized: "不能叫 \(n)") }
+        if ["claude", "presets", "test", "discover", "import"].contains(n) { return String(localized: "Can't be named \(n)") }
         return nil
     }
 }
@@ -446,17 +446,17 @@ struct AssignSummary: Equatable {
         // An older hub (or no assign) says nothing of it: the screen sends the user to Model Settings instead.
         guard asked, let a = r.assigned else { return }
         if Set(a) == Set(ProviderWizardModel.assignPurposes) {
-            assigned = String(localized: "主对话和新开的 Agent 现在用它。")
+            assigned = String(localized: "The main conversation and new agents now use it.")
         } else if !a.isEmpty {
-            assigned = String(localized: "\(ListFormatter.localizedString(byJoining: a.map(Self.purpose))) 现在用它。")
+            assigned = String(localized: "\(ListFormatter.localizedString(byJoining: a.map(Self.purpose))) now uses it.")
         }
         kept = (r.kept ?? []).map { Self.kept($0) }
     }
 
     static func purpose(_ id: String) -> String {
         switch id {
-        case "assistant": String(localized: "主对话")
-        case "agent.new": String(localized: "新开的 Agent")
+        case "assistant": String(localized: "Main Chat")
+        case "agent.new": String(localized: "New agents")
         default: id
         }
     }
@@ -464,10 +464,10 @@ struct AssignSummary: Equatable {
     static func kept(_ k: LauncherAdded.Kept) -> String {
         let p = purpose(k.purpose)
         return switch k.reason {
-        case "customized": String(localized: "\(p)没换：你改过，保留你的选择。")
-        case "incompatible": String(localized: "\(p)没换：它用不了这个供应商。")
-        case "failed": String(localized: "\(p)没换成：可以在「模型配置」里手动选。")
-        default: String(localized: "\(p)没换。")
+        case "customized": String(localized: "\(p) unchanged: you had changed it, so your choice stays.")
+        case "incompatible": String(localized: "\(p) unchanged: it can't use this provider.")
+        case "failed": String(localized: "\(p) wasn't switched: you can pick it yourself in Model Settings.")
+        default: String(localized: "\(p) unchanged.")
         }
     }
 }

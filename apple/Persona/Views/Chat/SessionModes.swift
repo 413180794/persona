@@ -10,34 +10,34 @@ nonisolated enum SessionModes {
     }
 
     static let permissionModes: [Option] = [
-        Option(id: "default", title: String(localized: "手动确认"), detail: String(localized: "改文件、跑命令前都先问你"), symbol: Theme.Icon.askFirst),
-        Option(id: "acceptEdits", title: String(localized: "自动改文件"), detail: String(localized: "改文件不问，跑命令还会问"), symbol: "pencil.line"),
-        Option(id: "plan", title: String(localized: "只做计划"), detail: String(localized: "只读代码、写计划，批准后才动手"), symbol: "list.bullet.clipboard"),
-        Option(id: "auto", title: String(localized: "自动", comment: "Permission mode: the agent judges the risk itself"), detail: String(localized: "自己判断风险，安全的直接做"), symbol: "wand.and.sparkles"),
-        Option(id: "bypassPermissions", title: String(localized: "全部放行"), detail: String(localized: "什么都不问；只能在新开时选"), symbol: Theme.Icon.allowEverything),
+        Option(id: "default", title: String(localized: "Ask First"), detail: String(localized: "Asks you before editing files or running commands"), symbol: Theme.Icon.askFirst),
+        Option(id: "acceptEdits", title: String(localized: "Auto-Edit"), detail: String(localized: "Edits files without asking, still asks before commands"), symbol: "pencil.line"),
+        Option(id: "plan", title: String(localized: "Plan Only"), detail: String(localized: "Reads code and writes a plan, acts only once you approve"), symbol: "list.bullet.clipboard"),
+        Option(id: "auto", title: String(localized: "Auto", comment: "Permission mode: the agent judges the risk itself"), detail: String(localized: "Judges the risk itself and does safe things right away"), symbol: "wand.and.sparkles"),
+        Option(id: "bypassPermissions", title: String(localized: "Allow Everything"), detail: String(localized: "Never asks. Only available when starting"), symbol: Theme.Icon.allowEverything),
     ]
 
     /// "auto" is the model's own default level (node/modes.go). Replies are recorded at the level they actually ran at,
     /// so after the next reply the chip shows that level instead.
     static let effortLevels: [Option] = [
-        Option(id: "auto", title: String(localized: "自动", comment: "Thinking effort level"), detail: String(localized: "用模型自己的默认档"), symbol: Theme.Icon.effortAuto),
-        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "最快，简单的事够用"), symbol: "gauge.with.dots.needle.0percent"),
-        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快一些"), symbol: Theme.Icon.context),
-        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "大多数任务的默认"), symbol: Theme.Icon.effort),
-        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: "gauge.with.dots.needle.67percent"),
-        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: "gauge.with.dots.needle.100percent"),
+        Option(id: "auto", title: String(localized: "Auto", comment: "Thinking effort level"), detail: String(localized: "The model's own default level"), symbol: Theme.Icon.effortAuto),
+        Option(id: "low", title: String(localized: "Low", comment: "Thinking effort level"), detail: String(localized: "Fastest, fine for simple things"), symbol: "gauge.with.dots.needle.0percent"),
+        Option(id: "medium", title: String(localized: "Medium [Session Modes a567bd]", comment: "Thinking effort level"), detail: String(localized: "A bit faster"), symbol: Theme.Icon.context),
+        Option(id: "high", title: String(localized: "High [Session Modes b1c278]", comment: "Thinking effort level"), detail: String(localized: "Default for most tasks"), symbol: Theme.Icon.effort),
+        Option(id: "xhigh", title: String(localized: "Extra High", comment: "Thinking effort level"), detail: String(localized: "More careful, but slower and pricier"), symbol: "gauge.with.dots.needle.67percent"),
+        Option(id: "max", title: String(localized: "Max", comment: "Thinking effort level"), detail: String(localized: "Slowest and most careful"), symbol: "gauge.with.dots.needle.100percent"),
     ]
 
     /// Codex's reasoning efforts (node/codex_effort.go); a thread offers its model's, in `Session.efforts`. Their symbols
     /// come from Claude Code's levels without auto (`startEffortLevels`), so `[0]` is low.
     static let codexEffortLevels: [Option] = [
-        Option(id: "minimal", title: String(localized: "极低", comment: "Thinking effort level"), detail: String(localized: "几乎不思考，最快"), symbol: startEffortLevels[0].symbol),
-        Option(id: "low", title: String(localized: "低", comment: "Thinking effort level"), detail: String(localized: "快，简单的事够用"), symbol: startEffortLevels[0].symbol),
-        Option(id: "medium", title: String(localized: "中", comment: "Thinking effort level"), detail: String(localized: "快慢适中"), symbol: startEffortLevels[1].symbol),
-        Option(id: "high", title: String(localized: "高", comment: "Thinking effort level"), detail: String(localized: "更仔细"), symbol: startEffortLevels[2].symbol),
-        Option(id: "xhigh", title: String(localized: "很高", comment: "Thinking effort level"), detail: String(localized: "更仔细，也更慢、更贵"), symbol: startEffortLevels[3].symbol),
-        Option(id: "max", title: String(localized: "最高", comment: "Thinking effort level"), detail: String(localized: "最慢最仔细"), symbol: startEffortLevels[4].symbol),
-        Option(id: "ultra", title: String(localized: "极高", comment: "Thinking effort level"), detail: String(localized: "最仔细，还会主动分给多个子 Agent 一起做"), symbol: startEffortLevels[4].symbol),
+        Option(id: "minimal", title: String(localized: "Minimal", comment: "Thinking effort level"), detail: String(localized: "Barely thinks, fastest"), symbol: startEffortLevels[0].symbol),
+        Option(id: "low", title: String(localized: "Low", comment: "Thinking effort level"), detail: String(localized: "Fast, fine for simple things"), symbol: startEffortLevels[0].symbol),
+        Option(id: "medium", title: String(localized: "Medium [Session Modes a567bd]", comment: "Thinking effort level"), detail: String(localized: "Balanced speed"), symbol: startEffortLevels[1].symbol),
+        Option(id: "high", title: String(localized: "High [Session Modes b1c278]", comment: "Thinking effort level"), detail: String(localized: "More careful"), symbol: startEffortLevels[2].symbol),
+        Option(id: "xhigh", title: String(localized: "Extra High", comment: "Thinking effort level"), detail: String(localized: "More careful, but slower and pricier"), symbol: startEffortLevels[3].symbol),
+        Option(id: "max", title: String(localized: "Max", comment: "Thinking effort level"), detail: String(localized: "Slowest and most careful"), symbol: startEffortLevels[4].symbol),
+        Option(id: "ultra", title: String(localized: "Ultra", comment: "Thinking effort level"), detail: String(localized: "Most careful, and splits work across subagents on its own"), symbol: startEffortLevels[4].symbol),
     ]
 
     /// Modes a running session can switch to (bypassPermissions only at start, see node/modes.go).
@@ -49,7 +49,7 @@ nonisolated enum SessionModes {
     /// Every mode for an assistant conversation (the main one too, new or running): the node restarts its Claude in
     /// Allow Everything (#2416), so the option doesn't say "only when new".
     static let assistantModes = permissionModes.map { o in
-        o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: String(localized: "改文件、跑命令都不问你"), symbol: o.symbol) : o
+        o.id == "bypassPermissions" ? Option(id: o.id, title: o.title, detail: String(localized: "Edits files and runs commands without asking"), symbol: o.symbol) : o
     }
 
     /// The modes a running session can switch to: every one for an assistant conversation, `switchableModes` otherwise.
@@ -77,10 +77,10 @@ nonisolated enum SessionModes {
     /// Why the model cannot be switched right now (nil when it can): the node refuses the same cases.
     static func modelBusy(_ s: Session?) -> String? {
         switch s?.state {
-        case .working?: String(localized: "工作中，停下后再切换模型")
-        case .needsYou?: String(localized: "等你回答，答完后再切换模型")
-        case .offline?: String(localized: "没在运行")
-        default: s?.starting == true ? String(localized: "正在启动") : nil
+        case .working?: String(localized: "Working. Switch models after it stops.")
+        case .needsYou?: String(localized: "Waiting for your answer. Switch models after you reply.")
+        case .offline?: String(localized: "Not running [Session Modes 06dd52]")
+        default: s?.starting == true ? String(localized: "Starting [Session Modes 087739]") : nil
         }
     }
 
@@ -99,7 +99,7 @@ nonisolated enum SessionModes {
 
     /// "Ask First" for known modes, the raw value otherwise (Codex approval policies, newer Claude Code modes).
     /// For a mode or effort the session has not reported.
-    static var unknown: String { String(localized: "未知") }
+    static var unknown: String { String(localized: "Unknown [Session Modes 4d8c1c]") }
     static func modeLabel(_ id: String?) -> String? { id.map { mode($0)?.title ?? $0 } }
     static func effortLabel(_ id: String?) -> String? { id.map { effort($0)?.title ?? $0 } }
 
@@ -116,7 +116,7 @@ nonisolated enum SessionModes {
     static func composerTitle(model: String?, effort: String?) -> ComposerTitle? {
         switch (model, effort) {
         case let (m?, e): ComposerTitle(model: m, effort: e)
-        case let (nil, e?): ComposerTitle(model: String(localized: "思考", comment: "Composer button title when no model is known: thinking effort follows"), effort: e)
+        case let (nil, e?): ComposerTitle(model: String(localized: "Thinking [Message Views 8cf010]", comment: "Composer button title when no model is known: thinking effort follows"), effort: e)
         case (nil, nil): nil
         }
     }
@@ -169,7 +169,7 @@ struct SessionModeBar: View {
         HStack(spacing: Theme.Space.s) {
             if session?.setsEffortOnly != true {
                 Menu {
-                    Picker("权限模式", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
+                    Picker("Permission Mode", selection: Binding(get: { mode ?? "" }, set: { new in change(mode: new) })) {
                         ForEach(options(SessionModes.switchableModes(session), current: mode)) { o in
                             Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                         }
@@ -177,13 +177,13 @@ struct SessionModeBar: View {
                     .pickerStyle(.inline)
                 } label: {
                     ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
-                             text: SessionModes.modeLabel(mode) ?? String(localized: "权限模式"), tint: SessionModes.modeTint(mode), known: mode != nil)
+                             text: SessionModes.modeLabel(mode) ?? String(localized: "Permission Mode"), tint: SessionModes.modeTint(mode), known: mode != nil)
                 }
                 .labelOnlyMenu()
-                .accessibilityLabel("权限模式：\(SessionModes.modeLabel(mode) ?? SessionModes.unknown)")
+                .accessibilityLabel("Permission Mode: \(SessionModes.modeLabel(mode) ?? SessionModes.unknown)")
             }
             Menu {
-                Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
+                Picker("Thinking Effort", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
                     ForEach(SessionModes.effortOptions(session)) { o in
                         Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                     }
@@ -192,8 +192,8 @@ struct SessionModeBar: View {
                 // The model in the same chip (#3119, the web's #2434): Claude Code takes `/model`, typed by the node.
                 if SessionModes.switchesModel(session) {
                     let busy = SessionModes.modelBusy(session)
-                    Section("模型") {
-                        Picker("模型", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in change(model: id) })) {
+                    Section("Model [Assistant View c98e11]") {
+                        Picker("Model [Assistant View c98e11]", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in change(model: id) })) {
                             ForEach(PromptItems.claudeModels, id: \.id) { m in
                                 Text(m.name).tag(m.id)
                             }
@@ -201,17 +201,17 @@ struct SessionModeBar: View {
                         .pickerStyle(.inline)
                         .disabled(busy != nil)
                         // A menu draws no section footers: the note is a row of its own (not tappable).
-                        Text(busy ?? String(localized: "所选模型也会成为新会话的默认"))
+                        Text(busy ?? String(localized: "The model you pick also becomes the default for new sessions"))
                     }
                 }
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: effort.map { String(localized: "思考\(SessionModes.effortLabel($0) ?? $0)") } ?? String(localized: "思考强度"), tint: .secondary, known: effort != nil)
+                         text: effort.map { String(localized: "Thinking \(SessionModes.effortLabel($0) ?? $0) [Session Modes e77236]") } ?? String(localized: "Thinking Effort"), tint: .secondary, known: effort != nil)
             }
             .labelOnlyMenu()
             .accessibilityLabel(SessionModes.switchesModel(session)
-                ? String(localized: "思考强度与模型：\(SessionModes.effortLabel(effort) ?? String(localized: "未知"))，\(SessionModes.modelName(session?.model) ?? String(localized: "模型未知"))")
-                : String(localized: "思考强度：\(SessionModes.effortLabel(effort) ?? String(localized: "未知"))"))
+                ? String(localized: "Thinking effort and model: \(SessionModes.effortLabel(effort) ?? String(localized: "Unknown [Session Modes 4d8c1c]")), \(SessionModes.modelName(session?.model) ?? String(localized: "Unknown model"))")
+                : String(localized: "Thinking effort: \(SessionModes.effortLabel(effort) ?? String(localized: "Unknown [Session Modes 4d8c1c]"))"))
             if changing { ProgressView().controlSize(.mini) }
             Spacer(minLength: 0)
         }
@@ -265,9 +265,9 @@ struct SessionModesMenu: View {
         if setsModes, mode == "bypassPermissions" {
             Section { BypassWarning() }
         }
-        Section("模型") {
+        Section("Model [Assistant View c98e11]") {
             if picksModel {
-                Picker("模型", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in
+                Picker("Model [Assistant View c98e11]", selection: Binding(get: { PromptItems.claudeModelID(session?.model) }, set: { id in
                     guard id != PromptItems.claudeModelID(session?.model) else { return }
                     model.sendNow(key, text: "/model \(id)", images: []) // photos and quotes stay for the message
                 })) {
@@ -277,12 +277,12 @@ struct SessionModesMenu: View {
                 }
                 .pickerStyle(.inline)
             } else {
-                Text(SessionModes.modelName(session?.model) ?? String(localized: "模型未知")) // what it runs; changed where it was started
+                Text(SessionModes.modelName(session?.model) ?? String(localized: "Unknown model")) // what it runs; changed where it was started
             }
         }
         if setsModes || setsEffortOnly {
-            Section("思考强度") {
-                Picker("思考强度", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
+            Section("Thinking Effort") {
+                Picker("Thinking Effort", selection: Binding(get: { effort ?? "" }, set: { new in change(effort: new) })) {
                     ForEach(SessionModes.effortOptions(session)) { o in
                         Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                     }
@@ -297,7 +297,7 @@ struct SessionModesMenu: View {
                     Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id)
                 }
             } label: {
-                Label("权限模式：\(SessionModes.modeLabel(mode) ?? SessionModes.unknown)", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
+                Label("Permission Mode: \(SessionModes.modeLabel(mode) ?? SessionModes.unknown)", systemImage: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst)
             }
             .pickerStyle(.menu)
         }
@@ -315,8 +315,8 @@ struct BypassWarning: View {
     var body: some View {
         Button(role: .destructive) {} label: {
             Label {
-                Text("全部放行")
-                Text("改文件、跑命令都不问你")
+                Text("Allow Everything")
+                Text("Edits files and runs commands without asking")
             } icon: {
                 // A menu draws its images in the accent unless they carry their own colors.
                 Image(systemName: Theme.Icon.allowEverything).symbolRenderingMode(.palette).foregroundStyle(Theme.danger)
@@ -357,25 +357,25 @@ struct NewSessionModePicker: View {
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             Menu {
-                Picker("权限模式", selection: $mode) {
-                    Text("跟随启动器").tag("")
+                Picker("Permission Mode", selection: $mode) {
+                    Text("Use Launcher's").tag("")
                     ForEach(modes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
                 }
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.mode(mode)?.symbol ?? Theme.Icon.askFirst,
-                         text: SessionModes.mode(mode)?.title ?? String(localized: "权限：默认"), tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
+                         text: SessionModes.mode(mode)?.title ?? String(localized: "Permissions: Default"), tint: SessionModes.modeTint(mode), known: !mode.isEmpty)
             }
             .labelOnlyMenu()
             Menu {
-                Picker("思考强度", selection: $effort) {
-                    Text("跟随启动器").tag("")
+                Picker("Thinking Effort", selection: $effort) {
+                    Text("Use Launcher's").tag("")
                     ForEach(SessionModes.startEffortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
                 }
                 .pickerStyle(.inline)
             } label: {
                 ModeChip(symbol: SessionModes.effort(effort)?.symbol ?? Theme.Icon.effort,
-                         text: SessionModes.effort(effort).map { String(localized: "思考\($0.title)") } ?? String(localized: "思考：默认"), tint: .secondary, known: !effort.isEmpty)
+                         text: SessionModes.effort(effort).map { String(localized: "Thinking \($0.title) [Session Modes e77236]") } ?? String(localized: "Thinking: Default"), tint: .secondary, known: !effort.isEmpty)
             }
             .labelOnlyMenu()
         }

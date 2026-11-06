@@ -197,11 +197,11 @@ nonisolated struct MachineEngine: RawRepresentable, Codable, Hashable, CaseItera
     }
     var detail: String? {
         switch self {
-        case .herdr: String(localized: "终端里的 herdr")
-        case .herdrApp: String(localized: "桌面 App 里开的终端")
-        case .herdrBoth: String(localized: "终端和桌面 App 的会话都显示")
-        case .orca: String(localized: "Orca 里的终端")
-        case .paseo: String(localized: "Paseo 里的 Agent")
+        case .herdr: String(localized: "herdr in a terminal")
+        case .herdrApp: String(localized: "Terminals in the desktop app")
+        case .herdrBoth: String(localized: "Sessions from both the terminal and the desktop app")
+        case .orca: String(localized: "Terminals in Orca")
+        case .paseo: String(localized: "Agents in Paseo")
         default: nil
         }
     }
@@ -295,7 +295,7 @@ nonisolated struct MachineComputer: Codable, Hashable, Sendable {
 
     /// The macOS permissions it still lacks, by their names in System Settings.
     var missingPermissions: [String] {
-        [(accessibility, String(localized: "辅助功能", comment: "macOS privacy setting name")), (screenRecording, String(localized: "屏幕录制", comment: "macOS privacy setting name"))].compactMap { $0.0 == "missing" ? $0.1 : nil }
+        [(accessibility, String(localized: "Accessibility", comment: "macOS privacy setting name")), (screenRecording, String(localized: "Screen Recording", comment: "macOS privacy setting name"))].compactMap { $0.0 == "missing" ? $0.1 : nil }
     }
 }
 
@@ -684,10 +684,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var canDelete: Bool { !assistant && starting != true && (status == .offline || status == .done || status == .unknown) }
     var sourceLabel: String? {
         switch sourceKind {
-        case "codex_app_server": String(localized: "Codex 实时")
-        case "identity_conflict": String(localized: "身份冲突")
-        case "codex_history": String(localized: "Codex 历史")
-        case "claude_bg": String(localized: "Claude 后台")
+        case "codex_app_server": String(localized: "Codex live")
+        case "identity_conflict": String(localized: "Identity conflict")
+        case "codex_history": String(localized: "Codex history")
+        case "claude_bg": String(localized: "Claude background")
         case "runtime": agentLabel // an agent runtime's session (docs/runtimes.md): its own name, "DSH"
         case .some(let kind) where !kind.isEmpty: kind
         default: nil
@@ -697,8 +697,8 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         guard let sourceLabel else { return nil }
         let detail = sourceKind == "identity_conflict" ? nil : agentName.flatMap { $0.isEmpty ? nil : $0 }
         let label = detail.map { sourceLabel + " · " + $0 } ?? sourceLabel
-        let reason = readOnlyReason.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "此来源尚未允许发送")
-        return canSend ? label : String(localized: "\(label) · 仅查看：\(reason)", comment: "A session's source, and why it can only be viewed")
+        let reason = readOnlyReason.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Sending isn't allowed from this source yet")
+        return canSend ? label : String(localized: "\(label) · View only: \(reason)", comment: "A session's source, and why it can only be viewed")
     }
 
     /// The host tool it lives in, from its pane ref: `botmux:…`, `orca:…`, `herdr-core:…`; any other pane is herdr's
@@ -945,7 +945,7 @@ nonisolated struct Subagent: Codable, Identifiable, Hashable, Sendable {
     var updatedAt: Date?
     var lastText: String?
 
-    var title: String { (description?.isEmpty == false ? description : nil) ?? type ?? String(localized: "子 Agent") }
+    var title: String { (description?.isEmpty == false ? description : nil) ?? type ?? String(localized: "Subagent [Task Note Row 70da69]") }
 
     enum CodingKeys: String, CodingKey {
         case id, type, description, running, fork, background
@@ -1011,12 +1011,12 @@ nonisolated struct GoalInfo: Codable, Hashable, Sendable {
     /// The status in words, as the goal bar and its sheet say it.
     var statusLabel: String {
         switch status {
-        case "active": String(localized: "进行中")
-        case "complete": String(localized: "已达成")
-        case "paused": String(localized: "已暂停")
-        case "blocked": String(localized: "受阻")
-        case "usage_limited": String(localized: "用量到上限")
-        case "budget_limited": String(localized: "预算用完")
+        case "active": String(localized: "Active")
+        case "complete": String(localized: "Achieved")
+        case "paused": String(localized: "Paused")
+        case "blocked": String(localized: "Blocked")
+        case "usage_limited": String(localized: "Usage Limit")
+        case "budget_limited": String(localized: "Out of Budget")
         default: status
         }
     }
@@ -1050,11 +1050,11 @@ nonisolated struct LoopInfo: Codable, Hashable, Sendable {
 
     /// "Every 30 min" / "cron 33 17 * * *".
     var cadence: String? {
-        if kind == "cron", let cron { return String(localized: "按计划 \(cron)") }
+        if kind == "cron", let cron { return String(localized: "Cron \(cron)") }
         guard let s = intervalSeconds, s > 0 else { return nil }
-        if s < 120 { return String(localized: "每 \(s) 秒") }
-        if s < 7200 { return String(localized: "每 \(s / 60) 分钟") }
-        return String(localized: "每 \(s / 3600) 小时")
+        if s < 120 { return String(localized: "Every \(s) seconds") }
+        if s < 7200 { return String(localized: "Every \(s / 60) minutes") }
+        return String(localized: "Every \(s / 3600) hours")
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1082,7 +1082,7 @@ nonisolated struct BackgroundTask: Codable, Identifiable, Hashable, Sendable {
     /// What to call it in one line: the description Claude gave, else the command.
     var title: String {
         if let d = description, !d.isEmpty { return d }
-        return command?.components(separatedBy: "\n").first ?? (isWorkflow ? "Workflow" : isAgent ? String(localized: "子代理") : String(localized: "后台命令"))
+        return command?.components(separatedBy: "\n").first ?? (isWorkflow ? "Workflow" : isAgent ? String(localized: "Subagent [Models acd37b]") : String(localized: "Background command"))
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1149,19 +1149,19 @@ extension Session {
         let left = wake.timeIntervalSince(now)
         let when: String
         if left < 60 {
-            when = retry ? String(localized: "马上重试") : String(localized: "马上叫醒")
+            when = retry ? String(localized: "retrying now") : String(localized: "waking now")
         } else {
             let after = Session.inMinutes(left)
-            when = retry ? String(localized: "\(after)后重试") : String(localized: "\(after)后叫醒")
+            when = retry ? String(localized: "retrying in \(after)") : String(localized: "waking in \(after)")
         }
-        return String(localized: "\(line)（\(when)）")
+        return String(localized: "\(line) (\(when))")
     }
     /// 「12 分钟」「1 小时 5 分」「2 小时」: when the hub acts next, minutes are enough.
     static func inMinutes(_ seconds: TimeInterval) -> String {
         let m = Int((seconds / 60).rounded())
-        if m < 60 { return String(localized: "\(m) 分钟") }
+        if m < 60 { return String(localized: "\(m) min [Task Views 135d12]") }
         let h = m / 60
-        return m % 60 == 0 ? String(localized: "\(h) 小时") : String(localized: "\(h) 小时 \(m % 60) 分")
+        return m % 60 == 0 ? String(localized: "\(h) hr") : String(localized: "\(h) hr \(m % 60) min")
     }
     /// A failure notice without the warning sign botmux starts it with: the app draws its own.
     static func failureText(_ reason: String) -> String {
@@ -1350,9 +1350,9 @@ nonisolated struct Compaction: Codable, Hashable, Sendable {
     /// Manual / Auto / While idle, for the divider; nil when the hub did not say.
     var source: String? {
         switch trigger {
-        case "manual": String(localized: "手动", comment: "How a compaction started")
-        case "auto": String(localized: "自动", comment: "How a compaction started")
-        case "idle": String(localized: "空闲时", comment: "How a compaction started")
+        case "manual": String(localized: "Manual [Models 962f41]", comment: "How a compaction started")
+        case "auto": String(localized: "Auto", comment: "How a compaction started")
+        case "idle": String(localized: "While idle", comment: "How a compaction started")
         default: nil
         }
     }
@@ -1625,7 +1625,7 @@ nonisolated struct DesktopDevice: Codable, Hashable, Sendable, Identifiable {
 
     /// The banner's line: 「Mac 上的 Persona 已登录」, or how many when there are several.
     static func bannerTitle(_ list: [DesktopDevice]) -> String {
-        list.count > 1 ? String(localized: "\(list.count) 台 Mac 上的 Persona 已登录") : String(localized: "Mac 上的 Persona 已登录")
+        list.count > 1 ? String(localized: "Persona is signed in on \(list.count) Macs") : String(localized: "Persona is signed in on your Mac")
     }
 }
 
@@ -1697,8 +1697,8 @@ nonisolated struct NotifyPrefs: Codable, Equatable, Sendable {
     /// "1 min" / "90 s": how the page words a duration from the hub.
     static func duration(_ seconds: Int?) -> String {
         let s = seconds ?? 60
-        if s >= 60, s % 60 == 0 { return String(localized: "\(s / 60) 分钟") }
-        return String(localized: "\(s) 秒")
+        if s >= 60, s % 60 == 0 { return String(localized: "\(s / 60) min [Task Views 135d12]") }
+        return String(localized: "\(s) s")
     }
 }
 
@@ -1885,13 +1885,13 @@ nonisolated enum DeleteSessionText {
     static func message(title: String, machine: String?, resume: String?) -> String {
         switch (machine, resume) {
         case let (machine?, resume?):
-            String(localized: "「\(title)」会从各端的列表里移除。\(machine) 上的对话记录不会删除，之后在电脑上用 \(resume) 继续，它会重新出现。")
+            String(localized: "“\(title)” will be removed from the list on all your devices. Its chat history on \(machine) won't be deleted; continue it on the computer with \(resume) and it'll come back.")
         case let (machine?, nil):
-            String(localized: "「\(title)」会从各端的列表里移除。\(machine) 上的对话记录不会删除，之后再用到它，它会重新出现。")
+            String(localized: "“\(title)” will be removed from the list on all your devices. Its chat history on \(machine) won't be deleted; it'll come back the next time it's used.")
         case let (nil, resume?):
-            String(localized: "「\(title)」会从各端的列表里移除。电脑上的对话记录不会删除，之后在电脑上用 \(resume) 继续，它会重新出现。")
+            String(localized: "“\(title)” will be removed from the list on all your devices. Its chat history on the computer won't be deleted; continue it there with \(resume) and it'll come back.")
         case (nil, nil):
-            String(localized: "「\(title)」会从各端的列表里移除。电脑上的对话记录不会删除，之后再用到它，它会重新出现。")
+            String(localized: "“\(title)” will be removed from the list on all your devices. Its chat history on the computer won't be deleted; it'll come back the next time it's used.")
         }
     }
 }
@@ -1899,5 +1899,5 @@ nonisolated enum DeleteSessionText {
 /// Where an agent was opened (`Session.source`, #2526).
 nonisolated enum SessionSource: String, Sendable {
     case feishu, terminal
-    var label: String { self == .feishu ? String(localized: "飞书群") : String(localized: "终端") }
+    var label: String { self == .feishu ? String(localized: "Lark Group [Models e86099]") : String(localized: "Terminal") }
 }

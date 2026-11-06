@@ -27,7 +27,7 @@ extension AppModel {
         } catch {
             compactionRequests[key] = nil
             Haptics.error()
-            toast = Toast(String(localized: "没开始压缩：\(error.shown ?? String(localized: "请稍后再试"))"), style: .error)
+            toast = Toast(String(localized: "Couldn't start compacting: \(error.shown ?? String(localized: "Try again later."))"), style: .error)
         }
     }
 
@@ -39,16 +39,16 @@ extension AppModel {
             let r = try await api.newMainConversation(carry: carry, expect: main.sessionID)
             await toEmptyMain()
             Haptics.success()
-            toast = Toast(r.carried == true ? String(localized: "已新建主对话，会带上旧对话的摘要") : String(localized: "已新建主对话"), style: .success)
+            toast = Toast(r.carried == true ? String(localized: "New main chat started. It'll include a summary of the old one.") : String(localized: "New main chat started"), style: .success)
             return true
         } catch let e as APIError where e.code == "main_changed" {
             // Another device replaced it already: show what the hub has now.
             await toEmptyMain()
-            toast = Toast(String(localized: "主对话已在别的设备上换过了，已刷新"), style: .info)
+            toast = Toast(String(localized: "The main chat was replaced on another device. Refreshed."), style: .info)
             return true
         } catch {
             Haptics.error()
-            toast = Toast(String(localized: "没新建：\(error.shown ?? String(localized: "请稍后再试"))"), style: .error)
+            toast = Toast(String(localized: "Couldn't start a new chat: \(error.shown ?? String(localized: "Try again later."))"), style: .error)
             return false
         }
     }
@@ -69,12 +69,12 @@ struct MainConversationMenu: View {
         if let key, model.canCompact(key) {
             let running = model.session(key)?.compaction?.state == .running || model.compactionRequests[key] != nil
             Button { Task { await model.compactConversation(key) } } label: {
-                Label(running ? "正在压缩上下文…" : "压缩上下文", systemImage: Theme.Icon.compactContext)
+                Label(running ? String(localized: "Compacting Context…") : String(localized: "Compact context"), systemImage: Theme.Icon.compactContext)
             }
             .disabled(running)
         }
         if model.canStartNewMain(key) {
-            Button { model.newMainAsked = true } label: { Label("新建主对话…", systemImage: Theme.Icon.newConversation) }
+            Button { model.newMainAsked = true } label: { Label("New Main Chat…", systemImage: Theme.Icon.newConversation) }
         }
     }
 }
@@ -172,15 +172,15 @@ struct CompactionNote: View {
             switch shown {
             case .running:
                 ProgressView().controlSize(.mini)
-                Text("正在压缩上下文…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                Text("Compacting Context…").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
             case .done:
                 Image(systemName: Theme.Icon.successFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
-                Text("已压缩上下文").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                Text("Context compacted").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
             case .failed(let k, let error):
                 Image(systemName: Theme.Icon.errorFilled).font(Theme.Font.labelStrong).foregroundStyle(Theme.danger)
-                Text("压缩失败：\(error)").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
+                Text("Compacting failed: \(error)").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(3)
                 Spacer(minLength: 0)
                 Button {
                     withAnimation(Theme.Motion.standard) {
@@ -194,7 +194,7 @@ struct CompactionNote: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("关闭")
+                .accessibilityLabel("Close")
                 .accessibilityIdentifier("chat.compaction.close")
             }
         }
@@ -220,31 +220,31 @@ struct NewMainSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("现在的主对话会归档，改名为「\(MainConversationActions.archivedTitle())」，之后在「已归档」里能找到。新的主对话从你发的下一条消息开始。")
+                    Text("The current main chat will be archived as “\(MainConversationActions.archivedTitle())” and you can find it under Archived. The new main chat starts with your next message.")
                         .font(Theme.Font.secondary)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Section {
-                    Toggle(isOn: $carry) { Text("带上旧对话的摘要").lineLimit(1) }
+                    Toggle(isOn: $carry) { Text("Include Old Chat Summary").lineLimit(1) }
                         .disabled(busy)
                         .accessibilityIdentifier("newmain.carry")
                 } footer: {
-                    Text("没压缩过的只带最近几条；想带完整摘要，可以先压缩上下文。")
+                    Text("If the chat hasn't been compacted, only the last few messages come along. For a full summary, compact the context first.")
                 }
             }
-            .navigationTitle("新建主对话？")
+            .navigationTitle("New Main Chat?")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Text("取消").lineLimit(1) }
+                    Button { dismiss() } label: { Text("Cancel").lineLimit(1) }
                         .disabled(busy)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button { Task { await go() } } label: {
-                        if busy { ProgressView().controlSize(.small) } else { Text("新建主对话").lineLimit(1) }
+                        if busy { ProgressView().controlSize(.small) } else { Text("New Main Chat").lineLimit(1) }
                     }
                     .disabled(busy)
                     .accessibilityIdentifier("newmain.confirm")

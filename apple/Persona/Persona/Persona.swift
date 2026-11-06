@@ -9,21 +9,21 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     /// saved and gets Mochi, one that chose Visor has "jarvis" saved and keeps it (`PersonaStore.chosenID`).
     static let builtinID = "persona"
     /// The default: Mochi, the app icon's character, in the icon's colors.
-    static let builtin = Persona(id: builtinID, name: "Persona", subtitle: String(localized: "App 图标里招手的团子"), rev: "", manifest: nil,
-                                 design: "mochi", title: String(localized: "团子"))
+    static let builtin = Persona(id: builtinID, name: "Persona", subtitle: String(localized: "The waving blob from the app icon"), rev: "", manifest: nil,
+                                 design: "mochi", title: String(localized: "Mochi"))
     /// Visor, the default until 2026-11-03, now a choice; still named Persona, in the accent.
-    static let visor = Persona(id: "jarvis", name: "Persona", subtitle: String(localized: "面罩，颜色随主题色"), rev: "", manifest: nil,
-                               design: "visor", title: String(localized: "面罩"))
+    static let visor = Persona(id: "jarvis", name: "Persona", subtitle: String(localized: "Visor, in the theme color"), rev: "", manifest: nil,
+                               design: "visor", title: String(localized: "Visor"))
     /// Circuit (three traces running into a core with two eyes), a choice next to the default; still named Persona.
-    static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: String(localized: "汇流，颜色随主题色"), rev: "", manifest: nil,
-                                 design: "circuit", title: String(localized: "汇流"))
+    static let circuit = Persona(id: "jarvis-circuit", name: "Persona", subtitle: String(localized: "Circuit, in the theme color"), rev: "", manifest: nil,
+                                 design: "circuit", title: String(localized: "Circuit"))
     /// Pixel, Facet and Jelly (#350, from the style candidates the user picked): after Circuit, in the accent, still named Persona.
-    static let pixel = Persona(id: "jarvis-pixel", name: "Persona", subtitle: String(localized: "像素，颜色随主题色"), rev: "", manifest: nil,
-                               design: "pixel", title: String(localized: "像素"))
-    static let facet = Persona(id: "jarvis-facet", name: "Persona", subtitle: String(localized: "晶面，颜色随主题色"), rev: "", manifest: nil,
-                               design: "facet", title: String(localized: "晶面"))
-    static let blob = Persona(id: "jarvis-blob", name: "Persona", subtitle: String(localized: "软糖，颜色随主题色"), rev: "", manifest: nil,
-                              design: "blob", title: String(localized: "软糖"))
+    static let pixel = Persona(id: "jarvis-pixel", name: "Persona", subtitle: String(localized: "Pixel, in the theme color"), rev: "", manifest: nil,
+                               design: "pixel", title: String(localized: "Pixel"))
+    static let facet = Persona(id: "jarvis-facet", name: "Persona", subtitle: String(localized: "Facet, in the theme color"), rev: "", manifest: nil,
+                               design: "facet", title: String(localized: "Facet"))
+    static let blob = Persona(id: "jarvis-blob", name: "Persona", subtitle: String(localized: "Jelly, in the theme color"), rev: "", manifest: nil,
+                              design: "blob", title: String(localized: "Jelly"))
     /// What Settings › Appearance › Avatar offers before the hub's packages, the default first.
     static let builtins = [builtin, visor, circuit, pixel, facet, blob]
 
@@ -42,7 +42,7 @@ nonisolated struct Persona: Identifiable, Sendable, Hashable {
     var isBuiltin: Bool { manifest == nil }
     var cardTitle: String { title ?? name }
     /// A built-in's line under its card in Settings: whose colors it is drawn in.
-    var builtinNote: String { design == PersonaFace.Design.mochi.rawValue ? String(localized: "App 图标的配色") : String(localized: "颜色随主题色") }
+    var builtinNote: String { design == PersonaFace.Design.mochi.rawValue ? String(localized: "The app icon's colors") : String(localized: "Follows the theme color") }
     var palette: PersonaPalette? {
         manifest?.colors.flatMap { PersonaPalette(light: $0.light, dark: $0.dark) }
     }

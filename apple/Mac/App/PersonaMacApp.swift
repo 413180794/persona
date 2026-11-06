@@ -40,7 +40,7 @@ struct PersonaMacApp: App {
         }
 
         // An Agent's terminal on its own (Agent › Open Terminal in New Window, MacTerminalWindow).
-        WindowGroup("终端", id: MacTerminalWindow.id, for: SessionKey.self) { $key in
+        WindowGroup(String(localized: "Terminal"), id: MacTerminalWindow.id, for: SessionKey.self) { $key in
             MacTerminalWindow(key: key).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
@@ -48,7 +48,7 @@ struct PersonaMacApp: App {
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowMinHeight)
 
         // A conversation on its own (「在新窗口打开」, MacChatWindow).
-        WindowGroup("对话", id: MacChatWindow.id, for: SessionKey.self) { $key in
+        WindowGroup(String(localized: "Chat"), id: MacChatWindow.id, for: SessionKey.self) { $key in
             MacChatWindow(key: key).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
@@ -56,13 +56,13 @@ struct PersonaMacApp: App {
         .defaultSize(width: Theme.Size.macWindowHeight, height: Theme.Size.macWindowHeight)
 
         // A link dragged out of the panel, an inbox item opened on its own (Mac/Link, Mac/Inbox).
-        WindowGroup("网页", id: MacLinkWindow.id, for: URL.self) { $url in
+        WindowGroup(String(localized: "Web Pages"), id: MacLinkWindow.id, for: URL.self) { $url in
             MacLinkWindow(url: url).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
         }
         .defaultSize(width: Theme.Size.macLinkPanelIdeal * 2, height: Theme.Size.macWindowHeight)
-        WindowGroup("收件箱", id: MacInboxItemWindow.id, for: String.self) { $id in
+        WindowGroup(String(localized: "Inbox"), id: MacInboxItemWindow.id, for: String.self) { $id in
             MacInboxItemWindow(itemID: id).environment(model)
                 .markdownInlineImageProvider(MathInlineImages()).markdownImageProvider(WebMarkdownImages()) // inline formulas (MathMarkdown)
                 .markdownCodeSyntaxHighlighter(PersonaCodeHighlighter()) // fences colored by language, as on the web (#2684)
@@ -106,15 +106,15 @@ extension AppModel {
     func openPairing(_ url: URL) {
         guard let cfg = ServerConfig(pairURL: url.absoluteString) else { return }
         guard MacPairing.accepts(isPaired: isPaired, isDemo: isDemo) else {
-            let host = config?.url.host() ?? String(localized: "一个 hub")
-            toast = Toast(String(localized: "已经连着 \(host)：要换 hub，先在 设置 › 服务器 里断开"), style: .error)
+            let host = config?.url.host() ?? String(localized: "a hub")
+            toast = Toast(String(localized: "Already connected to \(host). To switch hubs, disconnect in Settings › Server first."), style: .error)
             return
         }
         Task {
             do {
                 try await pair(cfg)
-                let host = cfg.url.host() ?? String(localized: "服务器")
-                toast = Toast(String(localized: "已连接到 \(host)"), style: .success)
+                let host = cfg.url.host() ?? String(localized: "Server")
+                toast = Toast(String(localized: "Connected to \(host)"), style: .success)
             }
             catch { showPairing(error) }
         }
@@ -128,10 +128,10 @@ struct MacCommands: Commands {
     var body: some Commands {
         // File: New Agent Chat ⌘N, New Persona Chat ⇧⌘N (docs/mac.md「菜单和快捷键」). Not while unpaired: nothing to start on.
         CommandGroup(replacing: .newItem) {
-            Button("新建 Agent 对话…") { MacShellState.shared.newAgent = true }
+            Button("New Agent Chat…") { MacShellState.shared.newAgent = true }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(!model.isPaired)
-            Button("新建 Persona 对话") {
+            Button("New Persona Chat") {
                 MacShellState.shared.willOpen()
                 model.selectedTab = .assistant
                 model.assistantCurrent = nil
@@ -141,28 +141,28 @@ struct MacCommands: Commands {
             // Add Computer (#4196): only a hub with machines_add takes it.
             if model.canAddComputer {
                 Divider()
-                Button("添加电脑…") { model.openAddComputer() }
+                Button("Add Computer…") { model.openAddComputer() }
                     .disabled(!model.isPaired)
             }
         }
         // Go: Quick Open ⌘K.
         CommandGroup(after: .textEditing) {
-            Button("查找…") { MacFind.find() }
+            Button("Find…") { MacFind.find() }
                 .keyboardShortcut("f", modifiers: .command)
-            Button("查找下一个") { MacFind.findNext(forward: true) }
+            Button("Find Next") { MacFind.findNext(forward: true) }
                 .keyboardShortcut("g", modifiers: .command)
-            Button("查找上一个") { MacFind.findNext(forward: false) }
+            Button("Find Previous") { MacFind.findNext(forward: false) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
         }
-        CommandMenu("前往") {
-            Button("快速打开…") { MacShellState.shared.quickOpen.toggle() }
+        CommandMenu(String(localized: "Go [New Chat View fa9607]")) {
+            Button("Quick Open…") { MacShellState.shared.quickOpen.toggle() }
                 .keyboardShortcut("k", modifiers: .command)
                 .disabled(!model.isPaired)
         }
         // Persona › Settings… ⌘,: the Settings section of the main window (#1222). A Settings window of its own held the same
         // pages as the section: two ways to the same place, and one of them a window on its own.
         CommandGroup(replacing: .appSettings) {
-            Button("设置…") {
+            Button("Set Up…") {
                 MacShellState.shared.go(.settings, model)
                 MacShellState.shared.showMain()
             }

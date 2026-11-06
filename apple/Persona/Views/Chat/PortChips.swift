@@ -57,10 +57,10 @@ private struct PortBadgeRow: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("port-chip-\(l.port)")
-                    .accessibilityHint(state == .gone ? "这个端口已经没有在监听" : "在 App 里打开这个页面")
+                    .accessibilityHint(state == .gone ? String(localized: "This port is no longer listening") : String(localized: "Opens this page in the app"))
                     .contextMenu {
                         Button { UIPasteboard.general.string = "http://localhost:\(l.port)\(l.path)" } label: {
-                            Label("拷贝链接", systemImage: Theme.Icon.link)
+                            Label("Copy Link", systemImage: Theme.Icon.link)
                         }
                     }
                 }
@@ -79,7 +79,7 @@ private struct PortBadgeRow: View {
     static func detail(_ state: PortPresence.State?) -> String? {
         switch state {
         case .live(let title): title
-        case .gone: String(localized: "已停止")
+        case .gone: String(localized: "Stopped [Port Chips f00645]")
         case nil: nil
         }
     }

@@ -43,7 +43,7 @@ struct CompactFoldRow: View {
                 .font(CompactList.metaStrong)
                 .foregroundStyle(.secondary)
                 .scaledFrame(width: CompactList.mark)
-            Text("还有 \(sessions.count) 个空闲")
+            Text("\(sessions.count) more idle")
                 .font(CompactList.title)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -56,7 +56,7 @@ struct CompactFoldRow: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("展开 \(sessions.count) 个空闲的 agent")
+        .accessibilityLabel("Show \(sessions.count) idle agents")
     }
 }
 
@@ -106,13 +106,13 @@ struct CompactQuietSpaceRow: View {
         }
         .contentShape(.rect)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([group.name, expanded ? String(localized: "已展开") : String(localized: "已折叠"), showMachine ? machine?.name ?? "" : "",
-                             count, at].filter { !$0.isEmpty }.joined(separator: String(localized: "，", comment: "Separator between parts of an accessibility label")))
+        .accessibilityLabel([group.name, expanded ? String(localized: "Expanded") : String(localized: "Collapsed [Readiness Card ee6046]"), showMachine ? machine?.name ?? "" : "",
+                             count, at].filter { !$0.isEmpty }.joined(separator: String(localized: ", ", comment: "Separator between parts of an accessibility label")))
         .accessibilityAddTraits(.isButton)
     }
 
     /// Agents counted, not tabs: a tab may hold several (#2320).
-    private var count: String { String(localized: "\(group.sessions.count) 个 Agent") }
+    private var count: String { String(localized: "\(group.sessions.count) agents") }
 }
 
 /// Compact List: something waiting for you (a plan, a question, a permission) as one row like an agent's: its kind's mark in

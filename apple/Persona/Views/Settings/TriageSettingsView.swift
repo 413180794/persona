@@ -14,41 +14,41 @@ struct TriageSettingsView: View {
             }
             if model?.unsupported == true {
                 Section {
-                    Label("这台 hub 还不支持会话分诊，更新 hub 后再来打开", systemImage: Theme.Icon.info)
+                    Label("This hub doesn't support session triage yet. Update the hub, then turn it on here.", systemImage: Theme.Icon.info)
                         .font(Theme.Font.secondary).foregroundStyle(.secondary)
                 }
             } else {
                 Section {
-                    toggle(\.enabled, String(localized: "会话分诊"), String(localized: "列表里显示在等什么；做完的不再算完成未看"), Theme.Icon.triage, id: "triage-enabled")
-                    ModelConfigurationLink(title: String(localized: "分诊模型"), purposeID: "agent.triage")
+                    toggle(\.enabled, String(localized: "Session Triage"), String(localized: "Shows what each session is waiting for in the list; finished ones no longer count as Unread"), Theme.Icon.triage, id: "triage-enabled")
+                    ModelConfigurationLink(title: String(localized: "Triage Model"), purposeID: "agent.triage")
                 } footer: {
-                    Text("Agent 每停下一轮，hub 用分诊模型读它最后的回复（每轮一次，用的是「模型配置 › 会话分诊」里选的模型）。")
+                    Text("Each time an agent stops a turn, the hub reads its last reply with the triage model (once per turn, using the model chosen in Model Configuration › Session Triage).")
                 }
                 Section {
-                    toggle(\.decide, String(localized: "要你决定的开卡片"), String(localized: "Agent 在等你拍板时，问题和选项放进「需要你」"), Theme.Icon.askFirst, id: "triage-decide")
-                    toggle(\.autoContinue, String(localized: "出错自动继续"), String(localized: "模型服务临时出错（503 等）后自动发「继续」，最多 3 次"), Theme.Icon.retry, id: "triage-continue")
-                    toggle(\.wake, String(localized: "到点叫醒"), String(localized: "在等部署、CI 或另一个 Agent 的，到点叫醒它自己去查"), Theme.Icon.wakeUp, id: "triage-wake")
+                    toggle(\.decide, String(localized: "Cards for Your Decisions"), String(localized: "When an agent is waiting on your decision, its question and options go into Needs You"), Theme.Icon.askFirst, id: "triage-decide")
+                    toggle(\.autoContinue, String(localized: "Continue After Errors"), String(localized: "After a temporary model service error (503 and the like), sends “continue” automatically, up to 3 times"), Theme.Icon.retry, id: "triage-continue")
+                    toggle(\.wake, String(localized: "Wake on Time"), String(localized: "Agents waiting on a deploy, CI or another agent get woken up on time to check for themselves"), Theme.Icon.wakeUp, id: "triage-wake")
                 } header: {
-                    Text("分诊之后")
+                    Text("After Triage")
                 } footer: {
-                    Text("只在会话分诊打开时起作用。自动继续和到点叫醒会让 Agent 用它自己的模型再跑一轮。推代码、部署、给别人发消息这类事 hub 只会问你，不会自己做。")
+                    Text("Works only when session triage is on. Continuing and waking make the agent run another turn on its own model. For things like pushing code, deploying or messaging other people, the hub only asks you and never does them itself.")
                 }
             }
         }
         .overlay { if model?.switches == nil && model?.error == nil && model?.unsupported != true { ProgressView() } }
         .themedGroupedPage()
-        .detailTitle(String(localized: "会话分诊"))
+        .detailTitle(String(localized: "Session Triage"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             if model == nil {
                 let api = { [app] in app.api }
                 model = TriageSettingsModel(deps: .init(
                     load: {
-                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                         return try await api.agentTriage()
                     },
                     save: { next in
-                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+                        guard let api = api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
                         return try await api.setAgentTriage(next)
                     }))
             }

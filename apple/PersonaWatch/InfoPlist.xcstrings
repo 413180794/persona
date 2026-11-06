@@ -1,29 +1,29 @@
 {
-  "sourceLanguage" : "zh-Hans",
-  "strings" : {
-    "NSMicrophoneUsageDescription" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription; only the text is saved to the knowledge base on your hub."
+  "sourceLanguage": "en",
+  "strings": {
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Persona records audio you start on Apple Watch, for example a meeting or a spoken note, then transfers it to your iPhone for on-device transcription; only the text is saved to the knowledge base on your hub."
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apple Watchで録音を始めると、Personaが会議や口頭のメモなどを録音し、iPhoneに転送してデバイス上で文字起こしします。テキストだけがハブのナレッジに保存されます。"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Watchで録音を始めると、Personaが会議や口頭のメモなどを録音し、iPhoneに転送してデバイス上で文字起こしします。テキストだけがハブのナレッジに保存されます。"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你在 Apple Watch 上开始录音时，Persona 会录音，比如一场会议或一段口述笔记，然后传到 iPhone 上本机转写；只有文字存进 hub 上的知识库。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在 Apple Watch 上开始录音时，Persona 会录音，比如一场会议或一段口述笔记，然后传到 iPhone 上本机转写；只有文字存进 hub 上的知识库。"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

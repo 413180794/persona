@@ -59,7 +59,7 @@ struct AssistantDrawerLayout<Sidebar: View, Page: View>: View {
                     Theme.Fill.scrim.opacity(drawer.progress)
                         .contentShape(.rect)
                         .onTapGesture { drawer.close() }
-                        .accessibilityLabel("关闭侧边栏")
+                        .accessibilityLabel("Close Sidebar")
                         .accessibilityAddTraits(.isButton)
                     sidebar
                         .frame(width: width)

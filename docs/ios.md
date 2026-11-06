@@ -589,17 +589,17 @@ With Automatic translation enabled, content not in the target language (Simplifi
 
 iOS, Mac, visionOS, watch and extensions support Simplified Chinese, English and 日本語 (shared rules in `docs/i18n.md`).
 
-- **Entries**: String Catalog, source language zh-Hans, **Chinese source text is the key** (existing UI, unit tests and pixel / layout baselines unchanged).
+- **Entries**: String Catalog, development language `en`, with English source text or contextual English keys (#5090). Every entry has explicit en / zh-Hans / ja values; Chinese UI, unit tests and pixel / layout baselines retain their `zh-Hans` wording.
   `apple/Shared/Localization/Localizable.xcstrings` is shared across all targets (App, Mac, visionOS and watch compile it through `Shared/`; widgets add it separately in `project.yml`);
   shortcut phrases live in `Persona/Intents/AppShortcuts.xcstrings`; permission explanations in each target's `InfoPlist.xcstrings` (one each for iOS, Mac, visionOS, watch because wording differs). Runtime displays catalog text, not `Info.plist`: update both `Info.plist` and all three catalog languages for permission changes; `check` rejects en mismatches with `Info.plist` and `*UsageDescription` keys absent from the catalog (#4790).
   XcodeGen generates `knownRegions` from catalog languages; do not edit pbxproj manually. `Info.plist` `CFBundleDevelopmentRegion` is `en`: other system languages fall back to English.
 - **Code**: SwiftUI `Text("…")`, `Button("…")`, `Label`, `.navigationTitle` already take `LocalizedStringKey`; every other user-facing `String` uses `String(localized: "…")`,
-  App Intents use `LocalizedStringResource`. Interpolated sentences are one entry (`"共 \(n) 个"`, "\(n) total"), never assembled fragments; English plurals get one / other in the catalog;
-  dates and numbers use `FormatStyle`, never hard-coded `zh_CN` (machine formats still `en_US_POSIX`). When identical Chinese needs different translations, separate it with `String(localized: "<English key>", defaultValue: "关闭")` ("Close").
+  App Intents use `LocalizedStringResource`. Interpolated sentences are one English entry (`"\(n) items"`), never assembled fragments; English plurals get one / other in the catalog.
+  Dates and numbers use `FormatStyle`, never hard-coded `zh_CN` (machine formats still `en_US_POSIX`). When identical English has different Chinese or Japanese meanings, retain distinct contextual keys and explicit en values, or use `String(localized: "action.close", defaultValue: "Close")`.
   Non-UI Chinese (hub / Agent prompts and messages, protocol values, matching hub or terminal text, logs, previews, DEBUG pages) gets `// i18n-ignore` at line end; sample-data-only files add `// i18n-ignore-file: <reason>` within the first 20 lines.
 - **After adding wording**: build once with `xcodebuild … SWIFT_EMIT_LOC_STRINGS=YES`, then `python3 scripts/i18n/apple_l10n.py sync <DerivedData>` adds new entries to the catalog (Xcode IDE builds do it automatically; CLI builds do not),
-  then fill en and ja. `python3 scripts/i18n/apple_l10n.py check` (run by `scripts/test/test_apple_l10n.py`) checks all three languages, matching placeholders, and source Chinese absent from the catalog;
-  `apple_l10n.py strict <DerivedData>` checks each unlocalized Chinese literal against compiler extraction.
+  then fill en, zh-Hans and ja, including symbols, numbers and names. `python3 scripts/i18n/apple_l10n.py check` (run by `scripts/test/test_apple_l10n.py`) checks every translation state, argument number/type, English key, unignored Chinese literal and explicit source-key reference.
+  `apple_l10n.py strict <DerivedData>` remains available for compiler extraction. Expressions such as `Text(condition ? "A" : "B")` produce a `String`; localize each branch with `String(localized:)`. `apple_english_keys_verify.py <base>` verifies that an English-key migration retains the existing translation trees after argument renumbering.
 - **Choosing**: Settings › Appearance › Language: Match System (default) / 简体中文 / English / 日本語 (`AppLanguage`, `LanguageStore`, `Shared/Localization/AppLanguage.swift`).
   An in-App setting rather than only system per-App language: docs/i18n.md requires a common setting; Match System must use docs/i18n.md rules (French → English, Traditional → Simplified Chinese), which Bundle matching cannot provide;
   watch and extensions lack their own entry points; Mac's system per-App language is deeply buried. Both are the same value: the App writes its result to `AppleLanguages` (also used by the system's per-App language),

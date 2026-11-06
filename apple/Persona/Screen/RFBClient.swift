@@ -185,13 +185,13 @@ nonisolated final class RFBClient: @unchecked Sendable {
 
     private func handshake() async throws {
         let version = String(decoding: try await reader.bytes(12), as: UTF8.self)
-        guard version.hasPrefix("RFB ") else { throw Failure.protocolError(String(localized: "不是屏幕共享：\(version.prefix(12))")) }
+        guard version.hasPrefix("RFB ") else { throw Failure.protocolError(String(localized: "Not Screen Sharing: \(version.prefix(12))")) }
         try await transport.send(Array("RFB 003.008\n".utf8))
         let count = Int(try await reader.u8())
         if count == 0 { throw Failure.protocolError(try await reason()) }
         let offered = try await reader.bytes(count)
         guard let type = RFBAuth.preferred.first(where: offered.contains) else {
-            throw Failure.protocolError(String(localized: "这台 Mac 的屏幕共享要的登录方式还不支持（\(offered.map(String.init).joined(separator: ", "))）"))
+            throw Failure.protocolError(String(localized: "This Mac’s Screen Sharing asks for a sign-in method that isn’t supported yet (\(offered.map(String.init).joined(separator: ", ")))"))
         }
         try await transport.send([type])
         switch type {
@@ -233,11 +233,11 @@ nonisolated final class RFBClient: @unchecked Sendable {
         let version = try await reader.bytes(2)
         guard version == [0, 2] else { throw Failure.protocolError("VeNCrypt \(version)") }
         try await transport.send([0, 2])
-        guard try await reader.u8() == 0 else { throw Failure.protocolError(String(localized: "VeNCrypt 0.2 被拒")) }
+        guard try await reader.u8() == 0 else { throw Failure.protocolError(String(localized: "VeNCrypt 0.2 was refused")) }
         let n = Int(try await reader.u8())
         var subtypes: [UInt32] = []
         for _ in 0..<n { subtypes.append(try await reader.u32()) }
-        guard subtypes.contains(RFBAuth.plain) else { throw Failure.protocolError(String(localized: "VeNCrypt 没有 Plain")) }
+        guard subtypes.contains(RFBAuth.plain) else { throw Failure.protocolError(String(localized: "VeNCrypt offers no Plain")) }
         try await transport.send(RFBAuth.be32(RFBAuth.plain))
         let c = try await sign()
         try await transport.send(RFBAuth.plainCredentials(account: c.account, password: c.password))
@@ -267,7 +267,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
                 let n = Int(try await reader.u32())
                 let text = try await reader.bytes(n)
                 onCutText(String(text.map { Character(Unicode.Scalar($0)) }))
-            case let t: throw Failure.protocolError(String(localized: "不认识的消息 \(t)"))
+            case let t: throw Failure.protocolError(String(localized: "Unknown message \(t)"))
             }
         }
     }
@@ -302,7 +302,7 @@ nonisolated final class RFBClient: @unchecked Sendable {
             case -224:
                 break
             default:
-                throw Failure.protocolError(String(localized: "不认识的编码 \(encoding)"))
+                throw Failure.protocolError(String(localized: "Unknown encoding \(encoding)"))
             }
             if encoding == -224 { break }
             dirty = dirty.union(CGRect(x: x, y: y, width: w, height: h))
@@ -329,14 +329,14 @@ nonisolated final class RFBClient: @unchecked Sendable {
     private static func describe(_ error: Error) -> String {
         switch error {
         case Failure.protocolError(let s): return s
-        case Failure.noCredentials: return String(localized: "没有登录这台 Mac 的屏幕共享")
-        case let e as URLError where e.code == .badServerResponse: return String(localized: "hub 不让连这台的屏幕（扩展没开，或这台设备只能看不能操作）")
+        case Failure.noCredentials: return String(localized: "Not signed in to this Mac's Screen Sharing")
+        case let e as URLError where e.code == .badServerResponse: return String(localized: "The hub won't connect to this screen (the extension is off, or this device can view but not control)")
         // What the network says in its own words ("Socket is not connected") when the Mac or the hub hangs up, or
         // nothing answers: said plainly (the page, the small window's card).
-        case let e as URLError where e.code == .timedOut: return String(localized: "连接超时")
-        case let e as URLError where [.cannotConnectToHost, .cannotFindHost, .notConnectedToInternet].contains(e.code): return String(localized: "连不上 hub")
-        case let e as URLError where e.code == .networkConnectionLost: return String(localized: "连接断了")
-        case let e as NSError where e.domain == NSPOSIXErrorDomain && [ENOTCONN, ECONNRESET, EPIPE].contains(Int32(e.code)): return String(localized: "连接断了")
+        case let e as URLError where e.code == .timedOut: return String(localized: "Connection timed out")
+        case let e as URLError where [.cannotConnectToHost, .cannotFindHost, .notConnectedToInternet].contains(e.code): return String(localized: "Can't reach the hub")
+        case let e as URLError where e.code == .networkConnectionLost: return String(localized: "Connection lost")
+        case let e as NSError where e.domain == NSPOSIXErrorDomain && [ENOTCONN, ECONNRESET, EPIPE].contains(Int32(e.code)): return String(localized: "Connection lost")
         default: return error.localizedDescription
         }
     }

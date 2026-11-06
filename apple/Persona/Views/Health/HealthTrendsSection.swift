@@ -12,9 +12,9 @@ struct HealthTrendsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.titleToContent) {
             HStack {
-                Text("健康趋势").font(Theme.Font.heading)
+                Text("Health Trends").font(Theme.Font.heading)
                 Spacer(minLength: Theme.Space.s)
-                Picker("时间范围", selection: $model.range) {
+                Picker("Time Range", selection: $model.range) {
                     ForEach(HealthTrendRange.allCases) { Text($0.title).lineLimit(1).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -22,7 +22,7 @@ struct HealthTrendsSection: View {
                 .accessibilityIdentifier("health-trends-range")
             }
             content
-            Text("数据只在这台 iPhone 上读取和绘制，不会发给 hub。")
+            Text("Data is read and charted only on this iPhone and never sent to the hub.")
                 .font(Theme.Font.caption)
                 .foregroundStyle(.secondary)
         }
@@ -37,15 +37,15 @@ struct HealthTrendsSection: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity).padding(Theme.Space.xl)
         case .needsAccess:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "读取健康数据"),
-                           message: String(localized: "允许 Persona 读取步数、睡眠和体重后，这里会画出趋势。"),
-                           action: (title: String(localized: "允许读取"), run: { Task { await model.requestAccess() } }))
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "Read Health Data"),
+                           message: String(localized: "Allow Persona to read steps, sleep and weight, and trends will be charted here."),
+                           action: (title: String(localized: "Allow Access"), run: { Task { await model.requestAccess() } }))
         case .unavailable:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "这台设备没有健康数据"),
-                           message: String(localized: "步数、睡眠和体重的趋势在装有「健康」的 iPhone 上显示。"), action: nil)
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "No Health Data on This Device"),
+                           message: String(localized: "Trends for steps, sleep and weight appear on an iPhone with the Health app."), action: nil)
         case .loaded(let cards) where cards.isEmpty:
-            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "暂时没有数据"),
-                           message: String(localized: "这段时间里没有步数、睡眠或体重记录。若没有允许读取，可在 iOS 设置 › 健康 › 数据访问与设备 › Persona 里打开。"),
+            EmptyStateView(symbol: Theme.Icon.healthTrends, title: String(localized: "No Data Yet"),
+                           message: String(localized: "No steps, sleep or weight data in this period. If you haven't allowed access, turn it on in iOS Settings › Health › Data Access & Devices › Persona."),
                            action: nil)
         case .loaded(let cards):
             ForEach(HealthTrendMetric.allCases) { metric in

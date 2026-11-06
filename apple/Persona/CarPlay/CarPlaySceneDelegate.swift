@@ -114,7 +114,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// Shown where the voice template is not available (iOS before 26.4). A list is one of the templates this app
     /// category may use; in practice CarPlay only lists the app from 26.4 on, when the category exists.
     private static func infoTemplate() -> CPListTemplate {
-        let item = CPListItem(text: "Persona", detailText: String(localized: "在车里和 Persona 语音长聊需要 iOS 26.4 或更新"))
+        let item = CPListItem(text: "Persona", detailText: String(localized: "Long voice chats with Persona in the car need iOS 26.4 or later"))
         return CPListTemplate(title: "Persona", sections: [CPListSection(items: [item])])
     }
 

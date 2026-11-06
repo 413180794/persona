@@ -378,7 +378,7 @@ struct FirstMessagePending: View {
             DayLine(date: .now)
             VStack(alignment: .trailing, spacing: Theme.Space.sm) {
                 if pending.imageCount > 0 {
-                    Label("\(pending.imageCount) 张图片", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
+                    Label("\(pending.imageCount) images", systemImage: Theme.Icon.photo).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
                 HStack {
                     Spacer(minLength: 48)
@@ -386,7 +386,7 @@ struct FirstMessagePending: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
-            TypingIndicator(text: String(localized: "\(name) 正在准备…"))
+            TypingIndicator(text: String(localized: "\(name) is getting ready…"))
         }
         .padding(.horizontal, Theme.Space.l) // the chat's list margins
         .frame(maxWidth: ChatView.readableWidth)
@@ -533,20 +533,20 @@ struct AssistantWelcome: View {
             return
         }
         if s.needs.contains(where: { $0.hasPrefix("phone_calendar") }) {
-            model.toast = Toast(String(localized: "接下来 iPhone 会问你：允许 Persona 读取日历"))
+            model.toast = Toast(String(localized: "Next, your iPhone will ask you to let Persona read your calendar"))
         } else if !s.needs.isEmpty {
-            model.toast = Toast(String(localized: "接下来 iPhone 会问你要不要允许 Persona 读取这项数据"))
+            model.toast = Toast(String(localized: "Next, your iPhone will ask whether Persona may read this data"))
         }
         send(s.prompt, [])
     }
 
     private static let builtIn: [(symbol: String, title: String, prompt: String)] = [
-        ("calendar", String(localized: "今天的安排"), String(localized: "看一下我今天的安排：iPhone 日历和飞书日历都查，合并后按时间列出来。")),
-        (Theme.Icon.mailAccounts, String(localized: "要处理的邮件"), String(localized: "我的邮箱里最近有哪些需要我处理或回复的邮件？挑重要的说。")),
-        ("macbook.and.iphone", String(localized: "电脑在忙什么"), String(localized: "我各台电脑上的 Agent 现在都在忙什么？哪些在等我、哪些跑完了还没看？")),
-        ("bubble.left.and.text.bubble.right", String(localized: "飞书消息"), String(localized: "总结一下我今天飞书上收到的重要消息，哪些需要我回复。")),
-        ("person.2.wave.2", String(localized: "会前准备"), String(localized: "看看我今天接下来的会，挑最重要的一个帮我准备：议程、相关文档、上次的纪要和没完成的待办。")),
-        ("heart.text.square", String(localized: "这周的健康"), String(localized: "根据我 iPhone 上的健康数据，总结一下这周的步数、睡眠和运动情况。")),
+        ("calendar", String(localized: "Today's Schedule"), String(localized: "Check my schedule for today: look at both my iPhone calendar and Lark calendar, merge them, and list everything by time.")),
+        (Theme.Icon.mailAccounts, String(localized: "Emails to Handle"), String(localized: "Which recent emails in my inbox need me to act or reply? Just the important ones.")),
+        ("macbook.and.iphone", String(localized: "What My Computers Are Doing"), String(localized: "What are the agents on my computers doing right now? Which are waiting on me, and which finished but I haven't looked at yet?")),
+        ("bubble.left.and.text.bubble.right", String(localized: "Lark Messages"), String(localized: "Summarize the important messages I got on Lark today and which ones need a reply from me.")),
+        ("person.2.wave.2", String(localized: "Meeting Prep"), String(localized: "Look at my remaining meetings today, pick the most important one, and help me prepare: agenda, related docs, last meeting's notes, and open to-dos.")),
+        ("heart.text.square", String(localized: "This Week's Health"), String(localized: "Using the health data on my iPhone, summarize my steps, sleep, and workouts this week.")),
     ]
 
     var body: some View {
@@ -559,7 +559,7 @@ struct AssistantWelcome: View {
             }
             if AppStyle.current.usesBeautifulUI {
                 // BeautifulUI's list card: one row per thing to ask, its mark, what it is and how it is put.
-                BUIListSection(String(localized: "可以问我")) {
+                BUIListSection(String(localized: "Things to Ask")) {
                     ForEach(suggestions, id: \.title) { s in
                         Button {
                             ask(s)
@@ -603,8 +603,8 @@ struct AssistantWelcome: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(greeting).font(Theme.Font.display).padding(.top, Theme.Space.xl)
             Text(model.assistantMain == nil
-                 ? "这是你的主对话：我会记住这里聊过的事。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。"
-                 : "开一段新的旁支对话。我能看你的电脑、iPhone、邮箱、飞书和整理好的项目，也能替你盯着事、到点提醒。")
+                 ? String(localized: "This is your main chat: I'll remember what we talk about here. I can see your computers, iPhone, email, Lark, and organized projects, and I can keep an eye on things and remind you when it's time.")
+                 : String(localized: "Start a new side chat. I can see your computers, iPhone, email, Lark, and organized projects, and I can keep an eye on things and remind you when it's time."))
                 .font(Theme.Font.secondary).lineHeight(.secondary)
                 .foregroundStyle(.secondary)
             // Wraps: in one HStack, a few more machines (or larger text) widened the whole page past the screen.
@@ -624,10 +624,10 @@ struct AssistantWelcome: View {
 
     private var greeting: String {
         switch Calendar.current.component(.hour, from: .now) {
-        case 5..<11: String(localized: "早上好")
-        case 11..<13: String(localized: "中午好")
-        case 13..<18: String(localized: "下午好")
-        default: String(localized: "晚上好")
+        case 5..<11: String(localized: "Good morning")
+        case 11..<13: String(localized: "Good afternoon [Assistant View fceb19]")
+        case 13..<18: String(localized: "Good afternoon [Assistant View 552594]")
+        default: String(localized: "Good evening")
         }
     }
 }
@@ -736,7 +736,7 @@ struct StarterComposer: View {
         let files = videos.ready
         // Nothing to send: a second ⏎ on the Mac before the field redraws (#785) would start an empty conversation.
         guard !videos.busy, !t.isEmpty || !images.isEmpty || !files.isEmpty else { return }
-        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? String(localized: "请看视频") : String(localized: "请看图片")) : t, files: files)
+        let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? String(localized: "Please look at the image [Assistant View a3e0a0]") : String(localized: "Please look at the image [Assistant View 5ad878]")) : t, files: files)
         // The keyboard goes down with the send: the conversation that takes over has a field of its own, and the keyboard
         // coming back up and going down again on the way moved the first message up and down with it (#1911).
         focused = false
@@ -751,8 +751,8 @@ struct StarterComposer: View {
 
     /// A PhotosPicker inside a Menu never presents (the menu dismisses first): the buttons present it from here.
     @ViewBuilder private var attachments: some View {
-        Button { showPhotos = true } label: { Label("照片", systemImage: Theme.Icon.photos) }
-        Button { showFiles = true } label: { Label("文件", systemImage: Theme.Icon.file) }
+        Button { showPhotos = true } label: { Label("Photos", systemImage: Theme.Icon.photos) }
+        Button { showFiles = true } label: { Label("Files", systemImage: Theme.Icon.file) }
     }
 
     var body: some View {
@@ -761,7 +761,7 @@ struct StarterComposer: View {
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             #if os(iOS) || os(visionOS)
             PasteImageChip(focused: focused) { img in
-                guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
+                guard images.count < 4 else { return model.toast = Toast(String(localized: "Up to 4 at a time"), style: .error) }
                 let scaled = img.scaledDown(maxSide: 1600)
                 if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
                     images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
@@ -770,7 +770,7 @@ struct StarterComposer: View {
             #endif
             if !images.isEmpty { ComposerImages(images: $images) }
             if let shell {
-                ShellComposerBar(placeholder: String(localized: "问 \(model.persona.name)"), text: $text, selection: $selection, focused: $focused,
+                ShellComposerBar(placeholder: String(localized: "Ask \(model.persona.name)"), text: $text, selection: $selection, focused: $focused,
                                  canSend: canSend, hasAttachments: !images.isEmpty || !videos.items.isEmpty,
                                  modesTitle: StarterModesMenu.title(modes: shell, launchers: launchers, model: model),
                                  history: "assistant.new", gate: gate, send: submit) {
@@ -780,7 +780,7 @@ struct StarterComposer: View {
                 }
                 .task { launchers = (try? await model.launchers(model.hubRef(model.assistantConfig?.machineID ?? model.hubMachineID)))?.filter(\.runsAssistant) ?? [] }
             } else {
-                ComposerRow(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused, canSend: canSend,
+                ComposerRow(placeholder: placeholder ?? String(localized: "Ask \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused, canSend: canSend,
                             send: submit, history: "assistant.new", gate: gate) {
                     attachments
                 }
@@ -808,7 +808,7 @@ struct StarterComposer: View {
                 if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
                 for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
-                        AppModel.shared.toast = Toast(String(localized: "有照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
+                        AppModel.shared.toast = Toast(String(localized: "Couldn't read some photos (they may still be downloading from iCloud)"), style: .error)
                         continue
                     }
                     let scaled = img.scaledDown(maxSide: 1600)
@@ -869,7 +869,7 @@ struct BeautifulStarterComposer: View {
             if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
             #if os(iOS) || os(visionOS)
             PasteImageChip(focused: focused) { img in
-                guard images.count < 4 else { return model.toast = Toast(String(localized: "一次最多 4 张"), style: .error) }
+                guard images.count < 4 else { return model.toast = Toast(String(localized: "Up to 4 at a time"), style: .error) }
                 let scaled = img.scaledDown(maxSide: 1600)
                 if let jpeg = scaled.jpegData(compressionQuality: 0.75) {
                     images.append((scaled, ImagePayload(mime: "image/jpeg", data: jpeg.base64EncodedString())))
@@ -877,7 +877,7 @@ struct BeautifulStarterComposer: View {
             }
             #endif
             if !images.isEmpty { ComposerImages(images: $images) }
-            PromptComposer(placeholder: placeholder ?? String(localized: "问 \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused,
+            PromptComposer(placeholder: placeholder ?? String(localized: "Ask \(model.persona.name)…"), text: $text, selection: $selection, focused: $focused,
                            hasAttachments: !images.isEmpty || !videos.items.isEmpty || !quotes.isEmpty, disabled: disabled,
                            attach: PromptItems.attachments(camera: false),
                            mentions: { PromptItems.sessions(model.sessionsNow, except: nil) },
@@ -908,12 +908,12 @@ struct BeautifulStarterComposer: View {
                                    return
                                }
                                if videos.busy { // nothing goes; the bar clears the box right after this, so it is put back
-                                   model.toast = Toast(String(localized: "视频还在上传，传完再发送"))
+                                   model.toast = Toast(String(localized: "The video is still uploading. Send once it's done."))
                                    Task { text = typed }
                                    return
                                }
                                let files = videos.ready
-                               let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "参考上面的内容。") : String(localized: "请看视频")) : String(localized: "请看图片")) : t,
+                               let body = AttachedFile.message(t.isEmpty ? (images.isEmpty ? (files.isEmpty ? String(localized: "See the context above.") : String(localized: "Please look at the image [Assistant View a3e0a0]")) : String(localized: "Please look at the image [Assistant View 5ad878]")) : t,
                                                                files: files)
                                // Quoted sessions ride along as <jarvis-context> tags before what was typed, as in a chat.
                                send(quotes.isEmpty ? body : quotes.map(\.xml).joined(separator: "\n") + "\n\n" + body, images.map(\.1))
@@ -947,7 +947,7 @@ struct BeautifulStarterComposer: View {
                 if !movies.isEmpty { videos.start(movies, machine: machine, model: model) }
                 for item in items where !PickedMovie.isVideo(item) {
                     guard let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) else {
-                        AppModel.shared.toast = Toast(String(localized: "有照片读不出来（可能还在 iCloud 里没下载完）"), style: .error)
+                        AppModel.shared.toast = Toast(String(localized: "Couldn't read some photos (they may still be downloading from iCloud)"), style: .error)
                         continue
                     }
                     let scaled = img.scaledDown(maxSide: 1600)
@@ -983,7 +983,7 @@ struct AssistantToolsRow: View {
                         .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(count) 次工具调用：\(sources(calls))")
+                .accessibilityLabel("\(count) tool calls: \(sources(calls))")
             } else {
                 Button {
                     withAnimation(Theme.Motion.standard) { open.toggle() }
@@ -996,7 +996,7 @@ struct AssistantToolsRow: View {
                             }
                         } else {
                             Image(systemName: Theme.Icon.unknownTool)
-                            Text("工具 \(count)")
+                            Text("Tools \(count)")
                             Text(sources(calls)).foregroundStyle(.tertiary).lineLimit(1)
                         }
                         Spacer(minLength: 0)
@@ -1029,10 +1029,10 @@ struct AssistantToolsRow: View {
             let n = ToolPresentation.baseName(c.name)
             let label: String
             if n.hasPrefix("phone_") { label = "iPhone" }
-            else if n.hasPrefix("mail_") { label = String(localized: "邮件") }
-            else if n == "Bash" { label = (c.input["command"]?.string ?? "").contains("ssh ") ? String(localized: "电脑") : String(localized: "命令") }
-            else if n == "Skill" { label = c.input["skill"]?.string ?? String(localized: "技能") }
-            else if n.hasPrefix("Web") { label = String(localized: "网页") }
+            else if n.hasPrefix("mail_") { label = String(localized: "Mail [Assistant View 3d708e]") }
+            else if n == "Bash" { label = (c.input["command"]?.string ?? "").contains("ssh ") ? String(localized: "Computers") : String(localized: "Commands [Assistant View 928f87]") }
+            else if n == "Skill" { label = c.input["skill"]?.string ?? String(localized: "Skill") }
+            else if n.hasPrefix("Web") { label = String(localized: "Web Pages") }
             else { label = ToolPresentation.verb(c.name) }
             if !seen.contains(label) { seen.append(label) }
         }
@@ -1084,21 +1084,21 @@ struct StarterLauncherStatus: View {
             } label: {
                 HStack(spacing: Theme.Space.xs) {
                     Image(systemName: Theme.Icon.error)
-                    Text(String(localized: "读不到设置")).lineLimit(1).minimumScaleFactor(0.8)
-                    Text(String(localized: "重试")).lineLimit(1).foregroundStyle(Theme.accent)
+                    Text(String(localized: "Couldn't Load Settings")).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(String(localized: "Retry [Components b8784c]")).lineLimit(1).foregroundStyle(Theme.accent)
                 }
                 .statusCapsule()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("读不到设置"))
-            .accessibilityHint(Text("重试"))
+            .accessibilityLabel(Text("Couldn't Load Settings"))
+            .accessibilityHint(Text("Retry [Components b8784c]"))
         } else {
             HStack(spacing: Theme.Space.xs) {
                 ProgressView().controlSize(.mini)
-                Text(String(localized: "正在读取")).lineLimit(1)
+                Text(String(localized: "Reading")).lineLimit(1)
             }
             .statusCapsule()
-            .accessibilityLabel(Text("正在读取"))
+            .accessibilityLabel(Text("Reading"))
         }
     }
 }
@@ -1137,7 +1137,7 @@ struct StarterModesMenu: View {
     @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> SessionModes.ComposerTitle? {
         let effort = SessionModes.effort(modes.effort)?.title
         guard let name = modes.launcher ?? model.starterLauncherSetting else {
-            return SessionModes.ComposerTitle(model: String(localized: model.assistantConfigLoadFailed ? "读不到设置" : "正在读取"), effort: effort)
+            return SessionModes.ComposerTitle(model: String(localized: model.assistantConfigLoadFailed ? String(localized: "Couldn't Load Settings") : String(localized: "Reading")), effort: effort)
         }
         let launcher = launchers.first { $0.name == name }
         return SessionModes.composerTitle(model: SessionModes.modelName(launcher?.model) ?? launcher?.name ?? name,
@@ -1150,19 +1150,19 @@ struct StarterModesMenu: View {
         }
         if modes.launcher ?? model.starterLauncherSetting == nil {
             // Settings are not read yet: the menu says so (and offers a retry) instead of a launcher name (#4200).
-            Section("模型") {
+            Section("Model [Assistant View c98e11]") {
                 if model.assistantConfigLoadFailed {
-                    Button {} label: { Label(String(localized: "读不到设置"), systemImage: Theme.Icon.error) }.disabled(true)
+                    Button {} label: { Label(String(localized: "Couldn't Load Settings"), systemImage: Theme.Icon.error) }.disabled(true)
                     Button {
                         Haptics.tap()
                         model.retryAssistantLoad()
                     } label: {
-                        Label(String(localized: "重试"), systemImage: Theme.Icon.retry)
+                        Label(String(localized: "Retry [Components b8784c]"), systemImage: Theme.Icon.retry)
                     }
                 } else {
                     Button {} label: {
                         HStack {
-                            Text(String(localized: "正在读取"))
+                            Text(String(localized: "Reading"))
                             Spacer()
                             ProgressView()
                         }
@@ -1171,8 +1171,8 @@ struct StarterModesMenu: View {
                 }
             }
         } else if !launchers.isEmpty {
-            Section("模型") {
-                Picker("启动器", selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
+            Section("Model [Assistant View c98e11]") {
+                Picker("Launcher", selection: Binding(get: { modes.launcher ?? model.assistantConfig?.launcher ?? "" }, set: { modes.launcher = $0 })) {
                     ForEach(launchers) { l in
                         Text(SessionModes.modelName(l.model).map { "\(l.name) · \($0)" } ?? l.name).tag(l.name)
                     }
@@ -1180,18 +1180,18 @@ struct StarterModesMenu: View {
                 .pickerStyle(.inline)
             }
         }
-        Section("思考强度") {
-            Picker("思考强度", selection: modes.$effort) {
-                Text("跟随启动器").tag("")
+        Section("Thinking Effort") {
+            Picker("Thinking Effort", selection: modes.$effort) {
+                Text("Use Launcher's").tag("")
                 ForEach(SessionModes.startEffortLevels) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
             }
             .pickerStyle(.inline)
         }
         Picker(selection: modes.$mode) {
-            Text("跟随启动器").tag("")
+            Text("Use Launcher's").tag("")
             ForEach(SessionModes.assistantModes) { o in Label { Text(o.title); Text(o.detail) } icon: { Image(systemName: o.symbol) }.tag(o.id) }
         } label: {
-            Label("权限模式：\(SessionModes.mode(modes.mode)?.title ?? String(localized: "跟随启动器"))", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
+            Label("Permission Mode: \(SessionModes.mode(modes.mode)?.title ?? String(localized: "Use Launcher's"))", systemImage: SessionModes.mode(modes.mode)?.symbol ?? Theme.Icon.askFirst)
         }
         .pickerStyle(.menu)
     }

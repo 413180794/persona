@@ -41,14 +41,14 @@ nonisolated extension ContextRef {
         switch kind {
         case "quote":
             let mine = title == "我" // i18n-ignore: the sender name Lark gives the user's own messages
-            if mine { return String(localized: "引用 你的消息") }
-            let who = title.isEmpty ? String(localized: "消息") : title
-            return String(localized: "引用 \(who)")
-        case "edit": return String(localized: "要改的文字 · \(label)")
+            if mine { return String(localized: "Quoting your message") }
+            let who = title.isEmpty ? String(localized: "Messages [Quote Views 4da199]") : title
+            return String(localized: "Quoting \(who)")
+        case "edit": return String(localized: "Text to change · \(label)")
         default:
-            if isSession { return String(localized: "引用会话 \(label)") }
-            if !url.isEmpty { return isWholePage ? String(localized: "引用 \(label)") : String(localized: "引用选中的文字 · \(label)") }
-            return String(localized: "引用 \(label)")
+            if isSession { return String(localized: "Quoting session \(label)") }
+            if !url.isEmpty { return isWholePage ? String(localized: "Quoting \(label)") : String(localized: "Quoting selected text · \(label)") }
+            return String(localized: "Quoting \(label)")
         }
     }
 
@@ -58,7 +58,7 @@ nonisolated extension ContextRef {
         var flat = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if isSession, flat.count > 1 { flat.removeFirst() } // 「另一个会话：…」: the heading names it already
         let joined = flat.joined(separator: " ")
-        return joined.isEmpty ? String(localized: "没有内容") : String(joined.prefix(240))
+        return joined.isEmpty ? String(localized: "No content") : String(joined.prefix(240))
     }
 }
 
@@ -136,7 +136,7 @@ struct QuoteBarRow: View {
     var lines = 2
     var tint: Color?
     /// What × says to VoiceOver (Feishu's reply: Cancel Reply).
-    var removeLabel = String(localized: "取消引用")
+    var removeLabel = String(localized: "Remove Quote")
     var remove: () -> Void
     @Environment(\.buiTheme) private var theme
 
@@ -185,7 +185,7 @@ struct QuoteBlock: View {
     var body: some View {
         QuoteCard(heading: ref.quoteHeading, summary: open ? ref.text : ref.quoteSummary, lines: open ? .max : 2,
                   tint: Theme.Quote.tint, ink: Theme.Quote.summary, action: tap)
-            .accessibilityHint(ref.msg.isEmpty ? "" : "跳到原消息")
+            .accessibilityHint(ref.msg.isEmpty ? "" : String(localized: "Jumps to the original message"))
     }
 
     private func tap() {
@@ -227,7 +227,7 @@ struct QuoteCard: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(heading)：\(summary)")
+        .accessibilityLabel("\(heading): \(summary)")
         .accessibilityIdentifier("bubble.quote")
     }
 }

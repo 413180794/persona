@@ -46,7 +46,7 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
 
     /// Drawn like my other messages: my name and avatar from the last one I sent here.
     func message(like mine: LarkMessage?) -> LarkMessage {
-        var message = LarkMessage(id: rowID, position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? String(localized: "我"),
+        var message = LarkMessage(id: rowID, position: "", senderID: mine?.senderID, senderName: mine?.senderName ?? String(localized: "Me"),
                     senderAvatar: mine?.senderAvatar, senderType: mine?.senderType, isMine: true, type: "TEXT", text: text,
                     createdAt: at, recalled: false, replyCount: 0, replyTo: thread ? nil : replyTo)
         if let encrypted {
@@ -150,12 +150,12 @@ enum LarkReply {
             .filter { !$0.isEmpty }.joined(separator: " ")
         if !line.isEmpty { return line }
         switch m.type.uppercased() {
-        case "IMAGE": return String(localized: "[图片]")
-        case "FILE": return String(localized: "[文件]")
-        case "MEDIA": return String(localized: "[视频]")
-        case "AUDIO": return String(localized: "[语音]")
-        case "STICKER": return String(localized: "[贴纸]")
-        default: return String(localized: "[消息]")
+        case "IMAGE": return String(localized: "[Image]")
+        case "FILE": return String(localized: "[File] [Lark Chat Pins View 54e20f]")
+        case "MEDIA": return String(localized: "[Video] [Lark Outbox da5d03]")
+        case "AUDIO": return String(localized: "[Voice]")
+        case "STICKER": return String(localized: "[Sticker]")
+        default: return String(localized: "[Message]")
         }
     }
 
@@ -184,13 +184,13 @@ struct LarkSendMarkView: View {
         case .sending:
             ProgressView().controlSize(.mini)
                 .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.iconL)
-                .accessibilityLabel("发送中")
+                .accessibilityLabel("Sending")
                 .accessibilityIdentifier("lark.outgoing.sending")
         case .sent:
             if mark.canRemoveSent {
                 Menu {
                     Button(role: .destructive, action: mark.discard) {
-                        Label("移除本机记录", systemImage: Theme.Icon.delete).lineLimit(1)
+                        Label("Remove from This Device", systemImage: Theme.Icon.delete).lineLimit(1)
                     }
                 } label: {
                     Image(systemName: Theme.Icon.done)
@@ -198,18 +198,18 @@ struct LarkSendMarkView: View {
                         .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.tapTarget)
                         .contentShape(.rect)
                 }
-                .accessibilityLabel("已发送，管理本机记录")
-                .accessibilityHint("仅移除此处的发送记录，不撤回飞书消息")
+                .accessibilityLabel("Sent. Manage the record on this device")
+                .accessibilityHint("Removes only the record here; the Lark message isn't recalled")
                 .accessibilityIdentifier("lark.outgoing.sentReceipt")
             }
         case .failed, .unconfirmed:
             Menu {
                 Button(action: mark.retry) { Label(retryTitle, systemImage: Theme.Icon.retry).lineLimit(1) }
                 if mark.state != .unconfirmed {
-                    Button(action: mark.edit) { Label("放回输入框", systemImage: Theme.Icon.undo).lineLimit(1) }
+                    Button(action: mark.edit) { Label("Back to Composer", systemImage: Theme.Icon.undo).lineLimit(1) }
                 }
                 Button(role: .destructive, action: mark.discard) {
-                    Label(mark.state == .unconfirmed ? "移除本机记录" : "删除", systemImage: Theme.Icon.delete).lineLimit(1)
+                    Label(mark.state == .unconfirmed ? String(localized: "Remove from This Device") : String(localized: "Delete"), systemImage: Theme.Icon.delete).lineLimit(1)
                 }
             } label: {
                 Image(systemName: Theme.Icon.errorFilled)
@@ -219,7 +219,7 @@ struct LarkSendMarkView: View {
                     .scaledFrame(width: Theme.Size.iconL, height: Theme.Size.tapTarget)
                     .contentShape(.rect)
             }
-            .accessibilityLabel(mark.state == .unconfirmed ? "发送结果待确认" : "没发出去，点按重发")
+            .accessibilityLabel(mark.state == .unconfirmed ? String(localized: "Send result unconfirmed") : String(localized: "Not sent. Tap to resend"))
             .accessibilityHint(hint)
             .accessibilityIdentifier(mark.state == .unconfirmed ? "lark.outgoing.unconfirmed" : "lark.outgoing.failed")
         }
@@ -227,11 +227,11 @@ struct LarkSendMarkView: View {
 
     private var hint: String {
         if case .failed(let why) = mark.state { return why }
-        return mark.canRetry ? String(localized: "连接中断，尚未确认发送结果。重试前会先检查已有消息。") : String(localized: "尚未确认文件是否发出。只检查发送结果，不重复上传。")
+        return mark.canRetry ? String(localized: "The connection dropped before the send was confirmed. Retrying checks existing messages first.") : String(localized: "Not yet confirmed whether the file was sent. This only checks the result; it won't upload again.")
     }
 
     private var retryTitle: String {
-        guard mark.state == .unconfirmed else { return String(localized: "重发") }
-        return mark.canRetry ? String(localized: "检查并重试") : String(localized: "检查发送结果")
+        guard mark.state == .unconfirmed else { return String(localized: "Resend") }
+        return mark.canRetry ? String(localized: "Check and Retry") : String(localized: "Check Send Result")
     }
 }

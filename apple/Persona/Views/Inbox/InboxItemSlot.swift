@@ -136,7 +136,7 @@ import SwiftUI
             phase = .plugin
             return
         }
-        failure = Self.quiet(page) ? nil : (page.error ?? String(localized: "出错了"))
+        failure = Self.quiet(page) ? nil : (page.error ?? String(localized: "Something Went Wrong"))
         phase = .plain
     }
 
@@ -203,17 +203,17 @@ struct InboxItemSlotContent<Plain: View>: View {
         .onChange(of: InboxItemSlotChange(item)) { Task { await slot.changed() } }
     }
 
-    private var name: String { slot.place.map { $0.ownerName?.isEmpty == false ? $0.ownerName! : $0.title } ?? String(localized: "扩展") }
+    private var name: String { slot.place.map { $0.ownerName?.isEmpty == false ? $0.ownerName! : $0.title } ?? String(localized: "Extensions") }
 
     /// The plugin failed: today's body under a line saying so, with Retry.
     private func failed(_ why: String) -> some View {
         InboxSlotStrip {
-            Label { Text("\(name)的详情没画出来：\(why)").lineLimit(1) } icon: { Image(systemName: Theme.Icon.plugins) }
+            Label { Text("\(name) couldn't show details: \(why)").lineLimit(1) } icon: { Image(systemName: Theme.Icon.plugins) }
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help(why)
-            Button { Task { await slot.retry() } } label: { Label("重试", systemImage: Theme.Icon.retry).lineLimit(1) }
+            Button { Task { await slot.retry() } } label: { Label("Retry [Components b8784c]", systemImage: Theme.Icon.retry).lineLimit(1) }
                 .themedButton(prominent: false)
                 .controlSize(.small)
                 .accessibilityIdentifier("inbox-plugin-item-retry")
@@ -224,7 +224,7 @@ struct InboxItemSlotContent<Plain: View>: View {
     private var back: some View {
         InboxSlotStrip {
             Button { slot.showsSource = false } label: {
-                Label("回到\(slot.place?.title ?? String(localized: "扩展"))", systemImage: Theme.Icon.back).lineLimit(1)
+                Label("Back to \(slot.place?.title ?? String(localized: "Extensions")) [Inbox Item Slot a550aa]", systemImage: Theme.Icon.back).lineLimit(1)
             }
             .buttonStyle(.borderless)
             .accessibilityIdentifier("inbox-plugin-item-back")

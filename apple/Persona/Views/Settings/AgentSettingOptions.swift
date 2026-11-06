@@ -8,31 +8,31 @@ nonisolated enum AgentSettingOptions {
     private static let names: [String: [String: String]] = [
         "effortLevel": Dictionary(uniqueKeysWithValues: SessionModes.effortLevels.map { ($0.id, $0.title) }),
         "autoUpdatesChannel": [
-            "latest": String(localized: "最新版", comment: "Claude Code update channel"),
-            "stable": String(localized: "稳定版", comment: "Claude Code update channel"),
+            "latest": String(localized: "Latest", comment: "Claude Code update channel"),
+            "stable": String(localized: "Stable", comment: "Claude Code update channel"),
         ],
         "model_reasoning_effort": Dictionary(uniqueKeysWithValues: SessionModes.codexEffortLevels.map { ($0.id, $0.title) }),
         "model_reasoning_summary": [
-            "auto": String(localized: "自动", comment: "Codex reasoning summary"),
-            "concise": String(localized: "简短", comment: "Codex reasoning summary; also a verbosity"),
-            "detailed": String(localized: "详细", comment: "Codex reasoning summary; also a verbosity"),
-            "none": String(localized: "不显示", comment: "Codex reasoning summary"),
+            "auto": String(localized: "Auto", comment: "Codex reasoning summary"),
+            "concise": String(localized: "Short", comment: "Codex reasoning summary; also a verbosity"),
+            "detailed": String(localized: "Detailed", comment: "Codex reasoning summary; also a verbosity"),
+            "none": String(localized: "None [Agent Setting Options fc3ffd]", comment: "Codex reasoning summary"),
         ],
         "model_verbosity": [
-            "low": String(localized: "简短", comment: "Codex reasoning summary; also a verbosity"),
-            "medium": String(localized: "适中", comment: "Codex verbosity"),
-            "high": String(localized: "详细", comment: "Codex reasoning summary; also a verbosity"),
+            "low": String(localized: "Short", comment: "Codex reasoning summary; also a verbosity"),
+            "medium": String(localized: "Medium [Agent Setting Options fe4e7b]", comment: "Codex verbosity"),
+            "high": String(localized: "Detailed", comment: "Codex reasoning summary; also a verbosity"),
         ],
         "approval_policy": [
-            "untrusted": String(localized: "没把握的命令都先问", comment: "Codex approval policy"),
-            "on-failure": String(localized: "出错了再问", comment: "Codex approval policy"),
-            "on-request": String(localized: "它觉得需要时问", comment: "Codex approval policy"),
-            "never": String(localized: "一律不问", comment: "Codex approval policy"),
+            "untrusted": String(localized: "Ask unless it's clearly safe", comment: "Codex approval policy"),
+            "on-failure": String(localized: "Ask when something fails", comment: "Codex approval policy"),
+            "on-request": String(localized: "Ask when it needs to", comment: "Codex approval policy"),
+            "never": String(localized: "Never ask", comment: "Codex approval policy"),
         ],
         "sandbox_mode": [
-            "read-only": String(localized: "只能读", comment: "Codex sandbox mode"),
-            "workspace-write": String(localized: "能改工作目录", comment: "Codex sandbox mode"),
-            "danger-full-access": String(localized: "不设限（危险）", comment: "Codex sandbox mode"),
+            "read-only": String(localized: "Read only", comment: "Codex sandbox mode"),
+            "workspace-write": String(localized: "Can change the working folder", comment: "Codex sandbox mode"),
+            "danger-full-access": String(localized: "No limits (risky)", comment: "Codex sandbox mode"),
         ],
     ]
 

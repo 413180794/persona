@@ -35,35 +35,35 @@ enum PersonaToolNames {
     /// "Call Persona · agent read".
     static func fallback(_ base: String) -> String {
         let label = base.replacingOccurrences(of: "_", with: " ")
-        return String(localized: "调用 Persona · \(label)")
+        return String(localized: "Call Persona · \(label)")
     }
 
     private static func verbs(_ n: String) -> String? {
         switch n {
         // Agents on the user's computers (docs/assistant.md「Agents 与飞书工具」).
-        case "agent_read": String(localized: "读 Agent 对话")
-        case "agent_send", "send_to_agent": String(localized: "给 Agent 发消息")
-        case "agents_list", "list_agents": String(localized: "看 Agent 列表")
-        case "agent_start", "task_plan": String(localized: "派任务")
-        case "interaction_answer": String(localized: "替你回答")
-        case "ask_jarvis": String(localized: "交给 Persona")
+        case "agent_read": String(localized: "Read Agent Chat")
+        case "agent_send", "send_to_agent": String(localized: "Message Agent")
+        case "agents_list", "list_agents": String(localized: "List Agents")
+        case "agent_start", "task_plan": String(localized: "Assign Task")
+        case "interaction_answer": String(localized: "Answer for You")
+        case "ask_jarvis": String(localized: "Hand to Persona")
         // The knowledge base (docs/knowledge.md).
-        case "kb_get", "kb_list", "kb_search", "search_knowledge": String(localized: "查知识库")
-        case "kb_update": String(localized: "更新知识库")
+        case "kb_get", "kb_list", "kb_search", "search_knowledge": String(localized: "Search Knowledge")
+        case "kb_update": String(localized: "Update Knowledge")
         // Talking to the user.
-        case "ask_user": String(localized: "问你")
-        case "notify_user": String(localized: "通知你")
-        case "schedule_followup": String(localized: "提醒")
-        case "list_followups": String(localized: "看提醒")
-        case "cancel_followup": String(localized: "取消提醒")
-        case "schedule_routine": String(localized: "设定期任务")
-        case "delete_routine": String(localized: "删定期任务")
-        case "inbox_draft": String(localized: "起草回复")
-        case "jarvis_settings": String(localized: "Persona 设置")
+        case "ask_user": String(localized: "Ask You")
+        case "notify_user": String(localized: "Notify You")
+        case "schedule_followup": String(localized: "Reminder [Add Todo Intent 8f29b3]")
+        case "list_followups": String(localized: "List Reminders")
+        case "cancel_followup": String(localized: "Cancel Reminder")
+        case "schedule_routine": String(localized: "Schedule Task")
+        case "delete_routine": String(localized: "Delete Scheduled Task [Persona Tool Names 24bbfb]")
+        case "inbox_draft": String(localized: "Draft Reply")
+        case "jarvis_settings": String(localized: "Persona Settings")
         // Live cards (docs/assistant-views.md).
-        case "view_show": String(localized: "画卡片")
-        case "view_get": String(localized: "看卡片")
-        case "view_update": String(localized: "更新卡片")
+        case "view_show": String(localized: "Draw Card")
+        case "view_get": String(localized: "Read Card")
+        case "view_update": String(localized: "Update Card")
         default: nil
         }
     }

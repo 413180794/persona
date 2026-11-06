@@ -21,7 +21,7 @@ nonisolated struct GitHubInboxOptions: Codable, Equatable, Sendable {
     }
 
     /// The CI choices, most quiet first: (value, title).
-    static let ciModes: [(String, String)] = [("off", String(localized: "state.off", defaultValue: "关闭")), ("default_branch", String(localized: "只看默认分支")), ("mine", String(localized: "加上我的 PR")), ("all", String(localized: "全部"))]
+    static let ciModes: [(String, String)] = [("off", String(localized: "state.off", defaultValue: "Off")), ("default_branch", String(localized: "Default Branch Only")), ("mine", String(localized: "Plus My PRs")), ("all", String(localized: "All"))]
 }
 
 extension APIClient {
@@ -42,7 +42,7 @@ struct GitHubInboxSettings: View {
 
     var body: some View {
         Section {
-            Picker("CI 失败", selection: Binding(get: { options.ci }, set: { options.ci = $0; save() })) {
+            Picker("CI Failures", selection: Binding(get: { options.ci }, set: { options.ci = $0; save() })) {
                 ForEach(GitHubInboxOptions.ciModes, id: \.0) { value, title in Text(title).tag(value) }
             }
             .pickerStyle(.menu)
@@ -54,21 +54,21 @@ struct GitHubInboxSettings: View {
                 save()
             }
             HStack {
-                TextField("静音仓库：owner/name", text: $newRepo)
+                TextField(String(localized: "Mute repository: owner/name"), text: $newRepo)
                     #if os(macOS)
                     .labelsHidden() // the title is the prompt (#1221)
                     #endif
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onSubmit(add)
-                Button(action: add) { Text("添加").lineLimit(1) }
+                Button(action: add) { Text("Add [Beautiful U I Bridge 7a8a11]").lineLimit(1) }
                     .disabled(!newRepo.contains("/"))
             }
             if let error {
                 Text(error).font(Theme.Font.label).foregroundStyle(Theme.danger)
             }
         } header: {
-            Text("收件箱")
+            Text("Inbox")
         } footer: {
             Text(footer)
         }
@@ -76,14 +76,14 @@ struct GitHubInboxSettings: View {
 
     private var footer: String {
         let ci = switch options.ci {
-        case "off": String(localized: "CI 失败不进收件箱。")
-        case "default_branch": String(localized: "只有默认分支的 CI 失败进收件箱，算「需要你」。")
-        case "all": String(localized: "所有分支的 CI 失败都算「需要你」。")
-        default: String(localized: "默认分支和你自己开着的 PR 的 CI 失败算「需要你」，其他分支的算「知悉即可」。")
+        case "off": String(localized: "CI failures don't go to the Inbox.")
+        case "default_branch": String(localized: "Only CI failures on the default branch go to the Inbox, as Needs you.")
+        case "all": String(localized: "CI failures on every branch count as Needs you.")
+        default: String(localized: "CI failures on the default branch and your open PRs count as Needs you; other branches are FYI.")
         }
         let auto = (options.ignoreBranches ?? ["train/*"]).joined(separator: String(localized: "、", comment: "Separator between items in a list"))
-        return ci + String(localized: "同一个分支的失败合成一件，重跑也算同一件；后来跑成功、分支删了或 PR 合了就自动处理掉。自动分支（\(auto)）不提醒。")
-            + String(localized: "真人的 @、请你 review、要求修改算「需要你」，机器人发的算「知悉即可」。静音的仓库什么都不进收件箱，已有的也会处理掉。")
+        return ci + String(localized: " Failures on the same branch are grouped into one item, reruns included; it's marked done automatically once a run passes, the branch is deleted, or the PR is merged. Automated branches (\(auto)) aren't flagged.")
+            + String(localized: " @mentions, review requests, and requested changes from people count as Needs you; ones from bots are FYI. Muted repositories send nothing to the Inbox, and existing items are marked done.")
     }
 
     private func add() {
@@ -103,7 +103,7 @@ struct GitHubInboxSettings: View {
                     saved(c)
                 }
             } catch {
-                self.error = error.shown.map { String(localized: "没存上：\($0)") }
+                self.error = error.shown.map { String(localized: "Couldn't save: \($0) [Git Hub Inbox Settings 902c6a]") }
             }
         }
     }

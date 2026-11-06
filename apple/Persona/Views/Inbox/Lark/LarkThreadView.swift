@@ -74,7 +74,7 @@ struct LarkThreadView: View {
                         .overlay { if flash?.line == root.id { QuoteFlash().id(flash?.id) } }
                         .id(root.id)
                     HStack {
-                        Text(loading ? "加载回复…" : hasReplies || problem == nil ? "\(replies.count) 条回复" : "回复")
+                        Text(loading ? String(localized: "Loading replies…") : hasReplies || problem == nil ? String(localized: "\(replies.count) replies") : String(localized: "Reply"))
                             .font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(height: Theme.Size.line)
                     }
@@ -85,7 +85,7 @@ struct LarkThreadView: View {
                         Label(line, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
                     }
                     if pager.hasOlder {
-                        LarkLoadOlderButton(title: String(localized: "加载更早的回复"), loading: loadingOlder) { Task { await loadOlder() } }
+                        LarkLoadOlderButton(title: String(localized: "Load earlier replies"), loading: loadingOlder) { Task { await loadOlder() } }
                     }
                     // Mine on their way are in the same list, where they were written (LarkChatRows).
                     // Pictures and files wait in the chat's outbox (`queued`), text here; both by when they were written.
@@ -133,11 +133,11 @@ struct LarkThreadView: View {
                     if preparingAttachment {
                         HStack(spacing: Theme.Space.s) {
                             ProgressView().controlSize(.small)
-                            Text("正在准备附件…").font(Theme.Font.label).foregroundStyle(.secondary)
+                            Text("Preparing attachments…").font(Theme.Font.label).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, Theme.Space.m)
                     }
-                    LarkComposer(placeholder: String(localized: "回复话题"), text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
+                    LarkComposer(placeholder: String(localized: "Reply to topic"), text: $text, focused: $boxFocused, boxID: "lark.thread.box", sendID: "lark.thread.send",
                                  attachmentPicker: canAttach ? { photo in if photo { showPhotos = true } else { showFiles = true } } : nil,
                                  canAddAttachments: attachments.count < LarkAttachment.selectionLimit,
                                  hasAttachments: !attachments.isEmpty, preparingAttachment: preparingAttachment,
@@ -174,7 +174,7 @@ struct LarkThreadView: View {
             .sheet(item: $person) { LarkProfileView(person: $0) }
             .modifier(LarkThreadTitle(chatName: chatName))
             .navigationBarTitleDisplayMode(.inline)
-            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
             .task {
                 if focusBox {
                     // Once the sheet is up: focusing while it slides in is dropped.
@@ -216,9 +216,9 @@ struct LarkThreadView: View {
             LoadableContent(state: Loadable<Void>.loading, retry: nil) { _ in EmptyView() }
                 .padding(.vertical, Theme.Space.xl)
         case .empty:
-            EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "还没有回复"), message: String(localized: "在下面回复，开始这个话题。"))
+            EmptyStateView(symbol: Theme.Icon.conversation, title: String(localized: "No replies yet"), message: String(localized: "Reply below to start this topic."))
         case .failed(let p):
-            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: String(localized: "重试"), run: retry))
+            EmptyStateView(symbol: p.symbol, title: p.title, message: p.message, action: (title: String(localized: "Retry [Components b8784c]"), run: retry))
         }
     }
 
@@ -239,7 +239,7 @@ struct LarkThreadView: View {
             pager.replace(with: try await api.larkThread(root.id).replies(of: root.id))
             problem = nil
         } catch {
-            problem = LarkLoadProblem.of(error, subject: String(localized: "这个话题"))
+            problem = LarkLoadProblem.of(error, subject: String(localized: "this topic"))
         }
     }
 
@@ -281,7 +281,7 @@ struct LarkThreadView: View {
     /// restart, keep their place and account, and are checked before any retry.
     private func sendAttachments() {
         guard canAttach, let queue = chatOutbox, let api, let feed = feedID else {
-            model.toast = Toast(String(localized: "需要更新 Hub 上的飞书扩展，才能在话题里发送图片和文件"), style: .error); return
+            model.toast = Toast(String(localized: "Update the Lark extension on the hub to send images and files in topics."), style: .error); return
         }
         let picked = attachments
         let batch = picked.map { LarkOutgoing(text: "", replyTo: LarkReply.quote(root), thread: true, threadRoot: root.id, attachment: $0) }
@@ -289,7 +289,7 @@ struct LarkThreadView: View {
         Task {
             do { try await queue.enqueue(batch) } catch {
                 attachments = picked + attachments
-                model.toast = Toast(String(localized: "附件未发送，无法保存到本机，请检查存储空间"), style: .error); return
+                model.toast = Toast(String(localized: "Attachment not sent: couldn't save it on this device. Check storage."), style: .error); return
             }
             Haptics.tap()
             for item in batch { queue.deliver(item.id, using: api, feed: feed) { await refreshLatest() } }
@@ -308,18 +308,18 @@ struct LarkThreadView: View {
                 try await queue.settle(try await api.larkThread(root.id).messages)
                 guard let item = queue.items.first(where: { $0.id == id }) else { return }
                 guard item.canRetry else {
-                    model.toast = Toast(String(localized: "尚未确认文件是否发出，请稍后再检查"), style: .error); return
+                    model.toast = Toast(String(localized: "Not yet confirmed whether the file was sent. Check again later."), style: .error); return
                 }
                 try await queue.retry(id)
                 queue.deliver(id, using: api, feed: feed) { await refreshLatest() }
-            } catch { model.toast = Toast(String(localized: "暂时无法重试，请检查连接和本机存储空间"), style: .error) }
+            } catch { model.toast = Toast(String(localized: "Can't retry right now. Check the connection and this device's storage."), style: .error) }
         }
     }
 
     private func discardQueued(_ id: UUID) {
         Task {
             do { try await chatOutbox?.discard(id) }
-            catch { model.toast = Toast(String(localized: "未能删除，请检查本机存储空间"), style: .error) }
+            catch { model.toast = Toast(String(localized: "Couldn't delete. Check this device's storage."), style: .error) }
         }
     }
 
@@ -330,7 +330,7 @@ struct LarkThreadView: View {
             do {
                 try await chatOutbox?.discard(o.id)
                 attachments.append(attachment)
-            } catch { model.toast = Toast(String(localized: "未能放回，请检查本机存储空间"), style: .error) }
+            } catch { model.toast = Toast(String(localized: "Couldn't move it back. Check this device's storage."), style: .error) }
         }
     }
 
@@ -402,9 +402,9 @@ private struct LarkThreadTitle: ViewModifier {
 
     func body(content: Content) -> some View {
         if let chatName {
-            content.navigationTitle("话题详情").navigationSubtitle("来自 \(chatName)")
+            content.navigationTitle("Topic Details").navigationSubtitle(String(localized: "From \(chatName)"))
         } else {
-            content.navigationTitle("话题")
+            content.navigationTitle("Topic")
         }
     }
 }

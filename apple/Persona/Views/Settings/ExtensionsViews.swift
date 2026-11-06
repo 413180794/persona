@@ -15,7 +15,7 @@ struct ExtensionsView: View {
                 Section {
                     Group {
                         NavigationLink(value: SettingsPage.pluginMarket) {
-                            SettingsRow(title: String(localized: "扩展市场"), symbol: Theme.Icon.pluginMarket, tint: Theme.accent)
+                            SettingsRow(title: String(localized: "Extension Market"), symbol: Theme.Icon.pluginMarket, tint: Theme.accent)
                         }
                         .accessibilityIdentifier("plugins-market")
                     }
@@ -29,8 +29,8 @@ struct ExtensionsView: View {
             #endif
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "没有扩展"),
-                                   message: String(localized: "扩展在 hub 的管理界面（/admin）或 hub 所在的机器上用 personad extension install 安装，装好后在这里开关和设置。"))
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "No Extensions"),
+                                   message: String(localized: "Install extensions in the hub's admin page (/admin) or on the hub machine with personad extension install, then turn them on and set them up here."))
                         .listRowBackground(Color.clear)
                 }
             } else if let plugins = page.plugins {
@@ -43,19 +43,19 @@ struct ExtensionsView: View {
                     }
                     .bareListRow()
                 } footer: {
-                    Text("扩展在 hub 的管理界面（/admin）或 hub 所在的机器上（personad extension）安装、升级和卸载，这里可以开关、改设置、填密钥。")
+                    Text("Extensions are installed, updated and uninstalled in the hub's admin page (/admin) or on the hub machine (personad extension). Here you can turn them on or off, change settings and enter secrets.")
                 }
             }
             if let error = page.error {
                 #if os(macOS)
                 // A page's empty state, not the request's error in red (#2113).
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.plugins, title: page.missing ? String(localized: "没有扩展") : String(localized: "扩展没有加载出来"),
+                    EmptyStateView(symbol: Theme.Icon.plugins, title: page.missing ? String(localized: "No Extensions") : String(localized: "Couldn't Load Extensions"),
                                    message: page.missing
-                                       ? (AppModel.shared.isDemo ? String(localized: "体验模式里没有扩展。连接自己的 hub 后，装好的扩展在这里开关和设置。")
-                                                                 : String(localized: "这个 hub 的版本还不支持扩展，升级 hub 后再来看。"))
+                                       ? (AppModel.shared.isDemo ? String(localized: "Demo mode has no extensions. Connect your own hub to turn on and set up installed extensions here.")
+                                                                 : String(localized: "This hub's version doesn't support extensions yet. Update the hub and check back."))
                                        : error,
-                                   action: page.missing ? nil : (String(localized: "重试"), { Task { await page.load() } }))
+                                   action: page.missing ? nil : (String(localized: "Retry [Components b8784c]"), { Task { await page.load() } }))
                         .listRowBackground(Color.clear)
                 }
                 #else
@@ -69,7 +69,7 @@ struct ExtensionsView: View {
         .pluginLinks($cardLink)
         #endif
         .overlay { if page.plugins == nil && page.loading { ProgressView() } }
-        .detailTitle(String(localized: "扩展"))
+        .detailTitle(String(localized: "Extensions"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         #if os(macOS)
@@ -187,17 +187,17 @@ struct ExtensionDetailView: View {
                 }
                 if d.readOnly {
                     Section {
-                        Text("这个扩展写在 hub.json 里：开关和设置在 hub 所在的机器上改。").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("This extension is set in hub.json; change its switch and settings on the hub machine.").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 } else {
                     Section {
                         Toggle(isOn: Binding(get: { d.plugin.enabled ?? true }, set: { on in Task { await page.setEnabled(on) } })) {
-                            Text("启用").lineLimit(1)
+                            Text("Enabled").lineLimit(1)
                         }
                         .disabled(page.changingEnabled || page.saving || page.changingContribution != nil)
                         .accessibilityIdentifier("plugin-enabled")
                     } footer: {
-                        Text("停用后它不再运行，提供的连接器等也一起关掉；设置和密钥留着。")
+                        Text("When off, it stops running and the connectors and other things it provides turn off too; its settings and secrets stay.")
                     }
                 }
                 if let auto = d.plugin.autoUpgrade { upgrades(d.plugin, auto: auto) }
@@ -212,7 +212,7 @@ struct ExtensionDetailView: View {
             }
         }
         .themedPage()
-        .detailTitle(page.detail?.plugin.name ?? String(localized: "扩展"))
+        .detailTitle(page.detail?.plugin.name ?? String(localized: "Extensions"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             if page.detail?.readOnly == false && !(page.detail?.form.isEmpty ?? true) {
@@ -220,19 +220,19 @@ struct ExtensionDetailView: View {
                     Button {
                         Task { await page.save() }
                     } label: {
-                        if page.saving { ProgressView() } else { Text("保存").lineLimit(1) }
+                        if page.saving { ProgressView() } else { Text("Save").lineLimit(1) }
                     }
                     .disabled(!page.canSave)
                     .accessibilityIdentifier("plugin-save")
                 }
             }
         }
-        .confirmationDialog("连带停用依赖它的扩展？", isPresented: Binding(
+        .confirmationDialog("Also Turn Off Extensions That Depend on It?", isPresented: Binding(
             get: { page.disableConfirmation != nil },
             set: { if !$0 { page.disableConfirmation = nil } }), titleVisibility: .visible) {
-            Button(role: .destructive) { Task { await page.confirmDisable() } } label: { Text("一起停用").lineLimit(1) }
+            Button(role: .destructive) { Task { await page.confirmDisable() } } label: { Text("Turn Off All").lineLimit(1) }
                 .accessibilityIdentifier("extension-cascade-confirm")
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(page.disableConfirmation?.message ?? "")
         }
@@ -296,7 +296,7 @@ struct ExtensionDetailView: View {
                 }
             }
             if let needs = page.detail?.plugin.needsSetup, !needs.isEmpty {
-                Text(String(localized: "还缺：\(ExtensionText.list(needs))")).font(Theme.Font.label).foregroundStyle(Theme.caution)
+                Text(String(localized: "Still needs: \(ExtensionText.list(needs))")).font(Theme.Font.label).foregroundStyle(Theme.caution)
             }
             if let e = page.detail?.plugin.error ?? page.error, !e.isEmpty {
                 Text(e).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
@@ -305,7 +305,7 @@ struct ExtensionDetailView: View {
     }
 
     private var stateText: String {
-        guard let p = page.detail?.plugin else { return page.loading ? String(localized: "正在读取…") : String(localized: "读不到") }
+        guard let p = page.detail?.plugin else { return page.loading ? String(localized: "Loading… [File Viewer 86b6d0]") : String(localized: "Couldn't load [Connector Thread Models 153e20]") }
         return [ExtensionText.state(p), p.version, ExtensionText.source(p.source)].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -314,7 +314,7 @@ struct ExtensionDetailView: View {
     @ViewBuilder private func upgrades(_ p: HubExtension, auto: Bool) -> some View {
         Section {
             Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
-                Text("自动升级").lineLimit(1)
+                Text("Auto-Update").lineLimit(1)
             }
             .accessibilityIdentifier("plugin-auto-upgrade")
             if let u = p.upgrade {
@@ -322,7 +322,7 @@ struct ExtensionDetailView: View {
                     NavigationLink(value: SettingsPage.marketExtension(market: u.market, id: u.id)) {
                         // The action stays at the end of the row however long what it asks for is.
                         HStack(spacing: Theme.Space.m) {
-                            ExtensionUpgradeLine(title: String(localized: "有新版本 \(u.to)"), detail: ExtensionText.upgradeDetail(u),
+                            ExtensionUpgradeLine(title: String(localized: "New Version \(u.to) [Extensions Views fc9053]"), detail: ExtensionText.upgradeDetail(u),
                                               attention: u.state == "needs_permission" || u.state == "skipped")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             Text(action).foregroundStyle(Theme.accent).lineLimit(1).fixedSize()
@@ -330,7 +330,7 @@ struct ExtensionDetailView: View {
                     }
                     .accessibilityIdentifier("plugin-upgrade")
                 } else {
-                    ExtensionUpgradeLine(title: String(localized: "有新版本 \(u.to)"), detail: ExtensionText.upgradeDetail(u), attention: false)
+                    ExtensionUpgradeLine(title: String(localized: "New Version \(u.to) [Extensions Views fc9053]"), detail: ExtensionText.upgradeDetail(u), attention: false)
                         .accessibilityIdentifier("plugin-upgrade")
                 }
             } else if let n = p.upgradeNote, let text = ExtensionText.upgradeNote(n) {
@@ -338,9 +338,9 @@ struct ExtensionDetailView: View {
                     .accessibilityIdentifier("plugin-upgrade-note")
             }
         } header: {
-            SettingsHeading(String(localized: "升级"))
+            SettingsHeading(String(localized: "Update [Extension Market Views 94996c]"))
         } footer: {
-            Text("扩展市场里出了新版本，扩展空闲时自动装上；新版本要的权限变多时先问你。装上后起不来的会退回原来的版本。")
+            Text("When the market has a new version, it installs while the extension is idle, and asks you first if it wants more permissions. If it doesn't start after installing, it goes back to the previous version.")
         }
     }
 
@@ -357,7 +357,7 @@ struct ExtensionDetailView: View {
                     .accessibilityIdentifier("plugin-page-\(place.id)")
                 }
             } header: {
-                SettingsHeading(String(localized: "页面"))
+                SettingsHeading(String(localized: "Pages"))
             }
         }
     }
@@ -371,15 +371,15 @@ struct ExtensionDetailView: View {
                     Toggle(isOn: Binding(get: { c.inbox ?? false }, set: { on in
                         Task { await connectorInbox.setInbox(c.id, on: on) }
                     })) {
-                        Text("进收件箱").lineLimit(1)
+                        Text("Show in Inbox").lineLimit(1)
                     }
                     .disabled(connectorInbox.changing != nil)
                     .accessibilityIdentifier("extension-connector-inbox-\(c.id)")
                     NavigationLink(value: SettingsPage.connector(c.id)) {
                         Label {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                                Text("连接器设置").lineLimit(1)
-                                Text("登录、状态和更多收件箱设置").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                                Text("Connector Settings").lineLimit(1)
+                                Text("Sign-in, status and more Inbox settings").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             }
                         } icon: {
                             Image(systemName: Theme.Icon.connectors)
@@ -387,12 +387,12 @@ struct ExtensionDetailView: View {
                     }
                     .accessibilityIdentifier("extension-connector-open-\(c.id)")
                 } header: {
-                    SettingsHeading(String(localized: "连接器 \(c.name)"))
+                    SettingsHeading(String(localized: "Connector \(c.name)"))
                 } footer: {
                     if c.inbox == true {
-                        Text("\(c.name) 的新条目进收件箱。和连接器页上的「进收件箱」是同一个开关。")
+                        Text("New \(c.name) items show in the Inbox. This is the same switch as Show in Inbox on the connector's page.")
                     } else {
-                        Text("不进收件箱：不再收新的，已有的条目留着。")
+                        Text("Not showing in Inbox: nothing new arrives; existing items stay.")
                     }
                 }
             }
@@ -404,7 +404,7 @@ struct ExtensionDetailView: View {
             Section {
                 ForEach(d.form.filter { $0.type != "object" }) { f in ExtensionFieldRow(field: f, path: [f.name], page: page, templates: declarations.templates) }
             } header: {
-                SettingsHeading(String(localized: "设置"))
+                SettingsHeading(String(localized: "Settings"))
             } footer: {
                 if let footer = ExtensionText.saveFooter(d.form) { Text(footer) }
             }
@@ -425,7 +425,7 @@ struct ExtensionDetailView: View {
             ForEach(d.secrets) { s in
                 Button { editingSecret = s } label: {
                     LabeledContent {
-                        Text(s.set ? "已设置" : (s.required == true ? "未设置（必填）" : "未设置"))
+                        Text(s.set ? String(localized: "Set") : (s.required == true ? String(localized: "Not set (required)") : String(localized: "Not set")))
                             .foregroundStyle(s.set || s.required != true ? Color.secondary : Theme.caution)
                             .lineLimit(1)
                     } label: {
@@ -436,9 +436,9 @@ struct ExtensionDetailView: View {
                 .accessibilityIdentifier("plugin-secret-\(s.name)")
             }
         } header: {
-            SettingsHeading(String(localized: "密钥"))
+            SettingsHeading(String(localized: "Secrets"))
         } footer: {
-            Text("密钥加密存在 hub 上，只交给这个扩展；存好后不再显示，只能换新的或清除。")
+            Text("Secrets are stored encrypted on the hub and given only to this extension. Once saved they aren't shown again; you can only replace or clear them.")
         }
     }
 
@@ -452,7 +452,7 @@ struct ExtensionDetailView: View {
                         })) {
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text(c.label).lineLimit(1)
-                                Text(c.via == "connector" ? String(localized: "\(ExtensionText.point(c.point)) · 跟着连接器") : ExtensionText.point(c.point))
+                                Text(c.via == "connector" ? String(localized: "\(ExtensionText.point(c.point)) · with connector") : ExtensionText.point(c.point))
                                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
@@ -460,9 +460,9 @@ struct ExtensionDetailView: View {
                         .accessibilityIdentifier("extension-contribution-\(c.id)")
                     }
                 } header: {
-                    SettingsHeading(String(localized: "提供"))
+                    SettingsHeading(String(localized: "Provides"))
                 } footer: {
-                    Text("开关即时生效。关掉一项只停止这项贡献，其他能力和设置保留。")
+                    Text("Switches take effect right away. Turning one off stops only that contribution; other features and settings stay.")
                 }
             }
         } else if let c = d.plugin.contributes, !c.isEmpty {
@@ -473,7 +473,7 @@ struct ExtensionDetailView: View {
                     }
                 }
             } header: {
-                SettingsHeading(String(localized: "提供"))
+                SettingsHeading(String(localized: "Provides"))
             }
         }
     }
@@ -488,14 +488,14 @@ struct ExtensionDetailView: View {
                             .foregroundStyle(dependency.state == "ok" ? Color.secondary : Theme.cautionText)
                     }
                 }
-            } header: { SettingsHeading(String(localized: "依赖")) }
+            } header: { SettingsHeading(String(localized: "Dependencies")) }
         }
         if let members = d.extensionPack, !members.isEmpty {
             Section {
                 ForEach(members, id: \.id) { member in
                     LabeledContent(member.id, value: member.version ?? "")
                 }
-            } header: { SettingsHeading(String(localized: "合集成员")) }
+            } header: { SettingsHeading(String(localized: "Pack Members")) }
         }
     }
 
@@ -512,31 +512,31 @@ struct ExtensionDetailView: View {
                     .padding(.vertical, Theme.Space.xxs)
                 }
             } header: {
-                SettingsHeading(String(localized: "它可以"))
+                SettingsHeading(String(localized: "It Can"))
             } footer: {
-                Text("安装时你同意过这些；新版本要得更多时，升级前会再问一次。")
+                Text("You agreed to these when installing. If a new version asks for more, you'll be asked again before the update.")
             }
         }
     }
 
     @ViewBuilder private func about(_ d: HubExtensionDetail) -> some View {
         Section {
-            if let v = d.plugin.version, !v.isEmpty { LabeledContent("版本", value: v) }
-            if let v = d.previousVersion, !v.isEmpty { LabeledContent("上一个版本", value: v) }
-            if let s = ExtensionText.source(d.plugin.source) { LabeledContent("来源", value: s) }
+            if let v = d.plugin.version, !v.isEmpty { LabeledContent("Version", value: v) }
+            if let v = d.previousVersion, !v.isEmpty { LabeledContent("Previous Version", value: v) }
+            if let s = ExtensionText.source(d.plugin.source) { LabeledContent("Source", value: s) }
             if let o = d.origin, !o.isEmpty {
-                LabeledContent("安装自") { Text(o).lineLimit(2).truncationMode(.middle).textSelection(.enabled) }
+                LabeledContent("Installed From") { Text(o).lineLimit(2).truncationMode(.middle).textSelection(.enabled) }
             }
-            if let p = d.publisher, !p.isEmpty { LabeledContent("发布者", value: p) }
+            if let p = d.publisher, !p.isEmpty { LabeledContent("Publisher", value: p) }
 
             if let h = d.homepage, let url = URL(string: h) {
-                Link(destination: url) { Label("主页", systemImage: Theme.Icon.openExternal).lineLimit(1) }
+                Link(destination: url) { Label("Website", systemImage: Theme.Icon.openExternal).lineLimit(1) }
             }
             ForEach(ExtensionAuthText.warnings(d.plugin.warnings, shown: auth), id: \.self) { w in
                 Label { Text(w).font(Theme.Font.label) } icon: { Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution) }
             }
         } header: {
-            SettingsHeading(String(localized: "关于"))
+            SettingsHeading(String(localized: "About"))
         }
         // The command-line programs this version runs with (#4507), the machine's own marked.
         if let tools = d.plugin.tools, !tools.isEmpty {
@@ -546,7 +546,7 @@ struct ExtensionDetailView: View {
                         .accessibilityIdentifier("plugin-tool-\(t.name)")
                 }
             } header: {
-                SettingsHeading(String(localized: "命令行"))
+                SettingsHeading(String(localized: "Command line"))
             }
         }
     }
@@ -579,7 +579,7 @@ private struct ExtensionFieldRow: View {
         .accessibilityIdentifier("plugin-field-\(path.joined(separator: "."))")
     }
 
-    private var title: String { field.required == true && field.default == nil ? String(localized: "\(field.label)（必填）") : field.label }
+    private var title: String { field.required == true && field.default == nil ? String(localized: "\(field.label) (required)") : field.label }
 
     @ViewBuilder private var control: some View {
         switch field.type {
@@ -635,9 +635,9 @@ private struct ExtensionFieldRow: View {
     /// What shows when it is empty: the default it falls back to, or Not set.
     private var placeholder: String {
         if let d = field.default, let s = field.enum?.first(where: { $0.value == d })?.label ?? d.string, !s.isEmpty {
-            return String(localized: "默认：\(s)")
+            return String(localized: "Default: \(s)")
         }
-        return String(localized: "未设置")
+        return String(localized: "Not set")
     }
 
     /// A number as typed: kept as text until it reads as one (ExtensionModel.numberProblems), then the value.
@@ -680,20 +680,20 @@ private struct ExtensionMachineSwitches: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Text(title).font(Theme.Font.labelStrong).foregroundStyle(.secondary).lineLimit(2)
             if machines.isEmpty && unknown.isEmpty {
-                Text(field.items?.os == ["darwin"] ? "这个 hub 上还没有 Mac。" : "这个 hub 上还没有机器。")
+                Text(field.items?.os == ["darwin"] ? String(localized: "This hub doesn't have a Mac yet.") : String(localized: "This hub doesn't have any machines yet."))
                     .font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             ForEach(machines) { m in
                 row(m.id, name: m.name, status: nodeStatus(m) ?? (browsers ? Self.browserStatus(m) : Self.status(m, computers: computers)))
             }
             ForEach(unknown, id: \.self) { id in
-                row(id, name: id, status: String(localized: "找不到这台机器"))
+                row(id, name: id, status: String(localized: "Can't find this machine"))
             }
         }
         // An alert, not a confirmation dialog: anchored to the row as a popover, that one drops its Cancel.
-        .alert("打开「\(askingName)」？", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) {
-            Button("取消", role: .cancel) { asking = nil }
-            Button(String(localized: "action.turnOn", defaultValue: "打开")) {
+        .alert("Turn On “\(askingName)”?", isPresented: Binding(get: { asking != nil }, set: { if !$0 { asking = nil } })) {
+            Button("Cancel", role: .cancel) { asking = nil }
+            Button(String(localized: "action.turnOn", defaultValue: "Turn On")) {
                 if let id = asking { save(id, on: true) }
                 asking = nil
             }
@@ -706,7 +706,7 @@ private struct ExtensionMachineSwitches: View {
     private func nodeStatus(_ m: Machine) -> String? {
         guard let detail = page.detail, detail.nodeMachines == path.last, items.contains(m.id) else { return nil }
         let state = detail.plugin.nodes?.first { $0.machineID == m.id }
-        return (m.online ? String(localized: "在线") : String(localized: "离线")) + " · " + ExtensionNodeState.status(state)
+        return (m.online ? String(localized: "Online") : String(localized: "Offline [Machine Entity be1b4f]")) + " · " + ExtensionNodeState.status(state)
     }
 
     private func save(_ id: String, on: Bool) {
@@ -729,13 +729,13 @@ private struct ExtensionMachineSwitches: View {
 
     /// Online / Offline, then how ego lite is on it (Ready is the switch worth turning on).
     static func browserStatus(_ m: Machine) -> String {
-        var parts = [m.online ? String(localized: "在线") : String(localized: "离线")]
+        var parts = [m.online ? String(localized: "Online") : String(localized: "Offline [Machine Entity be1b4f]")]
         if m.online, let b = m.browser, b.checked {
-            if b.job?.running == true { parts.append(b.job?.kind == "install" ? String(localized: "ego 安装中") : String(localized: "ego 首次设置中")) }
-            else if !b.installed { parts.append(String(localized: "ego 没装")) }
-            else if !b.setUp { parts.append(String(localized: "ego 没做完首次设置")) }
-            else if b.ready { parts.append(String(localized: "ego 就绪")) }
-            else { parts.append(String(localized: "ego 没跑通")) }
+            if b.job?.running == true { parts.append(b.job?.kind == "install" ? String(localized: "Installing ego") : String(localized: "Setting up ego")) }
+            else if !b.installed { parts.append(String(localized: "ego not installed")) }
+            else if !b.setUp { parts.append(String(localized: "ego setup not finished")) }
+            else if b.ready { parts.append(String(localized: "ego ready")) }
+            else { parts.append(String(localized: "ego not working")) }
         }
         return parts.joined(separator: " · ")
     }
@@ -743,20 +743,20 @@ private struct ExtensionMachineSwitches: View {
     /// Online / Offline, then for a computer plugin how Cua Driver is on it, once its node has said (every Mac's while the
     /// plugin is on, whether or not it is turned on for it).
     static func status(_ m: Machine, computers: Bool) -> String {
-        var parts = [m.online ? String(localized: "在线") : String(localized: "离线")]
+        var parts = [m.online ? String(localized: "Online") : String(localized: "Offline [Machine Entity be1b4f]")]
         if computers, m.online, let c = m.computer, c.checked {
             if !c.installed {
-                parts.append(String(localized: "Cua 没装"))
+                parts.append(String(localized: "Cua not installed"))
             } else if !c.daemon {
-                parts.append(String(localized: "Cua 没在运行"))
+                parts.append(String(localized: "Cua not running"))
             } else if !c.missingPermissions.isEmpty {
-                parts.append(String(localized: "Cua 缺权限"))
+                parts.append(String(localized: "Cua missing permissions"))
             } else if c.desktop == "locked" {
-                parts.append(String(localized: "锁屏了"))
+                parts.append(String(localized: "Screen locked"))
             } else if c.ready {
-                parts.append(String(localized: "Cua 可以用"))
+                parts.append(String(localized: "Cua ready"))
             } else {
-                parts.append(String(localized: "Cua 已装"))
+                parts.append(String(localized: "Cua installed"))
             }
         }
         return parts.joined(separator: " · ")
@@ -797,11 +797,11 @@ private struct ExtensionListField: View {
                             Image(systemName: Theme.Icon.clear).foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("删除 \(item)")
+                        .accessibilityLabel("Delete \(item)")
                     }
                 }
                 HStack(spacing: Theme.Space.s) {
-                    TextField("添加一项", text: $adding)
+                    TextField(String(localized: "Add item"), text: $adding)
                         #if os(macOS)
                         .labelsHidden() // the title is the prompt (#1221)
                         #endif
@@ -812,7 +812,7 @@ private struct ExtensionListField: View {
                         .buttonStyle(.plain)
                         .foregroundStyle(Theme.accent)
                         .disabled(adding.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .accessibilityLabel("添加")
+                        .accessibilityLabel("Add [Beautiful U I Bridge 7a8a11]")
                 }
             }
         }
@@ -843,16 +843,16 @@ private struct ExtensionSecretSheet: View {
         NavigationStack {
             List {
                 Section {
-                    SecretField(secret.set ? String(localized: "输入新的值替换") : String(localized: "输入"), filled: String(localized: "已填写，点保存"), text: $value, identifier: "plugin-secret-value")
+                    SecretField(secret.set ? String(localized: "Enter a new value to replace it") : String(localized: "Enter"), filled: String(localized: "Filled in; tap Save [Extension Market Views 94348c]"), text: $value, identifier: "plugin-secret-value")
                 } footer: {
-                    Text(secret.description?.isEmpty == false ? secret.description! : String(localized: "存在 hub 上，只交给这个扩展。"))
+                    Text(secret.description?.isEmpty == false ? secret.description! : String(localized: "Stored on the hub and given only to this extension."))
                 }
                 if secret.set {
                     Section {
                         Button(role: .destructive) {
                             Task { busy = true; await clear(); busy = false; dismiss() }
                         } label: {
-                            Text("清除").lineLimit(1)
+                            Text("Clear [Image Editor bce237]").lineLimit(1)
                         }
                         .tint(Theme.danger) // a Mac form draws a button in the accent whatever its role (#1512)
                         .disabled(busy)
@@ -872,7 +872,7 @@ private struct ExtensionSecretSheet: View {
                             busy = false
                         }
                     } label: {
-                        if busy { ProgressView() } else { Text("保存").lineLimit(1) }
+                        if busy { ProgressView() } else { Text("Save").lineLimit(1) }
                     }
                     .disabled(busy || value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("plugin-secret-save")

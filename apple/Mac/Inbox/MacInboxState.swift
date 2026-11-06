@@ -64,14 +64,14 @@ enum MacInboxFilter: Hashable, Identifiable {
 
     /// The kinds, in the iPhone's chip order.
     static var kinds: [(key: String, title: String)] {
-        [("mention", String(localized: "@我")), ("dm", String(localized: "私聊")), ("group", String(localized: "群聊")),
-         ("mail", String(localized: "邮件")), ("agent", "Agent")]
+        [("mention", String(localized: "@Me")), ("dm", String(localized: "DMs")), ("group", String(localized: "Group chat")),
+         ("mail", String(localized: "Mail [Assistant View 3d708e]")), ("agent", "Agent")]
     }
 
     var title: String {
         switch self {
-        case .all: String(localized: "全部")
-        case .feishu: String(localized: "飞书")
+        case .all: String(localized: "All")
+        case .feishu: String(localized: "Lark [Inbox Event Views 7e4419]")
         case .account(let a): InboxView.short(a.email)
         case .connector(_, let name): name
         case .kind(let k): Self.kinds.first { $0.key == k }?.title ?? k
@@ -180,7 +180,7 @@ final class MacInboxState {
     func matches(_ it: InboxItem, source: String? = nil, kind: String? = nil, query: String? = nil) -> Bool {
         let source = source ?? self.source, kind = kind ?? self.kind, query = query ?? self.query
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == "@我")) { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == String(localized: "@Me"))) { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }

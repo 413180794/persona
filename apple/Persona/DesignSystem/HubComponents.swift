@@ -20,7 +20,7 @@ struct HubTag: View {
     var body: some View {
         if model.isMultiHub {
             Chip(text: model.groupName(group), symbol: Theme.Icon.hubGroup, shrinks: true)
-                .accessibilityLabel("来自 \(model.groupName(group))")
+                .accessibilityLabel("From \(model.groupName(group))")
         }
     }
 }
@@ -51,7 +51,7 @@ struct HubSwitcher: View {
                 .fixedSize()
             }
             .accessibilityIdentifier("hub.switcher")
-            .accessibilityLabel("当前 hub：\(model.groupName(current))")
+            .accessibilityLabel("Current hub: \(model.groupName(current))")
         }
     }
 }

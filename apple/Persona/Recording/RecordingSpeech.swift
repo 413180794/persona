@@ -18,10 +18,10 @@ nonisolated enum RecordingSpeechError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedLanguage: String(localized: "这台设备没有适用于所选语言的本机转写模型")
-        case .noSpeechPermission: String(localized: "语音识别权限未开启，请到系统设置中允许 Persona 使用")
-        case .modelUnavailable: String(localized: "本机语音模型下载失败，请检查网络后重试")
-        case .empty: String(localized: "录音中没有识别到语音")
+        case .unsupportedLanguage: String(localized: "This device has no on-device transcription model for the selected language")
+        case .noSpeechPermission: String(localized: "Speech recognition is off. Allow it for Persona in Settings.")
+        case .modelUnavailable: String(localized: "Couldn't download the on-device speech model. Check your network and try again.")
+        case .empty: String(localized: "No speech was recognized in the recording")
         }
     }
 }

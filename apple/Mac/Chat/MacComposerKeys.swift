@@ -186,15 +186,15 @@ struct MacSentSearch: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Theme.Space.s) {
                 Text("^R").font(Theme.Font.code).foregroundStyle(.secondary).accessibilityHidden(true)
-                TextField("搜索已发送的消息", text: $query)
+                TextField(String(localized: "Search sent messages"), text: $query)
                     .textFieldStyle(.plain)
                     .focused($focused)
-                    .accessibilityLabel("搜索已发送的消息")
+                    .accessibilityLabel("Search sent messages")
             }
             .padding(Theme.Space.m)
             Divider()
             if rows.isEmpty {
-                Text(candidates.isEmpty ? "还没有发过消息" : "没有匹配的消息")
+                Text(candidates.isEmpty ? String(localized: "No messages sent yet") : String(localized: "No matching messages"))
                     .font(Theme.Font.secondary)
                     .foregroundStyle(.secondary)
                     .padding(Theme.Space.m)

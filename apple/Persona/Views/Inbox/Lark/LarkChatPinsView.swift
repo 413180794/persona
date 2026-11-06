@@ -30,10 +30,10 @@ struct LarkPinPresentation: ViewModifier {
                         .environment(\.larkDisplay, display)
                 }
             }
-            .confirmationDialog("添加到 Pin 消息？", isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding = nil } }), titleVisibility: .visible) {
-                if let adding { Button("添加 Pin") { add(adding) } }
-                Button("取消", role: .cancel) {}
-            } message: { Text("会话成员可以在 Pin 列表中找到这条消息。") }
+            .confirmationDialog("Pin This Message?", isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding = nil } }), titleVisibility: .visible) {
+                if let adding { Button("Pin [Lark Chat Pins View 638562]") { add(adding) } }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("Chat members can find this message in the pinned list.") }
     }
 }
 
@@ -51,20 +51,20 @@ struct LarkChatPinsView: View {
                 if let problem = pins.problem { problemSection(problem) }
                 if pins.items.isEmpty {
                     if pins.loading {
-                        ProgressView("加载 Pin 消息…").frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
+                        ProgressView(String(localized: "Loading Pinned Messages…")).frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
                     } else if pins.loaded && pins.problem == nil {
-                        EmptyStateView(symbol: Theme.Icon.pin, title: String(localized: "还没有 Pin 消息"), message: String(localized: "长按聊天中的消息，选择「添加 Pin」。"))
+                        EmptyStateView(symbol: Theme.Icon.pin, title: String(localized: "No pinned messages yet"), message: String(localized: "Touch and hold a message in the chat, then choose Pin."))
                     }
                 } else {
                     Section {
                         ForEach(pins.items) { pin in pinRow(pin) }
                     } header: {
-                        Text("\(pins.total) 条 Pin").font(Theme.Font.caption)
+                        Text("\(pins.total) pins").font(Theme.Font.caption)
                     }
                     if let problem = pins.pageProblem {
                         Section {
                             Text(problem).font(Theme.Font.secondary).foregroundStyle(.secondary)
-                            Button("重试") { Task { await pins.more() } }.lineLimit(1).disabled(pins.busy)
+                            Button("Retry [Components b8784c]") { Task { await pins.more() } }.lineLimit(1).disabled(pins.busy)
                                 .accessibilityIdentifier("lark.pins.moreRetry")
                         }
                     } else if pins.nextCursor != nil {
@@ -79,19 +79,19 @@ struct LarkChatPinsView: View {
                 }
             }
             .themedGroupedPage()
-            .navigationTitle("Pin 消息")
+            .navigationTitle("Pinned Messages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }.lineLimit(1).accessibilityIdentifier("lark.pins.close")
+                    Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1).accessibilityIdentifier("lark.pins.close")
                 }
             }
-            .confirmationDialog("移除这条 Pin？", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            .confirmationDialog("Unpin This Message?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
                 if let pin = removing {
-                    Button("移除 Pin", role: .destructive) { Task { _ = await pins.change(message: pin.messageID, pin: pin.id) } }
+                    Button("Unpin [Lark Chat Pins View f13ef8]", role: .destructive) { Task { _ = await pins.change(message: pin.messageID, pin: pin.id) } }
                 }
-                Button("取消", role: .cancel) {}
-            } message: { Text("原消息会保留在聊天中。") }
+                Button("Cancel", role: .cancel) {}
+            } message: { Text("The message stays in the chat.") }
             .task {
                 let changes = LarkSync.shared.changes(of: feed)
                 await pins.refresh()
@@ -105,7 +105,7 @@ struct LarkChatPinsView: View {
         Section {
             Text(text).font(Theme.Font.secondary).foregroundStyle(.secondary)
             if !pins.blocked {
-                Button(pins.requiresRecheck ? "查看最新列表" : "重新加载") { Task { await pins.refresh() } }
+                Button(pins.requiresRecheck ? String(localized: "View Latest List") : String(localized: "Reload [Lark Chat Pins View 7bdd5c]")) { Task { await pins.refresh() } }
                     .lineLimit(1).disabled(pins.busy).accessibilityIdentifier("lark.pins.retry")
             }
         }
@@ -129,7 +129,7 @@ struct LarkChatPinsView: View {
                     Text(summary(pin)).font(Theme.Font.body).foregroundStyle(.primary).lineLimit(3)
                         .multilineTextAlignment(.leading)
                     if let m = pin.message, m.olk != nil {
-                        Label(m.olk?.isOpen == true ? "加密消息" : "加密消息 · 对外展示", systemImage: Theme.Icon.locked)
+                        Label(m.olk?.isOpen == true ? String(localized: "Encrypted message") : String(localized: "Encrypted message · Public text"), systemImage: Theme.Icon.locked)
                             .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     if let time = pin.createdAt {
@@ -145,12 +145,12 @@ struct LarkChatPinsView: View {
             .accessibilityIdentifier("lark.pin.\(pin.id)")
             if pin.canRemove {
                 Menu {
-                    Button("移除 Pin", systemImage: Theme.Icon.unpin, role: .destructive) { removing = pin }
+                    Button("Unpin [Lark Chat Pins View f13ef8]", systemImage: Theme.Icon.unpin, role: .destructive) { removing = pin }
                 } label: {
                     Image(systemName: Theme.Icon.more).font(Theme.Font.body)
                         .scaledFrame(width: Theme.Size.well, height: Theme.Size.well)
                 }
-                .accessibilityLabel("Pin 操作").accessibilityIdentifier("lark.pin.menu.\(pin.id)")
+                .accessibilityLabel("Pin actions").accessibilityIdentifier("lark.pin.menu.\(pin.id)")
                 .disabled(pins.busy || pins.blocked || pins.requiresRecheck)
             }
         }
@@ -159,12 +159,12 @@ struct LarkChatPinsView: View {
     }
 
     private func summary(_ pin: LarkChatPin) -> String {
-        guard let m = pin.message, m.deleted != true else { return String(localized: "原消息已不可用") }
+        guard let m = pin.message, m.deleted != true else { return String(localized: "The original message is no longer available") }
         let policy = display.accountID == pins.accountID ? display : .hidden
-        guard policy.showsBody(of: m) else { return String(localized: "消息已撤回") }
+        guard policy.showsBody(of: m) else { return String(localized: "Message recalled") }
         let body = policy.summary(m.displayText.trimmingCharacters(in: .whitespacesAndNewlines))
-        let fallback = m.type == "IMAGE" ? String(localized: "[图片]") : m.type == "FILE" ? String(localized: "[文件]") : String(localized: "消息", comment: "Summary of a pinned message that has no text")
+        let fallback = m.type == "IMAGE" ? String(localized: "[Image]") : m.type == "FILE" ? String(localized: "[File] [Lark Chat Pins View 54e20f]") : String(localized: "Messages [Quote Views 4da199]", comment: "Summary of a pinned message that has no text")
         let text = body.isEmpty ? fallback : body
-        return m.recalled ? String(localized: "\(text) · 已撤回") : text
+        return m.recalled ? String(localized: "\(text) · Recalled") : text
     }
 }

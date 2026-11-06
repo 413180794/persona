@@ -132,32 +132,32 @@ struct DevicesView: View {
         SettingsForm {
             Section {
                 Button { connecting = true } label: {
-                    Label("连接新设备", systemImage: Theme.Icon.pairing).lineLimit(1)
+                    Label("Connect New Device", systemImage: Theme.Icon.pairing).lineLimit(1)
                 }
                 .accessibilityIdentifier("devices.connect")
             } footer: {
-                Text("给另一台手机、Mac 或浏览器一个一次性的配对码，不用到 hub 所在的机器上操作。")
+                Text("Give another phone, Mac or browser a one-time pairing code, without going to the hub machine.")
             }
             Section {
                 ForEach(tokens.filter { $0.revokedAt == nil }) { t in row(t) }
             } footer: {
-                Text("每台设备有自己的凭据，丢了哪台就撤销哪台，其他设备不受影响。手表只能看和回答，不能改设置、开关 Agent。")
+                Text("Each device has its own credentials. If you lose one, revoke just that one; the others keep working. A watch can only view and answer; it can't change settings or start and stop agents.")
             }
             let revoked = tokens.filter { $0.revokedAt != nil }
             if !revoked.isEmpty {
-                Section(String(localized: "section.revoked", defaultValue: "已撤销")) {
+                Section(String(localized: "section.revoked", defaultValue: "Revoked")) {
                     ForEach(revoked) { t in row(t).foregroundStyle(.secondary) }
                 }
             }
         }
         .overlay {
             if loaded, tokens.isEmpty {
-                ContentUnavailableView("还没有设备凭据", systemImage: Theme.Icon.credentials,
+                ContentUnavailableView("No Device Credentials Yet", systemImage: Theme.Icon.credentials,
                                        description: Text(model.deviceID == nil ? Self.upgradeNote : ""))
             }
         }
         .themedPage()
-        .detailTitle(String(localized: "设备"))
+        .detailTitle(String(localized: "Devices"))
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $connecting, onDismiss: { Task { await load() } }) {
@@ -168,21 +168,21 @@ struct DevicesView: View {
             if UserDefaults.standard.string(forKey: "openConnectDevice") != nil { try? await Task.sleep(for: .seconds(1)); connecting = true }
         }
         #endif
-        .confirmationDialog(revoking.map { String(localized: "撤销「\($0.name)」？") } ?? "", isPresented: Binding(
+        .confirmationDialog(revoking.map { String(localized: "Revoke “\($0.name)”?") } ?? "", isPresented: Binding(
             get: { revoking != nil }, set: { if !$0 { revoking = nil } }
         ), titleVisibility: .visible, presenting: revoking) { t in
-            Button(t.id == current ? String(localized: "撤销并退出配对") : String(localized: "action.revoke", defaultValue: "撤销"), role: .destructive) { Task { await revoke(t) } }
+            Button(t.id == current ? String(localized: "Revoke and Unpair") : String(localized: "action.revoke", defaultValue: "Revoke"), role: .destructive) { Task { await revoke(t) } }
         } message: { t in
-            Text(t.id == current ? Self.revokeSelfNote : String(localized: "那台设备会立刻断开，要重新配对才能用。"))
+            Text(t.id == current ? Self.revokeSelfNote : String(localized: "That device disconnects right away and has to be paired again."))
         }
     }
 
     #if os(macOS)
-    private static let upgradeNote = String(localized: "hub 更新后，这台 Mac 会自动换成自己的凭据。")
-    private static let revokeSelfNote = String(localized: "这台 Mac 会立刻断开，要重新粘贴配对链接。")
+    private static let upgradeNote = String(localized: "After the hub updates, this Mac switches to its own credentials automatically.")
+    private static let revokeSelfNote = String(localized: "This Mac disconnects right away. Paste the pairing link again to reconnect.")
     #else
-    private static let upgradeNote = String(localized: "hub 更新后，这台 iPhone 会自动换成自己的凭据。")
-    private static let revokeSelfNote = String(localized: "这台 iPhone 会立刻断开，要重新扫码配对。")
+    private static let upgradeNote = String(localized: "After the hub updates, this iPhone switches to its own credentials automatically.")
+    private static let revokeSelfNote = String(localized: "This iPhone disconnects right away. Scan the code again to pair.")
     #endif
 
     private func row(_ t: APIClient.DeviceToken) -> some View {
@@ -193,14 +193,14 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 HStack(spacing: Theme.Space.sm) {
                     Text(t.name).lineLimit(1)
-                    if t.id == current { Chip(text: String(localized: "本机"), look: .outline) }
-                    if t.role == "answer" { Chip(text: String(localized: "只能回答")) }
+                    if t.id == current { Chip(text: String(localized: "This Device"), look: .outline) }
+                    if t.role == "answer" { Chip(text: String(localized: "Answer Only")) }
                 }
                 Text(detail(t)).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
             if t.revokedAt == nil {
-                Button(String(localized: "action.revoke", defaultValue: "撤销"), role: .destructive) { revoking = t }
+                Button(String(localized: "action.revoke", defaultValue: "Revoke"), role: .destructive) { revoking = t }
                     .buttonStyle(.borderless)
                     .lineLimit(1)
             }
@@ -208,9 +208,9 @@ struct DevicesView: View {
     }
 
     private func detail(_ t: APIClient.DeviceToken) -> String {
-        if let r = t.revokedAt { return String(localized: "撤销于 \(r.formatted(.relative(presentation: .named)))") }
-        if let s = t.lastSeen { return String(localized: "最近使用 \(s.formatted(.relative(presentation: .named)))") }
-        return String(localized: "添加于 \(t.createdAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
+        if let r = t.revokedAt { return String(localized: "Revoked \(r.formatted(.relative(presentation: .named)))") }
+        if let s = t.lastSeen { return String(localized: "Last used \(s.formatted(.relative(presentation: .named)))") }
+        return String(localized: "Added \(t.createdAt?.formatted(date: .abbreviated, time: .shortened) ?? "")")
     }
 
     private func load() async {

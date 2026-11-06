@@ -53,7 +53,7 @@ struct LoadProblem: View {
     var body: some View {
         #if os(macOS)
         if model.isDemo {
-            Label("体验模式没有这部分的演示数据，连接自己的 hub 后显示。", systemImage: Theme.Icon.info)
+            Label("Demo mode has no sample data for this part. It shows up once you connect your own hub.", systemImage: Theme.Icon.info)
                 .font(Theme.Font.label).foregroundStyle(.secondary)
         } else {
             problem

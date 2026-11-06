@@ -17,23 +17,23 @@ struct MacInboxDetail: View {
                 // mark-done button, and a mixed one only files its item rows (#3479).
                 switch state.multiSelection {
                 case .agentsOnly:
-                    EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "这些是 Agent 的请求"),
-                                   message: String(localized: "打开对应的对话来处理。"))
+                    EmptyStateView(symbol: Theme.Icon.agents, title: String(localized: "These are Agent requests"),
+                                   message: String(localized: "Open their conversations to handle them."))
                 case .mixed(let itemCount, let agentCount):
-                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 项"),
-                                   message: String(localized: "\(agentCount) 个 Agent 请求要在对话里处理，按 E 只把另外 \(itemCount) 件标为已处理。"))
-                    Button("把 \(itemCount) 件标为已处理") { state.toggleDone(sel, model: model) }
+                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "\(sel.count) Items Selected [Mac Inbox Detail 8aed29]"),
+                                   message: String(localized: "\(agentCount) agent requests are handled in their conversations; press E to mark only the other \(itemCount) items as done."))
+                    Button("Mark \(itemCount) Items as Done") { state.toggleDone(sel, model: model) }
                         .controlSize(.large)
                         .lineLimit(1)
                 case .itemsOnly:
-                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "已选 \(sel.count) 件"), message: String(localized: "按 E 把它们都标为已处理。"))
-                    Button("全部标为已处理") { state.toggleDone(sel, model: model) }
+                    EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "\(sel.count) Items Selected [Mac Inbox Detail ebed9d]"), message: String(localized: "Press E to mark them all as done."))
+                    Button("Mark All as Done") { state.toggleDone(sel, model: model) }
                         .controlSize(.large)
                         .lineLimit(1)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("收件箱")
+            .navigationTitle("Inbox")
         } else if case .item(let id)? = sel.first, let item = state.item(id) {
             MacInboxItemDetail(item: item, accounts: state.accounts)
                 .id(item.id)
@@ -45,7 +45,7 @@ struct MacInboxDetail: View {
                     .padding(Theme.Space.xl)
             }
             .frame(maxWidth: .infinity)
-            .navigationTitle(ix.sessionlessPlace ?? String(localized: "脚本"))
+            .navigationTitle(ix.sessionlessPlace ?? String(localized: "Script"))
         } else if case .agent(let id)? = sel.first, let ix = model.pendingInteractions.first(where: { $0.id == id }) {
             ScrollView {
                 InteractionPreviewCard(interaction: ix) { state.open(ix, model: model) }
@@ -56,13 +56,13 @@ struct MacInboxDetail: View {
             .navigationTitle(ix.sessionTitle ?? ix.title)
             .pageToolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { state.open(ix, model: model) } label: { Label("打开对话", systemImage: Theme.Icon.conversation) }
-                        .help("打开这个 Agent 的对话")
+                    Button { state.open(ix, model: model) } label: { Label("Open Chat", systemImage: Theme.Icon.conversation) }
+                        .help("Open this agent's chat")
                 }
             }
         } else {
-            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "选一件事"), message: String(localized: "左边列表里选一件事，详情会在这里打开。"))
-                .navigationTitle("收件箱")
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "Pick an Item"), message: String(localized: "Select an item in the list on the left to see its details here."))
+                .navigationTitle("Inbox")
         }
     }
 }
@@ -153,7 +153,7 @@ struct MacInboxItemDetail: View {
 
     private var subtitle: String {
         if current.doc != nil { return current.doc?.typeName ?? "" }
-        if current.isLark { return current.lark?.isGroup == true ? String(localized: "飞书群聊") : String(localized: "飞书") }
+        if current.isLark { return current.lark?.isGroup == true ? String(localized: "Lark Group [Mac Inbox Detail 98c8c6]") : String(localized: "Lark [Inbox Event Views 7e4419]") }
         return current.accountName
     }
 
@@ -186,7 +186,7 @@ struct MacInboxItemWindow: View {
             if let itemID, let item = InboxStore.shared.items.first(where: { $0.id == itemID }) {
                 MacInboxItemDetail(item: item, accounts: MacInboxState.shared.accounts, standalone: true)
             } else {
-                EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "这件事不在收件箱里了"), message: String(localized: "可能已经过期，回到主窗口看看。"))
+                EmptyStateView(symbol: Theme.Icon.inbox, title: String(localized: "This Item Is No Longer in the Inbox"), message: String(localized: "It may have expired. Check the main window."))
             }
         }
         .macLook(model)

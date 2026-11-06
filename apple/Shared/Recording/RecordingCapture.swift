@@ -39,13 +39,13 @@ final class RecordingCapture {
             MainActor.assumeIsolated {
                 guard let self, self.state == .recording else { return }
                 do { try self.writer?.restartAfterConfigurationChange() }
-                catch { self.error = String(localized: "麦克风发生变化，录音已暂停"); self.writer?.pause(); self.state = .paused }
+                catch { self.error = String(localized: "The microphone changed, so recording paused"); self.writer?.pause(); self.state = .paused }
             }
         })
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { @Sendable [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, self.state == .recording else { return }
-                self.stop(); self.error = String(localized: "系统音频服务已重置，已保存定稿部分，请重新开始录音")
+                self.stop(); self.error = String(localized: "The system audio service reset. What was finished is saved; start recording again.")
             }
         })
     }
@@ -73,7 +73,7 @@ final class RecordingCapture {
                 return
             }
             guard generation == token else { return }
-            notice = String(localized: "没有找到眼镜或蓝牙耳机的麦克风，已改用手机麦克风")
+            notice = String(localized: "No glasses or Bluetooth headset microphone found; using the phone's microphone")
         }
         #endif
         try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
@@ -127,11 +127,11 @@ final class RecordingCapture {
         self.input = input
         let allowed = await Self.permission()
         guard generation == token, state == .starting else { return }
-        guard allowed else { state = .idle; error = String(localized: "请在系统设置中允许 Persona 使用麦克风"); return }
+        guard allowed else { state = .idle; error = String(localized: "Allow Persona to use the microphone in Settings"); return }
         if let problem = Self.resourceProblem(starting: true) { state = .idle; error = problem; return }
         let micOwner = UUID()
         guard RecordingMicrophone.shared.claim(micOwner) else {
-            state = .idle; error = String(localized: "麦克风正在用于听写，请先结束听写再录音"); return
+            state = .idle; error = String(localized: "The microphone is in use for dictation. Finish dictating before recording."); return
         }
         activeMicOwner = micOwner
         do {
@@ -156,7 +156,7 @@ final class RecordingCapture {
             if let id = recordingID { RecordingLibrary.shared.change(id) { $0.active = false; $0.expectedSegments = 0 } }
             recordingID = nil; state = .idle
             releaseAudioSession()
-            self.error = String(localized: "麦克风打不开，请稍后重试")
+            self.error = String(localized: "Can't open the microphone. Try again later.")
         }
     }
 
@@ -183,7 +183,7 @@ final class RecordingCapture {
                     try writer.resume(); self.state = .recording
                 } catch {
                     guard self.generation == token else { return }
-                    self.error = String(localized: "麦克风打不开，录音仍已保存")
+                    self.error = String(localized: "Can't open the microphone; the recording is still saved")
                 }
             }
         }
@@ -264,10 +264,10 @@ final class RecordingCapture {
     private static func resourceProblem(starting: Bool) -> String? {
         let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory())
         let free = (attributes?[.systemFreeSize] as? NSNumber)?.int64Value
-        if let free, free < (starting ? 300_000_000 : 150_000_000) { return String(localized: "存储空间不足，已保存的录音不会丢失") }
+        if let free, free < (starting ? 300_000_000 : 150_000_000) { return String(localized: "Not enough storage. Saved recordings won't be lost.") }
         #if os(watchOS)
         let device = WKInterfaceDevice.current(); device.isBatteryMonitoringEnabled = true
-        if device.batteryState == .unplugged, device.batteryLevel >= 0, device.batteryLevel < 0.05 { return String(localized: "手表电量过低，已保存的录音不会丢失") }
+        if device.batteryState == .unplugged, device.batteryLevel >= 0, device.batteryLevel < 0.05 { return String(localized: "Watch battery is too low. Saved recordings won't be lost.") }
         #endif
         return nil
     }

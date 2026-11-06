@@ -84,7 +84,7 @@ struct QuickResultCard: View {
                 .background((result.kind == .reminder ? Theme.caution : Theme.accent).opacity(0.14),
                             in: .rect(cornerRadius: Theme.Radius.control, style: .continuous))
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(undone ? "已撤销" : (result.kind == .reminder ? "已加提醒" : "已加到日历"))
+                Text(undone ? String(localized: "Undone") : (result.kind == .reminder ? String(localized: "Added to Calendar [Quick Results 6c2bac]") : String(localized: "Added to Calendar [Quick Results 5cba1c]")))
                     .font(Theme.Font.secondaryStrong)
                 Text(subtitle).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
             }
@@ -93,7 +93,7 @@ struct QuickResultCard: View {
                 Button {
                     Task { await store.undo(result) }
                 } label: {
-                    Label("撤销", systemImage: Theme.Icon.undo).labelStyle(.titleOnly).lineLimit(1)
+                    Label("Undo", systemImage: Theme.Icon.undo).labelStyle(.titleOnly).lineLimit(1)
                 }
                 .font(Theme.Font.captionStrong)
                 .themedButton()
@@ -117,8 +117,8 @@ struct QuickResultCard: View {
     static func when(_ date: Date, allDayish: Bool = false, now: Date = .now) -> String {
         let cal = Calendar.current
         let time = date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
-        if cal.isDate(date, inSameDayAs: now) { return String(localized: "今天 \(time)") }
-        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(date, inSameDayAs: tomorrow) { return String(localized: "明天 \(time)") }
+        if cal.isDate(date, inSameDayAs: now) { return String(localized: "Today \(time)") }
+        if let tomorrow = cal.date(byAdding: .day, value: 1, to: now), cal.isDate(date, inSameDayAs: tomorrow) { return String(localized: "Tomorrow \(time)") }
         if let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day, (2..<7).contains(days) {
             return date.formatted(.dateTime.weekday(.abbreviated)) + " " + time
         }
@@ -137,32 +137,32 @@ struct TaskTrustView: View {
         List {
             if let kinds {
                 if kinds.isEmpty {
-                    EmptyStateView(symbol: Theme.Icon.taskTrust, title: String(localized: "还没有"),
-                                   message: String(localized: "在对话的计划卡上勾「这类以后直接开」，同一台电脑、同一个目录、同样读或改的任务以后就不再先问。"))
+                    EmptyStateView(symbol: Theme.Icon.taskTrust, title: String(localized: "None yet"),
+                                   message: String(localized: "Check “Start These Directly” on a plan card in a chat, and tasks on the same computer and folder with the same read or edit access won't ask first again."))
                         .listRowBackground(Color.clear)
                 } else {
                     Section {
                         ForEach(kinds, id: \.key) { k in
                             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                                 Text((k.cwd as NSString).lastPathComponent).font(Theme.Font.body)
-                                Text("\(TaskPlace.machineName(k.machine)) · \(k.readonly ? String(localized: "只读") : String(localized: "可以改文件")) · \(k.cwd)")
+                                Text("\(TaskPlace.machineName(k.machine)) · \(k.readonly ? String(localized: "Read-only") : String(localized: "Can edit files")) · \(k.cwd)")
                                     .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                             }
                             .themedRow()
                         }
                         .onDelete { idx in Task { await forget(idx.map { kinds[$0] }) } }
                     } footer: {
-                        Text("这些任务 Persona 会直接开，不先给你看计划。左滑删掉的，以后又会先问。")
+                        Text("Persona starts these tasks directly without showing you a plan first. Swipe left to remove one, and it'll ask first again.")
                     }
                 }
             } else if let error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "没读到"), message: error).listRowBackground(Color.clear)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Couldn't load [Quick Results a4ce9d]"), message: error).listRowBackground(Color.clear)
             } else {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
             }
         }
         .themedPage()
-        .navigationTitle("直接开的任务")
+        .navigationTitle("Auto-Start Tasks")
         .task { await load() }
     }
 

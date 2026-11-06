@@ -262,7 +262,7 @@ nonisolated enum LarkPartRenderer {
         case "docs":
             var s = style
             s.link = p.url.flatMap(safeURL)
-            return [.symbol("doc.text", LarkColor.blue), .text(" " + (p.text ?? String(localized: "文档")), s)]
+            return [.symbol("doc.text", LarkColor.blue), .text(" " + (p.text ?? String(localized: "Document")), s)]
         case "emotion":
             let key = p.refId ?? p.text ?? ""
             let label = LarkMedia.labelFallback(key, text: p.text)
@@ -391,9 +391,9 @@ struct LarkImagePart: View {
                     ImageViewer(urls: all, index: all.firstIndex(of: url) ?? 0)
                         .navigationTransition(.zoom(sourceID: url, in: zoom))
                 }
-                .accessibilityLabel("图片")
+                .accessibilityLabel("images")
         } else {
-            Label("图片已失效", systemImage: Theme.Icon.photo).font(Theme.Font.secondary).foregroundStyle(.secondary)
+            Label("Image expired", systemImage: Theme.Icon.photo).font(Theme.Font.secondary).foregroundStyle(.secondary)
         }
     }
 
@@ -422,7 +422,7 @@ struct LarkSticker: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.control).fill(Color.primary.opacity(0.05)).scaledFrame(width: Theme.Size.box80, height: Theme.Size.box80)
                 }
             }
-            .accessibilityLabel(part.text ?? String(localized: "贴纸"))
+            .accessibilityLabel(part.text ?? String(localized: "Sticker"))
             .task(id: url) { image = await LarkMedia.shared.image(url, maxPixel: 400) }
         }
     }
@@ -434,7 +434,7 @@ struct LarkFileCard: View {
     @Environment(\.larkOpenFile) private var openFile
 
     var body: some View {
-        let name = part.text ?? String(localized: "文件")
+        let name = part.text ?? String(localized: "Files")
         let ext = (part.metaString("extension") ?? (name as NSString).pathExtension).uppercased()
         Button {
             if let url = part.url { openFile?(url, name) }
@@ -510,7 +510,7 @@ struct LarkVideoPart: View {
         .contentShape(.rect)
         .onTapGesture { if part.url != nil { playing = true } }
         .fullScreenCover(isPresented: $playing) { if let url = part.url { LarkPlayerView(url: url) } }
-        .accessibilityLabel("视频 \(part.text ?? "")")
+        .accessibilityLabel("Video \(part.text ?? "")")
     }
 }
 
@@ -545,16 +545,16 @@ struct LarkCodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(language?.isEmpty == false ? language! : String(localized: "代码")).font(Theme.Font.labelMedium).foregroundStyle(.secondary)
+                Text(language?.isEmpty == false ? language! : String(localized: "Code")).font(Theme.Font.labelMedium).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                     Haptics.success()
-                    AppModel.shared.toast = Toast(String(localized: "已拷贝代码"), style: .success)
+                    AppModel.shared.toast = Toast(String(localized: "Code copied"), style: .success)
                 } label: { Image(systemName: Theme.Icon.copy).font(Theme.Font.label) }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("拷贝代码")
+                    .accessibilityLabel("Copy Code [Message Views fa2611]")
             }
             .padding(.horizontal, Theme.Space.m).padding(.top, Theme.Space.s).padding(.bottom, Theme.Space.xs)
             ScrollView(.horizontal, showsIndicators: false) {

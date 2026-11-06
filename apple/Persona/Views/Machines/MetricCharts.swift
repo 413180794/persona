@@ -196,18 +196,18 @@ struct MetricChart: View {
                     let s = series[i]
                     ForEach(points.chartValues(s)) { v in
                         if series.count == 1 {
-                            AreaMark(x: .value("时间", v.date), y: .value(s.name, v.value), series: .value("段", v.series))
+                            AreaMark(x: .value(String(localized: "Time"), v.date), y: .value(s.name, v.value), series: .value(String(localized: "Segment"), v.series))
                                 .foregroundStyle(s.color.opacity(0.1))
                                 .interpolationMethod(.monotone)
                         }
-                        LineMark(x: .value("时间", v.date), y: .value(s.name, v.value), series: .value("段", v.series))
+                        LineMark(x: .value(String(localized: "Time"), v.date), y: .value(s.name, v.value), series: .value(String(localized: "Segment"), v.series))
                             .foregroundStyle(s.color)
                             .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                             .interpolationMethod(.monotone)
                     }
                 }
                 if let reference {
-                    RuleMark(y: .value("参考", reference.value))
+                    RuleMark(y: .value(String(localized: "Reference"), reference.value))
                         .foregroundStyle(Color.secondary.opacity(0.6))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         .annotation(position: .top, alignment: .leading, spacing: 2) {
@@ -215,12 +215,12 @@ struct MetricChart: View {
                         }
                 }
                 if let picked {
-                    RuleMark(x: .value("选中", picked.date))
+                    RuleMark(x: .value(String(localized: "Selected [Metric Charts 45c21a]"), picked.date))
                         .foregroundStyle(Color.secondary.opacity(0.5))
                         .lineStyle(StrokeStyle(lineWidth: 1))
                     ForEach(series.indices, id: \.self) { i in
                         if let v = series[i].value(picked) {
-                            PointMark(x: .value("时间", picked.date), y: .value(series[i].name, v))
+                            PointMark(x: .value(String(localized: "Time"), picked.date), y: .value(series[i].name, v))
                                 .symbolSize(64)
                                 .foregroundStyle(series[i].color)
                                 .symbol { Circle().fill(series[i].color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL)
@@ -293,13 +293,13 @@ struct MetricChart: View {
         let parts = series.indices.map { i in
             let vals = points.compactMap { series[i].value($0) }
             let now = i < self.now.count ? self.now[i] : nil
-            let current = now.map(format) ?? String(localized: "未知")
-            let peak = vals.max().map(format) ?? String(localized: "未知")
+            let current = now.map(format) ?? String(localized: "Unknown [Session Modes 4d8c1c]")
+            let peak = vals.max().map(format) ?? String(localized: "Unknown [Session Modes 4d8c1c]")
             return series.count > 1
-                ? String(localized: "\(series[i].name) 现在 \(current)，最高 \(peak)")
-                : String(localized: "现在 \(current)，最高 \(peak)")
+                ? String(localized: "\(series[i].name) now \(current), peak \(peak)")
+                : String(localized: "Now \(current), peak \(peak)")
         }
-        return parts.joined(separator: String(localized: "；", comment: "Separator between chart series summaries"))
+        return parts.joined(separator: String(localized: "; ", comment: "Separator between chart series summaries"))
     }
 }
 

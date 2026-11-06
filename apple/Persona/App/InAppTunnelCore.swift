@@ -17,8 +17,8 @@ nonisolated enum InAppTunnel {
         var errorDescription: String? { message }
     }
 
-    static let notSignedIn = Failure(message: String(localized: "隧道还没有登录：先在「登录和选节点」里登录"))
-    static let missing = Failure(message: String(localized: "这个版本的 App 没有内网隧道核心"))
+    static let notSignedIn = Failure(message: String(localized: "The tunnel isn't signed in yet. Sign in under “Sign In and Pick a Node” first."))
+    static let missing = Failure(message: String(localized: "This build of the app has no tunnel core"))
 
     /// The version of the C interface the app is written against (PersonaTunnelAPIVersion).
     static let apiVersion = 1
@@ -60,7 +60,7 @@ nonisolated enum InAppTunnel {
         if let running = lock.withLock({ panelURL }) { return running }
         #if canImport(PersonaTunnelCore)
         guard Int(PersonaTunnelAPIVersion()) == apiVersion else {
-            throw Failure(message: String(localized: "内网隧道核心的版本和 App 不匹配"))
+            throw Failure(message: String(localized: "The tunnel core's version doesn't match the app"))
         }
         var dir = dataDir
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -71,7 +71,7 @@ nonisolated enum InAppTunnel {
         let raw = try check(take(withC(dir.path) { d in
             withC(host) { h in withC(String(route.targetPort)) { p in PersonaTunnelStart(d, h, p) } }
         }))
-        guard let url = URL(string: raw) else { throw Failure(message: String(localized: "内网隧道核心返回了无效的地址")) }
+        guard let url = URL(string: raw) else { throw Failure(message: String(localized: "The tunnel core returned an invalid address")) }
         lock.withLock { panelURL = url }
         return url
         #else
@@ -114,7 +114,7 @@ nonisolated enum InAppTunnel {
         _ = try await start(probe: route)
         #if canImport(PersonaTunnelCore)
         let addr = try check(take(withC(route.target) { PersonaTunnelForward($0, Int32(port)) }))
-        guard let url = URL(string: "http://\(addr)") else { throw Failure(message: String(localized: "内网隧道核心返回了无效的地址")) }
+        guard let url = URL(string: "http://\(addr)") else { throw Failure(message: String(localized: "The tunnel core returned an invalid address")) }
         return url
         #else
         throw missing

@@ -471,7 +471,7 @@ nonisolated enum TaskAsk {
 
     /// The task card's line while it waits: what it asks, else the generic word.
     static func waitingLine(_ interactions: [Interaction]) -> String {
-        line(interactions) ?? String(localized: "有事等你回答")
+        line(interactions) ?? String(localized: "Waiting for your answer [Tasks 542ebd]")
     }
 }
 
@@ -485,7 +485,7 @@ nonisolated func runningSubagents(_ lead: Session?) -> [String] {
             if !desc.isEmpty { return desc }
             let typ = $0.type?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             if !typ.isEmpty { return typ }
-            return String(localized: "子任务")
+            return String(localized: "Subtask")
         }
 }
 
@@ -493,8 +493,8 @@ nonisolated func runningSubagents(_ lead: Session?) -> [String] {
 nonisolated func subagentsSummaryLine(_ subagents: [String]) -> String? {
     guard !subagents.isEmpty else { return nil }
     let head = subagents.prefix(3).joined(separator: String(localized: "、", comment: "Separator between names in a list"))
-    if subagents.count > 3 { return String(localized: "子 Agent 在跑：\(head) 等 \(subagents.count) 个", comment: "Running subagents: the first three names and how many in all") }
-    return String(localized: "子 Agent 在跑：\(head)")
+    if subagents.count > 3 { return String(localized: "Subagents running: \(head), \(subagents.count) in all", comment: "Running subagents: the first three names and how many in all") }
+    return String(localized: "Subagents running: \(head)")
 }
 
 // MARK: - Endpoints

@@ -197,11 +197,11 @@ nonisolated struct TurnErrorFix: Hashable, Sendable {
     init?(code: String?) {
         switch code {
         case "not_logged_in":
-            self.init(title: String(localized: "模型没接好：Claude Code 没登录"), detail: String(localized: "在那台电脑上登录一次，或者改用 API Key。"), action: "connect_model")
+            self.init(title: String(localized: "Model not connected: Claude Code isn't signed in"), detail: String(localized: "Sign in once on that computer, or use an API key instead."), action: "connect_model")
         case "auth_failed":
-            self.init(title: String(localized: "模型没接好：Key 不对"), detail: String(localized: "Key 不对或过期了，换一个能用的。"), action: "edit_provider")
+            self.init(title: String(localized: "Model not connected: the key is wrong"), detail: String(localized: "The key is wrong or has expired; use one that works."), action: "edit_provider")
         case "model_route":
-            self.init(title: String(localized: "模型没接好：这个模型用不了"), detail: String(localized: "模型名不对，或者这个模型现在用不了，换一个试试。"), action: "connect_model")
+            self.init(title: String(localized: "Model not connected: this model can't be used"), detail: String(localized: "The model name is wrong, or the model isn't available right now; try another one."), action: "connect_model")
         default:
             return nil
         }

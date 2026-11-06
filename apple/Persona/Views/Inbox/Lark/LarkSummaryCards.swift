@@ -36,18 +36,18 @@ struct LarkMergeForwardCard: View {
         let count = meta["messageCount"]?.int ?? previews.count
         Button { showing = true } label: {
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                Text(title.isEmpty ? String(localized: "聊天记录") : title).font(Theme.Font.secondaryStrong).lineLimit(2).multilineTextAlignment(.leading)
+                Text(title.isEmpty ? String(localized: "Chat History [Lark Summary Cards b790c0]") : title).font(Theme.Font.secondaryStrong).lineLimit(2).multilineTextAlignment(.leading)
                 ForEach(Array(previews.prefix(4).enumerated()), id: \.offset) { _, p in
-                    Text("\(p["senderName"]?.string ?? "")：\(Fmt.plain(display.forwardedPreview(p)))")
+                    Text("\(p["senderName"]?.string ?? ""): \(Fmt.plain(display.forwardedPreview(p)))")
                         .font(Theme.Font.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Divider().padding(.top, Theme.Space.xxs)
                 HStack {
-                    Label("聊天记录", systemImage: Theme.Icon.conversation).labelStyle(.titleAndIcon)
+                    Label("Chat History [Lark Summary Cards b790c0]", systemImage: Theme.Icon.conversation).labelStyle(.titleAndIcon)
                     Spacer()
-                    Text("\(count) 条")
+                    Text("\(count) items [Assistant Profile View 29b8db]")
                 }
                 .font(Theme.Font.label)
                 .foregroundStyle(.secondary)
@@ -85,7 +85,7 @@ struct LarkForwardedView: View {
                                     if let d = m.createdAt { Text(d.formatted(date: .abbreviated, time: .shortened)).font(Theme.Font.label).foregroundStyle(.tertiary) }
                                 }
                                 if m.isRecalled == true && !(display.antiRecall && m.hasRetainedRecallContent == true) {
-                                    Text("消息已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
+                                    Text("Message recalled").font(Theme.Font.caption).foregroundStyle(.secondary)
                                 } else if let encryption = m.olk {
                                     LarkEncryptedContent(encryption: encryption)
                                 } else if let source = m.parts, !source.isEmpty {
@@ -97,7 +97,7 @@ struct LarkForwardedView: View {
                                     Text(display.shown(m.textPreview ?? "")).font(Theme.Font.body)
                                 }
                                 if m.isRecalled == true && display.antiRecall && m.hasRetainedRecallContent == true {
-                                    Text("已撤回").font(Theme.Font.caption).foregroundStyle(.secondary)
+                                    Text("Recalled").font(Theme.Font.caption).foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -105,9 +105,9 @@ struct LarkForwardedView: View {
                 }
                 .padding(Theme.Space.l)
             }
-            .navigationTitle(title.isEmpty ? String(localized: "聊天记录") : title)
+            .navigationTitle(title.isEmpty ? String(localized: "Chat History [Lark Summary Cards b790c0]") : title)
             .navigationBarTitleDisplayMode(.inline)
-            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .pageToolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
         }
     }
 
@@ -139,9 +139,9 @@ struct LarkShareCard: View {
             }
             Divider()
             HStack {
-                Text(meta["eyebrow"]?.string ?? (isGroup ? String(localized: "群名片") : String(localized: "个人名片")))
+                Text(meta["eyebrow"]?.string ?? (isGroup ? String(localized: "Group card") : String(localized: "Contact card")))
                 Spacer()
-                if meta["isDissolved"]?.bool == true { Text("已解散") }
+                if meta["isDissolved"]?.bool == true { Text("Disbanded") }
             }
             .font(Theme.Font.label)
             .foregroundStyle(.secondary)
@@ -214,8 +214,8 @@ struct LarkGenericSummaryCard: View {
                     Button {
                         UIPasteboard.general.string = value
                         Haptics.success()
-                        AppModel.shared.toast = Toast(String(localized: "已拷贝会议号"), style: .success)
-                    } label: { Label("拷贝会议号", systemImage: Theme.Icon.copy).lineLimit(1).font(Theme.Font.labelMedium) }
+                        AppModel.shared.toast = Toast(String(localized: "Meeting ID copied"), style: .success)
+                    } label: { Label("Copy Meeting ID", systemImage: Theme.Icon.copy).lineLimit(1).font(Theme.Font.labelMedium) }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                 }

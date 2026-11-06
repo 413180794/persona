@@ -66,13 +66,13 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
     private var row: some View {
         HStack(spacing: .zero) {
             if opensMenu(.assistant) {
-                Menu { chatMenu() } label: { segment(String(localized: "shell.assistant", defaultValue: "助手", comment: "The chat side of the top switch (72 pt wide)"), selected: true) }
+                Menu { chatMenu() } label: { segment(String(localized: "shell.assistant", defaultValue: "Assistant", comment: "The chat side of the top switch (72 pt wide)"), selected: true) }
                     .menuStyle(.button)
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("shell-assistant")
-                    .accessibilityHint("对话的菜单")
+                    .accessibilityHint("Chat menu")
             } else {
-                button(String(localized: "shell.assistant", defaultValue: "助手", comment: "The chat side of the top switch (72 pt wide)"), .assistant, id: "shell-assistant")
+                button(String(localized: "shell.assistant", defaultValue: "Assistant", comment: "The chat side of the top switch (72 pt wide)"), .assistant, id: "shell-assistant")
             }
             ZStack(alignment: .topTrailing) {
                 if opensMenu(.chats) {
@@ -80,7 +80,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
                         .menuStyle(.button)
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("shell-agents")
-                        .accessibilityHint("列表的选项")
+                        .accessibilityHint("List options")
                 } else {
                     button("Agents", .chats, id: "shell-agents")
                 }
@@ -88,7 +88,7 @@ struct ShellSwitch<ChatMenu: View, WorkMenu: View>: View {
             }
             #if os(iOS) || os(visionOS)
             if LarkHomePreference.shared.shows {
-                button(String(localized: "消息"), .feishu, id: "shell-feishu")
+                button(String(localized: "Messages [Quote Views 4da199]"), .feishu, id: "shell-feishu")
             }
             #endif
         }
@@ -201,12 +201,12 @@ private struct WaitingBadge: View {
             BUIPill(waiting > 99 ? "99+" : "\(waiting)", tone: .custom(ink: .white, fill: Theme.needsYou))
                 .offset(offset)
                 .allowsHitTesting(false)
-                .accessibilityLabel("\(waiting) 个在等你")
+                .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
         } else if waiting > 0 {
             CountBadge(count: waiting, look: .solid(Theme.needsYou))
                 .offset(offset)
                 .allowsHitTesting(false)
-                .accessibilityLabel("\(waiting) 个在等你")
+                .accessibilityLabel("\(waiting) need you [Shell Components 79a4aa]")
         }
     }
 }
@@ -284,10 +284,10 @@ struct ShellPersonaButton: View {
                 InboxDot(size: dot).offset(x: shift, y: shift)
             }
         }
-        .accessibilityLabel("历史对话")
-        .accessibilityValue([String(localized: "\(model.persona.name)，\(state.title)"), inbox ? String(localized: "收件箱有事等你") : nil]
-            .compactMap { $0 }.joined(separator: String(localized: "，", comment: "List separator")))
-        .accessibilityHint("打开侧边栏")
+        .accessibilityLabel("Chat History [Shell Components 60636b]")
+        .accessibilityValue([String(localized: "\(model.persona.name), \(state.title)"), inbox ? String(localized: "Something in the Inbox needs you") : nil]
+            .compactMap { $0 }.joined(separator: String(localized: ", ", comment: "List separator")))
+        .accessibilityHint("Opens the sidebar")
         .accessibilityIdentifier(id)
     }
 }

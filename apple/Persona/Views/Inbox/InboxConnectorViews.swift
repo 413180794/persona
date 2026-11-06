@@ -64,12 +64,12 @@ struct InboxConnectorTextView: View {
                 .padding(.vertical, Theme.Space.xs)
                 if let url = connector?.url.flatMap(URL.init(string:)) {
                     Button { link = LinkTarget(url: url) } label: {
-                        Label("在 \(item.accountName) 打开", systemImage: Theme.Icon.safari).lineLimit(1)
+                        Label("Open in \(item.accountName) [Inbox Connector Views 0e0e38]", systemImage: Theme.Icon.safari).lineLimit(1)
                     }
                 }
             } footer: {
                 if let to = connector?.replyTo, connector?.canReply == true {
-                    Text("回复会\(to)。")
+                    Text("Replies go to: \(to).")
                 }
             }
             // Why its conversation page could not be read (a rate limit); an item without one (a CI run) has nothing to say.
@@ -78,7 +78,7 @@ struct InboxConnectorTextView: View {
                     Label(problem, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(.secondary)
                 }
             }
-            Section("内容") {
+            Section("Content") {
                 if let context, !context.isEmpty {
                     Text(context).font(Theme.Font.secondary).textSelection(.enabled)
                 } else if let failure {
@@ -106,7 +106,7 @@ struct InboxConnectorTextView: View {
             context = try await model.api?.inboxItem(item.id).context ?? ""
             failure = nil
         } catch {
-            failure = error.shown.map { String(localized: "读不到内容：\($0)") }
+            failure = error.shown.map { String(localized: "Couldn't read the content: \($0)") }
         }
     }
 }

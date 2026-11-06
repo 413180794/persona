@@ -98,14 +98,14 @@ struct MachinesView: View {
                 UsageWindowsCard() // the Mac has it at the foot of its sections column
                 #endif
                 if machines.isEmpty, model.canAddComputer {
-                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "还没有电脑"),
-                                   message: String(localized: "添加一台，Persona 就能在上面替你干活。"),
-                                   action: (String(localized: "添加电脑"), { adding = .add }))
+                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "No computers yet"),
+                                   message: String(localized: "Add one and Persona can work on it for you."),
+                                   action: (String(localized: "Add Computer"), { adding = .add }))
                 } else if machines.isEmpty {
                     // A hub without machines_add: computers are added in its admin page, as before.
-                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "还没有机器"), message: String(localized: "hub 连上后，这里会显示 hub 所在的机器和它接入的各台电脑。"))
+                    EmptyStateView(symbol: Theme.Icon.machines, title: String(localized: "No machines yet"), message: String(localized: "Once the hub is connected, the hub machine and the computers it connects to appear here."))
                 } else if !unmonitored {
-                    Text("CPU、内存、网络每 10 秒更新，曲线是最近 1 小时。")
+                    Text("CPU, memory and network update every 10 seconds. Charts show the last hour.")
                         .font(Theme.Font.label).foregroundStyle(.secondary)
                         .padding(.horizontal, Theme.Space.xs)
                 }
@@ -116,7 +116,7 @@ struct MachinesView: View {
         .modifier(MacBelowTitleRowIfAsked()) // under Machines' title in the window: the cards start below it (#1243)
         #endif
         .themedGroupedPage()
-        .navigationTitle("机器")
+        .navigationTitle("Machines")
         // Large wherever it is pushed (the Agents list's stack would make it inline, and the principal item below would
         // then hide the title); the bar's middle is only for Connecting… and the like.
         .navigationBarTitleDisplayMode(.large)
@@ -129,8 +129,8 @@ struct MachinesView: View {
             #endif
             if model.canAddComputer {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { adding = .add } label: { Label("添加电脑", systemImage: Theme.Icon.add) }
-                        .help("添加电脑")
+                    Button { adding = .add } label: { Label("Add Computer", systemImage: Theme.Icon.add) }
+                        .help("Add Computer")
                         .accessibilityIdentifier("machines.add")
                 }
             }
@@ -216,16 +216,16 @@ struct MachinesView: View {
     private func summary(_ machines: [Machine], alerts: [MetricLevel], waiting: Int) -> some View {
         let online = machines.filter(\.online).count
         return HStack(spacing: Theme.Space.l) {
-            Label("\(online)/\(machines.count) 台在线", systemImage: Theme.Icon.dot)
+            Label("\(online)/\(machines.count) online", systemImage: Theme.Icon.dot)
                 .labelStyle(DotLabel(color: online == machines.count ? Theme.positive : .secondary))
             if let worst = alerts.max() {
                 HStack(spacing: Theme.Space.xs) {
                     Image(systemName: Theme.Icon.errorFilled).foregroundStyle(MetricColor.level(worst))
-                    Text("\(alerts.count) 台用量偏高")
+                    Text("\(alerts.count) machines running high")
                 }
             }
             if waiting > 0 {
-                Label("\(waiting) 个 Agent 需要你", systemImage: Theme.Icon.dot)
+                Label("\(waiting) agents need you", systemImage: Theme.Icon.dot)
                     .labelStyle(DotLabel(color: StatusPalette.needsYou.dot))
             }
             Spacer(minLength: 0)
@@ -341,26 +341,26 @@ struct MachineCard: View {
     static func subtitle(_ m: Machine, system: MachineSystem?) -> String {
         guard let sys = system else { return m.hostname ?? m.sshHost ?? m.id }
         var parts = [sys.name]
-        if sys.cores > 0 { parts.append(String(localized: "\(sys.cores) 核")) }
+        if sys.cores > 0 { parts.append(String(localized: "\(sys.cores) cores")) }
         if sys.memory > 0 { parts.append(MetricFormat.bytes(sys.memory)) }
         return parts.joined(separator: " · ")
     }
 
     @ViewBuilder private var status: some View {
         if machine.isPending {
-            Text("等你确认").font(Theme.Font.labelStrong).foregroundStyle(Theme.cautionText).lineLimit(1).fixedSize()
+            Text("Waiting for you [Chat View 99e510]").font(Theme.Font.labelStrong).foregroundStyle(Theme.cautionText).lineLimit(1).fixedSize()
                 .accessibilityIdentifier("machine.pending")
         } else if machine.neverConnected {
-            Text("还没连上").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary).lineLimit(1).fixedSize()
+            Text("Not connected yet").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary).lineLimit(1).fixedSize()
         } else if machine.online {
             HStack(spacing: Theme.Space.sm) {
                 Circle().fill(Theme.positive).scaledFrame(width: Theme.Size.dotS, height: Theme.Size.dotS)
-                Text("在线").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
+                Text("Online").font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
             }
             .fixedSize()
         } else {
             VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
-                Text("离线").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary)
+                Text("Offline [Machine Entity be1b4f]").font(Theme.Font.labelStrong).foregroundStyle(Color.secondary)
                 if let seen = machine.lastSeen, seen.timeIntervalSince1970 > 0 {
                     Text(Fmt.relative(seen)).font(Theme.Font.label).foregroundStyle(.tertiary)
                 }
@@ -374,23 +374,23 @@ struct MachineCard: View {
         let end = Date.now
         let domain = end.addingTimeInterval(-3600)...end
         return HStack(alignment: .top, spacing: Theme.Space.m) {
-            MetricCell(title: "CPU", value: MetricFormat.percent(s?.cpu), detail: s?.load.map { String(localized: "负载 \(MetricFormat.load($0))") },
+            MetricCell(title: "CPU", value: MetricFormat.percent(s?.cpu), detail: s?.load.map { String(localized: "Load \(MetricFormat.load($0))") },
                        level: MetricLevel.of(s?.cpu, warn: 75, crit: 90)) {
                 Sparkline(points: points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu) { $0.cpu }], domain: domain, yMax: 100)
             }
-            MetricCell(title: String(localized: "内存"), value: MetricFormat.percent(s?.memPercent),
+            MetricCell(title: String(localized: "Memory [Machine Detail View 7d8f8c]"), value: MetricFormat.percent(s?.memPercent),
                        detail: s.map { MetricFormat.bytes($0.memUsed) + " / " + MetricFormat.bytes($0.memTotal) },
                        level: MetricLevel.of(s?.memPercent, warn: 80, crit: 90)) {
                 let total = Double(s?.memTotal ?? metrics?.system?.memory ?? 0)
-                Sparkline(points: points, series: [ChartSeries(name: String(localized: "内存"), color: MetricColor.mem) { p in
+                Sparkline(points: points, series: [ChartSeries(name: String(localized: "Memory [Machine Detail View 7d8f8c]"), color: MetricColor.mem) { p in
                     p.mem.map { total > 0 ? 100 * $0 / total : 0 }
                 }], domain: domain, yMax: 100)
             }
-            MetricCell(title: String(localized: "网络"), value: s == nil ? "—" : "↓ " + MetricFormat.rate(s?.netRx),
+            MetricCell(title: String(localized: "Network"), value: s == nil ? "—" : "↓ " + MetricFormat.rate(s?.netRx),
                        detail: s == nil ? nil : "↑ " + MetricFormat.rate(s?.netTx), level: .normal) {
                 Sparkline(points: points, series: [
-                    ChartSeries(name: String(localized: "下行"), color: MetricColor.rx) { $0.rx },
-                    ChartSeries(name: String(localized: "上行"), color: MetricColor.tx) { $0.tx },
+                    ChartSeries(name: String(localized: "Down"), color: MetricColor.rx) { $0.rx },
+                    ChartSeries(name: String(localized: "Up"), color: MetricColor.tx) { $0.tx },
                 ], domain: domain, yMax: nil)
             }
         }
@@ -404,9 +404,9 @@ struct AgentCounts: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            item(tally.needsYou, String(localized: "需要你"), tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
-            item(tally.working, String(localized: "工作中"), tone: StatusPalette.working, ink: StatusPalette.working.text)
-            item(tally.idle, String(localized: "空闲"), tone: StatusPalette.idle, ink: Color.primary)
+            item(tally.needsYou, String(localized: "Needs You [Chats View e60ec4]"), tone: StatusPalette.needsYou, ink: StatusPalette.needsYou.text)
+            item(tally.working, String(localized: "Working [Assistant Profile View f42082]"), tone: StatusPalette.working, ink: StatusPalette.working.text)
+            item(tally.idle, String(localized: "Idle"), tone: StatusPalette.idle, ink: Color.primary)
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
@@ -422,7 +422,7 @@ struct AgentCounts: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(n) 个 Agent \(label)")
+        .accessibilityLabel("\(n) agents \(label)")
     }
 }
 
@@ -467,7 +467,7 @@ struct AlertChip: View {
         .padding(.horizontal, Theme.Space.s)
         .padding(.vertical, Theme.Space.xs)
         .background(color.opacity(0.16), in: .capsule)
-        .accessibilityLabel(alert.level == .critical ? String(localized: "严重：\(alert.label)") : String(localized: "注意：\(alert.label)"))
+        .accessibilityLabel(alert.level == .critical ? String(localized: "Critical: \(alert.label)") : String(localized: "Warning: \(alert.label)"))
     }
 }
 
@@ -488,19 +488,19 @@ struct DeployRow: View {
                 if busy {
                     ProgressView().controlSize(.small)
                 } else {
-                    Text("重新部署").font(Theme.Font.labelStrong).lineLimit(1)
+                    Text("Redeploy").font(Theme.Font.labelStrong).lineLimit(1)
                 }
             }
             .themedButton()
             .disabled(busy)
-            .accessibilityLabel(busy ? "正在部署" : "重新部署")
+            .accessibilityLabel(busy ? String(localized: "Deploying") : String(localized: "Redeploy"))
         }
     }
 
     private func text(_ busy: Bool) -> String {
-        if busy { return String(localized: "正在把 hub 这一版的 Persona 装到这台电脑…") }
-        if let e = machine.deployError, !e.isEmpty { return String(localized: "上次部署没成：\(e)") }
-        return String(localized: "这台电脑上的 Persona 和 hub 不是同一次部署")
+        if busy { return String(localized: "Installing the hub's Persona build on this computer…") }
+        if let e = machine.deployError, !e.isEmpty { return String(localized: "Last deploy failed: \(e)") }
+        return String(localized: "Persona on this computer isn't from the same deploy as the hub")
     }
 
     private func deploy() async {
@@ -511,7 +511,7 @@ struct DeployRow: View {
             Haptics.tap()
             await model.refresh()
         } catch {
-            if let m = error.shown { model.toast = Toast(String(localized: "部署失败：\(m)"), style: .error) }
+            if let m = error.shown { model.toast = Toast(String(localized: "Deploy failed: \(m)"), style: .error) }
         }
     }
 }
@@ -526,14 +526,14 @@ struct PendingRow: View {
     var body: some View {
         HStack(spacing: Theme.Space.s) {
             if machine.online {
-                Button { Task { await run(confirm: true) } } label: { Text("是我的电脑").font(Theme.Font.labelStrong).lineLimit(1) }
+                Button { Task { await run(confirm: true) } } label: { Text("It's Mine").font(Theme.Font.labelStrong).lineLimit(1) }
                     .themedButton(prominent: true)
                     .accessibilityIdentifier("machine.confirm")
-                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("不是").font(Theme.Font.labelStrong).lineLimit(1) }
+                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("Not Mine").font(Theme.Font.labelStrong).lineLimit(1) }
                     .themedButton()
                     .accessibilityIdentifier("machine.reject")
             } else {
-                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("删掉").font(Theme.Font.labelStrong).lineLimit(1) }
+                Button(role: .destructive) { Task { await run(confirm: false) } } label: { Text("Remove [Add Computer View c94330]").font(Theme.Font.labelStrong).lineLimit(1) }
                     .themedButton()
                     .accessibilityIdentifier("machine.reject")
             }
@@ -550,7 +550,7 @@ struct PendingRow: View {
         do {
             if confirm { try await api.confirmMachine(machine.id) } else { try await api.rejectMachine(machine.id) }
             confirm ? Haptics.success() : Haptics.tap()
-            model.toast = Toast(confirm ? String(localized: "已添加：\(machine.name)") : String(localized: "已删掉「\(machine.name)」"), style: .success)
+            model.toast = Toast(confirm ? String(localized: "Added: \(machine.name)") : String(localized: "Removed “\(machine.name)”"), style: .success)
             await model.refresh()
         } catch {
             model.toast = Toast(AddComputerText.failure(error).message, style: .error)

@@ -178,7 +178,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
             let room = AVAudioFrameCount(segmentFrames - fileFrames)
             let n = min(room, buffer.frameLength - offset)
             if let slice = Self.slice(buffer, from: offset, count: n) {
-                do { try file?.write(from: slice) } catch { shared.withLock { $0.failure = String(localized: "录音文件写入失败") }; return }
+                do { try file?.write(from: slice) } catch { shared.withLock { $0.failure = String(localized: "Couldn't write the recording file") }; return }
             }
             fileFrames += AVAudioFramePosition(n)
             offset += n
@@ -201,7 +201,7 @@ nonisolated final class RecordingSegmentWriter: @unchecked Sendable {
             file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
             fileFrames = 0
         } catch {
-            shared.withLock { $0.failure = String(localized: "录音文件创建失败") }
+            shared.withLock { $0.failure = String(localized: "Couldn't create the recording file") }
         }
     }
 

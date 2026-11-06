@@ -11,8 +11,8 @@ nonisolated enum RecordingInput: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .phone: String(localized: "手机麦克风")
-        case .bluetooth: String(localized: "眼镜 / 蓝牙耳机")
+        case .phone: String(localized: "Phone Microphone")
+        case .bluetooth: String(localized: "Glasses / Bluetooth Headset")
         }
     }
 

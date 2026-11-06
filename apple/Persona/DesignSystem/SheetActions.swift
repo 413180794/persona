@@ -8,7 +8,7 @@ extension View {
     /// Cancel in an edit sheet's bar (Esc on a Mac). On a Mac, with unsaved edits it asks before throwing them away;
     /// iOS cancels at once, as it always has.
     /// `when`: only in a sheet, for a page that is also pushed.
-    func sheetCancel(_ title: LocalizedStringKey = "取消", unsaved: Bool, when active: Bool = true,
+    func sheetCancel(_ title: LocalizedStringKey = "Cancel", unsaved: Bool, when active: Bool = true,
                      cancel: @escaping () -> Void) -> some View {
         modifier(SheetCancel(title: title, unsaved: unsaved, active: active, cancel: cancel))
     }
@@ -17,7 +17,7 @@ extension View {
     /// keeps its own Close or the swipe down.
     func macSheetDone(_ done: @escaping () -> Void) -> some View {
         #if os(macOS)
-        toolbar { ToolbarItem(placement: .cancellationAction) { Button(action: done) { Text("完成").lineLimit(1) } } }
+        toolbar { ToolbarItem(placement: .cancellationAction) { Button(action: done) { Text("Done [Extension System Presentation c0b3fb]").lineLimit(1) } } }
         #else
         self
         #endif
@@ -50,11 +50,11 @@ private struct SheetCancel: ViewModifier {
                 }
             }
             // On the content, not on the bar's button: the bar is hosted apart from the page.
-            .confirmationDialog("放弃未保存的修改？", isPresented: $asking, titleVisibility: .visible) {
-                Button("放弃修改", role: .destructive, action: cancel)
-                Button("继续编辑", role: .cancel) {}
+            .confirmationDialog("Discard Unsaved Changes?", isPresented: $asking, titleVisibility: .visible) {
+                Button("Discard Changes", role: .destructive, action: cancel)
+                Button("Keep Editing", role: .cancel) {}
             } message: {
-                Text("关掉后，这次改的内容不会保存。")
+                Text("If you close it, the changes you made won't be saved.")
             }
             #if DEBUG && os(macOS)
             // `-showDiscardConfirm YES`: the question up as the sheet opens, for screenshots.

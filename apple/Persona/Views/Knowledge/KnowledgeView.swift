@@ -88,7 +88,7 @@ struct KnowledgeView: View {
         .modifier(MacBelowTitleRowIfAsked()) // under Knowledge's title in the window: the list starts below it (#1243)
         #endif
         .themedPage()
-        .detailTitle(String(localized: "知识库")) // pushed in Persona's page: ‹ Knowledge in the title row on the Mac
+        .detailTitle(String(localized: "Knowledge")) // pushed in Persona's page: ‹ Knowledge in the title row on the Mac
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -98,7 +98,7 @@ struct KnowledgeView: View {
         }
         // Always shown: the drawer that hides on scroll folded away as soon as results replaced the list (the chips
         // row goes), taking the typed text out of sight (2026-10-31).
-        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "搜索档案和聊天记录"))
+        .pageSearchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "Search profiles and chat history"))
         .task(id: query) { await search() }
         .task(id: "\(kind.rawValue)|\(tag ?? "")") { await load() }
         .onChange(of: kind) { showIgnored = false }
@@ -144,8 +144,8 @@ struct KnowledgeView: View {
     @ViewBuilder private func content(_ list: KBList) -> some View {
         if list.items.isEmpty {
             Section {
-                EmptyStateView(symbol: kind.symbol, title: tag == nil ? String(localized: "还没有\(kind.title)") : String(localized: "没有带 #\(tag!) 的\(kind.title)"),
-                               message: String(localized: "hub 会把飞书和邮件里的会话归档、压缩，自动整理出项目、人、文档和会议，并按重要级和相关性排好。"))
+                EmptyStateView(symbol: kind.symbol, title: tag == nil ? String(localized: "No \(kind.title) yet") : String(localized: "No \(kind.title) tagged #\(tag!)"),
+                               message: String(localized: "The hub archives and condenses your Lark and email conversations, organizes them into projects, people, docs and meetings, and ranks them by importance and relevance."))
             }
             .listRowBackground(Color.clear)
         } else if kind == .projects {
@@ -154,14 +154,14 @@ struct KnowledgeView: View {
             let rest = active.filter { $0.importance != "P0" && $0.importance != "P1" }
             let done = list.items.filter(\.projectDone)
             let ignored = list.items.filter(\.projectIgnored)
-            if !focus.isEmpty { Section { rows(focus) } header: { header(String(localized: "重点"), focus.count) } }
-            if !rest.isEmpty { Section { rows(rest) } header: { header(focus.isEmpty ? String(localized: "进行中") : String(localized: "其他进行中"), rest.count) } }
-            if !done.isEmpty { Section { rows(done) } header: { header(String(localized: "已完成"), done.count) } }
+            if !focus.isEmpty { Section { rows(focus) } header: { header(String(localized: "Focus"), focus.count) } }
+            if !rest.isEmpty { Section { rows(rest) } header: { header(focus.isEmpty ? String(localized: "Active") : String(localized: "Other Active"), rest.count) } }
+            if !done.isEmpty { Section { rows(done) } header: { header(String(localized: "Done [Task Sheets f28461]"), done.count) } }
             if !ignored.isEmpty {
                 Section {
                     Button { withAnimation(Theme.Motion.standard) { showIgnored.toggle() } } label: {
                         HStack {
-                            Text("不是项目").foregroundStyle(.secondary)
+                            Text("Not a Project").foregroundStyle(.secondary)
                             Text("\(ignored.count)").foregroundStyle(.tertiary).monospacedDigit()
                             Spacer()
                             Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
@@ -172,7 +172,7 @@ struct KnowledgeView: View {
                     .buttonStyle(.plain)
                     if showIgnored { rows(ignored) }
                 } footer: {
-                    Text("只在通知、营销邮件、机器人会话里出现的，不会再更新。打标里改回「进行中」就恢复。")
+                    Text("These only appeared in notifications, marketing emails or bot chats and won't be updated. Set them back to Active under Tag to restore them.")
                 }
             }
         } else {
@@ -180,13 +180,13 @@ struct KnowledgeView: View {
             let ranked = tag != nil ? list.items : list.items.filter { !($0.importance ?? "").isEmpty }
             let rest = tag != nil ? [] : list.items.filter { ($0.importance ?? "").isEmpty }
             if !ranked.isEmpty {
-                Section { rows(ranked) } header: { header(tag.map { "#" + $0 } ?? String(localized: "按重要级和相关性"), ranked.count) }
+                Section { rows(ranked) } header: { header(tag.map { "#" + $0 } ?? String(localized: "By Importance and Relevance"), ranked.count) }
             }
             if !rest.isEmpty {
                 Section {
                     Button { withAnimation(Theme.Motion.standard) { showIgnored.toggle() } } label: {
                         HStack {
-                            Text(ranked.isEmpty ? "全部" : "还没整理的").foregroundStyle(.secondary).lineLimit(1)
+                            Text(ranked.isEmpty ? String(localized: "All") : String(localized: "Not Yet Organized")).foregroundStyle(.secondary).lineLimit(1)
                             Text("\(rest.count)").foregroundStyle(.tertiary).monospacedDigit()
                             Spacer()
                             Image(systemName: Theme.Icon.disclosure).font(Theme.Font.captionStrong).foregroundStyle(.tertiary)
@@ -199,7 +199,7 @@ struct KnowledgeView: View {
                     if showIgnored || ranked.isEmpty { rows(rest) }
                 } footer: {
                     if !ranked.isEmpty {
-                        Text("只在群里出现过、还没有打标的\(kind.title)。和你说过话、或在重要会话里的会被 AI 整理出来。")
+                        Text("\(kind.title) that have only appeared in groups and aren't tagged yet. Anyone who has talked with you or shows up in important chats gets organized by AI.")
                     }
                 }
             }
@@ -224,9 +224,9 @@ struct KnowledgeView: View {
     private var tagMenu: some View {
         Menu {
             Button { tag = nil } label: {
-                if tag == nil { Label("全部", systemImage: Theme.Icon.done) } else { Text("全部") }
+                if tag == nil { Label("All", systemImage: Theme.Icon.done) } else { Text("All") }
             }
-            Section("常用标签") {
+            Section("Frequent Tags") {
                 ForEach(list?.tags ?? [], id: \.self) { t in
                     Button { Haptics.tap(); tag = t } label: {
                         if tag == t { Label("#" + t, systemImage: Theme.Icon.done) } else { Text("#" + t) }
@@ -236,7 +236,7 @@ struct KnowledgeView: View {
         } label: {
             Image(systemName: tag == nil ? Theme.Icon.filter : Theme.Icon.filterActive)
         }
-        .accessibilityLabel(tag.map { "按标签筛选，当前 #\($0)" } ?? "按标签筛选")
+        .accessibilityLabel(tag.map { String(localized: "Filter by tag, currently #\($0)") } ?? String(localized: "Filter by tag"))
     }
 
     // MARK: Search
@@ -407,7 +407,7 @@ struct KBKindBar: View {
     }
 
     /// 1985 → "1985" (no grouping comma: the chip is narrow), past 9999 → "10K+".
-    static func count(_ n: Int) -> String { n > 9999 ? String(localized: "1万+") : String(n) }
+    static func count(_ n: Int) -> String { n > 9999 ? String(localized: "10K+") : String(n) }
 }
 
 /// One ranked entry: a kind tile carrying the importance, the name, its one-line state, then tags and when it changed.
@@ -446,7 +446,7 @@ struct KBRow: View {
         HStack(spacing: Theme.Space.sm) {
             ImportanceBadge(importance: entry.importance)
             if let k = entry.projectKind { KBPill(text: k, tint: (entry.extra ?? "").hasPrefix("long") ? Theme.Hue.blue : nil) }
-            if entry.relevance > 0 { KBPill(text: String(localized: "相关 \(entry.relevance)"), tint: RelevanceMeter.tint(entry.relevance)) }
+            if entry.relevance > 0 { KBPill(text: String(localized: "Relevance \(entry.relevance)"), tint: RelevanceMeter.tint(entry.relevance)) }
             ForEach((entry.tags ?? []).prefix(tags), id: \.self) { t in
                 Text("#" + t).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
             }
@@ -482,7 +482,7 @@ struct ImportanceBadge: View {
         let p = importance ?? ""
         if !p.isEmpty {
             KBPill(text: p, tint: Self.color(p), bold: true)
-                .accessibilityLabel("重要级 \(p)")
+                .accessibilityLabel("Importance \(p)")
         }
     }
 
@@ -536,7 +536,7 @@ struct KBHitRow: View {
                     Text(Self.marked(result.entry.name, query)).font(Theme.Font.secondaryStrong).lineLimit(1)
                     Spacer(minLength: 0)
                     if result.count > hits.count {
-                        Text(result.count >= 99 ? "99+ 处" : "\(result.count) 处").font(Theme.Font.label).foregroundStyle(.tertiary)
+                        Text(result.count >= 99 ? String(localized: "99+ matches") : String(localized: "\(result.count) matches")).font(Theme.Font.label).foregroundStyle(.tertiary)
                             .lineLimit(1).fixedSize()
                     }
                 }
@@ -621,12 +621,12 @@ struct KnowledgeDetailView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    } header: { sectionHeader(String(localized: "在做这个项目的 Agent"), agents.count) }
+                    } header: { sectionHeader(String(localized: "Agents on This Project"), agents.count) }
                 }
                 if let log = d.log, !log.isEmpty { timeline(log) }
                 // Empty once the header's parts are taken out (a summary that is just the one line): no blank card.
                 if let sum = d.summary, case let profile = Self.profile(sum, oneLine: shown.oneLine), !profile.isEmpty {
-                    Section("档案") {
+                    Section("Profile") {
                         Markdown(Links.markdown(MathMarkdown.rewrite(profile))).markdownTheme(.jarvis).textSelection(.enabled)
                             .padding(.vertical, Theme.Space.sm)
                     }
@@ -639,16 +639,16 @@ struct KnowledgeDetailView: View {
                         DisclosureGroup(isExpanded: $showRecent) {
                             Text(recent).font(Theme.Font.secondary).textSelection(.enabled)
                         } label: {
-                            Label("最近 7 天的消息", systemImage: Theme.Icon.conversation)
+                            Label("Messages from the Last 7 Days", systemImage: Theme.Icon.conversation)
                         }
                     }
                 }
                 Section {
                     Text(d.path).font(Theme.Font.code).foregroundStyle(.secondary).textSelection(.enabled)
                 } header: {
-                    Text("目录")
+                    Text("Folder [Task Views 52daa7]")
                 } footer: {
-                    Text("Persona、AI 分身和各台电脑上的 Agent 都能直接读这个目录。")
+                    Text("Persona, the AI twin and the agents on your computers can all read this folder directly.")
                 }
             } else if let error {
                 Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger).font(Theme.Font.caption) }
@@ -662,8 +662,8 @@ struct KnowledgeDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { editing = true } label: { Label("打标", systemImage: Theme.Icon.label) }
-                    .accessibilityLabel("打标")
+                Button { editing = true } label: { Label("Tag", systemImage: Theme.Icon.label) }
+                    .accessibilityLabel("Tag")
             }
         }
         #if os(macOS)
@@ -715,9 +715,9 @@ struct KnowledgeDetailView: View {
                     Text(e.name).font(Theme.Font.title).lineLimit(3)
                     HStack(spacing: Theme.Space.sm) {
                         ImportanceBadge(importance: e.importance)
-                        if let k = e.projectKind { KBPill(text: String(localized: "\(k)项目"), tint: (e.extra ?? "").hasPrefix("long") ? Theme.Hue.blue : nil) }
+                        if let k = e.projectKind { KBPill(text: String(localized: "\(k) project"), tint: (e.extra ?? "").hasPrefix("long") ? Theme.Hue.blue : nil) }
                         if let st = projectStatus { KBPill(text: st) }
-                        if e.relevance > 0 { KBPill(text: String(localized: "相关 \(e.relevance)"), tint: RelevanceMeter.tint(e.relevance)) }
+                        if e.relevance > 0 { KBPill(text: String(localized: "Relevance \(e.relevance)"), tint: RelevanceMeter.tint(e.relevance)) }
                     }
                 }
             }
@@ -732,13 +732,13 @@ struct KnowledgeDetailView: View {
             HStack(spacing: Theme.Space.m) {
                 Button { Task { await ask() } } label: {
                     // White on the prominent fill: the symbol took the tint and vanished into the blue.
-                    Label("问 Persona", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: Self.buttonsFill)
+                    Label("Ask Persona", systemImage: Theme.Icon.ai).lineLimit(1).frame(maxWidth: Self.buttonsFill)
                         .foregroundStyle(.white)
                 }
                 .themedButton(prominent: true)
                 if entry.kind == KBKind.projects.rawValue {
                     Button { newAgent = true } label: {
-                        Label("开 Agent", systemImage: Theme.Icon.newConversation).lineLimit(1).frame(maxWidth: Self.buttonsFill)
+                        Label("Start Agent", systemImage: Theme.Icon.newConversation).lineLimit(1).frame(maxWidth: Self.buttonsFill)
                     }
                     .themedButton()
                 }
@@ -762,10 +762,10 @@ struct KnowledgeDetailView: View {
     private var projectStatus: String? {
         guard entry.kind == KBKind.projects.rawValue, let st = detail?.detail.meta?["status"]?.string ?? entry.extra?.components(separatedBy: " · ").last else { return nil }
         switch st {
-        case "paused": return String(localized: "暂停")
-        case "done": return String(localized: "已完成")
-        case "ignored": return String(localized: "不是项目")
-        case "merged": return String(localized: "已合并")
+        case "paused": return String(localized: "Pause")
+        case "done": return String(localized: "Done [Task Sheets f28461]")
+        case "ignored": return String(localized: "Not a Project")
+        case "merged": return String(localized: "Merged")
         default: return nil
         }
     }
@@ -790,10 +790,10 @@ struct KnowledgeDetailView: View {
             }
             if moments.count > Self.linksShown {
                 Button { withAnimation(Theme.Motion.standard) { allMoments.toggle() } } label: {
-                    Text(allMoments ? "收起" : "全部 \(moments.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Text(allMoments ? String(localized: "Collapse") : String(localized: "All \(moments.count) [Knowledge View 7c7192]")).font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
             }
-        } header: { sectionHeader(String(localized: "相关\(KBMoments.feedName(moments))"), moments.count) }
+        } header: { sectionHeader(String(localized: "Related \(KBMoments.feedName(moments))"), moments.count) }
     }
 
     /// A project merged into another (same work under two names): where it went.
@@ -802,10 +802,10 @@ struct KnowledgeDetailView: View {
             NavigationLink {
                 KnowledgeDetailView(entry: KBEntry(kind: KBKind.projects.rawValue, id: into, name: into, relevance: 0))
             } label: {
-                Label("已合并到另一个项目", systemImage: Theme.Icon.link).lineLimit(1)
+                Label("Merged into Another Project", systemImage: Theme.Icon.link).lineLimit(1)
             }
         } footer: {
-            Text("和另一个项目是同一件事，时间线、会话和人都并过去了。这里保留合并前的样子。")
+            Text("This is the same thing as another project, so its timeline, chats and people were moved there. This shows how it looked before the merge.")
         }
     }
 
@@ -838,7 +838,7 @@ struct KnowledgeDetailView: View {
         Section {
             if matches.isEmpty {
                 // Found by its name, or in a part of it the page shows below.
-                Text("「\(query)」在名字或资料里").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                Text("“\(query)” in names or profiles").font(Theme.Font.secondary).foregroundStyle(.secondary)
             }
             ForEach(shownMatches) { m in
                 if let chat, let day = m.day {
@@ -852,12 +852,12 @@ struct KnowledgeDetailView: View {
             }
             if matches.count > Self.matchesShown {
                 Button { withAnimation(Theme.Motion.standard) { allMatches.toggle() } } label: {
-                    Text(allMatches ? "收起" : "显示全部 \(matches.count) 处").font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Text(allMatches ? String(localized: "Collapse") : String(localized: "Show All \(matches.count) Matches")).font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
             }
         } header: {
             HStack(spacing: Theme.Space.sm) {
-                Text("搜索「\(query)」")
+                Text("Search “\(query)”")
                 Text(matches.count >= 40 ? "40+" : "\(matches.count)").foregroundStyle(Color.secondary.opacity(0.7)).monospacedDigit()
             }
             .accessibilityElement(children: .combine)
@@ -879,11 +879,11 @@ struct KnowledgeDetailView: View {
             }
             if lines.count > Self.logShown {
                 Button { withAnimation(Theme.Motion.standard) { allLog.toggle() } } label: {
-                    Text(allLog ? "收起" : "显示全部 \(lines.count) 条").font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Text(allLog ? String(localized: "Collapse") : String(localized: "Show All \(lines.count) Entries")).font(Theme.Font.secondaryMedium).lineLimit(1)
                 }
                 .listRowSeparator(.hidden)
             }
-        } header: { sectionHeader(String(localized: "时间线"), lines.count) }
+        } header: { sectionHeader(String(localized: "Timeline [Knowledge View f1241a]"), lines.count) }
     }
 
     // MARK: Related
@@ -906,10 +906,10 @@ struct KnowledgeDetailView: View {
                                 if open { openKinds.remove(k.rawValue) } else { openKinds.insert(k.rawValue) }
                             }
                         } label: {
-                            Text(open ? "收起" : "全部 \(group.count) 个").font(Theme.Font.secondaryMedium).lineLimit(1)
+                            Text(open ? String(localized: "Collapse") : String(localized: "All \(group.count) [Knowledge View 1f585d]")).font(Theme.Font.secondaryMedium).lineLimit(1)
                         }
                     }
-                } header: { sectionHeader(String(localized: "关联的\(k.title)"), group.count) }
+                } header: { sectionHeader(String(localized: "Linked \(k.title)"), group.count) }
             }
         }
         if !dirs.isEmpty {
@@ -921,7 +921,7 @@ struct KnowledgeDetailView: View {
                         Image(systemName: Theme.Icon.folder).foregroundStyle(.secondary)
                     }
                 }
-            } header: { sectionHeader(String(localized: "代码目录"), dirs.count) }
+            } header: { sectionHeader(String(localized: "Code Folders"), dirs.count) }
         }
     }
 
@@ -999,7 +999,7 @@ struct KBMomentRow: View {
                     }
                     .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).fixedSize()
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(moment.comments) 条评论")
+                    .accessibilityLabel("\(moment.comments) comments")
                 }
             }
             if let note = moment.note, !note.isEmpty {
@@ -1076,8 +1076,8 @@ struct ItemFacts {
         guard let k = KBKind(rawValue: kind), [.docs, .meetings, .events].contains(k), let meta else { return nil }
         at = meta["at"]?.string.flatMap(Self.parse)
         url = meta["url"]?.string.flatMap { $0.isEmpty ? nil : URL(string: $0) }
-        whenLabel = k == .docs ? String(localized: "提到的时间") : k == .meetings ? String(localized: "开会时间") : String(localized: "时间")
-        openLabel = k == .docs ? String(localized: "打开文档") : k == .meetings ? String(localized: "打开会议纪要") : String(localized: "打开日程")
+        whenLabel = k == .docs ? String(localized: "Mentioned") : k == .meetings ? String(localized: "Meeting Time") : String(localized: "Time")
+        openLabel = k == .docs ? String(localized: "Open Document") : k == .meetings ? String(localized: "Open Meeting Notes") : String(localized: "Open Event")
     }
 
     /// "Fri, Oct 30, 14:00" (24-hour: SwiftUI's hour style is 12-hour in Chinese, docs/lessons/ios.md), the year when not this one.
@@ -1108,7 +1108,7 @@ struct KBMatchRow: View {
     var body: some View {
         let hit = match.hit
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(hit.day.map { String(localized: "聊天记录 · \(KBDayView.title($0))") } ?? hit.source)
+            Text(hit.day.map { String(localized: "Chat History · \(KBDayView.title($0))") } ?? hit.source)
                 .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
             if match.day != nil {
                 if let b = match.before?.last { context(b) }
@@ -1123,7 +1123,7 @@ struct KBMatchRow: View {
 
     private func context(_ raw: String) -> some View {
         let l = KBMessageLine(raw)
-        return Text(l.sender.isEmpty ? l.text : String(localized: "\(l.sender)：\(l.text)"))
+        return Text(l.sender.isEmpty ? l.text : String(localized: "\(l.sender): \(l.text)"))
             .font(Theme.Font.label).foregroundStyle(.tertiary).lineLimit(1)
     }
 }
@@ -1174,7 +1174,7 @@ struct KBDayView: View {
                                 .accessibilityIdentifier(on ? "kb.focus" : "")
                         }
                     } header: {
-                        Text("\(page.messages.count) 条消息")
+                        Text("\(page.messages.count) messages")
                     }
                     Section {
                         HStack {
@@ -1344,8 +1344,8 @@ struct KBTagEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("重要级") {
-                    Picker("重要级", selection: $importance) {
+                Section("Importance") {
+                    Picker("Importance", selection: $importance) {
                         ForEach(["P0", "P1", "P2", "P3"], id: \.self) { Text($0).tag($0) }
                     }
                     .pickerStyle(.segmented)
@@ -1355,26 +1355,26 @@ struct KBTagEditor: View {
                     #if os(macOS)
                         .labelsHidden() // its empty label column took the left half of the row
                     #endif
-                } header: { Text("与我相关 \(Int(relevance))") }
+                } header: { Text("Relevance to Me \(Int(relevance))") }
                 Section {
                     #if os(macOS)
                     // A grouped Mac form shows a titled field as label + trailing value: the hint read as a label.
-                    TextField("用空格分隔", text: $tags, prompt: Text("用空格分隔")).labelsHidden()
+                    TextField(String(localized: "Separate with spaces"), text: $tags, prompt: Text("Separate with spaces")).labelsHidden()
                     #else
-                    TextField("用空格分隔", text: $tags)
+                    TextField(String(localized: "Separate with spaces"), text: $tags)
                     #endif
-                } header: { Text("标签") }
+                } header: { Text("Tags") }
                 if entry.kind == KBKind.projects.rawValue {
-                    Section("项目") {
-                        Picker("类型", selection: $projectKind) {
-                            Text("短期（需求）").tag("short")
-                            Text("长期（使命）").tag("long")
+                    Section("Project") {
+                        Picker("Type", selection: $projectKind) {
+                            Text("Short-Term (Request)").tag("short")
+                            Text("Long-Term (Mission)").tag("long")
                         }
-                        Picker("状态", selection: $status) {
-                            Text("进行中").tag("active")
-                            Text("暂停").tag("paused")
-                            Text("已完成").tag("done")
-                            Text("不是项目").tag("ignored")
+                        Picker("Status", selection: $status) {
+                            Text("Active").tag("active")
+                            Text("Pause").tag("paused")
+                            Text("Done [Task Sheets f28461]").tag("done")
+                            Text("Not a Project").tag("ignored")
                         }
                     }
                 }
@@ -1385,9 +1385,9 @@ struct KBTagEditor: View {
             .navigationTitle(entry.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { Task { await save() } }.disabled(saving)
+                    Button("Save") { Task { await save() } }.disabled(saving)
                 }
             }
             .onAppear {

@@ -173,7 +173,7 @@ nonisolated enum InboxEventText {
         guard !it.isDone else { return nil }
         if let s = it.currentSuggestion { return .suggestion(kind: kindTitle(s), line: firstLine(s.text), symbol: symbol(s)) }
         let state = it.handling?.state
-        if state == "failed" { return .failed(String(localized: "AI 处理失败")) }
+        if state == "failed" { return .failed(String(localized: "AI couldn't handle it")) }
         if it.urgent == true, state == "looking" { return .preparing }
         if it.triage == .working, let word = stateWord(state) { return .working(word) }
         return nil
@@ -181,28 +181,28 @@ nonisolated enum InboxEventText {
 
     /// Who filed a done item, where it is told: 「管理者处理了」 for the manager (it read it, nothing to do); nil otherwise.
     static func doneBy(_ it: InboxItem) -> String? {
-        it.isDone && it.doneBy == "manager" ? String(localized: "管理者处理了") : nil
+        it.isDone && it.doneBy == "manager" ? String(localized: "Handled by the manager") : nil
     }
 
     /// The handling state for people; nil when there is nothing to say (done, unknown).
     static func stateWord(_ state: String?) -> String? {
         switch state {
-        case "looking": String(localized: "AI 正在看")
-        case "agent": String(localized: "Agent 在做")
-        case "waiting": String(localized: "等对方回复")
-        case "failed": String(localized: "AI 处理失败")
+        case "looking": String(localized: "AI is looking")
+        case "agent": String(localized: "Agent working")
+        case "waiting": String(localized: "Waiting for a reply")
+        case "failed": String(localized: "AI couldn't handle it")
         default: nil
         }
     }
 
     /// suggested reply / suggested Agent / conclusion / your call (a handback).
     static func kindTitle(_ s: InboxItem.Suggestion) -> String {
-        if s.isHandback { return String(localized: "要你拿主意") }
+        if s.isHandback { return String(localized: "Your call") }
         return switch s.kind {
-        case "reply": String(localized: "建议回复")
-        case "agent": String(localized: "建议派 Agent")
-        case "conclusion": String(localized: "结论")
-        default: String(localized: "建议")
+        case "reply": String(localized: "Suggested reply")
+        case "agent": String(localized: "Suggested Agent task")
+        case "conclusion": String(localized: "Conclusion")
+        default: String(localized: "Suggestion")
         }
     }
 
@@ -248,12 +248,12 @@ nonisolated enum InboxEventText {
     }
 
     static func actions(_ s: InboxItem.Suggestion) -> [Action] {
-        if s.isHandback { return [.confirm(String(localized: "确认")), .edit, .reject] }
+        if s.isHandback { return [.confirm(String(localized: "Confirm")), .edit, .reject] }
         switch s.kind {
-        case "reply": return [.confirm(String(localized: "发送")), .edit, .reject]
-        case "agent": return [.confirm(String(localized: "开始")), .edit, .reject]
-        case "conclusion": return [.confirm(String(localized: "知道了")), .reject]
-        default: return [.confirm(String(localized: "确认")), .reject]
+        case "reply": return [.confirm(String(localized: "Send")), .edit, .reject]
+        case "agent": return [.confirm(String(localized: "Started")), .edit, .reject]
+        case "conclusion": return [.confirm(String(localized: "OK [Recordings Section de32e2]")), .reject]
+        default: return [.confirm(String(localized: "Confirm")), .reject]
         }
     }
 }

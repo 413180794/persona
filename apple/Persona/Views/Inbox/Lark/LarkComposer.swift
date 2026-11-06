@@ -82,14 +82,14 @@ struct LarkComposer: View {
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
                 if let attachmentPicker {
                     Menu {
-                        Button { attachmentPicker(true) } label: { Label("照片", systemImage: Theme.Icon.photos).lineLimit(1) }
-                        Button { attachmentPicker(false) } label: { Label("文件", systemImage: Theme.Icon.file).lineLimit(1) }
+                        Button { attachmentPicker(true) } label: { Label("Photos", systemImage: Theme.Icon.photos).lineLimit(1) }
+                        Button { attachmentPicker(false) } label: { Label("Files", systemImage: Theme.Icon.file).lineLimit(1) }
                     } label: {
                         Image(systemName: Theme.Icon.add).font(Theme.Font.heading)
                             .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
                     }
                     .disabled(preparingAttachment || !canAddAttachments)
-                    .accessibilityLabel("添加附件")
+                    .accessibilityLabel("Add attachment")
                 }
                 // The message answered is quoted inside the box, over the field (Telegram's reply, #986).
                 VStack(alignment: .leading, spacing: 0) {
@@ -124,7 +124,7 @@ struct LarkComposer: View {
                     .themedButton(prominent: true)
                     .clipShape(.circle)
                     .disabled(preparingAttachment)
-                    .accessibilityLabel("发送")
+                    .accessibilityLabel("Send")
                     .accessibilityIdentifier(sendID)
                     .transition(.scale.combined(with: .opacity))
                 }
@@ -176,8 +176,8 @@ struct LarkReplyBar: View {
     var cancel: () -> Void
 
     var body: some View {
-        QuoteBarRow(heading: String(localized: "回复 \(reply.senderName)"), summary: Fmt.plain(reply.displayText), lines: 1, tint: LarkColor.blue,
-                    removeLabel: String(localized: "取消回复"), remove: cancel)
+        QuoteBarRow(heading: String(localized: "Replying to \(reply.senderName)"), summary: Fmt.plain(reply.displayText), lines: 1, tint: LarkColor.blue,
+                    removeLabel: String(localized: "Cancel Reply"), remove: cancel)
             .accessibilityIdentifier("lark.replyBar")
     }
 }

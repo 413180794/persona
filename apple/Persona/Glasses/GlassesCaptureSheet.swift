@@ -23,11 +23,11 @@ struct GlassesCaptureSheet: View {
                     captureView
                 }
             }
-            .navigationTitle("眼镜拍照")
+            .navigationTitle("Glasses Photo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }.lineLimit(1)
+                    Button("Close") { dismiss() }.lineLimit(1)
                 }
             }
             .task(id: glasses.registered) {
@@ -56,11 +56,11 @@ struct GlassesCaptureSheet: View {
     private var connectView: some View {
         VStack(spacing: Theme.Space.l) {
             Spacer(minLength: 0)
-            Text("需要先在 Meta AI 里连上眼镜。点下面的按钮会跳到 Meta AI，连好后再回到 Persona。")
+            Text("Connect your glasses in Meta AI first. The button below opens Meta AI; come back to Persona once they are connected.")
                 .font(Theme.Font.body)
                 .multilineTextAlignment(.center)
             Button { Task { await act { try await glasses.connect() } } } label: {
-                Label("连接 Meta 眼镜", systemImage: Theme.Icon.glasses).lineLimit(1)
+                Label("Connect Meta Glasses", systemImage: Theme.Icon.glasses).lineLimit(1)
             }
             .themedButton(prominent: true)
             .disabled(busy)
@@ -75,7 +75,7 @@ struct GlassesCaptureSheet: View {
     private var permissionView: some View {
         VStack(spacing: Theme.Space.l) {
             Spacer(minLength: 0)
-            Text("要在 Meta AI 里允许 Persona 使用眼镜摄像头，会跳到 Meta AI。")
+            Text("Allow Persona to use the glasses' camera in Meta AI. This opens Meta AI.")
                 .font(Theme.Font.body)
                 .multilineTextAlignment(.center)
             Button {
@@ -85,7 +85,7 @@ struct GlassesCaptureSheet: View {
                     }
                 }
             } label: {
-                Label("去允许", systemImage: Theme.Icon.glasses).lineLimit(1)
+                Label("Allow [Glasses Capture Sheet beea4f]", systemImage: Theme.Icon.glasses).lineLimit(1)
             }
             .themedButton(prominent: true)
             .disabled(busy)
@@ -105,7 +105,7 @@ struct GlassesCaptureSheet: View {
                 } else if let frame = glasses.preview {
                     Image(uiImage: frame).resizable().scaledToFit()
                 } else if glasses.error == nil {
-                    ProgressView("正在连接眼镜").font(Theme.Font.secondary)
+                    ProgressView(String(localized: "Connecting to the glasses")).font(Theme.Font.secondary)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -117,26 +117,26 @@ struct GlassesCaptureSheet: View {
                         self.photo = nil
                         Task { try? await glasses.startPreview() }
                     } label: {
-                        Label("重拍", systemImage: Theme.Icon.retry).lineLimit(1)
+                        Label("Retake", systemImage: Theme.Icon.retry).lineLimit(1)
                     }
                     .themedButton()
                     Button {
                         pick(photo)
                         dismiss()
                     } label: {
-                        Label("用这张", systemImage: Theme.Icon.done).lineLimit(1)
+                        Label("Use This Photo", systemImage: Theme.Icon.done).lineLimit(1)
                     }
                     .themedButton(prominent: true)
                 }
             } else if glasses.preview == nil, glasses.error != nil {
                 Button { Task { await act { try await glasses.startPreview() } } } label: {
-                    Label("重试", systemImage: Theme.Icon.retry).lineLimit(1)
+                    Label("Retry [Components b8784c]", systemImage: Theme.Icon.retry).lineLimit(1)
                 }
                 .themedButton(prominent: true)
                 .disabled(busy)
             } else {
                 Button { Task { await shoot() } } label: {
-                    Label("拍一张", systemImage: Theme.Icon.camera).lineLimit(1)
+                    Label("Take Photo [Glasses Capture Sheet d0ccbf]", systemImage: Theme.Icon.camera).lineLimit(1)
                 }
                 .themedButton(prominent: true)
                 .disabled(glasses.preview == nil || busy)

@@ -81,7 +81,7 @@ enum MacQuickOpen {
         let mail = inbox.compactMap { it -> Hit? in
             let sc = score(title: it.title, hay: [it.sender, it.preview, it.accountName], query: q)
             guard sc > 0 else { return nil }
-            return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between two parts of a one-line summary, e.g. a tool name and what it does")),
+            return Hit(id: "i:\(it.id)", title: it.title, subtitle: [it.sender, it.preview].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: String(localized: ": ", comment: "Separator between two parts of a one-line summary, e.g. a tool name and what it does")),
                        icon: Theme.Icon.inbox, target: .inbox(it.id), score: sc, date: it.updatedAt)
         }
         let fileHits = q.isEmpty ? [] : files.map { f -> Hit in
@@ -93,11 +93,11 @@ enum MacQuickOpen {
         }
         let groups = [
             Group(title: "Agent", hits: Array(ranked(agents).prefix(agentLimit))),
-            Group(title: String(localized: "Persona 对话"), hits: Array(ranked(conversations).prefix(otherLimit))),
-            Group(title: String(localized: "文件"), hits: fileHits),
-            Group(title: String(localized: "收件箱"), hits: Array(ranked(mail).prefix(otherLimit))),
-            Group(title: String(localized: "前往"), hits: places(q, supportsTodos: supportsTodos, showsMessages: showsMessages)),
-            Group(title: String(localized: "动作"), hits: actions(q)),
+            Group(title: String(localized: "Persona Chats"), hits: Array(ranked(conversations).prefix(otherLimit))),
+            Group(title: String(localized: "Files"), hits: fileHits),
+            Group(title: String(localized: "Inbox"), hits: Array(ranked(mail).prefix(otherLimit))),
+            Group(title: String(localized: "Go [New Chat View fa9607]"), hits: places(q, supportsTodos: supportsTodos, showsMessages: showsMessages)),
+            Group(title: String(localized: "Actions [Mac Quick Open be37d8]"), hits: actions(q)),
         ].filter { !$0.hits.isEmpty }
         let tier = { (g: Group) in (g.hits.map(\.score).max() ?? 0) / 20 }
         return groups.enumerated().sorted { a, b in
@@ -138,9 +138,9 @@ enum MacQuickOpen {
 
     private static func actions(_ q: String) -> [Hit] {
         let all: [(String, String, String, Target, [String])] = [
-            ("a:new-agent", String(localized: "新建 Agent"), String(localized: "在一台电脑上启动 Claude Code / Codex  ⌘N"), .newAgent,
+            ("a:new-agent", String(localized: "New Agent [Mac Quick Open 0587b9]"), String(localized: "Start Claude Code / Codex on a computer  ⌘N"), .newAgent,
              ["new agent", "start", "启动", "claude", "codex"]), // i18n-ignore
-            ("a:new-jarvis", String(localized: "新建 Persona 对话"), String(localized: "问 Persona  ⇧⌘N"), .newConversation,
+            ("a:new-jarvis", String(localized: "New Persona Chat"), String(localized: "Ask Persona  ⇧⌘N"), .newConversation,
              ["new chat", "jarvis", "对话", "助手"]), // i18n-ignore
         ]
         return all.compactMap { id, title, sub, target, words in

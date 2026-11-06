@@ -8,11 +8,11 @@ struct AskJarvisControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "jarvis.control.ask") {
             ControlWidgetButton(action: OpenJarvisAssistantIntent()) {
-                Label("问 Persona", systemImage: "sparkles")
+                Label("Ask Persona", systemImage: "sparkles")
             }
         }
-        .displayName("问 Persona")
-        .description("打开 Persona 助手。")
+        .displayName(String(localized: "Ask Persona"))
+        .description(String(localized: "Opens the Persona assistant."))
     }
 }
 
@@ -26,6 +26,6 @@ struct JarvisAgentsControl: ControlWidget {
             }
         }
         .displayName("Persona Agents")
-        .description("打开 Persona 的 Agents 页。")
+        .description(String(localized: "Opens the Agents tab in Persona."))
     }
 }

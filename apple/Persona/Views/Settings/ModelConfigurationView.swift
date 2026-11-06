@@ -17,7 +17,7 @@ struct ModelConfigurationView: View {
             if let error = page.error {
                 Section {
                     Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
-                    Button("重新加载") { Task { await page.load() } }.lineLimit(1)
+                    Button("Reload [Lark Chat Pins View 7bdd5c]") { Task { await page.load() } }.lineLimit(1)
                 }
             }
             if page.loading && !page.loaded {
@@ -43,20 +43,20 @@ struct ModelConfigurationView: View {
                         }
                         .padding(.vertical, Theme.Space.s)
                     } label: {
-                        Text("适用范围").font(Theme.Font.body).lineLimit(1)
+                        Text("Applies To").font(Theme.Font.body).lineLimit(1)
                     }
                     .accessibilityIdentifier("model-config-scope")
                 } footer: {
-                    Text("修改一个分类，将统一用于该分类的所有用途；从下一次运行生效，不打断当前任务。")
+                    Text("Changing a category applies to every use in it. Takes effect from the next run without interrupting current tasks.")
                         .font(Theme.Font.caption)
                 }
             } else if page.loaded && page.error == nil {
-                EmptyStateView(symbol: Theme.Icon.model, title: String(localized: "暂无模型配置"), message: String(localized: "连接支持四类模型配置的 hub 后，可在这里统一设置。"))
+                EmptyStateView(symbol: Theme.Icon.model, title: String(localized: "No Model Configuration Yet"), message: String(localized: "Connect to a hub that supports model configuration by category to set it up here."))
                     .listRowBackground(Color.clear)
             }
         }
         .themedPage()
-        .detailTitle(String(localized: "模型配置"))
+        .detailTitle(String(localized: "Model Settings [Launcher Model Picker 8cbcf7]"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await page.load() }
         .refreshable { await page.load() }
@@ -138,10 +138,10 @@ struct ModelPurposeEditorView: View {
     var body: some View {
         SettingsForm {
             if let purpose = page.purpose {
-                Section("当前生效") {
-                    LabeledContent("模型", value: page.summary(purpose).isEmpty ? String(localized: "未配置") : page.summary(purpose))
+                Section("In Effect") {
+                    LabeledContent("Model [Assistant View c98e11]", value: page.summary(purpose).isEmpty ? String(localized: "Not set up") : page.summary(purpose))
                     if let source = purpose.inheritedFrom, !source.isEmpty {
-                        LabeledContent("继承来源", value: source)
+                        LabeledContent("Inherited From", value: source)
                     }
                     if let limit = purpose.limit {
                         ModelLimitLine(limit: limit, font: Theme.Font.label)
@@ -157,35 +157,35 @@ struct ModelPurposeEditorView: View {
                             launcherModelRow(choice)
                         } else if listLoading && listFor == listProvider {
                             HStack {
-                                Text("具体模型")
+                                Text("Model [Model Configuration View 7986d5]")
                                 Spacer()
-                                Text("正在读取模型列表…").foregroundStyle(.secondary).lineLimit(1)
+                                Text("Loading model list…").foregroundStyle(.secondary).lineLimit(1)
                                 ProgressView().controlSize(.small)
                             }
                         } else {
                             #if os(macOS)
                             // A Mac form: the field's name on the left, what to type in the box (#1221).
-                            TextField("具体模型", text: optional(\.model), prompt: Text("留空跟随默认"))
+                            TextField(String(localized: "Model [Model Configuration View 7986d5]"), text: optional(\.model), prompt: Text("Leave empty for default"))
                                 .font(Theme.Font.body.monospaced())
                                 .accessibilityIdentifier("model-config-model")
                             #else
-                            TextField("具体模型（留空跟随默认）", text: optional(\.model))
+                            TextField(String(localized: "Model (leave empty for default)"), text: optional(\.model))
                                 .font(Theme.Font.body.monospaced())
                                 .textInputAutocapitalization(.never).autocorrectionDisabled()
                                 .accessibilityIdentifier("model-config-model")
                             #endif
                             if let listError, listFor == listProvider {
                                 HStack {
-                                    Text("模型列表没读到：\(listError)").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
+                                    Text("Couldn't load the model list: \(listError)").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
                                     Spacer(minLength: Theme.Space.s)
-                                    Button("重试") { Task { await loadList(refresh: true) } }.buttonStyle(.borderless).lineLimit(1)
+                                    Button("Retry [Components b8784c]") { Task { await loadList(refresh: true) } }.buttonStyle(.borderless).lineLimit(1)
                                 }
                             }
                         }
                     }
                     if purpose.supports("effort") && allowsEffort {
-                        Picker("思考强度", selection: optional(\.effort)) {
-                            Text("跟随默认").tag("")
+                        Picker("Thinking Effort", selection: optional(\.effort)) {
+                            Text("Default [Model Configuration View a44f9f]").tag("")
                             ForEach(SessionModes.startEffortLevels) { Text($0.title).tag($0.id) }
                             if let effort = page.draft.effort, !SessionModes.startEffortLevels.contains(where: { $0.id == effort }) {
                                 Text(effort).tag(effort)
@@ -195,20 +195,20 @@ struct ModelPurposeEditorView: View {
                     }
                     if !page.runtimes.isEmpty { runtimePicker }
                 } header: {
-                    Text("模型设置")
+                    Text("Model Settings [Model Configuration View 082a73]")
                 } footer: {
-                    Text("此分类的所有用途统一使用这项配置。留空使用现有默认；更换供应商会清除旧模型和思考强度。自定义模型 ID 需要供应商支持。")
+                    Text("Every use in this category uses this setting. Leave fields empty to keep the current default. Changing the provider clears the previous model and reasoning effort. Custom model IDs must be supported by the provider.")
                 }
                 .disabled(page.saving || page.loading)
                 Section {
                     Button {
                         page.restoreInheritance()
                     } label: {
-                        Label("恢复默认", systemImage: Theme.Icon.undo).lineLimit(1)
+                        Label("Restore Default", systemImage: Theme.Icon.undo).lineLimit(1)
                     }
                     .disabled(page.saving || page.loading || page.draft.isEmpty)
                 } footer: {
-                    Text("保存后从下一次运行生效，不会打断当前任务，也不会重新处理历史数据。权限设置不会随模型改变。")
+                    Text("Changes take effect from the next run. Current tasks aren't interrupted and past data isn't reprocessed. Permission settings don't change with the model.")
                 }
             } else if page.loading {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, Theme.Space.xl)
@@ -216,13 +216,13 @@ struct ModelPurposeEditorView: View {
             if let error = page.error {
                 Section {
                     Label(error, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger)
-                    Button("重新加载") { reload() }.lineLimit(1)
+                    Button("Reload [Lark Chat Pins View 7bdd5c]") { reload() }.lineLimit(1)
                         .disabled(page.saving || page.loading)
                 }
             }
         }
         .themedPage()
-        .detailTitle(page.purpose?.name ?? String(localized: "模型配置"))
+        .detailTitle(page.purpose?.name ?? String(localized: "Model Settings [Launcher Model Picker 8cbcf7]"))
         .navigationBarTitleDisplayMode(.inline)
         .pageToolbar {
             #if os(macOS)
@@ -240,8 +240,8 @@ struct ModelPurposeEditorView: View {
         #endif
         .task(id: purposeID) { await page.load(purposeID: purposeID) }
         .task(id: listProvider) { await loadList() }
-        .confirmationDialog("重新加载会丢弃未保存的编辑。", isPresented: $confirmReload, titleVisibility: .visible) {
-            Button("重新加载", role: .destructive) { Task { await page.load(purposeID: purposeID) } }
+        .confirmationDialog("Reloading discards your unsaved edits.", isPresented: $confirmReload, titleVisibility: .visible) {
+            Button("Reload [Lark Chat Pins View 7bdd5c]", role: .destructive) { Task { await page.load(purposeID: purposeID) } }
         }
     }
 
@@ -258,7 +258,7 @@ struct ModelPurposeEditorView: View {
                 }
             }
         } label: {
-            if page.saving { ProgressView() } else { Text("保存").lineLimit(1) }
+            if page.saving { ProgressView() } else { Text("Save").lineLimit(1) }
         }
         .disabled(page.purpose == nil || !page.dirty || page.saving || page.loading || page.conflict)
         .accessibilityIdentifier("model-config-save")
@@ -275,16 +275,16 @@ struct ModelPurposeEditorView: View {
     private var launcherChoice: LauncherModelChoice? {
         guard let list = launcherList, listFor == listProvider, !list.models.isEmpty, let purpose = page.purpose else { return nil }
         let inherited = page.draft.provider == nil && (purpose.override.model ?? "").isEmpty ? purpose.effective.model ?? "" : ""
-        return LauncherModelChoice(list: list, picked: page.draft.model ?? "", configured: inherited, configuredLabel: String(localized: "继承"))
+        return LauncherModelChoice(list: list, picked: page.draft.model ?? "", configured: inherited, configuredLabel: String(localized: "Inherited"))
     }
 
     @ViewBuilder private func launcherModelRow(_ choice: LauncherModelChoice) -> some View {
         if let locked = choice.list.locked {
             // The launcher passes its own --model: a pick would not reach it (saving one fails the hub's check).
-            LabeledContent("具体模型") {
+            LabeledContent("Model [Model Configuration View 7986d5]") {
                 VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
                     HStack(spacing: Theme.Space.xs) {
-                        Text(choice.unlisted ?? String(localized: "默认")).lineLimit(1)
+                        Text(choice.unlisted ?? String(localized: "Default [Prompt Composer 844b8c]")).lineLimit(1)
                         Image(systemName: Theme.Icon.locked).foregroundStyle(.secondary)
                     }
                     Text(locked).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(2)
@@ -298,10 +298,10 @@ struct ModelPurposeEditorView: View {
 
     /// Footer under the model list: what leaving it empty does, and which computer the list came from.
     private var defaultModelFooter: String {
-        let source = launcherList?.machine.map { String(localized: "（来自 \($0)）") } ?? ""
+        let source = launcherList?.machine.map { String(localized: " (from \($0))") } ?? ""
         return page.draft.provider == nil
-            ? String(localized: "留空：继承上一级的设置。列表和在终端里输入 /model 看到的一样\(source)。")
-            : String(localized: "留空：用这个供应商的默认模型。列表和在终端里输入 /model 看到的一样\(source)。")
+            ? String(localized: "Leave empty to inherit the setting from the level above. The list matches what you see when you type /model in the terminal\(source).")
+            : String(localized: "Leave empty to use this provider's default model. The list matches what you see when you type /model in the terminal\(source).")
     }
 
     private func unlockedModelRow(_ choice: LauncherModelChoice) -> some View {
@@ -309,10 +309,10 @@ struct ModelPurposeEditorView: View {
             LauncherModelPicker(choice: choice, picked: optional(\.model), refresh: { await loadList(refresh: true) }, allowsCustom: true,
                                 defaultFooter: defaultModelFooter)
         } label: {
-            LabeledContent("具体模型") {
+            LabeledContent("Model [Model Configuration View 7986d5]") {
                 VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
-                    Text(choice.selected?.displayName ?? choice.unlisted.map { SessionModes.gptModelName($0) ?? $0 } ?? String(localized: "默认")).lineLimit(1)
-                    if let detail = choice.unlisted != nil ? String(localized: "列表里没有") : choice.detail {
+                    Text(choice.selected?.displayName ?? choice.unlisted.map { SessionModes.gptModelName($0) ?? $0 } ?? String(localized: "Default [Prompt Composer 844b8c]")).lineLimit(1)
+                    if let detail = choice.unlisted != nil ? String(localized: "Not in list") : choice.detail {
                         Text(detail).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                     }
                 }
@@ -347,13 +347,13 @@ struct ModelPurposeEditorView: View {
     }
 
     private var providerPicker: some View {
-        Picker("模型供应商", selection: Binding(get: { page.draft.provider ?? "" }, set: { page.chooseProvider($0) })) {
-            Text("跟随默认").tag("")
+        Picker("Model Providers", selection: Binding(get: { page.draft.provider ?? "" }, set: { page.chooseProvider($0) })) {
+            Text("Default [Model Configuration View a44f9f]").tag("")
             ForEach(page.candidates) { provider in
                 Text(provider.name).tag(provider.id)
             }
             if let id = page.draft.provider, !page.candidates.contains(where: { $0.id == id }) {
-                Text("\(id)（当前配置）").tag(id)
+                Text("\(id) (current) [Model Configuration View ebda83]").tag(id)
             }
         }
         .lineLimit(1)
@@ -362,8 +362,8 @@ struct ModelPurposeEditorView: View {
 
     /// Main Chat's How It Runs (#2455): the Claude Code CLI or the Agent SDK; "" follows the default (the CLI).
     private var runtimePicker: some View {
-        Picker("运行方式", selection: optional(\.runtime)) {
-            Text("跟随默认").tag("")
+        Picker("How It Runs", selection: optional(\.runtime)) {
+            Text("Default [Model Configuration View a44f9f]").tag("")
             ForEach(page.runtimes, id: \.self) { Text(AssistantRuntime.title($0)).tag($0) }
         }
         .lineLimit(1)
@@ -373,11 +373,11 @@ struct ModelPurposeEditorView: View {
     private var pluginModelPicker: some View {
         let id = page.draft.provider ?? page.purpose?.effective.provider
         let models = page.providers.first { $0.id == id }?.models ?? []
-        return Picker("具体模型", selection: optional(\.model)) {
-            Text("跟随扩展默认").tag("")
+        return Picker("Model [Model Configuration View 7986d5]", selection: optional(\.model)) {
+            Text("Extension Default").tag("")
             ForEach(models) { Text($0.name ?? $0.id).tag($0.id) }
             if let model = page.draft.model, !models.contains(where: { $0.id == model }) {
-                Text("\(model)（当前配置）").tag(model)
+                Text("\(model) (current) [Model Configuration View ebda83]").tag(model)
             }
         }
         .lineLimit(1)
@@ -425,7 +425,7 @@ private struct ModelConfigurationSheet: ViewModifier {
                 .navigationDestination(for: ModelPurposeRoute.self) { ModelPurposeEditorView(purposeID: $0.id) }
                 .pageToolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button("关闭") { showing = false }.lineLimit(1)
+                        Button("Close") { showing = false }.lineLimit(1)
                     }
                 }
             }
@@ -436,7 +436,7 @@ private struct ModelConfigurationSheet: ViewModifier {
 
 /// A row that opens Model Settings (or one purpose's editor) as a sheet (`modelConfigurationSheet`).
 struct ModelConfigurationLink: View {
-    var title = String(localized: "模型配置")
+    var title = String(localized: "Model Settings [Launcher Model Picker 8cbcf7]")
     var purposeID: String?
     var summary: String?
     @State private var showing = false
@@ -445,11 +445,11 @@ struct ModelConfigurationLink: View {
         Button { showing = true } label: {
             if AppStyle.current.usesBeautifulUI {
                 BUIListRow(title) { BUIIconTile(Theme.Icon.model, tint: Theme.accent) } trailing: {
-                    Text(summary ?? String(localized: "统一管理")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    Text(summary ?? String(localized: "Managed centrally")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 }
             } else {
                 LabeledContent {
-                    Text(summary ?? String(localized: "统一管理")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                    Text(summary ?? String(localized: "Managed centrally")).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                 } label: {
                     Label(title, systemImage: Theme.Icon.model).lineLimit(1)
                 }

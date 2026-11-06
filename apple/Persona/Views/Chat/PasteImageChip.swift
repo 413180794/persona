@@ -73,7 +73,7 @@ struct PasteImageChip: View {
                         .scaledFrame(minWidth: Theme.Size.wellXS, minHeight: Theme.Size.wellXS).contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("不粘贴")
+                .accessibilityLabel("Don't paste")
             }
             .padding(.horizontal, Theme.Space.m)
             .padding(.vertical, Theme.Space.s)

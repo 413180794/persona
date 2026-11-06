@@ -16,22 +16,22 @@ struct IslandSettingsView: View {
         List {
             Section {
                 VStack(spacing: Theme.Space.l) {
-                    preview("平时", Self.sample(needsYou: false), island)
+                    preview("Normally", Self.sample(needsYou: false), island)
                         .contentShape(.rect)
                         .onLongPressGesture { diagnostics = true }
-                    preview("有 Agent 需要你时", Self.sample(needsYou: true), island)
+                    preview("When an Agent Needs You", Self.sample(needsYou: true), island)
                     VStack(spacing: Theme.Space.sm) {
                         IslandSharedPreview(state: Self.sample(needsYou: false))
-                        Text("和其他 App 共用时").font(Theme.Font.label).foregroundStyle(.secondary)
+                        Text("Shared with Other Apps").font(Theme.Font.label).foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Space.sm)
             } footer: {
-                Text("有 Agent 需要你时，左侧总是换成红色的数量。别的 App 也有实时活动时，灵动岛只留给 Persona 一小块，只显示最急的一类的数量（需要你 > 在工作 > 做完未看），不受上面的样式影响。")
+                Text("When an agent needs you, the left side always switches to a red count. When another app also has a Live Activity, the Dynamic Island leaves Persona only a small slot that shows the count of the most urgent kind (Needs you > Working > Unread), whatever the style above.")
             }
 
-            Section("样式") {
+            Section("Style") {
                 ForEach(IslandPrefs.Preset.allCases, id: \.self) { preset in
                     Button {
                         island.preset = preset
@@ -58,23 +58,23 @@ struct IslandSettingsView: View {
 
             if island.preset == .custom {
                 Section {
-                    Picker("左侧", selection: side(\.left)) {
+                    Picker("Left", selection: side(\.left)) {
                         ForEach(IslandSlot.allCases.filter { $0 != .none }, id: \.self) { Text($0.title).tag($0) }
                     }
-                    Picker("右侧", selection: side(\.right)) {
+                    Picker("Right", selection: side(\.right)) {
                         ForEach(IslandSlot.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                 } header: {
-                    Text("自定义")
+                    Text("Custom")
                 } footer: {
-                    Text("「状态数量」在左侧显示最急的一类（需要你 > 在工作 > 做完未看），在右侧显示下一类。")
+                    Text("“Status count” shows the most urgent kind on the left (Needs you > Working > Unread) and the next kind on the right.")
                 }
             }
 
             if island.sides.left == .load || island.sides.right == .load {
-                Section("负载看哪台") {
-                    Picker(String(localized: "picker.machine", defaultValue: "机器"), selection: Binding(get: { island.machine ?? "" }, set: { island.machine = $0.isEmpty ? nil : $0 })) {
-                        Text("最忙的那台").tag("")
+                Section("Load From") {
+                    Picker(String(localized: "picker.machine", defaultValue: "Machine"), selection: Binding(get: { island.machine ?? "" }, set: { island.machine = $0.isEmpty ? nil : $0 })) {
+                        Text("Busiest").tag("")
                         ForEach(model.machines) { Text($0.name).tag($0.id) }
                     }
                     .pickerStyle(.inline)
@@ -84,11 +84,11 @@ struct IslandSettingsView: View {
 
             Section {
             } footer: {
-                Text("需要你、在工作、做完了的变化立刻更新；token、负载这些数字最多每分钟更新一次（系统限制实时活动的推送次数），在 App 里时实时更新。")
+                Text("Changes to Needs you, Working, and Done update right away; numbers like tokens and load update at most once a minute (the system limits Live Activity pushes), and in real time while you're in the app.")
             }
         }
         .themedPage()
-        .navigationTitle("灵动岛")
+        .navigationTitle("Dynamic Island")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $diagnostics) { IslandDiagnosticsView() }
         #if DEBUG
@@ -115,10 +115,10 @@ struct IslandSettingsView: View {
 
     static func summary(_ preset: IslandPrefs.Preset) -> String {
         switch preset {
-        case .a: String(localized: "左边最急的数量，右边下一类：需要你、在工作、做完未看")
-        case .b: String(localized: "左边状态，右边所有 Agent 每分钟输出的 token")
-        case .c: String(localized: "左边状态，右边今天用掉的 token")
-        case .custom: String(localized: "左右两侧各选一项")
+        case .a: String(localized: "Most urgent count on the left, next kind on the right: Needs you, Working, Unread")
+        case .b: String(localized: "Status on the left, tokens per minute across all agents on the right")
+        case .c: String(localized: "Status on the left, tokens used today on the right")
+        case .custom: String(localized: "Pick one item for each side")
         }
     }
 

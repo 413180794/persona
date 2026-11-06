@@ -3,23 +3,23 @@ import Foundation
 
 /// "Ask Claude": sends a message to the newest live session on a machine, or starts a new one.
 struct AskClaudeIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "问 Claude"
+    nonisolated static let title: LocalizedStringResource = "Ask Claude [Ask Claude Intent 946979]"
     nonisolated static let description = IntentDescription(
-        "把你这句话发给某台机器上最近的会话，或者在 herdr 里新开一个。",
-        categoryName: "对话",
-        searchKeywords: ["Claude", "会话", "发送"]
+        "Sends what you say to the latest session on a machine, or starts a new one in herdr.",
+        categoryName: "Chat",
+        searchKeywords: ["Claude", "Session", "Send"]
     )
     /// The hub is plain HTTP over an SSH tunnel; the app does not need to come to the foreground. The result still
     /// carries `OpenSessionIntent`, so tapping the dialog's button opens the chat.
     nonisolated static var supportedModes: IntentModes { .background }
 
-    @Parameter(title: "内容", requestValueDialog: "要跟 Claude 说什么？")
+    @Parameter(title: "Content", requestValueDialog: "What do you want to say to Claude?")
     var text: String
 
-    @Parameter(title: "机器")
+    @Parameter(title: "Machines")
     var machine: MachineEntity?
 
-    @Parameter(title: "新会话", default: false)
+    @Parameter(title: "New Session [Ask Claude Intent c57c30]", default: false)
     var newSession: Bool
 
     nonisolated init() {}
@@ -32,15 +32,15 @@ struct AskClaudeIntent: AppIntent {
 
     nonisolated static var parameterSummary: some ParameterSummary {
         When(\.$newSession, .equalTo, true) {
-            Summary("在 \(\.$machine) 上新开对话问 \(\.$text)")
+            Summary("Start a new chat on \(\.$machine) and ask \(\.$text)")
         } otherwise: {
-            Summary("用 \(\.$machine) 问 \(\.$text)")
+            Summary("Ask \(\.$text) on \(\.$machine)")
         }
     }
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & OpensIntent {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "要跟 Claude 说什么？")) }
+        guard !body.isEmpty else { throw IntentFailureSentence(String(localized: "What do you want to say to Claude?")) }
 
         do {
             let target = try await resolveMachine()
@@ -73,7 +73,7 @@ struct AskClaudeIntent: AppIntent {
         guard let session = IntentPicker.session(sessions, machine: machine.ref.id, group: machine.ref.group) else {
             throw IntentFailure.noSession(machine.name)
         }
-        guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? String(localized: "此会话仅可查看")) }
+        guard session.canSend else { throw IntentFailureSentence(session.sourceSubtitle ?? String(localized: "This session is view-only")) }
         try await api.send(session.key, text: text)
         return session
     }

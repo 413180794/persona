@@ -91,33 +91,33 @@ nonisolated enum InboxBulk {
         let fresh = changedSince(result)
         let head: String
         switch (done, action) {
-        case (true, .done): head = moved > 0 ? String(localized: "已将 \(moved) 件标为已处理") : String(localized: "没有要标的")
-        case (true, .dismiss): head = moved > 0 ? String(localized: "已清理 \(moved) 件") : String(localized: "没有要清理的")
-        case (false, _): head = moved > 0 ? String(localized: "已移回 \(moved) 件") : String(localized: "没有要移回的")
+        case (true, .done): head = moved > 0 ? String(localized: "Marked \(moved) items as done") : String(localized: "Nothing to mark")
+        case (true, .dismiss): head = moved > 0 ? String(localized: "Cleaned up \(moved) items") : String(localized: "Nothing to clean up")
+        case (false, _): head = moved > 0 ? String(localized: "Moved back \(moved) items") : String(localized: "Nothing to move back")
         }
-        return fresh > 0 ? head + String(localized: "，\(fresh) 件有新消息，留在收件箱") : head
+        return fresh > 0 ? head + String(localized: ". \(fresh) with new messages stayed in the Inbox.") : head
     }
 
     /// The question before a large Clear All (the web's and Android's words).
-    static var confirmTitle: String { String(localized: "全部清理？") }
+    static var confirmTitle: String { String(localized: "Clean up all?") }
 
     /// The dialog's button: Clear and how many.
-    static func confirmButton(count: Int) -> String { String(localized: "清理 \(count) 件") }
+    static func confirmButton(count: Int) -> String { String(localized: "Clean up \(count) items") }
 
     static func confirmMessage(count: Int, filters: [String], query: String) -> String {
-        String(localized: "将清理 \(count) 件（\(scope(filters: filters, query: query))）。之后进来的新消息不受影响，完成后可以撤销。")
+        String(localized: "This cleans up \(count) items (\(scope(filters: filters, query: query))). New messages that arrive later aren't affected, and you can undo it afterward.")
     }
 
     /// What Clear All covers, for the menu: the filters' names and the search, or All.
     static func scope(filters: [String], query: String) -> String {
         var parts = filters.filter { !$0.isEmpty }
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !q.isEmpty { parts.append(String(localized: "搜索「\(q)」")) }
-        return parts.isEmpty ? String(localized: "全部") : parts.joined(separator: " · ")
+        if !q.isEmpty { parts.append(String(localized: "Search “\(q)”")) }
+        return parts.isEmpty ? String(localized: "All") : parts.joined(separator: " · ")
     }
 
     /// The menu's line under Clear All: what it covers and how many.
     static func scopeLine(filters: [String], query: String, count: Int) -> String {
-        count == 0 ? String(localized: "没有未处理的") : String(localized: "\(scope(filters: filters, query: query)) · \(count) 件")
+        count == 0 ? String(localized: "Nothing left to handle") : String(localized: "\(scope(filters: filters, query: query)) · \(count) items")
     }
 }

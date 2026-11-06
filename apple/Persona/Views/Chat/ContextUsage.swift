@@ -27,7 +27,7 @@ nonisolated struct ContextUsage: Equatable, Sendable {
     init?(_ session: Session?) { self.init(tokens: session?.contextTokens, window: session?.contextWindow) }
 
     /// 「还剩 61%」.
-    var label: String { String(localized: "还剩 \(left)%") }
+    var label: String { String(localized: "\(left)% left") }
     /// 「172K / 200K」 (for VoiceOver).
     var detail: String { "\(Self.short(tokens)) / \(Self.short(window))" }
 
@@ -54,13 +54,13 @@ struct ContextUsageRow: View {
                     .monospacedDigit()
                     .foregroundStyle(usage.warns ? Theme.caution : Color.secondary)
             } label: {
-                Label("上下文余量", systemImage: Theme.Icon.context).lineLimit(1)
+                Label("Context Remaining", systemImage: Theme.Icon.context).lineLimit(1)
             }
             ProgressView(value: usage.fractionLeft)
                 .tint(usage.warns ? Theme.caution : Theme.accent)
                 .accessibilityHidden(true)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("上下文\(usage.label)，已用 \(usage.used)%，窗口 \(usage.detail)")
+        .accessibilityLabel("Context \(usage.label), \(usage.used)% used, window \(usage.detail)")
     }
 }

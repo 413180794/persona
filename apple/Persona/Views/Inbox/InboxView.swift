@@ -22,7 +22,7 @@ struct InboxView: View {
         SplitNavigation(path: $path, destinations: InboxDestinations(accounts: accountState.accounts)) {
             InboxPage(path: $path, accountState: accountState)
         } empty: {
-            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "选一件事"), message: String(localized: "左边列表里点一件事，详情会在这里打开。"))
+            SplitPlaceholder(symbol: Theme.Icon.inbox, title: String(localized: "Pick an Item"), message: String(localized: "Tap an item in the list on the left to see its details here."))
         }
         .environment(\.feishuOpen) { path.append($0) }
         .feishuHandlesLinks { path.append($0) }
@@ -58,11 +58,11 @@ struct InboxPage: View {
     private var store: InboxStore { .shared }
 
     /// The kind filters, by key.
-    static let kinds = [("mention", String(localized: "@我")), ("dm", String(localized: "私聊")), ("group", String(localized: "群聊")), ("mail", String(localized: "邮件")), ("agent", "Agent")]
+    static let kinds = [("mention", String(localized: "@Me")), ("dm", String(localized: "DMs")), ("group", String(localized: "Group chat")), ("mail", String(localized: "Mail [Assistant View 3d708e]")), ("agent", "Agent")]
 
     private func matches(_ it: InboxItem) -> Bool {
         if !source.isEmpty && it.account != source { return false }
-        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == String(localized: "@我"))) { return false }
+        if !kind.isEmpty && !(it.kind == kind || kind == "group" && it.kind == "bot" || kind == "mention" && (it.kind == "doc" || it.kind == "moment" && it.kindLabel == String(localized: "@Me"))) { return false }
         if query.isEmpty { return true }
         return [it.title, it.sender ?? "", it.preview, it.summary ?? ""].contains { $0.localizedCaseInsensitiveContains(query) }
     }
@@ -99,11 +99,11 @@ struct InboxPage: View {
 
     private var page: some View {
             list
-                .navigationTitle("收件箱")
+                .navigationTitle("Inbox")
                 .navigationBarTitleDisplayMode(.inline)
-                .pageSearchable(text: $query, prompt: String(localized: "搜索标题、发件人、内容"))
+                .pageSearchable(text: $query, prompt: String(localized: "Search Titles, Senders, and Content"))
                 .pageToolbar {
-                    ToolbarItem(placement: .principal) { ConnectionTitle(title: String(localized: "收件箱")) }
+                    ToolbarItem(placement: .principal) { ConnectionTitle(title: String(localized: "Inbox")) }
                     if model.isMultiHub {
                         // Each hub has its own inbox (docs/multi-hub.md「hub 级页面」): whose this is, and the others.
                         ToolbarItem(placement: .topBarLeading) { HubSwitcher(compact: true) }
@@ -114,11 +114,11 @@ struct InboxPage: View {
                         Menu {
                             cleanButton
                             Divider()
-                            Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("写邮件", systemImage: Theme.Icon.compose) }
+                            Button { composing = ComposeDraft(accountID: accounts.first?.id ?? "") } label: { Label("New Email", systemImage: Theme.Icon.compose) }
                                 .disabled(accounts.isEmpty)
-                            Button { showingMutes = true } label: { Label("已静音", systemImage: Theme.Icon.mute) }
+                            Button { showingMutes = true } label: { Label("Muted [Inbox Mutes View e5e468]", systemImage: Theme.Icon.mute) }
                         } label: { Image(systemName: Theme.Icon.moreMenu) }
-                        .accessibilityLabel("更多")
+                        .accessibilityLabel("More")
                         .accessibilityIdentifier("inbox.more")
                     }
                 }
@@ -129,7 +129,7 @@ struct InboxPage: View {
                 .confirmationDialog(InboxBulk.confirmTitle, isPresented: $confirming, titleVisibility: .visible) {
                     Button(InboxBulk.confirmButton(count: cleanScope.count)) { clean(confirmed: true) }
                         .accessibilityIdentifier("inbox.cleanConfirm")
-                    Button("取消", role: .cancel) {}
+                    Button("Cancel", role: .cancel) {}
                 } message: {
                     Text(InboxBulk.confirmMessage(count: cleanScope.count, filters: filterNames, query: query))
                 }
@@ -166,7 +166,7 @@ struct InboxPage: View {
     private var filterNames: [String] {
         var names: [String] = []
         if source == "feishu" {
-            names.append(String(localized: "飞书"))
+            names.append(String(localized: "Lark [Inbox Event Views 7e4419]"))
         } else if let a = accounts.first(where: { $0.id == source }) {
             names.append(Self.short(a.email))
         } else if let c = connectorSources.first(where: { $0.id == source }) {
@@ -185,12 +185,12 @@ struct InboxPage: View {
     private var cleanButton: some View {
         let scope = cleanScope
         return Button { clean(confirmed: false) } label: {
-            Label("全部清理", systemImage: Theme.Icon.cleanUpAll)
+            Label("Clean up all", systemImage: Theme.Icon.cleanUpAll)
             Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count))
         }
         .disabled(scope.isEmpty)
         // A menu item's subtitle is drawn but not read out: the spoken name says what it covers and how many too.
-        .accessibilityLabel(Text("全部清理") + Text(verbatim: "，") + Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count)))
+        .accessibilityLabel(Text("Clean up all") + Text(verbatim: String(localized: ", ")) + Text(InboxBulk.scopeLine(filters: filterNames, query: query, count: scope.count)))
         .accessibilityIdentifier("inbox.cleanUpAll")
     }
 
@@ -228,8 +228,8 @@ struct InboxPage: View {
                     .themedRow()
             }
             if openItems.isEmpty && waitingAgents.isEmpty && !store.loading {
-                EmptyStateView(symbol: "checkmark.seal", title: query.isEmpty ? String(localized: "都处理完了") : String(localized: "没有匹配的"),
-                               message: query.isEmpty ? String(localized: "新的飞书消息和邮件会出现在这里。") : String(localized: "换个关键词试试。"))
+                EmptyStateView(symbol: "checkmark.seal", title: query.isEmpty ? String(localized: "All Caught Up") : String(localized: "No Matches"),
+                               message: query.isEmpty ? String(localized: "New Lark messages and emails show up here.") : String(localized: "Try a different search."))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
             }
@@ -253,7 +253,7 @@ struct InboxPage: View {
                 Section {
                     if expanded.contains("done") { ForEach(shownDone) { row($0) } }
                 } header: {
-                    sectionHeader(String(localized: "已处理"), count: doneItems.count, key: "done", clear: nil)
+                    sectionHeader(String(localized: "Done [Inbox View 59f6c8]"), count: doneItems.count, key: "done", clear: nil)
                 }
             }
         }
@@ -319,9 +319,9 @@ struct InboxPage: View {
             .background { NavigationLink(value: it) { EmptyView() }.opacity(0) }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if it.isDone {
-                    Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
+                    Button { store.setDone(it, false) } label: { Label("Move Back", systemImage: Theme.Icon.undo) }.tint(Theme.accent)
                 } else {
-                    Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }.tint(Theme.positive)
+                    Button { store.setDone(it, true) } label: { Label("Done [Inbox View 59f6c8]", systemImage: Theme.Icon.done) }.tint(Theme.positive)
                 }
             }
             .contextMenu { rowMenu(it) }
@@ -332,9 +332,9 @@ struct InboxPage: View {
     /// the name under each (docs/inbox.md「静音」).
     @ViewBuilder private func rowMenu(_ it: InboxItem) -> some View {
         if it.isDone {
-            Button { store.setDone(it, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
+            Button { store.setDone(it, false) } label: { Label("Move Back", systemImage: Theme.Icon.undo) }
         } else {
-            Button { store.setDone(it, true) } label: { Label("已处理", systemImage: Theme.Icon.done) }
+            Button { store.setDone(it, true) } label: { Label("Done [Inbox View 59f6c8]", systemImage: Theme.Icon.done) }
         }
         if let mutes = it.mutes, !mutes.isEmpty {
             Section {
@@ -355,8 +355,8 @@ struct InboxPage: View {
     @ViewBuilder private var filters: some View {
         if AppStyle.current.usesBeautifulUI {
             LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) {
-                filterChip(String(localized: "全部"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
-                filterChip(String(localized: "飞书"), on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                filterChip(String(localized: "All"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
+                filterChip(String(localized: "Lark [Inbox Event Views 7e4419]"), on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     filterChip(Self.short(a.email), on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
@@ -384,8 +384,8 @@ struct InboxPage: View {
     private var plainFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Space.s) {
-                chip(String(localized: "全部"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
-                chip(String(localized: "飞书"), symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
+                chip(String(localized: "All"), on: source.isEmpty && kind.isEmpty) { source = ""; kind = "" }
+                chip(String(localized: "Lark [Inbox Event Views 7e4419]"), symbol: Theme.Icon.feishuChats, on: source == "feishu") { source = source == "feishu" ? "" : "feishu" }
                 ForEach(accounts) { a in
                     chip(Self.short(a.email), symbol: Theme.Icon.mail, on: source == a.id) { source = source == a.id ? "" : a.id }
                 }
@@ -425,8 +425,8 @@ struct InboxPage: View {
     nonisolated static func clearTitle(_ tier: InboxItem.Tier) -> String? {
         switch tier {
         case .action, .working: nil
-        case .fyi: String(localized: "全部看过")
-        case .noise: String(localized: "全部清除")
+        case .fyi: String(localized: "Mark All Seen")
+        case .noise: String(localized: "Clear All")
         }
     }
 
@@ -470,10 +470,10 @@ struct InboxRow: View {
                     Text(translated.map(\.subject).flatMap { $0.isEmpty ? nil : $0 } ?? item.title).font(item.isDone ? Theme.Font.body : Theme.Font.heading).foregroundStyle(item.isDone ? .secondary : .primary).lineLimit(1)
                     if translated != nil {
                         Image(systemName: Theme.Icon.translate).font(Theme.Font.label).foregroundStyle(.tertiary)
-                            .accessibilityLabel("已翻译")
+                            .accessibilityLabel("Translated")
                     }
                     if let label = item.kindLabel {
-                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == String(localized: "@我") ? .tint(Theme.danger) : .neutral)
+                        Chip(text: label, look: item.kind == "mention" || item.kind == "doc" && label == String(localized: "@Me") ? .tint(Theme.danger) : .neutral)
                     }
                     Spacer(minLength: 4)
                     Text(LarkTime.short(item.updatedAt)).font(Theme.Font.caption).foregroundStyle(.secondary).fixedSize()
@@ -515,7 +515,7 @@ struct InboxRow: View {
                     } else if item.agentWorking {
                         HStack(spacing: Theme.Space.sm) {
                             InboxSpinner()
-                            Text(item.agent?.state == "queued" ? String(localized: "AI 分身排队中") : item.agent?.task.map { String(localized: "AI 分身正在处理：\($0)") } ?? String(localized: "AI 分身正在处理"))
+                            Text(item.agent?.state == "queued" ? String(localized: "AI twin is queued") : item.agent?.task.map { String(localized: "AI twin is working: \($0)") } ?? String(localized: "AI twin is working"))
                                 .font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                         }
                         .padding(.top, Theme.Space.xxs)
@@ -530,14 +530,14 @@ struct InboxRow: View {
     /// Who wrote what (under the AI's summary once it has one).
     private var from: String {
         if let doc = item.doc { return doc.typeName + " · " + item.preview } // the preview names who: Li Lei mentioned you
-        if item.moment != nil { return String(localized: "\(item.sender ?? "")：\(item.preview)", comment: "Who wrote it: what they wrote") } // who commented, on the post in the title
+        if item.moment != nil { return String(localized: "\(item.sender ?? ""): \(item.preview)", comment: "Who wrote it: what they wrote") } // who commented, on the post in the title
         if let c = item.connector { // example-org/example-repo#12 · bob: please take a look
-            let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: String(localized: "：", comment: "Separator between a label and its value"))
+            let who = [item.sender ?? "", item.preview].filter { !$0.isEmpty }.joined(separator: String(localized: ": ", comment: "Separator between a label and its value"))
             return [c.reference ?? "", who].filter { !$0.isEmpty }.joined(separator: " · ")
         }
-        if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return String(localized: "\(sender)：\(t)", comment: "Who wrote it: what they wrote") }
+        if let t = translated?.preview, !t.isEmpty, let sender = item.sender, !sender.isEmpty { return String(localized: "\(sender): \(t)", comment: "Who wrote it: what they wrote") }
         guard let sender = item.sender, !sender.isEmpty, item.lark?.isGroup != false || !item.isLark else { return item.preview }
-        return String(localized: "\(sender)：\(item.preview)", comment: "Who wrote it: what they wrote")
+        return String(localized: "\(sender): \(item.preview)", comment: "Who wrote it: what they wrote")
     }
 
     private var avatar: some View {
@@ -589,7 +589,7 @@ struct InboxDraftCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Label("AI 分身草拟的回复", systemImage: Theme.Icon.ai)
+            Label("AI Twin's Draft Reply", systemImage: Theme.Icon.ai)
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(Theme.ai)
                 .lineLimit(1)
@@ -613,17 +613,17 @@ struct InboxDraftCard: View {
         HStack(spacing: Theme.Space.s) {
             Spacer(minLength: 0)
             if let edit {
-                Button("修改", action: edit).buttonStyle(.bui(.secondary)).lineLimit(1)
+                Button("Edit [Inbox Event Views 37090f]", action: edit).buttonStyle(.bui(.secondary)).lineLimit(1)
             }
             Button(action: send) {
                 HStack(spacing: Theme.Space.xs) {
                     if sending { BUISpinner(size: Theme.Size.dotXL) }
-                    Text("发送").lineLimit(1)
+                    Text("Send").lineLimit(1)
                 }
             }
             .buttonStyle(.bui(.accent))
             .disabled(sending)
-            .accessibilityLabel("发送 AI 分身草拟的回复")
+            .accessibilityLabel("Send the AI twin's draft reply")
         }
     }
 
@@ -632,7 +632,7 @@ struct InboxDraftCard: View {
             Spacer(minLength: 0)
             if let edit {
                 Button(action: edit) {
-                    Text("修改").font(Theme.Font.secondaryMedium).lineLimit(1)
+                    Text("Edit [Inbox Event Views 37090f]").font(Theme.Font.secondaryMedium).lineLimit(1)
                         .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
                         .foregroundStyle(Theme.accent)
                         .background(Theme.accent.opacity(0.12), in: .capsule)
@@ -642,7 +642,7 @@ struct InboxDraftCard: View {
             Button(action: send) {
                 HStack(spacing: Theme.Space.xs) {
                     if sending { ProgressView().controlSize(.mini).tint(.white) } else { Image(systemName: Theme.Icon.sendMail).font(Theme.Font.label) }
-                    Text("发送")
+                    Text("Send")
                 }
                 .font(Theme.Font.secondaryStrong).lineLimit(1)
                 .padding(.horizontal, Theme.Space.l).padding(.vertical, Theme.Space.sm)
@@ -651,7 +651,7 @@ struct InboxDraftCard: View {
             }
             .buttonStyle(.borderless)
             .disabled(sending)
-            .accessibilityLabel("发送 AI 分身草拟的回复")
+            .accessibilityLabel("Send the AI twin's draft reply")
         }
     }
 }
@@ -747,12 +747,12 @@ struct InboxDetailView: View {
             .pageToolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if current.isDone {
-                        Button { InboxStore.shared.setDone(current, false) } label: { Label("移回", systemImage: Theme.Icon.undo) }
+                        Button { InboxStore.shared.setDone(current, false) } label: { Label("Move Back", systemImage: Theme.Icon.undo) }
                     } else {
                         Button {
                             InboxStore.shared.setDone(current, true)
                             dismiss()
-                        } label: { Label("已处理", systemImage: Theme.Icon.done) }
+                        } label: { Label("Done [Inbox View 59f6c8]", systemImage: Theme.Icon.done) }
                     }
                 }
             }

@@ -43,14 +43,14 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
 
     func forwardedPreview(_ message: JSONValue) -> String {
         if message["isRecalled"]?.bool == true && !(antiRecall && message["hasRetainedRecallContent"]?.bool == true) {
-            return String(localized: "消息已撤回")
+            return String(localized: "Message recalled")
         }
         let text: String
         if let raw = message["olk"], raw != .null {
             let encryption = (try? JSON.encoder.encode(raw)).flatMap { try? JSON.decoder.decode(LarkEncryption.self, from: $0) }
-            text = encryption?.summary ?? String(localized: "加密消息")
+            text = encryption?.summary ?? String(localized: "Encrypted message")
         } else { text = summary(message["textPreview"]?.string ?? message["text"]?.string ?? "") }
-        return message["isRecalled"]?.bool == true ? String(localized: "\(text) · 已撤回") : text
+        return message["isRecalled"]?.bool == true ? String(localized: "\(text) · Recalled") : text
     }
 }
 
@@ -124,7 +124,7 @@ extension APIClient {
                 if LarkLoadProblem.isNotLoggedIn(error) {
                     problem = LarkLoadProblem.of(error).message
                 } else {
-                    problem = (error as? APIError)?.status == 404 ? String(localized: "请先更新 Hub 和飞书网关，再使用消息显示设置。") : String(localized: "暂时无法读取设置，请连接后重试。")
+                    problem = (error as? APIError)?.status == 404 ? String(localized: "Update the hub and the Lark gateway first to use the message display settings.") : String(localized: "Couldn't read the settings. Connect and try again.")
                 }
             }
         }
@@ -143,10 +143,10 @@ extension APIClient {
                 problem = LarkLoadProblem.of(error).message
             } else {
                 switch (error as? APIError)?.status {
-                case 409: problem = String(localized: "设置或账号已变化，请重新读取后再修改。")
-                case 403: problem = String(localized: "当前连接没有修改权限。")
-                case 404: problem = String(localized: "请先更新飞书网关，再修改这些设置。")
-                default: problem = String(localized: "暂时无法确认保存结果，请重新读取设置。")
+                case 409: problem = String(localized: "The settings or account changed. Reload them before making changes.")
+                case 403: problem = String(localized: "This connection doesn't have permission to make changes.")
+                case 404: problem = String(localized: "Update the Lark gateway first to change these settings.")
+                default: problem = String(localized: "Couldn't confirm the changes were saved. Reload the settings.")
                 }
             }
         }
@@ -160,9 +160,9 @@ struct LarkMessageDisplaySettingsView: View {
     var body: some View {
         Group {
             if let link = app.hub { LarkMessageDisplaySettingsContent(link: link).id(ObjectIdentifier(link)) }
-            else { ContentUnavailableView("请先连接 Hub", systemImage: Theme.Icon.connectors) }
+            else { ContentUnavailableView("Connect to a Hub First", systemImage: Theme.Icon.connectors) }
         }
-        .navigationTitle("风灵月影").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Message Tweaks").navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -172,23 +172,23 @@ private struct LarkMessageDisplaySettingsContent: View {
     var body: some View {
         List {
             Section {
-                setting("防撤回", key: "anti_recall", value: state.policy.antiRecall)
-            } footer: { Text("查看飞书网关已留存的撤回内容，保留「已撤回」标记。未留存的内容无法恢复。") }
+                setting("Keep Recalled Messages", key: "anti_recall", value: state.policy.antiRecall)
+            } footer: { Text("Shows recalled messages the Lark gateway kept, with the Recalled mark. Content it didn't keep can't be recovered.") }
             Section {
-                setting("编辑历史", key: "show_edit_history", value: state.policy.showEditHistory)
-            } footer: { Text("点击消息下方的「已编辑」，查看已留存的旧版本。") }
+                setting("Edit History", key: "show_edit_history", value: state.policy.showEditHistory)
+            } footer: { Text("Tap Edited under a message to see the earlier versions that were kept.") }
             if let climb = state.policy.braveClimb {
                 Section {
-                    setting("", key: "brave_climb_codec", value: climb)
-                } footer: { Text("") }
+                    setting("Brave Climb Encoding", key: "brave_climb_codec", value: climb)
+                } footer: { Text("When on, Brave Climb encoded text in chats is shown decoded, and you can choose to send with it from the composer. It's a reversible encoding, not encryption: anyone with this turned on can read it.") }
             }
             Section {
-                if state.loading || state.saving { ProgressView(state.saving ? "正在保存…" : "正在读取…") }
+                if state.loading || state.saving { ProgressView(state.saving ? String(localized: "Saving…") : String(localized: "Loading… [File Viewer 86b6d0]")) }
                 if let problem = state.problem {
                     Text(problem).font(Theme.Font.label).foregroundStyle(.secondary)
-                    Button("重新读取") { Task { await state.refresh(using: link.api) } }.lineLimit(1)
+                    Button("Reload [Lark Message Display df7392]") { Task { await state.refresh(using: link.api) } }.lineLimit(1)
                 }
-            } footer: { Text("与飞书网关的网页共用当前飞书账号的设置。") }
+            } footer: { Text("Shares the current Lark account's settings with the Lark gateway's web page.") }
         }
         .themedPage()
         .task { await state.refresh(using: link.api) }
@@ -218,10 +218,10 @@ struct LarkEditHistoryView: View {
                             else { Text(display.shown(version.text)).font(Theme.Font.body) }
                         }
                     }
-                } else { Text("编辑历史已隐藏").foregroundStyle(.secondary) }
+                } else { Text("Edit history is hidden").foregroundStyle(.secondary) }
             }
-            .themedPage().navigationTitle("编辑历史").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.lineLimit(1) } }
+            .themedPage().navigationTitle("Edit History").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() }.lineLimit(1) } }
         }
     }
 }

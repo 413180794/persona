@@ -18,7 +18,7 @@ struct InboxEventMarkLine: View {
         case .preparing:
             HStack(spacing: Theme.Space.sm) {
                 InboxSpinner()
-                Text("AI 正在准备建议").font(Theme.Font.labelStrong).foregroundStyle(Theme.ai).lineLimit(1)
+                Text("AI is preparing a suggestion").font(Theme.Font.labelStrong).foregroundStyle(Theme.ai).lineLimit(1)
             }
         case .working(let word):
             (Text(Image(systemName: Theme.Icon.inProgress)) + Text(" " + word))
@@ -62,7 +62,7 @@ struct InboxEventBlocks: View {
             status
             if let recap = item.recap, !recap.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                    InboxBlockTitle(title: String(localized: "总结"))
+                    InboxBlockTitle(title: String(localized: "Recap"))
                     Text(recap)
                         .font(Theme.Font.secondary)
                         .lineHeight(.secondary)
@@ -188,12 +188,12 @@ struct InboxSuggestionCard: View {
     @ViewBuilder private func button(_ a: InboxEventText.Action, _ s: InboxItem.Suggestion, fill: Bool) -> some View {
         switch a {
         case .reject:
-            InboxSuggestionButton(title: String(localized: "驳回"), prominent: false, spinning: model.busy == "reject", fill: fill) {
+            InboxSuggestionButton(title: String(localized: "Reject"), prominent: false, spinning: model.busy == "reject", fill: fill) {
                 Task { await model.reject(s) }
             }
             .accessibilityIdentifier("inbox.suggestion.reject")
         case .edit:
-            InboxSuggestionButton(title: String(localized: "修改"), prominent: false, spinning: false, fill: fill, perform: edit)
+            InboxSuggestionButton(title: String(localized: "Edit [Inbox Event Views 37090f]"), prominent: false, spinning: false, fill: fill, perform: edit)
                 .accessibilityIdentifier("inbox.suggestion.edit")
         case .confirm(let title):
             InboxSuggestionButton(title: title, prominent: true, spinning: model.busy == "confirm", fill: fill) {
@@ -250,7 +250,7 @@ struct InboxSuggestionEditor: View {
     /// send / start / confirm: the card's main button.
     private var confirmTitle: String {
         for a in InboxEventText.actions(suggestion) { if case .confirm(let t) = a { return t } }
-        return String(localized: "确认")
+        return String(localized: "Confirm")
     }
 
     var body: some View {
@@ -276,7 +276,7 @@ struct InboxSuggestionEditor: View {
                 }
                 Divider()
                 HStack(spacing: Theme.Space.s) {
-                    TextField("说一句话：比如「别这么回，先问时间」", text: $words, axis: .vertical)
+                    TextField(String(localized: "Say a word, e.g. “Don't reply like that, ask about the time first”"), text: $words, axis: .vertical)
                         .lineLimit(1...3)
                         .padding(.horizontal, Theme.Space.m).padding(.vertical, Theme.Space.s)
                         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.card))
@@ -285,7 +285,7 @@ struct InboxSuggestionEditor: View {
                     Button(action: instruct) {
                         HStack(spacing: Theme.Space.xs) {
                             if model.busy == "instruct" { ProgressView().controlSize(.mini) }
-                            Text("告诉 AI").lineLimit(1).fixedSize()
+                            Text("Tell AI").lineLimit(1).fixedSize()
                         }
                     }
                     .buttonStyle(.bordered)
@@ -299,7 +299,7 @@ struct InboxSuggestionEditor: View {
             .navigationTitle(InboxEventText.kindTitle(suggestion))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         let changed = text
@@ -345,10 +345,10 @@ struct InboxChainSection: View {
         if !chain.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 HStack(spacing: Theme.Space.s) {
-                    InboxBlockTitle(title: String(localized: "处理链条"))
+                    InboxBlockTitle(title: String(localized: "Timeline [Inbox Event Views 49991a]"))
                     Spacer(minLength: 0)
                     if chain.count > 1 {
-                        Button(all ? String(localized: "收起") : String(localized: "展开全部（\(chain.count)）")) {
+                        Button(all ? String(localized: "Collapse") : String(localized: "Show all (\(chain.count))")) {
                             withAnimation(Theme.Motion.layout) { all.toggle() }
                         }
                         .font(Theme.Font.captionMedium)
@@ -380,7 +380,7 @@ struct InboxChainSection: View {
                             .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(open ? String(localized: "收起") : String(localized: "展开"))
+                    .accessibilityLabel(open ? String(localized: "Collapse") : String(localized: "Expand"))
                 }
             }
             if open { expansion(e).transition(.opacity) }
@@ -460,7 +460,7 @@ struct InboxChainSection: View {
     private func expansion(_ e: InboxItem.ChainEntry) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             ForEach(Array((e.messages ?? []).enumerated()), id: \.offset) { _, m in
-                Text(m.sender.map { String(localized: "\($0)：\(m.text)", comment: "Who wrote it: what they wrote") } ?? m.text)
+                Text(m.sender.map { String(localized: "\($0): \(m.text)", comment: "Who wrote it: what they wrote") } ?? m.text)
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -493,7 +493,7 @@ struct InboxRelatedSection: View {
         let related = item.related ?? []
         if !related.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                InboxBlockTitle(title: String(localized: "有关"))
+                InboxBlockTitle(title: String(localized: "Related"))
                 ForEach(related) { r in
                     let label = HStack(spacing: Theme.Space.s) {
                         Image(systemName: Theme.Icon.link).font(Theme.Font.label).foregroundStyle(.secondary)
@@ -651,7 +651,7 @@ struct InboxEventPage: View {
                 Text(InboxEventPage.from(item)).font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
                 Spacer(minLength: 0)
                 NavigationLink(value: InboxSourceRoute(item: item, position: nil, uid: nil)) {
-                    Label("看原文", systemImage: Theme.Icon.openDocument).font(Theme.Font.captionMedium).lineLimit(1).fixedSize()
+                    Label("View original", systemImage: Theme.Icon.openDocument).font(Theme.Font.captionMedium).lineLimit(1).fixedSize()
                 }
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("inbox.viewSource")
@@ -661,7 +661,7 @@ struct InboxEventPage: View {
 
     /// Where it came from: Feishu · a name / the mail account.
     static func from(_ it: InboxItem) -> String {
-        let source = it.isLark ? String(localized: "飞书") : it.accountName
+        let source = it.isLark ? String(localized: "Lark [Inbox Event Views 7e4419]") : it.accountName
         return [source, it.title].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
@@ -670,10 +670,10 @@ struct InboxEventPage: View {
         HStack(spacing: Theme.Space.s) {
             let canReply = item.connector.map { $0.canReply == true } ?? true
             if canReply && item.currentSuggestion?.kind != "reply" && !item.isDone {
-                InboxSuggestionButton(title: item.agentDraft == nil ? String(localized: "AI 草拟回复") : String(localized: "查看草稿"),
+                InboxSuggestionButton(title: item.agentDraft == nil ? String(localized: "AI Draft Reply") : String(localized: "View Draft"),
                                       prominent: false, spinning: false, perform: draft)
             }
-            InboxSuggestionButton(title: String(localized: "交给 AI"), prominent: false, spinning: false, perform: handOff)
+            InboxSuggestionButton(title: String(localized: "Hand to AI"), prominent: false, spinning: false, perform: handOff)
             Spacer(minLength: 0)
         }
     }

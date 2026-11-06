@@ -17,7 +17,7 @@ struct LanguageSettingsPage: View {
                 // Wrap the MainActor-isolated method in a closure instead of passing `set: pick`: Xcode 26.6
                 // (Swift 6.3) crashes IRGen emitting the reabstraction thunk for the isolated method value when
                 // building for macOS (#4157). Keep the wrapper until the compiler is fixed.
-                Picker("语言", selection: Binding(get: { choice }, set: { pick($0) })) {
+                Picker("Language", selection: Binding(get: { choice }, set: { pick($0) })) {
                     ForEach(AppLanguage.allCases) { language in
                         Text(language == .system ? systemTitle : language.title)
                             .lineLimit(1)
@@ -28,7 +28,7 @@ struct LanguageSettingsPage: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
             } footer: {
-                Text("跟随系统时：系统的第一语言是中文（含繁体）就用简体中文，日文用日本語，其他都用 English。Apple Watch、灵动岛和小组件跟着这里，hub 发来的通知和助手的回答也用这种语言。")
+                Text("With Match System, Persona uses Simplified Chinese when your first system language is any Chinese (Traditional too), Japanese for Japanese, and English for everything else. Apple Watch, the Dynamic Island and widgets follow this setting, and so do notifications and the assistant's replies from your hub.")
             }
             if store.needsRelaunch {
                 Section {
@@ -36,7 +36,7 @@ struct LanguageSettingsPage: View {
                         Text(relaunchNote)
                             .font(Theme.Font.body)
                         #if os(macOS)
-                        Button(String(localized: "立即重新打开"), action: Self.relaunch)
+                        Button(String(localized: "Reopen Now"), action: Self.relaunch)
                             .themedButton(prominent: true)
                             .lineLimit(1)
                             .accessibilityIdentifier("language-relaunch")
@@ -46,7 +46,7 @@ struct LanguageSettingsPage: View {
                 }
             }
         }
-        .navigationTitle("语言")
+        .navigationTitle("Language")
         #if os(iOS) || os(visionOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -55,15 +55,15 @@ struct LanguageSettingsPage: View {
     /// Match System, and what it comes to on this device.
     private var systemTitle: String {
         let name = AppLanguage(rawValue: AppLanguage.resolve(store.systemFirst))?.title ?? ""
-        return String(localized: "跟随系统（\(name)）")
+        return String(localized: "Match System (\(name))")
     }
 
     private var relaunchNote: String {
         let name = AppLanguage(rawValue: store.current)?.title ?? store.current
         #if os(macOS)
-        return String(localized: "重新打开 Persona 后换成 \(name)。")
+        return String(localized: "Persona switches to \(name) the next time it opens.")
         #else
-        return String(localized: "完全退出 Persona（在 App 切换器里上划）再打开后换成 \(name)。")
+        return String(localized: "Persona switches to \(name) after you quit it (swipe it up in the App Switcher) and open it again.")
         #endif
     }
 
@@ -92,6 +92,6 @@ extension AppLanguage {
     static var settingsSummary: String {
         let store = LanguageStore.shared
         let name = AppLanguage(rawValue: store.current)?.title ?? store.current
-        return store.choice == .system ? String(localized: "跟随系统（\(name)）") : name
+        return store.choice == .system ? String(localized: "Match System (\(name))") : name
     }
 }

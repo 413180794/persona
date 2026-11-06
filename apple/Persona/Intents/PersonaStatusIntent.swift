@@ -4,11 +4,11 @@ import Foundation
 /// "Persona Status": how many sessions are working and how many are waiting, plus the first question.
 // Compatibility: the system addresses this type by its original module/type identity.
 struct JarvisStatusIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "Persona 状态"
+    nonisolated static let title: LocalizedStringResource = "Persona Status"
     nonisolated static let description = IntentDescription(
-        "有几个 Claude 在工作、几个在等你处理，以及第一个问题是什么。",
-        categoryName: "状态",
-        searchKeywords: ["状态", "进度", "待处理"]
+        "How many Claude sessions are working, how many are waiting for you, and what the first question is.",
+        categoryName: "Status",
+        searchKeywords: ["Status", "pending [Persona Status Intent f81ff5]", "pending [Persona Status Intent 999a45]"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 

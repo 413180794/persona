@@ -180,7 +180,7 @@ struct ComputerActivityPill: View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             if let a = activity, a.shown(at: ctx.date) {
                 Button { Haptics.tap(); model.openVNC(a.machine, from: from) } label: {
-                    DockPillLabel(title: a.running ? String(localized: "正在操作 \(a.machineName) · \(a.step)") : String(localized: "刚操作 \(a.machineName) · \(a.step)"), state: .working, waiting: false,
+                    DockPillLabel(title: a.running ? String(localized: "Controlling \(a.machineName) · \(a.step)") : String(localized: "Just controlled \(a.machineName) · \(a.step)"), state: .working, waiting: false,
                                   maxWidth: Theme.Size.box280) {
                         if a.running {
                             ProgressView().controlSize(.mini)
@@ -192,8 +192,8 @@ struct ComputerActivityPill: View {
                 .buttonStyle(.plain)
                 .disabled(!model.canShowScreen(a.machine))
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(a.running ? String(localized: "正在操作 \(a.machineName)，\(a.step)") : String(localized: "刚操作 \(a.machineName)，\(a.step)"))
-                .accessibilityHint(model.canShowScreen(a.machine) ? "打开 VNC" : "")
+                .accessibilityLabel(a.running ? String(localized: "Controlling \(a.machineName), \(a.step)") : String(localized: "Just controlled \(a.machineName), \(a.step)"))
+                .accessibilityHint(model.canShowScreen(a.machine) ? String(localized: "Opens VNC") : "")
                 .accessibilityIdentifier("computer-activity")
                 .transition(.opacity)
             }

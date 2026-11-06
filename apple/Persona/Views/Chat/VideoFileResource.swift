@@ -49,7 +49,7 @@ nonisolated struct VideoFileSource: Sendable {
                         if data.count >= 64 << 10 { break }
                     }
                     throw APIError(status: response.statusCode,
-                                   message: response.statusCode == 412 ? String(localized: "视频文件已改变，请关闭后重新打开") :
+                                   message: response.statusCode == 412 ? String(localized: "The video file changed. Close it and open it again.") :
                                     (APIError.message(in: data) ?? HTTPURLResponse.localizedString(forStatusCode: response.statusCode)),
                                    fields: APIError.fields(in: data), requestID: response.value(forHTTPHeaderField: "X-Request-Id"))
                 }
@@ -69,7 +69,7 @@ nonisolated struct VideoFileSource: Sendable {
         }, close: { session.invalidateAndCancel() })
     }
 
-    static var invalidResponse: APIError { APIError(status: 0, message: String(localized: "视频片段读取不完整或服务端不支持按需播放，请重试或更新 hub")) }
+    static var invalidResponse: APIError { APIError(status: 0, message: String(localized: "Couldn't read the whole video segment, or the server doesn't support streaming. Try again or update the hub.")) }
 
     static func metadata(_ response: HTTPURLResponse, requested: Range<Int64>, revision: String?) throws -> VideoFileRange {
         guard let header = response.value(forHTTPHeaderField: "Content-Range"), header.hasPrefix("bytes "),

@@ -82,23 +82,23 @@ struct DataChart: View {
                 switch kind {
                 case .bar:
                     if stacked || series.count == 1 {
-                        BarMark(x: .value("类别", p.label), y: .value("值", p.value))
-                            .foregroundStyle(by: .value("系列", p.series))
+                        BarMark(x: .value(String(localized: "Category"), p.label), y: .value(String(localized: "Value [Data Chart cda1d5]"), p.value))
+                            .foregroundStyle(by: .value(String(localized: "Series"), p.series))
                             .opacity(picked == nil || picked == p.label ? 1 : 0.4)
                     } else {
-                        BarMark(x: .value("类别", p.label), y: .value("值", p.value))
-                            .foregroundStyle(by: .value("系列", p.series))
-                            .position(by: .value("系列", p.series))
+                        BarMark(x: .value(String(localized: "Category"), p.label), y: .value(String(localized: "Value [Data Chart cda1d5]"), p.value))
+                            .foregroundStyle(by: .value(String(localized: "Series"), p.series))
+                            .position(by: .value(String(localized: "Series"), p.series))
                             .opacity(picked == nil || picked == p.label ? 1 : 0.4)
                     }
                 case .line:
-                    LineMark(x: .value("类别", p.label), y: .value("值", p.value), series: .value("系列", p.series))
-                        .foregroundStyle(by: .value("系列", p.series))
+                    LineMark(x: .value(String(localized: "Category"), p.label), y: .value(String(localized: "Value [Data Chart cda1d5]"), p.value), series: .value(String(localized: "Series"), p.series))
+                        .foregroundStyle(by: .value(String(localized: "Series"), p.series))
                         .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: Theme.Size.rule))
                     if picked == p.label {
-                        PointMark(x: .value("类别", p.label), y: .value("值", p.value))
-                            .foregroundStyle(by: .value("系列", p.series))
+                        PointMark(x: .value(String(localized: "Category"), p.label), y: .value(String(localized: "Value [Data Chart cda1d5]"), p.value))
+                            .foregroundStyle(by: .value(String(localized: "Series"), p.series))
                     }
                 }
             }
@@ -169,9 +169,9 @@ struct DataChart: View {
     /// VoiceOver reads each series' values by category instead of the marks one by one.
     private var accessibilitySummary: String {
         series.map { s in
-            let pairs = labels.indices.prefix(s.values.count).map { "\(labels[$0]) \(s.text($0, format))" }.joined(separator: String(localized: "，", comment: "List separator"))
-            return series.count > 1 && !s.name.isEmpty ? String(localized: "\(s.name)：\(pairs)", comment: "Chart series name and its values") : pairs
-        }.joined(separator: String(localized: "；", comment: "Separator between chart series"))
+            let pairs = labels.indices.prefix(s.values.count).map { "\(labels[$0]) \(s.text($0, format))" }.joined(separator: String(localized: ", ", comment: "List separator"))
+            return series.count > 1 && !s.name.isEmpty ? String(localized: "\(s.name): \(pairs)", comment: "Chart series name and its values") : pairs
+        }.joined(separator: String(localized: "; ", comment: "Separator between chart series"))
     }
 
     /// A short number: whole ones as they are, a few decimals at most, large ones as 1.2k / 3.4M / 5.6B.

@@ -108,12 +108,12 @@ struct RootView: View {
         .voiceOrbSample()
         .healthTrendsSample()
         #endif
-        .alert("Claude 想在 iPhone 上执行", isPresented: Binding(
+        .alert("Claude Wants to Act on Your iPhone", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
             set: { if !$0 { model.pendingConfirmation?.respond(false); model.pendingConfirmation = nil } }
         ), presenting: model.pendingConfirmation) { c in
-            Button("允许") { c.respond(true); model.pendingConfirmation = nil }
-            Button("拒绝", role: .cancel) { c.respond(false); model.pendingConfirmation = nil }
+            Button("Allow [Notification Actions ce7ef2]") { c.respond(true); model.pendingConfirmation = nil }
+            Button("Deny", role: .cancel) { c.respond(false); model.pendingConfirmation = nil }
         } message: { c in
             Text(c.summary)
         }
@@ -300,7 +300,7 @@ private struct TabPage<Page: View>: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("InboxRootTab")
         #endif
-        Tab("收件箱", systemImage: Theme.Icon.inbox, value: AppTab.mail) {
+        Tab(String(localized: "Inbox"), systemImage: Theme.Icon.inbox, value: AppTab.mail) {
             TabPage {
                 InboxView()
                     .modifier(TabActivityScope(tab: .mail))
@@ -321,7 +321,7 @@ private struct TabPage<Page: View>: View, Equatable {
         #if DEBUG || PERF_SIGNPOST
         let _ = PerfTrace.body("SettingsRootTab")
         #endif
-        Tab("设置", systemImage: Theme.Icon.settings, value: AppTab.settings) {
+        Tab(String(localized: "Settings"), systemImage: Theme.Icon.settings, value: AppTab.settings) {
             TabPage {
                 SettingsView()
                     .modifier(TabActivityScope(tab: .settings))
@@ -336,7 +336,7 @@ private struct TabPage<Page: View>: View, Equatable {
 
     /// Demo; else what the plugins' main-navigation entries' badges add up to (only words: a dot).
     private var badge: Text? {
-        if model.isDemo { return Text("体验") }
+        if model.isDemo { return Text("Demo") }
         let total = ExtensionSlots.shared.total
         if total.count > 0 { return Text(total.count > 99 ? "99+" : "\(total.count)") }
         return total.dot ? Text("•") : nil
@@ -354,7 +354,7 @@ nonisolated struct ConnectionShown: Encodable, Equatable {
 #if os(iOS) || os(visionOS)
 @MainActor private struct FeishuRootTab: TabContent {
     var body: some TabContent<AppTab> {
-        Tab("消息", systemImage: Theme.Icon.feishuChats, value: AppTab.feishu) {
+        Tab(String(localized: "Messages [Quote Views 4da199]"), systemImage: Theme.Icon.feishuChats, value: AppTab.feishu) {
             TabPage { LarkConversationsView().modifier(TabActivityScope(tab: .feishu)) }.equatable()
         }
     }

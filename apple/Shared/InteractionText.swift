@@ -8,7 +8,7 @@ nonisolated enum PlanText {
             let t = line.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#* "))
             if !t.isEmpty { return t }
         }
-        return String(localized: "执行计划")
+        return String(localized: "Plan [Interaction Text 2619dd]")
     }
 }
 
@@ -41,7 +41,7 @@ nonisolated extension Interaction {
 
     private var permissionSeparator: String {
         // Same separator on the chat card, the inbox row and the Mac menu bar.
-        String(localized: "：", comment: "Separator between a tool name and what it runs, e.g. Bash：npm test")
+        String(localized: ": ", comment: "Separator between a tool name and what it runs, e.g. Bash：npm test")
     }
 }
 

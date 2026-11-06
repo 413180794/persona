@@ -30,7 +30,7 @@ nonisolated struct ExtensionMarket: Codable, Hashable, Sendable, Identifiable {
         if official == true { return ExtensionMarket.officialTitle }
         return name.isEmpty ? spec : name
     }
-    static var officialTitle: String { String(localized: "官方扩展") }
+    static var officialTitle: String { String(localized: "Official extensions") }
     /// A GitHub market read without a token: GitHub's 60 requests an hour for the whole network, so a token is what
     /// fixes it failing, public repositories included.
     var wantsGitHubToken: Bool { spec.hasPrefix("github:") && !hasToken }
@@ -155,10 +155,10 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
     func confirmationProblem(at now: Date) -> String? {
         let all = [self] + (bundle ?? [])
         if all.contains(where: { $0.expiresAt.map { $0 <= now } == true }) {
-            return String(localized: "预览已过期，关闭后重新预览。")
+            return String(localized: "The preview expired. Close it and preview again.")
         }
         if all.contains(where: { $0.unresolved?.isEmpty == false }) {
-            return String(localized: "还有未解决的依赖，添加对应市场后重新预览。")
+            return String(localized: "Some dependencies are unresolved. Add the markets that provide them, then preview again.")
         }
         let bundled = Set((bundle ?? []).map { $0.manifest.id })
         if !all.allSatisfy({ preview in
@@ -166,7 +166,7 @@ nonisolated struct ExtensionPreview: Decodable, Hashable, Sendable, Identifiable
                 dependency.state == "ok" || (["missing", "old"].contains(dependency.state) && bundled.contains(dependency.id))
             }
         }) {
-            return String(localized: "依赖尚未就绪，先安装、启用或升级对应扩展，再重新预览。")
+            return String(localized: "Dependencies aren't ready. Install, turn on, or update those extensions, then preview again.")
         }
         return nil
     }
@@ -244,21 +244,21 @@ enum ExtensionMarketText {
     /// The row's word on it: Available / Update to 1.1.0 / Installed 1.2.0 / Can't Install.
     static func state(_ p: ExtensionCatalogItem) -> String {
         switch step(p) {
-        case .install: String(localized: "可安装")
-        case .upgrade: String(localized: "可升级 · \(p.installed ?? "") → \(p.version)")
-        case .upToDate: String(localized: "已安装 · \(p.installed ?? p.version)")
-        case .unavailable: String(localized: "装不了")
+        case .install: String(localized: "Available [Extension Market Model 06c13d]")
+        case .upgrade: String(localized: "Update Available · \(p.installed ?? "") → \(p.version)")
+        case .upToDate: String(localized: "Installed · \(p.installed ?? p.version)")
+        case .unavailable: String(localized: "Can't Install")
         }
     }
 
     /// Under a GitHub market's error when it has no token: why a token helps a public repository too.
-    static let gitHubTokenHint = String(localized: "GitHub 不带 token 时每小时只能读 60 次，同一个网络里的设备共用这份额度。填一个 GitHub token 能到 5000 次，公开仓库也适用（fine-grained token 选 Public repositories，不用勾任何权限）。")
+    static let gitHubTokenHint = String(localized: "Without a token, GitHub allows only 60 reads an hour, shared by every device on your network. A GitHub token raises that to 5,000, public repos included (a fine-grained token with Public repositories and no permissions is enough).")
 
     /// A market's line: how many plugins, when it was read.
     static func marketSummary(_ m: ExtensionMarket) -> String {
-        var parts = [String(localized: "\(m.plugins ?? 0) 个扩展")]
-        if m.hasToken { parts.append(String(localized: "有 token")) }
-        if let t = m.fetchedAt { let when = Fmt.relative(t); parts.append(String(localized: "\(when)读取", comment: "When a market's index was read; the time is relative, e.g. 5 minutes ago")) }
+        var parts = [String(localized: "\(m.plugins ?? 0) extensions")]
+        if m.hasToken { parts.append(String(localized: "Has token")) }
+        if let t = m.fetchedAt { let when = Fmt.relative(t); parts.append(String(localized: "Read \(when)", comment: "When a market's index was read; the time is relative, e.g. 5 minutes ago")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -338,7 +338,7 @@ enum ExtensionMarketText {
     func addMarket(spec: String, token: String) async -> String? {
         let spec = spec.trimmingCharacters(in: .whitespacesAndNewlines)
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !spec.isEmpty else { return String(localized: "填市场的地址") }
+        guard !spec.isEmpty else { return String(localized: "Enter the market's address") }
         do {
             let m = try await api().addExtensionMarket(spec: spec, token: token.isEmpty ? nil : token)
             markets.removeAll { $0.id == m.id }
@@ -387,7 +387,7 @@ enum ExtensionMarketText {
     }
 
     private func api() throws -> APIClient {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         return api
     }
 }
@@ -410,7 +410,7 @@ enum ExtensionMarketText {
     private(set) var starting = false
     private(set) var isPack = false
     private(set) var removingMembers = false
-    private(set) var removalMessage = String(localized: "已卸载")
+    private(set) var removalMessage = String(localized: "Uninstalled")
     /// The last uninstall went through with cleanup warnings: shown until its OK (acknowledgeRemoval), not as a toast.
     var removalNotice: ExtensionRemovalNotice?
     var uninstallConfirmation: ExtensionDisableConfirmation?
@@ -445,7 +445,7 @@ enum ExtensionMarketText {
         do {
             let c = try await api().pluginCatalog(market: market)
             guard let it = c.plugins.first(where: { $0.pluginID == pluginID }) else {
-                throw APIError(status: 404, message: String(localized: "这个市场里已经没有这个扩展了"))
+                throw APIError(status: 404, message: String(localized: "This market no longer has this extension"))
             }
             item = it
             if it.installed != nil, let detail = try? await api().plugin(pluginID) {
@@ -551,8 +551,8 @@ enum ExtensionMarketText {
         do {
             let result = try await operations.uninstall(pluginID, name: item?.name, cascade: cascade, members: members)
             removalMessage = members
-                ? result.removedMembers.map { String(localized: "合集已卸载；成功卸载 \($0.count) 个成员") } ?? String(localized: "合集已卸载，成员结果未返回")
-                : String(localized: "已卸载")
+                ? result.removedMembers.map { String(localized: "Pack uninstalled, along with \($0.count) members") } ?? String(localized: "Pack uninstalled; no result came back for its members")
+                : String(localized: "Uninstalled")
             // Removed, with files left for the user (#4466): it counts as uninstalled, the warnings stay up.
             let warnings = result.cleanupWarnings
             removalNotice = warnings.isEmpty ? nil : ExtensionRemovalNotice(title: removalMessage, warnings: warnings)
@@ -616,7 +616,7 @@ enum ExtensionMarketText {
     }
 
     private func api() throws -> APIClient {
-        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+        guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
         return api
     }
 }

@@ -4,7 +4,7 @@ import Foundation
 /// A machine as Siri sees it: id and name come from `/api/v1/machines`. The id is `MachineRef.path` (the machine id,
 /// "group|id" for another group of hubs); the name says the group when there are several.
 struct MachineEntity: AppEntity, Hashable, Sendable {
-    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "机器")
+    nonisolated static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Machines")
     nonisolated static let defaultQuery = MachineEntityQuery()
 
     var id: String
@@ -25,7 +25,7 @@ struct MachineEntity: AppEntity, Hashable, Sendable {
     var ref: MachineRef { MachineRef(path: id) }
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(name)", subtitle: online ? "在线" : "离线")
+        DisplayRepresentation(title: "\(name)", subtitle: online ? "Online" : "Offline [Machine Entity be1b4f]")
     }
 }
 

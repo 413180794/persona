@@ -21,7 +21,7 @@ struct ExtensionMarketView: View {
             }
             ForEach(page.markets.filter { $0.error?.isEmpty == false }) { m in
                 Section {
-                    Label { Text("「\(m.title)」读不到：\(m.error ?? "")") } icon: {
+                    Label { Text("Couldn't read “\(m.title)”: \(m.error ?? "")") } icon: {
                         Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                     }
                     .font(Theme.Font.label)
@@ -30,12 +30,12 @@ struct ExtensionMarketView: View {
                     // elsewhere when GitHub rate-limits it, and a quiet way to Markets is there for whoever wants a token.
                     if m.wantsGitHubToken && m.official == true {
                         NavigationLink(value: SettingsPage.pluginMarkets) {
-                            Text("被限流了？去「市场」填一个 GitHub token").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                            Text("Rate-limited? Add a GitHub token in Markets").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
                                 .minimumScaleFactor(0.8)
                         }
                         .accessibilityIdentifier("market-error-official-token-\(m.id)")
                     } else if m.wantsGitHubToken {
-                        Button { tokenFor = m } label: { Text("填 token").lineLimit(1) }
+                        Button { tokenFor = m } label: { Text("Add Token").lineLimit(1) }
                             .accessibilityIdentifier("market-error-token-\(m.id)")
                     }
                 } footer: {
@@ -45,16 +45,16 @@ struct ExtensionMarketView: View {
             if let items = page.items {
                 if page.markets.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "还没有扩展市场"),
-                                       message: String(localized: "扩展市场是一个仓库或网站发布的扩展索引。添加一个市场后，这里列出它的扩展，可以直接安装。"))
-                        NavigationLink(value: SettingsPage.pluginMarkets) { Text("添加市场").lineLimit(1) }
+                        EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "No Extension Markets Yet"),
+                                       message: String(localized: "An extension market is an index of extensions published by a repository or website. Add one to list its extensions here and install them directly."))
+                        NavigationLink(value: SettingsPage.pluginMarkets) { Text("Add Market").lineLimit(1) }
                             .accessibilityIdentifier("market-add-first")
                     }
                     .listRowBackground(Color.clear)
                 } else if items.isEmpty {
                     Section {
-                        EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "没有找到扩展"),
-                                       message: page.query.isEmpty ? String(localized: "这个市场里还没有扩展。") : String(localized: "换个词试试，名字、说明、发布者和标签都能搜。"))
+                        EmptyStateView(symbol: Theme.Icon.search, title: String(localized: "No Extensions Found"),
+                                       message: page.query.isEmpty ? String(localized: "This market has no extensions yet.") : String(localized: "Try another word. You can search names, descriptions, publishers and tags."))
                     }
                     .listRowBackground(Color.clear)
                 } else {
@@ -66,14 +66,14 @@ struct ExtensionMarketView: View {
                             .accessibilityIdentifier("market-plugin-\(p.pluginID)")
                         }
                     } footer: {
-                        if let p = page.platform, !p.isEmpty { Text("这台 hub 是 \(p)；装之前会列出扩展能做什么，你同意后才装。") }
+                        if let p = page.platform, !p.isEmpty { Text("This hub runs \(p). Before installing, you'll see what an extension can do, and it installs only after you agree.") }
                     }
                 }
             }
             if let e = page.error {
                 Section {
                     LoadProblem(text: e)
-                    Button { Task { await page.load() } } label: { Text("重试").lineLimit(1) }
+                    Button { Task { await page.load() } } label: { Text("Retry [Components b8784c]").lineLimit(1) }
                 }
             }
             #if os(macOS)
@@ -82,7 +82,7 @@ struct ExtensionMarketView: View {
             if !page.markets.isEmpty {
                 Section {
                     NavigationLink(value: SettingsPage.pluginMarkets) {
-                        Label { Text("管理市场").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
+                        Label { Text("Manage Markets").lineLimit(1) } icon: { Image(systemName: Theme.Icon.pluginMarket) }
                     }
                     .accessibilityIdentifier("market-manage")
                 }
@@ -96,13 +96,13 @@ struct ExtensionMarketView: View {
         .contentMargins(.top, Theme.Space.s, for: .scrollContent)
         #endif
         .overlay { if page.items == nil && page.error == nil { ProgressView() } }
-        .detailTitle(String(localized: "扩展市场"))
+        .detailTitle(String(localized: "Extension Market"))
         .navigationBarTitleDisplayMode(.inline)
-        .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "名字、说明、发布者或标签"))
+        .pageSearchable(text: $page.query, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "Name, description, publisher or tag"))
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: SettingsPage.pluginMarkets) { Text("市场").lineLimit(1) }
+                NavigationLink(value: SettingsPage.pluginMarkets) { Text("Markets").lineLimit(1) }
                     .accessibilityIdentifier("market-manage")
             }
         }
@@ -115,7 +115,7 @@ struct ExtensionMarketView: View {
         }
         .refreshable { await page.load(refresh: true) }
         .sheet(item: $tokenFor) { m in
-            MarketTokenSheet(title: String(localized: "「\(m.title)」的 token"), asksSpec: false, hasToken: m.hasToken) { _, token in
+            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken) { _, token in
                 if let why = await page.setToken(m.id, token: token) { return why }
                 await page.load()
                 return nil
@@ -125,7 +125,7 @@ struct ExtensionMarketView: View {
 
     private var marketChips: some View {
         FlowLayoutRow {
-            FilterChip(title: String(localized: "全部"), on: page.market == nil) { choose(nil) }
+            FilterChip(title: String(localized: "All"), on: page.market == nil) { choose(nil) }
                 .accessibilityIdentifier("market-filter-all")
             ForEach(page.markets) { m in
                 FilterChip(title: m.title, on: page.market == m.id) { choose(m.id) }
@@ -190,10 +190,10 @@ private struct MarketStateChip: View {
 
     @ViewBuilder private var stateChip: some View {
         switch ExtensionMarketText.step(item) {
-        case .install: Chip(text: String(localized: "可安装"), look: .tint(Theme.accent))
-        case .upgrade: Chip(text: String(localized: "可升级"), look: .tint(Theme.caution))
-        case .upToDate: Chip(text: String(localized: "已安装"), look: .tint(Theme.positive))
-        case .unavailable: Chip(text: String(localized: "装不了"), look: .neutral)
+        case .install: Chip(text: String(localized: "Available [Extension Market Model 06c13d]"), look: .tint(Theme.accent))
+        case .upgrade: Chip(text: String(localized: "Update [Extension Market Views 8a63ee]"), look: .tint(Theme.caution))
+        case .upToDate: Chip(text: String(localized: "Installed [Extension Market Views a8b6c3]"), look: .tint(Theme.positive))
+        case .unavailable: Chip(text: String(localized: "Can't Install"), look: .neutral)
         }
     }
 }
@@ -229,34 +229,34 @@ struct MarketExtensionDetailView: View {
                     Section {
                         ForEach(perms) { PermissionLine(permission: $0) }
                     } header: {
-                        SettingsHeading(String(localized: "它可以"))
+                        SettingsHeading(String(localized: "It Can"))
                     } footer: {
-                        Text("安装前会再列一次，以下载到的包为准；新版本要得更多时，升级前会单独列出多出来的。")
+                        Text("This is listed again before installing, based on the downloaded package. If a new version asks for more, the extra permissions are listed before the update.")
                     }
                 }
                 about(p)
             } else if let e = page.error {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "读不到这个扩展"), message: e,
-                                   action: (String(localized: "重试"), { Task { await page.load() } }))
+                    EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Couldn't Load This Extension"), message: e,
+                                   action: (String(localized: "Retry [Components b8784c]"), { Task { await page.load() } }))
                 }
                 .listRowBackground(Color.clear)
             }
         }
         .themedPage()
         .overlay { if page.item == nil && page.error == nil { ProgressView() } }
-        .detailTitle(page.item?.name ?? String(localized: "扩展"))
+        .detailTitle(page.item?.name ?? String(localized: "Extensions"))
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("停用依赖它的扩展后再卸载？", isPresented: Binding(
+        .confirmationDialog("Turn Off Dependent Extensions and Uninstall?", isPresented: Binding(
             get: { page.uninstallConfirmation != nil }, set: { if !$0 { page.uninstallConfirmation = nil } }),
             titleVisibility: .visible) {
             Button(role: .destructive) {
                 Task {
                     if await page.uninstall(cascade: true, members: page.removingMembers) { done(.uninstall) }
                 }
-            } label: { Text("停用依赖并卸载").lineLimit(1) }
+            } label: { Text("Turn Off Dependents and Uninstall").lineLimit(1) }
             .accessibilityIdentifier("market-uninstall-cascade")
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(page.uninstallConfirmation?.message ?? "")
         }
@@ -334,49 +334,49 @@ struct MarketExtensionDetailView: View {
         Section {
             switch ExtensionMarketText.step(p) {
             case .install:
-                primary(String(localized: "安装"), symbol: Theme.Icon.install, id: "market-install")
+                primary(String(localized: "Install"), symbol: Theme.Icon.install, id: "market-install")
             case .upgrade:
-                primary(String(localized: "升级到 \(p.version)"), symbol: Theme.Icon.upgrade, id: "market-upgrade")
+                primary(String(localized: "Update to \(p.version)"), symbol: Theme.Icon.upgrade, id: "market-upgrade")
             case .upToDate:
-                LabeledContent("已安装", value: p.installed ?? p.version)
+                LabeledContent("Installed [Extension Market Views a8b6c3]", value: p.installed ?? p.version)
             case .unavailable:
-                Label { Text(p.problem ?? String(localized: "这台 hub 装不了")) } icon: {
+                Label { Text(p.problem ?? String(localized: "Can't install on this hub")) } icon: {
                     Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                 }
                 .font(Theme.Font.label)
             }
             if p.installed != nil {
                 NavigationLink(value: SettingsPage.plugin(p.pluginID)) {
-                    Label { Text("打开扩展设置").lineLimit(1) } icon: { Image(systemName: Theme.Icon.settings) }
+                    Label { Text("Open Extension Settings").lineLimit(1) } icon: { Image(systemName: Theme.Icon.settings) }
                 }
                 .accessibilityIdentifier("market-open-plugin")
             }
             if page.canUninstall {
                 Button(role: .destructive) { confirmRemove = true } label: {
-                    Label { Text("卸载").lineLimit(1) } icon: { Image(systemName: Theme.Icon.delete) }
+                    Label { Text("Uninstall").lineLimit(1) } icon: { Image(systemName: Theme.Icon.delete) }
                 }
                 .tint(Theme.danger) // a Mac form draws a button in the accent whatever its role (#1512)
                 .disabled(page.working)
                 .accessibilityIdentifier("market-uninstall")
-                .confirmationDialog("卸载「\(p.name)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
+                .confirmationDialog("Uninstall “\(p.name)”?", isPresented: $confirmRemove, titleVisibility: .visible) {
                     Button(role: .destructive) {
                         Task { if await page.uninstall() { done(.uninstall) } }
-                    } label: { Text(page.isPack ? "只卸载合集" : "卸载").lineLimit(1) }
+                    } label: { Text(page.isPack ? String(localized: "Uninstall Pack Only") : String(localized: "Uninstall")).lineLimit(1) }
                     .accessibilityIdentifier("market-uninstall-confirm")
                     if page.isPack {
                         Button(role: .destructive) {
                             Task { if await page.uninstall(members: true) { done(.uninstall) } }
-                        } label: { Text("连同成员一起卸载").lineLimit(1) }
+                        } label: { Text("Uninstall with Members").lineLimit(1) }
                         .accessibilityIdentifier("market-uninstall-members")
                     }
-                    Button("取消", role: .cancel) {}
+                    Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text(page.isPack ? "只卸载合集会保留成员。连成员一起卸载会删除成员的设置和数据。" : "它的设置和数据一起删掉；以后可以从市场再装。")
+                    Text(page.isPack ? String(localized: "Uninstalling only the pack keeps its members. Uninstalling with members deletes their settings and data.") : String(localized: "Its settings and data are deleted too. You can install it again from the market later."))
                 }
             }
         } footer: {
             if p.installed != nil && !page.canUninstall && p.installedSource != nil {
-                Text("这个扩展不是从这个市场装的，在 hub 的管理界面（/admin）或 hub 所在的机器上卸载。")
+                Text("This extension wasn't installed from this market. Uninstall it in the hub's admin page (/admin) or on the hub machine.")
             }
         }
     }
@@ -398,10 +398,10 @@ struct MarketExtensionDetailView: View {
 
     @ViewBuilder private func about(_ p: ExtensionCatalogItem) -> some View {
         Section {
-            LabeledContent("版本", value: p.version)
-            if let v = p.installed, !v.isEmpty { LabeledContent("已安装的版本", value: v) }
-            if let m = p.marketName, !m.isEmpty { LabeledContent("市场", value: m) }
-            if let pub = p.publisher, !pub.isEmpty { LabeledContent("发布者", value: pub) }
+            LabeledContent("Version", value: p.version)
+            if let v = p.installed, !v.isEmpty { LabeledContent("Installed Version", value: v) }
+            if let m = p.marketName, !m.isEmpty { LabeledContent("Markets", value: m) }
+            if let pub = p.publisher, !pub.isEmpty { LabeledContent("Publisher", value: pub) }
             if let c = p.contributes, !c.isEmpty {
                 ForEach(c.keys.sorted(), id: \.self) { point in
                     LabeledContent(ExtensionText.point(point)) {
@@ -410,10 +410,10 @@ struct MarketExtensionDetailView: View {
                 }
             }
             if let h = p.homepage, let url = URL(string: h) {
-                Link(destination: url) { Label("主页", systemImage: Theme.Icon.openExternal).lineLimit(1) }
+                Link(destination: url) { Label("Website", systemImage: Theme.Icon.openExternal).lineLimit(1) }
             }
         } header: {
-            SettingsHeading(String(localized: "关于"))
+            SettingsHeading(String(localized: "About"))
         }
     }
 }
@@ -467,7 +467,7 @@ private struct ExtensionInstallSheet: View {
         NavigationStack {
             List {
                 Section {
-                    LabeledContent(upgrade ? "升级" : "版本",
+                    LabeledContent(upgrade ? String(localized: "Update [Extension Market Views 94996c]") : String(localized: "Version"),
                                    value: upgrade ? "\(preview.from ?? "") → \(preview.manifest.version ?? "")" : preview.manifest.version ?? "")
                     if let d = preview.manifest.description, !d.isEmpty { Text(d).font(Theme.Font.secondary).foregroundStyle(.secondary) }
                 }
@@ -480,28 +480,28 @@ private struct ExtensionInstallSheet: View {
                                     .foregroundStyle(dependency.state == "ok" ? Color.secondary : Theme.cautionText)
                             }
                         }
-                    } header: { SettingsHeading(String(localized: "依赖")) }
+                    } header: { SettingsHeading(String(localized: "Dependencies")) }
                 }
                 if let members = preview.manifest.extensionPack, !members.isEmpty {
                     Section {
                         ForEach(members, id: \.id) { member in
                             LabeledContent(member.id, value: member.version ?? "")
                         }
-                    } header: { SettingsHeading(String(localized: "合集成员")) }
+                    } header: { SettingsHeading(String(localized: "Pack Members")) }
                 }
                 if let bundle = preview.bundle, !bundle.isEmpty {
                     ForEach(bundle) { member in
                         Section {
                             LabeledContent(member.manifest.name ?? member.manifest.id, value: member.manifest.version ?? "")
                             ForEach(member.permissions) { PermissionLine(permission: $0, tools: member.manifest.tools) }
-                        } header: { SettingsHeading(String(localized: "一起安装")) }
+                        } header: { SettingsHeading(String(localized: "Installed Together")) }
                     }
                 }
                 if let unresolved = preview.unresolved, !unresolved.isEmpty {
                     Section {
-                        Text("市场里找不到：\(unresolved.joined(separator: "、"))")
+                        Text("Not found in any market: \(unresolved.joined(separator: "、"))")
                             .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
-                    } footer: { Text("先添加提供这些扩展的市场，再重新预览。没有装好依赖时不会安装。") }
+                    } footer: { Text("Add the markets that provide these extensions, then preview again. Nothing is installed until its dependencies are.") }
                 }
                 if let problem = preview.confirmationProblem(at: previewTime) {
                     Section {
@@ -513,23 +513,23 @@ private struct ExtensionInstallSheet: View {
                     Section {
                         ForEach(added) { PermissionLine(permission: $0, tone: Theme.caution) }
                     } header: {
-                        SettingsHeading(String(localized: "新版本多要的"))
+                        SettingsHeading(String(localized: "New Version Also Asks For"))
                     } footer: {
-                        Text("升级就是同意这些。")
+                        Text("Updating means agreeing to these.")
                     }
                 }
                 Section {
                     if preview.permissions.isEmpty {
                         Text(preview.manifest.extensionPack?.isEmpty == false
-                             ? "合集本身不申请额外权限；成员按上方各自的权限运行。" : "这个包不申请额外权限。")
+                             ? String(localized: "The pack itself asks for no extra permissions; each member runs with its own permissions above.") : String(localized: "This package asks for no extra permissions."))
                             .font(Theme.Font.secondary).foregroundStyle(.secondary)
                     } else {
                         ForEach(preview.permissions) { PermissionLine(permission: $0, tools: preview.manifest.tools) }
                     }
                 } header: {
-                    SettingsHeading(upgrade ? String(localized: "新版本可以") : String(localized: "它可以"))
+                    SettingsHeading(upgrade ? String(localized: "New Version Can") : String(localized: "It Can"))
                 } footer: {
-                    Text("扩展按预览列出的权限和 hub 的隔离配置运行。包已按市场给的校验和核对过。")
+                    Text("The extension runs with the permissions listed in the preview and the hub's isolation settings. The package was verified against the market's checksum.")
                 }
                 if let w = preview.warnings, !w.isEmpty {
                     Section {
@@ -541,7 +541,7 @@ private struct ExtensionInstallSheet: View {
                 }
             }
             .themedPage()
-            .navigationTitle(upgrade ? "升级 \(name)" : "安装 \(name)")
+            .navigationTitle(upgrade ? String(localized: "Update \(name)") : String(localized: "Install \(name)"))
             .navigationBarTitleDisplayMode(.inline)
             .sheetCancel(unsaved: false) { dismiss() }
             .task(id: preview.expirationBoundary) {
@@ -560,7 +560,7 @@ private struct ExtensionInstallSheet: View {
                             busy = false
                         }
                     } label: {
-                        if busy { ProgressView() } else { Text(upgrade ? "升级" : "安装").lineLimit(1) }
+                        if busy { ProgressView() } else { Text(upgrade ? String(localized: "Update [Extension Market Views 94996c]") : String(localized: "Install")).lineLimit(1) }
                     }
                     .disabled(busy || preview.confirmationProblem(at: previewTime) != nil)
                     .accessibilityIdentifier("market-confirm")
@@ -584,21 +584,21 @@ struct ExtensionMarketsView: View {
         SettingsForm {
             if page.markets.isEmpty && !page.loading && page.error == nil {
                 Section {
-                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "还没有扩展市场"),
-                                   message: String(localized: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token，公开的填了也不容易被 GitHub 限流），或 git:…（用 hub 机器的 SSH 凭据）。"),
-                                   action: (String(localized: "添加市场"), { adding = true }))
+                    EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "No Extension Markets Yet"),
+                                   message: String(localized: "Enter a market's address: an https://… index, github:owner/repo (a private repo needs a read-only token; a public one is rate-limited less by GitHub with one) or git:… (uses the hub machine's SSH credentials)."),
+                                   action: (String(localized: "Add Market"), { adding = true }))
                 }
                 .listRowBackground(Color.clear)
             }
             if let auto = page.autoUpgrade, !page.markets.isEmpty {
                 Section {
                     Toggle(isOn: Binding(get: { auto }, set: { on in Task { await page.setAutoUpgrade(on) } })) {
-                        Text("自动升级扩展").lineLimit(1)
+                        Text("Auto-Update Extensions").lineLimit(1)
                     }
                     .accessibilityIdentifier("market-auto-upgrade")
                 } footer: {
-                    Text(auto ? "从这些市场装的扩展出了新版本，扩展空闲时 hub 自动装上；要的权限变多时先问你。每个扩展也可以在自己的页面里单独关掉。"
-                              : "关着：有新版本时只在扩展的页面里提示，你自己去升级。")
+                    Text(auto ? String(localized: "When an extension from these markets has a new version, the hub installs it while the extension is idle, and asks you first if it wants more permissions. You can turn this off for each extension on its own page.")
+                              : String(localized: "Off: new versions are only shown on the extension's page, and you update it yourself."))
                 }
             }
             ForEach(page.markets) { m in
@@ -619,7 +619,7 @@ struct ExtensionMarketsView: View {
             Section {
                 HStack {
                     Spacer(minLength: 0)
-                    Button("添加市场…") { adding = true }.lineLimit(1).formButton()
+                    Button("Add Market…") { adding = true }.lineLimit(1).formButton()
                         .accessibilityIdentifier("market-add")
                 }
             }
@@ -627,24 +627,24 @@ struct ExtensionMarketsView: View {
         }
         .themedPage()
         .overlay { if page.markets.isEmpty && page.loading { ProgressView() } }
-        .detailTitle(String(localized: "市场"))
+        .detailTitle(String(localized: "Markets"))
         .navigationBarTitleDisplayMode(.inline)
         #if os(iOS) || os(visionOS)
         .pageToolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { adding = true } label: { Image(systemName: Theme.Icon.add) }
-                    .accessibilityLabel("添加市场")
+                    .accessibilityLabel("Add Market")
                     .accessibilityIdentifier("market-add")
             }
         }
         #endif
         .sheet(isPresented: $adding) {
-            MarketTokenSheet(title: String(localized: "添加市场"), asksSpec: true, hasToken: false) { spec, token in
+            MarketTokenSheet(title: String(localized: "Add Market"), asksSpec: true, hasToken: false) { spec, token in
                 await page.addMarket(spec: spec, token: token)
             }
         }
         .sheet(item: $tokenFor) { m in
-            MarketTokenSheet(title: String(localized: "「\(m.title)」的 token"), asksSpec: false, hasToken: m.hasToken) { _, token in
+            MarketTokenSheet(title: String(localized: "Token for “\(m.title)”"), asksSpec: false, hasToken: m.hasToken) { _, token in
                 await page.setToken(m.id, token: token)
             }
         }
@@ -687,19 +687,19 @@ private struct MarketRow: View {
         }
         .padding(.vertical, Theme.Space.xxs)
         HStack(spacing: Theme.Space.l) {
-            action(String(localized: "刷新"), .refresh, id: "market-refresh-\(market.id)")
-            action(market.hasToken ? String(localized: "换 token") : String(localized: "设 token"), .token, id: "market-token-\(market.id)")
+            action(String(localized: "Refresh"), .refresh, id: "market-refresh-\(market.id)")
+            action(market.hasToken ? String(localized: "Change Token") : String(localized: "Set Token"), .token, id: "market-token-\(market.id)")
             Spacer(minLength: 0)
-            Button(role: .destructive) { confirmRemove = true } label: { Text("删除").lineLimit(1) }
+            Button(role: .destructive) { confirmRemove = true } label: { Text("Delete").lineLimit(1) }
             .buttonStyle(.borderless)
             .foregroundStyle(Theme.danger) // a Mac borderless button draws its role in the accent
             .accessibilityIdentifier("market-remove-\(market.id)")
-            .confirmationDialog("删除市场「\(market.title)」？", isPresented: $confirmRemove, titleVisibility: .visible) {
-                Button(role: .destructive) { act(.remove) } label: { Text("删除").lineLimit(1) }
+            .confirmationDialog("Delete market “\(market.title)”?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button(role: .destructive) { act(.remove) } label: { Text("Delete").lineLimit(1) }
                     .accessibilityIdentifier("market-remove-confirm")
-                Button("取消", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             } message: {
-                Text("hub 不再读这个市场；从它装的扩展留着。")
+                Text("The hub stops reading this market. Extensions installed from it stay.")
             }
         }
         .font(Theme.Font.secondary)
@@ -726,7 +726,7 @@ private struct ExtensionRemovalNoticeSheet: View {
         NavigationStack {
             List {
                 Section {
-                    NoticeBanner(text: String(localized: "卸载已完成，还有下面这些要你手动处理。"))
+                    NoticeBanner(text: String(localized: "Uninstalled. A few things still need you to clean them up by hand."))
                         .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -739,7 +739,7 @@ private struct ExtensionRemovalNoticeSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 } header: {
-                    SettingsHeading(String(localized: "需要手动处理"))
+                    SettingsHeading(String(localized: "Needs manual cleanup"))
                 }
             }
             .themedPage()
@@ -747,7 +747,7 @@ private struct ExtensionRemovalNoticeSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(action: done) { Text("知道了").lineLimit(1) }
+                    Button(action: done) { Text("OK [Recordings Section de32e2]").lineLimit(1) }
                         .accessibilityIdentifier("market-removal-done")
                 }
             }
@@ -778,27 +778,27 @@ private struct MarketTokenSheet: View {
                 if asksSpec {
                     Section {
                         // Sent as typed: the hub reads it and says what is wrong (#1373), the app does not judge the form.
-                        TextField("https://…、github:owner/repo 或 git:…", text: $spec)
+                        TextField(String(localized: "https://…, github:owner/repo or git:…"), text: $spec)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .accessibilityIdentifier("market-spec")
                     } header: {
-                        SettingsHeading(String(localized: "地址"))
+                        SettingsHeading(String(localized: "Address"))
                     } footer: {
-                        Text(String(localized: "三种写法：https://example.com/extensions/（不以 .json 结尾的读它下面的 persona-extensions.json，没有再读 persona-plugins.json）；github:owner/repo（仓库根目录的那份，私有的要 token）；git:<地址>[#分支]（git@host:path.git、ssh://…、https://…，用 hub 机器自己的 SSH 凭据，不用 token）。"))
+                        Text(String(localized: "Three forms: https://example.com/extensions/ (an address not ending in .json reads persona-extensions.json under it, then persona-plugins.json); github:owner/repo (the one at the repo root; private repos need a token); git:<address>[#branch] (git@host:path.git, ssh://…, https://…; uses the hub machine's own SSH credentials, no token)."))
                     }
                 }
                 Section {
-                    SecretField(hasToken ? String(localized: "输入新的 token 替换") : (asksSpec ? String(localized: "公开的市场不用填") : String(localized: "输入 token")), filled: String(localized: "已填写，点保存"),
+                    SecretField(hasToken ? String(localized: "Enter a new token to replace it") : (asksSpec ? String(localized: "Not needed for public markets") : String(localized: "Filled in; tap Save [Extension Market Views 8b5050]")), filled: String(localized: "Filled in; tap Save [Extension Market Views 94348c]"),
                                 text: $token, identifier: "market-token")
                 } header: {
-                    SettingsHeading(asksSpec ? String(localized: "Token（可选）") : "Token")
+                    SettingsHeading(asksSpec ? String(localized: "Token (Optional)") : "Token")
                 } footer: {
-                    Text("GitHub 市场：私有仓库要一个只读 token（这个仓库的 Contents 读权限）；公开仓库填一个也有用，读的额度从每小时 60 次（整个网络共用）提到 5000 次，选 Public repositories、不勾权限就行。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。")
+                    Text("GitHub markets: a private repo needs a read-only token (read access to this repo's Contents). A token helps a public repo too: it raises the limit from 60 reads an hour (shared by your whole network) to 5,000. Choose Public repositories with no permissions. It's stored encrypted on the hub, sent only to the market itself, and not shown again once saved. git: markets use the hub machine's SSH credentials and don't need one.")
                 }
                 if !asksSpec && hasToken {
                     Section {
-                        Button(role: .destructive) { submit(clearing: true) } label: { Text("去掉 token").lineLimit(1) }
+                        Button(role: .destructive) { submit(clearing: true) } label: { Text("Remove Token").lineLimit(1) }
                             .tint(Theme.danger)
                             .disabled(busy)
                     }
@@ -818,7 +818,7 @@ private struct MarketTokenSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button { submit(clearing: false) } label: {
-                        if busy { ProgressView() } else { Text(asksSpec ? "添加" : "保存").lineLimit(1) }
+                        if busy { ProgressView() } else { Text(asksSpec ? String(localized: "Add [Beautiful U I Bridge 7a8a11]") : String(localized: "Save")).lineLimit(1) }
                     }
                     .disabled(busy || (asksSpec ? spec.trimmingCharacters(in: .whitespaces).isEmpty : token.trimmingCharacters(in: .whitespaces).isEmpty))
                     .accessibilityIdentifier("market-save")

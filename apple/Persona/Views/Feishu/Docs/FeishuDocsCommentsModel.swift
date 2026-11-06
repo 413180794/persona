@@ -128,7 +128,7 @@ final class FeishuDocsCommentsModel {
             await load()
         } catch {
             guard !error.isCancellation else { return }
-            writeError = String(localized: "没发出去：\(Self.reason(error))")
+            writeError = String(localized: "Couldn't send: \(Self.reason(error))")
         }
     }
 
@@ -143,14 +143,14 @@ final class FeishuDocsCommentsModel {
             await load()
         } catch {
             guard !error.isCancellation else { return }
-            writeError = resolved ? String(localized: "没能标为已解决：\(Self.reason(error))") : String(localized: "没能重新打开：\(Self.reason(error))")
+            writeError = resolved ? String(localized: "Couldn't resolve: \(Self.reason(error))") : String(localized: "Couldn't reopen: \(Self.reason(error))")
         }
     }
 
     /// Replying to a thread: the box says to whom, the draft is kept.
     func reply(to thread: FeishuDocsComments.Thread) {
         let last = thread.replies.last
-        target = .thread(id: thread.id, name: last?.author.name ?? String(localized: "评论"), text: last?.text ?? thread.quote)
+        target = .thread(id: thread.id, name: last?.author.name ?? String(localized: "Comments"), text: last?.text ?? thread.quote)
     }
 
     func people(_ query: String) async throws -> [LarkMember] { try await api.docPeople(url: url, query: query) }

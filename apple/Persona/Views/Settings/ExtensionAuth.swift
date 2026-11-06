@@ -203,24 +203,24 @@ enum ExtensionAuthText {
     /// Not signed in / Waiting for confirmation / Signed in: <account> / Expired / Error: <reason>.
     static func state(_ a: ExtensionAuth) -> String {
         switch a.state {
-        case .signedOut: String(localized: "未登录")
-        case .pending: String(localized: "等待确认")
-        case .signedIn: a.account.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "已登录：\($0)") } ?? String(localized: "已登录")
-        case .expired: String(localized: "登录已过期")
-        case .error: a.message.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "出错：\($0)") } ?? String(localized: "出错了")
-        case .unknown: String(localized: "扩展启动后才知道")
+        case .signedOut: String(localized: "Not signed in")
+        case .pending: String(localized: "Waiting for confirmation")
+        case .signedIn: a.account.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "Signed in: \($0)") } ?? String(localized: "Signed in")
+        case .expired: String(localized: "Sign-in expired")
+        case .error: a.message.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "Error: \($0)") } ?? String(localized: "Something Went Wrong")
+        case .unknown: String(localized: "Known once the extension starts")
         }
     }
 
     /// The section's button: Sign In when not signed in, Sign In Again when signed in or expired.
     static func signInButton(_ a: ExtensionAuth) -> String {
-        a.state == .signedIn || a.state == .expired ? String(localized: "重新登录") : String(localized: "登录")
+        a.state == .signedIn || a.state == .expired ? String(localized: "Sign In Again") : String(localized: "Sign In")
     }
 
     /// The list's suffix for one that is not signed in.
     static func listSuffix(_ a: ExtensionAuth?) -> String? {
         guard let a, a.needsSignIn else { return nil }
-        return a.state == .expired ? String(localized: "登录已过期") : String(localized: "未登录")
+        return a.state == .expired ? String(localized: "Sign-in expired") : String(localized: "Not signed in")
     }
 
     /// A program's name in About: Node.js (node).
@@ -231,7 +231,7 @@ enum ExtensionAuthText {
     /// Its version, the machine's own marked: 22.23.4 · already on the machine.
     static func toolVersion(_ t: ExtensionToolUse) -> String {
         let version = t.version
-        return t.reused == true ? String(localized: "\(version) · 机器上已有") : version
+        return t.reused == true ? String(localized: "\(version) · already on the machine") : version
     }
 
     /// The extension's warnings, without the hub's 「还没登录（<title>）…」: the Sign In section says how it is (and follows a
@@ -250,7 +250,7 @@ enum ExtensionAuthText {
         if let npm = t.npm {
             add(npm.registry?.isEmpty == false ? npm.registry : "https://registry.npmjs.org")
             let list = ExtensionText.list(hosts.sorted())
-            return String(localized: "npm：\(list)")
+            return String(localized: "npm: \(list)")
         }
         for a in (t.archive ?? [:]).values {
             add(a.url)
@@ -267,5 +267,5 @@ enum ExtensionAuthText {
     }
 
     /// Under the programs: where they go.
-    static let toolsNote = String(localized: "装在扩展自己的目录，不用管理员权限；机器上已有能用的会直接用。")
+    static let toolsNote = String(localized: "Installed in the extension's own folder, no administrator rights needed; a usable copy already on the machine is used as is.")
 }

@@ -22,7 +22,7 @@ struct ExtensionComponentRowLabel: View {
             if let b = row.badge { Chip(text: b.text, look: b.tone == nil || b.tone == "neutral" ? .neutral : .tint(ExtensionUIStyle.tone(b.tone))) }
             if let action = row.action, model?.selected(action.id) == true {
                 Image(systemName: Theme.Icon.success).font(Theme.Font.labelStrong).foregroundStyle(Theme.positive)
-                    .accessibilityLabel("已选")
+                    .accessibilityLabel("Selected [Extension Components 7ecf1c]")
             } else if chevron {
                 if let a = row.action, model?.running == a.id {
                     ProgressView().controlSize(.small)
@@ -189,9 +189,9 @@ struct ExtensionEmpty: View {
             .accessibilityIdentifier("plugin-ui-empty")
             .disabled(model?.managesConfirmation == true && empty.button.map { model?.isEnabled($0.action) != true } == true)
             .confirmationDialog(empty.button?.action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
-                Button { run() } label: { Text(empty.button?.title ?? String(localized: "确定")).lineLimit(1) }
+                Button { run() } label: { Text(empty.button?.title ?? String(localized: "OK [Interactive Assistant View Card fac2a6]")).lineLimit(1) }
                     .accessibilityIdentifier("plugin-ui-confirm")
-                Button("取消", role: .cancel) {}
+                Button("Cancel", role: .cancel) {}
             }
     }
 
@@ -219,7 +219,7 @@ struct ExtensionMoreRow: View {
     var body: some View {
         Button { load() } label: {
             HStack(spacing: Theme.Space.s) {
-                Text(more.title?.isEmpty == false ? more.title! : String(localized: "加载更多")).lineLimit(1)
+                Text(more.title?.isEmpty == false ? more.title! : String(localized: "Load More")).lineLimit(1)
                 if model.loadingMore == more.action.id { ProgressView().controlSize(.small) }
             }
             .frame(maxWidth: .infinity)
@@ -258,7 +258,7 @@ struct ExtensionFilterChips: View {
             .padding(.vertical, Theme.Space.xs)
         }
         .disabled(model.running != nil || (model.managesConfirmation && !model.isEnabled(filter.action)))
-        .accessibilityLabel(filter.title ?? String(localized: "筛选"))
+        .accessibilityLabel(filter.title ?? String(localized: "Filter"))
     }
 }
 
@@ -271,11 +271,11 @@ struct ExtensionSearchRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.s) {
-            TextField(search.placeholder ?? String(localized: "搜索"), text: Binding(get: { model.query }, set: { model.query = $0 }))
+            TextField(search.placeholder ?? String(localized: "Search"), text: Binding(get: { model.query }, set: { model.query = $0 }))
                 .font(Theme.Font.body).textInputAutocapitalization(.never).autocorrectionDisabled()
                 .onSubmit { run() }
             Button { run() } label: { Image(systemName: Theme.Icon.search) }
-                .themedButton().accessibilityLabel("搜索")
+                .themedButton().accessibilityLabel("Search")
         }
         .padding(Theme.Space.s)
         .background(Theme.Fill.well, in: .rect(cornerRadius: Theme.Radius.control))
@@ -317,7 +317,7 @@ struct ExtensionChartItem: View {
                 }
                 DataChart(kind: item.kind == "line" ? .line : .bar, labels: labels,
                           series: series.enumerated().map { i, s in
-                              DataChart.Series(name: s.name?.isEmpty == false ? s.name! : String(localized: "系列 \(i + 1)"),
+                              DataChart.Series(name: s.name?.isEmpty == false ? s.name! : String(localized: "Series \(i + 1)"),
                                                color: ExtensionUIStyle.series(s.tone), values: s.points.map(\.value),
                                                displays: s.points.map(\.display))
                           },
@@ -431,9 +431,9 @@ struct ExtensionActionButton<Content: View>: View {
         .disabled(!model.isEnabled(action))
         .accessibilityIdentifier("plugin-ui-action-\(action.id)")
         .confirmationDialog(action.confirm ?? "", isPresented: $asking, titleVisibility: .visible) {
-            Button(role: destructive ? .destructive : nil) { run() } label: { Text(title.isEmpty ? String(localized: "确定") : title).lineLimit(1) }
+            Button(role: destructive ? .destructive : nil) { run() } label: { Text(title.isEmpty ? String(localized: "OK [Interactive Assistant View Card fac2a6]") : title).lineLimit(1) }
                 .accessibilityIdentifier("plugin-ui-confirm")
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -469,14 +469,14 @@ struct ExtensionFieldItem: View {
             case "choice":
                 Picker(selection: text) {
                     if !(field.choices ?? []).contains(where: { $0.value == (model.values[name] ?? "") }) {
-                        Text(field.placeholder ?? String(localized: "未选")).tag(model.values[name] ?? "")
+                        Text(field.placeholder ?? String(localized: "None [Extension Components 3005ea]")).tag(model.values[name] ?? "")
                     }
                     ForEach(field.choices ?? []) { c in Text(c.label).tag(c.value) }
                 } label: {
                     Text(label).lineLimit(2)
                 }
             case "secret":
-                labeled { SecretField(field.placeholder ?? "", filled: String(localized: "已填写，提交时发送"), text: text) }
+                labeled { SecretField(field.placeholder ?? "", filled: String(localized: "Filled in; sent when you submit"), text: text) }
             case "number":
                 labeled {
                     TextField(field.placeholder ?? "", text: text).keyboardType(.decimalPad)

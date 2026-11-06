@@ -133,9 +133,9 @@ nonisolated enum UsageWindows {
 
     static func paceLabel(_ s: PaceState) -> String {
         switch s {
-        case .over: String(localized: "用得偏快")
-        case .under: String(localized: "用得偏慢")
-        case .on: String(localized: "节奏正常")
+        case .over: String(localized: "Ahead of pace")
+        case .under: String(localized: "Behind pace")
+        case .on: String(localized: "On pace")
         }
     }
 
@@ -144,32 +144,32 @@ nonisolated enum UsageWindows {
     static func resetLabel(_ resetsAt: Date?, now: Date = .now, calendar: Calendar = .current) -> String {
         guard let at = resetsAt else { return "" }
         let secs = at.timeIntervalSince(now)
-        if secs <= 0 { return String(localized: "即将重置") }
+        if secs <= 0 { return String(localized: "resets soon") }
         let mins = Int((secs / 60).rounded(.up))
-        if mins < 60 { return String(localized: "\(mins)m 后重置") }
+        if mins < 60 { return String(localized: "resets in \(mins)m") }
         if calendar.isDate(at, inSameDayAs: now) {
             let time = at.formatted(Date.FormatStyle(date: .omitted, time: .shortened, calendar: calendar, timeZone: calendar.timeZone))
-            return String(localized: "\(time) 重置")
+            return String(localized: "Resets \(time)")
         }
         let hours = mins / 60
         let d = hours / 24
-        return d > 0 ? String(localized: "\(d)d \(hours % 24)h 后重置") : String(localized: "\(hours)h 后重置")
+        return d > 0 ? String(localized: "resets in \(d)d \(hours % 24)h") : String(localized: "resets in \(hours)h")
     }
 
     /// How long ago a sample was taken ("12 s ago"), coarser past a minute; "" without a time.
     static func sampleAge(_ at: Date?, now: Date = .now) -> String {
         guard let at, at.isMeaningful else { return "" }
         let s = max(0, Int(now.timeIntervalSince(at).rounded()))
-        if s < 60 { return String(localized: "\(s) 秒前") }
-        if s < 3600 { return String(localized: "\(s / 60) 分钟前") }
-        if s < 86400 { return String(localized: "\(s / 3600) 小时前") }
-        return String(localized: "\(s / 86400) 天前")
+        if s < 60 { return String(localized: "\(s) seconds ago") }
+        if s < 3600 { return String(localized: "\(s / 60) min ago") }
+        if s < 86400 { return String(localized: "\(s / 3600)h ago") }
+        return String(localized: "\(s / 86400)d ago")
     }
 
     /// The age as the account's header says it: "Outdated · 3 hr ago" when stale.
     static func ageLabel(_ a: UsageAccount, now: Date = .now) -> String {
         let age = sampleAge(a.sampledAt, now: now)
-        return a.stale ? (age.isEmpty ? String(localized: "已过期") : String(localized: "已过期 · \(age)")) : age
+        return a.stale ? (age.isEmpty ? String(localized: "Outdated [Usage Windows 2fe0e3]") : String(localized: "Outdated · \(age)")) : age
     }
 
     /// The accounts worth showing: samples within three days, windows that have not reset, accounts that still have one.
@@ -191,7 +191,7 @@ nonisolated enum UsageWindows {
 
     /// Where an account was seen, for people: "This Device", then the gateways' names.
     static func sourceNames(_ a: UsageAccount) -> [String] {
-        (a.local ? [String(localized: "usage.source.local", defaultValue: "本机", comment: "Usage numbers read from an agent's own files on a computer")] : []) + a.sources
+        (a.local ? [String(localized: "usage.source.local", defaultValue: "Local", comment: "Usage numbers read from an agent's own files on a computer")] : []) + a.sources
     }
 
     /// The plan to write beside the name, unless the name already says it ("Codex Pro" and plan "pro").
@@ -203,8 +203,8 @@ nonisolated enum UsageWindows {
     /// What the gateway could not do, in words; "" when nothing went wrong.
     static func problemText(_ a: UsageAccount) -> String {
         switch a.problem {
-        case "unreachable": String(localized: "网关暂时读不到，显示的是上次的数字")
-        case "error": String(localized: "网关读这个账号失败，显示的是它存着的数字")
+        case "unreachable": String(localized: "Can't reach the gateway right now; showing the last numbers")
+        case "error": String(localized: "The gateway couldn't read this account; showing the numbers it saved")
         default: ""
         }
     }

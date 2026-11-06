@@ -206,7 +206,7 @@ nonisolated enum ServerEvent: Sendable {
         case "hook_event":
             guard let key else { return nil }
             return .hookEvent(key, event: e.event ?? "", message: e.message, lastText: e.lastAssistantMessage)
-        case "error": return .error(key, e.error ?? String(localized: "未知错误"))
+        case "error": return .error(key, e.error ?? String(localized: "Unknown error"))
         case "revs":
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
@@ -578,7 +578,7 @@ final class LiveConnection {
                     // The handshake's answer: 401 is the hub refusing this credential, not the hub being away.
                     let refused = (t.response as? HTTPURLResponse)?.statusCode == 401
                     if refused != self.rejected { self.rejected = refused }
-                    self.state = .failed(refused ? String(localized: "hub 不认这台设备的凭据（401）") : err.localizedDescription)
+                    self.state = .failed(refused ? String(localized: "The hub doesn't accept this device's credentials (401)") : err.localizedDescription)
                     self.stalled = false
                     self.scheduleReconnect(gen)
                 }
@@ -589,7 +589,7 @@ final class LiveConnection {
     /// Demo Mode: no network, no heartbeat; the made-up hub's messages arrive like a socket's.
     private func openLocal(_ gen: Int) {
         guard let make = Self.makeLocal else {
-            state = .failed(String(localized: "体验模式不可用"))
+            state = .failed(String(localized: "Demo mode isn't available"))
             return
         }
         let socket = make()

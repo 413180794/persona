@@ -74,12 +74,12 @@ enum MacSection: String, CaseIterable, Identifiable {
         switch self {
         case .assistant: "Persona"
         case .agents: "Agents"
-        case .todos: String(localized: "待办")
-        case .messages: String(localized: "消息")
-        case .inbox: String(localized: "收件箱")
-        case .knowledge: String(localized: "知识库")
-        case .machines: String(localized: "机器")
-        case .settings: String(localized: "设置")
+        case .todos: String(localized: "To-dos")
+        case .messages: String(localized: "Messages [Quote Views 4da199]")
+        case .inbox: String(localized: "Inbox")
+        case .knowledge: String(localized: "Knowledge")
+        case .machines: String(localized: "Machines")
+        case .settings: String(localized: "Settings")
         }
     }
 
@@ -127,12 +127,12 @@ struct MacRootView: View {
         .macLook(model)
         .loadsChannels() // the names under a message that came in from a channel (「来自 微信」)
         .overlay(alignment: .top) { ToastOverlay() }
-        .alert("Claude 想在这台 Mac 上执行", isPresented: Binding(
+        .alert("Claude Wants to Run on This Mac", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
             set: { if !$0 { model.pendingConfirmation?.respond(false); model.pendingConfirmation = nil } }
         ), presenting: model.pendingConfirmation) { c in
-            Button("允许") { c.respond(true); model.pendingConfirmation = nil }
-            Button("拒绝", role: .cancel) { c.respond(false); model.pendingConfirmation = nil }
+            Button("Allow [Notification Actions ce7ef2]") { c.respond(true); model.pendingConfirmation = nil }
+            Button("Deny", role: .cancel) { c.respond(false); model.pendingConfirmation = nil }
         } message: { c in
             Text(c.summary)
         }
@@ -242,9 +242,9 @@ private struct MacShell: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 Button { withAnimation(Theme.Motion.layout) { sidebarHidden.toggle() } } label: {
-                    Label(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏", systemImage: Theme.Icon.sidebar)
+                    Label(sidebarHidden ? String(localized: "Show Sidebar") : String(localized: "Hide Sidebar"), systemImage: Theme.Icon.sidebar)
                 }
-                .help(sidebarHidden ? "显示侧边栏" : "隐藏侧边栏")
+                .help(sidebarHidden ? String(localized: "Show Sidebar") : String(localized: "Hide Sidebar"))
                 // The Agents list's menu (filter, grouping, folding) right after it, in this group. As the list's own
                 // `.navigation` item it jumped in front of this button whenever a page in the detail column brought an
                 // item of its own (a space's ⋯, a machine's ⓘ): the window's toolbar is rebuilt then, list items first.
@@ -350,7 +350,7 @@ private struct MacShell: View {
         case .assistant: n = model.badges.assistant
         case .agents: n = model.badges.agents
         case .inbox: n = InboxStore.shared.actionCount
-        case .settings: return model.isDemo ? .word(String(localized: "体验", comment: "Sidebar badge: demo mode is on")) : nil
+        case .settings: return model.isDemo ? .word(String(localized: "Demo", comment: "Sidebar badge: demo mode is on")) : nil
         }
         return n > 0 ? .count(n) : nil
     }
@@ -441,8 +441,8 @@ struct MacConnectionFooter: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .help("查看连接详情")
-            .accessibilityLabel("\(phase.title)，查看连接详情")
+            .help("View connection details")
+            .accessibilityLabel("\(phase.title), view connection details")
             .connectionDetails($details)
         }
     }

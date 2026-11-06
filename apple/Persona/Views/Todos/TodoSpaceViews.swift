@@ -14,8 +14,8 @@ struct TodoSpaceTag: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("待办：\(todo.title)")
-            .help("待办：\(todo.title)")
+            .accessibilityLabel("To-do: \(todo.title)")
+            .help("To-do: \(todo.title)")
             .accessibilityIdentifier("todo.space." + group.id)
         }
     }
@@ -39,7 +39,7 @@ struct SpaceTodoMenu: View {
         if let space = group.todoSpace, store.spacesSupported, TodosLogic.isOnTodosHub(sessionGroup: group.group, hubGroup: appModel.hub?.group) {
             let todo = TodosLogic.findTodoForSpace(store.todos, machineID: group.machineID, space: space)
             Button(action: link) {
-                Label(todo == nil ? "挂到待办…" : "改挂到其他待办…", systemImage: Theme.Icon.todo).lineLimit(1)
+                Label(todo == nil ? String(localized: "Add to To-Do…") : String(localized: "Move to Another To-do…"), systemImage: Theme.Icon.todo).lineLimit(1)
             }
             .disabled(store.changingSpaces)
             if let todo {
@@ -51,7 +51,7 @@ struct SpaceTodoMenu: View {
                         } catch { AppModel.shared.show(error) }
                     }
                 } label: {
-                    Label("移出待办", systemImage: Theme.Icon.link).lineLimit(1)
+                    Label("Remove from To-Do", systemImage: Theme.Icon.link).lineLimit(1)
                 }
                 .disabled(store.changingSpaces)
             }
@@ -77,7 +77,7 @@ struct TodoSpacesSection: View {
                             Text("\(project.space) · \(machineName(project.machineID))")
                                 .font(Theme.Font.body).foregroundStyle(Color.primary).lineLimit(1)
                             if !TodosLogic.hasLiveAgent(in: project, sessions: sessions, hubGroup: hubGroup, machineOnline: machineOnline) {
-                                Text("当前没有 Agent").font(Theme.Font.caption).foregroundStyle(.secondary)
+                                Text("No agents right now").font(Theme.Font.caption).foregroundStyle(.secondary)
                             }
                         }
                         Spacer()
@@ -87,18 +87,18 @@ struct TodoSpacesSection: View {
                                 catch { AppModel.shared.show(error) }
                             }
                         } label: {
-                            Text("移出").foregroundStyle(Theme.danger)
+                            Text("Remove [Todo Space Views 95861c]").foregroundStyle(Theme.danger)
                         }
                         .font(Theme.Font.captionStrong)
                         .lineLimit(1)
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("移出 \(project.space)")
+                        .accessibilityLabel("Remove \(project.space) [Todo Space Views cf56a9]")
                         .disabled(TodoStore.shared.changingSpaces)
                     }
                     .padding(.vertical, Theme.Space.xs)
                 }
             } header: {
-                Text("项目 · \(spaces.count)").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
+                Text("Projects · \(spaces.count)").font(Theme.Font.sectionHeader).foregroundStyle(.secondary)
             }
         }
     }

@@ -49,27 +49,27 @@ enum ReadinessRoute: Identifiable, Hashable {
     /// The button's words for an action (5.1); an id this app does not know gets none (text only).
     static func title(_ action: String) -> String? {
         switch action {
-        case "add_computer": String(localized: "添加电脑")
-        case "confirm_computer": String(localized: "确认是我的电脑")
-        case "wake_computer": String(localized: "怎么唤醒")
-        case "install_claude": String(localized: "怎么安装")
-        case "login_claude": String(localized: "怎么登录")
-        case "connect_model": String(localized: "接上模型")
-        case "edit_provider": String(localized: "换 Key")
-        case "test_assistant": String(localized: "试一句")
-        case "enable_tls", "open_admin": String(localized: "打开管理界面")
+        case "add_computer": String(localized: "Add Computer")
+        case "confirm_computer": String(localized: "It's my computer")
+        case "wake_computer": String(localized: "How to wake it")
+        case "install_claude": String(localized: "How to install [Readiness Views 0aa867]")
+        case "login_claude": String(localized: "How to sign in")
+        case "connect_model": String(localized: "Connect a model")
+        case "edit_provider": String(localized: "Change key")
+        case "test_assistant": String(localized: "Try a message")
+        case "enable_tls", "open_admin": String(localized: "Open admin page")
         default: nil
         }
     }
 
     /// What the send button says while the main conversation cannot answer (4.4).
     static func sendTitle(_ step: AssistantReadiness.Step) -> String {
-        guard step.id == "computer" else { return String(localized: "先接上模型") }
+        guard step.id == "computer" else { return String(localized: "Connect a model first") }
         switch step.code {
-        case "node_unreachable": return String(localized: "先唤醒电脑")
-        case "machine_pending": return String(localized: "先确认电脑")
-        case "node_outdated": return String(localized: "先更新电脑")
-        default: return String(localized: "先添加电脑")
+        case "node_unreachable": return String(localized: "Wake the computer first")
+        case "machine_pending": return String(localized: "Confirm the computer first")
+        case "node_outdated": return String(localized: "Update the computer first")
+        default: return String(localized: "Add a computer first")
         }
     }
 }
@@ -133,7 +133,7 @@ struct ReadinessSheets: ViewModifier {
 private struct DoneButton: View {
     var action: () -> Void
     var body: some View {
-        Button(action: action) { Text("完成").lineLimit(1) }
+        Button(action: action) { Text("Done [Extension System Presentation c0b3fb]").lineLimit(1) }
     }
 }
 
@@ -155,7 +155,7 @@ struct ReadinessHomeCard: View {
         } else if let step = store.current?.cardStep {
             stepCard(step)
         } else if let probe = store.probe {
-            ReadinessCard(title: probe.ok == true ? String(localized: "试过了，能回答") : String(localized: "试了一句，没成功"),
+            ReadinessCard(title: probe.ok == true ? String(localized: "Tried it: it answers") : String(localized: "Tried a message, it didn't work"),
                           detail: probe.ok == true ? probe.answer : probe.error, tone: probe.ok == true ? .caution : .danger)
         }
     }
@@ -163,7 +163,7 @@ struct ReadinessHomeCard: View {
     private func stepCard(_ step: AssistantReadiness.Step) -> some View {
         let primary = step.action?.id
         let alt = step.altActions?.first?.id
-        return ReadinessCard(title: step.title ?? String(localized: "还差一步"),
+        return ReadinessCard(title: step.title ?? String(localized: "One more step"),
                              detail: step.detail,
                              tone: step.state == "problem" ? .danger : .caution,
                              actionTitle: primary.flatMap(ReadinessRoute.title),
@@ -197,13 +197,13 @@ struct CodedFailureCard: View {
     var body: some View {
         let f = failure
         let title = f.action.flatMap(ReadinessRoute.title)
-        let name = f.machine ?? String(localized: "那台电脑")
+        let name = f.machine ?? String(localized: "that computer")
         ReadinessCard(title: f.error,
-                      detail: f.code == "node_unreachable" ? String(localized: "\(name) 现在不在线，可能睡着了") : nil,
+                      detail: f.code == "node_unreachable" ? String(localized: "\(name) is offline right now, maybe asleep") : nil,
                       tone: .danger,
                       actionTitle: title,
                       action: title == nil ? nil : { run(f.action ?? "") },
-                      details: [f.detail, f.requestID.map { String(localized: "请求 ID：\($0)") }].compactMap { $0 },
+                      details: [f.detail, f.requestID.map { String(localized: "Request ID: \($0)") }].compactMap { $0 },
                       dismiss: { withAnimation(Theme.Motion.state) { model.readiness.failure = nil } })
     }
 
@@ -225,7 +225,7 @@ struct ReadinessHelpView: View {
     var machine: String?
     @Binding var route: ReadinessRoute?
 
-    private var name: String { machine ?? String(localized: "那台电脑") }
+    private var name: String { machine ?? String(localized: "that computer") }
 
     var body: some View {
         ScrollView {
@@ -241,47 +241,47 @@ struct ReadinessHelpView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Text("知道了").lineLimit(1) } } }
+        .toolbar { ToolbarItem(placement: .confirmationAction) { Button { dismiss() } label: { Text("OK [Recordings Section de32e2]").lineLimit(1) } } }
     }
 
     private var title: String {
         switch topic {
-        case "wake_computer": String(localized: "叫醒\(name)")
-        case "install_claude": String(localized: "安装 Claude Code")
-        case "login_claude": String(localized: "登录 Claude Code")
-        case "how_to_connect_model": String(localized: "怎么接模型")
-        default: String(localized: "Persona 能做什么")
+        case "wake_computer": String(localized: "Wake \(name)")
+        case "install_claude": String(localized: "Install Claude Code")
+        case "login_claude": String(localized: "Sign in to Claude Code")
+        case "how_to_connect_model": String(localized: "How to connect a model")
+        default: String(localized: "What Persona can do")
         }
     }
 
     @ViewBuilder private var content: some View {
         switch topic {
         case "wake_computer":
-            para(String(localized: "\(name) 现在不在线，可能睡着了，或者上面的 Persona Link 没开。打开盖子或唤醒它，确认 Persona Link 在运行。"))
-            para(String(localized: "连上以后这里会自己变好，不用刷新。"), secondary: true)
+            para(String(localized: "\(name) is offline right now: it may be asleep, or Persona Link isn't running on it. Open the lid or wake it, and make sure Persona Link is running."))
+            para(String(localized: "Once it's connected this updates by itself, no need to refresh."), secondary: true)
         case "install_claude":
-            para(String(localized: "在 \(name) 上打开终端，粘贴下面这行，回车："))
+            para(String(localized: "On \(name), open Terminal, paste this line and press Return:"))
             CommandLine(text: "curl -fsSL https://claude.ai/install.sh | bash")
-            para(String(localized: "装好以后回到这里，过一会儿就会变好。"), secondary: true)
+            para(String(localized: "Come back here once it's installed; this updates shortly after."), secondary: true)
             useKey
         case "login_claude":
-            para(String(localized: "在 \(name) 上打开终端，输入下面这个词，回车，按提示在浏览器里登录一次："))
+            para(String(localized: "On \(name), open Terminal, type this word, press Return, and sign in once in the browser as it asks:"))
             CommandLine(text: "claude")
-            para(String(localized: "登录好以后回到这里，发一句试试。"), secondary: true)
+            para(String(localized: "Once signed in, come back here and send a message to try it."), secondary: true)
             useKey
         case "how_to_connect_model":
-            para(String(localized: "Persona 要一个能用的模型才能回答。两种方式选一种："))
-            bullet(String(localized: "有 API Key：在「设置 › 模型供应商」里选一家，粘贴 Key，会自动测试。"))
-            bullet(String(localized: "已经在用 Claude Code：在那台电脑上登录一次就行，不用再填什么。"))
-            para(String(localized: "不管哪一种，现在主对话都还要在你的一台电脑上运行：只粘贴 API Key、不接电脑，还开始不了。"), secondary: true)
+            para(String(localized: "Persona needs a working model to answer. Pick one of two ways:"))
+            bullet(String(localized: "Have an API key: in Settings › Model providers pick one, paste the key, and it's tested automatically."))
+            bullet(String(localized: "Already using Claude Code: sign in once on that computer, nothing else to fill in."))
+            para(String(localized: "Either way, the main conversation still runs on one of your computers: an API key alone, with no computer, can't start it yet."), secondary: true)
             useKey
         default:
-            para(String(localized: "Persona 是你的私人助手。接好电脑和模型以后，它能："))
-            bullet(String(localized: "在你的电脑上看文件、跑命令、替你动手（动手前会先问你）"))
-            bullet(String(localized: "看你的日程、邮件、飞书和收件箱，帮你整理、草拟回复"))
-            bullet(String(localized: "记住聊过的事，下次接着来"))
+            para(String(localized: "Persona is your personal assistant. With a computer and a model connected, it can:"))
+            bullet(String(localized: "Read files, run commands and act for you on your computer (it asks you first)"))
+            bullet(String(localized: "Read your calendar, mail, Feishu and inbox, sort them and draft replies"))
+            bullet(String(localized: "Remember what you talked about and pick up next time"))
             if let step = model.readiness.current?.blockingStep, let t = step.title {
-                para(String(localized: "现在还差一步：\(t)"), secondary: true)
+                para(String(localized: "One more step for now: \(t)"), secondary: true)
             }
         }
     }
@@ -290,7 +290,7 @@ struct ReadinessHelpView: View {
         Button {
             route = .providerWizard
         } label: {
-            Text("改用 API Key").font(Theme.Font.secondaryStrong).lineLimit(1)
+            Text("Use an API key instead").font(Theme.Font.secondaryStrong).lineLimit(1)
         }
         .themedButton()
     }
@@ -319,9 +319,9 @@ private struct CommandLine: View {
             Button {
                 UIPasteboard.general.string = text
                 Haptics.tap()
-                model.toast = Toast(String(localized: "已复制"))
+                model.toast = Toast(String(localized: "Copied [V N C Pi P Diagnostics 8f6f8d]"))
             } label: {
-                Label("拷贝", systemImage: Theme.Icon.copy).font(Theme.Font.label).lineLimit(1)
+                Label("Copy [Readiness Views d37380]", systemImage: Theme.Icon.copy).font(Theme.Font.label).lineLimit(1)
             }
             .buttonStyle(.borderless)
             .foregroundStyle(Theme.accent)

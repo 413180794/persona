@@ -11,19 +11,19 @@ struct VNCPiPDiagnostics: View {
     private var facts: [(String, String)] {
         let audio = AVAudioSession.sharedInstance()
         return [
-            (String(localized: "支持画中画"), VNCPiP.supported ? String(localized: "是") : String(localized: "否")),
-            (String(localized: "小窗开着"), VNCPiP.shared.active ? String(localized: "是") : String(localized: "否")),
-            (String(localized: "音频会话"), Self.categories[audio.category] ?? audio.category.rawValue),
-            (String(localized: "后台音频"), (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("audio") == true ? String(localized: "有") : String(localized: "没有")),
+            (String(localized: "Picture in Picture supported"), VNCPiP.supported ? String(localized: "Yes [V N C Pi P Diagnostics b5141d]") : String(localized: "No")),
+            (String(localized: "Picture in Picture open"), VNCPiP.shared.active ? String(localized: "Yes [V N C Pi P Diagnostics b5141d]") : String(localized: "No")),
+            (String(localized: "Audio session"), Self.categories[audio.category] ?? audio.category.rawValue),
+            (String(localized: "Background audio"), (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?.contains("audio") == true ? String(localized: "Yes [V N C Pi P Diagnostics 90ce0f]") : String(localized: "None [V N C Pi P Diagnostics f12780]")),
         ]
     }
 
     private static let categories: [AVAudioSession.Category: String] = [
-        .playback: String(localized: "播放"), .soloAmbient: String(localized: "默认（不能后台）"), .ambient: String(localized: "环境"), .playAndRecord: String(localized: "播放和录音"), .record: String(localized: "录音"),
+        .playback: String(localized: "Play"), .soloAmbient: String(localized: "Default (no background)"), .ambient: String(localized: "Ambient"), .playAndRecord: String(localized: "Record [V N C Pi P Diagnostics 270b17]"), .record: String(localized: "Record [Recordings Section ef2821]"),
     ]
 
     private var text: String {
-        (facts.map { String(localized: "\($0.0)：\($0.1)", comment: "Diagnostics fact: name and value") } + VNCPiPLog.lines).joined(separator: "\n")
+        (facts.map { String(localized: "\($0.0): \($0.1)", comment: "Diagnostics fact: name and value") } + VNCPiPLog.lines).joined(separator: "\n")
     }
 
     var body: some View {
@@ -39,9 +39,9 @@ struct VNCPiPDiagnostics: View {
                         .font(Theme.Font.secondary)
                     }
                 }
-                Section("最近的步骤") {
+                Section("Recent Steps") {
                     if VNCPiPLog.lines.isEmpty {
-                        Text("还没有开过小窗。").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        Text("Picture in Picture hasn't been opened yet.").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     }
                     ForEach(Array(VNCPiPLog.lines.enumerated().reversed()), id: \.offset) { _, line in
                         Text(line).font(Theme.Font.code).textSelection(.enabled)
@@ -50,21 +50,21 @@ struct VNCPiPDiagnostics: View {
                 Section {
                     Button {
                         UIPasteboard.general.string = text
-                        model.toast = Toast(String(localized: "已复制"), style: .success)
+                        model.toast = Toast(String(localized: "Copied [V N C Pi P Diagnostics 8f6f8d]"), style: .success)
                     } label: {
-                        Label("复制全部", systemImage: Theme.Icon.copy).lineLimit(1)
+                        Label("Copy All [V N C Pi P Diagnostics 75c393]", systemImage: Theme.Icon.copy).lineLimit(1)
                     }
                 } footer: {
-                    Text("系统日志里也有（控制台，子系统 jarvis，类别 vnc）。")
+                    Text("It's also in the system log (Console, subsystem jarvis, category vnc).")
                 }
             }
             .themedPage()
-            .navigationTitle("小窗诊断")
+            .navigationTitle("Picture in Picture Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button { dismiss() } label: { Image(systemName: Theme.Icon.close) }
-                        .accessibilityLabel("关闭")
+                        .accessibilityLabel("Close")
                 }
             }
         }

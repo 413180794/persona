@@ -42,7 +42,7 @@ final class VideoFileModel {
         error = nil
         received = 0
         guard let api else {
-            error = String(localized: "尚未连接 hub")
+            error = String(localized: "Not connected to the hub [App Model 93d955]")
             return
         }
         let mine = generation
@@ -87,7 +87,7 @@ final class VideoFileModel {
             cacheURL = cache.url
             total = info.total
             guard try await resource.asset.load(.isPlayable) else {
-                throw APIError(status: 0, message: String(localized: "这个视频的格式或编码无法在当前设备播放，请导出为 H.264 或 HEVC 的 MP4 视频"))
+                throw APIError(status: 0, message: String(localized: "This video's format or codec can't play on this device. Export it as an H.264 or HEVC MP4."))
             }
             try Task.checkCancellation()
             guard generation == mine else { return }
@@ -96,7 +96,7 @@ final class VideoFileModel {
             item.canUseNetworkResourcesForLiveStreamingWhilePaused = false
             statusObserver = item.observe(\.status, options: [.new]) { @Sendable [weak self] item, _ in
                 guard item.status == .failed else { return }
-                let message = item.error?.localizedDescription ?? String(localized: "视频无法播放，请检查文件或重新导出")
+                let message = item.error?.localizedDescription ?? String(localized: "The video can't play. Check the file or export it again.")
                 Task { @MainActor in
                     guard let self, self.generation == mine else { return }
                     if self.error == nil { self.error = message }
@@ -133,14 +133,14 @@ struct VideoFileView: View {
     var body: some View {
         Group {
             if let error = model.error {
-                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "视频无法播放"), message: error)
+                EmptyStateView(symbol: Theme.Icon.error, title: String(localized: "Can't Play Video"), message: error)
             } else if let player = model.player {
                 VideoPlayer(player: player)
                     .accessibilityIdentifier("file-video-player")
             } else {
                 VStack(spacing: Theme.Space.m) {
                     ProgressView(value: Double(model.received), total: Double(max(model.total, 1)))
-                    Text("正在缓冲视频…")
+                    Text("Buffering Video…")
                         .font(Theme.Font.body)
                     Text(ByteCountFormatter.string(fromByteCount: model.received, countStyle: .file) + " / " +
                          ByteCountFormatter.string(fromByteCount: model.total, countStyle: .file))

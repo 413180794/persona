@@ -5,11 +5,11 @@ import Foundation
 /// it is a permission or a plan. Questions and terminal prompts need the screen, so those answer with a hint to open
 /// the app.
 struct ApproveFirstIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "批准第一个待处理"
+    nonisolated static let title: LocalizedStringResource = "Approve First Pending"
     nonisolated static let description = IntentDescription(
-        "允许最早的那条工具授权，或者批准一个计划（批准后自动执行）。提问和终端需要打开 App。",
-        categoryName: "状态",
-        searchKeywords: ["批准", "允许", "授权", "计划"]
+        "Allows the oldest tool permission request, or approves a plan (it starts right away). Questions and terminal prompts need the app.",
+        categoryName: "Status",
+        searchKeywords: ["Approve [Notification Actions 8cbe69]", "Allow [Notification Actions ce7ef2]", "Permission", "plan"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 
@@ -34,7 +34,7 @@ struct ApproveFirstIntent: AppIntent {
             let api = try IntentSupport.client(group: first.group)
             let session = sessions.first { $0.key == first.sessionKey }
             guard first.canAnswer(session: session) else {
-                let hint = String(localized: "此会话不允许审批，请打开 App 查看")
+                let hint = String(localized: "This session can't be approved from here. Open the app to check it.")
                 return .result(value: hint, dialog: IntentSupport.dialog(hint))
             }
             try await api.resolve(first.id, resolution)

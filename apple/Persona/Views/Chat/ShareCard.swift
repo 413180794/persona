@@ -32,7 +32,7 @@ struct MessageShareCard: View {
             HStack(spacing: 10) {
                 avatar
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(message.isUser ? String(localized: "我") : message.agent).font(.system(size: 15, weight: .semibold))
+                    Text(message.isUser ? String(localized: "Me") : message.agent).font(.system(size: 15, weight: .semibold))
                     if !message.source.isEmpty {
                         Text(message.source).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                     }
@@ -135,7 +135,7 @@ struct MessageShareSheet: View {
                         .scaledToFit()
                         .clipShape(.rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                        .accessibilityLabel("消息卡片")
+                        .accessibilityLabel("Message card")
                 } else {
                     ProgressView().frame(maxWidth: .infinity, minHeight: 240)
                 }
@@ -155,13 +155,13 @@ struct MessageShareSheet: View {
         ViewerTopBar {
             Button { dismiss() } label: { ViewerIcon(symbol: Theme.Icon.close) }
                 .viewerRound()
-                .accessibilityLabel("完成")
+                .accessibilityLabel("Done [Extension System Presentation c0b3fb]")
                 .accessibilityIdentifier("share-card-close")
                 .keyboardShortcut(.cancelAction)
         } center: {
-            Picker("样式", selection: Binding(get: { isDark }, set: { dark = $0 })) {
-                Text("浅色").tag(false)
-                Text("深色").tag(true)
+            Picker("Style", selection: Binding(get: { isDark }, set: { dark = $0 })) {
+                Text("Light").tag(false)
+                Text("Dark").tag(true)
             }
             .pickerStyle(.segmented)
             .fixedSize()
@@ -176,25 +176,25 @@ struct MessageShareSheet: View {
     private var bottomBar: some View {
         ViewerBottomBar {
             if let image {
-                ShareLink(item: Image(uiImage: image), preview: SharePreview("消息卡片", image: Image(uiImage: image))) {
+                ShareLink(item: Image(uiImage: image), preview: SharePreview(String(localized: "Message card"), image: Image(uiImage: image))) {
                     ViewerIcon(symbol: Theme.Icon.share)
                 }
-                .accessibilityLabel("分享")
+                .accessibilityLabel("Share")
             } else {
                 ViewerIcon(symbol: Theme.Icon.share, enabled: false)
-                    .accessibilityLabel("分享")
+                    .accessibilityLabel("Share")
                     .accessibilityAddTraits(.isButton)
             }
         } actions: {
             Button { Task { await save() } } label: { ViewerIcon(symbol: Theme.Icon.save) }
                 .disabled(image == nil || saving)
-                .accessibilityLabel(saving ? "保存中" : "保存")
+                .accessibilityLabel(saving ? String(localized: "Saving [Image Viewer a1a172]") : String(localized: "Save"))
             Button { copyImage() } label: { ViewerIcon(symbol: Theme.Icon.copy) }
                 .disabled(image == nil)
-                .accessibilityLabel("拷贝")
+                .accessibilityLabel("Copy [Readiness Views d37380]")
         } trailing: {
             ShareLink(item: message.text) { ViewerIcon(symbol: Theme.Icon.text) }
-                .accessibilityLabel("分享文字")
+                .accessibilityLabel("Share Text")
         }
     }
 
@@ -202,7 +202,7 @@ struct MessageShareSheet: View {
         guard let image else { return }
         UIPasteboard.general.image = image
         Haptics.success()
-        AppModel.shared.toast = Toast(String(localized: "已拷贝图片"), style: .success)
+        AppModel.shared.toast = Toast(String(localized: "Image copied"), style: .success)
     }
 
     private func save() async {
@@ -212,17 +212,17 @@ struct MessageShareSheet: View {
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else {
             Haptics.error()
-            AppModel.shared.toast = Toast(String(localized: "没有相册权限：请在 设置 › Persona › 照片 里允许「仅添加照片」"), style: .error)
+            AppModel.shared.toast = Toast(String(localized: "No access to Photos. In Settings › Persona › Photos, allow “Add Photos Only”."), style: .error)
             return
         }
         do {
             // `@Sendable`: Photos runs the block on its own queue, where main-actor code is a crash (BackgroundCallbackTests).
             try await PHPhotoLibrary.shared().performChanges { @Sendable in PHAssetChangeRequest.creationRequestForAsset(from: image) }
             Haptics.success()
-            AppModel.shared.toast = Toast(String(localized: "已保存到相册"), style: .success)
+            AppModel.shared.toast = Toast(String(localized: "Saved to Photos"), style: .success)
         } catch {
             Haptics.error()
-            if !error.isCancellation { AppModel.shared.toast = Toast(String(localized: "保存失败：\(error.localizedDescription)"), style: .error) }
+            if !error.isCancellation { AppModel.shared.toast = Toast(String(localized: "Couldn't save: \(error.localizedDescription) [Image Viewer fcc6eb]"), style: .error) }
         }
     }
 }

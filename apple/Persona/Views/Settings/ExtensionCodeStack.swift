@@ -28,7 +28,7 @@ struct CodeBlockStack: View {
                     Button(role: b.tone == "danger" ? .destructive : nil) { go() } label: { Text(b.title).lineLimit(1) }
                         .accessibilityIdentifier("plugin-ui-confirm")
                 }
-                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "Cancel"), role: .cancel) {}
             }
     }
 
@@ -55,7 +55,7 @@ struct CodeBlockStack: View {
 
     @ViewBuilder private var rows: some View {
         if let lookPicker {
-            Picker(String(localized: "改动的看法"), selection: lookPicker) {
+            Picker(String(localized: "Diff View"), selection: lookPicker) {
                 ForEach(CodeDiffLook.allCases) { Text($0.title).tag($0.rawValue) }
             }
             .pickerStyle(.segmented)
@@ -117,7 +117,7 @@ struct CodeBlockStack: View {
         case .treeRow(_, let tree, let row, let t):
             treeRow(tree: tree, row: row, t: t)
         case .treeEmpty:
-            Text(String(localized: "没有文件")).font(Theme.Font.secondary).foregroundStyle(.secondary).padding(Theme.Space.page)
+            Text(String(localized: "No files")).font(Theme.Font.secondary).foregroundStyle(.secondary).padding(Theme.Space.page)
         case .code(_, let c):
             CodeFileBlock(code: c, model: model, link: $link, fills: false)
                 .padding(.horizontal, Theme.Space.page).padding(.vertical, Theme.Space.s)
@@ -150,7 +150,7 @@ struct CodeBlockStack: View {
             Button { if let a = d.load { run(a, ["path": d.path]) } } label: {
                 HStack(spacing: Theme.Space.s) {
                     if model.running == d.load?.id { ProgressView().controlSize(.small) }
-                    Text(String(localized: "加载 diff")).lineLimit(1)
+                    Text(String(localized: "Load Diff")).lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(Theme.Space.m)
@@ -162,7 +162,7 @@ struct CodeBlockStack: View {
             .accessibilityIdentifier("code-diff-load-\(d.path)")
         case .diffMore(_, let d, let i):
             Button { if let a = d.expand { run(a, ["path": d.path, "hunk": String(i), "direction": "down"]) } } label: {
-                Label(String(localized: "展开后面的行"), systemImage: Theme.Icon.expand).font(Theme.Font.caption).lineLimit(1)
+                Label(String(localized: "Show Lines Below"), systemImage: Theme.Icon.expand).font(Theme.Font.caption).lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xs)
             }
@@ -177,7 +177,7 @@ struct CodeBlockStack: View {
         case .threadTitle(_, let title, let resolved):
             HStack(spacing: Theme.Space.s) {
                 Text(title).font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
-                if resolved { Chip(text: String(localized: "已解决"), look: .tint(Theme.positive)).lineLimit(1) }
+                if resolved { Chip(text: String(localized: "Resolved"), look: .tint(Theme.positive)).lineLimit(1) }
             }
             .padding(.horizontal, Theme.Space.page + Theme.Space.xs)
             .padding(.top, Theme.Space.m)
@@ -189,7 +189,7 @@ struct CodeBlockStack: View {
                 .padding(.vertical, Theme.Space.s)
         case .reply(let id, let action, let placeholder):
             CodeComposerView(placeholder: placeholder, text: draft(id),
-                             buttons: [(String(localized: "回复"), nil, action.id, { send(action, id: id, ["body": draftText(id)]) })],
+                             buttons: [(String(localized: "Reply"), nil, action.id, { send(action, id: id, ["body": draftText(id)]) })],
                              running: model.running, identifier: "code-reply-\(id)")
                 .padding(.horizontal, Theme.Space.page).padding(.vertical, Theme.Space.s)
         case .composer(_, let c):
@@ -246,8 +246,8 @@ struct CodeBlockStack: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if t.outdated == true || t.resolved == true {
                 HStack(spacing: Theme.Space.s) {
-                    if t.outdated == true { Chip(text: String(localized: "已过时"), look: .neutral).lineLimit(1) }
-                    if t.resolved == true { Chip(text: String(localized: "已解决"), look: .tint(Theme.positive)).lineLimit(1) }
+                    if t.outdated == true { Chip(text: String(localized: "Outdated [Extension Code Stack 1148b6]"), look: .neutral).lineLimit(1) }
+                    if t.resolved == true { Chip(text: String(localized: "Resolved"), look: .tint(Theme.positive)).lineLimit(1) }
                 }
             }
             ForEach(Array(t.comments.enumerated()), id: \.offset) { _, c in
@@ -255,8 +255,8 @@ struct CodeBlockStack: View {
                                 badge: c.badge.map { ($0.text, $0.tone) }, event: c.event == true, link: $link)
             }
             if let r = t.reply {
-                CodeComposerView(placeholder: String(localized: "回复…"), text: draft(id),
-                                 buttons: [(String(localized: "回复"), nil, r.id, { send(r, id: id, ["body": draftText(id)]) })],
+                CodeComposerView(placeholder: String(localized: "Reply…"), text: draft(id),
+                                 buttons: [(String(localized: "Reply"), nil, r.id, { send(r, id: id, ["body": draftText(id)]) })],
                                  running: model.running, identifier: "code-thread-reply-\(t.id ?? id)")
             }
         }
@@ -265,16 +265,16 @@ struct CodeBlockStack: View {
         .overlay(alignment: .leading) { Rectangle().fill(Theme.accent).frame(width: Theme.Size.line * 2) }
         .padding(.horizontal, Theme.Space.page)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "第 \(t.line) 行的评论"))
+        .accessibilityLabel(String(localized: "Comments on line \(t.line)"))
     }
 
     private func inlineComposer(id: String, d: ExtensionDiffComponent, anchor: CodePageState.Anchor) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text(anchor.side == "old" ? String(localized: "评论原第 \(anchor.line) 行") : String(localized: "评论第 \(anchor.line) 行"))
+            Text(anchor.side == "old" ? String(localized: "Comment on old line \(anchor.line)") : String(localized: "Comment on line \(anchor.line)"))
                 .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(1)
-            CodeComposerView(placeholder: String(localized: "写评论…"), text: draft(id),
-                             buttons: [(String(localized: "取消"), nil, "cancel", { withAnimation(Theme.Motion.state) { state.compose(nil) } }),
-                                       (String(localized: "评论"), nil, d.comment?.id ?? "comment", {
+            CodeComposerView(placeholder: String(localized: "Write a comment…"), text: draft(id),
+                             buttons: [(String(localized: "Cancel"), nil, "cancel", { withAnimation(Theme.Motion.state) { state.compose(nil) } }),
+                                       (String(localized: "Comments"), nil, d.comment?.id ?? "comment", {
                                            guard let a = d.comment else { return }
                                            send(a, id: id, ["path": d.path, "side": anchor.side, "line": String(anchor.line),
                                                             "body": draftText(id)]) { state.compose(nil) }
@@ -361,7 +361,7 @@ struct CodeHeaderView: View {
                         .font(Theme.Font.caption)
                         .lineLimit(1)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel([f.label, f.value].compactMap { $0 }.joined(separator: String(localized: "：")))
+                        .accessibilityLabel([f.label, f.value].compactMap { $0 }.joined(separator: String(localized: ": ")))
                     }
                 }
             }
@@ -416,7 +416,7 @@ struct CodeBreadcrumbView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "路径"))
+        .accessibilityLabel(String(localized: "Path"))
     }
 
     private var line: some View {
@@ -513,7 +513,7 @@ struct CodeFileBlock: View {
         let src = source ?? CodeSnippetSource(code)
         VStack(spacing: Theme.Space.flush) {
             CodeLines(source: src, version: src.version)
-                .accessibilityLabel(code.path.map { String(localized: "\($0) 的代码") } ?? String(localized: "代码"))
+                .accessibilityLabel(code.path.map { String(localized: "Code of \($0)") } ?? String(localized: "Code"))
                 .accessibilityIdentifier("code-file")
                 .frame(height: fills ? nil : CGFloat(min(src.lineCount, Self.blockLines)) * src.lineHeight + Theme.Space.xl * 2)
                 .frame(maxHeight: fills ? .infinity : nil)
@@ -525,7 +525,7 @@ struct CodeFileBlock: View {
                 } label: {
                     HStack(spacing: Theme.Space.s) {
                         if model.running == load.id { ProgressView().controlSize(.small) }
-                        Text(String(localized: "加载更多")).lineLimit(1)
+                        Text(String(localized: "Load More")).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(Theme.Space.m)
@@ -610,7 +610,7 @@ struct CodeBackRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "返回 \(title)"))
+        .accessibilityLabel(String(localized: "Back to \(title) [Extension Code Stack bcc83f]"))
         .accessibilityIdentifier("code-back")
     }
 }

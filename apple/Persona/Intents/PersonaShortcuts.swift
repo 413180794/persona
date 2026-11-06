@@ -8,88 +8,88 @@ struct JarvisShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: TalkToPersonaIntent(),
             phrases: [
-                "跟 \(.applicationName) 聊聊",
-                "和 \(.applicationName) 聊天",
+                "Have a chat with \(.applicationName)",
+                "Start a chat with \(.applicationName)",
                 "Talk to \(.applicationName)",
                 "Chat with \(.applicationName)",
             ],
-            shortTitle: "跟 Persona 聊聊",
+            shortTitle: "Talk to Persona",
             systemImageName: "waveform.badge.mic"
         )
         AppShortcut(
             intent: AskJarvisIntent(),
             phrases: [
-                "问 \(.applicationName)",
-                "用 \(.applicationName) 问一下",
+                "Ask \(.applicationName) something",
+                "Quick question for \(.applicationName)",
                 "Ask \(.applicationName)",
                 "Ask \(.applicationName) a question",
             ],
-            shortTitle: "问 Persona",
+            shortTitle: "Ask Persona",
             systemImageName: "sparkles"
         )
         AppShortcut(
             intent: AgentTaskIntent(),
             phrases: [
-                "用 \(.applicationName) 让 Agent 去做",
-                "让 \(.applicationName) 的 \(\.$agent) 去做",
-                "\(.applicationName) 交给 Agent",
+                "Give an agent a task in \(.applicationName)",
+                "Ask \(\.$agent) in \(.applicationName) to do something",
+                "Hand off to an agent in \(.applicationName)",
                 "Have \(.applicationName) agent do something",
                 "Send a task to \(\.$agent) with \(.applicationName)",
             ],
-            shortTitle: "让 Agent 去做",
+            shortTitle: "Give an Agent a Task",
             systemImageName: "person.crop.circle.badge.checkmark"
         )
         AppShortcut(
             intent: AgentsStatusIntent(),
             phrases: [
-                "\(.applicationName) 个人 Agent 未读",
-                "\(.applicationName) Agent 有什么新消息",
+                "Unread from \(.applicationName) personal agents",
+                "What's new from \(.applicationName) agents",
                 "Check \(.applicationName) agents",
             ],
-            shortTitle: "Agent 未读",
+            shortTitle: "Agent Unread",
             systemImageName: "tray.full"
         )
         AppShortcut(
             intent: AskClaudeIntent(),
             phrases: [
-                "用 \(.applicationName) 问 Claude",
+                "Ask Claude in \(.applicationName)",
                 "Ask Claude with \(.applicationName)",
-                "\(.applicationName) 问 Claude",
-                "用 \(.applicationName) 问一下 Claude",
+                "\(.applicationName), ask Claude",
+                "Quick question for Claude in \(.applicationName)",
             ],
-            shortTitle: "问 Claude",
+            shortTitle: "Ask Claude [Ask Claude Intent 946979]",
             systemImageName: "bubble.left.and.text.bubble.right"
         )
         AppShortcut(
             intent: JarvisStatusIntent(),
             phrases: [
-                "\(.applicationName) 状态",
+                "Status of \(.applicationName)",
                 "\(.applicationName) status",
-                "\(.applicationName) 现在怎么样",
-                "用 \(.applicationName) 看进度",
+                "How's \(.applicationName) doing",
+                "Check progress in \(.applicationName)",
             ],
-            shortTitle: "状态",
+            shortTitle: "Status",
             systemImageName: "gauge.with.dots.needle.33percent"
         )
         AppShortcut(
             intent: ApproveFirstIntent(),
             phrases: [
-                "用 \(.applicationName) 批准第一个",
-                "\(.applicationName) 批准待处理",
+                "Approve the first one in \(.applicationName)",
+                "Approve pending in \(.applicationName)",
             ],
-            shortTitle: "批准第一个",
+            shortTitle: "Approve First",
             systemImageName: "checkmark.shield"
         )
         AppShortcut(
             intent: AddTodoIntent(),
             phrases: [
-                "用 \(.applicationName) 新建待办",
-                "\(.applicationName) 记个待办",
-                "\(.applicationName) 加个待办",
+                "Create a to-do in \(.applicationName)",
+                "Note a to-do in \(.applicationName)",
+                "Add to-do to \(.applicationName)",
                 "Add a to-do in \(.applicationName)",
                 "New \(.applicationName) to-do",
             ],
-            shortTitle: "新建待办",
+            shortTitle: "New To-Do",
             systemImageName: "checklist"
         )
     }

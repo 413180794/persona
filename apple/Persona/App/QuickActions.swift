@@ -10,9 +10,9 @@ enum QuickAction: String, CaseIterable {
 
     var item: UIApplicationShortcutItem {
         let (title, symbol): (String, String) = switch self {
-        case .newConversation: (String(localized: "新对话"), Theme.Icon.compose)
+        case .newConversation: (String(localized: "New Chat [Quick Actions ea4b29]"), Theme.Icon.compose)
         case .agents: ("Agents", Theme.Icon.agents)
-        case .inbox: (String(localized: "收件箱"), Theme.Icon.inbox)
+        case .inbox: (String(localized: "Inbox"), Theme.Icon.inbox)
         }
         return UIApplicationShortcutItem(type: rawValue, localizedTitle: title, localizedSubtitle: nil,
                                          icon: UIApplicationShortcutIcon(systemImageName: symbol))

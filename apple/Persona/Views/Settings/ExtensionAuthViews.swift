@@ -25,7 +25,7 @@ struct ExtensionAuthSection: View {
                     .accessibilityIdentifier("extension-auth-error")
             }
         } header: {
-            SettingsHeading(String(localized: "登录"))
+            SettingsHeading(String(localized: "Sign In"))
         } footer: {
             Text(footer)
         }
@@ -33,19 +33,19 @@ struct ExtensionAuthSection: View {
         .task(id: model.prompt.flatMap(ExtensionSignIn.pollKey)) {
             _ = await model.waitForAuthorization()
         }
-        .confirmationDialog("退出\(auth.title)？", isPresented: $confirmLogout, titleVisibility: .visible) {
-            Button(role: .destructive) { Task { await model.logout() } } label: { Text("退出登录").lineLimit(1) }
+        .confirmationDialog("Sign out of \(auth.title)? [Extension Auth Views fd7af9]", isPresented: $confirmLogout, titleVisibility: .visible) {
+            Button(role: .destructive) { Task { await model.logout() } } label: { Text("Sign Out [Connector Sign In Views 3ab8cc]").lineLimit(1) }
                 .accessibilityIdentifier("extension-auth-logout-confirm")
-            Button("取消", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("扩展存的登录凭据会删掉，要用时再登录。")
+            Text("The sign-in the extension saved is deleted; sign in again when you need it.")
         }
     }
 
     private var footer: String {
-        if !enabled { return String(localized: "启用后才能登录。") }
+        if !enabled { return String(localized: "Turn it on to sign in. [Extension Auth Views 31711b]") }
         if let d = auth.description, !d.isEmpty { return d }
-        return String(localized: "登录凭据只存在 hub 上这个扩展自己的目录里。")
+        return String(localized: "The sign-in is kept only in this extension's own folder on the hub.")
     }
 
     private var status: some View {
@@ -53,7 +53,7 @@ struct ExtensionAuthSection: View {
             Image(systemName: icon).resizable().scaledToFit().foregroundStyle(tone)
                 .scaledFrame(width: Theme.Size.iconS, height: Theme.Size.iconS)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text(auth.title.isEmpty ? String(localized: "登录") : auth.title).font(Theme.Font.body).lineLimit(1)
+                Text(auth.title.isEmpty ? String(localized: "Sign In") : auth.title).font(Theme.Font.body).lineLimit(1)
                 Text(ExtensionAuthText.state(auth)).font(Theme.Font.label)
                     .foregroundStyle(auth.state == .error ? Theme.danger : auth.needsSignIn ? Theme.cautionText : Color.secondary)
                     .lineLimit(2)
@@ -99,7 +99,7 @@ struct ExtensionAuthSection: View {
             .accessibilityIdentifier("extension-auth-sign-in")
             if auth.isSignedIn {
                 Button(role: .destructive) { confirmLogout = true } label: {
-                    Text("退出登录").lineLimit(1).formActionWidth()
+                    Text("Sign Out [Connector Sign In Views 3ab8cc]").lineLimit(1).formActionWidth()
                 }
                 .themedButton()
                 .disabled(!enabled || model.busy)
@@ -120,9 +120,9 @@ struct ExtensionAuthSection: View {
         }
         if ExtensionSignIn.isQR(p) {
             ExtensionSignInQR(rows: p.qr?.rows ?? [])
-            waiting(String(localized: "等你扫码确认…"))
+            waiting(String(localized: "Waiting for you to scan and confirm…"))
             buttons(primary: ExtensionSignIn.link(p).map { url in
-                (String(localized: "在本机打开"), "extension-auth-open", { UIApplication.shared.open(url) })
+                (String(localized: "Open on This Device"), "extension-auth-open", { UIApplication.shared.open(url) })
             })
         } else if ExtensionSignIn.isDeviceCode(p) {
             if let code = p.userCode, !code.isEmpty { userCode(code) }
@@ -130,20 +130,20 @@ struct ExtensionAuthSection: View {
                 // The link's QR code, to open it on another phone.
                 ExtensionSignInQR(rows: rows)
             }
-            waiting(String(localized: "等你在打开的页面上确认…"))
+            waiting(String(localized: "Waiting for you to confirm on the page you opened…"))
             buttons(primary: ExtensionSignIn.link(p).map { url in
-                (String(localized: "打开登录页面"), "extension-auth-open", { UIApplication.shared.open(url) })
+                (String(localized: "Open Sign-In Page"), "extension-auth-open", { UIApplication.shared.open(url) })
             })
         } else if ExtensionSignIn.isForm(p) {
             ForEach(p.fields ?? []) { field($0) }
-            buttons(primary: (model.busy ? String(localized: "正在验证…") : String(localized: "下一步"), "extension-auth-next", {
+            buttons(primary: (model.busy ? String(localized: "Verifying…") : String(localized: "Next [Inbox Line acfc4e]"), "extension-auth-next", {
                 Task { await model.next() }
             }), primaryDisabled: !model.canSend)
         } else {
-            Text("这一步这个版本的 App 显示不了。更新 App 后点「重新开始」再试。")
+            Text("This version of the app can't show this step. Update the app, then tap Start Over.")
                 .font(Theme.Font.secondary).foregroundStyle(Theme.cautionText)
                 .accessibilityIdentifier("extension-auth-cannot-draw")
-            buttons(primary: (String(localized: "重新开始"), "extension-auth-restart", { Task { await model.restart() } }))
+            buttons(primary: (String(localized: "Start Over"), "extension-auth-restart", { Task { await model.restart() } }))
         }
     }
 
@@ -164,10 +164,10 @@ struct ExtensionAuthSection: View {
                 UIPasteboard.general.string = code
                 Haptics.success()
             } label: {
-                Label("复制", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
+                Label("Copy [Message Menu 63d90d]", systemImage: Theme.Icon.copy).labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("复制验证码")
+            .accessibilityLabel("Copy Code [Connector Sign In Views 85a0b9]")
         }
     }
 
@@ -180,7 +180,7 @@ struct ExtensionAuthSection: View {
                     .disabled(primaryDisabled)
                     .accessibilityIdentifier(primary.1)
             }
-            Button { model.cancel() } label: { Text("取消").lineLimit(1).formActionWidth() }
+            Button { model.cancel() } label: { Text("Cancel").lineLimit(1).formActionWidth() }
                 .themedButton()
                 .accessibilityIdentifier("extension-auth-cancel")
         }
@@ -193,7 +193,7 @@ struct ExtensionAuthSection: View {
             Text(f.label).font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
             #if os(iOS) || os(visionOS)
             if f.secret == true {
-                SecretField(f.placeholder ?? f.label, filled: String(localized: "已填写"), text: text, identifier: "extension-auth-field-" + f.name)
+                SecretField(f.placeholder ?? f.label, filled: String(localized: "Filled in"), text: text, identifier: "extension-auth-field-" + f.name)
             } else {
                 TextField(f.label, text: text, prompt: Text(f.placeholder ?? f.label))
                     .textInputAutocapitalization(.never)

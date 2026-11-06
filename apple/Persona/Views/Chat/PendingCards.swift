@@ -61,7 +61,7 @@ struct PendingCards: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             // Not over a lone card with the keyboard up: it says nothing there, and the room is the card's.
             if over, !(keyboard && cards.count == 1) {
-                Text("\(cards.count) 个待处理")
+                Text("\(cards.count) pending")
                     .font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                     .padding(.horizontal, Theme.Space.xs)
                     .accessibilityIdentifier("pending-cards-count")

@@ -141,19 +141,19 @@ struct TerminalKeyBar: View {
             modifier(.ctrl, "Ctrl", name: "Control")
             if visible.contains("esc") { key("Esc", name: "esc") { press("esc") } }
             if visible.contains("tab") { key("Tab", name: "tab") { press("tab") } }
-            if visible.contains("ctrlc") { key("⌃C", name: String(localized: "发送 Control C")) { send(["ctrl+c"]) } }
+            if visible.contains("ctrlc") { key("⌃C", name: String(localized: "Send Control-C")) { send(["ctrl+c"]) } }
             if visible.contains("shortcuts"), let shortcuts {
                 Button { Haptics.tap(); shortcuts() } label: {
                     KeyCap(symbol: shortcutsOn ? "bolt.fill" : "bolt", state: shortcutsOn ? .once : .off)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("快捷命令")
+                .accessibilityLabel("Quick Commands [Terminal Keys 6f3d83]")
             }
             if visible.contains("paste"), let paste {
                 if let photos, let files {
                     // A tap pastes the clipboard's text as ever; held, it offers photos and files too.
                     Menu {
-                        Button { paste() } label: { Label("粘贴文字", systemImage: Theme.Icon.paste) }
+                        Button { paste() } label: { Label("Paste Text", systemImage: Theme.Icon.paste) }
                         fileItems(photos: photos, files: files)
                     } label: {
                         KeyCap(symbol: Theme.Icon.paste, state: .off)
@@ -164,13 +164,13 @@ struct TerminalKeyBar: View {
                     .menuStyle(.button)
                     .buttonStyle(.plain)
                     .menuIndicator(.hidden)
-                    .accessibilityLabel("粘贴")
-                    .accessibilityHint("按住可以粘贴照片或文件")
+                    .accessibilityLabel("Paste")
+                    .accessibilityHint("Press and hold to paste photos or files")
                     .accessibilityIdentifier("terminal-paste")
                 } else {
                     Button { Haptics.tap(); paste() } label: { KeyCap(symbol: Theme.Icon.paste, state: .off) }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("粘贴")
+                        .accessibilityLabel("Paste")
                 }
             }
             if visible.contains("files"), let photos, let files {
@@ -182,7 +182,7 @@ struct TerminalKeyBar: View {
                 .menuStyle(.button)
                 .buttonStyle(.plain)
                 .menuIndicator(.hidden)
-                .accessibilityLabel("粘贴照片或文件")
+                .accessibilityLabel("Paste Photos or Files")
                 .accessibilityIdentifier("terminal-files")
             }
             if visible.contains("alt") { modifier(.alt, "Alt", name: "Option") }
@@ -191,8 +191,8 @@ struct TerminalKeyBar: View {
     }
 
     @ViewBuilder private func fileItems(photos: @escaping () -> Void, files: @escaping () -> Void) -> some View {
-        Button { photos() } label: { Label("照片", systemImage: Theme.Icon.photos) }
-        Button { files() } label: { Label("文件", systemImage: Theme.Icon.file) }
+        Button { photos() } label: { Label("Photos", systemImage: Theme.Icon.photos) }
+        Button { files() } label: { Label("Files", systemImage: Theme.Icon.file) }
     }
 
     private func keyboardButton(_ up: Binding<Bool>) -> some View {
@@ -205,7 +205,7 @@ struct TerminalKeyBar: View {
         .buttonStyle(.plain)
         // A double tap is return (as in Moshi); a single one waits for it not to be one.
         .highPriorityGesture(TapGesture(count: 2).onEnded { Haptics.tap(); send(["enter"]) })
-        .accessibilityLabel(up.wrappedValue ? "收起键盘" : "键盘")
+        .accessibilityLabel(up.wrappedValue ? String(localized: "Hide Keyboard") : String(localized: "Keyboard"))
         .accessibilityIdentifier("terminal-keyboard")
     }
 
@@ -217,7 +217,7 @@ struct TerminalKeyBar: View {
             KeyCap(symbol: pad ? "gamecontroller.fill" : "gamecontroller", state: pad ? .once : .off)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("方向键")
+        .accessibilityLabel("Arrows")
         .accessibilityAddTraits(pad ? .isSelected : [])
     }
 
@@ -240,7 +240,7 @@ struct TerminalKeyBar: View {
             .overlay(TouchArea(down: { down(k) }, up: { up(k) }, cancel: { cancelled(k) }))
             .accessibilityElement()
             .accessibilityLabel(name)
-            .accessibilityValue(state == .locked ? "已锁定" : state == .off ? "" : "已按下")
+            .accessibilityValue(state == .locked ? String(localized: "Locked") : state == .off ? "" : String(localized: "Pressed"))
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(state == .off ? [] : .isSelected)
             .accessibilityAction { m.wrappedValue.tap(k, quick: false) }

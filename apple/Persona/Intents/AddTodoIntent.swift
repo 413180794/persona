@@ -4,18 +4,18 @@ import Foundation
 /// "New To-Do": writes a todo (docs/todos.md) straight to the hub, so Siri, the Action button or a shortcut can note
 /// something down without opening the app. It goes to the hub group the app has selected, where the todos page reads.
 struct AddTodoIntent: AppIntent {
-    nonisolated static let title: LocalizedStringResource = "新建待办"
+    nonisolated static let title: LocalizedStringResource = "New To-Do"
     nonisolated static let description = IntentDescription(
-        "在 Persona 里记一条待办，之后可以在待办页交给 Agent 去做。",
-        categoryName: "待办",
-        searchKeywords: ["待办", "todo", "to-do", "任务", "记一下", "提醒"]
+        "Note a to-do in Persona. Later you can hand it to an agent from the To-dos page.",
+        categoryName: "To-dos",
+        searchKeywords: ["To-dos", "todo", "to-do", "Tasks", "Reminder [Add Todo Intent 357f8a]", "Reminder [Add Todo Intent 8f29b3]"]
     )
     nonisolated static var supportedModes: IntentModes { .background }
 
-    @Parameter(title: "标题", requestValueDialog: "要记什么待办？")
+    @Parameter(title: "Title", requestValueDialog: "What's the to-do?")
     var todoTitle: String
 
-    @Parameter(title: "说明", description: "交给 Agent 时作为上下文一起发出", inputOptions: String.IntentInputOptions(multiline: true))
+    @Parameter(title: "Notes", description: "Sent along as context when you hand it to an agent", inputOptions: String.IntentInputOptions(multiline: true))
     var notes: String?
 
     nonisolated init() {}
@@ -25,7 +25,7 @@ struct AddTodoIntent: AppIntent {
     }
 
     nonisolated static var parameterSummary: some ParameterSummary {
-        Summary("新建待办 \(\.$todoTitle)") { \.$notes }
+        Summary("New to-do \(\.$todoTitle)") { \.$notes }
     }
 
     nonisolated func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
@@ -55,8 +55,8 @@ nonisolated enum AddTodoFlow {
 
 /// Wording for AddTodoIntent. Pure, so SiriIntentsTests can pin it.
 nonisolated enum TodoIntentText {
-    static let askTitle = String(localized: "要记什么待办？")
-    static let oldHub = String(localized: "hub 的版本还不支持待办，先更新 hub。")
+    static let askTitle = String(localized: "What's the to-do?")
+    static let oldHub = String(localized: "This hub doesn't support to-dos yet. Update the hub first.")
 
     /// Trimmed text, or nil when nothing is left.
     static func cleaned(_ text: String?) -> String? {
@@ -65,7 +65,7 @@ nonisolated enum TodoIntentText {
     }
 
     static func added(_ title: String) -> String {
-        String(localized: "已记下待办：「\(IntentText.excerpt(title, limit: 60))」")
+        String(localized: "Added to-do: “\(IntentText.excerpt(title, limit: 60))”")
     }
 
     static func failure(_ error: Error) -> String {

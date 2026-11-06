@@ -112,9 +112,9 @@ nonisolated enum NodeMenu {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .pull: String(localized: "拉取")
-            case .push: String(localized: "推送")
-            case .fetch: String(localized: "获取")
+            case .pull: String(localized: "Pull")
+            case .push: String(localized: "Push")
+            case .fetch: String(localized: "Fetch")
             }
         }
         var symbol: String {
@@ -127,8 +127,8 @@ nonisolated enum NodeMenu {
         /// The toast after it ran: the node's one-line summary ("Already up to date"), or Done.
         func done(_ message: String?) -> String {
             let m = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let said = m.isEmpty ? String(localized: "完成") : m
-            return String(localized: "\(title)：\(said)")
+            let said = m.isEmpty ? String(localized: "Done [Extension System Presentation c0b3fb]") : m
+            return String(localized: "\(title): \(said)")
         }
     }
 
@@ -145,7 +145,7 @@ nonisolated enum NodeMenu {
     enum Direction: String, CaseIterable, Identifiable, Sendable {
         case right, down
         var id: String { rawValue }
-        var title: String { self == .right ? String(localized: "向右拆分") : String(localized: "向下拆分") }
+        var title: String { self == .right ? String(localized: "Split Right") : String(localized: "Split Down") }
         var symbol: String { self == .right ? Theme.Icon.splitRight : Theme.Icon.splitDown }
     }
 
@@ -220,7 +220,7 @@ final class NodeActions {
 
     private func git(_ op: NodeMenu.GitOp, machine: MachineRef, body: [String: String]) {
         guard let api = model.api(machine.group) else { return }
-        model.toast = Toast(String(localized: "正在\(op.title)…"))
+        model.toast = Toast(String(localized: "\(op.title)…"))
         Task {
             do {
                 let data = try await api.nodeAction(machine: machine.id, "panes/git", body, timeout: 100)
@@ -228,7 +228,7 @@ final class NodeActions {
                 model.toast = Toast(op.done(result?.message), style: .success)
                 Haptics.success()
             } catch {
-                fail(String(localized: "\(op.title)失败"), error)
+                fail(String(localized: "\(op.title) failed"), error)
             }
         }
     }
@@ -238,10 +238,10 @@ final class NodeActions {
         Task {
             do {
                 try await api.nodeAction(machine: s.machineID, "panes/split", NodeMenu.splitBody(pane: pane, direction))
-                model.toast = Toast(String(localized: "已新建窗格"), style: .success)
+                model.toast = Toast(String(localized: "Pane created"), style: .success)
                 await model.refresh()
             } catch {
-                fail(String(localized: "新建窗格失败"), error)
+                fail(String(localized: "Couldn't create pane"), error)
             }
         }
     }
@@ -258,17 +258,17 @@ final class NodeActions {
         Task {
             do {
                 try await api.nodeAction(machine: c.machine.id, "tabs/close", NodeMenu.closeTabBody(tabID: c.tabID, kind: c.kind))
-                model.toast = Toast(String(localized: "已关闭标签页"), style: .success)
+                model.toast = Toast(String(localized: "Tab closed"), style: .success)
                 await model.refresh()
             } catch {
-                fail(String(localized: "nodeActions.closeTabFailed", defaultValue: "关闭失败", comment: "Closing a terminal tab failed"), error)
+                fail(String(localized: "nodeActions.closeTabFailed", defaultValue: "Couldn't close the tab", comment: "Closing a terminal tab failed"), error)
             }
         }
     }
 
     func fail(_ what: String, _ error: Error) {
         if error.isOffline || error.isQuiet { model.show(error); return }
-        model.toast = Toast(String(localized: "\(what)：\(error.shown ?? error.localizedDescription)"), style: .error)
+        model.toast = Toast(String(localized: "\(what): \(error.shown ?? error.localizedDescription)"), style: .error)
         Haptics.error()
     }
 }
@@ -283,13 +283,13 @@ private struct NodeActionPrompts: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog(actions.closingTab.map { $0.name.isEmpty ? "关闭这个标签页？" : "关闭标签页「\($0.name)」？" } ?? "",
+            .confirmationDialog(actions.closingTab.map { $0.name.isEmpty ? String(localized: "Close This Tab?") : String(localized: "Close Tab “\($0.name)”?") } ?? "",
                                 isPresented: Binding(get: { actions.closingTab != nil }, set: { if !$0 { actions.closingTab = nil } }),
                                 titleVisibility: .visible, presenting: actions.closingTab) { c in
-                Button("关闭标签页", role: .destructive) { actions.closeTab(c) }
-                Button("取消", role: .cancel) {}
+                Button("Close Tab", role: .destructive) { actions.closeTab(c) }
+                Button("Cancel", role: .cancel) {}
             } message: { _ in
-                Text("标签页里的所有窗格都会关掉，里面运行的 Agent 也会结束。")
+                Text("Every pane in the tab closes, and the agents running in them end too.")
             }
             .sheet(item: Binding(get: { actions.runningHere }, set: { actions.runningHere = $0 })) { g in
                 RunAgentHereSheet(group: g)
@@ -312,14 +312,14 @@ struct AgentNodeMenuItems: View {
             ForEach(NodeMenu.Direction.allCases) { d in
                 Button { if let s = now() { actions.split(s, d) } } label: { Label(d.title, systemImage: d.symbol) }
             }
-        } label: { Label("拆分窗格", systemImage: Theme.Icon.splitRight).lineLimit(1) }
+        } label: { Label("Split Pane", systemImage: Theme.Icon.splitRight).lineLimit(1) }
         Menu {
             ForEach(NodeMenu.GitOp.allCases) { op in
                 Button { if let s = now() { actions.git(op, session: s) } } label: { Label(op.title, systemImage: op.symbol) }
             }
         } label: { Label("Git", systemImage: Theme.Icon.gitBranch) }
         Button(role: .destructive) { if let s = now() { actions.askCloseTab(s) } } label: {
-            Label("关闭标签页…", systemImage: Theme.Icon.closeTab).lineLimit(1)
+            Label("Close Tab…", systemImage: Theme.Icon.closeTab).lineLimit(1)
         }
     }
 }
@@ -333,10 +333,10 @@ struct SpaceNodeMenuItems: View {
     var body: some View {
         let actions = NodeActions.shared
         Button { actions.runningHere = group } label: {
-            Label("在这里运行 Agent…", systemImage: Theme.Icon.run).lineLimit(1)
+            Label("Run Agent Here…", systemImage: Theme.Icon.run).lineLimit(1)
         }
         Button { actions.newWorktree = group } label: {
-            Label("新建 worktree…", systemImage: Theme.Icon.newWorktree).lineLimit(1)
+            Label("New Worktree…", systemImage: Theme.Icon.newWorktree).lineLimit(1)
         }
         Menu {
             ForEach(NodeMenu.GitOp.allCases) { op in
@@ -374,17 +374,17 @@ struct RunAgentHereSheet: View {
                 content(loaded)
             }
             .themedPage()
-            .navigationTitle("在这里运行 Agent")
+            .navigationTitle("Run Agent Here")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }.lineLimit(1).disabled(busy)
+                    Button("Cancel") { dismiss() }.lineLimit(1).disabled(busy)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if busy {
                         ProgressView()
                     } else {
-                        Button("运行") { run() }
+                        Button("Runtime") { run() }
                             .lineLimit(1)
                             .disabled(pane.isEmpty || launcher.isEmpty)
                     }
@@ -401,15 +401,15 @@ struct RunAgentHereSheet: View {
         let launchers = loaded.launchers.filter(NodeMenu.launchableHere)
         if shells.isEmpty {
             let canOpen = NodeMenu.herdrHost(loaded.panes)?.newTab == true
-            EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "没有空闲的终端"),
-                           message: String(localized: "「\(group.name)」里的窗格都在运行 Agent。新开一个终端标签页，在那里运行。"),
-                           action: canOpen && !busy ? (title: String(localized: "新开终端标签页"), run: { openShell() }) : nil)
+            EmptyStateView(symbol: Theme.Icon.terminal, title: String(localized: "No Free Terminal"),
+                           message: String(localized: "Every pane in “\(group.name)” is running an agent. Open a new terminal tab and run it there."),
+                           action: canOpen && !busy ? (title: String(localized: "New Terminal Tab"), run: { openShell() }) : nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(Theme.Space.page)
         } else {
             Form {
-                Section("窗格") {
-                    Picker("窗格", selection: $pane) {
+                Section("Pane") {
+                    Picker("Pane", selection: $pane) {
                         ForEach(shells) { p in Text(NodeMenu.shellTitle(p, in: loaded.panes)).lineLimit(1).tag(p.pane) }
                     }
                     .pickerStyle(.inline)
@@ -417,19 +417,19 @@ struct RunAgentHereSheet: View {
                 }
                 Section {
                     if launchers.isEmpty {
-                        Text("这台电脑上没有能直接启动的 Claude Code 启动器").font(Theme.Font.secondary).foregroundStyle(.secondary)
+                        Text("This computer has no Claude Code launcher that can start directly").font(Theme.Font.secondary).foregroundStyle(.secondary)
                     } else {
-                        Picker("启动器", selection: $launcher) {
+                        Picker("Launcher", selection: $launcher) {
                             ForEach(launchers) { l in Text(l.name).lineLimit(1).tag(l.name) }
                         }
                     }
                 } header: {
-                    Text("启动器")
+                    Text("Launcher")
                 } footer: {
                     if let failure {
                         Text(failure).foregroundStyle(Theme.danger)
                     } else {
-                        Text("在选中的 shell 里启动，不新开标签页。Codex 需要第一条消息，请用「新建 Agent」。")
+                        Text("Starts in the selected shell without opening a new tab. Codex needs a first message, so use New Agent.")
                     }
                 }
             }
@@ -438,7 +438,7 @@ struct RunAgentHereSheet: View {
     }
 
     private func load() async {
-        guard let api = model.api(group.group) else { state = .failed(String(localized: "尚未连接 hub")); return }
+        guard let api = model.api(group.group) else { state = .failed(String(localized: "Not connected to the hub [App Model 93d955]")); return }
         state = .loading
         do {
             async let panes = api.terminalPanes(machine: group.machineID)
@@ -465,7 +465,7 @@ struct RunAgentHereSheet: View {
                 try await api.nodeAction(machine: group.machineID, "panes", body)
                 await load()
             } catch {
-                NodeActions.shared.fail(String(localized: "没能新开终端"), error)
+                NodeActions.shared.fail(String(localized: "Couldn't open a terminal"), error)
             }
         }
     }
@@ -479,12 +479,12 @@ struct RunAgentHereSheet: View {
             defer { busy = false }
             do {
                 try await api.nodeAction(machine: group.machineID, "panes/agent", ["pane": pane, "launcher": name], timeout: 130)
-                model.toast = Toast(String(localized: "已在窗格里启动 \(name)"), style: .success)
+                model.toast = Toast(String(localized: "Started \(name) in the pane"), style: .success)
                 Haptics.success()
                 dismiss()
                 await model.refresh()
             } catch {
-                failure = String(localized: "启动失败：\(error.shown ?? error.localizedDescription)")
+                failure = String(localized: "Failed to start: \(error.shown ?? error.localizedDescription)")
                 Haptics.error()
             }
         }
@@ -567,14 +567,14 @@ nonisolated enum WorktreeForm: Sendable {
     /// Why git would not take this as a branch name (`git check-ref-format --branch`), nil when it would.
     static func branchProblem(_ raw: String) -> String? {
         let b = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if b.isEmpty { return String(localized: "请填写分支名") }
-        if b.hasPrefix("-") { return String(localized: "分支名不能以 - 开头") }
+        if b.isEmpty { return String(localized: "Enter a branch name") }
+        if b.hasPrefix("-") { return String(localized: "Branch names can't start with -") }
         let bad = CharacterSet(charactersIn: "~^:?*[\\").union(.whitespacesAndNewlines).union(.controlCharacters)
-        if b == "@" || b.unicodeScalars.contains(where: bad.contains) { return String(localized: "分支名里有不能用的字符") }
-        if b.contains("..") || b.contains("@{") || b.contains("//") { return String(localized: "分支名里有不能用的写法") }
-        if b.hasPrefix("/") || b.hasSuffix("/") || b.hasSuffix(".") || b.hasSuffix(".lock") { return String(localized: "分支名的开头或结尾不合法") }
+        if b == "@" || b.unicodeScalars.contains(where: bad.contains) { return String(localized: "The branch name has characters that aren't allowed") }
+        if b.contains("..") || b.contains("@{") || b.contains("//") { return String(localized: "The branch name has a sequence that isn't allowed") }
+        if b.hasPrefix("/") || b.hasSuffix("/") || b.hasSuffix(".") || b.hasSuffix(".lock") { return String(localized: "The branch name can't start or end like that") }
         if b.split(separator: "/").contains(where: { $0.hasPrefix(".") || $0.hasSuffix(".lock") }) {
-            return String(localized: "分支名的每一段都不能以 . 开头或以 .lock 结尾")
+            return String(localized: "No part of a branch name can start with . or end with .lock")
         }
         return nil
     }
@@ -601,10 +601,10 @@ nonisolated enum WorktreeForm: Sendable {
 
     /// What stops it being sent; nil when nothing does.
     static func problem(_ s: State) -> String? {
-        branchProblem(s.branch) ?? (s.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "请填写检出路径") : nil)
+        branchProblem(s.branch) ?? (s.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "Enter a checkout path") : nil)
     }
 
-    static var needsUpdate: String { String(localized: "这台电脑上的 Persona 版本太旧，更新后才能新建 worktree") }
+    static var needsUpdate: String { String(localized: "Persona on this computer is too old to create worktrees. Update it first.") }
 
     /// A hub or node without these calls answers 404 / 405 / 501 or "unknown method": told to update.
     static func isTooOld(_ error: Error) -> Bool {
@@ -617,7 +617,7 @@ nonisolated enum WorktreeForm: Sendable {
     static func describe(_ error: Error, what: String) -> String {
         if isTooOld(error) { return needsUpdate }
         let m = error.shown ?? error.localizedDescription
-        return m.isEmpty ? what : String(localized: "\(what)：\(m)")
+        return m.isEmpty ? what : String(localized: "\(what): \(m)")
     }
 
     static func body(workspaceID: String, kind: String?) -> [String: String] {
@@ -658,17 +658,17 @@ struct NewWorktreeSheet: View {
                     content(r)
                 }
                 .themedPage()
-                .navigationTitle("新建 worktree")
+                .navigationTitle("New Worktree")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { dismiss() }.lineLimit(1).disabled(busy)
+                        Button("Cancel") { dismiss() }.lineLimit(1).disabled(busy)
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         if busy {
                             ProgressView()
                         } else {
-                            Button("创建") { create() }
+                            Button("Create") { create() }
                                 .lineLimit(1)
                                 .disabled(repo.value == nil || WorktreeForm.problem(form) != nil)
                         }
@@ -684,13 +684,13 @@ struct NewWorktreeSheet: View {
     @ViewBuilder private func content(_ r: WorktreePrepare) -> some View {
         Form {
             Section {
-                Label(r.branch.isEmpty ? "\(r.repoName) · 未在任何分支上" : "\(r.repoName) · 当前分支 \(r.branch)",
+                Label(r.branch.isEmpty ? String(localized: "\(r.repoName) · not on any branch") : String(localized: "\(r.repoName) · on branch \(r.branch)"),
                       systemImage: Theme.Icon.gitBranch)
                     .font(Theme.Font.secondary)
                     .lineLimit(1)
             }
             Section {
-                TextField("新分支名，或已有的本地分支", text: Binding(get: { form.branch }, set: { form = WorktreeForm.typeBranch(form, base: base, $0) }))
+                TextField(String(localized: "New branch name, or an existing local branch"), text: Binding(get: { form.branch }, set: { form = WorktreeForm.typeBranch(form, base: base, $0) }))
                     .font(Theme.Font.code)
                     .autocorrectionDisabled()
                     #if os(iOS) || os(visionOS)
@@ -698,16 +698,16 @@ struct NewWorktreeSheet: View {
                     #endif
                     .accessibilityIdentifier("worktree.branch")
             } header: {
-                Text("分支")
+                Text("Branch")
             } footer: {
                 if !form.branch.isEmpty, let problem = WorktreeForm.branchProblem(form.branch) {
                     Text(problem).foregroundStyle(Theme.danger)
                 } else {
-                    Text("新分支从这个工作区当前的提交开始；已有的本地分支直接检出。")
+                    Text("A new branch starts from this workspace's current commit; an existing local branch is checked out as is.")
                 }
             }
             Section {
-                TextField("检出路径", text: Binding(get: { form.path }, set: { form = WorktreeForm.typePath(form, base: base, $0.replacingOccurrences(of: "\n", with: "")) }),
+                TextField(String(localized: "Checkout Path"), text: Binding(get: { form.path }, set: { form = WorktreeForm.typePath(form, base: base, $0.replacingOccurrences(of: "\n", with: "")) }),
                           axis: .vertical) // a long path shows whole
                     .font(Theme.Font.code)
                     .autocorrectionDisabled()
@@ -716,12 +716,12 @@ struct NewWorktreeSheet: View {
                     #endif
                     .accessibilityIdentifier("worktree.path")
             } header: {
-                Text("检出路径")
+                Text("Checkout Path")
             } footer: {
                 if let failure {
                     Text(failure).foregroundStyle(Theme.danger).accessibilityIdentifier("worktree.failure")
                 } else {
-                    Text("跟着分支名走；改过之后不再跟，清空后恢复")
+                    Text("Follows the branch name. Once you edit it, it stops following; clear it to follow again.")
                 }
             }
         }
@@ -729,7 +729,7 @@ struct NewWorktreeSheet: View {
     }
 
     private func prepare() async {
-        guard let api = model.api(group.group), !workspaceID.isEmpty else { repo = .failed(String(localized: "尚未连接 hub")); return }
+        guard let api = model.api(group.group), !workspaceID.isEmpty else { repo = .failed(String(localized: "Not connected to the hub [App Model 93d955]")); return }
         repo = .loading
         do {
             let data = try await api.nodeAction(machine: group.machineID, "worktree/prepare",
@@ -738,7 +738,7 @@ struct NewWorktreeSheet: View {
             if !form.pathEdited { form.path = WorktreeForm.suggestedPath(base: r.path, branch: form.branch) }
             repo = .loaded(r)
         } catch {
-            repo = .failed(WorktreeForm.describe(error, what: String(localized: "没能读取这个仓库")))
+            repo = .failed(WorktreeForm.describe(error, what: String(localized: "Couldn't read this repository")))
         }
     }
 
@@ -754,12 +754,12 @@ struct NewWorktreeSheet: View {
             do {
                 let data = try await api.nodeAction(machine: group.machineID, "worktree/create", body, timeout: 160)
                 let made = try JSON.decoder.decode(WorktreeCreated.self, from: data)
-                model.toast = Toast(String(localized: "已新建 worktree"), style: .success)
+                model.toast = Toast(String(localized: "Worktree created"), style: .success)
                 Haptics.success()
                 await model.refresh()
                 created = made
             } catch {
-                failure = WorktreeForm.describe(error, what: String(localized: "没能新建 worktree"))
+                failure = WorktreeForm.describe(error, what: String(localized: "Couldn't create the worktree"))
                 Haptics.error()
             }
         }

@@ -30,7 +30,7 @@ struct PersonalAgentSessionView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
                     if hasMore {
-                        Button(loadingOlder ? "加载中…" : "加载更早") { Task { await loadOlder() } }
+                        Button(loadingOlder ? String(localized: "Loading… [Personal Agent Session View 4927a5]") : String(localized: "Load Earlier")) { Task { await loadOlder() } }
                             .disabled(loadingOlder).frame(maxWidth: .infinity)
                     }
                     if let error {
@@ -66,11 +66,11 @@ struct PersonalAgentSessionView: View {
     @ViewBuilder private var composer: some View {
         VStack(spacing: Theme.Space.xs) {
             if !session.canSend {
-                Text("这个会话不能从 Persona 发送（canSend=false），请到飞书网关的网页处理。")
+                Text("This session can't send from Persona (canSend=false). Handle it on the Lark gateway's web page.")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
             }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
-                TextField("发消息给 \(session.provider)", text: $draft, axis: .vertical)
+                TextField(String(localized: "Message \(session.provider) [Personal Agent Session View 72a8a3]"), text: $draft, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(!session.canSend)
@@ -99,13 +99,13 @@ struct PersonalAgentSessionView: View {
             PersonalAgentBubble(message: PersonalAgentMessage(externalId: "local:" + p.id, role: "user",
                                                               blocks: [PersonalAgentBlock(text: p.text)]))
             switch p.state {
-            case .sending: Text("发送中…").font(Theme.Font.label).foregroundStyle(.secondary)
-            case .sent: Text("已发送，等待回复").font(Theme.Font.label).foregroundStyle(.secondary)
+            case .sending: Text("Sending… [Personal Agent Session View 364970]").font(Theme.Font.label).foregroundStyle(.secondary)
+            case .sent: Text("Sent, waiting for a reply").font(Theme.Font.label).foregroundStyle(.secondary)
             case .failed(let why):
                 HStack {
-                    Text("失败：\(why)").font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(2)
-                    Button("重试") { Task { await send(p) } }.font(Theme.Font.label)
-                    Button("放弃") { pending.removeAll { $0.id == p.id } }.font(Theme.Font.label)
+                    Text("Failed: \(why)").font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(2)
+                    Button("Retry [Components b8784c]") { Task { await send(p) } }.font(Theme.Font.label)
+                    Button("Discard") { pending.removeAll { $0.id == p.id } }.font(Theme.Font.label)
                 }
             }
         }
@@ -117,7 +117,7 @@ struct PersonalAgentSessionView: View {
         set(p.id, .sending)
         do {
             let r = try await api.sendPersonalAgent(session.id, clientId: p.id, text: p.text)
-            if r.outbox.status == "failed" { set(p.id, .failed(r.outbox.error ?? String(localized: "发送失败"))) } else { set(p.id, .sent) }
+            if r.outbox.status == "failed" { set(p.id, .failed(r.outbox.error ?? String(localized: "Send failed"))) } else { set(p.id, .sent) }
             await reload(markRead: false)
         } catch {
             set(p.id, .failed(error.localizedDescription))
@@ -200,7 +200,7 @@ struct PersonalAgentBubble: View {
         case "reaction" where !(b.emoji ?? "").isEmpty:
             HStack(spacing: Theme.Space.xs) {
                 Text(b.emoji ?? "").font(Theme.Font.title)
-                Text("回应了").font(Theme.Font.label).foregroundStyle(.secondary)
+                Text("Reacted").font(Theme.Font.label).foregroundStyle(.secondary)
             }
             .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xxs)
             .background(Capsule().fill(Theme.Fill.chip))

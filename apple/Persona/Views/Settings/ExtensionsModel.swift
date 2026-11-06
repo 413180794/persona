@@ -58,24 +58,24 @@ nonisolated struct ExtensionNodeState: Codable, Hashable, Sendable {
 
     /// How it is, for the machine's row: what the user can make of it (nil: switched on, nothing heard yet).
     static func status(_ s: ExtensionNodeState?) -> String {
-        guard let s else { return String(localized: "等 hub 把程序发过去") }
+        guard let s else { return String(localized: "Waiting for the hub to send the program") }
         let error = s.error.map(exitText)
         switch s.state {
-        case "running": return s.version.map { String(localized: "程序在运行 · \($0)") } ?? String(localized: "程序在运行")
-        case "starting": return String(localized: "程序正在启动")
-        case "missing": return String(localized: "正在把程序发过去")
-        case "offline": return String(localized: "离线：连上后会启动")
-        case "lease_expired": return String(localized: "和 hub 断开太久，程序已停，连上后会再启动")
-        case "outdated": return String(localized: "这台电脑上的 personad 太旧，更新后才能运行")
-        case "error": return error.map { String(localized: "程序出错：\($0)") } ?? String(localized: "程序出错")
-        default: return error.map { String(localized: "\(s.state)：\($0)", comment: "A program state the app does not know, and its error") } ?? s.state
+        case "running": return s.version.map { String(localized: "Running · \($0)") } ?? String(localized: "Running [Extensions Model 1f1cd2]")
+        case "starting": return String(localized: "Starting [Extensions Model 0abbfb]")
+        case "missing": return String(localized: "Sending the program")
+        case "offline": return String(localized: "Offline: starts once connected")
+        case "lease_expired": return String(localized: "Disconnected from the hub too long; stopped, and starts again once connected")
+        case "outdated": return String(localized: "personad on this computer is too old; update it to run")
+        case "error": return error.map { String(localized: "Program error: \($0)") } ?? String(localized: "Program error")
+        default: return error.map { String(localized: "\(s.state): \($0)", comment: "A program state the app does not know, and its error") } ?? s.state
         }
     }
 
     /// Go's words for how a program ended (exec.ExitError), in the apps' words: exit status 3 → Exit code 3.
     static func exitText(_ error: String) -> String {
-        error.replacing(#/\bexit status (-?\d+)/#) { m in let code = String(m.1); return String(localized: "退出码 \(code)") }
-            .replacing(#/\bsignal: ([a-z ]+)/#) { m in let signal = String(m.1); return String(localized: "被信号结束（\(signal)）") }
+        error.replacing(#/\bexit status (-?\d+)/#) { m in let code = String(m.1); return String(localized: "Exit code \(code)") }
+            .replacing(#/\bsignal: ([a-z ]+)/#) { m in let signal = String(m.1); return String(localized: "ended by signal (\(signal))") }
     }
 }
 
@@ -303,21 +303,21 @@ enum ExtensionText {
     /// (`runNote`). hub's `status` values are unchanged.
     static func state(_ p: HubExtension) -> String {
         switch p.status {
-        case "running", "stopped": String(localized: "启动", comment: "Extension state: on")
-        case "starting": String(localized: "正在启动")
-        case "needs_setup": String(localized: "需要设置")
-        case "disabled": String(localized: "停用", comment: "Extension state: off")
-        case "incompatible": String(localized: "这台 hub 用不了")
-        case "error": String(localized: "出错了")
-        default: String(localized: "状态未知")
+        case "running", "stopped": String(localized: "On [Herdr Notice 56410f]", comment: "Extension state: on")
+        case "starting": String(localized: "Starting [Session Modes 087739]")
+        case "needs_setup": String(localized: "Needs Setup")
+        case "disabled": String(localized: "Off [Extensions Model 4e6fd0]", comment: "Extension state: off")
+        case "incompatible": String(localized: "Not available on this hub")
+        case "error": String(localized: "Something Went Wrong")
+        default: String(localized: "Unknown [Connectors Views 93e474]")
         }
     }
 
     /// Whether an enabled plugin's program runs right now, under its description; nil for any other state.
     static func runNote(_ p: HubExtension) -> String? {
         switch p.status {
-        case "running": String(localized: "正在运行")
-        case "stopped": String(localized: "暂未运行，用到时自动启动")
+        case "running": String(localized: "Running [Extensions Model 9273b8]")
+        case "stopped": String(localized: "Not running; starts when needed")
         default: nil
         }
     }
@@ -327,24 +327,24 @@ enum ExtensionText {
 
     static func source(_ s: String?) -> String? {
         switch s {
-        case "builtin": String(localized: "内置")
+        case "builtin": String(localized: "Built-in")
         case "hub.json": "hub.json"
-        case "installed": String(localized: "已安装")
+        case "installed": String(localized: "Installed [Extension Market Views a8b6c3]")
         default: nil
         }
     }
 
     static func point(_ name: String) -> String {
         switch name {
-        case "connectors": String(localized: "连接器")
-        case "voice": String(localized: "语音对话")
+        case "connectors": String(localized: "Connectors")
+        case "voice": String(localized: "Voice Chat")
         default: name
         }
     }
 
     /// The row's value: its state (the version is on its page).
     static func summary(_ p: HubExtension, auth: ExtensionAuth? = nil) -> String {
-        let base = p.upgrade?.state == "needs_permission" ? String(localized: "\(state(p)) · 新版本待确认") : state(p)
+        let base = p.upgrade?.state == "needs_permission" ? String(localized: "\(state(p)) · Update needs review") : state(p)
         // Not signed in (#4507): said after the state, as the hub's warning says it to older apps.
         guard p.enabled ?? true, let suffix = ExtensionAuthText.listSuffix(auth ?? p.auth) else { return base }
         return base + " · " + suffix // i18n-ignore
@@ -354,7 +354,7 @@ enum ExtensionText {
     static func permissionTitle(_ p: ExtensionPermission) -> String {
         guard p.key == "tools" else { return p.title }
         let more = p.title.contains("更多") // i18n-ignore: the hub's title for an upgrade's added programs
-        return more ? String(localized: "安装更多命令行程序") : String(localized: "安装命令行程序")
+        return more ? String(localized: "Install more command-line programs") : String(localized: "Install command-line programs")
     }
 
     /// Under the form: which switches take effect at once (lists of machines, `ExtensionModel.saveNow`) and that the rest
@@ -362,10 +362,10 @@ enum ExtensionText {
     static func saveFooter(_ fields: [ExtensionField]) -> String? {
         let all = fields.flatMap { $0.type == "object" ? ($0.fields ?? []) : [$0] }
         let now = all.filter { $0.items?.format == "machine" }.map { String(localized: "「\($0.label)」", comment: "A field's name in quotes") }
-        if now.isEmpty { return String(localized: "改完点右上角「保存」；保存后扩展会重新启动。留空的项用扩展的默认值。") }
+        if now.isEmpty { return String(localized: "When you're done, tap Save at the top right; the extension restarts after saving. Empty fields use the extension's defaults.") }
         if now.count == all.count { return nil }
         let names = list(now)
-        return String(localized: "\(names)的开关即时生效；其他项改完点右上角「保存」，保存后扩展会重新启动。留空的项用扩展的默认值。")
+        return String(localized: "Switches in \(names) take effect right away. For the rest, tap Save at the top right when you're done; the extension restarts after saving. Empty fields use the extension's defaults.")
     }
 
     /// The Update section's line for a newer version: what happens to it (docs/extensions.md「自动升级」).
@@ -373,12 +373,12 @@ enum ExtensionText {
         let why = u.detail.flatMap { $0.isEmpty ? nil : $0 }
         switch u.state {
         case "needs_permission": return morePermissions(u.addedPermissions ?? [])
-        case "waiting_idle": return String(localized: "扩展空闲时自动升级")
-        case "available": return String(localized: "稍后自动升级")
-        case "off": return String(localized: "自动升级关着")
-        case "skipped": return String(localized: "上次升级后起不来，已回到 \(u.from)，不再自动升级到这个版本")
-        case "failed": return why.map { String(localized: "没装上：\($0)") } ?? String(localized: "没装上")
-        case "incompatible": return why.map { String(localized: "这台 hub 装不了：\($0)") } ?? String(localized: "这台 hub 装不了")
+        case "waiting_idle": return String(localized: "Updates automatically when the extension is idle")
+        case "available": return String(localized: "Updates automatically later")
+        case "off": return String(localized: "Auto-update is off")
+        case "skipped": return String(localized: "It didn't start after the last update, so it went back to \(u.from) and won't auto-update to this version")
+        case "failed": return why.map { String(localized: "Didn't install: \($0)") } ?? String(localized: "Didn't install")
+        case "incompatible": return why.map { String(localized: "Can't install on this hub: \($0)") } ?? String(localized: "Can't install on this hub")
         default: return ""
         }
     }
@@ -386,35 +386,35 @@ enum ExtensionText {
     /// Whether the line asks something of the user (its row opens the upgrade in the market).
     static func upgradeAction(_ u: ExtensionUpgrade) -> String? {
         switch u.state {
-        case "needs_permission": return String(localized: "去确认")
-        case "off", "skipped", "failed": return String(localized: "去升级")
+        case "needs_permission": return String(localized: "Review [Extensions Model 9fdfd7]")
+        case "off", "skipped", "failed": return String(localized: "Update [Extensions Model 326f67]")
         default: return nil
         }
     }
 
     /// What a newer version asks for more, as the hub says it in its notice.
     static func morePermissions(_ added: [ExtensionPermission]) -> String {
-        guard !added.isEmpty else { return String(localized: "要的权限有变化") }
+        guard !added.isEmpty else { return String(localized: "Its permissions changed") }
         let lines = added.map { p in
-            p.detail.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "\(p.title)（\($0)）", comment: "A permission and its detail") } ?? p.title
+            p.detail.flatMap { $0.isEmpty ? nil : $0 }.map { String(localized: "\(p.title) (\($0))", comment: "A permission and its detail") } ?? p.title
         }
         let all = list(lines)
         // One sentence per small count: the hub's notice says them with Chinese numerals (「要多一项权限」).
         return switch added.count {
-        case 1: String(localized: "要多一项权限：\(all)")
-        case 2: String(localized: "要多两项权限：\(all)")
-        case 3: String(localized: "要多三项权限：\(all)")
-        case 4: String(localized: "要多四项权限：\(all)")
-        case 5: String(localized: "要多五项权限：\(all)")
-        default: String(localized: "要多 \(added.count) 项权限：\(all)")
+        case 1: String(localized: "Needs 1 more permission: \(all)")
+        case 2: String(localized: "Needs 2 more permissions: \(all)")
+        case 3: String(localized: "Needs 3 more permissions: \(all)")
+        case 4: String(localized: "Needs 4 more permissions: \(all)")
+        case 5: String(localized: "Needs 5 more permissions: \(all)")
+        default: String(localized: "Needs \(added.count) more permissions: \(all)")
         }
     }
 
     /// The last upgrade, when it is news of its own (asking and failing are the newer version's line).
     static func upgradeNote(_ n: ExtensionUpgradeNote) -> String? {
         switch n.kind {
-        case "upgraded": return String(localized: "已自动升级到 \(n.to)（原来是 \(n.from)）")
-        case "rolled_back": return String(localized: "\(n.to) 起不来，已回到 \(n.from)")
+        case "upgraded": return String(localized: "Auto-updated to \(n.to) (was \(n.from))")
+        case "rolled_back": return String(localized: "\(n.to) didn't start; went back to \(n.from)")
         default: return nil
         }
     }
@@ -422,9 +422,9 @@ enum ExtensionText {
     /// Settings' row: how many, and how many need the user.
     static func listSummary(_ list: [HubExtension]?) -> String {
         guard let list else { return "" }
-        if list.isEmpty { return String(localized: "没有", comment: "No extensions") }
+        if list.isEmpty { return String(localized: "None [V N C Pi P Diagnostics f12780]", comment: "No extensions") }
         let attention = list.filter { $0.status == "needs_setup" || isProblem($0) }.count
-        return attention > 0 ? String(localized: "\(list.count) 个 · \(attention) 个要处理") : String(localized: "\(list.count) 个")
+        return attention > 0 ? String(localized: "\(list.count) · \(attention) need you") : String(localized: "\(list.count) [Chats View cb60bd]")
     }
 }
 
@@ -452,7 +452,7 @@ enum ExtensionText {
         loading = true
         defer { loading = false }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let list = try await api.pluginList()
             plugins = list.plugins
             ExtensionAuthStore.shared.received(list.plugins.filter { $0.auth != nil })
@@ -501,7 +501,7 @@ enum ExtensionText {
     /// Number fields typed into that do not read as one, by path.
     var numberProblems: [String: String] {
         numberText.compactMapValues { text in
-            text.trimmingCharacters(in: .whitespaces).isEmpty || Double(text.trimmingCharacters(in: .whitespaces)) != nil ? nil : String(localized: "要是一个数")
+            text.trimmingCharacters(in: .whitespaces).isEmpty || Double(text.trimmingCharacters(in: .whitespaces)) != nil ? nil : String(localized: "Must be a number")
         }
     }
 
@@ -523,7 +523,7 @@ enum ExtensionText {
         changingEnabled = true
         defer { changingEnabled = false }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             detail = try await api.setExtension(id, enabled: on, cascade: cascade)
             error = nil
             disableConfirmation = nil
@@ -545,7 +545,7 @@ enum ExtensionText {
         changingContribution = contribution.id
         defer { changingContribution = nil }
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             detail = try await api.setExtensionContribution(id, point: contribution.point, id: contribution.contributionID, enabled: enabled)
             error = nil
         } catch {
@@ -598,7 +598,7 @@ enum ExtensionText {
     /// Takes the new configuration on save; reloading and non-configuration actions keep the unsaved draft.
     @discardableResult private func run(preservingDraft: Bool = false, _ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
         do {
-            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "还没连接 hub")) }
+            guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let d = try await call(api)
             let editing = preservingDraft ? draftKey.flatMap { deps.drafts.values[$0] } : nil
             detail = d

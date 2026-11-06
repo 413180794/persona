@@ -159,10 +159,10 @@ struct MacLinkPanel: View {
             }
         }
         .background(Theme.pageBackground)
-        .alert("让 Agent 改这段", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
-            TextField("怎么改？", text: $instruction)
-            Button("取消", role: .cancel) { instruction = "" }
-            Button("发送") { sendEdit() }
+        .alert("Have an Agent Edit This", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            TextField(String(localized: "How should it change?"), text: $instruction)
+            Button("Cancel", role: .cancel) { instruction = "" }
+            Button("Send") { sendEdit() }
         } message: {
             Text(editing.map { String($0.text.prefix(120)) } ?? "")
         }
@@ -170,7 +170,7 @@ struct MacLinkPanel: View {
     }
 
     private var shownTitle: String {
-        title.isEmpty ? (isFeishuDoc ? String(localized: "飞书文档") : feishuRoute != nil ? String(localized: "公司圈") : target.url.host ?? String(localized: "网页")) : title
+        title.isEmpty ? (isFeishuDoc ? String(localized: "Lark Doc") : feishuRoute != nil ? String(localized: "Moments") : target.url.host ?? String(localized: "Web Pages")) : title
     }
 
     private var header: some View {
@@ -178,9 +178,9 @@ struct MacLinkPanel: View {
             if feishuRoute == nil {
                 ControlGroup {
                     Button { web?.goBack() } label: { Image(systemName: Theme.Icon.back) }
-                        .help("后退")
+                        .help("Back [Mac Link Panel 2d1d8c]")
                     Button { web?.goForward() } label: { Image(systemName: Theme.Icon.forward) }
-                        .help("前进")
+                        .help("Forward")
                 }
                 .controlGroupStyle(.navigation)
                 .fixedSize()
@@ -193,36 +193,36 @@ struct MacLinkPanel: View {
             Spacer(minLength: Theme.Space.sm)
             if isFeishuDoc {
                 Button { pick("", kind: "context") } label: { Image(systemName: Theme.Icon.addContext) }
-                    .help("把这篇文档作为上下文")
-                    .accessibilityLabel("把这篇文档作为上下文")
+                    .help("Add this document as context")
+                    .accessibilityLabel("Add this document as context")
             } else if feishuRoute == nil {
                 Button { web?.reload() } label: { Image(systemName: Theme.Icon.retry) }
-                    .help("重新载入")
+                    .help("Reload [Mac Link Panel 35588d]")
             }
             Menu {
-                Button { NSWorkspace.shared.open(target.url) } label: { Label("在浏览器打开", systemImage: Theme.Icon.safari) }
+                Button { NSWorkspace.shared.open(target.url) } label: { Label("Open in Browser", systemImage: Theme.Icon.safari) }
                 if close != nil {
                     Button {
                         openWindow(id: MacLinkWindow.id, value: target.url)
                         close?()
-                    } label: { Label("在单独窗口打开", systemImage: Theme.Icon.newWindow) }
+                    } label: { Label("Open in Separate Window", systemImage: Theme.Icon.newWindow) }
                 }
                 Divider()
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(target.url.absoluteString, forType: .string)
-                    model.toast = Toast(String(localized: "已拷贝链接"), style: .success)
-                } label: { Label("拷贝链接", systemImage: Theme.Icon.link) }
-                ShareLink(item: target.url) { Label("分享", systemImage: Theme.Icon.share) }
+                    model.toast = Toast(String(localized: "Link copied"), style: .success)
+                } label: { Label("Copy Link", systemImage: Theme.Icon.link) }
+                ShareLink(item: target.url) { Label("Share", systemImage: Theme.Icon.share) }
             } label: { Image(systemName: Theme.Icon.moreMenu) }
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("更多")
+            .help("More")
             if let close {
                 Button(action: close) { Image(systemName: Theme.Icon.clear).symbolRenderingMode(.hierarchical) }
                     .keyboardShortcut("w", modifiers: .command)
-                    .help("关闭（⌘W）")
-                    .accessibilityLabel("关闭")
+                    .help("Close (⌘W)")
+                    .accessibilityLabel("Close")
             }
         }
         .buttonStyle(.borderless)
@@ -244,7 +244,7 @@ struct MacLinkPanel: View {
             editing = ref
         } else if let destination {
             model.composerContexts[destination, default: []].append(ref)
-            model.toast = Toast(key == nil ? String(localized: "已作为上下文，会随下一条发给 Persona 的消息发送") : String(localized: "已作为上下文，会随下一条消息发送"), style: .success)
+            model.toast = Toast(key == nil ? String(localized: "Added as context. It will be sent with your next message to Persona.") : String(localized: "Added as context. It'll be sent with your next message."), style: .success)
         } else {
             Task { await model.askJarvis(ref.xml + "\n\n先记下这段，我接着说。") } // i18n-ignore: sent to the assistant
         }
@@ -272,7 +272,7 @@ struct MacLinkWindow: View {
             if let url {
                 MacLinkPanel(target: LinkTarget(url: url), key: nil, close: nil)
             } else {
-                EmptyStateView(symbol: Theme.Icon.link, title: String(localized: "没有链接"), message: String(localized: "从对话或收件箱里打开一个链接。"))
+                EmptyStateView(symbol: Theme.Icon.link, title: String(localized: "No Link"), message: String(localized: "Open a link from a chat or the Inbox."))
             }
         }
         .macLook(model)
