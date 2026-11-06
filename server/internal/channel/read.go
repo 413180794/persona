@@ -166,7 +166,7 @@ func endsInWords(items []proto.Item) bool {
 		switch {
 		// The line a turn ends with (its duration) and a compaction say nothing of how it ended (as in Stopped).
 		case it.Kind == proto.KindThinking, it.TurnDuration != nil, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "",
-			it.Kind == proto.KindNotice && compaction(it):
+			it.Kind == proto.KindNotice && it.Task == nil && compaction(it):
 			continue
 		case it.Role == "assistant" && it.Kind == proto.KindText:
 			return true

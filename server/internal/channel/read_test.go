@@ -155,9 +155,10 @@ func TestReadTurnFoldedAcrossPages(t *testing.T) {
 	first := &Run{Base: 1, MsgIDs: []string{"voice-1"}, Started: t0}
 	second := &Run{Base: 4, MsgIDs: []string{"voice-2"}, Started: t0.Add(30e9)}
 	second.Fold(first)
+	duration := proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}}
 	src := &pagedSource{page: 2, items: numbered(agentSays("before"),
-		userSays("voice-1", "fix it"), toolUse, toolResult, agentSays("fixed"),
-		userSays("voice-2", "and lint"), toolUse, toolResult, agentSays("lint clean"))}
+		userSays("voice-1", "fix it"), toolUse, toolResult, agentSays("fixed"), duration,
+		userSays("voice-2", "and lint"), toolUse, toolResult, agentSays("lint clean"), duration)}
 	rd, err := ReadTurn(context.Background(), src, second)
 	if err != nil || !rd.Found || rd.Answer != "fixed\n\nlint clean" {
 		t.Fatalf("%+v %v", rd, err)
@@ -191,6 +192,64 @@ func TestFoldedRunAnswer(t *testing.T) {
 	}
 	if got, _ := RunAnswer(&Run{MsgIDs: []string{"wechat-1"}}, []proto.Item{userSays("wechat-1", "一"), agentSays("答一"), userSays("x", "y"), agentSays("答y")}); texts(got) != "答y" {
 		t.Errorf("one message: %q (as before: the last words)", texts(got))
+	}
+}
+
+// Whole-turn durations follow the answers but do not turn them into unfinished parts.
+func TestFoldedRunAnswerTurnDuration(t *testing.T) {
+	r := &Run{MsgIDs: []string{"a", "b"}}
+	items := []proto.Item{
+		{Seq: 1, Role: "user", Kind: "text", Text: "one", ClientMsgID: "a"},
+		{Seq: 2, Role: "assistant", Kind: "text", Text: "answer one"},
+		{Seq: 3, Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}},
+		{Seq: 4, Role: "user", Kind: "text", Text: "two", ClientMsgID: "b"},
+		{Seq: 5, Role: "assistant", Kind: "text", Text: "answer two"},
+		{Seq: 6, Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}},
+	}
+	got, all := RunAnswer(r, items)
+	if !all || texts(got) != "answer one|answer two" {
+		t.Fatalf("%q, %v; want both answers, true", texts(got), all)
+	}
+}
+
+// Only rows that say nothing about how a turn ended can be passed over, as in Stopped.
+func TestFoldedRunAnswerEndings(t *testing.T) {
+	r := &Run{MsgIDs: []string{"a", "b"}}
+	for _, c := range []struct {
+		name string
+		end  proto.Item
+		both bool
+	}{
+		{"thinking", proto.Item{Role: "assistant", Kind: proto.KindThinking, Text: "thinking"}, true},
+		{"empty text", agentSays(" \n\t"), true},
+		{"compact marker", proto.Item{Role: "system", Kind: proto.KindNotice, Compact: &proto.Compact{Trigger: "auto"}}, true},
+		{"compacted text", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactedNotice}, true},
+		{"compact summary", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice}, true},
+		{"compact command", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactNotice}, true},
+		{"tool use", toolUse, false},
+		{"tool result", toolResult, false},
+		{"user text", userSays("", "another message"), false},
+		{"system text", proto.Item{Role: "system", Kind: proto.KindText, Text: "system message"}, false},
+		{"API error", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.APIErrorPrefix + "overloaded"}, false},
+		{"interrupted", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}, false},
+		{"other notice", proto.Item{Role: "system", Kind: proto.KindNotice, Text: "another event"}, false},
+		{"task with compact text", proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactedNotice, Task: &proto.TaskNote{}}, false},
+		{"compact on non-notice", proto.Item{Role: "system", Kind: proto.KindText, Text: transcript.CompactedNotice, Compact: &proto.Compact{}}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			items := numbered(userSays("a", "one"), agentSays("answer one"), c.end,
+				proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}},
+				proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.CompactSummaryNotice},
+				userSays("b", "two"), agentSays("answer two"))
+			want := "answer two"
+			if c.both {
+				want = "answer one|answer two"
+			}
+			got, all := RunAnswer(r, items)
+			if !all || texts(got) != want {
+				t.Fatalf("%q, %v; want %q, true", texts(got), all, want)
+			}
+		})
 	}
 }
 
