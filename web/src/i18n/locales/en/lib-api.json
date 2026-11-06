@@ -1,3 +1,4 @@
 {
-  "cant_reach_hub": "Can't reach the hub"
+  "cant_reach_hub": "Can't reach the hub",
+  "hub_no_response": "The hub took too long to answer. It may be restarting, or the network may be down. Try again in a moment."
 }

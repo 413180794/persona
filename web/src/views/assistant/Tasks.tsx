@@ -769,14 +769,38 @@ export function QuickResultCard({ result }: { result: QuickResult }) {
 
 // ── 今天 ──
 
+/** The 今天 card's 等你 row's lines under its title (#4478), one per task, each truncated on its own: what its task
+ *  waits on (「在问你：…」), or for several, up to three 「<title>：<what it waits on>」 (the title alone when the store
+ *  has no card) and 「还有 N 件」 past them. A card just answered here is not one it waits on (answeredLookup). */
+const TODAY_WAITING_MAX = 3;
+function todayWaitingLines(s: State, waiting: { id: string; title: string }[]): string[] {
+  const lookup = answeredLookup(s.sessions, s.interactions, s.answered);
+  const askOf = (id: string) => {
+    const todo = s.todos.find((x) => x.id === id);
+    return todo ? taskAsk(taskInteraction(todo, s.interactions, mostUrgentAgent(todo, lookup)?.session)) : undefined;
+  };
+  if (waiting.length === 1) {
+    const ask = askOf(waiting[0].id);
+    return ask ? [ask] : [];
+  }
+  const out = waiting.slice(0, TODAY_WAITING_MAX).map((w) => {
+    const ask = askOf(w.id);
+    return ask ? t("assistant-tasks.dock_task_asks", { title: w.title, ask }) : w.title;
+  });
+  if (waiting.length > TODAY_WAITING_MAX) out.push(t("assistant-tasks.more_asks", { count: waiting.length - TODAY_WAITING_MAX }));
+  return out;
+}
+
 function TodayCard({ body, conversation }: { body: TodayBody; conversation: string }) {
   const say = useSayToPersona(conversation);
   const [board, setBoard] = useState(false);
-  const rows: { icon: IconName; tint: string; title: string; detail?: string; action?: string; run?: () => void }[] = [];
+  // one string, so useStore's compare keeps the card still while nothing it shows changes
+  const waitingText = useStore((s) => (body.waiting?.length ? todayWaitingLines(s, body.waiting).join("\n") : ""));
+  const rows: { icon: IconName; tint: string; title: string; detail?: string; lines?: string[]; action?: string; run?: () => void }[] = [];
   if (body.done?.length)
     rows.push({ icon: "check", tint: "bg-green-tint text-green", title: body.done.length === 1 ? t("assistant-tasks.today_done_single", { title: body.done[0].title }) : t("assistant-tasks.today_done_n", { count: body.done.length }), detail: body.done.length > 1 ? body.done.map((d) => d.title).join(t("assistant-tasks.list_separator")) : undefined, action: t("assistant-tasks.look"), run: () => openTask(body.done![0].id) });
   if (body.waiting?.length)
-    rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
+    rows.push({ icon: "hand", tint: "bg-red-tint text-red", title: body.waiting.length === 1 ? t("assistant-tasks.today_waiting_single", { title: body.waiting[0].title }) : t("assistant-tasks.today_waiting_n", { count: body.waiting.length }), lines: waitingText ? waitingText.split("\n") : undefined, action: t("assistant-tasks.go_look"), run: () => openTask(body.waiting![0].id) });
   if (body.working) rows.push({ icon: "gear", tint: "bg-orange-tint text-orange", title: t("assistant-tasks.today_working", { count: body.working }), action: t("assistant-tasks.all"), run: () => setBoard(true) });
   for (const m of (body.meetings ?? []).slice(0, 3)) {
     const at = formatDate(m.start, { hour: "2-digit", minute: "2-digit" });
@@ -806,6 +830,11 @@ function TodayCard({ body, conversation }: { body: TodayBody; conversation: stri
           <div className="min-w-0 flex-1">
             <div className="text-[13.5px] font-medium">{r.title}</div>
             {r.detail && <div className="line-clamp-2 whitespace-pre-line text-[12px] text-ink-2">{r.detail}</div>}
+            {r.lines?.map((l, j) => (
+              <div key={j} data-today-line className="truncate text-[12px] text-ink-2" title={l}>
+                {l}
+              </div>
+            ))}
           </div>
           {r.action && r.run && <Button onClick={r.run}>{r.action}</Button>}
         </div>

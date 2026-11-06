@@ -48,7 +48,46 @@ export const CLIENT_VERSION = "1";
 /** What this page can render beyond the basics (client_hello `features`). */
 export const CLIENT_FEATURES = ["elicitation", "extension_operations", "extension_auth"];
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string } = {}): Promise<T> {
+// A read the hub has not answered by then fails instead of loading forever (#4492): a restarting hub, a stuck node or a
+// half-dead network. Longer than the hub's own cut-offs for asking a computer (30–40 s), so when the hub has an error
+// that says which computer, that one arrives first. Writes have none: one that took effect must not read as failed.
+export const READ_TIMEOUT_MS = 45_000;
+
+/** The hub did not answer a read within its time (`api`'s `timeout`). */
+export class HubTimeoutError extends Error {
+  constructor() {
+    super(t("lib-api.hub_no_response"));
+    this.name = "HubTimeoutError";
+  }
+}
+
+/** `timeout`: ms before a read gives up with HubTimeoutError (default READ_TIMEOUT_MS for GET, none otherwise; 0: none). */
+export async function api<T>(path: string, init: RequestInit & { json?: unknown; token?: string; timeout?: number } = {}): Promise<T> {
+  const { timeout, ...rest } = init;
+  const limit = timeout ?? ((init.method ?? "GET").toUpperCase() === "GET" ? READ_TIMEOUT_MS : 0);
+  if (!limit) return request<T>(path, rest);
+  // The caller's own signal still aborts as before (an AbortError); only the time running out becomes HubTimeoutError.
+  const controller = new AbortController();
+  const outer = init.signal;
+  const forward = () => controller.abort(outer?.reason);
+  if (outer?.aborted) forward();
+  else outer?.addEventListener("abort", forward, { once: true });
+  let late = false;
+  const timer = setTimeout(() => {
+    late = true;
+    controller.abort();
+  }, limit);
+  try {
+    return await request<T>(path, { ...rest, signal: controller.signal });
+  } catch (e) {
+    throw late && isAbort(e) ? new HubTimeoutError() : e;
+  } finally {
+    clearTimeout(timer);
+    outer?.removeEventListener("abort", forward);
+  }
+}
+
+async function request<T>(path: string, init: RequestInit & { json?: unknown; token?: string }): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${init.token ?? getToken()}`);
   // the hub writes its error and status text in the interface language (docs/i18n.md「协议」)
