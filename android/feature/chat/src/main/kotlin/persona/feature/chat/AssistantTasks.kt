@@ -83,6 +83,9 @@ import persona.core.domain.tasks.receiptState
 import persona.core.domain.lines.ApiErrorInfo
 import persona.core.domain.tasks.TasksStore
 import persona.core.domain.tasks.isRemovable
+import persona.core.domain.answer.askLine
+import persona.core.domain.answer.firstBySession
+import persona.core.domain.answer.waitingCard
 
 // The unified entry in the assistant's conversation (docs/unified-entry.md; iOS Views/Assistant/Tasks, web
 // views/assistant/Tasks.tsx): the lines the assistant's host adds — plan cards, task cards, receipts, answered lines,
@@ -102,7 +105,12 @@ internal class AssistantTaskHost(
     val sheet: androidx.compose.runtime.MutableState<TaskSheet?> = mutableStateOf(null),
     /** The hub's computers, for 改一下's computer. */
     val machines: List<persona.core.contracts.Machine> = emptyList(),
-)
+    /** The cards waiting for an answer: a waiting task says what its agent's card asks (#3964). */
+    val pending: List<persona.core.contracts.Interaction> = emptyList(),
+) {
+    /** Each session's first card ([firstBySession]). */
+    val cards: Map<SessionKey, persona.core.contracts.Interaction> by lazy { pending.firstBySession() }
+}
 
 internal fun TaskState.status(): Status = when (this) {
     TaskState.NeedsYou, TaskState.Interrupted -> Status.NeedsYou
@@ -309,8 +317,11 @@ private fun TaskCard(todo: Todo, host: AssistantTaskHost) {
     val cut = if (state == TaskState.Interrupted) Interruption.of(lead) else null
     val progress = TaskNow.of(lead, lead?.agentState == AgentState.Working)
     val clock by rememberNow(30_000, state == TaskState.Working) // how long its step has gone on
+    // what its agent's card asks while it waits for you (#3964)
+    val card = if (state == TaskState.NeedsYou) todo.waitingCard(lead, host.cards) else null
+    val asks = remember(card) { card?.askLine() }
     val now = when {
-        state == TaskState.NeedsYou -> stringResource(R.string.chat_tasks_now_needs_you)
+        state == TaskState.NeedsYou -> asks?.text() ?: stringResource(R.string.chat_tasks_now_needs_you)
         cut != null -> stringResource(R.string.chat_tasks_now_cut, cut.reason)
         state == TaskState.Failed -> stringResource(R.string.chat_tasks_now_failed, todo.startError.orEmpty().trim())
         progress != null -> progress.text

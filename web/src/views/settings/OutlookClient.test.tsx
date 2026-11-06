@@ -72,6 +72,21 @@ describe("Outlook 的 client ID", () => {
     expect(host.querySelector("form")).toBeNull();
   });
 
+  it("describes the client ID field by its error so a screen reader hears why", async () => {
+    fetcher.mockResolvedValueOnce(ok({ configured: false, redirect_uri: redirect }));
+    act(() => root.render(<OutlookClient />));
+    await flush();
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    expect(input.hasAttribute("aria-describedby")).toBe(false);
+
+    type("not-an-id");
+    await submit();
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    const described = input.getAttribute("aria-describedby");
+    expect(described).toBeTruthy();
+    expect(document.getElementById(described!)?.textContent).toContain("这不像 client ID");
+  });
+
   it("goes to the form with 更换 (the current ID filled in) and back with 不换了", async () => {
     fetcher.mockResolvedValueOnce(ok({ configured: true, client_id: ID, source: "config", redirect_uri: redirect }));
     act(() => root.render(<OutlookClient />));

@@ -6,6 +6,7 @@ import persona.core.contracts.CoreText.Key
 import persona.core.contracts.Interaction
 import persona.core.contracts.Session
 import persona.core.contracts.SessionKey
+import persona.core.contracts.Todo
 import persona.core.contracts.parseTime
 import persona.core.domain.plainMarkdown
 import persona.core.domain.sort.workLine
@@ -55,8 +56,17 @@ private val Whitespace = Regex("\\s+")
 
 /** Each session's card that came first (then by id), the one its row speaks of; the chat lists the rest after it. */
 fun List<Interaction>.firstBySession(): Map<SessionKey, Interaction> = groupBy { it.sessionKey }.mapValues { (_, cards) ->
-    cards.minWith(compareBy<Interaction> { parseTime(it.createdAt) ?: Instant.MAX }.thenBy { it.id })
+    cards.minWith(EarliestFirst)
 }
+
+private val EarliestFirst = compareBy<Interaction> { parseTime(it.createdAt) ?: Instant.MAX }.thenBy { it.id }
+
+/**
+ * The card a task waits on (the web's `taskInteraction`): its [lead] agent's first, else the one that came first among
+ * its other active agents' (then by id).
+ */
+fun Todo.waitingCard(lead: Session?, cards: Map<SessionKey, Interaction>): Interaction? =
+    lead?.let { cards[it.key] } ?: activeAgents.mapNotNull { cards[it.key] }.minWithOrNull(EarliestFirst)
 
 /** What a session's row says it waits for (#3964): its own [card]'s [askLine] while it needs you; null otherwise. */
 fun Session.askingLine(card: Interaction?): CoreText? =

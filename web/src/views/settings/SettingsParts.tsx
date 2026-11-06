@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { t } from "../../i18n";
 import { Button, cx, EASE } from "../../ui/atoms";
 import { Icon, type IconName } from "../../ui/icons";
@@ -27,18 +28,59 @@ export function RowConfirm({ open, trigger, confirm, busy, onCancel, onConfirm }
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  if (!open) return <>{trigger}</>;
+  // display:contents, so the row's flex layout sees the same children as before; it only scopes the focus moves below
+  const box = useRef<HTMLSpanElement>(null);
+  // which of the trigger's controls had the focus, counted from the end (ShortcutSettings' recorder keeps its place there
+  // while the reset / clear buttons before it come and go), so closing hands it back to the same one
+  const fromEnd = useRef(-1);
+  const was = useRef(open);
+  useEffect(() => {
+    if (was.current === open) return;
+    was.current = open;
+    const el = box.current;
+    if (!el) return;
+    const list = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    // open: the trigger that had the focus is gone, so it goes to 取消 rather than dropping to <body>
+    if (open) return list[0]?.focus({ preventScroll: true });
+    // closed: back to the trigger, unless the focus has already moved somewhere else on purpose
+    const active = document.activeElement;
+    if (active && active !== document.body && !el.contains(active)) return;
+    (list[list.length - 1 - fromEnd.current] ?? list[0])?.focus({ preventScroll: true });
+  }, [open]);
+  const remember = (e: React.FocusEvent) => {
+    if (open || !box.current) return;
+    const list = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
+    const i = list.indexOf(e.target as HTMLElement);
+    if (i >= 0) fromEnd.current = list.length - 1 - i;
+  };
   return (
-    <span className="flex shrink-0 items-center gap-1" style={{ animation: `pop-in 160ms ${EASE} both` }}>
-      <Button tone="quiet" disabled={busy} onClick={onCancel}>
-        {t("common.cancel")}
-      </Button>
-      <Button tone="danger" busy={busy} onClick={onConfirm}>
-        {confirm}
-      </Button>
+    <span ref={box} className="contents" onFocus={remember}>
+      {open ? (
+        <span
+          className="flex shrink-0 items-center gap-1"
+          style={{ animation: `pop-in 160ms ${EASE} both` }}
+          onKeyDown={(e) => {
+            if (e.key !== "Escape" || busy) return;
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }}
+        >
+          <Button tone="quiet" disabled={busy} onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button tone="danger" busy={busy} onClick={onConfirm}>
+            {confirm}
+          </Button>
+        </span>
+      ) : (
+        trigger
+      )}
     </span>
   );
 }
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Row({ label, hint, children, onClick, mono, icon }: { label: React.ReactNode; hint?: React.ReactNode; children?: React.ReactNode; onClick?: () => void; mono?: boolean; icon?: IconName }) {
   const body = (

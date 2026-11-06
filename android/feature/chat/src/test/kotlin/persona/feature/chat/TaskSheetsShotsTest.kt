@@ -31,6 +31,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import persona.core.contracts.FeedItem
 import persona.core.contracts.FeedResponse
+import persona.core.contracts.Interaction
 import persona.core.contracts.Machine
 import persona.core.contracts.PlanTask
 import persona.core.contracts.ServerEvent
@@ -101,7 +102,10 @@ class TaskSheetsShotsTest {
         override fun send(message: JsonObject): Boolean = true
     }
 
-    private fun shot(scene: String, style: AppStyle, dark: Boolean, expected: String) {
+    // the lead agent waits on a permission: what it asks is the task's line (#3964)
+    private val bash = Interaction("p1", machineId = "mac", sessionId = "lead", kind = "permission", toolName = "Bash", summary = "swift test")
+
+    private fun shot(scene: String, style: AppStyle, dark: Boolean, expected: String, pending: List<Interaction> = emptyList()) {
         val store = TasksStore(Api(todos), Connection(), CoroutineScope(Dispatchers.Unconfined))
         store.reloadTodos()
         store.loadTodayIfMain("other") // reads the main conversation's id
@@ -119,7 +123,7 @@ class TaskSheetsShotsTest {
                     })
                 }
                 val host = AssistantTaskHost(store, "main", listOf(lead, helper, own), { id -> machines.first { it.id == id }.name }, {}, {}, {},
-                    sheet = sheet, machines = machines)
+                    sheet = sheet, machines = machines, pending = pending)
                 if (scene == "plan") PlanEditSheet(plan, host, onDismiss = {}) {}
                 else Column(Modifier.testTag("shot").width(400.dp).background(PersonaTheme.palette.background).padding(vertical = Tokens.Space.l)) {
                     AssistantTaskBar(host)
@@ -151,6 +155,27 @@ class TaskSheetsShotsTest {
         rule.waitForIdle()
         assertTrue("no task sheet", rule.onAllNodesWithText("正在开 Agent", substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
     }
+
+    /** The task card in the conversation says what its agent's card asks; with no card, as before. */
+    private fun card(pending: List<Interaction>, expected: String, absent: String) {
+        val store = TasksStore(Api(todos), Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.reloadTodos()
+        rule.setContent {
+            PersonaTheme(darkTheme = false, reduceMotion = true, style = AppStyle.Glass) {
+                val host = AssistantTaskHost(store, "main", listOf(lead, helper, own), { it }, {}, {}, {}, pending = pending)
+                Column { AssistantExtraLine(AssistantExtra.Feed(FeedItem("f1", "main", at = now.toString(), kind = "task", ref = "t1")), host) }
+            }
+        }
+        rule.waitForIdle()
+        assertTrue("no 「$expected」", rule.onAllNodesWithText(expected, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue("「$absent」 still shown", rule.onAllNodesWithText(absent, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test fun waitingCardSaysWhatItAsks() = card(listOf(bash), "需要授权：swift test", "有事等你回答")
+    @Test fun waitingCardWithoutACardReadsAsBefore() = card(emptyList(), "有事等你回答", "需要授权")
+
+    @Test fun detailAsks() = shot("detail", AppStyle.Glass, false, "需要授权：swift test", listOf(bash))
+    @Test fun boardAsks() = shot("board", AppStyle.Glass, false, "需要授权：swift test", listOf(bash))
 
     @Test fun dockGlass() = shot("dock", AppStyle.Glass, false, "全部 4")
     @Test fun dockGlassDark() = shot("dock", AppStyle.Glass, true, "全部 4")

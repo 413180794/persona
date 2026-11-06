@@ -5,6 +5,8 @@ import persona.core.contracts.Interaction
 import persona.core.contracts.Question
 import persona.core.contracts.ScreenDialog
 import persona.core.contracts.Session
+import persona.core.contracts.Todo
+import persona.core.contracts.TodoAgent
 import persona.core.domain.zh
 import kotlinx.serialization.json.Json
 import org.junit.Assert.*
@@ -49,6 +51,28 @@ class AskLineTest {
         assertEquals("b", cards[first.sessionKey]?.id)
         assertEquals("c", cards[other.sessionKey]?.id)
         assertEquals("0", listOf(undated.copy(id = "1"), undated).firstBySession()[undated.sessionKey]?.id)
+    }
+
+    @Test fun aWaitingTaskSpeaksOfItsLeadsCardElseAnotherActiveAgents() {
+        val lead = Session(machineId = "mac", sessionId = "s1", state = "needs_you")
+        val leadCard = card("permission", id = "a").copy(toolName = "Bash", summary = "swift test")
+        val helperCard = card("question", id = "b", session = "s2")
+        val releasedCard = card("plan", id = "c", session = "s3")
+        val todo = Todo(id = "t1", title = "修登录", agents = listOf(TodoAgent("mac", "s3", releasedAt = "2026-11-06T07:00:00Z"),
+            TodoAgent("mac", "s2"), TodoAgent("mac", "s1")))
+        val cards = listOf(leadCard, helperCard, releasedCard).firstBySession()
+        assertEquals("a", todo.waitingCard(lead, cards)?.id)
+        assertEquals("b", todo.waitingCard(lead, cards - lead.key)?.id)
+        // without the lead's, the card that came first, not the agent linked first
+        val older = card("question", id = "d", session = "s4", createdAt = "2026-11-06T07:30:00Z")
+        val newer = helperCard.copy(createdAt = "2026-11-06T08:00:00Z")
+        val two = todo.copy(agents = todo.agents + TodoAgent("mac", "s4"))
+        assertEquals("d", two.waitingCard(null, listOf(newer, older).firstBySession())?.id)
+        // undated cards tie on time: the lower id
+        assertEquals("a", todo.waitingCard(null, cards)?.id)
+        // a released agent's card is not the task's
+        assertNull(todo.waitingCard(lead, mapOf(releasedCard.sessionKey to releasedCard)))
+        assertEquals("需要授权：swift test", todo.waitingCard(lead, cards)?.askLine()?.zh())
     }
 
     @Test fun theRowSaysWhatItsCardAsksOnlyWhileItNeedsYou() {

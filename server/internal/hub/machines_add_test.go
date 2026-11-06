@@ -170,7 +170,7 @@ func TestDeviceAddRefusals(t *testing.T) {
 	}
 	w := securityRequest(h.routes(), "POST", "/api/v1/auth/pair-codes", tok, `{"add":{"name":"onb d"}}`, "198.51.100.1:1", true)
 	requireCode(t, w, 429, "too_many_pending")
-	if !strings.Contains(w.Body.String(), "3 台电脑在等你确认") {
+	if !strings.Contains(w.Body.String(), "已经加了 3 台电脑还没处理完") {
 		t.Fatalf("too many: %s", w.Body.String())
 	}
 	if h.cfgEntry("onb-d") != nil {

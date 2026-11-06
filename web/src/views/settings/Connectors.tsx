@@ -4,7 +4,7 @@
 // 这台 iPhone (phone_* tools) is the phone's own and has no place in a browser; Gmail signs in with Google through the
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
 // Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
 import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
@@ -148,6 +148,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const errorId = useId(); // field k's error line is `${errorId}-${k}`
   useEffect(() => {
     if (open) {
       setF(EMPTY_MAIL_FORM);
@@ -188,9 +189,10 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
         spellCheck={false}
         disabled={busy}
         aria-invalid={!!shown[k]}
+        aria-describedby={shown[k] ? `${errorId}-${k}` : undefined}
         className={cx(fieldClass, opts.mono && "font-mono", shown[k] ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field")}
       />
-      {shown[k] && <span className="mt-1 block text-[11px] text-red">{shown[k]}</span>}
+      {shown[k] && <span id={`${errorId}-${k}`} className="mt-1 block text-[11px] text-red">{shown[k]}</span>}
     </label>
   );
 
@@ -305,6 +307,7 @@ export function OutlookClient() {
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const problemId = useId();
   useEffect(() => {
     api<MicrosoftConfig>("/mail/oauth/microsoft/config").then(setConfig, (e) => setFailed(errorText(e)));
   }, []);
@@ -379,9 +382,10 @@ export function OutlookClient() {
           spellCheck={false}
           disabled={busy}
           aria-invalid={!!problem}
+          aria-describedby={problem ? problemId : undefined}
           className={cx(fieldClass, "font-mono", problem ? "shadow-[inset_0_0_0_1px_var(--red)]" : "shadow-inset-field")}
         />
-        {problem && <span className="mt-1 block text-[11px] text-red">{problem}</span>}
+        {problem && <span id={problemId} className="mt-1 block text-[11px] text-red">{problem}</span>}
       </label>
       {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{error}</p>}
       <div className="flex justify-end gap-2">

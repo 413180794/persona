@@ -1,6 +1,6 @@
 // Small building blocks of the admin pages, on the web client's tokens (src/styles.css) and atoms.
 import { t } from "../i18n";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { visiblePoll } from "../lib/visible-poll";
 import { BUSY_MOTION } from "../lib/busy-motion";
 import { Button, copyText, cx, EASE, IconButton, PixelGrid, Shimmer } from "../ui/atoms";
@@ -121,16 +121,21 @@ export function Field({
     error && "shadow-[0_0_0_1px_var(--red)]",
     multiline ? "min-h-[76px] resize-y py-2 leading-relaxed" : "h-9",
   );
+  // Only the label text names the control; the hint or error describes it, so a screen reader reads them separately.
+  const id = useId();
+  const noteId = `${id}-note`;
+  const note = error || hint;
+  const a11y = { id, "aria-invalid": error ? true : undefined, "aria-describedby": note ? noteId : undefined };
   return (
-    <label className="block">
-      <span className="mb-1 block text-[12px] font-medium text-ink-2">{label}</span>
+    <div className="block">
+      <label htmlFor={id} className="mb-1 block text-[12px] font-medium text-ink-2">{label}</label>
       {multiline ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} spellCheck={false} className={cls} />
+        <textarea {...a11y} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} spellCheck={false} className={cls} />
       ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} autoComplete={autoComplete} autoCapitalize={autoCapitalize} maxLength={maxLength} spellCheck={false} className={cls} />
+        <input {...a11y} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} autoComplete={autoComplete} autoCapitalize={autoCapitalize} maxLength={maxLength} spellCheck={false} className={cls} />
       )}
-      {(error || hint) && <span className={cx("mt-1 block text-[11.5px] leading-relaxed", error ? "text-red" : "text-ink-3")}>{error || hint}</span>}
-    </label>
+      {note && <span id={noteId} className={cx("mt-1 block text-[11.5px] leading-relaxed", error ? "text-red" : "text-ink-3")}>{note}</span>}
+    </div>
   );
 }
 
@@ -189,27 +194,52 @@ export function Stat({ icon, label, value, hint, onClick }: { icon: AdminIconNam
   );
 }
 
-// ConfirmButton asks again in place: the first click turns it into「确认」/「取消」.
+// ConfirmButton asks again in place: the first click turns it into「确认」/「取消」. Focus moves to「取消」 when it asks and
+// back to the trigger when it stops asking (unless the user has moved on), so a keyboard user keeps their place; Escape backs out.
 export function ConfirmButton({ label, confirm, onConfirm, icon = "trash", busy }: { label: string; confirm: string; onConfirm: () => void | Promise<void>; icon?: AdminIconName; busy?: boolean }) {
   const [asking, setAsking] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  // stop asking; give focus back to the trigger only if it is still in the pair (or was dropped on the body)
+  const close = () => {
+    const active = document.activeElement;
+    refocus.current = !active || active === document.body || !!box.current?.contains(active);
+    setAsking(false);
+  };
   useEffect(() => {
-    if (!asking) return;
-    const timer = setTimeout(() => setAsking(false), 6000);
+    if (!asking) {
+      if (refocus.current) trigger.current?.focus();
+      refocus.current = false;
+      return;
+    }
+    box.current?.querySelector("button")?.focus();
+    const timer = setTimeout(close, 6000);
     return () => clearTimeout(timer);
   }, [asking]);
   if (asking)
     return (
-      <span className="flex items-center gap-1" style={{ animation: `pop-in 140ms ${EASE} both` }}>
-        <Button tone="quiet" className="h-7 px-2" onClick={() => setAsking(false)}>
+      <span
+        ref={box}
+        className="flex items-center gap-1"
+        style={{ animation: `pop-in 140ms ${EASE} both` }}
+        onKeyDown={(e) => {
+          if (e.key !== "Escape") return;
+          e.stopPropagation();
+          close();
+        }}
+      >
+        <Button tone="quiet" className="h-7 px-2" onClick={close}>
           {t("admin-parts.cancel")}
         </Button>
-        <Button tone="danger" className="h-7 px-2.5" busy={busy} onClick={() => void Promise.resolve(onConfirm()).finally(() => setAsking(false))}>
+        <Button tone="danger" className="h-7 px-2.5" busy={busy} onClick={() => void Promise.resolve(onConfirm()).finally(close)}>
           {confirm}
         </Button>
       </span>
     );
   return (
     <button
+      ref={trigger}
       type="button"
       title={label}
       aria-label={label}

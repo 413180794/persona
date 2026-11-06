@@ -11,14 +11,15 @@ export const INPUT = inputClass;
 export const FIELD = "rounded-control bg-field text-ink shadow-inset-field outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 export const SMALL = `${FIELD} h-7 px-2 text-[12px]`;
 
-export function Labelled({ label, hint, error, children, htmlFor }: { label: React.ReactNode; hint?: React.ReactNode; error?: string; children: React.ReactNode; htmlFor?: string }) {
+/** `describedById` goes on the hint / error line so the field can point `aria-describedby` at it. */
+export function Labelled({ label, hint, error, children, htmlFor, describedById }: { label: React.ReactNode; hint?: React.ReactNode; error?: string; children: React.ReactNode; htmlFor?: string; describedById?: string }) {
   return (
     <div className="block min-w-0">
       <label htmlFor={htmlFor} className="mb-1 block text-[12px] font-medium text-ink-2">
         {label}
       </label>
       {children}
-      {(error || hint) && <span className={cx("mt-1 block text-[11px] leading-relaxed", error ? "text-red" : "text-ink-3")}>{error || hint}</span>}
+      {(error || hint) && <span id={describedById} className={cx("mt-1 block text-[11px] leading-relaxed", error ? "text-red" : "text-ink-3")}>{error || hint}</span>}
     </div>
   );
 }
@@ -35,9 +36,10 @@ export function TextField({ label, value, onChange, hint, error, placeholder, mo
   inputMode?: "numeric" | "url";
 }) {
   const id = useId();
+  const noteId = useId();
   return (
-    <Labelled label={label} hint={hint} error={error} htmlFor={id}>
-      <input id={id} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} inputMode={inputMode} autoComplete="off" spellCheck={false} className={cx(INPUT, mono && "font-mono")} />
+    <Labelled label={label} hint={hint} error={error} htmlFor={id} describedById={noteId}>
+      <input id={id} aria-invalid={error ? true : undefined} aria-describedby={error || hint ? noteId : undefined} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} placeholder={placeholder} inputMode={inputMode} autoComplete="off" spellCheck={false} className={cx(INPUT, mono && "font-mono")} />
     </Labelled>
   );
 }
@@ -52,9 +54,11 @@ export function SecretField({ label, value, onChange, hint, placeholder, multili
   multiline?: boolean;
 }) {
   const id = useId();
+  const noteId = useId();
   const [shown, setShown] = useState(false);
   // password managers: none of them should offer to save a gateway key as the hub's password
   const quiet = { autoComplete: "off", spellCheck: false, "data-1p-ignore": true, "data-lpignore": "true", "data-bwignore": true } as const;
+  const described = hint ? noteId : undefined;
   const toggle = (
     <button type="button" onClick={() => setShown((s) => !s)} aria-label={shown ? t("settings-providerfields.hide") : t("settings-providerfields.show")} aria-pressed={shown}
       className="touch-hit absolute top-1.5 right-1.5 flex size-6 items-center justify-center rounded-chip text-ink-3 hover:bg-hover hover:text-ink">
@@ -62,13 +66,13 @@ export function SecretField({ label, value, onChange, hint, placeholder, multili
     </button>
   );
   return (
-    <Labelled label={label} hint={hint} htmlFor={id}>
+    <Labelled label={label} hint={hint} htmlFor={id} describedById={noteId}>
       <div className="relative">
         {multiline ? (
-          <textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} {...quiet}
+          <textarea id={id} aria-describedby={described} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={3} {...quiet}
             className={cx(textareaClass, "pr-9 font-mono", !shown && "[-webkit-text-security:disc]")} />
         ) : (
-          <input id={id} type={shown ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} {...quiet} autoComplete="new-password" className={cx(INPUT, "pr-9")} />
+          <input id={id} aria-describedby={described} type={shown ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} {...quiet} autoComplete="new-password" className={cx(INPUT, "pr-9")} />
         )}
         {toggle}
       </div>

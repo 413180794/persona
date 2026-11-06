@@ -497,11 +497,13 @@ private fun ChatPage(
     }
     // A task's detail or the dock's 全部, open over the conversation; kept across the host being made again.
     val taskSheet = remember(key) { mutableStateOf<TaskSheet?>(null) }
+    // the cards still to answer: one just answered here no longer says what it asked
+    val taskCards = remember(allRequests, resolved) { allRequests.filter { it.id !in resolved } }
     val taskHost = tasks?.let { store ->
         AssistantTaskHost(store, key.sessionId, sessionList, { id -> machines.firstOrNull { it.id == id }?.name?.takeIf(String::isNotBlank) ?: id },
             onOpen = { k -> chrome.onOpenSession?.invoke(k) }, onError = { notice = operationFeedback(it).text.resolve(res) },
             say = { text -> scope.launch { runCatching { sender.send(key, text, UUID.randomUUID().toString()) } } },
-            sheet = taskSheet, machines = machines)
+            sheet = taskSheet, machines = machines, pending = taskCards)
     }
     // Drawn whatever the composer area shows: a read-only assistant conversation's task cards open their sheet too.
     taskHost?.let { AssistantTaskSheets(it) }

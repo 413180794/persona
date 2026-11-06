@@ -39,7 +39,7 @@ const rowActions = (n: number) => {
   const edit = [...host.querySelectorAll<HTMLElement>("button")].filter((b) => b.textContent?.trim() === "编辑")[n];
   return { edit, box: edit.parentElement! };
 };
-const input = (label: string) => [...dialog()!.querySelectorAll("label")].find((l) => l.querySelector("span")?.textContent === label)!.querySelector("input")!;
+const input = (label: string) => [...dialog()!.querySelectorAll("label")].find((l) => l.textContent === label)!.control as HTMLInputElement;
 
 const fresh = (): UsageSources => ({
   enabled: true,

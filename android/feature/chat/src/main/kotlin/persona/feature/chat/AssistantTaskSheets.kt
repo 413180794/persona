@@ -50,6 +50,9 @@ import persona.core.designsystem.Status
 import persona.core.designsystem.Tokens
 import persona.core.designsystem.icons.PhIcons
 import persona.core.designsystem.text
+import persona.core.domain.answer.askLine
+import persona.core.domain.answer.askingLine
+import persona.core.domain.answer.waitingCard
 import persona.core.domain.tasks.TaskNow
 import persona.core.domain.tasks.TaskState
 import persona.core.domain.tasks.isRemovable
@@ -163,7 +166,7 @@ private fun AgentDetailSheet(key: SessionKey, host: AssistantTaskHost, onDismiss
 @Composable
 private fun AgentSummary(session: Session, host: AssistantTaskHost, routeTo: String?, onDismiss: () -> Unit) {
     val now = when (session.agentState) {
-        AgentState.NeedsYou -> stringResource(R.string.chat_tasks_now_needs_you)
+        AgentState.NeedsYou -> session.askingLine(host.cards[session.key])?.text() ?: stringResource(R.string.chat_tasks_now_needs_you)
         else -> TaskNow.of(session, session.agentState == AgentState.Working)?.text ?: session.lastText?.takeIf(String::isNotBlank)
             ?: stringResource(R.string.chat_tasks_now_quiet)
     }
@@ -204,7 +207,9 @@ private fun TaskBoardSheet(host: AssistantTaskHost, onDismiss: () -> Unit) {
             JSectionHeader(stringResource(title), count = count)
             tasks.forEachIndexed { index, (todo, state) ->
                 JGroupItem(GroupPosition.of(index, count)) {
-                    JRow(todo.title, subtitle = boardSubtitle(todo, state, host).ifBlank { state.label.text() }, leading = { TaskMark(state) },
+                    val lead = host.tasks.lead(todo, host.sessions)
+                    val asks = if (state == TaskState.NeedsYou) todo.waitingCard(lead, host.cards)?.askLine()?.text() else null
+                    JRow(todo.title, subtitle = boardSubtitle(todo, state, host, lead, asks).ifBlank { state.label.text() }, leading = { TaskMark(state) },
                         onClick = { host.sheet.value = TaskSheet.Task(todo.id) },
                         onLongClick = if (state.isRemovable) ({ removing = todo }) else null)
                 }
@@ -237,10 +242,13 @@ private fun TaskBoardSheet(host: AssistantTaskHost, onDismiss: () -> Unit) {
 private val Todo.startFailure: String?
     get() = startError?.takeIf(String::isNotBlank) ?: agents.firstOrNull { !it.startError.isNullOrBlank() }?.startError
 
-/** A task's row in 全部 (iOS TaskBoardSheet.subtitle): where it runs, then why it did not start or what it is on now. */
-private fun boardSubtitle(todo: Todo, state: TaskState, host: AssistantTaskHost): String {
-    val lead = host.tasks.lead(todo, host.sessions)
-    val after = todo.startFailure?.trim() ?: TaskNow.of(lead, state == TaskState.Working)?.text
+/**
+ * A task's row in 全部 (iOS TaskBoardSheet.subtitle): where it runs, then what its card [asks] while it waits for you,
+ * why it did not start, or what it is on now. A waiting task's card comes first: an agent that once failed to start
+ * must not hide what the one now waiting asks (as the task card).
+ */
+private fun boardSubtitle(todo: Todo, state: TaskState, host: AssistantTaskHost, lead: Session?, asks: String? = null): String {
+    val after = asks ?: todo.startFailure?.trim() ?: TaskNow.of(lead, state == TaskState.Working)?.text
     return listOfNotNull(todo.place(host, lead), after).filter(String::isNotBlank).joinToString(" · ")
 }
 
