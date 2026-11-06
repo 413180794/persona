@@ -103,7 +103,7 @@ func (s *Service) takeSnapshot(done chan struct{}) {
 		snap.Machines = append(snap.Machines, prompts.SnapshotMachine{Name: m.Name, ID: m.ID, Online: m.Online})
 	}
 	web := s.webBase(ctx) // the agents' and tasks' links (#2194)
-	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
+	snap.Needs, snap.Unread, snap.Waiting, snap.Done, snap.Muted, snap.Working, snap.Workflows = s.snapshotAgents(ctx, devices, web)
 	snap.Tasks = s.snapshotTasks(ctx, web)
 	snap.Approvals = s.snapshotApprovals(ctx, web)
 	snap.Unaccepted, snap.UnacceptedTotal = s.snapshotUnaccepted(ctx, loc)
@@ -134,11 +134,13 @@ func (s *Service) ProfileChanged(context.Context) {
 }
 
 // snapshotAgents sorts the agents by what they need: the work state (agents_work.go, docs/agent-work.md) says what a stopped one
-// waits for or concluded. Each has its page in the web app at web ("" for none).
-func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done []prompts.SnapshotAgent,
+// waits for or concluded. Each has its page in the web app at web ("" for none). The muted ones (the agent or its
+// space) are in none of the others: the Live Activity, the Agents badge and the inbox leave them out
+// (docs/live-activity.md), so 需要你 here does too; they are told apart, for when the user asks about them (#4562).
+func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web string) (needs, unread, waiting, done, muted []prompts.SnapshotAgent,
 	working []string, workflows []prompts.SnapshotWorkflow) {
 	for _, m := range devices {
-		list, _ := s.sessions(ctx, m.ID)
+		list, off, _ := s.sessionsMuted(ctx, m.ID)
 		for _, c := range list {
 			if c.Assistant {
 				continue
@@ -154,23 +156,34 @@ func (s *Service) snapshotAgents(ctx context.Context, devices []Device, web stri
 				a.Line = w.Line
 			}
 			recent := time.Since(c.UpdatedAt) < 24*time.Hour
+			var into *[]prompts.SnapshotAgent
 			switch {
 			case c.State == proto.StateNeedsYou:
-				needs = append(needs, a)
+				into = &needs
 			case c.State == proto.StateWorking:
-				working = append(working, agentLabel(c))
+				if !off[c.SessionID] {
+					working = append(working, agentLabel(c))
+					continue
+				}
+				into = &muted
 			// A decision with no card up (cards off, muted, 先不管) is not 需要你: the lists, the badges and the Live
 			// Activity go by the state (docs/agent-states.md), so it stays 完成未看 with what it waits for, or is seen.
 			case w != nil && w.Phase == proto.WorkBlocked && w.On != proto.WaitUser && c.State != proto.StateUnread && recent:
-				waiting = append(waiting, a) // the hub waits it out (an unread one is left for the user)
+				into = &waiting // the hub waits it out (an unread one is left for the user)
 			case w != nil && w.Phase == proto.WorkDone && recent:
-				done = append(done, a)
+				into = &done
 			case c.State == proto.StateUnread && recent:
-				unread = append(unread, a)
+				into = &unread
+			default:
+				continue
 			}
+			if off[c.SessionID] {
+				into = &muted
+			}
+			*into = append(*into, a)
 		}
 	}
-	return needs, unread, waiting, done, working, workflows
+	return needs, unread, waiting, done, muted, working, workflows
 }
 
 // runningWorkflows are c's background workflow runs still running, as the snapshot tells them (#2935).

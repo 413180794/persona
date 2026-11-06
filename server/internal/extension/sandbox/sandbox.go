@@ -102,6 +102,12 @@ func probe() Support {
 			s.Why = "bwrap 起不来沙箱：" + firstLine(out, err)
 			return s
 		}
+		// The namespaces alone are not enough: a container or a restricted user namespace may let bwrap make them and
+		// still refuse /proc, the tmpfs mounts or the read-only remount. Try the very mounts a start makes.
+		if why := probeMounts(ctx, path); why != "" {
+			s.Why = why
+			return s
+		}
 		s.Bwrap = path
 		if p, err := exec.LookPath("systemd-run"); err == nil {
 			if exec.CommandContext(ctx, p, "--user", "--scope", "--quiet", "--collect", "--", "true").Run() == nil {
@@ -124,6 +130,29 @@ func probe() Support {
 	return s
 }
 
+// probeMounts runs true in a sandbox set up exactly as Linux sets one up, with throwaway directories for the
+// package, data, run directory and personad; "" when it starts, else why not.
+func probeMounts(ctx context.Context, bwrap string) string {
+	dir, err := os.MkdirTemp("", "persona-sandbox-probe-")
+	if err != nil {
+		return "建不了沙箱探测用的临时目录：" + err.Error()
+	}
+	defer os.RemoveAll(dir)
+	plan := Plan{Pkg: filepath.Join(dir, "pkg"), Data: filepath.Join(dir, "data"), Run: filepath.Join(dir, "run"), Self: filepath.Join(dir, "self")}
+	for _, d := range []string{plan.Pkg, plan.Data, plan.Run} {
+		if err := os.Mkdir(d, 0o700); err != nil {
+			return "建不了沙箱探测用的临时目录：" + err.Error()
+		}
+	}
+	if err := os.WriteFile(plan.Self, nil, 0o600); err != nil {
+		return "建不了沙箱探测用的临时目录：" + err.Error()
+	}
+	if out, err := exec.CommandContext(ctx, bwrap, append(linuxSetup(plan), "--", "true")...).CombinedOutput(); err != nil {
+		return "bwrap 建不了沙箱的挂载：" + firstLine(out, err)
+	}
+	return ""
+}
+
 func firstLine(out []byte, err error) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
 	if line == "" {
@@ -143,6 +172,30 @@ var systemDirs = []string{"/usr", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "
 // Linux is the command line that runs plan in bubblewrap (in a systemd scope with plan.Scope), and the environment it
 // adds. The program sees HTTP(S)_PROXY on its loopback (RunCommand carries it to plan.ProxySocket), HOME its data.
 func Linux(bwrap string, plan Plan) (string, []string, []string) {
+	args := append(linuxSetup(plan),
+		"--", SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:"+strconv.Itoa(ProxyPort),
+		"--", plan.Command)
+	args = append(args, plan.Args...)
+	proxy := "http://127.0.0.1:" + strconv.Itoa(ProxyPort)
+	env := ProxyEnv(proxy)
+	if !plan.Scope {
+		return bwrap, args, env
+	}
+	unit := fmt.Sprintf("persona-ext-%s-%d", plan.ID, time.Now().UnixNano())
+	scope := []string{"--user", "--scope", "--quiet", "--collect", "--unit", unit,
+		"-p", "MemoryMax=" + strconv.Itoa(plan.MemoryMB) + "M", "-p", "MemorySwapMax=0",
+		"-p", "CPUQuota=" + strconv.Itoa(plan.CPUPercent) + "%", "--", bwrap}
+	for _, kv := range plan.Env { // systemd-run reaches the user's manager with these; bwrap drops them again
+		if strings.HasPrefix(kv, "XDG_RUNTIME_DIR=") || strings.HasPrefix(kv, "DBUS_SESSION_BUS_ADDRESS=") {
+			env = append(env, kv)
+		}
+	}
+	return "systemd-run", append(scope, args...), env
+}
+
+// linuxSetup is bwrap's options for plan, everything before the program: Linux runs the program after them, probe
+// runs true after them, so the probe tries what a start does.
+func linuxSetup(plan Plan) []string {
 	args := []string{"--die-with-parent"}
 	args = append(args, bwrapNamespaces()...)
 	for _, d := range systemDirs {
@@ -163,25 +216,8 @@ func Linux(bwrap string, plan Plan) (string, []string, []string) {
 		// The sandbox's own root (the directories made for the mounts) read-only too: only its data, run and /tmp take
 		// writes.
 		"--remount-ro", "/",
-		"--chdir", plan.Pkg,
-		"--", SelfPath, RunCommand, "--proxy-socket", plan.ProxySocket, "--listen", "127.0.0.1:"+strconv.Itoa(ProxyPort),
-		"--", plan.Command)
-	args = append(args, plan.Args...)
-	proxy := "http://127.0.0.1:" + strconv.Itoa(ProxyPort)
-	env := ProxyEnv(proxy)
-	if !plan.Scope {
-		return bwrap, args, env
-	}
-	unit := fmt.Sprintf("persona-ext-%s-%d", plan.ID, time.Now().UnixNano())
-	scope := []string{"--user", "--scope", "--quiet", "--collect", "--unit", unit,
-		"-p", "MemoryMax=" + strconv.Itoa(plan.MemoryMB) + "M", "-p", "MemorySwapMax=0",
-		"-p", "CPUQuota=" + strconv.Itoa(plan.CPUPercent) + "%", "--", bwrap}
-	for _, kv := range plan.Env { // systemd-run reaches the user's manager with these; bwrap drops them again
-		if strings.HasPrefix(kv, "XDG_RUNTIME_DIR=") || strings.HasPrefix(kv, "DBUS_SESSION_BUS_ADDRESS=") {
-			env = append(env, kv)
-		}
-	}
-	return "systemd-run", append(scope, args...), env
+		"--chdir", plan.Pkg)
+	return args
 }
 
 // ProxyEnv points every common HTTP client at proxy, and nothing past it.

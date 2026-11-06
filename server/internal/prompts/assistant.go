@@ -155,6 +155,9 @@ type Snapshot struct {
 	// Waiting: stopped on something the hub waits out for them (a retry, a deploy, another agent); Done: finished
 	// within a day, with the conclusion (docs/agent-work.md「Persona 知道」).
 	Waiting, Done []SnapshotAgent
+	// Muted: agents (or their spaces) the user turned notifications off for that would be in one of the above; in
+	// none of them, as the Live Activity and the Agents badge count none of them (#4562).
+	Muted         []SnapshotAgent
 	Working       []string
 	Workflows     []SnapshotWorkflow // background workflow runs still running, newest first
 	PhoneOnline   bool

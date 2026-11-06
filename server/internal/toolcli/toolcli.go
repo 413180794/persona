@@ -51,6 +51,19 @@ const callTimeout = 30 * time.Minute
 // stdinMost is the most a command line reads from stdin (a message's text).
 const stdinMost = 1 << 20
 
+// readStdin reads all of stdin, failing when it holds more than stdinMost bytes instead of cutting it short: a
+// truncated message would be sent as if it were whole.
+func readStdin(stdin io.Reader) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(stdin, stdinMost+1))
+	if err != nil {
+		return nil, fmt.Errorf("stdin: %w", err)
+	}
+	if len(b) > stdinMost {
+		return nil, fmt.Errorf("stdin: more than %d bytes (1 MiB), nothing was sent", stdinMost)
+	}
+	return b, nil
+}
+
 // dial reaches the node; it hangs up when ctx is cancelled (Ctrl-C, SIGTERM), so a write waiting for the user ends on
 // the node too and the hub takes its card off the phone (rpc.Peer.Cancels), instead of a card nobody waits for until
 // it expires (replaced by tests).
@@ -97,9 +110,9 @@ func Main(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io
 	case len(args) > 2:
 		return out.fail(exitUsage, "one tool and one JSON object of its arguments", 0)
 	case len(args) == 2 && args[1] == "-":
-		b, err := io.ReadAll(io.LimitReader(stdin, stdinMost))
+		b, err := readStdin(stdin)
 		if err != nil {
-			return out.fail(exitUsage, "stdin: "+err.Error(), 0)
+			return out.fail(exitUsage, err.Error(), 0)
 		}
 		toolArgs = b
 	case len(args) == 2:
@@ -157,9 +170,9 @@ func commandLine(ctx context.Context, conn string, args []string, stdin io.Reade
 	}
 	in := map[string]any{"argv": append([]string{}, words...)}
 	if slices.Contains(words, "-") { // the text comes from stdin (tg send <chat> -)
-		b, err := io.ReadAll(io.LimitReader(stdin, stdinMost))
+		b, err := readStdin(stdin)
 		if err != nil {
-			return out.fail(exitUsage, "stdin: "+err.Error(), 0)
+			return out.fail(exitUsage, err.Error(), 0)
 		}
 		in["stdin"] = string(b)
 	}

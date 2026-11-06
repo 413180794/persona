@@ -70,7 +70,7 @@
 1. `im.message.receive_v1` → 去重 → 不是主人 / 不是私聊就停（到这里是 hub；主人的消息交给助手，助手再按 message_id 去重一次、存下来）。以 `/` 开头的先当命令（下面）；不认识的命令原样发过去（可能是 Agent 自己的，比如 `/compact`）。
 2. 目标：回复的是机器人发过的某条消息（或在它的话题里）就发给那条消息绑定的对话 / Agent（`threads`），否则发给当前目标（`current`：`main` / 某段 Persona 对话 / 某个 Agent）。
 3. 内容：文字（富文本转成 Markdown，@ 换回名字）；图片（最多 4 张）作为图片附件；文件、语音、视频和多出来的图片下载后经 node 的
-   `file.upload.*` 存到那台电脑的临时目录，路径写进消息；引用的消息、合并转发的聊天记录（逐条读出来，一行一条）放进 `<jarvis-context>`；
+   `file.upload.*` 存到那台电脑的临时目录，路径写进消息；引用的消息、合并转发的聊天记录（逐条读出来，一行一条）放进 `<jarvis-context>`；引用的消息里的图片和文件按同样的规则交给它（和这条消息自己的图片一起最多 4 张，读不到时只带引用的文字，不挡发送，#4728）；
    发给 Persona 的再加一段说明「回答会发回飞书，结论先行、不用 notify_user」（提示词 `bot/message.md`）。
 4. 发送：Persona 的对话走 `session.send`（主对话照 App 一样跟着设置 › 助手的启动器；助手经 hub 的 `session.send_once` 发），`client_msg_id` 是 `feishu-<message_id>`，
    和 App 共用 `sent_messages` 的去重：重发的事件不会打两遍。还没有主对话时新开一段并设为主对话。消息上点「OnIt」表情。

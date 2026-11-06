@@ -184,9 +184,13 @@ func TestGoldenAssistantSnapshotWork(t *testing.T) {
 		{SessionID: "cccccccc-3", Cwd: "/code/demo", Title: "选方案", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "dddddddd-4", Cwd: "/code/demo", Title: "没分诊", Status: proto.StatusDone, UpdatedAt: at},
 		{SessionID: "eeeeeeee-5", Cwd: "/code/demo", Title: "在问", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "ffffffff-6", Cwd: "/code/demo", Title: "屏蔽了", Status: proto.StatusDone, UpdatedAt: at},
 	})
-	putPending(s, &pending{ix: proto.Interaction{ID: "own", MachineID: "server", SessionID: "eeeeeeee-5", Kind: proto.IxQuestion,
-		Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
+	setMutes(s, Pins{Sessions: []string{"server/ffffffff-6"}})
+	for _, sid := range []string{"eeeeeeee-5", "ffffffff-6"} {
+		putPending(s, &pending{ix: proto.Interaction{ID: "own-" + sid, MachineID: "server", SessionID: sid, Kind: proto.IxQuestion,
+			Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
+	}
 	wake := time.Now().Add(5 * time.Minute).UTC()
 	var report []assistantwire.SessionWork
 	for sid, w := range map[string]proto.WorkState{
@@ -265,7 +269,7 @@ func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	putPending(s, &pending{ix: proto.Interaction{ID: "own", MachineID: "mac", SessionID: "cccccccc-3", Kind: proto.IxQuestion,
 		Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
 
-	needs, unread, waiting, _, _, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
+	needs, unread, waiting, _, _, _, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
 	if live := s.fleetSnapshot().NeedsYou; len(needs) != live || live != 1 || needs[0].Session != "cccccccc" {
 		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want the one asking", needs, live)
 	}
@@ -275,4 +279,53 @@ func TestSnapshotNeedsYouIsTheState(t *testing.T) {
 	if len(waiting) != 0 {
 		t.Fatalf("在等的 %+v: the hub waits out none of them", waiting)
 	}
+}
+
+// A muted agent (or one in a muted space) is not 需要你, 工作中 or 完成未看 in the snapshot, as the Live Activity, the
+// Agents badge and the inbox leave it out: the assistant would tell the user an agent waits for them that they muted.
+// It is listed apart, for when they ask about it (#4562).
+func TestSnapshotLeavesMutedAgentsOut(t *testing.T) {
+	ft := newFleetTestNoStore(t)
+	s := ft.s
+	ft.f.devices = []Device{{ID: "mac", Name: "Mac", Online: true, Reachable: true}}
+	at := time.Now().Add(-10 * time.Minute).UTC()
+	ft.d.setSessions("mac", []proto.Session{
+		{SessionID: "aaaaaaaa-1", Cwd: "/code/demo", Title: "在问", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "bbbbbbbb-2", Cwd: "/code/demo", Title: "屏蔽了在问", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "cccccccc-3", Cwd: "/code/side", SpaceName: "side", Title: "屏蔽的空间在跑", Status: proto.StatusWorking, UpdatedAt: at},
+		{SessionID: "dddddddd-4", Cwd: "/code/demo", Title: "屏蔽了做完", Status: proto.StatusDone, UpdatedAt: at},
+		{SessionID: "eeeeeeee-5", Cwd: "/code/side", SpaceName: "side", Title: "空间里开着通知", Status: proto.StatusWorking, UpdatedAt: at},
+	})
+	setMutes(s, Pins{Spaces: []string{"mac/side"}, Sessions: []string{"mac/bbbbbbbb-2", "mac/dddddddd-4"},
+		Allowed: []string{"mac/eeeeeeee-5"}})
+	for _, sid := range []string{"aaaaaaaa-1", "bbbbbbbb-2"} {
+		putPending(s, &pending{ix: proto.Interaction{ID: "ix-" + sid, MachineID: "mac", SessionID: sid, Kind: proto.IxQuestion,
+			Questions: []proto.Question{{Question: "删掉这个分支吗？"}}}})
+	}
+
+	needs, unread, _, _, muted, working, _ := s.snapshotAgents(context.Background(), ft.f.devices, "")
+	live := s.fleetSnapshot()
+	if len(needs) != live.NeedsYou || live.NeedsYou != 1 || needs[0].Session != "aaaaaaaa" {
+		t.Fatalf("需要你: snapshot %+v, Live Activity %d; want only the agent not muted", needs, live.NeedsYou)
+	}
+	if len(working) != live.Working || live.Working != 1 || !strings.HasSuffix(working[0], "空间里开着通知") {
+		t.Fatalf("工作中: snapshot %v, Live Activity %d; want the one turned back on in the muted space", working, live.Working)
+	}
+	if len(unread) != live.Unread || live.Unread != 0 {
+		t.Fatalf("完成未看: snapshot %+v, Live Activity %d; want none", unread, live.Unread)
+	}
+	var got []string
+	for _, a := range muted {
+		got = append(got, a.Session)
+	}
+	if strings.Join(got, ",") != "bbbbbbbb,cccccccc,dddddddd" {
+		t.Fatalf("已屏蔽 %v: want the muted ones apart", got)
+	}
+}
+
+// setMutes is the user's mutes as the hub told them (GET /api/v1/mutes).
+func setMutes(s *Service, p Pins) {
+	s.fleet.mutesMu.Lock()
+	s.fleet.mutes = &p
+	s.fleet.mutesMu.Unlock()
 }

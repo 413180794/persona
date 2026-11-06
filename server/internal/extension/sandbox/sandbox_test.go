@@ -146,6 +146,25 @@ func TestLinuxCommandLine(t *testing.T) {
 	}
 }
 
+// TestProbeMountsAsStart: the probe runs true after the same bwrap options a start puts before its program, so a
+// machine that cannot make a start's mounts (/proc, the tmpfs mounts, the read-only remount) has no sandbox.
+func TestProbeMountsAsStart(t *testing.T) {
+	plan := Plan{ID: "notes", Command: "/x/pkg/bin/notes", Pkg: "/x/pkg", Data: "/x/data", Run: "/x/run", Tools: "/x/tools",
+		ProxySocket: "/x/run/proxy.sock", Self: "/usr/local/bin/personad"}
+	setup := linuxSetup(plan)
+	_, args, _ := Linux("/usr/bin/bwrap", plan)
+	if len(args) <= len(setup) || !slices.Equal(args[:len(setup)], setup) || args[len(setup)] != "--" {
+		t.Fatalf("a start's options are not the probe's:\n%v\n%v", setup, args)
+	}
+	line := strings.Join(setup, " ")
+	for _, want := range []string{"--proc /proc", "--dev /dev", "--tmpfs /tmp", "--tmpfs /run", "--ro-bind /usr/local/bin/personad " + SelfPath,
+		"--remount-ro /", "--chdir /x/pkg"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("no %q in %s", want, line)
+		}
+	}
+}
+
 func TestDarwinProfile(t *testing.T) {
 	data := t.TempDir()
 	plan := Plan{Command: "/x/pkg/bin/notes", Pkg: "/x/pkg", Data: data, Run: "/x/run", ProxyURL: "http://ext:c@127.0.0.1:40001"}

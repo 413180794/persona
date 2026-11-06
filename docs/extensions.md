@@ -391,7 +391,8 @@ hub 里有一个**出网代理**（`server/internal/extension/egress`），第�
 - `systemd-run --user --scope` 给它上限：`MemoryMax`（默认 1024 MB）、`MemorySwapMax=0`、`CPUQuota`（默认 100%，即一个核）。清单可以申请别的：
   `runtime.resources: {"memory_mb": 64–8192, "cpu_percent": 10–800}`（老 hub 严格读清单，用它的扩展在 `engines.persona` 里写上带 #1856 的构建号）。
   用不了 `systemd-run --user` 时（没有用户的 systemd）只有 bwrap，没有上限。
-- hub 起来后第一次用时探一次：`bwrap` 在不在、能不能建网络命名空间，`systemd-run --user --scope` 能不能用。
+- hub 起来后第一次用时探一次：`bwrap` 在不在、能不能建网络命名空间，能不能做真正启动时的那些挂载（`/proc`、`/dev`、`/tmp` 和 `/run` 的 tmpfs、只读重挂根目录，用临时目录当包 / 数据 / 运行目录跑一次 `true`），`systemd-run --user --scope` 能不能用。
+  容器里或者用户命名空间受限的机器上常常能建命名空间却挂不了 `/proc`，这时算没有沙箱，`why` 写「bwrap 建不了沙箱的挂载：…」。
 
 **macOS**：`sandbox-exec`，profile 是：默认放行，再拒绝所有出站网络（只放 hub 代理的本机端口和自己运行目录里的 unix socket）、拒绝所有写（只放数据目录、运行目录、`/dev`）、
 拒绝读家目录（只放包、数据、运行目录）。没有网络命名空间，所以代理用本机 TCP 端口加凭据；没有资源上限。2026-11-05 在 macOS 27.2 上实测：写数据可以、写 / 读家目录不行、

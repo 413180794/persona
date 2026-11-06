@@ -687,21 +687,41 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 	s.fbot.mu.Lock()
 	_, ours := s.fbot.st.Threads[msg.ParentID]
 	s.fbot.mu.Unlock()
+	// The media to pass on: this message's own, then the pictures and files of the message it quotes (the owner
+	// replies to a picture to ask about it), each downloaded with the message it is in.
+	type botMedia struct {
+		of     string // the message it is in
+		quoted bool   // not to be had is no reason to hold the message back
+		feishubot.Media
+	}
+	var media []botMedia
+	for _, md := range content.Media {
+		media = append(media, botMedia{of: msg.MessageID, Media: md})
+	}
 	if msg.ParentID != "" && !ours {
-		in.Quote = s.botQuote(ctx, msg.ParentID)
+		var quoted []feishubot.Media
+		in.Quote, quoted = s.botQuote(ctx, msg.ParentID)
+		for _, md := range quoted {
+			media = append(media, botMedia{of: msg.ParentID, quoted: true, Media: md})
+		}
 	}
 	if content.Forward {
 		in.Forward = s.botForward(ctx, msg.MessageID)
 	}
 	var images []proto.Image
-	for _, md := range content.Media {
+	for _, bm := range media {
+		md := bm.Media
 		if md.Kind == "image" {
 			var res struct {
 				Data     []byte `json:"data"`
 				MIME     string `json:"mime"`
 				TooLarge bool   `json:"too_large"`
 			}
-			if err := s.appCall(ctx, AppFeishu, FeishuResource, map[string]any{"message_id": msg.MessageID, "key": md.Key, "kind": md.Kind}, &res); err != nil {
+			if err := s.appCall(ctx, AppFeishu, FeishuResource, map[string]any{"message_id": bm.of, "key": md.Key, "kind": md.Kind}, &res); err != nil {
+				if bm.quoted {
+					s.logf("bots: the quoted message's image: %v", err)
+					continue
+				}
 				return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.download_image"), err)
 			}
 			mime := res.MIME
@@ -721,8 +741,12 @@ func (s *Service) botSend(ctx context.Context, ev *feishubot.MessageEvent, conte
 		var saved struct {
 			Path string `json:"path"`
 		}
-		if err := s.appCall(ctx, AppFeishu, FeishuSave, map[string]any{"message_id": msg.MessageID, "key": md.Key, "kind": md.Kind, "name": md.Name,
+		if err := s.appCall(ctx, AppFeishu, FeishuSave, map[string]any{"message_id": bm.of, "key": md.Key, "kind": md.Kind, "name": md.Name,
 			"machine_id": rt.machine}, &saved); err != nil {
+			if bm.quoted {
+				s.logf("bots: the quoted message's file: %v", err)
+				continue
+			}
 			return fmt.Errorf("%s%w", i18n.T(s.botLang(ctx), "assistant-feishu.save_file", i18n.Args{"machine": rt.machineName}), err)
 		}
 		in.Files = append(in.Files, saved.Path)
@@ -787,11 +811,11 @@ func botProbe(text string, in prompts.BotMessage) string {
 	return channel.Probe(text, fallbacks...)
 }
 
-// botQuote is the message a message replies to.
-func (s *Service) botQuote(ctx context.Context, id string) *prompts.BotQuote {
+// botQuote is the message a message replies to, and the pictures and files in it.
+func (s *Service) botQuote(ctx context.Context, id string) (*prompts.BotQuote, []feishubot.Media) {
 	items, err := s.botMessages(ctx, id)
 	if err != nil || len(items) == 0 {
-		return nil
+		return nil, nil
 	}
 	it := items[0]
 	c := feishubot.ParseContent(it.MsgType, it.Body.Content, nil)
@@ -802,7 +826,7 @@ func (s *Service) botQuote(ctx context.Context, id string) *prompts.BotQuote {
 	if c.Text == "" {
 		c.Text = "[" + it.MsgType + "]"
 	}
-	return &prompts.BotQuote{Who: who, Text: clip(c.Text, 4000)}
+	return &prompts.BotQuote{Who: who, Text: clip(c.Text, 4000)}, c.Media
 }
 
 // botForward reads a merged forward: one line per message, oldest first.

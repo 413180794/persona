@@ -229,3 +229,28 @@ func TestKindBeforeWords(t *testing.T) {
 		}
 	}
 }
+
+// stdin over stdinMost fails before any call instead of being cut to stdinMost and sent as if whole; exactly
+// stdinMost still goes through.
+func TestStdinOverLimit(t *testing.T) {
+	text := strings.Repeat("a", stdinMost-len(`{"text":""}`))
+	atLimit := `{"text":"` + text + `"}`
+	over := `{"text":"` + text + `a"}`
+
+	f := &fakeNode{}
+	if code, _, errOut := run(t, f, over, "example_say", "-"); code != exitUsage || len(f.calls) != 0 || !strings.Contains(errOut, "1 MiB") {
+		t.Fatalf("json over the limit: %d %q %d calls", code, errOut, len(f.calls))
+	}
+	if code, _, errOut := run(t, f, strings.Repeat("a", stdinMost+1), "--cli", "example", "say", "-"); code != exitUsage || len(f.calls) != 0 || !strings.Contains(errOut, "1 MiB") {
+		t.Fatalf("text over the limit: %d %q %d calls", code, errOut, len(f.calls))
+	}
+
+	if code, _, errOut := run(t, f, atLimit, "example_say", "-"); code != exitOK || len(f.calls) != 1 {
+		t.Fatalf("json at the limit: %d %q %d calls", code, errOut, len(f.calls))
+	}
+	f = &fakeNode{}
+	if code, _, errOut := run(t, f, strings.Repeat("a", stdinMost), "--cli", "example", "say", "-"); code != exitOK || len(f.calls) != 2 ||
+		!strings.Contains(f.calls[1], `"text":"aaa`) || len(f.calls[1]) < stdinMost {
+		t.Fatalf("text at the limit: %d %q %d calls", code, errOut, len(f.calls))
+	}
+}

@@ -6,6 +6,7 @@
 {{end}}{{with .Unread}}  - 完成未看：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Waiting}}  - 在等的（hub 到时会叫醒它们，不用管）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Done}}  - 做完的（24 小时内）：{{template "assistant/snapshot_agents" .}}
+{{end}}{{with .Muted}}  - 已屏蔽（用户关了它们的通知，上面的数不算它们；别主动提，问到再说）：{{template "assistant/snapshot_agents" .}}
 {{end}}{{with .Working}}  - 工作中：{{join (first 8 .) "；"}}{{if gt (len .) 8}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Workflows}}  - 后台 workflow 在跑（这些 Agent 这一轮停着是在等结果，不是做完了，结果回来会叫醒它们；别关它们）：{{range $i, $w := first 6 .}}{{if $i}}；{{end}}{{$w.Agent}}（{{$w.Machine}}，session_id={{$w.Session}}）的{{template "assistant/snapshot_workflow" $w}}{{end}}{{if gt (len .) 6}} 等 {{len .}} 个{{end}}
 {{end}}{{with .Tasks}}- 从对话开的任务（task_plan；用 agent_send 对它的 Agent 说话）：
