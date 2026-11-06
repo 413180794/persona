@@ -1,252 +1,252 @@
-# 经验：Android
-
-## 完成边沿要保留本轮运行证据（#2124）
-
-只比较相邻快照的 Working → Unread 会漏掉 Working → NeedsYou → Unread；同一轮工作中途等待提问或授权后，仍可能直接完成。保留本轮运行标记穿过 NeedsYou，在完成时消费；Idle、移除和断线时清除。rev 单独变化不能当作新完成，旧未读版本也不能因解除静音补播。
-
-启用提示时，磁盘缓存中的 Working 不是当前运行证据；但把第一个实时事件一律当基线，又会漏掉已有在线工作恰好第一次完成。复用已有的已验证列表建立基线，订阅屏障先注册事件，再同步读权威快照；不为提示另起轮询或 WebSocket。重连不可观测窗口保持不猜测补播。
-
-新的多模块安卓 App（`android/`，`docs/android.md`、`docs/android-design.md`）踩过的坑。主线旧 App（单模块）的经验在 `docs/android.md`「经验」的「主线旧 App 的经验」一节。
-
-- 插件提醒 `notify.kind=alert` 没有交互编号，同一会话可以有多个不同提醒；通知 tag 要逐条区分，不能沿用完成提醒的 `kind:machine/session` 覆盖规则（#1654）。空的机器或会话标识表示普通提醒，不要拿它刷新会话列表或生成空会话深链。展示前在交付和构建通知两处核对 `input` 偏好，避免异步刷新期间关闭开关后仍弹出提醒。
-
-## 界面与 Compose
-
-- `activity-alias` 不继承目标 Activity 的 metadata（2026-11-03，#758）：保留旧 launcher alias 后，读取 `componentName` 会拿到 alias 的空 metadata，DEBUG 启动适配器因此不加载，假 hub、风格与深浅色参数都被忽略。查询 canonical `MainActivity` 的 metadata，保留原 key 和唯一 launcher；Release 仍不注册 DEBUG 适配器。截图脚本必须核对配对状态、实际 mock 请求和每个子进程退出码，不能把欢迎页或后续 `printf` 的成功退出算作截图验收。
-
-- Android 的 `AndroidView` 不会按自己的布局边界裁剪：里面的 View 在 `onDraw` 里 `drawColor` 会盖住上面的兄弟组件（终端的工具栏整条被背景色盖掉），要加 `Modifier.clipToBounds()`。
-- Compose 的 `Dialog(usePlatformDefaultWidth = false)` 做整页时，窗口默认不铺到系统栏下面：状态栏和手势条处各露出一条灰带（是背后的遮罩）。
-  加 `decorFitsSystemWindows = false` 铺满以后，对话框窗口的状态栏图标又不跟 Activity 走，浅色页面上是白字（历史会话页踩过）。整页弹层一律用 `JFullScreen`。
-- 玻璃页面的滚动边缘按「页面顶在屏幕顶上」画：嵌在别的界面下面的 `JPage`（链接卡片里的飞书文档）没有顶栏，顶部模糊会把内容第一行糊掉，所以没有顶栏就不画顶部边缘（`PageFrame`）。
-- Haze 默认用约 0.78 倍分辨率的内容做模糊：浮层多的页面（对话页的顶栏、任务条、状态行、输入框）在手机上帧时间翻倍，`LocalHazePerformanceMode`
-  设成 `Performance`（0.25 倍）后截图看不出差别（`JarvisTheme`）。模拟器的 GPU 是模拟的，玻璃一帧上百毫秒，性能只能在真机上量（`scripts/diag/android_scroll_perf.py`）。
-- Android 切页面闪烁的几个根源（2026-11-01 逐帧抓出来的）：① Nav3 的 `NavDisplay` 只组合当前 tab，`key(selected)` 一换整页重建，空状态、加载圈、
-  「还没有消息」轮流闪一遍 —— 访问过的 tab 保持组合、隐藏时不放置，并用 `rememberNavigationEventDispatcherOwner(enabled = false)` 关掉它的返回；
-  ② 浮层高度用 `onSizeChanged` 量完再写回 state，第一帧内容没留位置，标题从状态栏下面跳下来 —— 用 `SubcomposeLayout` 一次量完（`PageFrame`）；
-  ③ 外壳按「栈里只剩根页」显示底栏，返回时底栏先画在还在退出的对话页上 —— 底栏放进根页面（`NavEntryDecorator`），跟页面一起转场；
-  ④ 转场里两页同时半透明会叠字 —— 推入、返回只滑动不淡入淡出。录屏：`adb shell screenrecord` 后 `ffmpeg -vf fps=60` 抽帧，按相邻帧差找转场段。
-  模拟器上玻璃一帧上百毫秒，转场只能看对不对，看不出顺不顺。
-- Android 平板 / 折叠屏（2026-11-01）：android-35 google_apis 的 Pixel Fold 模拟器 `adb emu posture 2` 后 `device_state` 显示 HALF_OPENED，
-  但 `WindowInfoTracker` 给 App 的 displayFeatures 是空的（换 android-37 ps16k 镜像冷启动卡在 offline）：半折截图用 debug 包的 `debug.posture`（假铰链），
-  合上 / 展开（`emu posture 1` / `3`）是真的切屏。折叠屏有两块屏，`screencap -p` 先输出一行多屏警告，PNG 要从 `\x89PNG` 开始截。
-  带硬件键盘的模拟器不在触摸模式，Compose 把初始焦点给第一个输入框、软键盘自己弹出来：`MainActivity` 用 `stateAlwaysHidden`。
-  `NavDisplay` 传单个 `sceneStrategy` 的重载和转场 lambda 一起写类型推断不出来，用 `sceneStrategies = listOf(...)`；这套版本里 `ExitTransition.KeepUntilTransitionsFinished` 是 internal。
-- Android 各页面自己套的 `JarvisTheme` 默认读 `isSystemInDarkTheme()`，只在根上传 `darkTheme` 盖不住它们：debug 固定深浅色要改 `LocalConfiguration` 的 uiMode（`MainActivity.AppearanceOverride`），否则深色截图里会混着浅色的页面。
-- Kotlin 的尾随 lambda 也只匹配最后一个函数参数：给 `AppNavigator` 新加一个可选的函数参数后，原来 `AppNavigator(...) { 按会话分 tab }` 的调用悄悄传给了新参数。新加的函数参数放最后，调用处一律写参数名。
-- Compose 里会变的透明度别用 `Modifier.alpha`：值为 1 时不加图层，切换时修饰符链中间增删一层 graphicsLayer；排在 `clip` + `background` 后面时，Compose UI 1.12.1 删层后不再画那段背景（Android 的 `JButton` 由禁用变可用只剩一行字）。设计系统用 `Modifier.stableAlpha`（`docs/android.md` 经验）。
-- material3-adaptive 的 `ListDetailSceneStrategy.detailPane()` 每次返回新的、没有 `equals` 的 metadata，拿它做相等比较永远是 false（Android 双栏左栏的高亮因此从来没亮过）：判断详情页按路由类型（`ShellPanes.kt`）。
-- Compose 里给容器加 `height(IntrinsicSize.Min)`（为了让左边的色块撑满高度），里面一旦有懒加载列表或 `BoxWithConstraints` 就直接崩
-  （「Asking for intrinsic measurements of SubcomposeLayout layouts is not supported」，看板风格的飞书会话踩过）：贴边的色块用 `drawBehind` 画（`Modifier.holder`）。
-- Haze 的 `GlassStyle.regular` 跟随**系统**深浅色，不看 App 自己的深浅色：调试固定深浅色时要连 `LocalConfiguration` 的 uiMode 一起改（`MainActivity.AppearanceOverride`），否则深色页面上出现浅色玻璃。
-- 玻璃风格的 `ComposerFrame`（`floatingSurface`）按 `LocalGlassSource` 采样它下面的内容：放进 `JSheet` 时 `LocalGlassSource` 还是页面的，输入框里透出浮层后面那一页的字（收件箱的「改一改」、邮件回复浮层都这样）。浮层是不透明的，内容外面套 `CompositionLocalProvider(LocalGlassSource provides null)`，输入框就画成实心（`InboxDraftSheet`）。以后要在 `JSheet` 里统一处理可以在组件里置空。
-- 晨报的 `surface` 是卡片灰，输入框和 chip 也拿它填底、没有边框：底部面板原来也是这个灰（`surfaceOpaque`），面板里的输入框和 chip 就看不见了（交给 AI、改一改、AI 草拟）。晨报的 `JSheet` 改用纸白（`background`），和页面一样。
-- `SaveableStateHolder.SaveableStateProvider(key)` 里面是 `ReusableContent(key)`：key 一变整棵子树重建，焦点、滚动位置、`remember` 都没了。key 里别放随输入变的值：收件箱曾把搜索词和折叠的分组放进 key，搜索框每打一个字就丢焦点（后面的字也丢了），折叠一组就跳回顶部（`InboxScreen`）。
-- `SwipeToDismissBox` 的 `backgroundContent` 不滑动时也在画：玻璃风格的半透明行下面会透出滑动操作的颜色（收件箱整行发绿），只在 `dismissDirection` 不是 `Settled` 时画（`JSwipeActions`）。
-- Phosphor 线条图标（`X` 等）的 fill 字重是「实心方块里镂空一个 X」：看板风格里 `JIcon(selected = true)` 取 fill，照片角上的移除叉号画成了白方块。叉号这类别给 `selected`，看板自动用 bold。
-- 玻璃背景每变一帧，上面所有浮层（顶栏、悬浮坞、输入框、滚动边缘）都要重新模糊，代价远大于画背景本身：状态光动起来以后（#959），模拟器上 Persona 页空闲时
-  24 fps 重画占一个核的 p50 12%，降到 12 fps 后 p50 7.4%（各 15 次采样）。慢速的装饰动画按「看不出步进」的最低帧率更新（帧时间量化后写状态，
-  只在 draw 里读），不要跟着屏幕刷新率跑；省电模式下停掉。
-- `JSegmented` 不能放进 `horizontalScroll`：看板风格的每一格是 `weight(1f, fill = false)`，横向滚动给的宽度是无穷大，格子全缩没了，只剩一条竖线（插件页的 `segmented`，#1451，用 Robolectric 截图才看出来，玻璃和晨报正常）。要横排就让它拿父级的有限宽度。
-- 插件画的界面可以在 JVM 上截图：`feature:settings` 的 `PluginSlotsShotsTest` 用 Robolectric 的原生绘制（`@GraphicsMode(NATIVE)`）`captureToImage()` 存 PNG，中文字体正常，不用模拟器；新做的纯 Compose 组件照这个办法先看一遍。
-- 截图测试注释里写的 `-Dpersona.shots=<dir>` 经 `./gradlew … -D` 传不进测试 JVM（约定插件没有转发这个系统属性，2026-11-05 收件箱第一期）：PNG 照旧写在模块的 `build/<名字>-shots/`，要放别处就跑完再拷。用 `LocalizedFormats` 的纯函数（时间格式）在普通 JUnit 里会抛 `RuntimeException`（它用了 Android 的 `DateFormat`），测试类要加 `@RunWith(AndroidJUnit4::class)` 用 Robolectric 跑。
-- Robolectric 截图测试里 `rule.mainClock.autoAdvance = false`（转圈、计时不会停）时，改了 `mutableStateOf`（比如 `dark = true`）再 `advanceTimeByFrame()` 不一定重组：快照的改动还没 apply，深色截图其实还是浅色（#3350 第一次拍出两张一样的图）。改状态后先 `Snapshot.sendApplyNotifications()` 再推帧，并断言两张图的像素不同（`LiveTurnShotsTest`）。
-- Compose 测试里 `Modifier.clickable(enabled = false)` 仍带 OnClick 语义动作，`assertHasNoClickAction()` 断言不了「不可点」，要用 `assertIsNotEnabled()`（`ComposerPartsTest`）。
-
-- 匿名 `BaseInputConnection` 里写 `override fun getEditable() = editable`，外层类的字段也叫 `editable`：Kotlin 先找到的是这个对象自己的 `getEditable()`（Java getter 对应的属性），于是自己调自己，输入法一连上（`finishComposingText` → `getEditable`）就栈溢出崩溃（终端键盘，2026-11-02）。外层字段别和框架 getter 同名（改叫 `buffer`）；这种问题 JVM 单测测不出，要在模拟器上真点一次键盘。
-- 终端页上方的提示卡（「正在接管…」）一出现、一消失都会改终端的高度，接管时窗格因此多重排两次，攒下的滚出行还会重复：会来回变的状态写在标题下的一行里，终端的高度只随键盘变。
-
-## 终端与假 hub
-
-- 假 hub 的「只看」订阅以前不停掉接管时的那条流：两个 epoch 的帧交错到达，App 每次都判成缺帧重订，假 hub 每次重订又从头放一遍录制，帧越来越多，几十秒后 App OOM（`MOCK_TERMINAL_INTERVAL=0.05` 时很快）。真 hub 一个会话只有一条订阅，新订阅取代旧的；假 hub 现在也这样（`drive.clear()`）。
-- 换了假 hub 进程（`HUB_ID` 每次随机），已配对的 App 健康检查对不上 hub 身份，一直「连不上 hub」：重启假 hub 后要 `pm clear` 再走一次 `debug.mockAddress` 配对。
-- `./gradlew --stop` 停的是这台机器上同一 Gradle 版本的所有 daemon，几条车道（worktree）共用时会把别人的构建一起停掉；只停自己的构建用 Ctrl-C 或 kill 自己那条命令。
-
-## 测试
-
-- 设置入口迁移的截图不能只手工拼同名的 `JRow`（2026-11-05，#2196）：旧渠道截图自己画了「扩展 → 渠道」，设置页改了也不会发现位置错误。用最小 Fake 服务画真正的 `SettingsScreen`，传入导航回调，核对独立分节、上下顺序、点击目标、双栏选中、能力缺失与体验模式；移除「认识 Persona」入口时先找到实际文案（安卓为「助手」分组里的 `Persona`），不能误删主对话或仍被顶栏／启动器使用的资料页。Robolectric Native 的图片须实际打开检查，并明确不是模拟器截图。清理包装的 imports 后，自动 merge 最新 master 也要复编：另一个 PR 可能让留下的页面新用到原本只供包装用的依赖（#2192 的主对话迁移回调重新使用了 `LocalAssistantHost`），Git 没有文本冲突不代表依赖仍完整。
-
-- 2026-11-05，#1881：只验证契约模块或扫描硬编码 token，不能证明新增页面能编译。Agents 的 hub 提示行同时出现 `Set.takeLast` 和不存在的尺寸 token；修好生产编译后，原测试夹具还因引用旧接口和继承 final 类而不能编译。
-  有序去重集合先转成列表再截取最近 8 项，验证重复键不会增长或重排历史；加载圈沿用 `JSpinner` 与已有设计系统尺寸，不造页面里的数值或修改生成的 token 文件。Fake 按当前接口实现，`AgentsPreferences` 用真实构造函数和内存 DataStore，不把正式类型改成 open。
-  `WhileSubscribed` 的 StateFlow 要有活跃收集者；测试安装 Main dispatcher，先启动订阅再发送不重放的 hello，并推进调度器后检查状态；结束时取消模型／订阅并恢复 dispatcher。实际模拟器还暴露了尚未收到 hello 时误报「hub 版本太旧」的时序问题：没有 hello 不是协议为零，调用方要等 hello 到达后再判断兼容性；真正收到旧协议仍提示。
-  保留原断言，另用原生绘制和实际 App 截图检查三种风格 × 深浅色，最后跑完整 Android 测试和 APK 构建。原失败日志与退出码单独保留，不能把测试编译失败写成已运行的测试失败。
-
-- 读取仓库源码的 JVM 测试不要把 `File(".")` 当仓库根目录（2026-11-04，#1672）：Gradle 的 `:app:testDebugUnitTest` 在 `android/app` 下运行，重复拼接 `android/app/...` 会在文件存在检查处失败，真正的契约断言根本没有执行。沿当前目录的父目录寻找约定的源码文件，用合成目录验证仓库根、Android 根、App 模块三种入口以及缺失文件／同名目录；不全局改测试工作目录、不跳过原契约断言。原发布失败记录保留，修复后真实运行 Gradle 测试和打包。
-
-- `RealInboxRepository` 构造时在作用域里起一个收集当前配对的协程，它第一次运行会把列表清空（换配对时的清场）。`runTest` 里构造完直接 `refresh()`，清场排在第一次挂起之后跑，刚读到的列表又被清掉：先等 `snapshot.first { it.contentSource != null }` 再刷新（`InboxHandOffRepositoryTest`）。
-- `RealInboxRepository` 的测试用尾随 lambda 传最后一个参数 `download`：新加的构造参数要放在它前面（带默认值），否则尾随 lambda 对不上。
-
-- Navigation 3 的页面级 ViewModel（`rememberViewModelStoreNavEntryDecorator`）在页面出栈时随 ViewModelStore 一起清掉：页面里 `viewModelScope.launch` 的收尾（比如清掉新建 Agent 的启动记录）如果排在 `navigator.back()` 之后，常常还没跑就被取消，下次打开又说「上次启动的结果待确认」。要先在 `LaunchedEffect` 里把收尾做完（挂起函数），再离开页面（`NewAgentDestination` 的 `acknowledge()`）。
-
-- `JFullScreen` 是一个 Compose `Dialog`，有自己的窗口：App 统一的提示（`LocalAppFeedback` → `Root.kt` 的 `SnackbarHost`）画在 Activity 的窗口里，整页弹层开着时会被盖住，用户看不到。弹层里操作的结果要在弹层自己的窗口里提示（看图的查看器、`SpaceScreen` 都自带 `SnackbarHost`）；只有弹层随即关掉时的那一条（「已加到输入框，补一句话就能发」）走 `LocalAppFeedback`。读代码确认，2026-11-02 写看图时没有上设备看。
-- `JFullScreen` 先铺一层不透明的页面背景，弹层里把内容拉走时透不出下面的页面：查看器给它一个 `background` 透明的色板（`LocalPalette`），在里面换回原色板、自己画会变淡的背景。弹层里的玻璃浮层要有自己的 `HazeState`（`LocalGlassSource`），否则用的是从下面那页继承来的，采样的是另一个窗口的内容。
-- Compose 的 `Modifier.border(0.dp, …)` 不是没有边：`0.dp` 就是 `Dp.Hairline`，照样画一像素的线（`BorderModifierNode` 里写明的）。「有时有边」要按条件加这个修饰符（编辑器的选色圈）。
-- 图片解码用 `ImageDecoder`（按 EXIF 方向转正）而不是 `BitmapFactory`（不管方向，相机原图会横着显示）；要往里画、重新编码的位图用 `ALLOCATOR_SOFTWARE`，硬件位图不能画进软件 Canvas。存 JPEG 前把透明的地方铺白：JPEG 没有透明通道，编码器会把透明处变成黑色（`jpegBytes`）。
-- `Offset` 是值类，按位比较：`coerceIn(-0f, 0f)` 会得到 `-0f`，和 `Offset.Zero` 不相等；没有余地时直接给 `0f`（`ImageMath.clampPan`），测试里比较算出来的浮点偏移用容差。
-
-## 系统能力
-
-- 通知栏是另一份状态，不会跟着待处理列表走（#3401）：重连没续上（`resumed=false`）时漏掉的 `interaction_resolved` 不补发，全量刷新只修好了 App 里的列表。`HubService` 在线且列表稳定 1.5 秒后拿通知栏里带 `jarvis.request` 标记的提问通知去对列表，不在的撤掉（`InteractionNotificationReconciler`）；不按「列表比上次少了」判断，冷启动时上个进程留下的也能撤；没打开的组（关掉、合并改了 id）跳过，那些请求没答完。
-- hub 的 `fleet` 只在变化时推（`liveactivity.go` 和上次广播的比较），刚连上的客户端什么都收不到：常驻通知、小组件会一直是 0，直到哪个 Agent 状态变了。连接每次连上都要 `GET /api/v1/fleet` 一次（`FleetFeed`）。
-- 一个 PendingIntent 是不是「同一个」只看 action、data、组件和类别，不看 extras 和 flags：常驻通知上的「允许」如果和「需要你处理」通知上的用同一个 data URI，系统会把它们当成一个（一个可变带回复框、一个不可变），后创建的覆盖先创建的。常驻通知的按钮用自己的 `jarvis-notify://ongoing/…`。
-- 前台服务的 `onStartCommand` 不只跑一次：App 每次回到前台都会再 start 它，每次都要 `startForeground`。那时用的通知要是现在显示着的那条（`HubService.shown`），不能按当前数据重新算：重新算的没有「只剩做完未看满 5 分钟退回连接行」这一步，已经收起的「1 个做完了」又回来了，而收集器看到的状态没变，不会再改回去，一直挂到 fleet 下次变化（2026-11-02 模拟器上复现）。
-- 前台服务要停的时候别再更新它的通知：取消配对时连接状态、通知偏好先变（App 跟着发了两次「等待网络」），紧接着服务停下、`stopForeground(REMOVE)` 收走通知；系统处理通知是异步的（模拟器上用调用栈确认：两次 post 都在 onDestroy 之前），最后那次更新落在收走之后，成了一条普通的常驻通知，划不掉、也没人再管它（两次复现两次都留下）。`HubService.show` 在没配对时不再更新。
-- 通知上要求解锁的按钮（`setAuthenticationRequired(true)`）：锁屏上点了、输完 PIN，SystemUI 马上就把按钮的 PendingIntent 发出来，这时 `KeyguardManager.isDeviceLocked` 还是 true（Android 15 模拟器单次观察，约 0.8 秒后才变 false）。收到就读它再拒绝的话，锁屏上的「允许 / 批准」每次都回「请先解锁」，一次也成不了；常驻服务的「恢复」也一样被悄悄吞掉，手机工具确认通知上的「允许」被丢掉、90 秒后按拒绝回给 Claude。要给解锁一点时间落定再判断（`lockedAfterUnlockSettles`，`:platform:notify` 和 `:platform:phonetools` 各一份，最多等 3 秒，一直锁着才算锁着）。
-- 手机工具：hub 把各台手机同名的工具合并成一份定义（取说明更长的），调用却可能发给任一台声明了它的手机（`phoneClient`）。Android 的定义只要和 iOS 不一样，Claude 就会按 iOS 的参数调用 Android（新版曾经把超范围的 `limit` 当错误拒绝）：工具定义逐字照 iOS，用导出的夹具守着（`PhoneToolCatalogTest`）。
-
-- 用 `startForegroundService` 拉起的服务，在调 `startForeground` 之前被停掉（自己 `stopSelf`、外面 `stopService`），系统直接让 App 崩在 `ForegroundServiceDidNotStartInTimeException`。负载高时这段空档变长，配对时一闪的「未配对」就会撞上：`HubService` 一律先进前台再决定去留，只在已经进了前台时才停它（`ForegroundStarts`，`docs/android.md`）。
-
-## 包名迁移与升级兼容
+# Lessons: Android
+
+## Completion edges must retain evidence of the current run (#2124)
+
+Comparing only adjacent Working → Unread snapshots misses Working → NeedsYou → Unread; a turn can finish directly after waiting for a question or permission midway through work. Retain a current-run marker through NeedsYou and consume it at completion; clear it on Idle, removal, or disconnect. A rev-only change is not a new completion, and old unread versions must not replay when unmuted.
+
+When enabling alerts, Working from disk cache is not evidence of a current run. But treating every first live event as a baseline misses an already-online Agent that happens to complete on that first event. Reuse the existing verified list as the baseline; register events at the subscription barrier before synchronously reading the authoritative snapshot. Do not add polling or a WebSocket just for alerts. Do not guess or replay completions from the unobservable reconnect window.
+
+Pitfalls in the new multi-module Android App (`android/`, `docs/android.md`, `docs/android-design.md`). Lessons from the old single-module mainline App are under "Lessons from the old mainline App" in `docs/android.md` ("Lessons").
+
+- Plugin alerts `notify.kind=alert` have no interaction ID, and one session may have multiple distinct alerts. Notification tags must distinguish individual alerts, not reuse completion alerts' `kind:machine/session` replacement rule (#1654). Empty machine or session identifiers mean a generic alert; do not use them to refresh session lists or create empty-session deep links. Check the `input` preference at both delivery and notification construction, so disabling it during async refresh does not still show an alert.
+
+## UI and Compose
+
+- `activity-alias` does not inherit its target Activity's metadata (2026-11-03, #758). After retaining the old launcher alias, reading `componentName` returned empty alias metadata, so the DEBUG launch adapter did not load and mock hub, style, and light / dark arguments were ignored. Query canonical `MainActivity` metadata, retaining the original key and single launcher; Release still must not register the DEBUG adapter. Screenshot scripts must verify pairing, actual mock requests, and every subprocess exit code. A welcome page or a successful later `printf` exit is not screenshot acceptance.
+
+- Android's `AndroidView` does not clip to its layout bounds. A View calling `drawColor` in `onDraw` covers siblings above it (the terminal toolbar was entirely covered by the background); add `Modifier.clipToBounds()`.
+- A full-page Compose `Dialog(usePlatformDefaultWidth = false)` does not extend under system bars by default, leaving gray strips at the status bar and gesture bar (the scrim behind it).
+  After adding `decorFitsSystemWindows = false`, the dialog's status-bar icons still do not follow the Activity and remain white on a light page (seen on historical sessions). Use `JFullScreen` for all full-page overlays.
+- Glass-page scroll edges assume the page starts at the screen top. A `JPage` embedded below another UI (a Lark document in a link card) has no top bar, and top blur obscures its first content line. Do not draw a top edge without a top bar (`PageFrame`).
+- Haze blurs content at about 0.78× resolution by default. Pages with many overlays (chat top bar, task bar, status row, input bar) doubled frame time on a phone. Setting `LocalHazePerformanceMode`
+  to `Performance` (0.25×) produced no visible screenshot difference (`JarvisTheme`). The simulator GPU is emulated; glass takes over 100 ms per frame. Measure performance only on physical devices (`scripts/diag/android_scroll_perf.py`).
+- Several causes of Android page-switch flicker (isolated frame by frame 2026-11-01): ① Nav3 `NavDisplay` composes only the current tab; changing `key(selected)` rebuilds the whole page, flashing empty state, spinner,
+  and "No messages yet" in sequence. Keep visited tabs composed but unplaced while hidden, and disable their back handling with `rememberNavigationEventDispatcherOwner(enabled = false)`.
+  ② Measuring overlay height in `onSizeChanged` and writing it to state leaves no space on the first frame; the title jumps down from below the status bar. Measure in one pass with `SubcomposeLayout` (`PageFrame`).
+  ③ Showing the bottom bar when only the root remains in the stack draws it over the still-exiting chat on Back. Put it inside the root page (`NavEntryDecorator`) so it transitions with the page.
+  ④ Two translucent pages in a transition overlap text. Push / pop should slide without fading. Record with `adb shell screenrecord`, extract frames with `ffmpeg -vf fps=60`, and find transitions by adjacent-frame differences.
+  Glass takes over 100 ms per simulator frame, so transitions can be checked for correctness, not smoothness.
+- Android tablets / foldables (2026-11-01): on the android-35 google_apis Pixel Fold emulator, `adb emu posture 2` makes `device_state` report HALF_OPENED,
+  but `WindowInfoTracker` gives the App empty displayFeatures (the android-37 ps16k image cold boot stalled offline). Half-fold screenshots use the debug build's `debug.posture` (fake hinge);
+  closed / unfolded (`emu posture 1` / `3`) really switch screens. Foldables have two displays; `screencap -p` first prints a multi-display warning, so trim the PNG from `\x89PNG`.
+  Emulators with hardware keyboards are not in touch mode. Compose initially focuses the first input, opening the soft keyboard automatically; `MainActivity` uses `stateAlwaysHidden`.
+  The `NavDisplay` overload taking one `sceneStrategy` fails type inference alongside transition lambdas; use `sceneStrategies = listOf(...)`. In this version, `ExitTransition.KeepUntilTransitionsFinished` is internal.
+- Pages' own `JarvisTheme` wrappers default to `isSystemInDarkTheme()`; passing `darkTheme` only at the root does not override them. DEBUG-fixed light / dark mode must change `LocalConfiguration` uiMode (`MainActivity.AppearanceOverride`), or dark screenshots mix in light pages.
+- Kotlin trailing lambdas match only the final function parameter. After adding an optional function parameter to `AppNavigator`, existing `AppNavigator(...) { group tabs by session }` calls silently bound to the new parameter. Put new function parameters last, and name parameters at call sites.
+- Do not use `Modifier.alpha` for changing opacity in Compose. At 1 it adds no layer, so switching adds / removes a graphicsLayer in the modifier chain. After `clip` + `background`, removing the layer in Compose UI 1.12.1 stops drawing that background (Android `JButton` lost everything but text when enabled). The design system uses `Modifier.stableAlpha` (`docs/android.md`, "Lessons").
+- material3-adaptive `ListDetailSceneStrategy.detailPane()` returns new metadata without `equals` every time, so equality comparisons always fail (Android two-column left selection never highlighted). Identify detail pages by route type (`ShellPanes.kt`).
+- A container with `height(IntrinsicSize.Min)` (to stretch a left color block) crashes as soon as it contains a lazy list or `BoxWithConstraints`
+  ("Asking for intrinsic measurements of SubcomposeLayout layouts is not supported," seen in board-style Lark chats). Draw edge color blocks with `drawBehind` (`Modifier.holder`).
+- Haze's `GlassStyle.regular` follows **system** light / dark mode, not the App's. DEBUG-fixed appearance must also change `LocalConfiguration` uiMode (`MainActivity.AppearanceOverride`), or dark pages get light glass.
+- Glass-style `ComposerFrame` (`floatingSurface`) samples underlying content through `LocalGlassSource`. Inside `JSheet`, this still points to the page, so text from behind the sheet shows through the input (Inbox Edit and email-reply sheets). The sheet is opaque; wrap its content in `CompositionLocalProvider(LocalGlassSource provides null)` to make the input solid (`InboxDraftSheet`). This can later be centralized by clearing it in `JSheet`.
+- Morning-style `surface` is card gray, also used for borderless inputs and chips. The bottom panel used the same gray (`surfaceOpaque`), making its inputs and chips invisible (Hand to AI, Edit, AI draft). Morning-style `JSheet` now uses paper-white `background`, like the page.
+- `SaveableStateHolder.SaveableStateProvider(key)` contains `ReusableContent(key)`: changing the key rebuilds the entire subtree, losing focus, scroll position, and `remember`. Do not include input-changing values in the key. Inbox included search text and collapsed groups; every typed character lost focus (and later characters), and collapsing a group jumped to the top (`InboxScreen`).
+- `SwipeToDismissBox` draws `backgroundContent` even when not swiping. Swipe-action colors show through translucent glass rows (whole Inbox rows turned green). Draw only when `dismissDirection` is not `Settled` (`JSwipeActions`).
+- Phosphor line icons (`X`, etc.) have fill weight drawn as a solid square with an X cutout. Board-style `JIcon(selected = true)` picks fill, making the photo-corner remove icon a white square. Do not set `selected` for crosses like these; board automatically uses bold.
+- Every changing glass-background frame forces all overlays (top bar, floating dock, input, scroll edges) to blur again, far more expensive than drawing the background. After status glow animation (#959), idle Persona-page
+  redraws at 24 fps used p50 12% of one core on the simulator; at 12 fps, p50 was 7.4% (15 samples each). Update slow decorative animations at the lowest frame rate without visible stepping (quantize frame time before writing state,
+  read only in draw), not the display refresh rate; stop them in power-saving mode.
+- `JSegmented` must not be inside `horizontalScroll`. Each board-style segment uses `weight(1f, fill = false)`; infinite scroll width shrinks all segments away, leaving a vertical line (plugin-page `segmented`, #1451, found only with Robolectric screenshots; glass and morning were fine). A horizontal row must receive finite parent width.
+- Plugin UI can be screenshotted on the JVM. `feature:settings` `PluginSlotsShotsTest` uses Robolectric native rendering (`@GraphicsMode(NATIVE)`) and `captureToImage()` to save PNGs, with working Chinese fonts and no emulator. Inspect new pure Compose components this way first.
+- Screenshot-test comments suggesting `-Dpersona.shots=<dir>` do not pass that property to the test JVM through `./gradlew … -D` (convention plugins do not forward it; 2026-11-05, Inbox phase 1). PNGs still go to the module's `build/<name>-shots/`; copy them afterward for another location. Pure `LocalizedFormats` functions (time formatting) throw `RuntimeException` in ordinary JUnit because they use Android `DateFormat`; add `@RunWith(AndroidJUnit4::class)` and run with Robolectric.
+- In Robolectric screenshot tests, with `rule.mainClock.autoAdvance = false` (spinners / timers never stop), changing `mutableStateOf` (such as `dark = true`) then calling `advanceTimeByFrame()` may not recompose: snapshot changes are not applied yet, so the dark screenshot is still light (#3350's first pair was identical). After changing state, call `Snapshot.sendApplyNotifications()` before advancing frames, and assert that the images' pixels differ (`LiveTurnShotsTest`).
+- In Compose tests, `Modifier.clickable(enabled = false)` still has an OnClick semantic action. `assertHasNoClickAction()` cannot assert disabled behavior; use `assertIsNotEnabled()` (`ComposerPartsTest`).
+
+- In an anonymous `BaseInputConnection`, `override fun getEditable() = editable` with an outer field also named `editable` resolves first to the object's own `getEditable()` (the property corresponding to the Java getter). It recurses, causing stack-overflow crashes as soon as the IME connects (`finishComposingText` → `getEditable`; terminal keyboard, 2026-11-02). Do not give outer fields framework-getter names (renamed to `buffer`). JVM unit tests cannot catch this; tap the keyboard on an emulator.
+- A status card above the terminal ("Taking over…") changes terminal height on both appearance and disappearance, causing two extra pane reflows during takeover and duplicating buffered scrollback. Put changing status in one line below the title; terminal height should change only with the keyboard.
+
+## Terminal and mock hub
+
+- The mock hub's view-only subscription previously did not stop the takeover stream. Frames from two epochs interleaved; the App repeatedly detected gaps and resubscribed, each time restarting the recording. Frames accumulated until the App OOMed after tens of seconds (quickly with `MOCK_TERMINAL_INTERVAL=0.05`). A real hub has only one subscription per session, replaced by a new subscription; the mock now does the same (`drive.clear()`).
+- Replacing the mock hub process (`HUB_ID` is random each time) makes a paired App's health check fail hub identity, leaving "Cannot connect to hub" indefinitely. After restarting the mock, run `pm clear` and pair again through `debug.mockAddress`.
+- `./gradlew --stop` stops all daemons of that Gradle version on the machine. Shared lanes (worktrees) therefore stop other people's builds too. To stop only yours, use Ctrl-C or kill your own command.
+
+## Testing
+
+- Settings-entry migration screenshots must not just hand-build identically named `JRow`s (2026-11-05, #2196). Old channel screenshots drew "Extensions → Channels" themselves and could not detect misplaced entries after Settings changed. Render the real `SettingsScreen` with minimal fake services and navigation callbacks; check separate sections, ordering, click targets, two-column selection, missing capabilities, and demo mode. When removing the "Meet Persona" entry, first find the actual label (Android's `Persona` under Assistant); do not delete the main chat or the profile page still used by top bars / launchers. Open and inspect Robolectric Native images, explicitly stating that they are not emulator screenshots. After cleaning wrapper imports, rebuild after automatically merging latest master: another PR may make a retained page use a dependency previously used only by the wrapper (#2192's main-chat migration callback reused `LocalAssistantHost`). No textual Git conflict does not mean dependencies remain complete.
+
+- 2026-11-05, #1881: checking only contract modules or hardcoded tokens does not prove new pages compile. Agents' hub notice row had both `Set.takeLast` and a nonexistent size token; after production compilation was fixed, old test fixtures still failed by referencing old interfaces and inheriting final classes.
+  Convert ordered deduplicated sets to lists before taking the latest 8 items; verify duplicate keys neither grow nor reorder history. Reuse `JSpinner` and existing design-system sizes, without page-local values or edits to generated token files. Implement Fakes against current interfaces; use the real `AgentsPreferences` constructor and an in-memory DataStore, not an `open` production type.
+  `WhileSubscribed` StateFlows need an active collector. Install Main dispatcher in tests, subscribe before sending a non-replayed hello, and advance the scheduler before checking state. Cancel models / subscriptions and restore the dispatcher at the end. A real emulator also exposed a timing bug reporting "Hub version too old" before hello arrived: missing hello does not mean protocol zero. Callers must wait for hello before checking compatibility, while still warning for a genuinely old protocol.
+  Retain original assertions; also inspect native-rendered and real-App screenshots for all three styles × light / dark, then run the full Android tests and APK build. Keep original failure logs and exit codes separately; test compilation failure is not a failure of tests that actually ran.
+
+- JVM tests reading repository source must not treat `File(".")` as the repository root (2026-11-04, #1672). Gradle `:app:testDebugUnitTest` runs under `android/app`; appending `android/app/...` again fails file-existence checks before contract assertions run. Search parent directories for the agreed source file. Synthetic directories should test repository-root, Android-root, App-module entry points, and missing files / same-named directories. Do not globally change test working directories or skip original contract assertions. Retain the original release failure record, then actually run Gradle tests and packaging after the fix.
+
+- `RealInboxRepository` starts a coroutine collecting the current pairing in its constructor. Its first run clears the list for pairing changes. In `runTest`, constructing then immediately calling `refresh()` lets cleanup run after the first suspension and erase the freshly loaded list. Wait for `snapshot.first { it.contentSource != null }` before refreshing (`InboxHandOffRepositoryTest`).
+- `RealInboxRepository` tests pass the last argument `download` as a trailing lambda. New constructor arguments must go before it (with defaults), or the trailing lambda no longer matches.
+
+- Navigation 3 page-level ViewModels (`rememberViewModelStoreNavEntryDecorator`) are cleared with their ViewModelStore when the page leaves the stack. Cleanup in `viewModelScope.launch` (such as clearing a new Agent's start record), scheduled after `navigator.back()`, is often cancelled before running. Reopening then says "Previous start result needs confirmation." Complete cleanup first in `LaunchedEffect` (suspending function), then leave (`NewAgentDestination` `acknowledge()`).
+
+- `JFullScreen` is a Compose `Dialog` with its own window. Global App feedback (`LocalAppFeedback` → `SnackbarHost` in `Root.kt`) is drawn in the Activity window and hidden behind an open full-page overlay. Overlay actions must show results in the overlay's own window (image viewer and `SpaceScreen` have their own `SnackbarHost`). Only the final notice when the overlay immediately closes ("Added to input; add a message to send") uses `LocalAppFeedback`. Confirmed by code reading; image-viewer work on 2026-11-02 was not checked on a device.
+- `JFullScreen` first draws an opaque page background, so dragging overlay content away cannot reveal the page below. The viewer gives it a palette with transparent `background` (`LocalPalette`), restores the original palette inside, and draws its own fading background. Glass overlays in the dialog need their own `HazeState` (`LocalGlassSource`), or they sample another window's content inherited from the underlying page.
+- Compose `Modifier.border(0.dp, …)` does not mean no border: `0.dp` is `Dp.Hairline`, drawing a one-pixel line (explicit in `BorderModifierNode`). Add the modifier conditionally for optional borders (editor color-selection ring).
+- Decode images with `ImageDecoder` (corrects EXIF orientation), not `BitmapFactory` (ignores it, displaying camera originals sideways). Bitmaps to draw into / reencode need `ALLOCATOR_SOFTWARE`; hardware bitmaps cannot be drawn into software Canvas. Flatten transparent areas onto white before saving JPEG: JPEG has no alpha, and the encoder otherwise makes them black (`jpegBytes`).
+- `Offset` is a value class with bitwise equality. `coerceIn(-0f, 0f)` can produce `-0f`, unequal to `Offset.Zero`. Return `0f` directly when no range exists (`ImageMath.clampPan`); use tolerance for computed floating-point offsets in tests.
+
+## System capabilities
+
+- The notification tray has separate state and does not follow the pending list (#3401). If reconnect does not resume (`resumed=false`), missed `interaction_resolved` events are not replayed; full refresh fixes only the App list. Once `HubService` is online and the list has been stable for 1.5 seconds, compare question notifications carrying `jarvis.request` with the list and remove absent ones (`InteractionNotificationReconciler`). Do not infer from "list shorter than before"; leftovers from a prior process must also disappear on cold start. Skip unopened groups (disabled or IDs changed by merge), whose requests remain unanswered.
+- Hub pushes `fleet` only on change (`liveactivity.go` compares with the last broadcast), so a newly connected client gets nothing. Persistent notifications and widgets remain at 0 until an Agent changes state. Every connection must `GET /api/v1/fleet` once on connect (`FleetFeed`).
+- PendingIntent identity depends only on action, data, component, and categories, not extras or flags. If Allow on the persistent notification uses the same data URI as a Needs you notification, Android treats them as identical (one mutable with reply input, one immutable) and the later one overwrites the earlier. Persistent-notification buttons use their own `jarvis-notify://ongoing/…`.
+- Foreground-service `onStartCommand` runs more than once: the App starts it each time it returns to the foreground, and each call needs `startForeground`. Use the notification currently displayed (`HubService.shown`), not one recomputed from current data. Recomputing omits "after 5 minutes with only Unread remaining, fall back to the connection row," so a collapsed "1 finished" reappears. The collector sees no state change, cannot correct it, and it persists until the next fleet change (reproduced on an emulator 2026-11-02).
+- Do not update a foreground-service notification when stopping it. During unpairing, connection state and notification preferences change first (the App posted "Waiting for network" twice), then the service stops and `stopForeground(REMOVE)` removes the notification. System notification handling is async (emulator call stacks confirmed both posts before onDestroy); the final update lands after removal and becomes an ordinary persistent notification that cannot be swiped away and has no owner left (reproduced twice, remained twice). `HubService.show` no longer updates while unpaired.
+- For notification buttons requiring unlock (`setAuthenticationRequired(true)`), tapping on the lock screen and entering a PIN makes SystemUI send the PendingIntent immediately while `KeyguardManager.isDeviceLocked` remains true (one Android 15 emulator observation; false about 0.8 seconds later). Checking immediately rejects lock-screen Allow / Approve every time with "Unlock first." Persistent-service Resume is silently swallowed too; phone-tool confirmation Allow is dropped and returned to Claude as denial after 90 seconds. Allow unlock to settle before checking (`lockedAfterUnlockSettles`, one copy each in `:platform:notify` and `:platform:phonetools`, waits up to 3 seconds; still locked then means locked).
+- Phone tools: hub merges same-named tools from phones into one definition (the longer description wins), but may route calls to any phone declaring the tool (`phoneClient`). If Android definitions differ from iOS, Claude invokes Android with iOS arguments (a new version rejected out-of-range `limit` as an error). Match iOS definitions verbatim, guarded by exported fixtures (`PhoneToolCatalogTest`).
+
+- Stopping a service started by `startForegroundService` before it calls `startForeground` (its own `stopSelf` or external `stopService`) crashes the App with `ForegroundServiceDidNotStartInTimeException`. Under load the gap grows, and a brief "Unpaired" during pairing hits it. `HubService` always enters the foreground before deciding whether to stay, and stops only after foreground entry (`ForegroundStarts`, `docs/android.md`).
+
+## Package migration and upgrade compatibility
 
-- 产品 / Kotlin 包名改为 Persona / `persona.*` 时，不只要查显式写死的包名（2026-11-03，#277）：`kotlinx.serialization` 的 sealed 子类和导航 `NavKey` 默认类型名也可能包含包名。旧 `shell-position.json` 中的 `ChatRoute.source` 等值会因此反序列化失败。已经持久化的类型应固定旧 `@SerialName`，回归测试用旧 JSON 验证恢复，不能只测新版本自己序列化再读回。
-- WorkManager 会持久化 Worker 的 FQCN；已有 PendingIntent 和桌面启动项会记住 `ComponentName`。迁移要保留旧 Worker / receiver 包装和必要的 activity-alias，让旧组件继续到新实现；常驻服务保持单一系统组件身份，避免新旧服务同时运行。不要仅为包名改动重建、取消已有任务或要求用户重新配对。必须另测旧 APK → 新 APK 的升级、待运行任务、通知按钮、桌面启动、分享入口和已有外壳位置恢复。
-- 文档和源码静态回归不等于 Android 构建 / 真机升级验证。JDK 21 不可用时，Gradle toolchain 的 `MAC_OS/aarch64` 下载失败是环境阻塞，不能记成构建通过；以上升级场景仍需在可用的构建环境和设备上核验。
+- When renaming the product / Kotlin package to Persona / `persona.*`, check more than explicit hardcoded package names (2026-11-03, #277). Default type names for `kotlinx.serialization` sealed subclasses and navigation `NavKey` may also contain package names, breaking deserialization of values such as `ChatRoute.source` in old `shell-position.json`. Fix persisted types to their old `@SerialName`; regression-test restoration from old JSON, not only new-version serialize / read-back.
+- WorkManager persists Worker FQCNs; existing PendingIntents and home-screen launch entries retain `ComponentName`. Preserve old Worker / receiver wrappers and necessary activity-alias entries to route old components to new implementations. Keep one foreground-service component identity so old and new services do not run together. Do not recreate / cancel existing jobs or require re-pairing merely for a package rename. Separately test old APK → new APK upgrade, pending jobs, notification buttons, home-screen launch, sharing, and restoration of saved shell position.
+- Static documentation / source regressions are not Android build / physical-device upgrade verification. If JDK 21 is unavailable and Gradle toolchain download for `MAC_OS/aarch64` fails, that is an environment blocker, not a passing build. These upgrade scenarios still need a working build environment and device.
 
-- 从相机、文件选择器这类整页的系统 Activity 回来，hub 连接常还在恢复（`readyToSend` 为 false），这时上传附件会立刻报「连接恢复后重试上传」，拍完照每次都失败。上传前先等 `readyToSend`（`ChatComposer`，最多 15 秒，配置值）。
-- 上传别走共用 OkHttp 客户端的超时（读 15 秒、写默认 10 秒）：慢链路上 hub 已经收全了文件，客户端等回包超时，照片照样标「上传失败」（假 hub `MOCK_UPLOAD_KBPS=3` 复现，约 90 KB 的两张都这样）。现在上传单独给 10 分钟（`HttpChatComposerService`，和旧 App 一样）。
+- Returning from full-page system Activities such as camera or file picker often finds the hub connection still recovering (`readyToSend` false). Uploading immediately fails with "Retry upload after connection recovers," so every photo capture fails. Wait for `readyToSend` before uploading (`ChatComposer`, up to 15 seconds, configured).
+- Uploads must not use the shared OkHttp client's timeout (15-second read, default 10-second write). On slow links, hub may receive the full file but the client times out waiting for the response, marking photos "Upload failed" anyway (mock `MOCK_UPLOAD_KBPS=3`, reproduced for two photos about 90 KB). Uploads now have a separate 10-minute timeout (`HttpChatComposerService`, like the old App).
 
-## 契约与装配
+## Contracts and wiring
 
-- 给接口加带默认实现的方法（`ChatActions.editQueue` / `info`、`AgentOperations.attachSession`）时，`by delegate` 的包装会自动转发，手写的转发对象不会：`core:data` 的 `trackActions`、App 的 `AgentsWiringModule` 里那个匿名 `AgentOperations` 都是逐个方法写的，漏一行新方法就悄悄走默认实现（「尚未接入」），编译不报错。加方法时 `git grep ': ChatActions\b\|object : AgentOperations'` 把手写的转发都补上。
-- Claude Code 的 transcript 不留 `client_msg_id`（2026-11-03，#895）：用户那一行的 item id 是 Claude 自己的 uuid，hub 和 node 都不改写。hub 有 `client_ops` 时 Android 曾只按 id 认「对话里已经有这条」，发到 Claude Code 的消息全都一直挂着「已送达，等待对话记录」。待发消息按文字找对话里的那一条（`MessageEcho`，规则同 iOS 的 `PendingMessage.arrived`：归一化、电脑时钟最多慢 2 分钟、截断的按开头），只对发出了或结果不明的消息做，一条对话记录只认一条待发消息；聊天仓库每次拿到新 item（事件、翻页、补洞）都交给 outbox 对一遍（`HubChatRepository` 的 `transcript`）。
-- 送达不等于对话里一定会出现一条一样的用户消息（2026-11-03，#950）：手机发 `/compact` 在 transcript 里只是一条「压缩上下文」通知，Codex 到轮次结束才写排队的消息。只等回显，气泡就永远挂着；iOS（`settleSend`）和网页都是送达 60 秒后、会话不在工作（最多再等 15 分钟）就收起，Android 同样（`OutboxMessageSender.sentGraceMillis`、`connectActivity`）。给构造函数加参数时别加在 `now` 后面：调用处把时钟写成尾随 lambda。
-- 多 hub 下收件箱「交给 AI」的目标会话来自合并列表（带组后缀），要用按组路由的 `ConnectionRuntime.messages`，不能直接用某一组的 `data.messages`（#950）。
-- 来源会话的 `read_only_reason` 有的 node 自己就以「仅查看：」开头，客户端再拼「 · 仅查看：原因」会出现两遍（iOS 也是这样拼的）：`SessionSource` 先去掉这个前缀。
+- When adding interface methods with default implementations (`ChatActions.editQueue` / `info`, `AgentOperations.attachSession`), `by delegate` wrappers forward automatically, but handwritten forwarding objects do not. `trackActions` in `core:data` and the anonymous `AgentOperations` in App `AgentsWiringModule` forward method by method; missing a new method silently uses its default ("Not integrated yet") without compilation errors. When adding methods, use `git grep ': ChatActions\b\|object : AgentOperations'` to update all handwritten forwarding.
+- Claude Code transcripts do not retain `client_msg_id` (2026-11-03, #895). A user item's ID is Claude's own UUID; neither hub nor node rewrites it. With hub `client_ops`, Android previously matched "already in the transcript" only by ID, leaving every Claude Code message at "Delivered, waiting for transcript." Match pending messages to transcript entries by text (`MessageEcho`, same rules as iOS `PendingMessage.arrived`: normalization, computer clock up to 2 minutes behind, prefix match for truncation), only for sent / uncertain messages, and one pending message per transcript entry. Every new item (events, paging, gap repair) is reconciled with the outbox (`HubChatRepository` `transcript`).
+- Delivery does not guarantee an identical user message in the transcript (2026-11-03, #950). Phone `/compact` appears only as a compaction notice; Codex writes queued messages only at turn end. Waiting only for an echo leaves bubbles forever. iOS (`settleSend`) and web dismiss 60 seconds after delivery once the session is not working (wait at most another 15 minutes); Android does the same (`OutboxMessageSender.sentGraceMillis`, `connectActivity`). Do not add constructor parameters after `now`: callers pass the clock as a trailing lambda.
+- With multiple hubs, an Inbox Hand to AI target session comes from the merged list (with group suffix). Use group-routed `ConnectionRuntime.messages`, not one group's `data.messages` directly (#950).
+- Some nodes already prefix a source session's `read_only_reason` with "仅查看：" (view only). If the client also adds " · View only: reason," it appears twice (iOS does this too). `SessionSource` strips that prefix first.
 
-## 网络
+## Networking
 
-- OkHttp 对自签证书（我们按公钥钉扎、自己的 `X509TrustManager`）给的 `response.handshake.peerCertificates` 是空的，拿响应去核对「对方出示的是哪台 hub 的指纹」做不到。组内多台 hub 共用一个钉扎客户端时，在主机名校验器里按 host:port 记下实际出示的指纹，再按候选所属的 hub 核对（`HubHttpClient`，`docs/android.md`「多 hub」）。
-- 两台 hub 的 id 空间是独立的：交互 id、会话 id 都可能一样（假 hub 的夹具完全一样）。合并列表时只给机器 id 加组后缀不够，「等你定」的 LazyColumn 用 `request:<交互 id>` 当 key，两组同 id 直接崩（`Key … was already used`）；交互 id 也要带后缀，作答时去掉。
-- 一组的数据在页面还开着它的对话时关掉（合并、断开），对话流结束时 `SessionItemsCache.release` 在已关闭的 Room 上开事务，抛「Database is closed」，从 LaunchedEffect 里冒出来直接崩（模拟器上合并时踩过）。现在：先把这组从列表里拿掉、等页面换走再关库；`release` 在库已关时什么都不做；门面里组已关时的失败改成取消。以前只有一份配对时重新配对也有同样的竞态，只是很少撞上。
-- 多 hub 的会话键：给非主组的机器 id 加 `~<组 id>`，而不是给 `SessionKey` 加字段。从路由、深链、通知、旧数据构造键的地方太多，漏一处就串组；后缀编进机器 id，哪里都带着。代价是每个带机器 id 的接口都要在门面里翻译（`GroupNames`），新接口别忘了（`docs/android.md`「多 hub」）。
-- 关 OkHttp 客户端也会联网：`connectionPool.evictAll()` 关 TLS 连接时要写 close_notify，在主线程上就是 `NetworkOnMainThreadException`。配对在主线程的 `finally` 里关 `HubPairingClient`，这个异常在凭据保存之后才抛，盖掉了成功的结果：配对页说「连接未完成」，强制重启后其实已经连上（#955）。明文连接关闭不写网络，只走内网明文地址时一直没暴露。`HubHttpClient.close()` 现在把清池交给调度器自己的线程；自己写的客户端别在调用方线程上 `evictAll`。
+- For self-signed certificates (public-key pinning with our own `X509TrustManager`), OkHttp returns empty `response.handshake.peerCertificates`, so a response cannot verify which hub's fingerprint was presented. When multiple hubs in a group share one pinned client, record the actual presented fingerprint by host:port in the hostname verifier, then compare with the candidate's hub (`HubHttpClient`, `docs/android.md`, "Multiple hubs").
+- Two hubs have independent ID spaces: interaction and session IDs may coincide (mock fixtures are identical). Adding group suffixes only to machine IDs is not enough when merging lists. Needs you LazyColumn used `request:<interaction id>` as key; matching IDs from two groups crashed (`Key … was already used`). Interaction IDs also need suffixes, stripped when answering.
+- Closing a group's data while its chat page is open (merge / disconnect) made `SessionItemsCache.release` start a transaction on closed Room as the stream ended, throwing "Database is closed" from LaunchedEffect and crashing (seen during an emulator merge). Now remove the group from the list first, wait for the page to switch away, then close the database; `release` does nothing if already closed; facade failures for closed groups become cancellation. Single-pairing re-pairing had the same race, but rarely hit it.
+- Multi-hub session keys add `~<group id>` to non-primary-group machine IDs rather than a field to `SessionKey`. Too many routes, deep links, notifications, and legacy-data paths construct keys; missing one mixes groups. Embedding the suffix in the machine ID carries it everywhere. The cost is translating every machine-ID-bearing API in the facade (`GroupNames`); remember new APIs (`docs/android.md`, "Multiple hubs").
+- Closing OkHttp clients can perform network I/O: `connectionPool.evictAll()` writes TLS close_notify, causing `NetworkOnMainThreadException` on the main thread. Pairing closed `HubPairingClient` in a main-thread `finally`; the exception came after credentials were saved and hid success. The pairing page said "Connection incomplete," while a forced restart showed it had paired (#955). Plaintext connection close does not write to the network, so LAN-only plaintext never exposed this. `HubHttpClient.close()` now schedules pool cleanup on the dispatcher's own thread; custom clients must not `evictAll` on the caller's thread.
 
-## 模拟器与真机
+## Emulators and physical devices
 
-- 测常驻通知时别用 `am force-stop` / `am start -S` 冷启动：系统把它记成用户强行停止（`ApplicationExitInfo.REASON_USER_REQUESTED`），App 下次启动就当成「后台连接被你停止了」，常驻服务不再起来，要在通知上点「恢复」。只想换个新进程用 `adb shell run-as <包名> kill -9 <pid>`（常驻服务会被系统很快拉起，`am start -W` 多半报 WARM）。
-- 通知栏里有走着的计时（常驻通知只剩工作中时的 chronometer），`uiautomator dump` 一直拿不到 idle、直接失败：那时只能截图看。
-- Pixel（Android 15）默认「锁屏上隐藏静默通知」：常驻通知用的「实时状态」频道是低重要性，默认设置下锁屏上根本不出现；看锁屏效果先 `settings put secure lock_screen_show_silent_notifications 1`，测完 `settings delete`。
-- 模拟器在充电状态下 `settings put global low_power 1` 不生效（省电模式开不了）：先 `dumpsys battery unplug`，测完 `dumpsys battery reset`。
-- 平板 AVD 拍手机布局：`wm size 1080x2400`、`wm density 420`，再 `settings put system accelerometer_rotation 0`、`user_rotation 0` 固定竖屏。这些写进 AVD 的数据、重启还在，用完要 `wm size reset`、`wm density reset` 并恢复旋转设置。
-- `scripts/mock/mock_hub.py` 每次启动的 `HUB_ID` 都是新的：换 `MOCK_*` 开关重启假 hub 后原配对失效，要 `pm clear` 再配对（草稿随配对目录一起没了）。`adb reverse --remove` 断不掉已建好的连接（OkHttp 复用连接），模拟不了上传途中断网。
-- `adb shell am start … --es k "jarvis://open?a=1&b=2"`：adb 把参数拼成一行交给设备上的 shell，`&` 会把命令截断，链接要再套一层单引号（`scripts/android.sh` 的 shots）。
-- ColorOS 的 logcat 里看不到第三方 App 自己的 `Log.*`（只有系统打的行），真机上查异常拿不到堆栈：在模拟器 + 假 hub 上复现（要走 TLS 就 `mock_hub.py --tls-port`，配对链接带 `fp` 和 `tls`），#955 就是这样找到的。
-- ColorOS 上 `adb install` 要在手机上点确认「USB 安装」：手机熄屏或没人点时 adb 一直卡住，几分钟后报失败。装到用户手机上要先让用户在手机旁边。
-- `debug.mockAddress` 是静默配对（`platformPairing.pair`，不经过配对页），配对完成之后的步骤（选择引擎、准备清单）都看不到：要看这些就用 `jarvis://pair?url=…&token=mock` 链接打开配对页，再点「确认配对」。
-- 想让一次保存失败，别靠 `adb reverse --remove` 断掉假 hub：App 的 OkHttp 连接池里已经建好的长连接照样能用，请求还是成功了。用假 hub 的失败开关（`MOCK_ENGINE_ERROR`、`MOCK_MODEL_CONFLICT`、`MOCK_DEPLOY_ERROR`）。
-- **用户已经配对着自己的 hub 时，别给 App 发 `jarvis://pair` 深链**：深链进的是根配对页，确认后 `HubDataStore.pair` 会丢掉原来的配对再写新的。
-  加一台测试 hub 走 设置 › hub › 添加 hub（新的一组，原来的不动）。准备清单没走完时，深链和添加 hub 的配对页都会先停在准备清单上，链接被忽略。
-- **`adb shell input text` 遇上中文输入法会打乱**：微信输入法、拼音模式的 Gboard 会把字符重排、`?` 变成全角、吞掉 `=` 和 `_`、把字母转成汉字。
-  要往输入框里打链接这类 ASCII，临时 `ime set` 到一个不处理按键的输入法（如手机上启用了的 `com.google.android.gms/.autofill.service.AutofillInputMethodServiceProxy`），
-  打完马上 `ime set` 回 `settings get secure default_input_method` 记下的原值。配对页的地址框一出现 `jarvis://` 开头就立刻解析，长链接先打后半段、最后在行首补 `jarvis://`。
+- Do not cold-start with `am force-stop` / `am start -S` when testing persistent notifications. Android records a user force-stop (`ApplicationExitInfo.REASON_USER_REQUESTED`), and the next launch treats the background connection as stopped by you. The persistent service will not start until Resume is tapped on the notification. To get a fresh process only, use `adb shell run-as <package> kill -9 <pid>` (Android quickly restarts the persistent service; `am start -W` usually reports WARM).
+- With a running timer in the notification tray (chronometer when the persistent notification has only working Agents), `uiautomator dump` never reaches idle and fails; inspect screenshots instead.
+- Pixel (Android 15) defaults to hiding silent lock-screen notifications. The persistent notification's low-importance Live status channel never appears on the lock screen by default. Before checking, run `settings put secure lock_screen_show_silent_notifications 1`; afterward, `settings delete` it.
+- `settings put global low_power 1` does not work while the emulator is charging. First `dumpsys battery unplug`; afterward `dumpsys battery reset`.
+- To capture phone layouts on a tablet AVD: `wm size 1080x2400`, `wm density 420`, then lock portrait with `settings put system accelerometer_rotation 0` and `user_rotation 0`. These persist in AVD data across restart; afterward run `wm size reset`, `wm density reset`, and restore rotation settings.
+- `scripts/mock/mock_hub.py` generates a new `HUB_ID` each launch. Restarting after changing `MOCK_*` invalidates pairing; `pm clear` and pair again (drafts disappear with the pairing directory). `adb reverse --remove` does not break established connections (OkHttp reuses them), so it cannot simulate a network drop mid-upload.
+- `adb shell am start … --es k "jarvis://open?a=1&b=2"`: adb joins arguments into a line for the device shell, where `&` truncates the command. Wrap the link in an additional layer of single quotes (`scripts/android.sh` shots).
+- ColorOS logcat does not show third-party Apps' own `Log.*`, only system lines, so physical-device exceptions lack stacks. Reproduce on emulator + mock hub (for TLS, use `mock_hub.py --tls-port` and pairing-link `fp` / `tls`); this is how #955 was found.
+- ColorOS `adb install` requires confirming USB installation on the phone. With the screen off or no tap, adb hangs for minutes then fails. Before installing on the user's phone, ensure the user is beside it.
+- `debug.mockAddress` pairs silently (`platformPairing.pair`, bypassing the pairing page), hiding post-pairing steps (engine selection, readiness checklist). To inspect those, open the pairing page with `jarvis://pair?url=…&token=mock`, then tap Confirm pairing.
+- To make a save fail, do not rely on `adb reverse --remove` to disconnect the mock: established long-lived OkHttp pooled connections still work and requests succeed. Use mock failure switches (`MOCK_ENGINE_ERROR`, `MOCK_MODEL_CONFLICT`, `MOCK_DEPLOY_ERROR`).
+- **Do not send a `jarvis://pair` deep link to an App already paired with the user's hub.** It opens root pairing; confirmation makes `HubDataStore.pair` discard the old pairing and write the new one.
+  Add a test hub through Settings › Hub › Add hub (a new group, preserving the old). With the readiness checklist unfinished, both deep-link and Add hub pairing pages stop there first and ignore the link.
+- **`adb shell input text` is corrupted by Chinese IMEs**: WeChat Input and Gboard in pinyin mode reorder characters, turn `?` full-width, swallow `=` / `_`, and convert letters to Chinese characters.
+  For ASCII such as links, temporarily `ime set` an IME that does not process keystrokes (such as an enabled `com.google.android.gms/.autofill.service.AutofillInputMethodServiceProxy`),
+  then immediately restore the value recorded from `settings get secure default_input_method`. The pairing address field parses as soon as it starts with `jarvis://`; type the latter half of a long link first, then prepend `jarvis://`.
 
 
-## 语音对话
+## Voice chat
 
-- OkHttp 的 WebSocket 收到对方的关闭帧后只调 `onClosing`，监听器自己不 `close()` 的话连接一直半关着，`onClosed` 永远不来；MockWebServer 也因此关不掉（「Gave up waiting for queue to shut down」）。`onClosing` 里要回一个 `close`（`HttpVoicePlugins`），关闭码用 1000：1005 这类保留码传给 `close` 会抛异常。
-- 模拟器按规矩用 `-no-audio` 启动，`AudioRecord` 开不了，语音页只会显示「麦克风打不开」：截图用调试参数 `debug.voiceAudio fake`（假音频只在 debug 源码集里）。
-- 假 hub 每次启动都换一个 hub_id，重启后 App 的配对按 hub 身份校验就失败了：要换假 hub 的行为，用运行中能切的开关（`/mock/voice?mode=…`），别重启它。
-- 模拟器上玻璃一帧上百毫秒，状态变了以后颜色动画要过一两秒才走完：按时间截图时离状态变化留 2 秒以上，否则截到的是上一个状态的颜色。`uiautomator dump` 每次要一两秒，也算进去。
-- `uiautomator dump` 只看得到最上面那个窗口：底部浮层（ModalBottomSheet）开着时，下面页面的按钮都找不到，先关浮层。
-- Phosphor 的 fill 粗细不全是「实心的同一个图形」：`waveform` 的 fill 是一个圆角方块里挖出波形，放在实心圆盘上像多了一个白方块。圆盘里的图标用 regular。
+- After receiving a WebSocket close frame, OkHttp calls only `onClosing`. If the listener does not call `close()` itself, the connection stays half-closed and `onClosed` never arrives; MockWebServer also fails to shut down ("Gave up waiting for queue to shut down"). Reply with `close` in `onClosing` (`HttpVoicePlugins`), using code 1000. Reserved codes such as 1005 throw when passed to `close`.
+- Emulators start with `-no-audio` as required, so `AudioRecord` cannot open and the voice page only shows "Cannot open microphone." For screenshots, use DEBUG argument `debug.voiceAudio fake` (fake audio exists only in the debug source set).
+- The mock hub changes hub_id each launch; restarting breaks the App's pairing identity checks. Change mock behavior with runtime switches (`/mock/voice?mode=…`), not restarts.
+- Glass takes over 100 ms per emulator frame; color animation may take one or two seconds after a state change. Allow over 2 seconds before timed screenshots or they capture the previous state's color. Each `uiautomator dump` takes one or two seconds too; include that time.
+- `uiautomator dump` sees only the top window. While a bottom sheet (ModalBottomSheet) is open, underlying buttons cannot be found; close it first.
+- Phosphor fill weight is not always a solid version of the same shape. `waveform` fill is a rounded square with a waveform cut out; on a solid disc it looks like an extra white square. Use regular icons on discs.
 
-## 宽屏两栏和 Persona 页
+## Wide-screen two-column layout and Persona page
 
-- material3-adaptive 1.3.0 的 Navigation 3 list-detail 场景（`rememberListDetailSceneStrategy`）可以接分隔条：传 `paneExpansionState` 和 `paneExpansionDragHandle`。但库的 `Modifier.paneExpansionDraggable` 松手时调 `settleToAnchorIfNeeded`：有锚点就一定吸到最近的锚点，没锚点就停在松手处，做不到「离折痕 28dp 以内才吸」，`firstPaneWidth` 等读数又是 internal 的。要自定吸附和收起，就自己写把手的 `draggable`，每帧 `setFirstPaneWidth(px)`（只触发两栏重新测量，不重组页面），松手后用 `animate` 一帧帧写。另外 expansion state 一旦设了宽度（不是 unspecified），就盖过 `PaneScaffoldDirective.excludedBounds` 的折痕避让：分开的折痕要 `clear()` 并且不传把手，交还给库按折痕分栏（源码 `ThreePaneScaffold.kt` 的 measure）。读这类库的行为直接下 Google Maven 的 `-sources.jar` 看源码最快。
-- 根页底栏和键盘（#867）：外壳给根页留了 dock 的高度（玻璃风格是 `ChromeInsets.bottom`，晨报 / 看板是 Column 里 dock 占的那一行），页面自己又 `imePadding()` 了整个键盘的高度，键盘弹起后输入框悬在键盘上方一个 dock 那么高（vivo 折叠屏实测约 460px）。dock 留出的地方要算成已经消费的 inset：玻璃风格在根页外包 `consumeWindowInsets(PaddingValues(bottom = …))`，Column 里的根页用 `recalculateWindowInsets()`（按自己的位置重算，dock 那一截不再算进它的 IME inset）。这样 `imePadding()` 只补 dock 之外的那一截键盘，随动画连续变化，不用读 IME 高度、也不用在弹起时藏 dock。验收看输入框底边和键盘顶边的距离，三种风格都要看。
-- 点空白处收键盘（#2626）：`JPage` 的内容区和 `JSheet` 挂 `dismissKeyboardOnBlankTap()`，在 Final 阶段确认点按未被子控件消费后清焦点并隐藏输入法，自身不消费事件，链接、按钮、长按、滚动照常处理。不经过 `JPage` 的分享弹层单独接入。`ComposerFrame` 三种风格都用 `keepsKeyboardOnTap()` 消费子控件未处理的内边距点按（传了 `onBlankTap` 的会聚焦输入框、弹键盘，聊天输入框、收件箱回复框、连接器回复框、飞书文档评论框都这么用，#894、#4093）：空的 pointer 修饰符只能挡住下层兄弟，嵌套 `JPage` 的祖先监听器仍能看到未消费事件。回归测试要包含嵌套页、真实链接回调和实际滚动位移。只要长按的东西（消息的长按菜单）别用 `detectTapGestures(onLongPress = …)`：它把每次短点按的 down 和 up 都消费掉，Agent 回复又是整行宽，助手对话页几乎点哪都「已消费」，键盘不收（#3056）；改用设计系统的 `onLongPress(key) { … }`，只在长按触发后才消费。测试要拿真实的消息行（`MessageContent` + 长按菜单），自己画个 `detectTapGestures` 的卡片测不出来。
-- 切 tab 后焦点和粘贴菜单还在（#894）：去过的 tab 一直留在组合里（只是不摆放），里面的输入框保持焦点，键盘和长按出来的粘贴菜单会浮在新 tab 上。外壳用 `ReleaseTextInputOnChange(selected)`，真的换了 tab 才收起选择菜单、清焦点、收键盘，第一次显示不算。
-- `setFirstPaneWidth(0)` 时库只摆第二栏（列表还在组合里、大小为 0），把手放在左边缘（离边 `horizontalPartitionSpacerSize / 2`），所以收起后把手还在，可以拖回来。
-- hub 的 pins（`/api/v1/pins` 的 sessions）同时装着 Agents 的置顶会话和 Persona 的置顶对话：Persona 历史里「全部取消置顶」只能取消 Persona 自己的对话，不能把整份 pins 清掉。
-- 交接对话的标题要先认 `<jarvis-context … title="X">` 再截断：旧 App 先把最后一句截到 30 个字再认标签，长标题的标签被截断后就认不出来，历史里露出半截原始标签。
+- material3-adaptive 1.3.0 Navigation 3 list-detail scenes (`rememberListDetailSceneStrategy`) accept a divider through `paneExpansionState` and `paneExpansionDragHandle`. But library `Modifier.paneExpansionDraggable` calls `settleToAnchorIfNeeded` on release: with anchors, it always snaps to the nearest; without them, it stays at release. It cannot snap only within 28dp of the fold, and readings such as `firstPaneWidth` are internal. For custom snapping / collapse, implement the handle's `draggable` yourself, calling `setFirstPaneWidth(px)` each frame (remeasures panes without recomposing pages), then writing frame by frame with `animate` on release. Once expansion state has a specified width, it overrides fold avoidance from `PaneScaffoldDirective.excludedBounds`. For a separating fold, `clear()` it and omit the handle, returning fold-based layout to the library (`ThreePaneScaffold.kt` measure source). Downloading Google Maven `-sources.jar` is the quickest way to inspect these library behaviors.
+- Root-page bottom dock and keyboard (#867): the shell reserves dock height (`ChromeInsets.bottom` for glass, a dock row in Column for morning / board), while the page's `imePadding()` adds the whole keyboard height. The input then floats one dock-height above the keyboard (about 460px on a vivo foldable). Treat the reserved dock space as consumed inset: wrap glass root pages in `consumeWindowInsets(PaddingValues(bottom = …))`; Column root pages use `recalculateWindowInsets()` to recompute for their position, excluding the dock portion from IME inset. `imePadding()` then adds only the keyboard portion beyond the dock and follows animation continuously, without reading IME height or hiding the dock. Check input-bottom to keyboard-top distance in all three styles.
+- Dismiss keyboard on blank taps (#2626): `JPage` content and `JSheet` attach `dismissKeyboardOnBlankTap()`. In the Final phase, if children have not consumed the tap, clear focus and hide the IME; the modifier itself does not consume events, preserving links, buttons, long presses, and scrolling. Sharing sheets outside `JPage` integrate separately. All three `ComposerFrame` styles use `keepsKeyboardOnTap()` to consume padding taps not handled by children (with `onBlankTap`, focus the input and show the keyboard; chat, Inbox reply, connector reply, and Lark-document comment inputs use this, #894, #4093). An empty pointer modifier blocks lower siblings only; ancestor listeners in nested `JPage` still see unconsumed events. Regression tests must include nested pages, real link callbacks, and actual scroll displacement. For long-press-only content (message context menus), do not use `detectTapGestures(onLongPress = …)`: it consumes every short tap's down / up, and Agent replies span the whole row, so nearly every assistant-chat tap is consumed and the keyboard never dismisses (#3056). Use design-system `onLongPress(key) { … }`, consuming only after a long press triggers. Test real message rows (`MessageContent` + long-press menu); a hand-built `detectTapGestures` card misses it.
+- Focus and paste menu survive tab changes (#894): visited tabs remain composed, merely unplaced, retaining input focus; keyboard and long-press paste menus float over the new tab. The shell uses `ReleaseTextInputOnChange(selected)` to dismiss selection menus, clear focus, and hide the keyboard only on an actual tab change, not first display.
+- With `setFirstPaneWidth(0)`, the library places only the second pane (list stays composed at size 0), and puts the handle at the left edge (`horizontalPartitionSpacerSize / 2` from it). The collapsed handle remains draggable to restore the pane.
+- Hub pins (`sessions` in `/api/v1/pins`) contain both pinned Agent sessions and pinned Persona chats. Unpin all in Persona history must remove only Persona's chats, not clear all pins.
+- Recognize handoff-chat titles from `<jarvis-context … title="X">` before truncation. The old App truncated the last message to 30 characters first; long-title tags became unrecognizable and leaked partial raw tags into history.
 
 
-## 文件和 Git
+## Files and Git
 
-- 一行里两个 `weight(1f)` 会平分剩余空间：`JSectionHeader` 曾让标题（`weight(1f, fill = false)`）和后面的 Spacer 各占一份，`trailing` / `action`（收件箱的「收起」「全部看过」）停在中线附近，长标题在半宽处就截断。现在标题和计数包在一个 `weight(1f)` 的 Row 里，右边的东西贴着行尾；要把东西推到最右，只给左边一个 weight。Git 页「改动」的 +N −N 要和标题按基线对齐，自己套 `Row`：标题 `Modifier.weight(1f).alignByBaseline()`，右边的字 `alignByBaseline()`。
-- 两个模块都在清单里声明 `androidx.core.content.FileProvider` 会在合并时撞名（provider 按 `android:name` 合并）：每个模块用自己的子类（`FilesShareProvider`、`InboxFileProvider`），authority 各起一个。
-- mikepenz Markdown 的 `LazyMarkdownSuccess` 自己建 LazyColumn，前面加不了别的行：长文档要在 `Markdown(success = { … })` 里自己写 LazyColumn，每个顶层块一行 `MarkdownElement(node, components, content, includeSpacer = index > 0)`。三个坑：`MarkdownElement` 把块间距画成自己前面的一个兄弟 Spacer，外面包 `Box` 会把两者叠在一起（间距全没了），要包 `Column`；顶层子节点里的 EOL / 空白和链接引用定义（`[api]: https://…`，什么都不画）要先滤掉，否则平白多出空隙；`ImageTransformer.intrinsicSize` 按像素给，README 里的图会按像素大小画（高密度屏上很小），乘上 density 才和浏览器一样按 dp 显示。
-- `PdfRenderer` 只能读文件描述符（base64 先写进 cache），而且同一时间只能开一页：渲染要加锁，关掉之后别再画（`PdfDocument`）。
-- 跨模块的属性不能 smart cast（`SessionFileContent.mime` 在 `core:contracts`）：先赋给局部变量再判空。
+- Two `weight(1f)` elements in a row split the remaining space equally. `JSectionHeader` gave one share each to its title (`weight(1f, fill = false)`) and following Spacer, leaving `trailing` / `action` (Inbox Collapse / Mark all seen) near the middle and truncating long titles at half width. Title and count now share one `weight(1f)` Row, with trailing content at the end. To push content fully right, weight only the left side. Git Changes +N −N must align with the title baseline; use a custom `Row`: title `Modifier.weight(1f).alignByBaseline()`, trailing text `alignByBaseline()`.
+- Two modules declaring `androidx.core.content.FileProvider` collide during manifest merge (providers merge by `android:name`). Each module needs its own subclass (`FilesShareProvider`, `InboxFileProvider`) and authority.
+- mikepenz Markdown `LazyMarkdownSuccess` creates its own LazyColumn, so earlier rows cannot be added. For long documents, build a LazyColumn inside `Markdown(success = { … })`, with one `MarkdownElement(node, components, content, includeSpacer = index > 0)` per top-level block. Three pitfalls: `MarkdownElement` draws inter-block spacing as a sibling Spacer before itself; a wrapping `Box` overlaps both and loses spacing, so use `Column`. Filter top-level EOL / whitespace and link-reference definitions (`[api]: https://…`, drawing nothing) to avoid extra gaps. `ImageTransformer.intrinsicSize` returns pixels, making README images render at pixel dimensions (tiny on high-density screens); multiply by density for browser-like dp rendering.
+- `PdfRenderer` reads only file descriptors (write base64 into cache first) and opens only one page at a time. Lock rendering and never draw after closing (`PdfDocument`).
+- Cross-module properties cannot smart cast (`SessionFileContent.mime` in `core:contracts`); assign to a local variable before checking null.
 
-## 对话内容
+## Chat content
 
-- Codex 的文件改动在 hub 里变成只带 `diff` 的 `Edit`（`server/internal/transcript/codex.go`），但 `diff` 不一定是 unified diff：FileChange 没有 `unified_diff` 时（新建文件）hub 放的是整份文件内容，没有 `@@`。按 unified diff 解析会把整份内容丢光（不以 `+` `-` 空格开头的行都被当成文件头跳过），所以先看有没有 `@@`，没有就按 `change` 画成全部新增或全部删除（`patchDiff`）。
-- 对话页给每一行的能力（`LocalChatRowActions`）要在流式更新时保持同一个对象：读它的行（几乎每一行）会在它换对象时全部重组。会随消息变的东西（这段对话的图片列表）做成打开时才读的函数，不要放进 `remember` 的键（`ChatScreen` 里的 `pictures`）。
+- Codex file changes become `Edit` with only `diff` in hub (`server/internal/transcript/codex.go`), but `diff` is not always unified diff. When FileChange has no `unified_diff` (new files), hub supplies the entire file body without `@@`. Unified-diff parsing discards it all (lines not starting with `+`, `-`, or space are treated as headers). Check for `@@` first; without it, render all-added / all-deleted according to `change` (`patchDiff`).
+- The chat page's per-row capabilities (`LocalChatRowActions`) must keep the same object during streaming. Every reader (nearly every row) recomposes when the object changes. Message-dependent data (the chat's image list) should be a function read when opened, not a `remember` key (`pictures` in `ChatScreen`).
 
-- 逐像素截图（`android.sh shots` 的 `SHOTS_*`，`docs/android.md`「改前改后逐像素比对」）：Android 15 的 SystemUI 演示模式隐藏移动网络后约 5 秒会冒出一个卫星图标，演示命令和 `icon_blacklist` 都去不掉，只能等它出现后再截（每张图都带着它）；`adb root` 会重启 adbd，之前的 `adb reverse` 跟着没了，要先 root 再转发；macOS 的 `sips -Z` 直接改原图，看图前先拷一份；macOS 自带 bash 3.2 在 `set -u` 下展开空数组报错，写成 `${arr[@]+"${arr[@]}"}`。
-- 用 Homebrew 装的 Android SDK 在 `/opt/homebrew/share/android-commandlinetools`（不是 `~/Library/Android/sdk`），默认 Java 是 JDK 8：跑 `android.sh` 前设 `ANDROID_HOME` 为它、`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`。自建 AVD 用单独的 `ANDROID_AVD_HOME`，别动别人在跑的模拟器。准备清单（首次启动）挡着时，先跑一遍 `android.sh shots`，它会清数据、配对、跳过准备，之后用 `DebugEntryActivity --es debug.mockAddress …` 换到自己的假 hub。
+- Pixel-by-pixel screenshots (`SHOTS_*` in `android.sh shots`; `docs/android.md`, "Before / after pixel comparison"): after SystemUI demo mode hides mobile networking on Android 15, a satellite icon appears about 5 seconds later. Neither demo commands nor `icon_blacklist` removes it; wait for it before every capture. `adb root` restarts adbd and loses existing `adb reverse`; root before forwarding. macOS `sips -Z` changes the original image; copy first before viewing. macOS bash 3.2 with `set -u` errors on empty-array expansion; use `${arr[@]+"${arr[@]}"}`.
+- Homebrew Android SDK is at `/opt/homebrew/share/android-commandlinetools`, not `~/Library/Android/sdk`, and default Java is JDK 8. Before `android.sh`, set `ANDROID_HOME` to it and `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`. Custom AVDs need a separate `ANDROID_AVD_HOME`; do not touch other running emulators. If the first-launch readiness checklist blocks access, run `android.sh shots` once to clear data, pair, and skip readiness, then switch to your mock with `DebugEntryActivity --es debug.mockAddress …`.
 
-- 多 hub（#634）：新接一个按机器 id 调用的服务时，别用「当前配对」的连接（`ConnectionRuntime.scopedData` / `connectionFor`）。页面拿到的机器 id 来自合并列表，别的组的带 `~<组 id>`，发给选中组的 hub 只会「找不到机器」，主组和别的组恰好有同名机器时更糟：改到了另一台。
-  按 `GroupStacks.use(GroupKeys.namespaceOf(id))` 找组、在组里用 `inGroup(names)` 去掉后缀、把返回的机器再加上后缀；只有一台 hub 一份的（模型配置、语音、收件箱）才跟选中的组。
-- 历史页也要触发 transcript 对账（#899）：末尾 item ID 不变并不等于对话没有新增记录。向前加载旧消息和补洞都会在末尾不变时增加用户消息；outbox 的 transcript 回调须按完整记录变化触发，不能只看最后一条，否则早期已送达气泡要到重开页面后才可能消失。
+- Multiple hubs (#634): when integrating a service invoked by machine ID, do not use the current-pairing connection (`ConnectionRuntime.scopedData` / `connectionFor`). Page machine IDs come from the merged list; other groups carry `~<group id>`. Sending to the selected group's hub merely yields "Machine not found," or worse, changes another machine if both groups have the same ID.
+  Find the group through `GroupStacks.use(GroupKeys.namespaceOf(id))`, strip suffixes there with `inGroup(names)`, and add them back to returned machines. Only one-per-hub services (model configuration, voice, Inbox) follow the selected group.
+- History pages must also reconcile transcripts (#899). An unchanged final item ID does not mean no new transcript entries. Backward paging and gap repair can add user messages without changing the tail. Trigger the outbox transcript callback on full-record changes, not only the last item, or early delivered bubbles may disappear only after reopening the page.
 
-## 连接和 TLS
+## Connection and TLS
 
-- 握手失败不等于证书变了（#1250）：hub 重启那几秒，Docker Desktop 的端口代理和 `adb reverse` 会先接下 TCP 连接、再因为后端不在而断开，握手中途断开也抛 `SSLHandshakeException`。原来凡是它都归成「hub 的证书变了」且永不重试，App 要杀进程才连得上。
-  只有拿到了证书、校验没过才算证书不符：`SpkiTrustManager` 拒了（异常链里有 `CertificateException`），或 hostname verifier 拒了（组里别的 hub 的 pin，`SSLPeerUnverifiedException`）。其余握手失败按普通网络错误退避重试（`HubFailure.from`）。
-- `OkHttpHubConnection.request` 遇到非 2xx 自己就抛 `HubFailure`，不会把响应交回调用方：在调用方里 `if (!response.isSuccessful)` 再读错误正文，用真实连接时永远走不到（MockWebServer 的单测直接返回响应，测不出来）。hub 错误正文里要用的字段（如插件设置被拒的 `field`、`message`）得进 `ErrorBody` / `HubFailure`（2026-11-04，#1206：被拒的字段在模拟器上显示成了页顶错误）；单测里用一个和连接一样先抛的 request 再测一遍（`HttpPluginManagementTest`）。
+- Handshake failure does not mean the certificate changed (#1250). During a hub restart, Docker Desktop's port proxy and `adb reverse` accept TCP then close it because the backend is absent; an interrupted handshake also throws `SSLHandshakeException`. Previously all such exceptions meant "Hub certificate changed" with no retry, requiring a process kill to reconnect.
+  Only an obtained certificate that fails validation is a certificate mismatch: rejection by `SpkiTrustManager` (`CertificateException` in the cause chain), or by hostname verifier (another hub's pin in the group, `SSLPeerUnverifiedException`). Retry other handshake failures with ordinary network-error backoff (`HubFailure.from`).
+- `OkHttpHubConnection.request` throws `HubFailure` itself for non-2xx responses instead of returning them. Caller-side `if (!response.isSuccessful)` error-body parsing is unreachable with the real connection (unit tests returning MockWebServer responses directly miss this). Required hub error fields (such as rejected plugin-settings `field` and `message`) must enter `ErrorBody` / `HubFailure` (2026-11-04, #1206: a rejected field became a page-top error on the emulator). Unit-test again with a request that throws first like the connection (`HttpPluginManagementTest`).
 
-## 模块门面别漏掉接口的默认方法（2026-11-04，#1619）
+## Module facades must include default interface methods (2026-11-04, #1619)
 
-- `InboxModule` 的 `InboxRepository` 门面（`object : InboxRepository`）把调用转发给当前激活组的 `it.inbox`。
-- 如果接口声明了带默认实现的方法（例如 `momentsPost` 默认 `error(...)`、`emojis` 默认 `null`），Kotlin 编译器不会报错要求实现，直接落到默认值；页面调用时就表现为功能不可用（如公司圈帖子打不开）。
-- 做法：门面实现时完整实现接口的所有方法，并加契约单测检查。
+- `InboxModule`'s `InboxRepository` facade (`object : InboxRepository`) forwards calls to the active group's `it.inbox`.
+- For interface methods with defaults (such as `momentsPost` defaulting to `error(...)`, `emojis` to `null`), Kotlin does not require implementation and silently uses the default. Pages then appear unsupported (such as Moments posts not opening).
+- Implement every interface method in the facade, and add contract unit tests.
 
 
-- herdr 的 `herdr_running` / `herdr_running_known` 是 node.info 字段，hub 的普通 `machines` 快照没有转发它们。Android 要从 `GET /api/v1/machines/{mid}/herdr` 读 `{autostart, running, known}`；`known: false` 表示未知。显式启动后用确认的结果更新提示，并防止更早的状态查询覆盖它（#1916）。
+- herdr `herdr_running` / `herdr_running_known` belong to node.info and are not forwarded in hub's ordinary `machines` snapshot. Android must read `{autostart, running, known}` from `GET /api/v1/machines/{mid}/herdr`; `known: false` means unknown. After explicit startup, update the notice from the confirmed result and prevent earlier status queries from overwriting it (#1916).
 
 
-## 悬浮窗 addView 后还没有 attach（#2124）
+## Floating windows are not attached immediately after addView (#2124)
 
-冷启动后快速回桌面，会在窗口注册后、首次绘制 attach 前触发配对重建或隐藏。`WindowManager.addView()` 已经注册成功时，
-`View.isAttachedToWindow` 仍可能为 false；只按 attached 决定是否移除，会留下等待 attach 的窗口，然后它带着已 DESTROYED 的 LifecycleOwner
-进入 Compose，报 `Cannot configure ComposeView to disposeComposition at Lifecycle ON_DESTROY`。
+Returning quickly to Home after a cold start can trigger pairing reconstruction or hiding after window registration but before first-draw attachment. Even after `WindowManager.addView()` registers successfully,
+`View.isAttachedToWindow` may still be false. Removing only attached windows leaves one pending attachment; it then enters Compose with an already DESTROYED LifecycleOwner,
+throwing `Cannot configure ComposeView to disposeComposition at Lifecycle ON_DESTROY`.
 
-宿主单独记录注册成功，隐藏时先 `removeViewImmediate` 撤掉已注册的窗口，再 dispose composition 和销毁 owner。清理先清本地注册标记，
-避免重入重复移除。模拟器验收应包含保留 always 设置的冷启动、马上 Home、重新打开与关闭，不只测停稳后的拖动和点击。
+The host tracks successful registration separately. On hiding, `removeViewImmediate` unregisters first, then disposes composition and destroys the owner. Clear the local registration marker before cleanup
+to avoid reentrant double removal. Emulator acceptance must cover cold start with the always setting retained, immediate Home, reopen, and close—not just settled dragging and tapping.
 
 
-## Compose 浮层的头部拖动（#2124）
+## Header dragging in Compose overlays (#2124)
 
-Compose 的可点击内容可能调用 `requestDisallowInterceptTouchEvent`，父 FrameLayout 的 `onInterceptTouchEvent` 不一定能接管拖动；
-空的 Compose 拖动检测器还会和窗口手势竞争。窗口层在向 Compose 分发前，用 raw 屏幕坐标识别头部拖动；超过触摸阈值时向子控件发送一次 CANCEL，
-再移动 WindowManager 的窗口。拖动期间暂停按旧停靠位置的布局校正，松手才保存新的边和高度比例。验收要核对实际窗口 frame 和持久化位置，
-不能只看截图以为拖动成功。
+Clickable Compose content may call `requestDisallowInterceptTouchEvent`, preventing parent FrameLayout `onInterceptTouchEvent` from taking over a drag.
+An empty Compose drag detector also competes with window gestures. Before dispatching to Compose, the window layer detects header drags from raw screen coordinates. After touch slop is exceeded, send one CANCEL to children,
+then move the WindowManager window. Suspend layout correction based on the old dock position during dragging; save the new edge and height ratio only on release. Verify actual window frame and persisted position,
+not just a screenshot that looks as if dragging worked.
 
 
-## 浮层 IME inset 的坐标范围（#2124）
+## Coordinate scope of overlay IME insets (#2124)
 
-WindowInsets 回给浮层 View 的 IME bottom 可能只是该窗口与键盘的重叠量，不能直接从整屏高度减去它。
-现场 display 高 2400、键盘 top 1517，旧卡片 bottom 2305，输入框和发送按钮被遮住。
-优先使用 WindowMetrics 的全屏 IME inset；View 局部 inset 要先按窗口屏幕位置与高度换算，再用于屏幕边界。
-窗口已移到键盘上方时局部重叠会变为零，IME 仍可见时保留已知边界，明确隐藏时才清除。
-卡片的任务 / 扩展独立滚动，输入框和发送固定在底部，验收核对整块卡片 bottom 在键盘 top 以上，并实际点击发送。
+IME bottom from WindowInsets on an overlay View may be only that window's overlap with the keyboard; do not subtract it directly from full-screen height.
+Observed display height 2400, keyboard top 1517, old card bottom 2305: input and Send were obscured.
+Prefer full-screen IME insets from WindowMetrics. Convert View-local insets using the window's screen position and height before using them for screen bounds.
+Once the window moves above the keyboard, local overlap becomes zero; retain the known boundary while IME remains visible and clear it only on explicit hiding.
+Task / extension content scrolls independently inside the card, while input and Send stay fixed at the bottom. Verify the entire card bottom lies above keyboard top and actually tap Send.
 
-## 胶囊的窗口尺寸与入口语义（#2124 紧凑化反馈）
+## Pill window sizing and entry semantics (#2124 compactness feedback)
 
-活动摘要曾把收起胶囊撑到 248 dp 宽，“优先状态数 / 活跃总数”的比例又容易被误解为未读数或会话位置。收起只保留小形象和提醒，具体数量放在含义明确的“未读 / 主对话 / 收件箱”入口；未读使用现有 seen 版本投影，工作中与完成未看分开。
+An activity summary once expanded the collapsed pill to 248 dp wide, while the "priority-state count / active total" ratio was easily mistaken for unread count or session position. Collapsed mode should retain only a small avatar and alerts; put counts in clearly named Unread / Main chat / Inbox entry points. Unread uses the existing seen-version projection, keeping Working separate from Unread.
 
-浮层体积由 WindowManager.LayoutParams 和 Compose 内容共同决定；只缩 Compose 里的头像或 maxWidth 仍可能留下宽大的透明触摸区域。修改收起尺寸时同步调整原生窗口宽度、拖动头部高度、展开最大高度，并在其他 App 上验证实际边界和输入法位置。
+Overlay size comes from both WindowManager.LayoutParams and Compose content. Shrinking only the avatar or maxWidth in Compose can leave a large transparent touch area. When changing collapsed size, also adjust native window width, draggable-header height, and maximum expanded height. Verify actual bounds and IME position over other Apps.
 
-## 没有 Android Studio 的 Linux 机器上编译和跑单测（2026-11-04，#984）
+## Build and run unit tests on Linux without Android Studio (2026-11-04, #984)
 
-- **JDK 21 工具链**：构建要 JDK 21，命令行的 `-Porg.gradle.java.installations.paths=` 只给根构建，`build-logic` 这个包含构建看不到，
-  报「Cannot find a Java installation … languageVersion=21」。把它写进 `GRADLE_USER_HOME/gradle.properties`（用一个临时的 Gradle 用户目录，不改机器上的 `~/.gradle`）。
-- **SDK**：新的 cmdline-tools 说 `--licenses` 已经不需要了，直接 `sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"`。
-  compileSdk 37 对应的包名是 `android-37.0`，不是 `android-37`。
-- **Robolectric 运行时自己下 android-all**：不走 Gradle 的仓库，Maven Central 不通时 `AgentRowTest` 这类用例报 `MavenArtifactFetcher` 的 `ConnectException`。
-  用 `JAVA_TOOL_OPTIONS=-Drobolectric.dependency.repo.url=<镜像>` 传给测试进程。
-- **单测读仓库根目录下的文件**（`jarvis.repo.root`）：`spec/fixtures`、`apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`。
-  只拷 `android/` 过去跑，会多出几条 `FileNotFoundException`，看着像测试坏了。
+- **JDK 21 toolchain**: builds require JDK 21. CLI `-Porg.gradle.java.installations.paths=` reaches only the root build, not the included `build-logic` build,
+  causing "Cannot find a Java installation … languageVersion=21." Put it in `GRADLE_USER_HOME/gradle.properties` (a temporary Gradle user directory, without changing the machine's `~/.gradle`).
+- **SDK**: new cmdline-tools say `--licenses` is no longer needed; run `sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"` directly.
+  compileSdk 37's package is `android-37.0`, not `android-37`.
+- **Robolectric downloads android-all at runtime** outside Gradle repositories. If Maven Central is unreachable, cases such as `AgentRowTest` fail with `MavenArtifactFetcher` `ConnectException`.
+  Pass `JAVA_TOOL_OPTIONS=-Drobolectric.dependency.repo.url=<mirror>` to the test process.
+- **Unit tests read repository-root files** (`jarvis.repo.root`): `spec/fixtures`, `apple/PersonaTests/Fixtures/terminal-control-scroll.jsonl`.
+  Copying only `android/` causes several extra `FileNotFoundException`s that look like broken tests.
 
-## 回答已结束的请求：200 already、410 status 和快照复活（2026-11-05，#2906）
+## Answering ended requests: 200 already, 410 status, and snapshot resurrection (2026-11-05, #2906)
 
-- `POST /api/v1/interactions/{id}/resolve` 对已结束的卡不是统一的错误：已回答的回 200 `{already: true, resolution}`（当时生效的答案，可能和这次发的不同），过期、撤回、交回电脑的回 410 带 `status`。只看 HTTP 状态码会把前者当成刚刚答好、把后者一律说成「已在电脑上处理」。
-- 410 的 `status` 在错误体里，`HubFailure.body` 留着原文，按需再解析；`ErrorBody` 不加这个字段。
-- 刷新时只合并「拉取开始之后」的变化，挡不住一份比本机作答还晚、但 hub 还没来得及去掉这张卡的快照：本机结束的 id 要单独记下，快照里的跳过，实时的 `interaction` 事件才放回。
+- `POST /api/v1/interactions/{id}/resolve` does not return one uniform error for ended cards. Answered cards return 200 `{already: true, resolution}` (the effective answer, possibly different from the newly submitted one); expired, recalled, or returned-to-computer cards return 410 with `status`. Checking only HTTP status makes the former look newly answered and labels all the latter "Handled on computer."
+- The 410 `status` is in the error body. `HubFailure.body` retains the original for parsing as needed; do not add it to `ErrorBody`.
+- Merging only changes after fetch start during refresh cannot prevent a snapshot newer than the local answer but still containing a card hub has not removed yet. Track locally ended IDs separately, skip them in snapshots, and restore only from a real-time `interaction` event.
 
-## 拼 context 块的正文一律经 `contextBody`（2026-11-06，#3831）
+## All context-block bodies must use `contextBody` (2026-11-06, #3831)
 
-- 收件箱交给 AI（`InboxHandOff.contextTag`）、链接选段（`ChatLinkContext.xml`）、分享（`formatSharedContent`）原来只 `replace` 一遍字面的结束标签，嵌套写法 `</jarvis-</jarvis-context>context>` 删完正好剩一个，块提前闭合，外部正文落到块外成了用户的话；知识库（`knowledgeContext`）挡不住大小写变体；待办（`todoContextXml`）完全不处理，标题也没转义。
-- 现在都经 `core/contracts` 的 `contextBody`：先删一遍，删出来的再把 `<` 写成 `&lt;`，两遍、线性，大小写不敏感、允许空白，和 hub、网页、iOS 一致。回归测试用 `contextClosingTag` 数整条消息里的结束标签，只能剩块自己的那一个。
-- 做负面对照时用 `git checkout` / `git apply` 把源码换回去又换回来，Gradle 守护进程的文件监视（`watch-fs`）可能没察觉：第二次 `compileKotlin` 报 UP-TO-DATE，测试跑的还是旧 class，结果和改前一模一样。对照前后各跑一次时加 `--no-watch-fs`，并确认改到的模块的编译任务真的执行了。
+- Inbox Hand to AI (`InboxHandOff.contextTag`), link selections (`ChatLinkContext.xml`), and sharing (`formatSharedContent`) previously did just one `replace` of literal closing tags. Nested `</jarvis-</jarvis-context>context>` leaves a closing tag after removal, ending the block early and making external content look like user text. Knowledge (`knowledgeContext`) missed case variants; to-dos (`todoContextXml`) did no handling and did not escape titles.
+- All now use `contextBody` in `core/contracts`: remove once, then escape `<` in newly exposed tags as `&lt;`. Two linear passes, case-insensitive, whitespace allowed, matching hub, web, and iOS. Regression tests count closing tags across the whole message with `contextClosingTag`; only the block's own closing tag may remain.
+- Swapping source backward and forward with `git checkout` / `git apply` for negative controls may be missed by Gradle daemon `watch-fs`. The second `compileKotlin` reports UP-TO-DATE and tests still run old classes, giving identical before / after results. Use `--no-watch-fs` on both comparison runs and verify compilation tasks for changed modules actually execute.

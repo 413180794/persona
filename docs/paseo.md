@@ -1,132 +1,132 @@
-# Paseo 引擎
+# Paseo engine
 
-[Paseo](https://paseo.sh) 是一个多 Agent 管理器：一个常驻的 daemon，加上桌面、手机、网页 App。Claude Code、Codex 和各种 ACP Agent
-都由它通过各家 SDK 来跑，不开终端；它也有自己的工作区（项目、worktree）。在 Persona 里，Paseo 和 herdr、Herdr App、Orca 并列，
-是一台电脑的**引擎**（`docs/engines.md`）：一台电脑选了 Paseo，Agents 里显示的就是这台电脑上 Paseo 里的 Agent，从手机新建、
-接着做、回答卡片也都在 Paseo 里进行。
+[Paseo](https://paseo.sh) is a multi-Agent manager: a persistent daemon plus desktop, phone, and web apps. It runs Claude Code, Codex, and various ACP Agents
+through their SDKs, without terminals, and has its own workspaces (projects and worktrees). In Persona, Paseo sits alongside herdr, Herdr App, and Orca
+as a computer's **engine** (`docs/engines.md`). When a computer uses Paseo, Agents shows that computer's Paseo Agents; creating chats from the phone,
+resuming work, and answering cards all happen in Paseo.
 
-和另外三个的区别在接入方式：herdr / Herdr App / Orca 是终端，node 读它们的窗格；Paseo 没有终端，node 通过一个**桥**接它。
-桥是一个 runtime（`docs/runtimes.md`），一头说 Paseo 的 WebSocket 协议，一头说 Persona 的 runtime 协议；它由 node 自己运行，不用另外安装。
+The integration differs from the other three: herdr / Herdr App / Orca are terminal-based, and node reads their panes. Paseo has no terminal; node connects through a **bridge**.
+The bridge is a runtime (`docs/runtimes.md`), speaking Paseo's WebSocket protocol on one side and Persona's runtime protocol on the other. Node runs it itself; no separate installation is needed.
 
 ```
- 手机 / 网页 / Mac ── hub ── node ──runtime.sock── 桥（node 运行，integrations/paseo）──WebSocket── Paseo daemon ── Claude Code / Codex / ACP…
-                              └── 读 ~/.claude 里的对话记录（跑 Claude Code 的 Agent）
+ Phone / web / Mac ── hub ── node ──runtime.sock── bridge (run by node, integrations/paseo)──WebSocket── Paseo daemon ── Claude Code / Codex / ACP…
+                              └── reads transcripts in ~/.claude (Agents running Claude Code)
 ```
 
-## 怎么用
+## How to use it
 
-1. 电脑上开着 Paseo：打开 Paseo 的桌面 App，或者运行 `paseo daemon start`。
-2. 在 App 里打开设置 › 机器，选中这台电脑，把「引擎」改成 **Paseo**。配对时问引擎那一步也可以直接选。
-3. 等几秒，Agents 里就会出现 Paseo 里的 Agent。
+1. Run Paseo on the computer: open the Paseo desktop App, or run `paseo daemon start`.
+2. In the App, open Settings › Machines, select the computer, and change "Engine" to **Paseo**. You can also choose it at the engine step during pairing.
+3. Wait a few seconds; the Paseo Agents appear in Agents.
 
-不用装别的东西。桥要 Node.js 22 以上，node 会用 Paseo 自己的那份：CLI 版用的 node，桌面版用 App 本身的二进制，
-以 `ELECTRON_RUN_AS_NODE=1` 运行。
+Nothing else needs to be installed. The bridge requires Node.js 22 or newer. Node uses Paseo's own copy: the node used by the CLI version, or the desktop App's binary,
+run with `ELECTRON_RUN_AS_NODE=1`.
 
-## 显示哪些会话
+## Which sessions appear
 
-- **哪些 Agent 会列出**：Paseo 里没归档的 Agent 全部列出，最多 300 个。在跑的和在等你的一定在列。
-  Paseo 自己的 App 里看得到的 Agent，Persona 里也看得到；归档了的就不列了。
-- **会话 id**：
-  - 跑 Claude Code 的 Agent（包括 `extends: "claude"` 的自定义 provider），id 就是它的 Claude 会话 id，和 herdr、「未运行」里的同一段对话是一个 id。
-    Paseo 自己新建的 Agent，跑第一轮之前还没有会话 id，这时先不列。
-  - 其他 Agent 的 id 是 `paseo-<agent id>`。
-  - 从 Persona 新建的、从 Persona 接手的 Agent，id 写在它的标签 `persona.session` 上，以后都不变。
-    Claude 那边换了会话（`/clear`）也不变。
-- **内容**：
-  - **跑 Claude Code 的 Agent**：内容直接读这台电脑上 Claude 的对话记录，和 herdr 里的会话完全一样：工具卡片、子 Agent、后台任务、
-    压缩、「在做什么」都有。同一份对话记录不会再多一行「未运行」。对话记录还没写出来（第一轮刚开始），或者 node 不认识它所在的配置目录时，
-    改用 Paseo 的 timeline，写出来以后自动换过去。
-  - **其他 Agent**：内容来自 Paseo 的 timeline，换成 App 画的那套：命令、读写文件、diff、搜索、网页、子 Agent、待办都按 Claude Code 的工具名画。
-- **状态**：
+- **Listed Agents**: all unarchived Paseo Agents, up to 300. Running Agents and those waiting for you are always included.
+  An Agent visible in Paseo's own App is also visible in Persona; archived Agents are omitted.
+- **Session IDs**:
+  - An Agent running Claude Code (including custom providers with `extends: "claude"`) uses its Claude session ID, the same ID as that chat in herdr or "Not running."
+    An Agent created by Paseo itself has no session ID before its first turn, so it is not listed yet.
+  - Other Agents use `paseo-<agent id>`.
+  - Agents created or taken over through Persona store their ID in the `persona.session` label, which stays unchanged thereafter,
+    even if the Claude session changes (`/clear`).
+- **Content**:
+  - **Agents running Claude Code**: content is read directly from the Claude transcript on that computer, exactly as for herdr sessions: tool cards, sub-Agents, background tasks,
+    compaction, and "what it is doing" are all available. The same transcript does not produce an extra "Not running" row. If the transcript has not been written yet (the first turn has just started), or node does not recognize its configuration directory,
+    content uses Paseo's timeline until the transcript becomes available, then switches automatically.
+  - **Other Agents**: content comes from Paseo's timeline, converted to the App's rendering format. Commands, file reads / writes, diffs, search, web access, sub-Agents, and to-dos use Claude Code tool names.
+- **State**:
 
-  | Paseo 里 | Persona 里 |
+  | In Paseo | In Persona |
   | --- | --- |
-  | 有待处理的请求（授权、提问、计划） | 需要你 |
-  | `running`、`initializing` | 工作中 |
-  | `idle` / `error`，Paseo 标着要你看（`requiresAttention`：跑完、出错还没在 Paseo 里看） | 完成未看（Persona 里看过就是已看）；出错的最后一句是出错原因 |
-  | `idle` / `error`，在 Paseo 里看过了 | 已看 |
-  | 老版本 Paseo（没有 `requiresAttention`）：`idle` 跑过一轮、`error` | 完成未看 / 已看由 Persona 自己记 |
-  | `idle`：还没跑过 | 空闲 |
-  | `closed`：没在运行，进程退了 | 未运行（发消息时 Paseo 重新载入它） |
+  | Pending request (permission, question, plan) | Needs you |
+  | `running`, `initializing` | Working |
+  | `idle` / `error`, marked for attention by Paseo (`requiresAttention`: finished / errored and not yet viewed in Paseo) | Unread (Seen once viewed in Persona); the final message for an error is its cause |
+  | `idle` / `error`, viewed in Paseo | Seen |
+  | Older Paseo (no `requiresAttention`): `idle` after a turn, `error` | Persona tracks Unread / Seen itself |
+  | `idle`: has not run yet | Idle |
+  | `closed`: not running, process exited | Not running (Paseo reloads it when a message is sent) |
 
-  已读跟 herdr 一样是单向的（#2831）：在 Paseo 里看过，Persona 里就是已看；在 Persona 里看过由 hub 自己记，不回写 Paseo。
+  Read state is one-way, as with herdr (#2831): viewed in Paseo means Seen in Persona; views in Persona are tracked by hub and not written back to Paseo.
 
-- **空间和槽位**（#2784、#2802）：和 Paseo 的侧边栏一样分两层。
-  - **空间是 Paseo 的项目**：同一个仓库的主检出和它的各个 worktree 在 App 里是一组，名字是项目名。
-    空间 id 是 Paseo 的项目记录 id：Paseo 给 Agent 的位置信息里那个 `projectKey` 字段填的就是它（不是项目自己的 key）。
-  - **Paseo 给 worktree 另记的项目并进主仓库**：只把一个 worktree 的目录交给 Paseo 时，它会给这个 worktree 另记一个项目
-    （名字是 worktree 的目录名）。这种记录按主仓库的路径（`checkout.mainRepoRoot`，解析符号链接后比较）并进主仓库那个项目的组；
-    Persona 还不知道主仓库的项目时（那边没有 Agent）它单独一组，组名取主仓库的目录名。
-  - **槽位是 Paseo 的工作区**：一个 worktree，或者同一个目录里的一个任务。名字是工作区标题，没有标题时是分支名，再没有就是目录名。
-  - Paseo 没给项目信息的 Agent 照旧：空间是它的工作区，没有槽位。
-- **仓库**（#2840）：git 仓库里的 Agent 带 `repo_root`（worktree 填主仓库的目录，主检出填它自己），三端的「按仓库」按它把
-  Paseo 的 worktree 挂到主仓库下面。Paseo 的 worktree 在 `~/.paseo/worktrees/<项目哈希>/<名字>`，只看路径认不出仓库。
-- **逐字**：手机看着一个会话时，桥订阅这个 Agent 的 timeline，正在写的文字逐字显示。没人看着的会话桥不订阅。同一个会话换了 Agent（原来的关了，另一个接着它），桥改订新的那个，非 Claude 会话按新的 history 让手机整页重取。
+- **Spaces and slots** (#2784, #2802): two levels, matching Paseo's sidebar.
+  - **A space is a Paseo project**: a repository's main checkout and its worktrees form one group in the App, named after the project.
+    The space ID is Paseo's project-record ID: the `projectKey` field in the location information Paseo gives the Agent contains this ID (not the project's own key).
+  - **Separate worktree project records are merged into the main repository**: when only a worktree directory is given to Paseo, it creates a separate project record for it
+    (named after the worktree directory). These records are grouped with the main repository's project by its path (`checkout.mainRepoRoot`, compared after resolving symlinks).
+    If Persona does not yet know the main repository's project (it has no Agents), the record forms its own group, named after the main repository directory.
+  - **A slot is a Paseo workspace**: a worktree, or a task in the same directory. Its name is the workspace title; if absent, the branch name; if that is absent too, the directory name.
+  - Agents without project information from Paseo keep the existing behavior: their workspace is their space, with no slot.
+- **Repository** (#2840): Agents in Git repositories carry `repo_root` (the main repository directory for a worktree, or the checkout itself for a main checkout). "By repository" on all three clients uses it to group
+  Paseo worktrees under the main repository. Paseo worktrees live at `~/.paseo/worktrees/<project hash>/<name>`; the path alone does not identify the repository.
+- **Streaming**: while the phone is viewing a session, the bridge subscribes to that Agent's timeline and shows text as it is written. Unviewed sessions have no bridge subscription. If a session changes Agents (the original closes and another resumes it), the bridge subscribes to the new one. Non-Claude sessions use the new history to make the phone refetch the whole page.
 
-## 能做什么
+## Capabilities
 
-| 能力 | Paseo | 说明 |
+| Capability | Paseo | Notes |
 | --- | --- | --- |
-| 列出会话、显示状态 | ✅ | Paseo 的目录有变化时马上推送 |
-| 发消息、发图片 | ✅ | Agent 正在工作时，消息插进这一轮（Paseo 的 `steer`，和 Claude Code 里边做边打字一样）；同一条消息重发只投一次 |
-| 中断 | ✅ | |
-| 授权、提问、计划卡片 | ✅ | 手机和 Paseo App 都能回答，先答的为准：在 Paseo 里答了，手机上的卡片会撤掉；在手机上点「交回电脑」，就留给 Paseo App 回答 |
-| 从手机新建会话 | ✅ | Paseo 里每个能用的 provider 都是一个启动器，带它的模型、思考强度和权限模式（只有 Claude Code 有权限模式）。进哪个工作区：表单指名的工作区在 Paseo 里就进它；否则目录正好是某个 worktree 时进那个 worktree 的工作区（有几个时取主仓库项目下的、再取最近的），和 Paseo 自己按目录找工作区一样；主检出或普通目录由 Paseo 在这个项目下开一个新工作区 |
-| 接着「未运行」的 Claude 会话 | ✅ | Paseo 导入这段对话，会话 id 不变；Paseo 里已经有这个会话就直接用，归档过的会先恢复。别处有一个不归 Paseo 管的 claude 开着它时拒绝，避免两个进程同时写 |
-| 改名 | 后端支持 | 改的是 Paseo 里 Agent 的标题。iOS、Android、网页的「重命名」目前只在有终端的会话上显示，Paseo 的会话暂时在 Paseo 里改 |
-| 关闭 | 后端支持 | 在 Paseo 里归档这个 Agent，它会停下并从列表里消失。App 的「关闭」按钮和改名一样，暂时只在有终端的会话上显示 |
-| 切权限模式、思考强度 | ✅ | Claude Code 的五种模式；思考强度只给这个模型支持的那几档 |
-| 按键、读屏、实时终端、手机接管 | ❌ | Paseo 没有终端 |
-| 手机工具（`phone_*`、`mail_*`） | ❌ | 还没注入到 Paseo 的 Agent 里 |
+| List sessions and show state | ✅ | Pushed immediately when Paseo's catalog changes |
+| Send messages and images | ✅ | While an Agent is working, messages steer the current turn (Paseo's `steer`, like typing while Claude Code works); resending the same message delivers it only once |
+| Interrupt | ✅ | |
+| Permission, question, and plan cards | ✅ | Both the phone and Paseo App can answer; the first answer wins. Answering in Paseo removes the phone's card. Tapping "Return to computer" on the phone leaves the answer to the Paseo App |
+| Create sessions from the phone | ✅ | Each available Paseo provider is a launcher, with its models, reasoning effort, and permission modes (permission modes are Claude Code only). Workspace selection: use the workspace explicitly named in the form if it exists in Paseo; otherwise, if the directory is exactly a worktree, use that worktree's workspace (prefer one under the main-repository project, then the most recent), matching Paseo's own directory-based lookup. For a main checkout or ordinary directory, Paseo creates a new workspace under that project |
+| Resume a "Not running" Claude session | ✅ | Paseo imports the chat without changing its session ID. If Paseo already has it, reuse it, restoring it first if archived. Reject if another claude process outside Paseo is using it, to prevent two processes writing at once |
+| Rename | Backend support | Changes the Agent's title in Paseo. "Rename" on iOS, Android, and web currently appears only for terminal sessions; rename Paseo sessions in Paseo for now |
+| Close | Backend support | Archives the Agent in Paseo, stopping it and removing it from the list. Like Rename, the App's Close button currently appears only for terminal sessions |
+| Change permission mode and reasoning effort | ✅ | Claude Code's five modes; reasoning effort includes only the levels supported by the model |
+| Keystrokes, screen reading, live terminal, phone takeover | ❌ | Paseo has no terminal |
+| Phone tools (`phone_*`, `mail_*`) | ❌ | Not yet injected into Paseo Agents |
 
-登录 shell 里的启动器（`~/.zshrc` 里的）仍然会出现在新建表单里，选它的时候：Paseo 里有同名的 provider 就用那个，
-没有就用 Paseo 的默认 provider（Claude Code 自己的那个开着就用它，否则用第一个跑 Claude Code 的）。
+Login-shell launchers (those in `~/.zshrc`) still appear in the creation form. If selected, use the Paseo provider with the same name if one exists;
+otherwise use Paseo's default provider (its built-in Claude Code provider if enabled, otherwise the first provider running Claude Code).
 
-## 桥怎么运行
+## How the bridge runs
 
-- **桥的代码**：放在 personad 里，是运行时包 `jarvis-paseo-runtime`（`internal/runtimepkg`，构建时从 `integrations/` 生成）。
-  引擎换成 Paseo 时，node 把它写到 `runtime.sock` 旁边的 `runtime-packages/jarvis-paseo-runtime/<哈希>/`，然后运行：
-  `node bridge.mjs --socket <runtime.sock> --paseo-home <Paseo 的 home>`。
-- **用哪个 Node.js**，按顺序取第一个 22 以上的：
+- **Bridge code**: bundled in personad as runtime package `jarvis-paseo-runtime` (`internal/runtimepkg`, generated from `integrations/` at build time).
+  When the engine switches to Paseo, node writes it beside `runtime.sock` at `runtime-packages/jarvis-paseo-runtime/<hash>/`, then runs:
+  `node bridge.mjs --socket <runtime.sock> --paseo-home <Paseo home>`.
+- **Which Node.js**: the first version 22 or newer, in this order:
   1. `PERSONA_NODEJS`
-  2. Paseo daemon 自己用的那个（`paseo.pid` 里的进程）
-  3. PATH 上的 `node`
-  4. Homebrew、`/usr/local`、volta、nvm 的常见安装位置
-- **退出和停止**：
-  - 桥退出后 node 会再运行它，间隔从 1 秒开始翻倍，最长 1 分钟；稳定跑满 5 分钟后间隔回到 1 秒。
-  - 引擎换走时 node 停掉它：先 SIGTERM 它的进程组，3 秒后 SIGKILL。
-  - node 一直开着桥的 stdin；node 突然没了（被 kill），stdin 就断了，桥随之退出。这样不会留下一个旧桥，占着 runtime id 把新 node 的桥挡在外面。
-- **日志**：桥的输出逐行写进 node 的日志，前缀 `paseo bridge:`。
-- **node.info**：引擎列表里，桥连着时 Paseo 显示可用，版本是 Paseo 的版本；桥没连上但 daemon 有回应时也显示可用，
-  桥起不来的原因写在 `note` 里（App 显示在引擎选项下面）。
+  2. The one used by the Paseo daemon (the process in `paseo.pid`)
+  3. `node` on PATH
+  4. Common Homebrew, `/usr/local`, volta, and nvm installation locations
+- **Exit and shutdown**:
+  - After the bridge exits, node runs it again with exponential backoff starting at 1 second, capped at 1 minute. After 5 minutes of stable operation, the interval resets to 1 second.
+  - When switching away from this engine, node stops it: SIGTERM to its process group, then SIGKILL after 3 seconds.
+  - Node keeps the bridge's stdin open. If node suddenly disappears (is killed), stdin closes and the bridge exits. This avoids leaving an old bridge holding the runtime ID and blocking the new node's bridge.
+- **Logs**: bridge output is written line by line to node's log, prefixed with `paseo bridge:`.
+- **node.info**: Paseo appears available in the engine list when the bridge is connected, with Paseo's version. It also appears available if the daemon responds even though the bridge has not connected;
+  the bridge startup failure reason goes in `note` (displayed below the engine option in the App).
 
-## 怎么找到 Paseo
+## Finding Paseo
 
-- **地址**：只认 Paseo home（`PASEO_HOME`，默认 `~/.paseo`）里 `paseo.pid` 写的地址，和 Paseo 自己的 CLI 一样。不会退回到默认端口，
-  因为那个端口上可能是另一个 home 的 daemon。
-  - 没有 `paseo.pid`：Paseo 没在运行。
-  - 有 `paseo.pid` 但里面还没有地址：Paseo 正在启动。
-  - 两种情况都稍后再试。
-- **密码**：Paseo 设了密码时，用 home 里的 `local-credential` 登录（Paseo 的 CLI 也是这样）。没设密码时 Paseo 不检查。
-- **连接时声明的能力**：桥以 `cli` 客户端连接，声明 `owned_subscriptions`：只收自己请求的回复和自己订阅的消息，不收广播。
-  订阅三样：
-  - Agent 目录
-  - 待处理的请求和 provider 变化
-  - 正在看的 Agent 的 timeline
-- **Paseo 重启（比如升级）**：桥每秒重连一次，实测约 1.5 秒恢复，期间会话留在列表里。
-- **Paseo 停了超过 30 秒**：桥离开 node，引擎显示没检测到。跑 Claude Code 的会话退回「未运行」，对话记录还在；
-  这时发消息会提示 Paseo 没连上，什么都不会发出去。
+- **Address**: use only the address in `paseo.pid` under Paseo home (`PASEO_HOME`, default `~/.paseo`), just as Paseo's own CLI does. Never fall back to a default port,
+  since another home's daemon might be listening there.
+  - No `paseo.pid`: Paseo is not running.
+  - `paseo.pid` exists but has no address yet: Paseo is starting.
+  - Retry later in either case.
+- **Password**: if Paseo has a password, log in using `local-credential` in its home (as Paseo's CLI does). With no password, Paseo skips the check.
+- **Declared connection capabilities**: the bridge connects as a `cli` client and declares `owned_subscriptions`, receiving only replies to its own requests and messages from its own subscriptions, not broadcasts.
+  It subscribes to three things:
+  - Agent catalog
+  - Pending requests and provider changes
+  - Timeline of the Agent being viewed
+- **Paseo restart (for example, an upgrade)**: the bridge reconnects every second; measured recovery is about 1.5 seconds. Sessions remain in the list during this time.
+- **Paseo stopped for over 30 seconds**: the bridge leaves node, and the engine shows as not detected. Claude Code sessions fall back to "Not running," with transcripts preserved.
+  Sending a message then reports that Paseo is not connected; nothing is sent.
 
-## 映射
+## Mapping
 
-- **timeline → items**：seq 用 Paseo timeline 的 seq，各种内容落在哪一个 seq 上如下：
-  - 消息、思考、通知：落在它开始的那一行。
-  - 工具调用：调用落在开始的那一行，结果落在完成的那一行。
-  - 正在写的文字只走逐字，写完才变成 item。
-  - Paseo 改写了历史（rewind），`history` 就换掉，App 整页重取。
-- **工具名**：
+- **timeline → items**: seq uses Paseo timeline's seq. Content is assigned to seq as follows:
+  - Messages, thinking, notifications: the row where they start.
+  - Tool calls: the call uses its start row; the result uses its completion row.
+  - Text being written is delivered only as streaming text, becoming an item once complete.
+  - If Paseo rewrites history (rewind), `history` changes and the App refetches the whole page.
+- **Tool names**:
 
-  | Paseo 的 detail | App 里画成 |
+  | Paseo detail | App rendering |
   | --- | --- |
   | `shell` | `Bash` |
   | `read` | `Read` |
@@ -137,59 +137,59 @@
   | `sub_agent` | `Task` |
   | `plan` | `ExitPlanMode` |
   | `todo` | `TodoWrite` |
-  | 其他 | 原名，参数原样 |
+  | Other | Original name and unmodified parameters |
 
-- **卡片**：
-  - Paseo 的 `question` → 提问卡。回答时，Claude Code 的按问题原文作 key，其他 Agent 按 Paseo 卡片用的 `header`。
-  - `plan` → 计划卡：
-    - 批准时选 Paseo 的 `implement`，再切到手机上选的模式；原来是 bypass / auto，就用 `implement_resume` 回到原来的模式。
-    - 打回时把意见作为拒绝的理由。
-  - 其余 → 授权卡：
-    - Claude Code 带建议规则时，卡上有「总是允许」，写明加的是哪条规则、用在哪里。
-    - 拒绝时带上你写的理由。
-  - 卡片 id 由 Paseo 的请求 id 算出来，桥重启后挂回原来那张卡。
-  - Claude Code 交给 Paseo 的计划请求里没有计划正文（`ExitPlanMode` 的 input 是空的），桥从 timeline 里的那次工具调用读出正文。
-- **新建**：用 Paseo 的 `agent.create`。Agent id 由桥选，表单选的模型、权限模式、思考强度都带上，第一句话作为 `initialPrompt`。
-  - 从某个空间新建，就放进那个 Paseo 工作区。
-  - Paseo 25 秒内没建完，先回会话行，后台接着等。
-- **接手**：用 Paseo 的 `import_agent`，provider 选这台电脑上最近一个跑 Claude Code 的 Agent 所用的那个。
-  标签 `persona.session` 设成原来的会话 id，Paseo 里归档过的 Agent 会被恢复。
+- **Cards**:
+  - Paseo `question` → question card. Answers for Claude Code use the original question text as the key; other Agents use the `header` from Paseo's card.
+  - `plan` → plan card:
+    - Approval selects Paseo's `implement`, then switches to the mode selected on the phone. If the previous mode was bypass / auto, use `implement_resume` to return to it.
+    - Rejection sends the feedback as the denial reason.
+  - Everything else → permission card:
+    - If Claude Code provides a suggested rule, the card offers "Always allow," stating which rule will be added and where it applies.
+    - Denial includes the reason you entered.
+  - Card IDs are derived from Paseo request IDs, reconnecting to the original card after a bridge restart.
+  - Plan requests Claude Code gives Paseo contain no plan body (`ExitPlanMode` input is empty). The bridge reads the body from that tool call in the timeline.
+- **Create**: use Paseo's `agent.create`. The bridge chooses the Agent ID and includes the form's selected model, permission mode, and reasoning effort. The first message is `initialPrompt`.
+  - Creating from a space places it in that Paseo workspace.
+  - If Paseo does not finish creation within 25 seconds, return the session row first and keep waiting in the background.
+- **Take over**: use Paseo's `import_agent`, choosing the provider used by the most recent Agent running Claude Code on that computer.
+  Set the `persona.session` label to the original session ID; archived Paseo Agents are restored.
 
-## 不做的、已知的限制
+## Out of scope and known limitations
 
-- 没有终端：按键、读屏、实时终端画面、手机接管都没有，App 按会话的能力隐藏这些入口。
-- 手机工具（`phone_*`、`mail_*`）还没注入到 Paseo 里的 Agent。
-- 三端 App 的「重命名」「关闭」按会话有没有终端来显示，Paseo 的会话没有终端，所以暂时不显示。node 和桥已经支持这两个操作，
-  要等会话的 `capabilities` 加上改名 / 关闭以后，App 才能按能力显示。
-- 只连本机的 Paseo daemon：Paseo 的 relay 和它连着的其他主机不接。另一台电脑上的 Paseo，用那台电脑自己的 node。
-- 桥只认识还有 Agent 的工作区：一个 worktree 里的 Agent 都归档了以后，再从 Persona 往这个目录新建，桥找不到它的工作区，
-  Paseo 仍会给它另记一个项目（Paseo 的新建请求只能新开 worktree，不能指定已有的）。App 里它照样和主仓库在一组。
-- Paseo timeline 里的图片不显示。跑 Claude Code 的会话不受影响，它的图片来自对话记录。
-- 机器开了 Codex 历史时，Paseo 里同一段 Codex 对话可能还会多出一行只读的 Codex 历史。
-- Paseo 自己的插件、定时任务、hub 执行这些功能不接入。
+- No terminal: no keystrokes, screen reading, live terminal view, or phone takeover. The App hides these entry points based on session capabilities.
+- Phone tools (`phone_*`, `mail_*`) are not yet injected into Paseo Agents.
+- All three clients show "Rename" and "Close" based on whether the session has a terminal. Paseo sessions have none, so these actions are currently hidden. Node and the bridge already support both operations;
+  the App can show them by capability once session `capabilities` includes rename / close.
+- Connect only to the local Paseo daemon. Paseo's relay and its other connected hosts are not integrated. Paseo on another computer uses that computer's own node.
+- The bridge knows only workspaces that still have Agents. After all Agents in a worktree are archived, creating another session in that directory from Persona leaves the bridge unable to find its workspace,
+  and Paseo creates another project record (Paseo's creation request can create only a new worktree, not select an existing one). The App still groups it with the main repository.
+- Images in Paseo's timeline are not displayed. Claude Code sessions are unaffected; their images come from the transcript.
+- If Codex history is enabled for the machine, the same Codex chat in Paseo may also appear as an extra read-only Codex history row.
+- Paseo's own plugins, scheduled tasks, and hub execution are not integrated.
 
-## 验证
+## Verification
 
-- 单元测试：`cd integrations/paseo && npm test`。用一个假的 Paseo daemon（`test/fake-paseo.js`）和 SDK 的假 node，测列表、内容、
-  逐字、发送、卡片、新建、接手、切模式、Paseo 重启和离开。
-- 端到端：先 `cd server && go generate ./internal/runtimepkg && go build -o /tmp/personad ./cmd/personad`，再运行
-  `JARVISD=/tmp/personad CLAUDE_BIN=<一个 Claude Code 可执行文件> node integrations/paseo/e2e/run.mjs`，一共 29 项检查，需要本机装了 `paseo`。
-  - 起一个真的 Paseo daemon，用它自己的 home 和一个空闲端口。provider 是 `extends: "claude"`，模型是 `e2e/model.mjs` 里按剧本回答的
-    Anthropic API。
-  - 起一个真的 `jarvisd node --stdio`，由 SDK 的测试工具扮演 hub。把引擎设成 Paseo 后，桥由 node 自己运行。
-  - 从新建一直测到关闭后接手。
-  - 只用临时目录，不碰本机正在用的 Paseo 和 `~/.claude`。
-  - 加 `KEEP=1` 保留临时目录，加 `DEBUG=1` 打印 node 日志里桥的那几行。
-- 本机实测（2026-11-04，Paseo 0.14.0、Claude Code 2.1.294）：
-  - 端到端 29 项全过。
-  - 对一台真实在用的 Paseo 做了只读核对：桥连一个假 node，只放行读请求。结果是每个能用的 provider 一个启动器；跑 Claude Code 的会话都指向自己的对话记录，
-    绝大多数在本机找到（找不到的在 node 不认识的配置目录里，内容改走 timeline）；没有发出任何写请求。
+- Unit tests: `cd integrations/paseo && npm test`. Use a fake Paseo daemon (`test/fake-paseo.js`) and the SDK's fake node to test lists, content,
+  streaming, sending, cards, creation, takeover, mode changes, Paseo restart, and disconnection.
+- End to end: first `cd server && go generate ./internal/runtimepkg && go build -o /tmp/personad ./cmd/personad`, then run
+  `JARVISD=/tmp/personad CLAUDE_BIN=<a Claude Code executable> node integrations/paseo/e2e/run.mjs`. There are 29 checks; `paseo` must be installed locally.
+  - Start a real Paseo daemon with its own home and an unused port. The provider uses `extends: "claude"`; the model is a scripted
+    Anthropic API in `e2e/model.mjs`.
+  - Start a real `jarvisd node --stdio`, with the SDK test tools acting as hub. After setting the engine to Paseo, node runs the bridge itself.
+  - Test from creation through takeover after closing.
+  - Use only temporary directories, without touching the active local Paseo or `~/.claude`.
+  - Add `KEEP=1` to retain temporary directories, or `DEBUG=1` to print the bridge lines from node's log.
+- Local testing (2026-11-04, Paseo 0.14.0, Claude Code 2.1.294):
+  - All 29 end-to-end checks passed.
+  - Read-only validation against a real active Paseo: the bridge connected to a fake node, allowing only read requests. Every available provider became a launcher; all Claude Code sessions pointed to their own transcripts,
+    most of which were found locally (the missing ones were in configuration directories unknown to node, so their content used the timeline). No write requests were sent.
 
-## 排错
+## Troubleshooting
 
-- **引擎显示「没检测到」**：Paseo 没在运行，或者 `paseo.pid` 不在 node 认为的 home 里。用了自定义 home 的，给 personad 设上 `PASEO_HOME`。
-- **引擎可用，但下面写着「Paseo 在运行，但 Persona 连不上它：…」**：桥起不来，后面是原因，常见的是找不到 Node.js 22。
-  设 `PERSONA_NODEJS` 指向一个 node 22 以上的可执行文件。
-- **会话列出来了，内容却是 Paseo 的样子，不是 Claude 的对话记录**：node 没找到这个会话的对话记录，比如 provider 用了别的
-  `CLAUDE_CONFIG_DIR`。把那个目录写进 hub.json 里这台机器的 `machines[].claude_config_dirs`（`docs/config.md`）。
-- **详细日志**：看 node 的日志里 `paseo bridge:` 开头的行。
+- **Engine shows "Not detected"**: Paseo is not running, or `paseo.pid` is not in the home node expects. For a custom home, set `PASEO_HOME` for personad.
+- **Engine is available, but the note says "Paseo is running, but Persona cannot connect to it: …"**: the bridge cannot start; the rest gives the reason, commonly a missing Node.js 22.
+  Set `PERSONA_NODEJS` to a node executable version 22 or newer.
+- **Sessions appear, but content uses Paseo's format rather than Claude's transcript**: node did not find the transcript, for example because the provider uses a different
+  `CLAUDE_CONFIG_DIR`. Add that directory to the machine's `machines[].claude_config_dirs` in hub.json (`docs/config.md`).
+- **Detailed logs**: look for lines beginning with `paseo bridge:` in node's log.

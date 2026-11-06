@@ -1,516 +1,516 @@
-# 收件箱
+# Inbox
 
-「收件箱」tab 是 Persona 的信息入口：飞书消息和各个邮箱的邮件在**一个列表**里，按「件」聚合，AI 先分拣，人只看结论。
-（2026-10-27 用户定的方向：不按群浏览、不做第二个飞书，见 `docs/feishu.md`。）
+The Inbox tab is Persona's information entry point: Lark messages and mail from all email accounts share **one list**, grouped into items. AI triages first; people see only the conclusions.
+(Requested direction 2026-10-27: no group-by-group browsing, no second Lark client; see `docs/feishu.md`.)
 
-## 谁管什么：收件箱归管理者（2026-11-04）
+## Ownership: the manager owns the Inbox (2026-11-04)
 
-收件箱是**管理者**（助手进程 `personad assistant`，`docs/assistant.md`「和 hub 的边界」）的：条目和它们的状态（进收件箱前的分拣、
-每个来源的规则和兜底档、分拣状态 `triage`、事件合成、静音、已处理、批量）、AI 分身（判断、开它的对话、草稿、消息卡）、条目的翻译和
-App 用的通用翻译（`docs/ios.md`「翻译」），以及 `/api/v1/inbox…`、`/api/v1/translate`、`/api/v1/translate/mail` 的全部接口
-（hub 原样转给它，`assistantwire.InboxRoutes`，字段和以前一样）。代码在 `server/internal/assistant/inbox*.go`。
-表 `inbox_items`、设置 `inbox_mutes` 不变、不迁数据，只有管理者读写。模型（分拣、判断、代写、翻译）都是管理者叫的，
-经 hub 的模型配置（`app.call models.*`，管理者那边只有 `assistant/inbox_hub.go` 一处）：每次调用都带期限（`timeout_ms`），
-管理者不等了 hub 也停，不留排着的请求。收件箱和翻译在 hub 里不再用模型。
+The Inbox belongs to the **manager** (assistant process `personad assistant`; `docs/assistant.md`, "Boundary with hub"): items and their state (pre-admission triage,
+per-source rules and fallback tiers, `triage` status, event grouping, muting, done state, bulk actions), the AI twin (judgment, starting its chat, drafts, message cards), item translation,
+and generic App translation (`docs/ios.md`, "Translation"), plus every endpoint under `/api/v1/inbox…`, `/api/v1/translate`, and `/api/v1/translate/mail`
+(hub forwards unchanged through `assistantwire.InboxRoutes`, with the same fields as before). Code: `server/internal/assistant/inbox*.go`.
+Table `inbox_items` and setting `inbox_mutes` are unchanged; no data migration, and only the manager reads / writes them. All models (triage, judgment, drafting, translation) are called by the manager
+through hub's model configuration (`app.call models.*`, centralized on the manager side in `assistant/inbox_hub.go`). Every call has a deadline (`timeout_ms`);
+when the manager stops waiting, hub stops too, leaving no queued request. Inbox and translation no longer call models inside hub.
 
-**来源也是管理者的**（2026-11-05 随连接器挪进管理者，`server/internal/extmgr/inbox.go`，`docs/extensions.md`「谁管什么」；下面说「hub」的来源部分现在都在管理者里，和收件箱同一个进程，交接不再过总线）：连接器和插件怎么采（`inbox.collect`）、什么时候采（2 分钟一轮、连接器的
-`changed`、飞书事件、邮件 3 分钟一次），采到的原样交给管理者（总线调用 `inbox.collected`，一轮一次：每个来源读到的条目、它能做什么、
-邮件每个账号最新一页，最多 4 个账号同时读、按账号顺序交，读失败的跳过；连接器读失败的照样在这一轮里，`things` 为空、带 `read_error`（短代码，见下面「分拣状态」），管理者保留它原来的条目；每轮带 hub 这次运行的 `epoch` 和轮次 `seq`，路上耽搁了、比用过的旧的一轮管理者丢掉）；管理者要对来源做的事经
-`app.call inbox.*` 请 hub 做：读一封邮件的全文（翻译要的是保留段落和链接的文字）、发回复（邮件或经连接器 / 接飞书的插件）、
-`settle`、事件合成的 `group.tool` / `group.fallback` / `group.append`、读 hub 的分拣规则、AI 分身配置和插件提供了哪些连接器
-（`inbox.config`）、翻译模型现在是哪个（`inbox.translate_fingerprint`）。条目变了管理者发 `inbox.changed`，hub 在总线的读循环外
-给插件发 `inbox.changed` 事件、给 App 推 `{"type":"inbox"}`（一个插件读得慢不挡住别的）。插件详情页插槽 `inbox_item` 要的条目、
-删一个来源的数据时它的条目、GitHub 设置页的「静音的仓库」，hub 都问管理者（`inbox.item`、`inbox.forget`、`inbox.repo_mutes`）。
-hub 照旧自己守着的边界：只能回答的设备（手表）回复只能是文字，不改文档状态、不发 `/agent …`（以用户身份发出去会开一个 Agent），
-hub 在转给管理者之前就拦下（403，管理者那边也查）；连接器的设置（含凭据）还是 hub 的接口，只有静音的仓库交给管理者。
+**Sources also belong to the manager** (2026-11-05, moved with connectors; `server/internal/extmgr/inbox.go`, `docs/extensions.md`, "Ownership"). Source-related mentions of "hub" below now live in the manager, in the same process as the Inbox, without bus handoff. Connectors and plugins collect through `inbox.collect` on a schedule
+(every 2 minutes, connector `changed`, Lark events, mail every 3 minutes) and deliver raw collected data to the manager (bus call `inbox.collected`, once per round: each source's items and capabilities,
+each mail account's latest page, reading at most 4 accounts concurrently and delivering in account order, skipping failed mail reads. Failed connector reads still appear in the round with empty `things` and a short `read_error` code (see "Triage status" below); the manager retains their existing items. Each round carries the hub run's `epoch` and round `seq`; delayed rounds older than one already used are discarded). Source operations requested by the manager use
+`app.call inbox.*` through hub: read a mail's full body (translation needs text preserving paragraphs and links), send replies (mail, connectors, or the Lark plugin),
+`settle`, event grouping's `group.tool` / `group.fallback` / `group.append`, read hub triage rules, AI twin configuration, and plugin-provided connectors
+(`inbox.config`), and current translation model (`inbox.translate_fingerprint`). On item changes, the manager emits `inbox.changed`; outside the bus read loop, hub
+sends plugins the `inbox.changed` event and Apps `{"type":"inbox"}` (one slow plugin reader does not block others). Hub asks the manager for items needed by plugin detail slot `inbox_item`,
+items when deleting a source's data, and GitHub Settings' muted repositories (`inbox.item`, `inbox.forget`, `inbox.repo_mutes`).
+Hub still enforces its own boundary: reply-only devices (Watch) may send only text, not change document state or send `/agent …` (which starts an Agent when sent as the user).
+Hub rejects these before forwarding (403; the manager checks too). Connector settings, including credentials, remain hub APIs; only muted repositories belong to the manager.
 
-**发出去的只发一次**：回复（邮件、经连接器、接飞书的插件）带管理者算的 `send_id`（App 给了 `client_id` 就用它，否则是这件、文字和改动，
-和飞书的 `clientId` 一样不含 `last`），hub 记在 `sent_messages`（和 App 发消息同一张表，留一天）：同一个再问回 `already`、不再发（答案在路上丢了、
-管理者重启了重试都安全）；上次发到一半断了的（hub 停了、超时）回 `assistant_in_doubt`，也不再发。事件合成的 `group.append` 同理带
-`append_id`：插件写过的，hub 记着它的回答，重试拿到同一个事件，不会写两遍。
+**Send once**: replies (mail, connectors, Lark plugin) carry manager-derived `send_id` (use App `client_id` if supplied; otherwise derive from item, text, and changes,
+excluding `last`, like Lark `clientId`). Hub stores it in `sent_messages` (the same table as App sends, retained one day). Repeated requests return `already` without resending (safe if a reply is lost in transit
+or the manager restarts and retries). A previous interrupted send (hub stopped or timed out) returns `assistant_in_doubt`, also without resending. Event grouping's `group.append` similarly carries
+`append_id`: hub retains the plugin's response and returns the same event on retry, never appending twice.
 
-**管理者没连着时**（助手重启那几秒、崩了还没被拉起）：
+**When the manager is disconnected** (assistant restart, or crashed before being restarted):
 
-- `/api/v1/inbox…` 和翻译都回 `503 assistant_offline`「助手暂时连不上，稍后再试」（下拉刷新、回复、标处理、静音也是）；回复这样被拒时
-  不写进回执（`reply_receipts.go`），管理者回来后同样的回复照常能发。
-- 回复交给管理者以后连接断了、超时了：可能已经发出去了，回 `502 assistant_in_doubt`、`delivered: "unknown"`（App 提示先看看再决定，
-  不说「没发出去」）；也不写回执，同一条再发能到管理者，`send_id` 一样，hub 发过的不再发。
-- **采集不丢东西**（2026-11-05 起来源和收件箱在同一个进程里，下面这段只剩助手的收件箱一时读不出存着的状态时有用）：hub 照常按时读来源，读到的替管理者攒着（`held`：每个线程 / 事件 / 邮件留最新读到的那份，窗口里滑出去的也留着；
-  一个来源最多 2000 件、一个邮箱最多 500 封，只在内存里，hub 重启就没了，那时管理者会跟着重连、马上采一轮）；读到时关掉了的来源不留。
-  管理者一连上 hub 马上来一轮完整的（含邮件），连同攒着的一起交，邮件最新 40 封、iMessage 最新 30 条这种窗口里中间滑出去的也进来。
-  这一轮没交成功（管理者没回、读不出库）就接着攒，下一轮再交。事件合成的一批没写完时插件下一轮再交。
-- 插件详情页插槽画不出（App 照旧画原来的正文）；GitHub 的收件箱设置（CI、静音的仓库、忽略的分支）整块不显示：hub 不给缺了静音仓库的设置
-  （显示成一个都没静音，再一保存就全清掉了）；保存设置时没带 `muted_repos`（或是 `null`）的，静音照旧不动，只有带了列表（哪怕是空的）才改；
-  删连接器的数据时知识库那部分照删、收件箱那部分报错，再删一次就删掉。
-- 管理者的条目在库里：它重启、hub 重启都从 `inbox_items` 读回来；hub 重启时会重新起它，连上就来一轮完整的。
-- 管理者连着、但读不出存着的条目和静音（数据库没答）：收件箱的接口回 `503 inbox_unavailable`，交来的一轮不收（hub 留着再交）、
-  什么都不写，免得拿内存里不全的那份盖掉库里的；下次用到时再读。
-- 管理者刚重启、还没有一轮列出来源时，插件提供的连接器它也知道（`inbox.config` 的 `extensions`）：它们的条目照旧没有兜底档、只能等模型；
-  不认识的来源也一样，不会默认成「不重要」。
+- Inbox and translation endpoints return `503 assistant_offline`, "Assistant temporarily unavailable; try again later" (including pull-to-refresh, replies, marking done, muting). Replies rejected this way
+  are not recorded in receipts (`reply_receipts.go`), so the same reply can send normally after recovery.
+- If the connection drops or times out after handing the reply to the manager, it may already have been sent. Return `502 assistant_in_doubt`, `delivered: "unknown"` (the App asks users to check before deciding,
+  not "Not sent"). No receipt is written; retry reaches the manager with the same `send_id`, and hub does not resend anything already sent.
+- **Collection loses nothing** (since sources and Inbox share a process from 2026-11-05, this now matters only when the assistant Inbox temporarily cannot read stored state). Hub keeps collecting on schedule and buffers for the manager (`held`: latest version per thread / event / mail, retaining items that slide out of the window;
+  at most 2000 items per source and 500 mails per mailbox, memory only, lost on hub restart—when the manager reconnects and immediately collects a round). Sources disabled at collection are not retained.
+  On manager connection, hub immediately collects a complete round including mail and delivers it with buffered items, including those that slid out of windows such as latest 40 mails / 30 iMessages.
+  If delivery fails (no manager response or database unreadable), keep buffering for the next round. Incompletely written event batches are resubmitted by the plugin next round.
+- Plugin detail slots cannot render (the App keeps its original body). GitHub Inbox settings (CI, muted repositories, ignored branches) are hidden as a whole: hub never supplies settings missing muted repositories,
+  which would look unmuted and clear everything on save. Saving without `muted_repos` (or with `null`) preserves mutes; only a supplied list, even empty, changes them.
+  Deleting connector data still deletes knowledge-base data but reports the Inbox failure; retry deletion completes it.
+- Manager items are in the database: manager or hub restarts reload `inbox_items`. Hub restarts launch the manager again, with a full round on connection.
+- Connected manager but stored items / mutes unreadable (database unresponsive): Inbox APIs return `503 inbox_unavailable`, submitted rounds are rejected (hub retains them for retry),
+  and nothing is written, avoiding overwriting database state with incomplete memory. Retry reading on next use.
+- Immediately after restart, before a round lists sources, the manager still knows plugin-provided connectors (`extensions` in `inbox.config`). Their items still have no fallback and must wait for the model;
+  unknown sources behave likewise, never defaulting to unimportant.
 
-## 一件事 = 一行
+## One item = one row
 
-| 来源 | 一件事是 | id |
+| Source | An item is | id |
 | --- | --- | --- |
-| 飞书 | 一个会话里还没处理的新消息（从第一条新消息起，后来的继续并进来） | `lark:<feedId>:<第一条的 position>` |
-| 飞书云文档 | 文档通知中心的一张卡片（一份文档里 @我 / 评论 / 回复我的最新动态） | `doc:<通知 id>:<更新时间毫秒>` |
-| 邮件 | 一个邮件线程里的未读邮件（主题去掉 Re: / Fwd: / 回复： / [列表名] 后相同即同一线程） | `mail:<账号>:<线程>:<第一封 uid>` |
+| Lark | Unhandled new messages in one chat (starting at the first new message; later ones merge into it) | `lark:<feedId>:<first message position>` |
+| Lark Docs | One document notification-center card (latest mentions / comments / replies to me in one document) | `doc:<notification id>:<update time in milliseconds>` |
+| Mail | Unread mail in a thread (same subject after stripping Re: / Fwd: / 回复： [reply] / [list name] means the same thread) | `mail:<account>:<thread>:<first mail uid>` |
 
-- 一个会话 / 线程同时只有一件**未处理**的事；处理后再来的消息开一件新的（只算处理时最后一条之后的）。
-  例外：「移回」（单件 `done:false`、批量 `reopen` / 撤销）不查同一线程后来有没有开新的一件，旧的照样移回，这时一个线程会有两件未处理，
-  之后的新消息固定并进最新的那件（`UpdatedAt` 最新，相同按 id，`threadIndex.openFor`，#3796），旧的那件不跟着变。
-- 什么会进来（飞书）：飞书网关的 `unread` scope（飞书的「未读」，免打扰的会话不在里面）+ `mentions` scope（免打扰群里 @我 也算）。
-  私聊 → `dm`，机器人 / AI 私聊 → `bot`，群里 @我 / @所有人 → `mention`，没免打扰的群 → `group`；7 天前的未读不算。
-  只看别人发的：自己发的消息不会让一个会话变成「需要你」。
-- 邮件：每个账号收件箱最新 40 封里的未读（7 天内）。列表接口只取正文前 2 KB（HTML 邮件常常全是 `<style>`），
-  所以新邮件会再读一次全文（IMAP `BODY.PEEK`，不会标成已读）做预览和 AI 的上下文（`BodyOf` 记着读到哪封）。
+- A chat / thread has only one **unhandled** item at a time. Messages arriving after it is handled open a new item (only messages after the last one at handling time count).
+  Exception: Reopen (single `done:false`, bulk `reopen` / Undo) does not check whether a newer item exists for the thread; it reopens the old one anyway, yielding two unhandled items.
+  Later messages always merge into the newest (`UpdatedAt`, ties by ID, `threadIndex.openFor`, #3796); the old item stays unchanged.
+- Included Lark messages: gateway `unread` scope (Lark Unread, excluding muted chats) + `mentions` scope (mentions of me in muted groups still count).
+  Private chat → `dm`, bot / AI private chat → `bot`, group mentions of me / everyone → `mention`, unmuted group → `group`; unread older than 7 days is excluded.
+  Only other people's messages count; your own messages never make a chat Needs you.
+- Mail: unread messages in each account's latest 40 Inbox messages, within 7 days. The list API reads only the first 2 KB of body (HTML mail often contains nothing but `<style>`),
+  so new mails fetch the full body again (IMAP `BODY.PEEK`, without marking read) for preview and AI context (`BodyOf` tracks which mail was read).
 
-## 云文档：表格、多维表格、文档里 @我（2026-10-31）
+## Docs: mentions in sheets, bases, and documents (2026-10-31)
 
-由接飞书的插件做（原来在 hub 的 inbox_docs.go）。飞书在文档、表格、多维表格里 @我、评论我，不会进 IM 的会话列表，只在**文档通知中心**
-（飞书网关 `GET /documents/notifications`）：每份文档一张卡片，只有最新一条动态（`summary` 像「张三提及了你」）、`atMe`、`url`、`type`
-（drive 对象类型：3 表格、8 多维表格、22 docx、2 旧文档、16 wiki）。每次采集飞书时读一次。
+Handled by the Lark plugin (formerly hub `inbox_docs.go`). Mentions / comments to me in Lark documents, sheets, and bases do not enter the IM chat list, only the **document notification center**
+(Lark gateway `GET /documents/notifications`). Each document has one card with only its latest activity (`summary`, such as "A colleague mentioned you"), `atMe`, `url`, `type`
+(drive object types: 3 sheet, 8 base, 22 docx, 2 legacy document, 16 wiki). Read once per Lark collection.
 
-- 什么会进来：`atMe` 或 kind 是 mention / comment / reply、7 天内、没静音。分享、点赞不算。`kind = "doc"`，分拣兜底算「需要你」，筛选里算在「@我」。
-- 卡片不说是哪一行 @了我，所以 hub 读文档自己找（wiki 链接先 `documents/header` 换成背后的表格 / 多维表格 / docx）：
-  - **表格**：每个分页（最多 6 个）第一行有字的行当表头；哪个单元格的文字里有「@<我的名字>」，那一行就是「提到我的行」。
-    表头像状态的列（状态 / 进度 / 进展 / 阶段 / status / stage……）是**状态列**，可选值取这一格下拉（数据校验）的选项，没有下拉就取这一列已有的值。
-  - **多维表格**：每张表（最多 6 张、每张最多 5 页 × 200 条）里文本格有「@<我的名字>」或人员字段里有我（飞书网关的 `accounts` 给名字和 userId）的记录。
-    名字像状态的**单选**字段是状态列，可选值是它的选项（颜色按选项的色号）。真实的表里常见「跟进人」是文本列、里面写「@名字」。
-  - **docx**：取 @我 附近前后各 700 字；评论（`documents/comments`，多维表格是 `base/comments`）里提到我、没解决的最近 3 条。
-  - 行按「没做完的在前」排（状态值像完成 / 已解决 / 关闭 / 上线……算做完），最多 5 行；每行带标题（首列 / 主字段）、其余最多 6 个字段、状态列。
-- 回复发到哪（`doc.reply`）：有提到我的评论就回复那条评论；否则多维表格评论那条记录（`comments/record`）、表格评论 @我 的那个单元格
-  （`comments/cell`）、docx 发一条全文评论。
-- **改状态**：`POST /inbox/{id}/doc/status`。多维表格先读这条记录拿 `expect` 指纹再 `base/edit set`；表格先读拿 revision，
-  带下拉的格子要用 `sheet/structure` 的 `choose`（普通 `sheet/edit` 对有下拉 / 链接 / @ 的格子报 `DOCUMENT_EDIT_UNSUPPORTED`），
-  没下拉的才用 `sheet/edit`（带 `base` 原值）。写完重新读一遍文档更新这件事。只允许改成这一列的可选值。
-- AI 分身：提示词带上这些行和 ref / field / 可选值；`inbox_draft` 多一个 `changes:[{ref,field,value}]`，只接受这件事列出的行、列和值。
-  草稿卡片上每条改动一行（「状态：待验收 → 已完成 · 压测报告」），点「发送」先改状态再发评论；「修改」浮层里每条可以勾掉。
-- App：行的头像换成文档类型的方块（表格绿、多维表格紫、文档蓝），类型标签「@我」/「评论」，第二行是「多维表格 · 李雷提及了你」，
-  下面一行是第一条提到我的行和它的状态（点一下就是菜单，选了直接写进文档）、「+N 行」。点开是 `InboxDocDetailView`：
-  「打开多维表格」（App 内的文档阅读器）、每行一张卡片（字段 + 每个状态列一个菜单）、回复会发到哪。
-- 测试：找行、状态列、指纹、回复目标、AI 的改动校验，以及对自己的 demo 文档真改一次状态再改回来的测试，#1571 起随飞书的收件箱在接飞书的插件里（原来是 hub 的 inbox_docs_test.go、TestDocsLive）；
-  本仓库留块类型（`assistant/inbox_blocks.go`）的 `inbox_agent_test.go`、`inbox_golden_test.go`，UI 测试 `InboxDocTests`（`MOCK_DOCS=1`）。别拿别人的表测。
+- Included: `atMe` or kind mention / comment / reply, within 7 days, not muted. Shares and likes do not count. `kind = "doc"`, fallback Needs you, included in the Mentions filter.
+- Cards do not identify the row mentioning me, so hub reads the document to find it (wiki links first use `documents/header` to resolve the underlying sheet / base / docx):
+  - **Sheets**: on each tab (at most 6), the first nonempty row is the header. A row containing "@<my name>" in any cell is a mentioning row.
+    Columns with state-like headers (状态 / 进度 / 进展 / 阶段—status / progress / progress / stage—or status / stage, etc.) are **status columns**. Allowed values come from the cell's dropdown (data validation), or existing column values if no dropdown exists.
+  - **Bases**: records on each table (at most 6, each up to 5 pages × 200 records) containing "@<my name>" in text cells or me in a people field (gateway `accounts` provides names and userId).
+    **Single-select** fields with state-like names are status columns; choices are their options, with option colors. Real tables often use a Follow-up owner text column containing "@name."
+  - **docx**: take 700 characters on either side of mentions of me; include the latest 3 unresolved comments mentioning me (`documents/comments`, or `base/comments` for bases).
+  - Order unfinished rows first (state values resembling 完成 / 已解决 / 关闭 / 上线—completed / resolved / closed / live—count as finished), up to 5 rows. Each includes a title (first column / primary field), at most 6 other fields, and status columns.
+- Reply destination (`doc.reply`): reply to a comment mentioning me if present; otherwise comment on the base record (`comments/record`), the sheet cell mentioning me
+  (`comments/cell`), or the whole docx document.
+- **Change status**: `POST /inbox/{id}/doc/status`. For bases, read the record for an `expect` fingerprint, then `base/edit set`. For sheets, read the revision first;
+  dropdown cells require `sheet/structure` `choose` (ordinary `sheet/edit` rejects dropdown / link / mention cells with `DOCUMENT_EDIT_UNSUPPORTED`),
+  while plain cells use `sheet/edit` with original `base` values. Reread the document afterward to update the item. Changes may use only allowed values for that column.
+- AI twin: prompts include these rows, ref / field / allowed values. `inbox_draft` adds `changes:[{ref,field,value}]`, accepting only rows, columns, and values listed for this item.
+  Draft cards show one line per change ("Status: Pending review → Completed · Load-test report"). Send changes status first, then posts the comment; each change can be unchecked in the Edit sheet.
+- App: replace the row avatar with a document-type tile (sheets green, bases purple, documents blue), type label Mentions / Comment, second line "Base · A colleague mentioned you."
+  Below, show the first mentioning row and its status (tap for a menu; selection writes directly into the document), plus "+N rows." Open `InboxDocDetailView`:
+  Open base (in-App document reader), one card per row (fields + a menu per status column), and reply destination.
+- Tests: row detection, status columns, fingerprints, reply targets, AI-change validation, plus a live change-and-restore test on your own demo document. Since #1571 these live with Lark Inbox in the Lark plugin (formerly hub `inbox_docs_test.go`, TestDocsLive).
+  This repository retains `inbox_agent_test.go` / `inbox_golden_test.go` for block types (`assistant/inbox_blocks.go`) and UI `InboxDocTests` (`MOCK_DOCS=1`). Never test on someone else's sheet.
 
-## AI 分拣
+## AI triage
 
-`server/internal/assistant/inbox_triage.go`（管理者的）：每件新事（或有新消息的事）交给小任务模型（模型配置的 `inbox.triage`，没配时是 `hub.json` 的 `ai`，默认 DeepSeek flash）分成三档，
-附一句不超过 40 字的摘要和一个很短的理由：
+`server/internal/assistant/inbox_triage.go` (manager-owned): every new item, or item with new messages, goes to the small-task model (`inbox.triage` in model configuration, falling back to `ai` in `hub.json`, default DeepSeek flash), which assigns one of three tiers,
+a summary up to 40 characters, and a short reason:
 
-| tier | 界面 | 是什么 |
+| tier | UI | Meaning |
 | --- | --- | --- |
-| `action` | 需要你 | 要用户本人回复 / 决定 / 处理或尽快知道：直接提问、@了要做事、私聊找、审批确认、相关告警、要回的邮件、临近截止 |
-| `fyi` | 知悉即可 | 有关、值得扫一眼、不用做什么：群里的进展、抄送、有信息量的通知 |
-| `noise` | 已折叠 | 营销、订阅、newsletter、自动通知、无关闲聊、机器人刷屏 |
+| `action` | Needs you | Requires the user's reply / decision / action or prompt awareness: direct questions, actionable mentions, private requests, approval confirmations, relevant alerts, email needing replies, approaching deadlines |
+| `fyi` | FYI | Relevant and worth a glance, no action needed: group progress, CCs, informative notifications |
+| `noise` | Collapsed | Marketing, subscriptions, newsletters, automated notices, irrelevant chatter, bot spam |
 
-- 喂给模型的是类型（私聊 / @了用户 / 群 / 机器人 / 直接发给用户的邮件 / 抄送或列表）+ 这件事的文字（`context`：飞书最近最多 20 条新消息、
-  邮件最新一封的全文前 3000 字）。提示词在 `server/internal/prompts/inbox/`（分拣 `triage.md`、代写 `draft.md`、判断 `judge.md`、AI 分身 `agent.md`，`docs/prompts.md`）。称呼取 `assistant.owner`；`hub.json` 的 `inbox.rules`（或助手改过的设置）是用户自己的分拣规则，附在提示词最后、优先于默认判断。
-- **每个来源自己的规则（覆盖式，2026-11-04，#1644）**：不同来源、不同账号要的标准不一样，一份全局规则管不住。连接器交的条目可以带 `rules`
-  （用户的原话，比如飞书插件设置里的「分拣规则」`triage_rules`，`docs/connector-protocol.md`）：这件事**只用它自己的规则**，不再附全局的 `inbox.rules`；
-  没带的才用全局。默认判断标准（上面三档的说明）不变，用户的规则照旧写在最后、优先。规则跟着条目存（不列出来），每次有新动静随新的一版更新；
-  最多 4000 字。助手能改插件来源的规则（`jarvis_settings` 的 `inbox.rules.<插件>`，手机上确认，`docs/assistant.md`）；GitHub、信息这些内置连接器还没有自己的规则（Telegram 扩展有：它的 `triage_rules`）。
-- 拿不准 action / fyi 时选 action。模型分不了（没配分拣模型、没额度 / 并发满、出错、超时）时按规则兜底（私聊 / @我 → action，只有 @所有人、没有 @我 → fyi（公告，知道就行），群 → fyi，直接发来的邮件 → fyi，其余 → noise），理由写「按规则」。
-  连接器的条目兜底是它的规则给的档（`tier`）；交给模型的（`tier` 为空）hub 自己的连接器（GitHub、Telegram、信息）照旧算噪音，
-  **插件提供的连接器没有兜底**：算成噪音等于悄悄藏掉，用户会漏事（见下）。
-- **范围（2026-11-04 用户定）**：下面「先分拣、再进收件箱」和「没有兜底的不进来」**只管插件提供的连接器**（装的插件或 hub.json 里的插件，不是 personad 自带的；
-  现在就是接飞书的扩展）。邮件、GitHub、Telegram、信息这些 hub 自己的来源一切照旧：新条目马上列出来、之后后台分拣，时机和兜底（没有规则档的算噪音）都和以前一样。
-  判断按「是不是插件提供的」（`extensionConnectors`，hub 起插件的连接器时记下，每轮交给管理者时带上：`InboxSource.extension`），不认名字。
-- **先分拣、再进收件箱（#1644）**：插件的连接器一轮新起的条目先放在一边（`inbox_admit.go`），这一轮采完后在后台分拣，分完才写库、列出来：
-  - 模型分了：用模型的档和摘要；
-  - 模型分不了、有兜底：按兜底进来，「按规则」，**这一版就定了**，模型恢复后也不再分这一版（有新动静时才重新分）；
-  - 模型分不了、没有兜底：**这一轮不写**。不做「存了但不列出来」的行（查不清楚）；连接器从自己的内存回答 `inbox.collect`，下一轮会把它再交回来，自然重试，模型好了就进来。
-  - 限时：一次分拣里新条目只在 20 秒内开始分（并发 4，每件最多 30 秒），没轮到的留到下一轮（这次有进展就马上再来一轮）。
-    分拣在后台跑，采集、下拉刷新都不等它（分完推 `{"type":"inbox"}`）；同一时间只分一批，正在分的时候来的那一轮，它自己的新条目这一轮先不写，下一轮再交。
-  - 飞书插件的条目总有兜底（hub 按类型的规则：私聊、@我 → 需要你，群 → 知悉即可……），所以**飞书的新条目从不会被扣下**，只是分拣挪到了进列表之前；
-    会被扣下的只有别的插件连接器交来、又没有规则档的条目，而且都记在下面的分拣状态里。被静音的新条目照旧直接记成已处理。
-  - 已经在收件箱里的条目有新动静：照旧先更新、后台重新分拣（并发 4，每件最多 90 秒，一轮跑完才开下一轮），模型失败按兜底；
-    额度用完时没分过的先按兜底放着、模型回来再分。插件连接器里没有兜底的保持原来的档，下一轮再问，不再变成噪音。
-  - 没有文字（`context` 为空）的条目不分拣，照旧直接进来，在界面上算「需要你」。
-- **分拣状态**：`GET /api/v1/inbox`（和下拉刷新的回包）带 `triage`：`{state, reason, waiting, sources?}`。`waiting` 是每个插件来源最近一次分拣因为分不了又没兜底、
-  或没轮到而没进来的新条目数（hub 自己的来源从不扣下，不在里面）；`state` 是其中最要紧的原因：`unconfigured`（没有配置分拣模型）> `paused`（模型没有额度 / 并发已满）> `error`（模型出错）>
-  `timeout`（模型太慢）> `behind`（这一轮没分完）；`reason` 是给人看的原因；`sources: [{source, name, state, reason, waiting, read_error?, read_reason?}]` 按来源分开。
-  `read_error` 是最近一轮这个来源没读到（`timeout` / `rate_limited` / `failed`，不认识的一律当 `failed`），`read_reason` 是给人看的一句（三种语言）；
-  它原来的条目留着，hub 扣下的那一轮如果还带着之前读到的东西，照样用上；下一轮读到了就清掉。只在内存里，hub 或管理者重启后要等下一轮才知道。
-  只在内存里，每轮重新算（这一轮读过的来源重算，没读的保留到它不在了为止）；没有等着的是 `{"state": "ok", "waiting": 0}`。
-  App 据此在收件箱顶上显示「等分拣的横幅」（下一条）。
-- **等分拣的横幅**（#1773，网页、iOS / Mac、安卓一致）：`triage.state` 不是 `ok` 且 `waiting > 0` 时，收件箱列表顶上、搜索和筛选下面、第一段上面一条警示色（橙）的横幅，不能关掉；
-  跟着列表刷新（`inbox` 推送、重连、下拉刷新），恢复 `ok` 后消失。老 hub 没有 `triage`：不显示。
-  - 文案：只有一个来源在等（`sources` 里 `waiting > 0` 的恰好一个，而且有 `name`）时「有 {waiting} 条{name}消息在等分拣：{reason}」，否则「有 {waiting} 条消息在等分拣：{reason}」。
-    `reason` 用 hub 给的（去掉首尾空白）；空的按状态：`unconfigured` 还没配分拣模型 · `paused` 分拣模型暂停了 · `error` 分拣模型出错了 · `timeout` 分拣模型太慢了 · `behind` 新消息太多，正在排队；
-    不认识的状态又没有原因时只写「有 {waiting} 条消息在等分拣」。名字前后不加空格（「有 2 条GitHub消息在等分拣」）。
-  - 按钮：只有 `unconfigured` 有「去配置」，打开 设置 › 模型配置 › 信息筛选（`inbox.triage`）；只在这台设备能改设置时显示，否则只有文字。其他状态只说原因。
-  - 各端都用时钟图标。网页 `TriageBanner`（`docs/web.md`「收件箱」），「去配置」在文字右边；iOS / Mac `InboxStore.triage`，设计系统的 `NoticeBanner`（`apple/Persona/DesignSystem/Notice.swift`，图标 `Theme.Icon.time`）
-    做成列表的第一行（iPhone 在筛选下面，「去配置」在文字下面；Mac 在列表栏的第一行，「去配置」在右边），「去配置」以浮层打开信息筛选的模型编辑，体验模式里不显示；
-    安卓读得到 `GET /api/v1/model-config/purposes/inbox.triage` 才显示「去配置」（只能回答的设备、没有这个用途的 hub 只显示文字；体验模式没有），细节见 `docs/android.md`。
-    正常配对的设备三端结果一样：能保存这个设置的设备有按钮。
-  - 截图和联调用假 hub 的 `MOCK_INBOX_TRIAGE=<状态>[:<条数>[:<来源名，逗号隔开>[:<原因>]]]`（`unconfigured`、`behind:8:飞书`、`error:7:飞书,邮件,GitHub`、`error:2:GitHub:模型没有额度`）。
-- 2026-10-27 第一次跑：51 件里 3 件需要你、29 件噪音（全是营销邮件），摘要像「Sample Contact问 codex 代码是否已合入 1013，等你确认答复」。
+- Model input is item type (private chat / mention of user / group / bot / mail directly to user / CC or list) plus item text (`context`: at most 20 recent new Lark messages,
+  first 3000 characters of the latest mail's full body). Prompts are in `server/internal/prompts/inbox/` (`triage.md`, drafting `draft.md`, judgment `judge.md`, AI twin `agent.md`; `docs/prompts.md`). Address the owner using `assistant.owner`; `inbox.rules` in `hub.json` (or assistant-edited settings) contains the user's rules, appended last and overriding defaults.
+- **Per-source rules (replacement, 2026-11-04, #1644)**: sources / accounts need different standards; one global rule set cannot cover them. Connector items may include `rules`
+  (the user's original words, such as Lark-plugin Triage rules `triage_rules`; `docs/connector-protocol.md`). The item **uses only its own rules**, with no global `inbox.rules` appended.
+  Only items without rules use global ones. Default tier criteria above are unchanged; user rules remain last and authoritative. Rules are stored with the item (not listed), updated from each new version when activity arrives,
+  up to 4000 characters. The assistant can change plugin-source rules (`inbox.rules.<plugin>` in `jarvis_settings`, confirmed on the phone; `docs/assistant.md`). Built-in GitHub and Messages connectors do not yet have their own rules (the Telegram extension has `triage_rules`).
+- When uncertain between action / fyi, choose action. If the model cannot triage (unconfigured, no quota / concurrency full, error, timeout), use fallback rules (private chat / mention of me → action; everyone-only mention without me → fyi, an announcement; group → fyi; direct mail → fyi; others → noise), with reason "Rule-based."
+  Connector items use their rule-provided fallback (`tier`). Model-triaged items (empty `tier`) from hub-owned connectors (GitHub, Telegram, Messages) still fall back to noise.
+  **Plugin-provided connectors have no fallback**: noise would silently hide items the user must see (below).
+- **Scope (requested 2026-11-04)**: "Triage before admission" and "No admission without fallback" below **apply only to plugin-provided connectors** (installed plugins or hub.json plugins, not bundled personad connectors;
+  currently the Lark extension). Hub-owned mail, GitHub, Telegram, and Messages behave unchanged: new items appear immediately, then triage in the background; timing and fallback (no rule tier means noise) remain as before.
+  Identify by plugin ownership (`extensionConnectors`, recorded when hub starts a plugin connector and passed each round as `InboxSource.extension`), not name.
+- **Triage before admission (#1644)**: hold new plugin-connector items aside for a collection round (`inbox_admit.go`). After collection, triage in the background; only then write to the database and list them:
+  - Model succeeds: use its tier and summary.
+  - Model fails, fallback exists: admit by fallback with "Rule-based." **That version is final**, with no retriage on model recovery (only new activity triggers it).
+  - Model fails, no fallback: **do not write this round**. Do not store hidden rows (hard to inspect). The connector answers `inbox.collect` from its own memory and resubmits next round, naturally retrying until the model works.
+  - Time limit: new items must begin triage within 20 seconds of a batch start (concurrency 4, at most 30 seconds per item). Unreached items wait for the next round (a round with progress immediately triggers another).
+    Background triage does not block collection or pull-to-refresh (`{"type":"inbox"}` pushed afterward). Only one batch runs at once; new items arriving during it are not written that round and are resubmitted next round.
+  - Lark-plugin items always have a fallback (hub type rules: private / mentions of me → Needs you, groups → FYI, etc.), so **new Lark items are never withheld**; triage merely moves before listing.
+    Only items from other plugin connectors without a rule tier are withheld, all reflected in triage status below. Muted new items are still marked done directly.
+  - Existing Inbox items with new activity update first, then retriage in the background as before (concurrency 4, at most 90 seconds per item, batches sequential), with fallback on failure.
+    When quota is exhausted, untriaged items keep fallback until model recovery. Plugin items without fallback retain their previous tier and retry next round, never turning into noise.
+  - Empty text (`context` empty) skips triage and enters directly as before, shown as Needs you.
+- **Triage status**: `GET /api/v1/inbox` (and refresh responses) includes `triage`: `{state, reason, waiting, sources?}`. `waiting` counts each plugin source's new items withheld in its latest triage due to failure without fallback,
+  or not reaching them (hub-owned sources are never withheld and are excluded). `state` is the most important cause: `unconfigured` (no triage model) > `paused` (no quota / full concurrency) > `error` (model error) >
+  `timeout` (too slow) > `behind` (unfinished batch). `reason` is human-readable; `sources: [{source, name, state, reason, waiting, read_error?, read_reason?}]` separates sources.
+  `read_error` reports a failed source read in the latest round (`timeout` / `rate_limited` / `failed`; unknown codes become `failed`), and `read_reason` is a human-readable sentence in all three languages.
+  Existing items remain; previously collected data still present in a hub-held round is also used. Clear the diagnostic on the next successful read. Memory only: after hub or manager restart, it is unknown until the next round.
+  Memory only, recomputed per round for read sources; unread sources retain status until removed. Nothing waiting yields `{"state": "ok", "waiting": 0}`.
+  Apps use it for the waiting-for-triage banner below.
+- **Waiting-for-triage banner** (#1773, consistent on web, iOS / Mac, Android): if `triage.state` is not `ok` and `waiting > 0`, show a non-dismissible caution-colored (orange) banner at the top of the Inbox list, below search / filters and above the first section.
+  It follows list refresh (Inbox pushes, reconnect, pull-to-refresh), disappearing on recovery to `ok`. Older hubs without `triage` show none.
+  - Text: with exactly one waiting source (`waiting > 0` in `sources`, with `name`), "{waiting} {name} messages waiting for triage: {reason}"; otherwise "{waiting} messages waiting for triage: {reason}."
+    Use hub `reason`, trimmed. If empty, use state defaults: `unconfigured` no triage model configured · `paused` triage model paused · `error` triage model error · `timeout` triage model too slow · `behind` too many new messages, queued.
+    Unknown state without reason shows only "{waiting} messages waiting for triage." Chinese labels place no spaces around the source name ("有 2 条GitHub消息在等分拣", meaning 2 GitHub messages waiting for triage).
+  - Button: Set Up only for `unconfigured`, opening Settings › Model configuration › Information filtering (`inbox.triage`). Show only if this device can edit settings, otherwise text alone. Other states only explain the cause.
+  - All clients use a clock icon. Web `TriageBanner` (`docs/web.md`, "Inbox") has Set Up to the text's right. iOS / Mac `InboxStore.triage` uses design-system `NoticeBanner` (`apple/Persona/DesignSystem/Notice.swift`, `Theme.Icon.time`)
+    as the first list row (iPhone below filters with Set Up below text; Mac first row in the list column, Set Up on the right). Set Up opens an Information filtering model-edit sheet, hidden in demo mode.
+    Android shows Set Up only if it can read `GET /api/v1/model-config/purposes/inbox.triage` (reply-only devices or hubs lacking that purpose show text only; hidden in demo); details in `docs/android.md`.
+    Normally paired devices behave identically across clients: devices able to save this setting get the button.
+  - Screenshots / integration use mock `MOCK_INBOX_TRIAGE=<state>[:<count>[:<source names, comma-separated>[:<reason>]]]` (`unconfigured`, `behind:8:Lark`, `error:7:Lark,Mail,GitHub`, `error:2:GitHub:Model has no quota`).
+- First run 2026-10-27: of 51 items, 3 needed you and 29 were noise (all marketing mail). An example summary: "A contact asks whether the Codex code was merged into 1013, awaiting your confirmation."
 
-## 事件合成（2026-11-04，#1680）
+## Event grouping (2026-11-04, #1680)
 
-一个会话一行太粗：一个群里同时在聊好几件事，有的要我、有的不要，混成一行既分不准级，也看不出在说什么。声明了 `group` 的连接器（飞书插件）
-把一个会话的新消息交成**待关联的一批**，管理者让模型判断每条新消息属于哪件事，**一件事（事件）是收件箱里的一行**（`server/internal/assistant/inbox_group.go`，
-协议见 `docs/connector-protocol.md`「事件合成」）。
+One row per chat is too coarse: a group can discuss several things at once, some requiring me and some not. Combining them prevents accurate prioritization and obscures the subject. Connectors declaring `group` (the Lark plugin)
+submit new messages from a chat as **a batch awaiting association**. The manager asks the model which item each message belongs to; **one item (event) is one Inbox row** (`server/internal/assistant/inbox_group.go`,
+protocol in `docs/connector-protocol.md`, "Event grouping").
 
-- **一本账**：哪条消息属于哪件事只记在这一行的 `meta` 里。声明了 `meta` 的连接器，meta 由它的程序写（`group.append`：一次一件事，交 meta 加几条消息、回追加后的 meta）；
-  只声明 `group` 的，hub 自己从这一批写事件（没有 meta，`context` 是这件事那几条消息的文字，协议文档「两种写法」）。meta
-  **hub 不解析**，原样存、原样交给模型和插件。初期只在同一个会话里关联。
-- **能力协商**：hub 在插件的 `initialize` 里报 `hub.capabilities: ["inbox_group"]`，连接器在清单里声明 `group`；自己记 meta 的再声明 `meta` 和 `meta_description`
-  （一段话说清 meta 的字段；没有 `meta` 不能写它）。`group.tool`、`group.fallback` 不用声明，没有就回 `unknown_method`：模型看到工具用不了；没有兜底时模型分不了的那一批等着下一轮。
-  缺一个就照旧一个会话一行，老 hub、老插件互不影响（注意：老 hub 不认 `group`，见协议文档「旧 hub」）。
-- **模型怎么做**（分拣模型 `inbox.triage`）：提示词是通用的判断规则（`prompts/inbox/group.md`：回复和引用、同一话题、同一人连发是同一件，隔了很久又换话题是新的一件，
-  拿不准就并进已有的，一批最多新开 3 件；三档的标准和分拣共用 `inbox/tiers.md`）+ 插件的 `meta_description` + 这个来源的规则（`rules`，没有用全局的 `inbox.rules`）
-  + 这一批新消息的文字。输入里先放好这个会话的事（下面 `events` 不带 query 的结果），省一次调用。模型每次回一个 JSON：要么调一个工具，要么给结果；
-  每批最多调 4 次工具，整批最多 2 分钟（每次调用 45 秒）。
-- **工具**：`events`（hub 自己的：同一个会话里还开着的事，加上 3 天内处理过的，最多 10 件，`{id, title, summary, tier, version, done, meta}`，`query` 按标题、总结、meta 里的字筛）；
-  `messages_before`、`messages_around`、`search`（插件的，经 `group.tool`，结果去掉头像和媒体、最多 8 KB）。
-- **结果**：`assign`（每条新消息归到哪件事：已有事件的 id 或 `new:1`…）和 `events`（动到的每件事的标题、总结、分级、理由，新的一件可以 `continues` 接着一件已处理的）。
-  hub 检查：每条新消息恰好归一件；已有的事必须是这一批查到过的、没处理完的；`new:k` 最多 3 个；分级只能是三档之一、要有标题。**不合格就当模型不可用。**
-- **件数**：一件事一共几条（`count`）由 hub 记：新事件是分给它的条数，之后每批加上新分进去的条数，不看插件给的 `extra.count`；开始时间（`started_at`）新建时定下、不再变。
-- **写进收件箱**：自己记 meta 的（`meta`）动到几件事就调几次 `group.append`，一件失败只重试这一件（共 3 次）；按回来的 `id` 写进收件箱，标题、总结、分级用模型的，`triaged_by: "model"`，
-  这一版算分拣过了。期间用户把那件事标了已处理的，改成新开一件、接着它。`last` 没变的回答是重发，不再存、不再推（推送按「id + 版本」一次）。被静音的照旧直接算处理完。
-- **兜底**：模型不可用（没配、没额度、出错、超时）或结果不合格时，交给插件的 `group.fallback` 按结构分组（回复和引用链、话题、同一人连发、时间断档；
-  插件没有 `group.fallback` 的，这一批不写、等模型，下一轮再交，和没有兜底的收件箱条目一样），
-  给它的事和 `events` 工具的规则一样；分级用插件的兜底（`rule_tier`），理由「按规则」，`triaged_by: "rules"`，这一版不再交给模型。兜底的结果也按上面的规矩查，不合格这一批就先不写，下一轮再来。
-- **一批只做一次**：关联在后台跑，不拖住采集（下拉刷新不等它）；同一个会话同一时间只关联一批（同一批再交、同一轮交两份都按一批算），同时最多 4 个会话，别的下一轮再来。
-  一批的消息都写进了某件事，插件就不再交它；没写完的下一轮再交剩下的。
-- **列表**：事件就是普通的条目，多了 `triaged_by`；`meta` 和它属于哪个会话只在 hub 里，不在列表里（插件的详情页插槽 `inbox_item` 经 `ui.render` 拿到 meta，#1681）。
-- 还没做：一个会话里事件的已读、处理完由插件报回来（现在靠用户在 App 里处理）；切到事件合成之前那个会话原来的一行不并进事件，留着到处理完。
+- **One ledger**: message-to-item membership is recorded only in that row's `meta`. For connectors declaring `meta`, their program writes it (`group.append`: one item at a time, submit meta plus messages, return appended meta).
+  With only `group`, hub writes events from the batch itself (no meta; `context` is the text of messages assigned to the item; protocol "Two writing modes").
+  **Hub does not parse meta**; it stores and passes it unchanged to the model and plugin. Initially, association stays within one chat.
+- **Capability negotiation**: hub declares `hub.capabilities: ["inbox_group"]` in plugin `initialize`; connectors declare `group` in the manifest. Those maintaining meta also declare `meta` and `meta_description`
+  (prose explaining meta fields; disallowed without `meta`). `group.tool` and `group.fallback` need no declaration; if absent, return `unknown_method`. The model sees unavailable tools; with no fallback, an untriageable batch waits for the next round.
+  If either side lacks support, retain one row per chat. Old hubs / plugins do not affect each other (old hubs do not recognize `group`; see protocol "Old hubs").
+- **Model behavior** (`inbox.triage`): prompt = generic association rules (`prompts/inbox/group.md`: replies / quotes, same topic, consecutive messages from one person belong together; a long gap plus new topic starts another;
+  uncertainty merges into an existing event; at most 3 new events per batch; tier criteria shared with triage in `inbox/tiers.md`) + plugin `meta_description` + source rules (`rules`, otherwise global `inbox.rules`)
+  + batch text. Existing events for the chat are preloaded (the no-query result of `events` below), saving one call. Each model response is JSON, either one tool call or a result.
+  At most 4 tool calls per batch; at most 2 minutes total, 45 seconds per call.
+- **Tools**: `events` (hub-owned: open events in the same chat plus those handled within 3 days, at most 10, `{id, title, summary, tier, version, done, meta}`; `query` filters text in titles, summaries, meta);
+  `messages_before`, `messages_around`, `search` (plugin-owned through `group.tool`, avatars / media stripped, at most 8 KB).
+- **Result**: `assign` (each new message's event: existing ID or `new:1`…) and `events` (title, summary, tier, reason for each touched event; new events may `continues` a handled one).
+  Hub validates: every new message assigned exactly once; existing events must have been queried in this batch and remain unhandled; at most 3 `new:k`; tier must be one of three and title required. **Invalid results mean model unavailable.**
+- **Counts**: hub maintains total message `count`, initialized from assigned messages and incremented by newly assigned messages each batch, ignoring plugin `extra.count`. `started_at` is fixed at creation.
+- **Inbox writes**: for connectors maintaining `meta`, call `group.append` once per touched event; retry only failed events, 3 attempts total. Write Inbox items using returned `id`, model title / summary / tier, `triaged_by: "model"`,
+  treating this version as triaged. If the user handled an event meanwhile, create a new continuation instead. An unchanged `last` is a retransmission, with no store / push (push once per ID + version). Muted events remain directly done.
+- **Fallback**: unavailable model (unconfigured, no quota, error, timeout) or invalid result invokes plugin `group.fallback` for structural grouping (reply / quote chains, topics, consecutive messages by one person, time gaps).
+  Without `group.fallback`, do not write the batch; wait for the model and resubmit next round, like Inbox items without fallback.
+  It receives events under the same rules as `events`. Use plugin `rule_tier`, reason "Rule-based," `triaged_by: "rules"`; do not send this version back to the model. Validate fallback results by the same rules; invalid batches remain unwritten until the next round.
+- **One pass per batch**: association runs in the background without delaying collection or pull-to-refresh. One batch per chat at a time (resubmitting the same batch or twice in one round still counts as one); at most 4 chats concurrently, others retry next round.
+  Once every batch message belongs to an item, the plugin stops submitting it; unfinished batches resubmit remaining messages.
+- **List**: events are ordinary items with added `triaged_by`. `meta` and their chat membership stay on hub, not the list (plugin detail slot `inbox_item` receives meta through `ui.render`, #1681).
+- Not implemented: plugin-reported read / done state for chat events (currently users handle them in the App). A chat's pre-grouping row is not merged into events; it remains until handled.
 
-## 公司圈（2026-11-01）
+## Moments (2026-11-01)
 
-公司圈（飞书 Moments，以前叫头条圈）里和我有关的事也进收件箱（由接飞书的插件做，原来在 hub 的 inbox_moments.go）：有人评论了我的帖子、
-回复了我的评论、在帖子或评论里 @ 了我。点赞、新关注不算事，不进来。不做 feed（`docs/feishu.md`「不做第二个飞书」），只收和我有关的。
+Relevant Lark Moments activity (formerly Toutiao Circle) also enters the Inbox, via the Lark plugin (formerly hub `inbox_moments.go`): comments on my posts,
+replies to my comments, and mentions of me in posts or comments. Likes and new followers are not items. No feed (`docs/feishu.md`, "Not a second Lark client"); only activity involving me.
 
-- 来源：飞书网关的 `moments/notifications?category=message`，跟着飞书一起每 2 分钟采一次（一次调用，最新 50 条）；7 天前的不算。
-- **一个帖子一件事**（Thread）：同一个帖子下新的评论 / 回复并进还没处理的那件，`count` 是通知数；处理后再来的另开一件。
-  标题是帖子开头，`sender` / 预览是最新那条评论。
-- 上下文：帖子（「我发的帖子」还是别人的）+ 最新 15 条评论（我的标成「我」，要回复的那条标出来），评论全公司可见这一点也写进去。
-- 分拣：@ 了我默认「需要你」，评论和回复默认「知悉即可」（多是捧场和闲聊），模型照常判断。
-- **发送**是在帖子下发评论（`POST /moments/posts/:id/comments`）：回复最新那条和我有关的评论，@ 在帖子本身的就评论帖子。
-  代写和 AI 分身的提示词都提醒：全公司可见，只说能公开说的。
-- 自己已经在别处回了（帖子最新一条评论是我、在这件事之后）就算处理完（`done_by=replied`）；通知在飞书里都读过了、又不是「需要你」的，算 `read`。
-- App：行的图标是公司圈的、标签「公司圈」（@ 我的是「@我」，也出现在「@我」筛选里）；点开就是帖子和评论（`LarkMomentsPostView`，`pushed`）。
-  DEBUG：`-openInboxItem <id>` 打开某一件（截公司圈详情用）；mock 里有一件 `moment:mp1:mn1`。
+- Source: gateway `moments/notifications?category=message`, collected with Lark every 2 minutes (one call, latest 50 notifications); older than 7 days excluded.
+- **One post per item** (Thread): new comments / replies on the same post merge into its unhandled item; `count` is notification count. Activity after handling opens a new item.
+  Title is the post's opening; `sender` / preview come from the latest comment.
+- Context: post (whether mine or someone else's) + latest 15 comments (mine marked Me, reply target marked), explicitly noting company-wide visibility.
+- Triage: mentions default to Needs you; comments / replies default to FYI (often encouragement or chat), with normal model judgment.
+- **Send** posts a comment (`POST /moments/posts/:id/comments`), replying to the latest relevant comment, or commenting on the post if it mentions me directly.
+  Drafting and AI twin prompts warn that it is visible company-wide; say only what can be public.
+- If I already replied elsewhere (the latest post comment is mine and newer than the item), mark done (`done_by=replied`). If all notifications were read in Lark and the item is not Needs you, mark `read`.
+- App: Moments icon and label (Mentions for mentions of me, also in the Mentions filter). Opening shows post and comments (`LarkMomentsPostView`, `pushed`).
+  DEBUG: `-openInboxItem <id>` opens an item for detail screenshots; mock includes `moment:mp1:mn1`.
 
-## 连接器：GitHub（2026-11-02）
+## Connector: GitHub (2026-11-02)
 
-连接器（`docs/plan-connectors.md`）的「需要我」的事也进收件箱：连接器实现 `connector.Inbox`，给出候选（一个线程一个，`InboxThing`），
-管理者合成条目（`server/internal/assistant/inbox_connectors.go`；hub 每轮把连接器给的候选交过去），规则和飞书会话一样：一个线程同时只有一件没处理的，后来的动静并进去（`count` 加一）；
-处理过以后再来的另开一件；连接器说这件事结束了（合了、关了、自己回了）就自动处理掉（`done_by` = read / replied）；在别处读过、又不是「需要你」的，算 `read`。
-分拣、代写、AI 分身、已处理、保留时间都是 hub 通用的。
+Connector activity needing me (`docs/plan-connectors.md`) also enters the Inbox. A connector implements `connector.Inbox`, returning candidates (`InboxThing`, one per thread),
+which the manager turns into items (`server/internal/assistant/inbox_connectors.go`; hub delivers candidates each round). Rules match Lark chats: one unhandled item per thread, later activity merged with `count` incremented;
+after handling, new activity opens another. If the connector says an item ended (merged, closed, replied by me), automatically handle it (`done_by` = read / replied); read elsewhere and not Needs you means `read`.
+Triage, drafting, AI twin, done state, and retention use hub's generic logic.
 
-- **GitHub**（`server/internal/connector/github/inbox.go`）：hub 没有公网入口收不到 webhook，所以轮询 `/notifications`（只看未读），间隔按 `X-Poll-Interval`（一般 60 秒），
-  带 `If-Modified-Since`，304 不读任何详情；每 10 分钟不带条件读一次全量（在 GitHub 上读过的通知可能不改 Last-Modified）。有变化的线程再读 PR / issue、评论和 review（每轮最多 30 个）。
-  请求额度剩不到一成时只轮询通知，状态显示「请求额度快用完了」。
-- 收哪些（`reason`）：等我 review 的 PR（`review_requested`）、@ 我（`mention`）、@ 了我的团队（`team_mention`）、我的 PR / issue 有别人的新评论或 review（`author`）、
-  CI 结果（`ci_activity`）、分配给我（`assign`）。其余（`subscribed`、`comment`、`state_change`…）不进来。PR / issue 一个一件（`example-org/example-repo#12`）。
-- **降噪（2026-11-03，#577）**：用户嫌太吵——hub 上一次只读统计，GitHub 打开的 52 件全是「需要你」，其中 42 件是功能分支、自动分支上的 CI 失败（很多是 Agent 用用户的账号推的），
-  同一个分支好几件、重跑也另算一件。原因：CI 一条通知一件；分级全交给模型，提示词里说 CI 失败、review 请求一般需要用户，模型就全给了「需要你」。改成：
-  - **分级由规则定**（`InboxThing.Tier` + `Why`，条目的 `reason` 写是哪条规则），规则判断不了的才交给模型：
-    - 真人请你 review、真人 @ 你、要求修改（`CHANGES_REQUESTED`）、分配给你：需要你；
-    - 机器人的 PR 请你 review、机器人 @ 你或在我的 PR 上留言、批准了、@ 的是我所在的团队：知悉即可；
-    - 我的 PR 上真人的普通评论：交给模型（提示词说「要你改、回答问题的需要你」）。
-  - **CI 失败按（仓库，分支）合成一件**（线程 `ci:<owner>/<repo>@<分支>`），分支从通知标题读（`<workflow> workflow run[, Attempt #N] failed for <分支> branch`，
-    这类通知没有 URL），重跑、后来的失败都并进去：
-    - 默认分支的、我自己开着的 PR 的：需要你；其他分支：知悉即可；自动分支（`train/*`，可配置）：完全不进来。
-    - 自动处理掉（不删，`done_by=read`，`reason` 写原因）：这个 workflow 在这个分支上后来跑成功了（「GitHub：后来成功了」，收到 succeeded 的通知时立刻，
-      否则每 10 分钟查一次 Actions 的 runs）、分支删了、PR 合了或关了。
-  - **可配置**（设置 › 连接器 › GitHub › 收件箱；hub.json `github.inbox` 给默认值；存在 settings 表 `connectors.options.github`）：
-    - 「CI 失败」：关闭 / 只看默认分支 / 加上我的 PR（默认）/ 全部（都算需要你）；
-    - 静音仓库：这些仓库什么都不进来，已有的也处理掉；
-    - `ignore_branches`：不提醒的分支（`path.Match` 模式，默认 `["train/*"]`，只在 hub.json 里改）。
-  - **积压**：hub 每轮采集后把 GitHub 还开着的条目交给连接器的 `Settle`（`connector.InboxSettler`）：一条通知一件的旧 CI 条目（「GitHub 降噪：CI 失败改为按分支合并成一条」）、
-    静音仓库的、自动分支的、CI 设为关闭时的 CI 条目都标成已处理，不删；还在未读通知里的按新规则重新分级。
-  - 2026-11-03 用 hub 上的真实数据只读对比（只看数量）：需要你从 52 件降到 13 件（旧 CI 42 件处理掉；剩 6 件真人 @、2 件请 review、
-    4 件默认分支 / 自己开着的 PR 的 CI、1 件 PR 上的评论），7 件功能分支 CI 和 1 件机器人 PR 的 review 降为知悉即可。
-- 结束：合了 / 关了 → read；线程最新一条是我 → replied；review 请求撤了（我不在 reviewers 里了）→ 我 review 过是 replied，否则 read。已处理**不回写** GitHub 的已读。
-- 上下文：标题、状态、作者、等谁 review、描述（截 1500 字）、最近 8 条评论和 review（旧的在前，每条截 600 字）。提示词里的「类型」行在 `prompts/inbox/kinds/github.md`。
-- **发送** = 在 PR / issue 下评论（`POST /repos/{o}/{r}/issues/{n}/comments`），「发送」按钮本身就是确认；`reply_to` 写「评论到 …（仓库可见的人都能看到）」。CI 失败不能回复（只有「交给 AI」）。
-- App（只有 iOS 带 `?sources=all`；Mac、手表、Android 这一步看不到）：
-  - 行：头像是最新动静的人，角标是 GitHub 标志，标签是 `label`（「请你 review」「@我」「CI 失败」…），第二行「仓库#号 · 谁：内容」；
-  - 筛选里有「GitHub」（有条目时才出现）；
-  - 点开是通用详情 `InboxConnectorDetailView`：标题、线程、「在 GitHub 打开」（App 内的网页卡片）、hub 读到的内容。没有 PR 页、diff 页。
-  - 没有 GitHub 条目时界面不变。
-  - mock：`MOCK_GITHUB_INBOX=1`；UI 测试 `InboxConnectorTests`。
+- **GitHub** (`server/internal/connector/github/inbox.go`): with no public hub endpoint for webhooks, poll `/notifications` (unread only), following `X-Poll-Interval` (usually 60 seconds),
+  with `If-Modified-Since`; 304 fetches no details. Every 10 minutes, fetch unconditionally (reading notifications on GitHub may not change Last-Modified). Fetch PR / issue, comments, and reviews only for changed threads, up to 30 per round.
+  With under one tenth of request quota remaining, poll notifications only and show "Request quota nearly exhausted."
+- Included `reason`: PRs requesting my review (`review_requested`), mentions (`mention`), team mentions (`team_mention`), new comments / reviews by others on my PRs / issues (`author`),
+  CI results (`ci_activity`), assignments (`assign`). Others (`subscribed`, `comment`, `state_change`…) are excluded. One item per PR / issue (`example-org/example-repo#12`).
+- **Noise reduction (2026-11-03, #577)**: the user found it too noisy. A read-only hub count showed all 52 open GitHub items as Needs you, including 42 CI failures on feature / automatic branches (many pushed by Agents using the user's account),
+  multiple items per branch, with reruns counted separately. Causes: one item per CI notification; model-only tiers with prompts saying CI failures and review requests generally need the user, so everything became Needs you. Changed to:
+  - **Rule-based tiers** (`InboxThing.Tier` + `Why`, item `reason` identifies the rule); only undecidable cases go to the model:
+    - Human review requests, human mentions, requested changes (`CHANGES_REQUESTED`), assignments: Needs you.
+    - Bot PR review requests, bot mentions / comments on my PRs, approvals, team mentions: FYI.
+    - Ordinary human comments on my PRs: model decides (prompt: requests for changes / answers need you).
+  - **Group CI failures by (repository, branch)** (thread `ci:<owner>/<repo>@<branch>`). Read the branch from notification title (`<workflow> workflow run[, Attempt #N] failed for <branch> branch`;
+    these notifications have no URL), merging reruns and later failures:
+    - Default branch and my open PRs: Needs you; other branches: FYI; automatic branches (`train/*`, configurable): excluded entirely.
+    - Automatically mark handled without deleting (`done_by=read`, explanatory `reason`) when the workflow later succeeds on that branch ("GitHub: later succeeded," immediately on a succeeded notification,
+      otherwise check Actions runs every 10 minutes), branch deleted, or PR merged / closed.
+  - **Configuration** (Settings › Connectors › GitHub › Inbox; `github.inbox` in hub.json supplies defaults; stored as `connectors.options.github` in settings):
+    - CI failures: Off / Default branch only / Include my PRs (default) / All (all Needs you).
+    - Muted repositories: exclude all activity and handle existing items.
+    - `ignore_branches`: silent branches (`path.Match` patterns, default `["train/*"]`, editable only in hub.json).
+  - **Backlog**: after each collection, hub passes open GitHub items to connector `Settle` (`connector.InboxSettler`). Old one-per-notification CI items ("GitHub noise reduction: group CI failures by branch"),
+    muted repositories, automatic branches, and CI items when CI is off are marked done, not deleted. Items still in unread notifications are retiered under new rules.
+  - Read-only count comparison on real hub data 2026-11-03: Needs you fell from 52 to 13 (42 old CI items handled; remaining 6 human mentions, 2 review requests,
+    4 CI failures on default branch / my open PRs, 1 PR comment). Seven feature-branch CI items and one bot-PR review request became FYI.
+- Ended: merged / closed → read; latest thread entry is mine → replied; review request withdrawn (I am no longer a reviewer) → replied if I reviewed, otherwise read. Done state **does not write back** GitHub read state.
+- Context: title, state, author, requested reviewers, description (1500 characters), latest 8 comments / reviews oldest first (600 characters each). Prompt kind line: `prompts/inbox/kinds/github.md`.
+- **Send** = PR / issue comment (`POST /repos/{o}/{r}/issues/{n}/comments`); tapping Send is confirmation. `reply_to` says "Comment on … (visible to everyone with repository access)." CI failures cannot be replied to (Hand to AI only).
+- App (only iOS passes `?sources=all`; Mac, Watch, Android do not see this step):
+  - Row: avatar of the latest actor, GitHub badge, `label` (Review requested / Mentions / CI failed…), second line "repository#number · who: content."
+  - GitHub filter appears only when items exist.
+  - Generic `InboxConnectorDetailView`: title, thread, Open in GitHub (in-App web card), hub-read content. No PR page or diff page.
+  - With no GitHub items, the UI is unchanged.
+  - Mock `MOCK_GITHUB_INBOX=1`; UI tests `InboxConnectorTests`.
 
-## 静音（2026-11-03，连接器 v2 · V3，#670）
+## Muting (2026-11-03, connector v2 · V3, #670)
 
-所有来源一样：在收件箱里长按一行，菜单里除了「已处理 / 移回」，还有这件事能静音的东西——「静音这个仓库」（GitHub）、「静音这个会话」
-（飞书的会话、信息、Telegram）、「静音这个发件人」（飞书群里的人、邮件的发件人、GitHub 上最新一步的人），名字写在下面（仓库只写名字，不带 owner，菜单里不换行）。
-点了以后这件事和同一来源里它覆盖的其他打开的事都收进已处理（原因「已静音：<名字>」），toast 说「已静音「…」，以后不再进收件箱」。
-收件箱右上角「更多」里的「已静音」列出所有静音（名字、来源 · 仓库 / 会话 / 发件人），左滑或长按「取消静音」；取消后以后的才会进来，已经收掉的不回来。
+All sources work alike. Long-press an Inbox row for Done / Reopen plus available mute targets: Mute repository (GitHub), Mute chat
+(Lark chats, Messages, Telegram), Mute sender (people in Lark groups, mail senders, latest GitHub actor). Names appear below (repositories omit owner; menu labels never wrap).
+Muting handles this item and other covered open items in the same source, reason "Muted: <name>," with toast "Muted ‘…’; future items will not enter the Inbox."
+Muted under More at the Inbox's top right lists all mutes (name, source · repository / chat / sender), with swipe-left or long-press Unmute. Unmuting admits only future items; already handled ones stay handled.
 
-- **接口**：`GET /api/v1/inbox/mutes`（列出，按添加的顺序，旧的在前）；`POST /api/v1/inbox/mutes {item_id, tag}` 按这一件在 `tag` 下的值静音（值从条目上读，
-  不由客户端给；条目不存在回 404，这件没有这个 `tag` 回 400），回 `{mute, settled}`，`settled` 是顺带收进已处理的那些；`DELETE /api/v1/inbox/mutes/{id}` 取消。
-  条目上的 `mutes` 列出它能按什么静音（菜单就照它画）。
+- **APIs**: `GET /api/v1/inbox/mutes` (creation order, oldest first); `POST /api/v1/inbox/mutes {item_id, tag}` mutes the item's value for `tag` (read from the item,
+  not supplied by the client; nonexistent item 404, missing tag 400), returning `{mute, settled}` with additionally handled items. `DELETE /api/v1/inbox/mutes/{id}` unmutes.
+  Item `mutes` lists allowed mute targets, which the menu renders.
 
-- **管理者**（`assistant/inbox_mutes.go`）：静音存在设置 `inbox_mutes`（来源 + 标签 + 值 + 名字）。每次收集收件箱都把被覆盖的打开条目收掉，所以以后来的
-  新消息进来就直接是已处理。条目能按什么静音（`mutes`）：连接器条目来自它的 `InboxThing.Tags`（`repo`、`chat`、`sender`），飞书的是会话（`lark.feed_id`）
-  和群里最新发言的人（`lark.sender_id`），邮件的是发件人地址（小写）；飞书的云文档和公司圈条目没有。
-- **GitHub 的「静音的仓库」**：原来存在 GitHub 连接器的设置里（`muted_repos`），现在就是来源 `github`、标签 `repo` 的静音。管理者连上 hub 时
-  hub 把旧的搬过去（`inbox.repo_mutes` 加上）、从 GitHub 的设置里清掉；设置 › 连接器 › GitHub 的列表（和旧 App）照旧读写 `muted_repos`，
-  hub 在中间问管理者、换成静音，所以两处看到的是同一份。
+- **Manager** (`assistant/inbox_mutes.go`): mutes live in `inbox_mutes` settings (source + tag + value + name). Each collection handles covered open items, so future
+  messages arrive already done. Item mute targets (`mutes`): connector `InboxThing.Tags` (`repo`, `chat`, `sender`); Lark chat (`lark.feed_id`)
+  and latest group speaker (`lark.sender_id`); lowercase mail sender address. Lark Docs and Moments items have none.
+- **GitHub muted repositories**: formerly GitHub connector setting `muted_repos`, now source `github`, tag `repo` mutes. On manager connection,
+  hub migrates old entries through `inbox.repo_mutes` and clears them from GitHub settings. Settings › Connectors › GitHub (and old Apps) still read / write `muted_repos`;
+  hub translates through the manager, so both entry points share the same data.
 
-## 事件与处理链条（第一期，2026-11-05）
+## Events and handling chain (phase 1, 2026-11-05)
 
-需求见团队的设计说明「收件箱演进第一期」：现有的条目就是**事件**，一件事从消息进来、分拣、交给管理者处理，到出结果、你确认、执行，全在同一个条目上，
-过程按时间串成一条**处理链条**。只加不改：id、来源、已有字段和接口都不变；状态只多一个「进行中」。代码 `assistant/inbox_events.go`（链条、分区、关联）、
-`inbox_handling.go`（处理对话和建议的形状）。字段都是可选的，旧 hub 一个都不发（App 照旧按 `tier` 分区），旧 App 不认就不显示。
+Requirements are in the team's design description "Inbox evolution, phase 1." Existing items are **events**: arrival, triage, manager handling, result, user confirmation, and execution all happen on one item,
+with a chronological **handling chain**. Additive only: IDs, sources, existing fields / APIs unchanged; only a new Working state. Code: `assistant/inbox_events.go` (chain, sections, relationships),
+`inbox_handling.go` (handling chats and suggestion shape). All fields optional; old hubs send none (Apps keep sectioning by `tier`), and old Apps ignore them.
 
-**条目上多的字段**（列表、详情和所有回条目的接口都带）：
+**Added item fields** (included in lists, details, and all item-returning APIs):
 
-| 字段 | 是什么 |
+| Field | Meaning |
 | --- | --- |
-| `status` | 未处理的条目在哪个分区，管理者算的：`action` 需要你 · `working` 进行中（新，在需要你和知悉即可之间）· `fyi` 知悉即可 · `noise` 已折叠；已处理的不带。`tier` 意思不变，所以旧 App 把进行中的画在需要你里 |
-| `urgent` | 急事：分拣（`triage.md`、事件合成的 `group.md` 都多回一个 `urgent`）说有人在等、截止临近（只在 `action` 上）。急事在管理者准备建议的时候也留在「需要你」，卡上写「AI 正在准备建议」 |
-| `recap` | 管理者写的总结：背景、进展、卡在哪，纯文本，最多 600 字 |
-| `handling` | 这件事绑定的处理对话：`{owner: "manager", state, machine_id?, session_id?, since, error?}`，`state` 是 `looking`（AI 正在看）/ `agent`（它开的子会话在做）/ `waiting`（确认的动作已经发出，等对方回）/ `done`（这一轮做完：出了建议或结论）/ `failed`（失败、超时，退回需要你、不带建议） |
-| `suggestion` | 当前最多一条建议（见下「处理对话和建议」） |
-| `chain` | 处理链条，按时间从旧到新，最多最新 50 条 |
-| `related` | 跨原子的「有关」：`[{id, title, source}]`，点进去跳到那件，各走各的状态 |
+| `status` | Manager-derived section for unhandled items: `action` Needs you · `working` Working (new, between Needs you and FYI) · `fyi` FYI · `noise` Collapsed; absent when done. `tier` keeps its meaning, so old Apps show Working under Needs you |
+| `urgent` | Urgent: triage (`triage.md` and grouping `group.md` also return `urgent`) says someone is waiting or a deadline is near (action only). Urgent items stay in Needs you while the manager prepares advice, with "AI is preparing a suggestion" on the card |
+| `recap` | Manager-written summary: background, progress, blockers; plain text, up to 600 characters |
+| `handling` | Bound handling chat: `{owner: "manager", state, machine_id?, session_id?, since, error?}`; `state` is `looking` (AI reviewing) / `agent` (its sub-chat working) / `waiting` (confirmed action sent, awaiting response) / `done` (turn finished with suggestion or conclusion) / `failed` (failure / timeout, returns to Needs you without suggestion) |
+| `suggestion` | At most one current suggestion (see "Handling chats and suggestions") |
+| `chain` | Chronological handling chain, oldest first, latest 50 entries at most |
+| `related` | Cross-atomic relationships: `[{id, title, source}]`; tap to jump to that item, each retaining its own state |
 
-**分区怎么算**（`status()`）：已折叠的就是已折叠（噪音从不升级）；有回复 / Agent 的建议 → 需要你；处理对话在看 / 子会话在做 → 进行中（急事是需要你）；
-等对方回 → 进行中；失败 → 需要你；其余按 `tier`（知悉即可、需要你；没分拣的算需要你）。结论（`conclusion`）的建议按它定的档。
+**Section calculation** (`status()`): collapsed stays collapsed (noise never upgrades); reply / Agent suggestion → Needs you; handling chat reviewing / sub-chat working → Working (urgent stays Needs you);
+awaiting response → Working; failure → Needs you; otherwise `tier` (FYI / Needs you; untriaged counts as Needs you). A `conclusion` suggestion uses its chosen tier.
 
-**处理链条**：只记关键的调用，**全部由程序在发生的地方记**（不靠模型自己写，也不记调查过程），每条 `{id, at, kind, text, detail?, count?, sender?, messages?, link?, edited?}`，
-`text` 是管理者按用户的语言写好的一行，App 也可以按 `kind` 自己画。`link` 是点进去去哪：`{type: "source", position?}`（飞书：这件的会话、定位到那条）、
-`{type: "source", uid}`（邮件：这件里的那封）、`{type: "source", url}`（连接器、云文档：在 App 内打开）、`{type: "source"}`（这件自己的来源页）、
-`{type: "session", machine_id, session_id}`（那段对话 / 子会话）、`{type: "item", id}`（另一件）；没有 `link` 的点了就地展开 `detail` / `messages`。
+**Handling chain** records only key calls, **written by code where they occur**, not model-authored or investigative steps. Each entry is `{id, at, kind, text, detail?, count?, sender?, messages?, link?, edited?}`.
+`text` is a manager-written localized line; Apps may also render by `kind`. `link` is the tap destination: `{type: "source", position?}` (Lark: item's chat at that message),
+`{type: "source", uid}` (mail: that mail in the item), `{type: "source", url}` (connectors / Docs: in-App opening), `{type: "source"}` (item's source page),
+`{type: "session", machine_id, session_id}` (chat / sub-chat), `{type: "item", id}` (another item). Without `link`, tap expands `detail` / `messages` inline.
 
-| kind | 什么时候记 | 点进去 |
+| kind | Recorded when | Tap destination |
 | --- | --- | --- |
-| `received` | 这件事进来新消息，**一批一条**：「收到 3 条新消息 · 张三」（邮件「收到 2 封邮件 · …」），`count`、`sender`，`messages` 是这一批（最多 10 条、每条 200 字；飞书从插件的上下文行里读，读不出就不带，单条时用预览；邮件用每封的摘要）。对方的回复也记在这里。没归进这件的消息不记 | 这批第一条在来源里的位置：飞书第一批是 `start_position`，之后按会话里的序号算（新的条数往前数、不早于上一批最后一条），邮件是这批第一封的 uid，其它是来源页 |
-| `triaged` | 分拣：「分拣：需要你」「分拣：需要你（急）」，`detail` 是「档 · 理由」。重新分拣落在同一档（和同样急不急）不再记 | 就地展开 |
-| `handling` | 一段处理对话接手这件事（一段对话记一次） | 那段对话 |
-| `sent` | Persona 替你发出去了（`/reply`、确认的回复建议）：「发了飞书消息」「发了邮件」「发了评论」 | 飞书：会话最后（回复落在那里）；邮件：回的那封；其它：来源页 |
-| `agent` | 处理对话开了子会话：「开了子会话：<标题>」 | 那段子会话 |
-| `confirmed` / `rejected` / `instructed` | 你确认 / 驳回 / 说了一句话（`detail` 是执行的内容或你说的话，改过文字的 `edited: true`） | 就地展开 |
-| `self_replied` | 你直接在来源里回了（不经 Persona，比如在飞书里回了一句）：「你在飞书里回复了」，这件照旧算处理完（`done_by=replied`） | 来源页 |
-| `failed` | 处理失败 / 超时（`detail` 是原因） | 就地展开 |
-| `concluded` | 管理者的结论（`detail` 是结论） | 就地展开 |
-| `done` | 处理完：「你标了已处理」「你忽略了」「在别处看过了，已处理」「管理者看完，不用管」。**契约表之外加的一种**，App 不认识的 `kind` 按 `text` 画通用图标 | 就地展开 |
+| `received` | New messages enter this item, **one entry per batch**: "Received 3 messages · A contact" (mail: "Received 2 emails · …"), with `count`, `sender`; `messages` is this batch (up to 10, 200 characters each; Lark from plugin context lines, omitted if unreadable, preview for one message; mail uses summaries). Replies from others also go here. Messages outside this item are not recorded | First batch message's source position: Lark first batch `start_position`, later batches by chat sequence (count backward by new-message count, never earlier than previous batch's last message); mail first uid; others source page |
+| `triaged` | Triage: "Triaged: Needs you" / "Triaged: Needs you (urgent)," `detail` = tier · reason. Same-tier retriage with unchanged urgency is not recorded | Expand inline |
+| `handling` | A handling chat takes over this item (once per chat) | That chat |
+| `sent` | Persona sends on your behalf (`/reply`, confirmed reply suggestion): "Sent a Lark message" / "Sent an email" / "Posted a comment" | Lark chat tail (where reply lands); replied mail; others source page |
+| `agent` | Handling chat opens a sub-chat: "Opened sub-chat: <title>" | That sub-chat |
+| `confirmed` / `rejected` / `instructed` | You confirm / reject / say something (`detail` = executed content or your words; edited text has `edited: true`) | Expand inline |
+| `self_replied` | You reply directly at the source, outside Persona: "You replied in Lark"; item still becomes done (`done_by=replied`) | Source page |
+| `failed` | Handling fails / times out (`detail` = reason) | Expand inline |
+| `concluded` | Manager conclusion (`detail` = conclusion) | Expand inline |
+| `done` | Handled: "You marked done" / "You ignored it" / "Read elsewhere; done" / "Manager reviewed; no action needed." **An added kind outside the contract table**; Apps render unknown kinds from `text` with a generic icon | Expand inline |
 
-- 存在条目的 JSON 里（`inbox_items.data`，不加表），编号 `c1`、`c2`… 一直往上数，超过 50 条丢最旧的。
-- **旧条目**（这一期之前存下的）没有链条：读出来时从已有字段补两条（`received`：开始时间、条数、发送人；分拣过的再加 `triaged`：档和理由），之后照常往后记。
-- AI 分身开关（`inbox.agent.enabled`）关着时也记：收到消息、分拣、你自己的回复、已处理都在。
+- Stored in item JSON (`inbox_items.data`, no new table), IDs `c1`, `c2`… increasing indefinitely; discard oldest beyond 50.
+- **Old items** (stored before this phase) have no chain. On read, backfill two entries from existing fields (`received`: start time, count, sender; if triaged, `triaged`: tier / reason), then append normally.
+- Record even with AI twin disabled (`inbox.agent.enabled`): arrivals, triage, your own replies, and done state remain.
 
-**事件怎么分**：
-- **原子**由来源给：连接器交的 `InboxThing.thread`（飞书一个会话、邮件一个线程、GitHub 一个 PR / issue）。
-- **噪音一个原子一件**（`foldNoise`）：事件合成里模型这一批新开的噪音都并进这个会话还开着的噪音事件，没有就合成一件新的；噪音事件不收模型分得更高的消息
-  （那些单开一件），所以噪音从不被按话题拆开、并到别的事里，也从不升级。
-- **知悉即可 / 需要你**照旧按话题拆（上面「事件合成」）。
-- **消息并进已有事件时跟那件事走**：那件事正在处理（`handling` 是 looking / agent / waiting，或有建议等你）时，新消息只记 `received`，档、标题、总结、急不急都不变，
-  也不再重新分拣（`TriagedAt` 直接跟上），交给它的处理对话去判断（下面「处理对话和建议」）。没在处理的照旧重新分拣。
-- **跨原子的「有关」**：第一期不合并，只记 `related`（两边都记，最多 10 件，同一个原子里的不算）。现在记的来源：连接器说这件是从另一件长出来的（`InboxThing.parent` 指向另一个来源 / 会话的条目），
-  以及处理对话交建议时写的 `related`（只认收件箱里有的条目）。
+**Event splitting**:
+- **Atomic threads** come from sources: connector `InboxThing.thread` (one Lark chat, mail thread, GitHub PR / issue).
+- **Noise stays one item per atomic thread** (`foldNoise`): all noise events newly created by the model in a grouping batch merge into that chat's open noise event, or one new noise event if absent. Noise events do not absorb higher-tier messages
+  (those create separate items), so noise is never split by topic, merged with other work, or upgraded.
+- **FYI / Needs you** still split by topic ("Event grouping" above).
+- **New messages follow the existing event**: while it is being handled (`handling` looking / agent / waiting, or a suggestion awaiting you), new messages record only `received`; tier, title, summary, urgency stay unchanged,
+  with no retriage (`TriagedAt` advances directly). Its handling chat decides what to do (below). Inactive items retriage as before.
+- **Cross-atomic related items**: phase 1 does not merge them, only records `related` on both sides, at most 10, excluding same-atomic-thread items. Currently populated when a connector says an item grew from another (`InboxThing.parent` points to an item in another source / chat),
+  and from `related` submitted by a handling chat with its suggestion (only existing Inbox items are accepted).
 
-## AI 分身：处理对话和建议（第一期起，2026-11-05）
+## AI twin: handling chats and suggestions (from phase 1, 2026-11-05)
 
-AI 分身演进成**处理对话**：开关（`inbox.agent.enabled`）开着时，每件「需要你」的事都交给管理者（不再由模型 2 筛一遍），**一件事一段对话**，
-绑定在这件事上（条目的 `handling`，对话的来源是 `inbox`、`origin_ref` 是这件的 id）。全在管理者后台跑，代码 `assistant/inbox_agent.go`（升级、开对话、清点）、
-`inbox_handle.go`（告诉对话、建议工具、确认接口）。会被别人看到的动作**只出建议**，你确认了程序才原样执行。开关关着：不升级、没有进行中、没有建议，链条照记。
+The AI twin becomes a **handling chat**. With `inbox.agent.enabled` on, every Needs you item goes to the manager (no longer filtered by model 2), **one chat per item**,
+bound to that item (`handling` on the item; chat source `inbox`, `origin_ref` = item ID). It runs in the manager background. Code: `assistant/inbox_agent.go` (promotion, chat creation, reconciliation),
+`inbox_handle.go` (chat notifications, suggestion tool, confirmation API). Actions visible to others **produce suggestions only**; code executes them verbatim after your confirmation. With the switch off: no promotion, Working state, or suggestions; chain recording continues.
 
-| 步骤 | 谁 | 做什么 |
+| Step | Who | Purpose |
 | --- | --- | --- |
-| 1 分拣 | `inbox.triage`（小模型） | 上面的分拣，多回 `urgent` |
-| 2 升级 | 程序 | 分拣成「需要你」、内容分拣过、最新一条在 `max_age_hours`（默认 24）内的：排队开处理对话，`handling.state = looking`（进行中，急事留在需要你）。要做的事取分拣的摘要和理由 |
-| 2′ 关联任务 | `inbox.judge`（小模型，只在有进行中的任务时） | 只用它的 `task_id`：这件事说的是哪个任务（[unified-entry.md](unified-entry.md)「消息卡关联任务」），它的 `handle` 不再管要不要处理 |
-| 3 处理 | `inbox.agent.launcher`（Claude Code 启动器，模型配置「Agents」那一类） | 无头 claude，在助手目录里跑；查清楚后调 MCP `inbox_suggest` 交建议和总结 |
+| 1 Triage | `inbox.triage` (small model) | Triage above, also returning `urgent` |
+| 2 Promote | Code | Triaged Needs you items with triaged content and latest message within `max_age_hours` (default 24) queue a handling chat; `handling.state = looking` (Working; urgent stays Needs you). The task comes from the triage summary and reason |
+| 2′ Link task | `inbox.judge` (small model, only when tasks are active) | Use only its `task_id`: which task the item concerns ([unified-entry.md](unified-entry.md), "Message cards link to tasks"). Its `handle` no longer decides whether to process the item |
+| 3 Handle | `inbox.agent.launcher` (Claude Code launcher, Agents category in model configuration) | Headless claude in the assistant directory; investigate, then submit a suggestion and recap through MCP `inbox_suggest` |
 
-- **新消息接着做，不重跑**：一件有处理对话的事来了新消息（对方回了、又补了一句），或你确认 / 驳回 / 说了一句话，程序把它**发进同一段对话**
-  （`sendToSession`，提示词 `prompts/inbox/handling/*.md`：新消息、已经发出、Agent 已经开了、交回去做、驳回、你说、处理完了），不另开、不重新判断；
-  正在处理的事并进来的新消息不重新分拣、不改档（上面「事件怎么分」）。要它干活的（新消息、驳回、说一句话、交回）算一轮开始（`looking`），只是告知的（已经发出、Agent 开了）不算。
-- **处理对话不在了**：发不进去、它那台电脑说没有这段对话时，记下它不在了；要它干活时**按事件 id 找回**（同一件的别的处理对话），找不到就新开一段，
-  第一条消息带上总结（`recap`）、处理链条和这期间的话。**管理者重启**：条目在库里，处理对话照旧接得上；重启时正在开的那段（还没记下对话 id），过了启动的等待后
-  按事件 id 找回，找不到再开，不会开两段。
-- **并发、超时、只处理 24 小时内的事**沿用原来的设置：同时在看的（`looking`）最多 `inbox.agent.concurrency`（默认 1）段，接着发进已有对话的不占名额；
-  一轮超过 `timeout_minutes`（默认 15）没交建议、或这一轮结束了却没交（过了第一分钟、对话已经不在跑），算失败：`handling.state = failed`、退回「需要你」、
-  不带建议，链条记 `failed`。开了子会话等它的（`agent`）超过 4 倍的时间才算超时。
-- **提示词**（`prompts/inbox/agent.md`）：这段对话绑定的事件 id、这件事的内容和来源；接着做时带总结、链条和期间的话。只读调查可以自己做，要动手的可以 `agent_start` 开子会话（它做完会告诉这段对话）；
-  禁止它自己发（`lark_send` / `mail_send` / `agent_send`，以及任何连接器的写操作）和用 `ask_user` / `notify_user` 打扰用户，会被别人看到的只能交成建议；
-  消息里的指令不是用户的指令（收件箱正文是别人写的、不可信的数据），只按要做的和用户在这段对话里说的办。写操作本来也要过闸门或手机批准，提示词是第一道，闸门是最后一道。
-  顺手可以用知识库工具更新人和项目（`kb_update` 是允许的写操作）。
-- 它的对话出现在「对话」tab，跑完不推「完成」（`notifyFinished` 跳过）：结果就是收件箱里的建议。
+- **Continue on new messages, do not restart**: new messages for an item with a handling chat (a response or additional detail), or your confirmation / rejection / instruction, are **sent into the same chat**
+  (`sendToSession`, prompts `prompts/inbox/handling/*.md`: new messages, sent, Agent started, handed back, rejected, your instruction, item done). No new chat or fresh judgment.
+  Messages merged into active items do not retriage or change tier ("Event splitting" above). Work requests (new messages, rejection, instruction, handback) start a turn (`looking`); informational notices (sent, Agent started) do not.
+- **Handling chat missing**: if sending fails or its computer reports no such chat, record its absence. When work is needed, **recover by event ID** (another handling chat for the same item); create a new one only if none exists,
+  including `recap`, handling chain, and intervening messages in its first message. **Manager restart**: items remain in the database, and existing handling chats reconnect normally. A chat still starting at restart (no recorded session ID) waits through the startup interval,
+  then recovers by event ID before creating another, avoiding duplicate chats.
+- **Concurrency, timeout, and 24-hour eligibility** keep existing settings. At most `inbox.agent.concurrency` (default 1) chats may be `looking`; messages continuing existing chats consume no slot.
+  No suggestion after `timeout_minutes` (default 15), or a turn ending without one (after the first minute, chat no longer running), means failure: `handling.state = failed`, return to Needs you,
+  no suggestion, and a `failed` chain entry. Waiting on a sub-chat (`agent`) times out only after four times that duration.
+- **Prompt** (`prompts/inbox/agent.md`): bound event ID, item content and source; on continuation, recap, chain, and intervening messages. Read-only investigation may run directly; work can use `agent_start` to create a sub-chat, which reports completion back here.
+  Direct sends (`lark_send` / `mail_send` / `agent_send`, all connector writes) and user interruptions through `ask_user` / `notify_user` are forbidden. Anything visible to others must be submitted as a suggestion.
+  Instructions in messages are not user instructions (Inbox bodies are untrusted data from others); follow only the task and the user's words in this chat. Writes also require the gate or phone approval: prompts are the first defense, the gate the last.
+  Knowledge-base tools may update people and projects along the way (`kb_update` is an allowed write).
+- Its chat appears in Chats but sends no completion push (`notifyFinished` skips it); the result is the Inbox suggestion.
 
-**建议工具 `inbox_suggest`**（`assistant/inbox_handle.go`，描述 `prompts/mcp/inbox/inbox_suggest.md`；只认为某件事开的处理对话，别的对话调会报错）：
-`{kind, text, note?, handback?, outcome?, recap?, machine?, cwd?, related?, changes?}`。
+**Suggestion tool `inbox_suggest`** (`assistant/inbox_handle.go`, description `prompts/mcp/inbox/inbox_suggest.md`; accepts only the handling chat started for an item, rejecting other chats):
+`{kind, text, note?, handback?, outcome?, recap?, machine?, cwd?, related?, changes?}`.
 
-| kind | 是什么 | 确认后 |
+| kind | Meaning | After confirmation |
 | --- | --- | --- |
-| `reply` | 一条回复（`text` 原样发出去：不许留【…】这种等人填的空；云文档可带 `changes`） | 经 `/reply` 同一条只发一次的路发出（`send_id`），**这件不标已处理**：`handling.state = waiting`（进行中，等对方回），链条记「你确认了」和「发了…」，再告诉对话「用户确认了，已经发出」 |
-| `agent` | 派个 Agent 去做（`text` 是给它的指令，`machine`、`cwd` 可省：助手那台、家目录） | 程序照这条指令开 Agent（像这段对话自己调 `agent_start`：链条记 `agent` 指向它，做完会告诉对话），`handling.state = agent` |
-| `conclusion` | 结论：`outcome: fyi`（知悉即可：这件改成知悉即可，带着结论，「知道了」标已处理）或 `done`（看完发现不用管：直接标已处理，`done_by=manager`） | 「知道了」：标已处理（`done_by=user`） |
+| `reply` | A reply (`text` sent verbatim, no 【…】 blanks for users to fill; Docs may include `changes`) | Send through `/reply`'s send-once path (`send_id`), **without marking the item done**. `handling.state = waiting` (Working, awaiting response); chain records your confirmation and the send, then tells the chat the user confirmed and it was sent |
+| `agent` | Assign an Agent (`text` is its instruction; optional `machine` / `cwd` default to assistant computer / home directory) | Code starts an Agent with that instruction (like the chat calling `agent_start`: `agent` chain entry links to it; completion reports back), `handling.state = agent` |
+| `conclusion` | Conclusion: `outcome: fyi` (move to FYI with the conclusion; OK marks done) or `done` (review found no action needed; immediately done, `done_by=manager`) | OK marks done (`done_by=user`) |
 
-- `handback: true`：要你拿主意的建议（「先问张三再回客户」）：确认后什么都不执行，作为指示交回处理对话，由它去做（过程照常进链条）。
-- 只给 `recap`（不给 `kind`）只更新总结（比如发出去之后）。`recap` 最多 600 字。`related` 是别的会话 / 别的来源里有关的条目 id，两边都记。
-- 每交一条，版本号（`suggestion.version`）加一，旧的作废；出了建议 `handling.state = done`。链条记「管理者建议回复 / 建议派个 Agent / 给了建议，等你拿主意」（`handling`，指向处理对话），结论记 `concluded`。
-- 旧名 `inbox_draft`（只交回复）照旧能用，等于 `kind: reply`：工具列表变之前开的对话还认它。
-- **和任务有关的事**：关联了任务的（2′），提示词带上这个任务的进度；交了回复建议时往开这个任务的那段对话里插一张消息卡（`message` 条目，发出去后卡片上记着已发送）。
+- `handback: true`: a suggestion requiring your judgment ("Ask a colleague before replying to the client"). Confirmation executes nothing; hand it back to the handling chat as instructions to act, with the normal chain recording.
+- `recap` alone, without `kind`, updates only the summary (for example after a send), up to 600 characters. `related` contains IDs of related Inbox items from other chats / sources, recorded on both sides.
+- Each submission increments `suggestion.version` and invalidates the old suggestion; producing a suggestion sets `handling.state = done`. Chain records "Manager suggests a reply / an Agent / advice awaiting your decision" (`handling`, linked to the handling chat); conclusions record `concluded`.
+- Old `inbox_draft` (reply only) remains supported, equivalent to `kind: reply`, for chats started before the tool list changed.
+- **Task-related items**: for linked tasks (2′), prompts include task progress; a reply suggestion inserts a message card into the chat that started the task (`message`, retaining sent state after sending).
 
-**确认接口** `POST /api/v1/inbox/{id}/suggestion`：`{version, action, text?, client_id?}`，`action` 是 `confirm` / `reject` / `instruct`。
+**Confirmation API** `POST /api/v1/inbox/{id}/suggestion`: `{version, action, text?, client_id?}`, `action` = `confirm` / `reject` / `instruct`.
 
-- `confirm`：照显示的原样执行；带 `text` 就用它代替建议的文字（修改 = 改完再确认，链条记 `edited: true`，对话知道改成了什么）。
-- `reject`：链条记「你驳回了」，建议清掉，交回处理对话重新想。`instruct`：要 `text`（说一句话「别这么回，先问时间」，没有 400），链条记「你说：…」，建议清掉，交回处理对话，它重新出建议。
-- 回答：`200` 这件 · `409 {"code":"suggestion_stale","error":"建议已更新","item":{…}}`（`version` 不是当前的，或已经没有建议：App 提示「建议已更新」并按带回的这件重画；
-  同一条建议点两次，第二次也是这个）· `409 inbox_item_done` · `400` · `403`：只能作答的设备（手表）只能确认回复或结论、以文字（不能开 Agent、交回、驳回、说一句话、改文档状态、发 `/agent …`；
-  hub 把这条路由放进手表能调的范围，具体能不能由管理者按建议判断）· `502 assistant_in_doubt`（同 `/reply`：可能已经发出去，再确认是 409）· 其它 502。
-- **执行失败**（发送失败、超时、Agent 没开起来）：`handling.state = failed`，退回「需要你」、不带建议，链条记 `failed`（「发送没有成功」）。
-- **自己发的不算你回的**：确认的回复发出去后，飞书插件下一轮会说这个会话最新一条是我发的（`done: replied`）。只要这件还在等对方回、之后没有新消息（`last` 没变），
-  就当成 Persona 自己发的，不归档、不记「你在飞书里回复了」；对方回了以后你又在飞书里自己回了，照旧算处理完（`done_by=replied`），记「你在飞书里回复了」，
-  正在处理它的对话被告知停下。（第一期分不清的情况：发出去以后、对方回之前你又在飞书里补了一句，这一句也被当成 Persona 发的那条。）
-- **标了已处理 / 忽略 / 旧 App 点了「发送」**（`/reply` 照旧标已处理）：建议清掉，正在处理（或有建议等你）的对话被告知这件事处理完了，停下。
+- `confirm`: execute exactly what is shown; supplied `text` replaces suggestion text (edit then confirm; chain `edited: true`, chat learns the changed text).
+- `reject`: record rejection, clear the suggestion, and return to the handling chat to reconsider. `instruct` requires `text` (such as "Do not reply this way; ask about timing first"; absent text returns 400), records your words, clears the suggestion, and asks the chat for a new one.
+- Responses: `200` item; `409 {"code":"suggestion_stale","error":"建议已更新","item":{…}}` ("Suggestion updated": version is no longer current or no suggestion exists; App shows the notice and redraws from the returned item,
+  including the second tap on the same suggestion); `409 inbox_item_done`; `400`; `403`: reply-only devices (Watch) may confirm only replies / conclusions, as text (no Agent creation, handback, rejection, instructions, document-status changes, or `/agent …` sends;
+  hub allows the route for Watch, while the manager checks the actual suggestion); `502 assistant_in_doubt` (as `/reply`: it may already have sent; confirming again gives 409); other 502 errors.
+- **Execution failure** (send fails / times out, Agent fails to start): `handling.state = failed`, return to Needs you without a suggestion; chain `failed` ("Send did not succeed").
+- **Persona's own sends are not your replies**: after a confirmed reply, the next Lark-plugin round reports the chat's latest message as yours (`done: replied`). While the item awaits the other person's response and no new messages arrived (`last` unchanged),
+  treat it as Persona's send: do not archive or record You replied in Lark. If the other person replies and you later reply in Lark yourself, mark done as usual (`done_by=replied`), record your reply,
+  and tell its active handling chat to stop. Phase 1 ambiguity: if you add another Lark message after sending but before the other person replies, it is also treated as Persona's send.
+- **Marked done / dismissed / Send in an old App** (`/reply` still marks done): clear the suggestion and tell an active or suggestion-waiting handling chat the item is done and to stop.
 
-**旧 App 兼容**：回复建议同时写进 `agent.draft` / `agent.note`（`agent.state = drafted`），旧 App 照旧显示「AI 分身草拟的回复」，点「发送」走 `/reply`（照旧标已处理）；
-处理中的 `agent.state = running`，失败 `failed`；别的建议（Agent、结论、交回）旧 App 不显示草稿（`skipped`）。以前存下的 AI 分身草稿列成版本 1 的回复建议（`handling.state = done`），
-新版 App 照样能确认。`/reply`、`/done`、`/draft` 不变。
+**Old-App compatibility**: reply suggestions also write `agent.draft` / `agent.note` (`agent.state = drafted`). Old Apps still show an AI twin draft, whose Send uses `/reply` and marks done as before.
+Processing uses `agent.state = running`, failure `failed`; other suggestions (Agent, conclusion, handback) show no draft on old Apps (`skipped`). Previously stored AI twin drafts become version-1 reply suggestions (`handling.state = done`),
+confirmable in new Apps. `/reply`, `/done`, `/draft` unchanged.
 
-- 本地验证模型 1：`JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` 跑 `TestInboxModelsLive`
-  （在管理者的包里：`go test -run InboxModelsLive ./internal/assistant`，在 hub 机器上跑，key 文件在那台机器上）。
+- Local model 1 verification: `JARVIS_LIVE_AI='{"base_url":"…","api_key_file":"…","model":"…"}'` runs `TestInboxModelsLive`
+  in the manager package: `go test -run InboxModelsLive ./internal/assistant`, on the hub machine, with the key file there.
 
-## 线索：父子关系（#2128）
+## Relationships: parents and children (#2128)
 
-一件事可以挂在一个「上级」下面（条目的 `parent: {kind, id, by}`），这样从一个会话里来、变成待办、又交给几个 Agent 的事能连成一条线。
-上级是另一件收件箱条目（`inbox`）、一个待办（`todo`）或一个 Agent 会话（`session`，id 是 `<机器>/<会话>`）。Persona 只存、只列、只跳转，不自己猜上级；
-待办那边不另存一棵树。代码 `assistant/inbox_parent.go`。
+An item can have a parent (`parent: {kind, id, by}`), linking an item arriving from a chat, becoming a to-do, and going to several Agents into one thread.
+A parent is another Inbox item (`inbox`), a to-do (`todo`), or Agent session (`session`, ID `<machine>/<session>`). Persona stores, lists, and navigates only; it never guesses parents.
+To-dos do not store a separate tree. Code: `assistant/inbox_parent.go`.
 
-- **从哪来**（`by`）：事件合成里接着上一件的新事件（`continues`）、连接器在 `InboxThing.parent` 里给的（`connector`）、用户自己设的（`user`）。
-  用户设的不会被自动来的盖掉；连接器给的盖得掉 `continues`，反过来不行。
-- **设置**：`PUT /api/v1/inbox/{id}/parent {kind, id}`，传 `null` 或 `{}` 去掉（没有 DELETE，免得和 `DELETE /api/v1/inbox/mutes/{id}` 撞）。
-  上级是条目时要存在（否则 404）、不能成环、往上最多 8 层（否则 409）；id 最长 256 个字符、不能有控制字符（400）。回改好的条目。
-- **读一条线**：`GET /api/v1/inbox/tree/{kind}/{id...}` 回 `{node, item?, ancestors, children}`：`ancestors` 从近到远（最后一个可以是没有条目的待办 / 会话，
-  或已经不在收件箱里的条目，这时没有 `item`），`children` 是直接挂在它下面的条目，按开始时间从早到晚。`kind` 可以是 `todo` / `session`，用来列一个待办或会话下面长出来的事。
-- 扩展的 token：读树要 `inbox.read`，改上级要 `inbox.write`（`extwire/scopes.go`）；手表调不了这两个接口。
-- 各端怎么画见下面「App」的「线索」（网页 `web/src/views/inbox/InboxLine.tsx`，只读，不提供改上级的入口）。
-- 测试：`inbox_parent_test.go`（`continues`、PUT 和去掉、层数、谁盖谁、树）。
+- **Origin** (`by`): a new event continuing an earlier one from grouping (`continues`), connector `InboxThing.parent` (`connector`), or user-set (`user`).
+  Automatic values never overwrite user values; connector values may overwrite `continues`, not vice versa.
+- **Set**: `PUT /api/v1/inbox/{id}/parent {kind, id}`; `null` or `{}` removes it (no DELETE, avoiding collision with `DELETE /api/v1/inbox/mutes/{id}`).
+  Item parents must exist (404 otherwise); no cycles, at most 8 ancestor levels (409 otherwise). IDs up to 256 characters, no control characters (400). Return updated item.
+- **Read a thread**: `GET /api/v1/inbox/tree/{kind}/{id...}` returns `{node, item?, ancestors, children}`. `ancestors` nearest first (last may be a to-do / session without an item,
+  or an item no longer in Inbox, with no `item`); `children` are direct child items, oldest start time first. `kind` may be `todo` / `session` to list items growing from it.
+- Extension tokens require `inbox.read` for trees, `inbox.write` for parent changes (`extwire/scopes.go`); Watch cannot call either API.
+- Client rendering: "Relationships" under "App" below (web `web/src/views/inbox/InboxLine.tsx`, read-only, no parent-edit entry).
+- Tests: `inbox_parent_test.go` (`continues`, PUT / removal, depth, precedence, trees).
 
-## 生命周期
+## Lifecycle
 
-- hub 后台采集（`server/internal/extmgr/inbox.go`，采到的交给管理者合成条目）：飞书实时事件来了 3 秒后采一次，这一轮只读飞书会话；每 2 分钟一轮再读文档通知、
-  公司圈和其它连接器（连接器自己的事件、改设置也触发这种轮）；邮件每 3 分钟。以前每个飞书事件都把这些全读一遍（#674）。下拉刷新
-  （`POST /api/v1/inbox/refresh`）立刻采全部。有变化就存库（`inbox_items`）并推 `{"type":"inbox"}`，App 再拉列表；插件连接器新起的条目分拣完才存、才推（「AI 分拣」）。
-- **已处理**只记在 Persona（`done_at`，`done_by=user`；忽略的是 `dismissed`，见「全部清理」），不回写飞书已读、不改邮件的已读。已处理的保留 3 天（列表底部可移回），
-  8 天后从库里删掉（期间用来挡住「飞书里一直未读」的旧消息重新冒出来）。
-- 在别处看过（飞书里读了、别的邮件客户端读了）：标 `read`；不是「需要你」的直接算处理完（`done_by=read`），「需要你」的留着，但未读数清零、不再标 @我 / @所有人（已经不是未读的 @ 了）。按规则分级的条目读过后按现在的规则重新分级，不再是「需要你」的也算处理完；
-  已经标了 `read` 还开着、但仍有未读数或规则分级过时的条目（规则改之前读的），下一轮整理一次（#798）。
-- 飞书里自己回复了（会话最新一条是我发的、在这件事之后）：算处理完（`done_by=replied`）。
-- 飞书采集读消息时不持锁：读的期间这件被标成已处理（手动或批量），读到的新消息另开一件，不并进已处理的那件（以前会被它吞掉、看不到，#1105）。
+- Hub background collection (`server/internal/extmgr/inbox.go`, delivering data to the manager for item composition): collect Lark chats 3 seconds after real-time Lark events; this round reads chats only. Every 2 minutes, also read document notifications,
+  Moments, and other connectors (their events / setting changes also trigger this full round); mail every 3 minutes. Previously every Lark event read all of them (#674). Pull-to-refresh
+  (`POST /api/v1/inbox/refresh`) collects everything immediately. Changes write `inbox_items` and push `{"type":"inbox"}`, prompting App refetch; new plugin-connector items store / push only after triage ("AI triage").
+- **Done** is recorded only in Persona (`done_at`, `done_by=user`; ignored items use `dismissed`, see "Clean up all"). It does not change Lark or mail read state. Done items remain listed for 3 days, reopenable at the bottom,
+  and are deleted from the database after 8 days (meanwhile preventing old still-unread Lark messages from resurfacing).
+- Read elsewhere (Lark / another mail client): mark `read`; non-Needs you items become done (`done_by=read`). Needs you remains open, but unread count becomes zero and me / everyone mention flags clear (no longer unread mentions). Rule-tiered items are retiered using current rules after reading; no longer Needs you means done.
+  Already-read open items with remaining unread count or stale rule tiers (read before a rule change) are reconciled next round (#798).
+- A reply by me in Lark (latest chat message is mine, newer than the item) handles it (`done_by=replied`).
+- Lark collection reads messages without holding a lock. If an item is marked done during the read (manually or in bulk), newly read messages create another item rather than merge into the done one (previously swallowed and invisible, #1105).
 
-## 全部标为已处理（2026-11-04，#1105）
+## Mark All as Done (2026-11-04, #1105)
 
-用户说的「全部已读」。收件箱的「已读」就是「已处理」：只记在 Persona，**不回写**飞书已读、邮件已读、GitHub 通知（和单件一样，见上面「生命周期」），所以批量也没有要同步、要重试的来源。
+The user's "Mark all read." Inbox read means done, recorded only in Persona, **not written back** to Lark, mail, or GitHub notifications, just like single items ("Lifecycle" above). Bulk handling therefore has no source sync / retry.
 
-- **入口**：这一节最早的入口「全部标为已处理」已经和「全部忽略」合成「全部清理」（#5114，见下一节），这里只留请求和撤销的规矩。范围 = 当前筛选和搜索下列表里**未处理**的条目；
-  等你的 Agent 不是收件箱条目（等的是回答，不是归档），不算；选了「Agent」筛选时不可点。没有未处理的时候不可点。
-- **一次请求**：`POST /api/v1/inbox/done`（`docs/protocol.md`），每件带列表里的 `version`。hub 在同一把锁里比版本再标：列出以后又有新消息并进来的那件不标、
-  留在收件箱（toast 说「N 件有新消息，留在收件箱」，App 再拉一次列表）；已处理的不改 `done_at`（幂等）；整批写一次库、推一次 `inbox`。
-  `version` 是 `Last`（最新一条的位置 / uid / 通知）的短哈希，分拣、在别处已读、标处理都不改它。
-- **撤销**：先改本地（角标、侧边栏的数立刻变），hub 回了以后 toast（全部清理是「已清理 N 件」）带「撤销」，5 秒内点了，用同一个接口把 `changed` 里那些移回。
-  选撤销而不是先确认：收件箱的「全部看过」「左滑已处理」一直是点了就生效，撤销更顺手。请求失败全部恢复并报错。
-- 「知悉即可 · 全部看过」「已折叠 · 全部清除」、Mac 多选后按 E 也走这个接口（以前逐件发请求），同样有撤销。
-- App 图标没有角标（只有 Tab 角标和侧边栏的数），所以不用另外更新。
-- iOS 的 toast 在新外壳里是一个不接触摸的窗口（`ToastWindow`）：带按钮的 toast 只在按钮附近接触摸，别处照样点到下面。
-- 测试：`inbox_bulk_test.go`（范围、版本变了不标、幂等、撤销、读消息期间被标处理的另开一件、并发）；`InboxBulkTests`；UI 测试 `InboxMarkAllTests`
-  （假 hub 在 `/mock/inbox_bulk` 记下每次请求）；网页 `inbox.test.ts`。
+- **Entry point**: the original Mark All as Done entry has been combined with Dismiss All into Clean up all (#5114, next section). This section retains only request / Undo rules. Scope = **unhandled** items in the current filtered / searched list.
+  Waiting Agents are not Inbox items (they await answers, not archiving), so excluded. Disabled with Agent filter or no unhandled items.
+- **One request**: `POST /api/v1/inbox/done` (`docs/protocol.md`), with each listed item's `version`. Hub checks versions and marks within one lock. Items with new messages merged after listing remain unhandled,
+  with toast "N items have new messages and remain in the Inbox," then App refetch. Already-done items do not change `done_at` (idempotent); one database write and one Inbox push for the batch.
+  `version` is a short hash of `Last` (latest message position / uid / notification), unchanged by triage, reading elsewhere, or marking done.
+- **Undo**: update locally first (badges and sidebar counts immediately), then show a toast ("Cleaned up N items" for Clean up all) with Undo after hub responds. Within 5 seconds, Undo reopens `changed` items through the same endpoint.
+  Undo rather than prior confirmation matches existing Mark All Seen / swipe-to-done behavior and is smoother. Failure restores everything and shows an error.
+- FYI · Mark All Seen, Collapsed · Clear All, and Mac multi-select E use this endpoint too (previously per-item requests), with Undo.
+- The App icon has no badge (only tabs / sidebar counts), so no separate update.
+- iOS new-shell toasts use a non-touch-intercepting window (`ToastWindow`). Button toasts intercept only near the button, leaving other touches to content below.
+- Tests: `inbox_bulk_test.go` (scope, changed-version skip, idempotence, Undo, new item when marked done during message read, concurrency), `InboxBulkTests`, UI `InboxMarkAllTests`
+  (mock `/mock/inbox_bulk` records every request), web `inbox.test.ts`.
 
-## 全部清理（2026-11-05，#2609；2026-11-06 合成一个，#5114）
+## Clean up all (2026-11-05, #2609; unified 2026-11-06, #5114)
 
-上面「全部标为已处理」的扩展：hub 能按筛选处理，客户端多的时候先确认。原来各端有「全部标为已处理」「全部忽略」两个入口，
-用户眼里是一个意思（这批我暂时不用管了，全部清掉），#5114 合成一个「全部清理」（en「Clean up all」，ja「すべて片付ける」）。
+Extends Mark All as Done above with hub-side filter handling and confirmation for large selections. Each client previously had Mark All as Done and Dismiss All,
+which users saw as one action: clear this batch they do not need to handle now. #5114 combines them into Clean up all (English "Clean up all", Japanese "すべて片付ける").
 
-- **按忽略记**：全部清理发 `action=dismiss`（`done_by=dismissed`），因为用户并没有真的处理这些事。两种记法唯一看得出的区别是线索里那一行
-  写「已忽略」还是「已处理」；没有统计、分拣或别的逻辑区分 `user` 和 `dismissed`，所以统一按忽略最不破坏。
-- **兼容**：hub 的 `/bulk` 照旧收 `done` 和 `dismiss`（已经发出去的 iOS / Mac / Android 版本还会发 `done`），各按原来的记法；
-  新客户端的全部清理只发 `dismiss`。分段的「全部看过」「全部清除」不变（`done`）。
+- **Record as dismissed**: Clean up all sends `action=dismiss` (`done_by=dismissed`), since the user did not actually handle these items. The only visible difference is the relationship-chain line
+  saying Dismissed rather than Done. No statistics, triage, or other logic distinguishes `user` from `dismissed`, so using dismissed is the least disruptive choice.
+- **Compatibility**: hub `/bulk` continues accepting `done` and `dismiss` from shipped iOS / Mac / Android clients, preserving their respective semantics.
+  New clients send only `dismiss` for Clean up all. Section Mark All Seen / Clear All remain `done`.
 
-- **忽略**是「这件不用我管」：和已处理一样只记在 Persona（`done_at`，`done_by=dismissed`），不回写来源、不是静音（同一会话以后的新消息照常进来，要不再进来用「静音」）。
-  副作用和单件已处理完全一样：整批写一次库、推一次 `inbox`（各端的列表、Tab 角标、侧边栏的数跟着变）；排着队的 AI 分身不再开始（只给未处理的开），
-  已经起好的草稿留在这件上，撤销以后还在。单件也能忽略：`POST /api/v1/inbox/{id}/done {done:true, dismiss:true}`。
-- **接口**：`POST /api/v1/inbox/bulk {action: done|dismiss|reopen, items?|ids?, filter?, as_of?}`（`docs/protocol.md`）。
-  客户端照旧带列表里每件的 `id` 和 `version`（这样搜索、Agent 之类只有客户端知道的筛选也准）；不给 ids 时给 `filter`（来源 / 账号 / 分段 / 类型）和 `as_of`。
-- **截止**：`GET /api/v1/inbox` 回 `as_of`（读出列表那一刻）。每件记下它装着现在这些内容是什么时候到 hub 的（`arrived_at`，第一次列出或存下的时刻；
-  `Last` 变了就重记，旧数据用 `updated_at` 补）。按筛选处理时，`arrived_at` 晚于 `as_of` 的（之后新进来的、之后又并进新消息的）都不动，回在 `skipped`（`reason=changed`）。
-  不用消息时间比：飞书 / 邮件的消息时间可能早于用户看列表的时刻，却在那之后才采到。
-- **撤销**：回答里的 `ids` 是这次改了的，`undo` 是 `{action:"reopen", ids}`，原样发回去就只移回这次改的。toast 上 5 秒的「撤销」就发它。
-- **确认**：10 件及以上先确认（「将清理 N 件（范围）。之后进来的新消息不受影响，完成后可以撤销。」），少的直接做、靠撤销。范围和件数是点的那一刻列表上的。
-- **入口**（各端只有一个）：网页筛选那一行右边的「全部清理」按钮（窄的时候隐藏），「⋯」里一项「全部清理」（下面写范围和件数）；
-  Android 顶栏「更多」的动作表里一项；iOS「更多」里一项（下面一行写范围和件数，如「全部 · 12 件」「飞书 · @我 · 3 件」「搜索「周报」 · 2 件」）；
-  Mac 工具栏一个按钮（悬停说范围），菜单栏「收件箱」菜单一项 ⇧⌘E（收件箱在前时）。Apple 端带当前筛选和搜索下未处理条目的 `items`（id + version），不用 `filter`；
-  分段的「全部看过」「全部清除」照旧走 `/done`。手表上收件箱只有单件已处理，不放这个入口。手表（只能作答的设备）调不了 `/bulk`，扩展要 `inbox.write`。
-- **旧 hub**：没有 `/bulk`（404 / 405）时退回 `/done`：旧接口没有忽略，全部清理在那里按已处理记（`done_by=user`），照样从列表里清掉；移回同样退回 `/done`。
-- 测试：`inbox_bulk_test.go`（`TestInboxBulkFilterAsOf`：截止之后的新条目和新消息不动、忽略、撤销只移回这次的；ids、单件忽略、坏请求），
-  `hub/devicetokens_test.go` `TestAnswerRoleOnlyWhatTheWatchDoes`（手表不行）、`hub/testdata/route_scopes.txt`（扩展要 `inbox.write`）；网页 `inbox.test.ts`；Android `InboxBulkTest`、`InboxRepositoryTest`、`InboxAssistantTransportTest`；
-  Apple `InboxBulkTests`（回包和 `undo`、旧 hub 退回、失败回滚、确认门槛）、UI 测试 `InboxMarkAllTests`（全部清理 + 撤销发回 `undo`，`MOCK_INBOX_EXTRA` 时看确认框）；hub 的 `TestInboxBulkOldClientsDoneAndDismiss` 钉住旧客户端的 `done` / `dismiss`。
+- **Dismiss** means "I do not need to handle this." Like done, Persona-only (`done_at`, `done_by=dismissed`), no source writes, not mute (later messages in the same chat still arrive; use Mute to stop them).
+  Side effects match single-item done: one batch write and Inbox push (lists, tab badges, sidebar counts update), queued AI twins do not start (only unhandled items qualify),
+  existing drafts remain on the item and survive Undo. Single dismiss: `POST /api/v1/inbox/{id}/done {done:true, dismiss:true}`.
+- **API**: `POST /api/v1/inbox/bulk {action: done|dismiss|reopen, items?|ids?, filter?, as_of?}` (`docs/protocol.md`).
+  Clients still pass each listed `id` / `version` (correct for client-only filters such as search / Agent); without IDs, supply `filter` (source / account / section / kind) and `as_of`.
+- **Cutoff**: `GET /api/v1/inbox` returns `as_of` (list-read time). Each item tracks when its current content reached hub (`arrived_at`, first listing / persistence;
+  reset when `Last` changes; old data backfills `updated_at`). Filter handling leaves items with `arrived_at` after `as_of` unchanged (new arrivals / merged new messages), returning them in `skipped`, `reason=changed`.
+  Do not compare message times: Lark / mail messages may predate list viewing but be collected afterward.
+- **Undo**: response `ids` are changed items; `undo` is `{action:"reopen", ids}`. Send it unchanged to reopen only those items. Toast's 5-second Undo sends this.
+- **Confirmation**: 10 or more items require confirmation ("Clean up N items (scope). New messages arriving later are unaffected; you can undo afterward."); fewer act directly with Undo. Scope / count are from the list at tap time.
+- **Entry points (one per client)**: web has Clean up all to the filter row's right (hidden at narrow widths), and one Clean up all item in ⋯ with scope / count below.
+  Android top-bar More has one item; iOS More has one item with scope / count below ("All · 12 items", "Lark · Mentions · 3 items", "Search ‘weekly report’ · 2 items").
+  Mac has one toolbar button (scope on hover) and one Inbox-menu item, ⇧⌘E while Inbox is active. Apple passes `items` (ID + version) for current filtered / searched unhandled items, not `filter`.
+  Section Mark All Seen / Clear All still use `/done`. Watch has only single-item done, no bulk entry, and reply-only devices cannot call `/bulk`; extensions need `inbox.write`.
+- **Old hubs**: without `/bulk` (404 / 405), fall back to `/done`. It lacks dismiss, so Clean up all records done (`done_by=user`), still removing items from the list. Reopen also falls back to `/done`.
+- Tests: `inbox_bulk_test.go` (`TestInboxBulkFilterAsOf`: post-cutoff items / messages unchanged, dismiss, Undo only changed items; IDs, single dismiss, bad requests),
+  `hub/devicetokens_test.go` `TestAnswerRoleOnlyWhatTheWatchDoes` (Watch blocked), `hub/testdata/route_scopes.txt` (`inbox.write` required); web `inbox.test.ts`; Android `InboxBulkTest`, `InboxRepositoryTest`, `InboxAssistantTransportTest`;
+  Apple `InboxBulkTests` (responses / `undo`, old-hub fallback, failure rollback, confirmation threshold), UI `InboxMarkAllTests` (Clean up all + returned Undo; confirmation with `MOCK_INBOX_EXTRA`); hub `TestInboxBulkOldClientsDoneAndDismiss` guards old clients' `done` / `dismiss`.
 
 ## App
 
-- `InboxStore`（`Persona/App/InboxStore.swift`）：列表存在本地（`inbox-items`），冷启动先画缓存；`inbox` 事件、重连、进入页面时拉。
-  标已处理先改本地再发请求，失败恢复。Tab 角标 = 未处理里「需要你」的件数。
-- 页面（`Persona/Views/Inbox/InboxView.swift`）：顶部一行筛选（全部 / 飞书 / 每个邮箱 | @我 / 私聊 / 群聊 / 邮件），搜索标题、发件人、
-  内容、摘要。分段：需要你（展开）、进行中（一直展开、标题点不了，收件箱第一期；hub 给了 `status` 才有，老 hub 照 `tier` 分、没有这一段；不算进角标和手表的「需要你」，急事是 `status: action`，照算）、知悉即可（展开，标题右边「全部看过」）、已折叠（收起，「全部清除」），最后是已处理（收起）；
-  段标题点一下展开 / 收起。行：头像 40（右下角 18pt 来源小标：飞书蓝，邮件中性灰）、标题（headline）+ 类型标签（`Chip`，@我 红色）、时间；
-  有摘要时第二行是 ✦ 摘要、第三行小字「发件人：内容」（次要灰，不用 tertiary），没分拣时直接是「发件人：内容」；件数（普通是灰底，@我 是主色底）。
-  分隔线从文字列开始（16 + 40 + 12）。飞书头像的色板不用红和橙，免得像「需要你」。左滑到底 = 已处理。「更多」里「全部清理」（见上面「全部清理」）。
-- **等你的 Agent 也在「需要你」**：待处理的交互（提问、计划审批、授权、终端等你，包括助手的 ask_user；免打扰的除外）排在「需要你」最前面
-  （`InboxAgentRow`：和机器页会话行一样的圆角方块，红色浅底上是请求类型的图标；标题是哪个 Agent，第二行是它问什么，
-  第三行是红字的「Claude 在问你 / 计划等你审批」+ 机器。类型标签不跟在标题后面，标题能占满整行），点开跳到那个 Agent 的对话（助手的在「对话」tab）。只在 App 端合并，
-  hub 的收件箱不存它们；Agents tab 照旧。筛选里的「Agent」只看它们；选了某个来源时不显示。
-- 点开：飞书会话停在这件事的第一条新消息（`LarkChatView`，focus = start_position），邮件打开最新一封；右上角「已处理」。
-  看过的飞书消息按可见即读上报飞书已读，从收件箱打开时的第一屏也算（2026-10-31 用户确认，门禁见 `docs/redesign/ux.md` 3.5 / 3.6）；「已处理」只记在 Persona，不回写飞书。
-  导航栏下面是操作条（`InboxActionBar`）：✦ 摘要 +「AI 草拟回复」「交给 AI」。
-  摘要下面是「线索」（#3071，同网页 #2352，`Persona/Views/Inbox/InboxLine.swift`）：打开时读 `GET /api/v1/inbox/tree/inbox/{id}`，
-  先列这件事挂在哪里（上级链，远的在上：待办 / Agent 会话 / 事件），再列从它长出来的「下一步」；点一行跳过去：事件在当前栈里推进去，
-  待办弹出待办详情，Agent 会话跳到它的对话。上级已经不在收件箱里的那行写「已不在收件箱里」、点不了；既没上级也没下一步、或老 hub 没有这个接口时什么都不画。
-  Mac 放在右侧操作栏的摘要下面（`MacInboxActions`），点事件在详情栏自己的栈里推进去（返回回到原来那件）。
-- **事件（收件箱第一期，iOS / Mac）**：模型在 `Shared/InboxEvents.swift`（`handling`、`suggestion`、`chain`、`related`，链条逐条宽松解码，
-  不认识的 `kind` 照 `text` 画、通用图标）。条目带了这几个字段之一（或 `recap`）才算事件（`isEvent`），否则行和详情一像素不变。
-  - 行：有建议时摘要下面一行写建议的类型 + 第一行（建议回复 / 建议派 Agent / 结论 / 要你拿主意），代替原来的「AI 分身草拟的回复」卡片（hub 把回复建议镜像进 `agent.draft`，不重复画）；
-    进行中写处理状态（AI 正在看 / Agent 在做 / 等对方回复）；急事还没有建议时写「AI 正在准备建议」；失败写「AI 处理失败」（`InboxEventText.mark`）。
-  - iPhone 详情是一页（`InboxEventPage`）：✦ 摘要 +「看原文」、状态、总结、建议卡片（按钮紧跟：回复 发送 · 修改 · 驳回；Agent 开始 · 修改 · 驳回；
-    结论 知道了 · 驳回；要判断的 确认 · 修改 · 驳回）、处理链条、线索、有关，最下面「AI 草拟回复」（已有回复建议时不出）「交给 AI」。
-    原来的来源页（飞书会话、邮件、插件画的）在「看原文」和链条的「收到消息」后面（`InboxSourceRoute` → `InboxSourcePage`，飞书停在链接的 position，邮件打开链接的 uid）。
-  - Mac 不另开一页：来源照旧在左边，右侧操作栏（`MacInboxActions`）的摘要下面依次是状态、总结、建议卡片、处理链条、有关；
-    链条里只指向来源本身的那条不再跳（来源就在旁边），带 position / uid 的在详情栏自己的栈里推进去。窄到只剩上方横条时总结只留三行。
-  - 修改（`InboxSuggestionEditor`）：改文字后点发送 / 开始 / 确认 = `confirm` 带 `text`（没改不带）；下面「说一句话」+「告诉 AI」= `instruct`。
-    每次一个 `client_id`，带卡片上显示的 `version`；`409 suggestion_stale` 时卡片上写「建议已更新」并用回包里的条目重画（编辑浮层关掉），失败留在浮层里能再试（`InboxSuggestionModel`）。
-  - 处理链条默认只显示最新一条，「展开全部（N）」看全部（旧的在上）；每行 时间 · 按类型的图标 · 文字。点了按 `link` 走（`InboxChainTarget`）：
-    来源 → 来源页；`session` → 那段对话（管理者处理的那段在助手里打开，子会话照 Agent 打开）；`item` → 那件事；没有 link → 就地展开 `detail` / `messages`。
-    既能跳又有消息的（收到消息）右边单独一个展开箭头。
-  - 管理者自己归档的（`done_by: "manager"`）详情的状态处写「管理者处理了」；链条的 `done`（你标了已处理 / 管理者看完，不用管）用 ✓ 图标、点不了。
-    知悉即可的结论照常列在知悉即可里、带结论卡片，点「知道了」才归档。
-  - 手表不变：照旧用 `agent.draft`。
-  - 单元测试 `InboxEventsTests`（解码 `PersonaTests/Fixtures/inbox-events.json` 里每种状态的事件、分段、行的说法、链条去向、建议按钮对 FakeHub）。
-- DEBUG：`-tab mail`（打开收件箱）、`-openInboxFirst YES`（打开第一件未处理的）、`-openInboxItem <id>`（打开那一件）、`-showInboxAction draft|handoff`（再打开那个浮层）、
-  `-showInboxSuggestionEdit YES`（iPhone 事件页打开建议的修改浮层）。
-- **插件画的详情**（#1681，`docs/extensions.md`「收件箱条目」）：插件的连接器收进来的事（`source` 是那个连接器），插件贡献了这个连接器的 `inbox_item` 时，
-  详情的头部（标题、来源、已处理、✦ 摘要、AI 草拟回复 / 交给 AI）照旧，下面的正文换成插件按这一条画的 View（飞书插件按 meta 画一件事：涉及的人、时间跨度、接着哪件、消息链、回复、在会话里看）。
-  「在会话里看」回 `persona://inbox/<条目 id>/source`，App 打开这件事原来的来源页（飞书会话停在这件事的第一条）。
-  hub 把这一行的 `{id, title, summary, tier, reason, done, meta, extra}` 交给插件，`meta` 原样、不解析。没有这个插槽的来源、没有它的老 hub、只读设备、插件画不出来时，照旧画原来的正文。
-  网页已做（`docs/web.md`「设置」的「UI 插槽」）；iOS、Android 各自的 PR。
+- `InboxStore` (`Persona/App/InboxStore.swift`): list cached locally (`inbox-items`), shown before refresh on cold start; fetch on Inbox events, reconnect, page entry.
+  Mark done locally before request; restore on failure. Tab badge = unhandled Needs you count.
+- Page (`Persona/Views/Inbox/InboxView.swift`): top filters (All / Lark / each mail account | Mentions / Private / Groups / Mail); search titles, senders,
+  body, summary. Sections: Needs you (expanded), Working (always expanded, non-tappable heading, Inbox phase 1; present only with hub `status`, absent on older hubs using `tier`; excluded from badges and Watch Needs you, while urgent `status: action` still counts), FYI (expanded, Mark All Seen to the heading's right), Collapsed (collapsed, Clear All), then Done (collapsed).
+  Tap headings to expand / collapse. Row: 40-point avatar (18pt source badge at bottom right: Lark blue, mail neutral gray), title (headline) + type `Chip` (mentions red), time;
+  with summary, second line ✦ summary, third small "sender: content" (secondary gray, not tertiary); before triage, just "sender: content." Count badge (normally gray fill, primary-color fill for mentions).
+  Separator starts at text column (16 + 40 + 12). Lark avatar palette avoids red / orange that imply Needs you. Full left swipe = done. More contains Clean up all (see "Clean up all" above).
+- **Waiting Agents also appear under Needs you**: pending questions, plans, permissions, terminal prompts, including assistant `ask_user`, excluding muted Agents, sort first
+  (`InboxAgentRow`: rounded square like Machines session rows, request-type icon on light red fill; Agent title, question second line,
+  red "Claude is asking / Plan needs approval" + machine third line. No type chip after the title, which gets full width). Tap opens the Agent chat (assistant in Chats tab). Combined only in the App,
+  not stored by hub Inbox; Agents unchanged. Agent filter shows only these, while source filters hide them.
+- Opening: Lark chat at the item's first new message (`LarkChatView`, focus = start_position), mail at latest message; Done at top right.
+  Visible Lark messages are reported read, including the first screen opened from Inbox (confirmed 2026-10-31; gate in `docs/redesign/ux.md` 3.5 / 3.6). Done itself stays Persona-only.
+  Under navigation, `InboxActionBar`: ✦ summary + AI Draft Reply / Hand to AI.
+  Relationships below summary (#3071, matching web #2352; `Persona/Views/Inbox/InboxLine.swift`): fetch `GET /api/v1/inbox/tree/inbox/{id}` on open,
+  list parent chain first, distant ancestors above (to-do / Agent session / event), then child Next steps. Tapping an event pushes in the current stack,
+  a to-do opens details, an Agent opens its chat. Missing ancestor items show "No longer in Inbox" and cannot be tapped. No ancestors / children or old hub without API means nothing drawn.
+  Mac puts it below summary in the right action column (`MacInboxActions`); event taps push in the detail column's own stack, returning to the original item.
+- **Events (Inbox phase 1, iOS / Mac)**: models in `Shared/InboxEvents.swift` (`handling`, `suggestion`, `chain`, `related`, tolerant per-entry chain decoding;
+  unknown `kind` rendered from `text` with a generic icon). An item is an event (`isEvent`) only if it has one of these fields or `recap`; otherwise rows / details remain pixel-identical.
+  - Row: suggestions show their kind + first line below the summary (reply / Agent / conclusion / judgment needed), replacing the old AI twin draft card (hub mirrors replies into `agent.draft`; do not render twice).
+    Working shows handling state (AI reviewing / Agent working / awaiting reply); urgent items without suggestions show AI is preparing a suggestion; failures show "AI couldn't handle it" (`InboxEventText.mark`).
+  - iPhone details use one page (`InboxEventPage`): ✦ summary + View original, state, recap, suggestion card (adjacent buttons: reply Send · Edit · Reject; Agent Start · Edit · Reject;
+    conclusion OK · Reject; judgment Confirm · Edit · Reject), handling chain, relationships, related items, then AI Draft Reply (absent with a reply suggestion) and Hand to AI at the bottom.
+    Original source pages (Lark chat, mail, plugin-rendered) sit behind View original and Received messages chain entries (`InboxSourceRoute` → `InboxSourcePage`, Lark at link position, mail at link uid).
+  - Mac keeps the source on the left rather than opening a separate page. Below summary in right-side `MacInboxActions`: state, recap, suggestion card, chain, related items.
+    Chain entries linking only to the source do not navigate (already beside them); position / uid links push within the detail column's own stack. At narrow width with only the top action strip, recap keeps three lines.
+  - Edit (`InboxSuggestionEditor`): changing text then Send / Start / Confirm = `confirm` with `text` (omit if unchanged); Say something + Tell AI below = `instruct`.
+    One `client_id` per attempt, with the card's displayed `version`. `409 suggestion_stale` shows Suggestion updated and redraws from the returned item, closing the editor. Failure stays in the editor for retry (`InboxSuggestionModel`).
+  - Chain initially shows only the latest entry; Expand all (N) reveals all, oldest first. Each row: time · kind icon · text. Taps follow `link` (`InboxChainTarget`):
+    source → source page; `session` → chat (manager handling chat in assistant, sub-chat as Agent); `item` → that item; no link → inline `detail` / `messages`.
+    Entries with both navigation and messages (Received messages) have a separate expand arrow on the right.
+  - Manager-archived items (`done_by: "manager"`) show "Handled by the manager" in detail state. Chain `done` (user marked done / manager found no action needed) uses ✓ and is not tappable.
+    FYI conclusions remain under FYI with their card; OK archives them.
+  - Watch unchanged: uses `agent.draft` as before.
+  - Unit tests `InboxEventsTests` (decode every event state in `PersonaTests/Fixtures/inbox-events.json`, sections, row text, chain targets, suggestion buttons with FakeHub).
+- DEBUG: `-tab mail` (Inbox), `-openInboxFirst YES` (first unhandled item), `-openInboxItem <id>` (specific item), `-showInboxAction draft|handoff` (then that sheet),
+  `-showInboxSuggestionEdit YES` (suggestion editor on iPhone event page).
+- **Plugin-rendered details** (#1681; `docs/extensions.md`, "Inbox items"): for items from a plugin connector (`source` = connector) contributing `inbox_item`,
+  keep the header (title, source, Done, ✦ summary, AI Draft Reply / Hand to AI), replacing the body with the plugin's item View (Lark renders event meta: people, time span, continuation, message chain, reply, View in chat).
+  View in chat returns `persona://inbox/<item id>/source`; the App opens its original source page (Lark at the item's first message).
+  Hub passes `{id, title, summary, tier, reason, done, meta, extra}`; meta unchanged, unparsed. Sources without a slot, old hubs without it, read-only devices, and rendering failures keep the original body.
+  Web implemented (`docs/web.md`, "Settings," "UI slots"); iOS / Android in separate PRs.
 
-## 对一件事能做什么（`Persona/Views/Inbox/InboxActions.swift`）
+## Item actions (`Persona/Views/Inbox/InboxActions.swift`)
 
-- **AI 草拟回复**：`POST /api/v1/inbox/{id}/draft {instruction}`，管理者用「草拟回复」的模型按用户口吻起草（飞书口语、短；邮件按来信的语言和正式程度；
-  不知道的事实不编，也不留【】之类的占位符让用户补，不知道就不写；`assistant.notes` 作为「关于用户」附上）。浮层里可以直接改，也可以输入「让 AI 改：…」再重写。
-  「发送」走 `POST /api/v1/inbox/{id}/reply {text}`：管理者请 hub 在原会话发飞书消息（经接飞书的插件），或按回复发邮件（Re: 主题、In-Reply-To / References、
-  引用原文前 40 行，用收到它的账号），然后标为已处理（`done_by=replied`）。手机和手表都用这一个接口。
-  回复只回答发送时这件事里有的消息：发送期间又进来新消息（采集同时在跑，`last` 变了），这件事保持未处理，新消息不跟着归档（#1828）。
-  飞书的回复只发一次：手机、手表各点一次或超时重试，同样的文字只发一条（按件排队，`clientId` = UUIDv5(件 id + 文字)）；
-  上面那种留着没归档的，同样的文字重试也不再发。带了 `client_id` 的请求按各自的 id 算，换一个 id 就是另一条回复；网页和 Apple 还没传，
-  对刚进来的新消息回一模一样的文字会被当成重试。管理者给 hub 的发送编号（`send_id`，上面「发出去的只发一次」）也是这样算的
-  （有 `client_id` 用它，没有就是件 id + 文字 + 改动，不含 `last`），所以管理者重启以后的重试 hub 同样不再发。
-  飞书的回复发到对方看得到的地方（按 `lark.reply_to` / `lark.thread_kind`，采集时记下最后一条别人发的消息和它在不在话题里）：
-  私聊照旧发进会话；话题里的事（话题群的话题、普通群里的话题回复）回复那一条并落进它的话题（`replyMode:"thread"`）；
-  群里 @我 的事（不在话题里）引用那一条回复；其它群里的事照旧发进会话（不知道在回哪一条，引用反而奇怪）；旧数据没有 `reply_to` 也照旧发进会话。
-  话题群只采到最新一页的话题根（P-04 还没做），所以「最后一条别人发的」是最新的那个话题，不一定是有新回复的那个。
-- **交给 AI**：把这件事作为 `<jarvis-context kind="context" title="飞书 · 群名">`（hub 给的 `context` + feedId / 邮件 uid，方便它用工具读更多、
-  回复）加上「要它做什么」（默认「总结一下，告诉我要做什么，给出建议的回复」，另有两个预设）发出去：给 Persona 就新开一个对话（跳到「对话」），
-  给某个 Agent（最近 8 个）就发进它的会话（跳过去）。默认同时标为已处理。
-- **已处理**：行上左滑、详情右上角 ✓，或发送 / 交给 AI 时顺带。
+- **AI Draft Reply**: `POST /api/v1/inbox/{id}/draft {instruction}`. The manager uses the Draft reply model in the user's voice (Lark short and conversational; mail matches the incoming language and formality).
+  Do not invent unknown facts or leave 【】 placeholders for the user; omit unknown details. Include `assistant.notes` as About the user. Edit directly in the sheet or enter "Have AI revise: …" to rewrite.
+  Send uses `POST /api/v1/inbox/{id}/reply {text}`: the manager asks hub to post in the original Lark chat through its plugin, or reply by mail (Re: subject, In-Reply-To / References,
+  quote first 40 lines, using the receiving account), then mark done (`done_by=replied`). Phone and Watch use the same API.
+  A reply handles only messages present in the item when sending began. New messages arriving during sending (parallel collection changes `last`) leave the item unhandled; new messages are not archived with it (#1828).
+  Lark replies send once: phone / Watch taps or timeout retries send identical text only once (queued per item, `clientId` = UUIDv5(item ID + text)).
+  Retrying identical text for an item left unhandled above does not resend. Requests with `client_id` use their own IDs; a new ID is a new reply. Web / Apple do not pass it yet,
+  so identical replies to newly arrived messages are treated as retries. Manager `send_id` to hub ("Send once" above) is derived the same way
+  (use `client_id` if supplied, otherwise item ID + text + changes, not `last`), so retries after manager restart also do not resend.
+  Lark replies go where the other party can see them (`lark.reply_to` / `lark.thread_kind`, recording the last message by someone else and whether it is in a topic during collection):
+  private chats post normally; topic items (topic-group topics or topic replies in ordinary groups) reply to that message within its topic (`replyMode:"thread"`);
+  group mentions outside topics quote that message; other group items post normally (unclear reply targets would make quotes odd); legacy data without `reply_to` also posts normally.
+  Topic groups collect only the latest page of topic roots (P-04 unfinished), so the last message from someone else is the latest topic, not necessarily the one with new replies.
+- **Hand to AI**: attach the item as `<jarvis-context kind="context" title="Lark · Group name">` (hub `context` + feedId / mail uid, letting tools read more and
+  reply), plus the requested action (default "Summarize this, tell me what I need to do, and suggest a reply," with two other presets). Persona opens a new chat (switch to Chats);
+  an Agent (latest 8) receives it in its session (navigate there). Mark done simultaneously by default.
+- **Done**: row swipe-left, top-right ✓ in details, or alongside Send / Hand to AI.
 
-## 手表
+## Watch
 
-- 首页「需要你」= 等你的 Agent（原来的「等你处理」）+ 收件箱里 `action` 的事（`WatchInboxRow`：来源 / 类型、标题、AI 摘要）。
-  iPhone 推给手表的摘要里带最多 20 件（`WatchSummary.inbox`），手表打开时每 8 秒直接拉 `/api/v1/inbox`；新的一件来了震一下。
-- 点开（`WatchInboxItemView`）：摘要、最新一条；「AI 回复」先起草、显示出来，再点「发送」（`/reply`）；「已处理」。
-- DEBUG：手表 `-openInboxFirst YES` 打开第一件。
+- Home Needs you = waiting Agents (formerly Waiting for you) + Inbox `action` items (`WatchInboxRow`: source / kind, title, AI summary).
+  iPhone's Watch summary carries up to 20 items (`WatchSummary.inbox`); while open, Watch fetches `/api/v1/inbox` directly every 8 seconds. New items vibrate.
+- Open `WatchInboxItemView`: summary, latest message; AI reply drafts first and displays it, then Send (`/reply`); Done.
+- DEBUG: Watch `-openInboxFirst YES` opens the first item.

@@ -1,12 +1,12 @@
-# 经验：模型的显示名称与原始 ID
+# Lessons: model display names and raw IDs
 
-## 友好名称不能反向进入请求（#2201）
+## Friendly names must never flow back into requests (#2201)
 
-- 输入框和模型选择项共用显示 helper。只格式化 GPT ID 的名称部分，不维护一份猜测的型号目录；版本、变体及日期后缀都保留。
-- 列表的 `name` 与 `id` 不同（忽略大小写）时，视为显式别名并原样保留。空名称回退 ID；非 GPT 名称仍走原来的显示方式。
-- 列表关闭后也要保留已知的别名，但这是按机器 / 启动器限定的临时界面状态，不改模型选择和持久化配置。
-- 详情行是否需要再显示 ID，应继续比较原始 `name` 与 `id`，不能拿友好名称比较：否则单纯去前缀会让每个 GPT 项凭空多出第二行。
-- 搜索可同时匹配友好名和原始 ID；选择回调、请求、序列化仍使用原始 ID。隔离浏览器验证应同时检查菜单文字、关闭后的标签和拦截到的请求参数，不能只看 helper 的输出。
-- 改共享 helper 后也要跑依赖它的新建会话测试（#2302）：`AgentModel.label` 改了，会影响 `defaultModelDetail` 的兜底，即使新建页面本身没有改动。更新显示期望时，保留原始模型 ID 和 effort 的请求断言。
+- The input bar and model picker share a display helper. Format only the name portion of GPT IDs; do not maintain a guessed catalog of models. Preserve versions, variants, and date suffixes.
+- If a list item's `name` differs from its `id` (case-insensitive), treat it as an explicit alias and preserve it verbatim. An empty name falls back to the ID; non-GPT names keep their existing display behavior.
+- Preserve known aliases after the list closes, too. This is temporary UI state scoped to a machine / launcher; it does not change model selection or persisted configuration.
+- To decide whether a detail row needs to show the ID as well, keep comparing the raw `name` and `id`, not the friendly name. Otherwise, merely stripping a prefix creates an unnecessary second line for every GPT item.
+- Search may match both the friendly name and the raw ID; selection callbacks, requests, and serialization still use the raw ID. Isolated browser verification must check menu text, the label after closing the menu, and intercepted request parameters, not just the helper's output.
+- After changing a shared helper, also run the new-session tests that depend on it (#2302). Changes to `AgentModel.label` affect the fallback in `defaultModelDetail`, even if the new-session page itself is unchanged. When updating display expectations, retain request assertions for the raw model ID and effort.
 
-Android 的既有输入框没有模型列表 / 当前模型数据时，不为展示改动新建查询和选择流程；复用已经传入的会话模型，缺值保留原兜底。
+If Android's existing input bar has no model list / current-model data, do not add a new query and selection flow just for a display change. Reuse the session model already passed in, and preserve the existing fallback when it is missing.

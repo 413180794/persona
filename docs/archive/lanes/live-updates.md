@@ -1,248 +1,248 @@
-# 实时更新不打断用户操作（2026-10-31）
+# Live updates must not interrupt user actions (2026-10-31)
 
-用户：「还有个问题，是针对动态获取数据导致的刷新问题，用户状态可能被打断。比如 agents 里面点击更多，准备选择机器的时候，可能因为刷新，
-列表自动跳到顶部去了。用户在查看执行过程中的图的时候，也可能因为刷新了最新 agents 进展，图片被打断跳关闭了。这个重渲染也是有性能问题的吧。」
+User: "There is another issue with refreshes caused by dynamically fetched data: they can interrupt what the user is doing. For example, in Agents, I tap More and am about to choose a machine, but a refresh
+makes the list jump to the top. While viewing an image from the execution process, an update to the latest Agent progress can also interrupt it and close the image. This rerendering must have a performance cost too, right?"
 
-## 怎么测
+## Test method
 
-`LiveUpdateTests`（`docs/testing.md`）：mock hub 的 `/mock/churn` 按一个忙碌的 hub 连续推 12 轮更新，每轮 400 ms：
+`LiveUpdateTests` (`docs/testing.md`): the mock hub's `/mock/churn` simulates a busy hub, pushing 12 rounds of updates every 400 ms:
 
-- 各机器的会话列表：工作中的 Agent 换一句最新的话，两个轮流变成最新；
-- 机器列表：`last_seen` 变了；
-- 每个打开的对话加新步骤，每 4 轮夹一句话。
+- Each machine's session list: working Agents get a new latest message, with two taking turns as the most recent.
+- Machine list: `last_seen` changes.
+- Each open chat gains new steps, with a message every 4 rounds.
 
-每轮共 5 条推送。推的同时断言用户正在做的事没被打断。App 以 `-perfCounts YES` 启动，记录两样东西：
+Each round has 5 pushes total. Assertions check that ongoing user actions are not interrupted. The App launches with `-perfCounts YES` and records two things:
 
-- 各视图 body 被算了几次；
-- 每次推送到主线程空闲用了多久（同时发 os_signpost，Instruments 的 Points of Interest 能看到）。
+- How often each view's body is evaluated.
+- Time from each push until the main thread is idle (also emitted as os_signpost, visible in Instruments' Points of Interest).
 
-数字都是 Debug 构建、模拟器上的，看的是改前改后的比例。改前的数字用同一个测试和同样的计数，在 origin/master 上跑。
+All numbers are from a Debug build on a simulator; the focus is the before / after ratio. Before-fix numbers use the same test and counters on origin/master.
 
-## 结果
+## Results
 
-| 正在做的事 | 改前 | 改后 |
+| Ongoing action | Before | After |
 | --- | --- | --- |
-| ⋯ 菜单滚到机器那里开着 | 推送时菜单回到顶部（选项从 467 pt 跳到 807 pt） | 不动 |
-| 行的长按菜单开着 | 开着，但菜单内容每轮被重建约 100 次（是每一行的菜单） | 不重建 |
-| 过程里的截图全屏看着，Agent 继续干活到这一轮结束 | 新步骤一直来的时候还开着，**这一轮结束（最后一句回复到）时被关掉** | 一直开着 |
-| 过程卡展开着、列表滚到中间、搜索框里打字、行左滑出「关闭」 | 没打断 | 没打断 |
+| ⋯ menu open, scrolled to machines | Push resets the menu to the top (option jumps from 467 pt to 807 pt) | Stays put |
+| Row's long-press menu open | Stays open, but menu content is rebuilt about 100 times per round (across every row's menu) | No rebuild |
+| Viewing a process screenshot full-screen while the Agent keeps working until the turn ends | Stays open while new steps arrive, but **closes when the turn ends (the final reply arrives)** | Stays open throughout |
+| Process card expanded, list scrolled midway, typing in search, row swiped left to show Close | Not interrupted | Not interrupted |
 
-每轮推送的主线程耗时和 body 次数：
+Main-thread time and body evaluations per push round:
 
-| 情形 | 主线程 / 轮（改前 → 改后） | 每轮多算的 body（改前 → 改后） |
+| Scenario | Main thread / round (before → after) | Extra body evaluations per round (before → after) |
 | --- | --- | --- |
-| Agents 列表，长按菜单开着 | 157 → 45 ms | 列表 7 → 3，长按菜单内容 96 → 0，⋯ 菜单内容 7 → 0，筛选条 7 → 0，两个 tab 各 3 → 0 |
-| Agents 列表，滚到中间 | 194 → 76 ms | 长按菜单内容 185 → 0，其余同上 |
-| Agents 列表，搜索中 | 154 → 35 ms | 长按菜单内容 103 → 0，其余同上 |
-| 对话，过程卡展开 | 182 → 50 ms | 过程步骤 133 → 1.2，对话页 7 → 3.6，后面的 Agents 列表 7 → 3 |
-| 对话，全屏看图（每轮 6 步，最后这一轮结束） | 223 → 56 ms | 过程步骤 67 → 6，缩略图 8 → 0，对话页 8 → 4 |
+| Agents list, long-press menu open | 157 → 45 ms | List 7 → 3, long-press menu content 96 → 0, ⋯ menu content 7 → 0, filter bar 7 → 0, both tabs 3 → 0 each |
+| Agents list, scrolled midway | 194 → 76 ms | Long-press menu content 185 → 0, others as above |
+| Agents list, searching | 154 → 35 ms | Long-press menu content 103 → 0, others as above |
+| Chat, process card expanded | 182 → 50 ms | Process steps 133 → 1.2, chat page 7 → 3.6, Agents list behind it 7 → 3 |
+| Chat, image full-screen (6 steps per round, turn ends in the last round) | 223 → 56 ms | Process steps 67 → 6, thumbnails 8 → 0, chat page 8 → 4 |
 
-## 原因和改法
+## Causes and fixes
 
-- **⋯ 菜单回到顶部：** 菜单在 Agents 列表的工具栏里。列表每次推送都重算，工具栏跟着重新交给 UIKit，打开的菜单就被重新布局，滚动位置归零。
-  只让菜单内容不变不够：内容已经不重建了，菜单照样跳。
-  - 改成 `ChatsView` 只管导航、搜索框和工具栏，不读会话数据；列表是 `AgentsList`。
-  - 菜单要列的机器用 `AppModel.machineChoices`，只有名字、图标；只在增删机器或改名时变，每次推送的 `last_seen` 不算。
-  - 拆开后搜索框放在 `AgentsList` 上，紧跟筛选条，顺序和原来一样。`ChatsView` 的 body 要读一下 `searching`：
-    从搜索结果打开会话时，先关搜索、下一轮再推，这一步要连导航一起重算。不读的话，打开的对话又顶着系统导航栏，`SearchOpenTests` 会挂。
-- **长按菜单：** `.contextMenu` 的内容在列表每次重算时，对每一行都算一遍。改成 `AgentRowMenu`，只要它显示的东西（置顶、屏蔽、循环、在线）没变就算相等。
-  菜单项要用的「当前会话」到点的时候再取。空间标题的 ⋯ 同理（`SpaceHeaderMenu`）。
-- **看图被关掉：** 全屏查看器原来是被点的那张缩略图自己弹出来的。
-  - 缩略图在懒加载列表的一行里。这一轮继续往下走时，列表跟到最新一步、丢掉离得远的行；一轮结束时工作行会重新排，行也会重建。行一没，查看器跟着关。
-  - 改成由对话页弹（环境值 `viewImages`），缩放转场的来源按图片区分。
-  - 用户消息里的图（`SentPhotos`、`AttachedImages`）同样处理。
-  - 工具行的展开状态原来也在行里（`ToolCallRow.expanded`），行重建就收起：改成存在页面上（`openTools`），和过程卡的 `openWork` 一样。
-- **过程步骤每次推送都全部重算：** 对话页用 `.environment(\.openFile) { … }` 这类写法往下传动作，每次重算都是新的闭包。
-  SwiftUI 判断不出它没变，读了这些环境值的每一行都跟着重算。改成每个对话页只建一次的 `ChatActions`，它的闭包转调这一次渲染设好的处理。
-- **一个会话的页面跟着所有会话重算：** `model.session(key)` 原来读整张索引，任何一台机器的列表来了都算变化。
-  改成每个会话一个可观察的格子（`SessionCell`），只在那个会话真的变了时通知。
-- `machines` 推来相同的列表不再赋值。
+- **⋯ menu resets to the top:** the menu is in the Agents list toolbar. Every push reevaluates the list, resubmitting its toolbar to UIKit; the open menu is laid out again and its scroll position resets.
+  Keeping menu content unchanged is not enough: even after content stopped rebuilding, the menu still jumped.
+  - `ChatsView` now handles only navigation, search, and the toolbar, without reading session data. The list is `AgentsList`.
+  - The menu's machines use `AppModel.machineChoices`, containing only names and icons. It changes only when machines are added, removed, or renamed; pushed `last_seen` changes do not count.
+  - After the split, search sits on `AgentsList`, immediately after the filter bar, preserving the original order. `ChatsView`'s body must read `searching`:
+    opening a chat from search results closes search first and pushes on the next cycle, so navigation must reevaluate too. Without that read, the opened chat retains the system navigation bar and `SearchOpenTests` fails.
+- **Long-press menus:** each list reevaluation evaluates `.contextMenu` content for every row. This is now `AgentRowMenu`, considered equal while its displayed values (pinned, muted, looping, online) are unchanged.
+  Menu actions fetch the "current session" when invoked. The space header's ⋯ works the same way (`SpaceHeaderMenu`).
+- **Image viewer closes:** the full-screen viewer was originally presented by the tapped thumbnail itself.
+  - The thumbnail lives in a lazy-list row. As the turn progresses, the list follows the latest step and drops distant rows; when the turn ends, work rows are reordered and rebuilt. Once the row disappears, so does its viewer.
+  - The chat page now presents the viewer (environment value `viewImages`), with zoom-transition sources distinguished per image.
+  - Images in user messages (`SentPhotos`, `AttachedImages`) use the same approach.
+  - Tool-row expansion also originally lived in the row (`ToolCallRow.expanded`), collapsing when rebuilt. It now lives on the page (`openTools`), like process-card `openWork`.
+- **All process steps reevaluate on every push:** the chat page passed actions down with patterns such as `.environment(\.openFile) { … }`, producing a new closure on each reevaluation.
+  SwiftUI cannot tell that it is unchanged, so every row reading these environment values reevaluates too. A `ChatActions` instance is now created once per chat page; its closures forward to the handlers set for the current render.
+- **One session's page reevaluates for all sessions:** `model.session(key)` originally read the entire index, so a session-list update from any machine counted as a change.
+  Each session now has an observable cell (`SessionCell`) that notifies only when that session actually changes.
+- Identical pushed `machines` lists are no longer assigned again.
 
-## 没改的
+## Unchanged
 
-- 滚到中间的列表、展开的过程卡、搜索、左滑，在这组推送下都没被打断，没动。
-- 置顶的「需要你处理」卡片新出现时，会把下面的内容往下推。它是要你马上处理的事，不攒着。
+- Lists scrolled midway, expanded process cards, search, and left swipes were not interrupted by these pushes and were left alone.
+- A newly pinned "Needs you" card pushes content below it downward. It needs immediate attention, so it is not buffered.
 
-## 又回来了（2026-11-01，TestFlight 70）
+## It came back (2026-11-01, TestFlight 70)
 
-用户：「好像昨天修的，机器切换的刷新问题，对话里面滚动时的刷新问题，又回来了」。
+User: "The machine-switch refresh issue and refreshes while scrolling in chats that we fixed yesterday seem to be back."
 
-### 为什么测试没抓住
+### Why tests missed it
 
-- 上面这组推送里只有会话列表、机器列表和对话的新步骤。真实的 hub 一整天还在推另外两样：
-  - 收件箱的变化（新的飞书消息）；
-  - 等你处理的事（某个 Agent 提问、另一个被答完）。
-- 读这两样的是「角标」：旧布局 tab 栏上 Agents、收件箱的数字，新外壳 ☰ 上的红点和「Agents」上的数字。mock 从来不推这两样，所以测试一直是绿的。
-- 新外壳（fd9c99e）是 iPhone 的默认布局，但所有 UI 测试都用 `-ui.oldLayout YES` 跑（`launchJarvis`），新外壳下这组测试一次没跑过。
+- The pushes above covered only session lists, machine lists, and new chat steps. A real hub pushes two other kinds all day:
+  - Inbox changes (new Lark messages).
+  - Pending interactions (one Agent asks a question, another gets answered).
+- "Badges" read these: the Agents and Inbox counts on the old tab bar, and the red dot on ☰ / count on "Agents" in the new shell. The mock never pushed either, so tests stayed green.
+- The new shell (fd9c99e) is the default iPhone layout, but all UI tests ran with `-ui.oldLayout YES` (`launchJarvis`). These tests had never run under the new shell.
 
-### 原因
+### Cause
 
-两种布局的原因相同：角标挂在装着页面的视图上，角标一变，页面或菜单跟着重建。
+Both layouts share the cause: badges live on the view containing the page, so a badge change rebuilds the page or menu.
 
-| 布局 | 谁读角标 | 角标一变 | 结果 |
+| Layout | Badge reader | On badge change | Result |
 | --- | --- | --- | --- |
-| 旧布局 | 每个 `Tab` | `Tab` 重算，把里面的页面重新建一遍：`ChatsView`、`AssistantView` 的 body 再跑一次（`Tab` 的内容不按值比较） | Agents 的工具栏重新交给 UIKit，⋯ 菜单回到顶部；开着的 Persona 对话整页重算（8 秒 27 次） |
-| 新外壳 | 两个顶栏的 body | 整条顶栏重算 | 「Agents」按钮就是机器菜单（`Menu`），数字在它的 label 上：数字一变 label 就变，开着的菜单重新布局、回到顶部；Persona 页的顶栏和「助手」菜单每次推送重建 |
+| Old layout | Each `Tab` | `Tab` reevaluates and recreates its page: `ChatsView` and `AssistantView` bodies run again (`Tab` content is not compared by value) | Agents toolbar is resubmitted to UIKit; ⋯ menu resets to the top. The open Persona chat reevaluates in full (27 times in 8 seconds) |
+| New shell | Bodies of both top bars | Entire top bar reevaluates | The "Agents" button is the machine menu (`Menu`), with the count in its label. A count change changes the label, relaying out the open menu and resetting it to the top. The Persona top bar and "Assistant" menu rebuild on every push |
 
-### 改法
+### Fix
 
-- 旧布局：`Tab` 里的页面包一层 `TabPage { … }.equatable()`。
-  - 页面不从 `Tab` 拿任何东西，所以 `Tab` 重算时不用再跑页面的 body。
-  - 页面自己读的状态、环境、模型照常让它更新。
-- 新外壳：
-  - 数字拆成单独的视图 `WaitingBadge`，自己读 `agentsWaiting`。它放在菜单旁边的 ZStack 里，不放在菜单的 label 上，所以 `ShellSwitch` 不再接收数字。
-  - ☰ 的红点改由 `ShellCircleButton(inboxDot: true)` 自己读收件箱，顶栏不再读。
-  - `AgentsTopBar` 改成 `Equatable`：`ChatsView` 每次重算都会给它一个新的闭包，现在不会因此重建它。
+- Old layout: wrap each `Tab` page in `TabPage { … }.equatable()`.
+  - The page takes nothing from `Tab`, so a `Tab` reevaluation need not rerun its body.
+  - State, environment, and models read by the page itself still update it normally.
+- New shell:
+  - Move the count into a separate `WaitingBadge` view that reads `agentsWaiting` itself. It sits beside the menu in a ZStack, not in the menu label, so `ShellSwitch` no longer receives the count.
+  - Make `ShellCircleButton(inboxDot: true)` read the Inbox for ☰'s red dot itself; the top bar no longer reads it.
+  - Make `AgentsTopBar` `Equatable`: each `ChatsView` reevaluation gives it a new closure, but that no longer rebuilds it.
 
-### 结果
+### Results
 
-测试：mock 的 `/mock/churn` 加了两个参数。
+Tests: the mock's `/mock/churn` gained two parameters.
 
-- `&inbox=1`：每轮改一条收件箱，「需要你」的数字隔轮变，并重推等你处理的事。`LiveUpdateTests` 每个用例都带。
-- `&waiting=1`：每轮多一个 Agent 等你、下一轮又答完，数字每轮变，列表顶上的卡片出现又消失。菜单用例带。
+- `&inbox=1`: change an Inbox item each round, vary the "Needs you" count every other round, and repush pending interactions. Every `LiveUpdateTests` case includes it.
+- `&waiting=1`: add an Agent waiting for you each round, then answer it the next round. The count changes every round, and the top card appears / disappears. Menu cases include it.
 
-这组测试现在两种布局都跑：设 `TEST_RUNNER_JARVIS_LAYOUT=shell` 时 `launchJarvis` 默认用新外壳。
+These tests now run with both layouts. With `TEST_RUNNER_JARVIS_LAYOUT=shell`, `launchJarvis` defaults to the new shell.
 
-下表的「改前」是 origin/master，测试是同一份。
+"Before" below is origin/master, using the same tests.
 
-| 情形 | 布局 | 改前 | 改后 |
+| Scenario | Layout | Before | After |
 | --- | --- | --- | --- |
-| ⋯ 菜单滚到机器那里开着，推 12 轮 | 新外壳 | 菜单回到顶部（469 → 809 pt），菜单内容每轮重建 1.1 次 | 不动，0 |
-| ⋯ 菜单滚到机器那里开着，推 12 轮 | 旧布局 | 菜单回到顶部（467 → 807 pt）；`ChatsView`、菜单内容每轮重建 2.5 次，主线程每轮 535 ms | 不动，0，121 ms |
-| Persona 对话开着，8 秒内推 14 轮 | 旧布局 | `AssistantView` / `ChatView` / 顶栏各 27 次，推送的主线程合计 158 ms | 页面和顶栏 0 次（`ChatView` 剩 9 次，是 mock 往这个对话里加的步骤），45 ms |
-| Persona 对话开着，8 秒内推 14 轮 | 新外壳 | 顶栏 40 次、`ShellSwitch`（里面是「助手」菜单）39 次，41 ms | 0，14 ms |
+| ⋯ menu open, scrolled to machines, 12 push rounds | New shell | Menu resets to top (469 → 809 pt); menu content rebuilds 1.1 times per round | Stays put, 0 |
+| ⋯ menu open, scrolled to machines, 12 push rounds | Old layout | Menu resets to top (467 → 807 pt); `ChatsView` and menu content rebuild 2.5 times per round; main thread 535 ms per round | Stays put, 0, 121 ms |
+| Persona chat open, 14 push rounds in 8 seconds | Old layout | `AssistantView` / `ChatView` / top bar each 27 times; total push main-thread time 158 ms | Page and top bar 0 (`ChatView` still 9, for steps the mock adds to this chat), 45 ms |
+| Persona chat open, 14 push rounds in 8 seconds | New shell | Top bar 40 times, `ShellSwitch` (containing the "Assistant" menu) 39 times, 41 ms | 0, 14 ms |
 
-### 没复现的
+### Not reproduced
 
-在新外壳里录了屏，逐帧看（`simctl io recordVideo`，自己写的 AVFoundation 拆帧）：
+Recorded the new shell and inspected frame by frame (`simctl io recordVideo`, frames extracted with custom AVFoundation code):
 
-- 带着这组推送选机器、切回全部机器：都没看到闪或跳；
-- Agent 对话、Persona 对话往上翻，停下后画面在推送下也完全不动。
+- Selecting a machine and switching back to all machines with these pushes showed no flicker or jumps.
+- Scrolling back in Agent and Persona chats, then stopping, left the view completely still under pushes.
 
-旧布局里对话页随角标整页重算，已经修掉。新外壳的对话页本身没有跟着角标重算，「滚动时刷新」在新外壳的 mock 上没有复现。如果修完还有，要连真实的 hub 录屏看。
+The old layout's whole-chat reevaluation from badges is fixed. The new shell's chat page itself did not reevaluate with badges, and "refreshes while scrolling" did not reproduce with the new-shell mock. If it persists after the fix, record against the real hub.
 
-### 测试本身的坑
+### Test pitfalls
 
-- 新外壳把两个页面都留着，不显示的那页仍在无障碍树里：「Agents」按钮、`chat.scrollState` 探针都会找到两个。
-  - 测试取能点的那个按钮；
-  - 探针的 label 末尾带上 `key=<机器>/<会话>`，按会话挑。
-- 菜单开着时，XCUITest 读 `perf.counts` 探针这一下，会让菜单自己回到顶部。所以要先量菜单的位置，再读计数。
+- The new shell keeps both pages mounted. The hidden page remains in the accessibility tree, yielding two "Agents" buttons and two `chat.scrollState` probes.
+  - Tests pick the tappable button.
+  - Probe labels end with `key=<machine>/<session>`, allowing selection by session.
+- While a menu is open, XCUITest reading the `perf.counts` probe itself resets the menu to the top. Measure menu position before reading counters.
 
-## 滚动时被迫刷新（2026-11-01，TestFlight 77）
+## Forced refreshes while scrolling (2026-11-01, TestFlight 77)
 
-用户：「滚动列表的被迫刷新，影响体验的」。TestFlight 77 已经带着上面「又回来了」的修复；那次在 mock 上没复现滚动中的问题，
-所以先去真实的 hub 上找。
+User: "Forced refreshes while scrolling the list hurt the experience." TestFlight 77 already included the "It came back" fixes above. Those tests had not reproduced the scrolling issue with the mock,
+so investigation started against the real hub.
 
-### 真实的 hub 推了什么
+### What the real hub pushed
 
-在 hub 前面挡了一个只读代理录推送：GET 照转；别的请求回 `{}`，不发出去；WebSocket 只往上转 subscribe、unsubscribe、pong。
-这样不改用户的任何状态，模拟器也不会登记成手机。录了 10 分钟，共 554 条：
+A read-only proxy in front of hub recorded pushes. GETs were forwarded; other requests returned `{}` without being sent; WebSocket forwarded only subscribe, unsubscribe, and pong upstream.
+This changed none of the user's state and did not register the simulator as a phone. A 10-minute recording contained 554 messages:
 
-| 推送 | 每分钟 | 说明 |
+| Push | Per minute | Notes |
 | --- | --- | --- |
-| `sessions` | 25.5 | 中位间隔 1.85 秒；每条都带新的 `rev` / `updated_at`；约五分之一换了最后一句 |
+| `sessions` | 25.5 | Median interval 1.85 seconds; each carries new `rev` / `updated_at`; about one fifth change the last message |
 | `revs` | 15.6 | |
 | `fleet` | 6.9 | |
 | `lark` | 5.7 | |
-| `hook_event`、`inbox` | 各约 0.7 | |
-| `machines` | 0.1 | 10 分钟只有连上时那 1 条 |
+| `hook_event`, `inbox` | About 0.7 each | |
+| `machines` | 0.1 | Only the initial connection message in 10 minutes |
 
-Agents 列表按「状态 + 最近一次更新」排空间。拿录下的 255 条 `sessions` 按 App 的规则排一遍，93 条（36%）让空间换了位置。
+The Agents list orders spaces by "state + last update." Applying the App's ordering rules to the 255 recorded `sessions` messages, 93 (36%) changed space positions.
 
-### 怎么量
+### Measurement
 
-- App 以 `-perfCounts YES` 启动时，`PerfScroll` 逐帧看正在拖、正在滑的滚动视图（`docs/testing.md`「滚动中推送」）。
-  - 记下几类异常：整体跳开、行被换掉重画、行之间相对挪动、惯性被打断。
-  - 每次异常记到它前 0.6 秒内到达的那类推送上。
-- 真实数据上，五个列表各拖、甩 60 秒：Agents 列表、Agent 对话、Persona 对话、知识库、机器页。
-  同一份数据先开着推送跑一遍，再让代理扣住推送跑一遍（只放行打开的对话的新步骤）。两遍的差别才是推送造成的。
-- 小于 100 pt 的跳动两遍都有，是懒加载的行自己定高、UI 测试合成的拖动带来的，不算。
+- With the App launched using `-perfCounts YES`, `PerfScroll` inspects dragging / decelerating scroll views frame by frame (`docs/testing.md`, "Pushes during scrolling").
+  - It records several anomalies: whole-content jumps, replaced / redrawn rows, relative movement between rows, and interrupted inertia.
+  - Each anomaly is attributed to the push type received within the preceding 0.6 seconds.
+- On real data, drag and flick each of five lists for 60 seconds: Agents list, Agent chat, Persona chat, knowledge base, Machines page.
+  Run once with pushes enabled, then again with the proxy holding pushes (allowing only new steps in the open chat). Only the difference is caused by pushes.
+- Jumps under 100 pt occur in both runs, caused by lazy rows determining their heights and UI-test-generated drags; they do not count.
 
-改前，真实 hub，新外壳：
+Before the fix, real hub, new shell:
 
-| 列表 | 开着推送 | 扣住推送 |
+| List | Pushes enabled | Pushes held |
 | --- | --- | --- |
-| Agents 列表 | 跳开最大 558 pt，5 次屏幕上的行被换掉，滚动中列表重算 9 次 | 最大 45 pt，0 次，0 次 |
-| Agent 对话、Persona 对话、知识库 | 和扣住时一样 | — |
-| 机器页 | `moved` 很高，但扣住推送时一样高（玻璃卡片的效果层自己在动） | — |
+| Agents list | Maximum jump 558 pt, visible rows replaced 5 times, list reevaluated 9 times while scrolling | Maximum 45 pt, 0, 0 |
+| Agent chat, Persona chat, knowledge base | Same as with pushes held | — |
+| Machines page | High `moved`, equally high with pushes held (the glass cards' effect layers move on their own) | — |
 
-用户说的就是 Agents 列表：新外壳里默认就是这一页。
+The user's issue was the Agents list, the default page in the new shell.
 
-### 原因
+### Causes
 
-一层一层查下来，有五处：
+Working through the layers revealed five causes:
 
-1. **空间按最近一次更新排。** 工作中的 Agent 每说一句，它所在的空间就可能跑到别的空间前面，滚动中排序一变，整屏内容跳开。
-2. **滚动中照样跟着每条推送重算、重排。** 「需要你处理」的卡片在顶上出现又消失，行的最后一句在一行、两行之间变（行高跟着变）。
-   被对话盖住、在另一页的时候也照样重算：Agent 对话里滚动时，后面的列表跟着重算（mock 上 20 秒 47–51 次）。
-3. **改成滚动中用快照以后，推送还是会碰到列表，漏了三处：**
-   - `AgentSync`（推送带来新的 `rev` 时后台去拉对话）每拉一次就往 UserDefaults 写一次进度。往 UserDefaults 写东西，
-     App 里每个 `@AppStorage` 视图都当作变了、body 重跑，Agents 列表有四个 `@AppStorage`。忙的 hub 上几秒就写一次。
-   - 快照是在 `onChange` / `onScrollPhaseChange` 里读模型拍的，SwiftUI 把这次读算到 body 头上：之后每条推送照样让 body 重跑。
-   - 快照放在列表自己的 `@State` 里，开始滚动时一设，列表就重画一次（真实数据上每次开始滚动两次）。
-   - `List` 的每一行单独记着自己上次读过什么。行里问模型要机器名（`model.machine`）、提问卡片问模型要会话（`model.session`），
-     快照期间推送一来，这些行自己重画。
-4. **`List` 只要被更新一次，就按估算高度重新量行。** 数据一模一样也会。这份列表的行比估算高约 70 pt：
-   惯性滑到一半时一更新，内容高度一下差出一两行，屏幕上的内容跟着跳几百 pt，几行被换掉重画。
-5. **在两次滑动之间落地也会跳。** 停下 0.5 秒就放开快照：数据在静止时落地，`List` 要到下一次手指落下时才重新量行，那一下跳。
-   连着甩的时候两次之间只停 1 秒左右。
+1. **Spaces ordered by last update.** Every new message from a working Agent can move its space ahead of another. Reordering during scrolling makes the entire screen's content jump.
+2. **Every push still triggers reevaluation and reordering during scrolling.** "Needs you" cards appear / disappear at the top; last messages vary between one and two lines, changing row height.
+   Reevaluation continues behind a pushed chat or on another page: while scrolling an Agent chat, the list behind it reevaluates (47–51 times in 20 seconds on the mock).
+3. **After introducing snapshots during scrolling, pushes still reached the list through three missed paths:**
+   - `AgentSync` (background transcript fetches when a push brings a new `rev`) wrote progress to UserDefaults after every fetch. Writing anything to UserDefaults
+     makes every `@AppStorage` view in the App treat it as a change and rerun its body. The Agents list has four `@AppStorage` properties; on a busy hub, writes happen every few seconds.
+   - Snapshots read the model in `onChange` / `onScrollPhaseChange`. SwiftUI attributes that read to the body, so subsequent pushes still rerun it.
+   - The snapshot lived in the list's own `@State`; setting it at scroll start redrew the list (twice at every scroll start on real data).
+   - Each `List` row separately tracks its last reads. Rows asked the model for machine names (`model.machine`), and question cards asked for sessions (`model.session`),
+     so pushes during a snapshot still redrew those rows independently.
+4. **Any `List` update remeasures rows using estimated heights,** even with identical data. These rows are about 70 pt taller than the estimate.
+   An update halfway through deceleration suddenly changes content height by one or two rows, shifting visible content by hundreds of points and replacing / redrawing several rows.
+5. **Applying updates between scrolls also causes jumps.** Releasing the snapshot after 0.5 seconds at rest applies data while still, but `List` waits until the next touch to remeasure rows, causing a jump then.
+   Consecutive flicks pause only about 1 second between gestures.
 
-### 改法
+### Fix
 
-- 空间按 `sortDate` 排（`SpaceGroup.sortDate`）：工作中的 Agent 按开始工作的时间，别的按最近一次更新，和空间里的行一样。
-  同一段录制里，换位从 93/255 降到 18/255；剩下的是真的状态变化（这 10 分钟有 23 次）。
-- 列表只读一个中转对象 `AgentsFeed`（会话、等你处理的事、机器）。它用 `withObservationTracking` 跟着模型，有变化就转给列表；
-  以下情况下扣住，条件一解除，扣住期间来的一次落地：
-  - 手指拖着、惯性滑着，以及停下后 1.5 秒内：连着甩的几下算一次滚动（之后改成 0.5 秒，见下「之后」）；
-  - 被推上来的页面盖住（分栏里列表在旁边看得见，不算）；
-  - 在新外壳的另一页、旧布局的另一个 tab（新外壳两页之间滑动时放开）。
-  扣住只是改一个没人观察的开关，开始滚动不会让列表重画；滚动阶段也放在不被观察的对象里。
-- 堵上漏：
-  - `AgentSync` 的进度改存 `StateCache`（Caches 里的文件，和它描述的对话缓存放在一起），不写 UserDefaults；
-  - 列表的 body 不再读模型（只读 `AgentsFeed`），也就没有在 `onChange` 里读模型这回事；
-  - 行不再读模型：机器、会话由 body 每次填进一个不被观察的查找表（`AgentsList.Lookup`），行从表里取；
-    提问卡片的机器名、Agent 名由列表传进去（`InteractionPreviewCard(machine:agentLabel:)`）；
-    行上「已屏蔽」用会话自己的空间名判断（`model.isMuted(session)`），不再经 `model.session(key)`。
+- Order spaces by `sortDate` (`SpaceGroup.sortDate`): working Agents use their work-start time; others use the last update, just like rows within a space.
+  In the same recording, position changes fell from 93/255 to 18/255. The remainder were real state changes (23 in those 10 minutes).
+- The list reads only an intermediary `AgentsFeed` (sessions, pending interactions, machines). It tracks the model with `withObservationTracking` and forwards changes to the list.
+  Updates are held in the following cases and applied together once the condition clears:
+  - Finger dragging, deceleration, and the first 1.5 seconds after stopping: consecutive flicks count as one scroll (later changed to 0.5 seconds; see "Follow-up" below).
+  - Covered by a pushed page (not when the list remains visible beside it in split view).
+  - On the new shell's other page or the old layout's other tab (released while swiping between the new shell's two pages).
+  Holding changes only an unobserved switch, so starting a scroll does not redraw the list; scroll phase also lives in an unobserved object.
+- Close the leaks:
+  - Store `AgentSync` progress in `StateCache` (a file in Caches, alongside the transcript cache it describes), not UserDefaults.
+  - The list body no longer reads the model, only `AgentsFeed`; there are no model reads in `onChange` either.
+  - Rows no longer read the model. Each body evaluation populates an unobserved lookup table (`AgentsList.Lookup`) with machines and sessions; rows read from it.
+    The list passes machine and Agent names into question cards (`InteractionPreviewCard(machine:agentLabel:)`).
+    A row's "Muted" state uses the session's own space name (`model.isMuted(session)`), not `model.session(key)`.
 
-### 结果
+### Results
 
-`ScrollUnderPushTests`：mock 每 2 秒推一轮（`/mock/churn?ms=2000&real=1&inbox=1&waiting=1`），各拖、甩约 20 秒。
-「改前」是同一个测试，把 `ChatsView.swift`、`AgentSync.swift`、`InteractionViews.swift` 换回 origin/master。
+`ScrollUnderPushTests`: the mock pushes every 2 seconds (`/mock/churn?ms=2000&real=1&inbox=1&waiting=1`), with each drag / flick run lasting about 20 seconds.
+"Before" uses the same test with `ChatsView.swift`, `AgentSync.swift`, and `InteractionViews.swift` reverted to origin/master.
 
-| 情形 | 布局 | 改前 | 改后 |
+| Scenario | Layout | Before | After |
 | --- | --- | --- | --- |
-| Agents 列表 | 新外壳 | 跳开 ≥ 100 pt 10 次（最大 1349 pt），行相对挪动 5 次，行被换掉 2 次，滚动中写 UserDefaults 5 次；滚动中列表重算 52 次、行 129 次 | 都是 0；滚动中列表重算 0 次，行 45–51 次（滑进屏幕的行） |
-| Agents 列表 | 旧布局 | 8 次（最大 917 pt），4 次，1 次，2 次；列表 47 次、行 144 次 | 都是 0；列表 0 次，行 46–52 次 |
-| Agent 对话 | 两种 | 后面的 Agents 列表重算 47–50 次，写 UserDefaults 2 次 | 0，0 |
-| Persona 对话 | 两种 | 写 UserDefaults 3–4 次 | 0 |
+| Agents list | New shell | 10 jumps ≥ 100 pt (maximum 1349 pt), 5 relative row movements, 2 row replacements, 5 UserDefaults writes during scrolling; list reevaluated 52 times and rows 129 times during scrolling | All 0; list reevaluated 0 times during scrolling, rows 45–51 times (rows entering the screen) |
+| Agents list | Old layout | 8 jumps (maximum 917 pt), 4 movements, 1 replacement, 2 writes; list 47 times, rows 144 times | All 0; list 0 times, rows 46–52 times |
+| Agent chat | Both | Agents list behind it reevaluated 47–50 times; 2 UserDefaults writes | 0, 0 |
+| Persona chat | Both | 3–4 UserDefaults writes | 0 |
 
-改后两种布局各跑了 3 遍，Agents 列表 6 遍都是 0。有一遍新外壳的 Agent 对话还没打开就开始滑（测试等的是固定秒数），
-测试改成等这个对话的 `chat.scrollState` 探针，之后两种布局都过。
+After the fix, each layout ran 3 times, and all 6 Agents-list runs recorded 0. One new-shell Agent-chat run started scrolling before the chat opened (the test waited a fixed number of seconds).
+The test was changed to wait for that chat's `chat.scrollState` probe; both layouts then passed.
 
-真实 hub、新外壳、同一套拖动（各 60 秒，开着推送 / 扣住推送）：
+Real hub, new shell, same gestures (60 seconds each, pushes enabled / held):
 
-| 列表 | 改前：开着推送 | 改前：扣住推送 | 改后：开着推送 | 改后：扣住推送 |
+| List | Before: enabled | Before: held | After: enabled | After: held |
 | --- | --- | --- | --- | --- |
-| Agents 列表 | 跳开最大 558 pt，行被换掉 5 次，滚动中列表重算 9 次 | 最大 45 pt，0，0 | 最大 58 pt，0，0 | 最大 67 pt，0，0 |
-| Agent 对话、Persona 对话、知识库 | 和扣住时一样（最大 40–67 pt，没有换行） | — | 和扣住时一样 | — |
+| Agents list | Maximum jump 558 pt, 5 row replacements, 9 list reevaluations during scrolling | Maximum 45 pt, 0, 0 | Maximum 58 pt, 0, 0 | Maximum 67 pt, 0, 0 |
+| Agent chat, Persona chat, knowledge base | Same as held (maximum 40–67 pt, no row replacements) | — | Same as held | — |
 
-改后那次 hub 正好比改前那次清闲一些（Agents 列表那一分钟里会话推送 2 条，改前 4 条），收件箱、飞书推送多一些。
+The hub happened to be slightly quieter after the fix (2 session pushes during the Agents-list minute, versus 4 before), with more Inbox and Lark pushes.
 
 
-### 没改的
+### Unchanged
 
-- 新外壳的两页都一直建着：Agents 列表滚动时，另一页（助手）的对话照样跟着它的推送重算（mock 上 20 秒约 7 次）。
-  看不见，量不出跳动，没动。
-- 列表停下后，攒下的变化一次落地：这时屏幕上方的行变高、空间换位置，静止的内容会挪一下（和原来「需要你处理」的卡片一样）。
+- Both new-shell pages remain mounted. While scrolling the Agents list, the other page's assistant chat still reevaluates with its own pushes (about 7 times in 20 seconds on the mock).
+  It is invisible, so jumps cannot be measured; left unchanged.
+- After scrolling stops, buffered changes apply together. Rows above the screen may grow taller or spaces change position, shifting stationary content slightly (like the original "Needs you" card).
 
-### 之后（2026-11-02，真实性和及时性）
+### Follow-up (2026-11-02, accuracy and timeliness)
 
-用户：减少刷新不能拿正确性换，屏幕上说的必须是真的、来得及时。所以对上面的扣留改了三处，标准和测试见 `docs/ios-state.md`：
+User: fewer refreshes must not sacrifice correctness; what the screen says must be true and timely. Three changes were made to the buffering above; standards and tests are in `docs/ios-state.md`:
 
-- 关键的不扣：某个 Agent 开始或不再需要你、提问或审批来了或答完、Agent 离线、机器离线或出错，滚动中也立刻落地（实测推送后 0.03–0.04 s 上屏）。
-  - 做不到原地只改那一行：状态一变，空间按优先级换位置，新卡片插在最上面。
-  - 所以连同攒下的其他变化一起落地，列表可能在手指下挪一下。这是马上显示的代价。
-- 停下后 0.5 秒落地（原来 1.5 秒）。两次滑动之间落地，下一次手指落下时会跳一下：那是按设计在静止时落地，`PerfScroll` 记为 `landed`。
-- 一直在滚也最多扣 5 秒，到时间强制落地（实测 5.08 秒）。
-- 对话页：开着推送和扣住推送没差别，没动。对话里新消息只在最新端时跟过去，往上翻时冻结（`ChatView.Frozen`），已经是这样。
-- 小于 100 pt 的跳动在不推送时也有：懒加载的行自己定高，UI 测试合成的拖动也会带来，不算。
+- Critical changes are not held: an Agent starting / ceasing to need you, arriving / answered questions or approvals, Agent offline, machine offline or error. These apply immediately even while scrolling (measured on-screen 0.03–0.04 s after a push).
+  - Updating only that row in place is not possible: a state change reorders spaces by priority and inserts a new card at the very top.
+  - Buffered changes therefore apply with it, and the list may shift under the finger. That is the cost of immediate display.
+- Apply 0.5 seconds after stopping (previously 1.5 seconds). Applying between scrolls can cause a jump on the next touch; updates intentionally land while stationary, recorded as `landed` by `PerfScroll`.
+- Even continuous scrolling holds updates for at most 5 seconds, then applies them forcibly (measured 5.08 seconds).
+- Chat pages: no difference between pushes enabled / held, so unchanged. New chat messages follow only at the latest end; scrolling back freezes content (`ChatView.Frozen`), as before.
+- Jumps under 100 pt also occur without pushes, from lazy rows determining their heights and UI-test-generated drags; they do not count.

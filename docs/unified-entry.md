@@ -1,307 +1,307 @@
-# 主对话统一入口（#930）
+# Unified main-chat entry point (#930)
 
-在助手的主对话里完成全部工作：你说一句话，Persona 把它拆成任务，派给合适的 Agent，盯着进度，只在需要你的时候打断你。
-生活上的信息（日程、提醒、邮件、飞书）和工作上的 Agent 都从这一个入口进出，可以同时跑很多任务，也可以一直接着说下去。
+Complete all work in the assistant's main chat: say what you want, and Persona breaks it into tasks, assigns suitable Agents, watches progress, and interrupts only when it needs you.
+Personal information (calendar, reminders, email, Lark) and work Agents share this entry point. Many tasks can run at once, and the conversation can continue indefinitely.
 
-交互原型：`docs/assets/unified-entry-prototype.html`。直接用浏览器打开，`#step=5&theme=dark` 可以跳到第 5 步并切到深色。
-原型是界面和交互的标准，实现时逐屏对照。
+Interaction prototype: `docs/assets/unified-entry-prototype.html`. Open it directly in a browser; `#step=5&theme=dark` jumps to step 5 in dark mode.
+The prototype is the UI and interaction standard; compare screen by screen during implementation.
 
-## 边界
+## Boundaries
 
-- **Agents 页和顶栏的「助手 | Agents」切换完全不动**，也不降到任何二级入口（2026-11-03 用户要求）。从主对话开的任务本身就是普通的
-  Agent 会话，在 Agents 页照常出现，两边是同一份数据。这个功能只改助手页这一侧。
-- 不另做一套任务系统：**一个任务就是一个待办**加上挂在它上面的 Agent（`docs/todos.md`），只是多记一笔「从哪段对话开的」。
-- 不做第二个飞书，也不为某个来源做浏览页（`CLAUDE.md`）：消息只以「和任务有关」的形式出现在对话里。
+- **Do not change the Agents page or the top-bar "Assistant | Agents" switch at all**, or move them behind any secondary entry point (requested 2026-11-03). Tasks started from the main chat are ordinary
+  Agent sessions that appear normally in Agents; both sides share the same data. This feature changes only the assistant side.
+- No separate task system: **a task is a to-do** with attached Agents (`docs/todos.md`), plus a record of which chat created it.
+- No second Lark client or source-specific browsing pages (`CLAUDE.md`): messages appear in the chat only in relation to tasks.
 
-## 三层结构
+## Three layers
 
-| 层 | 是什么 | 数据从哪来 |
+| Layer | What it is | Data source |
 | --- | --- | --- |
-| 对话流 | 你和 Persona 的对话，加上 hub 往里插的系统条目（计划卡、任务卡、回执、答过的问题、转给任务的话），统一按时间排 | transcript + 对话动态（下面「对话动态」） |
-| 任务坞 | 输入框上方一排胶囊：从这段对话开的、在做和等你的任务；主对话里任务后面还有手动开的、在做和等你的 Agent。最左边「全部 N」（只有文字）打开任务板 | 待办 + 挂着的 Agent 的状态；手动的 Agent 来自 Agents 页的会话列表 |
-| 需要你 | 任务的 Agent 要你批准或回答时，问题卡出现在对话最底下，原地作答 | 现有的交互（`Interaction`） |
+| Chat stream | Your conversation with Persona plus hub-inserted system entries (plan cards, task cards, receipts, answered questions, messages routed to tasks), all ordered by time | Transcript + chat activity (see "Chat activity" below) |
+| Task dock | A row of pills above the input bar: working / waiting tasks started from this chat; in the main chat, manually started working / waiting Agents follow the tasks. "All N" at the far left (text only) opens the task board | To-dos + attached Agent state; manual Agents come from the Agents page's session list |
+| Needs you | When a task's Agent needs approval or an answer, a question card appears at the bottom of the chat for an inline response | Existing interactions (`Interaction`) |
 
-## 交互规格
+## Interaction specification
 
-### 派发：说意图，不选项目
+### Dispatch: express intent, do not choose a project
 
-- 一句话里有几件事，Persona 拆成几个任务，用 `task_plan` 工具交给 hub。每个任务带上它推断的电脑、目录（项目）、启动器 / 模型、权限，
-  以及一行为什么这么选。推断依据是知识库里项目和目录的对应、哪台电脑最近在这个目录干活（`agents_list`）、默认启动器和你过去的选择。
-- 按代价分三档，决定要不要先给你看计划：
+- Persona splits multiple requests in one sentence into tasks and passes them to hub through `task_plan`. Each task includes its inferred computer, directory (project), launcher / model, permissions,
+  and a one-line rationale. Inference uses knowledge-base project-to-directory mappings, the computer recently working in that directory (`agents_list`), the default launcher, and your past choices.
+- Three cost tiers determine whether to show a plan first:
 
-  | 档 | 例子 | 怎么做 |
+  | Tier | Examples | Behavior |
   | --- | --- | --- |
-  | 秒办 | 加提醒、建日程、查天气 | 不是任务，Persona 直接调用手机 / 邮件工具。对话里画成结果卡（带撤销），不进任务坞 |
-  | 自动开始 | 只读：查资料、整理材料、读代码回答问题 | `task_plan` 直接开，卡片上标「自动开始 · 只读」 |
-  | 先给计划 | 改代码、开多个 Agent、第一次在这个项目开 | 对话里出计划卡，每一项是能点开改的标签；「开始」后才开 |
+  | Instant | Add a reminder, create an event, check weather | Not a task; Persona calls phone / mail tools directly. Render a result card (with Undo) in the chat, without adding it to the dock |
+  | Auto-start | Read-only: research, organize material, read code to answer a question | `task_plan` starts directly; card says "Auto-started · Read-only" |
+  | Plan first | Change code, start multiple Agents, first start in this project | Show a plan card in the chat, with editable labels for each item; start only after "Start" |
 
-- 你在对话里亲口要求的任务（直接下令、「让 Agent 去做」「你去开始」，#2559）也直接开：Persona 在 `task_plan` 的这一项填 `user_requested: true`，卡片只显示进度。
-  它自己推断、你没说过的任务照旧等你点「开始」；一份计划里只要有一项要等，整份都等。设置 › 助手的「我在对话里说过的，直接开始」（`assistant.start_requested_tasks`，默认开）能关掉。
-- 计划卡上有「这类以后直接开」：按「项目 × 只读 / 改文件」记住，下次同类不再问。存 settings `tasks.trust`，设置里能看能删。
-- `task_plan` **不阻塞**：计划交给你以后，这一轮马上结束，你可以接着说别的。你点「开始」时 hub 直接开 Agent，Persona 在下一条消息的实时快照里看到结果。
+- Tasks you explicitly request in the chat (a direct instruction, "have an Agent do it," "go ahead and start," #2559) also start directly. Persona sets `user_requested: true` for that `task_plan` item, and the card shows progress only.
+  Inferred tasks you did not request still wait for Start. If any item in a plan needs to wait, the whole plan waits. "Start tasks I request in chat directly" under Settings › Assistant (`assistant.start_requested_tasks`, on by default) can disable this.
+- The plan card offers "Start These Directly," remembered per "project × read-only / file changes." Similar tasks no longer ask. Stored in settings `tasks.trust`; entries can be viewed and deleted in Settings.
+- `task_plan` **does not block**: once the plan is handed to you, the turn ends immediately and you can continue talking about something else. When you tap Start, hub starts the Agents directly; Persona sees the result in the next message's live snapshot.
 
-### 任务卡
+### Task cards
 
-- 计划开始后，计划卡收成一行「开了 N 个任务」，下面是 N 张任务卡。任务卡**原地更新**：状态（转圈 / 橙点 / 绿勾）、标题、
-  「电脑 · 项目 · 模型」、当前这一步在做什么（Agent 最近一句话或最近一次工具调用的概括）、进度条、用了多久。
-- 「当前这一步」（#1108）：Agent 连着跑工具、不写字的时候（读代码、跑测试、等 CI），`last_text` 一停就是几分钟到几十分钟
-  （2026-11-04 统计一台机器两天的 transcript：两段文字之间连调 ≥3 次工具的 6069 段，中位 84 秒、p90 约 6 分钟、p99 约 20 分钟），卡片看着像卡住了。
-  所以 node 从 transcript 取最近一次工具调用，概括成一行（`transcript.Activity`：「在跑测试」「在读 tasks.go」「在等 CI」「在提 PR」……），
-  随会话列表下发 `activity` / `activity_at`（只在工具调用比最后一段文字新时才有）。卡片在 Agent 工作中时显示这一步和它持续了多久（每 30 秒重画一次），
-  有了新文字就换回文字；停下来以后显示最后一段文字。App 端的规则在 `TaskNow`（iOS）、`taskNow`（网页 `web/src/lib/todos.ts`）、`TaskNow`（安卓 `core:domain`），
-  三端和快照用同一套规则；从没说过话、停在一次工具调用上的，也显示这一步（不计时），不显示「还没有动静」。
-- 最后一句话不能因为 transcript 太长丢掉（#1583）：node 只读 transcript 末尾 384 KB，Agent 说完一句接着调工具，工具结果和钩子回执很快超过 384 KB，
-  那句话被挤出窗口，`last_text` 就空了（现场：1.5 MB 的 transcript，最后一句在 665 KB 处，卡片显示了 7 分钟「还没有动静」）。
-  现在末尾窗口里没有文字时，沿用上一次读到的（文件只追加，上次读过以后新写的都在窗口里），没有上一次就往前一段段找，最多 8 MB。
-- 在跑的子 Agent（`subagents` 里 `running` 的）在卡片上另起一行「子 Agent 在跑：A、B」，只作补充：卡片的主行始终是主 Agent 自己的话或这一步。
-  子 Agent 的 transcript 是单独的文件（`<会话>/subagents/agent-*.jsonl`），不会混进主 Agent 的 `last_text` / `activity`。
-- 快照里的任务（`snapshotTasks`）同样带最近一句、工作中的这一步和持续时间、在跑的子 Agent：「在做，<机器> session_id=…：最近一句；现在在跑测试（3 分钟了）；子 Agent 在跑：…」。
-- 链路时延（2026-11-04 在 hub 机器上量）：Claude Code 写出一行 0.1–3 秒；node 每秒重建一次列表，增长中的 transcript 最多每 3 秒重读一次（`metaMinInterval`），
-  列表一变（含新的 `activity`）立刻推给 hub，hub 直接广播，网页收到即替换。这一段没有模型生成摘要的环节，卡片和快照都用原文，做完的回执也是 Agent 最后一段话截断。
-- 卡片读会话用 `AppModel.sessionWithLine`，不用 `session(_:)`：后者为了少重绘，只有 `last_text` / `updated_at` / `rev` 变了的推送不算变化，
-  卡片会一直停在状态上次变化时的那句话（`docs/lessons/ios.md`）。
-- 任务的进展**不往对话里插新消息**。只有三种情况在对话底部追加：要你回答（问题卡）、答完了（收成一行）、做完了（回执）。
-- 卡片底部有「说一句」（指向这个任务，见下面「指向谁」）和「停下」（中断，先确认）。点卡片打开任务详情。
-- 过了当天的任务卡折成一行（状态点 + 标题 + 结果），点开展开。
+- Once a plan starts, its card collapses to "Started N tasks," followed by N task cards. Task cards **update in place**: state (spinner / orange dot / green check), title,
+  "computer · project · model," the current step (the Agent's latest message or a summary of its latest tool call), progress bar, and elapsed time.
+- **Current step** (#1108): when an Agent keeps calling tools without writing text (reading code, testing, waiting for CI), `last_text` can remain unchanged for minutes to tens of minutes
+  (2026-11-04 statistics from two days of transcripts on one machine: 6069 segments with ≥3 consecutive tool calls between text blocks, median 84 seconds, p90 about 6 minutes, p99 about 20 minutes), making the card look stuck.
+  Node therefore extracts the latest tool call from the transcript and summarizes it in one line (`transcript.Activity`: "Running tests," "Reading tasks.go," "Waiting for CI," "Opening a PR," etc.),
+  delivering `activity` / `activity_at` with the session list (only when the tool call is newer than the last text block). While the Agent works, the card shows that step and its duration (redrawn every 30 seconds);
+  new text replaces it, and once the Agent stops, the last text block is shown. Client rules live in `TaskNow` (iOS), `taskNow` (web, `web/src/lib/todos.ts`), and `TaskNow` (Android `core:domain`).
+  All three clients and the snapshot use the same rules. An Agent that has never written text and stopped on a tool call also shows that step (without a timer), not "No activity yet."
+- The last message must not disappear because the transcript is too long (#1583). Node reads only the final 384 KB. After an Agent writes text and continues calling tools, tool results and hook receipts quickly exceed 384 KB,
+  pushing that text out of the window and leaving `last_text` empty (observed: a 1.5 MB transcript, last text at 665 KB, card showing "No activity yet" for 7 minutes).
+  Now, if the tail window contains no text, reuse the last text read (the file is append-only; newly written data since the last read is in the window). With no prior value, search backward in chunks, up to 8 MB.
+- Running sub-Agents (`running` in `subagents`) appear on a separate "Sub-Agents running: A, B" line as supplementary information. The main line always shows the main Agent's own text or current step.
+  Sub-Agent transcripts are separate files (`<session>/subagents/agent-*.jsonl`) and never enter the main Agent's `last_text` / `activity`.
+- Snapshot tasks (`snapshotTasks`) also include the latest text, current working step and duration, and running sub-Agents: "Working, <machine> session_id=…: latest text; now running tests (3 minutes); sub-Agents running: …".
+- Link latency (measured on the hub machine 2026-11-04): Claude Code writes a line in 0.1–3 seconds; node rebuilds the list every second and rereads a growing transcript at most every 3 seconds (`metaMinInterval`).
+  List changes (including new `activity`) are pushed to hub immediately, hub broadcasts directly, and web replaces on receipt. There is no model-generated summary in this path: cards and snapshots use original text; completion receipts also truncate the Agent's final text block.
+- Cards read sessions through `AppModel.sessionWithLine`, not `session(_:)`. To reduce redraws, the latter ignores pushes changing only `last_text` / `updated_at` / `rev`,
+  which would leave the card stuck on the message from the last state change (`docs/lessons/ios.md`).
+- Progress **does not insert new chat messages**. Only three cases append at the bottom: needs your answer (question card), answered (collapsed line), finished (receipt).
+- Card footers offer "Message" (targeting this task; see "Routing" below) and "Stop" (interrupt, with confirmation first). Tapping the card opens task details.
+- Task cards from previous days collapse to one line (state dot + title + result); tap to expand.
 
-### 需要你
+### Needs you
 
-- 任务的 Agent 有待处理的交互（提问、批准工具、审批计划）时，主对话最底下出现问题卡：顶上写「哪个任务」，下面就是现在
-  `InteractionPanel` 的内容，原地作答。对应的任务卡描橙边，坞里的胶囊变成「xx · 等你」，排到最前面。
-- 点橙色胶囊滚到那张问题卡，并闪一下边框。
-- 几件同时等你时按到达顺序排在底部。答完的收成一行「✓ 登录崩溃 · 批准了」，留在对话里作记录（对话动态的 `answered` 条目）；点一下展开完整的「问题 → 回答」（多个问题逐个列出，可以选中复制），再点收起，点任务名进任务详情（#1231）。
-- 推送照旧：标题是任务名，点开就是主对话，定位到问题卡。
+- When a task's Agent has a pending interaction (question, tool approval, plan approval), a question card appears at the bottom of the main chat. Its header names the task; below it is the current
+  `InteractionPanel` content, answered inline. The corresponding task card gains an orange border, and its dock pill becomes "xx · Waiting for you," sorted first.
+- Tapping an orange pill scrolls to the question card and briefly flashes its border.
+- Multiple waiting items appear at the bottom in arrival order. Answered cards collapse to a line such as "✓ Login crash · Approved," retained as a chat record (`answered` chat-activity entry). Tap to expand the full "question → answer" (multiple questions listed separately, selectable and copyable), tap again to collapse, and tap the task name to open task details (#1231).
+- Pushes remain unchanged: the title is the task name; opening the notification goes to the main chat at the question card.
 
-### 回执
+### Receipts
 
-- 任务做完（挂着的 Agent 一轮结束、没有待处理的交互），对话底部追加一行绿色回执：任务名、做了什么（Agent 最后一段话的概括）、
-  改了几个文件、测试、PR，下面是下一步：看改动、合并、告诉刚才问过的人……
-- 回执由 hub 生成，不等 Persona 回话；Persona 在下一条消息的快照里看到这件事，需要时再接着说。
-- 发回执的同时，hub 用判断模型看任务是不是真的做完了（停在「没改完」「等审核」的不算），做完了就把任务的待办自动标成完成（`done_by = auto`，可重新打开），见 `docs/todos.md`「自动完成」（#1092）。
-- Agent 没开起来（#1077）：机器的连接断了（`rpc: connection closed`、机器暂时离线）先隔 3 秒自动重试一次；还不行就失败。
-  失败时 hub 把任务的待办结束掉（`done_at` + `start_error`），计划卡记下原因，对话里追加红色的「没开起来」回执；
-  快照里是「没开起来」，收件箱、今天卡片不再把它当成在做。App 上任务卡变成红色的「没开起来」，卡片上直接有「移除」，不进任务坞。
-- 移除：没在运行的任务（没开起来、做完了、停着、已完成，以及 hub 一直没回报的「正在开」）都能移除，沿用 Agents 页「关闭」的方式：
-  长按任务卡 / 胶囊 / 折叠行出菜单「移除任务」，任务板里左滑「移除」，任务详情右上角 ⋯。移除就是删掉这个待办；
-  有过 Agent 的先确认（Agent 和对话记录还在 Agents 页），从没开起来的直接移除。
-- 网页端同样（#1142）：失败的任务是红色的「没开起来」，卡片上有「移除」；右键任务卡 / 胶囊 / 折叠行出「移除任务…」，任务面板右上角 ⋯；
-  确认用浏览器的 `confirm()`。还没升级的 hub 留下的「正在开」，靠计划卡里记的错误也认成「没开起来」。
-- 重试（#1396）：没开起来的任务卡上「移除」旁边有「重试」，任务详情里也有。点了 hub 照计划里这个任务原样再开一次
-  （机器、目录、提示词、启动器 / 模型、权限、标题），还是同一个待办：马上重新打开、清掉错误（计划卡的红字也清掉），卡片原地变成「正在开」，
-  任务坞里也不会多出一个。连点只开一次（hub 用待办上的条件更新挡住第二次，客户端在请求回来前也不再发）；目标机器离线时直接拒绝，
-  说「「某电脑」现在离线，等它连上再重试」，任务保持原样。再失败就照常结束待办、写上新的错误，但不再追加第二条回执：
-  失败回执跟着待办走——还没开起来时显示最新的错误和「重试」，重新开了以后收成一行灰字「正在重新开」/「重试后开起来了」，点开是任务。
-  网页只说一遍（#4145）：对话里画着这个任务的完整卡片（当天的任务）时，原因和「重试 / 移除」只在卡片上，计划卡下面不再写红字，
-  失败回执收成一行红字「「xx」没开起来，见上方任务卡」（点开是任务）；没有完整卡片（前几天的任务只是一行）时照旧写原因、给「重试」。
-  接口见 `docs/protocol.md`「待办」的 `POST /api/v1/todos/{id}/retry`。
+- When a task finishes (an attached Agent ends a turn with no pending interaction), append a green receipt at the bottom: task name, what was done (summary of the Agent's final text block),
+  number of changed files, tests, PR, and next actions below: review changes, merge, tell the person who asked, etc.
+- Hub generates receipts without waiting for Persona to reply. Persona sees the event in the next message's snapshot and can continue if needed.
+- When sending a receipt, hub also uses the judgment model to check whether the task is really done (stopped at "not finished" or "waiting for review" does not count). If complete, automatically mark its to-do done (`done_by = auto`, reopenable); see `docs/todos.md`, "Automatic completion" (#1092).
+- Agent failed to start (#1077): if the machine connection closes (`rpc: connection closed`, temporarily offline), retry once after 3 seconds; fail if it still does not work.
+  On failure, hub ends the task's to-do (`done_at` + `start_error`), records the reason in the plan card, and appends a red "Didn't Start" receipt.
+  The snapshot reports "Didn't Start"; Inbox and Today cards no longer treat it as working. The App's task card turns red with "Didn't Start" and a direct Remove action; it does not enter the dock.
+- Removal: any non-running task (failed to start, finished, stopped, completed, or "Starting" that hub never reported back on) can be removed, following the Agents page's Close interaction.
+  Long-press a task card / pill / collapsed row for "Remove task," swipe left on the task board for Remove, or use ⋯ at the top right of task details. Removal deletes the to-do.
+  Confirm first if it ever had an Agent (the Agent and transcript remain in Agents); a task that never started is removed directly.
+- Web behaves the same (#1142): failed tasks are red with "Didn't Start" and Remove on the card. Right-click a task card / pill / collapsed row for "Remove task…," or use ⋯ at the top right of the task panel.
+  Confirmation uses browser `confirm()`. "Starting" tasks left by older hubs are also recognized as "Didn't Start" from the error recorded in the plan card.
+- Retry (#1396): failed-start cards have Retry beside Remove, also available in task details. Hub retries that task exactly as specified in the plan
+  (machine, directory, prompt, launcher / model, permissions, title), using the same to-do: immediately reopen it, clear the error (including red text on the plan card), and change the card in place to "Starting."
+  No extra dock item is added. Repeated taps start only once (hub uses a conditional to-do update to block the second attempt, and clients send no further request until the first returns). If the target machine is offline, reject directly,
+  saying "‘Computer’ is offline; retry when it reconnects," leaving the task unchanged. A new failure ends the to-do and writes the new error as usual, but adds no second receipt:
+  the failure receipt follows the to-do, showing the latest error and Retry while it has not started, then collapsing to gray "Restarting" / "Started after retry" once reopened. Tap to open the task.
+  Web says it only once (#4145): when the chat contains the full task card (today's task), only that card shows the cause and Retry / Remove; the plan card no longer repeats red text below it.
+  The failure receipt collapses to one red line, "‘xx’ failed to start; see the task card above" (tap to open the task). Without a full card (earlier-day tasks shown only as a line), keep the cause and Retry as before.
+  API: `POST /api/v1/todos/{id}/retry` under "To-dos" in `docs/protocol.md`.
 
-### 指向谁
+### Routing
 
-- 默认你说的话交给 Persona，它决定自己回答、开新任务还是用 `agent_send` 转给已有任务。有字时输入框上方显示灰色标签「Persona 决定交给谁」。
-- 想直接对某个任务说：输入 `@` 弹出列表（任务、电脑、项目、人），选一个任务；或在任务卡上点「说一句」。输入框上方出现紫色路由标签
-  「对「xx」说 ×」，发出去 App 直接交给那个 Agent（不经过 Persona），对话里的气泡带同样的标签（对话动态的 `routed` 条目）。
+- By default, messages go to Persona, which decides whether to answer, start a task, or forward to an existing task with `agent_send`. When the input contains text, a gray label above it says "Persona decides who handles this."
+- To speak directly to a task, type `@` for a list (tasks, computers, projects, people) and select a task, or tap Message on its card. A purple routing label appears above the input,
+  "To ‘xx’ ×." The App sends directly to that Agent, bypassing Persona. The chat bubble carries the same label (`routed` chat-activity entry).
 
-### 任务详情
+### Task details
 
-- 点任务卡、坞里的胶囊或回执里的「看改动」，任务详情从底部浮起，交互和链接卡片一样（`LinkSheet`）：打开即铺满，
-  下拉到 0.6 时不挡主对话（还能滚动、输入），再下拉关闭。
-  常规宽度（iPad、iPhone Duo 打开）不浮起：系统的 sheet 在那里是屏幕中间的小表单，任务详情改成推进对话所在的栈、铺满右边的详情栏，
-  和 Agents 左栏点开一个 Agent 一样，左上角 ‹ 回到对话；切到别的对话也会收起它（#2816，`detailPresentation`）。
-- 手机上浮起的详情左上角 ✕ 旁边有「全屏查看」（#3743）：详情收起，这个 Agent 的页推进助手页的栈，和从 Agents tab 点进去的是同一个页，
-  返回（‹ 或从左边缘右滑）回到主对话，详情不再浮起。用推进而不是 `fullScreenCover`：Agents tab 本来就是推进的，返回手势、
-  顶栏 / 外壳随栈隐藏（`atRoot`）都和那边一样；全屏盖层要自己画关闭、下滑关闭和对话的滚动打架，从 sheet 上盖还会关回 sheet。
-- 页面就是这个 Agent 的对话（`ChatView(style: .dev)`，Agents 页能做的这里都能做）。顶部只有一层（#3255，用户嫌原来的
-  「任务头 + 会话头 + 同空间 tab 条」三层太复杂）：嵌进来的对话页的头就是浮层的头（`HostedChat`）——左边 ✕（推进详情栏时是 ‹），
-  中间任务名、下面一行「状态点 · 状态 · 电脑 · 项目」，目标、循环 / 后台任务是标题旁的小图标，右边 ⋯。
-  ⋯ 的最上面是这个任务自己的：会话标题和任务名不同时作为分组标题写在那里，然后是「移除任务…」「在 Agents 里打开」，下面照旧是对话页 ⋯ 的全部操作。
-- 从主对话打开就只看这一个 Agent：没有同空间其他 Agent 的 tab 条、也不在这里切换；要看同空间的其他 Agent 走「在 Agents 里打开」
-  （收起浮层，切到 Agents 页打开这个 Agent，那里的 tab 条照旧）。
-- 一个任务挂着几个 Agent 时，标题旁多一个 ⌄：点标题弹出这个任务的几个 Agent 来切换（还有「会话信息」；网页同样，#3333）。
-- 没有 Agent 的时候（还在开、没开起来）没有对话页，浮层用自己的头：状态、任务名、⋯、关闭。
+- Tap a task card, dock pill, or Review changes in a receipt to open task details from the bottom, like link cards (`LinkSheet`): initially full-screen;
+  pull down to 0.6 so it no longer blocks the main chat (scrolling and typing remain available), then pull farther to close.
+  At regular width (iPad, unfolded iPhone Duo), do not float a sheet: the system sheet is a small centered form there. Push task details onto the chat's stack, filling the right detail column,
+  like opening an Agent from the Agents left column. ‹ at the top left returns to the chat; switching chats also dismisses the details (#2816, `detailPresentation`).
+- On phones, floated details offer "Full Screen" beside ✕ at the top left (#3743). Dismiss the details and push the Agent page onto the assistant page's stack, using the same page as opening it from the Agents tab.
+  Back (‹ or a right swipe from the left edge) returns to the main chat without reopening the sheet. Use a push, not `fullScreenCover`: Agents already uses a push, giving the same back gesture
+  and stack-based top-bar / shell hiding (`atRoot`). A full-screen cover requires a custom close control, its downward dismissal conflicts with chat scrolling, and presenting it over a sheet returns to that sheet on dismissal.
+- The page is this Agent's chat (`ChatView(style: .dev)`, with everything available in Agents). The top has only one layer (#3255; the user found the previous
+  "task header + session header + same-space tab bar" too complex). The embedded chat header is the sheet header (`HostedChat`): ✕ on the left (‹ when pushed into the detail column),
+  task name in the middle, with "state dot · state · computer · project" below; goal and loop / background tasks are small icons beside the title; ⋯ on the right.
+  The top of ⋯ belongs to the task: if session title and task name differ, show the session title as a section heading, then "Remove Task…" and "Open in Agents," followed by all the usual chat-page ⋯ actions.
+- Opening from the main chat shows only this Agent: no tab bar for other Agents in the space and no switching here. To see others in the same space, use "Open in Agents"
+  (dismiss the sheet, switch to Agents, and open this Agent with the normal tab bar).
+- If a task has multiple Agents, add ⌄ beside the title. Tapping the title lists the task's Agents for switching (plus "Session Info"; web does the same, #3333).
+- Without an Agent (starting or failed to start), there is no chat page; the sheet uses its own header: state, task name, ⋯, Close.
 
-### 任务板
+### Task board
 
-- 点坞最右边的「全部」。按**等你 / 在做 / 今天完成 / 定时**分组；每行是状态点、标题、「电脑 · 项目 · 最新一句」。
-- 这就是待办列表（「任务就是待办」），以后待办的入口也指到这里。
+- Tap All at the far right of the dock. Group by **Waiting for you / Working / Completed today / Scheduled**. Each row has a state dot, title, and "computer · project · latest message."
+- This is the to-do list ("tasks are to-dos"); future to-do entry points also lead here.
 
-### 对话的形状
+### Chat structure
 
-- 按天分段：每天第一条上面一行日期。
-- 早报（定时任务「早报」）发进主对话，画成「今天」卡片：夜里做完的任务、日程、要你回的消息、提醒，每行一个动作。
-- 收件箱里和正在做的任务有关的消息，由 Persona 带上任务进度起草回复，在对话里出一张消息卡（引用原话、挂着那个任务、草稿、「发送」）。
+- Group by day, with a date line above each day's first entry.
+- The morning briefing (scheduled task "Morning briefing") posts to the main chat as a Today card: tasks completed overnight, calendar events, messages needing replies, reminders, with an action per row.
+- For Inbox messages related to active tasks, Persona drafts replies using task progress and shows a message card in the chat (quoted original, linked task, draft, Send).
 
-### 安静的任务（#1731）
+### Quiet tasks (#1731)
 
-设置 › 助手 › 「主对话派的任务只在主对话里通知」（settings `assistant` 的 `main_tasks_quiet`，`jarvis_settings` 的 `assistant.main_tasks_quiet`，**默认开**）。
-开着时，从主对话派出去的任务（`task_plan`；`agent_start` 也算，见下）是**安静的**：待办 `quiet: true`，建的时候定下、存进 `todos.quiet`，之后改设置不影响已有的任务。
+Settings › Assistant › "Notify main-chat tasks only in the main chat" (`main_tasks_quiet` in settings `assistant`, `assistant.main_tasks_quiet` in `jarvis_settings`, **on by default**).
+When enabled, tasks dispatched from the main chat (`task_plan`; also `agent_start`, below) are **quiet**: to-do `quiet: true`, set at creation and stored in `todos.quiet`. Later setting changes do not affect existing tasks.
 
-- **不打扰**：hub 不为它的 Agent 发任务推送（做完、需要你、出错），`notify` 事件也不发，飞书机器人 / 渠道不贴卡片；不进 Live Activity / 灵动岛（`liveActivities.snapshot` 跳过）；
-  会话列表给它的 Agent 标 `quiet: true`（任务做完了也一直带着），各端据此不进全局角标：网页侧边栏「总览」「待办」、安卓「Agents」标签和抽屉「待办」、安卓的提醒（旧 hub 发来的也拦下）。
-  Agents 页、主对话里的任务卡、任务坞、问题卡和实时快照都照常。
-- **改由主对话说**：做完 / 被打断（`taskTurnEnded`）、没开起来（`startPlanTask`）、在等用户（hub 发 `interaction.raised`）时，助手往主对话投一条通知
-  （`prompts/assistant/task_notice.md`：「🔔 任务「xx」做完了（电脑）」、Agent 最后说的或它在问什么，再说明这是任务通知、由你决定怎么告诉用户），
-  主对话据此回答，回答照常推送到手机。这条通知在对话里不画成用户气泡：hub 下发时给它带上 `injected`，各端只显示一行「任务「xx」做完了」（`docs/protocol.md`「Persona 注入的消息」）。
-- **合并**：同一个任务第一次变化后等 15 秒（`quietNoticeDelay`），这期间的变化只留最新的，通知里写「这期间它还等过用户」；
-  等用户的通知发出前用户已经答了，就不发。主对话正在跑时，通知排进对话之间的队列（和 `conversation_send` 同一个，输入框上方显示「任务「xx」的通知」），这一轮结束再投；
-  队列里已经有同一个任务的通知就原地换成新的，不再排第二条。实现在 `server/internal/assistant/quiet.go`。
-- **`agent_start`**：从主对话调用、设置开着时，hub 给它建一个安静的待办（`origin` = 主对话，没有计划）并挂上这个 Agent，对话里插任务卡，之后和 `task_plan` 的任务一样；
-  设置关着或从别的对话调用，照旧是一个单独的 Agent。
-- **会回传的对话**（#3192）：用 `report_tasks: true` 开的对话（插件的飞书 /agent）派出的任务（`task_plan`、`agent_start`）不看这个设置，一律是安静的任务，
-  通知投进**派出它的那段对话**（`Reporting` 版的说法：照这段对话一开始的说明交代出去），不进主对话。登记在 `assistant/reporters.go`（`docs/lark-agent.md`）。
+- **No interruptions**: hub sends no task pushes for their Agents (completion, needs you, errors), no `notify` events, and no Lark bot / channel cards. They do not enter Live Activities / Dynamic Island (`liveActivities.snapshot` skips them).
+  Session lists mark their Agents `quiet: true` (retained even after task completion). Clients exclude them from global badges: web sidebar Overview / To-dos, Android Agents tab and To-dos drawer, and Android notifications (also suppressing ones from older hubs).
+  Agents page, main-chat task cards, dock, question cards, and live snapshots remain normal.
+- **The main chat speaks instead**: on completion / interruption (`taskTurnEnded`), failed start (`startPlanTask`), or waiting for the user (hub emits `interaction.raised`), the assistant injects a notice into the main chat
+  (`prompts/assistant/task_notice.md`: "🔔 任务「xx」做完了（电脑）"—task "xx" finished (computer)—plus the Agent's last text or question, and an explanation that this is a task notice and the assistant decides how to tell the user).
+  The main chat replies accordingly, with its reply pushed to the phone normally. This notice is not rendered as a user bubble: hub adds `injected` when delivering it; clients show only a line such as "Task ‘xx’ finished" (`docs/protocol.md`, "Persona-injected messages").
+- **Coalescing**: wait 15 seconds after a task's first change (`quietNoticeDelay`), retaining only the latest change in that interval and noting "It also waited for the user during this period."
+  If the user has answered before a waiting notice is sent, skip it. While the main chat is running, queue the notice between chat turns (the same queue as `conversation_send`, showing "Notice for task ‘xx’" above the input), then inject it after the current turn ends.
+  If the queue already has a notice for this task, replace it in place instead of adding another. Implementation: `server/internal/assistant/quiet.go`.
+- **`agent_start`**: when called from the main chat with the setting enabled, hub creates a quiet to-do (`origin` = main chat, no plan), attaches the Agent, inserts a task card, and thereafter treats it like a `task_plan` task.
+  With the setting off or calls from other chats, it remains a standalone Agent as before.
+- **Reporting chats** (#3192): tasks (`task_plan`, `agent_start`) dispatched from chats created with `report_tasks: true` (the extension's Lark /agent) ignore this setting and are always quiet.
+  Notices go into **the chat that dispatched them**, not the main chat (the `Reporting` wording follows the instructions at that chat's start). Registered in `assistant/reporters.go` (`docs/lark-agent.md`).
 
-### 督办（#3124）
+### Supervision (#3124)
 
-主对话派出去的任务（`task_plan`，以及安静任务模式下 `agent_start` 建的待办）由主对话**督办**：助手是这些任务的负责人，对完成情况和质量负责，而不是等「做完了」再转述。
+The main chat **supervises** tasks it dispatches (`task_plan`, and to-dos created by `agent_start` in quiet-task mode). The assistant owns their completion and quality, rather than merely relaying "done."
 
-- **台账**：`task_plan` 每个任务可以带 `done_when`（验收标准，最多 6 条）和 `expect_minutes`（预计分钟数）；验收标准会接在派活 prompt 后面告诉 Agent，要它做完时逐条给证据。
-  待办记下督办人（开它的对话）、验收标准、预计时长和验收状态，存在 `todo_supervision` 表（一行一个督办的待办，跟待办一起删），待办的 JSON 多一个 `supervision`（`docs/protocol.md`）。
-  验收状态：进行中 → `pending_review`（待验收）→ `accepted`（已验收，待办完成，`done_by = review`）/ `rework`（返工，`round` 记轮次）/ `needs_user`（等用户决定）/ `cancelled`（取消，待办完成）。
-- **不再自动关**：督办的待办 hub 判断做完时（`docs/todos.md`「自动完成」那个判断）不写 `done_at`，改成「待验收」；判断没做完（`not_done` / `waiting` / `needs_user` / `unsure`）就告诉督办人「停下了但没做完」。用户手动点完成照旧。
-- **督办器**（`server/internal/assistant/supervise.go`，不调模型）：每 30 秒看一遍督办中的任务，加上任务的事件，算出信号：
-  `review` 待验收、`idle` 停下没做完、`needs_you` 等回答超过 3 分钟（安静的任务马上，用户没收到推送）、`stalled` 在做但超过 max(20 分钟, 预计 × 1.5) 没进展（会话没更新）、`interrupted` 被模型服务出错打断、`failed` 没开起来。
-  同一任务的同一信号对同一段状态只说一次（状态变了、有了新进展才再说）。几个任务的信号合成**一条「📋 督办」消息**投进主对话（`prompts/assistant/supervise.md`：任务、信号、验收标准、它在问什么、Agent 最后说的、链接，再说明怎么处理）：
-  第一条等 15 秒攒一攒，之后最多每 10 分钟一条，`needs_you` / `idle` / `interrupted` / `failed` 这类等决定的最短 2 分钟。主对话在跑就排进对话之间的队列（输入框上方「督办消息」），队列里还没投出的督办消息原地换成合并后的一条。
-  督办的任务不再发「🔔 任务…」通知（`quiet.go`），都在督办消息里；其他对话开的任务照旧。
-- **默认不推送**：督办消息开始的这一轮正常结束时，不发「完成」推送（`fleet_push.go`），渠道的镜像也不发（快照里主对话的 `SessionView.supervising` 标着）；出错、被打断照常推。用户在主对话说话、或别的消息投进来时恢复。要告诉用户就用 `notify_user`，要用户决定用 `ask_user`。
-- **验收**：MCP 工具 `task_review {todo_id, verdict, checks:[{criterion, met, evidence}], note}`。`accepted` 关掉待办（之后照「做完的任务关掉 Agent」关 Agent）；
-  `rework` 把逐条缺口和说明（`prompts/assistant/supervise_rework.md`）发给任务的 Agent（`session.send`，Agent 已被关掉的先按原启动器恢复），对话里留一条 `routed`，Agent 再停下时重新判断；**最多 2 轮**，第 3 次 `rework` 改成 `needs_user`；
-  `needs_user` 之后不再发督办信号，等助手问用户；`cancelled` 关掉待办（理由「取消：…」）。每次验收在对话动态里插一条 `review`，记进台账的 `reviews`。只有督办人那个对话能验收它的任务。
-- **派活查重**：`task_plan` 把每个新任务和正在进行的待办、在工作 / 等人的 Agent 比：提到同一个 issue / PR 号，或同一台电脑同一目录（一个在另一个里面）且标题相近，或标题很像，就在返回里列「疑似重复」，提示助手先看再决定合并还是取消；不拦。
-- **快照**：「从对话开的任务」里督办的任务带「督办：正常 / 卡住 N 分钟 / 等回答 N 分钟 / 待验收 / 返工第 N 轮 / 等你决定 / 已验收」和验收标准条数，要处理的排在前面。
-- **助手的做法**写在它的 CLAUDE.md（`prompts/assistant/claude_md.md`「做事方式」）：派活必填 `done_when`；收到督办消息能拍板的自己拍，卡住就催或换路，抢资源的排先后，重复的取消；验收前自己核对 PR / CI / 截图 / 线上状态；只把要用户决定的和已验收的结果告诉用户；下游的尾巴（部署、关 issue、TestFlight）拆成后续任务或跟进。
+- **Ledger**: each `task_plan` task may include `done_when` (up to 6 acceptance criteria) and `expect_minutes` (estimated minutes). Criteria are appended to the assignment prompt, asking the Agent to provide evidence for each when finished.
+  The to-do records its supervisor (the creating chat), criteria, estimated duration, and review state in `todo_supervision` (one row per supervised to-do, deleted with it). To-do JSON adds `supervision` (`docs/protocol.md`).
+  Review states: in progress → `pending_review` → `accepted` (to-do done, `done_by = review`) / `rework` (`round` tracks iterations) / `needs_user` (awaiting user decision) / `cancelled` (to-do done).
+- **No automatic closure**: when hub judges a supervised to-do complete (the "Automatic completion" check in `docs/todos.md`), it does not write `done_at`; it marks it pending review. If judged incomplete (`not_done` / `waiting` / `needs_user` / `unsure`), tell the supervisor "Stopped but not finished." Manual completion is unchanged.
+- **Supervisor loop** (`server/internal/assistant/supervise.go`, no model calls): every 30 seconds, inspect supervised tasks plus task events and derive signals:
+  `review` pending review, `idle` stopped unfinished, `needs_you` waiting for an answer over 3 minutes (immediately for quiet tasks, since the user received no push), `stalled` working without progress (no session update) for more than max(20 minutes, estimate × 1.5), `interrupted` by model-service error, `failed` to start.
+  The same signal for the same task is reported only once within the same state segment (reported again only after state changes or new progress). Signals from multiple tasks are combined into **one "📋 督办" (supervision) message** in the main chat (`prompts/assistant/supervise.md`: task, signal, criteria, question, Agent's last text, links, and handling instructions).
+  The first waits 15 seconds to coalesce; subsequent messages are at most one per 10 minutes, with a 2-minute minimum for decision-waiting signals such as `needs_you` / `idle` / `interrupted` / `failed`. If the main chat is running, queue between turns ("Supervision message" above the input); replace any queued, undelivered supervision message with the merged one.
+  Supervised tasks no longer emit "🔔 任务…" (task notices) from `quiet.go`; all appear in supervision messages. Tasks started by other chats are unchanged.
+- **No push by default**: when a turn initiated by a supervision message ends normally, send no completion push (`fleet_push.go`) or channel mirror (the snapshot marks the main chat's `SessionView.supervising`). Errors and interruptions still push normally. Normal behavior resumes when the user speaks in the main chat or another message is injected. Use `notify_user` to tell the user and `ask_user` for decisions.
+- **Review**: MCP tool `task_review {todo_id, verdict, checks:[{criterion, met, evidence}], note}`. `accepted` closes the to-do (then closes the Agent according to "Close Agents for finished tasks").
+  `rework` sends the itemized gaps and instructions (`prompts/assistant/supervise_rework.md`) to the task's Agent (`session.send`, first restoring a closed Agent with its original launcher), leaves a `routed` entry in the chat, and judges again when the Agent stops. **At most 2 rounds**; a third `rework` becomes `needs_user`.
+  After `needs_user`, no more supervision signals are emitted; the assistant must ask the user. `cancelled` closes the to-do (reason "取消：…", meaning "Cancelled: …"). Every review inserts a `review` chat-activity entry and is recorded in ledger `reviews`. Only the supervising chat can review its tasks.
+- **Assignment deduplication**: `task_plan` compares new tasks with ongoing to-dos and working / waiting Agents. The same issue / PR number, or the same computer and directory (including nested directories) with similar titles, or very similar titles, yields "Possible duplicate" in the result. The assistant is told to inspect before deciding whether to merge or cancel; dispatch is not blocked.
+- **Snapshot**: supervised tasks under "Tasks started from this chat" include "Supervision: normal / stalled N minutes / waiting for an answer N minutes / pending review / rework round N / awaiting your decision / accepted" and a criteria count. Items needing action come first.
+- **Assistant workflow** is in its CLAUDE.md (`prompts/assistant/claude_md.md`, "How to work"): always provide `done_when` when assigning; make decisions independently when possible, nudge or change approach when stalled, sequence resource contention, cancel duplicates; verify PR / CI / screenshots / live status personally before acceptance; tell the user only about decisions they must make and accepted results; split downstream follow-through (deployment, issue closure, TestFlight) into subsequent tasks or follow-ups.
 - **In charge of any agent** (#5112, `assistant/agent_control.go`):
   - **Levels of interruption**: `agent_send` queues behind the agent's turn; `agent_interrupt` stops the turn at once (`session.interrupt`: Esc in a herdr pane, the runtime's or Codex's own cancel) and keeps the session; with `then` it sends the new instruction right after (steering). Work already done is not undone. Not for assistant conversations or read-only sources (`capabilities.interrupt` false). An agent that is not working (including one still starting) is not stopped; `then` is still sent (queued if it is busy). Closing an agent is not offered to the model (accepted / cancelled tasks are retired as before).
   - **Adoption**: `agent_supervise`, main conversation only. An agent on no todo becomes a task of the conversation: a new todo (titled after the session by default), the agent linked, the supervisor set, a task card in the feed; from then on it is like a `task_plan` task (signals, pending review, `task_review`). On one of its own tasks it sets `done_when` / `expect_minutes`. Another conversation's task or the user's own todo is refused and stays theirs. If the todo is made but the agent cannot be linked, the todo is closed at once (no empty task is left); one adoption runs at a time. The agent is not told: the answer reminds the assistant to tell it with `agent_send` if it should work to the criteria or report.
   - **Agents report to their supervisor**: agents get the MCP tool `report_to_supervisor {kind: progress|question|blocked|done, text, evidence?, step?, steps?}`. Only an agent of a supervised task has someone to receive it; any other gets "nobody receives this" (not an error). A report becomes the supervisor signal `report`: `question` / `blocked` / `done` are urgent (the 2-minute cadence), `progress` follows the normal one; reports of the same kind waiting for the same message are joined (both questions kept, evidence merged) instead of replacing each other; the message lists the kind, the step, what it said and its evidence. `done` does not mark the task pending review (the hub's judge still decides). At most 10 reports per session in 10 minutes. Only Claude Code agents with the Persona MCP have the tool (Codex does not), so task prompts do not mention it.
   - **Whose call it is**: an agent's MCP server has no session id of its own. `personad mcp` passes its pane (`HookPane`) to the node, and **only for `report_to_supervisor`** the node resolves the session from it (`node/hooks.go` `paneCaller`: the agent the host shows in the pane now, else the hooks' binding). Other tools still call without a session (a connector's approval card is not attached to the agent). An agent run by a runtime without a pane gets "nobody receives this".
-- **客户端**：网页、安卓的任务卡和待办详情显示验收标准清单和验收状态；iOS / Mac 另做（#3124 的子 issue）。不认识 `supervision` 的客户端照常工作，待验收的任务在它们那里就是「停着 / 完成未看」。
+- **Clients**: web and Android task cards / to-do details show acceptance criteria and review state; iOS / Mac are separate work (sub-issues of #3124). Clients unaware of `supervision` continue normally, showing pending-review tasks as "Stopped / Unread."
 
-## 数据和接口（hub）
+## Data and APIs (hub)
 
-### 任务 = 待办
+### Task = to-do
 
-`todos` 加两列：
+Add two columns to `todos`:
 
-- `origin`：从哪段助手对话开的（会话 id），手动建的待办为空。任务坞和任务板只看 `origin` 等于当前对话的（主对话另外带上手动开的 Agent，见下面「主对话的任务坞里的手动 Agent」）。
-- `plan_id`：由哪个计划开的，可空。
+- `origin`: the assistant chat that created it (session ID), empty for manually created to-dos. The dock and board include only items whose `origin` equals the current chat (the main chat also includes manual Agents; see "Manual Agents in the main-chat dock" below).
+- `plan_id`: the plan that created it, nullable.
 
-### 计划
+### Plans
 
-表 `task_plans`：`id`、`conversation`、`tasks`（JSON：每项 `title`、`notes`、`machine`、`cwd`、`launcher`、`model`、`permission`、`readonly`、`user_requested`、`why`）、
-`state`（`open` / `started` / `dismissed`）、`created_at`、`updated_at`。
+Table `task_plans`: `id`, `conversation`, `tasks` (JSON: each item's `title`, `notes`, `machine`, `cwd`, `launcher`, `model`, `permission`, `readonly`, `user_requested`, `why`),
+`state` (`open` / `started` / `dismissed`), `created_at`, `updated_at`.
 
-- MCP 工具 `task_plan`（只给助手）：传任务列表。每一项都是只读、`user_requested`（且 `assistant.start_requested_tasks` 开着）或命中 `tasks.trust` 时直接开始；否则存成 `open` 的计划，发对话动态。
-  返回计划 id 和每个任务的状态（文字）。
-- `POST /api/v1/task-plans/{id}/start`：可以带用户改过的字段，一个任务建一个待办（`origin`、`plan_id`）再开 Agent（`startSession` 带 `todo_id`）；
-  `remember: true` 时把这类记进 `tasks.trust`。`POST …/dismiss`：不开了。
+- MCP tool `task_plan` (assistant only): accepts a task list. Start directly if every item is read-only, `user_requested` (with `assistant.start_requested_tasks` enabled), or matched by `tasks.trust`; otherwise save an `open` plan and emit chat activity.
+  Return the plan ID and each task's state (text).
+- `POST /api/v1/task-plans/{id}/start`: may include user-edited fields. Create a to-do per task (`origin`, `plan_id`), then start its Agent (`startSession` with `todo_id`).
+  With `remember: true`, record this kind in `tasks.trust`. `POST …/dismiss`: do not start.
 
-### 对话动态
+### Chat activity
 
-hub 往对话里插的条目，不进 Claude 的 transcript（插进去会多跑一轮、还会被压缩掉），单独存表 `assistant_feed`：
-`id`、`conversation`、`at`、`kind`、`ref`、`body`（JSON），以及 `sent_at`（消息卡回复发出的时间，和 `body.sent_at` 同步写，供 `since` 查询走索引；0390）。
+Hub-inserted chat entries do not enter Claude's transcript (that would trigger another turn and later be compacted away). Store separately in `assistant_feed`:
+`id`, `conversation`, `at`, `kind`, `ref`, `body` (JSON), plus `sent_at` (when a message-card reply was sent, written alongside `body.sent_at` so `since` queries can use an index; 0390).
 
-| kind | 什么时候 | ref / body |
+| kind | Trigger | ref / body |
 | --- | --- | --- |
-| `plan` | `task_plan` 交给你一个计划 | 计划 id |
-| `task` | 一个任务开始 | 待办 id |
-| `answered` | 任务的交互被处理 | 待办 id；一行摘要（问题、你的回答），和逐个问题的完整问答 `items` |
-| `receipt` | 任务做完 / 没开起来 / 被模型服务出错打断（`interrupted`，#1516） | 待办 id；摘要、改动文件数、测试、PR；打断的带错误原文 `error` |
-| `routed` | 你直接对任务说了一句 | 待办 id；原文 |
-| `message` | 收件箱里一条和任务有关的消息，AI 分身起草好了回复 | 收件箱条目 id；任务、来源、会话、谁、原话、草稿 |
-| `today` | 当天第一次打开这段对话（App 调 `POST …/today`） | 日期；夜里做完的任务、等你的任务、在做几个、飞书今天接下来的会、@我 的会话、其他未读数、昨天 18:00 以来没成功的（没开起来的任务、失败 / 跳过的定时任务，#4124） |
+| `plan` | `task_plan` hands you a plan | Plan ID |
+| `task` | A task starts | To-do ID |
+| `answered` | A task interaction is handled | To-do ID; one-line summary (question, your answer), and full question / answer `items` per question |
+| `receipt` | Task finishes / fails to start / is interrupted by a model-service error (`interrupted`, #1516) | To-do ID; summary, changed-file count, tests, PR; interrupted receipts include original error `error` |
+| `routed` | You speak directly to a task | To-do ID; original text |
+| `message` | AI twin drafts a reply to an Inbox message related to a task | Inbox item ID; task, source, chat, sender, original message, draft |
+| `today` | First opening of this chat that day (App calls `POST …/today`) | Date; tasks completed overnight, waiting tasks, working count, remaining Lark meetings today, chats mentioning me, other unread counts, unsuccessful items since yesterday at 18:00 (failed-start tasks, failed / skipped scheduled tasks, #4124) |
 
-- `GET /api/v1/assistant/conversations/{id}/feed?since=`，WebSocket `assistant_feed` 推新条目。App 把它和 transcript 按时间合在一起画。
-- 计划卡、任务卡的实时状态不存在动态里：卡片按 `ref` 读计划 / 待办 / 会话的当前状态，所以原地更新。
+- `GET /api/v1/assistant/conversations/{id}/feed?since=`; WebSocket `assistant_feed` pushes new entries. The App merges them with the transcript by time.
+- Live plan-card / task-card state is not stored in the feed. Cards read current plan / to-do / session state by `ref`, updating in place.
 
-### 钩子
+### Hooks
 
-- **做完**：`Machine.setSessions` 发现挂在带 `origin` 的待办上的 Agent 从 working 变成 done / idle、没有待处理的交互时（和 `notifyFinished` 同一处），
-  写 `receipt`。同一个任务的几个 Agent 都停了才算任务做完。有 Agent 停在模型 API 错误上（`turn_error`）时写 `interrupted` 回执、不判断做完（#1516）；
-  卡片上的「继续」走 `POST /api/v1/todos/{id}/retry`，hub 给那个 Agent 发「继续」，它跑起来任务就回到在做，这一轮正常结束再发一条 done 回执。
-- **等你**：不写动态。App 直接用待办挂着的 Agent 的 `pending_interactions`；处理后（`resolve`）写 `answered`。
-- **对任务说话**：`POST /api/v1/assistant/conversations/{id}/route {todo_id, text}`：hub 用 `session.send` 发给那个任务最要紧的 Agent，写 `routed`。
-- **Persona 知道**：实时快照多一节「这段对话开的任务」：每个任务的状态、最近一句、和上一份比的变化（做完了、在等你）。不额外触发一轮。
+- **Finished**: when `Machine.setSessions` finds an Agent attached to a to-do with `origin` changing from working to done / idle with no pending interaction (at the same point as `notifyFinished`),
+  write `receipt`. A task with multiple Agents is finished only when all stop. If an Agent stops on a model API error (`turn_error`), write an `interrupted` receipt without judging completion (#1516).
+  Continue on the card uses `POST /api/v1/todos/{id}/retry`; hub sends the Agent "继续" (continue). Once it runs, the task returns to working; a normal turn ending emits another done receipt.
+- **Waiting for you**: no feed entry. The App directly uses the attached Agents' `pending_interactions`; handling (`resolve`) writes `answered`.
+- **Speak to a task**: `POST /api/v1/assistant/conversations/{id}/route {todo_id, text}`; hub uses `session.send` to send to the task's highest-priority Agent and writes `routed`.
+- **Persona learns about it**: the live snapshot adds "Tasks started from this chat," with each task's state, latest text, and changes since the previous snapshot (finished, waiting for you). No extra turn is triggered.
 
-## App（iOS）
+## App (iOS)
 
-- 助手页的 `ChatView(style: .assistant)` 合入对话动态（`ChatLines` 里按时间插入），新的行类型：计划卡、任务卡、回执、答过的问题、路由气泡；
-  秒办的手机工具调用（`phone_reminders_create`、`phone_calendar_create_event`……）从「工具 N」那一行里提出来，画成结果卡。
-- `mainFooter` 在 `InteractionPanel` 上方加问题卡队列（任务的交互，带任务名）和任务坞；输入框加 `@` 和路由标签。
-- 新组件都进设计系统（`apple/Persona/DesignSystem`），颜色用 `AgentState.tone`，动画用 `Theme.Motion`；
-  页面里不写死数值（`CLAUDE.md`「设计系统（iOS）」）。逻辑放 `@Observable` 的 `TasksModel`（依赖从 `Deps` 进，测试用 `FakeHub`），
-  对话动态的合并是纯函数，单测覆盖。
-- 截图：mock hub（`scripts/mock/mock_hub.py`）加计划、任务、动态的假数据，DEBUG 参数 `-openUnifiedStep <n>` 停在原型对应的那一步，
-  每一步深浅色各截一张对照原型。
+- The assistant's `ChatView(style: .assistant)` merges chat activity (inserted by time in `ChatLines`). New row types: plan card, task card, receipt, answered question, routed bubble.
+  Instant phone-tool calls (`phone_reminders_create`, `phone_calendar_create_event`, etc.) are extracted from the "Tools N" row and rendered as result cards.
+- `mainFooter` adds a question-card queue (task interactions with task names) and dock above `InteractionPanel`; the input gains `@` and routing labels.
+- New components belong in the design system (`apple/Persona/DesignSystem`), using `AgentState.tone` colors and `Theme.Motion` animations.
+  No hardcoded values in pages (`CLAUDE.md`, "Design system (iOS)"). Logic lives in an `@Observable` `TasksModel` (dependencies from `Deps`, tests with `FakeHub`);
+  chat-activity merging is a pure function covered by unit tests.
+- Screenshots: add mock plan, task, and activity data to the mock hub (`scripts/mock/mock_hub.py`). DEBUG argument `-openUnifiedStep <n>` stops at the corresponding prototype step;
+  capture light and dark for each step and compare to the prototype.
 
-## 实现（iOS，第 3 步）
+## Implementation (iOS, step 3)
 
-| 部分 | 在哪 |
+| Part | Location |
 | --- | --- |
-| 数据类型（计划、对话动态、待办、任务状态）和接口 | `apple/Shared/Tasks.swift` |
-| 待办列表、本地缓存与按 id 索引 | `apple/Persona/App/TodoStore.swift`（`todos` 事件与重连统一刷新，在途刷新合并补拉） |
-| 计划、每段对话的动态，路由到哪个任务、打开哪个任务 | `apple/Persona/App/TasksStore.swift`（待办从 `TodoStore` 索引读取，`assistant_feed` / `task_plan` 事件更新计划与动态，重连时重拉各对话的动态） |
-| 计划卡、任务卡、回执、答过的问题、路由气泡、任务坞、问题卡、路由标签、`@` 列表 | `apple/Persona/Views/Assistant/Tasks/TaskViews.swift` |
-| 任务详情（嵌 Agent 的对话页）、任务板 | `apple/Persona/Views/Assistant/Tasks/TaskSheets.swift` |
-| 对话动态排进对话：放在它发生的那一轮末尾（下一条消息之前） | `ChatLines.mergeFeed`，`ChatLine.Content.feed` |
-| 输入框上方：问题卡（只放最早的一张，写「还有 N 件」）、`@` 列表、任务坞、路由标签；路由时消息直接交给任务 | `ChatView.taskFooter`、`Composer.sendText` |
+| Data types (plans, chat activity, to-dos, task state) and APIs | `apple/Shared/Tasks.swift` |
+| To-do list, local cache, ID index | `apple/Persona/App/TodoStore.swift` (`todos` events and reconnect share refresh logic; in-flight refreshes are coalesced with a follow-up fetch) |
+| Plans, per-chat activity, routing target, opened task | `apple/Persona/App/TasksStore.swift` (to-dos read from the `TodoStore` index; `assistant_feed` / `task_plan` events update plans and activity; reconnect refetches each chat's feed) |
+| Plan cards, task cards, receipts, answered questions, routed bubbles, dock, question cards, routing labels, `@` list | `apple/Persona/Views/Assistant/Tasks/TaskViews.swift` |
+| Task details (embedded Agent chat), task board | `apple/Persona/Views/Assistant/Tasks/TaskSheets.swift` |
+| Feed inserted into chat at the end of its turn (before the next message) | `ChatLines.mergeFeed`, `ChatLine.Content.feed` |
+| Above the input: question card (earliest only, with "N more"), `@` list, dock, routing label; routed messages go directly to the task | `ChatView.taskFooter`, `Composer.sendText` |
 
-- 状态颜色沿用 Agent 的（`AgentState.tone`：需要你红、工作中琥珀、完成未看绿），不用原型里的橙色等你，和 Agents 页一致。
-- 任务坞的胶囊放不下时让标题省略，「等你」两个字不省略。
-- 任务详情浮层只有一层头：嵌的 Agent 页的头接管了任务名、关闭和任务的 ⋯（#3255，见上面「任务详情」）。
-- 截图：`MOCK_TASKS=1`、`MOCK_TASKS_AT`、`-showTaskDetail`、`-showTaskBoard`（`docs/testing.md`）。
+- Reuse Agent state colors (`AgentState.tone`: Needs you red, Working amber, Unread green), not the prototype's orange waiting state, to match Agents.
+- If dock pills do not fit, truncate the title but never "Waiting for you."
+- Task details have one header layer: the embedded Agent page takes over the task name, Close, and task ⋯ (#3255; see "Task details" above).
+- Screenshots: `MOCK_TASKS=1`, `MOCK_TASKS_AT`, `-showTaskDetail`, `-showTaskBoard` (`docs/testing.md`).
 
-#### 主对话的任务坞里的手动 Agent（#1113）
+#### Manual Agents in the main-chat dock (#1113)
 
-在 Agents 页手动开的 Agent 没有待办，或者待办的 `origin` 为空，哪段对话的任务坞都看不到。主对话要「盯住所有任务」，所以只有主对话的任务坞和任务板把它们也带上：
+Agents started manually in Agents have no to-do, or a to-do with empty `origin`, so no chat's dock sees them. The main chat must watch all tasks, so only its dock and board include them too:
 
-- 带哪些：所有「在做 / 等你」的 Agent（Persona 自己的对话除外），去掉已经是任务的：没完成的任务（`origin` 不为空）挂着的 Agent，
-  以及 hub 给会话标了待办、但这个待办不是手动建的（包括待办列表还没刷新到的新任务）。挂在手动建的待办上的 Agent 照样算手动的。
-  从其他对话开的任务按原来的规则不进主对话，它们的 Agent 也不当成手动的重复出现。
-- 怎么排：任务的胶囊在前，手动的 Agent 在后（等你的在前，其余按进入当前状态的时间新的在前）；胶囊多一个 Agents 页的 `</>` 标记，等你时和任务一样染成需要你的红色、带「等你」。
-- 什么时候消失：做完（完成未看）、空闲、离线就不在坞里了；和任务不同，完成未看的手动 Agent 不留在坞里（Agents 页有它）。
-- 「全部 N」算上它们，任务板在「等你」「在做」两组里任务后面列出它们；点胶囊或任务板的行，在任务详情浮层里打开这个 Agent 的对话。
-- 数据：`AppModel.goingAgents` 从已有的会话列表派生，只在胶囊要显示的内容变了时才更新，不新开轮询、不让坞跟着每次推送重画；
-  筛选在 `DockAgent.shown`（`apple/Shared/Tasks.swift`），单元测试 `DockAgentTests`，界面测试 `TaskDockAgentTests`（`MOCK_TASKS_DOCK=pair` 两个胶囊，不设时六个）。
-- 对话流里不为手动 Agent 插卡片：它们不是从对话开的。
-- 网页端同样（#1275）：`dockAgents`（`web/src/lib/todos.ts`）筛选和排序，点胶囊在侧边面板打开这个 Agent 的对话（`AgentPanel`）；「全部 N」去待办页。
-- 第 4 步（#996 和这一步的 iOS）：
-  - **按天分段**：`ChatLines.daySections` 在每天第一行上面加一行日期（今天 / 昨天 / 几月几日 周几），只在助手对话里。
-  - **旧任务卡折叠**：不是今天的 `task` 条目画成一行（`TaskLine`：状态、标题、到哪了），点开是详情。
-  - **秒办结果卡**：`phone_reminders_create`、`phone_calendar_create_event` 成功时，结果画在那一轮的工作行下面（`QuickResult`、
-    `ChatLines.quickResults`），「撤销」在手机上用 EventKit 删掉（`RemindersTool.remove`、`CalendarTool.remove`），不经过 hub。
-  - **今天**：主对话每天第一次显示时 `POST …/today`（`TasksStore.loadToday`），卡片在当天零点的位置：做完的、等你的、在做几个、
-    飞书的会（「准备」替你说一句）、@你 的会话（「过一遍」）；App 已有提醒事项权限时，再加上今天到期的提醒（不会为此弹授权）。
-  - **直接开的任务**：Persona 资料页「主动做事」里，列出记住的几类，左滑删掉。
-- **消息卡关联任务**（hub）：收件箱的「要不要交给 AI 分身」判断（`inbox/judge.md`）同时看到正在做的任务，消息说的是其中某一个时
-  回 `task_id`（只认给它看过的）；AI 分身的第一条消息带上这个任务的进度（`inbox/agent.md`），草稿照实说做到哪了；草稿交上来时
-  （`inbox_draft`）往开这个任务的对话里插 `message` 条目。App 上画成消息卡（`MessageCard`）：原话、挂着的任务（实时）、草稿（「改一下」就地改）、「发送」（走收件箱的发送，条目不在本地时按 id 发）、「稍后」（先收起）；
-  已经回复过时写「已以你的名义回复」和发出去的原文。
-  - **已发送记在卡片上**（#1519）：这件事的回复发出去时（从卡片、收件箱、任何一端），hub 在它之前插的消息卡的 body 里写上 `sent_at`、`sent`（发出去的原文），
-    并重新广播这条 `assistant_feed`（同一个 id，客户端按 id 换成新的 body）；`GET …/feed?since=` 也带上 `since` 之后发送的卡片。只写一次、不清掉：
-    事项被新消息重新打开、AI 分身再起草时插的是新卡片，旧卡片仍是已发送。早于这个记录的卡片，读取时按收件箱事项（`done_by=replied` 且晚于卡片）补上，原文用草稿。
-    找未发送卡片（`db.MarkFeedSent`）走部分索引 `assistant_feed_unsent`（`kind, ref, at`，条件是 body 里没有 `sent_at`，迁移 0392，#2617；只有消息卡会写 `sent_at`，其他种类的条目一直在索引里，所以它不小），
-    改这条 UPDATE 的条件要和索引谓词保持一致，否则每次回复又整表扫描。
-  - **只发一次**：卡片的「发送」带上卡片 id（`POST /inbox/{id}/reply {text, card}`），hub 按卡片加锁，已发送的卡片不再发（连点、两端各点一次、旧页面都一样）；
-    回复已经发出去后才交上来的草稿不再插卡片。
-  - **不留占位符**：草稿是点一下就原样发出去的，`inbox/agent.md`、`inbox/draft.md` 要求不知道的就不写（不再用【】标出来让用户补），
-    `inbox_draft` 拒收带【…】/ {{…}} 的草稿让 AI 分身重交；网页、安卓的卡片在草稿里还有【…】时不让发，并提示改掉。
-  - iOS 目前还按本地记录 + 收件箱列表里事项的 `done` 判断，没读 `sent_at`（收件箱列表只留 3 天内处理过的，事项被重新打开后旧卡片又会显示「发送」），待改。
+- Included: all Working / Waiting for you Agents (excluding Persona's own chats), minus those already represented by tasks: Agents attached to unfinished tasks (nonempty `origin`),
+  and sessions marked by hub with a non-manual to-do (including new tasks not yet refreshed into the to-do list). Agents attached to manually created to-dos still count as manual.
+  Tasks from other chats remain excluded from the main chat, and their Agents do not reappear as manual duplicates.
+- Ordering: task pills first, manual Agents afterward (waiting first; others by most recent entry into their current state). Their pills add the Agents page's `</>` mark; waiting pills use the same Needs you red and "Waiting for you" as tasks.
+- Disappearance: remove from the dock when finished (Unread), idle, or offline. Unlike tasks, Unread manual Agents do not remain in the dock (they remain in Agents).
+- "All N" includes them; the board lists them after tasks in Waiting for you / Working. Tapping a pill or board row opens the Agent's chat in the task-details sheet.
+- Data: `AppModel.goingAgents` derives from the existing session list and updates only when pill-visible content changes. No new polling, and no dock redraw on every push.
+  Filtering: `DockAgent.shown` (`apple/Shared/Tasks.swift`); unit tests `DockAgentTests`; UI tests `TaskDockAgentTests` (`MOCK_TASKS_DOCK=pair` for two pills, otherwise six).
+- No chat-stream cards for manual Agents: they were not started from the chat.
+- Web does the same (#1275): `dockAgents` (`web/src/lib/todos.ts`) filters and sorts; tapping a pill opens that Agent's chat in the side panel (`AgentPanel`); "All N" goes to To-dos.
+- Step 4 (#996 and this step's iOS work):
+  - **Day sections**: `ChatLines.daySections` adds a date above each day's first row (Today / Yesterday / month, day, weekday), only in assistant chats.
+  - **Old task cards collapse**: non-today `task` entries become one line (`TaskLine`: state, title, progress); tapping opens details.
+  - **Instant result cards**: successful `phone_reminders_create` / `phone_calendar_create_event` results render below that turn's work row (`QuickResult`,
+    `ChatLines.quickResults`). Undo deletes locally through EventKit (`RemindersTool.remove`, `CalendarTool.remove`), without hub.
+  - **Today**: first main-chat display each day calls `POST …/today` (`TasksStore.loadToday`), placing the card at midnight: completed tasks, waiting tasks, working count,
+    Lark meetings (Prepare sends a message for you), chats mentioning you (Review); if the App already has reminder permission, also include reminders due today (no permission prompt for this).
+  - **Direct-start tasks**: Persona profile's Proactive work section lists remembered kinds, with swipe-left deletion.
+- **Message cards link to tasks** (hub): the Inbox's "Hand to AI twin?" judgment (`inbox/judge.md`) also sees active tasks. If a message concerns one, it returns `task_id` (only an ID shown to it).
+  The AI twin's first message includes that task's progress (`inbox/agent.md`), so the draft states actual progress. Draft submission
+  (`inbox_draft`) inserts a `message` entry into the chat that started the task. The App renders `MessageCard`: original message, attached task (live), draft (Edit inline), Send (Inbox sending; send by ID if the item is not local), Later (collapse for now).
+  Already-replied cards show "Replied on your behalf" and the sent text.
+  - **Sent state on the card** (#1519): when a reply for this item is sent (from a card, Inbox, or any client), hub writes `sent_at` and `sent` (the sent text) into the previously inserted message-card body,
+    then rebroadcasts `assistant_feed` with the same ID; clients replace the body by ID. `GET …/feed?since=` also includes cards sent after `since`. Written once, never cleared:
+    reopening an item with a new message and having the AI twin draft again creates a new card; the old one remains sent. For cards predating this record, reads backfill from the Inbox item (`done_by=replied`, later than the card), using the draft as text.
+    Finding unsent cards (`db.MarkFeedSent`) uses partial index `assistant_feed_unsent` (`kind, ref, at`, predicate: body has no `sent_at`, migration 0392, #2617. Only message cards write `sent_at`; other kinds remain in the index, so it is not small).
+    Keep this UPDATE's condition aligned with the index predicate or each reply scans the whole table again.
+  - **Send once**: Send includes the card ID (`POST /inbox/{id}/reply {text, card}`). Hub locks per card and never resends a sent card (double taps, one tap on each of two clients, and stale pages all behave the same).
+    Drafts submitted after the reply was sent no longer insert cards.
+  - **No placeholders**: drafts are sent verbatim with one tap. `inbox/agent.md` and `inbox/draft.md` require omitting unknown information (no more 【】 markers for the user to fill).
+    `inbox_draft` rejects drafts containing 【…】 / {{…}} and asks the AI twin to resubmit. Web and Android cards refuse to send drafts still containing 【…】 and ask for edits.
+  - iOS still uses local records + the Inbox list item's `done`, not `sent_at` (the list retains processed items only for 3 days; reopening an item makes old cards show Send again). To be fixed.
 
-## 分步
+## Steps
 
-| 步 | 内容 |
+| Step | Scope |
 | --- | --- |
-| 1 | 本文档和原型 |
-| 2 ✅ | hub：迁移（`todos.origin` / `plan_id`、`task_plans`、`assistant_feed`）、`task_plan` 工具和提示词、计划开始 / 不开接口、对话动态的接口和推送、做完 / 答过 / 路由的钩子、快照里的任务 |
-| 3 ✅ | iOS：模型和 `FakeHub`、对话动态合并、计划卡、任务卡、任务坞、问题卡、回执、`@` 和路由、任务详情浮层、任务板 |
-| 4 ✅ | 秒办结果卡、主对话的「今天」卡片、按天分段和折叠、`tasks.trust` 的设置页（消息卡关联任务另做） |
-| 5 | 网页 ✅（`docs/web.md`「主对话统一入口」）；手表 ✅（提问带 `task_title`，「需要你」里写「任务 · xx」；在做几个、等你几个本来就在实时活动和手表里，任务的 Agent 也算在内）；Android ✅（`docs/android.md`「主对话统一入口」） |
+| 1 | This document and prototype |
+| 2 ✅ | hub: migrations (`todos.origin` / `plan_id`, `task_plans`, `assistant_feed`), `task_plan` tool and prompts, start / dismiss plan APIs, feed APIs and pushes, completion / answer / routing hooks, tasks in snapshots |
+| 3 ✅ | iOS: models and `FakeHub`, feed merging, plan cards, task cards, dock, question cards, receipts, `@` and routing, task-details sheet, task board |
+| 4 ✅ | Instant result cards, main-chat Today card, day sections and collapsing, `tasks.trust` Settings page (message-card task links are separate work) |
+| 5 | Web ✅ (`docs/web.md`, "Unified main-chat entry point"); Watch ✅ (questions carry `task_title`, displaying "Task · xx" in Needs you; working / waiting counts already exist in Live Activities and Watch and include task Agents); Android ✅ (`docs/android.md`, "Unified main-chat entry point") |
 
-## 已拍板（2026-11-03）
+## Decisions (2026-11-03)
 
-1. 自动开始的边界按上面三档；计划卡上能记住「这类以后直接开」。
-2. 任务就是待办，待办页和任务板合成一个视图。
-3. 主对话按天分段，任务进展不进对话，过了当天的任务卡折成一行；久远上下文交给压缩和知识库；旁支对话保留、入口弱化。
-4. 手表和锁屏只放任务坞和「需要你」。
-5. 界面、UI 和交互按榜首水准打磨：每一步深浅色截图对照原型，状态过渡和动画要顺。
-6. Agents 页和顶栏切换不动、不降级。
+1. Auto-start boundaries follow the three tiers above; plan cards can remember "Start this kind directly next time."
+2. Tasks are to-dos; To-dos and the task board share one view.
+3. Main chat uses day sections; task progress stays out of the chat; previous-day task cards collapse to a line. Distant context belongs in compaction and the knowledge base. Side chats remain, with less prominent entry points.
+4. Watch and lock screen show only the dock and Needs you.
+5. Polish the interface, UI, and interactions to chart-topping App quality: compare light / dark screenshots to the prototype at every step, with smooth state transitions and animations.
+6. Do not change or demote Agents or the top-bar switch.
