@@ -1,180 +1,180 @@
-# 计划：扩展底座（#1101）
+# Plan: extension foundation (#1101)
 
-> 2026-11-05：「插件（plugin）」整体改名「扩展（extension）」，和 VS Code 对齐（总 issue #1843，命名和兼容层 #1844，见 `docs/extensions.md`「命名和兼容」）。改名之后的阶段（两个扩展仓库、签名、统一组件、SDK、扩展模型、细分 token、沙箱、可观测、系统级位置）在 #1843 里跟踪。
+> 2026-11-05: "plugin" was renamed "extension" across the board, aligning with VS Code (umbrella issue #1843, naming and compatibility layer #1844, see `docs/extensions.md` ("Naming and compatibility")). The phases after the rename (two extension repositories, signing, unified components, SDK, extension model, fine-grained tokens, sandbox, observability, system-level locations) are tracked in #1843.
 
-状态：**第 1 步（底座）的服务端做完**（1a，2026-11-04）。规格（清单、安装、协议、接口、命令行）已经写进 `docs/extensions.md`，以那里为准；
-这份留着记设计取舍、实现时和方案的出入、还没做的步骤。issue #1101 定了方向：一个统一底座 + 各模块开放扩展点，骨架学 VS Code（清单 + `contributes` + 按需激活 + 独立进程），
-权限学 Chrome（显式声明、安装时展示），WordPress 只借事件通知、不借 filter。
+Status: **the server side of step 1 (the foundation) is done** (1a, 2026-11-04). The spec (manifest, installation, protocol, endpoints, command line) is written in `docs/extensions.md`, which is authoritative;
+this document records the design trade-offs, where the implementation diverged from the plan, and the steps not yet done. Issue #1101 set the direction: one unified foundation + extension points opened by each module, with the skeleton modeled on VS Code (manifest + `contributes` + on-demand activation + separate processes),
+permissions modeled on Chrome (explicit declaration, shown at install time), and from WordPress only event notifications, not filters.
 
-## 一、现状
+## 1. Current state
 
-| | hub 扩展（`docs/extensions.md`） | 连接器协议 v2（`docs/connector-protocol.md`） |
+| | hub extensions (`docs/extensions.md`) | Connector protocol v2 (`docs/connector-protocol.md`) |
 | --- | --- | --- |
-| 从哪来 | hub.json 的 `extensions[]`，主人手写 | 只有 Telegram：`jarvisd-telegram` 在 personad 旁边就注册，代码里写死 |
-| 进程 | hub 起，2 秒起、最长 60 秒退避重启；或只给 `socket`，跑在别处 | `connector/proc` 起，5 秒起、最长 5 分钟退避；连接器关掉就停 |
-| 怎么说话 | 扩展在 unix socket 上起 HTTP，hub 原样转发 `/api/v1/extensions/<id>/…`；`GET /health` 判活 | stdin / stdout 一行一条 JSON（`internal/rpc`），`init` → 清单 → 各方法；一致性测试 |
-| 配置 | `config`（任意 JSON）放进环境变量 `PERSONA_EXTENSION_CONFIG` | `init` 带 hub.json 里它那一节 |
-| 密钥 | 自己处理（`key_file`、`key_command`）；还拿到 hub 的完整 token | `secrets.*`：hub 加密存 `connector_secrets`，只给它自己 |
-| 权限 | 没有，等于 hub 本身 | 写操作只能经 `actions.do`，过 hub 的闸门 |
-| 状态 | 内存 | 开关、选项存 `settings` 表的 `connectorSettingsKey` |
+| Where they come from | `extensions[]` in hub.json, written by hand by the owner | Only Telegram: `jarvisd-telegram` is registered whenever it sits next to personad, hard-coded |
+| Process | Started by the hub, 2 s to start, restarted with backoff up to 60 s; or only a `socket` is given and it runs elsewhere | Started by `connector/proc`, 5 s to start, backoff up to 5 minutes; stopped when the connector is turned off |
+| How they talk | The extension serves HTTP on a unix socket, and the hub forwards `/api/v1/extensions/<id>/…` as is; `GET /health` checks liveness | One JSON per line on stdin / stdout (`internal/rpc`), `init` → manifest → methods; conformance tests |
+| Config | `config` (arbitrary JSON) passed in the environment variable `PERSONA_EXTENSION_CONFIG` | `init` carries its section of hub.json |
+| Secrets | Handled by itself (`key_file`, `key_command`); also receives the hub's full token | `secrets.*`: the hub stores them encrypted in `connector_secrets` and gives them only to that connector |
+| Permissions | None; equivalent to the hub itself | Writes only through `actions.do`, past the hub's gate |
+| State | In memory | Switches and options stored under `connectorSettingsKey` in the `settings` table |
 
-两套各有一半：hub 扩展有通用的进程管理和 HTTP 转发，没有清单、密钥、权限；连接器有清单、密钥和协议，但只认一个写死的程序。底座把两边合起来。
+Each has half: hub extensions have generic process management and HTTP forwarding, but no manifest, secrets or permissions; connectors have a manifest, secrets and a protocol, but only recognize one hard-coded program. The foundation combines the two.
 
-## 二、关键决定
+## 2. Key decisions
 
-1. **一个注册表，三个来源**：内置（personad 自带，清单编进二进制）、hub.json（现有的 `extensions[]`，原样兼容）、安装的（包放在 hub 机器上，登记在数据库）。
-   App 和 API 只看到一个列表。
-2. **清单是唯一的事实**：能力、配置项、密钥、权限、进程怎么起，全在 `persona-extension.json`；hub 不运行扩展也能列出它、画出配置表单、给用户看权限。
-   程序在握手时报的清单只能是它的子集，不一致时以安装时接受的为准（和连接器现在的做法一样）。
-3. **进程扩展的协议就是连接器 v2 推广出来的**：同一个 `internal/rpc` 一行一条 JSON，握手改名 `initialize`，方法按扩展点分命名空间。
-   连接器 v2 的方法原样搬进 `connector.` 命名空间（`status` → `connector.status`），字段和意思一个都不变，原来的一致性测试照跑。
-4. **HTTP 转发保留，作为进程扩展的第二个出口**：语音要在手机和扩展之间直传音频 WebSocket，JSON-RPC 不适合。清单里 `runtime.http: true` 的扩展在
-   unix socket 上起 HTTP，hub 照旧转发。所以现有的语音扩展不用改一行就是一个合法的扩展（只有 HTTP、没有 RPC）。
-5. **安装只在 hub 机器上和管理界面做，手机不能装**：装扩展就是在 hub 机器上跑一个新程序。手机的设备凭据只能看列表、开关、改配置、填密钥；
-   安装、升级、卸载要 hub 的主 token（只在 hub 机器的 hub.json 里，命令行 `personad extension …` 用它走回环）或管理界面的登录会话。
-6. **权限第 1 步是「声明 + 展示 + 记录」，不是沙箱**：进程扩展以 hub 的系统用户运行，能读写这个用户能读写的一切；网络域名 hub 管不住。
-   安装时把这句话和声明的权限一起给人看，接受的那一份存下来；hub 自己提供的能力（给 hub token、以后的知识库读写等）按接受的权限放行，没接受就拒绝。
-   真正的隔离（Linux 用 bubblewrap / 网络命名空间，Mac 用 sandbox-exec，或经 hub 的代理出网）以后单独做，见「六」。
-7. **配置只支持 JSON Schema 的一个子集**：子集以外的写法装不上，保证每个扩展的配置在 App 里都能画成表单，而不是装上以后才发现某个字段没法改。
-8. **改了配置、密钥或开关就重启扩展进程**：第 1 步不做热更新，少一种状态。连接器自己的「选项」（`connector.Options`）不受影响，照旧热改。
+1. **One registry, three sources**: built-in (shipped with personad, manifest compiled into the binary), hub.json (the existing `extensions[]`, compatible as is), and installed (package on the hub machine, registered in the database).
+   The App and API see a single list.
+2. **The manifest is the single source of truth**: capabilities, config fields, secrets, permissions and how to start the process are all in `persona-extension.json`; the hub can list an extension, render its config form and show its permissions without running it.
+   The manifest a program reports at handshake can only be a subset of it; on mismatch, the one accepted at install time wins (same as connectors do today).
+3. **The process-extension protocol is connector v2 generalized**: the same `internal/rpc` with one JSON per line, the handshake renamed `initialize`, and methods namespaced by extension point.
+   Connector v2 methods move into the `connector.` namespace as is (`status` → `connector.status`), with not a single field or meaning changed, and the existing conformance tests keep running.
+4. **HTTP forwarding stays, as the second outlet for process extensions**: voice needs to stream an audio WebSocket directly between the phone and the extension, which JSON-RPC does not suit. Extensions with `runtime.http: true` in the manifest
+   serve HTTP on a unix socket, and the hub forwards as before. So the existing voice extension is a valid extension without changing a line (HTTP only, no RPC).
+5. **Installation happens only on the hub machine and in the admin UI, never from the phone**: installing an extension means running a new program on the hub machine. The phone's device credentials can only view the list, toggle, edit config and enter secrets;
+   install, upgrade and uninstall need the hub's master token (only in hub.json on the hub machine; the command line `personad extension …` uses it over loopback) or an admin UI login session.
+6. **Step 1 of permissions is "declare + show + record", not a sandbox**: process extensions run as the hub's system user and can read and write everything that user can; the hub cannot control network domains.
+   At install time, this sentence is shown together with the declared permissions, and the accepted set is stored; capabilities the hub itself provides (handing out the hub token, later knowledge-base reads and writes, etc.) are allowed per the accepted permissions and refused otherwise.
+   Real isolation (bubblewrap / network namespaces on Linux, sandbox-exec on Mac, or egress through a hub proxy) comes later as separate work, see "6".
+7. **Config supports only a subset of JSON Schema**: anything outside the subset will not install, which guarantees every extension's config can be drawn as a form in the App, instead of discovering after installation that some field cannot be edited.
+8. **Changing config, secrets or the on/off switch restarts the extension process**: step 1 does no hot reload, which removes one state. A connector's own "options" (`connector.Options`) are unaffected and still change live.
 
-## 三、实现时和方案的出入（1a）
+## 3. Where the implementation diverged from the plan (1a)
 
-- **管理界面的安装页后补（#1208）**：1a 时安装、升级、回滚、卸载只认主 token 经回环（`personad extension`）；之后加了管理会话那条路
-  （`/api/v1/admin/extensions…`，CSRF、预览一次一个 + 10 分钟 10 次，审计记 `admin UI`），还多了浏览器上传（`upload:<文件名>`）和升级预览的 `added_permissions`。
-- **协议多了一个基础方法 `manifest`**：`initialize` 只回 id、版本和贡献，装跑在别处的扩展时要完整清单（权限、配置、密钥），所以加了 `manifest`
-  （`initialize` 之前也能调；hub 从包里起的扩展可以不回）。只有 HTTP 的远端扩展回 `GET /manifest`。
-- **贡献了连接器的扩展由连接器的开关持有**：它的 `on_call` 不算数（否则「关着时登录」会把程序拉起来，和现在的行为不一样）；`on_startup` 照样常驻。
-- **连接器程序拿得到用户填的密钥**：`connector/serve.MainWith` 的 `Init.Declared`；原来的 `serve.Main` 不变。
-- **内置 Telegram 的版本号是 hub 的版本**（不是语义化版本）：内置扩展不过 `Parse`，`engines` 由 `version -v` 的检查代替。
-- **列表多了 `can_install`**（hub 有没有数据库），`features` 多了 `extension_manager`。
-- **升级失败自动回滚只看自己会起的扩展**（`on_startup`，或连接器开着）：按需起的扩展升级时不会为了检查而拉起。
-- 迁移号用了 `0291_plugins.sql`（避开其他车道的号段）。
+- **The admin UI's install page came later (#1208)**: in 1a, install, upgrade, rollback and uninstall only accepted the master token over loopback (`personad extension`); later the admin-session path was added
+  (`/api/v1/admin/extensions…`, CSRF, preview one at a time + 10 per 10 minutes, audited as `admin UI`), plus browser upload (`upload:<file name>`) and `added_permissions` in the upgrade preview.
+- **The protocol gained a basic method `manifest`**: `initialize` returns only the id, version and contributions, but installing an extension that runs elsewhere needs the full manifest (permissions, config, secrets), so `manifest` was added
+  (callable before `initialize` too; extensions the hub starts from a package may skip it). Remote HTTP-only extensions answer `GET /manifest`.
+- **An extension that contributes a connector is held by the connector's switch**: its `on_call` does not count (otherwise "sign in while off" would start the program, unlike current behavior); `on_startup` still keeps it running.
+- **Connector programs can get the secrets the user entered**: `Init.Declared` in `connector/serve.MainWith`; the original `serve.Main` is unchanged.
+- **Built-in Telegram's version is the hub's version** (not semver): built-in extensions skip `Parse`, and `engines` is replaced by the `version -v` check.
+- **The list gained `can_install`** (whether the hub has a database), and `features` gained `extension_manager`.
+- **Automatic rollback on a failed upgrade only covers extensions that would start on their own** (`on_startup`, or the connector is on): on-demand extensions are not started just to check during an upgrade.
+- The migration number used is `0291_plugins.sql` (avoiding other lanes' number ranges).
 
-## 四、分步
+## 4. Steps
 
-- [x] **1a：服务端底座**：`internal/extension`（清单、schema 子集、权限、版本范围、包的暂存和解包、注册表）、`extension/host`（进程宿主、按需激活、退避、超时、ping、HTTP、远端 socket）、
-  `extension/serve`（程序一侧）、`extension/conformance`；迁移 `0291`；hub 的接口和 `personad extension`；语音（hub.json）和 Telegram（内置）迁上来；
-  `connector/serve` 认扩展开头，`connector/proc` 能经扩展进程说话（`Link`）；文档 `docs/extensions.md`、`docs/connector-protocol.md`。
-- [x] **1b：App「设置 › 扩展」**（iOS，Mac 共用页面）：列表、详情（权限、贡献、关于）、按 `form.fields` 画的配置表单、只写的密钥、开关；
-  假 hub `MOCK_PLUGINS=1`、UI 测试和单元测试，默认 / BeautifulUI 风格 × 深浅色截图看过（`docs/extensions.md`「App：设置 › 扩展」）。
-- [x] 管理界面的「扩展」页（#1208）：列表、开关、安装（目录 / 包 / https / 上传 / remote，先预览）、升级（权限变多明确提示）、回滚、卸载（可留数据）。
-- [x] 网页的扩展页（#1207）。
-- [x] Android 的扩展页（#1206，`docs/android.md`「扩展（设置 › 扩展）」）。
-- [x] **第 2 步（服务端）**：扩展点 `quota`（扩展看不到 Key：`quota.query` + 经 hub / node 代发的 `quota.http`，占位符 `${launcher_key}`、同源限制，权限 `launcher_keys`）、
-  `providers`（声明供应商，`GET /api/v1/launchers/presets`，新增启动器带 `preset`）；node 的 `launchers.quota` 换成 `launchers.http`；`server/internal/quota` 只留通用部分，
-  两家网关的读法迁到私有扩展仓库（归属见 `CLAUDE.local.md`）。规格在 `docs/extensions.md`「额度」「模型供应商」。
-- [ ] 第 2 步（App，#1259，进行中）：额度的网关名用 hub 给的 `gateway_name`（不再写死），假 hub 的示例网关换成中性的；设置 › 模型供应商 › 新增「从扩展添加」。
-- [x] 两个额度扩展已在私有扩展仓库，装在用户的 hub 上实测：经 node 代发查到 `~/.zshrc` 启动器的额度，不认识的网关回「查不了」。
-- [x] 第 3 步（服务端）：飞书网关整条飞书链路（含公司圈）迁成私有扩展，hub 自己的那份已删（3c，#1520），见下面「第 3 步的方案」「第 3 步做下来」。TRAEX 留在开源仓库（已拍板）。
-- [x] 第 3 步（客户端，3d，#1530）：飞书界面按 `features` 的 `lark` / `lark_moments` 显示（网页 #1542、iOS / Mac #1575、Android #1622），「公司圈」的通用叫法，帖子标题用存档的 feed 名。
-- [x] **第 4 步（服务端，#1284）**：扩展点 `ui`（`plugin_page` / `launcher_section`，`ui.render` / `ui.action`，View 是几种固定的条目，hub 按 `extension.CheckView` 把关；
-  启动器页的一节经 `gateway.http` 用 Key 访问网关，扩展看不到 Key）和 `events`（`inbox.changed`、`agent.needs_you`、`agent.finished`，只通知，订阅随权限一起同意）。
-  规格在 `docs/extensions.md`「声明式 UI」「事件」。
-- [ ] 第 4 步（客户端）：iOS / Mac、Android、网页画 View（扩展详情里的页面、启动器页上的一节）。
-- [x] **UI 插槽（服务端，#1451）**：插槽表（`nav_page` 主导航入口、`overview_card` 总览卡片、`machine_section` 机器详情的一节），渲染上下文（时区、语言、平台、尺寸、UI 版本），
-  `chart` / `stat_grid` / `segmented`、`refresh_after`、`ui.badge` 角标，主导航 / 总览 / 机器详情按贡献算进「它可以」和权限摘要，老 App 由 hub 按 UI 版本拿掉新条目。规格在 `docs/extensions.md`「UI 插槽」。
-- [ ] UI 插槽（客户端）：网页、Android、iOS / Mac 画新插槽和新条目。
-- [x] **扩展市场（服务端，#1303）**：仓库 / 网站发布 `persona-extensions.json`，hub 登记市场（GitHub 私有仓库带只读 token），目录、搜索，完整权限的设备从市场装、升级、卸载；
-  命令行 `personad extension market … / search / install market:…`。规格在 `docs/extensions.md`「扩展市场」。
-- [x] git 仓库作为市场（#1373）：`git:<地址>`，hub 浅克隆、用 hub 机器的 SSH 凭据，给没有 token 读文件接口的私有 git 托管用。
-- [ ] 扩展市场（客户端）：iOS / Mac、Android、网页、管理界面的「扩展市场」页。
+- [x] **1a: server foundation**: `internal/extension` (manifest, schema subset, permissions, version ranges, package staging and unpacking, registry), `extension/host` (process host, on-demand activation, backoff, timeouts, ping, HTTP, remote socket),
+  `extension/serve` (the program side), `extension/conformance`; migration `0291`; hub endpoints and `personad extension`; voice (hub.json) and Telegram (built-in) moved over;
+  `connector/serve` recognizes the extension handshake, `connector/proc` can talk through an extension process (`Link`); docs `docs/extensions.md`, `docs/connector-protocol.md`.
+- [x] **1b: App Settings › Extensions** (iOS, page shared with Mac): list, details (permissions, contributions, about), config form drawn from `form.fields`, write-only secrets, switch;
+  mock hub `MOCK_PLUGINS=1`, UI tests and unit tests, screenshots checked in default / BeautifulUI styles × light and dark (`docs/extensions.md` ("App: Settings › Extensions")).
+- [x] The admin UI's **Extensions** page (#1208): list, switch, install (directory / package / https / upload / remote, preview first), upgrade (an explicit warning when permissions grow), rollback, uninstall (data can be kept).
+- [x] The web extensions page (#1207).
+- [x] The Android extensions page (#1206, `docs/android.md` ("Extensions (Settings › Extensions)")).
+- [x] **Step 2 (server)**: extension point `quota` (extensions never see the Key: `quota.query` + `quota.http` sent on their behalf by the hub / node, placeholder `${launcher_key}`, same-origin restriction, permission `launcher_keys`),
+  `providers` (declare providers, `GET /api/v1/launchers/presets`, new launchers carry `preset`); node's `launchers.quota` replaced by `launchers.http`; `server/internal/quota` keeps only the generic part,
+  and the two gateways' readers moved to a private extension repository (ownership in `CLAUDE.local.md`). The spec is in `docs/extensions.md` ("Quota", "Model providers").
+- [ ] Step 2 (App, #1259, in progress): the quota gateway name uses the `gateway_name` from the hub (no longer hard-coded), the mock hub's example gateway becomes a neutral one; **Settings › Model Providers** gets a new **From Extension** option.
+- [x] Both quota extensions are in the private extension repository and were tested on the user's hub: through node relaying, they fetched the quota of `~/.zshrc` launchers; unknown gateways answer "can't check".
+- [x] Step 3 (server): the whole Lark chain of the Lark gateway (including Moments) moved into a private extension, and the hub's own copy was deleted (3c, #1520); see "Step 3 plan" and "How step 3 went" below. TRAEX stays in the open-source repository (decided).
+- [x] Step 3 (clients, 3d, #1530): the Lark UI shows according to `lark` / `lark_moments` in `features` (web #1542, iOS / Mac #1575, Android #1622), with the generic name **Moments**, and post titles using the archived feed name.
+- [x] **Step 4 (server, #1284)**: extension point `ui` (`plugin_page` / `launcher_section`, `ui.render` / `ui.action`; a View is a few fixed kinds of items, checked by the hub with `extension.CheckView`;
+  the launcher-page section reaches the gateway with the Key through `gateway.http`, and the extension never sees the Key) and `events` (`inbox.changed`, `agent.needs_you`, `agent.finished`, notify-only, subscriptions agreed to together with permissions).
+  The spec is in `docs/extensions.md` ("Declarative UI", "Events").
+- [ ] Step 4 (clients): iOS / Mac, Android and web draw Views (pages in extension details, a section on the launcher page).
+- [x] **UI slots (server, #1451)**: the slot table (`nav_page` main navigation entry, `overview_card` overview card, `machine_section` a section of machine details), render context (time zone, language, platform, size, UI version),
+  `chart` / `stat_grid` / `segmented`, `refresh_after`, `ui.badge` badges; main navigation / overview / machine details count toward "It can" and the permission summary by contribution; for old Apps the hub strips new items by UI version. The spec is in `docs/extensions.md` ("UI slots").
+- [ ] UI slots (clients): web, Android and iOS / Mac draw the new slots and items.
+- [x] **Extension market (server, #1303)**: a repository / website publishes `persona-extensions.json`; the hub registers markets (GitHub private repositories with a read-only token), with catalog and search; devices with full permissions install, upgrade and uninstall from a market;
+  command line `personad extension market … / search / install market:…`. The spec is in `docs/extensions.md` ("Extension market").
+- [x] A git repository as a market (#1373): `git:<address>`; the hub shallow-clones using the hub machine's SSH credentials, for private git hosts without a token-based file-reading API.
+- [ ] Extension market (clients): the **Extension Market** page on iOS / Mac, Android, web and the admin UI.
 
-## 第 3 步的方案：飞书网关迁成扩展
+## Step 3 plan: moving the Lark gateway into an extension
 
-审计（2026-11-04）：开源仓库里只对特定服务有意义的东西，最大的一块是经 **飞书网关**（第三方、非官方的飞书网页客户端，以用户身份登录）接的整条飞书链路：
-`server/internal/lark` 包（约 3000 行）、hub 的 `lark*.go`、公司圈（飞书 Moments）的收件箱 / 知识库爬取和关联、node 内置的飞书工具、`skills/` 下飞书网关的 skill 副本、node 的写闸门、
-一批提示词和 golden，以及客户端按飞书网关的数据形状画的飞书聊天页。已拍板：**整条迁到私有扩展仓库**；开源版保留官方 `lark-cli`、飞书机器人、飞书邮箱这些公开能力。
+Audit (2026-11-04): the largest piece of the open-source repository that only makes sense for one particular service is the whole Lark chain connected through the **Lark gateway** (a third-party, unofficial Lark web client that signs in as the user):
+the `server/internal/lark` package (about 3000 lines), the hub's `lark*.go`, Inbox / knowledge-base crawling and linking of Moments (Lark Moments), node's built-in Lark tools, the copy of the Lark gateway skill under `skills/`, node's write gate,
+a batch of prompts and goldens, and the client Lark chat pages drawn after the Lark gateway's data shapes. Decided: **move the whole chain into a private extension repository**; the open-source edition keeps the public capabilities: the official `lark-cli`, the Lark bot and Lark mail.
 
-目标：装上扩展，飞书在 App 里和现在一模一样；不装，开源版没有飞书网关相关的任何东西（代码、提示词、文档、测试数据），飞书只走 `lark-cli`。
+Goal: with the extension installed, Lark in the App is exactly as it is now; without it, the open-source edition has nothing related to the Lark gateway (code, prompts, docs, test data), and Lark goes only through `lark-cli`.
 
-### 新扩展点（开源仓库，通用）
+### New extension points (open-source repository, generic)
 
-| 扩展点 | 扩展提供 | hub 做什么 |
+| Extension point | Extension provides | What the hub does |
 | --- | --- | --- |
-| `api`（版本 1） | `{id, prefix, features?, events?}`：一段 App 用的 HTTP 接口，在扩展的 HTTP 一侧 | 把 `/api/v1/<prefix>/…` 转给扩展（鉴权在 hub 做完，同 `/api/v1/extensions/<id>/…`）；`prefix` 不能和 hub 自己的接口撞；`features` 加进 hello / `/health` 的 `features`（客户端靠它决定显不显示）；扩展发 `api.broadcast {type, …}` 推给在线的客户端，`type` 只能是 `events` 里声明的 |
-| `connectors`（已有，补两项） | 收件箱种类的说明（`kinds` 带 `{kind, description}`，给模型分拣用，替代开源仓库里的 `prompts/inbox/kinds/<id>.md`）；知识库条目（`items`）已有 | 照旧 |
-| `assistant`（版本 1） | 技能目录（包里的 `skills/<name>/`）、助手说明的片段（markdown）、给编程 Agent 的工具说明 | 技能随助手的其他技能一起下发到各台电脑；片段接在助手的 CLAUDE.md 后面（提示词 golden 照旧守开源部分） |
+| `api` (version 1) | `{id, prefix, features?, events?}`: a set of HTTP endpoints for the App, on the extension's HTTP side | Forwards `/api/v1/<prefix>/…` to the extension (authentication done in the hub, as with `/api/v1/extensions/<id>/…`); `prefix` must not clash with the hub's own endpoints; `features` are added to the `features` of hello / `/health` (clients use them to decide what to show); the extension sends `api.broadcast {type, …}` to push to online clients, where `type` must be one declared in `events` |
+| `connectors` (existing, two additions) | Descriptions of Inbox kinds (`kinds` carries `{kind, description}`, used by the model for triage, replacing `prompts/inbox/kinds/<id>.md` in the open-source repository); knowledge-base items (`items`) already exist | Unchanged |
+| `assistant` (version 1) | A skills directory (`skills/<name>/` in the package), fragments of the assistant instructions (markdown), tool descriptions for coding Agents | Skills are distributed to every computer along with the assistant's other skills; fragments are appended to the assistant's CLAUDE.md (prompt goldens still guard the open-source part) |
 
-### 分阶段
+### Phases
 
-1. **3a 扩展点**（开源仓库，#1262 已做）：`api`、`assistant`、连接器的种类说明；hub 里飞书相关的入口改成走注册表（没有提供 `lark` 的扩展时，飞书相关的接口、工具、收件箱来源都不出现，App 按 `features` 不显示）。
-2. **3b 扩展**（私有扩展仓库里接飞书的扩展）：把 `internal/lark` 和 hub 里飞书网关的逻辑搬过去，做成进程扩展：`api`（现有 `/api/v1/lark/…` 接口原样，数据形状不变，App 不用改）、`connectors`（工具、收件箱、知识库归档和条目、实时事件）、`assistant`（飞书网关的技能和说明、写闸门规则）、`/agent`（经 `hub_api`）。对着用户 hub 上的真实飞书网关验证。
-3. **3c 清理**（开源仓库）：删掉 `internal/lark` 里飞书网关的部分、hub 的 `lark*.go` / 公司圈、提示词和 golden、`skills/` 下飞书网关的 skill 副本、node 的写闸门、同步脚本、文档和测试数据里的相关内容；`lark-cli`、飞书机器人、飞书邮箱留着。部署，在用户的 hub 上装扩展，确认飞书收件箱、聊天、知识库、助手都和以前一样。
-4. **3d 客户端**：飞书聊天页按 `features` 显示（扩展提供时）；公司圈的界面改成通用的「飞书公司圈（Moments）」，名字和分组来自扩展，不写死任何租户的名称。
+1. **3a extension points** (open-source repository, #1262, done): `api`, `assistant`, and connector kind descriptions; Lark entry points in the hub now go through the registry (when no extension provides `lark`, Lark endpoints, tools and Inbox sources do not appear, and the App hides them based on `features`).
+2. **3b extension** (the extension that connects to Lark, in the private extension repository): move `internal/lark` and the hub's Lark gateway logic over as a process extension: `api` (the existing `/api/v1/lark/…` endpoints as is, data shapes unchanged, no App change), `connectors` (tools, Inbox, knowledge-base archiving and items, live events), `assistant` (the Lark gateway's skills and instructions, write-gate rules), `/agent` (through `hub_api`). Verified against the real Lark gateway on the user's hub.
+3. **3c cleanup** (open-source repository): delete the Lark gateway parts of `internal/lark`, the hub's `lark*.go` / Moments, prompts and goldens, the Lark gateway skill copy under `skills/`, node's write gate, sync scripts, and related content in docs and test data; keep `lark-cli`, the Lark bot and Lark mail. Deploy, install the extension on the user's hub, and confirm the Lark Inbox, chat, knowledge base and assistant all behave as before.
+4. **3d clients**: the Lark chat page shows based on `features` (when the extension provides it); the Moments UI becomes the generic "Lark Moments", with names and groups coming from the extension, never hard-coding any tenant's name.
 
-每一阶段一个 PR；3b、3c 互相依赖，3c 在扩展装好验证后再合。
+One PR per phase; 3b and 3c depend on each other, and 3c merges only after the extension is installed and verified.
 
-### 第 3 步做下来（2026-11-04）
+### How step 3 went (2026-11-04)
 
-扩展接管的过程中 hub 补了这些通用能力（每条一个 issue / PR；规格在 `docs/extensions.md`、`docs/connector-protocol.md`）：
+While the extension was taking over, the hub gained these generic capabilities (one issue / PR each; specs in `docs/extensions.md`, `docs/connector-protocol.md`):
 
-| 缺口 | 做法 |
+| Gap | Solution |
 | --- | --- |
-| 连接器 id `lark` 被 hub 预留，扩展装不上 | 可迁出的连接器 id（`connector.MigratableConnectors`）：扩展启用时 hub 的让出、停用时放回；3c 之后 hub 没有自己的了，只是不预留（#1320） |
-| 转发扩展 HTTP：`Cache-Control` 叠成两份、`%2F` 被拆开 | 缓存头以扩展的为准；转义的路径原样到扩展（#1320） |
-| 收件箱条目原有的块（聊天、文档的行、公司圈帖子）和旧条目接续 | 连接器的 thing 带 `extra`，hub 只对可迁出的连接器读；旧条目按块对到 thread 上，新条目用扩展给的 `legacy_id`；回复和改状态经 `inbox.reply` 的 `client_id`、`changes`（#1320） |
-| 知识库的日程 / 会议 / 文档标题、会话里的附件 | 协议加 `items.list`、`items.doc_title`、`archive.media`（#1372） |
-| 公司圈全量进知识库、和我有关的帖子 | 程序调 hub 的 `posts.put` / `posts.comments` / `posts.pending`、`archive.chats`，清单 `archive_sources`；帖子存档、清理、挂项目在 hub（#1444） |
-| 助手的写闸门和凭据 | `assistant.gate`（包里的闸门文件）+ `assistant.credentials` / `assistant.summary`；node 的闸门、命令包装、运行时工具按 hub 给的闸门走（#1468） |
-| /agent | 开对话带 `purpose`、`machine_id`；`GET /api/v1/kb/chats/{id}/context`；扩展接管时 hub 的 `lark_agent_reply` 和 /agent 让出（#1484） |
-| 个人 Agent（Agents 页的一个来源） | `agent_sources` 扩展点（#1400）+ 可迁出的来源 id，会话 id 不变（#1497） |
-| 发送回执、hub 互联的角色、两份实时事件 | `api` 的 `receipts`；`initialize` 的 `hub.role`，角色变了重启扩展；扩展接管时 hub 的事件循环停下（#1503） |
-| 助手快照和「今天」卡片里的未读会话、今天的会 | 连接器能力 `snapshot`（`snapshot.get`）（#1520） |
-| 客户端按扩展显示飞书 | 扩展的 `api` 报 features `lark`、`lark_moments`（#1530） |
+| Connector id `lark` was reserved by the hub, so the extension could not install | Migratable connector ids (`connector.MigratableConnectors`): the hub's yields when the extension is enabled and returns when it is disabled; after 3c the hub has none of its own and simply doesn't reserve it (#1320) |
+| Forwarding extension HTTP: `Cache-Control` doubled, `%2F` split apart | The extension's cache headers win; escaped paths reach the extension as is (#1320) |
+| Continuity for the existing blocks of Inbox items (chats, document rows, Moments posts) and old items | A connector's thing carries `extra`, which the hub reads only for migratable connectors; old items are matched to threads by block, new items use the `legacy_id` from the extension; replies and state changes go through `inbox.reply`'s `client_id` and `changes` (#1320) |
+| Knowledge-base event / meeting / document titles, attachments in chats | The protocol adds `items.list`, `items.doc_title`, `archive.media` (#1372) |
+| All of Moments into the knowledge base, posts that involve me | The program calls the hub's `posts.put` / `posts.comments` / `posts.pending` and `archive.chats`, with `archive_sources` in the manifest; post archiving, cleanup and project linking stay in the hub (#1444) |
+| The assistant's write gate and credentials | `assistant.gate` (gate file in the package) + `assistant.credentials` / `assistant.summary`; node's gate, command wrapping and runtime tools follow the gate given by the hub (#1468) |
+| /agent | Opening a chat carries `purpose` and `machine_id`; `GET /api/v1/kb/chats/{id}/context`; when the extension takes over, the hub's `lark_agent_reply` and /agent yield (#1484) |
+| Personal Agents (a source on the Agents page) | The `agent_sources` extension point (#1400) + migratable source ids, session ids unchanged (#1497) |
+| Send receipts, linked-hub roles, duplicate live events | `api`'s `receipts`; `hub.role` in `initialize`, restarting the extension when the role changes; the hub's event loop stops when the extension takes over (#1503) |
+| Unread chats and today's meetings in the assistant snapshot and the Today card | Connector capability `snapshot` (`snapshot.get`) (#1520) |
+| Clients show Lark per the extension | The extension's `api` reports features `lark` and `lark_moments` (#1530) |
 
-经验：
+Lessons:
 
-- **先补能力、在真实 hub 上让扩展接管并验证，再删 hub 自己的**：接管期间两份并存，每一处 hub 自己的循环（实时事件、/agent、爬取、个人 Agent）都要有「扩展接管时让出」的判断，
-  漏一处就会出现两份（/agent 的事件处理就漏过：判断写在了处理之后）。
-- **数据的接续靠 id 不变**：连接器 id、知识库的会话 id（`<来源>-<id>`）、收件箱条目 id、个人 Agent 的会话 id、发送回执的派生 id 都照原样，
-  扩展第一次接手时从 hub 已有的状态接着（`archive.chats`、旧条目按块对上），不重读、不重复、不漏。
-- **扩展仓库里的代码可以有内部细节，开源仓库只留扩展点**：闸门规则、提示词、技能、客户端数据形状里只对一个服务有意义的部分都放进扩展包，hub 只认通用的格式。
-- 没装扩展时，开源版和「没配飞书网关」时一样：飞书只走 lark-cli 和机器人；hub.json 里旧的 `lark.container / token / base_url`、`lark_agent`、`kb.moments` 不再读，
-  有的话 hub 启动时记一行日志，迁到扩展配置（容器名、地址、账号、/agent 开关和启动器、公司圈全量）的步骤见下。
+- **First add the capabilities, let the extension take over and verify it on a real hub, then delete the hub's own copy**: during the takeover both copies coexist, and every one of the hub's own loops (live events, /agent, crawling, personal Agents) needs a "yield when the extension takes over" check;
+  miss one and you get two copies (the /agent event handling missed it once: the check was placed after the handling).
+- **Data continuity relies on unchanged ids**: connector ids, knowledge-base chat ids (`<source>-<id>`), Inbox item ids, personal Agent session ids and derived send-receipt ids all stay as they were;
+  when the extension first takes over, it continues from the hub's existing state (`archive.chats`, old items matched by block), with no rereading, no duplicates and nothing missed.
+- **Code in the extension repository can carry internal details; the open-source repository keeps only the extension points**: gate rules, prompts, skills and the parts of client data shapes that only mean something to one service all go into the extension package, and the hub only knows generic formats.
+- Without the extension, the open-source edition behaves as if no Lark gateway were configured: Lark goes only through lark-cli and the bot; the old `lark.container / token / base_url`, `lark_agent` and `kb.moments` in hub.json are no longer read;
+  if present, the hub logs one line at startup. The steps to move them into the extension config (container name, address, account, /agent switch and launcher, full Moments crawl) are below.
 
-hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `personad extension config <id> key=value`）填容器名（或地址 + 密钥里的 token）、账号；
-`lark_agent.enabled` / `launcher` / `machine` 对应扩展的 `agent` / `agent_launcher` / `agent_machine`；`kb.moments.enabled` 对应 `moments_crawl`。确认扩展接管后再删 hub.json 里的这几段。
+Moving the old hub.json config into the extension: after installing the extension, fill in the container name (or address + the token in secrets) and account under **Settings › Extensions** (or `personad extension config <id> key=value`);
+`lark_agent.enabled` / `launcher` / `machine` map to the extension's `agent` / `agent_launcher` / `agent_machine`; `kb.moments.enabled` maps to `moments_crawl`. Delete these sections from hub.json only after confirming the extension has taken over.
 
-## 五、现有的两套怎么迁上来
+## 5. Migrating the two existing systems
 
-### 语音扩展（hub.json 的 `extensions[]`）
+### Voice extensions (`extensions[]` in hub.json)
 
-- hub.json 里的每一项照旧读，hub 替它合成一份清单：`{id, name, version: <hub 的构建号>, runtime: {command, args, env, rpc: "none", http: true}, contributes: {<kind>: [{id}]}, permissions: {hub_api: true}}`；
-  只给 `socket` 的是 `remote:`，hub 不起进程。`dir`、`env`、`config`、`disabled`、`command: "personad" / "jarvisd"` 的意思都不变。
-- 行为不变：socket 路径、环境变量（包括 hub 的 token）、`/health` 判活、转发时去掉 App 的凭据、手表那种只读设备 403、模型配置的 `plugin.<id>`。
-  唯一的变化是退避上限从 60 秒变成 5 分钟。
-- `GET /api/v1/extensions` 的老字段不变（Android 的语音入口按 `kind == "voice"` 和 `status == "running"` 找），只多字段。
-- 语音的配置（`providers` 是对象数组）超出表单的子集，第 1 步不进注册表的配置，照旧在 hub.json；以后子集支持对象数组了再说。
-- 现有的 `server/internal/extmgr/extensions_test.go` 不改断言，照旧要过。
+- Each hub.json entry is still read as before, and the hub synthesizes a manifest for it: `{id, name, version: <hub build number>, runtime: {command, args, env, rpc: "none", http: true}, contributes: {<kind>: [{id}]}, permissions: {hub_api: true}}`;
+  an entry with only `socket` is `remote:` and the hub starts no process. The meanings of `dir`, `env`, `config`, `disabled`, and `command: "personad" / "jarvisd"` are unchanged.
+- Behavior is unchanged: socket paths, environment variables (including the hub token), `/health` liveness checks, stripping App credentials when forwarding, 403 for read-only devices such as watches, and `plugin.<id>` model config.
+  The only change is that the maximum backoff rises from 60 seconds to 5 minutes.
+- Old fields in `GET /api/v1/extensions` are unchanged (Android's voice entry looks for `kind == "voice"` and `status == "running"`); only fields are added.
+- Voice config (`providers` is an array of objects) is outside the form subset, so in step 1 it stays in hub.json rather than becoming registry config; revisit when the subset supports object arrays.
+- The existing assertions in `server/internal/extmgr/extensions_test.go` stay unchanged and must still pass.
 
-### Telegram（连接器 v2）
+### Telegram (connector v2)
 
-- 成为一个内置扩展：清单编进 personad（`id: "telegram"`，`runtime.command` 是 personad 旁边的 `jarvisd-telegram`，`contributes.connectors: [spec.Manifest()]`），
-  程序在才注册，和现在一样；`engines` 要求和 hub 同一个构建（现在的 `version -v` 检查保留）。
-- 连接器 id、`connector_secrets` 里的会话、连接器设置里的开关和选项、默认关着都不变。内置扩展的启停和连接器自己的开关是两层：扩展默认启用，用户平时只碰连接器的开关。
-- 连接器的一致性测试（GitHub、信息、Telegram）照跑，并对 `connector/serve` 的两种开头各跑一遍；Telegram 的 proc 测试改成经扩展宿主起程序。
+- Becomes a built-in extension: its manifest is compiled into personad (`id: "telegram"`, `runtime.command` is `jarvisd-telegram` next to personad, `contributes.connectors: [spec.Manifest()]`),
+  registered only when the program is present, as today; `engines` requires the same build as the hub (the current `version -v` check stays).
+- The connector id, session in `connector_secrets`, switches and options in connector settings, and default-off behavior are unchanged. Enabling the built-in extension and the connector's own switch are two layers: the extension is enabled by default, and normally users touch only the connector's switch.
+- Connector conformance tests (GitHub, Messages, Telegram) keep running, once for each of `connector/serve`'s two handshakes; Telegram proc tests change to start the program through the extension host.
 
-## 六、不做 / 以后
+## 6. Out of scope / later
 
-- ~~沙箱（文件、网络的真正隔离）、CPU / 内存限制、扩展签名~~：签名 #1848、沙箱和出网代理、资源上限 #1856 已做（`docs/extensions.md`「签名」「沙箱」「出网」）。
-  还没做：node 上的扩展程序（`node` 段）的沙箱、Mac 上的资源上限、hub.json 里的扩展进沙箱。registry 仍不做。
-- 扩展之间的依赖、扩展调别的扩展：不做。
-- WordPress 的 filter（扩展改 hub 的数据）：永远不做；事件钩子只通知。
-- hub 互联：扩展属于装它的那台 hub，第 1 步不在组内同步；App 经中心 hub 看到的是中心的扩展。
-- 清单的多语言（`name`、`description`、表单标题）：先只有一种，以后加 `l10n`。
+- ~~Sandboxing (real file and network isolation), CPU / memory limits, extension signing~~: signing #1848 and sandboxing, egress proxy and resource limits #1856 are done (`docs/extensions.md` ("Signing", "Sandbox", "Egress")).
+  Still not done: sandboxing node-side extension programs (the `node` section), resource limits on Mac, and sandboxing extensions from hub.json. The registry is still out of scope.
+- Dependencies between extensions, one extension calling another: not doing these.
+- WordPress filters (extensions changing hub data): never; event hooks only notify.
+- Linked hubs: an extension belongs to the hub where it is installed; step 1 does not sync it within the group; through the primary hub, the App sees the primary hub's extensions.
+- Multilingual manifests (`name`, `description`, form titles): one language first, `l10n` later.
 
-## 七、扩展在指定电脑上运行（node 侧程序，方案，#1830）
+## 7. Running an extension on selected computers (node-side program, proposal, #1830)
 
-**要解决什么**：现在扩展的程序只在 hub 上跑（`runtime`），有的能力却只能在某台电脑上做：
+**Problem to solve**: extension programs currently run only on the hub (`runtime`), but some capabilities can only run on a particular computer:
 
-- iMessage：读 iMessage 的数据库。现在是写死在 node 里的 5 个方法（`connector.*`），由 hub.json 的 `imessage.machine` 指定一台机器。
-- cua / ego：驱动 cua-driver、ego lite。现在是编进 personad 的 node 代码（`node/computer*.go`、`node/browser*.go`），加上只有声明的内置扩展。
-- 第三方扩展：做不了这类事。
+- iMessage: reading the iMessage database. Currently five methods (`connector.*`) hard-coded in node, with one machine selected by `imessage.machine` in hub.json.
+- cua / ego: driving cua-driver and ego lite. Currently node code compiled into personad (`node/computer*.go`, `node/browser*.go`), plus declaration-only built-in extensions.
+- Third-party extensions: cannot do these things.
 
-### 清单：`node` 段
+### Manifest: the `node` section
 
-和 `runtime` 并列。两段可以都有（hub 上一个程序、电脑上一个程序），也可以只有一段。
+A sibling of `runtime`. Both can exist (one program on the hub, another on the computer), or only one.
 
 ```json
 "node": {
@@ -189,166 +189,166 @@ hub.json 的旧配置迁到扩展：装上扩展后在 设置 › 扩展（或 `
 }
 ```
 
-各字段：
+Fields:
 
-- `command`：和 `runtime.command` 的写法一样，按平台取（`Command.For`）。支持哪些平台就看它有哪些键，不另写平台列表。
-- `machines`：用哪个配置字段选机器。这个字段必须是 `type: array`、`items.format: machine`，开关照旧是每台机器一个（`format: machine` 已有的画法）。
-  `items` 的 `x-os` 要写，且只能是 `command` 有程序的系统（hub 校验），不支持的机器选不了；只能一台就在这个字段上写 `maxItems: 1`。
-- `rpc` / `http`：扩展协议 1 走 stdio；要 HTTP 就在 `PERSONA_EXTENSION_SOCKET` 上开，和 hub 侧一样。
-- `keep_running`：hub 连不上时这个程序怎么办，见下「node 离线时」。
-- `secrets`：发给 node 的是哪几个（`secrets[]` 里声明过的名字），其余只留在 hub。
-- `permissions`：node 侧的权限，见下「权限展示」。
+- `command`: same syntax as `runtime.command`, selected by platform (`Command.For`). Its keys define the supported platforms; no separate platform list.
+- `machines`: the config field used to select machines. This field must have `type: array` and `items.format: machine`; there is still one switch per machine (the existing `format: machine` rendering).
+  `items` must specify `x-os`, restricted to systems with a program in `command` (validated by the hub); unsupported machines cannot be selected. For only one machine, set `maxItems: 1` on this field.
+- `rpc` / `http`: extension protocol 1 over stdio; for HTTP, listen on `PERSONA_EXTENSION_SOCKET`, as on the hub side.
+- `keep_running`: what the program does when the hub cannot connect, see "When node is offline" below.
+- `secrets`: which ones to send to node (names declared in `secrets[]`); the rest stay only on the hub.
+- `permissions`: node-side permissions, see "Permission display" below.
 
-校验：
+Validation:
 
-- `machines` 指向的字段要存在、形状对，`x-os` 和程序的平台对得上；
-- `secrets` 只能写 `secrets[]` 里有的；
-- 装的时候不再要求 hub 的平台有程序，只要 `runtime`（如果有）能在 hub 上跑、`node` 至少有一个平台。
+- The field referenced by `machines` must exist with the right shape, and `x-os` must match the program's platforms;
+- `secrets` can contain only names present in `secrets[]`;
+- Installation no longer requires a program for the hub's platform, only that `runtime` (if present) can run on the hub and that `node` has at least one platform.
 
-### 安装、升级怎么下发到 node
+### Delivering installs and upgrades to node
 
-**包**：
+**Package**:
 
-- 同一个包里放它支持的各平台的 node 程序（比如 `node/` 目录），装的时候每个都检查在、可执行。
-- 市场不用改：它按 hub 的平台挑一个包，这个包里带着所有电脑平台的程序（包会大一些；以后真嫌大，再给市场条目加按平台的 `{url, sha256}`）。
-- 装好后各平台的程序就在 `installed/<id>/<ver>/` 里，hub 给每台机器发它那个平台的。
+- One package contains the node programs for every supported platform (for example under `node/`); installation checks that each exists and is executable.
+- The market stays unchanged: it picks one package for the hub's platform, and that package includes programs for every computer platform (a larger package; if this becomes a real problem, add per-platform `{url, sha256}` to market entries later).
+- Once installed, each platform's program is under `installed/<id>/<ver>/`, and the hub sends each machine the one for its platform.
 
-**下发**：
+**Delivery**:
 
-- 新的 RPC `plugin.node.put`（begin / chunk / commit，1 MB 一块，带 sha256），分块和校验复用 `node.update.*` 的代码；
-- 按内容摘要去重，和 skills 下发（`assistant.prepare`）一样，同一版本不重复传；
-- node 上放在 `~/.persona/node-plugins/<id>/<ver>/`，数据目录 `~/.persona/node-plugins/<id>/data/` 跨版本保留（不和 hub 的 `~/.persona/extensions/` 共用，#1933）。
+- New RPC `plugin.node.put` (begin / chunk / commit, 1 MB chunks, with sha256), reusing chunking and verification code from `node.update.*`;
+- Deduplicate by content digest, as with skills delivery (`assistant.prepare`); do not transfer the same version twice;
+- On node, store it in `~/.persona/node-plugins/<id>/<ver>/`; the data directory `~/.persona/node-plugins/<id>/data/` survives upgrades (not shared with the hub's `~/.persona/extensions/`, #1933).
 
-**升级**：
+**Upgrade**:
 
-- hub 侧先升（现在的流程），再逐台升：下发新版本 → node 停旧的、起新的 → 程序 30 秒内 `initialize` 成功才算好，否则 node 自己退回上一版。
-- 和 hub 侧一样只留一个旧版本。
-- 每台的结果记下来，设置页里显示。
+- Upgrade the hub side first (the current flow), then each machine: deliver the new version → node stops the old one and starts the new one → successful `initialize` within 30 seconds counts as healthy; otherwise node rolls itself back to the previous version.
+- Keep only one old version, as on the hub side.
+- Record each machine's result and show it in settings.
 
-**版本**：
+**Version**:
 
-- node 侧和 hub 侧必须是同一个版本（同一个包）。
-- 离线时错过了升级的机器，连上后先补下发。补上之前对它的调用回 409 `plugin_updating`，不拿旧程序硬跑。
+- `node`-side and hub-side versions must match (the same package).
+- Machines that missed an upgrade while offline receive it upon reconnecting. Until caught up, calls to that machine return 409 `plugin_updating`, rather than forcing the old program to run.
 
-**停用、去掉一台、卸载**：
+**Disable, remove a machine, uninstall**:
 
-- node 停掉程序、删掉版本目录；
-- 卸载时数据目录一起删，停用、去掉一台时留着。
+- Node stops the program and deletes the version directories;
+- Uninstall also deletes the data directory; disabling or removing a machine keeps it.
 
-### node 离线时
+### When node is offline
 
-**对账，不排队**：
+**Reconcile, don't queue**:
 
-- hub 只存「应该是什么样」：Postgres 里扩展的 config、版本、选了哪些机器（都已经有）。
-- node 每次连上（`Machine.serve` 的重连钩子，和 `refreshComputer` 在同一处），hub 发一次全量对账 `plugin.node.sync`：应该跑哪些扩展、哪个版本、摘要。
-- node 补下发缺的、停掉不该跑的、删掉不在名单上的。
-- 所以离线期间的安装、升级、停用、卸载都不用排队，连上就对齐。
+- The hub stores only the desired state: extension config, version and selected machines in Postgres (all already present).
+- Whenever node connects (the reconnect hook in `Machine.serve`, alongside `refreshComputer`), the hub sends a full reconciliation `plugin.node.sync`: which extensions should run, which versions, which digests.
+- Node receives missing programs, stops ones that should not run, and deletes ones no longer listed.
+- Thus installs, upgrades, disables and uninstalls while offline need no queue; reconnection brings everything into line.
 
-**离线时调用**：
+**Calls while offline**:
 
-- 和现在 cua / ego 一样，HTTP 回 409「机器离线」，扩展的 hub 侧收到错误。
-- App 设置页每台机器显示「运行中 / 离线 / 待更新 / 出错」，出错时带原因。
+- As with cua / ego today, HTTP returns 409 "Machine offline", and the extension's hub-side program receives the error.
+- In App settings, each machine shows "Running / Offline / Update pending / Error", with a reason on error.
 
-**hub 连不上 node 时，电脑上的程序**：
+**The computer's program when the hub cannot reach node**:
 
-- `keep_running: "lease"`（默认）：hub 每 10 分钟续一次租约（同 `computer.nolock`），超过 30 分钟没续，node 停掉它，连上再起。
-- `keep_running: "always"`：hub 断开时不停，给 iMessage 这种要一直收、hub 重启也不该断的。
+- `keep_running: "lease"` (default): the hub renews the lease every 10 minutes (as with `computer.nolock`); after 30 minutes without renewal, node stops it and restarts it on reconnection.
+- `keep_running: "always"`: do not stop when the hub disconnects, for things like iMessage that need continuous collection and should not stop during hub restarts.
 
-**密钥不落 node 的盘**：
+**Secrets never go to node's disk**:
 
-- 只在 `plugin.node.start` 里经现有的 hub↔node 连接带过去，在内存里交给程序（`initialize.secrets`）。
-- 所以 node 重启后，程序要等 hub 连上才起。`always` 只是「hub 断开时不停」，不是「node 重启后自己起」。
+- Sent only in `plugin.node.start` over the existing hub↔node connection and passed to the program in memory (`initialize.secrets`).
+- Thus after node restarts, the program waits for the hub to connect before starting. `always` means "don't stop when the hub disconnects", not "start on its own after node restarts".
 
-### hub 怎么起停、转发
+### How the hub starts, stops and forwards
 
-**宿主**：把 `plugin/host` 里的进程管理（起停、退避重启、关 stdin → SIGTERM → SIGKILL）抽成 hub 和 node 共用的，node 上跑同一套。
+**Host**: extract process management from `plugin/host` (start/stop, restart with backoff, close stdin → SIGTERM → SIGKILL) for both hub and node to share; node runs the same implementation.
 
-**RPC**：
+**RPC**:
 
-- `plugin.node.start{id, version, config, secrets}`、`plugin.node.stop{id}`、`plugin.node.status`；
-- `plugin.node.call{id, method, params}`：转给程序的扩展协议方法；
-- 程序发的通知（`changed` 等）由 node 转成 `plugin.node.event` 发给 hub，hub 交给 hub 侧程序或连接器框架。
+- `plugin.node.start{id, version, config, secrets}`, `plugin.node.stop{id}`, `plugin.node.status`;
+- `plugin.node.call{id, method, params}`: forward to the program's extension-protocol method;
+- Node converts program notifications (`changed`, etc.) into `plugin.node.event` and sends them to the hub, which hands them to the hub-side program or connector framework.
 
-**hub 侧程序调电脑上的程序**：扩展协议加 `nodes.call{machine, method, params}`。有 `node` 段就能用，不另加权限。只有 `node` 段的扩展，hub 把 App 的请求直接转过去。
+**Hub-side programs calling programs on computers**: add `nodes.call{machine, method, params}` to the extension protocol. Available when the manifest has `node`, with no extra permission. For node-only extensions, the hub forwards App requests directly.
 
-**HTTP**：
+**HTTP**:
 
-- 路由 `/api/v1/extensions/{id}/machines/{mid}/…`：hub → 流（`internal/streams`，现在只拨 TCP 端口，加一个「拨扩展的 unix socket」的目标）→ node 上程序的 socket。
-- 普通请求和 WebSocket 都走流。和 hub 侧的 HTTP 一样，只给 full 设备，去掉 `Authorization`。
+- Route `/api/v1/extensions/{id}/machines/{mid}/…`: hub → stream (`internal/streams`, currently dialing only TCP ports, with a new target to dial an extension's unix socket) → the program's socket on node.
+- Both ordinary requests and WebSockets use streams. As with hub-side HTTP, full devices only, with `Authorization` stripped.
 
-### 权限展示
+### Permission display
 
-**「运行程序」那行按位置写**（`perm.Explain` 现在固定写「在 hub 机器上运行程序」）：
+**The "Run a program" row states where** (`perm.Explain` currently always says "Run a program on the hub machine"):
 
-- 有 `runtime`：「在 hub 机器上运行程序」；
-- 有 `node`：「会在这些电脑上运行程序：MacBook、Mac Studio」，列实际选中的机器，没选时写「会在你选的电脑上运行程序」。
+- With `runtime`: "Run a program on the hub machine";
+- With `node`: "Run a program on these computers: MacBook, Mac Studio", listing the actual selected machines; if none are selected, "Run a program on the computers you select".
 
-**node 侧的权限另起一组**：
+**Node-side permissions get a separate group**:
 
-- `network`：联网；
-- `files`：读写自己数据目录以外的文件；
-- `macos_privacy`：会请求完全磁盘访问、辅助功能这类系统权限。
+- `network`: network access;
+- `files`: read and write files outside its own data directory;
+- `macos_privacy`: request system permissions such as Full Disk Access and Accessibility.
 
-**要重新同意的情况**：
+**When consent must be renewed**:
 
-- `perm.Digest` 把 node 段（平台、权限、发给 node 的密钥名）也算进去，变了就要重新同意（现有的 `Added` 列出新增的）。
-- 给扩展加一台机器也要确认：打开那台的开关时，弹出「将在 <机器> 上运行 <扩展> 的程序」（`x-confirm`）。
+- `perm.Digest` includes the node section (platforms, permissions, names of secrets sent to node); changes require renewed consent (the existing `Added` lists additions).
+- Adding a machine to an extension also needs confirmation: turning its switch on shows "Run <extension>'s program on <machine>" (`x-confirm`).
 
-### cua / ego 怎么迁
+### Migrating cua / ego
 
-**第一步只换路，不换代码**：
+**The first step changes routing, not code**:
 
-- 它们的 node 代码留在 personad 里，注册成「内置的 node 侧程序」：进程内实现同一个接口，不起子进程，清单里 `node.command` 写 `builtin`。
-- hub 改用 `plugin.node.call{id: "cua", …}`。旧的 `computer.*`、`browser.*` 方法名保留一个版本，给还没升级的 node。
-- `machines` 字段、机器页上的开关、`PUT /machines/{mid}/computer|browser` 都不变，用户看不到变化。
+- Their node code stays in personad, registered as "built-in node-side programs": the same interface implemented in-process, no child process, `node.command` set to `builtin` in the manifest.
+- The hub switches to `plugin.node.call{id: "cua", …}`. Old `computer.*` and `browser.*` method names remain for one version for nodes not yet upgraded.
+- The `machines` field, switches on the machine page, and `PUT /machines/{mid}/computer|browser` are unchanged; users see no difference.
 
-**换来的**：
+**What this buys**:
 
-- 权限页的「会在这些电脑上运行」、离线对账、设置页里每台机器的状态，三个扩展共用一套；
-- `refreshComputer`、`refreshBrowser`、`tellNoLock` 这类各写一份的重连代码，收进 `plugin.node.sync`。
+- All three extensions share "Run on these computers" in permissions, offline reconciliation, and per-machine status in settings;
+- Separate reconnect code such as `refreshComputer`, `refreshBrowser` and `tellNoLock` is consolidated into `plugin.node.sync`.
 
-**以后**：要拆成独立的程序（比如挪到私有仓库）时，再按普通 node 程序发；现在没有这个需要，不拆。
+**Later**: if they need standalone programs (for example to move into a private repository), distribute them as ordinary node programs then; there is no such need now, so do not split them.
 
-### iMessage 怎么用它
+### How iMessage uses it
 
-- **成为扩展 `imessage`**：`node.command` 只有 `darwin-*`，选机器的字段 `maxItems: 1`，`keep_running: "always"`。
-- **node 程序**：就是现在的 Reader（`connector/imessage`），在 stdio 上按连接器协议回答 `connector.list/chats/older/changes/search`。
-  hub 侧的连接器框架把调用经 `plugin.node.call` 转过去，把 `changed` 转回来。连接器的一致性测试照跑。
-- **配置**：从 hub.json 的 `imessage.machine` 换成扩展的 `machines` 字段。迁移时第一次启动读旧值写进去，旧字段保留一个版本、只读。「交给 Persona」的开关不动。
-- **完全磁盘访问**：macOS 把子进程的权限算在「负责的进程」，也就是拉起它的 node 头上，所以第一步和现在一样，要给 node 授权。
-  `plan-connectors.md` 里「有自己权限的 helper」要做成 LaunchAgent，留作后续：`node.launch: "launchd"`，由 node 用 launchd 起它，第一步不做。
-- **以后的发送**：走闸门（`connector_gate`），和现在的规划一样。
+- **Becomes extension `imessage`**: `node.command` has only `darwin-*`, the machine-selection field has `maxItems: 1`, and `keep_running: "always"`.
+- **Node program**: the current Reader (`connector/imessage`), answering `connector.list/chats/older/changes/search` over stdio using the connector protocol.
+  The hub-side connector framework forwards calls through `plugin.node.call` and returns `changed` notifications. Connector conformance tests keep running.
+- **Config**: move from `imessage.machine` in hub.json to the extension's `machines` field. On the first startup during migration, read the old value and write it there; keep the old field read-only for one version. The "Send to Persona" switch is unchanged.
+- **Full Disk Access**: macOS attributes child-process permissions to the "responsible process", namely the node that launches it, so step 1 remains as today: grant node permission.
+  The "helper with its own permissions" in `plan-connectors.md` would need to be a LaunchAgent, left for later: `node.launch: "launchd"`, launched by node through launchd; not in step 1.
+- **Future sending**: through the gate (`connector_gate`), as currently planned.
 
-### 分步
+### Steps
 
-1. 清单的 `node` 段、校验、权限文案和摘要、包里带 node 程序：只动 hub，有测试。（已合，#1878）
-2. node 侧宿主和 `plugin.node.*`：下发（分块、摘要、去重）、起停、对账、租约，加上 hub 侧的重连钩子；用假 node 和真进程测试。
-   （做完，见 `docs/extensions.md`「在电脑上运行的程序」：按平台一份确定性的包；`host` 的进程管理 hub 和 node 共用；node 上的程序属于进程，不属于某一条连接。）
-3. HTTP / WebSocket 转发：流能拨 unix socket。（做完：`/api/v1/extensions/{id}/-/machines/{mid}/…` 经 `plugin.node.dial`；
-   路径放在 hub 自己的 `/-/` 下，不占扩展自己的路径。）
-4. App（iOS、Mac、网页）：每台机器的状态、加机器时的确认、权限页的新行；截图给用户看。
-   （做完：状态写在选电脑那个字段的每一行里；确认由 hub 补进字段的 `confirm`，App 照旧画；清单的 JSON Schema 和四端生成的类型加上 `node`。Android 的插件设置没跟。）
-5. cua / ego 换成内置的 node 程序，不改界面。
-   （做完：node 在 `node.info` 报 `builtin_programs`，hub 对报了的 node 经 `plugin.node.call` 问、对旧 node 照旧用 `computer.*` / `browser.*`，见 `docs/extensions.md`「内置的 node 程序」。
-   收尾（#1830 最后一个 PR）：cua、ego、imessage 的清单写上 `node.command: "builtin"`，`Manifest.NodeProgram()` 对它们是 nil，同意摘要、界面都不动；
-   连上时的 `refreshComputer`、`refreshBrowser`、`tellNoLock`、`tellCursor` 收进 `reconcileNodePrograms`，和装的包的同步走同一个入口。）
-6. iMessage 迁成扩展，迁移 hub.json 里的配置。
-   （做完：内置扩展「信息（iMessage）」，设置里一个选 Mac 的字段，只能开一台；连接器还是原来那个，读哪台从扩展取，没选再看 hub.json；
-   hub.json 的值启动时迁一次（名字换成 id、打开扩展、记标记），迁不了就继续读 hub.json；node 的 `builtin_programs` 加 `imessage`，
-   方法名照旧 `connector.*`。见 `docs/extensions.md`「内置的 node 程序」和下面「第 6 步拍板结果」。）
+1. Manifest `node` section, validation, permission text and digest, node programs in the package: hub-only changes, with tests. (Merged, #1878.)
+2. Node-side host and `plugin.node.*`: delivery (chunks, digests, deduplication), start/stop, reconciliation, leases, plus the hub-side reconnect hook; test with fake nodes and real processes.
+   (Done, see `docs/extensions.md` ("Programs running on computers"): one deterministic package per platform; process management in `host` shared by hub and node; programs on node belong to the process, not a particular connection.)
+3. HTTP / WebSocket forwarding: streams can dial unix sockets. (Done: `/api/v1/extensions/{id}/-/machines/{mid}/…` through `plugin.node.dial`;
+   the path lives under the hub's own `/-/`, leaving the extension's paths free.)
+4. App (iOS, Mac, web): per-machine status, confirmation when adding a machine, new permission rows; show screenshots to the user.
+   (Done: status appears in each row of the computer-selection field; the hub inserts confirmation into the field's `confirm`, which the App draws as before; the manifest JSON Schema and types generated for all four clients include `node`. Android plugin settings have not caught up.)
+5. Switch cua / ego to built-in node programs, without UI changes.
+   (Done: node reports `builtin_programs` in `node.info`; the hub calls reporting nodes through `plugin.node.call`, and uses `computer.*` / `browser.*` as before for old nodes, see `docs/extensions.md` ("Built-in node programs").
+   Final cleanup (last PR for #1830): cua, ego and imessage manifests declare `node.command: "builtin"`; `Manifest.NodeProgram()` returns nil for them, with consent digests and UI unchanged;
+   reconnect's `refreshComputer`, `refreshBrowser`, `tellNoLock` and `tellCursor` move into `reconcileNodePrograms`, sharing one entry point with installed-package sync.)
+6. Migrate iMessage into an extension and migrate its hub.json config.
+   (Done: built-in extension "Messages (iMessage)", one Mac-selection field in settings, with only one allowed on; the connector is unchanged, taking the selected machine from the extension and falling back to hub.json if none is selected;
+   hub.json's value is migrated once at startup (name to id, enable the extension, record a marker), with hub.json still read if migration fails; node's `builtin_programs` adds `imessage`,
+   method names stay `connector.*`. See `docs/extensions.md` ("Built-in node programs") and "Step 6 decisions" below.)
 
-第 1–3 步做完就能装第三方的 node 侧扩展；第 5、6 步各自一个 PR。
+After steps 1–3, third-party node-side extensions can be installed; steps 5 and 6 each get their own PR.
 
-### 第 6 步拍板结果（2026-11-05，用户「都按建议」）
+### Step 6 decisions (2026-11-05, user: "follow all recommendations")
 
-- 设置 › 扩展 加一行「信息（iMessage）」；设置 › 连接器 › 信息没配置时，提示去 设置 › 扩展 › 信息 选一台 Mac。
-- 已经开着一台时再开另一台：hub 拒绝，提示「只能读一台 Mac，先关掉 <那台>」。
-- 用户的 hub 没配 iMessage：按开源通用的迁移做（用户那边没有要迁的值）。
-- 方案里说的「管理界面把 hub.json 的那一项标成只读」不用做：管理界面本来就没有 iMessage 这一项。
+- Add "Messages (iMessage)" under **Settings › Extensions**; if **Settings › Connectors › Messages** is not configured, direct users to **Settings › Extensions › Messages** to select a Mac.
+- Turning on a second Mac while one is already on: the hub refuses with "Only one Mac can be read; turn off <that machine> first".
+- The user's hub has no iMessage config: use the generic open-source migration (there is no user value to migrate).
+- The proposal's "mark the hub.json entry read-only in the admin UI" is unnecessary: the admin UI never had an iMessage entry.
 
-### 拍板结果（2026-11-05，用户四点都按方案定）
+### Decisions (2026-11-05, all four points adopted as proposed)
 
-- **hub 连不上时，电脑上的程序**：默认停，租约 30 分钟（hub 每 10 分钟续一次）；扩展可以声明 `keep_running: "always"`。
-- **版本**：node 侧必须和 hub 侧一致（同一个包），不允许范围。
-- **只有 `node` 段、没有 hub 侧程序的扩展**：允许，App 的请求直接转到 node。
-- **node 侧程序能不能调 hub 的 API（`hub_api`）**：不给；要用 hub 的能力，经扩展自己的 hub 侧程序。
+- **Programs on computers when the hub cannot connect**: stop by default, with a 30-minute lease (renewed by the hub every 10 minutes); extensions may declare `keep_running: "always"`.
+- **Version**: node-side must match hub-side (the same package); no version range.
+- **Extensions with only `node`, no hub-side program**: allowed; App requests are forwarded directly to node.
+- **Can node-side programs call the hub API (`hub_api`)?** No; use hub capabilities through the extension's own hub-side program.

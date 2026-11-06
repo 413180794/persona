@@ -1,53 +1,53 @@
-验收日期：2026-10-31。分支：`p0/v-ios`，代码版本：`2606f3d`。
+Acceptance date: 2026-10-31. Branch: `p0/v-ios`, code version: `2606f3d`.
 
-本文是历史验收记录：命令、路径和系统确认文案保留当时的 Jarvis 旧名，属于兼容 / 历史引用，不是 Persona 改名后的构建或升级验证。
+This is a historical acceptance record: commands, paths and system confirmation text keep the old Jarvis name of the time. They are compatibility / historical references, not a build or upgrade verification after the Persona rename.
 
-**结论：接口检查通过，iOS P0 验收未完成。** 当前沙箱无法访问 CoreSimulator，未能创建模拟器、安装 App 或截图。下面的接口检查和 Swift 配对链接解析检查，不能替代 App 实际连接及 UI 测试。README 第 10 节要求的真机配对也未执行。
+**Conclusion: the API checks passed; iOS P0 acceptance is not complete.** The current sandbox cannot reach CoreSimulator, so no simulator could be created, no App installed and no screenshot taken. The API checks and the Swift pairing-link parsing check below do not replace a real App connection and UI tests. The device pairing required by README section 10 was not done either.
 
-| 任务步骤 | 实际结果 | 证据（本机临时文件） |
+| Task step | Actual result | Evidence (local temp files) |
 | --- | --- | --- |
-| 临时配置 | 已在临时 HOME 创建最小构建配置，bundle id 为 `com.example.jarvis`，未填团队；hub 使用环境变量提供的专用数据库、指定的两个回环监听端口和空机器列表 | `/tmp/jarvis-ios-verify/home/` |
-| 独立模拟器 | 执行 `xcrun simctl create Jarvis-P0-v-ios com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro`，退出码 1；CoreSimulatorService 连接被拒绝，simdiskimaged 不可用，未返回设备 ID | `/tmp/jarvis-ios-verify/simulator-create.log` |
-| hub 构建与启动 | 原命令因 VCS 状态读取失败而退出；加 `-buildvcs=false` 后构建成功。假 HOME 下 HTTP、TLS 启动成功 | `/tmp/jarvis-ios-verify/go-build.log`、`go-build-no-vcs.log`、`hub-isolated.log` |
-| iOS 构建 | 将受版本控制的 iOS 文件复制到临时目录，配置生成与 XcodeGen 成功，使用 `CODE_SIGNING_ALLOWED=NO` 尝试模拟器构建；CoreSimulator 不可用，Swift Package 拉取又发生 HTTP/2 中断，未得到构建成功结果 | `/tmp/jarvis-ios-verify/source/ios/`、`ios-build.log` |
-| 旧格式配对 | `jarvisd hub pair --legacy` 成功；该命令只打印地址、主 token 和二维码，探针按源码同一编码规则构造链接。HTTP 和 WebSocket 检查通过，未在 App 中启动 | `/tmp/jarvis-ios-verify/probe.log`、`protocol-results.json` |
-| 新格式配对 | `jarvisd hub pair` 成功，探针直接使用命令输出的链接；附加字段包括 `hub`、`fp`、`tls`，HTTP 和 WebSocket 检查通过，未在 App 中启动 | 同上 |
-| 原有 Swift 链接解析 | 从 `ios/Shared/APIClient.swift` 原样提取 `ServerConfig`，在临时 Swift 程序中解析两种实际链接，均成功；新参数未影响 `url`、`token` 读取 | `/tmp/jarvis-ios-verify/PairParser.swift`、`swift-parser.log` |
-| 两个连接 UI 用例 | 启动仓库原有 mock，指定 `ConnectionTests/testOutageShowsConnectingThenRecovers`、`ConnectionTests/testShortDropDoesNotFlash`；Xcode 在执行测试前退出，退出码 74。禁用自动解析后的尝试还报告缺少 `Package.resolved` | `/tmp/jarvis-ios-verify/ui-tests.log`、`mock-hub.log` |
-| 截图及界面状态 | 无截图；“已连接”、无错误弹窗、App 内机器列表均未验证 | 无截图路径，未生成图片 |
-| 清理 | 本车道测试 hub 和 mock 均已退出，三个监听端口均已关闭；模拟器创建失败，无设备可删除，未操作现有模拟器 | `/tmp/jarvis-ios-verify/cleanup.json` |
+| Temporary config | Created a minimal build config under a temporary HOME, bundle id `com.example.jarvis`, no team; the hub used a dedicated database from environment variables, the two specified loopback listen ports and an empty machine list | `/tmp/jarvis-ios-verify/home/` |
+| Dedicated simulator | Ran `xcrun simctl create Jarvis-P0-v-ios com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro`, exit code 1; the CoreSimulatorService connection was refused, simdiskimaged was unavailable, no device ID returned | `/tmp/jarvis-ios-verify/simulator-create.log` |
+| hub build and start | The original command exited because reading VCS status failed; with `-buildvcs=false` the build succeeded. HTTP and TLS started fine under the fake HOME | `/tmp/jarvis-ios-verify/go-build.log`, `go-build-no-vcs.log`, `hub-isolated.log` |
+| iOS build | Copied the version-controlled iOS files to a temp directory; config generation and XcodeGen succeeded; tried a simulator build with `CODE_SIGNING_ALLOWED=NO`; CoreSimulator was unavailable and the Swift Package fetch hit an HTTP/2 interruption, so no successful build | `/tmp/jarvis-ios-verify/source/ios/`, `ios-build.log` |
+| Legacy-format pairing | `jarvisd hub pair --legacy` succeeded; the command only prints the address, the master token and a QR code, and the probe built the link with the same encoding rule as the source. HTTP and WebSocket checks passed; not launched in the App | `/tmp/jarvis-ios-verify/probe.log`, `protocol-results.json` |
+| New-format pairing | `jarvisd hub pair` succeeded; the probe used the link from the command output directly; extra fields include `hub`, `fp`, `tls`; HTTP and WebSocket checks passed; not launched in the App | Same as above |
+| Existing Swift link parsing | Extracted `ServerConfig` verbatim from `ios/Shared/APIClient.swift` and parsed both real links in a temporary Swift program; both succeeded; the new parameters did not affect reading `url` and `token` | `/tmp/jarvis-ios-verify/PairParser.swift`, `swift-parser.log` |
+| Two connection UI tests | Started the repository's existing mock and selected `ConnectionTests/testOutageShowsConnectingThenRecovers` and `ConnectionTests/testShortDropDoesNotFlash`; Xcode exited before running the tests, exit code 74. An attempt with automatic resolution disabled also reported a missing `Package.resolved` | `/tmp/jarvis-ios-verify/ui-tests.log`, `mock-hub.log` |
+| Screenshots and UI state | No screenshots; "Connected", no error alert, and the machine list in the App were all unverified | No screenshot path; no images produced |
+| Cleanup | This lane's test hub and mock have exited and all three listen ports are closed; simulator creation failed, so there was no device to delete; existing simulators were not touched | `/tmp/jarvis-ios-verify/cleanup.json` |
 
-接口检查按照现有 App 的配对顺序执行，但请求由临时 Python 探针发送，没有冒充 App 端到端结果。两种链接均得到以下结果：
+The API checks followed the existing App's pairing order, but the requests were sent by a temporary Python probe; they do not pose as an end-to-end App result. Both links gave these results:
 
-- `GET /api/v1/machines` 返回 HTTP 200，`machines` 为 `[]`。
-- `GET /api/v1/ws` 携带 Bearer 完成 HTTP 101 升级，并收到 `hello` 和 `machines` 事件，后者的 `machines` 为 `[]`。探针未发送 `client_hello`。本次没有得到可归属于 iOS App 的 hub 连接日志；握手和事件记录只能证明探针连通。
-- `POST /api/v1/auth/tokens` 返回 HTTP 200，包含字符串字段 `id`、`token`、`role`；使用换得的设备 token 再请求机器列表仍为 HTTP 200、空列表。
+- `GET /api/v1/machines` returned HTTP 200 with `machines` as `[]`.
+- `GET /api/v1/ws` with a Bearer token completed the HTTP 101 upgrade and received the `hello` and `machines` events, the latter with `machines` as `[]`. The probe did not send `client_hello`. No hub connection log attributable to the iOS App was obtained this time; the handshake and event records only prove the probe connected.
+- `POST /api/v1/auth/tokens` returned HTTP 200 with string fields `id`, `token`, `role`; requesting the machine list again with the exchanged device token still gave HTTP 200 and an empty list.
 
-发现的问题和验收边界：
+Issues found and acceptance boundaries:
 
-- `hub.json.public_url` 需要显式设为测试 HTTP 地址。只设置 `listen` 不会同步更新它；旧配对二维码的 `url` 来自 `PublicURL`，否则会沿用默认主机地址和默认端口。本次只补充了临时配置。
-- 空 `machines` 不会关闭 Lark 后台任务。未提供 `lark.token` 时，`server/internal/lark/lark.go` 的 `agentToken` 会尝试 `docker inspect` 默认容器；初次启动日志显示读取失败。发现后已停掉进程，将临时 `lark.base_url` 指向本机 mock，并填入测试 token 后重新启动。未手动操作 Docker；无法据此声称最小配置完全没有尝试访问容器。mock 不实现 `/agent/v1`，后续后台 404 属于这项隔离配置的已知结果，不应报为配对接口故障。
-- 本次检查未发现上述配对接口或字段的兼容性失败，但没有在真实 iOS `Envelope` 上解码整条 WS 消息，也未验证新事件的长期能力门控，不能给出全面兼容结论。
-- UI 用例未运行，无法确认 mock 改动没有打断它们。需在可访问 CoreSimulator 的执行环境中补跑上述两个用例，并完成两种链接的 App 配对与截图。
-- Xcode 构建已发送中断；另一次直接终止进程的尝试被沙箱拒绝，未确认其最终退出状态。测试 hub 和 mock 的退出及端口关闭已单独确认。
+- `hub.json.public_url` has to be set explicitly to the test HTTP address. Setting only `listen` does not update it; the `url` in the legacy pairing QR code comes from `PublicURL`, otherwise it falls back to the default host address and default port. Only the temporary config was amended this time.
+- An empty `machines` does not turn off the Lark background tasks. Without `lark.token`, `agentToken` in `server/internal/lark/lark.go` tries `docker inspect` on the default container; the first startup log showed the read failing. Once noticed, the process was stopped, the temporary `lark.base_url` pointed at a local mock, a test token filled in, and the hub restarted. Docker was not touched manually; this does not support claiming that the minimal config never tried to access a container. The mock does not implement `/agent/v1`, so the later background 404s are a known result of this isolation config and should not be reported as pairing API failures.
+- This check found no compatibility failure in the pairing APIs or fields above, but whole WS messages were not decoded with the real iOS `Envelope`, and long-term capability gating of new events was not verified, so no overall compatibility conclusion can be given.
+- The UI tests did not run, so it cannot be confirmed that the mock changes did not break them. The two tests above need to be rerun in an environment with CoreSimulator access, along with App pairing and screenshots for both links.
+- An interrupt was sent to the Xcode build; another attempt to kill the process directly was refused by the sandbox, and its final exit status was not confirmed. The test hub and mock exiting and their ports closing were confirmed separately.
 
-仅新增本报告，`ios/`、`server/` 均无改动；构建副本、探针和日志全部位于 `/tmp/jarvis-ios-verify/`。临时配置及标记为 `private` 的文件含测试凭据，不纳入版本控制。未执行 git add、commit、push、stash、部署或线上 hub 连接。性能未实测，本报告不作性能结论。
+Only this report was added; `ios/` and `server/` are unchanged. Build copies, probes and logs are all under `/tmp/jarvis-ios-verify/`. The temporary config and files marked `private` contain test credentials and are not under version control. No git add, commit, push, stash, deploy or connection to a live hub was done. Performance was not measured; this report draws no performance conclusion.
 
-## 补充：App 层验证（2026-10-31，沙箱外）
+## Addendum: App-level verification (2026-10-31, outside the sandbox)
 
-**结论：没有改过的 iOS App 对新 hub 兼容，P0 的 iOS 验收通过（模拟器；真机配对仍待做）。**
+**Conclusion: the unmodified iOS App is compatible with the new hub; iOS P0 acceptance passes (simulator; device pairing still to do).**
 
-- 环境：集成分支的 hub 起在回环（HTTP + TLS 两个监听、专用测试库、空机器列表、Lark 指向不可达地址）；
-  iOS App 用当前 `ios/` 原样构建（Debug，无签名团队），装在新建的 iPhone 17 Pro 模拟器（iOS 27.0）上。
-- **两种链接都能配对、进主界面**：旧格式（`--legacy`，主 token）和默认新格式（`jp_` 临时码 + `hub` / `fp` / `tls` / `alt`）。
-  App 带着凭据访问了 hub（只有依赖 Lark 的请求返回 502，属于测试配置）。
-- **换凭据**（旧 App 扫新码后能长期用的关键）：
-  - DEBUG 版用 `-pairURL` 启动时会跳过换凭据（`DeviceCredentials.swift`），所以测法是：先带 `-pairURL` 启动一次，配置写进 Keychain；
-    再不带参数冷启动，App 走真实的 `upgradeCredentials()`。
-  - 结果：新格式下临时码换出 `phone/full` 设备令牌，临时码标记为已兑换，App 随后用设备令牌连上 hub。
-    旧格式下主 token 同样换出了设备令牌。
-- `simctl openurl` 打开 `jarvis://pair` 时，iOS 27 会弹「在 Jarvis 中打开？」确认框，脚本点不了，所以没用这条路。
-- 发现并修掉一个问题：用临时码连上的几秒里，App 注册手机工具，hub 拿临时凭据去查设备令牌表，失败并记错误日志。
-  现在临时码连接只在内存里标记手机，换成设备令牌后重新注册时再保存（`server/internal/hub/http.go` 的 `register_phone`）。
-- 每次冷启动，App 都有一两个请求返回 401，就在启动的那一秒（hub 日志只记来源和状态，不记路径）。对配对和换凭据没有影响，没再深查。
-- 没做：真机配对、公网 TLS 直连（现有 iOS 不支持钉扎，按设计继续走内网 / VPN）、手表。
+- Environment: the integration branch's hub on loopback (two listeners, HTTP + TLS, a dedicated test database, an empty machine list, Lark pointed at an unreachable address);
+  the iOS App built from the current `ios/` as is (Debug, no signing team), installed on a new iPhone 17 Pro simulator (iOS 27.0).
+- **Both links pair and reach the main screen**: the legacy format (`--legacy`, master token) and the default new format (`jp_` temporary code + `hub` / `fp` / `tls` / `alt`).
+  The App reached the hub with the credentials (only Lark-dependent requests returned 502, which is down to the test config).
+- **Credential exchange** (the key to an old App staying usable long-term after scanning a new code):
+  - The DEBUG build skips the credential exchange when launched with `-pairURL` (`DeviceCredentials.swift`), so the test was: launch once with `-pairURL` so the config is written to the Keychain;
+    then cold-launch without arguments, so the App goes through the real `upgradeCredentials()`.
+  - Result: with the new format the temporary code was exchanged for a `phone/full` device token, the temporary code was marked redeemed, and the App then connected to the hub with the device token.
+    With the legacy format the master token was likewise exchanged for a device token.
+- When `simctl openurl` opens `jarvis://pair`, iOS 27 shows an "Open in Jarvis?" confirmation that a script cannot tap, so that path was not used.
+- Found and fixed one issue: in the few seconds connected with the temporary code, the App registers phone tools; the hub looked up the device-token table with the temporary credential, failed and logged an error.
+  Now a temporary-code connection only marks the phone in memory, and it is saved when it re-registers after switching to the device token (`register_phone` in `server/internal/hub/http.go`).
+- On every cold launch the App gets one or two 401 responses, right in the first second (the hub log records only source and status, not the path). No effect on pairing or credential exchange; not investigated further.
+- Not done: device pairing, direct public TLS connection (the current iOS does not support pinning and by design keeps using the intranet / VPN), the watch.

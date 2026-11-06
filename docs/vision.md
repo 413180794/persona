@@ -1,43 +1,43 @@
 # visionOS App
 
-原生 visionOS 版 Persona（`apple/` 里的 `PersonaVision` target，#1687）：和 iOS App 同一套逻辑层（`Shared/`、`Persona/App`）和内容视图，
-外面是 visionOS 自己的壳（`apple/Vision/`）。做法照 Mac 版（`docs/mac.md`「做法」），不为 visionOS 改 iOS 和 Mac 的样子。
+The native visionOS version of Persona (the `PersonaVision` target in `apple/`, #1687): it shares the logic layer (`Shared/`, `Persona/App`) and content views with the iOS App,
+wrapped in a visionOS shell of its own (`apple/Vision/`). The approach follows the Mac version (`docs/mac.md` ("Approach")): iOS and Mac do not change how they look for visionOS.
 
-## 做法
+## Approach
 
-- 编译的源码：`Vision/` + `Shared/` + `Persona/`（去掉 iOS 的 Info.plist 和 entitlements），再加实时活动里 AppModel 要读的形象图
-  （`LiveActivity/FleetPersona.swift`、`FleetIslandViews.swift`）。Bundle id 和 iOS 版相同，`TARGETED_DEVICE_FAMILY` 为 7。
-- iOS 专用的分支：visionOS 上有同样 API 的（UIKit 视图、WebKit、AVFoundation、PhotosUI…）把 `#if os(iOS)` 扩成 `#if os(iOS) || os(visionOS)`，
-  直接用 iOS 的代码。新代码写 `#if os(iOS)` 时要想一下 visionOS 能不能也走这一支，不能就给 visionOS 一个同名替身，别让 PersonaVision 编不过。
-- visionOS 标成不可用的 SwiftUI 修饰符（`scrollDismissesKeyboard`、`navigationSubtitle`、`scrollEdgeEffectHidden`、`GlassEffectContainer`、
-  `sharedBackgroundVisibility`）在 `Vision/Compat/SwiftUICompat.swift` 里给同名的 visionOS 版本，页面照常写。
-- `UIGestureRecognizerRepresentable` 只有 iOS 有：消息的长按手势在 `Vision/Media/MessageGestures.swift` 用 SwiftUI 手势重写同名类型（注视加长捏合）。
+- Compiled sources: `Vision/` + `Shared/` + `Persona/` (minus the iOS Info.plist and entitlements), plus the avatar images that AppModel reads from the Live Activity code
+  (`LiveActivity/FleetPersona.swift`, `FleetIslandViews.swift`). The bundle id is the same as the iOS version; `TARGETED_DEVICE_FAMILY` is 7.
+- iOS-only branches: where visionOS has the same API (UIKit views, WebKit, AVFoundation, PhotosUI…), widen `#if os(iOS)` to `#if os(iOS) || os(visionOS)`
+  and use the iOS code as is. When new code adds `#if os(iOS)`, ask whether visionOS can take that branch too; if not, give visionOS a stand-in with the same name so PersonaVision still compiles.
+- SwiftUI modifiers marked unavailable on visionOS (`scrollDismissesKeyboard`, `navigationSubtitle`, `scrollEdgeEffectHidden`, `GlassEffectContainer`,
+  `sharedBackgroundVisibility`) get visionOS versions with the same names in `Vision/Compat/SwiftUICompat.swift`; pages are written as usual.
+- `UIGestureRecognizerRepresentable` exists only on iOS: the message long-press gesture is rewritten as a same-named type using SwiftUI gestures (look plus long pinch) in `Vision/Media/MessageGestures.swift`.
 
-## 和 iOS 的对应
+## Mapping from iOS
 
 | iOS | visionOS |
 | --- | --- |
-| 实时活动、灵动岛、灵动岛设置 | 没有。`LiveActivityController` 换成只保存 hub 推来的状态的替身（`Vision/App/VisionStandIns.swift`），给「需要你」装饰条用；设置里不显示灵动岛 |
-| 拍照、扫码配对 | Vision Pro 不把摄像头给 App：`CameraPicker.isAvailable` 为 false，菜单里不出「拍照」；配对用粘贴链接 |
-| 触感反馈 | 空操作 |
-| 抽屉、侧滑切换 | 捏合拖动在 visionOS 上是滚动：远程画面的抽屉不能下拉关闭（点把手关），对话的左右分页只用按钮切 |
-| VNC 画中画 | 没有（visionOS 不支持 sample buffer 画中画）：`VNCPiP.supported` 为 false，只开完整页 |
-| 液态玻璃 | 窗口本身就是玻璃：玻璃容器只做布局，表面用系统材质 |
-| 分享 › Persona（`PersonaShare`） | 同一份代码和 Info.plist，编成 visionOS 的扩展 target `PersonaVisionShare`，嵌在 Vision App 里；bundle id 和 iPhone 的一样（`<bundle id>.share`） |
-| 输入框上的「粘贴图片」（`PasteImageChip`） | 一样：系统的 `PasteButton` 和剪贴板在 visionOS 上都有 |
+| Live Activities, Dynamic Island, Dynamic Island settings | None. `LiveActivityController` is replaced by a stand-in that only stores the state the hub pushes (`Vision/App/VisionStandIns.swift`), used by the "Needs You" ornament; settings do not show the Dynamic Island |
+| Taking photos, scanning a QR code to pair | Vision Pro does not give Apps the camera: `CameraPicker.isAvailable` is false and the menu has no "Take Photo"; pairing uses a pasted link |
+| Haptics | No-op |
+| Drawers, swipe to switch | Pinch-and-drag scrolls on visionOS: the remote-screen drawer cannot be pulled down to close (tap the handle to close), and the chat's left/right paging switches only with buttons |
+| VNC picture in picture | None (visionOS does not support sample-buffer picture in picture): `VNCPiP.supported` is false; only the full page opens |
+| Liquid Glass | The window itself is glass: glass containers only do layout, surfaces use system materials |
+| Share › Persona (`PersonaShare`) | The same code and Info.plist, compiled as the visionOS extension target `PersonaVisionShare` and embedded in the Vision App; same bundle id as iPhone (`<bundle id>.share`) |
+| Paste Image in the composer (`PasteImageChip`) | Same: visionOS has the system `PasteButton` and clipboard too |
 
-## 壳
+## Shell
 
-- 主窗口的 tab 用系统 `TabView`，visionOS 画成窗口左侧竖排的装饰条：就是 iOS 旧布局 / iPad 的 `RootTabs`（同样的页面、标题、`Theme.Icon` 图标和角标），
-  选中状态绑 `AppModel.selectedTab`。visionOS 上 `RootView` 不建 iPhone 的新外壳（`ShellView`、`ShellState`），所以没有第二个来源：
-  通知、收件箱等写 `selectedTab` 的地方直接切 tab（`docs/shell.md` 说的唯一来源在这里就是 `selectedTab`）。外壳是 `Vision/App/VisionShell.swift` 的 `.visionShell()`。
-- 对话可以单独开一个窗口（`Vision/App/VisionScenes.swift`：`WindowGroup("对话", id: "chat", for: SessionKey.self)`，和 Mac 的 `MacChatWindow` 同一个做法），
-  会话键就是窗口的可恢复值，系统会恢复这些窗口。入口：Agents 列表行的长按菜单「在新窗口打开」。窗口里的对话是第一页（没有返回箭头），对话里推出的页面在这个窗口自己的导航栈里，和 iPad 一样。
-  DEBUG：`-openChatWindow <machine>/<session>` 启动时开这个对话的窗口（截图用）。
-- 主窗口底部的「需要你」装饰条（`.ornament(attachmentAnchor: .scene(.bottom))`）：个数就是 tab 角标的两个数相加（`AppModel.badges`：Persona 的和 Agents 的，屏蔽的 Agent 不算），
-  「去处理」打开等得最久的那个，正开着其中一个时打开下一个；个数为 0 时不显示。玻璃背景是系统的 `glassBackgroundEffect`，收在设计系统的 `.visionOrnamentPanel()`（`Vision/Design/VisionTokens.swift`，visionOS 专用的尺寸 token 也在这里）。
+- The main window's tabs use the system `TabView`, which visionOS draws as a vertical ornament on the left of the window: this is the old iOS layout / iPad `RootTabs` (same pages, titles, `Theme.Icon` icons and badges),
+  with the selection bound to `AppModel.selectedTab`. On visionOS, `RootView` does not build the iPhone's new shell (`ShellView`, `ShellState`), so there is no second source of truth:
+  notifications, the Inbox and other places that write `selectedTab` switch tabs directly (the single source of truth described in `docs/shell.md` is `selectedTab` here). The shell is `.visionShell()` in `Vision/App/VisionShell.swift`.
+- A chat can open in its own window (`Vision/App/VisionScenes.swift`: `WindowGroup("对话", id: "chat", for: SessionKey.self)`, the same approach as the Mac's `MacChatWindow`);
+  the session key is the window's restorable value, so the system restores these windows. Entry point: "Open in New Window" in the long-press menu of an Agents list row. The chat in the window is the first page (no back arrow); pages pushed from the chat live in the window's own navigation stack, as on iPad.
+  DEBUG: `-openChatWindow <machine>/<session>` opens the window for that chat at launch (for screenshots).
+- The "Needs You" ornament at the bottom of the main window (`.ornament(attachmentAnchor: .scene(.bottom))`): the count is the sum of the two tab badges (`AppModel.badges`: Persona's and Agents', muted Agents excluded);
+  "Go" opens the one that has waited longest, or the next one if one of them is already open; hidden when the count is 0. The glass background is the system `glassBackgroundEffect`, wrapped in the design system's `.visionOrnamentPanel()` (`Vision/Design/VisionTokens.swift`, which also holds the visionOS-only size tokens).
 
-## 构建、运行、截图
+## Build, run, screenshot
 
 ```bash
 eval "$(python3 scripts/persona_config.py env)"
@@ -47,12 +47,12 @@ xcodebuild -project apple/Persona.xcodeproj -scheme PersonaVision \
   -destination 'generic/platform=visionOS Simulator' -derivedDataPath build/DD-vision \
   CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= build
 xcrun simctl install <udid> build/DD-vision/Build/Products/Debug-xrsimulator/Persona.app
-xcrun simctl launch <udid> <bundle id> -openWelcome YES -demo.on YES   # 体验模式的演示数据
+xcrun simctl launch <udid> <bundle id> -openWelcome YES -demo.on YES   # demo data from the demo mode
 xcrun simctl io <udid> screenshot vision.png
 ```
 
-- 模拟器上要用本机自签名（`CODE_SIGN_IDENTITY=-`）：`CODE_SIGNING_ALLOWED=NO` 编出来的读写不了钥匙串，进不了体验模式。
-  原因：钥匙串读失败（缺 entitlement）时注册表算「读不出来」（`registryUnreadable`），体验模式只在注册表确定为空时才开。
-  DEBUG 的 visionOS 构建上，`-openWelcome YES` 把刚清空的注册表当作确定为空，所以没签名也能进体验模式（没在模拟器上验证过）。
-- 改了 iOS / Mac 共用的代码，三个都编一遍：`Persona`、`PersonaMac`、`PersonaVision`。
-- visionOS 模拟器上 `simctl terminate` 之后再 `launch`，常常不出窗口（进程在、场景没建）：先 `simctl shutdown` 再 `boot`。
+- On the simulator, sign ad hoc locally (`CODE_SIGN_IDENTITY=-`): a build with `CODE_SIGNING_ALLOWED=NO` cannot read or write the keychain, so it cannot enter demo mode.
+  Why: when the keychain read fails (missing entitlement), the registry counts as "unreadable" (`registryUnreadable`), and demo mode only opens when the registry is known to be empty.
+  In DEBUG visionOS builds, `-openWelcome YES` treats the just-cleared registry as known empty, so demo mode works without signing too (not verified on the simulator).
+- When you change code shared by iOS / Mac, build all three: `Persona`, `PersonaMac`, `PersonaVision`.
+- On the visionOS simulator, `launch` after `simctl terminate` often shows no window (the process is there, the scene is not created): `simctl shutdown` and then `boot` first.
