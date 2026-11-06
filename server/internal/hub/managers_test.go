@@ -331,3 +331,96 @@ func TestManagersInstallCodeSurvivesAFailedSave(t *testing.T) {
 	}
 	_ = dialRawBus(t, srv, joined.Token)
 }
+
+// A manager made and not installed stays in the roster after its code expires, as installing with the expired time
+// (the apps say 码已过期): the expired code no longer joins, …/code gives it a new one that does, and a pending one can
+// be called off. Expired more than db.ManagerInstallKept ago, it leaves the roster and is cleaned up.
+func TestManagersExpiredInstallIsRenewed(t *testing.T) {
+	h, srv, _ := managersHub(t)
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	expire := func(id string, ago time.Duration) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, `UPDATE manager_install_codes SET expires_at = now() - make_interval(secs => $2)
+			WHERE manager_id = $1`, id, ago.Seconds()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type madeReply struct {
+		Manager managerInfo `json:"manager"`
+		Code    string      `json:"code"`
+	}
+	var made madeReply
+	if code := managersDo(t, h, srv, "POST", "/api/v1/managers", map[string]any{"name": "工作"}, &made); code != 201 {
+		t.Fatalf("make: %d", code)
+	}
+	id := made.Manager.ID
+	expire(id, time.Minute)
+
+	var list managersReply
+	managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list)
+	m, ok := list.find(id)
+	if !ok || m.Installing == nil || !m.Installing.Before(time.Now()) || m.Name != "工作" || m.Online {
+		t.Fatalf("expired, not installed: %+v (%v)", m, ok)
+	}
+	if code := managersDo(t, h, srv, "POST", bus.JoinPath, map[string]any{"code": made.Code}, nil); code != 401 {
+		t.Fatalf("the expired code joined: %d", code)
+	}
+	if code := managersDo(t, h, srv, "PATCH", "/api/v1/managers/"+id, map[string]any{"name": "x"}, nil); code != 409 {
+		t.Fatalf("rename while installing: %d", code)
+	}
+
+	// A new code for it: installing again until the new expiry; the new code joins.
+	var renewed struct {
+		Code      string    `json:"code"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	if code := managersDo(t, h, srv, "POST", "/api/v1/managers/"+id+"/code", nil, &renewed); code != 200 || !installCodeShape.MatchString(renewed.Code) {
+		t.Fatalf("a new code for the expired install: %d %+v", code, renewed)
+	}
+	managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list)
+	if m, _ := list.find(id); m.Installing == nil || !m.Installing.After(time.Now()) {
+		t.Fatalf("after the new code: %+v", m)
+	}
+	var joined struct{ ID, Name, Token string }
+	if code := managersDo(t, h, srv, "POST", bus.JoinPath, map[string]any{"code": renewed.Code}, &joined); code != 200 || joined.ID != id || joined.Name != "工作" {
+		t.Fatalf("join with the new code: %d %+v", code, joined)
+	}
+	managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list)
+	if m, _ := list.find(id); m.Installing != nil {
+		t.Fatalf("still installing after the join: %+v", m)
+	}
+
+	// Another, expired and called off: gone, its code with it.
+	var other madeReply
+	managersDo(t, h, srv, "POST", "/api/v1/managers", map[string]any{"name": "临时"}, &other)
+	expire(other.Manager.ID, time.Hour)
+	if code := managersDo(t, h, srv, "DELETE", "/api/v1/managers/"+other.Manager.ID, nil, nil); code != 200 {
+		t.Fatalf("call off an expired install: %d", code)
+	}
+	managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list)
+	if _, ok := list.find(other.Manager.ID); ok {
+		t.Fatalf("called off, still listed: %+v", list)
+	}
+
+	// A third, expired longer than it is kept: not in the roster, no new code, and its rows go with the next code made.
+	var old madeReply
+	managersDo(t, h, srv, "POST", "/api/v1/managers", map[string]any{"name": "旧的"}, &old)
+	expire(old.Manager.ID, db.ManagerInstallKept+time.Hour)
+	managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list)
+	if _, ok := list.find(old.Manager.ID); ok {
+		t.Fatalf("kept past %s: %+v", db.ManagerInstallKept, list)
+	}
+	if code := managersDo(t, h, srv, "POST", "/api/v1/managers/"+old.Manager.ID+"/code", nil, nil); code != 404 {
+		t.Fatalf("a new code for one dropped: %d", code)
+	}
+	managersDo(t, h, srv, "POST", "/api/v1/managers", map[string]any{"name": "再一个"}, nil)
+	var left int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM manager_install_codes WHERE manager_id = $1`, old.Manager.ID).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("its codes left behind: %d %v", left, err)
+	}
+}

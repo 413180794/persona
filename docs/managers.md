@@ -23,7 +23,7 @@ The roster is the bus's identity table `bus_identities` (`docs/protocol.md`, "Bu
 
 ## Install codes
 
-**New manager** in the app (`POST /api/v1/managers {name}`) returns a one-time install code `mi_…`, **valid for 10 minutes and usable once**; the hub keeps only its sha256 (table `manager_install_codes`). Until the code is traded, the manager shows in the roster as installing (`installing` is when the code expires).
+**New manager** in the app (`POST /api/v1/managers {name}`) returns a one-time install code `mi_…`, **valid for 10 minutes and usable once**; the hub keeps only its sha256 (table `manager_install_codes`). Until the code is traded, the manager shows in the roster as installing (`installing` is when the code expires). It stays there when the code expires unused: `installing` is then a time in the past (the apps show 「码已过期」), the expired code no longer joins, `POST /api/v1/managers/{id}/code` gives it a new one, and `DELETE /api/v1/managers/{id}` calls it off. A manager never installed whose last code expired more than **7 days** ago leaves the roster, and its codes are deleted with the next code the hub makes (`db.ManagerInstallKept`). Codes used, and expired codes of an installed manager, are deleted a day later.
 
 The new manager trades the code for its bus token: `POST /api/v1/bus/join {"code"}` → `{id, name, token, hub_id}`. This endpoint needs no credential (like the bus, it sits outside the apps' auth); failed trades count against the source and go `429 rate_limited` past the limit, as a bad token does. A manager that already has a token and trades another code (`POST /api/v1/managers/{id}/code`, to install it somewhere else) gets a new token: the old one stops working at once and a connection using it is closed with 4002.
 

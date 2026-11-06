@@ -103,11 +103,20 @@ type ManagerInstallCode struct {
 	ExpiresAt time.Time
 }
 
-// AddManagerInstallCode keeps the sha256 of a new install code for manager c.ManagerID. Codes that expired or were
-// used more than a day ago go at the same time.
+// ManagerInstallKept is how long a manager that was made and never installed stays in the roster after its last code
+// expired (as installing, its code expired: the app offers a new one); after that it is dropped (docs/managers.md,
+// "Install codes").
+const ManagerInstallKept = 7 * 24 * time.Hour
+
+// AddManagerInstallCode keeps the sha256 of a new install code for manager c.ManagerID. What is no longer needed goes
+// at the same time: codes used more than a day ago, codes of an installed manager that expired more than a day ago,
+// and the codes of a never-installed manager whose last one expired more than ManagerInstallKept ago (it leaves the
+// roster with them).
 func (d *DB) AddManagerInstallCode(ctx context.Context, hash string, c ManagerInstallCode) error {
-	if _, err := d.pool.Exec(ctx, `DELETE FROM manager_install_codes
-		WHERE expires_at < now() - interval '1 day' OR used_at < now() - interval '1 day'`); err != nil {
+	if _, err := d.pool.Exec(ctx, `DELETE FROM manager_install_codes c
+		WHERE c.used_at < now() - interval '1 day'
+		   OR (c.expires_at < now() - interval '1 day' AND EXISTS (SELECT 1 FROM bus_identities b WHERE b.id = c.manager_id))
+		   OR c.expires_at < now() - make_interval(secs => $1)`, ManagerInstallKept.Seconds()); err != nil {
 		return err
 	}
 	_, err := d.pool.Exec(ctx, `INSERT INTO manager_install_codes (code_hash, manager_id, name, expires_at)
@@ -172,12 +181,13 @@ func (d *DB) ManagerInstallCodeByHash(ctx context.Context, hash string) (*Manage
 	return &c, nil
 }
 
-// PendingManagerInstalls are the managers that have a code still good and no identity yet (being installed), by id.
+// PendingManagerInstalls are the managers made and not installed yet (a code not used, no identity), by id, each with
+// its latest code's expiry: still good, or expired less than ManagerInstallKept ago (it waits for a new code).
 func (d *DB) PendingManagerInstalls(ctx context.Context) ([]ManagerInstallCode, error) {
 	rows, err := d.pool.Query(ctx, `SELECT DISTINCT ON (c.manager_id) c.manager_id, c.name, c.expires_at
 		FROM manager_install_codes c LEFT JOIN bus_identities b ON b.id = c.manager_id
-		WHERE b.id IS NULL AND c.used_at IS NULL AND c.expires_at > now()
-		ORDER BY c.manager_id, c.expires_at DESC`)
+		WHERE b.id IS NULL AND c.used_at IS NULL AND c.expires_at > now() - make_interval(secs => $1)
+		ORDER BY c.manager_id, c.expires_at DESC`, ManagerInstallKept.Seconds())
 	if err != nil {
 		return nil, err
 	}

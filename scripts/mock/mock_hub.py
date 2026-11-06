@@ -1690,7 +1690,12 @@ def _managers_seed():
          "deploy": "docker", "version": "0.9.8", "last_seen": ago(hours=3)},
         {"id": "m-c1e9f0", "name": "测试", "online": False,
          "installing": (datetime.now(timezone.utc) + timedelta(minutes=7)).isoformat().replace("+00:00", "Z")},
-    ]
+    ] + ([  # MOCK_MANAGER_EXPIRED=1: one made whose code expired unused (码已过期 · 新的安装码), and one expired too long ago
+        {"id": "m-5d7a01", "name": "备用", "online": False,
+         "installing": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")},
+        {"id": "m-0e44b9", "name": "早就过期", "online": False,
+         "installing": (datetime.now(timezone.utc) - timedelta(days=8)).isoformat().replace("+00:00", "Z")},
+    ] if os.environ.get("MOCK_MANAGER_EXPIRED") == "1" else [])
 
 
 MANAGERS = {"list": _managers_seed(), "default": "assistant"}
@@ -1721,6 +1726,10 @@ def managers_route(h, method, p):
     if not (p == "/api/v1/managers" or p.startswith("/api/v1/managers/")): return False
     if os.environ.get("MOCK_MANAGERS") == "0":
         return h.send_json({"error": "not found"}, 404) or True
+    # As the hub: a manager never installed stays (its code expired: installing in the past) until 7 days after
+    # its last code expired, then leaves the roster (db.ManagerInstallKept).
+    MANAGERS["list"] = [m for m in MANAGERS["list"] if not m.get("installing") or
+                        datetime.fromisoformat(m["installing"].replace("Z", "+00:00")) > datetime.now(timezone.utc) - timedelta(days=7)]
     ms, dflt = MANAGERS["list"], MANAGERS["default"]
     if p == "/api/v1/managers" and method == "GET":
         out = [dict(m, default=True) if m["id"] == dflt else m for m in ms]
@@ -13196,6 +13205,7 @@ def features():
 
 
 MOCK_HELP.append("MOCK_EXTENSION_OPS=1|fail  （配合 MOCK_PLUGINS）扩展的安装 / 升级 / 卸载分步骤推进度（extension_operation 事件）：后台预览、停在等你同意、同意后同一个操作接着装；fail：每个扩展第一次安装停在「启动」、第一次卸载停在「删除」，都能重试；MOCK_EXTENSION_OPS_STEP=秒 每步的时长；MOCK_EXTENSION_INSTALL_DELAY=秒 没有分步骤的旧 hub 安装 / 卸载要这么久才回（#3307）")
+MOCK_HELP.append("MOCK_MANAGER_EXPIRED=1  设置 › 管理者：多一个安装码过期了还没装的（码已过期，可以拿新的安装码），和一个过期超过 7 天的（像 hub 一样不在名册里）")
 MOCK_HELP.append("MOCK_MANAGER_COMMANDS=1  设置 › 管理者：新建 / 换个地方装的回答带安装命令（commands.service / docker）；MOCK_MANAGERS=0 是还没有名册的旧 hub（/api/v1/managers 404）")
 MOCK_HELP.append("MOCK_REWIND=1  检查 PR 的对话里有四条你的消息（两条同样的「继续」），试「回退到这里」（#2436）；POST …/rewind 记在 REWINDS，MOCK_REWIND_ERROR=<code>:<提示> 让它像节点一样拒绝，MOCK_REWIND_DELAY=<秒> 调等待")
 MOCK_HELP.append("MOCK_INBOX_SOURCES=none  还没接任何消息来源：收件箱空、没有邮箱账号、飞书没设置、GitHub 没登录（#4480）")

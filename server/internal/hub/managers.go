@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -72,7 +73,8 @@ type managerInfo struct {
 	Version  string     `json:"version,omitempty"`
 	Since    *time.Time `json:"since,omitempty"`     // connected since (online only)
 	LastSeen *time.Time `json:"last_seen,omitempty"` // last connected (offline: "last synced")
-	// Installing: made with POST /api/v1/managers, its code not traded yet; until when the code is good.
+	// Installing: made with POST /api/v1/managers, its code not traded yet; until when the code is good (a time past:
+	// it expired, and POST …/code gives a new one). Dropped db.ManagerInstallKept after it expired.
 	Installing *time.Time `json:"installing,omitempty"`
 }
 
@@ -210,14 +212,18 @@ var errInstallCode = errors.New("this install code is unknown, expired or used a
 // newManagerID is an id for a manager made in the app: m- and six hex digits, not one in the roster.
 func (h *Hub) newManagerID(ctx context.Context) (string, error) {
 	s := h.managerStore()
+	pending, err := s.PendingManagerInstalls(ctx)
+	if err != nil {
+		return "", err
+	}
 	for range 8 {
 		id := "m-" + randomHex(3)
 		b, err := s.BusIdentityByID(ctx, id)
 		if err != nil {
 			return "", err
 		}
-		if b == nil {
-			return id, nil
+		if b == nil && !slices.ContainsFunc(pending, func(c db.ManagerInstallCode) bool { return c.ManagerID == id }) {
+			return id, nil // nor one made and still waiting for its install
 		}
 	}
 	return "", errors.New("no free manager id")
