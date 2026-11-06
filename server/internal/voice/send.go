@@ -72,7 +72,7 @@ func splitMark(task string) (kind, rest string) {
 var approvalCards = []string{proto.IxPlan, proto.IxPermission, proto.IxScreen}
 
 // handOverBound is protocol 2's handover (mu held; it goes on in the background).
-func (c *conversation) handOverBound(task, delegation string, gen int, at time.Time) {
+func (c *conversation) handOverBound(task, delegation string, gen int, at time.Time, reply string) {
 	kind, rest := splitMark(task)
 	switch kind {
 	case "status":
@@ -97,7 +97,7 @@ func (c *conversation) handOverBound(task, delegation string, gen int, at time.T
 	if kind == "answer" {
 		task = rest
 	}
-	c.whenSaid(at, func(spoken bool) {
+	c.whenSaid(at, reply, func(spoken bool) {
 		c.mu.Lock()
 		if task == "" { // the model said nothing of what to do: what the user said
 			task = c.lastUserLine()

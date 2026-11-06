@@ -3,6 +3,8 @@ package voice
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -121,7 +123,7 @@ func TestWhenSaidWaitsForTheCaptionOnItsWay(t *testing.T) {
 	}
 
 	start := time.Now()
-	c.whenSaid(time.Time{}, func(s bool) { spoken <- s })
+	c.whenSaid(time.Time{}, "", func(s bool) { spoken <- s })
 	select {
 	case <-spoken:
 		t.Fatal("whenSaid went before the caption came")
@@ -144,7 +146,7 @@ func TestWhenSaidWaitsForTheCaptionOnItsWay(t *testing.T) {
 	c.pace.voice = time.Now()
 	c.mu.Unlock()
 	start = time.Now()
-	c.whenSaid(time.Time{}, func(s bool) { spoken <- s })
+	c.whenSaid(time.Time{}, "", func(s bool) { spoken <- s })
 	select {
 	case s := <-spoken:
 		if took := time.Since(start); !s || took < gateWait-50*time.Millisecond {
@@ -152,6 +154,57 @@ func TestWhenSaidWaitsForTheCaptionOnItsWay(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("whenSaid never went")
+	}
+}
+
+// #5790: the model's reply that handed this over only called the tool (it was over without any audio). The measured
+// service holds the user's caption until the call's result, so a handover the user's voice opened goes at once instead
+// of waiting gateWait for it. A reply that spoke still waits for the caption on its way, and a silent reply does not
+// open a gate that is closed.
+func TestWhenSaidGoesAtOnceAfterASilentReply(t *testing.T) {
+	setVar(t, &gateWait, 600*time.Millisecond)
+	c := captionConversation(t)
+	c.pl = &Plugin{logger: log.New(io.Discard, "", 0)}
+	reply := func(id string, voiced bool) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.handle(0, event{kind: evReply, id: id})
+		if voiced {
+			c.handle(0, event{kind: evAudio, audio: make([]byte, 320)})
+		}
+		c.handle(0, event{kind: evTurnEnd, id: id})
+	}
+	when := func(open bool, id string) (bool, time.Duration) {
+		c.mu.Lock()
+		now := time.Now()
+		c.gate = speechGate{}
+		if open {
+			c.gate.user = now.Add(-2 * time.Second) // an earlier caption: the gate is open
+		}
+		c.pace.voice = now // the user said something since: its caption is due
+		spoken := make(chan bool, 1)
+		c.whenSaid(time.Time{}, id, func(s bool) { spoken <- s })
+		c.mu.Unlock()
+		start := time.Now()
+		select {
+		case s := <-spoken:
+			return s, time.Since(start)
+		case <-time.After(2 * time.Second):
+			t.Fatal("whenSaid never went")
+			return false, 0
+		}
+	}
+
+	reply("r1", false)
+	if s, took := when(true, "r1"); !s || took >= gateWait/2 {
+		t.Fatalf("after a silent reply: spoken %v after %v", s, took)
+	}
+	reply("r2", true)
+	if s, took := when(true, "r2"); !s || took < gateWait-50*time.Millisecond {
+		t.Fatalf("after a reply that spoke: spoken %v after %v", s, took)
+	}
+	if s, took := when(false, "r1"); s || took < gateWait-50*time.Millisecond {
+		t.Fatalf("closed gate after a silent reply: spoken %v after %v", s, took)
 	}
 }
 

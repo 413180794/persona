@@ -162,6 +162,12 @@ type conversation struct {
 	// that were over (completed) before such a word of theirs came.
 	signals bool
 	replied []string
+	// reply is the model's reply under way (evReply's id) and replyVoiced whether audio of it came; silent are its last
+	// replies that were over without any: replies that only called a tool, whose user caption the measured service
+	// holds until that call's result (#5790).
+	reply       string
+	replyVoiced bool
+	silent      []string
 	// sus is the call's pausing of its upstream while its conversation works (suspend.go, protocol 2).
 	sus suspension
 	// tail are the model's lines after the user's last line in the app, oldest first (protocol 2): a user's caption
@@ -717,6 +723,7 @@ func (c *conversation) handle(gen int, e event) {
 	switch e.kind {
 	case evAudio:
 		now := time.Now()
+		c.replyVoiced = true
 		if c.dropAudio && (now.Sub(c.lastAudio) > 1500*time.Millisecond || c.replyAfterCut(now)) {
 			c.dropAudio, c.cutAt = false, time.Time{} // a pause: this is the next answer
 		}
@@ -742,6 +749,7 @@ func (c *conversation) handle(gen int, e event) {
 		c.asstText(e.text, e.replace, e.final, e.name)
 	case evReply:
 		c.signals, c.turnsEnd = true, true
+		c.reply, c.replyVoiced = e.id, false
 	case evTurnEnd:
 		c.dropAudio, c.cutAt = false, time.Time{}
 		c.turnsEnd = true
@@ -749,6 +757,11 @@ func (c *conversation) handle(gen int, e event) {
 			c.signals = true
 			if c.replied = append(c.replied, e.id); len(c.replied) > repliedMost {
 				c.replied = c.replied[1:]
+			}
+			if e.id == c.reply && !c.replyVoiced {
+				if c.silent = append(c.silent, e.id); len(c.silent) > repliedMost {
+					c.silent = c.silent[1:]
+				}
 			}
 		}
 		c.closeAsst()
@@ -772,7 +785,7 @@ func (c *conversation) handle(gen int, e event) {
 			return
 		}
 		c.delegations[e.id] = gen
-		at := c.gate.agent // the gate as it was when the model handed this over
+		at, reply := c.gate.agent, c.reply // the gate as it was when the model handed this over, and its reply doing so
 		if c.tools() {
 			id, text := e.id, e.text
 			c.pending[id] = time.AfterFunc(toolCallWait, func() {
@@ -780,12 +793,12 @@ func (c *conversation) handle(gen int, e event) {
 				defer c.mu.Unlock()
 				if _, ok := c.pending[id]; ok && !c.closed {
 					delete(c.pending, id)
-					c.startTask(id, text, at)
+					c.startTask(id, text, at, reply)
 				}
 			})
 			return
 		}
-		c.startTask(e.id, e.text, at)
+		c.startTask(e.id, e.text, at, reply)
 	case evToolCall:
 		c.closeUser()
 		c.pace.delegated = time.Now()
@@ -984,7 +997,7 @@ func (c *conversation) runTool(gen int, e event) {
 		c.pl.logf("a call of %s, a tool this session did not declare: ignored", e.name)
 		return
 	}
-	at := c.gate.agent
+	at, reply := c.gate.agent, c.reply
 	label := toolLabels[e.name]
 	if label == "" {
 		label = e.name
@@ -1003,7 +1016,7 @@ func (c *conversation) runTool(gen int, e event) {
 		if e.id != "" {
 			c.delegations[e.id] = gen // its result is the call's answer, whether or not the call came with its delegation
 		}
-		c.handOver(strings.TrimSpace(in.Task), e.id, gen, at)
+		c.handOver(strings.TrimSpace(in.Task), e.id, gen, at, reply)
 		return
 	}
 	c.sendApp(map[string]any{"type": "tool", "id": e.callID, "label": label, "done": false})
@@ -1039,23 +1052,23 @@ func (c *conversation) toolOutput(e event) string {
 // startTask hands a delegation the model made to the main conversation (mu held). Nothing is sent back on the
 // delegation until the task's answer: the model has already told the user it handed it over, and anything on the
 // delegation has it speak again (docs/lessons/voice.md "Conclusions" 4).
-func (c *conversation) startTask(delegationID, text string, at time.Time) {
-	c.handOver(strings.TrimSpace(text), delegationID, c.delegations[delegationID], at)
+func (c *conversation) startTask(delegationID, text string, at time.Time, reply string) {
+	c.handOver(strings.TrimSpace(text), delegationID, c.delegations[delegationID], at, reply)
 }
 
 // handOver gives task to the main conversation once the user-speech gate lets it (gate.go; at is its agent time when
-// the model handed this over), else tells the model it was not sent (mu held; it goes on in the background). The answer
-// goes back on delegation, of upstream session gen, while that is open.
-func (c *conversation) handOver(task, delegation string, gen int, at time.Time) {
+// the model handed this over, reply the model's reply that did), else tells the model it was not sent (mu held; it
+// goes on in the background). The answer goes back on delegation, of upstream session gen, while that is open.
+func (c *conversation) handOver(task, delegation string, gen int, at time.Time, reply string) {
 	if c.version >= 2 {
-		c.handOverBound(task, delegation, gen, at)
+		c.handOverBound(task, delegation, gen, at, reply)
 		return
 	}
 	if card := c.askingCardLocked(); card != "" { // a question asked by voice: this is its answer (asks.go)
 		c.answerCard(card, task, delegation, gen, at)
 		return
 	}
-	c.whenSaid(at, func(spoken bool) {
+	c.whenSaid(at, reply, func(spoken bool) {
 		// What was said, taken now: the caption of the user's request often comes after the model's call (gate.go).
 		c.mu.Lock()
 		if task == "" { // the model said nothing of what to do: what the user said
@@ -1088,15 +1101,18 @@ func (c *conversation) handOver(task, delegation string, gen int, at time.Time) 
 // agent time was at: at once when it is, else once it opens within gateWait (the caption of what the user just said
 // can come after the model acted on it). The user's own voice since at, by the time the model acted, opens it too: a
 // reply that only calls a tool has the user's caption come after the call's result on the measured service (gate.go).
-func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) { c.waitGate(at, false, f) }
+func (c *conversation) whenSpoken(at time.Time, f func(spoken bool)) { c.waitGate(at, false, "", f) }
 
 // whenSaid is whenSpoken for a handover that is sent with what was said: while the user's caption of what they said
 // last is still to come (captionDue), it waits for it too, the gate open or not, within the same gateWait. The
 // caption of the request the model acts on comes 0.1–0.4 s after its call on the measured service (#5506); without
-// it the message would go without the user's own words.
-func (c *conversation) whenSaid(at time.Time, f func(spoken bool)) { c.waitGate(at, true, f) }
+// it the message would go without the user's own words. Not once reply, the model's reply that handed this over, was
+// over without saying anything: the service holds that caption until the call's result (#5790), so it cannot come.
+func (c *conversation) whenSaid(at time.Time, reply string, f func(spoken bool)) {
+	c.waitGate(at, true, reply, f)
+}
 
-func (c *conversation) waitGate(at time.Time, caption bool, f func(spoken bool)) {
+func (c *conversation) waitGate(at time.Time, caption bool, reply string, f func(spoken bool)) {
 	heard := c.gate.heardSince(at, time.Now()) // mu held: the user's voice by the time the model acted
 	go func() {
 		deadline := time.Now().Add(gateWait)
@@ -1104,8 +1120,13 @@ func (c *conversation) waitGate(at time.Time, caption bool, f func(spoken bool))
 			c.mu.Lock()
 			worded := c.gate.openSince(at, time.Now())
 			due := caption && c.captionDue()
+			held := due && reply != "" && slices.Contains(c.silent, reply)
 			c.mu.Unlock()
 			open := heard || worded
+			if held && open {
+				c.pl.logf("the reply that handed this over said nothing: its caption comes after the result, not waited for")
+				due = false
+			}
 			if open && !due || !time.Now().Before(deadline) {
 				if open && !worded {
 					c.pl.logf("the user's caption had not come: their voice in the app's audio counts")
