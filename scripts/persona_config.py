@@ -80,6 +80,26 @@ def app_group(cfg: dict) -> str:
     return get(cfg, "app.app_group", "") or "group." + get(cfg, "app.bundle_id", "")
 
 
+def provisioning_profiles(cfg: dict) -> dict[str, str]:
+    """Configured signing names are account resources, not product display names."""
+    bid = get(cfg, "app.bundle_id", "")
+    profiles = {
+        bid: "Persona App Store",
+        bid + ".watchkitapp": "Persona Watch App Store",
+        bid + ".liveactivity": "Persona Live Activity App Store",
+        bid + ".notify": "Persona Notify App Store",
+        bid + ".share": "Persona Share App Store",
+    }
+    overrides = get(cfg, "app_store.provisioning_profiles", {})
+    if not isinstance(overrides, dict):
+        sys.exit("app_store.provisioning_profiles must be a Bundle ID to profile name object")
+    for identifier, name in overrides.items():
+        if identifier not in profiles or not isinstance(name, str) or not name.strip():
+            sys.exit("app_store.provisioning_profiles requires known app Bundle IDs and nonempty profile names")
+        profiles[identifier] = name
+    return profiles
+
+
 # The app's entitlements. The CarPlay voice entitlement needs Apple's approval first (docs/carplay.md); the generated copy
 # sits in apple/, outside the Persona/ source folder, so XcodeGen does not pick it up as a resource.
 APP_ENTITLEMENTS = os.path.join("Persona", "Resources", "Persona.entitlements")
@@ -137,43 +157,18 @@ def tunnel_core(cfg: dict) -> tuple[str, str]:
 
 
 def export_options(cfg: dict, out: str, destination: str = "upload"):
-    bid = get(cfg, "app.bundle_id", "")
-    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>method</key>
-	<string>app-store-connect</string>
-	<key>destination</key>
-	<string>{destination}</string>
-	<key>signingStyle</key>
-	<string>manual</string>
-	<key>signingCertificate</key>
-	<string>Apple Distribution</string>
-	<key>provisioningProfiles</key>
-	<dict>
-		<key>{bid}</key>
-		<string>Persona App Store</string>
-		<key>{bid}.watchkitapp</key>
-		<string>Persona Watch App Store</string>
-		<key>{bid}.liveactivity</key>
-		<string>Persona Live Activity App Store</string>
-		<key>{bid}.notify</key>
-		<string>Persona Notify App Store</string>
-		<key>{bid}.share</key>
-		<string>Persona Share App Store</string>
-	</dict>
-	<key>teamID</key>
-	<string>{get(cfg, "app.team_id", "")}</string>
-	<key>uploadSymbols</key>
-	<true/>
-	<key>manageAppVersionAndBuildNumber</key>
-	<false/>
-</dict>
-</plist>
-"""
-    with open(out, "w") as f:
-        f.write(plist)
+    options = {
+        "method": "app-store-connect",
+        "destination": destination,
+        "signingStyle": "manual",
+        "signingCertificate": "Apple Distribution",
+        "provisioningProfiles": provisioning_profiles(cfg),
+        "teamID": get(cfg, "app.team_id", ""),
+        "uploadSymbols": True,
+        "manageAppVersionAndBuildNumber": False,
+    }
+    with open(out, "wb") as f:
+        plistlib.dump(options, f)
 
 
 def main():

@@ -4,6 +4,12 @@ Pitfalls, odd behavior and the decisions made at the time (formerly "Lessons" in
 
 - Helper extensions referenced by shared views must compile into every target too: after replacing `Color.mix` with `blended` for watchOS 10 compatibility, leaving the helper in `Theme.swift` causes Release archives to fail for Dynamic Island widgets that only include `PersonaFace`. Compile the helper with `PersonaFace.swift` into every target; do not drag the entire app theme into extensions or declare it twice.
 
+## 产品改名不等于签名资源改名（#6150）
+
+2026-11-07，源码中的默认描述文件名称随产品名更新，Apple 账号中原有的有效描述文件没有改名，导致发版在归档前停止。不要把字符串替换当成账号迁移，也不要直接重建所有描述文件来消除名称差异。
+
+已有名称通过 `app_store.provisioning_profiles` 配置，签名预检与 ExportOptions 共用同一映射。先只读核对，再以新冻结重跑发布；保留第一次失败的冻结和日志。不恢复旧品牌别名，不修改证书、capability 或注册身份。
+
 ## 事件胶囊的外层对齐（#5962）
 
 SwiftUI 的 `.frame(maxWidth: .infinity)` 默认把内容居中；父层 `VStack(alignment: .leading)` 只对齐这个满宽 frame，不能让里面的短胶囊靠左。事件标签应在 `.background(..., in: .capsule)` 之后加 `.frame(maxWidth: .infinity, alignment: .leading)`，让外层占行宽、背景仍跟内容走。不要把满宽 frame 放到背景之前，否则短标签也会撑满。回归测试同时检查短标签的左边缘和背景右侧留白，再用真实完成弹窗的深浅色截图确认与正文对齐。

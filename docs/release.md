@@ -21,6 +21,14 @@ outside the repo, e.g. `~/.appstoreconnect/`), `app_store.app_id` (the app recor
 The API key's role is App Manager, which can't use cloud-managed signing (`-allowProvisioningUpdates` cloud signing fails), so
 archiving uses automatic signing, and at export `release.sh` generates ExportOptions from config (`scripts/persona_config.py export-options`) and re-signs with the two App Store profiles specified manually.
 
+## 现有描述文件的名称（#6150）
+
+产品名称不决定已经注册的描述文件名称。若签名预检因新默认名称报 `missing or invalid`，先在构建配置的 `app_store.provisioning_profiles` 中填写各 Bundle ID 对应的现有名称，再运行 `asc_signing.py --check`。签名预检与 ExportOptions 使用同一个映射；未配置的 target 仍使用 Persona 默认名称。
+
+此配置只选择已有资源，不修改 Bundle ID、证书、capability 或描述文件。不要为名称不匹配直接运行不带 `--check` 的签名脚本：该脚本会删除并重建所选描述文件。若现有描述文件确实失效或缺少权限，预检仍会阻止发布，需要单独处理。
+
+`--dev` 仍单独处理开发描述文件：名称中的 `App Store` 替换为 `Development`；自定义名不含 `App Store` 时追加 ` Development`，不复用或删除同名的发布描述文件。
+
 ## First-time setup (in order)
 
 1. Fill in `~/.config/persona/config.json` (`app`, and the key part of `app_store`).

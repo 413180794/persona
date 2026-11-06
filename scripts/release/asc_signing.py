@@ -39,12 +39,13 @@ LIVE = APP + ".liveactivity"  # the widget extension drawing the lock screen / D
 NOTIFY = APP + ".notify"  # the notification service extension opening relayed pushes (docs/push-relay.md)
 SHARE = APP + ".share"  # the share extension sending to Persona's main conversation (#4586)
 # bundle identifier -> (App ID name, profile name, capabilities)
+PROFILES = persona_config.provisioning_profiles(CONFIG)
 TARGETS = {
-    APP: ("Persona", "Persona App Store", ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
-    WATCH: ("Persona Watch", "Persona Watch App Store", []),
-    LIVE: ("Persona Live Activity", "Persona Live Activity App Store", ["APP_GROUPS"]),
-    NOTIFY: ("Persona Notify", "Persona Notify App Store", []),
-    SHARE: ("Persona Share", "Persona Share App Store", []),
+    APP: ("Persona", PROFILES[APP], ["PUSH_NOTIFICATIONS", "USERNOTIFICATIONS_TIMESENSITIVE", "HEALTHKIT", "APP_GROUPS"]),
+    WATCH: ("Persona Watch", PROFILES[WATCH], []),
+    LIVE: ("Persona Live Activity", PROFILES[LIVE], ["APP_GROUPS"]),
+    NOTIFY: ("Persona Notify", PROFILES[NOTIFY], []),
+    SHARE: ("Persona Share", PROFILES[SHARE], []),
 }
 # The App Group the app shares the Live Activity's persona with the widget extension through (docs/live-activity.md).
 GROUP = persona_config.app_group(CONFIG)
@@ -165,7 +166,10 @@ def main():
         for identifier, (name, profile_name, capabilities) in TARGETS.items():
             if identifier not in ids:
                 continue
-            profile(ids[identifier], profile_name.replace("App Store", "Development"), dev,
+            # Custom distribution names need a distinct development name too: reusing one would delete the store profile.
+            development_name = (profile_name.replace("App Store", "Development") if "App Store" in profile_name
+                                else profile_name + " Development")
+            profile(ids[identifier], development_name, dev,
                     "IOS_APP_DEVELOPMENT", check_only, group="APP_GROUPS" in capabilities)
     if NOT_READY:
         sys.exit(f"""

@@ -107,6 +107,46 @@ class PersonaConfigTests(unittest.TestCase):
             self.assertEqual(generated, original)
 
 
+class SigningProfileConfigTests(unittest.TestCase):
+    bid = 'com.example.persona'
+
+    def exported(self, cfg, destination='upload'):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'ExportOptions.plist'
+            config.export_options(cfg, str(output), destination)
+            return plistlib.loads(output.read_bytes())
+
+    def test_default_profiles_and_other_export_settings_are_unchanged(self):
+        cfg = {'app': {'bundle_id': self.bid, 'team_id': 'EXAMPLE'}}
+        self.assertEqual(self.exported(cfg), {
+            'method': 'app-store-connect', 'destination': 'upload', 'signingStyle': 'manual',
+            'signingCertificate': 'Apple Distribution', 'teamID': 'EXAMPLE',
+            'uploadSymbols': True, 'manageAppVersionAndBuildNumber': False,
+            'provisioningProfiles': {
+                self.bid: 'Persona App Store', self.bid + '.watchkitapp': 'Persona Watch App Store',
+                self.bid + '.liveactivity': 'Persona Live Activity App Store',
+                self.bid + '.notify': 'Persona Notify App Store', self.bid + '.share': 'Persona Share App Store',
+            },
+        })
+
+    def test_partial_custom_names_are_preserved_and_xml_escaped(self):
+        names = {self.bid: 'Existing App & Store <Production>', self.bid + '.share': '共有の配布'}
+        cfg = {'app': {'bundle_id': self.bid}, 'app_store': {'provisioning_profiles': names}}
+        exported = self.exported(cfg, 'export')
+        self.assertEqual(exported['destination'], 'export')
+        self.assertEqual(exported['provisioningProfiles'], config.provisioning_profiles(cfg))
+        for bid, name in names.items():
+            self.assertEqual(exported['provisioningProfiles'][bid], name)
+        self.assertEqual(exported['provisioningProfiles'][self.bid + '.watchkitapp'], 'Persona Watch App Store')
+        self.assertEqual(cfg['app_store']['provisioning_profiles'], names)
+
+    def test_invalid_profile_config_is_rejected_before_export(self):
+        for overrides in (None, [], 'Profile', {self.bid: ''}, {self.bid: '  '}, {self.bid: 42},
+                          {'com.example.other': 'Other Profile'}):
+            with self.subTest(overrides=overrides), self.assertRaises(SystemExit):
+                self.exported({'app': {'bundle_id': self.bid}, 'app_store': {'provisioning_profiles': overrides}})
+
+
 class MetaWearablesConfigTests(unittest.TestCase):
     def test_env_enables_the_meta_wearables_include_only_when_configured(self):
         cases = {
