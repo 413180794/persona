@@ -306,3 +306,20 @@ func explain(body map[string]any, code, message string, l i18n.Lang) {
 		body["action"] = codeActions[code]
 	}
 }
+
+// Reason is the failure in an error body read back from another hub or service: the original text when the summary
+// was localized (localizeFailure moves it to detail), so a reason travels across hops instead of the generic summary.
+func Reason(b []byte) string {
+	var e struct {
+		Error  string          `json:"error"`
+		Detail json.RawMessage `json:"detail"`
+	}
+	if json.Unmarshal(b, &e) != nil {
+		return ""
+	}
+	var detail string
+	if json.Unmarshal(e.Detail, &detail) == nil && detail != "" {
+		return detail
+	}
+	return e.Error
+}

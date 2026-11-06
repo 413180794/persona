@@ -1312,6 +1312,10 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 	}()
 	for i, ac := range cards {
 		c, piece := ac.card, ac.fallback
+		if i == len(cards)-1 && r.SessionID != "" {
+			// The conversation's web link goes under the last piece only, as on pushed and mirrored turns.
+			c.Buttons(s.openButton(ctx, r.MachineID, r.SessionID))
+		}
 		if i == 0 {
 			endHeader(l, c, end)
 		}

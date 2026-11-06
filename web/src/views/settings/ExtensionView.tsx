@@ -159,6 +159,7 @@ export function ExtensionUI({
     drawnRef.current = true;
     if (!keep) setQuery(v.search?.value ?? "");
     setError("");
+    setUnsupported(false); // a view drawn is something here
     setDrawnAt(Date.now());
   };
   // Every request that draws the whole view (a draw, a press, a search) takes the next number when it leaves: an answer
@@ -189,6 +190,7 @@ export function ExtensionUI({
     drawnRef.current = false;
     setView(null);
     setError("");
+    setUnsupported(false); // "nothing here" was the page before's answer
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
@@ -340,27 +342,31 @@ export function ExtensionUI({
     searched.current = view?.search?.value ?? "";
   }, [pageKey, view?.search?.value]);
 
+  const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || t("settings-extensionview.back") : "";
+  const back = depth > 1 && (
+    <div className="-mb-3 flex items-center px-1">
+      <Button tone="quiet" icon="chevronLeft" onClick={pop} className="-ml-2 max-w-full">
+        <span className="truncate">{below}</span>
+      </Button>
+    </div>
+  );
   if (unsupported) {
-    return embedded || compact ? null : (
+    if (embedded || compact) return null;
+    const nothing = (
       <p className="rounded-card bg-surface px-4 py-6 text-center text-[12.5px] text-ink-3 shadow-card">{t("settings-extensionview.nothing_here")}</p>
     );
+    // a pushed page that has nothing still goes back to the page below
+    return back ? <div className="flex flex-col gap-6">{back}{nothing}</div> : nothing;
   }
 
   // a page that opens with a header (UI version 4) of the same title has its big title there: not said twice
   const first = view?.sections[0]?.items[0];
   const titled = view?.title || top.title || (depth === 1 ? title : undefined);
   const heading = first?.type === "header" && first.title === titled ? undefined : titled;
-  const below = depth > 1 ? stack[depth - 2].title || (depth === 2 ? title : undefined) || t("settings-extensionview.back") : "";
   const light = embedded || compact;
   return (
     <div className={cx("flex flex-col", compact ? "gap-1" : embedded ? "gap-3" : "gap-6")}>
-      {depth > 1 && (
-        <div className="-mb-3 flex items-center px-1">
-          <Button tone="quiet" icon="chevronLeft" onClick={pop} className="-ml-2 max-w-full">
-            <span className="truncate">{below}</span>
-          </Button>
-        </div>
-      )}
+      {back}
       {!light && (!bare || depth > 1) && heading && (
         <div className="flex items-center gap-2 px-1">
           <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink">{heading}</h2>

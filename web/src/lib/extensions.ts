@@ -217,9 +217,9 @@ export const setExtensionUpgrades = (auto: boolean) => api<{ auto: boolean }>(`$
 export const setExtensionConfig = (id: string, config: JsonObject) =>
   api<HubExtensionDetail>(`${base(id)}/config`, { method: "PUT", json: { config } }).then(detailOf).then(changed);
 export const setExtensionSecret = (id: string, name: string, value: string) =>
-  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } }).then(detailOf);
+  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "PUT", json: { value } }).then(detailOf).then(changed);
 export const clearExtensionSecret = (id: string, name: string) =>
-  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "DELETE" }).then(detailOf);
+  api<HubExtensionDetail>(`${base(id)}/secrets/${enc(name)}`, { method: "DELETE" }).then(detailOf).then(changed);
 
 /** A 400 invalid_config: the field the hub refused (its dotted path, "" when it names none) and why. */
 export function configError(e: unknown): { field: string; message: string } | null {
@@ -227,6 +227,16 @@ export function configError(e: unknown): { field: string; message: string } | nu
   const field = typeof e.body.field === "string" ? e.body.field : "";
   const message = typeof e.body.message === "string" && e.body.message ? e.body.message : e.message;
   return { field, message };
+}
+
+/**
+ * The secrets a refused configuration save deleted anyway (the hub clears the ones bound to the old configuration
+ * before it writes the new one, then answers 500 secret_not_cleared or 409 read_only with secrets_cleared); empty
+ * when the error names none.
+ */
+export function clearedSecrets(e: unknown): string[] {
+  if (!(e instanceof ApiError) || !Array.isArray(e.body.secrets_cleared)) return [];
+  return e.body.secrets_cleared.filter((n): n is string => typeof n === "string" && n !== "");
 }
 
 // ── words ───────────────────────────────────────────────

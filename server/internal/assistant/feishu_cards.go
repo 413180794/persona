@@ -666,7 +666,10 @@ func (s *Service) answeredCard(ctx context.Context, ix proto.Interaction, how st
 	case proto.IxPlan:
 		c.Markdown(feishubot.EscapeMarkdown(clip(planTitle(ix.Plan), 200)))
 	}
-	return safeCard(s.botLang(ctx), c.Note("✓ "+how), nil)
+	// open rides on the card and is handed to safeCard too, so the short fallback card keeps it when this one
+	// would exceed Feishu's size budget.
+	open := s.openButton(ctx, ix.MachineID, ix.SessionID)
+	return safeCard(s.botLang(ctx), c.Note("✓ "+how).Buttons(open), open)
 }
 
 func (s *Service) ixWhere(ctx context.Context, ix proto.Interaction) string {
@@ -689,8 +692,14 @@ func (s *Service) openButton(ctx context.Context, machine, session string) feish
 	if session != "" {
 		web = sessionLink(web, machine, session, s.isAssistantConversation(ctx, machine, session))
 	}
+	return s.openLinkButton(ctx, web)
+}
+
+// openLinkButton is the "open on web" button for a link already built (sessionLink); nil for an empty or non-http(s)
+// one, so a card never carries a dead empty link (#4073).
+func (s *Service) openLinkButton(ctx context.Context, web string) feishubot.Button {
 	if u, err := url.Parse(web); web == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil // no web app to open (no public_url): a button with an empty link does nothing, or gets the card refused
+		return nil
 	}
 	return feishubot.LinkBtn(i18n.T(s.botLang(ctx), "assistant-feishu_cards.open_web"), web)
 }
@@ -1522,6 +1531,8 @@ func (s *Service) conversationsCard(ctx context.Context) (*feishubot.Card, strin
 	}
 	var b strings.Builder
 	b.WriteString(title + "\n")
+	st, _ := s.feishuStatusKept(ctx)
+	web := strings.TrimRight(st.PublicURL, "/") // every row's link is on this web app; "" keeps all buttons out
 	for i, sess := range list {
 		if i == 8 {
 			break
@@ -1538,7 +1549,10 @@ func (s *Service) conversationsCard(ctx context.Context) (*feishubot.Card, strin
 		if sess.SessionID == main {
 			kind = targetMain
 		}
-		c.Markdown(line).Buttons(feishubot.Btn(i18n.T(l, "assistant-feishu_cards.chat_here"), feishubot.Default, map[string]any{"a": "switch", "k": kind, "m": sess.MachineID, "s": sess.SessionID, "t": name}))
+		switchBtn := feishubot.Btn(i18n.T(l, "assistant-feishu_cards.chat_here"), feishubot.Default, map[string]any{"a": "switch", "k": kind, "m": sess.MachineID, "s": sess.SessionID, "t": name})
+		// The rows are Persona conversations (conversations lists Assistant sessions), so the link is /j/<id>.
+		openBtn := s.openLinkButton(ctx, sessionLink(web, sess.MachineID, sess.SessionID, sess.Assistant))
+		c.Markdown(line).Buttons(switchBtn, openBtn)
 		fmt.Fprintf(&b, "- %s\n", fallbackText.Replace(name))
 	}
 	return c.Note(i18n.T(l, "assistant-feishu_cards.new_hint")), strings.TrimSpace(b.String())

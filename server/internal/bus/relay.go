@@ -2,7 +2,7 @@ package bus
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/coder/websocket"
+
+	"github.com/nwverse/persona/server/internal/apierr"
 )
 
 // DialAt opens another WebSocket on the hub with a service's token: path (with query) instead of the bus itself, e.g.
@@ -30,13 +32,10 @@ func DialAt(ctx context.Context, hub, token string, client *http.Client, path, q
 			if resp.StatusCode == http.StatusUnauthorized {
 				return nil, ErrRejected
 			}
-			var e struct {
-				Error string `json:"error"`
-			}
-			if resp.Body != nil {
+			if resp.Body != nil { // the hub's reason, not the summary it localized it into (apierr.Reason)
 				b, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
-				if json.Unmarshal(b, &e) == nil && e.Error != "" {
-					return nil, fmt.Errorf("%s", e.Error)
+				if why := apierr.Reason(b); why != "" {
+					return nil, errors.New(why)
 				}
 			}
 		}

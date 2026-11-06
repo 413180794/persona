@@ -3,7 +3,6 @@ package hub
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
 )
@@ -56,11 +56,9 @@ func (h *Hub) openThroughHub(ctx context.Context, hub, mid string) (*nodePipe, e
 		defer resp.Body.Close()
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 		msg := strings.TrimSpace(string(b))
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(b, &e) == nil && e.Error != "" {
-			msg = e.Error
+		// The member's reason, not the summary it localized it into (apierr.Reason).
+		if why := apierr.Reason(b); why != "" {
+			msg = why
 		}
 		if msg == "" {
 			msg = resp.Status

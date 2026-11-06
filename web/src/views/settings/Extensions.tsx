@@ -3,15 +3,17 @@
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
 // upgrading and removing are done on the hub's side (`personad extension` on its machine, or its admin UI at /admin).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import { isResumed } from "../../lib/reconnect";
 import { onHubEvent, useStore } from "../../lib/store";
+import { EXTENSIONS_CHANGED } from "../../lib/extension-prompts";
+import { operations, operationsListed, watchOperations } from "../../lib/extension-operations";
 import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market";
 import { ago } from "../../lib/format";
 import { composing } from "../../lib/send-history";
 import {
-  choiceLabel, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
+  changed, choiceLabel, clearedSecrets, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
   placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setContribution, setExtensionConfig, setExtensionEnabled,
   channelOf, machineStatus, nodeProgramStatus, sandboxEgress, sandboxState, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
   type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSandbox, type ExtensionSecret,
@@ -111,14 +113,37 @@ function ExtensionList({ onOpen, onMarket, onMarkets }: { onOpen: (id: string) =
   const [markets, setMarkets] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Reads are numbered: an answer older than the last one asked for is dropped.
+  const reads = useRef(0);
   const load = () => {
+    const mine = ++reads.current;
     setLoading(true);
     listExtensionsInfo()
-      .then((r) => (setExtensions(r.extensions), setMarkets(r.markets), setError("")))
-      .catch((e) => setError(errorText(e)))
-      .finally(() => setLoading(false));
+      .then((r) => mine === reads.current && (setExtensions(r.extensions), setMarkets(r.markets), setError("")))
+      .catch((e) => mine === reads.current && setError(errorText(e)))
+      .finally(() => mine === reads.current && setLoading(false));
   };
   useEffect(load, []);
+  // An install, upgrade or uninstall that finished (here, on another device, or the hub's auto-upgrade) changes the
+  // list: lib/extension-operations.ts sends EXTENSIONS_CHANGED when one succeeds. watchOperations starts its push
+  // listener, which otherwise only a market page starts. Several at once read the list once.
+  useEffect(() => {
+    let queued = false;
+    const again = () => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        load();
+      });
+    };
+    window.addEventListener(EXTENSIONS_CHANGED, again);
+    const stop = watchOperations(() => {});
+    return () => {
+      window.removeEventListener(EXTENSIONS_CHANGED, again);
+      stop();
+    };
+  }, []);
   // a sign-in that changed (signed in, out, expired) shows at once
   useEffect(() => onAuthChange((id, auth) => setExtensions((cur) => cur?.map((x) => withAuth(x, id, auth)) ?? cur)), []);
   // a reconnect the hub could not resume: the extension_auth pushes missed meanwhile are not replayed (#4954)
@@ -313,6 +338,37 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   const fields = detail?.form?.fields ?? [];
   const editable = !!detail && !detail.read_only;
 
+  // An operation of this extension that succeeds while the page is open (an upgrade, also the hub's auto-upgrade, or
+  // an install or uninstall from another device): its version, upgrades and permissions are read again. A dirty form
+  // keeps its draft, as a switch does; an uninstall goes back to the list. Those that ended before the page opened
+  // are not acted on: when this page is the first to start listening, the hub's list (which keeps ended operations a
+  // while) arrives after it opened, and what it brings that was not pushed meanwhile is old.
+  const dirtyNow = useRef(dirty);
+  dirtyNow.current = dirty;
+  const backNow = useRef(onBack);
+  backNow.current = onBack;
+  useEffect(() => {
+    const ended = () => operations().filter((o) => o.extension === id && o.state === "succeeded");
+    const seen = new Set(ended().map((o) => o.id));
+    let listed = operationsListed();
+    return watchOperations(() => {
+      if (!listed && operationsListed()) {
+        listed = true;
+        ended().forEach((o) => seen.add(o.id));
+        return;
+      }
+      const fresh = ended().filter((o) => !seen.has(o.id));
+      if (!fresh.length) return;
+      fresh.forEach((o) => seen.add(o.id));
+      // newest first: an uninstall followed by a fresh install stays on the page
+      if (fresh[0].kind === "uninstall") return backNow.current();
+      extensionDetail(id).then(
+        (d) => (dirtyNow.current ? setDetail(d) : (apply(d), setTyped({}), setFieldErrors({}))),
+        () => {},
+      );
+    });
+  }, [id]);
+
   const edit = (path: string[], value: Json | undefined) => {
     setDraft((d) => setAt(d, path, value));
     const key = path.join(".");
@@ -343,6 +399,13 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       const ce = configError(e);
       if (ce) setFieldErrors({ [ce.field]: ce.message });
       else toast(t("settings-extensions.not_saved", { error: errorText(e) }), "error");
+      // The configuration stayed as it was, but some of its secrets are gone: read the page again so the Secrets group
+      // says so; the draft and what is being typed stay. The hub restarts the program without them, so its entries,
+      // cards and quick prompts are asked for again too, as after clearing a secret.
+      if (clearedSecrets(e).length) {
+        changed(null);
+        void extensionDetail(id).then(setDetail, () => {});
+      }
     } finally {
       setSaving(false);
     }

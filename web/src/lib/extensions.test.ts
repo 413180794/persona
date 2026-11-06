@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
+import { EXTENSIONS_CHANGED } from "./extension-prompts";
 import {
-  clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
+  clearedSecrets, clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
   machineStatus, extensionState, extensionTone, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled, setExtensionSecret, sourceText,
   stateLine, valueAt, morePermissions, extensionUpgrades, setExtensionAutoUpgrade, setExtensionUpgrades, upgradeAction, upgradeDetail, upgradeNote,
   type HubExtension, type ExtensionField, type ExtensionUpgrade, nodeProgramStatus, exitText, saveFooter, channelOf, sandboxEgress, sandboxState,
@@ -17,8 +18,16 @@ vi.mock("./store", async (importOriginal) => {
   return { ...m, getState: () => ({ ...m.getState(), features: hub.features }) };
 });
 
+// The places refresh a state-changing call asks for (lib/extension-slots.ts), counted instead of fetched.
+const slots = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("./extension-slots", async (importOriginal) => {
+  const m = await importOriginal<typeof import("./extension-slots")>();
+  return { ...m, refreshExtensionPlaces: slots.refresh };
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  slots.refresh.mockReset();
   hub.features = ["extensions"];
 });
 
@@ -128,6 +137,28 @@ describe("扩展的接口", () => {
     expect(d.ui).toEqual([{ extension: "a", extension_name: "A", id: "usage", title: "用量", placement: "plugin_page" }]);
     expect(calls).toEqual(["GET /api/v1/plugins", "GET /api/v1/plugins/a/-/"]);
   });
+  it("refreshes the extension's places after a secret is set or cleared, not after a refused one", async () => {
+    // A secret change restarts the extension (registry SetSecret / DeleteSecret), so its sidebar entries, cards and
+    // quick prompts can appear or go away.
+    const events = new EventTarget();
+    let fired = 0;
+    events.addEventListener(EXTENSIONS_CHANGED, () => fired++);
+    vi.stubGlobal("window", events);
+    vi.stubGlobal("localStorage", { getItem: () => "t", setItem: () => {}, removeItem: () => {} });
+    let fail = false;
+    vi.stubGlobal("fetch", async () =>
+      fail
+        ? new Response(JSON.stringify({ code: "invalid_secret", message: "bad" }), { status: 400 })
+        : new Response(JSON.stringify({ id: "a", name: "x", kind: "k", status: "running" })));
+    await setExtensionSecret("a", "api_key", "v");
+    expect([slots.refresh.mock.calls.length, fired]).toEqual([1, 1]);
+    await clearExtensionSecret("a", "api_key");
+    expect([slots.refresh.mock.calls.length, fired]).toEqual([2, 2]);
+    fail = true;
+    await expect(setExtensionSecret("a", "api_key", "v")).rejects.toBeInstanceOf(ApiError);
+    await expect(clearExtensionSecret("a", "api_key")).rejects.toBeInstanceOf(ApiError);
+    expect([slots.refresh.mock.calls.length, fired]).toEqual([2, 2]);
+  });
   it("reads the field the hub refused", () => {
     expect(configError(new ApiError(400, "base_url: 要是一个网址", { code: "invalid_config", field: "base_url", message: "要是一个网址" }))).toEqual({
       field: "base_url", message: "要是一个网址",
@@ -135,6 +166,13 @@ describe("扩展的接口", () => {
     expect(configError(new ApiError(400, "bad", { code: "invalid_config" }))).toEqual({ field: "", message: "bad" });
     expect(configError(new ApiError(500, "x", {}))).toBeNull();
     expect(configError(new Error("x"))).toBeNull();
+  });
+  it("reads the secrets a refused configuration save cleared anyway", () => {
+    expect(clearedSecrets(new ApiError(500, "x", { code: "secret_not_cleared", secrets_cleared: ["api_key", 3, ""] }))).toEqual(["api_key"]);
+    expect(clearedSecrets(new ApiError(409, "x", { code: "read_only", secrets_cleared: ["token"] }))).toEqual(["token"]);
+    expect(clearedSecrets(new ApiError(409, "x", { code: "read_only" }))).toEqual([]);
+    expect(clearedSecrets(new ApiError(500, "x", { secrets_cleared: "api_key" }))).toEqual([]);
+    expect(clearedSecrets(new Error("x"))).toEqual([]);
   });
 });
 

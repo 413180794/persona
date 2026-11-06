@@ -97,6 +97,8 @@ let started = false;
 // older or missing (#4574).
 let listing = 0;
 let applied = 0;
+// Whether a list of the hub's has been applied yet: before that, what is known came from pushes and starts only.
+let listed = false;
 const listsOut = new Set<Set<string>>();
 
 function emit() {
@@ -125,6 +127,7 @@ export async function reloadOperations() {
     const list = await listOperations();
     if (mine < applied) return;
     applied = mine;
+    listed = true;
     const next = new Map(list.map((o) => [o.id, o]));
     for (const id of since) {
       const known = ops.get(id);
@@ -160,6 +163,8 @@ export function watchOperations(l: () => void): () => void {
   };
 }
 
+/** Whether the hub's list of operations has been read since listening started (it also holds ones that ended a while ago). */
+export const operationsListed = () => listed;
 export const operations = (): ExtensionOperation[] => [...ops.values()].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at));
 export const forget = (id: string) => {
   ops = new Map(ops);
