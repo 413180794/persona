@@ -2,6 +2,7 @@
   "no_auth": "no sign-in",
   "qr_missing_url": "a QR sign-in step without a URL",
   "not_found": "no such plugin",
+  "missing_extension": "This extension could not be found.",
   "unsupported_gateway": "not this plugin's gateway",
   "read_only_device": "this device can only read and answer",
   "not_set_up": "plugins are not set up",

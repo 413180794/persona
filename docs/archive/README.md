@@ -11,6 +11,7 @@ Current docs, code comments and lessons cite them to explain "why it is done thi
 
 | File | Contents |
 | --- | --- |
+| `codex-project-hierarchy-verification.md` | 2026-11-06 Codex project and task hierarchy verification, including source isolation, parent metadata, grouped tasks and client acceptance (#5620) |
 | `english-documentation-acceptance-20261106.md` | 2026-11-06 English documentation acceptance: language rules, bilingual README, all docs translations, merged PRs, link checks, screenshots and disclosed test limits (#5054, #5056) |
 | `lanes/live-updates.md` | 2026-10-31 live updates interrupting user actions: three reproductions, root cause, how it was measured, and performance numbers before and after the fix |
 | `lanes/msg-render-plan.md` | 2026-10-29 diagnosis and rework plan for the message read and render pipeline (compared against Ovis) |

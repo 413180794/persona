@@ -59,7 +59,7 @@ func TestExtensionStatusHTTP(t *testing.T) {
 			}
 			for _, path := range []string{"/api/v1/extensions/missing-extension/-/", "/api/v1/extensions/missing-extension/-/auth"} {
 				code, out := request("GET", path, "")
-				if code != 404 || out["code"] != "not_found" || out["error"] != i18n.T(l, "extension-status.not_found") {
+				if code != 404 || out["code"] != "not_found" || out["error"] != i18n.T(l, "extension-status.missing_extension") {
 					t.Fatalf("%s: HTTP %d %v", path, code, out)
 				}
 			}
@@ -84,7 +84,7 @@ func TestExtensionStatusHTTP(t *testing.T) {
 				t.Fatalf("nested validation: HTTP %d %v; want %s", code, out, wantMessage)
 			}
 			code, out = request("POST", "/api/v1/extensions/missing-extension/-/ui/page", `{}`)
-			if code != 404 || out["error"] != i18n.T(l, "extension-status.not_found") {
+			if code != 404 || out["error"] != i18n.T(l, "extension-status.missing_extension") {
 				t.Fatalf("missing UI extension: HTTP %d %v", code, out)
 			}
 			code, out = request("POST", "/api/v1/extensions/-/install", `{"preview_id":"expired-example","permissions_digest":"example"}`)
@@ -101,7 +101,7 @@ func TestExtensionStatusHTTP(t *testing.T) {
 		t.Fatal("request projection changed the canonical registry state")
 	}
 	code, out := extensionLanguageRequest(t, server, h.cfg.Token, "", "GET", "/api/v1/extensions/missing-extension/-/auth", "")
-	if code != 404 || out["error"] != errNoExtension.Error() {
+	if code != 404 || out["error"] != "no such plugin" || errNoExtension.Error() != "no such plugin" {
 		t.Fatalf("no-locale legacy error: HTTP %d %v", code, out)
 	}
 }

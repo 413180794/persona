@@ -2,6 +2,7 @@
   "no_auth": "この拡張機能はサインイン不要です",
   "qr_missing_url": "拡張機能のQRコードサインイン手順にURLがありません",
   "not_found": "この拡張機能は見つかりません",
+  "missing_extension": "この拡張機能は見つかりません",
   "unsupported_gateway": "このゲートウェイは拡張機能に対応していません",
   "read_only_device": "このデバイスでは閲覧と回答のみ可能です",
   "not_set_up": "拡張機能が設定されていません",

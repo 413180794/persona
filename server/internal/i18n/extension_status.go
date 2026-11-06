@@ -46,6 +46,9 @@ func extensionStatusText(l Lang, text string, depth int) string {
 				args[name] = value
 			}
 		}
+		if form.key == "extension-status.not_found" {
+			return T(l, "extension-status.missing_extension")
+		}
 		return T(l, form.key, args)
 	}
 	return text

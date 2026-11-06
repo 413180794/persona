@@ -8,6 +8,9 @@ import (
 
 func TestExtensionStatusCopies(t *testing.T) {
 	for _, l := range []Lang{En, ZhHans, Ja} {
+		if got := ExtensionStatusText(l, "no such plugin"); got != T(l, "extension-status.missing_extension") || got == "no such plugin" {
+			t.Fatalf("explicit %s retained the legacy missing-extension text: %q", l, got)
+		}
 		for _, tc := range []struct {
 			key  string
 			args Args

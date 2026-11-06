@@ -2331,7 +2331,7 @@ struct ChatView: View {
                     // Out of reach: the slim bar says so too (the open header's subtitle explains on a tap).
                     if model.connection.shown != .online {
                         ProgressView().controlSize(.mini)
-                        Text(model.connection.shown.title).lineLimit(1)
+                        Text(ConnectionLabel.text(model.connection.shown, hubRestarting: model.hubUpdate?.restarting == true)).lineLimit(1)
                     } else {
                         if let s = session { StatusDot(state: s.state, size: 7) }
                         Text(compactPlace).lineLimit(1).truncationMode(.middle)
@@ -2345,7 +2345,7 @@ struct ChatView: View {
                 .contentShape(.capsule)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(model.connection.shown != .online ? String(localized: "\(model.connection.shown.title), show title and tags")
+            .accessibilityLabel(model.connection.shown != .online ? String(localized: "\(ConnectionLabel.text(model.connection.shown, hubRestarting: model.hubUpdate?.restarting == true)), show title and tags")
                                 : String(localized: "\(compactPlace), show title and tags"))
             Spacer(minLength: 0)
             // A goal, a loop or background work: a small mark each. Files, the terminal and Git are in the ··· menu (a tap opens the header).
@@ -2545,7 +2545,7 @@ struct ChatView: View {
             titleLabel(chevron: false)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(link != .online ? String(localized: "\(title), \(link.title), view connection details") : String(localized: "\(title), view session info"))
+        .accessibilityLabel(link != .online ? String(localized: "\(title), \(ConnectionLabel.text(link, hubRestarting: model.hubUpdate?.restarting == true)), view connection details") : String(localized: "\(title), view session info"))
         .accessibilityIdentifier("chat.title")
         .connectionDetails($showLink)
     }

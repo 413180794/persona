@@ -19,6 +19,9 @@ func extensionErrorCopy(l i18n.Lang, err error, fallback string) (string, string
 	}
 	var msg *i18n.Message
 	if errors.As(err, &msg) && msg.Error() == err.Error() {
+		if msg.Key == "extension-status.not_found" {
+			return i18n.T(l, "extension-status.missing_extension"), ""
+		}
 		if _, nested := msg.Args["err"]; !nested {
 			return i18n.Localize(err, l), ""
 		}

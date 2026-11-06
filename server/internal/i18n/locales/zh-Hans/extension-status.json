@@ -2,6 +2,7 @@
   "no_auth": "这个扩展不用登录",
   "qr_missing_url": "扩展返回的扫码登录步骤没有链接",
   "not_found": "没有这个扩展",
+  "missing_extension": "没有这个扩展",
   "unsupported_gateway": "这个网关不是此扩展支持的",
   "read_only_device": "这台设备只能查看和回答",
   "not_set_up": "扩展还未设置好",
