@@ -703,7 +703,9 @@ struct InboxDetailView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 InboxActionBar(item: current, draft: { drafting = true }, handOff: { handingOff = true })
             }
-            .sheet(isPresented: $drafting) { InboxDraftSheet(item: current, accounts: accounts) }
+            .sheet(isPresented: $drafting) {
+                InboxDraftSheet(item: current, accounts: accounts, onSent: { dismiss() })
+            }
             .sheet(isPresented: $handingOff) { InboxHandOffSheet(item: current) }
             #if DEBUG
             // `-showInboxAction draft|handoff`: open that sheet (screenshots).

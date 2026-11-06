@@ -69,6 +69,21 @@ describe("the overview", () => {
     expect(html).toContain("计划写好了，等你批准");
   });
 
+  it("answers a permission or a one-choice question on its row, and sends a plan to its chat (#4090)", () => {
+    const a = agent(1, 0, "needs_you");
+    const buttons = (html: string) => [...html.matchAll(/<button [^>]*>(?:<[^>]+>)*([^<]+)/g)].map((m) => m[1]);
+    const html = render([a], [
+      { id: "p", kind: "permission", machine_id: "mac", session_id: a.session_id, tool_name: "Bash", tool_input: { command: "swift test", description: "运行测试" } } as Interaction,
+      { id: "q", kind: "question", machine_id: "mac", session_id: a.session_id, questions: [{ question: "哪种格式？", options: [{ label: "JPEG" }, { label: "PNG" }] }] } as Interaction,
+    ]);
+    expect(buttons(html)).toEqual(expect.arrayContaining(["允许", "拒绝", "JPEG", "PNG"]));
+    // what 允许 allows, by tool and command, not the agent's description of it
+    expect(html).toContain("Bash：swift test");
+    const plan = render([a], [{ id: "l", kind: "plan", machine_id: "mac", session_id: a.session_id, plan: "# 计划" } as Interaction]);
+    expect(buttons(plan)).not.toContain("允许");
+    expect(plan).toContain("计划写好了，等你批准");
+  });
+
   it("does not say nothing needs you above a waiting card", () => {
     const asking = agent(1, 0, "needs_you");
     const html = render([asking, agent(2, 0, "idle")], [{ id: "i1", kind: "permission", machine_id: "mac", session_id: asking.session_id, tool_name: "Bash" } as Interaction]);

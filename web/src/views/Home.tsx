@@ -1,8 +1,12 @@
 // 总览: what needs you, what is running, what just finished — Beautiful UI's Task Rows — and the computers.
 import { useMemo, useState } from "react";
-import { ago, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
+import { ago, sessionCan, sessionPreview, shortDuration, sourceSubtitle, sessionTitle, stateOf, STATE_LABEL, tabLabel } from "../lib/format";
 import { cardState } from "../lib/card-focus";
 import { interactionAsk } from "../lib/inbox";
+import { answerLines, type Resolution } from "../lib/answered";
+import { quickAnswers, withHeld, type HeldRow, type QuickChoice } from "../lib/quick-answers";
+import { optionDisplay, permissionDetail } from "../lib/tool-detail";
+import { toolDisplayName } from "../lib/turns";
 import { plainMarkdown } from "../lib/plain-markdown";
 import { homeOverview, paneRoute, type TabGroup } from "../lib/herdr-tree";
 import { agentLabel } from "../lib/mentions";
@@ -12,14 +16,16 @@ import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
 import { href, onLinkClick, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
-import { useStore } from "../lib/store";
+import { getSession, useStore } from "../lib/store";
 import { BUSY_MOTION, spinStyle } from "../lib/busy-motion";
 import type { AgentState, Interaction, Machine, Session } from "../lib/types";
-import { Button, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
+import { Button, Collapse, cx, EASE, IconButton, Loading, useNow } from "../ui/atoms";
+import { RecommendedTag } from "../ui/RecommendedTag";
 import { StatusMark } from "../ui/StatusMark";
 import { Icon } from "../ui/icons";
 import { MarkSeenDialog } from "./AgentMenus";
 import { answeredSessions } from "./assistant/answered-lookup";
+import { resolve } from "./chat/Interactions";
 import { OverviewCards } from "./extensions/ExtensionSlots";
 import { t } from "../i18n";
 
@@ -47,6 +53,18 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
   const name = (mid: string) => machineWithHub(mid, machines);
   const [confirmSeen, setConfirmSeen] = useState<Session[] | null>(null);
   const markAll = <MarkAllSeen count={unread.length} onClick={() => setConfirmSeen(unread)} />;
+
+  // A card answered on its row (#4090) stays in its slot while it is sent and, answered, says so for a moment before
+  // it folds away: the next row does not slide under the pointer and take a second click meant for this one.
+  const [held, setHeld] = useState<HeldRow[]>([]);
+  const answer = async (ix: Interaction, index: number, before: string | undefined, c: QuickChoice) => {
+    const phase = (p: HeldRow["phase"]) => setHeld((h) => h.map((x) => (x.ix.id === ix.id ? { ...x, phase: p } : x)));
+    setHeld((h) => [...h.filter((x) => x.ix.id !== ix.id), { ix, index, before, phase: "sending", pick: c.key, body: c.body }]);
+    if (!(await resolve(ix, c.body))) return setHeld((h) => h.filter((x) => x.ix.id !== ix.id)); // it said why (toast)
+    phase("done");
+    setTimeout(() => phase("leaving"), ANSWERED_HOLD_MS);
+    setTimeout(() => setHeld((h) => h.filter((x) => x.ix.id !== ix.id)), ANSWERED_HOLD_MS + 400);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -77,22 +95,42 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
           {!loaded && <Loading label={t("common.loading")} />}
 
           {/* the headline counts agents, this counts cards: say so when one agent has several cards waiting */}
-          {loaded && interactions.length > 0 && (
+          {loaded && (interactions.length > 0 || held.length > 0) && (
             <Group title={t("home.needs_you")} count={interactions.length} hint={new Set(interactions.map((ix) => `${ix.machine_id}/${ix.session_id}`)).size < interactions.length ? t("home.needs_you_hint") : undefined}>
-              {interactions.map((ix, i) => {
+              {withHeld(interactions, held).map(({ ix, held: h }, i, rows) => {
                 const s = sessions.find((x) => x.machine_id === ix.machine_id && x.session_id === ix.session_id);
+                const title = ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"));
+                // what the row answers in one tap, as iOS's 需要你 cards; the rest (plans, forms, typing) opens the chat
+                const quick = sessionCan(s ?? getSession(ix.machine_id, ix.session_id), "approve") ? quickAnswers(ix) : null;
+                // allowed in one tap, a permission says the tool and what it runs or touches (iOS:「Bash：swift test」),
+                // not the agent's description of it
+                const tool = quick && ix.kind === "permission" ? toolDisplayName(ix.tool_name) : "";
+                // and a terminal dialog what it is about (the command under its question), as iOS's card does. Both
+                // as they are: read as Markdown, `ls **/*.ts` lost its stars and `a <in >out` its redirections
+                const about = quick && ix.kind === "screen" ? [ix.dialog?.question, ix.dialog?.detail].filter(Boolean).join(" · ") : "";
+                const raw = (tool && permissionDetail(ix.tool_name, ix.tool_input)?.fields[0]?.value) || about;
+                const ask = (ix.kind === "plan" ? t("home.plan_ready") : raw || plainMarkdown(interactionAsk(ix))).replace(/\s+/g, " ").trim();
+                const done = h !== undefined && h.phase !== "sending";
+                // every row in a Collapse, so an answered one folds away where it is; answered, it keeps its words
+                // and its height (已回答 in the buttons' place) until then
                 return (
-                  <TaskRow
-                    key={ix.id}
-                    i={i}
-                    state="needs_you"
-                    to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
-                    title={ix.session_title || (s ? sessionTitle(s) : ix.cwd || t("home.session"))}
-                    meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
-                    detail={ix.kind === "plan" ? t("home.plan_ready") : plainMarkdown(interactionAsk(ix)).replace(/\s+/g, " ").trim() || undefined}
-                    pill={<Pill tone="red">{KIND[ix.kind]}</Pill>}
-                    entry={cardState(ix.id)}
-                  />
+                  // the room around the row (-m-2 / p-2) is its shadow's: the collapse clips what is outside it
+                  <Collapse key={ix.id} open={h?.phase !== "leaving"} className="-m-2">
+                    <div className="p-2">
+                      <TaskRow
+                        i={i}
+                        state="needs_you"
+                        done={done}
+                        to={{ name: "session", mid: ix.machine_id, sid: ix.session_id }}
+                        title={title}
+                        meta={[name(ix.machine_id), s?.space_name, s && tabLabel(s)].filter(Boolean).join(" › ")}
+                        detail={(tool && ask && ask !== tool ? t("home.permission_detail", { tool, what: ask }) : ask) || undefined}
+                        pill={!done && <Pill tone="red">{KIND[ix.kind]}</Pill>}
+                        entry={cardState(ix.id)}
+                        actions={done ? <AnsweredLine ix={ix} body={h.body} /> : quick && <QuickAnswers choices={quick} sending={h?.pick} onPick={(c) => void answer(ix, i, rows[i + 1]?.ix.id, c)} />}
+                      />
+                    </div>
+                  </Collapse>
                 );
               })}
             </Group>
@@ -126,7 +164,7 @@ export function Home({ onNewAgent, onToggleSidebar }: { onNewAgent: () => void; 
             </Group>
           )}
 
-          {loaded && quiet && interactions.length === 0 && (
+          {loaded && quiet && interactions.length === 0 && held.length === 0 && (
             <div className="flex flex-col items-start gap-3 rounded-card bg-surface p-4 shadow-card">
               <span className="flex size-8 items-center justify-center rounded-full bg-green-tint text-green">
                 <Icon name="check" size={15} stroke={2.6} />
@@ -238,26 +276,76 @@ function GroupTask({ g, i, machine, pill }: { g: TabGroup; i: number; machine: s
   );
 }
 
-// One Task Rows capsule: status badge, title, the latest words, a pill.
-function TaskRow({ i, state, to, title, meta, detail, pill, entry }: { i: number; state: AgentState; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown> }) {
+const ANSWERED_HOLD_MS = 1600;
+
+/** A row's one-tap answers (lib/quick-answers.ts), under its words; the one being sent spins, the others wait. */
+function QuickAnswers({ choices, sending, onPick }: { choices: QuickChoice[]; sending?: string; onPick: (c: QuickChoice) => void }) {
   return (
+    <div className="flex flex-wrap gap-1.5 px-3 pb-2.5 pl-12">
+      {choices.map((c) => {
+        const shown = optionDisplay(c.label);
+        return (
+          <Button key={c.key} tone={c.primary ? "primary" : "secondary"} busy={sending === c.key} disabled={sending !== undefined} title={c.hint || shown.text} onClick={() => onPick(c)} className="max-w-full">
+            <span className="min-w-0 truncate">{shown.text}</span>
+            {shown.recommended && <RecommendedTag />}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** In an answered row the buttons' place: 已回答 and the answer, a button's height, for a moment before it folds. */
+function AnsweredLine({ ix, body }: { ix: Interaction; body: Resolution }) {
+  // the hub may say it was answered already, elsewhere: what took effect, as the chat's answered card shows it
+  const done = useStore((s) => s.answered[ix.id]);
+  const answer = answerLines(ix, done?.resolution ?? body).map((l) => optionDisplay(l.answer).text).join(t("lib-answered.separator"));
+  return (
+    <div className="px-3 pb-2.5 pl-12">
+      <p role="status" className="flex h-8 min-w-0 items-center gap-1.5 text-[12.5px] font-medium text-green" style={{ animation: `fade-in 200ms ${EASE} both` }}>
+        <Icon name="check" size={13} stroke={2.6} className="shrink-0" />
+        <span className="truncate">{t("home.answered", { answer })}</span>
+      </p>
+    </div>
+  );
+}
+
+// One Task Rows capsule: status badge, title, the latest words, a pill. With `actions` (a card's one-tap answers) they
+// sit under it in the same capsule, outside the link, and its words take up to three lines: read before answering.
+function TaskRow({ i, state, done, to, title, meta, detail, pill, entry, actions }: { i: number; state: AgentState; done?: boolean; to: Route; title: string; meta: string; detail?: string; pill: React.ReactNode; entry?: Record<string, unknown>; actions?: React.ReactNode }) {
+  const enter = { animation: `fade-up 420ms ${EASE} ${Math.min(i, 8) * 50}ms both` };
+  const link = (
     <a
       href={href(to)}
       onClick={(e) => onLinkClick(e, to, entry)}
-      className="group flex items-center gap-3 rounded-[16px] bg-surface px-3 py-2.5 shadow-card transition-[background-color,transform] duration-150 hover:bg-inset active:scale-[0.995]"
-      style={{ animation: `fade-up 420ms ${EASE} ${Math.min(i, 8) * 50}ms both` }}
+      className={cx("group flex items-center gap-3 rounded-[16px] px-3 py-2.5 transition-[background-color,transform] duration-150", !actions && "bg-surface shadow-card hover:bg-inset active:scale-[0.995]")}
+      style={actions ? undefined : enter}
     >
-      <Badge state={state} />
+      {done ? (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-green text-white" aria-label={t("chat-interactions.answered")}>
+          <Icon name="check" size={13} stroke={3.2} />
+        </span>
+      ) : (
+        <Badge state={state} />
+      )}
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-[13.5px] font-medium text-ink">{title}</span>
           <span className="hidden shrink-0 truncate text-[11.5px] text-ink-3 sm:inline">{meta}</span>
         </span>
-        {detail && <span className="mt-0.5 block truncate text-[12.5px] text-ink-2">{detail}</span>}
+        {detail && <span className={cx("mt-0.5 text-[12.5px] text-ink-2", actions ? "line-clamp-3 [overflow-wrap:anywhere]" : "block truncate")} title={actions ? detail : undefined}>{detail}</span>}
       </span>
       {pill}
       <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-ink-3 transition-transform duration-150 group-hover:translate-x-0.5" />
     </a>
+  );
+  if (!actions) return link;
+  return (
+    // the capsule shades while the link part is hovered, not while a button is
+    <div className="rounded-[16px] bg-surface shadow-card transition-colors duration-150 has-[>a:hover]:bg-inset" style={enter}>
+      {link}
+      {actions}
+    </div>
   );
 }
 

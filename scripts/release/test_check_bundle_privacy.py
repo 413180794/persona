@@ -87,6 +87,21 @@ class SSHFieldTests(unittest.TestCase):
             self.assertIn(f"private value ({len(name)} chars)", cbp.text_kinds(text, (name,)))
 
 
+class BinaryNoiseEmailTests(unittest.TestCase):
+    """Machine code that reads like person@example.com is not an address (#4497); addresses people write still are."""
+
+    def test_noise_is_not_an_email(self):
+        for local, domain in (("B", "9.Sg"), ("xQ", "7.De"), ("a", "12.34.cN")):
+            with self.subTest(domain=domain):
+                self.assertEqual(cbp.text_kinds(local + "@" + domain, ()), set())
+
+    def test_real_looking_addresses_still_count(self):
+        for local, domain in (("person", "company.com"), ("Person", "Company.com"), ("OPS", "COMPANY.COM"),
+                              ("me", "team9.io")):
+            with self.subTest(domain=domain):
+                self.assertIn("email", cbp.text_kinds(local + "@" + domain, ()))
+
+
 class PublicConstantTests(unittest.TestCase):
     def kinds(self, text, words=(), dependencies=DEPENDENCIES):
         return cbp.text_kinds(text, words, whole_short=True, dependencies=dependencies)

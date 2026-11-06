@@ -115,7 +115,7 @@ extension EnvironmentValues {
     /// Puts an (edited) image into this chat's composer as an attachment for the next message (set by ChatView).
     @Entry var attachImage: ((UIImage) -> Void)? = nil
     /// Loads an image file on the session's machine (photos sent from the phone are saved there; set by ChatView).
-    @Entry var loadImage: ((String) async -> ImagePayload?)? = nil
+    @Entry var loadImage: (@Sendable (String) async -> ImagePayload?)? = nil
     /// Fetches the whole text of an item the page cut (`Item.fullSize`), by item id (set by ChatView).
     @Entry var loadFullText: ((String) async throws -> String)? = nil
     /// Opens the full-screen image viewer from the chat page (set by ChatView). A viewer presented by the row it was
@@ -377,7 +377,7 @@ struct AttachedImages: View {
     @Environment(\.attachImage) private var attachImage
     @Environment(\.viewImages) private var viewImages
     var paths: [String]
-    var load: (String) async -> ImagePayload?
+    var load: @Sendable (String) async -> ImagePayload?
     @State private var loaded: [String: ImagePayload] = [:]
     @State private var viewer: Int?
 
@@ -391,12 +391,24 @@ struct AttachedImages: View {
             }
         }
         .task(id: paths) {
+            // Cache hits show immediately; each miss is an independent request.
+            var missing: [String] = []
             for path in paths where loaded[path] == nil {
-                var payload = AttachedImageCache.get(path)
-                if payload == nil { payload = await load(path) }
-                if let payload {
-                    AttachedImageCache.put(path, payload)
-                    loaded[path] = payload
+                if let cached = AttachedImageCache.get(path) {
+                    loaded[path] = cached
+                } else if !missing.contains(path) {
+                    missing.append(path) // one request per path
+                }
+            }
+            await withTaskGroup(of: (String, ImagePayload?).self) { group in
+                for path in missing {
+                    group.addTask { (path, await load(path)) }
+                }
+                for await (path, payload) in group {
+                    if let payload { // nil stays a spinner
+                        AttachedImageCache.put(path, payload)
+                        loaded[path] = payload
+                    }
                 }
             }
         }

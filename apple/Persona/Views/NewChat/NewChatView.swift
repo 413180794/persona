@@ -335,22 +335,40 @@ struct NewChatView: View {
         .disabled(!m.online)
     }
 
+    /// The model purpose a new Agent inherits.
+    /// Nil when the hub is older and has no model configuration (404);
+    /// every other error propagates to the caller.
+    private func purposeForNewChat(_ api: APIClient) async throws -> ModelPurpose? {
+        do {
+            return try await api.modelPurpose("agent.new").purpose
+        } catch let e as APIError where e.status == 404 {
+            return nil
+        }
+    }
+
     private func loadMachine() async {
         guard !machineID.isEmpty, let api = model.api(ref.group), machine?.online == true else { return }
         loading = true
         defer { loading = false }
         error = nil
         do {
-            do {
-                let purpose = try await api.modelPurpose("agent.new").purpose
-                defaultLauncher = purpose.effective.provider.map { $0.hasPrefix("launcher.") ? String($0.dropFirst("launcher.".count)) : $0 } ?? ""
-                configuredModel = purpose.effective.model ?? ""
-                unifiedModels = true
-            } catch let e as APIError where e.status == 404 {
-                unifiedModels = false
-            }
+            // The three requests are independent; start all of them together,
+            // then apply the purpose result before launchers and dirs finish.
+            async let p: ModelPurpose? = purposeForNewChat(api)
             async let l = model.launchers(ref)
             async let d = api.dirs(machine: ref.id, path: "")
+            let purpose = try await p
+            if let purpose {
+                defaultLauncher = purpose.effective.provider.map { provider in
+                    provider.hasPrefix("launcher.")
+                        ? String(provider.dropFirst("launcher.".count)) : provider
+                } ?? ""
+                configuredModel = purpose.effective.model ?? ""
+                unifiedModels = true
+            } else {
+                // 404: an older hub without model configuration.
+                unifiedModels = false
+            }
             let (ls, dirs) = try await (l, d)
             launchers = ls
             recent = dirs.recent ?? []

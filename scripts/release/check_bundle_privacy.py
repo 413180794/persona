@@ -116,11 +116,20 @@ def go_dependencies(path, sums_path=None):
     return dependencies if public_build else set()
 
 
+def binary_noise_email(domain):
+    """Machine code read as text, not an address (#4497): a two-letter mixed-case country domain ("Sg") or a
+    second-level label with no letter ("9"). Longer mixed-case tails ("comA") still count: a real name runs into them."""
+    labels = domain.split(".")
+    tld, sld = labels[-1], labels[-2]
+    return (len(tld) == 2 and tld != tld.lower() and tld != tld.upper()) or not any(c.isalpha() for c in sld)
+
+
 def generic_text(text, dependencies, original_text=None):
     """Classify public constants only for generic IP/email detection, never private-word matching."""
     if original_text is None or text == original_text:
         if text in SSH_ALGORITHM_NAMES or ("," in text and all(name in SSH_ALGORITHM_NAMES for name in text.split(","))):
             return ""
+    text = pc.EMAIL.sub(lambda m: "" if binary_noise_email(m.group(1)) else m.group(0), text)
     if "golang.org/x/crypto" in dependencies:
         text = GO_SSH_IDENTIFIERS.sub("", text)
     if "github.com/tailscale/web-client-prebuilt" in dependencies:

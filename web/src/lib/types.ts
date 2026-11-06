@@ -463,6 +463,8 @@ export interface Interaction {
   agent_id?: string;
   agent_type?: string;
   elicitation?: Elicitation;
+  /** What a permission card needs filled in before it is approved (a password): such a card is never approved in one tap. */
+  fields?: { key: string; label: string; secret?: boolean }[];
 }
 
 export interface Launcher {

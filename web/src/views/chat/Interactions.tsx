@@ -24,7 +24,8 @@ import { href, onLinkClick, type Route } from "../../lib/router";
 import { t } from "../../i18n";
 import { StatusMark } from "../../ui/StatusMark";
 
-async function resolve(ix: Interaction, body: Record<string, unknown>) {
+/** Answers a card: the chat's cards and the overview's quick answers (Home, #4090) send through this. */
+export async function resolve(ix: Interaction, body: Record<string, unknown>) {
   if (!sessionCan(getSession(ix.machine_id, ix.session_id), "approve")) {
     toast(t("chat-interactions.approve_not_allowed"), "error");
     return false;

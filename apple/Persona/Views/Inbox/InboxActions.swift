@@ -85,6 +85,9 @@ struct InboxDraftSheet: View {
     @Environment(\.dismiss) private var dismiss
     let item: InboxItem
     var accounts: [MailAccount]
+    /// Fired on the main actor only after the reply actually went out (InboxStore.send returns true).
+    /// The inbox detail presents this sheet and pops itself on send success (#4258); the list leaves it nil.
+    var onSent: (() -> Void)?
     @State private var text = ""
     @State private var instruction = ""
     @State private var loading = false
@@ -231,10 +234,15 @@ struct InboxDraftSheet: View {
     }
 
     /// Closes at once: the store files the item and sends in the background (a failure puts it back, with this text).
+    /// The sheet always closes immediately; when opened from the inbox detail, the detail pops itself only if the
+    /// send succeeded — a failure rolls the item back and keeps the draft for another try, so no kick to the list.
     private func send() async {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let it = item, changes = keptChanges
-        Task { await InboxStore.shared.send(it, text: body, changes: changes) }
+        let onSent = onSent
+        Task {
+            if await InboxStore.shared.send(it, text: body, changes: changes) { onSent?() }
+        }
         dismiss()
     }
 }

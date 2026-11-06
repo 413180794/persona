@@ -1060,12 +1060,12 @@ final class AppModel {
         case .none: break
         case .reload: Task { await reload(key) }
         case .fill:
-            // A live push can overtake the backlog asked for at subscribe time, and the backlog closes the hole
-            // itself: give it a moment before fetching.
-            Task {
-                try? await Task.sleep(for: .seconds(1.5))
-                await fill(key)
-            }
+            // Fetch at once. A live push can overtake the backlog asked for at subscribe time, so apply returns
+            // .fill while that backlog is still on its way, but nothing needs the wait: fill re-reads `covered`
+            // before every page, the `filling` set collapses concurrent fills for the key, and apply merges by
+            // id and seq (a replaced transcript starts over with .reload). The backlog then only overlaps the
+            // page already in flight; the delay sat on every real gap too (#4267).
+            Task { await fill(key) }
         }
     }
 
