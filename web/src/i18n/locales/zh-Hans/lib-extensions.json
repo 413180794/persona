@@ -33,6 +33,7 @@
   "default_value": "默认：{value}",
   "not_set": "未设置",
   "is_set": "已设置",
+  "is_set_hint": "已设置 · 末 4 位 {hint}",
   "not_set_required": "未设置（必填）",
   "not_a_number": "要是一个数",
   "not_an_integer": "要是一个整数",

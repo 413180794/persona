@@ -33,6 +33,7 @@
   "default_value": "Default: {value}",
   "not_set": "Not set",
   "is_set": "Set",
+  "is_set_hint": "Set · ends in {hint}",
   "not_set_required": "Not set (required)",
   "not_a_number": "Must be a number",
   "not_an_integer": "Must be a whole number",

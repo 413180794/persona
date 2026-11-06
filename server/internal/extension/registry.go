@@ -150,6 +150,10 @@ type Registry struct {
 	// SecretNeeds says why secret name of p may not be set under its configuration config (with the defaults), nil
 	// when it may: SetSecret asks it in the same operation SetConfig runs in. Nil: any may.
 	SecretNeeds func(p *Extension, name string, config json.RawMessage) error
+	// SettingsCheck asks an extension that declares settings_check whether its settings and secrets as they would be
+	// after a change work (#5906): an error saves nothing. Called outside the registry's operation, with the values in
+	// plain text, never kept.
+	SettingsCheck func(ctx context.Context, p *Extension, config json.RawMessage, secrets map[string]string) error
 
 	operationMu sync.Mutex // serializes package/record changes, including plan recovery and cleanup
 	planProblem error      // while a commit confirmation or package recovery is unresolved, no new writes; wait for a reload
@@ -1347,6 +1351,10 @@ var ErrSecretNotCleared = i18n.Err("extension-status.secret_not_cleared")
 // may have had (they could not be read). They go first, fail closed: one that cannot be deleted saves nothing
 // (ErrSecretNotCleared); a configuration that then cannot be saved answers its error with the ones already gone.
 func (r *Registry) SetConfigClearing(ctx context.Context, id string, raw json.RawMessage, actor string) (cleared []string, err error) {
+	checked, err := r.checkSettings(ctx, id, raw, "", "")
+	if err != nil {
+		return nil, err
+	}
 	unlock, err := r.beginOperation()
 	if err != nil {
 		return nil, err
@@ -1354,6 +1362,9 @@ func (r *Registry) SetConfigClearing(ctx context.Context, id string, raw json.Ra
 	defer unlock()
 	p, err := r.editable(id)
 	if err != nil {
+		return nil, err
+	}
+	if err := r.stillChecked(p, checked); err != nil {
 		return nil, err
 	}
 	if err := p.Schema.Check(raw); err != nil {
@@ -1432,6 +1443,10 @@ func (r *Registry) secretSpec(p *Extension, name string) error {
 
 // SetSecret keeps one of a plugin's declared secrets, sealed. The value never goes to a log or back to anyone.
 func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string) error {
+	checked, err := r.checkSettings(ctx, id, nil, name, value)
+	if err != nil {
+		return err
+	}
 	unlock, err := r.beginOperation()
 	if err != nil {
 		return err
@@ -1442,6 +1457,9 @@ func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string)
 		return err
 	}
 	if err := r.secretSpec(p, name); err != nil {
+		return err
+	}
+	if err := r.stillChecked(p, checked); err != nil {
 		return err
 	}
 	if r.SecretNeeds != nil {
@@ -1598,4 +1616,54 @@ func (r *Registry) changed(c Change) {
 	if r.OnChange != nil {
 		r.OnChange(c)
 	}
+}
+
+// ErrSettingsMoved: the settings changed while a change of them was being checked (settings_check); nothing saved.
+var ErrSettingsMoved = i18n.Err("extension-status.settings_moved")
+
+// settingsChecked is what a change was checked against: the configuration the extension had then (nil: not checked).
+type settingsChecked struct{ config json.RawMessage }
+
+// checkSettings has extension id check its settings as a change would leave them (SettingsCheck): config replaced
+// by next (nil: kept), or secret name set to value (name ""). Only for one that declares settings_check, and only with
+// values that pass the schema and the secret's rules first (those errors are the registry's own, later).
+func (r *Registry) checkSettings(ctx context.Context, id string, next json.RawMessage, name, value string) (*settingsChecked, error) {
+	p := r.Get(id)
+	if p == nil || !p.Manifest.SettingsCheck || r.SettingsCheck == nil {
+		return nil, nil
+	}
+	now := r.Config(p)
+	config := now
+	if next != nil {
+		if p.Schema.Check(next) != nil {
+			return nil, nil
+		}
+		config = p.Schema.Effective(next)
+	}
+	if name != "" && (r.secretSpec(p, name) != nil || value == "" || len(value) > SecretMost) {
+		return nil, nil
+	}
+	secrets, err := r.Secrets(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if secrets == nil {
+		secrets = map[string]string{}
+	}
+	if name != "" {
+		secrets[name] = value
+	}
+	if err := r.SettingsCheck(ctx, p, config, secrets); err != nil {
+		return nil, err
+	}
+	return &settingsChecked{config: now}, nil
+}
+
+// stillChecked refuses a change whose check (checkSettings) saw other settings than p has now: one saved meanwhile
+// was not checked with this one. Called in the operation.
+func (r *Registry) stillChecked(p *Extension, c *settingsChecked) error {
+	if c == nil || string(r.Config(p)) == string(c.config) {
+		return nil
+	}
+	return ErrSettingsMoved
 }

@@ -49,7 +49,9 @@ type Manifest struct {
 	// The configuration's JSON Schema, in the subset every app draws as a form (docs "Configuration: the form subset").
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
-	Permissions   *Permissions    `json:"permissions,omitempty"`
+	// The program checks a change of its settings or secrets before the hub saves it (settings.check).
+	SettingsCheck bool         `json:"settings_check,omitempty"`
+	Permissions   *Permissions `json:"permissions,omitempty"`
 	// Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
 	// "Command-line programs (tools)", #4507). Installing them is a permission. Hubs before them refuse the manifest.
 	Tools []ToolSpec `json:"tools,omitempty"`
@@ -193,6 +195,8 @@ type SecretSpec struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required,omitempty"`
+	// last4: once set, the settings show its last four characters.
+	Hint json.RawMessage `json:"hint,omitempty"`
 }
 
 // Permissions: A closed vocabulary: a permission the hub does not know fails the install.

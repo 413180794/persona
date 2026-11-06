@@ -63,7 +63,10 @@ type Manifest struct {
 	ExtensionPack []PackMember    `json:"extension_pack,omitempty"`
 	Configuration json.RawMessage `json:"configuration,omitempty"`
 	Secrets       []SecretSpec    `json:"secrets,omitempty"`
-	Permissions   Permissions     `json:"permissions,omitzero"`
+	// SettingsCheck: the program checks a change of its settings or secrets before the hub saves it (settings.check,
+	// configured.go, #5906).
+	SettingsCheck bool        `json:"settings_check,omitempty"`
+	Permissions   Permissions `json:"permissions,omitzero"`
 	// Tools are command-line programs the hub installs for it (tools.go); Auth says it signs in (auth.* methods).
 	// Hubs before them refuse the manifest (strict), so an extension using them asks for a newer hub in engines.
 	Tools []ToolSpec `json:"tools,omitempty"`
@@ -266,6 +269,8 @@ type SecretSpec struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required,omitempty"`
+	// Hint "last4": once set, the settings show its last four characters (configured.go, #5906).
+	Hint string `json:"hint,omitempty"`
 }
 
 // Activation events.
@@ -553,6 +558,7 @@ func (m *Manifest) Validate() error {
 			bad("secrets: %q has no title", s.Name)
 		}
 	}
+	errs = append(errs, m.checkConfigured()...)
 	if err := m.Permissions.validate(); err != nil {
 		errs = append(errs, err)
 	}

@@ -264,6 +264,8 @@ export function ExtensionUI({
       if (r.toast) toast(r.toast, "ok");
       if (r.url) openLink(r.url);
       if (r.source) onOpenSource?.();
+      // an extension's own settings (persona://settings/extensions/<id>) open in the app
+      if (r.settings) navigate(r.settings);
       if (r.push) push(r.push);
       if (r.pop) pop();
       if (r.reload) load();

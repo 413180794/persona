@@ -227,6 +227,31 @@ func (ps *extensions) egress() (*egress.Proxy, error) {
 	return sb.proxy, sb.proxyErr
 }
 
+// settingsTargets are the addresses extension id's settings name now that its granted permissions.network lets it
+// reach ("config:<field>", #5906). Only what the user saved: an extension cannot write its own configuration.
+func (ps *extensions) settingsTargets(id string) []egress.Target {
+	p := ps.reg.Get(id)
+	if p == nil {
+		return nil
+	}
+	granted := extension.Permissions{Network: p.Record.Granted.Network}
+	if len(granted.ConfiguredNetworks()) == 0 {
+		return nil
+	}
+	return extension.ConfiguredTargets(&extension.Manifest{Permissions: granted}, ps.reg.Config(p))
+}
+
+// settingsMoved: extension id's settings changed; a running program reaches the address they name now, and no longer
+// the one before (its restart registers anew too).
+func (ps *extensions) settingsMoved(id string) {
+	ps.sandboxes.mu.Lock()
+	px := ps.sandboxes.proxy
+	ps.sandboxes.mu.Unlock()
+	if px != nil {
+		px.SetTargets(id, ps.settingsTargets(id))
+	}
+}
+
 // forgetEgress: p's program stopped for good this run (switched off, upgraded, removed); a new start registers anew.
 func (ps *extensions) forgetEgress(id string) {
 	if px := ps.sandboxes.proxyIfStarted(); px != nil {
@@ -315,7 +340,10 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 	}
 	id := p.Record.ID
 	g := p.Record.Granted
-	rule := egress.Rule{Hosts: slices.Clone(g.Network), Hub: g.FullHub() || len(g.Hub) > 0}
+	// The addresses its settings name are read at each start (and again when the settings change: settingsTargets).
+	ruleNow := func() egress.Rule {
+		return egress.Rule{Hosts: slices.Clone(g.Network), Hub: g.FullHub() || len(g.Hub) > 0, Targets: ps.settingsTargets(id)}
+	}
 	if !st.Active {
 		start := s.StartEnv
 		s.StartEnv = func() []string {
@@ -323,7 +351,7 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 			if start != nil {
 				env = start()
 			}
-			return append(env, sandbox.ProxyEnv(px.Register(id, rule))...)
+			return append(env, sandbox.ProxyEnv(px.Register(id, ruleNow()))...)
 		}
 		return nil
 	}
@@ -365,7 +393,7 @@ func (ps *extensions) confine(ctx context.Context, p *extension.Extension, hp *h
 		tools = ps.reg.ToolsDir(id)
 	}
 	s.Wrap = func(command string, args []string) (string, []string, []string, error) {
-		proxyURL := px.Register(id, rule)
+		proxyURL := px.Register(id, ruleNow())
 		if runtimeSock != "" {
 			if err := px.RelayUnix(id, runtimeSock, nodeRuntimeSocket()); err != nil {
 				return "", nil, nil, err

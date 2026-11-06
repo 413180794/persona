@@ -914,6 +914,48 @@ the host side (every call, every run, every log line) is the `Observer` in `exte
   (`PATH`, `HOME`, `USER`, `LANG`, `TZ`, `TMPDIR`, a few proxy and certificate vars, `host.PassEnv`), plus the ones above. Built-in ones and ones from manager.json still inherit the hub's whole environment.
 - State a connector saves for itself while running (Telegram's session) still goes through `connector.secrets.*`, stored in `connector_secrets`, one copy per connector id: that is written by the program itself, separate from secrets the user fills in.
 
+### Settings the user fills in (#5906)
+
+For an extension whose user enters a service's address and key in 设置 › 扩展 (a gateway's quota extension, first), the
+manifest can ask for four things. A hub from before them refuses the manifest, so raise `engines.persona`.
+
+- **`permissions.network: ["config:<field>"]`**: the egress proxy lets the extension reach the address the user wrote in
+  configuration field `<field>`, which must be a string of `format: uri`.
+  - Only that host and port, as written: no subdomain, no other port. A redirect to another host is refused like any
+    host.
+  - https only (a CONNECT tunnel) unless the entry is `config:<field>:http`, which also takes plain http.
+  - The proxy resolves the name itself and dials the address it checked. It refuses the name when any answer is
+    loopback, link-local (the usual cloud metadata address included), unspecified, multicast, a metadata address (`fd00:ec2::254`,
+    `100.100.100.200`), or this machine's own address at the hub's or the proxy's port. Private network addresses are
+    allowed.
+  - The value is the user's: only the settings pages (and the hub) write an extension's configuration, and no method a
+    program calls can (`TestExtensionCannotWriteItsSettings`).
+  - When the settings change, the old address is refused at once (`Proxy.SetTargets`), before the restart.
+  - The consent line is 「访问你在设置里填的地址」: the field's title, the address there now (「当前：…」, 未填 before
+    install), and whether http is allowed. An upgrade that adds such an entry lists it under the permissions that grew,
+    like a new host.
+  - Only with the sandbox on does the proxy hold the extension to it; without the sandbox the extension reaches what it
+    likes, as before.
+- **`secrets[].hint: "last4"`**: once set, the detail's `secrets[].hint` is the secret's last four characters (none for one
+  shorter than 12). The apps show 已设置 · 末 4 位 <hint>. It is read for the detail only, never logged or audited.
+- **`settings_check: true`**: before saving a secret or the configuration, the hub calls the running program's
+  `settings.check {config, secrets}`, with the values as they would be after the change. The answer is `{ok: true}` or
+  `{ok: false, error}`.
+  - A refusal saves nothing and is not audited. The route answers 400 `check_failed` with the extension's words.
+  - Before the words go back, every secret handed to the check is replaced by `***`: whole, and any prefix or suffix of
+    6 characters or more. The words are cut to 300 characters.
+  - No answer in 10 seconds is a failure. A disabled or stopped extension can't be checked, so nothing is saved.
+  - At most 6 checks per extension a minute; more answer 429 `check_rate_limited` without reaching the program, so it
+    can't be used to guess keys.
+  - A change saved by someone else while one was being checked makes it answer 409 `settings_moved`.
+  - Deleting a secret is never checked.
+- **`open_url: "persona://settings/extensions/<its own id>"`** from an action: the apps open 设置 › 扩展 › that extension
+  (the web `/settings?tab=extensions&extension=<id>`). Another extension's id is refused like any non-https link.
+
+Code: `extension/configured.go`, `extension/egress` (`Target`, `dialConfigured`), `extmgr/extension_settings_check.go`;
+the clients `web/src/lib/extensions.ts`, `web/src/views/settings/Extensions.tsx`,
+`apple/Persona/Views/Settings/ExtensionsModel.swift`, `ExtensionUIModel.swift`.
+
 ## The hub's API
 
 `/api/v1/extensions/<id>/…` is forwarded to the extension as a whole, so the hub's own endpoints sit under the reserved `-` segment (an extension's own HTTP paths cannot start with `/-/`; the hub does not forward those).

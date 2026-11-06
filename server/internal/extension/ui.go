@@ -276,6 +276,12 @@ func InboxSourceURL(itemID string) string {
 	return "persona://inbox/" + url.PathEscape(itemID) + "/source"
 }
 
+// SettingsURL is the other link besides https an action may open, only to its own extension's settings (#5906): the
+// apps open 设置 › 扩展 › that extension there (the web /settings?tab=extensions&extension=<id>).
+func SettingsURL(id string) string {
+	return "persona://settings/extensions/" + url.PathEscape(id)
+}
+
 // Limits of a View.
 const (
 	ItemsMost  = wire.ItemsMost

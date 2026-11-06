@@ -408,7 +408,15 @@ struct ExtensionDetailView: View {
             } header: {
                 SettingsHeading(String(localized: "Settings"))
             } footer: {
-                if let footer = ExtensionText.saveFooter(d.form) { Text(footer) }
+                if page.formError != nil || ExtensionText.saveFooter(d.form) != nil {
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        // The extension's own word on settings it refused (#5906), where Save is.
+                        if let e = page.formError {
+                            Text(e).foregroundStyle(Theme.danger).accessibilityIdentifier("plugin-form-refused")
+                        }
+                        if let footer = ExtensionText.saveFooter(d.form) { Text(footer) }
+                    }
+                }
             }
             ForEach(d.form.filter { $0.type == "object" }) { group in
                 Section {
@@ -427,7 +435,7 @@ struct ExtensionDetailView: View {
             ForEach(d.secrets) { s in
                 Button { editingSecret = s } label: {
                     LabeledContent {
-                        Text(s.set ? String(localized: "Set") : (s.required == true ? String(localized: "Not set (required)") : String(localized: "Not set")))
+                        Text(ExtensionText.secretState(s))
                             .foregroundStyle(s.set || s.required != true ? Color.secondary : Theme.caution)
                             .lineLimit(1)
                     } label: {
@@ -835,17 +843,23 @@ private struct ExtensionListField: View {
 /// Sets one of a plugin's secrets: typed in hidden, saved to the hub, never shown again; one set can be cleared.
 private struct ExtensionSecretSheet: View {
     var secret: ExtensionSecret
-    var save: (String) async -> Bool
+    var save: (String) async -> ExtensionSecretSave
     var clear: () async -> Void
     var close: () -> Void
     @State private var value = ""
     @State private var busy = false
+    /// The hub's words when the extension refused what was typed (#5906): shown under the field, which keeps it.
+    @State private var refusal: String?
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     SecretField(secret.set ? String(localized: "Enter a new value to replace it") : String(localized: "Enter"), filled: String(localized: "Filled in; tap Save [Extension Market Views 94348c]"), text: $value, identifier: "plugin-secret-value")
+                    if let refusal {
+                        Text(refusal).font(Theme.Font.label).foregroundStyle(Theme.danger).textSelection(.enabled)
+                            .accessibilityIdentifier("plugin-secret-refused")
+                    }
                 } footer: {
                     Text(secret.description?.isEmpty == false ? secret.description! : String(localized: "Stored on the hub and given only to this extension."))
                 }
@@ -864,13 +878,21 @@ private struct ExtensionSecretSheet: View {
             .themedPage()
             .navigationTitle(secret.title)
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: value) { if refusal != nil { refusal = nil } }
             .sheetCancel(unsaved: !value.isEmpty) { close() }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task {
                             busy = true
-                            if await save(value) { close() }
+                            switch await save(value) {
+                            case .saved:
+                                value = ""
+                                refusal = nil
+                                close()
+                            case .refused(let words): refusal = words
+                            case .failed: refusal = nil
+                            }
                             busy = false
                         }
                     } label: {

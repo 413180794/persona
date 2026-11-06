@@ -45,6 +45,8 @@ export interface Manifest {
    */
   configuration?: unknown;
   secrets?: SecretSpec[];
+  /** The program checks a change of its settings or secrets before the hub saves it (settings.check). */
+  settings_check?: boolean;
   permissions?: Permissions;
   /**
    * Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
@@ -218,6 +220,8 @@ export interface SecretSpec {
   title: string;
   description?: string;
   required?: boolean;
+  /** last4: once set, the settings show its last four characters. */
+  hint?: unknown;
 }
 
 /**

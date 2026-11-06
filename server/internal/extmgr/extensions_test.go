@@ -54,6 +54,10 @@ func TestMain(m *testing.M) {
 		serveAuthExtensionForTest()
 		return
 	}
+	if os.Getenv("JARVIS_TEST_PLUGIN") == "settingscheck" {
+		serveSettingsCheckExtensionForTest()
+		return
+	}
 	if os.Getenv("JARVIS_TEST_PLUGIN") == "errors" {
 		serveErrorsExtensionForTest()
 		return

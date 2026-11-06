@@ -90,5 +90,6 @@
   "sandbox_mount": "bwrapでサンドボックスのマウントを設定できません：{err}",
   "git_timeout": "タイムアウトしました",
   "market_warning": "拡張機能マーケットに警告があります",
-  "sandbox_unavailable": "サンドボックスを利用できません"
+  "sandbox_unavailable": "サンドボックスを利用できません",
+  "settings_moved": "確認中に設定が変わったため保存していません。もう一度お試しください"
 }

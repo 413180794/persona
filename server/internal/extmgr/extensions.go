@@ -132,9 +132,11 @@ func (p *hubExtension) healthy(ctx context.Context) bool { return p.proc != nil 
 
 // plugins is the registry and what runs of it.
 type extensions struct {
-	dir  string // the hub's data directory
-	root string // where the extensions are kept: <dir>/extensions (extensionsRoot)
-	reg  *extension.Registry
+	// checks limit how often each extension's settings.check runs (extension_settings_check.go).
+	checks checkLimiter
+	dir    string // the hub's data directory
+	root   string // where the extensions are kept: <dir>/extensions (extensionsRoot)
+	reg    *extension.Registry
 	// logf is the hub's log, each line about an extension kept with its log too; journal only the hub's (the host's
 	// lines reach the extension's log through its Observe).
 	logf, journal func(string, ...any)
@@ -360,6 +362,7 @@ func (h *Manager) attachExtensions(ctx context.Context) {
 	reg.PlanGuard = h.guardExtensionPlan
 	// The voice extension's key goes with its address (voice_extension.go).
 	reg.BoundSecrets, reg.SecretNeeds = ps.voiceKeyFollowsURL, ps.voiceKeyNeedsURL
+	reg.SettingsCheck = ps.settingsCheck // settings_check (extension_settings_check.go)
 	var own []string
 	for _, c := range h.connectors.All() {
 		if !slices.Contains(connector.MigratableConnectors, c.ID()) { // a plugin may take these over (connectors_migrate.go)
@@ -434,6 +437,9 @@ func (ps *extensions) changed(c extension.Change) {
 	ctx := ps.ctx
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if c.Kind == "config" {
+		ps.settingsMoved(c.ID) // before the restart: the old address is refused from now on
 	}
 	ps.apply(ctx, c.ID)
 	ps.forgetAuth(c.ID) // another version, removed, switched, set up again: ask again

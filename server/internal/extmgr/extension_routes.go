@@ -54,12 +54,14 @@ type ExtensionSecretView struct {
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required,omitempty"`
 	Set         bool   `json:"set"`
+	// Hint is a set secret's last four characters, when its spec asks (hint "last4", #5906); never more of it.
+	Hint string `json:"hint,omitempty"`
 }
 
 func (ps *extensions) detail(ctx context.Context, p *extension.Extension) ExtensionDetail {
 	m := p.Full
 	d := ExtensionDetail{ExtensionView: ps.view(ctx, p), Publisher: m.Publisher, Homepage: m.Homepage, Origin: p.Record.Origin,
-		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.ExplainIn(ps.h.contextLang(ctx), m),
+		PreviousVersion: p.Record.PreviousVersion, ReadOnly: p.ReadOnly(), Form: p.Schema, Permissions: extension.ExplainWith(ps.h.contextLang(ctx), m, ps.reg.Config(p)),
 		Contributions: ps.contributionViews(p), Depends: ps.reg.DependenciesContext(ctx, m), ExtensionPack: m.ExtensionPack}
 	if d.Permissions == nil {
 		d.Permissions = []extension.PermissionLine{}
@@ -79,8 +81,13 @@ func (ps *extensions) detail(ctx context.Context, p *extension.Extension) Extens
 			d.Config = json.RawMessage(`{}`)
 		}
 		set := ps.reg.SecretsSet(ctx, p)
+		var plain map[string]string // read only when a secret is shown by its end
 		for _, s := range m.Secrets {
-			d.Secrets = append(d.Secrets, ExtensionSecretView{Name: s.Name, Title: s.Title, Description: s.Description, Required: s.Required, Set: set[s.Name]})
+			if s.Hint != "" && set[s.Name] && plain == nil {
+				plain, _ = ps.reg.Secrets(ctx, p.Record.ID)
+			}
+			d.Secrets = append(d.Secrets, ExtensionSecretView{Name: s.Name, Title: s.Title, Description: s.Description, Required: s.Required, Set: set[s.Name],
+				Hint: extension.SecretHint(s, plain[s.Name])})
 		}
 	}
 	return d
@@ -232,6 +239,9 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Text(h.requestLang(r)), "code": "invalid_config", "field": fe.Path, "message": fe.MessageText(h.requestLang(r))})
 				return
 			}
+			if writeSettingsCheckError(w, r, err) {
+				return
+			}
 			status, code := http.StatusConflict, "read_only"
 			if errors.Is(err, extension.ErrSecretNotCleared) {
 				status, code = http.StatusInternalServerError, "secret_not_cleared"
@@ -272,6 +282,9 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			code := "invalid_secret"
 			if errors.As(err, new(keyNeedsURLError)) { // the voice extension's key is for an address (voice_extension.go)
 				code = "needs_url"
+			}
+			if writeSettingsCheckError(w, r, err) {
+				return
 			}
 			writeExtensionResponseError(w, r, http.StatusBadRequest, code, err)
 			return

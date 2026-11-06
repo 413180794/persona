@@ -101,6 +101,20 @@ nonisolated enum InboxSourceLink {
     }
 }
 
+/// `persona://settings/extensions/<extension id>` (the id path-escaped, #5906): an extension's page asking to open its
+/// own settings, Settings › Extensions › it. The hub lets an extension open only its own (docs/extensions.md).
+nonisolated enum ExtensionSettingsLink {
+    /// The extension whose settings `url` opens, nil when it is no such link.
+    static func extensionID(_ url: URL) -> String? {
+        guard url.scheme?.lowercased() == "persona",
+              let c = URLComponents(url: url, resolvingAgainstBaseURL: false), c.host?.lowercased() == "settings" else { return nil }
+        let parts = c.percentEncodedPath.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].isEmpty, parts[1] == "extensions",
+              let id = String(parts[2]).removingPercentEncoding, !id.isEmpty else { return nil }
+        return id
+    }
+}
+
 extension APIClient {
     /// What enabled extensions draw at a placement (a launcher's section: only the extensions whose gateway it is).
     /// No placement: every slot's but launchers' sections (docs/extensions.md「UI 插槽」). Placements this app does not
@@ -274,7 +288,7 @@ extension APIClient {
         if let p = r.push, depth < Self.maxDepth { pushed = p }
         if r.pop == true { popped = true }
         if r.view == nil && r.toast == nil && r.openUrl == nil && r.push == nil && r.pop != true { await redraw() }
-        let url = r.openUrl.flatMap(URL.init(string:)).flatMap { Self.opens($0, item: context.item) ? $0 : nil }
+        let url = r.openUrl.flatMap(URL.init(string:)).flatMap { Self.opens($0, item: context.item, owner: plugin) ? $0 : nil }
         return Outcome(toast: r.toast?.isEmpty == false ? r.toast : nil, url: url)
     }
 
@@ -431,10 +445,12 @@ extension APIClient {
 
     static func isUnsupported(_ e: APIError) -> Bool { e.status == 404 && e.code == "unsupported" }
 
-    /// What a control's `open_url` may open: an https page; on an inbox item's page (`item`), also that item's own
-    /// source (`InboxSourceLink`), never another item's.
-    static func opens(_ url: URL, item: String?) -> Bool {
+    /// What a control's `open_url` may open: an https page; the settings of the extension it is from (`owner`,
+    /// `ExtensionSettingsLink`), never another's; on an inbox item's page (`item`), also that item's own source
+    /// (`InboxSourceLink`), never another item's.
+    static func opens(_ url: URL, item: String?, owner: String? = nil) -> Bool {
         if url.scheme?.lowercased() == "https" { return true }
+        if let settings = ExtensionSettingsLink.extensionID(url) { return owner != nil && settings == owner }
         guard let item, let source = InboxSourceLink.item(url) else { return false }
         return source == item
     }

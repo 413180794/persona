@@ -93,3 +93,26 @@ func TestSessionGroupAttrHasItsOwnSession(t *testing.T) {
 		t.Fatal("StopGroup did not end it")
 	}
 }
+
+// A group that keeps forking can keep a child through one SIGKILL to the group on macOS (one forked while it is
+// delivered); SweepGroup leaves it empty (#5942).
+func TestSweepGroupLeavesNothing(t *testing.T) {
+	for round := 0; round < 10; round++ {
+		cmd := exec.Command("/bin/sh", "-c", `while :; do sleep 30 & sleep 0.01; done`)
+		cmd.SysProcAttr = GroupAttr()
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		go func() { _ = cmd.Wait() }()
+		pid := cmd.Process.Pid
+		time.Sleep(50 * time.Millisecond)
+		_ = StopGroup(pid, true)
+		if !SweepGroup(pid, 2*time.Second) {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			t.Fatalf("round %d: the group still has processes after the sweep", round)
+		}
+		if err := syscall.Kill(-pid, 0); err != syscall.ESRCH {
+			t.Fatalf("round %d: kill(-group, 0) = %v, want ESRCH", round, err)
+		}
+	}
+}

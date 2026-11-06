@@ -151,6 +151,8 @@ export interface ExtensionSecret {
   description?: string;
   required?: boolean;
   set: boolean;
+  /** Its last four characters, when it is set and the extension asked for them (secrets[].hint "last4"); never more. */
+  hint?: string;
 }
 
 /** A line of what an extension may do. */
@@ -227,6 +229,16 @@ export function configError(e: unknown): { field: string; message: string } | nu
   const field = typeof e.body.field === "string" ? e.body.field : "";
   const message = typeof e.body.message === "string" && e.body.message ? e.body.message : e.message;
   return { field, message };
+}
+
+/**
+ * A save the extension itself turned down (400 check_failed, in its own words), a check asked for too often (429
+ * check_rate_limited), or settings changed meanwhile (409 settings_moved): nothing was saved, and the hub's words say
+ * why. null for any other error.
+ */
+export function checkError(e: unknown): string | null {
+  if (!(e instanceof ApiError)) return null;
+  return e.code === "check_failed" || e.code === "check_rate_limited" || e.code === "settings_moved" ? e.message : null;
 }
 
 /**
@@ -340,7 +352,10 @@ export function placeholder(f: ExtensionField): string {
   return t("lib-extensions.not_set");
 }
 
-export const secretState = (s: ExtensionSecret) => (s.set ? t("lib-extensions.is_set") : s.required ? t("lib-extensions.not_set_required") : t("lib-extensions.not_set"));
+export function secretState(s: ExtensionSecret): string {
+  if (s.set) return s.hint ? t("lib-extensions.is_set_hint", { hint: s.hint }) : t("lib-extensions.is_set");
+  return s.required ? t("lib-extensions.not_set_required") : t("lib-extensions.not_set");
+}
 
 // ── the draft, by path ──────────────────────────────────
 

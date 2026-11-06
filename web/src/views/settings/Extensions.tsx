@@ -3,7 +3,7 @@
 // form drawn from its schema (`form.fields`, saved as a whole), its secrets (typed in, never shown again), what it
 // contributes, what it may do and where it came from. An extension written in hub.json is only looked at here. Installing,
 // upgrading and removing are done on the hub's side (`personad extension` on its machine, or its admin UI at /admin).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { errorText } from "../../lib/api";
 import { isResumed } from "../../lib/reconnect";
 import { onHubEvent, useStore } from "../../lib/store";
@@ -13,7 +13,7 @@ import { marketOf, extensionsRoute, routeSub } from "../../lib/extension-market"
 import { ago } from "../../lib/format";
 import { composing } from "../../lib/send-history";
 import {
-  changed, choiceLabel, clearedSecrets, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
+  changed, checkError, choiceLabel, clearedSecrets, clearExtensionSecret, compact, configError, fieldLabel, fieldTitle, isDirty, listItems, listExtensionsInfo, listSummary, numberProblems,
   placeholder, extensionDetail, extensionState, extensionTone, pointText, readNumber, runNote, same, secretState, setAt, setContribution, setExtensionConfig, setExtensionEnabled,
   channelOf, machineStatus, nodeProgramStatus, sandboxEgress, sandboxState, saveFooter, setExtensionAutoUpgrade, setExtensionSecret, sourceText, stateLine, upgradeAction, upgradeDetail, upgradeNote, valueAt,
   type HubExtension, type HubExtensionDetail, type Json, type JsonObject, type ExtensionField, type ExtensionNodeState, type ExtensionSandbox, type ExtensionSecret,
@@ -301,6 +301,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   const [typed, setTyped] = useState<Typed>({});
   // The hub's word on a field it refused, by dotted path ("" = the whole form).
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // The extension's own word on a save it turned down (check_failed, check_rate_limited, settings_moved): shown at the
+  // save bar, where the draft stays to be changed and saved again; gone once the draft changes.
+  const [checkFailed, setCheckFailed] = useState("");
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [secret, setSecret] = useState<ExtensionSecret | null>(null);
@@ -392,10 +395,12 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     setDraft((d) => setAt(d, path, value));
     const key = path.join(".");
     if (fieldErrors[key] || fieldErrors[""]) setFieldErrors(({ [key]: _a, [""]: _b, ...rest }) => rest);
+    setCheckFailed("");
   };
   const type = (path: string[], text: string, integer: boolean) => {
     const key = path.join(".");
     setTyped((t) => ({ ...t, [key]: { text, integer } }));
+    setCheckFailed("");
     const n = readNumber(text, integer);
     if (!n.error) edit(path, n.value);
   };
@@ -404,12 +409,14 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     setDraft(detail.config ?? {});
     setTyped({});
     setFieldErrors({});
+    setCheckFailed("");
   };
 
   const save = async () => {
     if (!canSave) return;
     setSaving(true);
     setFieldErrors({});
+    setCheckFailed("");
     const n = writing();
     try {
       const d = await setExtensionConfig(id, compact(draft));
@@ -418,7 +425,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       toast(t("settings-extensions.saved_restart"), "ok");
     } catch (e) {
       const ce = configError(e);
+      const refused = checkError(e);
       if (ce) setFieldErrors({ [ce.field]: ce.message });
+      else if (refused) setCheckFailed(refused);
       else toast(t("settings-extensions.not_saved", { error: errorText(e) }), "error");
       // The configuration stayed as it was, but some of its secrets are gone: read the page again so the Secrets group
       // says so; the draft and what is being typed stay. The hub restarts the program without them, so its entries,
@@ -700,16 +709,19 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       )}
 
       {dirty && (
-        <div className="sticky bottom-3 z-10 mt-2 flex items-center gap-2 rounded-card bg-surface px-3 py-2 shadow-overlay" style={{ animation: `fade-up 220ms ${EASE} both` }}>
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
-            {Object.keys(problems).length ? t("settings-extensions.not_a_number") : t("settings-extensions.unsaved")}
-          </span>
-          <Button tone="quiet" onClick={revert} disabled={saving}>
-            {t("settings-extensions.revert")}
-          </Button>
-          <Button tone="accent" busy={saving} disabled={!canSave} onClick={() => void save()}>
-            {t("common.save")}
-          </Button>
+        <div className="sticky bottom-3 z-10 mt-2 flex flex-col gap-2 rounded-card bg-surface px-3 py-2 shadow-overlay" style={{ animation: `fade-up 220ms ${EASE} both` }}>
+          {checkFailed && <p role="alert" className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red select-text">{t("settings-extensions.not_saved", { error: checkFailed })}</p>}
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
+              {Object.keys(problems).length ? t("settings-extensions.not_a_number") : t("settings-extensions.unsaved")}
+            </span>
+            <Button tone="quiet" onClick={revert} disabled={saving}>
+              {t("settings-extensions.revert")}
+            </Button>
+            <Button tone="accent" busy={saving} disabled={!canSave} onClick={() => void save()}>
+              {t("common.save")}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1057,6 +1069,12 @@ function SecretDialog({ extension, secret, onClose, onStart, onDone }: { extensi
   const [busy, setBusy] = useState<"" | "save" | "clear">("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const errorId = useId();
+  // The field is disabled while the hub answers; a refused value stays typed in it, with the focus back to change it.
+  useEffect(() => {
+    if (!busy && error) input.current?.focus();
+  }, [busy, error]);
   const run = async (kind: "save" | "clear") => {
     const v = value.trim();
     if (kind === "save" && !v) return;
@@ -1065,6 +1083,8 @@ function SecretDialog({ extension, secret, onClose, onStart, onDone }: { extensi
     try {
       const n = onStart();
       const d = kind === "save" ? await setExtensionSecret(extension, secret.name, v) : await clearExtensionSecret(extension, secret.name);
+      // a saved value leaves the page: nothing keeps it once the hub has it
+      setValue("");
       onDone(n, d);
       toast(t(kind === "save" ? "settings-extensions.secret_saved" : "settings-extensions.secret_cleared", { title: secret.title }), "ok");
       onClose();
@@ -1117,14 +1137,17 @@ function SecretDialog({ extension, secret, onClose, onStart, onDone }: { extensi
         </div>
         <div className="flex items-center gap-1.5">
           <input
+            ref={input}
             type={shown ? "text" : "password"}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => (setValue(e.target.value), setError(""))}
             autoFocus
             autoComplete="new-password"
             spellCheck={false}
             placeholder={secret.set ? t("settings-extensions.secret_replace_placeholder") : t("settings-extensions.secret_placeholder")}
             aria-label={secret.title}
+            aria-invalid={!!error || undefined}
+            aria-describedby={error ? errorId : undefined}
             disabled={!!busy}
             className={cx(inputClass, "h-9 min-w-0 flex-1 font-mono shadow-inset-field")}
           />
@@ -1135,8 +1158,12 @@ function SecretDialog({ extension, secret, onClose, onStart, onDone }: { extensi
             disabled={!!busy}
           />
         </div>
+        {error && (
+          <p id={errorId} role="alert" className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red select-text">
+            {t("settings-extensions.not_saved", { error })}
+          </p>
+        )}
         <p className="text-[11.5px] leading-relaxed text-ink-3">{secret.description || t("settings-extensions.secret_hint")}</p>
-        {error && <p className="rounded-[8px] bg-red-tint px-2.5 py-1.5 text-[12px] break-words text-red">{t("settings-extensions.not_saved", { error })}</p>}
         <button type="submit" hidden />
       </form>
     </Dialog>

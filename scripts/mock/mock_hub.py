@@ -9611,7 +9611,38 @@ _NOTES_FORM = [
         {"name": "port", "type": "integer", "title": "端口", "default": 8080}]},
 ]
 _RUNS = {"key": "runs_code", "title": "在 hub 机器上运行程序", "detail": "以 hub 的系统用户运行，能读写这个用户能读写的文件；不在沙箱里"}
+# A gateway quota extension's settings (#5906): the gateway's address, which key it is, the key (shown by its last
+# four characters once set). Saving the key is checked first, as settings.check does: a key with "bad" in it is refused
+# by the gateway, an address with "wrong" in it is not a gateway, one with "down" in it does not answer.
+_GATEWAY_FORM = [
+    {"name": "gateway_url", "type": "string", "title": "网关地址", "format": "uri",
+     "description": "网关的 https 地址，比如 https://gateway.example.com。填了它和下面的 Key，侧边栏直接读这个网关，不用再在 hub 上配额度来源"},
+    {"name": "key_kind", "type": "string", "title": "Key 类型", "default": "management",
+     "description": "管理 Key 能看网关的全部账号（含停用的）；API Key 只看这把 Key 自己能用到的账号、用量和上游席位",
+     "enum": [{"value": "management", "title": "管理 Key"}, {"value": "api", "title": "API Key"}]},
+]
+
+
+def gateway_check(cfg, key):
+    """What settings.check says of an address and a key (None: they work)."""
+    url = cfg.get("gateway_url") or ""
+    if not url: return None
+    if "wrong" in url: return "这个地址不是这种网关（/me 返回 404）：检查网关地址"
+    if "down" in url: return "连不上网关（连接超时）：检查地址，或网关是否在运行"
+    if key and "bad" in key: return "网关不认这把 Key（401）：检查 Key 是否填对，以及「Key 类型」选得对不对"
+    return None
+
+
 PLUGINS = {
+    "example-gateway-quota": {"id": "example-gateway-quota", "name": "Example Gateway", "kind": "quota", "status": "running", "version": "2.2.0",
+                        "source": "market", "enabled": True, "description": "网关的额度和账号：启动器页的用量面板，侧边栏的「网关账号」。",
+                        "contributes": {"quota": ["gateway"], "ui": ["sidebar", "panel"]}, "publisher": "persona",
+                        "origin": "market:3f2a9c1d0b/example-gateway-quota", "form": {"fields": _GATEWAY_FORM}, "config": {},
+                        "secrets": [{"name": "gateway_key", "title": "Key", "set": False,
+                                     "description": "按上面选的类型填。交给 hub 加密保存，填完只显示末 4 位；只用来查额度和账号，不调模型"}],
+                        "permissions": [_RUNS,
+                                        {"key": "network_config", "title": "访问你在设置里填的地址", "detail": "设置「网关地址」里填的地址（当前：未填），只连这一个主机和端口，只用 https"},
+                                        {"key": "launcher_keys", "title": "经 hub 用启动器的 Key 查额度", "detail": "Key 不会交给扩展"}]},
     "example-notes": {"id": "example-notes", "name": "Example Notes", "kind": "connectors", "status": "needs_setup", "version": "1.2.0",
                       "source": "installed", "enabled": True, "description": "把 Example Notes 的笔记同步进知识库，并给助手一个搜索工具。",
                       "contributes": {"connectors": ["examplenotes"]}, "needs_setup": ["密钥「API Key」"],
@@ -10690,6 +10721,21 @@ def plugins_route(handler, p, body):
         pl["status"] = "disabled" if not pl["enabled"] else ("needs_setup" if pl["source"] == "installed" else "running")
     elif rest == ["config"] and method == "PUT":
         cfg = req.get("config") or {}
+        if pl["id"] == "example-gateway-quota":
+            url = (cfg.get("gateway_url") or "").strip()
+            if url and not url.startswith("https://"):
+                msg = "要是一个 https 网址"
+                handler.send_json({"error": "gateway_url: " + msg, "code": "invalid_config", "field": "gateway_url", "message": msg}, 400)
+                return True
+            key_set = any(x["name"] == "gateway_key" and x["set"] for x in pl["secrets"])
+            why = gateway_check(cfg, "") if key_set else None
+            if why:
+                handler.send_json({"error": why, "code": "check_failed"}, 400)
+                return True
+            host = urlparse(url).netloc if url else ""
+            for line in pl["permissions"]:
+                if line["key"] == "network_config":
+                    line["detail"] = "设置「网关地址」里填的地址（当前：%s），只连这一个主机和端口，只用 https" % (host + ("" if ":" in host or not host else ":443") or "未填")
         if pl["id"] == "imessage" and len(cfg.get("machines") or []) > 1:  # one Mac only, the one on named (the hub's imessageOneMac)
             on = next((m for m in (cfg.get("machines") or []) if m in (pl["config"].get("machines") or [])), cfg["machines"][0])
             name = next((m["name"] for m in MACHINES if m["id"] == on), on)
@@ -10717,8 +10763,17 @@ def plugins_route(handler, p, body):
                 try: send({"type": "machines", "machines": out_machines()})
                 except Exception: pass
     elif len(rest) == 2 and rest[0] == "secrets" and method in ("PUT", "DELETE"):
+        value = req.get("value") or ""
+        if pl["id"] == "example-gateway-quota" and method == "PUT":
+            why = gateway_check(pl["config"], value)
+            if why:
+                handler.send_json({"error": why, "code": "check_failed"}, 400)
+                return True
         for s in pl.get("secrets", []):
-            if s["name"] == rest[1]: s["set"] = method == "PUT"
+            if s["name"] == rest[1]:
+                s["set"] = method == "PUT"
+                s.pop("hint", None)
+                if pl["id"] == "example-gateway-quota" and method == "PUT" and len(value) >= 12: s["hint"] = value[-4:]
     else:
         handler.send_json({"error": "not found"}, 404)
         return True

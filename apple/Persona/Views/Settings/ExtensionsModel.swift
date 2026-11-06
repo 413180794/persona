@@ -174,6 +174,9 @@ nonisolated struct ExtensionSecret: Codable, Hashable, Sendable, Identifiable {
     var description: String?
     var required: Bool?
     var set: Bool
+    /// The value's last four characters, only when it is set and the extension asked for them (#5906): to tell which
+    /// key it is without showing it.
+    var hint: String?
     var id: String { name }
 }
 
@@ -311,6 +314,13 @@ enum ExtensionText {
         case "error": String(localized: "Something Went Wrong")
         default: String(localized: "Unknown [Connectors Views 93e474]")
         }
+    }
+
+    /// A secret's row: set (with its last four characters when the hub gives them, #5906), or not set (required).
+    static func secretState(_ s: ExtensionSecret) -> String {
+        guard s.set else { return s.required == true ? String(localized: "Not set (required)") : String(localized: "Not set") }
+        guard let hint = s.hint, !hint.isEmpty else { return String(localized: "Set") }
+        return String(localized: "Set · ends in \(hint)", comment: "A secret that is set, with its last four characters")
     }
 
     /// Whether an enabled plugin's program runs right now, under its description; nil for any other state.
@@ -466,6 +476,14 @@ enum ExtensionText {
     }
 }
 
+/// What saving a secret came to: saved, stopped with the hub's words for the sheet to show (`ExtensionModel.refusal`),
+/// or failed otherwise (the page's error says why).
+nonisolated enum ExtensionSecretSave: Equatable, Sendable {
+    case saved
+    case refused(String)
+    case failed
+}
+
 /// Settings › Extensions › one: its switch, its form (a draft saved as a whole), its secrets.
 @Observable final class ExtensionModel {
     struct Deps {
@@ -484,6 +502,8 @@ enum ExtensionText {
     var disableConfirmation: ExtensionDisableConfirmation?
     /// The hub's word on a field it refused, by its dotted path ("proxy.host").
     private(set) var fieldErrors: [String: String] = [:]
+    /// The extension's own word on the settings it refused when they were saved (#5906), under the form; nothing was saved.
+    private(set) var formError: String?
     /// The configuration being edited; saved as a whole (PUT replaces it).
     var draft: [String: JSONValue] = [:] { didSet { keepDraft() } }
     /// What number fields hold as typed, by path, until they read as a number.
@@ -562,7 +582,8 @@ enum ExtensionText {
         saving = true
         defer { saving = false }
         fieldErrors = [:]
-        let ok = await run { api in try await api.setExtension(self.id, config: Self.compact(self.draft)) }
+        formError = nil
+        let ok = await run(refused: { self.formError = $0 }) { api in try await api.setExtension(self.id, config: Self.compact(self.draft)) }
         if ok { numberText = [:] }
         return ok
     }
@@ -575,15 +596,21 @@ enum ExtensionText {
         set(value, at: path) // shows at once
         saving = true
         defer { saving = false }
-        let ok = await run { api in try await api.setExtension(self.id, config: Self.compact(Self.setting(saved, path[...], value))) }
+        formError = nil
+        let ok = await run(refused: { self.formError = $0 }) { api in
+            try await api.setExtension(self.id, config: Self.compact(Self.setting(saved, path[...], value)))
+        }
         // run took the hub's answer as the draft: the other edits go back on top of it.
         draft = Self.setting(editing, path[...], ok ? self.value(path) : Self.value(in: saved, path))
     }
 
-    func setSecret(_ name: String, value: String) async -> Bool {
+    /// Saves a secret. The value is only sent: never kept here, put in an error or logged.
+    func setSecret(_ name: String, value: String) async -> ExtensionSecretSave {
         let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return false }
-        return await run(preservingDraft: true) { api in try await api.setExtension(self.id, secret: name, value: value) }
+        guard !value.isEmpty else { return .failed }
+        var refusal: String?
+        let ok = await run(preservingDraft: true, refused: { refusal = $0 }) { api in try await api.setExtension(self.id, secret: name, value: value) }
+        return ok ? .saved : refusal.map(ExtensionSecretSave.refused) ?? .failed
     }
 
     func clearSecret(_ name: String) async {
@@ -596,7 +623,10 @@ enum ExtensionText {
     }
 
     /// Takes the new configuration on save; reloading and non-configuration actions keep the unsaved draft.
-    @discardableResult private func run(preservingDraft: Bool = false, _ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
+    /// `refused` takes the extension's own word when its check stopped the change (`refusal`); without it that is the
+    /// page's error.
+    @discardableResult private func run(preservingDraft: Bool = false, refused: ((String) -> Void)? = nil,
+                                        _ call: @escaping (APIClient) async throws -> HubExtensionDetail) async -> Bool {
         do {
             guard let api = deps.api() else { throw APIError(status: 0, message: String(localized: "Not connected to the hub yet")) }
             let d = try await call(api)
@@ -611,9 +641,24 @@ enum ExtensionText {
             error = nil
             return false
         } catch {
-            self.error = error.localizedDescription
+            if let refused, let words = Self.refusal(error) {
+                refused(words)
+                self.error = nil
+            } else {
+                self.error = error.localizedDescription
+            }
             return false
         }
+    }
+
+    /// The hub's words when a change of the settings or a secret was stopped before it was saved (#5906): the
+    /// extension checked it and said no (check_failed, its own words), it was asked too often (check_rate_limited), or
+    /// the settings changed meanwhile (settings_moved). nil for any other error.
+    nonisolated static func refusal(_ error: Error) -> String? {
+        guard let e = error as? APIError, let code = e.code,
+              ["check_failed", "check_rate_limited", "settings_moved"].contains(code) else { return nil }
+        let words = e.message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return words.isEmpty ? String(localized: "The extension didn't accept this change") : words
     }
 
     // MARK: the draft by path

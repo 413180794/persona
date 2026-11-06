@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import { EXTENSIONS_CHANGED } from "./extension-prompts";
 import {
-  clearedSecrets, clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
+  checkError, clearedSecrets, clearExtensionSecret, compact, configError, fieldTitle, isDirty, listItems, listExtensions, listSummary, numberProblems, placeholder, extensionDetail,
   machineStatus, extensionState, extensionTone, readNumber, runNote, same, secretState, setAt, setExtensionConfig, setExtensionEnabled, setExtensionSecret, sourceText,
   stateLine, valueAt, morePermissions, extensionUpgrades, setExtensionAutoUpgrade, setExtensionUpgrades, upgradeAction, upgradeDetail, upgradeNote,
   type HubExtension, type ExtensionField, type ExtensionUpgrade, nodeProgramStatus, exitText, saveFooter, channelOf, sandboxEgress, sandboxState,
@@ -61,6 +61,21 @@ describe("扩展的文字", () => {
     expect(placeholder({ name: "s", type: "string" })).toBe("未设置");
     expect(secretState({ name: "k", title: "K", set: false, required: true })).toBe("未设置（必填）");
     expect(secretState({ name: "k", title: "K", set: true, required: true })).toBe("已设置");
+  });
+  it("shows a set secret's last four characters when the hub gives them, and nothing more without", () => {
+    expect(secretState({ name: "k", title: "K", set: true, hint: "7f3a" })).toBe("已设置 · 末 4 位 7f3a");
+    expect(secretState({ name: "k", title: "K", set: true, hint: "" })).toBe("已设置");
+    expect(secretState({ name: "k", title: "K", set: true })).toBe("已设置");
+    // a hint on one that is not set (it should never come) does not make it read as set
+    expect(secretState({ name: "k", title: "K", set: false, required: true, hint: "7f3a" })).toBe("未设置（必填）");
+  });
+  it("reads a save the extension turned down in the hub's words, and nothing else", () => {
+    const words = "网关不认这把 Key（401）：invalid api key";
+    expect(checkError(new ApiError(400, words, { code: "check_failed", error: words }))).toBe(words);
+    expect(checkError(new ApiError(429, "检查太频繁了", { code: "check_rate_limited" }))).toBe("检查太频繁了");
+    expect(checkError(new ApiError(409, "设置刚被改过", { code: "settings_moved" }))).toBe("设置刚被改过");
+    expect(checkError(new ApiError(400, "bad", { code: "invalid_config" }))).toBeNull();
+    expect(checkError(new Error("check_failed"))).toBeNull();
   });
 });
 

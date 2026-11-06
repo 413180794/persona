@@ -80172,6 +80172,29 @@
       },
       "extractionState": "manual"
     },
+    "Set · ends in %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set · ends in %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定済み · 末尾 4 桁 %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已设置 · 末 4 位 %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Shaded: the computer was offline. Its usage fills in once it's back.": {
       "localizations": {
         "en": {
@@ -94776,6 +94799,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "扩展读不到这个形象包的图，画的是默认形象换成它的颜色"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The extension didn't accept this change": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The extension didn't accept this change"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拡張機能がこの変更を受け付けませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展没有接受这次修改"
           }
         }
       },

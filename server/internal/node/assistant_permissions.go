@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/osproc"
 )
@@ -36,6 +37,9 @@ func (n *Node) resetAssistantPermissions(ctx context.Context, id string) (restar
 	if err := osproc.StopGroup(p.cmd.Process.Pid, true); err != nil && p.alive() {
 		return true, fmt.Errorf("stop assistant permission cache: %w", err)
 	}
+	// A child forked while that signal went out can miss it (macOS): sweep until the group is empty, so nothing of
+	// the conversation lives on (#5942).
+	osproc.SweepGroup(p.cmd.Process.Pid, time.Second)
 	_ = p.stdin.Close()
 	select {
 	case <-p.exited:

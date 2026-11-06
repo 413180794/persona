@@ -34,6 +34,10 @@ func StopGroup(pid int, _ bool) error {
 	return exec.Command(taskkill, "/F", "/T", "/PID", strconv.Itoa(pid)).Run()
 }
 
+// SweepGroup is StopGroup's follow-up on Unix (proc_unix.go); taskkill /T has already walked the tree, so there is
+// no group to sweep here.
+func SweepGroup(int, time.Duration) bool { return true }
+
 // Kill ends the process pid at once (TerminateProcess); one already gone is not an error.
 func Kill(pid int) error {
 	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE, false, uint32(pid))

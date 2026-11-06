@@ -30,6 +30,26 @@ func StopGroup(pid int, force bool) error {
 	return syscall.Kill(-pid, sig)
 }
 
+// sweepEvery is how often SweepGroup kills the group again.
+const sweepEvery = 10 * time.Millisecond
+
+// SweepGroup kills the process group led by pid (SIGKILL) again and again until nobody is left in it or within has
+// passed, and says whether it is empty. One signal to a group misses a child forked while it is delivered: macOS does
+// not order the two (Linux does), and the child lives on, adopted by launchd, holding what the group held (#5942).
+// Killed members count until their parent reaps them, which is quick: the caller's Wait, or launchd for orphans.
+func SweepGroup(pid int, within time.Duration) bool {
+	deadline := time.Now().Add(within)
+	for {
+		if err := syscall.Kill(-pid, syscall.SIGKILL); errors.Is(err, syscall.ESRCH) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(sweepEvery)
+	}
+}
+
 // Kill ends the process pid at once (SIGKILL); one already gone is not an error.
 func Kill(pid int) error {
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {

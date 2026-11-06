@@ -363,7 +363,7 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 	if params.UIVersion < 3 {
 		res.Push, res.Pop = nil, false // an older app knows neither: it draws the view it got, or draws again
 	}
-	if err := checkOpenURL(*item, in.Context.Item, res.OpenURL); err != nil {
+	if err := checkOpenURL(id, *item, in.Context.Item, res.OpenURL); err != nil {
 		return extension.ActionResult{}, err
 	}
 	return res, nil
@@ -399,10 +399,11 @@ func checkPushes(m *extension.Manifest, from extension.UIItem, v *extension.View
 	return nil
 }
 
-// checkOpenURL holds what an action opens to https; an inbox_item may also open its item's own source page
-// (plugin.InboxSourceURL), that item's only.
-func checkOpenURL(ui extension.UIItem, itemID, raw string) error {
-	if raw == "" {
+// checkOpenURL holds what extension id's action opens to https; an inbox_item may also open its item's own source page
+// (plugin.InboxSourceURL), that item's only, and any of its pages its own settings (extension.SettingsURL), its own
+// only.
+func checkOpenURL(id string, ui extension.UIItem, itemID, raw string) error {
+	if raw == "" || raw == extension.SettingsURL(id) {
 		return nil
 	}
 	if ui.Placement == "inbox_item" && itemID != "" && raw == extension.InboxSourceURL(itemID) {

@@ -78,5 +78,9 @@
   "event_agent_needs_you": "An agent is waiting for your answer or approval (computer, session, question)",
   "event_agent_finished": "An agent finished (computer, session, title)",
   "error_reports_title": "Receive error and crash reports",
-  "error_reports_detail": "Errors and crashes of the hub and your devices, scrubbed first: no message text, tokens, user names, machine names or IP addresses. It decides where they go (for example an error tracker)"
+  "error_reports_detail": "Errors and crashes of the hub and your devices, scrubbed first: no message text, tokens, user names, machine names or IP addresses. It decides where they go (for example an error tracker)",
+  "network_config_title": "Reach the address you enter in its settings",
+  "network_config_detail": "The address in the “{field}” setting (now: {host}): that one host and port only, https only",
+  "network_config_detail_http": "The address in the “{field}” setting (now: {host}): that one host and port only; unencrypted http allowed",
+  "network_config_unset": "not set"
 }

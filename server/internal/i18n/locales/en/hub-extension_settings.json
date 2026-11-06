@@ -1,0 +1,6 @@
+{
+  "check_rate_limited": "Too many checks. Try again in a minute",
+  "check_not_running": "The extension is not running, so this can't be checked. Turn it on, then save",
+  "check_timeout": "The check had no answer in {seconds} seconds. Nothing was saved",
+  "check_failed_plain": "The check did not pass. Nothing was saved"
+}

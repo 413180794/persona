@@ -55,6 +55,8 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     /// subset").
     var configuration: JSONValue?
     var secrets: [ExtensionSecretSpec]?
+    /// The program checks a change of its settings or secrets before the hub saves it (settings.check).
+    var settingsCheck: Bool?
     var permissions: ExtensionPermissions?
     /// Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
     /// "Command-line programs (tools)", #4507). Installing them is a permission. Hubs before them refuse the
@@ -62,7 +64,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
     var tools: [ExtensionToolSpec]?
     var auth: ExtensionAuthSpec?
 
-    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, tags: [String]? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, offByDefault: [String]? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, permissions: ExtensionPermissions? = nil, tools: [ExtensionToolSpec]? = nil, auth: ExtensionAuthSpec? = nil) {
+    init(manifestVersion: Int = 0, id: String = "", name: String = "", version: String = "", description: String? = nil, publisher: String? = nil, homepage: String? = nil, tags: [String]? = nil, engines: ExtensionEngines? = nil, runtime: ExtensionRuntime? = nil, node: ExtensionNodeRuntime? = nil, activationEvents: [String]? = nil, contributes: ExtensionContributes? = nil, offByDefault: [String]? = nil, depends: [ExtensionDependency]? = nil, exports: ExtensionExports? = nil, extensionPack: [ExtensionPackMember]? = nil, configuration: JSONValue? = nil, secrets: [ExtensionSecretSpec]? = nil, settingsCheck: Bool? = nil, permissions: ExtensionPermissions? = nil, tools: [ExtensionToolSpec]? = nil, auth: ExtensionAuthSpec? = nil) {
         self.manifestVersion = manifestVersion
         self.id = id
         self.name = name
@@ -82,6 +84,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.extensionPack = extensionPack
         self.configuration = configuration
         self.secrets = secrets
+        self.settingsCheck = settingsCheck
         self.permissions = permissions
         self.tools = tools
         self.auth = auth
@@ -107,6 +110,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         case extensionPack = "extension_pack"
         case configuration
         case secrets
+        case settingsCheck = "settings_check"
         case permissions
         case tools
         case auth
@@ -133,6 +137,7 @@ nonisolated struct ExtensionManifest: Codable, Hashable, Sendable {
         self.extensionPack = try? c.decodeIfPresent([ExtensionPackMember].self, forKey: .extensionPack)
         self.configuration = try? c.decodeIfPresent(JSONValue.self, forKey: .configuration)
         self.secrets = try? c.decodeIfPresent([ExtensionSecretSpec].self, forKey: .secrets)
+        self.settingsCheck = try? c.decodeIfPresent(Bool.self, forKey: .settingsCheck)
         self.permissions = try? c.decodeIfPresent(ExtensionPermissions.self, forKey: .permissions)
         self.tools = try? c.decodeIfPresent([ExtensionToolSpec].self, forKey: .tools)
         self.auth = try? c.decodeIfPresent(ExtensionAuthSpec.self, forKey: .auth)
@@ -577,12 +582,15 @@ nonisolated struct ExtensionSecretSpec: Codable, Hashable, Sendable {
     var title: String
     var description: String?
     var required: Bool?
+    /// last4: once set, the settings show its last four characters.
+    var hint: JSONValue?
 
-    init(name: String = "", title: String = "", description: String? = nil, required: Bool? = nil) {
+    init(name: String = "", title: String = "", description: String? = nil, required: Bool? = nil, hint: JSONValue? = nil) {
         self.name = name
         self.title = title
         self.description = description
         self.required = required
+        self.hint = hint
     }
 
     enum CodingKeys: String, CodingKey {
@@ -590,6 +598,7 @@ nonisolated struct ExtensionSecretSpec: Codable, Hashable, Sendable {
         case title
         case description
         case required
+        case hint
     }
 
     init(from decoder: Decoder) throws {
@@ -598,6 +607,7 @@ nonisolated struct ExtensionSecretSpec: Codable, Hashable, Sendable {
         self.title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? ""
         self.description = try? c.decodeIfPresent(String.self, forKey: .description)
         self.required = try? c.decodeIfPresent(Bool.self, forKey: .required)
+        self.hint = try? c.decodeIfPresent(JSONValue.self, forKey: .hint)
     }
 }
 

@@ -90,5 +90,6 @@
   "sandbox_mount": "bwrap cannot set up the sandbox mounts: {err}",
   "git_timeout": "Timed out",
   "market_warning": "The extension market has a warning",
-  "sandbox_unavailable": "The sandbox is unavailable"
+  "sandbox_unavailable": "The sandbox is unavailable",
+  "settings_moved": "The settings changed while this was being checked. Nothing was saved; try again"
 }

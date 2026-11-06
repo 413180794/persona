@@ -402,14 +402,15 @@ export function blocks(items: UIItem[]): UIBlock[] {
 /**
  * What to do after a press: the view to show (new, or "reload" to draw again), a word to say, a link to open; `source`:
  * open the inbox item's own source page (an inbox_item's open_url persona://inbox/<item>/source, for the item it is
- * drawn for).
+ * drawn for); `settings`: the in-app path of an extension's own settings (open_url persona://settings/extensions/<id>).
  */
 export function outcome(
   r: UIActionResult,
   item?: string,
-): { view?: UIView; items?: UIItem[]; reload: boolean; toast?: string; url?: string; source?: true; push?: UIPush; pop?: true } {
+): { view?: UIView; items?: UIItem[]; reload: boolean; toast?: string; url?: string; source?: true; settings?: string; push?: UIPush; pop?: true } {
   const url = r.open_url && isHttps(r.open_url) ? r.open_url : undefined;
   const source = !!item && !!r.open_url && inboxSourceItem(r.open_url) === item;
+  const settings = r.open_url ? extensionSettingsHref(r.open_url) : undefined;
   const push = readPush(r.push);
   const pop = r.pop === true && !push;
   return {
@@ -420,6 +421,7 @@ export function outcome(
     toast: r.toast || undefined,
     url,
     ...(source ? { source: true as const } : {}),
+    ...(settings ? { settings } : {}),
     ...(push ? { push } : {}),
     ...(pop ? { pop: true as const } : {}),
   };
@@ -481,6 +483,24 @@ export function inboxSourceItem(url: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The in-app path of an extension's settings page that persona://settings/extensions/<id> names (the id escaped as one
+ * path segment): /settings?tab=extensions&extension=<id>. undefined for any other link, and for an id the hub keeps for
+ * itself (one starting with "-") or one with a "/".
+ */
+export function extensionSettingsHref(url: string): string | undefined {
+  const m = /^persona:\/\/settings\/extensions\/([^/?#]+)$/.exec(url);
+  if (!m) return undefined;
+  let id: string;
+  try {
+    id = decodeURIComponent(m[1]);
+  } catch {
+    return undefined;
+  }
+  if (!id || id.startsWith("-") || id.includes("/")) return undefined;
+  return `/settings?tab=extensions&extension=${encodeURIComponent(id)}`;
 }
 
 // ── reading what the hub sent (UI version 2) ─────────────

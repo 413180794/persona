@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"strings"
@@ -48,6 +49,9 @@ var hostPattern = regexp.MustCompile(`^(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])
 func (p Permissions) validate() error {
 	var errs []error
 	for _, h := range p.Network {
+		if _, ok := ParseConfigNetwork(h); ok {
+			continue // a settings field, held to the schema by the manifest (checkConfigured)
+		}
 		if !hostPattern.MatchString(h) || len(h) > 253 {
 			errs = append(errs, fmt.Errorf("permissions.network: %q is not a host name (lowercase, no scheme, port or path; *. allowed first)", h))
 		}
@@ -273,15 +277,20 @@ func NodeAdds(old, m *Manifest) bool {
 func Explain(m *Manifest) []PermissionLine { return ExplainIn(i18n.Default, m) }
 
 // ExplainIn generates permission disclosures without changing manifest or consent data.
-func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine {
+func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine { return ExplainWith(l, m, nil) }
+
+// ExplainWith is ExplainIn naming the address an installed extension's settings hold now (config, nil when not
+// installed yet) for each "config:" entry of permissions.network.
+func ExplainWith(l i18n.Lang, m *Manifest, config json.RawMessage) []PermissionLine {
 	out := []PermissionLine{} // never null on the wire: nothing to agree to is an empty list
 	if m.Runtime != nil {
 		out = append(out, permissionLine(l, "runs_code"))
 	}
-	if len(m.Permissions.Network) > 0 {
+	if hosts := m.Permissions.hostNames(); len(hosts) > 0 {
 		out = append(out, PermissionLine{Key: "network", Title: permissionText(l, "network_title"),
-			Detail: permissionText(l, "network_detail", i18n.Args{"hosts": strings.Join(m.Permissions.normalized().Network, permissionText(l, "list_separator"))})})
+			Detail: permissionText(l, "network_detail", i18n.Args{"hosts": strings.Join(hosts, permissionText(l, "list_separator"))})})
 	}
+	out = append(out, configuredLines(l, m, m.Permissions.ConfiguredNetworks(), config)...)
 	if m.Permissions.FullHub() {
 		out = append(out, permissionLine(l, "hub_api"))
 	} else if hub := m.Permissions.normalized().Hub; len(hub) > 0 {
@@ -366,14 +375,21 @@ func AddedIn(l i18n.Lang, old, m *Manifest) []PermissionLine {
 		out = append(out, toolsLine(l, more, permissionText(l, "tools_more_title")))
 	}
 	var hosts []string
+	var configured []ConfiguredNetwork
 	for _, h := range m.Permissions.normalized().Network {
-		if !slices.Contains(old.Permissions.Network, h) {
+		if slices.Contains(old.Permissions.Network, h) {
+			continue
+		}
+		if c, ok := ParseConfigNetwork(h); ok {
+			configured = append(configured, c) // agreed to again like any host (the consent digest has it as written)
+		} else {
 			hosts = append(hosts, h)
 		}
 	}
 	if len(hosts) > 0 {
 		out = append(out, PermissionLine{Key: "network", Title: permissionText(l, "network_more_title"), Detail: strings.Join(hosts, permissionText(l, "list_separator"))})
 	}
+	out = append(out, configuredLines(l, m, configured, nil)...)
 	if m.Permissions.FullHub() && !old.Permissions.FullHub() {
 		out = append(out, permissionLine(l, "hub_api"))
 	} else if !m.Permissions.FullHub() && !old.Permissions.FullHub() {
@@ -493,4 +509,32 @@ func surfacesDetail(l i18n.Lang, m *Manifest, surfaces []string) string {
 		parts = append(parts, permissionText(l, "slot_"+sl.Name)+permissionText(l, "label_separator")+strings.Join(titles, permissionText(l, "list_separator")))
 	}
 	return strings.Join(parts, permissionText(l, "sentence_separator"))
+}
+
+// configuredLines say what each "config:" entry lets the extension reach: the address the user writes in its
+// settings, the one there now when config has it, and that http is allowed when the manifest says so.
+func configuredLines(l i18n.Lang, m *Manifest, cs []ConfiguredNetwork, config json.RawMessage) []PermissionLine {
+	var out []PermissionLine
+	sc, _ := ParseSchema(m.Configuration)
+	for _, c := range cs {
+		field := c.Field
+		if sc != nil {
+			for _, f := range sc.Fields {
+				if f.Name == c.Field && f.Title != "" {
+					field = f.Title
+				}
+			}
+		}
+		now := permissionText(l, "network_config_unset")
+		if t, _ := ConfiguredTarget(c, config); t.Host != "" {
+			now = net.JoinHostPort(t.Host, t.Port)
+		}
+		key := "network_config_detail"
+		if c.HTTP {
+			key = "network_config_detail_http"
+		}
+		out = append(out, PermissionLine{Key: "network_config", Title: permissionText(l, "network_config_title"),
+			Detail: permissionText(l, key, i18n.Args{"field": field, "host": now})})
+	}
+	return out
 }

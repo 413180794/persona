@@ -37,6 +37,26 @@ extension AppModel {
         extensionOpen = ExtensionSystemOpen(link: link, action: action, values: values)
         return true
     }
+
+    /// Settings › Extensions › `id`: what an extension's `open_url` persona://settings/extensions/<id> opens (#5906). An
+    /// extension page shown over everything closes first.
+    func openExtensionSettings(_ id: String) {
+        extensionOpen = nil
+        settingsPath = NavigationPath([SettingsPage.plugins, SettingsPage.plugin(id)])
+        #if os(macOS)
+        MacShellState.shared.go(.settings, self)
+        #else
+        selectedTab = .settings
+        #endif
+    }
+
+    /// Opens `url` when it is an extension's settings link (`ExtensionSettingsLink`); false for any other, which the
+    /// caller opens as before.
+    func openIfExtensionSettings(_ url: URL) -> Bool {
+        guard let id = ExtensionSettingsLink.extensionID(url) else { return false }
+        openExtensionSettings(id)
+        return true
+    }
 }
 
 /// Reuses the regular extension pages with their links, push/pop and invalidation refresh; no separate renderer for notifications.

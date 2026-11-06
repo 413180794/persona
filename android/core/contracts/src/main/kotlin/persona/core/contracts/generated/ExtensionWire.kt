@@ -71,6 +71,10 @@ data class ExtensionManifest(
      */
     val configuration: JsonElement? = null,
     val secrets: List<ExtensionSecretSpec>? = null,
+    /**
+     * The program checks a change of its settings or secrets before the hub saves it (settings.check).
+     */
+    @SerialName("settings_check") val settingsCheck: Boolean? = null,
     val permissions: ExtensionPermissions? = null,
     /**
      * Command-line programs the hub installs into the extension's own directory and puts first on its PATH (docs
@@ -279,6 +283,10 @@ data class ExtensionSecretSpec(
     val title: String = "",
     val description: String? = null,
     val required: Boolean? = null,
+    /**
+     * last4: once set, the settings show its last four characters.
+     */
+    val hint: JsonElement? = null,
 )
 
 /**

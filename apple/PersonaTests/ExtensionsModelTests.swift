@@ -151,8 +151,8 @@ struct ExtensionsModelTests {
         }
         let page = make(hub)
         await page.load()
-        #expect(await page.setSecret("api_key", value: "   ") == false, "nothing to save")
-        #expect(await page.setSecret("api_key", value: " k3y \n"))
+        #expect(await page.setSecret("api_key", value: "   ") == .failed, "nothing to save")
+        #expect(await page.setSecret("api_key", value: " k3y \n") == .saved)
         #expect(body == #"{"value":"k3y"}"#)
         #expect(page.detail?.secrets.first?.set == true)
     }

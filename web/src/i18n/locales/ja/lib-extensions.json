@@ -33,6 +33,7 @@
   "default_value": "デフォルト：{value}",
   "not_set": "未設定",
   "is_set": "設定済み",
+  "is_set_hint": "設定済み · 末尾 {hint}",
   "not_set_required": "未設定（必須）",
   "not_a_number": "数値を入力してください",
   "not_an_integer": "整数を入力してください",

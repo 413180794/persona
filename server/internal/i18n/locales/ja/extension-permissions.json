@@ -78,5 +78,9 @@
   "event_agent_needs_you": "エージェントが回答や承認を待機（コンピューター、セッション、質問）",
   "event_agent_finished": "エージェントが完了（コンピューター、セッション、タイトル）",
   "error_reports_title": "エラーとクラッシュのレポートを受け取る",
-  "error_reports_detail": "hub とあなたの各デバイスで起きたエラーとクラッシュ。先に匿名化され、メッセージ本文、トークン、ユーザー名、マシン名、IP アドレスは含みません。送り先（エラー追跡サービスなど）は拡張機能が決めます"
+  "error_reports_detail": "hub とあなたの各デバイスで起きたエラーとクラッシュ。先に匿名化され、メッセージ本文、トークン、ユーザー名、マシン名、IP アドレスは含みません。送り先（エラー追跡サービスなど）は拡張機能が決めます",
+  "network_config_title": "設定に入力したアドレスへのアクセス",
+  "network_config_detail": "設定「{field}」に入力したアドレス（現在：{host}）。このホストとポートだけ、https のみ",
+  "network_config_detail_http": "設定「{field}」に入力したアドレス（現在：{host}）。このホストとポートだけ。暗号化されない http も許可",
+  "network_config_unset": "未入力"
 }
