@@ -107,6 +107,7 @@
   "key_test_ok": "The key works: {model} answered ({ms} ms)",
   "key_test_failed": "The test didn't pass",
   "retest": "Test again",
+  "other_provider": "Use another",
   "done_title": "{name} is connected",
   "done_pick_later": "To use it for the main conversation or Agents, pick it under Models.",
   "more_options_model": "Default model",

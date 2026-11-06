@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  assignByDefault,
   assignSummary,
   launcherNameProblem,
   loadPresets,
@@ -88,6 +89,16 @@ describe("launcher presets", () => {
     expect(assignSummary({ launcher: { name: "glm" } }, true)).toEqual({ assigned: "", kept: [] });
     expect(assignSummary(r, false)).toEqual({ assigned: "", kept: [] });
     expect(assignSummary({ ...r, assigned: [], kept: [{ purpose: "assistant", reason: "failed" }] }, true).assigned).toBe("");
+  });
+
+  // #4526: a key the region blocks is not put on the main conversation and new agents unless asked for.
+  it("assigns by default only when Claude Code does not answer already and the region is not blocked", () => {
+    expect(assignByDefault(false, null)).toBe(true);
+    expect(assignByDefault(false, { ok: true, ms: 300 })).toBe(true);
+    expect(assignByDefault(false, { ok: false, ms: 80, error: "Key 不对（401）" })).toBe(true);
+    expect(assignByDefault(false, { ok: false, ms: 120, code: "region_blocked", error: "x" })).toBe(false);
+    expect(assignByDefault(true, null)).toBe(false);
+    expect(assignByDefault(true, { ok: true, ms: 300 })).toBe(false);
   });
 
   it("an older hub without presets answers none", async () => {

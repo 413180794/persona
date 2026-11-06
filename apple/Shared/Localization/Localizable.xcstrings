@@ -105442,6 +105442,30 @@
       },
       "extractionState": "manual"
     },
+    "Use another provider": {
+      "comment": "Provider wizard: the key test says the provider does not serve this region; back to the provider list (#4526)",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use another provider"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "別のプロバイダーへ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换一家"
+          }
+        }
+      }
+    },
     "Use it for the main conversation and new agents": {
       "localizations": {
         "zh-Hans": {

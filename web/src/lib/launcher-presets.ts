@@ -4,6 +4,7 @@
 // another of its models; the hub fills in the name, the address, the kind and the rest.
 import { formatList, t } from "../i18n";
 import { api, ApiError } from "./api";
+import type { TestResult } from "./providers";
 
 export interface PresetModel {
   id: string;
@@ -102,6 +103,16 @@ export function launcherNameProblem(name: string): string {
 
 /** The categories a provider added in the wizard takes over while they are still at their default (docs/onboarding.md 5.4). */
 export const ASSIGN_PURPOSES = ["assistant", "agent.new"] as const;
+
+/** The hub says the provider blocks this region: no key will work here, only another provider (#4482, #4526). */
+export const regionBlocked = (r: TestResult | null | undefined) => !!r && !r.ok && r.code === "region_blocked";
+
+/** Whether "the main conversation and new agents use it" starts on: not while Claude Code already answers the main
+ *  conversation (4.3 B.3), and not for a key the provider's region block makes useless here (#4526). The user can
+ *  still turn it on. */
+export function assignByDefault(claudeAnswers: boolean, test: TestResult | null | undefined): boolean {
+  return !claudeAnswers && !regionBlocked(test);
+}
 
 /** POST /api/v1/launchers' body: the name only when typed (the hub names it after the provider), the model only when
  *  another one than the preset's default was picked, `assign` when asked. */

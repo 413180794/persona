@@ -378,7 +378,13 @@ struct ProviderWizard: View {
             }
         } else if let t = wizard.keyTest {
             ProbeResultRow(result: t)
-            if !t.ok {
+            if wizard.regionBlocked {
+                // the region, not the key: testing again or another key will not help, another provider will (#4526)
+                Button { step = .pick } label: {
+                    Label("Use another provider", systemImage: Theme.Icon.back).lineLimit(1)
+                }
+                .accessibilityIdentifier("wizard.preset.other")
+            } else if !t.ok {
                 Button { Task { await wizard.testKey() } } label: {
                     Label("Test again", systemImage: Theme.Icon.reload).lineLimit(1)
                 }

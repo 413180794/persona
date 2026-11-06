@@ -351,6 +351,8 @@ export interface TestResult {
   ms: number;
   model?: string;
   error?: string;
+  /** What the hub recognised (`region_blocked`: the provider does not serve this region, #4482); the text is `error`. */
+  code?: string;
 }
 
 export const testText = (r: TestResult) => (r.ok ? t("lib-providers.test_ok", { ms: r.ms }) : r.error || t("lib-providers.test_failed"));

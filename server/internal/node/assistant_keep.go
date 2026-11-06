@@ -3,15 +3,12 @@ package node
 import "sync"
 
 // A resident node keeps its headless conversations when the hub's connection ends (docs/hub-restart.md "Conversations are not interrupted"):
-// a hub restart or a reconnect replaces the connection, and with it the Node serving it (attach.go), but the claude
+// a hub restart or a reconnect replaces the connection, and with it the Node serving it (attach.go), but the assistant
 // processes go on — their turn, their background tasks and monitors — and the Node serving the next connection takes
 // them over: what they say from then on reaches the new hub, the answer being generated included. Without a resident
 // node (`node --stdio` serving the hub itself) the process ends with the connection, and so do they, as before.
-//
-// Only claude (stream-json) is kept: a Codex conversation's connection belongs to its Node (codexConn.n) and ends
-// with it.
 
-// liveAssistants is every headless claude this process runs, whichever Node it reports to (AssistantsBusy).
+// liveAssistants is every headless assistant this process runs, whichever Node it reports to (AssistantsBusy).
 var liveAssistants sync.Map // *assistantProc -> struct{}
 
 // AssistantsBusy: a conversation is answering or waiting on its background tasks or monitors; a resident node asked
@@ -56,7 +53,7 @@ func (k *assistantKeeper) keep(procs map[string]*assistantProc) (stop []*assista
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	for id, p := range procs {
-		if p.agent == "claude" && p.alive() {
+		if (p.agent == "claude" || p.agent == "codex") && p.alive() {
 			k.procs[id] = p
 		} else {
 			stop = append(stop, p)
@@ -79,6 +76,9 @@ func (k *assistantKeeper) adopt(n *Node) []*assistantProc {
 		}
 		p.owner.Store(n)
 		n.procs[id] = p
+		if p.cx != nil {
+			n.akeys[p.cx.key] = p
+		}
 		out = append(out, p)
 	}
 	n.mu.Unlock()
@@ -130,6 +130,7 @@ func (n *Node) handOverAssistants() {
 	n.mu.Lock()
 	stop := n.keeper.keep(n.procs)
 	n.procs = map[string]*assistantProc{}
+	n.akeys = map[string]*assistantProc{}
 	n.mu.Unlock()
 	for _, p := range stop {
 		p.stop()

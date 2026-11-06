@@ -551,6 +551,13 @@ func (n *Node) watchAgent(ctx context.Context, req sockRequest) (_ context.Conte
 // ask forwards an interaction to the hub and blocks until the phone answers, it expires, or the hook is cancelled.
 // It fails with errNodeGone when the hub connection ends first: a resumable hook then asks the next node.
 func (n *Node) ask(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool, error) {
+	if c, ok := ctx.Value(codexApprovalOwner{}).(*codexConn); ok {
+		return c.askResumable(ctx, ix)
+	}
+	return n.askOnce(ctx, ix)
+}
+
+func (n *Node) askOnce(ctx context.Context, ix proto.Interaction) (proto.Resolution, bool, error) {
 	if n.peer == nil { // no hub: nobody to ask
 		return proto.Resolution{}, false, nil
 	}

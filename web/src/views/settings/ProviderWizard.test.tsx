@@ -22,6 +22,8 @@ const presets = [
 ];
 let calls: { method: string; path: string; body?: Record<string, unknown> }[] = [];
 let testOK = true;
+// set: what the hub's key test answers instead (a region block, #4526)
+let testAnswer: Record<string, unknown> | null = null;
 let readiness: Readiness | null = null;
 // set: readiness answers only once it resolves (a node self-check can take seconds)
 let readinessGate: Promise<void> | null = null;
@@ -39,6 +41,7 @@ function hub(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   calls.push({ method, path, body });
   if (path.endsWith("/assistant/readiness")) return (readinessGate ?? Promise.resolve()).then(() => (readiness ? json(readiness) : json({ error: "not found" }, 404)));
   if (path.endsWith("/launchers/presets")) return Promise.resolve(json({ presets }));
+  if (path.endsWith("/launchers/test") && testAnswer) return Promise.resolve(json(testAnswer));
   if (path.endsWith("/launchers/test")) return Promise.resolve(json(testOK ? { ok: true, ms: 321, model: "glm-x" } : { ok: false, ms: 80, model: "glm-x", error: "Key 不对（401）" }));
   if (path.endsWith("/launchers") && method === "POST")
     return Promise.resolve(json({ launcher: { name: "glm", display_name: "智谱 GLM", has_key: true }, assigned: ["assistant"], kept: [{ purpose: "agent.new", reason: "customized" }] }));
@@ -77,6 +80,7 @@ beforeEach(() => {
   Object.assign(getState(), { features: ["builtin_presets"] });
   calls = [];
   testOK = true;
+  testAnswer = null;
   readiness = null;
   readinessGate = null;
   resetReadiness();
@@ -170,6 +174,52 @@ describe("ProviderWizard from presets", () => {
     const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/launchers"));
     expect(post?.body).not.toHaveProperty("assign");
     expect(text()).toContain("到「模型配置」里选");
+  });
+
+  // #4526: the region, not the key, is the problem (#4482): no retesting, a way back to the list, and the provider is
+  // not put on the main conversation and new agents unless asked for.
+  it("offers another provider instead of retesting when the region is blocked, and does not assign by default", async () => {
+    testAnswer = { ok: false, ms: 120, model: "glm-x", code: "region_blocked", error: "Anthropic 不对这个地区提供服务：换 Key 也没用，换一个在这里能直接用的供应商" };
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    expect(text()).toContain("换 Key 也没用");
+    expect(button("重新测试")).toBeUndefined();
+    expect(button("换一家")).toBeDefined();
+    const toggle = document.body.querySelector<HTMLButtonElement>('button[role="switch"]')!;
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    await act(async () => button("保存")!.click());
+    await flush();
+    const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/launchers"));
+    expect(post?.body).not.toHaveProperty("assign");
+  });
+
+  it("still assigns a region-blocked provider when the switch is turned on", async () => {
+    testAnswer = { ok: false, ms: 120, code: "region_blocked", error: "Anthropic 不对这个地区提供服务" };
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    act(() => document.body.querySelector<HTMLButtonElement>('button[role="switch"]')!.click());
+    await act(async () => button("保存")!.click());
+    await flush();
+    const post = calls.find((c) => c.method === "POST" && c.path.endsWith("/launchers"));
+    expect(post?.body).toMatchObject({ assign: ["assistant", "agent.new"] });
+  });
+
+  it("goes back to the providers from a blocked region's 换一家", async () => {
+    testAnswer = { ok: false, ms: 120, code: "region_blocked", error: "Anthropic 不对这个地区提供服务" };
+    await open();
+    act(() => button("智谱 GLM")!.click());
+    type(keyInput(), "sk-test-123456");
+    await waitAutoTest();
+    act(() => button("换一家")!.click());
+    await flush();
+    const rows = [...document.body.querySelectorAll("ul li")].map((li) => li.textContent ?? "");
+    expect(rows).toHaveLength(4);
+    expect(keyInput()).toBeNull();
   });
 
   it("asks an older hub's preset for the name and sends no assign", async () => {

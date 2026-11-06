@@ -176,8 +176,9 @@ The assistant's claude no longer belongs to a single hub connection:
 
 - The hub machine runs a **resident node** (`scripts/deploy/node-launchd.sh install`; on Linux the systemd user service `jarvisd-node`, in its own cgroup).
   The hub still starts `jarvisd node --stdio`, which only relays when it finds the resident node listening (`Relay` in `node/attach.go`). A hub restart only kills the relay process.
-- In the resident node, when a connection ends, its claude chats are handed to the process-level `assistantKeeper` (Codex chat connections belong to the `Node` and are still stopped); the next connection's `Node`
+- In the resident node, when a connection ends, its Claude and Codex chats are handed to the process-level `assistantKeeper`; the next connection's `Node`
   takes them over (`adopt`) before loading state, and from then on the chats' output (streamed text, turn ends, background task changes) is reported to the new `Node`, that is, the new hub.
+  Codex approvals resume with the same interaction ID and expiry through the next connection; disconnects do not imply refusal or permission. Ordinary and connector approvals remain separate. Explicit cancellation, expiry, and the bounded reconnect window still stop waiting.
   On takeover, the background task list and the text being generated are reported again. `Attach` waits for the previous connection to finish handing over before serving the next, so two `Node`s never compete.
 - Output buffering: claude's stdout is always read by the same reader goroutine (it never blocks for lack of a hub); text being generated is in `p.partial`, finished text in the transcript;
   deltas from the 1–2 seconds without a hub cannot be sent, so after takeover one complete current text is sent instead (a delta is "the full text so far" anyway).

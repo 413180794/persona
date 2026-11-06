@@ -37,7 +37,7 @@ func keptProc(t *testing.T, n *Node, id, agent string) *assistantProc {
 	return p
 }
 
-// A resident node's connection ends (the hub restarted): its claude conversations go on, and the Node serving the
+// A resident node's connection ends (the hub restarted): its conversations go on, and the Node serving the
 // next connection takes them over — what they say from then on is its own.
 func TestResidentNodeKeepsConversations(t *testing.T) {
 	const id, codexID = "11111111-2222-3333-4444-000000000011", "11111111-2222-3333-4444-000000000012"
@@ -46,24 +46,29 @@ func TestResidentNodeKeepsConversations(t *testing.T) {
 	a.keeper, b.keeper = k, k
 	p := keptProc(t, a, id, "claude")
 	cx := keptProc(t, a, codexID, "codex")
+	cx.cx = &codexConn{n: a, p: cx, key: "codex-key"}
+	a.akeys = map[string]*assistantProc{"codex-key": cx}
+	b.akeys = map[string]*assistantProc{}
 
 	a.handOverAssistants()
 	if len(a.procs) != 0 {
 		t.Fatal("the ended connection's Node still has conversations")
 	}
-	select {
-	case <-cx.exited:
-	case <-time.After(5 * time.Second):
-		t.Fatal("a Codex conversation cannot be kept: it should have been stopped")
+	if !cx.alive() {
+		t.Fatal("the Codex conversation was stopped with the connection")
 	}
+
 	if !p.alive() {
 		t.Fatal("the claude conversation was stopped with the connection")
 	}
 
 	b.state.put(id, sessionState{Launcher: "claude", Cwd: "/home/u/.jarvis/assistant"})
 	adopted := k.adopt(b)
-	if len(adopted) != 1 || b.procs[id] != p {
+	if len(adopted) != 2 || b.procs[id] != p || b.procs[codexID] != cx {
 		t.Fatalf("not taken over: %v", adopted)
+	}
+	if b.akeys["codex-key"] != cx || len(a.akeys) != 0 || cx.ownerOr(a) != b {
+		t.Fatal("Codex MCP identity did not move to the new connection")
 	}
 	if _, err := p.stdin.Write([]byte(`{"type":"system","subtype":"background_tasks_changed","tasks":[{"description":"watch the deploy"}]}` + "\n")); err != nil {
 		t.Fatal(err)

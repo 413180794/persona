@@ -153,8 +153,12 @@ enum LauncherName {
     private var trimmedKey: String { presetKey.trimmingCharacters(in: .whitespacesAndNewlines) }
     /// A key long enough to be worth testing on its own: a test costs a request, so not on every keystroke.
     var keyTestable: Bool { (preset?.testable ?? false) && trimmedKey.count >= 8 }
-    /// The assign toggle: on unless the main conversation already runs on a Claude Code that answers.
-    var assign: Bool { assignChoice ?? !Self.claudeCodeWorks(deps.readiness()) }
+    /// The key test says the provider does not serve this region (#4482): no key will work here, only another
+    /// provider, so the wizard offers that instead of testing again (#4526).
+    var regionBlocked: Bool { keyTest.map { !$0.ok && $0.code == "region_blocked" } ?? false }
+    /// The assign toggle: on unless the main conversation already runs on a Claude Code that answers, or the key test
+    /// says the region is blocked (#4526); the user can still turn it on.
+    var assign: Bool { assignChoice ?? (!Self.claudeCodeWorks(deps.readiness()) && !regionBlocked) }
     var canSavePreset: Bool {
         preset != nil && !trimmedKey.isEmpty && presetNameProblem == nil && !keyTesting && !saving
     }

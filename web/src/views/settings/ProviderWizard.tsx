@@ -9,7 +9,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import {
+  assignByDefault,
   assignSummary,
+  regionBlocked,
   BUILTIN_PLUGIN,
   launcherNameProblem,
   loadPresets,
@@ -103,7 +105,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
   // pending: the first readiness answer has not come (it can take seconds): the switch waits for it, and so does "Save"
   const { readiness, pending } = useReadiness(isNew);
   const works = claudeWorks(readiness);
-  const assign = assignSet ?? !works;
+  const assign = assignSet ?? assignByDefault(works, keyTest && !keyTest.running ? keyTest.result : null);
   const preset = presets?.find((p) => p.id === choice);
   // a hub with built-in presets names a provider itself and takes assign; an older one needs the name and knows no assign
   const hubNames = useStore((s) => hubHas(s.features, BUILTIN_PRESETS_FEATURE, true));
@@ -213,7 +215,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
         // never decide on "not known yet": a Claude Code that already answers must not be moved off (4.3 B.3)
         await readinessSettled();
         const before = currentReadiness();
-        const give = hubNames && (assignSet ?? !claudeWorks(before));
+        const give = hubNames && (assignSet ?? assignByDefault(claudeWorks(before), keyTest && !keyTest.running ? keyTest.result : null));
         const result = await api<AddResult>("/launchers", { method: "POST", json: presetBody(preset, pf.name, pf.api_key, pf.model, give) });
         onSaved();
         setAdded({ result, asked: give, fallback: pf.name.trim() || presetTitle(preset), noClaude: claudeMissing(before) });
@@ -322,7 +324,7 @@ export function ProviderWizard({ existing, onClose, onSaved }: { existing: Provi
         {step === "pick" && <PickStep presets={presets} error={presetsError} choice={choice} onPick={pick} />}
 
         {step === "key" && preset && (
-          <KeyStep preset={preset} pf={pf} setPf={setPf} keyTest={keyTest} onRetest={() => void runKeyTest()} assign={hubNames ? assign : null} setAssign={setAssign} checking={pending && assignSet === null} works={works ? readiness?.machine?.name ?? "" : null} more={more} setMore={setMore} />
+          <KeyStep preset={preset} pf={pf} setPf={setPf} keyTest={keyTest} onRetest={() => void runKeyTest()} onOther={() => (setError(""), setChoice(""), setStep("pick"))} assign={hubNames ? assign : null} setAssign={setAssign} checking={pending && assignSet === null} works={works ? readiness?.machine?.name ?? "" : null} more={more} setMore={setMore} />
         )}
 
         {step === "done" && added && <DoneStep added={added} readiness={readiness} />}
@@ -456,12 +458,14 @@ function PickStep({ presets, error, choice, onPick }: { presets: LauncherPreset[
 type PresetForm = { name: string; api_key: string; model: string };
 
 /** (2) for a preset: only the key; it is tested by itself. The name and another model wait under "More options". */
-function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, checking, works, more, setMore }: {
+function KeyStep({ preset, pf, setPf, keyTest, onRetest, onOther, assign, setAssign, checking, works, more, setMore }: {
   preset: LauncherPreset;
   pf: PresetForm;
   setPf: React.Dispatch<React.SetStateAction<PresetForm>>;
   keyTest: KeyTest | null;
   onRetest: () => void;
+  /** Back to the providers (a region block: another key will not help, #4526). */
+  onOther: () => void;
   /** null: the hub takes no assign and wants the name (an older hub). */
   assign: boolean | null;
   setAssign: (on: boolean) => void;
@@ -499,7 +503,7 @@ function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, chec
         </a>
       )}
       {presetTestable(preset) ? (
-        <KeyTestStatus keyTest={keyTest} hasKey={!!pf.api_key.trim()} onRetest={onRetest} />
+        <KeyTestStatus keyTest={keyTest} hasKey={!!pf.api_key.trim()} onRetest={onRetest} onOther={onOther} />
       ) : (
         <p className="text-[11.5px] leading-relaxed text-ink-3">{t("settings-providerwizard.key_test_responses")}</p>
       )}
@@ -541,7 +545,7 @@ function KeyStep({ preset, pf, setPf, keyTest, onRetest, assign, setAssign, chec
   );
 }
 
-function KeyTestStatus({ keyTest, hasKey, onRetest }: { keyTest: KeyTest | null; hasKey: boolean; onRetest: () => void }) {
+function KeyTestStatus({ keyTest, hasKey, onRetest, onOther }: { keyTest: KeyTest | null; hasKey: boolean; onRetest: () => void; onOther: () => void }) {
   if (!keyTest) return <p className="text-[11.5px] leading-relaxed text-ink-3">{hasKey ? t("settings-providerwizard.key_test_wait") : t("settings-providerwizard.key_test_cost")}</p>;
   if (keyTest.running)
     return (
@@ -558,8 +562,9 @@ function KeyTestStatus({ keyTest, hasKey, onRetest }: { keyTest: KeyTest | null;
         {r.ok ? t("settings-providerwizard.key_test_ok", { model: r.model ?? "", ms: r.ms }) : r.error || t("settings-providerwizard.key_test_failed")}
       </span>
       {!r.ok && (
-        <button type="button" onClick={onRetest} className="touch-hit shrink-0 whitespace-nowrap font-medium hover:underline">
-          {t("settings-providerwizard.retest")}
+        // the region, not the key: testing again or another key will not help, another provider will (#4526)
+        <button type="button" onClick={regionBlocked(r) ? onOther : onRetest} className="touch-hit shrink-0 whitespace-nowrap font-medium hover:underline">
+          {regionBlocked(r) ? t("settings-providerwizard.other_provider") : t("settings-providerwizard.retest")}
         </button>
       )}
     </div>

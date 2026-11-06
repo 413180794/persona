@@ -424,6 +424,33 @@ struct ProviderWizardTests {
         #expect(AssignSummary(LauncherAdded(launcher: nil), asked: true) == AssignSummary(LauncherAdded(), asked: false))
     }
 
+    /// #4526: the region, not the key, is the problem (#4482, `code: "region_blocked"`): the provider is not put on the
+    /// main conversation and new agents unless the user turns it on, and saving sends no assign.
+    @Test func aRegionBlockedKeyIsNotAssignedByDefault() async throws {
+        let hub = FakeHub()
+        hub.on("POST", "/api/v1/launchers/test", json: #"""
+        {"ok":false,"ms":120,"model":"glm-5","code":"region_blocked","error":"Anthropic 不对这个地区提供服务：换 Key 也没用，换一个在这里能直接用的供应商"}
+        """#)
+        hub.on("POST", "/api/v1/launchers", json: #"{"launcher":{"name":"glm","source":"jarvis"},"assigned":[],"kept":[]}"#)
+        let w = await loadedPresets(hub)
+        w.presetID = "builtin/glm"
+        w.presetKey = "sk-test-0123456789"
+        #expect(w.assign) // no answer yet: as before
+        await w.testKey()
+        #expect(w.keyTest?.code == "region_blocked" && w.regionBlocked) // the view offers another provider, not a retest
+        #expect(!w.assign && w.canSavePreset)
+        #expect(await w.savePreset())
+        #expect(try body(hub.sent("POST", "/api/v1/launchers").first)["assign"] == nil)
+        // Turned on by the user, it goes.
+        w.assignChoice = true
+        #expect(w.assign && w.presetInput?.assign == ProviderWizardModel.assignPurposes)
+        // Another failure (a wrong key) leaves the default as it was.
+        hub.on("POST", "/api/v1/launchers/test", json: #"{"ok":false,"ms":80,"model":"glm-5","error":"认证失败（401）"}"#)
+        w.assignChoice = nil
+        await w.testKey()
+        #expect(w.assign && !w.regionBlocked)
+    }
+
     @Test func theToggleFollowsWhetherClaudeCodeAlreadyWorks() async throws {
         let on = await loadedPresets(FakeHub())
         #expect(on.assign && on.assignChoice == nil) // no readiness (an older hub, or not read yet): on

@@ -240,6 +240,7 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 			n.logger.Printf("assistant codex %s: %s", key, l)
 		}
 	})
+	liveAssistants.Store(p, struct{}{})
 	go c.read(stdout)
 	go func() {
 		_ = cmd.Wait()
@@ -250,7 +251,12 @@ func (n *Node) spawnCodex(id, cwd, launcher string, resume, spare bool, options 
 			cancel()
 		}
 		c.mu.Unlock()
+		liveAssistants.Delete(p)
 		close(p.exited)
+		if n.keeper != nil {
+			n.keeper.forget(p)
+		}
+		n := p.ownerOr(n)
 		n.mu.Lock()
 		delete(n.akeys, key)
 		wasSpare := n.spare == p
@@ -305,7 +311,7 @@ func (n *Node) realDir(dir string) string {
 // start does the handshake and opens the thread: thread/start for a new conversation (Codex picks the id),
 // thread/resume for an existing one.
 func (c *codexConn) start(ctx context.Context, id, cwd string, resume bool) error {
-	n := c.n
+	n := c.p.ownerOr(c.n)
 	var init struct {
 		CodexHome string `json:"codexHome"`
 	}
@@ -398,7 +404,7 @@ func codexSandboxPolicy(mode, memDir string) map[string]any {
 // deliver hands a user message to the thread: a new turn when idle, steered into the running turn otherwise. live is
 // the <persona-context> block it starts with ("" for none; assistant_context.go).
 func (c *codexConn) deliver(ctx context.Context, live, text string, images []proto.Image) error {
-	n := c.n
+	n := c.p.ownerOr(c.n)
 	input := []map[string]any{}
 	if live != "" {
 		input = append(input, map[string]any{"type": "text", "text": live, "text_elements": []any{}})
@@ -467,7 +473,7 @@ func (c *codexConn) interrupt(ctx context.Context) error {
 		}
 	}
 	if err := c.call(ctx, "thread/backgroundTerminals/clean", map[string]any{"threadId": thread}, nil); err != nil {
-		c.n.logger.Printf("assistant codex %s: clean background terminals: %v", short(thread), err)
+		c.p.ownerOr(c.n).logger.Printf("assistant codex %s: clean background terminals: %v", short(thread), err)
 	}
 	c.p.mu.Lock()
 	c.p.tasks = nil
@@ -486,13 +492,13 @@ func (c *codexConn) compact(ctx context.Context) error {
 
 // compacted: Codex compacted the thread; the user's compaction, if one was running, is done.
 func (c *codexConn) compacted() {
-	c.n.contextCompacted(c.p.id) // the snapshots it had seen were summarized away (assistant_context.go)
+	c.p.ownerOr(c.n).contextCompacted(c.p.id) // the snapshots it had seen were summarized away (assistant_context.go)
 	c.p.mu.Lock()
 	manual := c.p.manual
 	c.p.manual, c.p.compacting = false, false
 	c.p.mu.Unlock()
 	if manual {
-		c.n.compactionEnded(c.p.id, "")
+		c.p.ownerOr(c.n).compactionEnded(c.p.id, "")
 	}
 }
 
@@ -520,7 +526,7 @@ func (c *codexConn) syncTasks() {
 	c.p.mu.Lock()
 	c.p.tasks = tasks
 	c.p.mu.Unlock()
-	c.n.rememberTasks(c.p.id, tasks)
+	c.p.ownerOr(c.n).rememberTasks(c.p.id, tasks)
 }
 
 func short(id string) string {
@@ -548,7 +554,7 @@ func (c *codexConn) read(r io.Reader) {
 		}
 		c.receive(m)
 	}
-	stopUnreadAssistant(c.n.logger, c.p, "codex "+c.key, sc.Err()) // the exit goroutine in spawnCodex cleans up
+	stopUnreadAssistant(c.p.ownerOr(c.n).logger, c.p, "codex "+c.key, sc.Err()) // the exit goroutine in spawnCodex cleans up
 }
 
 func (c *codexConn) receive(m codexMessage) {
@@ -580,7 +586,7 @@ func (c *codexConn) receive(m codexMessage) {
 }
 
 func (c *codexConn) notification(method string, params json.RawMessage) {
-	n, p := c.n, c.p
+	n, p := c.p.ownerOr(c.n), c.p
 	var ev struct {
 		ThreadID string `json:"threadId"`
 		TurnID   string `json:"turnId"`
@@ -787,7 +793,8 @@ type codexRequest struct {
 
 // decide works out the answer to one app-server request.
 func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessage) (any, error) {
-	n, p := c.n, c.p
+	n, p := c.p.ownerOr(c.n), c.p
+	ctx = context.WithValue(ctx, codexApprovalOwner{}, c)
 	var r codexRequest
 	_ = json.Unmarshal(raw, &r)
 	mode, _ := n.modesOf(p.id)
@@ -917,7 +924,7 @@ func (c *codexConn) decide(ctx context.Context, method string, raw json.RawMessa
 
 // askPhone asks about a command / file change and maps the answer to Codex's decision names.
 func (c *codexConn) askPhone(ctx context.Context, ix proto.Interaction, accept, always, decline string) map[string]any {
-	res, ok, err := c.n.ask(ctx, ix)
+	res, ok, err := c.askResumable(ctx, ix)
 	if err != nil || !ok || res.Allow == nil {
 		return map[string]any{"decision": "cancel"}
 	}
@@ -950,7 +957,7 @@ func (c *codexConn) tellModel(reason string) {
 		}
 		input := []map[string]any{{"type": "text", "text": prompts.RenderRefused(reason), "text_elements": []any{}}}
 		if err := c.call(ctx, "turn/steer", map[string]any{"threadId": thread, "input": input, "expectedTurnId": turn}, nil); err != nil {
-			c.n.logger.Printf("assistant codex %s: pass the refusal on: %v", short(thread), err)
+			c.p.ownerOr(c.n).logger.Printf("assistant codex %s: pass the refusal on: %v", short(thread), err)
 		}
 	}()
 }
