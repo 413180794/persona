@@ -45,7 +45,7 @@ for n in range(8000):
            "space_kind": "herdr", "space_index": n % 10, "slot_id": "slot-%05d" % n,
            "slot_name": "任务 %05d" % n, "slot_index": n, "pane_id": "pane-%05d" % n,
            "agent": "claude", "updated_at": base.ago(minutes=n / 60), "state_since": base.ago(minutes=n / 60),
-           "pending_interactions": 0, "assistant": False, "started_by_jarvis": False,
+           "pending_interactions": 0, "assistant": False, "started_by_persona": False,
            "waiting": False, "last_text": "示例进展：数据仅用于本地分页和滚动验证。" * 8}
     rows.append(row)
 personal = [{"id": "demo:personal-%05d" % n, "source": "demo", "sessionKey": "personal-%05d" % n,

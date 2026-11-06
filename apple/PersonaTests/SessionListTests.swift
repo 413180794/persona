@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Jarvis
+@testable import Persona
 
 @MainActor struct SessionListTests {
     private func row(_ n: Int, text: String = "") throws -> Session {

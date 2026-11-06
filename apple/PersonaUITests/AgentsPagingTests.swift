@@ -32,7 +32,7 @@ final class AgentsPagingTests: XCTestCase {
 
     @MainActor private func launch(_ appearance: String = "Light") -> Double {
         app = XCUIApplication()
-        let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
+        let pair = "persona://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         app.launchArguments = ["-pairURL", pair, "-app.tab", "chats", "-tab", "dev", "-dev.openChat", "", "-ui.oldLayout", "NO",
                                "-openAgentsFresh", "YES", "-dev.grouping", "recent", "-dev.folded", "",
                                "-ui.scheme", appearance.lowercased(), "-runtimeCLI", String(cliPort), "-runtimeCLIToken", "paging-test"]
