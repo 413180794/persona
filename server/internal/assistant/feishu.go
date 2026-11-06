@@ -103,11 +103,18 @@ type feishuBook struct {
 // it and a few minutes for its downloads.
 const feishuRecalledKeep = 10 * time.Minute
 
-// FeishuRecalled is feishu.recalled: the owner recalled a message in the bot's chat.
+// FeishuRecalled is feishu.recalled: the owner recalled a message in the bot's chat. One not in its conversation yet
+// is not sent; one being answered stops its turn (recallChannelRun).
 func (s *Service) FeishuRecalled(p FeishuRecalled) {
 	if p.MessageID == "" {
 		return
 	}
+	s.noteRecalled(p.MessageID)
+	go s.recallChannelRun(channel.Feishu, p.MessageID, channel.ClientMsgID(channel.Feishu, p.MessageID))
+}
+
+// noteRecalled remembers that the owner recalled message id, for feishuRecalledKeep.
+func (s *Service) noteRecalled(id string) {
 	b := &s.fbot
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -120,7 +127,7 @@ func (s *Service) FeishuRecalled(p FeishuRecalled) {
 	if b.recalled == nil {
 		b.recalled = map[string]time.Time{}
 	}
-	b.recalled[p.MessageID] = now
+	b.recalled[id] = now
 }
 
 // botRecalled says whether the owner recalled message id.
@@ -1150,6 +1157,23 @@ func (f feishuSink) folded(ctx context.Context, o *channel.Run) {
 	}
 }
 
+// recalled takes a recalled message's marks off when the run it was folded into goes on without it: its reaction,
+// and its own progress card (which said it is answered with the next message) says it was recalled.
+func (f feishuSink) recalled(ctx context.Context, m channel.Folded) {
+	s := f.s
+	if rx := m.Ext["reaction"]; rx != "" && m.ReplyTo != "" {
+		s.botUnreact(ctx, m.ReplyTo, rx)
+	}
+	if card := m.Ext["card"]; card != "" {
+		l := s.botLang(ctx)
+		c := feishubot.NewCard("", "", "").Note(i18n.T(l, "assistant-feishu.recalled_folded"))
+		endHeader(l, c, channel.EndRecalled)
+		if err := s.botUpdateCard(ctx, card, c); err != nil {
+			s.logf("bots: a recalled message's card: %v", err)
+		}
+	}
+}
+
 // answer writes the answer into the progress card (more cards when long), and marks the messages DONE. When nothing
 // of it got out because the hub could not be reached it says so (tried again later); once a piece is out, the rest
 // is best effort (a card sent twice would show twice). The card's last line says how the run ended; a quiet end
@@ -1222,6 +1246,9 @@ func (f feishuSink) answer(ctx context.Context, r *channel.Run, answer, note str
 		}
 		if rx := m.Ext["reaction"]; rx != "" {
 			s.botUnreact(ctx, m.ReplyTo, rx)
+		}
+		if end == channel.EndRecalled {
+			continue // the message is gone: nothing to mark done
 		}
 		if _, err := s.botReact(ctx, m.ReplyTo, "DONE"); err != nil {
 			s.logf("bots: react: %v", err)

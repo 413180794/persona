@@ -157,7 +157,7 @@
 1. 建企业自建应用，开启「机器人」能力。
 2. 权限：`im:message`（读写单聊消息）、`im:message:send_as_bot`、`im:message.p2p_msg:readonly`（单聊里发给机器人的消息）、`im:resource`（下载消息里的图片和文件）；
    可选 `contact:user.base:readonly`（名字）。
-3. 事件与回调：订阅方式选「使用长连接接收事件」；事件订阅「接收消息 v2.0」（`im.message.receive_v1`），可选「用户进入与机器人的会话」、「消息被撤回」（`im.message.recalled_v1`：主人撤回了还没发进对话的消息，就不发了，#4880）；回调订阅「卡片回传交互」（`card.action.trigger`）。
+3. 事件与回调：订阅方式选「使用长连接接收事件」；事件订阅「接收消息 v2.0」（`im.message.receive_v1`），可选「用户进入与机器人的会话」、「消息被撤回」（`im.message.recalled_v1`：主人撤回了还没发进对话的消息，就不发了，#4880；已收下、正在答的：这一轮只答它就像 /stop 一样停掉，进度卡收成「撤回了，这一轮停了」、不发答案，和别的消息并着答就只去掉它，已答完的不变，#5248）；回调订阅「卡片回传交互」（`card.action.trigger`）。
 4. 发布版本（企业里通常要管理员审核），App 里填 App ID / App Secret、打开、配对。
 
 ## 还没做 / 限制

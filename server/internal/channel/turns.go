@@ -48,6 +48,8 @@ type Run struct {
 	// Again: the turn ended without an answer and the conversation was asked for one then (AskAgain); the waits for
 	// a turn to start count from it.
 	Again time.Time `json:"again,omitempty"`
+	// Recalled: the owner recalled the one message it answers (#5248); it ends as EndRecalled, with no answer.
+	Recalled bool `json:"recalled,omitempty"`
 }
 
 // waitFrom is when the turn being waited on was asked for: the message, or the ask for an answer.
@@ -131,6 +133,42 @@ func (r *Run) Fold(o *Run) {
 	}
 }
 
+// Unfold takes message ref (msgID: its client_msg_id) out of a run that answers others too, as when the owner
+// recalled it: the others are still answered. When ref is the run's own message, the latest folded one takes its
+// place (the answer replies to it, its reaction is the run's). It returns what ref had (its reply ref and reaction);
+// false when the run answers only ref, or does not answer it.
+func (r *Run) Unfold(ref, msgID string) (Folded, bool) {
+	if len(r.Folded) == 0 || ref == "" {
+		return Folded{}, false
+	}
+	var out Folded
+	if r.ReplyTo == ref {
+		out = Folded{ReplyTo: ref, Ext: map[string]string{}}
+		if rx := r.Ext["reaction"]; rx != "" {
+			out.Ext["reaction"] = rx
+		}
+		last := r.Folded[len(r.Folded)-1]
+		r.Folded = slices.Clone(r.Folded[:len(r.Folded)-1])
+		r.ReplyTo = last.ReplyTo
+		if r.Ext == nil {
+			r.Ext = map[string]string{}
+		}
+		delete(r.Ext, "reaction")
+		if rx := last.Ext["reaction"]; rx != "" {
+			r.Ext["reaction"] = rx
+		}
+	} else {
+		i := slices.IndexFunc(r.Folded, func(f Folded) bool { return f.ReplyTo == ref })
+		if i < 0 {
+			return Folded{}, false
+		}
+		out = r.Folded[i]
+		r.Folded = slices.Delete(slices.Clone(r.Folded), i, i+1)
+	}
+	r.MsgIDs = slices.DeleteFunc(slices.Clone(r.MsgIDs), func(id string) bool { return id == msgID })
+	return out, true
+}
+
 // Look is the conversation as it is now, for Check.
 type Look struct {
 	Now time.Time
@@ -157,12 +195,13 @@ const (
 type End string
 
 const (
-	EndDone    End = ""
-	EndStopped End = "stopped" // interrupted (/stop, the app, the terminal)
-	EndError   End = "error"   // the turn ended in a model API error
-	EndGaveUp  End = "gave_up" // not done in RunMost (HeldMost for a held run)
-	EndGone    End = "gone"    // the conversation was closed or deleted
-	EndOffline End = "offline" // its machine is offline
+	EndDone     End = ""
+	EndStopped  End = "stopped"  // interrupted (/stop, the app, the terminal)
+	EndError    End = "error"    // the turn ended in a model API error
+	EndGaveUp   End = "gave_up"  // not done in RunMost (HeldMost for a held run)
+	EndGone     End = "gone"     // the conversation was closed or deleted
+	EndOffline  End = "offline"  // its machine is offline
+	EndRecalled End = "recalled" // the owner recalled the message it answers
 )
 
 // Step is Check's verdict.

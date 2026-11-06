@@ -2,6 +2,7 @@ package channel
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -538,5 +539,26 @@ func TestAnswerApprovalWordVariants(t *testing.T) {
 	q := []proto.Question{{Question: "备注？"}}
 	if r, done, _ := ReadAnswer("", &Ask{Kind: proto.IxQuestion, Questions: q}, "ok~"); !done || r.Answers["备注？"] != "ok~" {
 		t.Errorf("question: %+v", r)
+	}
+}
+
+// A recalled message comes out of a run that answers others too (#5248); a run answering only it is not changed.
+func TestRunUnfold(t *testing.T) {
+	r := &Run{ReplyTo: "m2", MsgIDs: []string{"x-m0", "x-m1", "x-m2"}, Ext: map[string]string{"reaction": "r2", "card": "c2"},
+		Folded: []Folded{{ReplyTo: "m0", Ext: map[string]string{"reaction": "r0"}}, {ReplyTo: "m1", Ext: map[string]string{"reaction": "r1"}}}}
+	if got, ok := r.Unfold("m0", "x-m0"); !ok || got.ReplyTo != "m0" || got.Ext["reaction"] != "r0" ||
+		len(r.Folded) != 1 || r.Folded[0].ReplyTo != "m1" || !slices.Equal(r.MsgIDs, []string{"x-m1", "x-m2"}) || r.ReplyTo != "m2" {
+		t.Fatalf("a folded one: %+v, %v", r, got)
+	}
+	// Its own message: the latest folded one takes its place, with its reaction; the progress card stays.
+	if got, ok := r.Unfold("m2", "x-m2"); !ok || got.ReplyTo != "m2" || got.Ext["reaction"] != "r2" ||
+		r.ReplyTo != "m1" || r.Ext["reaction"] != "r1" || r.Ext["card"] != "c2" || len(r.Folded) != 0 || !slices.Equal(r.MsgIDs, []string{"x-m1"}) {
+		t.Fatalf("its own: %+v, %v", r, got)
+	}
+	if _, ok := r.Unfold("m1", "x-m1"); ok || r.ReplyTo != "m1" {
+		t.Fatalf("the only message was unfolded: %+v", r)
+	}
+	if _, ok := (&Run{ReplyTo: "a", Folded: []Folded{{ReplyTo: "b"}}}).Unfold("z", "x-z"); ok {
+		t.Fatal("a message it does not answer")
 	}
 }
