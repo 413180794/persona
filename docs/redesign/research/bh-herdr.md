@@ -1,389 +1,389 @@
-# removed Herdr / Claude Code 客户端调研（对照 Persona「Agents」tab）
+# Reference client: herdr / Claude Code research (compared with Persona's Agents tab)
 
-调研日期 2026-10-30。只读阅读 removed 源码与文档、Persona worktree 文档与源码，没有运行任何构建或 App。
-路径前缀：`removed/` = removed 仓库根；`jarvis/` = Persona worktree 根。行号以调研时的文件为准。
-标注：**【事实】** 有出处；**【判断】** 是我的结论 / 建议。所有阈值、间隔都是代码常量或文档写明的配置值，**不是实测性能**；removed 文档自己也写明没有做帧率 / 网络时延的定量实测（`removed/docs/HERDR_PROGRESS.md:754`、`:1159`）。
+Research date: 2026-10-30. Read-only review of the reference client's source and documentation, and the Persona worktree's documentation and source. No builds or apps were run.
+Path prefixes: `reference-client/` = the reference client repository root; `jarvis/` = the Persona worktree root. Line numbers refer to the files at the time of the review.
+Notation: **[Fact]** has a source; **[Assessment]** is my conclusion or recommendation. All thresholds and intervals are code constants or configuration values documented in the source, **not measured performance**. The reference client's documentation also explicitly says it has no quantitative frame-rate or network-latency measurements (`reference-client/docs/HERDR_PROGRESS.md:754`, `:1159`).
 
-> 状态：完整版（第 0–12 节）。中断恢复后按节追加写成。
-
----
-
-## 0. 一句话结论
-
-- 【事实】removed 的 Herdr 端是「手机 SSH 直连主机 → 每次请求起一个 exec 子进程跑主机组件 bridge（NDJSON，一问一答）→ bridge 操作 herdr 窗格、读 Claude transcript、收 hooks」；聊天靠 **1 秒一次的游标轮询**，终端是同一 SSH 连接上的 PTY（SwiftTerm）（`removed/docs/ADR-001-SSH-EXEC.md`；`AgentWorkspaceModel.swift:1933-1973` 的 `observe` 默认 `Task.sleep(.seconds(1))`）。
-- 【判断】它最值得 Persona 借鉴的不是外观，而是三样东西：①「每个写操作都有持久回执、结果未知只核对不重发」的**操作日志 + 主机幂等回执**体系；②**原生交互的完整度**（拒绝原因、计划意见互斥、倒计时、MCP 表单 / 链接、子 Agent 来源、交回终端、草稿按请求保留）；③**阅读工具**（会话内搜索、跨页定位原始调用并可返回、任务进度聚合、长文本全屏分页阅读）。Persona 在推送、实时流、多机器、无头助手、终端（手机尺寸接管）、列表信息架构上明显更强。
+> Status: complete version (sections 0–12). Written incrementally by section after resuming from an interruption.
 
 ---
 
-## 1. removed 架构速览（与 UI 相关的部分）
+## 0. Bottom line
 
-【事实】
-- 分层：SSHTransport（认证 / 指纹 / PTY / 隧道）→ HerdrRuntime（server/workspace/pane）→ AgentSession（会话身份、对话状态、输入提交、聊天与终端一致性）→ BridgeClient（版本协商、请求、快照）→ 主机端 ClaudeCodeAdapter（会话发现、记录解析、hooks、交互适配）。客户端不解析 Claude 原始日志，只消费 bridge 归一化协议；新增 Agent 主要是主机 adapter（`removed/docs/ARCHITECTURE.md:123-140`）。
-- 「AgentContracts 包含公共会话标识、对话内容块、工具执行、状态、交互请求和能力声明……客户端根据能力决定是否展示审批、问题或停止按钮，不能在页面各处堆积 `if agent == claude`」（`ARCHITECTURE.md:138`）。能力在会话 descriptor 上逐项给出：`conversation/prompt/interrupt/terminal/approvals/sessionState/permissionFeedback/rename/promptFiles/promptImages/promptAttachments/compact/endSession/childTranscripts`（`removed/host/removed-bridge/src/controller.mjs:73`），hello 里另有主机级能力 `promptQueue/terminalQuestions/terminalPermissions/activityState/remoteNotifications/...`（`controller.mjs:195`）。
-- 传输：SSH exec 每次一个子进程、stdin/stdout 一条 NDJSON 请求与响应，单帧上限 8 MiB（`removed/Packages/removedKit/Sources/AgentKit/BridgeClient/SSHAgentBridgeClient.swift:355`）；无监听端口、无隧道凭据（`ADR-001-SSH-EXEC.md`）。页面取消只关闭自己的 exec 子通道，不关共享 SSH（`ARCHITECTURE.md:682-687`）。
-- 刷新节奏（代码常量）：会话页 1 s 轮询 `session.read`（`AgentWorkspaceModel.swift:1933`）；多主机任务中心每 8 s 一轮、最多 3 台并发且完成即补位（`AgentFleetModel.swift:67-100`）；主机推送采集 daemon 每 15 s 读一次 herdr（`removed/docs/HERDR_PUSH.md:7`）。没有事件流 / 游标续传（Cindy 对照审计里自己承认「Herdr 当前仍为 SSH 轮询，没有同类会话增量 push」，`removed/docs/HERDR_CINDY_REVIEW.md:47`）。
-- 会话身份 = 六字段：`id, paneID, kind, binding(进程身份哈希), nativeSessionID, terminalID`（`removed/docs/HERDR_PROMPT_QUEUE.md:9`；`AgentNavigationStore.swift` 的 `AgentNavigationTarget`）。主机每个写操作前 `checked(binding, paneID)` 重新取进程身份比对哈希，不一致回 `STALE_SESSION`（`controller.mjs:83-89`）。
+- [Fact] The reference client's herdr integration is “phone connects directly to the host over SSH → each request launches an exec subprocess running the host bridge (NDJSON, one request and one response) → bridge controls herdr panes, reads Claude transcripts, and receives hooks.” Chat uses **cursor polling once per second**; the terminal is a PTY (SwiftTerm) on the same SSH connection (`reference-client/docs/ADR-001-SSH-EXEC.md`; `observe` in `AgentWorkspaceModel.swift:1933-1973` defaults to `Task.sleep(.seconds(1))`).
+- [Assessment] The three things most worth borrowing for Persona are not its appearance: ① the **operation journal + host-side idempotent receipts** system, where every write has a durable receipt and unknown results are reconciled rather than resent; ② **complete native interactions** (denial reasons, mutually exclusive plan feedback, countdowns, MCP forms / links, sub-Agent provenance, handing control back to the terminal, and drafts retained per request); ③ **reading tools** (in-session search, locating original calls across pages with return navigation, aggregated task progress, and full-screen paginated long-text reading). Persona is clearly stronger in push notifications, live streaming, multiple computers, a headless assistant, terminal control at phone dimensions, and list information architecture.
 
 ---
 
-## 2. 会话列表 / 首页（任务中心）
+## 1. Reference client architecture at a glance (UI-related parts)
 
-【事实】
-- 首页（Cindy 评审后改版，`HERDR_CINDY_REVIEW.md:63-91`，`HERDR_PROGRESS.md:1395-1403`）：顶栏「Herdr」+ 主机与连接 / 通知中心（未读数）/ 新建（`AgentFleetView.swift:123-145`）；一条紧凑「主机 x/y 已连接」连接条，有主机连接中显示转圈、有未就绪显示橙色感叹号，点开是主机面板（大卡片、连接详情、密钥库、外观都收进去）（`AgentFleetView.swift:310-352`）。
-- 范围筛选 三段：活跃 / 待处理 / 全部，每段带数量；**活跃 = 工作中 ∪ 待处理 ∪ 本机近 7×24 小时主动打开过**（访问记录只在显式打开、真正回到前台阅读、前台 pane 换进程时记一次，后台轮询不续期）（`AgentFleetModel.swift:29-35`；`AgentSessionBrowser.swift` `recentVisitInterval`；`HERDR_PROGRESS.md:1052-1062`）。
-- 排列 二选一：按项目（完整主机 scope + 完整路径分组，同名不同路径不合并，组可折叠、「全部展开 / 收起」，偏好持久化）/ 最近访问（`AgentFleetView.swift:428-449, 469-501`）。排序：待处理 → 工作中 → 其余，再按最近访问，平级用稳定身份字段字典序，**轮询不会让列表乱跳**（`AgentFleetModel.swift:198-206`；`AgentSessionBrowser.swift` `Candidate.precedes`）。
-- 行（`AgentFleetView.swift:502-528`）：Agent 标记 / 终端图标 + **真实会话名**（没有主机给的摘要就不编造，`HERDR_CINDY_REVIEW.md:85`）+（最近排列时）主机 · 项目 + 状态标签（待处理 / 状态待核对 / 工作中 / 已完成 / 终端 / 就绪）+ **橙色「草稿 · …」摘要**。
-- 「状态待核对」：Herdr 列表的粗粒度 `done` 可能在 Claude 还挂着 AskUserQuestion 时就报出来，所以对「非 done→done」的候选再调一次只读 `session.activity` 核对 transcript 里有没有未答问题；核对中 / 失败显示「状态待核对」，不猜成 blocked 也不算完成；计数、筛选、徽标、通知共用这份投影（`AgentWorkspaceModel.swift:79-148`；`controller.mjs:139-174`；`HERDR_PROGRESS.md:958-989`；`HERDR_PUSH.md:75-83`）。
-- 待核对操作卡（工作区页）：「发送 / 交互 / 改名 / 压缩 / 退出 / 停止结果待确认 · 会话名」一行一个，点进原会话（`AgentsView.swift:191-202`）；会话启动 / 恢复结果不明时有「核对会话启动结果」与「已在主机核对启动结果…」人工处置页（显示原会话 ID、操作编号）（`AgentsView.swift:203-218, 345-370`）。
-- 新建：先选主机（只有一台就绪时直接进）→ 全屏项目选择（按名称 / 完整目录搜索，确认按钮固定底部，取消自动退回首页、不自动创建）（`AgentFleetView.swift:371-397`；`AgentsView.swift:412-422`；README「新建会话」段）。
-- 导航：任务行直接 push 进同一 NavigationStack 的会话页，返回一次回首页；工作区是可选层级（`HERDR_PROGRESS.md:1086-1094, 1395-1403`）。自定义顶栏 + UIKit 手势代理桥接的边缘右滑在真机失败，最终改回**系统导航栏 + 系统返回**（`HERDR_PROGRESS.md:1039-1077`）。
-
-【判断】Persona 列表的状态模型（需要你 / 完成未看 / 工作中 / 待唤醒 / 已屏蔽 / 已看）、空间 / 槽位、置顶 / 屏蔽、三种分组比 removed 成熟得多；可借鉴的只有：①行内**草稿摘要**；②「状态待核对」这类**不确定态的显式表达**（Persona 现在把 hub 计算结果当确定值）；③排序**稳定性**原则（同状态内不因轮询抖动）。
+[Fact]
+- Layers: SSHTransport (authentication / fingerprints / PTY / tunnels) → HerdrRuntime (server/workspace/pane) → AgentSession (session identity, chat state, input submission, chat / terminal consistency) → BridgeClient (version negotiation, requests, snapshots) → host-side ClaudeCodeAdapter (session discovery, record parsing, hooks, interaction adaptation). The client does not parse raw Claude logs; it consumes the bridge's normalized protocol. Adding an Agent primarily means adding a host adapter (`reference-client/docs/ARCHITECTURE.md:123-140`).
+- “AgentContracts contains shared session identifiers, chat content blocks, tool execution, states, interaction requests, and capability declarations… The client decides whether to show approvals, questions, or a stop button based on capabilities; it must not scatter `if agent == claude` throughout pages” (`ARCHITECTURE.md:138`). The session descriptor declares each capability: `conversation/prompt/interrupt/terminal/approvals/sessionState/permissionFeedback/rename/promptFiles/promptImages/promptAttachments/compact/endSession/childTranscripts` (`reference-client/host/reference-bridge/src/controller.mjs:73`). Hello separately declares host-level capabilities such as `promptQueue/terminalQuestions/terminalPermissions/activityState/remoteNotifications/...` (`controller.mjs:195`).
+- Transport: one SSH exec subprocess per request, one NDJSON request and response over stdin/stdout, with an 8 MiB frame limit (`reference-client/Packages/ReferenceClientKit/Sources/AgentKit/BridgeClient/SSHAgentBridgeClient.swift:355`); no listening port or tunnel credentials (`ADR-001-SSH-EXEC.md`). Cancelling a page closes only its own exec subchannel, not the shared SSH connection (`ARCHITECTURE.md:682-687`).
+- Refresh cadence (code constants): session pages poll `session.read` every 1 s (`AgentWorkspaceModel.swift:1933`); the multi-host task center runs every 8 s, with at most 3 hosts concurrently and immediately fills each completed slot (`AgentFleetModel.swift:67-100`); the host push-collection daemon reads herdr every 15 s (`reference-client/docs/HERDR_PUSH.md:7`). There is no event stream or cursor-based resumption (the comparison audit acknowledges “herdr still uses SSH polling and has no comparable incremental session push,” `reference-client/docs/HERDR_CINDY_REVIEW.md:47`).
+- Session identity has six fields: `id, paneID, kind, binding(process-identity hash), nativeSessionID, terminalID` (`reference-client/docs/HERDR_PROMPT_QUEUE.md:9`; `AgentNavigationTarget` in `AgentNavigationStore.swift`). Before every write, the host calls `checked(binding, paneID)` to obtain the process identity again and compare the hash; a mismatch returns `STALE_SESSION` (`controller.mjs:83-89`).
 
 ---
 
-## 3. 会话页（记录渲染）
+## 2. Session list / home page (task center)
 
-### 3.1 页面骨架
-【事实】`AgentSessionView`（`removed/Packages/removedKit/Sources/Features/AgentsFeature/AgentsView.swift:438-722`，下文 AgentsFeature 目录省略前缀）：
-- 系统导航栏：标题 = 会话名，副标题 = 「主机 · 项目目录名」（`AgentsView.swift:602-607`）——**状态不放顶栏**（Cindy 评审后去掉重复状态，`HERDR_CINDY_REVIEW.md:89`）。右侧：键盘弹起时「收起键盘」、终端 / 聊天切换、`…` 菜单（搜索、子任务目录、改名、模拟器预览、网页预览、Git 审查、用量与上下文、待发消息、压缩上下文、结束会话）（`AgentsView.swift:471-496`）。
-- 正文上方（有结构化任务结果时）一条「任务进度 · x/y ›」横条（`AgentsView.swift:500-509`）。
-- 输入区上方**唯一一处**实时状态行（`AgentLiveActivityView`，只有它每秒重绘，正文不随时钟刷新）+ 旁边「改动」按钮（Git）；有待处理交互时状态行换成交互入口（`AgentsView.swift:538-558`）。再上面是「待发消息 · N 条待处理 ›」（启用主机队列时）。
-- 输入框：多行 TextField（1…6 行，辅助字号下更少）+「＋」菜单（相机 / 照片 / 文件）+ 工作中出现的停止键（36pt 圆、44pt 触控，实心方块）+ 发送键（同尺寸）（`AgentsView.swift:570-596`；`HERDR_PROGRESS.md:1105-1111`）。**工作中仍可发送**（进入 Claude 自己的排队），停止和发送是两个独立按钮。
+[Fact]
+- Home page (redesigned after the comparison review, `HERDR_CINDY_REVIEW.md:63-91`, `HERDR_PROGRESS.md:1395-1403`): top bar with “Herdr” + hosts and connections / notification center (unread count) / New (`AgentFleetView.swift:123-145`); a compact “Hosts x/y connected” bar shows a spinner while a host is connecting and an orange exclamation mark if any host is not ready. Tapping opens the host panel, which contains large cards, connection details, the key vault, and appearance settings (`AgentFleetView.swift:310-352`).
+- Three scope filters: Active / Pending / All, each with a count. **Active = working ∪ pending ∪ explicitly opened on this device within the last 7×24 hours**. Visits are recorded only on an explicit open, an actual return to foreground reading, or a process change in the foreground pane; background polling does not renew them (`AgentFleetModel.swift:29-35`; `recentVisitInterval` in `AgentSessionBrowser.swift`; `HERDR_PROGRESS.md:1052-1062`).
+- Two arrangements: By Project (grouped by full host scope + full path; identical names with different paths remain separate; groups are collapsible, with “Expand / Collapse All” and persisted preferences) / Recently Visited (`AgentFleetView.swift:428-449, 469-501`). Sort order: pending → working → others, then most recently visited, with lexicographic ordering of stable identity fields as the tie-breaker. **Polling does not make the list jump around** (`AgentFleetModel.swift:198-206`; `Candidate.precedes` in `AgentSessionBrowser.swift`).
+- Rows (`AgentFleetView.swift:502-528`): Agent mark / terminal icon + **actual session name** (no invented summary if the host supplies none, `HERDR_CINDY_REVIEW.md:85`) + host · project (in recent order) + status label (Pending / Status Needs Verification / Working / Completed / Terminal / Ready) + **orange “Draft · …” summary**.
+- “Status Needs Verification”: herdr's coarse `done` list state can appear while Claude still has an unanswered AskUserQuestion. For candidates transitioning from non-done to done, an additional read-only `session.activity` call checks the transcript for unanswered questions. During verification or on failure, show “Status Needs Verification”; do not guess blocked or count it as completed. Counts, filters, badges, and notifications share this projection (`AgentWorkspaceModel.swift:79-148`; `controller.mjs:139-174`; `HERDR_PROGRESS.md:958-989`; `HERDR_PUSH.md:75-83`).
+- Operation cards awaiting verification (workspace page): one row each for “Send / Interaction / Rename / Compact / Exit / Stop Result Awaiting Confirmation · Session Name”; tapping opens the original session (`AgentsView.swift:191-202`). When session launch / resume has an unknown result, manual resolution pages offer “Verify Session Launch Result” and “I Have Verified the Launch Result on the Host…”, displaying the original session ID and operation number (`AgentsView.swift:203-218, 345-370`).
+- New session: choose a host first (skip directly ahead if only one is ready) → full-screen project picker (search by name / full directory, confirmation button fixed at the bottom; cancellation returns to home without automatically creating anything) (`AgentFleetView.swift:371-397`; `AgentsView.swift:412-422`; README, “New Session”).
+- Navigation: tapping a task row pushes its session page onto the same NavigationStack; one Back returns home. The workspace is an optional level (`HERDR_PROGRESS.md:1086-1094, 1395-1403`). A custom top bar with a UIKit gesture-delegate bridge for the rightward edge swipe failed on real devices; it ultimately reverted to the **system navigation bar + system Back** (`HERDR_PROGRESS.md:1039-1077`).
 
-### 3.2 状态机（输入区上方那一行）
-【事实】`AgentLiveActivity.resolve`（`AgentLiveActivity.swift`，全文 33 行）的优先级：
-`ended`（会话结束或身份变化）> `unavailable`（连接失效）> `submitting`（本机正在回传）> `operationUnconfirmed`（上次操作结果待核对）> 健康检查不是 verified 或 **超过 15 秒没验证** → `checking`「正在同步主机状态」> 有待处理交互或 blocked → `awaitingInput` > working（已发停止则 `stopping`「停止已发送，等待主机确认」）/ idle / done。
-- 文案与颜色见 `AgentLiveActivityView.swift`：工作中蓝色转圈「Claude 正在工作」，等待确认橙色手掌，结果待核对橙色感叹号；减少动态效果时转圈换静态图标。
-- 状态行带 notice 时可点，打开「会话状态」页，集中放：会话提示、上次操作待核对（「核对上次操作结果」/「已在主机核对结果…」→ 二选一「确认已执行，结束提醒 / 确认未执行，保留输入」）、记录读取暂停（重试 / 打开同一会话终端）、进程已变化、需要在终端处理的交互、本机记录恢复失败、草稿未保存（`AgentSessionStatusView.swift`；`AgentsView.swift:668-678` 的 `statusTitle` 优先级）。
-- 刻意**不**从 thinking 块、工具结果或终端转圈文字推断「正在思考」（`HERDR_PROGRESS.md:808-819`）。
-
-【判断】这个「一处状态 + 可点详情 + 结果待核对是一级状态」的做法，比 Persona 现在「顶栏副标题状态 + spinner 条 + 工作行计时 + 交互面板」分散在几处更清楚；但 Persona 的 spinner 文本（`Cogitating… 12s · ↓3.2k`）信息量更大，两者可以合并：状态行左边是确定状态，右边附 spinner 实况。
-
-### 3.3 正文渲染
-【事实】
-- 时间线行由 `AgentTimelineRow.make` 生成：只有唯一的 assistant tool_use 和唯一的后续 tool_result 才按 ID 合并成一张工具卡；重复、乱序、缺失调用的结果独立显示（`ARCHITECTURE.md:283`）。
-- **处理过程折叠**（`AgentWorkPresentation.swift`，`AgentWorkSummaryView.swift`）：当前窗口内连续的 assistant 工具调用 / 思考 / 中间叙述合成一个可展开的「处理过程 · N 项操作」，最终回复留在外面；折叠时就能看见「N 项执行失败」「N 项尚无结果记录」（明确说「暂无结果不代表仍在执行」）；用户输入、主机通知、图片、孤立结果、未知格式都是分组边界。只有主机记录了 `system/turn_duration` 且严格关联到这一段最终回复时，标题才换成「用时 X 分 X 秒」，否则不用时间戳估算（`HERDR_PROGRESS.md:775-786`）。
-- **展开后吸顶收起**：展开的组滚过顶部后，顶部浮出该组摘要栏，点它或「收起」折叠并回到摘要所在行；组尾把它推走（`AgentPinnedWorkSummary.swift`；`HERDR_PROGRESS.md:865-871`）。
-- 头像 / 角色标签：连续 assistant 行不重复标题；系统来源的块各有标签：「主机定时触发」「主机命令记录」「上下文压缩」「监听事件」「后台任务通知」「主机提示」「工具输出」（`AgentConversationView.swift:273-281`）。空 thinking 整块隐藏（`HERDR_PROGRESS.md:821-827`）。
-- Markdown：独立的 `MarkdownContent` 模块（swift-markdown AST → 值模型，后台解析），标题 / 列表 / 引用 / 表格（横滑 Grid）/ 代码块（头部「复制」按钮、横向滚动）（`removed/Packages/removedKit/Sources/SharedKit/MarkdownContent/MarkdownContentView.swift:115-139, 182-187`）。代码高亮只对 Swift / Python / JS / TS / JSON 做**有界词法扫描**（64 KiB 上限，后台可取消，超限或未知语言原样显示）（`ARCHITECTURE.md:776-780`）。被截断的 Markdown 不当 Markdown 渲染（避免半截代码块的复制按钮），改纯文本 +「内容较长，继续阅读」（`AgentConversationTextView.swift`）。
-- 每条消息只有一个「复制」（复制原文，不是重建的 Markdown）；去掉了常驻「全文」按钮（`HERDR_PROGRESS.md:768-772`）。**自己的超长消息在气泡内分页**（每页 ≤8192 UTF-16 / 80 行），不跳全文页（`HERDR_PROGRESS.md:797-806`）。正文排版：系统字重、动态字号、行距 5pt、段距 16pt（同上）。
-- 工具卡片（`AgentConversationView.swift:539-594`）：标题行「工具名 + 结果（失败红色）」+ 两行参数摘要；展开后按工具类型渲染：
-  - Edit / Write：请求片段的**行级 diff**（UTF-8 字节为行身份，保留 CRLF / 无换行；公共前后缀之外用有上限的 LCS，超大区域整段删增并标「粗粒度」），卡片只画首个修改附近 12 行，独立全屏页 LazyVStack + 「上一处 / 下一处」修改导航，打开时冻结快照（`ARCHITECTURE.md:734-738`）；有 `structuredPatch` 时可在后台**重建整份历史文件**并复制修改前 / 后（`ARCHITECTURE.md:740-746`）。
-  - Bash / Read / Glob / Grep / ToolSearch：按字段显示原样参数（命令、说明、超时、后台标志 / 路径、行范围、PDF 页码 / 模式、过滤…），不补默认值、不推断是否生效（`ARCHITECTURE.md:790-794`）。
-  - 结构化结果：Bash 标准 / 错误输出、文件读取（含「此前可读结果」跨页定位）、Notebook 读 / 改、PDF 分页阅读、Glob/Grep 结果、Web 结果、MCP 资源、Cron / ScheduleWakeup、Monitor、Worktree、子 Agent 结果、后台任务停止、任务（TaskCreate/Get/List/Update/TodoWrite）（`AgentConversationView.swift:561-577`）。
-  - 一律保留「原始输入 / 原始输出」折叠项；预览限 80 行 / 12000 字符，「全屏查看」与「复制完整内容」（`ARCHITECTURE.md:285`；`AgentConversationView.swift:647-701`）。
-- 全屏文本阅读器 `AgentFullTextView`：打开时冻结的快照，按 8192 UTF-16 分页（不切开代理对 / 字素），首末 / 前后翻页、全文前后循环搜索（后台、可取消）、完整复制；TextKit 1 按实际字形矩形定位命中（`ARCHITECTURE.md:797-799`）。
-- 图片：只解码随会话返回的内嵌 PNG/JPEG/GIF/WebP，后台缩略图，全屏缩放（`ARCHITECTURE.md:721-725`）。
-- Hook 非阻塞错误单独显示为「主机 Hook 执行失败」，提示「不会阻止工具继续执行」（`AgentConversationView.swift:621-631`）。
-
-### 3.4 长记录分页、渲染窗口、阅读位置、跳到最新
-【事实】
-- 主机按字节游标分页：历史页约 1 MiB、实时页约 2 MiB，单条记录上限 6 MiB；超限返回 `TRANSCRIPT_RECORD_TOO_LARGE`，客户端**只暂停那个方向**的读取、保留游标和已加载内容，引导到同一会话终端（`ARCHITECTURE.md:698-718`；`AgentWorkspaceModel.swift:2093-2110`）。文件被替换 / 截短（`reset`）时整窗重读，不把新文件的尾巴拼到旧历史前面（`AgentWorkspaceModel.swift:2043-2050`）。
-- 渲染窗口：首次只构建最近 60 行，「加载更早记录」先在本地窗口再展开 60 行，本地到头才向主机要历史页；跟随最新时新内容收拢到最近窗口；**故意用 VStack + 实测行高，而不是 LazyVStack**（后者在高度差异大的混合内容下会落在输出中间甚至空视口）（`ARCHITECTURE.md:705-711`；`AgentTimeline.swift` `AgentTimelineWindow(pageSize: 60)`）。
-- `AgentReadingState`：手势状态和「是否在底部」分开跟踪，内容变高不会自己关掉跟随；用户开始拖动时才按是否在底部决定 followsLatest（`AgentTimeline.swift` `AgentReadingState`）。不跟随时右下角浮钮「回到最新」，有新内容时变「有新内容」（`AgentConversationView.swift:401-425`）。
-- 阅读位置持久化：按（主机 scope，原生会话）存 `followsLatest / hasNewContent / viewport(rowID + 行内偏移) / 展开的块集合 / 最新一条消息的 SHA-256`，滚动停止后 400 ms 去抖写盘（`AgentConversationView.swift:474-478`；`AgentReadingStore.swift`）。重开或冷启动时：若上次在看历史，**逐页向前读（每轮最多 20 页）找回那一行**，状态页显示「正在查找上次读到的记录，已读取 N 页」，超过 20 页给「继续查找」，到头给「没有找到」，任何时候可「查看最新」；最新一条的签名变了就标「有新内容」（`AgentWorkspaceModel.swift:1833-1898`；`AgentReadingRecoveryView.swift:22-38`；`AgentReadingStore.swift:86-88`）。
-- 导航恢复：当前打开的会话（含子任务层级，最多 8 层）跨重启恢复，按六字段身份核对，进程变了就拒绝恢复并提示（`AgentNavigationStore.swift`；`HERDR_PROGRESS.md:28, 1328-1336`）。会话阅读器缓存最近 8 个（有草稿 / 在途操作 / 未保存状态的不淘汰）（`AgentWorkspaceModel.swift:171, 2492-2498`）。
-
-### 3.5 会话内搜索与「跨页定位原始调用」
-【事实】
-- 搜索页（`AgentTranscriptSearch.swift`）：搜正文、思考、工具名、工具输入（JSON 里所有字符串）和配对输出、主机事件（任务通知、监听事件、定时触发、命令记录、请求错误）；不搜图片 / 附件；200 ms 去抖、后台 detached；最多 100 条命中（超出提示缩小范围）；底部「加载更早记录并搜索」；点命中 → 关闭搜索 → 展开对应块、滚到并**蓝框高亮**，顶部出现「返回搜索前位置」（`AgentConversationView.swift:186-204, 482-515`）。
-- 关联定位：任务通知 / 监听事件 / 定时触发 / 「文件未变化」记录上有「查看来源」，客户端逐页向前读（≤20 页一轮）找原始调用，找到后高亮并在顶部给「返回任务通知」；找不到 / 歧义 / 超过页数各有明确提示和「继续查找 / 重试查找 / 取消定位」（`AgentConversationView.swift:150-177, 450-473`；`AgentWorkspaceModel.swift:1993-2017`）。
-
-### 3.6 子 Agent、任务进度
-【事实】
-- 子 Agent：父会话的 Agent 工具卡可「打开子任务」进独立的子记录阅读页（分页、搜索、独立阅读位置、可逐层进入，最多 8 层，循环引用保护）；`…` 菜单「子任务目录」列出本会话所有 Agent 调用（倒序、可搜索、状态写「（返回记录）」「尚无结果记录」，明确不推断实时状态）（`AgentSubtaskDirectoryView.swift`；`HERDR_PROGRESS.md:26`）。子 Agent 发起的权限请求带来源卡片「请求来自子 Agent · ID · 类型」，在父会话和子页都能处理（README 0.7.40 段）。
-- 任务进度聚合（`AgentTaskProgress.swift`，`AgentTaskProgressView.swift`；`ARCHITECTURE.md:760-773`）：从唯一配对、未出错的 TaskCreate/Get/List/Update/TodoWrite 结构化结果**按结果在会话中的顺序**重建任务表（完整列表替换成员、增量更新对应 ID、依赖两侧同步），顶部「任务进度 · x/y」，全屏页显示每项状态、负责人、执行说明、前置 / 后续任务、「查看相关记录」；并明确提示「根据已加载结果整理，可能与主机此刻不同」「尚无完整列表」「存在未确认更新」。
-
-【判断】Persona 的展示逻辑（每条消息一段、工作行「工具 5 · 思考 1 · 回复 1 · 4 分 17 秒」、展开后每步是独立懒加载行、倒置列表）在性能与「输入—输出紧挨」上比 removed 更好，**不要换回 VStack 窗口方案**；值得补的是：会话内搜索 + 高亮 + 返回原位、跨页定位原始调用、任务进度聚合页、长文本全屏分页阅读器、折叠时可见的失败数、工具卡「原始输入 / 输出」统一入口、Edit 的 diff 导航。
+[Assessment] Persona's list state model (Needs you / Unread / Working / Waiting / Hidden / Seen), spaces / slots, pinning / hiding, and three grouping modes are much more mature than the reference client's. The only things worth borrowing are ① inline **draft summaries**; ② **explicit uncertainty**, such as “Status Needs Verification” (Persona currently treats hub's computed results as certain); ③ **stable sorting**, without polling-induced movement within the same state.
 
 ---
 
-## 4. 原生交互
+## 3. Session page (record rendering)
 
-### 4.1 来源与传输
-【事实】
-- 两条来源：
-  1. **会话专属 hooks**（只给 App 新建的会话，用私有 `--settings` 文件注入；不改全局设置、不写长期权限规则）：PermissionRequest（普通工具 / MCP 工具）、PreToolUse AskUserQuestion、PreToolUse ExitPlanMode（仅 plan 模式且带完整 plan 与 planFilePath）、Elicitation（MCP 表单 / URL）（`removed/README.md:110-116`；`removed/host/removed-bridge/src/interactions/requests.mjs:16-60`；`ARCHITECTURE.md:648-664, 673-695`）。
-  2. **终端适配**（给没装 hook 的既有会话）：只认两类——标准 AskUserQuestion 菜单（0.7.53）和标准 Bash 审批菜单（0.7.58）。条件是 transcript 里**恰好一个**未完成的对应 tool_use + 完整、未截断、能逐字核对的实时菜单；布局未知 / 截断 / 软折行无法无损还原 / 多个候选时不出卡片，留在终端（`README.md:124-128`；`removed/host/removed-bridge/src/interactions/terminal-permissions.mjs:18-38, 45-71`）。卡片标 `responseTransport: "terminal"`，提示「此审批来自终端……请勿同时在电脑处理这项审批」（`AgentInteractionView.swift:104-107`）。
-- 能力协商：客户端在 `session.read` 里声明 `interactionKinds`、`childInteractions`、`terminalQuestions`、`terminalPermissions`；旧客户端不会收到它不认识的类型（不会因为新类型解码失败把整个会话读坏）（`controller.mjs:91-107`；`ARCHITECTURE.md:662`）。
-- 有效期：权限 / 问题 90 s，计划 / MCP 表单 10 min（`requests.mjs:123`）；终端适配卡 24 h（`terminal-permissions.mjs:90`）。过期后**恢复原 CLI 交互**（hook 不输出 = 交回 TUI）。
+### 3.1 Page structure
+[Fact] `AgentSessionView` (`reference-client/Packages/ReferenceClientKit/Sources/Features/AgentsFeature/AgentsView.swift:438-722`; the AgentsFeature directory prefix is omitted below):
+- System navigation bar: title = session name, subtitle = “Host · Project Directory Name” (`AgentsView.swift:602-607`). **No status in the top bar** (duplicate status removed after the comparison review, `HERDR_CINDY_REVIEW.md:89`). On the right: “Dismiss Keyboard” when the keyboard is open, terminal / chat toggle, and a `…` menu (Search, Subtask Directory, Rename, Simulator Preview, Web Preview, Git Review, Usage and Context, Queued Messages, Compact Context, End Session) (`AgentsView.swift:471-496`).
+- Above the body, when structured task results exist: a “Task Progress · x/y ›” bar (`AgentsView.swift:500-509`).
+- **One and only one** live status row above the composer (`AgentLiveActivityView`; only this row redraws every second, not the body), with a “Changes” button (Git) beside it. A pending interaction replaces the status row with the interaction entry point (`AgentsView.swift:538-558`). Above that is “Queued Messages · N Pending ›” when the host queue is enabled.
+- Composer: multiline TextField (1…6 lines, fewer at accessibility text sizes) + “＋” menu (Camera / Photos / Files) + Stop while working (36 pt circle, 44 pt touch target, solid square) + Send at the same size (`AgentsView.swift:570-596`; `HERDR_PROGRESS.md:1105-1111`). **Sending remains available while working**, entering Claude's own queue. Stop and Send are separate buttons.
 
-### 4.2 呈现层级
-【事实】
-- **就近**：普通工具权限显示在**记录末尾**（`AgentInlineInteractionView`）：标题、「主机 · 项目路径」、子任务来源、工具名、完整参数审阅（Bash 字段 / Edit 差异 / 原始 JSON）、剩余时间倒计时、「拒绝本次操作 / 仅允许这一次」+「查看完整请求」（`AgentInteractionInboxView.swift:94-141`）。已经在完整页写了拒绝原因草稿的，内联卡不给按钮，强制回完整页，避免原因被静默丢掉（同文件 `:114-121`）。没有协议级 tool_use 关联 ID 时**不把请求伪装成挂在某个历史工具卡下**（`HERDR_CINDY_REVIEW.md:89`）。
-- 计划、问题、MCP 等复杂请求：输入区上方一个橙色入口「回答问题 / 审阅计划 / N 项待处理交互 ›」，单个直接打开完整页，多个先进「待处理交互」收件箱（按收到时间排，每项有摘要和剩余时间）（`AgentInteractionInboxView.swift:24-90, 143-190`）。
-- 完整页 `AgentInteractionView`（`AgentInteractionView.swift:47-335`）：
-  - 顶部：类型标题、会话名、终端来源提示、子 Agent 来源卡、「等待回复 + 计时器」或「已处理 / 过期 / 会话已变化」（`:101-122`）。
-  - **权限**：MCP 显示服务器名与配置来源（主机没给就明说「未提供」，不从工具名推断来源）；参数审阅；**可选拒绝原因（≤4000 字）**——「原因会随本次拒绝交给 Claude；如需允许，请先清空原因」，有原因时「仅允许这一次」禁用；主机不支持就提示升级或清空（`:157-182, 324-329`）。终端来源的 Bash 只有「拒绝本次 / 仅允许这一次」，**不映射「不再询问」「切换自动模式」**（`:318-322`；`README.md:126`）。
-  - **计划**：计划文件路径 + Markdown 原文 +「批准后 Claude 将退出计划模式；后续工具权限由主机上的 Claude Code 决定」+ 可选修改意见；**有意见时只能「退回修改」，清空后才能「批准计划并继续」**（`:147-156, 312-317`）。批准只回传官方 allow + 原 updatedInput，**不附加 setMode**（`ARCHITECTURE.md:660`）。
-  - **问题**：每题 header + 问题 + 选项（含说明）+「自己的答案」输入框（填了就清空选项）；单选 / 多选；「提交回答」在全部合法前禁用；hook 来源有「取消回答」，终端来源去掉（危险按键映射）（`:183-226`；`HERDR_PROGRESS.md:841-845`）。
-  - **MCP Elicitation**：表单（字符串 / 数字 / 布尔 / 单选 / 多选，含旧 enumNames）或浏览器链接两种；链接模式显示服务器、请求消息、目标主机与完整 URL，只有系统确实接受了打开操作后才允许「已打开，继续」，并说明「打开链接不代表授权成功」；三种结局「提交表单 / 拒绝请求 / 取消本次」分别回传（`:123-146, 302-311`；`ARCHITECTURE.md:689-695`）。schema 校验客户端做一遍、主机再做一遍，服务器给的正则在独立 Node 进程里限时 500 ms、32 MiB 堆执行（同上）。
-  - 底部操作栏固定（`safeAreaInset(.bottom)`），键盘弹起时让位；辅助字号下随正文滚动、按钮纵排；键盘工具栏「完成输入」（`:239-266`；`HERDR_PROGRESS.md:91`）。
-  - 「交回同一会话的终端」：先回传 `terminal` 决定，成功后才导航到终端；有一个导航票据，关闭题卡 / 离页 / 后台 / 请求变化都会作废它，迟到成功不会把用户硬拽进终端（`AgentInteractionView.swift:11-45, 228-238`；`HERDR_PROGRESS.md:883-887`）。
-  - 未提交的输入（选项、自填、原因、表单）按**完整请求快照**保存在当前连接内，关掉再开能恢复；请求被替换就丢弃（`AgentWorkspaceModel.swift:1570-1587`；`AgentInteractionView.swift:272-277`）。
-- 目录信任（新开 Claude 弹「信任此目录」）：原生页显示主机、完整路径、「信任后可读写执行此目录、可能加载项目配置」，**由用户选**「信任目录并继续 / 不信任，退出 Claude / 在终端查看」；确认后等 Claude 真正可交互再自动进原生聊天（`AgentPaneView.swift:84-120`；`HERDR_PROGRESS.md:620-626`）。
+### 3.2 State machine (the row above the composer)
+[Fact] Priority in `AgentLiveActivity.resolve` (`AgentLiveActivity.swift`, 33 lines in total):
+`ended` (session ended or identity changed) > `unavailable` (connection invalid) > `submitting` (this device is sending back) > `operationUnconfirmed` (last operation needs verification) > health check not verified or **not verified in over 15 seconds** → `checking`, “Syncing Host Status” > pending interaction or blocked → `awaitingInput` > working (if Stop was sent, `stopping`, “Stop Sent, Waiting for Host Confirmation”) / idle / done.
+- Copy and colors are in `AgentLiveActivityView.swift`: working uses a blue spinner with “Claude Is Working”; awaiting confirmation uses an orange hand; results needing verification use an orange exclamation mark. Reduce Motion replaces the spinner with a static icon.
+- A status row with a notice is tappable and opens “Session Status”. This page centralizes session notices, verification of the last operation (“Verify Last Operation Result” / “I Have Verified the Result on the Host…” → choose “Confirm It Ran, Dismiss Reminder” or “Confirm It Did Not Run, Keep Input”), paused record reading (Retry / open the same session's terminal), process changes, interactions requiring the terminal, failed local record recovery, and unsaved drafts (`AgentSessionStatusView.swift`; `statusTitle` priority in `AgentsView.swift:668-678`).
+- It deliberately **does not** infer “Thinking” from thinking blocks, tool results, or terminal spinner text (`HERDR_PROGRESS.md:808-819`).
 
-### 4.3 主机侧单次决策与回执
-【事实】
-- 每个 hook 请求一个随机 UUID，绑定 pane、进程 binding、原生 session、**存活的 hook PID** 与截止时间；请求 / 答案只短暂存在 0700 目录的 0600 文件里，完成后删除，只留最小 delivery 回执（`ARCHITECTURE.md:652`；`requests.mjs:115-147`）。
-- 回答走「独占硬链接」占用唯一决策槽：第二个回答拿到 `INTERACTION_RESOLVED`；hook 侧轮询到决定后**再核对一次会话身份与有效期**，失败写 `expired`；只有写成 `returned` 才算回传（而且注释明确「returned 只代表交给了 hook，不代表工具执行了」）（`requests.mjs:172-215`）。计划在发布和回传前都重读计划文件（拒绝软链接、非普通文件、>256 KiB、内容与展示不符），计划变了旧批准失效（`interactions/plan.mjs:16-26`；`ARCHITECTURE.md:662`）。
-- 手机端：回答前先把（requestID, commandID, 目标身份）写进本机 journal（**不写答案本身**），丢回执只用 `command.status` 查原 commandID，绝不重发；主机返回 `INTERACTION_EXPIRED / RESOLVED` 后这张卡永久退役（`AgentWorkspaceModel.swift:2219-2257, 2436-2461`；`ARCHITECTURE.md:654`）。
-- 终端适配的回答：先写永久 claim 文件（`wx`），**每发一个方向键 / 回车之前都重新读屏 + 重读 transcript**，核对 tool_use 输入摘要、菜单选项摘要、transcript 文件身份；只要已经按过键又出错就是 `RESULT_UNKNOWN`（`terminal-permissions.mjs:99-122`）。已 claim 或交回终端但菜单还在时，会话保持 blocked，普通消息 / 附件 / 中断 / 压缩 / 退出等写操作一律拒绝，防止打字落进菜单（`controller.mjs:111-134`；`HERDR_PROGRESS.md:845, 1029`）。
+[Assessment] This “single status location + tappable details + verification as a first-class state” is clearer than Persona's current status spread across the top-bar subtitle, spinner bar, timed work row, and interaction panel. Persona's spinner text (`Cogitating… 12s · ↓3.2k`) carries more information, though. The two can be combined: definite state on the left, live spinner information on the right.
 
-### 4.4 与 Persona 现状对照
-【事实】（Persona）
-- 交互种类 `question / plan / permission / screen`（`jarvis/ios/Shared/Models.swift:403`）；没有 MCP Elicitation、没有单独的 MCP 权限来源展示、没有子 Agent 来源（zoekt 在 jarvis 仓库搜 `Elicitation` 无结果）。
-- 权限表单只有工具名 + 一段等宽摘要 +「拒绝 / 允许 / 本会话总是允许」（`jarvis/ios/Jarvis/Views/Interactions/InteractionViews.swift:495-531`）。**服务端已支持拒绝原因**（`jarvis/server/internal/node/hooks.go:285-290` 的 `res.Message`，`Resolution.message` 也有，`Models.swift:479-501`），但 App 从不填它（全仓 `Resolution(allow: false)` 都不带 message）。
-- 计划：「批准并自动执行（bypassPermissions）/ 自动接受编辑（acceptEdits）/ 打回 + 意见」（`InteractionViews.swift:437-493`；`hooks.go:267-277` 用 setMode）。removed 刻意不替用户选模式；Persona 让用户选模式，更实用，但「批准并自动执行」= 全部放行，风险提示不足。
-- 终端对话框（screen 卡）是**通用解析**任何对话框（信任目录、模型选择……），按编号 / 光标算键，node 按键前重读屏幕比对 `rev`（`jarvis/docs/protocol.md:185-203`）——覆盖面比 removed 的两类适配广；但没有和 transcript 里的 tool_use 交叉核对，命令被截断时卡片上看到的就是截断的屏幕文字。
-- 交互挺过重启：确定性 interaction id + hook 重连 2 分钟 + hub 宽限 3 分钟（`protocol.md:322-333`）——这一点 Persona 比 removed 强（removed 的 hook 进程依附于 SSH 无关的主机进程，本身不受手机断线影响，但没有「hub 重启后卡片不丢」这类问题，因为没有 hub）。
-- Persona 新会话启动时由 node **自动按「Yes, I trust」**（`jarvis/docs/claude-integration.md:13-15`）；removed 让用户在原生页确认。
+### 3.3 Body rendering
+[Fact]
+- `AgentTimelineRow.make` generates timeline rows. A tool call and result are merged by ID into one card only when there is exactly one assistant tool_use and exactly one subsequent tool_result. Duplicate, out-of-order, or orphaned results appear separately (`ARCHITECTURE.md:283`).
+- **Collapsed work process** (`AgentWorkPresentation.swift`, `AgentWorkSummaryView.swift`): consecutive assistant tool calls / thinking / intermediate narration in the current window form an expandable “Work Process · N Operations”; the final reply stays outside. The collapsed state already shows “N Failed Operations” and “N Operations Without a Recorded Result”, explicitly stating “No result yet does not mean it is still running.” User input, host notifications, images, orphaned results, and unknown formats form grouping boundaries. Only when the host records `system/turn_duration` and strictly associates it with this section's final reply does the heading become “Took X min Y sec”; timestamps are not otherwise used to estimate duration (`HERDR_PROGRESS.md:775-786`).
+- **Sticky collapse control after expansion**: once an expanded group scrolls above the top, its summary bar floats at the top. Tapping it or “Collapse” collapses the group and returns to the summary row. The group's end pushes it away (`AgentPinnedWorkSummary.swift`; `HERDR_PROGRESS.md:865-871`).
+- Avatars / role labels: consecutive assistant rows do not repeat the heading. System-source blocks have individual labels: “Host Scheduled Trigger”, “Host Command Record”, “Context Compaction”, “Watch Event”, “Background Task Notification”, “Host Notice”, “Tool Output” (`AgentConversationView.swift:273-281`). Empty thinking blocks are hidden entirely (`HERDR_PROGRESS.md:821-827`).
+- Markdown: a separate `MarkdownContent` module (swift-markdown AST → value model, parsed in the background), supporting headings / lists / quotes / tables (horizontally scrolling Grid) / code blocks (header Copy button, horizontal scrolling) (`reference-client/Packages/ReferenceClientKit/Sources/SharedKit/MarkdownContent/MarkdownContentView.swift:115-139, 182-187`). Syntax highlighting uses **bounded lexical scanning** only for Swift / Python / JS / TS / JSON (64 KiB cap, cancellable in the background; oversized content or unknown languages display unchanged) (`ARCHITECTURE.md:776-780`). Truncated Markdown is not rendered as Markdown, avoiding Copy buttons on incomplete code fences. It becomes plain text + “Long Content, Continue Reading” (`AgentConversationTextView.swift`).
+- Each message has just one Copy control, which copies the original text rather than reconstructed Markdown. The permanent “Full Text” button was removed (`HERDR_PROGRESS.md:768-772`). **The user's own oversized messages paginate inside their bubble**, with each page ≤8192 UTF-16 units / 80 lines, rather than opening a full-text page (`HERDR_PROGRESS.md:797-806`). Body typography: system font weight, Dynamic Type, 5 pt line spacing, 16 pt paragraph spacing (same source).
+- Tool cards (`AgentConversationView.swift:539-594`): heading “Tool Name + Result” (failures in red) + two-line parameter summary. Expanded rendering depends on tool type:
+  - Edit / Write: **line-level diff** of the requested fragment (UTF-8 bytes identify lines, preserving CRLF / missing final newlines; bounded LCS beyond common prefixes / suffixes; oversized regions become whole-region deletion / insertion marked “Coarse-grained”). The card shows only 12 lines around the first change. A separate full-screen LazyVStack page has Previous / Next Change navigation and freezes its snapshot on opening (`ARCHITECTURE.md:734-738`). With `structuredPatch`, it can **reconstruct the entire historical file** in the background and copy the before / after versions (`ARCHITECTURE.md:740-746`).
+  - Bash / Read / Glob / Grep / ToolSearch: show supplied fields verbatim (command, description, timeout, background flag / path, line range, PDF pages / pattern, filters…). Do not fill in defaults or infer whether they took effect (`ARCHITECTURE.md:790-794`).
+  - Structured results: Bash stdout / stderr, file reads (including cross-page navigation to “Previously Readable Result”), Notebook reads / edits, paginated PDF reading, Glob/Grep results, Web results, MCP resources, Cron / ScheduleWakeup, Monitor, Worktree, sub-Agent results, background-task stops, and tasks (TaskCreate/Get/List/Update/TodoWrite) (`AgentConversationView.swift:561-577`).
+  - Always retain collapsible “Raw Input / Raw Output” sections. Preview cap: 80 lines / 12000 characters, with “View Full Screen” and “Copy Full Content” (`ARCHITECTURE.md:285`; `AgentConversationView.swift:647-701`).
+- Full-screen reader `AgentFullTextView`: freezes a snapshot on opening, paginates at 8192 UTF-16 units without splitting surrogate pairs / graphemes, provides First / Last and Previous / Next Page, wraparound forward / backward full-text search (background, cancellable), and full copying. TextKit 1 locates matches using actual glyph rectangles (`ARCHITECTURE.md:797-799`).
+- Images: decode only inline PNG/JPEG/GIF/WebP returned with the session; background thumbnails and full-screen zoom (`ARCHITECTURE.md:721-725`).
+- Nonblocking hook errors appear separately as “Host Hook Failed”, with “This Does Not Prevent the Tool from Continuing” (`AgentConversationView.swift:621-631`).
 
-【判断】Persona 应补：拒绝原因（服务端现成）、计划意见与批准互斥、倒计时、MCP 来源、Elicitation（表单 + 链接）、子 Agent 来源、交互草稿按请求保留、内联（记录末尾）权限卡、多请求收件箱、终端来源 Bash 审批「只读这一次」的严格适配思路（用 transcript 的完整命令显示，而不是屏幕截断文字）。
+### 3.4 Long-history pagination, render windows, reading position, and jumping to latest
+[Fact]
+- The host paginates with byte cursors: historical pages are about 1 MiB, live pages about 2 MiB, and individual records are capped at 6 MiB. Oversized records return `TRANSCRIPT_RECORD_TOO_LARGE`; the client **pauses reading only in that direction**, preserves the cursor and loaded content, and directs the user to the same session's terminal (`ARCHITECTURE.md:698-718`; `AgentWorkspaceModel.swift:2093-2110`). A replaced / truncated file (`reset`) triggers a full-window reread; the new file's tail is not prepended to old history (`AgentWorkspaceModel.swift:2043-2050`).
+- Render window: initially build only the latest 60 rows. “Load Earlier Records” first expands another 60 rows in the local window; host history pages are fetched only once local history is exhausted. While following latest, new content is reduced to the recent window. It **deliberately uses VStack + measured row heights, not LazyVStack**, which can land in the middle of output or even an empty viewport when mixed content has large height differences (`ARCHITECTURE.md:705-711`; `AgentTimelineWindow(pageSize: 60)` in `AgentTimeline.swift`).
+- `AgentReadingState` tracks gestures separately from “at the bottom”. Content growing taller does not itself disable following. Only when the user starts dragging is followsLatest determined from whether they are at the bottom (`AgentReadingState` in `AgentTimeline.swift`). When not following, a bottom-right floating button says “Back to Latest”, changing to “New Content” when content arrives (`AgentConversationView.swift:401-425`).
+- Persisted reading position: per (host scope, native session), store `followsLatest / hasNewContent / viewport(rowID + within-row offset) / expanded block set / SHA-256 of latest message`, debouncing disk writes for 400 ms after scrolling stops (`AgentConversationView.swift:474-478`; `AgentReadingStore.swift`). On reopen or cold start, if the user was reading history, **read backward page by page (at most 20 pages per round) to recover that row**. The status page says “Finding Where You Last Read, N Pages Read”; after 20 pages it offers “Keep Searching”, and at the end “Not Found”. “View Latest” is available at any time. A changed latest-message signature marks “New Content” (`AgentWorkspaceModel.swift:1833-1898`; `AgentReadingRecoveryView.swift:22-38`; `AgentReadingStore.swift:86-88`).
+- Navigation restoration: the open session, including up to 8 subtask levels, is restored across restarts and checked against all six identity fields. A changed process rejects restoration with a notice (`AgentNavigationStore.swift`; `HERDR_PROGRESS.md:28, 1328-1336`). The last 8 session readers are cached; those with drafts / in-flight operations / unsaved state are not evicted (`AgentWorkspaceModel.swift:171, 2492-2498`).
 
-## 5. 提示词队列 / 持久化 outbox / 草稿 / 附件
+### 3.5 In-session search and locating original calls across pages
+[Fact]
+- Search page (`AgentTranscriptSearch.swift`): searches body text, thinking, tool names, tool inputs (all JSON strings) and paired outputs, and host events (task notifications, watch events, scheduled triggers, command records, request errors). It does not search images / attachments. 200 ms debounce, background detached task, at most 100 matches (asks to narrow the scope beyond that). Bottom control: “Load Earlier Records and Search”. Tapping a match → closes search → expands its block, scrolls to it, and **highlights it with a blue outline**; “Return to Position Before Search” appears at the top (`AgentConversationView.swift:186-204, 482-515`).
+- Linked-source navigation: task notifications / watch events / scheduled triggers / “File Unchanged” records have “View Source”. The client reads backward page by page (≤20 pages per round) to find the original call, highlights it, and offers “Return to Task Notification” at the top. Not found / ambiguity / page limit each have explicit notices with “Keep Searching / Retry Search / Cancel Navigation” (`AgentConversationView.swift:150-177, 450-473`; `AgentWorkspaceModel.swift:1993-2017`).
 
-### 5.1 默认路径：单操作 journal（所有主机都有）
-【事实】
-- 本机 `AgentLocalStateStore`（原子 JSON，文件 + 目录 fsync；版本 1–8 兼容读取，遇到更新版本拒绝覆盖）（`AgentLocalStateStore.swift:150-165, 251-258`）。作用域 = 连接 ID + 主机地址 / 用户名 + 已信任 SSH 指纹 + Herdr server；会话键 = Agent 类型 + 原生 session ID（避免 pane 复用串草稿）（`ARCHITECTURE.md:325`）。
-- 发送流程（`AgentWorkspaceModel.swift:2175-2216, 2400-2435`）：
-  1. `prepare`：把 `AgentPendingOperation(kind, target 六字段, originalDraft, originalDraftVersion)` 和当前草稿**先原子落盘**，同一会话已有未决操作就拒绝（`operationPending`）（`AgentLocalStateStore.swift:278-284`）；
-  2. 调 bridge（每个请求带 commandID = 操作 UUID）；
-  3. `finish`：回执校验通过后删 pending；**只有草稿仍是发送时那一版（文本、版本 UUID、编辑序号都没变）才清空草稿**，否则提示「操作已确认，当前草稿已保留」（`:2425-2435`；`AgentLocalStateStore.swift:300-306`）。
-  4. 失败：明确失败（主机给了确定错误码）→ 结束记录、显示原因；**结果未知 → 保留 pending，阻止这个会话的下一次发送 / 交互 / 改名 / 停止**，状态行显示「上次操作结果待核对」（`:2436-2461`；`AgentsView.swift:668-669`）。
-- 核对：「核对上次操作结果」只调 `command.status(原 commandID)`；仍未知就继续等；用户在主机上确认后可「确认已执行 / 确认未执行，保留输入」，记一条本机人工处置历史（启用队列的主机还要拿到主机端审计回执）（`AgentWorkspaceModel.swift:2284-2309, 2405-2424`；`AgentSessionStatusView.swift`）。
-- 停止（interrupt）也是一个带 commandID 的操作：发出后 `interruptSubmitted` 直到主机报非 working，期间停止键置灰（「停止已发送，等待主机更新」）（`AgentWorkspaceModel.swift:2376-2399`；`AgentsView.swift:578-587`）。主机实现是 `ctrl+c`，并撤销同一 pane 上尚未写入 socket 的普通输入（`controller.mjs:533-544`）。
-- 工作中继续发：主机允许 working 的 Claude 接收新消息（进 Claude 自己的排队），但先用带颜色读屏确认输入框是空的——Claude 的「Press up to edit queued messages」灰字不算草稿，用户真打的字算（`controller.mjs:404-412`；`HERDR_PROGRESS.md:1116-1120`）。和 Persona 的 `input_draft` 判定是同一思路（`jarvis/docs/protocol.md:205-221`）。
+### 3.6 Sub-Agents and task progress
+[Fact]
+- Sub-Agents: an Agent tool card in the parent session offers “Open Subtask”, leading to a separate child-transcript reader with pagination, search, independent reading position, nested navigation up to 8 levels, and cycle protection. The `…` menu's “Subtask Directory” lists every Agent call in this session, newest first and searchable. States say “(Returned Record)” or “No Recorded Result Yet”, explicitly without inferring live state (`AgentSubtaskDirectoryView.swift`; `HERDR_PROGRESS.md:26`). Permission requests from sub-Agents include a source card, “Request from Sub-Agent · ID · Type”, and can be handled from either the parent session or child page (README, 0.7.40).
+- Aggregated task progress (`AgentTaskProgress.swift`, `AgentTaskProgressView.swift`; `ARCHITECTURE.md:760-773`): rebuilds the task table from uniquely paired, successful structured TaskCreate/Get/List/Update/TodoWrite results **in their order in the session**. A full list replaces membership; incremental updates modify matching IDs; dependencies synchronize both ends. The top bar shows “Task Progress · x/y”. A full-screen page shows each task's status, owner, execution instructions, prerequisites / successors, and “View Related Records”. It explicitly warns “Organized from Loaded Results; May Differ from the Host Now”, “No Complete List Yet”, and “Unconfirmed Updates Exist”.
 
-### 5.2 可选：主机持久多消息队列（0.7.62–0.7.65，默认关闭）
-【事实】（`removed/docs/HERDR_PROMPT_QUEUE.md`；`HERDR_CINDY_REVIEW.md:51-59, 101-129`）
-- 动机：Cindy（开源 Agent 客户端）对照审计发现单操作 journal ≠ 多条离线队列；要有「主机明确接管（host-owned）」「逐条取消」「FIFO」「崩溃恢复」的完整契约（`HERDR_CINDY_REVIEW.md:37-59`）。
-- 每条不可变项：item UUID、host UUID、clientScope（安装 UUID + 已核对主机 scope 的 SHA-256）、bridgeSession、六字段目标、createdAtMs、正文、图片、文件；SHA-256 摘要按「8 位十六进制字节长度 + 冒号 + 原字节」逐字段拼接，跨语言固定向量测试（`HERDR_PROMPT_QUEUE.md:7-20`）。
-- 主机状态（SQLite WAL + synchronous=FULL + fullfsync）：`queued → claimed → executing → confirming / submitted / cancelled / rejected`；**cancel 与 begin 在同一写事务里决出胜负**；executing 之后取消只记「取消待确认」，**不发 Ctrl-C**；`confirming` 永不自动重发；cancelled 删正文留身份墓碑，迟到的 accept 不能复活（`HERDR_PROMPT_QUEUE.md:26-44`）。按「bridgeSession + 六字段目标」FIFO，同目标早的未完成项挡住后面的；派发前再核对实例、交互、输入框（`:40, 54`）。
-- 手机 outbox phase（`AgentPromptOutbox.swift`；`AgentPromptQueueView.swift` `statusText`）：已存手机，等待交给主机 / 主机接收结果待确认 / 已进入主机队列 / 输入结果待核对 / 核对结论待确认 / 取消待确认 / 已提交给会话 / 已取消 / 主机未提交此条（或「已核对为未送达」）/ 身份或协议变化，已暂停。
-- 手机行为：本地保存成功即可编辑下一条（网络接纳不占编辑器）；第一次 SSH 前持久标记 `enqueueStarted`；未知时先查原身份，只有协商到 v1 才允许**同 UUID、同载荷**重试；同目标前一项接纳未知时后面的本机项等待（`HERDR_PROMPT_QUEUE.md:66`；`AgentPromptQueueModel.swift:120-160`）。取消未开始的项只在本机终结，开始后保留取消意图直到主机回执。已取消 / 被拒的可「恢复为草稿」；终态可「清除本机正文」（保留身份与回执）（`AgentPromptQueueView.swift` `promptRow`）。
-- 会话页入口「待发消息 · N 条待处理 ›」，队列页可切「本会话 / 本主机」，工作区「全部记录」即使原会话消失也能找到；关闭队列要求本机和主机都没有未决项（`HERDR_PROMPT_QUEUE.md:68`）。
-- 离线编辑：断线后或冷启动（读取私钥之前）可按上次已核对的目录打开原会话继续编辑、排队，只存手机；重连并**重新核对主机实例与六字段身份**后才上传，进程变了就冻结不发给新进程（`HERDR_PROMPT_QUEUE.md:76, 83-101`）。
-- 可选的主机后台服务（launchd / systemd --user，用户确认后安装），让队列在手机退出后继续派发（`HERDR_PROMPT_QUEUE.md:103-116`）。
-
-【判断】这套队列是给「SSH 直连、没有常驻服务端」的架构补出来的。Persona 有常驻 hub + Postgres，**等价物应放在 hub 上**：hub 持久接纳（落库）后才回 accepted，手机 outbox 只负责「hub 接纳之前」那段；没必要照搬「主机 SQLite + 后台服务」。但它的**状态枚举、取消 / 派发竞争在一个事务里决、confirming 不自动重发、墓碑防复活、同目标 FIFO** 这些契约可以直接搬。
-
-### 5.3 草稿
-【事实】
-- 每个会话（按原生 session）持久草稿：文本 + 图片 + 文件 + 版本 UUID，250 ms 去抖写盘；离开页面 / 后台 / 缓存淘汰前立即 flush（`AgentWorkspaceModel.swift:1659-1660, 1780-1796`；`AgentsView.swift:653-660`）。
-- 同一原生会话换了 reader（重连）时继承尚未落盘的编辑，序号更大，旧回执不能清掉新草稿、迟到保存不能复活旧草稿（`AgentWorkspaceModel.swift:1768-1779`；`ARCHITECTURE.md:325`）。
-- 列表行显示「草稿 · 摘要」；只有附件时摘要显示「[附件]」（`AgentFleetView.swift:520-522`；`HERDR_PROGRESS.md:877`）。
-- 草稿写失败：状态行「草稿暂未保存」，详情页写原因（`AgentsView.swift:671`）。
-
-### 5.4 附件
-【事实】
-- 「＋」菜单：相机 / 照片 / 文件（语音入口按用户要求移除）；键盘编辑时也能加（`AgentImageComposerView.swift`；`HERDR_PROGRESS.md:758-766`）。
-- 图片：方向校正、首帧、白底转 JPEG、最长边 1600（必要时 1200 / 800）、去掉照片元数据，单张 ≤1 MiB、最多 4 张；文件：合计 4 项 / 4 MiB；图片 + 文件混发要主机能力 `promptAttachments`，否则保留完整草稿并提示升级，**不拆开发送**（`ARCHITECTURE.md:749-757`；`README.md:137`；`AgentWorkspaceModel.swift:2181-2190`）。
-- 附件字节随草稿持久化（草稿 v6），点击发送才上传；主机生成私有文件名（目录 0700 / 文件 0600），SHA-256 核对，图片逐张粘贴路径并等待 `[Image #N]` 就绪再提交文本；离线时文案「附件仅保存在手机；重新核对原主机和会话后才能上传」（`AgentImageComposerView.swift` 文案；`ARCHITECTURE.md:753-755`）。
-- 混合附件的「回执丢失」用 transcript 证据核对：输入前记下原生日志基线与请求摘要，之后只有出现**唯一且内容 / 图片 / 会话完全一致**的新 user 记录才确认提交（`controller.mjs:418-465`；`removed/docs/HERDR_ROADMAP.md:129-131`）。
-
-### 5.5 与 Persona 现状对照
-【事实】（Persona）
-- 发送：点发送立即清空输入框、「发送中」气泡上屏，transcript 里出现同样的话（或进了排队列表）就换成真消息，失败变红可重发 / 删除（`jarvis/docs/ios.md:113-114`）。离线 / 超时 → 「连上后自动发送」，存盘（`Outbox.swift`），重连后**自动按顺序重发**，同一条带同一个 `client_msg_id`（`jarvis/docs/ios.md:288-292`；`jarvis/ios/Jarvis/App/Outbox.swift`）。
-- 去重只在 **node 进程内存**里，记 10 分钟（`jarvis/server/internal/node/sendsafe.go:132-171`），node 重启或超过 10 分钟就忘；hub 侧没有按 `client_msg_id` 去重（zoekt：hub 代码里没有 ClientMsgID）。而 App 把**超时**也当「等待」自动重发（`SendSafety.swift` `catch where error.isOffline || error.isTimeout → .waiting`）。
-- 「打字中途出错」回 `delivered: unknown`，App 只弹一句「可能已经送到电脑上了：先看看对话里有没有」，气泡变失败、用户可手动重发（`SendSafety.swift`）。
-- 排队消息 = Claude TUI 自己的队列，App 从 transcript 的 queue-operation 还原，「撤回编辑 / 拷贝 / 删除」（`jarvis/docs/ios.md:140-141`）；没有主机级持久队列（hub 没有接纳语义）。
-- 草稿：只存文本（`SendSafety.swift` `SavedDraft{key,text}`），列表行不显示草稿；图片附件在 `composerInbox`。
-- 附件：图片最多 4 张、1600px；文件最多 200 MB 传到会话所在电脑的临时目录，把路径插进输入框、不自动发送（`jarvis/docs/protocol.md:223-238`）——比 removed 的 4 MiB 宽得多。
-
-【判断】Persona 的「乐观上屏 + 断网排队自动发」体验更好，应保留；风险点是**超时自动重发 + 去重只在 node 内存**：hub / node 重新部署（文档说曾两分钟内部署三次，`jarvis/CLAUDE.md`「经验」）后，超时的那条再发一次可能打两遍。建议：①把 `client_msg_id` 的接纳记录落到 hub 的 Postgres（hub 先落库再转 node，node 回执也落库），去重窗口按会话长期保留；②区分「请求根本没发出（离线）」与「发出后超时（结果未知）」，后者不自动重发，进入「待核对」，用 transcript 里是否出现同 id / 同文本的用户行来自动核对（removed 的 transcript 证据法）；③草稿持久化附件、列表显示草稿摘要。
-
-## 6. 历史会话浏览
-
-【事实】
-- 入口：工作区「会话」标题旁的时钟按钮 →「历史会话」全屏页（`AgentsView.swift:222-228, 404-411`）。结构：①「最近阅读」最多 20 项（历史父 / 子记录的阅读入口，左滑「移除入口」只删快捷入口、不删主机历史与阅读位置）；② 项目选择（按名称或完整目录搜索，同名项目显示路径）；③ 该项目的历史会话（标题、更新时间、「正在运行，继续会打开现有会话」标记）、分页「加载更多历史会话」、搜索已加载会话或 ID、「有 N 条记录无法验证项目或格式」提示（`AgentSessionHistoryView.swift:1-160`）。
-- 标题来源优先级：Claude 自定义名称（transcript 最近 256 KiB 或同目录 `custom-title.json`）→ 自动标题 → 首条用户消息 → 会话 ID；只读开头 6 MiB 验证项目、末尾 256 KiB 找名称，中间没读到时不沿用可能已改掉的旧名（`removed/README.md:94`）。
-- 历史详情可「查看聊天记录」（**只读**，不需要先恢复会话）：原生文本 / 代码 / 工具记录、按需读更早、已加载内容搜索定位、手动刷新、独立阅读位置（行内偏移、展开状态，跨重启恢复，离开期间有新内容时保留原位置并给「跳到最新」）、子任务逐层阅读；这个页面不提供发送或权限操作（`README.md:92`；`AgentHistoryTranscriptView.swift`）。
-- 继续会话：运行中的同一原生会话直接打开，否则 `session.resume`。恢复前先持久化操作；结果不明时只「核对会话启动结果」，并有主机侧**恢复锁**（同一原生会话同时只能有一个恢复操作）；人工处置要求先在主机确认「原启动请求已结束、目标 Claude 已退出、原窗格已回到 shell 或关闭」，主机复查后记审计才解除限制（`README.md:145-147`；`AgentsView.swift:203-218, 345-370`）。
-- 自定义 Claude 配置目录（`CLAUDE_CONFIG_DIR`）：安装时显式配置 > SSH 进程继承的环境变量 > `~/.claude`；记录读取与新建 / 恢复的启动环境统一到同一目录，不合并多个目录（`README.md:96-102`）。
-
-【事实】（Persona）列表里有「最近（未运行）」会话，状态 `offline`，向它发消息会 `--resume`（`jarvis/docs/agent-states.md:14, 53`）；node 会扫描所有正在跑的 claude 的 `CLAUDE_CONFIG_DIR` 并合并多个目录（`jarvis/CLAUDE.md`「经验」）。我没有找到「按项目浏览全部历史会话 / 只读打开」的专门入口（未逐一核实 hub 返回的未运行会话条数上限）；知识库里有「会话」档案（`jarvis/docs/ios.md:11`）。
-
-【判断】Persona 需要的是「历史 = 列表的一个范围」而不是单独的大页面：在 Agents 列表加「历史」范围（按项目 / 时间），点开先只读（同一个对话页，输入框换成「继续这个会话」按钮），确认后再 resume；加「最近阅读」不必（Persona 的「完成未看 / 已看」已覆盖大部分回访）。
+[Assessment] Persona's rendering (one section per message; work row “5 Tools · 1 Thought · 1 Reply · 4 min 17 sec”; each expanded step is an independent lazy-loaded row; inverted list) is better than the reference client's for performance and keeping input immediately next to output. **Do not revert to the VStack window approach.** Useful additions: in-session search + highlighting + return to original position, locating original calls across pages, aggregated task-progress page, full-screen paginated long-text reader, visible failure counts while collapsed, a unified Raw Input / Output entry point on tool cards, and Edit diff navigation.
 
 ---
 
-## 7. 终端
+## 4. Native interactions
 
-【事实】（removed）
-- 传输：同一条已认证 SSH 连接上每次附着开一个独立 session 子通道；PTY 和 exec 都要求服务端成功应答（为此在 vendored Citadel 上加了 `withCancellablePTY`）；2026-10-24 起**直接用 PTY + exec 执行 `herdr … terminal attach <terminalID>`**，不再先开登录 shell 再往 stdin 打 attach 命令（去掉欢迎语、命令回显）（`removed/docs/ADR-001-SSH-EXEC.md` PTY 补充段；`HERDR_PROGRESS.md:1149-1159`）。渲染用 SwiftTerm（`TerminalUI/RemoteTerminalView.swift`）。窗口尺寸随手机变化同步给同一 PTY（`HERDR_PROGRESS.md:32`）。
-- 生命周期：每个工作区保留最近 3 个有稳定 terminalID 的 pane 的 PTY + 画面，离页后保留 90 s，快速返回复用原 SSH 子通道和 SwiftTerm 画面；缓存画面可先显示，**重新核对 pane 身份后才开放输入**；离页时清空未写出的按键（`HERDR_PROGRESS.md:1149-1159`；`AgentWorkspaceModel.swift:166`；`RemoteTerminalView.swift` `setInputEnabled`）。控制中心这类短暂 inactive 保留 PTY，真正进后台关闭（主机会话不受影响），回前台先核对原 pane / terminal 身份再自动附着（`HERDR_PROGRESS.md:829-839`）。
-- 同一 pane 里的进程切换：Claude 退出自动显示 shell；shell 里启动了 Claude 或完成目录信任，周期识别后给「原生聊天已就绪」入口，**不打断正在进行的终端输入**（`HERDR_PROGRESS.md:606`；`AgentPaneView.swift:37-51`）。
-- 键栏（`AgentTerminalToolbar.swift`）：一条胶囊工具栏 Ctrl / Esc / Tab / 方向键开关 / 键盘开关；**Ctrl 三态**：点一下只作用于下一个键、400 ms 内双击锁定（显示锁图标与底线）、再点解除（`TerminalUI/TerminalControlLatch.swift`）；长按 Ctrl 展开 ⌃C ⌃D ⌃Z ⌃L ⌃A ⌃E ⌃U ⌃K ⌃W 快捷面板；方向面板（四向、回车、退格、Home、End）以**透明悬浮层**盖在终端内容上，展开收起不改变终端行数；横屏 / 键盘弹起 / 辅助字号时换成单行横滑条（`HERDR_PROGRESS.md:855-863`）。方向键走 SwiftTerm 的公开导航方法，跟随正常 / 应用光标模式（`HERDR_PROGRESS.md:596`）。
-- 输入顺序：键盘输入、粘贴、特殊键全部进同一个有界串行队列（容量 256，溢出即断开报错，不丢序）（`TerminalUI/TerminalInputQueue.swift`）。输入法组合文字不按 UTF-8 字节加 Ctrl（`TerminalControlLatch.swift` `keys(for:composing:)`）。
-- 独立 SSH 终端：没装主机组件时也能打开登录 shell（关闭页面 / 后台即关闭，明确提示「不保证持久，持久任务用 tmux」）（`removed/docs/HERDR_HOST_COMPONENTS.md:19-21`）。
+### 4.1 Sources and transport
+[Fact]
+- Two sources:
+  1. **Session-specific hooks** (only for sessions created by the app, injected through a private `--settings` file; no global settings changes or long-term permission rules): PermissionRequest (regular / MCP tools), PreToolUse AskUserQuestion, PreToolUse ExitPlanMode (only in plan mode, with the full plan and planFilePath), and Elicitation (MCP form / URL) (`reference-client/README.md:110-116`; `reference-client/host/reference-bridge/src/interactions/requests.mjs:16-60`; `ARCHITECTURE.md:648-664, 673-695`).
+  2. **Terminal adaptation** (existing sessions without hooks): recognizes only two types—standard AskUserQuestion menus (0.7.53) and standard Bash approval menus (0.7.58). Requires **exactly one** corresponding unfinished tool_use in the transcript and a complete, untruncated live menu that can be verified character by character. Unknown layouts / truncation / soft wraps that cannot be losslessly reconstructed / multiple candidates produce no card and remain in the terminal (`README.md:124-128`; `reference-client/host/reference-bridge/src/interactions/terminal-permissions.mjs:18-38, 45-71`). The card is marked `responseTransport: "terminal"` and warns “This approval comes from the terminal… Do not handle this approval on the computer at the same time” (`AgentInteractionView.swift:104-107`).
+- Capability negotiation: the client declares `interactionKinds`, `childInteractions`, `terminalQuestions`, and `terminalPermissions` in `session.read`. Old clients do not receive unknown types, so a new type cannot break decoding of the whole session (`controller.mjs:91-107`; `ARCHITECTURE.md:662`).
+- Lifetime: permissions / questions 90 s; plans / MCP forms 10 min (`requests.mjs:123`); terminal-adapted cards 24 h (`terminal-permissions.mjs:90`). Expiration **restores the original CLI interaction** (no hook output = hand control back to the TUI).
 
-【事实】（Persona，`jarvis/docs/terminal.md`、`jarvis/docs/ios.md:144-177`）：hub 中转的 herdr observe 实时帧 + 自写 VT 子集网格渲染（宽字符 / 框线对齐）；「手机尺寸」接管（`terminal session control`，离开即还原电脑尺寸）；滚轮按行拆事件落在手指那一格；底部弹出全屏盖板、下拉关闭；Moshi 式键栏（ctrl / alt / ⇧ 单击粘滞、双击锁定、按住）、快捷命令、补全、捏合字号、双指切 Agent、链接 App 内打开、状态条「上次更新 N 秒前」。
+### 4.2 Presentation hierarchy
+[Fact]
+- **Near the action**: ordinary tool permissions appear at the **end of the transcript** (`AgentInlineInteractionView`): heading, “Host · Project Path”, subtask source, tool name, full parameter review (Bash fields / Edit diff / raw JSON), remaining-time countdown, “Deny This Operation / Allow Once”, and “View Full Request” (`AgentInteractionInboxView.swift:94-141`). If a denial-reason draft already exists in the full page, the inline card has no action buttons and requires returning to the full page, preventing the reason from being silently lost (same file, `:114-121`). Without a protocol-level tool_use association ID, it **does not pretend the request belongs under a historical tool card** (`HERDR_CINDY_REVIEW.md:89`).
+- Plans, questions, MCP, and other complex requests: an orange entry above the composer, “Answer Question / Review Plan / N Pending Interactions ›”. A single request opens the full page directly; multiple requests first open a “Pending Interactions” inbox ordered by receipt time, each with a summary and remaining time (`AgentInteractionInboxView.swift:24-90, 143-190`).
+- Full page `AgentInteractionView` (`AgentInteractionView.swift:47-335`):
+  - Top: type heading, session name, terminal-source notice, sub-Agent source card, and “Waiting for Reply + Timer” or “Handled / Expired / Session Changed” (`:101-122`).
+  - **Permissions**: MCP shows the server name and configuration source; if the host supplies none, explicitly say “Not Provided” rather than infer the source from the tool name. Parameter review; **optional denial reason (≤4000 characters)**—“The reason will be sent to Claude with this denial; clear it first if you want to allow.” With a reason present, Allow Once is disabled. If unsupported by the host, ask to upgrade or clear the reason (`:157-182, 324-329`). Terminal-source Bash offers only Deny Once / Allow Once; **no mapping for “Don't Ask Again” or “Switch to Auto Mode”** (`:318-322`; `README.md:126`).
+  - **Plans**: plan-file path + original Markdown + “After approval, Claude will exit plan mode; subsequent tool permissions are decided by Claude Code on the host” + optional revision feedback. **With feedback present, only Return for Changes is available; Approve Plan and Continue requires clearing it** (`:147-156, 312-317`). Approval returns only the official allow + original updatedInput, **without setMode** (`ARCHITECTURE.md:660`).
+  - **Questions**: each question's header + question + options with descriptions + “Your Own Answer” field (filling it clears selected options); single / multiple selection; Submit Answers disabled until all answers are valid. Hook-source questions offer Cancel Answer; terminal-source questions do not, because of unsafe key mapping (`:183-226`; `HERDR_PROGRESS.md:841-845`).
+  - **MCP Elicitation**: either a form (string / number / boolean / single / multiple selection, including old enumNames) or a browser link. Link mode shows the server, request message, destination host, and full URL. “Opened, Continue” becomes available only after the system actually accepts the open operation; it warns “Opening the Link Does Not Mean Authorization Succeeded.” Submit Form / Deny Request / Cancel This Request return three distinct outcomes (`:123-146, 302-311`; `ARCHITECTURE.md:689-695`). Schema validation runs both on the client and again on the host. Server-supplied regex runs in a separate Node process with a 500 ms limit and 32 MiB heap (same source).
+  - Fixed bottom action bar (`safeAreaInset(.bottom)`) yields to the keyboard. At accessibility text sizes it scrolls with the body and stacks buttons vertically. Keyboard toolbar: Done Editing (`:239-266`; `HERDR_PROGRESS.md:91`).
+  - “Hand Back to the Same Session's Terminal”: return the `terminal` decision first, navigate to the terminal only on success. A navigation ticket is invalidated by closing the question card / leaving the page / backgrounding / a changed request; a late success cannot forcibly pull the user into the terminal (`AgentInteractionView.swift:11-45, 228-238`; `HERDR_PROGRESS.md:883-887`).
+  - Unsubmitted input (selections, custom answers, reasons, form values) is saved against the **complete request snapshot** within the current connection. Closing and reopening restores it; replacing the request discards it (`AgentWorkspaceModel.swift:1570-1587`; `AgentInteractionView.swift:272-277`).
+- Directory trust (a newly launched Claude asks to trust this directory): native page shows host, full path, and “Trust allows reading, writing, and execution in this directory and may load project configuration.” **The user chooses** Trust Directory and Continue / Do Not Trust, Exit Claude / View in Terminal. After confirmation, it waits until Claude is actually interactive before automatically entering native chat (`AgentPaneView.swift:84-120`; `HERDR_PROGRESS.md:620-626`).
 
-【判断】终端这块 **Persona 全面领先**（实时流、续传、接管、滚动、补全、多手势）。removed 值得借的只有小点：①方向面板做成**透明悬浮、不改终端行数**；②「缓存画面先显示、身份核对后才开放输入、离页清空未发按键」；③同一 pane 内 shell ↔ Claude 切换时给「原生聊天已就绪」入口而不是跳转。
+### 4.3 Single host-side decision and receipts
+[Fact]
+- Each hook request has a random UUID bound to the pane, process binding, native session, **live hook PID**, and deadline. Requests / answers exist only briefly as 0600 files in a 0700 directory. They are deleted on completion, leaving only a minimal delivery receipt (`ARCHITECTURE.md:652`; `requests.mjs:115-147`).
+- Answers claim the single decision slot through an exclusive hard link. A second answer gets `INTERACTION_RESOLVED`. After polling the decision, the hook **rechecks session identity and validity**, writing `expired` on failure. Only `returned` counts as delivery; the comment explicitly says “returned means only that it was handed to the hook, not that the tool ran” (`requests.mjs:172-215`). Plans reread the plan file before both publishing and returning (reject symlinks, nonregular files, >256 KiB, or content differing from what was shown). A changed plan invalidates old approval (`interactions/plan.mjs:16-26`; `ARCHITECTURE.md:662`).
+- Phone: before answering, write (requestID, commandID, target identity) to the local journal, **without the answer itself**. A lost receipt is reconciled only through `command.status` with the original commandID, never resent. Once the host returns `INTERACTION_EXPIRED / RESOLVED`, the card is permanently retired (`AgentWorkspaceModel.swift:2219-2257, 2436-2461`; `ARCHITECTURE.md:654`).
+- Terminal-adapted answers: first write a permanent claim file (`wx`). **Before every arrow key / Enter, reread both the screen and transcript**, checking the tool_use input digest, menu-option digest, and transcript file identity. Any error after a key has been sent is `RESULT_UNKNOWN` (`terminal-permissions.mjs:99-122`). If already claimed or handed back to the terminal but the menu remains, the session stays blocked. All writes—ordinary messages / attachments / interrupt / compact / exit—are rejected to prevent typing into the menu (`controller.mjs:111-134`; `HERDR_PROGRESS.md:845, 1029`).
 
-## 8. 安全设计：「结果未知 → 只核对不重发」「操作前校验进程绑定」
+### 4.4 Comparison with current Persona
+[Fact] (Persona)
+- Interaction kinds: `question / plan / permission / screen` (`jarvis/ios/Shared/Models.swift:403`). No MCP Elicitation, separate MCP permission-source display, or sub-Agent source (zoekt found no `Elicitation` in the jarvis repository).
+- Permission form: tool name + monospaced summary + Deny / Allow / Always Allow for This Session (`jarvis/ios/Jarvis/Views/Interactions/InteractionViews.swift:495-531`). **The server already supports denial reasons** (`res.Message` in `jarvis/server/internal/node/hooks.go:285-290`, also `Resolution.message`, `Models.swift:479-501`), but the app never fills them in (`Resolution(allow: false)` calls throughout the repository have no message).
+- Plans: Approve and Run Automatically (`bypassPermissions`) / Automatically Accept Edits (`acceptEdits`) / Return + Feedback (`InteractionViews.swift:437-493`; `hooks.go:267-277` uses setMode). The reference client deliberately does not choose a mode for the user; Persona lets the user choose, which is more practical. However, Approve and Run Automatically means allowing everything, with insufficient risk warning.
+- Terminal dialogs (`screen` cards) use **generic parsing** of any dialog (directory trust, model selection…), computing keys from option numbers / cursor position. Node rereads the screen and checks `rev` before sending keys (`jarvis/docs/protocol.md:185-203`). Coverage is broader than the reference client's two adapters, but there is no cross-check against transcript tool_use. When a command is truncated, the card shows that truncated screen text.
+- Interactions survive restarts: deterministic interaction IDs + 2-minute hook reconnection + 3-minute hub grace period (`protocol.md:322-333`). Persona is stronger here. The reference client's hook process belongs to a host process independent of SSH and is unaffected by phone disconnection, but it has no “cards survive hub restart” issue because it has no hub.
+- Persona's node **automatically presses “Yes, I trust”** when launching a new session (`jarvis/docs/claude-integration.md:13-15`); the reference client asks the user to confirm on a native page.
 
-### 8.1 身份：什么叫「同一个会话」
-【事实】
-- 主机端：`binding = sha256(进程身份)`（herdr 报的 agent 进程身份），descriptor 带 `paneID / terminalID / binding / nativeSessionID`（`controller.mjs:62-74`）。每个写操作在主机上先 `checked(binding, paneID)`：重新取当前 agent、重新算身份哈希，不一致回 `STALE_SESSION`（`controller.mjs:83-89`）；prompt 还会再比 nativeSessionID，并在真正输入前 / 每张图片粘贴前重复检查（`controller.mjs:400-489`）。
-- 客户端：六字段完全相等才算同一会话（`hasSameActivityIdentity`；`AgentNavigationTarget`）。pane 里换了进程（Claude 退出重开、/clear 之外的替换）→ 旧 reader 停止、草稿和阅读状态落盘，**新 reader 不继承旧进程的草稿、审批和待核对操作**（`HERDR_PROGRESS.md:606`；`AgentWorkspaceModel.swift:1917-1931`）。
-- 每个 reader / 页面持有 `revision`，所有 await 之后先比对 `revision`、`isCurrent`、`Task.isCancelled`，迟到的结果直接丢（全文件随处可见，例如 `AgentWorkspaceModel.swift:2041, 2199, 2241`）。连接层还有 connection revision / generation：编辑地址或认证身份就递增，旧 generation 的数据不能写进新连接的页面（`ARCHITECTURE.md:228`；`HERDR_PROGRESS.md:1105-1111` 重连后当前页按持久 scope + pane/terminal 身份核对后换新 lease，不退出页面）。
-- 粗粒度列表不能覆盖细粒度状态：会话页开始详细读取后，状态 / 能力只由详细结果维护，列表的 `done` 不能把「等待回答」改回「完成」并重新开放发送（`AgentWorkspaceModel.swift:1918-1931`；`HERDR_PROGRESS.md:943-956`）。
-- 通知跳转、恢复导航、离线目录都要核对 主机 generation + 六字段；进程变了就拒绝跳转、明确提示「原会话已退出或被替换，未跳转到新的进程」（`AgentFleetModel.swift:167-179`）。
+[Assessment] Persona should add denial reasons (server support already exists), mutually exclusive plan feedback / approval, countdowns, MCP sources, Elicitation (forms + links), sub-Agent sources, per-request interaction drafts, inline permissions at the end of the transcript, a multiple-request inbox, and the strict one-time terminal-source Bash approval adaptation approach (show the complete transcript command rather than truncated screen text).
 
-### 8.2 写操作的三段式
-【事实】
-1. **派发前持久化**：手机 journal 先写 pending（含原草稿版本），失败就不发（`AgentWorkspaceModel.swift:2400-2404`）。
-2. **主机幂等回执**：`once(request)` 以 `commandID.json` 用 `wx` 独占创建，内容是 `{digest: sha256(method+params), completed:false}`；同 ID 不同载荷 → `COMMAND_ID_REUSED`；同 ID 未完成 → `RESULT_UNKNOWN`「上一次命令的结果待确认，不会再次执行」；已完成 → 直接返回原响应 / 原错误；只有一组**确定性错误码**（`STALE_SESSION / COMPOSER_NOT_EMPTY / AGENT_BLOCKED / INVALID_INPUT / INTERACTION_EXPIRED…`）才把记录标成完成（表示「肯定没执行」），其他异常保持未完成（`controller.mjs:783-806`）。过程中用 `checkpoint(partial)` 记下「做到哪一步」（例如是否已经调用了 `agent.prompt`、创建的 paneID 和预分配的 nativeSessionID）（`controller.mjs:430-447, 556`）。
-3. **只读核对**：`command.status` 读回执；对未完成的记录按 partial 类型做**只读的正向证明**：混合附件 → transcript 里出现唯一一致的新 user 记录且原发送进程已死；改名 → 连续两次读到目标标签；交互 → hook 的 delivery 回执；创建 → 新 pane 上出现预分配 session ID 的 Claude；退出 → 原进程已结束（`controller.mjs:580-629`）。证明不了就一直是 unknown，**从不重放**。
-- 客户端对 unknown 的处理：保留 pending、阻止同会话下一次写操作、状态行和会话状态页给「核对」与「人工处置」两个入口；人工处置只记录结论（「确认已执行 / 确认未执行，保留输入」），不发送任何东西（`AgentSessionStatusView.swift`）。
-- 「已回传」≠「工具执行成功」：交互回执的 `returned` 只表示交给了 hook；UI 文案「本次选择已回传」，执行结果仍以 transcript 为准（`requests.mjs:213`；`README.md:116, 128`）。
-- 不自动重试的边界也写进了 SSH 层：建立连接超时与已派发请求超时是两种错误；后者关闭故障传输、操作留待核对，不因重连重发（`ARCHITECTURE.md:783-787`）。重连成功也不自动重发输入或审批（`ARCHITECTURE.md:329`）。
+## 5. Prompt queue / durable outbox / drafts / attachments
 
-### 8.3 Agent 场景特有的防护
-【事实】
-- 往终端打字之前：输入框必须为空（ANSI 读屏区分灰色提示和真实草稿）、没有待答问题 / 待审批菜单（含已经交回终端但菜单仍在的情况）（`controller.mjs:111-134, 404-412`）。
-- 终端菜单回答：claim 文件防重复，每个按键前重读屏幕 + transcript 并比对摘要，按过键之后出错一律 unknown（`terminal-permissions.mjs:99-122`）。
-- 停止 ≠ 取消队列项；取消队列项 ≠ 发 Ctrl-C；停止有独立的 control fence，可撤销还没写进 socket 的普通输入（`HERDR_PROMPT_QUEUE.md:56`；`controller.mjs:539-542`）。
-- 完成提醒前独立核验没有待答问题（防「题还挂着却通知完成」）（`controller.mjs:139-174`）。
-- 推送载荷不含主机名、路径、会话 ID、提示词或正文，只有通用提示 + 随机 ID，详情经 SSH 认证后再取并核对身份（`HERDR_PUSH.md:11`）。
+### 5.1 Default path: single-operation journal (all hosts)
+[Fact]
+- Local `AgentLocalStateStore` (atomic JSON, file + directory fsync; compatible reading of versions 1–8, refuses to overwrite a newer version) (`AgentLocalStateStore.swift:150-165, 251-258`). Scope = connection ID + host address / username + trusted SSH fingerprint + herdr server; session key = Agent type + native session ID, preventing draft leakage on pane reuse (`ARCHITECTURE.md:325`).
+- Send flow (`AgentWorkspaceModel.swift:2175-2216, 2400-2435`):
+  1. `prepare`: **atomically persist first** the `AgentPendingOperation(kind, six-field target, originalDraft, originalDraftVersion)` and current draft. Reject if the same session already has an unresolved operation (`operationPending`) (`AgentLocalStateStore.swift:278-284`).
+  2. Call the bridge (each request has commandID = operation UUID).
+  3. `finish`: remove pending after receipt validation. **Clear the draft only if it is still the sent version—text, version UUID, and edit sequence all unchanged**; otherwise show “Operation Confirmed; Current Draft Kept” (`:2425-2435`; `AgentLocalStateStore.swift:300-306`).
+  4. Failure: definite failure (host supplied a definitive error code) → end the record and show the reason; **unknown result → retain pending, block the session's next send / interaction / rename / stop**, and show “Last Operation Result Needs Verification” in the status row (`:2436-2461`; `AgentsView.swift:668-669`).
+- Verification: “Verify Last Operation Result” calls only `command.status(original commandID)`. If still unknown, keep waiting. After checking on the host, the user can Confirm It Ran / Confirm It Did Not Run, Keep Input, recording local manual-resolution history. Queue-enabled hosts also require a host audit receipt (`AgentWorkspaceModel.swift:2284-2309, 2405-2424`; `AgentSessionStatusView.swift`).
+- Stop (`interrupt`) is also an operation with a commandID. Once sent, `interruptSubmitted` remains until the host reports a non-working state. The Stop button is disabled meanwhile (“Stop Sent, Waiting for Host Update”) (`AgentWorkspaceModel.swift:2376-2399`; `AgentsView.swift:578-587`). The host uses `ctrl+c` and revokes ordinary input not yet written to the socket on that pane (`controller.mjs:533-544`).
+- Sending while working: the host lets working Claude receive new messages in Claude's own queue, but first reads the screen with colors to verify that the input field is empty. Claude's gray “Press up to edit queued messages” is not a draft; actual user typing is (`controller.mjs:404-412`; `HERDR_PROGRESS.md:1116-1120`). This is the same idea as Persona's `input_draft` detection (`jarvis/docs/protocol.md:205-221`).
 
-### 8.4 Persona 现状对照
-【事实】
-- 有：`client_msg_id`（但只在 node 内存 10 分钟，`sendsafe.go:132-171`）；输入框草稿 / 对话框检测后拒绝（`protocol.md:205-221`）；screen 卡按键前重读屏幕比对 `rev`（`protocol.md:193-195`）；交互确定性 id、挺过重启（`protocol.md:322-333`）；批准 / 回答类一次性操作断网不排队、失败把卡片放回（`jarvis/docs/ios.md:292-293`）。
-- 没有：持久化的命令回执与「unknown」一级状态（超时被当成离线自动重发，见 5.5）；客户端写操作前的本地 journal（批准 / 中断 / 改名 / 关闭 Agent 丢回执后无法核对）；「进程身份」概念——Persona 以 Claude session id 为会话身份（这对「同一对话 resume 后继续发」是对的，但 pane 被别的进程占用、同一 session 被两个进程打开时没有保护，未核实）。
+### 5.2 Optional: durable multi-message host queue (0.7.62–0.7.65, off by default)
+[Fact] (`reference-client/docs/HERDR_PROMPT_QUEUE.md`; `HERDR_CINDY_REVIEW.md:51-59, 101-129`)
+- Motivation: the comparison audit against Cindy (an open-source Agent client) found that a single-operation journal is not a multi-message offline queue. It needs a complete contract for explicit host ownership, per-item cancellation, FIFO, and crash recovery (`HERDR_CINDY_REVIEW.md:37-59`).
+- Each immutable item: item UUID, host UUID, clientScope (installation UUID + SHA-256 of verified host scope), bridgeSession, six-field target, createdAtMs, body, images, files. SHA-256 input concatenates each field as “8-digit hexadecimal byte length + colon + original bytes”, with fixed cross-language test vectors (`HERDR_PROMPT_QUEUE.md:7-20`).
+- Host states (SQLite WAL + synchronous=FULL + fullfsync): `queued → claimed → executing → confirming / submitted / cancelled / rejected`. **Cancel and begin compete in the same write transaction.** Cancellation after executing only records “Cancellation Awaiting Confirmation”; **it does not send Ctrl-C**. `confirming` never automatically resends. Cancelled items delete the body but retain identity tombstones so late accept cannot resurrect them (`HERDR_PROMPT_QUEUE.md:26-44`). FIFO is per “bridgeSession + six-field target”; earlier unfinished items block later items for the same target. Recheck instance, interactions, and composer before dispatch (`:40, 54`).
+- Phone outbox phases (`AgentPromptOutbox.swift`; `statusText` in `AgentPromptQueueView.swift`): Saved on Phone, Waiting to Hand to Host / Host Acceptance Awaiting Confirmation / In Host Queue / Input Result Needs Verification / Verification Conclusion Awaiting Confirmation / Cancellation Awaiting Confirmation / Submitted to Session / Cancelled / Host Did Not Submit This Item (or “Verified as Undelivered”) / Paused Due to Identity or Protocol Change.
+- Phone behavior: after a successful local save, the user can edit the next item; network acceptance does not occupy the editor. Persist `enqueueStarted` before the first SSH request. For unknown results, query the original identity first; retry with **the same UUID and payload** only after negotiating v 1. Later local items for the same target wait while earlier acceptance is unknown (`HERDR_PROMPT_QUEUE.md:66`; `AgentPromptQueueModel.swift:120-160`). Cancelling an unstarted item ends it locally; after it starts, keep the cancellation intent until a host receipt arrives. Cancelled / rejected items can be restored as drafts. Terminal items can Clear Local Body while retaining identity and receipt (`promptRow` in `AgentPromptQueueView.swift`).
+- Session entry: “Queued Messages · N Pending ›”. The queue page switches between This Session / This Host; workspace All Records remains searchable even after the original session disappears. Disabling the queue requires no unresolved items on either phone or host (`HERDR_PROMPT_QUEUE.md:68`).
+- Offline editing: after disconnection or cold start, before reading the private key, open the original session from the last verified directory listing to keep editing and queueing locally. Upload only after reconnecting and **rechecking host instance and all six identity fields**. A changed process freezes the queue instead of sending to the new process (`HERDR_PROMPT_QUEUE.md:76, 83-101`).
+- An optional host background service (launchd / systemd --user, installed after user confirmation) continues dispatching after the phone app exits (`HERDR_PROMPT_QUEUE.md:103-116`).
 
-【判断】Persona 的身份应保持「对话 = Claude session id」（用户关心的是对话，不是进程），但写操作需要带一个**「目标实例指纹」**（machine + pane + 进程 pid / 启动时间 + session id），node 执行前核对，不一致就回确定性错误（等价于 `STALE_SESSION`），由 App 提示「会话已在别处重开，要发到新进程吗？」。回执与核对建议放 hub（Postgres 一张 `commands` 表：id、digest、状态 pending/done/unknown、partial、结果），node 侧把「是否已调用 herdr 写入」作为 checkpoint 回报。
+[Assessment] This queue compensates for an SSH-direct architecture without a persistent server. Persona has a persistent hub + Postgres, so **the equivalent belongs on hub**: return accepted only after durable database acceptance; the phone outbox handles only the period before hub acceptance. There is no need to copy host SQLite + background service. Its contracts can be adopted directly: **state enumeration, cancellation / dispatch arbitration in one transaction, no automatic resend from confirming, anti-resurrection tombstones, and FIFO per target**.
 
-## 9. 对照 Persona：removed 有而 Persona 没有 / 做得更好
+### 5.3 Drafts
+[Fact]
+- Durable drafts per native session: text + images + files + version UUID, with a 250 ms disk-write debounce. Immediately flush before leaving the page / backgrounding / cache eviction (`AgentWorkspaceModel.swift:1659-1660, 1780-1796`; `AgentsView.swift:653-660`).
+- When the same native session gets a new reader on reconnect, it inherits unpersisted edits with a higher sequence number. Old receipts cannot clear new drafts, and late saves cannot resurrect old drafts (`AgentWorkspaceModel.swift:1768-1779`; `ARCHITECTURE.md:325`).
+- List rows show “Draft · Summary”; attachment-only drafts show “[Attachment]” (`AgentFleetView.swift:520-522`; `HERDR_PROGRESS.md:877`).
+- Failed draft save: status row says “Draft Not Yet Saved”; details show the reason (`AgentsView.swift:671`).
 
-按对设计的价值排序。「Persona 现状」一栏是我在 jarvis worktree 里查到的事实；没查到的标「未发现」。
+### 5.4 Attachments
+[Fact]
+- “＋” menu: Camera / Photos / Files (voice entry removed at the user's request); attachments can be added while editing with the keyboard (`AgentImageComposerView.swift`; `HERDR_PROGRESS.md:758-766`).
+- Images: correct orientation, use first frame, convert to JPEG over white, maximum long edge 1600 (1200 / 800 if needed), strip photo metadata, ≤1 MiB each, at most 4 images. Files: 4 items / 4 MiB total. Mixed image + file sends require host capability `promptAttachments`; otherwise retain the complete draft and ask to upgrade, **without splitting the send** (`ARCHITECTURE.md:749-757`; `README.md:137`; `AgentWorkspaceModel.swift:2181-2190`).
+- Attachment bytes persist with drafts (draft v 6); upload only when Send is tapped. The host generates private filenames (0700 directory / 0600 files), verifies SHA-256, pastes image paths one by one, and waits for `[Image #N]` before submitting text. Offline copy: “Attachments Are Saved Only on the Phone; Upload Requires Re-verifying the Original Host and Session” (`AgentImageComposerView.swift` copy; `ARCHITECTURE.md:753-755`).
+- Lost receipts for mixed attachments are reconciled using transcript evidence: record the native-log baseline and request digest before input. Confirm submission only when **exactly one** new user record matches content / images / session completely (`controller.mjs:418-465`; `reference-client/docs/HERDR_ROADMAP.md:129-131`).
 
-| # | removed 的做法（出处） | Persona 现状 | 建议优先级【判断】 |
+### 5.5 Comparison with current Persona
+[Fact] (Persona)
+- Sending: tapping Send clears the composer immediately and displays a Sending bubble. Matching transcript text, or entry into the queue list, replaces it with the real message; failure turns it red with Retry / Delete (`jarvis/docs/ios.md:113-114`). Offline / timeout → “Send Automatically When Connected”, persisted (`Outbox.swift`), then **automatically resent in order** on reconnect using the same `client_msg_id` (`jarvis/docs/ios.md:288-292`; `jarvis/ios/Jarvis/App/Outbox.swift`).
+- Deduplication exists only in **node process memory**, retained for 10 minutes (`jarvis/server/internal/node/sendsafe.go:132-171`). A node restart or more than 10 minutes loses it. Hub has no `client_msg_id` deduplication (zoekt: no ClientMsgID in hub code). The app also treats **timeout** as waiting and automatically resends (`SendSafety.swift`, `catch where error.isOffline || error.isTimeout → .waiting`).
+- Errors midway through typing return `delivered: unknown`; the app only says “It May Already Have Reached the Computer: Check the Chat First”, marks the bubble failed, and allows manual resend (`SendSafety.swift`).
+- Queued messages are Claude TUI's own queue, reconstructed from transcript queue-operation records, with Withdraw and Edit / Copy / Delete (`jarvis/docs/ios.md:140-141`). No durable host-level queue; hub has no acceptance semantics.
+- Drafts persist text only (`SavedDraft{key,text}` in `SendSafety.swift`); list rows do not show them. Image attachments live in `composerInbox`.
+- Attachments: up to 4 images at 1600 px; files up to 200 MB upload to a temporary directory on the session's computer, inserting the path into the composer without automatically sending (`jarvis/docs/protocol.md:223-238`). Much more generous than the reference client's 4 MiB.
+
+[Assessment] Persona's optimistic display + automatic offline queueing is better UX and should stay. The risk is **automatic timeout resend + deduplication only in node memory**: after hub / node redeployment (documentation records three deployments within two minutes, `jarvis/CLAUDE.md`, “Lessons”), resending the timed-out item can type it twice. Recommendations: ① persist `client_msg_id` acceptance records in hub Postgres (hub writes before forwarding to node, and persists node receipts too), retaining deduplication long-term per session; ② distinguish “request never sent (offline)” from “timed out after sending (unknown result)”. Do not automatically resend the latter; enter Needs Verification and reconcile automatically against a user row with the same ID / text in the transcript (the reference client's transcript-evidence approach); ③ persist draft attachments and show draft summaries in lists.
+
+## 6. Browsing historical sessions
+
+[Fact]
+- Entry: clock button next to workspace Sessions heading → full-screen Historical Sessions page (`AgentsView.swift:222-228, 404-411`). Structure: ① Recently Read, at most 20 entries (shortcuts to historical parent / child transcripts; swipe left to Remove Shortcut deletes only the shortcut, not host history or reading position); ② project picker (search by name or full directory; show paths for identically named projects); ③ that project's historical sessions (title, update time, “Running; Continue Opens the Existing Session”), paginated Load More Historical Sessions, search loaded sessions or ID, and “N Records Have Unverifiable Project or Format” (`AgentSessionHistoryView.swift:1-160`).
+- Title priority: Claude custom name (latest 256 KiB of transcript or adjacent `custom-title.json`) → automatic title → first user message → session ID. Read only the first 6 MiB to verify the project and the last 256 KiB to find a name. If the middle was not read, do not reuse an older name that may have changed (`reference-client/README.md:94`).
+- History details offer View Chat History (**read-only**, without first resuming the session): native text / code / tool records, on-demand earlier pages, search and navigation within loaded content, manual refresh, independent reading position (within-row offset and expansion state, restored across restarts; new content arriving while away preserves the original position and offers Jump to Latest), and nested subtask reading. This page has no send or permission actions (`README.md:92`; `AgentHistoryTranscriptView.swift`).
+- Continue session: open the same running native session directly; otherwise call `session.resume`. Persist the operation before resuming. Unknown results offer only Verify Session Launch Result. A host-side **resume lock** allows only one simultaneous resume operation per native session. Manual resolution requires checking on the host that “the original launch request has ended, the target Claude has exited, and the original pane has returned to shell or closed”. The host rechecks and records an audit before unlocking (`README.md:145-147`; `AgentsView.swift:203-218, 345-370`).
+- Custom Claude configuration directory (`CLAUDE_CONFIG_DIR`): explicit installation configuration > environment inherited by the SSH process > `~/.claude`. Reading records and launching / resuming sessions use the same directory; multiple directories are not merged (`README.md:96-102`).
+
+[Fact] (Persona) The list includes Recent (Not Running) sessions with `offline` state. Sending a message uses `--resume` (`jarvis/docs/agent-states.md:14, 53`). Node scans `CLAUDE_CONFIG_DIR` for all running Claude processes and merges multiple directories (`jarvis/CLAUDE.md`, “Lessons”). I found no dedicated entry to browse all history by project / open read-only (did not individually verify the limit on non-running sessions returned by hub). Knowledge contains Session archives (`jarvis/docs/ios.md:11`).
+
+[Assessment] Persona needs “history as a list scope”, not a separate large page. Add a History scope to the Agents list, by project / time. Open read-only first in the same chat page, replacing the composer with Continue This Session; resume only after confirmation. Recently Read is unnecessary: Persona's Unread / Seen already covers most return visits.
+
+---
+
+## 7. Terminal
+
+[Fact] (reference client)
+- Transport: each attachment opens its own session subchannel on the same authenticated SSH connection. Both PTY and exec require successful server acknowledgments, supported by adding `withCancellablePTY` to vendored Citadel. Since 2026-10-24, **PTY + exec runs `herdr … terminal attach <terminalID>` directly**, rather than opening a login shell and typing attach into stdin, removing welcome text and command echo (`reference-client/docs/ADR-001-SSH-EXEC.md`, PTY addendum; `HERDR_PROGRESS.md:1149-1159`). SwiftTerm renders it (`TerminalUI/RemoteTerminalView.swift`). Phone size changes synchronize to the same PTY (`HERDR_PROGRESS.md:32`).
+- Lifecycle: per workspace, retain PTY + screen for the last 3 panes with stable terminalIDs, for 90 s after leaving. Quick returns reuse the original SSH subchannel and SwiftTerm screen. Show the cached screen first, but **enable input only after rechecking pane identity**; clear unsent keys when leaving (`HERDR_PROGRESS.md:1149-1159`; `AgentWorkspaceModel.swift:166`; `setInputEnabled` in `RemoteTerminalView.swift`). Brief inactive states such as Control Center retain the PTY; actually entering the background closes it without affecting the host session. Returning foreground rechecks the original pane / terminal identity before automatically attaching (`HERDR_PROGRESS.md:829-839`).
+- Process changes in the same pane: Claude exit automatically shows shell. Launching Claude in shell or completing directory trust is detected periodically and exposes Native Chat Is Ready, **without interrupting terminal input in progress** (`HERDR_PROGRESS.md:606`; `AgentPaneView.swift:37-51`).
+- Key bar (`AgentTerminalToolbar.swift`): capsule toolbar with Ctrl / Esc / Tab / arrow-panel toggle / keyboard toggle. **Three-state Ctrl**: tap for the next key only; double-tap within 400 ms to lock (lock icon + underline); tap again to release (`TerminalUI/TerminalControlLatch.swift`). Long-press Ctrl opens ⌃C ⌃D ⌃Z ⌃L ⌃A ⌃E ⌃U ⌃K ⌃W shortcuts. The direction panel (four arrows, Enter, Backspace, Home, End) is a **transparent overlay** above terminal content; expanding / collapsing does not change terminal row count. Landscape / open keyboard / accessibility sizes use a single horizontally scrolling bar (`HERDR_PROGRESS.md:855-863`). Arrow keys use SwiftTerm's public navigation methods, respecting normal / application cursor mode (`HERDR_PROGRESS.md:596`).
+- Input ordering: keyboard input, paste, and special keys all enter one bounded serial queue (capacity 256; overflow disconnects with an error rather than losing ordering) (`TerminalUI/TerminalInputQueue.swift`). IME composing text does not apply Ctrl per UTF-8 byte (`keys(for:composing:)` in `TerminalControlLatch.swift`).
+- Standalone SSH terminal: can open a login shell without host components; closes on page exit / backgrounding and explicitly warns “Persistence Is Not Guaranteed; Use tmux for Persistent Tasks” (`reference-client/docs/HERDR_HOST_COMPONENTS.md:19-21`).
+
+[Fact] (Persona, `jarvis/docs/terminal.md`, `jarvis/docs/ios.md:144-177`): hub-relayed live herdr observe frames + custom VT-subset grid rendering (wide-character / box-drawing alignment); Phone Size control (`terminal session control`, restores computer dimensions on leaving); wheel input split into per-row events at the cell under the finger; full-screen cover rises from the bottom and pulls down to close; Moshi-style key bar (ctrl / alt / ⇧ tap-sticky, double-tap-lock, hold), command shortcuts, completion, pinch font scaling, two-finger Agent switching, in-app links, status bar “Last Updated N Seconds Ago”.
+
+[Assessment] **Persona leads across the board** in terminals (live streaming, resumption, size control, scrolling, completion, multiple gestures). Only small details are worth borrowing: ① **transparent floating arrow panel without changing terminal rows**; ② cached screen first, input only after identity verification, clear unsent keys on leaving; ③ Native Chat Is Ready entry on shell ↔ Claude changes within the pane, instead of automatic navigation.
+
+## 8. Safety: unknown results are verified, not resent; process binding is checked before operations
+
+### 8.1 Identity: what counts as the same session
+[Fact]
+- Host: `binding = sha256(process identity)` (the Agent process identity reported by herdr). Descriptor includes `paneID / terminalID / binding / nativeSessionID` (`controller.mjs:62-74`). Every host write first calls `checked(binding, paneID)`, obtaining the current Agent again and recomputing its identity hash; mismatch returns `STALE_SESSION` (`controller.mjs:83-89`). Prompt additionally compares nativeSessionID and repeats checks immediately before input / each image paste (`controller.mjs:400-489`).
+- Client: all six fields must match for the same session (`hasSameActivityIdentity`; `AgentNavigationTarget`). If the pane's process changes (Claude exits and relaunches, replacement other than /clear), stop the old reader and persist drafts / reading state. **The new reader does not inherit the old process's drafts, approvals, or operations needing verification** (`HERDR_PROGRESS.md:606`; `AgentWorkspaceModel.swift:1917-1931`).
+- Each reader / page holds a `revision`. After every await, check `revision`, `isCurrent`, and `Task.isCancelled`, discarding late results (throughout the file, e.g. `AgentWorkspaceModel.swift:2041, 2199, 2241`). Connection revision / generation also increments when address or authentication identity changes; old-generation data cannot enter the new connection's page (`ARCHITECTURE.md:228`; `HERDR_PROGRESS.md:1105-1111`: after reconnect, the current page verifies persistent scope + pane/terminal identity and obtains a new lease without leaving the page).
+- Coarse list state cannot override detailed state. Once the session page begins detailed reading, only detailed results maintain status / capabilities. List `done` cannot change Waiting for Answer back to Completed and reopen sending (`AgentWorkspaceModel.swift:1918-1931`; `HERDR_PROGRESS.md:943-956`).
+- Notification navigation, restored navigation, and offline listings all verify host generation + six fields. A changed process rejects navigation with “The Original Session Exited or Was Replaced; Did Not Navigate to the New Process” (`AgentFleetModel.swift:167-179`).
+
+### 8.2 Three-stage writes
+[Fact]
+1. **Persist before dispatch**: phone journal writes pending, including the original draft version; do not send if persistence fails (`AgentWorkspaceModel.swift:2400-2404`).
+2. **Host idempotent receipt**: `once(request)` exclusively creates `commandID.json` with `wx`, containing `{digest: sha256(method+params), completed:false}`. Same ID, different payload → `COMMAND_ID_REUSED`; same ID, incomplete → `RESULT_UNKNOWN`, “The Previous Command's Result Awaits Confirmation; It Will Not Run Again”; completed → return original response / error. Only a set of **definitive error codes** (`STALE_SESSION / COMPOSER_NOT_EMPTY / AGENT_BLOCKED / INVALID_INPUT / INTERACTION_EXPIRED…`) marks the record complete, meaning it definitely did not execute. Other exceptions keep it incomplete (`controller.mjs:783-806`). During execution, `checkpoint(partial)` records progress, such as whether `agent.prompt` was called, created paneID, and preallocated nativeSessionID (`controller.mjs:430-447, 556`).
+3. **Read-only reconciliation**: `command.status` reads the receipt. For incomplete records, use **read-only positive evidence** based on partial type: mixed attachments → exactly one matching new user record in the transcript and original sending process dead; rename → target label read twice consecutively; interaction → hook delivery receipt; creation → Claude with preallocated session ID appears in the new pane; exit → original process ended (`controller.mjs:580-629`). Without proof it stays unknown, **never replayed**.
+- Client handling of unknown: retain pending, block the next write to the same session, and provide Verification and Manual Resolution from the status row and Session Status page. Manual resolution records only the conclusion (Confirm It Ran / Confirm It Did Not Run, Keep Input), sending nothing (`AgentSessionStatusView.swift`).
+- Returned ≠ tool executed successfully. Interaction receipt `returned` means only handed to the hook. UI says “This Choice Was Returned”; execution results still come from the transcript (`requests.mjs:213`; `README.md:116, 128`).
+- No-auto-retry boundaries also exist in SSH: connection-establishment timeout and dispatched-request timeout are different errors. The latter closes the failed transport and leaves the operation for reconciliation, without resending on reconnect (`ARCHITECTURE.md:783-787`). Even successful reconnect does not automatically resend input or approvals (`ARCHITECTURE.md:329`).
+
+### 8.3 Agent-specific safeguards
+[Fact]
+- Before typing into the terminal: composer must be empty (ANSI screen reading distinguishes gray hints from actual drafts), with no unanswered questions / approval menus, including menus still present after handoff to terminal (`controller.mjs:111-134, 404-412`).
+- Terminal-menu answers: claim file prevents duplicates; reread screen + transcript and compare digests before every key. Any error after a key is sent is unknown (`terminal-permissions.mjs:99-122`).
+- Stop ≠ cancel queue item; cancel queue item ≠ Ctrl-C. Stop has a separate control fence that can revoke ordinary input not yet written to the socket (`HERDR_PROMPT_QUEUE.md:56`; `controller.mjs:539-542`).
+- Independently verify no unanswered questions before completion notifications, avoiding “completed” while a question remains (`controller.mjs:139-174`).
+- Push payload contains no hostname, path, session ID, prompt, or body—only generic notice + random ID. Fetch details after SSH authentication and verify identity (`HERDR_PUSH.md:11`).
+
+### 8.4 Comparison with current Persona
+[Fact]
+- Present: `client_msg_id`, but only in node memory for 10 minutes (`sendsafe.go:132-171`); rejection after composer-draft / dialog detection (`protocol.md:205-221`); screen cards reread screen and compare `rev` before keys (`protocol.md:193-195`); deterministic interaction IDs surviving restarts (`protocol.md:322-333`); one-time approvals / answers are not queued offline, and failures restore the card (`jarvis/docs/ios.md:292-293`).
+- Absent: durable command receipts and unknown as a first-class state (timeouts treated as offline and automatically resent; see 5.5); client-side local journal before writes (no reconciliation after lost receipts for approve / interrupt / rename / close Agent); process-identity concept. Persona uses Claude session ID as session identity, correctly for continued sending after resume, but protection when a pane is occupied by another process or two processes open the same session is absent / unverified.
+
+[Assessment] Persona should retain “chat = Claude session ID”—the user cares about the chat, not the process—but writes need a **target-instance fingerprint** (machine + pane + PID / start time + session ID). Node verifies before execution and returns a definitive error equivalent to `STALE_SESSION` on mismatch. The app asks “This Session Was Reopened Elsewhere. Send to the New Process?” Put receipts and reconciliation on hub: a Postgres `commands` table with id, digest, pending/done/unknown status, partial, and result. Node reports whether it called the herdr write as a checkpoint.
+
+## 9. Comparison: what the reference client has or does better than Persona
+
+Ordered by design value. Current Persona lists facts found in the jarvis worktree; missing findings are marked Not Found.
+
+| # | Reference client approach (source) | Current Persona | Recommended priority [Assessment] |
 | --- | --- | --- | --- |
-| 1 | 写操作三段式：本机 journal → 主机 `wx` 幂等回执 + 载荷摘要 → `command.status` 只读核对 + 正向证明；unknown 是一级状态并挡住后续写（§8.2；`controller.mjs:580-629, 783-806`） | `client_msg_id` 去重仅 node 内存 10 分钟（`sendsafe.go:132-171`）；超时当离线自动重发（`SendSafety.swift`）；批准 / 中断等无回执核对 | P0 |
-| 2 | 拒绝原因（≤4000 字，有原因时禁用允许）（`AgentInteractionView.swift:173-182, 324-329`） | 服务端支持 `message`（`hooks.go:285-290`），App 不填 | P0（几乎零成本） |
-| 3 | 计划：意见与批准互斥；批准不替用户改权限模式（`AgentInteractionView.swift:147-156, 312-317`） | 有「打回 + 意见」，批准默认 bypassPermissions（`InteractionViews.swift:466-470`；`hooks.go:267-270`） | P1：保留选模式，但「批准并自动执行」要有风险说明、意见非空时禁用批准 |
-| 4 | 交互倒计时、过期 / 已处理 / 会话已变化的明确态、请求快照草稿保留（§4.2） | Interaction 有 `expiresAt` 字段（`Models.swift:453`），UI 未见倒计时；未见按请求保留的草稿 | P1 |
-| 5 | MCP 权限显示服务器与配置来源；MCP Elicitation 表单 / 链接（§4.2） | 未发现（仓库无 `Elicitation`） | P1（MCP 越来越多） |
-| 6 | 子 Agent 请求带来源（ID / 类型），父页与子页都能处理（`README.md:118`） | 子 Agent 只读查看（`jarvis/docs/ios.md:180-182`），交互未见来源标注 | P2 |
-| 7 | 会话内搜索（正文 / 思考 / 工具输入输出 / 主机事件），命中高亮，「返回搜索前位置」，可「加载更早并搜索」（§3.5） | 未发现会话内搜索（只有列表搜索 `ChatsView.swift:245`） | P1 |
-| 8 | 关联定位：任务通知 / 监听事件 / 定时触发 / 文件未变化 → 跨页找原始调用并可返回（§3.5） | 未发现 | P2 |
-| 9 | 任务进度聚合页（按结果顺序重建 TaskCreate/Update/List/TodoWrite，「可能与主机此刻不同」）（§3.6） | TodoWrite 内联清单（`ToolViews.swift:197-198, 588`），无聚合 | P1（长任务很需要） |
-| 10 | 长文本全屏阅读器：冻结快照、分页、全文前后搜索、首末翻页、完整复制（§3.3） | 有「已截断，看全文」+「拷贝全文」（`ToolViews.swift:386-434`），未见文内搜索 / 分页 | P2 |
-| 11 | 工具卡结构化字段 + 统一「原始输入 / 原始输出」+ 多种专用结果视图（Notebook、PDF、MCP 资源、Cron、Monitor、Worktree…）（§3.3） | 工具行 44pt、Bash / Edit / 图片 / 待办等常用工具有专门视图（`jarvis/docs/ios.md:19-25`） | P2：只补「原始 JSON」统一入口和 Edit diff 的上一处 / 下一处 |
-| 12 | 折叠时就显示「N 项执行失败 / N 项尚无结果」（`AgentWorkSummaryView.swift`） | 工作行只有计数和用时（`jarvis/docs/ios.md:61`） | P1（失败不该被折叠藏起来） |
-| 13 | 状态行把「本机正在回传 / 上次结果待核对 / 同步中（>15 s 未验证）」作为一级状态（§3.2） | 连接状态在标题位（`jarvis/docs/ios.md:273-297`），会话级「结果待核对」未见 | P1（配合 #1） |
-| 14 | 完成前核验没有待答问题（`controller.mjs:139-174`） | 需要你 = herdr blocked 或有待处理交互（`agent-states.md`）；hook 未接住的终端菜单靠 hub 读屏（`protocol.md:185-203`），未见「done 前核验」 | P2（需确认 Persona 是否有同类误报） |
-| 15 | 草稿含附件持久化；列表行「草稿 · 摘要」（§5.3） | 草稿只存文本，列表无草稿提示（`SendSafety.swift` `SavedDraft`） | P1 |
-| 16 | 目录信任交给用户确认（`AgentPaneView.swift:84-120`） | Persona 新开会话时 node 自动选「Yes, I trust」（`claude-integration.md:13-15`） | P2（用户自己选的目录，自动信任可接受；但电脑上手动开的会话遇到信任框时应给原生页，而不是 screen 卡） |
-| 17 | 阅读位置连同展开状态持久化；找不回时逐页找（≤20 页）并给「继续查找 / 查看最新」（§3.4） | 记屏幕最上面那一行（`chat.read.<会话>`）+ 完成未看落在最后一条输入下（`jarvis/docs/ios.md:66-67`） | P3（Persona 的进入策略更好，只补「展开状态」记忆） |
-| 18 | SSH 网页预览（手机本地回环端口 → 主机 127.0.0.1 显式端口）、模拟器只读截图（`HERDR_PROGRESS.md:644-659`） | 未发现 | P3（hub 也能做端口代理预览，是个新功能点） |
-| 19 | 主机组件随 App 安装 / 升级（摘要校验、原子切换、只升级已知官方版本）（`HERDR_HOST_COMPONENTS.md`） | `scripts/deploy.sh` 从开发机部署（`jarvis/CLAUDE.md`） | 不适用（Persona 是 hub 架构） |
-| 20 | 推送载荷零内容（`HERDR_PUSH.md:11`） | 推送正文是最后一条回复（`jarvis/docs/ios.md:258`） | P3：做成设置项「锁屏不显示内容」 |
+| 1 | Three-stage writes: local journal → host `wx` idempotent receipt + payload digest → `command.status` read-only reconciliation + positive evidence; unknown is first-class and blocks subsequent writes (§8.2; `controller.mjs:580-629, 783-806`) | `client_msg_id` deduplication only in node memory for 10 minutes (`sendsafe.go:132-171`); timeout treated as offline and resent (`SendSafety.swift`); no receipt reconciliation for approve / interrupt, etc. | P0 |
+| 2 | Denial reason (≤4000 characters; reason disables Allow) (`AgentInteractionView.swift:173-182, 324-329`) | Server supports `message` (`hooks.go:285-290`); app does not fill it | P0 (almost no cost) |
+| 3 | Plan feedback and approval are mutually exclusive; approval does not change the user's permission mode (`AgentInteractionView.swift:147-156, 312-317`) | Return + Feedback exists; approval defaults to bypassPermissions (`InteractionViews.swift:466-470`; `hooks.go:267-270`) | P1: keep mode selection, but explain risks of Approve and Run Automatically and disable approval with nonempty feedback |
+| 4 | Interaction countdowns, explicit Expired / Handled / Session Changed states, request-snapshot drafts (§4.2) | Interaction has `expiresAt` (`Models.swift:453`); no countdown or per-request drafts found in UI | P1 |
+| 5 | MCP permissions show server and configuration source; MCP Elicitation forms / links (§4.2) | Not found (no `Elicitation` in repository) | P1 (MCP is increasingly common) |
+| 6 | Sub-Agent requests identify source (ID / type); handled from parent or child page (`README.md:118`) | Sub-Agents are read-only (`jarvis/docs/ios.md:180-182`); no interaction-source labels found | P2 |
+| 7 | In-session search (body / thinking / tool input and output / host events), match highlighting, Return to Position Before Search, Load Earlier and Search (§3.5) | No in-session search found, only list search (`ChatsView.swift:245`) | P1 |
+| 8 | Linked-source navigation: task notifications / watch events / scheduled triggers / unchanged files → find original call across pages, with return navigation (§3.5) | Not found | P2 |
+| 9 | Aggregated task-progress page (reconstruct TaskCreate/Update/List/TodoWrite in result order; “May Differ from the Host Now”) (§3.6) | TodoWrite inline checklist (`ToolViews.swift:197-198, 588`); no aggregation | P1 (much needed for long tasks) |
+| 10 | Full-screen long-text reader: frozen snapshot, pagination, forward / backward full-text search, first / last page, full copying (§3.3) | Truncated, View Full Text + Copy Full Text (`ToolViews.swift:386-434`); no in-text search / pagination found | P2 |
+| 11 | Structured tool fields + unified Raw Input / Raw Output + specialized result views (Notebook, PDF, MCP resources, Cron, Monitor, Worktree…) (§3.3) | 44 pt tool rows; specialized views for Bash / Edit / images / to-dos and other common tools (`jarvis/docs/ios.md:19-25`) | P2: add only a unified Raw JSON entry and Previous / Next Change in Edit diffs |
+| 12 | Collapsed summary already shows N Failed / N Without Results (`AgentWorkSummaryView.swift`) | Work row shows only counts and duration (`jarvis/docs/ios.md:61`) | P1 (failures must not be hidden by collapse) |
+| 13 | Status row makes Sending from This Device / Last Result Needs Verification / Syncing (>15 s without verification) first-class states (§3.2) | Connection state in title area (`jarvis/docs/ios.md:273-297`); session-level Result Needs Verification not found | P1 (with #1) |
+| 14 | Verify no unanswered questions before completion (`controller.mjs:139-174`) | Needs you = herdr blocked or pending interaction (`agent-states.md`); terminal menus missed by hooks rely on hub screen reads (`protocol.md:185-203`); pre-done verification not found | P2 (check whether Persona has similar false reports) |
+| 15 | Drafts persist attachments; list row Draft · Summary (§5.3) | Text-only drafts; no list indication (`SavedDraft` in `SendSafety.swift`) | P1 |
+| 16 | User confirms directory trust (`AgentPaneView.swift:84-120`) | Node automatically chooses “Yes, I trust” for new sessions (`claude-integration.md:13-15`) | P2 (automatic trust acceptable for user-chosen directories; manually opened computer sessions encountering trust should get a native page, not a screen card) |
+| 17 | Reading position and expanded state persisted; missing position searched page by page (≤20 pages), with Keep Searching / View Latest (§3.4) | Remembers top visible row (`chat.read.<session>`); Unread opens below last input (`jarvis/docs/ios.md:66-67`) | P3 (Persona's entry strategy is better; add only expansion memory) |
+| 18 | SSH web preview (phone-local loopback port → explicit host 127.0.0.1 port), read-only simulator screenshots (`HERDR_PROGRESS.md:644-659`) | Not found | P3 (hub can also proxy ports; a new feature) |
+| 19 | App installs / upgrades host components (digest verification, atomic switch, upgrades only known official versions) (`HERDR_HOST_COMPONENTS.md`) | `scripts/deploy.sh` deploys from developer machine (`jarvis/CLAUDE.md`) | Not applicable (Persona has a hub architecture) |
+| 20 | Content-free push payload (`HERDR_PUSH.md:11`) | Push body contains last reply (`jarvis/docs/ios.md:258`) | P3: add Hide Content on Lock Screen setting |
 
 ---
 
-## 10. Persona 更好的地方（重新设计时必须保留）
+## 10. Where Persona is better (must preserve in redesign)
 
-| 方面 | Persona（出处） | removed（出处） |
+| Area | Persona (source) | Reference client (source) |
 | --- | --- | --- |
-| 实时性 | hub 推 `sessions / revs / items / interaction`，订阅中 node 每 250 ms 读新行；`items` 有 `history / from_seq / to_seq` 连续性和补洞（`jarvis/docs/protocol.md:148-248`） | 1 s 轮询、无事件续传（`AgentWorkspaceModel.swift:1933`；`HERDR_CINDY_REVIEW.md:47`） |
-| 推送 | hub 直接 APNs；需要你 / 完成两类，可按设备设置；授权 / 计划**通知上直接批准**；实时活动 + 灵动岛（`jarvis/docs/ios.md:258-263`；`jarvis/docs/live-activity.md`） | 可选主机 daemon 每 15 s 采集、默认关、需自己配 APNs 凭据；本地通知只在 App 前台采集（`HERDR_PUSH.md`；`AgentActivityView.swift`） |
-| 多机器 | 一个 hub 统管所有电脑，App 只连 hub；机器监控、空间 / 槽位（`jarvis/docs/agent-states.md`；`jarvis/docs/machines.md`） | 每台主机独立 SSH 连接与密钥，手机直连（`AgentFleetModel.swift`） |
-| 状态模型 | 需要你 / 工作中 / 完成未看 / 待唤醒 / 已屏蔽 / 已看 / 未运行，hub 统一计算、App / 手表 / 推送共用（`agent-states.md`） | 待处理 / 工作中 / 已完成 / 就绪 / 状态待核对，没有「看过」概念 |
-| 列表 IA | 按项目 / 状态 / 机器三种分组，置顶、屏蔽、左右滑操作、同空间同伴菜单、空间页、机器页（`jarvis/docs/ios.md:12, 49-55`） | 活跃 / 待处理 / 全部 + 项目 / 最近（`AgentFleetView.swift`） |
-| 对话展示 | 每条消息自成一段、工作行可原地展开为独立懒加载行、多消息合并气泡、唤醒 / 回顾抽屉、倒置列表精确贴底（`jarvis/docs/ios.md:60-104`） | 60 行 VStack 窗口 + 实测行高（`ARCHITECTURE.md:705-711`） |
-| 发送体验 | 乐观上屏、离线排队自动发、`input_draft` 时可「清空并发送」（`jarvis/docs/ios.md:113-114, 288-292`；`protocol.md:217-218`） | 发送前必须先落盘，unknown 时整会话停发直到核对 |
-| 终端 | hub 实时流 + 续传、手机尺寸接管、滚轮、补全、快捷命令、多手势（§7） | SSH PTY + SwiftTerm，3 个 × 90 s 缓存 |
-| 无头助手 | 「Persona」tab：无头 `claude -p`、逐字流式、ask_user、定时任务 / 跟进、知识库（`jarvis/docs/assistant.md`） | 无 |
-| 其他能力 | 权限模式 / 思考强度标签可在会话里改（`jarvis/docs/ios.md:196-209`）、Claude 建议胶囊、/loop 与后台任务条、文件 / Git 页、链接 App 内打开、分享卡片、手机数据工具、Siri | 无对应（Git 只读审查、用量页较简单） |
-| 交互挺过重启 | 确定性 id + hook 重连 + hub 宽限（`protocol.md:322-333`） | 不需要（无 hub），但手机断线时卡片只能等下次轮询 |
-| screen 卡通用性 | 任意 TUI 对话框都能原生化，按键前比对 `rev`（`protocol.md:185-203`） | 只有 AskUserQuestion 与 Bash 两类适配 |
+| Real time | Hub pushes `sessions / revs / items / interaction`; subscribed node reads new lines every 250 ms. `items` has `history / from_seq / to_seq` continuity and gap recovery (`jarvis/docs/protocol.md:148-248`) | 1 s polling, no event resumption (`AgentWorkspaceModel.swift:1933`; `HERDR_CINDY_REVIEW.md:47`) |
+| Push | Hub directly uses APNs; Needs you / Completed, configurable per device; permissions / plans **approved directly from notifications**; Live Activities + Dynamic Island (`jarvis/docs/ios.md:258-263`; `jarvis/docs/live-activity.md`) | Optional host daemon collects every 15 s, off by default, requires own APNs credentials; local notifications collected only while app is foreground (`HERDR_PUSH.md`; `AgentActivityView.swift`) |
+| Multiple computers | One hub manages all computers; app connects only to hub; machine monitoring, spaces / slots (`jarvis/docs/agent-states.md`; `jarvis/docs/machines.md`) | Independent SSH connection / keys per host, phone connects directly (`AgentFleetModel.swift`) |
+| State model | Needs you / Working / Unread / Waiting / Hidden / Seen / Not Running, computed centrally by hub and shared across app / Watch / push (`agent-states.md`) | Pending / Working / Completed / Ready / Status Needs Verification; no Seen concept |
+| List IA | Group by project / state / machine; pin, hide, swipe actions, same-space peer menu, space page, machine page (`jarvis/docs/ios.md:12, 49-55`) | Active / Pending / All + Project / Recent (`AgentFleetView.swift`) |
+| Chat presentation | Each message forms a section; work rows expand in place into independent lazy-loaded rows; merged multi-message bubbles; wakeup / recap drawers; inverted list precisely anchored to bottom (`jarvis/docs/ios.md:60-104`) | 60-row VStack window + measured heights (`ARCHITECTURE.md:705-711`) |
+| Send UX | Optimistic display, automatic offline queue, Clear and Send on `input_draft` (`jarvis/docs/ios.md:113-114, 288-292`; `protocol.md:217-218`) | Must persist before send; unknown stops sending for the whole session until verified |
+| Terminal | Hub live streaming + resumption, phone-size control, wheel scrolling, completion, command shortcuts, multiple gestures (§7) | SSH PTY + SwiftTerm, 3 × 90 s cache |
+| Headless assistant | Persona tab: headless `claude -p`, word-by-word streaming, ask_user, scheduled tasks / follow-ups, knowledge base (`jarvis/docs/assistant.md`) | None |
+| Other capabilities | In-session permission-mode / reasoning-effort labels (`jarvis/docs/ios.md:196-209`), Claude suggestion capsules, /loop and background-task bars, Files / Git pages, in-app links, share cards, phone-data tools, Siri | No equivalent (Git review is read-only; usage page is simpler) |
+| Restart-surviving interactions | Deterministic ID + hook reconnect + hub grace period (`protocol.md:322-333`) | Not needed (no hub); phone disconnection leaves cards waiting for next poll |
+| Generic screen cards | Any TUI dialog can become native, with `rev` checked before keys (`protocol.md:185-203`) | Only AskUserQuestion and Bash adaptation |
 
-## 11. Agents 部分重新设计建议（【判断】为主）
+## 11. Agents redesign recommendations (mostly [Assessment])
 
-### 11.1 原则
-1. **对话身份 = Claude session id**（保留 Persona 现有模型，resume 后照常发）；但每个写操作附带**目标实例指纹**（机器 + pane + 进程 pid / 启动时间 + session id），node 执行前核对，不一致回确定性错误，App 问「会话已在别处重开，发到新进程吗？」。不学 removed 那种「进程变了就冻结一切」的严格度。
-2. **hub 是唯一权威**：命令回执、消息接纳、交互决定都落 Postgres；手机 outbox 只负责「hub 接纳之前」。removed 的主机 SQLite 队列 + 后台服务是无 hub 架构的补丁，不照搬。
-3. **结果未知是一级状态**：任何「发出后没收到确定回执」的写操作进入「待核对」，自动核对（读 hub 回执 / transcript 证据），核对不了就显式交给用户；**绝不因为超时自动重发**。离线（根本没发出）才自动排队重发。
-4. **一处状态**：会话页只有输入区上方一条状态行表达「现在怎样」，顶栏只放身份（名字、机器 · 空间 › tab）；本机在途 / 待核对 / 同步陈旧都在这条线上。
-5. **能力驱动 UI**：会话 descriptor 带能力位（发图、发文件、拒绝原因、Elicitation、子 Agent 来源、改模式……），hub `features` 带全局能力；UI 不写 `if claude / codex`，Codex / TRAEX 只是能力少一些。
-6. 不确定就说不确定：「暂无结果 ≠ 仍在执行」「已回传 ≠ 已执行」「根据已加载记录整理」这些措辞照搬 removed。
+### 11.1 Principles
+1. **Chat identity = Claude session ID** (keep Persona's existing model; normal sending after resume), but every write includes a **target-instance fingerprint** (machine + pane + PID / start time + session ID). Node verifies before execution and returns a definitive error on mismatch; the app asks “This Session Was Reopened Elsewhere. Send to the New Process?” Do not copy the reference client's strict freeze-everything-on-process-change approach.
+2. **Hub is the sole authority**: persist command receipts, message acceptance, and interaction decisions in Postgres. The phone outbox handles only the period before hub acceptance. The reference client's host SQLite queue + background service compensates for having no hub; do not copy it.
+3. **Unknown results are first-class states**: any write sent without a definitive receipt enters Needs Verification. Reconcile automatically using hub receipts / transcript evidence; if unprovable, explicitly ask the user. **Never automatically resend because of a timeout.** Only offline requests never sent may be automatically queued and resent.
+4. **One status location**: the session page has one status row above the composer for what is happening now. Top bar contains only identity (name, machine · space › tab). Local in-flight operations, verification, and stale synchronization all appear in that row.
+5. **Capability-driven UI**: session descriptor carries capability bits (send images, files, denial reasons, Elicitation, sub-Agent sources, change mode…). Hub `features` carries global capabilities. No `if claude / codex` in UI; Codex / an internal Codex variant simply have fewer capabilities.
+6. Say uncertainty explicitly: borrow “No Result Yet ≠ Still Running”, “Returned ≠ Executed”, and “Organized from Loaded Records” from the reference client.
 
-### 11.2 信息架构
-- **Agents 列表**（保留 Persona 三种分组与状态序）：
-  - 顶部范围段：需要你（数量）· 进行中 · 全部 · 历史。「历史」= 未运行的会话按项目 / 时间浏览（取代单独的历史页）。
-  - 行：状态点 + 标题 + 时间 / 最新一句 / 元信息；新增**草稿摘要**（橙色「草稿 · …」/「[附件]」）与**待核对徽标**（时钟问号）。
-  - 「需要你处理」卡片升级为**跨会话请求收件箱**入口：每项一行（类型、会话、摘要、剩余时间），点开直接是完整交互页，不必先进会话。
-- **会话页**（自上而下）：
-  1. 顶栏（保留 Persona 跟手收起的 ChromeHeader）：返回 / 标题 + 身份副标题 / 同伴菜单 / 终端 / ⋯。⋯ 菜单：搜索、任务进度、子 Agent、文件、Git、用量与上下文、模式与思考强度、改名、压缩上下文、关闭 Agent。
-  2. 可选横条：「任务进度 · x/y ›」（有结构化任务结果时）。
-  3. 正文（保留倒置列表与工作行）：工作行补「N 项失败」常显；展开后顶部吸附「收起」条；记录末尾放**内联权限卡**（只放普通工具权限，其余类型给入口）。
-  4. 状态行（唯一）：左侧确定状态（见 11.4-a），右侧附 spinner 实况（Persona 现有 `Cogitating… 12s · ↓3.2k`）与「改动」入口；有 notice 时整行可点进「会话状态」页。
-  5. 交互区：单个请求 → 面板（保留 Persona 贴在输入框上方、可折叠、限高 55% 的面板）；多个 → 「N 项待处理 ›」进收件箱。
-  6. 循环 / 后台 / 排队 / 待发条（保留 Persona 的 QueueStrip 等），新增「待核对 N」条。
-  7. 输入栏（保留 ComposerRow：＋ / 输入 / 发送或停止，模式与思考强度胶囊）。
-- **新增页面**：会话内搜索（全屏，命中定位 + 高亮 +「返回搜索前位置」胶囊）、任务进度页（每项「查看相关记录」）、全文阅读器（分页 + 文内搜索）、跨会话请求收件箱、会话状态页（待核对的核对 / 人工处置入口）。
-- **交互完整页**（sheet）：类型标题、会话与来源（主机 · 项目、子 Agent、MCP 服务器与来源、终端来源警示）、倒计时、主体（参数字段 + diff / 计划原文 / 问题 / 表单 / 链接）、可选拒绝原因或修改意见、固定底部操作、「交给电脑上的终端」。
+### 11.2 Information architecture
+- **Agents list** (keep Persona's three grouping modes and state order):
+  - Top scope segments: Needs you (count) · In Progress · All · History. History browses non-running sessions by project / time, replacing a separate history page.
+  - Row: state dot + title + time / latest sentence / metadata; add **draft summary** (orange “Draft · …” / “[Attachment]”) and **verification badge** (clock with question mark).
+  - Upgrade the Needs Your Attention card to a **cross-session request inbox** entry: one row per request (type, session, summary, remaining time), opening the full interaction page directly without first entering the session.
+- **Session page**, top to bottom:
+  1. Top bar (keep Persona's gesture-responsive collapsing ChromeHeader): Back / title + identity subtitle / peer menu / Terminal / ⋯. ⋯ menu: Search, Task Progress, Sub-Agents, Files, Git, Usage and Context, Mode and Reasoning Effort, Rename, Compact Context, Close Agent.
+  2. Optional bar: “Task Progress · x/y ›” when structured task results exist.
+  3. Body (keep inverted list and work rows): always show N Failed on work rows; expanded groups get a sticky Collapse bar at the top. Put **inline permission cards** at the transcript end, only for ordinary tool permissions; other types have an entry point.
+  4. Single status row: definite state on the left (11.4-a), live spinner information on the right (Persona's current `Cogitating… 12s · ↓3.2k`) plus Changes entry. With a notice, the whole row opens Session Status.
+  5. Interaction area: single request → panel (keep Persona's collapsible panel attached above the composer, capped at 55% height); multiple requests → N Pending › opens inbox.
+  6. Loop / background / queue / outbox strips (keep Persona's QueueStrip, etc.); add N Need Verification strip.
+  7. Composer (keep ComposerRow: ＋ / input / Send or Stop, mode and reasoning-effort capsules).
+- **New pages**: in-session search (full screen, match navigation + highlighting + Return to Position Before Search capsule), task progress (View Related Records per task), full-text reader (pagination + in-text search), cross-session request inbox, Session Status (reconciliation / manual-resolution entries).
+- **Full interaction page** (sheet): type heading, session and source (host · project, sub-Agent, MCP server and source, terminal-source warning), countdown, body (parameter fields + diff / original plan / questions / form / link), optional denial reason or revision feedback, fixed bottom actions, Hand to Terminal on the Computer.
 
-### 11.3 组件清单
-| 组件 | 要点 |
+### 11.3 Component inventory
+| Component | Key points |
 | --- | --- |
-| `StatusLine` | 状态机 11.4-a；只有它每秒重绘；带 notice 时 44pt 可点 |
-| `InteractionCard`（内联）/ `InteractionSheet`（完整）/ `RequestInbox` | 按请求快照提交；草稿按请求 id 保存；过期 / 已处理 / 会话变化后禁用并说明；有原因时禁用「允许」，有意见时禁用「批准」 |
-| `WorkLine` + `StickyWorkHeader` | 计数「工具 N · 思考 N · 回复 N · 用时」+ 失败数常显；用时只取 transcript 记录的 turn duration，没有就不显示 |
-| `ToolCard` | 结构化字段 + 统一「原始输入 / 原始输出 / 复制」；预览上限 + 全文阅读器 |
-| `DiffView` | 保留 Persona 现有实现，补「上一处 / 下一处」导航与快照冻结 |
-| `FullTextReader` | 冻结快照、分页（按字素边界）、文内搜索、首末页、完整复制 |
-| `SearchOverlay` + `ReturnChip` | 搜索结果定位后顶部出现「返回搜索前位置」；关联定位同理「返回任务通知」 |
-| `TaskProgressBanner` / `TaskProgressPage` | 按结果顺序重建；明示「可能与此刻不同」 |
-| `PendingBubble` | 状态见 11.4-b；待核对时气泡带「核对中 / 请在电脑确认」 |
-| `VerifySheet`（会话状态页） | 列出待核对操作：自动核对结果、「确认已送达 / 确认未送达（保留输入）」 |
-| `DraftStore` | 文本 + 附件 + 版本号；回执清草稿前比对版本 |
+| `StatusLine` | State machine 11.4-a; only it redraws every second; 44 pt tap target with notice |
+| `InteractionCard` (inline) / `InteractionSheet` (full) / `RequestInbox` | Submit against request snapshot; save drafts by request ID; disable and explain on expiration / resolution / session change; disable Allow with reason, Approve with feedback |
+| `WorkLine` + `StickyWorkHeader` | Counts “N Tools · N Thoughts · N Replies · Duration” + always-visible failures; duration only from recorded transcript turn duration, otherwise omit |
+| `ToolCard` | Structured fields + unified Raw Input / Raw Output / Copy; preview limit + full-text reader |
+| `DiffView` | Keep Persona implementation; add Previous / Next Change and frozen snapshot |
+| `FullTextReader` | Frozen snapshot, pagination at grapheme boundaries, in-text search, first / last page, full copying |
+| `SearchOverlay` + `ReturnChip` | Return to Position Before Search at top after navigating; same for linked-source Return to Task Notification |
+| `TaskProgressBanner` / `TaskProgressPage` | Rebuild in result order; explicitly say May Differ from Current State |
+| `PendingBubble` | States in 11.4-b; verification bubbles show Verifying / Please Check on the Computer |
+| `VerifySheet` (Session Status page) | List unconfirmed operations: automatic reconciliation result, Confirm Delivered / Confirm Undelivered (Keep Input) |
+| `DraftStore` | Text + attachments + version; compare version before clearing on receipt |
 
-### 11.4 状态机
-**a. 会话实时状态（StatusLine，客户端合成）**
-`ended`（会话结束 / 被替换）> `offline`（连不上 hub，沿用标题位的连接状态，不重复）> `submitting`（本机有写操作在途）> `unconfirmed`（有待核对操作）> `stale`（超过 N 秒没收到 hub 的确认，显示「正在同步」）> `needsYou`（有待处理交互或 herdr blocked）> `working`（含 `stopping`：中断已发出、尚未离开 working）> `unread / idle`。N 取多少需要实测 hub 推送间隔后再定（removed 用 15 s，`AgentLiveActivity.swift`，非实测值）。
+### 11.4 State machines
+**a. Live session status (`StatusLine`, synthesized by client)**
+`ended` (session ended / replaced) > `offline` (cannot connect to hub; reuse connection state in title area, no duplication) > `submitting` (local write in flight) > `unconfirmed` (operation needs verification) > `stale` (no hub confirmation in N seconds; show Syncing) > `needsYou` (pending interaction or herdr blocked) > `working` (including `stopping`: interrupt sent, not yet out of working) > `unread / idle`. Choose N after measuring hub push intervals (reference client uses 15 s, `AgentLiveActivity.swift`, not a measured value).
 
-**b. 发出的消息**
+**b. Sent messages**
 ```
-draft ──发送──▶ local(未联网，存盘) ──联网──▶ sending
-sending ──hub 落库回 accepted──▶ accepted ──node 回 delivered──▶ delivered ──transcript 出现──▶ shown
-sending ──确定性拒绝(input_draft/dialog_open/stale/invalid)──▶ refused（可编辑重发 / 清空电脑草稿并发）
-sending ──超时 / 断线且不知道 hub 是否收到──▶ unknown ──查 hub 回执──▶ accepted… | local（hub 确认没收到才回到可自动重发）
-accepted/delivered 中 node 报 delivered:unknown ──▶ verifying ──transcript 有同 id/同文──▶ shown | 无法证明 ──▶ needsReview（人工：已送达 / 未送达）
-取消：只允许 local / accepted-未派发；派发与取消的竞争在 hub 同一事务里决定
+draft ──send──▶ local(offline, persisted) ──online──▶ sending
+sending ──hub persists, returns accepted──▶ accepted ──node returns delivered──▶ delivered ──appears in transcript──▶ shown
+sending ──definitive rejection(input_draft/dialog_open/stale/invalid)──▶ refused(edit and resend / clear computer draft and send)
+sending ──timeout / disconnect, hub receipt unknown──▶ unknown ──query hub receipt──▶ accepted… | local(return to automatic resend only if hub confirms not received)
+node reports delivered:unknown during accepted/delivered ──▶ verifying ──same id/text in transcript──▶ shown | unprovable ──▶ needsReview(manual: delivered / undelivered)
+Cancellation: only local / accepted-not-dispatched; dispatch and cancellation compete in the same hub transaction
 ```
-**c. 交互请求**
-`pending(deadline)` → `answering` → `answered`（hook 已取走）| `expired` | `resolvedElsewhere`（电脑上或别的设备答了）| `handedToTerminal` | `unknown`（回答请求丢回执 → 按 interaction id 查 hub）。answered 之后由 transcript 显示工具实际结果，卡片文案「已回传」而不是「已完成」。
+**c. Interaction requests**
+`pending(deadline)` → `answering` → `answered` (hook consumed it) | `expired` | `resolvedElsewhere` (answered on computer or another device) | `handedToTerminal` | `unknown` (answer request lost receipt → query hub by interaction ID). After answered, the transcript shows actual tool results; card says Returned, not Completed.
 
-**d. 一次性操作（中断 / 改名 / 关闭 Agent / 压缩 / 改模式 / 改思考强度）**
-`pending` → `sent` → `done` | `failed(确定)` | `unknown → verifying`。中断 ≠ 取消排队消息；有 `unknown` 时同一会话的下一次同类操作要先核对。
+**d. One-time operations (interrupt / rename / close Agent / compact / change mode / change reasoning effort)**
+`pending` → `sent` → `done` | `failed(definite)` | `unknown → verifying`. Interrupt ≠ cancel queued message. An `unknown` requires reconciliation before the next same-type operation in that session.
 
-### 11.5 Android 实现要点
-- **列表与对话**：Compose `LazyColumn(reverseLayout = true)` 天然是倒置列表，Persona 在 iOS 上为翻转、安全区、边缘模糊做的绕路（`jarvis/CLAUDE.md` 经验）大多不需要；仍要遵守「每个工作步骤是独立 item、给稳定 key 和 `contentType`」。吸顶收起条在 `reverseLayout` 下不能直接用 `stickyHeader`，需按 `LazyListState.layoutInfo` 自绘浮层（待原型验证）。
-- **键盘与边距**：edge-to-edge + `WindowInsets.ime`/`imePadding()`；输入区放在列表下方的 Column 里（与 Persona iOS 的结论一致）。
-- **返回手势**：预测性返回（`PredictiveBackHandler`）；交互完整页用 `ModalBottomSheet`，草稿在 dismiss 时按请求 id 存。
-- **推送**：FCM 替代 APNs（hub 要加 FCM HTTP v1 发送端）；「需要你」用高优先级消息；通知操作用 `RemoteInput`，可以在通知里直接输入**拒绝原因 / 计划修改意见**（比 iOS 只能在 App 里输入更顺）；批准类操作要求解锁（`setAuthenticationRequired`，API 级别需核实）。实时活动的对应物是常驻通知；Android 16 的 Live Updates（进度类通知）可考虑，API 与限制需核实；没有灵动岛。
-- **后台**：不要在后台保持 WebSocket（Doze / 后台限制），沿用「前台连、后台断、推送唤醒」；离线 outbox 的补发可用 WorkManager（联网约束），但必须带同一个 client id，且只处理「hub 确认没收到」的条目。
-- **存储**：outbox / 操作日志 / 草稿用 Room（事务保证「落盘后才发送」「回执清草稿要比对版本」）；配对 token 用 Android Keystore 生成的密钥加密（Jetpack Security Crypto 的维护状态需核实）。
-- **终端**：协议是 hub 中转的 VT 帧，把 Persona iOS 自写的网格渲染（`TerminalGrid` / 宽字符 / 框线画成线）移植到 Compose Canvas；现成终端库（如 Termux 的 terminal-emulator）许可证与适配度需核实。键栏、Ctrl 三态（单击粘滞 / 双击锁定 / 按住）逻辑可直接复用。
-- **Markdown / 代码**：没有 MarkdownUI 对应物，需选型（commonmark-java + 自写 Compose 渲染，或现成 Compose Markdown 库，需评估表格 / 代码块 / 选择复制）；代码高亮照 removed 做有界词法扫描（几种语言、输入上限、后台、可取消）。Compose 的 `SelectionContainer` 支持跨段落选择，可以去掉 iOS 上「选择」要弹纯文本页的限制。
-- **按钮不换行**：`maxLines = 1` + `softWrap = false`，空间紧时用自动缩字（Compose 新版 `BasicText` 的 autoSize，版本需核实）或改图标。
-- **附件**：Photo Picker（`PickVisualMedia`）、相机 `TakePicture`、文件用 SAF；大文件按 hub 现有分块上传流式读 `ContentResolver`。
+### 11.5 Android implementation notes
+- **Lists and chats**: Compose `LazyColumn(reverseLayout = true)` is naturally inverted. Most Persona iOS workarounds for inversion, safe areas, and edge blur (`jarvis/CLAUDE.md`, “Lessons”) are unnecessary. Still require each work step to be its own item with stable key and `contentType`. Sticky collapse bars under `reverseLayout` cannot directly use `stickyHeader`; draw an overlay from `LazyListState.layoutInfo` instead (prototype verification pending).
+- **Keyboard and insets**: edge-to-edge + `WindowInsets.ime`/`imePadding()`; composer in a Column below the list, consistent with Persona iOS conclusions.
+- **Back gesture**: predictive back (`PredictiveBackHandler`); full interactions use `ModalBottomSheet`, saving drafts by request ID on dismissal.
+- **Push**: FCM replaces APNs (hub needs an FCM HTTP v 1 sender); Needs you uses high-priority messages. Notification actions use `RemoteInput`, letting users enter **denial reasons / plan revision feedback** directly from notifications, smoother than iOS's in-app-only entry. Approval actions require unlock (`setAuthenticationRequired`; API level needs verification). Persistent notifications correspond to Live Activities; Android 16 Live Updates (progress notifications) are worth considering, with APIs / restrictions to verify. No Dynamic Island.
+- **Background**: do not keep WebSocket alive in background (Doze / background restrictions); keep connect-foreground, disconnect-background, wake-by-push. WorkManager with a network constraint can resend offline outbox items, but must use the same client ID and only items hub confirms it never received.
+- **Storage**: Room for outbox / operation journal / drafts, with transactions guaranteeing persist-before-send and version comparison before receipt-driven draft clearing. Encrypt pairing tokens using an Android Keystore-generated key (Jetpack Security Crypto maintenance status needs verification).
+- **Terminal**: protocol carries hub-relayed VT frames. Port Persona iOS's custom grid rendering (`TerminalGrid` / wide characters / box drawing as lines) to Compose Canvas. Existing terminal libraries such as Termux terminal-emulator need license / fit checks. Key bar and three-state Ctrl (tap-sticky / double-tap-lock / hold) logic can be reused directly.
+- **Markdown / code**: no MarkdownUI equivalent; choose a library (commonmark-java + custom Compose rendering, or existing Compose Markdown, evaluating tables / code blocks / selection and copying). Borrow bounded lexical syntax scanning from the reference client: several languages, input limit, background, cancellable. Compose `SelectionContainer` supports cross-paragraph selection, removing iOS's Select-requires-plain-text-page limitation.
+- **Single-line buttons**: `maxLines = 1` + `softWrap = false`; under tight space, use auto-sizing (new Compose `BasicText` autoSize, version to verify) or icons.
+- **Attachments**: Photo Picker (`PickVisualMedia`), camera `TakePicture`, SAF for files. Stream large files from `ContentResolver` with hub's existing chunked upload.
 
-### 11.6 落地顺序建议
-1. P0（协议 + 小 UI）：hub 侧命令回执表与 `client_msg_id` 持久去重；超时 ≠ 离线；拒绝原因；计划意见与批准互斥 + 「自动执行」风险说明；StatusLine 合并与「待核对」一级状态。
-2. P1：会话内搜索；任务进度；跨会话请求收件箱 + 倒计时；草稿含附件 + 列表草稿摘要；工作行失败数常显；MCP 来源与 Elicitation；交互草稿按请求保留。
-3. P2：关联定位；全文阅读器文内搜索；子 Agent 请求来源；终端细节（透明方向面板、缓存画面待核对后开放输入）；hub 端口代理网页预览。
+### 11.6 Recommended implementation order
+1. P0 (protocol + small UI): hub command-receipt table and durable `client_msg_id` deduplication; timeout ≠ offline; denial reasons; mutually exclusive plan feedback / approval + automatic-execution risk warning; consolidated StatusLine and first-class Needs Verification.
+2. P1: in-session search; task progress; cross-session request inbox + countdowns; attachment drafts + list summaries; always-visible work-row failure counts; MCP source and Elicitation; per-request interaction drafts.
+3. P2: linked-source navigation; in-text search in full-text reader; sub-Agent request sources; terminal details (transparent direction panel, cached screen with input enabled after verification); hub-proxied web preview.
 
-## 12. 没查清 / 需要实测的地方
+## 12. Unresolved questions / measurements needed
 
-- removed 文档自述：真机网络时延、滚动帧率、真机键盘 / 大字号 / 边缘手势大多没有定量验收（`HERDR_PROGRESS.md:754, 1159`；`HERDR_CINDY_REVIEW.md:91`）；持久队列「真实服务商 + 手机 SSH 全链路」未验收（`HERDR_PROMPT_QUEUE.md:72-78`）。本笔记里的 1 s / 8 s / 15 s / 90 s / 60 行 / 20 页等全是代码常量或文档配置，**不是性能数据**。
-- 没逐个读：`AgentHistoryTranscriptView.swift`、`AgentChildTranscriptView.swift`、`AgentElicitationFormView.swift`、`AgentUsageView.swift`、`AgentGitReviewView.swift`、`AgentWebPreviewView.swift`、各 `*ResultView.swift`、主机 `terminal-questions*.mjs`、`queue/*.mjs`——相关结论来自 README / ARCHITECTURE / PROGRESS 的描述。
-- Persona：只用 zoekt 确认 hub 代码里没有 `ClientMsgID` 去重，没有跑过「node 重启后重发」的实验；是否存在「herdr 报 done 但题还挂着」的误报没有验证；未运行会话在列表里最多列多少条没有核实；电脑上手动开的会话遇到 Bash 审批时，screen 卡显示的命令是否会被截断没有验证。
-- Android 相关的 API 级别与库（Live Updates、通知操作解锁要求、Compose 自动缩字、Jetpack Security Crypto 状态、终端 / Markdown 库许可证）全部需要另行核实。
-- removed 的「交互卡片挂在对应工具记录下」做不到（协议没有 tool_use 关联 ID，`HERDR_CINDY_REVIEW.md:89`）；Persona 的 hook 输入里有 `tool_use_id`（`jarvis/ios/Shared/Models.swift:474`），理论上可以把权限卡挂到对应工具行，需要确认 transcript 落盘时机（tool_use 行在 hook 触发时是否已写出）。
+- The reference client's documentation says real-device network latency, scrolling frame rates, keyboards / large text / edge gestures mostly lack quantitative acceptance checks (`HERDR_PROGRESS.md:754, 1159`; `HERDR_CINDY_REVIEW.md:91`). The durable queue has not passed a real-provider + phone-SSH full-chain acceptance check (`HERDR_PROMPT_QUEUE.md:72-78`). This note's 1 s / 8 s / 15 s / 90 s / 60 rows / 20 pages are all code constants or documented configuration, **not performance data**.
+- Not read individually: `AgentHistoryTranscriptView.swift`, `AgentChildTranscriptView.swift`, `AgentElicitationFormView.swift`, `AgentUsageView.swift`, `AgentGitReviewView.swift`, `AgentWebPreviewView.swift`, individual `*ResultView.swift`, host `terminal-questions*.mjs`, `queue/*.mjs`. Related conclusions come from README / ARCHITECTURE / PROGRESS descriptions.
+- Persona: only used zoekt to confirm no hub `ClientMsgID` deduplication; did not test resend after node restart. Did not verify false completion while a question remains, the limit on non-running sessions in the list, or whether screen-card commands are truncated for Bash approvals in sessions manually opened on the computer.
+- Android API levels and libraries all need separate verification: Live Updates, notification-action unlock requirements, Compose auto-sizing, Jetpack Security Crypto status, terminal / Markdown library licenses.
+- The reference client cannot attach interaction cards to corresponding tool records because the protocol lacks a tool_use association ID (`HERDR_CINDY_REVIEW.md:89`). Persona hook input has `tool_use_id` (`jarvis/ios/Shared/Models.swift:474`), so attaching permission cards to tool rows is theoretically possible. Verify transcript persistence timing: has the tool_use row been written when the hook fires?

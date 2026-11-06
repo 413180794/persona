@@ -1,105 +1,46 @@
-# 经验：助手（无头 Claude / Codex）
+# Lessons: assistant (headless Claude / Codex)
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, unusual behavior, and decisions at the time (formerly `CLAUDE.md` “Lessons”; index `docs/lessons/README.md`). Add lessons to relevant sections, or a new section if none fits.
 
-- 会话分诊设置读库失败时不能给客户端回 `200` 加默认值（2026-11-06，#4553）：客户端点一个开关会把整组设置 `PUT` 回去，伪装成「全关」的读失败会覆盖库里原来开启的其他项。读取函数保留错误，设置接口回带本地化原因的 `503`；只有内部自动分诊继续用默认值兜底。失败不缓存，下次重试仍要读库。回归用假的 Store 注入读错误，分别检查接口报错、恢复后读到保存值，以及内部兜底和 `PUT` 不受影响，不停共享测试数据库。
+- A database-read failure for session triage settings must not return `200` with defaults (2026-11-06, #4553). Toggling one switch makes the client `PUT` the entire settings group; a failed read disguised as All Off would overwrite other enabled values. Preserve the read error and return `503` with a localized reason from the settings API. Only internal automatic triage keeps a default fallback. Do not cache failures; the next retry must read the database again. Regression tests inject read errors through a fake Store and check API failure, saved values after recovery, and unaffected internal fallback and `PUT`, without stopping the shared test database.
 
-- 助手卡片的边界校验不能只看常见写法（2026-11-05，#2018）：重复 key 的错误曾被后续 chart／markdown 检查的 nil 覆盖；Markdown 引用图片和引用链接也能绕过只查内联语法的正则。共同检查应先拒绝重复 key，再检查组件；安全子集明确拒绝引用链接定义，补图片、autolink、缺 hostname 的 URL 回归。剥离 HTML 后清理空 section，否则 compact 限制会把已经清空的卡片判成过大。活卡片 version 要限制到 JavaScript 安全整数范围，不能只看 Go 的 int64。
+- Assistant-card boundary validation must cover more than common syntax (2026-11-05, #2018). Duplicate-key errors were overwritten by later chart / Markdown checks returning nil; reference-style images / links bypassed inline-only regex. Shared validation rejects duplicate keys first, then components. Safe subset explicitly rejects reference definitions; regression tests include images, autolinks, URLs without hostnames. Remove empty sections after stripping HTML, or compact limits reject emptied cards as oversized. Live-card version must stay within JavaScript safe integers, not merely Go int64.
 
-- 单会话查询也要用可信的助手分类（2026-11-05，#2019）：列表会按专用目录和是否有 pane 判断 Assistant，原来的 session.get 却直接返回 node 的原始记录，字段通常没填。富 UI 的工具和 outbox 用它检查身份，会误拒绝真实助手。查询时复用 isAssistant，pane 仍优先判成普通 Agent；测试不能只手动填 Assistant=true，要用真实 hub 查询路径验证 headless／pane／普通目录。正文注册也用同一分类。
-- Go 的 JSON 解码会忽略字段名大小写（2026-11-05，#2019）：`Fallback` 能填进 Go 的 Fallback，但 Swift／Kotlin 只读 schema 的 `fallback`。助手原始块在转成 Go 类型前必须确认精确字段名，不能拿类型解码成功当跨端合规。
-- HTTP 请求过总线时保留编码路径（2026-11-05，#2019）：正文卡片 key 含 `/`，item id 常带 `#`；客户端正确 URL 编码后，hub 若转发 `r.URL.Path`，助手重建请求就把它们当路径分隔符或 fragment，动作全回 404。用 `EscapedPath()`，并测真实 hub→assistant 中继；只测 Service 的路由会漏掉这层错误。
+- Single-session lookup must use trusted assistant classification too (2026-11-05, #2019). Lists classify by dedicated directory / pane, but session.get returned raw node records usually lacking Assistant. Rich-UI tools / outbox falsely rejected real assistants. Reuse isAssistant on lookup; pane takes precedence as ordinary Agent. Tests must use real hub query path for headless / pane / normal directory, not manually Assistant=true. Body registration shares classification.
+- Go JSON decoding ignores field-name case (2026-11-05, #2019): Fallback populates Go Fallback, but Swift / Kotlin require schema fallback. Validate exact keys before converting assistant raw blocks to Go types; successful decoding is not cross-client conformance.
+- Preserve encoded paths over HTTP bus (2026-11-05, #2019). Body-card keys contain /, item IDs often #. Clients encoded correctly, but forwarding `r.URL.Path` made assistant treat them as separators / fragments, actions all 404. Use `EscapedPath()`, test real hub→assistant relay; Service routes alone miss this layer.
 
-- 无头 `claude -p` 里 AskUserQuestion 不可用（不是 hook 没接上，是工具本身被禁用）：要在手机上问用户，给它一个会阻塞等答案的 MCP 工具
-  （`ask_user`，`docs/assistant.md`）。模型会把它和别的工具并行调用，有副作用的工具要自己在 hub 里批准。
-- 无头助手（`claude -p`）默认权限模式下，连 Persona 自己的 MCP 工具（notify_user、schedule_followup）都要在手机上批准：夜里到点的跟进、
-  Monitor 事件就卡在批准上（2026-10-30 实测）。助手进程带 `--allowedTools mcp__jarvis`，会替用户出面的工具由 hub 自己再问（`docs/assistant.md`）。
-- 助手的后台任务和 Monitor 是 claude 进程的子进程：回收空闲进程、systemd 重启 jarvisd（杀整个 cgroup）都会把它们一起杀掉，对话永远等不到通知。
-  node 从 stream-json 的 `system/background_tasks_changed` 知道还有什么在跑，有任务就不回收，任务列表随时落库，重启后告诉对话丢了什么。
-- 助手按时做的事只能有一张表（2026-10-31，`docs/assistant.md`「定时任务」）：以前定时任务和跟进分两套，重复的巡检只能一轮接一轮地
-  `schedule_followup`，跑起来那一刻就从列表消失，卡在审批上的一个多小时里用户看不到、停不了。重复就做成重复（`every`），
-  一轮重排自己时 hub 认出是同一个任务；任务的模型 / 权限模式只让用户在 App 里改，助手不能自己提权。`bypassPermissions` 对无头 claude 只能启动时给。
-- 助手调飞书用飞书网关自带的 skill（副本在 `server/internal/assistantskills/`，编进 jarvisd，起助手时装到它的 `.claude/skills`；
-  同步上游的脚本；2026-11-04 起技能在接飞书的插件里）。token 只进助手进程的环境变量（#1317 起连环境也不进了，见下面「凭据别放进 Agent 进程的环境」）；
-  写操作靠 node 的 Bash PreToolUse 闸门（`node/larkgate.go`），
-  只给助手用的那组 hooks（`assistant-hooks` 插件和 `assistant-settings.json`）带这个 hook。闸门读不懂的命令里只要有 `ol POST/PUT/PATCH/DELETE` 也要手机确认，否则 bypass 模式会直接放过
-  （凭据在代理的闸门改成直接拒绝）。
-  在 hub 上起测试实例用独立 HOME / 端口 / 库（`/tmp/jt`），别碰线上 jarvisd；`ssh … 'pkill -f 模式'` 会匹配到 ssh 自己的命令行把会话杀掉，模式写成 `[/]tmp/…`。
-  `[x]` 的写法只在同一条 ssh 命令里别处没再出现原文时才管用：2026-11-01 `pkill -f "[d]rive.py x"` 后面还跟着 `python3 drive.py x …`，
-  `pgrep -f jarvis_args` 再按进程组杀，都把 ssh 自己杀了（exit 255）。最稳的是按完整路径锚定（`pgrep -f '^/tmp/jt/…/jarvisd'`）拿 pid 再杀，一条 ssh 只做这一件事。
-- 凭据别放进 Agent 进程的环境，再靠读命令拦（#1317，2026-11-05）：`env`、`printenv <拆开拼的变量名>`、`cat /proc/self/env*`、
-  `${!前缀*}`、`python3 -c 'import os…'` 都绕得过字面黑名单，评审又试出 `nohup env`、`compgen -e`、`ps eww`、`eval` 拼名字、`env -u HOME printenv`……补不完；
-  更要紧的是拿到 token 的脚本直接调接口，写操作的手机确认就没了。改成凭据留在 node、本机代理按同一份规则查每个实际请求（`node/gateproxy.go`）。
-  代理要挂在常驻 node 的整个进程上（`assistantKeeper`），不能挂在每个连接的 `Node` 上：hub 一重连就换一个 `Node`，留下来的对话还拿着旧地址，
-  新 `Node` 放行的调用到不了旧代理，确认过的写也发不出去。
-  确认过的调用按「方法 + 路径 + 正文」一次一放，所以闸门读不懂的命令（循环、脚本）里的写只能拒绝、让模型单独一条发；别为了它开「一段时间都放行」的窗口，
-  那会把同一个对话里接下来别的命令也放过去。
-- 助手用 Codex 时是 `codex app-server`（`docs/assistant.md`「Codex」）。踩过的：MCP 工具调用要批准，来的是 `mcpServer/elicitation/request`
-  （`_meta.codex_approval_kind: mcp_tool_call`），不是命令审批；MCP 工具默认 60 秒超时（ask_user 要调大 `tool_timeout_sec`）；命令的环境默认去掉
-  `*KEY*` / `*TOKEN*` 变量（ol 拿不到 token）；`turn/interrupt` 不停正在跑的命令，要再 `thread/backgroundTerminals/clean`（实验接口，导出协议要
-  `generate-ts --experimental` 才看得到）；thread id 由 Codex 定，MCP 进程起来时还不知道会话 id。飞书闸门靠「审批总会来」：别用 `approvalPolicy: never`。
-- Codex 助手的记忆和 Claude 共用助手目录的 auto memory（`docs/assistant.md`「Codex」）。Codex 的 `untrusted` 连 `head` 都要批准，
-  不单独放行的话每次读记忆都在手机上弹卡片（2026-11-01 实测）；记忆目录在助手目录外，不加进 `writableRoots` 写不进去。
-  Codex 自己的 `~/.codex/memories` 是整台机器共用的，别给助手打开。
-- Codex 在 macOS 的沙箱拒绝路径里带软链接的可写目录（`/tmp`、`/var` 这类顶层的除外），每条命令执行前就报 `symlinked writable roots are not supported`（#1751）。
-  助手目录走旧名 `~/.jarvis`（指向 `.persona`）、`~/.claude` 放在 dotfiles 里都会撞上；cwd 和记忆目录两个可写目录都要解析成真实路径再交给 Codex（`codexDirs`），只改 cwd 不够。
-  报错里的 `allow_symlinked_codex_home` 只放行 CODEX_HOME 下面的，别拿它放宽。验证：用 `command/exec` 和 `thread/fork`（`ephemeral: true`，不碰原会话）带同样的参数跑 `pwd`。
-- 在 hub 机器上用假 HOME 起测试 hub 时，`~/.local/bin/codex` 包装脚本按 `$HOME/.npm-global` 找安装目录，假 HOME 里要软链过去，否则 app-server 一启动就退出。
-- 假 HOME 的测试 hub 不等于隔离：node 读的是启动器指定的 Claude 配置目录，启动器（`claude-aster` 这类）写死了 `CLAUDE_CONFIG_DIR` 时，测试对话的 transcript 会写进真实的配置目录，而且 node 按 cwd 以 `/.jarvis/assistant` 结尾认助手对话，真实的那些也会出现在测试 hub 的列表里、测试助手能改它们（2026-11-01 测对话管理工具时）。做法：假 HOME 里放一份启动器的拷贝，`CLAUDE_CONFIG_DIR` 改到假 HOME 下（settings.json 拷一份），`_claude_launchers` 也写进假 HOME 的 .bashrc；提示词只让它动自己开的对话；测完删掉整个假 HOME（拷贝里有 key）。
-- node 的 `assistant.send` 带一个它不认识的 session id 时不报错：找不到 transcript 就用这个 id 起一段**空白**的新对话。要「续上，续不上就告诉我」的调用
-  （定时任务自己的对话，2026-11-01）带 `resume_only`：node 找不到进程也找不到 transcript 就报错，由 hub 开新对话并记下（`docs/assistant.md`「定时任务」）。
-  判断对话忙不忙看 hub 里的会话状态（working / needs_you），只有在 node 列表里的会话才有：要长期续的对话放进 `keptSessions`，否则一台忙机器上 80 个新 transcript 就把它挤出列表。
-- **系统提示里不放每次都变的东西**（2026-11-01，`docs/assistant.md`「实时快照和前缀缓存」）：提示词缓存按前缀匹配，系统提示和工具定义在整段对话前面，
-  变一个字节，重启后整段历史就要重写（几十万 token 的对话首字要 10 秒到几分钟）。实时快照随每条消息带。但 Claude Code 续聊时其实一直用第一次记下的系统提示
-  （压缩后才换），所以以前的快照是「过时」而不是「失效」；重启后读不到缓存的真正原因是**工具列表变了**（实测少一个 MCP 工具整段重写，schema 键的顺序不影响）。
-  判断缓存为什么没中，别猜，复制一份真实对话（换会话 id、放临时目录）一项一项改着重启，看 `message_start` 的 `cache_read_input_tokens`。
-- 无头 `claude -p` 会自动压缩（窗口用 `CLAUDE_CODE_AUTO_COMPACT_WINDOW` 调），但 Claude Code 的空闲压缩只在交互式会话里跑；stream-json 发一条 `/compact`
-  就能手动压。实测续聊进程的第一条消息有时还不压、下一条才压，别拿一次没压当「不支持」。
-- `ssh_host` 是 hub 那台机器 `~/.ssh/config` 里的别名，只在 hub 本机有效：给跑在别的电脑上的东西（助手的说明）写 `ssh <别名>` 等于给了一条执行不了的命令。
-- npm 装的 lark-cli 是 `#!/usr/bin/env node` 的脚本，node 和它都在 nvm 这类目录里，systemd 起的 jarvisd 的 PATH 里没有（2026-11-03，#273）：
-  按命令名直接执行会「找不到」，找到了也会因为 `env node` 失败。node 先用登录 shell `command -v` 找到绝对路径，执行时把它所在的目录放到 PATH 最前（`node/larkcligate.go`）；助手 PATH 上的包装同理。
-- lark-cli 以用户身份发消息要应用开了 `im:message.send_as_user`，默认的应用没有（2026-11-04，#273）：`auth login --domain all` 拿到两百多个权限也没有它，
-  `im +messages-send --as user` 回 `missing_scope`，提示的 `auth login --scope …` 也补不上（应用没开的权限用户授权不了）。机器人身份有 `im:message`，
-  所以助手发消息、回复一律 `--as bot`，手机卡片按 `--as` 写身份。这次是手机上点了同意之后才在飞书那边失败的：闸门只能确认「要不要做」，做不做得成要看权限。
-- 会话的 `last_text` 是 node 截过的预览（空白全压成一个空格、只留 200 个字，`node/sessions.go` 的 `snippet`），不是能渲染的 Markdown（2026-11-04，#1508）：
-  任务完成卡片拿它当摘要，列表、标题挤成一行，`**`、反引号可能被截在中间，网页又按纯文本显示，用户看到一串符号。要原文的地方（完成卡片）
-  用 `session.items` 读 transcript 里最后一条回复（`lastTurn`），截断用 `clipMarkdown`（按行、不截在标记中间）；只显示一两行的地方
-  （任务进度行、推送）把 Markdown 去掉（hub `plainMarkdown`、网页 `lib/plain-markdown.ts`），别原样显示。
-- hub 插进对话的 feed 条目是只追加的，「发出去了」这种之后才有的状态不能只放客户端内存（2026-11-04，#1519）：消息卡点了「发送」、评论也发到 GitHub 了，
-  网页刷新后又是草稿和「发送」，差点重发。状态要写回条目本身（body 的 `sent_at`），重新广播同一个 id，客户端按 id 换 body，增量拉取也要带上「之后改过的」条目。
-  同一次还发现起草提示词明确要求「查不到的用【】标出来」，点一下就发的草稿把【预计今晚 / 几点前】原样发了出去：一键发送的草稿不能留空让人填。
-- MCP 的 `tools/list` 失败时不能回空列表（2026-11-04，#504）：`personad mcp` 在 `initialize` 声明了 `listChanged: false`，Claude Code 整段对话只列一次工具，
-  node 一时连不上（重启、重连 hub、启动顺序）时回空列表，助手整段对话就没有任何 Persona 工具，也看不出是连接问题。现在 15 秒内重试，仍不行就回 JSON-RPC 错误（`/mcp` 和 MCP 日志里能看到原因）；
-  node 回 `{"tools":[],"error":…}`（它连不上 hub）也算失败，正常的空列表才算没有工具。
-- 助手成了自己的进程（2026-11-04，#1446，`docs/assistant.md`「进程」）以后，hub 里凡是「问一下助手」的地方都可能等不到：hub 启动时注册连接器要查助手的工具名，
-  那时助手还没连上，每个工具名都等满 10 秒（测试里一个连接器测试 60 秒）。hub 启动、注册这类路径只读助手上次报的（`assistantToolsNow`），只有 node 给助手对话要工具列表时才等它一会儿。
-  同理，助手自己的定时任务循环要等第一次握手的回答（在哪台机器、时区）再开始，否则一启动就拿着空的回答跑到点的任务，全失败。
-- 总线上 hub 发来的事件在读循环里同步交给回调（`internal/rpc`）：处理慢了整条连接都停。助手把事件放进队列按顺序处理，`session.turn_ended`（要问模型、等任务的 Agent 停下）另起；
-  测试里要「助手处理完了」就在发完事件后对它做一次调用（同一条连接，排在事件后面），再等它的队列空（`BusHub.Settle`）。
-- hub 默认用 `os.Executable() assistant` 起助手：测试里 `os.Executable()` 是测试二进制，起它等于把整个测试再跑一遍。hub 的测试在 `init` 里把 `assistantCommand` 换掉，要测子进程就让测试二进制在 `TestMain` 里认出环境变量、当助手跑。
-- `zsh -ic` 会先展开已有 alias 再执行整段脚本（#1674）：用户给 `codex` 起了同名 alias 时，`codex() { … }` 会在解析阶段失败，同串里先 `unalias` 也来不及。
-  包装函数用 `function codex { … }`，其他包装里的调用写成 `\codex`，避免 alias 再次展开造成递归；用临时 `ZDOTDIR` 配真实 zsh 回归，不读取或修改用户的 shell 配置。
-- Agent 自己的「本会话」授权只活在它的进程里（2026-11-05，#2202）：Claude 的 `addRules … destination: session`、Codex 的 `acceptForSession`、
-  飞书闸门的 node 内存，主对话进程一换（空闲回收、部署、换启动器）、node 一重启就没了，`--resume` 不带回来，用户看到的是「点了总是允许还一直问」。
-  助手对话里要跨进程的状态都得落到 hub 的库：授权卡带 `always_keys`，hub 记进 `assistant_always` 并自己回答同样的卡（`docs/assistant.md`「本会话总是允许」）。
-- 一段对话的 Agent 类型是它的对话记录定的，不是这一条消息带的启动器（2026-11-05）：主对话每条都按「模型配置 › 主对话」（#1518），设置从 Codex 换成 Claude 的启动器后，
-  node 只在进程还活着时拒绝换类型，进程一退就 `claude --resume <Codex 线程 id>`，回 `No conversation found`，消息停在「没能确认是否送达」，界面是「会话已结束」，从 19:39 坏到深夜。
-  更糟的是失败的那次启动已把会话状态的 `launcher` 改成了 Claude 的，原来的 Codex 启动器名丢了。现在续聊前先看对话记录是哪一种（`assistantResumeLauncher`），
-  类型不合就用它自己的、或同类的 `claude` / `codex`；查这类问题先 `rg <id> ~/.persona/node-attach.log`，看是哪个启动器、什么时候开始退的。
-- 助手对话（`claude -p`）被停时 transcript 里没有「已中断」（2026-11-06，#3308）：`assistantInterrupt` 直接杀进程，不会写 `[Request interrupted by user]`，
-  所以插件从 `items` 看不出这一轮是被 App 的停止按钮停的，只会把半截的最后一段当答案发出去。要知道「被停了」只能靠 hub：interrupt 路由停的是助手对话时发 `session.user_stopped`，助手记下来，插件读 `GET /api/v1/assistant/reporters`。
-- 模型网关报的 `usage` 不一定是一次请求的（2026-11-06，#3300）：有的网关给中间回复报 0、给最后一条报整轮加起来的输入，Claude Code 按最后一条估上下文，
-  于是白白自动压缩，摘要也失败时对话从此每条都是「Prompt is too long」。用 usage 的地方都要先过 `transcript.PlausibleContext`；坏了的 transcript 由 node 原地改 0 修好
-  （`docs/assistant.md`「网关报的不可能的用量」）。`stream-json` 的 `result.usage` 是 Claude Code 自己把一轮加起来的数，本来就会超过窗口，不能拿来判断上下文。
-- 分页读一轮的回答时，找到这一轮的第一条消息后不能在后面的页里再「找」（2026-11-06，#3497）：合并（Fold）的两条消息落在 transcript 的不同页时，
-  后一页又找到第二条，前面读到的整段被丢掉，`RunAnswer` 看不到第一条、当它还没进对话，一直等到 `QueuedMost`（10 分钟）才退回只取最后的话。
-  现在只在还没找到时找，找到以后的页一律接上（`channel.ReadTurn`，测试 `TestReadTurnFoldedAcrossPages`）。
-- 合并消息的回答不能只看每段物理上的最后一行（2026-11-06，#4120）：每轮回答后还会有 `turn_duration`，`endsInWords` 没跳过它时，已经答完的前一轮被当成中途接着做，最终只回最后一轮。
-  判断这一轮是否以文字结束，要和 `Stopped` 一样跳过思考、空文字、`TurnDuration != nil` 和压缩通知；压缩既有 `Compact` 字段，也有只带固定文字的旧格式。压缩判断只用于没有 `Task` 的 notice，不能把后台任务、错误、中断或所有 system 行都跳过。回归同时覆盖两轮耗时、跨页读取、压缩和不能跨过的结束边界，保留 `RunAnswer` 其余拼接规则。
-- 把用户的话认成提问的某个选项时，拿不准就原样交给 Agent（2026-11-06，#3497 评审）：第一版「句子里有选项名、多说不超过三个词」就算选中，
-  「备份后删除」成了「删除」、「SQLite，加密」成了「SQLite」，条件被丢掉；「all」按子串认成「Small fix」，选项是 1 / 3 / 5 时「3」成了第三个「5」。
-  认错一个选项比交一段原话给 Agent 糟得多：选项名之外只许虚词、英文从词首算、带问号和撞了数字的都不认（`channel.MatchOption`，`docs/channels.md`「提问和批准」）。
-- 任务的 Agent 干完、Claude 退出后，任务会一直显示「正在开 Agent」（2026-11-06，#4510）：node 只列整台机器最近的 80 个已退出的 transcript，
-  开发机上一天上千个别的 transcript 很快把它挤出列表，hub 的会话列表里没有它，客户端就当成「有 Agent 还没会话」。未完成的待办挂着的 Agent 现在进 profile 的 `keep`，
-  node 不管多久没动都列出来。同一次还发现：任务的 Agent 启动用满 5 分钟后，记「没开起来」也用的是同一个已超时的 context，写库失败，任务没有 Agent、也不算失败，
-  一样一直是「正在开」；超时之后的善后要另给时间（`taskFailTimeout`）。查「正在开」先对比 `todo_agents` 和 `GET /api/v1/sessions`，再看 hub 日志里 `task <id>: start:`。
+- AskUserQuestion unavailable in headless `claude -p`, tool disabled rather than disconnected hook. Phone questions need blocking MCP `ask_user` (`docs/assistant.md`). Model may call it alongside other tools; side-effecting tools require their own hub approval.
+- Default-mode headless assistant even needs phone approval for Persona MCP notify_user / `schedule_followup`, stalling nighttime follow-ups / Monitor (tested 2026-10-30). Pass `--allowedTools mcp__jarvis`; hub asks separately for acting-on-user-behalf tools (`docs/assistant.md`).
+- Background tasks / Monitor are Claude child processes; idle recycling or systemd jarvisd restart killing cgroup kills them, leaving chat waiting forever. Node reads `stream-json` `system/background_tasks_changed`, does not recycle with active tasks, persists task list continuously, tells chat what was lost after restart.
+- Scheduled assistant work needs one table only (2026-10-31, `docs/assistant.md` “Scheduled tasks”). Separate schedules / follow-ups forced repeated checks to `schedule_followup` each round; entry disappeared on start, invisible / unstopppable during hour-long approval waits. Repeating work uses every; self-reschedule recognized as same task. Only user changes task model / permission in app; assistant cannot elevate itself. Headless `bypassPermissions` only at launch.
+- Lark assistant uses gateway skill (copy formerly `server/internal/assistantskills/`, embedded jarvisd, installed `.claude/skills` at assistant startup, upstream sync script; since 2026-11-04 in Lark plugin). Token formerly process env; since #1317 not even env, below. Node Bash PreToolUse `node/larkgate.go` applies only `assistant-hooks` / assistant-settings.json. Unparsed commands containing `ol POST/PUT/PATCH/DELETE` still require phone confirmation, otherwise bypass permits; credential-proxy gate now rejects them outright.
+  Test hub uses own HOME / port / DB (`/tmp/jt`), never live jarvisd. SSH pkill -f pattern can match own SSH command; use [/]tmp/…. [x] works only if literal absent elsewhere in same SSH command: 2026-11-01 `pkill -f "[d]rive.py x"` followed by `python3 drive.py x …`, and `pgrep -f jarvis_args` then process-group kill both killed SSH, exit 255. Safest anchor full path, `pgrep -f '^/tmp/jt/…/jarvisd'`, get PID / kill, only that task per SSH.
+- Keep credentials out of Agent env, not protected by read-command blacklists (#1317,2026-11-05). Env, split-variable-name printenv, `cat /proc/self/env*`, ${!prefix*}, `python3 -c 'import os…'` bypass; review also nohup env, `compgen -e`, ps eww, eval-built names, `env -u HOME printenv`—unpatchable. Worse, token-bearing scripts bypass write confirmation directly. Credentials stay in node; local proxy checks every actual request against same rules (`node/gateproxy.go`). Proxy belongs to entire persistent `assistantKeeper` process, not per-connection Node: reconnect replaces Node, surviving chat retains old proxy address, new approved calls cannot reach old proxy. One approval allows method + path + body once. Writes in unparsed loops / scripts must be refused and sent as standalone commands; never open timed allow-all windows, which permit unrelated later commands in same chat.
+- Codex assistant uses `codex app-server` (`docs/assistant.md` “Codex”). MCP approval arrives as `mcpServer/elicitation/request` with `_meta.codex_approval_kind: mcp_tool_call`, not command approval. Default tool timeout 60 seconds needs larger `tool_timeout_sec` for ask_user. Default command env strips `*KEY*` / `*TOKEN*` (ol lost token). `turn/interrupt` does not stop running commands; `thread/backgroundTerminals/clean` additionally, experimental generate-ts --experimental. Codex owns thread ID, unknown when MCP starts. Lark gate relies on approval arriving; never `approvalPolicy: never`.
+- Codex / Claude share assistant auto-memory (`docs/assistant.md`). Untrusted Codex approves even head; without separate allowance every memory read prompts phone (tested 2026-11-01). Memory outside assistant directory needs writableRoots. Do not enable machine-wide `~/.codex/memories` for assistant.
+- Mac Codex sandbox rejects symlinked writable roots except top-level `/tmp` `/var`, before every command: symlinked writable roots are not supported (#1751). Legacy `~/.jarvis`→`.persona` and dotfiles `~/.claude` trigger it. Resolve cwd **and** memory path for `codexDirs`, not cwd alone. `allow_symlinked_codex_home` affects CODEX_HOME only; do not broaden. Verify same parameters with `command/exec` and `thread/fork` with `ephemeral: true`, pwd, preserving original session.
+- Fake-HOME hub tests: `~/.local/bin/codex` wrapper resolves installation via `$HOME/.npm-global`; symlink into fake HOME or app-server exits immediately.
+- Fake HOME is not isolation. Node follows launcher-selected `CLAUDE_CONFIG_DIR`; hardcoded profile launcher writes real transcripts, and cwd suffix `/.jarvis/assistant` makes real assistant chats appear in test hub, editable by test assistant (2026-11-01 chat-management tests). Copy launcher into fake HOME, redirect `CLAUDE_CONFIG_DIR` there, copy settings.json, define `_claude_launchers` in fake .bashrc, prompt only own created chats; delete full fake HOME afterward, keys included.
+- Unknown `assistant.send` session ID starts **blank new chat** rather than error if no transcript. Resume-or-report-failure calls (scheduled chats 2026-11-01) use `resume_only`; no process / transcript errors, hub creates / records new chat (`docs/assistant.md` “Scheduled tasks”). Busy state comes from hub working / needs_you and only listed sessions; retain long-lived chats in `keptSessions`, or 80 new transcripts on busy machine evict them.
+- **No per-message changing data in system prompt** (2026-11-01, `docs/assistant.md` “Live snapshots and prefix caching”). Prefix caching puts system / tools before history; one byte change rewrites hundreds of thousands of tokens after restart, first output 10 seconds to minutes. Snapshots accompany messages. Claude resume actually retains first system prompt until compaction, so old snapshot stale, not cache-invalidating. Real restart cache miss was **changed tools**: one removed MCP tool rewrites all, schema key order does not. Diagnose experimentally: copy real chat with new ID / temporary directory, change one thing per restart, inspect `message_start` cache_read_input_tokens.
+- Headless `claude -p` auto-compacts via `CLAUDE_CODE_AUTO_COMPACT_WINDOW`; idle compaction only interactive. `stream-json` `/compact` manually compacts. First resumed-process message sometimes does not compact, second does; one miss not proof unsupported.
+- `ssh_host` aliases exist only hub ~/.ssh/config. Giving remote assistant ssh <alias> supplies unusable command.
+- Npm lark-cli has `#!/usr/bin/env node`; nvm paths missing systemd jarvisd PATH (2026-11-03,#273). Command name not found; absolute script still fails env node. Node login-shell `command -v` finds absolute path, prepends its directory to PATH (`node/larkcligate.go`); assistant wrappers same.
+- Lark-cli user sending requires app `im:message.send_as_user`, absent in default app (2026-11-04,#273). `auth login --domain all` gets 200+ scopes but not it; `im +messages-send --as user` `missing_scope`, `auth login --scope …` suggested by the error cannot grant app-disabled permission. Bot `im:message` exists, so assistant send / reply `--as bot`; phone card states identity from --as. Failed upstream only after phone approval: gate confirms intent, success depends permissions.
+- Session `last_text` is node preview, whitespace collapsed /200 characters (`node/sessions.go` snippet), not renderable Markdown (2026-11-04,#1508). Completion-card summaries became one-line lists / headings with truncated ** / backticks and web plaintext symbols. Full completion cards read `lastTurn` via `session.items`, `clipMarkdown` by lines without splitting markup. One/two-line progress / pushes strip Markdown (hub `plainMarkdown`, web `lib/plain-markdown.ts`).
+- Hub feed append-only does not mean later Sent status can stay client-memory (2026-11-04,#1519). GitHub comment sent, refresh reverted card to Draft / Send, nearly duplicate. Persist body.sent_at, rebroadcast same ID, replace body by ID; incremental fetch includes later updates. Same investigation found prompt `查不到的用【】标出来` (“mark unknowns in brackets”), sending literal `【预计今晚 / 几点前】` (“[expected tonight / by what time]”). One-tap drafts must not leave blanks for user completion.
+- MCP `tools/list` failure must not return empty list (2026-11-04,#504). Personad mcp declares `listChanged: false`; Claude lists once per chat. Temporary node failure / startup order returned empty, permanently removing Persona tools without connectivity indication. Retry 15 seconds then JSON-RPC error, visible `/mcp` / logs. Node `{"tools":[],"error":…}` is failure too; only valid empty means no tools.
+- Separate assistant process (2026-11-04,#1446, `docs/assistant.md` “Process”) can be unavailable to every hub inquiry. Startup connector registration asked each assistant tool name before connection,10 seconds each,60-second test. Startup / registration read last `assistantToolsNow`; wait only when node requests tools for assistant chat. Assistant schedule loop waits first handshake machine / timezone reply before running due tasks, or starts with empty config and fails all.
+- Bus events synchronously invoke read-loop callbacks (`internal/rpc`); slow handler stalls connection. Assistant queues in order, handles `session.turn_ended` separately (model query / waiting task Agent stop). To wait in tests, call assistant after event on same connection, then await empty queue (`BusHub.Settle`).
+- Hub default `os.Executable() assistant` launches test binary in tests, rerunning entire suite. Tests replace `assistantCommand` in init; subprocess tests detect env in `TestMain` and act as assistant.
+- `zsh -ic` expands existing aliases before script execution (#1674). Codex alias makes `codex() { … }` definition parse fail; earlier unalias in same string too late. Use function codex { … }, calls \codex to prevent recursive alias expansion. Real zsh regression with temporary ZDOTDIR, no user shell read / writes.
+- Session-only Agent approval lives in process (2026-11-05,#2202): Claude `addRules … destination: session`, Codex `acceptForSession`, Lark node memory lost on assistant recycle / deploy / launcher switch / node restart, not restored by `--resume`, causing repeated prompts despite Always Allow. Cross-process assistant state belongs in hub DB: cards `always_keys`, hub `assistant_always` auto-answers matches (`docs/assistant.md` “Always allow for this chat”).
+- Chat Agent type comes from transcript, not current message launcher (2026-11-05). Main chat selects Model Configuration › Main Chat each message (#1518); changing Codex→Claude rejected only while process live. After exit, Claude resumed Codex thread, No conversation found, message Unconfirmed Delivery / Session Ended, broken 19:39 through late night. Failed launch overwrote state launcher, losing original Codex name. `assistantResumeLauncher` now checks transcript type, chooses original or same-type claude / codex on mismatch. Investigate `rg <id> ~/.persona/node-attach.log` for launcher / failure start.
+- Stopping headless assistant leaves no `已中断` (“Interrupted”) transcript (2026-11-06,#3308). `assistantInterrupt` kills process without [Request interrupted by user]; plugins reading items may send partial final passage as answer. Hub-only signal: assistant-target interrupt emits `session.user_stopped`; assistant records, plugins `GET /api/v1/assistant/reporters`.
+- Gateway usage may cover entire turn, not request (2026-11-06,#3300). Some return 0 intermediate, accumulated inputs final. Claude estimates context from final, compacts unnecessarily; failed summary leaves all messages Prompt is too long. All usage consumers use `transcript.PlausibleContext`; node repairs damaged transcript in place with 0 (`docs/assistant.md` “Impossible gateway usage”). `stream-json` `result.usage` legitimately sums whole turn, can exceed window, not context metric.
+- Paginated answers must not search again after finding first message (2026-11-06,#3497). Folded two messages on different pages: later search found second and discarded earlier portion, `RunAnswer` waited for missing first until QueuedMost 10 minutes, then final-text fallback. Search only until found, append all later pages (`channel.ReadTurn`, `TestReadTurnFoldedAcrossPages`).
+- Folded-message answers cannot look only at the physically last row of each segment (2026-11-06, #4120). A reply is followed by `turn_duration`; without skipping it, `endsInWords` treated an already answered earlier turn as intermediate work and returned only the final turn.
+  To determine whether a turn ends in text, skip thinking, empty text, `TurnDuration != nil`, and compaction notices just as `Stopped` does. Compaction may have a `Compact` field or only fixed legacy text. Apply compaction detection only to notices without `Task`; do not skip background tasks, errors, interruptions, or all system rows. Regressions cover durations for two turns, cross-page reading, compaction, and termination boundaries that must not be crossed, preserving the rest of `RunAnswer`'s stitching rules.
+- Uncertain question-option matching must pass original text to Agent (2026-11-06,#3497 review). Initial option-name-plus≤3 extra words rule mapped `备份后删除` (“delete after backup”) to `删除` (“delete”), `SQLite，加密` (“SQLite, encrypted”) to SQLite, dropping conditions. Substring all matched Small fix; choices 1/3/5 made “3” third option 5. Wrong option worse than original answer: only grammatical filler beyond label, English word-start matching, reject question marks / numeric ambiguity (`channel.MatchOption`, `docs/channels.md` “Questions and approvals”).
+- Completed task Agent / exited Claude can leave Opening Agent forever (2026-11-06,#4510). Node lists only 80 latest exited transcripts machine-wide; thousands daily evict it, hub lacks session, client assumes Agent without session. Unfinished to-do Agents now profile keep, listed regardless age. Also five-minute start timeout cleanup reused expired context, failed DB write, task neither Agent nor failure, still Opening. Cleanup needs fresh taskFailTimeout. Compare `todo_agents` vs `GET /api/v1/sessions`, then hub `task <id>: start:` logs.

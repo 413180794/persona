@@ -1,45 +1,43 @@
-# 原生飞书图片与文件发送（#410）
+# Native Lark image and file sending (#410)
 
-> **2026-11-04 起（#1520，插件第 3 步 3c）**：经飞书网关接飞书的整条链路（App 的 `/api/v1/lark/…`、收件箱和知识库的飞书来源、公司圈、
-> 助手的 `ol` 闸门和凭据、/agent、个人 Agent）不在开源仓库里了，由接飞书的插件提供（`docs/extensions.md`，`docs/plan-extensions.md`「第 3 步」）。
-> 下文描述的行为由插件照原样提供；文中提到的 hub 源文件（`hub/lark*.go`、`internal/lark` 的客户端……）已删。开源版只留官方 lark-cli、飞书机器人、飞书邮箱。
+> **Since 2026-11-04 (#1520, plugin step 3c)**: the entire Lark-gateway integration (app `/api/v1/lark/…`, Inbox and knowledge sources, Moments, assistant `ol` gate and credentials, /agent, personal Agent) is no longer in the open-source repository. It is provided by the Lark plugin (`docs/extensions.md`, `docs/plan-extensions.md`, “Step 3”).
+> The plugin preserves the behavior below; referenced hub source files (`hub/lark*.go`, the `internal/lark` client…) have been removed. Open-source retains official lark-cli, Lark bots, and Lark mail.
 
-现有 `LarkChatView` 输入框的「＋」选择照片或文件，先预览、移除，再发送。预览复用图片查看器（支持下拉关闭）与系统 Quick Look；消息继续使用原生飞书排版。
+The existing `LarkChatView` composer's “＋” selects photos or files, with preview and removal before sending. Previews reuse the image viewer with pull-down dismissal and system Quick Look; messages retain native Lark formatting.
 
-## 发送和确认
+## Sending and confirmation
 
-- 文本、图片、文件通过同一会话发送队列顺序提交；等待回显不会阻塞下一条提交。
-- 每条消息有固定 client_id。文件选择后保存私有快照，重试不再读取可能变化或失去访问权限的原文件；启动时清理上次进程遗留的选取副本，持久化媒体使用独立目录，不在清理范围。
-- 请求成功保存 message_id；回显按 client_id / message_id 替换本机消息，附件不按空文本、文件名或超时删除。
-- 失败保留附件，支持重发、放回输入框或删除；退出聊天再进入仍能恢复。队列按 Hub 组、实际飞书账号与会话隔离。
-- 引用文字仍走主线回复接口，话题回复保持主线行为。文字与附件分别发送。
-- 引用一条消息时，图片和文件也带上引用（#1035）：每个附件各自引用那条消息，不会悄悄作为普通消息另发。这要 Hub 上的飞书扩展声明 `lark_attachment_reply`；没有时（旧版扩展会忽略引用照样发出）不发，提示「需要更新 Hub 上的飞书扩展，才能引用消息发送图片和文件」，文字、附件和引用都留在输入区。发件箱记录同时保存引用、是否进话题和话题根（`threadRoot`），重启恢复后重发仍是同一个引用 / 话题。话题页（从会话里打开的话题弹层）也能选图片和文件（#1035 第二部分）：它们进**所在会话的同一个可持久化发件箱**，标成这个话题的回复（`thread` + `threadRoot`），所以重启后照样恢复、按账号隔离、发送前核对账号；会话列表的待发行不显示话题回复，话题页只显示属于本话题的。话题页刷新时用话题里的回复对账；重发前先读一次话题最新回复，已发出的不再发；结果未知的文件只提示查证、不重传。不在会话里打开的话题（没有会话的发件箱）、或 Hub 的扩展不支持时，话题输入区不提供附件。话题里的文字回复仍是原来的发送方式。
+- Text, images, and files submit in order through one session send queue. Waiting for an echo does not block the next submission.
+- Each message has a stable `client_id`. File selection saves a private snapshot; retries do not reread originals that may change or lose access. Startup cleans selection copies left by the previous process; durable media uses a separate directory excluded from cleanup.
+- Successful requests save `message_id`; echoes replace local messages by `client_id` / `message_id`. Do not remove attachments based on empty text, filename, or timeout.
+- Failures retain attachments for retry, restoration to composer, or deletion; leaving and reopening chat restores them. Queues isolate hub group, actual Lark account, and session.
+- Quoted text still uses the main reply API; topic replies retain existing behavior. Text and attachments send separately.
+- Images and files preserve quotes too (#1035): each attachment quotes the same message rather than silently sending normally. Requires hub extension capability `lark_attachment_reply`. Without it, older extensions would ignore quotes and send, so block and explain “Update the Lark Extension on Your Hub to Send Images and Files Quoting Messages”; text, attachments, quote remain in composer. Outbox stores quote, topic flag, and `threadRoot`, preserving routing on restart / retry. Topic sheets opened from a chat also select images / files (#1035 part 2), using **that chat's same durable outbox** with `thread` + `threadRoot`. Recovery, account isolation / verification remain. Chat pending rows omit topic replies; topic page displays only its own. Topic refresh reconciles against topic replies; before retry reread latest topic replies to avoid duplicates. Unknown-result files offer verification only, never reupload. Topics opened without chat outbox, or unsupported hub extension, have no attachment controls. Topic text retains original send path.
 
-## Hub 接口
+## Hub APIs
 
-专用 `images` / `files` 接口绑定 Hub 配置的飞书网关账号，复用设备认证与角色权限，不开放通用写代理。
-图片校验编码大小与真实 MIME，文件流式上传并限制 Content-Length；保留飞书网关的登录失效错误码。老 Hub 提示先升级后发送附件。
-引用 / 话题（扩展的 `lark_attachment_reply`）：`images` 的 JSON 多 `reply_to`（引用的消息）和 `thread`（进它的话题）；`files` 的查询多 `reply_to` 和 `thread_root`（话题根）。上游对应飞书网关的 `images` + `replyTo`、`image-uploads` + `messages/{id}/replies`（`replyMode: thread`）、`files` + `replyTo` / `threadRootId`；文件不经飞书网关发件箱，没有幂等重试，结果未知时先查历史，不自动重传。
+Dedicated `images` / `files` bind the configured gateway account, reuse device authentication / roles, never expose a generic write proxy. Images validate encoded size and actual MIME; files stream with Content-Length limits. Preserve gateway login-expiration codes. Old hubs require upgrade before attachment sending.
+Quotes / topics (`lark_attachment_reply`): images JSON adds `reply_to` and `thread`; files query adds `reply_to` / `thread_root`. Upstream maps to images + `replyTo`, `image-uploads` + `messages/{id}/replies` with `replyMode: thread`, files + `replyTo` / threadRootId. Files bypass gateway outbox and lack idempotent retry; unknown outcomes require history checks, no automatic reupload.
 
-## 限制与回归
+## Limits and regression coverage
 
-每批最多 4 个附件。照片转换成 JPEG、最长边 2560 像素、清除位置元数据；原图和动图可选文件发送。文件 1 字节至 100 MiB。
-普通会话的文字、引用、附件草稿和发件箱现在一起持久化（#688）。文件位于 Application Support，排除系统备份、使用系统文件保护；记录按 Hub 组、实际飞书用户 ID 与会话的摘要隔离，不保存凭据或原文件路径。Hub 在同组内切换地址、更新设备令牌，不会另建一份草稿；账号切换使用各自草稿。首次在线确认账号后可离线打开本机草稿，发送前通过既有只读 accounts 接口重新确认实际账号，确认失败时保留内容，不发出写请求。旧文字草稿与当前/备用地址对应的旧版发件箱没有记录账号，需用户确认归属后才恢复；不同账号不自动导入。话题回复保持原实现。
+At most 4 attachments per batch. Photos convert to JPEG, longest edge 2560 px, strip location metadata; originals / animated images may be sent as files. Files 1 byte–100 MiB.
+Normal-chat text, quotes, attachment drafts, outbox persist together (#688). Files in Application Support, excluded from backup, system file protection. Records isolated by digest of hub group / actual Lark user ID / chat; no credentials or original paths. Same-group hub address / device-token changes reuse draft; account switches use separate drafts. After initial online account verification, local drafts open offline; before sending reverify actual account using existing read-only accounts API. Failure retains content and sends no write. Legacy text / current-and-backup-address outboxes lack account identity, requiring user attribution confirmation; never auto-import across accounts. Topic replies retain original implementation.
 
-发送前先原子保存“清空草稿 + 新增发件箱”，成功后才清空输入并请求网络。保存失败保留原草稿；在发出网络请求前持久化尝试标记。重启时仅已尝试提交的消息变为“发送结果待确认”；排队中尚未提交的消息可显式重试，均不自动重发。已确认回执按 client_id / message_id 对账；已不在最新一页的消息按原消息 ID 只读核验，不把旧附件永久留在底部。
+Before send, atomically save “clear draft + add outbox”; only then clear input and request network. Persistence failure retains draft. Persist attempt marker before network. Restart marks only attempted submissions Unconfirmed Send Result; unsent queued items allow explicit retry, none automatically resend. Reconcile receipts by client_id / message_id; older messages outside latest page checked read-only by original ID, not retained forever at bottom.
 
-注意：飞书网关的文件上传不走文字/单图的 outbox 重试协议。文件收到明确拒绝或确认未能联网 / 建连时允许重试；超时、连接中断、服务端错误或损坏回执时只提供“检查发送结果”和“移除本机记录”，不重新上传，也不放回输入框后生成新 ID。成功的文件回执可以省略 message_id，此时保持“已发送”，不提供重发；提供“移除本机记录”，只移除手机端记录，不撤回已发出的飞书消息，不按同名文件猜测回显。保留 client_id 本身不能证明文件重试幂等。上游发送状态只读接口的补齐另见飞书网关上游的对应 issue（记在接飞书的扩展的说明里）。
+Gateway file uploads do not use text / single-image outbox retry. Definitive rejection or confirmed failure to connect allows retry. Timeout, disconnect, server errors, damaged receipt offer Check Send Result / Remove Local Record only—no upload or composer restoration generating a new ID. Successful file receipt may omit message_id: retain Sent, no retry; Remove Local Record removes only phone record, not sent Lark message, and never infer echo from same filename. Client_id alone does not prove idempotent file retry. Upstream read-only send-status work is tracked in gateway issue referenced by extension instructions.
 
-重启恢复仅在打开该会话时加载和核对，不在后台批量重发。状态文件损坏或版本过新时停止发送，用户可点“恢复输入”，确认“清除草稿并重新开始”后删除此会话的本机记录及媒体，同时清理旧版恢复备份；存储读写失败仅提供重试，不伪装成版本不兼容。临时选取副本随引用释放；持久副本在新状态原子写入后清理。
+Restart recovery loads / reconciles only on opening that chat, no background bulk resend. Corrupt / newer-version state stops sending. Restore Input → confirm Clear Draft and Start Over deletes chat's local records / media and legacy recovery backups. Storage failures offer retry, not false version-incompatibility errors. Temporary selected copies release with references; durable copies cleaned after atomic new-state write.
 
-`LarkAttachmentTests` 覆盖快照隔离、大小边界、请求原始字节、重试幂等键、精确回显、引用路由与账号隔离、附件的引用 / 话题字段、功能开关和重启后保留引用与话题根。`LarkAttachmentFlowTests.testQuotedPhotoFollowsWhatTheHubCanCarry` 分别对新旧两种 mock（`MOCK_LARK_OLD_ATTACHMENTS=1`）跑：带上引用，或提示并保留草稿。
-`LarkAttachmentFlowTests` 和 `LarkSendTests` 使用本地 mock Hub 验证预览、下拉关闭、失败退出重进、重试、普通文字、引用和话题回复。
-截图见 [附件回归记录](screenshots/lark-attachments/README.md) 和 [持久化回归记录](screenshots/lark-durable/README.md)。真实账号仅只读检查，不发送测试消息。
+`LarkAttachmentTests` covers snapshot isolation, size bounds, original request bytes, retry IDs, exact echoes, quote routing / account isolation, attachment quote / topic fields, capability gates, restart-preserved quote / root. `LarkAttachmentFlowTests.testQuotedPhotoFollowsWhatTheHubCanCarry` runs current / old mock (`MOCK_LARK_OLD_ATTACHMENTS=1`): preserves quote or warns / retains draft.
+`LarkAttachmentFlowTests` / `LarkSendTests` use local mock hub for previews, pull-down dismissal, failure / leave / reopen, retry, text / quotes / topic replies.
+Screenshots: [Attachment regressions](screenshots/lark-attachments/README.md), [Persistence regressions](screenshots/lark-durable/README.md). Real accounts inspected read-only, no test messages sent.
 
-2026-11-03 只读核对真实飞书网关：两条已同步消息（一条自己的消息、一条他人消息）的 `GET /agent/v1/messages/{id}` 均返回 `item.id/feedId/isMine/localState`，身份、会话与消息 ID 一致。Hub 的只读透传保留这些字段；mock 同步补齐精确消息路由。未记录消息正文、ID 或凭据，未发送消息 / 已读回执。
+Read-only gateway verification 2026-11-03: `GET /agent/v1/messages/{id}` for two synced messages, one own / one other, returned `item.id/feedId/isMine/localState` matching identity / chat / ID. Hub forwards fields; mock adds exact message route. No bodies / IDs / credentials recorded, no messages / read receipts sent.
 
-上传总时限按文件大小估算（128 KiB/s 加一分钟处理时间，至少三分钟，100 MiB 约十四分钟），手机与 Hub 使用相同预算；用户取消会立即向上游传递取消。飞书网关的 pending / failed 本地副本不显示为已发送消息。
+Upload total budget estimated at 128 KiB/s plus one minute processing, minimum three minutes, ~14 minutes for 100 MiB; phone and hub use same budget. User cancellation propagates immediately. Gateway pending / failed local copies do not display as sent.
 
-文字编辑合并为一秒一次的磁盘事务；附件变动、页面离开和切入后台立即保存，发送与放回输入框取消旧的延迟保存。输入框只在本机提交事务期间锁定，网络发送、核对与拉取最新消息不阻塞继续输入。断开 Hub / 移除组时先使队列失效并取消任务，再删除该组的草稿、附件与账号绑定；迟到的 HTTP 或磁盘回调不能恢复已清理的数据。
+Text edits coalesce into disk transaction once per second; attachment changes, page exit, background save immediately. Send / restore cancel old delayed saves. Composer locks only during local commit, not network send / reconciliation / latest fetch. Disconnect hub / remove group invalidates queue / cancels tasks first, then deletes group drafts / attachments / account bindings; late HTTP / disk callbacks cannot resurrect cleaned data.
 
-2026-11-03 只读核对真实飞书网关 `/agent/v1/accounts`：`activeId` 和账号 `id` 均为字符串，选中账号唯一，包含布尔 `signedIn` 和非空字符串 `userId`。按 Hub 请求选择的账号匹配，不用列表中第一个 primary 账号代替；不记录实际 ID、账号或凭据。
+Read-only `/agent/v1/accounts` verification 2026-11-03: `activeId` / account id are strings, selected account unique, boolean `signedIn` / nonempty string userId. Match hub-request-selected account, not first primary. No real IDs / accounts / credentials recorded.

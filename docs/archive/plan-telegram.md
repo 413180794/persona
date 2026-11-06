@@ -1,226 +1,164 @@
-# 计划：Telegram 连接器（用户自己的账号）
+# Plan: Telegram connector (the user's own account)
 
-> 已结束（2026-11-05）：Telegram 连接器搬出了开源仓库，成了扩展 `telegram`（#1704）：先在私有的扩展市场，0.1.3 起在 `nwverse/persona-extensions`（#2057）。
-> 连接器 id 不变，登录、收件箱、知识库照旧接着用；代码、`tg` 命令行（现在是 `personad tool --cli telegram`）、telegram 技能都在扩展里。
-> 这里只作当时的设计记录，文中的路径（`connector/telegram`、`jarvisd-telegram`、`personad tg`）在本仓库里已经没有了。
+> Completed 2026-11-05: Telegram connector moved out of open-source repository into telegram extension (#1704), initially private extension marketplace, since 0.1.3 in `nwverse/persona-extensions` (#2057).
+> Connector ID unchanged; login, Inbox, knowledge continue. Code, tg CLI (now `personad tool --cli telegram`), telegram skill all in extension.
+> Historical design record only; paths `connector/telegram`, `jarvisd-telegram`, personad tg no longer exist here.
 
-状态：方案已定，开工（2026-11-03）。用户定了：用自己的账号（MTProto 用户客户端，不是机器人）；消息文字可以交给 AI，和飞书一样进知识库和收件箱，
-助手能查、能总结；设置里留开关。第一版**只读**。框架见 `docs/plan-connectors.md`（Connector 接口、Registry、闸门），本文只写 Telegram 自己的部分。
-做完后把设计并进 `docs/connectors.md`（或那份计划的「Telegram」一节），删掉这份。
+Status: design agreed, work started 2026-11-03. User decided own account (MTProto user client, not bot), message text may go to AI and knowledge / Inbox like Lark; assistant can search / summarize, with settings switches. First version **read-only**. Framework `docs/plan-connectors.md` (Connector, Registry, gate); only Telegram-specific parts here.
+After completion, merge design into `docs/connectors.md` or plan's Telegram section and delete this document.
 
-## 选型：gotd/td（纯 Go），不用 TDLib
+## Library: gotd/td (pure Go), not TDLib
 
 | | gotd/td | TDLib |
 | --- | --- | --- |
-| 语言 | 纯 Go，`CGO_ENABLED=0` 能交叉编译，和现在的 personad 一样四个平台一份代码 | C++ 库，要 cgo 或者带一个 `tdjson` 动态库；四个平台各编一份，personad 的发布方式（publish.sh、自动更新）都得改 |
-| 状态 | 自己管：会话（auth key）要我们存，更新的游标我们管 | 自带 SQLite 数据库，存在本地目录，难以加密进 Postgres |
-| 维护 | 活跃，跟 Telegram 的 layer 走；有 `tgtest` 内存服务、`auth` 登录流程、`updates` 状态机、`floodwait` | 官方，最全 |
-| 体积 | 编进 personad 会多约 35 MB（实测 linux-amd64：39 → 74 MB，gzip 后 14.5 → 23.7 MB，主要是 Telegram 全部类型的生成代码），所以单独一个程序（下一节） | 二进制外再带一个几十 MB 的库 |
+| Language | Pure Go, `CGO_ENABLED=0` cross-compiles, same four-platform personad code | C++ requires cgo or tdjson dynamic library; platform builds require `publish.sh` / auto-update changes |
+| State | Own auth-key storage / update cursors | Built-in local SQLite, difficult to encrypt into Postgres |
+| Maintenance | Active Telegram layer tracking; tgtest in-memory service, auth flow, updates state machine, floodwait | Official, most complete |
+| Size | Adds ~35 MB to personad (linux-amd64 measured 39 → 74 MB, gzip 14.5 → 23.7 MB, mainly generated Telegram types), so separate program below | Additional tens-of-MB library |
 
-选 gotd/td：只要一个 Go 依赖，不碰发布流程；会话由我们存（正好加密进 Postgres）。只用它的原始 API（`tg.Client`）、登录（`auth`）、限流（`tgerr.FloodWait`）。
+Choose gotd/td: one Go dependency, no release-flow changes; own session storage encrypts naturally into Postgres. Use raw `tg.Client` API, auth, `tgerr.FloodWait` only.
 
-## 架构：单独一个程序 `jarvisd-telegram`（用户 2026-11-03 定的 B）
+## Architecture: separate `jarvisd-telegram` (option B, decided 2026-11-03)
 
-gotd 让二进制大 35 MB，所以 Telegram 不编进 personad，单独一个程序，personad 本身不变大。
+Gotd adds 35 MB, so Telegram stays out of personad in separate program, keeping core size unchanged.
 
-- **代码**：连接器在 `server/internal/connector/telegram`（用 gotd），程序是 `server/cmd/personad-telegram`，同一个 Go module、同一次构建出来。
-  hub 不传任何 Telegram 的配置给它：凭据和会话都在 `connector_secrets` 里，它经 `secrets.*` 读写。
-  personad 不 import 它：测试守住 `go list -deps ./cmd/personad` 里没有 gotd。
-- **hub 怎么用它**：开关开着时，hub 起 `jarvisd-telegram`（和 personad 放在同一个目录），用 stdin / stdout 跑现有的双向 JSON-lines RPC
-  （`internal/rpc`，hub↔node 用的那个）。hub 这边是一个通用的「子进程连接器」适配器（`connector/proc`），把 Connector 的各项能力
-  （状态、登录、归档、收件箱、只读工具、事件）一一转成 RPC 调用；子进程那边一个 `connector/serve` 把任意 Go 连接器挂到 stdio 上。
-  加密存储反过来：子进程调 hub 的 `secrets.load / save / delete`，会话的明文只在两边的内存里，不落子进程的磁盘。
-  子进程退出了 hub 按退避重启；开关关掉就停掉它。以后别的大依赖的连接器也能这样做。
-- **版本对齐**：hub 起它之前先跑 `jarvisd-telegram version -v`，版本和 build 号必须和 personad 一样，不一样就不起，状态写「jarvisd-telegram 和 hub 版本不一致」。
-- **只在 hub 上**：node 不需要它，`deploy.sh` 只给 hub 那台装；Docker 镜像里也放一份（hub 在容器里跑时用）。
-- **发布和自动更新**：
-  - `publish.sh` 四个平台各编一份 `jarvisd-telegram-<os>-<arch>.gz`（每个约 10 MB，在 25 MiB 以内），一起过隐私扫描和体积检查；
-  - `latest.json` 加 `programs: {"jarvisd-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`，老 hub 不认这个字段，照旧只换 personad；
-  - hub 自动更新时两个一起下载、校验（`version -v`）、一起换上，旧的各留 `.prev`；新版起不来回滚时两个一起回滚。
-- **部署**：`deploy.sh` 和主会话的 `deploy-hub.sh`（写成 `.new`）在 hub 机器上多放这一个。
+- **Code**: `server/internal/connector/telegram` uses gotd; `server/cmd/personad-telegram`, same module / build. Hub sends no Telegram config; credentials / session in `connector_secrets` accessed via secrets.*. Personad does not import it; test requires no gotd in go list -deps ./cmd/personad.
+- **Hub integration**: enabled → launch `jarvisd-telegram` beside personad using existing bidirectional stdin / stdout JSON-lines RPC (`internal/rpc`). Generic subprocess connector adapter `connector/proc` converts status / login / archive / Inbox / read-only tools / events to RPC; `connector/serve` exposes any Go connector over stdio. Reverse encrypted storage: child calls hub `secrets.load / save / delete`; plaintext sessions only both processes' memory, never child disk. Exit restarts with backoff; disable stops. Future heavy connectors can reuse.
+- **Version alignment**: before launch, `jarvisd-telegram version -v` must match personad version / build; otherwise no launch, status `jarvisd-telegram` and Hub Versions Differ.
+- **Hub only**: nodes do not need it; `deploy.sh` hub only, bundled in Docker hub image too.
+- **Release / self-update**:
+  - `publish.sh` builds `jarvisd-telegram-<os>-<arch>.gz` for four platforms, ~10 MB each under 25 MiB, same privacy / size checks.
+  - `latest.json` `programs: {"jarvisd-telegram": {"<os>-<arch>": {name, size, sha256, binary_sha256}}}`; old hub ignores, updates personad only.
+  - Hub downloads / verifies `version -v` / replaces both together, retains each `.prev`; failed startup rolls both back.
+- **Deployment**: `deploy.sh` and main-chat `deploy-hub.sh` add program on hub, written as .new.
 
-## 凭据：都由用户在 App 里填（用户 2026-11-03：「Telegram 的 API 凭据也让用户填，不要写到程序里面」）
+## Credentials: user enters everything in the app (requested 2026-11-03: do not embed Telegram API credentials)
 
-- **api_id / api_hash**：不放 hub.json、不编进程序、不放构建配置。登录的**第一步**就让用户填，表单上附一句申请指引：
-  「去 my.telegram.org，用你的 Telegram 账号登录，进 API development tools 建一个应用，把 api_id 和 api_hash 填到这里」。
-- **会话（auth key + 数据中心）**：gotd 的 `session.Storage` 接到 hub。凭据和会话放在一起（一份 JSON），用 `secret.key` AES-GCM 加密
-  （和启动器的 Key、邮箱凭据同一个主密钥，`sealKey`），存 Postgres 的 `connector_secrets`（T1）。明文只在两个进程的内存里。
-- **显示**：App 只显示 api_id，api_hash 打码（只露最后 4 位）：状态的 `via` 是「api_id 1234567 · api_hash ••••a1b2」。
-  日志、错误、响应里永远不出现这两个值（连接器的错误先抹掉它们）。
-- **登录**（设置 › 连接器 › Telegram）：api_id + api_hash → 手机号 → 验证码（发到 Telegram 的其他设备上，或短信）→ 有两步验证时再填密码。
-  第一步先用填的凭据连一次 Telegram（`help.getConfig`），不对就留在这一步（「api_id 或 api_hash 不对」）。
-  之后 hub 一步一步转给 Telegram：`auth.sendCode` → `auth.signIn` →（`SESSION_PASSWORD_NEEDED` 时）`account.getPassword` + SRP 校验密码。
-  中间状态（`phone_code_hash`）只在内存，程序重启了就从手机号重新来。密码只经过内存，用完即丢。
-- **退出**：`auth.logOut`（Telegram 那边这个会话也没了），再删 `connector_secrets` 那一行：凭据和会话一起删。要换凭据就退出再登录。
-- **默认关着**：jarvisd-telegram 在的 hub 都会登记这个连接器，但默认是关的（T1 的 `addConnectorOff`）；用户在设置里打开开关、再按上面的步骤登录。
-- hub 的网络：hub 机器直连 Telegram 的数据中心（2026-11-03 测过 TCP 443 和 web.telegram.org 都通）。连不上的环境以后再加代理，这版不做。
+- **api_id / api_hash**: not hub.json, binary, or build config. **First login step** requests them, with guide: “Sign in to my.telegram.org with your Telegram account, create an app under API development tools, enter api_id and api_hash here.”
+- **Session (auth key + data center)**: gotd `session.Storage` connected to hub. Credentials / session one JSON encrypted with `secret.key` AES-GCM (same `sealKey` master as launcher / mail keys), Postgres `connector_secrets` (T1); plaintext only both processes' memory.
+- **Display**: api_id visible, api_hash masked except last 4; status via example api_id <API ID> · api_hash ••••<suffix>. Neither appears in logs / errors / responses; connector errors redact first.
+- **Login**, Settings › Connectors › Telegram: API credentials → phone number → code on other Telegram devices / SMS → two-step password if enabled. First validate credentials through `help.getConfig`; invalid stays with api_id or api_hash Is Incorrect. Hub then forwards `auth.sendCode` → `auth.signIn` → `SESSION_PASSWORD_NEEDED` `account.getPassword` / SRP. Intermediate `phone_code_hash` memory only; restart begins at phone. Password discarded after memory use.
+- **Logout**: `auth.logOut` removes upstream session, then `connector_secrets` row deletes credentials / session. Logout / login to change credentials.
+- **Off by default**: hubs with jarvisd-telegram register disabled connector via T1 addConnectorOff. Enable in settings, then login.
+- Hub directly connects Telegram data centers (TCP 443 / web.telegram.org tested reachable 2026-11-03). Proxy for inaccessible networks later, not this version.
 
-## 读什么
+## What to read
 
-- **会话**：私聊、普通群、超级群。**不收**：广播频道（channel）、和机器人的私聊、Saved Messages（拿不准的见下面「要定的」）。
-  秘密聊天（secret chat）经 API 拿不到（端到端、只在那台设备上），说明里写清楚。
-- **第一次同步**：最近活跃的会话（`messages.getDialogs`，按最后一条时间），每个会话往回取最近 30 天、最多 500 条。更早的不补（以后要的话按知识库的往回补做）。
-- **增量**：游标是每个会话已归档的最大消息 id（`Archive.Changes` 的游标里存一个 `会话 → 最大 id` 的表）。每轮 `getDialogs` 看哪些会话的最新一条比游标新，
-  再 `messages.getHistory(min_id=游标)` 取新的。实时的 updates 只用来「踢」一下（`Events` → `ScopeChats` / `ScopeInbox`），不靠它记游标：
-  超级群的更新要按每个群单独追 pts，按 id 拉更简单，也不会因为断线漏消息。
-- **消息内容**：文字原样；回复带被回复那条的开头（「回复「…」：」）；转发写「转发自 某某」；图片、文件、语音、贴纸记一行占位（「[图片]」「[文件 名字 · 大小]」），
-  第一版不下载附件。编辑、删除不追（归档是追加的，和飞书一样）。
-- **知识库 id**：`chats/telegram-<u|g|c><数字 id>`（用户、普通群、超级群），不用用户名（会改）、不出现手机号。人：`people/telegram-<用户 id>`，名字取显示名。
-- **限流**（#958，用户：「Telegram 的频率限制还是要非常尊重的」）：整个连接器只有一道请求闸门（`connector/telegram/gate.go`，
-  gotd 的 middleware，所有 RPC 都过它，登录、检查凭据、gotd 自己取配置也是）：
-  - 一次只发一个；上一个结束到下一个开始之间随机 0.5–1 秒（和用户自己的 Telethon skill 一样）。归档、收件箱、助手工具同时要读时排队。
-  - Telegram 回 `FLOOD_WAIT_X`：X 秒再加 0.5–1 秒之内一个请求都不发；从不重试，碰到它的那一轮到此为止（已经读到的照样归档），
-    之后的归档、收件箱刷新、工具调用在闸门前就回「Telegram 限流中，N 秒后再试」，不发请求。恢复后马上又碰到，同样整轮放弃、等下一轮。
-  - 状态：已登录的账号在限流期间是 `rate_limited`，写明几点开始、Telegram 要求等多久、还要多久、几点恢复（用户的时区）；
-    App 的 Telegram 页黄点、说明是灰字（限流不是出错）。hub 只读 `ok` 的连接器，限流期间不归档、不给助手 Telegram 的工具。
-  - 助手工具一次只读一页：`telegram_messages` 最多 50 条、`telegram_search` 最多 30 条；按名字找会话先看最近一次列出的会话列表，
-    找不到才去问 Telegram，所以一次调用最多三个请求。
-  - 限流状态在 jarvisd-telegram 的内存里：hub 重新部署后程序重启，第一次请求如果又碰到限流，再记下来。
-  - **Telegram 推来的更新只当「有新东西了」的信号，按轮处理**（#1024）：一轮里先踢一下归档（hub 到点才真归档，默认 10 分钟一次），
-    再刷新收件箱（列会话 `messages.getDialogs`，每个文件夹最多 100 个，再读几条上下文）。两轮之间至少隔 1 分钟（`newsEvery`），
-    中间来的更新都并进下一轮；一轮里或两轮之间碰到 FLOOD_WAIT（连接器的任何请求），间隔就加倍，最多 16 分钟，之后每一轮没碰到就减半，
-    最少 1 分钟。原来每攒 3 秒更新就刷新一次，群多的号每 4–5 秒列两遍会话，Telegram 大约每分钟要求等一次（2026-11-03，每小时约 65 次）。
+- **Chats**: direct, basic groups, supergroups. **Exclude** broadcast channels, bot DMs, Saved Messages (uncertainties below). Secret chats are end-to-end / device-only, unavailable via API; explain clearly.
+- **Initial sync**: recently active `messages.getDialogs` ordered by latest message; each last 30 days, max 500 messages. No earlier backfill initially; future knowledge backfill if needed.
+- **Incremental**: per-chat largest archived message ID in `Archive.Changes` cursor map chat → max ID. `getDialogs` checks newer latest IDs, then messages.getHistory(min_id=cursor). Updates only kick Events `ScopeChats` / `ScopeInbox`, not cursor tracking. Per-supergroup pts tracking complex; ID fetch simpler, avoids disconnect gaps.
+- **Content**: text verbatim; replies prefix quoted original start (“Reply to ‘…’:”); forwards “Forwarded from Name”; photos / files / voice / stickers placeholders such as [Image], [File Name · Size]. No first-version downloads. Edits / deletion not tracked; append-only like Lark.
+- **Knowledge IDs**: chats/telegram-<u|g|c><numeric id> for users / basic groups / supergroups, not mutable usernames or phone numbers. People/telegram-<user id>, display names.
+- **Rate limits** (#958, user explicitly requires respect): one connector-wide request gate (`connector/telegram/gate.go`, gotd middleware) for all RPC including login / credential checks / gotd config:
+  - One request at a time; random 0.5–1-second gap after previous completion, like user's Telethon skill. Archive / Inbox / assistant reads queue.
+  - `FLOOD_WAIT_X` blocks every request for X seconds plus 0.5–1 seconds. Never retry; end current round, archive already read data. Later archive / Inbox / tool calls return Telegram Rate Limited, Retry in N Seconds before request. Repeated immediate limit abandons next round too.
+  - Signed-in `rate_limited` state shows start, required duration, remaining, restore time in user timezone. Yellow dot / gray explanation, not error. Hub reads only ok connectors, no archive / assistant Telegram tools during limit.
+  - One tool page: `telegram_messages` max 50, `telegram_search` max 30. Resolve names from last chat listing, Telegram only if absent, at most three requests per call.
+  - State in subprocess memory; redeployment restart forgets, first repeated flood wait records again.
+  - **Updates signal new data, processed in rounds** (#1024): kick archive first (actual hub archive at due time, default 10 minutes), then refresh Inbox via `getDialogs`, max 100 per folder, plus context messages. At least one minute between rounds (`newsEvery`), intervening updates coalesced. Any connector FLOOD_WAIT during / between rounds doubles interval up to 16 minutes; successful rounds halve to minimum 1. Previously every 3 seconds of accumulated updates refreshed, listing twice every 4–5 seconds on many-group accounts, triggering roughly one wait per minute (~65/hour, 2026-11-03).
 
-## 收件箱：什么算「需要我」
+## Inbox: what needs the user
 
-- 私聊：对方发来、我还没读也没回（`read_inbox_max_id` 之后、最新一条不是我）。
-- 群：@ 了我的、回复我的消息的（`unread_mentions_count`、回复到我的消息）。静音的群和归档文件夹里的会话不进收件箱，只进知识库。
-- 在手机 / 电脑的 Telegram 上读了且不是「需要你」的 → `done_by=read`；我在 Telegram 上回了 → `done_by=replied`。
-- **不回复**（第一版只读）：`CanReply=false`；`OpenURL` 是 `tg://resolve?domain=<用户名>`（有用户名的）或 `https://t.me/…`，在 App 里显示「在 Telegram 里回复」，交给系统打开。
-  以后要从这里发：`telegram_send` 作为写操作，必须过闸门（卡片写明发给谁、全文）。
+- Direct chats: incoming, unread / unreplied, after `read_inbox_max_id` and latest not mine.
+- Groups: mentions / replies to mine, unread_mentions_count. Muted groups / archived folder only knowledge, not Inbox.
+- Read in Telegram phone / computer and not Needs you → `done_by=read`; replied → `done_by=replied`.
+- **No replies in first read-only version**: `CanReply=false`; `OpenURL` tg://resolve?domain=<username> or `https://t.me/…`; Reply in Telegram delegates to system. Future `telegram_send` write must gate with recipient / full-content card.
 
-## 助手的只读工具
+## Assistant read-only tools
 
-| 工具 | 做什么 |
+| Tool | Purpose |
 | --- | --- |
-| `telegram_chats` | 最近的会话：名字、类型、未读数、最后一条的时间和开头 |
-| `telegram_messages` | 一个会话的消息（往前翻页，截断） |
-| `telegram_search` | 搜消息（`messages.searchGlobal`，或指定会话 `messages.search`） |
+| `telegram_chats` | Recent name / type / unread / last time and text prefix |
+| `telegram_messages` | One chat, earlier pagination, truncated |
+| `telegram_search` | Global `messages.searchGlobal` or chat `messages.search` |
 
-描述放 `server/internal/prompts/mcp/telegram/`，golden 加一种「有 Telegram」的工具列表。已经归档的内容也能用知识库的工具查（`kb_*`）。
+Descriptions `server/internal/prompts/mcp/telegram/`, golden adds Telegram tool list. Archived data also searchable with kb_*.
 
-## 会话页（#1054）
+## Chat page (#1054)
 
-用户要求：「github&Telegram 的 UI，都支持丰富一下，参考飞书的对话页面」。收件箱点开 Telegram 条目，不再是一块纯文本，而是原生的会话页
-（`apple/Persona/Views/Inbox/ConnectorThread/`，和飞书会话页一样：对方在左、带头像，群里显示名字；我的在右；隔 5 分钟或换天出时间；
-引用块点了跳到原消息，不在已加载的里就往前翻几页找）。
+User requested richer GitHub / Telegram UI modeled on Lark chat. Telegram Inbox opens native page instead of plain text (`apple/Persona/Views/Inbox/ConnectorThread/`): incoming left with avatar / group name, mine right, time at 5-minute gaps / date changes; quote taps original, paging backward if not loaded.
 
-- **数据**：连接器的 `threads` 能力（`docs/connectors.md`，和 ovis 对过，GitHub 共用）。`Thread` 一页一个请求（`messages.getHistory`），
-  被回复的消息不在这一页时，整页合起来再查一次（`messages.getMessages`）。打开页面只读最新一页（30 条），往上翻再读下一页。
-- **媒体**：头像和图片按需拉，App 显示到哪个才拉哪个。经 hub 的 `/media`，hub 存磁盘、App 也缓存，同一张不再问 Telegram；每个分片（512 KB）都走闸门。
-  - 头像：`a.<会话>.<照片 id>`，不需要 file reference。
-  - 消息里的：`m.<会话>.<消息 id>.f|t`，位置记在内存里；程序重启后再读一次那条消息，拿新的 file reference。
-  - 照片取长边不超过 1280 的那一档。静态贴纸取本身（WebP）；动的贴纸、视频取缩略图。语音只显示时长，文件只显示名字和大小。
-  - 去图片所在的数据中心取（#1272，量的结果见 #1255）：头像带着它的数据中心编号（`UserProfilePhoto.dc_id`、`ChatPhoto.dc_id`，从读过的页面和会话列表记下），
-    消息里的照片和文件也带着（`Photo.dc_id`、`Document.dc_id`），就直接去那个数据中心取。每个数据中心一个连接（`dc.go` 的 `dcPools`，gotd 的 `Client.DC`，仍然是 MTProto 直连），用到才连。
-    建连接、生成密钥、导入授权放在闸门外，只有导出授权那一个请求过闸门；同一个数据中心只建一次，不同的同时建。连接上的每个请求照旧过闸门。
-    编号不知道（重启前读的页面）、就是本号所在的数据中心、或者图搬走了（目标回 FILE_MIGRATE）时，走本号的连接，gotd 自己跟着 FILE_MIGRATE 走。限流中不建连接、不发请求。
-    之前每张跨数据中心的图要 2 个请求（先在本号的数据中心被打回）；第一次去一个数据中心的 4 秒左右整段占着闸门，别的请求都要等。
-  - 计时（#1255）：每取一张，jarvisd-telegram 的日志写一行，只有时间和数据中心编号，不写 ref、id、名字、内容。例：
-    `Telegram avatar: 4.70 s; from DC 4 (account on DC 1); 2 request(s), queued 0.01 s, in Telegram 0.80 s; not sent on; new connection to DC 4 in 4.20 s outside the gate, authorization transfer 3.90 s (export 0.35 s)`。
-    `from` 是在哪个数据中心取的；`sent on` 是 Telegram 回了 FILE_MIGRATE（在本号的连接上取了别的数据中心的图）；`new connection` 是这个进程第一次去那个数据中心（`outside the gate` 是在闸门外建连接用的时间），要转授权（导出 + 导入）。
-    数据来源：闸门（`gate.do`）记排队和调用，gotd 的 `OnTransfer` 记授权转移，闸门中间件记导出；gotd 的 Logger（`traceLog`）只对带计时的请求打开，从 gotd 自己的两条记录里取编号，本身什么都不打印。
-- **限流**：页面和媒体都走 #965 的闸门；限流中直接回「Telegram 限流中，N 秒后再试」，App 在页面上方提示，或者退回 hub 收集的文本。
-- **人数**（#1228）：标题下面和飞书会话页一样写来源，群和频道再加人数：「Telegram 群聊 · 128 位成员」「Telegram 频道 · 1,234 位订阅者」，私聊只写「Telegram」。
-  人数先从 Telegram 已经给的对象里拿，不多发请求：列会话（`getDialogs`）时普通群的 `Chat.participants_count` 一定有，超级群和频道的有时有。
-  拿不到的，打开第一页时问一次（`Info`：`getFullChannel` / `getFullChat`，和 `tg get-chat` 同一个），按会话记 12 小时（`membersFor`，失败也记）。
-  这一问排在页面和引用之后，碰上限流只丢人数、不丢页面；限流中不问；往上翻的页和私聊都不问。不知道人数就只写前半句。
-- **回复**：页面底部有回复框，长按气泡「回复」引用那一条；发送走 `telegram_send`。用户自己点的发送直接发，不过 `connector_gate`、不弹卡片（#1190）；闸门只管 AI 发的。
-- **打磨**（#1118，用户看过截图后定的）：
-  - 气泡按内容收窄，最宽是页面宽度的 78%（`ThreadLayout.bubbleShare`）；我的靠右，对方的一样宽；引用块和气泡一样宽（`WidestColumn`）。
-  - 时间在气泡右下角（HH:mm，次要色，编辑过的是「已编辑 09:42」）：跟在正文最后一行末尾，放不下换到下一行靠右（`StampedText`：正文末尾一份透明的时间占位，看得见的那份叠在右下角）。
-  - 没有文字的图片、视频、贴纸，时间叠在右下角的半透明胶囊上（`StampCapsule`）。
-  - 往上翻时内容在摘要栏下沿渐隐：只给这一页的滚动区加了遮罩，不动收件箱共用的摘要栏。
-  - 对方连发几条时，头像放在这一串的最后一条旁边，和气泡底边对齐（和 Telegram 一样）；群里的名字仍在这一串第一条上方。
+- **Data**: threads capability (`docs/connectors.md`, checked with Ovis, shared GitHub). One `messages.getHistory` per page; missing quoted messages fetched together once with messages.getMessages. Initial latest 30, older on scroll.
+- **Media**: avatars / images on demand as displayed. Hub `/media` disk cache + app cache prevent repeated Telegram fetch; each 512 KB chunk gated.
+  - Avatar ref a.<chat>.<photo id>, no file reference.
+  - Message ref m.<chat>.<message id>.f|t, location memory; after restart reread message for fresh file reference.
+  - Photos largest size with long edge≤1280; static sticker WebP, animated / video thumbnails. Voice duration only, files name / size only.
+  - Fetch from image's data center (#1272, measurements #1255). Avatar `UserProfilePhoto.dc_id` / `ChatPhoto.dc_id` remembered from pages / dialogs; `Photo.dc_id` / `Document.dc_id` too. Connect lazily per DC (`dc.go` `dcPools`, gotd `Client.DC`, direct MTProto). Connection / key generation / auth import outside gate; only auth export gated. One connection per DC, parallel across DCs; requests still gated. Unknown DC after restart, account DC, or relocated FILE_MIGRATE use account connection / gotd migration. No connection / request during limit. Previously cross-DC images took 2 requests, initial wrong-DC redirect; first ~4-second DC setup held entire gate.
+  - Timing (#1255): one subprocess log per fetch, time / DC only, no ref / ID / name / content. Example:
+    `Telegram avatar: 4.70 s; from DC 4 (account on DC 1); 2 request(s), queued 0.01 s, in Telegram 0.80 s; not sent on; new connection to DC 4 in 4.20 s outside the gate, authorization transfer 3.90 s (export 0.35 s)`.
+    From = fetched DC; sent on = FILE_MIGRATE on account connection; new connection = first access this process, outside-gate duration, export / import auth transfer. `gate.do` records queue / call, gotd `OnTransfer` auth transfer, middleware export; `traceLog` gotd Logger enabled only timed requests, takes DC from two gotd records, prints nothing itself.
+- **Rate limit**: pages / media use #965 gate; immediate Telegram Rate Limited, Retry in N Seconds, displayed above page or fallback hub-collected text.
+- **Members** (#1228): source below title, groups / channels include count, “Telegram Group · 128 Members”, “Telegram Channel · 1,234 Subscribers”; DM Telegram only. Prefer existing objects, no extra request: `getDialogs` basic `Chat.participants_count` always, supergroups / channels sometimes. Missing count fetched once on first page via Info `getFullChannel` / `getFullChat`, same `tg get-chat`, cached 12 hours by `membersFor` including failures. After page / quote requests; limit drops count only, not page. No limit-time / older-page / DM queries; unknown shows source alone.
+- **Replies**: bottom composer, long-press Reply quote; telegram_send. Explicit user Send bypasses `connector_gate` / cards (#1190); gate AI writes only.
+- **Polish** (#1118, user decided after screenshots):
+  - Content-width bubbles, max 78% page (`ThreadLayout.bubbleShare`); mine right, incoming same width rules; quote matches bubble via WidestColumn.
+  - Time bottom-right HH:mm secondary, edits “Edited 09:42”; follows final text line, wraps right if needed (`StampedText` transparent time placeholder at text end, visible overlay bottom-right).
+  - Textless image / video / sticker time on semitransparent `StampCapsule` bottom-right.
+  - Upward scroll fades below summary bar; mask only this scroll area, shared Inbox summary unchanged.
+  - Incoming sequence avatar by final bubble, bottom-aligned like Telegram; group sender name above first bubble.
 
-## tg 命令行和 telegram skill（#988）
+## tg CLI and telegram skill (#988)
 
-用户要求：「参考 feishu-cli 的 cli 设计……再制作一个 skill 来让 agent 在 hub 对接了 telegram 之后，支持用 skill 更灵活地操作（对接成功了才有 skill）」。
+User requested feishu-cli-inspired command design and skill for flexible Agent Telegram operations only after successful hub integration.
 
-- **`personad tg …`**（`server/internal/tgcli`；助手的 PATH 上叫 `tg`）只经过 hub：它和 MCP 一样连本机 node 的 socket（kind `cli.call`），
-  node 再调 hub 的 `mcp.call`，最后由 Telegram 连接器发请求，所以每个请求都过 #965 的闸门。CLI 不连 Telegram，也没有 token。
-  **谁是助手由 node 判定**（`node/clicall.go`）：socket 对端的进程（Linux `SO_PEERCRED`、macOS `LOCAL_PEERPID`）要是 node 为助手起的进程，
-  或者是它的子孙（助手的 Bash），才按助手的身份调；判断不了就拒绝（Agent 读不到用户的私聊）。node 也只转发 `telegram_` 开头的调用。
-- **读**：`tg chats` / `unread` / `messages`（分页 `next_before`，`--since` / `--until`）/ `search` / `message` / `chat`（资料）/ `members`。
-  **写**：`tg send` / `reply` / `forward` / `react` / `read`（标已读）。写操作是连接器的 actions（`telegram_send`、`telegram_forward`、
-  `telegram_react`、`telegram_mark_read`），过 `connector_gate`：默认在手机上确认，卡片写明会话、全文、谁会看到；不另加闸门。
-  写操作只认会话的 id 或 @用户名，而且要是读命令或收件箱列过的（只看内存里的，不问 Telegram），所以卡片上的会话就是实际写到的会话。
-- 这些工具在 Manifest 的 `Unlisted` 里：不进模型的工具列表（助手照旧只看到三个只读工具），只按名字调。描述和参数在
-  `prompts/mcp/telegram/`，实现在 `connector/telegram/cli.go`；读的回 JSON（snake_case，时间是用户时区的 RFC 3339），上限和三个工具一样，一次一页。
-- **输出**照 feishu-cli 的做法：stdout 一行 JSON（`--format text` 给人看）；失败时 stderr 一行 `{error, kind, retry_after}`，退出码
-  0 成功、1 出错、2 用法、3 用不了（没登录、关着、没 hub、不是助手）、4 限流（`retry_after`）、5 用户拒绝或规则不许。
-- **skill**：内置的 `assistantskills/builtin/telegram/SKILL.md`。只有 hub 上 Telegram 是 ok 或限流（开着、登录着）时才装：hub 每次
-  `assistant.prepare` 带上登录着的连接器（`connectors`），node 据此装上或撤掉 skill 和 `tg`（`assistantskills.Requires`）。
-  退出登录、关掉开关之后，下一条消息之前就撤掉。
-- 子进程协议为此加了 `actions.list` / `actions.describe` / `actions.do`（`docs/connector-protocol.md`），2026-11-03 和 ovis 对过。
+- **Personad tg …** (`server/internal/tgcli`, tg on assistant PATH) goes only through hub: local node socket `cli.call` → hub `mcp.call` → Telegram connector, all #965-gated. CLI has no Telegram connection / token. **Node verifies assistant identity** (`node/clicall.go`): peer PID via Linux `SO_PEERCRED` / Mac `LOCAL_PEERPID` must be Persona-launched assistant or descendant, e.g. Bash. Unverifiable rejected so Agents cannot read private chats. Node forwards telegram_-prefixed calls only.
+- **Read**: tg chats / unread / messages (`next_before`, `--since` / `--until`) / search / message / chat info / members. **Write**: send / reply / forward / react / read, connector actions `telegram_send` / `telegram_forward` / `telegram_react` / `telegram_mark_read`, existing `connector_gate` default phone card with chat / full text / audience, no extra gate. Write target only ID / @username already seen by read / Inbox, memory-only resolution, no Telegram lookup; shown chat is actual target.
+- Tools Manifest.Unlisted, excluded from model list (assistant retains three read tools), called by name. Descriptions / params `prompts/mcp/telegram/`, implementations connector/telegram/cli.go. Reads JSON snake_case / user-timezone RFC 3339, same caps, one page.
+- **Output** like feishu-cli: stdout one JSON line, `--format text` for humans; errors stderr `{error, kind, retry_after}`. Exit 0 success,1 error,2 usage,3 unavailable (logged out / off / no hub / nonassistant),4 limit,5 user / rule denial.
+- **Skill**: `assistantskills/builtin/telegram/SKILL.md` installed only when hub Telegram ok or rate_limited, enabled / signed in. Every `assistant.prepare` connectors tells node to install / remove skill / tg through assistantskills.Requires. Logout / disable removes before next message.
+- Subprocess `actions.list` / `actions.describe` / `actions.do` added (`docs/connector-protocol.md`), checked with Ovis 2026-11-03.
 
-## 设置 › 连接器 › Telegram
+## Settings › Connectors › Telegram
 
-- 状态：关着 / 未登录 / 已登录 · 显示名（@用户名）· 「api_id 1234567 · api_hash ••••a1b2」/ 限流 / 出错。
-- 登录：一步一个表单（api_id + api_hash 和申请指引 → 手机号 → 验证码 → 密码），通用：hub 告诉 App 这一步要哪些字段，App 照着画
-  （以后别的要分步登录的连接器也用它）；api_hash、密码是 `secret` 字段，输入时遮住。
-- **开关「同步 Telegram」**：默认关；关掉就停止同步（不连 Telegram、不进知识库和收件箱、助手没有工具），登录状态保留。
-- **删除已存的数据**：知识库里 `telegram-*` 的会话和人、收件箱里 Telegram 的条目、游标；要二次确认。
-- **开关「进知识库」「进收件箱」**（#989，通用连接器页按能力显示）：默认开。关掉「进知识库」就不再归档（hub 不调 `Changes`，不发归档的请求），收件箱和助手工具照常；「删除已存的知识库内容」只删知识库里 `telegram-*` 的会话、人和游标，并把「进知识库」存成关。关掉「进收件箱」就不再收新的，已有的条目不动。
-- **退出登录**：凭据和会话一起删（见上）；要换凭据就退出再登录。
-- 收件箱的行用通用的连接器块（GitHub 已经在用），标志 `Theme.Brand.telegram`（官方标志，加资源）。
-- 收件箱：连接器不能回复（只读）的条目，操作栏里是「在 Telegram 里回复」（`open_url`，`tg://` 或 `t.me` 链接；和信息的「在信息里回复」是同一个按钮，`InboxActionBar.openTitle`），不出回复框。
-- App 这边是通用的（`ConnectorSignInSections` / `ConnectorSignInModel`，`HubConnector.signsInHere` = 有 `login` 能力）：页面不认 Telegram，
-  只照 hub 给的字段画；单元测试 `ConnectorSignInTests`（`FakeHub`），UI 测试 `TelegramConnectorTests`（mock hub 的 `MOCK_TELEGRAM=2fa`：
-  凭据 → 手机号 → 错的验证码 → 验证码 → 密码 → 已登录 → 退出），mock 还有 `MOCK_TELEGRAM=off|signed_out|signed_in`、`MOCK_TELEGRAM_INBOX=1`。
+- State: Off / Signed Out / Signed In · Display Name (@username) · api_id <API ID> · api_hash ••••<suffix> / Rate Limited / Error.
+- Login stepwise generic forms: credentials + application guide → phone → code → password. Hub declares fields, app renders, reusable for other connectors. Api_hash / password secret, masked input.
+- **Sync Telegram** off by default; disable stops connection / knowledge / Inbox / assistant tools, preserves login.
+- **Delete Stored Data**: `telegram-*` knowledge chats / people, Telegram Inbox, cursor; second confirmation.
+- **Add to Knowledge / Add to Inbox** (#989, capability-driven generic page), on by default. Knowledge off stops Changes / archival requests, retains Inbox / assistant. Delete Stored Knowledge deletes only `telegram-*` chats / people / cursors and persists knowledge off. Inbox off stops new items, existing untouched.
+- **Sign Out** deletes credentials / session; required to change credentials.
+- Inbox rows generic connector block like GitHub, official `Theme.Brand.telegram` resource.
+- Read-only nonreplyable items show Reply in Telegram using `open_url` `tg://` / `t.me`; same button as Messages Reply in Messages via `InboxActionBar.openTitle`, no reply composer.
+- Generic app `ConnectorSignInSections` / `ConnectorSignInModel`, `HubConnector.signsInHere` from login capability; no Telegram-specific page logic. `ConnectorSignInTests` `FakeHub`; `TelegramConnectorTests` mock `MOCK_TELEGRAM=2fa` flow credentials → phone → wrong code → code → password → signed in → logout. Also `MOCK_TELEGRAM=off|signed_out|signed_in`, MOCK_TELEGRAM_INBOX=1.
 
-## 接口改动（`server/internal/connector`，2026-11-03 和 ovis 对过）
+## API changes (`server/internal/connector`, checked with Ovis 2026-11-03)
 
-1. **分步登录** `Login`（可选能力）：`LoginStep(ctx, step, values) (Prompt, error)`、`Logout(ctx) error`。
-   `Prompt{Step, Fields []Field, Hint, Error, Done, Account}`，`Field{Name, Label, Secret, Placeholder}`；`step` 为空是开始。
-   「验证码不对」这类给人看的一句放 `Prompt.Error`，表单留在这一步重填；只有出了不该出的错才返回 `error`。
-   计划里的 `Credentials`（一步）就是只有一步的 `Login`，不另做。会话 / token 只走 `Secrets`，永远不进 `Prompt`、`Status`、日志。
-   hub：`GET /api/v1/connectors` 每项多 `login`（这一步要的字段）、`POST /api/v1/connectors/{id}/login {step, values}`、`POST …/logout`。
-2. **加密存储** `Secrets{Load, Save, Delete}`：hub 按连接器 id 给一个实现（Postgres 新表 `connector_secrets(connector, sealed, updated_at)`，
-   一个连接器一个账号；`sealKey` 加密），构造连接器时传进去。
-3. **开关**放 `Registry`：`SetEnabled(id, bool)`，新状态 `StateDisabled`，`StatusOf` 对关掉的回 `disabled`
-   （工具、收件箱、归档这些按状态判断的地方都不用改）；`Start` 给每个连接器自己的 ctx，关掉时取消它的 `Run` / `Watch`，再打开时重新起。
-   开关的持久化在 hub（settings 表）；`Infos` 加 `enabled`。`PUT /api/v1/connectors/{id}/settings {"enabled"}`。
-4. **删除数据**放 hub（知识库、收件箱、游标都是 hub 的）：先 `SetEnabled(false)`（免得边删边进），再按前缀删知识库的 `<id>-*` 会话和人、
-   收件箱 `Source=<id>` 的条目、`cursors/<id>.json`。`DELETE /api/v1/connectors/{id}/data`。
-- 和 ovis 的迁移（M1 #529 加 `Chats` / `Items`、M6 给 `Status` 加 `Guide`、M3 加 `InboxReplier`）不重叠，谁后合谁 rebase。
+1. **Stepwise login**, optional Login capability: `LoginStep(ctx, step, values) (Prompt, error)`, `Logout(ctx) error`. Prompt{Step, Fields []Field, Hint, Error, Done, Account}; Field{Name, Label, Secret, Placeholder}; empty step starts. User-correctable Invalid Code goes in `Prompt.Error`, retaining step for reentry; only unexpected failures return error. Planned one-step Credentials is simply one-step Login, no separate interface. Sessions / tokens exclusively Secrets, never Prompt / Status / logs. Hub `GET /api/v1/connectors` adds login fields per item; `POST /api/v1/connectors/{id}/login {step, values}`, POST …/logout.
+2. **Encrypted storage** Secrets{Load,Save,Delete}: hub supplies per-ID implementation, new `connector_secrets(connector, sealed, updated_at)` table, one account per connector, `sealKey` encryption; injected at construction.
+3. **Enable switch** in Registry: `SetEnabled(id, bool)`, `StateDisabled`, `StatusOf` returns disabled; existing state-filtered tools / Inbox / archive unchanged. Start gives each connector context; disable cancels Run / Watch, enable restarts. Hub settings persistence; Infos adds enabled; `PUT /api/v1/connectors/{id}/settings {"enabled"}`.
+4. **Delete data** on hub, owning knowledge / Inbox / cursors: `SetEnabled(false)` first to prevent concurrent imports; delete `<id>-*` knowledge chats / people, `Source=<id>` Inbox, cursors/<id>.json. `DELETE /api/v1/connectors/{id}/data`.
+- No overlap with Ovis migration M1 #529 Chats / Items, M6 Status.Guide, M3 `InboxReplier`; later merger rebases.
 
-## 可选：接电脑上已有的 Telegram 服务（先不做）
+## Optional: existing Telegram service on a computer (not yet)
 
-有的人已经在某台电脑上跑着一个托管了自己账号的 Telegram 客户端（Telethon、TDLib 的 CLI 或服务）。可以像 iMessage 那样走「node 当本地连接器」
-（`docs/plan-connectors.md` 第二节第三种）：node 读本机那个服务（只读命令），hub 一侧注册成连接器，凭据和会话一直留在那台电脑上（比如它的钥匙串），不进 hub。
-- 好处：不用在 hub 上再登录一次，不多一个 Telegram 设备会话；已经授权过的服务直接用。
-- 代价：每种服务的命令和输出各不一样，要一个适配层；只能读那个服务肯给的；那台电脑离线就没有数据；限速由那个服务管。
-- 现在不做，先把 jarvisd-telegram 做完；有人要时再按 iMessage 的 `connector.*` RPC 加一个 `telegram` 的本地源。
+Some users already run account-hosting Telethon / TDLib CLI or service. Like iMessage, node could be local connector (`docs/plan-connectors.md`, section 2 option 3), reading local service commands; hub registers connector while credentials / sessions stay on computer, e.g. keychain, not hub.
+- Benefit: no second login / Telegram device session; reuse authorized service.
+- Cost: service-specific commands / output require adapters, limited exposed reads, offline computer has no data, service owns rate limits.
+- Not now; finish jarvisd-telegram first. Demand later adds telegram local source via iMessage-style `connector.*` RPC.
 
-## 测试
+## Tests
 
-- 不用真账号：Telegram 的调用收在一个小接口后面（`api`：发验证码、登录、密码、会话列表、历史、搜索、退出），单元测试用假的实现（合成的会话和消息，人名用「示例用户」）。
-  再试 gotd 自带的 `tgtest`（内存里的 MTProto 服务端）跑一条登录流程，验证真的走了 MTProto 编码；不好用就只用夹具。
-- 加密：存进库的是密文（测试里断言库里那一行不含明文 auth key）；退出后那一行没了。
-- 隐私扫描照常；日志只记会话 id、条数、错误类型，不记正文、手机号、验证码、密码。
-- 真账号的登录由用户自己在 App 里做。之后只在 hub 上看数字（会话数、行数、收件箱条数）。
-- **对照真实数据的样子**：用户在一台 Mac 上有一个托管了自己 Telegram 账号的只读服务（Telethon CLI，经本机 unix socket）。只用它的读命令
-  （status、dialogs、resolve、messages、search，`--limit` 不超过 200），一次一个请求、间隔 0.5–1 秒、FloodWait 等够，不轮询、不大批量拉；
-  **绝不**调用发送类命令。只对照结构（会话类型、群和超级群、回复、@我、静音 / 归档、附件的种类），记录也只写结构：真实的消息、人名、群名、
-  手机号、id 不进仓库、夹具、PR、issue 和日志。gotd 用不了它的会话（那是另一份授权）。
+- No real accounts: small api interface for code send / sign-in / password / chats / history / search / logout, fake implementation with synthetic chats / messages, names Example User. Try gotd tgtest in-memory MTProto login to verify actual encoding; fixtures only if unsuitable.
+- Encryption: assert DB row excludes plaintext auth key; logout deletes row.
+- Normal privacy scan; logs only session IDs, counts, error types, never body / phone / code / password.
+- User performs real-account login in app; afterward hub checks counts only (chats / rows / Inbox).
+- **Compare real data shapes**: user's Mac has account-hosting read-only Telethon CLI through Unix socket. Use only status / dialogs / resolve / messages / search, `--limit`≤200, one request at a time, 0.5–1-second gaps, full FloodWait, no polling / bulk fetch. **Never send commands.** Compare only structure: chat types, groups / supergroups, replies, mentions, mute / archive, attachment kinds. Record only structure; real messages / people / group names / phone / IDs never repository, fixtures, PR, issues, logs. Gotd cannot reuse that session; separate authorization.
 
-## 分步
+## Steps
 
-| 步 | 内容 |
+| Step | Content |
 | --- | --- |
-| T1 | 框架：`Login`、`Secrets`（`connector_secrets` 表）、`SetEnabled` / `disabled`、hub 的登录 / 退出 / 开关接口（已和 ovis 对过） |
-| T2a | 子进程连接器：hub 的 `connector/proc` 和子进程的 `connector/serve`（RPC、版本对齐、退避重启、开关停起），用测试里的假子进程验证 |
-| T2b | `jarvisd-telegram`：gotd 客户端、分步登录（凭据 → 手机号 → 验证码 → 密码）、凭据和会话经 hub 加密存、退出、状态（只露 api_id）；personad 不带 gotd 的测试 |
-| T2c | 发布和更新：`deploy.sh`、`publish.sh`（编、扫、体积、清单的 `programs`）、hub 自动更新一起换一起回滚、Docker 镜像、`deploy-hub.sh.new` |
-| T3 | T3a 知识库归档（会话增量）+ 实时踢；T3b 只读工具 + 提示词；T3c 删除已存数据（知识库、收件箱、游标） |
-| T4 | 收件箱 |
-| T5 | App：设置里的登录表单、开关、删除、退出；收件箱行的标志；mock hub；两种风格 × 深浅色截图 |
+| T1 | Framework Login, Secrets / `connector_secrets`, `SetEnabled` / disabled, hub login / logout / enable APIs, checked with Ovis |
+| T2a | Subprocess connector: `connector/proc`, `connector/serve`, RPC / version alignment / restart backoff / enable lifecycle, fake subprocess tests |
+| T2b | `jarvisd-telegram` gotd client, credentials → phone → code → password, hub-encrypted credentials / session, logout, status exposes only api_id; no-gotd personad test |
+| T2c | `deploy.sh` / `publish.sh` build, scan, size, programs manifest; coordinated self-update / rollback, Docker, `deploy-hub.sh.new` |
+| T3 | T3a incremental knowledge archive + live kick; T3b read tools / prompts; T3c delete stored knowledge / Inbox / cursors |
+| T4 | Inbox |
+| T5 | App login / switches / deletion / logout, Inbox brand, mock hub, two styles × dark / light screenshots |
 
-## 用户定的（2026-11-03）
+## User decisions (2026-11-03)
 
-1. **api_id / api_hash**：用户在 App 里登录的第一步自己填（上面「凭据」），不放 hub.json、不编进程序、不放构建配置。
-2. **第一次同步**：每个会话最近 30 天、最多 500 条。
-3. **收哪些会话**：只收私聊和群（含超级群），不收频道、机器人、Saved Messages；静音和归档的只进知识库、不进收件箱。
-4. **账号风险**：用户知道 Telegram 的「设备」里会多一个会话、会遇到限速；会话加密存，只读用。
-5. **体积**：选 B，单独一个程序（上面「架构」）。
+1. **api_id / api_hash** entered in first app-login step (Credentials above), never hub.json / program / build config.
+2. **Initial sync**: last 30 days per chat, max 500 messages.
+3. **Chat types**: direct / groups including supergroups; no channels, bots, Saved Messages. Muted / archived knowledge only, not Inbox.
+4. **Account risk**: user understands extra Telegram Devices session / rate limits; encrypted session, read-only use.
+5. **Size**: option B separate program (Architecture above).
