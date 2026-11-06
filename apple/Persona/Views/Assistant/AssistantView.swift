@@ -1137,7 +1137,7 @@ struct StarterModesMenu: View {
     @MainActor static func title(modes: StarterComposer.ShellModes, launchers: [Launcher], model: AppModel) -> SessionModes.ComposerTitle? {
         let effort = SessionModes.effort(modes.effort)?.title
         guard let name = modes.launcher ?? model.starterLauncherSetting else {
-            return SessionModes.ComposerTitle(model: String(localized: model.assistantConfigLoadFailed ? String(localized: "Couldn't Load Settings") : String(localized: "Reading")), effort: effort)
+            return SessionModes.ComposerTitle(model: model.assistantConfigLoadFailed ? String(localized: "Couldn't Load Settings") : String(localized: "Reading"), effort: effort)
         }
         let launcher = launchers.first { $0.name == name }
         return SessionModes.composerTitle(model: SessionModes.modelName(launcher?.model) ?? launcher?.name ?? name,

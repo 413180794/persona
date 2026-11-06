@@ -171,14 +171,14 @@ struct FeishuBotView: View {
 
     private var featuresSection: some View {
         Section {
-            feature(\.main, Theme.Icon.jarvis, String(localized: "Chat with Persona"), String(localized: "Messages go to the main chat (/new, /list to switch threads); replies come back to Lark"))
-            feature(\.cards, Theme.Icon.needsYou, String(localized: "Questions and Approvals"), String(localized: "When Persona or an agent you drive from Lark needs an answer or approval, you get a card in Lark. One tap does it"))
-            feature(\.allCards, Theme.Icon.notifications, String(localized: "Questions from All Agents"), String(localized: "Questions and approvals from every agent on all your computers go to Lark"))
+            feature(\.main, Theme.Icon.jarvis, "Chat with Persona", "Messages go to the main chat (/new, /list to switch threads); replies come back to Lark")
+            feature(\.cards, Theme.Icon.needsYou, "Questions and Approvals", "When Persona or an agent you drive from Lark needs an answer or approval, you get a card in Lark. One tap does it")
+            feature(\.allCards, Theme.Icon.notifications, "Questions from All Agents", "Questions and approvals from every agent on all your computers go to Lark")
                 .disabled(!features.cards)
-            feature(\.pushes, Theme.Icon.unmute, String(localized: "Also Send Notifications to Lark"), String(localized: "Persona's notifications and scheduled task results are also sent to Lark"))
-            feature(\.sync, Theme.Icon.inProgress, String(localized: "Sync Main Chat"), String(localized: "Replies in the main chat, from the app or scheduled tasks, are also sent to Lark"))
-            feature(\.reports, Theme.Icon.inProgress, String(localized: "Send Task Progress to Lark"), String(localized: "When tasks from the main chat finish, wait for you or get interrupted, they're combined into one card sent to Lark, with stages and links"))
-            feature(\.agents, Theme.Icon.agents, String(localized: "Drive Agents"), String(localized: "/agents picks Claude Code / Codex on any of your computers to chat with in Lark; /start opens a new one"))
+            feature(\.pushes, Theme.Icon.unmute, "Also Send Notifications to Lark", "Persona's notifications and scheduled task results are also sent to Lark")
+            feature(\.sync, Theme.Icon.inProgress, "Sync Main Chat", "Replies in the main chat, from the app or scheduled tasks, are also sent to Lark")
+            feature(\.reports, Theme.Icon.inProgress, "Send Task Progress to Lark", "When tasks from the main chat finish, wait for you or get interrupted, they're combined into one card sent to Lark, with stages and links")
+            feature(\.agents, Theme.Icon.agents, "Drive Agents", "/agents picks Claude Code / Codex on any of your computers to chat with in Lark; /start opens a new one")
         } header: {
             Text("What It Can Do")
         } footer: {
@@ -188,10 +188,10 @@ struct FeishuBotView: View {
 
     private var setupSection: some View {
         Section {
-            step(1, String(localized: "Create a custom app on the Lark Open Platform and enable the Bot capability"))
-            step(2, String(localized: "Under Permissions, enable: read and send direct messages (im:message, im:message:send_as_bot), receive direct messages sent to the bot, and upload and download message resources. Reading contact names helps too (contact:user.base:readonly)"))
-            step(3, String(localized: "In Events & Callbacks, choose “Receive events through persistent connection” and subscribe to “Receive messages” and “Card action callbacks”"))
-            step(4, String(localized: "Publish a version (your company's admin may need to approve it), then enter the App ID and App Secret above"))
+            step(1, "Create a custom app on the Lark Open Platform and enable the Bot capability")
+            step(2, "Under Permissions, enable: read and send direct messages (im:message, im:message:send_as_bot), receive direct messages sent to the bot, and upload and download message resources. Reading contact names helps too (contact:user.base:readonly)")
+            step(3, "In Events & Callbacks, choose “Receive events through persistent connection” and subscribe to “Receive messages” and “Card action callbacks”")
+            step(4, "Publish a version (your company's admin may need to approve it), then enter the App ID and App Secret above")
         } header: {
             Text("How to Set Up the Bot")
         } footer: {

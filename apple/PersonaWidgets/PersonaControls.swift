@@ -11,8 +11,8 @@ struct AskJarvisControl: ControlWidget {
                 Label("Ask Persona", systemImage: "sparkles")
             }
         }
-        .displayName(String(localized: "Ask Persona"))
-        .description(String(localized: "Opens the Persona assistant."))
+        .displayName("Ask Persona")
+        .description("Opens the Persona assistant.")
     }
 }
 
@@ -26,6 +26,6 @@ struct JarvisAgentsControl: ControlWidget {
             }
         }
         .displayName("Persona Agents")
-        .description(String(localized: "Opens the Agents tab in Persona."))
+        .description("Opens the Agents tab in Persona.")
     }
 }

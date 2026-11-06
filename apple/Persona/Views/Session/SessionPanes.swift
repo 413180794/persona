@@ -864,11 +864,11 @@ struct TerminalTips: View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text("Terminal Tips").font(Theme.Font.secondaryStrong)
             VStack(alignment: .leading, spacing: Theme.Space.sm) {
-                if direct { tip("keyboard", String(localized: "Keyboard button: type directly; taps go to the terminal")) }
-                tip("arrow.up.left.and.arrow.down.right", String(localized: "Pinch to change text size"))
-                tip("hand.tap", String(localized: "Double-tap the terminal to paste"))
-                tip("bolt", String(localized: "Bolt: quick commands; tap to type, double-tap to run"))
-                tip("arrow.left.arrow.right", String(localized: "Two-finger swipe: switch agents in this space"))
+                if direct { tip("keyboard", "Keyboard button: type directly; taps go to the terminal") }
+                tip("arrow.up.left.and.arrow.down.right", "Pinch to change text size")
+                tip("hand.tap", "Double-tap the terminal to paste")
+                tip("bolt", "Bolt: quick commands; tap to type, double-tap to run")
+                tip("arrow.left.arrow.right", "Two-finger swipe: switch agents in this space")
             }
             .font(Theme.Font.caption)
             HStack(spacing: Theme.Space.m) {
