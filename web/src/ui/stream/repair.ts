@@ -67,6 +67,23 @@ function balance(md: string, delim: "**" | "*"): string {
   return md + delim;
 }
 
+const TABLE_DIVIDER = /^ {0,3}\|?[\t ]*:?-{3,}:?[\t ]*(?:\|[\t ]*:?-{3,}:?[\t ]*)*\|?[\t ]*$/;
+
+/** A table's last row still being written (no line end yet, under the table's divider): left out until it is whole, so
+ *  the table does not grow a cell at a time and reflow its columns with every word (#5602). */
+function holdHalfRow(md: string): string {
+  if (md.endsWith("\n")) return md;
+  const nl = md.lastIndexOf("\n");
+  if (nl < 0 || !md.slice(nl + 1).trimStart().startsWith("|")) return md;
+  const lines = md.slice(0, nl).split(/\r?\n/);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i].trim();
+    if (TABLE_DIVIDER.test(l) && l.includes("|")) return md.slice(0, nl + 1);
+    if (!l.startsWith("|")) return md;
+  }
+  return md;
+}
+
 export function repairStreamingMarkdown(md: string): string {
   if (!md) return md;
   const { open, outside } = scanFences(md);
@@ -74,6 +91,7 @@ export function repairStreamingMarkdown(md: string): string {
     const marker = open.marker.repeat(open.length);
     return md.endsWith("\n") ? md + marker : `${md}\n${marker}`;
   }
+  md = holdHalfRow(md);
   // half a code span: whatever * follows may be inside it
   let ticks = 0;
   for (let i = 0; i < outside.length; i++) if (outside[i] === "`" && !escaped(outside, i)) ticks++;

@@ -14,7 +14,7 @@ describe("the assistant's deltas", () => {
     const shown: string[] = [];
     const t = createTextThrottle((s) => shown.push(s), clock);
     applyDelta(t, "Hel");
-    now = 80;
+    now = 20; // within the 33 ms interval
     applyDelta(t, "Hello");
     expect(shown).toEqual(["Hel"]); // inside the interval: held
     applyDelta(t, "");

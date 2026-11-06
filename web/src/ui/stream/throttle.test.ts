@@ -4,10 +4,20 @@ import { createTextThrottle, throttleInterval, THROTTLE_BASE_MS, THROTTLE_MAX_MS
 describe("throttleInterval", () => {
   it("grows with the text and stops at 400 ms", () => {
     expect(throttleInterval("x")).toBe(THROTTLE_BASE_MS);
-    expect(throttleInterval("x".repeat(12_000))).toBe(100);
+    expect(throttleInterval("x".repeat(4_001))).toBe(66);
+    expect(throttleInterval("x".repeat(12_000))).toBe(66);
     expect(throttleInterval("x".repeat(12_001))).toBe(125);
     expect(throttleInterval("x".repeat(32_001))).toBe(175);
     expect(throttleInterval("x".repeat(400_000))).toBe(THROTTLE_MAX_MS);
+  });
+
+  it("goes at the page's pace: 33 ms in front, 100 ms unfocused, 200 ms hidden (#5602)", () => {
+    expect(throttleInterval("x", "front")).toBe(33);
+    expect(throttleInterval("x", "unfocused")).toBe(100);
+    expect(throttleInterval("x", "hidden")).toBe(200);
+    // a long text's own interval when it is longer
+    expect(throttleInterval("x".repeat(12_001), "unfocused")).toBe(125);
+    expect(throttleInterval("x".repeat(400_000), "hidden")).toBe(THROTTLE_MAX_MS);
   });
 });
 
@@ -39,15 +49,33 @@ describe("createTextThrottle", () => {
     const t = createTextThrottle((s) => out.push(s), c.clock);
     t.push("a");
     expect(out).toEqual(["a"]);
-    c.advance(30);
+    c.advance(10);
     t.push("ab");
-    c.advance(30);
+    c.advance(10);
     t.push("abc");
     expect(out).toEqual(["a"]);
-    c.advance(40); // 100 ms after "a"
+    c.advance(13); // 33 ms after "a"
     expect(out).toEqual(["a", "abc"]);
     c.advance(100);
     expect(out).toEqual(["a", "abc"]);
+  });
+
+  it("waits longer while the tab is hidden", () => {
+    const out: string[] = [];
+    const c = fakeClock();
+    let pace: "front" | "hidden" = "hidden";
+    const t = createTextThrottle((s) => out.push(s), { ...c.clock, pace: () => pace });
+    t.push("a");
+    c.advance(100);
+    t.push("ab");
+    c.advance(50);
+    expect(out).toEqual(["a"]); // 150 ms: not yet at 200
+    c.advance(50);
+    expect(out).toEqual(["a", "ab"]);
+    pace = "front";
+    c.advance(40);
+    t.push("abc");
+    expect(out).toEqual(["a", "ab", "abc"]);
   });
 
   it("never drops the last value", () => {

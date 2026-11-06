@@ -30,4 +30,13 @@ describe("repairStreamingMarkdown", () => {
     expect(repair("read [the docs](https://exa")).toBe("read the docs");
     expect(repair("read [the docs](https://example.com) ok")).toBe("read [the docs](https://example.com) ok");
   });
+
+  it("holds a table's half-written last row back until its line ends (#5602)", () => {
+    const head = "| 文件 | 改动 |\n| --- | --- |\n| a.swift | 刷新 |\n";
+    expect(repair(head + "| b.swi")).toBe(head);
+    expect(repair(head + "| b.swift | 超时 |\n")).toBe(head + "| b.swift | 超时 |\n");
+    // the header itself, before its divider, and a pipe in prose are left alone
+    expect(repair("| 文件 | 改")).toBe("| 文件 | 改");
+    expect(repair("Use a | b\n| not a table")).toBe("Use a | b\n| not a table");
+  });
 });
