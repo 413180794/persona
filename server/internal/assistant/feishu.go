@@ -70,6 +70,9 @@ type botState struct {
 	// Pairing is the pairing the state belongs to (the owner and when they paired, feishu.status; "" not paired; nil:
 	// not recorded yet, a state from before). Another one, or none, starts the chat afresh (feishuReconcile).
 	Pairing *string `json:"pairing,omitempty"`
+	// Topics are the latest message the owner said in each topic (chat/thread -> message), what a reply into the thread
+	// goes by (feishu_thread_posts.go).
+	Topics map[string]*topicAnchor `json:"topics,omitempty"`
 }
 
 // The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer
@@ -311,6 +314,7 @@ func (s *Service) saveBotStateLocked() {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
 	}
 	pruneBotThreads(b.st.Threads, b.clock())
+	pruneTopicAnchors(b.st.Topics, b.clock())
 	s.trimBotCardsLocked()
 	st := s.store()
 	if st == nil {
@@ -430,6 +434,9 @@ func (s *Service) botPostKeyed(ctx context.Context, replyTo string, card *feishu
 type feishuTarget struct {
 	ChatID   string
 	InThread bool
+	// NoDetour: a reply whose parent is gone fails (the hub's no_detour) instead of landing in the chat as a message of
+	// its own: for what belongs under that parent or nowhere (a to-do's line into its topic, a card into a topic).
+	NoDetour bool
 }
 
 // params adds the target's fields to p; the zero target adds none, so the call is the same as before.
@@ -439,6 +446,9 @@ func (t feishuTarget) params(p map[string]any) map[string]any {
 	}
 	if t.InThread {
 		p["in_thread"] = true
+	}
+	if t.NoDetour {
+		p["no_detour"] = true
 	}
 	return p
 }

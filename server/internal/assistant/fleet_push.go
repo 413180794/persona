@@ -297,6 +297,8 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	// The same finished turn's one Feishu card (#4674); the sender re-checks the pushes switch and the conversations
 	// with their own Feishu path (main, scheduled task, health).
 	go s.feishuAgentDone(machine, sess, head, text, place)
+	// And the topic of the todo this agent works on, if it has one (the same decision again, not a second one).
+	s.threadAgentDone(machine, sess)
 }
 
 // reportSlack is how long before its turn started a scheduled run or notice may have been sent (the node starts the

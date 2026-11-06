@@ -1048,7 +1048,11 @@ func (s *Service) setTodoRow(id string, row db.TodoRow, guard func(*Todo) bool) 
 		}
 	}
 	out := formatTodo(copyTodoLocked(t))
+	closing := threadClosing(becameDone, t.StartError, t.DoneReason)
 	s.todos.mu.Unlock()
+	if closing != nil {
+		s.threadPost(id, *closing) // after the lock: it looks the todo up again
+	}
 	return out, doneKeys, true
 }
 
@@ -1334,7 +1338,9 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	s.todos.mu.Lock()
 	t := s.todos.todos[id]
 	var failKeys [][2]string
+	var closing *threadEvent
 	if t != nil {
+		closing = threadClosing(t.DoneAt == nil, reason, "")
 		if t.DoneAt == nil {
 			t.DoneAt = &doneAt
 		}
@@ -1352,6 +1358,9 @@ func (s *Service) failTodo(ctx context.Context, id, reason string) error {
 	s.todos.writing.Unlock()
 	if t == nil {
 		return db.ErrTodoNotFound
+	}
+	if closing != nil {
+		s.threadPost(id, *closing)
 	}
 	if len(failKeys) > 0 {
 		s.retireTodoWork(failKeys...)

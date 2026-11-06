@@ -290,7 +290,7 @@ func (s *Service) acceptReply(ctx context.Context, messageID, text string, ids .
 	}
 	if st := s.todoDB(); st != nil {
 		at := decisionNow()
-		if ok, err := st.InsertTodoDecision(ctx, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: id,
+		if ok, err := s.insertDecision(ctx, st, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: id,
 			Question: i18n.T(l, "assistant-reports.accept_question"), Choice: decisionText(text), Source: db.DecisionManual,
 			SourceMessage: "feishu-" + messageID, CreatedAt: at}); err != nil {
 			s.logf("task %s: acceptance decision: %v", id, err)
@@ -343,6 +343,7 @@ func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	s.saveAcceptLocked(ctx)
 	b.mu.Unlock()
 	s.setTaskStage(ctx, id, "verify", "")
+	s.threadPost(id, threadEvent{kind: threadTodoAccepted}) // and the todo's chat thread
 	if t, ok := s.todoNow(id); ok {
 		for _, mid := range cp.Messages {
 			if err := s.botUpdateCard(ctx, mid, s.acceptCard(ctx, t, cp, false)); err != nil {

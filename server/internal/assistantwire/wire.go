@@ -863,15 +863,19 @@ const (
 	AppFeishu = "feishu"
 	// FeishuStatusGet: {} → FeishuStatus.
 	FeishuStatusGet = "feishu.status"
-	// FeishuPost: {reply_to?, card, fallback?, uuid?} → {message_id}: a card (JSON 2.0) as a reply, else into the
-	// owner's chat; one Feishu refuses goes again as rich text (fallback, Markdown). uuid (≤ 40 chars) is the caller's
-	// key for a send into the chat that may be made again (a retried morning brief): the same key lands once.
+	// FeishuPost: {reply_to?, card, fallback?, uuid?, no_detour?} → {message_id}: a card (JSON 2.0) as a reply, else
+	// into the owner's chat; one Feishu refuses goes again as rich text (fallback, Markdown). uuid is the caller's key
+	// for a send that may be made again (a retried morning brief): the same key lands once, and a reply under it is
+	// not dropped as a repeat of another with the same words. It may be made of letters, digits, ":", "_" and "-" only
+	// (anything else is ignored, as if none was given) and is cut to 46 characters; without one a reply's key is made
+	// of its parent and content. no_detour? makes a reply whose parent was withdrawn or deleted fail (feishubot.MessageGone
+	// tells why) in place of going into the chat as a message of its own.
 	// chat_id? names another chat to send into (and to fall back to when the parent was withdrawn) and in_thread? puts
 	// a reply in the parent's thread; the hub refuses any chat but the owner's private chat, and with neither field
 	// the call is what it always was.
 	FeishuPost = "feishu.post"
-	// FeishuText: {reply_to?, text, chat_id?, in_thread?} → {message_id}: plain text as a reply, else into the owner's
-	// chat; chat_id and in_thread are FeishuPost's.
+	// FeishuText: {reply_to?, text, chat_id?, in_thread?, uuid?, no_detour?} → {message_id}: plain text as a reply,
+	// else into the owner's chat; chat_id, in_thread, uuid (cut to 50 characters here) and no_detour are FeishuPost's.
 	FeishuText = "feishu.text"
 	// FeishuUpdateCard: {message_id, card} → {}.
 	FeishuUpdateCard = "feishu.update_card"
@@ -1007,6 +1011,10 @@ type FeishuStatus struct {
 	PairedAt time.Time `json:"paired_at,omitzero"`
 	// PublicURL is the hub's web app (a card's "Open web app").
 	PublicURL string `json:"public_url,omitempty"`
+	// Chats are the chats the bot may send into for the assistant (the hub's own rule for feishu.post / feishu.text):
+	// the owner's private chat and the group chats the owner opted in. A thread the assistant posts into is checked
+	// against it before the call, so nothing goes to a chat an agent made up.
+	Chats []string `json:"chats,omitempty"`
 }
 
 // InteractionAnnounced is interaction.announced's params.

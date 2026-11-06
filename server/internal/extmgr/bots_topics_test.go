@@ -1,6 +1,7 @@
 package extmgr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -661,5 +662,46 @@ func TestTopicChatsWithANewAppIDChangeNothing(t *testing.T) {
 	// The same App ID is no change.
 	if code, _ := w.do(t, "PUT", "/api/v1/bots/feishu", `{"app_id":"cli_test","topic_chats":[{"chat_id":"oc_new"}]}`); code != 200 {
 		t.Fatalf("the same App ID with a list: %d", code)
+	}
+}
+
+// feishu.status carries the chats the bot may send into, so the assistant can tell before it posts: the owner's
+// private chat and the opted-in groups, nothing else, and nothing before pairing.
+func TestFeishuStatusListsTheChatsTheBotMaySendInto(t *testing.T) {
+	w := newBotWorld(t)
+	if st := w.feishu(t, assistantwire.FeishuStatusGet, nil); st["chats"] != nil {
+		t.Fatalf("chats before pairing: %v", st["chats"])
+	}
+	w.pair(t)
+	w.topicsOn(t, topicChat)
+	st := w.feishu(t, assistantwire.FeishuStatusGet, nil)
+	chats, _ := st["chats"].([]any)
+	if len(chats) != 2 || chats[0] != "oc_p2p" || chats[1] != topicChat {
+		t.Fatalf("chats %v", st["chats"])
+	}
+	for _, c := range chats {
+		if !botChatAllowed(w.settings(), c.(string)) {
+			t.Errorf("%v listed but not allowed", c)
+		}
+	}
+}
+
+// A line of the bot's own in an opted-in topic is not a reply (it comes with a sender that is not a user): the hub drops
+// it, whatever open id it carries, so a to-do's own post into its topic can never come back as the owner's words.
+func TestTopicBotsOwnPostIsDropped(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	w.topicsOn(t, topicChat)
+	total := w.api.total()
+	for i, from := range []string{"ou_me", "ou_bot"} { // even one carrying the owner's own open id
+		ev := bytes.Replace(groupEvent(fmt.Sprintf("om_own%d", i), from, "新决策：先发安卓", topicChat, "omt_1"), []byte(`"sender_type":"user"`), []byte(`"sender_type":"app"`), 1)
+		if !bytes.Contains(ev, []byte(`"sender_type":"app"`)) {
+			t.Fatal("event not rewritten")
+		}
+		w.send(t, ev)
+	}
+	w.quiet(t, total, "om_marker")
+	if got := w.handed(); len(got) != 1 || got[0] != "om_marker" {
+		t.Fatalf("handed %v: only the marker should have been", got)
 	}
 }

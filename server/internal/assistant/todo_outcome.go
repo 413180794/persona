@@ -253,7 +253,7 @@ func (s *Service) outcomeDecisions(ctx context.Context, t Todo, key string, by o
 	wrote, last := false, at
 	for i, r := range rows {
 		at := at.Add(time.Duration(i) * time.Microsecond) // listed in this order
-		ok, err := st.InsertTodoDecision(ctx, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID, Question: decisionText(r.q),
+		ok, err := s.insertDecision(ctx, st, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID, Question: decisionText(r.q),
 			Choice: decisionText(r.c), Reason: decisionText(r.r), Source: db.DecisionOutcome, SourceMachine: by.MachineID,
 			SourceSession: by.SessionID, SourceMessage: key + "#" + r.id, CreatedAt: at})
 		if err != nil {

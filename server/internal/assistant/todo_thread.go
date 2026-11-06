@@ -44,8 +44,13 @@ func cleanThread(th TodoThread) (TodoThread, error) {
 }
 
 // postable: whether decision d may be posted into the chat thread its todo is bound to. What the user said in the thread
-// is already there: posting it again would only echo it (and the bot's own post must not come back as a reply).
+// is already there: posting it again would only echo it (and the bot's own post must not come back as a reply). Nor
+// are the words the user wrote in the private chat as the answer to a "Please verify" card (a manual decision whose
+// source message is a Lark message): what is said in the private chat stays in it.
 func postable(d db.TodoDecisionRow) bool {
+	if d.Source == db.DecisionManual && strings.HasPrefix(d.SourceMessage, "feishu-") {
+		return false // the user's own words in the private chat, on the "Please verify" card: they stay there
+	}
 	return d.Source != db.DecisionThread
 }
 

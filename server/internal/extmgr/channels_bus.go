@@ -80,6 +80,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		Card       string               `json:"card"`
 		Fallback   string               `json:"fallback"`
 		UUID       string               `json:"uuid"`
+		NoDetour   bool                 `json:"no_detour"` // feishu.post / feishu.text: a reply to a parent that is gone fails, it is not sent into the chat
 		Text       string               `json:"text"`
 		MessageID  string               `json:"message_id"`
 		Emoji      string               `json:"emoji"`
@@ -108,6 +109,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		st := assistantwire.FeishuStatus{Ready: api != nil, Enabled: set.Enabled, Features: assistantwire.FeishuFeatures(set.Features)}
 		if set.Owner != nil {
 			st.Owner, st.PairedAt = set.Owner.OpenID, set.Owner.At
+			st.Chats = botSendChats(set)
 		}
 		if h.cfg != nil {
 			st.PublicURL = h.cfg.PublicURL
@@ -135,7 +137,7 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if err != nil {
 			return nil, err
 		}
-		id, err := h.botPostJSONKeyed(ctx, api, chatID, a.ReplyTo, a.Card, a.Fallback, a.UUID, a.InThread)
+		id, err := h.botPostJSONKeyedOpt(ctx, api, chatID, a.ReplyTo, a.Card, a.Fallback, callerKey(a.UUID, feishuMaxUUID-4), a.InThread, a.NoDetour)
 		if err == nil {
 			h.rememberMessageChat(id, firstNonEmpty(parent, chatID)) // what it sent is in a chat the bot may use
 		}
@@ -150,7 +152,13 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 			return nil, err
 		}
 		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.
-		id, _, err := h.replyOrSend(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUIDIn(a.ReplyTo, "t", a.Text, a.InThread), a.InThread)
+		// The caller's key, when it names one, in place of the reply's own (parent, purpose, content): two lines with
+		// the same words under one parent are two messages, which the content-derived key would have Feishu drop as a repeat.
+		replyUUID := feishuReplyUUIDIn(a.ReplyTo, "t", a.Text, a.InThread)
+		if k := callerKey(a.UUID, feishuMaxUUID); k != "" {
+			replyUUID = k
+		}
+		id, _, err := h.replyOrSendOpt(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), replyUUID, a.InThread, a.NoDetour)
 		if err == nil {
 			h.rememberMessageChat(id, firstNonEmpty(parent, chatID))
 		}

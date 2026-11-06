@@ -67,7 +67,7 @@ func (s *Service) todoDecisionRoutes() {
 			apierr.Write(w, http.StatusBadRequest, errors.New("question and choice cannot be empty"))
 			return
 		}
-		if _, err := st.InsertTodoDecision(r.Context(), row); err != nil {
+		if _, err := s.insertDecision(r.Context(), st, row); err != nil {
 			decisionErr(w, err)
 			return
 		}
@@ -176,7 +176,7 @@ func (s *Service) cardDecisions(ctx context.Context, ix proto.Interaction, r pro
 		}
 		// A microsecond apart, so they list in the card's order (the list orders by time, then by the random id).
 		at := at.Add(time.Duration(i) * time.Microsecond)
-		ok, err := st.InsertTodoDecision(ctx, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: todoID,
+		ok, err := s.insertDecision(ctx, st, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: todoID,
 			Question: q, Choice: c, Source: db.DecisionCard, SourceMachine: ix.MachineID, SourceSession: ix.SessionID,
 			SourceMessage: ix.ID, CreatedAt: at})
 		if err != nil {
@@ -254,7 +254,7 @@ func (s *Service) agentDecisionTool(ctx context.Context, machine, session, name 
 		return "", fmt.Errorf("too many decisions: at most %d in %d minutes; note only the calls that change the work",
 			reportLimit, int(reportWindow.Minutes()))
 	}
-	if _, err := st.InsertTodoDecision(ctx, row); err != nil {
+	if _, err := s.insertDecision(ctx, st, row); err != nil {
 		if errors.Is(err, db.ErrDecisionSupersede) {
 			return "", errors.New("supersedes_id must be an earlier decision of this todo (see todo_decisions)")
 		}

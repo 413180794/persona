@@ -50,15 +50,24 @@ const (
 func (s *Service) feishuInteraction(ix proto.Interaction) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	f, ready := s.feishuFeatures(ctx)
-	if !ready || !f.Cards {
-		return
-	}
-	// "All cards" does not take a health conversation's: only one the chat drives itself (health.go).
-	if drives := s.botDrives(ctx, ix.MachineID, ix.SessionID); !drives && (!f.AllCards || s.ixInHealth(ctx, ix)) {
+	if !s.feishuCardWanted(ctx, ix) {
 		return
 	}
 	s.postInteractionCard(ctx, ix)
+}
+
+// feishuCardWanted: the bot posts a card for ix (feishuInteraction): it is on with the cards switch, and the chat
+// drives the conversation or "all cards" is on (not for a health conversation's).
+func (s *Service) feishuCardWanted(ctx context.Context, ix proto.Interaction) bool {
+	f, ready := s.feishuFeatures(ctx)
+	if !ready || !f.Cards {
+		return false
+	}
+	// "All cards" does not take a health conversation's: only one the chat drives itself (health.go).
+	if drives := s.botDrives(ctx, ix.MachineID, ix.SessionID); !drives && (!f.AllCards || s.ixInHealth(ctx, ix)) {
+		return false
+	}
+	return true
 }
 
 // feishuInteractionAlways posts ix's card whatever the cards switches say: a task's decision the report put on top
@@ -135,12 +144,17 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 		fallback = "🖥 " + i18n.T(s.botLang(ctx), "assistant-feishu_cards.screen_summary")
 	}
 	card := s.interactionCard(ctx, ix)
+	// A card for a topic is a reply to its run's message and belongs under it: if that message is gone it would be a
+	// stray card in the group (the hub would send it into the chat), and the owner may not see it there. It goes to the
+	// owner instead, as with a chat that refused it.
+	to.NoDetour = to.ChatID != ""
 	mid, err := s.botPostTo(ctx, to, reply, card, fallback, "")
-	if err != nil && to.ChatID != "" && chatRefused(err) {
+	if err != nil && to.ChatID != "" && (chatRefused(err) || feishubot.MessageGone(err)) {
 		// The topic was refused outright (the group was taken off the owner's list, the bot is not in it, it was
-		// dissolved): nothing went out there, and the owner's DM gets the card instead, as a message of its own (a reply
-		// to the topic's message would land in the topic). Any other failure (a timeout, a gateway error) may have gone
-		// out, and a second card would show the same question twice: it is only logged.
+		// dissolved) or the message to reply under is gone: nothing went out there, and the owner's DM gets the card
+		// instead, as a message of its own (a reply to the topic's message would land in the topic). Any other failure
+		// (a timeout, a gateway error) may have gone out, and a second card would show the same question twice: it is
+		// only logged.
 		s.logf("bots: card for %s refused in the topic: %v; sending it to the owner", ix.ID, err)
 		reply = ""
 		mid, err = s.botPostTo(ctx, feishuTarget{}, "", card, fallback, "")
@@ -182,7 +196,22 @@ func chatRefused(err error) bool {
 // one); then the owner's DM wins, where only the owner sees the card (an approval or a plan must not be shown to a
 // group), and of several runs of one place the one asked last decides.
 func (s *Service) interactionPlace(ix proto.Interaction) (reply string, to feishuTarget, note *topicNote) {
-	var private, topic *channel.Run
+	private, topic := s.interactionRuns(ix)
+	switch {
+	case private != nil && topic != nil:
+		// The card is not in the topic that asked: a short line there says it went to the DM.
+		return private.ReplyTo, feishuTarget{}, &topicNote{reply: topic.ReplyTo, to: runTo(s.runExts(topic, "chat", "thread"))}
+	case private != nil:
+		return private.ReplyTo, feishuTarget{}, nil
+	case topic != nil:
+		return topic.ReplyTo, runTo(s.runExts(topic, "chat", "thread")), nil
+	}
+	return "", feishuTarget{}, nil
+}
+
+// interactionRuns are the runs that decide where ix's card goes: the latest asked in the owner's DM and the latest
+// asked in a topic, of the conversation it belongs to (either may be nil).
+func (s *Service) interactionRuns(ix proto.Interaction) (private, topic *channel.Run) {
 	for _, r := range s.channelRuns(channel.Feishu) {
 		if r.MachineID != ix.MachineID || r.SessionID != ix.SessionID {
 			continue
@@ -195,16 +224,7 @@ func (s *Service) interactionPlace(ix proto.Interaction) (reply string, to feish
 			topic = &r
 		}
 	}
-	switch {
-	case private != nil && topic != nil:
-		// The card is not in the topic that asked: a short line there says it went to the DM.
-		return private.ReplyTo, feishuTarget{}, &topicNote{reply: topic.ReplyTo, to: runTo(s.runExts(topic, "chat", "thread"))}
-	case private != nil:
-		return private.ReplyTo, feishuTarget{}, nil
-	case topic != nil:
-		return topic.ReplyTo, runTo(s.runExts(topic, "chat", "thread")), nil
-	}
-	return "", feishuTarget{}, nil
+	return private, topic
 }
 
 // topicNote is where a line goes that tells a topic its run's card went to the DM: the run's message, in its topic.

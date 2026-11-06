@@ -583,6 +583,7 @@ func (s *Service) tell(ix proto.Interaction) {
 	}
 	if !s.muted(ix.MachineID, ix.SessionID) {
 		s.notifyInteraction(ix, s.machineName(ix.MachineID))
+		go s.threadAgentAsks(ix) // and the topic of the todo this agent works on, if it has one
 	}
 	s.InteractionAnnounced(context.Background(), InteractionAnnounced{Interaction: ix}) // the Feishu bot, the channels
 }

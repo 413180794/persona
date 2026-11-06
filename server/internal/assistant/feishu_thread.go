@@ -62,6 +62,8 @@ func (s *Service) threadMessage(ctx context.Context, ev feishubot.MessageEvent, 
 		s.logf("bots: a message outside a topic of a group chat was left alone")
 		return // nowhere to answer in, and not a topic of a to-do
 	}
+	// Where the bot's own lines into this topic reply to (a todo's posts, feishu_thread_posts.go): any message of it will do.
+	s.rememberTopicMessage(ctx, msg.ChatID, msg.ThreadID, msg.MessageID)
 	l := s.botLang(ctx)
 	topic := &feishuTopic{Chat: msg.ChatID, Thread: msg.ThreadID}
 	to := topic.target()
@@ -97,7 +99,7 @@ func (s *Service) threadMessage(ctx context.Context, ev feishubot.MessageEvent, 
 	if text != "" {
 		if store := s.todoDB(); store != nil {
 			at := decisionNow()
-			inserted, err := store.InsertTodoDecision(ctx, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID,
+			inserted, err := s.insertDecision(ctx, store, db.TodoDecisionRow{ID: "dec_" + randomHex(8), TodoID: t.ID,
 				Question: i18n.T(l, "assistant-feishu.thread_question"), Choice: decisionText(text), Source: db.DecisionThread,
 				SourceMessage: "feishu-" + msg.MessageID, CreatedAt: at})
 			switch {

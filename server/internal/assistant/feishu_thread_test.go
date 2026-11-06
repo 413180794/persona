@@ -660,6 +660,8 @@ func TestCardOfATopicsRunFallsBackToTheDMOnlyWhenRefused(t *testing.T) {
 		{"the hub refuses the chat", &rpc.Error{Code: CodeChatDenied, Message: "feishu: the bot only sends into the owner's private chat and the group chats the owner opted in"}, true},
 		{"the bot is not in the chat", errors.New("feishu send: 230002 Bot/User can NOT be out of the chat"), true},
 		{"the chat was dissolved", errors.New("feishu reply: 232009 The chat has been dissolved"), true},
+		{"the run's message was withdrawn", errors.New("feishu reply: 230011 The message has been withdrawn"), true},
+		{"the run's message was deleted", errors.New("feishu reply: 230110 The message has been deleted"), true},
 		{"a timeout", errors.New("context deadline exceeded"), false},
 		{"a timeout through the bus", &rpc.Error{Message: "feishu send: Post \"https://example.test\": context deadline exceeded"}, false},
 		{"a gateway error", errors.New("feishu send: HTTP 502"), false},
@@ -684,6 +686,9 @@ func TestCardOfATopicsRunFallsBackToTheDMOnlyWhenRefused(t *testing.T) {
 			}
 			if _, in := p["chat_id"]; in {
 				tried++
+				if p["no_detour"] != true { // the hub would put it into the group as a message of its own
+					t.Errorf("%s: the card for the topic was sent without no_detour: %v", c.name, p)
+				}
 				continue
 			}
 			landed++

@@ -91,6 +91,7 @@ type Service struct {
 	reply      replyBook         // agents_reply.go: the reminders of questions left unanswered
 	chans      channelsBook      // channels.go
 	fbot       feishuBook        // feishu.go
+	tposts     threadPoster      // feishu_thread_posts.go: what a todo tells its chat thread
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
 	board      boardBook         // workspace_board.go: the workspace board

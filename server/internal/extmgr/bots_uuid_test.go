@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -313,5 +314,132 @@ func TestBotPostJSONKeyed(t *testing.T) {
 	got := f.uuids()
 	if len(got) != 2 || got[0] != "k:mcafe00a10:c" || got[1] != got[0] {
 		t.Fatalf("uuids %v", got)
+	}
+}
+
+// A text reply under the caller's key (feishu.text uuid) goes out under it: two lines with the same words under one
+// parent are two messages, not a repeat Feishu drops. The key is cut to Feishu's cap; without one the key is what it
+// always was.
+func TestChannelFeishuTextCallerKey(t *testing.T) {
+	w := newBotWorld(t)
+	w.pair(t)
+	w.api.inChat("om_5279k", "oc_p2p")
+	const text = "same words 5279k"
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279k", "in_thread": true, "uuid": "tp:aaaa"})
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279k", "in_thread": true, "uuid": "tp:bbbb"})
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279k", "in_thread": true, "uuid": strings.Repeat("u", 80)})
+	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279k", "in_thread": true})
+	var keys []string
+	w.api.mu.Lock()
+	for _, c := range w.api.calls {
+		if m := uuidInCall.FindStringSubmatch(c); m != nil && strings.Contains(c, "/messages/om_5279k/reply") {
+			keys = append(keys, m[1])
+		}
+	}
+	w.api.mu.Unlock()
+	want := []string{"tp:aaaa", "tp:bbbb", strings.Repeat("u", feishuMaxUUID), feishuReplyUUIDIn("om_5279k", "t", text, true)}
+	if len(keys) != 4 || keys[0] != want[0] || keys[1] != want[1] || keys[2] != want[2] || keys[3] != want[3] {
+		t.Fatalf("keys %v, want %v", keys, want)
+	}
+}
+
+// The same for a card: under the caller's key a reply is not keyed by its parent and content.
+func TestBotPostJSONKeyedReply(t *testing.T) {
+	f := newFakeUUIDAPI(t)
+	h := newTestManager(t)
+	api := feishubot.New("cli", "sec", f.srv.URL)
+	card := feishubot.NewCard("t", "green", "a").Markdown("card-a").JSON()
+	for _, key := range []string{"k1", "k2", ""} {
+		if _, err := h.botPostJSONKeyed(context.Background(), api, "chat", "om_parent", card, "fb", key, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := f.uuids()
+	if len(got) != 3 || got[0] != "k:k1:c" || got[1] != "k:k2:c" || got[2] != feishuReplyUUIDIn("om_parent", "c", card, true) {
+		t.Fatalf("uuids %v", got)
+	}
+}
+
+// With no_detour a reply whose parent is gone (230011 / 230110) fails and says why, whether or not it is in a thread; nothing is
+// sent into the chat. Without it the detour is as it always was, in a thread or not (TestBotReplyDetoursIntoTheCallsChat).
+func TestChannelFeishuNoDetourReplyToGoneParentFails(t *testing.T) {
+	for _, code := range []int{230011, 230110} {
+		for _, inThread := range []bool{true, false} {
+			w := newBotWorld(t)
+			w.pair(t)
+			w.api.rejectReply = code
+			const text = "reply to a gone parent 5279"
+			w.api.inChat("om_gone", "oc_p2p")
+			err := w.sendErr(assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_gone", "in_thread": inThread, "no_detour": true})
+			if err == nil || !feishubot.MessageGone(err) {
+				t.Fatalf("%d thread=%v: error %v, want one MessageGone knows", code, inThread, err)
+			}
+			w.api.find(t, "/messages/om_gone/reply", text) // attempted
+			card := feishubot.NewCard("t", "green", "a").Markdown("c").JSON()
+			if err := w.sendErr(assistantwire.FeishuPost, map[string]any{"card": card, "reply_to": "om_gone", "in_thread": inThread, "no_detour": true}); err == nil || !feishubot.MessageGone(err) {
+				t.Fatalf("%d thread=%v: card error %v", code, inThread, err)
+			}
+			if n := w.api.count("POST /open-apis/im/v1/messages "); n != 0 {
+				t.Fatalf("%d thread=%v: %d chat sends, want none", code, inThread, n)
+			}
+			// The same calls without it detour into the chat.
+			if err := w.sendErr(assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_gone", "in_thread": inThread}); err != nil {
+				t.Fatalf("%d thread=%v: %v", code, inThread, err)
+			}
+			if n := w.api.count("POST /open-apis/im/v1/messages "); n != 1 {
+				t.Fatalf("%d thread=%v: %d chat sends without no_detour, want the detour's one", code, inThread, n)
+			}
+		}
+	}
+}
+
+// A caller's key is made of letters, digits, ":", "_" and "-"; anything else is ignored (the call has the key it would
+// have had without one), text and card alike. A long one is cut, never in the middle of a character, and the key is
+// at most 50 characters.
+func TestChannelFeishuCallerKeyIsChecked(t *testing.T) {
+	if got := cutUTF8("ab你好", 3); got != "ab" {
+		t.Fatalf("cutUTF8 split a character: %q", got)
+	}
+	if got := cutUTF8("ab你好", 5); got != "ab你" || cutUTF8("abc", 5) != "abc" {
+		t.Fatalf("cutUTF8: %q", got)
+	}
+	for _, bad := range []string{"", "tp:你好", "has space", "a.b", "a/b", "tp:ok\n", "k\"q"} {
+		if got := callerKey(bad, 50); got != "" {
+			t.Errorf("callerKey(%q) = %q, want it ignored", bad, got)
+		}
+	}
+	if got := callerKey(strings.Repeat("a1:_-", 20), 50); len(got) != 50 {
+		t.Errorf("long key: %d characters", len(got))
+	}
+	w := newBotWorld(t)
+	w.pair(t)
+	w.api.inChat("om_5279c", "oc_p2p")
+	const text = "key check 5279c"
+	card := feishubot.NewCard("t", "green", "a").Markdown("card-c").JSON()
+	for _, k := range []string{"tp:good1", "tp:你好", strings.Repeat("z", 90)} {
+		w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279c", "uuid": k})
+		w.feishu(t, assistantwire.FeishuPost, map[string]any{"card": card, "reply_to": "om_5279c", "uuid": k})
+	}
+	var textKeys, cardKeys []string
+	w.api.mu.Lock()
+	for _, c := range w.api.calls {
+		if m := uuidInCall.FindStringSubmatch(c); m != nil && strings.Contains(c, "/messages/om_5279c/reply") {
+			if strings.Contains(c, `"msg_type":"text"`) {
+				textKeys = append(textKeys, m[1])
+			} else {
+				cardKeys = append(cardKeys, m[1])
+			}
+		}
+	}
+	w.api.mu.Unlock()
+	wantText := []string{"tp:good1", feishuReplyUUID("om_5279c", "t", text), strings.Repeat("z", 50)}
+	wantCard := []string{"k:tp:good1:c", feishuReplyUUID("om_5279c", "c", card), "k:" + strings.Repeat("z", 46) + ":c"}
+	if !slices.Equal(textKeys, wantText) || !slices.Equal(cardKeys, wantCard) {
+		t.Fatalf("text keys %v want %v; card keys %v want %v", textKeys, wantText, cardKeys, wantCard)
+	}
+	for _, k := range append(textKeys, cardKeys...) {
+		if len(k) > feishuMaxUUID {
+			t.Errorf("key %q is %d long", k, len(k))
+		}
 	}
 }
