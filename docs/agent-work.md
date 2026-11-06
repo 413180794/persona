@@ -208,6 +208,7 @@ Users enable them under **Settings › Session Triage** (web, Android, iOS / Mac
 
 - Subswitches work only when the main switch is on. Disabling a switch takes effect immediately: Persona-created cards are removed, and queued retries / wakeups are not sent.
 - `GET / PUT /api/v1/agents/triage` (`{enabled, auto_continue, wake, decide}`, forwarded by the hub to the manager); changes broadcast `{"type":"agents.triage"}`.
+- A `GET` whose first read of the database fails answers `503` with an `error` in the request's language (Chinese, English or Japanese) saying why, instead of returning the defaults as if they were the saved switches (#4553). Failures are not cached: the next request reads again. Switches once read or saved stay cached in memory; hub.json's initial values apply only when the database really has no setting. Triage itself still falls back to the defaults when its own read fails, and `PUT` saves as before.
 - `agents.triage` in hub.json now retains limits (`max_retries` default 3, `max_wakes` default 6, `settle_seconds` default 15);
   its four switches are initial values only when settings have never been saved in the App (omitted means off). This section is passed to the manager in the handshake reply (`assistantwire.Hello.Agents`).
 

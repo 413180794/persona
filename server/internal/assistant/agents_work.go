@@ -212,23 +212,30 @@ func (s *Service) triageCfg(ctx context.Context) assistantwire.TriageConfig {
 // triageSwitches are the switches in force: the saved ones, else hub.json's. Read from the database once; while it
 // cannot be read, hub.json's (off when unset).
 func (s *Service) triageSwitches(ctx context.Context) TriageSwitches {
+	sw, _ := s.readTriageSwitches(ctx)
+	return sw
+}
+
+// readTriageSwitches keeps read failures separate from an unset setting. Internal triage may use the returned
+// defaults on failure, but the settings API must report the error so clients cannot save those defaults back.
+func (s *Service) readTriageSwitches(ctx context.Context) (TriageSwitches, error) {
 	s.work.mu.Lock()
 	sw := s.work.switches
 	s.work.mu.Unlock()
 	if sw != nil {
-		return *sw
+		return *sw, nil
 	}
 	def := switchesOf(s.triageCfg(ctx))
 	st := s.store()
 	if st == nil {
-		return def
+		return def, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var saved TriageSwitches
 	ok, err := st.Setting(ctx, triageSettingKey, &saved)
 	if err != nil {
-		return def // read again next time
+		return def, err // read again next time
 	}
 	if !ok {
 		saved = def
@@ -236,7 +243,7 @@ func (s *Service) triageSwitches(ctx context.Context) TriageSwitches {
 	s.work.mu.Lock()
 	s.work.switches = &saved
 	s.work.mu.Unlock()
-	return saved
+	return saved, nil
 }
 
 func (s *Service) workOn(ctx context.Context) bool { return s.triageSwitches(ctx).Enabled }

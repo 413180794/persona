@@ -1,4 +1,5 @@
 {
+  "read_switches_error": "Could not read session triage settings: {error}",
   "answer_skip": "Leave it",
   "answer_retry": "Try again",
   "answer_handled": "Fixed, go on",

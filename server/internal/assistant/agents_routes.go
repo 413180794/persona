@@ -11,6 +11,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -19,7 +20,12 @@ import (
 
 func (s *Service) agentRoutes() {
 	s.handle("GET /api/v1/agents/triage", func(w http.ResponseWriter, r *http.Request) {
-		apierr.WriteJSON(w, s.triageSwitches(r.Context()))
+		sw, err := s.readTriageSwitches(r.Context())
+		if err != nil {
+			apierr.Write(w, http.StatusServiceUnavailable, i18n.Err("assistant-agents_work.read_switches_error", i18n.Args{"error": err.Error()}))
+			return
+		}
+		apierr.WriteJSON(w, sw)
 	})
 	s.handle("PUT /api/v1/agents/triage", func(w http.ResponseWriter, r *http.Request) {
 		if !fullRole(r) {

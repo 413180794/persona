@@ -1,4 +1,5 @@
 {
+  "read_switches_error": "セッションのトリアージ設定を読み込めませんでした：{error}",
   "answer_skip": "今は放置",
   "answer_retry": "もう一度試す",
   "answer_handled": "対応済み、続行",
