@@ -402,6 +402,12 @@ nonisolated enum Theme {
         static let workflowShare: CGFloat = 0.38
         /// The smallest thing a finger should hit.
         static let tapTarget: CGFloat = 44
+        /// A search field's band under a navigation bar, as the system's drawer draws it (`AgentsHeader`).
+        static let searchBand: CGFloat = 54
+        /// The field in it, at its top.
+        static let searchField: CGFloat = 44
+        /// Between a search field and its ✕ while searching, as the system's search lays them out.
+        static let searchCloseGap: CGFloat = 11
         static let avatarL: CGFloat = 46
         static let avatarXL: CGFloat = 48
         // Boxes: label columns, thumbnails, charts, previews and panels, by their size at the default text size.
@@ -539,6 +545,9 @@ nonisolated enum Theme {
         /// bar reached into the search field pulled out under it on Agents, whose room is a line of the system's that
         /// does not grow with the text (`ShellNavigationClearance`).
         static let topBarLargestTypeSize: DynamicTypeSize = .xxxLarge
+        /// Room on Agents between the navigation bar and the search field for the top bar, which is taller (`AgentsHeader`):
+        /// the height of the system's prompt line that made it before (`ShellNavigationClearance`), the same at every size.
+        static let agentsRoom: CGFloat = 34
         /// The optional third segment must leave both side buttons reachable on narrow screens.
         static let compactSwitchLargestTypeSize: DynamicTypeSize = .large
     }

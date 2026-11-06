@@ -186,7 +186,20 @@ struct ChatsView: View {
     @State private var searching = false
     /// What was searched for when a result was opened: closing the search empties the system field (our text stays,
     /// so nothing writes it back), and on coming back the list showed the results under an empty field (2026-10-31).
+    /// The system's search only: beside the split (`AgentsHeader` on a phone keeps its text).
     @State private var searchedBeforePush: String?
+    /// Regular width (the split, iPhone Duo open): the list is a sidebar column with the system's search.
+    @Environment(\.horizontalSizeClass) private var widthClass
+    #if os(iOS) || os(visionOS)
+    /// The top on a phone: its own search field and layout (#2478).
+    @State private var header = AgentsHeader()
+    private var ownsTop: Bool { widthClass != .regular }
+    /// The field on its way up into the bar's row, animated (`AgentsHeader.up`).
+    private var fieldUp: Bool { header.up }
+    #else
+    private var ownsTop: Bool { false }
+    private var fieldUp: Bool { false }
+    #endif
     @State private var showNew = false
     /// The ⋯ menu's actions, kept current by the list (not observed: see `AgentsListMenu`).
     @State private var menuActions = AgentsListMenu.Actions()
@@ -203,6 +216,17 @@ struct ChatsView: View {
     private var pushing: Binding<NavigationPath> {
         Binding(get: { path }, set: { new in
             guard searching, new.count > path.count else { return path = new }
+            #if os(iOS) || os(visionOS)
+            if ownsTop {
+                // Our own field holds no navigation bar up: the search closes (the keyboard goes, the text and the
+                // results stay for coming back) and the page goes on at once.
+                searching = false
+                header.floating = false
+                header.up = false
+                header.setCompact(false)
+                return path = new
+            }
+            #endif
             searchedBeforePush = query
             searching = false
             DispatchQueue.main.async { path = new }
@@ -218,10 +242,15 @@ struct ChatsView: View {
         let _ = searching
         SplitNavigation(path: pushing, destinations: AgentsDestinations()) {
             AgentsList(path: $path, spaceAt: $spaceAt, query: $query, searching: $searching,
-                       searchedBeforePush: $searchedBeforePush, showNew: $showNew, menuActions: menuActions)
-                // The shell's top bar floats over the navigation bar: this page's own bar makes room for it (not the
-                // navigation container: a chat pushed on it must not move, nor the list on the way back, #340).
-                .background { ShellNavigationClearance(active: shell != nil && !searching) }
+                       searchedBeforePush: $searchedBeforePush, showNew: $showNew, menuActions: menuActions, ownsTop: ownsTop,
+                       beginSearch: beginSearch)
+                #if os(iOS) || os(visionOS)
+                .environment(header)
+                #endif
+                // The shell's top bar floats over the navigation bar: beside the split this page's own bar makes room
+                // for it (not the navigation container: a chat pushed on it must not move, nor the list on the way
+                // back, #340). On a phone the room is the list's first row's (`AgentsHeader`).
+                .background { ShellNavigationClearance(active: shell != nil && !ownsTop && !searching) }
                 .background { StackStillProbe(watcher: stackStill) }
                 #if os(macOS)
                 .onAppear { MacShellState.shared.agentsList = menuActions } // the shell's toolbar menu, Display › Collapse All / Expand All
@@ -236,8 +265,9 @@ struct ChatsView: View {
                 // The Mac's buttons are in the list column's own title row (below); the shell is the phone's.
                 #if os(iOS) || os(visionOS)
                 .pageToolbar {
-                    if shell != nil {
-                        // The shell's own bar floats over this one (AgentsTopBar): the bar stays for the search field.
+                    if shell != nil || (ownsTop && header.up) {
+                        // The shell's own bar floats over this one (AgentsTopBar). Searching on a phone the field takes
+                        // the bar's row: no title under it either.
                         ToolbarItem(placement: .principal) { Color.clear.frame(width: Theme.Size.hairline) }
                             .sharedBackgroundVisibility(.hidden)
                     } else {
@@ -327,14 +357,33 @@ struct ChatsView: View {
         // (`searchedBeforePush` set): the bar stays away rather than flash back for that moment.
         .overlay(alignment: .top) {
             ZStack {
-                if let shell, path.isEmpty, !searching, searchedBeforePush == nil {
+                if let shell, path.isEmpty, ownsTop, !header.compact {
+                    // Fades with the field coming up into its row (`AgentsTopBarFade`), from the same animation. Gone
+                    // once the field is up (`compact`: set when the rise ends, cleared before the way down): faded out,
+                    // its controls were still in the accessibility tree over the field, ☰ found there and tappable.
+                    AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
+                        .equatable()
+                        .searchTraceMark("topbar")
+                        .modifier(AgentsTopBarFade(progress: fieldUp ? 1 : 0))
+                        .allowsHitTesting(!searching)
+                        .accessibilityHidden(searching)
+                        .transition(.opacity)
+                } else if let shell, path.isEmpty, !searching, searchedBeforePush == nil {
                     AgentsTopBar(shell: shell, menuActions: menuActions) { showNew = true }
                         .equatable()
                         .transition(.opacity)
                 }
             }
-            .animation(Theme.Motion.state, value: searching) // the bar only: not the list under it
+            .animation(Theme.Motion.state, value: ownsTop ? false : searching) // the bar only: not the list under it
         }
+        #if os(iOS) || os(visionOS)
+        .overlay {
+            if ownsTop, path.isEmpty {
+                AgentsSearchOverlay(header: header, shell: shell != nil, query: $query, focused: riseSearch,
+                                    cancel: endSearch)
+            }
+        }
+        #endif
         .animation(Theme.Motion.state, value: path.isEmpty)
         .environment(\.openSpace) { space in
             if spaceAt[path.count - 2] == space { path.removeLast() } else { pushSpace(space) }
@@ -368,6 +417,58 @@ struct ChatsView: View {
         }
         #endif
         model.openChat = nil
+    }
+
+    /// A tap on the field in the list's row: the floating field takes its place and the keyboard, then comes up into
+    /// the bar's row (`riseSearch`): the first keyboard of a launch takes a moment to load, and an animation started
+    /// before it jumped by what that moment would have shown. Never stuck below if the keyboard does not come.
+    private func beginSearch() {
+        #if os(iOS) || os(visionOS)
+        guard !searching, !header.floating else { return }
+        header.measureListTop()
+        #if DEBUG
+        SearchTrace.shared.note("begin listTop=\(header.listTop) scrolled=\(header.scrolled)")
+        #endif
+        header.floating = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { if header.floating { riseSearch() } } // no keyboard came
+        #endif
+    }
+
+    /// The floating field has the keyboard: up into the bar's row.
+    private func riseSearch() {
+        #if os(iOS) || os(visionOS)
+        guard !searching else { return }
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { searching = true }
+        withAnimation(Theme.Motion.state) { header.up = true } completion: {
+            // Up: laid out for searching, where it is drawn already.
+            guard searching else { return }
+            header.setCompact(true)
+        }
+        #endif
+    }
+
+    /// 「取消」: the whole list again, at once (results and list drawn together ghosted), from its top with the field out;
+    /// the field goes back down into the row, the shell's bar fading back as it goes.
+    private func endSearch() {
+        #if os(iOS) || os(visionOS)
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) { query = "" }
+        // Laid out at rest again, drawn where it is (shifted up by the difference), then down with the field.
+        header.setCompact(false)
+        // A turn later, once the whole list is in and laid out again.
+        DispatchQueue.main.async {
+            header.showField()
+            header.measureListTop()
+            #if DEBUG
+            SearchTrace.shared.note("end listTop=\(header.listTop) scrolled=\(header.scrolled)")
+            #endif
+            withTransaction(still) { searching = false }
+            withAnimation(Theme.Motion.state) { header.up = false } completion: { if !searching { header.floating = false } }
+        }
+        #endif
     }
 
     /// A space page from a page already open (a chat's Space menu): on top of it.
@@ -404,8 +505,18 @@ private struct AgentsList: View {
     @Binding var searchedBeforePush: String?
     @Binding var showNew: Bool
     var menuActions: AgentsListMenu.Actions
+    /// A phone: the page's own top (`AgentsHeader`), not the system's search.
+    var ownsTop: Bool
+    var beginSearch: () -> Void
 
     @State private var searchClose = SearchCloseWatcher()
+    #if os(iOS) || os(visionOS)
+    @Environment(AgentsHeader.self) private var header
+    /// Laid out for searching (`AgentsHeader.compact`).
+    private var compactTop: Bool { ownsTop && header.compact }
+    #else
+    private var compactTop: Bool { false }
+    #endif
     @StoredValue("dev.machineFilter") private var machineFilter = ""
     /// Several groups of hubs: the one the list shows ("" = all; `HubFilter`).
     @StoredValue(HubFilter.key) private var hubFilter = ""
@@ -630,13 +741,21 @@ private struct AgentsList: View {
             // leaving a blurred gap, TestFlight 35). Beside the split (regular width) it stays above the list.
             if widthClass != .regular {
                 Section {
+                    #if os(iOS) || os(visionOS)
+                    // The room for the shell's bar and the search field above the filters (`AgentsHeader`).
+                    AgentsHeaderRow(header: header, query: $query, begin: beginSearch) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            filterBar(base)
+                            machineFilterChip
+                        }
+                    }
+                    .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to Assistant
+                    #else
                     VStack(alignment: .leading, spacing: 0) {
                         filterBar(base)
                         machineFilterChip
                     }
-                        #if os(iOS) || os(visionOS)
-                        .background { DrawerPan.NoRowSwipe() } // no swipe of its own: a drag to the right pages to Assistant
-                        #endif
+                    #endif
                 }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
@@ -694,6 +813,7 @@ private struct AgentsList: View {
                     }
                 } header: {
                     SectionHeader(title: String(localized: "需要你处理"), count: interactions.count, tone: StatusPalette.needsYou)
+                        .searchTraceMark("needs")
                 }
             }
 
@@ -788,13 +908,19 @@ private struct AgentsList: View {
                 .listRowSeparator(capsules ? .hidden : .automatic)
             }
         }
-        .modifier(AgentsListStyle(capsules: capsules))
+        .modifier(AgentsListStyle(capsules: capsules, room: ownsTop && shell != nil && !compactTop, ownsTop: ownsTop))
+        #if os(iOS) || os(visionOS)
+        // Between the two layouts, slid with the field (`AgentsHeader.compact`); the page's color behind it.
+        .modifier(ListShift(progress: ownsTop && header.up ? 1 : 0, compact: ownsTop && header.compact,
+                            shift: AgentsHeader.shift(shell: shell != nil)))
+        #endif
         #if os(macOS)
         .modifier(MacListKeys(current: { macOpenNow }, delete: { key in deletingSession = session(key) }, move: macMove))
         #endif
-        // Keep the phone's first-row controls close to the bar: active search otherwise adds the grouped list's
-        // default first-section margin. The split's sidebar keeps its native content margins.
-        .contentMargins(.top, widthClass == .regular ? nil : Theme.Space.xs, for: .scrollContent)
+        // Keep the phone's first row close to the bar: the grouped list's default first-section margin otherwise. The
+        // room between the search field and the filters is the row's own (`AgentsHeader.filtersMargin`). The split's
+        // sidebar keeps its native content margins.
+        .contentMargins(.top, widthClass == .regular ? nil : 0, for: .scrollContent)
         .environment(\.defaultMinListRowHeight, compact ? 30 : 44)
         .environment(\.compactList, compact)
         #if DEBUG || PERF_SIGNPOST
@@ -813,22 +939,14 @@ private struct AgentsList: View {
         // takes the title's place: empty while all is well, Connecting… and the like while the hub is out of reach
         // (toolbar(removing: .title) would hide that too).
         .navigationBarTitleDisplayMode(.inline)
-        .background { SearchCloseProbe(watcher: searchClose) }
-        .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
-        // Back in front (its tab picked again, the shell's Agents): folded again too (#740). Not on the way back from a
-        // chat, which keeps the list as it was: that changes the view's appearance, not the tab.
-        // From a view of its own: reading `tabIsActive` here drew the whole list again each time the page came to the
-        // front or went behind (the Mac keeps it in the window behind other sections, #390).
-        .background { PageFrontWatcher(initial: false) { [searchClose] active in if active { searchClose.refold() } } }
+        .modifier(AgentsTop(ownsTop: ownsTop, searchClose: searchClose))
         #if (DEBUG || PERF_SIGNPOST) && (os(iOS) || os(visionOS))
         .background { if ScreenProbe.enabled { AgentsScrollProbe(page: shell == nil ? nil : "agents") } }
         #endif
-        // The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user request: the
-        // always-shown field crowded the top). Safe only because the filter bar is no longer pinned in the safe area
-        // on a phone: pinned, it stayed under the folded field (TestFlight 35, ~120 pt of blurred list).
-        // On the list itself, before the alerts, as it always was.
-        .pageSearchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
-                        prompt: String(localized: "搜索空间、标签、会话、内容"))
+        // Beside the split and on the Mac: the system's search (a phone has its own, `AgentsHeader`). The filter bar is
+        // not pinned in the safe area under a folding field: pinned, it stayed under the folded field (TestFlight 35,
+        // ~120 pt of blurred list). On the list itself, before the alerts, as it always was.
+        .modifier(AgentsSystemSearch(enabled: !ownsTop, query: $query, searching: $searching))
         .refreshable { await model.refresh() }
         // Whether each machine's herdr runs, while the list is in sight (a modifier of its own: in this chain the
         // compiler ran out of time type-checking it).
@@ -854,11 +972,18 @@ private struct AgentsList: View {
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: grouping, initial: true) { _, mode in feed.recent = mode == .recent }
+        #if DEBUG && (os(iOS) || os(visionOS))
+        .onChange(of: searching) { _, now in SearchTrace.shared.note("searching \(now)") }
+        .onChange(of: query) { _, now in SearchTrace.shared.note("query '\(now)'") }
+        #endif
         .onChange(of: machineFilter) { _, _ in kept = [] }
         .onAppear {
             feed.follow(model)
             #if os(iOS) || os(visionOS)
-            Self.keepReader(feed.reader, searchClose)
+            // The list rests with the field folded, a band down from its top: that is still the top (`atTop`); counted
+            // as read down, a change at launch kept a row and threw the list ~350 pt down (SearchOpenTests).
+            if ownsTop { Self.keepReader(feed.reader, top: Theme.Size.searchBand) { [weak header] in header?.listScrollView } }
+            else { Self.keepReader(feed.reader) { [weak searchClose] in searchClose?.listScrollView } }
             #endif
         }
         .onScrollPhaseChange { _, phase in
@@ -866,6 +991,9 @@ private struct AgentsList: View {
             PerfScroll.mark("Agents list \(phase)")
             #endif
             if phase != .idle { feed.reader.cancel() }
+            #if os(iOS) || os(visionOS)
+            if ownsTop, phase == .idle { header.settle() }
+            #endif
             feed.hold.set(.scrolling, phase != .idle)
         }
         .onChange(of: covered, initial: true) { _, covered in feed.hold.set(.outOfSight, covered) }
@@ -897,6 +1025,7 @@ private struct AgentsList: View {
     /// `base`: as the body worked it out (working it out again here went through every agent twice more per push).
     private func filterBar(_ base: [Session]) -> some View {
         QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
+            .searchTraceMark("filter")
     }
 
     /// The machine the list is narrowed to, in the shell: its menu sits behind the selected Agents switch and says
@@ -984,24 +1113,25 @@ private struct AgentsList: View {
 
     #if os(iOS) || os(visionOS)
     /// `ReaderAnchor` on the list's own scroll view.
-    private static func keepReader(_ reader: ReaderAnchor, _ watcher: SearchCloseWatcher) {
-        reader.shown = { [weak watcher] in
-            guard let list = watcher?.listScrollView, list.window != nil else { return nil }
+    /// `top`: how far down from the list's top it still counts as at the top.
+    private static func keepReader(_ reader: ReaderAnchor, top slack: CGFloat = 0, _ listView: @escaping () -> UIScrollView?) {
+        reader.shown = {
+            guard let list = listView(), list.window != nil else { return nil }
             let inset = list.adjustedContentInset
             let frame = list.convert(list.bounds, to: nil)
             let top = frame.minY + inset.top, bottom = frame.maxY - inset.bottom
             guard bottom > top else { return nil }
-            return (top...bottom, list.contentOffset.y <= -inset.top + 1)
+            return (top...bottom, list.contentOffset.y <= -inset.top + slack + 1)
         }
-        reader.scroll = { [weak watcher] dy in
-            guard let list = watcher?.listScrollView else { return }
+        reader.scroll = { dy in
+            guard let list = listView() else { return }
             let inset = list.adjustedContentInset
             let lowest = -inset.top
             let highest = max(lowest, list.contentSize.height + inset.bottom - list.bounds.height)
             list.contentOffset.y = min(max(list.contentOffset.y + dy, lowest), highest)
         }
-        reader.moving = { [weak watcher] in
-            guard let list = watcher?.listScrollView else { return false }
+        reader.moving = {
+            guard let list = listView() else { return false }
             return list.isTracking || list.isDragging || list.isDecelerating
         }
     }
@@ -1010,6 +1140,17 @@ private struct AgentsList: View {
     /// Opens a search result: the search closes first (open, it keeps the system navigation bar up over the chat), and
     /// the chat is pushed once it has folded away. The search's text and results stay for coming back.
     private func openFromSearch(_ key: SessionKey) {
+        #if os(iOS) || os(visionOS)
+        if ownsTop {
+            // Nothing to wait for: our own field holds no navigation bar up. The text and results stay.
+            searching = false
+            header.floating = false
+            header.up = false
+            header.setCompact(false)
+            path.append(key)
+            return
+        }
+        #endif
         searchedBeforePush = query
         searching = false
         searchClose.whenClosed { path.append(key) }
@@ -2802,9 +2943,52 @@ struct QuietSpaceRow: View {
 /// padding left about 100 pt under the filter chips); otherwise the grouped list.
 private struct AgentsListStyle: ViewModifier {
     let capsules: Bool
+    /// The shell's room over the list on a phone (`AgentsHeader.room`), not searching.
+    var room = false
+    /// A phone: the top is `AgentsHeader`'s.
+    var ownsTop = false
 
     func body(content: Content) -> some View {
-        if capsules { content.listStyle(.plain) } else { content.listStyle(.insetGrouped) }
+        if capsules { roomBar(content.listStyle(.plain)) } else { roomBar(content.listStyle(.insetGrouped)) }
+    }
+
+    /// The shell's bar is taller than the navigation bar under it: room over the list for the rest of it, as a bar of
+    /// the list's own, so the list blurs under it as under the navigation bar. On the list itself (on a view around
+    /// it, the blur did not come); a clear bar gets no blur either, so the page's own color, all but transparent.
+    @ViewBuilder private func roomBar(_ list: some View) -> some View {
+        #if os(iOS) || os(visionOS)
+        list.safeAreaBar(edge: .top, spacing: 0) {
+            if room { AgentsHeader.roomFill.frame(height: Theme.Shell.agentsRoom).allowsHitTesting(false).accessibilityHidden(true) }
+        }
+        // As under the system's drawer: a hard edge, there only once rows are under the bars (not the field folded
+        // away under them, `AgentsHeader.rowsUnder`).
+        .modifier(AgentsEdge(room: room, ownsTop: ownsTop))
+        #else
+        list
+        #endif
+    }
+}
+
+/// The list's edge under the bars on a phone (`AgentsListStyle.roomBar`).
+private struct AgentsEdge: ViewModifier {
+    var room: Bool
+    var ownsTop: Bool
+    #if os(iOS) || os(visionOS)
+    @Environment(AgentsHeader.self) private var header
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(iOS) || os(visionOS)
+        if ownsTop {
+            content
+                .scrollEdgeEffectStyle(room ? .hard : nil, for: .top)
+                .scrollEdgeEffectHidden(!header.rowsUnder, for: .top)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }
 
@@ -2993,6 +3177,74 @@ private struct AgentsDestinations: ViewModifier {
             .navigationDestination(for: PersonalAgentSession.self) { s in PersonalAgentSessionView(session: s).id(s.id).splitDetailPage() }
             .navigationDestination(for: TodoDetailRoute.self) { r in TodoDetailView(todoID: r.id).splitDetailPage() }
     }
+}
+
+/// Where the list's top comes from. A phone: `AgentsHeader`, which follows the list's scroll, starts it folded and
+/// folds it again when the page comes back to the front. Beside the split: the system's search drawer, folded by
+/// `SearchCloseWatcher`.
+private struct AgentsTop: ViewModifier {
+    var ownsTop: Bool
+    let searchClose: SearchCloseWatcher
+    #if os(iOS) || os(visionOS)
+    @Environment(AgentsHeader.self) private var header
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(iOS) || os(visionOS)
+        if ownsTop {
+            content
+                .background { AgentsHeaderProbe(header: header) }
+                .onAppear { header.foldOnce() } // the search field starts folded away; a pull shows it
+                // Back in front (its tab picked again, the shell's Agents): folded again too (#740). Not on the way
+                // back from a chat, which keeps the list as it was: that changes the view's appearance, not the tab.
+                .background { PageFrontWatcher(initial: false) { [header] active in if active { header.refold() } } }
+                .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { [header] _, y in
+                    header.scrolled = y
+                    let under = y > (header.compact ? 0 : AgentsHeader.band) + 0.5
+                    if header.rowsUnder != under { header.rowsUnder = under }
+                }
+                // Where UIKit draws the list (its top inset, the navigation bar's), whenever its frame changes.
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { [header] _ in
+                    DispatchQueue.main.async { header.measureListTop() }
+                }
+        } else {
+            system(content)
+        }
+        #else
+        system(content)
+        #endif
+    }
+
+    @ViewBuilder private func system(_ content: Content) -> some View {
+        content
+            .background { SearchCloseProbe(watcher: searchClose) }
+            .onAppear { searchClose.foldOnce() } // the search field starts folded away; a pull shows it
+            // From a view of its own: reading `tabIsActive` here drew the whole list again each time the page came to
+            // the front or went behind (the Mac keeps it in the window behind other sections, #390).
+            .background { PageFrontWatcher(initial: false) { [searchClose] active in if active { searchClose.refold() } } }
+    }
+}
+
+/// The system's search beside the split and on the Mac (in the window's toolbar there); a phone has its own
+/// (`AgentsHeader`). The search field folds away as the list scrolls and comes back on a pull (2026-11-01 user
+/// request: the always-shown field crowded the top).
+private struct AgentsSystemSearch: ViewModifier {
+    var enabled: Bool
+    @Binding var query: String
+    @Binding var searching: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.pageSearchable(text: $query, isPresented: $searching, placement: .navigationBarDrawer(displayMode: .automatic),
+                                   prompt: AgentsSearchPrompt.text)
+        } else {
+            content
+        }
+    }
+}
+
+enum AgentsSearchPrompt {
+    static var text: String { String(localized: "搜索空间、标签、会话、内容") }
 }
 
 /// A bar above a list in a stack (the split's sidebar column). Otherwise nothing: on a phone the bar is the list's

@@ -335,17 +335,22 @@ final class AgentsListTests: XCTestCase {
 
     /// At rest the first row hugs the navigation bar (or its revealed search field). Check both layout and pixels:
     /// UIKit once moved the drawn chips down by the whole top inset while accessibility still reported their old frame.
+    /// The page's top on a phone is its own (#2478, `AgentsHeader`): the field is the list's first row with the filters,
+    /// under the navigation bar and, in the shell, under the room kept for its taller top bar.
     private func gapAboveFilters(_ state: String, searchShown: Bool = false) -> CGFloat {
         let bar = see(filter("all"), "the first-row quick filters").frame
         let nav = app.navigationBars.firstMatch.frame
+        let shellRoom: CGFloat = app.buttons["agents-new"].firstMatch.exists ? 34 : 0 // AgentsHeader.room
+        let top = nav.maxY + shellRoom
         let search = app.searchFields.firstMatch
         let visible = search.exists && search.isHittable && search.frame.height > 30
-        XCTAssertEqual(visible, searchShown, "\(state): unexpected search drawer visibility")
+        XCTAssertEqual(visible, searchShown, "\(state): unexpected search field visibility")
         if searchShown && search.exists {
-            XCTAssertGreaterThanOrEqual(search.frame.minY, nav.minY - 1, "\(state): search starts inside the navigation bar")
-            XCTAssertLessThanOrEqual(search.frame.maxY, nav.maxY + 1, "\(state): search ends inside the navigation bar")
+            // Searching, it is up in the navigation bar's row; otherwise under the bars.
+            let floor = search.frame.minY < nav.maxY ? nav.minY : top
+            XCTAssertGreaterThanOrEqual(search.frame.minY, floor - 1, "\(state): the search field is under the bars")
         }
-        let edge = max(nav.maxY, searchShown && search.exists ? search.frame.maxY : nav.maxY)
+        let edge = searchShown && search.exists ? search.frame.maxY : top
         print("filters \(state): bar \(bar) nav \(nav) search \(search.exists ? search.frame : .zero)")
         XCTAssertGreaterThanOrEqual(bar.minY, edge - 1, "\(state): the first row is under the bar")
         XCTAssertTrue(drawn(bar), "\(state): the bar is not drawn where it is laid out")
