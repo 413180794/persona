@@ -79,6 +79,9 @@ type ModelPurpose struct {
 
 var modelCategoryIDs = []string{"assistant", "agent.new", "kb", "inbox.triage", "agent.delegate"}
 
+// The catalog also includes an opt-in override; category-default assignment must not write it.
+var modelConfigIDs = append(slices.Clone(modelCategoryIDs), purposeLarkAgent)
+
 // modelPurposes are the uses; Name, Group and Uses hold catalog names (assistant-models), read in a language by
 // localized.
 var modelPurposes = []ModelPurpose{
@@ -155,6 +158,22 @@ var errModelConflict = i18n.Err("assistant-models.err_conflict")
 
 func modelKey(id string) string { return "model_config." + id }
 
+// Lark /agent overrides were retired with category-only settings. A fresh namespace keeps dormant records
+// (model_config.lark.agent) inert, including their revisions. Only a new user save creates this record.
+func modelRecordKey(id string) string {
+	if id == purposeLarkAgent {
+		return "model_config.overrides.v1.lark.agent"
+	}
+	return modelKey(id)
+}
+
+func modelRecordID(p ModelPurpose) string {
+	if p.CategoryID != "" && p.ID != purposeLarkAgent {
+		return p.CategoryID
+	}
+	return p.ID
+}
+
 // modelsState is the model configuration's: one change at a time, the key that seals the providers' keys, the
 // launchers' model lists, the machines' ~/.zshrc launchers as last seen.
 type modelsState struct {
@@ -174,7 +193,7 @@ type modelsState struct {
 func (s *Service) modelRecord(ctx context.Context, id string) (modelRecord, error) {
 	var r modelRecord
 	if st := s.store(); st != nil {
-		_, err := st.Setting(ctx, modelKey(id), &r)
+		_, err := st.Setting(ctx, modelRecordKey(id), &r)
 		return r, err
 	}
 	return r, nil
@@ -191,7 +210,7 @@ func (s *Service) saveModelRecord(ctx context.Context, id string, revision int64
 	if cas, ok := st.(interface {
 		CompareSetting(context.Context, string, int64, any) (bool, error)
 	}); ok {
-		updated, err := cas.CompareSetting(ctx, modelKey(id), revision, r)
+		updated, err := cas.CompareSetting(ctx, modelRecordKey(id), revision, r)
 		if err != nil {
 			return err
 		}
@@ -201,13 +220,13 @@ func (s *Service) saveModelRecord(ctx context.Context, id string, revision int64
 		return nil
 	}
 	var old modelRecord
-	if _, err := st.Setting(ctx, modelKey(id), &old); err != nil {
+	if _, err := st.Setting(ctx, modelRecordKey(id), &old); err != nil {
 		return err
 	}
 	if old.Revision != revision {
 		return errModelConflict
 	}
-	return st.PutSetting(ctx, modelKey(id), r)
+	return st.PutSetting(ctx, modelRecordKey(id), r)
 }
 
 // saveModel is saveModelRecord at r's revision, one change at a time.
@@ -412,6 +431,8 @@ func inheritedLabel(l i18n.Lang, p ModelPurpose, base ModelBinding, from string,
 		return mc(l, "source_delegate_connection", i18n.Args{"provider": name}) // the model is the user's pick, or the connection's own
 	case p.ID == "agent.delegate":
 		return mc(l, "source_delegate_default", i18n.Args{"provider": name, "model": model})
+	case p.ID == purposeLarkAgent:
+		return purposeName(l, p.Parent)
 	case from == mc(l, modelAutoSource):
 		return mc(l, "source_auto_named", i18n.Args{"provider": name})
 	}
@@ -465,14 +486,14 @@ func mergeModel(base, over ModelBinding) ModelBinding {
 	return base
 }
 
-// resolveModel is what purpose id runs on: its category's record over its baseline.
+// resolveModel reads category defaults, except the opt-in Lark /agent override and independent plugin models.
 func (s *Service) resolveModel(ctx context.Context, id string) (ModelBinding, error) {
 	p, err := s.modelPurposeDef(ctx, id)
 	if err != nil {
 		return ModelBinding{}, err
 	}
-	if p.CategoryID != "" && p.CategoryID != id {
-		return s.resolveModel(ctx, p.CategoryID)
+	if recordID := modelRecordID(p); recordID != id {
+		return s.resolveModel(ctx, recordID)
 	}
 	base, _, err := s.modelBaseline(ctx, p)
 	if err != nil {
@@ -588,10 +609,7 @@ func (s *Service) modelPurpose(ctx context.Context, id string, providers []Model
 	if err != nil {
 		return p, err
 	}
-	recordID := id
-	if p.CategoryID != "" {
-		recordID = p.CategoryID
-	}
+	recordID := modelRecordID(p)
 	r, err := s.modelRecord(ctx, recordID)
 	if err != nil {
 		return p, err
@@ -799,10 +817,10 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 				if err := s.call(ctx, machine, assistantwire.DeviceLaunchersModelCheck, s.launcherParams(ctx, machine, strings.TrimPrefix(b.Provider, "launcher."), map[string]any{"model": b.Model}), &result); err != nil {
 					return i18n.Err("assistant-models.err_check_model", i18n.Args{"error": i18n.Localize(err, s.requestCtxLang(ctx))})
 				}
-				if p.ID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" && result.Agent != "agy" && result.Agent != "omp" {
+				if p.CategoryID == "agent.new" && result.Agent != "claude" && result.Agent != "codex" && result.Agent != "agy" && result.Agent != "omp" {
 					return i18n.Err("assistant-models.err_agent_launcher")
 				}
-				if p.ID == "agent.new" && result.Agent == "codex" && b.Effort != "" {
+				if p.CategoryID == "agent.new" && result.Agent == "codex" && b.Effort != "" {
 					return i18n.Err("assistant-models.err_codex_effort")
 				}
 			}
@@ -814,7 +832,7 @@ func (s *Service) validateModel(ctx context.Context, p ModelPurpose, b ModelBind
 // providerModelUses are the categories that run on provider: a provider in use is not deleted underneath them.
 func (s *Service) providerModelUses(ctx context.Context, provider string) ([]string, error) {
 	uses := []string{}
-	for _, id := range modelCategoryIDs {
+	for _, id := range modelConfigIDs {
 		p, err := s.modelPurposeDef(ctx, id)
 		if err != nil {
 			return nil, err
@@ -856,7 +874,7 @@ func (s *Service) modelConfigRoutes() {
 		ctx := r.Context()
 		providers := s.modelProviders(ctx)
 		purposes := []ModelPurpose{}
-		for _, id := range modelCategoryIDs {
+		for _, id := range modelConfigIDs {
 			p, err := s.modelPurpose(ctx, id, providers)
 			if err != nil {
 				apierr.Write(w, 500, err)
@@ -881,7 +899,8 @@ func (s *Service) modelConfigRoutes() {
 	}
 	s.handle("GET /api/v1/model-config/purposes/{id}", detail)
 	s.handle("GET /api/v1/model-config/providers/{id}/models", s.providerModels)
-	s.handle("PATCH /api/v1/model-config/purposes/{id}", func(w http.ResponseWriter, r *http.Request) {
+	// Both verbs keep sparse updates and the same revision-checked write path.
+	update := func(w http.ResponseWriter, r *http.Request) {
 		var in modelPatch
 		dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 		dec.DisallowUnknownFields()
@@ -906,7 +925,7 @@ func (s *Service) modelConfigRoutes() {
 			apierr.Write(w, status, err)
 			return
 		}
-		if p.CategoryID != "" && p.CategoryID != id {
+		if len(p.Fields) == 0 {
 			apierr.Write(w, http.StatusBadRequest, i18n.Err("assistant-models.err_purpose_readonly"))
 			return
 		}
@@ -962,7 +981,9 @@ func (s *Service) modelConfigRoutes() {
 			return
 		}
 		detail(w, r)
-	})
+	}
+	s.handle("PATCH /api/v1/model-config/purposes/{id}", update)
+	s.handle("PUT /api/v1/model-config/purposes/{id}", update)
 }
 
 // ---- what a node call runs on ----

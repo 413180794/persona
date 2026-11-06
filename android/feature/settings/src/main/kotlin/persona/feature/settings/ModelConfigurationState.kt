@@ -24,11 +24,19 @@ internal fun summaryWords(res: Resources, purpose: ModelPurpose, providers: List
     purpose.effective.effort?.takeIf { it.isNotBlank() }?.let { res.getString(R.string.settings_src_model_effort_summary, it) },
 )
 
+/** A model-only or effort-only selection is also an explicit Lark override, even when its provider is inherited. */
+internal fun larkModelMode(res: Resources, purpose: ModelPurpose): String? =
+    if (purpose.id != "lark.agent") null else res.getString(
+        if (listOf(purpose.override.provider, purpose.override.model, purpose.override.effort).any { !it.isNullOrBlank() })
+            R.string.settings_src_model_lark_separate else R.string.settings_src_model_lark_follow
+    )
+
 /** A purpose's row: what is in effect, then the hub's status or where it inherits from. */
 internal fun purposeSubtitle(res: Resources, purpose: ModelPurpose, catalog: ModelCatalog): String = listOfNotNull(
     summaryWords(res, purpose, catalog.providers).joinToString(res.getString(R.string.settings_src_model_summary_separator))
         .ifEmpty { res.getString(R.string.settings_src_state_not_configured) },
-    purpose.status?.takeIf { it.isNotBlank() } ?: purpose.inheritedFrom?.takeIf { it.isNotBlank() }?.let { from ->
+    larkModelMode(res, purpose),
+    purpose.status?.takeIf { it.isNotBlank() } ?: purpose.inheritedFrom?.takeIf { it.isNotBlank() && purpose.id != "lark.agent" }?.let { from ->
         res.getString(R.string.settings_src_model_follows, catalog.purposes.firstOrNull { it.id == from }?.displayName ?: from)
     },
 ).joinToString("\n")
@@ -46,7 +54,7 @@ internal fun providerOptions(res: Resources, purpose: ModelPurpose, providers: L
 
 /** Effort is a field of launchers and of Responses APIs; a Messages API provider has none to set. */
 internal fun showsEffort(purpose: ModelPurpose, provider: ModelProvider?): Boolean =
-    purpose.supports("effort") && !(provider?.kind == "api" && provider.api != "responses")
+    purpose.supports("effort") && (purpose.id == "lark.agent" || !(provider?.kind == "api" && provider.api != "responses"))
 
 internal data class ModelCatalogState(
     val catalog: ModelCatalog? = null,

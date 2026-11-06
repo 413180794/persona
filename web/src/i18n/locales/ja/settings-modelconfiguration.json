@@ -9,6 +9,8 @@
   "no_purposes": "ハブに設定できるモデルの用途はまだありません",
   "follows": "{name}に従う",
   "custom": "カスタム",
+  "separately_configured": "個別設定",
+  "follow_agents": "Agentsに従う",
   "manage_providers": "モデルプロバイダーを管理",
   "restored": "継承に戻しました",
   "saved": "保存しました。次回の実行から反映されます",

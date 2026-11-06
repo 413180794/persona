@@ -44,7 +44,7 @@ and the tags collapse into one line next to the bubble, "Context · N items", fo
 
 ## How it runs
 
-- Like the Inbox's AI twin, it is a headless Agent in the assistant's directory (`assistant.send`), so it has all the assistant's tools; the model is chosen in one place, **Settings › Model configuration › Lark /agent** (`docs/model-config.md`). Without a per-purpose override, the old default `lark_agent.launcher` still applies; if that is unset, the assistant's is used. The chat appears in the history of the "Persona" tab, where you can open it to see what it looked up; no "done" notification is pushed when it finishes (the result is the reply in Lark).
+- Like the Inbox's AI twin, it is a headless Agent in the assistant's directory (`assistant.send`), so it has all the assistant's tools. New requests open with `purpose: "lark.agent"`: configure its provider / launcher, model, and effort under **Settings › Model configuration › Lark /agent** (`docs/model-config.md`). With no newly saved override, or after restoring following, it inherits **Agents** (`agent.new`), not the main chat or old `lark_agent.launcher` / extension launcher defaults. Retired per-purpose records remain inert; only new user saves use the independent override namespace (#5921). The resolved launcher, model, and effort are passed to the node before it starts the conversation. Existing topic conversations retain their running settings; saving applies to new `/agent` conversations. The chat appears in the history of the "Persona" tab, where you can open it to see what it looked up; no "done" notification is pushed when it finishes (the result is the reply in Lark).
 - On receiving a request it first reacts to the message with the "OnIt" emoji, and switches it to "DONE" after replying.
 - The Agent submits its answer with the MCP tool `lark_agent_reply` (accepted only from the chat started for that request); the hub sends it with the Lark gateway's `POST /messages/:id/replies`
   (`editorType: markdown`, `replyMode: thread` inside a topic). If the turn ends before the Agent's first reply without calling the tool, the hub sends its last reply paragraph.
@@ -72,6 +72,10 @@ and the tags collapse into one line next to the bubble, "Context · N items", fo
 - Records are stored in `lark_agent.runs` in the settings table (3 days).
 
 ## Configuration
+
+Model selection is stored by the manager through `GET` / `PUT /api/v1/model-config/purposes/lark.agent` (PATCH remains compatible). Read the current revision, save the selected fields, and read back `override` and `effective`. To follow Agents again, send `provider: null`, `model: null`, and `effort: null` with the current revision. This does not authorize sending Lark messages or alter the extension's trigger and reply settings.
+
+The legacy trigger configuration below illustrates the pre-extension shape; its `launcher` field no longer selects a model. Current trigger and machine settings belong to the Lark extension.
 
 ```json
 "lark_agent": {

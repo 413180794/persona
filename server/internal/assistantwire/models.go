@@ -133,6 +133,7 @@ var modelRoutes = []string{
 	"GET /api/v1/model-config/purposes/{id}",
 	"GET /api/v1/model-config/providers/{id}/models",
 	"PATCH /api/v1/model-config/purposes/{id}",
+	"PUT /api/v1/model-config/purposes/{id}",
 	"GET /api/v1/launchers",
 	"GET /api/v1/launchers/presets",
 	"POST /api/v1/launchers/test",

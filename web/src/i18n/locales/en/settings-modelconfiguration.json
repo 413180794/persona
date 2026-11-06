@@ -9,6 +9,8 @@
   "no_purposes": "The hub has no model uses to configure yet",
   "follows": "Follows {name}",
   "custom": "Custom",
+  "separately_configured": "Separately configured",
+  "follow_agents": "Follow Agents",
   "manage_providers": "Manage model providers",
   "restored": "Inheritance restored",
   "saved": "Saved; applies from the next run",

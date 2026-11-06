@@ -9,6 +9,8 @@
   "no_purposes": "hub 上还没有能配模型的用途",
   "follows": "跟随 {name}",
   "custom": "自定义",
+  "separately_configured": "单独设置",
+  "follow_agents": "跟随 Agents",
   "manage_providers": "管理模型供应商",
   "restored": "已恢复继承",
   "saved": "已保存，下一次运行生效",

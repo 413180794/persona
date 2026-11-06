@@ -196,7 +196,9 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 			t.Errorf("%s: %+v %v", id, b, err)
 		}
 	}
-	setModel(t, s, "lark.agent", ModelBinding{Provider: "launcher.new"})
+	if err := s.putSetting(ctx, modelKey(purposeLarkAgent), modelRecord{Revision: 9, Binding: ModelBinding{Provider: "launcher.old"}}); err != nil {
+		t.Fatal(err)
+	}
 	if b, _ := s.resolveModel(ctx, "lark.agent"); b.Provider != "launcher.claude" {
 		t.Fatal("deprecated use override still applied")
 	}
@@ -468,12 +470,16 @@ func TestFourModelCategoriesCatalog(t *testing.T) {
 	ids := []string{}
 	for _, p := range catalog.Purposes {
 		ids = append(ids, p.ID)
-		if p.CategoryID != p.ID || len(p.Uses) == 0 || len(p.Fields) == 0 {
+		if p.ID == purposeLarkAgent {
+			if p.CategoryID != "agent.new" || p.Parent != "agent.new" || len(p.Fields) == 0 {
+				t.Fatalf("Lark /agent missing independent editor: %+v", p)
+			}
+		} else if p.CategoryID != p.ID || len(p.Uses) == 0 || len(p.Fields) == 0 {
 			t.Fatalf("category missing scope or editor: %+v", p)
 		}
 	}
-	if !reflect.DeepEqual(ids, modelCategoryIDs) {
-		t.Fatalf("catalog is not exactly the four ordered categories: %v", ids)
+	if !reflect.DeepEqual(ids, modelConfigIDs) {
+		t.Fatalf("catalog is not the ordered categories and Lark /agent: %v", ids)
 	}
 }
 
@@ -492,7 +498,7 @@ func TestModelUsesAreReadOnlyAndIgnoreDeprecatedOverrides(t *testing.T) {
 	}
 	ids := []string{"task.one"}
 	for _, p := range modelPurposes {
-		if p.Parent != "" {
+		if p.Parent != "" && p.ID != purposeLarkAgent {
 			ids = append(ids, p.ID)
 		}
 	}

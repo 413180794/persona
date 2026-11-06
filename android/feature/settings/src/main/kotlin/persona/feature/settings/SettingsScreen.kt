@@ -277,7 +277,7 @@ private fun SettingsContent(
         "feishu-bot" -> FeishuBotPage(services.feishuBot.takeUnless { services.demo }, back)
         "mail-add" -> AddMailAccountPage(connectorsService, onBack = { page = "mail" }, onAdded = { page = "mail" })
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
-            onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent" }
+            onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent"; page = "models" }
         })
         // "Messages" has its own page, as on iOS: "Hand to Persona", its steps on the Mac, "Conversations" (MessagesConnector.kt).
         else -> if (page == "connector/imessage") {

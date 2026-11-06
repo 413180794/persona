@@ -428,6 +428,7 @@ kb.write             PUT /api/v1/kb/{kind}/{id}
 -                    PUT /api/v1/machines/{mid}/engine
 -                    PUT /api/v1/machines/{mid}/herdr
 -                    PUT /api/v1/machines/{mid}/omp-settings
+-                    PUT /api/v1/model-config/purposes/{id}
 -                    PUT /api/v1/mutes
 -                    PUT /api/v1/pins
 -                    PUT /api/v1/recordings/{id}

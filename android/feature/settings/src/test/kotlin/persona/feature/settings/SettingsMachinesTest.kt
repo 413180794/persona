@@ -215,6 +215,47 @@ class ModelConfigurationStateTest {
         assertEquals("未配置", purposeSubtitle(res, ModelPurpose("misc"), catalog))
     }
 
+    @Test fun larkModelModeIncludesPartialOverrides() {
+        val lark = agent.copy(id = "lark.agent", parent = "agent.new", inheritedFrom = "Agents")
+        assertEquals("跟随 Agents", larkModelMode(res, lark))
+        assertTrue(purposeSubtitle(res, lark.copy(status = "offline"), catalog).contains("跟随 Agents"))
+        for (override in listOf(ModelBinding("launcher.old"), ModelBinding(model = "custom"), ModelBinding(effort = "high"))) {
+            assertEquals("单独设置", larkModelMode(res, lark.copy(override = override)))
+        }
+        assertNull(larkModelMode(res, agent))
+        assertTrue(showsEffort(lark, providers[2]))
+    }
+
+    @Test fun larkEditorSavesOwnRevisionAndRestoresFollowing() = runBlocking {
+        var saved = agent.copy(id = "lark.agent", parent = "agent.new", revision = 0)
+        val ids = mutableListOf<String>()
+        val revisions = mutableListOf<Long>()
+        val api = object : ModelConfiguration {
+            override suspend fun catalog() = catalog
+            override suspend fun purpose(id: String): ModelPurposeDetail {
+                ids += id
+                return ModelPurposeDetail(saved, providers)
+            }
+            override suspend fun providerModels(provider: String, refresh: Boolean, machine: String?): ProviderModels? = null
+            override suspend fun save(purpose: ModelPurpose, draft: ModelConfigurationDraft): ModelPurposeSave {
+                assertEquals("lark.agent", purpose.id)
+                revisions += purpose.revision
+                saved = purpose.copy(revision = purpose.revision + 1,
+                    override = ModelBinding(draft.provider, draft.model, draft.effort))
+                return ModelPurposeSave.Saved(ModelPurposeDetail(saved, providers))
+            }
+        }
+        val model = ModelPurposeModel(api, "lark.agent")
+        model.load()
+        model.edit(ModelConfigurationDraft(provider = "launcher.old", model = "custom", effort = "high"))
+        assertNotNull(model.save())
+        assertEquals("单独设置", larkModelMode(res, requireNotNull(model.state.value.purpose)))
+        assertNotNull(model.save(restore = true))
+        assertEquals("跟随 Agents", larkModelMode(res, requireNotNull(model.state.value.purpose)))
+        assertEquals(listOf("lark.agent"), ids)
+        assertEquals(listOf(0L, 1L), revisions)
+    }
+
     @Test fun providerChoicesMarkHiddenAndUnavailableReferences() {
         val options = providerOptions(res, agent.copy(override = ModelBinding("launcher.old")), providers, "launcher.old")
         assertEquals(listOf("", "launcher.claude", "launcher.old"), options.map { it.id })

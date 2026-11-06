@@ -27,6 +27,8 @@ export interface ModelPurpose {
   group: string;
   kind: "api" | "launcher" | "plugin";
   parent?: string;
+  /** Owning category; a child with nonempty fields can still have its own editable record. */
+  category_id?: string;
   machine_id?: string;
   override: ModelBinding;
   effective: ModelBinding;
