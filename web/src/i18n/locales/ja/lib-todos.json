@@ -19,5 +19,8 @@
   "subtask": "サブタスク",
   "same_chat": "同じグループ",
   "review_done": "検収済み",
-  "review_cancelled": "取り消し"
+  "review_cancelled": "取り消し",
+  "thread_feishu": "Lark のトピック",
+  "thread_channel": "トピック（{channel}）",
+  "thread_line": "{kind} · {name}"
 }

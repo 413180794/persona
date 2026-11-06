@@ -19,5 +19,8 @@
   "subtask": "子任务",
   "same_chat": "同群",
   "review_done": "已验收",
-  "review_cancelled": "已取消"
+  "review_cancelled": "已取消",
+  "thread_feishu": "飞书话题",
+  "thread_channel": "话题（{channel}）",
+  "thread_line": "{kind} · {name}"
 }

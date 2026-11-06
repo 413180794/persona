@@ -302,6 +302,7 @@ var Features = []string{
 	"file_upload",            // POST /api/v1/machines/{mid}/files (docs/protocol.md "Sending files")
 	"machine_trust",          // machines' trust and error_code, POST /api/v1/machines/{id}/confirm|reject (docs/onboarding.md 5.3)
 	"machines_add",           // POST /api/v1/auth/pair-codes with add / machine from a signed-in device: it adds a computer and pairs it (docs/onboarding.md 5.3)
+	"todo_threads",           // a to-do's chat thread: PUT/DELETE /api/v1/todos/{id}/thread, and `thread` on the to-dos GET returns (docs/todos.md "Chat thread")
 	"tls",                    // optional TLS listener and SPKI pin (hub-changes.md 1.1)
 	"endpoints",              // authenticated address discovery and capability-gated updates
 	"plugins",                // GET /api/v1/plugins and the relay under /api/v1/plugins/{id}/ (docs/extensions.md)

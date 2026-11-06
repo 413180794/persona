@@ -131,5 +131,14 @@
   "delivery_gate": "「{gate}」で止まっています",
   "unblock_user": "あなたの承認待ち",
   "unblock_agent": "エージェントが続行できます",
-  "unblock_other": "他の人 / CI / 環境待ち"
+  "unblock_other": "他の人 / CI / 環境待ち",
+  "thread_section": "トピック",
+  "thread_unbind": "紐づけ解除",
+  "thread_unbind_label": "トピック「{name}」の紐づけを解除",
+  "thread_unbind_title": "トピックの紐づけ解除",
+  "thread_unbind_confirm": "トピック「{name}」とこのToDoの紐づけを解除しますか？トピック内のメッセージは削除されません。解除後は、このToDoの進捗はトピックに投稿されず、トピックでの返信もこのToDoには届きません。",
+  "thread_unbound": "トピックの紐づけを解除しました",
+  "thread_unbind_failed": "紐づけを解除できませんでした：{error}",
+  "thread_empty": "このToDoにはトピックが紐づいていません。/topics で登録したグループチャットでトピックを作ると、新しいToDoが作られて紐づきます。エージェントにこのToDoをトピックに紐づけさせることもできます。",
+  "thread_mark": "トピックに紐づいています"
 }

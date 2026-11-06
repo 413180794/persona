@@ -61,7 +61,7 @@ export interface Todo {
   pr_url?: string;
   /** How far its finished work went out; short of live, where it is held and who can unhold it (docs/todos.md "Delivery"). */
   delivery?: TodoDelivery;
-  /** The chat thread the todo is bound to (#5279, docs/todos.md "Chat thread"); unset while it has none. No UI uses it yet. */
+  /** The chat thread the todo is bound to (#5279, docs/todos.md "Chat thread"); unset while it has none. */
   thread?: TodoThread;
 }
 

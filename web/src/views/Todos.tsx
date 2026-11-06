@@ -50,6 +50,7 @@ import { answeredLookup } from "./assistant/answered-lookup";
 import { Empty } from "./assistant/parts";
 import { ReviewBadge, ReviewChecklist } from "./assistant/Supervision";
 import { TodoStageBar } from "./TodoStageBar";
+import { boundThread, threadLine, threadName, todoThreadsOn, unbindTodoThread } from "../lib/todo-thread";
 
 export function TodosView({
   selectedId,
@@ -551,6 +552,7 @@ const TodoListItem = memo(function TodoListItem({
   const { status, dotState, activeCount } = view;
   const toneClass = TONE_CLASS[TODO_STATUS_INFO[status].tone];
   const held = heldDelivery(todo);
+  const thread = useStore((s) => todoThreadsOn(s.features)) ? boundThread(todo) : undefined;
 
   return (
     <div
@@ -593,7 +595,14 @@ const TodoListItem = memo(function TodoListItem({
           <span className={cx("truncate text-[13.5px] font-semibold text-ink", todo.done_at && "line-through text-ink-3 font-normal")}>
             {todo.title}
           </span>
-          <span className="shrink-0 text-[11px] text-ink-3">{view.age}</span>
+          <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-3">
+            {thread && (
+              <span data-testid="todo-thread-mark" role="img" aria-label={t("todos.thread_mark")} title={threadLine(thread)} className="inline-flex">
+                <Icon name="chat" size={12} stroke={2} />
+              </span>
+            )}
+            {view.age}
+          </span>
         </div>
 
         {/* Status Line */}
@@ -842,6 +851,8 @@ function TodoDetail({
         </div>
       </div>
 
+      <ThreadSection todo={todo} />
+
       <DecisionsSection todo={todo} lookup={lookup} />
 
       {/* Spaces Section */}
@@ -1046,6 +1057,91 @@ function TodoDetail({
           {todo.done_at ? t("todos.reopen") : t("todos.complete")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ── Chat thread (#5279) ──────────────────────────────────────
+
+/**
+ * The chat thread the todo is bound to, with Unbind. Binding is not done here: it needs the bot's recent topics, which the
+ * hub has no route for, so an unbound todo says how a binding comes about. A hub from before threads answers the unbind
+ * with a route-level 404: the section then goes away without a word, as the decisions do. It shows only when the hub says it
+ * has to-do threads (feature `todo_threads`): an older hub never sends a thread, so an "unbound" note there would be false.
+ */
+function ThreadSection({ todo }: { todo: Todo }) {
+  const thread = boundThread(todo);
+  const threadsOn = useStore((s) => todoThreadsOn(s.features));
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [unsupported, setUnsupported] = useState(false);
+
+  useEffect(() => {
+    setConfirm(false);
+    setBusy(false);
+  }, [todo.id]);
+
+  const unbind = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await unbindTodoThread(todo.id);
+      setConfirm(false);
+      await refreshTodos();
+      toast(t("todos.thread_unbound"), "ok");
+    } catch (e) {
+      if (isLegacySpacesRouteError(e)) {
+        setConfirm(false);
+        setUnsupported(true);
+      } else {
+        toast(t("todos.thread_unbind_failed", { error: errorText(e) }), "error");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!threadsOn || unsupported) return null;
+  return (
+    <div className="mt-6" data-testid="todo-thread">
+      <div className="mb-2 text-[11.5px] font-medium tracking-[0.04em] text-ink-3 uppercase">{t("todos.thread_section")}</div>
+      {thread ? (
+        <div className="flex items-center justify-between gap-3 rounded-control border border-line bg-canvas p-3">
+          <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold text-ink">
+            <span className="shrink-0 text-ink-3">
+              <Icon name="chat" size={14} />
+            </span>
+            <span data-testid="todo-thread-line" title={threadLine(thread)} className="truncate">
+              {threadLine(thread)}
+            </span>
+          </div>
+          <Button
+            tone="quiet"
+            title={t("todos.thread_unbind_label", { name: threadName(thread) })}
+            className="shrink-0 whitespace-nowrap px-2 py-1 text-[12px] text-ink-3 hover:bg-red-tint/50 hover:text-red"
+            onClick={() => setConfirm(true)}
+          >
+            {t("todos.thread_unbind")}
+          </Button>
+        </div>
+      ) : (
+        <div className="rounded-control border border-dashed border-line p-4 text-[12.5px] leading-[1.6] text-ink-3">
+          {t("todos.thread_empty")}
+        </div>
+      )}
+      {thread && (
+        <Dialog open={confirm} onClose={() => !busy && setConfirm(false)} title={t("todos.thread_unbind_title")}>
+          <div className="py-2 text-[13.5px] text-ink-2">{t("todos.thread_unbind_confirm", { name: threadName(thread) })}</div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button tone="secondary" disabled={busy} onClick={() => setConfirm(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button tone="danger" busy={busy} onClick={() => void unbind()}>
+              {t("todos.thread_unbind")}
+            </Button>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

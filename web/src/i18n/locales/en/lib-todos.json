@@ -19,5 +19,8 @@
   "subtask": "Subtask",
   "same_chat": "Same chat",
   "review_done": "Accepted",
-  "review_cancelled": "Cancelled"
+  "review_cancelled": "Cancelled",
+  "thread_feishu": "Lark topic",
+  "thread_channel": "Topic ({channel})",
+  "thread_line": "{kind} · {name}"
 }

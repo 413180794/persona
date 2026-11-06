@@ -131,5 +131,14 @@
   "delivery_gate": "卡在「{gate}」",
   "unblock_user": "要你点头",
   "unblock_agent": "Agent 能接着做",
-  "unblock_other": "等别人 / CI / 环境"
+  "unblock_other": "等别人 / CI / 环境",
+  "thread_section": "话题",
+  "thread_unbind": "解绑",
+  "thread_unbind_label": "解绑话题「{name}」",
+  "thread_unbind_title": "解绑话题",
+  "thread_unbind_confirm": "确定把话题「{name}」从这件待办上解绑吗？话题里的消息不会被删；解绑后，这件待办的进展不再发到话题里，话题里的回复也不再回到这件待办。",
+  "thread_unbound": "已解绑话题",
+  "thread_unbind_failed": "解绑失败：{error}",
+  "thread_empty": "这件待办还没有绑定话题。在已用 /topics 登记的话题群里开一个话题，会自动新建待办并绑定；也可以让 Agent 把这件待办绑到某个话题上。",
+  "thread_mark": "已绑定话题"
 }
