@@ -1160,7 +1160,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		if err := json.Unmarshal(params, &a); err != nil || a.Dir == "" || strings.Contains(a.Dir, "..") {
 			return nil, fmt.Errorf("bad assistant dir")
 		}
-		dir := filepath.Join(n.home, a.Dir)
+		dir := n.assistantDirOf(a.Dir)
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, err
 		}

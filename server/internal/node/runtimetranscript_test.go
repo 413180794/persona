@@ -386,3 +386,24 @@ func TestRuntimeTranscriptEcho(t *testing.T) {
 		t.Fatalf("page %s %v", raw, err)
 	}
 }
+
+// A runtime's session in a Claude transcript shows the agent's plan, as the same transcript in a terminal does
+// (#5421 set Session.plan on the pane and background rows only).
+func TestRuntimeTranscriptShowsThePlan(t *testing.T) {
+	n, _ := runtimeNode(t)
+	t.Cleanup(freshOffline)
+	list := `{"todos":[{"content":"a","status":"completed","activeForm":"Doing a"},{"content":"b","status":"in_progress","activeForm":"Reproducing the crash"},{"content":"c","status":"pending","activeForm":"Doing c"}]}`
+	writeTranscript(t, n.home, "/w/app", sdkSession, time.Now().Add(-time.Minute),
+		`{"type":"user","uuid":"u1","timestamp":"2026-11-06T10:00:00Z","cwd":"/w/app","message":{"role":"user","content":"fix the crash"}}`,
+		`{"type":"assistant","uuid":"c1","timestamp":"2026-11-06T10:00:02Z","message":{"role":"assistant","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"toolu_1","name":"TodoWrite","input":`+list+`}]}}`,
+		`{"type":"user","uuid":"r1","timestamp":"2026-11-06T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"ok"}]}}`,
+		strings.Repeat(" ", 4096))
+	host := dialRuntime(t, n, paseoHello())
+	_ = host.peer.Notify("runtime.sessions", map[string]any{"sessions": []map[string]any{{
+		"session_id": "paseo-a1", "transcript": sdkSession, "agent": "claude", "title": "Fix the crash", "cwd": "/w/app", "status": "working"}}})
+	waitFor(t, "listed with its plan", func() bool {
+		freshOffline()
+		s, ok := listed(t, n)["paseo-a1"]
+		return ok && s.Plan != nil && s.Plan.Done == 1 && s.Plan.Total == 3 && s.Plan.Current == "Reproducing the crash"
+	})
+}

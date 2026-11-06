@@ -871,7 +871,8 @@ type Session struct {
 	// Goal is the goal the agent works toward, when one is set (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
 	Goal *GoalInfo `json:"goal,omitempty"`
 	// Plan is the agent's own task list (Claude Code's TodoWrite, or TaskCreate / TaskUpdate), when it keeps one: how far
-	// along it is and the step in progress (docs/agent-goal.md "Plan"). Absent for Codex and runtimes.
+	// along it is and the step in progress (docs/agent-goal.md "Plan"). Absent for Codex and for runtimes
+	// whose conversation is not a Claude transcript on the node.
 	Plan *PlanInfo `json:"plan,omitempty"`
 	// Ports are the TCP ports the agent's processes listen on that answer HTTP (docs/ports.md): the dev servers
 	// it started, which the apps open through the hub.

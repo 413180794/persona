@@ -221,13 +221,8 @@ func (n *Node) mergeRuntimeTranscript(s *proto.Session) string {
 	if s.Status == proto.StatusWorking || s.Status == proto.StatusBlocked {
 		s.Queued = m.queue
 	}
-	s.Background = nil
-	for _, b := range m.bg {
-		if b.Kind != "agent" {
-			s.Background = append(s.Background, b)
-		}
-	}
-	s.Loop, s.Goal = m.loop, m.goal
+	n.setBackground(s, m) // as for a pane's session: its workflows, and the background tasks not shown as them
+	s.Loop, s.Goal, s.Plan = m.loop, m.goal, m.plan
 	s.Subagents = n.subagents(s.SessionID)
 	return t
 }

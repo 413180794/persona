@@ -65,7 +65,7 @@ func (n *Node) assistantGuestPrepare(params json.RawMessage) (any, error) {
 	if err := json.Unmarshal(params, &a); err != nil || a.Dir == "" || strings.Contains(a.Dir, "..") || filepath.IsAbs(a.Dir) {
 		return nil, errors.New("bad guest dir")
 	}
-	dir := filepath.Join(n.home, a.Dir)
+	dir := n.assistantDirOf(a.Dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -97,4 +97,24 @@ func (n *Node) guestMCPAndTools(id string, tools []string) (mcpJSON string, tool
 		allowed[i] = "mcp__jarvis__" + t
 	}
 	return string(mcp), []string{"--mcp-config", string(mcp), "--strict-mcp-config", "--tools", "", "--allowedTools", strings.Join(allowed, ",")}
+}
+
+// assistantDirOf is where a directory the hub names relative to HOME for the assistant (".jarvis/assistant",
+// ".jarvis/health", ".jarvis/guest") is on this node. Under a custom PERSONA_HOME it is in that root, the data_dir the
+// hub reports the assistant's directory in (#5505); on the default layouts (~/.jarvis, ~/.persona) it stays at the
+// path it always had, which Claude Code knows the assistant's sessions and memory by (docs/rename.md).
+func (n *Node) assistantDirOf(rel string) string {
+	if sub, ok := strings.CutPrefix(filepath.ToSlash(rel), ".jarvis/"); ok && n.customDataDir() {
+		return filepath.Join(n.dir, filepath.FromSlash(sub))
+	}
+	return filepath.Join(n.home, rel)
+}
+
+// customDataDir: the node's data directory is a root of its own (PERSONA_HOME), not one of the default ones.
+func (n *Node) customDataDir() bool {
+	if n.dir == "" {
+		return false
+	}
+	d := filepath.Clean(n.dir)
+	return d != filepath.Join(n.home, ".jarvis") && d != filepath.Join(n.home, ".persona")
 }
