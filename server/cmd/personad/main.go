@@ -306,7 +306,7 @@ func main() {
 			err = usageError("usage: " + commandName() + " launch <launcher> [claude args…]")
 			break
 		}
-		err = node.Launch(ctx, os.Args[2], os.Args[3:])
+		err = runLaunch(stop, os.Args[2], os.Args[3:]) // launch.go: bounded wait for the node, Ctrl-C ends it
 	case "codex-start": // a Codex launcher with the phone's first message, read from a file (node/codex_start.go)
 		err = node.CodexStart(os.Args[2:])
 	case "tab-start": // a command a runtime gave to resume its session in a new tab (`pi --session …`, node/pi.go)

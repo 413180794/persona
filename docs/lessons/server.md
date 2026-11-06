@@ -674,3 +674,10 @@ Error-valued message arguments and structured field errors also need the request
 ## Localized RPC summaries must not imply successful or absent delivery
 
 A timeout or disconnected stream may happen after input reached the node. Translate the error summary, but preserve every existing code, delivered and retryable field; never infer delivered=none just because the transport failed. Keep raw diagnostics in detail, preserve node-provided details/drafts, and leave unknown custom error codes as external data. HTTP replies, uncertain inbox replies and backlog/terminal errors must use the same locale-aware boundary rules.
+
+## A command that only waits on the node socket must not trap Ctrl-C (2026-11-06, #4548)
+
+- `main` turns SIGINT / SIGTERM into a cancelled context for every subcommand. A subcommand that never reads that context while it blocks (here `personad launch` reading the node's answer) can then be stopped by neither Ctrl-C nor `kill`, only `kill -9`.
+  `launch` calls the `stop` from `signal.NotifyContext` first: with no channel left for the signal, Go puts back the handling the process inherited at start (normally terminate; ignored stays ignored), then waits.
+- Socket reads on the local node get a deadline (`launchNodeWait`, 10 s for `launch`): a node that accepts and never answers (restarting, stuck, a stale socket held by another process) otherwise blocks forever. Say which socket timed out and point at `personad node doctor`.
+- Test a signal while the child is actually waiting: signal only after the fake node has read the request, not after a fixed sleep. A child inherits an ignored SIGINT (tests run in the background), so skip when `signal.Ignored` reports it (`cmd/personad/launch_test.go`).
