@@ -47,6 +47,11 @@ struct NewChatView: View {
     @State private var loading = false
     /// Machine whose saved defaults were applied; `.task` re-runs when a pushed picker pops, which must not clobber picks.
     @State private var defaultsFor = ""
+    /// Machine the directories, launchers and picks on screen belong to (cleared for another one); "" before the first.
+    @State private var shownFor = ""
+    /// Group whose New Agent model (`unifiedModels`, `defaultLauncher`, `configuredModel`) is loaded; nil: none yet.
+    /// Each group's hub has its own model configuration.
+    @State private var purposeGroup: String?
     @State private var starting = false
     @State private var error: String?
     @FocusState private var promptFocused: Bool
@@ -80,9 +85,9 @@ struct NewChatView: View {
     private var promptHint: String { codex ? String(localized: "What should Codex do? (Required: Codex starts a session only after the first message)")
                                        : String(localized: "What should Claude do? (Optional)") }
 
-    /// Nothing missing for Start Chat.
+    /// Nothing missing for Start Chat, and the machine's own launchers and directories are in.
     private var ready: Bool {
-        machine?.online == true && !cwd.isEmpty && (!launcher.isEmpty || unifiedModels)
+        machine?.online == true && defaultsFor == machineID && !cwd.isEmpty && (!launcher.isEmpty || unifiedModels)
             && !(codex && contextBlock == nil && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
@@ -375,9 +380,20 @@ struct NewChatView: View {
     }
 
     private func loadMachine() async {
-        guard !machineID.isEmpty, let api = model.api(ref.group), machine?.online == true else { return }
+        let id = machineID
+        // Another machine: the last one's directories and launchers go now, not when this one's hub answers. Until then
+        // they were offered under this machine's card, and stayed there when its hub could not be reached.
+        if shownFor != id {
+            if !shownFor.isEmpty { forgetLastMachine() }
+            shownFor = id
+        }
+        guard !id.isEmpty, let api = model.api(ref.group), machine?.online == true else { loading = false; return }
+        let group = ref.group
+        // Still the load the sheet is waiting for: not one for a machine picked before (its task is cancelled, but an
+        // answer can be in already), nor one cut short by a pushed page (it runs again when the page pops).
+        func current() -> Bool { !Task.isCancelled && machineID == id }
         loading = true
-        defer { loading = false }
+        defer { if current() { loading = false } }
         error = nil
         do {
             // The three requests are independent; start all of them together,
@@ -386,6 +402,8 @@ struct NewChatView: View {
             async let l = model.launchers(ref)
             async let d = api.dirs(machine: ref.id, path: "")
             let purpose = try await p
+            guard current() else { return }
+            purposeGroup = group
             if let purpose {
                 defaultLauncher = purpose.effective.provider.map { provider in
                     provider.hasPrefix("launcher.")
@@ -398,6 +416,7 @@ struct NewChatView: View {
                 unifiedModels = false
             }
             let (ls, dirs) = try await (l, d)
+            guard current() else { return }
             launchers = ls
             recent = dirs.recent ?? []
             if defaultsFor != machineID {
@@ -415,7 +434,30 @@ struct NewChatView: View {
                 launcher = unifiedModels ? "" : ls.first?.name ?? ""
             }
         } catch {
-            self.error = error.shown
+            guard current(), !error.isCancellation else { return }
+            // No answer at all (out of reach, timed out): said, not left as an empty sheet with a grey button.
+            self.error = error.shown ?? String(localized: "Can't reach this computer's hub. Try again later.")
+        }
+    }
+
+    /// What belonged to the machine picked before: its directories, launchers, the picks made from them and their
+    /// saved defaults (applied again for the next machine), and its hub's New Agent model when the new machine is in
+    /// another group of hubs.
+    private func forgetLastMachine() {
+        recent = []
+        launchers = []
+        launcher = ""
+        mode = ""
+        effort = ""
+        defaultsFor = ""
+        loading = false
+        error = nil
+        if preset == nil { cwd = "" }
+        if purposeGroup != ref.group {
+            unifiedModels = false
+            defaultLauncher = ""
+            configuredModel = ""
+            purposeGroup = nil
         }
     }
 
@@ -710,8 +752,12 @@ struct DirectoryBrowser: View {
             }
         } catch {
             guard mine == attempt else { return }
-            let reason = DirectoryPath.problem((error as? APIError)?.message ?? error.shown ?? "", path: p)
-            if list == nil, !p.isEmpty {
+            // The hub never answered (out of reach, timed out, cut off): there is no reason from it to show, and the home
+            // folder would fail the same way. It showed only "Can't open" with an empty path when the hub was out of reach.
+            let unreachable = !(error is APIError) && error.isQuiet
+            let reason = unreachable ? String(localized: "Can't reach this computer's hub. Try again later.")
+                : DirectoryPath.problem((error as? APIError)?.message ?? error.shown ?? "", path: p)
+            if list == nil, !p.isEmpty, !unreachable {
                 await load("")
                 self.error = reason
                 return

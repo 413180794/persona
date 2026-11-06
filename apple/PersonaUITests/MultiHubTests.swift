@@ -142,6 +142,59 @@ final class MultiHubTests: XCTestCase {
         XCTAssertFalse(text(relaunch, containing: "公司").exists, "the disconnected group's rows are still there")
     }
 
+    /// New Chat, switching to the other group's MacBook: the first MacBook's directories go as soon as it is picked, not
+    /// when the other hub answers, and a hub that does not answer says so (they stayed under the second card, and the
+    /// directory browser showed only "Can't open" with an empty path).
+    @MainActor func testNewChatOnTheOtherGroupsMachine() throws {
+        let h = try hubs()
+        // No -newChat.machine: a launch argument outranks what the sheet saves, so the picked card would never change.
+        let app = launch(h, ["-tab", "dev"])
+        defer { for hub in [h.b, h.c] { _ = mock(hub, "/mock/delay?s=0"); _ = mock(hub, "/mock/down?s=0") } }
+        let newChat = app.buttons["新建会话"]
+        XCTAssertTrue(newChat.waitForExistence(timeout: 20), "no 新建会话:\n\(app.debugDescription)")
+        newChat.tap()
+        // The machine cards (labelled name, then group), not the Agents rows under the sheet that name the machine too.
+        let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch
+        let work = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "工作 MacBook")).firstMatch
+        let recent = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "weather")).firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 15), "no MacBook card:\n\(app.debugDescription)")
+        home.tap()
+        XCTAssertTrue(recent.waitForExistence(timeout: 15), "the first group's MacBook lists no recent directory:\n\(app.debugDescription)")
+        XCTAssertTrue(work.exists, "no MacBook from the second group")
+        shot("first group")
+
+        // The second group's hubs answer slowly: picking its MacBook empties the list at once, then fills it with its own.
+        for hub in [h.b, h.c] { _ = mock(hub, "/mock/delay?s=6") }
+        work.tap()
+        let gone = NSPredicate(format: "exists == false")
+        expectation(for: gone, evaluatedWith: recent)
+        waitForExpectations(timeout: 2)
+        XCTAssertTrue(app.buttons["newChat.directory"].label.contains("选择目录"), app.buttons["newChat.directory"].label)
+        XCTAssertFalse(app.buttons["开始对话"].isEnabled, "Start Chat with the other machine's directory")
+        shot("second group loading")
+        XCTAssertTrue(recent.waitForExistence(timeout: 30), "the second group's MacBook never listed its own directories")
+        for hub in [h.b, h.c] { _ = mock(hub, "/mock/delay?s=0") }
+
+        // Back to the first, then the second while its hubs are gone: nothing of the first stays, and it says why.
+        home.tap()
+        XCTAssertTrue(recent.waitForExistence(timeout: 15))
+        for hub in [h.b, h.c] { _ = mock(hub, "/mock/down?s=120") }
+        work.tap()
+        expectation(for: gone, evaluatedWith: recent)
+        waitForExpectations(timeout: 2)
+        let error = app.descendants(matching: .any).matching(identifier: "newChat.error").firstMatch
+        XCTAssertTrue(error.waitForExistence(timeout: 45), "no word on the hub out of reach:\n\(app.debugDescription)")
+        XCTAssertTrue(error.label.contains("连不上这台电脑所在的 hub"), error.label)
+        XCTAssertFalse(app.buttons["开始对话"].isEnabled)
+        shot("second group out of reach")
+
+        app.buttons["newChat.directory"].tap()
+        let retry = app.buttons["dirBrowser.retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 45), "the directory browser did not offer Retry:\n\(app.debugDescription)")
+        XCTAssertTrue(text(app, containing: "连不上这台电脑所在的 hub").exists, "the directory browser does not say the hub is out of reach")
+        shot("directory browser out of reach")
+    }
+
     /// The hub the second group is on goes away: the group goes on through its other hub.
     @MainActor func testGroupMovesToItsOtherHub() throws {
         let h = try hubs()
