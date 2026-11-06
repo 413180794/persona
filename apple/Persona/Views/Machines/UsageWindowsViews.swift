@@ -8,22 +8,24 @@ final class UsageWindowsStore {
 
     private(set) var accounts: [UsageAccount] = []
 
-    /// Every group's accounts (each hub merges its own machines' and gateways'). A group that fails keeps its last
-    /// answer; one before this route answers none.
+    /// Every group's accounts (each hub merges its own machines' and gateways'), every group at once (#4705). A group
+    /// that fails, or is not asked because its link is down, keeps its last answer; one before this route answers none.
     func load(_ model: AppModel) async {
-        var all: [UsageAccount] = []
         let multi = model.isMultiHub
-        for g in model.groupIDs {
-            guard let api = model.api(g) else { continue }
-            do {
-                var list = try await api.usageWindows()
-                if multi { list = list.map { var a = $0; a.id = g + "|" + a.id; return a } }
-                all += list
-            } catch {
-                if error.isCancellation { return }
-                all += accounts.filter { !multi || $0.id.hasPrefix(g + "|") }
+        let ids = model.groupIDs
+        let apis = Dictionary(ids.compactMap { g in model.api(g).map { (g, $0) } }, uniquingKeysWith: { a, _ in a })
+        let asked = HubFanOut.asked(ids.filter { apis[$0] != nil }) { model.socket($0)?.looksConnected == true }
+        var answers: [String: [UsageAccount]] = [:]
+        var cancelled = false
+        await HubFanOut.run(asked, fetch: { g in try await apis[g]!.usageWindows() }) { g, result in
+            switch result {
+            case .success(let list): answers[g] = multi ? list.map { var a = $0; a.id = g + "|" + a.id; return a } : list
+            case .failure(let error): if error.isCancellation { cancelled = true }
             }
         }
+        if cancelled || Task.isCancelled { return }
+        // In the groups' order, as before; a group without an answer keeps what it had.
+        let all = ids.flatMap { g in answers[g] ?? accounts.filter { !multi || $0.id.hasPrefix(g + "|") } }
         if all != accounts { accounts = all }
     }
 

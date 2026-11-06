@@ -862,12 +862,18 @@ func (s *Service) scheduleLoop(ctx context.Context) {
 	wake := s.sched.wakeup()
 	for {
 		now := time.Now()
-		if !s.hello(ctx).Assistant.Standby { // a mesh member's tasks wait while the center runs the group's (docs/mesh.md)
-			s.runDue(ctx, now)
-		}
 		wait := scheduleIdle
-		if next := s.nextDue(ctx, now); !next.IsZero() && next.Sub(now) < wait {
-			wait = max(next.Sub(now), 50*time.Millisecond)
+		// A mesh member's tasks wait while the center runs the group's (docs/mesh.md). Nothing here moves a past
+		// one-off or interval task on, so its time stays past: a member only checks again at the idle wake-up (or
+		// when the list changes), not every 50 ms.
+		if !s.hello(ctx).Assistant.Standby {
+			s.runDue(ctx, now)
+			if next := s.nextDue(ctx, now); !next.IsZero() && next.Sub(now) < wait {
+				wait = max(next.Sub(now), 50*time.Millisecond)
+				if !next.After(now) {
+					wait = time.Second // runDue moves a due task on; one still past could not run (its list was not read): retry, not spin
+				}
+			}
 		}
 		t := time.NewTimer(wait)
 		select {

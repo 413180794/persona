@@ -2283,7 +2283,10 @@ final class AppModel {
     /// Where a pinned agent sits among its group's pinned agents (the newest pin first).
     func pinOrder(_ k: SessionKey) -> Int { pinsStore(k.group)?.pins.sessions.firstIndex(of: Self.pinKey(session: k)) ?? 0 }
     func loadPins() async {
-        for link in links { await link.pins.load() }
+        // Every group at once: one hub out of reach held the later ones' pins back by its requests' timeouts (#4705).
+        await withTaskGroup(of: Void.self) { tasks in
+            for link in links { tasks.addTask { await link.pins.load() } }
+        }
     }
 
     func isMuted(_ g: SpaceGroup) -> Bool { pinsStore(g.group)?.isMuted(space: Self.pinKey(space: g)) == true }
@@ -2392,14 +2395,23 @@ final class AppModel {
                 Translator.shared.syncPrefs(hubHas: p.translate)
                 LiveActivityController.shared.settings(p)
             }
-            var any = false
-            for link in links {
-                if let fleet = try? await link.api.fleet() { link.fleet = fleet; any = true }
-            }
-            if any { LiveActivityController.shared.apply(mergedFleet()) }
         }
+        // Not after the prefs above: a hub-level hub out of reach held every group's fleet back by its timeout (#4705).
+        Task { await loadFleets() }
         await withTaskGroup(of: Void.self) { tasks in
             for link in links { tasks.addTask { await self.refresh(link) } }
+        }
+    }
+
+    /// Every group's fleet for the Live Activity (docs/multi-hub.md「实时活动」), all at once: one hub out of reach held
+    /// the others' agents off the island by its requests' timeouts (#4705). Applied as each answers.
+    func loadFleets() async {
+        let byGroup = Dictionary(links.map { ($0.group, $0) }, uniquingKeysWith: { a, _ in a })
+        let apis = byGroup.mapValues(\.api)
+        await HubFanOut.run(links.map(\.group), fetch: { g in try await apis[g]!.fleet() }) { g, result in
+            guard case .success(let fleet) = result, let link = byGroup[g], self.link(g) === link else { return }
+            link.fleet = fleet
+            LiveActivityController.shared.apply(mergedFleet())
         }
     }
 

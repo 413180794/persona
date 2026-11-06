@@ -59,13 +59,7 @@ final class LiveActivityController {
         }
         // Every group's fleet, merged (docs/multi-hub.md「实时活动」).
         let model = AppModel.shared
-        Task {
-            var any = false
-            for link in model.links {
-                if let fleet = try? await link.api.fleet() { link.fleet = fleet; any = true }
-            }
-            if any { apply(model.mergedFleet()) }
-        }
+        Task { await model.loadFleets() }
     }
 
     /// Once per launch: watch tokens and activities the hub push-started.

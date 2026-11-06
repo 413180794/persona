@@ -222,16 +222,18 @@ struct MachinesView: View {
 
     /// Every group's metrics (each hub keeps its own machines').
     private func loadMetrics() async {
-        for g in model.groupIDs {
-            guard let api = model.api(g) else { continue }
-            do {
-                let fresh = try await api.metricsOverview()
+        // Every group at once, and only those whose link is up: a hub out of reach held the others' numbers back by its
+        // requests' 30 s every round (#4705). One that is not asked keeps its last numbers.
+        let apis = Dictionary(model.groupIDs.compactMap { g in model.api(g).map { (g, $0) } }, uniquingKeysWith: { a, _ in a })
+        let asked = HubFanOut.asked(model.groupIDs.filter { apis[$0] != nil }) { model.socket($0)?.looksConnected == true }
+        await HubFanOut.run(asked, fetch: { g in try await apis[g]!.metricsOverview() }) { g, result in
+            switch result {
+            case .success(let fresh):
                 var all = metrics.filter { $0.key.group != g }
                 for m in fresh where all[MachineRef(group: g, id: m.machineID)] == nil { all[MachineRef(group: g, id: m.machineID)] = m }
                 metrics = all
                 unmonitoredGroups.remove(g)
-            } catch {
-                if error.isCancellation { return }
+            case .failure(let error):
                 // A hub before machine monitoring: the cards go without numbers. Other errors keep the last numbers (the
                 // title says when the hub is out of reach).
                 if let e = error as? APIError, e.status == 404 { unmonitoredGroups.insert(g) }

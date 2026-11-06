@@ -146,17 +146,22 @@ final class WatchModel {
         var attempted = 0
         var failure: Error?
         let multi = configs.count > 1
-        for g in groups {
-            guard let api = api(g) else { continue }
-            attempted += 1
-            do {
-                async let s = api.sessions()
-                async let i = api.interactions()
-                async let m = api.machines()
-                let (a, b, c) = try await (s, i, m)
+        // Every group at once: one hub out of reach held the others back by its requests' 30 s every refresh (#4705).
+        let apis = Dictionary(groups.compactMap { g in api(g).map { (g, $0) } }, uniquingKeysWith: { a, _ in a })
+        let asked = groups.filter { apis[$0] != nil }
+        attempted = asked.count
+        await HubFanOut.run(asked, fetch: { g in
+            let api = apis[g]!
+            async let s = api.sessions()
+            async let i = api.interactions()
+            async let m = api.machines()
+            return try await (s, i, m)
+        }) { g, result in
+            switch result {
+            case .success(let (a, b, c)):
                 fetched[g] = WatchGroupData(sessions: a, interactions: b,
                     machines: multi ? c.map { var m = $0; m.groupLabel = names[g] ?? g; return m } : c)
-            } catch {
+            case .failure(let error):
                 failed.insert(g)
                 failure = error
             }
