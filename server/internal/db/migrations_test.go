@@ -23,6 +23,10 @@ import (
 // manager's from the inbox). A new migration goes in exactly one set.
 var bothSets = []string{"0001_init.sql", "0071_sent_messages.sql", "0241_sent_echo.sql"}
 
+// sharedNumbers are numbers both sets use for different migrations, frozen: two lines of work took 421 at once
+// (#5751). Harmless, since each set records its own part, but a new migration takes a number neither set has.
+var sharedNumbers = map[int][2]string{421: {"0421_hub_settings.sql", "0421_machine_usage.sql"}}
+
 // sharedTables are the tables both sets make (a database the hub and the default manager share has one of each).
 var sharedTables = []string{"sent_messages"}
 
@@ -64,7 +68,8 @@ func setTables(t *testing.T, part string) []string {
 	return out
 }
 
-// Every migration is in exactly one set (docs/server.md "Migrations"), but for the frozen few from before the split.
+// Every migration is in exactly one set and has a number of its own (docs/server.md "Migrations"), but for the frozen
+// few in bothSets and sharedNumbers.
 func TestMigrationSets(t *testing.T) {
 	root, err := fs.ReadDir(migrations, "migrations")
 	if err != nil {
@@ -93,10 +98,16 @@ func TestMigrationSets(t *testing.T) {
 				t.Errorf("migrations/%s: two migrations numbered %d", part, v)
 			}
 			seen[v] = true
-			if was, ok := versions[v]; ok && (was != name || !slices.Contains(bothSets, name)) {
+			pair, known := sharedNumbers[v]
+			if was, ok := versions[v]; ok && (was != name || !slices.Contains(bothSets, name)) && !(known && was == pair[0] && name == pair[1]) {
 				t.Errorf("migration %d is in both sets (%s, %s): a new migration goes in exactly one; take a number neither set has", v, was, name)
 			}
 			versions[v] = name
+		}
+	}
+	for v, pair := range sharedNumbers {
+		if !slices.Contains(files["hub"], pair[0]) || !slices.Contains(files["manager"], pair[1]) {
+			t.Errorf("sharedNumbers lists %d as %v, which are not hub's and manager's files", v, pair)
 		}
 	}
 	for _, name := range bothSets {
@@ -230,21 +241,10 @@ func TestMigrateFreshSets(t *testing.T) {
 	}
 }
 
-// unifiedMigrate is the migrator from before the split: one schema_migrations row per version, every migration in
-// order, up to version until (0: all).
-func unifiedMigrate(t *testing.T, url string, until int) {
+// unifiedUpTo are the migrations as the migrator from before the split had them, up to version until, in order, with
+// their SQL: 0001 was both parts in one; the others in both sets are the same in each.
+func unifiedUpTo(t *testing.T, until int) [][2]string {
 	t.Helper()
-	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-		version int PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
-		t.Fatal(err)
-	}
-	// The files as they were: 0001 was both parts in one; the others in both sets are the same in each.
 	sql := map[string]string{}
 	for _, part := range []string{"hub", "manager"} {
 		for _, name := range setFiles(t)[part] {
@@ -259,20 +259,36 @@ func unifiedMigrate(t *testing.T, url string, until int) {
 			}
 		}
 	}
-	names := make([]string, 0, len(sql))
-	for name := range sql {
-		names = append(names, name)
+	var out [][2]string
+	for name, q := range sql {
+		if v, _ := migrationVersion(name); v <= until {
+			out = append(out, [2]string{name, q})
+		}
 	}
-	sort.Strings(names)
-	for _, name := range names {
-		v, _ := migrationVersion(name)
-		if until > 0 && v > until {
-			break
+	sort.Slice(out, func(i, j int) bool { return out[i][0] < out[j][0] })
+	return out
+}
+
+// unifiedMigrate is the migrator from before the split: one schema_migrations row per version, every migration in
+// order, up to version until (419 at most: the split came after it).
+func unifiedMigrate(t *testing.T, url string, until int) {
+	t.Helper()
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version int PRIMARY KEY, name text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range unifiedUpTo(t, until) {
+		v, _ := migrationVersion(m[0])
+		if _, err := conn.Exec(ctx, m[1]); err != nil {
+			t.Fatalf("%s: %v", m[0], err)
 		}
-		if _, err := conn.Exec(ctx, sql[name]); err != nil {
-			t.Fatalf("%s: %v", name, err)
-		}
-		if _, err := conn.Exec(ctx, `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`, v, name); err != nil {
+		if _, err := conn.Exec(ctx, `INSERT INTO schema_migrations (version, name) VALUES ($1, $2)`, v, m[0]); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -286,7 +302,7 @@ func TestMigrateUpgradeFromUnified(t *testing.T) {
 	all := union(setTables(t, "hub"), setTables(t, "manager"))
 	t.Run("complete", func(t *testing.T) {
 		url := freshDatabase(t)
-		unifiedMigrate(t, url, 0)
+		unifiedMigrate(t, url, 419) // the last migration from before the split
 		probe, err := pgx.Connect(ctx, url)
 		if err != nil {
 			t.Fatal(err)
@@ -296,34 +312,39 @@ func TestMigrateUpgradeFromUnified(t *testing.T) {
 		if _, err := probe.Exec(ctx, `INSERT INTO settings (key, value) VALUES ('kept', '"yes"')`); err != nil {
 			t.Fatal(err)
 		}
-		var before []string
-		for i, s := range []Sets{ManagerSet, HubSet, AllSets} {
+		var want []string
+		for _, m := range unifiedUpTo(t, 419) {
+			want = append(want, m[0]+" -")
+		}
+		sort.Strings(want)
+		for _, s := range []Sets{ManagerSet, HubSet, AllSets} {
 			d, err := Open(ctx, url, s)
 			if err != nil {
 				t.Fatalf("open %d: %v", s, err)
 			}
-			got := records(t, d)
-			if i == 0 {
-				before = got
-				for _, r := range got {
-					if !strings.HasSuffix(r, " -") {
-						t.Fatalf("a record from before the split changed or was added: %s", r)
-					}
+			// The records from before stay as they were (part NULL, none added for them); only the migrations after the
+			// split are new, recorded with their part.
+			var old []string
+			for _, r := range records(t, d) {
+				if v, _ := migrationVersion(r); v <= 419 {
+					old = append(old, r)
+				} else if !strings.HasSuffix(r, " hub") && !strings.HasSuffix(r, " manager") {
+					t.Fatalf("a migration after the split recorded without its part: %s", r)
 				}
-			} else if !slices.Equal(got, before) {
-				t.Fatalf("records after opening with %d: %v, want %v", s, got, before)
 			}
-			if tables := tablesOf(t, d); !slices.Equal(tables, all) {
-				t.Fatalf("tables %v, want %v", tables, all)
+			if !slices.Equal(old, want) {
+				t.Fatalf("records from before the split after opening with %d: %v, want %v", s, old, want)
+			}
+			if s == AllSets {
+				if tables := tablesOf(t, d); !slices.Equal(tables, all) {
+					t.Fatalf("tables %v, want %v", tables, all)
+				}
 			}
 			var v string
 			if ok, err := d.Setting(ctx, "kept", &v); s != HubSet && (err != nil || !ok || v != "yes") { // the manager's settings
 				t.Fatalf("setting kept = %q %v %v", v, ok, err)
 			}
 			d.Close()
-		}
-		if len(before) != len(setFiles(t)["hub"])+len(setFiles(t)["manager"])-len(bothSets) {
-			t.Fatalf("%d records: %v", len(before), before)
 		}
 		// What a binary from before the split does with it (a hub switched back to an older slot): its lookup and its
 		// insert still work.
@@ -454,5 +475,29 @@ func TestHubSettingsCopiedOnUpgrade(t *testing.T) {
 	var tasks []any
 	if ok, err := manager.Setting(ctx, "assistant.tasks", &tasks); err != nil || !ok {
 		t.Fatalf("the manager's setting: %v %v", ok, err)
+	}
+}
+
+// A NULL-part row after the split (a build without the split that had one of the 421 files) stands only for its own
+// file: the other set's 0421 still runs.
+func TestNullRowAfterTheSplitIsItsFileOnly(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	unifiedMigrate(t, url, 419)
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `INSERT INTO schema_migrations (version, name) VALUES (421, '0421_machine_usage.sql')`); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if !slices.Contains(tablesOf(t, d), "hub_settings") {
+		t.Fatal("the hub's 0421 was taken as done by the manager's row")
 	}
 }

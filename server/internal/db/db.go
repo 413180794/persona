@@ -161,14 +161,19 @@ var renumbered = []struct{ from, to string }{
 	{"0081_device_push_relay.sql", "0141_device_push_relay.sql"}, // 0081 is device_sessions
 }
 
+// lastUnified is the last migration from before the split: a NULL-part row up to it stands for both sets.
+const lastUnified = 419
+
 // migrateFrom is migrate over the migrations/hub and migrations/manager directories of fsys (tests start from a
 // database at an older state).
 //
 // schema_migrations has a row per migration a part applied: part is "hub" or "manager", NULL for the rows from before
 // the split, when one set ran everything (such a row stands for both parts). A version is done for a set when it has a
-// row of that part or a NULL one. So a database migrated before the split runs nothing again, and the few early
-// migrations that are in both sets (they made tables for both sides; db_test.go bothSets lists them) run once per part on a database
-// the hub and the default manager share.
+// row of that part, or a NULL one from up to lastUnified (or, after it, of the same file: a number both sets use for
+// different files, migrations_test.go sharedNumbers, is not taken as done by the other's row from a build before the
+// split). So a database migrated before the split runs nothing again, and the few early migrations that are in both
+// sets (they made tables for both sides; migrations_test.go bothSets lists them) run once per part on a database the
+// hub and the default manager share.
 func (d *DB) migrateFrom(ctx context.Context, fsys fs.FS) error {
 	// Serialize concurrent hubs, managers (and tests) on one advisory lock.
 	conn, err := d.pool.Acquire(ctx)
@@ -233,7 +238,7 @@ func migrateSet(ctx context.Context, conn *pgxpool.Conn, fsys fs.FS, part string
 		}
 		var done bool
 		if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM schema_migrations
-			WHERE version = $1 AND (part IS NULL OR part = $2))`, version, part).Scan(&done); err != nil {
+			WHERE version = $1 AND (part = $2 OR part IS NULL AND (version <= $3 OR name = $4)))`, version, part, lastUnified, name).Scan(&done); err != nil {
 			return err
 		}
 		if done {
