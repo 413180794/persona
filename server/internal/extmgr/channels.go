@@ -355,6 +355,9 @@ func (h *Manager) configureFeishu(ctx context.Context, enabled *bool, features m
 // actorOf is who changes a plugin from the channel's page, for the plugin's audit (the assistant relays the
 // channels' routes: the device is not known here).
 func actorOf(ctx context.Context) string {
+	if a, ok := ctx.Value(actorKey{}).(string); ok && a != "" {
+		return a
+	}
 	if p := principalOf(ctx); p.ID != "" {
 		return "device:" + p.ID
 	}
@@ -429,13 +432,18 @@ func (h *Manager) bindFeishu(ctx context.Context, step string, values map[string
 	b.mu.Lock()
 	h.loadBotsLocked(ctx)
 	p := b.set.Pairing
+	issued := false
 	if p == nil || !b.clock().Before(p.Expires) || step == "" && values != nil {
 		p = &botPairing{Code: botPairCode(), Expires: b.clock().Add(botPairFor)}
 		b.set.Pairing = p
 		h.saveBotSettingsLocked()
+		issued = true
 	}
 	code := p.Code
 	b.mu.Unlock()
+	if issued {
+		h.auditBot(ctx, botRecord{action: auditBotPairCode})
+	}
 	return connector.Prompt{Step: "pair", Kind: PromptPairCode, UserCode: code, Interval: 3,
 		Hint: i18n.T(l, "hub-channels.pair_hint")}, nil
 }

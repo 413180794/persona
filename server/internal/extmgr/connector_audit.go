@@ -28,9 +28,15 @@ const (
 )
 
 // auditConnector records an action on connector id by whoever made the request (actorOf: device:<id>, or the hub
-// token). detail holds only what is safe to keep: never a credential, a value someone typed or a setting's value. A
-// record that cannot be written does not undo the action, which already happened; it is logged.
+// token).
 func (h *Manager) auditConnector(ctx context.Context, id, action string, detail map[string]any) {
+	h.audit(ctx, id, action, actorOf(ctx), detail)
+}
+
+// audit records an action on id (a connector, the Feishu bot) by actor in plugin_audit. detail holds only what is safe
+// to keep: never a credential, a value someone typed or a setting's value. A record that cannot be written does not
+// undo the action, which already happened; it is logged.
+func (h *Manager) audit(ctx context.Context, id, action, actor string, detail map[string]any) {
 	st, _ := h.store.(auditStore)
 	if st == nil {
 		return
@@ -42,8 +48,8 @@ func (h *Manager) auditConnector(ctx context.Context, id, action string, detail 
 		}
 	}
 	// The action is done even when the app stopped waiting for the answer: its record is kept all the same.
-	if err := st.AddExtensionAudit(context.WithoutCancel(ctx), id, action, actorOf(ctx), raw); err != nil {
-		h.logf("connector %s: audit %s: %v", id, action, err)
+	if err := st.AddExtensionAudit(context.WithoutCancel(ctx), id, action, actor, raw); err != nil {
+		h.logf("audit %s %s: %v", id, action, err)
 	}
 }
 
@@ -97,4 +103,15 @@ func forgotten(counts map[string]any, err error) map[string]any {
 		counts["incomplete"] = true
 	}
 	return counts
+}
+
+type actorKey struct{}
+
+// actorAssistant is who the audit names for what the assistant did through its app.calls (turning the Feishu bot's
+// features on, switching a channel): not a device's request, and not the hub token either.
+const actorAssistant = "assistant"
+
+// withActor names who acts in ctx for the audit (actorOf), over the request's principal.
+func withActor(ctx context.Context, actor string) context.Context {
+	return context.WithValue(ctx, actorKey{}, actor)
 }

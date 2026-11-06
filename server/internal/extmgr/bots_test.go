@@ -30,6 +30,7 @@ type botStore struct {
 	mu    sync.Mutex
 	vals  map[string][]byte
 	sends map[string]string
+	audit []auditRow // plugin_audit (bots_audit_test.go)
 }
 
 func newBotStore() *botStore {

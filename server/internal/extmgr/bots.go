@@ -338,6 +338,7 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 		b.set.Pairing = &botPairing{Code: botPairCode(), Expires: b.clock().Add(botPairFor)}
 		h.saveBotSettingsLocked()
 		b.mu.Unlock()
+		h.auditBot(r.Context(), botRecord{action: auditBotPairCode})
 		writeJSON(w, h.botView(r.Context()))
 	})
 	api.HandleFunc("DELETE /api/v1/bots/feishu/owner", func(w http.ResponseWriter, r *http.Request) {
@@ -371,9 +372,13 @@ func (h *Manager) unpairBot(ctx context.Context) {
 	b := &h.bots
 	b.mu.Lock()
 	h.loadBotsLocked(ctx)
+	had := b.set.Owner != nil
 	b.set.Owner, b.set.Pairing = nil, nil
 	h.saveBotSettingsLocked()
 	b.mu.Unlock()
+	if had {
+		h.auditBot(ctx, botRecord{action: auditBotUnpaired})
+	}
 	_ = h.notifyAssistant(assistantwire.EventFeishuOwner, assistantwire.FeishuOwner{})
 }
 
@@ -406,7 +411,7 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 	next := b.set.copy()
 	b.mu.Unlock()
 	reconnect := false
-	creds := false
+	creds, credsChanged := false, false
 	if appID != nil || secret != nil || domain != nil {
 		id, dom := next.AppID, next.Domain
 		if appID != nil {
@@ -415,16 +420,20 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 		if domain != nil {
 			dom = strings.TrimSpace(*domain)
 		}
-		var plain string
-		switch {
-		case secret != nil && strings.TrimSpace(*secret) != "":
-			plain = strings.TrimSpace(*secret)
-		case next.SecretEnc != "":
+		newSecret := secret != nil && strings.TrimSpace(*secret) != ""
+		// The secret kept now: what a new one is compared with (for the audit), and what is used without one.
+		var prev string
+		if next.SecretEnc != "" {
 			var err error
-			if plain, err = h.openKey(next.SecretEnc); err != nil {
+			if prev, err = h.openKey(next.SecretEnc); err != nil && !newSecret {
 				return err
 			}
 		}
+		plain := prev
+		if newSecret {
+			plain = strings.TrimSpace(*secret)
+		}
+		credsChanged = id != next.AppID || dom != next.Domain || (id != "" && plain != prev)
 		if id == "" {
 			// Cleared: back to hub.json's, if any.
 			next.AppID, next.SecretEnc, next.Domain = "", "", ""
@@ -450,7 +459,21 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 	// Onto the settings as they are now: the credentials were checked over the network meanwhile, and a pairing may
 	// have come in.
 	cur := &b.set
+	var records []botRecord
 	if creds {
+		if credsChanged {
+			d := map[string]any{"app_id": next.AppID}
+			if next.Domain != "" {
+				d["domain"] = next.Domain
+			}
+			if next.AppID == "" {
+				d["cleared"] = true
+			}
+			if next.AppID != cur.AppID && cur.Owner != nil {
+				d["owner_reset"] = true
+			}
+			records = append(records, botRecord{auditBotCredentials, d})
+		}
 		if next.AppID != cur.AppID {
 			cur.Owner, cur.Pairing = nil, nil
 		}
@@ -459,12 +482,17 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 	if enabled != nil && *enabled != cur.Enabled {
 		cur.Enabled = *enabled
 		reconnect = true
+		records = append(records, botRecord{auditBotEnabled, map[string]any{"enabled": *enabled}})
 	}
 	if features != nil {
+		if *features != cur.Features {
+			records = append(records, botRecord{auditBotFeatures, map[string]any{"features": *features}})
+		}
 		cur.Features = *features
 	}
 	h.saveBotSettingsLocked()
 	b.mu.Unlock()
+	h.auditBot(ctx, records...)
 	if reconnect {
 		h.restartBot()
 	}

@@ -432,6 +432,7 @@ func (h *Manager) AppCall(ctx context.Context, p assistantwire.AppCall) (json.Ra
 	if !h.ready(ctx) {
 		return nil, true, errAssistantOffline
 	}
+	ctx = withActor(ctx, actorAssistant) // what changes here is the assistant's doing (the audit's actor)
 	if p.AppID == assistantwire.AppInbox {
 		return h.inboxAppCall(ctx, p)
 	}

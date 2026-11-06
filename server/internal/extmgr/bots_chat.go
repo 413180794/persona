@@ -312,6 +312,7 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 	ok := live && text == p.Code
 	noteKey := "hub-bots_chat.pair_hint"
 	var noteArgs i18n.Args
+	var record *botRecord
 	if !ok && live && regexpDigits.MatchString(text) {
 		// A code-shaped answer while a pairing is still live is a real try: say specifically that it was wrong and
 		// how many tries remain, instead of the generic hint. At the cap the pairing is dropped, so the note says
@@ -319,6 +320,7 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 		if p.Fails++; p.Fails >= botPairTries {
 			b.set.Pairing = nil // guessed at: the user asks for a new code in the app
 			noteKey = "hub-bots_chat.pair_expired"
+			record = &botRecord{auditBotPairGuessed, map[string]any{"fails": p.Fails}}
 		} else {
 			noteKey = "hub-bots_chat.pair_wrong"
 			noteArgs = i18n.Args{"n": botPairTries - p.Fails}
@@ -329,6 +331,7 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 		b.set.Owner = &BotOwner{OpenID: openID, ChatID: chatID, At: b.clock().UTC()}
 		b.set.Pairing = nil
 		h.saveBotSettingsLocked()
+		record = &botRecord{auditBotPaired, map[string]any{"open_id": openID}}
 	} else {
 		now := b.clock()
 		if b.pairTold == nil {
@@ -344,6 +347,9 @@ func (h *Manager) botPair(api *feishubot.Client, openID, chatID, text string) {
 		}
 	}
 	b.mu.Unlock()
+	if record != nil { // done in the chat: the Feishu account that sent the message did it
+		h.audit(context.Background(), channel.Feishu, record.action, botChatActor(openID), record.detail)
+	}
 	if !ok {
 		h.botSendNote(api, chatID, i18n.T(h.userLang(), noteKey, noteArgs))
 		return

@@ -464,8 +464,13 @@ Connectors are recorded in the same table (#5281), with the connector's id in th
 `connector_feed` (`{feed, on}`) only when the value changes, `connector_options` (the connector's own settings changed; never their values), `connector_data_deleted`
 (`{chats, people, inbox}`), `connector_archive_deleted` (`{chats, people}`; both add `incomplete: true` when part of the deletion failed) and `connector_auth_source`
 (`{source, machine}`, where GitHub's token comes from). This covers Settings › Connectors and binding or unbinding an extension channel, which signs its connector in or out.
-Who is `device:<id>` or `hub token`; what the user typed and the credential itself are never recorded. A record that cannot be written does not undo the action; the hub logs it.
-A program saving its own credential (`connector.secrets.save`, e.g. a refreshed session) is not recorded.
+Who is `device:<id>` or `hub token`, and `assistant` for what the assistant changed through its app calls; what the user typed and the credential itself are never recorded.
+A record that cannot be written does not undo the action; the hub logs it. A program saving its own credential (`connector.secrets.save`, e.g. a refreshed session) is not recorded.
+
+The Feishu bot is recorded the same way (#5353), with `plugin` = `feishu` (the channel's id) and a `bot_` prefix: `bot_credentials` (`{app_id, domain?, cleared?, owner_reset?}`,
+only when the App ID, domain or secret really changed; never the secret), `bot_enabled` (`{enabled}`) and `bot_features` (`{features}`) only when they change, `bot_pair_code`
+(a new pairing code was issued; never the code), `bot_paired` (`{open_id}`), `bot_pair_guessed` (`{fails}`: the pairing was dropped after too many wrong codes) and
+`bot_unpaired`. What happens in the Feishu chat (pairing, guessing) is recorded with the Feishu account as the actor, `feishu:<open_id>`.
 
 ### Command-line programs (tools)
 
