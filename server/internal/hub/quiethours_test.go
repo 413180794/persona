@@ -34,6 +34,9 @@ func TestQuietHoursWindow(t *testing.T) {
 		// 15:00 UTC is 00:00 in Tokyo.
 		{"the fallback zone", QuietHours{Enabled: true, Start: "23:00", End: "07:00"}, at(15, 0), tokyo, true},
 		{"its own zone over the fallback", QuietHours{Enabled: true, Start: "23:00", End: "07:00", TZ: "UTC"}, at(15, 0), tokyo, false},
+		// No zone at all reads UTC, whatever the machine's zone is (#5878).
+		{"no zone at all, inside in UTC", QuietHours{Enabled: true, Start: "13:00", End: "15:00"}, at(14, 0), nil, true},
+		{"no zone at all, outside in UTC", QuietHours{Enabled: true, Start: "13:00", End: "15:00"}, at(16, 0), nil, false},
 		{"bad times", QuietHours{Enabled: true, Start: "25:00", End: "07:00"}, at(1, 0), time.UTC, false},
 	} {
 		if got := tc.q.activeAt(tc.t, tc.loc); got != tc.want {

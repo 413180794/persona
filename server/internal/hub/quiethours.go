@@ -54,7 +54,9 @@ func (q QuietHours) validate() error {
 	return nil
 }
 
-// activeAt reports whether t falls inside the window, read in q.TZ or else in fallback.
+// activeAt reports whether t falls inside the window, read in q.TZ or else in fallback, or else in UTC: the zone the hub
+// runs in, never the machine's (tzguard). The hub always passes the user's zone (Pusher.userLoc); only a pusher made
+// without it has none (#5878).
 func (q QuietHours) activeAt(t time.Time, fallback *time.Location) bool {
 	if !q.Enabled {
 		return false
@@ -71,7 +73,7 @@ func (q QuietHours) activeAt(t time.Time, fallback *time.Location) bool {
 		}
 	}
 	if loc == nil {
-		loc = time.Local
+		loc = time.UTC
 	}
 	lt := t.In(loc)
 	now := lt.Hour()*60 + lt.Minute()
