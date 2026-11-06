@@ -69,9 +69,13 @@ type botState struct {
 	Pairing *string `json:"pairing,omitempty"`
 }
 
+// The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer
+// card), and pushes and synced turns more, so a count of 100 forgot a card of a few days ago. They are kept by age,
+// with a cap so the state, written on every message, stays small (about 110 KB at 500).
 const (
-	botSeenKeep    = 300
-	botThreadsKeep = 100
+	botSeenKeep       = 300
+	botThreadsKeep    = 500
+	botThreadsKeepFor = 30 * 24 * time.Hour
 )
 
 // feishuBook is the chat's state in memory, the cards asking what is asked, and the bot's status a moment.
@@ -164,6 +168,7 @@ func (s *Service) loadBotLocked(ctx context.Context) {
 	if b.st.Threads == nil {
 		b.st.Threads = map[string]*botThread{}
 	}
+	pruneBotThreads(b.st.Threads, b.clock()) // a long quiet chat: the stale ones go before the first route
 	if b.st.Current.Kind == "" {
 		b.st.Current = botTarget{Kind: targetMain}
 	}
@@ -179,15 +184,7 @@ func (s *Service) saveBotStateLocked() {
 	if len(b.st.Seen) > botSeenKeep {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
 	}
-	for len(b.st.Threads) > botThreadsKeep {
-		oldest := ""
-		for id, t := range b.st.Threads {
-			if oldest == "" || t.At.Before(b.st.Threads[oldest].At) {
-				oldest = id
-			}
-		}
-		delete(b.st.Threads, oldest)
-	}
+	pruneBotThreads(b.st.Threads, b.clock())
 	st := s.store()
 	if st == nil {
 		return
@@ -196,6 +193,27 @@ func (s *Service) saveBotStateLocked() {
 	defer cancel()
 	if err := st.PutSetting(ctx, botStateKey, b.st); err != nil {
 		s.logf("bots: save state: %v", err)
+	}
+}
+
+// pruneBotThreads drops the threads older than botThreadsKeepFor, then the oldest beyond botThreadsKeep. A thread
+// without a time (a state written by hand or by a test) is not judged by age; it counts as the oldest for the cap.
+func pruneBotThreads(threads map[string]*botThread, now time.Time) {
+	for id, t := range threads {
+		if t == nil || !t.At.IsZero() && now.Sub(t.At) > botThreadsKeepFor {
+			delete(threads, id)
+		}
+	}
+	if len(threads) <= botThreadsKeep {
+		return
+	}
+	ids := make([]string, 0, len(threads))
+	for id := range threads {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(a, b string) int { return threads[a].At.Compare(threads[b].At) })
+	for _, id := range ids[:len(ids)-botThreadsKeep] {
+		delete(threads, id)
 	}
 }
 
