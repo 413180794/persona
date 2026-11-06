@@ -134,7 +134,7 @@ The native method also honors these variables (e.g. systemd's `Environment=`), b
 
 ## Upgrading
 
-The hub never replaces its own image; when a new image exists, the App tells you (`docs/hub-update.md` ("Docker")): every 6 hours (or any time via **Check for Updates** in Settings › hub) the hub asks the registry for
+The hub never replaces its own image; when a new image exists, the App tells you (`docs/hub-update.md` ("Docker")): every hour (or any time via **Check for Updates** in Settings › hub) the hub asks the registry for
 the tags of `JARVIS_IMAGE`. If the latest release version (`X.Y.Z`, not counting `-rc`, `edge`, `sha-…`) is newer than its own, the top of the Agents page shows "New hub image: X",
 and Settings › hub shows the command to run (copyable):
 

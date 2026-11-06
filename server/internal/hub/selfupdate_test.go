@@ -409,7 +409,7 @@ func TestUpdateHeldWhenTheReleaseIsBehind(t *testing.T) {
 		t.Fatal("would install a release behind this hub's code by itself")
 	}
 	h.upd.noteHeld(ctx)
-	h.upd.noteHeld(ctx) // the next check, 6 hours on: written once
+	h.upd.noteHeld(ctx) // the next check, an hour on: written once
 	var held []updateRecord
 	for _, r := range h.upd.settings.History {
 		if r.Result == "held" {

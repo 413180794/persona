@@ -439,7 +439,7 @@ Foreground app keeps WebSocket to hub, receiving change broadcasts. A 19-minute 
 
 ## Self-update (`hub/selfupdate.go`, `docs/hub-update.md`)
 
-`channel=release` hubs check release site's `latest.json` every 6 hours. New version waits until assistant / Agents idle, replaces binary / restarts, rolls back if unable to start.
+`channel=release` hubs check release site's `latest.json` every hour. New version waits until assistant / Agents idle, replaces binary / restarts, rolls back if unable to start.
 - Files under `~/.persona/update/`: `<build>/` downloads, node binaries in `nodes/` later copied to `~/.persona/bin/nodes/`; `pending.json` ongoing update, deleted after confirmation; `rolledback.json` latest rollback, recorded by old version, marked bad then deleted; `watch.log` watchdog output, `hub.log` rollback hub output without service manager.
 - Previous binary ~/.persona/bin/jarvisd.prev. Manual restore: `cp ~/.persona/bin/jarvisd.prev ~/.persona/bin/personad && systemctl --user restart jarvisd`; launchd uses launchctl kickstart -k. Disable auto-update in app afterward to avoid reinstall (rolled-back builds already excluded automatically).
 - Disable in app Settings or `PUT /api/v1/hub/update/settings {"auto": false}`.

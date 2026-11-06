@@ -27,13 +27,13 @@ import (
 	"github.com/nwverse/persona/server/internal/update"
 )
 
-// The hub updating itself to the publisher's release (docs/hub-update.md"Updates"): check the manifest every 6 hours, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
+// The hub updating itself to the publisher's release (docs/hub-update.md"Updates"): check the manifest every hour, download and verify, wait until the assistant and every agent are idle, swap the binary (keeping the old
 // one), restart into the new one, and count it a success only once the machines that were connected are back;
 // otherwise go back to the old binary, by the new process itself or by the old one's watchdog. A build that went
 // back is not tried again automatically. Then the nodes follow, through deploy.go.
 
 const (
-	updateCheckEvery   = 6 * time.Hour
+	updateCheckEvery   = time.Hour // docs/hub-update.md "Checking for updates" (hourly since 2026-11-07)
 	updateFirstCheck   = time.Minute
 	updateConfirmIn    = 2 * time.Minute
 	updateWatchFor     = 3 * time.Minute
@@ -395,7 +395,7 @@ func copyInto(from, to string) error {
 	return os.WriteFile(to, b, 0o755)
 }
 
-// loop checks for releases (a minute after starting, then every 6 hours) and installs one when updating itself is
+// loop checks for releases (a minute after starting, then every hour) and installs one when updating itself is
 // on and the release is newer and not a build that went back.
 func (u *updater) loop(ctx context.Context) {
 	if !u.h.build.SelfUpdates() && u.h.build.Channel != update.Docker {

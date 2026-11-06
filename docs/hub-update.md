@@ -21,7 +21,7 @@ Implemented in 4 steps; after each step, the corresponding "Plan" is rewritten a
   `internal/update`'s download / replace / watchdog, `jarvisd update-watch`; APIs in section 12.
 - **Step 3 (App) done**: `apple/Shared/HubUpdate.swift` (state, history, Skills, compatibility check `HubCompat`, which banner to show `HubNotice`),
   `Views/Settings/HubUpdateViews.swift` (Settings › hub, banner, Skills page); after an automatic update is installed or rolled back, the hub sends a regular notification. Section 10 has been rewritten as the current state.
-- **Step 4 (Docker check and notice) done**: a Docker hub asks the registry every 6 hours which tags its image has (`internal/update/image.go`);
+- **Step 4 (Docker check and notice) done**: a Docker hub asks the registry every hour which tags its image has (`internal/update/image.go`);
   if the newest release is newer than itself it shows a notice, and the App gives the command to run (pinned versions edit `.env` first). See the "Docker" section.
 
 ## Current state (verified 2026-11-02)
@@ -203,14 +203,14 @@ Comparing only build numbers can go backwards: a directly deployed hub runs comm
 ## 7. Checking for updates
 
 - **Release build**:
-  - The hub checks 1 minute after startup, then every 6 hours; the App can "Check now" (`POST /api/v1/hub/update/check`);
+  - The hub checks 1 minute after startup, then every hour (every 6 hours until 2026-11-07, when the user asked for hourly so a release reaches hubs sooner); the App can "Check now" (`POST /api/v1/hub/update/check`);
   - It only fetches the manifest (a few KB): there is an update only if the build number is larger than its own and not in the bad-version list; the result is broadcast to open Apps.
 - **Docker build**:
-  - Every 6 hours, query the image repository's tags (anonymous GHCR `tags/list`), take the highest stable semver, and show a notice if it is newer;
+  - Every hour, query the image repository's tags (anonymous GHCR `tags/list`), take the highest stable semver, and show a notice if it is newer;
   - The hub installs nothing; Docker pulls the image and verifies by digest;
   - CI writes the image name into the binary at build time; it is not hard-coded in the source.
 - **dev**: no checks, only shows the version.
-- Network unavailable or bad manifest: log it and show the reason under **Check for Updates** in the App; do not hammer retries (keep the 6-hour interval).
+- Network unavailable or bad manifest: log it and show the reason under **Check for Updates** in the App; do not hammer retries (keep the hourly interval).
 
 ## 8. Updating (release build; automatic and manual use the same flow)
 
