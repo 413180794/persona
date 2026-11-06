@@ -108,6 +108,9 @@ type assistantLink struct{ h *Hub }
 func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h
 	out := assistantwire.Hello{KB: h.kbSettings(), Locale: string(h.userLang())} // hub.json's kb section: the knowledge base it keeps (kb.go)
+	if m, ok := h.mutesEvent(); ok {                                             // the hub's mutes, before the manager pushes anything (fleet_link.go)
+		out.Mutes = m.Mutes
+	}
 	if h.cfg == nil {
 		return out, nil
 	}
@@ -365,7 +368,7 @@ func (h *Hub) assistantHello(ctx context.Context) assistantwire.Hello {
 // assistantHelloFor is assistantHello for manager id.
 func (h *Hub) assistantHelloFor(ctx context.Context, id string) assistantwire.Hello {
 	hello, _ := assistantLink{h}.Hello(ctx)
-	raw, _ := json.Marshal(hello)
+	raw, _ := json.Marshal(updatedHello(hello))
 	a := h.assistantOf(id)
 	a.helloMu.Lock()
 	a.lastHello = string(raw)
@@ -400,6 +403,7 @@ func (h *Hub) managerUpdated(id string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		hello, _ := assistantLink{h}.Hello(ctx)
+		hello = updatedHello(hello)
 		raw, _ := json.Marshal(hello)
 		a.helloMu.Lock()
 		same := a.lastHello == string(raw)
@@ -409,6 +413,13 @@ func (h *Hub) managerUpdated(id string) {
 			_ = h.notifyBus(id, assistantwire.EventUpdated, hello)
 		}
 	}()
+}
+
+// updatedHello is hello as manager.updated sends it: without the mutes, which go by fleet.mutes after the handshake
+// (a change of them alone is no new hello: the manager would read its profile again for nothing).
+func updatedHello(hello assistantwire.Hello) assistantwire.Hello {
+	hello.Mutes = nil
+	return hello
 }
 
 // assistantConnected runs when the assistant's handshake went through: its tools are asked for again (a new build

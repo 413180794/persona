@@ -190,6 +190,26 @@ func TestTheHubShowsTheHandOverUntilTheManagerReports(t *testing.T) {
 	if s := next.machineByID("box").snapshot(); !s.Online || s.Hostname != "box" || len(next.machineByID("box").sessionList()) != 1 {
 		t.Fatalf("the next hub process: %+v", s)
 	}
+	// It stops again before its manager reported: what it still shows from the hand-over is handed on.
+	next.saveDevicesWarm(context.Background())
+	third := newTestHub(t)
+	third.store = st
+	third.cfg.Machines = h.cfg.Machines
+	third.startDevices(context.Background())
+	if s := third.machineByID("box").snapshot(); !s.Online || len(third.machineByID("box").sessionList()) != 1 {
+		t.Fatalf("a second quick restart: %+v", s)
+	}
+	// ... with the first hand-over's deadline, not a new one: restarts in a row do not keep it shown for ever.
+	nm, tm := next.machineByID("box"), third.machineByID("box")
+	nm.mu.Lock()
+	first := nm.warmUntil
+	nm.mu.Unlock()
+	tm.mu.Lock()
+	again := tm.warmUntil
+	tm.mu.Unlock()
+	if again.After(first) {
+		t.Fatalf("the deadline moved on: %v, first %v", again, first)
+	}
 }
 
 // echoServer is a TCP server on this machine that writes back what it reads: a port an agent listens on.

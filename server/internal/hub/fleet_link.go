@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -341,7 +342,6 @@ func (h *Hub) fleetConnected() {
 	f.clientsSent = false
 	f.mu.Unlock()
 	h.fleetClientsChanged()
-	h.mutesChanged()
 }
 
 // markSeen tells the manager the user looked at a session (an app's WebSocket seen).
@@ -349,12 +349,68 @@ func (h *Hub) markSeen(machine, session string) {
 	_ = h.notifyBus(h.sessionOwner(machine, session), assistantwire.EventSeen, assistantwire.FleetSeen{MachineID: machine, SessionID: session})
 }
 
-// mutesChanged tells the managers the muted spaces / agents (the hub's settings mutes): after a change, and after
-// each handshake (fleetConnected). They are the hub's: a manager never reads them from a database.
+// mutesChanged tells every manager the muted spaces / agents (the hub's settings mutes) after a change; each also
+// gets them in its hello's answer (assistant_link.go). They are the hub's: a manager never reads them from a database.
+// Mutes that could not be read are not sent: the managers keep the last ones (an empty set would push every muted
+// agent). Sends are one at a time, each with the mutes as they are then, so an older set never overtakes a newer one.
 func (h *Hub) mutesChanged() {
-	p := h.loadMutes(context.Background())
-	_ = h.notifyManagers(assistantwire.EventMutes, assistantwire.FleetMutes{Mutes: &assistantwire.Mutes{
-		Spaces: p.Spaces, Sessions: p.Sessions, Allowed: p.Allowed}})
+	h.mutesSend.Lock()
+	defer h.mutesSend.Unlock()
+	if m, ok := h.mutesEvent(); ok {
+		_ = h.notifyManagers(assistantwire.EventMutes, m)
+	}
+}
+
+// mutesRetry hands manager id the mutes once they can be read (they were not when it connected), while it is
+// connected; it gives up after mutesRetries tries (the manager keeps the ones it had; the next change sends them).
+func (h *Hub) mutesRetry(id string) {
+	for range mutesRetries {
+		time.Sleep(mutesRetryEvery)
+		if h.busConnOf(id) == nil {
+			return
+		}
+		h.mutesSend.Lock()
+		m, ok := h.mutesEvent()
+		if ok {
+			_ = h.notifyBus(id, assistantwire.EventMutes, m)
+		}
+		h.mutesSend.Unlock()
+		if ok {
+			return
+		}
+	}
+	h.logf("mutes: still unreadable: [%s] keeps the ones it had", id)
+}
+
+// mutesRetryEvery and mutesRetries: how often and how many times mutesRetry tries (tests shorten them).
+var (
+	mutesRetryEvery = 5 * time.Second
+	mutesRetries    = 60
+)
+
+func (h *Hub) mutesEvent() (assistantwire.FleetMutes, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p, ok := h.readMutes(ctx)
+	return assistantwire.FleetMutes{Mutes: &assistantwire.Mutes{Spaces: p.Spaces, Sessions: p.Sessions, Allowed: p.Allowed}}, ok
+}
+
+// mutesSettle runs on a manager connection's first word after its handshake and sends it the mutes once more. The
+// hello's answer and a fleet.mutes sent while it was on its way race at the manager (the answer is taken on another
+// goroutine than the events, and events of its last connection may still be queued): either could be taken last.
+// The manager says nothing before it took the answer (bus.Client), so these land after it. A manager from before the
+// answer carried the mutes has them from here.
+func (h *Hub) mutesSettle(c *busConn) {
+	if c == nil || c.ident.Role != bus.RoleManager || !c.mutesSettled.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		h.mutesSend.Lock()
+		defer h.mutesSend.Unlock()
+		if m, ok := h.mutesEvent(); ok && h.busCurrent(c) { // unreadable: mutesRetry's
+			_ = c.peer.Notify(assistantwire.EventMutes, m)
+		}
+	}()
 }
 
 // fleetRoutesRelayed relays the apps' requests on the manager's routes on the interactions and the sessions' states

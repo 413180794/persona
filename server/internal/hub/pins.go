@@ -25,18 +25,24 @@ type Pins struct {
 // shows them quietly. Same keys as pins.
 
 func (h *Hub) loadMutes(ctx context.Context) Pins {
+	p, _ := h.readMutes(ctx)
+	return p
+}
+
+// readMutes is loadMutes, false when they could not be read (none then; read again next time).
+func (h *Hub) readMutes(ctx context.Context) (Pins, bool) {
 	h.mutesMu.Lock()
 	defer h.mutesMu.Unlock()
 	if h.mutes == nil {
 		p := Pins{Spaces: []string{}, Sessions: []string{}}
 		if h.store != nil {
 			if _, err := h.store.Setting(ctx, "mutes", &p); err != nil {
-				return p // try again next time
+				return Pins{Spaces: []string{}, Sessions: []string{}}, false // try again next time
 			}
 		}
 		h.mutes = &p
 	}
-	return *h.mutes
+	return *h.mutes, true
 }
 
 // muted reports whether pushes about this session are off (the agent or its space is muted).

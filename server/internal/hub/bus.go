@@ -122,6 +122,9 @@ type busConn struct {
 	once    sync.Once
 	closing sync.Once
 
+	// mutesSettled: its first word after the handshake was heard, and the mutes went once more (fleet_link.go).
+	mutesSettled atomic.Bool
+
 	// guarded by busState.mu
 	presence busPresence
 	replaced bool // a newer connection of the identity took over
@@ -310,6 +313,7 @@ func (h *Hub) busRequest(ctx context.Context, c *busConn, method string, params 
 	if !h.busCurrent(c) {
 		return nil, &rpc.Error{Code: bus.CodeStaleConnection, Message: "say " + busHello + " on the current connection first"}
 	}
+	h.mutesSettle(c)
 	fn, ok := busMethods[method]
 	if !ok {
 		return nil, &rpc.Error{Code: bus.CodeUnknownMethod, Message: "unknown method " + clip(method, 80)}
@@ -321,6 +325,7 @@ func (h *Hub) busEvent(c *busConn, event string, params json.RawMessage) {
 	if !h.busCurrent(c) {
 		return // before the handshake, or replaced: not heard
 	}
+	h.mutesSettle(c)
 	if f := busEvents[event]; f != nil {
 		f(h, c, params)
 	}
@@ -412,7 +417,10 @@ func (h *Hub) busAccept(ctx context.Context, c *busConn, p busPresence) error {
 		h.managerReconnected(c.ident.ID) // its tools are asked for again (manager_state.go)
 	}
 	if c.ident.Role == bus.RoleManager {
-		h.devicesConnected(c.ident.ID) // its first report: the sessions the apps watch, watched again (devices_link.go)
+		h.devicesConnected(c.ident.ID)    // its first report: the sessions the apps watch, watched again (devices_link.go)
+		if _, ok := h.mutesEvent(); !ok { // not in the hello's answer: handed over once they can be read (fleet_link.go)
+			go h.mutesRetry(c.ident.ID)
+		}
 	}
 	return nil
 }

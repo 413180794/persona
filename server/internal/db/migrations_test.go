@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io/fs"
 	"os"
 	"regexp"
@@ -499,5 +500,366 @@ func TestNullRowAfterTheSplitIsItsFileOnly(t *testing.T) {
 	defer d.Close()
 	if !slices.Contains(tablesOf(t, d), "hub_settings") {
 		t.Fatal("the hub's 0421 was taken as done by the manager's row")
+	}
+}
+
+// A switch back to a hub build from before hub_settings and forward again: what that build wrote in settings
+// meanwhile is taken up (only where it is newer), and its event log hand-over is moved, not left for a later switch
+// back to resume.
+func TestHubFollowsAnOlderBuild(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	unifiedMigrate(t, url, 419)
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `INSERT INTO settings (key, value) VALUES ('mutes', '{"spaces":["a"]}'), ('look', '"one"')`); err != nil {
+		t.Fatal(err)
+	}
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.PutSetting(ctx, "look", "two"); err != nil { // this build's own change, after the copy
+		t.Fatal(err)
+	}
+	// It is kept for an older build too, with the same time: a switch back starts from it, and it is not taken again.
+	var same bool
+	if err := conn.QueryRow(ctx, `SELECT s.value = h.value AND s.updated_at = h.updated_at FROM settings s JOIN hub_settings h
+		USING (key) WHERE key = 'look'`).Scan(&same); err != nil || !same {
+		t.Fatalf("look kept for an older build: %v %v", same, err)
+	}
+	if err := hub.PutSetting(ctx, "hub.devices_warm", map[string]int{}); err != nil { // not a key an older build knows
+		t.Fatal(err)
+	}
+	var n int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM settings WHERE key = 'hub.devices_warm'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("a new key in settings: %d %v", n, err)
+	}
+	hub.Close()
+	// The older build serves for a while: it writes the hub's keys to settings.
+	for _, q := range []string{
+		`UPDATE settings SET value = '{"spaces":["a","b"]}', updated_at = now() + interval '1 second' WHERE key = 'mutes'`,
+		`INSERT INTO settings (key, value, updated_at) VALUES ('sessions.deleted', '{"m/s":"x"}', now() + interval '1 second')`,
+		`INSERT INTO settings (key, value, updated_at) VALUES ('codex_inventory/lap', '{"n":1}', now() + interval '1 second')`,
+		`INSERT INTO settings (key, value, updated_at) VALUES ('hub.event_log', '{"stream":"old"}', now() + interval '1 second')`,
+		`INSERT INTO settings (key, value, updated_at) VALUES ('assistant.tasks', '[]', now() + interval '1 second')`,
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	hub, err = Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	var mutes struct {
+		Spaces []string `json:"spaces"`
+	}
+	if ok, err := hub.Setting(ctx, "mutes", &mutes); err != nil || !ok || len(mutes.Spaces) != 2 {
+		t.Fatalf("mutes the older build changed: %+v %v %v", mutes, ok, err)
+	}
+	var look string
+	if ok, err := hub.Setting(ctx, "look", &look); err != nil || !ok || look != "two" {
+		t.Fatalf("this build's newer value was replaced: %q %v %v", look, ok, err)
+	}
+	for _, k := range []string{"sessions.deleted", "codex_inventory/lap"} {
+		var v any
+		if ok, err := hub.Setting(ctx, k, &v); err != nil || !ok {
+			t.Fatalf("%s the older build wrote: %v %v", k, ok, err)
+		}
+	}
+	var v any
+	if ok, err := hub.Setting(ctx, "assistant.tasks", &v); err != nil || ok {
+		t.Fatalf("a manager's key taken: %v %v", ok, err)
+	}
+	var log struct {
+		Stream string `json:"stream"`
+	}
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || !ok || log.Stream != "old" {
+		t.Fatalf("the older build's event log: %+v %v %v", log, ok, err)
+	}
+	var left int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM settings WHERE key = 'hub.event_log'`).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("the event log is still in settings (%d, %v): a switch back would resume it", left, err)
+	}
+	// This build's own hand-over is there for an older build too, and taking it takes both.
+	if err := hub.PutSetting(ctx, "hub.event_log", map[string]string{"stream": "new"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM settings WHERE key = 'hub.event_log' AND value->>'stream' = 'new'`).Scan(&left); err != nil || left != 1 {
+		t.Fatalf("this build's hand-over not kept for an older one: %d %v", left, err)
+	}
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || !ok || log.Stream != "new" {
+		t.Fatalf("take: %+v %v %v", log, ok, err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM settings WHERE key = 'hub.event_log'`).Scan(&left); err != nil || left != 0 {
+		t.Fatalf("taken, still in settings: %d %v", left, err)
+	}
+}
+
+// followOlderHub takes up the keys 0421 copied: the two lists are one.
+func TestHubKeysAreThoseCopied(t *testing.T) {
+	b, err := fs.ReadFile(migrations, "migrations/hub/0421_hub_settings.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := regexp.MustCompile(`(?s)key IN \((.*?)\)`).FindStringSubmatch(string(b))
+	if in == nil {
+		t.Fatal("no key list in 0421")
+	}
+	var copied []string
+	for _, m := range regexp.MustCompile(`'([^']+)'`).FindAllStringSubmatch(in[1], -1) {
+		copied = append(copied, m[1])
+	}
+	want := slices.Clone(hubKeys)
+	sort.Strings(copied)
+	sort.Strings(want)
+	if !slices.Equal(copied, want) {
+		t.Fatalf("0421 copies %v, followOlderHub takes %v", copied, want)
+	}
+	if !strings.Contains(string(b), `codex\_inventory/%`) || !slices.Equal(hubKeyPrefixes, []string{"codex_inventory/"}) {
+		t.Fatal("the key families differ")
+	}
+}
+
+// A fresh install: the hub opens the database before its default manager makes the settings table. Once it is there,
+// the hub's keys (those written before it too) are kept there for a build from before hub_settings.
+func TestHubKeysKeptForAnOlderBuildOnAFreshInstall(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	if err := hub.PutSetting(ctx, "hub_id", "h-1"); err != nil { // no settings table yet
+		t.Fatal(err)
+	}
+	manager, err := Open(ctx, url, ManagerSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := hub.PutSetting(ctx, "mutes", map[string][]string{"spaces": {"m/a"}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"hub_id", "mutes"} {
+		var n int
+		if err := manager.pool.QueryRow(ctx, `SELECT count(*) FROM settings s JOIN hub_settings h USING (key)
+			WHERE key = $1 AND s.value = h.value`, k).Scan(&n); err != nil || n != 1 {
+			t.Fatalf("%s not kept for an older build: %d %v", k, n, err)
+		}
+	}
+}
+
+// The sync with an older build's settings locks the shared table before it touches hub_settings, as a write of a hub
+// key starts there: a hub-key write while another process (a CLI, a starting hub) syncs makes the sync wait, holding
+// nothing the write needs next, whether the write's row was there already or is new.
+func TestHubKeySyncLocksTheSharedTableFirst(t *testing.T) {
+	for _, tc := range []struct{ name, shared, own string }{
+		{"a row that is there", `UPDATE settings SET value = '{"spaces":["b"]}', updated_at = now() WHERE key = 'mutes'`,
+			`UPDATE hub_settings SET value = '{"spaces":["b"]}', updated_at = now() WHERE key = 'mutes'`},
+		{"a new row", `INSERT INTO settings (key, value) VALUES ('codex_inventory/new', '{}')`,
+			`INSERT INTO hub_settings (key, value) VALUES ('codex_inventory/new', '{}')`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			url := freshDatabase(t)
+			unifiedMigrate(t, url, 419)
+			conn, err := pgx.Connect(ctx, url)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close(ctx)
+			if _, err := conn.Exec(ctx, `INSERT INTO settings (key, value) VALUES ('mutes', '{"spaces":["a"]}')`); err != nil {
+				t.Fatal(err)
+			}
+			hub, err := Open(ctx, url, HubSet)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer hub.Close()
+			// A write of a hub key on its way (PutSetting): the shared table first, then hub_settings.
+			put, err := conn.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer put.Rollback(ctx)
+			if _, err := put.Exec(ctx, tc.shared); err != nil {
+				t.Fatal(err)
+			}
+			synced := make(chan error, 1)
+			go func() { synced <- hub.syncOlderHub(ctx) }()
+			var pid int
+			for deadline := time.Now().Add(10 * time.Second); ; {
+				err := hub.pool.QueryRow(ctx, `SELECT pid FROM pg_stat_activity WHERE datname = current_database()
+					AND wait_event_type = 'Lock'`).Scan(&pid)
+				if err == nil {
+					break
+				}
+				if !errors.Is(err, pgx.ErrNoRows) {
+					t.Fatal(err)
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("the sync does not wait for the write")
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			var held int
+			if err := hub.pool.QueryRow(ctx, `SELECT count(*) FROM pg_locks WHERE pid = $1 AND relation = 'hub_settings'::regclass`,
+				pid).Scan(&held); err != nil || held != 0 {
+				t.Fatalf("the waiting sync holds %d locks on hub_settings (%v)", held, err)
+			}
+			if _, err := put.Exec(ctx, `SET LOCAL lock_timeout = '3s'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := put.Exec(ctx, tc.own); err != nil {
+				t.Fatalf("the write waits for the sync on hub_settings: %v", err)
+			}
+			if err := put.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if err := <-synced; err != nil {
+				t.Fatalf("sync: %v", err)
+			}
+		})
+	}
+}
+
+// This build's event log hand-over, kept in settings for an older build, was taken by one that then served and
+// stopped without handing over: the copy left in hub_settings is stale and not resumed. One the older build handed
+// over is; one waiting for this build stays in both tables until taken, however often the database is opened first.
+func TestHubDropsAHandOverAnOlderBuildTook(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	unifiedMigrate(t, url, 419)
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	open := func() *DB {
+		t.Helper()
+		hub, err := Open(ctx, url, HubSet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return hub
+	}
+	var log struct {
+		Stream string `json:"stream"`
+	}
+	hub := open()
+	if err := hub.PutSetting(ctx, "hub.event_log", map[string]string{"stream": "new"}); err != nil { // it stops
+		t.Fatal(err)
+	}
+	hub.Close()
+	if _, err := conn.Exec(ctx, `DELETE FROM settings WHERE key = 'hub.event_log'`); err != nil { // the older build takes it
+		t.Fatal(err)
+	}
+	hub = open()
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || ok {
+		t.Fatalf("a hand-over an older build took is resumed: %+v %v %v", log, ok, err)
+	}
+	// This build stops again; the older build takes it and hands its own over.
+	if err := hub.PutSetting(ctx, "hub.event_log", map[string]string{"stream": "new"}); err != nil {
+		t.Fatal(err)
+	}
+	hub.Close()
+	if _, err := conn.Exec(ctx, `UPDATE settings SET value = '{"stream":"old"}', updated_at = now() + interval '1 second'
+		WHERE key = 'hub.event_log'`); err != nil {
+		t.Fatal(err)
+	}
+	hub = open()
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || !ok || log.Stream != "old" {
+		t.Fatalf("the older build's hand-over: %+v %v %v", log, ok, err)
+	}
+	// This build stops; the database is opened (a CLI, a start that failed) before the next start takes it.
+	if err := hub.PutSetting(ctx, "hub.event_log", map[string]string{"stream": "new"}); err != nil {
+		t.Fatal(err)
+	}
+	hub.Close()
+	open().Close()
+	open().Close()
+	hub = open()
+	defer hub.Close()
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || !ok || log.Stream != "new" {
+		t.Fatalf("this build's hand-over after the database was opened in between: %+v %v %v", log, ok, err)
+	}
+	var n int
+	if err := conn.QueryRow(ctx, `SELECT count(*) FROM settings WHERE key = 'hub.event_log'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("taken, still in settings: %d %v", n, err)
+	}
+}
+
+// A fresh install: the hub hands its event log over before its default manager made the settings table, and the table
+// appears while the hub is down. That hand-over was never there for an older build to take: it is resumed.
+func TestHubKeepsAHandOverFromBeforeTheSharedTable(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hub.PutSetting(ctx, "hub.event_log", map[string]string{"stream": "first"}); err != nil {
+		t.Fatal(err)
+	}
+	hub.Close()
+	manager, err := Open(ctx, url, ManagerSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.Close()
+	hub, err = Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	var log struct {
+		Stream string `json:"stream"`
+	}
+	if ok, err := hub.TakeSetting(ctx, "hub.event_log", &log); err != nil || !ok || log.Stream != "first" {
+		t.Fatalf("the hand-over from before the shared table: %+v %v %v", log, ok, err)
+	}
+}
+
+// The shared settings table dropped while the hub runs: its keys go on in hub_settings alone, a take first as well as a
+// write.
+func TestHubKeysAfterTheSharedTableIsDropped(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	unifiedMigrate(t, url, 419)
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	if err := hub.PutSetting(ctx, "look", "one"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hub.pool.Exec(ctx, `DROP TABLE settings`); err != nil {
+		t.Fatal(err)
+	}
+	var look string
+	if ok, err := hub.TakeSetting(ctx, "look", &look); err != nil || !ok || look != "one" {
+		t.Fatalf("take: %q %v %v", look, ok, err)
+	}
+	if err := hub.PutSetting(ctx, "look", "two"); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if ok, err := hub.Setting(ctx, "look", &look); err != nil || !ok || look != "two" {
+		t.Fatalf("read: %q %v %v", look, ok, err)
+	}
+	// A database handle that still takes the table for there: the write.
+	hub.olderHub.Store(true)
+	if err := hub.PutSetting(ctx, "look", "three"); err != nil {
+		t.Fatalf("put on a stale flag: %v", err)
+	}
+	if ok, err := hub.Setting(ctx, "look", &look); err != nil || !ok || look != "three" {
+		t.Fatalf("read: %q %v %v", look, ok, err)
 	}
 }

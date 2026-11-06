@@ -1106,3 +1106,11 @@ func TestAdminNetworkPublicKeepsEnvOut(t *testing.T) {
 		t.Fatalf("restart %v", out["restart"])
 	}
 }
+
+// Setting is the test database's when there is one, else nothing (the hello's answer reads the mutes).
+func (s *adminMemStore) Setting(ctx context.Context, key string, out any) (bool, error) {
+	if s.sharedStore != nil {
+		return s.sharedStore.Setting(ctx, key, out)
+	}
+	return false, nil
+}

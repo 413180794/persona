@@ -111,7 +111,9 @@ func tablesTouched(funcs map[string]dbFunc, m string, all []string) []string {
 	var out []string
 	var walk func(key string)
 	walk = func(key string) {
-		if seen[key] || key == "DB.settingsTable" { // the side's own settings table, by how the database was opened
+		// The side's own settings table, by how the database was opened; and the copy of the hub's keys kept for a hub
+		// build from before hub_settings on a database shared with the default manager (db.go keepForOlderHub).
+		if seen[key] || key == "DB.settingsTable" || key == "DB.keepForOlderHub" || key == "DB.sharedWithOlderHub" {
 			return
 		}
 		seen[key] = true

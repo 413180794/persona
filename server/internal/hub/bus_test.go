@@ -242,6 +242,7 @@ func TestBusHello(t *testing.T) {
 		Managers: []busManagerBrief{{ID: "assistant", Name: "助手", Role: bus.RoleManager, Online: true}, {ID: "desk", Name: "工作", Role: bus.RoleManager}},
 		Hello: assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),
 			KB: &assistantwire.KBSettings{}, Locale: "zh-Hans", // hub.json's kb section (the defaults); the user's language
+			Mutes: &assistantwire.Mutes{Spaces: []string{}, Sessions: []string{}}, // the hub's mutes (none)
 			// the finished push's timings and a card's default wait: the manager's to apply (fleet_push.go there)
 			Notify: assistantwire.NotifyTimings{DoneDelayMS: 60000, LongTurnMS: 60000, BackgroundHoldMS: 7200000, HookTimeoutMS: 1800000}}}
 	if !jsonEqual(reply, want) {

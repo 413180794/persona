@@ -474,10 +474,7 @@ func (s *Service) FleetEvent(ctx context.Context, name string, params json.RawMe
 		if json.Unmarshal(params, &p) != nil || p.Mutes == nil {
 			return true // not the mutes (a hub from before they came with the event): the ones handed over last stay
 		}
-		m := Pins{Spaces: nonNil(p.Mutes.Spaces), Sessions: nonNil(p.Mutes.Sessions), Allowed: p.Mutes.Allowed}
-		s.fleet.mutesMu.Lock()
-		s.fleet.mutes = &m
-		s.fleet.mutesMu.Unlock()
+		s.setMutes(*p.Mutes)
 		for _, m := range s.fleetMachines() {
 			s.publishSessions(m.ID)
 		}
@@ -696,7 +693,15 @@ type Pins struct {
 	Allowed  []string `json:"allowed,omitempty"`
 }
 
-// loadMutes is the mutes the hub handed over last (fleet.mutes, after each handshake and every change); none before
+// setMutes takes the hub's mutes (the hello's answer, fleet.mutes).
+func (s *Service) setMutes(p assistantwire.Mutes) {
+	m := Pins{Spaces: nonNil(p.Spaces), Sessions: nonNil(p.Sessions), Allowed: p.Allowed}
+	s.fleet.mutesMu.Lock()
+	s.fleet.mutes = &m
+	s.fleet.mutesMu.Unlock()
+}
+
+// loadMutes is the mutes the hub handed over last (the hello's answer, fleet.mutes after every change); none before
 // it did. They are the hub's settings: the manager never reads them from a database.
 func (s *Service) loadMutes(context.Context) Pins {
 	f := &s.fleet

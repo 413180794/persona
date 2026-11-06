@@ -168,6 +168,9 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 			}
 		}()
 	}
+	if svc != nil && h.Mutes != nil {
+		svc.setMutes(*h.Mutes) // the hub's, before anything is pushed (fleet.go)
+	}
 	if svc != nil {
 		svc.workReconnected() // turns that ended while it was away are looked for at the next tick (agents_work.go)
 		// The whole snapshot goes once the connection counts as up (after this returns): before that it is offline,

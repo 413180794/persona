@@ -29,8 +29,8 @@ const (
 const (
 	// EventClients is what the hub's connected apps can take now (Clients), after every change.
 	EventClients = "fleet.clients"
-	// EventMutes is the muted spaces / agents (FleetMutes), the hub's: after each handshake and whenever the user
-	// changes them.
+	// EventMutes is the muted spaces / agents (FleetMutes), the hub's: once after each handshake (on the manager's
+	// first word: they are in the hello's answer too, Hello.Mutes) and whenever the user changes them.
 	EventMutes = "fleet.mutes"
 	// EventSeen: an app looked at a session (its WebSocket's seen) (FleetSeen).
 	EventSeen = "fleet.seen"
@@ -202,8 +202,7 @@ type MachineUsage struct {
 // FleetMutes is fleet.mutes' params. The hub keeps the mutes (its settings; GET / PUT /api/v1/mutes); the manager
 // decides the pushes by them.
 type FleetMutes struct {
-	// Mutes are the mutes now; nil from a hub before they came with the event (the manager then read them from the
-	// database the two shared).
+	// Mutes are the mutes now; nil from a hub before they came with the event (the manager keeps the ones it had).
 	Mutes *Mutes `json:"mutes,omitempty"`
 }
 

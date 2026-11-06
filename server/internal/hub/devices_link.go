@@ -478,8 +478,11 @@ func (h *Hub) startDevices(ctx context.Context) {
 		if c, ok := saved.EngineHosts[mc.ID]; ok {
 			m.engineHosts = &c
 		}
-		if w, ok := saved.Machines[mc.ID]; ok {
+		if w, ok := saved.Machines[mc.ID]; ok && (w.Until.IsZero() || w.Until.After(time.Now())) {
 			m.info, m.sessions, m.warmUntil = w.Info, w.Sessions, until
+			if !w.Until.IsZero() && w.Until.Before(until) {
+				m.warmUntil = w.Until
+			}
 			n++
 		}
 		h.machines = append(h.machines, m)
@@ -515,6 +518,9 @@ type devicesWarm struct {
 type devicesWarmMachine struct {
 	Info     proto.NodeInfo  `json:"info"`
 	Sessions []proto.Session `json:"sessions"`
+	// Until: a machine only still shown from an earlier hand-over keeps that one's deadline (quick restarts in a row
+	// do not keep it shown for ever); zero for one online.
+	Until time.Time `json:"until,omitzero"`
 }
 
 // saveDevicesWarm hands the next hub process the hub.json machines as the managers last reported them (beginStop,
@@ -531,6 +537,8 @@ func (h *Hub) saveDevicesWarm(ctx context.Context) {
 		}
 		m.mu.Lock()
 		if m.managed && !m.derived {
+			// Online, or still shown from the last hand-over (a second restart within the grace keeps it).
+			shown := m.online || m.warmLocked(saved.SavedAt)
 			if m.snap != nil && m.snap.Engine != "" {
 				saved.Engines[m.cfg.ID] = m.snap.Engine
 			} else if m.engine != "" {
@@ -541,8 +549,12 @@ func (h *Hub) saveDevicesWarm(ctx context.Context) {
 			} else if m.engineHosts != nil {
 				saved.EngineHosts[m.cfg.ID] = *m.engineHosts
 			}
-			if m.online {
-				saved.Machines[m.cfg.ID] = devicesWarmMachine{Info: m.info, Sessions: slices.Clone(m.sessions)}
+			if shown {
+				w := devicesWarmMachine{Info: m.info, Sessions: slices.Clone(m.sessions)}
+				if !m.online {
+					w.Until = m.warmUntil
+				}
+				saved.Machines[m.cfg.ID] = w
 			}
 		}
 		m.mu.Unlock()

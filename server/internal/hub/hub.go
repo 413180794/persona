@@ -56,8 +56,9 @@ type Hub struct {
 	// machineAdd: one computer is added for a pairing code at a time (machines_add.go), so two get different ids.
 	machineAdd sync.Mutex
 
-	mutesMu sync.Mutex
-	mutes   *Pins // muted spaces / agents (no pushes); loaded from settings on first use
+	mutesMu   sync.Mutex
+	mutesSend sync.Mutex // one send of the mutes to the managers at a time (fleet_link.go)
+	mutes     *Pins      // muted spaces / agents (no pushes); loaded from settings on first use
 
 	// sessionsSent: each machine's last session list sent to the apps, as encoded (broadcastSessions).
 	sessionsMu   sync.Mutex
