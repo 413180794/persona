@@ -82,7 +82,10 @@ POST /relay/v1/push       Authorization: Bearer <grant>
                           {"type":"alert|background|liveactivity","priority":"10|5","collapse_id":"<hex>",
                            "sealed":"<base64>",                      // alert / background
                            "token":"<hex>","aps":{…}}                // liveactivity: the activity's or push-to-start token
-                          → 200 {"ok":true} | 410 {"reason":"Unregistered"} | 4xx/5xx {"error":"…"}
+                          → 200 {"ok":true} | 410 {"reason":"Unregistered"}
+                            | 422 {"error":"apns <status>","reason":"…"}  // APNs rejected it for good: not retried
+                            | 502 {"error":"…"}                          // APNs 429/5xx or unreachable: retried
+                            | other 4xx {"error":"…"}                    // the relay's own refusal
 GET  /relay/v1/health     → {"ok":true,"apns":true}
 ```
 

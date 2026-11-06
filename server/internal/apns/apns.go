@@ -37,10 +37,17 @@ type Client struct {
 	// Base replaces Apple's host (tests).
 	Base string
 
-	mu    sync.Mutex
-	jwt   string
-	jwtAt time.Time
+	mu  sync.Mutex
+	jwt string
+	// jwtIat is the cached token's iat in Unix seconds. Its age is measured on the wall clock, the clock APNs
+	// checks iat against: a monotonic reading stops while the machine sleeps, so a Mac hub waking up after hours
+	// would keep sending a token Apple already rejects as expired.
+	jwtIat int64
 }
+
+// tokenMaxAge is how long a signed token is reused. APNs rejects tokens older than an hour and answers 429
+// TooManyProviderTokenUpdates when they are re-signed more often than every 20 minutes.
+const tokenMaxAge = 40 * 60
 
 // New loads the .p8 key the config names ("~/" is the home directory). It refuses a config without key_id or
 // team_id: every token signed without them is answered 403 InvalidProviderToken.
@@ -78,15 +85,32 @@ func NewWithKey(cfg Config, key *ecdsa.PrivateKey) *Client {
 	return &Client{Cfg: cfg, key: key, http: &http.Client{Timeout: 15 * time.Second}}
 }
 
+// token returns the cached provider token, signing a new one when there is none or it is tokenMaxAge old.
 func (c *Client) token() (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.jwt != "" && time.Since(c.jwtAt) < 40*time.Minute {
+	return c.tokenLocked()
+}
+
+// resign drops stale, the token APNs just called expired, and returns a fresh one. When another request already
+// replaced stale, that newer token is returned instead of signing again.
+func (c *Client) resign(stale string) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.jwt == stale {
+		c.jwt = ""
+	}
+	return c.tokenLocked()
+}
+
+func (c *Client) tokenLocked() (string, error) {
+	now := time.Now().Unix()
+	if c.jwt != "" && now-c.jwtIat < tokenMaxAge {
 		return c.jwt, nil
 	}
 	enc := base64.RawURLEncoding
 	header := enc.EncodeToString([]byte(fmt.Sprintf(`{"alg":"ES256","kid":%q}`, c.Cfg.KeyID)))
-	claims := enc.EncodeToString([]byte(fmt.Sprintf(`{"iss":%q,"iat":%d}`, c.Cfg.TeamID, time.Now().Unix())))
+	claims := enc.EncodeToString([]byte(fmt.Sprintf(`{"iss":%q,"iat":%d}`, c.Cfg.TeamID, now)))
 	sum := sha256.Sum256([]byte(header + "." + claims))
 	r, s, err := ecdsa.Sign(rand.Reader, c.key, sum[:])
 	if err != nil {
@@ -95,7 +119,7 @@ func (c *Client) token() (string, error) {
 	sig := make([]byte, 64)
 	r.FillBytes(sig[:32])
 	s.FillBytes(sig[32:])
-	c.jwt, c.jwtAt = header+"."+claims+"."+enc.EncodeToString(sig), time.Now()
+	c.jwt, c.jwtIat = header+"."+claims+"."+enc.EncodeToString(sig), now
 	return c.jwt, nil
 }
 
@@ -129,12 +153,25 @@ func Host(env string) string {
 	return "https://api.push.apple.com"
 }
 
-// Send posts one notification and waits for APNs' answer.
+// Send posts one notification and waits for APNs' answer. A 403 ExpiredProviderToken is retried once with a newly
+// signed token; InvalidProviderToken is not, since a wrong key or id stays wrong.
 func (c *Client) Send(ctx context.Context, r Request) (Result, error) {
 	jwt, err := c.token()
 	if err != nil {
 		return Result{}, fmt.Errorf("apns jwt: %w", err)
 	}
+	res, err := c.post(ctx, r, jwt)
+	if err != nil || res.Status != http.StatusForbidden || res.Reason != "ExpiredProviderToken" {
+		return res, err
+	}
+	if jwt, err = c.resign(jwt); err != nil {
+		return Result{}, fmt.Errorf("apns jwt: %w", err)
+	}
+	return c.post(ctx, r, jwt)
+}
+
+// post sends r once with the provider token jwt.
+func (c *Client) post(ctx context.Context, r Request, jwt string) (Result, error) {
 	host := Host(r.Env)
 	if c.Base != "" {
 		host = c.Base

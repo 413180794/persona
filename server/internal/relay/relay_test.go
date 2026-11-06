@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -201,9 +202,31 @@ func TestDeadTokenIs410(t *testing.T) {
 	if code != 410 || out["reason"] != "BadDeviceToken" {
 		t.Fatalf("%d %v", code, out)
 	}
-	f.resp = apns.Result{Status: 429, Reason: "TooManyRequests"}
-	if code, _ := call(h, "/relay/v1/push", g, PushRequest{Type: "alert", Sealed: sealed}); code != 502 {
-		t.Fatalf("other APNs errors: %d", code)
+}
+
+// APNs' answers that may pass are 502 (the hub tries again); its permanent rejections are 422 with APNs' reason, so
+// the hub neither tries them again nor reads them as a stale grant (401).
+func TestAPNsRejectStatus(t *testing.T) {
+	_, f, h := newTest(t)
+	g := register(t, h)
+	for _, c := range []struct {
+		apns   int
+		reason string
+		want   int
+	}{
+		{400, "BadCollapseId", 422},
+		{400, "DeviceTokenNotForTopic", 422},
+		{403, "InvalidProviderToken", 422},
+		{413, "PayloadTooLarge", 422},
+		{429, "TooManyRequests", 502},
+		{500, "InternalServerError", 502},
+		{503, "ServiceUnavailable", 502},
+	} {
+		f.resp = apns.Result{Status: c.apns, Reason: c.reason}
+		code, out := call(h, "/relay/v1/push", g, PushRequest{Type: "alert", Sealed: sealed})
+		if code != c.want || out["reason"] != c.reason || out["error"] != fmt.Sprintf("apns %d", c.apns) {
+			t.Errorf("APNs %d %s: %d %v, want %d", c.apns, c.reason, code, out, c.want)
+		}
 	}
 }
 

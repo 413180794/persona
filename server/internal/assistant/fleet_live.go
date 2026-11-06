@@ -109,7 +109,8 @@ func (s *Service) fleetSnapshot() FleetState {
 				continue
 			}
 			agents = append(agents, fleetInput{
-				Machine: m.Name, Session: sess, Muted: s.muted(m.ID, sess.SessionID),
+				// Its own space, not muted's lookup of the node's row: that scanned the machine's list once per session.
+				Machine: m.Name, Session: sess, Muted: s.mutedAs(m.ID, sess.SessionID, sess.SpaceName),
 				TurnStart: s.turnsBook().startOf(m.ID + "/" + sess.SessionID),
 			})
 		}

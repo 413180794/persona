@@ -232,10 +232,19 @@ func (p *Pusher) forget(d Device) {
 	p.mu.Lock()
 	delete(p.devices, d.DeviceID)
 	p.mu.Unlock()
-	if p.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
-		defer cancel()
-		_ = p.store.DeleteDevice(ctx, d.DeviceID)
+	p.deleteRow(d)
+}
+
+// deleteRow deletes a forgotten device's row, bounded by storeTimeout. A delete that fails is logged: the row stays,
+// so the device is loaded again on the next start and gets pushes until it is forgotten again.
+func (p *Pusher) deleteRow(d Device) {
+	if p.store == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), p.storeTimeout)
+	defer cancel()
+	if err := p.store.DeleteDevice(ctx, d.DeviceID); err != nil {
+		p.logf("forget device %s: %v", d.Name, err)
 	}
 }
 
@@ -257,9 +266,7 @@ func (p *Pusher) forgetIfCurrent(d Device) {
 		p.logf("device %s: its old token is gone; kept, it has registered a new one", d.Name)
 		return
 	}
-	if p.store != nil {
-		_ = p.store.DeleteDevice(context.Background(), d.DeviceID)
-	}
+	p.deleteRow(d)
 }
 
 // sendLiveActivity pushes to a Live Activity token (an activity's own, or the push-to-start one): its own push type and

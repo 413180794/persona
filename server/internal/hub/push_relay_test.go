@@ -30,6 +30,7 @@ type relayAPNs struct {
 	mu   sync.Mutex
 	got  []apns.Request
 	gone bool
+	resp apns.Result // any other answer (zero: 200)
 }
 
 func (f *relayAPNs) Send(_ context.Context, r apns.Request) (apns.Result, error) {
@@ -38,6 +39,9 @@ func (f *relayAPNs) Send(_ context.Context, r apns.Request) (apns.Result, error)
 	f.got = append(f.got, r)
 	if f.gone {
 		return apns.Result{Status: 410, Reason: "Unregistered"}, nil
+	}
+	if f.resp.Status != 0 {
+		return f.resp, nil
 	}
 	return apns.Result{Status: 200}, nil
 }
@@ -512,6 +516,34 @@ func TestRelayDoesNotTryARefusalAgain(t *testing.T) {
 	time.Sleep(20 * time.Millisecond) // a retry would come after a millisecond
 	if tries, _ := fr.seen(); tries != 1 || strings.Contains(strings.Join(logs, "\n"), "tries") {
 		t.Fatalf("tries = %d, log %q; want one try", tries, logs)
+	}
+}
+
+// APNs' permanent rejection behind the relay is tried once and logged with APNs' reason; its trouble that may pass is
+// tried again. The relay used to answer both with 502, so a rejected push went to APNs three times.
+func TestRelayDoesNotTryAnAPNsRejectionAgain(t *testing.T) {
+	for _, c := range []struct {
+		apns  apns.Result
+		tries int
+		log   string
+	}{
+		{apns.Result{Status: 400, Reason: "BadCollapseId"}, 1, "relay phone: 422 apns 400 BadCollapseId"},
+		{apns.Result{Status: 503, Reason: "ServiceUnavailable"}, 3, "(3 tries)"},
+	} {
+		fr := &flakyRelay{}
+		h, f, _ := fr.hub(t)
+		f.mu.Lock()
+		f.resp = c.apns
+		f.mu.Unlock()
+		h.push.notifyDone("m1", "笔记本", "s1", "t", "x", nil)
+		fr.waitLog(t, c.log)
+		time.Sleep(20 * time.Millisecond) // a retry would come after a millisecond
+		f.mu.Lock()
+		sent := len(f.got)
+		f.mu.Unlock()
+		if tries, logs := fr.seen(); tries != c.tries || sent != c.tries {
+			t.Errorf("APNs %d: relay saw %d pushes, APNs %d, want %d; log %q", c.apns.Status, tries, sent, c.tries, logs)
+		}
 	}
 }
 

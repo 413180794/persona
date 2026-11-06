@@ -152,7 +152,7 @@ function panelLabel(p: Panel) {
 function body(p: Panel) {
   switch (p.kind) {
     case "files":
-      return <FilesPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} onClose={closePanel} />;
+      return <FilesPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} path={p.path} file={p.file} onClose={closePanel} />;
     case "git":
       return <GitPanel key={directoryPanelKey(p)} mid={p.mid} sid={p.sid} cwd={p.cwd} at={p.at} onClose={closePanel} />;
     case "file":

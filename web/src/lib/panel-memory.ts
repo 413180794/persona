@@ -1,0 +1,105 @@
+// A session's side panel comes back with the session (#5150, docs/web.md "Side panels"). Moving to another page closes
+// a session's Files / Git / file panel (App); coming back to that session (the sidebar, the browser's Back) opens it
+// again where it was: the same kind, the Files panel's folder and the file open in it. What is kept is the panel open
+// when the page left the session, so one the user closed (×, Esc, ⌘B, its button) before leaving is not brought back,
+// and one brought back is kept again only if it is still open when the page leaves. Kept per browser tab
+// (sessionStorage), for the last few sessions.
+import { useEffect, useRef } from "react";
+import { closePanel, directoryPanelKey, getPanel, openPanel, type Panel } from "./panel";
+
+/** The panels that belong to the session the page shows (the ones App closes when the page moves on). */
+export type SessionPanel = Extract<Panel, { kind: "files" | "git" | "file" }>;
+
+/** Where a Files panel is: the folder it shows and the file open in it (FilesPanel tells, `notePlace`). */
+export interface Place {
+  path?: string;
+  file?: string;
+}
+
+export type PanelMemory = Record<string, SessionPanel>;
+
+const STORE = "persona.panel.back";
+/** How many sessions' panels are kept: the ones gone back and forth between, not every one ever visited. */
+export const KEPT = 20;
+
+/** The session a pane is, as the memory keys it. */
+export function sessionKey(pane: { mid: string; sid: string }): string {
+  return `${pane.mid}/${pane.sid}`;
+}
+
+/** Whether `p` is a panel of the session `pane` that the page closes on leaving it (App's rule). */
+export function belongsTo(p: Panel | null, pane: { mid: string; sid: string } | null | undefined): p is SessionPanel {
+  if (!p || !pane) return false;
+  if (p.kind === "file") return true; // a file opened from this conversation (its links, its tool rows)
+  return (p.kind === "files" || p.kind === "git") && p.mid === pane.mid && p.sid === pane.sid;
+}
+
+/** The memory after the page left `session` with `panel` open (null: none of its own): kept, or forgotten. */
+export function leaving(memory: PanelMemory, session: string, panel: SessionPanel | null, place?: Place): PanelMemory {
+  const { [session]: _, ...rest } = memory;
+  if (!panel) return rest;
+  const kept: SessionPanel = panel.kind === "files" && place ? { ...panel, path: place.path, file: place.file } : panel;
+  const out = { ...rest, [session]: kept };
+  const keys = Object.keys(out);
+  return keys.length > KEPT ? Object.fromEntries(keys.slice(keys.length - KEPT).map((k) => [k, out[k]])) : out;
+}
+
+/** Coming back to `session` with `open` showing: the panel to open (and the memory without it), or none. A panel that
+ * is already open (a link, a task: they stay across pages) is not replaced; the session's is kept for the next time. */
+export function arriving(memory: PanelMemory, session: string, open: Panel | null): { memory: PanelMemory; back: SessionPanel | null } {
+  const back = memory[session];
+  if (!back || open) return { memory, back: null };
+  const { [session]: _, ...rest } = memory;
+  return { memory: rest, back };
+}
+
+function load(): PanelMemory {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(STORE) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as PanelMemory) : {};
+  } catch {
+    return {};
+  }
+}
+
+function save(m: PanelMemory) {
+  try {
+    if (Object.keys(m).length) sessionStorage.setItem(STORE, JSON.stringify(m));
+    else sessionStorage.removeItem(STORE);
+  } catch {
+    // private mode / full: the panel just does not come back
+  }
+}
+
+const places = new Map<string, Place>();
+
+/** A Files panel says where it is now (its folder, the file open in it), so leaving keeps that. */
+export function notePlace(panel: { mid: string; sid: string; cwd: string }, place: Place) {
+  places.set(directoryPanelKey(panel), place);
+}
+
+/** On each page: leaving a session keeps its open panel (and closes it, with the other session panels App closed
+ * before), coming back to one opens what it kept. `pane` is the session the page shows, if any. */
+export function useSessionPanels(at: string, pane: { mid: string; sid: string } | null | undefined) {
+  const was = useRef<{ mid: string; sid: string } | null>(null);
+  useEffect(() => {
+    const p = getPanel();
+    const left = was.current;
+    was.current = pane ? { mid: pane.mid, sid: pane.sid } : null;
+    let memory = load();
+    if (left && !(pane && sessionKey(pane) === sessionKey(left))) {
+      const own = belongsTo(p, left) ? p : null;
+      memory = leaving(memory, sessionKey(left), own, own?.kind === "files" ? places.get(directoryPanelKey(own)) : undefined);
+    }
+    // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link, a
+    // task and an agent stay)
+    if (p && p.kind !== "link" && p.kind !== "task" && p.kind !== "agent" && !(p.kind !== "file" && pane && p.mid === pane.mid && p.sid === pane.sid)) closePanel();
+    if (pane) {
+      const r = arriving(memory, sessionKey(pane), getPanel());
+      memory = r.memory;
+      if (r.back) openPanel(r.back);
+    }
+    save(memory);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [at]);
+}

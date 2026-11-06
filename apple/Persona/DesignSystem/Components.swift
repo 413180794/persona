@@ -251,6 +251,8 @@ struct FilterChip: View {
                 .background(on ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(Color.secondary.opacity(0.12)), in: .capsule)
             }
             .buttonStyle(.plain)
+            // Like BUIFilterChip: tell VoiceOver which chip is on, not only through the fill.
+            .accessibilityAddTraits(on ? .isSelected : [])
         }
     }
 

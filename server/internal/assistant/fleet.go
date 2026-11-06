@@ -313,6 +313,15 @@ func (s *Service) NodeEvent(machine, event string, params json.RawMessage) bool 
 	}
 	switch event {
 	case "sessions.changed":
+		// The devices took this very list just before passing the event on (Machine.onEvent, and BusUp's replay of
+		// it): a copy of theirs, not a second decode of the whole list on every change. Its nested slices are shared
+		// with theirs, as decorated's are: never written into.
+		if s.devs != nil {
+			if list, ok := s.devs.Sessions(machine); ok {
+				s.setSessions(machine, list)
+				return false
+			}
+		}
 		var p struct {
 			Sessions []proto.Session `json:"sessions"`
 		}

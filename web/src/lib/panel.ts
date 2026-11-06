@@ -18,7 +18,8 @@ export interface GitSpot {
 }
 
 export type Panel =
-  | { kind: "files"; mid: string; sid: string; cwd: string; path?: string }
+  /** `path`: the folder to open at; `file`: a file open in it (a panel brought back, lib/panel-memory.ts). */
+  | { kind: "files"; mid: string; sid: string; cwd: string; path?: string; file?: string }
   | { kind: "git"; mid: string; sid: string; cwd: string; at?: GitSpot }
   /** `sid`: the session whose message box takes the comments made in it (else the one last used). */
   | { kind: "file"; mid: string; path: string; cwd?: string; line?: number; to?: number; sid?: string }

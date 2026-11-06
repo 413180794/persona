@@ -7,7 +7,7 @@ import { PageBoundary } from "./views/PageBoundary";
 import { lazyPage, preloadPages } from "./lib/lazy-page";
 import { drawerA11y, focusBack, useDrawerDrag } from "./lib/drawer";
 import { acceptHubs, here, rememberHub, takeHubs } from "./lib/hubs";
-import { closePanel, getPanel } from "./lib/panel";
+import { useSessionPanels } from "./lib/panel-memory";
 import { resolveTab, tabOfSessionLink, tabPagePane } from "./lib/herdr-tree";
 import { resolveSessionLink, sessionLinkRoute } from "./lib/session-link";
 import { href, navigate, onLinkClick, routePath, useRoute } from "./lib/router";
@@ -246,14 +246,10 @@ function Shell() {
   useShortcuts({ route, pane, narrow, toggleDrawer: toggle });
 
   useEffect(() => setDrawer(false), [route.name, pane ? pane.sid : route.name === "jarvis" ? route.sid : route.name === "agents" ? route.id : ""]);
-  // a session's terminal / files / Git belong to that conversation: moving to another page closes them (a link and a
-  // task stay)
+  // a session's files / Git belong to that conversation: moving to another page closes them (a link and a task stay),
+  // and coming back to it opens them again where they were (#5150, lib/panel-memory.ts)
   const at = pane ? `${pane.mid}/${pane.sid}` : route.name;
-  useEffect(() => {
-    const p = getPanel();
-    if (p && p.kind !== "link" && p.kind !== "task" && p.kind !== "agent" && !(p.kind !== "file" && pane && p.mid === pane.mid && p.sid === pane.sid)) closePanel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [at]);
+  useSessionPanels(at, pane);
 
   const extensionTitle = useExtensionPlace(route.name === "extension" ? route.extension : "", route.name === "extension" ? route.ui : "")?.title;
   const title =

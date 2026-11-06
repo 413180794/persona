@@ -225,8 +225,19 @@ func (s *Server) push(w http.ResponseWriter, r *http.Request) {
 	case res.Gone():
 		writeJSON(w, http.StatusGone, map[string]any{"reason": res.Reason})
 	default:
-		writeJSON(w, http.StatusBadGateway, map[string]any{"error": fmt.Sprintf("apns %d", res.Status), "reason": res.Reason})
+		writeJSON(w, apnsFailStatus(res.Status), map[string]any{"error": fmt.Sprintf("apns %d", res.Status), "reason": res.Reason})
 	}
+}
+
+// apnsFailStatus is the relay's status for an APNs answer that is neither 200 nor a gone token. APNs' trouble that
+// may pass (429, 5xx) is 502, which the hub tries again; any other answer is a rejection that sending again will not
+// change (BadCollapseId, InvalidProviderToken, PayloadTooLarge, ...), so it is 422, which the hub does not try again.
+// Never 401: the hub reads that as a stale grant to renew.
+func apnsFailStatus(status int) int {
+	if status == http.StatusTooManyRequests || status >= 500 {
+		return http.StatusBadGateway
+	}
+	return http.StatusUnprocessableEntity
 }
 
 // envelope turns a hub's request into the APNs request: the relay writes the aps itself.

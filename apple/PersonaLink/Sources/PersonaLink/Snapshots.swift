@@ -43,7 +43,7 @@ import SwiftUI
             ("node-missing", status("connected") {
                 $0.hubName = "家里"; $0.meshHubs = 1
                 $0.address = endpoints[1].url; $0.kind = "ipv6"; $0.since = now.addingTimeInterval(-95); $0.node = "offline"
-                $0.nodeError = "本机的常驻 node 没在运行（~/.jarvis/node-attach.sock 连不上）：让 jarvisd node --attach 一直跑（scripts/node-launchd.sh install）"
+                $0.nodeError = "本机的常驻 node 没在运行（~/.jarvis/node-attach.sock 连不上）：让 jarvisd node --attach 一直跑（scripts/deploy/node-launchd.sh install）"
             }, nil),
             ("connecting", status("connecting"), nil),
             ("waiting", status("waiting") {

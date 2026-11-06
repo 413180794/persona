@@ -197,6 +197,7 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 			return total, err
 		}
 		var lines []Line
+		lastAt := c.LastAt
 		for _, m := range msgs {
 			// Already archived: the cursor's own message, or (topic groups, read from the newest page each time) anything
 			// not newer than the last archived message. Past the retention: the newest page of a quiet chat goes back years.
@@ -215,6 +216,14 @@ func (e *Engine) archiveChat(ctx context.Context, src Source, sc SourceChat) (in
 			}
 		}
 		if err := e.Store.AppendMessages(c, lines); err != nil {
+			// This page is not archived: LastAt goes back to before it, or the next run skips its messages as seen.
+			// The earlier pages are, so keep their cursor as when a fetch fails.
+			c.LastAt = lastAt
+			if total > 0 {
+				if serr := e.saveArchived(c, cursor, total, sc.UpdatedAt); serr != nil {
+					e.logf("archive %s: save progress: %v", c.ID, serr)
+				}
+			}
 			return total, err
 		}
 		total += len(lines)

@@ -13,6 +13,7 @@ import { aheadBehind, below, gitMark, joinPath, type FsEntry, type FsListing, ty
 import { ancestors } from "../../lib/files-tree";
 import { ago, baseName, bytes, shortPath } from "../../lib/format";
 import { openPanel } from "../../lib/panel";
+import { notePlace } from "../../lib/panel-memory";
 import { useFsLive } from "../../lib/use-fs-live";
 import { NARROW, useMedia } from "../../lib/viewport";
 import { Button, copyText, cx, IconButton, Loading, Menu, useMenu } from "../../ui/atoms";
@@ -27,7 +28,7 @@ import { Empty, FileGlyph, GitDot, GitBadge, useStoredFlag } from "./files/parts
 
 type Listed = { at: string; listing?: FsListing; error?: string };
 
-export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid: string; cwd: string; path?: string; onClose: () => void }) {
+export function FilesPanel({ mid, sid, cwd, path, file, onClose }: { mid: string; sid: string; cwd: string; path?: string; file?: string; onClose: () => void }) {
   // The root is the session's folder; a `path` inside it opens there with the folders above it in the breadcrumb.
   const start = useMemo(() => {
     const inside = path && cwd ? below(cwd, path) : null;
@@ -55,7 +56,9 @@ export function FilesPanel({ mid, sid, cwd, path, onClose }: { mid: string; sid:
   const [dirTick, setDirTick] = useState(0); // the folder shown changed on the computer (drill-in view)
   const [gitTick, setGitTick] = useState(0); // the folder's Git status did
   const [git, setGit] = useState<GitStatus | null>(null);
-  const [open, setOpen] = useState<string[]>([]); // files opened from the list, newest last
+  const [open, setOpen] = useState<string[]>(file ? [file] : []); // files opened from the list, newest last
+  // where it is, kept when the page leaves the session so coming back opens it here again (#5150)
+  useEffect(() => notePlace({ mid, sid, cwd }, { path: dir === cwd ? undefined : dir, file: open.at(-1) }), [mid, sid, cwd, dir, open]);
   const menu = useMenu();
 
   const [selecting, setSelecting] = useState(false);
