@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -29,6 +30,8 @@ type uploadNode struct {
 	noEcho  bool   // knows file.upload.* but not dest=dir: opens it in its temp directory and says nothing
 	refuse  string // file.upload.begin fails with this rpc code
 	noDest  bool   // fails dest=dir as a node from before it does: "unknown upload destination"
+	// noHealthEcho: takes health_dir without saying so (a node from before other managers' health spaces)
+	noHealthEcho bool
 }
 
 func (f *uploadNode) handle(_ context.Context, method string, params json.RawMessage) (any, error) {
@@ -39,10 +42,11 @@ func (f *uploadNode) handle(_ context.Context, method string, params json.RawMes
 		return nil, errors.New("unknown method " + method)
 	}
 	var p struct {
-		Name   string `json:"name"`
-		Dest   string `json:"dest"`
-		Offset int64  `json:"offset"`
-		Data   []byte `json:"data"`
+		Name      string `json:"name"`
+		Dest      string `json:"dest"`
+		HealthDir string `json:"health_dir"`
+		Offset    int64  `json:"offset"`
+		Data      []byte `json:"data"`
 	}
 	_ = json.Unmarshal(params, &p)
 	switch method {
@@ -60,6 +64,9 @@ func (f *uploadNode) handle(_ context.Context, method string, params json.RawMes
 		if p.Dest == proto.UploadDestDir && !f.noEcho {
 			return map[string]any{"upload_id": "u1", "dest": p.Dest}, nil
 		}
+		if p.HealthDir != "" && !f.noHealthEcho {
+			return map[string]any{"upload_id": "u1", "health_dir": p.HealthDir}, nil
+		}
 		return map[string]any{"upload_id": "u1"}, nil
 	case "file.upload.chunk":
 		f.offsets = append(f.offsets, p.Offset)
@@ -76,6 +83,13 @@ func (f *uploadNode) handle(_ context.Context, method string, params json.RawMes
 
 func uploadHub(t *testing.T, f *uploadNode) http.Handler {
 	t.Helper()
+	_, _, mux := uploadHubOf(t, f)
+	return mux
+}
+
+// uploadHubOf is uploadHub with its hub and its machine m1.
+func uploadHubOf(t *testing.T, f *uploadNode) (*Hub, *Machine, http.Handler) {
+	t.Helper()
 	h := newTestHub(t)
 	toNode, nodeIn := io.Pipe()
 	toHub, hubIn := io.Pipe()
@@ -91,7 +105,42 @@ func uploadHub(t *testing.T, f *uploadNode) http.Handler {
 	h.byID["m1"] = m
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/machines/{mid}/files", h.withMachine(h.uploadFile))
-	return mux
+	return h, m, mux
+}
+
+// A health report goes in the health space of the machine's manager: the built-in's as ever (no health_dir: the
+// node's call is what it was), another's health-<id>, which the node has to echo; a node that does not know other
+// managers' spaces (no capability, or no echo) is told to update, and nothing stays.
+func TestHealthUploadInTheMachinesManagersSpace(t *testing.T) {
+	upload := func(f *uploadNode, owner string, info proto.NodeInfo) *httptest.ResponseRecorder {
+		h, m, mux := uploadHubOf(t, f)
+		h.cfg.Machines = []MachineConfig{{ID: "m1", Name: "box"}}
+		if owner != "" {
+			h.devices.assign = map[string]string{"m1": owner}
+		}
+		m.info = info
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("POST", "/api/v1/machines/m1/files?name=report.pdf&dest=health", strings.NewReader("pdf")))
+		return rec
+	}
+	knows := proto.NodeInfo{Version: "v1", Protocol: nodeproto.Version, Capabilities: nodeproto.Announced}
+	builtin := &uploadNode{}
+	if rec := upload(builtin, "", proto.NodeInfo{Version: "old"}); rec.Code != 200 || len(builtin.begins) != 1 || builtin.begins[0]["health_dir"] != nil {
+		t.Fatalf("the built-in's: %d %s %v", rec.Code, rec.Body, builtin.begins)
+	}
+	other := &uploadNode{}
+	if rec := upload(other, "m-0b0b0b", knows); rec.Code != 200 || len(other.begins) != 1 || other.begins[0]["health_dir"] != "health-m-0b0b0b" {
+		t.Fatalf("another manager's: %d %s %v", rec.Code, rec.Body, other.begins)
+	}
+	quiet := &uploadNode{noHealthEcho: true}
+	if rec := upload(quiet, "m-0b0b0b", knows); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), proto.CodeNodeOutdated) || !quiet.aborted {
+		t.Fatalf("a node that does not echo it: %d %s, aborted %v", rec.Code, rec.Body, quiet.aborted)
+	}
+	old := &uploadNode{}
+	if rec := upload(old, "m-0b0b0b", proto.NodeInfo{Version: "old", Protocol: nodeproto.Version, Capabilities: []string{nodeproto.Sessions}}); rec.Code != http.StatusConflict ||
+		len(old.begins) != 0 {
+		t.Fatalf("a node without health_spaces: %d %s %v", rec.Code, rec.Body, old.begins)
+	}
 }
 
 func TestUploadStreamsChunks(t *testing.T) {

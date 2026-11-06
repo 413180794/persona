@@ -15,6 +15,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -223,5 +224,73 @@ func TestRouteValues(t *testing.T) {
 	}
 	if _, v := routeValues("GET /api/v1/machines/{mid}/herdr", httptest.NewRequest(http.MethodGet, "/api/v1/machines/ma/herdr", nil)); v["mid"] != "ma" {
 		t.Fatalf("%v", v)
+	}
+}
+
+// With two managers, a health report uploaded to a machine goes in its manager's health space: to the built-in's
+// machine as ever, to B's machine with B's health_dir (health-m-0b0b0b), each through its own manager.
+func TestHealthUploadsWithTwoManagers(t *testing.T) {
+	h, srv, _ := newBusHub(t)
+	h.cfg.Machines = []MachineConfig{{ID: "ma", Name: "ma", Kind: "local"}, {ID: "mb", Name: "mb", Kind: "local"}}
+	node := func(method string, params json.RawMessage) (any, error) {
+		if method != devicewire.MethodCall {
+			return map[string]any{}, nil
+		}
+		var c devicewire.NodeCall
+		_ = json.Unmarshal(params, &c)
+		var p struct {
+			HealthDir string `json:"health_dir"`
+		}
+		_ = json.Unmarshal(c.Params, &p)
+		switch c.Method {
+		case "file.upload.begin":
+			out := map[string]any{"upload_id": "u1"}
+			if p.HealthDir != "" {
+				out["health_dir"] = p.HealthDir
+			}
+			return out, nil
+		case "file.upload.end":
+			return proto.UploadedFile{Path: "/r/report.pdf", Name: "report.pdf", Size: 3}, nil
+		}
+		return map[string]any{}, nil
+	}
+	a := connectGuardManager(t, h, srv.URL, assistantwire.AssistantID, node)
+	b := connectGuardManager(t, h, srv.URL, "m-0b0b0b", node)
+	if _, err := h.moveMachine(context.Background(), "mb", "m-0b0b0b"); err != nil {
+		t.Fatal(err)
+	}
+	info := proto.NodeInfo{Home: "/home/me", Version: "v1", Protocol: nodeproto.Version, Capabilities: nodeproto.Announced}
+	a.report(t, devicewire.State{Machine: proto.Machine{ID: "ma", Name: "ma"}, Info: info})
+	b.report(t, devicewire.State{Machine: proto.Machine{ID: "mb", Name: "mb"}, Info: info})
+	eventually(t, 5*time.Second, "ma, mb", func() bool { return h.localMachine("ma") != nil && h.localMachine("mb") != nil })
+	post := func(mid string) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/machines/"+mid+"/files?name=report.pdf&dest=health", strings.NewReader("pdf"))
+		req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("upload to %s: %d", mid, resp.StatusCode)
+		}
+	}
+	post("ma")
+	post("mb")
+	begins := func(f *guardManager) []string {
+		var out []string
+		for _, l := range strings.Split(f.log(), "\n") {
+			if strings.Contains(l, `"method":"file.upload.begin"`) {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	if got := begins(a); len(got) != 1 || strings.Contains(got[0], "health_dir") || !strings.Contains(got[0], `"machine_id":"ma"`) {
+		t.Fatalf("the built-in's machine: %v", got)
+	}
+	if got := begins(b); len(got) != 1 || !strings.Contains(got[0], `"health_dir":"health-m-0b0b0b"`) || !strings.Contains(got[0], `"machine_id":"mb"`) {
+		t.Fatalf("B's machine: %v", got)
 	}
 }

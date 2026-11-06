@@ -43,10 +43,14 @@ const (
 	// Ultracode: session.start takes ultracode and session.ultracode switches it (docs/protocol.md "Claude Code
 	// ultracode"). A node without it would start a session and drop the field without a word.
 	Ultracode = "ultracode"
+	// HealthSpaces: file.upload.begin (dest=health) and health.reports.list / health.reports.delete take health_dir,
+	// another manager's health space (health-<id>, docs/managers.md "Directories on a computer"). A node without it
+	// would use the built-in manager's.
+	HealthSpaces = "health_spaces"
 )
 
 // Required are the capabilities a manager built from this code cannot drive a node without.
 var Required = []string{Sessions}
 
 // Announced is what a node built from this code announces.
-var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode}
+var Announced = []string{Sessions, ModelConfiguration, NodeUpdate, Engines, MachineUID, HerdrServer, PluginNodeCall, Ultracode, HealthSpaces}

@@ -2,6 +2,7 @@ package assistant
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/proto"
@@ -27,6 +28,10 @@ func TestAManagersOwnDirectories(t *testing.T) {
 		}
 		if len(f.prepared) != 2 || f.prepared[0]["dir"] != c.assistant || f.prepared[1]["dir"] != c.health {
 			t.Fatalf("%q prepared %v", c.id, f.prepared)
+		}
+		// Its health CLAUDE.md names its own space, where its reports are.
+		if md, _ := f.prepared[1]["claude_md"].(string); !strings.Contains(md, "/"+c.health[len(".jarvis/"):]+"/reports/") {
+			t.Fatalf("%q: the health CLAUDE.md does not name its space: %s", c.id, md)
 		}
 		d := Device{ID: "server", Home: "/home/me"}
 		if got := s.assistantCwd(d); got != "/home/me/"+c.assistant {

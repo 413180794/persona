@@ -37,7 +37,10 @@ type AssistantHealthClaudeMD struct {
 	Owner    string // "" is "user"
 	Notes    string // Settings › Assistant › About me, trimmed
 	StateDir string
-	Language string
+	// HealthDir is the health space's directory name in StateDir: "" is the built-in manager's "health", another's
+	// "health-<id>" (identity.HealthDirName).
+	HealthDir string
+	Language  string
 }
 
 func RenderAssistantHealthClaudeMD(d AssistantHealthClaudeMD) string {

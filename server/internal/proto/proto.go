@@ -394,6 +394,8 @@ type HealthReport struct {
 // HealthReports is health.reports.list's answer, the newest first.
 type HealthReports struct {
 	Reports []HealthReport `json:"reports"`
+	// HealthDir is the health space they are of when the request named one (another manager's, health-<id>).
+	HealthDir string `json:"health_dir,omitempty"`
 }
 
 type NodeInfo struct {

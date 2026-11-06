@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/nodeproto"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -21,7 +23,8 @@ import (
 // The app cancelling the request (or going away) aborts the upload and the node removes what it wrote.
 // dest=terminal (the web terminal's paste and drop, docs/terminal.md): the node keeps the file under its Persona
 // directory for a week instead of the temp directory, and the limit is proto.MaxTerminalUploadBytes.
-// dest=health (a report for the health space): the node keeps it in the health directory's reports/.
+// dest=health (a report for the health space): the node keeps it in the health directory's reports/: the machine's
+// manager's (the built-in's health/, another's health-<id>/, docs/managers.md "Directories on a computer").
 // dest=dir&dir=<folder>[&cwd=][&conflict=replace|keep] (the app's file browser, docs/protocol.md "Changing files"): the file
 // keeps its name in that folder, which must be in the home; a taken name is 409 exists unless conflict says what
 // to do, up to proto.MaxDirUploadBytes.
@@ -62,12 +65,26 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 		return m.call(c, method, params, out)
 	}
 	var begin struct {
-		UploadID string `json:"upload_id"`
-		Dest     string `json:"dest"` // echoed by a node that knows dest=dir
+		UploadID  string `json:"upload_id"`
+		Dest      string `json:"dest"`       // echoed by a node that knows dest=dir
+		HealthDir string `json:"health_dir"` // echoed by a node that knows another manager's health space
 	}
 	beginParams := map[string]any{"name": name, "size": size}
 	if dest != "" {
 		beginParams["dest"] = dest // an old node ignores it and uses the temp directory
+	}
+	// A report goes in the health space of the machine's manager (whose health conversations run there); the
+	// built-in's is named as ever (nothing), another's needs a node that knows it.
+	space := ""
+	if dest == proto.UploadDestHealth {
+		if space = identity.HealthDirName(h.machineOwner(m.cfg.ID)); space == identity.SpaceHealth {
+			space = ""
+		} else if !m.hasCapability(nodeproto.HealthSpaces) {
+			writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-upload.outdated", i18n.Args{"name": m.cfg.Name}), nil)
+			return
+		} else {
+			beginParams["health_dir"] = space
+		}
 	}
 	if dest == proto.UploadDestDir {
 		q := r.URL.Query()
@@ -86,7 +103,7 @@ func (h *Hub) uploadFile(w http.ResponseWriter, r *http.Request, m *Machine) {
 	outdated := func() {
 		writeCode(w, http.StatusConflict, proto.CodeNodeOutdated, i18n.T(h.requestLang(r), "hub-upload.outdated", i18n.Args{"name": m.cfg.Name}), nil)
 	}
-	if dest == proto.UploadDestDir && begin.Dest != dest { // an old node ignored dest and opened it in its temp directory
+	if dest == proto.UploadDestDir && begin.Dest != dest || begin.HealthDir != space { // an old node ignored dest (or health_dir) and opened it elsewhere
 		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = m.call(c, "file.upload.abort", map[string]any{"upload_id": begin.UploadID}, nil)
 		cancel()

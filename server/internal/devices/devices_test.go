@@ -31,6 +31,10 @@ type testNode struct {
 	// taking them) until closed.
 	events []string
 	stall  chan struct{}
+	// info, when set, is what node.info answers (a node that announces the handshake's capabilities).
+	info *proto.NodeInfo
+	// echoHealth: it says which health space it answered about (health_dir), as a node with health_spaces does.
+	echoHealth bool
 }
 
 func (n *testNode) dial(context.Context) (net.Conn, error) {
@@ -42,12 +46,21 @@ func (n *testNode) dial(context.Context) (net.Conn, error) {
 		n.calls = append(n.calls, method+" "+string(params))
 		switch method {
 		case "node.info":
+			if n.info != nil {
+				return *n.info, nil
+			}
 			return proto.NodeInfo{Hostname: "box", OS: "linux", Arch: "amd64", Home: "/home/me", Version: "test"}, nil
 		case "sessions.list":
 			return map[string]any{"sessions": n.sessions}, nil
 		}
 		if n.refuse != nil {
 			return nil, n.refuse
+		}
+		var p struct {
+			HealthDir string `json:"health_dir"`
+		}
+		if _ = json.Unmarshal(params, &p); n.echoHealth && p.HealthDir != "" {
+			return map[string]any{"ok": true, "method": method, "health_dir": p.HealthDir}, nil
 		}
 		return map[string]any{"ok": true, "method": method}, nil
 	}

@@ -126,25 +126,36 @@ func deleteHealthReport(dir, name string) error {
 	return nil
 }
 
-// healthReportsCall serves health.reports.list and health.reports.delete.
+// healthReportsCall serves health.reports.list and health.reports.delete, of the health space health_dir names (""
+// the built-in manager's; another's is echoed back: healthReportsDirOf).
 func (n *Node) healthReportsCall(method string, params json.RawMessage) (any, error) {
-	dir := healthReportsDir(n.home)
+	var p struct {
+		Name      string `json:"name"`
+		HealthDir string `json:"health_dir"`
+	}
+	if len(params) > 0 {
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("bad params: %w", err)
+		}
+	}
+	dir, err := healthReportsDirOf(n.home, p.HealthDir)
+	if err != nil {
+		return nil, err
+	}
 	if method == "health.reports.list" {
 		list, err := listHealthReports(dir)
 		if err != nil {
 			return nil, err
 		}
-		return proto.HealthReports{Reports: list}, nil
-	}
-	var p struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, fmt.Errorf("bad params: %w", err)
+		return proto.HealthReports{Reports: list, HealthDir: p.HealthDir}, nil
 	}
 	if err := deleteHealthReport(dir, p.Name); err != nil {
 		return nil, err
 	}
 	n.logger.Printf("health report deleted")
-	return map[string]any{"ok": true}, nil
+	out := map[string]any{"ok": true}
+	if p.HealthDir != "" {
+		out["health_dir"] = p.HealthDir
+	}
+	return out, nil
 }

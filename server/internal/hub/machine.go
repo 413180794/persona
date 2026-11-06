@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -91,6 +92,17 @@ func (m *Machine) ownerID() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.owner
+}
+
+// hasCapability: m's node announced capability c (nodeproto), as its manager reported it; a node from before the
+// handshake (protocol 0) has none of the later ones, a test's (no version) all.
+func (m *Machine) hasCapability(c string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.info.Protocol > 0 {
+		return slices.Contains(m.info.Capabilities, c)
+	}
+	return m.info.Version == ""
 }
 
 // ownerOrCarrier is m's owner, the carrier of hub.json's machines before one reported it; m.mu must not be held.

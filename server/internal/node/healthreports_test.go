@@ -6,9 +6,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -145,5 +147,93 @@ func TestHealthReportsCall(t *testing.T) {
 	}
 	if _, err := os.Stat(out.Path); err == nil {
 		t.Fatal("still there")
+	}
+}
+
+// Another manager's health space (health-<id>, beside the built-in's health) takes its reports when the hub names it
+// (health_dir, echoed), lists and deletes only its own; the built-in's stays where it was; any other name is refused.
+func TestHealthReportsOfAManagersSpace(t *testing.T) {
+	home := t.TempDir()
+	n := &Node{dir: t.TempDir(), home: home, logger: log.New(io.Discard, "", 0)}
+	call := func(method string, p map[string]any) (any, error) {
+		raw, _ := json.Marshal(p)
+		if strings.HasPrefix(method, "health.reports") {
+			return n.healthReportsCall(method, raw)
+		}
+		return n.uploadCall(method, raw)
+	}
+	upload := func(space, name string) (proto.UploadedFile, error) {
+		p := map[string]any{"name": name, "size": 4, "dest": proto.UploadDestHealth}
+		if space != "" {
+			p["health_dir"] = space
+		}
+		res, err := call("file.upload.begin", p)
+		if err != nil {
+			return proto.UploadedFile{}, err
+		}
+		if got, _ := res.(map[string]any)["health_dir"].(string); got != space {
+			t.Fatalf("health_dir echoed %q, want %q", got, space)
+		}
+		id := res.(map[string]any)["upload_id"]
+		if _, err := call("file.upload.chunk", map[string]any{"upload_id": id, "offset": 0, "data": []byte("%PDF")}); err != nil {
+			return proto.UploadedFile{}, err
+		}
+		out, err := call("file.upload.end", map[string]any{"upload_id": id})
+		if err != nil {
+			return proto.UploadedFile{}, err
+		}
+		return out.(proto.UploadedFile), nil
+	}
+	theirs, err := upload("health-m-0b0b0b", "b.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(filepath.Dir(identity.HealthDir(home)), "health-m-0b0b0b", "reports"); filepath.Dir(theirs.Path) != want {
+		t.Fatalf("another manager's report in %s, want %s", filepath.Dir(theirs.Path), want)
+	}
+	builtin, err := upload("", "a.pdf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(identity.HealthDir(home), "reports"); filepath.Dir(builtin.Path) != want {
+		t.Fatalf("the built-in's report in %s, want %s", filepath.Dir(builtin.Path), want)
+	}
+	for _, bad := range []string{"health", "../x", "health-bin", "assistant-m-0b0b0b", "health-m-0b0b0b/../health"} {
+		if _, err := upload(bad, "c.pdf"); err == nil {
+			t.Errorf("health_dir %q was taken", bad)
+		}
+		if _, err := call("health.reports.list", map[string]any{"health_dir": bad}); err == nil {
+			t.Errorf("health.reports.list of %q was answered", bad)
+		}
+	}
+	list := func(space string) (proto.HealthReports, error) {
+		p := map[string]any{}
+		if space != "" {
+			p["health_dir"] = space
+		}
+		got, err := call("health.reports.list", p)
+		if err != nil {
+			return proto.HealthReports{}, err
+		}
+		return got.(proto.HealthReports), nil
+	}
+	b, err := list("health-m-0b0b0b")
+	if err != nil || len(b.Reports) != 1 || b.Reports[0].Path != theirs.Path || b.HealthDir != "health-m-0b0b0b" {
+		t.Fatalf("another manager's list: %+v %v", b, err)
+	}
+	if a, err := list(""); err != nil || len(a.Reports) != 1 || a.Reports[0].Path != builtin.Path {
+		t.Fatalf("the built-in's list: %+v %v", a, err)
+	}
+	if _, err := call("health.reports.delete", map[string]any{"name": filepath.Base(builtin.Path), "health_dir": "health-m-0b0b0b"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(builtin.Path); err != nil {
+		t.Fatal("deleting in another manager's space took the built-in's report")
+	}
+	if _, err := call("health.reports.delete", map[string]any{"name": filepath.Base(theirs.Path), "health_dir": "health-m-0b0b0b"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(theirs.Path); err == nil {
+		t.Fatal("another manager's report is still there")
 	}
 }

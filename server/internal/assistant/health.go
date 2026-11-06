@@ -43,6 +43,9 @@ func (s *Service) spaceCwd(d Device, space string) string {
 func (s *Service) healthClaudeMD(ctx context.Context, here string) string {
 	hello := s.hello(ctx)
 	d := prompts.AssistantHealthClaudeMD{Owner: strings.TrimSpace(hello.Owner), Notes: s.notes(ctx), Language: answerLanguage(hello.Locale)}
+	if name := identity.HealthDirName(s.id); name != identity.SpaceHealth {
+		d.HealthDir = name // another manager's own space (the built-in's is the template's default)
+	}
 	devices := s.devices(ctx)
 	if i := slices.IndexFunc(devices, func(d Device) bool { return d.ID == here }); i >= 0 {
 		if cwd := s.assistantCwd(devices[i]); cwd != "" {
