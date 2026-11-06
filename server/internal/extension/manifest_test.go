@@ -106,6 +106,12 @@ func TestParseRefuses(t *testing.T) {
 		"hub's env": func(m map[string]any) {
 			m["runtime"].(map[string]any)["env"] = map[string]any{"PERSONA_HUB_TOKEN": "x"}
 		},
+		"loader's env": func(m map[string]any) {
+			m["runtime"].(map[string]any)["env"] = map[string]any{"LD_PRELOAD": "./x.so"}
+		},
+		"macOS loader's env": func(m map[string]any) {
+			m["runtime"].(map[string]any)["env"] = map[string]any{"DYLD_INSERT_LIBRARIES": "./x.dylib"}
+		},
 		"activation":           func(m map[string]any) { m["activation_events"] = []any{"onStartup"} },
 		"on_http without http": func(m map[string]any) { m["activation_events"] = []any{"on_http"} },
 		"nothing contributed":  func(m map[string]any) { m["contributes"] = map[string]any{} },

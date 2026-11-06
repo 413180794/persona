@@ -598,6 +598,11 @@ func checkEnv(at string, env map[string]string) []error {
 		if strings.HasPrefix(k, "PERSONA_") || strings.HasPrefix(k, "JARVIS_") {
 			errs = append(errs, fmt.Errorf("%s: %q is the hub's to set", at, k))
 		}
+		// The dynamic loader's variables reach the sandbox's own launcher (bwrap, systemd-run, sandbox-exec), which
+		// starts outside the sandbox: a library preloaded there would run unconfined.
+		if strings.HasPrefix(k, "LD_") || strings.HasPrefix(k, "DYLD_") {
+			errs = append(errs, fmt.Errorf("%s: %q is not allowed (the dynamic loader's)", at, k))
+		}
 	}
 	return errs
 }
