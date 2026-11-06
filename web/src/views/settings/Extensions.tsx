@@ -312,12 +312,34 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     setDraft(d.config ?? {});
     setError("");
   };
+  // Reads of the detail overlap (opening the page, an operation that succeeded, a save that cleared secrets), and so do
+  // the writes that answer with the whole detail. All are numbered in the order they leave, and an answer is dropped
+  // when one that left after it is already shown, so an older detail (the version before an upgrade, the settings before
+  // a save) is not put back.
+  const order = useRef({ asked: 0, shown: 0 });
+  const readDetail = (then: (d: HubExtensionDetail) => void, failed?: (e: unknown) => void) => {
+    const n = ++order.current.asked;
+    return extensionDetail(id).then(
+      (d) => {
+        if (n <= order.current.shown) return;
+        order.current.shown = n;
+        then(d);
+      },
+      (e) => void (n > order.current.shown && failed?.(e)),
+    );
+  };
+  /** A write leaving: its number, for `wrote` when it answers. */
+  const writing = () => ++order.current.asked;
+  /** A write answered with `d`: shown (and true) unless something that left after it is shown already. */
+  const wrote = (n: number, d: HubExtensionDetail) => {
+    if (n <= order.current.shown) return false;
+    order.current.shown = n;
+    setDetail(d);
+    return true;
+  };
   const load = () => {
     setLoading(true);
-    extensionDetail(id)
-      .then((d) => (apply(d), setTyped({}), setFieldErrors({})))
-      .catch((e) => setError(errorText(e)))
-      .finally(() => setLoading(false));
+    void readDetail((d) => (apply(d), setTyped({}), setFieldErrors({})), (e) => setError(errorText(e))).finally(() => setLoading(false));
   };
   useEffect(load, [id]);
   // its sign-in as the hub pushes it; an install whose next step is signing in opens the dialog once
@@ -362,10 +384,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       fresh.forEach((o) => seen.add(o.id));
       // newest first: an uninstall followed by a fresh install stays on the page
       if (fresh[0].kind === "uninstall") return backNow.current();
-      extensionDetail(id).then(
-        (d) => (dirtyNow.current ? setDetail(d) : (apply(d), setTyped({}), setFieldErrors({}))),
-        () => {},
-      );
+      void readDetail((d) => (dirtyNow.current ? setDetail(d) : (apply(d), setTyped({}), setFieldErrors({}))));
     });
   }, [id]);
 
@@ -391,8 +410,10 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     if (!canSave) return;
     setSaving(true);
     setFieldErrors({});
+    const n = writing();
     try {
-      apply(await setExtensionConfig(id, compact(draft)));
+      const d = await setExtensionConfig(id, compact(draft));
+      if (wrote(n, d)) apply(d);
       setTyped({});
       toast(t("settings-extensions.saved_restart"), "ok");
     } catch (e) {
@@ -404,7 +425,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
       // cards and quick prompts are asked for again too, as after clearing a secret.
       if (clearedSecrets(e).length) {
         changed(null);
-        void extensionDetail(id).then(setDetail, () => {});
+        void readDetail(setDetail);
       }
     } finally {
       setSaving(false);
@@ -413,8 +434,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
 
   const toggleAutoUpgrade = async (on: boolean) => {
     setToggling(true);
+    const n = writing();
     try {
-      setDetail(await setExtensionAutoUpgrade(id, on));
+      wrote(n, await setExtensionAutoUpgrade(id, on));
       toast(on ? t("settings-extensions.auto_upgrade_on") : t("settings-extensions.auto_upgrade_off"), "ok");
     } catch (e) {
       toast(t(on ? "settings-extensions.auto_upgrade_on_failed" : "settings-extensions.auto_upgrade_off_failed", { error: errorText(e) }), "error");
@@ -425,10 +447,11 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
 
   const toggle = async (on: boolean, cascade = false) => {
     setToggling(true);
+    const n = writing();
     try {
       const d = await setExtensionEnabled(id, on, cascade);
       // A switch never overwrites the unsaved configuration draft.
-      setDetail(d);
+      wrote(n, d);
       setDependents(null);
       toast(t(on ? "settings-extensions.enabled_name" : "settings-extensions.disabled_name", { name: d.name }), "ok");
     } catch (e) {
@@ -441,8 +464,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   };
   const toggleContribution = async (c: Contribution, on: boolean) => {
     setToggling(true);
+    const n = writing();
     try {
-      setDetail(await setContribution(id, c.point, c.id, on));
+      wrote(n, await setContribution(id, c.point, c.id, on));
       toast(on ? t("settings-extensions.contribution_on") : t("settings-extensions.contribution_off"), "ok");
     } catch (e) {
       toast(t("settings-extensions.change_failed", { error: errorText(e) }), "error");
@@ -456,10 +480,10 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
     if (!detail) return;
     const saved = detail.config ?? {};
     setDraft((d) => setAt(d, path, value));
+    const n = writing();
     try {
       const d = await setExtensionConfig(id, compact(setAt(saved, path, value)));
-      setDetail(d);
-      setDraft((cur) => setAt(cur, path, valueAt(d.config ?? {}, path)));
+      if (wrote(n, d)) setDraft((cur) => setAt(cur, path, valueAt(d.config ?? {}, path)));
     } catch (e) {
       setDraft((cur) => setAt(cur, path, valueAt(saved, path)));
       toast(t("settings-extensions.not_saved", { error: errorText(e) }), "error");
@@ -469,7 +493,9 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
   const nodes = detail?.node_machines ? { field: detail.node_machines, states: detail.nodes ?? [] } : undefined;
 
   // A secret's answer is a whole detail too; keep the form's draft as it is.
-  const secretDone = (d: HubExtensionDetail) => setDetail(d);
+  // The dialog's request is numbered as it leaves, like the page's own writes.
+  const secretStart = () => writing();
+  const secretDone = (n: number, d: HubExtensionDetail) => wrote(n, d);
 
   const back = () => (dirty ? setLeaving(true) : onBack());
   const p = detail;
@@ -687,7 +713,7 @@ function ExtensionDetail({ id, onBack, onPage, onUpgrade, onChannel, onConnector
         </div>
       )}
 
-      {secret && <SecretDialog extension={id} secret={secret} onClose={() => setSecret(null)} onDone={secretDone} />}
+      {secret && <SecretDialog extension={id} secret={secret} onClose={() => setSecret(null)} onStart={secretStart} onDone={secretDone} />}
     </div>
   );
 }
@@ -1024,7 +1050,7 @@ function ListControl({ field: f, path, draft, onEdit, id, ring }: Pick<FieldProp
 // ── a secret ────────────────────────────────────────────
 
 /** Sets one secret: typed in hidden, saved to the hub, never shown again; one that is set can be cleared. */
-function SecretDialog({ extension, secret, onClose, onDone }: { extension: string; secret: ExtensionSecret; onClose: () => void; onDone: (d: HubExtensionDetail) => void }) {
+function SecretDialog({ extension, secret, onClose, onStart, onDone }: { extension: string; secret: ExtensionSecret; onClose: () => void; onStart: () => number; onDone: (n: number, d: HubExtensionDetail) => void }) {
   const [value, setValue] = useState("");
   // shown while typing, to check what was pasted (a token cut short is a common mistake); a saved one is never shown
   const [shown, setShown] = useState(false);
@@ -1037,8 +1063,9 @@ function SecretDialog({ extension, secret, onClose, onDone }: { extension: strin
     setBusy(kind);
     setError("");
     try {
+      const n = onStart();
       const d = kind === "save" ? await setExtensionSecret(extension, secret.name, v) : await clearExtensionSecret(extension, secret.name);
-      onDone(d);
+      onDone(n, d);
       toast(t(kind === "save" ? "settings-extensions.secret_saved" : "settings-extensions.secret_cleared", { title: secret.title }), "ok");
       onClose();
     } catch (e) {

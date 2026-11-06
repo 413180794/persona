@@ -13,6 +13,10 @@ const hub = vi.hoisted(() => ({
   detail: null as unknown,
   listReads: 0,
   detailReads: 0,
+  /** When set, detail reads wait here (in the order they were asked) instead of answering at once. */
+  held: null as ((d: unknown) => void)[] | null,
+  saved: null as unknown,
+  saveHeld: null as ((d: unknown) => void)[] | null,
 }));
 vi.mock("../../lib/extensions", async (original) => ({
   ...(await original<typeof import("../../lib/extensions")>()),
@@ -22,8 +26,10 @@ vi.mock("../../lib/extensions", async (original) => ({
   },
   extensionDetail: () => {
     hub.detailReads++;
-    return Promise.resolve(hub.detail);
+    const held = hub.held;
+    return held ? new Promise((r) => held.push(r)) : Promise.resolve(hub.detail);
   },
+  setExtensionConfig: () => (hub.saveHeld ? new Promise((r) => hub.saveHeld!.push(r)) : Promise.resolve(hub.saved)),
 }));
 vi.mock("../../lib/store", async (original) => ({
   ...(await original<typeof import("../../lib/store")>()),
@@ -56,6 +62,9 @@ const ext = (over: Partial<HubExtension>): HubExtension => ({ id: "example-ext",
 beforeEach(() => {
   hub.listReads = 0;
   hub.detailReads = 0;
+  hub.held = null;
+  hub.saved = null;
+  hub.saveHeld = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -134,6 +143,61 @@ describe("an extension's page after an operation", () => {
     hub.detail = detail({ config: { greeting: "after" } });
     await pushOp("example-ext", "upgrade");
     expect(input().value).toBe("after");
+  });
+
+  it("a read asked for before the one shown does not put the older detail back", async () => {
+    hub.held = [];
+    act(() => root.render(<Extensions open="example-ext" onOpen={() => {}} />));
+    await flush();
+    const [mount] = hub.held;
+    await pushOp("example-ext", "upgrade");
+    const [, again] = hub.held;
+    expect(hub.detailReads).toBe(2);
+    await act(async () => again(detail({ version: "2.0.0", config: { greeting: "after" } })));
+    await flush();
+    expect(input().value).toBe("after");
+    await act(async () => mount(detail({ version: "1.0.0", config: { greeting: "before" } })));
+    await flush();
+    expect(input().value).toBe("after");
+    expect(host.textContent).toContain("2.0.0");
+    expect(host.textContent).not.toContain("1.0.0");
+  });
+
+  it("a read still out when the settings are saved does not put the old settings back", async () => {
+    hub.detail = detail({});
+    act(() => root.render(<Extensions open="example-ext" onOpen={() => {}} />));
+    await flush();
+    hub.held = [];
+    await pushOp("example-ext", "upgrade");
+    const [again] = hub.held;
+    typeInto(input(), "typed");
+    hub.saved = detail({ config: { greeting: "typed" } });
+    const save = [...host.querySelectorAll("button")].find((b) => b.textContent === "保存")!;
+    await act(async () => save.click());
+    await flush();
+    expect(host.textContent).not.toContain("设置改了还没保存");
+    await act(async () => again(detail({ config: { greeting: "hello" } })));
+    await flush();
+    expect(input().value).toBe("typed");
+  });
+
+  it("a save that answers after a newer read does not put back the version it read", async () => {
+    hub.detail = detail({ version: "1.0.0" });
+    act(() => root.render(<Extensions open="example-ext" onOpen={() => {}} />));
+    await flush();
+    typeInto(input(), "typed");
+    hub.saveHeld = [];
+    const save = [...host.querySelectorAll("button")].find((b) => b.textContent === "保存")!;
+    await act(async () => save.click());
+    await flush();
+    const [answerSave] = hub.saveHeld;
+    hub.detail = detail({ version: "2.0.0", config: { greeting: "typed" } });
+    await pushOp("example-ext", "upgrade"); // left after the save and answers first
+    expect(host.textContent).toContain("2.0.0");
+    await act(async () => answerSave(detail({ version: "1.0.0", config: { greeting: "typed" } })));
+    await flush();
+    expect(host.textContent).toContain("2.0.0");
+    expect(host.textContent).not.toContain("1.0.0");
   });
 
   it("goes back to the list when it is uninstalled", async () => {
