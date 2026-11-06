@@ -126,10 +126,24 @@ export function currentLanguage(): Lang {
   return lang;
 }
 
+// formatLocale()'s last inputs and answer.
+let localeKey: string | undefined;
+let locale = SOURCE_LANG;
+
 /** The locale for Intl: the system's when it is in the interface language (keeps its region, en-GB dates), else the
  *  interface language itself. */
 export function formatLocale(): string {
   const sys = typeof navigator === "undefined" ? "" : (navigator.languages?.[0] ?? navigator.language ?? "");
+  // Formatting calls this on every row render: reuse the answer while the system language and `lang` are unchanged.
+  const key = `${sys}\u0000${lang}`;
+  if (key !== localeKey) {
+    localeKey = key;
+    locale = resolveFormatLocale(sys);
+  }
+  return locale;
+}
+
+function resolveFormatLocale(sys: string): string {
   const primary = sys.replace(/_/g, "-").split("-")[0].toLowerCase();
   if (sys && LANG_MATCHES[primary] === lang) {
     // a Traditional Chinese system still formats as Simplified: the interface is zh-Hans
@@ -185,21 +199,48 @@ export function hasKey(key: string): boolean {
 
 // Formatting: always Intl with formatLocale(), never hand-built month / day strings.
 
+// Building an Intl formatter costs tens of microseconds and list rows format on every push, so each (kind, locale,
+// options) builds one and keeps it. The options are a few literals per call site; the cap only guards against a caller
+// passing ever-new values.
+const formatters = new Map<string, unknown>();
+const MAX_FORMATTERS = 256;
+
+function formatter<T>(kind: string, opts: object | undefined, make: (locale: string) => T, zone = ""): T {
+  const loc = formatLocale();
+  const key = `${kind}\u0000${loc}\u0000${zone}\u0000${JSON.stringify(opts ?? {})}`;
+  let f = formatters.get(key) as T | undefined;
+  if (!f) {
+    if (formatters.size >= MAX_FORMATTERS) formatters.clear();
+    f = make(loc);
+    formatters.set(key, f);
+  }
+  return f;
+}
+
 export function formatNumber(n: number, opts?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(formatLocale(), opts).format(n);
+  return formatter("number", opts, (loc) => new Intl.NumberFormat(loc, opts)).format(n);
 }
 
 export function formatDate(d: Date | number | string, opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" }): string {
   const date = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(formatLocale(), opts).format(date);
+  return formatter("date", opts, (loc) => new Intl.DateTimeFormat(loc, opts), opts.timeZone ? "" : systemZone(date)).format(date);
+}
+
+// A DateTimeFormat built without timeZone fixes the system zone at construction, so a tab left open across a zone
+// change (travel, a device setting) would keep printing the old wall clock. The zone name itself is only reachable by
+// building a formatter, so the key uses the offsets that decide the output instead: this year's January and July
+// offsets tell zones (and their DST) apart, and the date's own offset covers the instant being formatted.
+function systemZone(date: Date): string {
+  const year = new Date().getFullYear();
+  return `${new Date(year, 0, 1).getTimezoneOffset()},${new Date(year, 6, 1).getTimezoneOffset()},${date.getTimezoneOffset()}`;
 }
 
 export function formatRelative(value: number, unit: Intl.RelativeTimeFormatUnit, opts: Intl.RelativeTimeFormatOptions = { numeric: "auto" }): string {
-  return new Intl.RelativeTimeFormat(formatLocale(), opts).format(value, unit);
+  return formatter("relative", opts, (loc) => new Intl.RelativeTimeFormat(loc, opts)).format(value, unit);
 }
 
 /** A list joined the way the language does it: Chinese with an ideographic comma and "and", "A, B, and C", Japanese with ideographic commas only. */
 export function formatList(items: string[], opts: Intl.ListFormatOptions = { type: "conjunction" }): string {
-  return new Intl.ListFormat(formatLocale(), opts).format(items);
+  return formatter("list", opts, (loc) => new Intl.ListFormat(loc, opts)).format(items);
 }

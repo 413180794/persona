@@ -13,6 +13,15 @@ export function visiblePoll(refresh: () => void, period: number, page: { visible
   return () => { off(); clear(); };
 }
 
+// The browser tab as visiblePoll's page: shown while document.visibilityState is "visible".
+export const documentPage = {
+  visible: () => document.visibilityState === "visible",
+  subscribe: (fn: () => void) => {
+    document.addEventListener("visibilitychange", fn);
+    return () => document.removeEventListener("visibilitychange", fn);
+  },
+};
+
 // Both successes and errors belong to the latest live request, never to an older response or an unmounted page.
 export function latestRequest<T>(apply: (result: T) => void, failed: (error: unknown) => void) {
   let live = true, generation = 0;

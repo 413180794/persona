@@ -172,14 +172,16 @@ export function WorkNodes({ nodes, p, live, fade }: { nodes: WorkNode[]; p: Work
   );
 }
 
-/** Words that fade in if they just came in: the only reader of FreshWords, so a new reply renders these, not the chat. */
-function FreshAnswer({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
+/** Words that fade in if they just came in: the only reader of FreshWords, so a new reply renders these, not the chat.
+ *  Memo: a streamed delta re-renders the segment, not these; FreshWords still reaches them through the context. */
+const FreshAnswer = memo(function FreshAnswer({ item, mid, sid }: { item: Item; mid: string; sid: string }) {
   const fresh = useContext(FreshWords);
   return <Answer item={item} mid={mid} sid={sid} fade={fresh?.has(item.id)} />;
-}
+});
 
-/** A step on its own: in the open, or inside an open group. */
-export function StepView({ step, p, live, fade }: { step: Step; p: WorkProps; live?: boolean; fade?: boolean }) {
+/** A step on its own: in the open, or inside an open group. Memo: its props stay the same objects while the reply
+ *  streams (SegmentView memoizes steps and p on the segment), so a delta skips every step of the turn. */
+export const StepView = memo(function StepView({ step, p, live, fade }: { step: Step; p: WorkProps; live?: boolean; fade?: boolean }) {
   switch (step.kind) {
     case "tool":
       if (isAgentStep(step)) return <SubagentCard step={step} status={p.agentStatus(step)} mid={p.mid} scope={p.scope} />;
@@ -204,7 +206,7 @@ export function StepView({ step, p, live, fade }: { step: Step; p: WorkProps; li
         </div>
       );
   }
-}
+});
 
 /** A live group's clock, every 500 ms; its own leaf, so the ticking redraws nothing else. While it shows, the running
  *  bar shows no time of its own (#3534). */

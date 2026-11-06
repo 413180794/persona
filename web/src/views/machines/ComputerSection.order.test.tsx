@@ -82,4 +82,30 @@ describe("Computer control", () => {
     expect(host.textContent).toContain("verify");
     expect(host.textContent).not.toContain("download");
   });
+
+  // The 2 s watch while a job runs stops in a hidden tab and asks once when the tab is shown again.
+  it("does not ask while the tab is hidden, and asks once when it is shown again", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+    const show = (v: DocumentVisibilityState) => act(() => { visibility = v; document.dispatchEvent(new Event("visibilitychange")); });
+    try {
+      act(() => root.render(<ComputerSection mid="mac" computer={installing("download")} online />));
+      take("GET").answer(installing("download")); // asked when the page opened, and only once
+      await flush();
+      expect(pending).toHaveLength(0);
+      act(() => void vi.advanceTimersByTime(2000));
+      take("GET").answer(installing("download"));
+      await flush();
+      show("hidden");
+      act(() => void vi.advanceTimersByTime(60_000));
+      expect(pending).toHaveLength(0);
+      show("visible");
+      take("GET").answer(installing("verify"));
+      await flush();
+      expect(pending).toHaveLength(0);
+      expect(host.textContent).toContain("verify");
+    } finally {
+      delete (document as { visibilityState?: unknown }).visibilityState;
+    }
+  });
 });

@@ -11,6 +11,7 @@ import { machineDeployment } from "../lib/machine-deploy";
 import { classifyConnection } from "../lib/node-health";
 import { href, navigate, onLinkClick, type Route } from "../lib/router";
 import { useStore } from "../lib/store";
+import { documentPage, visiblePoll } from "../lib/visible-poll";
 import type { Machine, MachineMetrics, MetricPoint, Session } from "../lib/types";
 import { Button, cx, EASE, IconButton, Loading, toast } from "../ui/atoms";
 import { Icon } from "../ui/icons";
@@ -37,11 +38,11 @@ export function Machines({ onToggleSidebar }: { onToggleSidebar: () => void }) {
       api<{ machines: MachineMetrics[] }>("/metrics")
         .then((r) => !dead && (setMetrics(r.machines ?? []), setError("")))
         .catch((e) => !dead && setError(errorText(e)));
-    void load();
-    const timer = setInterval(load, 10_000);
+    // Right away and every 10 s while the tab is shown; a hidden tab asks nothing and loads again when shown.
+    const stop = visiblePoll(() => void load(), 10_000, documentPage);
     return () => {
       dead = true;
-      clearInterval(timer);
+      stop();
     };
   }, []);
 

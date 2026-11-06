@@ -2,11 +2,11 @@
 // lets the assistant operate it through Cua Driver, and whether it can now. What is missing comes with what to do:
 // "Install Cua Driver" (after a confirmation) when it is not there, "Grant access" when a permission is missing (macOS asks on the
 // Mac's own screen), the node's progress while it works, and VNC (the web's live screen, /screen/<mid>) when
-// Screen Sharing is on. The hub is asked again when the page opens, and every 2 s while a job runs.
+// Screen Sharing is on. The hub is asked again when the page opens, and every 2 s while a job runs and the tab is shown.
 import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText } from "../../lib/api";
 import { computerView, computerWatching, GRANT_HINT, NO_SCREEN_SHARING, screenPath, type ComputerAction, type MachineComputer } from "../../lib/computer";
-import { latestRequest } from "../../lib/visible-poll";
+import { documentPage, latestRequest, visiblePoll } from "../../lib/visible-poll";
 import { Button, cx, Dialog, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Switch } from "../settings/SettingsParts";
@@ -57,8 +57,12 @@ export function ComputerSection({ mid, computer, online }: { mid: string; comput
 
   useEffect(() => {
     if (!watching) return;
-    const t = setInterval(() => void refresh(), 2000);
-    return () => clearInterval(t);
+    // Every 2 s while the tab is shown, and once on coming back. visiblePoll asks right away when it starts, but the
+    // page just asked (on open or with the action that started this), so that first call is skipped.
+    let started = false;
+    const stop = visiblePoll(() => { if (started) void refresh(); }, 2000, documentPage);
+    started = true;
+    return stop;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mid, watching]);
 

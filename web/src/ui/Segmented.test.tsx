@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Segmented } from "../views/assistant/parts";
 import { SegmentedTrack, selectedBox } from "./Segmented";
 
@@ -51,5 +51,89 @@ describe("segmented control", () => {
   it("draws no thumb while nothing is laid out (jsdom has no layout)", () => {
     act(() => root.render(<SegmentedTrack role="tablist" label="t" thumbClassName=""><button data-selected="true" /></SegmentedTrack>));
     expect(host.querySelector('[data-testid="seg-thumb"]')).toBeNull();
+  });
+});
+
+/** A ResizeObserver stand-in that records what it watches and lets a test deliver a resize callback. */
+class FakeResizeObserver {
+  static all: FakeResizeObserver[] = [];
+  watched = new Set<Element>();
+  observe = vi.fn((el: Element) => void this.watched.add(el));
+  unobserve = vi.fn((el: Element) => void this.watched.delete(el));
+  disconnect = vi.fn(() => this.watched.clear());
+  constructor(private readonly cb: ResizeObserverCallback) {
+    FakeResizeObserver.all.push(this);
+  }
+  fire() {
+    this.cb([], this as unknown as ResizeObserver);
+  }
+}
+
+function lay(el: HTMLElement, box: { x: number; w: number }) {
+  Object.defineProperty(el, "offsetLeft", { configurable: true, get: () => box.x });
+  Object.defineProperty(el, "offsetTop", { configurable: true, value: 2 });
+  Object.defineProperty(el, "offsetWidth", { configurable: true, get: () => box.w });
+  Object.defineProperty(el, "offsetHeight", { configurable: true, value: 28 });
+}
+
+describe("segmented track resize observer", () => {
+  beforeEach(() => {
+    FakeResizeObserver.all = [];
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const Track = ({ segs, sel, tick }: { segs: string[]; sel: string; tick?: number }) => (
+    <SegmentedTrack role="tablist" label="t" thumbClassName="" data-tick={tick}>
+      {segs.map((s) => <button key={s} data-selected={s === sel} data-seg={s}>{s}</button>)}
+    </SegmentedTrack>
+  );
+  const seg = (name: string) => host.querySelector<HTMLElement>(`[data-seg="${name}"]`)!;
+
+  it("keeps one observer across re-renders with the same segments", async () => {
+    await act(async () => root.render(<Track segs={["a", "b"]} sel="a" tick={0} />));
+    expect(FakeResizeObserver.all).toHaveLength(1);
+    const ro = FakeResizeObserver.all[0];
+    const observes = ro.observe.mock.calls.length;
+    expect(observes).toBe(3); // the track and both segments
+    for (let i = 1; i <= 5; i++) await act(async () => root.render(<Track segs={["a", "b"]} sel={i % 2 ? "b" : "a"} tick={i} />));
+    expect(FakeResizeObserver.all).toHaveLength(1);
+    expect(ro.disconnect).not.toHaveBeenCalled();
+    expect(ro.observe).toHaveBeenCalledTimes(observes);
+    act(() => root.unmount());
+    expect(ro.disconnect).toHaveBeenCalledTimes(1);
+    root = createRoot(host);
+  });
+
+  it("observes an added segment and drops a removed one", async () => {
+    await act(async () => root.render(<Track segs={["a", "b"]} sel="a" />));
+    const ro = FakeResizeObserver.all[0];
+    await act(async () => root.render(<Track segs={["a", "b", "c"]} sel="a" />));
+    const c = seg("c");
+    expect(ro.observe).toHaveBeenCalledWith(c);
+    expect(ro.watched.has(c)).toBe(true);
+    await act(async () => root.render(<Track segs={["a", "c"]} sel="a" />));
+    expect(ro.unobserve).toHaveBeenCalledTimes(1);
+    expect([...ro.watched].some((el) => (el as HTMLElement).dataset.seg === "b")).toBe(false);
+    expect(ro.watched.has(seg("a")) && ro.watched.has(c)).toBe(true);
+  });
+
+  it("moves the thumb when a segment is resized", async () => {
+    await act(async () => root.render(<Track segs={["a", "b"]} sel="b" />));
+    const a = { x: 2, w: 40 };
+    const b = { x: 44, w: 52 };
+    lay(seg("a"), a);
+    lay(seg("b"), b);
+    const ro = FakeResizeObserver.all[0];
+    await act(async () => ro.fire());
+    const thumb = () => host.querySelector<HTMLElement>('[data-testid="seg-thumb"]')!;
+    expect(thumb().style.width).toBe("52px");
+    expect(thumb().style.transform).toBe("translate(44px, 2px)");
+    a.w = 60;
+    b.x = 64;
+    b.w = 70;
+    await act(async () => ro.fire());
+    expect(thumb().style.width).toBe("70px");
+    expect(thumb().style.transform).toBe("translate(64px, 2px)");
   });
 });

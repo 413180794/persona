@@ -31,6 +31,10 @@ export function SegmentedTrack({ role, label, className, thumbClassName, childre
     };
     measure();
   });
+  // One ResizeObserver per mounted track. Segments that come and go are followed through a MutationObserver on the
+  // track's child list, so a parent re-render (new `children` elements, same segments) no longer disconnects and
+  // re-observes everything: each observe() delivers an initial callback that forces layout, and the layout effect
+  // above already measures after every render.
   useLayoutEffect(() => {
     const track = ref.current;
     if (!track || typeof ResizeObserver === "undefined") return;
@@ -40,8 +44,18 @@ export function SegmentedTrack({ role, label, className, thumbClassName, childre
     });
     ro.observe(track);
     for (const c of Array.from(track.children)) ro.observe(c);
-    return () => ro.disconnect();
-  }, [children]);
+    const mo = typeof MutationObserver === "undefined" ? null : new MutationObserver((records) => {
+      for (const r of records) {
+        for (const n of Array.from(r.removedNodes)) if (n instanceof Element) ro.unobserve(n);
+        for (const n of Array.from(r.addedNodes)) if (n instanceof Element && n.parentNode === track) ro.observe(n);
+      }
+    });
+    mo?.observe(track, { childList: true });
+    return () => {
+      mo?.disconnect();
+      ro.disconnect();
+    };
+  }, []);
   useLayoutEffect(() => {
     if (!box || ready) return;
     const id = requestAnimationFrame(() => setReady(true));

@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, enc, errorText, pastHub } from "../../lib/api";
 import { browserView, browserWatching, type BrowserAction, type BrowserStep, type MachineBrowser } from "../../lib/browser";
 import { screenPath } from "../../lib/computer";
-import { latestRequest, visiblePoll } from "../../lib/visible-poll";
+import { documentPage, latestRequest, visiblePoll } from "../../lib/visible-poll";
 import { Button, cx, EASE, Spinner, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Switch } from "../settings/SettingsParts";
@@ -16,14 +16,6 @@ import { BrowserLogins } from "./BrowserLogins";
 import { t } from "../../i18n";
 
 type Reads = ReturnType<typeof latestRequest<MachineBrowser>>;
-
-const documentPage = {
-  visible: () => document.visibilityState === "visible",
-  subscribe: (fn: () => void) => {
-    document.addEventListener("visibilitychange", fn);
-    return () => document.removeEventListener("visibilitychange", fn);
-  },
-};
 
 export function BrowserSection({ mid, browser, online }: { mid: string; browser: MachineBrowser; online: boolean }) {
   // What the hub said since the page opened (newer than the machine list's).

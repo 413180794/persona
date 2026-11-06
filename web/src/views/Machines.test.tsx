@@ -204,3 +204,45 @@ describe("Machines", () => {
     expect(host.textContent).not.toContain("failed to get reader");
   });
 });
+
+// A hidden tab asks the hub nothing (the 10 s refresh of every card's numbers stops) and asks once on coming back.
+describe("Machines in a hidden tab", () => {
+  let visibility: DocumentVisibilityState = "visible";
+  const show = (v: DocumentVisibilityState) => act(() => { visibility = v; document.dispatchEvent(new Event("visibilitychange")); });
+  const metricsReads = () => vi.mocked(fetch).mock.calls.filter(([input]) => String(input).split("?")[0] === "/api/v1/metrics").length;
+
+  beforeEach(() => {
+    visibility = "visible";
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
+  });
+  afterEach(() => {
+    delete (document as { visibilityState?: unknown }).visibilityState;
+  });
+
+  it("stops asking for /metrics while hidden and asks once when shown again", async () => {
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await flush();
+    expect(metricsReads()).toBe(1);
+    show("hidden");
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await flush();
+    expect(metricsReads()).toBe(1);
+    show("visible");
+    await flush();
+    expect(metricsReads()).toBe(2);
+    await act(async () => { vi.advanceTimersByTime(10_000); });
+    await flush();
+    expect(metricsReads()).toBe(3);
+  });
+
+  it("opened in a hidden tab, loads when the tab is shown", async () => {
+    visibility = "hidden";
+    act(() => root.render(<Machines onToggleSidebar={() => {}} />));
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await flush();
+    expect(metricsReads()).toBe(0);
+    show("visible");
+    await flush();
+    expect(metricsReads()).toBe(1);
+  });
+});
