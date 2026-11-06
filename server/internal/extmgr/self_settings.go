@@ -35,11 +35,25 @@ func (h *Manager) selfSettings() []selfSetting {
 			}},
 		selfSetting{key: "inbox.agent_rules", title: agentRulesTitle,
 			about: "the user's guidance for linking a needs-you inbox item to one of their running tasks; which items the AI twin takes on " +
-				"is set by inbox policies (POST /api/v1/inbox/policies), not here",
+				"is set by inbox policies (POST /api/v1/inbox/policies), not here; " + h.twinState(),
 			value: `a string ("" clears it)`,
-			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxAgentRules(ctx)), nil },
+			get: func(ctx context.Context) (string, error) {
+				return h.withTwinOff(orNone(h.inboxAgentRules(ctx))), nil
+			},
 			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-				return h.textSetting(ctx, v, agentRulesTitle, h.inboxAgentRules, "inbox.agent_rules")
+				c, err := h.textSetting(ctx, v, agentRulesTitle, h.inboxAgentRules, "inbox.agent_rules")
+				if err != nil || c.apply == nil {
+					return c, err
+				}
+				apply := c.apply
+				c.apply = func(ctx context.Context, values map[string]string) (string, error) {
+					out, err := apply(ctx, values)
+					if err != nil {
+						return out, err
+					}
+					return h.withTwinOff(out), nil
+				}
+				return c, nil
 			}})
 	if h.mail != nil {
 		out = append(out, selfSetting{key: "mail.accounts", title: ss(l, "title_mail"),
@@ -133,6 +147,24 @@ func (h *Manager) inboxRules(ctx context.Context) string {
 }
 func (h *Manager) inboxAgentRules(ctx context.Context) string {
 	return h.settingText(ctx, "inbox.agent_rules", h.cfg.Inbox.Agent.Rules)
+}
+
+// twinState tells the assistant, next to inbox.agent_rules, whether the AI twin runs at all: with it off, a rule
+// written there drafts nothing, yet the assistant told the user drafts would come (#5865).
+func (h *Manager) twinState() string {
+	if h.cfg.Inbox.Agent.Enabled {
+		return "the AI twin is on"
+	}
+	return "the AI twin is off on this hub (inbox.agent.enabled is false): it drafts nothing for any item, whatever this setting " +
+		"or the inbox policies say, until the user turns it on"
+}
+
+// withTwinOff adds to what reading or changing inbox.agent_rules returns that the AI twin is off, when it is.
+func (h *Manager) withTwinOff(s string) string {
+	if h.cfg.Inbox.Agent.Enabled {
+		return s
+	}
+	return s + "\nNote: " + h.twinState() + "."
 }
 
 // textSetting changes a text setting kept in the manager's settings under key ("" deletes the override).

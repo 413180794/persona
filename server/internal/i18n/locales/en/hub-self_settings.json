@@ -1,6 +1,6 @@
 {
   "title_inbox_rules": "Inbox sorting rules",
-  "title_agent_rules": "AI twin rules",
+  "title_agent_rules": "Inbox task-linking rules",
   "title_mail": "Mail",
   "none": "(none)",
   "change": "Change {title}: {before} → {after}",

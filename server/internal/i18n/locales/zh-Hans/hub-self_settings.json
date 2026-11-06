@@ -1,6 +1,6 @@
 {
   "title_inbox_rules": "收件箱分拣规则",
-  "title_agent_rules": "AI 分身的规则",
+  "title_agent_rules": "收件箱关联任务的规则",
   "title_mail": "邮箱",
   "none": "（无）",
   "change": "改{title}：{before} → {after}",
