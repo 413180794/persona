@@ -97,4 +97,11 @@ class WireCompatibilityTest {
         assertNull(legacyError.retryable)
         assertThrows(SerializationException::class.java) { JsonCodec.decodeFromString<Session>("""{"session_id":false}""") }
     }
+
+    @Test fun fileContentKeepsTheHubsRevision() {
+        val streamed = JsonCodec.decodeFromString<persona.core.contracts.api.SessionFileContent>(
+            """{"path":"/m/a.wav","name":"a.wav","size":10,"stream":true,"revision":"a-179ac3b2c1e00000"}""")
+        assertEquals("a-179ac3b2c1e00000", streamed.revision)
+        assertNull(JsonCodec.decodeFromString<persona.core.contracts.api.SessionFileContent>("""{"path":"/m/a.wav","name":"a.wav"}""").revision)
+    }
 }

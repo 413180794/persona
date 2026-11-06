@@ -85,6 +85,8 @@ interface SessionFiles {
     val entries: List<String> = emptyList(),
     /** Asked with stream=1 and binary: no [data], the bytes come from file/download. */
     val stream: Boolean = false,
+    /** The hub's name for this version of the file (size and modification time); null from an older hub. */
+    val revision: String? = null,
 )
 
 @Serializable data class SessionGitFile(

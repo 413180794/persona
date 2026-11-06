@@ -49,12 +49,14 @@ class ShareQueue @Inject constructor(
     private val sessions: PlatformSessions,
     private val runtime: persona.android.di.ConnectionRuntime,
 ) {
-    private val lock = Mutex()
-    @Volatile private var wake: Channel<Unit>? = null
+    /** One per data scope: a group's long upload never holds another group's share sheet (#4818). */
+    private val locks = ShareLocks()
+    /** Each open group's observer, by data scope: every group drains its own folder (#4818). */
+    private val wake = java.util.concurrent.ConcurrentHashMap<String, Channel<Unit>>()
 
     internal suspend fun stage(id: String, title: String, text: String, uris: List<Uri>): Boolean {
         val owner = sessions.requireSession()
-        return owner.io { lock.withLock {
+        return owner.io { locks[owner.data.scope.path].withLock {
             val directory = directory(owner, id)
             val entry = File(directory, "entry.json")
             if (entry.exists()) return@withLock read(entry).queued
@@ -102,20 +104,20 @@ class ShareQueue @Inject constructor(
 
     internal suspend fun submit(id: String, target: SessionKey?, note: String, asContext: Boolean) {
         val owner = sessions.requireSession()
-        owner.io { lock.withLock {
+        owner.io { locks[owner.data.scope.path].withLock {
             val file = File(directory(owner, id), "entry.json")
             val draft = read(file)
             if (!draft.queued) write(file, draft.copy(machine = target?.machineId, session = target?.sessionId,
                 note = note, asContext = asContext, queued = true))
             // The durable queue remains recoverable even if the scheduler is temporarily unavailable.
             try { schedule(owner) } catch (_: Exception) { }
-            wake?.trySend(Unit)
+            wake[owner.data.scope.path]?.trySend(Unit)
         } }
     }
 
     internal suspend fun discardDraft(id: String) {
         val owner = sessions.requireSession()
-        owner.io { lock.withLock {
+        owner.io { locks[owner.data.scope.path].withLock {
             val directory = directory(owner, id)
             val file = File(directory, "entry.json")
             if (file.exists() && !read(file).queued) directory.deleteRecursively()
@@ -124,7 +126,8 @@ class ShareQueue @Inject constructor(
 
     internal suspend fun observe(owner: PlatformSession) = coroutineScope {
         val pending = Channel<Unit>(Channel.CONFLATED)
-        wake = pending
+        val key = owner.data.scope.path
+        wake[key] = pending
         pending.trySend(Unit)
         launch { owner.hub.connection.state.collect { if (it == ConnectionState.Online) pending.trySend(Unit) } }
         try {
@@ -136,33 +139,27 @@ class ShareQueue @Inject constructor(
                 }
             }
         } finally {
-            if (wake === pending) wake = null
+            wake.remove(key, pending)
             pending.close()
         }
     }
 
-    internal suspend fun drain(owner: PlatformSession): Boolean = owner.io { lock.withLock {
+    internal suspend fun drain(owner: PlatformSession): Boolean = owner.io { locks[owner.data.scope.path].withLock {
         val entries = File(owner.directory, "shares").listFiles().orEmpty()
             .map { File(it, "entry.json") }.filter { it.exists() }
-        var remaining = false
-        for (file in entries) {
-            try {
-                owner.active()
-                remaining = deliverQueuedShare(file, owner.hub.connection.state.value == ConnectionState.Online,
-                    untitled = application.getString(R.string.app_share_content),
-                    prepareMain = { owner.data.messages.prepareMainConversation() },
-                    upload = { machine, attachment, name, main -> upload(owner, machine, main, attachment, name) },
-                    main = { body, id -> owner.data.messages.sendToMain(body, id) },
-                    // A session of another hub group goes to that group (docs/android.md「多 hub」); one group: the same outbox.
-                    agent = { target, body, id ->
-                        if (persona.core.contracts.GroupKeys.namespaceOf(target.machineId) == null && runtime.groupOf(target.machineId)?.data === owner.data)
-                            owner.data.messages.send(target, body, id)
-                        else runtime.messages.send(target, body, id)
-                    }) || remaining
-            } catch (error: CancellationException) { throw error }
-            catch (_: Exception) { remaining = true }
+        drainQueuedShares(entries, owner::active) { file ->
+            deliverQueuedShare(file, owner.hub.connection.state.value == ConnectionState.Online,
+                untitled = application.getString(R.string.app_share_content),
+                prepareMain = { owner.data.messages.prepareMainConversation() },
+                upload = { machine, attachment, name, main -> upload(owner, machine, main, attachment, name) },
+                main = { body, id -> owner.data.messages.sendToMain(body, id) },
+                // A session of another hub group goes to that group (docs/android.md「多 hub」); one group: the same outbox.
+                agent = { target, body, id ->
+                    if (persona.core.contracts.GroupKeys.namespaceOf(target.machineId) == null && runtime.groupOf(target.machineId)?.data === owner.data)
+                        owner.data.messages.send(target, body, id)
+                    else runtime.messages.send(target, body, id)
+                })
         }
-        remaining
     } }
 
     private suspend fun upload(owner: PlatformSession, machine: String, main: Boolean, file: File, name: String): String {
@@ -217,6 +214,29 @@ internal fun <A> shareUploadApi(main: Boolean, machine: String, owner: A, groupA
 
 private const val DRAFT_MAX_AGE_MILLIS = 24L * 60 * 60 * 1000
 
+internal class ShareLocks {
+    private val locks = java.util.concurrent.ConcurrentHashMap<String, Mutex>()
+    operator fun get(scope: String): Mutex = locks.computeIfAbsent(scope) { Mutex() }
+}
+
+/** Every entry is tried; one that fails stays queued and the result reports it as remaining. */
+internal suspend fun drainQueuedShares(entries: List<File>, active: () -> Unit, deliver: suspend (File) -> Boolean): Boolean {
+    var remaining = false
+    for (file in entries) {
+        try {
+            active()
+            remaining = deliver(file) || remaining
+        } catch (error: CancellationException) {
+            // An unselected group's main resolver refuses with "Pairing changed" (PlatformRuntime): the entry waits.
+            currentCoroutineContext().ensureActive()
+            active()
+            remaining = true
+        }
+        catch (_: Exception) { remaining = true }
+    }
+    return remaining
+}
+
 /** Returns true while the staged entry still needs a connection or a main target. */
 internal suspend fun deliverQueuedShare(
     file: File, connected: Boolean,
@@ -267,9 +287,17 @@ interface ShareRetryDependencies {
 open class ShareRetryWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
     override suspend fun doWork(): Result = try {
         val dependencies = EntryPointAccessors.fromApplication(applicationContext, ShareRetryDependencies::class.java)
-        val owner = dependencies.platformSessions().requireSession()
-        if (owner.data.scope.path != inputData.getString("scope")) Result.success()
-        else if (dependencies.shares().drain(owner)) Result.retry() else Result.success()
+        val sessions = dependencies.platformSessions()
+        val owner = sessions.requireSession()
+        shareRetryResult(inputData.getString("scope"), owner, sessions.open(), { it.data.scope.path }) { dependencies.shares().drain(it) }
     } catch (error: CancellationException) { throw error }
     catch (_: Exception) { Result.retry() }
+}
+
+/** The work's own group drains, selected or not (#4818); with no open group of that scope (deleted, closed) it ends. */
+internal suspend fun <S> shareRetryResult(scope: String?, selected: S, open: List<S>, scopeOf: (S) -> String,
+    drain: suspend (S) -> Boolean): ListenableWorker.Result {
+    val owner = if (scopeOf(selected) == scope) selected
+        else open.firstOrNull { scopeOf(it) == scope } ?: return ListenableWorker.Result.success()
+    return if (drain(owner)) ListenableWorker.Result.retry() else ListenableWorker.Result.success()
 }

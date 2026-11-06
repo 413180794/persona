@@ -284,10 +284,11 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
     // phone width that chip is an icon (#4142): 3rem leaves its 2.5rem and the gap, 5rem also the footer's 22px ⓘ
     // button and its gap (`withInfo`, #3533).
     <span className={cx("flex shrink-0 items-center gap-1", assistant && "min-w-0 max-w-[calc(100%-5.5rem)]", assistant && (withInfo ? "max-sm:max-w-[calc(100%-5rem)]" : "max-sm:max-w-[calc(100%-3rem)]"))}>
-      {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
+      {!effortOnly && <Chip label={mode ? modeTitle(mode) : t("chat-sessiondialogs.permission_default")} narrow={{ icon: "shield", label: modeShort(mode) }} danger={danger} onClick={modeMenu.open} active={Boolean(modeMenu.anchor)} title={danger ? BYPASS_WARNING : t("chat-sessiondialogs.permission_mode")} />}
       <Chip
         buttonRef={effortChip}
         label={session.effort ? t("chat-sessiondialogs.effort_chip", { effort: effortTitle(session.effort) }) : t("chat-sessiondialogs.effort_default")}
+        narrow={{ icon: "gauge", label: session.effort ? effortTitle(session.effort) : t("chat-sessiondialogs.short_default") }}
         onClick={withModel ? (e) => setPopover((a) => (a ? null : e.currentTarget)) : effortMenu.open}
         active={Boolean(withModel ? popover : effortMenu.anchor)}
         title={withModel ? t("composer.model_effort") : t("chat-sessiondialogs.effort")}
@@ -317,9 +318,25 @@ export function ModeChips({ session, effortOnly, assistant, withInfo }: { sessio
   );
 }
 
+// The permission chip's word below 340 px (#4316): enough to tell whether the agent asks first.
+const MODE_SHORT: Record<string, string> = {
+  default: "chat-sessiondialogs.mode_short_default",
+  acceptEdits: "chat-sessiondialogs.mode_short_accept_edits",
+  plan: "chat-sessiondialogs.mode_short_plan",
+  auto: "chat-sessiondialogs.mode_short_auto",
+  [BYPASS_MODE]: "chat-sessiondialogs.mode_short_bypass",
+};
+
+export function modeShort(mode?: string): string {
+  if (!mode) return t("chat-sessiondialogs.short_default");
+  return MODE_SHORT[mode] ? t(MODE_SHORT[mode]) : modeTitle(mode);
+}
+
 /** `phoneIcon`: at phone width the label gives way to this icon (still read out, and in full in the menu it opens), so
- *  the chips beside it keep their words (#4142); wider, the chip is as before. */
-export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIcon }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement>; phoneIcon?: IconName }) {
+ *  the chips beside it keep their words (#4142); wider, the chip is as before.
+ *  `narrow`: below 340 px (a 320 px phone, #4316) the label gives way to this icon and short word, which still say the
+ *  setting (the chevron goes, for room); the full label stays for screen readers. From 340 px up the chip is as before. */
+export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIcon, narrow }: { label: string; onClick: (e: React.MouseEvent<HTMLElement>) => void; active?: boolean; danger?: boolean; title: string; buttonRef?: React.Ref<HTMLButtonElement>; phoneIcon?: IconName; narrow?: { icon: IconName; label: string } }) {
   return (
     <button
       ref={buttonRef}
@@ -335,8 +352,10 @@ export function Chip({ label, onClick, active, danger, title, buttonRef, phoneIc
       )}
     >
       {phoneIcon && <Icon name={phoneIcon} size={12} className="shrink-0 sm:hidden" />}
-      <span className={cx("min-w-0 truncate", phoneIcon && "max-sm:sr-only")}>{label}</span>
-      <Icon name="chevron" size={9} stroke={2.4} className="shrink-0" />
+      {narrow && <Icon name={narrow.icon} size={12} className="shrink-0 xs:hidden" />}
+      {narrow && <span aria-hidden className="min-w-0 truncate xs:hidden">{narrow.label}</span>}
+      <span className={cx("min-w-0 truncate", phoneIcon && "max-sm:sr-only", narrow && "max-xs:sr-only")}>{label}</span>
+      <Icon name="chevron" size={9} stroke={2.4} className={cx("shrink-0", narrow && "max-xs:hidden")} />
     </button>
   );
 }

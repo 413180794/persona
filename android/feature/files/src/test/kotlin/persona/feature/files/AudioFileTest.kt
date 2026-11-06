@@ -61,6 +61,13 @@ class AudioFileTest {
         assertFalse(AudioFiles.cacheName("/m/x", 1, "../../evil").contains('/'))
     }
 
+    @Test fun cacheNamesFollowTheRevision() {
+        // #4821: a file rewritten at the same size is another revision, so it is fetched again.
+        val a = AudioFiles.cacheName("/m/a.wav", 10, "a.wav", "10-1")
+        assertNotEquals(a, AudioFiles.cacheName("/m/a.wav", 10, "a.wav", "10-2"))
+        assertEquals(AudioFiles.cacheName("/m/a.wav", 10, "a.wav"), AudioFiles.cacheName("/m/a.wav", 10, "a.wav", null))
+    }
+
     @Test fun clock() {
         assertEquals("0:00", AudioFiles.clock(0))
         assertEquals("3:25", AudioFiles.clock(205_400))

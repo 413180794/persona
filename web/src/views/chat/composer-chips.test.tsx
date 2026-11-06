@@ -6,7 +6,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { Session } from "../../lib/types";
-import { Chip, ModeChips } from "./SessionDialogs";
+import { Chip, ModeChips, modeShort } from "./SessionDialogs";
 
 // the class lists of the markup's elements, in document order
 const tags = (node: React.ReactElement) =>
@@ -45,5 +45,28 @@ describe("composer chips on a narrow row", () => {
     expect(tags(<ModeChips session={session} assistant />)[0].cls).toContain("max-sm:max-w-[calc(100%-3rem)]");
     // the footer's ⓘ button (a read-only or conflicting source, #3533) takes room too
     expect(tags(<ModeChips session={session} assistant withInfo />)[0].cls).toContain("max-sm:max-w-[calc(100%-5rem)]");
+  });
+
+  // #4316: at 320 px even 手动确认 / 思考 高 alone did not fit; below 340 px they are an icon and a short word
+  it("below 340 px the mode chips show an icon and a short word, keep the full label for screen readers", () => {
+    const [, icon, short, label, chevron] = tags(<Chip label="手动确认" narrow={{ icon: "shield", label: "先问" }} title="mode" onClick={() => {}} />);
+    expect(icon.tag).toBe("svg");
+    expect(icon.cls).toEqual(expect.arrayContaining(["shrink-0", "xs:hidden"]));
+    expect(short.text).toBe("先问");
+    expect(short.cls).toEqual(expect.arrayContaining(["truncate", "xs:hidden"]));
+    expect(label.text).toBe("手动确认");
+    expect(label.cls).toContain("max-xs:sr-only");
+    expect(chevron.cls).toContain("max-xs:hidden");
+    // a chip without it is as before
+    const plain = tags(<Chip label="手动确认" title="mode" onClick={() => {}} />);
+    expect(plain).toHaveLength(3);
+    expect(plain[2].cls).not.toContain("max-xs:hidden");
+    const words = renderToStaticMarkup(<ModeChips session={session} assistant />);
+    expect(words).toContain(">先问<");
+    expect(words).toContain(">高<");
+    expect(modeShort("default")).toBe("先问");
+    expect(modeShort("bypassPermissions")).toBe("放行");
+    expect(modeShort(undefined)).toBe("默认");
+    expect(modeShort("someNewMode")).toBe("someNewMode");
   });
 });

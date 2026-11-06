@@ -93,6 +93,9 @@
 }
 
 /* Expose the tokens as Tailwind utilities. */
+/* Phones under 340 px wide (iPhone SE first generation, small Android phones): `max-xs:` is below 340 px, where the composer's mode chips turn into
+   an icon and a short word (#4316). */
+@theme { --breakpoint-xs: 340px; }
 @theme inline {
   --color-page: var(--page);
   --color-canvas: var(--canvas);

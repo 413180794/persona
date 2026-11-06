@@ -26,13 +26,19 @@ internal data class PlatformSession(val hub: Hub, val data: ScopedHubData) {
 }
 
 @Singleton
-class PlatformSessions @Inject constructor(application: Application) {
+class PlatformSessions @Inject constructor(application: Application, private val runtime: ConnectionRuntime) {
     private val app = application as PersonaApp
     internal val current = MutableStateFlow<PlatformSession?>(null)
     internal suspend fun requireSession(): PlatformSession {
         combine(app.pairingReady, app.pairingRestoreError) { ready, failed -> ready || failed }.first { it }
         check(app.hub.value != null) { app.getString(R.string.app_error_pair_in_app) }
         return withTimeout(10_000) { current.filterNotNull().first { it.hub === app.hub.value } }
+    }
+    /** Every open group's session, the selected one's included. */
+    internal fun open(): List<PlatformSession> = runtime.groups.value.mapNotNull { group ->
+        val hub = group.hub ?: return@mapNotNull null
+        val data = group.data ?: return@mapNotNull null
+        PlatformSession(hub, data).takeIf { data.credentials.deviceToken == hub.api.token }
     }
 }
 
@@ -67,6 +73,12 @@ class PlatformRuntime @Inject constructor(
                 } finally {
                     sessions.current.compareAndSet(session, null)
                 }
+            }
+        }
+        app.scope.launch {
+            // The other open groups drain their own shares too, so one coming online sends them unselected (#4818).
+            runtime.groups.combine(app.hub) { _, hub -> hub }.collectLatest { selected ->
+                coroutineScope { sessions.open().filter { it.hub !== selected }.forEach { launch { shares.observe(it) } } }
             }
         }
     }

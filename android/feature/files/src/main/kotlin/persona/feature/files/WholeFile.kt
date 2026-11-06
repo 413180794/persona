@@ -84,12 +84,12 @@ internal fun rememberWholeFile(file: SessionFileContent, folder: String, fetch: 
     always: Boolean = false, converting: Boolean = false, keep: Int = 2): State<WholeLoad> {
     val context = LocalContext.current
     val resources = LocalResources.current
-    return produceState<WholeLoad>(WholeLoad.Fetching, file.path, file.size, always) {
+    return produceState<WholeLoad>(WholeLoad.Fetching, file.path, file.size, file.revision, always) {
         // produceState keeps its value when the keys change: another file is not the last one's.
         value = WholeLoad.Fetching
         value = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, folder).apply { mkdirs() }
-            val into = File(dir, AudioFiles.cacheName(file.path + if (converting) "\u0000pdf" else "", file.size, if (converting) "a.pdf" else file.name))
+            val into = File(dir, AudioFiles.cacheName(file.path + if (converting) "\u0000pdf" else "", file.size, if (converting) "a.pdf" else file.name, file.revision))
             if (into.exists() && (converting || into.length() == file.size)) return@withContext WholeLoad.Ready(into.also { it.setLastModified(System.currentTimeMillis()) })
             // Parts another page is still writing stay; finished files beyond the newest few go.
             dir.listFiles()?.filter { it != into && !it.name.contains(".part") }?.sortedByDescending { it.lastModified() }

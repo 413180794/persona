@@ -36,9 +36,13 @@ internal object AudioFiles {
     fun isAudio(file: SessionFileContent): Boolean =
         file.text == null && (file.mime.orEmpty().startsWith("audio/") || FilesPaths.extension(file.name) in extensions)
 
-    /** Where a file's bytes are kept while it plays: by machine path and size, so a changed file is fetched again. */
-    fun cacheName(path: String, size: Long, name: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest("$path\u0000$size".toByteArray()).joinToString("") { "%02x".format(it) }
+    /**
+     * Where a file's bytes are kept while it plays: by machine path, size and the hub's [revision] (when it sends one),
+     * so a changed file is fetched again, even at the same size.
+     */
+    fun cacheName(path: String, size: Long, name: String, revision: String? = null): String {
+        val key = "$path\u0000$size" + if (revision == null) "" else "\u0000$revision"
+        val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
         val ext = FilesPaths.extension(name).filter { it.isLetterOrDigit() }.take(8)
         return digest.take(24) + if (ext.isEmpty()) "" else ".$ext"
     }
@@ -66,10 +70,10 @@ internal fun AudioFile(file: SessionFileContent, download: suspend (path: String
     header: LazyListScope.() -> Unit) {
     val context = LocalContext.current
     val resources = LocalResources.current
-    val load by produceState<AudioLoad>(AudioLoad.Fetching, file.path, file.size) {
+    val load by produceState<AudioLoad>(AudioLoad.Fetching, file.path, file.size, file.revision) {
         value = withContext(Dispatchers.IO) {
             val dir = File(context.cacheDir, "files-audio").apply { mkdirs() }
-            val into = File(dir, AudioFiles.cacheName(file.path, file.size, file.name))
+            val into = File(dir, AudioFiles.cacheName(file.path, file.size, file.name, file.revision))
             if (into.exists() && into.length() == file.size) return@withContext AudioLoad.Ready(into)
             // Only the last finished file stays (audio can be large; the page fetches again when it's gone). Parts
             // another page is still writing are left alone.
