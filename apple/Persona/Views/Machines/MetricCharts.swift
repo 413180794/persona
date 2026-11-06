@@ -24,18 +24,63 @@ enum MetricColor {
 
 /// One plotted value. `series` is the line it belongs to: a measure split at every gap, so no line crosses a time
 /// the machine sent nothing.
-struct ChartValue: Identifiable {
-    var id: String { "\(series)@\(date.timeIntervalSince1970)" }
-    var series: String
-    var name: String
-    var date: Date
-    var value: Double
+nonisolated struct ChartValue: Identifiable, Equatable, Sendable {
+    let id: String
+    let series: String
+    let name: String
+    let date: Date
+    let value: Double
+
+    init(series: String, name: String, date: Date, value: Double) {
+        self.id = "\(series)@\(date.timeIntervalSince1970)"
+        self.series = series
+        self.name = name
+        self.date = date
+        self.value = value
+    }
+}
+
+nonisolated enum MetricSeriesKey: Hashable, Sendable {
+    case cpu, memory(total: Double), down, up, load
+
+    func value(_ point: MetricPoint) -> Double? {
+        switch self {
+        case .cpu: point.cpu
+        case .memory(let total): point.mem.map { total > 0 ? 100 * $0 / total : 0 }
+        case .down: point.rx
+        case .up: point.tx
+        case .load: point.load
+        }
+    }
+}
+
+nonisolated struct PreparedMetricSeries: Equatable, Sendable {
+    let key: MetricSeriesKey
+    let name: String
+    let values: [ChartValue]
+    let peak: Double?
+
+    static func build(_ points: [MetricPoint], key: MetricSeriesKey, name: String) -> Self {
+        var values: [ChartValue] = []
+        values.reserveCapacity(points.count)
+        var segment = 0
+        var peak: Double?
+        for point in points {
+            if point.isGap { segment += 1; continue }
+            if let value = key.value(point) {
+                values.append(ChartValue(series: "\(name)#\(segment)", name: name, date: point.date, value: value))
+                peak = max(peak ?? value, value)
+            }
+        }
+        return Self(key: key, name: name, values: values, peak: peak)
+    }
 }
 
 /// What a chart draws: a name (the legend) and how to read it from a point.
 struct ChartSeries {
     var name: String
     var color: Color
+    var key: MetricSeriesKey? = nil
     var value: (MetricPoint) -> Double?
 }
 
@@ -181,7 +226,10 @@ enum SparklineGeometry {
 
 /// A detail chart: title and the value now (or at the scrubbed moment), the lines over the range, a hairline grid,
 /// and a shared scrub: holding any chart shows the same moment in all of them.
-struct MetricChart: View {
+struct MetricChart: View, Equatable {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var title: String
     var points: [MetricPoint]
     var series: [ChartSeries]
@@ -194,22 +242,53 @@ struct MetricChart: View {
     var format: (Double) -> String
     /// The value(s) shown when nothing is scrubbed.
     var now: [Double?]
+    var prepared: [PreparedMetricSeries]? = nil
+    var formatKey: String? = nil
+    var selectionSnapshot: Date?
     @Binding var selection: Date?
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        guard let key = lhs.formatKey, key == rhs.formatKey,
+              lhs.series.count == rhs.series.count,
+              zip(lhs.series, rhs.series).allSatisfy({ a, b in
+                  a.key != nil && a.key == b.key && a.name == b.name && a.color == b.color
+              }) else { return false }
+        return lhs.title == rhs.title && lhs.points == rhs.points && lhs.prepared == rhs.prepared
+            && lhs.domain == rhs.domain && lhs.step == rhs.step && lhs.yDomain == rhs.yDomain
+            && lhs.reference?.value == rhs.reference?.value && lhs.reference?.label == rhs.reference?.label
+            && lhs.now == rhs.now && lhs.selectionSnapshot == rhs.selectionSnapshot
+    }
+
+    private func preparedSeries(_ index: Int) -> PreparedMetricSeries? {
+        guard let prepared, index < prepared.count, prepared[index].key == series[index].key,
+              prepared[index].name == series[index].name else { return nil }
+        return prepared[index]
+    }
+
+    private func peak(_ index: Int) -> Double? {
+        if let prepared = preparedSeries(index) { return prepared.peak }
+        return points.compactMap { series[index].value($0) }.max()
+    }
+
     var body: some View {
+        let _ = colorScheme
+        let _ = locale
+        let _ = dynamicTypeSize
+        let timeLabel = String(localized: "Time")
+        let segmentLabel = String(localized: "Segment")
         let picked = selection.flatMap { points.nearest($0, step: step) }
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             header(picked)
             Chart {
                 ForEach(series.indices, id: \.self) { i in
                     let s = series[i]
-                    ForEach(points.chartValues(s)) { v in
+                    ForEach(preparedSeries(i)?.values ?? points.chartValues(s)) { v in
                         if series.count == 1 {
-                            AreaMark(x: .value(String(localized: "Time"), v.date), y: .value(s.name, v.value), series: .value(String(localized: "Segment"), v.series))
+                            AreaMark(x: .value(timeLabel, v.date), y: .value(s.name, v.value), series: .value(segmentLabel, v.series))
                                 .foregroundStyle(s.color.opacity(0.1))
                                 .interpolationMethod(.monotone)
                         }
-                        LineMark(x: .value(String(localized: "Time"), v.date), y: .value(s.name, v.value), series: .value(String(localized: "Segment"), v.series))
+                        LineMark(x: .value(timeLabel, v.date), y: .value(s.name, v.value), series: .value(segmentLabel, v.series))
                             .foregroundStyle(s.color)
                             .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                             .interpolationMethod(.monotone)
@@ -229,7 +308,7 @@ struct MetricChart: View {
                         .lineStyle(StrokeStyle(lineWidth: 1))
                     ForEach(series.indices, id: \.self) { i in
                         if let v = series[i].value(picked) {
-                            PointMark(x: .value(String(localized: "Time"), picked.date), y: .value(series[i].name, v))
+                            PointMark(x: .value(timeLabel, picked.date), y: .value(series[i].name, v))
                                 .symbolSize(64)
                                 .foregroundStyle(series[i].color)
                                 .symbol { Circle().fill(series[i].color).scaledFrame(width: Theme.Size.dotL, height: Theme.Size.dotL)
@@ -294,16 +373,17 @@ struct MetricChart: View {
 
     /// The y top: a little over the largest value (and the reference), so the line does not touch the top.
     private var niceMax: Double {
-        let m = max(series.flatMap { s in points.compactMap { s.value($0) } }.max() ?? 0, reference?.value ?? 0)
+        let maximum = series.indices.compactMap { peak($0) }.max() ?? 0
+        let m = max(maximum, reference?.value ?? 0)
         return m > 0 ? m * 1.15 : 1
     }
 
     private var summary: String {
         let parts = series.indices.map { i in
-            let vals = points.compactMap { series[i].value($0) }
+            let maximum = peak(i)
             let now = i < self.now.count ? self.now[i] : nil
             let current = now.map(format) ?? String(localized: "Unknown [Session Modes 4d8c1c]")
-            let peak = vals.max().map(format) ?? String(localized: "Unknown [Session Modes 4d8c1c]")
+            let peak = maximum.map(format) ?? String(localized: "Unknown [Session Modes 4d8c1c]")
             return series.count > 1
                 ? String(localized: "\(series[i].name) now \(current), peak \(peak)")
                 : String(localized: "Now \(current), peak \(peak)")

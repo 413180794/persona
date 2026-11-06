@@ -541,8 +541,10 @@ nonisolated struct APIClient: Sendable {
         }
     }
     func machineMetrics(_ machine: String, range: MetricRange) async throws -> MachineMetrics {
-        struct R: Decodable { var metrics: MachineMetrics }
-        return try await get("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self).metrics
+        nonisolated struct R: Decodable, Sendable { var metrics: MachineMetrics }
+        let response = try await getDecodedOffMain("/api/v1/machines/\(machine)/metrics", query: ["range": range.rawValue], as: R.self)
+        try Task.checkCancellation()
+        return response.metrics
     }
     /// A machine's token usage over a range (docs/machines.md "Token usage"); model / launcher nil: all ("" is the
     /// unknown launcher, sent as "-"). 404 from a hub before it.

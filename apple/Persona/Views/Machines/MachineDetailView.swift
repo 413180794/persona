@@ -13,6 +13,9 @@ struct MachineDetailView: View {
     private var machineID: String { ref.id }
     @State private var range: MetricRange = Self.initialRange
     @State private var data: MachineMetrics?
+    @State private var preparedCharts: [MetricSeriesKey: PreparedMetricSeries] = [:]
+    @State private var chartEnd = Date.now
+    @State private var metricsRequest = 0
     @State private var shownRange: MetricRange?
     @State private var failure: String?
     @State private var selection: Date?
@@ -330,9 +333,24 @@ struct MachineDetailView: View {
     private func load() async {
         guard let api = model.api(ref.group) else { return }
         let r = range
+        metricsRequest += 1
+        let request = metricsRequest
         do {
             let fresh = try await api.machineMetrics(machineID, range: r)
-            guard r == range else { return }
+            let total = Double(fresh.latest?.memTotal ?? fresh.system?.memory ?? model.machine(ref)?.system?.memory ?? 0)
+            let definitions: [(MetricSeriesKey, String)] = [
+                (.cpu, "CPU"), (.memory(total: total), String(localized: "Memory [Machine Detail View 7d8f8c]")),
+                (.down, String(localized: "Down")), (.up, String(localized: "Up")), (.load, String(localized: "Load")),
+            ]
+            let prepared = await Task.detached(priority: .userInitiated) {
+                Dictionary(uniqueKeysWithValues: definitions.map { key, name in
+                    (key, PreparedMetricSeries.build(fresh.points, key: key, name: name))
+                })
+            }.value
+            try Task.checkCancellation()
+            guard request == metricsRequest, r == range else { return }
+            preparedCharts = prepared
+            chartEnd = .now
             data = fresh
             shownRange = r
             failure = nil
@@ -343,7 +361,9 @@ struct MachineDetailView: View {
             }
             #endif
         } catch {
-            if error.isCancellation { return }
+            if error.isCancellation || request != metricsRequest || r != range { return }
+            // Keep the time domain advancing on failed polls too; unrelated session pushes do not move it.
+            chartEnd = .now
             if let e = error as? APIError, e.status == 404 {
                 failure = String(localized: "This hub has no monitoring data yet. Deploy a newer hub and the node on this computer, then check again.")
             } else if data == nil {
@@ -411,30 +431,39 @@ struct MachineDetailView: View {
 
     // MARK: Charts
 
+    private var networkPrepared: [PreparedMetricSeries]? {
+        guard let down = preparedCharts[.down], let up = preparedCharts[.up] else { return nil }
+        return [down, up]
+    }
+
     @ViewBuilder private func charts(system: MachineSystem?) -> some View {
         if let data, shownRange != nil {
             let r = shownRange ?? range
-            let end = Date.now
+            let end = chartEnd
             let domain = end.addingTimeInterval(-r.seconds)...end
             let step: TimeInterval = r == .hour ? 10 : r == .sixHours ? 60 : 240
             let memTotal = Double(data.latest?.memTotal ?? system?.memory ?? 0)
             let live = data.online ? data.latest : nil
             let cores = Double(system?.cores ?? 0)
             Group {
-                MetricChart(title: "CPU", points: data.points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu) { $0.cpu }],
+                MetricChart(title: "CPU", points: data.points, series: [ChartSeries(name: "CPU", color: MetricColor.cpu, key: .cpu) { $0.cpu }],
                             domain: domain, step: step, yDomain: 0...100, format: { MetricFormat.percent($0) },
-                            now: [live?.cpu], selection: $selection)
+                            now: [live?.cpu], prepared: preparedCharts[.cpu].map { [$0] }, formatKey: "percent",
+                            selectionSnapshot: selection, selection: $selection).equatable()
                 MetricChart(title: memTotal > 0 ? String(localized: "Memory (\(MetricFormat.bytes(memTotal)) total)") : String(localized: "Memory [Machine Detail View 7d8f8c]"), points: data.points,
-                            series: [ChartSeries(name: String(localized: "Memory [Machine Detail View 7d8f8c]"), color: MetricColor.mem) { p in p.mem.map { memTotal > 0 ? 100 * $0 / memTotal : 0 } }],
+                            series: [ChartSeries(name: String(localized: "Memory [Machine Detail View 7d8f8c]"), color: MetricColor.mem, key: .memory(total: memTotal)) { p in p.mem.map { memTotal > 0 ? 100 * $0 / memTotal : 0 } }],
                             domain: domain, step: step, yDomain: 0...100, format: { MetricFormat.percent($0) },
-                            now: [live?.memPercent], selection: $selection)
+                            now: [live?.memPercent], prepared: preparedCharts[.memory(total: memTotal)].map { [$0] }, formatKey: "percent",
+                            selectionSnapshot: selection, selection: $selection).equatable()
                 MetricChart(title: String(localized: "Network"), points: data.points, series: [
-                    ChartSeries(name: String(localized: "Down"), color: MetricColor.rx) { $0.rx },
-                    ChartSeries(name: String(localized: "Up"), color: MetricColor.tx) { $0.tx },
-                ], domain: domain, step: step, format: { MetricFormat.rate($0) }, now: [live?.netRx, live?.netTx], selection: $selection)
-                MetricChart(title: String(localized: "Load (1 min)"), points: data.points, series: [ChartSeries(name: String(localized: "Load"), color: MetricColor.load) { $0.load }],
+                    ChartSeries(name: String(localized: "Down"), color: MetricColor.rx, key: .down) { $0.rx },
+                    ChartSeries(name: String(localized: "Up"), color: MetricColor.tx, key: .up) { $0.tx },
+                ], domain: domain, step: step, format: { MetricFormat.rate($0) }, now: [live?.netRx, live?.netTx],
+                            prepared: networkPrepared, formatKey: "rate", selectionSnapshot: selection, selection: $selection).equatable()
+                MetricChart(title: String(localized: "Load (1 min)"), points: data.points, series: [ChartSeries(name: String(localized: "Load"), color: MetricColor.load, key: .load) { $0.load }],
                             domain: domain, step: step, reference: cores > 0 ? (cores, String(localized: "\(Int(cores)) cores")) : nil,
-                            format: { MetricFormat.load($0) }, now: [live?.load], selection: $selection)
+                            format: { MetricFormat.load($0) }, now: [live?.load], prepared: preparedCharts[.load].map { [$0] },
+                            formatKey: "load", selectionSnapshot: selection, selection: $selection).equatable()
             }
             .animation(.default, value: shownRange)
             if data.points.allSatisfy(\.isGap) {

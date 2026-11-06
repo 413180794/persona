@@ -387,6 +387,9 @@ Use an invalidation revision as the task key and handle the flag after completio
   vectorized `LinePlot` / `AreaPlot` save nothing (cost per chart, not per point). Draw axis-free, noninteractive mini-charts in `Canvas` (`Sparkline`).
   - 2026-11-06，#5730：单系列的填充和描边不要各算一次单调插值路径；复用开放路径，关闭副本用于填充，仍保持所有填充先于所有描边。不同 gap 不合并，多系列没有填充时不建立额外缓存数组。
   - 同一优化模拟器构建、28 台机器、5 轮正式 glide：路径复用前后 custom hitch 中位数 8.3 → 4.2 ms/s，cadence 59.5 → 59.7。它不是 GPU 呈现帧率或全页面 60 FPS 验收；主机负载和离群长帧仍须注明。
+- 机器详情的历史曲线不要在每次 `body` 重算时生成点 ID、gap 分段和最大值（2026-11-06，#5730）：响应解码和完整曲线准备放到 `Task.detached`，在 MainActor 一次发布。图表时间域随指标刷新推进，不随无关的会话推送或选点变化推进；保留完整历史、稳定点 ID 和 gap，不靠删点隐藏长帧。
+  - `Equatable` 图表必须比较不可变的选点快照，不能只比较两个指向同一状态的 `Binding` 当前值。范围切换和并发刷新用请求序号及范围共同校验，防止旧响应覆盖新范围。
+  - 预计算的 peak 为 `nil` 可以表示整个系列没有有效点，不是缓存缺失；不要用 `??` 再扫描原数组。
 - `Menu` label overlays / glass surfaces become part of the menu button: glass covers avatar + name, and overlay text is absent from XCUITest (button reports initial label only).
   Put temporary button hints in a sibling ZStack (`AssistantTopBar.face`).
 - Floating-header fog must cover status bar: use GeometryReader `safeAreaInsets.top` and shift background upward; direct `ignoresSafeArea` computes insufficient height.
@@ -492,6 +495,7 @@ Use an invalidation revision as the task key and handle the flag after completio
 - With `SWIFT_APPROACHABLE_CONCURRENCY`, `APIClient` is `nonisolated` but async methods run on caller actor,
   so view `await api.get(…)` decodes JSON on main. Lark pushes refetch 40 card-bearing messages; main decoding occupied 43 samples
   (2026-11-03, #674 P-19). Use `getDecodedOffMain` for large responses, or fetch `Data` then decode in `Task.detached` as `items` does; results must be `Sendable`.
+  - 单机详情直接从页面请求指标，不能因为概览的 fan-out 已在后台就认定单机详情也在后台（2026-11-06，#5730）；分别核对实际调用者。Xcode 27.1 的 `Thread.isMainThread` 带 `noasync`，测试后台准备时在同步 `nonisolated` 探针里读取，再从 detached task 调用，不在异步闭包直接读取。
 ### Minimum compatible compiler
 
 - **Minimum compiler remains Xcode 26.0 (Swift 6.2)** (2026-11-02): this and many development machines still use 26.0; master must compile there for iOS, Mac, watch and extensions. Release machine uses Xcode 27.1 / Swift 6.4.0, which proves nothing about 26.0.
