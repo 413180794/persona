@@ -54,6 +54,8 @@ export type DraftEvent =
   | ({ type: "quote" } & DraftQuote)
   | { type: "replace"; text: string }
   | { type: "append"; text: string }
+  /** The words of a send that failed after its box moved on (another conversation, or closed): back in front. */
+  | { type: "unsent"; text: string }
   | { type: "image"; image: DraftImage };
 
 /** "> " in front of every line, then a blank line, then what was already typed (ChatView.swift bindMenu). */
@@ -237,6 +239,8 @@ export function applyDraft(draft: string, e: DraftEvent): string {
       return e.text;
     case "append":
       return withAppended(draft, e.text);
+    case "unsent":
+      return withUnsent(draft, e.text);
     default:
       return draft;
   }

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +72,10 @@ type fakeILink struct {
 	sent     []sentText
 	typing   []bool
 	image    []byte
+	// failSends: how many sendmessage calls to keep and then answer HTTP 500 (the answer lost on the way back).
+	failSends int
+	clientIDs []string        // every sendmessage's client_id, repeated ones too
+	kept      map[string]bool // client_ids iLink has: a repeat is not posted again
 }
 
 type sentText struct{ To, Context, Text string }
@@ -120,9 +125,23 @@ func (f *fakeILink) serve(w http.ResponseWriter, r *http.Request) {
 		out = map[string]any{"ret": 0, "msgs": msgs, "get_updates_buf": "cursor-" + strconv.Itoa(f.seq)}
 	case "/ilink/bot/sendmessage":
 		msg := body["msg"].(map[string]any)
-		item := msg["item_list"].([]any)[0].(map[string]any)
-		f.sent = append(f.sent, sentText{To: msg["to_user_id"].(string), Context: msg["context_token"].(string),
-			Text: item["text_item"].(map[string]any)["text"].(string)})
+		id := msg["client_id"].(string)
+		f.clientIDs = append(f.clientIDs, id)
+		if !f.kept[id] {
+			if f.kept == nil {
+				f.kept = map[string]bool{}
+			}
+			f.kept[id] = true
+			item := msg["item_list"].([]any)[0].(map[string]any)
+			f.sent = append(f.sent, sentText{To: msg["to_user_id"].(string), Context: msg["context_token"].(string),
+				Text: item["text_item"].(map[string]any)["text"].(string)})
+		}
+		if f.failSends > 0 {
+			f.failSends--
+			f.mu.Unlock()
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	case "/ilink/bot/getconfig":
 		out["typing_ticket"] = "TT"
 	case "/ilink/bot/sendtyping":
@@ -385,6 +404,41 @@ func TestSendNeedsTheOwnersChat(t *testing.T) {
 	got := r.sentTo(owner, "10 点有周会")
 	if got.Context == "" || !strings.HasPrefix(got.Text, "**明天**") || strings.Contains(got.Text, "x.png") { // WeChat shows bold, not pictures
 		t.Fatalf("sent %+v", got)
+	}
+}
+
+// A send whose answer is lost is sent again with the same client_id, by the bot and by the hub's retry of the same
+// ref after the bot gave up: iLink keeps it once (#4530).
+func TestSendRetryKeepsTheClientID(t *testing.T) {
+	wait := sendRetryWait
+	sendRetryWait = time.Millisecond
+	t.Cleanup(func() { sendRetryWait = wait })
+	r := newRig(t, true)
+	ctx := context.Background()
+	r.ilink.say(owner, "在吗")
+	eventually(t, "the message at the hub", func() bool { return len(r.hub.got()) == 1 })
+	eventually(t, "serving", func() bool { return r.bot.Status(ctx).State == connector.StateOK })
+	r.ilink.mu.Lock()
+	r.ilink.failSends, r.ilink.clientIDs, r.ilink.sent = 3, nil, nil // every attempt of the first Send loses its answer
+	r.ilink.mu.Unlock()
+	p := channel.SendParams{Ref: "run-1:4", Text: "答案", Kind: channel.OutAnswer}
+	if _, err := r.bot.Send(ctx, p); err == nil {
+		t.Fatal("the first Send should fail: no attempt got an answer")
+	}
+	if _, err := r.bot.Send(ctx, p); err != nil { // the hub sends the same ref again
+		t.Fatal(err)
+	}
+	r.ilink.mu.Lock()
+	ids, sent := append([]string(nil), r.ilink.clientIDs...), append([]sentText(nil), r.ilink.sent...)
+	r.ilink.mu.Unlock()
+	if len(ids) != 4 || len(slices.Compact(slices.Clone(ids))) != 1 {
+		t.Fatalf("client_ids %q: every attempt must carry the same one", ids)
+	}
+	if len(sent) != 1 {
+		t.Fatalf("the owner got %d copies: %+v", len(sent), sent)
+	}
+	if clientID("other", 0) == ids[0] || clientID(p.Ref, 1) == ids[0] {
+		t.Fatal("another ref or piece must get another client_id")
 	}
 }
 

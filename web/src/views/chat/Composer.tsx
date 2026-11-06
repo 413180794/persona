@@ -12,7 +12,7 @@ import { enterSends, hasFinePointer } from "../../lib/viewport";
 import { INPUT_MAX } from "./dock";
 import { imagePayload, MAX_IMAGE, quotePath, releaseAttachments, sendFile } from "../../lib/attachments";
 import { activateComposer, addContext, getContexts, newContext, registerComposer, removeContext, useContexts, withContexts, type ComposerHandle } from "../../lib/links";
-import { addQuote, applyDraft, getQuotes, onDraftEvent, parseQuotes, removeQuote, replaceNeedsConfirm, setQuotes, splitQuotes, useQuotes, withQuoteBlock, withUnsent, type DraftImage } from "../../lib/drafts";
+import { addQuote, applyDraft, getQuotes, onDraftEvent, parseQuotes, removeQuote, replaceNeedsConfirm, sendDraft, setQuotes, splitQuotes, useQuotes, withQuoteBlock, withUnsent, type DraftImage } from "../../lib/drafts";
 import { browseTarget, mentionAt, replaceToken, sessionQuote } from "../../lib/mentions";
 import { AttachmentTray } from "../../ui/AttachmentTray";
 import { cx, EASE, Spinner, toast } from "../../ui/atoms";
@@ -185,6 +185,11 @@ export function Composer({
   useEffect(
     () =>
       onDraftEvent(draftKey, (e) => {
+        // a send from an earlier box of this conversation failed: its words come back even while sending is off
+        if (e.type === "unsent") {
+          setDraft((cur) => withUnsent(cur, e.text));
+          return;
+        }
         if (!canTake.current) return;
         if (e.type === "image") {
           if (!roomForImage()) {
@@ -418,10 +423,15 @@ export function Composer({
       history.record(text);
       releaseAttachments(sent);
     } else {
-      setDraft((cur) => withUnsent(cur, text));
-      // the box closed or shows another conversation now: the pictures are not put back there, only freed
-      if (mounted.current && keyNow.current === draftKey) setAtts((cur) => [...sent, ...cur]);
-      else releaseAttachments(sent);
+      // the box closed or shows another conversation now: the words go back to this conversation's draft (its open
+      // box, or the stored one), not into the box; the pictures are not put back there, only freed
+      if (mounted.current && keyNow.current === draftKey) {
+        setDraft((cur) => withUnsent(cur, text));
+        setAtts((cur) => [...sent, ...cur]);
+      } else {
+        if (text) sendDraft(draftKey, { type: "unsent", text });
+        releaseAttachments(sent);
+      }
       refs.forEach((r) => addContext(draftKey, r));
       // the quotes back above this conversation's box (kept for it when the box shows another one or closed)
       if (q.length && !getQuotes(draftKey).list.length) setQuotes(draftKey, q);

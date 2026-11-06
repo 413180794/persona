@@ -194,3 +194,64 @@ describe("Composer suggestion", () => {
     expect(pill()).toBeNull();
   });
 });
+
+describe("Composer words of a send that fails after the box moved on", () => {
+  const box = () => host.querySelector("textarea")!;
+  const typeIn = (draftKey: string, text: string) =>
+    act(() => {
+      sendDraft(draftKey, { type: "replace", text });
+    });
+  const sendSlow = (draftKey: string) => {
+    let finish!: (ok: boolean) => void;
+    render(draftKey, () => new Promise<boolean>((resolve) => (finish = resolve)));
+    return (ok: boolean) => act(async () => finish(ok));
+  };
+
+  it("go back to their own conversation's draft, not into the one the box shows now", async () => {
+    const finish = sendSlow("a");
+    typeIn("a", "hello a");
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
+    expect(box().value).toBe("");
+    render("b", async () => true);
+    await finish(false);
+    expect(box().value).toBe("");
+    render("a");
+    expect(box().value).toBe("hello a");
+  });
+
+  it("are kept for the conversation when the box went away before the answer", async () => {
+    const finish = sendSlow("a");
+    typeIn("a", "hello a");
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
+    act(() => root.unmount());
+    root = createRoot(host);
+    await finish(false);
+    expect(localStorage.getItem("draft:a")).toBe("hello a");
+    render("a");
+    expect(box().value).toBe("hello a");
+  });
+
+  it("go under what the conversation's open box has by then", async () => {
+    const finish = sendSlow("a");
+    typeIn("a", "hello a");
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
+    // the conversation opened again in a new box (a chat page mounts one per conversation) while the send was out
+    act(() => root.unmount());
+    root = createRoot(host);
+    render("a");
+    typeIn("a", "more");
+    await finish(false);
+    expect(box().value).toBe("hello a\nmore");
+  });
+
+  it("come back into the conversation's new box even while it cannot send", async () => {
+    const finish = sendSlow("a");
+    typeIn("a", "hello a");
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => root.render(<Composer draftKey="a" placeholder="" onSend={async () => true} disabled />));
+    await finish(false);
+    expect(box().value).toBe("hello a");
+  });
+});

@@ -3,10 +3,12 @@ package wechat
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"log"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,9 @@ const (
 	// turn goes on): a hub that went away does not leave it on.
 	typingFor = 30 * time.Second
 )
+
+// sendRetryWait is the first wait before sending a piece again (then twice, three times as long); tests shorten it.
+var sendRetryWait = time.Second
 
 // handle takes one message the bot got: someone else's gets one line saying whose bot it is; the owner's goes to the
 // hub, which knows what it is (a command, an answer to what was asked, a message for the conversation).
@@ -56,7 +61,7 @@ func (b *Bot) handle(ctx context.Context, c *ilink.Client, creds ilink.Credentia
 	}
 	if err := b.opt.Hub.Receive(ctx, msg); err != nil {
 		log.Printf("wechat: handing a message to the hub: %v", err)
-		b.send(ctx, c, m.From, m.ContextToken, i18n.T(b.lang(), "wechat-chat.hub_error"))
+		b.send(ctx, c, m.From, m.ContextToken, "", i18n.T(b.lang(), "wechat-chat.hub_error"))
 	}
 }
 
@@ -76,23 +81,25 @@ func (b *Bot) stranger(ctx context.Context, c *ilink.Client, m ilink.Message) {
 		}
 	}
 	b.mu.Unlock()
-	b.send(ctx, c, m.From, m.ContextToken, i18n.T(b.lang(), "wechat-chat.stranger"))
+	b.send(ctx, c, m.From, m.ContextToken, "", i18n.T(b.lang(), "wechat-chat.stranger"))
 }
 
 // send sends text to peer as the bot: WeChat's subset of Markdown, in pieces it takes. A failure is logged (never
-// the text).
-func (b *Bot) send(ctx context.Context, c *ilink.Client, peer, contextToken, text string) bool {
+// the text). ref, when given, is the hub's id for the message: each piece's client_id comes from it, so a retry
+// (this loop's or the hub's) is kept once by iLink; without one, each piece gets a random id.
+func (b *Bot) send(ctx context.Context, c *ilink.Client, peer, contextToken, ref, text string) bool {
 	if c == nil || contextToken == "" {
 		log.Printf("wechat: nothing to send with (no client or context token)")
 		return false
 	}
-	for _, part := range ilink.Chunk(ilink.FilterMarkdown(strings.TrimSpace(text)), 0) {
+	for i, part := range ilink.Chunk(ilink.FilterMarkdown(strings.TrimSpace(text)), 0) {
 		var err error
+		id := clientID(ref, i) // the same for every attempt: a retry after a lost answer must not post it again
 		for attempt := range 3 {
-			if err = c.SendText(ctx, peer, contextToken, clientID(), part); err == nil || !ilink.Retryable(err) {
+			if err = c.SendText(ctx, peer, contextToken, id, part); err == nil || !ilink.Retryable(err) {
 				break
 			}
-			if !sleep(ctx, time.Duration(attempt+1)*time.Second) {
+			if !sleep(ctx, time.Duration(attempt+1)*sendRetryWait) {
 				return false
 			}
 		}
@@ -113,7 +120,7 @@ func (b *Bot) Send(ctx context.Context, p channel.SendParams) (channel.SendResul
 	if creds == nil || c == nil || contextToken == "" {
 		return channel.SendResult{}, channel.ErrCannotSend
 	}
-	if !b.send(ctx, c, creds.UserID, contextToken, p.Text) {
+	if !b.send(ctx, c, creds.UserID, contextToken, p.Ref, p.Text) {
 		return channel.SendResult{}, errSendFailed
 	}
 	return channel.SendResult{}, nil
@@ -125,10 +132,15 @@ func (e sendError) Error() string { return string(e) }
 
 const errSendFailed = sendError("微信没收下这条消息")
 
-func clientID() string {
-	var r [12]byte
-	_, _ = rand.Read(r[:])
-	return "persona-" + hex.EncodeToString(r[:])
+// clientID is piece i's iLink client_id: derived from the hub's ref when there is one, random otherwise.
+func clientID(ref string, i int) string {
+	if ref == "" {
+		var r [12]byte
+		_, _ = rand.Read(r[:])
+		return "persona-" + hex.EncodeToString(r[:])
+	}
+	sum := sha256.Sum256([]byte(ref + "#" + strconv.Itoa(i)))
+	return "persona-" + hex.EncodeToString(sum[:12])
 }
 
 // compose is the owner's message as the hub takes it: the text (a voice message's transcript), the quote, the
