@@ -922,7 +922,9 @@ For an extension whose user enters a service's address and key in 设置 › 扩
 manifest can ask for four things. A hub from before them refuses the manifest, so raise `engines.persona`.
 
 - **`permissions.network: ["config:<field>"]`**: the egress proxy lets the extension reach the address the user wrote in
-  configuration field `<field>`, which must be a string of `format: uri`.
+  configuration field `<field>`, which must be a string of `format: uri` with no `default`. A manifest whose field has
+  one is refused: the proxy would let the extension reach that address before the user wrote any, and an upgrade that
+  only changed it would move everyone who never filled the field in without asking again (#6099).
   - Only that host and port, as written: no subdomain, no other port. A redirect to another host is refused like any
     host.
   - https only (a CONNECT tunnel) unless the entry is `config:<field>:http`, which also takes plain http.
@@ -947,6 +949,8 @@ manifest can ask for four things. A hub from before them refuses the manifest, s
   - Before the words go back, every secret handed to the check is replaced by `***`: whole, and any prefix or suffix of
     6 characters or more. The words are cut to 300 characters.
   - No answer in 10 seconds is a failure. A disabled or stopped extension can't be checked, so nothing is saved.
+  - An extension waiting for its settings (`needs_setup`: a required secret or field not filled in yet) does not run,
+    so it can't check them: those settings are saved unchecked, and it starts once nothing is missing (#6099).
   - At most 6 checks per extension a minute; more answer 429 `check_rate_limited` without reaching the program, so it
     can't be used to guess keys.
   - A change saved by someone else while one was being checked makes it answer 409 `settings_moved`.

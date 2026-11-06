@@ -45,6 +45,10 @@ func serveSettingsCheckExtensionForTest() {
 }
 
 func settingsCheckPackage(t *testing.T) string {
+	return settingsCheckPackageWith(t, `{"name": "key", "title": "Key", "hint": "last4"}`)
+}
+
+func settingsCheckPackageWith(t *testing.T, secret string) string {
 	dir := t.TempDir()
 	self, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Join(dir, "bin"), 0o755)
@@ -53,8 +57,8 @@ func settingsCheckPackage(t *testing.T) string {
 		"engines": {"plugin_protocol": 1}, "runtime": {"command": {%q: "bin/gw"}}, "activation_events": ["on_startup"],
 		"contributes": {"ui": [{"id": "page", "title": "Gateway", "placement": "nav_page"}]},
 		"configuration": {"type": "object", "properties": {"gateway_url": {"type": "string", "title": "网关地址", "format": "uri"}}},
-		"secrets": [{"name": "key", "title": "Key", "hint": "last4"}], "settings_check": true,
-		"permissions": {"network": ["config:gateway_url"]}}`, runtime.GOOS+"-"+runtime.GOARCH)
+		"secrets": [%s], "settings_check": true,
+		"permissions": {"network": ["config:gateway_url"]}}`, runtime.GOOS+"-"+runtime.GOARCH, secret)
 	_ = os.WriteFile(filepath.Join(dir, extension.ManifestFile), []byte(manifest), 0o644)
 	return dir
 }
@@ -110,6 +114,34 @@ func TestSettingsCheckRoutes(t *testing.T) {
 	put("ag-good-key-0123456789-0002")
 	if code, out := put("ag-good-key-0123456789-0003"); code != 429 || out["code"] != "check_rate_limited" {
 		t.Fatalf("too many checks: %d %v", code, out)
+	}
+}
+
+// An extension waiting for a required key has no program to check it: the first key goes in unchecked and starts it,
+// and the ones after are checked by it (#6099).
+func TestSettingsCheckWhileNeedsSetup(t *testing.T) {
+	h, _ := extensionTestHub(t)
+	mux := h.routes()
+	master := h.cfg.Token
+	_, pv := call(t, mux, "POST", "/api/v1/plugins/-/preview", master, `{"source": "dir:`+settingsCheckPackageWith(t, `{"name": "key", "title": "Key", "hint": "last4", "required": true}`)+`"}`)
+	call(t, mux, "POST", "/api/v1/plugins/-/install", master, fmt.Sprintf(`{"preview_id": %q, "permissions_digest": %q}`, pv["preview_id"], pv["permissions_digest"]))
+	waitLong(t, "waiting for its key", func() bool {
+		hp := h.extensions.get("example-gateway")
+		return hp != nil && hp.proc == nil && hp.status == extensionNeedsSetup
+	})
+	put := func(value string) (int, map[string]any) {
+		b, _ := json.Marshal(map[string]string{"value": value})
+		return call(t, mux, "PUT", "/api/v1/extensions/example-gateway/-/secrets/key", master, string(b))
+	}
+	if code, out := put("ag-good-key-0123456789-7f3a"); code != 200 {
+		t.Fatalf("the first key: %d %v", code, out)
+	}
+	waitLong(t, "the extension up", func() bool {
+		hp := h.extensions.get("example-gateway")
+		return hp != nil && hp.proc != nil && hp.proc.Ready()
+	})
+	if code, out := put("ag-echo-key-0123456789-zyxw"); code != 400 || out["code"] != "check_failed" {
+		t.Fatalf("the next key is checked: %d %v", code, out)
 	}
 }
 

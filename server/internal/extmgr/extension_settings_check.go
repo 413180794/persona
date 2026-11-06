@@ -76,6 +76,10 @@ func (l *checkLimiter) allow(id string) bool {
 // settingsCheck is the registry's SettingsCheck: extension p's program judges config and secrets.
 func (ps *extensions) settingsCheck(ctx context.Context, p *extension.Extension, config json.RawMessage, secrets map[string]string) error {
 	id := p.Record.ID
+	hp := ps.get(id)
+	if p.Record.Enabled && hp != nil && hp.proc == nil && hp.status == extensionNeedsSetup {
+		return nil // it runs only once its settings are in, so the first ones go in unchecked
+	}
 	if !ps.checks.allow(id) {
 		return settingsCheckLimited{i18n.Err("hub-extension_settings.check_rate_limited")}
 	}
@@ -83,7 +87,6 @@ func (ps *extensions) settingsCheck(ctx context.Context, p *extension.Extension,
 	if ps.h != nil {
 		lang = ps.h.userLang()
 	}
-	hp := ps.get(id)
 	if !p.Record.Enabled || hp == nil || hp.proc == nil {
 		return settingsCheckFailed{i18n.T(lang, "hub-extension_settings.check_not_running")}
 	}

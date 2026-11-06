@@ -64,8 +64,8 @@ func (p Permissions) hostNames() []string {
 	return out
 }
 
-// checkConfigured holds m's settings-filled parts to the schema: a "config:" entry names a string field of format uri,
-// a hint is one this hub knows.
+// checkConfigured holds m's settings-filled parts to the schema: a "config:" entry names a string field of format uri
+// with no default (a default would let it reach an address the user never wrote), a hint is one this hub knows.
 func (m *Manifest) checkConfigured() []error {
 	var errs []error
 	cs := m.Permissions.ConfiguredNetworks()
@@ -87,6 +87,8 @@ func (m *Manifest) checkConfigured() []error {
 				errs = append(errs, fmt.Errorf("permissions.network: configuration has no field %q", c.Field))
 			case f.Type != "string" || f.Format != "uri":
 				errs = append(errs, fmt.Errorf("permissions.network: configuration.%s: the address it reaches is a string of format uri", c.Field))
+			case f.Default != nil:
+				errs = append(errs, fmt.Errorf("permissions.network: configuration.%s: the address it reaches has a default, but only the user writes it", c.Field))
 			}
 		}
 	}

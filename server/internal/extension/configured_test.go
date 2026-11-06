@@ -19,6 +19,7 @@ func configuredManifest(t *testing.T, network ...any) *Manifest {
 		m["permissions"] = map[string]any{"network": network}
 		m["secrets"] = []any{map[string]any{"name": "api_key", "title": "API Key", "hint": "last4"}}
 		m["settings_check"] = true
+		delete(m["configuration"].(map[string]any)["properties"].(map[string]any)["base_url"].(map[string]any), "default")
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +27,8 @@ func configuredManifest(t *testing.T, network ...any) *Manifest {
 	return m
 }
 
-// A config: entry names a string field of format uri; anything else, and a hint the hub does not know, fails.
+// A config: entry names a string field of format uri with no default; anything else, and a hint the hub does not know,
+// fails.
 func TestConfiguredNetworkManifest(t *testing.T) {
 	m := configuredManifest(t, "notes.example.com", "config:base_url", "config:base_url:http")
 	if cs := m.Permissions.ConfiguredNetworks(); len(cs) != 2 || cs[0] != (ConfiguredNetwork{Field: "base_url"}) || !cs[1].HTTP {
@@ -42,6 +44,7 @@ func TestConfiguredNetworkManifest(t *testing.T) {
 		{"no such field", func(m map[string]any) { m["permissions"] = map[string]any{"network": []any{"config:nope"}} }},
 		{"not a uri", func(m map[string]any) { m["permissions"] = map[string]any{"network": []any{"config:folders"}} }},
 		{"two colons", func(m map[string]any) { m["permissions"] = map[string]any{"network": []any{"config:base_url:ftp"}} }},
+		{"a default", func(m map[string]any) { m["permissions"] = map[string]any{"network": []any{"config:base_url"}} }},
 		{"unknown hint", func(m map[string]any) {
 			m["secrets"] = []any{map[string]any{"name": "api_key", "title": "API Key", "hint": "all"}}
 		}},
@@ -138,6 +141,7 @@ func TestSettingsCheckBeforeSaving(t *testing.T) {
 		m["permissions"] = map[string]any{"network": []any{"config:base_url"}}
 		m["secrets"] = []any{map[string]any{"name": "api_key", "title": "API Key", "hint": "last4"}}
 		m["settings_check"] = true
+		delete(m["configuration"].(map[string]any)["properties"].(map[string]any)["base_url"].(map[string]any), "default")
 	})
 	pv, err := r.Preview(ctx, "dir:"+pkg, "")
 	if err != nil {
