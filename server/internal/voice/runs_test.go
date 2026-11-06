@@ -436,7 +436,8 @@ func TestTurnEndComesOverTheHubLink(t *testing.T) {
 }
 
 // The hub drops the link (as it drops a client whose queue is full, or on a redeploy): the extension connects again,
-// subscribes again from the run's base, and the turn's end still comes over it.
+// subscribes again from the last line it saw (the run's message, after its base), and the turn's end still comes
+// over it.
 func TestHubLinkReconnects(t *testing.T) {
 	setVar(t, &lookEvery, time.Hour)
 	setVar(t, &linkBackoff, []time.Duration{50 * time.Millisecond})
@@ -453,8 +454,8 @@ func TestHubLinkReconnects(t *testing.T) {
 	waitFor(t, "the run's first check", func() bool { return hub.lookCount() >= 2 })
 	hub.dropWS()
 	waitFor(t, "a second subscribe", func() bool { n, _ := hub.subscribes("main1"); return n >= 2 })
-	if _, sub := hub.subscribes("main1"); sub["since_seq"] != float64(2) {
-		t.Fatalf("subscribed again with %v (the run's base is 2)", sub)
+	if _, sub := hub.subscribes("main1"); sub["since_seq"] != float64(3) {
+		t.Fatalf("subscribed again with %v (the run's base is 2, its message 3)", sub)
 	}
 	time.Sleep(200 * time.Millisecond) // the catch-up check after the reconnect is done
 	hub.status("main1", "working")

@@ -232,6 +232,16 @@ func (h *hubClient) interactions(ctx context.Context) ([]proto.Interaction, erro
 	return out.Interactions, err
 }
 
+// resolve answers card id (POST /api/v1/interactions/{id}/resolve, as the app's card does). already: it had been
+// answered before (the hub answers that 200 with already, and 410 or 404 when it is over otherwise).
+func (h *hubClient) resolve(ctx context.Context, id string, r proto.Resolution) (already bool, err error) {
+	var out struct {
+		Already bool `json:"already"`
+	}
+	err = h.call(ctx, "POST", "/api/v1/interactions/"+url.PathEscape(id)+"/resolve", r, &out)
+	return out.Already, err
+}
+
 // interrupt stops the conversation's turn (the app's 停止 button).
 func (h *hubClient) interrupt(ctx context.Context, machine, session string) error {
 	return h.call(ctx, "POST", sessionPath(machine, session)+"/interrupt", map[string]any{}, nil)

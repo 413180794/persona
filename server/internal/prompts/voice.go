@@ -50,7 +50,7 @@ type VoiceTarget struct {
 }
 
 // VoiceCard is a card waiting on the user in the bound conversation, by its kind: question (Text: its first
-// question), plan, permission (Tool: command, edit, web, mcp, other), screen, elicitation.
+// question; none in voice/needs_you), plan, permission (Tool: command, edit, web, mcp, other), screen, elicitation.
 type VoiceCard struct {
 	Kind, Tool, Text string
 }
@@ -138,6 +138,59 @@ type VoiceStatus struct {
 }
 
 func RenderVoiceStatus(d VoiceStatus) string { return render("voice/status", d) }
+
+// VoiceAsk is a question a conversation asked, as the voice model is to ask it (voice/ask, docs/voice.md「提问和卡片」):
+// from the card's own data, one question at a time, the options by their names. Not channel.QuestionText: that has the
+// options' meanings and the typing hints in it, and a cut drops the last options. The question and the options are
+// the agent's words: they go inside an <agent_output> block.
+type VoiceAsk struct {
+	Lang string
+	To   string // an agent's name; "" the Persona main conversation
+	// Tool is what the model hands the answer over with: delegate_task, ask_jarvis, or "" (a delegation of its own).
+	Tool string
+	// Bound: the call is bound to the conversation (protocol 2): 「状态：」 and 「停止：」 are not answers.
+	Bound            bool
+	Header, Question string
+	Options          []VoiceOption
+	Multi            bool // several options may be picked
+	N, Total         int  // which question this is (from 1) of how many the card has
+	Again            bool // the last answer was not heard: ask once more
+}
+
+// VoiceOption is an option of a question: its name, and what it means (said only when the user asks).
+type VoiceOption struct{ Label, Description string }
+
+func RenderVoiceAsk(d VoiceAsk) string { return render("voice/ask", d) }
+
+// VoiceNeedsYou is what the voice model is told of cards that are answered on the screen only (voice/needs_you): a
+// plan, a permission, a terminal dialog, a form, a question voice cannot answer. Only their kinds: never a command, a
+// path or what a plan says (docs/voice.md「提问和卡片」).
+type VoiceNeedsYou struct {
+	Lang  string
+	To    string
+	Cards []VoiceCard
+	// Here: the cards show on the screen of this call (protocol 2); else they are on the phone, in the conversation.
+	Here bool
+}
+
+func RenderVoiceNeedsYou(d VoiceNeedsYou) string { return render("voice/needs_you", d) }
+
+// VoiceAnswered is what the voice model is told when a question it asked by voice is over (voice/answered).
+type VoiceAnswered struct {
+	Lang string
+	To   string
+	// By: voice (the user's answer went to it); elsewhere (answered on the screen or another device while it was being
+	// asked: said by itself); late (an answer the user gave by voice came after it was answered elsewhere); unknown (the
+	// connection broke off while it was passed on, and the question no longer waits); failed (the answer did not get
+	// there: Code, a node's refusal said in words of its own (input_draft, dialog_open), else Reason, the hub's own
+	// words, when it said); screen (the answer was not heard twice: it is left to the screen).
+	By, Code, Reason string
+	Here             bool // as VoiceNeedsYou's
+	// Unfollowed (voice): no run follows the conversation, so what it does next is not told by itself (#3503).
+	Unfollowed bool
+}
+
+func RenderVoiceAnswered(d VoiceAnswered) string { return render("voice/answered", d) }
 
 // VoiceSpoken is a stand-in for what an answer holds that is not to be read out (voice/spoken): code, a table, a
 // link, a path, a hash; omitted marks a long answer's cut middle.

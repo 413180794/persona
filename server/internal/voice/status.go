@@ -76,11 +76,14 @@ func (c *conversation) stopTarget(delegation string, gen int) {
 	case !working(sess) && !waitingOnUser(sess):
 		st.Do = "idle"
 	default:
-		// Working, or its turn stopped on a card or a dialog: the interrupt (Esc) ends it, as the app's 停止 does.
+		// Working, or its turn stopped on a card or a dialog: the interrupt (Esc) ends it, as the app's 停止 does. Noted
+		// first: the card asked goes before the hub answers, and the tracker may see that first (asks.go).
 		c.runs.stopAsked.Store(time.Now().UnixNano()) // before the stop can be read back (tracker.finish)
+		c.stopping(true)
 		if err := hub.interrupt(ctx, t.MachineID, t.SessionID); err != nil {
 			c.pl.logf("stop %s/%s: %v", t.MachineID, t.SessionID, err)
 			c.runs.stopAsked.Store(0) // the stop did not go through: a later stop from elsewhere is told as usual
+			c.stopping(false)
 			st.Do, st.Reason = "stop_failed", hubReason(err)
 		} else {
 			c.runs.stopped()

@@ -1,0 +1,2 @@
+Claude Code has stopped and waits for the user: a permission to run a command. It is not finished: it goes on once the user taps it on the screen.
+Tell the user in one sentence what it waits for and to tap it on the screen, like "Claude Code wants to run a command, approve it on the screen". Say only what sort it is: do not read out a command, a path or what the plan says, and do not answer it for the user; when the user says "approve" or "yes", ask them to tap it on the screen.

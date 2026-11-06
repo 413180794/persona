@@ -55,7 +55,7 @@ type hubLink struct {
 	mu         sync.Mutex
 	listeners  map[*linkListener]struct{}
 	subs       map[linkKey]int // listeners' watches
-	since      map[linkKey]int // what a subscription catches up from (a run's base)
+	since      map[linkKey]int // what a subscription catches up from (a run's base, moved on by the lines seen: saw)
 	seen       map[linkKey]string
 	conn       *websocket.Conn
 	cancel     context.CancelFunc
@@ -284,10 +284,20 @@ func (h *hubLink) handle(b []byte) {
 		}
 		var f struct {
 			Items []struct {
+				Seq          int             `json:"seq"`
 				TurnDuration json.RawMessage `json:"turn_duration"`
 			} `json:"items"`
+			ToSeq *int `json:"to_seq"`
 		}
 		_ = json.Unmarshal(b, &f)
+		seen := 0
+		if f.ToSeq != nil {
+			seen = *f.ToSeq
+		}
+		for _, it := range f.Items {
+			seen = max(seen, it.Seq)
+		}
+		h.saw(key, seen)
 		for _, it := range f.Items {
 			if len(it.TurnDuration) > 0 && string(it.TurnDuration) != "null" {
 				h.dispatch(linkEvent{key: key, ended: true})
@@ -373,6 +383,15 @@ func fingerprint(s *proto.Session) string {
 	}
 	b, _ := json.Marshal([]any{s.Status, s.State, s.Starting, s.PendingInteractions, len(s.Background), s.Subagents, s.TurnError, work})
 	return string(b)
+}
+
+// saw moves k's catch-up point on to seq, the last line of a batch the link got (it only moves on).
+func (h *hubLink) saw(k linkKey, seq int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.subs[k] > 0 && seq > h.since[k] {
+		h.since[k] = seq
+	}
 }
 
 func (h *hubLink) watched(k linkKey) bool {

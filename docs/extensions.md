@@ -2168,7 +2168,7 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 全双工：手机一直送麦克风（包括静音），什么时候该说话由模型决定，App 不做 VAD、不做「按住说话」。
 
-本节是协议 1。语音模式的协议 2（#3502 起内置语音扩展说它；`start` 带 `protocol: 2` 和 `target`：绑定所在的对话，加 `run` / `link` 帧、`resend`、`ready` 里的目标，`ask` 帧等 #3504）见 `docs/voice.md` 第 3 节；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
+本节是协议 1。语音模式的协议 2（#3502 起内置语音扩展说它；`start` 带 `protocol: 2` 和 `target`：绑定所在的对话，加 `run` / `link` 帧、`resend`、`ready` 里的目标，#3504 起加 `ask` 帧）见 `docs/voice.md` 第 3 节；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
 `error` 的 `code` 两种协议都可能有：`upstream_forbidden`（服务拒了 Key）、`upstream_unavailable`、`upstream_failed`（断了重连不上），App 不认识的 `code` 按没有处理。
 
 ### `GET /models`
@@ -2294,7 +2294,7 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
   - **失败时宁可删**：不管读不读得到「有没有设 Key」都删（删是幂等的），读不到时回应照样带 `secrets_cleared`；删不掉就什么都不存，回 500 `secret_not_cleared`；
     Key 删了之后配置没存上（数据库写失败，409）时，错误回应也带 `secrets_cleared`，地址还是原来的。配置不合表单（400）时什么都不改，Key 也留着。
 - **模型回退**：App 选的模型所在的上游没了（地址清掉了、hub.json 改了），不再报错断开：改用默认模型、默认音色，连上后发一个不致命的 `error{code: "model_unavailable"}`。
-- **`GET /info`**：`{"protocol": 2, "features": ["target", "runs", "resume"], "setup"?: "…", "warnings"?: ["…"]}`，不带 Key，也不带上游列表。`protocol` 是这个扩展说的最高的语音帧版本（#3502 起是 2，`start` 不写 `protocol: 2` 的客户端照旧是这一节的协议 1），`features` 只列已经有的（`docs/voice.md`「版本协商」）。
+- **`GET /info`**：`{"protocol": 2, "features": ["target", "runs", "asks", "resume"], "setup"?: "…", "warnings"?: ["…"]}`，不带 Key，也不带上游列表。`protocol` 是这个扩展说的最高的语音帧版本（#3502 起是 2，`start` 不写 `protocol: 2` 的客户端照旧是这一节的协议 1），`features` 只列已经有的（`docs/voice.md`「版本协商」）。
 - **扩展拿到的环境变量**：`PERSONA_EXTENSION_CONFIG`（表单的值，带默认值）、`PERSONA_EXTENSION_SECRETS`（`{"key": "…"}`，解密后只在进程环境里）、
   `PERSONA_VOICE_HUB_CONFIG`（被接管条目原来的 `config`）、条目的 `env`，以及 `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`（清单里 `hub_api`，和以前一样）；
   旧名字 `PERSONA_PLUGIN_*` 同样给，扩展也认。
@@ -2331,7 +2331,9 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
 扩展按一轮跟踪（`docs/voice.md`「一轮跟踪」，和渠道管线同一套 `channel.Run` 规则）：按这条消息的 id 找到它、等**它那一轮**结束（主对话在忙别的一轮时等它排到），
 读这一轮的完整回答，转成能说出口的文字（代码、表格、链接、哈希换成「一段 12 行的代码，在屏幕上」这类占位，路径只留文件名），
 放进 `<agent_output>` 数据块作为这个 delegation 唯一的结果交回去，模型再用一两句话说结论；delegation 已经不在了（重连过）就作为一句新的上下文说出来。
-主对话停下来等用户回答或批准时说一句「去手机上看」；留下后台任务时先说结果、后台做完再说一次。
+主对话停下来提问时（`ask_user`），完整设备的通话一题一题念出来（只念选项名），这期间交出去的话都当回答，扩展调 `POST /api/v1/interactions/{id}/resolve` 答掉；
+计划、授权这类卡只按类别说一句、请你在手机上点，口头「批准」不会替你点（`docs/voice.md` 4.7，#3504）；别的扩展调来的通话、或者没有卡片可说时，照旧说一句「去手机上看」。
+留下后台任务时先说结果、后台做完再说一次。
 App 那边这期间显示「Persona 主对话处理中」。开了 `tools` 的上游，模型调查知识库、看 Agents 时扩展直接执行（走 hub 的 API）。
 
 **用户发言门槛**：交出去的事（交给主对话、`send_to_agent`）只在用户刚说过话时才做：模型读到上一个回答之后用户说过话（字幕或打字），而且不超过 30 秒；

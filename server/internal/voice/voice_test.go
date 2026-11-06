@@ -161,7 +161,9 @@ func dialApp(t *testing.T, pl *Plugin, start map[string]any, header ...http.Head
 			a.frames <- f
 		}
 	}()
-	a.send(start)
+	if start != nil { // nil: the test sends it when it likes
+		a.send(start)
+	}
 	return a
 }
 

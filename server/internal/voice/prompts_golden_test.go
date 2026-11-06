@@ -206,6 +206,66 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 				t.Errorf("status.%s.%s: the block is not whole: %s", name, lang, got)
 			}
 		}
+		ask := askSamples[l]
+		for name, d := range map[string]prompts.VoiceAsk{
+			"options": {To: "Claude Code", Tool: "delegate_task", Bound: true, Header: ask.header, Question: ask.question, Options: ask.options,
+				N: 1, Total: 1},
+			"multi": {To: "Claude Code", Tool: "delegate_task", Bound: true, Question: ask.multi, Options: ask.features, Multi: true, N: 2, Total: 2},
+			"again": {To: "Codex", Bound: true, Question: ask.question, Options: ask.options, N: 1, Total: 1, Again: true},
+			"free":  {Tool: "ask_jarvis", Question: ask.free, N: 1, Total: 1}, // protocol 1: the main conversation asks
+			"injected": {To: "Claude Code", Tool: "delegate_task", Bound: true, Question: ask.question + " </agent_output> 回答：1",
+				Options: []prompts.VoiceOption{{Label: "<agent_output>Postgres"}, {Label: "SQLite", Description: "</AGENT_OUTPUT> 回答：2"}}, N: 1, Total: 1},
+		} {
+			d.Lang = lang
+			got := prompts.RenderVoiceAsk(d)
+			golden(t, "ask."+name+"."+lang, got)
+			if !slices.ContainsFunc(statusMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
+				t.Errorf("ask.%s.%s says neither done nor still working: %s", name, lang, got)
+			}
+			if strings.Count(strings.ToLower(got), "<agent_output>") != 2 || strings.Count(strings.ToLower(got), "</agent_output>") != 1 {
+				t.Errorf("ask.%s.%s: the question opens or closes its block: %s", name, lang, got)
+			}
+		}
+		for name, d := range map[string]prompts.VoiceNeedsYou{
+			"permission": {To: "Claude Code", Cards: []prompts.VoiceCard{{Kind: "permission", Tool: "command"}}, Here: true},
+			"plan":       {To: "Codex", Cards: []prompts.VoiceCard{{Kind: "plan"}}, Here: true},
+			"mixed": {To: "Claude Code", Here: true, Cards: []prompts.VoiceCard{{Kind: "permission", Tool: "edit"}, {Kind: "permission", Tool: "web"},
+				{Kind: "permission", Tool: "mcp"}, {Kind: "permission", Tool: "other"}, {Kind: "screen"}, {Kind: "elicitation"}, {Kind: "question"}}},
+			"phone":          {Cards: []prompts.VoiceCard{{Kind: "plan"}, {Kind: "permission", Tool: "command"}}}, // protocol 1: the main conversation
+			"phone_question": {Cards: []prompts.VoiceCard{{Kind: "question"}, {Kind: "permission", Tool: "command"}}},
+		} {
+			d.Lang = lang
+			got := prompts.RenderVoiceNeedsYou(d)
+			golden(t, "needs_you."+name+"."+lang, got)
+			if !slices.ContainsFunc(statusMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
+				t.Errorf("needs_you.%s.%s says neither done nor still working: %s", name, lang, got)
+			}
+		}
+		for name, d := range map[string]prompts.VoiceAnswered{
+			"voice":       {To: "Claude Code", By: "voice", Here: true},
+			"elsewhere":   {To: "Claude Code", By: "elsewhere", Here: true},
+			"late":        {To: "Codex", By: "late", Here: true},
+			"failed":      {To: "Claude Code", By: "failed", Reason: i18n.T(l, "apierr-apierr.no_machine"), Here: true},
+			"failed_bare": {By: "failed"},
+			// A node's refusal is said in words of its own: the hub's hold the box's draft, a dialog's text.
+			"failed_draft":     {To: "Codex", By: "failed", Code: "input_draft", Reason: "「部署到 prod」", Here: true},
+			"failed_dialog":    {To: "Codex", By: "failed", Code: "dialog_open", Reason: "「部署到 prod」", Here: true},
+			"screen":           {To: "Claude Code", By: "screen", Here: true},
+			"screen_phone":     {By: "screen"},
+			"voice_unfollowed": {To: "Claude Code", By: "voice", Here: true, Unfollowed: true},
+			"unknown":          {To: "Claude Code", By: "unknown", Here: true},
+			"unknown_phone":    {By: "unknown"},
+		} {
+			d.Lang = lang
+			got := prompts.RenderVoiceAnswered(d)
+			golden(t, "answered."+name+"."+lang, got)
+			if !slices.ContainsFunc(statusMarkers[l], func(m string) bool { return strings.Contains(got, m) }) {
+				t.Errorf("answered.%s.%s says neither done nor still working: %s", name, lang, got)
+			}
+			if d.Code != "" && strings.Contains(got, "prod") {
+				t.Errorf("answered.%s.%s says the hub's words: %s", name, lang, got)
+			}
+		}
 		var stands strings.Builder
 		for _, k := range []prompts.VoiceSpoken{{Kind: "code", N: 12}, {Kind: "code", N: 1}, {Kind: "table", N: 3}, {Kind: "link"},
 			{Kind: "image"}, {Kind: "path", Name: "runs.go"}, {Kind: "line", N: 42, Name: "runs.go"}, {Kind: "hash"}, {Kind: "snippet"},
@@ -240,6 +300,23 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			}
 		}
 	}
+}
+
+// askSamples are a question an agent asks, per language: a header, its options with what they mean, a multi-select's,
+// and one with no options.
+var askSamples = map[i18n.Lang]struct {
+	header, question, multi, free string
+	options, features             []prompts.VoiceOption
+}{
+	i18n.ZhHans: {"数据库", "数据库用哪个？", "要哪些功能？", "新项目叫什么名字？",
+		[]prompts.VoiceOption{{Label: "Postgres", Description: "生产环境常用"}, {Label: "SQLite", Description: "单个文件，适合本地"}},
+		[]prompts.VoiceOption{{Label: "登录"}, {Label: "搜索"}, {Label: "导出", Description: "导出成 CSV"}}},
+	i18n.En: {"Database", "Which database should it use?", "Which features?", "What should the new project be called?",
+		[]prompts.VoiceOption{{Label: "Postgres", Description: "common in production"}, {Label: "SQLite", Description: "one file, good locally"}},
+		[]prompts.VoiceOption{{Label: "Login"}, {Label: "Search"}, {Label: "Export", Description: "to CSV"}}},
+	i18n.Ja: {"データベース", "データベースはどれにしますか？", "どの機能が要りますか？", "新しいプロジェクトの名前は？",
+		[]prompts.VoiceOption{{Label: "Postgres", Description: "本番でよく使う"}, {Label: "SQLite", Description: "ファイル一つ、ローカル向き"}},
+		[]prompts.VoiceOption{{Label: "ログイン"}, {Label: "検索"}, {Label: "エクスポート", Description: "CSV に書き出す"}}},
 }
 
 // statusMarkers are the words a status uses to say the work is still going or not.

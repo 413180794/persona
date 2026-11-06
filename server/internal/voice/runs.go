@@ -123,12 +123,17 @@ type tracker struct {
 	// stopAsked is when the voice side last asked the bound conversation to stop (stopTarget, unix ns): a run read as
 	// stopped after that ends quietly, as stopped() ends it: the model already said it was stopped.
 	stopAsked atomic.Int64
+	asks      *asker        // the cards waiting in the call's conversations (asks.go)
+	every     time.Duration // lookEvery as the call began
 }
 
 const refusedMost = 20
 
 func newTracker(c *conversation, link *linkListener) *tracker {
-	return &tracker{c: c, link: link, ops: make(chan func(), 16), ended: map[linkKey]time.Time{}, refused: map[string]*voiceRun{}}
+	t := &tracker{c: c, link: link, ops: make(chan func(), 16), ended: map[linkKey]time.Time{}, refused: map[string]*voiceRun{},
+		every: lookEvery}
+	t.asks = newAsker(t, c.role == "" || c.role == roleFull)
+	return t
 }
 
 // loop owns the runs until the conversation ends: then they are dropped (they are not kept anywhere; what was sent goes
@@ -152,13 +157,17 @@ func (t *tracker) loop(ctx context.Context) {
 			op()
 		case ev := <-t.link.events:
 			t.event(ev)
+			t.asks.event(ev)
 			due = true
 		case now := <-tick.C:
-			due = t.link.dirty.Swap(false) || now.Sub(t.last) >= lookEvery
+			dirty := t.link.dirty.Swap(false)
+			due = dirty || now.Sub(t.last) >= t.every
+			t.asks.due = t.asks.due || dirty
 		}
 		if due && len(t.runs) > 0 {
 			t.checkAll(ctx)
 		}
+		t.asks.tick(ctx)
 	}
 }
 
@@ -256,8 +265,10 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 	case look.Waiting && !r.waiting:
 		r.waiting = true // once until it works again: the user answers on the phone
 		t.set(r, runNeedsYou)
-		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
-			Tasks: r.Tasks})), false, false)
+		if !t.asks.covers(ctx, linkKey{r.MachineID, r.SessionID}) { // a card waiting says itself (asks.go)
+			t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
+				Tasks: r.Tasks})), false, false)
+		}
 	case look.Working:
 		r.waiting = false
 		if !r.Held {

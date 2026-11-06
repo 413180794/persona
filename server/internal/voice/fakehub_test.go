@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,6 +50,17 @@ type fakeHub struct {
 	cards      []proto.Interaction // GET /api/v1/interactions
 	interrupts []string            // the sessions POST …/interrupt stopped
 	offline    bool                // the machine is not connected
+	// resolved are the cards POST /api/v1/interactions/{id}/resolve answered; onResolve answers one instead (status
+	// 0: take it; below 0: the connection drops with no answer).
+	resolved  []resolvedCard
+	onResolve func(id string) (int, string)
+	// onInterrupt runs as POST …/interrupt stops sid, before it answers (unlocked).
+	onInterrupt func(sid string)
+}
+
+type resolvedCard struct {
+	ID  string
+	Res proto.Resolution
 }
 
 type fakeSession struct {
@@ -154,10 +166,47 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		defer h.mu.Unlock()
 		_ = json.NewEncoder(w).Encode(map[string]any{"interactions": append([]proto.Interaction{}, h.cards...)})
 	})
+	mux.HandleFunc("POST /api/v1/interactions/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
+		var res proto.Resolution
+		_ = json.NewDecoder(r.Body).Decode(&res)
+		id := r.PathValue("id")
+		h.mu.Lock()
+		onResolve := h.onResolve
+		h.mu.Unlock()
+		if onResolve != nil {
+			if status, body := onResolve(id); status < 0 {
+				if conn, _, err := http.NewResponseController(w).Hijack(); err == nil {
+					_ = conn.Close()
+				}
+				return
+			} else if status != 0 {
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, body)
+				return
+			}
+		}
+		h.mu.Lock()
+		n := len(h.cards)
+		h.cards = slices.DeleteFunc(h.cards, func(ix proto.Interaction) bool { return ix.ID == id })
+		if len(h.cards) == n {
+			h.mu.Unlock()
+			w.WriteHeader(http.StatusGone)
+			_, _ = io.WriteString(w, `{"error":"no longer pending"}`)
+			return
+		}
+		h.resolved = append(h.resolved, resolvedCard{ID: id, Res: res})
+		h.pushLocked("", map[string]any{"type": "interaction_resolved", "id": id})
+		h.mu.Unlock()
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	})
 	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/interrupt", func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
 		h.interrupts = append(h.interrupts, r.PathValue("sid"))
+		onInterrupt := h.onInterrupt
 		h.mu.Unlock()
+		if onInterrupt != nil {
+			onInterrupt(r.PathValue("sid"))
+		}
 		h.status(r.PathValue("sid"), "idle")
 		_, _ = io.WriteString(w, `{}`)
 	})
@@ -367,6 +416,32 @@ func (h *fakeHub) pushLocked(sid string, v any) {
 			cancel()
 		}
 	}
+}
+
+// raise puts a card up and tells every client, as the hub does (it broadcasts a card to all of them).
+func (h *fakeHub) raise(ix proto.Interaction) {
+	if ix.CreatedAt.IsZero() {
+		ix.CreatedAt = time.Now()
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cards = append(h.cards, ix)
+	h.pushLocked("", map[string]any{"type": "interaction", "interaction": ix})
+}
+
+// answerOnScreen takes a card down as the app's answer does, and tells every client.
+func (h *fakeHub) answerOnScreen(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cards = slices.DeleteFunc(h.cards, func(ix proto.Interaction) bool { return ix.ID == id })
+	h.pushLocked("", map[string]any{"type": "interaction_resolved", "id": id})
+}
+
+// resolutions are the cards answered through the hub so far.
+func (h *fakeHub) resolutions() []resolvedCard {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.resolved)
 }
 
 // dropWS closes every /api/v1/ws connection, as the hub does to a client whose queue is full (or on a redeploy).

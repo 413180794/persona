@@ -18,7 +18,8 @@ import (
 // as the model made it, once the user-speech gate lets it (gate.go); what it starts with decides what it is:
 //   - 「状态：」 asks how the conversation stands: answered from its live state (status.go), never sent, no gate;
 //   - 「停止：」 stops it (the app's 停止 button), behind the gate;
-//   - 「回答：」 is the user's answer to what it asked: sent without the mark;
+//   - while a question of it is asked by voice, anything else is the answer (asks.go), behind the gate;
+//   - 「回答：」 otherwise is the user's answer to what it asked in words: sent without the mark;
 //   - anything else is an instruction, sent as it is: refused by the hub (409) it is told why and the app may send it
 //     again (resend); while a card waits, a word that only approves or refuses is not sent (cards are tapped).
 // A run that the hub took (200) folds the ones not answered yet on the same conversation (tracker.adopt): one refused
@@ -87,7 +88,12 @@ func (c *conversation) handOverBound(task, delegation string, gen int, at time.T
 			c.stopTarget(delegation, gen)
 		})
 		return
-	case "answer":
+	}
+	if card := c.askingCardLocked(); card != "" { // a question asked by voice: anything else is its answer (asks.go)
+		c.answerCard(card, task, delegation, gen, at)
+		return
+	}
+	if kind == "answer" {
 		task = rest
 	}
 	c.whenSpoken(at, func(spoken bool) {
@@ -351,6 +357,7 @@ func (t *tracker) resume(runs []resumeRun) {
 func (t *tracker) stopped() {
 	select {
 	case t.ops <- func() {
+		t.asks.quiet() // the stop closed its cards
 		for _, r := range slices.Clone(t.runs) {
 			if r.MachineID == t.c.target.MachineID && r.SessionID == t.c.target.SessionID {
 				t.c.toolsDone(r.appIDs)

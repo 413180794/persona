@@ -95,6 +95,13 @@ type conversation struct {
 	queue            []*sentWords          // what waits for the insertion gate
 	userAt           time.Time             // the user's open caption last grew
 	connectedAt      time.Time             // the upstream session came up
+	// askCur is the card the tracker asks by voice (asks.go), askTold whether the model was told it: from then on what
+	// it hands over is the card's answer.
+	askCur  string
+	askTold bool
+	// stopAt is when 「停止：」 began to interrupt the bound conversation (zero: it did not, or that failed): a card
+	// that goes from then on was closed by it (asks.go).
+	stopAt time.Time
 }
 
 type outFrame struct {
@@ -466,7 +473,12 @@ func (c *conversation) connect() error {
 	c.resume = nil
 	c.mu.Unlock()
 	go c.readUpstream(up, gen)
-	if first && len(resume) > 0 {
+	if !first {
+		c.runs.reconnected()
+		return nil
+	}
+	c.runs.arm() // its cards (asks.go): the call is set up; before the runs handed back, which a card may cover
+	if len(resume) > 0 {
 		c.runs.resume(resume)
 	}
 	return nil
@@ -831,6 +843,10 @@ func (c *conversation) handOver(task, delegation string, gen int, at time.Time) 
 		c.handOverBound(task, delegation, gen, at)
 		return
 	}
+	if card := c.askingCardLocked(); card != "" { // a question asked by voice: this is its answer (asks.go)
+		c.answerCard(card, task, delegation, gen, at)
+		return
+	}
 	c.whenSpoken(at, func(spoken bool) {
 		// What was said, taken now: the caption of the user's request often comes after the model's call (gate.go).
 		c.mu.Lock()
@@ -890,14 +906,30 @@ func (c *conversation) tell(r *voiceRun, w words, final, agent bool) {
 	c.mu.Lock()
 	gen, delegation := c.gen, ""
 	if final && r.Delegation != "" {
-		if g, open := c.delegations[r.Delegation]; open && g == r.Gen && g == gen {
-			delegation = r.Delegation
-			delete(c.delegations, r.Delegation)
-		}
+		delegation = c.claim(r.Delegation, r.Gen)
 		r.Delegation = ""
 	}
 	c.mu.Unlock()
 	c.deliver(&sentWords{words: w, delegation: delegation, gen: gen, agent: agent})
+}
+
+// answerOn gives the model s as the one commentary of delegation (of upstream session gen) while that is open in this
+// session, else as something to say.
+func (c *conversation) answerOn(delegation string, gen int, s *sentWords) {
+	c.mu.Lock()
+	s.delegation, s.gen = c.claim(delegation, gen), c.gen
+	c.mu.Unlock()
+	c.deliver(s)
+}
+
+// claim takes delegation, of upstream session gen, for its one commentary (mu held): "" when it is not open in this
+// session (its session is gone, or it had its commentary).
+func (c *conversation) claim(delegation string, gen int) string {
+	if g, open := c.delegations[delegation]; delegation != "" && open && g == gen && g == c.gen {
+		delete(c.delegations, delegation)
+		return delegation
+	}
+	return ""
 }
 
 // sentWords is what deliver sends, kept by its event id until the service acks or refuses it.
@@ -910,6 +942,8 @@ type sentWords struct {
 	at         time.Time
 	queued     time.Time // it went into the queue: the user's voice holds it back at most answerHoldMost / sayHoldMost
 	prio       int       // which goes first of what waits for the insertion gate: higher first, then the oldest
+	card       string    // the card it asks (asks.go): once it is sent, the model asks that card
+	cards      []string  // the cards it says wait on the screen (asks.go): not said once they are all gone
 }
 
 // deliver sends s once the insertion gate lets it (gate.go; a tool's result on its call goes at once).
@@ -1014,6 +1048,7 @@ func (c *conversation) sendNow(s *sentWords) {
 	if s.agent {
 		c.gate.told(now)
 	}
+	c.told(s.card)
 	delegation, gen, text, onCall := s.delegation, s.gen, s.text, s.onCall
 	c.mu.Unlock()
 	if delegation != "" && c.sendUp(gen, w.reply(delegation, text, true, id)...) || onCall {

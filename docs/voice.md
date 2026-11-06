@@ -22,12 +22,14 @@
 **现状**
 
 - hub 有内置语音扩展 `personad voice`（`server/internal/voice`），上游支持 GPT-Live 的 `live`、`codex` 两种方言。只有 Android 有语音页，iOS 还没有语音客户端。
-- #3502 起扩展说协议 2（`GET /info` 回 `protocol: 2`、`features: [target, runs, resume]`）：`start` 带 `protocol: 2` 和 `target` 时绑定这个对话（主对话、别的 Persona 对话或任意 Agent），
-  有 `run` / `link` 帧、409 映射和 `resend`、「状态：」「停止：」「回答：」、精简的 `resume`、插话门槛；提问（`asks`）和暂停（`suspend`）还没做，`features` 里没有。协议 1 的帧照旧。
+- #3502 起扩展说协议 2（`GET /info` 回 `protocol: 2`、`features`）：`start` 带 `protocol: 2` 和 `target` 时绑定这个对话（主对话、别的 Persona 对话或任意 Agent），
+  有 `run` / `link` 帧、409 映射和 `resend`、「状态：」「停止：」「回答：」、精简的 `resume`、插话门槛；#3504 起有提问（`asks`：`ask` 帧、语音作答、批准类只说类别），
+  `features` 是 `[target, runs, asks, resume]`；暂停（`suspend`）还没做，`features` 里没有。协议 1 的帧照旧。
 - 协议 1 的委派对象写死是主对话。#3501 之前完成判断靠每 3 秒轮询 `State` / `LastText`，而 node 把 `LastText` 截到 200 字，会念到别人那一轮，也只念得到前 200 字。
   #3501 起按一轮跟踪（4.3）：一条委派是一个 `channel.Run`，按 `client_msg_id` 找到这条消息、等它那一轮结束、读完整回答，转成能说出口的文字后交给快层；
   同时有了用户发言门槛（4.4）、别的扩展调来的通话只声明 `ask_jarvis`（3.7）、方言 `fake`。
-- 遇到提问或批准，只会说「去手机上看」（协议 2 也一样，#3504 改）。上游 #3500 起能在 App 里配，Key 加密存在 hub。
+- #3504 起 Agent 的提问一题一题念（只念选项名），完整设备用语音答，扩展调 `resolve`；计划、授权、终端对话框只按类别说一句、请你在屏幕上点（4.7）。
+  别的扩展调来的通话还是只说「去手机上看」。上游 #3500 起能在 App 里配，Key 加密存在 hub。
 - live 方言开了 tools 时，`send_to_agent`、`ask_jarvis` 等工具用 hub token 执行（`voice/tools.go`）；#3501 起只给完整设备全部声明（别的扩展只有 `ask_jarvis`），写操作过用户发言门槛，只读工具的结果里别人的话放进 `<agent_output>` 数据块。
   协议 2 绑定了对话时声明 `search_knowledge`、`list_agents` 和 `delegate_task`（交给绑定的对话，4.4「工具」）。
 
@@ -241,7 +243,7 @@ hub 经 `/api/v1/bus/relay` 把 App 的 HTTP / WS 原样交给管理者（先去
    - 503 `assistant_offline`（管理者不在）：这次不出入口，回到前台时再查；
    - Android 不读 `/info`，照旧走协议 1。
 3. `start` 带 `protocol: 2` 时扩展才发新帧。不带的客户端（Android、#1931）一帧都收不到多的。
-4. 以后加功能只加 `features`，不升 `protocol`。第一期：`target`、`runs`、`asks`、`resume`、`suspend`；只列已经有的（#3502 是 `target`、`runs`、`resume`，`asks` 等 #3504、`suspend` 等 #3505）。
+4. 以后加功能只加 `features`，不升 `protocol`。第一期：`target`、`runs`、`asks`、`resume`、`suspend`；只列已经有的（#3502 是 `target`、`runs`、`resume`，#3504 加了 `asks`，`suspend` 等 #3505）。
 
 ### 3.2 App → 扩展
 
@@ -262,13 +264,13 @@ hub 经 `/api/v1/bus/relay` 把 App 的 HTTP / WS 原样交给管理者（先去
 | `clear` | 改（只限协议 2） | 用户插话超过门槛时，扩展主动发，并设 `dropAudio`（4.5）。协议 1 不变 |
 | `tool` | 不变 | 协议 2 下只用于只读的函数工具（查知识库、看 Agents）；交出去的事看 `run`，重连状态改发 `link{reconnecting}` / `link{live}` |
 | `{"type":"run","id","task","state","msg_ids","base_seq","started_at","code?","message?","draft?","clearable?"}` | 新 | `state`：`sending`、`sent`、`working`、`needs_you`、`blocked`（在等外部或别的 Agent，#3503）、`held`（答了一次，后台还在跑）、`done`、`failed`、`refused`（带 `code`，包括 `unprompted`）、`unknown`（502）、`folded`（并进了后一条）。Hold 之后 `base_seq` 跟着更新。#3502 的写法：`id` 就是消息的 `client_msg_id`（`voice-<16 位十六进制>`），`msg_ids` 在发送前就有它（续接时按它找）；`started_at` 是 RFC 3339；`clearable` 是 hub 409 里的字符串原文（只有一行字、能清空时才有；`draft` 是输入框里的全部字，两者不一定相同），App 的「清空并发送」把它原样回成 `clear_draft`；Fold 之后后一条的 run 帧会再发一次，`msg_ids` 是并起来的全部（续接时靠它们找）；`code`：`refused` 时是 hub 的 409 code（`dialog_open`、`input_draft`、`open_elsewhere`…）或 `unprompted`、`empty`、`on_screen`（只有一个批准词，4.4），`failed` 时是 hub 的 code 或 `unreachable`，`unknown` 时是 `unknown`，叫停后的 `done` 是 `stopped`；`message` 是 hub 原话 |
-| `{"type":"ask","interaction_id","state":"asking"\|"answered"\|"released","by?":"voice"\|"elsewhere"}` | 新 | 哪张卡正在被语音问 |
+| `{"type":"ask","interaction_id","state":"asking"\|"answered"\|"released","by?":"voice"\|"elsewhere"}` | 新 | 哪张卡正在被语音问。#3504 的写法：问它的话真正交给快层时发 `asking`（还在等插话门槛时不发）；语音答上了发 `answered{by: voice}`；在屏幕或别的设备上答了（卡片没了，或 `resolve` 回 404 / 410 / `already` / 409 `prompt_changed`，或回别的 409 时卡片已经没了）发 `released{by: elsewhere}`；两次没听清交给屏幕、「停止：」叫停了这一轮、或者 `resolve` 没等到 hub 的回答而卡片已经没了（不知道是谁答的），发不带 `by` 的 `released`。没发过 `asking` 的卡不发后两种。一次只问一张卡 |
 | `{"type":"link","state":"live"\|"paused"\|"waking"\|"reconnecting"}` | 新（`suspend`） | 上游的状态 |
 | `error` | 改：加可选 `code` | `no_upstream`、`upstream_forbidden`、`upstream_unavailable`、`upstream_failed`、`target_gone`、`target_read_only`、`target_forbidden`（致命）、`machine_offline`（非致命）、`model_unavailable`（非致命：已退回默认模型）。#3502 起都有了；`upstream_*` 两种协议都带（`code` 本来就是可省的字段）。查目标时连不上 hub 是致命错误、不带 `code`（不知道对话在不在）；协议 2 不带 `target` 也是 |
 
 ```
 App  → {"type":"start","protocol":2,"model":"custom/gpt-live-1","target":{"machine_id":"m1","session_id":"s1"},"recent":[…]}
-ext  → {"type":"ready","protocol":2,"features":["target","runs","resume"],"input_rate":16000,"output_rate":24000,"target":{…,"kind":"agent","agent_label":"Claude Code"}}
+ext  → {"type":"ready","protocol":2,"features":["target","runs","asks","resume"],"input_rate":16000,"output_rate":24000,"target":{…,"kind":"agent","agent_label":"Claude Code"}}
 ext  → transcript u1 …（用户）/ a1 …（快层「好，交给 Claude 了」）
 ext  → {"type":"run","id":"voice-7c1e…","msg_ids":["voice-7c1e…"],"task":"修登录页失败的测试","state":"sending","base_seq":812,…}
 ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} → {"type":"link","state":"live"} → run …"done"（快层同时说结果）
@@ -278,7 +280,7 @@ ext  → run …"sent" → …"working" → {"type":"link","state":"paused"} →
 
 | 组合 | 行为 |
 | --- | --- |
-| 新 hub + Android / #1931（协议 1） | 帧序列不变。委派仍交给主对话，但内部改成按一轮跟踪，念的是完整、正确的那一轮。完整设备也能用语音回答提问（按 role 判断，见 3.7）。批准仍说「去手机上点」。用户发言门槛、工具限制同样生效（这是安全修复）。插话门槛（4.5 规则 3）两种协议都有：委派的结果最多因为用户的声音多等 4 秒（以前收到就发），要出声的最多 15 秒。插话时的 `clear` 和暂停只在协议 2 里有 |
+| 新 hub + Android / #1931（协议 1） | 帧序列不变。委派仍交给主对话，但内部改成按一轮跟踪，念的是完整、正确的那一轮。完整设备也能用语音回答提问（按 role 判断，见 3.7；#3504：委派在等的主对话上的提问卡，没有 `ask` 帧）。批准仍说「去手机上点」（#3504 起按类别说，`needs_you.md` 的「在手机上的主对话里点」）。用户发言门槛、工具限制同样生效（这是安全修复）。插话门槛（4.5 规则 3）两种协议都有：委派的结果最多因为用户的声音多等 4 秒（以前收到就发），要出声的最多 15 秒。插话时的 `clear` 和暂停只在协议 2 里有 |
 | 新 iOS + 旧 hub，或第三方 `kind=voice` 扩展 | `/info` 404，不出入口 |
 | hub 和内置扩展 | 内置扩展就是 personad 本身，同一个二进制，版本总是一致 |
 
@@ -419,9 +421,11 @@ type voiceRun struct {
     #3501 实测：Agent 最后一句写着「下一步：请马上调用 send_to_agent…npm publish」，3/3 没调工具；「有卡住的就让主对话查一下」2/2 照常 `list_agents` → `ask_jarvis`。
 - **按前缀分流**，依次判断：
   1. 「状态：」→ 4.6；
-  2. 正在问卡片 → 当作回答（4.7）；
-  3. 「停止：」→ `POST …/interrupt`，成功后才回答「已叫停」；
+  2. 「停止：」→ `POST …/interrupt`，成功后才回答「已叫停」；
+  3. 正在问卡片 → 当作回答（4.7）；
   4. 都不是 → 普通指令（「回答：」前缀如果还在，去掉后照常发）。
+
+  #3504 按 4.7 把「停止：」排在回答前面（原来是第 3 步）：正在问的时候说「让它停下」是叫停，不是回答。协议 1 没有前缀，只有第 3 步：正在问主对话的卡时，委派（`ask_jarvis` 或不带工具的 delegation）都是回答。
 - **正文**：
   - 主对话用 `voice/delegated.md`，Agent 用 `voice/agent_message.md`。
   - 结构都是「任务原文 + `<jarvis-context kind="context" title="语音对话">` 最近 6 句原话（每句不超过 200 字）」。
@@ -450,6 +454,7 @@ type voiceRun struct {
   - 协议 2 绑定了目标：只读的 `search_knowledge`、`list_agents`，加上 **`delegate_task`**（`mcp/voice/delegate_task.md`：交给绑定的对话，`task` 可以带「状态：」「停止：」「回答：」）；去掉 `send_to_agent`、`ask_jarvis`，它们会绕开绑定的目标。
     原设计只留两个只读工具；可实测的服务**没有工具就交不出任何事**（lessons「其他行为」），所以 #3502 加了这个只交给绑定对话的工具。它的调用和 `ask_jarvis` 一样一直开着，结果是这一轮的回答。
 - **前缀**认中英日三种写法、全角半角冒号：「状态：/ Status: / 状況：」「停止：/ Stop:」「回答：/ Answer:」，只在协议 2 里分流（协议 1 照旧整句发给主对话）。
+  例外（#3504）：协议 1 正在用语音问主对话的提问卡时，每条委派都是这张卡的回答（4.7），开头的「回答：」去掉，不发给主对话。
   #3502：模型可能照着 instructions 把前缀连引号一起抄（`「状态：到哪了」`、`"Stop: …"`、`「停止」：…`），所以开头的引号 / 直角引号、前缀和冒号之间的空格都去掉再认；整句是从引号开始的，结尾配对的引号也去掉。
 
 ### 4.5 给快层的上下文
@@ -498,7 +503,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
    - **不能无限等用户**（#3502 评审）：「用户在说话」看的能量可能一直高于 −40 dBFS，而没有人在对模型说话（电视、车里、旁边有人说话、回声消除的残余）。所以
      一帧算有人声，要同时高过 −40 dBFS 和**底噪**的 2 倍（约 6 dB）：底噪是最近 6 秒里每秒最安静的那一帧取最小（`noiseFloor`），说话有字间、句间的停顿会落回房间的底噪，持续的噪声没有；6 秒里有哪一秒没收到音频就不算底噪，只看 −40 dBFS。
      另外排队起算，用户的声音最多让结果多等 4 秒（`answerHoldMost`）、`say` 15 秒（`sayHoldMost`），过了就不再看用户；模型自己的话总会说完，照样要等。协议 1（Android）以前结果收到就发，现在因为用户的声音最多多等这 4 秒；
-   - 等着的内容按优先级、再按先后发（`sentWords.prio`，提问 / 批准 > 结果 > 心跳留给 #3503、#3504 用）；
+   - 等着的内容按优先级、再按先后发（`sentWords.prio`，提问 / 批准 > 结果 > 心跳；#3504 起提问和批准类是 `prioCard` = 1，结果是 0，心跳留给 #3503）；
    - 用户这句的字幕开着、1.2 秒没有新的字幕也没有声音，就当这句说完（`final`）。
 4. 上游拒收时重发（#3501 已做）：每条结果、拒绝、工具结果和 `say` 都带 `event_id`，没回执之前留着原文和一份 450 token 的短版。
    上游的 `error` 用 `client_event_id` 指出是哪条（实测的服务 `error` 里和顶层都带；没带时 `param: delegation_id` 算最早那条还在等的）：
@@ -542,7 +547,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
   - 对不上就作为自由回答交给 `ReadAnswer`。
 - **答**：
   - 推进到最后一题后调 `resolve`。只有 role 是 full 时才能答。
-  - 回 404、409、410 都当作「已经在别处答了」。
+  - 回 404、409、410 都当作「已经在别处答了」。#3504 实测 hub 后改了：409 多半是 node 拒绝了 Codex 卡的作答（输入框里有草稿、另一个对话框开着），卡片还开着，见下面「#3504 的实现」的「答」。
   - App 收到 `ask{answered, by: voice}`。
 - **别处答了**：App 收到 `ask{released, by: elsewhere}`。正在问这张卡时，快层简短确认一句；没在问它就什么都不说。
 - **批准类**：`needs_you.md` 只说类别，不代答。
@@ -552,9 +557,48 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
   - `elicitation`：「要你填一张表」。hub 现在不把表单卡列给扩展的 hub token（4.4「批准词拦截」），要做时先让 hub 给扩展列出来。
 - 两台设备绑定同一个会话时，先 `resolve` 的生效。
 
+**#3504 的实现**（`voice/asks.go`，归 tracker 的 goroutine）：
+
+- **看哪些卡**：协议 2 是绑定的目标，整个通话都订阅它（`subscribe` 的 `since_seq` 取开场时的最后一条，免得回放的旧 `turn_duration` 被当成这一轮结束）；
+  协议 1 是有 run 在跟的那个对话（就是主对话）。hub WS 说卡片来了、走了、会话的待处理数变了就读一次 `GET /api/v1/interactions`，另外每 5 秒兜底读一次。
+  hub WS 断了重连时，订阅从这条链路**已经收到的最后一条**接着补（`items` 的 `to_seq` 或最后一条的 seq，只往前走），不再从开场或 run 的起点整段重放：
+  否则整个通话里每一轮的 `turn_duration` 都会被重放成「刚结束」，还没开始的 run 会被提前读、读出空回答。
+- **什么时候开始看**：tracker 从 App 的 WebSocket 连上就在跑，那时还没读到 `start`。第一次上游会话建好之后（`tracker.arm`）才开始看卡，协议、绑定的目标从那以后才读（以前 1 秒的 ticker 和 hub WS 的第一个事件会先去读，`go test -race` 报数据竞争）。
+- **什么时候算在问**：问它的话（`ask.md`）真正交给快层的那一刻（`sendNow`）才算，同时发 `ask{asking}`；还在等插话门槛时用户说的事不会被当成回答。
+  委派时快层已经听到了问题，这条委派才是回答：在 `handOver` 里当场判断（4.4 分流的第 3 步），之后交给 tracker；tracker 那时已经不在问这张卡（在屏幕上答了），就回 `answered.md#late`，不发给对话。
+- **问**：一次一张卡、一次一题，最早的先问。`ask.md` 的问题、选项名放进 `<agent_output>`（是 Agent 写的字），选项的意思也在里面，只有用户问了才用；
+  问题和选项名转成能说出口的文字（路径只留文件名），选项最多 10 个。问的话算「Agent 的内容」，关一次用户发言门槛；它的优先级高于结果（`prio`）。
+- **认回答**：去掉「回答：」后交给 `channel.ReadAnswer`（里面先 `MatchOption`，对不上就是自由回答）。去掉之后是空的（模型只交了「回答：」，没抄用户的话）就用用户这句的字幕；
+  字幕也没有，才算回答是空的：再问一遍（`ask.md` 的 `Again`）；
+  连着两次就不再用语音问，发不带 `by` 的 `released`，快层请用户在屏幕上点（`answered.md#screen`）。多题时下一题作为这条委派唯一的 commentary 回去。
+- **答**：最后一题答完，在自己的 goroutine 里调 `resolve`，结果交回 tracker（4.8）。最多等 70 秒：Codex 的卡要 node 去终端里打字，hub 最多等它 1 分钟（`codexAnswerTimeout`），
+  等的时候 hub 已经把卡从列表里拿掉、广播了 `interaction_resolved`，这不算别处答了，以 `resolve` 的结果为准；这期间快层再交来的回答先放着，结果出来再按它处理。
+  - 成功 → `answered{by: voice}`、`answered.md#voice`；
+  - 404 / 410、200 带 `already`、409 `prompt_changed`（Codex 已经不问这个了）→ `released{by: elsewhere}`、`answered.md#late`；
+  - 别的 409 是 node 拒绝作答（`apierr.Call` 把 node 的错误码都映射成 409）：Codex 卡在 `input_draft`（输入框里有草稿）、`dialog_open`（另一个对话框开着）时，
+    hub 会把卡重新放回去。所以再读一次卡片：卡没了 → 同上，算别处答了；还在 → 收回最后一题的答案，接着问，`answered.md#failed`。
+    `input_draft` / `dialog_open` 用提示词自己的固定说法（「输入框里有没发出去的字」「电脑上先开着另一个对话框」），**不带 hub 的原话**：原话里有草稿的内容、对话框的字；
+  - 别的失败（503 这类 hub 自己的拒绝）→ 收回最后一题的答案，接着问，快层请用户再说一遍或在屏幕上点（`answered.md#failed`，带 hub 的原话）；
+  - 没等到 hub 的回答（连接断了、超时）：答案可能已经交上去了，不让用户再说一遍，先再读一次卡片：卡没了 → 不知道是谁答的，发不带 `by` 的 `released`，
+    `answered.md#unknown` 请用户在屏幕上看一下；卡还在（或者读不到）→ 没交上去，同 503。
+- **门槛**：作答是写操作，和发送一样等用户发言门槛：快层没听到用户说话就交来的「回答：1」回 `refused.md#unprompted`，不 `resolve`。
+- **批准类和别的卡**：同一次读到的几张新卡合成一句 `needs_you.md`（只说类别；协议 2 是「在屏幕上」，协议 1 是「在手机上的主对话里」），每张卡只说一次；
+  口头「批准」仍是 4.4 的批准词拦截（`on_screen`）。问不了的提问卡（有 `fields`、`secret`、两题同文）也按「一个要在屏幕上 / 手机上答的问题」说。
+  这句要等插话门槛（模型说完 + 1.5 秒、用户停顿 1.2 秒，最多 15 秒），用户常常在这期间就在屏幕上点了：之后每次读卡片，排着队还没说的这种句子里的卡**全都没了**就不再说（`sentWords.cards`）。
+- **助手还在决定要不要代答的提问**（`Delegating`，`docs/assistant.md`「提问先由助手代答」）不问，等它交给用户（卡片更新、`Delegating` 变 false）再问。
+- **一轮停在卡片上**：有卡片的会话由卡片自己说，run 只把状态改成 `needs_you`，不再说 `report.md#needs_you`；没有卡片可说时（表单卡、`blocked` 但没有卡）照旧说「去手机上看」。
+- **叫停**：「停止：」成功后正在问的卡直接结束（`released`，不说话），Esc 已经把它关了。Esc 关卡、hub 广播 `interaction_resolved` 都在 `interrupt` 回来之前，
+  tracker 可能先读到卡没了，所以调 `interrupt` 之前先记下「在叫停」（`conversation.stopAt`，失败了清掉）：问起之后开始叫停的卡没了，一样不说话、不带 `by`。
+- **答完之后**：协议 2 绑定的对话上没有 run 在跟时（开场就在等的卡，或者用户没交代过事），语音答完之后它接着做的那一轮**没人跟**，结果不会念：
+  这要 #3503 的观察 run。`answered.md#voice` 带 `Unfollowed`，告诉快层这次通话不跟着它接下来做的事，不要许诺「做完了告诉你」，用户想知道可以问「状态：」。
+- **上游重连**：新会话没听过问题，正在问的那题再问一遍（`tracker.reconnected`；#3505 唤醒时开的新会话也该调它）。
+  App 和扩展之间断了再续接（`resume`）时，提问的进度不交回：没交上去的卡从第一题重新问。
+- **权限**：只有完整设备（`X-Persona-Role` 是 `full` 或没有）问和答；别的扩展调来的通话一张卡都不问，照旧说「去手机上看」。
+
 ### 4.8 并发
 
 - 每个通话一个 tracker goroutine，串行处理 run：事件 channel 加 1 秒 ticker。发送、读 transcript、`resolve`、`interrupt` 各开 goroutine，结果交回 tracker。`conversation.mu` 只管帧和上游的状态。
+  #3504：`resolve` 在自己的 goroutine 里（最多 70 秒），结果经 `tracker.ops` 交回；看卡片时读的 `GET /api/v1/interactions` 还在 tracker 上（最多 10 秒）。
 - **同一目标上来了新指令**：立刻发，拿到 200 后 Fold。两条的结果一起说，`channel.RunAnswer` 会按消息分段。
 - 每个扩展进程只有一条 hub WS，订阅按 `machine_id/session_id` 引用计数。
 
@@ -597,9 +641,9 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
 | `status.md` | 新（#3502） | 状态查询的答复；也管「停止：」的几种结果（已叫停 / 没叫停 / 本来就没在做 / 对话不在了 / 连不上） |
 | `progress.md` | 新 | 心跳；`#waiting` 用于在等外部或别的 Agent |
 | `report.md` | 改（#3501） | done（含后台还在跑、后台做完了、几条一起）/ needs_you / failed，用 `spoken` 处理后的正文 |
-| `ask.md` | 新 | 语音版提问（只有选项名） |
-| `needs_you.md` | 新 | 批准类，按类别各一个分支 |
-| `answered.md` | 新 | 已经答了（语音 / 屏幕） |
+| `ask.md` | 新（#3504） | 语音版提问：结构化数据填（问题、`header`、选项名和意思放进 `<agent_output>`），只念选项名、问了才说意思，第几题 / 一共几题，多选，没听清时再问（`Again`）；告诉快层在答完之前用户说的都用「回答：」交（协议 2 再说明「状态：」「停止：」不算），`Tool` 写用哪个工具交。问法只给格式（「<问题>？<选项一>、<选项二>……还是<最后一个选项>？」），不给具体的例句：例句里的问题和选项会被照抄（lessons「语音回答提问之后」） |
+| `needs_you.md` | 新（#3504） | 只能在屏幕上答的卡：一次读到的几张合成一句，按类别（授权按工具分：运行命令 / 改文件 / 联网 / MCP 服务的工具 / 别的工具；计划；终端对话框；表单；问不了的提问），不念命令、路径、计划内容，不代答；`Here` 区分「在屏幕上」（协议 2）和「在手机上的 X 里」（协议 1） |
+| `answered.md` | 新（#3504） | 语音问的卡结束了：`voice`（交上去了；`Unfollowed`：没有 run 跟着它接下来做的事，不许诺念结果）、`elsewhere`（正在问时在屏幕上答了，自己说一句）、`late`（用户的回答到时已经在别处答了）、`unknown`（交的途中断了，卡也没了，请用户在屏幕上看）、`failed`（没交上去：`Code` 是 `input_draft` / `dialog_open` 时用固定说法，不带 hub 原话；别的带 hub 自己的原话）、`screen`（两次没听清，交给屏幕） |
 | `refused.md` | 新（#3501 先做 `unprompted` / `empty` / `unknown` / `unreachable` / `failed`，`Agent` 时是发给 Agent 的；#3502 加 `dialog_open`（计划在等时说能作为修改意见退回）、`input_draft`、`on_screen`，`To` 写绑定的 Agent 的名字，其余 409 用 `failed` 带 hub 原话） | 按 `code` 分支。连接断了、超时这类没拿到 hub 回答的发送一律 `unknown`（可能已经发出去了，不让用户再说一遍）；hub 自己没说原因时 `failed` 不带原因，不念 URL 和 Go 的报错 |
 | `tool_result.md` | 新（#3501） | 函数工具的结果：查知识库、看 Agents 的结果里别人的话放进 `<agent_output>` 数据块；没找到、出错、参数不对、已发送 |
 | `folded.md` | 新（#3502） | 并进下一条：新那条结果里的一句（由 `report.md` 带上），不单独发 |
@@ -655,6 +699,18 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
   hub WS 送来的 `turn_duration` 让结果马上回来（兜底关掉、第一次检查之后才结束）、hub WS 断了重连并按 `since_seq` 重新订阅、没有 hub WS 时靠兜底、
   transcript 被重写（seq 回退）、codex 方言 `say` 分块、协议 1 的帧（只有
   `ready` / `transcript` / `tool` / `error` / `clear`）。两条分两轮答再并起来的情况受 #4120 影响（前一轮的回答会丢），没有写进测试。
+- **#3504 已覆盖**（`voice/asks_test.go`，假 hub 加了 `POST /api/v1/interactions/{id}/resolve`（成功时广播 `interaction_resolved`，可以按脚本回任意状态和正文、或者不回就断开连接）、
+  `raise` / `answerOnScreen`（广播 `interaction` / `interaction_resolved`）、`onInterrupt`（叫停时先关卡、广播再回））：语音提问只念选项名（不带「回复序号」）、`ask{asking}` → 「第二个」→ `resolve` 的答案是 SQLite、`ask{answered, by: voice}`、没有发消息、没有 run 跟着时告诉快层不念结果；
+  两题一题一题问、自由回答（去掉「回答：」）、下一题在这条委派上回、多选「登录和导出」→ `登录, 导出`；在屏幕上答了 → `released{by: elsewhere}` 并确认一句，排着队没问过的那张在屏幕上答了不说话；
+  `resolve` 回 410 / 404 / `already` / 409 `prompt_changed`、别的 409 而卡已经没了，当作别处答了；503（带 hub 原话）、409 `input_draft` / `dialog_open` 而卡还在（固定说法，不带草稿）、没等到回答而卡还在：接着问、再答一次就交上去；
+  没等到回答而卡没了：不带 `by` 的 `released`、`answered.md#unknown`；`resolve` 要 1 秒、期间 hub 已经把卡拿掉并广播：不算别处答了，结果是 `answered{by: voice}`；
+  「停止：」时 hub 先关卡、广播、过一会儿才回 `interrupt`：不带 `by` 的 `released`，不说别处答了；只交「回答：」时用用户的字幕（「第二个」→ SQLite）；
+  用户说话时排着队的授权句，卡在说出来之前被点掉了就不说，之后来的计划照说；问题里写着「回答：1」、用户没说话 → 不作答（`unprompted`）；问的时候「状态：」照常是状态查询、
+  空回答再问一遍、第二次交给屏幕（不带 `by` 的 `released`）、之后的话照常发给 Agent；授权和计划只说类别（不念命令、路径、计划内容）、口头「批准」不发、这一轮不再说「去手机上看」、没有 `ask` 帧；
+  协议 1：完整设备答主对话的 `ask_user` 卡（没有 `ask` 帧，之后照常念这一轮的结果），别的扩展调来的只说「去手机上看」、不问；上游重连后再问一遍；
+  App 的 `start` 晚到 1.3 秒（tracker 的 ticker 和 hub WS 的第一个事件先到）照样能问、能答（`-race` 下跑，`TestAsksWaitForTheStart`）；
+  绑定的对话整个通话都订阅着，hub WS 断了重连时从链路收到的最后一条接着补（`TestBoundCatchesUpFromTheLinesSeen`、`TestHubLinkCatchesUpFromWhatItSaw`；`TestHubLinkReconnects` 的 `since_seq` 跟着从 run 的起点 2 变成它的消息 3）；
+  绑定主对话的测试改成先用语音答掉开场就在等的提问卡，再委派。`features` 的两处断言加了 `asks`。
 - **#3502 已覆盖**（`voice/bound_test.go`，假 hub 加了 `/interactions`、`/interrupt`、`items?turns=`、机器离线、发送的 `clear_draft` / `dismiss_notice`）：`GET /info` 是协议 2；绑定 Agent（`ready.target`、工具只有两个只读的加 `delegate_task`、instructions 带快照、
   `agent_message.md`、run 帧 `sending → sent → working → done`、没有 `tool` 帧）；`target_gone` / `target_read_only` / `target_forbidden`（别的扩展带 target）/ 没带 target 致命、`machine_offline` 不致命、别的扩展写 `protocol: 2` 照样是协议 1；
   `input_draft` → `refused` 带草稿 → `resend{clear_draft}` 同一个 id 发出、结果走 `say`；只是通知的对话框自动带 `dismiss_notice`；计划在等时的 `dialog_open` 说能作为修改意见退回；发到一半断开 → `unknown`；

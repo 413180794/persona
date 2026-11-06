@@ -95,3 +95,42 @@ func TestHubLinkReadsTheHubsEvents(t *testing.T) {
 		t.Fatalf("a step that changed nothing a run looks at: %+v", ev)
 	}
 }
+
+// A subscription catches up, after a reconnect, from the last line the link saw of the conversation (a batch's to_seq
+// or its last item), not from where the call or a run began: what is replayed is only what it missed.
+func TestHubLinkCatchesUpFromWhatItSaw(t *testing.T) {
+	h := newHubLink(newHubClient("http://127.0.0.1:1", "t"), log.New(io.Discard, "", 0).Printf)
+	l := h.listen()
+	defer l.close()
+	k := linkKey{"m", "s"}
+	l.watch(k, 5)
+	since := func() int {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		return h.since[k]
+	}
+	for _, c := range []struct {
+		raw  string
+		want int
+	}{
+		{`{"type":"items","machine_id":"m","session_id":"s","items":[{"seq":6},{"seq":7,"turn_duration":{"duration_ms":5}}]}`, 7},
+		{`{"type":"items","machine_id":"m","session_id":"s","items":[],"to_seq":9}`, 9},
+		{`{"type":"items","machine_id":"m","session_id":"s","items":[{"seq":8}],"backlog":true}`, 9}, // never back
+		{`{"type":"items","machine_id":"m","session_id":"other","items":[{"seq":40}]}`, 9},
+	} {
+		h.handle([]byte(c.raw))
+		if got := since(); got != c.want {
+			t.Fatalf("%s: since %d, want %d", c.raw, got, c.want)
+		}
+	}
+	h.mu.Lock()
+	_, other := h.since[linkKey{"m", "other"}]
+	h.mu.Unlock()
+	if other {
+		t.Fatal("an unwatched conversation got a catch-up point")
+	}
+	l.watch(k, 3) // a run's base before what was seen: its turn's end is caught up too
+	if got := since(); got != 3 {
+		t.Fatalf("since %d after a watch from 3", got)
+	}
+}

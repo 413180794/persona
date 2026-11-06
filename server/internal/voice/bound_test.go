@@ -96,7 +96,7 @@ func runIn(state string) func(map[string]any) bool {
 // answer comes back on the call.
 func TestBoundToAnAgent(t *testing.T) {
 	hub := agentHub(t)
-	hub.work = 600 * time.Millisecond
+	hub.work = 1500 * time.Millisecond // long enough for the tracker to see it working on a loaded machine
 	hub.reply = func(string) string { return "测试修好了，改了 `web/src/Login.tsx`。" }
 	up := boundUpstream(t, true)
 	pl := testPlugin(t, Config{Providers: []Provider{{ID: "rt", URL: up.url(), Models: []string{"m1"}, Tools: true}}}, hub.server(t))
@@ -105,7 +105,7 @@ func TestBoundToAnAgent(t *testing.T) {
 		{"role": "assistant", "text": "登录页的测试挂了两个"}, {"role": "tool", "text": "ignored"}}}))
 	ready := a.until(ofType("ready"))
 	target, _ := ready["target"].(map[string]any)
-	if ready["protocol"] != float64(2) || fmt.Sprint(ready["features"]) != "[target runs resume]" || target["kind"] != "agent" ||
+	if ready["protocol"] != float64(2) || fmt.Sprint(ready["features"]) != "[target runs asks resume]" || target["kind"] != "agent" ||
 		target["agent_label"] != "Claude Code" || target["title"] != "修登录页的测试" || target["machine_name"] != "工作站" || target["session_id"] != "a1" {
 		t.Fatalf("ready: %v", ready)
 	}
@@ -562,7 +562,8 @@ func TestBoundFold(t *testing.T) {
 }
 
 // Bound to the main conversation with no recent turns from the app: the snapshot is read from the hub (its last
-// turns, a card's question, the agents), and a handover is voice/delegated.
+// turns, a card's question, the agents); the question is asked and answered by voice (asks.go), and a handover after
+// it is voice/delegated.
 func TestBoundToTheMainConversation(t *testing.T) {
 	hub := newFakeHub(t)
 	hub.add("main1", proto.Item{Role: "user", Kind: proto.KindText, Text: "明天有什么会"},
@@ -584,11 +585,21 @@ func TestBoundToTheMainConversation(t *testing.T) {
 			t.Errorf("instructions lack %q: %s", want, instructions)
 		}
 	}
+	if got := content(up.nextMatch(saying("用哪个数据库"))); !strings.Contains(got, "Persona 主对话停下来在等用户回答一个问题") {
+		t.Fatalf("asked: %s", got)
+	}
+	a.send(map[string]any{"type": "text", "text": "Postgres"})
+	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "用户的回答已经交给 Persona 主对话了") {
+		t.Fatalf("answered: %s", got)
+	}
+	if res := hub.resolutions(); len(res) != 1 || res[0].Res.Answers["用哪个数据库？"] != "Postgres" {
+		t.Fatalf("resolved %+v", res)
+	}
 	a.send(map[string]any{"type": "text", "text": "查一下邮件"})
 	if m := hub.waitSent(1); m.Session != "main1" || !strings.Contains(m.Text, "回复简短些") {
 		t.Fatalf("sent %+v", m)
 	}
-	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "Persona 主对话这一轮做完了") {
+	if got := content(up.nextMatch(on("dlg2"))); !strings.Contains(got, "Persona 主对话这一轮做完了") {
 		t.Fatalf("result: %s", got)
 	}
 }
