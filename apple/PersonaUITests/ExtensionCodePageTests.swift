@@ -15,8 +15,14 @@ final class ExtensionCodePageTests: XCTestCase {
         continueAfterFailure = false
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
-        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "showcase", "-openExtensionPage", "snapshots"]
+        let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
+        app.launchArguments = ["-pairURL", pair, "-dev.openChat", "", "-ui.scheme", look]
         app.launchPinned()
+        acceptIconAlert()
+        app.terminate()
+        app.launchArguments = ["-pairURL", pair, "-tab", "settings", "-openExtension", "showcase", "-openExtensionPage", "snapshots", "-ui.scheme", look]
+        app.launchPinned()
+        acceptIconAlert()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["允许", "Allow"] where springboard.buttons[label].waitForExistence(timeout: 3) { springboard.buttons[label].tap() }
         XCTAssertTrue(app.buttons["plugin-ui-action-snapshot-code-review"].waitForExistence(timeout: 40), app.debugDescription)
@@ -24,6 +30,10 @@ final class ExtensionCodePageTests: XCTestCase {
     }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "code-preview-" + name
+        attachment.lifetime = .keepAlways
+        add(attachment)
         guard let dir = env["JARVIS_SHOTS"] else { return }
         let look = env["JARVIS_PLUGINS_APPEARANCE"] ?? "light"
         let o = XCUIDevice.shared.orientation.isLandscape ? "-landscape" : ""

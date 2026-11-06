@@ -503,43 +503,49 @@ struct CodeFileBlock: View {
     @Bindable var model: ExtensionViewModel
     @Binding var link: LinkTarget?
     var fills: Bool
-    @State private var source: CodeSnippetSource?
+    @State private var snippet = CodeSnippetModel()
     @Environment(AppModel.self) private var app
 
     /// A block in a stack shows at most this many lines (it scrolls inside itself past them).
     static let blockLines = 24
 
     var body: some View {
-        let src = source ?? CodeSnippetSource(code)
         VStack(spacing: Theme.Space.flush) {
-            CodeLines(source: src, version: src.version)
-                .accessibilityLabel(code.path.map { String(localized: "Code of \($0)") } ?? String(localized: "Code"))
-                .accessibilityIdentifier("code-file")
-                .frame(height: fills ? nil : CGFloat(min(src.lineCount, Self.blockLines)) * src.lineHeight + Theme.Space.xl * 2)
-                .frame(maxHeight: fills ? .infinity : nil)
-            if code.truncated == true, let load = code.load {
-                Button {
-                    var v = ["from": String((code.startLine ?? 1) + src.lineCount)]
-                    if let p = code.path { v["path"] = p }
-                    Task { ExtensionOutcome.show(await model.perform(load, with: v), app: app, link: $link) }
-                } label: {
-                    HStack(spacing: Theme.Space.s) {
-                        if model.running == load.id { ProgressView().controlSize(.small) }
-                        Text(String(localized: "Load More")).lineLimit(1)
+            if let src = snippet.current(code) {
+                CodeLines(source: src, version: src.version)
+                    .accessibilityLabel(code.path.map { String(localized: "Code of \($0)") } ?? String(localized: "Code"))
+                    .accessibilityIdentifier("code-file")
+                    .frame(height: fills ? nil : CGFloat(min(src.lineCount, Self.blockLines)) * src.lineHeight + Theme.Space.xl * 2)
+                    .frame(maxHeight: fills ? .infinity : nil)
+                if code.truncated == true, let load = code.load {
+                    Button {
+                        var v = ["from": String((code.startLine ?? 1) + src.lineCount)]
+                        if let p = code.path { v["path"] = p }
+                        Task { ExtensionOutcome.show(await model.perform(load, with: v), app: app, link: $link) }
+                    } label: {
+                        HStack(spacing: Theme.Space.s) {
+                            if model.running == load.id { ProgressView().controlSize(.small) }
+                            Text(String(localized: "Load More")).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(Theme.Space.m)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(Theme.Space.m)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Theme.accent)
+                    .background(Theme.codeBackground)
+                    .accessibilityIdentifier("code-load-more")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.accent)
-                .background(Theme.codeBackground)
-                .accessibilityIdentifier("code-load-more")
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: fills ? nil : Theme.Size.box150)
+                    .frame(maxHeight: fills ? .infinity : nil)
+                    .background(Theme.codeBackground)
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: fills ? 0 : Theme.Radius.control, style: .continuous))
-        .onChange(of: code, initial: true) { _, c in
-            if source?.code != c { source = CodeSnippetSource(c) }
-        }
+        .onChange(of: code, initial: true) { _, c in snippet.update(c) }
+        .task(id: CodeSnippetInput(code)) { await snippet.load(code) }
     }
 }
 
@@ -547,6 +553,7 @@ struct CodeFileBlock: View {
 /// `highlight` lines marked.
 @MainActor final class CodeSnippetSource: CodeLineSource {
     let code: ExtensionCodeComponent
+    let input: CodeSnippetInput
     private let file: CodeFileSource
     var version = 0
     var changed: ((Range<Int>?) -> Void)? {
@@ -554,12 +561,23 @@ struct CodeFileBlock: View {
         set { file.changed = newValue }
     }
 
-    init(_ code: ExtensionCodeComponent) {
+    init(_ code: ExtensionCodeComponent, document: CodeDocument) {
         self.code = code
-        let language = code.language.flatMap(SyntaxLanguage.named) ?? code.path.flatMap { SyntaxLanguage.detect(name: $0) }
-        file = CodeFileSource(CodeDocument(text: code.text, language: language))
+        input = CodeSnippetInput(code)
+        file = CodeFileSource(document)
     }
 
+    private init(_ code: ExtensionCodeComponent, file: CodeFileSource) {
+        self.code = code
+        input = CodeSnippetInput(code)
+        self.file = file
+    }
+
+    func updatingPresentation(_ code: ExtensionCodeComponent) -> CodeSnippetSource {
+        CodeSnippetSource(code, file: file)
+    }
+
+    var document: CodeDocument { file.doc }
     var lineCount: Int { file.lineCount }
     var columns: Int { file.columns }
     var gutterColumns: Int { max(2, String(lineCount + (code.startLine ?? 1) - 1).count) }

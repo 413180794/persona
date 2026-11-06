@@ -406,6 +406,8 @@ Use an invalidation revision as the task key and handle the flag after completio
 - Do not put tens of thousands of lines into one UITextView (`MonoTextView` lays out all text, linear cost): `CodeLinesView` reuses labels only for visible rows,
   with fixed left line numbers;20k Go lines open ~0.3 s, scroll 60 fps. Split long MarkdownUI documents into lazy `MarkdownChunks`,
   without `.textSelection(.enabled)`: measured ~40% slower opening, entering-chunk frames ~40→60 ms (`docs/ios.md` ("File viewer")).
+  - 代码行只画可见部分，不代表全文准备已在后台（2026-11-07，#5730）：扩展代码预览曾在 `body` 的备用源和初次 `onChange` 各构造一次 `CodeDocument`，两次都复制全文和索引行。按文本和实际解析语言在后台准备，行号/高亮/Load More 属性只替换展示包装并复用文件及高亮器。
+  - 取消展示任务不会中止 detached task 中的同步构造；保留最多两个最近输入的准备任务/结果，取消只阻止旧结果发布，快速返回同一输入不再重做。它是有界近期复用，不保证所有历史输入只算一次；响应发布仍检查取消、代次和最新输入，测试必须验证取消后的准备复用，不能只验证没显示旧内容。
 - Video detection is not complete transfer (2026-11-03): old binary API capped 2 MiB, while MP 4 index may be at end, so a prefix remains unplayable. Bounded full download first restored playback, later authenticated Range + `AVAssetResourceLoader` reads tail index / target keyframes and caches sparse chunks. Sparse logical file length is not downloaded bytes. Pin versions across requests with `If-Match`, not `If-Range` (which falls back to full 200 after changes). Test long video for first playback before full download, actual `seek` ranges, continued playback and close cleanup; `seek` completion / instant clock jump do not prove frames decoded—check ranges after playback resumes.
 - Message paths become tappable files only `if` actually present on that machine (`FilePresence` batches `GET …/stat`, uncertainty means no link). Previously other-machine paths (hub
   `~/.jarvis/…`) were tappable and only produced "Cannot open this file".
