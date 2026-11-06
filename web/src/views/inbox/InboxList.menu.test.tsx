@@ -49,8 +49,8 @@ describe("收件箱的行菜单", () => {
   it("puts the mutes under a divider on the first, each muting with its own option", () => {
     const it0 = item({ mutes: [sender, chat] });
     const m = rowMenu(it0, false);
-    expect(m.map((x) => x.key)).toEqual(["done", "mute:sender:u1", "mute:chat:c1"]);
-    expect(m.map((x) => !!x.divider)).toEqual([false, true, false]);
+    expect(m.map((x) => x.key)).toEqual(["done", "mute:sender:u1", "mute:chat:c1", "policy:sender:u1", "policy:chat:c1"]);
+    expect(m.map((x) => !!x.divider)).toEqual([false, true, false, true, false]);
     expect(m[1].hint).toBeTruthy();
     m[2].onSelect();
     expect(calls.mute.at(-1)).toEqual([it0, chat]);

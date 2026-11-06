@@ -84,5 +84,19 @@
   "ix_elicitation_form": "An MCP form needs you",
   "ix_elicitation_url": "An MCP link needs you",
   "tier_working": "In progress",
-  "suggestion_failed": "Couldn't act on the suggestion: {error}"
+  "suggestion_failed": "Couldn't act on the suggestion: {error}",
+  "policy_repo": "Rule for this repository…",
+  "policy_chat": "Rule for this chat…",
+  "policy_sender": "Rule for this sender…",
+  "policy_tier_none": "Leave to triage",
+  "policy_tier_action": "Always Needs you",
+  "policy_tier_fyi": "FYI",
+  "policy_tier_noise": "Collapsed",
+  "policy_twin_none": "As set",
+  "policy_twin_first": "AI twin first",
+  "policy_twin_never": "Never AI twin",
+  "policy_reason": "Your rule: {name}",
+  "policy_saved": "Rule saved for “{name}”.",
+  "policy_removed": "Rule removed for “{name}”.",
+  "policy_failed": "Couldn't save the rule: {error}"
 }

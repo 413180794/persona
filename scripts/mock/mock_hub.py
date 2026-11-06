@@ -3860,6 +3860,42 @@ def mute_item(item_id, tag):
     return mute, settled
 
 
+# The policies the user set (GET/POST/PATCH/DELETE /api/v1/inbox/policies, docs/inbox.md "Policies"); MOCK_POLICIES=1 starts with two.
+POLICIES = [] if not os.environ.get("MOCK_POLICIES") else [
+    {"id": "p1", "source": "lark", "source_name": "飞书", "tag": "chat", "value": "f-weekend", "name": "周末徒步群", "tier": "noise", "created_at": ago(days=2), "updated_at": ago(days=2)},
+    {"id": "p2", "source": "mail", "source_name": "邮件", "tag": "sender", "value": "boss@example.com", "name": "王经理", "tier": "action", "twin": "first", "created_at": ago(hours=5), "updated_at": ago(hours=5)},
+]
+
+
+def set_policy(body, pid=None):
+    """POST (from an item) / PATCH (by id) a policy: one per target; neither part removes it; covered open items take its tier."""
+    tier, twin = body.get("tier") or "", body.get("twin") or ""
+    if tier not in ("", "action", "fyi", "noise") or twin not in ("", "first", "never"): return None, 0
+    if pid:
+        pol = next((x for x in POLICIES if x["id"] == pid), None)
+        if not pol: return None, 0
+    else:
+        it = next((x for x in INBOX if x["id"] == body.get("item_id")), None)
+        opt = next((m for m in (it or {}).get("mutes") or [] if m["tag"] == body.get("tag")), None)
+        if not opt: return None, 0
+        src = it["source"]
+        pol = next((x for x in POLICIES if x["source"] == src and x["tag"] == opt["tag"] and x["value"] == opt["value"]), None)
+        if not pol:
+            pol = {"id": "p%d" % (len(POLICIES) + 100), "source": src, "source_name": SOURCE_NAMES.get(src, src), "tag": opt["tag"],
+                   "value": opt["value"], "name": opt["name"], "created_at": ago(minutes=0)}
+            POLICIES.append(pol)
+    pol.update({"tier": tier, "twin": twin, "updated_at": ago(minutes=0)})
+    if not tier and not twin: POLICIES[:] = [x for x in POLICIES if x["id"] != pol["id"]]
+    applied = 0
+    for x in INBOX if tier else []:
+        if x["source"] == pol["source"] and not x.get("done_at") and x.get("tier") and x.get("tier") != tier and \
+                any(m["tag"] == pol["tag"] and m["value"] == pol["value"] for m in x.get("mutes") or []):
+            x["tier"], x["reason"] = tier, "按你的规则：" + pol["name"]
+            if x.get("status") in ("action", "fyi", "noise"): x["status"] = tier
+            applied += 1
+    return pol, applied
+
+
 def inbox_version(x):
     """What the item holds now (the hub's inboxVersion): it moves when something new comes in."""
     return hashlib.sha256((x["id"] + "\0" + str(x.get("updated_at")) + str(x.get("count"))).encode()).hexdigest()[:16]
@@ -11304,6 +11340,7 @@ class H(BaseHTTPRequestHandler):
             time.sleep(int(os.environ.get("MOCK_INBOX_DELAY_MS", "0")) / 1000)
             return self.send_json(inbox_list(q))
         if p == "/api/v1/inbox/mutes": return self.send_json({"mutes": MUTES})
+        if p == "/api/v1/inbox/policies": return self.send_json({"policies": POLICIES})
         if p == "/api/v1/lark/moments/posts/mp1": return self.send_json(MOMENT_POST)
         if p == "/api/v1/lark/moments/posts/mp1/comments": return self.send_json({"comments": MOMENT_COMMENTS})
         if p.startswith("/api/v1/inbox/tree/"):
@@ -12381,6 +12418,18 @@ class H(BaseHTTPRequestHandler):
             mute, settled = mute_item(body.get("item_id"), body.get("tag"))
             if not mute: return self.send_json({"error": "这一条没有可静音的" + str(body.get("tag"))}, 400)
             return self.send_json({"mute": mute, "settled": settled})
+        if p == "/api/v1/inbox/policies" and self.command == "POST":
+            pol, applied = set_policy(json.loads(self.last_body or b"{}"))
+            if not pol: return self.send_json({"error": "这一条不能这样设规则"}, 400)
+            return self.send_json({"policy": pol, "applied": applied})
+        if p.startswith("/api/v1/inbox/policies/") and self.command == "PATCH":
+            pol, applied = set_policy(json.loads(self.last_body or b"{}"), p.rsplit("/", 1)[1])
+            if not pol: return self.send_json({"error": "没有这条规则"}, 404)
+            return self.send_json({"policy": pol, "applied": applied})
+        if p.startswith("/api/v1/inbox/policies/") and self.command == "DELETE":
+            pid = p.rsplit("/", 1)[1]
+            POLICIES[:] = [x for x in POLICIES if x["id"] != pid]
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/inbox/mutes/") and self.command == "DELETE":
             mid = p.rsplit("/", 1)[1]
             MUTES[:] = [m for m in MUTES if m["id"] != mid]

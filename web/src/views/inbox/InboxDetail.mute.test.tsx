@@ -51,7 +51,10 @@ describe("收件箱详情的静音", () => {
     act(() => root.render(<InboxDetail item={item({ mutes: [sender, chat] })} loaded />));
     act(() => muteButton()!.click());
     const rows = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("示例甲"), expect.stringContaining("示例群")]);
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining("静音这个发件人示例甲"), expect.stringContaining("静音这个会话示例群"),
+      expect.stringContaining("为这个发件人设规则…示例甲"), expect.stringContaining("为这个会话设规则…示例群"),
+    ]);
     act(() => rows[1].click());
     await flush();
     const post = fetcher.mock.calls.find(([url]) => url === "/api/v1/inbox/mutes");

@@ -6,7 +6,8 @@
 // "Handling" goes back.
 import { useEffect, useState } from "react";
 import { hasEvent, itemAtUid } from "../../lib/inbox-events";
-import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { agentDraft, agentWorking, canDraft, isDone, kindLabel, labelIsUrgent, muteItem, muteShortName, muteTitle, openTitle, policyMenuTitle, openURL, setDone, shortTime, sourceLine, type InboxItem } from "../../lib/inbox";
+import { openPolicyDialog } from "./PolicyDialog";
 import { useInboxItemPlace } from "../../lib/extension-slots";
 import { PHONE, useMedia } from "../../lib/viewport";
 import { navigate } from "../../lib/router";
@@ -56,7 +57,11 @@ export function InboxDetail({ item, loaded }: { item?: InboxItem; loaded: boolea
   const translated = hubTranslation(item, prefs);
   const time = shortTime(item.updated_at);
   const canPin = Boolean(item.lark) && (!place || ownShown) && !showEvent;
-  const muteRows: MenuItem[] = (item.mutes ?? []).map((m) => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) }));
+  const muteRows: MenuItem[] = [
+    ...(item.mutes ?? []).map((m): MenuItem => ({ key: `${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", onSelect: () => void muteItem(item, m) })),
+    // and a rule for each (docs/inbox.md "Policies"), under a divider
+    ...(item.mutes ?? []).map((m, i): MenuItem => ({ key: `policy:${m.tag}:${m.value}`, label: policyMenuTitle(m), hint: muteShortName(m), icon: "target", divider: i === 0, onSelect: () => openPolicyDialog({ item, option: m, source: item.source }) })),
+  ];
   // the item's own body: the chat, the mail, the document's rows, the post, a connector's thread
   // (a chain entry opens the chat at its message, the mail at its uid)
   const at = source ?? {};

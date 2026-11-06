@@ -1026,6 +1026,103 @@ export function unmuteInbox(id: string): Promise<unknown> {
   return api(`/inbox/mutes/${enc(id)}`, { method: "DELETE" });
 }
 
+/** A policy's tier (docs/inbox.md "Policies"): "" leaves the tier to triage. */
+export type PolicyTier = "" | "action" | "fyi" | "noise";
+/** What a policy does with the AI twin: "first" hands it over first (even when not Needs you), "never" keeps it away; "" as configured. */
+export type PolicyTwin = "" | "first" | "never";
+
+/** A policy the user set (GET /api/v1/inbox/policies): items of `source` with `value` under `tag` get its tier and twin. */
+export interface InboxPolicy extends InboxMuteOption {
+  id: string;
+  source: string;
+  source_name?: string;
+  tier?: PolicyTier;
+  twin?: PolicyTwin;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** The tags a policy can name, the most specific first: a sender's policy beats its chat's (the hub's rule). */
+const POLICY_TAGS = ["sender", "chat", "repo"];
+
+/** The policy that applies to an item, as the hub picks it: the same source, one of its mute options, sender before chat before repository. */
+export function policyFor(it: InboxItem, policies: InboxPolicy[]): InboxPolicy | undefined {
+  let best: InboxPolicy | undefined;
+  let rank = POLICY_TAGS.length;
+  for (const o of it.mutes ?? []) {
+    const r = POLICY_TAGS.indexOf(o.tag);
+    if (r < 0 || r >= rank) continue;
+    const p = policies.find((x) => x.source === it.source && x.tag === o.tag && x.value === o.value);
+    if (p) [best, rank] = [p, r];
+  }
+  return best;
+}
+
+/** The menu's words for setting a policy on an option: "Rule for this repository / chat / sender…". */
+export function policyMenuTitle(o: Pick<InboxMuteOption, "tag">): string {
+  return t(o.tag === "repo" ? "lib-inbox.policy_repo" : o.tag === "chat" ? "lib-inbox.policy_chat" : "lib-inbox.policy_sender");
+}
+
+/** A policy tier's words: "Always Needs you" / "FYI" / "Collapsed"; "" is "Leave to triage". */
+export function policyTierName(tier: PolicyTier): string {
+  return t(tier === "action" ? "lib-inbox.policy_tier_action" : tier === "fyi" ? "lib-inbox.policy_tier_fyi" : tier === "noise" ? "lib-inbox.policy_tier_noise" : "lib-inbox.policy_tier_none");
+}
+
+/** A policy twin's words: "AI twin first" / "AI twin never"; "" is "As set". */
+export function policyTwinName(twin: PolicyTwin): string {
+  return t(twin === "first" ? "lib-inbox.policy_twin_first" : twin === "never" ? "lib-inbox.policy_twin_never" : "lib-inbox.policy_twin_none");
+}
+
+/** What a policy does, for people: "Always Needs you · AI twin first", one part when it sets one. */
+export function policySummary(p: Pick<InboxPolicy, "tier" | "twin">): string {
+  const parts: string[] = [];
+  if (p.tier) parts.push(policyTierName(p.tier));
+  if (p.twin) parts.push(policyTwinName(p.twin));
+  return parts.join(" · ");
+}
+
+/** Whether a policy's tier reaches an item at once (the hub's rule): the same thing, open, triaged, not being handled. */
+function policyReaches(source: string, o: InboxMuteOption, it: InboxItem): boolean {
+  return muteCovers(source, o, it) && Boolean(it.tier) && statusOf(it) !== "working";
+}
+
+/** The policies, newest first. */
+export async function listInboxPolicies(): Promise<InboxPolicy[]> {
+  const r = await api<{ policies?: InboxPolicy[] }>("/inbox/policies");
+  const ts = (p: InboxPolicy) => (p.created_at ? Date.parse(p.created_at) || 0 : 0);
+  return [...(r.policies ?? [])].sort((a, b) => ts(b) - ts(a));
+}
+
+/**
+ * Set the policy of what an item has under an option's tag (POST /api/v1/inbox/policies), or change it (PATCH, with
+ * `id`): the open items it covers take its tier at once ("Your rule: <name>"); the hub does the same and the next
+ * push confirms it; a failure puts them back. Setting neither part removes the policy. Resolves to the policy, or null
+ * when the hub refused.
+ */
+export async function saveInboxPolicy(target: { item?: InboxItem; option: InboxMuteOption; source: string; id?: string }, tier: PolicyTier, twin: PolicyTwin): Promise<InboxPolicy | null> {
+  const { option: o, source } = target;
+  const before = new Map(tier ? state.items.filter((it) => policyReaches(source, o, it)).map((it) => [it.id, it]) : []);
+  const reason = t("lib-inbox.policy_reason", { name: o.name });
+  const statusFor = (it: InboxItem) => (it.status && it.status !== "working" ? tier || it.status : it.status);
+  set({ items: state.items.map((it) => (before.has(it.id) && it.tier !== tier ? { ...it, tier, status: statusFor(it), reason, urgent: tier === "action" ? it.urgent : false } : it)) });
+  try {
+    const r = target.id
+      ? await api<{ policy: InboxPolicy }>(`/inbox/policies/${enc(target.id)}`, { method: "PATCH", json: { tier, twin } })
+      : await api<{ policy: InboxPolicy }>("/inbox/policies", { method: "POST", json: { item_id: target.item?.id, tag: o.tag, tier, twin } });
+    toast(tier || twin ? t("lib-inbox.policy_saved", { name: o.name }) : t("lib-inbox.policy_removed", { name: o.name }), "ok");
+    return r.policy;
+  } catch (e) {
+    set({ items: state.items.map((it) => before.get(it.id) ?? it) });
+    toast(t("lib-inbox.policy_failed", { error: errorText(e) }), "error");
+    return null;
+  }
+}
+
+/** Remove a policy: items keep the tier it gave until new content is triaged again. */
+export function removeInboxPolicy(id: string): Promise<unknown> {
+  return api(`/inbox/policies/${enc(id)}`, { method: "DELETE" });
+}
+
 /** What a bulk action does (POST /api/v1/inbox/bulk): `dismiss` is Clean up all (done_by=dismissed), `done` files a section
  * (Mark all as seen / Clear all), `reopen` is Move back (their Undo). */
 export type BulkAction = "done" | "dismiss" | "reopen";

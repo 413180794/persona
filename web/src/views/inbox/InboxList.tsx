@@ -3,7 +3,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import {
   agentDraft, agentWorking, conversationRoute, fromLine, interactionAgentTitle, interactionAsk, interactionTitle, isDone, isLark,
-  listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, unmuteInbox,
+  listInboxMutes, muteItem, muteLine, muteShortName, muteTitle, policyMenuTitle, unmuteInbox,
   BULK_CONFIRM_AT, bulkScope, bulkScopeName, connectorSources, KIND_FILTERS, kindLabel, labelIsUrgent, mailAccounts, mailShort, reloadInbox, sections, sendReply, setAllDone, setDone, shortTime, TIERS,
   useInbox, waitingAgents, type InboxItem, type InboxMute, type SectionKey,
 } from "../../lib/inbox";
@@ -20,6 +20,7 @@ import { errorText } from "../../lib/api";
 import { contextMenuProps } from "../../ui/context-menu";
 import type { MenuAt } from "../../ui/menu-model";
 import { Icon } from "../../ui/icons";
+import { openPolicyDialog, RulesDialog } from "./PolicyDialog";
 import { isNoHover } from "../../ui/media-query";
 import { DraftDialog } from "./InboxDialogs";
 import { TriageBanner } from "./TriageBanner";
@@ -57,6 +58,7 @@ export function InboxList({ selected }: { selected?: string }) {
   const accounts = useMailAccounts();
   const more = useMenu();
   const [mutesOpen, setMutesOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   // Clean up all over many items asks first; the items are the ones shown when it was asked.
   const [confirm, setConfirm] = useState<{ items: InboxItem[]; scope: string } | null>(null);
 
@@ -145,9 +147,11 @@ export function InboxList({ selected }: { selected?: string }) {
             items={[
               { key: "clean-all", label: t("inbox-inboxlist.clean_all"), hint: scope, icon: "check", disabled: !openInView.length, onSelect: runBulk },
               { key: "muted", label: t("inbox-inboxlist.muted_list"), icon: "bellOff", divider: true, onSelect: () => setMutesOpen(true) },
+              { key: "rules", label: t("inbox-inboxlist.rules_list"), icon: "target", onSelect: () => setRulesOpen(true) },
             ]} />
         )}
         {mutesOpen && <MutesDialog onClose={() => setMutesOpen(false)} />}
+        {rulesOpen && <RulesDialog onClose={() => setRulesOpen(false)} />}
         <BulkConfirm confirm={confirm} onClose={() => setConfirm(null)} />
 
         <TriageBanner triage={triage} />
@@ -359,6 +363,8 @@ export function rowMenu(it: InboxItem, done: boolean): MenuItem[] {
       : { key: "done", label: t("inbox-inboxlist.done"), icon: "check", onSelect: () => void markFromRow(it, true, true) }, // a menu pick: "Undo" on any screen (#4162)
   ];
   (it.mutes ?? []).forEach((m, i) => items.push({ key: `mute:${m.tag}:${m.value}`, label: muteTitle(m), hint: muteShortName(m), icon: "bellOff", divider: i === 0, onSelect: () => void muteItem(it, m) }));
+  // then a rule for each (docs/inbox.md "Policies"): the tier its items get, what the AI twin does with them
+  (it.mutes ?? []).forEach((m, i) => items.push({ key: `policy:${m.tag}:${m.value}`, label: policyMenuTitle(m), hint: muteShortName(m), icon: "target", divider: i === 0, onSelect: () => openPolicyDialog({ item: it, option: m, source: it.source }) }));
   return items;
 }
 

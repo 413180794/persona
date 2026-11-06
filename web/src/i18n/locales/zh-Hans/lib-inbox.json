@@ -77,5 +77,19 @@
   "ix_elicitation_form": "MCP 表单等你填写",
   "ix_elicitation_url": "MCP 链接等你确认",
   "tier_working": "进行中",
-  "suggestion_failed": "建议没处理成：{error}"
+  "suggestion_failed": "建议没处理成：{error}",
+  "policy_repo": "为这个仓库设规则…",
+  "policy_chat": "为这个会话设规则…",
+  "policy_sender": "为这个发件人设规则…",
+  "policy_tier_none": "交给分拣",
+  "policy_tier_action": "始终需要你",
+  "policy_tier_fyi": "知悉",
+  "policy_tier_noise": "收起",
+  "policy_twin_none": "按设置",
+  "policy_twin_first": "分身优先",
+  "policy_twin_never": "分身不碰",
+  "policy_reason": "按你的规则：{name}",
+  "policy_saved": "已为“{name}”保存规则",
+  "policy_removed": "已移除“{name}”的规则",
+  "policy_failed": "规则没保存成功：{error}"
 }

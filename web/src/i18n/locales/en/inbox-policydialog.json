@@ -1,0 +1,19 @@
+{
+  "title": "Rule for {name}",
+  "intro": "{what}. The hub applies it in code to what comes in from here, after the AI sorts it; a mute still wins.",
+  "tier": "Where it goes",
+  "twin": "AI twin",
+  "twin_note": "AI twin first hands these to the AI twin even when they are not Needs you, before the others. Never keeps them yours. The AI twin must be on.",
+  "save": "Save",
+  "cancel": "Cancel",
+  "remove": "Remove",
+  "rules": "Rules",
+  "close": "Close",
+  "edit": "Edit",
+  "retry": "Retry",
+  "load_failed": "Couldn't load the rules: {error}",
+  "empty_title": "No rules",
+  "empty_hint": "Right-click an item in the Inbox and pick a rule for its chat, sender or repository.",
+  "removed": "Rule removed for “{name}”.",
+  "remove_failed": "Couldn't remove the rule: {error}"
+}

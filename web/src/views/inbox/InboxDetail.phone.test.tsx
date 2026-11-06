@@ -39,7 +39,7 @@ describe("收件箱详情在手机宽度", () => {
     expect(host.querySelector('button[aria-label="静音"]')).toBeNull();
     act(() => host.querySelector<HTMLButtonElement>('button[aria-label="更多"]')!.click());
     const rows = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((r) => r.textContent);
-    expect(rows).toEqual([expect.stringContaining("Pin 消息"), expect.stringContaining("示例群")]);
+    expect(rows).toEqual([expect.stringContaining("Pin 消息"), expect.stringContaining("静音这个会话示例群"), expect.stringContaining("为这个会话设规则…示例群")]);
   });
 
   it("keeps a lone Pin 消息 as its own button", () => {

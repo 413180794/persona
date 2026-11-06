@@ -10,6 +10,7 @@ import { cx, IconButton, Spinner } from "../../ui/atoms";
 import { ComposeDialog } from "./ComposeDialog";
 import { DetailPlaceholder, InboxDetail } from "./InboxDetail";
 import { InboxList } from "./InboxList";
+import { PolicyDialogHost } from "./PolicyDialog";
 
 export function Inbox({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
   const item = useInbox((s) => (id ? s.items.find((x) => x.id === id) : undefined));
@@ -35,6 +36,7 @@ export function Inbox({ id, onToggleSidebar }: { id?: string; onToggleSidebar: (
           {id ? <InboxDetail item={item} loaded={loaded} /> : <DetailPlaceholder />}
         </section>
       </div>
+      <PolicyDialogHost />
       {composing && <ComposeDialog draftKey="new" initial={newDraft(accounts[0]?.id ?? "")} accounts={accounts} onClose={() => setComposing(false)} />}
     </div>
   );

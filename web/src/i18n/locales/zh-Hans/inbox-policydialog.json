@@ -1,0 +1,19 @@
+{
+  "title": "{name} 的规则",
+  "intro": "{what}。hub 在 AI 分拣之后按这条规则处理这里进来的内容；静音仍然优先。",
+  "tier": "放到哪里",
+  "twin": "AI 分身",
+  "twin_note": "分身优先：即使不是“需要你”也交给 AI 分身，并排在其他之前。分身不碰：始终留给你自己。需要先打开 AI 分身。",
+  "save": "保存",
+  "cancel": "取消",
+  "remove": "移除",
+  "rules": "规则",
+  "close": "关闭",
+  "edit": "编辑",
+  "retry": "重试",
+  "load_failed": "规则没加载出来：{error}",
+  "empty_title": "还没有规则",
+  "empty_hint": "在收件箱里右键一条内容，为它的会话、发送人或仓库设规则。",
+  "removed": "已移除“{name}”的规则",
+  "remove_failed": "规则没移除成功：{error}"
+}

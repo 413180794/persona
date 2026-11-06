@@ -77,5 +77,19 @@
   "ix_elicitation_form": "MCPフォームの入力待ち",
   "ix_elicitation_url": "MCPリンクの確認待ち",
   "tier_working": "進行中",
-  "suggestion_failed": "提案を処理できませんでした：{error}"
+  "suggestion_failed": "提案を処理できませんでした：{error}",
+  "policy_repo": "このリポジトリのルール…",
+  "policy_chat": "この会話のルール…",
+  "policy_sender": "この送信者のルール…",
+  "policy_tier_none": "仕分けに任せる",
+  "policy_tier_action": "常に要対応",
+  "policy_tier_fyi": "参考",
+  "policy_tier_noise": "折りたたみ",
+  "policy_twin_none": "設定どおり",
+  "policy_twin_first": "分身を優先",
+  "policy_twin_never": "分身は触れない",
+  "policy_reason": "あなたのルール：{name}",
+  "policy_saved": "「{name}」のルールを保存しました",
+  "policy_removed": "「{name}」のルールを削除しました",
+  "policy_failed": "ルールを保存できませんでした：{error}"
 }
