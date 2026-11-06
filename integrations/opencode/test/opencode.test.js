@@ -245,6 +245,20 @@ test('a permission asked by a subagent is the root session\'s; while it waits th
   await until('clear', () => n.last('runtime.sessions')?.sessions.find((s) => s.session_id === 'ses_root')?.status !== 'blocked')
 })
 
+test('a session opencode does not have is not_found, so the node does not take another runtime\'s session for this one', async (t) => {
+  const d = fakeDb()
+  d.session('ses_a')
+  d.user('ses_a', 4, 'hello')
+  const { n, host } = await setup(t, { db: d })
+  host.register(fakeCtx())
+  await n.ready
+  // The node asks every connected runtime session.items {limit: 1} about a session nobody listed, and gives it to
+  // the first that answers (runtimeFor, handOver): an empty page here would take a DSH or pi session for opencode.
+  await assert.rejects(n.peer.call('session.items', { session_id: 'session-0b1c', limit: 1 }), (err) => err.code === 'not_found')
+  const p = await n.peer.call('session.items', { session_id: 'ses_a', limit: 1 })
+  assert.deepEqual(p.items.map((i) => i.id), ['4#0'])
+})
+
 test('without the database the runtime still answers: an empty list, no pages, sends and the rest through the plugin', async (t) => {
   const n = await startFakeNode(t)
   const host = createOpencodeHost({ openDb: async () => { throw new Error('no such file') }, pid: 4243 }, { socketPath: n.path, retryMs: 20, pushDelayMs: 5 })

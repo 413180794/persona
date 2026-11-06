@@ -51,6 +51,7 @@ opencode 的插件接口给的是会话的 context（压缩之后留下的那部
 - 列表和对话**只读**这个数据库（`file:…?mode=ro`、`PRAGMA query_only`、300 ms 的 busy timeout，查询都走 `(session_id, seq)` 索引）；在 opencode 自己的进程里用 `bun:sqlite`，
   测试里用 `node:sqlite`。永远不写、不长时间占着。位置按 `$XDG_DATA_HOME/opencode/opencode.db`（默认 `~/.local/share/opencode`），`PERSONA_OPENCODE_DB` 可以指到别处。
   数据库打不开时列表为空、翻页为空，发送 / 中断 / 改名 / 卡片照常（它们走插件接口）。
+  数据库里没有的会话翻页回 `not_found`：node 会拿没人列过的会话挨个问各个 runtime（`session.items {limit: 1}`），答得上来的就归它，回空页就会把 DSH、pi 的会话认成 opencode 的。
 - 实时的事情（一轮开始 / 结束、文字、权限）来自插件的事件流（`ctx.event.subscribe`）：`session.execution.started/succeeded/failed/interrupted`、
   `session.inbox.enqueued`、`session.text.delta`、`session.step.ended`、`session.tool.success`、`permission.asked/replied`、`form.created/replied`、`session.renamed/deleted`。
 - 控制走插件上下文：`ctx.session.prompt({sessionID, text, files})`、`interrupt({sessionID})`、`update({sessionID, title})`、`ctx.permission.reply({sessionID, requestID, decision})`。

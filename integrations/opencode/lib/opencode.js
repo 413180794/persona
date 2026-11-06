@@ -264,6 +264,9 @@ export function createOpencodeHost(deps, options = {}) {
 
   async function view(id) {
     const [r] = await rows('select revert from session_v2 where id = ?', id)
+    // Not opencode's (the database is open and has no such session): the node asks every runtime about a session
+    // nobody listed and gives it to the first that answers, so an empty page would take another runtime's for ours.
+    if (!r && db) throw new RpcError(`opencode 里没有这个会话（${id}）`, 'not_found')
     return { toSeq: await maxSettledBefore(id), history: historyOf(id, r?.revert) }
   }
 
