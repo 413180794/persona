@@ -179,7 +179,7 @@ hub 第一次启动后，在它的 `~/.persona/hub.json` 里补上各台电脑�
 
 - Apple 平台没有上架 App Store：iPhone 用 [TestFlight 公开测试](https://testflight.apple.com/join/vsjfy3hE)安装（不限人数），或自己编译；Vision Pro 版目前只能自己编译。
 - hub 的原生装法只支持 Linux（systemd + Docker 里的 Postgres）；别的系统用 Docker 跑 hub，那台机器不能同时跑 Agent。
-- Android 还没和 iOS 完全对齐：健康数据只能读、不能写，后台通知要在系统设置里放开后台运行（[docs/android.md](docs/android.md)）。
+- Android 还没和 iOS 完全对齐：没有提醒事项，健康数据只能读、不能写，后台通知要在系统设置里放开后台运行；各家厂商的系统上后台通知能撑多久还没有实测（[docs/android.md](docs/android.md)）。
 
 ## 文档
 

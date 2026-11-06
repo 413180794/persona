@@ -179,7 +179,7 @@ How connectors work and how to add one: [docs/connectors.md](docs/connectors.md)
 
 - The Apple apps are not on the App Store: install the iPhone app from the [public TestFlight beta](https://testflight.apple.com/join/vsjfy3hE) (no tester limit) or build it yourself; the Vision Pro app can only be built yourself for now.
 - The native hub install supports Linux only (systemd plus Postgres in Docker); on other systems run the hub in Docker, and that machine cannot run Agents at the same time.
-- Android is not fully on par with iOS yet: health data is read-only, and background notifications need background activity allowed in system settings ([docs/android.md](docs/android.md)).
+- Android is not fully on par with iOS yet: there are no reminders, health data is read-only, and background notifications need background activity allowed in system settings; how long they keep arriving in the background on each vendor's Android has not been measured yet ([docs/android.md](docs/android.md)).
 
 ## Docs
 
