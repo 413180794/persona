@@ -1,10 +1,15 @@
 package node
 
 import (
+	"context"
+	"encoding/json"
+	"io"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // A Codex turn the model service failed writes no answer, only task_complete's error (Codex 0.166, measured): the
@@ -110,5 +115,82 @@ func TestCodexRemoteTurnFailed(t *testing.T) {
 	end("t5", "completed", nil)
 	if th := threadOf(c, remoteRaw); th.failure != "" {
 		t.Fatalf("completed: %q", th.failure)
+	}
+}
+
+// A turn that began before Persona joined (a resume started with its message): its turn/started never came, so its
+// turn/completed ends it all the same, and clears the reply's live text on the hub, or every page opened later shows
+// the reply twice (#5598).
+func TestCodexRemoteTurnBegunBeforeJoining(t *testing.T) {
+	n, f, c := effortPane(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	n2hR, n2hW := io.Pipe()
+	h2nR, h2nW := io.Pipe()
+	n.peer = rpc.New("n", n2hW)
+	hub := rpc.New("h", h2nW)
+	var mu sync.Mutex
+	var deltas []string
+	hub.OnEvent = func(event string, params json.RawMessage) {
+		var p struct {
+			SessionID string `json:"session_id"`
+			Text      string `json:"text"`
+		}
+		if event == "session.delta" && json.Unmarshal(params, &p) == nil && p.SessionID == remoteRaw {
+			mu.Lock()
+			deltas = append(deltas, p.Text)
+			mu.Unlock()
+		}
+	}
+	go func() { _ = hub.Serve(ctx, n2hR) }()
+	go func() { _ = n.peer.Serve(ctx, h2nR) }()
+	t.Cleanup(func() { cancel(); _ = n2hW.Close(); _ = h2nW.Close() })
+	last := func() (string, int) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(deltas) == 0 {
+			return "", 0
+		}
+		return deltas[len(deltas)-1], len(deltas)
+	}
+
+	joinPane(t, n)
+	if th := threadOf(c, remoteRaw); th.turn != "" {
+		t.Fatalf("a turn known before any began: %q", th.turn)
+	}
+	f.push(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": remoteRaw,
+		"item": map[string]any{"id": "m1", "type": "agentMessage", "text": "done"}}})
+	waitFor(t, "the reply's live text", func() bool { text, _ := last(); return text == "done" })
+	_, before := last()
+	f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": remoteRaw,
+		"turn": map[string]any{"id": "t-before", "status": "completed"}}})
+	waitFor(t, "the live text cleared", func() bool { text, n := last(); return n > before && text == "" })
+	if th := threadOf(c, remoteRaw); th.status != proto.StatusDone {
+		t.Errorf("status after the turn = %q", th.status)
+	}
+
+	// Its end arriving again does not end anything again: a failure it left stays.
+	if th := threadOf(c, remoteRaw); th.ended != "t-before" {
+		t.Fatalf("ended = %q", th.ended)
+	}
+	f.push(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": remoteRaw, "turn": map[string]any{"id": "t-fail", "status": "inProgress"}}})
+	waitFor(t, "turn t-fail runs", func() bool { return threadOf(c, remoteRaw).turn == "t-fail" })
+	f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": remoteRaw,
+		"turn": map[string]any{"id": "t-fail", "status": "failed", "error": map[string]any{"message": "boom"}}}})
+	waitFor(t, "t-fail ends", func() bool { return threadOf(c, remoteRaw).failure == "boom" })
+	f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": remoteRaw, "turn": map[string]any{"id": "t-fail", "status": "interrupted"}}})
+	f.push(map[string]any{"method": "thread/settings/updated", "params": map[string]any{"threadId": remoteRaw, "threadSettings": map[string]any{"model": "sync-1"}}})
+	waitFor(t, "events read", func() bool { return threadOf(c, remoteRaw).model == "sync-1" })
+	if th := threadOf(c, remoteRaw); th.failure != "boom" {
+		t.Errorf("its end again cleared the failure: %q", th.failure)
+	}
+
+	// A known turn still ends only on its own turn/completed.
+	f.push(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": remoteRaw, "turn": map[string]any{"id": "t1", "status": "inProgress"}}})
+	waitFor(t, "turn t1 runs", func() bool { return threadOf(c, remoteRaw).turn == "t1" })
+	f.push(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": remoteRaw, "turn": map[string]any{"id": "t0"}}})
+	f.push(map[string]any{"method": "thread/settings/updated", "params": map[string]any{"threadId": remoteRaw, "threadSettings": map[string]any{"model": "sync-marker"}}})
+	waitFor(t, "events read", func() bool { return threadOf(c, remoteRaw).model == "sync-marker" })
+	if th := threadOf(c, remoteRaw); th.turn != "t1" || th.status != proto.StatusWorking {
+		t.Fatalf("another turn's end ended t1: turn %q status %q", th.turn, th.status)
 	}
 }

@@ -28,6 +28,9 @@ var errCodexNoOwner = errors.New("没有可共享的 app-server 运行入口")
 
 type remoteThread struct {
 	id, publicID, title, cwd, status, turn, parent, partial string
+	// ended is the last turn turn/completed ended: a snapshot read before it (join, activeTurn, the metadata read)
+	// does not bring it back, and its completion arriving again is not another end (#5598).
+	ended string
 	// model and effort are what the app-server says the thread is configured with (codex_effort.go); "" unknown / unset.
 	model, effort string
 	// failure / failureKind: the latest turn failed, as turn/completed said it (status failed, its error, #2185);
@@ -398,7 +401,7 @@ func (c *codexRemote) refresh() error {
 			t.status = proto.StatusBlocked
 		}
 		for _, turn := range d.Turns {
-			if turn.Status == "inProgress" {
+			if turn.Status == "inProgress" && turn.ID != t.ended {
 				t.turn = turn.ID
 			}
 		}
@@ -409,7 +412,7 @@ func (c *codexRemote) refresh() error {
 	for raw, t := range next {
 		if old, ok := c.threads[raw]; ok && old.revision != seenRevision[raw] {
 			t.joined, t.turn, t.partial, t.files, t.status, t.revision, t.buffer, t.lastDelta = old.joined, old.turn, old.partial, old.files, old.status, old.revision, old.buffer, old.lastDelta
-			t.failure, t.failureKind = old.failure, old.failureKind
+			t.failure, t.failureKind, t.ended = old.failure, old.failureKind, old.ended
 			t.model, t.effort = old.model, old.effort // an effort just set (codex_effort.go) over a read from before it
 			next[raw] = t
 		}
@@ -526,7 +529,7 @@ func (c *codexRemote) join(ctx context.Context, id string, remember bool) error 
 			current.model, current.effort = m, firstNonEmpty(reply.Effort, reply.Thread.Effort)
 		}
 		for _, turn := range reply.Thread.Turns {
-			if turn.Status == "inProgress" {
+			if turn.Status == "inProgress" && turn.ID != current.ended {
 				current.turn = turn.ID
 			}
 		}
@@ -653,7 +656,9 @@ func (c *codexRemote) activeTurn(ctx context.Context, thread string) string {
 	}
 	if turn != "" {
 		c.mu.Lock()
-		if t, ok := c.threads[thread]; ok && t.turn == "" {
+		if t, ok := c.threads[thread]; ok && turn == t.ended {
+			turn = "" // the read is older than its end
+		} else if ok && t.turn == "" {
 			t.turn = turn
 			t.revision++
 			c.threads[thread] = t
@@ -741,8 +746,11 @@ func (c *codexRemote) message(m codexMessage) {
 		t.buffer = nil
 		emit = true
 	case "turn/completed":
-		if t.turn == ev.Turn.ID {
+		// A turn that began before Persona joined (a resume started with its message, #5598) never had its
+		// turn/started here: with no turn known, this is its end, or its live text would stay on the hub.
+		if t.turn == ev.Turn.ID || (t.turn == "" && ev.Turn.ID != t.ended) {
 			t.turn = ""
+			t.ended = ev.Turn.ID
 			t.status = proto.StatusDone
 			t.failure, t.failureKind = "", ""
 			if ev.Turn.Status == "failed" { // interrupted is the user's Esc, no failure
