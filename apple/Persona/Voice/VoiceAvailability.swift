@@ -1,12 +1,12 @@
 import Foundation
 import Observation
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
 // Whether a conversation's page offers Voice Chat (docs/voice.md 6.1「显示条件」, 3.1「版本协商」), and the voice
 // extension's own read-only endpoints the app asks: /info, /models, /voices. Pure apart from the client calls; the Mac
-// and visionOS compile it and are told 「not here」.
+// compiles it and is told "not here"; Apple Vision Pro has the phone's call audio.
 
 /// The extension's `GET /info` (docs/voice.md 5.6): which protocol it speaks and what it still needs.
 nonisolated struct VoiceInfo: Decodable, Equatable, Sendable {
@@ -54,12 +54,12 @@ nonisolated enum VoiceInfoState: Equatable, Sendable {
 }
 
 nonisolated enum VoicePlatform: Equatable, Sendable {
-    /// iPhone and iPad: the only ones with call audio in the first version.
+    /// iPhone, iPad and Apple Vision Pro: the ones with call audio (`PhoneVoiceAudio`); not the Mac yet.
     case phone
     case other
 
     static var current: VoicePlatform {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         .phone
         #else
         .other
@@ -274,7 +274,7 @@ extension APIClient {
 
     /// `watchesApp`: ask again when the app comes back to the foreground (the shared one).
     init(watchesApp: Bool = false) {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard watchesApp else { return }
         observers.append(NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil,
                                                                 queue: .main) { @Sendable [weak self] _ in

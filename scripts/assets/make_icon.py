@@ -5,9 +5,14 @@ no alpha. This derives the rest from them: the tinted look, the watch icon (the 
 the Mac sizes and docs/icon-preview.png:
   python3 scripts/assets/make_icon.py
   python3 scripts/assets/make_icon.py mac     # only the Mac sizes
+  python3 scripts/assets/make_icon.py vision  # only Apple Vision Pro's icon
 
 The Mac icon is the same picture on macOS's icon grid: the system does not mask a Mac icon, so it carries its own
 rounded square (824 of 1024, centered) and shadow, at every size the Mac App Store asks for (16 to 512, 1x and 2x).
+Apple Vision Pro takes no app icon set: its icon is a layered image stack (AppIcon-Vision.solidimagestack, the
+PersonaVision target's ASSETCATALOG_COMPILER_APPICON_NAME), whose back layer must be opaque. The art is one flat
+picture, so make_icon.py splits it: the paper (fitted from the border) is the back layer, the drawing on it the
+front one, the middle layer empty; the system masks it round.
 Replacing the icon is overwriting the two PNGs and rerunning this (and scripts/assets/make_alt_icons.py for the
 settings preview).
 """
@@ -21,6 +26,7 @@ S = 1024
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IOS = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets/AppIcon.appiconset")
 WATCH = os.path.join(ROOT, "apple/PersonaWatch/Assets.xcassets/AppIcon.appiconset")
+VISION = os.path.join(ROOT, "apple/Persona/Resources/Assets.xcassets/AppIcon-Vision.solidimagestack")
 MAC_SIZES = (16, 32, 128, 256, 512)
 
 
@@ -76,6 +82,55 @@ def write_set(folder, images, contents):
         json.dump(contents, f, indent=2)
 
 
+def vision_layers(picture):
+    """The flat art split into Apple Vision Pro's two layers: the paper alone (a smooth fit of the border band, opaque)
+    and the drawing on it (where the art differs from the paper, with a soft edge), so the drawing floats over the
+    paper and composing the two gives the art back."""
+    import numpy as np
+    art = np.asarray(picture.convert("RGB"), dtype=np.float64)
+    h, w, _ = art.shape
+    ys, xs = np.mgrid[0:h, 0:w] / max(h, w)
+    band = np.zeros((h, w), bool)
+    b = 48
+    band[:b, :] = band[-b:, :] = band[:, :b] = band[:, -b:] = True
+    terms = lambda x, y: np.stack([np.ones_like(x), x, y, x * x, x * y, y * y], -1)
+    a = terms(xs[band], ys[band])
+    paper = np.empty_like(art)
+    for c in range(3):
+        coef, *_ = np.linalg.lstsq(a, art[..., c][band], rcond=None)
+        paper[..., c] = terms(xs, ys) @ coef
+    diff = np.abs(art - paper).max(-1)
+    alpha = np.clip((diff - 6) / 18, 0, 1)
+    back = Image.fromarray(np.clip(paper, 0, 255).astype(np.uint8), "RGB")
+    mask = Image.fromarray((alpha * 255).astype(np.uint8), "L").filter(ImageFilter.GaussianBlur(1.5))
+    front = picture.convert("RGBA")
+    front.putalpha(mask)
+    return back, front
+
+
+def write_vision(picture):
+    """Apple Vision Pro's layered icon: the drawing in front, the paper behind (opaque), the middle layer empty."""
+    info = {"author": "xcode", "version": 1}
+    back, front = vision_layers(picture)
+    pictures = {"Front": ("front.png", front), "Back": ("back.png", back)}
+    layers = ("Front", "Middle", "Back")
+    os.makedirs(VISION, exist_ok=True)
+    with open(os.path.join(VISION, "Contents.json"), "w") as f:
+        json.dump({"info": info, "layers": [{"filename": f"{l}.solidimagestacklayer"} for l in layers]}, f, indent=2)
+    for layer in layers:
+        folder = os.path.join(VISION, f"{layer}.solidimagestacklayer")
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "Contents.json"), "w") as f:
+            json.dump({"info": info}, f, indent=2)
+        image = {"idiom": "vision", "scale": "2x"}
+        images = {}
+        if layer in pictures:
+            name, im = pictures[layer]
+            image["filename"] = name
+            images[name] = im
+        write_set(os.path.join(folder, "Content.imageset"), images, {"images": [image], "info": info})
+
+
 def main():
     light = Image.open(os.path.join(IOS, "icon.png")).convert("RGB")
     dark = Image.open(os.path.join(IOS, "icon-dark.png")).convert("RGB")
@@ -91,6 +146,7 @@ def main():
         "info": {"author": "xcode", "version": 1},
     })
     write_mac(light)
+    write_vision(light)
     write_set(WATCH, {"icon.png": light}, {
         "images": [{"filename": "icon.png", "idiom": "universal", "platform": "watchos", "size": "1024x1024"}],
         "info": {"author": "xcode", "version": 1},
@@ -109,5 +165,8 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["mac"]:
         write_mac(Image.open(os.path.join(IOS, "icon.png")))
         print("mac icons written")
+    elif sys.argv[1:] == ["vision"]:
+        write_vision(Image.open(os.path.join(IOS, "icon.png")))
+        print("vision icon written")
     else:
         main()

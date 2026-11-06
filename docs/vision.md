@@ -25,6 +25,8 @@ wrapped in a visionOS shell of its own (`apple/Vision/`). The approach follows t
 | Liquid Glass | The window itself is glass: glass containers only do layout, surfaces use system materials |
 | Share › Persona (`PersonaShare`) | The same code and Info.plist, compiled as the visionOS extension target `PersonaVisionShare` and embedded in the Vision App; same bundle id as iPhone (`<bundle id>.share`) |
 | Paste Image in the composer (`PasteImageChip`) | Same: visionOS has the system `PasteButton` and clipboard too |
+| Voice Chat's call audio (`PhoneVoiceAudio`, docs/voice.md) | Same: `AVAudioSession` play-and-record / voice-chat, voice processing, the microphone permission and keeping the screen awake during a call are shared with iPhone; `VoicePlatform.current` is `.phone`. Not on the Mac yet |
+| App icon | `AppIcon-Vision.solidimagestack` (written by `scripts/assets/make_icon.py vision`): the flat art split into two layers, the paper behind (a smooth fit of the border, opaque) and the drawing in front (the pixels that differ from the paper, with a feathered edge), the middle layer empty; visionOS wants at least two layers with content and masks the icon round |
 
 ## Shell
 

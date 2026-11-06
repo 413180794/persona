@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import AVFoundation
 import UIKit
 #endif
@@ -98,7 +98,7 @@ nonisolated struct SystemVoiceClock: VoiceClock {
 
 struct SystemMicPermission: MicPermission {
     func request() async -> Bool {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         await AVAudioApplication.requestRecordPermission()
         #else
         false
@@ -109,14 +109,14 @@ struct SystemMicPermission: MicPermission {
 final class SystemIdleTimer: IdleTimerControl {
     var isDisabled: Bool {
         get {
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             UIApplication.shared.isIdleTimerDisabled
             #else
             false
             #endif
         }
         set {
-            #if os(iOS)
+            #if os(iOS) || os(visionOS)
             UIApplication.shared.isIdleTimerDisabled = newValue
             #endif
         }

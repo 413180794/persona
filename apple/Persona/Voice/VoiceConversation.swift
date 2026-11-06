@@ -144,7 +144,7 @@ struct VoiceDeps {
         VoiceDeps(api: { AppModel.shared.api(group) },
                   socket: { request, api in HubVoiceSocket(request: request, session: api.session) },
                   audio: {
-                      #if os(iOS)
+                      #if os(iOS) || os(visionOS)
                       PhoneVoiceAudio()
                       #else
                       NoVoiceAudio()

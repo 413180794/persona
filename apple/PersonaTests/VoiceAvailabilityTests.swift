@@ -22,9 +22,9 @@ struct VoiceAvailabilityTests {
             == .available(extensionID: "voice"))
     }
 
-    @Test func notOnTheMacOrVision() {
+    @Test func notOnTheMac() {
         #expect(VoiceAvailability.evaluate(platform: .other, session: Self.agent, extensions: [Self.voice], info: Self.protocol2) == .unsupported)
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         #expect(VoicePlatform.current == .phone)
         #else
         #expect(VoicePlatform.current == .other)

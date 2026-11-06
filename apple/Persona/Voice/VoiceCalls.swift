@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-#if os(iOS)
+#if os(iOS) || os(visionOS)
 import UIKit
 #endif
 
@@ -21,7 +21,7 @@ import UIKit
     /// `watchesApp`: end the phone's call when the app goes to the background (the shared one; the tests drive
     /// `appDidEnterBackground` themselves).
     init(watchesApp: Bool = false) {
-        #if os(iOS)
+        #if os(iOS) || os(visionOS)
         guard watchesApp else { return }
         observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil,
                                                                 queue: .main) { @Sendable [weak self] _ in
