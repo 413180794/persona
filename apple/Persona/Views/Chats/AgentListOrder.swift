@@ -91,3 +91,18 @@ struct AgentListOrder {
         return Self.stateKeys.enumerated().filter { ranks.contains($0.offset) }.map { "state/" + $0.element }
     }
 }
+
+/// Limits the iPhone list's initially eligible rows before its "Show All N" row (#5766). The List remains lazy; this
+/// presentation budget does not eliminate full filtering or grouping work. Other clients keep their existing list
+/// behavior, including the Mac's ↑ / ↓ navigation (`AgentListRows`).
+nonisolated enum AgentRowCap {
+    #if os(iOS)
+    static let rows = 20
+    #else
+    static let rows = Int.max
+    #endif
+    /// How many to show of `count`; nil: all of them. A run only a few over the cap shows them all (no "Show All 22").
+    static func capped(_ count: Int, cap: Int = rows) -> Int? {
+        cap == .max || count <= cap + 5 ? nil : cap
+    }
+}

@@ -310,3 +310,42 @@ struct SpaceHeaderMenu: View, Equatable {
         }
     }
 }
+
+/// The grouping, one tap away under the quick filters (#5766), in a cell without the search input. The same stored
+/// choice as the ⋯ menu's (`dev.grouping`), kept across launches. Reads nothing that a hub push changes.
+struct AgentsGroupingMenu: View {
+
+    @StoredValue("dev.grouping") private var grouping: DevGrouping = .standard
+    private var shown: DevGrouping { DevGrouping.resolved(grouping, supportsTodos: TodoStore.shared.isSupported) }
+
+    var body: some View {
+        Menu {
+            Picker("Group By [Agents Menus 399ee6]", selection: Binding(get: { shown }, set: { g in
+                Haptics.tap()
+                withAnimation(Theme.Motion.layout) { grouping = g }
+            })) {
+                ForEach(DevGrouping.offered(supportsTodos: TodoStore.shared.isSupported)) { g in
+                    Label(g.title, systemImage: g.symbol).tag(g)
+                }
+            }
+        } label: {
+            HStack(spacing: Theme.Space.xs) {
+                Image(systemName: shown.symbol)
+                Text(shown.title)
+                Image(systemName: Theme.Icon.choices).font(Theme.Font.label)
+            }
+            .font(Theme.Font.secondaryMedium)
+            .lineLimit(1)
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, Theme.Space.m)
+            .padding(.vertical, Theme.Space.s)
+            .background(Capsule().fill(Theme.Fill.chip))
+            .contentShape(Capsule())
+        }
+        .labelOnlyMenu()
+        // Keep the Menu's activation independent of surrounding List content.
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("agents.grouping")
+        .accessibilityLabel(String(localized: "Grouping: \(shown.title)"))
+    }
+}

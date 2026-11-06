@@ -12,6 +12,14 @@ Working sessions also use last activity, not work-start time; seen, idle and not
 The existing `AgentsFeed` and scroll protection remain; structure updates only when activity timestamps change relative session order, with reordering paused while browsing to preserve reading position.
 Mac's previous / next Agent follows pinned order then recent activity in this mode; other modes retain their order.
 
+## iPhone Agents 分组入口与长列表（#5766）
+
+- 快速筛选下方增加独立 List 单元中的分组菜单，始终显示当前分组名称，不与搜索输入框共用单元。菜单与原 ⋯ 菜单共用 `dev.grouping`，重启后保留选择。已有分组和默认值不变，平铺视图仍叫「最近使用」。
+- 分组折叠继续使用 `dev.folded`，搜索时展开匹配内容。
+- 长列表首次显示前 20 项并提供「显示全部 N 个」；不超过 25 项时全部显示。适用于最近使用、状态、待办、机器的活跃行，以及项目和工作树的活跃项；快速筛选或搜索时不截断。Mac 不截断，保留 ↑ / ↓ 导航行为。
+- 「显示全部」的展开状态与分组折叠分开，不跨重启保存。项目内一个多 Agent tab 仍作为一项，不拆散 tab。
+- 行数上限只是展示策略；是否改善帧率，以相同基底、相同数据和相同工具链的实测为准，不从行数减少推导性能收益。
+
 ## Information architecture
 
 Expanded Idle spaces in Agents reuse `AgentListOrder.ordered` across normal cards, compact lists and capsules, newest activity first (#2443).

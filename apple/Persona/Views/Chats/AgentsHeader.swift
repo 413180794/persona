@@ -229,6 +229,9 @@ private struct AgentsFoldingField: View {
             .frame(height: band, alignment: .top)
             .mask(alignment: .bottom) { Rectangle().frame(height: shown) }
             .opacity(header.floating ? 0 : Double(shown / band))
+            #if os(iOS)
+            .allowsHitTesting(!header.floating && shown >= band / 2)
+            #endif
             .accessibilityHidden(header.floating || shown < band / 2)
             .searchTraceMark("field")
     }
@@ -354,6 +357,22 @@ struct AgentsSearchField: UIViewRepresentable {
         field.accessibilityTraits.insert(.searchField) // as the drawer's: VoiceOver and UI tests know it as a search field
         field.enablesReturnKeyAutomatically = true
         field.delegate = context.coordinator
+        #if os(iOS)
+        if !active {
+            // UIKit may probe an input's focus while opening a Menu. Only explicit taps or accessibility activation
+            // begin search; an incidental first-responder request must not create the floating, active input.
+            let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.beginSearchFromTap(_:)))
+            tap.cancelsTouchesInView = false
+            tap.delegate = context.coordinator
+            holder.addGestureRecognizer(tap)
+            holder.activateSearch = { [weak coordinator = context.coordinator] in coordinator?.parent.begin() }
+            holder.isAccessibilityElement = true
+            holder.accessibilityTraits = .searchField
+            holder.accessibilityLabel = Self.prompt
+            holder.accessibilityValue = text.isEmpty ? Self.prompt : text
+            field.isAccessibilityElement = false
+        }
+        #endif
         field.addAction(UIAction { [weak field, weak coordinator = context.coordinator] _ in
             coordinator?.parent.text = field?.text ?? ""
         }, for: .editingChanged)
@@ -373,6 +392,7 @@ struct AgentsSearchField: UIViewRepresentable {
     final class Holder: UIView {
         let field: UISearchTextField
         private let bar: UISearchBar
+        var activateSearch: (() -> Void)?
         init(field: UISearchTextField, bar: UISearchBar) {
             self.field = field
             self.bar = bar
@@ -382,6 +402,12 @@ struct AgentsSearchField: UIViewRepresentable {
             addSubview(field)
         }
         required init?(coder: NSCoder) { nil }
+
+        override func accessibilityActivate() -> Bool {
+            guard let activateSearch else { return super.accessibilityActivate() }
+            activateSearch()
+            return true
+        }
 
         /// An inset grouped list rounds its section's cells (a 26 pt corner configuration, clipped): the field's corners
         /// in the first row were cut deeper than the drawer's. The row has no background, so its cell is left unclipped,
@@ -426,21 +452,40 @@ struct AgentsSearchField: UIViewRepresentable {
         let field = holder.field
         context.coordinator.parent = self
         if field.text != text { field.text = text }
-        if !active, field.isFirstResponder { field.resignFirstResponder() }
+        if !active {
+            #if os(iOS)
+            holder.accessibilityValue = text.isEmpty ? Self.prompt : text
+            #endif
+            if field.isFirstResponder { field.resignFirstResponder() }
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: Holder, context: Context) -> CGSize? {
         CGSize(width: proposal.width ?? uiView.field.intrinsicContentSize.width, height: Theme.Size.searchField)
     }
 
-    final class Coordinator: NSObject, UITextFieldDelegate {
+    final class Coordinator: NSObject, UITextFieldDelegate, UIGestureRecognizerDelegate {
         var parent: AgentsSearchField
         init(_ parent: AgentsSearchField) { self.parent = parent }
 
+        @objc func beginSearchFromTap(_ recognizer: UITapGestureRecognizer) {
+            guard !parent.active, recognizer.state == .ended else { return }
+            parent.begin()
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
+        }
+
         func textFieldShouldBeginEditing(_ field: UITextField) -> Bool {
+            #if os(iOS)
+            return parent.active
+            #else
             if parent.active { return true }
             parent.begin()
             return false
+            #endif
         }
 
         private var keyboard: NSObjectProtocol?

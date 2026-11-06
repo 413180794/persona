@@ -287,3 +287,21 @@ import Testing
         #expect(rows(.machine, expandedIdle: ["machine-" + a.machineRef.path]).machines([a, b, c], order: refs).map(\.sessionID) == ["c", "a", "b"])
     }
 }
+
+/// The cap on a long run of rows (`AgentRowCap`, #5766).
+struct AgentRowCapTests {
+    @Test func shortRunsShowEveryRow() {
+        #expect(AgentRowCap.capped(0, cap: 20) == nil)
+        #expect(AgentRowCap.capped(20, cap: 20) == nil)
+        #expect(AgentRowCap.capped(25, cap: 20) == nil) // a few over: all of them, no "Show All 22"
+    }
+
+    @Test func longRunsShowTheCap() {
+        #expect(AgentRowCap.capped(26, cap: 20) == 20)
+        #expect(AgentRowCap.capped(140, cap: 20) == 20)
+    }
+
+    @Test func noCapShowsEverything() {
+        #expect(AgentRowCap.capped(10_000, cap: .max) == nil)
+    }
+}

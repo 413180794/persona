@@ -11,6 +11,7 @@ Current docs, code comments and lessons cite them to explain "why it is done thi
 
 | File | Contents |
 | --- | --- |
+| `agents-grouping-5766.md` | 2026-11-06 iPhone Agents 首批分组入口和长列表上限：400-Agent 受控读数、测试入口、零差异说明及未完成的 8000-Agent 边界（#5766） |
 | `agents-list-5929-local-acceptance.md` | 2026-11-06 bounded Agents API: runtime/personal-agent callers, synthetic 8,000-session before/after latency, bytes, CPU and memory, local test output and the pending production-deployment boundary (#5929) |
 | `codex-project-hierarchy-verification.md` | 2026-11-06 Codex project and task hierarchy verification, including source isolation, parent metadata, grouped tasks and client acceptance (#5620) |
 | `english-documentation-acceptance-20261106.md` | 2026-11-06 English documentation acceptance: language rules, bilingual README, all docs translations, merged PRs, link checks, screenshots and disclosed test limits (#5054, #5056) |

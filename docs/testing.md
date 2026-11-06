@@ -489,6 +489,7 @@ Long-scroll uses `XCTOSSignpostMetric`; simulator reports duration, not dropped 
   plus mostly/all-idle spaces; `seen` WS or POST changes Unread→Seen, `GET /mock/seen`, `/mock/reset`),
   `TEST_RUNNER_JARVIS_AGENTS_HUB=http://127.0.0.1:18775 TEST_RUNNER_JARVIS_SHOTS=<directory> TEST_RUNNER_JARVIS_STYLE=light … -only-testing:PersonaUITests/AgentsListTests`, repeat dark.
 - `-openAgentsFresh YES` clears remembered filter/grouping/compact/collapse at launch. Tests must change these via UI, not fixed launch args which override saved values.
+- Grouping menu and long-run cap (`AgentsGroupingTests`, #5766): `PORT=<port> MOCK_AGENTS=1 python3 scripts/mock/mock_hub.py`, `TEST_RUNNER_JARVIS_GROUPING_HUB=<mock URL>`; each grouping from the capsule beside the quick filters, By Status kept after a restart, Unread's Show all; `TEST_RUNNER_JARVIS_SHOTS=<directory>` + `TEST_RUNNER_JARVIS_SCHEME=light|dark` + `TEST_RUNNER_JARVIS_STYLE=<name>` for the shots.
 - Recent flat mode (`RecentAgentsTests`): ordinary mock (no `MOCK_AGENTS`), `TEST_RUNNER_JARVIS_RECENT_HUB=<mock URL>`,
   `-only-testing:PersonaUITests/RecentAgentsTests`. Real menu switch; cross-project activity order, persistence, read/return, idle/offline history, live reorder, machine filter/search.
   Light/dark, `TEST_RUNNER_JARVIS_LAYOUT=shell` too; per-step `TEST_RUNNER_JARVIS_SHOTS=<directory>`, `TEST_RUNNER_JARVIS_STYLE=light|dark` names.

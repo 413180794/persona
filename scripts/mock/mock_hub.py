@@ -794,13 +794,17 @@ if os.environ.get("MOCK_QUIET"):
         SESSIONS.append(sess("macbook", "e4f6a8c0-0000-4000-8000-%012d" % (i + 1), title, "/Users/me/code/news",
                              "idle", "idle", "news-dev", 9, slot, i + 1, minutes, last, seen_at=ago(minutes=60 * 24)))
 
+# MOCK_AGENTS=<n> (n > 1, #5766): the same list n times over (n=3: ~400 agents in 15 spaces), for the cost of a very long list.
 if os.environ.get("MOCK_AGENTS"):
     n = 0
-    for mid, proj, sidx, mix in (("studio", "platform", 10, {"needs_you": 3, "unread": 35, "working": 12}),
-                                 ("studio", "infra", 11, {"working": 2, "unread": 4, "idle": 24}),
-                                 ("studio", "docs-site", 12, {"idle": 20}),
-                                 ("macbook", "mobile", 13, {"unread": 5, "idle": 10}),
-                                 ("server", "tools", 14, {"needs_you": 1, "working": 3, "unread": 2, "idle": 4})):
+    _times = max(1, int(os.environ["MOCK_AGENTS"])) if os.environ["MOCK_AGENTS"].isdigit() else 1
+    _mixes = (("studio", "platform", 10, {"needs_you": 3, "unread": 35, "working": 12}),
+              ("studio", "infra", 11, {"working": 2, "unread": 4, "idle": 24}),
+              ("studio", "docs-site", 12, {"idle": 20}),
+              ("macbook", "mobile", 13, {"unread": 5, "idle": 10}),
+              ("server", "tools", 14, {"needs_you": 1, "working": 3, "unread": 2, "idle": 4}))
+    for mid, proj, sidx, mix in [(m, p if k == 0 else "%s-%d" % (p, k + 1), i + 20 * k, x)
+                                 for k in range(_times) for m, p, i, x in _mixes]:
         slot = 0
         for state, count in mix.items():
             for _ in range(count):

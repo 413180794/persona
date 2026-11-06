@@ -598,6 +598,23 @@ On a Linux development machine without the Android SDK or Xcode, pure-logic clie
   Copy the needed types verbatim from `Models.swift` and write minimal stand-ins for the rest; match the App's settings: Swift 6, `defaultIsolation(MainActor.self)`, plus the `NonisolatedNonsendingByDefault` and `InferIsolatedConformances` upcoming features (`SWIFT_APPROACHABLE_CONCURRENCY`).
   This catches syntax, type and isolation errors and really runs the tests, but it is not an Xcode build: say "not compiled with Xcode" in the PR; Xcode 26.0 is not verified either.
 
+## 后台测量停滞时，先区分未完成测量与残留管道（2026-11-06，#5766）
+
+性能批次停在某一轮，不等于 App 仍在测量。本次 App 的 `frames-page-idle.json`、`frames-page-glide.json` 已生成，但前台测量 shell 已退出；后台 mock 的残留 shell 仍持有输出管道，父批次的 `grep` 收不到 EOF，一直等待。
+
+- 先核对进程命令、PPID、工作目录、日志时间及 App 文档目录中的 JSON。已有完整读数另存并记录来源，不重跑、不覆盖。
+- mock 直接在当前 shell 后台启动，保存 `$!`，重定向 stdin/stdout/stderr；用退出 trap 处理这个已确认的子进程。不要用后台子 shell 启动常驻服务后丢失 PID。
+- 恢复前确认后续脚本有超时、失败结论和断点跳过。需要清理残留进程时，重新核实 PID；优先 TERM 本任务的 mock，让父进程自然解阻。不要按宽泛进程名或端口清理。
+- 模拟器操作整段持有 `/tmp/playbox-sim.lock`；锁等待和单次测量都设超时，成功、失败、中断均有明确结果。近零或不一致的前后差异不能写成显著性能收益。
+
+## UIKit 焦点探测不能当成开始搜索的用户意图（2026-11-07，#5766）
+
+分组持久化测试通过，但截图中的键盘遮住了页面。加入「开菜单不弹键盘」断言后发现：键盘在菜单打开时出现，不是选择回填后出现；改按钮样式或隔离 List 单元都不能解决。
+
+原因是静态搜索框的 `textFieldShouldBeginEditing` 返回 false 前还调用了开始搜索。UIKit 打开菜单时也会探测输入焦点，这个副作用把探测升级成了真正搜索。iPhone 的静态输入现在只由明确点击或 `accessibilityActivate` 开始搜索；焦点探测只返回编辑是否允许。不可见的折叠输入不参与点击。
+
+回归同时覆盖：菜单不弹键盘、明确点击可搜索并找到结果、关闭后再开菜单不恢复键盘、无障碍激活仍能开始搜索。只看状态断言不够，交付前仍需实际查看截图。
+
 ## macOS bash 3.2 can report an executable failure as exit 1 under `set -e` (#4467)
 
 The Mac-only `test_hub_restart_mac.py` fixture used an empty, non-executable `jarvisd` file. After blue-green switching was added, `hub-systemd.sh` executed it before restarting launchd. With `set -e`, macOS bash 3.2 returned 1 for `"$f" … || rc=$?`, which the script interpreted as a failed switch, rather than 126 for an executable failure. Bash 5 returned 126.

@@ -795,10 +795,20 @@ private struct AgentsList: View {
                         machineFilterChip
                     }
                     #endif
+                    #if os(iOS)
+                    // A stable cell keeps the selected grouping discoverable without crowding the quick filters.
+                    AgentsGroupingMenu()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, Theme.Space.page)
+                        .padding(.bottom, Theme.Space.sm)
+                        .background { DrawerPan.NoRowSwipe() }
+                        .id("agents.grouping.row")
+                    #endif
                 }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
+                    .id("agents.controls")
             }
             #if os(iOS) || os(visionOS)
             if !model.desktops.isEmpty && query.isEmpty {
@@ -1276,7 +1286,7 @@ private struct AgentsList: View {
     /// The agents of a tab with several together, under the tab's row (`tabRows`, #2320).
     @ViewBuilder private func agentRows(_ list: [Session], key: String, depth: Int = 0) -> some View {
         let rows = order.tabEntries(list, all: quick == .all)
-        ForEach(rows.busy) { e in entryRows(e, depth: depth) }
+        cappedRows(rows.busy, key: key, depth: depth) { e in entryRows(e, depth: depth) }
         if !rows.idle.isEmpty {
             let idle = rows.idle.flatMap(\.sessions)
             if expandedIdle.contains(key) || !query.isEmpty {
@@ -1546,7 +1556,7 @@ private struct AgentsList: View {
     @ViewBuilder private func recentSection(_ sessions: [Session]) -> some View {
         if !sessions.isEmpty {
             listSection {
-                ForEach(AgentListOrder.recent(sessions)) { s in slotRow(s, context: true) }
+                cappedRows(AgentListOrder.recent(sessions), key: "recent") { s in slotRow(s, context: true) }
             } header: {
                 SectionHeader(title: String(localized: "Recently Used"), count: sessions.count, tone: StatusPalette.idle)
             }
@@ -1622,10 +1632,10 @@ private struct AgentsList: View {
                 listSection {
                     if isFolded(id) {
                     } else if b.key == "idle" {
-                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: true) }
+                        cappedRows(rows, key: id) { s in slotRow(s, context: true, inStateSection: true) }
                     } else {
                         // Muted mixes states: each row says its own. Loops and background work stay off the rows (the chat shows them).
-                        ForEach(rows) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
+                        cappedRows(rows, key: id) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
                     FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(rows.count) [Chats View cb60bd]")) { toggleFold(id) } label: {
@@ -1650,7 +1660,7 @@ private struct AgentsList: View {
             if !g.sessions.isEmpty {
                 listSection {
                     if !folded {
-                        ForEach(g.sessions) { s in slotRow(s, context: true, showHost: mixedHosts) }
+                        cappedRows(g.sessions, key: id) { s in slotRow(s, context: true, showHost: mixedHosts) }
                     }
                 } header: {
                     FoldButton(title: g.name, folded: folded, detail: String(localized: "\(g.sessions.count) [Chats View cb60bd]")) { toggleFold(id, shown: folded) } label: {
@@ -1696,10 +1706,10 @@ private struct AgentsList: View {
             listSection {
                 if !isFolded(id) {
                     if quick == .all {
-                        ForEach(rows.filter(stays)) { s in slotRow(s, context: true) }
+                        cappedRows(rows.filter(stays), key: id) { s in slotRow(s, context: true) }
                         foldedRows(rows.filter { !stays($0) }, key: "machine-" + m.ref.path, label: String(localized: "Idle"))
                     } else {
-                        ForEach(rows) { s in slotRow(s, context: true) }
+                        cappedRows(rows, key: id) { s in slotRow(s, context: true) }
                     }
                 }
             } header: {
@@ -1709,6 +1719,47 @@ private struct AgentsList: View {
             }
             .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
         }
+    }
+
+    /// A long run of rows: the first `rowCap`, then "Show All N" (open until the list's view is rebuilt).
+    @ViewBuilder private func cappedRows<Item: Identifiable, Row: View>(_ items: [Item], key: String, depth: Int = 0,
+                                                                       @ViewBuilder row: @escaping (Item) -> Row) -> some View {
+        let key = "all:" + key
+        // Under a quick filter or a search every row it leaves shows: what was asked for, and already few.
+        if let cap = AgentRowCap.capped(items.count), query.isEmpty, quick == .all {
+            if expandedIdle.contains(key) {
+                ForEach(items) { row($0) }
+                collapseRow(String(localized: "Collapse"), key: key, depth: depth)
+            } else {
+                ForEach(items.prefix(cap)) { row($0) }
+                showAllRow(items.count, key: key, depth: depth)
+            }
+        } else {
+            ForEach(items) { row($0) }
+        }
+    }
+
+    private func showAllRow(_ count: Int, key: String, depth: Int) -> some View {
+        Button {
+            Haptics.tap()
+            withAnimation(Theme.Motion.standard) { _ = expandedIdle.insert(key) }
+        } label: {
+            HStack(spacing: compact ? CompactList.gap : Theme.Space.s) {
+                Image(systemName: Theme.Icon.expand)
+                    .font(compact ? CompactList.metaStrong : Theme.Font.secondaryMedium)
+                    .scaledFrame(width: compact ? CompactList.mark : Theme.Size.iconS)
+                Text("Show All \(count)").font(compact ? CompactList.title : Theme.Font.secondaryMedium).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(Theme.accent)
+            .contentShape(.rect)
+            .padding(.leading, nested(depth))
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(rowInsets(level: depth))
+        .listRowBackground(capsules ? Color.clear : nil)
+        .listRowSeparator(capsules ? .hidden : .automatic)
+        .accessibilityIdentifier("agents.showAll")
     }
 
     /// Quiet rows behind one "N more…" row (always open while searching).
@@ -2411,9 +2462,9 @@ struct QuickFilterBar: View, Equatable {
                 HStack(spacing: Theme.Space.xs) { chips }
                 LarkFlowLayout(spacing: Theme.Space.xs, lineSpacing: Theme.Space.sm) { chips }
             } else {
-                HStack(spacing: Theme.Space.s) { plainChips(padding: 12) }
-                HStack(spacing: Theme.Space.sm) { plainChips(padding: 8) }
-                LarkFlowLayout(spacing: 6, lineSpacing: 8) { plainChips(padding: 8) }
+                HStack(spacing: Theme.Space.s) { plainChips(padding: Theme.Space.m) }
+                HStack(spacing: Theme.Space.sm) { plainChips(padding: Theme.Space.s) }
+                LarkFlowLayout(spacing: Theme.Space.sm, lineSpacing: Theme.Space.s) { plainChips(padding: Theme.Space.s) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
