@@ -1,4 +1,6 @@
 {
   "running": "実行中",
-  "thinking": "思考中"
+  "thinking": "思考中",
+  "agents_working_other": "サブエージェント {count} 件が作業中",
+  "agents_more_other": "ほか {count} 件"
 }

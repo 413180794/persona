@@ -27,7 +27,9 @@ export type Panel =
   /** A task of the assistant's conversation: its agent's chat (docs/unified-entry.md). */
   | { kind: "task"; todo: string }
   /** An agent the main conversation's dock shows that no task stands for (#1113): its chat. */
-  | { kind: "agent"; mid: string; sid: string };
+  | { kind: "agent"; mid: string; sid: string }
+  /** A chat's plan: its latest TodoWrite as a whole list, following the chat (#5602). */
+  | { kind: "plan"; mid: string; sid: string };
 
 /** Files and Git state belongs to a directory even when that workspace has no Agent/session ID. */
 export function directoryPanelKey(panel: { mid: string; sid: string; cwd: string }): string {

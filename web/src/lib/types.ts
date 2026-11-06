@@ -70,6 +70,16 @@ export interface MeshHub {
   endpoints?: string[];
 }
 
+/** A plan or task list a folded call wrote (the hub keeps it with the fold, transcript.foldTaskSnapshots): `replace:
+ *  "todo"` is a TodoWrite's whole list. */
+export interface FoldTaskSnapshot {
+  replace?: string;
+  entries: { id: string; subject?: string; description?: string; status?: string }[];
+  source_item_id: string;
+  source_tool_use_id: string;
+  source_seq: number;
+}
+
 export interface Subagent {
   id: string;
   session_id: string;
@@ -392,7 +402,7 @@ export interface Item {
   queued?: boolean;
   wake?: boolean;
   task?: TaskNote;
-  fold?: { items: number; tools: number; thoughts: number; until?: string; through_seq: number; through_id?: string; images?: FoldImage[] };
+  fold?: { items: number; tools: number; thoughts: number; until?: string; through_seq: number; through_id?: string; images?: FoldImage[]; tasks?: FoldTaskSnapshot[] };
   image?: { mime: string; data?: string; lazy?: boolean; size?: number; width?: number; height?: number };
   /** Sent by another Claude session (cross-session messaging), not typed by you: its name. */
   from?: string;

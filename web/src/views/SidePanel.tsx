@@ -10,6 +10,7 @@ import { cx, EASE, IconButton, Loading } from "../ui/atoms";
 import { Icon, type IconName } from "../ui/icons";
 import { AgentPanel, TaskPanel } from "./assistant/TaskPanel";
 import { SubagentPanel } from "./chat/SubagentPanel";
+import { PlanPanel } from "./chat/PlanPanel";
 import { subagentParent } from "../lib/tasks";
 import { useCloseOnBack } from "../lib/back-close";
 import { mediaMatches, NARROW, PHONE, useMedia } from "../lib/viewport";
@@ -173,7 +174,7 @@ export function SidePanel() {
 }
 
 function panelLabel(p: Panel) {
-  return p.kind === "files" ? t("sidepanel.files") : p.kind === "git" ? "Git" : p.kind === "file" ? t("sidepanel.files") : p.kind === "task" ? t("sidepanel.task") : p.kind === "agent" ? t("sidepanel.agent") : t("sidepanel.link");
+  return p.kind === "files" ? t("sidepanel.files") : p.kind === "git" ? "Git" : p.kind === "file" ? t("sidepanel.files") : p.kind === "task" ? t("sidepanel.task") : p.kind === "agent" ? t("sidepanel.agent") : p.kind === "plan" ? t("sidepanel.plan") : t("sidepanel.link");
 }
 
 function body(p: Panel) {
@@ -192,6 +193,8 @@ function body(p: Panel) {
       // a subagent's conversation ("<parent>@<agent>", its card's "View full run"), read-only
       if (subagentParent(p.sid) !== p.sid) return <SubagentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
       return <AgentPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
+    case "plan":
+      return <PlanPanel key={`${p.mid}/${p.sid}`} mid={p.mid} sid={p.sid} onClose={closePanel} />;
   }
 }
 

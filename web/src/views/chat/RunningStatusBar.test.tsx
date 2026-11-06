@@ -16,6 +16,13 @@ describe("tokenCount", () => {
 });
 
 describe("statusText", () => {
+  it("says how many subagents the agent waits on and what the newest does (#5602)", () => {
+    expect(statusText({ verb: "Frosting" }, { count: 2, doing: ["跑测试", "在读 a.go"] })).toBe("2 个子 Agent 在工作 — 跑测试… · 还有 1 个");
+    expect(statusText(null, { count: 1, doing: ["跑测试"] })).toBe("1 个子 Agent 在工作 — 跑测试…");
+    expect(statusText(null, { count: 3, doing: [] })).toBe("3 个子 Agent 在工作…");
+    expect(statusText({ verb: "Frosting" }, null)).toBe("Frosting…");
+  });
+
   it("says the verb, 思考中 while thinking, 运行中 without a line", () => {
     expect(statusText({ verb: "Frosting" })).toBe("Frosting…");
     expect(statusText({ verb: "Frosting", thinking: true })).toBe("思考中");

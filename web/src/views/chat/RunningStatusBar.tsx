@@ -22,23 +22,35 @@ export function tokenCount(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`;
 }
 
-/** The left side's words. */
-export function statusText(live: SessionLive | null): string {
+/** The subagents the agent waits on and what they do (lib/tasks.ts agentsWorking). */
+export interface AgentsWorking {
+  count: number;
+  doing: string[];
+}
+
+/** The left side's words: while the agent waits on its subagents, how many work and what the newest does (#5602). */
+export function statusText(live: SessionLive | null, agents?: AgentsWorking | null): string {
+  if (agents) {
+    const head = t("chat-runningstatusbar.agents_working", { count: agents.count });
+    if (!agents.doing.length) return `${head}…`;
+    const more = agents.doing.length > 1 ? ` · ${t("chat-runningstatusbar.agents_more", { count: agents.doing.length - 1 })}` : "";
+    return `${head} — ${agents.doing[0]}…${more}`;
+  }
   if (!live) return t("chat-runningstatusbar.running");
   if (live.thinking) return t("chat-runningstatusbar.thinking");
   return live.verb ? `${live.verb}…` : t("chat-runningstatusbar.running");
 }
 
-export function RunningStatusBar({ mid, sid, working, startedAt, clock }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean }) {
+export function RunningStatusBar({ mid, sid, working, startedAt, clock, agents }: { mid: string; sid: string; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null }) {
   const live = useSessionLive(mid, sid);
-  return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} />;
+  return <RunningStatusView live={live} working={working} startedAt={startedAt} clock={clock} agents={agents} />;
 }
 
 type Phase = "on" | "linger" | "fading" | "off";
 
 /** The bar for a given status line (RunningStatusBar subscribes; tests render this). `clock: false`: no time, the
  *  chat's live work line shows it. */
-export function RunningStatusView({ live, working, startedAt, clock = true }: { live: SessionLive | null; working: boolean; startedAt?: string; clock?: boolean }) {
+export function RunningStatusView({ live, working, startedAt, clock = true, agents }: { live: SessionLive | null; working: boolean; startedAt?: string; clock?: boolean; agents?: AgentsWorking | null }) {
   const phase = usePhase(working);
   // after the turn: what it last said, while it lingers and fades
   const last = useRef(live);
@@ -62,7 +74,7 @@ export function RunningStatusView({ live, working, startedAt, clock = true }: { 
       <div key={breath.cycle} onAnimationEnd={breath.ended} className={`flex min-w-0 items-center gap-1.5 text-status-accent ${breath.cycle ? "status-breath" : ""}`}>
         <Icon name="sparkles" size={14} className="shrink-0 -translate-y-px" />
         <span className="truncate" data-running-verb>
-          {statusText(shown)}
+          {statusText(shown, working ? agents : null)}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-ink-3 tabular-nums">

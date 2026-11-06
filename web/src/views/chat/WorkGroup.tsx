@@ -225,7 +225,7 @@ export const StepView = memo(function StepView({ step, p, live, fade }: { step: 
   switch (step.kind) {
     case "tool":
       if (isAgentStep(step)) return <SubagentCard step={step} status={p.agentStatus(step)} mid={p.mid} scope={p.scope} />;
-      if (isPlanStep(step)) return <PlanCard id={step.id} todos={planTodos(step)} live={live} openKey={`${p.scope}plan:${p.segment ?? step.id}`} />;
+      if (isPlanStep(step)) return <PlanCard id={step.id} todos={planTodos(step)} live={live} mid={p.mid} sid={p.sid} />;
       return <ActionRow step={step} running={live && !step.result} mid={p.mid} sid={p.sid} />;
     case "thinking":
       return <ThinkingCard item={step.item} durationMs={p.thinking.get(step.id)} scope={p.scope} />;

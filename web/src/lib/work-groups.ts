@@ -279,10 +279,12 @@ export function workBlocks(steps: Step[], opts: WorkGroupOptions): WorkNode[] {
   return out;
 }
 
-/** The plan of an exchange: only its latest TodoWrite of two or more items draws a card; the others are not drawn. */
+/** The plan of an exchange: only its latest TodoWrite of two or more items (that the tool took) draws a card; the
+ *  others are not drawn. */
 export function planSteps(steps: Step[]): Step[] {
   let latest = -1;
-  steps.forEach((s, i) => isPlanStep(s) && planTodos(s as ToolStep).length >= 2 && (latest = i));
+  // a TodoWrite the tool refused did not change the plan (#5602)
+  steps.forEach((s, i) => isPlanStep(s) && !(s as ToolStep).result?.is_error && planTodos(s as ToolStep).length >= 2 && (latest = i));
   return steps.filter((s, i) => !isPlanStep(s) || i === latest);
 }
 

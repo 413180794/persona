@@ -1,23 +1,31 @@
-// The agent's plan (TodoWrite) as a card in the chat (cindy's InlinePlanCard), open by default: done / total and the
-// step it is on in its header, a 2 px progress bar under it when folded. While the card is out of view, a small
-// "Step N / M" pill above the composer (PlanPill) brings it back.
+// The agent's plan (TodoWrite) in the chat: one line, which step of how many it is on and that step, with a 2 px
+// progress bar; its whole list in the side panel's Plan (#5602, after Claude Desktop). While the line is out of view, a
+// small pill above the composer (PlanPill) says the same and opens the panel.
 import { useEffect, useState, type RefObject } from "react";
-import { useExpanded } from "./expanded";
+import { openPanel } from "../../lib/panel";
+import { t } from "../../i18n";
 import type { Segment } from "../../lib/turns";
-import { isPlanStep, planProgress, planSteps, planTodos, type Todo } from "../../lib/work-groups";
+import { isPlanStep, planProgress, planTodos, type Todo } from "../../lib/work-groups";
 import { cx, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 
-/** The chat's newest plan: the latest TodoWrite of two or more items in its newest exchange that has one. */
+/** The chat's newest plan: the latest TodoWrite of two or more items in its newest exchange that has one, also when the
+ *  hub folded it away with the work around it (the fold keeps the list, #5602). */
 export function latestPlan(segs: Segment[]): { id: string; todos: Todo[] } | undefined {
   for (let i = segs.length - 1; i >= 0; i--) {
-    const s = planSteps(segs[i].steps).findLast(isPlanStep);
-    if (s?.kind === "tool") return { id: s.id, todos: planTodos(s) };
+    for (let k = segs[i].steps.length - 1; k >= 0; k--) {
+      const st = segs[i].steps[k];
+      if (st.kind === "tool" && isPlanStep(st) && !st.result?.is_error && planTodos(st).length >= 2) return { id: st.id, todos: planTodos(st) };
+      if (st.kind === "fold") {
+        const snap = st.item.fold?.tasks?.findLast((t) => t.replace === "todo" && t.entries.length >= 2);
+        if (snap) return { id: snap.source_item_id, todos: snap.entries.map((e) => ({ content: e.subject ?? "", status: todoStatus(e.status) })).filter((t) => t.content) };
+      }
+    }
   }
   return undefined;
 }
 
-/** Whether the plan card `id` is drawn but out of the scroll view (scrolled past, or not reached). */
+/** Whether the plan card `id` is out of the scroll view (scrolled past, not reached, or not drawn at all). */
 export function usePlanOutOfView(scroller: RefObject<HTMLDivElement | null>, id?: string): boolean {
   const [out, setOut] = useState(false);
   useEffect(() => {
@@ -26,7 +34,8 @@ export function usePlanOutOfView(scroller: RefObject<HTMLDivElement | null>, id?
     if (!sc || !body || !id) return setOut(false);
     const check = () => {
       const el = sc.querySelector(`[data-plan-id="${CSS.escape(id)}"]`);
-      if (!el) return setOut(false);
+      // not drawn (the hub folded it away with the work around it): the pill is where it shows (#5602)
+      if (!el) return setOut(true);
       const r = el.getBoundingClientRect();
       const v = sc.getBoundingClientRect();
       setOut(r.bottom < v.top || r.top > v.bottom);
@@ -43,55 +52,80 @@ export function usePlanOutOfView(scroller: RefObject<HTMLDivElement | null>, id?
   return out;
 }
 
-/** `openKey`: where the reader's open / closed is kept (expanded.ts), the same for the exchange's every TodoWrite, so a
- *  new one does not open a card the reader closed (#5602). */
-export function PlanCard({ id, todos, live, openKey }: { id?: string; todos: Todo[]; live?: boolean; openKey?: string }) {
-  const [open, setOpen] = useExpanded(openKey ?? `plan:${id ?? ""}`, true);
+const todoStatus = (s?: string): Todo["status"] => (s === "completed" || s === "in_progress" ? s : "pending");
+
+type Progress = ReturnType<typeof planProgress>;
+
+/** How far along a plan is, said one way wherever it shows (the line, the pill, the panel): "Step 3 of 4", and "All 4
+ *  steps done" once they are. */
+export function planStepText(p: Progress): string {
+  return p.allDone ? t("chat-plancard.all_done", { count: p.total }) : t("chat-plancard.step_of", { step: p.step, total: p.total });
+}
+
+/** The step it is on, after how far along: "Step 3 of 4 · Run the tests"; none once all are done. */
+export function planSummary(p: Progress): string {
+  return [planStepText(p), p.allDone ? "" : p.current].filter(Boolean).join(" · ");
+}
+
+/** The plan in the chat: one line (#5602, after Claude Desktop): which step of how many it is on and that step, a 2 px
+ *  bar of how far along it is; it opens the whole list in the side panel, which follows the chat's newest plan. */
+export function PlanCard({ id, todos, mid, sid }: { id?: string; todos: Todo[]; live?: boolean; mid?: string; sid?: string }) {
   if (!todos.length) return null;
   const p = planProgress(todos);
   return (
     <div className="flex w-full" data-plan-card data-plan-id={id}>
       <div className="max-w-full min-w-0 overflow-hidden rounded-[12px] border border-line bg-surface">
-        <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-[14px] py-[10px] transition-opacity select-none hover:opacity-80 [@media(pointer:coarse)]:min-h-10">
-          <Icon name={open ? "chevron" : "chevronRight"} size={14} stroke={2.2} className="shrink-0 text-tool-ink" />
+        <button
+          type="button"
+          onClick={() => mid && sid && openPanel({ kind: "plan", mid, sid })}
+          aria-label={t("chat-plancard.open")}
+          className="flex w-full min-w-0 cursor-pointer items-center gap-2 px-[14px] py-[10px] transition-opacity select-none hover:opacity-80 [@media(pointer:coarse)]:min-h-10"
+        >
           <Icon name="todo" size={16} className="shrink-0 text-ink" />
-          <span className="shrink-0 font-mono text-[13px] leading-none font-medium text-ink tabular-nums">
-            {p.done}/{p.total}
-          </span>
+          <span className="shrink-0 text-[13px] leading-none text-ink">{t("chat-plancard.updated")}</span>
           <span className="shrink-0 text-[13px] leading-none text-tool-ink">·</span>
-          <span className="mt-px min-w-0 truncate text-[13px] leading-none text-ink">{p.current}</span>
+          <span className="shrink-0 text-[13px] leading-none font-medium whitespace-nowrap text-ink tabular-nums" data-plan-step>
+            {planStepText(p)}
+          </span>
+          {!p.allDone && p.current && (
+            <>
+              <span className="shrink-0 text-[13px] leading-none text-tool-ink">·</span>
+              <span className="mt-px min-w-0 truncate text-[13px] leading-none text-ink">{p.current}</span>
+            </>
+          )}
+          <Icon name="chevronRight" size={14} stroke={2.2} className="shrink-0 text-tool-ink" />
         </button>
-        {!open && (
-          <div className="h-[2px] w-full bg-line" data-plan-progress>
-            <div className="h-full bg-ink transition-[width] duration-200 motion-reduce:transition-none" style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} />
-          </div>
-        )}
-        {open && (
-          <div className="border-t border-line px-[14px] pt-[10px] pb-[12px]">
-            <div className="flex flex-col gap-[2px]">
-              {todos.map((t, i) => (
-                <div key={`${t.content}:${i}`} className="flex min-h-[30px] items-center gap-[10px]" data-todo={t.status}>
-                  {t.status === "completed" ? (
-                    <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-tool-ink text-tool-ink">
-                      <Icon name="check" size={11} stroke={2.6} />
-                    </span>
-                  ) : t.status === "in_progress" ? (
-                    <span className="flex size-[18px] shrink-0 items-center justify-center">{live ? <Spinner size={16} /> : <span className="size-[16px] rounded-full border-[1.5px] border-ink border-r-transparent" />}</span>
-                  ) : (
-                    <span className="size-[18px] shrink-0 rounded-full border-[1.5px] border-ink" />
-                  )}
-                  <span className={cx("min-w-0 text-[13px] leading-[1.45] break-words", t.status === "completed" ? "text-tool-ink" : t.status === "in_progress" ? "font-medium text-ink" : "text-ink")}>{t.content}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="h-[2px] w-full bg-line" data-plan-progress>
+          <div className="h-full bg-ink transition-[width] duration-200 motion-reduce:transition-none" style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} />
+        </div>
       </div>
     </div>
   );
 }
 
-/** Above the composer while the latest plan is out of view: a ring with how far along it is, Step N / M. */
+/** A plan's items, each with its state (the side panel's Plan). */
+export function PlanList({ todos, live }: { todos: Todo[]; live?: boolean }) {
+  return (
+    <div className="flex flex-col gap-[2px]" data-plan-list>
+      {todos.map((todo, i) => (
+        <div key={`${todo.content}:${i}`} className="flex min-h-[30px] items-center gap-[10px]" data-todo={todo.status}>
+          {todo.status === "completed" ? (
+            <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-tool-ink text-tool-ink">
+              <Icon name="check" size={11} stroke={2.6} />
+            </span>
+          ) : todo.status === "in_progress" ? (
+            <span className="flex size-[18px] shrink-0 items-center justify-center">{live ? <Spinner size={16} /> : <span className="size-[16px] rounded-full border-[1.5px] border-ink border-r-transparent" />}</span>
+          ) : (
+            <span className="size-[18px] shrink-0 rounded-full border-[1.5px] border-ink" />
+          )}
+          <span className={cx("min-w-0 text-[13px] leading-[1.45] break-words", todo.status === "completed" ? "text-tool-ink" : todo.status === "in_progress" ? "font-medium text-ink" : "text-ink")}>{todo.content}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Above the composer while the latest plan is out of view: a ring with how far along it is, and which step of how many. */
 export function PlanPill({ todos, onClick }: { todos: Todo[]; onClick: () => void }) {
   const p = planProgress(todos);
   const r = 7;
@@ -107,9 +141,7 @@ export function PlanPill({ todos, onClick }: { todos: Todo[]; onClick: () => voi
             <circle cx={8} cy={8} r={r} fill="none" stroke="var(--ink)" strokeWidth={2} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - (p.total ? p.step / p.total : 0))} transform="rotate(-90 8 8)" />
           </svg>
         )}
-        <span className="text-[13px] leading-none text-ink tabular-nums">
-          Step {p.step} / {p.total}
-        </span>
+        <span className="text-[13px] leading-none text-ink tabular-nums">{planStepText(p)}</span>
       </button>
     </div>
   );
