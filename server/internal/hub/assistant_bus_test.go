@@ -24,7 +24,7 @@ func init() {
 }
 
 // testAssistant is the assistant (internal/assistant) on the hub's bus, run in the test's process the way `personad
-// assistant` runs it: its own Service, the hub's store as its own, a real WebSocket connection to the hub.
+// assistant` runs it: its own Service, its own store (assistantStoreOf), a real WebSocket connection to the hub.
 type testAssistant struct {
 	svc   *assistant.Service
 	bh    *assistant.BusHub
@@ -81,9 +81,13 @@ func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, sto
 		f(&o)
 	}
 	bh := assistant.NewBusHub(o)
+	mgr, _ := managerDBOf(t, h) // taken now: a call of the assistant's that outlives the test never falls back to h.store
 	svc := assistant.New(assistant.Options{Hub: bh, Logf: logf, Devices: o.Devices, Store: func() assistant.Store {
-		if store != nil {
+		switch {
+		case store != nil:
 			return store
+		case mgr != nil:
+			return mgr
 		}
 		s, _ := h.store.(assistant.Store)
 		return s
@@ -157,6 +161,69 @@ func helloChanged(t *testing.T, h *Hub) {
 		t.Fatal(err)
 	}
 	settleAssistant(h)
+}
+
+// managerStores are, by hub, the test databases whose assistant keeps its state on a handle of its own
+// (useManagerDB): one opened for the manager's set, as the default manager has on a database it shares with the hub.
+var managerStores sync.Map // *Hub → *managerHandle
+
+type managerHandle struct {
+	url  string
+	once sync.Once
+	db   *db.DB
+	err  error
+}
+
+// useManagerDB makes the database at url, which h.store has opened for the hub's set alone, where h's assistant
+// keeps its state: it is opened for the manager's set when a test first needs it (a hub test without an assistant
+// sees the hub's tables alone).
+func useManagerDB(t *testing.T, h *Hub, url string) {
+	t.Helper()
+	managerStores.Store(h, &managerHandle{url: url})
+	t.Cleanup(func() { managerStores.Delete(h) })
+}
+
+// managerDBOf is the manager-set handle of h's database, opened on first use; false for a hub without one.
+func managerDBOf(t *testing.T, h *Hub) (*db.DB, bool) {
+	t.Helper()
+	v, ok := managerStores.Load(h)
+	if !ok {
+		return nil, false
+	}
+	m := v.(*managerHandle)
+	m.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if m.db, m.err = db.Open(ctx, m.url, db.ManagerSet); m.err == nil {
+			t.Cleanup(m.db.Close) // after the assistant dialed later stops (cleanups run last first)
+		}
+	})
+	if m.err != nil {
+		t.Fatal(m.err)
+	}
+	return m.db, true
+}
+
+// assistantStoreOf is where h's test assistant keeps its state: the manager-set handle of its database
+// (useManagerDB), else h.store (a test's in-memory store, or a database opened for both sets).
+func assistantStoreOf(t *testing.T, h *Hub) Store {
+	t.Helper()
+	if m, ok := managerDBOf(t, h); ok {
+		return m
+	}
+	return h.store
+}
+
+// managerDB is the database the assistant of h (a hub from newBusHub) keeps its state in: the same one, opened for
+// the manager's set (its tables, its settings in settings); h.store is the hub's (hub_settings). A test seeds and
+// reads the assistant's state here.
+func managerDB(t *testing.T, h *Hub) *db.DB {
+	t.Helper()
+	m, ok := managerDBOf(t, h)
+	if !ok {
+		t.Fatal("managerDB: not a hub from newBusHub")
+	}
+	return m
 }
 
 // testAssistants are the connected ones, by hub.
@@ -252,7 +319,7 @@ func useModel(t *testing.T, h *Hub, c ai.Config) {
 	}
 }
 
-// putModel sets purpose's record in the model configuration (the assistant reads it from the same store).
+// putModel sets purpose's record in the model configuration (the assistant reads it from its store).
 func putModel(t *testing.T, h *Hub, purpose string, b assistantwire.ModelBinding) {
 	t.Helper()
 	var r struct {
@@ -260,12 +327,12 @@ func putModel(t *testing.T, h *Hub, purpose string, b assistantwire.ModelBinding
 		Binding  assistantwire.ModelBinding `json:"binding"`
 	}
 	ctx := context.Background()
-	if _, err := h.store.Setting(ctx, "model_config."+purpose, &r); err != nil {
+	if _, err := assistantStoreOf(t, h).Setting(ctx, "model_config."+purpose, &r); err != nil {
 		t.Fatal(err)
 	}
 	r.Revision++
 	r.Binding = b
-	if err := h.store.PutSetting(ctx, "model_config."+purpose, r); err != nil {
+	if err := assistantStoreOf(t, h).PutSetting(ctx, "model_config."+purpose, r); err != nil {
 		t.Fatal(err)
 	}
 }

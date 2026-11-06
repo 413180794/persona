@@ -49,7 +49,8 @@ func init() {
 }
 
 // newBusHub is a hub on the lane's test database with no bus identities and no machine moved to a manager, served
-// over plain HTTP on loopback.
+// over plain HTTP on loopback. The database is opened for the hub's set (h.store, the third result); the assistant a
+// test connects gets it opened for the manager's set (managerDB).
 func newBusHub(t *testing.T) (*Hub, *httptest.Server, *db.DB) {
 	t.Helper()
 	dsn := os.Getenv("JARVIS_TEST_DATABASE_URL")
@@ -75,6 +76,7 @@ func newBusHub(t *testing.T) (*Hub, *httptest.Server, *db.DB) {
 	t.Cleanup(clearBus)
 	h := newTestHub(t)
 	h.store = store
+	useManagerDB(t, h, dsn) // the assistant a test connects is a manager: its own handle on the database
 	srv := httptest.NewServer(h.routes())
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { // before the server closes

@@ -24,7 +24,8 @@ import (
 // gets a supervise message whose turn is not pushed; the agent is done and the task waits for review (not closed); rework
 // goes back to the agent; the next stop waits for review again; accepted closes it, done by review.
 func TestSupervisedTaskOverTheBus(t *testing.T) {
-	h, srv, store := newBusHub(t)
+	h, srv, _ := newBusHub(t)
+	store := managerDB(t, h) // the assistant's state: its settings and tables
 	ctx := context.Background()
 	keys := []string{"assistant", "assistant.tasks", "assistant.routines", "assistant.followups", "assistant.runs",
 		"assistant.titles", "assistant.archived", "assistant.relay"}

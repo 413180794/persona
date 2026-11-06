@@ -23,7 +23,8 @@ import (
 // assistant (internal/assistant, with its schedule) dialing the hub's bus with a token from the database and keeping
 // its state in the same Postgres, an app on the WebSocket, fake nodes for the assistant's machine and an agent's.
 func TestAssistantOverTheBus(t *testing.T) {
-	h, srv, store := newBusHub(t)
+	h, srv, _ := newBusHub(t)
+	store := managerDB(t, h) // the assistant's state: its settings and tables
 	ctx := context.Background()
 	keys := []string{"assistant", "assistant.tasks", "assistant.routines", "assistant.followups", "assistant.runs",
 		"assistant.titles", "assistant.archived", "assistant.relay"}

@@ -28,10 +28,10 @@ func shown(h *Hub, id string) assistant.SessionView {
 	return a.sessions[id]
 }
 
-// assistantSetting reads one of the assistant's settings as the store has it.
+// assistantSetting reads one of the assistant's settings as its store has it.
 func assistantSetting(t *testing.T, h *Hub, key string, out any) {
 	t.Helper()
-	if _, err := h.store.Setting(context.Background(), key, out); err != nil {
+	if _, err := assistantStoreOf(t, h).Setting(context.Background(), key, out); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -85,7 +85,7 @@ func noteStarted(t *testing.T, h *Hub, machine, id string, at time.Time) {
 	m := map[string]any{}
 	assistantSetting(t, h, "assistant.titles", &m)
 	m[id] = map[string]any{"machine_id": machine, "by": "pending", "started": at.UTC()}
-	if err := h.store.PutSetting(context.Background(), "assistant.titles", m); err != nil {
+	if err := assistantStoreOf(t, h).PutSetting(context.Background(), "assistant.titles", m); err != nil {
 		t.Fatal(err)
 	}
 	restartAssistant(t, h)
@@ -181,7 +181,7 @@ func seedTasks(t *testing.T, h *Hub, tasks ...assistant.Task) {
 	if h.store == nil {
 		h.store = &settingsStore{vals: map[string][]byte{}}
 	}
-	if err := h.store.PutSetting(context.Background(), "assistant.tasks", tasks); err != nil {
+	if err := assistantStoreOf(t, h).PutSetting(context.Background(), "assistant.tasks", tasks); err != nil {
 		t.Fatal(err)
 	}
 }
