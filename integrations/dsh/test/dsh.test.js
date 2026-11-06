@@ -227,6 +227,20 @@ test('a watched session gets its new events as continuous items and the live tex
   assert.equal(n.all('session.items')[2].from_seq, 9)
 })
 
+test('a watch that starts mid-message gets the whole live text so far, not just what came after', async (t) => {
+  const { n, ctl, ev, rt } = await setup(t)
+  ctl.add('session-m', {}, [text(0, 'user', 'one')])
+  rt.start()
+  await n.ready
+  const agent = { session: { id: 'session-m' } }
+  ev.emit('agent/assistant-stream', { agent, frame: { type: 'start' } })
+  ev.emit('agent/assistant-stream', { agent, frame: { type: 'chunk', chunk: { type: 'text-delta', text: 'Hel' } } }) // nobody watching yet
+  await n.peer.call('session.watch', { session_id: 'session-m', since_seq: 0 })
+  ev.emit('agent/assistant-stream', { agent, frame: { type: 'chunk', chunk: { type: 'text-delta', text: 'lo' } } })
+  await until('delta', () => n.all('session.delta').length > 0)
+  assert.equal(n.last('session.delta').text, 'Hello')
+})
+
 test('approvals of a session the phone drives go to the phone first; a dismissed card goes to the browser', async (t) => {
   const { n, ctl, ev, rt } = await setup(t)
   ctl.add('session-x', {}, [text(0, 'user', 'deploy')])

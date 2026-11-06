@@ -695,10 +695,12 @@ export function createDshRuntime(deps, options = {}) {
       return
     }
     const add = streamText(frame)
-    if (!add || !rt.watching(id)) return
+    if (!add) return
+    // Kept whether or not the phone watches: session.delta is the whole text so far, so a watch that starts
+    // mid-message needs what came before it.
     const text = (texts.get(id) ?? '') + add
     texts.set(id, text)
-    rt.stream(id, text)
+    if (rt.watching(id)) rt.stream(id, text)
   }
 
   /** A write or edit of a file in an assistant conversation's memory directory, outside plan mode. */

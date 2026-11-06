@@ -44,6 +44,8 @@ Pitfalls hit while integrating DSH (`docs/dsh.md`) and node's runtime support (`
   The standalone process keeps its own `setInterval` (`companion.mjs`).
 - **An intentional disconnect must block the socket's close callback** (same day): after deliberately disconnecting from a too-old node, the `close` callback saw no peer and scheduled a reconnect in 1 s, overriding the "wait for node to restart" timer;
   the resident node's log showed connected / left twice a second. The unit test passed by luck (it only checked that it wasn't connected at one moment); it only shows up when you count the hellos the old node receives (`hellos` in `fake-node.js`).
+- **Live text must accumulate even when nobody watches** (2026-11-05, #3609): the `text` of `session.delta` is the whole text of the message so far, but the plugin used to append chunks only while `rt.watching(id)`,
+  so a phone opening the session mid-message saw only what came after. Only "send or not" depends on the watch; "record or not" does not (the Paseo bridge always worked this way).
 - **pi in herdr** (2026-11-01, measured with herdr 0.9.5 installed locally): a pi pane's `HERDR_PANE_ID` is the `pane_id` from `agent list` (`w1:p1`). herdr's pi integration reports
   `agent_session {kind: "path"}`, whose value is the session file; the uuid at the end of the file name is pi's session id (node used to accept only `kind: "id"`, so pi was always dropped). herdr's CLI only answers
   `server_not_running` when there is no server and doesn't start one itself. node adds `/opt/homebrew/bin` to PATH, so an old node can still find herdr's CLI after it's installed with brew. `herdr integration install claude`
