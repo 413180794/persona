@@ -84,9 +84,10 @@ final class LiveActivityController {
             endAll()
             return
         }
-        if state.isEmpty {
+        let step = Self.step(state, running: activity != nil, active: UIApplication.shared.applicationState == .active)
+        if step == .endSoon {
             // Agents flicker between turns: end only when nothing came back for a minute (the hub does the same).
-            guard endTask == nil, activity != nil else { return }
+            guard endTask == nil else { return }
             endTask = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(60))
                 guard !Task.isCancelled else { return }
@@ -98,12 +99,28 @@ final class LiveActivityController {
         endTask?.cancel()
         endTask = nil
         let content = ActivityContent(state: state, staleDate: .now.addingTimeInterval(15 * 60), relevanceScore: Self.relevance(state))
-        if let activity {
-            guard Self.worthUpdating(activity.content.state, staleDate: activity.content.staleDate, to: state, now: .now) else { return }
+        switch step {
+        case .update:
+            guard let activity, Self.worthUpdating(activity.content.state, staleDate: activity.content.staleDate, to: state, now: .now) else { return }
             Self.update(activity, content)
-        } else if UIApplication.shared.applicationState == .active, state.phase != .done {
+        case .start:
             request(content)
+        case .endSoon, .nothing:
+            break
         }
+    }
+
+    /// What `apply` does with a device's version of the fleet (`tailored`).
+    nonisolated enum Step: Equatable, Sendable { case endSoon, update, start, nothing }
+
+    /// `running`: an activity is on; `active`: the app is in front (only then can it start one). Nothing to show ends
+    /// a running activity a minute later; the assistant answering on a side of the island is something to show and
+    /// keeps it, though it starts none (#4628, as the hub, #4590). A new one starts in front for agents that count,
+    /// not for finished ones alone.
+    nonisolated static func step(_ state: FleetState, running: Bool, active: Bool) -> Step {
+        if state.showsNothing { return running ? .endSoon : .nothing }
+        if running { return .update }
+        return active && state.phase != .none && state.phase != .done ? .start : .nothing
     }
 
     /// Takes a settled request off the activity at once (the hub's update follows).

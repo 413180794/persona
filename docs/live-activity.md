@@ -284,7 +284,7 @@ Go `hub.FleetState` 和 Swift `FleetState`（`apple/Shared/FleetState.swift`）�
 
 - 启动就监听 `pushToStartTokenUpdates`、`activityUpdates`（hub 推开的活动），每个活动监听 `pushTokenUpdates`（会轮换）和结束 / 划掉，
   都上报 `POST /api/v1/devices/{id}/live-activity`。
-- 前台收到 `fleet` 事件或回到前台拉 `GET /api/v1/fleet`：有内容就开始（只有前台能 `Activity.request`）或更新；空了等 1 分钟再结束（轮次之间会闪）。
+- 前台收到 `fleet` 事件或回到前台拉 `GET /api/v1/fleet`：有内容就开始（只有前台能 `Activity.request`）或更新；空了等 1 分钟再结束（轮次之间会闪）。只有助手在回答、灵动岛又有一侧显示助手时不算空，开着的活动留着（「思考中」），但不为它新开一个；助手答完再按 1 分钟结束，和 hub 一致（#4628 / #4590，`LiveActivityController.step`）。
   和活动正在显示的一样（这台设备不显示的东西变了）就不 update，除非过期时间不到 5 分钟了（每次 update 续 15 分钟，`worthUpdating`）：每次 update 都要重画灵动岛和锁屏。
 - 点活动本身（紧凑态、锁屏）：只有一个 Agent 时打开它（`jarvis://open?machine=…&session=…`），有好几个时只是回到 App（`jarvis://open`），停在离开时的页面和位置（列表就是列表，对话页还是那个对话、同一行；App 被系统结束过的话，冷启动恢复上次的对话页，进后台时记下的阅读位置）；展开态每一行打开各自的会话。2026-10-29 以前一律打开第一条，用户反馈「点灵动岛进了某个 Agent」。
 - 模拟器自动化（`-pairURL`）不上报 token，免得 hub 把真机的活动当成模拟器的。

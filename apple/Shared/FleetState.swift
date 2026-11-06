@@ -183,6 +183,10 @@ nonisolated struct FleetState: Codable, Hashable, Sendable {
     }
 
     var isEmpty: Bool { phase == .none }
+    /// A device's version of the fleet (`tailored`) has nothing to draw: no agent counts, and the assistant is not
+    /// answering on a side of its island. Only the assistant answering is something to show where the island shows it
+    /// (思考中, #4398 / #4628), as the hub's `showsNothing` (liveactivity.go).
+    var showsNothing: Bool { phase == .none && !(assistant && (left == .assistant || right == .assistant)) }
     var workingSinceDate: Date? { workingSince.map { Date(timeIntervalSince1970: $0) } }
     /// Agents left out when only the first `showing` items are drawn ("+2 个").
     func hidden(showing: Int) -> Int { max(0, needsYou + working + unread - min(showing, items.count)) }

@@ -426,6 +426,53 @@ class ChatRepositoriesTest {
         assertFalse(snapshot.stopping)
     }
 
+    @Test fun resumedSessionListedAgainIsNoLongerEnded() = runTest {
+        val connection = Connection()
+        val working = Session(key.machineId, key.sessionId, status = "working", paneId = "pane")
+        val transport = Transport().apply {
+            list = listOf(working)
+            machineList = listOf(Machine(key.machineId, online = true))
+            fetch = { ItemsResponse(listOf(item(1)), history = "h", fromSeq = it.afterSeq, toSeq = 1) }
+        }
+        val sessions = HubSessionsRepository(transport, connection, backgroundScope)
+        val repository = HubChatRepository(transport, connection,
+            Cache(CachedChat(emptyList(), null, 0, false)), sessions, backgroundScope,
+            foreground = MutableStateFlow(false))
+        var snapshot = ChatSnapshot()
+        backgroundScope.launch { repository.observe(key).collect { snapshot = it } }
+        runCurrent()
+        suspend fun event(event: ServerEvent) { connection.events.emit(event); runCurrent() }
+        val actions = repository.trackActions(object : ChatActions {
+            override suspend fun isMuted(session: Session) = false
+            override suspend fun execute(session: Session, action: ChatAction) = ChatActionResult.Done
+            override suspend fun verify(session: Session, action: ChatAction) = ChatActionResult.Done
+        })
+        event(SessionsEvent(key.machineId, emptyList()))
+        assertTrue(snapshot.ended)
+        // Resume (#4986) lists the same id again.
+        event(SessionsEvent(key.machineId, listOf(working)))
+        assertFalse(snapshot.ended)
+
+        // A confirmed close stays ended while the old list still names the session, then clears once it is relisted.
+        actions.execute(working, ChatAction.Close)
+        runCurrent()
+        assertTrue(snapshot.ended)
+        event(SessionsEvent(key.machineId, listOf(working)))
+        assertTrue(snapshot.ended)
+        event(SessionsEvent(key.machineId, emptyList()))
+        assertTrue(snapshot.ended)
+        event(SessionsEvent(key.machineId, listOf(working)))
+        assertFalse(snapshot.ended)
+
+        // A replacement in the same pane ends it; the old id coming back undoes that too.
+        val replacement = working.copy(sessionId = "new-session")
+        event(SessionsEvent(key.machineId, listOf(replacement)))
+        assertTrue(snapshot.replaced)
+        event(SessionsEvent(key.machineId, listOf(replacement, working)))
+        assertFalse(snapshot.ended)
+        assertFalse(snapshot.replaced)
+    }
+
     private class Connection : HubConnection {
         override val state = MutableStateFlow(ConnectionState.Online)
         override val events = MutableSharedFlow<ServerEvent>()

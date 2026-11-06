@@ -51,6 +51,7 @@ class HubChatRepository(
         var currentSessions: List<Session>? = null
         var machineOnline: Boolean? = null
         var closeConfirmed = false
+        var listedGone = false
         var stopRequested = false
         var turnDurationSeconds: Long? = null
         var durationAfterSeq: Int = 0
@@ -520,9 +521,21 @@ class HubChatRepository(
         val durations = recordedTurnDurations(entry.reducer.items)
         durations[userId]?.takeIf { it.seq > entry.durationAfterSeq }?.let { entry.turnDurationSeconds = it.seconds }
         if (metadata != null) entry.previousSession = metadata
+        val machineOnline = entry.machineOnline.takeIf { connection.state.value == ConnectionState.Online }
+        // Ended and replaced stay latched while lists are unknown; a verified list that drops the session and later
+        // lists it again (resume reuses the id, #4986) undoes them, a confirmed close included.
+        var relisted = false
+        entry.currentSessions?.takeIf { machineOnline == true }?.let { current ->
+            val listed = current.firstOrNull { it.key == entry.key }
+            if (listed == null || listed.status == "offline") entry.listedGone = true
+            else if (entry.listedGone) {
+                entry.listedGone = false
+                entry.closeConfirmed = false
+                relisted = true
+            }
+        }
         val runtime = previous?.let {
-            SessionRuntimeState.map(it, entry.currentSessions,
-                entry.machineOnline.takeIf { connection.state.value == ConnectionState.Online },
+            SessionRuntimeState.map(it, entry.currentSessions, machineOnline,
                 closeConfirmed = entry.closeConfirmed, stopRequested = entry.stopRequested,
                 recordedTurnDurationSeconds = entry.turnDurationSeconds)
         } ?: SessionRuntimeState(turnDurationSeconds = entry.turnDurationSeconds)
@@ -537,7 +550,7 @@ class HubChatRepository(
             streamingItemIds = entry.realtime.streamingItemIds(),
             hasOlder = entry.reducer.hasMore == true, error = entry.eventError, verified = verified,
             lastSeenMessageId = lastSeen?.let(entry.realtime::displayId),
-            ended = runtime.ended || it.ended, replaced = runtime.replaced || it.replaced,
+            ended = runtime.ended || (it.ended && !relisted), replaced = runtime.replaced || (it.replaced && !relisted),
             stopping = runtime.stopping, turnDurationSeconds = runtime.turnDurationSeconds,
             recordedTurnDurations = durations.mapValues { it.value.seconds }) }
         // However the items came (an event, a page, a catch-up), a message sent from here that is in them is shown.

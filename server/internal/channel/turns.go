@@ -120,9 +120,10 @@ func (r *Run) Fold(o *Run) {
 	r.Folded = append(append(r.Folded, o.Folded...), Folded{ReplyTo: o.ReplyTo, Ext: o.Ext})
 	r.MsgIDs = append(slices.Clone(o.MsgIDs), r.MsgIDs...)
 	// An earlier run that names no message (it started the conversation, read from its base on) stays one of the
-	// messages answered: without this the fold names only the later one and the first answer is lost (#4746). A held
-	// run names none either, but it was answered already.
-	if o.Head || len(o.MsgIDs) == 0 && o.Probe == "" && !o.Held {
+	// messages answered: without this the fold names only the later one and the first answer is lost (#4746). Voice
+	// names that one by its probe alone, from base 0 (it is the conversation's first line). A held run names none
+	// either, but it was answered already.
+	if o.Head || len(o.MsgIDs) == 0 && (o.Probe == "" || o.Base == 0) && !o.Held {
 		r.Head = true
 	}
 	if r.Probe == "" {

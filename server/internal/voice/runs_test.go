@@ -203,6 +203,32 @@ func TestFoldedRunsAnswerTogether(t *testing.T) {
 	}
 }
 
+// With no main conversation yet the first instruction starts one: its message is the conversation's first line,
+// named by its probe alone. A second one sent before it is answered is folded in; the one answer still holds the
+// first's (#4746 for voice).
+func TestFoldedRunsKeepTheNewConversationsFirstAnswer(t *testing.T) {
+	hub := newFakeHub(t)
+	hub.manual, hub.main, hub.sessions = true, "", map[string]*fakeSession{}
+	up := delegatingUpstream(t)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, map[string]any{"type": "start"})
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "查明天的日程"})
+	hub.waitSent(1)
+	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["id"] == "d1" && f["done"] == false })
+	hub.add("main1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "明天下午三点有会。"})
+	a.send(map[string]any{"type": "text", "text": "顺便看看邮件"})
+	hub.waitSent(2)
+	a.until(func(f map[string]any) bool { return f["type"] == "tool" && f["id"] == "d2" && f["done"] == false })
+	time.Sleep(1200 * time.Millisecond) // the tracker has both before the turn ends
+	hub.add("main1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "邮件没什么要紧的。"})
+	hub.end("main1")
+	got := content(up.nextMatch(on("dlg2")))
+	if !strings.Contains(got, "明天下午三点有会") || !strings.Contains(got, "邮件没什么要紧的") {
+		t.Fatalf("result: %s", got)
+	}
+}
+
 // A second instruction the hub refuses is not folded: the first is answered on its own, the second told why it was
 // not sent.
 func TestARefusedSendDoesNotHoldTheFirstBack(t *testing.T) {

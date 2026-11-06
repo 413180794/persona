@@ -273,3 +273,30 @@ func TestReadTurnFoldsTheConversationsFirstMessage(t *testing.T) {
 		t.Fatal("asked again, still reading from the conversation's start")
 	}
 }
+
+// Voice starts a new conversation with its message as the first line: named by its probe alone (no client message id,
+// base 0). One sent before it was answered is folded in with its own id; the one answer still holds the first's.
+func TestReadTurnFoldsAProbedFirstMessage(t *testing.T) {
+	first := &Run{Probe: "first", Started: t0} // as voice handOver leaves a run that started the conversation
+	second := &Run{Base: 4, MsgIDs: []string{"voice-2"}, Probe: "second", Started: t0.Add(5e9)}
+	second.Fold(first)
+	duration := proto.Item{Role: "system", Kind: "turn_duration", TurnDuration: &proto.TurnDuration{DurationMS: 5}}
+	src := &pagedSource{page: 2, items: numbered(userSays("", "first"), toolUse, toolResult, agentSays("first answer"),
+		userSays("voice-2", "second"), agentSays("second answer"), duration)}
+	rd, err := ReadTurn(context.Background(), src, second)
+	if err != nil || !rd.Found || rd.Answer != "first answer\n\nsecond answer" {
+		t.Fatalf("%+v %v", rd, err)
+	}
+	// A probed run that is not the conversation's start (an older node's, after its base) is no head.
+	mid := &Run{Base: 4, MsgIDs: []string{"voice-3"}, Started: t0.Add(5e9)}
+	mid.Fold(&Run{Base: 2, Probe: "first", Started: t0})
+	if mid.Head {
+		t.Fatal("a probed run after the conversation's start folded in as its first message")
+	}
+	// Held: answered already.
+	held := &Run{Base: 4, MsgIDs: []string{"voice-3"}, Started: t0.Add(5e9)}
+	held.Fold(&Run{Held: true, Started: t0})
+	if held.Head {
+		t.Fatal("a held run folded in as an unanswered message")
+	}
+}
