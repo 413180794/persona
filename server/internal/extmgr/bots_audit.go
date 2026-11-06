@@ -17,6 +17,9 @@ const (
 	auditBotPaired      = "bot_paired"       // {open_id}: whoever sent the code is the owner now
 	auditBotPairGuessed = "bot_pair_guessed" // {fails}: the pairing was dropped after too many wrong codes
 	auditBotUnpaired    = "bot_unpaired"     // the owner was removed
+	// {chat_id}: a group chat the owner opted in, or took out again (the /topics command, or the app's list).
+	auditBotTopicChatAdded   = "bot_topic_chat_added"
+	auditBotTopicChatRemoved = "bot_topic_chat_removed"
 )
 
 // botRecord is an audit record of the bot's, written once its lock is let go.

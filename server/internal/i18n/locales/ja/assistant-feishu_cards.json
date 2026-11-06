@@ -142,5 +142,6 @@
   "elicitation_in_app": "Persona Appで入力して送信してください。",
   "elicitation_host": "開くサイト：{host}",
   "elicitation_confirm_in_app": "認証後、Persona Appに戻って確定してください。",
-  "command_typo": "{got} はわかりませんでした。{want} のことですか？そのまま Persona に送るには、前にスラッシュをもう一つ付けてください：/{got}。/help ですべてのコマンドを確認できます。"
+  "command_typo": "{got} はわかりませんでした。{want} のことですか？そのまま Persona に送るには、前にスラッシュをもう一つ付けてください：/{got}。/help ですべてのコマンドを確認できます。",
+  "sent_to_dm": "確認が必要なカードをプライベートチャットに送りました。"
 }

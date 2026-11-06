@@ -111,6 +111,7 @@ const (
 	FeishuCotAppend       = assistantwire.FeishuCotAppend
 	FeishuCotComplete     = assistantwire.FeishuCotComplete
 	CodeFeishuAPI         = assistantwire.CodeFeishuAPI
+	CodeChatDenied        = assistantwire.CodeChatDenied
 	FeishuReact           = assistantwire.FeishuReact
 	FeishuUnreact         = assistantwire.FeishuUnreact
 	FeishuMessages        = assistantwire.FeishuMessages

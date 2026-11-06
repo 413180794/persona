@@ -131,20 +131,45 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 		if err != nil {
 			return nil, err
 		}
+		parent, err := h.checkReplyParent(ctx, api, set, a.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
 		id, err := h.botPostJSONKeyed(ctx, api, chatID, a.ReplyTo, a.Card, a.Fallback, a.UUID, a.InThread)
+		if err == nil {
+			h.rememberMessageChat(id, firstNonEmpty(parent, chatID)) // what it sent is in a chat the bot may use
+		}
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuText:
 		chatID, err := botSendChat(set, a.ChatID)
 		if err != nil {
 			return nil, err
 		}
+		parent, err := h.checkReplyParent(ctx, api, set, a.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
 		// With no parent the key is unused: replyOrSend sends with its own fresh one-shot key.
 		id, _, err := h.replyOrSend(ctx, api, chatID, a.ReplyTo, feishubot.TypeText, feishubot.TextContent(a.Text), feishuReplyUUIDIn(a.ReplyTo, "t", a.Text, a.InThread), a.InThread)
+		if err == nil {
+			h.rememberMessageChat(id, firstNonEmpty(parent, chatID))
+		}
 		return map[string]any{"message_id": id}, err
 	case assistantwire.FeishuUpdateCard:
 		return map[string]any{}, api.UpdateCard(ctx, a.MessageID, a.Card)
 	case assistantwire.FeishuCotCreate:
+		// The agent message is made in the owner's DM, so the message it answers has to be in the DM too.
+		parent, err := h.checkReplyParent(ctx, api, set, a.ReplyTo)
+		if err != nil {
+			return nil, err
+		}
+		if parent != "" && parent != set.Owner.ChatID {
+			return nil, errBotReplyChat
+		}
 		cot, id, err := api.CotCreate(ctx, set.Owner.ChatID, a.ReplyTo)
+		if err == nil {
+			h.rememberMessageChat(id, set.Owner.ChatID)
+		}
 		return map[string]any{"cot_id": cot, "message_id": id}, feishuCoded(err)
 	case assistantwire.FeishuCotAppend:
 		return map[string]any{}, feishuCoded(api.CotAppend(ctx, a.CotID, a.MessageID, a.Events))

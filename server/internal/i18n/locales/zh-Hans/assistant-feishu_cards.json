@@ -142,5 +142,6 @@
   "elicitation_in_app": "到 Persona App 里填写和提交。",
   "elicitation_host": "将打开：{host}",
   "elicitation_confirm_in_app": "授权后回到 Persona App 点确认。",
-  "command_typo": "没认出 {got}。是想发 {want} 吗？要把这句原样发给 Persona，在前面多加一个斜杠：/{got}。发 /help 看全部命令。"
+  "command_typo": "没认出 {got}。是想发 {want} 吗？要把这句原样发给 Persona，在前面多加一个斜杠：/{got}。发 /help 看全部命令。",
+  "sent_to_dm": "需要你确认的卡发到私聊了。"
 }

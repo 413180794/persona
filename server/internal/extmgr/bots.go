@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -22,8 +23,8 @@ import (
 // changing messages and cards. What the chat does — where a message goes, following its turn and the answer cards,
 // what is asked there, the commands, pushes and the sync mirror — is the assistant's (internal/assistant, feishu*.go):
 // the owner's messages and card presses go to it over the bus (assistant_channels.go), and it posts through the hub.
-// Only the paired user is answered, only in the bot's private chat. Everything is off until switched on in the app
-// (Settings › Connectors › Lark bot).
+// Only the paired user is answered: in the bot's private chat, and in the topics of the group chats the owner has
+// opted in (TopicChats, bots_topics.go). Everything is off until switched on in the app (Settings › Connectors › Lark bot).
 
 // BotsConfig is hub.json "bots".
 type BotsConfig struct {
@@ -47,6 +48,9 @@ type FeishuBotSettings struct {
 	Features  BotFeatures `json:"features"`
 	Owner     *BotOwner   `json:"owner,omitempty"`
 	Pairing   *botPairing `json:"pairing,omitempty"`
+	// TopicChats are the group chats the owner opted in (bots_topics.go): their messages reach the assistant, and the
+	// bot may send into them. The owner's own list: it goes when the owner does.
+	TopicChats []BotChat `json:"topic_chats,omitempty"`
 }
 
 // BotFeatures are the parts that can be switched on one by one: kept here with the credentials, acted on by the
@@ -98,6 +102,12 @@ type botHub struct {
 	pairTold map[string]time.Time // sender -> when the pairing path last answered (short redelivery window)
 	names    map[string]string    // open id -> name
 	seen     []string             // the messages taken lately (Feishu delivers some again), memory only
+	// msgChat is the chat of the messages the bot may use, seen or sent lately (message id -> chat id): what a reply's
+	// parent is checked against (checkReplyParent), memory only.
+	msgChat idRing
+	// handedGroup are the group messages handed to the assistant lately: a recall in a group is only passed on for one
+	// of these (botRecalled), memory only.
+	handedGroup idRing
 	// line is closed once the last message taken has been handed to the assistant (botMessage): they go in the
 	// order they came.
 	line chan struct{}
@@ -224,6 +234,7 @@ func (h *Manager) botAPI() (*feishubot.Client, FeishuBotSettings) {
 
 // copy is the settings with nothing shared: the owner is changed in place under h.bots.mu.
 func (s FeishuBotSettings) copy() FeishuBotSettings {
+	s.TopicChats = slices.Clone(s.TopicChats)
 	if s.Owner != nil {
 		o := *s.Owner
 		s.Owner = &o
@@ -250,6 +261,7 @@ type feishuBotView struct {
 	BotName     string        `json:"bot_name,omitempty"`
 	Owner       *botOwnerView `json:"owner,omitempty"`
 	Pairing     *botPairView  `json:"pairing,omitempty"`
+	TopicChats  []botChatView `json:"topic_chats,omitempty"` // the group chats the owner opted in
 	// Target and Agents are the assistant's (feishu.view): where the chat's messages go now, the agents bound to
 	// threads of the chat; left out while it is not connected.
 	Target string                      `json:"target,omitempty"`
@@ -289,6 +301,9 @@ func (h *Manager) botView(ctx context.Context) feishuBotView {
 	if p := s.Pairing; p != nil && b.clock().Before(p.Expires) {
 		v.Pairing = &botPairView{Code: p.Code, ExpiresAt: p.Expires.Unix()}
 	}
+	for _, c := range s.TopicChats {
+		v.TopicChats = append(v.TopicChats, botChatView{ChatID: c.ChatID, Name: c.Name, AddedAt: c.At.Unix()})
+	}
 	b.mu.Unlock()
 	if chat, err := h.feishuChatView(ctx); err == nil {
 		v.Target, v.Agents = chat.Target, chat.Agents
@@ -308,6 +323,11 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 			AppSecret *string         `json:"app_secret"`
 			Domain    *string         `json:"domain"`
 			Features  json.RawMessage `json:"features"`
+			// TopicChats replaces the list of group chats the owner opted in; absent leaves it, [] clears it.
+			TopicChats *[]struct {
+				ChatID string `json:"chat_id"`
+				Name   string `json:"name"`
+			} `json:"topic_chats"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
@@ -324,9 +344,34 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 			}
 			fs = &f
 		}
+		var topics []BotChat
+		if in.TopicChats != nil {
+			topics = []BotChat{}
+			for _, c := range *in.TopicChats {
+				topics = append(topics, BotChat{ChatID: c.ChatID, Name: c.Name})
+			}
+			// Everything is checked before anything is written: a list sent with a change that makes it impossible
+			// (a new App ID unpairs the owner) must not leave the rest of the request applied.
+			if err := checkTopicChats(topics); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
+			if len(topics) > 0 {
+				if err := h.topicChatsPossible(r.Context(), in.AppID); err != nil {
+					writeErr(w, http.StatusBadRequest, err)
+					return
+				}
+			}
+		}
 		if err := h.updateBot(r.Context(), in.Enabled, in.AppID, in.AppSecret, in.Domain, fs); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
+		}
+		if topics != nil {
+			if err := h.setTopicChats(r.Context(), topics); err != nil {
+				writeErr(w, http.StatusBadRequest, err)
+				return
+			}
 		}
 		writeJSON(w, h.botView(r.Context()))
 	})
@@ -373,7 +418,7 @@ func (h *Manager) unpairBot(ctx context.Context) {
 	b.mu.Lock()
 	h.loadBotsLocked(ctx)
 	had := b.set.Owner != nil
-	b.set.Owner, b.set.Pairing = nil, nil
+	b.set.Owner, b.set.Pairing, b.set.TopicChats = nil, nil, nil // the topic chats were the owner's
 	h.saveBotSettingsLocked()
 	b.mu.Unlock()
 	if had {
@@ -475,7 +520,7 @@ func (h *Manager) updateBot(ctx context.Context, enabled *bool, appID, secret, d
 			records = append(records, botRecord{auditBotCredentials, d})
 		}
 		if next.AppID != cur.AppID {
-			cur.Owner, cur.Pairing = nil, nil
+			cur.Owner, cur.Pairing, cur.TopicChats = nil, nil, nil
 		}
 		cur.AppID, cur.SecretEnc, cur.Domain = next.AppID, next.SecretEnc, next.Domain
 	}

@@ -4,5 +4,9 @@
   "test_title": "テストメッセージ",
   "test_body": "Personaからのテストメッセージです。ボットから連絡が届きます。",
   "needs_secret": "App Secretが必要です",
-  "cannot_reach_app": "このアプリに接続できません：{error}（App ID / App Secretを確認し、開発者コンソールでアプリのボット機能を有効にしてください）"
+  "cannot_reach_app": "このアプリに接続できません：{error}（App ID / App Secretを確認し、開発者コンソールでアプリのボット機能を有効にしてください）",
+  "topic_chats_many": "オンにできるグループは最大{n}件です",
+  "topic_chat_bad": "グループIDが空、空白を含む、または重複しています",
+  "topic_needs_owner": "先にボットをペアリングしてください。グループの一覧は所有者のものです",
+  "topic_chats_new_app": "グループの一覧は別のリクエストで送ってください。App IDを変えると所有者のペアリングが解除されます"
 }

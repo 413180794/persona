@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // Messages to the bot (docs/bots.md "How a message travels"), the hub's part: who may talk to it, pairing, and handing
@@ -38,6 +39,12 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 		var ev feishubot.MessageEvent
 		if err := json.Unmarshal(env.Event, &ev); err != nil {
 			return nil, err
+		}
+		// The chat of the owner's own messages in the DM and in a listed group is kept (before the claim: a redelivery
+		// changes nothing). Nobody else's: a stranger writing to the bot must not push out what a reply goes to.
+		if _, set := h.botAPI(); set.Owner != nil && ev.Sender.SenderID.OpenID == set.Owner.OpenID &&
+			(ev.Message.ChatType == "p2p" || set.topicChat(ev.Message.ChatID)) {
+			h.rememberMessageChat(ev.Message.MessageID, ev.Message.ChatID)
 		}
 		if !h.claimBotMessage(ev.Message.MessageID) {
 			return nil, nil // redelivered
@@ -71,12 +78,17 @@ func (h *Manager) botEvent(ctx context.Context, payload []byte) (any, error) {
 	return nil, nil
 }
 
-// botRecalled tells the assistant the owner recalled a message in the bot's private chat: one not in its
-// conversation yet is not sent. Recalls elsewhere (a group, someone else's chat) and by an admin are not the owner's.
+// botRecalled tells the assistant a message was recalled in a chat the bot is used in (the owner's private chat, a
+// topic group the owner opted in): one not in its conversation yet is not sent. Recalls elsewhere (another group,
+// someone else's chat) and by an admin are not the owner's. In a group the event does not say whose message it was, so
+// only a recall of a message the hub handed to the assistant is passed on (the owner's alone).
 func (h *Manager) botRecalled(ev feishubot.Recalled) {
 	_, set := h.botAPI()
-	if set.Owner == nil || ev.MessageID == "" || ev.ChatID == "" || ev.ChatID != set.Owner.ChatID {
+	if set.Owner == nil || ev.MessageID == "" || !botChatAllowed(set, ev.ChatID) {
 		return
+	}
+	if ev.ChatID != set.Owner.ChatID && !h.handedGroupMessage(ev.MessageID) {
+		return // in a group only the owner's messages that were handed over matter; the event does not say whose it was
 	}
 	if ev.RecallType != "" && ev.RecallType != "message_owner" {
 		return
@@ -240,7 +252,11 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 		return
 	}
 	if msg.ChatType != "p2p" {
-		return // only its private chat: in a group anyone could reach the owner's Persona
+		// A group chat: only the owner's messages in a topic of a chat the owner opted in, and the command that opts
+		// one in (bots_topics.go). Everything else is dropped without a word: in a group anyone could reach the
+		// owner's Persona, and the owner's private chat (Owner.ChatID) is never rewritten from here.
+		h.botGroupMessage(api, set, ev, raw, since, pass)
+		return
 	}
 	if set.Owner == nil {
 		content := feishubot.ParseContent(msg.MessageType, msg.Content, msg.Mentions)
@@ -261,7 +277,17 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 	}
 	// The owner wrote it (the hub checked the sender): what it answers, it answers once, like a card's press — but
 	// only a question: the bot takes no typed answer to a plan, a permission or a terminal (#4675).
-	action := h.issueMessageAction(channel.Feishu, proto.IxQuestion)
+	h.handToAssistant(api, ev, raw, h.issueMessageAction(channel.Feishu, proto.IxQuestion), since, pass, false)
+}
+
+// handToAssistant hands the owner's message to the assistant; one it cannot take is answered that it could not be
+// sent (in the topic, for a message that came in one). pass releases the next message's wait once this one is handed
+// over, whatever came of it.
+func (h *Manager) handToAssistant(api *feishubot.Client, ev feishubot.MessageEvent, raw json.RawMessage, action string, since time.Time, pass func(), inThread bool) {
+	msg := ev.Message
+	if inThread {
+		h.rememberHandedGroup(msg.MessageID) // before the handover: a recall during it still counts
+	}
 	err := h.toAssistantSince(assistantwire.MethodFeishuMessage, assistantwire.FeishuMessage{Event: raw, Action: action}, since)
 	pass() // handed over (or not): the next one need not wait for the note below
 	if err == nil {
@@ -272,7 +298,8 @@ func (h *Manager) botMessage(ev feishubot.MessageEvent, raw json.RawMessage, sin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	h.botNote(ctx, api, msg.ChatID, msg.MessageID, i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)}))
+	text := i18n.T(h.userLang(), "hub-bots_chat.not_sent", i18n.Args{"error": clip(oneLine(err.Error()), 200)})
+	h.botNoteIn(ctx, api, msg.ChatID, msg.MessageID, text, inThread)
 }
 
 // botCardAction answers a press on one of the bot's cards: only the owner's count, and the assistant answers them.
@@ -280,6 +307,12 @@ func (h *Manager) botCardAction(ctx context.Context, a *feishubot.CardAction, ra
 	_, set := h.botAPI()
 	if set.Owner == nil || a.Operator.OpenID != set.Owner.OpenID {
 		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.owner_only_action"))
+	}
+	// A press from a group counts only in a group the owner has opted in (so a card left in one the owner took out
+	// again is dead), and only the owner's: a card shown to a group is shown to everyone in it. A press that names no
+	// chat is as it always was.
+	if a.Context.ChatID != "" && !botChatAllowed(set, a.Context.ChatID) {
+		return toast("error", i18n.T(h.userLang(), "hub-bots_chat.chat_not_enabled"))
 	}
 	// The owner pressed it (checked here): the assistant answers the card with this, once (interactions.resolve).
 	action := ""
@@ -437,12 +470,18 @@ func (h *Manager) replyOrSend(ctx context.Context, api *feishubot.Client, chatID
 	return
 }
 
-var errBotChatDenied = errors.New("feishu: the bot only sends into the owner's private chat")
+// errBotChatDenied is an rpc.Error with a code, so the assistant can tell a refusal (nothing was sent) from a call that
+// failed some other way (it may have gone out).
+var errBotChatDenied = &rpc.Error{Code: assistantwire.CodeChatDenied, Message: "feishu: the bot only sends into the owner's private chat and the group chats the owner opted in"}
 
-// botChatAllowed says whether the bot may send into chatID on the assistant's behalf: only the owner's private chat.
-// A group chat joins this when the hub has a list of chats the owner opted in; until then everything else is refused.
+// botChatAllowed says whether the bot may send into chatID on the assistant's behalf, and take a recall or a card press
+// from it: the owner's private chat, and the group chats the owner opted in (FeishuBotSettings.TopicChats). Everything
+// else is refused.
 func botChatAllowed(set FeishuBotSettings, chatID string) bool {
-	return set.Owner != nil && set.Owner.ChatID != "" && chatID == set.Owner.ChatID
+	if set.Owner == nil || chatID == "" {
+		return false
+	}
+	return chatID == set.Owner.ChatID || set.topicChat(chatID)
 }
 
 // botSendChat is the chat a feishu.post / feishu.text goes into: the owner's private chat when the caller names none,
@@ -462,8 +501,13 @@ func botSendChat(set FeishuBotSettings, chatID string) (string, error) {
 
 // botNote replies to a message with a line of text; a parent withdrawn meanwhile gets the note in the chat instead.
 func (h *Manager) botNote(ctx context.Context, api *feishubot.Client, chatID, messageID, text string) {
+	h.botNoteIn(ctx, api, chatID, messageID, text, false)
+}
+
+// botNoteIn is botNote that may go into the parent's thread: for a message that came in a topic.
+func (h *Manager) botNoteIn(ctx context.Context, api *feishubot.Client, chatID, messageID, text string, inThread bool) {
 	content := feishubot.TextContent(text)
-	if _, _, err := h.replyOrSend(ctx, api, chatID, messageID, feishubot.TypeText, content, feishuReplyUUID(messageID, "n", text), false); err != nil {
+	if _, _, err := h.replyOrSend(ctx, api, chatID, messageID, feishubot.TypeText, content, feishuReplyUUIDIn(messageID, "n", text, inThread), inThread); err != nil {
 		h.logf("bots: note: %v", err)
 	}
 }

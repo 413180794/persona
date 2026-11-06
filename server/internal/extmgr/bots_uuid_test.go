@@ -80,6 +80,7 @@ func TestChannelFeishuThreadReplyKeepsItsOwnKey(t *testing.T) {
 	w := newBotWorld(t)
 	w.pair(t)
 	const text = "same words 5279"
+	w.api.inChat("om_5279", "oc_p2p")
 	for _, inThread := range []bool{false, true, false, true} {
 		w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_5279", "in_thread": inThread})
 	}
@@ -242,6 +243,7 @@ func TestChannelFeishuTextUUID(t *testing.T) {
 	w := newBotWorld(t)
 	w.pair(t)
 	const text = "uuid probe answer 4077"
+	w.api.inChat("om_4077", "oc_p2p")
 	call := func(replyTo string) {
 		params := map[string]any{"text": text}
 		if replyTo != "" {
@@ -288,6 +290,7 @@ func TestChannelFeishuTextDetoursWithdrawnReplyToSend(t *testing.T) {
 	w.pair(t)
 	w.api.rejectReply = 230011
 	const text = "gone parent text 4457"
+	w.api.inChat("om_gone", "oc_p2p")
 	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": text, "reply_to": "om_gone"})
 	w.api.find(t, "/messages/om_gone/reply", text) // the anchored reply was attempted first
 	sendCall := w.api.find(t, "POST /open-apis/im/v1/messages ", text)

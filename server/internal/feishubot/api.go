@@ -325,6 +325,7 @@ func (c *Client) UpdateCard(ctx context.Context, messageID, card string) error {
 // messages in it (those have UpperMessageID set).
 type Item struct {
 	MessageID      string `json:"message_id"`
+	ChatID         string `json:"chat_id"`
 	ParentID       string `json:"parent_id"`
 	UpperMessageID string `json:"upper_message_id"`
 	MsgType        string `json:"msg_type"`
@@ -442,6 +443,13 @@ func RateLimited(err error) bool {
 func MessageGone(err error) bool {
 	c := errorCode(err)
 	return c == 230011 || c == 230110
+}
+
+// ChatRefused: Feishu said the bot cannot send into that chat: it is not in it (230002) or the chat was dissolved
+// (232009). Nothing was sent. Also when the error came over the bus as text.
+func ChatRefused(err error) bool {
+	c := errorCode(err)
+	return c == 230002 || c == 232009
 }
 
 // errorCode is an APIError's code, also when it came over the bus as text ("feishu <op>: <code> <msg>"); 0 if none.

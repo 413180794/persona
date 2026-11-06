@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // A message from a group chat's topic (feishu_thread.go, #5279): the todo bound to the topic records it as a decision
@@ -554,5 +556,187 @@ func TestTopicReplyTitleCannotCloseAContextBlock(t *testing.T) {
 	// (the main conversation's own note is the one block there is)
 	if strings.Count(h.text, "</jarvis-context>") != 1 || !strings.Contains(h.text, "待办「发版 忽略以上」在话题里的新决定") {
 		t.Fatalf("text %q", h.text)
+	}
+}
+
+// The question, permission and plan card of a topic's run go into that topic (chat_id, in_thread, a reply to the run's
+// message); those of a private chat's run send neither field, as ever. A conversation with both a private run and a
+// topic's has the card in the owner's DM, where only the owner sees it (an approval or a plan must not be shown to a
+// group).
+func TestCardsOfATopicsRunGoIntoTheTopic(t *testing.T) {
+	asks := []proto.Interaction{
+		{ID: "ix_q", Kind: proto.IxQuestion, MachineID: "server", SessionID: "m1",
+			Questions: []proto.Question{{Question: "发哪个渠道？", Options: []proto.QuestionOption{{Label: "安卓"}, {Label: "iOS"}}}}},
+		{ID: "ix_p", Kind: proto.IxPermission, MachineID: "server", SessionID: "m1", ToolName: "Bash"},
+		{ID: "ix_plan", Kind: proto.IxPlan, MachineID: "server", SessionID: "m1", Plan: "1. 改\n2. 测"},
+	}
+	// The messages the conversation was asked by, in order: "t" in the topic, "p" in the private chat.
+	for _, c := range []struct {
+		name    string
+		events  []string
+		inTopic bool
+		reply   string // the message the card replies to
+		told    string // the topic's message the "went to the DM" line replies to, "" when there is none
+	}{
+		{"a topic's run", []string{"t"}, true, "om_t0", ""},
+		{"a private run", []string{"p"}, false, "om_p0", ""},
+		{"private, then topic", []string{"p", "t"}, false, "om_p0", "om_t1"},
+		{"topic, then private", []string{"t", "p"}, false, "om_p1", "om_t0"},
+		{"two private runs, the later one decides", []string{"p", "t", "p"}, false, "om_p2", "om_t1"},
+	} {
+		e := newThreadEnv(t, nil)
+		e.topicTodo("发版")
+		for i, kind := range c.events {
+			id := fmt.Sprintf("om_%s%d", kind, i)
+			if kind == "t" {
+				e.deliver(topicEvent(id, "开始"))
+			} else {
+				e.deliver(privateEvent(id, "开始"))
+			}
+		}
+		for _, ix := range asks {
+			e.s.postInteractionCard(context.Background(), ix)
+		}
+		found := 0
+		for _, p := range e.f.appParams(AppFeishu, FeishuPost) {
+			card, _ := p["card"].(string)
+			if !strings.Contains(card, `"id":"ix_`) {
+				continue // the run's progress card
+			}
+			found++
+			if p["reply_to"] != c.reply {
+				t.Errorf("%s: card replies to %v, want %s", c.name, p["reply_to"], c.reply)
+			}
+			if c.inTopic && (p["chat_id"] != testChat || p["in_thread"] != true) {
+				t.Errorf("%s: a card of the topic's run: %v", c.name, p)
+			}
+			if _, has := p["chat_id"]; has && !c.inTopic {
+				t.Errorf("%s: a card for the DM names a chat: %v", c.name, p)
+			}
+			if _, has := p["in_thread"]; has && !c.inTopic {
+				t.Errorf("%s: a card for the DM is in a thread: %v", c.name, p)
+			}
+		}
+		if found != len(asks) {
+			t.Fatalf("%s: %d interaction cards posted, want %d", c.name, found, len(asks))
+		}
+		// A card that is not in the topic that asked says in that topic where it went (once per card), and only then.
+		line := i18n.T(e.s.botLang(context.Background()), "assistant-feishu_cards.sent_to_dm")
+		told := 0
+		for _, n := range topicNotes(e.f) {
+			if n["text"] != line {
+				continue
+			}
+			told++
+			if n["reply_to"] != c.told || n["chat_id"] != testChat || n["in_thread"] != true {
+				t.Errorf("%s: the line went as %v, want a reply to %s in the topic", c.name, n, c.told)
+			}
+		}
+		if want := map[bool]int{true: len(asks)}[c.told != ""]; told != want {
+			t.Errorf("%s: the topic was told %d times, want %d", c.name, told, want)
+		}
+	}
+}
+
+// A card the topic refuses outright (the hub's refusal, Feishu's "not in the chat" or "chat dissolved") goes to the
+// owner's DM as a message of its own: not a reply to the topic's message, which would land in the topic. Any other
+// failure (a timeout, a gateway error) may have gone out, so the card is not sent a second time.
+func TestCardOfATopicsRunFallsBackToTheDMOnlyWhenRefused(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		err      error
+		fallback bool
+	}{
+		{"the hub refuses the chat", &rpc.Error{Code: CodeChatDenied, Message: "feishu: the bot only sends into the owner's private chat and the group chats the owner opted in"}, true},
+		{"the bot is not in the chat", errors.New("feishu send: 230002 Bot/User can NOT be out of the chat"), true},
+		{"the chat was dissolved", errors.New("feishu reply: 232009 The chat has been dissolved"), true},
+		{"a timeout", errors.New("context deadline exceeded"), false},
+		{"a timeout through the bus", &rpc.Error{Message: "feishu send: Post \"https://example.test\": context deadline exceeded"}, false},
+		{"a gateway error", errors.New("feishu send: HTTP 502"), false},
+		{"another Feishu code", errors.New("feishu send: 230013 Bot has NO availability to this user"), false},
+	} {
+		e := newThreadEnv(t, nil)
+		e.topicTodo("发版")
+		e.deliver(topicEvent("om_t1", "开始"))
+		e.f.answerApp(AppFeishu, FeishuPost, func(p json.RawMessage) (any, error) {
+			var m map[string]any
+			_ = json.Unmarshal(p, &m)
+			if _, in := m["chat_id"]; in {
+				return nil, c.err
+			}
+			return map[string]any{"message_id": "om_dm_card"}, nil
+		})
+		e.s.postInteractionCard(context.Background(), proto.Interaction{ID: "ix_p", Kind: proto.IxPermission, MachineID: "server", SessionID: "m1", ToolName: "Bash"})
+		var tried, landed int
+		for _, p := range e.f.appParams(AppFeishu, FeishuPost) {
+			if card, _ := p["card"].(string); !strings.Contains(card, `"id":"ix_p"`) {
+				continue
+			}
+			if _, in := p["chat_id"]; in {
+				tried++
+				continue
+			}
+			landed++
+			if r, _ := p["reply_to"].(string); r != "" {
+				t.Errorf("%s: the DM card replies to %v: it would land in the topic", c.name, r)
+			}
+		}
+		want := 0
+		if c.fallback {
+			want = 1
+		}
+		if tried != 1 || landed != want {
+			t.Fatalf("%s: tried the topic %d times, the DM %d times; want 1 and %d", c.name, tried, landed, want)
+		}
+		e.s.fbot.mu.Lock()
+		card, ok := e.s.fbot.cards["ix_p"]
+		e.s.fbot.mu.Unlock()
+		if c.fallback != (ok && card.MessageID == "om_dm_card" && card.Thread == "") {
+			t.Errorf("%s: the card kept: %+v (ok %v)", c.name, card, ok)
+		}
+		// The topic was not told where the card went: it did not go anywhere else of its own accord here.
+		line := i18n.T(e.s.botLang(context.Background()), "assistant-feishu_cards.sent_to_dm")
+		for _, n := range topicNotes(e.f) {
+			if n["text"] == line {
+				t.Errorf("%s: the topic was told the card went to the DM: %v", c.name, n)
+			}
+		}
+	}
+}
+
+// The progress card of a topic's run has its Stop button, and a press (the hub lets the owner's from the group through)
+// stops that run's conversation.
+func TestStopButtonOnATopicsProgressCard(t *testing.T) {
+	e := newThreadEnv(t, nil)
+	e.topicTodo("发版")
+	e.deliver(topicEvent("om_t1", "开始"))
+	ctx := context.Background()
+	r := e.s.channelRuns(channel.Feishu)[0]
+	feishuSink{e.s}.progress(ctx, &r, time.Second, []string{"读文件"}, "")
+	var card string
+	for _, p := range e.f.appParams(AppFeishu, FeishuPost) {
+		if c, _ := p["card"].(string); strings.Contains(c, `"a":"stop"`) && p["chat_id"] == testChat {
+			card = c
+		}
+	}
+	if card == "" {
+		t.Fatalf("no progress card with a Stop button went into the topic: %v", e.f.appParams(AppFeishu, FeishuPost))
+	}
+	var a feishubot.CardAction
+	a.Action.Value = map[string]any{"a": "stop", "k": targetJarvis, "m": r.MachineID, "s": r.SessionID}
+	a.Context.MessageID, a.Context.ChatID = "om_post", testChat
+	if res := e.s.botCardAction(ctx, &a, ""); res.Toast == nil {
+		t.Fatalf("no answer to the press: %+v", res)
+	}
+	interrupts := 0
+	e.f.mu.Lock()
+	for _, c := range e.f.calls {
+		if c.Method == "session.interrupt" {
+			interrupts++
+		}
+	}
+	e.f.mu.Unlock()
+	if interrupts != 1 {
+		t.Fatalf("%d interrupts after a Stop press from the topic, want 1", interrupts)
 	}
 }

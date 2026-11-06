@@ -97,11 +97,13 @@ type fakeOpenAPI struct {
 	read  map[string]any // message id -> what GET /messages/:id answers (its items)
 	// rejectInteractive, when set, is the business code returned for interactive message sends (card rejection).
 	rejectInteractive int
-	rejectReply       int // business code for /reply, e.g. 230011 parent withdrawn
+	rejectReply       int            // business code for /reply, e.g. 230011 parent withdrawn
+	readCode          map[string]int // message id -> business code GET /messages/:id answers instead of its items
+	readFail          map[string]int // message id -> how many more GETs answer HTTP 500 (the client reads again)
 }
 
 func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
-	f := &fakeOpenAPI{read: map[string]any{}}
+	f := &fakeOpenAPI{read: map[string]any{}, readCode: map[string]int{}, readFail: map[string]int{}}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		f.mu.Lock()
@@ -127,8 +129,20 @@ func newFakeOpenAPI(t *testing.T) *fakeOpenAPI {
 		case r.Method == "GET" && strings.HasPrefix(p, "/open-apis/im/v1/messages/"):
 			id := strings.TrimPrefix(p, "/open-apis/im/v1/messages/")
 			f.mu.Lock()
-			items := f.read[id]
+			items, code := f.read[id], f.readCode[id]
+			flaky := f.readFail[id] > 0
+			if flaky {
+				f.readFail[id]--
+			}
 			f.mu.Unlock()
+			if flaky {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			if code != 0 {
+				reply(map[string]any{"code": code, "msg": "read failed"})
+				return
+			}
 			reply(map[string]any{"code": 0, "data": map[string]any{"items": items}})
 		case r.Method == "PATCH":
 			reply(map[string]any{"code": 0})
@@ -179,6 +193,40 @@ func (f *fakeOpenAPI) find(t *testing.T, want ...string) string {
 	defer f.mu.Unlock()
 	t.Fatalf("no call with %q; calls:\n%s", want, strings.Join(f.calls, "\n"))
 	return ""
+}
+
+// inChat says GET /messages/:id answers that the message is in chat.
+func (f *fakeOpenAPI) inChat(id, chat string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.read[id] = []map[string]any{{"message_id": id, "chat_id": chat}}
+}
+
+// posts is how many messages (sends and replies) the bot has sent.
+func (f *fakeOpenAPI) posts() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "POST /open-apis/im/v1/messages") {
+			n++
+		}
+	}
+	return n
+}
+
+// total is how many calls the bot has made.
+func (f *fakeOpenAPI) total() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+// since lists the calls after the first n.
+func (f *fakeOpenAPI) since(n int) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.Join(f.calls[n:], "\n")
 }
 
 func (f *fakeOpenAPI) count(want string) int {
@@ -299,7 +347,7 @@ func (w *botWorld) pair(t *testing.T) {
 	if code != 200 || pairing == nil {
 		t.Fatalf("pair: %d %v", code, out)
 	}
-	if _, err := w.h.botEvent(w.ctx, botMessageEvent("om_pair", "ou_me", "text", textContent(pairing["code"].(string)), nil)); err != nil {
+	if _, err := w.h.botEvent(w.ctx, botMessageEvent("om_pair_"+pairing["code"].(string), "ou_me", "text", textContent(pairing["code"].(string)), nil)); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, 8*time.Second, "the assistant told of the pairing", func() bool { return w.a.wasTold(assistantwire.EventFeishuOwner) })
@@ -343,7 +391,7 @@ func TestBotPairedNoteWithoutTheAssistant(t *testing.T) {
 	w.h.opts.AssistantEvent = nil // no assistant in this process to tell
 	_, out := w.do(t, "POST", "/api/v1/bots/feishu/pair", "")
 	pairing := out["pairing"].(map[string]any)
-	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_pair", "ou_me", "text", textContent(pairing["code"].(string)), nil))
+	_, _ = w.h.botEvent(w.ctx, botMessageEvent("om_pair_"+pairing["code"].(string), "ou_me", "text", textContent(pairing["code"].(string)), nil))
 	w.api.find(t, "已配对")
 }
 
@@ -668,6 +716,9 @@ func TestChannelFeishuInThread(t *testing.T) {
 	w := newBotWorld(t)
 	w.pair(t)
 	card := feishubot.NewCard("t", "green", "a").Markdown("thread card").JSON()
+	for _, id := range []string{"om_t1", "om_t2", "om_t3", "om_t4"} { // the owner's messages in the private chat
+		w.api.inChat(id, "oc_p2p")
+	}
 	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "thread text", "reply_to": "om_t1", "in_thread": true})
 	w.feishu(t, assistantwire.FeishuPost, map[string]any{"card": card, "reply_to": "om_t2", "in_thread": true, "chat_id": "oc_p2p"})
 	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "plain text", "reply_to": "om_t3"})
@@ -750,6 +801,7 @@ func TestBotReplyDetoursIntoTheCallsChat(t *testing.T) {
 		t.Fatalf("the detoured send: %s", send)
 	}
 	// Through the bus the same happens into the owner's chat.
+	w.api.inChat("om_gone2", "oc_p2p")
 	w.feishu(t, assistantwire.FeishuText, map[string]any{"text": "bus detour", "reply_to": "om_gone2", "in_thread": true, "chat_id": "oc_p2p"})
 	if send := w.api.find(t, "POST /open-apis/im/v1/messages ", "bus detour"); !strings.Contains(send, `"receive_id":"oc_p2p"`) {
 		t.Fatalf("the bus detour: %s", send)

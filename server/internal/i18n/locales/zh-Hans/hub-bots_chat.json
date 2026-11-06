@@ -7,5 +7,11 @@
   "owner_only_action": "只有机器人的主人能操作",
   "paired": "已配对",
   "paired_body": "以后在这里说的话会交给 Persona。发 /help 看看能做什么。",
-  "card_refused": "（这条消息没能显示成卡片，请到 App 里看。）"
+  "card_refused": "（这条消息没能显示成卡片，请到 App 里看。）",
+  "topics_on": "已开启：以后你在这个群的话题里写的话会交给 Persona，只认你本人的消息。发 /topics off 可以关掉。",
+  "topics_off": "已关闭：这个群不再读取任何内容。",
+  "topics_already": "这个群已经开启了。发 /topics off 可以关掉。",
+  "topics_not_on": "这个群没有开启。",
+  "topics_full": "已开启的群太多了，先关掉一个。",
+  "chat_not_enabled": "这个群没有为机器人开启，先在群里发 /topics。"
 }

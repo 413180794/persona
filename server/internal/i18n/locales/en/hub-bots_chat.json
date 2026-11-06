@@ -7,5 +7,11 @@
   "owner_only_action": "Only the bot's owner can do this",
   "paired": "Paired",
   "paired_body": "From now on, what you say here goes to Persona. Send /help to see what you can do.",
-  "card_refused": "(This message couldn't be shown as a card. See it in the app.)"
+  "card_refused": "(This message couldn't be shown as a card. See it in the app.)",
+  "topics_on": "Done: from now on, what you write inside a topic of this group chat goes to Persona. Only your own messages count. Send /topics off to turn it off.",
+  "topics_off": "Done: this group chat is off. Persona reads nothing from it any more.",
+  "topics_already": "This group chat is already on. Send /topics off to turn it off.",
+  "topics_not_on": "This group chat isn't on.",
+  "topics_full": "Too many group chats are on already. Turn one off first.",
+  "chat_not_enabled": "This chat isn't turned on for the bot. Send /topics in it first."
 }
