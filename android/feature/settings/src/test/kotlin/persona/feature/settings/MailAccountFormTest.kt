@@ -95,4 +95,18 @@ class MailAccountFormTest {
         assertEquals("未配置", ConnectorText.state(res, unconfigured))
         assertEquals("未配置", ConnectorText.summary(res, unconfigured))
     }
+
+    /** QQ / NetEase addresses get where to make their authorization code (#5123); other addresses and kinds get none. */
+    @Test fun qqAndNetEaseAddressesGetTheCodeGuide() {
+        val f = MailAccountForm(MailAccountForm.Kind.IMAP, email = "me@QQ.com")
+        assertEquals(CodeGuide(CodeGuide.Provider.QQ, "https://mail.qq.com"), f.codeGuide)
+        assertTrue(res.getString(f.codeGuide!!.provider.steps).contains("生成授权码"))
+        assertEquals(CodeGuide(CodeGuide.Provider.NETEASE, "https://mail.126.com"), f.copy(email = "me@126.com").codeGuide)
+        assertEquals("https://vip.163.com", f.copy(email = "me@vip.163.com").codeGuide?.webMail)
+        assertEquals("https://www.188.com", f.copy(email = "me@188.com").codeGuide?.webMail)
+        assertNull(f.copy(email = "me@example.com").codeGuide)
+        assertNull(f.copy(email = "me").codeGuide)
+        assertNull(f.copy(kind = MailAccountForm.Kind.FEISHU).codeGuide)
+        assertNull(f.copy(imapHost = "imap.example.com").codeGuide)
+    }
 }

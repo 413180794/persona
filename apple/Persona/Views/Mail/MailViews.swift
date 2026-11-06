@@ -479,6 +479,29 @@ struct MailAccountsView: View {
     private func load() async { accounts = (try? await model.api?.mailAccounts()) ?? [] }
 }
 
+/// The Other IMAP footer for a QQ / NetEase address: where its authorization code is made, and a button to that web mail (#5123).
+private struct CodeGuideSteps: View {
+    let guide: CodeGuide
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            switch guide.provider {
+            case .qq:
+                Text("服务器会自动填好。密码要填授权码，不是 QQ 密码：在电脑上打开网页版 QQ 邮箱，进入 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，把 16 位授权码粘贴到上面。")
+            case .netease:
+                Text("服务器会自动填好。密码要填授权码，不是登录密码：在电脑上打开网页版网易邮箱，进入 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，把它粘贴到上面。")
+            }
+            Button { openURL(guide.webMail) } label: {
+                Label(guide.provider == .qq ? String(localized: "打开 QQ 邮箱网页版") : String(localized: "打开网易邮箱网页版"), systemImage: Theme.Icon.safari)
+                    .lineLimit(1)
+            }
+            .font(Theme.Font.caption)
+            .accessibilityIdentifier("mail.codeGuide.open")
+        }
+    }
+}
+
 /// An account's provider: Gmail's and Lark's own marks, an envelope for any other IMAP server.
 struct MailProviderMark: View {
     var provider: String
@@ -560,7 +583,12 @@ struct AddMailAccountView: View {
                         switch form.kind {
                         case .gmail, .outlook: EmptyView()
                         case .feishu: Text("飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。")
-                        case .imap: Text("QQ / 163 / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。Outlook 用上面的「Outlook」登录。")
+                        case .imap:
+                            if let guide = form.codeGuide {
+                                CodeGuideSteps(guide: guide)
+                            } else {
+                                Text("QQ / 163 / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。Outlook 用上面的「Outlook」登录。")
+                            }
                         }
                     }
                 }

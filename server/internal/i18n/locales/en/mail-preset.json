@@ -1,0 +1,4 @@
+{
+  "guide_qq": "QQ Mail needs an authorization code, not your QQ password: on the web at {site}, open Settings › Account & Security › Security Settings, turn on “POP3/IMAP/SMTP/Exchange/CardDAV service”, verify as prompted, then click “Generate authorization code” and use the 16-character code as the password",
+  "guide_netease": "NetEase Mail needs an authorization code, not your sign-in password: on the web at {site}, open Settings › POP3/SMTP/IMAP and turn on “IMAP/SMTP service”; after you verify with your phone as prompted the code is shown: use it as the password"
+}

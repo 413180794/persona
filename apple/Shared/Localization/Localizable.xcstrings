@@ -32235,6 +32235,28 @@
         }
       }
     },
+    "打开 QQ 邮箱网页版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open QQ Mail on the web"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Web版QQメールを開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 QQ 邮箱网页版"
+          }
+        }
+      }
+    },
     "打开管理界面": {
       "localizations": {
         "en": {
@@ -32253,6 +32275,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开管理界面"
+          }
+        }
+      }
+    },
+    "打开网易邮箱网页版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open NetEase Mail on the web"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Web版NetEaseメールを開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开网易邮箱网页版"
           }
         }
       }
@@ -32540,6 +32584,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "有一台电脑想加入：%@，是你的吗？"
+          }
+        }
+      }
+    },
+    "服务器会自动填好。密码要填授权码，不是 QQ 密码：在电脑上打开网页版 QQ 邮箱，进入 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，把 16 位授权码粘贴到上面。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servers fill in automatically. The password is an authorization code, not your QQ password: on a computer, open QQ Mail on the web, go to Settings › Account & Security › Security Settings, turn on “POP3/IMAP/SMTP/Exchange/CardDAV service”, verify as prompted, then tap “Generate authorization code” and paste the 16-character code above."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーは自動で入力されます。パスワードにはQQのパスワードではなく認証コードを入力します。パソコンでWeb版QQメールを開き、設定 › アカウントとセキュリティ › セキュリティ設定で「POP3/IMAP/SMTP/Exchange/CardDAVサービス」をオンにし、案内に従って認証したあと「認証コードを生成」を押して、16文字の認証コードを上に貼り付けてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器会自动填好。密码要填授权码，不是 QQ 密码：在电脑上打开网页版 QQ 邮箱，进入 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，把 16 位授权码粘贴到上面。"
+          }
+        }
+      }
+    },
+    "服务器会自动填好。密码要填授权码，不是登录密码：在电脑上打开网页版网易邮箱，进入 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，把它粘贴到上面。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Servers fill in automatically. The password is an authorization code, not your login password: on a computer, open NetEase Mail on the web, go to Settings › POP3/SMTP/IMAP and turn on “IMAP/SMTP service”. After you verify with your phone as prompted, the code is shown: paste it above."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーは自動で入力されます。パスワードにはログインパスワードではなく認証コードを入力します。パソコンでWeb版NetEaseメールを開き、設定 › POP3/SMTP/IMAPで「IMAP/SMTPサービス」をオンにしてください。案内に従って携帯電話で認証すると認証コードが表示されるので、上に貼り付けてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器会自动填好。密码要填授权码，不是登录密码：在电脑上打开网页版网易邮箱，进入 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，把它粘贴到上面。"
           }
         }
       }

@@ -45,4 +45,32 @@ struct MailAccountForm: Equatable {
         return req
     }
 
+    /// Where a QQ / NetEase address typed under Other IMAP makes its authorization code; nil for any other address,
+    /// and once servers are typed (they may not be the provider's).
+    var codeGuide: CodeGuide? {
+        guard kind == .imap, imapHost.isEmpty, smtpHost.isEmpty, let at = email.lastIndex(of: "@") else { return nil }
+        return CodeGuide(domain: email[email.index(after: at)...].trimmingCharacters(in: .whitespaces).lowercased())
+    }
+}
+
+/// A mail provider whose clients sign in with an authorization code made in its web mail, not the account's password. The hub
+/// says the same steps for the same domains (`server/internal/mail/preset.go`, `Guide`): change them together.
+struct CodeGuide: Equatable {
+    enum Provider: Equatable { case qq, netease }
+    let provider: Provider
+    /// The web mail whose settings make the code.
+    let webMail: URL
+
+    init?(domain: String) {
+        let site: String
+        switch domain {
+        case "qq.com", "foxmail.com", "vip.qq.com": provider = .qq; site = "mail.qq.com"
+        case "163.com", "126.com", "yeah.net": provider = .netease; site = "mail." + domain
+        case "vip.163.com", "vip.126.com": provider = .netease; site = domain
+        case "188.com": provider = .netease; site = "www.188.com"
+        default: return nil
+        }
+        guard let url = URL(string: "https://" + site) else { return nil }
+        webMail = url
+    }
 }

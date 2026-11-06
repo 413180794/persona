@@ -354,7 +354,15 @@ internal fun AddMailAccountPage(
                     )
                 }
             }
-            item("form-footer") {
+            val guide = form.codeGuide
+            if (guide != null) item("form-code-guide") {
+                // QQ / NetEase: where the authorization code is made, and that web mail (#5123).
+                val uri = LocalUriHandler.current
+                Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs), modifier = Modifier.padding(top = Tokens.Space.xs)) {
+                    SettingsCaption(stringResource(guide.provider.steps))
+                    JTextButton(stringResource(guide.provider.open), onClick = { runCatching { uri.openUri(guide.webMail) } }, icon = PhIcons.ArrowSquareOut)
+                }
+            } else item("form-footer") {
                 SettingsCaption(
                     stringResource(when (form.kind) {
                         MailAccountForm.Kind.FEISHU -> R.string.settings_src_mail_feishu_footer

@@ -1,0 +1,4 @@
+{
+  "guide_qq": "QQ 邮箱要用授权码，不是 QQ 密码：在网页版 {site} 打开 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，用这个 16 位授权码当密码",
+  "guide_netease": "网易邮箱要用授权码，不是登录密码：在网页版 {site} 打开 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，用它当密码"
+}

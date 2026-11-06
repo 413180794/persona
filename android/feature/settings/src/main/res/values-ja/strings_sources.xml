@@ -81,6 +81,10 @@
     <string name="settings_src_required">必須</string>
     <string name="settings_src_mail_feishu_footer">Larkメール：サーバーはimap.larkoffice.com:993、smtp.larkoffice.com:465（SSL）に固定されているため、メールアドレスとパスワードだけを入力します。パスワードはLarkメール設定の「サードパーティクライアントのログインパスワード」です。</string>
     <string name="settings_src_mail_imap_footer">QQ、163、iCloudなどはサーバーが自動で入力されます。中国のメールサービスでは通常、ログインパスワードではなく「認証コード」が必要です。Outlook は上の「Outlook」でログインします。</string>
+    <string name="settings_src_mail_qq_code_steps">サーバーは自動で入力されます。パスワードにはQQのパスワードではなく認証コードを入力します。パソコンでWeb版QQメールを開き、設定 › アカウントとセキュリティ › セキュリティ設定で「POP3/IMAP/SMTP/Exchange/CardDAVサービス」をオンにし、案内に従って認証したあと「認証コードを生成」を押して、16文字の認証コードを上に貼り付けてください。</string>
+    <string name="settings_src_mail_netease_code_steps">サーバーは自動で入力されます。パスワードにはログインパスワードではなく認証コードを入力します。パソコンでWeb版NetEaseメールを開き、設定 › POP3/SMTP/IMAPで「IMAP/SMTPサービス」をオンにしてください。案内に従って携帯電話で認証すると認証コードが表示されるので、上に貼り付けてください。</string>
+    <string name="settings_src_mail_qq_open_web">Web版QQメールを開く</string>
+    <string name="settings_src_mail_netease_open_web">Web版NetEaseメールを開く</string>
     <string name="settings_src_mail_gmail_footer">アプリパスワードは16桁で、先に2段階認証プロセスを有効にする必要があります。Gmailのサーバーは自動で入力されます。</string>
     <string name="settings_src_mail_servers_header">サーバー（空欄で自動検出）</string>
     <string name="settings_src_mail_imap_server">IMAPサーバー</string>

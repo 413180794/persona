@@ -89,6 +89,10 @@
     <string name="settings_src_required">Required</string>
     <string name="settings_src_mail_feishu_footer">Lark Mail: the servers are always imap.larkoffice.com:993 and smtp.larkoffice.com:465 (SSL), so fill in only the address and password. The password is the third-party client password in Lark Mail settings.</string>
     <string name="settings_src_mail_imap_footer">Servers fill in automatically for QQ, 163, iCloud and others. Mail providers in China usually need an authorization code rather than your sign-in password. For Outlook, use Outlook above.</string>
+    <string name="settings_src_mail_qq_code_steps">Servers fill in automatically. The password is an authorization code, not your QQ password: on a computer, open QQ Mail on the web, go to Settings › Account &amp; Security › Security Settings, turn on “POP3/IMAP/SMTP/Exchange/CardDAV service”, verify as prompted, then tap “Generate authorization code” and paste the 16-character code above.</string>
+    <string name="settings_src_mail_netease_code_steps">Servers fill in automatically. The password is an authorization code, not your sign-in password: on a computer, open NetEase Mail on the web, go to Settings › POP3/SMTP/IMAP and turn on “IMAP/SMTP service”. After you verify with your phone as prompted, the code is shown: paste it above.</string>
+    <string name="settings_src_mail_qq_open_web">Open QQ Mail on the web</string>
+    <string name="settings_src_mail_netease_open_web">Open NetEase Mail on the web</string>
     <string name="settings_src_mail_gmail_footer">App passwords are 16 characters and need 2-Step Verification turned on first. Gmail\'s servers fill in automatically.</string>
     <string name="settings_src_mail_servers_header">Servers (leave blank to detect)</string>
     <string name="settings_src_mail_imap_server">IMAP server</string>

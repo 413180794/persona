@@ -6,6 +6,7 @@ import {
   EMPTY_MAIL_FORM,
   isUnset,
   mailAccountLine,
+  mailCodeGuide,
   mailErrors,
   mailProviderBadge,
   clientIDError,
@@ -125,6 +126,18 @@ describe("mail account form", () => {
     expect(MAIL_KINDS.map((k) => k.k)).toEqual(["gmail", "outlook", "feishu", "imap"]);
     expect(mailErrors({ ...EMPTY_MAIL_FORM, kind: "feishu", email: "me@example.com" }).password).toContain("飞书");
     expect(mailErrors({ ...EMPTY_MAIL_FORM, email: "me@example.com", password: "x", imapHost: "imap.example.com", imapPort: "abc" }).imapPort).toBeTruthy();
+  });
+
+  it("tells QQ and NetEase addresses where to make the authorization code (#5123)", () => {
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@QQ.com " })).toEqual({ provider: "qq", webMail: "https://mail.qq.com" });
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@foxmail.com" })?.provider).toBe("qq");
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@126.com" })).toEqual({ provider: "netease", webMail: "https://mail.126.com" });
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@vip.163.com" })?.webMail).toBe("https://vip.163.com");
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@188.com" })?.webMail).toBe("https://www.188.com");
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me@example.com" })).toBeNull();
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "imap", email: "me" })).toBeNull();
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, kind: "feishu", email: "me@qq.com" })).toBeNull();
+    expect(mailCodeGuide({ ...EMPTY_MAIL_FORM, email: "me@qq.com", imapHost: "imap.example.com" })).toBeNull();
   });
 
   it("builds the hub's request", () => {

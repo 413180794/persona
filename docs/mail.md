@@ -194,14 +194,15 @@ App 里选「飞书」，只填邮箱和密码（`provider: "feishu"`）。邮�
 | 域名 | IMAP | SMTP |
 | --- | --- | --- |
 | gmail.com / googlemail.com | imap.gmail.com:993 TLS | smtp.gmail.com:465 TLS |
-| qq.com / foxmail.com | imap.qq.com:993 TLS | smtp.qq.com:465 TLS |
-| 163.com | imap.163.com:993 TLS | smtp.163.com:465 TLS |
-| 126.com | imap.126.com:993 TLS | smtp.126.com:465 TLS |
+| qq.com / foxmail.com / vip.qq.com | imap.qq.com:993 TLS | smtp.qq.com:465 TLS |
+| 163.com / 126.com / yeah.net / 188.com / vip.163.com / vip.126.com | imap.<domain>:993 TLS | smtp.<domain>:465 TLS |
 | outlook.com / hotmail.com / live.com | outlook.office365.com:993 TLS | smtp-mail.outlook.com:587 STARTTLS |
 | icloud.com / me.com | imap.mail.me.com:993 TLS | smtp.mail.me.com:587 STARTTLS |
 | yahoo.com / yahoo.co.jp | imap.mail.yahoo.com:993 TLS | smtp.mail.yahoo.com:465 TLS |
 
 QQ / 163 / 126 之类的密码是**授权码**而不是登录密码，需要先在网页版邮箱设置里开启 IMAP/SMTP 并生成授权码。
+The QQ and NetEase presets carry the steps to make that authorization code (`Guide` in `preset.go`, text in `i18n/locales/*/mail-preset.json`, #5123): a rejected IMAP / SMTP login and the assistant's add-mail card show them.
+The add-mail forms on iOS, the web and Android recognize the same domains under Other IMAP and show the same steps with a button to that web mail (`CodeGuide` / `mailCodeGuide`); change their domain lists together with `preset.go`.
 163、126 会在登录前要求客户端先发 IMAP `ID`（RFC 2971），服务端已经会发。
 
 安全模式：IMAP 不给 `imap_security` 时按端口推断（993 = TLS，143 = STARTTLS，其余明文，明文只给本地测试用）；

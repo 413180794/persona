@@ -77,6 +77,18 @@ func TestSelfSettingsMailNeedsPhoneInput(t *testing.T) {
 
 // What the card says, in each language.
 func TestMailAccountRequestInEnglish(t *testing.T) {
+	if _, summary, err := mailAccountRequest(i18n.Default, json.RawMessage(`{"email":"me@qq.com"}`)); err != nil ||
+		!strings.Contains(summary, "mail.qq.com") || !strings.Contains(summary, "生成授权码") {
+		t.Errorf("mail qq.com: %q %v", summary, err)
+	}
+	if _, summary, err := mailAccountRequest(i18n.En, json.RawMessage(`{"email":"me@163.com"}`)); err != nil ||
+		!strings.Contains(summary, "mail.163.com") || !strings.Contains(summary, "authorization code") {
+		t.Errorf("mail 163.com en: %q %v", summary, err)
+	}
+	if _, summary, err := mailAccountRequest(i18n.En, json.RawMessage(`{"email":"me@qq.com","imap_host":"imap.example.com"}`)); err != nil ||
+		strings.Contains(summary, "authorization code") {
+		t.Errorf("mail qq.com with its own servers: %q %v", summary, err)
+	}
 	_, summary, err := mailAccountRequest(i18n.En, json.RawMessage(`{"email":"me@example.com"}`))
 	if err != nil || summary != "Add mail account me@example.com (servers detected automatically). After you enter the password it connects once before saving" {
 		t.Errorf("mail en: %q %v", summary, err)

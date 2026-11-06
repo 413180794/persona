@@ -282,6 +282,36 @@ export function mailRequest(f: MailForm): AddMailAccount | null {
   return req;
 }
 
+/**
+ * Where a QQ / NetEase address typed under Other IMAP makes its authorization code (the provider and its web mail), null for any
+ * other. The hub says the same steps for the same domains (server/internal/mail/preset.go, Guide; iOS CodeGuide):
+ * change them together.
+ */
+export function mailCodeGuide(f: Pick<MailForm, "kind" | "email" | "imapHost" | "smtpHost">): { provider: "qq" | "netease"; webMail: string } | null {
+  // Servers typed: they may not be the provider's.
+  if (f.kind !== "imap" || f.imapHost.trim() || f.smtpHost.trim()) return null;
+  const at = f.email.lastIndexOf("@");
+  if (at < 0) return null;
+  const domain = f.email.slice(at + 1).trim().toLowerCase();
+  switch (domain) {
+    case "qq.com":
+    case "foxmail.com":
+    case "vip.qq.com":
+      return { provider: "qq", webMail: "https://mail.qq.com" };
+    case "163.com":
+    case "126.com":
+    case "yeah.net":
+      return { provider: "netease", webMail: `https://mail.${domain}` };
+    case "vip.163.com":
+    case "vip.126.com":
+      return { provider: "netease", webMail: `https://${domain}` };
+    case "188.com":
+      return { provider: "netease", webMail: "https://www.188.com" };
+    default:
+      return null;
+  }
+}
+
 export interface MailAccount {
   id: string;
   name?: string;

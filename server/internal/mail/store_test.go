@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 func TestEncryptedStoreRoundTrip(t *testing.T) {
@@ -110,6 +112,12 @@ func TestPresets(t *testing.T) {
 		{"a@qq.com", ProviderIMAP, "imap.qq.com", 993, "smtp.qq.com", 465, "tls"},
 		{"a@163.com", ProviderIMAP, "imap.163.com", 993, "smtp.163.com", 465, "tls"},
 		{"a@126.com", ProviderIMAP, "imap.126.com", 993, "smtp.126.com", 465, "tls"},
+		{"a@foxmail.com", ProviderIMAP, "imap.qq.com", 993, "smtp.qq.com", 465, "tls"},
+		{"a@vip.qq.com", ProviderIMAP, "imap.qq.com", 993, "smtp.qq.com", 465, "tls"},
+		{"a@yeah.net", ProviderIMAP, "imap.yeah.net", 993, "smtp.yeah.net", 465, "tls"},
+		{"a@vip.163.com", ProviderIMAP, "imap.vip.163.com", 993, "smtp.vip.163.com", 465, "tls"},
+		{"a@vip.126.com", ProviderIMAP, "imap.vip.126.com", 993, "smtp.vip.126.com", 465, "tls"},
+		{"a@188.com", ProviderIMAP, "imap.188.com", 993, "smtp.188.com", 465, "tls"},
 		{"a@outlook.com", ProviderIMAP, "outlook.office365.com", 993, "smtp-mail.outlook.com", 587, "starttls"},
 		{"a@hotmail.com", ProviderIMAP, "outlook.office365.com", 993, "smtp-mail.outlook.com", 587, "starttls"},
 		{"a@icloud.com", ProviderIMAP, "imap.mail.me.com", 993, "smtp.mail.me.com", 587, "starttls"},
@@ -134,6 +142,27 @@ func TestPresets(t *testing.T) {
 				t.Errorf("security = %q, want %q", a.SMTPSecurity, tc.security)
 			}
 		})
+	}
+}
+
+// QQ and NetEase sign mail clients in with an authorization code: the guide says where each one's web mail makes
+// it, in the asked language (#5123).
+func TestPasswordGuide(t *testing.T) {
+	for email, want := range map[string]string{
+		"a@qq.com": "mail.qq.com", "a@Foxmail.com": "生成授权码", "a@163.com": "mail.163.com", "a@126.com": "mail.126.com",
+		"a@yeah.net": "mail.yeah.net", "a@vip.163.com": "vip.163.com", "a@188.com": "www.188.com",
+	} {
+		if got := PasswordGuide(i18n.ZhHans, email); !strings.Contains(got, want) || !strings.Contains(got, "授权码") {
+			t.Errorf("PasswordGuide(%q) = %q, want it to mention %q", email, got, want)
+		}
+	}
+	for _, email := range []string{"a@gmail.com", "a@icloud.com", "a@example.com", "nope"} {
+		if got := PasswordGuide(i18n.En, email); got != "" {
+			t.Errorf("PasswordGuide(%q) = %q, want none", email, got)
+		}
+	}
+	if got := PasswordGuide(i18n.En, "a@163.com"); !strings.Contains(got, "mail.163.com") || !strings.Contains(got, "authorization code") {
+		t.Errorf("PasswordGuide(en, 163.com) = %q", got)
 	}
 }
 

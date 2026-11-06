@@ -81,6 +81,10 @@
     <string name="settings_src_required">必填</string>
     <string name="settings_src_mail_feishu_footer">飞书邮箱：服务器固定为 imap.larkoffice.com:993、smtp.larkoffice.com:465（SSL），只填邮箱和密码。密码是飞书邮箱设置里的「第三方客户端登录密码」。</string>
     <string name="settings_src_mail_imap_footer">QQ / 163 / iCloud 等会自动填服务器；国内邮箱一般要用「授权码」而不是登录密码。Outlook 用上面的「Outlook」登录。</string>
+    <string name="settings_src_mail_qq_code_steps">服务器会自动填好。密码要填授权码，不是 QQ 密码：在电脑上打开网页版 QQ 邮箱，进入 设置 › 账号与安全 › 安全设置，开启「POP3/IMAP/SMTP/Exchange/CardDAV 服务」，按提示验证后点「生成授权码」，把 16 位授权码粘贴到上面。</string>
+    <string name="settings_src_mail_netease_code_steps">服务器会自动填好。密码要填授权码，不是登录密码：在电脑上打开网页版网易邮箱，进入 设置 › POP3/SMTP/IMAP，开启「IMAP/SMTP 服务」，按提示用手机验证后会显示授权码，把它粘贴到上面。</string>
+    <string name="settings_src_mail_qq_open_web">打开 QQ 邮箱网页版</string>
+    <string name="settings_src_mail_netease_open_web">打开网易邮箱网页版</string>
     <string name="settings_src_mail_gmail_footer">应用专用密码是 16 位，要先开两步验证。服务器会自动填 Gmail 的。</string>
     <string name="settings_src_mail_servers_header">服务器（可留空自动识别）</string>
     <string name="settings_src_mail_imap_server">IMAP 服务器</string>

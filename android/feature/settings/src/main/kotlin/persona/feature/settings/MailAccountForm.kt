@@ -41,6 +41,10 @@ data class MailAccountForm(
         }
     }
 
+    /** Where a QQ / NetEase address typed under Other IMAP makes its authorization code; null for any other, and once servers are typed (iOS `codeGuide`). */
+    val codeGuide: CodeGuide?
+        get() = if (kind != Kind.IMAP || imapHost.isNotEmpty() || smtpHost.isNotEmpty()) null else CodeGuide.forDomain(email.substringAfterLast('@', "").trim().lowercase())
+
     companion object {
         /** Keeps the form across rotation / process death — without the password (it is not written to disk). */
         val Saver: Saver<MailAccountForm, Any> = Saver(
@@ -50,5 +54,26 @@ data class MailAccountForm(
                 MailAccountForm(Kind.valueOf(l[0]), l[1], "", l[2], l[3], l[4], l[5])
             },
         )
+    }
+}
+
+/**
+ * A mail provider whose clients sign in with an authorization code made in its web mail, not the account's password. The hub says the
+ * same steps for the same domains (server/internal/mail/preset.go, Guide; iOS CodeGuide): change them together.
+ */
+data class CodeGuide(val provider: Provider, val webMail: String) {
+    enum class Provider(@StringRes val steps: Int, @StringRes val open: Int) {
+        QQ(R.string.settings_src_mail_qq_code_steps, R.string.settings_src_mail_qq_open_web),
+        NETEASE(R.string.settings_src_mail_netease_code_steps, R.string.settings_src_mail_netease_open_web),
+    }
+
+    companion object {
+        fun forDomain(domain: String): CodeGuide? = when (domain) {
+            "qq.com", "foxmail.com", "vip.qq.com" -> CodeGuide(Provider.QQ, "https://mail.qq.com")
+            "163.com", "126.com", "yeah.net" -> CodeGuide(Provider.NETEASE, "https://mail.$domain")
+            "vip.163.com", "vip.126.com" -> CodeGuide(Provider.NETEASE, "https://$domain")
+            "188.com" -> CodeGuide(Provider.NETEASE, "https://www.188.com")
+            else -> null
+        }
     }
 }

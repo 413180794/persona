@@ -11,6 +11,8 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-smtp"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // A wrong password or authorization code is the user's to fix: it says so in words and is a 400, not the server's raw
@@ -35,6 +37,31 @@ func TestAddAccountWrongPasswordSaysWhatToFix(t *testing.T) {
 	}
 	if accts, _ := s.ListAccounts(); len(accts) != 0 {
 		t.Fatalf("a failed account was saved: %+v", accts)
+	}
+}
+
+// A rejected QQ or NetEase login also says where that provider makes the authorization code (#5123), first: an
+// account's stored reason is cut at maxLoginErrLen, and a long server answer must not push the steps out.
+func TestLoginRejectedTellsTheProvidersSteps(t *testing.T) {
+	no := &imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeAuthenticationFailed, Text: "LOGIN failed"}
+	if msg := loginRejected(&MailAccount{Email: "me@qq.com"}, no).Error(); !strings.Contains(msg, "mail.qq.com") ||
+		!strings.Contains(msg, "生成授权码") || !strings.Contains(msg, "LOGIN failed") {
+		t.Errorf("qq.com: %q", msg)
+	}
+	long := &imap.Error{Type: imap.StatusResponseTypeNo, Text: strings.Repeat("Login fail. ", 40)}
+	if msg := loginRejected(&MailAccount{Email: "me@qq.com"}, long).Error(); !strings.HasPrefix(msg, PasswordGuide(i18n.Default, "me@qq.com")) {
+		t.Errorf("qq.com, long answer: %q", msg)
+	}
+	if msg := loginRejected(&MailAccount{Email: "me@163.com"}, no).Error(); !strings.Contains(msg, "mail.163.com") {
+		t.Errorf("163.com: %q", msg)
+	}
+	if msg := loginRejected(&MailAccount{Email: "me@example.com"}, no).Error(); strings.Contains(msg, "\n") {
+		t.Errorf("example.com: %q", msg)
+	}
+	refused := &smtp.SMTPError{Code: 535, Message: "Login fail"}
+	if msg := smtpLoginErr(&MailAccount{Email: "me@126.com", Auth: AuthPassword}, refused).Error(); !strings.Contains(msg, "mail.126.com") ||
+		!strings.Contains(msg, "SMTP") {
+		t.Errorf("126.com smtp: %q", msg)
 	}
 }
 
@@ -89,7 +116,7 @@ func TestRejectedLoginIsNotRetried(t *testing.T) {
 
 // A NO that is not about the credentials (here UNAVAILABLE: the server is busy) is not called a wrong password.
 func TestLoginUnavailableIsNotAWrongPassword(t *testing.T) {
-	err := loginRejected(&imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeUnavailable, Text: "try later"})
+	err := loginRejected(&MailAccount{}, &imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeUnavailable, Text: "try later"})
 	if strings.Contains(err.Error(), "授权码") || statusFor(err) == http.StatusBadRequest {
 		t.Fatalf("err = %q (status %d), want the server error as before", err, statusFor(err))
 	}
@@ -97,7 +124,7 @@ func TestLoginUnavailableIsNotAWrongPassword(t *testing.T) {
 
 // Feishu tries two server sets at once: a wrong authorization code from the reachable one is still told as the user's to fix.
 func TestFeishuWrongPasswordIsAUserError(t *testing.T) {
-	rejected := loginRejected(&imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeAuthenticationFailed,
+	rejected := loginRejected(&MailAccount{}, &imap.Error{Type: imap.StatusResponseTypeNo, Code: imap.ResponseCodeAuthenticationFailed,
 		Text: "wrong authorization code"})
 	s := newFeishuService(t, nil, map[string]error{"imap.larkoffice.com": context.DeadlineExceeded, "imap.feishu.cn": rejected})
 	_, err := addFeishu(s)

@@ -5,7 +5,7 @@
 // phone app (its OAuth client is an iOS one whose callback only the app can catch), so the web form leaves it to the phone;
 // Outlook too (Microsoft calls back to a custom scheme only the app catches), though its client ID can be set up here.
 import { useEffect, useId, useState } from "react";
-import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
+import { clientIDError, EMPTY_MAIL_FORM, MAIL_KINDS, mailAccountLine, mailCodeGuide, mailErrors, mailProviderBadge, mailRequest, mailSummary, signsInOnPhone, type MailAccount, type MailForm, type MicrosoftConfig } from "../../lib/agent-settings";
 import { t } from "../../i18n";
 import { api, enc, errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
@@ -159,6 +159,7 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
 
   const errors = mailErrors(f);
   const req = mailRequest(f);
+  const guide = mailCodeGuide(f);
   const shown = tried ? errors : {};
   const set = (k: keyof MailForm) => (e: React.ChangeEvent<HTMLInputElement>) => setF((x) => ({ ...x, [k]: e.target.value }));
 
@@ -252,11 +253,20 @@ function AddMail({ open, onClose, onAdded }: { open: boolean; onClose: () => voi
           >
             {field("email", t("settings-connectors.email"), { placeholder: "me@example.com", type: "email", auto: "email" })}
             {field("password", f.kind === "feishu" ? t("settings-connectors.password_lark") : t("settings-connectors.password"), { type: "password", auto: "new-password" })}
-            <p className="text-[11.5px] leading-relaxed text-ink-3">
-              {f.kind === "feishu"
-                ? t("settings-connectors.lark_hint")
-                : t("settings-connectors.imap_hint")}
-            </p>
+            {guide ? (
+              <div className="flex flex-col items-start gap-1.5 text-[11.5px] leading-relaxed text-ink-3">
+                <p>{t(guide.provider === "qq" ? "settings-connectors.qq_code_steps" : "settings-connectors.netease_code_steps")}</p>
+                <a href={guide.webMail} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap font-medium text-accent-ink hover:underline">
+                  {t(guide.provider === "qq" ? "settings-connectors.qq_open_web" : "settings-connectors.netease_open_web")}
+                </a>
+              </div>
+            ) : (
+              <p className="text-[11.5px] leading-relaxed text-ink-3">
+                {f.kind === "feishu"
+                  ? t("settings-connectors.lark_hint")
+                  : t("settings-connectors.imap_hint")}
+              </p>
+            )}
             {f.kind === "imap" && (
               <fieldset className="flex flex-col gap-3 rounded-[10px] bg-inset p-3 shadow-hairline">
                 <legend className="sr-only">{t("settings-connectors.servers")}</legend>

@@ -191,7 +191,13 @@ func mailAccountRequest(l i18n.Lang, v json.RawMessage) (mail.AddAccountRequest,
 	} else if a.IMAPHost != "" || a.SMTPHost != "" {
 		servers = fmt.Sprintf("IMAP %s · SMTP %s", hostPort(l, a.IMAPHost, a.IMAPPort), hostPort(l, a.SMTPHost, a.SMTPPort))
 	}
-	return req, ss(l, "add_mail", i18n.Args{"email": email, "servers": servers}), nil
+	summary := ss(l, "add_mail", i18n.Args{"email": email, "servers": servers})
+	// QQ / NetEase sign in with an authorization code, not the account's password: the card says where to make one
+	// (#5123), unless the servers were given (then they may not be the provider's).
+	if g := mail.PasswordGuide(l, email); g != "" && provider == mail.ProviderIMAP && a.IMAPHost == "" && a.SMTPHost == "" {
+		summary += "\n" + g
+	}
+	return req, summary, nil
 }
 
 func hostPort(l i18n.Lang, host string, port int) string {

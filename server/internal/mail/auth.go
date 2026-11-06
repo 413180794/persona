@@ -11,6 +11,8 @@ import (
 	"github.com/emersion/go-message/charset"
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // mailWordDecoder decodes RFC 2047 encoded words in IMAP envelope fields with
@@ -37,7 +39,7 @@ func loginIMAP(c *imapclient.Client, a *MailAccount, token string) error {
 		return nil
 	case "", AuthPassword:
 		if err := c.Login(a.Username, a.Password).Wait(); err != nil {
-			return loginRejected(err)
+			return loginRejected(a, err)
 		}
 		return nil
 	default:
@@ -48,13 +50,15 @@ func loginIMAP(c *imapclient.Client, a *MailAccount, token string) error {
 // loginRejected is a failed IMAP LOGIN of a password account. A NO about the credentials (no code,
 // AUTHENTICATIONFAILED, AUTHORIZATIONFAILED) says what to fix; another NO (blocked, contact the admin) quotes the
 // server; UNAVAILABLE and anything that is not a NO stay server errors. The server's answer stays wrapped, so
-// isConnError still sees a protocol reply and does not log in again.
-func loginRejected(err error) error {
+// isConnError still sees a protocol reply and does not log in again. A provider with known authorization code
+// steps (PasswordGuide) gets them first: an account's stored reason is cut at maxLoginErrLen, and a long server
+// answer (QQ's is) must not push the steps out.
+func loginRejected(a *MailAccount, err error) error {
 	var ie *imap.Error
 	if errors.As(err, &ie) && ie.Type == imap.StatusResponseTypeNo {
 		switch ie.Code {
 		case "", imap.ResponseCodeAuthenticationFailed, imap.ResponseCodeAuthorizationFailed:
-			return userError{msg: "邮箱服务器拒绝了登录：用户名或密码不对。QQ、163、126、飞书等邮箱要填网页版邮箱设置里生成的授权码，" +
+			return userError{msg: guideFor(a) + "邮箱服务器拒绝了登录：用户名或密码不对。QQ、163、126、飞书等邮箱要填网页版邮箱设置里生成的授权码，" +
 				"不是登录密码（服务器原话：" + serverText(ie.Text) + "）", cause: err}
 		case imap.ResponseCodeUnavailable: // the server is busy: not the user's to fix
 		default:
@@ -69,10 +73,20 @@ func loginRejected(err error) error {
 func smtpLoginErr(a *MailAccount, err error) error {
 	var se *smtp.SMTPError
 	if (a.Auth == "" || a.Auth == AuthPassword) && errors.As(err, &se) && (se.Code == 535 || se.Code == 534) {
-		return userError{msg: "收信登录通过了，发信（SMTP）登录被拒：多半是邮箱设置里没打开 SMTP 服务，或授权码不对" +
+		return userError{msg: guideFor(a) + "收信登录通过了，发信（SMTP）登录被拒：多半是邮箱设置里没打开 SMTP 服务，或授权码不对" +
 			"（服务器原话：" + serverText(se.Message) + "）", cause: err}
 	}
 	return fmt.Errorf("auth: %w", err)
+}
+
+// guideFor is the account's provider's authorization code steps leading a rejected login, in the language the
+// rejection is written in (the default; the rest of the message is not localized yet); "" for a provider without
+// them.
+func guideFor(a *MailAccount) string {
+	if g := PasswordGuide(i18n.Default, a.Email); g != "" {
+		return g + "\n"
+	}
+	return ""
 }
 
 // serverText is a server's reason as shown to the user, "" said as such.
