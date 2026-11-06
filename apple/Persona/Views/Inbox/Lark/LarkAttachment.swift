@@ -124,6 +124,17 @@ extension APIClient {
                             thread: Bool = false, threadRoot: String? = nil) async throws -> LarkSendReceipt {
         let root = "/api/v1/lark/conversations/\(feed)"
         var receipt: LarkSendReceipt
+        if let source = messagingSource {
+            var query = messagingQuery(["client_id": clientID, "name": attachment.name, "mime": attachment.mime,
+                                        "kind": attachment.kind == .image ? "image" : "file"])
+            if let replyTo { query["reply_to"] = replyTo }
+            if replyTo != nil, thread { query["thread"] = "1" }
+            let data = try await messagingCall {
+                try await uploadBytes(file: attachment.file, path: messagingPath(source, "conversations/\(feed)/attachments"), query: query,
+                                      timeout: LarkAttachment.uploadTimeout(bytes: attachment.size))
+            }
+            receipt = try JSON.decoder.decode(LarkSendReceipt.self, from: data)
+        } else {
         switch attachment.kind {
         case .image:
             struct Body: Encodable {
@@ -140,6 +151,7 @@ extension APIClient {
             let data = try await uploadBytes(file: attachment.file, path: root + "/files", query: query,
                                             timeout: LarkAttachment.uploadTimeout(bytes: attachment.size))
             receipt = try JSON.decoder.decode(LarkSendReceipt.self, from: data)
+        }
         }
         // A successful file upload may omit message_id. It is already accepted and must never be offered for retry.
         if attachment.kind == .file, receipt.messageID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {

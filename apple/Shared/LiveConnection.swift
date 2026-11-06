@@ -38,6 +38,9 @@ nonisolated enum ServerEvent: Sendable {
     /// Feishu conversations with new or changed messages (the Lark gateway's realtime events, relayed by the hub); account:
     /// the Feishu account they are in when it is not the hub's own (`ol_account`).
     case lark(feedIDs: [String], settingsChanged: Bool, account: Int?)
+    /// A messaging source's changes (#2138, docs/extension-messaging.md「九」): its conversations, of `account` (nil: the
+    /// default one).
+    case messaging(source: String, conversations: [String], settingsChanged: Bool, account: String?)
     /// Personal agent sessions (the gateway's agent-bridge, hub/agents.go) that changed: `<source>:<sessionKey>` ids, empty
     /// for "something changed, re-pull the list".
     case agents(sessionIDs: [String])
@@ -107,6 +110,12 @@ nonisolated enum ServerEvent: Sendable {
         var feedIDs: [String]?
         var settingsChanged: Bool?
         var olAccount: Int?
+        /// messaging's.
+        var source: String?
+        var conversations: [String]?
+        /// messaging's account is a string; a lark event carries a number here (its `ol_account` is what it means), so
+        /// either decodes: a String here dropped every lark event of a second account.
+        var account: JSONValue?
         var sessionIDs: [String]?
         var fleet: FleetState?
         var desktops: [DesktopDevice]?
@@ -149,7 +158,7 @@ nonisolated enum ServerEvent: Sendable {
         enum CodingKeys: String, CodingKey {
             case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, key, conversation, plan
-            case plugin, badge, invalidate, cwd, dirs, git, operation, auth
+            case plugin, badge, invalidate, cwd, dirs, git, operation, auth, source, conversations, account
             case extensionID = "extension"
             case hubID = "hub_id", hubName = "hub_name", protocolVersion = "protocol", minAppBuild = "min_app_build", publicURL = "public_url"
             case settingsChanged = "settings_changed", olAccount = "ol_account"
@@ -214,6 +223,10 @@ nonisolated enum ServerEvent: Sendable {
             guard let m = e.machineID, let revs = e.revs else { return nil }
             return .revs(machineID: m, revs)
         case "lark": return .lark(feedIDs: e.feedIDs ?? [], settingsChanged: e.settingsChanged ?? false, account: e.olAccount)
+        case "messaging":
+            guard let source = e.source else { return nil }
+            return .messaging(source: source, conversations: e.conversations ?? [], settingsChanged: e.settingsChanged ?? false,
+                              account: e.account?.string ?? e.account?.int.map(String.init))
         case "agents": return .agents(sessionIDs: e.sessionIDs ?? [])
         // the list prefs changed on another device: a non-session id wakes only the lists, which re-pull the prefs
         case "agents.prefs": return .agents(sessionIDs: ["agents.prefs"])
@@ -281,9 +294,9 @@ nonisolated extension ServerEvent {
         case .error(let key, let message): return .error(key.map(k), message)
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
-        case .hello, .interactionResolved, .toolCall, .revs, .lark, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
-             .personas, .managers, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge, .extensionInvalidate, .fsChanged, .extensionOperation,
-             .extensionAuth: return self
+        case .hello, .interactionResolved, .toolCall, .revs, .lark, .messaging, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
+             .personas, .managers, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge,
+             .extensionInvalidate, .fsChanged, .extensionOperation, .extensionAuth: return self
         }
     }
 }

@@ -156,7 +156,7 @@ When the extension's cursor is not a position, it goes in `older_cursor` / `newe
 | `client_id?`, `state?` | The `client_id` of a message I sent (outbox reconciliation, see "8"); `state` is `pending` / `failed` (not yet sent out on the source's side) |
 | `parts` | Body segments (see below), drawn in order |
 | `text` | Plain-text version (for copy, notifications, summaries, translation); already processed by the extension (decoded; for encrypted messages, the display text) |
-| `reply_to?` | Quote: `{id, sender_name, summary, recalled?}` |
+| `reply_to?` | Quote: `{id, sender_name, summary, recalled?}`. `summary` is one line the extension prepared. `recalled`: the quoted message was recalled and `summary` is its retained text (the App adds 「已撤回」 after it); when the recall is not shown it is left out and `summary` says 「消息已撤回」 |
 | `thread?` | Thread: `{count, latest_at?}`; with the `threads` capability, shows "N replies", which opens the thread details |
 | `reactions?` | `[{key, count, mine?, users?: [name]}]` |
 | `edited?`, `edit_history?` | Edited; `edit_history: [{edited_at, parts, text}]` (the extension decides whether to provide it: when Lark's **Edit History** switch is off, it doesn't) |
@@ -223,7 +223,8 @@ All of these are generic in the App; the extension just has to hold to the follo
 
 ## 9. Live events and the Inbox
 
-**Events**: the extension sends `messaging.changed {source, conversations?: [id], account?, settings_changed?}` (an event of the process protocol, so the source's extension must speak the process protocol);
+**Events**: the extension sends `messaging.changed {source, conversations?: [id], account?, settings_changed?}` (an event of the process protocol, so the source's extension must speak the process protocol).
+`account` is as in requests: left out for the default account. Empty `conversations` (or more than 500) means read everything again.
 the hub coalesces them within one second and pushes the WebSocket message `{type: "messaging", source, conversations, account?, settings_changed?}`. The App: an open conversation rereads its latest page right away;
 the list rereads; conversations not on screen are noted and read when the App returns to the foreground or they are opened; `settings_changed` rereads `status` (composer modes) and the settings page. Everything still works without events (while in the foreground, the App polls the open conversation every 60 seconds).
 

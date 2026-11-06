@@ -130,15 +130,17 @@ func TestCLICallOnlyForTheAssistant(t *testing.T) {
 		return res
 	}
 
-	n.mu.Lock()
-	n.connectors = []string{"example"}
-	n.mu.Unlock()
+	t.Setenv("PERSONA_SKILLS_DIR", t.TempDir())
+	t.Setenv("PERSONA_PLUGIN_SKILLS_DIR", t.TempDir())
+	n.dir, n.bin, n.logger = t.TempDir(), "/opt/example/personad", log.New(io.Discard, "", 0)
+	first := prepareAssistantForTest(t, n, ".jarvis/assistant", []string{"example"}, nil)
+	second := prepareAssistantForTest(t, n, ".jarvis/managers/second/assistant", []string{"other"}, nil)
 	// This test is no assistant process, whatever it says.
 	if res := ask("example_list"); !res.IsError || !strings.Contains(res.Content[0].Text, "只能在助手的对话里用") || len(asked) != 0 {
 		t.Fatalf("not the assistant: %+v, the hub was asked %v", res, asked)
 	}
 	n.mu.Lock()
-	n.procs["s1"] = &assistantProc{id: "s1", cmd: &exec.Cmd{Process: &os.Process{Pid: os.Getpid()}}}
+	n.procs["s1"] = &assistantProc{id: "s1", cwd: first, cmd: &exec.Cmd{Process: &os.Process{Pid: os.Getpid()}}}
 	n.mu.Unlock()
 	if res := ask("phone_contacts"); !res.IsError || len(asked) != 0 {
 		t.Fatalf("not a signed-in connector's: %+v", res)
@@ -146,9 +148,31 @@ func TestCLICallOnlyForTheAssistant(t *testing.T) {
 	if res := ask("example_list"); res.IsError {
 		t.Fatalf("the assistant: %+v", res)
 	}
+	if res := ask("other_list"); !res.IsError {
+		t.Fatalf("first assistant called the second one's connector: %+v", res)
+	}
+	n.mu.Lock()
+	delete(n.procs, "s1")
+	n.procs["s2"] = &assistantProc{id: "s2", cwd: second, cmd: &exec.Cmd{Process: &os.Process{Pid: os.Getpid()}}}
+	n.mu.Unlock()
+	if res := ask("example_list"); !res.IsError {
+		t.Fatalf("second assistant called the first one's connector: %+v", res)
+	}
+	if res := ask("other_list"); res.IsError {
+		t.Fatalf("second assistant: %+v", res)
+	}
+	for _, cwd := range []string{"", filepath.Join(n.dir, "unprepared")} {
+		n.mu.Lock()
+		n.procs["s2"].cwd = cwd
+		n.mu.Unlock()
+		if res := ask("other_list"); !res.IsError {
+			t.Fatalf("unprepared directory called a connector: %+v", res)
+		}
+	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(asked) != 1 || asked[0]["name"] != "example_list" || asked[0]["assistant"] != true || asked[0]["session_id"] != "s1" {
+	if len(asked) != 2 || asked[0]["name"] != "example_list" || asked[0]["assistant"] != true || asked[0]["session_id"] != "s1" ||
+		asked[1]["name"] != "other_list" || asked[1]["assistant"] != true || asked[1]["session_id"] != "s2" {
 		t.Fatalf("the hub was asked %v", asked)
 	}
 }
@@ -180,7 +204,7 @@ func TestPrepareTakesAwayTheBuiltInTg(t *testing.T) {
 		t.Fatalf("the extension's tg: %q %v", b, err)
 	}
 	prepare(nil, nil)
-	if n.mayCall("telegram_list_chats") {
+	if n.mayCall(n.assistantDirOf(".jarvis/assistant"), "telegram_list_chats") {
 		t.Fatal("Telegram signed out, its tools are still called")
 	}
 }
@@ -200,6 +224,7 @@ func TestConnectorCommandLines(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	cwd := n.assistantDirOf(".jarvis/assistant")
 	bin := filepath.Join(n.dir, "assistant-bin")
 	_ = os.MkdirAll(bin, 0o755)
 	gate := filepath.Join(bin, "ol") // a plugin's gate command: not the node's to take away
@@ -211,7 +236,7 @@ func TestConnectorCommandLines(t *testing.T) {
 			t.Fatalf("%s: %q %v", name, b, err)
 		}
 	}
-	if !n.mayCall("example_list") || !n.mayCall("telegram_cli") || n.mayCall("phone_contacts") || n.mayCall("examplex_list") {
+	if !n.mayCall(cwd, "example_list") || !n.mayCall(cwd, "telegram_cli") || n.mayCall(cwd, "phone_contacts") || n.mayCall(cwd, "examplex_list") {
 		t.Fatal("the command lines call the signed-in connectors' tools, and only those")
 	}
 
@@ -222,7 +247,7 @@ func TestConnectorCommandLines(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(bin, "ex")); !os.IsNotExist(err) {
 		t.Fatalf("example signed out, ex stayed: %v", err)
 	}
-	if n.mayCall("example_list") {
+	if n.mayCall(cwd, "example_list") {
 		t.Fatal("example signed out, its tools are still called")
 	}
 	prepare(nil, nil)

@@ -224,12 +224,13 @@ func TestAssistantLarkEnvLarkCLI(t *testing.T) {
 	_ = os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0),
 		larkCfg: proto.AssistantLark{CLI: &proto.LarkCLI{Bin: bin}}}
-	vars, _ := n.assistantLarkEnv(t.TempDir())
+	cwd := t.TempDir()
+	vars, _ := n.assistantLarkEnv(cwd)
 	env := strings.Join(vars, "\n")
 	if strings.Contains(env, "_TOKEN=") {
 		t.Fatal("lark-cli only: no gated command's token")
 	}
-	if _, err := os.Stat(filepath.Join(n.dir, "assistant-bin", "lark-cli")); err != nil {
+	if _, err := os.Stat(filepath.Join(n.assistantBin(cwd), "lark-cli")); err != nil {
 		t.Fatalf("no lark-cli wrapper: %v", err)
 	}
 }

@@ -113,6 +113,9 @@ final class LarkHistoryFlowTests: XCTestCase {
     }
 
     @MainActor func testOldHubAndChangedAccountShowSpecificMessages() async throws {
+        // An old hub's answers (no account on the page): the old /api/v1/lark only; a messaging source always says
+        // its account (#2138).
+        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         let app = try await open(["legacy": true])
         top(app)
         let retry = app.buttons["lark.history.retry"]
@@ -127,11 +130,14 @@ final class LarkHistoryFlowTests: XCTestCase {
     }
 
     /// Scrolls the header into view: a page stops up to half a screen before the top, where the bar can cover it.
+    /// Under the bar it still counts as hittable, but a tap at its center goes to the bar.
     @MainActor private func reveal(_ app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
-        for _ in 0..<5 where !element.isHittable { app.scrollViews.firstMatch.swipeDown(velocity: .slow) }
+        let bar = app.navigationBars.firstMatch
+        let covered = { !element.isHittable || (bar.exists && element.frame.midY < bar.frame.maxY) }
+        for _ in 0..<5 where covered() { app.scrollViews.firstMatch.swipeDown(velocity: .slow) }
         // A tap on a list still moving only stops it.
         Thread.sleep(forTimeInterval: 1)
-        XCTAssertTrue(element.isHittable)
+        XCTAssertFalse(covered())
         return element
     }
 
@@ -263,6 +269,9 @@ final class LarkHistoryFlowTests: XCTestCase {
     }
 
     @MainActor func testLargeTextKeepsTheHeaderOnOneLine() async throws {
+        // An old hub's answers (no account on the page): the old /api/v1/lark only; a messaging source always says
+        // its account (#2138).
+        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         let app = try await open(["legacy": true], waitFor: 48, size: "UICTContentSizeCategoryAccessibilityXXXL")
         let retry = app.buttons["lark.history.retry"]
         // Rows are tall at this size: a quick flick each time to reach the top.

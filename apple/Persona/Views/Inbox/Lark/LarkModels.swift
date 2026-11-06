@@ -197,9 +197,11 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     var reactions: [LarkReaction]?
     var clientID: String?
     var localState: String?
+    /// Small lines under the body a messaging source adds (「[removed] · 已解码」, 「加密消息 · 对外展示」), #2138.
+    var decorations: [LarkDecoration]? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, position, type, text, recalled, retained, edited, parts, reactions, olk, deleted
+        case id, position, type, text, recalled, retained, edited, parts, reactions, olk, deleted, decorations
         case canPin = "can_pin", canUnpin = "can_unpin", threadID = "thread_id", threadKind = "thread_kind"
         case editHistory = "edit_history"
         case senderID = "sender_id", senderName = "sender_name", senderAvatar = "sender_avatar", senderType = "sender_type"
@@ -210,6 +212,13 @@ nonisolated struct LarkMessage: Codable, Identifiable, Hashable, Sendable {
     }
 
     var isSystem: Bool { type == "SYSTEM" || (parts?.first?.metaBool("system") ?? false) }
+}
+
+/// A line under a message's body, from its messaging source: words, a symbol of the fixed set, a tone.
+nonisolated struct LarkDecoration: Codable, Hashable, Sendable {
+    var text: String
+    var icon: String?
+    var tone: String?
 }
 
 /// A message inside a merge-forward card: the Lark gateway's own `MessageView` shape (camelCase), media already
@@ -285,22 +294,33 @@ extension APIClient {
         var `default`: Int
     }
     /// The accounts on the hub's Lark gateway; a hub from before there were several answers 404.
-    func larkAccounts() async throws -> LarkAccounts { try await get("/api/v1/lark/accounts") }
+    func larkAccounts() async throws -> LarkAccounts {
+        if let source = messagingSource {
+            return try await messagingCall {
+                try await messagingGet(source, "accounts") { MessagingShape.accounts($0, source: source) }
+            }
+        }
+        return try await get("/api/v1/lark/accounts")
+    }
 
     /// One page of a feed scope: `chats` (Messages), `unread`, `done` (Done), `label:<id>`.
     func larkConversations(scope: String = "chats", cursor: String? = nil) async throws -> LarkConversations {
-        try await get("/api/v1/lark/conversations", query: ["scope": scope, "cursor": cursor ?? "", "limit": "60"])
+        if let source = messagingSource, scope == "chats" { return try await messagingConversations(source, cursor: cursor, pinned: false) }
+        return try await get("/api/v1/lark/conversations", query: ["scope": scope, "cursor": cursor ?? "", "limit": "60"])
     }
     /// The browser opts into account checks without changing inbox or prefetch reads.
     func larkConversationPage(cursor: String?, accountID: String) async throws -> LarkConversations {
-        try await get("/api/v1/lark/conversations", query: ["scope": "chats", "cursor": cursor ?? "", "limit": "60",
+        if let source = messagingSource { return try await messagingConversations(source, cursor: cursor, pinned: false) }
+        return try await get("/api/v1/lark/conversations", query: ["scope": "chats", "cursor": cursor ?? "", "limit": "60",
             "account_bound": "1", "account_id": accountID])
     }
     func larkPinnedSnapshot() async throws -> LarkConversations {
-        try await get("/api/v1/lark/pinned", query: ["account_bound": "1"])
+        if let source = messagingSource { return try await messagingConversations(source, cursor: nil, pinned: true) }
+        return try await get("/api/v1/lark/pinned", query: ["account_bound": "1"])
     }
     func larkPinned() async throws -> [LarkConversation] {
-        try await get("/api/v1/lark/pinned", as: LarkConversations.self).conversations
+        if let source = messagingSource { return try await messagingConversations(source, cursor: nil, pinned: true).conversations }
+        return try await get("/api/v1/lark/pinned", as: LarkConversations.self).conversations
     }
     func larkLabels() async throws -> [LarkLabel] {
         struct R: Decodable { var labels: [LarkLabel] }
@@ -323,14 +343,20 @@ extension APIClient {
     /// a topic group's threads with `topic`.
     /// Decoded off the main thread: an open chat asks again on every change in it, and a page of cards takes a few ms.
     func larkMessages(_ id: String, before: String? = nil, after: String? = nil, around: String? = nil, topic: Bool = false) async throws -> LarkMessages {
-        try await getDecodedOffMain("/api/v1/lark/conversations/\(id)/messages",
+        if let source = messagingSource {
+            return try await messagingMessages(source, id, before: before, after: after, around: around, topic: topic)
+        }
+        return try await getDecodedOffMain("/api/v1/lark/conversations/\(id)/messages",
                                     query: ["before": before ?? "", "after": after ?? "", "around": around ?? "", "limit": "40", "topic": topic ? "1" : ""])
     }
     /// Replies in one message's thread (decoded off the main thread, like `larkMessages`).
     /// A page of a thread, oldest first: the newest `limit` replies, or those before `before`. The Lark gateway puts the thread's
     /// first message (a topic) in front of every page (`replies(of:)` drops it).
     func larkThread(_ messageID: String, before: String? = nil, limit: Int = 60) async throws -> LarkMessages {
-        try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": String(limit)])
+        if let source = messagingSource {
+            return try await messagingMessages(source, messageID, before: before, after: nil, around: nil, topic: false, thread: true, limit: limit)
+        }
+        return try await getDecodedOffMain("/api/v1/lark/messages/\(messageID)/thread", query: ["before": before ?? "", "limit": String(limit)])
     }
     struct LarkText: Encodable {
         var text: String
@@ -345,7 +371,8 @@ extension APIClient {
     static let larkSendTimeout: TimeInterval = 45
     @discardableResult
     func larkSend(_ id: String, text: String, clientID: String? = nil, mentions: [LarkMention] = []) async throws -> LarkSendReceipt {
-        try await post("/api/v1/lark/conversations/\(id)/messages",
+        if let source = messagingSource { return try await messagingSend(source, id, text: text, clientID: clientID, mentions: mentions) }
+        return try await post("/api/v1/lark/conversations/\(id)/messages",
                        body: LarkText(text: text, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
                        timeout: Self.larkSendTimeout)
     }
@@ -359,8 +386,12 @@ extension APIClient {
     }
     /// A reply to one message: quoted in its chat, or in its thread. Same idempotency and timeout as `larkSend`.
     @discardableResult
-    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil, mentions: [LarkMention] = []) async throws -> LarkSendReceipt {
-        try await post("/api/v1/lark/messages/\(messageID)/replies",
+    func larkReply(messageID: String, text: String, thread: Bool, clientID: String? = nil, mentions: [LarkMention] = [],
+                   feed: String? = nil) async throws -> LarkSendReceipt {
+        if let source = messagingSource, let feed {
+            return try await messagingSend(source, feed, text: text, clientID: clientID, mentions: mentions, replyTo: messageID, thread: thread)
+        }
+        return try await post("/api/v1/lark/messages/\(messageID)/replies",
                        body: LarkReplyBody(text: text, thread: thread, clientID: clientID, mentions: mentions.isEmpty ? nil : mentions),
                        timeout: Self.larkSendTimeout)
     }
@@ -368,11 +399,53 @@ extension APIClient {
     /// A chat's members for the @ picker: all of them for an empty `query`, else the hub's search (name, group
     /// nickname, pinyin).
     func larkMembers(_ id: String, query: String, limit: Int = 30) async throws -> LarkMembers {
-        try await get("/api/v1/lark/conversations/\(id)/members", query: ["q": query, "limit": String(limit)])
+        if let source = messagingSource {
+            return try await messagingCall {
+                try await messagingGet(source, "conversations/\(id)/members", query: ["q": query, "limit": String(limit)]) { [account = messagingAccount] raw in
+                    guard var o = raw as? [String: Any] else { return raw }
+                    o["members"] = (o["members"] as? [[String: Any]] ?? []).map { m in
+                        var x: [String: Any] = ["user_id": m["id"] ?? "", "name": m["name"] ?? ""]
+                        if let a = m["avatar"] { x["avatar"] = MessagingShape.media(a, source: source, account: account) }
+                        return x
+                    }
+                    return o
+                }
+            }
+        }
+        return try await get("/api/v1/lark/conversations/\(id)/members", query: ["q": query, "limit": String(limit)])
     }
     /// Reports what the reader has seen (never sent just for opening a chat).
-    func larkRead(_ id: String, _ report: LarkReadReport) async throws { try await post("/api/v1/lark/conversations/\(id)/read", body: report) }
-    func larkEmojis() async throws -> LarkEmojis { try await get("/api/v1/lark/emojis") }
+    func larkRead(_ id: String, _ report: LarkReadReport) async throws {
+        if let source = messagingSource {
+            struct Body: Encodable { var position: String; var message_ids: [String]? }
+            // A source takes at most 100 ids at a time (docs/extension-messaging.md): a long read goes in turns.
+            let ids = report.messageIDs ?? []
+            let batches: [[String]?] = ids.isEmpty ? [report.messageIDs]
+                : stride(from: 0, to: ids.count, by: 100).map { Array(ids[$0 ..< min($0 + 100, ids.count)]) }
+            for batch in batches {
+                _ = try await messagingCall {
+                    try await request("POST", messagingPath(source, "conversations/\(id)/read"), query: messagingQuery(),
+                                      body: Body(position: report.position, message_ids: batch))
+                }
+            }
+            return
+        }
+        try await post("/api/v1/lark/conversations/\(id)/read", body: report)
+    }
+    func larkEmojis() async throws -> LarkEmojis {
+        if let source = messagingSource {
+            return try await messagingGet(source, "emojis") { raw in
+                guard var o = raw as? [String: Any], let e = o["emojis"] as? [String: [String: Any]] else { return raw }
+                // Looked up lowercased (LarkMedia.emoji), as the old API sent them; the keys sent back (reactions, the
+                // picker's groups) keep the source's own spelling.
+                o["emojis"] = Dictionary(e.map { k, v in
+                    (k.lowercased(), ["label": v["label"] ?? "", "url": MessagingShape.media(v["url"], source: source, account: nil) ?? ""] as [String: Any])
+                }, uniquingKeysWith: { a, _ in a })
+                return o
+            }
+        }
+        return try await get("/api/v1/lark/emojis")
+    }
     /// Presses a callback button on a card, as the user.
     func larkCardAction(message: String, action: String) async throws {
         try await post("/api/v1/lark/messages/\(message)/card-actions/\(action)")
@@ -381,27 +454,64 @@ extension APIClient {
     // MARK: People, reactions, link previews, Moments
 
     func larkProfile(_ userID: String, feedID: String? = nil) async throws -> LarkProfile {
-        try await get("/api/v1/lark/users/\(userID)", query: ["feed_id": feedID ?? ""])
+        if let source = messagingSource {
+            return try await messagingCall {
+                try await messagingGet(source, "users/\(userID)", query: ["conversation": feedID ?? ""]) { [account = messagingAccount] raw in
+                    MessagingShape.profile(raw, source: source, account: account)
+                }
+            }
+        }
+        return try await get("/api/v1/lark/users/\(userID)", query: ["feed_id": feedID ?? ""])
     }
     /// The 1:1 chat with a user (created when there is none yet).
     func larkDirectChat(_ userID: String) async throws -> String {
+        if let source = messagingSource {
+            struct R: Decodable { var conversation_id: String }
+            return try await messagingCall {
+                try JSON.decoder.decode(R.self, from: await request("POST", messagingPath(source, "users/\(userID)/chat"),
+                                                                    query: messagingQuery(), body: [String: String]())).conversation_id
+            }
+        }
         struct R: Decodable { var feed_id: String }
         return try await post("/api/v1/lark/users/\(userID)/chat", as: R.self).feed_id
     }
     struct LarkReact: Encodable { var key: String; var remove: Bool }
     func larkReact(_ messageID: String, key: String, remove: Bool) async throws {
+        if let source = messagingSource {
+            _ = try await messagingCall {
+                try await request("POST", messagingPath(source, "messages/\(messageID)/reactions"), query: messagingQuery(),
+                                  body: LarkReact(key: key, remove: remove))
+            }
+            return
+        }
         try await post("/api/v1/lark/messages/\(messageID)/reactions", body: LarkReact(key: key, remove: remove))
     }
     func larkQuickReactions() async throws -> [String] {
         struct R: Decodable { var keys: [String] }
+        if let source = messagingSource { return try await messagingGet(source, "reactions/quick", as: R.self) { $0 }.keys }
         return try await get("/api/v1/lark/reactions/quick", as: R.self).keys
     }
     func larkURLPreview(message: String, url: String) async throws -> LarkURLPreview {
-        try await get("/api/v1/lark/messages/\(message)/url-preview", query: ["url": url])
+        if let source = messagingSource {
+            return try await messagingGet(source, "messages/\(message)/url-preview", query: ["url": url]) { [account = messagingAccount] raw in
+                MessagingShape.urlPreview(raw, source: source, account: account)
+            }
+        }
+        return try await get("/api/v1/lark/messages/\(message)/url-preview", query: ["url": url])
     }
-    func larkMomentsPost(_ id: String) async throws -> LarkMomentsPost { try await get("/api/v1/lark/moments/posts/\(id)") }
+    func larkMomentsPost(_ id: String) async throws -> LarkMomentsPost {
+        if let source = messagingSource {
+            return try await messagingGet(source, "posts/\(id)") { [account = messagingAccount] in MessagingShape.post($0, source: source, account: account) }
+        }
+        return try await get("/api/v1/lark/moments/posts/\(id)")
+    }
     func larkMomentsComments(_ id: String) async throws -> [LarkMomentsComment] {
         struct R: Decodable { var comments: [LarkMomentsComment] }
+        if let source = messagingSource {
+            return try await messagingGet(source, "posts/\(id)/comments", as: R.self) { [account = messagingAccount] in
+                MessagingShape.postComments($0, source: source, account: account)
+            }.comments
+        }
         return try await get("/api/v1/lark/moments/posts/\(id)/comments", as: R.self).comments
     }
 }

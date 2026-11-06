@@ -69,6 +69,16 @@ final class LarkTopicReplies {
         want(topic)
     }
 
+    /// What the cards show is out of date as a whole (a messaging source's display settings changed: it sends retained
+    /// recalls and edits by them now, #2138; LarkSync.displayStale, which is rare): every topic read before is read
+    /// again.
+    func stale() {
+        for (id, p) in previews where reading[id] == nil && !waiting.contains(where: { $0.id == id }) {
+            waiting.append((id, p.count))
+        }
+        next()
+    }
+
     /// The card went off screen before its turn came: not read for now (nor again after a read under way).
     func drop(_ id: String) {
         waiting.removeAll { $0.id == id }

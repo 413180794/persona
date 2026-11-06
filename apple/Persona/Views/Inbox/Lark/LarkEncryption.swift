@@ -123,6 +123,7 @@ extension LarkMessage {
         try c.encodeIfPresent(clientID, forKey: .clientID)
         try c.encodeIfPresent(localState, forKey: .localState)
         try c.encodeIfPresent(olk?.cached, forKey: .olk)
+        try c.encodeIfPresent(decorations, forKey: .decorations)
     }
 }
 

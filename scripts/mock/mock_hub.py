@@ -11763,7 +11763,8 @@ class H(BaseHTTPRequestHandler):
             return self.upload()
         self.last_body = self.body()
         p = urlparse(self.path).path
-        if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith("/api/v1/extensions/%s/-/ui/" % lark_messaging.EXTENSION)) and \
+        if MOCK_MESSAGING and (p.startswith("/api/v1/messaging") or p.startswith(tuple(
+                "/api/v1/%s/%s/-/ui/" % (kind, lark_messaging.EXTENSION) for kind in ("extensions", "plugins")))) and \
                 lark_messaging.route(self, self.command, p, parse_qs(urlparse(self.path).query), self.last_body): return
         if pins_route(self, p): return
         if file_ops_route(self, p, self.last_body): return

@@ -8,6 +8,7 @@ larkext/-/ui/display).
 """
 import base64
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -172,7 +173,7 @@ def part(p):
     if kind == "emotion":
         if p.get("url"):
             return {"kind": "sticker", "media": media(p["url"]), "text": text}
-        return {"kind": "emoji", "key": (p.get("refId") or text or "?").lower(), "text": text or p.get("refId") or ""}
+        return {"kind": "emoji", "key": (p.get("refId") or text or "?").upper(), "text": text or p.get("refId") or ""}
     if kind == "interactive" and meta.get("richTag") == 32:
         return {"kind": "divider"}
     if kind == "image" and p.get("url"):
@@ -234,11 +235,136 @@ def card(p):
         if fields:
             out["fields"] = fields[:12]
         return out
-    title = (meta.get("header") or {}).get("title") if isinstance(meta.get("header"), dict) else None
-    title = title or meta.get("title") or p.get("text") or "卡片"
-    text = p.get("text") or ""
-    items = [{"type": "text", "text": text[:2000]}] if text and text != title else []
-    return {"kind": "card", "text": str(title)[:2000], "view": {"sections": [{"title": str(title)[:2000], "items": items or [{"type": "text", "text": str(title)[:2000], "style": "secondary"}]}]}}
+    view, words = card_view(meta, p.get("text") or "")
+    return {"kind": "card", "text": words[:2000], "view": view}
+
+
+_CARD_INLINE = {"plain_text", "link", "at", "at_all", "person", "person_v1", "person_list", "code_span", "emoji", "br",
+                "local_datetime", "markdown_emphasis", "markdown_font", "markdown_fallback", "text_tag", "number_tag",
+                "standard_icon", "custom_icon", "ud_icon"}
+
+
+def _kids(n):
+    return [c for c in (n.get("children") or []) if isinstance(c, dict)]
+
+
+def _plain(n):
+    """All the text a card node and its children show (the extension's cardNode.plain)."""
+    kids = _kids(n)
+    if not kids:
+        return "\n" if n.get("tag") == "br" else str(n.get("text") or "")
+    out = "".join(_plain(k) for k in kids)
+    return out or str(n.get("text") or "")
+
+
+def _columns_line(n):
+    """A column_set of short columns as one line (the extension's columnsLine); "" when they are layout."""
+    cols = []
+    for c in _kids(n):
+        words = [w for w in (_plain(k).strip() for k in _kids(c)) if w]
+        line = " ".join(words)
+        if len(words) > 3 or len(line) > 40 or "\n" in line:
+            return ""
+        if line:
+            cols.append(line)
+    return " · ".join(cols)
+
+
+def card_view(meta, text):
+    """The extension's cardView (the Lark extension's messaging_convert.go): the header as the section's title, inline runs as
+    paragraphs, lists, table rows, panels and a div's fields as lines, dividers, https links and pressable buttons."""
+    title = ""
+    header = meta.get("header")
+    if isinstance(header, dict):
+        texts = [_plain(k).strip() for k in _kids(header) if k.get("tag") == "plain_text"]
+        title = texts[0] if texts else ""
+    if not title and not meta.get("hideHeader"):
+        title = str(meta.get("title") or "")
+    items, run = [], []
+
+    def flush():
+        s = "".join(run).strip()
+        if s and len(items) < 60:
+            items.append({"type": "text", "text": s[:2000]})
+        run.clear()
+
+    def walk(nodes):
+        for n in nodes:
+            tag = n.get("tag")
+            if tag == "collapse_divider":
+                continue
+            if tag in _CARD_INLINE:
+                run.append(_plain(n))
+            elif tag in ("hr", "divider"):
+                flush()
+                items.append({"type": "divider"})
+            elif tag == "button":
+                flush()
+                label = _plain(n).strip() or "打开"
+                url, action = str(n.get("url") or ""), str(n.get("actionId") or "")
+                if url.startswith("https://"):
+                    items.append({"type": "link", "title": label[:2000], "url": url})
+                elif action and _int(n.get("actionMethod")) == 2 and not n.get("disabled") and len(action) <= 128:
+                    items.append({"type": "button", "title": label[:2000], "action": {"id": action}})
+            elif tag in ("img", "image", "img_combination", "chart"):
+                flush()
+            elif tag == "list":
+                flush()
+                counters = {}
+                for item in n.get("items") or []:
+                    if not isinstance(item, dict):
+                        continue
+                    level = _int(item.get("level")) or 0
+                    counters = {k: v for k, v in counters.items() if k <= level}
+                    marker = ["•", "◦", "▪︎"][min(max(level, 0), 2)]
+                    if item.get("type") == "ol":
+                        counters[level] = counters.get(level, 0) + 1
+                        marker = "%d." % counters[level]
+                    line = _plain(item).strip()
+                    if line:
+                        run.append(marker + " " + line)
+                        flush()
+            elif tag == "column_set" and _columns_line(n):
+                flush()
+                run.append(_columns_line(n))
+                flush()
+            elif tag == "markdown_table_row":
+                flush()
+                run.append(" | ".join(_plain(c).strip() for c in _kids(n)))
+                flush()
+            elif tag == "collapsible_panel":
+                flush()
+                if isinstance(n.get("header"), dict):
+                    run.append(_plain(n["header"]))
+                    flush()
+                walk(_kids(n))
+                flush()
+            elif tag == "div":
+                flush()
+                if _kids(n):
+                    walk(_kids(n))
+                else:
+                    run.append(str(n.get("text") or ""))
+                flush()
+                for f in n.get("fields") or []:
+                    if isinstance(f, dict):
+                        run.append(_plain(f))
+                        flush()
+            else:
+                flush()
+                if _kids(n):
+                    walk(_kids(n))
+                else:
+                    run.append(str(n.get("text") or ""))
+                flush()
+
+    if isinstance(meta.get("body"), dict):
+        walk(_kids(meta["body"]))
+    flush()
+    words = "\n".join(str(f) for f in (meta.get("fallback") or []) if f) or text or title
+    if not items:
+        items = [{"type": "text", "text": (words or "卡片")[:2000], "style": "secondary"}]
+    return {"sections": [{"title": title[:2000], "items": items}]}, words
 
 
 def parts_of(raw):
@@ -336,13 +462,13 @@ def message(m, display):
         elif climb_decode_whole(summary.strip()) is not None:
             summary = ""
         out["reply_to"] = {"id": r["id"], "sender_name": r.get("sender_name") or "", "summary": summary[:2000]}
-        if r.get("recalled"):
-            out["reply_to"]["recalled"] = True
+        if r.get("recalled") and display.get("anti_recall") and r.get("retained"):
+            out["reply_to"]["recalled"] = True  # the summary is the kept words (the extension's mark, docs「五」)
     count = m.get("thread_reply_count") or 0
     if count:
         out["thread"] = {"count": count}
     if m.get("reactions"):
-        out["reactions"] = [{"key": str(x.get("key", "")).lower(), "count": x.get("count") or 0,
+        out["reactions"] = [{"key": str(x.get("key", "")).upper(), "count": x.get("count") or 0,
                              **({"mine": True} if x.get("mine") else {}), **({"users": x["users"][:20]} if x.get("users") else {})}
                             for x in m["reactions"] if x.get("key")]
     if m.get("edited"):
@@ -457,7 +583,8 @@ def route(handler, method, path, query, body):
     """Serve /api/v1/messaging[/lark/…]; False when the path is not the protocol's."""
     if path == "/api/v1/messaging" and method == "GET":
         return handler.send_json({"sources": [source()]}) or True
-    if path.startswith("/api/v1/extensions/%s/-/ui/display" % EXTENSION) and method == "POST":
+    # The hub serves an extension's pages under both /api/v1/extensions and the older /api/v1/plugins (extension_compat).
+    if any(path.startswith("/api/v1/%s/%s/-/ui/display" % (p, EXTENSION)) for p in ("extensions", "plugins")) and method == "POST":
         return settings_page(handler, body) or True
     prefix = "/api/v1/messaging/%s/" % SOURCE
     if not path.startswith(prefix):
@@ -483,11 +610,10 @@ def route(handler, method, path, query, body):
                                   "signed_in": status == 200 and not s.get("error"), **({"name": s["name"]} if s.get("name") else {}),
                                   **({"error": s["error"]} if s.get("error") else {}), "modes": modes}) or True
     if method == "GET" and rest == "me":
-        status, a = lark.json("GET", "/raw/accounts")
-        active = next((x for x in a.get("accounts") or [] if x.get("id") == a.get("activeId") or x.get("active")), None)
-        if status != 200 or not active:
-            return _error(handler, status if status != 200 else 502, a) or True
-        return handler.send_json({"account": account or "1", "user_id": active.get("userId") or ""}) or True
+        user = me(lark)
+        if not user:
+            return handler.send_json({"error": "飞书未登录", "code": "not_signed_in"}, 502) or True
+        return handler.send_json({"account": account or "1", "user_id": user}) or True
     if method == "GET" and rest == "accounts":
         status, a = lark.json("GET", "/accounts")
         if status != 200:
@@ -513,7 +639,7 @@ def route(handler, method, path, query, body):
         disp = _display(lark)
         for x in out["conversations"]:
             x["preview"] = (climb_decode(x["preview"]) or x["preview"]) if disp.get("brave_climb_codec") else (
-                "" if climb_decode_whole(x["preview"].strip()) is not None else x["preview"])
+                "[removed]编码消息" if climb_decode_whole(x["preview"].strip()) is not None else x["preview"])
         return handler.send_json(out) or True
     if len(seg) == 3 and seg[0] == "conversations" and seg[2] == "messages" and method == "GET":
         q = {k: q1(k) for k in ("before", "after", "around", "limit", "topic") if q1(k)}
@@ -566,7 +692,12 @@ def route(handler, method, path, query, body):
     if len(seg) >= 3 and seg[0] == "conversations" and seg[2] == "pins":
         return pins(handler, lark, seg, method, query, body) or True
     if len(seg) == 3 and seg[0] == "messages" and seg[2] == "reactions" and method == "POST":
-        lark.json("POST", "/messages/%s/reactions" % seg[1], body=json.loads(body or b"{}"))
+        # Keys are the vendor's own spelling (upper case, as the real extension passes Feishu's on); the mock's old
+        # routes keep them lower case.
+        req = json.loads(body or b"{}")
+        if isinstance(req.get("key"), str):
+            req["key"] = req["key"].lower()
+        lark.json("POST", "/messages/%s/reactions" % seg[1], body=req)
         return handler.send_json({}) or True
     if len(seg) == 4 and seg[0] == "messages" and seg[2] == "actions" and method == "POST":
         lark.json("POST", "/messages/%s/card-actions/%s" % (seg[1], seg[3]), body={})
@@ -581,12 +712,13 @@ def route(handler, method, path, query, body):
                                   **({"author": {"name": cardx["author"], **({"avatar": media(cardx["avatarUrl"])} if cardx.get("avatarUrl") else {})}} if cardx.get("author") else {})}) or True
     if method == "GET" and rest == "emojis":
         status, r = lark.json("GET", "/emojis")
-        return handler.send_json({"emojis": {k.lower(): {"label": v.get("label", k), **({"url": media(v["url"])} if v.get("url") else {})}
+        groups = [dict(g, keys=[str(k).upper() for k in g.get("keys") or []]) for g in r.get("groups") or []]
+        return handler.send_json({"emojis": {k.upper(): {"label": v.get("label", k), **({"url": media(v["url"])} if v.get("url") else {})}
                                              for k, v in (r.get("emojis") or {}).items()},
-                                  **({"groups": r["groups"]} if r.get("groups") else {})}) or True
+                                  **({"groups": groups} if groups else {})}) or True
     if method == "GET" and rest == "reactions/quick":
         status, r = lark.json("GET", "/reactions/quick")
-        return handler.send_json({"keys": [k.lower() for k in r.get("keys") or []]}) or True
+        return handler.send_json({"keys": [k.upper() for k in r.get("keys") or []]}) or True
     if len(seg) == 2 and seg[0] == "users" and method == "GET":
         status, r = lark.json("GET", "/users/" + seg[1], {"feed_id": q1("conversation")} if q1("conversation") else None)
         if status != 200:
@@ -618,6 +750,18 @@ def route(handler, method, path, query, body):
                                                 "parts": [{"kind": "text", "text": c.get("content") or ""}], **({"hot": True} if c.get("isHot") else {})}
                                                for c in r.get("comments") or []]}) or True
     return handler.send_json({"error": "no such messaging route", "code": "not_found"}, 404) or True
+
+
+def me(lark):
+    """Who the account is: the mock's account-bound lists say (the pins fixture changes it), else the gateway's accounts
+    (the history fixture, MOCK_LARK_HISTORY, changes those: an account switch while a page is on its way)."""
+    if not os.environ.get("MOCK_LARK_HISTORY"):
+        _, bound = lark.json("GET", "/pinned", {"account_bound": "1"})
+        if bound.get("account_id"):
+            return bound["account_id"]
+    status, a = lark.json("GET", "/raw/accounts")
+    active = next((x for x in a.get("accounts") or [] if x.get("id") == a.get("activeId") or x.get("active")), None)
+    return (active or {}).get("userId") if status == 200 else None
 
 
 def profile(uid, r):
@@ -655,7 +799,7 @@ def post(r):
     parts = []
     for s in segs:
         if s.get("kind") == "emotion":
-            parts.append({"kind": "emoji", "key": (s.get("emojiKey") or s.get("key") or "?").lower(), "text": s.get("text") or ""})
+            parts.append({"kind": "emoji", "key": (s.get("emojiKey") or s.get("key") or "?").upper(), "text": s.get("text") or ""})
         elif s.get("text"):
             parts.append({"kind": "text", "text": s["text"]})
     if not parts and (r.get("content") or {}).get("text"):
@@ -667,7 +811,7 @@ def post(r):
     if imgs:
         out["images"] = imgs[:30]
     if r.get("reactionGroups"):
-        out["reactions"] = [{"key": str(g.get("type", "")).lower(), "count": g.get("count") or 0, **({"mine": True} if g.get("selfInvolved") else {})}
+        out["reactions"] = [{"key": str(g.get("type", "")).upper(), "count": g.get("count") or 0, **({"mine": True} if g.get("selfInvolved") else {})}
                             for g in r["reactionGroups"] if g.get("type")]
     if isinstance(r.get("commentCount"), int):
         out["comment_count"] = r["commentCount"]
@@ -680,9 +824,8 @@ def send(handler, lark, feed, body):
     req = json.loads(body or b"{}")
     text, mode = req.get("text") or "", req.get("mode") or ""
     if req.get("expect_user"):
-        _, a = lark.json("GET", "/raw/accounts")
-        active = next((x for x in a.get("accounts") or [] if x.get("id") == a.get("activeId") or x.get("active")), {})
-        if active.get("userId") and active["userId"] != req["expect_user"]:
+        user = me(lark)
+        if user and user != req["expect_user"]:
             return handler.send_json({"error": "飞书账号已切换，消息没有发出", "code": "account_changed"}, 409)
     if mode == "sealed":
         prepared = SEALED.pop(req.get("prepared") or "", None)
@@ -699,7 +842,7 @@ def send(handler, lark, feed, body):
         return handler.send_json({k: last[k] for k in ("message_id",) if last.get(k)})
     if mode == "brave_climb":
         if not _display(lark).get("brave_climb_codec"):
-            return handler.send_json({"error": "", "code": "unsupported"}, 403)
+            return handler.send_json({"error": "请先在设置里开启[removed]编码", "code": "unsupported"}, 403)
         text = climb_encode(text)
         req["mentions"] = []
     out = {"text": text, "client_id": req["client_id"]}
@@ -841,7 +984,7 @@ def settings_page(handler, body):
                 toast = "设置已变化，请重新读取"
     rows = [("anti_recall", "防撤回", "查看飞书网关已留存的撤回内容，保留「已撤回」标记。"),
             ("show_edit_history", "编辑历史", "点击消息下方的「已编辑」，查看已留存的旧版本。"),
-            ("brave_climb_codec", "", "")]
+            ("brave_climb_codec", "[removed]编码", "开启后聊天里的[removed]编码文字还原显示，输入框可以选它发送。")]
     items = []
     for key, title, sub in rows:
         if key in d:

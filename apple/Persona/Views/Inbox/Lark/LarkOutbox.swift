@@ -24,6 +24,10 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
     var canRetry: Bool { state != .sent && (attachment?.kind != .file || state != .unconfirmed) }
     /// Who Feishu notifies (the @ picker), kept for Resend and Back to Composer.
     var mentions: [LarkMention] = []
+    /// The message box mode it goes in on a messaging source (`brave_climb`…, #2138): the source handles the text.
+    var mode: String? = nil
+    /// What the source's `compose` gave for a mode that prepares (sealed): sent with it, once.
+    var prepared: String? = nil
     /// When it was first written, once a Resend has moved `at` on (nil until then).
     var firstAt: Date? = nil
     /// When it was written: where it stands among the chat's messages (LarkChatRows), whatever Resend did since.
@@ -53,6 +57,9 @@ nonisolated struct LarkOutgoing: Identifiable, Equatable, Sendable {
             message.olk = LarkEncryption(version: 1, state: "decrypted",
                 publicParts: [LarkPart(kind: "text", text: encrypted.cover ?? "")],
                 bodyParts: [LarkPart(kind: "text", text: text)])
+        } else if mode == "sealed" {
+            // A source's sealed message on its way: sealed here too (its cover was chosen in the source's sheet).
+            message.olk = LarkEncryption(version: 1, state: "decrypted", publicParts: [], bodyParts: [LarkPart(kind: "text", text: text)])
         }
         return message
     }
@@ -73,9 +80,21 @@ enum LarkOutbox {
             return try await api.larkSendAttachment(feed, attachment: attachment, clientID: o.clientID,
                                                     replyTo: o.replyTo?.id, thread: o.thread, threadRoot: o.threadRoot)
         }
+        // A mode (sealed, Brave Climb) is the source's to apply: without it the typed words must not go out as they are.
+        if o.mode != nil, api.messagingSource == nil {
+            throw APIError(status: 409, message: String(localized: "The message source is unavailable right now. This message wasn't sent."), fields: ["code": "lark_mode_unavailable"])
+        }
         if let reply = o.replyTo {
-            return try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions)
+            if let source = api.messagingSource {
+                return try await api.messagingSend(source, feed, text: o.text, clientID: o.clientID, mentions: o.mentions,
+                                                   replyTo: reply.id, thread: o.thread, mode: o.mode, prepared: o.prepared)
+            }
+            return try await api.larkReply(messageID: reply.id, text: o.text, thread: o.thread, clientID: o.clientID, mentions: o.mentions, feed: feed)
         } else {
+            if let source = api.messagingSource {
+                return try await api.messagingSend(source, feed, text: o.text, clientID: o.clientID, mentions: o.mentions,
+                                                   mode: o.mode, prepared: o.prepared)
+            }
             return try await api.larkSend(feed, text: o.text, clientID: o.clientID, mentions: o.mentions)
         }
     }

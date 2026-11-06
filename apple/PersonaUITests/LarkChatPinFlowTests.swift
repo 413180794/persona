@@ -86,9 +86,13 @@ final class LarkChatPinFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["lark.pins.retry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["lark.pin.1000"].exists)
         shot(app, "chat-pins-offline-keeps-rows")
-        _ = try await fixture(["offline": false, "error": "hub"])
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级 Hub")).firstMatch.waitForExistence(timeout: 10))
-        shot(app, "chat-pins-upgrade-hub")
+        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] != "1" { // an old hub: the old /api/v1/lark only (#2138)
+            _ = try await fixture(["offline": false, "error": "hub"])
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级 Hub")).firstMatch.waitForExistence(timeout: 10))
+            shot(app, "chat-pins-upgrade-hub")
+        } else {
+            _ = try await fixture(["offline": false])
+        }
         _ = try await fixture(["error": "upstream"])
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "升级飞书网关")).firstMatch.waitForExistence(timeout: 10))
         shot(app, "chat-pins-upgrade-gateway")

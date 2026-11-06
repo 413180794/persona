@@ -735,10 +735,10 @@ func (n *Node) assistantLarkEnv(cwd string) (env []string, release func()) {
 		}
 	}
 	skills := filepath.Join(cwd, ".claude", "skills")
-	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.signedInConnectors(), n.logger.Printf); err != nil {
+	if err := assistantskills.Sync(skills, assistantskills.UserDir(), n.signedInConnectors(cwd), n.logger.Printf); err != nil {
 		n.logger.Printf("assistant: skills: %v", err)
 	}
-	bin := filepath.Join(n.dir, "assistant-bin")
+	bin := n.assistantBin(cwd)
 	_ = os.MkdirAll(bin, 0o755)
 	env = []string{"PATH=" + bin + string(os.PathListSeparator) + os.Getenv("PATH"), "JARVIS_ASSISTANT_BIN=" + bin}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

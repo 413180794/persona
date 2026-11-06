@@ -197,7 +197,16 @@ nonisolated struct ConnectorDataDeleted: Codable, Sendable {
 }
 
 extension APIClient {
-    func larkStatus() async throws -> LarkStatus { try await get("/api/v1/lark/status") }
+    func larkStatus() async throws -> LarkStatus {
+        if let source = messagingSource {
+            return try await messagingGet(source, "status") { raw in
+                guard var o = raw as? [String: Any] else { return raw }
+                if (o["signed_in"] as? Bool) == false, o["error"] == nil { o["error"] = String(localized: "Not signed in to Lark") }
+                return o
+            }
+        }
+        return try await get("/api/v1/lark/status")
+    }
 
     func connectorLogin(_ id: String, step: String, values: [String: String]) async throws -> ConnectorPrompt {
         struct Body: Encodable { var step: String; var values: [String: String] }
@@ -468,7 +477,15 @@ struct FeishuConnectorView: View {
             }
 
             Section {
-                NavigationLink("Message Tweaks") { LarkMessageDisplaySettingsView() }
+                if let source = model.hub?.messagingSources.first, let page = source.settingsUi {
+                    NavigationLink("Message Tweaks") { ExtensionPageView(plugin: source.`extension`, ui: page, title: String(localized: "Message Tweaks")) }
+                } else if model.api?.messagingSource == nil {
+                    NavigationLink("Message Tweaks") { LarkMessageDisplaySettingsView() }
+                } else {
+                    // A source is in use but its list could not be read yet: not the old page (its switches are the
+                    // source's now), until the list comes.
+                    Text("Message Tweaks").foregroundStyle(.secondary)
+                }
             }
 
             Section("What Persona Does with Lark") {

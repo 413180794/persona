@@ -3,6 +3,16 @@ import Foundation
 
 nonisolated struct LarkEncryptedDraft: Codable, Hashable, Sendable {
     var cover = ""
+    /// A source's sealed message put back for sealing again after a send that may have gone (#2138): sent again as
+    /// the same message (its client_id), while its words and quote are still the ones put back (`digest`).
+    var again: Again? = nil
+
+    struct Again: Codable, Hashable, Sendable {
+        var id: UUID
+        var digest: String
+
+        static func digest(text: String, reply: String?) -> String { LarkOutboxIdentity.digest(text + "\u{0}" + (reply ?? "")) }
+    }
 }
 
 nonisolated struct LarkNativeEncryptionStatus: Decodable, Sendable {

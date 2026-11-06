@@ -35,6 +35,7 @@ extension APIClient {
     /// A primary account elsewhere in the list must never override the selected account.
     func larkAccountID() async throws -> String {
         if config.isDemo { return "demo" }
+        if let source = messagingSource { return try await messagingCall { try await messagingUser(source, refresh: true) } }
         struct Account: Decodable {
             var id: String
             var userId: String?

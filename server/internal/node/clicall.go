@@ -2,6 +2,8 @@ package node
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"maps"
 	"net"
 	"os"
@@ -53,21 +55,40 @@ func (n *Node) assistantOf(pid int, parent func(int) (int, error)) (string, bool
 	return "", false
 }
 
-// mayCall says whether the command lines may call tool: one of a connector signed in as of the last
+type assistantPrepareState struct {
+	connectors []string
+	clis       map[string]string // command name → connector id
+}
+
+// assistantPrepareDir gives prepare and running sessions the same key, including symlinked data directories.
+func assistantPrepareDir(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	return realPath(filepath.Clean(cwd))
+}
+
+// mayCall says whether this directory's command lines may call tool: one of a connector signed in as of its last
 // assistant.prepare ("<id>_…", the connector's own tools and its <id>_cli).
-func (n *Node) mayCall(tool string) bool {
-	return slices.ContainsFunc(n.signedInConnectors(), func(id string) bool { return strings.HasPrefix(tool, id+"_") })
+func (n *Node) mayCall(cwd, tool string) bool {
+	return slices.ContainsFunc(n.signedInConnectors(cwd), func(id string) bool { return strings.HasPrefix(tool, id+"_") })
 }
 
 // cliCall runs one of the command lines' calls (personad tool) on the hub as the assistant's, or refuses
 // it.
 func (n *Node) cliCall(ctx context.Context, c net.Conn, req sockRequest) proto.ToolResult {
-	if !n.mayCall(req.Name) {
-		return proto.ErrorResult(proto.ToolErrorUnavailable, req.Name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", 0)
-	}
 	session, ok := n.assistantCaller(c)
 	if !ok {
 		return proto.ErrorResult(proto.ToolErrorUnavailable, "这个命令只能在助手的对话里用：这个进程不是 Persona 为助手起的", 0)
+	}
+	n.mu.Lock()
+	cwd := ""
+	if p := n.procs[session]; p != nil {
+		cwd = p.cwd
+	}
+	n.mu.Unlock()
+	if !n.mayCall(cwd, req.Name) {
+		return proto.ErrorResult(proto.ToolErrorUnavailable, req.Name+" is not available: the command line calls only the tools of the hub's connectors that are signed in", 0)
 	}
 	if n.peer == nil {
 		return proto.ErrorResult(proto.ToolErrorUnavailable, "Persona hub error: not connected", 0)
@@ -79,19 +100,20 @@ func (n *Node) cliCall(ctx context.Context, c net.Conn, req sockRequest) proto.T
 	return res
 }
 
-// signedInConnectors are the hub's connectors signed in as of the last assistant.prepare: whose built-in skills the
-// assistant gets (assistantskills.Requires).
-func (n *Node) signedInConnectors() []string {
+// signedInConnectors are this directory's signed-in connectors as of its last assistant.prepare: whose built-in
+// skills the assistant gets (assistantskills.Requires). An unprepared directory gets none.
+func (n *Node) signedInConnectors(cwd string) []string {
+	key := assistantPrepareDir(cwd)
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return slices.Clone(n.connectors)
+	return slices.Clone(n.assistantPrepared[key].connectors)
 }
 
 // syncAssistantSkills puts the assistant's skills in its directory (cwd): the user's, and the built-in ones whose
 // connector is signed in; a connector's command line is on the assistant's PATH while it is. A runtime's directory (.agents/skills) is
 // kept the same once it is there.
 func (n *Node) syncAssistantSkills(cwd string) {
-	conns := n.signedInConnectors()
+	conns := n.signedInConnectors(cwd)
 	dirs := []string{filepath.Join(cwd, ".claude", "skills")}
 	if st, err := os.Stat(filepath.Join(cwd, ".agents", "skills")); err == nil && st.IsDir() {
 		dirs = append(dirs, filepath.Join(cwd, ".agents", "skills"))
@@ -101,14 +123,25 @@ func (n *Node) syncAssistantSkills(cwd string) {
 			n.logger.Printf("assistant: skills: %v", err)
 		}
 	}
-	n.writeCLIs(n.connectorCLIs())
+	n.writeCLIs(cwd, n.connectorCLIs(cwd))
 }
 
-// connectorCLIs are the signed-in connectors' command lines as of the last assistant.prepare (name → connector).
-func (n *Node) connectorCLIs() map[string]string {
+// connectorCLIs are this directory's signed-in connectors' command lines as of its last assistant.prepare.
+func (n *Node) connectorCLIs(cwd string) map[string]string {
+	key := assistantPrepareDir(cwd)
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	return maps.Clone(n.clis)
+	return maps.Clone(n.assistantPrepared[key].clis)
+}
+
+// assistantBin keeps the default assistant's existing PATH; every other directory gets its own wrappers so preparing
+// one manager cannot remove another's commands or change which connector a shared command name calls.
+func (n *Node) assistantBin(cwd string) string {
+	key := assistantPrepareDir(cwd)
+	if key == assistantPrepareDir(n.assistantDirOf(".jarvis/assistant")) {
+		return filepath.Join(n.dir, "assistant-bin")
+	}
+	return filepath.Join(n.dir, "assistant-bins", fmt.Sprintf("%x", sha256.Sum256([]byte(key))))
 }
 
 // cliMark is in every command line the node writes on the assistant's PATH: one it wrote and no longer has a
@@ -118,8 +151,8 @@ const cliMark = "# a connector's command line, on the assistant's PATH while it 
 // writeCLIs puts the signed-in connectors' command lines on the assistant's PATH (personad tool --cli <id>) and takes
 // away those whose connector is not, and the built-in Telegram's tg (personad tg) it wrote before Telegram became an
 // extension (#1704).
-func (n *Node) writeCLIs(clis map[string]string) {
-	bin := filepath.Join(n.dir, "assistant-bin")
+func (n *Node) writeCLIs(cwd string, clis map[string]string) {
+	bin := n.assistantBin(cwd)
 	want := map[string]string{}
 	for name, id := range clis {
 		want[name] = "#!/bin/sh\n" + cliMark + "\nexec " + shellQuote(n.bin) + " tool --cli " + shellQuote(id) + " \"$@\"\n"

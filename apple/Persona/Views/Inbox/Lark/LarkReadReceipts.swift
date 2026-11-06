@@ -130,6 +130,14 @@ extension APIClient {
     func larkReadStates(_ feed: String, ids: [String]) async throws -> [LarkReadState] {
         struct Body: Encodable { var message_ids: [String] }
         struct R: Decodable { var states: [LarkReadState]? }
+        if let source = messagingSource {
+            struct S: Decodable { var message_id: String; var read: Int; var unread: Int }
+            struct M: Decodable { var states: [S] }
+            let raw = try await messagingCall {
+                try await request("POST", messagingPath(source, "conversations/\(feed)/read-states"), query: messagingQuery(), body: Body(message_ids: ids))
+            }
+            return try JSON.decoder.decode(M.self, from: raw).states.map { LarkReadState(messageID: $0.message_id, readCount: $0.read, unreadCount: $0.unread) }
+        }
         return try await post("/api/v1/lark/conversations/\(feed)/read-states", body: Body(message_ids: ids), as: R.self).states ?? []
     }
 }

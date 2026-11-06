@@ -51,7 +51,9 @@ struct LarkCardView: View {
 
     var body: some View {
         let meta = part.metadata ?? .null
-        if meta["variant"]?.string != nil {
+        if meta["variant"]?.string == MessagingViewCard.variant {
+            MessagingViewCard(meta: meta, fallback: part.text ?? "")
+        } else if meta["variant"]?.string != nil {
             LarkSummaryCardView(meta: meta, fallbackTitle: part.text ?? "")
         } else {
             let theme = meta["theme"]?.string ?? "blue"

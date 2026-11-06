@@ -13,6 +13,13 @@ extension APIClient {
             var localState: String?
         }
         struct Reply: Decodable { var item: Proof }
+        if let source = messagingSource {
+            // A message id is the message's alone: mine, synced, and there is the proof (the conversation is not said).
+            struct Answer: Decodable { var message: Message }
+            struct Message: Decodable { var id: String; var mine: Bool; var state: String? }
+            let a = try JSON.decoder.decode(Answer.self, from: await request("GET", messagingPath(source, "messages/" + messageID), query: messagingQuery()))
+            return a.message.id == messageID && a.message.mine && a.message.state == nil
+        }
         let reply: Reply = try await get("/api/v1/lark/raw/messages/" + messageID)
         return reply.item.id == messageID && reply.item.feedId == feed && reply.item.isMine &&
             reply.item.localState != "pending" && reply.item.localState != "failed"

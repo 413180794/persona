@@ -16,6 +16,7 @@ final class LarkMessageDisplayFlowTests: XCTestCase {
         }
     }
     @MainActor private func configure(_ hub: String, enabled: Bool) throws {
+        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { return try configureSource(hub, enabled: enabled) }
         let app = launch(hub, settings: true)
         let entry = app.buttons["风灵月影"].firstMatch
         XCTAssertTrue(entry.waitForExistence(timeout: 20)); entry.tapCenter()
@@ -38,6 +39,29 @@ final class LarkMessageDisplayFlowTests: XCTestCase {
         try shot(app, enabled ? "trainer-settings-on" : "trainer-settings-off")
         app.terminate()
     }
+    /// On a messaging source the settings are its own page (extension_page `display`, #2138): set on the mock as another
+    /// device would, then the page shows them.
+    @MainActor private func configureSource(_ hub: String, enabled: Bool) throws {
+        let url = URL(string: hub + "/api/v1/lark/message-display")!
+        let now = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any] ?? [:]
+        for key in ["anti_recall", "show_edit_history"] where (now[key] as? Bool) != enabled {
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["account_id": now["account_id"] ?? "", "key": key, "value": enabled, "expected": !enabled])
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let done = expectation(description: key)
+            URLSession.shared.dataTask(with: req) { _, _, _ in done.fulfill() }.resume()
+            wait(for: [done], timeout: 10)
+        }
+        let app = launch(hub, settings: true)
+        let entry = app.buttons["风灵月影"].firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 20)); entry.tapCenter()
+        XCTAssertTrue(app.staticTexts["防撤回"].waitForExistence(timeout: 15), "the source's own settings page")
+        XCTAssertTrue(app.staticTexts[enabled ? "开" : "关"].firstMatch.waitForExistence(timeout: 10))
+        try shot(app, enabled ? "trainer-settings-on" : "trainer-settings-off")
+        app.terminate()
+    }
+
     private func change(_ hub: String, key: String, value: Bool) async throws {
         var req = URLRequest(url: URL(string: hub + "/api/v1/lark/message-display")!)
         req.httpMethod = "POST"

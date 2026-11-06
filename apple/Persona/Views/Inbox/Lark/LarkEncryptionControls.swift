@@ -9,6 +9,10 @@ struct LarkEncryptionModeBar: View {
     var checking = false
     var selectEncrypted: () -> Void
     var pickCover: () -> Void
+    /// The cover is picked here (the old API); a messaging source asks for it when sending (compose, #2138).
+    var picksCover = true
+    /// The source can send sealed messages now (its `modes`); a draft kept in the mode says it cannot.
+    var seals = true
 
     var body: some View {
         HStack(spacing: Theme.Space.m) {
@@ -31,7 +35,9 @@ struct LarkEncryptionModeBar: View {
                 .font(Theme.Font.label).lineLimit(1)
             }
             .accessibilityIdentifier("lark.encryption.mode")
-            if let draft {
+            if draft != nil, !picksCover {
+                Text(seals ? String(localized: "Public text is confirmed when sending") : String(localized: "The message source can't send encrypted messages right now")).font(Theme.Font.label).lineLimit(1)
+            } else if let draft {
                 Button(action: pickCover) {
                     Text(draft.cover.isEmpty ? String(localized: "Choose public text") : String(localized: "Public text: \(draft.cover)"))
                         .font(Theme.Font.label).lineLimit(1).truncationMode(.tail)

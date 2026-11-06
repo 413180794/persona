@@ -97,4 +97,13 @@ import Testing
         }
         #expect(own == nil)
     }
+
+    /// A messaging source's change (#2138): which source, which conversations, the account as the source names it.
+    @Test func aMessagingEventSaysWhichSourceAndAccount() throws {
+        let raw = #"{"type":"messaging","source":"lark","conversations":["c1"],"account":"2","settings_changed":true}"#
+        guard case .messaging(let source, let conversations, let settings, let account)? = ServerEvent.decode(Data(raw.utf8)) else {
+            Issue.record("not a messaging event"); return
+        }
+        #expect(source == "lark" && conversations == ["c1"] && settings && account == "2")
+    }
 }

@@ -253,6 +253,7 @@ private struct LarkTopicContent: View {
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
                     if parts != source { LarkBraveClimbMark() }
+                    if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }
         }

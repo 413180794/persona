@@ -335,6 +335,22 @@ final class AppModel {
         countBadges()
     }
 
+    /// Feishu conversations changed (the old API's `lark` event, or the messaging source's): the chats and lists
+    /// waiting for them read again; a change of the display settings is read too.
+    private func larkChanged(_ feedIDs: [String], settingsChanged: Bool, account: Int?, isHub: Bool, group: String) {
+        if isHub { LarkSync.shared.received(feedIDs, account: account) }
+        guard settingsChanged || feedIDs.isEmpty, let source = link(group) else { return }
+        // Message display settings are the hub's own account's (LarkMessageDisplay). A messaging source applies each
+        // account's itself (retained recalls, edit history, Brave Climb): what is on screen is read again for any (#2138).
+        let messaging = source.api.messagingSource != nil
+        guard account == nil || messaging else { return }
+        Task {
+            if account == nil { await source.larkDisplay.refresh(using: source.api) }
+            guard messaging else { return }
+            if settingsChanged { LarkSync.shared.displayChanged() } else { LarkSync.shared.everything() }
+        }
+    }
+
     /// Saves the registry, unless it could not be read: writing then would replace the real one (or delete it, empty).
     func saveRegistry(_ r: HubRegistry) {
         HubStore.save(r, known: !registryUnreadable)
@@ -1452,11 +1468,14 @@ final class AppModel {
         case .revs(let machineID, let revs):
             AgentSync.shared.revs(machine: MachineRef(group: group, id: machineID), revs)
         case .lark(let feedIDs, let settingsChanged, let account):
-            if isHub { LarkSync.shared.received(feedIDs, account: account) }
-            // Message display settings are the hub's own account's (LarkMessageDisplay).
-            if account == nil, settingsChanged || feedIDs.isEmpty, let source = link(group) {
-                Task { await source.larkDisplay.refresh(using: source.api) }
-            }
+            // With a messaging source the same change comes as its own event (#2138): this one is the old API's.
+            guard link(group)?.api.messagingSource == nil else { break }
+            larkChanged(feedIDs, settingsChanged: settingsChanged, account: account, isHub: isHub, group: group)
+        case .messaging(let source, let conversations, let settingsChanged, let account):
+            // An account the Feishu screens cannot name (their accounts are numbers) is no account of theirs, and not the
+            // hub's own either.
+            guard link(group)?.api.messagingSource == source, account.map({ Int($0) != nil }) ?? true else { break }
+            larkChanged(conversations, settingsChanged: settingsChanged, account: account.flatMap { Int($0) }, isHub: isHub, group: group)
         case .agents(let ids):
             if isHub { PersonalAgentSync.shared.received(ids) }
         case .inbox:
@@ -1564,6 +1583,7 @@ final class AppModel {
         case .hookEvent: "hook"
         case .revs: "revs"
         case .lark: "lark"
+        case .messaging: "messaging"
         case .agents: "agents"
         case .inbox: "inbox"
         case .todos: "todos"

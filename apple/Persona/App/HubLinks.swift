@@ -44,10 +44,45 @@ final class HubLink: Identifiable {
     }
     var isDemo: Bool { config.isDemo }
 
+    /// The hub's messaging sources (#2138, docs/extension-messaging.md): the Feishu screens go through the first.
+    private(set) var messagingSources: [ExtensionMessagingSource] = []
+
+    /// Reads the sources when the hub has the feature, forgets them when it does not.
+    func refreshMessagingSources(again: Bool = false) async {
+        let hub = config.url
+        guard features.contains("messaging") else {
+            messagingSources = []
+            if MessagingSources.set(nil, for: hub) { await sourceChanged() }
+            return
+        }
+        guard let raw = try? await api.request("GET", "/api/v1/messaging"),
+              let list = try? JSON.decoder.decode(ExtensionMessagingSources.self, from: raw) else { return }
+        // An extension starting again lists no source for a moment (a reconnect then): the one this hub had is let go
+        // only when it is still not there a little later.
+        if list.sources.isEmpty, !again, MessagingSources.source(for: hub) != nil {
+            try? await Task.sleep(for: .seconds(15))
+            await refreshMessagingSources(again: true)
+            return
+        }
+        messagingSources = list.sources
+        if MessagingSources.set(list.sources.first?.id, for: hub) { await sourceChanged() }
+    }
+
+    /// The Feishu screens moved between the old API and a source (a first launch reads before the hello came): their
+    /// settings and what is on screen are read again from the one they use now, nothing kept from the other.
+    private func sourceChanged() async {
+        await larkDisplay.refresh(using: api)
+        LarkSync.shared.displayChanged()
+    }
+
     func received(_ hello: HubHello) {
         self.hello = hello
         let f = Set(hello.features)
-        if f != features { features = f }
+        let changed = f != features
+        if changed { features = f }
+        // The sources are read again when the hub's features change (a source coming or going changes `messaging`), or
+        // while none is known; not on every reconnect.
+        if changed || messagingSources.isEmpty { Task { await refreshMessagingSources() } }
         let ext = f.contains("extensions")
         if !f.isEmpty, ext != Self.remembersExtensions(group) { UserDefaults.standard.set(ext, forKey: "hubExtensionsAPI." + group) }
     }

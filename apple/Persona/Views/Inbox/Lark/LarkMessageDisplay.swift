@@ -8,15 +8,20 @@ nonisolated struct LarkMessageDisplay: Codable, Equatable, Sendable {
     /// The Lark gateway's Brave Climb switch (#882); nil from a Feishu extension older than 0.10.0, which has no such setting:
     /// then Settings does not offer it and the words stay as they came.
     var braveClimb: Bool? = nil
+    /// A messaging source offers its sealed mode (`GET status` modes, #2138); nil on the old API, which checks its
+    /// encryption service when Encrypted message is chosen.
+    var sealed: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case accountID = "account_id", antiRecall = "anti_recall", showEditHistory = "show_edit_history"
-        case braveClimb = "brave_climb_codec"
+        case braveClimb = "brave_climb_codec", sealed
     }
     static let hidden = Self(accountID: "", antiRecall: false, showEditHistory: false)
 
     /// Brave Climb words are read and written: the switch is on.
     var climbs: Bool { braveClimb == true }
+    /// A messaging source's sealed messages can be sent.
+    var seals: Bool { sealed == true }
     /// A message's parts as the chat shows them: Brave Climb words decoded while the switch is on, as they came otherwise.
     func shown(_ parts: [LarkPart]) -> [LarkPart] { climbs ? LarkBraveClimb.decode(parts) ?? parts : parts }
     /// A message's text as the chat shows it (see `shown(_:)`).
@@ -75,6 +80,16 @@ extension EnvironmentValues {
 }
 
 extension APIClient {
+    /// On a messaging source the settings are the source's to apply (#2138): what it sends is shown, retained recalls
+    /// and edit history included; Brave Climb and Encrypted message can be chosen in the box while the source offers
+    /// the mode (`GET status`).
+    func messagingDisplay(_ source: String) async throws -> LarkMessageDisplay {
+        struct Status: Decodable { var modes: [String]? }
+        let user = try await messagingCall { try await messagingUser(source) }
+        let status = try JSON.decoder.decode(Status.self, from: await request("GET", messagingPath(source, "status"), query: messagingQuery()))
+        return LarkMessageDisplay(accountID: user, antiRecall: true, showEditHistory: true,
+                                  braveClimb: status.modes?.contains("brave_climb") == true, sealed: status.modes?.contains("sealed") == true)
+    }
     func larkMessageDisplay() async throws -> LarkMessageDisplay { try await get("/api/v1/lark/message-display") }
     func larkMessageDisplayChange(_ snapshot: LarkMessageDisplay, key: String, value: Bool, expected: Bool) async throws -> LarkMessageDisplay {
         struct Body: Encodable {
@@ -113,7 +128,9 @@ extension APIClient {
         while let api = pendingRefresh {
             pendingRefresh = nil
             do {
-                let next = try await api.larkMessageDisplay()
+                let next: LarkMessageDisplay
+                if let source = api.messagingSource { next = try await api.messagingDisplay(source) }
+                else { next = try await api.larkMessageDisplay() }
                 // A change arrived after this read began. Only publish the subsequent read.
                 guard pendingRefresh == nil else { continue }
                 guard !next.accountID.isEmpty else { throw LarkOutboxIdentity.Failure.unavailable }

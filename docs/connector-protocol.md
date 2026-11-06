@@ -138,7 +138,7 @@ If extension also contributes events (`docs/extensions.md` “Events”), hub ev
 
 Connectors may give assistant a CLI (#1704; Telegram tg previously built into personad): declare cli, provide `<id>_cli` tool in unlisted so model tool list omits it.
 
-- Logged-in connectors: before every assistant message, hub `assistant.prepare` clis tells node to write PATH wrapper `~/.persona/assistant-bin/<cli>`, `exec personad tool --cli <id> "$@"`. Remove on logout. CLI can call only **logged-in connector tools** with `<id>_` prefix, only from Persona-launched assistant processes.
+- Logged-in connectors: before every assistant message, `assistant.prepare` clis tells node to write a PATH wrapper, `exec personad tool --cli <id> "$@"`. The default assistant uses `~/.persona/assistant-bin/<cli>`; other directories have separate command bins ([assistant.md](assistant.md)). The node keeps wrappers and connector lists per canonical assistant directory, removing that directory's wrappers on logout; sessions using the same directory share its state. CLI can call only **logged-in connector tools** with `<id>_` prefix from its session directory's list, only from Persona-launched assistant processes.
 - `personad tool --cli <id> [--format json|text] <words…>`:
   1. Call `<id>_cli {argv, stdin?}`; standalone - reads stdin. Parse only, no external service. One JSON result:
      - `{name, call: {tool, args}, render?}` selects call, render for text output;

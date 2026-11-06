@@ -4,6 +4,9 @@ import XCTest
 final class LarkNativeEncryptionFlowTests: XCTestCase {
     @MainActor private func open(inbox: Bool = false) throws -> XCUIApplication {
         guard let hub = ProcessInfo.processInfo.environment["JARVIS_MOCK_HUB"] else { throw XCTSkip("needs native encryption mock") }
+        // The old /api/v1/lark's cover picker and unlock sheet; a messaging source asks through compose
+        // (MessagingSealedFlowTests, #2138).
+        if ProcessInfo.processInfo.environment["JARVIS_MESSAGING"] == "1" { throw XCTSkip("the old /api/v1/lark only") }
         continueAfterFailure = false
         let app = XCUIApplication()
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"

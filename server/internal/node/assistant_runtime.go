@@ -212,7 +212,7 @@ func (n *Node) runtimeInstructions(cwd, memDir string) string {
 // assistantRuntimeSkills puts the assistant's skills where agent runtimes look for a project's (<cwd>/.agents/skills),
 // beside Claude's (.claude/skills, assistantLarkEnv).
 func (n *Node) assistantRuntimeSkills(cwd string) {
-	if err := assistantskills.Sync(filepath.Join(cwd, ".agents", "skills"), assistantskills.UserDir(), n.signedInConnectors(), n.logger.Printf); err != nil {
+	if err := assistantskills.Sync(filepath.Join(cwd, ".agents", "skills"), assistantskills.UserDir(), n.signedInConnectors(cwd), n.logger.Printf); err != nil {
 		n.logger.Printf("assistant: skills: %v", err)
 	}
 }

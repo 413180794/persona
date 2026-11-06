@@ -46,7 +46,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 	user, cwd := t.TempDir(), t.TempDir()
 	t.Setenv("JARVIS_SKILLS_DIR", user)
 	n := &Node{dir: t.TempDir(), larkCfgAt: time.Now(), logger: log.New(io.Discard, "", 0), larkCfg: olCfg()}
-	ex := filepath.Join(n.dir, "assistant-bin", "ex")
+	ex := filepath.Join(n.assistantBin(cwd), "ex")
 	n.assistantLarkEnv(cwd)
 	if _, err := os.Stat(ex); !os.IsNotExist(err) {
 		t.Fatalf("ex without the example skill: %v", err)
@@ -71,7 +71,7 @@ func TestGatedCommandOnlyWithTheSkill(t *testing.T) {
 		t.Fatal("ex stayed after the skill was removed")
 	}
 	// The wrapper an older node wrote for its one gated command goes as well; a file of the user's stays.
-	old, mine := filepath.Join(n.dir, "assistant-bin", "ol"), filepath.Join(n.dir, "assistant-bin", "mine")
+	old, mine := filepath.Join(n.assistantBin(cwd), "ol"), filepath.Join(n.assistantBin(cwd), "mine")
 	_ = os.WriteFile(old, []byte("#!/bin/sh\n# The helper (the skill), on the assistant's PATH (node/larkgate.go).\nexec bash x \"$@\"\n"), 0o755)
 	_ = os.WriteFile(mine, []byte("#!/bin/sh\necho hi\n"), 0o755)
 	n.assistantLarkEnv(cwd)

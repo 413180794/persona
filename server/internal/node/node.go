@@ -194,9 +194,8 @@ type Node struct {
 	larkRisks    map[string]string
 	larkCLIPaths map[string]string
 
-	// connectors are the hub's signed in, as the last assistant.prepare said (clicall.go).
-	connectors []string
-	clis       map[string]string // the connectors' command lines (assistant.prepare): name → connector id
+	// assistantPrepared keeps each assistant directory's last prepare state (clicall.go).
+	assistantPrepared map[string]assistantPrepareState
 
 	// claudeV is claude's version as last asked (agentplugin.go).
 	claudeV claudeVersionCache
@@ -1145,7 +1144,20 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		list, err := n.gitLog(ctx, p.Cwd, p.Skip, p.Limit)
 		return map[string]any{"commits": list}, err
 	case "skills.list": // the skills the assistant gets on this machine (docs/hub-update.md "Moving skills out of the binary")
-		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir(), n.signedInConnectors())}, nil
+		cwd := p.Cwd
+		if cwd == "" {
+			cwd = n.assistantDirOf(".jarvis/assistant")
+			key := assistantPrepareDir(cwd)
+			n.mu.Lock()
+			// Older callers omit cwd; keep discovery for a sole non-default assistant.
+			if _, prepared := n.assistantPrepared[key]; !prepared && len(n.assistantPrepared) == 1 {
+				for dir := range n.assistantPrepared {
+					cwd = dir
+				}
+			}
+			n.mu.Unlock()
+		}
+		return map[string]any{"skills": assistantskills.List(assistantskills.UserDir(), n.signedInConnectors(cwd))}, nil
 	case "assistant.prepare":
 		var a struct {
 			Dir      string `json:"dir"`
@@ -1171,9 +1183,12 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			}
 		}
 		// Before every message: a connector signed out since the last one takes its skill (and tg) away.
+		key := assistantPrepareDir(dir)
 		n.mu.Lock()
-		n.connectors = a.Connectors
-		n.clis = a.CLIs
+		if n.assistantPrepared == nil {
+			n.assistantPrepared = map[string]assistantPrepareState{}
+		}
+		n.assistantPrepared[key] = assistantPrepareState{connectors: a.Connectors, clis: a.CLIs}
 		n.mu.Unlock()
 		var need []string
 		if a.PluginSkills != nil {

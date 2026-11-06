@@ -47,6 +47,12 @@ These instructions are written on that computer when the assistant prepares its 
 based on hub facts: `devices.list` (machine kind, ssh alias, home, data directory), knowledge base and other note directories (since 2026-11-04 the knowledge base belongs to the assistant, previously hub `kb.dirs`), `connectors.signed_in` (signed-in connectors, their CLIs, whether the manager's manager.json configures lark-cli), and `plugins.assistant` (plugin instructions and skills). A running claude process
 uses what it read at startup; new instructions take effect on its next start: after 20-minute idle reclamation, or rebuilding that node connection, the next message starts a fresh process.
 
+The node keeps the signed-in connector list and CLI mappings from `assistant.prepare` **per assistant directory** (#5831), resolving symlinks so prepare and the running session use the same key.
+Preparing another directory, or signing a connector out there, leaves this directory's connector permissions and command wrappers intact. Skill synchronization uses the destination directory's list;
+connector CLI calls first identify the assistant process and then check its session directory's list. An unprepared directory has no connector permissions.
+The default assistant keeps `assistant-bin/` under the node's data directory; other assistant directories use `assistant-bins/<directory hash>/`, with that directory first on their process PATH.
+The node's `skills.list` accepts an optional `cwd`. Without it, the node uses the default assistant directory if it has been prepared; otherwise, if exactly one directory has been prepared, it uses that directory. With no prepared directories or several non-default ones, it still uses the default directory's empty connector list. No new configuration is required.
+
 Only the assistant gets these tools: node's inline-JSON MCP configuration includes `JARVIS_ASSISTANT=1`, `JARVIS_SESSION_ID=<chat id>`;
 `personad mcp` carries both to hub, which lists these tools only for assistant=true and forwards calls to the assistant (`assistant/tools.go`). Ordinary Agents in herdr can't see them.
 
@@ -189,7 +195,7 @@ The current mechanisms are generic; specific commands, routes, and variables are
 
 - **Delivery to the assistant**: extension contribution `assistant` (`docs/extensions.md` ("Assistant")) supplies a skill directory and instructions. Skills **aren't in personad** (upstream redistribution isn't allowed, `docs/hub-update.md` ("Taking skills out of the binary"));
   node places them on the assistant machine and links them into `~/.persona/assistant/.claude/skills/` at each process start. User skills of the same name in `~/.persona/skills/` take precedence.
-  Gated commands get a one-line wrapper in `~/.persona/assistant-bin/<command>`, first on the process PATH. Without the skill there is no command, and assistant CLAUDE.md mentions only MCP `lark_*`.
+  Gated commands get a one-line wrapper in the assistant directory's command bin (the default assistant uses `~/.persona/assistant-bin/<command>`), first on the process PATH. Without the skill there is no command, and assistant CLAUDE.md mentions only MCP `lark_*`.
 - **Credentials**: hub gives them only to the assistant node (RPC `assistant.lark`), from extension `assistant.credentials`. They stay in node's local proxy (`node/gateproxy.go`);
   the assistant gets only a local-only address that still requires write confirmation. `env` / `printenv` can't expose credentials.
 - **Gate** (`node/larkgate.go`): the assistant uses separate hooks (plugin `assistant-hooks`, or `assistant-settings.json` for older Claude Code, `docs/claude-integration.md` ("Hooks")), with an extra Bash PreToolUse hook (herdr Agents unaffected).
@@ -213,7 +219,7 @@ This step covers only the assistant; Inbox, knowledge base, and `/agent` still r
 - **Enable**: `lark.cli` in the manager's manager.json (`docs/config.md` ("manager.json")), lark-cli installed on the assistant machine; the user runs `lark-cli auth login --domain all` once.
   A gateway can coexist; `lark.prefer` sets prompt precedence.
 - **Delivery**: before process startup, node asks hub for configuration (RPC `assistant.lark` adds `cli`, `prefer`; CLI-only doesn't query the gateway; hub no longer supplies gateway tokens anyway),
-  writes a one-line `~/.persona/assistant-bin/lark-cli` wrapper invoking configured lark-cli (resolve nonabsolute paths in a login shell) with configured `--profile`,
+  writes a one-line `lark-cli` wrapper in that assistant directory's command bin, invoking configured lark-cli (resolve nonabsolute paths in a login shell) with configured `--profile`,
   and adds its directory to PATH (npm lark-cli uses `env node`, so node must be findable). No wrapper if `lark.cli` absent or lark-cli not found.
   Credentials remain in its own `~/.lark-cli`; hub / node don't touch them.
 - **Instructions**: no skill copied into the assistant directory. CLAUDE.md (`prompts/assistant/claude_md.md`) adds a section directing `lark-cli skills read lark-<domain>` first for bundled,

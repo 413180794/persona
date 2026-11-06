@@ -59,7 +59,7 @@ actor LarkOutboxStore {
         let header: Header
         do { header = try JSON.decoder.decode(Header.self, from: bytes) }
         catch { throw Failure.corrupt }
-        guard header.version == 1 else { throw Failure.version }
+        guard header.version == 1 || header.version == 2 else { throw Failure.version }
         let saved: Record
         do { saved = try JSON.decoder.decode(Record.self, from: bytes) }
         catch { throw Failure.corrupt }
@@ -72,6 +72,8 @@ actor LarkOutboxStore {
                              replyTo: item.replyTo, thread: item.thread, threadRoot: item.threadRoot,
                              attachment: item.attachment.map(attachment), messageID: item.messageID, attempted: item.attempted ?? true, mentions: item.mentions ?? [])
                 o.firstAt = item.firstAt
+                o.mode = item.mode
+                o.prepared = item.prepared
                 return o
             })
     }
@@ -110,7 +112,8 @@ actor LarkOutboxStore {
         }
         let record = Record(snapshot: candidate)
         var data = try JSON.encoder.encode(record)
-        if candidate.draft.encryption != nil || candidate.items.contains(where: { $0.encrypted != nil }) {
+        // Sealed when anything in it is secret: an encrypted draft or row, or a source's sealed row (its words and token).
+        if candidate.draft.encryption != nil || candidate.items.contains(where: { $0.encrypted != nil || $0.mode == "sealed" }) {
             data = try sealer.seal(data)
         }
         let url = directory.appending(path: "state.json")
@@ -177,6 +180,8 @@ actor LarkOutboxStore {
     }
 
     private struct Record: Codable {
+        /// 2 when a row goes in a mode (sealed, Brave Climb): its words are what the mode turns, and an App from before
+        /// modes (which reads only 1) would send them as they are.
         var version = 1
         var draft: LarkDraft
         var attachments: [Media]
@@ -186,6 +191,7 @@ actor LarkOutboxStore {
             draft = snapshot.draft
             attachments = snapshot.attachments.map(Media.init)
             items = snapshot.items.map(Outgoing.init)
+            if items.contains(where: { $0.mode != nil }) { version = 2 }
         }
     }
 
@@ -217,8 +223,12 @@ actor LarkOutboxStore {
         var mentions: [LarkMention]?
         var attempted: Bool?
         var firstAt: Date?
+        var mode: String?
+        var prepared: String?
 
         init(_ value: LarkOutgoing) {
+            mode = value.mode
+            prepared = value.prepared
             encrypted = value.encrypted
             id = value.id; text = value.text; at = value.at; state = value.state; replyTo = value.replyTo
             thread = value.thread; threadRoot = value.threadRoot

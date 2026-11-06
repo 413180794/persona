@@ -74,6 +74,13 @@ extension APIClient {
     /// The response must belong to the account that owns the open chat. Older
     /// Hubs ignore this query; the missing owner is an upgrade prompt, never data.
     func larkOlderMessages(_ feed: String, before: String, account: String, topic: Bool) async throws -> LarkMessages {
+        if let source = messagingSource {
+            // The account is the source's (`account` echoed); the user it is now must still be the one the chat opened for.
+            let page = try await messagingMessages(source, feed, before: before, after: nil, around: nil, topic: topic)
+            let now = try await messagingCall { try await messagingUser(source, refresh: true) }
+            guard now == account else { throw APIError(status: 409, message: String(localized: "Lark account changed"), fields: ["code": "lark_account_changed"]) }
+            return page
+        }
         let page: LarkMessages = try await getDecodedOffMain("/api/v1/lark/conversations/\(feed)/messages",
             query: ["before": before, "limit": "40", "topic": topic ? "1" : "", "account_id": account])
         guard let owner = page.accountID else {

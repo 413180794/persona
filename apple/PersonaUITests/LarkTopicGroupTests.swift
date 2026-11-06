@@ -149,6 +149,9 @@ final class LarkTopicGroupTests: XCTestCase {
         // Six replies: the newest two, and the four before them counted.
         let six = topic("v2.4 发版说明").buttons["lark.topic.replies"]
         XCTAssertTrue(six.waitForExistence(timeout: 5), "no replies on the topic:\n\(app.debugDescription)")
+        // Its replies are read once its card is on screen: just above the newest topics it can sit under the group's
+        // bars, where XCUITest still finds it hittable but the list does not show it.
+        center(six)
         let read = NSPredicate { _, _ in six.label.contains("老王：灰度名单我今晚发出来") }
         XCTAssertEqual(XCTWaiter.wait(for: [expectation(for: read, evaluatedWith: nil)], timeout: 10), .completed,
                        "the newest replies were not read: \(six.label)")

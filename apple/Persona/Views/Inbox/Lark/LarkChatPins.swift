@@ -40,12 +40,45 @@ extension APIClient {
     }
 
     func larkChatPins(_ feed: String, account: String?, cursor: String?) async throws -> LarkChatPinsPage {
+        if let source = messagingSource {
+            let user = try await messagingCall { try await messagingUser(source) }
+            let acct = larkAccount.map(String.init)
+            return try await messagingCall {
+                try await messagingGet(source, "conversations/\(feed)/pins", query: ["limit": "50", "cursor": cursor ?? ""]) { raw in
+                    guard var o = raw as? [String: Any] else { return raw }
+                    o["items"] = (o["items"] as? [[String: Any]] ?? []).map { it in
+                        var x = it
+                        if let m = it["message"] as? [String: Any] { x["message"] = MessagingShape.message(m, source: source, account: acct) }
+                        return x
+                    }
+                    o["account_id"] = user
+                    if o["total"] == nil { o["total"] = (o["items"] as? [Any])?.count ?? 0 }
+                    return o
+                }
+            }
+        }
         var q = ["limit": "50"]
         q["account_id"] = account; q["cursor"] = cursor
         return try await chatPinRequest("GET", "/api/v1/lark/conversations/\(feed)/pins", query: q)
     }
     func larkPinTarget(_ feed: String, message: String, account: String, topic: Bool) async throws -> LarkChatPinTarget {
         struct Result: Decodable { var account_id: String; var target: LarkChatPinTarget }
+        if let source = messagingSource {
+            let user = try await messagingCall { try await messagingUser(source) }
+            let acct = larkAccount.map(String.init)
+            let result: Result = try await messagingCall {
+                try await messagingGet(source, "conversations/\(feed)/pins/\(message)", query: ["topic": topic ? "1" : "0"]) { raw in
+                    guard let o = raw as? [String: Any], let t = o["target"] as? [String: Any] else { return raw }
+                    var target: [String: Any] = [:]
+                    if let m = t["message"] as? [String: Any] { target["message"] = MessagingShape.message(m, source: source, account: acct) }
+                    if let r = t["root"] as? [String: Any] { target["root"] = MessagingShape.message(r, source: source, account: acct) }
+                    target["page"] = MessagingShape.page(t["page"] ?? [:], source: source, account: acct, user: user)
+                    return ["account_id": user, "target": target] as [String: Any]
+                }
+            }
+            guard result.account_id == account, result.target.id == message else { throw LarkChatPinsModel.accountChanged }
+            return result.target
+        }
         let result: Result = try await chatPinRequest("GET", "/api/v1/lark/conversations/\(feed)/pin-messages/\(message)",
             query: ["account_id": account, "topic": topic ? "1" : "0"])
         guard result.account_id == account, result.target.id == message else { throw LarkChatPinsModel.accountChanged }
@@ -53,6 +86,23 @@ extension APIClient {
     }
     func larkChangePin(_ feed: String, message: String, pin: String?, account: String) async throws {
         struct Body: Encodable { var account_id: String; var message_id: String; var pin_id: String?; var remove: Bool }
+        if let source = messagingSource {
+            struct M: Encodable { var message_id: String; var pin_id: String?; var remove: Bool }
+            struct R: Decodable { var pinned: Bool }
+            let unknown = APIError(status: 502, message: String(localized: "Couldn't confirm the result. Reload the pinned messages to check."), fields: ["code": "lark_pin_result_unknown"])
+            guard try await messagingCall({ try await messagingUser(source, refresh: true) }) == account else { throw LarkChatPinsModel.accountChanged }
+            let raw: Data
+            do {
+                raw = try await messagingCall {
+                    try await request("POST", messagingPath(source, "conversations/\(feed)/pins"), query: messagingQuery(),
+                                      body: M(message_id: message, pin_id: pin, remove: pin != nil))
+                }
+            } catch let e as APIError where e.code == "result_unknown" {
+                throw unknown // the list is checked again before the next change
+            }
+            guard try JSON.decoder.decode(R.self, from: raw).pinned == (pin == nil) else { throw unknown }
+            return
+        }
         struct Result: Decodable { var account_id: String; var pinned: Bool }
         let result: Result = try await chatPinRequest("POST", "/api/v1/lark/conversations/\(feed)/pins",
             body: Body(account_id: account, message_id: message, pin_id: pin, remove: pin != nil))

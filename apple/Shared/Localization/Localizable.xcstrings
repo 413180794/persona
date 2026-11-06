@@ -27574,6 +27574,29 @@
       },
       "extractionState": "manual"
     },
+    "Continue Sending": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue Sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信を続ける"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续发送"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Continue editing the encrypted draft from the message list.": {
       "localizations": {
         "en": {
@@ -63855,6 +63878,29 @@
       },
       "extractionState": "manual"
     },
+    "Not signed in to Lark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not signed in to Lark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larkにログインしていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "飞书未登录"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Not signed in to this Mac's Screen Sharing": {
       "localizations": {
         "en": {
@@ -73238,6 +73284,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "对外展示"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Public text is confirmed when sending": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public text is confirmed when sending"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開テキストは送信時に確認します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送时确认对外展示"
           }
         }
       },
@@ -93770,6 +93839,29 @@
       },
       "extractionState": "manual"
     },
+    "The action didn't complete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The action didn't complete"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作は完了しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作没有完成"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "The address, connection type and models are already filled in; once added, you can edit it like one you set up yourself.": {
       "localizations": {
         "zh-Hans": {
@@ -94569,6 +94661,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "终端上的对话框已经变了，这次没有按任何键：看看新的再答"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The encrypted message needs confirming again before it goes. It's back in the input field.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The encrypted message needs confirming again before it goes. It's back in the input field."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗号化メッセージは送信前にもう一度確認が必要です。入力欄に戻しました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密消息要重新确认后再发，已放回输入框"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The encryption service didn't say what to do next. Try again later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The encryption service didn't say what to do next. Try again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暗号化サービスから次の手順が返されませんでした。しばらくしてからもう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密服务没有给出下一步，请稍后重试"
           }
         }
       },
@@ -96202,6 +96340,75 @@
           "stringUnit": {
             "state": "translated",
             "value": "メイン会話は標準でコンピュータ上の Claude Code を使うので、プロバイダーの追加は不要です。試すと実際にごく小さなリクエストを送り、少額の費用がかかる場合があります。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The message source can't send encrypted messages right now": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The message source can't send encrypted messages right now"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージソースは現在暗号化メッセージを送信できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息来源暂时不能发加密消息"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The message source can't send encrypted messages right now. What you typed is kept.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The message source can't send encrypted messages right now. What you typed is kept."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージソースは現在暗号化メッセージを送信できません。入力した内容は保持されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息来源暂时不能发加密消息，已输入的内容会保留"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The message source is unavailable right now. This message wasn't sent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The message source is unavailable right now. This message wasn't sent."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メッセージソースを一時的に利用できないため、このメッセージは送信されていません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "消息来源暂时不可用，这条消息没有发出"
           }
         }
       },
@@ -99917,6 +100124,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "邮件很长，只翻译了前面一部分；全文看原文。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This encrypted message is still being sent. Check again later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This encrypted message is still being sent. Check again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この暗号化メッセージはまだ送信中です。しばらくしてからもう一度確認してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条加密消息还在发送，请稍后再检查"
           }
         }
       },

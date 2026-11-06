@@ -90,6 +90,28 @@ final class LarkSync {
         enqueue(keys.filter { known[$0] != nil })
     }
 
+    /// Everything shown may be out of date (a messaging source's change that names no chat, #2138): every listener is
+    /// told, open chats too.
+    func everything() {
+        for l in listeners.values { l.cont.yield() }
+    }
+
+    /// What the chats show changed under them (a messaging source's settings, or the screens moved to or from a source,
+    /// #2138): the pages cached on disk may hold what is hidden now (a recall's words, edit history), so they go and the
+    /// recent ones are fetched again; open chats drop the pages they hold and what they keep apart from them (a topic
+    /// group's reply previews, `displayStale`).
+    func displayChanged() {
+        StateCache.removeAll(prefix: "lark-chat-")
+        fetched = [:]
+        StateCache.save(Self.stateName, fetched)
+        NotificationCenter.default.post(name: Self.displayStale, object: nil)
+        everything()
+        reconnected()
+    }
+
+    /// Posted by `displayChanged()`: an open chat reads its newest page again as its whole window.
+    static let displayStale = Notification.Name("LarkSync.displayStale")
+
     /// One conversation's listener: told now, or once `chatGap` since it was last told is up.
     private func tell(_ id: UUID) {
         var gate = gates[id] ?? LarkChangeGate(gap: Self.chatGap)

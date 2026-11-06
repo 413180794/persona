@@ -21,6 +21,13 @@ nonisolated enum StateCache {
         }
     }
 
+    /// Removes every entry whose name starts with `prefix`, before returning (a save made after it stays).
+    static func removeAll(prefix: String) {
+        guard let dir = url(prefix)?.deletingLastPathComponent(), let leaf = url(prefix)?.deletingPathExtension().lastPathComponent,
+              let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        for name in names where name.hasPrefix(leaf) { try? FileManager.default.removeItem(at: dir.appending(path: name)) }
+    }
+
     static func save<T: Encodable & Sendable>(_ name: String, _ value: T) {
 
         Task.detached(priority: .utility) {

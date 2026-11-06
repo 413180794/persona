@@ -51,6 +51,14 @@ struct LarkChatView: View {
     @State private var pinNeedsRecheck = false
     @State private var showEncryptionCovers = false
     @State private var showEncryptionUnlock = false
+    /// A sealed send on a messaging source: what its `compose` asks for, and the token it gave (#2138).
+    @State private var composeAsk: ExtensionView?
+    /// The compose run whose request is on its way (an answer for a run that ended is dropped when it comes).
+    @State private var composing: UUID?
+    /// A source's sealed send prepared by `compose`: the token, for the words and quote it was prepared for.
+    @State private var prepared: (token: String, text: String, reply: String?)?
+    /// The compose run the user is in (nil: none, or the sheet was dismissed): an answer for another is dropped.
+    @State private var composeRun: UUID?
     @State private var checkingEncryption = false
     @State private var encryptionProblem: String?
     @State private var encryptionRetryOpensCovers = false
@@ -367,6 +375,16 @@ struct LarkChatView: View {
         .overlay(alignment: .bottomTrailing) { jumpToLatestButton }
         .overlay(alignment: .topTrailing) { mentionButton }
         .environment(\.larkDisplay, chatLink?.larkDisplay.policy ?? .hidden)
+        .onChange(of: chatLink?.larkDisplay.policy) { _, _ in
+            if chatAPI?.messagingSource != nil { topicReplies.stale() } // the source sends what the settings allow (#2138)
+        }
+        // What the source shows changed (its settings: its policy here stays the same, it applies them itself), or the
+        // screens moved to or from a source: the pages held here and the topics' reply previews may show what is hidden
+        // now (a recall's words, edit history), so they are read again, the window from the newest page (#2138).
+        .onReceive(NotificationCenter.default.publisher(for: LarkSync.displayStale)) { _ in
+            topicReplies.stale()
+            Task { await reloadWindow() }
+        }
         .environment(\.larkOpenFile, { url, name in fileRequest = (url, name) })
         .environment(\.larkRefresh, { Task { await refreshLatest() } })
         .environment(\.larkOpenProfile, { person = $0 })
@@ -388,6 +406,11 @@ struct LarkChatView: View {
                     guard encryptionDraft != nil else { return }
                     encryptionDraft?.cover = cover
                 }
+            }
+        }
+        .sheet(isPresented: Binding(get: { composeAsk != nil }, set: { if !$0 { composeAsk = nil; composeRun = nil } })) {
+            if let ask = composeAsk {
+                MessagingComposeSheet(view: ask, working: composing != nil && composing == composeRun) { values in compose(values: values) }
             }
         }
         .sheet(isPresented: $showEncryptionUnlock) {
@@ -472,13 +495,15 @@ struct LarkChatView: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             if messageComposer {
                 LarkEncryptionModeBar(draft: $encryptionDraft, climbing: $climbing,
-                    canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption,
+                    canEncrypt: attachments.isEmpty && !isTopic && !checkingEncryption
+                        && (chatAPI?.messagingSource == nil || chatLink?.larkDisplay.policy.seals == true),
                     canClimb: attachments.isEmpty && !isTopic && chatLink?.larkDisplay.policy.climbs == true,
                     checking: checkingEncryption, selectEncrypted: {
                         climbing = false
                         if encryptionDraft == nil { encryptionDraft = LarkEncryptedDraft() }
                         checkEncryption(openCovers: false)
-                    }, pickCover: { checkEncryption(openCovers: true) })
+                    }, pickCover: { checkEncryption(openCovers: true) }, picksCover: chatAPI?.messagingSource == nil,
+                    seals: chatAPI?.messagingSource == nil || chatLink?.larkDisplay.policy.seals == true)
             }
             if !messageComposer, encryptionDraft != nil {
                 #if os(iOS) || os(visionOS)
@@ -697,6 +722,13 @@ struct LarkChatView: View {
     private func refreshDisplay() async {
         guard let link = chatLink, let api = chatAPI else { return }
         await link.larkDisplay.refresh(using: api)
+    }
+
+    /// The newest page again as the whole window, the pages held dropped (LarkSync.displayStale).
+    private func reloadWindow() async {
+        guard let api = chatAPI, let r = try? await api.larkMessages(conversation.id, topic: isTopic) else { return }
+        following = true
+        apply(r)
     }
 
     /// Polls the tail while it is loaded: new messages append, cards that changed (alert status…) update in place.
@@ -1103,7 +1135,52 @@ struct LarkChatView: View {
                   mentions: mentions.isEmpty ? nil : mentions)
     }
 
+    /// A sealed send on a messaging source: `compose` until the source is ready (the user fills what it asks for in a
+    /// sheet), then the send goes with its token (#2138).
+    /// A source's sealed send: ask its `compose` (with what the sheet filled in), then send with the token it gives.
+    /// Started by Send (values nil); the sheet's submit goes on with the same run, and dismissing the sheet ends it, so
+    /// a late answer neither sends nor opens the sheet again.
+    private func compose(values: [String: String]?) {
+        guard let api = chatAPI, let source = api.messagingSource else { return }
+        if values == nil {
+            // Send again while this run's answer is on its way does nothing; after its sheet was closed it starts over.
+            guard composing == nil || composing != composeRun else { return }
+            composeRun = UUID()
+        }
+        guard let run = composeRun, composing != run else { return }
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines), reply = replyTo?.id
+        composing = run
+        Task {
+            defer { if composing == run { composing = nil } }
+            do {
+                let step = try await api.messagingCompose(source, conversation.id, mode: "sealed", text: t, replyTo: reply, values: values)
+                guard composeRun == run else { return }
+                // The mode, the words or the quote changed meanwhile: what came is not for the message in the box.
+                guard encryptionDraft != nil, text.trimmingCharacters(in: .whitespacesAndNewlines) == t, replyTo?.id == reply else {
+                    composeAsk = nil
+                    composeRun = nil
+                    return
+                }
+                switch step {
+                case .ready(let token):
+                    composeAsk = nil
+                    composeRun = nil
+                    prepared = (token, t, reply)
+                    send()
+                case .ask(let view):
+                    composeAsk = view
+                }
+            } catch {
+                guard composeRun == run else { return }
+                composeAsk = nil
+                composeRun = nil
+                model.toast = Toast(error.shown ?? String(localized: "Couldn't encrypt. The message stays in the input field."), style: .error)
+            }
+        }
+    }
+
     private func checkEncryption(openCovers: Bool) {
+        if chatAPI?.messagingSource != nil { return } // the source asks for what it needs when sending (compose)
         guard !checkingEncryption, let api = chatAPI, let identity = outbox.identity else { return }
         let queue = outbox
         checkingEncryption = true
@@ -1147,7 +1224,15 @@ struct LarkChatView: View {
             guard messageComposer, attachments.isEmpty, !isTopic else {
                 model.toast = Toast(String(localized: "Send encrypted text from the Messages page."), style: .error); return
             }
-            guard !encrypted.cover.isEmpty else { checkEncryption(openCovers: true); return }
+            if api.messagingSource != nil {
+                guard chatLink?.larkDisplay.policy.seals == true else {
+                    model.toast = Toast(String(localized: "The message source can't send encrypted messages right now. What you typed is kept."), style: .error); return
+                }
+                // The token seals the words it was prepared for: changed words or quote are prepared again.
+                guard let p = prepared, p.text == t, p.reply == replyTo?.id else { prepared = nil; compose(values: nil); return }
+            } else {
+                guard !encrypted.cover.isEmpty else { checkEncryption(openCovers: true); return }
+            }
         }
         var batch: [LarkOutgoing] = []
         if climbing {
@@ -1158,16 +1243,34 @@ struct LarkChatView: View {
             guard attachments.isEmpty, !isTopic else {
                 model.toast = Toast(String(localized: "Brave Climb encoding only works for text messages."), style: .error); return
             }
+            // Too long to encode is said here, before it is on its way (a source would refuse it the same).
             guard let words = try? LarkBraveClimbCodec.encode(t) else {
                 model.toast = Toast(String(localized: "The text is too long to send with Brave Climb encoding."), style: .error); return
             }
-            batch.append(LarkOutgoing(text: words, replyTo: replyTo, mentions: []))
+            if chatAPI?.messagingSource != nil {
+                // A messaging source encodes it itself (the mode), and gives the words back decoded (#2138).
+                var o = LarkOutgoing(text: t, replyTo: replyTo, mentions: [])
+                o.mode = "brave_climb"
+                batch.append(o)
+            } else {
+                batch.append(LarkOutgoing(text: words, replyTo: replyTo, mentions: []))
+            }
         } else if !t.isEmpty { batch.append(LarkOutgoing(text: t, replyTo: replyTo, mentions: LarkMentions.mentions(in: t, picked: mentions))) }
         batch += attachments.map { LarkOutgoing(text: "", replyTo: replyTo, attachment: $0) }
         savingOutgoing = true
         Task {
             defer { savingOutgoing = false }
-            if let encrypted {
+            if encrypted != nil, api.messagingSource != nil, let token = prepared?.token {
+                prepared = nil
+                // Put back after a send that may have gone: the same message again while its words and quote are.
+                if let again = encrypted?.again, again.digest == LarkEncryptedDraft.Again.digest(text: t, reply: batch[0].replyTo?.id),
+                   !queue.items.contains(where: { $0.id == again.id }) {
+                    batch[0].id = again.id
+                }
+                batch[0].mode = "sealed"
+                batch[0].prepared = token
+                batch[0].mentions = []
+            } else if let encrypted {
                 do {
                     let status = try await api.larkEncryptionStatus()
                     guard status.accountId == identity.account, outbox === queue, !queue.invalidated else { throw LarkOutboxIdentity.Failure.changed }
@@ -1200,6 +1303,7 @@ struct LarkChatView: View {
                     mentions = []
                     attachments = []
                 }
+                encryptionDraft?.again = nil
             }
             savingOutgoing = false
             Haptics.tap()
@@ -1221,6 +1325,17 @@ struct LarkChatView: View {
                 adopt(latest.messages)
                 try await queue.settle(latest.messages)
                 guard let item = queue.items.first(where: { $0.id == id }) else { return }
+                if item.mode == "sealed" {
+                    // A source's sealed message was prepared once (a token that expires): one that did not go is sealed
+                    // again through compose, as the same message (its client_id), so one that went after all is not
+                    // sent twice.
+                    guard !latest.messages.contains(where: { $0.clientID?.lowercased() == item.clientID && $0.localState == "pending" }) else {
+                        model.toast = Toast(String(localized: "This encrypted message is still being sent. Check again later."), style: .error); return
+                    }
+                    model.toast = Toast(String(localized: "The encrypted message needs confirming again before it goes. It's back in the input field."))
+                    restore(item)
+                    return
+                }
                 guard item.canRetry else {
                     model.toast = Toast(String(localized: "Not yet confirmed whether the file was sent. Check again later."), style: .error)
                     return
@@ -1242,14 +1357,21 @@ struct LarkChatView: View {
         guard !savingOutgoing else { return }
         let queue = outbox
         // Brave Climb words go back as the words typed, in that mode.
-        let words = outgoing.encrypted == nil && outgoing.attachment == nil ? LarkBraveClimbCodec.decodeMessage(outgoing.text) : nil
-        if outgoing.encrypted != nil && (!text.isEmpty || !attachments.isEmpty) || outgoing.encrypted == nil && encryptionDraft != nil
+        // A sealed one (the old path's encrypted, or a source's sealed mode) only goes back into an empty box, sealed.
+        let sealed = outgoing.encrypted != nil || outgoing.mode == "sealed"
+        let words = outgoing.mode == "brave_climb" ? outgoing.text
+            : !sealed && outgoing.attachment == nil ? LarkBraveClimbCodec.decodeMessage(outgoing.text) : nil
+        if sealed && (!text.isEmpty || !attachments.isEmpty) || !sealed && encryptionDraft != nil
             || words != nil && (!attachments.isEmpty || !climbing && !text.isEmpty) || words == nil && climbing && outgoing.attachment == nil {
             model.toast = Toast(String(localized: "Deal with the draft in the input field before restoring this message."), style: .error)
             return
         }
         var draft = self.draft, files = attachments
         if let encrypted = outgoing.encrypted { draft.encryption = LarkEncryptedDraft(cover: encrypted.cover ?? "") }
+        if outgoing.mode == "sealed" {
+            draft.encryption = LarkEncryptedDraft(cover: "", again: .init(id: outgoing.id,
+                digest: LarkEncryptedDraft.Again.digest(text: outgoing.text, reply: outgoing.replyTo?.id)))
+        }
         if words != nil { draft.braveClimb = true }
         if let attachment = outgoing.attachment {
             guard files.count < LarkAttachment.selectionLimit else {
@@ -1541,6 +1663,7 @@ struct LarkMessageRow: View {
                     let text = display.shown(m.text)
                     Text(m.text.isEmpty ? "[\(m.type.lowercased())]" : text).font(Theme.Font.body)
                     if text != m.text { LarkBraveClimbMark() }
+                    if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }
         } else if LarkPartsView.isBare(parts) {
@@ -1559,6 +1682,7 @@ struct LarkMessageRow: View {
                     LarkPartsView(parts: parts)
                         .environment(\.larkContext, LarkRenderContext(messageID: m.recalled ? nil : m.id, images: LarkPartsView.imageURLs(parts)))
                     if parts != source { LarkBraveClimbMark() }
+                    if let d = m.decorations { LarkDecorationsView(decorations: d) }
                 }
             }
         }
