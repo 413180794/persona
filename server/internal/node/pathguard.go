@@ -1,8 +1,11 @@
 package node
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -74,6 +77,7 @@ func (n *Node) offLimits(path string) error {
 	if slices.ContainsFunc(n.inDataDirs(p), dataSecret) {
 		return errOffLimits
 	}
+
 	if n.home == "" {
 		return nil
 	}
@@ -116,6 +120,78 @@ func dataSecret(rel string) bool {
 		}
 	}
 	return false
+}
+
+// offLimitsResolved is offLimits for a path whose folders are real ones (links already followed up to its last
+// component: realPath's, a walk's, a write's), with what only such a path may be checked for, reading a file beside
+// it: a manager's own folder wherever its --dir put it (#5877), whose credentials are refused as a data folder's are.
+// A path as asked is checked by name only (offLimits), so no link is followed before it is.
+func (n *Node) offLimitsResolved(path string) error {
+	if err := n.offLimits(path); err != nil {
+		return err
+	}
+	if inManagerDir(path) {
+		return errOffLimits
+	}
+	return nil
+}
+
+// inManagerDir says whether path is one of a data folder's credentials, as a manager's folder holds them: one named
+// as a credential (dataSecret) in a folder that holds a manager's manager.json, or a folder refused whole
+// (launcher-settings/, tls/, link-tls/) of one, or anything in it (the folder itself too: a link of that name is not
+// followed). Only those folders are looked at, so other paths cost no file access.
+func inManagerDir(path string) bool {
+	if dataSecret(fold(filepath.Base(path))) && isManagerDir(filepath.Dir(path)) {
+		return true
+	}
+	for d := path; d != filepath.Dir(d); d = filepath.Dir(d) {
+		if slices.Contains(identity.DataSecretDirs, fold(filepath.Base(d))) && isManagerDir(filepath.Dir(d)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isManagerDir says whether dir holds a manager's manager.json: a plain file naming its hub and its token, or one that
+// does not read but may hold a token (a hand edit cut short). A project's own manager.json (one that reads without
+// them, an empty one, a list) is not one. A link of that name is not followed and counts as one, as does a file only
+// a placeholder of which is here (iCloud's Desktop & Documents, OneDrive): opening it would fetch it. A FIFO, a
+// socket or a device is never one, and the file is opened without waiting on it or following a link.
+func isManagerDir(dir string) bool {
+	p := filepath.Join(dir, "manager.json")
+	st, err := os.Lstat(p)
+	switch {
+	case err != nil:
+		return false
+	case st.Mode()&fs.ModeSymlink != 0:
+		return true
+	case st.Mode()&(fs.ModeDir|fs.ModeNamedPipe|fs.ModeSocket|fs.ModeDevice|fs.ModeCharDevice) != 0:
+		return false
+	case !st.Mode().IsRegular() || dataless(st):
+		return true
+	}
+	f, err := openNoBlock(p)
+	if err != nil {
+		return true // there, a plain file, and not readable here: as a manager's, to be safe
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return false
+	} else if st.Size() > 1<<20 {
+		return true // more than is read here: its token may be past it
+	}
+	b, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	if err != nil {
+		return true
+	}
+	var m struct {
+		Hub   string `json:"hub"`
+		Token string `json:"token"`
+	}
+	if json.Unmarshal(b, &m) != nil {
+		return bytes.Contains(b, []byte(`"token"`))
+	}
+	return m.Hub != "" && m.Token != ""
 }
 
 // pseudoFSSecret says whether the folded path p is a secret Linux's /proc or /sys makes up as it is read (#4172).
@@ -226,12 +302,21 @@ func (n *Node) realPath(path string) (string, error) {
 			continue
 		}
 		next := filepath.Join(done, c)
-		if err := n.offLimits(next); err != nil {
+		if err := n.offLimitsResolved(next); err != nil {
 			return "", err
 		}
 		st, err := os.Lstat(next)
 		if err != nil {
-			return filepath.Join(append([]string{next}, pending...)...), err
+			// What is left is not there to follow: as named, it is still not a manager's folder's credential (a file
+			// a Git panel reads from a commit, gone from the working tree).
+			// A remainder that climbs (..) could lead anywhere once cleaned, so only one below next is looked at.
+			rest := filepath.Join(append([]string{next}, pending...)...)
+			if !slices.Contains(pending, "..") {
+				if err := n.offLimitsResolved(rest); err != nil {
+					return "", err
+				}
+			}
+			return rest, err
 		}
 		if st.Mode()&fs.ModeSymlink == 0 {
 			done = next

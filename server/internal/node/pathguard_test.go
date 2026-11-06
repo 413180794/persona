@@ -384,3 +384,59 @@ func TestPathGuardDataDirNestedInPersona(t *testing.T) {
 		}
 	}
 }
+
+// A manager's folder outside every data folder (`personad manager run --dir /srv/mgr2`, #5877): a folder that holds
+// a manager's manager.json (its hub and token) has its credentials refused as a data folder's are; its other files,
+// and a project's credentials-named files beside a manager.json of its own, stay readable.
+func TestPathGuardManagerDirAnywhere(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", filepath.Join(t.TempDir(), "persona-state"))
+	t.Setenv("JARVIS_HOME", "")
+	n := &Node{home: home}
+	mgr := filepath.Join(t.TempDir(), "srv", "mgr2")
+	project := filepath.Join(home, "code", "app")
+	write := func(p, body string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(mgr, "manager.json"), `{"id":"m-1","hub":"https://hub.example.com","token":"jb_secret","bots":{}}`)
+	write(filepath.Join(project, "manager.json"), `{"name":"a project's own manager.json"}`)
+	refused := []string{
+		filepath.Join(mgr, "manager.json"),
+		filepath.Join(mgr, "manager.json.unreadable-20261106T000000Z"),
+		filepath.Join(mgr, "secret.key"),
+		filepath.Join(mgr, "handles.key.bak"),
+		filepath.Join(mgr, "hub.json.before-manager-json-20261106T000000.000000000Z"),
+		filepath.Join(mgr, "tailcat-hub.json"),
+		filepath.Join(mgr, "launcher-settings", "work-claude-settings.json"),
+	}
+	readable := []string{
+		filepath.Join(mgr, "data", "people", "a.md"),
+		filepath.Join(mgr, "notes.md"),
+		filepath.Join(project, "link.json"),
+		filepath.Join(project, "certs", "dev.pem"),
+		filepath.Join(project, "manager.json"),
+	}
+	for _, p := range append(slices.Clone(refused), readable...) {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			write(p, `{"token":"x"}`)
+		}
+	}
+	for _, p := range refused {
+		if _, err := n.readFile(p, "", 0, false); !errors.Is(err, errOffLimits) {
+			t.Errorf("read %s: %v, want it refused", p, err)
+		}
+	}
+	for _, p := range readable {
+		if _, err := n.readFile(p, "", 0, false); err != nil {
+			t.Errorf("read %s: %v", p, err)
+		}
+	}
+	if _, err := n.listDir(mgr, ""); err != nil {
+		t.Errorf("list the manager's folder: %v", err)
+	}
+}

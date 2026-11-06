@@ -20,14 +20,36 @@ import (
 // the Mac's Library (preferences, keychains, app data) that nothing here should edit by hand.
 var noWriteDirs = []string{".persona", ".jarvis", "Library"}
 
+func errManagerReadOnly(path string) error {
+	return &rpc.Error{Code: proto.CodeReadOnly, Message: fmt.Sprintf("%s is in a manager's folder, which is read-only from the phone", path)}
+}
+
 func errReadOnly(path string) error {
 	return &rpc.Error{Code: proto.CodeReadOnly, Message: fmt.Sprintf("%s is read-only from the phone (only folders in the home are writable)", path)}
 }
 
 // writable says whether real (absolute, clean, links already followed) is a place a client may change.
 func (n *Node) writable(real string) error {
-	if err := n.offLimits(real); err != nil {
+	if err := n.offLimitsResolved(real); err != nil {
 		return err
+	}
+	// A manager's own folder wherever its --dir put it (#5877), whole, as the data folder: its extensions' programs,
+	// its knowledge base and its configuration are the manager's to change. With --dir the home itself, the home stays
+	// writable (as with PERSONA_HOME=~). Only real folders are looked into: real's last component may be a name to
+	// write (an upload's) or a link, which is not followed.
+	start := filepath.Dir(real)
+	if st, err := os.Lstat(real); err == nil && st.IsDir() {
+		start = real
+	}
+	for d := start; d != filepath.Dir(d); d = filepath.Dir(d) {
+		if isManagerDir(d) && !isHome(fold(d), n.home) {
+			return errManagerReadOnly(real)
+		}
+	}
+	// Nor is a manager.json written by a client: one naming a hub and a token would make a folder a manager's, its
+	// credentials refused and the folder read-only, with nothing the client could undo.
+	if strings.HasPrefix(fold(filepath.Base(real)), "manager.json") {
+		return errReadOnly(real)
 	}
 	if n.home == "" {
 		return errReadOnly(real)

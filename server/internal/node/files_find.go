@@ -186,7 +186,7 @@ func (n *Node) gitFiles(ctx context.Context, real string, limit int) *FindResult
 		}
 		seen[rel] = true
 		full := filepath.Join(real, filepath.FromSlash(rel))
-		if n.offLimits(full) != nil {
+		if n.offLimitsResolved(full) != nil {
 			continue
 		}
 		// Not what git lists but is gone, nor a submodule's folder.
@@ -233,7 +233,7 @@ func (n *Node) walkFiles(ctx context.Context, real string, limit int) *FindResul
 				child = rel + "/" + name
 			}
 			full := filepath.Join(real, filepath.FromSlash(child))
-			if n.offLimits(full) != nil {
+			if n.offLimitsResolved(full) != nil {
 				continue
 			}
 			if e.IsDir() { // a link to a directory is not IsDir: it is listed as a file and not entered

@@ -125,6 +125,7 @@ pins each difference:
 | `.hub.json.*` and other dot-prefixed copies | Readable | Refused |
 | `extensions/data/`, `extensions/run/`, `run/` | Readable | Refused, sockets included |
 | This start's own launcher settings | Refused | Readable |
+| A manager's folder outside the data directory (`--dir`, one holding a manager's `manager.json`) | The same names, keys and folders at its top | Not closed |
 
 Neither matches a name deeper in the data directory, so a project's own `link.json` or `certs/dev.pem` below it stays
 readable.
