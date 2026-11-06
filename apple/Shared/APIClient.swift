@@ -1288,10 +1288,13 @@ nonisolated struct APIClient: Sendable {
         /// Why the relay gave no grant, in its words ("403 topic not served", a redirect, a network error): the hub
         /// says it beside this device in Settings › Devices and `hub doctor` (#5998).
         var relayError: String?
+        /// What this app understands beyond the first version's pushes: `withdraw`, a silent push naming the cards that
+        /// are over, whose notifications it then removes (#4349). An older hub ignores it.
+        var features: [String]?
         /// The interface language pushes to this device use (docs/i18n.md「协议」).
         var locale: String? = LanguageStore.shared.launched
         enum CodingKeys: String, CodingKey {
-            case name, kind, topic, locale
+            case name, kind, topic, locale, features
             case deviceID = "device_id", apnsToken = "apns_token", apnsEnv = "apns_env"
             case pushKey = "push_key", relayURL = "relay_url", relayGrant = "relay_grant", relayError = "relay_error"
         }

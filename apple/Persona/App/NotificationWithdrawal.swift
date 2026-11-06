@@ -3,9 +3,9 @@ import UserNotifications
 
 /// Taking back the pushes about interactions that are settled (#3513): an approval or a question answered in the app,
 /// on the computer, on the web or the watch, withdrawn by the agent or expired leaves the notification center with
-/// it. The pushes carry `interaction_id` (push.go) and the session they are about; the hub sends nothing to take one
-/// back, so the app keeps the notification center in step with its list of pending interactions. Pure, for the tests;
-/// AppModel reads and removes the delivered notifications.
+/// it. The pushes carry `interaction_id` (push.go) and the session they are about. The app keeps the notification
+/// center in step with its list of pending interactions; while it is suspended the hub's withdrawal push names the
+/// cards that are over (#4349, `resolved`). Pure, for the tests; AppModel reads and removes the delivered notifications.
 nonisolated enum NotificationWithdrawal {
     /// A delivered notification about an interaction: the interaction's group (the push's, resolved the way a tap
     /// resolves it) and the hub's id, and when it was delivered.
@@ -34,6 +34,14 @@ nonisolated enum NotificationWithdrawal {
             guard let at = listedAt[d.group] else { return false }
             return d.date < at && !pending.contains(d.uid)
         }.map(\.identifier)
+    }
+
+    /// The notifications of the cards a hub's withdrawal push names (#4349), in that hub's group (nil: the push did
+    /// not say whose, so the ids in any group). Pending or not: the hub knows they are over, and a suspended app's list
+    /// is the one from before.
+    static func resolved(_ ids: [String], group: String?, delivered: [Delivered]) -> [String] {
+        let over = Set(ids)
+        return delivered.filter { over.contains($0.interactionID) && (group == nil || $0.group == group) }.map(\.identifier)
     }
 
     /// What the notification center gave, read where it calls back (off the main thread): the pushes about an
@@ -73,12 +81,22 @@ extension AppModel {
         }
     }
 
+    /// A hub's withdrawal push (#4349): the cards it names are over, answered elsewhere while the app was suspended.
+    /// `done` runs on the main queue once their notifications are gone.
+    func withdrawResolved(_ ids: [String], group: String?, done: @escaping @Sendable () -> Void) {
+        withdrawDelivered({ _, delivered in NotificationWithdrawal.resolved(ids, group: group, delivered: delivered) }, done: done)
+    }
+
     /// Reads what the notification center shows and removes what `pick` names. The center answers on its own queue;
     /// the groups are resolved, and the list read, back on the main actor.
-    private func withdrawDelivered(_ pick: @escaping @Sendable @MainActor (AppModel, [NotificationWithdrawal.Delivered]) -> [String]) {
+    private func withdrawDelivered(_ pick: @escaping @Sendable @MainActor (AppModel, [NotificationWithdrawal.Delivered]) -> [String],
+                                   done: (@Sendable () -> Void)? = nil) {
         UNUserNotificationCenter.current().getDeliveredNotifications { @Sendable list in
             let raw = NotificationWithdrawal.raw(list)
-            guard !raw.isEmpty else { return }
+            guard !raw.isEmpty else {
+                if let done { DispatchQueue.main.async(execute: done) }
+                return
+            }
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     let model = self
@@ -88,6 +106,7 @@ extension AppModel {
                     }
                     let ids = pick(model, delivered)
                     if !ids.isEmpty { UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ids) }
+                    done?()
                 }
             }
         }

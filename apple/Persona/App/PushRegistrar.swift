@@ -49,11 +49,13 @@ final class PushRegistrar {
         #endif
         #if os(macOS)
         let kind = "mac"
+        let features: [String]? = nil
         #else
         let kind = "iphone"
+        let features: [String]? = ["withdraw"] // AppDelegate takes a withdrawal push (#4349)
         #endif
         let base = APIClient.DeviceBody(deviceID: Self.deviceID, name: UIDevice.current.name, kind: kind, apnsToken: hex,
-                                        apnsEnv: env, topic: Bundle.main.bundleIdentifier)
+                                        apnsEnv: env, topic: Bundle.main.bundleIdentifier, features: features)
         Task {
             // A hub without the app's APNs key pushes through the relay, sealed to this group's key (docs/push-relay.md);
             // the notification service extension opens it. The hub decides: with its own key it ignores these.

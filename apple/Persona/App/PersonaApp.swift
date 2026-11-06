@@ -233,7 +233,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     /// Silent push from the hub (`jarvis_wake`): the assistant needs a phone_* tool while the app is in the background.
-    /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go.
+    /// iOS gives ~30 s; connect, let the hub deliver the call over the socket, then let go. A withdrawal push
+    /// (`resolved_interaction_ids`) removes the notifications of cards that are over.
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         // Through the relay the reason is sealed (docs/push-relay.md): open it here, in the app's own process, with
@@ -242,6 +243,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if PushCrypto.isSealed(userInfo), let opened = PushCrypto.opened(userInfo, keys: PushCrypto.allKeys()) {
             for (k, v) in opened.payload { info[k] = v }
             if !opened.group.isEmpty { info[PushCrypto.groupKey] = opened.group }
+        }
+        if let ids = info["resolved_interaction_ids"] as? [String] {
+            // Cards answered elsewhere while suspended (#4349): their notifications leave the lock screen.
+            nonisolated(unsafe) let done = completionHandler
+            AppModel.shared.withdrawResolved(ids, group: AppModel.shared.pushGroup(info)) { done(.newData) }
+            return
         }
         let wake = info["jarvis_wake"]
         guard wake != nil, AppModel.shared.isPaired, !AppModel.shared.isDemo else {

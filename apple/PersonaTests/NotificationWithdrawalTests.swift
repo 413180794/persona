@@ -58,4 +58,14 @@ struct NotificationWithdrawalTests {
         #expect(delivered("n", "ix1").uid == "ix1")
         #expect(delivered("n", "ix1", group: "g2").uid == "g2|ix1")
     }
+
+    @Test func aWithdrawalPushTakesBackWhatItNames() {
+        // The hub says ix1 and ix3 are over (#4349); the suspended app still lists ix1 as pending.
+        let pushes = [delivered("n1", "ix1"), delivered("n2", "ix2"), delivered("n3", "ix3", group: "g2")]
+        #expect(NotificationWithdrawal.resolved(["ix1", "ix3"], group: "", delivered: pushes) == ["n1"])
+        #expect(NotificationWithdrawal.resolved(["ix1", "ix3"], group: "g2", delivered: pushes) == ["n3"])
+        // A push that did not say whose: the ids in any group.
+        #expect(NotificationWithdrawal.resolved(["ix1", "ix3"], group: nil, delivered: pushes) == ["n1", "n3"])
+        #expect(NotificationWithdrawal.resolved([], group: nil, delivered: pushes).isEmpty)
+    }
 }
