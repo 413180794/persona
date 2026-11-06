@@ -123,7 +123,9 @@ export function Composer({
   // "Quote" and comments (lib/comments.ts): bars above the input, sent as `> ` blocks in front of the message (lib/drafts.ts)
   const quotes = useQuotes(draftKey).list;
   const [sending, setSending] = useState(false);
-  const [uploading, setUploading] = useState(0);
+  // files still on their way to the machine, per conversation: the spinner belongs to the one they were picked in
+  const [uploads, setUploads] = useState<Record<string, number>>({});
+  const uploading = uploads[draftKey] ?? 0;
   const [dismissed, setDismissed] = useState(false);
   const [active, setActive] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -402,22 +404,32 @@ export function Composer({
 
   // a file goes to the session's machine; its path lands in the input (docs/protocol.md "Sending files")
   const upload = async (f: File) => {
-    setUploading((n) => n + 1);
+    const count = (key: string, by: number) =>
+      setUploads((u) => {
+        const { [key]: n = 0, ...rest } = u;
+        return n + by > 0 ? { ...rest, [key]: n + by } : rest;
+      });
+    count(draftKey, 1);
     try {
       const path = await sendFile(machineId!, f, { dest: uploadDest });
-      const el = input.current;
       const p = quotePath(path);
-      setDraft((d) => {
-        const at = el && document.activeElement === el ? Math.min(el.selectionStart, d.length) : d.length;
-        const before = d.slice(0, at),
-          after = d.slice(at);
-        return `${before}${before && !before.endsWith(" ") ? " " : ""}${p}${after.startsWith(" ") || !after ? "" : " "}${after}`;
-      });
+      // finished after the box closed or moved to another conversation: into the draft it was picked for (its open
+      // box, else the stored draft), not into the one shown now
+      if (!mounted.current || keyNow.current !== draftKey) sendDraft(draftKey, { type: "append", text: p });
+      else {
+        const el = input.current;
+        setDraft((d) => {
+          const at = el && document.activeElement === el ? Math.min(el.selectionStart, d.length) : d.length;
+          const before = d.slice(0, at),
+            after = d.slice(at);
+          return `${before}${before && !before.endsWith(" ") ? " " : ""}${p}${after.startsWith(" ") || !after ? "" : " "}${after}`;
+        });
+      }
       toast(t("chat-composer.uploaded", { path }), "ok");
     } catch (e) {
       toast(e instanceof ApiError && e.code === "too_large" ? t("chat-composer.file_too_large") : t("chat-composer.upload_failed", { error: errorText(e) }), "error");
     } finally {
-      setUploading((n) => n - 1);
+      if (mounted.current) count(draftKey, -1);
     }
   };
 
@@ -597,7 +609,11 @@ export function Composer({
             }
           }}
           onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+            if (e.nativeEvent.isComposing || e.keyCode === 229) {
+              // the IME's own Escape (cancelling a candidate) must not reach ChatView's interrupt on the window
+              if (e.key === "Escape") e.stopPropagation();
+              return;
+            }
             // `/model` alone opens the model popover instead of sending (where the agent has one)
             if (enterSends(e, hasFinePointer()) && isModelCommand(draft) && requestModelPicker(draftKey)) {
               e.preventDefault();
@@ -635,6 +651,9 @@ export function Composer({
                 return;
               }
               if (e.key === "Escape") {
+                // closing the menu only: keep it from ChatView's interrupt on the window
+                e.preventDefault();
+                e.stopPropagation();
                 setDismissed(true);
                 return;
               }

@@ -13,6 +13,9 @@ const PAGE = "turns=2&fold_work=1&lazy_images=1";
 const STALE_TICK_MS = 2000;
 /** When each session was last asked for what its stream may have lost: kept across remounts, so reopening a page does not ask again at once. */
 const lastPulls = new Map<string, number>();
+/** After an older page fails, loadEarlier waits this long before asking again (scrolling at the top calls it on every tick), doubling up to the cap. */
+const EARLIER_RETRY_MS = 3000;
+const EARLIER_RETRY_MAX_MS = 30_000;
 
 export interface Transcript {
   items: Item[];
@@ -51,6 +54,13 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
   const gapTimer = useRef<number | undefined>(undefined);
+  // Bumped whenever the shown conversation starts over (another session, or the file was rewritten): an older page or a
+  // fold asked for before that is dropped when it lands, so it never merges into the conversation shown by then.
+  const generation = useRef(0);
+  const earlierInFlight = useRef(false); // set at once, unlike loadingEarlier, so scroll events before a render do not ask twice
+  // The back-off after a failed older page: when loadEarlier may ask again, and how long the last wait was.
+  const earlierRetryAt = useRef(0);
+  const earlierWait = useRef(0);
   // The assistant's delta (the whole reply so far, about every 80 ms; "" when it ends) re-renders the chat at most once
   // per throttle interval (ui/stream/throttle.ts), the last one never dropped; the end and the reply's item at once.
   const deltas = useRef<TextThrottle>(null!);
@@ -65,6 +75,9 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
   useEffect(() => {
     let dead = false;
     const ctl = new AbortController();
+    generation.current++;
+    earlierInFlight.current = false;
+    setLoadingEarlier(false);
     setItems([]);
     setLoading(true);
     setError("");
@@ -72,6 +85,8 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
     deltas.current.flush("");
     covered.current = 0;
     history.current = "";
+    earlierRetryAt.current = 0;
+    earlierWait.current = 0;
     setNotLive(false);
     let tally: StaleTally = FRESH_TALLY;
     let lastArrival = Date.now();
@@ -191,26 +206,41 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
 
   const loadEarlier = useCallback(async () => {
     const first = itemsRef.current[0];
-    if (!first || loadingEarlier || !hasMore) return;
+    if (!first || earlierInFlight.current || !hasMore || Date.now() < earlierRetryAt.current) return;
+    const gen = generation.current;
+    earlierInFlight.current = true;
     setLoadingEarlier(true);
     try {
       const p = await api<ItemsPage>(`${sessionPath(mid, sid)}/items?${PAGE}&before_seq=${first.seq}`);
+      if (gen !== generation.current) return;
       apply(p.items ?? []);
       setHasMore(Boolean(p.has_more));
+      earlierRetryAt.current = 0;
+      earlierWait.current = 0;
     } catch (e) {
+      if (gen !== generation.current) return;
+      // Kept in state for the caller to show; the next try waits instead of firing on every scroll tick.
+      earlierWait.current = Math.min(earlierWait.current ? earlierWait.current * 2 : EARLIER_RETRY_MS, EARLIER_RETRY_MAX_MS);
+      earlierRetryAt.current = Date.now() + earlierWait.current;
       setError(sessionLoadError(errorText(e)));
     } finally {
-      setLoadingEarlier(false);
+      // a start-over already cleared both for the conversation shown now
+      if (gen === generation.current) {
+        earlierInFlight.current = false;
+        setLoadingEarlier(false);
+      }
     }
-  }, [mid, sid, hasMore, loadingEarlier, apply]);
+  }, [mid, sid, hasMore, apply]);
 
   const expandFold = useCallback(
     async (fold: Item) => {
       if (!fold.fold) return;
+      const gen = generation.current;
       let from = fold.seq;
       const out: Item[] = [];
       for (let n = 0; n < 20; n++) {
         const p = await api<ItemsPage>(`${sessionPath(mid, sid)}/items?from_seq=${from}&through_seq=${fold.fold.through_seq}&lazy_images=1`);
+        if (gen !== generation.current) return;
         out.push(...(p.items ?? []));
         if (!p.more || !p.items?.length) break;
         from = p.items[p.items.length - 1].seq + 1;

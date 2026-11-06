@@ -9,9 +9,12 @@ import { Composer, type Outgoing } from "./Composer";
 
 // imagePayload decodes on a canvas, which jsdom has not: each read waits on a promise the test settles
 const reads: ((p: { mime: string; data: string }) => void)[] = [];
+// a file upload waits on a promise the test settles too, with the path the machine stored it at
+const uploads: ((path: string) => void)[] = [];
 vi.mock("../../lib/attachments", async (orig) => ({
   ...(await orig<typeof import("../../lib/attachments")>()),
   imagePayload: () => new Promise<{ mime: string; data: string }>((resolve) => reads.push(resolve)),
+  sendFile: () => new Promise<string>((resolve) => uploads.push(resolve)),
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -25,6 +28,7 @@ let root: Root;
 beforeEach(() => {
   urls = 0;
   reads.length = 0;
+  uploads.length = 0;
   create.mockClear();
   revoke.mockClear();
   URL.createObjectURL = create;
@@ -114,6 +118,62 @@ describe("Composer image object URLs", () => {
     await act(async () => reads[0]({ mime: "image/png", data: btoa("png") }));
     expect(revoke).toHaveBeenCalledWith("blob:test/1");
     root = createRoot(host);
+  });
+});
+
+// A file sent to the machine puts its path into the draft of the conversation it was picked in, not into the one
+// the box shows when the upload finishes.
+describe("Composer file upload that finishes after the box moved on", () => {
+  const box = () => host.querySelector("textarea")!;
+  const renderOn = (draftKey: string) => act(() => root.render(<Composer draftKey={draftKey} machineId="m1" placeholder="" onSend={async () => true} />));
+  const spinning = () => !host.querySelector('button[aria-label="添加图片或文件"] svg');
+  const pickNotes = async () => {
+    await pickFile(new File(["notes"], "notes.txt", { type: "text/plain" }));
+    expect(uploads).toHaveLength(1);
+  };
+
+  it("goes into its own conversation's draft, not into the one the box shows now", async () => {
+    renderOn("a");
+    await pickNotes();
+    expect(spinning()).toBe(true);
+    renderOn("b");
+    expect(spinning()).toBe(false); // b has nothing uploading
+    await act(async () => uploads[0]("/tmp/notes.txt"));
+    expect(box().value).toBe("");
+    expect(localStorage.getItem("draft:a")).toBe("/tmp/notes.txt");
+    renderOn("a");
+    expect(box().value).toBe("/tmp/notes.txt");
+  });
+
+  it("shows its spinner again when the box comes back to its conversation before it finishes", async () => {
+    renderOn("a");
+    await pickNotes();
+    renderOn("b");
+    renderOn("a");
+    expect(spinning()).toBe(true);
+    await act(async () => uploads[0]("/tmp/notes.txt"));
+    expect(spinning()).toBe(false);
+    expect(box().value).toBe("/tmp/notes.txt");
+  });
+
+  it("is kept for the conversation when the box went away before it finished", async () => {
+    renderOn("a");
+    await pickNotes();
+    act(() => root.unmount());
+    root = createRoot(host);
+    await act(async () => uploads[0]("/tmp/notes.txt"));
+    expect(localStorage.getItem("draft:a")).toBe("/tmp/notes.txt");
+    renderOn("a");
+    expect(box().value).toBe("/tmp/notes.txt");
+  });
+
+  it("goes under what the conversation's draft already holds", async () => {
+    localStorage.setItem("draft:a", "see");
+    renderOn("a");
+    await pickNotes();
+    renderOn("b");
+    await act(async () => uploads[0]("/tmp/my notes.txt"));
+    expect(localStorage.getItem("draft:a")).toBe("see\n'/tmp/my notes.txt'");
   });
 });
 
@@ -297,5 +357,54 @@ describe("Composer draft typed just before leaving (#4591)", () => {
     act(() => root.unmount());
     root = createRoot(host);
     expect(localStorage.getItem("draft:a")).toBeNull();
+  });
+});
+
+// ChatView interrupts a working agent on an Escape that reaches the window: an Escape the box uses for itself
+// (closing the / menu, cancelling an IME candidate) must stop there.
+describe("Composer Escape the box uses itself", () => {
+  const seen = vi.fn();
+  const onWindow = (e: KeyboardEvent) => {
+    if (e.key === "Escape") seen();
+  };
+  beforeEach(() => {
+    seen.mockClear();
+    addEventListener("keydown", onWindow);
+  });
+  afterEach(() => removeEventListener("keydown", onWindow));
+
+  const box = () => host.querySelector("textarea")!;
+  const typeInto = (text: string) =>
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box(), text);
+      box().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const escape = (init: KeyboardEventInit = {}) =>
+    act(() => {
+      box().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init }));
+    });
+  const menuOpen = () => host.querySelector(".bottom-full") !== null;
+
+  it("closes the / menu without reaching the window", () => {
+    render("a");
+    typeInto("/");
+    expect(menuOpen()).toBe(true);
+    escape();
+    expect(menuOpen()).toBe(false);
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("does not reach the window while an IME composes", () => {
+    render("a");
+    typeInto("ni");
+    escape({ isComposing: true });
+    escape({ keyCode: 229 });
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it("still reaches the window from an empty box", () => {
+    render("a");
+    escape();
+    expect(seen).toHaveBeenCalledTimes(1);
   });
 });
