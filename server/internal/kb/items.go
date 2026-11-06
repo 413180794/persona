@@ -192,6 +192,7 @@ func (e *Engine) Search(query string, messages bool, limit int) []Hit {
 				days = append(days, p)
 			}
 		case filepath.Base(p) == "segments.json": // a recording's: transcript.md has the same text
+		case !e.searchable(p):
 		case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
 			files = append(files, p)
 		}

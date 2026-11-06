@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Searching for the app (docs/knowledge.md "Search"): results are entries, not lines. Every line containing all the
@@ -39,8 +41,13 @@ const (
 	foundCap      = 99
 )
 
-// words is the query lowercased and split; a file without all of them is skipped whole.
-func words(query string) []string { return strings.Fields(strings.ToLower(query)) }
+// fold is the form text and queries are compared in: lowercased, then composed (NFC), so "café" typed precomposed
+// finds the decomposed "cafe\u0301" macOS often writes, and the other way round. Already composed text (nearly all of
+// the archive) passes norm's quick check without being copied.
+func fold(s string) string { return norm.NFC.String(strings.ToLower(s)) }
+
+// words is the query folded and split; a file without all of them is skipped whole.
+func words(query string) []string { return strings.Fields(fold(query)) }
 
 // hasAll is the whole-file check: most files have none of the words, and one pass over the file is much cheaper than
 // a match per line (the archive is ~400k lines; everything is read, the oldest days too).
@@ -53,14 +60,15 @@ func hasAll(lowered string, ws []string) bool {
 	return true
 }
 
-// matcher returns whether a line has every word of the query (case-insensitive); nil for an empty query.
+// matcher returns whether a line has every word of the query (case- and normalization-insensitive, fold); nil for an
+// empty query.
 func matcher(query string) func(string) bool {
-	words := strings.Fields(strings.ToLower(query))
+	words := words(query)
 	if len(words) == 0 {
 		return nil
 	}
 	return func(l string) bool {
-		l = strings.ToLower(l)
+		l = fold(l)
 		for _, w := range words {
 			if !strings.Contains(l, w) {
 				return false
@@ -68,6 +76,29 @@ func matcher(query string) func(string) bool {
 		}
 		return true
 	}
+}
+
+// searchable reports whether a file of the data dir (path relative to it) holds text a search may return. Bookkeeping
+// is not: a person's hashed identity hints (handles.json, handles.go), a connector's cursor (cursors/<source>.json)
+// and the Moments verdicts of a project (moments-judged.json, moments_link.go) mean nothing to a model, and the
+// hints are kept out of every tool and prompt.
+func searchable(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	switch {
+	case parts[0] == "cursors":
+		return false
+	case len(parts) == 3 && parts[0] == KindPerson && parts[2] == "handles.json":
+		return false
+	case len(parts) == 3 && parts[0] == KindProject && parts[2] == "moments-judged.json":
+		return false
+	}
+	return true
+}
+
+// searchable applies searchable to p, a path under the data dir.
+func (e *Engine) searchable(p string) bool {
+	rel, err := filepath.Rel(e.Store.Dir, p)
+	return err != nil || searchable(rel)
 }
 
 // entryOf maps a path relative to the data dir to the entry it belongs to: chats/<id>/…, docs/<id>.json.
@@ -90,10 +121,33 @@ func entryOf(rel string) (kind, id string, ok bool) {
 	return "", "", false
 }
 
-// Find searches every entry and returns at most limit, ranked.
+// shown reports whether Matches reads the file at rel (relative to the data dir) for the entry kind/id it belongs to:
+// Find only counts lines from those, so every result it gives can be located once opened. Other files under an entry
+// (a project's moments-judged.json, a person's handles.json) are bookkeeping, not something to show.
+func shown(kind, rel string) bool {
+	// rest is what follows <kind>/<id>/ (entryOf has checked there is one).
+	_, rest, _ := strings.Cut(filepath.ToSlash(rel), "/")
+	_, rest, _ = strings.Cut(rest, "/")
+	switch kind {
+	case KindChat, KindPerson, KindProject:
+		if rest == "summary.md" || rest == "log.md" || rest == "meta.json" {
+			return true
+		}
+		// Store.Days: the .md files directly in a chat's messages/.
+		day, ok := strings.CutPrefix(rest, "messages/")
+		return kind == KindChat && ok && strings.HasSuffix(day, ".md") && !strings.Contains(day, "/")
+	case KindRecording:
+		return rest == "summary.md" || rest == "transcript.md" || rest == "meta.json"
+	case KindDoc, KindMeeting, KindEvent:
+		return true // entryOf already keeps only <kind>/<id>.json
+	}
+	return false
+}
+
+// Find searches every entry and returns at most limit, ranked; none when limit <= 0.
 func (e *Engine) Find(query string, limit int) []Result {
 	match := matcher(query)
-	if match == nil {
+	if match == nil || limit <= 0 {
 		return nil
 	}
 	ws := words(query)
@@ -123,7 +177,7 @@ func (e *Engine) Find(query string, limit int) []Result {
 				p := all[i]
 				rel, _ := filepath.Rel(e.Store.Dir, p)
 				kind, id, ok := entryOf(rel)
-				if !ok {
+				if !ok || !shown(kind, rel) {
 					continue
 				}
 				fh := fileHits{key: kind + "/" + id}
@@ -248,6 +302,7 @@ func (e *Engine) files() (files, days []string) {
 			case strings.Contains(p, sep+"messages"+sep):
 				days = append(days, p)
 			case d.name == "segments.json": // a recording's: transcript.md has the same text
+			case !e.searchable(p):
 			case strings.HasSuffix(p, ".md") || strings.HasSuffix(p, ".json"):
 				files = append(files, p)
 			}
@@ -320,7 +375,7 @@ func (e *Engine) Matches(kind, id, query string, limit int) []Match {
 	ws := words(query)
 	look := func(p string, msgs bool) {
 		raw, err := os.ReadFile(p)
-		if err != nil || !hasAll(strings.ToLower(string(raw)), ws) {
+		if err != nil || !hasAll(fold(string(raw)), ws) {
 			return
 		}
 		rel, _ := filepath.Rel(e.Store.Dir, p)
@@ -445,7 +500,7 @@ func settling(st fileStat) bool { return time.Since(time.Unix(0, st.mod)) < find
 type findText struct {
 	stat  fileStat
 	raw   string
-	lower string
+	lower string // raw folded (fold): the same string unless raw has upper case or decomposed text
 	gen   uint64 // the last search that saw the file (prune drops the ones no search saw since)
 }
 
@@ -534,7 +589,7 @@ func (c *findCache) text(p string, gen uint64) (*findText, fileStat, bool) {
 		return nil, st, false
 	}
 	s := string(raw)
-	t = &findText{stat: st, raw: s, lower: strings.ToLower(s), gen: gen}
+	t = &findText{stat: st, raw: s, lower: fold(s), gen: gen}
 	if int64(len(raw)) != st.size || settling(st) {
 		return t, st, true // changing while read, or just now: used once, not kept
 	}
@@ -555,7 +610,8 @@ func (c *findCache) text(p string, gen uint64) (*findText, fileStat, bool) {
 	return t, st, true
 }
 
-// cost is the bytes a cached text holds (lowercasing returns the same string when nothing changes).
+// cost is the bytes a cached text holds (folding returns the same string when nothing changes; a decomposed or
+// mixed-case file keeps a second, folded copy).
 func (t *findText) cost() int {
 	if t.lower == t.raw {
 		return len(t.raw)

@@ -309,3 +309,96 @@ func TestFindConcurrent(t *testing.T) {
 		t.Fatalf("concurrent search: %s", s)
 	}
 }
+
+// Every result Find gives must be locatable once opened: Find only counts lines in the files Matches reads, so a hit
+// in an entry's bookkeeping (a project's moments-judged.json, a person's handles.json) is not a result whose detail
+// says "no matches" (docs/knowledge.md "Search").
+func TestFindAgreesWithMatches(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Store: st}
+	at := time.Date(2026, 10, 20, 9, 0, 0, 0, time.Local)
+	if err := st.PutProject(&Project{Slug: "pp", Name: "PP", Kind: "short", Status: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutPerson(&Person{ID: "lark-u1", Name: "U"}); err != nil {
+		t.Fatal(err)
+	}
+	ch := &Chat{ID: "lark-c1", Name: "C", Kind: "group"}
+	if err := st.PutChat(ch); err != nil {
+		t.Fatal(err)
+	}
+	write := func(p, text string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(st.path(KindProject, "pp", "moments-judged.json"), `{"post-1":"zebrapost"}`)
+	write(st.path(KindPerson, "lark-u1", "handles.json"), `["handlezebra"]`)
+	write(st.path(KindProject, "pp", "notes.md"), "strayzebra\n")
+	write(st.path(KindPerson, "lark-u1", "messages", "2026-10-20.md"), "- 09:00 U: personzebra\n")
+	if err := st.PutSummary(KindProject, "pp", "# PP\n\nsummaryzebra here\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AppendMessages(ch, []Line{{At: at, Sender: "甲", Text: "chatzebra"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct {
+		name, query, kind, id string
+		count                 int // lines Find counts, and Matches shows, for kind/id
+	}{
+		{"moments-judged.json", "zebrapost", KindProject, "pp", 0},
+		{"handles.json", "handlezebra", KindPerson, "lark-u1", 0},
+		{"stray file", "strayzebra", KindProject, "pp", 0},
+		{"messages outside a chat", "personzebra", KindPerson, "lark-u1", 0},
+		{"summary line", "summaryzebra", KindProject, "pp", 1},
+		{"chat message", "chatzebra", KindChat, "lark-c1", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			res := e.Find(c.query, 10)
+			got := 0
+			for _, r := range res {
+				m := e.Matches(r.Entry.Kind, r.Entry.ID, c.query, 40)
+				if r.Count > 0 && len(m) == 0 {
+					t.Fatalf("Find counts %d in %s/%s, Matches shows none", r.Count, r.Entry.Kind, r.Entry.ID)
+				}
+				if r.Entry.Kind == c.kind && r.Entry.ID == c.id {
+					got = r.Count
+				}
+			}
+			if m := e.Matches(c.kind, c.id, c.query, 40); got != c.count || len(m) != c.count {
+				t.Fatalf("Find count %d, Matches %+v; want %d", got, m, c.count)
+			}
+		})
+	}
+}
+
+// A limit of zero or less is no results, not a panic on out[:limit].
+func TestFindNonPositiveLimit(t *testing.T) {
+	st, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutProject(&Project{Slug: "pp", Name: "PP", Kind: "short", Status: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.PutSummary(KindProject, "pp", "# PP\n\nx marks it\n"); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Store: st}
+	if res := e.Find("x", 1); len(res) != 1 {
+		t.Fatalf("limit 1: %+v", res)
+	}
+	for _, limit := range []int{0, -1} {
+		if res := e.Find("x", limit); len(res) != 0 {
+			t.Fatalf("limit %d: %+v", limit, res)
+		}
+	}
+}
