@@ -25,9 +25,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Listen != ":18660" {
 		t.Fatalf("listen = %q", cfg.Listen)
 	}
-	if cfg.HookTimeoutMinutes != 30 {
-		t.Fatalf("hook timeout = %d", cfg.HookTimeoutMinutes)
-	}
 	if len(cfg.Token) != 48 {
 		t.Fatalf("token should be 24 random bytes of hex, got %q", cfg.Token)
 	}
@@ -174,7 +171,7 @@ func TestLoadConfigPersistsTokenMissingFromFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFillsMissingTimeout(t *testing.T) {
+func TestLoadConfigKeepsExplicitValues(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
@@ -189,9 +186,6 @@ func TestLoadConfigFillsMissingTimeout(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if cfg.HookTimeoutMinutes != 30 {
-		t.Fatalf("hook timeout = %d", cfg.HookTimeoutMinutes)
 	}
 	if cfg.Listen != ":1" || cfg.Token != "abc" {
 		t.Fatalf("explicit values were not kept: %+v", cfg)

@@ -24,8 +24,7 @@ import (
 // (kb_posts.go), and the hub's features that read the knowledge base ask here (kb_bus.go). The kb_* tools, the live
 // context and the apps' /api/v1/kb routes (kb_routes.go) are local calls.
 //
-// How it is kept is the hub's hub.json kb section, which the hub hands over in its hello (also to an assistant on
-// another machine). The knowledge base opens (kbGet) once that came, the user's time zone could be read (the archive is
+// How it is kept is the kb section of the manager's manager.json, laid over the hub's hello (ownconfig.go). The knowledge base opens (kbGet) once that came, the user's time zone could be read (the archive is
 // put into it first, so nothing is written in another zone) and the data directory's lock is this process's; it
 // closes while the assistant is not connected to the hub, so a process the hub no longer takes (its token replaced)
 // lets the data directory go to the one it does.
@@ -50,7 +49,7 @@ const (
 )
 
 var (
-	errKBOff = errors.New("the knowledge base is off (hub.json kb.enabled)")
+	errKBOff = errors.New("the knowledge base is off (manager.json kb.enabled)")
 	// errKBNotOpen: it is on but not open yet (no word from the hub yet, the user's time zone not readable, the data
 	// directory another process's).
 	errKBNotOpen = errors.New("the knowledge base is not open yet; try again in a moment")
@@ -100,7 +99,7 @@ func (s *Service) kbInit(o *KBOptions) {
 	}
 }
 
-// kbSettings is hub.json's kb section as the hub said it; nil before it did.
+// kbSettings is manager.json's kb section, laid over the hub's hello (ownconfig.go); nil before the first hello.
 func (s *Service) kbSettings(ctx context.Context) *assistantwire.KBSettings {
 	if s.kb.dir == "" {
 		return &assistantwire.KBSettings{Off: true}
@@ -467,7 +466,7 @@ func clipRunes(s string, n int) string {
 	return s
 }
 
-// kbExtraDirs are hub.json's kb.extra_dirs as written, for CLAUDE.md (none while the knowledge base is off).
+// kbExtraDirs are manager.json's kb.extra_dirs as written, for CLAUDE.md (none while the knowledge base is off).
 func (s *Service) kbExtraDirs(ctx context.Context) []string {
 	if set := s.kbSettings(ctx); set != nil && !set.Off {
 		return set.ExtraDirs

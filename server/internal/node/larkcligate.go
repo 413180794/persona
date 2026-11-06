@@ -48,7 +48,7 @@ func parseLarkCLI(args []string, risk larkRisk) (c larkCall, deny string, ok boo
 	}
 	for _, f := range flags {
 		if f == "--profile" || strings.HasPrefix(f, "--profile=") {
-			return c, "lark-cli 的配置档由 hub 定（hub.json 的 lark.cli.profile），不要自己传 --profile。", false
+			return c, "lark-cli 的配置档由管理者定（manager.json 的 lark.cli.profile），不要自己传 --profile。", false
 		}
 	}
 	if strings.Contains(strings.Join(words, " "), "$") {
@@ -269,7 +269,7 @@ func (n *Node) writeLarkCLIWrapper(dir string, c *proto.LarkCLI) {
 	for _, a := range larkCLIProfile(c) {
 		args += " " + shellQuote(a)
 	}
-	wrapper := "#!/bin/sh\n# lark-cli as hub.json lark.cli says (node/larkcligate.go), on the assistant's PATH.\nPATH=" +
+	wrapper := "#!/bin/sh\n# lark-cli as manager.json lark.cli says (node/larkcligate.go), on the assistant's PATH.\nPATH=" +
 		shellQuote(filepath.Dir(bin)) + ":\"$PATH\" exec " + shellQuote(bin) + args + " \"$@\"\n"
 	_ = os.WriteFile(path, []byte(wrapper), 0o755)
 }

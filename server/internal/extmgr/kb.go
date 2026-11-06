@@ -13,10 +13,10 @@ import (
 // The knowledge base is the assistant's, in this process (docs/knowledge.md "Who owns what"): the connectors' sources and
 // posts are handed to it here (kb_sources.go, kb_posts.go) as the hub used to hand them over the bus.
 
-// errKBOff is what the knowledge base's sources answer while hub.json turns it off.
+// errKBOff is what the knowledge base's sources answer while manager.json turns it off.
 var errKBOff = i18n.Err("hub-kb.off")
 
-// kbOff: hub.json kb.enabled is false (the hub's hello says).
+// kbOff: manager.json kb.enabled is false (the hello the manager keeps says).
 func (h *Manager) kbOff() bool {
 	hl := h.hello.Load()
 	return hl != nil && hl.KB != nil && hl.KB.Off

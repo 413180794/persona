@@ -21,13 +21,13 @@ As part of moving hub business logic into managers (`docs/assistant.md` ("Bounda
   chat context for the Inbox AI twin (`kb.context`), deleting a source's data (`kb.forget`). Triage after an Agent's turn stops also moved into the assistant (`docs/agent-work.md` ("Who owns what")); the project owning its directory is read directly in the assistant, no longer via `kb.projects`.
   Events seen by the hub are one-way: new source data (connector live events, enabling "Include in knowledge base", enabling "Hand to Persona" for "Information", `kb.kick`),
   and an Agent finishing a turn (before deciding notifications, `kb.agent_turn`, the project timeline entry).
-- **Models**: the knowledge base still uses the hub's model configuration (`kb.compress`, `kb.project`, `kb.items`, `kb.dedupe`, `kb.moments`, defaulted by `kb.ai`),
-  via `app.call models.json` (with `max_tokens`), all in one place, `assistant/kb_model.go`; once models move, it will use the manager's own.
+- **Models**: the knowledge base uses the manager's model configuration (`kb.compress`, `kb.project`, `kb.items`, `kb.dedupe`, `kb.moments`, defaulted by `kb.ai` in its `manager.json`),
+  resolved at every call, all in one place, `assistant/kb_model.go`.
 - **Where data lives**: by default the manager is a hub child process on the same machine. Its knowledge base is the data directory's `~/.persona/data` (`kb_dir` in its `manager.json` can move it), and its `handles.key` is in its own directory, `~/.persona/managers/assistant/` (copied there once from `~/.persona`, [managers.md](managers.md) ("The built-in manager's own files")).
-  Storage **follows the hub's hub.json**: the hub sends the `kb` section to the manager in its handshake response (`enabled`, `text_days`, `attachment_days`, `extra_dirs`, `docs/protocol.md` ("Handshake");
-  `kb.ai` is read by the hub's model configuration). This is also true when the manager runs elsewhere; it does not read its own machine's hub.json. With `enabled: false`, the manager does not open the knowledge base and the hub does not provide sources
-  (`connectors.archives` is empty; other source methods and plugin posts reply "This hub has no knowledge base enabled"); source deletion does not ask the knowledge base.
-  When hub.json sets `assistant.external` (manager elsewhere, `docs/assistant.md` ("Processes")), the knowledge base is in **that machine's** data directory: the original `data/` on the hub machine stops updating.
+  Storage **follows the manager's `manager.json`**: its `kb` section (`enabled`, `text_days`, `attachment_days`, `extra_dirs`, and `ai` for the models; `docs/config.md` ("manager.json")). Since 2026-11-06 the hub neither reads it nor hands it over in its handshake response (`docs/protocol.md` ("Handshake")), except raw, once, to a built-in manager it did not start (`legacy_config`, [managers.md](managers.md) ("Configuration"));
+  a manager that runs elsewhere reads the `manager.json` on its own machine. With `enabled: false`, the manager does not open the knowledge base and its sources provide nothing
+  (`connectors.archives` is empty; other source methods and plugin posts reply "The knowledge base is off for this manager"); source deletion does not ask the knowledge base.
+  When hub.json sets `assistant.external` (manager elsewhere, `docs/assistant.md` ("Processes")), the knowledge base is in **that machine's** data directory, and its `kb` section is in the `manager.json` there: the original `data/` on the hub machine stops updating.
   To continue using it, copy the entire directory, and the hub machine's `~/.persona/managers/assistant/handles.key` into the same place on that machine (or into its `~/.persona` before the manager first starts there; otherwise future identity-hint hashes will not match); `extra_dirs` refers to paths on that machine; the index table stays in shared Postgres and need not move.
   The app's knowledge API still goes to the hub, which forwards it unchanged; the interface stays the same. CLAUDE.md still calls it "the directory on the hub" (accurate when the manager is on the hub machine).
 - **When it opens**: on the manager's first need (first loop iteration, tool call or request), requiring all three: the hub's `kb` settings have arrived (handshake),
@@ -61,7 +61,7 @@ Transcribed text from phone recordings (and watch recordings relayed through the
 
 ## Extra notes directories (`kb.extra_dirs`)
 
-hub.json's `kb.extra_dirs` lists user-maintained notes directories on the manager's machine (the hub machine by default), for example a git repo of facts, lessons and decisions synced by its own tools.
+`kb.extra_dirs` in the manager's `manager.json` lists user-maintained notes directories on the manager's machine (the hub machine by default), for example a git repo of facts, lessons and decisions synced by its own tools.
 After searching the knowledge base, `kb_search` also searches `.md` files in these directories (skipping dot-prefixed directories such as `.git`); matching paths are absolute. The assistant's CLAUDE.md lists these directories
 and tells it to read their AGENTS.md / CLAUDE.md before reading or writing. Persona does not write, sync or index them.
 
@@ -148,7 +148,7 @@ Every chat, person, project, document, meeting and event has three fields, gener
    - Comments: reread only if the count changed (or never read), new posts first, at most `comments_per_round` (150) posts per round (posts without comments consume no slots); remaining ones continue next round. Requests are spaced by `delay_ms` (300).
      Stop the round on rate limiting (429 / rate).
    - Search (`kb_search`) reads these posts too, but after all other content, never displacing chats or projects. Expire posts by `text_days`.
-   - Switch in `hub.json`: `"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}`.
+   - Switch: the Lark extension's `moments_crawl` setting (`docs/plan-extensions.md`); the old `"kb": {"moments": {"enabled": true, "interval_minutes": 30, "head_pages": 3, "pages_per_tab": 10, "comments_per_round": 150, "delay_ms": 300, "max_days": 365}}` in `hub.json` is no longer read.
      It reads company-wide Moments with your account, so it is off by default.
    - **External posts** (#1444): post archiving is generic; any connector declaring `archive` can write through connector protocol `posts.put` (`docs/connector-protocol.md` ("Knowledge base")),
      with `posts.pending` listing posts whose comments need rereading (submit through `posts.comments`). Posts record source (`source`) and feed name (`feed`, used in archive titles); other connectors cannot overwrite them.
@@ -158,7 +158,7 @@ Every chat, person, project, document, meeting and event has three fields, gener
    - Only the last year (requested 2026-11-01, to avoid overloading upstream): posts before `max_days` (default 365, or `kb.text_days` if shorter) are not stored
      and their comments are not read. A full page older than a year marks the tab `done`; subsequent rounds only read its head pages for new posts. The feed is popularity-ranked, not strictly chronological,
      so stop only when the **whole page** is old; mixed pages continue normally. Clean archives older than `max_days` once daily.
-6. **Cleanup**: once daily, delete `messages/*.md` older than 365 days and `attachments/*` older than 30 days (days configured in hub.json's `kb`).
+6. **Cleanup**: once daily, delete `messages/*.md` older than 365 days and `attachments/*` older than 30 days (days configured in the `kb` section of the manager's `manager.json`).
    Messages outside text retention are never written: initial chat archives, initial email ingestion and backfill all stop at midnight on the earliest retained day (`kb.Engine.textCutoff`,
    using the same `text_days` as cleanup's `Engine.Prune`),
    otherwise another initially archived chat writes expired daily files again after cleanup (observed in production 2026-11-02: 47 returned 6 seconds after deletion).
@@ -270,7 +270,7 @@ no more updates, snapshots or prompts; the app groups them under **Not projects*
 
 ## Configuration
 
-`hub.json`:
+The manager's `manager.json` (`~/.persona/managers/assistant/manager.json` for the built-in manager, `docs/config.md` ("manager.json")):
 
 ```json
 "kb": {
@@ -281,7 +281,7 @@ no more updates, snapshots or prompts; the app groups them under **Not projects*
 }
 ```
 
-If `kb.ai` is omitted, use `inbox.triage_ai`, then `ai`. `enabled: false` disables everything. The hub sends this section to the manager at handshake ("Who owns what" above); the hub's model configuration reads `kb.ai` as the default for `kb.*` purposes.
+If `kb.ai` is omitted, use `inbox.triage_ai`, then `ai`. `enabled: false` disables everything. Only the manager reads this section ("Who owns what" above; the hub neither reads it nor hands it over), and its model configuration takes `kb.ai` as the default for the `kb.*` purposes.
 
 <a id="扩展整理知识库1908"></a>
 

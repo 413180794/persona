@@ -21,10 +21,10 @@ import (
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/identity"
+	"github.com/nwverse/persona/server/internal/managerconf"
 
 	"github.com/mdp/qrterminal/v3"
 
-	"github.com/nwverse/persona/server/internal/aiwire"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -84,12 +84,9 @@ type TailcatConfig struct {
 	DERPMapURL string `json:"derp_map_url,omitempty"`
 }
 
+// AssistantProfile is the hub's part of hub.json's assistant section; owner, notes, machine and launcher are the
+// manager's, in its manager.json (internal/managerconf).
 type AssistantProfile struct {
-	Owner string `json:"owner,omitempty"` // how the assistant refers to the user
-	Notes string `json:"notes,omitempty"` // Markdown appended to the assistant's instructions
-	// Defaults until changed in the app: the machine it runs on (default: the hub's own) and the launcher.
-	Machine  string `json:"machine,omitempty"`
-	Launcher string `json:"launcher,omitempty"`
 	// External: the assistant's process (personad assistant) runs elsewhere and connects with a token of its own
 	// (personad hub assistant-token); the hub does not start one (assistant_process.go).
 	External bool `json:"external,omitempty"`
@@ -112,26 +109,18 @@ type Config struct {
 	Listen                 string `json:"listen"`
 	Token                  string `json:"token"`
 	PublicURL              string `json:"public_url"`
-	HookTimeoutMinutes     int    `json:"hook_timeout_minutes"`
 	// DatabaseURL points at the Postgres container (scripts/deploy/deploy.sh creates it and fills this in).
 	DatabaseURL string `json:"database_url"`
-	// AI configures the Messages API used for in-app AI helpers (defaults to the launcher's gateway on the hub machine).
-	AI aiwire.Config `json:"ai"`
-	// The manager's own sections (lark, lark_gate, connector_gate, github, imessage, google, microsoft, bots,
-	// extensions, plugins, trusted_extension_markets, usage) are in its manager.json now (internal/managerconf,
-	// docs/config.md "manager.json"): the hub reads none of them, and an older hub.json's copies stay as they were.
+	// The manager's own sections (managerconf.Moved: the connectors, extensions, bots, mail sign-ins, Lark, usage
+	// sources, ai, inbox, kb, agents, hook_timeout_minutes and assistant.owner / notes / machine / launcher) are in
+	// its manager.json now (docs/config.md "manager.json"): the hub reads none of them, and an older hub.json's copies
+	// stay as they were.
 	Machines []MachineConfig `json:"machines"`
 	// Assistant personalizes the chat tab's assistant (its CLAUDE.md): whose assistant it is and anything it should
 	// know about them and their setup (where code lives, which skills reach work data, machines to stay out of).
 	Assistant AssistantProfile `json:"assistant"`
-	// Inbox tunes the inbox's AI triage (docs/inbox.md).
-	Inbox InboxConfig `json:"inbox"`
 	// Notify tunes when "finished" pushes go out (notify.go); which ones a device gets is its own setting.
 	Notify NotifyConfig `json:"notify,omitempty"`
-	// Agents: what the hub does on its own about agents' turns (docs/agent-work.md).
-	Agents AgentsConfig `json:"agents,omitzero"`
-	// KB is the knowledge base under ~/.jarvis/data: chat archives, compressed context, projects, tags (docs/knowledge.md).
-	KB KBConfig `json:"kb,omitempty"`
 	// Public is how the hub is reached from outside its LAN: TLS, the addresses it hands out (config_public.go).
 	Public PublicConfig `json:"public,omitempty"`
 
@@ -172,11 +161,10 @@ func defaultConfig() *Config {
 		machines = []MachineConfig{}
 	}
 	return &Config{
-		Listen:             ":18660",
-		Token:              randomHex(24),
-		PublicURL:          fmt.Sprintf("http://%s:18660", host),
-		HookTimeoutMinutes: 30,
-		Machines:           machines,
+		Listen:    ":18660",
+		Token:     randomHex(24),
+		PublicURL: fmt.Sprintf("http://%s:18660", host),
+		Machines:  machines,
 	}
 }
 
@@ -240,9 +228,6 @@ func LoadConfig() (*Config, error) {
 	cfg.applyEnv()
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("%s: token is empty", path)
-	}
-	if cfg.HookTimeoutMinutes <= 0 {
-		cfg.HookTimeoutMinutes = 30
 	}
 	cfg.dir = dir
 	return cfg, nil
@@ -419,13 +404,46 @@ func writePair(w io.Writer, cfg *Config) {
 	fmt.Fprintf(w, "\nMac 上拷贝这条链接，在 Persona 的「连接 hub」里粘贴：\n%s\n", cfg.PairURL())
 }
 
-// InboxConfig is hub.json's inbox: the hub reads the triage models (its model configuration's defaults) and the
-// rules (jarvis_settings); the inbox's sources are the manager's (internal/extmgr), which reads the same section.
-type InboxConfig struct {
-	Rules    string         `json:"rules,omitempty"`
-	TriageAI *aiwire.Config `json:"triage_ai,omitempty"`
-	JudgeAI  *aiwire.Config `json:"judge_ai,omitempty"`
-	// Agent (model 3) works on the Needs you items (and those a policy hands it) and drafts the reply (the manager's
-	// inbox_agent.go).
-	Agent assistantwire.InboxAgentConfig `json:"agent,omitempty"`
+// sayMovedSections says once, as the hub starts, which of the manager's sections hub.json still has: the hub reads
+// none of them (the manager reads its manager.json, which took them over once), so an edit there does nothing.
+func (h *Hub) sayMovedSections() {
+	if h.cfg == nil || h.cfg.dir == "" {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(h.cfg.dir, "hub.json"))
+	if err != nil {
+		return
+	}
+	moved := managerconf.In(b)
+	if len(moved) == 0 {
+		return
+	}
+	if !h.cfg.Assistant.External {
+		h.logf("config: hub.json's %s are the manager's and not read here: the built-in manager takes them over into "+
+			"its manager.json (%s) once and reads them there; change them there", strings.Join(moved, ", "),
+			managerconf.DefaultFile(h.cfg.dir))
+		return
+	}
+	// The built-in manager runs elsewhere: the hello's sections are handed to it at the handshake, the rest are its
+	// machine's to have.
+	var handed, rest []string
+	for _, k := range moved {
+		switch {
+		case k == "inbox": // its models and the AI twin's machine are handed over, the rest is that machine's
+			handed, rest = append(handed, "inbox's models"), append(rest, "the rest of inbox")
+		case managerconf.InHello(k):
+			handed = append(handed, k)
+		default:
+			rest = append(rest, k)
+		}
+	}
+	if len(handed) > 0 {
+		h.logf("config: hub.json's %s are the manager's: the hub hands them to the built-in manager at the handshake "+
+			"(assistant.external), which takes them over into the manager.json on its machine once; change them there",
+			strings.Join(handed, ", "))
+	}
+	if len(rest) > 0 {
+		h.logf("config: hub.json's %s are the manager's and read by nothing here: set them in the manager.json on the "+
+			"machine the built-in manager runs on (assistant.external)", strings.Join(rest, ", "))
+	}
 }

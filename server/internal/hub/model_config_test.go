@@ -70,7 +70,7 @@ func modelRequest(mux http.Handler, method, id, body string) *httptest.ResponseR
 
 func TestTaskModelConfigurationSurvivesOrdinaryTaskSave(t *testing.T) {
 	h, mux := modelTestHub(t)
-	h.cfg.Assistant.Launcher = "claude"
+	setManagerJSON(t, h, "assistant.launcher", "claude")
 	seedTasks(t, h, assistant.Task{ID: "one", Title: "任务", Prompt: "x", Repeat: "interval", EveryMinutes: 30, Enabled: true})
 	connectAssistant(t, h)
 	r := modelRequest(mux, "PATCH", "assistant", `{"revision":0,"provider":"launcher.claude","model":"exact","effort":"high"}`)

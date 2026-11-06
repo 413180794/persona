@@ -17,7 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// An agent's question goes to the assistant before the user (hub.json agents.delegate, off by default;
+// An agent's question goes to the assistant before the user (manager.json agents.delegate, off by default;
 // docs/assistant.md "The assistant answers questions first"): the card shows on the apps at once, marked delegating, but nothing is pushed.
 // The assistant answers what is the agent's own call (a technical option, a default, whether to run again, which
 // branch) the way interaction_answer does, with why (delegate.go decides); it leaves red lines (irreversible, or seen

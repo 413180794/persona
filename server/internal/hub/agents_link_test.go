@@ -131,7 +131,7 @@ func TestAgentWorkOverTheBus(t *testing.T) {
 	if err := database.PruneSessionWork(t.Context(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	h.cfg.Agents.Triage.SettleSeconds = 1
+	setManagerJSON(t, h, "agents", map[string]any{"triage": map[string]any{"settle_seconds": 1}})
 	m, n := workMachine(t, h)
 	useModel(t, h, workModel(t, `{"phase":"blocked","on":"user","line":"等你选方案",
 		"questions":[{"question":"用哪个方案？","header":"方案","options":[{"label":"用 D4","description":"推荐"},{"label":"用 D2"}]}]}`))

@@ -77,7 +77,11 @@ func Main(ctx context.Context, build update.Build, stdin io.Reader) error {
 	}
 	home := identity.HomeDir()
 	file := managerconf.DefaultFile(home)
-	ext, err := moveConfig(home, file, logger.Printf)
+	var drop []string
+	if deploy != "child" { // not the hub's child: the hello's sections are the hub's hub.json's (legacy_config)
+		drop = managerconf.HubOnly
+	}
+	ext, err := moveConfig(home, file, drop, logger.Printf)
 	if err != nil {
 		return err
 	}
@@ -119,8 +123,8 @@ func moveFiles(home string, logf func(string, ...any)) {
 // connector_gate) among them, and the node would fall back to its own, which let every read through. Whatever starts
 // it again (the hub's backoff for the built-in manager, the service for one made in the app) has it say why again,
 // until the file is fixed.
-func moveConfig(hubDir, file string, logf func(string, ...any)) (*extmgr.Config, error) {
-	rep, err := managerconf.Move(hubDir, file)
+func moveConfig(hubDir, file string, drop []string, logf func(string, ...any)) (*extmgr.Config, error) {
+	rep, err := managerconf.MoveExcept(hubDir, file, drop)
 	if err != nil {
 		return nil, fmt.Errorf("configuration: %w (%s)", err, notStarting)
 	}
@@ -143,6 +147,9 @@ func moveConfig(hubDir, file string, logf func(string, ...any)) (*extmgr.Config,
 	cfg, err := extmgr.LoadConfig(hubDir, file)
 	if err != nil {
 		return nil, fmt.Errorf("configuration: %w (%s)", err, notStarting)
+	}
+	if _, err := readOwnConfig(file); err != nil { // the hello's sections (owner, Agents, kb, models: ownconfig.go)
+		return nil, fmt.Errorf("configuration: %s: %w (%s)", file, err, notStarting)
 	}
 	return cfg, nil
 }
@@ -265,9 +272,10 @@ func run(ctx context.Context, build update.Build, o runOptions) error {
 		Timezone:  func() string { return svc.userTZ() }})
 	o.Errors.ext.Store(ext)
 	bh = NewBusHub(BusOptions{ID: o.ID, Hub: hub, Token: token, HTTPClient: httpClient, Version: version, Deploy: deploy,
-		Logf: logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
-	// The knowledge base in its directory, kept as the hub's hub.json says (hello). The model providers' keys are
-	// sealed with its own secret.key.
+		ConfigFile: o.ConfigFile,
+		Logf:       logf, Devices: devs, Extensions: ext, StopWhenRevoked: o.StopWhenRevoked})
+	// The knowledge base in its directory, kept as its manager.json's kb section says (over the hub's hello). The model
+	// providers' keys are sealed with its own secret.key.
 	svc = New(Options{Hub: bh, Store: func() Store { return database }, Logf: logf, Devices: devs,
 		KB: &KBOptions{Dir: o.KBDir, KeyDir: o.HandlesDir}, SecretKey: o.SecretKey,
 		Trust: devs, ID: o.ID})

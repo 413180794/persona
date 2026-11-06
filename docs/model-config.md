@@ -26,7 +26,7 @@ The home page has five category rows and a separate **Lark /agent** row, showing
 | Launcher | Claude Code / Codex chats and Agents | Must exist on the execution machine; the CLI/app-server must actually receive the specific model |
 | Plugin model | Integrated voice services | Only models provided by that plugin can be selected; the plugin's own provider and credentials are not changed |
 
-The original `/launchers` API remains. New connections have `kind` of `launcher` or `api`; omitted on legacy entries, it still means launcher. Messages-protocol API connections (`api` empty or `messages`) can also be selected for the main chat and Agents: node starts claude with their address and key (#2455; see `docs/claude-integration.md` for environment variables). Responses connections support only direct calls; `finishModel` refuses to treat them as launchers. Legacy `hub.json` API connections appear as compatibility sources; authentication-file paths and values are not returned to clients.
+The original `/launchers` API remains. New connections have `kind` of `launcher` or `api`; omitted on legacy entries, it still means launcher. Messages-protocol API connections (`api` empty or `messages`) can also be selected for the main chat and Agents: node starts claude with their address and key (#2455; see `docs/claude-integration.md` for environment variables). Responses connections support only direct calls; `finishModel` refuses to treat them as launchers. Legacy API connections (`ai`, `inbox.*_ai`, `kb.ai`, in the manager's `manager.json` since 2026-11-06, in `hub.json` before) appear as compatibility sources; authentication-file paths and values are not returned to clients.
 
 ## Editing and inheritance
 
@@ -39,7 +39,7 @@ Each category shows both “In Effect” and “Model Settings”:
 - Offline, protocol mismatch, missing provider, and similar states are explicit. An invalid explicit configuration never silently switches providers.
 - Concurrent edits to the same item from two devices use revision checks. Conflicts retain the draft and require reloading before saving again.
 
-For API purposes (triage, assessment, drafting, translation, knowledge processing, titles), when there is no override or legacy `ai` configuration in `hub.json`, automatically choose a connection directly callable from the hub: first the first `kind: api` entry, then the first Persona-managed launcher with a key and Messages protocol (excluding hidden entries or those missing an address / default model / key). Use its default model. “Inherited From” shows “Automatic selection”; no override is written, and later selections here still take priority. If none exists, status and errors explain where to configure one (#388, 2026-11-02: with only “Claude Code default” configured, reply drafting immediately returned no model configured).
+For API purposes (triage, assessment, drafting, translation, knowledge processing, titles), when there is no override or legacy `ai` configuration in the manager's `manager.json`, automatically choose a connection directly callable from the hub: first the first `kind: api` entry, then the first Persona-managed launcher with a key and Messages protocol (excluding hidden entries or those missing an address / default model / key). Use its default model. “Inherited From” shows “Automatic selection”; no override is written, and later selections here still take priority. If none exists, status and errors explain where to configure one (#388, 2026-11-02: with only “Claude Code default” configured, reply drafting immediately returned no model configured).
 
 Launchers such as “Claude Code default” are only CLIs on computers, without an API address or key, so they cannot be called directly and are not offered for API purposes.
 
@@ -71,8 +71,8 @@ Model configuration belongs to the **manager** (the assistant process `personad 
   `GET /api/v1/machines/{mid}/launchers…`, belong to the manager (`assistantwire.Routes`). hub forwards them unchanged: paths, fields, and errors stay the same; no app changes needed.
 - Every model consumer calls the manager's own configuration directly: triage, assessment, drafting, translation, knowledge, titles, Agent label names and triage, new Agents (`applyModel`), and Agents opened from Lark cards.
 - The manager sends Persona-added launchers to nodes (after changes, when it connects, or when a node connection is new, `launchers.managed`). Keys pass through hub's connection to node; hub neither stores nor decrypts them.
-- hub supplies only facts it knows: `ai`, `kb.ai`, `inbox.triage_ai` / `judge_ai`, `inbox.agent.machine`, and each computer's `machines[].launchers` from hub.json
-  arrive with the handshake (`models` in `manager.hello`, `manager.updated` on changes). Inheritance rules remain unchanged. The manager queries plugin provider presets, voice-plugin models, and which enabled plugins need “Information screening”
+- The legacy baseline is the manager's own: `ai`, `kb.ai`, `inbox.triage_ai` / `judge_ai` and `inbox.agent.machine` come from its `manager.json` (`docs/config.md` ("manager.json")). hub supplies only the facts it knows: each computer's `machines[].launchers` from hub.json
+  arrive with the handshake (`models.launchers` in `manager.hello`'s answer, `manager.updated` on changes). Inheritance rules remain unchanged. The manager queries plugin provider presets, voice-plugin models, and which enabled plugins need “Information screening”
   through `app.call plugins.presets` / `plugins.voice` / `plugins.quota` / `plugins.need_triage` (these three are removed after the plugin system moves into the manager).
   `api_key_file` is a path read by the manager on its own machine: the default child process runs on the same computer as hub, as the same user, so it can still read it.
 - The manager answers the two questions hub plugins need: whether “Information screening” is currently callable (`models.usable`, governing whether dependent plugins can be enabled), and requests that quota plugins or plugin launcher panels need to send with a key
@@ -185,7 +185,7 @@ Saving one item:
 Only `assistant` may write `runtime` (see “Main-chat runtime”).
 
 “Information screening” (`inbox.triage`) also governs plugins: plugins using the Inbox without their own fallback require it to be callable before they can be enabled. With such plugins enabled, a change making it unusable returns 422 `triage_model_in_use`,
-listing plugin names (clearing a selection still saves normally if fallback to hub.json or automatic selection remains callable; `docs/extensions.md`, “General Inbox rules”).
+listing plugin names (clearing a selection still saves normally if fallback to `manager.json`'s `ai` / `inbox.triage_ai` or automatic selection remains callable; `docs/extensions.md`, “General Inbox rules”).
 
 Send to `PUT /api/v1/model-config/purposes/{id}` or the compatible `PATCH` endpoint. The five category configurations, Lark /agent, and independent plugins are writable; other legacy purposes or task IDs return 400 (purpose models are read-only; edit the owning category). Missing fields are unchanged, `null` clears a selection, and nonempty values override. Success returns the same structure as a single-item GET. Only supported fields may be selected; a revision mismatch returns 409, and unknown purposes are not created ad hoc.
 

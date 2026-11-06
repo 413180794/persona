@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -92,6 +93,11 @@ func ReadManagerConfig(dir string) (*ManagerConfig, error) {
 // it reads either the old one or the new one. Only who it is changes: its sections of the configuration and anything
 // else in the file stay as they are.
 func WriteManagerConfig(dir string, c ManagerConfig) error {
+	return WriteManagerConfigTo(dir, c, os.Stderr)
+}
+
+// WriteManagerConfigTo is WriteManagerConfig, saying on warn where it kept a manager.json that did not read.
+func WriteManagerConfigTo(dir string, c ManagerConfig, warn io.Writer) error {
 	if err := c.check(); err != nil {
 		return err
 	}
@@ -134,7 +140,7 @@ func WriteManagerConfig(dir string, c ManagerConfig) error {
 		if err != nil {
 			return fmt.Errorf("%w (the one that did not read is kept as %s)", err, aside)
 		}
-		fmt.Fprintf(os.Stderr, "manager: %s did not read (%v): kept as %s, and a new one written with only who the "+
+		fmt.Fprintf(warn, "manager: %s did not read (%v): kept as %s, and a new one written with only who the "+
 			"manager is; copy its sections (gate rules, connectors, extensions, bots) back into it\n", path, why, aside)
 	}
 	return err
@@ -195,7 +201,7 @@ func RunManager(ctx context.Context, build update.Build, dir string) error {
 	// older build read the sections there) moves in once. One that does not read stops it before it opens its
 	// database (its service starts it again, and it says why again).
 	file := filepath.Join(dir, ManagerFile)
-	ext, err := moveConfig(dir, file, logger.Printf)
+	ext, err := moveConfig(dir, file, nil, logger.Printf)
 	if err != nil {
 		return err
 	}

@@ -82,8 +82,8 @@ const (
 	EventKBAgentTurn = "kb.agent_turn"
 )
 
-// KBSettings is hub.json's kb section as the hub hands it to the assistant in its hello: the hub's file is the one that
-// counts, also for an assistant on another machine (assistant.external). ai is the hub's model configuration's.
+// KBSettings is the knowledge base's settings the manager goes by: its manager.json's kb section, laid over the hub's
+// hello (an older hub still sends its hub.json's). Its ai is the models' (HubModels.KBAI).
 type KBSettings struct {
 	Off            bool     `json:"off,omitempty"`             // kb.enabled false: no knowledge base at all
 	TextDays       int      `json:"text_days,omitempty"`       // 0: 365

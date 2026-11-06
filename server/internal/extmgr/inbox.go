@@ -42,14 +42,14 @@ const (
 	inboxMailParallel = 4
 )
 
-// InboxConfig tunes the inbox (hub.json "inbox").
+// InboxConfig tunes the inbox (manager.json "inbox").
 type InboxConfig struct {
 	// Rules is extra guidance for triage, in the user's words ("anything from my manager needs me", "alerts from
 	// group X are noise"…), appended to the prompt.
 	Rules string `json:"rules,omitempty"`
 	// TriageAI (model 1) sorts and summarizes new items; JudgeAI (model 2) links a Needs you item to
 	// one of the user's tasks.
-	// Empty fields fall back to hub.json's "ai"; without them both use "ai".
+	// Empty fields fall back to manager.json's "ai"; without them both use "ai".
 	TriageAI *ai.Config `json:"triage_ai,omitempty"`
 	JudgeAI  *ai.Config `json:"judge_ai,omitempty"`
 	// Agent (model 3) works on the Needs you items (and those a policy hands it) and drafts the reply (the manager's
@@ -57,7 +57,7 @@ type InboxConfig struct {
 	Agent InboxAgentConfig `json:"agent,omitempty"`
 }
 
-// InboxAgentConfig is hub.json's inbox.agent, handed to the manager as it is.
+// InboxAgentConfig is manager.json's inbox.agent, handed to the manager as it is.
 type InboxAgentConfig = assistantwire.InboxAgentConfig
 
 // inboxSources is the hub's part of the inbox: the wake-ups, one collection at a time, and what the manager reported.
@@ -727,7 +727,7 @@ func (h *Manager) connectorOf(id string) connector.Connector {
 }
 
 // inboxConfigView is what the inbox goes by of the hub's: the triage rules and the AI twin's (settings over hub.json),
-// hub.json's inbox.agent, the default Feishu account (the Feishu extension's, inboxLarkAccount), the plugins'
+// manager.json's inbox.agent, the default Feishu account (the Feishu extension's, inboxLarkAccount), the plugins'
 // connectors, and the languages the devices want mail translated into.
 func (h *Manager) inboxConfigView(ctx context.Context) assistantwire.InboxConfig {
 	out := assistantwire.InboxConfig{Rules: h.inboxRules(ctx), AgentRules: h.inboxAgentRules(ctx)}

@@ -64,7 +64,7 @@ func TestWaitInteractionExpiresAsDismiss(t *testing.T) {
 	ft.waitPending(0)
 }
 
-// The default expiry is hub.json's hook_timeout_minutes (hello's notify).
+// The default expiry is manager.json's hook_timeout_minutes (hello's notify).
 func TestWaitInteractionDefaultExpiry(t *testing.T) {
 	ft := newFleetTestNoStore(t)
 	ft.f.hello.Notify.HookTimeoutMS = (45 * time.Minute).Milliseconds()

@@ -114,7 +114,7 @@ func TestMoveConfigFailsClosed(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		ext, err := moveConfig(dir, file, t.Logf)
+		ext, err := moveConfig(dir, file, nil, t.Logf)
 		if (err == nil) != c.ok || (err == nil) != (ext != nil) {
 			t.Fatalf("%s: %v", c.name, err)
 		}
@@ -135,7 +135,7 @@ func TestMoveConfigFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	var said []string
-	ext, err := moveConfig(dir, file, func(f string, a ...any) { said = append(said, fmt.Sprintf(f, a...)) })
+	ext, err := moveConfig(dir, file, nil, func(f string, a ...any) { said = append(said, fmt.Sprintf(f, a...)) })
 	if err != nil {
 		t.Fatal(err)
 	}

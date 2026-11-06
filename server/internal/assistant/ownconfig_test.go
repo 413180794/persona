@@ -1,0 +1,135 @@
+package assistant
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/nwverse/persona/server/internal/aiwire"
+	"github.com/nwverse/persona/server/internal/assistantwire"
+)
+
+// The manager's manager.json goes over the hub's hello section by section; what it lacks keeps the hello's (an older
+// hub still sends them), and a machine it names that the hub doesn't have is not used.
+func TestOwnConfigOverTheHello(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	mine := `{"id":"x","token":"bus","assistant":{"owner":" Example ","machine":"laptop","launcher":"codex"},
+		"agents":{"triage":{"max_retries":2}},"kb":{"enabled":false,"text_days":30,"ai":{"model":"k"}},
+		"ai":{"base_url":"https://gateway.example.com","model":"m"},
+		"inbox":{"triage_ai":{"model":"t"},"agent":{"machine":"gone"}},"hook_timeout_minutes":0}`
+	if err := os.WriteFile(file, []byte(mine), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := readOwnConfig(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := Hello{OwnerNotes: "the hub's notes", Assistant: assistantwire.Placement{MachineID: "server", Machines: []string{"server", "laptop"}},
+		Models: assistantwire.HubModels{JudgeAI: &aiwire.Config{Model: "old"}, InboxAgentMachine: "server"},
+		Notify: assistantwire.NotifyTimings{LongTurnMS: 5}}
+	h := c.over(hub)
+	if h.Owner != "Example" || h.OwnerNotes != "the hub's notes" || h.Assistant.MachineID != "laptop" || h.Assistant.Launcher != "codex" {
+		t.Fatalf("assistant %+v %q %q", h.Assistant, h.Owner, h.OwnerNotes)
+	}
+	if h.Agents.Triage.MaxRetries != 2 || h.KB == nil || !h.KB.Off || h.KB.TextDays != 30 || h.Models.KBAI == nil || h.Models.KBAI.Model != "k" {
+		t.Fatalf("agents/kb %+v %+v %+v", h.Agents, h.KB, h.Models.KBAI)
+	}
+	// Of inbox each of the hello's keys is replaced only when manager.json has it: its judge model stays the hello's.
+	if h.Models.AI.Model != "m" || h.Models.TriageAI == nil || h.Models.TriageAI.Model != "t" || h.Models.JudgeAI == nil ||
+		h.Models.JudgeAI.Model != "old" || h.Models.InboxAgentMachine != "" {
+		t.Fatalf("models %+v", h.Models)
+	}
+	if h.Notify.HookTimeoutMS != 1800000 || h.Notify.LongTurnMS != 5 {
+		t.Fatalf("notify %+v", h.Notify)
+	}
+	// Nothing in manager.json: the hello as it came, with the knowledge base's defaults.
+	none, _ := readOwnConfig(filepath.Join(t.TempDir(), "manager.json"))
+	if h := none.over(hub); h.OwnerNotes != "the hub's notes" || h.Models.JudgeAI.Model != "old" || h.KB == nil || h.KB.Off {
+		t.Fatalf("empty %+v", h)
+	}
+	// A machine the hub doesn't have keeps the hub's default.
+	if err := os.WriteFile(file, []byte(`{"assistant":{"machine":"elsewhere"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, _ = readOwnConfig(file)
+	if h := c.over(hub); h.Assistant.MachineID != "server" {
+		t.Fatalf("machine %q", h.Assistant.MachineID)
+	}
+}
+
+// A manager.json that stops reading while the manager runs keeps the sections it last read: the next hello does not
+// fall back to the bare defaults. And a manager does not start with one whose hello sections do not fit.
+func TestOwnConfigKeepsTheLastThatRead(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "manager.json")
+	if err := os.WriteFile(file, []byte(`{"assistant":{"owner":"Example"},"kb":{"enabled":false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b := NewBusHub(BusOptions{ConfigFile: file, Logf: t.Logf})
+	if h := b.setHello(Hello{}); h.Owner != "Example" || h.KB == nil || !h.KB.Off {
+		t.Fatalf("first hello %+v", h)
+	}
+	if err := os.WriteFile(file, []byte(`{"assistant":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if h := b.setHello(Hello{}); h.Owner != "Example" || h.KB == nil || !h.KB.Off {
+		t.Fatalf("after a bad edit %+v", h)
+	}
+	if err := os.WriteFile(file, []byte(`{"assistant":{"owner":"Other"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if h := b.setHello(Hello{}); h.Owner != "Other" || h.KB.Off {
+		t.Fatalf("fixed %+v", h)
+	}
+	if err := os.WriteFile(file, []byte(`{"agents":{"triage":"often"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := moveConfig(dir, file, nil, t.Logf); err == nil {
+		t.Fatal("a manager started with agents of the wrong shape")
+	}
+}
+
+// A built-in manager elsewhere (assistant.external) takes the hub's hello-era sections over from the handshake's
+// answer into its manager.json, and goes by them; what it keeps of the hello has no copy of them left.
+func TestSetHelloTakesTheHubsSectionsOver(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "manager.json")
+	b := NewBusHub(BusOptions{ConfigFile: file, Logf: t.Logf})
+	h := b.setHello(Hello{LegacyConfig: []byte(`{"assistant":{"owner":"Example"},"kb":{"enabled":false}}`)})
+	if h.Owner != "Example" || h.KB == nil || !h.KB.Off || h.LegacyConfig != nil {
+		t.Fatalf("hello %+v", h)
+	}
+	if c, err := readOwnConfig(file); err != nil || c.Assistant == nil || c.Assistant.Owner == nil || *c.Assistant.Owner != "Example" {
+		t.Fatalf("manager.json %+v %v", c, err)
+	}
+}
+
+// The hub's sections that could not be taken over (manager.json's directory a link to nothing) are still gone by, as
+// the hello used to carry them: not the bare defaults (the knowledge base on).
+func TestSetHelloUsesTheHubsSectionsItCouldNotTake(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Symlink(filepath.Join(dir, "not-mounted"), filepath.Join(dir, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	b := NewBusHub(BusOptions{ConfigFile: filepath.Join(dir, "gone", "manager.json"), Logf: t.Logf})
+	h := b.setHello(Hello{LegacyConfig: []byte(`{"assistant":{"owner":"Example"},"kb":{"enabled":false}}`)})
+	if h.Owner != "Example" || h.KB == nil || !h.KB.Off {
+		t.Fatalf("hello %+v", h)
+	}
+	// manager.updated does not carry them again: they are still gone by until they are taken over.
+	if h := b.setHello(Hello{}); h.Owner != "Example" || h.KB == nil || !h.KB.Off {
+		t.Fatalf("after manager.updated %+v", h)
+	}
+	// Once the directory is there, the next hello takes them over, and they are manager.json's from then on.
+	if err := os.Remove(filepath.Join(dir, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "gone"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if h := b.setHello(Hello{}); h.Owner != "Example" || !h.KB.Off || b.legacy != nil {
+		t.Fatalf("taken over %+v (pending %s)", h, b.legacy)
+	}
+	if c, err := readOwnConfig(filepath.Join(dir, "gone", "manager.json")); err != nil || c.KB == nil {
+		t.Fatalf("manager.json %+v %v", c, err)
+	}
+}

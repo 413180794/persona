@@ -55,7 +55,7 @@ func TestSupervisedTaskOverTheBus(t *testing.T) {
 	t.Cleanup(judge.Close)
 	key := filepath.Join(t.TempDir(), "key")
 	_ = os.WriteFile(key, []byte("k"), 0o600)
-	h.cfg.Inbox.TriageAI = &ai.Config{BaseURL: judge.URL, APIKeyFile: key, Model: "m"}
+	setManagerJSON(t, h, "inbox", map[string]any{"triage_ai": ai.Config{BaseURL: judge.URL, APIKeyFile: key, Model: "m"}})
 
 	n := newAssistantNode(t, h) // the main conversation's machine, "server"
 	n.m.info.Home = "/home/me"

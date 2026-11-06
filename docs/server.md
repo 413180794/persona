@@ -103,7 +103,7 @@ New users without repository: `curl -fsSL <website>/install.sh | sh -s -- --hub`
 
 ### Lightweight hub and predeployment checks
 
-A lightweight hub, e.g. 2 cores / 2 GB, can run hub + Postgres only, with Agents on execution computers. Before adding those, explicitly set `"machines": []` in `hub.json` to avoid default local node when omitted. Initially disable `inbox.agent.enabled` / `kb.enabled`; enable after data-source integration as needed. Deployment guidance only, not a load-tested minimum hardware requirement.
+A lightweight hub, e.g. 2 cores / 2 GB, can run hub + Postgres only, with Agents on execution computers. Before adding those, explicitly set `"machines": []` in `hub.json` to avoid default local node when omitted. Initially disable `inbox.agent.enabled` / `kb.enabled` in the built-in manager's `managers/assistant/manager.json`; enable after data-source integration as needed. Deployment guidance only, not a load-tested minimum hardware requirement.
 
 For Linux user services to survive SSH logout, administrator runs loginctl enable-linger <user>.
 After Docker installation, verify `postgres:18-alpine` can pull; reachable OS repositories do not prove Docker Hub reachable. Failed pulls must not count as initialized DB / deployed hub, and never print `hub.json` tokens / database URLs.
@@ -159,7 +159,6 @@ ssh <nas> 'umask 077; mkdir -p ~/.jarvis/bin && cat > ~/.jarvis/bin/jarvisd.new 
        "listen": ":18660",
        "token": secrets.token_hex(24),
        "public_url": "http://<LAN address>:18660",
-       "hook_timeout_minutes": 30,
        "database_url": "postgres://jarvis:%s@127.0.0.1:18661/jarvis?sslmode=disable" % os.environ["PW"],
        "machines": [],
        "public": {"tls_listen": ":18662", "advertise_ipv6": True, "advertise_lan": True},
@@ -383,8 +382,8 @@ Adding a migration:
 
 | File | Content |
 | --- | --- |
-| `hub.json` | listen, token, `public_url`, public (TLS / candidate addresses), security (trust / auth rate limits, [network.md](network.md#hubjson-网络配置)), name display name, admin access scope ([admin.md](admin.md)), `hook_timeout_minutes`, `database_url`, machines; notify (notification timing, `docs/config.md`) |
-| `managers/assistant/manager.json` | The built-in manager's own sections (`docs/config.md` ("manager.json")): lark, `lark_gate`, `connector_gate`, github, imessage, google, microsoft, bots, extensions / plugins, `trusted_extension_markets`, usage; e.g. `google.client_id` (Gmail iOS OAuth client), `google.proxy` (Gmail HTTP proxy, e.g. http://127.0.0.1:<port>, `docs/mail.md`), `github.proxy` (all GitHub connector requests, same format) |
+| `hub.json` | listen, token, `public_url`, public (TLS / candidate addresses), security (trust / auth rate limits, [network.md](network.md#hubjson-网络配置)), name display name, admin access scope ([admin.md](admin.md)), `database_url`, machines; notify (notification timing, `docs/config.md`); `assistant.external`, `persona_view`, `html_views` |
+| `managers/assistant/manager.json` | The built-in manager's own sections (`docs/config.md` ("manager.json")): `assistant.owner` / `notes` / `machine` / `launcher`, `ai`, `agents`, `inbox`, `kb`, `hook_timeout_minutes`, lark, `lark_gate`, `connector_gate`, github, imessage, google, microsoft, bots, extensions / plugins, `trusted_extension_markets`, usage, `sent_ledger_days`; e.g. `google.client_id` (Gmail iOS OAuth client), `google.proxy` (Gmail HTTP proxy, e.g. http://127.0.0.1:<port>, `docs/mail.md`), `github.proxy` (all GitHub connector requests, same format) |
 | `tls/hub.key`, `tls/hub.crt` | Automatically managed ECDSA P-256 identity key / self-signed cert, directory 0700, files 0600, private key outside DB. Rotation requires device re-pairing |
 | `secret.key` | The hub's own 32-byte key (peer tokens, connector credentials). The built-in manager's copy, which seals its secrets (mail, model providers, extensions), is in `managers/assistant/` with its `tailcat-hub.json` and `handles.key` ([managers.md](managers.md) ("The built-in manager's own files")) |
 | `apns.json`, `apns_key.p8` | Push config / key. Present → direct APNs; absent → per-phone registered relay (`docs/push-relay.md`); no relay → no push |

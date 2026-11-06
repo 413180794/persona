@@ -21,7 +21,7 @@ import (
 // (heldActs); a start right after the hub started waits for it to connect, and without it there is no start at all:
 // the computers are the manager's to reach (devices_link.go), so it is answered 503 assistant_offline.
 
-// AgentsConfig is hub.json "agents", the manager's defaults (Hello.Agents).
+// AgentsConfig is the manager's "agents" defaults (Hello.Agents): its manager.json's, not the hub's.
 type AgentsConfig = assistantwire.AgentsConfig
 
 // workCardTool is the tool_name of the manager's cards about an agent's turn.

@@ -12,10 +12,11 @@ import (
 // providers, their voice models, their quota readers) and hands those over as data; the hub.json sections about
 // models come in the hello (HubModels).
 
-// HubModels is what hub.json says about models, handed over in the hello: "ai", inbox.triage_ai / judge_ai and kb.ai
-// (the API categories' baselines when nothing is chosen for them; key files are paths, read where the assistant
-// runs), inbox.agent.machine when the hub has that machine, and each machine's configured launchers
-// (machines[].launchers: wrappers the node does not list, a type the user gave).
+// HubModels are the models' baselines the manager goes by: its manager.json's "ai", inbox.triage_ai / judge_ai, kb.ai
+// and inbox.agent.machine when the hub has that machine, laid over the hello (an older hub sends its hub.json's; the
+// API categories' baselines when nothing is chosen for them; key files are paths, read where the manager runs), and
+// the hub's: each machine's configured launchers (machines[].launchers: wrappers the node does not list, a type the
+// user gave).
 type HubModels struct {
 	AI                aiwire.Config                   `json:"ai"`
 	TriageAI          *aiwire.Config                  `json:"triage_ai,omitempty"`

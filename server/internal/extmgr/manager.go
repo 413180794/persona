@@ -199,7 +199,7 @@ func (h *Manager) requestLang(r *http.Request) i18n.Lang {
 	return i18n.FromRequest(r).Or(h.userLang())
 }
 
-// ownerName is whose Persona this is (hub.json assistant.owner, the hub's hello).
+// ownerName is whose Persona this is (manager.json assistant.owner, the hub's hello).
 func (h *Manager) ownerName() string {
 	if hl := h.hello.Load(); hl != nil {
 		return hl.Owner

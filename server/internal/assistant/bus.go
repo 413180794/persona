@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -43,6 +45,9 @@ type BusOptions struct {
 	Extensions Extensions
 	// StopWhenRevoked: Run returns bus.ErrRevoked once the hub refuses the token (bus.Client.StopWhenRevoked).
 	StopWhenRevoked bool
+	// ConfigFile is the manager's manager.json: its sections go over the hub's hello (ownconfig.go); "": the
+	// hello as it is (tests).
+	ConfigFile string
 }
 
 // BusHub is Hub over the bus.
@@ -52,8 +57,14 @@ type BusHub struct {
 
 	mu    sync.Mutex
 	hello Hello
-	svc   *Service
-	ctx   context.Context // Serve's
+	own   ownConfig // manager.json's sections as they last read (setHello)
+	// legacy is the hub's hello-era sections (the handshake's legacy_config) not taken over yet (takeLegacy), under
+	// legacyMu with legacySaid (its failure was said); one setHello takes it at a time.
+	legacyMu   sync.Mutex
+	legacy     json.RawMessage
+	legacySaid bool
+	svc    *Service
+	ctx    context.Context // Serve's
 
 	// helloed is closed once the first hello's answer is kept (setHello): the hub's calls and events can come in on
 	// their own goroutines before that answer is, and what they need of it (the hub's kb settings, its machines)
@@ -83,6 +94,9 @@ func NewBusHub(o BusOptions) *BusHub {
 		o.Logf = func(string, ...any) {}
 	}
 	b := &BusHub{opts: o, events: make(chan busEvent, 1024), helloed: make(chan struct{})}
+	if own, err := readOwnConfig(o.ConfigFile); err == nil { // it read as the manager started (moveConfig)
+		b.own = own
+	}
 	host, _ := os.Hostname()
 	id := o.ID
 	if id == "" {
@@ -96,7 +110,7 @@ func NewBusHub(o BusOptions) *BusHub {
 		HelloMethod:     assistantwire.MethodHello,
 		HelloParams: func() any {
 			return map[string]any{"id": id, "host": host, "os": runtime.GOOS, "arch": runtime.GOARCH,
-				"deploy": o.Deploy, "version": o.Version}
+				"deploy": o.Deploy, "version": o.Version, "capabilities": []string{assistantwire.CapabilityConfigOwn}}
 		},
 		OnHello: b.onHello,
 		// A node's tool call that its caller stopped waiting for ends at the hub too (fleet_tools.go).
@@ -145,12 +159,16 @@ func (b *BusHub) onHello(res json.RawMessage) error {
 	if err := json.Unmarshal(res, &h); err != nil {
 		return err
 	}
-	b.setHello(h)
+	h = b.setHello(h)
 	b.mu.Lock()
 	svc, ctx := b.svc, b.ctx
 	b.mu.Unlock()
 	if e := b.opts.Extensions; e != nil && ctx != nil {
-		e.Hello(res)
+		mine, err := json.Marshal(h) // with manager.json's sections over the hub's
+		if err != nil {
+			return err
+		}
+		e.Hello(mine)
 		go func() {
 			if b.client.Wait(ctx) == nil {
 				e.BusUp()
@@ -194,11 +212,67 @@ func (b *BusHub) Wait(ctx context.Context) error { return b.client.Wait(ctx) }
 // Client is the bus connection (for the devices: their calls and events to the hub).
 func (b *BusHub) Client() *bus.Client { return b.client }
 
-func (b *BusHub) setHello(h Hello) {
+// setHello keeps the hub's hello with the manager's own sections over it (manager.json, read again each time: a
+// hand edit is taken up at the next hello) and returns what it kept. A manager.json that no longer reads keeps the
+// sections it last read (the manager started with them), not the hello's bare defaults.
+func (b *BusHub) setHello(h Hello) Hello {
+	b.legacyMu.Lock()
+	if len(h.LegacyConfig) > 0 && b.opts.ConfigFile != "" {
+		b.legacy, b.legacySaid = h.LegacyConfig, false // kept until it is taken over (manager.updated does not carry it)
+	}
+	h.LegacyConfig = nil
+	if b.legacy != nil {
+		if err := b.takeLegacy(b.legacy); err != nil {
+			if !b.legacySaid {
+				b.opts.Logf("configuration: could not take the hub's sections over into %s: %v (gone by as they came "+
+					"until they are)", b.opts.ConfigFile, err)
+				b.legacySaid = true
+			}
+			var lo ownConfig
+			if json.Unmarshal(b.legacy, &lo) == nil {
+				h = lo.over(h) // under manager.json's, which a manager that did not start from them lacks
+			}
+		} else {
+			b.legacy = nil
+		}
+	}
+	b.legacyMu.Unlock()
+	own, err := readOwnConfig(b.opts.ConfigFile)
+	b.mu.Lock()
+	if err != nil {
+		own = b.own
+	} else {
+		b.own = own
+	}
+	b.mu.Unlock()
+	if err != nil {
+		b.opts.Logf("assistant: %s: %v (the sections it last read are kept until it is fixed)", b.opts.ConfigFile, err)
+	}
+	h = own.over(h)
 	b.mu.Lock()
 	b.hello = h
 	b.mu.Unlock()
 	b.helloOnce.Do(func() { close(b.helloed) })
+	return h
+}
+
+// takeLegacy takes the hub's hello-era sections (the handshake's legacy_config) over into manager.json, once each
+// (managerconf.MoveFrom), and says what it did.
+func (b *BusHub) takeLegacy(legacy json.RawMessage) error {
+	file := b.opts.ConfigFile
+	rep, err := managerconf.MoveFrom(legacy, file)
+	if err != nil {
+		return err
+	}
+	if len(rep.Moved) > 0 {
+		b.opts.Logf("configuration: took %s over from the hub's hub.json into %s (once; as the hub had them: %s)",
+			strings.Join(rep.Moved, ", "), file, rep.Backup)
+	}
+	if len(rep.Ignored) > 0 {
+		b.opts.Logf("configuration: %s: the hub's hub.json has another value than %s, which is the one read (once)",
+			strings.Join(rep.Ignored, ", "), file)
+	}
+	return nil
 }
 
 // helloWait bounds how long a call or event of the hub's waits for the first hello's answer to be kept.
@@ -599,7 +673,12 @@ func (b *BusHub) event(ctx context.Context, ev busEvent) error {
 			return err
 		}
 		before := b.helloNow().Assistant.Machines
-		b.setHello(h)
+		h = b.setHello(h)
+		if e := b.opts.Extensions; e != nil { // the extensions go by the same sections (kb off, the owner's name)
+			if mine, err := json.Marshal(h); err == nil {
+				e.Hello(mine)
+			}
+		}
 		// A computer just confirmed gets its keys (machine_trust.go).
 		s.trustChanged(ctx, before, h.Assistant.Machines)
 		s.ProfileChanged(ctx) // the live context and the settings are read again

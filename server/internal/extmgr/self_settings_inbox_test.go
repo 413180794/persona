@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The inbox's rules are the manager's settings (its own store, hub.json's inbox section underneath): a change is a
+// The inbox's rules are the manager's settings (its own store, manager.json's inbox section underneath): a change is a
 // card that sets them, "" falls back; both are listed among the manager's settings.
 func TestSelfSettingsInboxRulesPersist(t *testing.T) {
 	h := newTestManager(t)

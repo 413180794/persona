@@ -5,8 +5,8 @@ The repo hard-codes nobody's machines, accounts, domains, or preferences. Everyt
 | Config | Location | Read by | Covers |
 | --- | --- | --- | --- |
 | Build / deploy config | `~/.config/persona/config.json` on the dev machine (point elsewhere with `PERSONA_CONFIG`; the old `JARVIS_CONFIG` still works), template `config.example.json` at the repo root | `scripts/*` (via `scripts/persona_config.py`), XcodeGen (via the generated `apple/Config.xcconfig`) | The App's bundle id and team, the App Store Connect account, TestFlight testers, which machine / address the hub is on, machines to deploy to, simulators |
-| hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, whose assistant it is and what it should know, the AI gateway |
-| Manager config | `~/.persona/managers/assistant/manager.json` for the built-in manager, `~/.persona/managers/<id>/manager.json` for one made in the app (0600) | the manager (`personad assistant`, `personad manager run`) | Connectors, extensions written by hand, bots, mail sign-ins and the Gmail proxy, Lark and lark-cli, usage sources ("manager.json" below) |
+| hub runtime config | `~/.persona/hub.json` on the hub machine (0600, contains the token and database password; generated automatically the first time `personad hub` runs) | `personad hub` | Listen address, public address, which machines to connect, push timings, whether the hub starts the built-in manager, the card formats its apps get |
+| Manager config | `~/.persona/managers/assistant/manager.json` for the built-in manager, `~/.persona/managers/<id>/manager.json` for one made in the app (0600) | the manager (`personad assistant`, `personad manager run`) | Whose assistant it is and what it should know, where it runs by default, the AI gateway and models, the Agents' triage, question delegation and launcher health, the Inbox and its AI twin, the knowledge base, how long hook cards wait; connectors, extensions written by hand, bots, mail sign-ins and the Gmail proxy, Lark and lark-cli, usage sources ("manager.json" below) |
 
 The configs live outside the repo: releases run in a clean worktree (`docs/release.md`), where anything outside the repo would be missing; it also avoids committing them by accident.
 `apple/Config.xcconfig` and `CLAUDE.local.md` are in `.gitignore`.
@@ -87,7 +87,7 @@ open ports, or a Tailscale account; the hub tries ssh first and falls back to ta
 
    `ssh_host` is the host name the **hub machine** uses to SSH to this one (each side has its own `~/.ssh/config`, so it can differ from `ssh` in step 1); `id` should match step 1;
    `name` is the name shown in the App; `icon` is `server` / `laptop` / `desktop`. `remote_bin` is the path of `personad` on that computer; when omitted the hub uses `~/.jarvis/bin/jarvisd` (the `jarvisd` the deploy script installs, with `personad` as a symlink to it); set it if installed elsewhere.
-   You can fill in `assistant` while you're at it (see the hub.json section below). For direct public access add `public.tls_listen` and `public.advertise` and open the TLS port per the [network doc](network.md); keep `public_url` as an address old Apps can use.
+   Whose assistant it is and what it should know (`assistant.owner`, `assistant.notes`) go into the built-in manager's `~/.persona/managers/assistant/manager.json` (make it, 0600, if it isn't there yet; see "manager.json" below). For direct public access add `public.tls_listen` and `public.advertise` and open the TLS port per the [network doc](network.md); keep `public_url` as an address old Apps can use.
 
 4. **Restart the hub so it reads the new config**: `./scripts/deploy/deploy.sh <hub machine id>` (or `systemctl --user restart jarvisd` on the hub machine).
 
@@ -181,6 +181,8 @@ The Unix socket and its immediate parent directory must belong to the current us
 
 ## hub runtime config (hub.json)
 
+The sections that are a manager's (whose assistant it is, `ai`, `agents`, `inbox`, `kb`, `hook_timeout_minutes`, connectors, extensions written by hand, bots…) are in its `manager.json` (next section): the hub reads none of them, and says once at start which ones its `hub.json` still has.
+
 ```json
 {
   "listen": ":18660",
@@ -199,14 +201,7 @@ The Unix socket and its immediate parent directory must belong to the current us
   "machines": [
     { "id": "server", "name": "Server", "kind": "local", "icon": "server" },
     { "id": "laptop", "name": "Laptop", "kind": "ssh", "ssh_host": "laptop", "icon": "laptop" }
-  ],
-  "assistant": {
-    "owner": "Your name",
-    "notes": "- Code is in `~/code`.\n- Use `xxx-*` skills for work data.",
-    "machine": "server",
-    "launcher": "claude"
-  },
-  "ai": {}
+  ]
 }
 ```
 
@@ -277,35 +272,94 @@ The Unix socket and its immediate parent directory must belong to the current us
   e.g. `[{"name":"example_wrapper","agent_type":"codex"}]`: the wrapper actually runs Codex (`agent_type` is `claude` / `codex` / `traex` or a runtime's agent; `docs/protocol.md`, `docs/model-config.md`).
 - `personas.github_login` (optional): whose level on the NWVERSE board determines the tiered avatar (Milk Frog). Defaults to the GitHub connector's logged-in account;
   with neither, shows the default "Unhatched" tier (`docs/persona.md` ("Tiered avatars")).
-- `assistant.owner`: how the assistant in the "Chat" tab addresses you; `assistant.notes`: Markdown appended to the assistant instructions (`~/.persona/assistant/CLAUDE.md`),
-  describing things specific to your environment: code locations, skills / CLIs for work data, directories it must not touch.
-- The everyday entry for model settings is **Settings › Model Providers / Model Configuration** (`docs/model-config.md`): the former manages connections and credentials; the latter manages uses such as chat, classification, translation, knowledge processing, `/agent`, and scheduled tasks. Old `ai`, `inbox.*_ai`, `kb.ai`, and launcher defaults remain as a compatibility baseline; unified-use overrides live in Postgres, not written back to `hub.json`. Without an override the original model is kept; opening settings does not migrate it to another provider.
-- `assistant.machine` / `assistant.launcher`: default machine and launcher for the assistant (the hub's own machine, `claude`); App settings take priority once changed.
-  `owner`, `notes`, `machine`, `launcher` are all defaults handed by the hub to the assistant at handshake: changed settings belong to the assistant itself (settings `assistant`, only it reads/writes them, `docs/assistant.md` ("Boundary with the hub")).
 - `assistant.external` (default `false`): the assistant process (`personad assistant`, `docs/assistant.md` ("Process")) is started externally. By default the hub starts it as a child process and restarts it on exit,
   giving it a fresh bus token at every start (via stdin); with `true` the hub does not start it. On the machine that will run it, first generate a token with `personad hub assistant-token` (printed once; generating again replaces the old one), then
-  `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub address> personad assistant`. It reads hub.json and env vars just like the hub: database from `database_url` (`PERSONA_DATABASE_URL` takes priority),
-  and without `PERSONA_ASSISTANT_HUB`, connects to the local `listen` port. While the assistant is disconnected, its APIs return `503 assistant_offline`.
+  `PERSONA_ASSISTANT_TOKEN=<token> PERSONA_ASSISTANT_HUB=<hub address> personad assistant`. It reads hub.json and env vars just like the hub: database from `database_url` (`PERSONA_DATABASE_URL` takes priority);
+  its own sections come from the `manager.json` on that machine (`~/.persona/managers/assistant/manager.json`, moved once from the hub.json there, "manager.json" below); without `PERSONA_ASSISTANT_HUB`, it connects to the local `listen` port. While the assistant is disconnected, its APIs return `503 assistant_offline`.
   The assistant also carries all computers ([machines.md](machines.md) ("Who connects computers")): when running elsewhere, that machine connects the computers in `machines` (ssh host names, tailcat key,
   and even the hub machine's own `node --stdio` are on that machine); while disconnected, machines show offline and machine APIs return `503 assistant_offline`.
   Other managers created in the App do not read this hub.json section: their configuration is `manager.json` in their own directory ([managers.md](managers.md) ("A second manager")); their database is a Postgres of their own (a Docker container `personad manager install` makes, or `--database-url`), never the hub's.
+  This key stays in hub.json: the hub decides whether to start the built-in manager, before any manager is connected.
 - `assistant.persona_view` (default `false`): cards in assistant replies use ```` ```persona-view ```` (extension components, `docs/extensions.md` ("UI version 3")) instead of `persona-card`.
   Enable only after all clients (iOS / Mac, Android, web) can render UI version 3; `persona-card` still renders on every client.
 - `assistant.html_views` (on by default when omitted; false disables): a card's `html` component can call the hub via `persona.reply` / `persona.open` (`…/views/{key}/html-actions`).
   Only effective with `assistant.persona_view` enabled; when disabled, HTML always shows fallback. Each client must also pass its own HTML execution security acceptance before running it; see `docs/assistant-views.md`.
+  `persona_view` and `html_views` stay in hub.json: they are about what the hub delivers to its apps (it validates and relays every manager's cards), so there is one switch per hub; `persona_view` is also switched in the hub's admin UI.
+- `notify`: timing for "Done" pushes (`hub/notify.go`, omitted uses defaults): `done_delay_seconds` (how long after completion to wait for someone to look before pushing, default 60),
+  `long_turn_seconds` (how long a round must be to count as a "long task", default 60), `background_hold_minutes` (maximum wait for background tasks to finish, default 120),
+  `live_metrics_seconds` (minimum interval between pushes to one device when only Live Activity numbers change, default 60; `docs/live-activity.md` ("Push budget")).
+  Each device's push preferences are set separately in the App (**Settings › Notifications**, stored in hub `devices.prefs`), not here.
+  This section stays in hub.json: push delivery is the hub's, and it hands the timings to the managers in its hello.
+- `shutdown_timeout_seconds` (default 8): total hub shutdown budget, including closing the database connection pool; external `docker stop -t` must be longer (`docs/server.md` ("Shutdown")).
+
+## manager.json
+
+A manager's own sections of the configuration are in its `manager.json`, not in `hub.json`: the hub reads none of them (`server/internal/managerconf`). When its `hub.json` still has some (from before they moved), the hub says once at start which: an edit there does nothing.
+
+- The built-in manager (the assistant process the hub starts, `personad assistant`): `~/.persona/managers/assistant/manager.json` (0600, its directory 0700), where its own directory goes once it is a service of its own. It holds no identity: the hub hands this manager its token.
+- A manager made in the app: the `manager.json` of its own directory (`~/.persona/managers/<id>/manager.json`), next to who it is (`id`, `hub`, `token`…; [managers.md](managers.md) ("Directory and manager.json")).
+- **The hub's hello**: the hub no longer hands these sections over in its answer to `manager.hello`; the manager lays its `manager.json` over that answer. What the answer still carries is the hub's: the machines and the default machine, the launchers `hub.json`'s `machines[].launchers` add, `persona_view` / `html_views`, the push timings, the user's language and the mutes (`docs/protocol.md` ("Handshake")). A manager from before this change gets no owner, notes, Agents, knowledge base or model defaults from the hub any more and runs on its built-in ones ([managers.md](managers.md) ("Configuration")).
+- **Upgrading**: the first time the built-in manager starts with this version it copies `lark`, `lark_gate`, `connector_gate`, `github`, `imessage`, `google`, `microsoft`, `bots`, `extensions`, `plugins`, `trusted_extension_markets`, `usage`, `sent_ledger_days`, `agents`, `kb`, `ai`, `inbox`, `hook_timeout_minutes` and four keys of `assistant` (`owner`, `notes`, `machine`, `launcher`; the rest of `assistant` stays the hub's) out of `hub.json` into its `manager.json`, once: `moved_from_hub_json` in `manager.json` records which sections it took over and when, and `hub.json.before-manager-json-<time>` beside it (0600) is a copy of those sections as `hub.json` had them (only those: the hub's token and database password stay out of the manager's directory; any whole copy an earlier build left in that directory is cut down to the manager's sections at the next start that reads the marker: while a broken marker or a `manager.json` that doesn't read keeps the manager from starting, old copies are not cut down yet). A section `manager.json` already has keeps its value there, and when `hub.json`'s differs the manager says so at start (`configuration: …: hub.json's copy differs …`); a section `hub.json` doesn't have isn't recorded, so if one appears there later (an older build switched back wrote it) the next start moves it too. The same goes for sections added to the list later: a manager that moved the connector sections with an earlier build moves `agents`, `kb`, `ai`, `inbox`, `hook_timeout_minutes` and the `assistant` keys at its next start. A built-in manager the hub did not start (`assistant.external`) leaves the sections the hello used to carry out of its own move and takes them from the hub's `hub.json` instead, which the hub hands it at the handshake ([managers.md](managers.md) ("Configuration")).
+  `hub.json` itself is not changed, so an older build switched back still finds what it read before; changes made after the move (in the app's admin pages or by hand in `manager.json`) are in `manager.json` only, and the older build does not see them. Nothing reads `hub.json`'s copies any more: when one of them is edited by hand after the move, the manager says at start (`configuration: hub.json's … changed after they moved …`) that the change belongs in `manager.json`. They can be deleted from `hub.json` once no older build will run.
+- The built-in manager's own files are in its directory beside its `manager.json`: `secret.key`, `tailcat-hub.json` and `handles.key`, copied there once from `~/.persona` (`moved_from_data_dir`). Its knowledge base stays at `~/.persona/data` unless `kb_dir` says where ([managers.md](managers.md) ("The built-in manager's own files")).
+- Edits: the admin UI's **Usage sources** writes `manager.json`'s `usage`; hand edits of `manager.json` take effect when the hub restarts (which restarts the built-in manager), or the manager for one made in the app. The sections the hub's hello used to carry (`assistant`'s four keys, `agents`, `kb`, `ai`, `inbox`'s models and `inbox.agent.machine`, `hook_timeout_minutes`) are also read again whenever the hello arrives (a reconnect, a `manager.updated`). What is changed in the app (About me, the assistant's machine and launcher, the triage switches, model configuration) is stored in the database and wins over these defaults.
+- A `lark` section that fails its own check (an account out of range, an unknown `prefer`) no longer stops the hub: the manager says so at start and doesn't use it (lark-cli is then off for the assistant).
+- **A `manager.json` that doesn't read stops the manager, not the hub**: when it isn't JSON or is empty, a section the manager reads at start (every moved one but `usage`, the hello's `assistant`, `agents`, `kb`, `ai`, `inbox` and `hook_timeout_minutes` included: a `usage` of the wrong shape is said in the log and no usage source runs) has the wrong shape, a `connector_gate` rule is one the gate can't use, its `moved_from_hub_json` is broken, it, its directory or the `hub.json` beside it is a link to nothing (a volume not mounted yet), that `hub.json` doesn't read, or the move can't be written, the manager doesn't start and says why (naming the file). A `lark_gate` rule's action is not checked: one the gate doesn't know asks for confirmation. Started without its sections it would drop the user's gate rules (`lark_gate`, `connector_gate`), and the computers would fall back to their own, which let every read through. The hub keeps running and starts the built-in manager again with its usual backoff (1 s doubling to a minute), saying the reason each time until the file is fixed; the app shows that manager as offline meanwhile. A manager made in the app does the same each time its service starts it again (every few seconds): its own Postgres container, when install made one, is started first, and the check runs before the manager connects to its database or starts any work; a `manager.json` that isn't JSON, is empty or isn't there at all (a link to a volume not mounted yet) is the exception: as before, a manager made in the app exits with status 2 on it, which its systemd service doesn't restart on (launchd and Docker do), so on Linux start it again once the file is back.
+  While a manager runs, a `manager.json` that stops reading (a hand edit gone wrong) doesn't take effect: it keeps the sections it last read and says so in its log, rather than falling back to defaults, until the file is fixed (its next start fails as above).
+- **Switching a manager made in the app back to an older build**: the older build reads its sections from a `hub.json` in that manager's directory, not from `manager.json`, so what was moved or changed since is not seen there. Its `personad manager join` and `install` rewrite `manager.json` whole, keeping only who the manager is, so the sections and the marker are gone when this version runs again: copy `manager.json` aside before running either on an older build, and put its sections back afterwards (the `hub.json.before-manager-json-*` copies have them only as they were when they moved, and a manager that never had a `hub.json` has none). The older `personad manager run` and `status` also count `managers/assistant` (the built-in manager's directory) as a manager made in the app: give `--dir` to pick the manager.
+- **Switching back to the build just before this one** (the one that knew only the connector sections' move): its clean-up of the move's copies keeps only whole sections, so it cuts the `assistant` keys out of this version's copies. Nothing is lost (`hub.json` and `manager.json` still have them), but this version then says at start that `hub.json`'s `assistant.*` changed after they moved, until `hub.json`'s `assistant` keys are removed.
+
+```json
+{
+  "assistant": {
+    "owner": "Your name",
+    "notes": "- Code is in `~/code`.\n- Use `xxx-*` skills for work data.",
+    "machine": "server",
+    "launcher": "claude"
+  },
+  "google": { "client_id": "…", "proxy": "" },
+  "lark": { "account": 2 },
+  "extensions": [{ "id": "voice", "command": "jarvisd", "args": ["voice"] }]
+}
+```
+
+- `assistant.owner`: how the assistant in the "Chat" tab addresses you; `assistant.notes`: Markdown appended to the assistant instructions (`~/.persona/assistant/CLAUDE.md`),
+  describing things specific to your environment: code locations, skills / CLIs for work data, directories it must not touch.
+- `assistant.machine` / `assistant.launcher`: default machine and launcher for the assistant (unset, or a machine the hub doesn't have: the hub's own machine, else the first one; `claude`); App settings take priority once changed.
+  `owner`, `notes`, `machine`, `launcher` are all defaults, laid over the hub's hello: changed settings belong to the assistant itself (settings `assistant`, only it reads/writes them, `docs/assistant.md` ("Boundary with the hub")).
+  Only these four keys of `assistant` are the manager's: `external`, `persona_view` and `html_views` stay in hub.json ("hub runtime config" above).
+- The everyday entry for model settings is **Settings › Model Providers / Model Configuration** (`docs/model-config.md`): the former manages connections and credentials; the latter manages uses such as chat, classification, translation, knowledge processing, `/agent`, and scheduled tasks. Old `ai`, `inbox.*_ai`, `kb.ai` (here) and launcher defaults (`assistant.launcher` here, `machines[].launchers` in hub.json) remain as a compatibility baseline; unified-use overrides live in Postgres, not written back to either file. Without an override the original model is kept; opening settings does not migrate it to another provider.
 - `ai` (no default since 2026-10-31): model for small App features calling model APIs directly (not through Claude Code): Inbox triage, drafting replies, recognizing email config from pasted text.
   When omitted, these uses automatically select a directly callable connection on the hub (with a Key in **Settings › Model Providers**, see `docs/model-config.md` ("Editing and inheritance")); only if none exist do they report "No directly callable model yet".
   `api` is `messages` (Anthropic Messages, default) or `responses` (OpenAI Responses, always streamed, compatible with relays accepting only `stream: true`);
-  `base_url` gets `/v1/messages` or `/v1/responses` appended; `api_key_file` is the key file on the hub machine (0600, read only at call time); `model`;
+  `base_url` gets `/v1/messages` or `/v1/responses` appended; `api_key_file` is the key file on the manager's machine (the hub machine for the built-in manager; 0600, read only at call time); `model`;
   `reasoning_effort` applies only to `responses` (e.g. `low`); `bearer` (default `false`) true sends the Messages API key as `Authorization: Bearer` instead of `x-api-key`, for gateways accepting only Bearer (`responses` always uses Bearer).
-- `agents.triage`: triage after a round stops ([agent-work.md](agent-work.md) ("Switches")). Switches are under **Settings › Session Triage** in the App (stored in hub settings, all off by default),
+- `inbox.triage_ai` / `inbox.judge_ai` (optional, same fields as `ai`, omitted fields inherit from `ai`): AI twin model 1 (triage) and model 2 (linking a Needs you item to one of the user's tasks);
+  omitted means both use `ai`. `inbox.agent`: model 3, `enabled`, `launcher` (Claude Code launcher, default the assistant's), `machine` (default the assistant's machine),
+  `concurrency` (1), `timeout_minutes` (15), `max_age_hours` (24), `rules` (no longer read; what the twin takes on is set by inbox policies, `docs/inbox.md` ("Policies")). See `docs/inbox.md` ("AI twin").
+
+  ```json
+  "inbox": {
+    "triage_ai": { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
+    "judge_ai":  { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
+    "agent": { "enabled": true, "launcher": "<launcher>" }
+  }
+  ```
+- `inbox.rules`: personal rules for Inbox AI triage (natural language, e.g. "anything from this person needs me", "this alert group is only noise"), appended to the triage prompt and preferred over default judgments (`docs/inbox.md`).
+  When a connector item carries its own rules (`rules`, e.g. an extension's `triage_rules` setting), those are used instead of this setting.
+- `kb`: knowledge base (`docs/knowledge.md`): `enabled` (on by default), `text_days` (text retention days, 365), `attachment_days` (attachments, 30),
+  `ai` (model for compression and tagging, same fields as `ai`; defaults to `inbox.triage_ai`, then `ai`), `extra_dirs` (note directories you maintain on the manager's machine, the hub machine for the built-in manager,
+  e.g. a git repo of facts / lessons: `kb_search` also searches Markdown in these directories (read-only, skips dot directories such as `.git`), and the assistant's CLAUDE.md mentions them; `~/` is that machine's home).
+  The knowledge base belongs to the manager, which reads the whole section here (`ai` included: it is the default of its `kb.*` model purposes);
+  an assistant run elsewhere (`assistant.external`) reads the `manager.json` on its own machine, and its `extra_dirs` are paths there (`docs/knowledge.md` ("Who owns what")).
+- `agents.triage`: triage after a round stops ([agent-work.md](agent-work.md) ("Switches")). Switches are under **Settings › Session Triage** in the App (stored in the manager's settings, all off by default),
   and only limits live here: `max_retries` (maximum automatic continuations, default 3), `max_wakes` (maximum wakes, default 6), `settle_seconds` (delay after stopping before triage, default 15);
-  `enabled` / `auto_continue` / `wake` / `decide` are merely initial values if never saved in the App (omitted means off). Triage is done by the manager (assistant process); this section is handed over at handshake, and changes take effect after restarting the hub.
+  `enabled` / `auto_continue` / `wake` / `decide` are merely initial values if never saved in the App (omitted means off). Triage is done by the manager (assistant process), which reads this section here; for hand edits see **Edits** above.
 - `agents.launcher_health`: launcher health checks and automatic repair ([launcher-health.md](launcher-health.md)): `enabled` (off by default; true enables periodic checks and automatic repair), `interval_minutes` (default 30),
   `repair` (repair Agent: no `skill` means no repair Agent, only CLI upgrades; `machine` defaults to the assistant's computer, `cwd` to home, `launcher` to an available one, `permission` is the permission mode, default `bypassPermissions`).
 - `agents.delegate` (#3029): the assistant answers Agent questions first ([assistant.md](assistant.md) ("The assistant answers questions first")). **Off by default**, enabled only with `enabled: true`;
-  `timeout_seconds` is how long the hub waits for the assistant (default 180); if no result arrives, the question is pushed to the user unchanged. `rules` are the user's own delegation rules (prose shown to the model with built-in rules; they cannot relax red lines).
-  Restart the hub after changes. Example enabling it (alongside other keys in `~/.persona/hub.json`):
+  `timeout_seconds` is how long the assistant may take (default 180); if no result arrives, the question is pushed to the user unchanged. `rules` are the user's own delegation rules (prose shown to the model with built-in rules; they cannot relax red lines).
+  For hand edits see **Edits** above. Example enabling it (alongside the other sections of `manager.json`):
 
   ```json
   "agents": {
@@ -319,53 +373,7 @@ The Unix socket and its immediate parent directory must belong to the current us
 
   Model selection is elsewhere: **Settings › Model Configuration › Question Delegation** (purpose `agent.delegate`). If never selected, it uses the "Information Filtering" connection with Opus 5.5 (`claude-opus-5-5`);
   change provider or model there, or use `PATCH /api/v1/model-config/purposes/agent.delegate` (`{"revision": <current>, "model": "claude-sonnet-5-5"}`); "Restore Defaults" returns to Opus.
-- `notify`: timing for "Done" pushes (`hub/notify.go`, omitted uses defaults): `done_delay_seconds` (how long after completion to wait for someone to look before pushing, default 60),
-  `long_turn_seconds` (how long a round must be to count as a "long task", default 60), `background_hold_minutes` (maximum wait for background tasks to finish, default 120),
-  `live_metrics_seconds` (minimum interval between pushes to one device when only Live Activity numbers change, default 60; `docs/live-activity.md` ("Push budget")).
-  Each device's push preferences are set separately in the App (**Settings › Notifications**, stored in hub `devices.prefs`), not here.
-- `inbox.triage_ai` / `inbox.judge_ai` (optional, same fields as `ai`, omitted fields inherit from `ai`): AI twin model 1 (triage) and model 2 (linking a Needs you item to one of the user's tasks);
-  omitted means both use `ai`. `inbox.agent`: model 3, `enabled`, `launcher` (Claude Code launcher, default the assistant's), `machine` (default the assistant's machine),
-  `concurrency` (1), `timeout_minutes` (15), `max_age_hours` (24), `rules` (no longer read; what the twin takes on is set by inbox policies, `docs/inbox.md` ("Policies")). See `docs/inbox.md` ("AI twin").
-
-  ```json
-  "inbox": {
-    "triage_ai": { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
-    "judge_ai":  { "base_url": "<gateway address>", "api_key_file": "~/.persona/inbox-ai.key", "model": "<model>" },
-    "agent": { "enabled": true, "launcher": "<launcher>" }
-  }
-  ```
-- `kb`: knowledge base (`docs/knowledge.md`): `enabled` (on by default), `text_days` (text retention days, 365), `attachment_days` (attachments, 30),
-  `ai` (model for compression and tagging, same fields as `ai`; defaults to `inbox.triage_ai`, then `ai`), `extra_dirs` (note directories you maintain on the hub machine,
-  e.g. a git repo of facts / lessons: `kb_search` also searches Markdown in these directories (read-only, skips dot directories such as `.git`), and the assistant's CLAUDE.md mentions them; `~/` is that machine's home).
-  The knowledge base belongs to the assistant (manager); the hub hands this section over at handshake (except `ai`, read by the hub's model config), and even an assistant running elsewhere follows the hub's copy;
-  with `assistant.external`, `extra_dirs` are paths on the assistant's machine (`docs/knowledge.md` ("Who owns what")).
-- `inbox.rules`: personal rules for Inbox AI triage (natural language, e.g. "anything from this person needs me", "this alert group is only noise"), appended to the triage prompt and preferred over default judgments (`docs/inbox.md`).
-  When a connector item carries its own rules (`rules`, e.g. an extension's `triage_rules` setting), those are used instead of this setting.
 - `hook_timeout_minutes` (default 30, 0 or negative also means 30): maximum time Claude Code hooks wait for phone answers (questions, approvals); timeout hands control back to the terminal (`docs/claude-integration.md`).
-- `shutdown_timeout_seconds` (default 8): total hub shutdown budget, including closing the database connection pool; external `docker stop -t` must be longer (`docs/server.md` ("Shutdown")).
-
-## manager.json
-
-A manager's own sections of the configuration are in its `manager.json`, not in `hub.json`: the hub reads none of them (`server/internal/managerconf`).
-
-- The built-in manager (the assistant process the hub starts, `personad assistant`): `~/.persona/managers/assistant/manager.json` (0600, its directory 0700), where its own directory goes once it is a service of its own. It holds no identity: the hub hands this manager its token.
-- A manager made in the app: the `manager.json` of its own directory (`~/.persona/managers/<id>/manager.json`), next to who it is (`id`, `hub`, `token`…; [managers.md](managers.md) ("Directory and manager.json")).
-- **Upgrading**: the first time the built-in manager starts with this version it copies `lark`, `lark_gate`, `connector_gate`, `github`, `imessage`, `google`, `microsoft`, `bots`, `extensions`, `plugins`, `trusted_extension_markets`, `usage` and `sent_ledger_days` out of `hub.json` into its `manager.json`, once: `moved_from_hub_json` in `manager.json` records which sections it took over and when, and `hub.json.before-manager-json-<time>` beside it (0600) is a copy of those sections as `hub.json` had them (only those: the hub's token and database password stay out of the manager's directory; any whole copy an earlier build left in that directory is cut down to the manager's sections at the next start). A section `manager.json` already has keeps its value there, and when `hub.json`'s differs the manager says so at start (`configuration: …: hub.json's copy differs …`); a section `hub.json` doesn't have isn't recorded, so if one appears there later (an older build switched back wrote it) the next start moves it too.
-  `hub.json` itself is not changed, so an older build switched back still finds what it read before; changes made after the move (in the app's admin pages or by hand in `manager.json`) are in `manager.json` only, and the older build does not see them. Nothing reads `hub.json`'s copies any more: when one of them is edited by hand after the move, the manager says at start (`configuration: hub.json's … changed after they moved …`) that the change belongs in `manager.json`. They can be deleted from `hub.json` once no older build will run.
-- The built-in manager's own files are in its directory beside its `manager.json`: `secret.key`, `tailcat-hub.json` and `handles.key`, copied there once from `~/.persona` (`moved_from_data_dir`). Its knowledge base stays at `~/.persona/data` unless `kb_dir` says where ([managers.md](managers.md) ("The built-in manager's own files")).
-- Edits: the admin UI's **Usage sources** writes `manager.json`'s `usage`; hand edits of `manager.json` take effect when the hub restarts (which restarts the built-in manager), or the manager for one made in the app.
-- A `lark` section that fails its own check (an account out of range, an unknown `prefer`) no longer stops the hub: the manager says so at start and doesn't use it (lark-cli is then off for the assistant).
-- **A `manager.json` that doesn't read stops the manager, not the hub**: when it isn't JSON or is empty, a section the manager reads at start (every moved one but `usage`: a `usage` of the wrong shape is said in the log and no usage source runs) has the wrong shape, a `connector_gate` rule is one the gate can't use, its `moved_from_hub_json` is broken, it, its directory or the `hub.json` beside it is a link to nothing (a volume not mounted yet), that `hub.json` doesn't read, or the move can't be written, the manager doesn't start and says why (naming the file). A `lark_gate` rule's action is not checked: one the gate doesn't know asks for confirmation. Started without its sections it would drop the user's gate rules (`lark_gate`, `connector_gate`), and the computers would fall back to their own, which let every read through. The hub keeps running and starts the built-in manager again with its usual backoff (1 s doubling to a minute), saying the reason each time until the file is fixed; the app shows that manager as offline meanwhile. A manager made in the app does the same, before it opens its database, each time its service starts it again (every few seconds); a `manager.json` that isn't JSON, is empty or isn't there at all (a link to a volume not mounted yet) is the exception: as before, a manager made in the app exits with status 2 on it, which its systemd service doesn't restart on (launchd and Docker do), so on Linux start it again once the file is back.
-- **Switching a manager made in the app back to an older build**: the older build reads its sections from a `hub.json` in that manager's directory, not from `manager.json`, so what was moved or changed since is not seen there. Its `personad manager join` and `install` rewrite `manager.json` whole, keeping only who the manager is, so the sections and the marker are gone when this version runs again: copy `manager.json` aside before running either on an older build, and put its sections back afterwards (the `hub.json.before-manager-json-*` copies have them only as they were when they moved, and a manager that never had a `hub.json` has none). The older `personad manager run` and `status` also count `managers/assistant` (the built-in manager's directory) as a manager made in the app: give `--dir` to pick the manager.
-
-```json
-{
-  "google": { "client_id": "…", "proxy": "" },
-  "lark": { "account": 2 },
-  "extensions": [{ "id": "voice", "command": "jarvisd", "args": ["voice"] }]
-}
-```
-
 - `usage` (optional): subscription usage sources from an account-pool gateway (such as a relay), merged into the sidebar's usage bar (`docs/usage-windows.md` ("Account-pool gateways"), #2595).
   `usage.sources[]` (at most 8): `id`, `name` (source name in the sidebar), `type` (`relay` / `generic`; old type names are still read as `relay` and rewritten to the new name the next time this source is edited in the admin UI), `url`, `key` (the gateway's admin Key, **a secret: only in `manager.json` (0600)**, unreadable from the admin UI and APIs, absent from logs), `enabled` (false disables this source).
   `usage.enabled` (false is the master switch), `usage.poll_minutes` (poll interval per source, default 5, 1 to 1440). This section belongs to **the manager** (`personad assistant`, which reads and writes it in its `manager.json`; the hub does not read it): it only reads the gateway's cached numbers (`refresh=false`), requests come from the manager, and nodes never touch the gateway.

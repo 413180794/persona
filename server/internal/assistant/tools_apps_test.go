@@ -157,14 +157,14 @@ func TestKBToolsEmptyAnswersAreLocalizedAndPathFree(t *testing.T) {
 	}
 }
 
-// Without a knowledge base (hub.json kb.enabled false) the kb_* tools say it is off (and how to turn it on).
+// Without a knowledge base (manager.json kb.enabled false) the kb_* tools say it is off (and how to turn it on).
 func TestKBToolsKnowledgeBaseOff(t *testing.T) {
 	f := newFakeHub()
 	f.hello.KB = &KBSettings{Off: true}
 	s := withSettings(t, f, New(Options{Hub: f, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}}))
 	for _, name := range []string{"kb_search", "kb_list", "kb_get", "kb_update"} {
 		if _, err := runTool(s, "c1", name, map[string]any{"kind": "projects", "id": "x", "query": "x"}); err == nil ||
-			err.Error() != "the knowledge base is off (hub.json kb.enabled)" {
+			err.Error() != "the knowledge base is off (manager.json kb.enabled)" {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}

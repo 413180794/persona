@@ -98,7 +98,7 @@ Handled by the Lark plugin (formerly hub `inbox_docs.go`). Mentions / comments t
 
 ## AI triage
 
-`server/internal/assistant/inbox_triage.go` (manager-owned): every new item, or item with new messages, goes to the small-task model (`inbox.triage` in model configuration, falling back to `ai` in `hub.json`, default DeepSeek flash), which assigns one of three tiers,
+`server/internal/assistant/inbox_triage.go` (manager-owned): every new item, or item with new messages, goes to the small-task model (`inbox.triage` in model configuration, falling back to `ai` in the manager's `manager.json`, default DeepSeek flash), which assigns one of three tiers,
 a summary up to 40 characters, and a short reason:
 
 | tier | UI | Meaning |
@@ -108,7 +108,7 @@ a summary up to 40 characters, and a short reason:
 | `noise` | Collapsed | Marketing, subscriptions, newsletters, automated notices, irrelevant chatter, bot spam |
 
 - Model input is item type (private chat / mention of user / group / bot / mail directly to user / CC or list) plus item text (`context`: at most 20 recent new Lark messages,
-  first 3000 characters of the latest mail's full body). Prompts are in `server/internal/prompts/inbox/` (`triage.md`, drafting `draft.md`, judgment `judge.md`, AI twin `agent.md`; `docs/prompts.md`). Address the owner using `assistant.owner`; `inbox.rules` in `hub.json` (or assistant-edited settings) contains the user's rules, appended last and overriding defaults.
+  first 3000 characters of the latest mail's full body). Prompts are in `server/internal/prompts/inbox/` (`triage.md`, drafting `draft.md`, judgment `judge.md`, AI twin `agent.md`; `docs/prompts.md`). Address the owner using `assistant.owner`; `inbox.rules` in the manager's `manager.json` (or assistant-edited settings) contains the user's rules, appended last and overriding defaults.
 - **Per-source rules (replacement, 2026-11-04, #1644)**: sources / accounts need different standards; one global rule set cannot cover them. Connector items may include `rules`
   (the user's original words, such as Lark-plugin Triage rules `triage_rules`; `docs/connector-protocol.md`). The item **uses only its own rules**, with no global `inbox.rules` appended.
   Only items without rules use global ones. Default tier criteria above are unchanged; user rules remain last and authoritative. Rules are stored with the item (not listed), updated from each new version when activity arrives,
@@ -223,7 +223,7 @@ Triage, drafting, AI twin, done state, and retention use hub's generic logic.
   - **Configuration** (Settings › Connectors › GitHub › Inbox; `github.inbox` in the manager's manager.json supplies defaults; stored as `connectors.options.github` in settings):
     - CI failures: Off / Default branch only / Include my PRs (default) / All (all Needs you).
     - Muted repositories: exclude all activity and handle existing items.
-    - `ignore_branches`: silent branches (`path.Match` patterns, default `["train/*"]`, editable only in hub.json).
+    - `ignore_branches`: silent branches (`path.Match` patterns, default `["train/*"]`, editable only in manager.json).
   - **Backlog**: after each collection, hub passes open GitHub items to connector `Settle` (`connector.InboxSettler`). Old one-per-notification CI items ("GitHub noise reduction: group CI failures by branch"),
     muted repositories, automatic branches, and CI items when CI is off are marked done, not deleted. Items still in unread notifications are retiered under new rules.
   - Read-only count comparison on real hub data 2026-11-03: Needs you fell from 52 to 13 (42 old CI items handled; remaining 6 human mentions, 2 review requests,

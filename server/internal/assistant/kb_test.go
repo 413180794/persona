@@ -143,7 +143,7 @@ func TestKBAnswersTheHub(t *testing.T) {
 // Off, the knowledge base answers the hub with nothing (and the posts with why).
 func TestKBOffAnswersTheHub(t *testing.T) {
 	f := newFakeHub()
-	f.hello.KB = &KBSettings{Off: true} // hub.json kb.enabled false
+	f.hello.KB = &KBSettings{Off: true} // manager.json kb.enabled false
 	s := New(Options{Hub: f, Logf: testLogf(t), KB: &KBOptions{Dir: t.TempDir()}})
 	ctx := context.Background()
 	out, _, err := s.kbRequest(ctx, assistantwire.MethodKBContext, json.RawMessage(`{"chat_id":"lark-f1"}`))
@@ -341,7 +341,7 @@ func TestKBRouteProjectAgents(t *testing.T) {
 	}
 }
 
-// How the knowledge base is kept is the hub's hub.json kb section (its hello), wherever the assistant runs: the text
+// How the knowledge base is kept is the hub's manager.json kb section (its hello), wherever the assistant runs: the text
 // retention and the user's other notes; a change opens it again with the new one; off, it is off.
 func TestKBKeptAsTheHubSays(t *testing.T) {
 	f := newFakeHub()

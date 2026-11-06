@@ -841,7 +841,7 @@ func launcherAgent(name string) string {
 	return "claude"
 }
 
-// fakeModel is the model the API purposes run on (hub.json's "ai" in the hello, unless the test set the models
+// fakeModel is the model the API purposes run on (manager.json's "ai" in the hello, unless the test set the models
 // itself): a Messages API that answers a tab's name with f.tabReply, the Agents triage with f.triage and the done
 // judge with f.judge (each an error when empty), and the others with f.replies in turn (an error with noModel),
 // keeping what was asked.

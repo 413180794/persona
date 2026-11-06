@@ -21,7 +21,7 @@ import (
 // directory, with its tools: a conversation the assistant starts itself, untitled) looks into it and drafts the reply
 // (inbox_draft). The draft waits in the inbox; nothing is sent until the user taps "Send" (POST /api/v1/inbox/{id}/reply).
 
-// InboxAgentConfig is hub.json's inbox.agent (the hub hands it over in InboxConfig).
+// InboxAgentConfig is manager.json's inbox.agent (the hub hands it over in InboxConfig).
 type InboxAgentConfig = assistantwire.InboxAgentConfig
 
 func agentConcurrency(c InboxAgentConfig) int { return max(c.Concurrency, 1) }

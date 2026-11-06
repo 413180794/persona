@@ -13,12 +13,14 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Hello is manager.hello's answer, and manager.updated's params (the answer again when it changed): hub.json's
-// assistant section, which the assistant takes as its defaults (its own settings are its own: Profile), and what the
-// hub knows that it needs.
+// Hello is manager.hello's answer, and manager.updated's params (the answer again when it changed): what the hub
+// knows that the manager needs (its machines, the cards' switches, the push timings, the user's language). The
+// manager's own sections (Owner, OwnerNotes, Agents, KB, the models but Launchers, a card's wait) are not sent by a hub
+// that knows config.own: the manager lays its manager.json over the hello (assistant/ownconfig.go); an older hub still
+// sends its hub.json's, which a manager.json section replaces. Its own settings are its own (Profile).
 type Hello struct {
 	Owner string `json:"owner"`
-	// OwnerNotes is hub.json's assistant.notes: what the assistant knows about the user until "About me" is edited.
+	// OwnerNotes is manager.json's assistant.notes: what the assistant knows about the user until "About me" is edited.
 	OwnerNotes string `json:"owner_notes"`
 	// Assistant is where the hub would run the assistant's conversations by default.
 	Assistant Placement `json:"assistant"`
@@ -30,9 +32,9 @@ type Hello struct {
 	// HTMLViews is hub.json's assistant.html_views (default on) while PersonaView is on: the HTML bridge
 	// (…/views/{key}/html-actions) answers. An older hub never sends it, so the bridge stays off there.
 	HTMLViews bool `json:"html_views,omitempty"`
-	// Agents is hub.json's agents section: the triage's limits and default switches (agents.go).
+	// Agents is manager.json's agents section: the triage's limits and default switches (agents.go).
 	Agents AgentsConfig `json:"agents,omitzero"`
-	// KB is hub.json's kb section: the knowledge base the assistant keeps (kb.go).
+	// KB is manager.json's kb section: the knowledge base the assistant keeps (kb.go).
 	KB *KBSettings `json:"kb,omitempty"`
 	// Models is what hub.json says about models (models.go).
 	Models HubModels `json:"models,omitzero"`
@@ -43,12 +45,18 @@ type Hello struct {
 	// fleet.mutes), so a manager has them before anything it pushes; nil from an older hub or while the hub cannot
 	// read them (fleet.mutes brings them later).
 	Mutes *Mutes `json:"mutes,omitempty"`
-	// Notify is hub.json's notify and hook_timeout_minutes: the finished push's timings and how long a hook's card
-	// waits by default (the interactions and the pushes are the manager's, fleet.go).
+	// LegacyConfig is what of the hub's hub.json the hello carried before config.own (managerconf.HelloSections:
+	// owner, notes, Agents, kb, ai, a card's wait, the inbox's models and AI twin machine), raw. Only in the handshake's
+	// answer to a built-in manager the hub did not start (its hello's deploy is not "child"), which takes them over into
+	// its manager.json once (managerconf.MoveFrom); the hub's child took them from this hub.json itself.
+	LegacyConfig json.RawMessage `json:"legacy_config,omitempty"`
+	// Notify is hub.json's notify: the finished push's timings; HookTimeoutMS, how long a hook's card waits by default,
+	// is manager.json's hook_timeout_minutes, over the hello (the interactions and the pushes are the manager's).
 	Notify NotifyTimings `json:"notify,omitzero"`
 }
 
-// NotifyTimings are hub.json's notify section and hook_timeout_minutes, in milliseconds (0: the default).
+// NotifyTimings are hub.json's notify section, and manager.json's hook_timeout_minutes, in milliseconds (0: the
+// default).
 type NotifyTimings struct {
 	DoneDelayMS      int64 `json:"done_delay_ms,omitempty"`
 	LongTurnMS       int64 `json:"long_turn_ms,omitempty"`
@@ -58,10 +66,10 @@ type NotifyTimings struct {
 
 // Placement is the hub's defaults for where the assistant runs.
 type Placement struct {
-	// MachineID is hub.json's assistant.machine when the hub has it, else the hub's own machine, else the first one;
+	// MachineID is manager.json's assistant.machine when the hub has it, else the hub's own machine, else the first one;
 	// "" when the hub has no machine.
 	MachineID string `json:"machine_id"`
-	// Launcher is hub.json's assistant.launcher ("" is claude).
+	// Launcher is manager.json's assistant.launcher ("" is claude).
 	Launcher string `json:"launcher,omitempty"`
 	// Machines are the machines the hub has: a machine the assistant saved that is none of them is not used.
 	Machines []string `json:"machines,omitempty"`
@@ -541,8 +549,16 @@ const (
 // AssistantID is the bus identity the assistant connects as (a manager's token, hub/bustokens.go).
 const AssistantID = "assistant"
 
+// Capabilities a manager names in manager.hello's capabilities (stable names: never renamed or reused).
+const (
+	// CapabilityConfigOwn: the manager reads its own sections of the configuration from its manager.json (owner,
+	// notes, Agents, the knowledge base, the models, a card's wait): the hello does not carry them any more, and a
+	// manager without it runs on its built-in defaults (docs/managers.md "Configuration").
+	CapabilityConfigOwn = "config.own"
+)
+
 // The methods and events, by direction. The assistant's handshake is manager.hello {id, host, os, arch, deploy,
-// version}; its answer is Hello (with the hub's name, role and managers besides).
+// version, capabilities}; its answer is Hello (with the hub's name, role and managers besides).
 const (
 	// The assistant calls the hub (Hub).
 	MethodHello    = "manager.hello"

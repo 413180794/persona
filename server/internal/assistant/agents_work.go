@@ -211,7 +211,7 @@ func (a approval) covers(w *proto.WorkState) bool {
 // triedTurn is a turn a triage was attempted on: a failed one is tried again after workRetryTriage, not every tick.
 type triedTurn struct{ turn, at time.Time }
 
-// triageCfg is hub.json's agents.triage, as the hello has it.
+// triageCfg is manager.json's agents.triage, as the hello has it.
 func (s *Service) triageCfg(ctx context.Context) assistantwire.TriageConfig {
 	return s.hello(ctx).Agents.Triage
 }

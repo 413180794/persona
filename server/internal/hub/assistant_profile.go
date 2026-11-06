@@ -74,11 +74,7 @@ func (h *Hub) assistantProfile() assistantwire.Profile {
 	if p != nil {
 		return *p
 	}
-	out := assistantwire.Profile{MachineID: h.defaultAssistantMachine(), Launcher: "claude"}
-	if h.cfg != nil && h.cfg.Assistant.Launcher != "" {
-		out.Launcher = h.cfg.Assistant.Launcher
-	}
-	return out
+	return assistantwire.Profile{MachineID: h.defaultAssistantMachine(), Launcher: "claude"}
 }
 
 // assistantProfileOf is the selected manager's last reported profile, falling back to the built-in's while it
@@ -97,12 +93,9 @@ func (h *Hub) assistantProfileOf(id string) assistantwire.Profile {
 // isMainOn: session on machine is the assistant's main conversation, as it reported.
 func (h *Hub) isMainOn(machine, session string) bool { return h.mainOf(machine, session) }
 
-// defaultAssistantMachine is where hub.json runs the assistant: its assistant.machine when the hub has it, else the
-// hub's own machine, else the first one; never a computer waiting to be confirmed (machine_trust.go).
+// defaultAssistantMachine is where the hub would run the assistant: the hub's own machine, else the first one; never a
+// computer waiting to be confirmed (machine_trust.go). The manager's manager.json assistant.machine goes over it.
 func (h *Hub) defaultAssistantMachine() string {
-	if h.cfg != nil && h.localMachine(h.cfg.Assistant.Machine) != nil && !h.machineUntrusted(h.cfg.Assistant.Machine) {
-		return h.cfg.Assistant.Machine
-	}
 	machines := slices.DeleteFunc(h.machinesNow(), func(m *Machine) bool { return h.machineUntrusted(m.cfg.ID) })
 	for _, m := range machines {
 		if m.cfg.Kind == "local" {

@@ -39,7 +39,7 @@ type fakeInbox struct {
 	off       map[string]bool   // read with nothing: "Send to inbox" off, not signed in, waiting for the triage model
 	failing   map[string]error  // Collect fails
 	cfg       assistantwire.InboxConfig
-	// model is every inbox purpose's model (nil: none set up), models by purpose over it: hub.json's "ai" and its
+	// model is every inbox purpose's model (nil: none set up), models by purpose over it: manager.json's "ai" and its
 	// triage / judge / kb connections in the hello (models.go's baselines; translation and drafts are kb's).
 	model   *ai.Client
 	models  map[string]*ai.Client
@@ -174,7 +174,7 @@ func (in *fakeInbox) setModel(m *ai.Client) {
 	in.model = m
 }
 
-// hubModels are the hello's models: model as hub.json's "ai", models' as the connections the purposes' categories
+// hubModels are the hello's models: model as manager.json's "ai", models' as the connections the purposes' categories
 // fall back to (models.go legacyModelConfig).
 func (in *fakeInbox) hubModels() HubModels {
 	in.mu.Lock()

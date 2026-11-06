@@ -26,6 +26,7 @@ import (
 	"github.com/nwverse/persona/server/internal/db"
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/link"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/update"
 )
 
@@ -124,6 +125,11 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 			return "", nil, err // before the code is spent: it works once
 		}
 	}
+	if o.Dir != "" { // a manager.json there that is a link to nothing would fail the write after the code is spent
+		if _, err := managerconf.ReadFile(filepath.Join(o.Dir, assistant.ManagerFile)); err != nil {
+			return "", nil, ConfigError{err}
+		}
+	}
 	client := o.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -180,7 +186,11 @@ func Join(ctx context.Context, o JoinOptions) (string, *assistant.ManagerConfig,
 	if err != nil {
 		return "", nil, err
 	}
-	if err := assistant.WriteManagerConfig(dir, c); err != nil {
+	warn := o.Warn
+	if warn == nil {
+		warn = os.Stderr
+	}
+	if err := assistant.WriteManagerConfigTo(dir, c, warn); err != nil {
 		return "", nil, fmt.Errorf("写不了 %s：%w（token 已经换出来了：在 App 里再拿一个安装码重来）", filepath.Join(dir, assistant.ManagerFile), err)
 	}
 	return dir, &c, nil

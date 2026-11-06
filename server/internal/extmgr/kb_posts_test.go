@@ -120,7 +120,7 @@ func TestConnectorPostsNeedAnArchive(t *testing.T) {
 	}
 }
 
-// hub.json's kb.enabled false (the hub's hello says): nothing goes to a knowledge base.
+// manager.json's kb.enabled false (the hub's hello says): nothing goes to a knowledge base.
 func TestConnectorPostsWithTheKnowledgeBaseOff(t *testing.T) {
 	h, a, c := postsManager(t)
 	h.hello.Store(&assistantwire.Hello{KB: &assistantwire.KBSettings{Off: true}})

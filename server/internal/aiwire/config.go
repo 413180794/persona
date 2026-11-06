@@ -3,7 +3,7 @@
 // models, aliases it.
 package aiwire
 
-// Config is a model to call: the gateway, its API, the key and the model (hub.json's "ai" and the per-task models).
+// Config is a model to call: the gateway, its API, the key and the model (manager.json's "ai" and the per-task models).
 type Config struct {
 	// API is "messages" (Anthropic Messages, the default) or "responses" (OpenAI Responses, streamed).
 	API        string `json:"api"`

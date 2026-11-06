@@ -15,7 +15,14 @@ const oldHubJSON = `{
   "token": "hub-token",
   "database_url": "postgres://u:p@[fd00::20]:5432/jarvis",
   "machines": [{"id": "server", "kind": "local"}],
-  "assistant": {"owner": "Example"},
+  "assistant": {"owner": "Example", "notes": "- Code is in ~/code", "machine": "server", "launcher": "claude",
+    "external": false, "persona_view": true},
+  "agents": {"triage": {"max_retries": 2}},
+  "kb": {"enabled": false, "text_days": 30},
+  "ai": {"base_url": "https://gateway.example.com", "model": "m"},
+  "inbox": {"rules": "mine", "triage_ai": {"model": "t"}},
+  "hook_timeout_minutes": 45,
+  "notify": {"done_delay_seconds": 30},
   "lark": {"account": 2},
   "lark_gate": [{"method": "POST", "path": "/x", "action": "allow"}],
   "connector_gate": [],
@@ -72,17 +79,25 @@ func TestMoveTakesTheManagerSectionsOnce(t *testing.T) {
 	if !slices.Equal(rep.Moved, Moved) {
 		t.Fatalf("moved %v, want every manager section %v", rep.Moved, Moved)
 	}
-	hub := readObject(t, hubPath)
-	mine := readObject(t, file)
+	hubObj, _ := ParseObject([]byte(oldHubJSON))
+	mineRaw, _ := os.ReadFile(file)
+	mineObj, _ := ParseObject(mineRaw)
 	for _, k := range Moved {
-		if compact(t, mine[k]) != compact(t, hub[k]) {
-			t.Errorf("manager.json's %s = %s, hub.json had %s", k, mine[k], hub[k])
+		want, _ := getPath(hubObj, k)
+		got, ok := getPath(mineObj, k)
+		if !ok || compact(t, got) != compact(t, want) {
+			t.Errorf("manager.json's %s = %s, hub.json had %s", k, got, want)
 		}
 	}
-	for _, k := range []string{"listen", "token", "database_url", "machines", "assistant"} {
+	mine := readObject(t, file)
+	for _, k := range []string{"listen", "token", "database_url", "machines", "notify"} {
 		if _, ok := mine[k]; ok {
 			t.Errorf("manager.json took the hub's %s", k)
 		}
+	}
+	// assistant is split: the manager's keys moved, the hub's (external, persona_view) did not.
+	if compact(t, mine["assistant"]) != `{"launcher":"claude","machine":"server","notes":"- Code is in ~/code","owner":"Example"}` {
+		t.Errorf("manager.json's assistant %s", mine["assistant"])
 	}
 	if b, _ := os.ReadFile(hubPath); string(b) != oldHubJSON {
 		t.Fatalf("hub.json changed:\n%s", b)
@@ -94,14 +109,19 @@ func TestMoveTakesTheManagerSectionsOnce(t *testing.T) {
 	if filepath.Dir(rep.Backup) != DefaultDir(home) {
 		t.Fatalf("backup %s", rep.Backup)
 	}
-	backup := readObject(t, rep.Backup)
+	backupRaw, _ := os.ReadFile(rep.Backup)
+	backup, err := ParseObject(backupRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, k := range Moved {
-		if compact(t, backup[k]) != compact(t, hub[k]) {
-			t.Errorf("backup's %s = %s, hub.json had %s", k, backup[k], hub[k])
+		want, _ := getPath(hubObj, k)
+		if got, ok := getPath(backup, k); !ok || compact(t, got) != compact(t, want) {
+			t.Errorf("backup's %s = %s, hub.json had %s", k, got, want)
 		}
 	}
-	if len(backup) != len(Moved) {
-		t.Fatalf("the backup holds more than the moved sections: %v", backup)
+	if string(Only(backup, Moved)) != string(backup.Marshal()) {
+		t.Fatalf("the backup holds more than the moved sections: %s", backupRaw)
 	}
 	if b, _ := os.ReadFile(rep.Backup); strings.Contains(string(b), "hub-token") || strings.Contains(string(b), "postgres://") {
 		t.Fatalf("the backup holds the hub's secrets:\n%s", b)
@@ -255,6 +275,29 @@ func TestSectionsLeaveIdentityOut(t *testing.T) {
 	}
 }
 
+// Only and Without split a section by its dotted keys: the manager reads its part, the hub keeps the rest.
+func TestOnlyAndWithoutSplitSections(t *testing.T) {
+	o, err := ParseObject([]byte(`{"token":"t","assistant":{"owner":"o","external":true},"kb":{"enabled":false},"other":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := []string{"kb", "assistant.owner", "assistant.notes"}
+	if got := string(Only(o, keys)); got != `{"assistant":{"owner":"o"},"kb":{"enabled":false}}` {
+		t.Errorf("Only %s", got)
+	}
+	if got := string(Without(o, keys)); got != `{"token":"t","assistant":{"external":true},"other":1}` {
+		t.Errorf("Without %s", got)
+	}
+	// A section that is not an object is left alone by both (the hub's parser says what is wrong with it).
+	o, _ = ParseObject([]byte(`{"assistant":"x"}`))
+	if got := string(Only(o, keys)); got != `{}` {
+		t.Errorf("Only %s", got)
+	}
+	if got := string(Without(o, keys)); got != `{"assistant":"x"}` {
+		t.Errorf("Without %s", got)
+	}
+}
+
 // A section both have with the same value is not reported as ignored.
 func TestMoveSameValueIsNotIgnored(t *testing.T) {
 	dir := t.TempDir()
@@ -358,9 +401,11 @@ func TestTrimBackupsOnlyTouchesItsCopies(t *testing.T) {
 	if b, _ := os.ReadFile(file); string(b) != mine {
 		t.Fatalf("manager.json changed:\n%s", b)
 	}
-	cut := readObject(t, unlisted)
-	if _, ok := cut["token"]; ok || len(cut) != len(Moved) {
-		t.Fatalf("the unlisted copy holds %v", cut)
+	cutRaw, _ := os.ReadFile(unlisted)
+	cut, err := ParseObject(cutRaw)
+	if _, ok := cut.Get("token"); err != nil || ok || string(Only(cut, Moved)) != string(cut.Marshal()) ||
+		len(cut.Keys()) == 0 {
+		t.Fatalf("the unlisted copy holds %s (%v)", cutRaw, err)
 	}
 	if b, _ := os.ReadFile(outside); string(b) != oldHubJSON {
 		t.Fatalf("a file outside the manager's directory was cut:\n%s", b)
@@ -519,5 +564,102 @@ func TestDanglingHubJSONIsAnError(t *testing.T) {
 	}
 	if _, err := Move(dir, filepath.Join(dir, File)); err == nil || !strings.Contains(err.Error(), "link to nothing") {
 		t.Fatalf("Move: %v", err)
+	}
+}
+
+// The hub's hello-era sections, handed over raw to a built-in manager elsewhere: taken over once, only those; a
+// section manager.json has keeps its value; the next hello writes nothing.
+func TestMoveFromTheHubsSections(t *testing.T) {
+	legacy := Legacy([]byte(oldHubJSON))
+	lo, err := ParseObject(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := lo.Get("token"); ok || string(Only(lo, HelloSections)) != string(lo.Marshal()) {
+		t.Fatalf("legacy holds more than the hello's sections: %s", legacy)
+	}
+	if Legacy([]byte(`{"token":"t","lark":{}}`)) != nil {
+		t.Fatal("legacy of a hub.json without them")
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, File)
+	if err := os.WriteFile(file, []byte(`{"ai":{"model":"mine"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := MoveFrom(legacy, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(rep.Moved, "kb") || !slices.Contains(rep.Moved, "assistant.owner") || slices.Contains(rep.Moved, "ai") ||
+		!slices.Contains(rep.Moved, "inbox.triage_ai") || !slices.Equal(rep.Ignored, []string{"ai"}) || rep.Backup == "" {
+		t.Fatalf("%+v", rep)
+	}
+	mineRaw, _ := os.ReadFile(file)
+	mine, _ := ParseObject(mineRaw)
+	if v, _ := getPath(mine, "assistant.owner"); compact(t, v) != `"Example"` {
+		t.Fatalf("manager.json %s", mineRaw)
+	}
+	if _, ok := mine.Get("lark"); ok {
+		t.Fatalf("took a section the hello never had: %s", mineRaw)
+	}
+	before, _ := os.ReadFile(file)
+	if rep, err := MoveFrom(legacy, file); err != nil || len(rep.Moved) != 0 || len(rep.Ignored) != 0 {
+		t.Fatalf("the next hello: %+v %v", rep, err)
+	}
+	if after, _ := os.ReadFile(file); string(after) != string(before) {
+		t.Fatal("the next hello rewrote manager.json")
+	}
+}
+
+// manager.json's assistant not an object: an error, not "no owner, no notes".
+func TestSectionsRefusesASplitSectionThatIsNoObject(t *testing.T) {
+	file := filepath.Join(t.TempDir(), File)
+	if err := os.WriteFile(file, []byte(`{"assistant":"x"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sections(file); err == nil || !strings.Contains(err.Error(), "assistant") {
+		t.Fatalf("%v", err)
+	}
+}
+
+// A built-in manager elsewhere whose machine has a hub.json of its own (one setup wrote, with placeholders for the
+// hello's sections): its start leaves those out, and the hub's, handed over at the handshake, are taken once; of
+// inbox, this machine's rules and switch stay and the hub's models join them. A later change of the hub's is not
+// taken, and the next start says nothing about them.
+func TestMoveElsewhereTakesTheHellosSectionsFromTheHub(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, "hub.json"), []byte(`{"token":"t","ai":{"api":""},"kb":{},
+		"hook_timeout_minutes":30,"inbox":{"rules":"mine","agent":{"enabled":true,"machine":"desk"},"triage_ai":{"model":"stale-local"}},
+		"lark":{"account":2}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	file := DefaultFile(home)
+	rep, err := MoveExcept(home, file, HubOnly)
+	if err != nil || !slices.Equal(rep.Moved, []string{"lark", "inbox"}) {
+		t.Fatalf("local: %+v %v", rep, err)
+	}
+	hub := `{"ai":{"base_url":"https://gateway.example.com"},"kb":{"enabled":false},"hook_timeout_minutes":30,
+		"inbox":{"triage_ai":{"model":"t"},"agent":{"machine":"server"}}}`
+	rep, err = MoveFrom([]byte(hub), file)
+	// The twin's machine was always this machine's to say: kept, the hub's differing one said.
+	if err != nil || !slices.Equal(rep.Moved, []string{"kb", "ai", "hook_timeout_minutes", "inbox.triage_ai"}) ||
+		!slices.Equal(rep.Ignored, []string{"inbox.agent.machine"}) || rep.Backup == "" {
+		t.Fatalf("from the hub: %+v %v", rep, err)
+	}
+	mine := readObject(t, file)
+	if compact(t, mine["kb"]) != `{"enabled":false}` || compact(t, mine["ai"]) != `{"base_url":"https://gateway.example.com"}` ||
+		compact(t, mine["inbox"]) != `{"agent":{"enabled":true,"machine":"desk"},"rules":"mine","triage_ai":{"model":"t"}}` {
+		t.Fatalf("manager.json %v", mine)
+	}
+	before, _ := os.ReadFile(file)
+	if rep, err := MoveFrom([]byte(strings.Replace(hub, `"enabled":false`, `"enabled":true`, 1)), file); err != nil ||
+		len(rep.Moved)+len(rep.Ignored) != 0 {
+		t.Fatalf("a later handshake: %+v %v", rep, err)
+	}
+	if after, _ := os.ReadFile(file); string(after) != string(before) {
+		t.Fatal("a later handshake rewrote manager.json")
+	}
+	if rep, err := MoveExcept(home, file, HubOnly); err != nil || len(rep.Stale)+len(rep.Moved) != 0 {
+		t.Fatalf("next start: %+v %v", rep, err)
 	}
 }

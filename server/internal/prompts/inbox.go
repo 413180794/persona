@@ -78,7 +78,7 @@ func RenderInboxDraftInput(in InboxDraftInput) string { return render("inbox/dra
 // Needs you item goes to the manager, so only its task_id is used.
 type InboxJudge struct {
 	Owner string
-	Rules string // hub.json inbox.agent.rules, trimmed
+	Rules string // manager.json inbox.agent.rules, trimmed
 }
 
 func RenderInboxJudge(j InboxJudge) string { return render("inbox/judge", j) }

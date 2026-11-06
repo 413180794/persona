@@ -571,3 +571,22 @@ func TestLostDatabaseAndDockerDown(t *testing.T) {
 		t.Fatalf("gone: %q", got)
 	}
 }
+
+// --dir with a manager.json that is a link to nothing (a volume not mounted yet): refused before the code is traded,
+// which a write after it would have spent for nothing.
+func TestJoinRefusesADanglingManagerJSONFirst(t *testing.T) {
+	isolate(t)
+	j := &joinHub{}
+	srv := httptest.NewServer(j)
+	defer srv.Close()
+	dir := t.TempDir()
+	if err := os.Symlink(filepath.Join(dir, "not-mounted", "manager.json"), filepath.Join(dir, "manager.json")); err != nil {
+		t.Fatal(err)
+	}
+	var ce ConfigError
+	_, _, err := Join(context.Background(), JoinOptions{Hub: srv.URL, Code: "mi_good", Dir: dir,
+		CheckDocker: func(context.Context) error { return nil }})
+	if !errors.As(err, &ce) || !strings.Contains(err.Error(), "link to nothing") || j.trades.Load() != 0 {
+		t.Fatalf("%v, %d trades", err, j.trades.Load())
+	}
+}

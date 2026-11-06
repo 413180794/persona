@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +17,7 @@ import (
 	"github.com/nwverse/persona/server/internal/bus"
 	"github.com/nwverse/persona/server/internal/devicewire"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/managerconf"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
@@ -104,29 +107,27 @@ func (h *Hub) reportedOf(id string) *assistantState {
 // assistantLink is the hub's side of assistantwire.Hub.
 type assistantLink struct{ h *Hub }
 
-// Hello is hub.json's assistant section (the defaults of the assistant's own settings), the machines, and what of
-// the hub's own the assistant needs.
+// Hello is what of the hub's own the manager needs: the machines and where the hub would run the assistant, the
+// cards' switches and the finished push's timings (hub.json's, the hub's), the user's language. The manager's own
+// sections (owner, notes, agents, kb, models, a card's wait) are in its manager.json, not here (docs/config.md
+// "manager.json").
 func (l assistantLink) Hello(context.Context) (assistantwire.Hello, error) {
 	h := l.h
-	out := assistantwire.Hello{KB: h.kbSettings(), Locale: string(h.userLang())} // hub.json's kb section: the knowledge base it keeps (kb.go)
-	if m, ok := h.mutesEvent(); ok {                                             // the hub's mutes, before the manager pushes anything (fleet_link.go)
+	out := assistantwire.Hello{Locale: string(h.userLang())}
+	if m, ok := h.mutesEvent(); ok { // the hub's mutes, before the manager pushes anything (fleet_link.go)
 		out.Mutes = m.Mutes
 	}
 	if h.cfg == nil {
 		return out, nil
 	}
-	out.Owner = strings.TrimSpace(h.cfg.Assistant.Owner)
-	out.OwnerNotes = strings.TrimSpace(h.cfg.Assistant.Notes)
-	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Launcher: h.cfg.Assistant.Launcher, Standby: h.isMember()}
+	out.Assistant = assistantwire.Placement{MachineID: h.defaultAssistantMachine(), Standby: h.isMember()}
 	out.Assistant.Machines = h.machineIDs()
 	out.PersonaView, out.HTMLViews = h.assistantCards()
 	out.DoneDelayMS = taskSettleDelay(h.cfg.Notify).Milliseconds()
-	// The finished push's timings and a card's default wait: the manager's to apply (fleet_push.go there).
+	// The finished push's timings: the manager's to apply (fleet_push.go there).
 	out.Notify = assistantwire.NotifyTimings{DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),
-		LongTurnMS: h.cfg.Notify.longTurn().Milliseconds(), BackgroundHoldMS: h.cfg.Notify.backgroundHold().Milliseconds(),
-		HookTimeoutMS: (time.Duration(h.cfg.HookTimeoutMinutes) * time.Minute).Milliseconds()}
-	out.Agents = h.cfg.Agents  // the Agents business's defaults (agents_link.go)
-	out.Models = h.hubModels() // what hub.json says about models (assistant_models.go)
+		LongTurnMS: h.cfg.Notify.longTurn().Milliseconds(), BackgroundHoldMS: h.cfg.Notify.backgroundHold().Milliseconds()}
+	out.Models = h.hubModels() // the launchers hub.json's machines add (assistant_models.go)
 	return out, nil
 }
 
@@ -408,6 +409,20 @@ func (h *Hub) assistantHelloFor(ctx context.Context, id string) assistantwire.He
 	a.lastHello = string(raw)
 	a.helloMu.Unlock()
 	return hello
+}
+
+// legacyConfig is what of hub.json the hub used to hand the built-in manager in its hello (managerconf.Legacy), raw:
+// passed on, never read here. Only a built-in manager the hub did not start gets it (managerHello): the hub's child
+// took them from this hub.json itself.
+func (h *Hub) legacyConfig() json.RawMessage {
+	if h.cfg == nil || h.cfg.dir == "" {
+		return nil
+	}
+	b, err := os.ReadFile(filepath.Join(h.cfg.dir, "hub.json"))
+	if err != nil {
+		return nil
+	}
+	return managerconf.Legacy(b)
 }
 
 // assistantUpdated tells the connected assistant its hello answer changed (manager.updated): this hub's mesh role, the

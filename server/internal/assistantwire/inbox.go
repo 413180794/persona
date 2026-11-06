@@ -219,10 +219,10 @@ type InboxMailMessage struct {
 	Text    string        `json:"text"`
 }
 
-// InboxConfig is what the inbox goes by of the hub's (hub.json's inbox section, its settings and the devices'):
+// InboxConfig is what the inbox goes by of the hub's (manager.json's inbox section, its settings and the devices'):
 // asked for when it is needed, kept a few seconds.
 type InboxConfig struct {
-	// Rules are the user's own triage rules (setting inbox.rules, else hub.json's inbox.rules); AgentRules guide the
+	// Rules are the user's own triage rules (setting inbox.rules, else manager.json's inbox.rules); AgentRules guide the
 	// judge linking a Needs you item to one of the user's tasks (inbox.agent_rules); what the AI twin takes on is set
 	// by inbox policies (docs/inbox.md "Policies").
 	Rules      string           `json:"rules,omitempty"`
@@ -238,7 +238,7 @@ type InboxConfig struct {
 	Extensions []string `json:"extensions,omitempty"`
 }
 
-// InboxAgentConfig is hub.json's inbox.agent: the AI twin (docs/inbox.md).
+// InboxAgentConfig is manager.json's inbox.agent: the AI twin (docs/inbox.md).
 type InboxAgentConfig struct {
 	Enabled bool `json:"enabled"`
 	// Machine and Launcher run the agent; default: the assistant's.
@@ -251,7 +251,7 @@ type InboxAgentConfig struct {
 	// MaxAgeHours: items whose newest message is older are not handed over (default 24), so turning this on does
 	// not start an agent for every old item.
 	MaxAgeHours int `json:"max_age_hours,omitempty"`
-	// Rules is hub.json's inbox.agent.rules: no longer read (the judge only links items to tasks; what the twin takes
+	// Rules is manager.json's inbox.agent.rules: no longer read (the judge only links items to tasks; what the twin takes
 	// on is set by inbox policies). Kept so older hub.json files still parse.
 	Rules string `json:"rules,omitempty"`
 }

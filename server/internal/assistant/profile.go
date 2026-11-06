@@ -42,7 +42,7 @@ type Settings struct {
 	Launcher  string `json:"launcher"`
 	// Timezone is the phone's (IANA name): routines and the snapshot read times in it, and the hub its own.
 	Timezone string `json:"timezone,omitempty"`
-	// Notes, once edited in the app, replace hub.json's assistant.notes.
+	// Notes, once edited in the app, replace manager.json's assistant.notes.
 	Notes *string `json:"notes,omitempty"`
 	// OwnerAliases are the names the user explicitly adds for kb.owner; an empty list clears them.
 	OwnerAliases []string `json:"owner_aliases,omitempty"`
@@ -161,7 +161,7 @@ func (s *Service) effective(ctx context.Context, v Settings) Settings {
 	return v
 }
 
-// notes is what the assistant knows about the user: edited in the app, else hub.json's assistant.notes.
+// notes is what the assistant knows about the user: edited in the app, else manager.json's assistant.notes.
 func (s *Service) notes(ctx context.Context) string {
 	if n := s.settings(ctx).Notes; n != nil {
 		return strings.TrimSpace(*n)

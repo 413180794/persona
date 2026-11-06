@@ -5,9 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -427,5 +432,94 @@ func TestManagersExpiredInstallIsRenewed(t *testing.T) {
 	var left int
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM manager_install_codes WHERE manager_id = $1`, old.Manager.ID).Scan(&left); err != nil || left != 0 {
 		t.Fatalf("its codes left behind: %d %v", left, err)
+	}
+}
+
+// A manager names config.own in its hello when it reads its own manager.json. One that doesn't (a build from before)
+// is said once in the log, however often it connects, and the roster marks it needs_update while it is online.
+func TestManagerWithoutConfigOwnNeedsUpdate(t *testing.T) {
+	h, srv, _ := managersHub(t)
+	var mu sync.Mutex
+	var logs bytes.Buffer
+	h.logger = log.New(lockedWriter{&mu, &logs}, "", 0)
+	tok := busToken(t, h, assistantwire.AssistantID, "助手")
+	hello := func(caps []string) {
+		r := dialRawBus(t, srv, tok)
+		params := map[string]any{"id": assistantwire.AssistantID, "host": "box", "version": "v"}
+		if caps != nil {
+			params["capabilities"] = caps
+		}
+		if err := r.call(assistantwire.MethodHello, params, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	builtin := func() managerInfo {
+		var list managersReply
+		if code := managersDo(t, h, srv, "GET", "/api/v1/managers", nil, &list); code != 200 {
+			t.Fatalf("list: %d", code)
+		}
+		m, _ := list.find(assistantwire.AssistantID)
+		return m
+	}
+	// The hub's hello-era sections go to a built-in manager it did not start, raw, and not to its own child.
+	if err := os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t","kb":{"enabled":false}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for deploy, want := range map[string]string{"child": "", "external": `{"kb":{"enabled":false}}`} {
+		r := dialRawBus(t, srv, tok)
+		var res struct {
+			LegacyConfig json.RawMessage `json:"legacy_config"`
+		}
+		params := map[string]any{"id": assistantwire.AssistantID, "deploy": deploy, "capabilities": []string{assistantwire.CapabilityConfigOwn}}
+		if err := r.call(assistantwire.MethodHello, params, &res); err != nil || string(res.LegacyConfig) != want {
+			t.Fatalf("%s: legacy %s %v", deploy, res.LegacyConfig, err)
+		}
+	}
+	hello(nil)
+	if m := builtin(); !m.Online || !m.NeedsUpdate {
+		t.Fatalf("an older manager: %+v", m)
+	}
+	hello(nil)
+	mu.Lock()
+	said := strings.Count(logs.String(), "is from before manager.json")
+	mu.Unlock()
+	if said != 1 {
+		t.Fatalf("said %d times:\n%s", said, logs.String())
+	}
+	hello([]string{assistantwire.CapabilityConfigOwn, " ", "other"})
+	if m := builtin(); !m.Online || m.NeedsUpdate {
+		t.Fatalf("a manager with config.own: %+v", m)
+	}
+	for _, p := range h.busRoster() {
+		if p.ID == assistantwire.AssistantID && !slices.Equal(p.Capabilities, []string{assistantwire.CapabilityConfigOwn, "other"}) {
+			t.Fatalf("capabilities %q", p.Capabilities)
+		}
+	}
+}
+
+// The hub says once as it starts which of the manager's sections hub.json still has, and where they are read now.
+func TestHubSaysWhichSectionsAreTheManagers(t *testing.T) {
+	h := newTestHub(t)
+	var mu sync.Mutex
+	var logs bytes.Buffer
+	h.logger = log.New(lockedWriter{&mu, &logs}, "", 0)
+	if err := os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"),
+		[]byte(`{"token":"t","assistant":{"owner":"o","external":false},"kb":{},"lark":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.sayMovedSections()
+	mu.Lock()
+	got := logs.String()
+	mu.Unlock()
+	if !strings.Contains(got, "hub.json's lark, kb, assistant.owner are the manager's") ||
+		!strings.Contains(got, filepath.Join("managers", "assistant", "manager.json")) {
+		t.Fatalf("said %q", got)
+	}
+	logs.Reset()
+	if err := os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"token":"t","assistant":{"external":true}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if h.sayMovedSections(); logs.Len() != 0 {
+		t.Fatalf("said %q for a hub.json without them", logs.String())
 	}
 }

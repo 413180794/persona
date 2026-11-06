@@ -76,6 +76,9 @@ type managerInfo struct {
 	// Installing: made with POST /api/v1/managers, its code not traded yet; until when the code is good (a time past:
 	// it expired, and POST …/code gives a new one). Dropped db.ManagerInstallKept after it expired.
 	Installing *time.Time `json:"installing,omitempty"`
+	// NeedsUpdate: it is online with a build from before manager.json (no config.own in its hello): the hello no
+	// longer carries the manager's defaults, so it runs on its built-in ones until it is updated.
+	NeedsUpdate bool `json:"needs_update,omitempty"`
 }
 
 // defaultManager is the manager the entries that belong to none go to (Siri, the shortcuts, the assistant page as
@@ -121,6 +124,7 @@ func (h *Hub) managerList(ctx context.Context) ([]managerInfo, error) {
 			since := p.Since
 			m.Online, m.Since = true, &since
 			m.Host, m.OS, m.Arch, m.Deploy, m.Version = p.Host, p.OS, p.Arch, p.Deploy, p.Version
+			m.NeedsUpdate = !slices.Contains(p.Capabilities, assistantwire.CapabilityConfigOwn)
 		}
 		out = append(out, m)
 	}

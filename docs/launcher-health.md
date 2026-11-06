@@ -4,7 +4,7 @@ Launchers on your computers break silently: the gateway rejects a bare model nam
 the gateway key expires, the CLI is too old, or starting an Agent keeps timing out (`context deadline exceeded`). Nobody used to notice, and a dispatched Agent failed on its first message.
 Now a hub manager (`server/internal/assistant/launcher_health*.go`) periodically checks every launcher on every computer, routes work around broken ones, repairs known errors itself, and records what it cannot repair as blocked.
 **Record only, never push**: no notifications, nothing on the Dynamic Island; the App and the board read it themselves.
-**Off by default** (decided 2026-11-05): periodic checks and automatic repair only run when hub.json sets `agents.launcher_health.enabled: true`; when it is off, failed Agent starts are still recorded and still routed around.
+**Off by default** (decided 2026-11-05): periodic checks and automatic repair only run when the manager's `manager.json` sets `agents.launcher_health.enabled: true` (`docs/config.md` ("manager.json")); when it is off, failed Agent starts are still recorded and still routed around.
 
 ## Checks
 
@@ -45,11 +45,13 @@ Now a hub manager (`server/internal/assistant/launcher_health*.go`) periodically
   Blocked launchers are still retested at the normal interval and recover on their own when they pass.
 - **Upgrade the CLI**: the node's `launchers.repair {name, action: "upgrade_cli"}` does only a fixed thing: for Claude launchers it runs `claude update` (login shell, 5-minute timeout);
   for anything else it answers "not supported". It does not accept arbitrary commands. Old nodes lack this method, which counts as "cannot upgrade".
-- **Repair Agent**: when hub.json `agents.launcher_health.repair` sets `skill`, it starts an Agent with a healthy launcher on `machine` (default: the computer the assistant runs on) in `cwd` (default home).
+- **Repair Agent**: when `agents.launcher_health.repair` in `manager.json` sets `skill`, it starts an Agent with a healthy launcher on `machine` (default: the computer the assistant runs on) in `cwd` (default home).
   The first message (`server/internal/prompts/agents/launcher_repair.md`) says which launchers on which computer are broken, the raw error and category, which skill to use for the repair, and to self-test with `claude -p` afterwards.
   It hangs off a **quiet to-do** (`Quiet`, no source chat): the hub sends no pushes for it, but it is visible on the Agents page and in to-dos. When it stops (neither working nor waiting for you) or after 45 minutes,
   the manager retests this round's launchers: pass means `ok`, fail means `blocked` (the reason includes the repair Agent's last message). Without `skill`, upgrading the CLI is the only repair; everything else goes straight to `blocked`.
   The skill name and the computer used for repair are configuration; the code names no specific tool or gateway.
+
+The configuration, in the manager's `manager.json`:
 
 ```json
 "agents": {

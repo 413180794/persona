@@ -228,9 +228,8 @@ func TestRestartIsPlanned(t *testing.T) {
 	}
 	addr := ln.Addr().String()
 	_ = ln.Close()
-	disabled := false
 	cfg := Config{Listen: addr, PublicURL: "http://" + addr, Token: randomHex(24),
-		DatabaseURL: url, Machines: []MachineConfig{}, KB: KBConfig{Enabled: &disabled}, ShutdownTimeoutSeconds: 4}
+		DatabaseURL: url, Machines: []MachineConfig{}, ShutdownTimeoutSeconds: 4}
 	raw, _ := json.Marshal(cfg)
 	if err := os.WriteFile(filepath.Join(dir, "hub.json"), raw, 0600); err != nil {
 		t.Fatal(err)

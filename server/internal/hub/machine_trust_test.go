@@ -105,11 +105,6 @@ func TestPendingComputer(t *testing.T) {
 	if got := h.defaultAssistantMachine(); got != "trust-own" {
 		t.Fatalf("assistant machine %q: not the pending first one", got)
 	}
-	h.cfg.Assistant.Machine = "trust-new"
-	if got := h.defaultAssistantMachine(); got != "trust-own" {
-		t.Fatalf("assistant machine %q: not even when hub.json names it", got)
-	}
-	h.cfg.Assistant.Machine = ""
 	if got := h.machineIDs(); !slices.Equal(got, []string{"trust-own"}) {
 		t.Fatalf("hello machines %v", got)
 	}

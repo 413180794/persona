@@ -361,7 +361,7 @@ HTTP status: new codes use `rpc.Error{Code}`. `apierr.Call` returns 409 for code
 
 | Item | Today | Beginner default |
 | --- | --- | --- |
-| Main-chat model | App-stored value > hub.json `assistant.launcher` > `claude` (`assistant/profile.go:139-150`) | Unchanged. Use working Claude Code when detected; a key connected during onboarding is assigned through `assign` only while the choice is still default |
+| Main-chat model | App-stored value > `assistant.launcher` in the manager's `manager.json` > `claude` (`assistant/profile.go:139-150`) | Unchanged. Use working Claude Code when detected; a key connected during onboarding is assigned through `assign` only while the choice is still default |
 | Main-chat permissions | Default mode: approve Bash and similar tools on the phone each time; Persona's own tools are already allowed through `--allowedTools` (`docs/assistant.md`, "Tools that need no approval") | Unchanged. Improve approval-card explanations; onboarding says "It will ask before doing work on your computer." "Read without asking" cannot safely be expressed for Bash (read-only commands cannot be distinguished). First count approvals during a real beginner setup, then decide (decision 14) |
 | Writes on the user's behalf | Hub asks first for email sending, phone writes, and Lark writes | Unchanged (hard boundary) |
 | New Agent sessions | User-selected | Default "Manual approval"; no beginner preset uses "Allow all" |

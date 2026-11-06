@@ -100,7 +100,7 @@ func RenderAgentReanswer(a AgentReanswer) string { return render("agents/reanswe
 // (agents/delegate, docs/assistant.md "The assistant answers questions first").
 type AgentDelegate struct {
 	Owner string // "" is the user
-	Rules string // the user's own rules, trimmed: hub.json agents.delegate.rules
+	Rules string // the user's own rules, trimmed: manager.json agents.delegate.rules
 }
 
 func RenderAgentDelegate(d AgentDelegate) string { return render("agents/delegate", d) }

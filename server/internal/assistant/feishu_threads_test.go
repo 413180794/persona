@@ -45,4 +45,3 @@ func TestFeishuThreadWithoutATimeIsKept(t *testing.T) {
 		t.Fatal("a thread without a time was dropped")
 	}
 }
-

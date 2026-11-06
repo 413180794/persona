@@ -29,7 +29,7 @@ func (a *offArchive) Changes(_ context.Context, cursor string, _ int) ([]connect
 		Messages: []kb.SourceMessage{{ID: "m1", SenderID: "u1", SenderName: "示例用户", Type: "TEXT", Text: "周五发布", At: at}}}}, "1", false, nil
 }
 
-// hub.json kb.enabled false (the hub's hello says Off): the manager hands nothing over: no sources listed or read,
+// manager.json kb.enabled false (Off over the hello): the manager hands nothing over: no sources listed or read,
 // no posts taken, nothing asked to delete.
 func TestKBOffAtTheSources(t *testing.T) {
 	h := newTestManager(t)
@@ -49,7 +49,7 @@ func TestKBOffAtTheSources(t *testing.T) {
 		Params: json.RawMessage(`{"id":"example"}`)}); err == nil || f.calls != 0 {
 		t.Fatalf("changes read with the knowledge base off: %v", err)
 	}
-	if _, err := h.kbFor("example").PendingPosts(ctx, 10); err == nil || err.Error() != "这台 hub 没开知识库" {
+	if _, err := h.kbFor("example").PendingPosts(ctx, 10); err == nil || err.Error() != "这个管理者没开知识库" {
 		t.Fatalf("posts: %v", err)
 	}
 	if c, p, err := h.forgetArchive(ctx, "example"); c != 0 || p != 0 || err != nil {

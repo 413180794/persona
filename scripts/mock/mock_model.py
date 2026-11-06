@@ -3,8 +3,8 @@ Messages endpoint (POST /v1/messages) that answers deterministic JSON, so a real
 
     PORT=18790 python3 scripts/mock/mock_model.py
     echo fake > /tmp/mock-model.key
-    hub.json: "inbox": {"triage_ai": {"base_url": "http://127.0.0.1:18790", "api_key_file": "/tmp/mock-model.key", "model": "fake"},
-                        "judge_ai":  {"base_url": "http://127.0.0.1:18790", "api_key_file": "/tmp/mock-model.key", "model": "fake"}}
+    manager.json: "inbox": {"triage_ai": {"base_url": "http://127.0.0.1:18790", "api_key_file": "/tmp/mock-model.key", "model": "fake"},
+                            "judge_ai":  {"base_url": "http://127.0.0.1:18790", "api_key_file": "/tmp/mock-model.key", "model": "fake"}}
     (or "ai": {…} for every purpose; the key is never checked). Grouping uses the triage model (inbox.triage).
 
 What it answers, by the system prompt (server/internal/prompts/inbox/):

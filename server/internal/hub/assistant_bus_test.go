@@ -2,10 +2,14 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -76,7 +80,7 @@ func dialAssistantWithStore(t *testing.T, h *Hub, url string, schedule bool, sto
 	// The hub's test machines are its devices unless the test gives it the real ones (startTestManager): what comes
 	// from the nodes is the manager's (fleet_mirror_test.go); its extensions are faked (extensions_fake_test.go).
 	o := assistant.BusOptions{Hub: url, Token: tok, Backoff: 50 * time.Millisecond, Version: "test", Deploy: "test", Logf: logf,
-		Devices: mirrorOf(h), Extensions: fakeExtOf(h)}
+		Devices: mirrorOf(h), Extensions: fakeExtOf(h), ConfigFile: managerFileOf(t, h)}
 	for _, f := range opts {
 		f(&o)
 	}
@@ -309,11 +313,56 @@ func (m *memIdents) DeleteBusIdentity(_ context.Context, id string) (bool, error
 	return ok, nil
 }
 
-// useModel makes c hub.json's "ai", the baseline of the assistant's API purposes (its model configuration, in the
-// hello), telling a connected assistant.
+// useModel makes c the manager's "ai" (its manager.json), the baseline of the assistant's API purposes, telling a
+// connected assistant.
 func useModel(t *testing.T, h *Hub, c ai.Config) {
 	t.Helper()
-	h.cfg.AI = c
+	setManagerJSON(t, h, "ai", c)
+}
+
+// managerFiles are the test managers' manager.json, by hub: the sections the hub used to hand over (ownconfig.go in
+// the assistant).
+var managerFiles sync.Map // *Hub → string
+
+// managerFileOf is h's test manager's manager.json (made empty the first time).
+func managerFileOf(t *testing.T, h *Hub) string {
+	t.Helper()
+	if f, ok := managerFiles.Load(h); ok {
+		return f.(string)
+	}
+	f, _ := managerFiles.LoadOrStore(h, filepath.Join(t.TempDir(), "manager.json"))
+	t.Cleanup(func() { managerFiles.Delete(h) })
+	return f.(string)
+}
+
+// setManagerJSON sets key ("section" or "section.key") of h's test manager's manager.json to v, and tells a connected
+// manager (it reads the file again at the hello).
+func setManagerJSON(t *testing.T, h *Hub, key string, v any) {
+	t.Helper()
+	file := managerFileOf(t, h)
+	cfg := map[string]any{}
+	if b, err := os.ReadFile(file); err == nil {
+		if err := json.Unmarshal(b, &cfg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if section, rest, ok := strings.Cut(key, "."); ok {
+		nested, _ := cfg[section].(map[string]any)
+		if nested == nil {
+			nested = map[string]any{}
+		}
+		nested[rest] = v
+		cfg[section] = nested
+	} else {
+		cfg[key] = v
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := testAssistants.Load(h); ok && h.busConnOf(assistantwire.AssistantID) != nil {
 		helloChanged(t, h)
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -111,6 +112,8 @@ type busState struct {
 	// dials are answered 503 without a lookup after one failed.
 	storeErrLog everyMinute
 	storeDown   atomic.Int64
+	// saidOld: the managers already said to be from before manager.json (no config.own), once each while the hub runs.
+	saidOld map[string]bool
 }
 
 // busConn is one service connection.
@@ -133,15 +136,17 @@ type busConn struct {
 
 // busPresence is a connected identity as the roster has it: who, and where its handshake says it runs.
 type busPresence struct {
-	ID      string    `json:"id"`
-	Role    string    `json:"role"`
-	Name    string    `json:"name"`
-	Host    string    `json:"host,omitempty"`
-	OS      string    `json:"os,omitempty"`
-	Arch    string    `json:"arch,omitempty"`
-	Deploy  string    `json:"deploy,omitempty"`
-	Version string    `json:"version,omitempty"`
-	Since   time.Time `json:"since"`
+	ID      string `json:"id"`
+	Role    string `json:"role"`
+	Name    string `json:"name"`
+	Host    string `json:"host,omitempty"`
+	OS      string `json:"os,omitempty"`
+	Arch    string `json:"arch,omitempty"`
+	Deploy  string `json:"deploy,omitempty"`
+	Version string `json:"version,omitempty"`
+	// Capabilities are what its manager.hello names (assistantwire.Capability*).
+	Capabilities []string  `json:"capabilities,omitempty"`
+	Since        time.Time `json:"since"`
 }
 
 // close sends the close frame saying why; the read loop then ends the connection.
@@ -341,12 +346,13 @@ func (c *busConn) refuse(h *Hub, err error) (any, error) {
 // busManagerHello is what manager.hello says that the hub keeps for now; the rest (apps, the machine's summary) is
 // the follow-up's.
 type busManagerHello struct {
-	ID      string `json:"id"`
-	Host    string `json:"host"`
-	OS      string `json:"os"`
-	Arch    string `json:"arch"`
-	Deploy  string `json:"deploy"`
-	Version string `json:"version"`
+	ID           string   `json:"id"`
+	Host         string   `json:"host"`
+	OS           string   `json:"os"`
+	Arch         string   `json:"arch"`
+	Deploy       string   `json:"deploy"`
+	Version      string   `json:"version"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // busHelloReply is manager.hello's answer: who the hub knows the service as, the managers, and the assistant's hello
@@ -376,11 +382,40 @@ func (h *Hub) managerHello(ctx context.Context, c *busConn, params json.RawMessa
 		return c.refuse(h, fmt.Errorf("manager.hello says %q but the token is %q's", clip(p.ID, 64), c.ident.ID))
 	}
 	if err := h.busAccept(ctx, c, busPresence{Host: clip(p.Host, 200), OS: clip(p.OS, 40), Arch: clip(p.Arch, 40),
-		Deploy: clip(p.Deploy, 40), Version: clip(p.Version, 80)}); err != nil {
+		Deploy: clip(p.Deploy, 40), Version: clip(p.Version, 80), Capabilities: capabilityList(p.Capabilities)}); err != nil {
 		return nil, err
 	}
-	return busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHelloFor(ctx, c.ident.ID),
-		Devices: h.devicesHello(c.ident.ID)}, nil
+	if c.ident.Role == bus.RoleManager && !slices.Contains(p.Capabilities, assistantwire.CapabilityConfigOwn) {
+		h.bus.mu.Lock()
+		said := h.bus.saidOld[c.ident.ID]
+		if h.bus.saidOld == nil {
+			h.bus.saidOld = map[string]bool{}
+		}
+		h.bus.saidOld[c.ident.ID] = true
+		h.bus.mu.Unlock()
+		if !said {
+			h.logf("bus: [%s] is from before manager.json (no %s): the hello no longer carries the manager's defaults "+
+				"(owner, notes, Agents, knowledge base, models), so it runs on its built-in ones and its knowledge base "+
+				"does not open; update it", c.ident.ID, assistantwire.CapabilityConfigOwn)
+		}
+	}
+	reply := busHelloReply{Name: c.ident.Name, Role: c.ident.Role, Managers: h.busManagers(ctx), Hello: h.assistantHelloFor(ctx, c.ident.ID),
+		Devices: h.devicesHello(c.ident.ID)}
+	if c.ident.ID == assistantwire.AssistantID && p.Deploy != "child" { // elsewhere, or a service of its own
+		reply.LegacyConfig = h.legacyConfig()
+	}
+	return reply, nil
+}
+
+// capabilityList is a hello's capabilities, bounded: at most 32 names of at most 64 bytes.
+func capabilityList(in []string) []string {
+	var out []string
+	for _, c := range in {
+		if c = strings.TrimSpace(c); c != "" && len(c) <= 64 && len(out) < 32 && !slices.Contains(out, c) {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // busAccept makes c its identity's current connection, and hangs up the one it replaces.

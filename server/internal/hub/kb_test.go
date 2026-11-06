@@ -3,6 +3,8 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -85,7 +87,7 @@ func TestKBToolsWithoutAKnowledgeBase(t *testing.T) {
 	h := newTestHub(t)
 	connectAssistant(t, h)
 	r := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "kb_search", Arguments: json.RawMessage(`{"query":"x"}`)})
-	if !r.IsError || textOf(r) != "the knowledge base is off (hub.json kb.enabled)" {
+	if !r.IsError || textOf(r) != "the knowledge base is off (manager.json kb.enabled)" {
 		t.Fatalf("kb_search: %s", textOf(r))
 	}
 }
@@ -126,17 +128,19 @@ func TestKBRoutesRelayed(t *testing.T) {
 	}
 }
 
-// hub.json kb.enabled false: the assistant is told (hello) and opens none. (The manager hands nothing over then:
-// extmgr's TestKBOffAtTheSources.)
-func TestKBOffAtTheHub(t *testing.T) {
+// The kb section is the manager's (its manager.json): the hub hands none over, and a hub.json that still has one
+// (an older layout) changes nothing the hub says.
+func TestKBSectionIsNotTheHubs(t *testing.T) {
 	h := newTestHub(t)
-	off := false
-	h.cfg.KB.Enabled = &off
-	h.cfg.KB.TextDays = 30
-	if s := h.kbSettings(); !s.Off || s.TextDays != 30 {
-		t.Fatalf("settings %+v", s)
+	if err := os.WriteFile(filepath.Join(h.cfg.dir, "hub.json"), []byte(`{"kb":{"enabled":false,"ai":{"model":"k"}}}`), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if hello, _ := (assistantLink{h}).Hello(context.Background()); hello.KB == nil || !hello.KB.Off {
-		t.Fatalf("hello %+v", hello.KB)
+	if hello, _ := (assistantLink{h}).Hello(context.Background()); hello.KB != nil || hello.Models.KBAI != nil ||
+		hello.LegacyConfig != nil {
+		t.Fatalf("hello %+v %+v", hello.KB, hello.Models)
+	}
+	// What a built-in manager the hub did not start gets at its handshake (managerHello), raw, to take over once.
+	if got := string(h.legacyConfig()); got != `{"kb":{"enabled":false,"ai":{"model":"k"}}}` {
+		t.Fatalf("legacy %s", got)
 	}
 }

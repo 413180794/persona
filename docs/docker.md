@@ -15,7 +15,7 @@ Both run the same `personad` hub; `hub.json`, the database, the protocol, and th
 
 The image has no herdr and no Claude Code, so **the hub machine can't also be a computer that does the work**:
 - The `hub.json` written on first start has `"machines": []` (not the native method's "one local machine, `kind: local`"); every computer has to be added.
-- The "Persona" assistant runs on one of your computers: set `assistant.machine` to its id (if unset, the first entry in `machines` is used).
+- The "Persona" assistant runs on one of your computers: set `assistant.machine` to its id in the built-in manager's `data/managers/assistant/manager.json` (`docs/config.md` ("manager.json"); if unset, the first entry in `machines` is used).
 
 Extensions (`docs/extensions.md`) work as usual; installed ones live in `data/extensions/` and survive an image upgrade. The image lacks a few things the native method has:
 - No `bwrap`: an extension that would get a sandbox by default (one not installed from a trusted market, `docs/extensions.md` ("Sandbox")) still runs, just without a sandbox, and its details and the list say 没有沙箱 (no sandbox);

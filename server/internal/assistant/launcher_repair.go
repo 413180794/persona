@@ -14,7 +14,7 @@ import (
 
 // Repairing launchers (docs/launcher-health.md "Auto repair"): one round at a time per machine, since its launchers
 // usually broke together. A CLI too old is the node's to update (launchers.repair); the rest go to an agent told to
-// use hub.json's repair skill, on a quiet todo so nothing is pushed. What a round does not fix is blocked.
+// use manager.json's repair skill, on a quiet todo so nothing is pushed. What a round does not fix is blocked.
 
 const launcherRepairUpgrade = "upgrade_cli"
 
@@ -89,10 +89,10 @@ func (s *Service) repairMachine(ctx context.Context, d Device, cfg healthConfig)
 		return
 	}
 
-	// 2. The repair agent, when hub.json names its skill.
+	// 2. The repair agent, when manager.json names its skill.
 	if strings.TrimSpace(cfg.repair.Skill) == "" {
 		for _, r := range left {
-			s.setHealthState(ctx, d.ID, r.Launcher, healthBlocked, upgradeNote+"no repair agent is configured (hub.json agents.launcher_health.repair.skill)", nil)
+			s.setHealthState(ctx, d.ID, r.Launcher, healthBlocked, upgradeNote+"no repair agent is configured (manager.json agents.launcher_health.repair.skill)", nil)
 		}
 		return
 	}

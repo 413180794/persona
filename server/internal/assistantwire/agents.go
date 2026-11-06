@@ -15,15 +15,16 @@ import (
 // session.seen), shows what the manager reports (Snapshot.Work on the session lists, the cards among
 // Snapshot.Interactions) and asks it to fill in a start (agents.start_params, agents.resume_params, agents.tab_name).
 
-// AgentsConfig is hub.json "agents" (Hello.Agents): what the manager does about agents' turns by default.
+// AgentsConfig is manager.json "agents" (Hello.Agents, over the hub's hello): what the manager does about agents'
+// turns by default.
 type AgentsConfig struct {
 	Triage   TriageConfig   `json:"triage,omitzero"`
 	Delegate DelegateConfig `json:"delegate,omitzero"`
-	// LauncherHealth is hub.json agents.launcher_health: checking each machine's launchers (docs/launcher-health.md).
+	// LauncherHealth is manager.json agents.launcher_health: checking each machine's launchers (docs/launcher-health.md).
 	LauncherHealth LauncherHealthConfig `json:"launcher_health,omitzero"`
 }
 
-// LauncherHealthConfig is hub.json agents.launcher_health: how often each machine's launchers are checked, and the agent
+// LauncherHealthConfig is manager.json agents.launcher_health: how often each machine's launchers are checked, and the agent
 // that repairs the ones a node cannot repair itself.
 type LauncherHealthConfig struct {
 	// Enabled: check on a schedule and repair what fails (unset: off). Off, failed starts are still recorded and
@@ -45,7 +46,7 @@ type LauncherRepairConfig struct {
 	Permission string `json:"permission,omitempty"`
 }
 
-// DelegateConfig is hub.json agents.delegate: an agent's question goes to the assistant before the user
+// DelegateConfig is manager.json agents.delegate: an agent's question goes to the assistant before the user
 // (docs/assistant.md "The assistant answers questions first").
 type DelegateConfig struct {
 	// Enabled: off unless true.
@@ -68,7 +69,7 @@ func (c DelegateConfig) Timeout() time.Duration {
 	return time.Duration(c.TimeoutSeconds) * time.Second
 }
 
-// TriageConfig is hub.json agents.triage: the limits, and the switches a hub whose user never saved them starts with
+// TriageConfig is manager.json agents.triage: the limits, and the switches a hub whose user never saved them starts with
 // (unset: off).
 type TriageConfig struct {
 	Enabled      *bool `json:"enabled,omitempty"`

@@ -125,7 +125,7 @@ type healthBook struct {
 
 func healthKey(machine, launcher string) string { return machine + "/" + launcher }
 
-// healthConfig is hub.json agents.launcher_health with its defaults.
+// healthConfig is manager.json agents.launcher_health with its defaults.
 type healthConfig struct {
 	on       bool
 	interval time.Duration

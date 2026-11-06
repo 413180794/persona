@@ -206,7 +206,7 @@ func TestModelConfigurationPreservesLegacyBaselines(t *testing.T) {
 	if b, _ := s.resolveModel(ctx, "lark.agent"); b.Provider != "launcher.new" {
 		t.Fatal("category selection did not reach the slash agent")
 	}
-	// hub.json's inbox.agent.machine (the hub has it) is where the AI twin runs.
+	// manager.json's inbox.agent.machine (the hub has it) is where the AI twin runs.
 	f.hello.Models.InboxAgentMachine = "server"
 	f.hello.Assistant.Machines = []string{"server"}
 	if p := purposeOf(t, s, "inbox.agent"); p.MachineID != "server" {
@@ -351,7 +351,7 @@ func TestModelDatabaseFailureDoesNotFallback(t *testing.T) {
 	}
 }
 
-// #388: with no hub.json "ai", API uses run on a keyed connection the assistant already has instead of failing, and
+// #388: with no manager.json "ai", API uses run on a keyed connection the assistant already has instead of failing, and
 // say so.
 func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	s, f, _ := modelService(t)
@@ -425,7 +425,7 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 		t.Fatalf("fallback was stored: %+v", r)
 	}
 
-	// An explicit choice wins over the fallback, and hub.json's "ai" still wins over it too.
+	// An explicit choice wins over the fallback, and manager.json's "ai" still wins over it too.
 	if r := modelRequest(s, "PATCH", "kb", `{"revision":0,"provider":"launcher.claude-gw","model":"picked"}`); r.Code != 200 {
 		t.Fatalf("%d %s", r.Code, r.Body.String())
 	}

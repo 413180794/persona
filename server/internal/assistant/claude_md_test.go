@@ -30,7 +30,7 @@ func TestGoldenAssistantClaudeMD(t *testing.T) {
 		Device{ID: "desk", Name: "台式机", Kind: "ssh"})
 	f.hello.Owner = "示例用户"
 	f.hello.OwnerNotes = "  我在示例公司做后端。\n常用 skills：demo-skill。  "
-	f.hello.KB = &KBSettings{ExtraDirs: []string{"/home/me/notes", "/home/me/facts"}} // hub.json's kb section
+	f.hello.KB = &KBSettings{ExtraDirs: []string{"/home/me/notes", "/home/me/facts"}} // manager.json's kb section
 	s := newTestService(t, f)
 	s.kb.dir = "<hub>/data"
 	golden(t, "assistant_claude_md.full", s.claudeMD(ctx, "server", false))

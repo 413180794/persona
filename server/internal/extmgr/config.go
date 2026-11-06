@@ -14,9 +14,9 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Config is the manager's configuration for the extensions, connectors and bots: Listen, Token, PublicURL and Inbox
-// are hub.json's (the hub's own file, read as it is), the rest the manager's own manager.json's (managerconf.Moved,
-// docs/config.md "manager.json").
+// Config is the manager's configuration for the extensions, connectors, bots and the inbox: Listen, Token and
+// PublicURL are hub.json's (the hub's own file, read as it is), the rest the manager's own manager.json's
+// (managerconf.Moved, docs/config.md "manager.json").
 type Config struct {
 	Listen    string `json:"listen"`
 	Token     string `json:"token"`
@@ -136,6 +136,5 @@ func LoadConfig(dir, file string) (*Config, error) {
 
 // cfgWithout is cfg with only hub.json's part (after manager.json's sections failed to unmarshal halfway).
 func cfgWithout(cfg *Config) *Config {
-	return &Config{Listen: cfg.Listen, Token: cfg.Token, PublicURL: cfg.PublicURL, Inbox: cfg.Inbox, dir: cfg.dir,
-		warnings: cfg.warnings}
+	return &Config{Listen: cfg.Listen, Token: cfg.Token, PublicURL: cfg.PublicURL, dir: cfg.dir, warnings: cfg.warnings}
 }

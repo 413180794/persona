@@ -27,8 +27,9 @@ import (
 // judgeStub answers the judge's calls with reply (status 200) or fails them (status ≠ 200), counting them and keeping
 // the last input.
 type judgeStub struct {
-	calls atomic.Int32
-	input atomic.Value
+	triage, kb *ai.Config // the manager's triage and kb models, pointed at the stubs
+	calls      atomic.Int32
+	input      atomic.Value
 }
 
 func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
@@ -53,37 +54,37 @@ func stubJudge(t *testing.T, h *Hub, status int, reply string) *judgeStub {
 	_ = os.WriteFile(key, []byte("k"), 0o600)
 	// inbox.judge inherits "Triage" (inbox.triage) when nothing else is set, as in the inbox's own tests.
 	triage := ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"}
-	h.cfg.Inbox.TriageAI = &triage
 	// Naming inherits kb; its requests must not change the judge's count or input.
 	naming := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": "example-task"}}})
 	}))
 	t.Cleanup(naming.Close)
-	h.cfg.KB.AI = &ai.Config{BaseURL: naming.URL, APIKeyFile: key, Model: "m"}
-	if _, ok := testAssistants.Load(h); ok && h.busConnOf(assistantwire.AssistantID) != nil {
-		helloChanged(t, h) // the manager, whose models these are, reads them again
-	}
+	kbAI := ai.Config{BaseURL: naming.URL, APIKeyFile: key, Model: "m"}
+	js.triage, js.kb = &triage, &kbAI
+	// The manager's models (its manager.json): a connected one reads them again.
+	setManagerJSON(t, h, "inbox", map[string]any{"triage_ai": triage})
+	setManagerJSON(t, h, "kb", map[string]any{"ai": kbAI})
 	return js
 }
 
 func TestJudgeStubSeparatesNamingCalls(t *testing.T) {
 	h, _ := newTaskHub(t)
 	js := stubJudge(t, h, http.StatusOK, `{"verdict":"done","reason":"Example completed task"}`)
-	if _, err := ai.New(*h.cfg.KB.AI).Complete(context.Background(), "Example naming system", "Example task", 200); err != nil {
+	if _, err := ai.New(*js.kb).Complete(context.Background(), "Example naming system", "Example task", 200); err != nil {
 		t.Fatal(err)
 	}
 	if js.calls.Load() != 0 {
 		t.Fatal("a naming request was counted as a completion judgment")
 	}
 	var result struct{ Verdict string }
-	if err := ai.New(*h.cfg.Inbox.TriageAI).JSON(context.Background(), "Example judgment system", "Example completed work", &result); err != nil {
+	if err := ai.New(*js.triage).JSON(context.Background(), "Example judgment system", "Example completed work", &result); err != nil {
 		t.Fatal(err)
 	}
 	if result.Verdict != "done" || js.calls.Load() != 1 {
 		t.Fatalf("judgment result %q, calls %d", result.Verdict, js.calls.Load())
 	}
 	input := js.input.Load()
-	probe, err := http.Get(h.cfg.Inbox.TriageAI.BaseURL)
+	probe, err := http.Get(js.triage.BaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestJudgeStubSeparatesNamingCalls(t *testing.T) {
 	if js.calls.Load() != 1 || js.input.Load() != input {
 		t.Fatal("a non-model probe changed the completion judgment's count or input")
 	}
-	if _, err := ai.New(*h.cfg.KB.AI).Complete(context.Background(), "Example naming system", "Another example task", 200); err != nil {
+	if _, err := ai.New(*js.kb).Complete(context.Background(), "Example naming system", "Another example task", 200); err != nil {
 		t.Fatal(err)
 	}
 	if js.calls.Load() != 1 || js.input.Load() != input {

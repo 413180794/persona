@@ -333,9 +333,7 @@ func (h *Hub) fleetLive() (FleetState, FleetStats) {
 // scripts, jarvis_settings): the manager shows the card and waits for its answer (fleet.ask). Without the manager
 // nothing can be asked: a dismiss.
 func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.Resolution, error) {
-	if ix.ExpiresAt.IsZero() {
-		ix.ExpiresAt = time.Now().Add(time.Duration(h.cfg.HookTimeoutMinutes) * time.Minute).UTC()
-	}
+	// No expiry given: the manager's own wait for a card (its manager.json hook_timeout_minutes) applies.
 	if h.askVia != nil { // tests play the manager
 		return h.askVia(ctx, ix)
 	}

@@ -175,7 +175,7 @@ func fullRole(r *http.Request) bool {
 	return role == "" || role == roleFull
 }
 
-// owner is how the assistant calls the user: hub.json's assistant.owner, else the Chinese word for "user".
+// owner is how the assistant calls the user: manager.json's assistant.owner, else the Chinese word for "user".
 func (s *Service) owner(ctx context.Context) string {
 	if o := strings.TrimSpace(s.hello(ctx).Owner); o != "" {
 		return o

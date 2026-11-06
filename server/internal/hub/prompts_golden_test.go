@@ -196,8 +196,7 @@ func TestGoldenAssistantContextMain(t *testing.T) {
 	t.Cleanup(func() { _ = store.PutSetting(ctx, "assistant", nil) })
 	h := snapshotHub(t, false)
 	h.store = store
-	h.cfg.Assistant.Owner = "示例用户"
-	helloChanged(t, h)
+	setManagerJSON(t, h, "assistant.owner", "示例用户")
 	raw, _ := json.Marshal(map[string]string{"session_id": "main-session"})
 	res, err := nodeAsks(ctx, h.byID["server"], "assistant.context", raw)
 	if err != nil {

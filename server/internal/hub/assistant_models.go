@@ -11,12 +11,10 @@ import (
 // called, which launchers have a gateway, and requests to a launcher's gateway sent with its key (models.usable,
 // models.launchers, models.launcher_http).
 
-// hubModels is what hub.json says about models, for the hello.
+// hubModels is what hub.json's machines say about models (their launchers), for the hello; the models themselves
+// (ai, inbox's, kb's) are the manager's manager.json's.
 func (h *Hub) hubModels() assistantwire.HubModels {
-	out := assistantwire.HubModels{AI: h.cfg.AI, TriageAI: h.cfg.Inbox.TriageAI, JudgeAI: h.cfg.Inbox.JudgeAI, KBAI: h.cfg.KB.AI}
-	if m := h.cfg.Inbox.Agent.Machine; h.localMachine(m) != nil && !h.machineUntrusted(m) {
-		out.InboxAgentMachine = m
-	}
+	var out assistantwire.HubModels
 	for _, m := range h.machinesNow() {
 		if len(m.cfg.Launchers) > 0 {
 			if out.Launchers == nil {

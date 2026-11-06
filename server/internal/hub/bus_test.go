@@ -222,12 +222,11 @@ func (f *fakeService) event(t *testing.T, prefix string) string {
 	}
 }
 
-// manager.hello: the hub answers with the identity, hub.json's assistant section and the managers, and puts
-// the connection in the roster; the other managers hear who is online.
+// manager.hello: the hub answers with the identity, what of its own the manager needs and the managers, and puts
+// the connection in the roster; the other managers hear who is online. The manager's own sections (owner, notes, kb,
+// a card's wait…) are its manager.json's, not in it.
 func TestBusHello(t *testing.T) {
 	h, srv, _ := newBusHub(t)
-	notes := "回答尽量简短"
-	h.cfg.Assistant.Owner, h.cfg.Assistant.Notes = "主人", notes
 	tok := busToken(t, h, "assistant", "助手")
 	deskTok := busToken(t, h, "desk", "工作")
 
@@ -242,11 +241,10 @@ func TestBusHello(t *testing.T) {
 	reply.Devices = nil
 	want := busHelloReply{Name: "助手", Role: bus.RoleManager,
 		Managers: []busManagerBrief{{ID: "assistant", Name: "助手", Role: bus.RoleManager, Online: true}, {ID: "desk", Name: "工作", Role: bus.RoleManager}},
-		Hello: assistantwire.Hello{Owner: "主人", OwnerNotes: notes, DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(),
-			KB: &assistantwire.KBSettings{}, Locale: "zh-Hans", // hub.json's kb section (the defaults); the user's language
+		Hello: assistantwire.Hello{DoneDelayMS: taskSettleDelay(h.cfg.Notify).Milliseconds(), Locale: "zh-Hans", // the user's language
 			Mutes: &assistantwire.Mutes{Spaces: []string{}, Sessions: []string{}}, // the hub's mutes (none)
-			// the finished push's timings and a card's default wait: the manager's to apply (fleet_push.go there)
-			Notify: assistantwire.NotifyTimings{DoneDelayMS: 60000, LongTurnMS: 60000, BackgroundHoldMS: 7200000, HookTimeoutMS: 1800000}}}
+			// the finished push's timings: the manager's to apply (fleet_push.go there)
+			Notify: assistantwire.NotifyTimings{DoneDelayMS: 60000, LongTurnMS: 60000, BackgroundHoldMS: 7200000}}}
 	if !jsonEqual(reply, want) {
 		t.Fatalf("hello answer %+v, want %+v", reply, want)
 	}

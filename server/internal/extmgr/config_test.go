@@ -19,7 +19,7 @@ func TestConfigReadsTheManagerSectionsFromManagerJSON(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	mine := `{"token":"not-the-hub's","google":{"client_id":"mine"},"bots":{"feishu":{"app_id":"cli_example"}}}`
+	mine := `{"token":"not-the-hub's","google":{"client_id":"mine"},"bots":{"feishu":{"app_id":"cli_example"}},"inbox":{"rules":"my rules"}}`
 	if err := os.WriteFile(file, []byte(mine), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestConfigReadsTheManagerSectionsFromManagerJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != ":18999" || cfg.Token != "hub-token" || cfg.PublicURL != "http://hub.example.com:18999" || cfg.Inbox.Rules != "hub rules" {
+	if cfg.Listen != ":18999" || cfg.Token != "hub-token" || cfg.PublicURL != "http://hub.example.com:18999" || cfg.Inbox.Rules != "my rules" {
 		t.Fatalf("hub.json's own keys: %+v", cfg)
 	}
 	if cfg.Google.ClientID != "mine" || cfg.Bots.Feishu.AppID != "cli_example" {
@@ -82,7 +82,8 @@ func TestConfigUnreadableManagerJSONKeepsTheHubPart(t *testing.T) {
 func TestLoadConfigRefusesWhatNewWouldDrop(t *testing.T) {
 	for _, c := range []struct{ hub, mine string }{
 		{`{"token":"t"}`, `{"connector_gate":[{"connector":"github","action":"*","decision":"denied"}]}`},
-		{`{"token":"t","inbox":{"rules":["x"]}}`, `{"lark_gate":[{"method":"CLI","path":"/docs/**","action":"deny"}]}`},
+		{`{"token":"t","public_url":5}`, `{"lark_gate":[{"method":"CLI","path":"/docs/**","action":"deny"}]}`},
+		{`{"token":"t"}`, `{"inbox":{"rules":["x"]}}`},
 		{`{"token":"t","listen":18660}`, `{}`},
 		{`{"token":"t"}`, ``},
 	} {
