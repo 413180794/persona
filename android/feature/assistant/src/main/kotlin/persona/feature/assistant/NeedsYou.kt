@@ -19,7 +19,6 @@ import persona.core.designsystem.Status
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
 import persona.core.domain.inbox.InboxItem
-import persona.core.domain.inbox.InboxTier
 import persona.core.domain.inbox.orderHubInbox
 import persona.core.domain.sort.AgentPreferences
 
@@ -67,8 +66,11 @@ sealed interface NeedsYouLine {
     }
 }
 
-/** An inbox record as the home needs it: its item, and whether it came from Lark (it has a feed) or is a mail. */
-data class NeedsYouMessage(val item: InboxItem, val lark: Boolean)
+/**
+ * An inbox record as the home needs it: its item, and whether it came from Lark (it has a feed) or is a mail.
+ * [working] says the AI twin has it in hand (`InboxRecord.agentWorking`): it is Persona's, so not a line here (#4848).
+ */
+data class NeedsYouMessage(val item: InboxItem, val lark: Boolean, val working: Boolean = false)
 
 /**
  * The lines of [NeedsYou]: requests of agents that are not Persona's own conversations ([isAssistant], or a session
@@ -93,7 +95,8 @@ fun needsYou(
             who = agentName(request, bySession[request.sessionKey]), what = oneLine(request.headline.shown))
     }
     val lark = messages.filter { it.lark }.map { it.item.id }.toSet()
-    val inbox = orderHubInbox(messages.map { it.item }.distinctBy { it.id }.filter { !it.isDone && it.triage == InboxTier.Action })
+    // "Needs you" by the hub's section (status, else tier), as the inbox page groups it.
+    val inbox = orderHubInbox(messages.filterNot { it.working }.map { it.item }.distinctBy { it.id }.filter { it.needsYou })
         .map { item ->
             NeedsYouLine.Inbox(item.id, item.id in lark, item.kind,
                 who = item.title.ifBlank { item.sender.orEmpty() },

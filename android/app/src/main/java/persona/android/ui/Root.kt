@@ -70,6 +70,8 @@ import persona.feature.inbox.InboxTriageSetup
 import persona.feature.inbox.LocalInboxTriageSetup
 import persona.feature.inbox.inboxEntries
 import persona.feature.inbox.inboxItemPage
+import persona.feature.inbox.needsYouCount
+import persona.feature.inbox.agentWorking
 import persona.feature.inbox.inboxSourcePage
 import persona.feature.knowledge.*
 import persona.feature.machines.machinesEntries
@@ -399,15 +401,17 @@ private fun PersonaShell(session: ShellSession, openNavigation: MutableState<((R
     // one group. Of the sessions it reads only which space each is in (for mutes), not their state or activity.
     val inboxSpaces = inbox.sessions.map { it.id to it.spacePreferenceKey }
     val inboxNeeds = remember(inbox.records, inbox.interactions, inboxSpaces, inbox.mutes) {
-        buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes)
-            .groups.firstOrNull { it.id == "action" }?.count ?: 0
+        // Rows the AI twin is on are Persona's: the same count as the inbox page's "Needs you" (#4848).
+        needsYouCount(
+            buildInboxList(inbox.records.map { it.item }, inbox.interactions, inbox.sessions, inbox.mutes), inbox.records)
     }
     // Settings carries the extensions' nav page badges added up (a dot when they are words).
     val badges = mapOf(AppTab.Agents to agentNeeds, AppTab.Jarvis to assistantRequests.size, AppTab.Inbox to inboxNeeds, AppTab.Settings to slotBadge.count)
     // "Needs you now" on the Persona home: the agents waiting (not Persona's own, not muted), then the inbox's "Needs you".
     val needsYou = remember(agentRequests, sessions, preferences.mutes, inbox.records) {
         persona.feature.assistant.needsYou(agentRequests, sessions, preferences.mutes,
-            inbox.records.map { persona.feature.assistant.NeedsYouMessage(it.item, lark = it.feedId != null) })
+            inbox.records.map { persona.feature.assistant.NeedsYouMessage(it.item, lark = it.feedId != null,
+                working = it.agentWorking) })
     }
     // Voice chat is offered while the hub runs a voice extension: asked each time the Persona tab shows while connected.
     val voiceExtension = persona.feature.voice.rememberVoiceExtension(session.voice,

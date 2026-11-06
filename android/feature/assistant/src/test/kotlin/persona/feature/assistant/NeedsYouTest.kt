@@ -93,4 +93,23 @@ class NeedsYouTest {
         assertTrue(needs.isEmpty)
         assertEquals(0, needs.total)
     }
+
+    @Test fun messagesTheAiIsOnAreLeftOut() {
+        // #4848: the inbox page lists these under "Persona is working on it", so the home does not ask the user about them.
+        val needs = needsYou(emptyList(), emptyList(), AgentPreferences(), listOf(
+            message("mine", "2026-11-02T08:00:00Z"),
+            message("busy", "2026-11-02T09:00:00Z").copy(working = true),
+        ))
+        assertEquals(listOf("inbox:mine"), needs.lines.map { it.key })
+        assertEquals(1, needs.total)
+    }
+
+    @Test fun theHubsInProgressSectionIsNotNeedsYou() {
+        // The home takes "Needs you" by the hub's section, as the inbox page does: a `status` of working is not the user's.
+        val needs = needsYou(emptyList(), emptyList(), AgentPreferences(), listOf(
+            message("mine", "2026-11-02T08:00:00Z"),
+            NeedsYouMessage(InboxItem("hub", tier = "action", status = "working", updatedAt = "2026-11-02T09:00:00Z"), lark = true),
+        ))
+        assertEquals(listOf("inbox:mine"), needs.lines.map { it.key })
+    }
 }

@@ -73,8 +73,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
     )
     val result = list(InboxListSettings(source, kind, query, expanded.toSet() + section))
     // In progress: the hub says so (`status`, inbox phase 1), or, from an older hub, the AI twin is drafting a reply.
-    fun working(row: InboxRow) = row.type == InboxRowType.Item &&
-        records[row.id]?.let { it.item.isWorking || it.agent?.state in setOf("running", "queued") } == true
+    fun working(row: InboxRow) = row.type == InboxRowType.Item && records[row.id]?.agentWorking == true
     // A hub that sends `status` calls the section In progress; an older hub's is the AI twin's "Persona is working on it" as before.
     val eventHub = snapshot.records.any { it.item.status != null }
     // The summary speaks for the whole inbox, so it reads the unfiltered list.
@@ -93,7 +92,7 @@ fun InboxScreen(repository: InboxRepository, navigator: Navigator) {
         addAll(triageGroups.filter { it.id != "action" })
     }
     val groups = displayGroups.filter { section.isEmpty() || it.id == section }
-    val needsCount = displayGroups.firstOrNull { it.id == "action" }?.count ?: 0
+    val needsCount = needsYouCount(result, ::working)
     val doneCount = result.groups.firstOrNull { it.id == "done" }?.count ?: 0
     val allCount = result.groups.sumOf { it.count }
     val sources = listOf("" to res.getString(R.string.inbox_all_sources)) + snapshot.records.map { record ->
@@ -409,7 +408,7 @@ internal fun StatusText(text: String, isError: Boolean = false) {
 internal fun inboxSummary(res: Resources, inbox: InboxListResult, working: (InboxRow) -> Boolean): String {
     val open = inbox.groups.filter { it.id != "done" }
     val busy = open.sumOf { group -> group.rows.count(working) }
-    val needs = open.firstOrNull { it.id == "action" }?.rows?.count { !working(it) } ?: 0
+    val needs = needsYouCount(inbox, working)
     return if (needs == 0) res.getString(R.string.inbox_summary_clear) else res.getString(R.string.inbox_summary, needs, busy)
 }
 
