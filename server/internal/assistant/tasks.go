@@ -236,6 +236,7 @@ func (s *Service) feed(ctx context.Context, conversation string, since time.Time
 		}
 	}
 	s.settleCards(ctx, items)
+	s.fileCards(ctx, items)
 	plans := map[string]*TaskPlan{}
 	for _, it := range items {
 		if it.Kind == feedPlan && plans[it.Ref] == nil {
@@ -1235,6 +1236,36 @@ func (s *Service) settleCards(ctx context.Context, items []FeedItem) {
 				}
 			}
 		}
+	}
+}
+
+// fileCards adds filed_at to the cards among items that do not say sent_at and whose item is filed (Done, Dismiss, read
+// elsewhere, archived: not open), as of when it was filed: Send on them is refused (inbox_item_done), so the apps
+// hide it. It is worked out on each read and not stored: moved back to the inbox, the item is open and the card
+// offers Send again.
+func (s *Service) fileCards(ctx context.Context, items []FeedItem) {
+	var ids []string
+	for _, it := range items {
+		if it.Kind == feedMessage && cardSentAt(it) == nil && !slices.Contains(ids, it.Ref) {
+			ids = append(ids, it.Ref)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	filed := s.inboxFiledAt(ctx, ids)
+	for i, it := range items {
+		at, ok := filed[it.Ref]
+		if it.Kind != feedMessage || !ok || cardSentAt(it) != nil {
+			continue
+		}
+		var body map[string]json.RawMessage
+		_ = json.Unmarshal(it.Body, &body)
+		if body == nil {
+			body = map[string]json.RawMessage{}
+		}
+		body["filed_at"], _ = json.Marshal(at.UTC())
+		items[i].Body, _ = json.Marshal(body)
 	}
 }
 

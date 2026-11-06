@@ -375,3 +375,53 @@ func TestMessageCardOfAnItemFiledWhileAnotherReplyIsOutSendsNothing(t *testing.T
 		}
 	}
 }
+
+// cardFiledAt is the filed_at a message card says (#4797); nil when it does not.
+func cardFiledAt(t *testing.T, it FeedItem) *time.Time {
+	t.Helper()
+	var b struct {
+		FiledAt *time.Time `json:"filed_at"`
+	}
+	if err := json.Unmarshal(it.Body, &b); err != nil {
+		t.Fatal(err)
+	}
+	return b.FiledAt
+}
+
+// A card whose item was filed (Done, Dismiss, read elsewhere) says filed_at, when it was filed, so the apps hide its
+// Send (which is refused); moved back to the inbox, it does not. A card that was sent never says it (#4797).
+func TestMessageCardSaysFiled(t *testing.T) {
+	for _, by := range []string{"user", "dismissed", "read"} {
+		h, _, it := cardHub(t)
+		draft(t, h, "在修了")
+		if got := cards(t, h, time.Time{}); len(got) != 1 || cardFiledAt(t, got[0]) != nil {
+			t.Fatalf("open, by %s: feed = %+v", by, got)
+		}
+		at := time.Now().Add(time.Second).UTC().Truncate(time.Second)
+		h.inbox.mu.Lock()
+		it.done(at, by)
+		h.inbox.mu.Unlock()
+		got := cards(t, h, time.Time{})
+		if len(got) != 1 || cardFiledAt(t, got[0]) == nil || !cardFiledAt(t, got[0]).Equal(at) || cardSentAt(got[0]) != nil {
+			t.Fatalf("filed by %s: feed = %s", by, got[0].Body)
+		}
+		h.inbox.mu.Lock()
+		it.DoneAt, it.DoneBy = nil, ""
+		h.inbox.mu.Unlock()
+		if got := cards(t, h, time.Time{}); cardFiledAt(t, got[0]) != nil {
+			t.Fatalf("filed by %s, moved back: feed = %s", by, got[0].Body)
+		}
+	}
+
+	// Sent from the card: it says sent_at, not filed_at, though its item is filed (replied).
+	h, rc, _ := cardHub(t)
+	draft(t, h, "在修了")
+	list := cards(t, h, time.Time{})
+	body, _ := json.Marshal(map[string]string{"text": "在修了", "card": list[0].ID})
+	if code, _ := inboxCall(t, h.routes(), "POST", "/api/v1/inbox/example:1/reply", string(body)); code != 200 || len(rc.got) != 1 {
+		t.Fatalf("发送 = %d, sent %+v", code, rc.got)
+	}
+	if got := cards(t, h, time.Time{}); cardSentAt(got[0]) == nil || cardFiledAt(t, got[0]) != nil {
+		t.Fatalf("sent: feed = %s", got[0].Body)
+	}
+}

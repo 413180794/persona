@@ -108,8 +108,62 @@ func TestToolsCallWaitsForTheNodeSocket(t *testing.T) {
 	}
 	n = fakeNode(t, func(int) ([]byte, error) { return nil, errors.New("node closed connection: EOF") })
 	res, _ = handle(context.Background(), "test", callRequest())
-	if *n != 1 || !strings.Contains(fmt.Sprint(res), "not reachable") {
+	if *n != 1 || !strings.Contains(fmt.Sprint(res), "may have run") {
 		t.Fatalf("a call the node may have run was sent %d times: %+v", *n, res)
+	}
+}
+
+// A failed tool call tells the model whether the tool may have run: only a call nothing received is safe to retry,
+// so mail_send or agent_send are not sent twice after a dropped connection or a timeout.
+func TestToolsCallFailureSaysWhetherTheToolMayHaveRun(t *testing.T) {
+	oldRedial := callRedialFor
+	t.Cleanup(func() { callRedialFor = oldRedial })
+	callRedialFor = 0
+	expired, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	t.Cleanup(cancel)
+	for _, tc := range []struct {
+		name      string
+		ctx       context.Context
+		dial      func(int) ([]byte, error)
+		want, not []string
+	}{
+		{"no node", context.Background(),
+			func(int) ([]byte, error) {
+				return nil, fmt.Errorf("%w: dial unix node.sock: connection refused", node.ErrNoNode)
+			},
+			[]string{"not reachable", "was not run", "connection refused"}, []string{"may have run"}},
+		{"connection lost after sending", context.Background(),
+			func(int) ([]byte, error) { return nil, errors.New("node closed connection: EOF") },
+			[]string{"after sending the call", "may have run", "check", "EOF"}, []string{"not reachable"}},
+		{"deadline", expired,
+			func(int) ([]byte, error) { return nil, errors.New("node closed connection: read unix: i/o timeout") },
+			[]string{"timed out", "may still have run", "check"}, []string{"not reachable"}},
+		{"non-JSON reply", context.Background(),
+			func(int) ([]byte, error) { return []byte("panic: oops\n"), nil },
+			[]string{"bad response from Persona node", "invalid character"}, []string{"not reachable"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeNode(t, tc.dial)
+			res, rerr := handle(tc.ctx, "test", callRequest())
+			if rerr != nil {
+				t.Fatalf("unexpected rpc error %+v", rerr)
+			}
+			r, ok := res.(map[string]any)
+			if !ok || r["isError"] != true {
+				t.Fatalf("isError not set: %#v", res)
+			}
+			text := fmt.Sprint(r["content"])
+			for _, w := range tc.want {
+				if !strings.Contains(text, w) {
+					t.Errorf("text %q lacks %q", text, w)
+				}
+			}
+			for _, w := range tc.not {
+				if strings.Contains(text, w) {
+					t.Errorf("text %q contains %q", text, w)
+				}
+			}
+		})
 	}
 }
 
@@ -199,8 +253,127 @@ func TestServeEndsCallsWhenTheClientGoes(t *testing.T) {
 	}
 }
 
+// A line that is not a JSON-RPC request gets a JSON-RPC error instead of silence, so the client learns why instead
+// of waiting for its own timeout: -32700 when it is not JSON, -32600 when it is JSON but not a request (echoing a usable
+// id). Blank lines and notifications stay unanswered, and the server keeps answering what follows.
+func TestServeAnswersMalformedLines(t *testing.T) {
+	in, w := io.Pipe()
+	out := &syncBuf{}
+	done := make(chan error, 1)
+	go func() { done <- Serve(context.Background(), "test", in, out) }()
+	send := func(s string) { _, _ = io.WriteString(w, s+"\n") }
+
+	send(`not json`)
+	send(`{"jsonrpc":"2.0","id":4,"method":"ping"`) // cut short
+	send(`[1,2]`)
+	send(`null`)
+	send(`{"jsonrpc":"2.0","id":9}`)
+	send(`{"jsonrpc":"2.0","id":"a","method":7}`)
+	send(`{"jsonrpc":"2.0","id":{},"method":""}`)
+	send(``)
+	send(`{"jsonrpc":"2.0"}`)
+	send(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	send(`{"jsonrpc":"2.0","id":3,"method":"ping"}`)
+	waitFor(t, "ping after the malformed lines", func() bool { return strings.Contains(out.String(), `"id":3`) })
+	_ = w.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]int{}
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var r struct {
+			ID    json.RawMessage `json:"id"`
+			Error *rpcError       `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("unparsable answer %q: %v", line, err)
+		}
+		code := 0
+		if r.Error != nil {
+			code = r.Error.Code
+		}
+		got[fmt.Sprintf("%d %s", code, r.ID)]++
+	}
+	want := map[string]int{"-32700 null": 2, "-32600 null": 3, "-32600 9": 1, `-32600 "a"`: 1, "0 3": 1}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("answers (code id: count) = %v, want %v:\n%s", got, want, out.String())
+	}
+}
+
 func TestIDKey(t *testing.T) {
 	if idKey(json.RawMessage(` 7`)) != idKey(json.RawMessage(`7`)) || idKey(json.RawMessage(`"7"`)) == idKey(json.RawMessage(`7`)) {
 		t.Fatal("ids are keyed by value, a string apart from a number")
+	}
+}
+
+// A tool call without a name, or with arguments that are not a JSON object, is invalid params (-32602) and never
+// reaches the node: the handlers behind it would run on zero values.
+func TestToolsCallRejectsInvalidParams(t *testing.T) {
+	for _, params := range []string{
+		`{"arguments":{}}`,
+		`{"name":"","arguments":{}}`,
+		`{"name":"  ","arguments":{}}`,
+		`{"name":"conversations_list","arguments":[1]}`,
+		`{"name":"conversations_list","arguments":"q"}`,
+		`{"name":"conversations_list","arguments":3}`,
+		`{"name":"conversations_list","arguments":true}`,
+		`{"name":"conversations_list","arguments": [ ]}`,
+	} {
+		n := fakeNode(t, func(int) ([]byte, error) { return []byte(`{"content":[{"type":"text","text":"ran"}]}`), nil })
+		req := request{JSONRPC: "2.0", ID: json.RawMessage(`4`), Method: "tools/call", Params: json.RawMessage(params)}
+		res, rerr := handle(context.Background(), "test", req)
+		if rerr == nil || rerr.Code != -32602 || *n != 0 {
+			t.Fatalf("%s: res %+v, err %+v after %d dials", params, res, rerr, *n)
+		}
+	}
+}
+
+// Absent or null arguments reach the node as an empty object; an object is passed on as sent.
+func TestToolsCallSendsArgumentsAsAnObject(t *testing.T) {
+	for params, want := range map[string]string{
+		`{"name":"notify_user"}`:                            `{}`,
+		`{"name":"notify_user","arguments":null}`:           `{}`,
+		`{"name":"notify_user","arguments": {"text":"hi"}}`: `{"text":"hi"}`,
+	} {
+		old := dialNode
+		var got string
+		dialNode = func(_ context.Context, req any) ([]byte, error) {
+			b, _ := json.Marshal(req.(map[string]any)["args"])
+			got = string(b)
+			return []byte(`{"content":[{"type":"text","text":"sent"}]}`), nil
+		}
+		req := request{JSONRPC: "2.0", ID: json.RawMessage(`5`), Method: "tools/call", Params: json.RawMessage(params)}
+		_, rerr := handle(context.Background(), "test", req)
+		dialNode = old
+		if rerr != nil || got != want {
+			t.Fatalf("%s: node got args %s (want %s), err %+v", params, got, want, rerr)
+		}
+	}
+}
+
+// Over the real request path the client gets a -32602 error answer for its id.
+func TestToolsCallInvalidParamsOverServe(t *testing.T) {
+	n := fakeNode(t, func(int) ([]byte, error) { return []byte(`{"content":[{"type":"text","text":"ran"}]}`), nil })
+	in, w := io.Pipe()
+	out := &syncBuf{}
+	done := make(chan error, 1)
+	go func() { done <- Serve(context.Background(), "test", in, out) }()
+	// stdin stays open until the answer is out: Serve does not answer what runs when the client goes away.
+	_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"conversations_list","arguments":[1]}}`+"\n")
+	waitFor(t, "the answer", func() bool { return strings.Contains(out.String(), `"id":7`) })
+	_ = w.Close()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var resp struct {
+		ID    int       `json:"id"`
+		Error *rpcError `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(out.String()), &resp); err != nil {
+		t.Fatalf("answer %q: %v", out.String(), err)
+	}
+	if resp.ID != 7 || resp.Error == nil || resp.Error.Code != -32602 || *n != 0 {
+		t.Fatalf("answer %s after %d dials", out.String(), *n)
 	}
 }

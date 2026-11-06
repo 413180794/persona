@@ -3,6 +3,7 @@ package mcpserver
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +56,14 @@ func Serve(ctx context.Context, version string, in io.Reader, out io.Writer) err
 	)
 	for sc.Scan() {
 		var req request
-		if err := json.Unmarshal(sc.Bytes(), &req); err != nil {
+		if err := json.Unmarshal(sc.Bytes(), &req); err != nil || req.Method == "" {
+			if id, rerr := rejectLine(sc.Bytes()); rerr != nil {
+				mu.Lock()
+				if err := enc.Encode(response{JSONRPC: "2.0", ID: id, Error: rerr}); err != nil && werr == nil {
+					werr = err
+				}
+				mu.Unlock()
+			}
 			continue
 		}
 		if len(req.ID) == 0 { // notification
@@ -104,6 +113,36 @@ func Serve(ctx context.Context, version string, in io.Reader, out io.Writer) err
 	return sc.Err()
 }
 
+// rejectLine is the JSON-RPC error for a line that is not a request, and the id to send it under: -32700 for a line
+// that is not JSON, -32600 for JSON that is not a request object (an array, a scalar, an object without a method).
+// A blank line, or an object without an id (a notification nobody waits on), gets no answer: nil.
+func rejectLine(line []byte) (json.RawMessage, *rpcError) {
+	null := json.RawMessage("null")
+	if len(bytes.TrimSpace(line)) == 0 {
+		return nil, nil
+	}
+	if !json.Valid(line) {
+		return null, &rpcError{Code: -32700, Message: "Parse error"}
+	}
+	invalid := &rpcError{Code: -32600, Message: "Invalid Request"}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(line, &m) != nil || m == nil {
+		return null, invalid
+	}
+	id, ok := m["id"]
+	if !ok {
+		return nil, nil
+	}
+	// Echo the id only when it is one JSON-RPC allows (a string or a number); otherwise it cannot be trusted.
+	var v any
+	_ = json.Unmarshal(id, &v)
+	switch v.(type) {
+	case string, float64:
+		return id, invalid
+	}
+	return null, invalid
+}
+
 // idKey names a JSON-RPC id the same however it was spaced (a number or a string).
 func idKey(id json.RawMessage) string {
 	var v any
@@ -151,6 +190,9 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return nil, &rpcError{Code: -32602, Message: err.Error()}
 		}
+		if rerr := checkCallParams(&p.Name, &p.Arguments); rerr != nil {
+			return nil, rerr
+		}
 		// Phone round trips, approvals and ask_user can take a while (the user may need to unlock the phone).
 		ctx, cancel := context.WithTimeout(ctx, 40*time.Minute)
 		defer cancel()
@@ -159,15 +201,33 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
 			"session_id": sessionID(), "assistant": isAssistant(), "guest": isGuest(), "pane": node.HookPane(os.Getenv)})
 		if err != nil {
-			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
+			return toolResult(proto.TextResult(callFailure(ctx, err), true)), nil
 		}
 		var res proto.ToolResult
 		if err := json.Unmarshal(line, &res); err != nil {
-			return toolResult(proto.TextResult("bad response from Persona node", true)), nil
+			return toolResult(proto.TextResult(fmt.Sprintf("bad response from Persona node (%v)", err), true)), nil
 		}
 		return toolResult(res), nil
 	}
 	return nil, &rpcError{Code: -32601, Message: "method not found: " + req.Method}
+}
+
+// checkCallParams rejects a tools/call the node must not run (MCP: invalid params are -32602): the tool handlers
+// decode their arguments leniently and would act on zero values. Absent or null arguments become {}, so the node
+// and hub always get an object.
+func checkCallParams(name *string, args *json.RawMessage) *rpcError {
+	if strings.TrimSpace(*name) == "" {
+		return &rpcError{Code: -32602, Message: "tools/call: name is required"}
+	}
+	a := bytes.TrimSpace(*args)
+	if len(a) == 0 || bytes.Equal(a, []byte("null")) {
+		*args = json.RawMessage(`{}`)
+		return nil
+	}
+	if a[0] != '{' {
+		return &rpcError{Code: -32602, Message: "tools/call: arguments must be a JSON object"}
+	}
+	return nil
 }
 
 // dialNode and retryEvery are swapped out by tests. dialNode hangs up when its ctx is cancelled, so a cancelled tool
@@ -193,6 +253,19 @@ func callNode(ctx context.Context, req any) ([]byte, error) {
 		case <-time.After(retryEvery):
 		}
 	}
+}
+
+// callFailure is the tool result text for a call callNode could not complete. Only ErrNoNode means nothing was sent;
+// any other error came after the request reached the node, so the tool (mail_send, agent_send, ...) may have run and
+// the model must check its effect rather than retry blindly.
+func callFailure(ctx context.Context, err error) string {
+	switch {
+	case errors.Is(err, node.ErrNoNode):
+		return fmt.Sprintf("Persona node is not reachable (%v), so the call was not run. Is the hub connected to this machine?", err)
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return "The Persona node timed out before returning the result; the call may still have run, so check its effect before retrying."
+	}
+	return fmt.Sprintf("Lost the connection to the Persona node after sending the call; it may have run, so check its effect before retrying (%v).", err)
 }
 
 // callRedialFor: how long callNode waits for the node's socket to come back.

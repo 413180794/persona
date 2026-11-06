@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -101,6 +102,58 @@ func TestEveryMCPToolIsUsed(t *testing.T) {
 		if strings.TrimSpace(tool.Description) == "" || !strings.HasPrefix(string(tool.InputSchema), `{"type":"object"`) {
 			t.Errorf("%s: description %q, schema %s", n, tool.Description, tool.InputSchema)
 		}
+	}
+}
+
+// The "## MCP tools" table in docs/prompts.md has a row for every mcp/<dir>/, that row names each of the directory's
+// tools, and every tool it names exists.
+func TestMCPToolsTableListsEveryTool(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "prompts.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(raw), "\n## MCP tools\n")
+	if !ok {
+		t.Fatal(`docs/prompts.md has no "## MCP tools" section`)
+	}
+	section, _, _ = strings.Cut(section, "\n## ")
+	rows := map[string]string{} // directory -> its Tools cell
+	for _, line := range strings.Split(section, "\n") {
+		cells := strings.Split(line, " | ")
+		if len(cells) < 3 || !strings.HasPrefix(cells[0], "| `mcp/") {
+			continue
+		}
+		dir := strings.TrimSuffix(strings.TrimPrefix(cells[0], "| `mcp/"), "/`")
+		if _, dup := rows[dir]; dup {
+			t.Errorf("mcp/%s/ has two rows", dir)
+		}
+		rows[dir] = cells[1]
+	}
+	dirs, err := fs.ReadDir(files, "mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		cell, ok := rows[d.Name()]
+		if !ok {
+			t.Errorf("docs/prompts.md has no row for mcp/%s/", d.Name())
+			continue
+		}
+		delete(rows, d.Name())
+		tools, _ := fs.ReadDir(files, "mcp/"+d.Name())
+		for _, f := range tools {
+			if n := strings.TrimSuffix(f.Name(), ".md"); !strings.Contains(cell, "`"+n+"`") {
+				t.Errorf("the mcp/%s/ row does not list `%s`", d.Name(), n)
+			}
+		}
+		for i, part := range strings.Split(cell, "`") {
+			if i%2 == 1 && !slices.Contains(ToolNames(), part) {
+				t.Errorf("the mcp/%s/ row lists `%s`, which is not an MCP tool", d.Name(), part)
+			}
+		}
+	}
+	for dir := range rows {
+		t.Errorf("docs/prompts.md has a row for mcp/%s/, which does not exist", dir)
 	}
 }
 

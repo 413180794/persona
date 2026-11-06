@@ -458,5 +458,22 @@ func (s *Service) inboxRepliedAt(ctx context.Context, ids []string) map[string]t
 	return out
 }
 
+// inboxFiledAt is when those of the inbox items ids that are filed (not open) were filed.
+func (s *Service) inboxFiledAt(ctx context.Context, ids []string) map[string]time.Time {
+	b := &s.inbox
+	out := map[string]time.Time{}
+	if s.inboxReady(ctx) != nil {
+		return out
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, id := range ids {
+		if it := b.items[id]; it != nil && !it.open() {
+			out[id] = *it.DoneAt
+		}
+	}
+	return out
+}
+
 // ActiveTasks are the tasks going on, as the inbox's judge and AI twin link messages to them.
 func (s *Service) ActiveTasks(ctx context.Context) []prompts.InboxTask { return s.activeTasks(ctx) }
