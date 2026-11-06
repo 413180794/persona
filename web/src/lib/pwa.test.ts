@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { installState } from "./pwa";
+import { describe, expect, it, vi } from "vitest";
+import { afterLoad, installState } from "./pwa";
 
 const ua = {
   iphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
@@ -33,5 +33,33 @@ describe("installState", () => {
     expect(env({ secure: false })).toBe("insecure");
     expect(env({})).toBe("menu");
     expect(env({ ua: ua.firefox })).toBe("menu");
+  });
+});
+
+describe("afterLoad", () => {
+  const page = (readyState: DocumentReadyState) => {
+    const target = new EventTarget();
+    return { doc: { readyState }, win: { addEventListener: target.addEventListener.bind(target) } as Pick<Window, "addEventListener">, fire: () => target.dispatchEvent(new Event("load")) };
+  };
+
+  it("runs right away, once, when the page has already loaded (#4724)", () => {
+    const { doc, win, fire } = page("complete");
+    const run = vi.fn();
+    afterLoad(run, doc, win);
+    expect(run).toHaveBeenCalledTimes(1);
+    fire();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for load, then runs once, while the page is still loading", () => {
+    for (const state of ["loading", "interactive"] as const) {
+      const { doc, win, fire } = page(state);
+      const run = vi.fn();
+      afterLoad(run, doc, win);
+      expect(run).not.toHaveBeenCalled();
+      fire();
+      fire();
+      expect(run).toHaveBeenCalledTimes(1);
+    }
   });
 });

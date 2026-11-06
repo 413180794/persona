@@ -49,8 +49,19 @@ export function startPWA() {
   // modules aren't the build's.
   // Not under a sub-path (lib/base.ts): the worker's routes and caches are the root's (docs/web.md「子路径」).
   if (import.meta.env.PROD && !BASE && isSecureContext && "serviceWorker" in navigator) {
-    addEventListener("load", () => void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {}), { once: true });
+    afterLoad(() => void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).catch(() => {}));
   }
+}
+
+/** Runs `run` once the page has loaded: now if it already has. main.tsx awaits its imports before startPWA, by which
+ * time `load` has usually fired, so a listener alone would never run (#4724). */
+export function afterLoad(
+  run: () => void,
+  doc: Pick<Document, "readyState"> = document,
+  win: Pick<Window, "addEventListener"> = window,
+) {
+  if (doc.readyState === "complete") run();
+  else win.addEventListener("load", run, { once: true });
 }
 
 const current = (): InstallState =>
