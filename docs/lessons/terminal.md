@@ -1,62 +1,62 @@
-# 经验：终端
+# Lessons: terminal
 
-踩过的坑、怪异行为和当时的取舍（原来在 `CLAUDE.md`「经验」，索引见 `docs/lessons/README.md`）。新经验写进对应的节，没有合适的就新开一节。
+Pitfalls, odd behavior, and the tradeoffs made at the time (originally in `CLAUDE.md`, "Lessons"; index in `docs/lessons/README.md`). Add new lessons to the relevant section, or start a section if none fits.
 
-- herdr `pane read --source recent` 最多返回约 1000 行（--lines 再大也一样），没有偏移或滚动接口，也不落盘：终端历史只能分段读这 1000 行，全量在 transcript。
-- 要分清单击 / 快速双击 / 按住的键（终端键栏的修饰键）别用 `DragGesture(minimumDistance: 0)` 记按下松开：快速双击的第二下它收不到
-  （XCUITest 的 doubleTap 只来一对 down / up）。用一个覆盖在上面的 UIView 重写 touchesBegan / Ended（`TerminalKeys.swift` 的 `TouchArea`）。
-- 网格里写宽字符要分两步：左半照常写，右半（宽 0 的占位格）不能走「覆盖宽字符右半就清掉左半」的规则。
-  否则在同一位置重写一个宽字符时，刚写的字会被清掉。herdr 流式重画中文正是这样写的，手机上整段缺字（`TerminalGrid.putRightHalf`）。
-  改终端解析一律用录制的真实帧回放，和 `herdr pane read` 逐行比（`TerminalWrapTests`）。
-- 自定义视图直接收键盘（`UITextInput`）时，`hasText` 要恒为 true，否则空文档时键盘会自动切大写；拼音靠 marked text。
-  选定候选时可能来 `insertText`，也可能来 `setMarkedText` + `unmarkText`，两种都要当提交处理（`TerminalInput.swift`）。
-- 终端流的帧率上限是 Agent 自己的重画节奏，不在我们的链路上。Claude Code 2.1.312 流式时约 110 ms 重画一次（主要是转圈那一行），
-  正文分几次大块整屏出；herdr observe 最快每 16 ms 一帧；node / hub 原样转发，只把 30 ms 内的帧合成一帧（`termMinGap`）。
-  分段实测见 `docs/terminal.md` 第十节。
-- 手机接管终端用 `herdr terminal session control <pane> --cols --rows`（管道，不要 PTY，和 `terminal attach` 共用一个槽位）：
-  stdin 关掉、进程被 kill（包括 -9）herdr 都会把窗格放回原尺寸，所以接管进程的生死跟着 node 走就不会卡住电脑。
-  herdr 从不给程序的原始字节（attach 也是它重画的网格），接管期间也没有滚动历史：历史只能手机按帧比对自己攒（`TerminalGrid.scrolled`），
-  别指望换一个终端仿真库解决。键要走 RPC 的事件（method 在对端并发处理，会乱序）。`docs/terminal.md` 第十一节。
-- Claude Code（2.1.312，默认模式）窗口一改尺寸就清掉终端的滚动历史、只重画当前屏；接管期间它的输出也不进 herdr 的历史（回复 70 行，herdr 历史仍是 0），
-  用户认为接管前的历史被清掉是正常的，别再去拼 transcript（试过，用户不要）。滚动照 Moshi：手指滑 = 滚轮，经 hub → node → herdr `terminal.scroll`，
-  herdr 交给开了鼠标上报的程序（Claude 的全屏渲染会自己往回画对话、出「Jump to bottom」；Claude 2.1.312 的 fullscreen trial 不用配置就可能打开），否则滚 herdr 自己的历史。
-  别跟用户说「要配 fullscreen」：Moshi 什么都不用配，是 herdr 客户端在接鼠标。`docs/terminal.md` 第十二节。
-  herdr 的 `terminal.scroll` 对开了鼠标上报的程序**一条命令只发一个滚轮事件（`lines` 不管用）**，不给 `column` / `row` 就落在 1;1：
-  Codex 把本轮提问钉在第 0 行、那里不接滚轮，所以手机滑了也纹丝不动。node 按行拆成多条、落在手指按下的那一格（没有就屏幕中间），第十六节。
-  接管要等终端视图第一次布局量出手机的列 × 行才订阅：第一帧到之前也必须把终端视图放上去（转圈只能盖在上面），
-  build 21 用转圈顶替了视图，已连上 hub 时点「终端」永远转圈；UI 测试用 `-openPane terminal` 直接开时先走了 HTTP 读屏，测不出来
-  （`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` 先进会话、连上后再点「终端」）。
-- herdr 的 observe 流要按窗格本身的尺寸开（`--cols/--rows` 小了是裁左上角，不是重排），窗格变尺寸后要重开；`terminal attach` 会改窗格尺寸、占唯一槽位，别用（`docs/terminal.md`）。
-- node 往 hub 写帧和回包共用一个同步写（`rpc.Peer.write` 拿着锁写 stdout）：链路慢时写会卡住，卡住的地方不能拿着别的锁、不能堵住 herdr 的读取。
-  慢链路上该合并的是「正在写的时候来的帧」，不只是「30 ms 内来的帧」（`docs/terminal.md` 第十七节）。
-- 会话有真实宿主窗格，却报 `has no terminal`，先查 `isAssistantSession`，不要只查 WebSocket 或 Herdr 版本。
-  工作目录 `~/.jarvis/assistant` 和 transcript 目录只是无头助手的兜底线索，用户也能在这些目录里恢复一个终端会话；
-  当前宿主快照中非空的 `PaneID` 应优先于目录推断，但 node 明确持有的无头助手进程仍优先（避免陈旧窗格覆盖所有权）。
-  验证要经 hub 订阅拿到完整终端帧，不能只看 WebSocket 握手成功或会话列表带 `pane_id`。
-  Hub 的 `decorated` 也会重新判断 `assistant`，手机 Agents 又按这个字段过滤；只修 node 能打开终端，但列表仍会消失。
-  Hub 的列表、发送和重命名分类要共用含 `PaneID` 的判断，验收同时检查 HTTP、普通 WebSocket 和增量 WebSocket 快照中的 `assistant:false`，无窗格助手仍为 true。
-- 网页终端里的应用快捷键（⌘K / Ctrl+K 等，#2330）要在 xterm 之前放行：`attachCustomKeyEventHandler` 返回 `false` 时 xterm 在 `_keyDown` 里直接返回，**不** `preventDefault` 也不 `stopPropagation`，
-  事件继续冒泡到 window，页面的 keydown 监听才收得到；返回 `true` 的键 xterm 自己处理后会 `stopPropagation`，页面永远看不到，Ctrl+K 因此一直给程序发 `\x0b`。
-  放行只认「带 Mod 且已登记」的键（`passesToApp`）；Mac 的 ⌥ 组合会打出别的字符（⌥B → ∫），页面分发时必须 `preventDefault`，否则字符还是会进 xterm 的 textarea。
-  按物理键（`event.code`）认数字和标点，字母认 `event.key`，⌥ 组出非字母时才退回 `code`；AltGr（Windows 上是 Ctrl+Alt）要排除，否则打 `@` 会触发 Mod+Alt。
-  验证要在真浏览器里看假 hub 的 `/mock/terminal_input`：按 Ctrl+K 后里面不能有 `\x0b`，同时 Ctrl+C / Ctrl+R / Alt+B 要照旧到达。
-- `@xterm/addon-search` 带 decorations（才有匹配数和 `onDidChangeResults`）要 `allowProposedApi: true`，否则 `findNext` 抛错；它在比较前先把新选项写进自己的状态，
-  所以只切「区分大小写」、搜索词没变时不会重新算高亮，新搜索前先 `clearDecorations()`（`docs/terminal.md` 第二十节）。
-- xterm 有焦点时会吞掉它处理的按键（`stopPropagation`）：页面上 window 级的 Esc / 方向键监听（弹出菜单、浮层）收不到，要先让 xterm 失焦；
-  接管时 Ctrl+F 是程序的（readline、vim），查找快捷键不能抢它。
-- 网页终端拖放（#2333）：`dragover` 里把 `dropEffect` 设成 `none` 浏览器就不再触发 `drop`，放下时的提示（「接管终端后才能粘贴文件」）出不来、只显示禁止光标。要在放下时说明原因的拖动（文件面板的条目）`dragover` 照样给 `copy`，由 `drop` 决定敲不敲。
-  独立终端页上文件面板和终端并排时，终端只剩约 100px 宽会一直停在「正在连接终端」（算不出可用的网格）：端到端用 1800px 宽的窗口。
-- 完整 herdr 界面（`herdr session attach` 在 node 的 PTY 里，#2357）：herdr 的布局、窗格里程序的尺寸、当前聚焦的标签页都是**整个会话一份**，谁最近有动作（连上、改尺寸、打字）谁说了算——浏览器连着时电脑上的 Claude 按浏览器的大小重排版，电脑上敲一个键又换回去；
-  测试这类东西只能在自己建的临时会话（`herdr --session <名字>`，测完 `session stop` + `session delete`）里做，在用户的会话里 attach 会改他窗格的尺寸。`docs/terminal.md` 第二十四节。
-- PTY 里的客户端要「视图一结束就没有进程」：关 PTY 主端（挂断）→ TERM 进程组 → KILL 进程组，三步都要等；`yes` 这样的洪流不 ack 时读 PTY 的线程要在 ack 窗口满时停读，否则 node 里无限攒。测试里 `pgrep` 查不到残留才算过。
-- xterm 的 DOM 渲染器下行高大于 1 时 herdr 画的框线（`│`）会断成虚线（框线字符画不到行间的缝）；完整界面用行高 1。单窗格的行高 1.15 是老样子，没动。
-- Playwright 截切换中间态：一张截图的时间和 220 ms 的过渡差不多长，要在点击后立刻截、事后确认两个界面还都在页面上，没抓到就换个方向再试（`web_herdr_full_e2e.py` 的 `transition_shot`）。
-- xterm.js 在 Windows / Linux 上把 Ctrl+V 当成 `^V` 发出去并取消按键，浏览器不粘贴、也没有 `paste` 事件：剪贴板里的截图到不了页面（⌘V 和 Ctrl+Shift+V 才有）。要在 `attachCustomKeyEventHandler` 里自己拦下，先读 `navigator.clipboard.read()`，没有文件再补发 `^V`（`terminal-conflicts.ts` 的 `isCtrlV`，#2700）。
-- 完整界面里右键必须 `preventDefault`：xterm 的鼠标上报只管把按下发给 herdr，浏览器自己的右键菜单照样弹出来盖在 herdr 的菜单上（e2e 里看最后一个 `contextmenu` 事件的 `defaultPrevented`）；xterm 的 `rightClickSelectsWord` 在 Mac 上默认开，要关掉。herdr 的前缀键 Ctrl+B 和 Persona 的「右侧面板」（Mod+B，Windows / Linux 上就是 Ctrl+B）是同一个键，全局快捷键派发和 xterm 的按键处理都要放行。（`docs/terminal.md` 第二十六节）
-- xterm 的 DOM 渲染器靠「把字符重复 32 次量宽度」来补字距，浏览器的 `text-spacing-trim: normal`（Chrome 123+ 默认）会把挨着的全角标点压成半角：`「「「…` 量出 1 格，真放在汉字中间却是 2 格，补出来的字距让 `「` 占 2.97 格，一行里后面的东西全被推歪（含 `「」（）、，：；！？` 的行边框偏 1–3 格，旁边窗格的边框成锯齿）。`.xterm { text-spacing-trim: space-all }` 解决（`text-autospace: no-autospace` 同理），和字体、行高、`cjk.ts` 的缩放都无关。不要被「字体问题」带偏：用 Range 量每个 `│` 的位置减去缓冲区的列，比看截图快（`docs/terminal.md` 第二十七节，#2751）。
-- herdr 对每个宽字符都先 `ESC[r;cH` 再写，所以 xterm 的宽度表和 herdr 不一致不会让缓冲区列错位，只会留脏格子：herdr 以为 emoji 占 2 格不写第 2 格，xterm 默认的 Unicode 6 只给 1 格，第 2 格保留旧内容。用 `@xterm/addon-unicode-graphemes`（精确版本，加载后它自己激活 `15-graphemes`），扫 8266 个字符：Unicode 6 和 herdr 差 1283 个，Unicode 11 差 160，Unicode 15 差 99，加字素簇剩 85（Unicode 15 之后新加的）。测 herdr 的宽度不用猜表：抓 `herdr session attach <临时会话>` 在 PTY 里的输出，字符后面紧跟的标记字符被移到第几列就是它的宽度。读字节时同一个字符不要只取第一次出现（侧栏里也有），否则会把宽的读成 1。
-- 测「某帧没把上一帧的格子清掉」的 e2e 里，第二帧不能再发 `ESC[2J`（herdr 只重画变了的格子），否则脏格子被清屏吞掉、检查永远过。
-- herdr 的焦点事件不说是谁改的（0.9.5 的 schema 里整个 event 没有客户端字段），一次聚焦总发三个（`workspace_focused` / `tab_focused` / `pane_focused`，焦点没变一个都不发）：网页「跟随」要靠 node 的启发式归属（刚被敲过的完整客户端 / 我们刚要求过的），否则电脑上的窗口一动页面就跟着跑。判断「被敲过」要去掉鼠标移过去（herdr 开着任意移动上报，浏览器里鼠标一动就有 `ESC[<35;x;yM`）和页面回给 herdr 的应答（配色、DA1、尺寸、焦点 `CSI I/O`），不然永远算「刚敲过」（`node/focus.go`，`docs/terminal.md` 第二十八节）。
-- herdr 0.9.5 有 `pane.focus {pane_id}`（socket），CLI 的 `herdr pane focus` 却只有 `--direction`：按 id 聚焦要走 socket；旧文档里「herdr 没有按窗格 id 聚焦」只对更老的版本成立。
-- 一台电脑的完整客户端要共用：路由在会话之间换时页面整个卸载再挂载，每页一个客户端就是每次关了再开（`xterm` 的屏幕也没了）。共用的 feed 在最后一个页面卸载后要留一小会儿（`full-registry.ts` 的 `LINGER_MS`），让下一个页面接手；让出时也等一会儿再放手客户端（`YIELD_MS`），否则「卸载旧页面 → 挂载新页面」之间客户端被放手又重连。
-- 把 xterm 搬到另一个盒子：直接把 `term.element` `appendChild` 到新盒子，再 `fit` + `refresh`，监听（大小、拖放、粘贴）要重新挂在新盒子上；不要 `term.open` 第二次。藏起来的页面（`inert`）不能去抢 feed：挂载时的 `unseen` 状态还没算出来，要直接查 `closest("[inert]")`。
+- herdr `pane read --source recent` returns at most about 1000 lines (even with a larger --lines), has no offset or scrolling API, and does not persist them: terminal history can only be read in chunks within those 1000 lines; the transcript holds the complete history.
+- For keys that distinguish single tap / quick double tap / hold (terminal key-bar modifiers), do not track press and release with `DragGesture(minimumDistance: 0)`: it misses the second tap of a quick double tap
+  (XCUITest's doubleTap sends only one down / up pair). Overlay a UIView that overrides touchesBegan / Ended (`TouchArea` in `TerminalKeys.swift`).
+- Writing a wide character into a grid takes two steps: write the left half normally; the right half (a zero-width placeholder cell) must not use the rule "overwriting the right half of a wide character clears its left half".
+  Otherwise rewriting a wide character at the same position clears the character just written. This is exactly how herdr redraws streaming Chinese, causing whole passages to lose characters on the phone (`TerminalGrid.putRightHalf`).
+  Always validate terminal parser changes by replaying recorded real frames and comparing line by line with `herdr pane read` (`TerminalWrapTests`).
+- When a custom view receives keyboard input directly (`UITextInput`), keep `hasText` true, or the keyboard automatically switches to uppercase for an empty document. Pinyin uses marked text.
+  Selecting a candidate may call `insertText`, or `setMarkedText` + `unmarkText`; treat both as commits (`TerminalInput.swift`).
+- The terminal stream's frame-rate limit is the Agent's own redraw cadence, not our link. Claude Code 2.1.312 redraws about every 110 ms while streaming (mostly the spinner line),
+  with body text appearing in several large full-screen updates. herdr observe can emit a frame every 16 ms; node / hub forward unchanged, merging only frames within 30 ms (`termMinGap`).
+  See section 10 of `docs/terminal.md` for measurements by segment.
+- Phone terminal takeover uses `herdr terminal session control <pane> --cols --rows` (a pipe, not a PTY; shares the slot with `terminal attach`):
+  herdr restores the pane's original size if stdin closes or the process is killed (including -9), so tying the takeover process's lifetime to node prevents it from leaving the computer stuck.
+  herdr never provides the program's raw bytes (attach also sends its redrawn grid), and there is no scrollback during takeover. The phone must accumulate history by comparing frames (`TerminalGrid.scrolled`);
+  a different terminal emulator library will not solve this. Keys must use RPC events (methods run concurrently on the peer and can arrive out of order). See section 11 of `docs/terminal.md`.
+- Claude Code (2.1.312, default mode) clears terminal scrollback on a resize and redraws only the current screen. During takeover, its output also does not enter herdr history (a 70-line response still leaves herdr history at 0).
+  The user considers clearing pre-takeover history normal; do not splice in transcripts again (tried it; the user does not want it). Scroll like Moshi: finger swipes become wheel events through hub → node → herdr `terminal.scroll`.
+  herdr passes them to programs with mouse reporting enabled (Claude's full-screen renderer redraws earlier conversation and shows "Jump to bottom"; Claude 2.1.312's fullscreen trial may enable itself without configuration); otherwise it scrolls herdr's own history.
+  Do not tell the user "you need to configure fullscreen": Moshi needs no setup; the herdr client receives mouse events. See section 12 of `docs/terminal.md`.
+  For programs with mouse reporting, herdr's `terminal.scroll` **sends only one wheel event per command (`lines` is ignored)**. Without `column` / `row`, it lands at 1;1:
+  Codex pins the current question to row 0, which does not accept wheel events, so phone swipes do nothing. node splits the request into multiple commands by line, targeting the cell under the initial touch (or the screen center if unavailable). See section 16.
+  Takeover must wait for the terminal view's first layout to measure the phone's columns × rows before subscribing. The terminal view must exist even before the first frame (a spinner can only overlay it).
+  build 21 replaced the view with a spinner, so tapping "Terminal" when already connected to the hub spun forever. UI tests opening it directly with `-openPane terminal` first fetched the screen over HTTP and missed this
+  (`TerminalTypingTests/testOpeningTheTerminalWhenConnectedDrivesIt` enters the session first, connects, then taps "Terminal").
+- Open herdr's observe stream at the pane's actual size (smaller `--cols/--rows` crops the top-left, not reflows); reopen after a pane resize. `terminal attach` changes the pane size and occupies the only slot; do not use it (`docs/terminal.md`).
+- node shares one synchronous writer for frames and replies to hub (`rpc.Peer.write` holds a lock while writing stdout). A slow link can block writes; the blocked code must not hold other locks or block reads from herdr.
+  On slow links, merge "frames arriving while a write is in progress", not just "frames arriving within 30 ms" (section 17 of `docs/terminal.md`).
+- If a session has a real host pane but reports `has no terminal`, check `isAssistantSession` first, not just WebSocket or Herdr versions.
+  The working directory `~/.jarvis/assistant` and transcript directory are only fallback clues for a headless assistant; users can also restore terminal sessions in those directories.
+  A nonempty `PaneID` in the current host snapshot should take precedence over directory inference, but a headless assistant process explicitly owned by node still takes priority (so a stale pane does not override ownership).
+  Validate by subscribing through hub and receiving a complete terminal frame, not just a successful WebSocket handshake or `pane_id` in the session list.
+  Hub's `decorated` also reclassifies `assistant`, and the phone's Agents list filters by that field. Fixing only node lets the terminal open but still leaves the session missing from the list.
+  Hub listing, sending, and renaming must share a classification that includes `PaneID`. Acceptance checks must verify `assistant:false` in HTTP, regular WebSocket, and incremental WebSocket snapshots; assistants without panes remain true.
+- Web terminal app shortcuts (⌘K / Ctrl+K, etc., #2330) must pass through before xterm: when `attachCustomKeyEventHandler` returns `false`, xterm returns directly from `_keyDown` without `preventDefault` or `stopPropagation`.
+  The event continues bubbling to window, so the page's keydown listener receives it. For keys returning `true`, xterm handles them and calls `stopPropagation`; the page never sees them, which is why Ctrl+K kept sending `\x0b` to the program.
+  Pass through only registered keys with Mod (`passesToApp`). Mac ⌥ combinations produce other characters (⌥B → ∫); page dispatch must call `preventDefault` or the character still enters xterm's textarea.
+  Identify digits and punctuation by physical key (`event.code`), letters by `event.key`, falling back to `code` only when ⌥ produces a nonletter. Exclude AltGr (Ctrl+Alt on Windows), or typing `@` triggers Mod+Alt.
+  Validate in a real browser against the fake hub's `/mock/terminal_input`: pressing Ctrl+K must not add `\x0b`, while Ctrl+C / Ctrl+R / Alt+B still arrive normally.
+- `@xterm/addon-search` with decorations (needed for match counts and `onDidChangeResults`) requires `allowProposedApi: true`, or `findNext` throws. It writes new options to its state before comparing them,
+  so changing only "Match case" with an unchanged search term does not recompute highlights. Call `clearDecorations()` before a new search (section 20 of `docs/terminal.md`).
+- Focused xterm swallows keys it handles (`stopPropagation`), so window-level Esc / arrow listeners for menus and overlays do not receive them. Blur xterm first.
+  During takeover, Ctrl+F belongs to the program (readline, vim); the find shortcut must not steal it.
+- Web terminal drag-and-drop (#2333): setting `dropEffect` to `none` in `dragover` prevents the browser from firing `drop`, so the drop explanation ("Take over the terminal before pasting files") never appears; only a forbidden cursor does. For drags that should explain rejection at drop time (file-panel entries), still use `copy` in `dragover`, and decide whether to type in `drop`.
+  On the standalone terminal page, opening the file panel beside the terminal can leave the terminal only about 100px wide, stuck at "Connecting terminal" because it cannot compute a usable grid. Use an 1800px-wide window for end-to-end tests.
+- Full herdr UI (`herdr session attach` in node's PTY, #2357): herdr's layout, program dimensions in panes, and the focused tab are **shared by the whole session**. The latest action (connect, resize, type) wins—while a browser is connected, Claude on the computer reflows to the browser's dimensions; typing a key on the computer changes it back.
+  Test only in your own temporary session (`herdr --session <name>`, then `session stop` + `session delete` when done); attaching to a user's session changes their pane dimensions. See section 24 of `docs/terminal.md`.
+- A PTY client must leave "no process once the view ends": close the PTY master (hangup) → TERM the process group → KILL the process group, waiting at each step. For floods such as `yes`, the PTY reader must stop reading when the ack window fills if no acks arrive, or node accumulates unlimited data. A test passes only when `pgrep` finds no leftovers.
+- With xterm's DOM renderer and line height greater than 1, herdr's box lines (`│`) become dashed (box-drawing characters cannot fill the interline gap). Full UI uses line height 1. The single-pane line height remains the old 1.15.
+- Capturing transition states with Playwright: taking one screenshot takes about as long as the 220 ms transition. Capture immediately after clicking, then confirm both UIs are still on the page; if missed, try the opposite direction (`transition_shot` in `web_herdr_full_e2e.py`).
+- On Windows / Linux, xterm.js sends Ctrl+V as `^V` and cancels the key. The browser does not paste or fire a `paste` event, so clipboard screenshots never reach the page (⌘V and Ctrl+Shift+V do). Intercept it in `attachCustomKeyEventHandler`, read `navigator.clipboard.read()` first, then send `^V` if no files are present (`isCtrlV` in `terminal-conflicts.ts`, #2700).
+- Right-click in the full UI must call `preventDefault`: xterm's mouse reporting sends the press to herdr, but the browser's context menu still covers herdr's menu (check `defaultPrevented` on the last `contextmenu` event in e2e). Disable xterm's `rightClickSelectsWord`, which defaults on for Mac. herdr's prefix Ctrl+B and Persona's "Right panel" (Mod+B, Ctrl+B on Windows / Linux) use the same key; both global shortcut dispatch and xterm key handling must pass it through. (Section 26 of `docs/terminal.md`)
+- xterm's DOM renderer adjusts letter spacing by measuring a character repeated 32 times. The browser's `text-spacing-trim: normal` (default in Chrome 123+) compresses adjacent full-width punctuation to half-width: `「「「…` measures as one cell, but is two cells between Chinese characters. The computed letter spacing makes `「` take 2.97 cells, shifting everything after it (row borders in lines containing `「」（）、，：；！？` shift by 1–3 cells, making neighboring pane borders jagged). `.xterm { text-spacing-trim: space-all }` fixes it (`text-autospace: no-autospace` similarly); this has nothing to do with fonts, line height, or scaling in `cjk.ts`. Do not get sidetracked by "font issues": use Range to measure each `│` position minus its buffer column; this is faster than inspecting screenshots (section 27 of `docs/terminal.md`, #2751).
+- herdr writes `ESC[r;cH` before every wide character, so disagreements between xterm's width table and herdr do not misalign buffer columns; they leave stale cells. herdr assumes an emoji takes two cells and does not write the second, while xterm's default Unicode 6 assigns one, leaving old content in the second cell. Use `@xterm/addon-unicode-graphemes` (an exact version; loading it activates `15-graphemes` automatically). Scanning 8266 characters found 1283 differences from herdr for Unicode 6, 160 for Unicode 11, 99 for Unicode 15, and 85 with grapheme clusters (characters added after Unicode 15). Do not guess herdr's width table: capture PTY output from `herdr session attach <temporary-session>`; the column to which the immediately following marker character moves gives the width. When reading bytes, do not take only a character's first occurrence (it may also appear in the sidebar), or a wide character can be measured as one cell.
+- In an e2e test for "a frame failed to clear cells from the preceding frame", the second frame must not send `ESC[2J` again (herdr redraws only changed cells), or a clear-screen hides stale cells and the check always passes.
+- herdr's focus events do not identify who changed focus (the entire event schema in 0.9.5 has no client field). A focus change always emits three events (`workspace_focused` / `tab_focused` / `pane_focused`; unchanged focus emits none). Web "Follow" needs node's heuristic attribution (a full client just typed into / a focus change we just requested), or any activity in a computer window makes the page follow it. Exclude mouse movement (herdr enables all-motion reporting; moving the mouse in the browser sends `ESC[<35;x;yM`) and page responses to herdr (colors, DA1, dimensions, focus `CSI I/O`) when detecting "just typed", or it stays permanently true (`node/focus.go`, section 28 of `docs/terminal.md`).
+- herdr 0.9.5 has `pane.focus {pane_id}` over the socket, but CLI `herdr pane focus` has only `--direction`; focus by ID must use the socket. Old documentation claiming "herdr cannot focus by pane ID" applies only to older versions.
+- Share the full client for a computer: routing between sessions unmounts and remounts the page, so one client per page closes and reopens it every time (also losing the `xterm` screen). Keep the shared feed briefly after the last page unmounts (`LINGER_MS` in `full-registry.ts`) for the next page to take over. Also delay releasing the client when yielding (`YIELD_MS`), or it is released and reconnects between "unmount old page → mount new page".
+- To move xterm to another container, `appendChild` its `term.element` into the new container, then `fit` + `refresh`. Reattach size, drop, and paste listeners to the new container; do not call `term.open` twice. Hidden (`inert`) pages must not claim the feed: mount-time `unseen` has not been computed yet, so check `closest("[inert]")` directly.

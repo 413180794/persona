@@ -1,40 +1,40 @@
-# 计划：支持 Orca
+# Plan: Orca support
 
-状态：进行中。第 0、1 步已完成；第 2 步的 Orca 第一期和 herdr-core 第一期都已写完（「Orca 来源」「herdr-core 宿主」），未合并。做完的步骤在下面「实施顺序」里打勾，全部做完后把设计部分并进
-`docs/architecture.md` / `docs/server.md`，删掉这份计划。
+Status: in progress. Steps 0 and 1 are complete. The first Orca and herdr-core phases of step 2 are both written ("Orca source", "herdr-core host"), not merged. Completed steps are checked under "Implementation order" below. Once all steps are done, merge the design into
+`docs/architecture.md` / `docs/server.md` and delete this plan.
 
-## 背景
+## Background
 
-Persona 目前只能驱动开在 herdr 里的 Agent。开在别处（Orca 的终端、普通终端）的 Claude Code 正在跑，App 里也只显示「未运行」：
-看得到对话记录，看不到状态，发消息会在 herdr 里再起一个 `claude --resume`，和原来的进程同时写同一个会话。
+Persona currently drives only Agents running in herdr. Claude Code running elsewhere (an Orca terminal, an ordinary terminal) appears as "Not running" in the app:
+history is visible, status is not, and sending a message starts another `claude --resume` in herdr, with both processes writing the same session.
 
-想接入 Orca，又不想到处加 `if orca`：先抽出一层「宿主」，herdr 和 Orca 各实现一份，以后接 tmux 之类也只是再实现一份。
+We want Orca integration without scattering `if orca` everywhere: first extract a "host" layer, implemented separately by herdr and Orca. Adding tmux later becomes another implementation.
 
-## 两个概念
+## Two concepts
 
-本文和代码里固定用这两个词：
+Use these terms consistently in this document and code:
 
-- **宿主（host）**：终端开在哪里，比如 herdr、Orca。宿主负责有哪些窗格、读屏、发输入、开关窗格。
-- **Agent**：窗格里跑的是什么，比如 Claude Code、Codex、TRAEX。Agent 决定对话记录在哪、会话 id 怎么认、状态怎么判断、对话框长什么样。
+- **Host**: where the terminal runs, such as herdr or Orca. The host lists panes, reads screens, sends input, and opens/closes panes.
+- **Agent**: what runs in the pane, such as Claude Code, Codex, or an internal Codex variant. The Agent determines transcript location, session-ID recognition, state detection, and dialog appearance.
 
-现在两者混在一起：TRAEX 实际上是「herdr 宿主里一种 herdr 认不出的 Agent」，却是在 herdr 的代码路径里打补丁接进来的（`node/traex.go`）。
-分开以后，「Orca 里的 Codex」「herdr 里的 TRAEX」都只是宿主和 Agent 两张表的组合。
+These are currently mixed: the internal Codex variant is actually "an Agent that herdr cannot recognize inside a herdr host", but was integrated with patches in herdr code paths (`node/traex.go`).
+After separation, "Codex in Orca" and "an internal Codex variant in herdr" are just combinations from two tables: hosts and Agents.
 
-## 现状：和 herdr 绑死
+## Current state: tightly coupled to herdr
 
-- node 直接持有 `*herdr.Client`（`node/node.go`），内部的会话模型就是 `map[string]herdr.Agent`，没有任何接口。
-- 每个功能都直接调 herdr：快照和事件流（`sessions.go`、`herdrevents.go`）、认会话（`setAgents`、`sessionFromProcess`）、
-  启动（`control.go` 的 `start`、`waitReady`）、发送和发送前检查（`prompt`、`checkPane`、`ensureSubmitted`）、
-  切模式 / 思考强度（`modes.go`）、改名关闭、终端的 observe / control / scroll（`terminal.go`）。
-- 窗格 id 没有类型：内存里的绑定 `n.panes`、hub 数据库 `node_sessions.pane`、hook 带的 `HERDR_PANE_ID` 都默认是 herdr 的窗格。
-- `proto.Session.SpaceKind` 已经预留，但 node 只会写 `"herdr"`；App 解码了这个字段但从来不读，分组键只有「机器 + 空间 id」。
-- App 里有不少写死 herdr 的文案（新建对话、空间页、终端页的「约 1000 行」等）。
+- node holds `*herdr.Client` directly (`node/node.go`), and its internal session model is `map[string]herdr.Agent`, with no interface.
+- Every feature calls herdr directly: snapshots and event streams (`sessions.go`, `herdrevents.go`), session recognition (`setAgents`, `sessionFromProcess`),
+  launch (`start`, `waitReady` in `control.go`), sending and pre-send checks (`prompt`, `checkPane`, `ensureSubmitted`),
+  mode / thinking-effort changes (`modes.go`), rename/close, and terminal observe / control / scroll (`terminal.go`).
+- Pane IDs are untyped: in-memory bindings `n.panes`, hub database `node_sessions.pane`, and hook `HERDR_PANE_ID` all assume herdr panes.
+- `proto.Session.SpaceKind` is reserved already, but node writes only `"herdr"`; the app decodes but never reads it, grouping only by "machine + space ID".
+- Many app strings hardcode herdr (new chats, spaces, terminal "about 1000 lines", etc.).
 
-## 宿主接口
+## Host interface
 
-代码在 `server/internal/host`（接口、`PaneRef`、按类型存放宿主的 `Registry`），herdr 的实现是 `server/internal/node/hostherdr.go`
-（node 里唯一引用 herdr 客户端的文件）。核心部分每个宿主都要实现；可选能力用 Go 的接口断言判断有没有。方法按 node 实际的调用点定，
-herdr 实现里每个方法就是一个 herdr 调用（`Close` 是先数标签页里的窗格再关）。
+Code lives in `server/internal/host` (interfaces, `PaneRef`, kind-keyed host `Registry`), with the herdr implementation in `server/internal/node/hostherdr.go`
+(the only node file referencing the herdr client). Every host implements the core; optional capabilities use Go interface assertions. Methods follow actual node call sites,
+and each herdr implementation method wraps one herdr call (`Close` first counts panes in the tab, then closes).
 
 ```go
 type Host interface {
@@ -64,295 +64,295 @@ type Controller interface { CanControl() bool
                             Control(ctx, PaneRef, cols, rows int, takeover bool, fn func(Frame)) (Control, error) }
 ```
 
-- **窗格引用 `PaneRef`**：宿主类型 + 宿主自己的 id。存储和传输时写成 `<kind>:<id>`；herdr 的窗格不加前缀（herdr 的 id 本身带冒号，
-  如 `w1:p2`），前缀不在 `host.Kinds`（固定的已知类型：herdr、orca、herdr-core、botmux，不看本机注册了哪些）里的都当作 herdr；已知类型但本机没有这个宿主的，查找时报「no <kind> host on this machine」，不会发给 herdr，所以 hub 数据库、`proto.Session`、hook 带的窗格都不用迁移。
-  node 里的窗格一律存这个字符串（`n.panes`、`Agent.PaneID`），调用时由 `Registry.Pane` 解析出宿主和 id。
-- **会话模型**：node 内部是 `map[string]host.Agent`（字段和原来的 herdr Agent 一样，`PaneID` 是 `PaneRef` 字符串），宿主返回的
-  `Agent`、`Created` 里的窗格都已经是本宿主的 `PaneRef`。
-- **按键名**：沿用 App 现在发的 herdr 写法（`shift+tab`、`ctrl+c`、`enter`……）作为 Persona 统一的按键名。herdr 原样转发，
-  Orca 换成字节（如 `shift+tab` → `\x1b[Z`）。
-- **错误**：宿主用 `host.Mark` 给自己的错误加上 `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver`（`errors.Is` 判断），错误文本不变；宿主缺某个能力时 node 返回 `ErrUnsupported`，文本以 `unsupported` 开头（hub 按这个前缀退回读屏）。
-- **布局 `Layout`**：空间、槽位、能认出的 Agent 窗格、所有窗格。宿主知道的话顺带给出 Agent 类型、状态、会话 id（herdr 集成的 `agent_session`）。
-- **第 1 步还按 herdr 处理的地方**：新建会话、空间改名、`starts` 记下的标签页改名走默认宿主（herdr），因为空间 id 还不带宿主类型
-  （第 3 步）；事件流只订阅 herdr（`watchHerdr`，`herdrEvents` 只有一份）；`node.info` 的 `herdr_version` 取 herdr 宿主的版本。
-  列表时每个宿主各取一次快照合在一起，某个宿主没响应就沿用它上次的 Agent，全都没响应才算失败。
+- **Pane reference `PaneRef`**: host kind + host-local ID. Stored and transmitted as `<kind>:<id>`; herdr panes have no prefix (herdr IDs already contain colons,
+  such as `w1:p2`). Prefixes not in `host.Kinds` (fixed known kinds: herdr, orca, herdr-core, botmux, independent of local registrations) are treated as herdr. A known kind with no local host reports "no <kind> host on this machine" on lookup, never sends to herdr, so hub database, `proto.Session`, and hook pane values need no migration.
+  node always stores this string (`n.panes`, `Agent.PaneID`), and `Registry.Pane` resolves host and ID at call time.
+- **Session model**: node uses `map[string]host.Agent` internally (same fields as the old herdr Agent; `PaneID` is a `PaneRef` string). Panes in host-returned
+  `Agent` and `Created` already use that host's `PaneRef`.
+- **Key names**: retain the app's current herdr notation (`shift+tab`, `ctrl+c`, `enter`, etc.) as Persona-wide names. herdr forwards unchanged;
+  Orca converts to bytes (for example `shift+tab` → `\x1b[Z`).
+- **Errors**: hosts annotate their errors with `ErrNoAgent` / `ErrAttachBusy` / `ErrTakenOver` using `host.Mark` (tested with `errors.Is`), preserving error text. Missing host capabilities return `ErrUnsupported` from node, with text beginning `unsupported` (hub uses this prefix to fall back to screen reads).
+- **Layout `Layout`**: spaces, slots, recognized Agent panes, and all panes. When known, hosts also supply Agent type, state, and session ID (herdr-integrated `agent_session`).
+- **Still herdr-specific in step 1**: new sessions, space renaming, and tab renames recorded in `starts` use the default host (herdr), since space IDs do not yet carry host kind
+  (step 3). Event streams subscribe only to herdr (`watchHerdr`, one `herdrEvents`); `node.info` gets `herdr_version` from the herdr host version.
+  Listing takes a snapshot from each host and combines them, retaining a host's last Agents if it does not respond; only total failure counts as failure.
 
-## 宿主之上的公共层
+## Shared layer above hosts
 
-下面这些现在散在 herdr 的代码路径里，抽出来后所有宿主共用。
+These parts currently sit in herdr code paths; after extraction all hosts share them.
 
-| 公共层 | 做什么 |
+| Shared layer | Responsibility |
 | --- | --- |
-| 认会话 | 宿主给出会话 id 的优先用；否则扫 claude / codex 进程的环境变量，按各宿主的 `PaneEnv()` 找到窗格，再读 `sessions/<pid>.json`（Codex 按线程名，TRAEX 按 owner 文件）。`personad hook` 同时读各宿主的窗格变量 |
-| 定状态 | 宿主报了状态就用，没报就按屏幕判断（现在 TRAEX 的做法），已有的纠正（`codexTurnOver` 等）照旧，最后由 hub 换算成统一状态（`docs/agent-states.md`） |
-| 发送前检查 | 宿主能读带颜色的屏幕：完整的草稿 / 灰字判断和补回车（`checkPane`、`ensureSubmitted`）；只能读纯文本：按 Codex 现在的方式降级，只查对话框 |
-| 能力上报 | 每个会话带上宿主支持哪些能力（实时终端、接管、新建、改名、关闭），App 据此隐藏做不到的按钮 |
+| Session recognition | Prefer a session ID supplied by the host; otherwise scan claude / codex process environments, find the pane via each host's `PaneEnv()`, then read `sessions/<pid>.json` (Codex uses thread names, the internal Codex variant uses an owner file). `personad hook` reads pane variables for every host |
+| State detection | Use host-reported state when available; otherwise infer from the screen (the current approach for the internal Codex variant), retain existing corrections such as `codexTurnOver`, then let hub map to unified states (`docs/agent-states.md`) |
+| Pre-send checks | If the host reads colored screens: full draft / gray-text detection and extra Enter (`checkPane`, `ensureSubmitted`); plain-text only: degrade like current Codex handling, checking dialogs only |
+| Capability reporting | Each session carries supported host capabilities (live terminal, takeover, create, rename, close); the app hides unavailable buttons |
 
-node 里的 `n.herdr` 换成按类型存放的一组宿主（`n.hosts`）：列表把每个宿主的窗格合在一起，每个操作按 `PaneRef` 的类型分发。
+Replace node's `n.herdr` with kind-keyed hosts (`n.hosts`): listing combines their panes, and each operation dispatches by `PaneRef` kind.
 
-hub 和 App 要跟着改的：
+Changes required in hub and app:
 
-- `SpaceKind` 写宿主类型；App 的空间分组键、空间改名接口带上宿主类型（否则两个宿主的空间 id 撞上会合成一组、改名改到 herdr）。
-- 按能力隐藏按钮；herdr 专用的文案改成通用说法，确实只有 herdr 有的（比如历史约 1000 行）按宿主显示。
-- `node_sessions.pane` 存带前缀的 `PaneRef`。
+- Write host kind to `SpaceKind`; include host kind in app space-group keys and rename APIs (otherwise identical space IDs merge into one group and rename targets herdr).
+- Hide buttons by capability; generalize herdr-specific wording, showing truly herdr-only text (such as about 1000 history lines) only for that host.
+- Store prefixed `PaneRef` in `node_sessions.pane`.
 
-## Orca 来源
+## Orca source
 
-以 Orca 1.4.245 的源码为准，对照核实过。
+Based on and checked against Orca 1.4.245 source.
 
-### 怎么连
+### Connection
 
-- 读 `~/Library/Application Support/orca/orca-runtime.json`（0600）：Unix socket 路径和 `authToken`（Windows 版 Orca 写的是 `named-pipe` 传输，
-  `\\.\pipe\orca-<pid>-…`，没有 `unix`；见 [windows.md](windows.md)「Orca」）。Orca 每次启动换 token，
-  连接失败或报 `unauthorized` 时重读。Orca 没开时文件不存在，宿主报不可用。
-- 协议是每行一个 JSON：请求 `{id, authToken, method, params}`，回复 `{id, ok, result | error}`；慢的调用会先来 `{"_keepalive":true}`，跳过。
-- 同一个用户就能连，不需要任何 `ORCA_*` 环境变量：经 ssh 起的 node、launchd 常驻的 node 都行。
-- 这个 socket 协议没有公开文档，只有内部版本号（`RUNTIME_PROTOCOL_VERSION`，现在是 3）；启动时用 `status.get` 查能力，对不上就不启用。
-  直接连 socket，不每次起 `orca` 命令行（轮询时每秒起一个 Node 进程太重）。
+- Read `~/Library/Application Support/orca/orca-runtime.json` (0600): Unix socket path and `authToken` (Windows Orca writes `named-pipe` transport,
+  `\\.\pipe\orca-<pid>-…`, not `unix`; see [windows.md](windows.md), "Orca"). Orca changes tokens on every launch;
+  reread on connection failure or `unauthorized`. When Orca is not running, the file is absent and the host reports unavailable.
+- Protocol: one JSON per line, request `{id, authToken, method, params}`, response `{id, ok, result | error}`. Slow calls may first send `{"_keepalive":true}`; skip it.
+- Any process running as the same user can connect, without `ORCA_*` environment variables, including nodes started over ssh or kept running by launchd.
+- This socket protocol has no public documentation, only an internal version (`RUNTIME_PROTOCOL_VERSION`, currently 3). Check capabilities with `status.get` at startup; disable if incompatible.
+  Connect directly to the socket, not a new `orca` CLI process each time (starting a Node process every second while polling is too heavy).
 
-### 第一期（2026-11-01 写完，未合并）
+### Phase 1 (written 2026-11-01, not merged)
 
-Orca 是这台机器的第三种「引擎」（下面「一机一引擎」）：引擎名 `orca`，显示名「Orca」。代码：客户端 `server/internal/orcart`，
-宿主 `server/internal/node/hostorca.go`，测试用的假 runtime `server/internal/orcart/orcarttest`。
+Orca is this machine's third "engine" ("One engine per machine" below): engine name `orca`, display name "Orca". Code: client `server/internal/orcart`,
+host `server/internal/node/hostorca.go`, fake test runtime `server/internal/orcart/orcarttest`.
 
-- **窗格 id**：Orca 的 pane key `<tabId>:<leafId>`（`worktree.ps` 按它报 Agent，终端里的进程环境变量 `ORCA_PANE_KEY` 也是它），存成
-  `orca:<tabId>:<leafId>`。`terminal.*` 要的 handle（`term_<uuid>`）由宿主按 pane key 从最近一次 `terminal.list` 查；
-  handle 过期（`terminal_handle_stale`）时重新列一次：读屏照常跟过去；写（发送、按键、关闭）只在终端还是同一个进程（`incarnationId` 没变）时重试，
-  换了进程就拒绝（什么都没输入）。读、写、关闭都带 `expectedIncarnationId`，Orca 发现 handle 背后换了进程会拒绝，写不会落到新进程里。
-- **连接**：每次调用新开一条连接（socket 允许一条连接多个请求，但不需要）。第一次调用前、Orca 换了 runtime（`runtimeId` 变了）后先
-  `status.get`：`runtimeProtocolVersion` 低于 3，或 `minCompatibleRuntimeClientVersion` 高于 3，就不兼容，所有调用报错，
-  `node.info` 里 Orca 不可用并带一句 `note`。元数据文件不在、没有本平台的本地传输（macOS / Linux 是 `unix`，Windows 是 `named-pipe`，其次 `unix`）、socket / 管道不在或拒绝连接都算「没开」（`host.ErrNotRunning`）：
-  立刻答「没有终端」，从没连上过就不记日志；连不上或 `unauthorized` 时重读元数据文件再试一次（Orca 重启换了 socket 和 token）；
-  回复的 `_meta.runtimeId` 和元数据对不上时下次重读。Orca 读不懂的请求（坏 JSON、太大）以 id `unknown` 回错误，按这个请求的拒绝处理。
-  元数据路径：设了 `$ORCA_USER_DATA_PATH` 就只看它；否则看两处，都在时读最近写的那份（之前的 runtime 可能留下旧文件）：
-  桌面 App 的目录（macOS `~/Library/Application Support/orca/`、Windows `%APPDATA%\orca\`、Linux `$XDG_CONFIG_HOME/orca/`），
-  和 orcad 的目录（另一台电脑上的 Orca 经 SSH 在这台起的远程 runtime，不分平台：`$ORCA_USER_DATA`，否则 `$XDG_DATA_HOME/Orca`，否则 `~/.orca`；
-  Orca 1.4.246 的 orcad，#2070）。文件读不到时下次调用重新找，Orca 比 node 晚启动也能找到。
-- **超时**：`terminal.list`、`worktree.ps` 3 秒（每次刷新都调），`status.get`、`terminal.read`、`terminal.agentStatus` 5 秒，`terminal.send` 30 秒
-  （Agent 提示是 Orca 那边的长轮询，期间发 keepalive），`terminal.close` 10 秒。
-- **没有推送**：不实现 `Watcher`。选了 Orca 的机器没有事件流，node 的轮询每秒取一次快照，不是 herdr 有事件流时的 10 秒慢快照。
-  为了轻：`terminal.list` 平时不要布局（`includeVisualLayouts:false`，Orca 说这个贵），终端集合或某个工作区的 `topologyRevisions` 变了、
-  或者距上次超过 30 秒才要一次；`worktree.ps` 带上次的 `afterSnapshotId`，没变时 Orca 只回 `unchanged`；进程表最多 1.5 秒扫一次，
-  分两步（先 `ps -o pid=,stat=,etime=,args=` 找 claude / codex，再只对它们 `ps -E`）；快照失败后的 `Agents` 复用刚才那次结果。
-  本机实测一次刷新约 0.2 秒（10 个终端）。
+- **Pane ID**: Orca pane key `<tabId>:<leafId>` (`worktree.ps` reports Agents by it; terminal process `ORCA_PANE_KEY` also contains it), stored as
+  `orca:<tabId>:<leafId>`. The host resolves handles required by `terminal.*` (`term_<uuid>`) by pane key from the latest `terminal.list`.
+  On expired handles (`terminal_handle_stale`), relist: reads follow normally; writes (send, keys, close) retry only if it is still the same terminal process (`incarnationId` unchanged).
+  If the process changed, reject without input. Reads, writes, and closes all carry `expectedIncarnationId`; Orca rejects a handle whose process changed, preventing writes to its replacement.
+- **Connection**: open a connection per call (the socket supports multiple requests per connection, but we do not need that). Before the first call and after Orca changes runtime (`runtimeId` changes), call
+  `status.get`: `runtimeProtocolVersion` below 3 or `minCompatibleRuntimeClientVersion` above 3 is incompatible, all calls error,
+  and `node.info` marks Orca unavailable with a `note`. Missing metadata, no local transport for the platform (macOS / Linux `unix`; Windows `named-pipe`, then `unix`), or missing/refused socket / pipe means "not running" (`host.ErrNotRunning`):
+  immediately answer "No terminal", with no logs if never connected. On connection failure or `unauthorized`, reread metadata and retry once (restart changes socket and token).
+  If reply `_meta.runtimeId` differs from metadata, reread next time. Orca responds to unreadable requests (bad JSON, too large) with ID `unknown`; treat as rejection of this request.
+  Metadata lookup: if `$ORCA_USER_DATA_PATH` is set, use only that. Otherwise check two locations and read the most recently written when both exist (an old runtime may leave a stale file):
+  desktop app directory (macOS `~/Library/Application Support/orca/`, Windows `%APPDATA%\orca\`, Linux `$XDG_CONFIG_HOME/orca/`),
+  and orcad directory (remote runtime started here over SSH by Orca on another computer, platform-independent: `$ORCA_USER_DATA`, otherwise `$XDG_DATA_HOME/Orca`, otherwise `~/.orca`;
+  Orca 1.4.246's orcad, #2070). If unreadable, rediscover next call so Orca can start after node.
+- **Timeouts**: `terminal.list`, `worktree.ps` 3 seconds (each refresh); `status.get`, `terminal.read`, `terminal.agentStatus` 5 seconds; `terminal.send` 30 seconds
+  (Agent prompts use Orca-side long polling with keepalives); `terminal.close` 10 seconds.
+- **No push**: does not implement `Watcher`. Orca machines have no event stream; node polls a snapshot every second, not the slow 10-second snapshot used with herdr event streams.
+  Keep it lightweight: normally omit layouts in `terminal.list` (`includeVisualLayouts:false`; Orca says this is expensive), requesting them only when the terminal set or a worktree's `topologyRevisions` changes,
+  or after 30 seconds. Pass the previous `afterSnapshotId` to `worktree.ps`, which returns only `unchanged` if unchanged. Scan processes at most every 1.5 seconds,
+  in two steps (`ps -o pid=,stat=,etime=,args=` to find claude / codex, then `ps -E` only for them). `Agents` after a failed snapshot reuses that attempt's result.
+  Local measurement: about 0.2 seconds per refresh (10 terminals).
 
-### 映射对照
+### Mapping
 
-| Persona 要的 | Orca 怎么做 | 第一期 |
+| Persona requirement | Orca implementation | Phase 1 |
 | --- | --- | --- |
-| 列出窗格 | `terminal.list {includeVisualLayouts, includePreview:false}`（布局按上面「没有推送」的规则才要）：只取本机的（`executionHostId` 是 `local`，SSH 目标上的终端那边没有 node 能管）、不是 `orphaned` 的 | ✅ |
-| 是不是 Agent | 窗格里有**在前台**的 claude / codex 进程（进程环境变量 `ORCA_PANE_KEY` 等于这个 pane key，缺了看 `ORCA_AGENT_PANE`）才算：没被挂起（`ps` 的 stat 不以 `T` 开头）、在终端的前台进程组（stat 带 `+`；Linux 比 `/proc/<pid>/stat` 的 pgrp 和 tpgid），不带 `HERDR_PANE_ID` / `HC_TERMINAL_ID`（套在 Orca 终端里的 herdr / herdr-core 里的 claude 继承了外面的 `ORCA_PANE_KEY`，但它归那个宿主）。Orca 的 `agentIdentity` 和 Agent 行在 Agent 退出后可能还留着，所以单看它们不算；只有扫不了进程表时列表才退回「`agentIdentity` 和一条 `hasLivePty` 的同类 Agent 行都在」（这时写一律拒绝） | ✅ |
-| 状态 | `worktree.ps` 里这个 pane key 的 Agent 行（类型要对得上，且 `updatedAt` 不早于这个 Agent 进程启动前 2 秒，否则是同一窗格里上一个 Agent 留下的）：优先 `mainAgent.state`（窗格里主 Agent 自己的状态；行上的 `state` 把子 Agent 也算进去，主 Agent 这轮结束了、后台子 Agent 还在跑时是 working），working / blocked / done 原样，waiting 当 blocked。没有可用的行时问 `terminal.agentStatus`（缓存 3 秒）：working 原样，permission 当 blocked，idle 当 done；它也不知道（`status` 为 null）记 unknown | ✅ 轮询 |
-| 窗格对应会话 | 进程表里这个窗格在前台的 claude 进程 pid → `sessions/<pid>.json`（公共的「进程说会话」路径）。macOS 两次 `ps`（见上）、Linux 读 `/proc`、Windows 读进程的 PEB（[windows.md](windows.md)「Orca」），环境里只取 `ORCA_PANE_KEY` / `ORCA_AGENT_PANE`（和用来排除嵌套的两个变量），不留、不记日志、不发 hub（环境里还有 Orca 的 hook token） | ✅ |
-| 空间 / 槽位 | 空间是工作区（`worktreeId`），名字取分支（去掉 `refs/heads/`），没有分支取路径的文件夹名，顺序按 `worktree.ps`（Orca 侧栏的顺序）；槽位是 `visualLayouts` 里的标签页，按布局树的阅读顺序（分屏先 `first` 后 `second`），名字取标签页标题，空的取序号 | ✅ |
-| 读屏 | `terminal.read {terminal, screen:true}`：纯文本、只有当前屏，按 `tailRows[].wrapped` 把软换行接回去；`source` 是 `screen-unavailable` 时报错。宿主声明 `host.PlainScreen`，`recent` 也只给当前屏 | ✅ 纯文本、无历史 |
-| 发消息 | 不用 Orca 的 `agentPrompt`：它只给「见过在工作」的 Agent 括号粘贴，新开的 claude 收到的是原样的文字 + `\r`，多行消息会在第一个换行处被提交（2026-11-01 实测）。`accepted:false` 的拒绝（`no-agent` / `permission`）只在带 `requireAgentStatus:"sendable"` 时才有，而它和「文字 + 回车」一起用时 Orca 一律拒绝，也用不上。做法和 herdr 的 `agent.prompt` 一样：宿主先确认 Agent 在前台（进程表里有这个窗格在前台的 claude / codex，**并且** `terminal.agentStatus` 说 `isRunningAgent`；`status` 是 permission 回 `dialog_open`；进程表扫不了、Orca 答不上来都算不在前台，回 `not_delivered`，什么都没输入），再自己发一次括号粘贴 `terminal.send {text: ESC[200~ + 文字 + ESC[201~}`（不带 `enter`；文字里的 ESC 换成 `<ESC>`，和 Orca 自己的做法一样，免得提前结束粘贴），等 150 毫秒（每行加 10 毫秒，最多 1 秒），再确认一次 Agent 在前台，单独发 `\r` 提交。粘贴之后任何一步失败都回 `delivered:unknown`（文字可能留在输入框里）。`client` 一律带 `{id:"jarvis", type:"desktop"}`（`client.id` 必填，缺了 Orca 回 `invalid_argument`）。发送前检查只查对话框（没有颜色分不清草稿和灰字） | ✅ |
-| 会话不在运行 | 会话不再是 Agent 窗格（Agent 退出、被挂起、切到后台）时，herdr 会在新窗格里 resume 它再发；Orca（和 herdr-core）的引擎不能新建会话，所以直接拒绝、什么都不输入：它上次所在的窗格还在时回 `agent_not_in_front`（「Claude 不在前台（可能被挂起）」），窗格也没了回 `not_running`（「……Orca 里的会话要在电脑上重新打开」）。以前这里会去找启动器，报出让人看不懂的 `unsupported: orca cannot do this` | ✅ |
-| 只输入不回车 | `terminal.send {text}` 不带 `enter`：原样写字节，不粘贴，先做同样的「Agent 在前台」检查（不查 permission：对话框的自由填写要用）。Orca 不声明 `TextTyper` | ✅ |
-| 特殊按键 | 按键名 → xterm 的字节：`enter` `\r`、`esc` `\x1b`、`shift+tab` `\x1b[Z`、`backspace` `\x7f`、`ctrl+<字母>` 控制字符、`ctrl+space` `\x00`、`alt+<字符>` 前面加 ESC，方向键 / Home / End / Insert / Delete / PageUp / PageDown / F1–F12 带修饰键时用 xterm 的参数（1 + shift 1 + alt 2 + ctrl 4，如 `alt+left` `\x1b[1;3D`、`ctrl+left` `\x1b[1;5D`）。每个键单独一次 `terminal.send`，间隔 40 毫秒（按调用方的 ctx 取消；连在一起时 `esc` 会和后面的序列拼成 alt 键）。表里没有的键在按任何键之前拒绝；会打出字的键（字母、数字、空格）先做「Agent 在前台」检查，回车、esc、方向键、ctrl+c 不查（卡住的窗格也要能打断、关掉） | ✅ |
-| 什么都没输入 | 上面的前台检查不过；`terminal.send` 回 `accepted:false`（`permission` 回 `dialog_open`，其余 `not_delivered`）；`terminal_handle_stale`（含 incarnation 对不上）、`terminal_not_writable`、`terminal_gone`、`terminal_exited`、`invalid_argument`、`runtime_busy`、`request_too_large` 这类写之前就拒绝的错误也回 `not_delivered`（都是 `delivered:none`，可以重发）。`runtime_error` 之类不确定写没写的照常报错 | ✅ |
-| 关闭 | 和 herdr 一样先按两次 ctrl+c（`\x03`），再 `terminal.close`（Orca 关掉窗格，只剩它时关掉标签页）。已经不在的终端算关好了 | ✅ |
-| 改名 | 工作区和标签页的名字归 Orca 管：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Orca 里的工作区和标签页暂时不能从手机改名」） | ❌ |
-| 认 hook 的窗格 | `personad hook` 在没有 `HERDR_PANE_ID`、`HC_TERMINAL_ID` 时读 `ORCA_PANE_KEY`（缺了 `ORCA_AGENT_PANE`），报 `orca:<tabId>:<leafId>`；node 只在引擎是 Orca 的机器上记下这种窗格（herdr 机器和以前一样，不认 Orca 的窗格）。Orca 里开的 claude 一般不带 Persona 的 hook（只有 Persona 自己启动时用 `--settings` 带上） | ✅ |
-| 新建会话、切模式 / 思考强度 | `host.Launcher` 实现；`terminal.create` 支持在已登记工作区或其子目录下新建，未登记的 Git 仓库尝试自动登记；模式菜单待进一步扩展 | ✅ 新建会话已支持 |
-| 实时终端、带颜色读屏、接管尺寸 | 只在配对的加密 WebSocket 上有，hub 退回读屏 | 第三期 |
-| 推送变化 | socket 上没有（所有 `*.subscribe` 都是流式方法） | — |
+| List panes | `terminal.list {includeVisualLayouts, includePreview:false}` (layouts requested only under the "No push" rules above): local only (`executionHostId` is `local`; terminals on SSH targets have no node there to manage them), excluding `orphaned` | ✅ |
+| Identify Agents | Requires a **foreground** claude / codex process in the pane (`ORCA_PANE_KEY` matches the pane key; fall back to `ORCA_AGENT_PANE`): not suspended (`ps` stat does not start with `T`), in the terminal foreground process group (stat contains `+`; Linux compares pgrp and tpgid in `/proc/<pid>/stat`), without `HERDR_PANE_ID` / `HC_TERMINAL_ID` (claude in herdr / herdr-core nested inside Orca inherits the outer `ORCA_PANE_KEY` but belongs to its own host). Orca's `agentIdentity` and Agent rows can remain after exit, so neither alone suffices. Only if process scanning fails does listing fall back to both `agentIdentity` and a matching Agent row with `hasLivePty` (all writes then reject) | ✅ |
+| State | Agent row for this pane key in `worktree.ps` (matching type, `updatedAt` no earlier than 2 seconds before process start, or it may belong to the previous Agent): prefer `mainAgent.state` (main Agent's own state; row `state` includes children, remaining working if the main turn ended but background children run). Keep working / blocked / done, map waiting to blocked. Without a usable row, ask `terminal.agentStatus` (3-second cache): working unchanged, permission → blocked, idle → done; null `status` → unknown | ✅ Polling |
+| Map pane to session | Foreground claude pid for the pane → `sessions/<pid>.json` (shared "process identifies session" path). macOS uses two `ps` calls (above), Linux reads `/proc`, Windows reads process PEB ([windows.md](windows.md), "Orca"). Extract only `ORCA_PANE_KEY` / `ORCA_AGENT_PANE` and the two nested-host exclusion variables; never retain, log, or send environments to hub (they also contain Orca's hook token) | ✅ |
+| Spaces / slots | Space is worktree (`worktreeId`), named from branch (strip `refs/heads/`), falling back to path basename, ordered by `worktree.ps` (Orca sidebar order). Slots are tabs in `visualLayouts`, in layout-tree reading order (`first`, then `second` for splits), named by tab title or index if empty | ✅ |
+| Read screen | `terminal.read {terminal, screen:true}`: plain text, current screen only; rejoin soft wraps using `tailRows[].wrapped`; error on `source: screen-unavailable`. Host declares `host.PlainScreen`; `recent` also returns only the current screen | ✅ Plain text, no history |
+| Send message | Do not use Orca's `agentPrompt`: it bracket-pastes only to Agents it has "seen working". Newly launched claude receives raw text + `\r`, submitting a multiline message at its first newline (tested 2026-11-01). Rejections with `accepted:false` (`no-agent` / `permission`) require `requireAgentStatus:"sendable"`, which Orca always rejects alongside "text + Enter", so it is unusable here too. Follow herdr's `agent.prompt`: first verify a foreground Agent (process table has foreground claude / codex in the pane **and** `terminal.agentStatus` says `isRunningAgent`; permission status returns `dialog_open`; failed process scan or unknown Orca status means not foreground, returning `not_delivered` with no input), then send bracketed paste ourselves: `terminal.send {text: ESC[200~ + text + ESC[201~}` (no `enter`; replace ESC in text with `<ESC>`, like Orca, to prevent premature paste termination). Wait 150 ms plus 10 ms per line, capped at 1 second; verify foreground Agent again, then send `\r` separately. Any failure after paste returns `delivered:unknown` (text may remain in input). Always pass `client: {id:"jarvis", type:"desktop"}` (`client.id` required; absent yields `invalid_argument`). Pre-send checks only detect dialogs (no color to distinguish drafts from gray text) | ✅ |
+| Session not running | When a session is no longer an Agent pane (exited, suspended, backgrounded), herdr resumes it in a new pane before sending. Orca (and herdr-core) engines cannot create sessions, so reject with no input: if its last pane still exists, `agent_not_in_front` ("Claude is not in the foreground; it may be suspended"); if gone, `not_running` ("…Reopen the Orca session on your computer"). Previously this looked up a launcher and returned the confusing `unsupported: orca cannot do this` | ✅ |
+| Type without Enter | `terminal.send {text}` without `enter`: raw bytes, no paste, with the same foreground-Agent check (not permission: free-form dialog input needs it). Orca does not declare `TextTyper` | ✅ |
+| Special keys | Key names → xterm bytes: `enter` `\r`, `esc` `\x1b`, `shift+tab` `\x1b[Z`, `backspace` `\x7f`, `ctrl+<letter>` control characters, `ctrl+space` `\x00`, `alt+<character>` prefixed ESC. Modified arrows / Home / End / Insert / Delete / PageUp / PageDown / F1–F12 use xterm parameters (1 + shift 1 + alt 2 + ctrl 4, e.g. `alt+left` `\x1b[1;3D`, `ctrl+left` `\x1b[1;5D`). Send each key separately via `terminal.send`, 40 ms apart (cancel via caller ctx; concatenating `esc` with a following sequence can make an alt key). Reject unknown keys before sending any. Printable keys (letters, digits, space) first verify foreground Agent; Enter, esc, arrows, ctrl+c do not (stuck panes must remain interruptible/closable) | ✅ |
+| No input delivered | Foreground check fails; `terminal.send` returns `accepted:false` (permission → `dialog_open`, others → `not_delivered`); pre-write errors such as `terminal_handle_stale` (including incarnation mismatch), `terminal_not_writable`, `terminal_gone`, `terminal_exited`, `invalid_argument`, `runtime_busy`, `request_too_large` also return `not_delivered` (all `delivered:none`, safe to resend). Uncertain-write errors such as `runtime_error` remain errors | ✅ |
+| Close | Like herdr, send ctrl+c (`\x03`) twice, then `terminal.close` (Orca closes the pane, or tab if it was the last pane). An already absent terminal counts as closed | ✅ |
+| Rename | Orca owns worktree and tab names: `RenameSpace` / `RenameSlot` report `unsupported` ("Orca worktrees and tabs cannot be renamed from the phone yet") | ❌ |
+| Recognize hook pane | With no `HERDR_PANE_ID` or `HC_TERMINAL_ID`, `personad hook` reads `ORCA_PANE_KEY` (fallback `ORCA_AGENT_PANE`) and reports `orca:<tabId>:<leafId>`. node records these only on Orca-engine machines (herdr machines continue ignoring Orca panes). claude launched in Orca usually lacks Persona hooks (only Persona's own launches add them through `--settings`) | ✅ |
+| New sessions, mode / thinking-effort changes | Implements `host.Launcher`; `terminal.create` supports creation in registered worktrees or their subdirectories and attempts to register unregistered Git repositories automatically; mode menu needs further expansion | ✅ New sessions supported |
+| Live terminal, colored screen reads, takeover dimensions | Only over paired encrypted WebSocket; hub falls back to screen reads | Phase 3 |
+| Push changes | Not on the socket (all `*.subscribe` methods are streaming) | — |
 
-第三期两条路：给 Orca 提一个 socket 上就能调的「带颜色读屏」方法（倾向这条），或者在 Persona 里实现 Orca 的配对和加密 WebSocket。
+Two options for phase 3: propose an Orca "colored screen read" method callable on the socket (preferred), or implement Orca pairing and encrypted WebSocket in Persona.
 
-### 查清的几件事
+### Findings
 
-- **状态行什么时候消失**：Agent 进程退出后 Orca 把它的行从 `worktree.ps` 删掉（只留恢复用的行，`worktree.ps` 不列）。但 `agentIdentity`
-  和行的消失不一定和进程同步，所以「是不是 Agent」以进程为准。
-- **`terminal.send` 的拒绝不是错误**：返回 `{send:{accepted:false, bytesWritten:0, refusedReason}}`，要看 `accepted`；但 `no-agent` / `permission`
-  这两种只在带 `requireAgentStatus:"sendable"` 时出现，不带时 Orca 照写不误。`requireAgentStatus` 和「文字 + 回车」一起用时 Orca 直接拒绝
-  （它要求分两步：先写文字、再回车），而分两步就没有括号粘贴，所以「Agent 在前台」只能由我们发之前用 `terminal.agentStatus` 查。
-- **括号粘贴的条件**：`agentPrompt`、有文字、`enter`、`client.type` 是 `desktop`、前台是 Orca 认得**并且见过在工作**的 Agent，都满足才粘贴，
-  回复带 `send.prompt` 回执；新开、还没干过活的 claude 不算，Orca 原样写文字再写 `\r`。所以 Persona 自己做括号粘贴（见「发消息」）。
-  不带 `enter` 的文字原样写。`client` 要带 `id`（Persona 用 `"jarvis"`，和 Orca 命令行一样带上），只有 `type` 时 Orca 回 `invalid_argument`。
-- **默认读屏会换源**：不带 `screen` 的 `terminal.read` 读的是输出流的尾巴（`source: stream`），所以一律带 `screen:true`。
+- **When state rows disappear**: after an Agent exits, Orca removes its row from `worktree.ps` (retaining only recovery rows, which `worktree.ps` does not list). But `agentIdentity`
+  and row removal need not synchronize with the process, so Agent identification is process-based.
+- **`terminal.send` rejection is not an error**: it returns `{send:{accepted:false, bytesWritten:0, refusedReason}}`; inspect `accepted`. However, `no-agent` / `permission`
+  appear only with `requireAgentStatus:"sendable"`; without it, Orca writes anyway. Orca directly rejects `requireAgentStatus` together with "text + Enter"
+  (requiring two steps: text, then Enter), but that loses bracketed paste, so we must verify foreground Agent via `terminal.agentStatus` before sending.
+- **Bracketed-paste conditions**: requires `agentPrompt`, text, `enter`, `client.type: desktop`, and a foreground Agent recognized by Orca **and previously seen working**.
+  The reply includes a `send.prompt` receipt. Newly launched claude that has not worked yet does not qualify; Orca writes raw text followed by `\r`. Persona therefore performs bracketed paste itself (see "Send message").
+  Text without `enter` is written raw. `client` requires `id` (Persona uses `"jarvis"`, as Orca CLI does); `type` alone returns `invalid_argument`.
+- **Default screen reads switch sources**: `terminal.read` without `screen` reads the output-stream tail (`source: stream`); always pass `screen:true`.
 
-### 注意
+### Cautions
 
-- `orca-runtime.json` 的 token 能完全控制 Orca；claude 进程的环境变量里还有 Orca 的 hook token（`ORCA_AGENT_HOOK_TOKEN`）。node 只读需要的变量，不写日志、不发给 hub。
-  客户端从不打印 token；测试里查日志里没有 token。
-- `ORCA_TERMINAL_HANDLE` 不一定有（只在预先分配了 handle 时设），认窗格只靠 `ORCA_PANE_KEY`（缺了退回 `ORCA_AGENT_PANE`，这个名字不会被 Claude Code 清掉）。
-- Orca 会往全局的 `~/.claude/settings.json` 装它自己的 hook。不在 Orca 里开的 claude 也会执行，只是脚本发现没有 Orca 的变量就退出。
-  Persona 不碰这些 hook。
-- `~/Library/Application Support/orca/agent-hooks/last-status.json` 里也有每个窗格的会话 id（`entries[paneKey].providerSession.id`），
-  但这是 Orca 的内部文件，不用。
-- TRAEX 开在 Orca 里：能列出来（按 `ORCA_PANE_KEY` 认窗格），但第一期发消息会被拒绝（宿主只给它认得进程的 claude / codex 发）。
-- 联调只做只读调用：`go test -tags orcalive -run OrcaLive ./internal/node/ -v` 用只读客户端（只放行 `status.get`、`terminal.list`、
-  `worktree.ps`、`terminal.read`、`terminal.agentStatus`，别的方法在发出前就拒绝）列一遍正在用的 Orca，打印窗格、状态、pid、会话 id，并和
-  `sessions/<pid>.json` 对一遍，不打印屏幕内容。会改动 Orca 的调用（发送、关闭、新建）只对假的 runtime 测：`orcarttest` 按 Orca 的
-  参数 schema（`src/shared/rpc-contract`）校验每个请求，不合格的回 `invalid_argument` 并记下来，测试检查没有这种请求。
-  node 的测试包把 `ORCA_USER_DATA_PATH` 指到不存在的目录，任何测试都碰不到真的 Orca。
+- The token in `orca-runtime.json` grants full Orca control; claude process environments also contain Orca's hook token (`ORCA_AGENT_HOOK_TOKEN`). node reads only required variables, never logs or sends them to hub.
+  The client never prints tokens; tests check logs contain no token.
+- `ORCA_TERMINAL_HANDLE` may be absent (set only when a handle was preallocated). Recognize panes only by `ORCA_PANE_KEY`, falling back to `ORCA_AGENT_PANE`, whose name Claude Code does not strip.
+- Orca installs its hooks globally in `~/.claude/settings.json`. claude outside Orca also runs them, but scripts exit when Orca variables are absent.
+  Persona leaves these hooks alone.
+- `~/Library/Application Support/orca/agent-hooks/last-status.json` also has per-pane session IDs (`entries[paneKey].providerSession.id`),
+  but is an internal Orca file; do not use it.
+- The internal Codex variant in Orca can be listed (pane recognized through `ORCA_PANE_KEY`), but phase 1 rejects sends (host sends only to recognized claude / codex processes).
+- Live integration checks are read-only: `go test -tags orcalive -run OrcaLive ./internal/node/ -v` uses a read-only client (allowing only `status.get`, `terminal.list`,
+  `worktree.ps`, `terminal.read`, `terminal.agentStatus`; all other methods reject before sending) to list the active Orca once, print panes, status, pid, and session ID, and compare against
+  `sessions/<pid>.json`, without printing screen content. Orca-mutating calls (send, close, create) are tested only against fake runtimes: `orcarttest` validates every request against Orca's
+  parameter schema (`src/shared/rpc-contract`), returning and recording `invalid_argument` for invalid requests; tests verify none occur.
+  node's test package points `ORCA_USER_DATA_PATH` at a nonexistent directory, preventing every test from touching real Orca.
 
-### 结构化会话（#2072）
+### Structured sessions (#2072)
 
-Orca 1.4.24x 起有「结构化会话」：Orca 自己的聊天界面包着 Claude Code / Codex，没有终端。`terminal.list` 里没有它们，
-`worktree.ps` 里它们的行的 pane key 是 `structured-agent-session-<会话 id>:<uuid>`。第一期只认终端，所以这些会话在 Persona 里看不到。
-现在由 node 里的 Orca 桥接（`server/internal/node/orcabridge.go`，客户端 `server/internal/orcart/session.go`）把它们按
-runtime 协议（`docs/runtimes.md`）接进来，做法和 Paseo 的桥一样，只是在 node 进程里（`net.Pipe` 接到 `RuntimeHost`）：
+Since Orca 1.4.24x, "structured sessions" wrap Claude Code / Codex in Orca's own chat UI, without terminals. `terminal.list` omits them;
+their rows in `worktree.ps` have pane keys `structured-agent-session-<session-id>:<uuid>`. Phase 1 recognized only terminals, leaving these invisible in Persona.
+They are now integrated by the Orca bridge in node (`server/internal/node/orcabridge.go`, client `server/internal/orcart/session.go`) through the
+runtime protocol (`docs/runtimes.md`), like the Paseo bridge but inside node (`net.Pipe` connects to `RuntimeHost`):
 
-- **什么时候开**：引擎是 Orca 时开，切走就关。只列本机工作区（`hostId` 是 `local`）里 `agentType` 是 `claude` 的结构化会话；
-  Codex 的结构化会话这一版不列。
-- **会话 id**：用 Claude 自己的会话 id（`agentSession.history` 的 `providerSession.id`），对话记录照常读 Claude 的 transcript；
-  还没发过第一条消息的会话没有这个 id，发过之后（最多 10 秒）才出现。空间是工作区（`worktreeId`），名字和终端会话一样取分支；
-  子工作区带上 `parent_space_id`（父工作区），网页上和终端会话一样折叠在父工作区下（#2073）。
-- **状态**：`worktree.ps` 每 1.5 秒轮询一次，用行上的 `mainAgent.state`（working / blocked / done）；只在列表变了时才推给 hub。
-- **能做什么**：发消息（文字和图片，工作中发的排在这一轮后面，`delivery: queue-if-active`）、打断（`agentSession.cancel`）、
-  关闭（`agentSession.close`，和 Orca 的关闭按钮一样，记录还在）、切权限模式和思考强度（`agentSession.setOption`；Orca 没有 plan 模式，
-  选 plan 回 `unsupported`）。没有终端，读屏、按键、实时终端都没有。
-- **卡片**：会话是 blocked 时读 `agentSession.currentRequests`，把等着回答的审批变成权限卡片（`detail` 是工具输入的 JSON 时
-  按 hook 卡片的样子显示命令 / 文件）、计划审批变成计划卡片、提问变成提问卡片；回答按 Orca 的选项 id 和 `expectedRevision` 发回。
-  在电脑上先答了，手机上的卡片收回。
-- **写操作的信封**：每个写都带 `envelope {sessionId, clientOperationId, expectedRuntimeFence, payloadFingerprint}`。
-  `clientOperationId` 是 `<13 位毫秒>-<32 位十六进制>`，同一条消息（同一个 `client_msg_id`）用同一个，重发时 Orca 按第一次的结果回、不会发两遍；
-  `payloadFingerprint` 是 `{method, sessionId, fields}` 规范 JSON（键排序、不加空格、按 JavaScript 的 `JSON.stringify` 转义）的 SHA-256；
-  审批和提问按 `agentSession.respondTo:approval` / `respondTo:question` 算。`expectedRuntimeFence` 取 `history` 的 `page.fence`
-  （1.4.246 起不再比较，但必须是正整数）。Orca 回 `ok:false` 的 `refusal` 表示什么都没做；`agent_session_operation_unknown` 是不知道做没做。
-- **socket 上只有一问一答的方法**：`agentSession.subscribe*` 是流式方法，只在配对的 WebSocket 上有，所以靠轮询。
-- **实测**（2026-11-05，Orca 1.4.246，在新建的测试会话上，测完关掉）：`setOption`、`send`（同一个 operation id 重发不会发第二遍）、
-  Bash 审批的卡片内容和 deny（文件没建出来）、对已经答过的审批再答、`cancel`（工作中 → 停下）、`close` 都和上面一致。
+- **Activation**: enabled for the Orca engine, closed when switching away. Lists only structured sessions with `agentType: claude` in local worktrees (`hostId: local`);
+  this version does not list structured Codex sessions.
+- **Session ID**: Claude's own ID (`providerSession.id` from `agentSession.history`); history reads the usual Claude transcript.
+  Sessions with no first message lack this ID and appear only after sending one (within 10 seconds). Space is worktree (`worktreeId`), named from branch as for terminal sessions;
+  child worktrees carry `parent_space_id` and collapse under their parent on the web, like terminal sessions (#2073).
+- **State**: poll `worktree.ps` every 1.5 seconds, using row `mainAgent.state` (working / blocked / done); push to hub only when the list changes.
+- **Actions**: send text/images (messages sent while working queue after this turn, `delivery: queue-if-active`), interrupt (`agentSession.cancel`),
+  close (`agentSession.close`, like Orca's close button; records remain), change permission mode and thinking effort (`agentSession.setOption`; Orca has no plan mode,
+  so plan returns `unsupported`). No terminal, screen reads, keys, or live terminal.
+- **Cards**: when blocked, read `agentSession.currentRequests`, mapping pending approvals to permission cards (if `detail` is tool-input JSON,
+  show commands/files like hook cards), plan approvals to plan cards, and questions to question cards. Return answers with Orca option IDs and `expectedRevision`.
+  Cards disappear from the phone if answered on the computer first.
+- **Write envelope**: every write carries `envelope {sessionId, clientOperationId, expectedRuntimeFence, payloadFingerprint}`.
+  `clientOperationId` is `<13-digit-milliseconds>-<32-hex-digits>`; the same message (same `client_msg_id`) reuses it, so Orca returns the original result on resend, never sends twice.
+  `payloadFingerprint` is SHA-256 of canonical JSON `{method, sessionId, fields}` (sorted keys, no spaces, escaping as JavaScript `JSON.stringify`).
+  Approvals and questions use `agentSession.respondTo:approval` / `respondTo:question`. `expectedRuntimeFence` comes from `page.fence` in `history`
+  (no longer compared since 1.4.246, but must be a positive integer). `refusal` with `ok:false` means nothing was done; `agent_session_operation_unknown` means completion is unknown.
+- **Socket has request/response methods only**: `agentSession.subscribe*` are streaming methods available only on paired WebSocket, so this uses polling.
+- **Live checks** (2026-11-05, Orca 1.4.246, newly created test sessions closed afterward): `setOption`, `send` (same operation ID resend does not send twice),
+  Bash approval card content and deny (file not created), answering an already answered approval, `cancel` (working → stopped), and `close` all matched the behavior above.
 
-## herdr-core 宿主
+## herdr-core host
 
-herdr-core（命令 `hc`）是 Herdr 桌面版背后的终端运行时，和 herdr 同一个作者，但是重写的、不兼容：socket、方法（`terminal.*`）、
-环境变量都不同。所以 herdr-core 是一个独立的宿主，类型名 `herdr-core`，窗格存成 `herdr-core:<地址>`（如 `herdr-core:t7`）。
-代码：客户端 `server/internal/herdrcore`，宿主 `server/internal/node/hostherdrcore.go`。以 herdr-core 0.1.16 的源码和 `hc schema` 为准核实过。
+herdr-core (command `hc`) is the terminal runtime behind the Herdr desktop app. It has the same author as herdr, but is a rewrite and incompatible: different socket, `terminal.*` methods,
+and environment variables. It is therefore a separate host, kind `herdr-core`, storing panes as `herdr-core:<address>` (such as `herdr-core:t7`).
+Code: client `server/internal/herdrcore`, host `server/internal/node/hostherdrcore.go`. Checked against herdr-core 0.1.16 source and `hc schema`.
 
-### 一机一引擎
+### One engine per machine
 
-每台机器选一个「引擎」（一组宿主）：herdr（默认，单个宿主）、herdr-core、orca（见上面「Orca 来源」），以及 2026-11-03 加的
-`herdr-both`（herdr + herdr-core 两个宿主并列，见下面「并列引擎」）。用户在 App 里按机器选（配对时、设置 › 机器）。
-hub 存下选择，连上 node 时用 `engine.use` 告诉它（接口和存储见 `docs/protocol.md`「引擎」，node 侧 `server/internal/node/engine.go`）。
+Each machine selects one "engine" (a set of hosts): herdr (default, one host), herdr-core, orca ("Orca source" above), and
+`herdr-both`, added 2026-11-03 (herdr + herdr-core side by side, "Combined engine" below). Users choose per machine in the app (during pairing, **Settings › Machines**).
+hub persists the choice and sends `engine.use` when node connects (API/storage in `docs/protocol.md`, "Engines"; node code `server/internal/node/engine.go`).
 
-- **为什么默认不并列**：最初两个宿主同时注册，评审发现这会拖累 herdr：herdr-core 慢时 herdr 的刷新和发送跟着慢（最多约 4 秒）；
-  herdr 挂了而 herdr-core 在时，herdr 的旧 Agent 一直显示在线；herdr-core 的事件引出多余的 herdr 快照；herdr-core 里有 TRAEX 时
-  herdr 被迫每秒轮询。单选时只注册选中的那个，这些都不存在。并列引擎是显式选项，下面四条用并行 + 按宿主隔离逐个解决。
-- **选 herdr**：node 的宿主表、刷新、轮询、事件流和原来完全一样，不建 herdr-core 客户端、不订阅它的事件；唯一的例外是 `node.info`
-  问一次 herdr-core 在不在（填 `engines`）。
-- **连接时**：hub 对存过选择的机器第一个调用就发 `engine.use`；node 等引擎定下来（`engine.use`、或 hub 直接列会话、或最多 3 秒）
-  才开始轮询和订阅事件，所以 herdr-core 的机器连接时不会先闪一下 herdr 的会话。选 herdr 的机器（没选过）不收 `engine.use`。
-  选了 herdr-core 时 `node.info` 也不问 herdr，herdr 的版本取 `herdr --version`。
-- **运行时切换**：`engine.use` 换掉宿主表，丢掉旧引擎的 Agent、空间名、进程缓存（切换前开始的刷新结果作废），结束所有终端流
-  （推 `terminal.end`），停掉旧事件流、起新的，再推一次会话列表。每个事件流有自己的「在线」标记，停掉的旧流不会清掉新流的状态。
-- **不带宿主的操作**：新建会话、改空间名这类不从窗格认宿主的操作找默认宿主（`defaultHost` / `defaultHostKind`）：选了 herdr-core 时就是 herdr-core，
-  它做不到的报 `unsupported`，而不是「这台机器没有 herdr」；并列时固定是经典 herdr。选 herdr 的机器不变。
-- **嵌套的 herdr**：选了 herdr-core 时，前台是经典 herdr 客户端的终端不算 Agent，即使里面 claude 的 OSC 7501 透了出来。
-  并列时这种终端注册在 herdr-core 宿主下（Agent 为空），里面的 claude 归 herdr 宿主的窗格，不会被算两次。
+- **Why not combine by default**: initially both hosts registered together. Review found this slowed herdr: slow herdr-core delayed herdr refresh/send too (up to about 4 seconds);
+  if herdr died while herdr-core remained, stale herdr Agents stayed online; herdr-core events triggered unnecessary herdr snapshots; an internal Codex variant in herdr-core
+  forced herdr to poll every second. Selecting only one registers only that host and avoids all four. The combined engine is explicit and addresses them individually with parallelism and per-host isolation.
+- **herdr selected**: node's host table, refresh, polling, and event stream remain exactly as before; no herdr-core client or subscription. The sole exception is `node.info`,
+  which checks herdr-core availability once to fill `engines`.
+- **On connection**: for a machine with a saved choice, hub's first call is `engine.use`. node waits for the engine to be settled (`engine.use`, hub listing sessions directly, or at most 3 seconds)
+  before polling/subscribing, so herdr-core machines never briefly flash herdr sessions. Machines using herdr (no saved choice) receive no `engine.use`.
+  With herdr-core selected, `node.info` does not query herdr either; the herdr version comes from `herdr --version`.
+- **Runtime switching**: `engine.use` replaces the host table, discards old Agents, space names, and process caches (invalidating refreshes begun before the switch), ends every terminal stream
+  (pushes `terminal.end`), stops old event streams and starts new ones, then pushes the session list. Each event stream has its own live marker; stopped old streams cannot clear new-stream state.
+- **Operations without a host**: operations not deriving a host from a pane, such as creating sessions or renaming spaces, use `defaultHost` / `defaultHostKind`: herdr-core when selected,
+  returning `unsupported` for unavailable capabilities, not "No herdr on this machine". Combined mode always defaults to classic herdr. herdr-selected machines are unchanged.
+- **Nested herdr**: with herdr-core selected, a terminal whose foreground is classic herdr is not an Agent, even if inner claude OSC 7501 escapes through.
+  Combined mode registers such terminals under herdr-core with no Agent; the inner claude belongs to a herdr pane and is not counted twice.
 
-### 并列引擎（herdr-both，2026-11-03）
+### Combined engine (herdr-both, 2026-11-03)
 
-起因：Herdr App 可以 remote 连到另一台机器开终端（`herdr remote-client-bridge`），于是同一台机器上经典 herdr（本地终端用）和
-herdr-core（Herdr App remote 进来用）同时活着，单选哪个都会藏掉另一边的会话。`herdr-both` 让 node 同时注册两个宿主，
-把上面「为什么默认不并列」的四条逐个隔离掉：
+Reason: Herdr App can connect remotely to another machine's terminals (`herdr remote-client-bridge`), so classic herdr (local terminals) and
+herdr-core (Herdr App remote access) can both run on one machine. Selecting either hides the other's sessions. `herdr-both` registers both,
+isolating the four issues in "Why not combine by default":
 
-- **刷新不互相等**：`refreshHosts` 从顺序改成按宿主并行，每个调用受宿主客户端自己的超时约束（herdr-core 的 list 2 秒），
-  一个卡住不挡另一个；部分刷新只替换自己那个宿主的 Agent 缓存，另一个保留上次结果。
-- **事件不互相引**：每个 watcher 宿主有自己的 `watcherSignals`（live 标记 + kick 通道，`herdrevents.go`）。轮询循环 select 所有 kick，
-  谁的事件只把谁加进本轮 due 列表；没有事件的宿主仍按自己的 slow snapshot（10 秒）节奏。herdr-core 的事件不再引出 herdr 快照。
-- **在线状态按宿主分开**：Agent 缓存是 `map[hostKind][]Agent`；某个宿主返回 `not_running` 只清自己那组。
-- **TRAEX 不连累对方**：`hostHasTraex(kind)` 只数该宿主窗格里的 TRAEX，决定的是这个宿主要不要每秒快照。
-- **默认宿主是 herdr**：新建 / 继续 / 改名走 herdr；窗格操作照旧按 PaneRef 的 kind 路由，herdr-core 窗格的能力限制（无颜色、不能只打字、
-  无实时终端）和单选 herdr-core 时完全一样。
-- Orca 不进并列：它没有事件流、每秒轮询、模型最重；要并以后单独做。
+- **Refreshes do not wait for each other**: `refreshHosts` changes from sequential to per-host parallel, with each call bounded by its client timeout (herdr-core list: 2 seconds).
+  One stuck host does not block the other; partial refresh replaces only that host's Agent cache, retaining the other's last result.
+- **Events do not trigger each other**: each watcher host has its own `watcherSignals` (live marker + kick channel, `herdrevents.go`). The polling loop selects all kicks,
+  adding only the emitting host to that round's due list; hosts without events retain their own slow-snapshot cadence (10 seconds). herdr-core events no longer trigger herdr snapshots.
+- **Online state is per-host**: Agent cache is `map[hostKind][]Agent`; a host returning `not_running` clears only its own group.
+- **The internal Codex variant does not slow the other host**: `hostHasTraex(kind)` counts that variant only in the given host's panes and decides whether that host needs a snapshot every second.
+- **Default host is herdr**: create / continue / rename use herdr; pane actions still route by PaneRef kind. herdr-core pane restrictions (no color, no text-only typing,
+  no live terminal) are exactly the same as when herdr-core alone is selected.
+- Orca is not combined: no event stream, one-second polling, heaviest model. Combining it would be separate work later.
 
-### 连接方式
+### Connection
 
-- socket 位置和 `hc` 自己的规则一样：`$HC_SOCKET`，否则 `$XDG_CONFIG_HOME/herdr-core/config.toml` 顶层的 `socket`，否则运行目录
-  （`$XDG_RUNTIME_DIR/herdr-core`，没有时 `/run/user/<uid>/herdr-core` 存在就用它）下的 `<会话>.sock`，再否则状态目录
-  `$XDG_STATE_HOME/herdr-core/<会话>/<会话>.sock`（macOS 一般是 `~/.local/state/herdr-core/default/default.sock`）。会话名 `$HC_SESSION`，默认 `default`。
-- 协议是 JSON-RPC 2.0，一行一条。普通调用每次新开一条连接；`terminal.list`、`doc.get` 限 2 秒（每次刷新都调），发送限 20 秒
-  （`terminal.send` 要等电脑上 3 秒没人打字），按键限 8 秒，其余 5 秒。错误带稳定的 `data.kind`（`not_found`、`blocked`……）。
-- `events.subscribe` 不用分帧模式：普通连接收到回复后只推通知（`event`、每 15 秒一次 `heartbeat`、跟不上时 `missed` 加新快照）。
-  45 秒没有任何消息就当连接断了，退避重连。只有 `terminal.attach` 需要 `hello {framed:true}`。
-- 只有 socket 文件不在、或连上被拒（没人监听）才算没开（`host.ErrNotRunning`）：立刻答「没有终端」，会话清空，不记日志。
-  连接超时之类说明它还在、只是忙，沿用上次的会话。曾经连上过、后来连不上，每段故障只记一行（开始一行、恢复一行）。
-  之后打开 Herdr 不用重启 node。
+- Socket location follows `hc` rules: `$HC_SOCKET`, otherwise top-level `socket` in `$XDG_CONFIG_HOME/herdr-core/config.toml`, otherwise `<session>.sock` in the runtime directory
+  (`$XDG_RUNTIME_DIR/herdr-core`, or `/run/user/<uid>/herdr-core` if it exists), otherwise state directory
+  `$XDG_STATE_HOME/herdr-core/<session>/<session>.sock` (usually `~/.local/state/herdr-core/default/default.sock` on macOS). Session name is `$HC_SESSION`, default `default`.
+- Protocol: JSON-RPC 2.0, one message per line. Ordinary calls open a fresh connection; `terminal.list` and `doc.get` have 2-second limits (every refresh), sending 20 seconds
+  (`terminal.send` waits for 3 seconds without typing on the computer), keys 8 seconds, others 5 seconds. Errors carry stable `data.kind` (`not_found`, `blocked`, etc.).
+- `events.subscribe` does not use framed mode: after its response, the ordinary connection sends only notifications (`event`, `heartbeat` every 15 seconds, `missed` plus a new snapshot when behind).
+  No message for 45 seconds means disconnected; reconnect with backoff. Only `terminal.attach` needs `hello {framed:true}`.
+- Only a missing socket file or refused connection (no listener) means not running (`host.ErrNotRunning`): immediately answer "No terminal", clear sessions, no logs.
+  Connection timeouts and similar failures mean it is still there but busy; retain the last sessions. If previously connected, log one line at the start of each outage and one on recovery.
+  Opening Herdr later requires no node restart.
 
-### 映射对照
+### Mapping
 
-| Persona 要的 | herdr-core 怎么做 | 第一期 |
+| Persona requirement | herdr-core implementation | Phase 1 |
 | --- | --- | --- |
-| 列出窗格 | `terminal.list`：只取本机（地址不带 `/`）、`state` 为 `live` 的终端 | ✅ |
-| Agent 类型 | `status.app`（程序自己用 OSC 7501 报的词，原样）：`claude-code` → claude，`codex` → codex，其余不算 Agent（留给 TRAEX 认）。还没报过状态时看前台进程 `argv[0]` 是不是 `claude` / `codex`。前台是 shell、经典 herdr 或没有前台进程时不算 Agent：Agent 退出后 herdr-core 会把它最后的状态留在终端上，直到终端自己的程序结束 | ✅ |
-| 状态 | `status.state`：working / blocked / done / idle 原样；`error` 和「是 claude 但还没报」记 unknown（error 只说出过错，不说现在在干什么） | ✅ |
-| 窗格对应会话 | 前台进程 `foreground.pid` 就是 claude 自己的 pid，读 `sessions/<pid>.json`；herdr-core 不报会话 id | ✅ |
-| 空间 / 槽位 | Herdr 打开的终端带标签 `herdr.space`、`herdr.tab`（就是布局文档 `doc.get {name:"herdr-app"}` 里空间和标签页的 id）和 `where`（「空间 / 标签页」显示名）。名字取文档里的名字，空的取 `where`，再空取文件夹名 / 序号；序号按文档顺序。不是 Herdr 开的（`hc run`）按目录归成一个空间 `dir:<目录>`，槽位留空 | ✅ |
-| 读屏 | `terminal.read {terminal, lines:0}`：只有纯文本，软换行已接回，只读当前屏。要历史时 herdr-core 会用滚轮事件去滚全屏程序、期间扣住用户的按键，所以 `recent` 也只给当前屏，没有往前翻 | ✅ 纯文本、无历史 |
-| 发消息 | 先 `terminal.get` 确认 Agent 还在（退出了就拒绝，免得壳层把消息当命令跑），再 `terminal.send {terminal, text}`：粘贴再回车（程序开了括号粘贴就用），等电脑上 3 秒没人打字。herdr-core 拒收时什么都没输入：`blocked` 回 `dialog_open`，`status_mismatch` / `unavailable` / `finished` / `not_found` 回 `not_delivered`（都是 `delivered:none`，可以重发） | ✅ |
-| 特殊按键 | `terminal.keys`：按键名和 Persona 的写法一样（`enter`、`esc`、`shift+tab`、`ctrl+u`、`up`……），原样转发 | ✅ |
-| 只输入不回车 | 做不到，见下。「文字 + 回车」和 `/effort` 改走 `terminal.send`；别的输入文字（包括要先按键打开输入框的对话框选项）在按任何键之前拒绝（`cannot_type`，中文提示） | 部分 |
-| 认 hook 的窗格 | 终端里的进程都有 `HC_TERMINAL_ID`（就是地址）；`personad hook` 在没有 `HERDR_PANE_ID` 时报 `herdr-core:<地址>` | ✅ |
-| 推送变化 | `events.subscribe` 一条连接管所有终端，任何变化（大小、keep 和别的机器的除外）都马上取一次快照 | ✅ |
-| 实时终端 | 不做，见下；hub 退回读屏 | ❌ |
-| 关闭 | 和 herdr 一样先按两次 ctrl+c，再 `terminal.kill`（挂断 → 终止 → 强杀，最多约 3 秒后返回终端当时的样子）。Herdr App 自己关窗格也只调 `terminal.kill`，终端以 `killed` 结束后 App 自己把窗格（只剩它时是标签页）去掉，不调 `terminal.rm`，所以我们也只 kill、留下已结束的记录。已结束或已不存在（`not_found`）的终端算关好了；kill 后还是 `live` 报错 | ✅ |
-| 改名 | 空间和标签页的名字在 Herdr App 的布局文档里，归 App 管，不从手机改：`RenameSpace` / `RenameSlot` 报 `unsupported`（「Herdr App 里的空间和标签页暂时不能从手机改名」）。会话标题（`/rename`）照常 | ❌ |
-| 新建、接管 | 第一期不做（没有 Launcher / Controller） | 之后 |
+| List panes | `terminal.list`: local terminals only (address has no `/`) with `state: live` | ✅ |
+| Agent type | `status.app` (program's own OSC 7501 value, unchanged): `claude-code` → claude, `codex` → codex, others are not Agents (left to internal-variant detection). If no status yet, check foreground `argv[0]` for `claude` / `codex`. Foreground shell, classic herdr, or no foreground process is not an Agent: herdr-core retains an exited Agent's last status until the terminal's own program ends | ✅ |
+| State | `status.state`: working / blocked / done / idle unchanged; `error` and claude without status → unknown (error says an error occurred, not what it is doing now) | ✅ |
+| Map pane to session | Foreground `foreground.pid` is claude's own pid; read `sessions/<pid>.json`; herdr-core reports no session ID | ✅ |
+| Spaces / slots | Herdr-created terminals have labels `herdr.space`, `herdr.tab` (space/tab IDs in layout document `doc.get {name:"herdr-app"}`), and `where` (space / tab display name). Use document names, then `where`, then directory basename / index; indices follow document order. Non-Herdr terminals (`hc run`) group by directory into space `dir:<directory>`, with empty slot | ✅ |
+| Read screen | `terminal.read {terminal, lines:0}`: plain text only, soft wraps already joined, current screen only. History reads make herdr-core send wheel events to full-screen programs and withhold user keys, so `recent` also returns only the current screen, without scrolling back | ✅ Plain text, no history |
+| Send message | First `terminal.get` verifies an Agent remains (reject after exit so the shell cannot execute the message as a command), then `terminal.send {terminal, text}`: paste then Enter (bracketed paste if enabled), waiting for 3 seconds without computer typing. Rejection delivers no input: `blocked` → `dialog_open`; `status_mismatch` / `unavailable` / `finished` / `not_found` → `not_delivered` (all `delivered:none`, safe to resend) | ✅ |
+| Special keys | `terminal.keys`: names match Persona (`enter`, `esc`, `shift+tab`, `ctrl+u`, `up`, etc.), forwarded unchanged | ✅ |
+| Type without Enter | Not possible; see below. "Text + Enter" and `/effort` use `terminal.send`; other text input (including dialog options requiring keys to open an input field first) rejects before any keys (`cannot_type`, Chinese explanation) | Partial |
+| Recognize hook pane | All terminal processes have `HC_TERMINAL_ID` (the address); without `HERDR_PANE_ID`, `personad hook` reports `herdr-core:<address>` | ✅ |
+| Push changes | One `events.subscribe` connection covers all terminals; any change (except size, keep, and other-machine changes) immediately requests a snapshot | ✅ |
+| Live terminal | Not implemented; see below. hub falls back to screen reads | ❌ |
+| Close | Like herdr, send ctrl+c twice, then `terminal.kill` (hangup → terminate → force kill, returning terminal state after at most about 3 seconds). Herdr App also closes panes with only `terminal.kill`; when the terminal ends as `killed`, the app removes the pane (or tab if last), without `terminal.rm`. We likewise only kill, retaining the ended record. Ended or absent (`not_found`) counts as closed; still `live` after kill is an error | ✅ |
+| Rename | Space and tab names belong to Herdr App's layout document; do not rename from the phone. `RenameSpace` / `RenameSlot` return `unsupported` ("Herdr App spaces and tabs cannot be renamed from the phone yet"). Session titles (`/rename`) work normally | ❌ |
+| Create, takeover | Not in phase 1 (no Launcher / Controller) | Later |
 
-### 查清的几件事
+### Findings
 
-- **地址会不会复用**：不会。地址是一个只增不减的计数（`t1`…`t9`、`t10`、`t1b`……），删掉终端也不回收，计数存在状态目录里，重启照旧；
-  只有清空状态目录（或它认出是克隆的磁盘）才从 `t1` 重来。所以窗格 id 直接用地址，不加 `created_ms`：清状态是极少的人为操作，
-  而且认会话先看进程的 `sessions/<pid>.json`，旧绑定只在进程认不出时才用。
-- **能不能读颜色**：不能。`terminal.read` 只有纯文本，带颜色的只有 `terminal.attach` 的首帧。宿主声明 `host.PlainScreen`：
-  要颜色的读屏报 `unsupported`；App 要带颜色的屏幕时 node 改给纯文本（行尾换成 `\r\n`）；Claude 的发送前检查只查对话框
-  （`screen.Choosing`），不查草稿，因为没有颜色分不清草稿和灰色的提示语。herdr 的路径不变（它不声明 `PlainScreen`）。
-  补回车（`ensureSubmitted`）和建议回复（`suggestion.go`）读不到颜色就不做，也用不着：`terminal.send` 自己回车。
-- **能不能只粘贴不回车**：不能。`terminal.send` 一定回车，`terminal.keys` 只认按键名（单个字母数字和少数标点，没有任意文本）；
-  原始输入只在 `terminal.attach` 的分帧流上有，不带 `observe` 的 attach 会按我们的尺寸改终端大小。所以 `SendText` 报 `unsupported`，
-  宿主声明 `host.TextTyper`（`CanTypeText` 为 false）：node 把「文字 + 回车」和 `/effort` 当一条 `terminal.send` 发；其余要输入文字的
-  按键请求在按任何键之前就拒绝（自由填写的对话框选项也是：原来会先按键打开输入框、再在输入文字时失败，留下半开的输入框）。
-- **流是什么格式**：`terminal.attach {observe:true}` 先发一帧完整重绘（`0x18` 后跟 VT 序列），之后是程序原样的 PTY 输出，没有差量帧，
-  只有积压超过 4 MB 才重绘。node 现在的帧是 herdr 按网格重画的子集，App 自写的 VT 子集不一定吃得下程序的原始输出，
-  所以第一期不实现 `Streamer`，hub 退回读屏。
-- **keep 终端能不能关掉**：能，但只靠 ctrl+c 不行。Herdr App 开的 Agent 终端是 `sh -ic '"$@"; exec "$0" -i' sh <agent>` 并设了 `keep`：
-  Agent 退出后壳层接着跑，终端一直是 `live`。`keep` 只在程序「丢失」（被信号杀、holder 没了等）时换成新的 shell，正常退出（有退出码）和
-  `terminal.kill` 都是最终结束（herdr-core 源码 `terminals.rs` 的 `keep_preserves_losses…` 测试、`terminal.keep` 的说明）。所以关闭在两次
-  ctrl+c 之后一定要 `terminal.kill`。在自己起的实例上实测过：ctrl+c 后终端仍是 `live`、前台是 shell；kill 后是 `finished`，
-  过了 keep 的宽限期也没有复活（`TestHerdrCoreLiveCloseKeep`）。
+- **Are addresses reused?** No. Addresses use an ever-increasing counter (`t1`…`t9`, `t10`, `t1b`, etc.), never recycled when terminals are deleted, persisted in the state directory across restarts.
+  Only clearing the state directory (or detecting a cloned disk) restarts from `t1`. Pane IDs therefore use the address directly, without `created_ms`: clearing state is a rare manual operation,
+  and session recognition checks `sessions/<pid>.json` first, using old bindings only when process identification fails.
+- **Can it read colors?** No. `terminal.read` is plain text; only the first `terminal.attach` frame has color. The host declares `host.PlainScreen`:
+  colored reads return `unsupported`; when the app requests color, node sends plain text instead (line endings converted to `\r\n`). Claude pre-send checks only dialogs
+  (`screen.Choosing`), not drafts, since draft text cannot be distinguished from gray hints without color. herdr's path remains unchanged (it does not declare `PlainScreen`).
+  Extra Enter (`ensureSubmitted`) and suggested replies (`suggestion.go`) are skipped without color, and unnecessary: `terminal.send` adds Enter itself.
+- **Can it paste without Enter?** No. `terminal.send` always adds Enter; `terminal.keys` accepts key names only (single letters/digits and some punctuation, not arbitrary text).
+  Raw input exists only in the framed `terminal.attach` stream, and attach without `observe` resizes the terminal to our dimensions. `SendText` therefore returns `unsupported`,
+  and the host declares `host.TextTyper` with `CanTypeText: false`. node sends "text + Enter" and `/effort` as one `terminal.send`; other key requests requiring text
+  reject before any keys (including free-form dialog options, which previously opened the input first and failed when typing, leaving a half-open field).
+- **What format is the stream?** `terminal.attach {observe:true}` first sends a complete redraw (`0x18` followed by VT sequences), then raw program PTY output, not delta frames;
+  it redraws only when backlog exceeds 4 MB. node's current frames are a subset of herdr's grid redraws, and the app's custom VT subset may not handle arbitrary raw program output,
+  so phase 1 has no `Streamer`; hub falls back to screen reads.
+- **Can keep terminals close?** Yes, but ctrl+c alone is insufficient. Herdr App Agent terminals run `sh -ic '"$@"; exec "$0" -i' sh <agent>` with `keep`:
+  the shell continues after Agent exit and the terminal remains `live`. `keep` starts a replacement shell only if a program is "lost" (killed by signal, holder gone, etc.); normal exit with an exit code and
+  `terminal.kill` are final (herdr-core `terminals.rs` tests `keep_preserves_losses…`, `terminal.keep` documentation). Always follow two ctrl+c sends
+  with `terminal.kill`. Tested on an owned instance: after ctrl+c terminal stayed `live` with a foreground shell; after kill it was `finished`,
+  with no revival after the keep grace period (`TestHerdrCoreLiveCloseKeep`).
 
-### 注意
+### Cautions
 
-- herdr-core 没有 hook，状态只来自程序自己发的 OSC 7501（Claude Code 会发）；不发的程序没有状态。
-- herdr-core 不会丢掉调用方已经放弃的 `terminal.send` / `terminal.keys`：它们要等电脑上 3 秒没人打字，Persona 超时后仍可能晚些送到。
-  按键的超时缩到 8 秒让这段窗口小一点；对话框回答没有在送达前再核对一次版本。
-- 已知的小差别（暂不处理）：`config.toml` 写坏时我们的解析和 `hc` 的不一定一致；一次快照最慢约 4 秒（`terminal.list` + `doc.get`，
-  只影响选了 herdr-core 的机器）；窗格 id 不带 core 的身份，清空状态后地址从 `t1` 重来（认会话先看进程，影响小）。
-- `terminal.list` 也会列出连到这个 core 的别的机器（地址带 `/`），那些机器有自己的 node，这里跳过。
-- 联调只用自己起的实例：`HC_SOCKET`、`HC_SESSION`、`XDG_STATE_HOME`、`XDG_CONFIG_HOME` 都指向 `/tmp`，用完 `hc server stop`；
-  对默认实例只做只读调用（`terminal.list`、`terminal.get`、`doc.get`），关闭这类会结束终端的调用只在自己的实例上试。见 `server/internal/node/hostherdrcore_live_test.go`（`-tags hclive`）。
+- herdr-core has no hooks; status comes only from the program's own OSC 7501 (Claude Code sends it). Programs that do not emit it have no status.
+- herdr-core does not discard `terminal.send` / `terminal.keys` abandoned by the caller: they wait for 3 seconds without computer typing and may arrive after Persona times out.
+  Key timeout was shortened to 8 seconds to reduce this window; dialog answers do not recheck revision just before delivery.
+- Known minor differences (not addressed yet): our parser and `hc` may differ on malformed `config.toml`; a snapshot can take about 4 seconds (`terminal.list` + `doc.get`,
+  affecting only herdr-core-selected machines); pane IDs omit core identity, so clearing state restarts addresses at `t1` (process-first recognition limits impact).
+- `terminal.list` also lists other machines connected to this core (addresses contain `/`); they have their own node, so skip them here.
+- Live checks use only owned instances: point `HC_SOCKET`, `HC_SESSION`, `XDG_STATE_HOME`, and `XDG_CONFIG_HOME` under `/tmp`, then `hc server stop` afterward.
+  On the default instance, use read-only calls only (`terminal.list`, `terminal.get`, `doc.get`); terminal-ending actions such as close are tested only on owned instances. See `server/internal/node/hostherdrcore_live_test.go` (`-tags hclive`).
 
-## 实施顺序
+## Implementation order
 
-0. [x] **补测试**（2026-11-01 完成，`server/internal/node/herdr_*_test.go`、`herdrfake_test.go`）：给 node 和 herdr 之间的交互补「特征测试」：一个共用的假 herdr socket，按顺序记下 node 发出的每个调用；
-   每条测试断言「给定这个 herdr 状态，列出的会话是什么、发给 herdr 的调用序列是什么」。测试通过 node 的请求入口驱动、不碰内部字段，
-   第 1 步重构后原样再跑，用来证明行为没变。只加测试，不改业务代码。
-1. [x] **只搬 herdr，行为不变**（2026-11-01 合并，`server/internal/host` + `node/hostherdr.go`；单元测试、`scripts/test/test-herdr.sh` 联调通过；
-   部署时 herdr 里没有 Claude 窗格，`live_panes_check.py` 的真实窗格对比还没做，有窗格后补跑；观察一两天再开始第 2 步）：定义接口，把所有 herdr 调用搬到接口后面，`PaneRef` 和带前缀的存储一起做。现有测试、语料测试全过；
-   第 0 步的测试只许改 `herdrfake_test.go` 里的「Node adapters」块，三个 `herdr_*_test.go` 一行不动，否则就不算证明了行为没变。
-   部署后用 `scripts/diag/live_panes_check.py` 对比真实窗格，确认认会话的结果没变。单独合并、部署，跑一两天再做下一步。
-2. [x] **Orca 第一期**（2026-11-01 合并；在 Orca 里开临时终端实测过列出会话、单行 / 多行发送、挂起时拒绝、关闭）：发现、状态、发消息、按键、纯文本读屏、读屏回答对话框、关闭，作为第三种引擎（见上面「Orca 来源」）。
-   用假的 Orca socket（`orcarttest`，按 Orca 的参数规则校验请求）写测试；对正在用的 Orca 做过只读核对（会话 id 都和 `sessions/<pid>.json` 一致）。
-   另一个宿主：[x] **herdr-core 第一期**（2026-11-01 合并，一机一引擎）：见上面「herdr-core 宿主」。关闭已支持（2026-11-01）；改名不做（归 Herdr App 管）。之后：只粘贴不回车（等上游加方法）、实时终端、新建。
-   [x] **herdr + herdr-core 并列**（2026-11-03，`herdr-both`，见上面「并列引擎」）：宿主表放多个宿主，刷新改为并行、不再等最慢的那个。
-3. [ ] **App**：引擎选择已做（配对时、设置 › 机器，选项按 hub 的 `engines` 显示，2026-11-01）；按能力隐藏按钮、通用文案还没做。
-4. [ ] 之后：Orca 第二期（新建、模式）、第三期（实时终端）。
+0. [x] **Add tests** (completed 2026-11-01, `server/internal/node/herdr_*_test.go`, `herdrfake_test.go`): characterization tests for node/herdr interactions. One shared fake herdr socket records every call from node in order;
+   each test asserts "given this herdr state, what sessions are listed and what is the herdr call sequence?" Drive tests through node's request entry point, not internal fields.
+   Rerun unchanged after step 1 to prove behavior stayed the same. Tests only, no business-code changes.
+1. [x] **Move only herdr, preserve behavior** (merged 2026-11-01, `server/internal/host` + `node/hostherdr.go`; unit tests and `scripts/test/test-herdr.sh` live integration passed;
+   there were no Claude panes in herdr at deployment, so `live_panes_check.py` real-pane comparison remains unrun; rerun once panes exist, observe for a day or two before step 2): define interfaces, move all herdr calls behind them, implement `PaneRef` and prefixed storage together. Existing and corpus tests all pass;
+   step 0 tests may change only the "Node adapters" block in `herdrfake_test.go`; not one line of the three `herdr_*_test.go` files, or behavior preservation is not proven.
+   After deployment, compare real panes with `scripts/diag/live_panes_check.py` to confirm session recognition is unchanged. Merge and deploy separately, run a day or two before proceeding.
+2. [x] **Orca phase 1** (merged 2026-11-01; temporary Orca terminals tested for listing, single/multiline sends, rejection while suspended, and closing): discovery, status, sends, keys, plain-text screen reads, screen-based dialog answers, close, as the third engine ("Orca source" above).
+   Test with a fake Orca socket (`orcarttest`, validating Orca parameter rules); read-only checks against active Orca confirmed all session IDs matched `sessions/<pid>.json`.
+   Another host: [x] **herdr-core phase 1** (merged 2026-11-01, one engine per machine): "herdr-core host" above. Close supported (2026-11-01); rename omitted because Herdr App owns it. Later: paste without Enter (await upstream method), live terminal, create.
+   [x] **herdr + herdr-core combined** (2026-11-03, `herdr-both`, "Combined engine" above): multiple hosts in the table, parallel refresh no longer waiting for the slowest.
+3. [ ] **App**: engine selection is done (pairing, **Settings › Machines**, options from hub `engines`, 2026-11-01); capability-based button hiding and generic wording are not.
+4. [ ] Later: Orca phase 2 (create, modes), phase 3 (live terminal).
 
-## 待修（第 1 步合并后再做）
+## Fixes deferred until after step 1 merges
 
-补测试时发现、测试按现状固定下来的问题。现在修会改掉「重构前后行为不变」的基准，所以等第 1 步合并后再单独修，修的时候同时改对应的测试：
+Issues discovered while adding tests, with tests pinning current behavior. Fixing now would change the before/after-refactor baseline, so address separately after step 1, updating corresponding tests too:
 
-- 切到 `bypassPermissions` 时，`tuiSetMode` 按 6 次 shift+tab 还没到就放弃，Claude 停在另一个模式上（不是原来的模式）。应该失败时回到原模式，或者先确认这个模式在循环里（`node/modes.go`）。
-- `close()` 在 `pane.list` 失败时直接关整个标签页，分屏里别的窗格一起被关（herdr 宿主的 `Close`，`node/hostherdr.go`）。应该失败时只关这个窗格或报错。
-- 原有的 `catchup_test.go` 里 4 条测试在设了 `CLAUDE_CONFIG_DIR` 的环境里失败：测试默认 Claude 配置目录在 HOME 下，应在测试里清掉这个变量（新测试的 `herdrNode` 已经这样做）。
-- `terminal_test.go` 的 `TestTerminalControlEndsWhenTakenOrForgotten` 改全局的 `termLease`，同时还有没退出的 `controlLoop` 在读它：`-race` 下偶发报竞争（引擎选择那轮的 worker 跑 `-count=10` 时见过一次，复核时分支和 master 各跑 30 次没复现）。测试结束前要等 `controlLoop` 退出，或把租期改成实例字段。
-- 其余可疑行为（不一定要修）：herdr 快照失败退回 `agent.list` 时空间 / 槽位名是旧的；`editQueue` 清几行按 transcript 里的队列算，不按 TUI 实际拉回来的。
+- Switching to `bypassPermissions`, `tuiSetMode` gives up after 6 shift+tab presses, leaving Claude in a different mode (not the original). Restore the original on failure, or verify the target exists in the cycle first (`node/modes.go`).
+- `close()` closes the whole tab if `pane.list` fails, taking other split panes with it (herdr host `Close`, `node/hostherdr.go`). Close only this pane or return an error on failure.
+- Four existing `catchup_test.go` tests fail with `CLAUDE_CONFIG_DIR` set: they assume Claude config under HOME. Clear this variable in tests (new `herdrNode` already does).
+- `TestTerminalControlEndsWhenTakenOrForgotten` in `terminal_test.go` changes global `termLease` while a still-running `controlLoop` reads it: occasional `-race` failures (seen once by the engine-selection worker with `-count=10`; not reproduced in 30 runs each on branch and master). Wait for `controlLoop` before test completion, or make the lease an instance field.
+- Other suspicious behavior (not necessarily needing fixes): fallback from failed herdr snapshot to `agent.list` retains old space / slot names; `editQueue` clears lines based on transcript queue, not what the TUI actually restores.
 
-## 还没定的
+## Open decisions
 
-- 能力上报放在每个会话上还是每台机器的每个宿主上（倾向后者，会话只带宿主类型）。
-- 同一个会话同时出现在两个宿主里（比如 herdr 里 resume 了 Orca 里正开着的会话）怎么显示：现在的设计会列两次，至少要提示「在别处运行」。
-- 不在任何宿主里、但进程还活着的会话（普通终端里开的），要不要标成「在别处运行」并禁止发送：只靠 `sessions/<pid>.json` 就能判断，和宿主抽象无关，可以先做。
+- Report capabilities per session or per host on each machine (leaning toward the latter, with sessions carrying only host kind).
+- Displaying one session in two hosts simultaneously (for example, resuming in herdr a session already open in Orca): the current design lists it twice; at least show "Running elsewhere".
+- Sessions outside any host but with a live process (ordinary terminal): mark "Running elsewhere" and disable sending? `sessions/<pid>.json` alone can detect this, independent of host abstraction, so it can be done first.

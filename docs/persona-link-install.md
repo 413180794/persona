@@ -1,123 +1,123 @@
-# 在 Mac 上构建、安装 Persona Link
+# Build and install Persona Link on Mac
 
-Persona Link 是 Mac 菜单栏里的一个小 App：把这台 Mac 接到你的 Persona hub 上，hub 就能经它用上这台电脑（看、驱动这台上的 Claude Code / Codex 等）。
-它里面带着连接器 jarvis-link 和 personad，第一次打开会顺手装好本机常驻的 node 服务。原理、两种连接模式和协议见 [link.md](link.md)，这里只讲怎么装起来。
+Persona Link is a small Mac menu-bar app. It connects this Mac to your Persona hub, letting the hub use this computer to view and drive Claude Code, Codex, and other Agents running here.
+It bundles the jarvis-link connector and personad, and installs a persistent local node service on first launch. See [link.md](link.md) for the architecture, two connection modes, and protocol; this document covers installation only.
 
-还没有发布好的安装包，目前都从源码构建，几分钟就好。
+There is no published installer yet. Build from source for now; it takes a few minutes.
 
-## 准备
+## Prerequisites
 
-| 要什么 | 说明 |
+| Requirement | Details |
 | --- | --- |
-| macOS 15 或更新 | App 的最低系统版本 |
-| Xcode（完整版，不是只有命令行工具） | 用 `xcodebuild` 编 Swift package；装好后 `sudo xcode-select -s /Applications/Xcode.app` 并打开一次 Xcode 同意许可 |
-| Go | 编 jarvis-link 和 personad。版本按 `server/go.mod`；本机的 Go 旧一点也行，没设 `GOTOOLCHAIN=local` 时 Go 会自己下载需要的版本 |
-| 一台在跑的 hub | 和一台已经连上它的浏览器（网页版），用来添加这台 Mac。用安装命令新装的 hub 已经开好了电脑接入要的安全连接，老 hub 见下面「配对」的「高级」 |
+| macOS 15 or later | The app's minimum OS version |
+| Xcode (the full app, not just command-line tools) | Builds the Swift package with `xcodebuild`; after installation, run `sudo xcode-select -s /Applications/Xcode.app` and open Xcode once to accept its license |
+| Go | Builds jarvis-link and personad. Use the version in `server/go.mod`; a slightly older local Go is fine if `GOTOOLCHAIN=local` is not set, since Go downloads the required version automatically |
+| A running hub | And a browser already connected to it (the web client), to add this Mac. A hub set up with the install command already has the secure connection required for computer access; for an older hub, see "Advanced" under "Pairing" below |
 
-不需要 Apple 开发者账号：App 用本机的 ad-hoc 签名，只在构建它的这台 Mac 上运行。
+No Apple developer account is needed: the app uses local ad-hoc signing and runs only on the Mac that built it.
 
-## 构建并安装
+## Build and install
 
 ```bash
-git clone <仓库地址> persona && cd persona
+git clone <repository-url> persona && cd persona
 ./scripts/app/mac-link.sh install
 ```
 
-这一条会：编 App（Apple 芯片 / Intel 跟随本机）、编 jarvis-link 和 personad 放进 App、签名、装到 `/Applications/Jarvis Link.app`（为了兼容旧版本，文件名还叫 Jarvis Link，打开后显示的是 Persona Link），然后打开它。
-已经在跑的旧版本会先被退出、替换掉。
+This command builds the app for the local architecture (Apple silicon / Intel), builds and bundles jarvis-link and personad, signs the app, installs it at `/Applications/Jarvis Link.app` (the filename remains Jarvis Link for compatibility with older versions; the app displays Persona Link), and opens it.
+If an older version is running, it quits and replaces it first.
 
-- 只编不装：`./scripts/app/mac-link.sh build`，产物在 `apple/PersonaLink/build/Jarvis Link.app`。
-- 编一个 Apple 芯片和 Intel 都能跑的：`UNIVERSAL=1 ./scripts/app/mac-link.sh build`。
-- bundle id 默认是占位的 `com.example.jarvis.link`，自己用不用改；想换就在 `~/.config/persona/config.json` 里写 `mac.link_bundle_id`
-  （或设环境变量 `PERSONA_LINK_BUNDLE_ID`）。换了 bundle id 等于换了一个 App，「登录时启动」要重新勾。
+- Build without installing: `./scripts/app/mac-link.sh build`; output is `apple/PersonaLink/build/Jarvis Link.app`.
+- Build for both Apple silicon and Intel: `UNIVERSAL=1 ./scripts/app/mac-link.sh build`.
+- The default bundle ID is the placeholder `com.example.jarvis.link`; no need to change it for personal use. To change it, set `mac.link_bundle_id` in `~/.config/persona/config.json`
+  (or the `PERSONA_LINK_BUNDLE_ID` environment variable). Changing the bundle ID makes it a different app, so enable "Launch at login" again.
 
-打开后菜单栏右上角出现一个图标，没有 Dock 图标。第一次打开时：
+After launch, an icon appears at the top right in the menu bar, with no Dock icon. On first launch:
 
-- 它会把 App 里的 personad 复制到 `~/.persona/bin/`（已经有了就不动），并装一个 LaunchAgent `com.jarvis.node` 让本机的 node 常驻；
-- 第一次连内网地址时，系统会问「允许 Persona Link 查找本地网络上的设备」，选允许。点了拒绝的话，到 系统设置 › 隐私与安全性 › 本地网络 里打开。
+- It copies the bundled personad to `~/.persona/bin/` (leaving any existing copy alone), and installs the `com.jarvis.node` LaunchAgent to keep the local node running.
+- On the first connection to a LAN address, the system asks whether to allow Persona Link to find devices on the local network. Choose Allow. If you denied it, enable it in **System Settings › Privacy & Security › Local Network**.
 
-## 配对
+## Pairing
 
-在已经连上 hub 的网页里添加这台 Mac，拿到配对链接，粘贴进 Persona Link，再回网页确认是你的电脑。
+Add this Mac in the web client already connected to your hub, get a pairing link, paste it into Persona Link, then return to the web client to confirm that it is your computer.
 
-1. 打开网页版的「机器」，点「添加电脑」，系统选 Mac，起个名字（可以用中文，比如「我的 MacBook」），点下一步。iPhone 和 Android 上的「添加电脑」还在做，现在先用网页。
-2. 屏幕上出现配对链接：点「拷贝配对链接」或「分享…」，把它发到这台 Mac 上（备忘录、AirDrop、邮件都行）。
-3. 在这台 Mac 上点菜单栏的 Persona Link 图标 › **配对…**，保持默认的「我去连 hub（主动）」，把链接粘贴进去，点配对。
-4. 回到网页那一屏，它会问「有一台电脑想加入：<名字>，是你的吗？」，点「是我的电脑」。
-   确认之前，这台 Mac 拿不到 Persona 管理的模型 Key，Persona 也不会在上面干活；24 小时不确认会被自动删掉。关掉了那一屏的话，机器列表里这台的卡片上也能确认。
-5. 好了的样子：图标变成已连接，菜单里写着「本机 node 在线」「这台是 hub 上的「<名字>」」；网页和手机 App 的机器列表里这台在线。
-6. 想开机就连上：菜单里勾「登录时启动」。
+1. Open **Machines** in the web client, click **Add computer**, choose Mac, give it a name (Chinese is supported too, such as "我的 MacBook"—"My MacBook"), and click Next. **Add computer** on iPhone and Android is still in progress; use the web client for now.
+2. A pairing link appears. Click **Copy pairing link** or **Share…** and send it to this Mac (Notes, AirDrop, or email all work).
+3. On this Mac, click the Persona Link menu-bar icon › **Pair…**, keep the default **I connect to hub (active)**, paste the link, and click Pair.
+4. Return to that web screen. It asks, "A computer wants to join: <name>. Is it yours?" Click **It's my computer**.
+   Before confirmation, this Mac cannot receive Persona-managed model keys, and Persona will not run work on it. It is deleted automatically if not confirmed within 24 hours. If you closed that screen, you can also confirm on the computer's card in the machine list.
+5. Success: the icon shows connected; the menu says "Local node online" and "This computer is '<name>' on the hub"; this computer is online in the web and mobile machine lists.
+6. To connect at startup, enable **Launch at login** in the menu.
 
-链接 10 分钟内有效、只能用一次，过期了在网页那一屏点「重新生成」。它在用掉之前等于配对权限，只发给自己的电脑，别贴到群里。
+The link is valid for 10 minutes and can be used only once. If it expires, click **Regenerate** on that web screen. Until used, it grants pairing permission: send it only to your own computer, never post it in a group.
 
-网页报「hub 还没打开安全连接」时，是老 hub 没开电脑接入要的安全连接：到 hub 的管理界面 › 网络里打开，或者看下面「高级」。
+If the web client says "Secure connection isn't enabled on the hub yet", the older hub lacks the secure connection needed for computer access. Enable it in the hub's **Admin › Network**, or see "Advanced" below.
 
-### 高级
+### Advanced
 
-- **不经网页拿链接**：hub 管理界面 › 电脑 › 添加电脑 › **电脑来连**，填这台的 id（如 `macbook`）和名字；或者在 hub 机器上运行
-  `personad hub pair --machine macbook --add --name MacBook`（hub 是 Docker 部署的话在容器里跑，见 [docker.md](docker.md)）。这两种加的电脑直接算已确认，不用再点「是我的电脑」。
-- **hub 要开着 TLS**：主动模式只走 TLS（hub.json 的 `public.tls_listen`），或者 hub 在 HTTPS 反向代理后面（[link.md](link.md)「hub 在反向代理后面」）。`personad hub setup` 新装的 hub 默认只在局域网 IPv4 上开。
-- **让 hub 来连（被动）**：这台连不到 hub、hub 连得到它的（比如 hub 在别人的网络里，只能经代理进来），配对窗口里选这一项，
-  点「生成配对链接」，把链接粘贴到 hub 管理界面 › 电脑 › 添加电脑 › **hub 来连**。防火墙只对 hub 放行它监听的端口（默认 18663）。细节见 [link.md](link.md)「被动模式」。
-- **在终端里配对**：
+- **Get a link without the web client**: in the hub's **Admin › Computers › Add computer › Computer connects**, enter this computer's ID (such as `macbook`) and name; or run
+  `personad hub pair --machine macbook --add --name MacBook` on the hub machine (inside the container for a Docker hub; see [docker.md](docker.md)). Computers added by either method are confirmed immediately; no need to click "It's my computer".
+- **The hub must have TLS enabled**: active mode uses only TLS (`public.tls_listen` in hub.json), or a hub behind an HTTPS reverse proxy ([link.md](link.md), "Hub behind a reverse proxy"). A newly installed hub from `personad hub setup` enables it only on LAN IPv4 by default.
+- **Let the hub connect (passive)**: when this computer cannot reach the hub but the hub can reach it (for example, the hub is on someone else's network and can only be reached through a proxy), select this option in the pairing window,
+  click **Generate pairing link**, and paste it into **Admin › Computers › Add computer › Hub connects**. Allow its listening port (default 18663) through the firewall only for the hub. See [link.md](link.md), "Passive mode".
+- **Pair in the terminal**:
 
   ```bash
-  echo '<配对链接>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
+  echo '<pairing-link>' | "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" pair -
   ```
 
-## 菜单里的东西
+## Menu entries
 
-| 写着 | 意思 |
+| Entry | Meaning |
 | --- | --- |
-| 内网 / 公网 IPv6 / 域名 · 地址 | 现在走的是哪条路连到 hub |
-| hub「…」· 互联组共 N 台 hub | 连着哪台 hub（旧 hub 不发名字时没有这行） |
-| 本机 node 在线 | 一切正常 |
-| 链路是通的，但 hub 连不上本机的 node | 常驻 node 没在跑，见下面「常见问题」 |
-| 未连接 · N 秒后重试 | 每个候选地址为什么连不上，一行一个；它会自己重试，也可以点「立即重连」 |
-| hub 不认这台的凭据 | 这台在 hub 上被删了或凭据撤销了：重新配对 |
+| LAN / Public IPv6 / Domain · address | Which route is currently used to connect to the hub |
+| Hub "…" · N hubs in the linked group | Which hub is connected (absent when an older hub sends no name) |
+| Local node online | Everything is working |
+| Link connected, but the hub cannot reach the local node | The persistent node is not running; see "Troubleshooting" below |
+| Disconnected · Retry in N seconds | One line per candidate address explaining why it failed; retries automatically, or click **Reconnect now** |
+| Hub rejected this computer's credentials | The computer was removed from the hub or its credentials were revoked: pair again |
 
-图标的几种样子见 [link.md](link.md)「菜单栏 App」。
+See [link.md](link.md), "Menu-bar app", for the icon states.
 
-## 升级
+## Upgrade
 
-拉最新代码再装一次就行，配对和设置都在 `~/.persona/link.json`，不会丢：
+Pull the latest code and install again. Pairing and settings live in `~/.persona/link.json` and are preserved:
 
 ```bash
 git pull && ./scripts/app/mac-link.sh install
 ```
 
-升级 App 不会替换常驻 node 用的那份 personad。支持更新协议的 node 可以直接在 Persona 的机器页点「重新部署」，沿用现有连接更新，不必重装菜单栏 App。
+Upgrading the app does not replace the personad used by the persistent node. A node that supports the update protocol can be updated through **Redeploy** on Persona's machine page, using the existing connection without reinstalling the menu-bar app.
 
-旧 node 首次需要在本机升级一次。先查看真实服务的二进制路径和状态：
+Older nodes need one initial local upgrade. First inspect the actual service's binary path and status:
 
 ```bash
 "/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status --json
 ```
 
-按原安装 / 部署渠道替换 `bin` 指向的服务二进制并重启 `com.jarvis.node`，保留已有运行根、启动参数和配对。不要先卸载再查询路径，也不要把升级 App 当成常驻 node 已升级。首次迁移和失败恢复的完整说明见 [node-update.md](node-update.md)。
+Replace the service binary pointed to by `bin` through its original installation / deployment channel and restart `com.jarvis.node`, preserving the existing runtime root, launch arguments, and pairing. Do not uninstall before querying the path, and do not assume upgrading the app upgrades the persistent node. See [node-update.md](node-update.md) for the full initial migration and failure recovery procedure.
 
-## 卸载
+## Uninstall
 
-1. 不想要常驻 node 了，先停掉、删掉它的服务（要在删 App 之前跑）：`"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node uninstall`。
-2. 菜单 › 退出 Persona Link；系统设置 › 通用 › 登录项 里有它的话去掉。
-3. 删 App：`rm -rf "/Applications/Jarvis Link.app"`。
-4. 配对凭据在 `~/.persona/link.json`，状态在 `~/.persona/link.status.json`，被动模式的 TLS 身份在 `~/.persona/link-tls/`，日志在 `~/.persona/link.log`，常驻 node 的程序在 `~/.persona/bin/jarvisd`（这台也跑过安装脚本的话，`~/.persona/bin/` 里还有 `jarvis-link` 和别名 `personad`、`persona-link`），不要了就删。hub 那边在管理界面 › 电脑 里把这台删掉。
+1. If you no longer want the persistent node, stop it and remove its service first (before deleting the app): `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node uninstall`.
+2. Menu › **Quit Persona Link**; remove it from **System Settings › General › Login Items** if listed.
+3. Delete the app: `rm -rf "/Applications/Jarvis Link.app"`.
+4. Pairing credentials are in `~/.persona/link.json`, state in `~/.persona/link.status.json`, passive-mode TLS identity in `~/.persona/link-tls/`, logs in `~/.persona/link.log`, and the persistent node binary in `~/.persona/bin/jarvisd` (if this computer has also run the install script, `~/.persona/bin/` contains `jarvis-link` and the aliases `personad`, `persona-link`). Delete these if no longer needed. Remove this computer in the hub's **Admin › Computers**.
 
-## 常见问题
+## Troubleshooting
 
-**构建报 `xcodebuild: error: SDK … cannot be located` 或找不到开发者目录**：系统指向的是命令行工具，不是 Xcode。
-`sudo xcode-select -s /Applications/Xcode.app`，或者临时 `export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`。
+**Build fails with `xcodebuild: error: SDK … cannot be located` or a missing developer directory**: the system points at command-line tools, not Xcode.
+Run `sudo xcode-select -s /Applications/Xcode.app`, or temporarily `export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 
-**构建报 Go 版本太旧、下载 toolchain 失败**：装一个不低于 `server/go.mod` 里写的 Go，或者让 `go` 能访问网络自动下载。
+**Build says Go is too old, or toolchain download fails**: install Go at least as new as the version in `server/go.mod`, or allow `go` network access to download it automatically.
 
-**打开时系统说「无法验证开发者」**：从别处拷来的 App 才会这样（ad-hoc 签名只在构建的那台机器上被信任）。在要用的那台 Mac 上自己构建；
-实在要拷，右键 › 打开，或 `xattr -dr com.apple.quarantine "/Applications/Jarvis Link.app"`。
+**The system says it cannot verify the developer when opening the app**: this happens to apps copied from elsewhere (ad-hoc signatures are trusted only on the machine that built them). Build on the Mac where you will use it.
+If you must copy it, right-click › Open, or run `xattr -dr com.apple.quarantine "/Applications/Jarvis Link.app"`.
 
-**一直「未连接」，内网那行写着不可达**：多半是本地网络权限被拒了，见上面「第一次打开时」；在外面时内网连不上是正常的，会走公网 IPv6 或域名。
+**Always "Disconnected", with the LAN route shown as unreachable**: local network permission was probably denied; see "On first launch" above. When away from home, LAN being unreachable is normal; it uses public IPv6 or a domain instead.
 
-**「链路是通的，但 hub 连不上本机的 node」**：`"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status` 看常驻 node 的服务装没装、
-launchd 有没有加载它；日志在 `~/.persona/node-attach.log`。没装就在菜单里点「安装本机 node 服务」。
+**"Link connected, but the hub cannot reach the local node"**: run `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" node status` to check whether the persistent node service is installed
+and loaded by launchd. Logs are in `~/.persona/node-attach.log`. If not installed, click **Install local node service** in the menu.
 
-**菜单栏面板是直角、带一圈细边框的老样子**：App 是用旧脚本编的。拉最新代码重新 `install`（原因见 [lessons/macos.md](lessons/macos.md)「Persona Link 的面板是老样子」）。
+**The menu-bar panel has the old square corners and thin border**: the app was built with an older script. Pull the latest code and run `install` again (see [lessons/macos.md](lessons/macos.md), "Persona Link panel has the old appearance", for why).
 
-**看日志**：`tail -f ~/.persona/link.log`，或者 `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" logs -f`。用过旧版（Jarvis）的机器上，这些文件可能还在 `~/.jarvis/` 下（[config.md](config.md)「命名与兼容」）。
+**Read logs**: `tail -f ~/.persona/link.log`, or `"/Applications/Jarvis Link.app/Contents/Helpers/jarvis-link" logs -f`. On a computer that used the older Jarvis version, these files may still live under `~/.jarvis/` ([config.md](config.md), "Naming and compatibility").

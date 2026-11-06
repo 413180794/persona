@@ -1,52 +1,52 @@
-# Mac 的设计语言
+# Mac design language
 
-Mac 版（`PersonaMac`）在 iOS 设计系统（`docs/ios.md`「设计语言」）之上的一层约定：同一套 token、同一套风格和主题色，
-只规定 Mac 上**怎么排**、**多密**、**哪些东西不要**。目标是像 Mail、备忘录、Things、Codex 桌面版那样安静、紧凑、以键盘和鼠标为主，
-而不是把 iPhone 的页面放大。默认风格（液态玻璃）和其他风格都按这里排；一种风格自己的表面、颜色照旧由它的 `ComponentSpec` 决定。
+The Mac app (`PersonaMac`) adds a layer of conventions on top of the iOS design system (`docs/ios.md`, "Design language"): the same tokens, styles, and theme colors,
+with rules only for **layout**, **density**, and **what to leave out** on Mac. The goal is the quiet, compact, keyboard-and-mouse-first feel of Mail, Notes, Things, and the Codex desktop app,
+not an enlarged iPhone screen. The default style (Liquid Glass) and all other styles follow these layouts; each style's surfaces and colors still come from its `ComponentSpec`.
 
-2026-11-05 用户要求先定下这套语言，再按它出设计稿、逐项改（#2318）。设计稿在 `docs/assets/mac-design/`。
+Requested 2026-11-05: define this language first, then produce mockups and implement the changes one by one (#2318). Mockups live in `docs/assets/mac-design/`.
 
-## 四条原则
+## Four principles
 
-1. **窗口的标题栏就是每一栏的标题行**。每一栏（分区列表、列表、详情）顶上 52pt（`Theme.Size.macToolbarHeight`）那一行放这一栏的
-   标题、‹ 返回和这一栏的操作按钮；栏里不再有第二个标题、第二排按钮。推进去的页面把自己的名字放进这一行（`detailTitle`），
-   ‹ 在名字前面，不用系统画在红绿灯旁边的圆形玻璃返回键。
-2. **密，但不挤**。正文 13pt（`Theme.Font.body`），行与行靠 4pt 网格隔开；分组之间用小标题和一条发丝线分开，不用大块空白。
-   一屏能看到的东西应该接近 Mail，而不是 iPhone 的两倍放大。
-3. **内容决定宽度**。文档、设置、知识库详情这类读的页面有阅读宽度（正文一行 60–80 个字），在详情栏里居中，不铺满 1000pt 的窗口；
-   列表行的时间、计数贴着内容，不被推到窗口另一头。
-4. **一件事只说一遍**。一页只有一个空状态；状态只用一种方式表示（圆点或文字，不两个都上）；不在 Mac 上画 iPhone 的导航提示（行尾的 ›、
-   铺满整行的大按钮、浮在内容上的大圆键）。
+1. **The window title bar is the title row for every column**. The top 52pt row (`Theme.Size.macToolbarHeight`) of each column (sections, list, detail) contains that column's
+   title, ‹ back button, and actions. There is no second title or second row of buttons inside the column. A pushed page puts its name in this row (`detailTitle`),
+   with ‹ before the name, rather than the system's circular glass back button beside the traffic lights.
+2. **Dense, not cramped**. Body text is 13pt (`Theme.Font.body`), with rows spaced on a 4pt grid. Small headings and a hairline separate groups, not large empty areas.
+   The amount visible on one screen should be close to Mail, not a doubled-up iPhone layout.
+3. **Content determines width**. Reading pages—documents, settings, knowledge details—have a reading width (60–80 characters per body-text line), centered in the detail column rather than filling a 1000pt window.
+   Times and counts in list rows stay near the content, not at the far end of the window.
+4. **Say each thing once**. A page has one empty state. Show status in one way (a dot or text, not both). Do not draw iPhone navigation cues on Mac (trailing › chevrons,
+   large full-row buttons, or large round buttons floating over content).
 
-## 各部分
+## Components
 
-| 部分 | 规定 |
+| Component | Rule |
 | --- | --- |
-| 分区栏（侧栏） | 行高跟正文走（约 30pt；加这一档时在 `MacTokens.swift` 起名，现在是 `Theme.Size.avatarL`），图标 16pt，选中是 `Theme.Fill.macSelected` 的圆角块（`Theme.Radius.control`）；需要你的数用红色角标，其余数量是次要灰字 |
-| 列表栏 | 行：状态点 + 标题 + 时间 / 一句摘要 / 元信息，不画 ›；分组标题是 `sectionHeader`（11pt 粗、次要色），组和组之间 `Theme.Space.l`；二级分组（机器 › 空间）靠缩进和字重分层，不靠空白 |
-| 详情栏 | 推进去的页：标题行是 ‹ + 名字；阅读页内容限宽居中（一行 60–80 个字；第一次用到时在 `MacTokens.swift` 加这个宽度的 token）；操作按钮是常规大小（`controlSize(.regular)`），靠左或靠右成组，不铺满一行 |
-| 卡片 | 只在一组信息需要框起来时用（机器的监控、待处理的提问）；`Theme.Fill.well` 底、`Theme.Radius.card`，不叠阴影；一页上同一层级的卡片同一种画法 |
-| 按钮 | 标题行里的按钮是 28pt 的无底图标按钮（悬停才出底，`MacTitleRowButton`）；页面里的主操作一个实心、其余 bordered；危险操作红字 |
-| 选中、悬停、焦点 | 打开着的东西在列表里一直看得见、一直是选中态（不因为状态变了被收起或挪走）；能点的行悬停有 `Theme.Fill.macHover`；键盘焦点用系统的焦点环 |
-| 空状态 | 列表空：列表栏里一个 `EmptyStateView`，详情栏空着（窗口底色），不再放「选一个」；列表有内容、没选中：详情栏一句淡的「选一个…」 |
-| 深浅色 | 只用 `Theme` 的角色色和 `Theme.Fill`、系统的 `labelColor` 系列；卡片、分隔线在深色下靠 fill 区分，不靠阴影 |
+| Section column (sidebar) | Row height follows body text (about 30pt; name this size in `MacTokens.swift` when adding it; currently `Theme.Size.avatarL`), 16pt icons, rounded selection block using `Theme.Fill.macSelected` (`Theme.Radius.control`); Needs you counts use a red badge, other counts use secondary gray text |
+| List column | Row: status dot + title + time / one-line summary / metadata, no ›; group headings use `sectionHeader` (11pt bold, secondary color), with `Theme.Space.l` between groups; nested groups (machine › space) use indentation and font weight, not blank space |
+| Detail column | Pushed page: title row is ‹ + name; reading content is width-limited and centered (60–80 characters per line; add a width token to `MacTokens.swift` on first use); actions use regular size (`controlSize(.regular)`), grouped left or right, not stretched across a row |
+| Cards | Use only when a group of information needs a boundary (machine monitoring, pending questions); `Theme.Fill.well` background and `Theme.Radius.card`, no stacked shadows; cards at the same level on a page use the same treatment |
+| Buttons | Title-row buttons are 28pt backgroundless icon buttons (background appears on hover, `MacTitleRowButton`); within a page, one primary action is solid and the rest are bordered; destructive actions use red text |
+| Selection, hover, focus | The open item remains visible and selected in the list (not collapsed or moved because its status changed); clickable rows use `Theme.Fill.macHover` on hover; keyboard focus uses the system focus ring |
+| Empty states | Empty list: one `EmptyStateView` in the list column, blank detail column with the window background, no extra "Select an item"; populated list with no selection: one subdued "Select a…" line in the detail column |
+| Light and dark mode | Use only `Theme` role colors, `Theme.Fill`, and the system `labelColor` family; distinguish cards and dividers with fills in dark mode, not shadows |
 
-## 和 iOS 的边界
+## Boundary with iOS
 
-- 这些规定只在 Mac 上生效：写在 `apple/Mac/` 的视图里，或者共用视图里 `#if os(macOS)` 的分支；iOS 的样子一像素都不变。
-- 缺的数值先加 token（Mac 专用的在 `apple/Mac/Design/MacTokens.swift`），页面里不写字面量（`TokenRatchetTests` 只许减少）。
-- 不改性能已经量过的结构：分区页面常驻（`MacPageStack`，#390）、工具栏晚一帧换，改动后用 `-showPerfRun sections` 对照（`docs/mac.md`「切换分区：页面常驻」）。
+- These rules apply only on Mac: in views under `apple/Mac/`, or in `#if os(macOS)` branches of shared views. The iOS appearance must not change by a single pixel.
+- Add missing values as tokens first (Mac-only tokens go in `apple/Mac/Design/MacTokens.swift`); no literals in pages (`TokenRatchetTests` allows only reductions).
+- Do not change structures whose performance has already been measured: section pages stay mounted (`MacPageStack`, #390), and the toolbar changes one frame later. Compare changes with `-showPerfRun sections` (`docs/mac.md`, "Switching sections: persistent pages").
 
-## 设计稿（`docs/assets/mac-design/`）
+## Mockups (`docs/assets/mac-design/`)
 
-| 文件 | 改什么 |
+| File | Changes |
 | --- | --- |
-| `knowledge.jpg` | 知识库：列表 + 详情，详情限宽，「问 Persona」「开 Agent」常规大小并排 |
-| `machine-detail.jpg` | 机器详情：标题行「‹ 服务器」，红绿灯旁没有圆形返回键 |
-| `agents.jpg` | Agents 列表：机器分组标题收紧，计划卡的摘要和标题对齐，标题行的按钮是小的无底图标 |
-| `settings.jpg` | 设置：打开着的子页在列表里是选中态，详情的标题在标题行 |
-| `todos.jpg` | 待办为空：只有列表栏一个空状态，「＋」是正常可点的样子 |
+| `knowledge.jpg` | Knowledge: list + detail, width-limited detail, regular-sized "Ask Persona" and "Open Agent" buttons side by side |
+| `machine-detail.jpg` | Machine detail: "‹ Server" title row, no round back button beside the traffic lights |
+| `agents.jpg` | Agents list: tighter machine group headings, plan-card summary aligned with its title, small backgroundless icons in the title row |
+| `settings.jpg` | Settings: the open subpage remains selected in the list, with its detail title in the title row |
+| `todos.jpg` | Empty To-dos: only one empty state in the list column, with a normal clickable "+" |
 
-怎么出的：真窗口截图（体验模式）作底图，经 OpenAI 兼容的图片编辑接口（`/v1/images/edits`，模型 `gpt-image-2.5-sunburst`）按这里的规定重画。
-提示词要写**具体改哪几处**（「把内容分成 340pt 的列表栏和详情栏」「摘要和标题左对齐」）：只写风格（「更原生、更精致」）时，
-`gpt-image-2` 和 `sunburst` 都几乎原样画回原图。设计稿是方向，不是像素标准：数值以 token 为准。
+How they were made: actual window screenshots (demo mode) as base images, redrawn to these rules through an OpenAI-compatible image-editing API (`/v1/images/edits`, model `gpt-image-2.5-sunburst`).
+Prompts must specify **exactly which parts to change** ("split the content into a 340pt list column and a detail column", "left-align the summary with the title"). With style-only instructions ("more native, more polished"),
+both `gpt-image-2` and `sunburst` return almost the original image. Mockups set a direction, not a pixel specification: tokens determine the values.

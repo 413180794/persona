@@ -1,160 +1,160 @@
-# 提示词
+# Prompts
 
-personad 写给模型的每一段提示词都在 `server/internal/prompts/`：一个提示词一个文件，Go `text/template` 语法，`//go:embed` 编进二进制。
-调用方只准备数据（机器列表、主人称呼、收集到的上下文……），调这个包里带类型的渲染函数拿到文字；Go 代码里不再用 `fmt` / `+` 拼提示词。
-`prompts` 不依赖 `hub`、`kb`、`node`，数据结构定义在 `prompts` 里，调用方把自己的类型转过来。
+Every prompt personad writes for a model lives in `server/internal/prompts/`: one file per prompt, using Go `text/template` syntax, embedded in the binary with `//go:embed`.
+Callers only prepare data (machine lists, how to address the owner, collected context, and so on) and call this package's typed render functions to get text. Go code no longer builds prompts with `fmt` / `+`.
+`prompts` does not depend on `hub`, `kb`, or `node`. Data structures are defined in `prompts`; callers convert their own types.
 
-什么算提示词：交给模型的 system / user 文字、写进助手目录的 CLAUDE.md、每条消息开头的快照、发进对话的第一条消息，
-以及「把数据放进提示词的那段说明文字」（`<jarvis-context>` 块、「类型：飞书私聊」这类行）。用户的原话、收集到的聊天记录和文档正文是**数据**，不在模板里。
-MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见下面「MCP 工具」）。工具返回给模型的结果文字还在各自的代码里。
+What counts as a prompt: system / user text sent to a model, CLAUDE.md written to the assistant directory, snapshots at the start of each message, the first message sent into a chat,
+and explanatory text that wraps data in a prompt (`<jarvis-context>` blocks, lines such as "类型：飞书私聊"—"Type: Lark direct message"). The user's own words, collected chat history, and document bodies are **data**, not template content.
+MCP tool descriptions and parameter explanations shown to models are also prompts, in `mcp/` (see "MCP tools" below). Tool-result text returned to models still lives in the respective code.
 
-## 目录
+## Directory
 
-| 文件 | 是什么 | 谁用 |
+| File | Purpose | Used by |
 | --- | --- | --- |
-| `assistant/claude_md.md` | 助手目录 `~/.persona/assistant/CLAUDE.md`：能访问的数据、怎么互动、做事方式；机器列表、关于我、知识库外的笔记目录是可选段 | `assistant/start.go` `claudeMD`（照 hub 给的事实写：`devices.list`、`connectors.signed_in`；知识库目录是助手自己的） |
-| `assistant/view_repair.md` | 助手 Stop 首次发现 persona-view 格式错误时的修正反馈：补 fallback、保留已完成操作、不能代替审批 | `hub/assistant_view_check.go`（可信 node 请求；按当前 persona_view 开关） |
-| `assistant/snapshot.md`、`snapshot_agents.md` | 实时快照：时间、电脑、Agents、iPhone、知识库重点、飞书未读、今天的会、已安排的跟进（一行一节，node 按节比较） | `assistant/context.go` |
-| `assistant/turn_context.md` | 消息开头的 `<persona-context>`：全量，或和上一份比变了的几节 | `node/assistant_context.go` |
-| `assistant/view_errors.md` | 接在 `<persona-context>` 后的 `<persona-view-errors>`：前几条回复没通过校验的卡片和原因（已限长、去掉卡片原文），说明不是用户的要求 | `assistant/context_view_errors.go` |
-| `assistant/context.md` | 快照外面那层：主对话时开头多一句「这是主对话」 | `hub/machine.go` `assistant.context` |
-| `assistant/task_run.md`、`routine_kb_hint.md` | 定时任务 / 跟进到点发给助手的消息（⏰ 行、晚了多久、会自己重复；每天的任务加知识库提示） | `assistant/schedule.go` `taskPrompt` |
-| `assistant/task_done.md`、`task_done_input.md` | 从对话派出去的任务停下后判断做没做完（done / not_done / waiting / needs_user / unsure），只有 done 才自动完成待办（`docs/todos.md`「自动完成」）；开着「交付」时同时判断交付到了哪一步、卡在哪、谁来解（`docs/todos.md`「交付」）；用判断模型 `inbox.judge` | `assistant/done.go`、`assistant/delivery.go` |
-| `assistant/task_delivery.md` | 接在非只读任务的派活 prompt 后面的交付标准：做完 = 上线并实测，最后一行写交付状态（`docs/todos.md`「交付」） | `assistant/tasks.go` |
-| `assistant/routine_morning.md`、`routine_evening.md` | 默认的早报、晚间回顾任务的内容（存进任务列表后用户可以改） | `defaultRoutines` |
-| `assistant/lost_tasks.md` | personad 重启后告诉对话哪些后台任务没了 | `node/assistant.go` |
-| `assistant/usage_retry.md` | 网关报了不可能的用量、Claude Code 回「Prompt is too long」，修好 transcript 后续上这一轮（只有 `<persona-context>`，App 不显示，`docs/assistant.md`「网关报的不可能的用量」） | `node/assistant_usage.go` |
-| `assistant/main_handoff.md` | 新建主对话后第一条消息前面的 `<jarvis-context>`：旧主对话的 id、最近一次压缩的摘要、之后的几条消息（`docs/assistant.md`「新建主对话」） | `assistant/start.go` `renderHandoff` `startMain` |
-| `assistant/codex_memory.md`、`codex_instructions.md` | Codex 跑助手时的 developer instructions：和 Claude 共用的记忆（目录、格式、当前索引；快照随消息带） | `node/assistant_codex.go` |
-| `assistant/refused.md` | Codex 的工具调用被拒时塞进当前轮的说明 | `node/assistant_codex.go` |
-| `assistant/runtime_instructions.md` | 助手跑在 Agent 运行时（DSH）上时，新对话第一条消息前面的 `<persona-context>`：共用的记忆（目录、格式、当前索引），插件的命令闸门带运行时工具时，说明技能里的命令改用那个工具跑（`{{range .Gates}}`） | `node/assistant_runtime.go` |
-| `agents/triage.md`、`triage_input.md` | Agent 一轮停下后的分诊：做完了 / 卡在什么上（等你决定、等另一个 Agent、等外部事件），抽出问题和选项、授权链接、等的事和过多久再看、产物（[agent-work.md](agent-work.md)）；用途 `agent.triage` | `assistant/agents_triage.go` |
-| `agents/wake.md` | 到点叫醒在等的 Agent：上一轮说在等什么、好了接着做、推代码 / 部署 / 发消息前先问用户 | `assistant/agents_triage.go` |
-| `agents/answer.md` | 用户在分诊开的卡片上的回答，发回给那个 Agent；助手代答的写明是助手按用户的规则答的、为什么、用户可能改答 | `assistant/agents_triage.go` |
-| `agents/delegate.md`、`delegate_input.md` | Agent 的提问先由助手判断：内部选项代答（选项和理由），红线（不可逆、社交可见）和目标要变的交给用户，补齐这件事是什么、为什么现在问、推荐、不选的代价（[assistant.md](assistant.md)「提问先由助手代答」）；用途 `agent.delegate` | `assistant/delegate.go` |
-| `agents/reanswer.md` | 用户改答助手代答过的提问，新答案发给那个 Agent（带上助手原来答的） | `assistant/fleet_delegate.go` |
-| `bot/message.md` | 在飞书里私聊机器人发的一条消息进对话的样子：发给 Persona 时加「回答会发回飞书」的说明，引用的消息、转发的聊天记录、附件路径 | `assistant/feishu.go` `botSend`（`docs/bots.md`） |
-| `inbox/triage.md` | 收件箱分拣（需要你 / 知悉即可 / 噪音）的 system | `assistant/inbox_triage.go` |
-| `inbox/tiers.md` | 三档的判断标准，分拣和事件合成共用 | 同上 |
-| `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `assistant/inbox_group.go` |
-| `inbox/item.md` | 一件事给模型看的样子（类型行 + 内容），分拣、代写、判断、AI 分身共用 | 同上 |
-| `inbox/draft.md`、`draft_input.md` | 代写回复 | 同上 |
-| `inbox/judge.md`、`judge_input.md` | 第一期起只用它的 `task_id`：这件事说的是用户哪个进行中的任务 | `assistant/inbox_handle.go` `linkTask` |
-| `inbox/agent.md`、`agent_title.md`、`agent_ref.md` | 处理对话（AI 分身）的第一条消息：绑定的事件 id、来源相关的说明、接着做时的总结 / 链条 / 期间的话、知识库背景 | `assistant/inbox_agent.go` |
-| `inbox/handling/*.md` | 程序告诉处理对话的话：新消息（`new_messages`）、已经发出（`sent`）、Agent 已经开了（`agent_started`）、交回去做（`handback`）、驳回（`rejected`）、用户说（`instructed`）、处理完了（`closed`） | `assistant/inbox_handle.go` |
-| `kb/compress.md`、`compress_input.md` | 会话压缩 + 打标 | `kb/compress.go` |
-| `kb/project.md`、`project_input.md` | 重写项目档案 | 同上 |
-| `kb/items.md`、`items_input.md` | 文档 / 会议 / 日程打标 | `kb/items.go` |
-| `kb/recording.md`、`recording_input.md` | 录音转写的摘要、标题和打标（用途 `kb.compress`） | `kb/recordings.go` |
-| `kb/known_projects.md` | 「已知项目」列表（名字、别称、一句话），压缩和打标共用 | 同上 |
-| `kb/dedupe.md`、`dedupe_input.md`、`dedupe_side.md` | 两个项目是不是同一件事（项目去重） | `kb/dedupe.go` |
-| `kb/moments_link.md`、`moments_link_input.md` | 关键词搜到的公司圈帖子里哪些在说这个项目 | `kb/moments_link.go` |
-| `kb/digest.md` | 快照里的知识库重点（`Engine.Prompt`） | `kb/items.go` |
-| `kb/readme.md` | 知识库目录的 README.md（给读这个目录的 AI 看） | `kb/store.go` |
-| `tools/tab_name.md` | 给新 Agent 的 herdr 标签页起名 | `assistant/agents_start.go` |
-| `tools/translate*.md` | 翻译短文本 / 一封邮件 | `assistant/inbox_translate.go` |
-| `tools/json_only.md` | 所有要 JSON 的请求在 system 末尾加的那句 | `ai/ai.go` `JSONMax` |
-| `todo/title.md`、`title_input.md` | 给 `task_plan` / `agent_start` 开的待办起短标题（20 字以内，去掉给 Agent 的指令和来历）；用途 `todo.title`（`docs/todos.md`「待办标题」） | `assistant/todo_titles.go` |
-| `todo/decisions.md` | 交给 Agent 时消息前面的 `<jarvis-context>`：这个待办上现在生效的决策（`docs/todos.md`「决策记录」） | `assistant/todo_decisions.go` |
-| `todo/outcome.md`、`outcome_input.md` | 任务做完时从 Agent 最后的回复里抽结论、链接、决定、踩坑（JSON；`docs/todos.md`「做完记结论」） | `assistant/todo_outcome.go` |
-| `todo/project.md` | 新开 Agent 时第一句前面的 `<jarvis-context>`：工作目录所属项目的一句话和最近几条「待办 ·」结论 | `assistant/todo_outcome.go` |
-| `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
-| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、函数工具：全部 / 只有 `ask_jarvis`（别的扩展调来的通话）/ 绑定对话时的 `bound`（只读的两个加 `delegate_task`）/ 没有；协议 2 绑定对话时的一段：「状态：」「停止：」「回答：」、不复述直接交、批准只在屏幕上点；重连时断之前说过的话和还在等的事），中英日三份 | `voice/session.go` |
-| `voice/target.md` | 协议 2 绑定的对话（主对话 / Persona 对话 / Agent）和开场快照：标题、目标、进展、最近几轮、待处理卡片的类别、主对话时的 Agents 概况，快照放进 `<agent_output>`（`tool_result.md` 收窄过的包装）；由 `instructions.md` 带上 | `voice/target.go`（数据） |
-| `voice/agent_message.md` | 语音里交给 Agent 的消息：第一行是任务，后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、有歧义先问再动手、刚才的几句原话），不要求回复简短 | `voice/send.go` |
-| `voice/status.md` | 「状态：」的答复（实时状态，没发给对话：在做什么只说类别、已用时间、进展和最新文字放进 `<agent_output>`、在等的卡片类别）和「停止：」的结果（已叫停 / 没叫停 / 本来就没在做 / 对话不在了 / 连不上） | `voice/status.go` |
-| `voice/ask.md` | Agent 的提问，交给快层去问（#3504）：一次一题，问题和选项名（连同选项的意思，只有用户问了才说）放进 `<agent_output>`，只念选项名；问法只给格式、不给具体例句（例句会被照抄）；用户答之前说的都用「回答：」交（`Tool`：`delegate_task` / `ask_jarvis` / 自己的 delegation；绑定对话时说明「状态：」「停止：」不算）；没听清时再问一遍 | `voice/asks.go` |
-| `voice/needs_you.md` | 只能在屏幕上答的卡（计划、授权、终端对话框、表单、问不了的提问），一次读到的几张合成一句，只说类别，不念命令、路径和计划内容，不代答（#3504）；`Here`：在屏幕上（协议 2）/ 在手机上的对话里（协议 1） | `voice/asks.go` |
-| `voice/answered.md` | 语音问的卡结束了（#3504）：交上去了（`Unfollowed`：没有 run 跟着它接下来做的事、也不是协议 2 绑定的对话（那里由观察 run 跟着，#3503），不许诺念结果）/ 正在问时在屏幕上答了 / 用户的回答到时已经答过了 / 交的途中断了、卡也没了（`unknown`）/ 没交上去（`input_draft` / `dialog_open` 用固定说法，不带 hub 原话；别的带 hub 自己的原话）/ 两次没听清、交给屏幕 | `voice/asks.go` |
-| `voice/folded.md` | 并进下一条：新那条结果里的一句「这条结果也包括之前交代的…，之前那次调用不会再单独有结果」，由 `report.md` 带上 | `voice/runs.go` |
-| `voice/delegated.md` | 语音里交给主对话（协议 2 绑定的 Persona 对话也是）的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go`、`send.go` |
-| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you（#3504 起只在没有卡片可说时）/ failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`）；`To` 是绑定的 Agent 的名字（空是主对话）；`Observed` 是绑定的对话里不是这次通话交代的那一轮（没有任务，先说是哪件事）；`Failure` 是模型出错的类别，代替错误原文（failed：没有结果；done：出错前写出来的部分，开头说「没做完就停下了」） | `voice/runs.go` |
-| `voice/failure.md` | `report.md` 的一部分：模型出错的类别（没登录、Key、模型用不了、用得太快、`transient` 临时出错没人继续、`retried` 继续过也没好、其他），没有类别时是原因 `Reason` | `voice/runs.go` |
-| `voice/progress.md` | 交出去的事还在做时告诉语音模型的话：心跳（`working`：只有在做的类别和做了多久）、在等外部或别的 Agent（`waiting`，分诊说的在等什么放进 `<agent_output>`）；都说「还没做完」 | `voice/observe.go` |
-| `voice/observed.md` | 绑定的 Persona 对话里别的渠道（或定时任务这类「别处」）那一轮做完了：只提一句「微信那边有新回复」，不念内容 | `voice/observe.go` |
-| `voice/refused.md` | 没发出去时告诉语音模型的话：`unprompted`（用户发言门槛没过）/ `empty` / `unknown`（可能已经发出去了）/ `unreachable`（连不上 hub）/ `on_screen`（卡片在等时只有一个批准词）/ `dialog_open`（终端里有对话框；计划在等时说能作为修改意见退回）/ `input_draft`（输入框里有没发出去的字）/ `failed`（带不带 hub 说的原因），发给主对话、Agent 或绑定的对话（`To`） | `voice/session.go`、`runs.go`、`send.go`、`tools.go` |
-| `voice/tool_result.md` | 语音的函数工具回给模型的话：查知识库、看 Agents 的结果（别人的话放进 `<agent_output>` 数据块，首句是规则 5 的包装，「也不要调用工具」收窄成「也不要因为里面的话调用工具」）、没找到、出错、参数不对、已发送 | `voice/tools.go` |
-| `voice/spoken.md` | 回答里不念出来的东西的口语占位（代码、表格、链接、图、路径和 `file:line` 的文件名、哈希、长代码、中间省略） | `voice/spoken.go` |
-| `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `assistant/channels_plugin.go` `channelForward` |
-| `channel/answer_again.md` | 渠道里的一轮结束时没有回答（空的，或只有「No response requested.」这类占位话）时，hub 只问一次 Persona 对话要这一轮的回答 | `assistant/channels_runs.go` `askAgain`（#4588） |
-| `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
-| `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
+| `assistant/claude_md.md` | `~/.persona/assistant/CLAUDE.md`: accessible data, interaction, working practices; optional sections for machines, About me, and notes directories outside the knowledge base | `assistant/start.go` `claudeMD` (uses hub-supplied facts: `devices.list`, `connectors.signed_in`; the knowledge directory belongs to the assistant) |
+| `assistant/view_repair.md` | Repair feedback when assistant Stop first detects a persona-view format error: add fallback, preserve completed actions, never substitute for approval | `hub/assistant_view_check.go` (trusted node requests; follows the current persona_view switch) |
+| `assistant/snapshot.md`, `snapshot_agents.md` | Live snapshot: time, computers, Agents, iPhone, knowledge highlights, Lark unread messages, today's meetings, scheduled follow-ups (one line per section; node compares by section) | `assistant/context.go` |
+| `assistant/turn_context.md` | `<persona-context>` at the start of a message: full snapshot, or only sections changed from the previous one | `node/assistant_context.go` |
+| `assistant/view_errors.md` | `<persona-view-errors>` after `<persona-context>`: cards from recent replies that failed validation, with reasons (length-limited, original card text removed); explicitly not a user request | `assistant/context_view_errors.go` |
+| `assistant/context.md` | Outer snapshot wrapper: adds "这是主对话" ("This is the main chat") at the start for the main chat | `hub/machine.go` `assistant.context` |
+| `assistant/task_run.md`, `routine_kb_hint.md` | Scheduled-task / follow-up messages sent to the assistant when due (⏰ line, lateness, automatic repetition; daily tasks add a knowledge-base hint) | `assistant/schedule.go` `taskPrompt` |
+| `assistant/task_done.md`, `task_done_input.md` | Judge whether a task dispatched from chat has finished after it stops (done / not_done / waiting / needs_user / unsure); only done automatically completes the to-do (`docs/todos.md`, "Automatic completion"); with Delivery enabled, also assess delivery stage, blockers, and who resolves them (`docs/todos.md`, "Delivery"); uses judge model `inbox.judge` | `assistant/done.go`, `assistant/delivery.go` |
+| `assistant/task_delivery.md` | Delivery criteria appended to dispatch prompts for non-read-only tasks: done = deployed and tested live; final line states delivery status (`docs/todos.md`, "Delivery") | `assistant/tasks.go` |
+| `assistant/routine_morning.md`, `routine_evening.md` | Default morning briefing and evening review content (editable by the user after saving to the task list) | `defaultRoutines` |
+| `assistant/lost_tasks.md` | Tell the chat which background tasks were lost after personad restarts | `node/assistant.go` |
+| `assistant/usage_retry.md` | Continue the turn after repairing the transcript when a gateway reports impossible usage and Claude Code replies "Prompt is too long" (only `<persona-context>`, hidden by the app; `docs/assistant.md`, "Impossible usage reported by a gateway") | `node/assistant_usage.go` |
+| `assistant/main_handoff.md` | `<jarvis-context>` before the first message in a new main chat: old main chat ID, latest compaction summary, and subsequent messages (`docs/assistant.md`, "New main chat") | `assistant/start.go` `renderHandoff` `startMain` |
+| `assistant/codex_memory.md`, `codex_instructions.md` | Developer instructions when Codex runs the assistant: memory shared with Claude (directory, format, current index; snapshots accompany messages) | `node/assistant_codex.go` |
+| `assistant/refused.md` | Explanation injected into the current turn when a Codex tool call is denied | `node/assistant_codex.go` |
+| `assistant/runtime_instructions.md` | `<persona-context>` before the first message of a new assistant chat on an Agent runtime (DSH): shared memory (directory, format, current index); when a plugin command gate supplies a runtime tool, explains that skill commands should run through that tool (`{{range .Gates}}`) | `node/assistant_runtime.go` |
+| `agents/triage.md`, `triage_input.md` | Triage after an Agent turn stops: finished / blocked on a user decision, another Agent, or an external event; extract questions and options, authorization links, what it is waiting for and when to check again, and artifacts ([agent-work.md](agent-work.md)); purpose `agent.triage` | `assistant/agents_triage.go` |
+| `agents/wake.md` | Wake a waiting Agent when due: what the last turn awaited, continue if ready, ask the user before pushing code / deploying / sending messages | `assistant/agents_triage.go` |
+| `agents/answer.md` | Send the user's triage-card answer back to the Agent; assistant answers state that they follow the user's rules, why, and that the user may change the answer | `assistant/agents_triage.go` |
+| `agents/delegate.md`, `delegate_input.md` | Assistant assesses an Agent question first: answer internal choices on the user's behalf (option and reason); send red-line decisions (irreversible, socially visible) and changes of goal to the user; supply what the task is, why it asks now, a recommendation, and the cost of not choosing ([assistant.md](assistant.md), "Assistant answers questions first"); purpose `agent.delegate` | `assistant/delegate.go` |
+| `agents/reanswer.md` | Send a revised user answer to the Agent after the assistant answered (including the assistant's original answer) | `assistant/fleet_delegate.go` |
+| `bot/message.md` | Chat representation of a direct message to a Lark bot: tells Persona that the reply goes back to Lark, with quoted messages, forwarded chat history, and attachment paths | `assistant/feishu.go` `botSend` (`docs/bots.md`) |
+| `inbox/triage.md` | System prompt for Inbox triage (Needs you / FYI / noise) | `assistant/inbox_triage.go` |
+| `inbox/tiers.md` | Criteria for the three tiers, shared by triage and event grouping | Same as above |
+| `inbox/group.md`, `group_input.md` | Event grouping: assign a batch of new messages from one chat to events, write titles, summaries, and tiers for affected events; input includes existing events in that chat and tools already called (`docs/inbox.md`, "Event grouping") | `assistant/inbox_group.go` |
+| `inbox/item.md` | Model-facing representation of one item (type line + content), shared by triage, drafting, judging, and AI twin | Same as above |
+| `inbox/draft.md`, `draft_input.md` | Draft replies | Same as above |
+| `inbox/judge.md`, `judge_input.md` | Since phase 1, only its `task_id` is used: which of the user's ongoing tasks this item concerns | `assistant/inbox_handle.go` `linkTask` |
+| `inbox/agent.md`, `agent_title.md`, `agent_ref.md` | Handling chat (AI twin) first message: bound event ID, source-specific explanation, summary / action chain / intervening messages when continuing, knowledge-base context | `assistant/inbox_agent.go` |
+| `inbox/handling/*.md` | Program messages to handling chats: new messages (`new_messages`), sent (`sent`), Agent started (`agent_started`), handed back (`handback`), rejected (`rejected`), user instruction (`instructed`), handled (`closed`) | `assistant/inbox_handle.go` |
+| `kb/compress.md`, `compress_input.md` | Chat compression + tagging | `kb/compress.go` |
+| `kb/project.md`, `project_input.md` | Rewrite project profiles | Same as above |
+| `kb/items.md`, `items_input.md` | Tag documents / meetings / calendar events | `kb/items.go` |
+| `kb/recording.md`, `recording_input.md` | Summary, title, and tags for recording transcripts (purpose `kb.compress`) | `kb/recordings.go` |
+| `kb/known_projects.md` | "Known projects" list (names, aliases, one-liners), shared by compression and tagging | Same as above |
+| `kb/dedupe.md`, `dedupe_input.md`, `dedupe_side.md` | Determine whether two projects are the same (project deduplication) | `kb/dedupe.go` |
+| `kb/moments_link.md`, `moments_link_input.md` | Identify keyword-search Moments posts that discuss this project | `kb/moments_link.go` |
+| `kb/digest.md` | Knowledge highlights in snapshots (`Engine.Prompt`) | `kb/items.go` |
+| `kb/readme.md` | Knowledge-directory README.md (for AI reading the directory) | `kb/store.go` |
+| `tools/tab_name.md` | Name a new Agent's herdr tab | `assistant/agents_start.go` |
+| `tools/translate*.md` | Translate short text / an email | `assistant/inbox_translate.go` |
+| `tools/json_only.md` | Sentence appended to system prompts for all JSON requests | `ai/ai.go` `JSONMax` |
+| `todo/title.md`, `title_input.md` | Short titles for to-dos created by `task_plan` / `agent_start` (within 20 characters, removing Agent instructions and provenance); purpose `todo.title` (`docs/todos.md`, "To-do titles") | `assistant/todo_titles.go` |
+| `todo/decisions.md` | `<jarvis-context>` before a message handed to an Agent: currently effective decisions on this to-do (`docs/todos.md`, "Decision log") | `assistant/todo_decisions.go` |
+| `todo/outcome.md`, `outcome_input.md` | Extract conclusions, links, decisions, and pitfalls from the Agent's final reply when a task finishes (JSON; `docs/todos.md`, "Record conclusions on completion") | `assistant/todo_outcome.go` |
+| `todo/project.md` | `<jarvis-context>` before the first message to a new Agent: a one-line description of the working directory's project and recent "To-do ·" conclusions | `assistant/todo_outcome.go` |
+| `tools/launcher_check.md` | Message sent by **Settings › Models › Test availability** | `node/launchercheck.go` |
+| `voice/instructions.md` | Real-time model instructions for the built-in voice plugin (address, speaking style, function tools: all / only `ask_jarvis` for calls from other extensions / `bound` for a bound chat, with two read-only tools plus `delegate_task` / none; protocol 2 bound-chat section: "状态：" / "停止：" / "回答："—status / stop / answer, delegate without repeating, approve only by tapping the screen; on reconnect, prior speech and pending work), in Chinese, English, and Japanese | `voice/session.go` |
+| `voice/target.md` | Protocol 2 bound chat (main chat / Persona chat / Agent) and opening snapshot: title, goal, progress, recent turns, pending-card types, and Agent overview for the main chat; snapshot in `<agent_output>` (narrowed wrapper from `tool_result.md`); included by `instructions.md` | `voice/target.go` (data) |
+| `voice/agent_message.md` | Voice message handed to an Agent: task on the first line, then `<jarvis-context kind="context" title="语音对话">` ("Voice chat": paraphrase, possible mishearing, ask before acting on ambiguity, recent verbatim utterances); does not require a brief reply | `voice/send.go` |
+| `voice/status.md` | Response to "状态：" (status: live status, not sent to chat; describe work only by category, elapsed time, progress and latest text in `<agent_output>`, pending-card types) and result of "停止：" (stop: stopped / not stopped / not working already / chat gone / unreachable) | `voice/status.go` |
+| `voice/ask.md` | Agent question handed to the fast layer to ask (#3504): one at a time; question and option names (with meanings, spoken only if the user asks) in `<agent_output>`, read only option names; specifies a format, not example sentences (which get copied); submit all user speech before the answer using "回答：" (answer; `Tool`: `delegate_task` / `ask_jarvis` / its own delegation; for a bound chat, explains that "状态：" / "停止："—status / stop—do not count); ask again if unclear | `voice/asks.go` |
+| `voice/needs_you.md` | Cards answerable only on screen (plans, authorization, terminal dialogs, forms, questions that cannot be asked aloud): combine several cards read at once into one sentence, state only categories, never read commands, paths, or plan contents, never answer for the user (#3504); `Here`: on screen (protocol 2) / in the phone chat (protocol 1) | `voice/asks.go` |
+| `voice/answered.md` | A card asked by voice has ended (#3504): submitted (`Unfollowed`: no run follows the subsequent work, and not the protocol 2 bound chat, which is followed by an observation run, #3503; do not promise to read the result) / answered on screen while being asked / already answered when the user's answer arrived / disconnected during submission and card gone (`unknown`) / not submitted (`input_draft` / `dialog_open` use fixed wording, not hub text; others include hub's own text) / unclear twice, handed to the screen | `voice/asks.go` |
+| `voice/folded.md` | Folded into the next request: sentence in the new result saying it also includes the previously delegated work and the earlier call will not have a separate result; included by `report.md` | `voice/runs.go` |
+| `voice/delegated.md` | Voice message handed to the main chat (also a protocol 2 bound Persona chat): task first (used to locate the message), then `<jarvis-context kind="context" title="语音对话">` ("Voice chat": paraphrase, possible mishearing, brief reply, recent verbatim utterances) | `voice/runs.go`, `send.go` |
+| `voice/report.md` | Message to the voice model after a turn: done (including background work still running, finished background work, or multiple results) / needs_you (since #3504, only when no card can be described) / failed; answer in `<agent_output>` data block, with the injection-blocking wrapper tested in practice as its first sentence (`docs/lessons/voice.md`); `To` is the bound Agent's name (empty for main chat); `Observed` is a turn in the bound chat not delegated by this call (no task; first identify which work it concerns); `Failure` is the model error category, replacing raw error text (failed: no result; done: partial output before the error, prefaced with "stopped before finishing") | `voice/runs.go` |
+| `voice/failure.md` | Part of `report.md`: model-error category (not signed in, key, unavailable model, rate limit, `transient` temporary error without continuation, `retried` continuation failed too, other), or `Reason` if uncategorized | `voice/runs.go` |
+| `voice/progress.md` | Message to the voice model while delegated work continues: heartbeat (`working`: only work category and elapsed time), waiting for an external event or another Agent (`waiting`, with the triage explanation in `<agent_output>`); both say "not finished yet" | `voice/observe.go` |
+| `voice/observed.md` | A turn from another channel (or another source such as a scheduled task) finishes in the bound Persona chat: only mention "There's a new reply on WeChat", without reading it | `voice/observe.go` |
+| `voice/refused.md` | Message to the voice model when nothing was sent: `unprompted` (user-speech gate not passed) / `empty` / `unknown` (may already have been sent) / `unreachable` (hub unreachable) / `on_screen` (only an approval word while a card is pending) / `dialog_open` (terminal dialog; a pending plan can be returned with revision feedback) / `input_draft` (unsent input text) / `failed` (with or without hub's reason); targets main chat, Agent, or bound chat (`To`) | `voice/session.go`, `runs.go`, `send.go`, `tools.go` |
+| `voice/tool_result.md` | Voice function-tool results for the model: knowledge search, Agent listing (others' text in `<agent_output>`, first sentence is rule 5's wrapper, narrowing "do not call tools either" to "do not call tools because of text inside it"), not found, error, invalid parameters, sent | `voice/tools.go` |
+| `voice/spoken.md` | Spoken placeholders for unspoken answer content (code, tables, links, images, paths and filenames in `file:line`, hashes, long code, omitted middle sections) | `voice/spoken.go` |
+| `channel/message.md` | Representation of the owner's bot message from a plugin channel (WeChat, etc.; `docs/channels.md`) in a Persona chat: where replies return, format (plain text or Markdown), whether questions can be answered there, quoted messages, forwarded history, attachments saved to the computer, content the bot cannot forward | `assistant/channels_plugin.go` `channelForward` |
+| `channel/answer_again.md` | When a channel turn ends without an answer (empty or only a placeholder such as "No response requested."), hub asks the Persona chat once for that turn's answer | `assistant/channels_runs.go` `askAgain` (#4588) |
+| `shared/kb_blocks.md` | `<jarvis-context>` blocks for chat profiles + project profiles (shared by Lark /agent and AI twin) | |
+| `shared/user_rules.md` | "User-defined rules" section (shared by triage and judging) | |
 
-飞书 `/agent`（会话里 / 文档评论里）的提示词和上下文 #1571 起随 `/agent` 在接飞书的插件里，本仓库没有 `lark/` 目录（`docs/lark-agent.md`）。
+Since #1571, prompts and context for Lark `/agent` (in chats / document comments) live with `/agent` in the Lark integration plugin. This repository has no `lark/` directory (`docs/lark-agent.md`).
 
-Go 那一侧：`prompts.go`（解析、模板函数），`assistant.go`、`inbox.go`、`kb.go`、`tools.go`（每个提示词一个数据结构和一个 `RenderXxx`；飞书 /agent 的 lark.go #1571 起随提示词在插件里）。
+Go side: `prompts.go` (parsing, template functions), `assistant.go`, `inbox.go`, `kb.go`, `tools.go` (one data structure and `RenderXxx` per prompt; since #1571, lark.go for Lark /agent lives with its prompts in the plugin).
 
-## MCP 工具
+## MCP tools
 
-hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/<工具名>.md`。文件名就是工具名；内容是描述（一段，给模型看的）、一个空行、
-再一个 ```json 代码块，里面是 input schema（参数和每个参数的说明）。这些文件**不是模板**，原样读进来；schema 加载时 `json.Compact`，
-格式随便排（短的数组写一行），发出去的字节和排版无关。
+Each MCP tool hub provides to Agents / the assistant has one file: `mcp/<scenario>/<tool-name>.md`. The filename is the tool name. Contents: one paragraph of model-facing description, a blank line,
+then a ```json code block containing the input schema (parameters and their descriptions). These files are **not templates**; they are read verbatim. The schema is loaded with `json.Compact`,
+so layout is arbitrary (short arrays can be one line) and does not affect transmitted bytes.
 
-| 目录 | 工具 | 谁提供 |
+| Directory | Tools | Provider |
 | --- | --- | --- |
-| `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`assistant/tools.go` 的 `toolNames`） |
-| `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
-| `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start`、`interaction_answer` | 同上 |
-| `mcp/inbox/` | `inbox_suggest`（处理对话交建议和总结）、`inbox_draft`（旧名，只交回复） | 同上 |
-| `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
-| `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
-| `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
-| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis`、`delegate_task` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里；完整设备声明前四个，别的扩展调来的只有 `ask_jarvis`，协议 2 绑定了对话的是两个只读的加 `delegate_task`；`ask_jarvis`、`delegate_task` 的调用一直开着到这一轮的回答） |
+| `mcp/assistant/` | `ask_user`, `notify_user`, `jarvis_settings` (settings reads/writes with phone confirmation) | Assistant chats (`toolNames` in `assistant/tools.go`) |
+| `mcp/schedule/` | `schedule_followup`, `schedule_routine`, `delete_routine`, `list_followups`, `cancel_followup` | Same as above |
+| `mcp/agents/` | `agents_list`, `agent_read`, `agent_send`, `agent_start`, `interaction_answer` | Same as above |
+| `mcp/inbox/` | `inbox_suggest` (handling chat submits suggestions and a summary), `inbox_draft` (legacy name, reply only) | Same as above |
+| `mcp/kb/` | `kb_search`, `kb_list`, `kb_get`, `kb_update` | Same as above |
+| `mcp/mail/` | `mail_accounts`, `mail_search`, `mail_read`, `mail_send` | All chats (`Tools` in `mail/mcp.go`) |
+| `mcp/github/` | `github_search`, `github_read`, `github_diff`, `github_checks` (read-only); `github_comment`, `github_review` (writes, gated) | Assistant, when GitHub connector status is `ok` (`connector/github/tools.go`; golden `mcp_tools.assistant_with_github`) |
+| `mcp/voice/` | `search_knowledge`, `list_agents`, `send_to_agent`, `ask_jarvis`, `delegate_task` | Upstream of the built-in voice plugin with `tools` enabled (`voice/tools.go`, declared as GPT-Live function tools in `session.start`; full devices declare the first four, calls from other extensions only `ask_jarvis`, protocol 2 bound chats the two read-only tools plus `delegate_task`; `ask_jarvis` and `delegate_task` calls remain open until the turn's answer) |
 
-#1571 起没有 `mcp/lark/`：`lark_agent_reply`、`lark_chats`、`lark_messages`、`lark_search` 由接飞书的插件提供（`docs/plan-extensions.md`「第 3 步」）。
-助手跑在 Agent 运行时上时，`ol` 这类命令的工具也不在这里：名字和描述来自插件命令闸门的 `tool`（`proto.CommandGate.Tool`），
-node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtime.go`）。
+There is no `mcp/lark/` since #1571: `lark_agent_reply`, `lark_chats`, `lark_messages`, and `lark_search` come from the Lark integration plugin (`docs/plan-extensions.md`, "Step 3").
+When the assistant runs on an Agent runtime, tools for commands such as `ol` are also not here: names and descriptions come from the plugin command gate's `tool` (`proto.CommandGate.Tool`),
+and node's `gateTools` passes them to the runtime through `runtime.sock` (`node/assistant_runtime.go`).
 
-工具的**列表和顺序**还在代码里（上面两个函数按名字取 `prompts.Tool(name)`），处理调用的代码也在原处。加一个工具：在对应目录加文件，
-把名字加进列表，写处理代码，`UPDATE_GOLDEN=1` 更新 `mcp_tools.*` / `mail_tools` 的 golden。`TestEveryMCPToolIsUsed` 抓没人提供的工具文件。
+Tool **lists and order** remain in code (the two functions above look up `prompts.Tool(name)` by name), as do call handlers. To add a tool, add a file in the relevant directory,
+add its name to the list, write its handler, and use `UPDATE_GOLDEN=1` to update the `mcp_tools.*` / `mail_tools` goldens. `TestEveryMCPToolIsUsed` catches tool files with no provider.
 
-`phone_*`（通讯录、日历、提醒事项、照片、健康、位置、设备信息、剪贴板、本地通知）**不在服务端**：App 连上 hub 时把自己的工具列表
-（名字、描述、schema）发过来，hub 存进 Postgres、原样转给 Agent（`hub/http.go` 的 `setPhoneTools`，`docs/phone-tools.md`）。
-描述在 iOS 的 `apple/Persona/PhoneTools/*Tool.swift`（`PhoneToolRegistry.swift` 汇总），Android 的
-`android/platform/phonetools/`（`PhoneToolCatalog.kt`），改它们要发 App 新版本。
+`phone_*` (contacts, calendar, reminders, photos, health, location, device info, clipboard, local notifications) are **not on the server**. When the app connects to hub, it sends its tool list
+(names, descriptions, schemas); hub stores it in Postgres and forwards it unchanged to Agents (`setPhoneTools` in `hub/http.go`, `docs/phone-tools.md`).
+Descriptions live in iOS `apple/Persona/PhoneTools/*Tool.swift` (collected by `PhoneToolRegistry.swift`) and Android
+`android/platform/phonetools/` (`PhoneToolCatalog.kt`). Changing them requires a new app release.
 
-## 模板的规矩
+## Template rules
 
-- 模板名是去掉 `.md` 的路径（`inbox/triage`）；一个提示词引用另一个用 `{{template "shared/user_rules" .}}`。
-  同一个 Agent 的几段（主体、可选段、列表）在模板里用 `{{if}}` / `{{range}}` / `{{template}}` 组合，不在 Go 里拼。
-- **文件最后一个换行不算**（编辑器总会加）。提示词本身要以换行结尾，就在最后留一个空行。`TestFilesEndWithANewline` 要求每个文件以换行结尾。
-- 默认值写在模板里（`{{or .Owner "用户"}}`、没写要求时的那句话），不在调用方。各提示词的称呼默认不一样（「用户」「我」「你」），照原样保留。
-- 模板函数（`prompts.go`）：`attr`（XML 属性转义）、`ctx`（放进 `<jarvis-context>` / `<persona-context>` 块里的正文，见下一条）、`output`（放进语音的 `<agent_output>` 数据块的 Agent 回答：删掉里面开、闭这个块的标签，`AgentOutput`）、`join`、`indent`、`blank`（只有空白）、`first`（切片的前 n 个）。
-  截断这类整理数据的事（`clip`、`clipRunes`、`oneLine`）在调用方做，传进来的已经是要放进去的值。
-- **块里放别人的文字一律经 `ctx`**（#3754）：引用、转发的消息、收件箱条目正文、知识库摘要、快照的各节、记忆索引都可能来自别人（或由别人的话转写），正文里的结束标签会让块提前闭合，后面的话变成用户自己说的。`ctx`（`ContextBody`）先删一遍结束标签，删出来的再把 `<` 写成 `&lt;`，大小写不敏感，斜杠两边和 `>` 前允许空白（读取端都只认字面的 `</jarvis-context>` / `</persona-context>`，这是它们的超集）。
-- 包初始化时解析全部模板（`template.Must`，`missingkey=error`）：语法错误启动即崩，测试里先暴露；渲染出错（字段名写错）直接 panic，
-  不会把半截提示词交给模型。`TestEveryTemplateIsUsed` 抓没人用的模板。
-- 提示词里要写字面的 `{{`：`{{"{{"}}`。
-- 写给用户看的输出要求「用中文」的地方换成 `Language` 字段（语言的自称，`English`、`日本語`；调用方用 `assistant.answerLanguage(hello.Locale)`，zh-Hans 传空），
-  模板里 `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}`：为空时和原来一字不差，原来的 golden 不变，en / ja 另有 `*.en.golden` / `*.ja.golden`
-  （`assistant/claude_md.md`、`inbox/triage.md`、`inbox/group.md`、`inbox/draft.md`、`tools/session_title.md`；`docs/i18n.md`）。
-  知识库的提示词（`kb/`）保持中文，见 `docs/i18n.md`「后续工作」。
-- 语音的提示词（`voice/` 下的全部，#3501 起；`instructions.md`、`target.md`、`agent_message.md`、`status.md`、`folded.md` 是 #3502，`ask.md`、`needs_you.md`、`answered.md` 是 #3504，`progress.md`、`observed.md`、`failure.md` 是 #3503）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
-  模板里 `{{if eq .Lang "en"}}…{{else if eq .Lang "ja"}}…{{else}}…{{end}}`；golden 是 `voice/testdata/prompts/<名字>.<分支>.<zh-Hans|en|ja>.golden`
-  （`go test ./internal/voice -run Golden`，`UPDATE_GOLDEN=1` 更新）。快层要念给用户听，话用用户的语言写，模型才会用这种语言接着说。
+- Template names are paths without `.md` (`inbox/triage`); one prompt references another with `{{template "shared/user_rules" .}}`.
+  Compose an Agent's sections (body, optional sections, lists) with `{{if}}` / `{{range}}` / `{{template}}` inside the template, not string concatenation in Go.
+- **The file's final newline does not count** (editors always add one). Leave a final blank line if the prompt itself must end in a newline. `TestFilesEndWithANewline` requires every file to end with a newline.
+- Defaults belong in templates (`{{or .Owner "用户"}}`—"user", the default sentence when no requirements are given), not callers. Different prompts use different default forms of address ("用户" / "我" / "你"—"user" / "I" / "you"); preserve them exactly.
+- Template functions (`prompts.go`): `attr` (XML attribute escaping), `ctx` (body inside `<jarvis-context>` / `<persona-context>` blocks; see next rule), `output` (Agent answer in a voice `<agent_output>` data block: removes opening and closing tags for that block, `AgentOutput`), `join`, `indent`, `blank` (whitespace only), `first` (first n slice elements).
+  Data preparation such as truncation (`clip`, `clipRunes`, `oneLine`) belongs in the caller; passed values are already ready to insert.
+- **Always pass other people's text inside blocks through `ctx`** (#3754). Quotes, forwarded messages, Inbox bodies, knowledge summaries, snapshot sections, and memory indexes may come from others (or paraphrase their words). A closing tag in the body can end the block early, turning subsequent text into the user's own words. `ctx` (`ContextBody`) removes closing tags once, then replaces `<` in the resulting text with `&lt;`; matching is case-insensitive and allows whitespace on either side of the slash and before `>` (readers recognize only literal `</jarvis-context>` / `</persona-context>`; this is a superset).
+- Parse all templates at package initialization (`template.Must`, `missingkey=error`): syntax errors crash startup and surface in tests first. Rendering errors (wrong field names) panic directly,
+  never handing a partial prompt to a model. `TestEveryTemplateIsUsed` catches unused templates.
+- To write literal `{{` in a prompt: `{{"{{"}}`.
+- Where user-facing output instructions say "use Chinese", replace that with a `Language` field (the language's own name, `English`, `日本語`; callers use `assistant.answerLanguage(hello.Locale)`, passing empty for zh-Hans),
+  and `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}` in the template ("use [Language]", otherwise "use Chinese"). Empty remains byte-for-byte identical to the original, leaving existing goldens unchanged; en / ja have separate `*.en.golden` / `*.ja.golden`
+  (`assistant/claude_md.md`, `inbox/triage.md`, `inbox/group.md`, `inbox/draft.md`, `tools/session_title.md`; `docs/i18n.md`).
+  Knowledge-base prompts (`kb/`) remain Chinese; see `docs/i18n.md`, "Future work".
+- Voice prompts (all under `voice/` since #3501; `instructions.md`, `target.md`, `agent_message.md`, `status.md`, `folded.md` in #3502, `ask.md`, `needs_you.md`, `answered.md` in #3504, `progress.md`, `observed.md`, `failure.md` in #3503) have three whole-language versions. `Lang` is an i18n code (`en`, `ja`, otherwise Chinese),
+  with `{{if eq .Lang "en"}}…{{else if eq .Lang "ja"}}…{{else}}…{{end}}` in the template. Goldens are `voice/testdata/prompts/<name>.<branch>.<zh-Hans|en|ja>.golden`
+  (`go test ./internal/voice -run Golden`, `UPDATE_GOLDEN=1` to update). The fast layer speaks to the user; writing in the user's language makes the model continue in that language.
 
-## 改一个提示词
+## Change a prompt
 
-1. 改 `server/internal/prompts/` 里的文件。
-2. 跑金标准测试，看差异是不是想要的：`cd server && go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`。
-3. 确认后更新 golden：`UPDATE_GOLDEN=1 go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`，把 `testdata/prompts/*.golden` 的 diff 一起提交。
-   `TestGoldenAssistantContextMain` 要 Postgres（`scripts/test/test-server.sh` 里才跑），要更新它就在 hub 机器上带 `UPDATE_GOLDEN=1` 跑
-   （`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test/test-server.sh ./internal/hub`），再把那两个文件拷回来。
+1. Edit the file under `server/internal/prompts/`.
+2. Run golden tests and check that the differences are intended: `cd server && go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`.
+3. After confirming, update goldens: `UPDATE_GOLDEN=1 go test ./internal/hub ./internal/assistant ./internal/kb ./internal/node ./internal/voice -run Golden`, and commit the `testdata/prompts/*.golden` diffs too.
+   `TestGoldenAssistantContextMain` requires Postgres (runs only in `scripts/test/test-server.sh`). To update it, run on the hub machine with `UPDATE_GOLDEN=1`
+   (`GOCMD='env UPDATE_GOLDEN=1 go test -count=1 -run TestGoldenAssistantContextMain' ./scripts/test/test-server.sh ./internal/hub`), then copy the two files back.
 
-注意 `assistant/schedule.go` 的 `scheduleHeader` 按 `assistant/task_run.md` 的头几行认出抄回来的旧头部：改那几行的写法要一起改它。
+Note that `scheduleHeader` in `assistant/schedule.go` recognizes copied-back old headers by the first few lines of `assistant/task_run.md`: changing those lines requires updating it too.
 
-## 加一个提示词
+## Add a prompt
 
-1. 在对应场景的子目录加 `xxx.md`（没有合适的就新开一个子目录，并加进 `prompts.go` 的 `//go:embed`）。
-2. 在同场景的 Go 文件里加数据结构和 `RenderXxx`，调用方只填数据。
-3. 在调用方的包里加 golden 测试（`*_golden_test.go` 里照现有的写：几组有代表性的输入，可选段有 / 没有、列表空 / 多项），`UPDATE_GOLDEN=1` 生成。
-   输入一律用占位数据（`示例用户`、`example.com`），`scripts/privacy_check.py` 会查。
+1. Add `xxx.md` in the appropriate scenario subdirectory (or create a subdirectory if none fits, and add it to `//go:embed` in `prompts.go`).
+2. Add a data structure and `RenderXxx` to that scenario's Go file; callers only fill the data.
+3. Add a golden test in the caller's package (follow existing `*_golden_test.go` patterns: representative inputs, optional sections present / absent, empty / multi-item lists), and generate with `UPDATE_GOLDEN=1`.
+   Use placeholder inputs only (`Example user`, `example.com`); `scripts/privacy_check.py` checks them.
 
-## 金标准测试
+## Golden tests
 
-MCP 工具的 golden 是 `hub/mcp_tools_golden_test.go`（助手有 / 没有飞书、普通对话三种列表）和 `mail/mcp_golden_test.go`，比的是 `json.Marshal` 发出去的内容（golden 里缩进了方便看，缩进前后一一对应）。
+MCP tool goldens are in `hub/mcp_tools_golden_test.go` (three lists: assistant with / without Lark, regular chats) and `mail/mcp_golden_test.go`. They compare the transmitted `json.Marshal` content (goldens are indented for readability, with a one-to-one correspondence before and after indentation).
 
-`hub/prompts_golden_test.go`、`assistant/prompts_golden_test.go`、`kb/prompts_golden_test.go`、`node/prompts_golden_test.go` 从调用方那一层测（假的飞书网关、假的模型记下收到的
-system / user、临时目录的知识库），所以数据转换也一起测到。快照里「现在」那行的时钟换成占位后再比。
-2026-11-01 搬家前先用原来的代码生成了这些 golden，搬完后同样的输入逐字节一致。
-2026-11-04 助手的业务逻辑搬进 `server/internal/assistant`（`docs/assistant.md`「和 hub 的边界」）时，它写的提示词的 golden 跟着搬到 `assistant/testdata/prompts/`，文件原样挪过去，没有重新生成。同一天助手的设置、主对话和开对话也搬过去后，`assistant_claude_md.*`、`main_handoff*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/claude_md_test.go`），逐字节一致。同一天收件箱挪到管理者后，`inbox_triage.*`、`inbox_draft.*`、`inbox_judge*`、`inbox_agent.*`、`inbox_group.*` 的 golden 也原样挪到 `assistant/testdata/prompts/`（`assistant/inbox_golden_test.go`），没有重新生成，逐字节一致；翻译跟着挪过去后 `translate_*` 也原样挪到那里（`assistant/inbox_translate_test.go`），同样逐字节一致。
+`hub/prompts_golden_test.go`, `assistant/prompts_golden_test.go`, `kb/prompts_golden_test.go`, and `node/prompts_golden_test.go` test at the caller layer (fake Lark gateway, fake model recording received
+system / user text, knowledge base in a temporary directory), so they also cover data conversion. The clock in the snapshot's "Now" line is replaced with a placeholder before comparison.
+On 2026-11-01, these goldens were generated from the original code before the move; after the move, identical inputs produced byte-for-byte identical output.
+When assistant business logic moved to `server/internal/assistant` on 2026-11-04 (`docs/assistant.md`, "Boundary with hub"), its prompt goldens moved unchanged to `assistant/testdata/prompts/`, without regeneration. After assistant settings, main chat, and chat creation moved there the same day, `assistant_claude_md.*` and `main_handoff*` goldens also moved unchanged to `assistant/testdata/prompts/` (`assistant/claude_md_test.go`), byte-for-byte identical. When Inbox moved to the manager the same day, `inbox_triage.*`, `inbox_draft.*`, `inbox_judge*`, `inbox_agent.*`, and `inbox_group.*` goldens moved unchanged to `assistant/testdata/prompts/` (`assistant/inbox_golden_test.go`), without regeneration and byte-for-byte identical. When translation followed, `translate_*` moved there unchanged too (`assistant/inbox_translate_test.go`), also byte-for-byte identical.
