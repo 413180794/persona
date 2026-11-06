@@ -2,10 +2,11 @@ package extension
 
 import (
 	"context"
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // dependencyGraph is one immutable registry snapshot. Readiness is manifest/configuration availability, not whether
@@ -44,9 +45,10 @@ func (g *dependencyGraph) withManifest(m *Manifest) {
 }
 
 func (g *dependencyGraph) localMissing(p *Extension) []string {
+	l := i18n.From(g.ctx).Or(i18n.Default)
 	var out []string
 	if p.Problem != "" {
-		out = append(out, p.Problem)
+		out = append(out, p.ProblemText(l))
 	}
 	if p.ReadOnly() {
 		return out
@@ -54,7 +56,7 @@ func (g *dependencyGraph) localMissing(p *Extension) []string {
 	if len(p.Manifest.Secrets) > 0 || p.Manifest.Runtime != nil {
 		secrets, err := g.registry.Secrets(g.ctx, p.Record.ID)
 		if err != nil {
-			out = append(out, err.Error())
+			out = append(out, StatusErrorText(l, err))
 		}
 		set := map[string]bool{}
 		for name, value := range secrets {
@@ -62,12 +64,12 @@ func (g *dependencyGraph) localMissing(p *Extension) []string {
 		}
 		for _, secret := range p.Manifest.Secrets {
 			if secret.Required && !set[secret.Name] {
-				out = append(out, "密钥「"+secret.Title+"」")
+				out = append(out, i18n.T(l, "extension-status.missing_secret", i18n.Args{"title": secret.Title}))
 			}
 		}
 	}
 	if err := p.Schema.Check(p.Record.Config); err != nil {
-		out = append(out, "配置（"+err.Error()+"）")
+		out = append(out, i18n.T(l, "extension-status.missing_config", i18n.Args{"err": StatusErrorText(l, err)}))
 	}
 	return out
 }
@@ -91,41 +93,42 @@ func (g *dependencyGraph) state(d Dependency) DependencyState {
 	return state
 }
 
-func dependencyMessage(d DependencyState) string {
+func dependencyMessage(l i18n.Lang, d DependencyState) string {
 	name := d.Name
 	if name == "" {
 		name = d.ID
 	}
 	switch d.State {
 	case DepMissing:
-		return "先装扩展「" + name + "」"
+		return i18n.T(l, "extension-status.dep_install", i18n.Args{"name": name})
 	case DepDisabled:
-		return "先启用扩展「" + name + "」"
+		return i18n.T(l, "extension-status.dep_enable", i18n.Args{"name": name})
 	case DepOld:
-		return fmt.Sprintf("扩展「%s」要 %s（现在是 %s）", name, d.Version, d.Installed)
+		return i18n.T(l, "extension-status.dep_version", i18n.Args{"name": name, "required": d.Version, "current": d.Installed})
 	}
 	return ""
 }
 
 func (g *dependencyGraph) problems(id string) []string {
+	l := i18n.From(g.ctx).Or(i18n.Default)
 	if out, ok := g.missing[id]; ok {
 		return out
 	}
 	p := g.nodes[id]
 	if p == nil {
-		return []string{"先装扩展「" + id + "」"}
+		return []string{i18n.T(l, "extension-status.dep_install", i18n.Args{"name": id})}
 	}
 	out := g.localMissing(p)
 	if cycle := dependencyCycle(g.nodes, id); len(cycle) > 0 {
-		out = append(out, "依赖环："+strings.Join(cycle, " → "))
+		out = append(out, i18n.T(l, "extension-status.dependency_cycle", i18n.Args{"path": strings.Join(cycle, " → ")}))
 		g.missing[id] = out
 		return out
 	}
 	for _, dep := range p.Full.Depends {
 		state := g.state(dep)
 		if state.State == DepNotReady {
-			out = append(out, fmt.Sprintf("扩展「%s」未就绪：%s", state.Name, strings.Join(g.problems(dep.ID), "、")))
-		} else if message := dependencyMessage(state); message != "" {
+			out = append(out, i18n.T(l, "extension-status.dep_not_ready", i18n.Args{"name": state.Name, "err": strings.Join(g.problems(dep.ID), i18n.T(l, "extension-status.separator"))}))
+		} else if message := dependencyMessage(l, state); message != "" {
 			out = append(out, message)
 		}
 	}
@@ -140,11 +143,11 @@ func (g *dependencyGraph) problems(id string) []string {
 		}
 		ep := exporter.Full.Exported(name)
 		if ep == nil {
-			out = append(out, fmt.Sprintf("扩展「%s」没有扩展点 %s", exporter.Full.Name, name))
+			out = append(out, i18n.T(l, "extension-status.dep_no_point", i18n.Args{"name": exporter.Full.Name, "point": name}))
 			continue
 		}
 		if err := checkExported(ep, p.Manifest.Contributes[point]); err != nil {
-			out = append(out, fmt.Sprintf("给「%s」的 %s：%v", exporter.Full.Name, name, err))
+			out = append(out, i18n.T(l, "extension-status.dep_invalid_point", i18n.Args{"name": exporter.Full.Name, "point": name, "err": StatusErrorText(l, err)}))
 		}
 	}
 	g.missing[id] = out
@@ -201,7 +204,7 @@ func (r *Registry) checkDependencyGraph(candidates ...*Manifest) error {
 	seen := map[string]bool{}
 	for _, m := range candidates {
 		if seen[m.ID] {
-			return fmt.Errorf("候选扩展 %s 重复", m.ID)
+			return i18n.Err("extension-status.duplicate_candidate", i18n.Args{"id": m.ID})
 		}
 		seen[m.ID] = true
 		nodes[m.ID] = &Extension{Full: m}
@@ -213,7 +216,7 @@ func (r *Registry) checkDependencyGraph(candidates ...*Manifest) error {
 				continue
 			}
 			if path := dependencyPath(nodes, dep.ID, m.ID); len(path) > 0 {
-				return fmt.Errorf("依赖环：%s", strings.Join(append([]string{m.ID}, path...), " → "))
+				return i18n.Err("extension-status.dependency_cycle", i18n.Args{"path": strings.Join(append([]string{m.ID}, path...), " → ")})
 			}
 		}
 	}

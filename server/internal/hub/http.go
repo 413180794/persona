@@ -802,7 +802,7 @@ func (h *Hub) broadcastTo(typ string, b []byte, elicitation bool) {
 		if typ == "machines" {
 			c.queue(localizedMachineEvent(c.lang(), b))
 		} else {
-			c.queue(b)
+			c.queue(i18n.ExtensionEvent(c.lang(), b))
 		}
 	}
 }

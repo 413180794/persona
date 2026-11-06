@@ -10,8 +10,9 @@ import (
 )
 
 type removedMember struct {
-	ID    string `json:"id"`
-	Error string `json:"error,omitempty"`
+	ID     string `json:"id"`
+	Error  string `json:"error,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type uninstallOptions struct {
@@ -34,7 +35,7 @@ func (h *Manager) uninstallPack(w http.ResponseWriter, r *http.Request, id strin
 		}
 		warnings, err := leftover(ps.reg.Uninstall(r.Context(), id, o.keepData, o.actor), nil)
 		if err != nil {
-			writeErrCode(w, o.failureStatus, "uninstall_failed", err)
+			writeExtensionResponseError(w, r, o.failureStatus, "uninstall_failed", err)
 			return
 		}
 		writeJSON(w, uninstalled(map[string]any{"ok": true, "removed_members": []string{}}, warnings))
@@ -79,6 +80,11 @@ func (h *Manager) uninstallPack(w http.ResponseWriter, r *http.Request, id strin
 			remaining = []string{}
 		}
 		l := h.requestLang(r)
+		if i18n.FromRequest(r) != "" {
+			for i := range failed {
+				failed[i].Error, failed[i].Detail = i18n.ExtensionFailureText(l, failed[i].Error, "extension-status.failed")
+			}
+		}
 		sep := i18n.T(l, "hub-extension_uninstall.list_separator")
 		removedText := i18n.T(l, "hub-extension_uninstall.none")
 		if len(removed) > 0 {

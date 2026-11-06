@@ -16,6 +16,8 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/channel"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // ManifestMost is the largest persona-plugin.json read.
@@ -888,16 +890,16 @@ func (m *Manifest) Lint() []string {
 	var out []string
 	for _, name := range sortedKeys(m.Contributes) {
 		if _, ok := ItemOf(name); !ok {
-			out = append(out, fmt.Sprintf("contributes.%s: this hub has no such extension point (a newer hub's?); it does not take effect", name))
+			out = append(out, i18n.T(i18n.En, "extension-status.unknown_point", i18n.Args{"name": name}))
 		}
 	}
 	if m.Permissions.FullHub() {
-		out = append(out, "permissions.hub_api is the old way: it gets the hub's full token; ask for the scopes it uses under permissions.hub")
+		out = append(out, i18n.T(i18n.En, "extension-status.legacy_full_token"))
 	}
 	if s, err := ParseSchema(m.Configuration); err == nil && s != nil {
 		for _, f := range s.Fields {
 			if looksSecret(f.Name) {
-				out = append(out, fmt.Sprintf("configuration.%s looks like a secret: it is stored and shown in plain text; declare it under secrets", f.Name))
+				out = append(out, i18n.T(i18n.En, "extension-status.plaintext_secret", i18n.Args{"name": f.Name}))
 			}
 		}
 	}

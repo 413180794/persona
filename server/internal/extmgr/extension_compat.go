@@ -2,6 +2,7 @@ package extmgr
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extension"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The plugin → extension rename (docs/extensions.md "Naming and compatibility", #1844): the hub's routes live under
@@ -216,20 +218,23 @@ type legacyMarketView struct {
 
 // marketOut is v for r: the old keys under an old path.
 func marketOut(r *http.Request, v MarketView) any {
+	var out any = v
 	if legacyExtensionRequest(r) {
-		return legacyMarketView(v)
+		out = legacyMarketView(v)
 	}
-	return v
+	if l := i18n.FromRequest(r); l != "" {
+		if raw, err := json.Marshal(out); err == nil {
+			return json.RawMessage(i18n.ExtensionClientJSON(l, raw))
+		}
+	}
+	return out
 }
 
 // marketsOut is vs for r.
 func marketsOut(r *http.Request, vs []MarketView) any {
-	if !legacyExtensionRequest(r) {
-		return vs
-	}
-	out := make([]legacyMarketView, 0, len(vs))
+	out := make([]any, 0, len(vs))
 	for _, v := range vs {
-		out = append(out, legacyMarketView(v))
+		out = append(out, marketOut(r, v))
 	}
 	return out
 }

@@ -74,7 +74,7 @@ func (m *Market) git(ctx context.Context, dir string, args ...string) error {
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if ctx.Err() != nil {
-			msg = "超时"
+			msg = i18n.T(i18n.Default, "extension-status.git_timeout")
 		}
 		if i := strings.LastIndex(msg, "\n"); i >= 0 {
 			msg = strings.TrimSpace(msg[i+1:])

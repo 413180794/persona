@@ -153,7 +153,7 @@ func CheckEngines(m *Manifest, build int64) (warning string, err error) {
 		return "", err
 	}
 	if build == 0 {
-		return "开发构建的 hub 不检查 engines.persona（" + m.Engines.Persona + "）", nil
+		return i18n.T(i18n.Default, "extension-status.dev_engines", i18n.Args{"required": m.Engines.Persona}), nil
 	}
 	if !r.Allows(build) {
 		args := i18n.Args{"required": m.Engines.Persona, "current": build}

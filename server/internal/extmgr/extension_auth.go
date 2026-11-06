@@ -19,6 +19,7 @@ import (
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // An extension's sign-in (manifest.auth, docs/extensions.md "Sign-in (auth)", #4507): its program answers auth.status,
@@ -43,22 +44,25 @@ const (
 
 // ExtensionAuth is an extension's sign-in as the apps see it.
 type ExtensionAuth struct {
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	Page        string     `json:"page,omitempty"`
-	State       string     `json:"state"`
-	Account     string     `json:"account,omitempty"`
-	Message     string     `json:"message,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	CheckedAt   *time.Time `json:"checked_at,omitempty"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description,omitempty"`
+	Page          string     `json:"page,omitempty"`
+	State         string     `json:"state"`
+	Account       string     `json:"account,omitempty"`
+	Message       string     `json:"message,omitempty"`
+	MessageDetail string     `json:"message_detail,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	CheckedAt     *time.Time `json:"checked_at,omitempty"`
 }
 
 // authStatus is the program's answer to auth.status and auth.logout.
 type authStatus struct {
-	State     string     `json:"state"`
-	Account   string     `json:"account,omitempty"`
-	Message   string     `json:"message,omitempty"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// hubMessage distinguishes hub-owned failures from the program's authored message.
+	hubMessage bool
+	State      string     `json:"state"`
+	Account    string     `json:"account,omitempty"`
+	Message    string     `json:"message,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
 // authPrompt is a sign-in step: the connectors' Prompt, and when its code or link stops working.
@@ -91,7 +95,7 @@ func (c *authCache) put(id string, st authStatus) bool {
 	}
 	old, had := c.byID[id]
 	c.byID[id], c.at[id] = st, time.Now()
-	return !had || old.State != st.State || old.Account != st.Account || old.Message != st.Message || !sameTime(old.ExpiresAt, st.ExpiresAt)
+	return !had || old.State != st.State || old.Account != st.Account || old.Message != st.Message || old.hubMessage != st.hubMessage || !sameTime(old.ExpiresAt, st.ExpiresAt)
 }
 
 func (c *authCache) drop(id string) {
@@ -133,7 +137,7 @@ func validAuthState(s string) bool {
 
 // authView is p's sign-in from the cache (nil when it does not sign in): unknown while its program does not run or
 // was not asked yet. It asks in the background when it was not.
-func (ps *extensions) authView(p *extension.Extension) *ExtensionAuth {
+func (ps *extensions) authView(p *extension.Extension, langs ...i18n.Lang) *ExtensionAuth {
 	spec := p.Full.Auth
 	if spec == nil {
 		return nil
@@ -148,6 +152,9 @@ func (ps *extensions) authView(p *extension.Extension) *ExtensionAuth {
 		return v
 	}
 	v.State, v.Account, v.Message, v.ExpiresAt, v.CheckedAt = st.State, st.Account, st.Message, st.ExpiresAt, &at
+	if st.hubMessage && len(langs) > 0 {
+		v.Message, v.MessageDetail = i18n.ExtensionFailureText(langs[0], v.Message, "extension-status.auth_failed")
+	}
 	return v
 }
 
@@ -185,12 +192,13 @@ func (ps *extensions) askAuth(ctx context.Context, id string) (*ExtensionAuth, e
 	defer cancel()
 	var st authStatus
 	if err := hp.proc.Call(ctx, "auth.status", map[string]any{}, &st); err != nil {
-		st = authStatus{State: authError, Message: err.Error()}
+		var remote *rpc.Error
+		st = authStatus{State: authError, Message: err.Error(), hubMessage: !errors.As(err, &remote) || errors.As(err, new(*i18n.Message))}
 	} else if !validAuthState(st.State) {
-		st = authStatus{State: authError, Message: "auth.status: unknown state " + st.State}
+		st = authStatus{State: authError, Message: i18n.T(i18n.En, "extension-status.auth_unknown_state", i18n.Args{"state": st.State}), hubMessage: true}
 	}
 	ps.keepAuth(p, st)
-	return ps.authView(p), nil
+	return ps.authView(p, ps.h.contextLang(ctx)), nil
 }
 
 // keepAuth keeps st as p's status and tells the apps when it changed.
@@ -198,7 +206,7 @@ func (ps *extensions) keepAuth(p *extension.Extension, st authStatus) {
 	if !ps.auth.put(p.Record.ID, st) || ps.h == nil {
 		return
 	}
-	ps.h.broadcast(map[string]any{"type": "extension_auth", "extension": p.Record.ID, "auth": ps.authView(p)})
+	ps.h.broadcast(map[string]any{"type": "extension_auth", "extension": p.Record.ID, "auth": ps.authView(p), "hub_auth_message": st.hubMessage})
 }
 
 // forgetAuth drops what is known of id's sign-in (its program stopped, it was removed) and tells the apps.
@@ -238,7 +246,7 @@ func authWarning(l i18n.Lang, v *ExtensionAuth) string {
 	return ""
 }
 
-var errNoAuth = errors.New("no sign-in")
+var errNoAuth = i18n.ErrEnglish("extension-status.no_auth")
 
 // authQR draws the QR code of a step's URL: a qr step's (to scan with another app) and a device code's (its link,
 // for another phone).
@@ -249,7 +257,7 @@ func authQR(p *connector.Prompt) error {
 	}
 	if p.URL == "" {
 		if p.Kind == connector.PromptQRCode {
-			return errors.New("a QR sign-in step without a URL")
+			return i18n.ErrEnglish("extension-status.qr_missing_url")
 		}
 		return nil
 	}
@@ -267,7 +275,7 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		if p.Full.Auth != nil {
 			return false
 		}
-		writeErrCode(w, http.StatusNotFound, "no_auth", i18n.Err("hub-extension_auth.no_auth"))
+		writeExtensionResponseError(w, r, http.StatusNotFound, "no_auth", i18n.Err("hub-extension_auth.no_auth"))
 		return true
 	}
 	// running is p's program to talk to about signing in, or writes why there is none.
@@ -276,11 +284,11 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 			return false
 		}
 		if !p.Record.Enabled {
-			writeErrCode(w, http.StatusConflict, "disabled", i18n.Err("hub-extension_auth.disabled"))
+			writeExtensionResponseError(w, r, http.StatusConflict, "disabled", i18n.Err("hub-extension_auth.disabled"))
 			return false
 		}
 		if !ps().authRuns(p) {
-			writeErrCode(w, http.StatusConflict, "not_running", i18n.Err("hub-extension_auth.not_running"))
+			writeExtensionResponseError(w, r, http.StatusConflict, "not_running", i18n.Err("hub-extension_auth.not_running"))
 			return false
 		}
 		return true
@@ -291,10 +299,10 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		}
 		v, err := ps().askAuth(r.Context(), p.Record.ID)
 		if err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+			writeExtensionResponseErr(w, r, http.StatusBadGateway, err)
 			return
 		}
-		writeJSON(w, v)
+		writeExtensionJSON(w, r, v)
 	}))
 	api.HandleFunc("POST /api/v1/extensions/{id}/-/auth/step", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		if !running(w, r, p) {
@@ -315,11 +323,11 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		defer cancel()
 		var pr authPrompt
 		if err := ps().get(p.Record.ID).proc.Call(ctx, "auth.step", map[string]any{"step": in.Step, "values": in.Values}, &pr); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+			writeExtensionResponseErr(w, r, http.StatusBadGateway, err)
 			return
 		}
 		if err := authQR(&pr.Prompt); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+			writeExtensionResponseErr(w, r, http.StatusBadGateway, err)
 			return
 		}
 		if in.Step == "" {
@@ -331,7 +339,7 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		} else if in.Step == "" {
 			_, _ = ps().askAuth(context.WithoutCancel(r.Context()), p.Record.ID) // now pending
 		}
-		writeJSON(w, pr)
+		writeExtensionJSON(w, r, pr)
 	}))
 	api.HandleFunc("POST /api/v1/extensions/{id}/-/auth/logout", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		if !running(w, r, p) {
@@ -341,7 +349,7 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		defer cancel()
 		var st authStatus
 		if err := ps().get(p.Record.ID).proc.Call(ctx, "auth.logout", map[string]any{}, &st); err != nil {
-			writeErr(w, http.StatusBadGateway, err)
+			writeExtensionResponseErr(w, r, http.StatusBadGateway, err)
 			return
 		}
 		ps().reg.Audit(r.Context(), p.Record.ID, "auth_logout", actor(r), nil)
@@ -350,7 +358,7 @@ func (h *Manager) authRoutes(api *http.ServeMux, full func(f func(w http.Respons
 		} else {
 			_, _ = ps().askAuth(context.WithoutCancel(r.Context()), p.Record.ID)
 		}
-		writeJSON(w, ps().authView(ps().reg.Get(p.Record.ID)))
+		writeExtensionJSON(w, r, ps().authView(ps().reg.Get(p.Record.ID), h.requestLang(r)))
 	}))
 }
 

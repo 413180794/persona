@@ -159,6 +159,8 @@ var uiItemBlocks = []string{"lark", "doc", "moment", "mail", "connector"}
 // uiRequest is what the apps send: render (no action) or an action, with where it is drawn, for whom, and the
 // plugin's state.
 type uiRequest struct {
+	// lang is set only by an explicit HTTP preference; older clients retain their body locale.
+	lang    i18n.Lang
 	Context struct {
 		Launcher string `json:"launcher,omitempty"`
 		Machine  string `json:"machine,omitempty"`
@@ -185,6 +187,12 @@ func (h *Manager) uiFallbackLang(ctx context.Context, locale string) i18n.Lang {
 }
 
 var localePattern = regexp.MustCompile(`^[A-Za-z]{2,3}([-_][A-Za-z0-9]{1,8}){0,4}$`)
+
+func uiLocaleMatches(l i18n.Lang, tag string) bool {
+	primary, _, _ := strings.Cut(strings.ReplaceAll(tag, "_", "-"), "-")
+	want, _, _ := strings.Cut(string(l), "-")
+	return strings.EqualFold(primary, want) && i18n.Resolve(tag) == l
+}
 
 // uiParams are what the plugin is told of a request to draw item: the app's context held to what is known (a time
 // zone that loads, the user's when the app says none; a locale that looks like one; a known platform and size).
@@ -238,6 +246,12 @@ func (h *Manager) uiCall(ctx context.Context, id, uiID string, in uiRequest) (ex
 		return res, errUseWidget
 	}
 	params := h.uiParams(*item, slot, in)
+	// Older clients may send their system locale in the body. The request's UI language wins when supplied.
+	if l := in.lang; i18n.Valid(l) && !uiLocaleMatches(l, params.Locale) {
+		params.Locale = string(l)
+	} else if params.Locale == "" {
+		params.Locale = string(h.contextLang(ctx))
+	}
 	switch item.Placement {
 	case "launcher_section":
 		if in.Context.Launcher == "" {
@@ -403,10 +417,10 @@ func checkOpenURL(ui extension.UIItem, itemID, raw string) error {
 }
 
 var (
-	errNoExtension = errors.New("no such plugin")
+	errNoExtension = i18n.ErrEnglish("extension-status.not_found")
 	// errUnsupportedGateway: a launcher section without hosts whose plugin says the launcher's gateway is not its own;
 	// the apps leave the section out.
-	errUnsupportedGateway = errors.New("not this plugin's gateway")
+	errUnsupportedGateway = i18n.ErrEnglish("extension-status.unsupported_gateway")
 	// errNoMachine: a machine section for a machine the hub does not have.
 	errNoMachine = i18n.Err("hub-extension_ui.no_machine")
 	// errNoItem: an inbox item's page without the item, or for one the inbox does not have.
@@ -434,27 +448,28 @@ func (h *Manager) extensionUIRoutes(api *http.ServeMux) {
 	})
 	api.HandleFunc("POST /api/v1/extensions/{id}/-/ui/{ui}", func(w http.ResponseWriter, r *http.Request) {
 		if principalOf(r.Context()).Role != roleFull {
-			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+			writeExtensionResponseErr(w, r, http.StatusForbidden, i18n.ErrEnglish("extension-status.read_only_device"))
 			return
 		}
 		var in uiRequest
 		if !readExtensionJSON(w, r, &in) {
 			return
 		}
+		in.lang = i18n.FromRequest(r)
 		res, err := h.uiCall(r.Context(), r.PathValue("id"), r.PathValue("ui"), in)
 		switch {
 		case errors.Is(err, errNoExtension), errors.Is(err, errNoMachine), errors.Is(err, errNoItem):
-			writeErrCode(w, http.StatusNotFound, "not_found", err)
+			writeExtensionResponseError(w, r, http.StatusNotFound, "not_found", err)
 		case errors.Is(err, errUnsupportedGateway), errors.Is(err, errNotServed):
-			writeErrCode(w, http.StatusNotFound, "unsupported", err)
+			writeExtensionResponseError(w, r, http.StatusNotFound, "unsupported", err)
 		case errors.Is(err, errNotItsItem):
-			writeErrCode(w, http.StatusForbidden, "forbidden", err)
+			writeExtensionResponseError(w, r, http.StatusForbidden, "forbidden", err)
 		case errors.Is(err, errUseWidget):
-			writeErrCode(w, http.StatusBadRequest, "bad_request", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "bad_request", err)
 		case errors.Is(err, errOffline):
-			writeErrCode(w, http.StatusServiceUnavailable, "offline", err)
+			writeExtensionResponseError(w, r, http.StatusServiceUnavailable, "offline", err)
 		case err != nil:
-			writeErrCode(w, http.StatusBadGateway, "plugin_failed", err)
+			writeExtensionResponseError(w, r, http.StatusBadGateway, "plugin_failed", err)
 		default:
 			writeJSON(w, res)
 		}

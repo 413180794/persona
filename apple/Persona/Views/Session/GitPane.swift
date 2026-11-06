@@ -366,6 +366,7 @@ struct GitDiffSheet: View {
                 }
             }
             .task(id: target) { await load() }
+            .onHubReconnect(group) { if error != nil { Task { await load() } } }
             #if os(macOS)
             .macLargeSheet(bars: true)
             #endif
@@ -458,6 +459,7 @@ struct GitCommitSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done [Extension System Presentation c0b3fb]") { dismiss() } } }
             .task { await load() }
+            .onHubReconnect(group) { if error != nil { Task { await load() } } }
             #if os(macOS)
             .macLargeSheet(bars: true)
             #endif
@@ -470,6 +472,25 @@ struct GitCommitSheet: View {
         guard let api = model.api(group) else { error = String(localized: "Not connected to the hub [App Model 93d955]"); return }
         do { show = try await api.gitShow(machine: machineID, cwd: cwd, hash: commit.hash) }
         catch { if !error.isCancellation { self.error = error.shown ?? error.localizedDescription } }
+    }
+}
+
+extension View {
+    /// `action` once each time the group's socket answers again after being down or stalled (a stall keeps the state
+    /// connected while the title says Connecting…). The Git sheets read once when they open, so one that failed meanwhile
+    /// would wait for Retry with the hub already back (#4385). No polling.
+    func onHubReconnect(_ group: String, _ action: @escaping () -> Void) -> some View {
+        modifier(HubReconnectAction(group: group, action: action))
+    }
+}
+
+private struct HubReconnectAction: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let group: String
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onChange(of: model.isLive(group) && model.socket(group)?.stalled != true) { was, now in if !was && now { action() } }
     }
 }
 

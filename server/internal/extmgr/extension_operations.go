@@ -662,7 +662,10 @@ func (h *Manager) snapshot(op *extOp) ExtensionOperation {
 func (h *Manager) writeOp(w http.ResponseWriter, op *extOp) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]any{"operation": h.snapshot(op)})
+	raw, err := json.Marshal(map[string]any{"operation": h.snapshot(op)})
+	if err == nil {
+		_, _ = w.Write(i18n.ExtensionClientJSON(i18n.OfWriter(w), raw))
+	}
 }
 
 // operationRoutes list, show, retry and cancel the operations. Who may is who may start them: a full-rights device
@@ -674,25 +677,25 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 	gate := func(f func(w http.ResponseWriter, r *http.Request, op *extOp)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if h.extensions == nil || h.extensions.reg == nil {
-				writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+				writeExtensionResponseError(w, r, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
 				return
 			}
 			var op *extOp
 			if id := r.PathValue("op"); id != "" {
 				if op = h.opByID(id); op == nil {
-					writeErrCode(w, http.StatusNotFound, "not_found", i18n.Err("hub-extension_operations.not_found"))
+					writeExtensionResponseError(w, r, http.StatusNotFound, "not_found", i18n.Err("hub-extension_operations.not_found"))
 					return
 				}
 			}
 			if !may(r, op) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.market_only"))
+				writeExtensionResponseError(w, r, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.market_only"))
 				return
 			}
 			f(w, r, op)
 		}
 	}
 	api.HandleFunc("GET /api/v1/extensions/-/operations", gate(func(w http.ResponseWriter, r *http.Request, _ *extOp) {
-		writeJSON(w, map[string]any{"operations": h.opsView()})
+		writeExtensionJSON(w, r, map[string]any{"operations": h.opsView()})
 	}))
 	api.HandleFunc("GET /api/v1/extensions/-/operations/{op}", gate(func(w http.ResponseWriter, r *http.Request, op *extOp) {
 		h.expireOps()
@@ -703,7 +706,7 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 				v.Preview = pv.In(h.requestLang(r))
 			}
 		}
-		writeJSON(w, v)
+		writeExtensionJSON(w, r, v)
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/operations/{op}/retry", gate(func(w http.ResponseWriter, r *http.Request, op *extOp) {
 		ps := h.extensions
@@ -712,15 +715,15 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 		ps.ops.mu.Unlock()
 		switch {
 		case state != opFailed:
-			writeErrCode(w, http.StatusConflict, "not_failed", i18n.Err("hub-extension_operations.not_failed"))
+			writeExtensionResponseError(w, r, http.StatusConflict, "not_failed", i18n.Err("hub-extension_operations.not_failed"))
 			return
 		case retry == nil:
-			writeErrCode(w, http.StatusConflict, "not_retryable", i18n.Err("hub-extension_operations.not_retryable"))
+			writeExtensionResponseError(w, r, http.StatusConflict, "not_retryable", i18n.Err("hub-extension_operations.not_retryable"))
 			return
 		}
 		next, err := retry()
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "retry_failed", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "retry_failed", err)
 			return
 		}
 		h.writeOp(w, next)
@@ -739,7 +742,7 @@ func (h *Manager) operationRoutes(api *http.ServeMux) {
 		case state == opRunning && previewing && cancel != nil:
 			cancel() // the preview fails with it, and the operation is canceled
 		case state == opRunning:
-			writeErrCode(w, http.StatusConflict, "cannot_cancel", i18n.Err("hub-extension_operations.cannot_cancel"))
+			writeExtensionResponseError(w, r, http.StatusConflict, "cannot_cancel", i18n.Err("hub-extension_operations.cannot_cancel"))
 			return
 		case state == opNeedsConsent:
 			ps.reg.Discard(previewID)

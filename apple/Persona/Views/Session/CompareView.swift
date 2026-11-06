@@ -130,6 +130,7 @@ struct CompareView: View {
         }
         .safeAreaInset(edge: .bottom) { if !model.loading, model.error == nil { openBar } }
         .task(id: ObjectIdentifier(model)) { await model.load() }
+        .onHubReconnect(model.machine.group) { if model.error != nil { Task { await model.load() } } }
         .sheet(item: $open) { ref in FileViewer(ref: ref) } // no identifier here: it would hide compare-text / compare-image
     }
 

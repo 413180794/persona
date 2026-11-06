@@ -62,6 +62,7 @@ type SandboxView struct {
 	Chosen  bool   `json:"chosen"`
 	Active  bool   `json:"active"`
 	Why     string `json:"why,omitempty"`
+	Detail  string `json:"detail,omitempty"`
 	// Trusted: it came from a trusted market.
 	Trusted bool          `json:"trusted,omitempty"`
 	Egress  egress.Counts `json:"egress"`
@@ -129,7 +130,14 @@ func (ps *extensions) sandboxOf(ctx context.Context, p *extension.Extension) san
 		sup := sandboxProbe()
 		st.Active = sup.Available()
 		if !st.Active {
-			st.Why = i18n.T(ps.h.contextLang(ctx), "hub-extension_sandbox.unavailable", i18n.Args{"why": sup.Why})
+			l := ps.h.contextLang(ctx)
+			why, detail := i18n.ExtensionFailureText(l, sup.Why, "extension-status.sandbox_unavailable")
+			st.Detail = detail
+			if detail == "" {
+				st.Why = i18n.T(l, "hub-extension_sandbox.unavailable", i18n.Args{"why": why})
+			} else {
+				st.Why = why
+			}
 		}
 	}
 	if px := ps.sandboxes.proxyIfStarted(); px != nil {

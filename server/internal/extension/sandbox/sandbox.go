@@ -96,7 +96,7 @@ func probe() Support {
 	case "linux":
 		path, err := exec.LookPath("bwrap")
 		if err != nil {
-			s.Why = "机器上没有 bwrap（bubblewrap）"
+			s.Why = i18n.T(i18n.Default, "extension-status.sandbox_no_bwrap")
 			return s
 		}
 		dir, err := os.MkdirTemp("", "persona-sandbox-probe-*")
@@ -118,7 +118,7 @@ func probe() Support {
 		}
 		out, err := exec.CommandContext(ctx, path, bwrapProbeArgs(pkg, data, run, trueBin)...).CombinedOutput()
 		if err != nil {
-			s.Why = "bwrap 起不来沙箱：" + firstLine(out, err)
+			s.Why = i18n.T(i18n.Default, "extension-status.sandbox_bwrap_start", i18n.Args{"err": firstLine(out, err)})
 			return s
 		}
 		// The namespaces alone are not enough: a container or a restricted user namespace may let bwrap make them and
@@ -135,16 +135,16 @@ func probe() Support {
 		}
 	case "darwin":
 		if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
-			s.Why = "机器上没有 sandbox-exec"
+			s.Why = i18n.T(i18n.Default, "extension-status.sandbox_no_exec")
 			return s
 		}
 		if out, err := exec.CommandContext(ctx, "/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true").CombinedOutput(); err != nil {
-			s.Why = "sandbox-exec 起不来：" + firstLine(out, err)
+			s.Why = i18n.T(i18n.Default, "extension-status.sandbox_exec_start", i18n.Args{"err": firstLine(out, err)})
 			return s
 		}
 		s.SandboxExec = true
 	default:
-		s.Why = "这个系统（" + runtime.GOOS + "）上没有沙箱"
+		s.Why = i18n.T(i18n.Default, "extension-status.sandbox_os", i18n.Args{"os": runtime.GOOS})
 	}
 	return s
 }
@@ -154,20 +154,20 @@ func probe() Support {
 func probeMounts(ctx context.Context, bwrap string) string {
 	dir, err := os.MkdirTemp("", "persona-sandbox-probe-")
 	if err != nil {
-		return "建不了沙箱探测用的临时目录：" + err.Error()
+		return i18n.T(i18n.Default, "extension-status.sandbox_probe_dir", i18n.Args{"err": err.Error()})
 	}
 	defer os.RemoveAll(dir)
 	plan := Plan{Pkg: filepath.Join(dir, "pkg"), Data: filepath.Join(dir, "data"), Run: filepath.Join(dir, "run"), Self: filepath.Join(dir, "self")}
 	for _, d := range []string{plan.Pkg, plan.Data, plan.Run} {
 		if err := os.Mkdir(d, 0o700); err != nil {
-			return "建不了沙箱探测用的临时目录：" + err.Error()
+			return i18n.T(i18n.Default, "extension-status.sandbox_probe_dir", i18n.Args{"err": err.Error()})
 		}
 	}
 	if err := os.WriteFile(plan.Self, nil, 0o600); err != nil {
-		return "建不了沙箱探测用的临时目录：" + err.Error()
+		return i18n.T(i18n.Default, "extension-status.sandbox_probe_dir", i18n.Args{"err": err.Error()})
 	}
 	if out, err := exec.CommandContext(ctx, bwrap, append(linuxSetup(plan), "--", "true")...).CombinedOutput(); err != nil {
-		return "bwrap 建不了沙箱的挂载：" + firstLine(out, err)
+		return i18n.T(i18n.Default, "extension-status.sandbox_mount", i18n.Args{"err": firstLine(out, err)})
 	}
 	return ""
 }

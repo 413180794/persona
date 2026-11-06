@@ -108,9 +108,9 @@ func (p *Extension) ReadOnly() bool { return p.Record.Source == SourceHubJSON }
 // ProblemText is the compatibility problem in the client's language, when a translation is available.
 func (p *Extension) ProblemText(l i18n.Lang) string {
 	if p.problemErr != nil && p.problemErr.Error() == p.Problem {
-		return i18n.Localize(p.problemErr, l)
+		return i18n.ExtensionStatusText(l, i18n.Localize(p.problemErr, l))
 	}
-	return p.Problem
+	return i18n.ExtensionStatusText(l, p.Problem)
 }
 
 // Change is what the registry tells the hub after it changed a plugin.
@@ -315,7 +315,9 @@ func (r *Registry) fromRow(row Record) *Extension {
 		var loose Manifest
 		_ = json.Unmarshal(row.Manifest, &loose)
 		loose.ID = row.ID
-		p.Manifest, p.Full, p.Problem = &loose, &loose, "清单读不了："+err.Error()
+		p.Manifest, p.Full = &loose, &loose
+		p.problemErr = i18n.Err("extension-status.manifest_unreadable", i18n.Args{"err": err.Error()})
+		p.Problem = p.problemErr.Error()
 		return p
 	}
 	p.Full, p.Manifest = m, m.Without(row.DisabledContributions)
@@ -323,7 +325,8 @@ func (r *Registry) fromRow(row Record) *Extension {
 	if row.Remote == nil {
 		p.Dir = r.installedDir(row.ID, row.Version)
 		if !hasManifest(p.Dir) {
-			p.Problem = "扩展包不见了（" + p.Dir + "）"
+			p.problemErr = i18n.Err("extension-status.package_missing", i18n.Args{"path": p.Dir})
+			p.Problem = p.problemErr.Error()
 		}
 	}
 	if w, err := CheckEngines(m, r.build); err != nil {
@@ -511,7 +514,7 @@ func newID() string {
 // the installed plugin upgrade.
 func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了扩展")
+		return nil, i18n.Err("extension-status.install_no_database")
 	}
 	src, err := ParseSource(source)
 	if err != nil {
@@ -532,7 +535,7 @@ func (r *Registry) Preview(ctx context.Context, source, upgrade string) (*Previe
 // against the index's sha256, must be the plugin the index says (id, version, permissions).
 func (r *Registry) PreviewMarket(ctx context.Context, mk *Market, marketID string, e *MarketEntry, upgrade string, candidates ...*Manifest) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了扩展")
+		return nil, i18n.Err("extension-status.install_no_database")
 	}
 	pkg := e.PackageFor(Platform())
 	if pkg == nil {
@@ -598,7 +601,7 @@ func (r *Registry) PreviewMarketOf(previewID string) string {
 // name, written into the preview's staging directory (at most PackageMost bytes) and unpacked there.
 func (r *Registry) PreviewUpload(ctx context.Context, name string, body io.Reader, upgrade string) (*Preview, error) {
 	if r.store == nil {
-		return nil, errors.New("没有数据库：装不了扩展")
+		return nil, i18n.Err("extension-status.install_no_database")
 	}
 	name, err := UploadName(name)
 	if err != nil {
@@ -986,7 +989,7 @@ func (r *Registry) Uninstall(ctx context.Context, id string, keepData bool, acto
 	defer unlock()
 	old := r.Get(id)
 	if old == nil {
-		return fmt.Errorf("没有扩展 %s", id)
+		return i18n.Err("extension-status.extension_missing", i18n.Args{"id": id})
 	}
 	if old.Record.Source == SourceDev {
 		unlock()
@@ -1239,13 +1242,13 @@ func (r *Registry) logf(format string, args ...any) {
 func (r *Registry) editable(id string) (*Extension, error) {
 	p := r.Get(id)
 	if p == nil {
-		return nil, fmt.Errorf("没有扩展 %s", id)
+		return nil, i18n.Err("extension-status.extension_missing", i18n.Args{"id": id})
 	}
 	if p.ReadOnly() {
-		return nil, fmt.Errorf("%s 写在 hub.json 里：去 hub.json 或管理界面改", id)
+		return nil, i18n.Err("extension-status.read_only", i18n.Args{"id": id})
 	}
 	if p.Record.Source == SourceDev {
-		return nil, fmt.Errorf("%s 是开发中的扩展：改它目录里的 extension.dev.json，再跑一次 personad extension dev", id)
+		return nil, i18n.Err("extension-status.dev_read_only", i18n.Args{"id": id})
 	}
 	return p, nil
 }
@@ -1323,7 +1326,7 @@ func (r *Registry) SetConfig(ctx context.Context, id string, raw json.RawMessage
 
 // ErrSecretNotCleared: a secret the new configuration unbinds (BoundSecrets) could not be deleted, so the
 // configuration was not saved.
-var ErrSecretNotCleared = errors.New("密钥删不掉，设置没有保存")
+var ErrSecretNotCleared = i18n.Err("extension-status.secret_not_cleared")
 
 // SetConfigClearing is SetConfig saying which secrets the change deleted (BoundSecrets): those that had a value, or
 // may have had (they could not be read). They go first, fail closed: one that cannot be deleted saves nothing
@@ -1407,7 +1410,7 @@ func (r *Registry) Config(p *Extension) json.RawMessage {
 
 func (r *Registry) secretSpec(p *Extension, name string) error {
 	if !slices.ContainsFunc(p.Manifest.Secrets, func(s SecretSpec) bool { return s.Name == name }) {
-		return fmt.Errorf("%s 没有叫 %s 的密钥", p.Record.ID, name)
+		return i18n.Err("extension-status.secret_missing", i18n.Args{"id": p.Record.ID, "name": name})
 	}
 	return nil
 }
@@ -1432,10 +1435,10 @@ func (r *Registry) SetSecret(ctx context.Context, id, name, value, actor string)
 		}
 	}
 	if value == "" || len(value) > SecretMost {
-		return fmt.Errorf("密钥要有内容，最多 %d KB", SecretMost>>10)
+		return i18n.Err("extension-status.secret_size", i18n.Args{"max": SecretMost >> 10})
 	}
 	if r.store == nil || r.seal == nil {
-		return errors.New("没有数据库：存不了密钥")
+		return i18n.Err("extension-status.secret_no_database")
 	}
 	if err := r.ensureRow(ctx, p); err != nil {
 		return err
@@ -1516,7 +1519,7 @@ func (r *Registry) Secrets(ctx context.Context, id string) (map[string]string, e
 	for name, s := range sealed {
 		plain, err := r.seal.Open(s)
 		if err != nil {
-			return nil, fmt.Errorf("%s 的密钥 %s 打不开（secret.key 换过？）", id, name)
+			return nil, i18n.Err("extension-status.secret_decrypt", i18n.Args{"id": id, "name": name})
 		}
 		out[name] = plain
 	}

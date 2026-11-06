@@ -263,8 +263,9 @@ func (ps *extensions) list() []ExtensionView {
 
 func (ps *extensions) view(ctx context.Context, p *extension.Extension) ExtensionView {
 	m := p.Full
+	l := ps.h.contextLang(ctx)
 	v := ExtensionView{ID: p.Record.ID, Name: m.Name, Kind: m.Kind(), Version: p.Record.Version, Source: p.Record.Source,
-		Enabled: p.Record.Enabled, Description: m.Description, Contributes: m.Contributions(), Warnings: p.Warnings}
+		Enabled: p.Record.Enabled, Description: m.Description, Contributes: m.Contributions(), Warnings: p.WarningTexts(l)}
 	if c, ok := p.Legacy.(ExtensionConfig); ok {
 		v.Kind, v.Version = c.Kind, ""
 	}
@@ -287,8 +288,10 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 		v.NeedsSetup = ps.reg.Missing(ctx, p)
 		if len(v.NeedsSetup) > 0 {
 			v.Status = extensionNeedsSetup
+			v.Error = i18n.T(l, "hub-extensions.missing", i18n.Args{"fields": strings.Join(v.NeedsSetup, i18n.T(l, "hub-extensions.list_separator"))})
 		}
 	}
+	v.Error = i18n.ExtensionStatusText(l, v.Error)
 	if p.Record.Enabled && ps.h != nil && ps.h.hubJSONWaitsForTriageModel(ctx, p) { // runs, but its inbox waits
 		v.Status, v.NeedsSetup = extensionNeedsSetup, append(v.NeedsSetup, needsTriageModelSetup(ps.h.contextLang(ctx)))
 	}
@@ -301,7 +304,7 @@ func (ps *extensions) view(ctx context.Context, p *extension.Extension) Extensio
 	if m.NodeProgram() != nil {
 		v.Nodes = ps.nodes.views(p.Record.ID)
 	}
-	if v.Auth = ps.authView(p); v.Auth != nil && ps.h != nil {
+	if v.Auth = ps.authView(p, l); v.Auth != nil && ps.h != nil {
 		if line := authWarning(ps.h.contextLang(ctx), v.Auth); line != "" {
 			v.Warnings = append(slices.Clone(v.Warnings), line)
 		}

@@ -26,6 +26,8 @@ import (
 	"github.com/nwverse/persona/server/internal/identity"
 	"github.com/nwverse/persona/server/internal/osproc"
 	"github.com/nwverse/persona/server/internal/rpc"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // States a plugin's process is in.
@@ -55,7 +57,7 @@ var (
 )
 
 // ErrNotRunning is a call to a plugin that is not running and is not started by calls.
-var ErrNotRunning = errors.New("not running")
+var ErrNotRunning = i18n.ErrEnglish("extension-status.not_running")
 
 // Spec is how to run one plugin.
 type Spec struct {
@@ -301,7 +303,7 @@ func (p *Proc) Wait(ctx context.Context) error {
 		case ready:
 			return nil
 		case state == StateError:
-			return fmt.Errorf("%s: %s", p.spec.Name, why)
+			return i18n.ErrEnglish("extension-status.host_failure", i18n.Args{"name": p.spec.Name, "err": why})
 		}
 		select {
 		case <-ctx.Done():
@@ -356,7 +358,7 @@ func callCode(ctx context.Context, err error) string {
 
 func (p *Proc) call(ctx context.Context, method string, params, out any) error {
 	if !p.spec.RPC {
-		return fmt.Errorf("%s does not speak the plugin protocol", p.spec.Name)
+		return i18n.ErrEnglish("extension-status.no_protocol", i18n.Args{"name": p.spec.Name})
 	}
 	p.mu.Lock()
 	s := p.sess
@@ -373,7 +375,7 @@ func (p *Proc) call(ctx context.Context, method string, params, out any) error {
 	}
 	if s == nil {
 		if !lazy && !starting {
-			return fmt.Errorf("%s: %w", p.spec.Name, ErrNotRunning)
+			return &callFailure{message: i18n.ErrEnglish("extension-status.host_failure", i18n.Args{"name": p.spec.Name, "err": ErrNotRunning}), cause: ErrNotRunning}
 		}
 		wctx, cancel := context.WithTimeout(ctx, ReadyWithin)
 		err := p.Wait(wctx)
@@ -385,7 +387,7 @@ func (p *Proc) call(ctx context.Context, method string, params, out any) error {
 		s = p.sess
 		p.mu.Unlock()
 		if s == nil {
-			return fmt.Errorf("%s: %w", p.spec.Name, ErrNotRunning)
+			return &callFailure{message: i18n.ErrEnglish("extension-status.host_failure", i18n.Args{"name": p.spec.Name, "err": ErrNotRunning}), cause: ErrNotRunning}
 		}
 	}
 	cctx, cancel := context.WithTimeout(ctx, p.spec.callTimeout())
@@ -393,7 +395,7 @@ func (p *Proc) call(ctx context.Context, method string, params, out any) error {
 	err := s.peer.Call(cctx, method, params, out)
 	if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 		p.strike(method + " timed out")
-		return &rpc.Error{Code: extension.CodeTimeout, Message: fmt.Sprintf("%s did not answer %s in %s", p.spec.Name, method, p.spec.callTimeout())}
+		return newCallTimeout(p.spec.Name, method, p.spec.callTimeout())
 	}
 	if err == nil {
 		p.mu.Lock()
@@ -609,13 +611,13 @@ func (p *Proc) runOnce(ctx context.Context) error {
 			return nil
 		case <-ch.exited:
 			if ch.waitErr == nil {
-				return errors.New("exited")
+				return i18n.ErrEnglish("extension-status.exited")
 			}
 			return ch.waitErr
 		case <-peerDone:
-			return fmt.Errorf("the connection closed: %v", s.peer.Err())
+			return i18n.ErrEnglish("extension-status.connection_closed", i18n.Args{"err": s.peer.Err()})
 		case <-killed:
-			return errors.New("not answering")
+			return i18n.ErrEnglish("extension-status.not_answering")
 		case <-p.kick:
 			p.mu.Lock()
 			wanted := p.wantedLocked()
@@ -638,11 +640,11 @@ func (p *Proc) runOnce(ctx context.Context) error {
 			} else if healthMisses++; healthMisses >= StrikesToKill && p.spec.Command != "" && !p.spec.RPC {
 				// A hung HTTP-only program the hub runs: end the run so it is restarted. One elsewhere has
 				// nothing to restart, and a protocol one is covered by its pings.
-				return fmt.Errorf("missed %d health checks", healthMisses)
+				return i18n.ErrEnglish("extension-status.missed_health", i18n.Args{"count": healthMisses})
 			}
 			if !readyBy.IsZero() && time.Now().After(readyBy) {
 				if st, _ := p.Status(); st == StateStarting {
-					return fmt.Errorf("not answering /health within %s", ReadyWithin)
+					return i18n.ErrEnglish("extension-status.health_timeout", i18n.Args{"duration": ReadyWithin.String()})
 				}
 				readyBy = time.Time{} // it came up; later failures are the health check's
 			}
@@ -655,7 +657,7 @@ func (p *Proc) runOnce(ctx context.Context) error {
 			cancel()
 			if err != nil {
 				if misses++; misses >= StrikesToKill {
-					return fmt.Errorf("missed %d pings", misses)
+					return i18n.ErrEnglish("extension-status.missed_ping", i18n.Args{"count": misses})
 				}
 			} else {
 				misses = 0
@@ -692,11 +694,11 @@ func (p *Proc) checkHealth(ctx context.Context, t *time.Ticker) (missed bool) {
 	case !ok && state == StateRunning:
 		p.mu.Lock()
 		p.ready = p.spec.RPC
-		p.setLocked(StateError, "health check failed")
+		p.setLocked(StateError, i18n.T(i18n.En, "extension-status.health_failed"))
 		p.mu.Unlock()
 		t.Reset(HealthFirst)
 	case !ok && p.spec.Command == "" && state == StateStarting:
-		p.set(StateError, "not answering on "+p.spec.Socket)
+		p.set(StateError, i18n.T(i18n.En, "extension-status.socket_not_answering", i18n.Args{"path": p.spec.Socket}))
 	}
 	return missed
 }
@@ -717,18 +719,18 @@ func (p *Proc) initialize(ctx context.Context, s *session) error {
 	if err := s.peer.Call(ictx, extension.MInitialize, params, &res); err != nil {
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == extension.CodeWrongProtocol {
-			return fmt.Errorf("协议版本不对：%s", re.Message)
+			return i18n.Err("extension-status.wrong_protocol", i18n.Args{"err": re.Message})
 		}
-		return fmt.Errorf("没准备好：%v", err)
+		return i18n.Err("extension-status.not_ready", i18n.Args{"err": err.Error()})
 	}
 	if res.Protocol != extension.Protocol {
-		return fmt.Errorf("协议版本是 %d，hub 要 %d", res.Protocol, extension.Protocol)
+		return i18n.Err("extension-status.protocol_version", i18n.Args{"current": res.Protocol, "required": extension.Protocol})
 	}
 	if res.ID != params.Extension.ID && params.Extension.ID != "" {
-		return fmt.Errorf("the program says it is %q, not %q", res.ID, params.Extension.ID)
+		return i18n.ErrEnglish("extension-status.wrong_id", i18n.Args{"current": res.ID, "required": params.Extension.ID})
 	}
 	if res.Version != params.Extension.Version && params.Extension.Version != "" {
-		return fmt.Errorf("the program says it is version %q, not %q", res.Version, params.Extension.Version)
+		return i18n.ErrEnglish("extension-status.wrong_version", i18n.Args{"current": res.Version, "required": params.Extension.Version})
 	}
 	if p.spec.Accept != nil {
 		if err := p.spec.Accept(res); err != nil {
@@ -751,7 +753,7 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 		conn, err := d.DialContext(dctx, "unix", p.spec.RPCSocket)
 		cancel()
 		if err != nil {
-			return nil, nil, fmt.Errorf("连不上 %s：%v", p.spec.RPCSocket, err)
+			return nil, nil, i18n.Err("extension-status.socket_connect", i18n.Args{"path": p.spec.RPCSocket, "err": err.Error()})
 		}
 		ch.conn = conn
 		return ch, conn, nil
@@ -763,14 +765,14 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 		_ = os.Remove(p.spec.Socket) // left by a run that was killed
 	}
 	if _, err := os.Stat(p.spec.Command); err != nil && filepath.IsAbs(p.spec.Command) {
-		return nil, nil, fmt.Errorf("没有找到 %s 的程序（%s）", p.spec.Name, p.spec.Command)
+		return nil, nil, i18n.Err("extension-status.program_missing", i18n.Args{"name": p.spec.Name, "path": p.spec.Command})
 	}
 	name, args := p.spec.Command, p.spec.Args
 	var wrapEnv []string
 	if p.spec.Wrap != nil {
 		var err error
 		if name, args, wrapEnv, err = p.spec.Wrap(name, args); err != nil {
-			return nil, nil, fmt.Errorf("%s 的沙箱起不来：%v", p.spec.Name, err)
+			return nil, nil, i18n.Err("extension-status.sandbox_start", i18n.Args{"name": p.spec.Name, "err": err.Error()})
 		}
 	}
 	cmd := exec.Command(name, args...)
@@ -818,7 +820,7 @@ func (p *Proc) spawn(ctx context.Context) (*child, io.Reader, error) {
 	logsW.Close() // the program holds its own copy now; with ours open the reader never sees EOF
 	if err != nil {
 		logs.Close()
-		return nil, nil, fmt.Errorf("%s 的程序起不来：%v", p.spec.Name, err)
+		return nil, nil, i18n.Err("extension-status.program_start", i18n.Args{"name": p.spec.Name, "err": err.Error()})
 	}
 	go p.logLines(logs)
 	go func() {

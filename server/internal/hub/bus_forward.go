@@ -167,7 +167,11 @@ func (h *Hub) toWanting(feature string, b []byte) {
 	defer h.mu.Unlock()
 	for c := range h.clients {
 		if c.wants(feature) {
-			c.queue(b)
+			if feature == extensionOperationsFeature {
+				c.queue(i18n.ExtensionEvent(c.lang(), b))
+			} else {
+				c.queue(b)
+			}
 		}
 	}
 }

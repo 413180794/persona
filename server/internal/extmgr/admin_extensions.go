@@ -95,7 +95,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 	}
 	// gated runs a preview under the gate.
-	gated := func(w http.ResponseWriter, run func() (*extension.Preview, error)) {
+	gated := func(w http.ResponseWriter, r *http.Request, run func() (*extension.Preview, error)) {
 		end, retry, busy := h.admin.extensions.begin(h.adminNow())
 		switch {
 		case busy:
@@ -111,11 +111,11 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		defer end()
 		pv, err := run()
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "invalid_plugin", err)
 			return
 		}
 		h.logf("admin: previewed plugin %s %s (%s)", pv.Manifest.ID, pv.Manifest.Version, map[bool]string{true: "upgrade", false: "install"}[pv.Upgrade])
-		writeJSON(w, pv.In(i18n.OfWriter(w)))
+		writeExtensionJSON(w, r, pv.In(i18n.OfWriter(w)))
 	}
 
 	// The markets, as the apps have them (the admin session is the gate).
@@ -157,7 +157,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		if s == nil {
 			return
 		}
-		gated(w, func() (*extension.Preview, error) {
+		gated(w, r, func() (*extension.Preview, error) {
 			pv, err := s.reg.Preview(r.Context(), in.Source, in.Upgrade)
 			if err == nil {
 				h.resolveBundle(r.Context(), pv, "") // its missing dependencies, a pack's members (extension_model.go)
@@ -177,11 +177,11 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		q := r.URL.Query()
 		if _, err := extension.UploadName(q.Get("name")); err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "invalid_plugin", err)
 			return
 		}
 		body := http.MaxBytesReader(w, r.Body, extension.PackageMost+1)
-		gated(w, func() (*extension.Preview, error) {
+		gated(w, r, func() (*extension.Preview, error) {
 			pv, err := s.reg.PreviewUpload(r.Context(), q.Get("name"), body, q.Get("upgrade"))
 			if err == nil {
 				h.resolveBundle(r.Context(), pv, "")
@@ -208,7 +208,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		p, err := h.installExtensionPlan(r.Context(), "", in.PreviewID, in.Digest, in.Bundle, adminActor)
 		if err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "install_failed", err)
+			writeExtensionChangeError(w, r, http.StatusBadRequest, "install_failed", err)
 			return
 		}
 		h.logf("admin: installed plugin %s %s", p.Record.ID, p.Record.Version)
@@ -225,7 +225,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 		}
 		np, err := h.installExtensionPlan(r.Context(), p.Record.ID, in.PreviewID, in.Digest, in.Bundle, adminActor)
 		if err != nil {
-			writeExtensionErr(w, http.StatusBadRequest, "upgrade_failed", err)
+			writeExtensionChangeError(w, r, http.StatusBadRequest, "upgrade_failed", err)
 			return
 		}
 		h.logf("admin: upgraded plugin %s %s → %s", np.Record.ID, np.Record.PreviousVersion, np.Record.Version)
@@ -234,7 +234,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/extensions/{id}/rollback", one(func(w http.ResponseWriter, r *http.Request, ps *extensions, p *extension.Extension) {
 		np, err := ps.reg.Rollback(r.Context(), p.Record.ID, adminActor)
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "rollback_failed", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "rollback_failed", err)
 			return
 		}
 		h.logf("admin: rolled plugin %s back to %s", np.Record.ID, np.Record.Version)
@@ -252,7 +252,7 @@ func (h *Manager) adminExtensionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err := ps.reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, adminActor); err != nil {
-			writeExtensionErr(w, http.StatusConflict, "read_only", err)
+			writeExtensionChangeError(w, r, http.StatusConflict, "read_only", err)
 			return
 		}
 		writeJSON(w, detailOut(r, ps.detail(r.Context(), ps.reg.Get(p.Record.ID))))

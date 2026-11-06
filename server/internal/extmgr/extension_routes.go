@@ -110,7 +110,7 @@ func (h *Manager) fromThisMachine(r *http.Request) bool { return principalOf(r.C
 
 func readExtensionJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := json.NewDecoder(io.LimitReader(r.Body, extension.ConfigMost+extension.SecretMost+4096)).Decode(v); err != nil {
-		writeErrCode(w, http.StatusBadRequest, "bad_request", err)
+		writeExtensionResponseError(w, r, http.StatusBadRequest, "bad_request", err)
 		return false
 	}
 	return true
@@ -132,16 +132,16 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 	api.HandleFunc("GET /api/v1/extensions", func(w http.ResponseWriter, r *http.Request) {
 		key := extKey(r, "extensions", "plugins")
 		if ps() == nil {
-			writeJSON(w, map[string]any{key: []ExtensionView{}})
+			writeExtensionJSON(w, r, map[string]any{key: []ExtensionView{}})
 			return
 		}
-		writeJSON(w, map[string]any{key: ps().listCtx(r.Context()), "can_install": ps().reg.HasStore(), "markets": h.marketStore() != nil && ps().reg.HasStore()})
+		writeExtensionJSON(w, r, map[string]any{key: ps().listCtx(r.Context()), "can_install": ps().reg.HasStore(), "markets": h.marketStore() != nil && ps().reg.HasStore()})
 	})
 	// The hub's own routes under a plugin: what changes it is for a device with full rights.
 	full := func(f func(w http.ResponseWriter, r *http.Request, p *extension.Extension)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if principalOf(r.Context()).Role != roleFull {
-				writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+				writeExtensionResponseErr(w, r, http.StatusForbidden, i18n.ErrEnglish("extension-status.read_only_device"))
 				return
 			}
 			var p *extension.Extension
@@ -149,7 +149,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				p = ps().reg.Get(r.PathValue("id"))
 			}
 			if p == nil {
-				writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such plugin"))
+				writeExtensionResponseError(w, r, http.StatusNotFound, "not_found", errNoExtension)
 				return
 			}
 			f(w, r, p)
@@ -160,11 +160,11 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 	owner := func(f http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !h.fromThisMachine(r) {
-				writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.owner_only"))
+				writeExtensionResponseError(w, r, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.owner_only"))
 				return
 			}
 			if ps() == nil {
-				writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+				writeExtensionResponseError(w, r, http.StatusServiceUnavailable, "no_plugins", i18n.ErrEnglish("extension-status.not_set_up"))
 				return
 			}
 			f(w, r)
@@ -174,17 +174,17 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 	// plugin of a registered market (its package pinned by the market's index; docs/extensions.md "Extension markets").
 	marketOr := func(w http.ResponseWriter, r *http.Request, ofMarket func() bool) bool {
 		if ps() == nil {
-			writeErrCode(w, http.StatusServiceUnavailable, "no_plugins", errors.New("plugins are not set up"))
+			writeExtensionResponseError(w, r, http.StatusServiceUnavailable, "no_plugins", i18n.ErrEnglish("extension-status.not_set_up"))
 			return false
 		}
 		if h.fromThisMachine(r) || (principalOf(r.Context()).Role == roleFull && ofMarket()) {
 			return true
 		}
-		writeErrCode(w, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.market_only"))
+		writeExtensionResponseError(w, r, http.StatusForbidden, "this_machine_only", i18n.Err("hub-extension_routes.market_only"))
 		return false
 	}
 	api.HandleFunc("GET /api/v1/extensions/{id}/-/{$}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
+		writeExtensionJSON(w, r, detailOut(r, ps().detail(r.Context(), p)))
 	}))
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/enabled", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
@@ -199,10 +199,10 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			return
 		}
 		if err := ps().reg.SetEnabled(r.Context(), p.Record.ID, in.Enabled, actor(r)); err != nil {
-			writeExtensionErr(w, http.StatusConflict, "read_only", err)
+			writeExtensionChangeError(w, r, http.StatusConflict, "read_only", err)
 			return
 		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
+		writeExtensionJSON(w, r, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/config", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
@@ -229,7 +229,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			if errors.As(err, &fe) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Error(), "code": "invalid_config", "field": fe.Path, "message": fe.Message})
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": fe.Text(h.requestLang(r)), "code": "invalid_config", "field": fe.Path, "message": fe.MessageText(h.requestLang(r))})
 				return
 			}
 			status, code := http.StatusConflict, "read_only"
@@ -237,10 +237,19 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				status, code = http.StatusInternalServerError, "secret_not_cleared"
 			}
 			if len(cleared) == 0 {
-				writeErrCode(w, status, code, err)
+				writeExtensionResponseError(w, r, status, code, err)
 				return
 			}
-			writeCode(w, status, code, i18n.Localize(err, h.contextLang(r.Context())), map[string]any{"secrets_cleared": cleared})
+			summary := i18n.Localize(err, h.contextLang(r.Context()))
+			extra := map[string]any{"secrets_cleared": cleared}
+			if i18n.FromRequest(r) != "" {
+				var detail string
+				summary, detail = extensionErrorCopy(h.requestLang(r), err, "extension-status.failed")
+				if detail != "" {
+					extra["detail"] = detail
+				}
+			}
+			writeCode(w, status, code, summary, extra)
 			return
 		}
 		d := ps().detail(r.Context(), ps().reg.Get(p.Record.ID))
@@ -250,7 +259,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 				d.Warnings = append(slices.Clone(d.Warnings), i18n.T(h.contextLang(r.Context()), "hub-voice_extension.key_cleared"))
 			}
 		}
-		writeJSON(w, detailOut(r, d))
+		writeExtensionJSON(w, r, detailOut(r, d))
 	}))
 	api.HandleFunc("PUT /api/v1/extensions/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		var in struct {
@@ -264,17 +273,17 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 			if errors.As(err, new(keyNeedsURLError)) { // the voice extension's key is for an address (voice_extension.go)
 				code = "needs_url"
 			}
-			writeErrCode(w, http.StatusBadRequest, code, err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, code, err)
 			return
 		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
+		writeExtensionJSON(w, r, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
 	api.HandleFunc("DELETE /api/v1/extensions/{id}/-/secrets/{name}", full(func(w http.ResponseWriter, r *http.Request, p *extension.Extension) {
 		if err := ps().reg.DeleteSecret(r.Context(), p.Record.ID, r.PathValue("name"), actor(r)); err != nil {
-			writeErrCode(w, http.StatusBadRequest, "invalid_secret", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "invalid_secret", err)
 			return
 		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
+		writeExtensionJSON(w, r, detailOut(r, ps().detail(r.Context(), ps().reg.Get(p.Record.ID))))
 	}))
 
 	api.HandleFunc("POST /api/v1/extensions/-/preview", owner(func(w http.ResponseWriter, r *http.Request) {
@@ -305,9 +314,9 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		case in.Async:
 			h.writeOp(w, op)
 		case err != nil:
-			writeErrCode(w, http.StatusBadRequest, "invalid_plugin", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "invalid_plugin", err)
 		default:
-			writeJSON(w, withOperation(pv.In(h.requestLang(r)), op))
+			writeExtensionJSON(w, r, withOperation(pv.In(h.requestLang(r)), op))
 		}
 	}))
 	api.HandleFunc("POST /api/v1/extensions/-/install", func(w http.ResponseWriter, r *http.Request) {
@@ -362,10 +371,10 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		}
 		p, err := ps().reg.Rollback(r.Context(), r.PathValue("id"), actorOr(r, "personad extension"))
 		if err != nil {
-			writeErrCode(w, http.StatusBadRequest, "rollback_failed", err)
+			writeExtensionResponseError(w, r, http.StatusBadRequest, "rollback_failed", err)
 			return
 		}
-		writeJSON(w, detailOut(r, ps().detail(r.Context(), p)))
+		writeExtensionJSON(w, r, detailOut(r, ps().detail(r.Context(), p)))
 	})
 	api.HandleFunc("DELETE /api/v1/extensions/{id}/-/{$}", func(w http.ResponseWriter, r *http.Request) {
 		if !marketOr(w, r, fromMarket(r)) {
@@ -383,7 +392,7 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		// A plugin can do anything the hub can (it may hold its token): not for an answer-only device. An extension
 		// gets here with the scope to call this one (extensions.call:<id>).
 		if answerOnly(r) {
-			writeErr(w, http.StatusForbidden, errors.New("this device can only read and answer"))
+			writeExtensionResponseErr(w, r, http.StatusForbidden, i18n.ErrEnglish("extension-status.read_only_device"))
 			return
 		}
 		id := r.PathValue("id")
@@ -393,12 +402,12 @@ func (h *Manager) extensionRoutes(api *http.ServeMux) {
 		}
 		rest := strings.TrimPrefix(r.URL.Path, "/api/v1/extensions/"+id)
 		if hp == nil || hp.proxy == nil || hp.proc == nil || strings.HasPrefix(rest, "/-/") {
-			writeErrCode(w, http.StatusNotFound, "not_found", errors.New("no such plugin"))
+			writeExtensionResponseError(w, r, http.StatusNotFound, "not_found", errNoExtension)
 			return
 		}
 		end, err := hp.proc.BeginHTTP(r.Context())
 		if err != nil {
-			writeErr(w, http.StatusBadGateway, fmt.Errorf("plugin %s is not answering: %w", id, err))
+			writeExtensionResponseErr(w, r, http.StatusBadGateway, fmt.Errorf("plugin %s is not answering: %w", id, err))
 			return
 		}
 		defer end()
@@ -447,8 +456,8 @@ func (h *Manager) installRequest(w http.ResponseWriter, r *http.Request, upgrade
 	}
 	p, err := h.installOp(r.Context(), op, upgrade, previewID, digest, refs, actor)
 	if err != nil {
-		writeExtensionErr(w, http.StatusBadRequest, code, err)
+		writeExtensionChangeError(w, r, http.StatusBadRequest, code, err)
 		return
 	}
-	writeJSON(w, withOperation(detailOut(r, ps.detail(r.Context(), p)), op))
+	writeExtensionJSON(w, r, withOperation(detailOut(r, ps.detail(r.Context(), p)), op))
 }

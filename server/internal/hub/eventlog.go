@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The event log (docs/hub-restart.md "Event resume"): every message broadcastTo sends every app carries event_seq, one
@@ -170,7 +172,7 @@ func (h *Hub) helloLocked(c *client, hello map[string]any, stream string, after 
 	c.queue(b)
 	for _, e := range missed {
 		if !e.Elicitation { // only for apps that said they answer forms: it has not said so yet; pending ones follow
-			c.queue(localizedMachineEvent(c.lang(), e.Body))
+			c.queue(i18n.ExtensionEvent(c.lang(), localizedMachineEvent(c.lang(), e.Body)))
 		}
 	}
 }

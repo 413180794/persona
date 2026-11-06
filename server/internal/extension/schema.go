@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // ConfigMost is the largest configuration value kept.
@@ -331,6 +333,7 @@ func parseField(name string, raw json.RawMessage, at string, depth int) (Field, 
 
 // FieldError is a configuration value that does not fit: where (dotted) and why.
 type FieldError struct {
+	cause   error
 	Path    string `json:"path"`
 	Message string `json:"message"`
 }
@@ -341,7 +344,7 @@ func (e *FieldError) Error() string { return e.Path + ": " + e.Message }
 // kind, the required ones present (or defaulted). A nil schema takes only an empty object.
 func (s *Schema) Check(raw json.RawMessage) error {
 	if len(raw) > ConfigMost {
-		return &FieldError{Message: fmt.Sprintf("%d bytes, more than %d", len(raw), ConfigMost)}
+		return fieldError("", i18n.ErrEnglish("extension-status.schema_bytes", i18n.Args{"count": len(raw), "max": ConfigMost}))
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		raw = json.RawMessage(`{}`)
@@ -383,18 +386,18 @@ func (s *Schema) CheckSaved(raw json.RawMessage) error {
 func checkObject(fields []Field, raw json.RawMessage, at string) error {
 	var m map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &m); err != nil || m == nil {
-		return &FieldError{Path: strings.TrimSuffix(at, "."), Message: "要是一个对象"}
+		return fieldError(strings.TrimSuffix(at, "."), i18n.Err("extension-status.schema_object"))
 	}
 	for k := range m {
 		if !slices.ContainsFunc(fields, func(f Field) bool { return f.Name == k }) {
-			return &FieldError{Path: at + k, Message: "没有这一项"}
+			return fieldError(at+k, i18n.Err("extension-status.schema_unknown_field"))
 		}
 	}
 	for _, f := range fields {
 		v, ok := m[f.Name]
 		if !ok || string(v) == "null" {
 			if f.Required && f.Default == nil {
-				return &FieldError{Path: at + f.Name, Message: "必填"}
+				return fieldError(at+f.Name, i18n.Err("extension-status.schema_required"))
 			}
 			continue
 		}
@@ -403,7 +406,7 @@ func checkObject(fields []Field, raw json.RawMessage, at string) error {
 			if errors.As(err, &fe) {
 				return fe
 			}
-			return &FieldError{Path: at + f.Name, Message: err.Error()}
+			return fieldError(at+f.Name, err)
 		}
 	}
 	return nil
@@ -417,21 +420,21 @@ func (f *Field) check(raw json.RawMessage, at string) error {
 	case "array":
 		var items []json.RawMessage
 		if err := json.Unmarshal(raw, &items); err != nil {
-			return errors.New("要是一个列表")
+			return i18n.Err("extension-status.schema_array")
 		}
 		if f.MinItems != nil && len(items) < *f.MinItems {
-			return fmt.Errorf("至少 %d 项", *f.MinItems)
+			return i18n.Err("extension-status.schema_min_items", i18n.Args{"count": *f.MinItems})
 		}
 		if f.MaxItems != nil && len(items) > *f.MaxItems {
-			return fmt.Errorf("最多 %d 项", *f.MaxItems)
+			return i18n.Err("extension-status.schema_max_items", i18n.Args{"count": *f.MaxItems})
 		}
 		seen := map[string]bool{}
 		for i, item := range items {
 			if err := f.Items.check(item, fmt.Sprintf("%s[%d]", at, i)); err != nil {
-				return fmt.Errorf("第 %d 项%v", i+1, err)
+				return i18n.Err("extension-status.schema_item", i18n.Args{"count": i + 1, "err": err})
 			}
 			if f.UniqueItems && seen[string(item)] {
-				return fmt.Errorf("第 %d 项重复了", i+1)
+				return i18n.Err("extension-status.schema_duplicate", i18n.Args{"count": i + 1})
 			}
 			seen[string(item)] = true
 		}
@@ -439,59 +442,59 @@ func (f *Field) check(raw json.RawMessage, at string) error {
 	case "boolean":
 		var b bool
 		if json.Unmarshal(raw, &b) != nil {
-			return errors.New("要是开或关")
+			return i18n.Err("extension-status.schema_boolean")
 		}
 		return nil
 	case "integer", "number":
 		var n float64
 		if json.Unmarshal(raw, &n) != nil {
-			return errors.New("要是一个数")
+			return i18n.Err("extension-status.schema_number")
 		}
 		if f.Type == "integer" && n != math.Trunc(n) {
-			return errors.New("要是一个整数")
+			return i18n.Err("extension-status.schema_integer")
 		}
 		if f.Minimum != nil && n < *f.Minimum {
-			return fmt.Errorf("不能小于 %v", *f.Minimum)
+			return i18n.Err("extension-status.schema_minimum", i18n.Args{"min": *f.Minimum})
 		}
 		if f.Maximum != nil && n > *f.Maximum {
-			return fmt.Errorf("不能大于 %v", *f.Maximum)
+			return i18n.Err("extension-status.schema_maximum", i18n.Args{"max": *f.Maximum})
 		}
 	case "string":
 		var s string
 		if json.Unmarshal(raw, &s) != nil {
-			return errors.New("要是文字")
+			return i18n.Err("extension-status.schema_string")
 		}
 		n := utf8.RuneCountInString(s)
 		if f.MinLength != nil && n < *f.MinLength {
-			return fmt.Errorf("至少 %d 个字", *f.MinLength)
+			return i18n.Err("extension-status.schema_min_length", i18n.Args{"count": *f.MinLength})
 		}
 		if f.MaxLength != nil && n > *f.MaxLength {
-			return fmt.Errorf("最多 %d 个字", *f.MaxLength)
+			return i18n.Err("extension-status.schema_max_length", i18n.Args{"count": *f.MaxLength})
 		}
 		if f.pattern != nil && !f.pattern.MatchString(s) {
-			return errors.New("格式不对")
+			return i18n.Err("extension-status.schema_format")
 		}
 		switch f.Format {
 		case "uri":
 			if u, err := url.Parse(s); err != nil || u.Scheme == "" || u.Host == "" {
-				return errors.New("要是一个网址")
+				return i18n.Err("extension-status.schema_uri")
 			}
 		case "email":
 			if a, err := mail.ParseAddress(s); err != nil || a.Address != s {
-				return errors.New("要是一个邮箱地址")
+				return i18n.Err("extension-status.schema_email")
 			}
 		case "hostname":
 			if !hostnameLike.MatchString(s) {
-				return errors.New("要是一个主机名")
+				return i18n.Err("extension-status.schema_hostname")
 			}
 		case "machine":
 			if strings.TrimSpace(s) != s || s == "" {
-				return errors.New("要是一台机器的 id")
+				return i18n.Err("extension-status.schema_machine")
 			}
 		}
 	}
 	if len(f.Enum) > 0 && !slices.ContainsFunc(f.Enum, func(c Choice) bool { return sameJSON(c.Value, raw) }) {
-		return errors.New("不是可选的值")
+		return i18n.Err("extension-status.schema_enum")
 	}
 	return nil
 }
