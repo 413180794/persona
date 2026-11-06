@@ -16,8 +16,16 @@ Both run the same `personad` hub; `hub.json`, the database, the protocol, and th
 The image has no herdr and no Claude Code, so **the hub machine can't also be a computer that does the work**:
 - The `hub.json` written on first start has `"machines": []` (not the native method's "one local machine, `kind: local`"); every computer has to be added.
 - The "Persona" assistant runs on one of your computers: set `assistant.machine` to its id (if unset, the first entry in `machines` is used).
-- Lark uses `lark.token`; `lark.container` doesn't work (it needs `docker inspect` inside the hub).
-- Plugins (`docs/extensions.md`) are external programs on the hub machine; they aren't in the image and aren't supported yet.
+
+Extensions (`docs/extensions.md`) work as usual; installed ones live in `data/extensions/` and survive an image upgrade. The image lacks a few things the native method has:
+- No `bwrap`: an extension that would get a sandbox by default (one not installed from a trusted market, `docs/extensions.md` ("Sandbox")) still runs, just without a sandbox, and its details and the list say 没有沙箱 (no sandbox);
+  it can then read and write all of `data/` (including `hub.json`), so install only ones you trust.
+- No `git`: git markets (`git:`, `git@…`, `ssh://…`) can't be added; `github:` and `https://` markets go over HTTPS and work as usual.
+- The image is Alpine (musl): TypeScript extensions packed by `personad extension pack` (bun's `bun-linux-*` targets, which need glibc) won't start; Go extensions (`CGO_ENABLED=0`) are unaffected.
+- No interpreters such as node or python: an extension whose command is an interpreter (e.g. one run with `node` in hub.json) won't start; write and pack extensions (`personad extension dev` / `pack`) on another computer.
+
+The Lark gateway comes in through the Lark extension, and its Agent token and address are set in that extension's settings. The image has no docker CLI, so the option that reads the token by container name doesn't work; enter the token directly.
+For the address use the NAS's LAN address, not `127.0.0.1` (loopback inside the container is the container itself). `lark.token` / `lark.container` in hub.json no longer take effect (`docs/config.md`).
 
 How computers connect:
 - **tailcat (recommended)**: the NAS doesn't need to ssh into any computer, and computers can be on any internal network (`docs/server.md` ("tailcat hole punching")).
@@ -45,6 +53,7 @@ The image contains:
 - `personad` (the hub uses the `linux/<arch>` one) and node builds for four platforms (`/opt/jarvis/nodes`, `JARVIS_NODE_BINARIES`): **Redeploy** in the App
   takes them from here, so hub and node are always the same version;
 - the web app embedded in the binary (`docs/web.md`): just open the hub's address;
+- the built-in extensions' programs (the WeChat bot, `docs/wechat.md`), the same version as personad;
 - `openssh-client`, certificates, time zone data.
 
 The personad in the image ships no skills (like every binary): the assistant's skills live in `~/.persona/skills/` on the machine that runs the assistant (`docs/hub-update.md` ("Taking skills out of the binary")).
