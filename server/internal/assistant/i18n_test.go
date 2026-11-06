@@ -128,3 +128,36 @@ func TestRelayedErrorLanguage(t *testing.T) {
 		t.Fatalf("default = %q", got)
 	}
 }
+
+// Supervision's punctuation is a trim set, not UI text: remove trailing stops, preserving diagnostics inside the reason.
+func TestTaskFailureNoticePreservesReasonAndLocalizesAdvice(t *testing.T) {
+	s, f := newTaskService(t)
+	for _, tc := range []struct{ locale, title, stop, advice string }{
+		{"en", "“Demo task” couldn’t be started", ". ", "Open the conversation to tap “Retry”, or assign to another computer"},
+		{"zh-Hans", "「Demo task」没开起来", "。", "打开对话点『重试』，或换一台电脑再派"},
+		{"ja", "「Demo task」を開始できませんでした", "。", "会話を開いて「再試行」をタップするか、別のパソコンに割り当ててください"},
+	} {
+		f.mu.Lock()
+		f.hello.Locale = tc.locale
+		f.mu.Unlock()
+		for _, reason := range []struct{ raw, trimmed string }{
+			{"  Original。diagnostic.。  ", "Original。diagnostic"},
+			{" .。 ", ""},
+		} {
+			before := len(f.pushed())
+			s.notifyTaskFailed(context.Background(), Todo{Title: "Demo task", Origin: "conv9"}, "box", reason.raw)
+			pushes := f.pushed()
+			if len(pushes) != before+1 {
+				t.Fatalf("locale=%q reason=%q: got %d pushes, want %d", tc.locale, reason.raw, len(pushes), before+1)
+			}
+			p := pushes[before]
+			want := tc.advice
+			if reason.trimmed != "" {
+				want = reason.trimmed + tc.stop + want
+			}
+			if p.Title != tc.title || p.Body != want {
+				t.Fatalf("locale=%q reason=%q: title=%q body=%q, want %q / %q", tc.locale, reason.raw, p.Title, p.Body, tc.title, want)
+			}
+		}
+	}
+}

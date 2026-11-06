@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -129,5 +130,60 @@ func TestLauncherProviderErrorsInEachLanguage(t *testing.T) {
 	}
 	if err := checkHeaders("X-Ok: 1\nbroken"); i18n.Localize(err, i18n.En) != "Header line 2 must be “Name: value”" {
 		t.Fatalf("headers: %v", err)
+	}
+}
+
+// Launcher role labels follow each request, even when the hub's language differs and the launcher list is cached.
+func TestAntigravityLauncherRolesSpeakTheRequestLanguage(t *testing.T) {
+	s, f, _ := modelService(t)
+	f.mu.Lock()
+	f.hello.Locale = "ja"
+	f.launcherList = []proto.Launcher{{Name: "agy", Source: "agy", Agent: "agy", Model: "fallback-model"}}
+	f.mu.Unlock()
+	for _, discovered := range []bool{false, true} {
+		f.mu.Lock()
+		f.agentModels = map[string][]proto.AgentModel{}
+		if discovered {
+			f.agentModels["agy"] = []proto.AgentModel{
+				{ID: "main-id", Name: "Main model", Default: true},
+				{ID: "other-id", Name: "Other model"},
+			}
+		}
+		f.mu.Unlock()
+		for _, tc := range []struct{ locale, main, optional string }{
+			{"en-US", "Default model", "Optional model"},
+			{"zh-Hans", "默认主模型", "可选模型"},
+			{"ja", "既定のメインモデル", "選択可能なモデル"},
+			{"", "既定のメインモデル", "選択可能なモデル"},
+			{"en", "Default model", "Optional model"},
+		} {
+			header := map[string][]string{}
+			if tc.locale != "" {
+				header["Accept-Language"] = []string{tc.locale}
+			}
+			res, err := serveHTTP(context.Background(), s, assistantwire.HTTPRequest{
+				Method: "GET", Path: "/api/v1/launchers/agy", Header: header,
+			}, s.lang)
+			if err != nil || res.Status != http.StatusOK {
+				t.Fatalf("discovered=%v locale=%q: %d %s %v", discovered, tc.locale, res.Status, res.Body, err)
+			}
+			var out struct {
+				Launcher LauncherView `json:"launcher"`
+			}
+			if err := json.Unmarshal(res.Body, &out); err != nil {
+				t.Fatal(err)
+			}
+			models := out.Launcher.Details["server"].Models
+			want := []proto.LauncherModel{{Role: tc.main, Env: "agy acp", Model: "fallback-model"}}
+			if discovered {
+				want = []proto.LauncherModel{
+					{Role: tc.main, Env: "main-id", Model: "Main model"},
+					{Role: tc.optional, Env: "other-id", Model: "Other model"},
+				}
+			}
+			if !slices.Equal(models, want) {
+				t.Fatalf("discovered=%v locale=%q: models=%+v, want %+v", discovered, tc.locale, models, want)
+			}
+		}
 	}
 }

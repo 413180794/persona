@@ -226,3 +226,31 @@ func TestAskUserRefusesDuplicateQuestionText(t *testing.T) {
 		t.Fatalf("distinct questions: carded=%v error=%v %q", carded, r.IsError, text(r))
 	}
 }
+
+// agent_send's readonly refusal is original MCP model text, not a localized user-facing notification or card.
+func TestAgentSendReadonlyPreservesModelResult(t *testing.T) {
+	s, f := newTaskService(t)
+	const reason = "Original source diagnostic / 原始原因 / 元の理由"
+	for _, caps := range []*proto.SessionCapabilities{nil, {Read: true}} {
+		f.setSessions("box", proto.Session{SessionID: "readonly-agent", MachineID: "box", Cwd: "/code/app",
+			SourceKind: "external-history", Capabilities: caps, ReadOnlyReason: reason})
+		for _, locale := range []string{"en", "zh-Hans", "ja", "en"} {
+			f.mu.Lock()
+			f.hello.Locale = locale
+			f.mu.Unlock()
+			res := s.Tool(i18n.With(context.Background(), i18n.Lang(locale)), ToolCall{
+				MachineID: "server", SessionID: "conv9", Name: "agent_send",
+				Arguments: json.RawMessage(`{"machine":"box","session_id":"readonly-agent","text":"Continue"}`),
+			})
+			if !res.IsError || len(res.Content) != 1 || res.Content[0].Text != "这个 Agent 仅支持查看："+reason {
+				t.Fatalf("locale=%q capabilities=%+v: %+v", locale, caps, res)
+			}
+		}
+	}
+	if sent := sentToAgent(f); len(sent) != 0 {
+		t.Fatalf("readonly agent received messages: %v", sent)
+	}
+	if len(s.pendingQuestions()) != 0 || len(f.pushed()) != 0 {
+		t.Fatal("model-only refusal created a user-facing card or push")
+	}
+}

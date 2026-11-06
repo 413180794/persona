@@ -694,7 +694,7 @@ func (s *Service) launcherRoutes() {
 			} else if v.Source == "agy" {
 				v.Details = map[string]proto.LauncherDetail{}
 				for _, id := range v.Machines {
-					l := s.lang(ctx)
+					l := s.requestCtxLang(ctx)
 					models := []proto.LauncherModel{{Role: i18n.T(l, "assistant-models_launchers.role_default"), Env: "agy acp", Model: v.Model}}
 					if res, err := s.askLauncherModels(ctx, id, name, false); err == nil && len(res.Models) > 0 {
 						models = nil
