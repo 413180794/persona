@@ -2112,7 +2112,7 @@ struct ChatView: View {
             }
         }
         #endif
-        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text) }
+        .sheet(item: $menu.selecting) { t in SelectableTextSheet(text: t.text, plain: t.plain) }
         .sheet(item: $menu.sharing) { m in MessageShareSheet(message: m) }
         .confirmationDialog("这条回复", isPresented: Binding(get: { menu.more != nil }, set: { if !$0 { menu.more = nil } })) {
             if let id = menu.more {

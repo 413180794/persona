@@ -909,6 +909,7 @@ modifier 是按顺序包的：遮罩只裁它前面的内容，后加的 overlay
   不支持的设备上 `AVPictureInPictureController(contentSource:)` 实际返回 nil，Swift 却把它当成非空的对象，第一次用（这里是 KVO 的 `observe`）就崩在 `swift_dynamicCast`。先看 `isPictureInPictureSupported()` 再建；DEBUG 的 `-showPiPSource` 在模拟器上只摆源、不建控制器（#1839）。
 - **发送顺序**：原生 RFB 客户端起先每条指针、按键、剪贴板消息各开一个 `Task { try await transport.send(…) }`。这些 Task 谁先跑没有保证，按下和松开、移动和点击会乱序到 Mac，快速打字时最明显。改成一个发件队列（`AsyncStream`），握手完后由一个任务按顺序发；握手前来的也排在握手之后，不会插进握手中间。别的「多条消息、顺序有意义」的通道（终端按键、WS）同理。
 - **测试读剪贴板**：UI 测试的 runner 写了 `UIPasteboard.general`，App 去读时没弹「允许粘贴」，送到 mock 的剪贴板却是空的（runner 那时在后台，写的没有生效或读不到）。剪贴板的 UI 测试改成在 App 里来回：先「复制到 iPhone」，再「只放进 Mac 的剪贴板」送回 mock，比对 mock 收到的。
+- **runner 读 App 拷的字**（#3189）：反过来，App 拷贝、runner 读 `UIPasteboard.general.string` 时，模拟器弹「PersonaUITests-Runner 想从 Persona 粘贴」，这次读在主线程上一直等着，测试卡死到超时。读放到后台队列，主线程轮询 SpringBoard 的「Allow Paste / 允许粘贴」点掉（`SelectTextTests.pasted()`）。
 
 ## 在几何回调里直接改 UIScrollView 的偏移，别的行的几何回调可能收不到（2026-11-04，#1046）
 

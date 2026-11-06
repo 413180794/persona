@@ -272,6 +272,8 @@ iOS 的添加电脑（`AddComputerTests`，#4196）：`python3 scripts/mock/mock
 `SIM=<udid 或名字> ./scripts/app/ui-test.sh [machine/session]`（模拟器经 `sim-boot.sh` 瘦身启动，见下面「模拟器」）。目前有边缘右滑返回（顶栏展开 / 收起两种状态）。
 长按消息的操作条（`MessageMenuTests`，按 0.4 / 0.8 / 1.5 / 2.5 秒松手都要留下，点列表、滑动会关）连 `scripts/mock/mock_hub.py`，不用真实 hub：
 `TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests`。
+「选择文本」只拷一段（`SelectTextTests`：Agent 的回复带代码块、Persona 主对话的回复带粗体和列表、`MOCK_SELECT_TEXT` 的会话里一条你的消息（`__init__.py`、`2*3*4`、`# …`）和一条套了围栏、公式、缩进代码、分隔线的回复，双击开头一个词拷贝，剪贴板里正好是这个词）：mock 加 `MOCK_CHAT_READ=1 MOCK_SELECT_TEXT=1`，
+`TEST_RUNNER_JARVIS_MOCK_HUB=http://127.0.0.1:<端口>`，`TEST_RUNNER_JARVIS_UI_STYLE=beautiful` 换风格，`TEST_RUNNER_JARVIS_SHOTS=<目录>` 存图（按模拟器外观命名）。
 写 UI 测试时先在没有修复的代码上跑一次确认它会失败，再上修复。
 
 ### 模拟器：一律经 `scripts/app/sim-boot.sh`，默认瘦身（simslim，#2287、#2801）

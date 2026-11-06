@@ -4,7 +4,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 #endif
 
-/// WeChat-style message actions: long-press a message and a dark bar with 复制 / 选择 / 引用 / 分享 (and 编辑 for your
+/// WeChat-style message actions: long-press a message and a dark bar with 复制 / 选择文本 / 引用 / 分享 (and 编辑 for your
 /// own messages) appears right where you pressed — no lifted preview first. Tapping anywhere or scrolling closes it.
 @Observable
 final class MessageMenu {
@@ -90,6 +90,8 @@ struct RewindAsk: Identifiable, Equatable {
 
 struct SelectableText: Identifiable {
     var text: String
+    /// Your own message: shown as written, without Markdown (its bubble shows it plain).
+    var plain = false
     var id: String { text }
 }
 
@@ -370,7 +372,8 @@ struct MessageActionBar: View {
                 UIPasteboard.general.string = text
                 Haptics.success()
             }
-            action(String(localized: "选择"), "selection.pin.in.out") { menu.selecting = SelectableText(text: text) }
+            // 「选择文本」, not「选择」: next to 复制 a bare 选择 reads as picking messages (WeChat's 多选).
+            action(String(localized: "选择文本"), Theme.Icon.select) { menu.selecting = SelectableText(text: text, plain: isUser) }
             action(String(localized: "引用"), "quote.opening") { menu.quote?(text, id, isUser) }
             action(String(localized: "分享"), "square.and.arrow.up") {
                 menu.sharing = ShareMessage(text: text, isUser: isUser, source: menu.source(), date: date, agent: menu.agent())
@@ -404,7 +407,7 @@ struct MessageActionBar: View {
         VStack(spacing: Theme.Space.xs) {
             // Symbols differ in height: a fixed box keeps every label on one line.
             Image(systemName: symbol).font(Theme.Font.heading).dynamicTypeSize(...DynamicTypeSize.xxLarge).scaledFrame(height: Theme.Size.iconS)
-            Text(title).font(Theme.Font.label).lineLimit(1)
+            Text(title).font(Theme.Font.label).lineLimit(1).minimumScaleFactor(0.8) // 选择文本 on a narrow bar
         }
         .foregroundStyle(.white)
         .frame(width: itemWidth, height: Self.height)
@@ -412,24 +415,29 @@ struct MessageActionBar: View {
     }
 }
 
-/// The message in a plain text view where any part of it can be selected and copied ("选择").
+/// The message in a text view where any part of it can be selected and copied (「选择文本」). On iOS a reply reads as in
+/// the chat, without the Markdown marks (`SelectableMarkdown`); your own message stays as you wrote it, as its bubble
+/// shows it (`plain`). 全部拷贝 copies the message as 复制 does.
 struct SelectableTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     var text: String
+    var plain = false
 
     var body: some View {
         NavigationStack {
-            SelectableTextView(text: text)
+            SelectableTextView(text: text, plain: plain)
                 .navigationTitle("选择文本")
                 .navigationBarTitleDisplayMode(.inline)
                 .pageToolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button { dismiss() } label: { Label("完成", systemImage: Theme.Icon.done) }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button {
                             UIPasteboard.general.string = text
                             Haptics.success()
                             dismiss()
-                        } label: { Text("全部拷贝").lineLimit(1) }
+                        } label: { Label("全部拷贝", systemImage: Theme.Icon.copy).labelStyle(.titleAndIcon).lineLimit(1) }
                     }
                 }
         }
@@ -440,20 +448,214 @@ struct SelectableTextSheet: View {
 #if os(iOS) || os(visionOS)
 struct SelectableTextView: UIViewRepresentable {
     var text: String
+    var plain = false
 
-    func makeUIView(context: Context) -> UITextView {
-        let v = UITextView()
+    func makeUIView(context: Context) -> SelectableUITextView {
+        let v = SelectableUITextView()
         v.isEditable = false
         v.isSelectable = true
-        v.font = .preferredFont(forTextStyle: .body)
-        v.adjustsFontForContentSizeCategory = true
         v.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 24, right: 12)
         v.backgroundColor = .clear
+        v.accessibilityIdentifier = "selectable-text"
         return v
     }
 
-    func updateUIView(_ v: UITextView, context: Context) {
-        if v.text != text { v.text = text }
+    func updateUIView(_ v: SelectableUITextView, context: Context) { v.show(text, plain: plain) }
+}
+
+/// Draws its text again when the text size changes: the fonts are made for one size (an attributed string's fonts
+/// do not follow `adjustsFontForContentSizeCategory`).
+final class SelectableUITextView: UITextView {
+    private var source: (text: String, plain: Bool)?
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (v: SelectableUITextView, _) in v.render() }
+    }
+
+    required init?(coder: NSCoder) { fatalError("not from a nib") }
+
+    func show(_ text: String, plain: Bool) {
+        guard source?.text != text || source?.plain != plain else { return }
+        source = (text, plain)
+        render()
+    }
+
+    private func render() {
+        guard let source else { return }
+        attributedText = source.plain ? SelectableMarkdown.plain(source.text, traits: traitCollection)
+            : SelectableMarkdown.attributed(source.text, traits: traitCollection)
+    }
+}
+
+/// A reply's Markdown as text to select from: what the chat shows, not its marks. Bold, italics, inline code and
+/// links keep their look (`**`, `` ` `` and `[](…)` go), headings are bold, `-` / `*` / `+` items get a bullet (their
+/// indent kept), and a fenced block is its code in a monospaced font, indented, without the fence. Formulas
+/// (`$…$`, `\(…\)`, `$$` blocks), four-space-indented code, rules, tables and quotes stay as written.
+/// The chat's own rendering (MarkdownUI) cannot be selected across blocks (docs/ios.md「选择文本」), so this is its own.
+enum SelectableMarkdown {
+    /// The page's fonts: body text and code, at the text size of `traits` (the current one when nil).
+    private struct Fonts {
+        let body: UIFont
+        let mono: UIFont
+
+        init(_ traits: UITraitCollection?) {
+            body = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits)
+            mono = UIFontMetrics(forTextStyle: .body)
+                .scaledFont(for: .monospacedSystemFont(ofSize: 15, weight: .regular), compatibleWith: traits)
+        }
+    }
+
+    /// Your own message, as its bubble shows it: no Markdown.
+    static func plain(_ text: String, traits: UITraitCollection? = nil) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [.font: Fonts(traits).body, .foregroundColor: UIColor.label])
+    }
+
+    private enum Block {
+        /// A fenced code block: its fence's character and length. Only a bare fence of the same character, at least as
+        /// long, closes it.
+        case fence(Character, Int)
+        /// A `$$` / `\[` formula block and the line that closes it.
+        case math(String)
+    }
+
+    static func attributed(_ markdown: String, traits: UITraitCollection? = nil) -> NSAttributedString {
+        let fonts = Fonts(traits)
+        let code = NSMutableParagraphStyle()
+        code.firstLineHeadIndent = 12
+        code.headIndent = 12
+        let out = NSMutableAttributedString()
+        func verbatim(_ s: String, _ font: UIFont, _ style: NSParagraphStyle? = nil) {
+            var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.label]
+            if let style { attrs[.paragraphStyle] = style }
+            out.append(NSAttributedString(string: s, attributes: attrs))
+        }
+        var block: Block?
+        var lastBlank = true, inList = false, indentedCode = false
+        let lines = markdown.components(separatedBy: "\n")
+        for (i, raw) in lines.enumerated() {
+            let newline = i < lines.count - 1 ? "\n" : ""
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            let indent = raw.prefix { $0 == " " || $0 == "\t" }
+            let deep = indent.contains("\t") || indent.count >= 4
+            switch block {
+            case .fence(let c, let n)?:
+                if !deep, trimmed.count >= n, trimmed.allSatisfy({ $0 == c }) { block = nil } else { verbatim(raw + newline, fonts.mono, code) }
+                continue
+            case .math(let close)?:
+                if trimmed == close { block = nil }
+                verbatim(raw + newline, fonts.body)
+                continue
+            case nil: break
+            }
+            defer { lastBlank = trimmed.isEmpty }
+            if trimmed.isEmpty {
+                verbatim(raw + newline, fonts.body)
+                continue
+            }
+            if !deep, let f = fence(trimmed) {
+                block = .fence(f.0, f.1)
+                indentedCode = false
+                continue
+            }
+            if trimmed == "$$" || trimmed == "\\[" {
+                block = .math(trimmed == "$$" ? "$$" : "\\]")
+                verbatim(raw + newline, fonts.body)
+                continue
+            }
+            // Four spaces or a tab in, after a blank line and not in a list: code, as written.
+            if deep, !inList, lastBlank || indentedCode {
+                indentedCode = true
+                verbatim(raw + newline, fonts.mono)
+                continue
+            }
+            indentedCode = false
+            var line = raw, font = fonts.body
+            if isRule(trimmed) {
+                inList = false
+                verbatim(raw + newline, fonts.body)
+                continue
+            } else if let hashes = trimmed.firstIndex(where: { $0 != "#" }), trimmed.hasPrefix("#"),
+                      trimmed.distance(from: trimmed.startIndex, to: hashes) <= 6, trimmed[hashes] == " " {
+                line = String(trimmed[hashes...].dropFirst())
+                font = bold(fonts.body)
+                inList = false
+            } else if ["- ", "* ", "+ "].contains(where: trimmed.hasPrefix) {
+                line = String(indent) + "• " + String(trimmed.dropFirst(2))
+                inList = true
+            } else if trimmed.range(of: #"^\d{1,9}[.)] "#, options: .regularExpression) != nil {
+                inList = true
+            } else if !deep {
+                inList = false
+            }
+            out.append(inline(line, font: font, mono: fonts.mono))
+            verbatim(newline, fonts.body)
+        }
+        return out
+    }
+
+    /// An opening fence: three or more backticks or tildes (a backtick fence's info string has no backtick).
+    private static func fence(_ trimmed: String) -> (Character, Int)? {
+        guard let c = trimmed.first, c == "`" || c == "~" else { return nil }
+        let n = trimmed.prefix { $0 == c }.count
+        guard n >= 3 else { return nil }
+        if c == "`", trimmed.dropFirst(n).contains("`") { return nil }
+        return (c, n)
+    }
+
+    /// `---`, `* * *`, `___`: a rule, not a list item.
+    private static func isRule(_ trimmed: String) -> Bool {
+        let marks = trimmed.filter { $0 != " " && $0 != "\t" }
+        guard let c = marks.first, "-*_".contains(c), marks.count >= 3 else { return false }
+        return marks.allSatisfy { $0 == c }
+    }
+
+    /// Code spans (left to the Markdown parser) and formulas (kept as written) in a line.
+    private static let spans = try! NSRegularExpression(pattern: #"(`+).+?\1|\$\$.+?\$\$|\$[^\s$](?:[^$\n]*?[^\s$])?\$|\\\(.+?\\\)"#)
+
+    /// Bold, italics, inline code, strikethrough and links of one line, its spaces kept; formulas as written.
+    private static func inline(_ line: String, font: UIFont, mono: UIFont) -> NSAttributedString {
+        let out = NSMutableAttributedString()
+        let ns = line as NSString
+        var pending = "", at = 0
+        for m in spans.matches(in: line, range: NSRange(location: 0, length: ns.length)) {
+            pending += ns.substring(with: NSRange(location: at, length: m.range.location - at))
+            let span = ns.substring(with: m.range)
+            at = m.range.location + m.range.length
+            if span.hasPrefix("`") { pending += span; continue }
+            out.append(markdown(pending, font: font, mono: mono))
+            pending = ""
+            out.append(NSAttributedString(string: span, attributes: [.font: font, .foregroundColor: UIColor.label]))
+        }
+        pending += ns.substring(from: at)
+        out.append(markdown(pending, font: font, mono: mono))
+        return out
+    }
+
+    private static func markdown(_ text: String, font: UIFont, mono: UIFont) -> NSAttributedString {
+        guard !text.isEmpty else { return NSAttributedString() }
+        guard let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) else {
+            return NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
+        }
+        let out = NSMutableAttributedString()
+        for run in parsed.runs {
+            let intent = run.inlinePresentationIntent ?? []
+            var f = font
+            if intent.contains(.code) { f = mono }
+            if intent.contains(.stronglyEmphasized) { f = bold(f) }
+            if intent.contains(.emphasized), let d = f.fontDescriptor.withSymbolicTraits(f.fontDescriptor.symbolicTraits.union(.traitItalic)) {
+                f = UIFont(descriptor: d, size: 0)
+            }
+            var attrs: [NSAttributedString.Key: Any] = [.font: f, .foregroundColor: UIColor.label]
+            if intent.contains(.strikethrough) { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+            if let link = run.link { attrs[.link] = link }
+            out.append(NSAttributedString(string: String(parsed[run.range].characters), attributes: attrs))
+        }
+        return out
+    }
+
+    private static func bold(_ f: UIFont) -> UIFont {
+        f.fontDescriptor.withSymbolicTraits(f.fontDescriptor.symbolicTraits.union(.traitBold)).map { UIFont(descriptor: $0, size: 0) } ?? f
     }
 }
 #endif

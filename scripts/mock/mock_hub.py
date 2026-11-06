@@ -6277,6 +6277,17 @@ def mock_chat_read():
 if os.environ.get("MOCK_CHAT_READ") == "1":
     mock_chat_read()
 
+# MOCK_SELECT_TEXT=1: 选择文本 (#3189, SelectTextTests). Your message is plain text with Markdown-looking marks that must
+# stay; the reply has a fence inside a longer fence, a formula with `*`, indented code, a rule and a tab-indented item.
+SELECT_TEXT = "a1f3c2d4-0000-4000-8000-0000005e1ec7"
+if os.environ.get("MOCK_SELECT_TEXT") == "1":
+    SESSIONS.append(sess("macbook", SELECT_TEXT, "选择文本", "/Users/me/code/weather", "done", "read", "weather", 1, "select", 2, 1, "Yes"))
+    ITEMS[SELECT_TEXT] = [
+        it("user", "text", 3, text="Python 里 __init__.py 的 2*3*4 是不是写错了？\n# 不是标题\n- 也不是列表"),
+        it("assistant", "text", 2, text="Yes，`2*3*4` 没错，是 **24**。例子：\n\n````md\n```swift\nlet a = x*y*z\n```\n````\n\n"
+                                        "公式 $x*y*z$ 照原样。\n\n    indented *code*\n\n* * *\n\n- 一\n\t- tab item"),
+    ]
+
 # MOCK_PORTS=1: an agent running a dev server (docs/ports.md): its session lists the port, its reply links it (and a
 # server it has stopped), and …/ports/{port}/connect forwards a WebSocket's bytes to a real page served here on
 # another port (PortForwardTests). GET /mock/ports lists the connects.

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Long-press a message: the 复制 / 选择 / 引用 / 分享 bar must stay up after the finger lifts, whatever the press
+/// Long-press a message: the 复制 / 选择文本 / 引用 / 分享 bar must stay up after the finger lifts, whatever the press
 /// length; a tap on the list or a scroll still closes it. Runs against scripts/mock/mock_hub.py:
 ///   TEST_RUNNER_JARVIS_MOCK_URL=http://127.0.0.1:18760 xcodebuild test … -only-testing:PersonaUITests/MessageMenuTests
 final class MessageMenuTests: XCTestCase {
@@ -68,7 +68,7 @@ final class MessageMenuTests: XCTestCase {
         let copy = app.buttons["复制"]
         XCTAssertTrue(copy.waitForExistence(timeout: 2), "the bar did not open")
         // Sideways only: the flipped list reports flipped heights, not flipped widths.
-        let bar = ["复制", "选择", "引用", "分享", "编辑"].map { app.buttons[$0] }.filter(\.exists)
+        let bar = ["复制", "选择文本", "引用", "分享", "编辑"].map { app.buttons[$0] }.filter(\.exists)
             .map(\.frame).reduce(copy.frame) { $0.union($1) }
         let x = point.screenPoint.x
         XCTAssertTrue(bar.minX <= x && x <= bar.maxX, "the bar (\(bar.minX)–\(bar.maxX)) is not over the press at x \(x)")
