@@ -718,8 +718,9 @@ https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 *
 - **签名钉死**：登记时就记下仓库 `market.pub` 里的公钥，第一次读也用它验，不靠首次信任；换 key 照「签名」的流程由 hub 的主人确认，代码里的公钥要跟着改。
 - **排序**：`markets` 和目录里官方市场排第一，其余按登记时间（排序都在 hub，三端照 hub 给的顺序显示）。网页（设置和 `/admin`）、安卓按 `official: true` 显示「官方」标记；iOS / macOS 还没显示（另开任务）。
 - **名字**（#5017）：界面上官方市场一律叫「官方扩展」（英文 Official extensions，日文 公式拡張機能），不用索引里的 `name`（写的是发布方的名字）。
-  hub 按主人的界面语言把 `markets[].name` 和目录的 `market_name` 填成它（`marketName`，`extension_market.go`），网页、安卓见到 `official: true` 再按自己的界面语言换一遍，
+  hub 按主人的界面语言把 `markets[].name` 和目录的 `market_name` 填成它（`marketName`，`extension_market.go`），网页、安卓、iOS / macOS 见到 `official: true` 再按自己的界面语言换一遍，
   所以老 hub 上也对。只改展示，spec、索引、签名、市场 id 都不变；命令行 `personad extension market list` 也是这个名字。
+  iOS / macOS 的设置 › 扩展里「扩展市场」排在已安装的扩展上面（Mac 上也在扩展卡片上面）。
 - 内网市场等用户自己的市场照旧，不动。
 
 **发布一个市场**：仓库根目录放 `persona-extensions.json`，包放进 Release 附件（或仓库里、网站上），`sha256sum` 写进索引。扩展仓库的打包脚本顺手生成索引。

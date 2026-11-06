@@ -9,12 +9,8 @@ struct ExtensionsView: View {
 
     var body: some View {
         SettingsForm {
-            #if os(macOS)
-            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no 总览, they lead this list (their
-            // pages are in the sidebar). The iPhone has them on 设置 itself.
-            ExtensionCardsSection(link: $cardLink)
-            #endif
-            // 扩展市场 (docs/extensions.md「扩展市场」): only with a hub that has markets.
+            // 扩展市场 (docs/extensions.md「扩展市场」): only with a hub that has markets; first,
+            // above the installed ones (#5017).
             if page.markets {
                 Section {
                     Group {
@@ -26,6 +22,11 @@ struct ExtensionsView: View {
                     .bareListRow()
                 }
             }
+            #if os(macOS)
+            // The plugins' overview cards (docs/extensions.md「UI 插槽」): the Mac has no 总览, they lead the installed ones (their
+            // pages are in the sidebar). The iPhone has them on 设置 itself.
+            ExtensionCardsSection(link: $cardLink)
+            #endif
             if let plugins = page.plugins, plugins.isEmpty {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.plugins, title: String(localized: "没有扩展"),

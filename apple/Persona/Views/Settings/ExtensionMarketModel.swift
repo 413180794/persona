@@ -25,7 +25,12 @@ nonisolated struct ExtensionMarket: Codable, Hashable, Sendable, Identifiable {
     /// The market every hub has (#2351); nil from a hub before it.
     var official: Bool?
 
-    var title: String { name.isEmpty ? spec : name }
+    /// The official market reads 官方扩展 whatever its index names it (#5017): the index's name is its publisher's.
+    var title: String {
+        if official == true { return ExtensionMarket.officialTitle }
+        return name.isEmpty ? spec : name
+    }
+    static var officialTitle: String { String(localized: "官方扩展") }
     /// A GitHub market read without a token: GitHub's 60 requests an hour for the whole network, so a token is what
     /// fixes it failing, public repositories included.
     var wantsGitHubToken: Bool { spec.hasPrefix("github:") && !hasToken }
@@ -102,6 +107,11 @@ nonisolated struct ExtensionCatalog: Decodable, Sendable {
         plugins = try c.decodeIfPresent([ExtensionCatalogItem].self, forKey: .extensions)
             ?? c.decodeIfPresent([ExtensionCatalogItem].self, forKey: .plugins) ?? []
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
+        // The official market's plugins carry its name as the market does (#5017).
+        let official = Set(markets.filter { $0.official == true }.map(\.id))
+        for i in plugins.indices where official.contains(plugins[i].market) {
+            plugins[i].marketName = ExtensionMarket.officialTitle
+        }
     }
 }
 

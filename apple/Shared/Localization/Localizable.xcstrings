@@ -30881,6 +30881,28 @@
         }
       }
     },
+    "官方扩展": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Official extensions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公式拡張機能"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方扩展"
+          }
+        }
+      }
+    },
     "已删掉「%@」": {
       "localizations": {
         "en": {

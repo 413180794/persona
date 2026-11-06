@@ -53,6 +53,23 @@ struct ExtensionMarketModelTests {
         #expect(page.markets[0].fetchedAt != nil)
     }
 
+    /// The official market reads 官方扩展 on its chip and its plugins, whatever its index calls it (#5017); others keep theirs.
+    @Test func theOfficialMarketReadsOfficialExtensions() async throws {
+        let hub = FakeHub()
+        let json = #"""
+        {"markets":[{"id":"o1","spec":"github:example/extensions","name":"Example 扩展","official":true,"has_token":false},
+                    {"id":"m1","spec":"https://plugins.example.com/","name":"Example 插件","has_token":false}],
+         "plugins":[{"market":"o1","market_name":"Example 扩展","id":"a","name":"A","version":"1.0.0"},
+                    {"market":"m1","market_name":"Example 插件","id":"b","name":"B","version":"1.0.0"}]}
+        """#
+        hub.on("GET", "/api/v1/plugins/-/catalog", json: json)
+        let page = market(hub)
+        await page.load()
+        let items = try #require(page.items)
+        #expect(page.markets.map(\.title) == ["官方扩展", "Example 插件"])
+        #expect(items.map(\.marketName) == ["官方扩展", "Example 插件"])
+    }
+
     @Test func searchAndMarketGoToTheHub() async {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/plugins/-/catalog", json: Self.catalog(Self.calendar))
