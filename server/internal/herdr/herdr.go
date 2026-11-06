@@ -28,11 +28,14 @@ type Client struct {
 	Socket string
 	// Log gets one line when calls to herdr start failing, more and more rarely while they go on (LogBackoff: 30 s
 	// after the first, up to an hour apart, with how many failed meanwhile), and one when they work again; nil: silent.
+	// Snapshot also logs once per streak of truncated session snapshots.
 	Log func(format string, args ...any)
 
 	seq   atomic.Int64
 	trips episode
-	now   func() time.Time // the clock note reads; nil: time.Now (tests set it)
+	// snapshotCut is separate from transport failures: successful smaller calls do not end a truncation streak.
+	snapshotCut atomic.Bool
+	now         func() time.Time // the clock note reads; nil: time.Now (tests set it)
 }
 
 // episode throttles logging of transport failures (herdr down, socket gone): not one line per poll.
@@ -392,11 +395,12 @@ func (c *Client) AgentGet(ctx context.Context, target string) (*Agent, error) {
 }
 
 type Workspace struct {
-	ID     string `json:"workspace_id"`
-	Label  string `json:"label"`
-	Number int    `json:"number"`
-	Cwd    string `json:"cwd,omitempty"`
-	Branch string `json:"branch,omitempty"`
+	ID      string `json:"workspace_id"`
+	Label   string `json:"label"`
+	Number  int    `json:"number"`
+	Cwd     string `json:"cwd,omitempty"`
+	Branch  string `json:"branch,omitempty"`
+	Focused bool   `json:"focused,omitempty"`
 }
 
 type Tab struct {
@@ -404,9 +408,10 @@ type Tab struct {
 	WorkspaceID string `json:"workspace_id"`
 	Label       string `json:"label"`
 	Number      int    `json:"number"`
+	Focused     bool   `json:"focused,omitempty"`
 }
 
-// Snapshot is the whole live layout in one call: workspaces, tabs and agents.
+// Snapshot is the whole live layout: workspaces, tabs, panes, agents and focus.
 type Snapshot struct {
 	Workspaces []Workspace `json:"workspaces"`
 	Tabs       []Tab       `json:"tabs"`
@@ -420,16 +425,6 @@ type Snapshot struct {
 	FocusedWorkspaceID string `json:"focused_workspace_id"`
 	FocusedTabID       string `json:"focused_tab_id"`
 	FocusedPaneID      string `json:"focused_pane_id"`
-}
-
-func (c *Client) Snapshot(ctx context.Context) (*Snapshot, error) {
-	var res struct {
-		Snapshot Snapshot `json:"snapshot"`
-	}
-	if err := c.call(ctx, "session.snapshot", nil, &res, "api", "snapshot"); err != nil {
-		return nil, err
-	}
-	return &res.Snapshot, nil
 }
 
 func (c *Client) Workspaces(ctx context.Context) ([]Workspace, error) {

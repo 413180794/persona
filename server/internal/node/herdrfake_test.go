@@ -33,6 +33,8 @@ type fakeHerdr struct {
 	screen map[string]string // pane id -> what pane.read returns
 	ansi   map[string]string // pane id -> what pane.read with format ansi returns (else screen)
 	hooks  []func(c herdrCall)
+	// replyLimit simulates herdr's partial socket write; zero sends complete replies.
+	replyLimit int
 }
 
 // herdrCall is one recorded request.
@@ -110,6 +112,7 @@ func (f *fakeHerdr) serveConn(c net.Conn) {
 	}
 	f.log = append(f.log, call)
 	hooks := slices.Clone(f.hooks)
+	limit := f.replyLimit
 	f.mu.Unlock()
 	if h != nil {
 		result = h(req.Params)
@@ -125,7 +128,17 @@ func (f *fakeHerdr) serveConn(c net.Conn) {
 		resp["result"] = result
 	}
 	b, _ := json.Marshal(resp)
-	_, _ = c.Write(append(b, '\n'))
+	b = append(b, '\n')
+	if limit > 0 && len(b) > limit {
+		b = b[:limit]
+	}
+	_, _ = c.Write(b)
+}
+
+func (f *fakeHerdr) limitReplies(bytes int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.replyLimit = bytes
 }
 
 func str(v any) string { s, _ := v.(string); return s }

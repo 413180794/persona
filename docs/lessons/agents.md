@@ -320,6 +320,17 @@ other engines' panes (Orca) keep their original error.
 - Rects alone can't determine split order: both horizontal and vertical lines span a 2×2 grid; only `splits` knows whether top/bottom or left/right was split first.
 - When zooming a pane, `zoomed: true`, but every pane's `rect` remains its original split position, not fullscreen (measured herdr 0.9.5).
 
+## Rebuilding a truncated herdr snapshot (#6083)
+
+- A bigger reader buffer cannot recover bytes herdr never wrote. Reuse `ErrTruncated` from the pane-read fix (#6080), then request smaller objects.
+  `pane.layout {pane_id}` returns the entire tab's layout, so read it once per tab, keeping both rectangles and split nodes.
+- `pane.list` and snapshot `panes` omit agent-only fields such as `name`; derive snapshot `agents` through `agent.get {target: pane_id}`.
+  Depending on a whole `agent.list` would reintroduce the size limit. Preserve shell panes separately.
+- A tab can be locally focused in an inactive workspace. Select the global focus through the focused workspace, its focused tab, and that tab's `focused_pane_id`.
+- Keep the snapshot truncation streak separate from transport failure logging: every successful small call marks herdr reachable, but only a whole snapshot ends the truncation streak.
+  Test by cutting the entire serialized socket response at exactly 8192 bytes; a fabricated decode error does not exercise the transport path.
+- Multiple reads are not an atomic snapshot. A failed small read must not publish a partial tree that clears the cached names and layouts; let the existing agent-list fallback handle that scan.
+
 ## Driving Claude Code `/rewind` (2026-11-05, #2436, 2.1.318)
 
 Recorded screens: `server/internal/screen/testdata/claude-2.1.318-rewind-*`; parsing: `screen/rewind.go`; driving: `node/rewind.go`.

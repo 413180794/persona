@@ -189,6 +189,14 @@ node fills these fields from herdr's `session.snapshot` (workspaces, tabs and ag
 (the list is rebuilt at most once a second; entering / leaving blocked doesn't wait, see `docs/server.md` ("Fast lane for cards")),
 and every 10 seconds as a fallback (every second when the event stream is down or there's a compatible Codex forks pane, see `docs/server.md` ("Connection to herdr")). When a tab name is the default number, the App shows `#2`.
 
+If herdr cuts a large snapshot at its socket's 8192-byte limit (`herdr.ErrTruncated`, #6083), the client rebuilds it from
+`workspace.list`, then `tab.list` and `pane.list` per workspace, one `pane.layout` per tab, and `agent.get` per detected agent.
+This preserves workspace and tab names, shell panes, split layouts and pane indices, agent names and metadata, and the globally focused workspace / tab / pane.
+The workspace catalog and terminal focus reader use the same fallback. No configuration is needed. The cut snapshot is logged once until a whole snapshot succeeds;
+successful smaller calls do not reset that streak. These reads are not atomic. If a required small call fails (including another oversized answer),
+the client returns an error and the node keeps its existing agent-list fallback without replacing its cached layout with a partial tree.
+The workspace catalog retains its separate `workspace.list` fallback.
+
 ### Several panes in one tab
 
 A common pattern: an Agent runs `herdr pane split` in its own tab, then starts Claude / Codex in the new pane to split up the same job. Agents in the same tab (`slot_id`) form **a group**; the Agent doesn't need to write anything extra:

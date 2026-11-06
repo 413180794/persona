@@ -14,6 +14,12 @@ import (
 
 // fakeServer answers each connection's one request line with reply(method, params) and closes it, like herdr.
 func fakeServer(t *testing.T, reply func(method string, params map[string]any) string) string {
+	return fakeServerLimited(t, 0, reply)
+}
+
+// fakeServerLimited drops bytes after limit from the whole response, reproducing herdr's partial socket write.
+// A zero limit returns the complete response.
+func fakeServerLimited(t *testing.T, limit int, reply func(method string, params map[string]any) string) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "herdr") // short: unix socket paths are limited to ~100 bytes
 	if err != nil {
@@ -47,7 +53,11 @@ func fakeServer(t *testing.T, reply func(method string, params map[string]any) s
 					return
 				}
 				body := reply(req.Method, req.Params)
-				_, _ = conn.Write([]byte(`{"id":"` + req.ID + `",` + body + "}\n"))
+				response := []byte(`{"id":"` + req.ID + `",` + body + "}\n")
+				if limit > 0 && len(response) > limit {
+					response = response[:limit]
+				}
+				_, _ = conn.Write(response)
 			}()
 		}
 	}()
