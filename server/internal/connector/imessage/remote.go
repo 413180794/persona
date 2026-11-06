@@ -12,7 +12,7 @@ import (
 )
 
 // The hub's side: the connector reads through the node of one Mac (Reader runs there), so it is a thin adapter over
-// that node's connector.* RPCs. The app reads every conversation for the user (hub/imessage.go); with 交给 Persona on
+// that node's connector.* RPCs. The app reads every conversation for the user (extmgr/imessage.go); with 交给 Persona on
 // (jarvis.go) the real ones also go to the knowledge base, the inbox and the assistant.
 
 // Config is hub.json's "imessage".

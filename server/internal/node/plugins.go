@@ -635,7 +635,7 @@ func (ph *pluginHost) expireLeases() {
 }
 
 // dialPlugin connects stream id to plugin's HTTP socket (a program running here with http): the hub relays the app's
-// requests to it, WebSockets included (hub/extension_nodes.go, /api/v1/plugins/{id}/-/machines/{mid}/…).
+// requests to it, WebSockets included (extmgr/extension_nodes.go, /api/v1/plugins/{id}/-/machines/{mid}/…).
 func (n *Node) dialPlugin(ctx context.Context, ph *pluginHost, id, plugin string) error {
 	ph.mu.Lock()
 	r := ph.running[plugin]

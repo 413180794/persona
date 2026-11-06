@@ -762,15 +762,16 @@ type Session struct {
 	// internal/assistant/conversations.go).
 	Archived bool `json:"archived,omitempty"`
 	// Origin is who opened an assistant conversation and OriginRef what of (docs/protocol.md「助手对话的来源」):
-	// user, channel, inbox, task, spawned, lark_agent, extension; "" is the user's. Set by the hub from the
-	// assistant's snapshot.
+	// user, channel, inbox, task, spawned, lark_agent, extension; "" is the user's. Set by the manager's fleet from
+	// the assistant's snapshot (internal/assistant/fleet.go).
 	Origin    string `json:"origin,omitempty"`
 	OriginRef string `json:"origin_ref,omitempty"`
 	// Compaction is the last compaction the user asked for in an assistant conversation (POST …/compact), kept by the
 	// node until the next one: running, then done or failed (docs/assistant.md「手动压缩」).
 	Compaction *Compaction `json:"compaction,omitempty"`
 	// Channels are the channels messages came into this conversation from, newest first ("wechat", "feishu"):
-	// the conversation list draws the latest's icon (docs/channels.md「来源标记」). Set by the hub.
+	// the conversation list draws the latest's icon (docs/channels.md「来源标记」). Set by the manager's fleet
+	// (internal/assistant/fleet.go).
 	Channels []string `json:"channels,omitempty"`
 	// Space / slot generalize where an agent lives in its host tool: for herdr a workspace and a tab
 	// (docs/agent-states.md). Agents sharing a space are shown together as one collaborating group.

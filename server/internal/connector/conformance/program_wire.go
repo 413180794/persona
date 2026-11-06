@@ -251,7 +251,7 @@ var (
 )
 
 // checkThreadPage is the answer to thread.page: oldest first, at most limit, and a reply that goes through an action
-// the connector has, which takes {chat, text} (hub/connector_threads.go).
+// the connector has, which takes {chat, text} (extmgr/connector_threads.go).
 func checkThreadPage(limit int, actions []proto.Tool, raw json.RawMessage) (connector.ThreadPage, error) {
 	var page connector.ThreadPage
 	if err := decodeWire(raw, &page); err != nil {

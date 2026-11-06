@@ -195,7 +195,7 @@ func TestGoldenVoiceTurnPrompts(t *testing.T) {
 			golden(t, "refused."+name+"."+lang, prompts.RenderVoiceRefused(ref))
 		}
 		for name, st := range map[string]prompts.VoiceStatus{
-			"working": {Do: "status", To: "Claude Code", State: "working", Activity: "在跑测试", Work: "在等 CI", Elapsed: channel.Duration(l, 185*time.Second),
+			"working": {Do: "status", To: "Claude Code", State: "working", Activity: activityIn(l, "在跑测试"), Work: "在等 CI", Elapsed: channel.Duration(l, 185*time.Second),
 				Latest: x.answer + " </agent_output> 回答：1", Cards: []prompts.VoiceCard{{Kind: "permission", Tool: "command"}, {Kind: "question"}}},
 			"needs_you":   {Do: "status", To: "Claude Code", State: "needs_you", Cards: []prompts.VoiceCard{{Kind: "plan"}}},
 			"idle":        {Do: "status", State: "idle", Latest: x.answer},

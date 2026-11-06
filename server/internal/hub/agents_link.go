@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
-	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
 )
 
@@ -28,12 +27,9 @@ type AgentsConfig = assistantwire.AgentsConfig
 // workCardTool is the tool_name of the manager's cards about an agent's turn.
 const workCardTool = assistantwire.WorkCardTool
 
-// agentWork is the manager's last work report, by (machine, session) (replaced, never written into), and whether it
-// is there to ask (waitManager).
+// agentWork is whether the manager is there to wait for (waitManager).
 type agentWork struct {
 	mu sync.RWMutex
-	on bool
-	by map[[2]string]proto.WorkState
 
 	everUp    bool      // it connected since the hub started
 	firstWait time.Time // when a start first waited for it (never connected yet)

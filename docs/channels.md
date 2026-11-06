@@ -103,13 +103,13 @@
 
 2026-11-05 起表里「hub（传输）」那一列也在管理者里（`server/internal/extmgr`：飞书开放平台的长连接、凭证、配对、扩展渠道的程序、绑定，`docs/extensions.md`「谁管什么」）：
 它和助手在同一个进程，下面说的总线消息照旧（方法和参数一样），只是在进程里直接调；`/api/v1/bots…` 和绑定 `POST /api/v1/channels/{id}/bind` 由 hub 原样转给管理者。
-hub 留下的只有会话列表上的来源标记、完成推送（照快照的 `channels`）、跟对话（`session.follow` 等）和卡片本身；渠道里主人的回答经 `app.call hub interactions.resolve_owner` 让 hub 答卡片（主人的操作在管理者里核）。
+hub 留下的只有跟对话（`session.follow` 等）和卡片本身；会话列表上的来源标记和完成推送也在管理者里（`server/internal/assistant/fleet.go`、`fleet_push.go`，照助手快照的 `channels`）；渠道里主人的回答经 `app.call hub interactions.resolve_owner` 让 hub 答卡片（主人的操作在管理者里核）。
 
 | | hub（传输） | 助手（管理者，`personad assistant`） |
 | --- | --- | --- |
 | 飞书机器人 | 应用凭证（`bots.feishu`，连同功能开关）、开放平台的长连接、配对和「只认主人」「只在私聊」、发 / 回 / 改消息和卡片、表情、读引用和转发、下载图片和文件；`/api/v1/bots/feishu*` 的路由 | 消息进哪段对话（当前目标、话题绑定、`/main` `/new` `/list` `/agents` `/start` 这些命令）、组织内容、发进对话、跟踪这一轮、进度卡和答案卡、提问和批准的卡片和按钮的回答、推送和同步；聊天状态 `bots.feishu.state` |
 | 扩展渠道 | 起扩展程序、`channel.receive` / `channel.status` / `channel.send` / `channel.typing`（同一个 `ref` 重试）、开关、绑定（连接器登录、二维码）、列出有哪些渠道和它们的状态 | 目标、功能开关、最近的对话（`channels`）、runs、文字提问、去重（`channels.state`）、命令、提问和回答、推送和同步 |
-| 来源标记、完成推送 | 会话列表上画 `channels`、一轮在渠道里答了就不推「完成」：照助手快照里的 `channels` 报告（`assistantwire.ChannelsReport`） | 记哪段对话从哪些渠道来过、哪段对话的一轮正在 / 刚在渠道里答 |
+| 来源标记、完成推送 | 不管：会话列表和推送由管理者的 fleet 给（`server/internal/assistant/fleet.go`、`fleet_push.go`），hub 只把它们交给 App | 记哪段对话从哪些渠道来过、哪段对话的一轮正在 / 刚在渠道里答，报在快照的 `channels`（`assistantwire.ChannelsReport`）；fleet 照它在会话列表上画 `channels`、一轮在渠道里答了就不推「完成」 |
 | 接口 | `/api/v1/channels*` 原样转给助手（`http.request`），除了绑定 `POST …/bind`：它带着凭证和登录要填的东西，是 hub 自己的路由，渠道和机器人的密钥从不经过助手 | 回答 `/api/v1/channels*`（绑定除外） |
 | 批准类不代答 | 答卡片要有主人刚做的那一下：hub 把主人的按卡片、一条消息交给助手时各发一个**一次性的主人操作**（只在发它的渠道里有效，10 分钟内；按卡片的只能答那一张；一条消息的只能答这个渠道收文字回答的那几种卡：飞书只有提问，插件渠道是 `channel.TypedAnswerKinds`），`interactions.resolve` 带上它和答的是哪个渠道，没有、用过、渠道或卡对不上的一律拒绝（#5011）；记成用户自己答的（不带 `answered_by`） | 用渠道里的回答答卡片时带上那一下的主人操作；自己没有任何办法批准计划、允许工具、往终端里打字 |
 
@@ -187,7 +187,7 @@ hub 留下的只有会话列表上的来源标记、完成推送（照快照的 
 - **每条消息**：渠道发进对话的消息 `client_msg_id` 都是 `<渠道 id>-<消息 id>`（飞书机器人一直是 `feishu-…`，微信 `wechat-…`），node 把它带到 transcript 的 item 上（`Item.client_msg_id`）。
   客户端按前缀认出渠道：前缀（第一个 `-` 之前）等于 `GET /api/v1/channels` 里某个渠道的 id 就是从那儿来的，对话页在这条消息下面画一行「来自 微信」。
   App 自己发的是 UUID，第一段是 8 位十六进制，所以渠道 id 不能是 8 位十六进制（注册时拒绝）。语音扩展交给主对话的消息带 `voice-<随机 id>`。
-- **每段对话**：会话上有 `channels`（这段对话里从哪些渠道来过消息，按最近排，`proto.Session.Channels`；助手记、在快照里报，hub 照着画），对话列表画成渠道的小图标；
+- **每段对话**：会话上有 `channels`（这段对话里从哪些渠道来过消息，按最近排，`proto.Session.Channels`；助手记、在快照里报，管理者的 fleet 照着画），对话列表画成渠道的小图标；
   `/agent` 开的无头对话是 `lark_agent`。老的 App 不认这个字段，照旧显示。
 - 每一轮的 run 记着它是哪个渠道的，`GET /api/v1/channels/{id}` 里有「在等几个回答、几个提问」。
 

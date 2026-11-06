@@ -283,16 +283,6 @@ func (h *Hub) waitInteraction(ctx context.Context, ix proto.Interaction) (proto.
 	return r, nil
 }
 
-// approve asks the user on the phone to allow a sensitive tool call (e.g. sending an email).
-func (h *Hub) approve(ctx context.Context, by asker, tool, summary string, input json.RawMessage) bool {
-	ix := proto.Interaction{
-		ID: "ix_" + randomHex(6), MachineID: by.machine, SessionID: by.session, Kind: proto.IxPermission, ToolName: tool, Summary: summary,
-		ToolInput: input, SessionTitle: "Persona", Cwd: h.askerCwd(by), CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(15 * time.Minute).UTC(),
-	}
-	r, _ := h.waitInteraction(ctx, ix)
-	return r.Allow != nil && *r.Allow
-}
-
 // ---- what the hub tells the manager of the apps ----
 
 // fleetClientsChanged tells the manager what the connected apps can take now, when it changed (fleet.clients).

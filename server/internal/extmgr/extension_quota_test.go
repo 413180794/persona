@@ -137,7 +137,7 @@ func TestQuotaThroughAnExtension(t *testing.T) {
 }
 
 // A plugin's model provider is offered when a launcher is added (the launchers are the hub's: it asks for the presets,
-// extensions.hub_call presets, and fills in what the user leaves out, hub/extension_presets.go).
+// plugins.presets, and fills in what the user leaves out, extmgr/models_link.go).
 func TestProviderPresets(t *testing.T) {
 	h, _ := extensionTestHub(t)
 	mux := h.routes()

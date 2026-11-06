@@ -17,12 +17,6 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, v any, limit int64) 
 	return json.NewDecoder(http.MaxBytesReader(w, r.Body, limit)).Decode(v)
 }
 
-// bodyTooLarge reports whether err is decodeJSONBody's over-the-limit error.
-func bodyTooLarge(err error) bool {
-	var tooLarge *http.MaxBytesError
-	return errors.As(err, &tooLarge)
-}
-
 // writeBodyErr answers a body decodeJSONBody could not use: 413 (proto.CodeTooLarge) when err is over the limit,
 // else 400 with bad (the caller's own message, or err itself).
 func writeBodyErr(w http.ResponseWriter, err, bad error) {

@@ -127,7 +127,7 @@ func main() {
 		fmt.Fprintln(stderr, usage)
 		os.Exit(2)
 	case err != nil:
-		fmt.Fprintln(stderr, err)
+		fmt.Fprintln(stderr, explain(err))
 		os.Exit(1)
 	}
 }

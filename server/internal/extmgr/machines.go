@@ -212,17 +212,6 @@ func (h *Manager) machineByName(id string) *Machine {
 	return nil
 }
 
-// sessionsChanged: m's node listed its sessions again (they are told to the hub by the devices).
-func (h *Manager) sessionsChanged(m *Machine) {
-	if r, ok := h.opts.Devices.(interface {
-		Relist(ctx context.Context, id string) error
-	}); ok {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		_ = r.Relist(ctx, m.cfg.ID)
-	}
-}
-
 // decorated is m's sessions as its node listed them.
 func (h *Manager) decorated(m *Machine) []proto.Session {
 	m.mu.Lock()

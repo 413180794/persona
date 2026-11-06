@@ -192,7 +192,7 @@ func (r report) text(now time.Time, user string) string {
 			case "online":
 				line("本机 node：在线")
 			case "offline":
-				line("本机 node：hub 连不上（%s）", st.NodeError)
+				line("本机 node：hub 连不上（%s）%s", st.NodeError, nodeHint(st.NodeError))
 			default:
 				line("本机 node：hub 正在连")
 			}
@@ -277,7 +277,7 @@ func (r report) passiveText(line func(string, ...any), now time.Time, live bool)
 		case st.State == "connected" && st.Node == "online":
 			line("本机 node：在线")
 		case st.Node == "offline":
-			line("本机 node：hub 连不上（%s）", st.NodeError)
+			line("本机 node：hub 连不上（%s）%s", st.NodeError, nodeHint(st.NodeError))
 		}
 	}
 	if paired && p.Machine != "" {

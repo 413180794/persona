@@ -22,7 +22,7 @@ import (
 // Mac's real conversations (KeepContacts) go into the knowledge base (connector.Archive, by ROWID), unread ones into
 // the inbox (connector.Inbox, triaged like Feishu's), and the assistant reads them (ReadTools). Codes are masked in
 // all of it. Off: none of it — nothing is read for Persona, the tools are gone; what the hub kept stays until the
-// user deletes it (hub/imessage.go).
+// user deletes it (extmgr/imessage.go).
 
 // SetAI turns 交给 Persona on or off (the hub keeps the choice).
 func (c *Remote) SetAI(on bool) {

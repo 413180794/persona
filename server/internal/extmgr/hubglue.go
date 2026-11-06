@@ -2,8 +2,6 @@ package extmgr
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/extwire"
@@ -29,14 +27,6 @@ const (
 	sendUnknown   = "unknown"
 	sendSending   = "sending"
 )
-
-// sendOutcome is the state a send ends in.
-func sendOutcome(err error) string {
-	if err == nil {
-		return sendDelivered
-	}
-	return sendUnknown
-}
 
 // screenPort is macOS's Screen Sharing (VNC).
 const screenPort = 5900
@@ -101,9 +91,6 @@ func (h *Manager) assistantAsker(sessionID, machine string) asker {
 	return asker{machine, ""}
 }
 
-// errNotPending: the card is no longer waiting.
-var errNotPending = errors.New("no longer pending")
-
 // hubTools are the names of the hub's own tools a connector may not shadow (the phone's by their prefix), and the
 // assistant's.
 func (h *Manager) assistantToolsNow() []proto.Tool {
@@ -111,14 +98,6 @@ func (h *Manager) assistantToolsNow() []proto.Tool {
 		return nil
 	}
 	return h.opts.AssistantTools()
-}
-
-// rawOr is raw, or {} when empty.
-func rawOr(raw json.RawMessage) json.RawMessage {
-	if len(raw) == 0 {
-		return json.RawMessage(`{}`)
-	}
-	return raw
 }
 
 // inHealth: an assistant conversation working in cwd is in the health space. What it says leaves the space only with

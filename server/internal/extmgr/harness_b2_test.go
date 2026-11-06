@@ -72,12 +72,6 @@ func adminCall(t *testing.T, h http.Handler, method, path, body string) (int, ma
 	return callWith(t, h, method, path, body, map[string]string{extwire.HeaderAdmin: "1"}, "application/json")
 }
 
-// adminUpload posts a package body as the admin UI's browser does.
-func adminUpload(t *testing.T, h http.Handler, query string, body []byte) (int, map[string]any) {
-	t.Helper()
-	return callWith(t, h, "POST", adminUploadPath+"?"+query, string(body), map[string]string{extwire.HeaderAdmin: "1"}, "application/octet-stream")
-}
-
 // adminRoutes are h's routes as the hub relays the admin UI's: no token, the admin header (routes() keeps it).
 func adminRoutes(h *Manager) http.Handler {
 	routes := h.routes()

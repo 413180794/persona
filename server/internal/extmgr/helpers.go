@@ -32,7 +32,6 @@ import (
 var (
 	clip    = textfmt.Clip
 	oneLine = textfmt.OneLine
-	short   = textfmt.Short
 )
 
 func writeJSON(w http.ResponseWriter, v any) { apierr.WriteJSON(w, v) }

@@ -2,10 +2,7 @@ package hub
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
-	"testing"
-	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 )
@@ -50,23 +47,3 @@ func (m *memStore) Setting(context.Context, string, any) (bool, error) { return 
 
 // PutSetting keeps nothing, like Setting finds nothing: loading the schedule writes its one-time task list.
 func (m *memStore) PutSetting(context.Context, string, any) error { return nil }
-
-func waitPending(t *testing.T, h *Hub, n int) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for len(h.pendingInteractions()) != n {
-		if time.Now().After(deadline) {
-			t.Fatalf("pending = %d, want %d", len(h.pendingInteractions()), n)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-func rawOf(t *testing.T, v any) json.RawMessage {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return b
-}

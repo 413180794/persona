@@ -46,7 +46,7 @@
 - **升级 CLI**：node 的 `launchers.repair {name, action: "upgrade_cli"}` 只做固定的事：Claude 的启动器跑 `claude update`（登录 shell，5 分钟超时），
   别的回「不支持」。不接受任意命令。旧 node 没有这个方法，当作升级不了。
 - **修复 Agent**：hub.json `agents.launcher_health.repair` 配了 `skill` 时，在 `machine`（默认助手所在的电脑）的 `cwd`（默认 home）上用一个健康的启动器起一个 Agent，
-  首条消息（`prompts/tools/launcher_repair.md`）说明哪台电脑哪些启动器坏了、错误原文和分类、用哪个 skill 修、修完用 `claude -p` 自测。
+  首条消息（`server/internal/prompts/agents/launcher_repair.md`）说明哪台电脑哪些启动器坏了、错误原文和分类、用哪个 skill 修、修完用 `claude -p` 自测。
   它挂在一个**安静的待办**上（`Quiet`、没有来源对话）：hub 不为它推送，Agents 页和待办里看得到。它停下（不在工作、也不在等你）或 45 分钟后，
   管理者复测这一轮的启动器，过了就 `ok`，没过就 `blocked`（原因带上修复 Agent 最后说的话）。没配 `skill` 时只有升级 CLI 这一种修法，其余直接 `blocked`。
   skill 名字、修复用的电脑都是配置，代码里不写具体的工具和网关。

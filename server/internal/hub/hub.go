@@ -88,14 +88,11 @@ type Hub struct {
 	// userLocale: the user's language, an i18n.Lang (locale.go)
 	userLocale atomic.Value
 	deleted    deletedBook // conversations taken out of the apps' lists (deleted_sessions.go)
-	kb         kbLink      // what the hub keeps for the knowledge base, the assistant's (kb.go)
-	// chans is what the assistant reports of the channels, and the conversations they follow (assistant_channels.go).
-	chans  managerChannels
-	secret secretState // secretkey.go
-	devtok devTokens   // device token lookups (devicetokens.go)
-	public publicState // TLS identity, listener and advertised addresses (public.go)
-	sends  sendLog     // messages being / just sent, by client_msg_id (send.go)
-	fresh  freshStarts // agents started for a todo without a prompt, until their first message (assistant_todos.go)
+	secret     secretState // secretkey.go
+	devtok     devTokens   // device token lookups (devicetokens.go)
+	public     publicState // TLS identity, listener and advertised addresses (public.go)
+	sends      sendLog     // messages being / just sent, by client_msg_id (send.go)
+	fresh      freshStarts // agents started for a todo without a prompt, until their first message (assistant_todos.go)
 	// ext is what the hub keeps of the extensions, connectors and bots, the manager's (extensions_link.go).
 	ext   extLink
 	admin adminState // the admin UI (admin.go, docs/admin.md)
@@ -356,18 +353,6 @@ func (h *Hub) phoneToolList() []proto.Tool {
 		tools = []proto.Tool{}
 	}
 	return tools
-}
-
-// asker is the conversation a card the hub makes itself belongs to: the clients put a card into the chat of its
-// machine and session, so one with no session shows only in 需要你, not in the conversation that is waiting on it.
-type asker struct{ machine, session string }
-
-// assistantAsker is the assistant conversation sessionID (on the assistant's machine); with none, a card of machine.
-func (h *Hub) assistantAsker(sessionID, machine string) asker {
-	if mid := h.assistantProfile().MachineID; sessionID != "" && mid != "" {
-		return asker{mid, sessionID}
-	}
-	return asker{machine, ""}
 }
 
 func (h *Hub) callPhone(ctx context.Context, name string, args json.RawMessage) proto.ToolResult {

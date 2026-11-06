@@ -46,7 +46,7 @@ goal 的状态写成 `type: "attachment"` 的一行，`attachment.type` 是 `goa
   映射成 `complete`、`met: false` 是 `active`，判断理由放 `reason`。达成和 Codex 的非进行中状态在对话里生成 `notice`，只在状态变了时生成。
 - **node**：goal 可能设在一份几百 MB 的 transcript 的开头，只读尾部 384 KB 的 quick meta 看不到。所以和 `/loop`、后台任务一起由 `bgScan`
   读：整份读一次，之后只读追加的部分，只解析含标记的行（`goal_status`、`Goal set: `、`Goal cleared`、`thread_goal_updated`）。
-  会话列表上带 `goal`，签名（`sessionsSignature`）里带上目标、状态和理由，变了就推一次。
+  会话列表上带 `goal`，列表的签名（`node/sessions.go` 的 `listKey` / `listKeySized`）里带上目标、状态和理由，变了就推一次。
 - **协议**：`Session.goal`，见 `docs/protocol.md`。只加字段，旧客户端不认就不显示。
 - **客户端**：iOS / Mac 的 `GoalBar`（`Views/Session/SessionPanes.swift`）和详情 `GoalSheet`；网页 `views/chat/Activity.tsx` 的活动行。
   Android（#2888）：`core:contracts` 的 `Session.goal`（`GoalInfo`），对话页顶栏下面的 `ChatGoalBar`（`feature/chat/ChatGoal.kt`，设计系统的 `JActivityBar`），点按打开 `ChatGoalSheet`；

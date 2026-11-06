@@ -885,8 +885,6 @@ func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text strin
 	}
 }
 
-func (p *Pusher) clear(string) {}
-
 // joinPlace is "会话 · 机器" without the parts that are empty.
 func joinPlace(parts ...string) string {
 	return strings.Join(slices.DeleteFunc(parts, func(s string) bool { return strings.TrimSpace(s) == "" }), " · ")

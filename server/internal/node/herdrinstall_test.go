@@ -22,12 +22,11 @@ import (
 // herdr is "installed" once the file is in the returned directory. gate, when not nil, holds the download until it
 // is closed.
 type fakeRelease struct {
-	dir   string
-	hits  atomic.Int32
-	gate  chan struct{}
-	url   string
-	srv   *httptest.Server
-	saved func()
+	dir  string
+	hits atomic.Int32
+	gate chan struct{}
+	url  string
+	srv  *httptest.Server
 }
 
 func withFakeRelease(t *testing.T, body []byte, sum string, gate chan struct{}) *fakeRelease {

@@ -348,7 +348,7 @@ func waitConnected(e *env, since time.Time, oldPID int) error {
 		case "online":
 			line += "；本机 node 在线。"
 		case "offline":
-			line += "；但 hub 连不上本机的 node：" + st.NodeError
+			line += "；但 hub 连不上本机的 node：" + st.NodeError + nodeHint(st.NodeError)
 		default:
 			line += "；hub 正在连本机的 node。"
 		}

@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -628,18 +625,6 @@ func TestAIConfigOver(t *testing.T) {
 func newGitHubForTest(t *testing.T, muted []string) *github.Connector {
 	t.Helper()
 	return github.New(github.Config{Inbox: github.InboxOptions{MutedRepos: muted}}, "Mac", nil)
-}
-
-// fakeModel answers every Messages API call with reply.
-func fakeModel(t *testing.T, reply string) *ai.Client {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"content": []any{map[string]any{"type": "text", "text": reply}}})
-	}))
-	t.Cleanup(srv.Close)
-	key := filepath.Join(t.TempDir(), "key")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	return ai.New(ai.Config{BaseURL: srv.URL, APIKeyFile: key, Model: "m"})
 }
 
 // replyMail records what it was asked to send.

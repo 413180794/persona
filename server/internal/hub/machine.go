@@ -35,15 +35,7 @@ type Machine struct {
 	peer    nodeCaller
 	streams *streams.Mux // the forwarded ports' connections on the node's current connection (ports.go)
 	info    proto.NodeInfo
-	// computer: what the node last said of Cua Driver (computer.status), while the plugin cua is on for it (computer.go);
-	// computerAt: when the node answered it (or, from an older node, when it was asked), so an older answer never
-	// replaces it (keepComputer).
-	computer   *proto.Computer
-	computerAt time.Time
-	// browser, browserAt: the same for ego lite (browser.status, the plugin ego; browser.go).
-	browser   *proto.Browser
-	browserAt time.Time
-	online    bool
+	online  bool
 	// connectedAt: when the node's current connection began, as the manager says (sessions.changed carries it to the
 	// assistant).
 	connectedAt time.Time
@@ -533,14 +525,4 @@ func (m *Machine) isOnline() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.online
-}
-
-// localMachineID is the machine the hub runs on (kind local), "" when none is configured.
-func (h *Hub) localMachineID() string {
-	for _, m := range h.machinesNow() {
-		if m.cfg.Kind == "local" {
-			return m.cfg.ID
-		}
-	}
-	return ""
 }

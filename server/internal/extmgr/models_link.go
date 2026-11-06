@@ -117,9 +117,3 @@ func (h *Manager) gatewayLaunchers(ctx context.Context) ([]assistantwire.Gateway
 	}
 	return res.Launchers, err
 }
-
-// isAssistantOffline: err is the assistant not connected (assistantRemote.call's assistant_offline).
-func isAssistantOffline(err error) bool {
-	var re *rpc.Error
-	return errors.As(err, &re) && re.Code == assistantwire.CodeAssistantOffline
-}

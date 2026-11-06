@@ -4,11 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/i18n"
-	"github.com/nwverse/persona/server/internal/proto"
 )
 
 // The channels are the assistant's (internal/assistant, channels*.go and feishu*.go; docs/channels.md): which
@@ -20,18 +18,10 @@ import (
 //     interaction.ended); a conversation it follows has its items and the text it writes sent on (session.items,
 //     session.delta) until it unfollows or disconnects;
 //   - out: plain transport methods (app.call feishu.*, channels.*, interactions.resolve; device.call session.follow,
-//     session.unfollow, session.send_once) the assistant asks for;
-//   - shown: the channels each conversation's messages came from (the session lists' channels) and the conversations
-//     whose turn a channel answers (no finished push for those), from its snapshot (ChannelsReport).
-
-// managerChannels is what the hub keeps of the assistant's channels.
-type managerChannels struct {
-	mu  sync.RWMutex
-	got bool // a report came in since the hub started
-
-	// ended, when set, sees every interaction.ended (tests).
-	ended func(ix proto.Interaction, r *proto.Resolution)
-}
+//     session.unfollow, session.send_once) the assistant asks for.
+//
+// The session lists' channels and the finished push a channel's turn skips are no longer drawn here: the manager's
+// fleet reads them from the assistant's snapshot (ChannelsReport; internal/assistant/fleet.go, fleet_push.go).
 
 // channelNoted tells the assistant a channel's message went into a conversation through the apps' routes (a voice
 // conversation's errand, POST …/messages with client_msg_id voice-…): the conversation shows where it came from.

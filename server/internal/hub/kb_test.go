@@ -3,8 +3,6 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -40,20 +38,6 @@ func withKB(t *testing.T, h *Hub) *kb.Engine {
 		t.Fatal(err)
 	}
 	return &kb.Engine{Store: st, Owner: "我"}
-}
-
-// connectAssistantRunning is connectAssistant with the assistant's own loops running, as `personad assistant` runs
-// them (the knowledge base's among them).
-func connectAssistantRunning(t *testing.T, h *Hub) *testAssistant {
-	t.Helper()
-	if h.busStore() == nil {
-		h.bus.idents = &memIdents{}
-	}
-	mux := http.NewServeMux()
-	h.busRoutes(mux)
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	return dialAssistant(t, h, srv.URL, true)
 }
 
 // The kb_* tools, the assistant's, on its knowledge base: written, listed, read (a project by its name), searched;

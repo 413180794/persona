@@ -15,6 +15,8 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/extwire"
+	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -400,6 +402,51 @@ func TestStatusIsNotSent(t *testing.T) {
 	a.mu.Unlock()
 	if msgs := hub.messages(); len(msgs) != 0 || run {
 		t.Fatalf("sent %+v (run frame: %v)", msgs, run)
+	}
+}
+
+// In an English or Japanese call the status says what the agent is doing in that language (#4841): the node writes
+// its activity in Chinese; the category is recognised from it and said as the hub says it to the apps, never sliced
+// from a translated line (Japanese puts the command first). A category it does not know is left out.
+func TestStatusSaysTheActivityInTheCallsLanguage(t *testing.T) {
+	for _, c := range []struct {
+		lang     i18n.Lang
+		activity string
+		want     string // the Doing line's words; "" for no such line
+	}{
+		{i18n.En, "在读 tasks.go", i18n.T(i18n.En, "hub-transcript_text.act_read")},
+		{i18n.Ja, "在跑 npm test -- --token=abc", i18n.T(i18n.Ja, "hub-transcript_text.act_run")},
+		{i18n.En, "在等 CI", i18n.T(i18n.En, "hub-transcript_text.act_ci")},
+		{i18n.Ja, "在想 runs.go", ""},
+	} {
+		t.Run(string(c.lang)+" "+c.activity, func(t *testing.T) {
+			hub := agentHub(t)
+			hub.sessions["a1"].status = "working"
+			hub.sessions["a1"].look = func(s *proto.Session) {
+				s.Agent, s.Title, s.Activity, s.StateSince = "claude", "修登录页的测试", c.activity, time.Now().Add(-time.Minute)
+			}
+			up := boundUpstream(t, false)
+			pl := testPlugin(t, liveProvider(up), hub.server(t))
+			a := dialApp(t, pl, boundStart("a1", nil), http.Header{extwire.HeaderLang: {string(c.lang)}})
+			a.until(ofType("ready"))
+			a.send(map[string]any{"type": "text", "text": "status: how far"})
+			got := content(up.nextMatch(on("dlg1")))
+			doing := map[i18n.Lang]string{i18n.En: "Doing: ", i18n.Ja: "していること："}[c.lang]
+			switch {
+			case c.want == "" && strings.Contains(got, doing):
+				t.Errorf("an unknown category is said: %s", got)
+			case c.want != "" && !strings.Contains(got, doing+c.want+"\n"):
+				t.Errorf("status lacks %q: %s", doing+c.want, got)
+			}
+			if node := strings.Fields(c.activity)[0]; strings.Contains(got, node) { // the node's Chinese category
+				t.Errorf("%q in a %s status: %s", node, c.lang, got)
+			}
+			for _, secret := range []string{"tasks.go", "npm", "token", "runs.go"} {
+				if strings.Contains(got, secret) {
+					t.Errorf("status names what it acts on (%s): %s", secret, got)
+				}
+			}
+		})
 	}
 }
 

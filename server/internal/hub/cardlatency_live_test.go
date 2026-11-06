@@ -189,11 +189,13 @@ func TestLiveCardLatency(t *testing.T) {
 		note("sent", "")
 		var ix proto.Interaction
 		waitFor("the card", 3*time.Minute, func() bool {
-			h.mu.Lock()
-			defer h.mu.Unlock()
-			for _, p := range h.interactions {
-				if s, ok := session(); ok && p.ix.SessionID == s.SessionID && p.ix.Kind == proto.IxScreen && p.ix.Dialog != nil {
-					ix = p.ix
+			s, ok := session()
+			if !ok {
+				return false
+			}
+			for _, p := range h.pendingInteractions() {
+				if p.SessionID == s.SessionID && p.Kind == proto.IxScreen && p.Dialog != nil {
+					ix = p
 					return true
 				}
 			}
@@ -218,13 +220,11 @@ func TestLiveCardLatency(t *testing.T) {
 				var next proto.Interaction
 				deadline := time.Now().Add(5 * time.Second)
 				for next.ID == "" && time.Now().Before(deadline) {
-					h.mu.Lock()
-					for _, p := range h.interactions {
-						if p.ix.Kind == proto.IxScreen && p.ix.Dialog != nil && p.ix.ID != ix.ID {
-							next = p.ix
+					for _, p := range h.pendingInteractions() {
+						if p.Kind == proto.IxScreen && p.Dialog != nil && p.ID != ix.ID {
+							next = p
 						}
 					}
-					h.mu.Unlock()
 					time.Sleep(20 * time.Millisecond)
 				}
 				if next.ID == "" {
@@ -257,9 +257,7 @@ func TestLiveCardLatency(t *testing.T) {
 			_ = hc.PaneSendKeys(ctx, pane, "Enter")
 		}
 		waitFor("the card to go", time.Minute, func() bool {
-			h.mu.Lock()
-			defer h.mu.Unlock()
-			_, still := h.interactions[ix.ID]
+			_, still := h.pendingInteraction(ix.ID)
 			return !still
 		})
 		time.Sleep(500 * time.Millisecond)

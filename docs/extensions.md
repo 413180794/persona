@@ -22,9 +22,9 @@ Persona 的扩展底座（#1101）：开源仓库只放通用能力和**扩展�
 
 | 部分 | 代码 |
 | --- | --- |
-| 管理者这一侧：扩展的注册表和它的表（`plugins`、`plugin_secrets`、`plugin_audit`、市场）、安装 / 预览 / 升级 / 回滚 / 卸载 / 上传、市场和自动升级、进程宿主（`extension/host`、沙箱、出网代理、运行情况和日志、开发时的日志流）、配置和密钥（只有它解密）、扩展的 token 和范围检查、每个贡献的消费方（UI、主题、小组件、快捷指令、个人 Agent 来源和 Agent 过滤、模型供应商和额度、cua / ego / imessage、电脑上的程序、助手的技能、知识库和渠道的那部分、消息 `messaging`）；连接器框架和全部来源（`connector_secrets`、收件箱的采集轮次、邮件含飞书邮箱、GitHub、iMessage、Telegram、lark-cli、各连接器的登录）；飞书机器人的开放平台长连接和微信机器人、配对、凭证和 `/api/v1/bots…` | `server/internal/extmgr/`（从 hub 原样挪来的文件，接收者从 `Hub` 换成 `Manager`；`manager.go`、`serve.go` 是它在管理者里怎么跑，`machines.go` 经管理者自己的 devices 连电脑，`hubglue.go` 是还要问 hub 的几件事） |
+| 管理者这一侧：扩展的注册表和它的表（`plugins`、`plugin_secrets`、`plugin_audit`、市场）、安装 / 预览 / 升级 / 回滚 / 卸载 / 上传、市场和自动升级、进程宿主（`extension/host`、沙箱、出网代理、运行情况和日志、开发时的日志流）、配置和密钥（只有它解密）、扩展的 token 和范围检查、每个贡献的消费方（UI、主题、小组件、快捷指令、个人 Agent 来源和 Agent 过滤、模型供应商和额度、cua / ego / imessage、电脑上的程序、助手的技能、知识库和渠道的那部分、消息 `messaging`）；连接器框架和全部来源（`connector_secrets`、收件箱的采集轮次、邮件含飞书邮箱、GitHub、iMessage、Telegram、lark-cli、各连接器的登录）；飞书机器人的开放平台长连接和微信机器人、配对、凭证和 `/api/v1/bots…` | `server/internal/extmgr/`（从 hub 原样挪来的文件，接收者从 `Hub` 换成 `Manager`；`manager.go`、`serve.go` 是它在管理者里怎么跑，`machines.go` 经管理者自己的 devices 连电脑，`hubglue.go` 是还要问 hub 的几件事，`models_link.go` 是扩展和模型配置互相要问的：供应商、语音模型、额度、预设） |
 | 两边共用的消息 | `server/internal/extwire/`（管理者回答的路由 `Routes`、断线时 hub 留着上一次回答的 `KeptRoutes`、转发时带的头、方法名、报告、扩展 token 的路由范围表 `RouteScopes`） |
-| hub 这一侧：转发、它留的那份、它自己的功能要问的 | `server/internal/hub/extensions_link.go`、`extensions_models.go`、`extension_presets.go`、`inbox_routes.go` |
+| hub 这一侧：转发、它留的那份、它自己的功能要问的 | `server/internal/hub/extensions_link.go`、`extension_calls.go`（按凭据转发的调用）、`inbox_routes.go` |
 | 助手进程里接起来 | `server/internal/assistant/main.go`、`extensions.go`；共用的密钥文件 `server/internal/secretkey/` |
 
 **管理者做的**（`internal/extmgr`，hub 不 import 它，它也不 import hub）：

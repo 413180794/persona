@@ -890,16 +890,6 @@ func readMailHeader(raw []byte) (gomail.Header, error) {
 	return gomail.Header{Header: e.Header}, err
 }
 
-// partSize computes the decoded size of an attachment part without keeping the
-// body in memory.
-func partSize(encoding string, body io.Reader) int64 {
-	if body == nil {
-		return 0
-	}
-	n, _ := io.Copy(io.Discard, body)
-	return n
-}
-
 // SetFlags updates seen / flagged for one message.
 func (s *Service) SetFlags(ctx context.Context, accountID string, uid uint32, req SetFlagsRequest) error {
 	a, err := s.account(accountID)
@@ -937,9 +927,6 @@ func storeFlag(c *imapclient.Client, set imap.UIDSet, flag imap.Flag, on bool) e
 	_, err := c.Store(set, &imap.StoreFlags{Op: op, Silent: true, Flags: []imap.Flag{flag}}, nil).Collect()
 	return err
 }
-
-// errNotFound is returned when a mailbox or message does not exist.
-var errNotFound = errors.New("not found")
 
 // PlainText is an HTML body as readable text (styles and scripts dropped, whitespace collapsed).
 func PlainText(html string) string { return strings.Join(strings.Fields(stripHTML(html)), " ") }

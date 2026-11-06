@@ -5,9 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -271,22 +269,3 @@ func putModel(t *testing.T, h *Hub, purpose string, b assistantwire.ModelBinding
 		t.Fatal(err)
 	}
 }
-
-// keyFile is a key file for a test model.
-func keyFile(t *testing.T) string {
-	t.Helper()
-	key := filepath.Join(t.TempDir(), "key")
-	if err := os.WriteFile(key, []byte("k"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return key
-}
-
-// inboxTestStore is the model configuration's store that also takes inbox items.
-type inboxTestStore struct{ *modelTestStore }
-
-func (inboxTestStore) PutInboxItem(context.Context, string, []byte, time.Time, *time.Time) error {
-	return nil
-}
-
-func (inboxTestStore) DeleteInboxItems(context.Context, []string) error { return nil }

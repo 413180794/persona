@@ -5,30 +5,22 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/textfmt"
 )
 
 // What the hub's own features use of what used to be the assistant's tools (the assistant's are internal/assistant,
-// tools.go): MCP tool definitions, finding an agent by name (the channels, computer use), and the formatting both
-// write with (one copy, internal/textfmt).
+// tools.go): finding an agent by name (the channels, computer use), and the formatting both write with (one copy,
+// internal/textfmt).
 
 // The formatting the assistant writes with too.
 var (
-	clip      = textfmt.Clip
-	oneLine   = textfmt.OneLine
-	firstLine = textfmt.FirstLine
+	clip    = textfmt.Clip
+	oneLine = textfmt.OneLine
 	// plainMarkdown is Markdown as the text it shows, for a push or a one-line preview.
 	plainMarkdown = textfmt.PlainMarkdown
 	planTitle     = textfmt.PlanTitle
 )
-
-// mcpTool is one tool's definition from prompts/mcp.
-func mcpTool(name string) proto.Tool {
-	t := prompts.Tool(name)
-	return proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema}
-}
 
 func (h *Hub) machineByName(id string) *Machine {
 	if m := h.localMachine(id); m != nil {

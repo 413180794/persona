@@ -46,14 +46,6 @@ func putAssistantSettings(t *testing.T, h *Hub, v assistant.Settings) {
 	}
 }
 
-// reportProfile is p as if the assistant had reported it (for tests of the hub's features with none connected).
-func reportProfile(h *Hub, p assistantwire.Profile) {
-	a := &h.assistant
-	a.mu.Lock()
-	a.profile = &p
-	a.mu.Unlock()
-}
-
 // assistantViewOf is GET /api/v1/assistant (query: "?archived=1" or ""), relayed to the assistant.
 func assistantViewOf(t *testing.T, h *Hub, query string) assistantView {
 	t.Helper()

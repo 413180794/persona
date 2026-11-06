@@ -168,17 +168,6 @@ func editSessions(m *Machine, edit func([]proto.Session) []proto.Session) {
 	m.sessions = edit(m.sessions)
 }
 
-// relist has the manager tell the hub m's sessions again (after a test changed what decorates them), waited for.
-func relist(h *Hub, m *Machine) {
-	settleAssistant(h)
-	if v, ok := testAssistants.Load(h); ok {
-		list, _ := mirrorOf(h).Sessions(m.cfg.ID)
-		b, _ := json.Marshal(map[string]any{"sessions": list})
-		v.(*testAssistant).svc.NodeEvent(m.cfg.ID, "sessions.changed", b)
-		settleAssistant(h)
-	}
-}
-
 // nodeAsks is a node's request on m as the manager takes it (devices.Options.Answer): the assistant's own, then the
 // fleet's (interactions, MCP tools, assistant.lark), else the hub's (devices.request). Without a connected manager
 // a test's MCP call goes where the manager would send it: the hub's tools, then the phone's.

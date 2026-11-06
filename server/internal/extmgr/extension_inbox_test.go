@@ -92,7 +92,7 @@ func TestInboxExtensionNeedsTheTriageModel(t *testing.T) {
 	}
 
 	// It is on: the hub does not change the model to one that cannot be called (its 422 triage_model_in_use names
-	// what needs it: extensions.hub_call triage_needers, hub/extensions_models.go).
+	// what needs it: plugins.need_triage, extmgr/models_link.go).
 	needers := func() string {
 		raw, err := pluginsCall(t, h, assistantwire.PluginsNeedTriage, map[string]any{})
 		if err != nil {

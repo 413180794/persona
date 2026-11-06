@@ -14,12 +14,3 @@ func (h *Hub) userLocation() *time.Location {
 	}
 	return time.Local
 }
-
-// userTZName is the user's time zone by name ("Asia/Shanghai"), "" when only the hub's own is known: for what goes to
-// another program (a gateway's daily windows).
-func (h *Hub) userTZName() string {
-	if loc := h.userLocation(); loc != time.Local {
-		return loc.String()
-	}
-	return ""
-}

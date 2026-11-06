@@ -1,5 +1,5 @@
 // Package agents is Persona' single view of the agents it can reach. The hub has no Source of its own: every one is
-// a running plugin's agent_sources contribution (hub/extension_agents.go), e.g. the Feishu plugin's "removedbridge".
+// a running plugin's agent_sources contribution (extmgr/extension_agents.go), e.g. the Feishu plugin's "removedbridge".
 // A session's public id is "<source>:<sessionKey>" (the Lark gateway's own keys already start with "agent:").
 package agents
 

@@ -121,7 +121,7 @@ API 类用途（分拣、判断、草拟、翻译、知识处理、标题）没�
 
 「模型配置」里选了 Claude Code / Codex 启动器类的供应商时，「具体模型」也从这个启动器的 `/model` 列表里选，和新建 Agent 是同一份列表、同一个选择面板（网页 `ui/ModelPicker.tsx`、安卓设计系统的 `JModelSheet`）。
 
-- **问哪台电脑**：模型配置是管理者的，不属于某台电脑，所以 `GET /api/v1/model-config/providers/{id}/models` 在有这个启动器的电脑里挑一台在线的去问 node 的 `launchers.models`：`?machine=` 指定的、助手所在的、hub 本机、其余的，按这个顺序（和额度查询的 `quotaMachine` 一样）。~/.zshrc 里的启动器只在定义它的电脑上有；Persona 托管的（`jarvisd launch`）和「Claude Code 默认」每台都能跑。回答带 `machine`，页面写明列表来自哪台。
+- **问哪台电脑**：模型配置是管理者的，不属于某台电脑，所以 `GET /api/v1/model-config/providers/{id}/models` 在有这个启动器的电脑里挑一台在线的去问 node 的 `launchers.models`：`?machine=` 指定的、助手所在的、hub 本机、其余的，按这个顺序（`assistant/models_launchers.go` 的 `pickMachine`）。~/.zshrc 里的启动器只在定义它的电脑上有；Persona 托管的（`jarvisd launch`）和「Claude Code 默认」每台都能跑。回答带 `machine`，页面写明列表来自哪台。
 - **「默认」是留空**：留空在这里是继承。没选供应商、也没单独设模型时，「默认」那行写继承来的模型（「当前生效」里那个）；选了供应商时是这个供应商的默认模型（列表的默认项）。
 - **列表外的 ID 照样能用**：列表不一定全（网关新上的模型、别的电脑上不同的设置），搜索框里输入的 ID 没有完全对上的条目时，多一行「使用「…」」；已经配着的列表外的模型照样显示，标「列表里没有」。保存仍不是付费可用性测试。
 - **没有列表时**：插件的列表跟着插件走（原来就有），API 类的没有列表；旧 hub、node 太旧（404）或列不出来时退回原来的文本框，列不出来的原因和「重试」写在下面。

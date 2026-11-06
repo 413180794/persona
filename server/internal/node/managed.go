@@ -66,10 +66,8 @@ func (n *Node) launcherCommandQ(name string, q func(string) string) string {
 	return name
 }
 
-// shellDir quotes a directory for a shell command, keeping a leading ~/ as "$HOME"/ so it is the home of the shell that
-// runs it.
-func shellDir(p string) string { return shellDirQ(p, shellQuote) }
-
+// shellDirQ quotes a directory for a shell command with q, keeping a leading ~/ as "$HOME"/ so it is the home of the
+// shell that runs it.
 func shellDirQ(p string, q func(string) string) string {
 	if p == "~" {
 		return `"$HOME"`

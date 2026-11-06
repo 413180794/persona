@@ -219,7 +219,7 @@
   改了时间相关的代码，在 hub 上用 `TZ=UTC`、`TZ=Asia/Shanghai`、`TZ=America/Los_Angeles` 各跑一遍 `go test ./...`。
 - 只记钟点的文件（知识库的天文件、时间线）换时区要整体搬，还要记下自己是哪个时区，不能直接改写入时用的时区：
   否则同一个文件里新旧两种钟点混在一起，`Since` 按新时区解析旧行会差 8 小时，漏读压缩窗口里的消息（`docs/knowledge.md`「时区」）。
-- 发给别的程序的时区用 IANA 名字（`Hub.userTZName()`）：`time.Local.String()` 是 "Local"，不是时区名。
+- 发给别的程序的时区用 IANA 名字（管理者的 `Manager.userTZName()`，`extmgr/usertz.go`）：`time.Local.String()` 是 "Local"，不是时区名。
 - pgx 默认把 `timestamptz` 读成 `time.Local` 的时间（#3755）：hub 不在 UTC 的机器上时，库里读出来直接序列化的时间带 `+08:00`，和协议要求的 UTC 不符。`db.Open` 的 `AfterConnect` 给每个连接注册 `ScanLocation: time.UTC` 的 codec（`utcTimes`），读出的都是 UTC；不要在各处补 `.UTC()`。
 - hub 的 Docker 镜像（`docs/docker.md`，2026-11-01）：锁文件的 `resolved` 指向别的 npm 源时，别的网络里（GitHub Actions、NAS）`npm ci`
   卡一分多钟后只报 npm 自己的「Exit handler never called!」，看不出是网络问题。锁文件的下载源由 `privacy_check.py` 拦
@@ -419,7 +419,7 @@
 
 - **`task.cdp` 只放 Target / Browser**：cookie 要走页面的 `page.cdp("Network.setCookies" / "getAllCookies" / "deleteCookies")`，`Storage.getCookies` 会报「task.cdp only supports Target. and Browser. commands」。
 - **ego-browser 出错时的输出可能回显脚本**：cookie 值在脚本里，所以出错只报退出码，不把 stdout / stderr 带回 hub。
-- **「是不是用户本人」用 `byOwnDevice`**：hub.json 的配对 token 也是 full 角色，但它在 CLI 和助手的进程手里；凭据类的操作只认带设备 id 的 token。
+- **「是不是用户本人」用 `byOwnDevice`（`extmgr/helpers.go`）**：hub.json 的配对 token 也是 full 角色，但它在 CLI 和助手的进程手里；凭据类的操作只认带设备 id 的 token。
 - **往 JS 里写 Go 的切片，nil 会变成 `null`**（2026-11-05，#1926）：列出、清除没有要导入的 cookie，`json.Marshal(nil 切片)` 写出 `const set = null`，
   脚本第一行 `set.length` 就抛错，每台 Mac 的列表都出不来。实测只走了导入、单元测试又替换了 `runEgo`，所以没发现。
   现在写进脚本的列表一律先换成空切片，脚本本身也对 `getAllCookies` 返回 null、cookie 的字段是 null 做防守；测试用 node 跑真实生成的脚本（`TestCookieScriptTakesNullsFromEgo`）。

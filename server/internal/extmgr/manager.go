@@ -308,9 +308,6 @@ func (h *Manager) AssistantSaid(event string, params json.RawMessage) bool {
 // errAssistantOffline is the hub's 「助手暂时连不上」.
 var errAssistantOffline = i18n.Err("hub-assistant_link.offline")
 
-// connected: the hub is there now.
-func (h *Manager) connected() bool { return h.opts.Connected == nil || h.opts.Connected() }
-
 func (h *Manager) String() string { return fmt.Sprintf("extmgr(%s)", h.cfg.dir) }
 
 // secretKeyFile is the hub's key file in the data directory (internal/secretkey): the same one, not sealed again.

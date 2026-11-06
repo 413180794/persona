@@ -36,7 +36,7 @@ func (c *conversation) answerStatus(delegation string, gen int) {
 		st.State = sess.State
 		if working(sess) {
 			st.State = proto.StateWorking
-			st.Activity = activityKind(sess.Activity)
+			st.Activity = activityIn(l, sess.Activity) // in the call's language, the category only (#4841)
 			if !sess.StateSince.IsZero() {
 				st.Elapsed = channel.Duration(l, time.Since(sess.StateSince))
 			}
