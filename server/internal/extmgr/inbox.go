@@ -546,7 +546,7 @@ func (h *Manager) forgetInbox(ctx context.Context, source string) (int, error) {
 
 // ---- what the manager asks of the inbox's sources (app.call inbox.*) ----
 
-var errCannotReply = errors.New("this item cannot be replied to")
+var errCannotReply = i18n.ErrEnglish("inbox-errors.cannot_reply")
 
 // inboxAppCall answers the manager's calls about the inbox's sources; ok false for one that is not theirs.
 func (h *Manager) inboxAppCall(ctx context.Context, p assistantwire.AppCall) (json.RawMessage, bool, error) {
@@ -748,7 +748,7 @@ func (h *Manager) inboxConfigView(ctx context.Context) assistantwire.InboxConfig
 // (readable text, paragraphs and links kept, when the ref asks: translation).
 func (h *Manager) inboxMailBody(ctx context.Context, ref assistantwire.InboxMailRef) (assistantwire.InboxMailMessage, error) {
 	if h.mail == nil {
-		return assistantwire.InboxMailMessage{}, errors.New("mail is not set up")
+		return assistantwire.InboxMailMessage{}, i18n.ErrEnglish("inbox-errors.mail_unconfigured")
 	}
 	m, err := h.mail.GetMessage(ctx, ref.AccountID, ref.UID, ref.Mailbox)
 	if err != nil {

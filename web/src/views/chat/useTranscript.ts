@@ -157,8 +157,12 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       }
       if (e.from_seq !== undefined && covered.current && e.from_seq > covered.current) {
         apply(e.items ?? []);
-        clearTimeout(gapTimer.current);
-        gapTimer.current = window.setTimeout(() => void fillGap().catch(() => {}), 1500);
+        // Started once per gap: a busy turn pushes every second or so, and restarting it on each push put the fill
+        // off until the agent paused (#5355). The fill reads everything after `covered`, so later pushes need no timer.
+        gapTimer.current ??= window.setTimeout(() => {
+          gapTimer.current = undefined;
+          void fillGap().catch(() => {});
+        }, 1500);
         return;
       }
       apply(e.items ?? []);
@@ -197,6 +201,7 @@ export function useTranscript(mid: string, sid: string, opts: { starting?: boole
       off();
       deltas.current.cancel();
       clearTimeout(gapTimer.current);
+      gapTimer.current = undefined; // the next session's first gap starts its own
       clearInterval(staleTimer);
       document.removeEventListener("visibilitychange", checkStale);
       send({ type: "unsubscribe", machine_id: mid, session_id: sid });

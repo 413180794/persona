@@ -3,9 +3,10 @@ package hub
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 )
@@ -85,7 +86,7 @@ func answerMayReply(w http.ResponseWriter, r *http.Request) bool {
 	}
 	_ = json.Unmarshal(raw, &in)
 	if len(in.Changes) > 0 || assistantwire.AsksAgent(in.Text) {
-		writeErr(w, http.StatusForbidden, errors.New("this device can only reply with text"))
+		writeErr(w, http.StatusForbidden, i18n.ErrEnglish("inbox-errors.reply_text_only"))
 		return false
 	}
 	return true

@@ -2,8 +2,9 @@ package assistant
 
 import (
 	"context"
-	"errors"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The blocks of inbox items a connector moving out of the hub hands over in its things' extra (connector.MigratableConnectors,
@@ -105,7 +106,7 @@ func docOffers(d InboxDoc, ch DocChange) bool {
 	return false
 }
 
-var errNoDocRow = errors.New("this row or status column is not in the item")
+var errNoDocRow = i18n.ErrEnglish("inbox-errors.no_doc_row")
 
 // setDocStatus moves one row's status of a document item (the user's tap): the item's connector does it
 // (inbox.reply's changes, through the hub) and reads the document again.

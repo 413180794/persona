@@ -526,7 +526,7 @@ function Models() {
   );
 }
 
-function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: string | null; onClose: () => void; onChanged: () => void; onEdit: (l: LauncherView) => void }) {
+export function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: string | null; onClose: () => void; onChanged: () => void; onEdit: (l: LauncherView) => void }) {
   const machines = useStore((s) => s.machines);
   const [l, setL] = useState<LauncherView | null>(null);
   const [error, setError] = useState("");
@@ -537,6 +537,10 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
   // extensions draw a section here (docs/extensions.md "Declarative UI" launcher_section)
   const hasExtensions = useStore((s) => hubHasExt(s.features, "manager"));
 
+  // The dialog stays mounted from one launcher to the next: an answer or a test result for a name it no longer shows
+  // is dropped, or the body (and Delete) would be another launcher's under this one's title (#5374).
+  const shown = useRef(name);
+  shown.current = name;
   useEffect(() => {
     setL(null);
     setError("");
@@ -544,9 +548,13 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
     setConfirm(false);
     setShowDef(false);
     if (!name) return;
+    let live = true;
     api<{ launcher: LauncherView }>(enLauncher(name))
-      .then((r) => setL(r.launcher))
-      .catch((e) => setError(errorText(e)));
+      .then((r) => live && setL(r.launcher))
+      .catch((e) => live && setError(errorText(e)));
+    return () => {
+      live = false;
+    };
   }, [name]);
 
   // machines whose launcher sets the same, once
@@ -564,6 +572,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
   const running = Object.values(checks).some((c) => c === null);
   const check = async () => {
     if (!l) return;
+    const asked = name;
     setChecks(Object.fromEntries(testOn.map((id) => [id, null])));
     await Promise.all(
       testOn.map(async (id) => {
@@ -573,7 +582,7 @@ function LauncherDetailDialog({ name, onClose, onChanged, onEdit }: { name: stri
         } catch (e) {
           c = { ok: false, millis: 0, error: errorText(e) };
         }
-        setChecks((x) => ({ ...x, [id]: c }));
+        if (shown.current === asked) setChecks((x) => ({ ...x, [id]: c }));
       }),
     );
   };

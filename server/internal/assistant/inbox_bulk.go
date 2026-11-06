@@ -5,11 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/apierr"
 )
@@ -212,7 +213,7 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 	return res
 }
 
-var errBulkTooMany = errors.New("too many items in one request")
+var errBulkTooMany = i18n.ErrEnglish("inbox-errors.bulk_limit")
 
 // inboxBulkReply is POST /api/v1/inbox/bulk's answer: the result, the changed ids, and the request that undoes it.
 type inboxBulkReply struct {
@@ -239,7 +240,7 @@ func (s *Service) inboxBulkRoutes() {
 			Items []inboxBulkTarget `json:"items"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Done == nil {
-			apierr.Write(w, http.StatusBadRequest, errors.New("done and items are required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.bulk_done_required"))
 			return
 		}
 		if len(in.Items) > inboxBulkMax {
@@ -270,13 +271,13 @@ func (s *Service) inboxBulkRoutes() {
 		}
 		switch {
 		case in.Action != bulkDone && in.Action != bulkDismiss && in.Action != bulkReopen:
-			apierr.Write(w, http.StatusBadRequest, errors.New("action is done, dismiss or reopen"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.bulk_action"))
 			return
 		case in.Filter != nil && len(in.Items) > 0, in.Filter == nil && in.Items == nil:
-			apierr.Write(w, http.StatusBadRequest, errors.New("either ids (items) or a filter"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.bulk_targets"))
 			return
 		case in.Filter != nil && (in.Action == bulkReopen || in.AsOf.IsZero() || !in.Filter.valid()):
-			apierr.Write(w, http.StatusBadRequest, errors.New("a filter files open items as of a list: as_of is required, and reopen takes ids"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.bulk_filter"))
 			return
 		case len(in.Items) > inboxBulkMax:
 			apierr.Write(w, http.StatusRequestEntityTooLarge, errBulkTooMany)

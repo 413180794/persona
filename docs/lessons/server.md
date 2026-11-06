@@ -636,3 +636,8 @@ Translate only an exact standard HTTP status phrase at this boundary. Custom nod
 The node recorded which transcript line to tie a send to only **after** the send returned, but Claude Code writes the line as soon as it takes the message and the watch reads every 250 ms, so the line was often pushed before the send returned.
 That line is pushed once, so the push never carried `client_msg_id`; only a later page did, and the app's "sending" bubble waited for that page.
 Any mark a push reads (an echo, an owner, a session id) is recorded before typing, starting or writing; undo it on failure instead of recording it on success.
+## Flattened inbox errors need response-time translation
+
+Typed localization errors lose their key when RPC transmits only Error(), and persisted inbox failures or reply receipts retain the language in which they were written. Keep the old canonical error spelling, but translate a response copy from narrowly allowlisted hub-owned catalogs. Preserve context, titles, model summaries, suggestions, opaque metadata and unknown diagnostics; do not use a general reverse-translation pass over user content. Decode opaque JSON numbers with UseNumber so a localized error cannot corrupt an unrelated large ID.
+
+Error-valued message arguments and structured field errors also need the request locale. Localize only a direct typed error or a recognized canonical message; do not drop arbitrary wrapper context. Regression tests cover RPC-flattened strings, old receipts, changing request language, nested errors and untouched user/model text.

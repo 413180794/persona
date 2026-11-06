@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/i18n"
+
 	"github.com/nwverse/persona/server/internal/connector"
 )
 
@@ -166,7 +168,7 @@ func (s *Service) replyMigrated(ctx context.Context, r inboxReplyReq) (bool, err
 		changes = append(changes, connector.StatusChange{Ref: ch.Ref, Field: ch.Field, Value: ch.Value})
 	}
 	if len(changes) > 0 && it.Doc == nil {
-		return false, fmt.Errorf("only document items have a status to change")
+		return false, i18n.ErrEnglish("inbox-errors.document_only")
 	}
 	if err := s.connectorReply(ctx, migratedConnectorID, connector.InboxReply{Thread: migratedThread(&it), ItemID: it.ID, Last: it.Last,
 		Text: r.text, ClientID: clientID, Changes: changes}, r.sendID); err != nil {

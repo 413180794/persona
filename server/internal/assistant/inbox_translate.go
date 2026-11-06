@@ -5,14 +5,16 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -72,7 +74,7 @@ func (s *Service) translateFingerprint(ctx context.Context) (string, error) {
 func (s *Service) translateTexts(ctx context.Context, texts []string, target string) ([]string, error) {
 	lang, ok := assistantwire.TranslateLanguages[target]
 	if !ok {
-		return nil, fmt.Errorf("unknown target language %q", target)
+		return nil, i18n.ErrEnglish("inbox-errors.translation_target", i18n.Args{"target": strconv.Quote(target)})
 	}
 	fingerprint, err := s.translateFingerprint(ctx)
 	if err != nil {
@@ -112,7 +114,7 @@ func (s *Service) translateTexts(ctx context.Context, texts []string, target str
 		return nil, err
 	}
 	if len(res.Texts) != len(in) {
-		return nil, fmt.Errorf("the model returned %d texts for %d", len(res.Texts), len(in))
+		return nil, i18n.ErrEnglish("inbox-errors.translation_count", i18n.Args{"actual": len(res.Texts), "expected": len(in)})
 	}
 	for j, i := range todo {
 		v := strings.TrimSpace(res.Texts[j])
@@ -136,7 +138,7 @@ type mailTranslation struct {
 // part): the translation the inbox keeps of it when there is one by the same model, else a new one.
 func (s *Service) translateMail(ctx context.Context, ref assistantwire.InboxMailRef, target string) (mailTranslation, error) {
 	if _, ok := assistantwire.TranslateLanguages[target]; !ok {
-		return mailTranslation{}, fmt.Errorf("unknown target language %q", target)
+		return mailTranslation{}, i18n.ErrEnglish("inbox-errors.translation_target", i18n.Args{"target": strconv.Quote(target)})
 	}
 	fingerprint, err := s.translateFingerprint(ctx)
 	if err != nil {
@@ -152,7 +154,7 @@ func (s *Service) translateMail(ctx context.Context, ref assistantwire.InboxMail
 func (s *Service) translateMailFresh(ctx context.Context, ref assistantwire.InboxMailRef, target, fingerprint string) (mailTranslation, error) {
 	lang, ok := assistantwire.TranslateLanguages[target]
 	if !ok {
-		return mailTranslation{}, fmt.Errorf("unknown target language %q", target)
+		return mailTranslation{}, i18n.ErrEnglish("inbox-errors.translation_target", i18n.Args{"target": strconv.Quote(target)})
 	}
 	b := &s.inbox
 	key := translateKey("m", fingerprint, ref.AccountID, ref.Mailbox, fmt.Sprint(ref.UID), target)
@@ -180,7 +182,7 @@ func (s *Service) translateMailFresh(ctx context.Context, ref assistantwire.Inbo
 	}
 	t.Subject, t.Text = strings.TrimSpace(t.Subject), strings.TrimSpace(t.Text)
 	if t.Text == "" && text != "" {
-		return mailTranslation{}, errors.New("the model returned no translation")
+		return mailTranslation{}, i18n.ErrEnglish("inbox-errors.translation_empty")
 	}
 	t.ModelFingerprint = fingerprint
 	raw, _ := json.Marshal(t)
@@ -196,7 +198,7 @@ func (s *Service) translateRoutes() {
 			Target string   `json:"target"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || len(in.Texts) == 0 || len(in.Texts) > translateBatch {
-			apierr.Write(w, http.StatusBadRequest, fmt.Errorf("texts: 1 to %d", translateBatch))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.translation_batch", i18n.Args{"max": translateBatch}))
 			return
 		}
 		out, err := s.translateTexts(r.Context(), in.Texts, in.Target)
@@ -214,7 +216,7 @@ func (s *Service) translateRoutes() {
 			Target    string `json:"target"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.AccountID == "" || in.UID == 0 {
-			apierr.Write(w, http.StatusBadRequest, errors.New("account_id and uid are required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.mail_target_required"))
 			return
 		}
 		if in.Mailbox == "" {

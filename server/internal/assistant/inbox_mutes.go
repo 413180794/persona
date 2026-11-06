@@ -3,12 +3,14 @@ package assistant
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/i18n"
 
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/assistantwire"
@@ -218,7 +220,7 @@ func (s *Service) InboxRepoMutes(ctx context.Context, p assistantwire.InboxRepoM
 		keep := map[string]bool{}
 		for _, r := range p.Repos {
 			if !strings.Contains(r, "/") {
-				return nil, fmt.Errorf("muted repository %q is not owner/name", r)
+				return nil, i18n.ErrEnglish("inbox-errors.muted_repository", i18n.Args{"repo": strconv.Quote(r)})
 			}
 			keep[strings.ToLower(r)] = true
 		}
@@ -254,7 +256,7 @@ func (s *Service) listedMutes() []InboxMute {
 	return mutes
 }
 
-var errNoMuteOption = errors.New("this item cannot be muted by that")
+var errNoMuteOption = i18n.ErrEnglish("inbox-errors.cannot_mute")
 
 func (s *Service) inboxMuteRoutes() {
 	s.handle("GET /api/v1/inbox/mutes", func(w http.ResponseWriter, r *http.Request) {

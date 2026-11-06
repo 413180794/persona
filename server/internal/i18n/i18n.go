@@ -340,8 +340,9 @@ func Has(key string) bool {
 // Message is an error whose text is a catalog entry: written to a client (apierr) it reads in that client's
 // language; anywhere else (logs, older paths) Error() is the default language's text, what it said before i18n.
 type Message struct {
-	Key  string
-	Args Args
+	Key            string
+	Args           Args
+	legacyLanguage Lang
 }
 
 // Err is an error with key's text.
@@ -353,16 +354,40 @@ func Err(key string, args ...Args) error {
 	return m
 }
 
-func (m *Message) Error() string { return T(Default, m.Key, m.Args) }
+// ErrEnglish keeps an English-origin error's no-locale/log text while explicit client locales translate it.
+func ErrEnglish(key string, args ...Args) error {
+	m := Err(key, args...).(*Message)
+	m.legacyLanguage = En
+	return m
+}
+
+func (m *Message) Error() string { return T(m.legacyLanguage.Or(Default), m.Key, m.Args) }
 
 // Text is the message in l.
-func (m *Message) Text(l Lang) string { return T(l, m.Key, m.Args) }
+func (m *Message) Text(l Lang) string {
+	args := Args{}
+	for key, value := range m.Args {
+		if err, ok := value.(error); ok {
+			args[key] = Localize(err, l)
+		} else {
+			args[key] = value
+		}
+	}
+	return T(l, m.Key, args)
+}
 
 // Localize is err's text in l: a Message (not wrapped in more text) reads in l, any other error as it is.
 func Localize(err error, l Lang) string {
+	// Direct typed errors may localize their own structured fields. Do not discard an arbitrary wrapper's text.
+	if text, ok := err.(interface{ Text(Lang) string }); ok && l != "" {
+		return text.Text(l)
+	}
 	var m *Message
 	if l != "" && errors.As(err, &m) && err.Error() == m.Error() {
 		return m.Text(l)
+	}
+	if l != "" {
+		return InboxText(l, err.Error())
 	}
 	return err.Error()
 }

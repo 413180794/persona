@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -111,6 +112,13 @@ func (h *Hub) relayHTTP(w http.ResponseWriter, r *http.Request, id string, send,
 	}
 	if res.Status >= http.StatusBadRequest && strings.HasPrefix(r.URL.Path, "/api/v1/machines/") && strings.HasSuffix(r.URL.Path, "/deploy") {
 		res.Body = localizedDeploymentError(h.requestLang(r), res.Body)
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/inbox") || strings.HasPrefix(r.URL.Path, "/api/v1/translate") {
+		localized := i18n.InboxJSON(h.requestLang(r), res.Body)
+		if !bytes.Equal(localized, res.Body) {
+			res.Body = localized
+			w.Header().Del("Content-Length")
+		}
 	}
 	w.WriteHeader(res.Status)
 	_, _ = w.Write(res.Body)

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/nwverse/persona/server/internal/i18n"
+
 	"github.com/nwverse/persona/server/internal/apierr"
 	"github.com/nwverse/persona/server/internal/connector"
 )
@@ -45,10 +47,10 @@ type InboxParent struct {
 }
 
 var (
-	errParentKind  = errors.New("parent kind must be inbox, todo or session")
-	errParentID    = errors.New("parent id must be 1–256 printable characters")
-	errParentCycle = errors.New("that parent would make a cycle")
-	errParentDeep  = errors.New("that parent would sit the item too deep (at most 8 levels)")
+	errParentKind  = i18n.ErrEnglish("inbox-errors.parent_kind")
+	errParentID    = i18n.ErrEnglish("inbox-errors.parent_id")
+	errParentCycle = i18n.ErrEnglish("inbox-errors.parent_cycle")
+	errParentDeep  = i18n.ErrEnglish("inbox-errors.parent_deep")
 )
 
 func knownParentKind(k string) bool {

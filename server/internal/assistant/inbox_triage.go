@@ -385,7 +385,7 @@ func (s *Service) replyInboxDo(ctx context.Context, id, text, clientID string, f
 	case c.Connector == nil && migratedThread(&c) != "": // a plugin took Feishu over (inbox_migrate.go)
 		already, err = s.replyMigrated(ctx, req)
 	case len(changes) > 0:
-		return InboxItem{}, errors.New("only document items have a status to change")
+		return InboxItem{}, i18n.ErrEnglish("inbox-errors.document_only")
 	case c.Connector != nil:
 		already, err = s.replyConnectorItem(ctx, req)
 	case c.Mail != nil:

@@ -304,7 +304,7 @@ type suggestIn struct {
 	Changes  []DocChange `json:"changes"`
 }
 
-var errNotProcessing = errors.New("this conversation was not started for an inbox item")
+var errNotProcessing = i18n.ErrEnglish("inbox-errors.not_processing")
 
 // errSuggestion is a suggestion the tool refuses, said so the model can hand in a better one.
 type errSuggestion struct{ msg string }
@@ -534,8 +534,8 @@ type suggestionReq struct {
 }
 
 var (
-	errSuggestionStale = errors.New("the suggestion was updated")
-	errAnswerOnly      = errors.New("this device can only confirm a reply or a conclusion as text")
+	errSuggestionStale = i18n.ErrEnglish("inbox-errors.suggestion_stale")
+	errAnswerOnly      = i18n.ErrEnglish("inbox-errors.answer_only")
 )
 
 func (s *Service) inboxSuggestionRoutes() {
@@ -552,11 +552,11 @@ func (s *Service) inboxSuggestionRoutes() {
 		case suggestConfirm, suggestReject:
 		case suggestInstruct:
 			if in.Text == nil || strings.TrimSpace(*in.Text) == "" {
-				apierr.Write(w, http.StatusBadRequest, errors.New("text is required"))
+				apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.text_required"))
 				return
 			}
 		default:
-			apierr.Write(w, http.StatusBadRequest, errors.New("action must be confirm, reject or instruct"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.suggestion_action"))
 			return
 		}
 		it, err := s.actOnSuggestion(r.Context(), r.PathValue("id"), in, fullRole(r))

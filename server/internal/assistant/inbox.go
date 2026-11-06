@@ -1050,16 +1050,16 @@ func (s *Service) collectSource(ctx context.Context, src assistantwire.InboxSour
 
 // ---- API ----
 
-var errNoInboxItem = errors.New("no such inbox item")
+var errNoInboxItem = i18n.ErrEnglish("inbox-errors.no_item")
 
 // errInboxItemDone is "Send" on a message card whose inbox item was filed since (sendFromCard): nothing is sent.
-var errInboxItemDone = errors.New("the inbox item was filed: nothing was sent")
+var errInboxItemDone = i18n.ErrEnglish("inbox-errors.item_done")
 
 // errInboxNotPersisted says the item moved in memory but its row could not be written; the in-memory move was
 // rolled back, so the request can be retried.
-var errInboxNotPersisted = errors.New("the inbox item could not be saved")
+var errInboxNotPersisted = i18n.ErrEnglish("inbox-errors.save_failed")
 
-var errCannotReply = errors.New("this item cannot be replied to")
+var errCannotReply = i18n.ErrEnglish("inbox-errors.cannot_reply")
 
 func (s *Service) inboxRoutes() {
 	s.inboxMuteRoutes()
@@ -1152,13 +1152,13 @@ func (s *Service) inboxRoutes() {
 			Card            string      `json:"card"` // the message card it is sent from (sendFromCard)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || strings.TrimSpace(in.Text) == "" && len(in.Changes) == 0 {
-			apierr.Write(w, http.StatusBadRequest, errors.New("text is required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.text_required"))
 			return
 		}
 		if !fullRole(r) {
 			// Posted as the user, a "/agent …" comes back as their request and starts an agent (docs/lark-agent.md).
 			if len(in.Changes) > 0 || assistantwire.AsksAgent(in.Text) {
-				apierr.Write(w, http.StatusForbidden, errors.New("this device can only reply with text"))
+				apierr.Write(w, http.StatusForbidden, i18n.ErrEnglish("inbox-errors.reply_text_only"))
 				return
 			}
 		}
@@ -1196,7 +1196,7 @@ func (s *Service) inboxRoutes() {
 		}
 		var in DocChange
 		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Ref == "" || in.Field == "" || in.Value == "" {
-			apierr.Write(w, http.StatusBadRequest, errors.New("ref, field and value are required"))
+			apierr.Write(w, http.StatusBadRequest, i18n.ErrEnglish("inbox-errors.doc_change_required"))
 			return
 		}
 		it, err := s.setDocStatus(r.Context(), r.PathValue("id"), in)
@@ -1229,7 +1229,7 @@ type inboxMailTarget struct {
 	Version string `json:"version"`
 }
 
-var errMailReplyTargetChanged = errors.New("mail reply target changed")
+var errMailReplyTargetChanged = i18n.ErrEnglish("inbox-errors.mail_target_changed")
 
 func mailTarget(it InboxItem) *inboxMailTarget {
 	if it.Mail == nil || len(it.Mail.UIDs) == 0 {

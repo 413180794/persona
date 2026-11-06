@@ -23,15 +23,24 @@ var deploymentPlaceholders = regexp.MustCompile(`\{(\w+)\}`)
 var deploymentTemplates = makeDeploymentTemplates()
 
 func makeDeploymentTemplates() []deploymentTemplate {
+	return makeCatalogTemplates(func(key string) bool {
+		return strings.HasPrefix(key, "devices-deploy.") || strings.HasPrefix(key, "hub-machine.deploy_")
+	})
+}
+
+func makeCatalogTemplates(eligible func(string) bool) []deploymentTemplate {
 	var out []deploymentTemplate
 	for _, l := range Langs {
 		for key, text := range catalogs[l] {
-			if !strings.HasPrefix(key, "devices-deploy.") && !strings.HasPrefix(key, "hub-machine.deploy_") {
+			if !eligible(key) {
 				continue
 			}
 			base := key
-			if strings.HasPrefix(key, "devices-deploy.minutes_") || strings.HasPrefix(key, "devices-deploy.seconds_") {
-				base = key[:strings.LastIndex(key, "_")]
+			for _, suffix := range []string{"_zero", "_one", "_two", "_few", "_many", "_other"} {
+				if strings.HasSuffix(key, suffix) {
+					base = strings.TrimSuffix(key, suffix)
+					break
+				}
 			}
 			var pattern strings.Builder
 			pattern.WriteString("(?s)^")

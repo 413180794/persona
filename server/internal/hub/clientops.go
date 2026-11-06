@@ -15,6 +15,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 var clientOpUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -199,8 +200,12 @@ func writeClientOpResult(w http.ResponseWriter, result clientOpResult) {
 	if result.ContentType != "" {
 		w.Header().Set("Content-Type", result.ContentType)
 	}
+	localized := i18n.InboxJSON(i18n.OfWriter(w), result.Body)
+	if !bytes.Equal(localized, result.Body) {
+		w.Header().Del("Content-Length")
+	}
 	w.WriteHeader(result.Status)
-	_, _ = w.Write(result.Body)
+	_, _ = w.Write(localized)
 }
 
 func (h *Hub) waitClientOp(w http.ResponseWriter, r *http.Request, op *db.ClientOp) {

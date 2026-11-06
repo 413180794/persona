@@ -176,7 +176,7 @@ func TestCallSitesUseKnownKeys(t *testing.T) {
 			if id, ok := sel.X.(*ast.Ident); !ok || id.Name != pkg {
 				return true
 			}
-			at := map[string]int{"T": 1, "Err": 0}
+			at := map[string]int{"T": 1, "Err": 0, "ErrEnglish": 0}
 			i, ok := at[sel.Sel.Name]
 			if !ok || len(call.Args) <= i {
 				return true
