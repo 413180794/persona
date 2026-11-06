@@ -56,7 +56,18 @@ nonisolated struct ExtensionDisableConfirmation {
 
 nonisolated struct ExtensionRemovalResult: Decodable, Sendable {
     var removedMembers: [String]?
-    enum CodingKeys: String, CodingKey { case removedMembers = "removed_members" }
+    /// What the hub could not clean up (#4466): the extension is removed, these are for the user to do by hand. nil
+    /// from an older hub.
+    var warnings: [String]?
+    var cleanupWarnings: [String] { warnings ?? [] }
+    enum CodingKeys: String, CodingKey { case removedMembers = "removed_members", warnings }
+}
+
+/// An uninstall that went through with cleanup left to do (#4819): every warning, shown until the user closes it.
+nonisolated struct ExtensionRemovalNotice: Identifiable, Equatable, Sendable {
+    var id = UUID()
+    var title: String
+    var warnings: [String]
 }
 
 /// One confirmation covers each preview's own permission summary; for an older hub that needs no bundle, the new field is not sent.

@@ -30471,6 +30471,28 @@
         }
       }
     },
+    "卸载已完成，还有下面这些要你手动处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uninstalled. A few things still need you to clean them up by hand."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンインストールは完了しました。以下は手動で対応してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卸载已完成，还有下面这些要你手动处理。"
+          }
+        }
+      }
+    },
     "卸载没有完成": {
       "localizations": {
         "en": {
@@ -104069,6 +104091,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要先在 Meta AI 里连上眼镜。点下面的按钮会跳到 Meta AI，连好后再回到 Persona。"
+          }
+        }
+      }
+    },
+    "需要手动处理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs manual cleanup"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手動での対応が必要"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要手动处理"
           }
         }
       }

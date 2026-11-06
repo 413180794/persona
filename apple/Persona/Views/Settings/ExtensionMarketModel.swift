@@ -411,6 +411,8 @@ enum ExtensionMarketText {
     private(set) var isPack = false
     private(set) var removingMembers = false
     private(set) var removalMessage = String(localized: "已卸载")
+    /// The last uninstall went through with cleanup warnings: shown until its OK (acknowledgeRemoval), not as a toast.
+    var removalNotice: ExtensionRemovalNotice?
     var uninstallConfirmation: ExtensionDisableConfirmation?
     /// The operation the open preview belongs to (a hub with operations): agreeing goes on with it, closing the
     /// sheet without agreeing cancels it.
@@ -526,6 +528,20 @@ enum ExtensionMarketText {
         Task { await operations.dismiss(id) }
     }
 
+    /// The user read the cleanup warnings.
+    func acknowledgeRemoval() { removalNotice = nil }
+
+    #if DEBUG
+    /// `-showRemovalWarnings YES`: an uninstall's cleanup warnings up, for screenshots.
+    func showSampleRemovalNotice() {
+        removalNotice = ExtensionRemovalNotice(title: String(localized: "已卸载"), warnings: [
+            "请手动删除 /Users/example/.persona/extensions/example/data/" + String(repeating: "cache/", count: 12) + "index.db", // i18n-ignore
+            "请手动删除 /Users/example/.persona/extensions/example/package", // i18n-ignore
+            "清理 /tmp/example-extension 失败：permission denied", // i18n-ignore
+        ])
+    }
+    #endif
+
     func uninstall(cascade: Bool = false, members: Bool = false) async -> Bool {
         guard canUninstall, !working else { return false }
         removingMembers = members
@@ -537,6 +553,9 @@ enum ExtensionMarketText {
             removalMessage = members
                 ? result.removedMembers.map { String(localized: "合集已卸载；成功卸载 \($0.count) 个成员") } ?? String(localized: "合集已卸载，成员结果未返回")
                 : String(localized: "已卸载")
+            // Removed, with files left for the user (#4466): it counts as uninstalled, the warnings stay up.
+            let warnings = result.cleanupWarnings
+            removalNotice = warnings.isEmpty ? nil : ExtensionRemovalNotice(title: removalMessage, warnings: warnings)
             uninstallConfirmation = nil
             error = nil
             await load()

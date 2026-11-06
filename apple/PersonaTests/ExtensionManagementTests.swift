@@ -137,6 +137,61 @@ struct ExtensionManagementTests {
         #expect(m.removalMessage == "合集已卸载；成功卸载 1 个成员")
     }
 
+    // An uninstall can succeed with cleanup warnings (#4466): every one is kept, in order, repeats and long paths
+    // included; an older hub's answer (no warnings, null, []) has none (#4819).
+    @Test func removalResultsKeepEveryCleanupWarning() throws {
+        let long = "请手动删除 /tmp/example-extension/" + String(repeating: "long-directory/", count: 24) + "data"
+        let warnings = ["清理 /tmp/example-one 失败", long, "清理 /tmp/example-one 失败"]
+        let body = try JSONSerialization.data(withJSONObject: ["ok": true, "warnings": warnings, "removed_members": ["one"]])
+        let result = try JSON.decoder.decode(ExtensionRemovalResult.self, from: body)
+        #expect(result.cleanupWarnings == warnings)
+        #expect(result.removedMembers == ["one"])
+        for legacy in [#"{"ok":true}"#, #"{"ok":true,"warnings":null}"#, #"{"ok":true,"warnings":[]}"#, #"{"removed_members":["one"]}"#] {
+            let old = try JSON.decoder.decode(ExtensionRemovalResult.self, from: Data(legacy.utf8))
+            #expect(old.cleanupWarnings.isEmpty, "\(legacy)")
+        }
+    }
+
+    private func installedHub(_ answer: @escaping (LocalRequest) throws -> Data) -> FakeHub {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/plugins/-/catalog", json: #"{"plugins":[{"market":"market","id":"example","name":"示例扩展","version":"1.0.0","installed":"1.0.0","from_this_market":true}]}"#)
+        hub.on("GET", path, json: detail)
+        hub.on("DELETE", path, answer)
+        return hub
+    }
+
+    @Test func anUninstallWithWarningsIsDoneAndKeepsThemUntilAcknowledged() async throws {
+        let warnings = ["请手动删除 /tmp/example-extension/data", "请手动删除 /tmp/example-extension/package"]
+        let hub = installedHub { _ in try JSONSerialization.data(withJSONObject: ["ok": true, "warnings": warnings]) }
+        let m = MarketExtensionModel(market: "market", id: "example", deps: .init(api: { hub.client }))
+        await m.load()
+        #expect(await m.uninstall())
+        #expect(m.error == nil)
+        #expect(m.removalMessage == "已卸载")
+        let notice = try #require(m.removalNotice)
+        #expect(notice.warnings == warnings)
+        #expect(notice.title == "已卸载")
+        #expect(hub.sent("DELETE", path).count == 1)
+        m.acknowledgeRemoval()
+        #expect(m.removalNotice == nil)
+    }
+
+    @Test func anUninstallWithoutWarningsOrThatFailedShowsNoNotice() async throws {
+        for legacy in [#"{"ok":true}"#, #"{"ok":true,"warnings":null}"#, #"{"ok":true,"warnings":[]}"#] {
+            let hub = installedHub { _ in Data(legacy.utf8) }
+            let m = MarketExtensionModel(market: "market", id: "example", deps: .init(api: { hub.client }))
+            await m.load()
+            #expect(await m.uninstall())
+            #expect(m.removalNotice == nil, "\(legacy)")
+        }
+        let failing = installedHub { _ in throw APIError(status: 500, message: "卸载失败") }
+        let m = MarketExtensionModel(market: "market", id: "example", deps: .init(api: { failing.client }))
+        await m.load()
+        #expect(await !m.uninstall())
+        #expect(m.removalNotice == nil)
+        #expect(m.error != nil || m.operation?.state == .failed)
+    }
+
     private func decodePreview(_ extra: String) throws -> ExtensionPreview {
         var json = try #require(try JSONSerialization.jsonObject(with: Data(extra.utf8)) as? [String: Any])
         json["preview_id"] = "main-preview"

@@ -260,6 +260,12 @@ struct MarketExtensionDetailView: View {
         } message: {
             Text(page.uninstallConfirmation?.message ?? "")
         }
+        .sheet(item: $page.removalNotice) { notice in
+            ExtensionRemovalNoticeSheet(notice: notice) { page.acknowledgeRemoval() }
+        }
+        #if DEBUG
+        .task { if UserDefaults.standard.bool(forKey: "showRemovalWarnings") { page.showSampleRemovalNotice() } }
+        #endif
         // Closed without Install: the operation waiting on this preview is canceled.
         .sheet(item: $page.preview, onDismiss: { page.declined() }) { pv in
             ExtensionInstallSheet(preview: pv, name: page.item?.name ?? pv.manifest.name ?? pv.manifest.id) {
@@ -295,6 +301,8 @@ struct MarketExtensionDetailView: View {
     }
 
     private func done(_ kind: ExtensionOperation.Kind) {
+        // Cleanup left to do: its sheet says so and stays until closed (#4819), no toast over it.
+        if kind == .uninstall, page.removalNotice != nil { Haptics.attention(); return }
         Haptics.success()
         app.toast = Toast(kind == .uninstall ? page.removalMessage : ExtensionOperationText.title(
             ExtensionOperation(id: "", kind: kind, extensionID: "", state: .succeeded)), style: .success)
@@ -708,6 +716,50 @@ private struct MarketRow: View {
 
 /// Adding a market (its address and an optional token), or a market's new token: the token is typed in hidden and never
 /// shown again; the hub reads the index before it answers, and why it could not stays on the sheet.
+/// An uninstall that went through with cleanup left (#4819): it is uninstalled, and every warning with its path
+/// stays readable and selectable until OK. Not swiped away by accident: closing it is the acknowledgement.
+private struct ExtensionRemovalNoticeSheet: View {
+    var notice: ExtensionRemovalNotice
+    var done: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    NoticeBanner(text: String(localized: "卸载已完成，还有下面这些要你手动处理。"))
+                        .listRowInsets(EdgeInsets(top: 0, leading: Theme.Space.page, bottom: 0, trailing: Theme.Space.page))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                Section {
+                    ForEach(Array(notice.warnings.enumerated()), id: \.offset) { _, warning in
+                        Text(warning)
+                            .font(Theme.Font.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    SettingsHeading(String(localized: "需要手动处理"))
+                }
+            }
+            .themedPage()
+            .navigationTitle(notice.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(action: done) { Text("知道了").lineLimit(1) }
+                        .accessibilityIdentifier("market-removal-done")
+                }
+            }
+        }
+        .interactiveDismissDisabled()
+        .presentationDetents([.medium, .large])
+        #if os(macOS)
+        .macSheet()
+        #endif
+    }
+}
+
 private struct MarketTokenSheet: View {
     var title: String
     var asksSpec: Bool
