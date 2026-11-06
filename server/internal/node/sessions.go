@@ -800,6 +800,8 @@ func (n *Node) sessionList(ctx context.Context, refreshAgents bool) []proto.Sess
 		n.decorate(&s)
 		out = append(out, s)
 	}
+	// Terminal-owned Codex parents were already seen before history was added.
+	resolveCodexHierarchy(out)
 	var keptSessions []proto.Session
 	for _, s := range out {
 		if s.Cwd != "" && n.cwdBlocked(s.Cwd) && !n.isAssistantSession(s.SessionID) && !n.keptSessions()[s.SessionID] {
@@ -1872,6 +1874,14 @@ func listKeySized(list []proto.Session, size int) string {
 		w.b.WriteByte('|')
 		w.str(s.Suggestion, '|')
 		w.str(s.SpawnFrom, '\n')
+		w.b.WriteString("hierarchy:")
+		w.quote(s.ParentThreadID, '/')
+		w.quote(s.ParentSessionID, '/')
+		w.quote(s.RootSessionID, '/')
+		w.str(strconv.FormatBool(s.IsSubagent), '/')
+		w.quote(s.RepoRoot, '/')
+		w.quote(s.SpaceID, '/')
+		w.quote(s.SpaceKind, '\n')
 		writeUltracodeKey(&w, s)
 		if s.Activity != "" { // a new step shows at once, not with the next 10 s of updated_at
 			w.b.WriteString("activity:")

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="agents_child_tasks">子任务（%1$d）</string>
+    <string name="agents_child_tasks_kind">子任务</string>
     <plurals name="agents_summary_requests">
         <item quantity="other">有 %1$d 件事等你定</item>
     </plurals>

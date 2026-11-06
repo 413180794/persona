@@ -94,6 +94,7 @@ class AgentTabShotsTest {
                             is TreeRowEntry -> SlotRow(entry.row, "工作站", AgentRowMetadata(), now, false, false, false, depth = entry.depth,
                                 position = GroupPosition(entry.first, entry.last), located = entry.located, onOpen = {}, menuItems = { emptyList() },
                                 launcher = entry.launcher, branch = entry.branch)
+                            is TreeChildrenEntry -> error("Fixture has no Codex subtasks")
                             is TreeIdleEntry -> AgentIdleRow(entry.hidden, {}, depth = entry.depth)
                         }
                     }

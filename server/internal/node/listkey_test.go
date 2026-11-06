@@ -15,6 +15,7 @@ func listKeyFmt(list []proto.Session) string {
 	var b strings.Builder
 	for _, s := range list {
 		fmt.Fprintf(&b, "%s|%s|%s|%s|%s|%s|%s|%s|%d|%q|%s|%s\n", s.SessionID, s.Status, s.Title, s.PaneID, s.SpaceName, s.ParentSpaceID, s.SlotName, s.LastText, s.UpdatedAt.Unix()/10, s.Queued, s.Suggestion, s.SpawnFrom)
+		fmt.Fprintf(&b, "hierarchy:%q/%q/%q/%v/%q/%q/%q\n", s.ParentThreadID, s.ParentSessionID, s.RootSessionID, s.IsSubagent, s.RepoRoot, s.SpaceID, s.SpaceKind)
 		if s.Activity != "" {
 			fmt.Fprintf(&b, "activity:%s/%d\n", s.Activity, unixOf(s.ActivityAt))
 		}
@@ -101,6 +102,14 @@ func listKeyVariants() (proto.Session, map[string]proto.Session) {
 		Subagents: []proto.Subagent{{ID: "a1", Running: true, UpdatedAt: at}},
 		Ports:     []proto.Port{{Port: 3000, PID: 7, Title: "dev"}}}
 	v := map[string]func(*proto.Session){
+		"parent_thread_id":  func(s *proto.Session) { s.ParentThreadID = "parent" },
+		"parent_session_id": func(s *proto.Session) { s.ParentSessionID = "parent-public" },
+		"root_session_id":   func(s *proto.Session) { s.RootSessionID = "root-public" },
+		"is_subagent":       func(s *proto.Session) { s.IsSubagent = true },
+		"repo_root":         func(s *proto.Session) { s.RepoRoot = "/work/project" },
+		"space_id":          func(s *proto.Session) { s.SpaceID = "project-id" },
+		"space_kind":        func(s *proto.Session) { s.SpaceKind = "codex_app" },
+
 		"session_id":    func(s *proto.Session) { s.SessionID = "s2" },
 		"status":        func(s *proto.Session) { s.Status = proto.StatusDone },
 		"title":         func(s *proto.Session) { s.Title = "t2" },

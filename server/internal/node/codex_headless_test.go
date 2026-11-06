@@ -82,9 +82,9 @@ func TestCodexExecRunOnAnAppServerIsListed(t *testing.T) {
 	t.Fatal("an app-server's exec thread was hidden")
 }
 
-// #4745: a parent's subagents (a reviewer skill's thread_spawn children) were listed as agents of their own, titled
-// after their directory: each pushed "Done" and stayed "Unread". session_meta marks them; the parent stays.
-func TestCodexSubagentRolloutsAreNotListed(t *testing.T) {
+// Historical subagents remain available with explicit hierarchy metadata. Consumers
+// exclude them from top-level counters rather than discarding their transcripts.
+func TestCodexSubagentRolloutsRetainTheirRelationships(t *testing.T) {
 	n := remoteTestNode(t)
 	home := t.TempDir()
 	dir := filepath.Join(home, "sessions", "2026", "11", "06")
@@ -98,10 +98,10 @@ func TestCodexSubagentRolloutsAreNotListed(t *testing.T) {
 	}{
 		{parent, `{"id":"` + parent + `","originator":"codex-mew","source":"cli","cwd":"/work/home"}`, true},
 		// As Codex 0.159 writes it: thread_source, parent_thread_id and source.subagent.thread_spawn all say so.
-		{"0e000000-0000-4000-8000-0000000000a1", `{"id":"0e000000-0000-4000-8000-0000000000a1","session_id":"` + parent + `","forked_from_id":"` + parent + `","parent_thread_id":"` + parent + `","originator":"codex-mew","cwd":"/work/home","source":{"subagent":{"thread_spawn":{"parent_thread_id":"` + parent + `","depth":1,"agent_path":"/root/security","agent_nickname":"Copernicus"}}},"thread_source":"subagent"}`, false},
+		{"0e000000-0000-4000-8000-0000000000a1", `{"id":"0e000000-0000-4000-8000-0000000000a1","session_id":"` + parent + `","forked_from_id":"` + parent + `","parent_thread_id":"` + parent + `","originator":"codex-mew","cwd":"/work/home","source":{"subagent":{"thread_spawn":{"parent_thread_id":"` + parent + `","depth":1,"agent_path":"/root/security","agent_nickname":"Copernicus"}}},"thread_source":"subagent"}`, true},
 		// Either mark alone is enough.
-		{"0e000000-0000-4000-8000-0000000000a2", `{"id":"0e000000-0000-4000-8000-0000000000a2","originator":"codex-tui","cwd":"/work/home","thread_source":"subagent"}`, false},
-		{"0e000000-0000-4000-8000-0000000000a3", `{"id":"0e000000-0000-4000-8000-0000000000a3","originator":"codex-tui","cwd":"/work/home","source":{"subagent":"review"}}`, false},
+		{"0e000000-0000-4000-8000-0000000000a2", `{"id":"0e000000-0000-4000-8000-0000000000a2","originator":"codex-tui","cwd":"/work/home","thread_source":"subagent"}`, true},
+		{"0e000000-0000-4000-8000-0000000000a3", `{"id":"0e000000-0000-4000-8000-0000000000a3","originator":"codex-tui","cwd":"/work/home","source":{"subagent":"review"}}`, true},
 		// A fork (forked_from_id only) is a conversation of its own.
 		{"0e000000-0000-4000-8000-0000000000a4", `{"id":"0e000000-0000-4000-8000-0000000000a4","forked_from_id":"` + parent + `","originator":"codex-tui","source":"cli","cwd":"/work/home"}`, true},
 	}

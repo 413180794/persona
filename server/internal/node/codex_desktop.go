@@ -390,6 +390,8 @@ type codexOrigin struct {
 	// exec: a one-shot run a program started (`codex exec`, an SDK, the App's background runs) or a subagent of one:
 	// nobody's conversation, not listed in Agents (programRun).
 	exec   bool
+	sub    bool
+	root   string // session_id identifies the shared root on newer Codex versions
 	parent string // the thread that spawned this subagent
 }
 
@@ -411,8 +413,11 @@ func readCodexOrigin(path string) codexOrigin {
 	var m struct {
 		Type    string `json:"type"`
 		Payload struct {
-			Originator string          `json:"originator"`
-			Source     json.RawMessage `json:"source"`
+			Originator   string          `json:"originator"`
+			Parent       string          `json:"parent_thread_id"`
+			SessionID    string          `json:"session_id"`
+			ThreadSource string          `json:"thread_source"`
+			Source       json.RawMessage `json:"source"`
 		} `json:"payload"`
 	}
 	if json.Unmarshal(line, &m) != nil || m.Type != "session_meta" {
@@ -433,6 +438,15 @@ func readCodexOrigin(path string) codexOrigin {
 	}
 	if json.Unmarshal(m.Payload.Source, &spawn) == nil {
 		o.parent = spawn.Subagent.ThreadSpawn.Parent
+	}
+	o.parent = firstNonEmpty(m.Payload.Parent, o.parent)
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(m.Payload.Source, &fields) == nil {
+		_, o.sub = fields["subagent"]
+	}
+	o.sub = o.sub || o.parent != "" || source == "subagent" || m.Payload.ThreadSource == "subagent"
+	if o.sub {
+		o.root = m.Payload.SessionID
 	}
 	codexOrigins.Store(path, o)
 	return o

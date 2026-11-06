@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="agents_child_tasks">Subtasks (%1$d)</string>
+    <string name="agents_child_tasks_kind">subtasks</string>
     <string name="agents_text_raw" translatable="false">%1$s</string>
     <plurals name="agents_summary_requests">
         <item quantity="one">1 thing needs your decision</item>

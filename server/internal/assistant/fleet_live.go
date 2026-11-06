@@ -163,6 +163,9 @@ func buildFleet(agents []fleetInput, ixs []proto.Interaction) FleetState {
 func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) FleetState {
 	byKey := map[string]fleetInput{}
 	for _, a := range agents {
+		if a.Session.IsCodexSubagent() {
+			continue
+		}
 		byKey[a.Session.MachineID+"/"+a.Session.SessionID] = a
 	}
 	var st FleetState
@@ -187,7 +190,7 @@ func buildFleetIn(l i18n.Lang, agents []fleetInput, ixs []proto.Interaction) Fle
 	for _, a := range agents {
 		sess := a.Session
 		key := sess.MachineID + "/" + sess.SessionID
-		if a.Muted || asked[key] {
+		if sess.IsCodexSubagent() || a.Muted || asked[key] {
 			continue
 		}
 		switch sess.State {

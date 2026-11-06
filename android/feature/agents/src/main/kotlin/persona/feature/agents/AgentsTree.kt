@@ -62,6 +62,10 @@ internal data class TreeIdleEntry(val group: AgentListGroup, val hidden: Int, va
     override val key: String get() = "idle:${group.id}"
 }
 
+internal data class TreeChildrenEntry(val parent: AgentSession, val count: Int, val depth: Int, val expanded: Boolean) : AgentTreeEntry {
+    override val key: String get() = "children:${parent.id}"
+}
+
 private const val QUIET = "quiet"
 
 /**
@@ -72,6 +76,7 @@ private const val QUIET = "quiet"
  */
 internal fun agentTreeEntries(
     list: AgentListResult, machineFilter: String, tabs: Boolean = false, foldedTabs: Set<String> = emptySet(),
+    expandedTasks: Set<String> = emptySet(),
 ): List<AgentTreeEntry> {
     val entries = mutableListOf<AgentTreeEntry>()
     fun group(group: AgentListGroup, space: Boolean, depth: Int, first: Boolean) {
@@ -127,7 +132,20 @@ internal fun agentTreeEntries(
         if (it.under != null && byId[it.under]?.folded != false) return@forEach
         group(it, space = false, depth = if (it.under != null) 1 else 0, first = entries.isEmpty())
     }
-    return entries
+    val nested = mutableListOf<AgentTreeEntry>()
+    fun append(entry: AgentTreeEntry) {
+        nested += entry
+        if (entry !is TreeRowEntry) return
+        val children = list.children[entry.row.id].orEmpty()
+        if (children.isEmpty()) return
+        val expanded = entry.row.id in expandedTasks
+        nested += TreeChildrenEntry(entry.row, children.size, entry.depth + 1, expanded)
+        if (expanded) children.forEachIndexed { index, child ->
+            append(TreeRowEntry(child, entry.depth + 1, false, index == children.lastIndex, entry.located, branch = true))
+        }
+    }
+    entries.forEach(::append)
+    return nested
 }
 
 /** A computer in the filter strip: how many of its sessions the list would show. */
@@ -136,7 +154,7 @@ internal data class MachineCount(val machine: Machine, val count: Int)
 
 /** Every computer, online ones first (the tree's order), with the count the list would show for it. */
 internal fun machineCounts(machines: List<Machine>, rows: List<AgentSession>): List<MachineCount> {
-    val counts = rows.groupingBy { it.session.machineId }.eachCount()
+    val counts = rows.filterNot { it.session.isCodexSubagent }.groupingBy { it.session.machineId }.eachCount()
     return machines.sortedBy { !it.online }.map { MachineCount(it, counts[it.id] ?: 0) }
 }
 
@@ -169,5 +187,5 @@ internal val AgentMachineGroup.headingCounts: List<Pair<Status, Int>>
 internal val AgentListGroup.headingCounts: List<Pair<Status, Int>>
     get() = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread).map { state ->
         // A repository with working trees holds no rows itself (its trees do): it counts from stateCounts.
-        state.designStatus to if (rows.isEmpty()) stateCounts?.get(state) ?: 0 else rows.count { it.state == state }
+        state.designStatus to if (rows.isEmpty()) stateCounts?.get(state) ?: 0 else rows.count { !it.session.isCodexSubagent && it.state == state }
     }

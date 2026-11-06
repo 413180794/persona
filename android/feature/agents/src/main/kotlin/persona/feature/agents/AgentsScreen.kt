@@ -192,8 +192,9 @@ internal fun AgentsScreen(
     }
     // "By machine" shows a herdr tab's agents as a group (#2320), as the web's sidebar; the other groupings list one agent a row
     val tabs = page.preferences.grouping == AgentGrouping.MachineSpace
-    val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs) {
-        agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs)
+    var expandedTasks by remember { mutableStateOf(emptySet<String>()) }
+    val tree = remember(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, expandedTasks) {
+        agentTreeEntries(page.list, page.settings.machineFilter, tabs, page.preferences.foldedTabs, expandedTasks)
     }
     val spacesById = remember(spaces, page.preferences.grouping, page.list) {
         when (page.preferences.grouping) {
@@ -403,6 +404,11 @@ internal fun AgentsScreen(
                             onClose = closeSwipe(row, operations.busy) { operationDialog = AgentOperationDialog.Close(row.session) },
                             launcher = entry.launcher, branch = entry.branch,
                             requestCount = cardCounts[row.session.key] ?: 0, card = cards[row.session.key])
+                    }
+                    is TreeChildrenEntry -> item(entry.key, contentType = "children") {
+                        AgentSpaceHeader(stringResource(R.string.agents_child_tasks, entry.count), !entry.expanded,
+                            onToggle = { expandedTasks = if (entry.expanded) expandedTasks - entry.parent.id else expandedTasks + entry.parent.id },
+                            depth = entry.depth, kind = stringResource(R.string.agents_child_tasks_kind))
                     }
                     is TreeTabEntry -> item(entry.key, contentType = "tab") {
                         AgentTabEntryRow(entry, now, page.preferences.compact, onOpen = { openRow(entry.tab.lead) }, onToggle = { model.foldTab(entry.tab) },

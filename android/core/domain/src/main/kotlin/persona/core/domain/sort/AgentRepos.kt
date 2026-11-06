@@ -20,6 +20,10 @@ fun repoOf(cwd: String, repoRoot: String? = null): RepoPlace {
     if (path.isEmpty()) return RepoPlace("", "", "", main = true)
     val root = repoRoot.orEmpty().trimEnd('/')
     if (root.isNotEmpty()) {
+        val nestedTree = WorktreeMarkers.firstOrNull { path.startsWith(root + it) }?.let { marker ->
+            root + marker + path.removePrefix(root + marker).substringBefore('/')
+        }
+        if (nestedTree != null) return RepoPlace(root, baseName(root), nestedTree, main = false)
         val inside = path == root || path.startsWith("$root/")
         return RepoPlace(root, baseName(root), if (inside) root else path, main = inside)
     }

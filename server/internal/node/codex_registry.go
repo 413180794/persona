@@ -387,11 +387,12 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 	}
 	n.codices.mu.Unlock()
 	var out []proto.Session
+	projects := map[string]string{}
 	for id, src := range sources {
 		if seen[id] || n.isAssistantSession(id) || n.ownedAssistantSource(src.thread) {
 			continue
 		}
-		if n.programRun(id, src) || n.subagentRun(id, src) {
+		if n.programRun(id, src) {
 			continue
 		}
 		if n.agentFiltered("codex", src.path) && !n.keptSessions()[id] { // another platform's runs (agentfilters.go)
@@ -433,7 +434,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			if c.spec.Name != "" {
 				s.AgentName = c.spec.Name
 			}
-			s.ParentThreadID = t.parent
+			s.ParentThreadID = firstNonEmpty(t.parent, readCodexOrigin(src.path).parent)
 			if t.title != "" {
 				s.Title = t.title
 			}
@@ -454,7 +455,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			s.ReadOnlyReason = err.Error()
 		} else if o := readCodexOrigin(src.path); o.desktop {
 			switch {
-			case o.parent != "" && codexDesktopAvailable(src.home) && loadCodexAppState(src.home).listed(o.parent):
+			case o.parent != "":
 				s.AgentName, s.ParentThreadID = "Codex App", o.parent
 				s.ReadOnlyReason = "仅查看：这个子 Agent 由父 Agent 驱动"
 				n.placeCodexDesktop(&s, src, o.parent, true)
@@ -468,6 +469,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		} else if o.cli {
 			s.AgentName = "Codex CLI"
 		}
+		n.decorateCodexSession(&s, src, cfg.LegacyHome, projects)
 		if n.codexBlocked(id) {
 			markCodexConflict(&s)
 		}
@@ -482,35 +484,7 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SessionID < out[j].SessionID })
+	resolveCodexHierarchy(out)
 	slotCodexDesktop(out)
 	return out
-}
-
-// programRun: a one-shot run a program started (`codex exec`, an SDK; an evaluation opens dozens at once, #2131),
-// known only from its rollout: not one of the user's agents. A thread a shared app-server holds is drivable and stays,
-// as does a run the Codex App lists in its sidebar.
-func (n *Node) programRun(id string, src codexSource) bool {
-	if src.path == "" || !readCodexOrigin(src.path).exec {
-		return false
-	}
-	if _, _, err := n.codexOwner(id); err != errCodexNoOwner {
-		return false
-	}
-	return !codexDesktopChat(src)
-}
-
-// subagentRun: a subagent's thread (session_meta: thread_source "subagent" or a source of {"subagent": …}) known only
-// from its rollout. Its parent drives it and its work shows in the parent's conversation; listed on its own it was an
-// agent of its own, titled after its directory, that pushed "Done" and sat in Agents as "Unread" each time a parent's
-// reviewer finished (#4745). A subagent a shared app-server holds stays (read-only, its cards answerable), as does
-// one the Codex App lists under its parent.
-func (n *Node) subagentRun(id string, src codexSource) bool {
-	if src.path == "" || !metaOf(src.home, src.path).sub {
-		return false
-	}
-	if _, _, err := n.codexOwner(id); err != errCodexNoOwner {
-		return false
-	}
-	o := readCodexOrigin(src.path)
-	return !(o.desktop && o.parent != "" && codexDesktopAvailable(src.home) && loadCodexAppState(src.home).listed(o.parent))
 }

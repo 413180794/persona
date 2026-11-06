@@ -731,12 +731,9 @@ func TestSnapshotListsPlansWaitingToStart(t *testing.T) {
 // A task opened from a side conversation (neither quiet nor supervised) pushes a failure notification
 // when its agent cannot start, with reason and next steps, unless muted (#5081).
 func TestSideConversationTaskFailedToStartPushes(t *testing.T) {
-	old := taskStartRetryDelay
-	taskStartRetryDelay = 10 * time.Millisecond
-	t.Cleanup(func() { taskStartRetryDelay = old })
-
 	ctx := context.Background()
 	s, f := newTaskService(t)
+	s.taskRetry = 10 * time.Millisecond
 	f.hello.Assistant.MachineID = "box"
 	f.hello.Assistant.Machines = []string{"box"}
 	setSettings(t, s, func(v *Settings) { v.Main, v.MachineID = "main1", "box" })

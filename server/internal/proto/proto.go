@@ -690,6 +690,7 @@ const (
 
 // BearerAuth: the launcher's key goes as Authorization: Bearer (ANTHROPIC_AUTH_TOKEN) rather than x-api-key.
 func (l ManagedLauncher) BearerAuth() bool { return l.Auth == "bearer" }
+
 // AgentType is the agent CLI this managed launcher runs ("claude" by default, or "codex" / "agy").
 func (l ManagedLauncher) AgentType() string {
 	if l.Agent != "" {
@@ -697,7 +698,6 @@ func (l ManagedLauncher) AgentType() string {
 	}
 	return "claude"
 }
-
 
 type DirEntry struct {
 	Name  string `json:"name"`
@@ -751,6 +751,9 @@ type Session struct {
 	SourceThreadID   string               `json:"source_thread_id,omitempty"`
 	SourceInstanceID string               `json:"source_instance_id,omitempty"`
 	ParentThreadID   string               `json:"parent_thread_id,omitempty"`
+	ParentSessionID  string               `json:"parent_session_id,omitempty"` // Public ID scoped to the Codex home on this machine.
+	RootSessionID    string               `json:"root_session_id,omitempty"`
+	IsSubagent       bool                 `json:"is_subagent,omitempty"`
 	ReadOnlyReason   string               `json:"read_only_reason,omitempty"`
 	Capabilities     *SessionCapabilities `json:"capabilities,omitempty"`
 	Attached         bool                 `json:"attached,omitempty"`

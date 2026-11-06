@@ -13,6 +13,8 @@ data class AgentListSettings(
     val quick: AgentQuickFilter = AgentQuickFilter.All,
     val machineFilter: String = "",
     val query: String = "",
+    val queryAncestors: Set<String> = emptySet(),
+    val includeCodexHistory: Boolean = false,
     val kept: Set<String> = emptySet(),
     val folded: Set<String> = emptySet(),
     val expandedIdle: Set<String> = emptySet(),
@@ -95,6 +97,7 @@ data class AgentListResult(
     val unreadShown: List<String>,
     val quietTitle: CoreText? = null,
     val machines: List<AgentMachineGroup> = emptyList(),
+    val children: Map<String, List<AgentSession>> = emptyMap(),
 )
 
 data class AgentMachineGroup(
@@ -122,9 +125,19 @@ fun agentRank(session: AgentSession, mutes: AgentPreferences = AgentPreferences(
 /** The list's own filter before the quick filter and the botmux switch: not the assistant, the machine, the search. */
 fun AgentListSettings.admits(s: persona.core.contracts.Session): Boolean =
     !s.assistant && (machineFilter.isEmpty() || machineFilter == s.machineId) &&
-        (query.isEmpty() || listOf(s.title, s.cwd, s.lastText, s.spaceName, s.slotName).any { it?.contains(query, ignoreCase = true) == true })
+        (query.isEmpty() || s.key.path in queryAncestors || listOf(s.title, s.cwd, s.lastText, s.spaceName, s.slotName).any { it?.contains(query, ignoreCase = true) == true })
 
 fun buildAgentList(
+    sessions: List<AgentSession>, machines: List<Machine> = emptyList(),
+    pins: AgentPreferences = AgentPreferences(), mutes: AgentPreferences = AgentPreferences(),
+    settings: AgentListSettings = AgentListSettings(), todos: List<Todo> = emptyList(),
+): AgentListResult {
+    val tree = codexTaskForest(sessions)
+    return buildFlatAgentList(tree.roots, machines, pins, mutes, tree.searchSettings(settings), todos)
+        .copy(children = tree.children)
+}
+
+private fun buildFlatAgentList(
     sessions: List<AgentSession>,
     machines: List<Machine> = emptyList(),
     pins: AgentPreferences = AgentPreferences(),
@@ -134,10 +147,10 @@ fun buildAgentList(
 ): AgentListResult {
     val base = sessions.filter { settings.admits(it.session) && !(settings.hideBotmux && it.session.isBotmux) }
     val counts = AgentQuickFilter.entries.filter { it != AgentQuickFilter.All }
-        .associateWith { filter -> base.count(filter::matches) }
+        .associateWith { filter -> base.count { !it.session.isCodexSubagent && filter.matches(it) } }
     val filtered = base.filter { settings.quick.matches(it) || it.id in settings.kept }
     val pinned = filtered.filter { it.id in pins.sessions }.sortedBy { pins.sessions.indexOf(it.id) }
-    val live = filtered.filter { it.id !in pins.sessions && it.isLive }
+    val live = filtered.filter { it.id !in pins.sessions && (it.isLive || settings.includeCodexHistory && it.session.isCodexTask) }
     val quick = settings.quick != AgentQuickFilter.All
     // Under a quick filter, or sorted by "Recently updated", rows go by time only (iOS `AgentListOrder.byRank`).
     val byRank = !quick && settings.sort == AgentSort.State
@@ -155,7 +168,7 @@ fun buildAgentList(
     if (pinned.isNotEmpty()) result += if (settings.grouping == AgentGrouping.MachineSpace || settings.grouping == AgentGrouping.Repo)
         group("pinned", CoreText.of(Key.AgentsPinned), pinned, pinned) else AgentListGroup("pinned", CoreText.of(Key.AgentsPinned), pinned, pinned)
     var quietTitle: CoreText? = null
-    fun stateCounts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+    fun stateCounts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { !it.session.isCodexSubagent && it.state == state } }
     when (settings.grouping) {
         AgentGrouping.Repo -> {
             // Computer → repository → working tree → sessions, from each cwd (web `buildRepoMachineTree`, iOS `RepoTree`).
@@ -198,7 +211,7 @@ fun buildAgentList(
                         }
                 }
                 result += groups
-                AgentMachineGroup(machine, groups.map { it.id }, members.size, agentSpaces(members).size, stateCounts(members),
+                AgentMachineGroup(machine, groups.map { it.id }, members.count { !it.session.isCodexSubagent }, agentSpaces(members).size, stateCounts(members),
                     machineFolded, repoCount = repos.size)
             }
             return AgentListResult(counts, result, filtered.filter { it.state == AgentState.Unread }.map { it.id },
@@ -206,7 +219,7 @@ fun buildAgentList(
         }
         AgentGrouping.MachineSpace -> {
             // Keep each session in a single leaf group; machine headers only reference those leaves.
-            val treeRows = filtered.filter { it.isLive }
+            val treeRows = filtered.filter { it.isLive || settings.includeCodexHistory && it.session.isCodexTask }
             val known = machines + treeRows.map { it.session.machineId }.distinct()
                 .filter { id -> machines.none { it.id == id } }.map { Machine(it, "") }
             val machineGroups = known.sortedBy { !it.online }.mapNotNull { machine ->
@@ -220,8 +233,8 @@ fun buildAgentList(
                     group.copy(folded = folded, visibleRows = if (machineFolded || folded) emptyList() else group.visibleRows)
                 }
                 val spaces = agentSpaces(members)
-                AgentMachineGroup(machine, nested.groups.filterNot { it.id == "pinned" }.map { it.id }, members.size, spaces.size,
-                    AgentState.entries.associateWith { state -> members.count { it.state == state } },
+                AgentMachineGroup(machine, nested.groups.filterNot { it.id == "pinned" }.map { it.id }, members.count { !it.session.isCodexSubagent }, spaces.size,
+                    AgentState.entries.associateWith { state -> members.count { !it.session.isCodexSubagent && it.state == state } },
                     machineFolded)
             }
             return AgentListResult(counts, result, filtered.filter { it.state == AgentState.Unread }.map { it.id },
@@ -246,7 +259,7 @@ fun buildAgentList(
                     .thenByDescending { it.created ?: java.time.Instant.EPOCH }
                     .thenBy { it.id }
             )
-            fun counts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { it.state == state } }
+            fun counts(rows: List<AgentSession>) = AgentState.entries.associateWith { state -> rows.count { !it.session.isCodexSubagent && it.state == state } }
             fun leaf(id: String, title: CoreText, members: List<AgentSession>, under: String) {
                 val rows = ordered(members)
                 val folded = id in settings.folded
@@ -330,7 +343,7 @@ fun buildAgentList(
                     else -> rows.filter(::stays)
                 }
                 val states = listOf(AgentState.NeedsYou, AgentState.Working, AgentState.Unread, AgentState.Idle, AgentState.Unknown)
-                val stateCounts = states.associateWith { state -> rows.count { it.state == state } }
+                val stateCounts = states.associateWith { state -> rows.count { !it.session.isCodexSubagent && it.state == state } }
                 val labels = listOf(AgentState.NeedsYou to Key.CountNeedsYou, AgentState.Working to Key.CountWorking, AgentState.Unread to Key.CountUnread)
                 val spoken = labels.mapNotNull { (state, label) -> stateCounts.getValue(state).takeIf { it > 0 }?.let { CoreText.of(label, it) } } +
                     (stateCounts.getValue(AgentState.Idle) + stateCounts.getValue(AgentState.Unknown))

@@ -291,6 +291,9 @@ data class Session(
     @SerialName("source_thread_id") val sourceThreadId: String? = null,
     @SerialName("source_instance_id") val sourceInstanceId: String? = null,
     @SerialName("parent_thread_id") val parentThreadId: String? = null,
+    @SerialName("parent_session_id") val parentSessionId: String? = null,
+    @SerialName("root_session_id") val rootSessionId: String? = null,
+    @SerialName("is_subagent") val isSubagent: Boolean = false,
     /** Why the source only lets the phone read this session. */
     @SerialName("read_only_reason") val readOnlyReason: String? = null,
     val capabilities: SessionCapabilities? = null,

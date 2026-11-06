@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="agents_child_tasks">サブタスク（%1$d）</string>
+    <string name="agents_child_tasks_kind">サブタスク</string>
     <plurals name="agents_summary_requests">
         <item quantity="other">%1$d件の判断を待っています</item>
     </plurals>
