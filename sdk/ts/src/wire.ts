@@ -3490,6 +3490,124 @@ export interface ConnectorChangedEvent {
   scope: ConnectorScope;
 }
 
+/**
+ * error.code a program answers besides the base ErrorCode: cannot_send, nowhere to send to yet (before the owner's
+ * first message). Another failure of channel.send is tried again after 1, 2 and 4 seconds with the same ref.
+ */
+export type ChannelErrorCode = "cannot_send" | (string & {});
+export const CHANNEL_ERROR_CODES = ["cannot_send"] as const;
+
+/**
+ * ChannelStatusParams.state: bound and taking messages, not bound or not set up, or in error (say why in error).
+ */
+export type ChannelState = "connected" | "not_connected" | "error" | (string & {});
+export const CHANNEL_STATES = ["connected", "not_connected", "error"] as const;
+
+/**
+ * What a message the hub sends is: the turn's answer, a note of the hub's own, a question (asks: text), a push the
+ * owner did not ask for.
+ */
+export type ChannelSendKind = "answer" | "note" | "ask" | "push" | (string & {});
+export const CHANNEL_SEND_KINDS = ["answer", "note", "ask", "push"] as const;
+
+/**
+ * channel.receive: one of the owner's messages (only the owner's). Answered once the hub has it, deduplicated by id
+ * and queued, not after the turn.
+ */
+export interface ChannelReceiveParams {
+  /** The channel's id. The hub takes the extension's only channel when it is left out; always send it. */
+  contribution: string;
+  message: ChannelMessage;
+}
+
+/**
+ * At most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in unsupported. A message
+ * with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.
+ */
+export interface ChannelMessage {
+  /** The chat app's id of the message: the same message delivered again is taken once. */
+  id: string;
+  text?: string;
+  images?: ChannelBlob[];
+  files?: ChannelBlob[];
+  /** The text of the message it quotes. */
+  quote?: string;
+  /** What it forwards, as text. */
+  forward?: string;
+  /** The chat app's id of the message it answers. */
+  reply_to?: string;
+  /** What it had that the channel cannot bring, for people (a voice message, a sticker). */
+  unsupported?: string[];
+}
+
+/**
+ * A picture or a file.
+ */
+export interface ChannelBlob {
+  name?: string;
+  mime: string;
+  /** Base64. */
+  data: string;
+}
+
+/**
+ * channel.status: how a channel without a connector is doing (one with a connector says it through the connector's
+ * status).
+ */
+export interface ChannelStatusParams {
+  contribution: string;
+  state: ChannelState;
+  /** One sentence for people; never a secret or a message's body. */
+  error?: string;
+  account?: ChannelAccount;
+}
+
+/**
+ * Who the channel is bound to, for display.
+ */
+export interface ChannelAccount {
+  id?: string;
+  name: string;
+}
+
+/**
+ * channel.send: one message to the owner. text is Markdown, already split to the channel's max_text (a plain channel
+ * gets plain text). The same ref again is the same message: send it once, answer the same.
+ */
+export interface ChannelSendParams {
+  contribution: string;
+  ref: string;
+  text: string;
+  /** ChannelSendKind. */
+  kind: string;
+  /** The owner's message it answers (ChannelMessage.id). */
+  reply_to?: string;
+}
+
+/**
+ * channel.send's answer: the chat app's id of what was sent, for channel.edit.
+ */
+export interface ChannelSendResult {
+  message_id?: string;
+}
+
+/**
+ * channel.typing (capabilities.typing): show typing, or stop.
+ */
+export interface ChannelTypingParams {
+  contribution: string;
+  on: boolean;
+}
+
+/**
+ * channel.edit (capabilities.progress): replace the text of a message sent before.
+ */
+export interface ChannelEditParams {
+  contribution: string;
+  message_id: string;
+  text: string;
+}
+
 export type KBKind = "projects" | "chats" | "people" | "docs" | "meetings" | "events" | "recordings" | (string & {});
 export const KBKINDS = ["projects", "chats", "people", "docs", "meetings", "events", "recordings"] as const;
 
@@ -3761,6 +3879,11 @@ export const CALLS: Record<string, Call> = {
   "connector.archive.chats": { from: "program", params: "ConnectorArchiveChatsParams", result: "ConnectorArchivedChats" },
   "connector.credentials.gh_token": { from: "program", params: "ConnectorGhTokenParams", result: "ConnectorGhToken" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
+  "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
+  "channel.status": { from: "program", params: "ChannelStatusParams", result: "Empty" },
+  "channel.send": { from: "hub", params: "ChannelSendParams", result: "ChannelSendResult" },
+  "channel.typing": { from: "hub", params: "ChannelTypingParams", result: "Empty" },
+  "channel.edit": { from: "hub", params: "ChannelEditParams", result: "Empty" },
   "kb.list": { from: "program", params: "KBListParams", result: "KBListResult" },
   "kb.get": { from: "program", params: "KBGetParams", result: "KBGetResult" },
   "kb.day": { from: "program", params: "KBDayParams", result: "KBDayResult" },

@@ -1,6 +1,6 @@
 package conformance_test
 
-// The plugin protocol's schemas (schema/extension/connector.schema.json, kb.schema.json) describe what the server's
+// The plugin protocol's schemas (schema/extension/connector.schema.json, channel.schema.json, kb.schema.json) describe what the server's
 // own code sends and reads: every call and event they list is held to the Go types the hub and connector/serve put on
 // the wire, field by field, and every connector method the server knows is in them. The schema is what an extension
 // is written from; this keeps it from drifting from the code.
@@ -18,6 +18,7 @@ import (
 
 	"github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -79,6 +80,13 @@ var goTypes = map[string]any{
 	"ConnectorChangedEvent":        serve.ChangedEvent{},
 	"ConnectorInitParams":          serve.InitParams{},
 
+	"ChannelReceiveParams": channel.ReceiveParams{},
+	"ChannelStatusParams":  channel.StatusParams{},
+	"ChannelSendParams":    channel.SendParams{},
+	"ChannelSendResult":    channel.SendResult{},
+	"ChannelTypingParams":  channel.TypingParams{},
+	"ChannelEditParams":    channel.EditParams{},
+
 	"KBListParams":     assistantwire.KBListParams{},
 	"KBListResult":     assistantwire.KBListResult{},
 	"KBGetParams":      assistantwire.KBGetParams{},
@@ -96,7 +104,8 @@ var goTypes = map[string]any{
 }
 
 // The calls of the server the schemas must list: the connector methods connector/serve answers and calls (the bare
-// opening's init aside), the knowledge-base methods the hub forwards for extensions, and its events.
+// opening's init aside), the channel methods, the knowledge-base methods the hub forwards for extensions, and its
+// events.
 var serverCalls = []string{
 	serve.MManifest, serve.MStatus, serve.MLoginStep, serve.MLogout, serve.MChanges, serve.MCollect, serve.MReply,
 	serve.MTools, serve.MCall, serve.MActions, serve.MDescribe, serve.MDo, serve.MThread, serve.MMedia, serve.MItems,
@@ -105,6 +114,8 @@ var serverCalls = []string{
 	serve.MSecretsLoad, serve.MSecretsSave, serve.MSecretsDelete, serve.MPostsPut, serve.MPostsComments,
 	serve.MPostsPending, serve.MArchiveChats, serve.MGhToken, serve.EChanged,
 }
+
+var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit}
 
 var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay,
 	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner,
@@ -115,6 +126,9 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	for _, m := range serverCalls {
 		want = append(want, serve.InPlugin(m))
 	}
+	for _, m := range channelCalls {
+		want = append(want, channel.InPlugin(m))
+	}
 	want = append(want, kbCalls...)
 	for _, name := range want {
 		if _, ok := wire.Calls[name]; !ok {
@@ -122,7 +136,8 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 		}
 	}
 	for name := range wire.Calls {
-		if (strings.HasPrefix(name, serve.Namespace+".") || strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.")) &&
+		if (strings.HasPrefix(name, serve.Namespace+".") || strings.HasPrefix(name, channel.Namespace+".") ||
+			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.")) &&
 			!slices.Contains(want, name) {
 			t.Errorf("%s: schema/extension lists it, the server has no such call", name)
 		}
@@ -371,4 +386,3 @@ func jsonFields(g reflect.Type, out map[string]goField) {
 
 func asString(v any) string { s, _ := v.(string); return s }
 func asSlice(v any) []any   { s, _ := v.([]any); return s }
-

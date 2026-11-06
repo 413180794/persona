@@ -3269,6 +3269,119 @@ type ConnectorChangedEvent struct {
 	Scope        string `json:"scope"`
 }
 
+// ChannelErrorCode: error.code a program answers besides the base ErrorCode: cannot_send, nowhere to send to yet
+// (before the owner's first message). Another failure of channel.send is tried again after 1, 2 and 4 seconds with
+// the same ref.
+const (
+	ChannelErrorCodeCannotSend = "cannot_send"
+)
+
+// ChannelErrorCodes are the values of ChannelErrorCode, in order.
+var ChannelErrorCodes = []string{"cannot_send"}
+
+// ChannelState: channelStatusParams.state: bound and taking messages, not bound or not set up, or in error (say why
+// in error).
+const (
+	ChannelStateConnected    = "connected"
+	ChannelStateNotConnected = "not_connected"
+	ChannelStateError        = "error"
+)
+
+// ChannelStates are the values of ChannelState, in order.
+var ChannelStates = []string{"connected", "not_connected", "error"}
+
+// ChannelSendKind: what a message the hub sends is: the turn's answer, a note of the hub's own, a question (asks:
+// text), a push the owner did not ask for.
+const (
+	ChannelSendKindAnswer = "answer"
+	ChannelSendKindNote   = "note"
+	ChannelSendKindAsk    = "ask"
+	ChannelSendKindPush   = "push"
+)
+
+// ChannelSendKinds are the values of ChannelSendKind, in order.
+var ChannelSendKinds = []string{"answer", "note", "ask", "push"}
+
+// ChannelReceiveParams: channel.receive: one of the owner's messages (only the owner's). Answered once the hub has
+// it, deduplicated by id and queued, not after the turn.
+type ChannelReceiveParams struct {
+	// The channel's id. The hub takes the extension's only channel when it is left out; always send it.
+	Contribution string         `json:"contribution"`
+	Message      ChannelMessage `json:"message"`
+}
+
+// ChannelMessage: at most 4 images of 3 MB and files of 50 MB each; what does not fit is dropped and said in
+// unsupported. A message with nothing in it (no text, images, files, quote, forward or unsupported) is not handed on.
+type ChannelMessage struct {
+	// The chat app's id of the message: the same message delivered again is taken once.
+	ID     string        `json:"id"`
+	Text   string        `json:"text,omitempty"`
+	Images []ChannelBlob `json:"images,omitempty"`
+	Files  []ChannelBlob `json:"files,omitempty"`
+	// The text of the message it quotes.
+	Quote string `json:"quote,omitempty"`
+	// What it forwards, as text.
+	Forward string `json:"forward,omitempty"`
+	// The chat app's id of the message it answers.
+	ReplyTo string `json:"reply_to,omitempty"`
+	// What it had that the channel cannot bring, for people (a voice message, a sticker).
+	Unsupported []string `json:"unsupported,omitempty"`
+}
+
+// ChannelBlob: A picture or a file.
+type ChannelBlob struct {
+	Name string `json:"name,omitempty"`
+	Mime string `json:"mime"`
+	// Base64.
+	Data string `json:"data"`
+}
+
+// ChannelStatusParams: channel.status: how a channel without a connector is doing (one with a connector says it
+// through the connector's status).
+type ChannelStatusParams struct {
+	Contribution string `json:"contribution"`
+	State        string `json:"state"`
+	// One sentence for people; never a secret or a message's body.
+	Error   string          `json:"error,omitempty"`
+	Account *ChannelAccount `json:"account,omitempty"`
+}
+
+// ChannelAccount: who the channel is bound to, for display.
+type ChannelAccount struct {
+	ID   string `json:"id,omitempty"`
+	Name string `json:"name"`
+}
+
+// ChannelSendParams: channel.send: one message to the owner. text is Markdown, already split to the channel's
+// max_text (a plain channel gets plain text). The same ref again is the same message: send it once, answer the same.
+type ChannelSendParams struct {
+	Contribution string `json:"contribution"`
+	Ref          string `json:"ref"`
+	Text         string `json:"text"`
+	// ChannelSendKind.
+	Kind string `json:"kind"`
+	// The owner's message it answers (ChannelMessage.id).
+	ReplyTo string `json:"reply_to,omitempty"`
+}
+
+// ChannelSendResult: channel.send's answer: the chat app's id of what was sent, for channel.edit.
+type ChannelSendResult struct {
+	MessageID string `json:"message_id,omitempty"`
+}
+
+// ChannelTypingParams: channel.typing (capabilities.typing): show typing, or stop.
+type ChannelTypingParams struct {
+	Contribution string `json:"contribution"`
+	On           bool   `json:"on"`
+}
+
+// ChannelEditParams: channel.edit (capabilities.progress): replace the text of a message sent before.
+type ChannelEditParams struct {
+	Contribution string `json:"contribution"`
+	MessageID    string `json:"message_id"`
+	Text         string `json:"text"`
+}
+
 // Values of KBKind.
 const (
 	KBKindProjects   = "projects"
@@ -3755,6 +3868,15 @@ var newDef = map[string]func() any{
 	"ConnectorArchivedChats":       func() any { return new(ConnectorArchivedChats) },
 	"ConnectorArchivedChat":        func() any { return new(ConnectorArchivedChat) },
 	"ConnectorChangedEvent":        func() any { return new(ConnectorChangedEvent) },
+	"ChannelReceiveParams":         func() any { return new(ChannelReceiveParams) },
+	"ChannelMessage":               func() any { return new(ChannelMessage) },
+	"ChannelBlob":                  func() any { return new(ChannelBlob) },
+	"ChannelStatusParams":          func() any { return new(ChannelStatusParams) },
+	"ChannelAccount":               func() any { return new(ChannelAccount) },
+	"ChannelSendParams":            func() any { return new(ChannelSendParams) },
+	"ChannelSendResult":            func() any { return new(ChannelSendResult) },
+	"ChannelTypingParams":          func() any { return new(ChannelTypingParams) },
+	"ChannelEditParams":            func() any { return new(ChannelEditParams) },
 	"KBHandle":                     func() any { return new(KBHandle) },
 	"KBListParams":                 func() any { return new(KBListParams) },
 	"KBListResult":                 func() any { return new(KBListResult) },
@@ -3824,6 +3946,11 @@ var Calls = map[string]Call{
 	"connector.archive.chats":        {Name: "connector.archive.chats", From: "program", Params: "ConnectorArchiveChatsParams", Result: "ConnectorArchivedChats"},
 	"connector.credentials.gh_token": {Name: "connector.credentials.gh_token", From: "program", Params: "ConnectorGhTokenParams", Result: "ConnectorGhToken"},
 	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
+	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
+	"channel.status":                 {Name: "channel.status", From: "program", Params: "ChannelStatusParams", Result: "Empty"},
+	"channel.send":                   {Name: "channel.send", From: "hub", Params: "ChannelSendParams", Result: "ChannelSendResult"},
+	"channel.typing":                 {Name: "channel.typing", From: "hub", Params: "ChannelTypingParams", Result: "Empty"},
+	"channel.edit":                   {Name: "channel.edit", From: "hub", Params: "ChannelEditParams", Result: "Empty"},
 	"kb.list":                        {Name: "kb.list", From: "program", Params: "KBListParams", Result: "KBListResult"},
 	"kb.get":                         {Name: "kb.get", From: "program", Params: "KBGetParams", Result: "KBGetResult"},
 	"kb.day":                         {Name: "kb.day", From: "program", Params: "KBDayParams", Result: "KBDayResult"},

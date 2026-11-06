@@ -11,6 +11,7 @@ from them instead of being written once per platform:
 | `view.schema.json` | Views, sections, components (`Component`, told apart by `type`), actions, `ui.action`'s answer, and the `persona-card` in assistant answers (`PersonaCard`, folded into components in #1850) |
 | `messaging.schema.json` | The `messaging` extension point (#2138): the manifest's sources (`MessagingItem`), conversations, messages and parts (`MessagingPart`, by `kind`), sends, composer modes, documents, posts, events and errors; see `docs/extension-messaging.md` |
 | `connector.schema.json` | **Plugin-side.** The `connectors` extension point's calls (`docs/connector-protocol.md`): everything the hub asks a connector program (`connector.status`, `connector.inbox.collect`, `connector.thread.page`, `connector.archive.changes`, `connector.group.*`, `connector.login.step`…), what the program asks back (`connector.secrets.*`, the knowledge base's `connector.posts.*` and `connector.archive.chats`, `connector.credentials.gh_token`), the `connector.changed` event, the capabilities, states and error codes |
+| `channel.schema.json` | **Plugin-side.** The `channel` extension point's calls (`docs/channels.md` "4. Contributing a channel"): `channel.receive` and `channel.status` from the program, `channel.send`, `channel.typing` and `channel.edit` from the hub, `cannot_send` |
 | `kb.schema.json` | **Plugin-side.** The knowledge base an extension reads and writes directly (`docs/extensions.md` "Knowledge base RPC"): `kb.list`, `kb.get`, `kb.day`, `kb.search`, `kb.update`, `kb.owner`, and the events `event.kb.changed` / `event.kb.forgotten` |
 | `examples/` | Examples: `<definition>.<name>.json` must hold to the schema; those under `examples/invalid/` must not. The plugin-side schemas' are in `examples/plugin/` (and `examples/plugin/invalid/`) |
 
@@ -38,7 +39,7 @@ The View semantics both extensions and the assistant check (charts, tables, fiel
 
 ## Plugin-side schemas and calls
 
-A schema file with `"x-side": "plugin"` (`connector.schema.json`, `kb.schema.json`) describes only what the hub and an
+A schema file with `"x-side": "plugin"` (`connector.schema.json`, `channel.schema.json`, `kb.schema.json`) describes only what the hub and an
 extension's program say to each other. Its types are generated into the SDKs (Go `sdk/go/wire`, TypeScript
 `sdk/ts/src/wire.ts`) and not into the apps (Swift, Kotlin, the web copy), which never read these messages; a
 definition the apps have may not refer to one of them (the generator stops). Its examples are in `examples/plugin/`,
@@ -60,19 +61,21 @@ as `event.<name>`. The generator writes them out as `wire.Calls` (Go) and `CALLS
 - Params of a call in the connector namespace carry `contribution` (the connector's id; the hub adds it with
   `extension.Targeted`); results do not. Knowledge-base params are strict: no `contribution`, and an unknown field is
   `invalid_params`.
-- The connector's own conformance checks hold every message both ways to them: `connector/conformance.Check` (Go
-  connectors through `connector/serve`) and `CheckProgram` (a running program of any language).
+- The conformance checks hold every message both ways to them: `connector/conformance.Check` (Go connectors through
+  `connector/serve`), `CheckProgram` (a running connector program of any language) and `channel/conformance.Check`.
 - `server/internal/extension/conformance/plugin_schema_test.go` holds each definition a call names to the Go type the
   server puts on the wire, field by field (names, JSON kinds, a required field Go never leaves out), and every
-  connector and knowledge-base method the server has to an entry in the schemas; the server's wire fixtures
+  connector, channel and knowledge-base method the server has to an entry in the schemas; the server's wire fixtures
   (`server/internal/connector/testdata/wire/`) hold to them too. A change on either side fails until the other follows.
 
 In the Go SDK, `ext.Methods{…}.For(<contributions>)` is a namespace's handler from typed methods
 (`ext.Method(func(ctx, wire.ConnectorThreadParams) (wire.ConnectorThreadPage, error))`), and `ext.Hub` has the
 program's calls (`LoadSecret` / `SaveSecret` / `DeleteSecret`, `ConnectorChanged`, `PutPosts`, `ArchivedChats`,
-`KBList`, `KBGet`, `KBUpdate`, `KBOwner`…). `exttest.Start` is a fake hub to call a program from its own tests
+`ChannelReceive`, `ChannelStatus`, `KBList`, `KBGet`, `KBUpdate`, `KBOwner`…; `ext.CannotSend` is channel.send's
+`cannot_send`). `exttest.Start` is a fake hub to call a program from its own tests
 (secrets in memory, `Answer` for the knowledge base and the rest, `Hear` for the hub's events, every message held to
-the schemas), and `exttest.CheckConnectors` makes the hub's read-only calls of each connector the manifest declares.
+the schemas, a channel's messages in `Received`); `exttest.CheckConnectors` makes the hub's read-only calls of each
+connector the manifest declares, and `exttest.CheckChannels` holds each channel to the channel protocol.
 
 ## The subset
 

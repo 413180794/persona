@@ -14,8 +14,9 @@ import (
 
 // Host is a fake hub for a program's own tests, beyond Check: it opens the protocol, then the test calls the program
 // as the hub would (Call), sends it the hub's events (Hear) and answers what it asks (Answer; a connector's secrets
-// are kept in memory). Every message both ways that the schemas describe (wire.Calls: the connector and the knowledge
-// base) is held to them, and the test fails on one that does not hold.
+// are kept in memory, a channel's messages in Received). Every message both ways that the schemas describe
+// (wire.Calls: the connector, the channel, the knowledge base) is held to them, and the test fails on one that does
+// not hold.
 //
 //	h := exttest.Start(t, manifest, exttest.Serve(t, program()))
 //	h.Answer("kb.list", func(json.RawMessage) (any, error) { return wire.KBListResult{Items: []wire.KBEntry{}, Tags: []string{}}, nil })
@@ -204,4 +205,49 @@ func CheckConnectors(t testing.TB, manifest []byte, run Run, config ...json.RawM
 		}
 	}
 	return h
+}
+
+// CheckChannels holds each channel the manifest contributes to the channel protocol (docs/channels.md "4.
+// Contributing a channel"): channel.send of a note is sent or cannot_send, the same ref again answers the same
+// (sent once), channel.typing is taken, a send without a ref is refused, and another channel is no_contribution.
+// Every message both ways holds to the schema (channel.schema.json). It returns the host, with the messages the
+// program handed over meanwhile in Received.
+func CheckChannels(t testing.TB, manifest []byte, run Run, config ...json.RawMessage) *Host {
+	t.Helper()
+	h := Start(t, manifest, run, config...)
+	var m wire.Manifest
+	_ = json.Unmarshal(manifest, &m)
+	if m.Contributes == nil || len(m.Contributes.Channel) == 0 {
+		t.Fatal("the manifest contributes no channels")
+	}
+	send := ext.ChannelNamespace + ".send"
+	for _, c := range m.Contributes.Channel {
+		p := wire.ChannelSendParams{Contribution: c.ID, Ref: "exttest-1", Text: "A note from the test.", Kind: wire.ChannelSendKindNote}
+		var first, second wire.ChannelSendResult
+		err1 := h.Call(send, p, &first)
+		err2 := h.Call(send, p, &second)
+		switch {
+		case err1 != nil && code(err1) != wire.ChannelErrorCodeCannotSend:
+			t.Errorf("channel %s: channel.send: %v (sent, or cannot_send)", c.ID, err1)
+		case code(err1) != code(err2) || first != second:
+			t.Errorf("channel %s: the same ref answered %+v / %v, then %+v / %v", c.ID, first, err1, second, err2)
+		}
+		if err := h.Call(ext.ChannelNamespace+".typing", wire.ChannelTypingParams{Contribution: c.ID}, nil); err != nil {
+			t.Errorf("channel %s: channel.typing: %v", c.ID, err)
+		}
+		if err := h.call(send, map[string]string{"contribution": c.ID, "text": "x", "kind": wire.ChannelSendKindNote}, nil); err == nil {
+			t.Errorf("channel %s: channel.send without a ref was taken", c.ID)
+		}
+	}
+	if err := h.call(send, wire.ChannelSendParams{Contribution: "no-such-channel", Ref: "r", Text: "x", Kind: wire.ChannelSendKindNote}, nil); code(err) != wire.ErrorCodeNoContribution {
+		t.Errorf("channel.send to a channel it does not have: want %s, got %v", wire.ErrorCodeNoContribution, err)
+	}
+	return h
+}
+
+// Received are the owner's messages the program handed over (channel.receive), in order.
+func (h *Host) Received() []wire.ChannelReceiveParams {
+	h.h.mu.Lock()
+	defer h.h.mu.Unlock()
+	return slices.Clone(h.h.received)
 }

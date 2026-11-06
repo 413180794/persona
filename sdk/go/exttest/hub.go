@@ -14,7 +14,8 @@ import (
 )
 
 // hub is the hub's side of the protocol, enough to check a program: it calls, and answers the program's calls to
-// the hub: a connector's secrets from memory, what answers says, and the rest with an empty result. What the
+// the hub: a connector's secrets from memory, a channel's messages kept, what answers says, and the rest with an
+// empty result. What the
 // program sends that the schemas describe (wire.Calls) is held to them; what does not hold is in problems.
 type hub struct {
 	run     Run
@@ -27,6 +28,7 @@ type hub struct {
 	answers  map[string]func(params json.RawMessage) (any, error)
 	secrets  map[string][]byte // by contribution
 	events   []Event
+	received []wire.ChannelReceiveParams
 	problems []string
 }
 
@@ -113,6 +115,14 @@ func (h *hub) result(method string, params json.RawMessage) (any, error) {
 	}
 	c := ext.Contribution(params)
 	switch method {
+	case ext.ChannelNamespace + ".receive":
+		var p wire.ChannelReceiveParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		h.mu.Lock()
+		h.received = append(h.received, p)
+		h.mu.Unlock()
 	case ext.ConnectorNamespace + ".secrets.load":
 		h.mu.Lock()
 		defer h.mu.Unlock()

@@ -9,8 +9,8 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
-// Typed calls, both ways, for the extension points whose calls the schemas describe (wire.Calls: the connector and
-// the knowledge base, schema/extension/connector.schema.json and kb.schema.json).
+// Typed calls, both ways, for the extension points whose calls the schemas describe (wire.Calls: the connector, the
+// channel and the knowledge base; schema/extension/connector.schema.json, channel.schema.json and kb.schema.json).
 
 // MethodFunc answers one method of a namespace.
 type MethodFunc func(ctx context.Context, params json.RawMessage) (any, error)
@@ -114,6 +114,25 @@ func (h *Hub) GhToken(ctx context.Context, p wire.ConnectorGhTokenParams) (strin
 	t, err := callHub[wire.ConnectorGhToken](ctx, h, ConnectorNamespace+".credentials.gh_token", p)
 	return t.Token, err
 }
+
+// ChannelNamespace is the channel extension point's (docs/channels.md "4. Contributing a channel"): the hub calls
+// channel.send, channel.typing and channel.edit; the program calls ChannelReceive and ChannelStatus.
+const ChannelNamespace = "channel"
+
+// ChannelReceive hands the hub one of the owner's messages (only the owner's); it returns once the hub has it, not
+// after the turn. The same message id again is taken once.
+func (h *Hub) ChannelReceive(ctx context.Context, contribution string, m wire.ChannelMessage) error {
+	return h.Call(ctx, ChannelNamespace+".receive", wire.ChannelReceiveParams{Contribution: contribution, Message: m}, nil)
+}
+
+// ChannelStatus says how a channel without a connector is doing (wire.ChannelState*).
+func (h *Hub) ChannelStatus(ctx context.Context, p wire.ChannelStatusParams) error {
+	return h.Call(ctx, ChannelNamespace+".status", p, nil)
+}
+
+// CannotSend is channel.send's error while there is nowhere to send to yet (before the owner's first message): the
+// hub does not try again.
+func CannotSend(why string) error { return &Error{Code: wire.ChannelErrorCodeCannotSend, Message: why} }
 
 // The knowledge base (docs/extensions.md "Knowledge base RPC"): the permission kb.read (kb.write for KBUpdate) in
 // the manifest's permissions.hub, granted by the user. Errors carry wire.KBErrorCode* or permission_denied.
