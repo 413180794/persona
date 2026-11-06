@@ -151,7 +151,7 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return err
 	}
-	created, err := n.newTab(ctx, launch, st.Cwd, ws, tabName)
+	created, err := n.newTab(ctx, launch, st.Cwd, ws, tabName, id)
 	if err != nil {
 		return err
 	}
@@ -179,8 +179,9 @@ func (n *Node) resumeCodex(ctx context.Context, launch host.Launcher, id string,
 }
 
 // newTab opens a tab in workspace ws for cwd, named tabName (or agent-<n>); with no workspace, a new one named after
-// the directory, whose first tab it is.
-func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabName string) (*host.Created, error) {
+// the directory, whose first tab it is. The pane is marked as Persona's (personaTabToken, the session id when it is
+// already known): once its agent exits, the shell left behind is cleaned up (shelltabs.go).
+func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabName, id string) (*host.Created, error) {
 	if c := adoptedPane(ctx); c != nil { // "Run Agent Here": the pane the user picked, not a new tab (panes_actions.go)
 		return c, nil
 	}
@@ -196,5 +197,6 @@ func (n *Node) newTab(ctx context.Context, launch host.Launcher, cwd, ws, tabNam
 	if err != nil {
 		return nil, fmt.Errorf("创建终端标签页失败：%w", err)
 	}
+	markPersonaTab(ctx, launch, created.Pane, id)
 	return created, nil
 }

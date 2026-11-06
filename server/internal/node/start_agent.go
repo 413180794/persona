@@ -58,7 +58,7 @@ func otherAgentCommand(launcher, resume, prompt string) string {
 // resume is set, with the first message as its argument) and waits until the host reports an agent of that kind in
 // the tab with a session id that was not running before (or the one resumed).
 func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, launcher, kind, prompt, resume, ws, tabName string) (*proto.Session, error) {
-	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName, resume) // retire.go
 	if err != nil {
 		return nil, err
 	}

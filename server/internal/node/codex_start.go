@@ -128,7 +128,7 @@ func (n *Node) startCodex(ctx context.Context, launch host.Launcher, cwd, launch
 	if err := os.WriteFile(file, b, 0o600); err != nil {
 		return nil, err
 	}
-	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName, "") // retire.go
 	if err != nil {
 		return nil, err
 	}

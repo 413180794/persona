@@ -302,6 +302,12 @@ Resume waits for launcher readiness; like chat sends, `route` is not cancelled b
 node rejects these (`not_retirable`), assistant records them and does not ask again for 10 minutes if Agent unchanged (`taskCloseRetry`, then retries because node may have upgraded). Old nodes not recognizing `session.retire` are likewise treated as refusals, so hub-first/node-later upgrades do not close wrongly; after node upgrade, closure resumes within at most 10 minutes.
 Agents linked to no task (user-created, `agent_start`, inspection sessions such as herdr-leader) are not managed here.
 
+**`/exit` from the assistant**: `agent_send` with only `/exit` or `/quit` closes a running Agent as **Close** does (its tab goes too) instead of typing it in; to an Agent that is not running it does nothing, so a closed Agent is not resumed in a new tab only to quit there.
+
+**Tabs left with a bare shell** (`node/shelltabs.go`): an Agent Persona started can also end on its own (`/exit` typed by hand, an API error it gives up on, a launcher that quits), leaving its tab with only the login shell and `Resume this session with: claude --resume <id>`.
+Every tab Persona opens for an Agent carries the herdr pane token `persona_tab` (the session id when known). Once a minute node looks at such panes with no Agent in them: when only shells are in front and the screen has not changed for 10 minutes (`shellTabIdle`; any output or typing restarts the wait), it closes the pane (the whole tab when it is the only one). The session is untouched: the next message resumes it as above.
+Never closed: panes without the token (tabs the user opened, the pane picked for **Run Agent Here**), panes where another program is in front, a session being started or resumed, assistant chats. herdr does not keep pane tokens across a herdr server restart, so tabs opened before one are left alone.
+
 ## Decision records
 
 The costliest long-task mistake is an Agent forgetting a decision already made: asking again or silently overturning it (#1618). Decisions scattered across Agent chats disappear when switching Agents or compacting, so collect them by to-do:

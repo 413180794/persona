@@ -116,7 +116,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if id == "" {
 		id = newUUID()
 	}
-	created, err := n.newTab(ctx, launch, cwd, ws, tabName) // retire.go
+	created, err := n.newTab(ctx, launch, cwd, ws, tabName, id) // retire.go
 	if err != nil {
 		return nil, err
 	}
@@ -577,6 +577,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 		return r
 	}
 	n.dropSuggestion(id)
+	if exitCommand(text) && len(images) == 0 && !n.isAssistantSession(id) && !n.runtimeAssistant(id) {
+		return n.exitAgent(ctx, id)
+	}
 	pane, err := n.paneFor(ctx, id)
 	if err != nil && (n.codexPath(id) != "" || n.traexPath(id) != "") {
 		return n.resumeOther(ctx, id, text, images) // retire.go
@@ -830,6 +833,25 @@ func (n *Node) close(ctx context.Context, id string) error {
 	_ = n.sendKeys(ctx, a.PaneID, "ctrl+c")
 	time.Sleep(500 * time.Millisecond)
 	return org.Close(ctx, ref, a.WorkspaceID, a.TabID)
+}
+
+// exitCommand: the message is Claude's or Codex's own command to quit (/exit, /quit).
+func exitCommand(text string) bool {
+	switch strings.TrimSpace(text) {
+	case "/exit", "/quit":
+		return true
+	}
+	return false
+}
+
+// exitAgent is a message that only says to quit: typed in, the agent would exit and leave its tab holding a bare
+// shell, and one already closed would be resumed in a new tab just to quit there. A running agent is closed as
+// session.close does (its tab goes with it); one not running is left as it is.
+func (n *Node) exitAgent(ctx context.Context, id string) error {
+	if _, ok := n.agent(id); !ok {
+		return nil
+	}
+	return n.close(ctx, id)
 }
 
 // watch streams new transcript items of a session to the hub.

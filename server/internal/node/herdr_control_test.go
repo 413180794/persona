@@ -118,6 +118,7 @@ func TestHerdrStartInTheProjectsWorkspace(t *testing.T) {
 		call("workspace.list", nil),
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w1", "cwd": cwd, "label": "agent-2", "focus": false}),
+		markTab("w1:p2", startID),
 		call("pane.send_input", map[string]any{"pane_id": "w1:p2", "keys": []string{"Enter"},
 			"text": startCmd("claude", "--session-id "+startID+" --permission-mode plan --effort high", jarvisDir(home))}),
 		readVisible("w1:p2"), // the trust dialog, cursor on "No, exit"
@@ -168,6 +169,7 @@ func TestHerdrStartCreatesTheWorkspaceAndResumes(t *testing.T) {
 		call("workspace.list", nil),
 		call("workspace.create", map[string]any{"cwd": cwd, "label": "fresh", "focus": false}),
 		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "fix the build"}),
+		markTab("w7:p1", startID),
 		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
 			"text": startCmd("work_claude", "--resume "+startID, jarvisDir(home))}),
 		readVisible("w7:p1"), agentGet("w7:p1"),
@@ -222,6 +224,7 @@ func TestHerdrStartIntoAGivenWorkspaceReturnsOnABlockedClaude(t *testing.T) {
 	assertTrace(t, f.trace(), []string{
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "a very long tab name that goes p", "focus": false}),
+		markTab("w2:p5", startID),
 		// A managed launcher's start gets Persona's settings with its gateway merged in (#1336).
 		call("pane.send_input", map[string]any{"pane_id": "w2:p5", "keys": []string{"Enter"},
 			"text": "HERDR_AGENT=claude /tmp/jarvis-test/jarvisd launch work_gw --session-id " + startID + " --settings " +
@@ -271,6 +274,7 @@ func TestHerdrStartNamesTheTabOnceItExists(t *testing.T) {
 	assertTrace(t, f.trace(), []string{
 		call("session.snapshot", nil),
 		call("tab.create", map[string]any{"workspace_id": "w2", "cwd": home, "label": "agent-1", "focus": false}),
+		markTab("w2:p6", startID),
 		call("tab.rename", map[string]any{"tab_id": "w2:t6", "label": "named early"}),
 		call("pane.send_input", map[string]any{"pane_id": "w2:p6", "keys": []string{"Enter"},
 			"text": startCmd("claude", "--session-id "+startID, jarvisDir(home))}),
@@ -508,6 +512,7 @@ func TestHerdrSendResumesAnOfflineSession(t *testing.T) {
 		call("workspace.list", nil),
 		call("workspace.create", map[string]any{"cwd": cwd, "label": "proj", "focus": false}),
 		call("tab.rename", map[string]any{"tab_id": "w7:t1", "label": "agent-1"}),
+		markTab("w7:p1", sidA),
 		call("pane.send_input", map[string]any{"pane_id": "w7:p1", "keys": []string{"Enter"},
 			"text": startCmd("claude", "--resume "+sidA, jarvisDir(home))}),
 		readVisible("w7:p1"), agentGet("w7:p1"),
@@ -710,4 +715,9 @@ func TestHerdrRenames(t *testing.T) {
 		t.Errorf("transcript %s", b)
 	}
 	assertTrace(t, f.trace(), nil)
+}
+
+// markTab is the call that marks a tab the node opened for session id as Persona's (shelltabs.go).
+func markTab(pane, id string) string {
+	return call("pane.report_metadata", map[string]any{"pane_id": pane, "source": "persona", "tokens": map[string]any{personaTabToken: id}})
 }
