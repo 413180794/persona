@@ -96,6 +96,17 @@ func pickLoad(loads []FleetLoad, machine string) []FleetLoad {
 
 func fleetEmpty(s FleetState) bool { return s.Phase == "" }
 
+// showsNothing: a device's version of the fleet (forDevice) has nothing to draw: no agent, and the assistant not
+// answering or not on its island. Only the assistant answering is something to show where the island shows it
+// (思考中, #4398).
+func showsNothing(dst FleetState) bool { return fleetEmpty(dst) && !dst.Assistant }
+
+// showsAssistant: the device has the activity on, with a side of its island for the assistant answering.
+func showsAssistant(p NotifyPrefs) bool {
+	left, right := p.Island.sides()
+	return p.LiveActivity && (left == SlotAssistant || right == SlotAssistant)
+}
+
 // needsYouIDs: the items waiting for the user, to tell a new one (push now) from anything else (merge).
 func needsYouIDs(s FleetState) map[string]bool {
 	out := map[string]bool{}
@@ -167,11 +178,14 @@ type liveActivities struct {
 	last      FleetState
 	emptyAt   time.Time // since when the fleet has been over (empty, or only finished agents for a while)
 	doneSince time.Time
-	episode   int                  // bumps each time the fleet becomes active after being over
-	started   map[string]int       // device -> episode it was push-started in (once per episode)
-	sent      map[string][]byte    // device -> the content-state it last got
-	sentAt    map[string]time.Time // device -> when
-	stats     []byte               // last numbers broadcast to the open apps
+	// answeredAt: when the assistant stopped answering last (zero: not since the fleet started over). An activity that
+	// shows it stays fleetEndAfter after that, as one does after the fleet empties (#4398).
+	answeredAt time.Time
+	episode    int                  // bumps each time the fleet becomes active after being over
+	started    map[string]int       // device -> episode it was push-started in (once per episode)
+	sent       map[string][]byte    // device -> the content-state it last got
+	sentAt     map[string]time.Time // device -> when
+	stats      []byte               // last numbers broadcast to the open apps
 	// The last fleet broadcast to the open apps, and when: what an app that closed its connection cleanly (gone to
 	// the background) left its activity showing (phoneLeft).
 	shownState FleetState
@@ -320,12 +334,18 @@ func (la *liveActivities) tick() {
 	la.mu.Lock()
 	over := !la.emptyAt.IsZero() && now.Sub(la.emptyAt) >= fleetEndAfter
 	doneLong := la.last.Phase == "done" && !la.doneSince.IsZero() && now.Sub(la.doneSince) >= fleetDoneLinger
+	// The assistant answering, or done less than fleetEndAfter ago, holds the activities that show it (#4398).
+	answering := la.last.Assistant || (!la.answeredAt.IsZero() && now.Sub(la.answeredAt) < fleetEndAfter)
 	last := la.last
 	la.mu.Unlock()
 	switch {
-	case over || doneLong:
+	case (over || doneLong) && !answering:
 		la.endAll()
-	case !fleetEmpty(last):
+		return
+	case over || doneLong:
+		la.end(showsAssistant) // the others have nothing left to show
+	}
+	if !fleetEmpty(last) || last.Assistant {
 		if !la.coal.pending { // a change is being merged: its flush refreshes too, next tick otherwise
 			la.refresh(last, now)
 		}
@@ -357,6 +377,9 @@ func (la *liveActivities) refresh(last FleetState, now time.Time) {
 			continue // an open app keeps its activity fresh itself
 		}
 		dst := forDevice(last, devicePrefs(d.Prefs), stats)
+		if showsNothing(dst) {
+			continue // only the assistant answering, not on this island: the activity ends with the fleet
+		}
 		la.markSent(r.DeviceID, dst, now, true)
 		la.send(d, r, liveActivityPayload("update", dst, now), false)
 	}
@@ -384,6 +407,9 @@ func (la *liveActivities) metrics(last FleetState, now time.Time) {
 			continue // an open app has every number from the fleet event
 		}
 		dst := forDevice(last, devicePrefs(d.Prefs), stats)
+		if showsNothing(dst) {
+			continue
+		}
 		if la.markSent(r.DeviceID, dst, now, false) {
 			la.send(d, r, liveActivityPayload("update", dst, now), false)
 		}
@@ -474,6 +500,9 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 	} else {
 		la.doneSince = time.Time{}
 	}
+	if la.last.Assistant && !st.Assistant {
+		la.answeredAt = now
+	}
 	la.last = st
 	episode := la.episode
 	rows := make([]db.LiveActivity, 0, len(la.rows))
@@ -481,7 +510,7 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 		rows = append(rows, r)
 	}
 	la.mu.Unlock()
-	if fleetEmpty(st) {
+	if fleetEmpty(st) && !st.Assistant {
 		return time.Time{} // ended by tick after fleetEndAfter, unless something comes back first
 	}
 	stats := la.h.fleetStats()
@@ -495,6 +524,9 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 			continue
 		}
 		dst := forDevice(st, prefs, stats)
+		if showsNothing(dst) {
+			continue // only the assistant answering, not on this island: ended by tick like an empty fleet
+		}
 		switch {
 		case r.PushToken != "" && now.Sub(r.StartedAt) < fleetMaxAge:
 			if la.h.phoneOpen(r.DeviceID) {
@@ -510,7 +542,8 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 			if la.markSent(r.DeviceID, dst, now, force) {
 				la.send(d, r, liveActivityPayload("update", dst, now), urgent)
 			}
-		case r.PushToStartToken != "" && st.Phase != "done":
+		// Only the assistant answering starts none: whether it should is a product decision not made yet (#4398).
+		case r.PushToStartToken != "" && !fleetEmpty(st) && st.Phase != "done":
 			la.mu.Lock()
 			already := la.started[r.DeviceID] == episode
 			la.started[r.DeviceID] = episode
@@ -526,7 +559,11 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 	return next
 }
 
-func (la *liveActivities) endAll() {
+func (la *liveActivities) endAll() { la.end(nil) }
+
+// end ends the running activities: all of them (keep nil, the fleet has been over for a while), or those of the
+// devices whose settings keep does not hold on to.
+func (la *liveActivities) end(keep func(NotifyPrefs) bool) {
 	now := time.Now()
 	la.mu.Lock()
 	rows := make([]db.LiveActivity, 0, len(la.rows))
@@ -535,15 +572,25 @@ func (la *liveActivities) endAll() {
 			rows = append(rows, r)
 		}
 	}
-	la.emptyAt, la.doneSince = time.Time{}, time.Time{}
 	last := la.last
-	la.last = FleetState{}
-	la.sent, la.sentAt = map[string][]byte{}, map[string]time.Time{}
+	if keep == nil {
+		la.emptyAt, la.doneSince, la.answeredAt = time.Time{}, time.Time{}, time.Time{}
+		la.last = FleetState{}
+		la.sent, la.sentAt = map[string][]byte{}, map[string]time.Time{}
+	}
 	la.mu.Unlock()
 	for _, r := range rows {
-		if d, ok := la.h.push.device(r.DeviceID); ok {
+		d, ok := la.h.push.device(r.DeviceID)
+		if ok && keep != nil && keep(devicePrefs(d.Prefs)) {
+			continue
+		}
+		if ok {
 			la.send(d, r, liveActivityPayload("end", last, now), false)
 		}
+		la.mu.Lock()
+		delete(la.sent, r.DeviceID)
+		delete(la.sentAt, r.DeviceID)
+		la.mu.Unlock()
 		la.update(r.DeviceID, func(v *db.LiveActivity) { v.PushToken, v.ActivityID = "", "" })
 	}
 }

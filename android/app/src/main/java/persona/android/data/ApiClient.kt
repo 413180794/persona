@@ -43,7 +43,8 @@ class ApiClient(
         val request = chain.request().newBuilder()
             .header("Accept-Language", persona.core.contracts.ClientLanguage.tag).build()
         chain.proceed(request).also { response ->
-            if (response.code == 401 || response.code == 403) onUnauthorized()
+            // Only 401 means the credential is gone; a 403 refuses one request (#4692).
+            if (response.code == 401) onUnauthorized()
         }
     }.build()
 

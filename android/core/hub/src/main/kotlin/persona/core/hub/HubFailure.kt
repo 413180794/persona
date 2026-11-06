@@ -57,20 +57,16 @@ class HubFailure(
         private fun isPinRejection(error: Throwable) =
             error is SSLPeerUnverifiedException || error is CertificateException
 
-        /**
-         * 403 codes that refuse one request of a valid pairing: a read-only device, a role or an extension's grant, a
-         * switched-off feature, a connector write the hub's gate (or the user on the phone) turned down (`declined`).
-         * The pairing stays; any other 403 (a credential not usable from here) ends it as before.
-         */
-        private val refusedHere = setOf("forbidden", "permission_denied", "declined")
-
         internal fun from(response: Response): HubFailure {
             val raw = runCatching { response.peekBody(64 * 1024).string() }.getOrNull()
             val body = raw?.let { runCatching { JsonCodec.decodeFromString<ErrorBody>(it) }.getOrNull() }
             val kind = when {
-                response.code == 403 && body?.code in refusedHere -> HubError.Server
-                response.code == 401 || response.code == 403 -> HubError.PairingExpired
                 body?.code == "tls_required" -> HubError.TlsRequired
+                // A coded 403 refuses this request (a read-only device, a grant, `declined`, an expired install preview's
+                // `this_machine_only`, a credential not usable from this source); only 401 says the credential is gone
+                // (#4692). A 403 without a code (an old hub) still ends the pairing.
+                response.code == 403 && body?.code != null -> HubError.Server
+                response.code == 401 || response.code == 403 -> HubError.PairingExpired
                 body?.code == "incompatible" -> HubError.Incompatible
                 response.code == 429 -> HubError.RateLimited
                 else -> HubError.Server

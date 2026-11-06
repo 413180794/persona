@@ -802,14 +802,17 @@ func turnErrorTransient(c proto.Session) bool {
 func transientError(text string) bool {
 	t := strings.ToLower(text)
 	for _, w := range []string{"failed to authenticate", "oauth token has expired", "invalid api key", "not logged in", "issue with the selected model",
-		" 401", " 403", "permission_error", "authentication_error", "credit balance", "billing"} {
+		" 401", " 403", "permission_error", "authentication_error", "credit balance", "billing",
+		"ssl certificate", "self-signed certificate", "certificate verif"} {
 		if strings.Contains(t, w) {
 			return false
 		}
 	}
 	for _, w := range []string{"overloaded", " 500", " 502", " 503", " 504", " 529", " 429", "rate limit", "rate_limit",
 		"connection", "timed out", "timeout", "socket hang up", "econnreset", "fetch failed", "no eligible upstream",
-		"internal server error", "service unavailable", "bad gateway", "network", "api_error", "upstream"} {
+		"internal server error", "service unavailable", "bad gateway", "network", "api_error", "upstream",
+		"can't reach the api server", "temporarily unavailable", "no response from api", "unable to connect to api",
+		"enotfound", "eai_again", "failedtoopensocket"} {
 		if strings.Contains(t, w) {
 			return true
 		}

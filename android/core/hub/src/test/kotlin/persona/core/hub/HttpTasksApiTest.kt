@@ -174,7 +174,7 @@ class HttpTasksApiTest {
     }
 
     // A card refused for this device (read-only role, cards switched off) is that request's refusal, not the pairing's
-    // end; an unusable credential still ends it.
+    // end, and so is a credential not usable from this source (#4692); only a 401 ends it.
     @Test fun aRefusedCardKeepsThePairing() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(403).setBody("""{"error":"read-only role cannot reply from a card","code":"forbidden","retryable":false,"delivered":"none"}"""))
@@ -183,8 +183,8 @@ class HttpTasksApiTest {
             server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"invalid token","code":"invalid_token"}"""))
             val input = persona.core.contracts.generated.ExtensionViewActionInput("a", null, null, "m", expectedVersion = 1)
             val kinds = (1..4).map { runCatching { api(server).viewAction("c", "view_1", input) }.exceptionOrNull() as HubFailure }
-            assertEquals(listOf(HubError.Server, HubError.Server, HubError.PairingExpired, HubError.PairingExpired), kinds.map { it.kind })
-            assertTrue(kinds.take(2).none { it.retryable })
+            assertEquals(listOf(HubError.Server, HubError.Server, HubError.Server, HubError.PairingExpired), kinds.map { it.kind })
+            assertTrue(kinds.take(3).none { it.retryable })
             assertEquals("read-only role cannot reply from a card", kinds[0].message)
         }
     }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.*
 import okhttp3.*
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -136,13 +137,28 @@ class HubConnectionLivenessTest {
         }
     }
 
+    /** A per-request 403 (an expired install preview) fails that request only; the pairing stays (#4692). */
+    @Test fun aRefusedRequestDoesNotRevokeThePairing() = runBlocking {
+        Fixture().use { fixture ->
+            fixture.start()
+            val failure = runCatching {
+                fixture.connection.request("/api/v1/extensions/-/install", "POST", "{}".toRequestBody())
+            }.exceptionOrNull() as HubFailure
+            assertEquals("this_machine_only", failure.code)
+            fixture.scheduler.runCurrent()
+            assertNotEquals(ConnectionState.Revoked, fixture.connection.state.value)
+        }
+    }
+
     private class Fixture(private val appPing: Boolean = false, policy: HeartbeatPolicy = HeartbeatPolicy()) : AutoCloseable {
         val scheduler = TestCoroutineScheduler()
         private val sockets = mutableListOf<FakeSocket>()
         private val server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest) = MockResponse()
-                    .setBody("""{"ok":true,"hub_id":"test-hub"}""")
+                override fun dispatch(request: RecordedRequest) =
+                    if (request.path.orEmpty().startsWith("/api/v1/extensions/")) MockResponse().setResponseCode(403)
+                        .setBody("""{"error":"preview expired","code":"this_machine_only"}""")
+                    else MockResponse().setBody("""{"ok":true,"hub_id":"test-hub"}""")
             }
             start(InetAddress.getLoopbackAddress(), 0)
         }

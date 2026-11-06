@@ -7,7 +7,7 @@ wechat-connector 是一个外部 API 服务：它为一个微信账号提供读�
 它和 [wechat.md](wechat.md) 是两件事：那个是**渠道**（在微信里和 Persona 机器人对话），这个把你自己的微信当**数据来源**（#1420）。
 
 本文只讲 API 语义；wechat-connector 怎么实现、怎么部署，以它自己的文档为准。扩展包由 wechat-connector 一方发布，代码不在本仓库，Persona 也没有为它加 Go 连接器代码。
-下文按已发布的扩展包 0.5.0（与 wechat-connector 0.5.0 一同发布）的行为写，与安装预览里的清单不一致时以清单为准；新版本的变化以它的发布说明为准。
+下文按已发布的最新扩展包的行为写，不对应某个具体版本：版本号、要求和权限以安装预览里的清单为准，各版本的变化以扩展包的发布说明为准。
 
 ## 架构
 
@@ -39,7 +39,7 @@ wechat-connector 服务（外部，另行部署）
 | 事件推送 | 微信账号已在 wechat-connector 上登录，wechat-connector 侧已为该账号开启事件推送。没开时事件流按设计为空，状态是 `error` 而不是 `ok` |
 | 外发开关 | 服务方的策略，默认关。只管发送，不影响读取；Persona 不会去开它 |
 
-hub 要满足扩展包清单的 `engines`：0.5.0 要 hub 构建号不低于 `202611041602`（声明了 `fallback`，[extensions.md](extensions.md)「收件箱的通用规则」），老 hub 装不上。
+hub 要满足扩展包清单的 `engines`：目前发布的扩展包都要 hub 构建号不低于 `202611041602`（声明了 `fallback`，[extensions.md](extensions.md)「收件箱的通用规则」），老 hub 装不上；具体要求以安装预览里的清单为准。
 扩展包自己还要 hub 的系统用户能找到 Node.js 24 或更新，找不到时 hub 日志里有一行
 `plugin wechat-connector: wechat-connector-persona: Node.js 24 or newer is required …`。
 

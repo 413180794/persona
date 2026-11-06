@@ -120,15 +120,22 @@ func reportOf(t *testing.T, s *Service, sid string) (proto.WorkState, bool) {
 
 func TestTransientErrors(t *testing.T) {
 	for text, want := range map[string]bool{
-		"API Error: 503 no eligible upstream account":                    true,
-		"API Error: 529 {\"type\":\"overloaded_error\"}":                 true,
-		"API Error: Connection error.":                                   true,
-		"API Error: Request timed out.":                                  true,
-		"API Error: 429 rate limit exceeded":                             true,
-		"Failed to authenticate. API Error: 401 invalid x-api-key":       false,
-		"OAuth token has expired. Please obtain a new token":             false,
-		"Invalid API key · Please run /login":                            false,
-		"There's an issue with the selected model (x). It may not exist": false,
+		"API Error: 503 no eligible upstream account":                                             true,
+		"API Error: 529 {\"type\":\"overloaded_error\"}":                                          true,
+		"API Error: Connection error.":                                                            true,
+		"API Error: Request timed out.":                                                           true,
+		"API Error: 429 rate limit exceeded":                                                      true,
+		"API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)":          true,
+		"API Error: Can't reach the API server — check your internet or DNS (EAI_AGAIN)":          true,
+		"API Error: Can't reach the API server — check your internet or DNS (FailedToOpenSocket)": true,
+		"API Error: The API is temporarily unavailable":                                           true,
+		"API Error: No response from API (waited 5m)":                                             true,
+		"API Error: Unable to connect to API (ECONNREFUSED)":                                      true,
+		"API Error: Unable to connect to API: SSL certificate verification failed. See https://docs.claude.com/en/docs/claude-code/network-config": false,
+		"Failed to authenticate. API Error: 401 invalid x-api-key":                                                                                 false,
+		"OAuth token has expired. Please obtain a new token":                                                                                       false,
+		"Invalid API key · Please run /login":                                                                                                      false,
+		"There's an issue with the selected model (x). It may not exist":                                                                           false,
 	} {
 		if got := transientError(text); got != want {
 			t.Errorf("transientError(%q) = %v, want %v", text, got, want)
@@ -205,6 +212,17 @@ func TestCodexTurnErrorIsContinued(t *testing.T) {
 }
 
 // A 503 gets 继续 after the backoff, once; three runs of it and the user is asked.
+// Claude Code's own words for a network blip (no "connection" / "timeout" in them) are retried, not a card (#4644).
+func TestUnreachableAPIIsContinued(t *testing.T) {
+	s, f := workService(t)
+	f.setSessions("box", apiErrorTurn("s1", "API Error: Can't reach the API server — check your internet or DNS (EAI_AGAIN)"))
+	triage(t, s, "s1")
+	e := entryOf(t, s, "s1")
+	if e.WakeAt == nil || e.Work.On != proto.WaitTransient || len(e.Work.Questions) != 0 || len(f.sentToAgents()) != 0 {
+		t.Fatalf("entry %+v, sent %v", e, f.sentToAgents())
+	}
+}
+
 func TestTransientErrorIsContinued(t *testing.T) {
 	s, f := workService(t)
 	const errText = "API Error: 503 no eligible upstream account"

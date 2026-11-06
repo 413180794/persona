@@ -750,6 +750,97 @@ func TestFleetRefreshPerDevice(t *testing.T) {
 	}
 }
 
+// TestFleetAssistantHoldsActivity: only the assistant answering is something to show on an island that shows it
+// (思考中): the hub pushes it there and does not end that activity while it answers, nor until fleetEndAfter after it
+// stopped. A device whose island does not show the assistant ends as with an empty fleet, and none is started for it
+// (#4398).
+func TestFleetAssistantHoldsActivity(t *testing.T) {
+	h, f, clock := fleetClock(t)
+	la := h.live
+	h.push.register(Device{DeviceID: "pad", Name: "pad", APNSToken: "padtok", Topic: "app.example"})
+	la.update("pad", func(v *db.LiveActivity) { v.ActivityID, v.PushToken, v.StartedAt = "act2", "padact", *clock })
+	showing := NotifyPrefs{Input: true, Done: DoneLong, LiveActivity: true, Island: IslandPrefs{Preset: "custom", Left: SlotStatus, Right: SlotAssistant}}
+	if err := h.push.setPrefs("pad", showing); err != nil {
+		t.Fatal(err)
+	}
+	// pushes counts the fake APNs calls to token with event, waiting up to 2 s for want of them (pushes go out on
+	// their own goroutines). want 0 cannot be waited for: it gives a push in flight 50 ms to show up.
+	pushes := func(token, event string, want int) (n int, last apnsCall) {
+		count := func() (n int, last apnsCall) {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			for _, c := range f.got {
+				if c.Token == token && c.Event == event {
+					n, last = n+1, c
+				}
+			}
+			return n, last
+		}
+		if want == 0 {
+			time.Sleep(50 * time.Millisecond)
+			return count()
+		}
+		for deadline := time.Now().Add(2 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+			if n, last = count(); n >= want || time.Now().After(deadline) {
+				return n, last
+			}
+		}
+	}
+	t0 := *clock
+	la.flush(FleetState{Phase: "working", Working: 1, Items: []FleetItem{{ID: "m/a", Title: "api", Kind: "working"}}}, false, false)
+	f.calls(t, 2)
+	// A device that could have one push-started: whether only the assistant should start one is not decided yet.
+	h.push.register(Device{DeviceID: "mini", Name: "mini", APNSToken: "minitok", Topic: "app.example"})
+	la.update("mini", func(v *db.LiveActivity) { v.PushToStartToken = "minip2s" })
+	if err := h.push.setPrefs("mini", showing); err != nil {
+		t.Fatal(err)
+	}
+
+	// A minute on, the agent is done and seen, and the assistant answers: the pad shows it, the phone has nothing.
+	*clock = t0.Add(time.Minute)
+	answering := FleetState{Assistant: true}
+	reportLive(t, h, answering, FleetStats{})
+	la.flush(answering, false, false)
+	if n, c := pushes("padact", "update", 2); n != 2 || !c.State.Assistant || c.State.Phase != "" {
+		t.Fatalf("pad: %d updates, last %+v", n, c)
+	}
+	if n, _ := pushes("acttok", "update", 1); n != 1 {
+		t.Fatalf("phone: %d updates, want only the first", n)
+	}
+
+	// It answers for a quarter of an hour: the phone's activity ends after fleetEndAfter, the pad's stays, refreshed.
+	for *clock = clock.Add(15 * time.Second); clock.Before(t0.Add(time.Minute + fleetStaleIn)); *clock = clock.Add(15 * time.Second) {
+		la.tick()
+	}
+	if n, _ := pushes("acttok", "end", 1); n != 1 {
+		t.Fatalf("phone: %d ends, want 1", n)
+	}
+	if n, _ := pushes("padact", "end", 0); n != 0 || la.rows["pad"].PushToken != "padact" {
+		t.Fatal("the pad's activity ended while the assistant answers")
+	}
+	if n, c := pushes("padact", "update", 3); n != 3 || !c.State.Assistant {
+		t.Fatalf("pad: %d updates, want a refresh before it goes stale; last %+v", n, c)
+	}
+	if n, _ := pushes("minip2s", "start", 0); n != 0 {
+		t.Fatal("only the assistant answering started an activity")
+	}
+
+	// It stops: the pad's activity ends fleetEndAfter later, as an emptied fleet's does.
+	stopped := *clock
+	reportLive(t, h, FleetState{}, FleetStats{})
+	la.flush(FleetState{}, false, false)
+	for ; clock.Before(stopped.Add(fleetEndAfter)); *clock = clock.Add(15 * time.Second) {
+		la.tick()
+	}
+	if n, _ := pushes("padact", "end", 0); n != 0 {
+		t.Fatal("the pad's activity ended at once when the assistant stopped")
+	}
+	la.tick()
+	if n, _ := pushes("padact", "end", 1); n != 1 {
+		t.Fatalf("pad: %d ends fleetEndAfter after the assistant stopped, want 1", n)
+	}
+}
+
 // TestFleetBackgroundRefreshFromLastUpdate: an app that goes to the background may have left its activity's
 // stale-date as an earlier update set it (it does not update for a fleet that changes nothing it shows, nor for a
 // settings change), so the hub is only sure of fleetOpenFresh after the last fleet event: the refresh comes by then,

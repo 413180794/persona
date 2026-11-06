@@ -884,8 +884,8 @@ Debug 包的设置页底部另有一行「组件目录（调试版）」，自�
 - 搜索、筛选、加载更多：都是这张卡的 reply。搜索框用扩展的 `ExtensionSearchBar`，打字只记下 `q`，不会停顿后自动发出；旁边的「搜索」按钮（`SearchSubmit`，扩展不传就没有，扩展的行为不变）点一下发送搜索动作和 `q`；选筛选项才发，带上 `q` 和筛选值；
   submit 按 hub 的规则带上这一页的全部字段、`q` 和筛选值（`AssistantCard.fields`）。加载更多画成一个按钮，点了才发（扩展的加载更多一出现就自动请求，卡片里不能这样）。
   卡片回答过就不再显示搜索框和筛选。
-- 403：hub 对一个请求的拒绝（`forbidden`：只读设备、关掉的卡片；`permission_denied`）只是这个请求失败，配对不撤销（`HubFailure.from`，`HubHttpRoutingTest.aRefusedCardDoesNotRevokeThePairing`）；
-  401 和其他 403（凭据在这里不能用，如 `master_token_local_only`）照旧撤销配对。App 里另外两处自己看状态码的地方（`ApiClient` 的拦截器、输入框的「中断」）仍把任何 403 当成配对过期，没在这次改。
+- 403：带 code 的 403 只是这个请求失败，配对不撤销（`forbidden`：只读设备、关掉的卡片；`permission_denied`；`declined`；安装预览过期或已用过的 `this_machine_only`；凭据在这里不能用的 `master_token_local_only` 等，#4692）；`tls_required` 是「需要 TLS」，不是撤销（`HubFailure.from`，`HubFailureResponseTest`、`HubConnectionLivenessTest.aRefusedRequestDoesNotRevokeThePairing`、`HubHttpRoutingTest.aRefusedCardDoesNotRevokeThePairing`）。
+  只有 401 和不带 code 的 403（旧 hub）撤销配对；`ApiClient` 的拦截器只在 401 时撤销。输入框的「中断」仍把任何 403 当成配对过期，没在这次改。
 - **HTML**：`AssistantHtmlSandbox.Accepted = false`，所有 html 组件都显示「这个页面在安卓上还不运行」和卡片的 fallback。沙箱代码已写好待验收：
   独立 WebView（支持时用单独的 Profile）、data: 文档（不透明源）、CSP 放在页面内容之前、`blockNetworkLoads`、所有请求在 `shouldInterceptRequest` 里答空、所有导航拒绝、
   不开窗口 / 弹框 / 权限、只对这个 WebView 拒第三方 cookie（不碰全局 cookie）；bridge 只用 `addWebMessageListener`，只收当前实例主 frame 的消息、一次一个确认、拒两次就不再问；
