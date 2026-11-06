@@ -61,8 +61,8 @@ func assistantViewOf(t *testing.T, h *Hub, query string) assistantView {
 }
 
 // The hub keeps the profile the assistant last reported as its own (hub.assistant_profile) and starts with it, so its
-// features have the user's zone and the main conversation before the assistant reports again; the first start after
-// the settings moved reads them once from the assistant's settings as they were left.
+// features have the user's zone and the main conversation before the assistant reports again. It never reads the
+// assistant's own settings (the manager's).
 func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 	ctx := context.Background()
 	h := newTestHub(t)
@@ -73,14 +73,12 @@ func TestTheHubStartsWithTheProfileItKept(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.loadAssistantProfile(ctx)
-	if p := h.assistantProfile(); p.Main != "main-1" || p.Timezone != "Asia/Tokyo" || p.MachineID != h.defaultAssistantMachine() || p.Keep != nil {
-		t.Fatalf("seeded: %+v", p)
-	}
-	if got := h.userLocation().String(); got != "Asia/Tokyo" {
-		t.Fatalf("zone before the assistant reports: %s", got)
+	// The assistant's own settings are the manager's: the hub does not read them (hub.json's defaults until it reports).
+	if p := h.assistantProfile(); p.Main != "" || p.Timezone == "Asia/Tokyo" {
+		t.Fatalf("read from the assistant's settings: %+v", p)
 	}
 
-	// A report replaces it, and is what the next start begins with (not the old settings again).
+	// A report is what the next start begins with (the hub's own settings).
 	h.assistant.profile = nil
 	snap := assistantwire.Snapshot{Epoch: "e", Seq: 1, Profile: &assistantwire.Profile{MachineID: "server", Main: "main-2",
 		Launcher: "claude", Timezone: "Europe/Paris", Keep: []assistantwire.SessionRef{{MachineID: "server", SessionID: "main-2"}}}}

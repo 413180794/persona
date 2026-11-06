@@ -47,3 +47,5 @@ func (m *memStore) Setting(context.Context, string, any) (bool, error) { return 
 
 // PutSetting keeps nothing, like Setting finds nothing: loading the schedule writes its one-time task list.
 func (m *memStore) PutSetting(context.Context, string, any) error { return nil }
+
+func (m *memStore) TakeSetting(context.Context, string, any) (bool, error) { return false, nil }

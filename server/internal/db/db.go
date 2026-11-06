@@ -822,10 +822,22 @@ func (d *DB) DeleteConnectorSecret(ctx context.Context, connector string) error 
 
 // ---- settings ----
 
+// Each side has its own settings (docs/server.md "Migrations"): the hub's in hub_settings, a manager's in settings.
+// A database opened for the hub alone reads and writes the hub's; one opened for a manager (or for both, in tests)
+// the manager's. Neither side reads the other's keys: what one needs of the other comes over the bus.
+
+// settingsTable is the table Setting and the rest use: hub_settings for the hub's database, settings otherwise.
+func (d *DB) settingsTable() string {
+	if d.sets == HubSet {
+		return "hub_settings"
+	}
+	return "settings"
+}
+
 // Setting decodes the value stored under key into out; it reports false when the key is unset.
 func (d *DB) Setting(ctx context.Context, key string, out any) (bool, error) {
 	var raw []byte
-	err := d.pool.QueryRow(ctx, `SELECT value FROM settings WHERE key = $1`, key).Scan(&raw)
+	err := d.pool.QueryRow(ctx, `SELECT value FROM `+d.settingsTable()+` WHERE key = $1`, key).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -840,7 +852,7 @@ func (d *DB) PutSetting(ctx context.Context, key string, v any) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.pool.Exec(ctx, `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())
+	_, err = d.pool.Exec(ctx, `INSERT INTO `+d.settingsTable()+` (key, value, updated_at) VALUES ($1, $2, now())
 		ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()`, key, raw)
 	return err
 }
@@ -849,7 +861,7 @@ func (d *DB) PutSetting(ctx context.Context, key string, v any) error {
 // stopping hub hands to the next one, docs/hub-restart.md) is never read twice.
 func (d *DB) TakeSetting(ctx context.Context, key string, out any) (bool, error) {
 	var raw []byte
-	err := d.pool.QueryRow(ctx, `DELETE FROM settings WHERE key = $1 RETURNING value`, key).Scan(&raw)
+	err := d.pool.QueryRow(ctx, `DELETE FROM `+d.settingsTable()+` WHERE key = $1 RETURNING value`, key).Scan(&raw)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -866,12 +878,13 @@ func (d *DB) CompareSetting(ctx context.Context, key string, revision int64, val
 	if err != nil {
 		return false, err
 	}
-	tag, err := d.pool.Exec(ctx, `INSERT INTO settings (key, value, updated_at)
+	table := d.settingsTable()
+	tag, err := d.pool.Exec(ctx, `INSERT INTO `+table+` AS s (key, value, updated_at)
 		SELECT $1, $2::jsonb, now() WHERE $3::bigint = 0
 		ON CONFLICT (key) DO UPDATE SET value = $2::jsonb, updated_at = now()
-		WHERE COALESCE((settings.value->>'revision')::bigint, 0) = $3`, key, raw, revision)
+		WHERE COALESCE((s.value->>'revision')::bigint, 0) = $3`, key, raw, revision)
 	if revision != 0 && err == nil && tag.RowsAffected() == 0 {
-		tag, err = d.pool.Exec(ctx, `UPDATE settings SET value = $2::jsonb, updated_at = now()
+		tag, err = d.pool.Exec(ctx, `UPDATE `+table+` SET value = $2::jsonb, updated_at = now()
 			WHERE key = $1 AND COALESCE((value->>'revision')::bigint, 0) = $3`, key, raw, revision)
 	}
 	return tag.RowsAffected() == 1, err

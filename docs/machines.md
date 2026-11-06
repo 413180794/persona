@@ -80,8 +80,8 @@ an items page, image or screenshot is one message (same as the former node conne
 **Keys**: Persona Link credentials stop at hub (after authentication, manager receives only credential id and bound machine); pairing codes and pairing stay hub-owned. Kind-service helper credentials are needed for manager dialing:
 manager generates them during pairing, hands to hub for encrypted storage, then retrieves once and caches in memory (retrieves again only after rejection, re-pairing or pairing to another hub), not on every probe.
 
-**Hub restart**: the manager is a hub child and restarts too. Before stopping, it hands online machines' `node.info` and session lists to the next instance (settings `hub.warm_machines`, unchanged key and format from hub's old handoff, so the first post-upgrade restart works), then disconnects;
-new hub reads without consuming this snapshot to display machines (including engines), and calls to them wait for manager's first report (up to 30 seconds). Manager consumes the snapshot, shows machines online for 30 seconds and reconnects nodes.
+**Hub restart**: the manager is a hub child and restarts too. Before stopping, it hands online machines' `node.info` and session lists to its next instance (its settings `hub.warm_machines`), then disconnects; the hub keeps what it saw reported in its own settings (`hub.devices_warm`, [hub-restart.md](hub-restart.md));
+the new hub takes its own snapshot to display machines (including engines), and calls to them wait for manager's first report (up to 30 seconds). Manager consumes its snapshot, shows machines online for 30 seconds and reconnects nodes.
 Hub listening starts before manager: App requests and manager-owned routes arriving during these seconds wait (up to 30 seconds); Persona Link links and primary node streams arriving at member hubs wait up to 5 seconds (Persona Link gives a handshake 8 seconds),
 then return 503 if not ready (normal Persona Link backoff). After this startup window, absent manager returns 503 immediately, without waiting.
 

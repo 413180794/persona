@@ -289,7 +289,7 @@ Prefer one hub and node services elsewhere. If several hubs are needed, pair int
 ## Restart without interrupting clients ([hub-restart.md](hub-restart.md))
 
 - `jarvisd.socket` owns listener (socket activation, `hub-systemd.sh`); `systemctl --user restart jarvisd` leaves port open, queues connections for new process. Without `LISTEN_FDS` (Docker, launchd, manual), hub listens itself. Rollback: `PERSONA_HUB_SOCKET=0 scripts/deploy/hub-systemd.sh` **before** restoring old binary without `LISTEN_FDS` support, otherwise port conflict. Full stop: `systemctl --user stop jarvisd.socket jarvisd`.
-- SIGTERM planned shutdown sends `hub_restarting`, hands machines / sessions to next hub (settings `hub.warm_machines`), suppresses shutdown-induced offline broadcasts, then hands off event log (settings `hub.event_log`) so next hub continues sequence.
+- SIGTERM planned shutdown sends `hub_restarting`, hands machines / sessions as the managers reported them to next hub (`hub_settings` `hub.devices_warm`), suppresses shutdown-induced offline broadcasts, then hands off event log (settings `hub.event_log`) so next hub continues sequence.
 - Persistent node on hub machine (next section) keeps assistant Claude outside hub cgroup, surviving restart. Deploy with `node-launchd.sh restart-idle`; replace binary only when node idle.
 
 ## Persistent node (Mac, `scripts/deploy/node-launchd.sh`)
@@ -341,7 +341,8 @@ Without Docker, use system Postgres (Ubuntu postgresql, version 16 tested, local
 | `node_sessions` | Persona-started sessions per machine: pane, launcher, directory. Node uses hub `state.load` / `state.put`, Mac no direct DB. `state.load` reads last 60 days via `node_sessions_started` index (machine_id, started_at), not entire machine history |
 | `mail_accounts` | Nonsensitive JSONB + AES-GCM ciphertext; `~/.persona/secret.key` excluded from DB |
 | interactions | Questions / plans / permissions / terminal interactions and outcomes resolved / dismissed / expired / cancelled. Hub restart cancels leftover pending through partial `interactions_pending` index, no history scan. Completed rows currently retained indefinitely; retention #2615 |
-| settings | App-edited global settings (e.g. assistant launcher), persistent `hub_id` |
+| `hub_settings` | The hub's own settings: persistent `hub_id`, the user's locale, look, mutes and pins, the managers' default and machine owners, mesh records, update settings, the event log and machines handed to the next process |
+| settings | A manager's settings (the assistant, inbox rules, models and launchers, extensions, the computers' engines and warm start) |
 | `pair_tokens` | Temporary token hashes, expiration / redemption records, surviving restart |
 
 Connect: `ssh <hub machine> 'docker exec -it jarvis-postgres psql -U jarvis -d jarvis'`.
@@ -358,7 +359,9 @@ The migrations are two sets, one per side (`server/internal/db/migrations/`):
 
 `db.Open(ctx, url, sets)` applies the pending migrations of the sets it is given: the hub opens its database with `db.HubSet`, a manager with `db.ManagerSet` (tests that use both sides' tables: `db.AllSets`). While the default manager shares the hub's database, both sets run there, each when its side starts. Non-default managers have databases of their own (`docs/managers.md`) and get only the manager set.
 
-`schema_migrations` has a row per migration a part applied, with `part` `hub` or `manager`. Rows from before the split have `part` NULL and stand for both parts, so a database migrated by an older build runs nothing again, whichever side opens it first, and a build from before the split still reads and adds records there. Four early migrations are in both sets and frozen that way: `0001_init.sql` made tables for both sides and is split into each side's part; `0002_settings.sql`, `0071_sent_messages.sql` and `0241_sent_echo.sql` make `settings` and `sent_messages`, which each side keeps in its own database (the hub's sends from the apps, the manager's from the inbox). On a database both sides share, those tables are one.
+`schema_migrations` has a row per migration a part applied, with `part` `hub` or `manager`. Rows from before the split have `part` NULL and stand for both parts, so a database migrated by an older build runs nothing again, whichever side opens it first, and a build from before the split still reads and adds records there. Three early migrations are in both sets and frozen that way: `0001_init.sql` made tables for both sides and is split into each side's part; `0071_sent_messages.sql` and `0241_sent_echo.sql` make `sent_messages`, which each side keeps in its own database (the hub's sends from the apps, the manager's from the inbox). On a database both sides share, that table is one.
+
+Settings are each side's own too: the hub's in `hub_settings` (`0421_hub_settings.sql`, which on a database shared with the default manager copies the hub's keys out of `settings` once and leaves the rows there for an older build), a manager's in `settings`. `db.DB.Setting` and the rest use the table of the side the database was opened for (`db.HubSet` alone: `hub_settings`). Neither side reads the other's keys; what one needs of the other comes over the bus: the mutes travel with `fleet.mutes`, the computers waiting to be confirmed with the devices handover, and the hub hands its next process the machines as the managers reported them (`hub.devices_warm`) instead of reading the manager's warm start. The inbox's rules (`inbox.rules`, `inbox.agent_rules`) are the manager's settings (listed among its `jarvis_settings`). `TestSettingsKeysAreOneSidesOwn` (`internal/hub`) fails when the hub and a manager package use the same literal key.
 
 Adding a migration:
 

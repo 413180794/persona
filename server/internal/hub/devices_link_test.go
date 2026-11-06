@@ -174,6 +174,22 @@ func TestTheHubShowsTheHandOverUntilTheManagerReports(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the call never went")
 	}
+	st.mu.Lock()
+	_, left := st.settings[devicesWarmKey]
+	st.mu.Unlock()
+	if left {
+		t.Fatal("the hand-over was read, not taken")
+	}
+	// Stopping, the hub hands the next process what the manager reported (its own settings, not the manager's).
+	waitFor(t, "the manager reports box", func() bool { s := m.snapshot(); return s.Online && len(m.sessionList()) == 1 })
+	h.saveDevicesWarm(context.Background())
+	next := newTestHub(t)
+	next.store = st
+	next.cfg.Machines = h.cfg.Machines
+	next.startDevices(context.Background())
+	if s := next.machineByID("box").snapshot(); !s.Online || s.Hostname != "box" || len(next.machineByID("box").sessionList()) != 1 {
+		t.Fatalf("the next hub process: %+v", s)
+	}
 }
 
 // echoServer is a TCP server on this machine that writes back what it reads: a port an agent listens on.

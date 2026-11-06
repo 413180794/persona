@@ -18,26 +18,6 @@ func TestSelfSettingsRedactsSecretsWithoutChangingDelivery(t *testing.T) {
 	}
 }
 
-func TestSelfSettingsRulesAndNotesPersist(t *testing.T) {
-	h, _ := modelTestHub(t)
-	ctx := context.Background()
-	h.cfg.Inbox.Rules = "fallback"
-	change, err := h.textSetting(ctx, json.RawMessage(`"custom"`), "规则", h.inboxRules, "inbox.rules")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = change.apply(ctx, nil); err != nil || h.inboxRules(ctx) != "custom" {
-		t.Fatalf("rules: %v", err)
-	}
-	change, err = h.textSetting(ctx, json.RawMessage(`""`), "规则", h.inboxRules, "inbox.rules")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = change.apply(ctx, nil); err != nil || h.inboxRules(ctx) != "fallback" {
-		t.Fatalf("cleared rules: %v", err)
-	}
-}
-
 func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
 	h := newTestHub(t)
 	connectAssistant(t, h)
@@ -56,7 +36,8 @@ func TestSelfSettingsToolOnlyForAssistant(t *testing.T) {
 	// The list is the assistant's: its own settings and the hub's (settings.list).
 	res := h.asst().Tool(context.Background(), assistantwire.ToolCall{Name: "jarvis_settings", Arguments: json.RawMessage(`{}`)})
 	out := res.Content[0].Text
-	if res.IsError || !strings.Contains(out, "inbox.rules") || !strings.Contains(out, "- assistant.notes (关于我)") || strings.Contains(out, "- mail.accounts") {
+	// The inbox's rules and the mail accounts are the manager's settings (extmgr), not connected here.
+	if res.IsError || !strings.Contains(out, "- assistant.notes (关于我)") || strings.Contains(out, "- mail.accounts") || strings.Contains(out, "- inbox.rules ") {
 		t.Fatalf("list: %q", out)
 	}
 }

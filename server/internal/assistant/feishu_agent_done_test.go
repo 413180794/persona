@@ -1,7 +1,6 @@
 package assistant
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -136,9 +135,7 @@ func TestFeishuAgentDoneGated(t *testing.T) {
 	}{
 		{"pushes switch off", false, func(ft *fleetTest) {}, agentSession, 1},
 		{"muted session", true, func(ft *fleetTest) {
-			if err := ft.st.PutSetting(context.Background(), "mutes", Pins{Sessions: []string{"mac/s1"}}); err != nil {
-				t.Fatal(err)
-			}
+			ft.mutes(Pins{Sessions: []string{"mac/s1"}})
 		}, agentSession, 0},
 		{"main conversation", true, func(ft *fleetTest) {
 			ft.s.fleetTakeSnapshot(Snapshot{Profile: &Profile{MachineID: "mac", Main: "s1"}})

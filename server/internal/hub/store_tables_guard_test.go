@@ -111,7 +111,7 @@ func tablesTouched(funcs map[string]dbFunc, m string, all []string) []string {
 	var out []string
 	var walk func(key string)
 	walk = func(key string) {
-		if seen[key] {
+		if seen[key] || key == "DB.settingsTable" { // the side's own settings table, by how the database was opened
 			return
 		}
 		seen[key] = true
@@ -202,6 +202,89 @@ func TestStoresTouchTheirOwnTables(t *testing.T) {
 							m, tb, side.set, side.set)
 					}
 				}
+			}
+		}
+	}
+}
+
+// settingKeys are the keys the non-test files of dir pass to Setting / PutSetting / TakeSetting / CompareSetting as a
+// string literal or a constant of the package (keys built at run time are not seen).
+func settingKeys(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	consts := map[string]string{}
+	var parsed []*ast.File
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed = append(parsed, f)
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs := spec.(*ast.ValueSpec)
+				for i, id := range vs.Names {
+					if i < len(vs.Values) {
+						if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							consts[id.Name], _ = strconv.Unquote(lit.Value)
+						}
+					}
+				}
+			}
+		}
+	}
+	out := map[string]string{}
+	for _, f := range parsed {
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) < 2 {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || !slices.Contains([]string{"Setting", "PutSetting", "TakeSetting", "CompareSetting"}, sel.Sel.Name) {
+				return true
+			}
+			pos := fset.Position(call.Pos())
+			where := filepath.Base(pos.Filename) + ":" + strconv.Itoa(pos.Line)
+			switch k := call.Args[1].(type) {
+			case *ast.BasicLit:
+				if v, err := strconv.Unquote(k.Value); err == nil {
+					out[v] = where
+				}
+			case *ast.Ident:
+				if v, ok := consts[k.Name]; ok {
+					out[v] = where
+				}
+			}
+			return true
+		})
+	}
+	return out
+}
+
+// Each side keeps its own settings (hub_settings, a manager's settings): the hub uses no key a manager does, so it
+// never reads what a manager wrote (it gets that over the bus), and the other way round.
+func TestSettingsKeysAreOneSidesOwn(t *testing.T) {
+	hub := settingKeys(t, ".")
+	if len(hub) < 10 {
+		t.Fatalf("found only %d of the hub's setting keys: the scan is broken", len(hub))
+	}
+	for _, dir := range []string{"../assistant", "../devices", "../extmgr", "../extension", "../mail", "../agents"} {
+		for k, where := range settingKeys(t, dir) {
+			if at, ok := hub[k]; ok {
+				t.Errorf("setting %q is used by the hub (%s) and by internal/%s (%s): a key is one side's; hand the value "+
+					"over the bus instead; docs/server.md \"Migrations\"", k, at, filepath.Base(dir), where)
 			}
 		}
 	}

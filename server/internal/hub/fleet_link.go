@@ -341,6 +341,7 @@ func (h *Hub) fleetConnected() {
 	f.clientsSent = false
 	f.mu.Unlock()
 	h.fleetClientsChanged()
+	h.mutesChanged()
 }
 
 // markSeen tells the manager the user looked at a session (an app's WebSocket seen).
@@ -348,9 +349,12 @@ func (h *Hub) markSeen(machine, session string) {
 	_ = h.notifyBus(h.sessionOwner(machine, session), assistantwire.EventSeen, assistantwire.FleetSeen{MachineID: machine, SessionID: session})
 }
 
-// mutesChanged tells the manager the muted spaces / agents changed (settings mutes).
+// mutesChanged tells the managers the muted spaces / agents (the hub's settings mutes): after a change, and after
+// each handshake (fleetConnected). They are the hub's: a manager never reads them from a database.
 func (h *Hub) mutesChanged() {
-	_ = h.notifyManagers(assistantwire.EventMutes, map[string]any{})
+	p := h.loadMutes(context.Background())
+	_ = h.notifyManagers(assistantwire.EventMutes, assistantwire.FleetMutes{Mutes: &assistantwire.Mutes{
+		Spaces: p.Spaces, Sessions: p.Sessions, Allowed: p.Allowed}})
 }
 
 // fleetRoutesRelayed relays the apps' requests on the manager's routes on the interactions and the sessions' states

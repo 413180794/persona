@@ -432,7 +432,8 @@ func (c MachineConfig) forMesh() MachineConfig {
 // ---- what the manager reports ----
 
 // startDevices makes the machines of hub.json before the manager reports them: shown as before a restart while it
-// comes back (the warm start the manager handed over, warm.go there), offline otherwise; a call waits for it meanwhile.
+// comes back (what the last hub process saw the manager report, saveDevicesWarm), offline otherwise; a call waits for
+// it meanwhile.
 func (h *Hub) startDevices(ctx context.Context) {
 	d := &h.devices
 	d.mu.Lock()
@@ -442,18 +443,9 @@ func (h *Hub) startDevices(ctx context.Context) {
 	}
 	d.mu.Unlock()
 	_ = h.loadMachineOwners(ctx) // which of them another manager carries (ownership.go); unread: the next move reads it
-	var saved struct {
-		Machines map[string]struct {
-			Info     proto.NodeInfo  `json:"info"`
-			Sessions []proto.Session `json:"sessions"`
-		} `json:"machines"`
-		Engines     map[string]string             `json:"engines"`
-		EngineHosts map[string]proto.EngineChoice `json:"engine_hosts"`
-		SavedAt     time.Time                     `json:"saved_at"`
-	}
+	var saved devicesWarm
 	if h.store != nil {
-		// Read, not taken: the manager takes it when it starts.
-		if ok, err := h.store.Setting(ctx, devicesWarmKey, &saved); err != nil || !ok || time.Since(saved.SavedAt) > devicesWarmStale {
+		if ok, err := h.store.TakeSetting(ctx, devicesWarmKey, &saved); err != nil || !ok || time.Since(saved.SavedAt) > devicesWarmStale {
 			saved.Machines = nil
 		}
 	}
@@ -489,10 +481,61 @@ func (h *Hub) startDevices(ctx context.Context) {
 }
 
 const (
-	devicesWarmKey   = "hub.warm_machines" // the manager's hand-over (internal/devices, warm.go)
+	// devicesWarmKey is the hub's own (hub_settings): what a stopping hub process saw the managers report, for the
+	// next one. The manager hands its own machines to its next process apart (internal/devices warm.go).
+	devicesWarmKey   = "hub.devices_warm"
 	devicesWarmGrace = 30 * time.Second
 	devicesWarmStale = 2 * time.Minute
 )
+
+// devicesWarm is the hand-over: the online machines as reported, every machine's engine, when.
+type devicesWarm struct {
+	Machines map[string]devicesWarmMachine `json:"machines"`
+	Engines  map[string]string             `json:"engines,omitempty"`
+	// EngineHosts are their sets of hosts (#2576), as the managers reported them.
+	EngineHosts map[string]proto.EngineChoice `json:"engine_hosts,omitempty"`
+	SavedAt     time.Time                     `json:"saved_at"`
+}
+
+type devicesWarmMachine struct {
+	Info     proto.NodeInfo  `json:"info"`
+	Sessions []proto.Session `json:"sessions"`
+}
+
+// saveDevicesWarm hands the next hub process the hub.json machines as the managers last reported them (beginStop,
+// while they are still connected): the apps see them as they were while the managers come back.
+func (h *Hub) saveDevicesWarm(ctx context.Context) {
+	if h.store == nil {
+		return
+	}
+	saved := devicesWarm{Machines: map[string]devicesWarmMachine{}, Engines: map[string]string{},
+		EngineHosts: map[string]proto.EngineChoice{}, SavedAt: time.Now()}
+	for _, m := range h.machinesNow() {
+		if h.cfgEntry(m.cfg.ID) == nil {
+			continue
+		}
+		m.mu.Lock()
+		if m.managed && !m.derived {
+			if m.snap != nil && m.snap.Engine != "" {
+				saved.Engines[m.cfg.ID] = m.snap.Engine
+			} else if m.engine != "" {
+				saved.Engines[m.cfg.ID] = m.engine
+			}
+			if m.snap != nil && m.snap.EngineHosts != nil {
+				saved.EngineHosts[m.cfg.ID] = proto.EngineChoice{Hosts: m.snap.EngineHosts, Default: m.snap.EngineDefault}
+			} else if m.engineHosts != nil {
+				saved.EngineHosts[m.cfg.ID] = *m.engineHosts
+			}
+			if m.online {
+				saved.Machines[m.cfg.ID] = devicesWarmMachine{Info: m.info, Sessions: slices.Clone(m.sessions)}
+			}
+		}
+		m.mu.Unlock()
+	}
+	if err := h.store.PutSetting(ctx, devicesWarmKey, saved); err != nil {
+		h.logf("warm start: hand over the machines: %v", err)
+	}
+}
 
 // devicesWarmEnded: the manager did not report in time; the machines it has not reported show offline.
 func (h *Hub) devicesWarmEnded() {

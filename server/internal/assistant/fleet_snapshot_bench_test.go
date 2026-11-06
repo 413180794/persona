@@ -1,7 +1,6 @@
 package assistant
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -32,10 +31,7 @@ func BenchmarkFleetSnapshot(b *testing.B) {
 // session's own space decides, as in the node's row.
 func TestFleetSnapshotMutedSpace(t *testing.T) {
 	ft := newFleetTest(t)
-	if err := ft.st.PutSetting(context.Background(), "mutes",
-		Pins{Spaces: []string{"mac/app"}, Sessions: []string{}, Allowed: []string{"mac/s2"}}); err != nil {
-		t.Fatal(err)
-	}
+	ft.mutes(Pins{Spaces: []string{"mac/app"}, Sessions: []string{}, Allowed: []string{"mac/s2"}})
 	ft.d.setSessions("mac", []proto.Session{
 		{SessionID: "s1", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p1", SpaceName: "app"},
 		{SessionID: "s2", Cwd: "/code/app", Agent: "claude", Status: proto.StatusWorking, PaneID: "p2", SpaceName: "app"},

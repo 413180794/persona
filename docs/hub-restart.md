@@ -133,7 +133,7 @@ SIGTERM no longer cancels the hub's ctx directly; it runs `beginStop` first:
 
 1. Mark `stopping`;
 2. Send every client `{"type":"hub_restarting","back_in_ms":3000}`, waiting up to 300 ms for it to go out;
-3. Hand the `NodeInfo` and session lists of the machines online at this moment to the next hub (Postgres settings `hub.warm_machines`);
+3. Hand the `NodeInfo` and session lists of the machines online at this moment, as the managers reported them, to the next hub (its own settings, `hub_settings` `hub.devices_warm`);
 4. Then cancel the ctx and stop in the original order: close the listener → close WebSockets with 1001 (reason changed to "hub restarting") → drain HTTP → wait for node connections → **hand over the event log** → close the database.
 
 During shutdown, node connections drop, machines go offline and their interactions end; all of this is caused by the shutdown itself, so it is **no longer broadcast** (`detach` / `markOffline` check `stopping`).
@@ -156,14 +156,14 @@ Previously clients received a string of "machine offline" and "interaction ended
 ### Machines and sessions (`devices/warm.go`; on the hub side `startDevices` in `hub/devices_link.go`)
 
 Since 2026-11-04 computers are connected by the manager ([machines.md](machines.md) ("Who connects computers")): the manager is a child process of the hub and also receives SIGTERM when the hub stops.
-It first hands the `NodeInfo` and session lists of the machines online at this moment to the next one (`hub.warm_machines`, same key and format as the hub used to hand over, plus each machine's engines `engines`), then disconnects them (without reporting them offline).
+It first hands the `NodeInfo` and session lists of the machines online at this moment to its next process (its own settings `hub.warm_machines`, plus each machine's engines `engines`), then disconnects them (without reporting them offline).
 When the hub shuts down it waits for the manager to exit (as it used to wait for node connections, within the shutdown budget).
 
-The new hub first **reads** (without taking) `hub.warm_machines` (if handed over within 2 minutes) and shows the machines in hub.json accordingly; until the manager's first report, calls to these machines (subscription replay, sending messages…)
+The new hub first **takes** its own `hub.devices_warm` (what the stopping hub saw the managers report, if handed over within 2 minutes; the hub never reads the manager's settings) and shows the machines in hub.json accordingly; until the manager's first report, calls to these machines (subscription replay, sending messages…)
 wait for it (up to 30 s) instead of returning "offline" immediately. The new manager **takes** this record on startup, restores `NodeInfo` and session lists for the machines online at the time, shows them online as usual **for 30 s**, and reconnects the nodes in the meantime:
 clients that reconnect do not see the Mac go offline and come back. If a node has not connected after 30 s, it is shown offline the old way (sessions marked unknown) and broadcast.
 This warm start is display only: when the hub's self-update confirms "everything that was online has reconnected" before updating each node, it waits for the node to really connect (`connected` reported by the manager), the same as the hub's own warm start used to.
-On the restart that upgrades to this version, the handover is written by the old hub, and the new manager picks it up all the same.
+On the restart that upgrades to the split settings (#5457), the stopping hub has not written `hub.devices_warm` yet: for those seconds the hub shows the machines offline until the manager reports, while the manager's own warm start works as before.
 
 ### Text being generated
 

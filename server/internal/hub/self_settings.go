@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -53,28 +52,10 @@ func (s selfSetting) actions() []string {
 	return a
 }
 
-// selfSettings is the registry of the hub's own; the manager's (mail, the sources' own rules) are listed beside them
-// (managerSettings).
+// selfSettings is the registry of the hub's own; the manager's (the inbox's rules, mail, the sources' own rules) are
+// listed beside them (managerSettings).
 func (h *Hub) selfSettings() []selfSetting {
-	l := h.userLang() // the titles are on the phone's card
-	rulesTitle, agentRulesTitle := ss(l, "title_inbox_rules"), ss(l, "title_agent_rules")
-	out := []selfSetting{
-		{key: "inbox.rules", title: rulesTitle,
-			about: "the user's own rules for sorting the inbox (需要你 / 知悉即可 / 噪音), in their words; they win over the defaults " +
-				"(a source with rules of its own, inbox.rules.<plugin>, uses those instead)",
-			value: `a string (the whole rules text; "" clears it and falls back to hub.json)`,
-			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxRules(ctx)), nil },
-			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-				return h.textSetting(ctx, v, rulesTitle, h.inboxRules, "inbox.rules")
-			}},
-		{key: "inbox.agent_rules", title: agentRulesTitle,
-			about: "the user's rules for which 需要你 inbox items the AI 分身 takes on and drafts a reply for",
-			value: `a string ("" clears it)`,
-			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxAgentRules(ctx)), nil },
-			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
-				return h.textSetting(ctx, v, agentRulesTitle, h.inboxAgentRules, "inbox.agent_rules")
-			}},
-	}
+	var out []selfSetting
 	if h.store != nil {
 		out = append(out, h.blockedClaudeDirsSetting())
 	}
@@ -176,49 +157,6 @@ func clipped(l i18n.Lang, s string) string {
 // changeSummary is the card's "change title: before → after".
 func changeSummary(l i18n.Lang, title, before, after string) string {
 	return ss(l, "change", i18n.Args{"title": title, "before": clipped(l, before), "after": clipped(l, after)})
-}
-
-// ---- inbox rules (settings in Postgres win over hub.json) ----
-
-func (h *Hub) settingText(ctx context.Context, key, fallback string) string {
-	if h.store != nil {
-		var v string
-		if ok, err := h.store.Setting(ctx, key, &v); err == nil && ok && strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return strings.TrimSpace(fallback)
-}
-
-func (h *Hub) inboxRules(ctx context.Context) string {
-	return h.settingText(ctx, "inbox.rules", h.cfg.Inbox.Rules)
-}
-func (h *Hub) inboxAgentRules(ctx context.Context) string {
-	return h.settingText(ctx, "inbox.agent_rules", h.cfg.Inbox.Agent.Rules)
-}
-
-// textSetting changes a text setting kept in Postgres under key ("" deletes the override).
-func (h *Hub) textSetting(ctx context.Context, v json.RawMessage, title string, now func(context.Context) string, key string) (*selfChange, error) {
-	var text string
-	if err := json.Unmarshal(v, &text); err != nil {
-		return nil, errors.New("value must be a string")
-	}
-	text = strings.TrimSpace(text)
-	before := now(ctx)
-	l := h.userLang()
-	if text == before {
-		return &selfChange{summary: ss(l, "no_change", i18n.Args{"title": title})}, nil
-	}
-	if h.store == nil {
-		return nil, errors.New("no database on this hub")
-	}
-	return &selfChange{summary: changeSummary(l, title, before, text),
-		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			if err := h.store.PutSetting(ctx, key, text); err != nil {
-				return "", err
-			}
-			return title + " updated; it applies from the next items sorted.", nil
-		}}, nil
 }
 
 // managerSettings are the manager's jarvis_settings entries (none while it is away).

@@ -30,9 +30,9 @@ import (
 // the hub's own zone for those seconds (the knowledge base filed itself into the hub's zone and back).
 const assistantProfileKey = "hub.assistant_profile"
 
-// loadAssistantProfile takes up the profile the hub kept (assistantProfileKey) before the assistant reports one. The
-// first start after the settings moved into the assistant has none yet: it is read once from the assistant's settings
-// as they were left (settings assistant: machine, main conversation, time zone), and kept as the hub's own from then on.
+// loadAssistantProfile takes up the profile the hub kept (assistantProfileKey, its own settings) before the assistant
+// reports one. Without one, hub.json's defaults stand until the assistant reports (the hub never reads the
+// assistant's own settings: they are the manager's).
 func (h *Hub) loadAssistantProfile(ctx context.Context) {
 	if h.store == nil {
 		return
@@ -44,23 +44,7 @@ func (h *Hub) loadAssistantProfile(ctx context.Context) {
 		return
 	}
 	if !ok {
-		var was struct {
-			MachineID string `json:"machine_id"`
-			Main      string `json:"main"`
-			Timezone  string `json:"timezone"`
-		}
-		if found, err := h.store.Setting(ctx, "assistant", &was); err != nil || !found {
-			return
-		}
-		// Keep stays unknown (nil): the nodes keep what they list until the assistant says.
-		p = assistantwire.Profile{MachineID: was.MachineID, Main: was.Main, Timezone: was.Timezone}
-		if h.localMachine(p.MachineID) == nil {
-			p.MachineID = h.defaultAssistantMachine()
-		}
-		if p.Launcher = "claude"; h.cfg != nil && h.cfg.Assistant.Launcher != "" {
-			p.Launcher = h.cfg.Assistant.Launcher
-		}
-		h.keepAssistantProfile(ctx, &p)
+		return
 	}
 	a := &h.assistant
 	a.mu.Lock()

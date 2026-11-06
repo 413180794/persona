@@ -19,12 +19,12 @@ import (
 )
 
 // bothSets are the migrations in both sets, frozen: from before the split, 0001 made tables for both sides (each set
-// has its part), and settings and sent_messages are tables each side keeps in its own database (the hub's sends from
-// the apps, the manager's from the inbox; each side's settings). A new migration goes in exactly one set.
-var bothSets = []string{"0001_init.sql", "0002_settings.sql", "0071_sent_messages.sql", "0241_sent_echo.sql"}
+// has its part), and sent_messages is a table each side keeps in its own database (the hub's sends from the apps, the
+// manager's from the inbox). A new migration goes in exactly one set.
+var bothSets = []string{"0001_init.sql", "0071_sent_messages.sql", "0241_sent_echo.sql"}
 
 // sharedTables are the tables both sets make (a database the hub and the default manager share has one of each).
-var sharedTables = []string{"sent_messages", "settings"}
+var sharedTables = []string{"sent_messages"}
 
 var createTable = regexp.MustCompile(`(?i)CREATE TABLE (?:IF NOT EXISTS )?([a-z_]+)`)
 
@@ -317,7 +317,7 @@ func TestMigrateUpgradeFromUnified(t *testing.T) {
 				t.Fatalf("tables %v, want %v", tables, all)
 			}
 			var v string
-			if ok, err := d.Setting(ctx, "kept", &v); err != nil || !ok || v != "yes" {
+			if ok, err := d.Setting(ctx, "kept", &v); s != HubSet && (err != nil || !ok || v != "yes") { // the manager's settings
 				t.Fatalf("setting kept = %q %v %v", v, ok, err)
 			}
 			d.Close()
@@ -358,4 +358,101 @@ func TestMigrateUpgradeFromUnified(t *testing.T) {
 			t.Fatalf("%d migrations up to 0300 ran again, %v", newer, err)
 		}
 	})
+}
+
+// The hub's settings are its own table: a database opened for the hub reads and writes hub_settings, one opened for a
+// manager settings; neither sees the other's keys.
+func TestSettingsAreEachSidesOwn(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	manager, err := Open(ctx, url, ManagerSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := hub.PutSetting(ctx, "k", "hub's"); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.PutSetting(ctx, "k", "manager's"); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		d    *DB
+		want string
+	}{{hub, "hub's"}, {manager, "manager's"}} {
+		var v string
+		if ok, err := c.d.Setting(ctx, "k", &v); err != nil || !ok || v != c.want {
+			t.Fatalf("got %q %v %v, want %q", v, ok, err, c.want)
+		}
+	}
+	var v string
+	if ok, err := hub.TakeSetting(ctx, "k", &v); err != nil || !ok || v != "hub's" {
+		t.Fatalf("take %q %v %v", v, ok, err)
+	}
+	if ok, err := manager.Setting(ctx, "k", &v); err != nil || !ok || v != "manager's" {
+		t.Fatalf("the hub's take reached the manager's: %q %v %v", v, ok, err)
+	}
+	if ok, err := manager.CompareSetting(ctx, "rev", 0, map[string]int{"revision": 1}); err != nil || !ok {
+		t.Fatalf("compare: %v %v", ok, err)
+	}
+	if !slices.Contains(tablesOf(t, hub), "hub_settings") {
+		t.Fatal("no hub_settings")
+	}
+	only := freshDatabase(t)
+	d, err := Open(ctx, only, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if slices.Contains(tablesOf(t, d), "settings") {
+		t.Fatal("a hub's database has the managers' settings table")
+	}
+}
+
+// On a database the hub and the default manager shared, the hub's keys are copied once into hub_settings (the
+// manager's stay theirs), so nothing the hub kept is lost.
+func TestHubSettingsCopiedOnUpgrade(t *testing.T) {
+	ctx := context.Background()
+	url := freshDatabase(t)
+	unifiedMigrate(t, url, 419)
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, `INSERT INTO settings (key, value) VALUES ('hub_id', '"h-1"'), ('mutes', '{"spaces":["m/s"]}'),
+		('codex_inventory/lap', '{"x":1}'), ('hub.warm_machines', '{}'), ('assistant.tasks', '[]')`); err != nil {
+		t.Fatal(err)
+	}
+	hub, err := Open(ctx, url, HubSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Close()
+	for _, k := range []string{"hub_id", "mutes", "codex_inventory/lap"} {
+		var v any
+		if ok, err := hub.Setting(ctx, k, &v); err != nil || !ok {
+			t.Fatalf("%s not copied: %v %v", k, ok, err)
+		}
+	}
+	for _, k := range []string{"hub.warm_machines", "assistant.tasks"} {
+		var v any
+		if ok, err := hub.Setting(ctx, k, &v); err != nil || ok {
+			t.Fatalf("the manager's %s is the hub's now: %v %v", k, ok, err)
+		}
+	}
+	manager, err := Open(ctx, url, ManagerSet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	var tasks []any
+	if ok, err := manager.Setting(ctx, "assistant.tasks", &tasks); err != nil || !ok {
+		t.Fatalf("the manager's setting: %v %v", ok, err)
+	}
 }

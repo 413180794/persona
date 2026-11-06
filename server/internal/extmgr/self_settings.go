@@ -16,14 +16,30 @@ import (
 )
 
 // The manager's part of jarvis_settings (docs/assistant.md "Operating Persona itself"): the settings of what moved here
-// from the hub — the mail accounts, a source's own triage rules (self_settings_sources.go). The hub lists them with
+// from the hub — the inbox's rules, the mail accounts, a source's own triage rules (self_settings_sources.go). The hub lists them with
 // its own (extwire.HubSettingsList) and hands an action on one of them here (extwire.HubSettingsTool); the card on
 // the phone is the hub's (waitInteraction). The registry is the hub's, moved as it was.
 
 // selfSettings are the manager's settings (mail only with mail set up).
 func (h *Manager) selfSettings() []selfSetting {
 	l := h.userLang()
-	out := h.sourceRulesSettings()
+	rulesTitle, agentRulesTitle := ss(l, "title_inbox_rules"), ss(l, "title_agent_rules")
+	out := append(h.sourceRulesSettings(),
+		selfSetting{key: "inbox.rules", title: rulesTitle,
+			about: "the user's own rules for sorting the inbox (needs you / for your information / noise), in their words; they win over the defaults " +
+				"(a source with rules of its own, inbox.rules.<plugin>, uses those instead)",
+			value: `a string (the whole rules text; "" clears it and falls back to hub.json)`,
+			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxRules(ctx)), nil },
+			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
+				return h.textSetting(ctx, v, rulesTitle, h.inboxRules, "inbox.rules")
+			}},
+		selfSetting{key: "inbox.agent_rules", title: agentRulesTitle,
+			about: "the user's rules for which needs-you inbox items the AI twin takes on and drafts a reply for",
+			value: `a string ("" clears it)`,
+			get:   func(ctx context.Context) (string, error) { return orNone(h.inboxAgentRules(ctx)), nil },
+			set: func(ctx context.Context, v json.RawMessage) (*selfChange, error) {
+				return h.textSetting(ctx, v, agentRulesTitle, h.inboxAgentRules, "inbox.agent_rules")
+			}})
 	if h.mail != nil {
 		out = append(out, selfSetting{key: "mail.accounts", title: ss(l, "title_mail"),
 			about: "the user's mail accounts: Persona reads them in the inbox and mail_* use them. add connects (IMAP and SMTP) before saving; " +
@@ -116,6 +132,30 @@ func (h *Manager) inboxRules(ctx context.Context) string {
 }
 func (h *Manager) inboxAgentRules(ctx context.Context) string {
 	return h.settingText(ctx, "inbox.agent_rules", h.cfg.Inbox.Agent.Rules)
+}
+
+// textSetting changes a text setting kept in the manager's settings under key ("" deletes the override).
+func (h *Manager) textSetting(ctx context.Context, v json.RawMessage, title string, now func(context.Context) string, key string) (*selfChange, error) {
+	var text string
+	if err := json.Unmarshal(v, &text); err != nil {
+		return nil, errors.New("value must be a string")
+	}
+	text = strings.TrimSpace(text)
+	before := now(ctx)
+	l := h.userLang()
+	if text == before {
+		return &selfChange{summary: ss(l, "no_change", i18n.Args{"title": title})}, nil
+	}
+	if h.store == nil {
+		return nil, errors.New("no database on this manager")
+	}
+	return &selfChange{summary: changeSummary(l, title, before, text),
+		apply: func(ctx context.Context, _ map[string]string) (string, error) {
+			if err := h.store.PutSetting(ctx, key, text); err != nil {
+				return "", err
+			}
+			return title + " updated; it applies from the next items sorted.", nil
+		}}, nil
 }
 
 func (h *Manager) getMailAccounts(context.Context) (string, error) {

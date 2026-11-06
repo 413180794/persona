@@ -79,9 +79,7 @@ type fleetBook struct {
 
 	mutesMu sync.Mutex
 	mutes   *Pins
-	// mutesStale: the hub said the mutes changed (fleet.mutes); they are read again, the ones read last kept until then
-	mutesStale bool
-	mutesErr   bool // the last read of the mutes failed (logged once until one goes through)
+	// mutes are the hub's, as fleet.mutes handed them over last (nil: not yet).
 
 	askMu sync.Mutex
 	asked map[string]*askedOne // the assistant's own questions and cards on the phone (by interaction id)
@@ -462,8 +460,13 @@ func (s *Service) FleetEvent(ctx context.Context, name string, params json.RawMe
 			s.fleet.mu.Unlock()
 		}
 	case assistantwire.EventMutes:
+		var p assistantwire.FleetMutes
+		if json.Unmarshal(params, &p) != nil || p.Mutes == nil {
+			return true // not the mutes (a hub from before they came with the event): the ones handed over last stay
+		}
+		m := Pins{Spaces: nonNil(p.Mutes.Spaces), Sessions: nonNil(p.Mutes.Sessions), Allowed: p.Mutes.Allowed}
 		s.fleet.mutesMu.Lock()
-		s.fleet.mutesStale = true
+		s.fleet.mutes = &m
 		s.fleet.mutesMu.Unlock()
 		for _, m := range s.fleetMachines() {
 			s.publishSessions(m.ID)
@@ -676,35 +679,21 @@ func (s *Service) channelAnsweredPush(session string) bool {
 
 // Pins is the settings mutes: muted spaces / agents get no push notifications (finished, needs you). Spaces are
 // "machine/space name", agents "machine/session id"; Allowed are agents that keep theirs although their space is
-// muted. The hub's routes write it (GET / PUT /api/v1/mutes) and tell the manager (fleet.mutes).
+// muted. The hub keeps it (GET / PUT /api/v1/mutes) and hands it to the manager (fleet.mutes).
 type Pins struct {
 	Spaces   []string `json:"spaces"`
 	Sessions []string `json:"sessions"`
 	Allowed  []string `json:"allowed,omitempty"`
 }
 
-// loadMutes reads the mutes once, and again after the hub says they changed. A read that fails is tried again next
-// time; meanwhile the mutes read last stay (none before any read): an empty set would push every muted agent's cards
-// and finished turns for that moment.
-func (s *Service) loadMutes(ctx context.Context) Pins {
+// loadMutes is the mutes the hub handed over last (fleet.mutes, after each handshake and every change); none before
+// it did. They are the hub's settings: the manager never reads them from a database.
+func (s *Service) loadMutes(context.Context) Pins {
 	f := &s.fleet
 	f.mutesMu.Lock()
 	defer f.mutesMu.Unlock()
-	if f.mutes == nil || f.mutesStale {
-		p := Pins{Spaces: []string{}, Sessions: []string{}}
-		if st := s.store(); st != nil {
-			if _, err := st.Setting(ctx, "mutes", &p); err != nil {
-				if !f.mutesErr { // the lists ask once per session: one line, not one per session and round
-					s.logf("assistant: mutes: %v", err)
-				}
-				f.mutesErr = true
-				if f.mutes != nil {
-					return *f.mutes
-				}
-				return Pins{Spaces: []string{}, Sessions: []string{}}
-			}
-		}
-		f.mutes, f.mutesStale, f.mutesErr = &p, false, false
+	if f.mutes == nil {
+		return Pins{Spaces: []string{}, Sessions: []string{}}
 	}
 	return *f.mutes
 }
