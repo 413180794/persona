@@ -5,5 +5,6 @@
   "feishu": "飞书",
   "no_answer": "这一轮没产出回答，原因：{reason}",
   "reason_placeholder": "助手只回了占位的话「{text}」",
-  "reason_silent": "助手这一轮结束时没有写文字，再问一次也没有"
+  "reason_silent": "助手这一轮结束时没有写文字，再问一次也没有",
+  "machine_gone": "这台电脑已经不在 Persona 里了（被移除），这条消息没人答；换个目标再发一次。"
 }

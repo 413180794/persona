@@ -41,6 +41,8 @@ type fakeHub struct {
 	needTriage    []string
 	ownModels     bool                       // the test sets hello.Models itself: no fake model
 	devices       []Device                   // devices.list answers these when set (else one per machine with sessions)
+	devicesFull   bool                       // devices.list says its list is complete (a machine not in it was removed)
+	devicesOther  []string                   // devices.list's ids kept out of it (pending, leaving, absorbed)
 	sessions      map[string][]proto.Session // by machine: the machines there are
 	sessionsFail  map[string]int             // by machine: sessions.list fails offline this many more times (then recovers)
 	items         []proto.Item               // session.items answers this
@@ -156,7 +158,7 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 				devices = append(devices, Device{ID: id, Name: id, Online: true, Reachable: true})
 			}
 		}
-		return json.Marshal(map[string]any{"devices": devices})
+		return json.Marshal(map[string]any{"devices": devices, "complete": f.devicesFull, "others": f.devicesOther})
 	}
 	if p.Device == DeviceAll && p.Method == DeviceInteractionsList {
 		return json.Marshal(map[string]any{"interactions": f.hubCards})

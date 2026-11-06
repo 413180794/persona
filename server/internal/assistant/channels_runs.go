@@ -391,22 +391,36 @@ func (s *Service) deviceKnown(ctx context.Context, id string) (Device, bool, err
 	return Device{}, false, nil
 }
 
+// channelGoneRetry is how soon the answer of a run whose machine was removed is tried again when it did not go out.
+var channelGoneRetry = time.Second
+
+// machineRemoved: the hub says machine id is not one of its machines any more. Only when its list is complete (the
+// manager reported the machines, the pending computers were read) and the id is not one it keeps out of it (waiting
+// to be confirmed, leaving, absorbed by another entry); an older hub, a list it could not give, or any doubt: false,
+// and the run is watched as an offline one is.
+func (s *Service) machineRemoved(ctx context.Context, id string) bool {
+	var res struct {
+		Devices  []Device `json:"devices"`
+		Complete bool     `json:"complete"`
+		Others   []string `json:"others"`
+	}
+	if err := s.call(ctx, DeviceAll, DeviceDevicesList, map[string]any{}, &res); err != nil || !res.Complete {
+		return false
+	}
+	if slices.Contains(res.Others, id) {
+		return false
+	}
+	return !slices.ContainsFunc(res.Devices, func(d Device) bool { return d.ID == id })
+}
+
 // watchChannelRun follows a run until it is answered: the conversation's items come to the assistant (followed), for
 // the progress shown meanwhile.
 func (s *Service) watchChannelRun(r *channel.Run) {
 	c := &s.chans
 	ctx := context.Background()
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	_, known, err := s.deviceKnown(cctx, r.MachineID)
+	removed := s.machineRemoved(cctx, r.MachineID)
 	cancel()
-	if err == nil && !known { // the machine left the configuration: nothing will answer it
-		c.mu.Lock()
-		c.st.Runs = slices.DeleteFunc(c.st.Runs, func(o *channel.Run) bool { return o == r })
-		s.saveChannelStateLocked()
-		c.mu.Unlock()
-		s.channelsChanged()
-		return
-	}
 	c.mu.Lock()
 	if c.live == nil {
 		c.live = map[string]*chanLive{}
@@ -418,6 +432,21 @@ func (s *Service) watchChannelRun(r *channel.Run) {
 	prog := &chanLive{mu: newChanMutex(), checking: newChanMutex(), done: make(chan struct{})}
 	c.live[r.ID] = prog
 	c.mu.Unlock()
+	if removed {
+		// The machine was removed: nothing will answer it. The run ends like any other, so the owner is told and the
+		// message's reaction changes, rather than left on 「OnIt」 with no word. An answer that did not go out is tried
+		// again (finishChannelRun gives up after channelAnswerTries and ends the run all the same).
+		s.logf("channels: %s: its machine was removed", r.ID)
+		res := &channel.Result{Note: i18n.T(s.botLang(ctx), "assistant-channels_runs.machine_gone"), End: channel.EndGone}
+		for {
+			s.finishChannelRun(r, res)
+			select {
+			case <-prog.done:
+				return
+			case <-time.After(channelGoneRetry):
+			}
+		}
+	}
 	fctx, fcancel := context.WithTimeout(ctx, 10*time.Second) // a node that never answers does not hold the watcher
 	s.followSession(fctx, r.MachineID, r.SessionID)
 	fcancel()

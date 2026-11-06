@@ -132,8 +132,10 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 		switch p.Method {
 		case assistantwire.DeviceDevicesList:
 			list := []assistantwire.Device{}
+			others := []string{} // ids the hub knows that are not listed: untrusted for now, or absorbed by another entry
 			for _, m := range h.machinesNow() {
 				if h.machineUntrusted(m.cfg.ID) { // the assistant lists and uses none (machine_trust.go)
+					others = append(others, m.cfg.ID)
 					continue
 				}
 				m.mu.Lock()
@@ -143,7 +145,16 @@ func (l assistantLink) DeviceCall(ctx context.Context, p assistantwire.DeviceCal
 					DataDir: info.DataDir, Online: online, Reachable: m.reachable(), Version: info.Version,
 					ModelConfiguration: info.ModelConfiguration})
 			}
-			return json.Marshal(map[string]any{"devices": list, "phone_online": h.phoneClient() != nil})
+			d := &h.devices
+			d.mu.Lock()
+			for from := range d.absorbed {
+				others = append(others, from)
+			}
+			d.mu.Unlock()
+			// complete: the list is every machine there is (the manager reported them and the pending computers were
+			// read), so an id in neither it nor others was removed.
+			return json.Marshal(map[string]any{"devices": list, "phone_online": h.phoneClient() != nil,
+				"complete": h.devicesUp() && !h.trustUnknown(), "others": others})
 		}
 	}
 	m := h.localMachine(p.Device)
