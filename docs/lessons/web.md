@@ -353,3 +353,9 @@
 - Pages scroll in their own `overflow-y-auto` box under `<main>`, not the window, so the browser's scroll restoration does nothing for them. 总览 unmounts when a card opens a conversation, and 设置's phone list shares one scroller with every category (the category's shorter content clamps `scrollTop`), so Back landed at the top. The inbox never had the problem: its list stays mounted, hidden, under the opened item.
 - `useScrollMemory(ref, key)` (`lib/scroll-memory.ts`) remembers `scrollTop` per key and restores it only when the router saw Back / Forward land on the current address (`takeReturn`); a link or a tap starts at the top. Decide the target once per key: React's StrictMode runs the layout effect twice in development, and the second run would find the return already taken.
 - Checking it in a browser: an edit made while Vite is running can keep serving the old module (the "negative control" passed with the hook disabled). Restart Vite with `--force` and fetch the module to confirm before trusting a before/after comparison.
+
+## 输入框长高后对话停在最新一行上面（2026-11-06，#5375）
+
+- 自动长高的 textarea 每次测量都先 `height: 0` 再读 `scrollHeight`：这一次布局里坞变矮、对话区变高，浏览器把对话的 `scrollTop` 夹到更高的视图里，输入框恢复高度后对话就停在最新一行上面（差的正好是输入框的高度）。没到上限时对话区每次都变矮，ResizeObserver 把它拉回底部，看不出来；到了上限（240px）对话区高度不再变，ResizeObserver 不触发，每按一个键都留下这段差。测量时让 textarea 的父元素用 `min-height` 撑住原高度。
+- 坞（`[data-chat-dock]`）在所有宽度下都限高 `DOCK_MAX`，输入框以上的东西放进能缩、能自己滚动的 `[data-chat-dock-above]`：原来只有窄屏 / 侧边面板限高，宽屏矮窗口里主对话的任务提问 + 卡片 + 输入框比可用高度还高，对话区被挤成 0；窄屏限高后坞内容又从顶边溢出、画在对话上面。
+- 验证要打到上限以上（二三十行），量「对话区底边 = 坞顶边」和 `scrollHeight - scrollTop - clientHeight`；只打六行的 e2e 测不出来。

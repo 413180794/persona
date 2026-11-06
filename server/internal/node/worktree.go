@@ -181,6 +181,12 @@ func (n *Node) worktreeCreate(ctx context.Context, kind, workspace, branch, path
 	}
 	_ = n.refreshHosts(ctx, h) // the new workspace is in the layout the terminal page lists
 	res = proto.WorktreeCreateResult{WorkspaceID: created.SpaceID, TabID: created.SlotID, Path: dest, Branch: branch}
+	if created.Path != "" {
+		res.Path = created.Path
+	}
+	if created.Branch != "" {
+		res.Branch = created.Branch
+	}
 	if created.Pane.ID != "" {
 		res.Pane = created.Pane.String()
 		res.Terminal = panePrefix + res.Pane

@@ -94,12 +94,31 @@ def burst_stays(page, what):
     at_end(page, what + ", content landing in bursts")
 
 
+# The dock against the chat: the chat's bottom edge, the dock's top and bottom edges, the window.
+DOCK = """() => {
+  const s = document.querySelector('[data-chat-scroll]').getBoundingClientRect();
+  const d = document.querySelector('[data-chat-dock]').getBoundingClientRect();
+  return { chat: s.bottom, top: d.top, bottom: d.bottom, win: innerHeight };
+}"""
+
+
 def composer_grows(page, what):
     box = page.evaluate_handle(COMPOSER).as_element()
     if not box:
         fail(f"{what}: no composer")
     box.fill("一\n二\n三\n四\n五\n六")
     at_end(page, what + ", composer grown to six lines")
+    # past the box's cap (#5375): typed key by key, each one measures the box again
+    box.fill("")
+    box.click()
+    for i in range(24):
+        page.keyboard.type(f"第 {i + 1} 行，很长的一段输入内容")
+        page.keyboard.press("Shift+Enter")
+    at_end(page, what + ", composer typed past its cap")
+    d = page.evaluate(DOCK)
+    if d["top"] < d["chat"] - 1 or d["bottom"] > d["win"] + 1:
+        fail(f"{what}: the dock covers the chat or leaves the window ({d})")
+    ok(f"{what}: the dock sits under the chat, inside the window")
     box.fill("")
     page.wait_for_timeout(300)
 

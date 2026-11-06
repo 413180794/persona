@@ -274,12 +274,20 @@ export function Composer({
   useLayoutEffect(() => {
     const el = input.current;
     if (!el) return;
+    // Measuring collapses the box to 0 for one layout: its parent holds its height meanwhile. Otherwise the chat above
+    // grows by the box's height for that layout, the browser clamps the chat's scroll offset to the taller view, and
+    // with the box back the chat sits that much above its newest line (#5375). Under the cap the chat's own
+    // ResizeObserver brought the end back; at the cap the chat's height no longer changes, so every key left it there.
+    const holder = el.parentElement;
+    const held = holder?.style.minHeight ?? "";
+    if (holder) holder.style.minHeight = `${holder.getBoundingClientRect().height}px`;
     el.style.height = "0px";
     const h = el.scrollHeight;
     // the CSS max-height (INPUT_MAX) caps it: 240px, less when the visible height is small (a keyboard, a phone on
     // its side), so the send button stays on screen; past it the box scrolls (overflow-y-auto: when the keyboard
     // lowers the cap, no new draft comes to say so)
     el.style.height = `${Math.max(h, 24)}px`;
+    if (holder) holder.style.minHeight = held;
   }, [draft]);
 
   const quickPrompts = useQuickPrompts();

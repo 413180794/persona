@@ -411,6 +411,9 @@ type Created struct {
 	SpaceID string // set by CreateSpace
 	SlotID  string
 	Pane    PaneRef
+	// Path and Branch: the checkout CreateWorktree made, when the host chose them rather than taking the asked ones
+	// (Orca puts it under its own workspace directory); empty when they are the asked ones.
+	Path, Branch string
 }
 
 // Frame is one frame of a terminal stream: the grid redrawn as VT sequences — the whole screen when Full, else only

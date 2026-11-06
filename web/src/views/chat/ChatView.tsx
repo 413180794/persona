@@ -932,12 +932,17 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
       {!readOnly && (
       <div
         data-chat-dock
-        // narrow (and in a side panel): at most DOCK_MAX; the cards' box gives up its height first, and should the composer alone need more,
-        // it grows up over the chat (justify-end) instead of down off the screen
-        className={cx("mx-auto flex w-full max-w-[880px] flex-col gap-2 px-4 pb-4 sm:px-7 [@media(max-height:500px)]:pb-2", compactDock && "max-h-(--dock-max) justify-end")}
+        // at most DOCK_MAX on every width (#5375): what sits over the composer gives up its height first and scrolls in
+        // its own box, the chat above shrinks by what the dock takes and is never drawn over. Should the composer alone
+        // need more (a keyboard leaving little room), it grows up over the chat (justify-end) instead of down off the screen.
+        className="mx-auto flex max-h-(--dock-max) w-full max-w-[880px] flex-col justify-end gap-2 px-4 pb-4 sm:px-7 [@media(max-height:500px)]:pb-2"
         style={{ "--dock-max": DOCK_MAX } as React.CSSProperties}
         onInput={pendingRecap ? dismissRecap : undefined}
       >
+        {/* everything over the composer: it shrinks and scrolls before the composer does (the composer grew, and its
+            cards, task questions and notes stood taller than the dock, drawn up over the chat or pushing it to nothing);
+            the box clips what is in it, so its children keep a little room for their shadows (p-1; -m-1 gives it back) */}
+        <div data-chat-dock-above className="-m-1 flex min-h-0 shrink flex-col gap-2 overflow-y-auto overscroll-contain p-1 empty:hidden">
         {short ? (
           // a phone on its side: the plan's pill, the run's status and the queue share one line
           (pills || running || queue) && (
@@ -986,6 +991,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           />
         )}
         {!short && queue}
+        </div>
         <div ref={composerBox} className="shrink-0">
         <Composer
           draftKey={draftKey}
