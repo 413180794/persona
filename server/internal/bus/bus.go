@@ -22,6 +22,9 @@ import (
 const (
 	// Path is where the hub accepts the services' connections.
 	Path = "/api/v1/bus"
+	// JoinPath is where a new manager trades its one-time install code for its token (POST {"code"} → {id, name,
+	// token, hub_id}; hub/managers.go). It needs no credential.
+	JoinPath = "/api/v1/bus/join"
 
 	// RoleManager is the role of a token that speaks for a manager: a process that owns business state, such as the
 	// assistant. It is the only role so far.

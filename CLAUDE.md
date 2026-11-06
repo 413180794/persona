@@ -263,6 +263,7 @@ Persona：给自己用的 iPhone + Apple Watch 助手。「Persona」tab 是能�
 | 文档 | 内容 |
 | --- | --- |
 | `docs/assistant.md` | 「Persona」tab 的助手（主对话、知识库工具）：ask_user、定时任务 / 跟进、Agents 与飞书工具、实时快照、预热、记忆、后台唤醒手机 |
+| `docs/managers.md` | 管理者（平级，每个是完整的助手，没有总管）：默认管理者、归属、名册、安装码、吊销、分步 |
 | `docs/assistant-views.md` | 主对话富 UI（#2017）：统一 View、fallback、动作和活卡片，HTML 沙箱的安全边界、校验、自修复与分阶段验收 |
 | `docs/unified-entry.md` | 主对话统一入口（#930）：在助手里派发、盯住、回答所有任务；三层结构（对话流 / 任务坞 / 需要你）、计划卡和三档自动开始、任务 = 待办、对话动态、钩子、分步；原型 `docs/assets/unified-entry-prototype.html`。Agents 页不动 |
 | `docs/voice.md` | 语音模式（#3489）：快层是 GPT-Live（内置语音扩展），即时回答和播报；慢层是打开语音时所在的对话（主对话或任意 Agent），负责干活；扩展和 App 的协议 2（绑定目标，run / ask / link 帧）、按一轮跟踪念完整回答、用户发言门槛、提问用语音答而批准只点卡片、等 Agent 时暂停上游、在 App 里配上游（Key 加密存 hub）、iOS 通话条和音频管线、拆分和验收 |

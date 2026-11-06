@@ -1604,6 +1604,20 @@ hub 要变成只是一条通道：助手（以后还有别的服务）是另一�
   助手跑在别处时用 `personad hub assistant-token` 生成（`docs/config.md` 的 `assistant.external`）。没有接口和界面。
   同一身份再生成一次就换掉旧 token：旧的立刻失效，用它连着的连接以 4002 断开。
 - 互联的成员 hub 不把总线转给中心：服务连的是哪台 hub，就是哪台的。
+- 管理者的名册、安装码、吊销见 `docs/managers.md`：角色为 `manager` 的身份就是管理者，名册另记它最后一次握手报的位置和 `last_seen`（迁移 0419）；新管理者用一次性安装码换 token（`POST /api/v1/bus/join`，不要凭据）。
+
+**管理者（`/api/v1/managers`，hub 自己答）**
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/v1/managers` | `{managers:[{id, name, online, default?, builtin?, host?, os?, arch?, deploy?, version?, since?, last_seen?, installing?}], default}`：默认管理者在前，安装中的在后；`builtin` 是 hub 自己起的助手，`installing` 是安装码到期的时间。名册变了（新建、改名、连上、断开、删除）给要了 `managers` 的 App（`?features=` 或 `client_hello` 的 `features`）推 `{"type":"managers"}`，不进事件日志（重连后 App 反正重读列表） |
+| POST | `/api/v1/managers` | `{name}`（1–40 个字）→ 201 `{manager, code, expires_at}`：一次性安装码，10 分钟、用一次 |
+| POST | `/api/v1/managers/{id}/code` | 给已有的（或码过期了的安装中的）一个新码 → `{code, expires_at}`；hub 自己的助手 `409 builtin_manager` |
+| PATCH | `/api/v1/managers/{id}` | `{name?, default?: true}`：改名、设为默认；安装中的 `409 installing` |
+| DELETE | `/api/v1/managers/{id}` | 吊销（安装中的作废码）→ `{ok}`；默认的 `409 default_manager`、hub 自己的 `409 builtin_manager`，没有 `404 no_manager` |
+| POST | `/api/v1/bus/join` | `{code}` → `{id, name, token, hub_id}`；码不对、过期、用过 `401 bad_install_code`（按来源计数） |
+
+改名单、建码、删除要完整权限的设备（只读设备 403）。
 
 **线上格式**：每条 WebSocket 文本消息是一行 `internal/rpc` JSON（和 hub ↔ node 同一套），permessage-deflate，单条最大 64 MiB，两个方向都能调用：
 

@@ -39,7 +39,8 @@ func (h *Hub) busStore() busStore {
 }
 
 // createBusToken makes the token of manager id and returns it; it is shown once and never stored. An identity that
-// had a token gets a new one: the old one stops working and a connection that came with it is hung up.
+// had a token gets a new one: the old one stops working and a connection that came with it is hung up; its name stays
+// (name is the new one's).
 func (h *Hub) createBusToken(ctx context.Context, id, name string) (string, error) {
 	s := h.busStore()
 	if s == nil {
@@ -49,7 +50,14 @@ func (h *Hub) createBusToken(ctx context.Context, id, name string) (string, erro
 		return "", fmt.Errorf("bad manager id %q", id)
 	}
 	tok := busTokenPrefix + randomHex(24)
-	ident := db.BusIdentity{ID: id, Role: bus.RoleManager, Name: clip(strings.TrimSpace(name), 80)}
+	name = clip(strings.TrimSpace(name), 80)
+	if ms, ok := s.(managerStore); ok {
+		// The name the user gave it stays (the hub makes the assistant a new token every start: managers.go).
+		if b, err := ms.BusIdentityByID(ctx, id); err == nil && b != nil && b.Name != "" {
+			name = b.Name
+		}
+	}
+	ident := db.BusIdentity{ID: id, Role: bus.RoleManager, Name: name}
 	if err := s.SaveBusIdentity(ctx, ident, hashToken(tok)); err != nil {
 		return "", err
 	}

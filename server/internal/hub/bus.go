@@ -345,6 +345,7 @@ func (h *Hub) busAccept(ctx context.Context, c *busConn, p busPresence) error {
 		old.close(bus.CloseReplaced, "replaced by a newer connection")
 	}
 	h.logf("bus: [%s] connected: host %q %s/%s, version %q", p.ID, p.Host, p.OS, p.Arch, p.Version)
+	h.busSeen(ctx, c.ident.ID, &db.BusIdentity{Host: p.Host, OS: p.OS, Arch: p.Arch, Deploy: p.Deploy, Version: p.Version})
 	h.busRosterChanged(ctx, c)
 	if c.ident.ID == assistantwire.AssistantID {
 		go h.assistantConnected()
@@ -382,10 +383,9 @@ func (h *Hub) busEnded(c *busConn) {
 		if c.ident.ID == devicesOwner {
 			go h.devicesGone() // its machines (devices_link.go)
 		}
-		if c.ident.ID == assistantwire.AssistantID {
-		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		h.busSeen(ctx, c.ident.ID, nil)
 		h.busRosterChanged(ctx, nil)
 	}
 }
@@ -515,4 +515,15 @@ func (h *Hub) stopBus() []*busConn {
 		out = append(out, c)
 	}
 	return out
+}
+
+// busSeen keeps in the roster that identity id is connected now (where: its handshake's place) or just dropped, and
+// tells the apps (managers.go).
+func (h *Hub) busSeen(ctx context.Context, id string, where *db.BusIdentity) {
+	if s := h.managerStore(); s != nil {
+		if err := s.SeeBusIdentity(ctx, id, where); err != nil {
+			h.logf("bus: [%s] roster: %v", id, err)
+		}
+	}
+	h.managersChanged()
 }
