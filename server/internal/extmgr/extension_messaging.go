@@ -338,18 +338,35 @@ func (ps *extensions) messagingChanged(id string, params json.RawMessage) {
 	}
 	key := ev.Source + "\x00" + ev.Account
 	if have := c.pending[key]; have != nil {
-		for _, conv := range ev.Conversations {
-			if !slices.Contains(have.Conversations, conv) {
-				have.Conversations = append(have.Conversations, conv)
-			}
-		}
-		have.SettingsChanged = have.SettingsChanged || ev.SettingsChanged
+		mergeMessagingChanged(have, &ev)
 	} else {
 		c.pending[key] = &ev
 	}
 	if c.timer == nil {
 		c.timer = time.AfterFunc(time.Second, ps.flushMessaging)
 	}
+}
+
+// maxMessagingChanged is how many chats one push names; more is the same as none: read everything again
+// (docs/extension-messaging.md「八」, the schema's maxItems).
+const maxMessagingChanged = 500
+
+// mergeMessagingChanged folds a later change into one waiting to go out: the chats of both, or every chat when either
+// says so (it names none) or together they name more than a push can.
+func mergeMessagingChanged(have, ev *wire.MessagingChanged) {
+	if len(have.Conversations) == 0 || len(ev.Conversations) == 0 {
+		have.Conversations = nil
+	} else {
+		for _, conv := range ev.Conversations {
+			if !slices.Contains(have.Conversations, conv) {
+				have.Conversations = append(have.Conversations, conv)
+			}
+		}
+		if len(have.Conversations) > maxMessagingChanged {
+			have.Conversations = nil
+		}
+	}
+	have.SettingsChanged = have.SettingsChanged || ev.SettingsChanged
 }
 
 func (ps *extensions) flushMessaging() {

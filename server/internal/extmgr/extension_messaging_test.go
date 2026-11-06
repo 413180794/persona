@@ -172,6 +172,29 @@ func TestExtensionMessaging(t *testing.T) {
 	}
 }
 
+// Changes folded within the second keep what each said: the chats of both, and every chat when one of them names none
+// (read everything again) or together they name more than a push can.
+func TestMergeMessagingChanged(t *testing.T) {
+	many := make([]string, maxMessagingChanged)
+	for i := range many {
+		many[i] = fmt.Sprint("c", i)
+	}
+	for _, c := range []struct {
+		first, then, want []string
+	}{
+		{[]string{"a"}, []string{"b", "a"}, []string{"a", "b"}},
+		{nil, []string{"b"}, nil},
+		{[]string{"a"}, nil, nil},
+		{many, []string{"one more"}, nil},
+	} {
+		have := &wire.MessagingChanged{Source: "examplechat", Conversations: slices.Clone(c.first)}
+		mergeMessagingChanged(have, &wire.MessagingChanged{Source: "examplechat", Conversations: c.then, SettingsChanged: true})
+		if !slices.Equal(have.Conversations, c.want) || !have.SettingsChanged {
+			t.Fatalf("%v then %v: %v (settings %v), want %v", len(c.first), c.then, have.Conversations, have.SettingsChanged, c.want)
+		}
+	}
+}
+
 // A manifest's messaging is checked: its settings page and the pages its links open are its own extension_page.
 func TestMessagingManifestChecks(t *testing.T) {
 	base := `{"manifest_version": 1, "id": "x-chat", "name": "X", "version": "1.0.0", "engines": {"plugin_protocol": 1},
