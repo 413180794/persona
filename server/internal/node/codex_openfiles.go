@@ -13,6 +13,13 @@ import (
 
 // Only file names of the selected app-server processes are retained, never contents or their other descriptors.
 func openCodexRollouts(processes []codexProcess) map[int][]string {
+	out, _ := scanOpenRollouts(processes)
+	return out
+}
+
+// scanOpenRollouts is openCodexRollouts, and whether every process could be read: a resume (codex_resume.go) must
+// not take "could not tell" for "nothing holds it".
+func scanOpenRollouts(processes []codexProcess) (map[int][]string, bool) {
 	out := map[int][]string{}
 	var pids []string
 	for _, p := range processes {
@@ -21,11 +28,15 @@ func openCodexRollouts(processes []codexProcess) map[int][]string {
 		}
 	}
 	if len(pids) == 0 {
-		return out
+		return out, true
 	}
 	if runtime.GOOS == "linux" {
+		ok := true
 		for _, pid := range pids {
-			entries, _ := os.ReadDir("/proc/" + pid + "/fd")
+			entries, err := os.ReadDir("/proc/" + pid + "/fd")
+			if err != nil && !os.IsNotExist(err) { // gone since the scan is fine; unreadable is not
+				ok = false
+			}
 			for _, e := range entries {
 				path, err := os.Readlink("/proc/" + pid + "/fd/" + e.Name())
 				if err == nil && rolloutIDRe.MatchString(path) {
@@ -34,13 +45,13 @@ func openCodexRollouts(processes []codexProcess) map[int][]string {
 				}
 			}
 		}
-		return out
+		return out, ok
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	b, err := exec.CommandContext(ctx, "lsof", "-a", "-p", strings.Join(pids, ","), "-Fn").Output()
 	if err != nil && len(b) == 0 {
-		return out
+		return out, false
 	}
 	pid := 0
 	for _, line := range strings.Split(string(b), "\n") {
@@ -54,5 +65,5 @@ func openCodexRollouts(processes []codexProcess) map[int][]string {
 			}
 		}
 	}
-	return out
+	return out, true
 }

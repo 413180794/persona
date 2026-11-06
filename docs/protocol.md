@@ -1231,7 +1231,7 @@ and the hub also had to wait for the small model to come up with a tab name firs
 - A node restart loses records of sessions still starting: the session is then neither in the list nor has a transcript, and the App's send fails and can be resent.
 - Codex launchers (`agent: "codex"`) don't use `async`: Codex only creates the thread and fixes the session id when it gets the first message, so the App puts the first message in `prompt` and creates synchronously,
   and the node waits until that thread appears before returning (at most 60 seconds), returning its session. Rejection `code`s: `codex_needs_prompt` (no `prompt`, or `async` given),
-  `codex_launcher` (a shell function that runs Codex), `codex_resume` (trying to resume a session with a Codex launcher). See `docs/codex.md` ("Creating from the phone").
+  `codex_launcher` (a shell function that runs Codex), `codex_resume` (a Codex session that cannot be resumed from the phone: something has it open, or there is no record of it; see `docs/codex.md` "Resuming from the phone"). See `docs/codex.md` ("Creating from the phone").
 
 ### Sending messages
 

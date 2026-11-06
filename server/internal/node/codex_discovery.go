@@ -71,7 +71,15 @@ func codexProcessArgs(pid int, args []string, env string) (codexProcess, bool) {
 }
 
 func scanCodexProcesses() []codexProcess {
+	out, _ := scanCodexProcessesChecked()
+	return out
+}
+
+// scanCodexProcessesChecked is scanCodexProcesses, and whether the processes could be listed and read: a resume
+// (codex_resume.go) must not take "could not tell" for "no Codex holds it".
+func scanCodexProcessesChecked() ([]codexProcess, bool) {
 	var out []codexProcess
+	ok := true
 	if runtime.GOOS == "linux" {
 		// The shared walk of this user's /proc entries (userProcesses), as macOS's ps -U below.
 		procs := userProcesses()
@@ -83,19 +91,22 @@ func scanCodexProcesses() []codexProcess {
 			}
 			env, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
 			if err != nil {
+				if !os.IsNotExist(err) { // exited since the walk is fine; unreadable is not
+					ok = false
+				}
 				continue
 			}
 			if p, ok := codexProcessArgs(pid, args, string(env)); ok {
 				out = append(out, p)
 			}
 		}
-		return out
+		return out, ok
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	b, err := exec.CommandContext(ctx, "ps", "-E", "-ww", "-o", "pid=,command=", "-U", strconv.Itoa(os.Getuid())).Output()
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	for _, line := range strings.Split(string(b), "\n") {
 		fields := strings.Fields(line)
@@ -110,5 +121,5 @@ func scanCodexProcesses() []codexProcess {
 			out = append(out, p)
 		}
 	}
-	return out
+	return out, ok
 }

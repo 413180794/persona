@@ -177,11 +177,27 @@ The entry point is the same as Claude's (machine, directory, launcher); subseque
 - **Route**: bare `codex` 0.163 (or an alias without the following arguments) runs on the shared daemon and joins within seconds; "Connection" in "Session Info" shows app-server.
   Launchers with `-c` / `--profile` / `--enable` / `--disable` / `--oss` / `--strict-config` / `--no-daemon` run in their own process using the terminal route (#214).
   "Connection" explains "Started with launcher 'X': it includes -c, so Codex runs in its own process, not the shared app-server". Version 0.153 has no daemon and also uses the terminal route.
-- **Not offered**: permission mode / thinking effort selection at creation (Codex uses launcher arguments and `~/.codex/config.toml`; effort can be changed in-chat after joining app-server, see "Thinking effort"); resuming existing Codex sessions from the phone (`codex_resume`; use `codex resume` on the computer).
+- **Not offered**: permission mode / thinking effort selection at creation (Codex uses launcher arguments and `~/.codex/config.toml`; effort can be changed in-chat after joining app-server, see "Thinking effort"). Resuming an existing session: see "Resuming from the phone" below.
 - **Tests**: `node/codex_start_test.go` (fake herdr: pane command only `codex-start <file>`, file contains launcher words and message, exactly one session, route note, rejection, timeout and startup failure errors, trust dialogs,
   `codex-start` subprocess receives message byte-for-byte, Codex aliases in `~/.zshrc`). Real Codex: `TestLiveCodexStart` in `scripts/test/test-codex.sh`
   (0.163 connected with `--remote` to the test's own app-server, 0.153, 0.163 with `-c`; multiple turns each, messages with quotes / newlines / `$` / backticks / Chinese / long text,
   unchanged in rollout, one session per pane, correct route, a subsequent phone message received). App: `MachinePagesTests.testNewCodexSessionStartsWithItsFirstMessage`.
+
+## Resuming from the phone
+
+A Codex thread nothing runs comes back in a new tab of the engine with `codex resume <id>` (through `jarvisd codex-start`, like a new one),
+on a message to it (the message goes in as the resume's prompt, nothing typed) or on `session.start` with `resume_session_id` (no message unless the start brings one).
+Code: `node/codex_resume.go`, `node/retire.go` (`resumeOther`, `resumeCodex`); #1700, #5220.
+
+- **Started by Persona**: the launcher, directory and model it ran with (node state).
+- **Started elsewhere** (`codex` in a terminal, since closed; listed as a "Codex history" row): the directory from its rollout's `session_meta`,
+  the launcher the start gave (or the hub's "New Agent" one for a message) when it runs Codex, otherwise plain `codex`. From then on it is Persona's:
+  what it was resumed with is kept, and it is retired and resumed like one Persona started.
+- **Only when nothing has it open**, else the row stays view only (`codex_read_only`): no app-server owns it (sends go there), no process holds its rollout
+  (a Codex CLI still running, the desktop App's own app-server: a second writer would fork the thread), not the Codex App's chat, not a subagent or a program's run (`codex exec`, SDKs),
+  and the engine can open tabs (not a runtime engine, not Orca). Only the default `~/.codex` home: a thread of another home is listed under an opaque key, not its thread id.
+- The history row of such a thread is sendable (`capabilities.send`), so the apps show the input box; no client change is needed to resume by sending.
+- **Tests**: `node/codex_resume_test.go` (history row sendable / view only while held, resume on a message and on a start, Codex App thread refused), `node/retire_test.go`.
 
 ## Questions and approvals (structured cards)
 
@@ -237,7 +253,7 @@ herdr reports blocked when Codex has an unanswered async question, so `agent pro
 
 ## Not supported yet
 
-- Resuming existing Codex sessions from the phone: only new sessions ("Starting from the phone"). Offline / archived history on external app-server instances is read-only; never silently start another app-server to continue it.
+- Resuming from the phone covers a thread nothing has open in the default home ("Resuming from the phone"). Offline / archived history on external app-server instances is read-only; never silently start another app-server to continue it. Codex App threads continue only through the App.
 - Starting Codex from the phone requires the first message. Shell functions running Codex, aliases doing other work, and the internal fork cannot be used to start sessions; permission mode and thinking effort cannot be selected at creation.
 - Permission mode cannot be changed on the phone. Only app-server sessions can change thinking effort ("Thinking effort"); terminal-route Codex and the internal fork cannot.
 - Sessions started by launchers with arguments such as `-c` are not on the shared daemon and use only the terminal route (screen reading, typing).
@@ -266,7 +282,7 @@ with its own tag and "Message the Agent" input label. Code: `server/internal/nod
   (full context after compaction); decode only `display_completions`. `task_started` / `task_complete` are recorded in `Meta.TurnOpen`.
   `TerminalInteraction` (polling / sending input to a running command) is not displayed.
 - **Messaging**: herdr's `agent prompt` recognizes only known Agents and returns not found for fork panes, so use `pane send-text` + Enter (`Node.prompt`).
-- Phone messages to exited internal-fork / Codex sessions return an error (claude cannot resume their session ids).
+- A phone message to an exited internal-fork session Persona started resumes it (`<launcher> resume <id> <message>`, `node/retire.go`); one started outside Persona returns an error (its launcher is not known).
 
 ## Research: app-server and approval hooks for Codex in Agents (2026-11-02, conclusions only, not implemented)
 

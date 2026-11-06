@@ -27,12 +27,15 @@ type codexRegistry struct {
 	report       func(proto.CodexConfig)
 	kick         chan struct{}
 	scan         func() []codexProcess
+	// checked lists the processes as scan does, and says whether it could (scanCodexProcessesChecked); nil: scan's
+	// list, taken as complete.
+	checked func() ([]codexProcess, bool)
 }
 
 type codexSource struct{ home, thread, path string }
 
 func newCodexRegistry() *codexRegistry {
-	return &codexRegistry{threads: map[string]codexSource{}, remotes: map[string]*codexRemote{}, scan: scanCodexProcesses, kick: make(chan struct{}, 1)}
+	return &codexRegistry{threads: map[string]codexSource{}, remotes: map[string]*codexRemote{}, scan: scanCodexProcesses, checked: scanCodexProcessesChecked, kick: make(chan struct{}, 1)}
 }
 
 func canonicalCodexHome(home, base string) string {
@@ -470,6 +473,11 @@ func (n *Node) codexSessions(seen map[string]bool) []proto.Session {
 			s.AgentName = "Codex CLI"
 		}
 		n.decorateCodexSession(&s, src, cfg.LegacyHome, projects)
+		if s.SourceKind == "codex_history" && !s.Capabilities.Send && !s.IsSubagent && n.codexResumable(id) {
+			// Nothing has it open: a message resumes it in a new tab (codex_resume.go).
+			s.Capabilities.Send = true
+			s.ReadOnlyReason = ""
+		}
 		if n.codexBlocked(id) {
 			markCodexConflict(&s)
 		}

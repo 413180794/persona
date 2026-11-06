@@ -98,6 +98,12 @@ func (n *Node) resumeOther(ctx context.Context, id, text string, images []proto.
 	if _, runtime := engineRuntimes[n.engine()]; runtime || !mine || st.Launcher == "" || st.Cwd == "" {
 		return fmt.Errorf("这个 Agent 已经退出：Codex / TRAEX 的会话要在电脑上重新打开")
 	}
+	return n.resumeOtherWith(ctx, id, st, text, images)
+}
+
+// resumeOtherWith is resumeOther with the launcher, directory and model to resume with (st): the session's own, or
+// what a Codex thread started outside Persona is resumed with (codex_resume.go).
+func (n *Node) resumeOtherWith(ctx context.Context, id string, st sessionState, text string, images []proto.Image) error {
 	if r := n.notRunningRefusal(ctx, id); r != nil {
 		return r
 	}

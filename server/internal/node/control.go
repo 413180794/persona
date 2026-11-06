@@ -40,6 +40,11 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 	if err := execution.check(); err != nil {
 		return nil, err
 	}
+	if resume != "" && validID(resume) && n.codexPath(resume) != "" && !n.isAssistantSession(resume) {
+		if _, live := n.agent(resume); !live { // a Codex thread nothing runs (codex_resume.go)
+			return n.resumeCodexSession(ctx, resume, launcher, prompt)
+		}
+	}
 	if resume != "" && n.externalCodex(resume) {
 		return nil, refusal("codex_read_only", "不能用启动器恢复外部 Codex 会话", nil)
 	}
@@ -89,8 +94,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 	if argv, ok := n.codexLauncher(ctx, launcher); ok && kind != traexAgent { // codex_start.go
-		if resume != "" {
-			return nil, refusal("codex_resume", "Codex 会话请在电脑上恢复（codex resume）：从手机只能新建。", nil)
+		if resume != "" { // a Codex thread is resumed above: this id is not one
+			return nil, refusal(codexResumeRefused, "找不到这个 Codex 会话的记录，没法接着它：请在电脑上恢复（codex resume）。", nil)
 		}
 		if execution.Model != "" {
 			argv = append(withoutModelArgs(argv), "--model", execution.Model)
@@ -571,6 +576,9 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	// would see the first still in the box and be refused as a draft: one at a time.
 	defer n.typing.lock(id)()
 	if n.externalCodex(id) {
+		if n.codexResumable(id) { // nothing runs it: resumed in a new tab with the message (codex_resume.go)
+			return n.resumeCodexThread(ctx, id, opts.Launcher, text, images) // a refusal says nothing was sent
+		}
 		return n.sendCodex(ctx, id, text, images)
 	}
 	if r := n.agentsListRefusal(id); r != nil { // claudebg.go
