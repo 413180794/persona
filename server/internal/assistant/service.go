@@ -98,6 +98,7 @@ type Service struct {
 	fbot       feishuBook        // feishu.go
 	tposts     threadPoster      // feishu_thread_posts.go: what a todo tells its chat thread
 	tevents    todoEvents        // todo_events.go: what the extensions are told of the todos
+	standing   standingBoard     // feishu_board.go: the standing "waiting for you" card
 	kb         kbState           // kb.go
 	inbox      inboxBook         // inbox.go
 	board      boardBook         // workspace_board.go: the workspace board

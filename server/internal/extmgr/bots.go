@@ -65,6 +65,9 @@ type BotFeatures struct {
 	// Reports: how the main conversation's tasks go (done, waiting for the user, cut off) is told in the chat, a few
 	// at a time (#2768). On by default, and for settings saved before it: they have no such key.
 	Reports bool `json:"reports"`
+	// Board: /tasks keeps one standing "waiting for you" card in the chat and edits it in place (#6052). Off by default
+	// (it changes what /tasks does), and for settings saved before it: they have no such key.
+	Board bool `json:"board"`
 }
 
 var defaultBotFeatures = BotFeatures{Main: true, Cards: true, Reports: true}

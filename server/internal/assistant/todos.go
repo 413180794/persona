@@ -320,6 +320,7 @@ func (s *Service) todosLoaded() bool {
 func (s *Service) todosChanged(ctx context.Context) {
 	s.event(ctx, map[string]any{"type": "todos"})
 	s.todoChangedSoon()
+	s.boardChanged() // a to-do closed, reopened or gone leaves "Please verify"
 }
 
 // linksChanged: which todo an agent works for changed (or a todo's title, or whether it is done): the hub is told

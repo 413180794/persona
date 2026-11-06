@@ -11,6 +11,8 @@
   "feature_sync_detail": "アプリや定期タスクによるメインチャットの返信も Lark に送ります",
   "feature_reports_title": "タスクの進捗を Lark に送信",
   "feature_reports_detail": "メインチャットのタスクが完了・あなた待ち・中断になると、段階とリンク付きで 1 枚のカードにまとめて送ります",
+  "feature_board_title": "Larkの「あなた待ち」ボード",
+  "feature_board_detail": "/tasks があなた待ちの項目をまとめた1枚のカードを送り、その後は新しく送らずにその場で更新します",
   "feature_agents_title": "エージェントを操作",
   "feature_agents_detail": "/agents でお使いのコンピューター上の Claude Code / Codex を選んで Lark でチャットします。/start で新しく開始します",
   "step_create_app": "Lark 開発者コンソールでカスタムアプリを作成し、「ボット」機能を有効にします",

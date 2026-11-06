@@ -26,7 +26,7 @@ const saved = (over: Partial<FeishuBotStatus> = {}): FeishuBotStatus => ({
   domain: "https://open.feishu.cn",
   has_secret: true,
   from_config: false,
-  features: { main: true, cards: true, all_cards: false, pushes: false, sync: false, agents: false, reports: true },
+  features: { main: true, cards: true, all_cards: false, pushes: false, sync: false, agents: false, reports: true, board: false },
   connected: true,
   owner: null,
   pairing: null,

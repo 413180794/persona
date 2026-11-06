@@ -73,6 +73,9 @@ type botState struct {
 	// Topics are the latest message the owner said in each topic (chat/thread -> message), what a reply into the thread
 	// goes by (feishu_thread_posts.go).
 	Topics map[string]*topicAnchor `json:"topics,omitempty"`
+	// Board is the standing "waiting for you" card: its message and when it was sent (feishu_board.go). Only the bot's
+	// `board` switch uses it.
+	Board *botBoardRef `json:"board,omitempty"`
 }
 
 // The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer

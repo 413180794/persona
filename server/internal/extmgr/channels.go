@@ -134,7 +134,7 @@ func (h *Manager) feishuChannel(ctx context.Context) channel.View {
 	out.Features = []channel.Feature{
 		{ID: "main", On: f.Main}, {ID: "cards", On: f.Cards}, {ID: "all_cards", On: f.AllCards},
 		{ID: "pushes", On: f.Pushes}, {ID: "sync", On: f.Sync}, {ID: "agents", On: f.Agents},
-		{ID: "reports", On: f.Reports},
+		{ID: "reports", On: f.Reports}, {ID: "board", On: f.Board},
 	}
 	for i := range out.Features {
 		id := out.Features[i].ID
@@ -343,6 +343,8 @@ func (h *Manager) configureFeishu(ctx context.Context, enabled *bool, features m
 				f.Agents = on
 			case "reports":
 				f.Reports = on
+			case "board":
+				f.Board = on
 			default:
 				return errors.New(i18n.T(h.botLang(ctx), "hub-channels.no_feature", i18n.Args{"feature": id}))
 			}

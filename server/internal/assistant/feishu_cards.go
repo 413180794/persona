@@ -1511,6 +1511,9 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 		card, fallback := s.statusCard(ctx, t)
 		reply(card, fallback)
 	case "/tasks", "/进展", "/总览": // i18n-ignore: command aliases typed by the user; the catalogs describe them in /help
+		if f.Board && s.standingBoardCommand(ctx) {
+			break
+		}
 		for _, oc := range s.tasksOverview(ctx) {
 			reply(oc.card, oc.fallback)
 		}

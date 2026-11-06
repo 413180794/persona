@@ -445,6 +445,18 @@ func MessageGone(err error) bool {
 	return c == 230011 || c == 230110
 }
 
+// Transient: the call failed for a reason that may pass, so trying again later can work: Feishu gave no answer at all
+// (the network, a timeout, the connection to the hub), it limited the rate, a server failed (5xx) or the token had to be
+// renewed. Any other answer is Feishu's word on that message or chat (deleted, past its edit period, not a card, not
+// allowed) and will not change.
+func Transient(err error) bool {
+	if err == nil {
+		return false
+	}
+	c := errorCode(err)
+	return c == 0 || RateLimited(err) || c >= 500 && c < 600 || tokenGone(c)
+}
+
 // ChatRefused: Feishu said the bot cannot send into that chat: it is not in it (230002) or the chat was dissolved
 // (232009). Nothing was sent. Also when the error came over the bus as text.
 func ChatRefused(err error) bool {

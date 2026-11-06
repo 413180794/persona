@@ -129,6 +129,7 @@ func (s *Service) askAcceptance(t Todo, machine, session, reply string) {
 	b.asks[t.ID] = &a
 	s.saveAcceptLocked(ctx)
 	b.mu.Unlock()
+	s.boardChanged() // it waits for the owner now
 }
 
 // acceptLines are the card's three lines: the small model reads the task and the reply; without it (or when it
@@ -342,6 +343,7 @@ func (s *Service) accepted(ctx context.Context, id, card string) bool {
 	cp := *a
 	s.saveAcceptLocked(ctx)
 	b.mu.Unlock()
+	s.boardChanged() // it no longer waits
 	s.setTaskStage(ctx, id, "verify", "")
 	s.threadPost(id, threadEvent{kind: threadTodoAccepted}) // and the todo's chat thread
 	if t, ok := s.todoNow(id); ok {
@@ -418,6 +420,7 @@ func (s *Service) remindAcceptance(now time.Time) {
 			delete(b.asks, id)
 			s.saveAcceptLocked(ctx)
 			b.mu.Unlock()
+			s.boardChanged()
 			continue
 		}
 		cp := *a

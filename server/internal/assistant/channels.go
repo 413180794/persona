@@ -688,6 +688,7 @@ func (s *Service) InteractionAnnounced(_ context.Context, p InteractionAnnounced
 	go s.feishuInteraction(p.Interaction)
 	go s.channelInteraction(p.Interaction)
 	go s.taskAsks(p.Interaction)
+	s.boardChanged()
 }
 
 // InteractionEnded is interaction.ended: a card is over: the Feishu card says how, the text ask stops waiting.
@@ -713,6 +714,7 @@ func (s *Service) InteractionEnded(_ context.Context, p InteractionEnded) {
 	}
 	s.feishuInteractionDone(p.Interaction, how)
 	s.channelInteractionDone(p.Interaction)
+	s.boardChanged()
 }
 
 // channelsPushed: the conversation pushed what matters itself (notify_user): it goes to the channels with pushes on

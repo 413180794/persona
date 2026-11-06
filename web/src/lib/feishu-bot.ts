@@ -12,6 +12,8 @@ export interface BotFeatures {
   agents: boolean;
   /** The main conversation's tasks are told in the chat (#2768); a hub from before leaves it out. */
   reports?: boolean;
+  /** /tasks keeps one standing "waiting for you" card, edited in place (#6052); a hub from before leaves it out. */
+  board?: boolean;
 }
 
 export interface FeishuBotStatus {
@@ -43,7 +45,7 @@ export interface FeishuBotUpdate {
   features?: BotFeatures;
 }
 
-export const DEFAULT_FEATURES: BotFeatures = { main: true, cards: true, all_cards: false, pushes: false, sync: false, agents: false, reports: true };
+export const DEFAULT_FEATURES: BotFeatures = { main: true, cards: true, all_cards: false, pushes: false, sync: false, agents: false, reports: true, board: false };
 
 export const botStatus = () => api<FeishuBotStatus>("/bots/feishu");
 export const updateBot = (u: FeishuBotUpdate) => api<FeishuBotStatus>("/bots/feishu", { method: "PUT", json: u });

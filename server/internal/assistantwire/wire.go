@@ -1013,6 +1013,7 @@ type FeishuFeatures struct {
 	Sync     bool `json:"sync"`
 	Agents   bool `json:"agents"`
 	Reports  bool `json:"reports"` // the main conversation's tasks are told in the chat (#2768)
+	Board    bool `json:"board"`   // /tasks keeps one standing "waiting for you" card, edited in place (#6052)
 }
 
 // FeishuStatus is feishu.status's answer.
