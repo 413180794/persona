@@ -1,8 +1,8 @@
 # Managers
 
-A manager is the assistant's process, `personad assistant` (`docs/assistant.md`「进程」). One hub can have several managers, and **they are all equal**: each one is a whole assistant with its own main conversation, conversations, scheduled tasks, inbox, knowledge base, model settings, memory, computers and sources. There is no chief manager: nothing is escalated, handed down, or seen "all at once".
+A manager is the assistant's process, `personad assistant` (`docs/assistant.md`("Process")). One hub can have several managers, and **they are all equal**: each one is a whole assistant with its own main conversation, conversations, scheduled tasks, inbox, knowledge base, model settings, memory, computers and sources. There is no chief manager: nothing is escalated, handed down, or seen "all at once".
 
-- The assistant the hub starts itself (id `assistant`) is the first manager and, to begin with, the **default manager**: entry points that belong to no manager (Siri, the 「问 Persona」 shortcut, the assistant page as the app opens) go to the default manager, which can be changed in settings.
+- The assistant the hub starts itself (id `assistant`) is the first manager and, to begin with, the **default manager**: entry points that belong to no manager (Siri, the **Ask Persona** shortcut, the assistant page as the app opens) go to the default manager, which can be changed in settings.
 - Everything belongs to one manager (computers, sources, inbox events, sessions, model settings, the knowledge base), and the hub forwards by ownership; list endpoints are merged by the hub, each item carrying `manager` (the manager's id).
 - Each manager keeps its own data: a database of its own (one more database in the same Postgres instance, or one it brings); the default manager keeps using the hub's database, with nothing migrated.
 - Where a manager runs is the user's choice: another service on the hub machine, a service on another computer, or a container. Bots, channels, plugins and sources are set up in each manager's own settings; none of it is global.
@@ -12,18 +12,18 @@ A manager is the assistant's process, `personad assistant` (`docs/assistant.md`�
 1. **Roster and identity** (below): the roster, each manager's own token, install codes, `/api/v1/managers`. Behavior unchanged.
 2. **Ownership and forwarding by owner** (see "Ownership" below): computers, sessions, cards and list items carry `manager`, and the hub forwards by it and merges lists; for now everything belongs to the default manager, so behavior is unchanged.
 3. A second manager runs: its own database and directory, connected to the hub, taking over the computers and sources given to it.
-4. Clients: 「设置 › 管理者」, switching managers on the assistant page, grouping, per-manager push switches (all four platforms).
+4. Clients: **Settings › Managers**, switching managers on the assistant page, grouping, per-manager push switches (all four platforms).
 
 ## Roster
 
-The roster is the bus's identity table `bus_identities` (`docs/protocol.md`, "Bus"): every row with role `manager` is a manager. Migration 0419 adds where its last handshake said it runs (`host`, `os`, `arch`, `deploy`, `version`) and `last_seen` (recorded on handshake and on disconnect), so the app can show an offline manager's place and 「最后同步于…」.
+The roster is the bus's identity table `bus_identities` (`docs/protocol.md`, "Bus"): every row with role `manager` is a manager. Migration 0419 adds where its last handshake said it runs (`host`, `os`, `arch`, `deploy`, `version`) and `last_seen` (recorded on handshake and on disconnect), so the app can show an offline manager's place and "Last synced…".
 
 - The hub gives the assistant it starts a new token on every start, but **the name stays**: a name the user gave it is kept.
 - Manager ids: `m-` plus 6 hex digits for one made in the app; `assistant` for the hub's own.
 
 ## Install codes
 
-「新建管理者」 in the app (`POST /api/v1/managers {name}`) returns a one-time install code `mi_…`, **valid for 10 minutes and usable once**; the hub keeps only its sha256 (table `manager_install_codes`). Until the code is traded, the manager shows in the roster as installing (`installing` is when the code expires).
+**New manager** in the app (`POST /api/v1/managers {name}`) returns a one-time install code `mi_…`, **valid for 10 minutes and usable once**; the hub keeps only its sha256 (table `manager_install_codes`). Until the code is traded, the manager shows in the roster as installing (`installing` is when the code expires).
 
 The new manager trades the code for its bus token: `POST /api/v1/bus/join {"code"}` → `{id, name, token, hub_id}`. This endpoint needs no credential (like the bus, it sits outside the apps' auth); failed trades count against the source and go `429 rate_limited` past the limit, as a bad token does. A manager that already has a token and trades another code (`POST /api/v1/managers/{id}/code`, to install it somewhere else) gets a new token: the old one stops working at once and a connection using it is closed with 4002.
 
@@ -47,7 +47,7 @@ Who owns a thing is decided in one place: `server/internal/hub/ownership.go`. Wh
 - What a manager reports replaces only its own share: a manager reporting `devices.state` touches only its computers, a full list of pending cards replaces only its cards, and other managers' stay. The app gets computers ordered by manager: the one connecting hub.json's computers first, the rest by id.
 - When a hub feature needs the assistant: things tied to a computer or a session (message parameters, renaming, starting an Agent, question cards, read state) go to its manager; things that aren't (Siri, shortcuts, the knowledge base, an extension's hub_call) go to the default manager; notices that concern everyone (the app can fill in forms now, mutes changed, a source has something new, events for extensions) go to every connected manager. An extension's token is checked with each manager in turn (the default first); whichever recognizes it owns it.
 - The hub caches the default manager for 2 seconds (every forwarded request needs it) and reads it again when the roster changes (`managersChanged`).
-- How lists are merged, the `manager` field and what offline looks like are in `docs/protocol.md`, "Per-manager routing". An offline manager's things get no extra field: the app uses its `online` and `last_seen` in the roster to show 「最后同步于…」.
+- How lists are merged, the `manager` field and what offline looks like are in `docs/protocol.md`, "Per-manager routing". An offline manager's things get no extra field: the app uses its `online` and `last_seen` in the roster to show "Last synced…".
 
 Not done yet, left for step 3:
 

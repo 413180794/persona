@@ -1,73 +1,73 @@
-# CarPlay 语音长聊
+# Long voice conversations on CarPlay
 
-在车里和 Persona 语音长聊（双工、随时插话）。Siri 只当入口；通话本身走共享引擎 `VoiceConversation(surface: .carPlay)` / `VoiceCalls`（`docs/voice.md` 6，#3789），绑的是助手主对话。
+Talk with Persona in the car (full duplex, interrupt at any time). Siri is only the entry point; the call uses the shared `VoiceConversation(surface: .carPlay)` / `VoiceCalls` engine (`docs/voice.md` section 6, #3789), bound to the assistant's main chat.
 
-## 怎么用
+## Using it
 
-- 车上点 CarPlay 里的 Persona 图标，或对 Siri 说「打开 Persona」：App 直接进入聆听，不用先点按钮。
-- 对 Siri 说「跟 Persona 聊聊」（`TalkToPersonaIntent`）：Persona 正在车机屏幕上时开始对话；连着 CarPlay 但屏上是别的 App（比如地图）时只说一句「先在车里的屏幕上打开 Persona」，不开麦；没连时说明先连上 CarPlay（`CarPlayTalk`）。
-- 界面按钮：结束 / 打断 / 继续。
-- 离开 Persona 的界面（比如切到地图）就停：Apple 要求语音对话时语音控制界面在屏上。回到 Persona 界面会接着聊。
-- 自己开始只在连上 CarPlay 后、以及每次回到前台时各一次（`CarPlayAutoStart`）。通知横幅、Siri、来电结束只会让界面「失活 → 激活」，不会重新开麦；按过「结束」、空闲停掉或因缺权限 / 没有语音扩展结束后，只有「继续」或 Siri 能再开始。
-- 麦克风权限还没决定时不弹窗（弹窗在口袋里的手机上，车上会一直卡在「正在连接」），直接结束并提示先在手机上用一次听写或录音允许麦克风（`CarPlayMicPermission`）。
-- 10 分钟没人说话自动停（引擎的空闲规则）。
+- Tap Persona's icon in CarPlay, or tell Siri **Open Persona**: the app starts listening directly, without a button press first.
+- Tell Siri **Talk to Persona** (`TalkToPersonaIntent`): it starts the conversation if Persona is on the car's screen. If CarPlay is connected but another app (such as Maps) is on screen, it only says to open Persona on the car's screen first, without opening the microphone; without CarPlay, it explains that you must connect first (`CarPlayTalk`).
+- Screen buttons: **End / Interrupt / Continue**.
+- Leaving Persona's screen (for example switching to Maps) stops it: Apple requires the voice-control interface on screen during a voice conversation. Returning to Persona resumes the conversation.
+- It auto-starts once after connecting to CarPlay, and once each time it returns to the foreground (`CarPlayAutoStart`). Notification banners, Siri and the end of a phone call only deactivate / reactivate the interface, without reopening the microphone. After **End**, an idle stop, or ending because permission / a voice extension is missing, only **Continue** or Siri can start it again.
+- If microphone permission is undecided, no prompt is shown (it would appear on the phone in your pocket, leaving the car stuck at **Connecting**). Instead, end and explain that you must first use dictation or recording on the phone to allow the microphone (`CarPlayMicPermission`).
+- Stops automatically after 10 minutes without anyone speaking (the engine's idle rule).
 
-## 双工语音入口
+## Full-duplex entry
 
-CarPlay 是共享引擎外面的一层薄壳（`CarPlayVoiceSession`）：
+CarPlay is a thin shell around the shared engine (`CarPlayVoiceSession`):
 
-1. 解析助手主对话（`AppModel` 或 `IntentSupport` + `assistant()`）和第一个 `running` 的 voice 扩展（`VoiceAvailability.pick`）。
-2. `VoiceCalls.start(..., surface: .carPlay, deps: VoiceDeps.live` 且 `mic` 换成不弹窗的 `CarPlayMicPermission`）。
-3. 引擎经 `extensionPath` 连 `/api/v1/extensions/<id>/ws`（旧 hub 仍走 `/api/v1/plugins`），发协议 2 的 `start`，收 `ready`，之后麦克风与播放由 `PhoneVoiceAudio` 负责。
+1. Resolve the assistant's main chat (`AppModel` or `IntentSupport` + `assistant()`) and the first `running` voice extension (`VoiceAvailability.pick`).
+2. `VoiceCalls.start(..., surface: .carPlay, deps: VoiceDeps.live`, with `mic` replaced by the non-prompting `CarPlayMicPermission`).
+3. The engine connects to `/api/v1/extensions/<id>/ws` through `extensionPath` (old hubs still use `/api/v1/plugins`), sends protocol 2's `start`, receives `ready`, then `PhoneVoiceAudio` handles the microphone and playback.
 
-接哪个实时服务是 hub 的配置。需要干活时，扩展把事交给绑定的主对话，结果由快层口头转述（`docs/voice.md`）。
+The hub's config selects the real-time service. When work is needed, the extension sends it to the bound main chat; the fast layer relays the result aloud (`docs/voice.md`).
 
-## 音频
+## Audio
 
-- 与手机语音通话共用 `PhoneVoiceAudio`：`.playAndRecord` + `.voiceChat`、回声消除、按代丢弃 `clear` 前的声音。
-- 只在对话进行中激活音频会话，结束时 `notifyOthersOnDeactivation`，让音乐恢复。
-- 麦克风和录音、听写共用所有权（`RecordingMicrophone`）；录音或听写会结束通话。
-- 来电等系统打断会结束对话，不会在后台悄悄接着录。
-- 「进后台就结束」只对 `surface == .phone`；CarPlay 只在自己离开语音界面时停（`VoiceCalls.end(.left, from: .carPlay)`）。
+- Shares `PhoneVoiceAudio` with phone voice calls: `.playAndRecord` + `.voiceChat`, echo cancellation, dropping audio from before `clear` by generation.
+- Activates the audio session only during a conversation; ending uses `notifyOthersOnDeactivation` so music resumes.
+- Shares microphone ownership with recording and dictation (`RecordingMicrophone`); either ends the call.
+- System interruptions such as incoming calls end the conversation; it never quietly continues recording in the background.
+- "End on backgrounding" applies only to `surface == .phone`; CarPlay stops when it leaves its own voice screen (`VoiceCalls.end(.left, from: .carPlay)`).
 
-## Apple 的限制
+## Apple's restrictions
 
-以下是 2026-11 查的 CarPlay Developer Guide 的要求：
+Requirements from the CarPlay Developer Guide checked in 2026-11:
 
-- entitlement 名是 `com.apple.developer.carplay-voice-based-conversation`，要 iOS 26.4 以上，要 Apple 批准。
-- 语音对话类的模板最多 3 层。
-- 启动即语音：进入 App 就开始聆听。
-- 语音进行时必须显示语音控制界面（`CPVoiceControlTemplate`）。
-- 只在用语音时占用音频会话。
-- 回答不要显示文字和图片，车里只出声。
-- 录音只能配合语音控制模板使用。
+- The entitlement is `com.apple.developer.carplay-voice-based-conversation`, requires iOS 26.4 or later, and needs Apple's approval.
+- Voice-conversation templates have at most 3 levels.
+- Voice on launch: start listening when entering the app.
+- The voice-control interface (`CPVoiceControlTemplate`) must be visible while voice is active.
+- Hold the audio session only while using voice.
+- Do not display answer text or images; answers in the car are audio-only.
+- Recording is allowed only with the voice-control template.
 
-## 开启步骤
+## Enabling it
 
-没批准前别开，否则签名失败。
+Do not enable before approval, or signing fails.
 
-1. 在 Apple 开发者网站申请 CarPlay 语音对话 entitlement（CarPlay 申请页）。批准后在 Persona 的 App ID 上打开它。
-2. 重新生成发版用的 provisioning profile（`docs/release.md`）。
-3. 在 config.json 写 `"app": {"carplay_voice": true}`，然后运行 `python3 scripts/persona_config.py xcconfig`。它会生成 `apple/PersonaCarPlay.entitlements`（git 忽略），并让 Persona 用它签名。
+1. Apply for the CarPlay voice-conversation entitlement on Apple's developer site (the CarPlay application page). After approval, enable it for Persona's App ID.
+2. Regenerate the release provisioning profile (`docs/release.md`).
+3. Set `"app": {"carplay_voice": true}` in config.json, then run `python3 scripts/persona_config.py xcconfig`. It generates `apple/PersonaCarPlay.entitlements` (git-ignored) and makes Persona sign with it.
 
-没开时 CarPlay 里看不到 Persona，其他一切照旧。
+When disabled, Persona does not appear in CarPlay; everything else is unchanged.
 
-## 编译保护
+## Compile guards
 
-- `CPVoiceControlState.actionButtons` 是 iOS 26.4 SDK 才有的 Swift 属性。**不能用 `#if compiler(>=6.4)` 包**：Swift 6.4 只出现在 iOS 27 SDK 的 Xcode 上，带 iOS 26.4 及以上 SDK 的 Xcode 26.x（Swift 6.3）也有这个属性，这样包会让所有 Xcode 26 编出来的包都没有按钮。
-  现在经 Objective-C 运行时设（`CarPlayVoiceButtons`：`responds(to: setActionButtons:)` + KVC），任何 SDK 都编得过，iOS 26.4 起（用得上语音模板的系统）都有按钮；`CarPlayVoiceButtonsTests` 扫源码防回退。
-- 万一运行时没有这个属性，界面不带按钮，「已结束」的第二行改成提示用 Siri 说「跟 Persona 聊聊」再聊。
-- 实编验证过的只有 Xcode 27.2（iOS 27.2 SDK）；Xcode 26.x 未实编。
+- `CPVoiceControlState.actionButtons` is a Swift property introduced in the iOS 26.4 SDK. **Do not wrap it in `#if compiler(>=6.4)`**: Swift 6.4 appears only in Xcode with the iOS 27 SDK, while Xcode 26.x (Swift 6.3) with iOS 26.4 or newer SDKs also has the property. That guard would remove the buttons from every Xcode 26 build.
+  It is set through the Objective-C runtime (`CarPlayVoiceButtons`: `responds(to: setActionButtons:)` + KVC), compiling with any SDK and showing buttons from iOS 26.4 onward (the systems supporting voice templates). `CarPlayVoiceButtonsTests` scans the source to prevent regression.
+- If the property is missing at runtime, there are no buttons; the second line of **Ended** tells you to use Siri's **Talk to Persona** to resume.
+- Only Xcode 27.2 (iOS 27.2 SDK) has been verified by an actual build; Xcode 26.x has not.
 
-## 怎么验证
+## Verification
 
-- 模拟器：Xcode › Open Developer Tool › Simulator，菜单 I/O › External Displays › CarPlay（或 CarPlay Simulator App）。
-- 没有 entitlement 时，CarPlay 里不显示 Persona。
-- 单元测试：`CarPlayVoiceScreenTests`、`CarPlayWiringSourceTests`、`CarPlayVoiceButtonsTests`；引擎侧见 `VoiceConversationTests` / `VoiceCallsTests`。
+- Simulator: Xcode › Open Developer Tool › Simulator, then I/O › External Displays › CarPlay (or the CarPlay Simulator app).
+- Without the entitlement, Persona does not appear in CarPlay.
+- Unit tests: `CarPlayVoiceScreenTests`, `CarPlayWiringSourceTests`, `CarPlayVoiceButtonsTests`; engine tests: `VoiceConversationTests` / `VoiceCallsTests`.
 
-## 没做 / 推迟
+## Not implemented / deferred
 
-- 手机上的语音通话界面（#3508）。
-- 选模型和音色：先用扩展默认（`docs/voice.md`）。
-- 在别的 App（比如地图）前台时继续聊：Apple 要求语音界面在屏上。
-- 仪表盘和方向盘按键控制。
+- The phone's voice-call interface (#3508).
+- Model and voice selection: use the extension defaults first (`docs/voice.md`).
+- Continuing while another app (such as Maps) is in front: Apple requires the voice interface on screen.
+- Dashboard and steering-wheel-button controls.
