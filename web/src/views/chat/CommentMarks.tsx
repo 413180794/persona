@@ -15,6 +15,7 @@ import { scrollBehavior } from "../../ui/stream/motion";
 import { NumberDot } from "./CommentCard";
 import { useChatActions } from "./chat-actions";
 import { t } from "../../i18n";
+import { composing } from "../../lib/send-history";
 
 interface Box {
   id: string;
@@ -107,7 +108,7 @@ export function CommentMarks({ scroller }: { scroller: RefObject<HTMLDivElement 
   useEffect(() => {
     if (!pill) return;
     const press = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "c" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat || e.isComposing) return;
+      if (e.key.toLowerCase() !== "c" || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat || composing(e)) return;
       if (focusKind(e.target) !== "page") return;
       e.preventDefault();
       add();

@@ -94,7 +94,7 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 		}
 		out = append(out, strings.TrimSpace(text))
 	}
-	return Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after, Stopped: Stopped(kept)}, nil
+	return Reading{Answer: strings.Join(out, "\n\n"), Found: true, Last: after, Stopped: Stopped(kept), Words: endsInWords(kept)}, nil
 }
 
 // RunAnswer is the answer to r's messages in items (the transcript from the first of them on), and whether all of them
@@ -145,7 +145,9 @@ func endsInWords(items []proto.Item) bool {
 	for i := len(items) - 1; i >= 0; i-- {
 		it := items[i]
 		switch {
-		case it.Kind == proto.KindThinking, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "":
+		// The line a turn ends with (its duration) and a compaction say nothing of how it ended (as in Stopped).
+		case it.Kind == proto.KindThinking, it.TurnDuration != nil, it.Kind == proto.KindText && strings.TrimSpace(it.Text) == "",
+			it.Kind == proto.KindNotice && compaction(it):
 			continue
 		case it.Role == "assistant" && it.Kind == proto.KindText:
 			return true

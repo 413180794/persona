@@ -42,6 +42,42 @@ type Run struct {
 	Folded []Folded `json:"folded,omitempty"`
 	// Ext is the channel's own: the progress card, the reaction on the message.
 	Ext map[string]string `json:"ext,omitempty"`
+	// Again: the turn ended without an answer and the conversation was asked for one then (AskAgain); the waits for
+	// a turn to start count from it.
+	Again time.Time `json:"again,omitempty"`
+}
+
+// waitFrom is when the turn being waited on was asked for: the message, or the ask for an answer.
+func (r *Run) waitFrom() time.Time {
+	if r.Again.After(r.Started) {
+		return r.Again
+	}
+	return r.Started
+}
+
+// AskAgain makes r wait for the answer to msgID (probe: a piece of its text), a message asking the conversation for
+// the answer its turn did not give, after line last.
+func (r *Run) AskAgain(last int, msgID, probe string, now time.Time) {
+	if last > r.Base {
+		r.Base = last
+	}
+	r.MsgIDs, r.Probe, r.Seen, r.Again = []string{msgID}, probe, false, now
+}
+
+// Queued: the run's message is not in the conversation yet, but may still come (it waits behind another turn).
+func (r *Run) Queued(now time.Time) bool { return now.Sub(r.waitFrom()) < QueuedMost }
+
+// Asked: the conversation was asked again for this turn's answer (once is all).
+func (r *Run) Asked() bool { return !r.Again.IsZero() }
+
+// placeholders are what a turn may end with instead of an answer (Claude Code writes the first when a turn ends with
+// nothing to say).
+var placeholders = []string{"no response requested", "(no content)", "no content", "[no content]"}
+
+// Placeholder: text stands in for an answer the turn did not give.
+func Placeholder(text string) bool {
+	t := strings.TrimRight(strings.ToLower(strings.TrimSpace(text)), ".。!！ ")
+	return slices.Contains(placeholders, t)
 }
 
 // Folded is an earlier message a run answers too.
@@ -52,12 +88,15 @@ type Folded struct {
 
 // How long a run waits, and on what.
 const (
-	RunMost       = 4 * time.Hour
-	HeldMost      = 2 * time.Hour
-	QuietGrace    = 20 * time.Second // not seen working: the turn may not have started
-	EmptyGrace    = 2 * time.Minute  // no words yet and not seen working
-	QueuedMost    = 10 * time.Minute // the message is not in the conversation yet: it waits behind another turn
-	MissingAfter  = 3 * time.Minute  // the conversation is not listed (closed, deleted)
+	RunMost    = 4 * time.Hour
+	HeldMost   = 2 * time.Hour
+	QuietGrace = 20 * time.Second // not seen working: the turn may not have started
+	EmptyGrace = 2 * time.Minute  // no words yet and not seen working
+	QueuedMost = 10 * time.Minute // the message is not in the conversation yet: it waits behind another turn
+	// AnswerSettle is how long a turn read as over without words at its end is read again before it counts as one
+	// without an answer: the node says a turn is over a moment before its last words are in the transcript.
+	AnswerSettle  = 10 * time.Second
+	MissingAfter  = 3 * time.Minute // the conversation is not listed (closed, deleted)
 	OfflineGrace  = time.Minute
 	HeldIdleMost  = 10 * time.Minute // a held run's background work ended without a word
 	ProbeLen      = 24
@@ -150,7 +189,7 @@ func (r *Run) Check(l Look) Step {
 	if l.Waiting {
 		return Step{Do: Wait} // waiting on the owner: what it asks goes out as an ask
 	}
-	if !r.Seen && age < QuietGrace {
+	if !r.Seen && l.Now.Sub(r.waitFrom()) < QuietGrace {
 		return Step{Do: Wait}
 	}
 	if l.Offline && age < OfflineGrace {
@@ -166,6 +205,8 @@ type Reading struct {
 	Last   int    // the last line read
 	// Stopped is why a turn without words ended, when the conversation says (Stopped): an API error, an interruption.
 	Stopped string
+	// Words: the turn's items end in the assistant's words (else its last words may not be written yet).
+	Words bool
 }
 
 // Result is what to send when a run is over (or held: answered once, waiting on its background work).
@@ -194,7 +235,7 @@ func (r *Run) Decide(rd Reading, l Look) *Result {
 			return nil
 		case r.Held:
 			return &Result{Quiet: true, Last: rd.Last} // its background work ended without more to say
-		case !r.Seen && age < EmptyGrace:
+		case !r.Seen && l.Now.Sub(r.waitFrom()) < EmptyGrace:
 			return nil // not started yet (queued behind another message, a slow start)
 		}
 	}
@@ -220,7 +261,7 @@ func (r *Run) Hold(last int, now time.Time) {
 	if last > r.Base {
 		r.Base = last
 	}
-	r.MsgIDs, r.Probe, r.Seen, r.Held, r.Started, r.Folded = nil, "", false, true, now, nil
+	r.MsgIDs, r.Probe, r.Seen, r.Held, r.Started, r.Folded, r.Again = nil, "", false, true, now, nil, time.Time{}
 }
 
 // Find is where the run's message is in items: by its client_msg_id, else by its probe (holds says whether a user

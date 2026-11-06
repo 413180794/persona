@@ -14,6 +14,7 @@ import { LarkPeopleMenu, useLarkPeoplePicker } from "../../ui/LarkPeoplePicker";
 import { Empty, Segmented } from "../session/files/parts";
 import { docErrorFromBody, docErrorText } from "./feishu-doc";
 import { t } from "../../i18n";
+import { composing } from "../../lib/send-history";
 
 export interface DocComments {
   threads: DocThread[] | null;
@@ -150,7 +151,7 @@ export function DocCommentsView({ url, model, writes, resolved, onResolved, onBa
     <div
       className="flex h-full flex-col bg-surface"
       onKeyDown={(e) => {
-        if (e.key !== "Escape" || e.nativeEvent.isComposing) return;
+        if (e.key !== "Escape" || composing(e.nativeEvent)) return;
         e.preventDefault();
         e.stopPropagation();
         onBack();

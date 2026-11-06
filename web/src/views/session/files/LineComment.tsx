@@ -8,6 +8,7 @@ import { Button, Kbd } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { NumberDot } from "../../chat/CommentCard";
 import { t } from "../../../i18n";
+import { composing } from "../../../lib/send-history";
 
 export interface LinePick {
   /** The lines picked, once the pointer let go. */
@@ -120,7 +121,7 @@ export function LineBox({ where, onAdd, onCancel }: { where: string; onAdd: (bod
         placeholder={t("chat-comments.placeholder")}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
+          if (composing(e.nativeEvent)) return;
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             onAdd(body.trim());

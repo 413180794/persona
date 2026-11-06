@@ -1,4 +1,5 @@
-"""entitlements.py check and the apps' entitlements: time-sensitive notifications on the iPhone and the Mac (#1572, #1655).
+"""entitlements.py check and the apps' entitlements: time-sensitive notifications on the iPhone, the Mac and
+Apple Vision Pro (#1572, #1655, #2435).
 
     python3 scripts/release/test_entitlements.py
 """
@@ -31,6 +32,9 @@ class AppsAskForTimeSensitive(unittest.TestCase):
 
     def test_the_mac_app(self):
         self.assertIs(self.entitlements("Mac/Resources/PersonaMac.entitlements").get(ents.TIME_SENSITIVE), True)
+
+    def test_the_vision_app(self):
+        self.assertIs(self.entitlements("Vision/Resources/PersonaVision.entitlements").get(ents.TIME_SENSITIVE), True)
 
 
 class CheckAMacApp(unittest.TestCase):

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Each prompt's output is pinned by the golden tests of the package that uses it (hub, kb, node: *_golden_test.go);
@@ -116,5 +117,38 @@ func TestTurnContext(t *testing.T) {
 	got := RenderTurnContext(TurnContext{Sections: []string{"- 现在：x"}})
 	if want := "<persona-context>\n实时快照里和上一份比变了的（没列出的照旧）：\n- 现在：x\n</persona-context>"; got != want {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// The evening review asks what meetings happened today and when tomorrow's first one is. The snapshot only carries the
+// meetings still to come (snapshot.go Snapshot.Upcoming), so both have to come from reading the calendar (#4596).
+func TestEveningRoutineReadsTheCalendar(t *testing.T) {
+	got := RenderEveningRoutine()
+	for _, want := range []string{"今天开了哪些会", "phone_calendar_events", "飞书日历", "明天最早的安排"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the evening routine does not say %q:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "已经开完的不在") {
+		t.Errorf("the evening routine does not say the snapshot leaves out the meetings already over:\n%s", got)
+	}
+}
+
+// At 21:30 every meeting of the day is over and the snapshot has an empty calendar: that line must not read as "no
+// meetings today", which is what a review would say (#4596).
+func TestSnapshotCalendarSaysFinishedMeetingsAreNotListed(t *testing.T) {
+	now := time.Date(2026, 11, 6, 21, 30, 0, 0, time.UTC) // a Friday evening
+	got := RenderSnapshot(Snapshot{Now: now, Zone: "UTC", Calendar: &SnapshotCalendar{}})
+	if strings.Contains(got, "今天接下来没有会\n") {
+		t.Errorf("the empty calendar still reads as a day without meetings:\n%s", got)
+	}
+	if want := "已经开完的不在这里"; !strings.Contains(got, want) {
+		t.Errorf("the empty calendar does not say %q:\n%s", want, got)
+	}
+	// With a meeting still to come the line names it, and says the same about the ones over.
+	got = RenderSnapshot(Snapshot{Now: now, Zone: "UTC", Calendar: &SnapshotCalendar{Events: []SnapshotEvent{
+		{Start: now.Add(90 * time.Minute), End: now.Add(120 * time.Minute), Title: "夜间发布会"}}}})
+	if !strings.Contains(got, "夜间发布会") {
+		t.Errorf("a meeting still to come is left out:\n%s", got)
 	}
 }

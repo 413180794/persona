@@ -18,3 +18,11 @@ type ChannelMessage struct {
 }
 
 func RenderChannelMessage(m ChannelMessage) string { return render("channel/message", m) }
+
+// ChannelAnswerAgain asks a conversation for the answer a turn from a chat app did not give (it ended with nothing,
+// or a placeholder like 「No response requested.」): channel/answer_again.
+type ChannelAnswerAgain struct {
+	Name string // the chat app: 飞书, 微信
+}
+
+func RenderChannelAnswerAgain(m ChannelAnswerAgain) string { return render("channel/answer_again", m) }

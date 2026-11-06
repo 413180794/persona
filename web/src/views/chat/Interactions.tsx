@@ -23,6 +23,7 @@ import { cardState } from "../../lib/card-focus";
 import { href, onLinkClick, type Route } from "../../lib/router";
 import { t } from "../../i18n";
 import { StatusMark } from "../../ui/StatusMark";
+import { composing } from "../../lib/send-history";
 
 /** Answers a card: the chat's cards and the overview's quick answers (Home, #4090) send through this. */
 export async function resolve(ix: Interaction, body: Record<string, unknown>) {
@@ -209,7 +210,7 @@ function QuestionCard({ ix }: { ix: Interaction }) {
               setCustom((c) => ({ ...c, [qi]: e.target.value }));
               if (e.target.value) setPicked((p) => ({ ...p, [qi]: [] }));
             }}
-            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (last ? all && void send() : answered(qi) && setQi(qi + 1))}
+            onKeyDown={(e) => e.key === "Enter" && !composing(e.nativeEvent) && (last ? all && void send() : answered(qi) && setQi(qi + 1))}
             placeholder={t("chat-interactions.custom_placeholder")}
             aria-label={t("chat-interactions.custom_answer")}
             className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
@@ -248,7 +249,7 @@ function PlanCard({ ix }: { ix: Interaction }) {
               autoFocus
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && feedback.trim() && go({ approve: false, feedback: feedback.trim() })}
+              onKeyDown={(e) => e.key === "Enter" && !composing(e.nativeEvent) && feedback.trim() && go({ approve: false, feedback: feedback.trim() })}
               placeholder={t("chat-interactions.feedback_placeholder")}
               className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
             />
@@ -427,7 +428,7 @@ function ScreenCard({ ix }: { ix: Interaction }) {
                   autoFocus
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && text.trim() && go({ option: o.key, text }, o.key)}
+                  onKeyDown={(e) => e.key === "Enter" && !composing(e.nativeEvent) && text.trim() && go({ option: o.key, text }, o.key)}
                   placeholder={o.label}
                   className="h-8 min-w-0 flex-1 rounded-control bg-surface px-2.5 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3"
                 />

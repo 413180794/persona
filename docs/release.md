@@ -126,6 +126,7 @@ App Group 的 ID 本身不带团队前缀，Info.plist 里直接写 `$(JARVIS_AP
   Mac App 也要了这一项（#1655，`project.yml` 的 PersonaMac）：Mac 和 iPhone 是同一个 App ID（UNIVERSAL），上面开的能力同样覆盖 Mac；
   `entitlements.py check` 对 Mac 的 .pkg / 归档同样要求它（target 要了就查，`scripts/release/test_entitlements.py`）。
   还没在能发 Mac 版的环境里导出过一次 .pkg 核对、也没在 Mac 上开着专注模式看过横幅，这一步做完再关 #1655。
+  Apple Vision Pro 版（PersonaVision）也要了这一项（#2435），bundle id 和 iPhone 相同，同样被上面开的能力覆盖；还没在 Vision Pro 上开着专注模式看过横幅。
 
 ## App Group（2026-11-02）
 

@@ -244,6 +244,7 @@ func TestGoldenChannelMessage(t *testing.T) {
 		Asks: true, Text: "看下这个", Quote: "张三\n合同明天要签", Unsupported: []string{"文件「合同.pdf」", "一段视频"}}))
 	golden(t, "channel_message.markdown_files", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "Example Chat",
 		Text: "看下这个日志", Forward: "11-02 10:00 张三：构建挂了", Files: []string{"/tmp/jarvis-uploads/build.log"}}))
+	golden(t, "channel_answer_again.feishu", prompts.RenderChannelAnswerAgain(prompts.ChannelAnswerAgain{Name: "飞书"}))
 	golden(t, "channel_message.only_unsupported", prompts.RenderChannelMessage(prompts.ChannelMessage{Persona: true, Name: "微信", Plain: true,
 		Asks: true, Unsupported: []string{"一段没有转写的语音"}}))
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/i18n"
+	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -54,6 +55,8 @@ type chanLive struct {
 	// would send the same answer twice.
 	checking chanMutex
 	failing  time.Time // its answer first failed to go out (answerAgain)
+	// unsettled: the turn was first read as over without words at its end (its answer may not be written yet)
+	unsettled time.Time
 	// items are the turn's thinking, words and tool calls (for the Feishu bot's agent message); cot what of them it
 	// has shown, under mu.
 	items []proto.Item
@@ -644,6 +647,9 @@ func (s *Service) checkChannelRun(id string) {
 	c.mu.Unlock()
 	switch step.Do {
 	case channel.Wait:
+		c.mu.Lock()
+		prog.unsettled = time.Time{} // working or waiting again: a later read of its end settles afresh
+		c.mu.Unlock()
 		return
 	case channel.Finish:
 		s.finishChannelRun(r, &channel.Result{Note: step.Note, Quiet: step.Note == "", End: step.End})
@@ -667,7 +673,7 @@ func (s *Service) checkChannelRun(id string) {
 	prog.notFound = !rd.Found
 	c.mu.Unlock()
 	if !rd.Found {
-		if look.Now.Sub(snap.Started) < channel.QueuedMost {
+		if snap.Queued(look.Now) {
 			return // the message waits behind the turn that just ended: it starts the next one
 		}
 		// The message never reached the conversation even past QueuedMost. Reading the whole tail would answer with
@@ -684,7 +690,82 @@ func (s *Service) checkChannelRun(id string) {
 	if res == nil {
 		return
 	}
+	if res.Note != "" && channel.Placeholder(res.Answer) {
+		res.Answer = "" // the note (its background work goes on) without the placeholder
+	}
+	if !res.Quiet && res.Note == "" && res.End == "" {
+		empty := strings.TrimSpace(res.Answer) == "" || channel.Placeholder(res.Answer)
+		// The node says a turn is over a moment before its last words are in the transcript: a turn read as over
+		// without words at its end is read again for a few seconds before it counts as one without an answer.
+		c.mu.Lock()
+		unsure := !rd.Words || empty
+		if !unsure {
+			prog.unsettled = time.Time{}
+		} else if prog.unsettled.IsZero() {
+			prog.unsettled = look.Now
+		}
+		if unsure {
+			prog.checked = time.Time{}
+		}
+		settling := unsure && look.Now.Sub(prog.unsettled) < channel.AnswerSettle
+		c.mu.Unlock()
+		if settling {
+			return
+		}
+		if empty && res.Stopped == "" {
+			if !snap.Asked() && s.askAgain(ctx, r, prog, rd.Last) {
+				return
+			}
+			reason := s.noAnswerReason(look.Lang, res.Answer)
+			s.logf("channels: %s: no answer this turn: %s", r.ID, reason)
+			res.Answer = i18n.T(look.Lang, "assistant-channels_runs.no_answer", i18n.Args{"reason": reason})
+		}
+	}
 	s.finishChannelRun(r, res)
+}
+
+// askAgain sends the conversation of a turn that ended without an answer (nothing, or a placeholder like 「No
+// response requested.」) a message asking for it, once; the run then waits for that turn. False when it was not
+// sent (a coding agent's conversation is not asked: the message would land in its work).
+func (s *Service) askAgain(ctx context.Context, r *channel.Run, prog *chanLive, last int) bool {
+	if r.TargetKind == channel.TargetAgent {
+		return false
+	}
+	l := s.botLang(ctx)
+	name := r.Channel
+	if r.Channel == channel.Feishu {
+		name = i18n.T(l, "assistant-channels_runs.feishu")
+	} else if v, ok := s.pluginChannel(ctx, r.Channel); ok && v.Name != "" {
+		name = v.Name
+	}
+	text := prompts.RenderChannelAnswerAgain(prompts.ChannelAnswerAgain{Name: name})
+	_, body, _ := strings.Cut(text, "\n") // the first line is the context tag
+	id := channel.ClientMsgID(r.Channel, r.ID+"-again")
+	p, err := s.SendParams(ctx, SendParams{MachineID: r.MachineID, SessionID: r.SessionID,
+		Params: map[string]any{"session_id": r.SessionID, "text": text, "client_msg_id": id}})
+	if err == nil {
+		err = s.sendOnce(ctx, r.MachineID, p)
+	}
+	if err != nil {
+		s.logf("channels: %s: no answer this turn; asking again failed: %v", r.ID, err)
+		return false
+	}
+	s.logf("channels: %s: no answer this turn; asked the conversation again", r.ID)
+	c := &s.chans
+	c.mu.Lock()
+	r.AskAgain(last, id, channel.Probe(body), c.clock().UTC())
+	prog.unsettled, prog.checked, prog.notFound = time.Time{}, time.Time{}, false
+	s.saveChannelStateLocked()
+	c.mu.Unlock()
+	return true
+}
+
+// noAnswerReason is why a turn has no answer, for the owner.
+func (s *Service) noAnswerReason(l i18n.Lang, answer string) string {
+	if channel.Placeholder(answer) {
+		return i18n.T(l, "assistant-channels_runs.reason_placeholder", i18n.Args{"text": strings.TrimSpace(answer)})
+	}
+	return i18n.T(l, "assistant-channels_runs.reason_silent")
 }
 
 // busTranscript is a conversation's transcript as the assistant reads it, over the hub's bus (channel.ReadTurn's source).
@@ -775,6 +856,7 @@ func (s *Service) finishChannelRun(r *channel.Run, res *channel.Result) {
 	prog.failing = time.Time{}
 	if res.Held {
 		r.Hold(res.Last, now.UTC())
+		prog.unsettled = time.Time{}
 		delete(r.Ext, "card") // the next turn gets its own progress message
 		for _, k := range []string{"cot", "cot_msg", "cot_para", "cot_calls", "cot_done", "cot_off"} {
 			delete(r.Ext, k) // the next turn gets its own agent message (and asks for one again)

@@ -290,6 +290,9 @@ targets:
       path: Vision/Resources/PersonaVision.entitlements
       properties:
         aps-environment: development
+        # Time-sensitive pushes break through Focus on Apple Vision Pro too (the iPhone's #1572, the Mac's #1655); the
+        # bundle id is the iPhone's, so asc_signing.py's USERNOTIFICATIONS_TIMESENSITIVE covers it.
+        com.apple.developer.usernotifications.time-sensitive: true
         keychain-access-groups: ["$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID)", "$(AppIdentifierPrefix)$(JARVIS_BUNDLE_ID).push"]
     settings:
       base:

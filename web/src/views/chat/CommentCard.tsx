@@ -9,6 +9,7 @@ import { cancelNote, editNote, setNote, type DraftQuote } from "../../lib/drafts
 import { cx, EASE, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { t } from "../../i18n";
+import { composing } from "../../lib/send-history";
 
 /** `staged`, `unstaged`, `commit 1a2b3c4d`, worded for the reader. */
 export function diffName(d: NonNullable<CodeSpot["diff"]>): string {
@@ -133,7 +134,7 @@ export function CommentCard({ draftKey, quote, n, editing, onRemove }: { draftKe
               placeholder={t("chat-comments.placeholder")}
               onChange={(e) => setNote(draftKey, id, e.target.value)}
               onKeyDown={(e) => {
-                if (e.nativeEvent.isComposing) return;
+                if (composing(e.nativeEvent)) return;
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   finish(false);

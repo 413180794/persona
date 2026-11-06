@@ -6,6 +6,7 @@ import { findLabel, type FindState } from "../../../lib/terminal-search";
 import { cx, EASE, IconButton } from "../../../ui/atoms";
 import { Icon } from "../../../ui/icons";
 import { t } from "../../../i18n";
+import { composing } from "../../../lib/send-history";
 
 /** What the bar searches with: the pane's feed, or the full surface's. */
 export interface FindFeed {
@@ -57,7 +58,7 @@ export function FindBar({
         value={state.query}
         onChange={(e) => onQuery(e.target.value)}
         onKeyDown={(e) => {
-          if (e.nativeEvent.isComposing) return;
+          if (composing(e.nativeEvent)) return;
           if (e.key === "Enter") {
             e.preventDefault();
             step(e.shiftKey ? -1 : 1);

@@ -445,6 +445,12 @@ func TestSnapshotTaskFollowsTheAgent(t *testing.T) {
 		Unaccepted: []prompts.SnapshotAccept{{Title: "飞书机器人任务进展", Changed: "多了任务进展开关", Link: "https://hub.example.com/settings?tab=feishu",
 			Since: now.Add(-24 * time.Hour)}, {Title: "另一件事", Changed: "改了 A", Since: now}},
 		UnacceptedTotal: 3}))
+	// The calendar only carries the meetings still to come: a review in the evening must not read an empty one as a day
+	// without meetings (#4596), so the line says what it leaves out.
+	golden(t, "assistant_snapshot.calendar", prompts.RenderSnapshot(prompts.Snapshot{Now: now, Zone: "UTC",
+		Calendar: &prompts.SnapshotCalendar{Events: []prompts.SnapshotEvent{
+			{Start: now.Add(time.Hour), End: now.Add(90 * time.Minute), Title: "方案评审"},
+			{Start: now.Add(3 * time.Hour), End: now.Add(4 * time.Hour), Title: "发布会"}}}}))
 
 	lead.State, lead.Subagents = proto.StateUnread, nil
 	if got = snapshotTask(todo, "unread", []proto.Session{lead}, now); got.Doing != "" || got.DoingFor != "" || got.Last == "" {

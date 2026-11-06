@@ -24,6 +24,7 @@ import { Markdown } from "../../ui/Markdown";
 import { Marked } from "./KBParts";
 import { t } from "../../i18n";
 import { SegmentedTrack } from "../../ui/Segmented";
+import { composing } from "../../lib/send-history";
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: readonly { value: T; label: string }[]; onChange: (v: T) => void; label: string }) {
   return (
@@ -120,7 +121,7 @@ export function TagEditor({ entry, open, onClose, onSaved }: { entry: KBEntry; o
         <input
           value={f.tags}
           onChange={(e) => set("tags", e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void save()}
+          onKeyDown={(e) => e.key === "Enter" && !composing(e.nativeEvent) && void save()}
           placeholder={t("knowledge-kbdialogs.tags_placeholder")}
           aria-label={t("knowledge-kbdialogs.tags")}
           className="h-9 w-full rounded-control bg-surface px-3 text-[13px] text-ink shadow-btn outline-none placeholder:text-ink-3 focus:shadow-[inset_0_0_0_1px_var(--accent)]"

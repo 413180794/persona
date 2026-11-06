@@ -32,6 +32,7 @@ import {
 import { t } from "../../i18n";
 import { Button, cx, IconButton, Kbd } from "../../ui/atoms";
 import { Group, Row, RowConfirm, Switch } from "./SettingsParts";
+import { composing } from "../../lib/send-history";
 
 const SCOPES: ShortcutScope[] = ["global", "session", "sidebar"];
 
@@ -65,7 +66,7 @@ export function ShortcutSettings() {
   };
 
   const onKey = (e: React.KeyboardEvent, def: ShortcutDef) => {
-    if (e.nativeEvent.isComposing) return;
+    if (composing(e.nativeEvent)) return;
     // Tab on its own moves on (and the blur ends the recording): a keyboard user is not trapped here
     if (e.key === "Tab" && !e.ctrlKey && !e.metaKey && !e.altKey) return;
     e.preventDefault();

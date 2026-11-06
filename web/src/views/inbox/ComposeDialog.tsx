@@ -8,6 +8,7 @@ import type { MailAccount } from "../../lib/inbox";
 import { badAddresses, parseAddresses, sendMail, type ComposeDraft } from "../../lib/mail";
 import { t } from "../../i18n";
 import { Button, Dialog, toast } from "../../ui/atoms";
+import { composing } from "../../lib/send-history";
 
 const kept = new Map<string, ComposeDraft>();
 
@@ -108,7 +109,7 @@ export function ComposeDialog({ draftKey, initial, accounts, onClose }: { draftK
         }}
         onKeyDown={(e) => {
           // ⌘↩ / Ctrl+↩ sends, as in a mail app.
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !composing(e.nativeEvent)) {
             e.preventDefault();
             void send();
           }

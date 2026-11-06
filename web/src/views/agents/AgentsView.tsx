@@ -29,6 +29,7 @@ import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { SearchField } from "../../ui/SearchField";
 import { formatDate, t } from "../../i18n";
+import { composing } from "../../lib/send-history";
 
 export function AgentsView({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
   return id ? <AgentSessionView id={id} onToggleSidebar={onToggleSidebar} /> : <AgentList onToggleSidebar={onToggleSidebar} />;
@@ -269,7 +270,7 @@ function MessageRow({ m }: { m: AgentMessage }) {
   );
 }
 
-function AgentComposer({ disabled, reason, onSend }: { disabled: boolean; reason: string; onSend: (text: string) => void }) {
+export function AgentComposer({ disabled, reason, onSend }: { disabled: boolean; reason: string; onSend: (text: string) => void }) {
   const [text, setText] = useState("");
   const submit = () => {
     const body = text.trim();
@@ -285,7 +286,7 @@ function AgentComposer({ disabled, reason, onSend }: { disabled: boolean; reason
           disabled={disabled}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (e.key === "Enter" && !e.shiftKey && !composing(e.nativeEvent)) {
               e.preventDefault();
               submit();
             }

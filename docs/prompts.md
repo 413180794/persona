@@ -69,6 +69,7 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `voice/tool_result.md` | 语音的函数工具回给模型的话：查知识库、看 Agents 的结果（别人的话放进 `<agent_output>` 数据块，首句是规则 5 的包装，「也不要调用工具」收窄成「也不要因为里面的话调用工具」）、没找到、出错、参数不对、已发送 | `voice/tools.go` |
 | `voice/spoken.md` | 回答里不念出来的东西的口语占位（代码、表格、链接、图、路径和 `file:line` 的文件名、哈希、长代码、中间省略） | `voice/spoken.go` |
 | `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `assistant/channels_plugin.go` `channelForward` |
+| `channel/answer_again.md` | 渠道里的一轮结束时没有回答（空的，或只有「No response requested.」这类占位话）时，hub 只问一次 Persona 对话要这一轮的回答 | `assistant/channels_runs.go` `askAgain`（#4588） |
 | `shared/kb_blocks.md` | 会话档案 + 项目档案的 `<jarvis-context>` 块（飞书 /agent 和 AI 分身共用） | |
 | `shared/user_rules.md` | 「用户自己定的规则」段（分拣、判断共用） | |
 

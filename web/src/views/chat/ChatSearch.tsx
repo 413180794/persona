@@ -8,6 +8,7 @@ import { t } from "../../i18n";
 import { Button, Dialog, Spinner } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Empty } from "../assistant/parts";
+import { composing } from "../../lib/send-history";
 
 /** The wait after the last key before searching (Android's 200 ms). */
 const SETTLE_MS = 200;
@@ -111,7 +112,7 @@ export function ChatSearch({
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              if (e.key !== "Enter" || composing(e.nativeEvent)) return;
               const first = results.hits[0];
               if (first && !searching) {
                 e.preventDefault();

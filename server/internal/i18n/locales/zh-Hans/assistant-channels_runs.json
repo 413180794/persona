@@ -1,5 +1,9 @@
 {
   "no_text": "（这一轮没有文字回答）",
   "no_text_stopped": "这一轮没有文字回答就停了：{reason}",
-  "not_delivered": "没能确认消息送达，请重发一次。"
+  "not_delivered": "没能确认消息送达，请重发一次。",
+  "feishu": "飞书",
+  "no_answer": "这一轮没产出回答，原因：{reason}",
+  "reason_placeholder": "助手只回了占位的话「{text}」",
+  "reason_silent": "助手这一轮结束时没有写文字，再问一次也没有"
 }
