@@ -781,7 +781,7 @@ struct NoticeRow: View {
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.sm)
         .background(Theme.Fill.well, in: .capsule)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// `Background command "Release" completed (exit code 0)` → "Background command done · Release".

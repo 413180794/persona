@@ -6237,6 +6237,19 @@ if os.environ.get("MOCK_WAKES") == "1":
     _k += tool("Bash", {"command": "git commit -am 'lint'"}, "[main 1a2b3c] lint", 7)
     _k.append(it("assistant", "text", 6, text="lint 有两处要改，已经改好提交了。"))
     ITEMS[WAKES] = _k
+    # Alignment regression: short and overflowing Monitor events, each followed by a short answer.
+    if os.environ.get("MOCK_WAKE_ALIGNMENT") == "1":
+        _k = [it("user", "text", 40, text="检查后台上传的进展"),
+              it("assistant", "text", 38, text="已经开始监控上传，进展会在后台任务里汇总。")]
+        for minute, summary, reply in [
+            (30, "== upload", "仍在处理。"),
+            (20, "uploaded 0.1.0 (2)", "上传已完成。"),
+            (10, "upload validation completed successfully; all artifacts and checksums are ready for verification", "校验已完成。"),
+        ]:
+            _k.append(it("system", "notice", minute, text="Monitor 事件 · " + summary, wake=True,
+                         task={"kind": "monitor", "status": "event", "title": "监控上传", "task_id": "upload-monitor"}))
+            _k.append(it("assistant", "text", minute - 1, text=reply))
+        ITEMS[WAKES] = _k
 
 
 # MOCK_CHAT_LINES=1: a chat that shows the rest of the app's display logic (ChatLines) on one page: a finished exchange

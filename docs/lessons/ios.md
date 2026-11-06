@@ -4,6 +4,10 @@ Pitfalls, odd behavior and the decisions made at the time (formerly "Lessons" in
 
 - Helper extensions referenced by shared views must compile into every target too: after replacing `Color.mix` with `blended` for watchOS 10 compatibility, leaving the helper in `Theme.swift` causes Release archives to fail for Dynamic Island widgets that only include `PersonaFace`. Compile the helper with `PersonaFace.swift` into every target; do not drag the entire app theme into extensions or declare it twice.
 
+## 事件胶囊的外层对齐（#5962）
+
+SwiftUI 的 `.frame(maxWidth: .infinity)` 默认把内容居中；父层 `VStack(alignment: .leading)` 只对齐这个满宽 frame，不能让里面的短胶囊靠左。事件标签应在 `.background(..., in: .capsule)` 之后加 `.frame(maxWidth: .infinity, alignment: .leading)`，让外层占行宽、背景仍跟内容走。不要把满宽 frame 放到背景之前，否则短标签也会撑满。回归测试同时检查短标签的左边缘和背景右侧留白，再用真实完成弹窗的深浅色截图确认与正文对齐。
+
 ## Compiler-free English catalog keys (#5090)
 
 Changing the catalog's development language also changes the identity the Swift compiler extracts. Preserve each colliding English translation in its own contextual key and keep explicit English values; do not merge different Chinese or Japanese meanings. Reorder interpolation expressions together with translated argument numbers, and audit reordered expressions for side effects. Named App Intent parameters follow their names, not their old position.
