@@ -99,9 +99,9 @@ class HubChatRepository(
                         entry.realtime.screen(event, entry.reducer.items)
                         if (event.status in listOf("idle", "done", "offline", "blocked")) entry.stopRequested = false
                     }
+                    // Every open session records the call, but only the one showing its row is rebuilt (#5341).
                     is ToolCallEvent -> retainedEntries().forEach { entry -> entry.lock.withLock {
-                        entry.realtime.tool(event)
-                        publish(entry)
+                        if (entry.realtime.tool(event, entry.reducer.items)) publish(entry)
                     } }
                     is HookEvent -> update(SessionKey(event.machineId, event.sessionId)) { entry ->
                         if (event.event == "Stop") {

@@ -82,3 +82,34 @@ func TestCallKeepsOtherRefusals(t *testing.T) {
 		t.Error("a plain error is changed")
 	}
 }
+
+// Status codes and retryability stay stable; only exact standard status text is translated for an explicit locale.
+func TestStandardStatusTextLocalization(t *testing.T) {
+	for status, key := range standardStatusKeys {
+		for _, lang := range []i18n.Lang{i18n.En, i18n.ZhHans, i18n.Ja, ""} {
+			rec := httptest.NewRecorder()
+			original := errors.New(http.StatusText(status))
+			Write(langWriter{rec, lang}, status, original)
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			want := original.Error()
+			if lang != "" {
+				want = i18n.T(lang, key)
+			}
+			if body["error"] != want || body["code"] != Body(status, "", original)["code"] || rec.Code != status {
+				t.Fatalf("%d %s: %v, want %q", status, lang, body, want)
+			}
+		}
+	}
+	rec := httptest.NewRecorder()
+	Write(langWriter{rec, i18n.Ja}, 404, errors.New("custom diagnostic"))
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["error"] != "custom diagnostic" {
+		t.Fatalf("custom text changed: %v", body)
+	}
+}

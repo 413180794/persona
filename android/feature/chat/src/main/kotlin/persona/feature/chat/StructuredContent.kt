@@ -99,6 +99,10 @@ private fun MessageParts(parts: List<MessagePart>, user: Boolean, id: String, on
     }
 }
 
+/** What each of a bubble's [items] reads now: its live or full text from [updates], else its own. */
+internal fun bubbleTexts(items: List<Item>, updates: Map<String, ChatTextUpdate>): List<String> =
+    items.map { updates[it.id]?.text ?: it.text.orEmpty() }
+
 /** The time under your message, in the app's language: 14:30 · 2:30 PM; null when [ts] is not a time. */
 internal fun userBubbleTime(ts: String, locale: java.util.Locale, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String? =
     persona.core.contracts.parseTime(ts)?.let { LocalizedFormats.format(it, LocalizedFormats.TIME, locale, zone) }
@@ -111,7 +115,9 @@ internal fun userBubbleTime(ts: String, locale: java.util.Locale, zone: java.tim
 @Composable
 internal fun MergedUserBubble(items: List<Item>, updates: Map<String, ChatTextUpdate> = emptyMap(),
     onLastLine: ((Int) -> Unit)? = null, images: (@Composable () -> Unit)? = null, menu: Boolean = true) {
-    val models = remember(items, updates) { items.map { messageModel(updates[it.id]?.text ?: it.text.orEmpty(), it.from, user = true) } }
+    // Keyed on this bubble's own texts: [updates] is the whole chat's, and changes with every streamed chunk of a reply.
+    val texts = bubbleTexts(items, updates)
+    val models = remember(items, texts) { items.mapIndexed { index, item -> messageModel(texts[index], item.from, user = true) } }
     val parts = remember(models) { models.flatMap { it.parts } }
     val contexts = remember(models) { models.flatMap { it.contexts } }
     val photos = remember(models) { models.flatMap { it.images }.distinct() }

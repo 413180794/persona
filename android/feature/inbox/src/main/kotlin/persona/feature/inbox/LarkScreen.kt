@@ -201,6 +201,9 @@ internal fun LarkBubble(
             else message.parts.filterIsInstance<LarkPart.Text>().joinToString("\n") { it.text }, modifier)
         return
     }
+    // A recalled message 防撤回 kept takes no reaction, reply or card write (docs/protocol.md, `retained`), as on iOS.
+    val react = onReact.takeUnless { message.recalled }
+    val openReactionPicker = onOpenReactionPicker.takeUnless { message.recalled }
     var menuExpanded by remember { mutableStateOf(false) }
     var showingHistory by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -221,7 +224,7 @@ internal fun LarkBubble(
                 }
                 message.parts.forEach { part ->
                     LarkPartContent(
-                        part = part,
+                        part = if (message.recalled && part is LarkPart.Card) part.copy(messageId = null) else part,
                         repository = repository,
                         onError = onError,
                         onOpenForward = onOpenForward,
@@ -248,8 +251,8 @@ internal fun LarkBubble(
                 message = message,
                 expanded = menuExpanded,
                 onDismiss = { menuExpanded = false },
-                onReact = { key -> onReact?.invoke(message, key, false) },
-                onOpenPicker = { onOpenReactionPicker?.invoke(message) },
+                onReact = react?.let { r -> { key -> r(message, key, false) } },
+                onOpenPicker = openReactionPicker?.let { open -> { open(message) } },
                 onOpenProfile = if (message.senderId.isNotBlank() && onProfile != null) ({
                     onProfile(LarkPersonRef(message.senderId, message.senderName, message.avatar, feedId))
                 }) else null,
@@ -267,11 +270,11 @@ internal fun LarkBubble(
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
             // 设置 › 翻译: under the bubble, as on iOS.
             LarkTranslationLine(message, feedId)
-            if (message.reactions.isNotEmpty() && onReact != null && onOpenReactionPicker != null) {
+            if (message.reactions.isNotEmpty() && react != null && openReactionPicker != null) {
                 LarkReactionRow(
                     reactions = message.reactions,
-                    onToggleReaction = { key, isMine -> onReact(message, key, isMine) },
-                    onOpenPicker = { onOpenReactionPicker(message) }
+                    onToggleReaction = { key, isMine -> react(message, key, isMine) },
+                    onOpenPicker = { openReactionPicker(message) }
                 )
             }
             if (message.mine) Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -279,7 +282,7 @@ internal fun LarkBubble(
                 Text(larkTime(message.time, currentLocale), style = PersonaTheme.type.micro, color = PersonaTheme.palette.ink3)
             }
             if (message.bot) JTag(stringResource(R.string.inbox_bot))
-            if (message.replyCount > 0 && onThread != null) {
+            if (message.replyCount > 0 && onThread != null && !message.recalled) {
                 JTextButton(pluralStringResource(R.plurals.inbox_lark_replies, message.replyCount.toQuantity(), message.replyCount), onClick = onThread)
             }
             val pending = message.pendingDelivery?.pendingStatus()

@@ -36,8 +36,29 @@ func WriteCode(w http.ResponseWriter, status int, code string, err error) {
 	body := Body(status, code, err)
 	if l := i18n.OfWriter(w); l != "" {
 		body["error"] = i18n.Localize(err, l)
+		// Only exact standard status text is ours to translate; arbitrary server/node details remain untouched.
+		if key, ok := standardStatusKeys[status]; ok && err.Error() == http.StatusText(status) {
+			body["error"] = i18n.T(l, key)
+		}
 	}
 	WriteBody(w, status, body)
+}
+
+var standardStatusKeys = map[int]string{
+	http.StatusBadRequest:            "http-status.bad_request",
+	http.StatusUnauthorized:          "http-status.unauthorized",
+	http.StatusForbidden:             "http-status.forbidden",
+	http.StatusNotFound:              "http-status.not_found",
+	http.StatusMethodNotAllowed:      "http-status.method_not_allowed",
+	http.StatusRequestTimeout:        "http-status.timeout",
+	http.StatusConflict:              "http-status.conflict",
+	http.StatusGone:                  "http-status.gone",
+	http.StatusRequestEntityTooLarge: "http-status.too_large",
+	http.StatusTooManyRequests:       "http-status.rate_limited",
+	http.StatusInternalServerError:   "http-status.internal",
+	http.StatusBadGateway:            "http-status.bad_gateway",
+	http.StatusServiceUnavailable:    "http-status.unavailable",
+	http.StatusGatewayTimeout:        "http-status.timeout",
 }
 
 func WriteBody(w http.ResponseWriter, status int, body map[string]any) {

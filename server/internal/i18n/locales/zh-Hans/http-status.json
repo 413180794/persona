@@ -1,0 +1,15 @@
+{
+  "bad_request": "请求无效。",
+  "unauthorized": "请重新登录。",
+  "forbidden": "你没有执行此操作的权限。",
+  "not_found": "找不到请求的内容。",
+  "method_not_allowed": "当前操作不受支持。",
+  "timeout": "请求超时，请重试。",
+  "conflict": "当前状态已变化，请刷新后重试。",
+  "gone": "这项内容已不可用。",
+  "too_large": "请求的内容太大。",
+  "rate_limited": "请求过于频繁，请稍后重试。",
+  "internal": "hub 遇到了错误，请稍后重试。",
+  "bad_gateway": "hub 无法连接上游服务。",
+  "unavailable": "服务暂时不可用，请稍后重试。"
+}

@@ -1,0 +1,15 @@
+{
+  "bad_request": "The request is invalid.",
+  "unauthorized": "Please sign in again.",
+  "forbidden": "You do not have permission for this operation.",
+  "not_found": "The requested resource was not found.",
+  "method_not_allowed": "This operation is not supported.",
+  "timeout": "The request timed out. Please try again.",
+  "conflict": "The request conflicts with the current state. Refresh and try again.",
+  "gone": "This resource is no longer available.",
+  "too_large": "The request is too large.",
+  "rate_limited": "Too many requests. Please try again later.",
+  "internal": "The hub encountered an error. Please try again later.",
+  "bad_gateway": "The hub could not reach the upstream service.",
+  "unavailable": "The service is unavailable. Please try again later."
+}

@@ -624,3 +624,9 @@ hub 自更新原来只下「这一刻 hub 已经知道平台的机器」用到�
   这类查询用 `pgx.QueryExecModeExec`（无名语句、每次带着值规划），回归 `TestInteractionsNotCached`。别在连接池上全局改 `plan_cache_mode`：那会让所有语句都每次重新规划。
 - 用拼出来的键 LEFT JOIN（`s.key = 'node_model.' || n.machine_id || '.' || n.session_id`）时，规划器可能把整张 `settings` 做成哈希表；`settings` 给每个启动过的会话都留一行，越来越大。
   改成按行的标量子查询走 `settings_pkey`（`nodeSessionsSQL`）。jsonb 整块取回在 Go 里解：在外层 SELECT 里逐个取字段会让子查询每个字段跑一次。
+
+## ServeMux fallback needs its own response locale
+
+Unmatched API routes and method mismatches run outside matched handlers' request logging middleware. Passing the underlying writer to `apierr` therefore loses the locale even when `Accept-Language` is present. Wrap only the fallback writer with the request's resolved locale, preserving status, `Allow`, and the JSON error code; leave matched handlers and streams unchanged.
+
+Translate only an exact standard HTTP status phrase at this boundary. Custom node/server diagnostics must not be guessed from a status code. A request without a locale retains the old English status phrase. Cover 404 and 405 through the real router, not only by calling the formatter directly.

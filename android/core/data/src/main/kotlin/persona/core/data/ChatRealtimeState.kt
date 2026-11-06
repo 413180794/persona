@@ -36,10 +36,14 @@ internal class ChatRealtimeState(private val key: SessionKey) {
         }
     }
 
-    fun tool(event: ToolCallEvent) {
-        // Calls have no session identity and may precede their transcript row.
+    /**
+     * Records a call's name and arguments; true when [transcript] already has its row, so the session must be redrawn.
+     * Calls have no session identity and may precede their transcript row: then the row picks them up when it arrives.
+     */
+    fun tool(event: ToolCallEvent, transcript: List<Item>): Boolean {
         tools[event.callId] = event
         if (tools.size > 128) tools.remove(tools.keys.first())
+        return transcript.any { it.kind == "tool_use" && it.toolUseId == event.callId }
     }
 
     fun reset() {

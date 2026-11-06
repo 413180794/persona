@@ -3,8 +3,13 @@ package persona.core.data
 import persona.core.contracts.DeltaEvent
 import persona.core.contracts.Item
 import persona.core.contracts.SessionKey
+import persona.core.contracts.ToolCallEvent
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 
 class ChatRealtimeStateTest {
     private val key = SessionKey("m1", "s1")
@@ -22,5 +27,23 @@ class ChatRealtimeStateTest {
         val rows = state.items(listOf(user, cut)).filter { it.role == "assistant" && it.kind == "text" }
 
         assertEquals(listOf(cut.text), rows.map { it.text })
+    }
+
+    @Test
+    fun `a tool call redraws only the session that shows its row`() {
+        val state = ChatRealtimeState(key)
+        val other = Item("t1#0", 1, role = "assistant", kind = "tool_use", toolUseId = "other-call")
+        val args = buildJsonObject { put("query", "example") }
+
+        // Another session's call: kept for a row that may still come, nothing here to redraw.
+        assertFalse(state.tool(ToolCallEvent("call", "phone_example", args), listOf(other)))
+        val row = Item("t2#0", 2, role = "assistant", kind = "tool_use", toolUseId = "call")
+        assertEquals("phone_example", state.items(listOf(other, row)).last().toolName)
+
+        // This session's call names a row already on screen.
+        assertTrue(state.tool(ToolCallEvent("call", "phone_updated", args), listOf(other, row)))
+        assertEquals("phone_updated", state.items(listOf(other, row)).last().toolName)
+        // A text item with the same id is not the call's row.
+        assertFalse(state.tool(ToolCallEvent("t3", "x"), listOf(Item("t3#0", 3, role = "assistant", kind = "text", toolUseId = "t3"))))
     }
 }

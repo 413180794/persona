@@ -181,3 +181,37 @@ func localRequest(method, path string) *http.Request {
 	r.RemoteAddr = "127.0.0.1:1234"
 	return r
 }
+
+// Undeclared paths bypass matched route middleware; their 404/405 still use the first request language.
+func TestFallbackRouteLanguage(t *testing.T) {
+	h := newTestHub(t)
+	handler := h.routes()
+	for _, tc := range []struct{ header, notFound, notAllowed string }{
+		{"en", "The requested resource was not found.", "This operation is not supported."},
+		{"zh-Hans", "找不到请求的内容。", "当前操作不受支持。"},
+		{"ja-JP, en;q=0.8", "要求された内容が見つかりません。", "この操作はサポートされていません。"},
+		{"fr-FR, ja;q=0.8", "The requested resource was not found.", "This operation is not supported."},
+		{"", "Not Found", "Method Not Allowed"},
+	} {
+		for _, route := range []struct {
+			method, path, want string
+			status             int
+		}{
+			{"GET", "/api/v1/i18n-missing", tc.notFound, 404},
+			{"POST", "/api/v1/machines", tc.notAllowed, 405},
+		} {
+			req := localRequest(route.method, route.path)
+			req.Header.Set("Authorization", "Bearer "+h.cfg.Token)
+			req.Header.Set("Accept-Language", tc.header)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			body := errorResponse(t, rec)
+			if rec.Code != route.status || body["error"] != route.want {
+				t.Fatalf("%s %s %s: %d %v", tc.header, route.method, route.path, rec.Code, body)
+			}
+			if route.status == 405 && rec.Header().Get("Allow") != "GET, HEAD" {
+				t.Fatal("Allow header lost")
+			}
+		}
+	}
+}

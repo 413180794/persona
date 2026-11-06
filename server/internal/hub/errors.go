@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/nwverse/persona/server/internal/apierr"
+	"github.com/nwverse/persona/server/internal/i18n"
 )
 
 // The bodies are apierr's, shared with the assistant (internal/assistant), whose routes the hub relays.
@@ -28,12 +29,23 @@ func errorBody(status int, code string, err error) map[string]any {
 func jsonRouteErrors(mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, pattern := mux.Handler(r); pattern == "" {
-			mux.ServeHTTP(&routeErrorWriter{ResponseWriter: w}, r)
+			// ServeMux fallback runs outside the matched route's request logger, so retain the header locale here.
+			localized := routeLanguageWriter{ResponseWriter: w, language: i18n.FromRequest(r)}
+			mux.ServeHTTP(&routeErrorWriter{ResponseWriter: localized}, r)
 			return
 		}
 		mux.ServeHTTP(w, r)
 	})
 }
+
+type routeLanguageWriter struct {
+	http.ResponseWriter
+	language i18n.Lang
+}
+
+func (w routeLanguageWriter) Lang() i18n.Lang { return w.language }
+
+func (w routeLanguageWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 type routeErrorWriter struct {
 	http.ResponseWriter

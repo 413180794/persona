@@ -143,8 +143,9 @@ fun LarkMessageActionMenu(
     message: LarkMessage,
     expanded: Boolean,
     onDismiss: () -> Unit,
-    onReact: (String) -> Unit,
-    onOpenPicker: () -> Unit,
+    /** The quick reaction bar, where the message takes reactions (not a recalled one). */
+    onReact: ((String) -> Unit)?,
+    onOpenPicker: (() -> Unit)?,
     onOpenProfile: (() -> Unit)? = null,
     onCopy: () -> Unit,
     onAddPin: (() -> Unit)? = null,
@@ -162,7 +163,7 @@ fun LarkMessageActionMenu(
         modifier = Modifier.background(palette.surfaceStrong).border(1.dp, palette.ink.copy(alpha = 0.08f), RoundedCornerShape(Tokens.Radius.card))
     ) {
         // Quick reaction bar
-        Row(
+        if (onReact != null && onOpenPicker != null) Row(
             Modifier.padding(horizontal = Tokens.Space.s, vertical = Tokens.Space.xs),
             horizontalArrangement = Arrangement.spacedBy(Tokens.Space.xs),
             verticalAlignment = Alignment.CenterVertically
@@ -197,7 +198,7 @@ fun LarkMessageActionMenu(
             }
         }
 
-        HorizontalDivider(color = palette.ink.copy(alpha = 0.08f))
+        if (onReact != null && onOpenPicker != null) HorizontalDivider(color = palette.ink.copy(alpha = 0.08f))
 
         // Copy
         DropdownMenuItem(
