@@ -8,7 +8,7 @@ import { errorText } from "../../lib/api";
 import { ago } from "../../lib/format";
 import {
   addMarket, agreeLabel, canUninstall, getCatalog, installPreview, isGitMarket, itemLine, itemState, listMarkets, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, previewFromMarket,
-  previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallExtension, upgradePreview,
+  previewVersion, refreshMarket, removeMarket, setMarketToken, specLabel, uninstallExtension, upgradePreview, wantsGitHubToken,
   type Catalog, type CatalogItem, type Market, type MarketPreview,
 } from "../../lib/extension-market";
 import { extensionDetail, extensionUpgrades, pointText, setExtensionUpgrades, type ExtensionPermission } from "../../lib/extensions";
@@ -49,6 +49,18 @@ function Problem({ text, onRetry, busy }: { text: string; onRetry: () => void; b
 
 const STATE_TONE = { accent: "accent", green: "green", orange: "orange", red: "red", gray: undefined } as const;
 
+/** Under a GitHub market's read error: why a token helps, and the way to add it (the markets' own dialog). */
+function TokenHint({ onFix }: { onFix: () => void }) {
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      <p className="min-w-[200px] flex-1 text-[11.5px] leading-relaxed text-ink-3">{t("settings-extensionmarket.token_rate_limit_hint")}</p>
+      <Button tone="secondary" icon="key" onClick={onFix} className="shrink-0">
+        {t("settings-extensionmarket.set_token")}
+      </Button>
+    </div>
+  );
+}
+
 // ── the catalog ─────────────────────────────────────────
 
 export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => void; onOpen: (it: CatalogItem) => void; onMarkets: () => void }) {
@@ -57,6 +69,7 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
   const [data, setData] = useState<Catalog | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tokenFor, setTokenFor] = useState<Market | null>(null);
   const seq = useRef(0);
   const load = (refresh = false) => {
     const n = ++seq.current;
@@ -131,17 +144,29 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
         </div>
       )}
       {broken.map((m) =>
-        // the official market not reachable is the network's, not something a newcomer fixes with a token (docs/onboarding.md 4.5)
+        // the official market out of reach is the network's, grey not red and no token asked of a newcomer here
+        // (docs/onboarding.md 4.5); the hub reads it elsewhere when GitHub rate-limits it, and for whoever still wants a
+        // token a quiet way to the markets page, where it is set
         m.official ? (
-          <p key={m.id} title={m.error} className="mb-3 flex items-start gap-2 px-1 text-[12px] leading-relaxed text-ink-3">
-            <Icon name="info" size={13} className="mt-0.5 shrink-0" />
-            {t("settings-extensionmarket.official_unreachable")}
-          </p>
+          <div key={m.id} className="mb-3">
+            <p title={m.error} className="flex items-start gap-2 px-1 text-[12px] leading-relaxed text-ink-3">
+              <Icon name="info" size={13} className="mt-0.5 shrink-0" />
+              {t("settings-extensionmarket.official_unreachable")}
+            </p>
+            {wantsGitHubToken(m) && (
+              <button type="button" onClick={onMarkets} className="mt-1 block max-w-full truncate pr-1 pl-[25px] text-[11.5px] text-ink-3 underline underline-offset-2 hover:text-ink-2">
+                {t("settings-extensionmarket.official_token_link")}
+              </button>
+            )}
+          </div>
         ) : (
-          <p key={m.id} className="mb-3 flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">
-            <Icon name="info" size={13} className="mt-0.5 shrink-0" />
-            {t("settings-extensionmarket.market_unreadable", { name: m.name, error: m.error ?? "" })}
-          </p>
+          <div key={m.id} className="mb-3">
+            <p className="flex items-start gap-2 rounded-[8px] bg-red-tint px-3 py-2 text-[12px] leading-relaxed break-words text-red">
+              <Icon name="info" size={13} className="mt-0.5 shrink-0" />
+              {t("settings-extensionmarket.market_unreadable", { name: m.name, error: m.error ?? "" })}
+            </p>
+            {wantsGitHubToken(m) && <TokenHint onFix={() => setTokenFor(m)} />}
+          </div>
         ),
       )}
 
@@ -202,6 +227,16 @@ export function MarketCatalog({ onBack, onOpen, onMarkets }: { onBack: () => voi
           );
         })}
       </Group>
+      {tokenFor && (
+        <TokenDialog
+          market={tokenFor}
+          onClose={() => setTokenFor(null)}
+          onDone={() => {
+            setTokenFor(null);
+            load();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -723,6 +758,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
                 ) : (
                   <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("settings-extensionmarket.market_error", { error: m.error })}</p>
                 ))}
+                {m.error && wantsGitHubToken(m) && <TokenHint onFix={() => setTokenFor(m)} />}
                 {(m.warnings ?? []).map((w) => (
                   <p key={w} className="mt-1 flex items-start gap-1.5 text-[11.5px] leading-snug break-words text-orange">
                     <Icon name="info" size={12} className="mt-0.5 shrink-0" />
@@ -735,7 +771,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
               <Button tone="secondary" icon="retry" busy={busy[m.id] === "refresh"} disabled={!!busy[m.id]} onClick={() => void work(m, "refresh")}>
                 {t("settings-extensionmarket.reload")}
               </Button>
-              {!isGitMarket(m.spec) && !(m.official && !m.has_token) && (
+              {!isGitMarket(m.spec) && !(m.error && wantsGitHubToken(m)) && (
                 <Button tone="secondary" icon="key" disabled={!!busy[m.id]} onClick={() => setTokenFor(m)}>
                   {m.has_token ? t("settings-extensionmarket.change_token") : t("settings-extensionmarket.set_token")}
                 </Button>
@@ -776,6 +812,7 @@ export function Markets({ onBack }: { onBack: () => void }) {
           onDone={(m) => {
             put(m);
             setTokenFor(null);
+            load();
           }}
         />
       )}

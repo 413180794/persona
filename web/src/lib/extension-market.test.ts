@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   addMarket, agreeLabel, canUninstall, catalogQuery, getCatalog, installPreview, isGitMarket, itemLine, itemState, listMarkets, MARKET_SPEC_HINT, marketKind, marketLine, marketOf,
-  extensionsRoute, previewFromMarket, previewVersion, refreshMarket, removeMarket, routeSub, setMarketToken, specLabel, uninstallExtension, upgradePreview,
+  extensionsRoute, previewFromMarket, previewVersion, refreshMarket, removeMarket, routeSub, setMarketToken, specLabel, uninstallExtension, upgradePreview, wantsGitHubToken,
   type CatalogItem, type Market, type MarketPreview, type ExtensionsRoute,
 } from "./extension-market";
 
@@ -44,6 +44,13 @@ describe("市场的规矩", () => {
     expect(["github:example/x", "git@example.com:a/b.git", "https://example.com/"].map(marketKind)).toEqual(["github", "git", "web"]);
     expect(specLabel("git:ssh://git@example.com/team/extensions.git")).toBe("ssh://git@example.com/team/extensions.git");
     for (const w of ["https", "github:owner/repo", "git:"]) expect(MARKET_SPEC_HINT).toContain(w);
+  });
+  it("wants a token for a GitHub market without one", () => {
+    const base = { id: "m1", name: "x", extensions: 0 };
+    expect(wantsGitHubToken({ ...base, spec: "github:example/x", has_token: false })).toBe(true);
+    expect(wantsGitHubToken({ ...base, spec: "github:example/x", has_token: true })).toBe(false);
+    expect(wantsGitHubToken({ ...base, spec: "https://example.com/persona-extensions.json", has_token: false })).toBe(false);
+    expect(wantsGitHubToken({ ...base, spec: "git:git@example.com:team/extensions.git", has_token: false })).toBe(false);
   });
   it("words a market and a preview", () => {
     const m: Market = { id: "m1", spec: "github:example/x", name: "x", has_token: true, extensions: 3, fetched_at: "2026-11-04T06:00:00Z" };

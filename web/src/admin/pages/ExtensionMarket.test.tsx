@@ -56,6 +56,8 @@ const open = async () => {
 };
 
 const official = (error?: string): Market => ({ id: "official", name: "github:nwverse/persona-extensions", spec: "github:nwverse/persona-extensions", official: true, extensions: 0, error } as Market);
+const github = (id: string, error?: string): Market => ({ id, name: id, spec: "github:example/extensions", extensions: 0, error } as Market);
+const button = (label: string) => [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(label));
 
 describe("the admin page's markets", () => {
   it("shows the official market out of reach in grey, with the reason on hover", async () => {
@@ -70,6 +72,9 @@ describe("the admin page's markets", () => {
     expect(host.querySelector(".text-red")).toBeNull();
     expect(text()).toContain("市场暂时读不到，读到后扩展会列在这里");
     expect(text()).not.toContain("这里还没有扩展");
+    // the official market is the GitHub one most likely to hit the shared rate limit: its error still offers a token
+    expect(text()).toContain("GitHub 不带 token 时每小时只能读 60 次");
+    expect(button("填 token")).toBeTruthy();
   });
 
   it("keeps another market's error red", async () => {
@@ -77,6 +82,24 @@ describe("the admin page's markets", () => {
     await open();
     expect(text()).toContain("读不到：HTTP 404");
     expect(host.querySelector(".text-red")).not.toBeNull();
+    expect(text()).not.toContain("GitHub 不带 token 时每小时只能读 60 次");
+  });
+
+  it("offers a token under a GitHub market's error, and opens its dialog", async () => {
+    markets = [github("team", "HTTP 403")];
+    await open();
+    expect(text()).toContain("GitHub 不带 token 时每小时只能读 60 次");
+    const fix = button("填 token");
+    expect(fix).toBeTruthy();
+    act(() => fix!.click());
+    await flush();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("「team」的 token");
+  });
+
+  it("does not offer a token when the GitHub market has one", async () => {
+    markets = [{ ...github("team", "HTTP 403"), has_token: true }];
+    await open();
+    expect(text()).not.toContain("GitHub 不带 token 时每小时只能读 60 次");
   });
 
   it("says there are no extensions when every market was read", async () => {

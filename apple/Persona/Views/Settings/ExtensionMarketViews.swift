@@ -5,6 +5,7 @@ import SwiftUI
 /// themselves are one tap away (市场).
 struct ExtensionMarketView: View {
     @State private var page = ExtensionMarketModel()
+    @State private var tokenFor: ExtensionMarket?
 
     var body: some View {
         SettingsForm {
@@ -24,6 +25,21 @@ struct ExtensionMarketView: View {
                         Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution)
                     }
                     .font(Theme.Font.label)
+                    // Most often GitHub's limit for a network without a token: the fix right where it shows. Not for the
+                    // official market, which asks nothing of a newcomer here (docs/onboarding.md 4.5): the hub reads it
+                    // elsewhere when GitHub rate-limits it, and a quiet way to 市场 is there for whoever wants a token.
+                    if m.wantsGitHubToken && m.official == true {
+                        NavigationLink(value: SettingsPage.pluginMarkets) {
+                            Text("被限流了？去「市场」填一个 GitHub token").font(Theme.Font.label).foregroundStyle(.secondary).lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .accessibilityIdentifier("market-error-official-token-\(m.id)")
+                    } else if m.wantsGitHubToken {
+                        Button { tokenFor = m } label: { Text("填 token").lineLimit(1) }
+                            .accessibilityIdentifier("market-error-token-\(m.id)")
+                    }
+                } footer: {
+                    if m.wantsGitHubToken && m.official != true { Text(ExtensionMarketText.gitHubTokenHint) }
                 }
             }
             if let items = page.items {
@@ -98,6 +114,13 @@ struct ExtensionMarketView: View {
             await page.load()
         }
         .refreshable { await page.load(refresh: true) }
+        .sheet(item: $tokenFor) { m in
+            MarketTokenSheet(title: String(localized: "「\(m.title)」的 token"), asksSpec: false, hasToken: m.hasToken) { _, token in
+                if let why = await page.setToken(m.id, token: token) { return why }
+                await page.load()
+                return nil
+            }
+        }
     }
 
     private var marketChips: some View {
@@ -554,7 +577,7 @@ struct ExtensionMarketsView: View {
             if page.markets.isEmpty && !page.loading && page.error == nil {
                 Section {
                     EmptyStateView(symbol: Theme.Icon.pluginMarket, title: String(localized: "还没有扩展市场"),
-                                   message: String(localized: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。"),
+                                   message: String(localized: "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token，公开的填了也不容易被 GitHub 限流），或 git:…（用 hub 机器的 SSH 凭据）。"),
                                    action: (String(localized: "添加市场"), { adding = true }))
                 }
                 .listRowBackground(Color.clear)
@@ -645,6 +668,9 @@ private struct MarketRow: View {
                 Label { Text(e) } icon: { Image(systemName: Theme.Icon.error) }
                     .font(Theme.Font.label)
                     .foregroundStyle(Theme.danger)
+                if market.wantsGitHubToken {
+                    Text(ExtensionMarketText.gitHubTokenHint).font(Theme.Font.label).foregroundStyle(.secondary)
+                }
             }
             ForEach(market.warnings ?? [], id: \.self) { w in
                 Label { Text(w) } icon: { Image(systemName: Theme.Icon.error).foregroundStyle(Theme.caution) }
@@ -716,7 +742,7 @@ private struct MarketTokenSheet: View {
                 } header: {
                     SettingsHeading(asksSpec ? String(localized: "Token（可选）") : "Token")
                 } footer: {
-                    Text("私有仓库用只读的 token（GitHub：这个仓库的 Contents 读权限）。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。")
+                    Text("GitHub 市场：私有仓库要一个只读 token（这个仓库的 Contents 读权限）；公开仓库填一个也有用，读的额度从每小时 60 次（整个网络共用）提到 5000 次，选 Public repositories、不勾权限就行。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。")
                 }
                 if !asksSpec && hasToken {
                     Section {

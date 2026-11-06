@@ -613,6 +613,7 @@ personad extension market add <spec> [--token | --token-from=<市场 id>]
                                                      --token：token 从标准输入读；--token-from：用已登记的那个市场的 token（不显示）
 personad extension market set-spec <id> <spec>       市场搬了地址（仓库改名）：id 不变，从它装的还算它的，见「命名和兼容」
 personad extension market remove <id> | refresh <id>
+personad extension market token <id> [--clear]       换 token（从标准输入读，不回显）并重读；--clear 去掉。公开的 GitHub 市场填一个也有用，见「扩展市场」「GitHub 限流」
 personad extension market trust <id>                 市场换了签名的 key（或不再签名）：和发布方确认过再接受，见「扩展市场」「签名」
 personad extension search [关键词]                   每条打印成 market:<市场 id>/<扩展 id>，带已装 / 可升级
 personad extension install market:<市场 id>/<扩展 id>  从市场装；已装的就是升级
@@ -643,6 +644,16 @@ personad extension pack [<目录>] [--platforms linux-amd64,…] [--out <目录>
 
 https 和 GitHub 市场只收 https。私有的 https / GitHub 市场填一个 **token**（GitHub 用只读的 fine-grained token：这个仓库的 Contents 读权限）：用 hub 的 `secret.key` 加密存，
 只以 `Authorization: Bearer` 发给市场自己的源（GitHub 市场是 API 的源），重定向到别的主机（Release 附件跳到的存储）不带；不回显。
+
+**GitHub 限流**：不带 token 时 GitHub API 每小时只给每个出口地址 60 次，家里所有设备共用一个公网地址，用完就是 403。所以：
+
+- **公开仓库也可以填 token**（fine-grained token 选 Public repositories、不勾任何权限），额度到每小时 5000 次。App / 网页在 GitHub 市场读不到、又没有 token 时，
+  报错下面直接给「填 token」和这段说明（官方市场例外：目录页不让新手在那里填，只给一行不显眼的链接通到「管理市场」，见 onboarding.md 4.5）；命令行 `personad extension market token <id>`（从标准输入读，`--clear` 去掉）。
+- **没有 token 时的备用地址**（`extension/market.go` 的 `githubFallback`）：API 回限流时，同一个文件改从不受 API 限额的地方读——仓库里的文件（索引、`.sig`、相对路径的包）
+  从 `raw.githubusercontent.com/<owner>/<repo>/<分支，默认 HEAD>/<路径>`，`release:` 附件从 `github.com/<owner>/<repo>/releases/download/<tag>/<附件>`。只有公开仓库在那里；
+  私有的回 404，照旧报限流 / 要 token。有 token 的市场永远只走 API（token 不发给别处）。读到的东西照旧验签名、按 sha256 校验包，换地方读不改变信任什么。
+  raw 每个文件各自缓存几分钟，刚推送后可能新索引配旧签名：整对重读一次还对不上就算**这次没读成**（上一份好的索引留着），不当成签名不对。
+- 不做条件请求（ETag / `If-None-Match`）：实测不带 token 的 304 照样扣 60 次的额度（GitHub 只对带凭据的 304 不计数），对最常碰到限流的情况没用。
 
 **索引**：
 

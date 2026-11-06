@@ -65,6 +65,7 @@
   "scheduled_task": "定时任务「{task}」",
   "asked_elsewhere": "在别处问：{asked}",
   "only_beginning": "（只发了开头，全文到 App 里看）",
+  "agent_done_note": "后台 Agent · {place}",
   "help_intro": "直接发消息就是和 Persona 说话（文字、图片、文件、转发的聊天记录都行）；回复我的某条消息，就是接着那段对话说。\n\n",
   "help_main": "- `/main` 回到主对话\n- `/new` 开一段新对话（下一条消息开始）\n- `/list` 最近的对话，点一下切换\n",
   "help_agents": "- `/agents` 各台电脑上的 Agent，点一下就在这里和它聊\n- `/start` 在某台电脑上开一个新 Agent\n",

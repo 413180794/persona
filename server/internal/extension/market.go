@@ -278,15 +278,20 @@ type Market struct {
 	TrustedKey string
 	// Token, when set, is sent to the market's own origin only (a private repository or site).
 	Token string
-	// Client and GitHubAPI: tests replace them.
+	// Client, GitHubAPI, GitHubRaw and GitHubWeb: tests replace them. With GitHubAPI replaced and GitHubRaw not, a
+	// rate-limited read has nowhere else to go (githubFallback).
 	Client    *http.Client
 	GitHubAPI string
+	GitHubRaw string
+	GitHubWeb string
 	// Dir is where git markets' clones are kept (the hub's data directory).
 	Dir string
 	// Cache is where downloaded packages are kept by their sha256 ("": none), docs/protocol.md「扩展的安装、升级、卸载进度」.
 	Cache string
 	// allowLocal lets tests clone a local repository.
 	allowLocal bool
+	// viaFallback: some file of this read came from githubFallback's hosts.
+	viaFallback bool
 }
 
 func (m *Market) client() *http.Client {
@@ -332,9 +337,9 @@ func (m *Market) get(ctx context.Context, u, accept string, w io.Writer, limit i
 	case rateLimited(res):
 		msg := fmt.Sprintf("被限流了（HTTP %d）：%s再试", res.StatusCode, retryIn(res.Header, time.Now()))
 		if !sent && m.Spec.Kind == "github" {
-			msg += "；常用这个市场就填一个 token，额度更高"
+			msg += "；填一个 GitHub token 额度更高（公开仓库也适用）"
 		}
-		return errors.New(msg)
+		return errOfKind(ErrRateLimited, "%s", msg)
 	case (res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden) && !sent:
 		return fmt.Errorf("要登录才能读（HTTP %d）：填一个能读它的 token", res.StatusCode)
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
@@ -401,6 +406,58 @@ func sameOrigin(a, b string) bool {
 	return err1 == nil && err2 == nil && ua.Scheme == ub.Scheme && strings.EqualFold(ua.Host, ub.Host)
 }
 
+// ErrRateLimited: the market refused a request for its rate limit, not for rights.
+var ErrRateLimited = errors.New("rate limited")
+
+// githubFallback: when the API rate-limits a GitHub market read without a token (60 requests an hour for each
+// address, which every device behind one router shares), the same file is read where the API's limit does not
+// apply: raw.githubusercontent.com for files of the repository, github.com/…/releases/download for release assets.
+// Only public repositories are there; a private one says 404 and the API's answer stands. A market with a token
+// always uses the API (5000 an hour, and the token goes nowhere else). The index stays signed and every package
+// pinned by its sha256, so where they were read from changes nothing about what is trusted.
+func (m *Market) githubFallback() (raw, web string, ok bool) {
+	if m.Spec.Kind != "github" || m.Token != "" {
+		return "", "", false
+	}
+	raw, web = m.GitHubRaw, m.GitHubWeb
+	if m.GitHubAPI != "" && raw == "" { // a test's API: never the real raw host
+		return "", "", false
+	}
+	if raw == "" {
+		raw = "https://raw.githubusercontent.com"
+	}
+	if web == "" {
+		web = "https://github.com"
+	}
+	return strings.TrimSuffix(raw, "/"), strings.TrimSuffix(web, "/"), true
+}
+
+// getRepoFile reads a file of a GitHub market's repository through the API, and from raw.githubusercontent.com when
+// the API rate-limits a market without a token (githubFallback).
+func (m *Market) getRepoFile(ctx context.Context, p string, w io.Writer, limit int64) error {
+	err := m.get(ctx, m.contentsURL(p), "application/vnd.github.raw", w, limit)
+	raw, _, ok := m.githubFallback()
+	if !ok || !errors.Is(err, ErrRateLimited) {
+		return err
+	}
+	ref := m.Spec.Ref
+	if ref == "" {
+		ref = "HEAD" // the default branch
+	}
+	u := fmt.Sprintf("%s/%s/%s/%s/%s", raw, url.PathEscape(m.Spec.Owner), url.PathEscape(m.Spec.Repo), escapePath(ref), escapePath(p))
+	ferr := m.get(ctx, u, "", w, limit)
+	switch {
+	case ferr == nil:
+		m.viaFallback = true
+		return nil
+	case errors.As(ferr, new(notFound)):
+		// Not there: a file the repository does not have (the old index name, a signature), or a private repository,
+		// which a market without a token cannot read either way. Either is what the caller needs to hear.
+		return ferr
+	}
+	return err
+}
+
 // contentsURL is a file of a GitHub market's repository, through the API (works for private ones with a token).
 func (m *Market) contentsURL(p string) string {
 	u := fmt.Sprintf("%s/repos/%s/%s/contents/%s", m.api(), url.PathEscape(m.Spec.Owner), url.PathEscape(m.Spec.Repo), escapePath(p))
@@ -450,6 +507,11 @@ func (m *Market) FetchSigned(ctx context.Context) (*Fetched, error) {
 		var sf sigFile
 		if json.Unmarshal(sig, &sf) == nil && !signedByAny(raw, sf) {
 			raw, sig, err = m.fetchRaw(ctx)
+			// raw.githubusercontent.com caches each file for minutes, on its own: a new index can come with the old
+			// signature for a while. Not a read to judge the signature by; the last good index stays.
+			if err == nil && m.viaFallback && sig != nil && json.Unmarshal(sig, &sf) == nil && !signedByAny(raw, sf) {
+				err = errOfKind(ErrRateLimited, "GitHub 限流了，备用地址上的索引和签名暂时对不上：过几分钟再试；填一个 GitHub token 就不走备用地址")
+			}
 		}
 	}
 	if err != nil {
@@ -491,10 +553,10 @@ func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 			}
 		}
 	} else if m.Spec.Kind == "github" {
-		if err = m.get(ctx, m.contentsURL(IndexFile), "application/vnd.github.raw", &b, IndexMost); errors.As(err, new(notFound)) {
+		if err = m.getRepoFile(ctx, IndexFile, &b, IndexMost); errors.As(err, new(notFound)) {
 			b.Reset()
 			name = LegacyIndexFile
-			err = m.get(ctx, m.contentsURL(LegacyIndexFile), "application/vnd.github.raw", &b, IndexMost)
+			err = m.getRepoFile(ctx, LegacyIndexFile, &b, IndexMost)
 		}
 	} else {
 		name = m.Spec.URL
@@ -515,7 +577,7 @@ func (m *Market) fetchRaw(ctx context.Context) ([]byte, []byte, error) {
 			return []byte(b.String()), nil, nil
 		}
 	case "github":
-		if err = m.get(ctx, m.contentsURL(name+SigSuffix), "application/vnd.github.raw", &s, sigFileMost); errors.As(err, new(notFound)) {
+		if err = m.getRepoFile(ctx, name+SigSuffix, &s, sigFileMost); errors.As(err, new(notFound)) {
 			return []byte(b.String()), nil, nil
 		}
 	default:
@@ -615,6 +677,14 @@ func (m *Market) download(ctx context.Context, ref string, w io.Writer) (string,
 		var b strings.Builder
 		rel := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", m.api(), url.PathEscape(m.Spec.Owner), url.PathEscape(m.Spec.Repo), url.PathEscape(tag))
 		if err := m.get(ctx, rel, "application/vnd.github+json", &b, IndexMost); err != nil {
+			if _, web, ok := m.githubFallback(); ok && errors.Is(err, ErrRateLimited) {
+				// The download link of a public release's asset is not the API's: no limit, the sha256 still checks it.
+				u := fmt.Sprintf("%s/%s/%s/releases/download/%s/%s", web, url.PathEscape(m.Spec.Owner), url.PathEscape(m.Spec.Repo),
+					url.PathEscape(tag), url.PathEscape(asset))
+				if ferr := m.get(ctx, u, octet, w, PackageMost); ferr == nil {
+					return asset, nil
+				}
+			}
 			return "", fmt.Errorf("Release %s：%w", tag, err)
 		}
 		var r struct {
@@ -641,7 +711,7 @@ func (m *Market) download(ctx context.Context, ref string, w io.Writer) (string,
 			return clean, m.gitFile(clean, w, PackageMost)
 		}
 		if m.Spec.Kind == "github" {
-			return clean, m.get(ctx, m.contentsURL(clean), "application/vnd.github.raw", w, PackageMost)
+			return clean, m.getRepoFile(ctx, clean, w, PackageMost)
 		}
 		base, _ := url.Parse(m.Spec.URL)
 		u := base.ResolveReference(&url.URL{Path: clean})

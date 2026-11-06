@@ -150,6 +150,13 @@ export const isGitMarket = (spec: string) => /^(git:|git@|ssh:\/\/)/.test(spec.t
 /** The icon a market gets: its kind of source. */
 export const marketKind = (spec: string): "github" | "git" | "web" => (spec.startsWith("github:") ? "github" : isGitMarket(spec) ? "git" : "web");
 
+/**
+ * A GitHub market without a token: GitHub allows 60 reads an hour per public IP, shared by every device behind the
+ * same network, so this is the market an error leaves fixable here. A token raises the limit to 5,000, public repos
+ * included.
+ */
+export const wantsGitHubToken = (m: Pick<Market, "spec" | "has_token">) => m.spec.startsWith("github:") && !m.has_token;
+
 /** The words under the add form's address field, and its placeholder: the three ways to write one. */
 export const MARKET_SPEC_PLACEHOLDER = t("lib-extension-market.spec_placeholder");
 export const MARKET_SPEC_HINT = t("lib-extension-market.spec_hint");

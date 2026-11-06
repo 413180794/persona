@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/extension"
 )
 
 // personad plugin on the hub's machine: install (showing what it may do), list, configure, a secret from stdin,
@@ -74,5 +76,54 @@ func TestExtensionCommand(t *testing.T) {
 	run("", "uninstall", "example-notes")
 	if got := run("", "list"); strings.Contains(got, "example-notes") || !strings.Contains(got, cuaExtensionID) {
 		t.Fatal("gone; the built-in ones stay:", got)
+	}
+}
+
+// personad extension market token <id>: the token from stdin, the market read again with it; --clear takes it away.
+func TestExtensionMarketTokenCommand(t *testing.T) {
+	h, _, _ := marketHub(t)
+	gh := &fakeGitHub{files: map[string][]byte{extension.IndexFile: marketIndex(t, "Private")}}
+	srv := httptest.NewTLSServer(gh)
+	defer srv.Close()
+	h.extensions.markets.client, h.extensions.markets.githubAPI = srv.Client(), srv.URL
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hs := &http.Server{Handler: h.routes()}
+	go hs.Serve(ln)
+	t.Cleanup(func() { hs.Close() })
+	home := t.TempDir()
+	t.Setenv("PERSONA_HOME", home)
+	t.Setenv("JARVIS_HOME", "")
+	t.Setenv("PERSONA_LISTEN", "")
+	t.Setenv("JARVIS_LISTEN", "")
+	b, _ := json.Marshal(map[string]any{"listen": ln.Addr().String(), "token": h.cfg.Token})
+	if err := os.WriteFile(filepath.Join(home, "hub.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	run := func(stdin string, args ...string) (string, error) {
+		var out bytes.Buffer
+		err := ExtensionCommand(context.Background(), args, strings.NewReader(stdin), &out, &out)
+		return out.String(), err
+	}
+	if out, err := run("", "market", "add", "github:example/plugins"); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	id := extension.MarketID(extension.MarketSpec{Kind: "github", Owner: "example", Repo: "plugins"})
+	gh.mu.Lock()
+	gh.token = "ghp_secret"
+	gh.mu.Unlock()
+	if out, err := run("ghp_secret\n", "market", "token", id); err != nil || !strings.Contains(out, "已设 token") || strings.Contains(out, "ghp_secret") {
+		t.Fatalf("set: %v %q", err, out)
+	}
+	if _, err := run("\n", "market", "token", id); err == nil {
+		t.Fatal("an empty token was taken for --clear")
+	}
+	gh.mu.Lock()
+	gh.token = ""
+	gh.mu.Unlock()
+	if out, err := run("", "market", "token", id, "--clear"); err != nil || !strings.Contains(out, "已去掉 token") {
+		t.Fatalf("clear: %v %q", err, out)
 	}
 }

@@ -26,6 +26,13 @@ internal enum class CatalogStanding { Available, Installed, Upgradable, Installe
 /** What the page may do with a catalog extension. */
 internal enum class CatalogAction { Install, Upgrade, Uninstall }
 
+/**
+ * A GitHub market read without a token: GitHub allows 60 reads an hour per address, shared by every device on the
+ * same network, so offering it a read-only token is what gets the market read again (docs/extensions.md「扩展市场」).
+ */
+internal fun wantsGitHubToken(market: ExtensionMarket): Boolean =
+    !market.hasToken && market.spec.trim().startsWith("github:", ignoreCase = true)
+
 internal object CatalogText {
     fun standing(p: CatalogExtension): CatalogStanding = when {
         p.upgradable && p.problem.isNullOrBlank() -> CatalogStanding.Upgradable
@@ -113,6 +120,10 @@ internal data class CatalogState(
     val market: String? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    /** The market a token is on its way for. */
+    val tokenWorking: String? = null,
+    /** Why the last token change did not happen. */
+    val tokenError: String? = null,
 ) {
     val markets: List<ExtensionMarket> get() = catalog?.markets.orEmpty()
     val extensions: List<CatalogExtension> get() = catalog?.extensions.orEmpty()
@@ -127,6 +138,23 @@ internal class CatalogModel(private val api: ExtensionMarkets, private val res: 
     fun setQuery(query: String) = mutable.update { it.copy(query = query) }
 
     fun setMarket(market: String?) = mutable.update { it.copy(market = market) }
+
+    fun clearTokenError() = mutable.update { it.copy(tokenError = null) }
+
+    /** A new token, or "" to remove it; the hub reads the market again with it (a rate-limited GitHub market too). */
+    suspend fun setToken(id: String, token: String): Boolean {
+        if (state.value.tokenWorking != null) return false
+        mutable.update { it.copy(tokenWorking = id, tokenError = null) }
+        return try {
+            api.setMarketToken(id, token.trim())
+            load()
+            true
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            mutable.update { it.copy(tokenError = res.getString(R.string.settings_ext_market_token_not_changed, failureReasonText(error).resolve(res))) }
+            false
+        } finally { mutable.update { it.copy(tokenWorking = null) } }
+    }
 
     /** Reads the catalog for the query and market as they are; an older answer that comes in late is dropped. */
     suspend fun load(refresh: Boolean = false) {
@@ -397,6 +425,9 @@ internal class MarketsModel(private val api: ExtensionMarkets, private val res: 
     }
 
     fun clearAddError() = mutable.update { it.copy(addError = null) }
+
+    /** Puts away an error from an earlier action before the token sheet opens. */
+    fun clearActionError() = mutable.update { it.copy(actionError = null) }
 
     /** Turns auto-upgrades for all market extensions on or off; the switch shows what the hub then says. */
     suspend fun setAutoUpgrade(on: Boolean): Boolean {

@@ -54,6 +54,7 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   market set-spec <id> <spec>       the market moved (a renamed repository): same id, so what was installed from it
                                     stays its own
   market remove <id> | refresh <id>
+  market token <id> [--clear]       set the market's token (read from stdin) and read it again; --clear removes it
   market trust <id>                 accept a market's new signing key (or that it stopped signing) after checking
                                     with its publisher; a signature that does not verify is never accepted
   search [words]                    the markets' extensions
@@ -243,6 +244,34 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 				return err
 			}
 			fmt.Fprintf(stdout, "%s：%s，%d 个扩展（%s）\n", m.ID, m.Name, m.Extensions, m.Spec)
+			return nil
+		case "token":
+			if err := need(2); err != nil {
+				return err
+			}
+			tok := ""
+			if !flag("--clear") {
+				var err error
+				if tok, err = readSecret(stdin, stdout); err != nil {
+					return err
+				}
+				if strings.TrimSpace(tok) == "" {
+					return errors.New("token 是空的：要去掉 token 用 --clear")
+				}
+			}
+			var m MarketView
+			if err := c.do(ctx, "PUT", "/api/v1/extensions/-/markets/"+url.PathEscape(positional[1])+"/token", map[string]string{"token": tok}, &m); err != nil {
+				return err
+			}
+			state := "已去掉 token"
+			if m.HasToken {
+				state = "已设 token"
+			}
+			line := fmt.Sprintf("%s：%s，%s，%d 个扩展", m.ID, m.Name, state, m.Extensions)
+			if m.Error != "" {
+				line += "（" + m.Error + "）"
+			}
+			fmt.Fprintln(stdout, line)
 			return nil
 		case "trust":
 			if err := need(2); err != nil {

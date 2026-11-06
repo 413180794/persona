@@ -120,6 +120,27 @@ class ExtensionMarketStateTest {
         assertEquals("已安装，还缺：密钥「API Key」", CatalogText.installed(res, FakeMarket().installed, upgrade = false))
     }
 
+    @Test fun aGitHubMarketWithoutATokenWantsOne() {
+        assertTrue(wantsGitHubToken(marketB.copy(hasToken = false)))
+        assertFalse(wantsGitHubToken(marketB))
+        assertFalse(wantsGitHubToken(marketA))
+        assertFalse(wantsGitHubToken(marketA.copy(spec = "git:https://github.com/example/repo")))
+        assertTrue(wantsGitHubToken(marketA.copy(spec = " github:example/public ")))
+    }
+
+    @Test fun aTokenFromTheCatalogReadsTheMarketAgain() = runBlocking {
+        val api = FakeMarket()
+        val model = CatalogModel(api, res)
+        model.load()
+        assertTrue(model.setToken(marketB.id, "tok"))
+        assertTrue("token ${marketB.id} false" in api.calls)
+        assertTrue(api.calls.last().startsWith("catalog"))
+        assertNull(model.state.value.tokenError)
+        api.fail = HubFailure(HubError.Server, "token 不对", status = 400)
+        assertFalse(model.setToken(marketB.id, "bad"))
+        assertEquals("没有换成：token 不对", model.state.value.tokenError)
+    }
+
     @Test fun theCatalogSearchesAndNarrowsToAMarket() = runBlocking {
         val api = FakeMarket()
         val model = CatalogModel(api, res)

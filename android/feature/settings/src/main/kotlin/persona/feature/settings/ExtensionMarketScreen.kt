@@ -48,6 +48,8 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
     val model = remember(extensions, res) { CatalogModel(extensions, res) }
     val state by model.state.collectAsState()
     val scope = rememberCoroutineScope()
+    val feedback = LocalAppFeedback.current
+    var tokenFor by remember { mutableStateOf<ExtensionMarket?>(null) }
     // Typing waits a moment before asking the hub; the market filter asks at once.
     LaunchedEffect(model, state.query) { if (state.catalog != null) delay(SearchDelayMillis); model.load() }
     LaunchedEffect(model, state.market) { if (state.catalog != null) model.load() }
@@ -65,7 +67,10 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
                     onAction = { scope.launch { model.load() } })
             }
         }
-        marketProblems(state.markets.filter { state.market == null || it.id == state.market })
+        marketProblems(state.markets.filter { state.market == null || it.id == state.market }, state.tokenWorking, onMarkets) { market ->
+            model.clearTokenError()
+            tokenFor = market
+        }
         when {
             catalog == null && state.loading -> item("loading") { JLoading() }
             catalog != null && catalog.markets.isEmpty() -> item("no-markets") {
@@ -91,6 +96,18 @@ fun ExtensionMarketPage(extensions: ExtensionManagement?, onBack: () -> Unit, on
             item("footer") {
                 SettingsCaption(stringResource(R.string.settings_ext_market_footer),
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.m))
+            }
+        }
+    }
+    // A GitHub market's error can be fixed right here: the same token entry as 管理市场.
+    tokenFor?.let { market ->
+        TokenSheet(market, busy = state.tokenWorking == market.id, error = state.tokenError,
+            onDismiss = { tokenFor = null; model.clearTokenError() }) { token ->
+            scope.launch {
+                if (model.setToken(market.id, token)) {
+                    tokenFor = null
+                    feedback?.notice(res.getString(if (token.isBlank()) R.string.settings_ext_token_removed else R.string.settings_ext_token_changed))
+                }
             }
         }
     }
@@ -123,12 +140,42 @@ private fun MarketFilter(markets: List<ExtensionMarket>, selected: String?, onSe
 }
 
 /** A market the hub could not read, or read with entries it dropped. */
-private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>) {
+private fun LazyListScope.marketProblems(markets: List<ExtensionMarket>, working: String?, onMarkets: () -> Unit, onToken: (ExtensionMarket) -> Unit) {
     markets.forEach { market ->
         market.error?.takeIf { it.isNotBlank() }?.let { error ->
             item("market-error-${market.id}") {
-                JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                // The official market asks no token of a newcomer here (docs/onboarding.md 4.5): the hub reads it elsewhere
+                // when GitHub rate-limits it, and whoever still wants a token gets a quiet way to 管理市场, where it is set.
+                if (market.official) OfficialMarketError(market, error, onMarkets)
+                else MarketError(market, error, busy = working == market.id) { onToken(market) }
             }
+        }
+    }
+}
+
+/** The official market not read: why, and — without a token — a quiet way to the markets page. */
+@Composable
+private fun OfficialMarketError(market: ExtensionMarket, error: String, onMarkets: () -> Unit) {
+    Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), tone = InlineTone.Failed)
+        if (wantsGitHubToken(market)) {
+            JButton(stringResource(R.string.settings_ext_official_token_link), onMarkets, kind = JButtonKind.Quiet, size = JButtonSize.Small)
+        }
+    }
+}
+
+/**
+ * Why a market could not be read, and — for a GitHub market without a token — how to get past the hourly limit:
+ * the same token entry as 管理市场.
+ */
+@Composable
+private fun MarketError(market: ExtensionMarket, error: String, busy: Boolean, onToken: () -> Unit) {
+    Column(Modifier.padding(top = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), tone = InlineTone.Failed)
+        if (wantsGitHubToken(market)) {
+            SettingsCaption(stringResource(R.string.settings_ext_github_token_hint))
+            JButton(stringResource(R.string.settings_ext_github_token_fill), onToken, kind = JButtonKind.Secondary,
+                size = JButtonSize.Small, loading = busy)
         }
     }
 }
@@ -422,7 +469,10 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
             markets.forEach { market ->
                 market.error?.takeIf { it.isNotBlank() }?.let { error ->
                     item("market-error-${market.id}") {
-                        JInlineStatus(stringResource(R.string.settings_ext_labeled, market.label, error), Modifier.padding(top = Tokens.Space.s), tone = InlineTone.Failed)
+                        MarketError(market, error, busy = state.working == market.id) {
+                            model.clearActionError()
+                            tokenFor = market
+                        }
                     }
                 }
                 CatalogText.signatureProblem(res, market)?.let { problem ->
@@ -447,7 +497,10 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
             JAction(stringResource(R.string.settings_ext_market_reload), icon = PhIcons.ArrowClockwise, onClick = {
                 scope.launch { if (model.refresh(market.id)) feedback?.notice(res.getString(R.string.settings_ext_market_reloaded, market.label)) }
             }),
-            JAction(stringResource(if (market.hasToken) R.string.settings_ext_token_change else R.string.settings_ext_token_set), icon = PhIcons.Key, onClick = { tokenFor = market }),
+            JAction(stringResource(if (market.hasToken) R.string.settings_ext_token_change else R.string.settings_ext_token_set), icon = PhIcons.Key, onClick = {
+                model.clearActionError()
+                tokenFor = market
+            }),
             market.homepage?.takeIf { ExtensionViewText.isHttps(it) }?.let { url ->
                 JAction(stringResource(R.string.settings_ext_open_homepage), icon = PhIcons.ArrowSquareOut, onClick = { runCatching { uri.openUri(url) } })
             },
@@ -458,10 +511,14 @@ fun ExtensionMarketsPage(extensions: ExtensionManagement?, onBack: () -> Unit) {
         scope.launch { if (model.add(spec, token)) { adding = false; feedback?.notice(res.getString(R.string.settings_ext_market_added)) } }
     }
     tokenFor?.let { market ->
-        TokenSheet(market, busy = state.working == market.id, onDismiss = { tokenFor = null }) { token ->
+        TokenSheet(market, busy = state.working == market.id, error = state.actionError,
+            onDismiss = { tokenFor = null; model.clearActionError() }) { token ->
             scope.launch {
-                if (model.setToken(market.id, token)) { tokenFor = null; feedback?.notice(res.getString(if (token.isBlank()) R.string.settings_ext_token_removed else R.string.settings_ext_token_changed)) }
-                else tokenFor = null
+                if (model.setToken(market.id, token)) {
+                    tokenFor = null
+                    model.load()
+                    feedback?.notice(res.getString(if (token.isBlank()) R.string.settings_ext_token_removed else R.string.settings_ext_token_changed))
+                }
             }
         }
     }
@@ -496,7 +553,7 @@ private fun AddMarketSheet(state: MarketsState, onDismiss: () -> Unit, onAdd: (S
 }
 
 @Composable
-private fun TokenSheet(market: ExtensionMarket, busy: Boolean, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+private fun TokenSheet(market: ExtensionMarket, busy: Boolean, error: String? = null, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var token by remember(market.id) { mutableStateOf("") }
     JSheet(onDismiss, title = stringResource(if (market.hasToken) R.string.settings_ext_token_change else R.string.settings_ext_token_set), dismissible = !busy) {
         Column(Modifier.padding(vertical = Tokens.Space.s), verticalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
@@ -504,6 +561,7 @@ private fun TokenSheet(market: ExtensionMarket, busy: Boolean, onDismiss: () -> 
                 singleLine = true, enabled = !busy, visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
             SettingsCaption(stringResource(R.string.settings_ext_token_note, market.label))
+            error?.let { JInlineStatus(it, tone = InlineTone.Failed) }
             JButton(stringResource(R.string.settings_ext_save), { onSave(token) }, Modifier.fillMaxWidth(), loading = busy, enabled = !busy && token.isNotBlank())
             if (market.hasToken) JButton(stringResource(R.string.settings_ext_token_remove), { onSave("") }, Modifier.fillMaxWidth(), kind = JButtonKind.Destructive, enabled = !busy)
         }

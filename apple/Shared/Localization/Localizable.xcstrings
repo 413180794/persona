@@ -8648,6 +8648,28 @@
         }
       }
     },
+    "GitHub 不带 token 时每小时只能读 60 次，同一个网络里的设备共用这份额度。填一个 GitHub token 能到 5000 次，公开仓库也适用（fine-grained token 选 Public repositories，不用勾任何权限）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without a token, GitHub allows only 60 reads an hour, shared by every device on your network. A GitHub token raises that to 5,000, public repos included (a fine-grained token with Public repositories and no permissions is enough)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークンがないと、GitHubの読み取りは1時間あたり60回までで、同じネットワーク内のデバイスで共有されます。GitHubトークンを設定すると5,000回になり、公開リポジトリにも有効です（fine-grained tokenでPublic repositoriesを選び、権限は不要です）。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 不带 token 时每小时只能读 60 次，同一个网络里的设备共用这份额度。填一个 GitHub token 能到 5000 次，公开仓库也适用（fine-grained token 选 Public repositories，不用勾任何权限）。"
+          }
+        }
+      }
+    },
     "Gmail · Google 账号登录": {
       "localizations": {
         "en": {
@@ -37453,6 +37475,28 @@
         }
       }
     },
+    "填 token": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Token"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トークンを入力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填 token"
+          }
+        }
+      }
+    },
     "填「%@」": {
       "localizations": {
         "en": {
@@ -37475,24 +37519,24 @@
         }
       }
     },
-    "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。": {
+    "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token，公开的填了也不容易被 GitHub 限流），或 git:…（用 hub 机器的 SSH 凭据）。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter a market's address: an https://… index, github:owner/repo (a private repo needs a read-only token) or git:… (uses the hub machine's SSH credentials)."
+            "value": "Enter a market's address: an https://… index, github:owner/repo (a private repo needs a read-only token; a public one is rate-limited less by GitHub with one) or git:… (uses the hub machine's SSH credentials)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "マーケットのアドレスを入力します：https://…のインデックス、github:owner/repo（プライベートリポジトリには読み取り専用トークンが必要）、またはgit:…（ハブのマシンのSSH認証情報を使用）。"
+            "value": "マーケットのアドレスを入力します：https://…のインデックス、github:owner/repo（プライベートリポジトリには読み取り専用トークンが必要。公開リポジトリでもトークンがあればGitHubのレート制限を受けにくくなります）、またはgit:…（ハブのマシンのSSH認証情報を使用）。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token），或 git:…（用 hub 机器的 SSH 凭据）。"
+            "value": "填一个市场的地址：https://… 的索引、github:owner/repo（私有仓库要一个只读 token，公开的填了也不容易被 GitHub 限流），或 git:…（用 hub 机器的 SSH 凭据）。"
           }
         }
       }
@@ -78284,24 +78328,24 @@
         }
       }
     },
-    "私有仓库用只读的 token（GitHub：这个仓库的 Contents 读权限）。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。": {
+    "GitHub 市场：私有仓库要一个只读 token（这个仓库的 Contents 读权限）；公开仓库填一个也有用，读的额度从每小时 60 次（整个网络共用）提到 5000 次，选 Public repositories、不勾权限就行。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "For a private repo, use a read-only token (GitHub: read access to this repo's Contents). It's stored encrypted on the hub, sent only to the market itself, and not shown again once saved. git: markets use the hub machine's SSH credentials and don't need one."
+            "value": "GitHub markets: a private repo needs a read-only token (read access to this repo's Contents). A token helps a public repo too: it raises the limit from 60 reads an hour (shared by your whole network) to 5,000. Choose Public repositories with no permissions. It's stored encrypted on the hub, sent only to the market itself, and not shown again once saved. git: markets use the hub machine's SSH credentials and don't need one."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "プライベートリポジトリには読み取り専用トークンを使います（GitHub：このリポジトリのContentsの読み取り権限）。暗号化してハブに保存され、マーケット自身にのみ送られ、保存後は表示されません。git:マーケットはハブのマシンのSSH認証情報を使うので不要です。"
+            "value": "GitHubマーケット：プライベートリポジトリには読み取り専用トークンが必要です（このリポジトリのContentsの読み取り権限）。公開リポジトリでもトークンは役立ち、読み取りの上限が1時間あたり60回（ネットワーク全体で共有）から5,000回に上がります。Public repositoriesを選び、権限は付けなくてかまいません。暗号化してハブに保存され、マーケット自身にのみ送られ、保存後は表示されません。git:マーケットはハブのマシンのSSH認証情報を使うので不要です。"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "私有仓库用只读的 token（GitHub：这个仓库的 Contents 读权限）。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。"
+            "value": "GitHub 市场：私有仓库要一个只读 token（这个仓库的 Contents 读权限）；公开仓库填一个也有用，读的额度从每小时 60 次（整个网络共用）提到 5000 次，选 Public repositories、不勾权限就行。加密存在 hub 上，只发给市场自己，存好后不再显示。git: 市场用 hub 机器的 SSH 凭据，不用填。"
           }
         }
       }
@@ -83736,6 +83780,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "被屏蔽的目录不再扫描、不再记住，里面的会话不出现在 Agents（文件不动）；取消屏蔽后恢复。适合用单独 CLAUDE_CONFIG_DIR 跑 claude 的自动化脚本。默认目录不能屏蔽。"
+          }
+        }
+      }
+    },
+    "被限流了？去「市场」填一个 GitHub token": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate-limited? Add a GitHub token in Markets"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レート制限中？「マーケット」でGitHubトークンを設定"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被限流了？去「市场」填一个 GitHub token"
           }
         }
       }

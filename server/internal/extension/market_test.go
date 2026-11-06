@@ -123,7 +123,7 @@ func TestMarketRefusalSaysWhy(t *testing.T) {
 		{"token limit", "secret", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0"}, "被限流了（HTTP 403）", "填一个 token"},
 		// The secondary limit, at times with no header at all: only the body says it.
 		{"secondary limit body", "secret", http.StatusForbidden, map[string]string{"body": "You have exceeded a secondary rate limit."}, "被限流了（HTTP 403）：过一会儿再试", "token 不对"},
-		{"reset", "", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": fmt.Sprint(time.Now().Add(30 * time.Minute).Unix())}, "约 30 分钟后再试；常用这个市场就填一个 token", "token 不对"},
+		{"reset", "", http.StatusForbidden, map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": fmt.Sprint(time.Now().Add(30 * time.Minute).Unix())}, "约 30 分钟后再试；填一个 GitHub token 额度更高", "token 不对"},
 	}
 	for _, c := range cases {
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -65,6 +65,7 @@
   "scheduled_task": "Scheduled task “{task}”",
   "asked_elsewhere": "Asked elsewhere: {asked}",
   "only_beginning": "(Only the beginning is here; see the rest in the app)",
+  "agent_done_note": "Background agent · {place}",
   "help_intro": "Just send a message to talk to Persona (text, images, files and forwarded chats all work). Reply to one of my messages to continue that chat.\n\n",
   "help_main": "- `/main` back to the main chat\n- `/new` start a new chat (from your next message)\n- `/list` recent chats, tap one to switch\n",
   "help_agents": "- `/agents` the agents on your computers, tap one to chat with it here\n- `/start` start a new agent on a computer\n",

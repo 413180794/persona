@@ -22,11 +22,16 @@ nonisolated struct ExtensionMarket: Codable, Hashable, Sendable, Identifiable {
     var error: String?
     var fetchedAt: Date?
     var addedAt: Date?
+    /// The market every hub has (#2351); nil from a hub before it.
+    var official: Bool?
 
     var title: String { name.isEmpty ? spec : name }
+    /// A GitHub market read without a token: GitHub's 60 requests an hour for the whole network, so a token is what
+    /// fixes it failing, public repositories included.
+    var wantsGitHubToken: Bool { spec.hasPrefix("github:") && !hasToken }
 
     enum CodingKeys: String, CodingKey {
-        case id, spec, name, description, homepage, plugins, warnings, error
+        case id, spec, name, description, homepage, plugins, warnings, error, official
         case hasToken = "has_token", fetchedAt = "fetched_at", addedAt = "added_at"
     }
 }
@@ -43,6 +48,7 @@ extension ExtensionMarket {
         description = try c.decodeIfPresent(String.self, forKey: .description)
         homepage = try c.decodeIfPresent(String.self, forKey: .homepage)
         hasToken = try c.decodeIfPresent(Bool.self, forKey: .hasToken) ?? false
+        official = try c.decodeIfPresent(Bool.self, forKey: .official)
         plugins = try c.decodeIfPresent(Int.self, forKey: .plugins)
             ?? decoder.container(keyedBy: NewKeys.self).decodeIfPresent(Int.self, forKey: .extensions)
         warnings = try c.decodeIfPresent([String].self, forKey: .warnings)
@@ -234,6 +240,9 @@ enum ExtensionMarketText {
         case .unavailable: String(localized: "装不了")
         }
     }
+
+    /// Under a GitHub market's error when it has no token: why a token helps a public repository too.
+    static let gitHubTokenHint = String(localized: "GitHub 不带 token 时每小时只能读 60 次，同一个网络里的设备共用这份额度。填一个 GitHub token 能到 5000 次，公开仓库也适用（fine-grained token 选 Public repositories，不用勾任何权限）。")
 
     /// A market's line: how many plugins, when it was read.
     static func marketSummary(_ m: ExtensionMarket) -> String {

@@ -966,6 +966,64 @@ func (s *Service) feishuMirror(ctx context.Context, machine, session string) {
 	}
 }
 
+// agentDoneClip bounds the result text in a background agent's finished card; the rest is read in the app, so the
+// notice is always one card.
+const agentDoneClip = 1000
+
+// feishuAgentDone posts the one Feishu card for a background agent's finished turn (completed, failed or cut off)
+// that notifyFinished already decided the phone pushes (#4674). Riding that decision keeps it in step with the push:
+// seen, muted, a recent notify_user, a turn asked from the bot, an inbox agent's and a quiet or supervised task's
+// finish are all dropped before this is called. The sender still leaves out the conversations that have their own
+// Feishu path: the main conversation (the sync mirror), a scheduled task's own conversation (its pushes mirror) and
+// health, and posts nothing without the pushes switch.
+func (s *Service) feishuAgentDone(machine string, sess proto.Session, head, text, place string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	f, ready := s.feishuFeatures(ctx)
+	if !ready || !f.Pushes {
+		return
+	}
+	session := sess.SessionID
+	if sess.Assistant || s.mainSessionRep(machine, session) || s.taskSessionRep(machine, session) ||
+		spaceOf(sess) == SpaceHealth {
+		return
+	}
+	l := s.botLang(ctx)
+	color := feishubot.Green
+	if strings.HasPrefix(head, "⚠️") || strings.HasPrefix(head, "⏳") { // a failed/cut-off turn or blocked work left
+		color = feishubot.Orange
+	}
+	note := func(clipped bool) string {
+		n := i18n.T(l, "assistant-feishu_cards.agent_done_note", i18n.Args{"place": place})
+		if clipped {
+			n = i18n.T(l, "assistant-feishu_cards.only_beginning") + "\n" + n
+		}
+		return n
+	}
+	clipped := len([]rune(text)) > agentDoneClip
+	limit := agentDoneClip
+	var card *feishubot.Card
+	for { // a chart-laden answer can render wide: halve the body until the card fits Feishu's limit
+		body := clip(text, limit)
+		card = feishubot.NewCard(head, color, head).Markdown(feishubot.CardMarkdown(body)).
+			Note(note(clipped)).Buttons(s.openButton(ctx, machine, session))
+		if len(card.JSON()) <= answerCardMaxBytes || limit <= agentDoneClip/8 {
+			break
+		}
+		limit /= 2
+	}
+	body := clip(text, limit)
+	fallback := fallbackText.Replace(head) + "\n\n" + fallbackText.Replace(body) + "\n" + fallbackText.Replace(note(clipped))
+	mid, err := s.botPost(ctx, "", card, strings.TrimSpace(fallback))
+	if err != nil {
+		s.logf("bots: agent done: %v", err)
+		return
+	}
+	// A reply to the card talks to that agent, as with one picked with /agents.
+	s.rememberBotThread(mid, botTarget{Kind: targetAgent, MachineID: machine, SessionID: session},
+		agentLabel(sess)+" · "+s.machineName(machine))
+}
+
 // --- commands (docs/bots.md「命令」): which conversation or agent messages go to, the lists to pick one from,
 // starting an agent, stopping a turn ---
 

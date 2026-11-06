@@ -300,6 +300,9 @@ func (s *Service) notifyFinished(machine, id string, gen int) {
 	head, text := doneAlert(s.lang(context.Background()), sess)
 	s.deliver(Notification{Kind: assistantwire.NotifyDone, DeviceID: machine, Subtitle: place, SessionID: id, Title: head,
 		Body: text, TookMS: took.Milliseconds(), LongMS: long.Milliseconds()})
+	// The same finished turn's one Feishu card (#4674); the sender re-checks the pushes switch and the conversations
+	// with their own Feishu path (main, scheduled task, health).
+	go s.feishuAgentDone(machine, sess, head, text, place)
 }
 
 // reportSlack is how long before its turn started a scheduled run or notice may have been sent (the node starts the
@@ -430,6 +433,30 @@ func (s *Service) quietTaskConversation(session string) bool {
 	defer r.mu.RUnlock()
 	for _, t := range r.tasks {
 		if t.Push == assistantwire.PushAsked && t.RunSessionID != "" && t.RunSessionID == session {
+			return true
+		}
+	}
+	return false
+}
+
+// mainSessionRep says whether session is the main conversation as the last snapshot's profile has it (the manager's
+// copy of the assistant settings).
+func (s *Service) mainSessionRep(machine, session string) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	p := r.profile
+	r.mu.RUnlock()
+	return p != nil && p.Main == session && p.MachineID == machine
+}
+
+// taskSessionRep says whether session is a scheduled task's own conversation as the last snapshot has it, whatever
+// the task's push mode: the pushes mirror owns those turns.
+func (s *Service) taskSessionRep(machine, session string) bool {
+	r := &s.fleet.rep
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, t := range r.tasks {
+		if t.RunSessionID == session && t.RunMachineID == machine {
 			return true
 		}
 	}

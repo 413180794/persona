@@ -7,7 +7,7 @@ import { tRich } from "../../i18n/rich";
 import { useEffect, useRef, useState } from "react";
 import { previewBlocked } from "../../lib/extension-model";
 import { ago } from "../../lib/format";
-import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
+import { canUninstall, isGitMarket, itemState, MARKET_SPEC_HINT, MARKET_SPEC_PLACEHOLDER, marketKind, marketLine, specLabel, wantsGitHubToken, type CatalogItem, type Catalog, type Market } from "../../lib/extension-market";
 import { Button, cx, Dialog, IconButton, toast, useNow } from "../../ui/atoms";
 import { addMarket, AdminError, errorText, getCatalog, getMarkets, installExtension, previewFromMarket, refreshMarket, removeMarket, setMarketToken, upgradeExtension } from "../api";
 import { AdminIcon } from "../icons";
@@ -15,6 +15,19 @@ import { devDialog } from "../router";
 import type { ExtensionPreview } from "../types";
 import { Card, ConfirmButton, EmptyState, ErrorBox, Field, Loader, Segmented, Tag } from "../parts";
 import { PreviewBody } from "./Extensions";
+
+/** Under a GitHub market's read error: why a token helps, and the way to add it (the markets' own dialog). */
+function TokenHint({ onFix }: { onFix: () => void }) {
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <p className="min-w-[200px] flex-1 text-[12px] leading-relaxed text-ink-3">{t("admin-pages-extensionmarket.token_rate_limit_hint")}</p>
+      <Button tone="quiet" className="h-7 px-2" onClick={onFix}>
+        <AdminIcon name="key" size={13} />
+        {t("admin-pages-extensionmarket.set_token")}
+      </Button>
+    </div>
+  );
+}
 
 /** The markets and their catalog; `onChanged` when an extension was installed or upgraded (the list above reloads). */
 export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
@@ -108,6 +121,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
                   ) : (
                     <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("admin-pages-extensionmarket.read_failed", { error: m.error })}</p>
                   ))}
+                {m.error && wantsGitHubToken(m) && <TokenHint onFix={() => setTokenFor(m)} />}
                 {(m.warnings ?? []).map((w) => (
                   <p key={w} className="mt-1 flex items-start gap-1.5 text-[11.5px] leading-relaxed break-words text-orange">
                     <AdminIcon name="alert" size={12} className="mt-0.5 shrink-0" />
@@ -117,7 +131,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 <IconButton icon="retry" label={t("admin-pages-extensionmarket.reread_label", { name: m.name })} onClick={() => void refresh(m)} disabled={refreshing === m.id} size={28} iconSize={14} />
-                {!isGitMarket(m.spec) && (
+                {!isGitMarket(m.spec) && !(m.error && wantsGitHubToken(m)) && (
                   <Button tone="quiet" className="h-7 px-2" onClick={() => setTokenFor(m)}>
                     <AdminIcon name="key" size={13} />
                     {m.has_token ? t("admin-pages-extensionmarket.change_token") : t("admin-pages-extensionmarket.set_token")}
@@ -131,7 +145,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
       </Card>
       {markets && markets.length > 0 && <MarketCatalog key={catalogKey} markets={markets} onChanged={() => (onChanged(), setCatalogKey((k) => k + 1))} />}
       <AddMarketDialog open={adding} onClose={() => setAdding(false)} onAdded={(m) => (setAdding(false), toast(t("admin-pages-extensionmarket.added", { name: m.name }), "ok"), changed())} />
-      <TokenDialog market={tokenFor} onClose={() => setTokenFor(null)} onDone={(m) => (put(m), setTokenFor(null), setCatalogKey((k) => k + 1))} />
+      <TokenDialog market={tokenFor} onClose={() => setTokenFor(null)} onDone={(m) => (put(m), setTokenFor(null), setCatalogKey((k) => k + 1), void load())} />
     </>
   );
 }
