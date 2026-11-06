@@ -23,10 +23,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "schema" / "extension"
-SCHEMA_FILES = ["manifest.schema.json", "protocol.schema.json", "view.schema.json", "messaging.schema.json"]
+SCHEMA_FILES = ["manifest.schema.json", "protocol.schema.json", "view.schema.json", "messaging.schema.json",
+                "connector.schema.json", "kb.schema.json"]
 
 GO_OUT = ROOT / "sdk/go/wire/wire_gen.go"
-TS_OUTS = [ROOT / "sdk/ts/src/wire.ts", ROOT / "web/src/lib/extension-wire.ts"]
+# The TypeScript SDK's types, and the web app's copy. A schema file marked "x-side": "plugin" (what only the hub and
+# an extension's program say to each other: the connector, channel and knowledge-base calls) goes to the SDKs only:
+# the Go and TypeScript ones, not the web app's copy, Swift or Kotlin, which the apps never read it with.
+TS_SDK_OUT = ROOT / "sdk/ts/src/wire.ts"
+TS_OUTS = [TS_SDK_OUT, ROOT / "web/src/lib/extension-wire.ts"]
+SIDES = ("plugin",)
 SWIFT_OUT = ROOT / "apple/Shared/Generated/ExtensionWire.swift"
 KOTLIN_OUT = ROOT / "android/core/contracts/src/main/kotlin/persona/core/contracts/generated/ExtensionWire.kt"
 # The schemas themselves, next to the Go types: go:embed cannot reach outside the module, and wire.Validate (what the
@@ -58,7 +64,7 @@ class Field:
     type: TypeRef
     required: bool
     doc: str = ""
-    pointer: bool = False  # x-go-pointer: a Go number whose absence means something
+    pointer: bool = False  # x-go-pointer: a Go scalar whose absence means something
 
 
 @dataclass
@@ -74,6 +80,7 @@ class Def:
     since: int = 0  # x-since of a union variant
     union: str = ""  # the union a variant belongs to
     extra: bool = False  # explicit additionalProperties: retain extra keys as opaque JSON
+    side: str = ""  # the file's x-side: "plugin" is generated into the SDKs only
 
 
 def is_scalar(s: dict) -> bool:
@@ -82,8 +89,12 @@ def is_scalar(s: dict) -> bool:
 
 def load() -> dict[str, Def]:
     raw: dict[str, tuple[str, dict]] = {}
+    sides: dict[str, str] = {}
     for f in SCHEMA_FILES:
         doc = json.loads((SCHEMA_DIR / f).read_text())
+        sides[f] = doc.get("x-side", "")
+        if sides[f] and sides[f] not in SIDES:
+            raise SchemaError(f"{f}: x-side {sides[f]!r}: only {', '.join(SIDES)}")
         for name, s in doc.get("$defs", {}).items():
             if name in raw:
                 raise SchemaError(f"{f}: $defs/{name} is also in {raw[name][0]}: definition names are global")
@@ -160,6 +171,7 @@ def load() -> dict[str, Def]:
             defs[name] = Def(name, "struct", doc, fields=fields, since=s.get("x-since", 0), extra=keep_extra)
         else:
             raise SchemaError(f"{name}: not a struct, string enum, discriminated union or x-untagged")
+        defs[name].side = sides[f]
 
     for u in [d for d in defs.values() if d.kind == "union"]:
         for v in u.variants:
@@ -178,6 +190,68 @@ def load() -> dict[str, Def]:
         if len(set(tags)) != len(tags):
             raise SchemaError(f"{u.name}: two variants with the same {u.discriminator}")
     return defs
+
+
+@dataclass
+class Call:
+    name: str  # as on the wire: connector.status, event.kb.changed
+    sender: str  # hub | program
+    params: str  # the definition its params hold to
+    result: str = ""  # a call's answer's definition; "" any JSON (and always for an event)
+    event: bool = False
+
+
+def load_calls(defs: dict[str, Def]) -> list[Call]:
+    """The calls and events of the schema files' x-methods / x-events: what the generated tables say each one holds."""
+    calls: dict[str, Call] = {}
+    for f in SCHEMA_FILES:
+        doc = json.loads((SCHEMA_DIR / f).read_text())
+        for key, event in (("x-methods", False), ("x-events", True)):
+            for name, spec in doc.get(key, {}).items():
+                if name in calls:
+                    raise SchemaError(f"{f}: {key} {name} is described twice")
+                unknown = set(spec) - {"from", "params", "result", "description"}
+                if unknown or spec.get("from") not in ("hub", "program") or (event and "result" in spec):
+                    raise SchemaError(f"{f}: {key} {name}: from (hub | program), params, result (calls only), description")
+                for ref in (spec.get("params"), spec.get("result")):
+                    if ref is not None and (ref not in defs or defs[ref].kind not in ("struct", "any")):
+                        raise SchemaError(f"{f}: {key} {name}: {ref!r} is not an object definition")
+                calls[name] = Call(name, spec["from"], spec["params"], spec.get("result", ""), event)
+    return list(calls.values())
+
+
+def go_calls(calls: list[Call]) -> list[str]:
+    if not calls:
+        return []
+    out = ["// Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who",
+           "// sends it (hub or program), and the definitions its params and its answer hold to (Result \"\" is any",
+           "// JSON; an event has no answer).",
+           "type Call struct {", "\tName, From, Params, Result string", "\tEvent                      bool", "}", "",
+           "// Calls are the calls and events the schemas describe, by name as on the wire.",
+           "var Calls = map[string]Call{"]
+    for c in calls:
+        ev = ", Event: true" if c.event else ""
+        out.append(f"\t{json.dumps(c.name)}: {{Name: {json.dumps(c.name)}, From: {json.dumps(c.sender)}, "
+                   f"Params: {json.dumps(c.params)}, Result: {json.dumps(c.result)}{ev}}},")
+    return out + ["}", ""]
+
+
+def ts_calls(calls: list[Call]) -> list[str]:
+    if not calls:
+        return []
+    out = ["/** One call or event of an extension point's protocol: who sends it, and the definitions its params and",
+           " * its answer hold to (no result: any JSON; an event has no answer). */",
+           "export interface Call {", '  from: "hub" | "program";', "  params: string;", "  result?: string;",
+           "  event?: boolean;", "}", "", "/** The calls and events the schemas describe, by name as on the wire. */",
+           "export const CALLS: Record<string, Call> = {"]
+    for c in calls:
+        parts = [f"from: {json.dumps(c.sender)}", f"params: {json.dumps(c.params)}"]
+        if c.result:
+            parts.append(f"result: {json.dumps(c.result)}")
+        if c.event:
+            parts.append("event: true")
+        out.append(f"  {json.dumps(c.name)}: {{ {', '.join(parts)} }},")
+    return out + ["};", ""]
 
 
 def flat_fields(defs: dict[str, Def], u: Def) -> list[Field]:
@@ -273,7 +347,7 @@ def reserved_keys(defs: dict[str, Def], d: Def) -> list[str]:
 # discriminator: what the hub has always decoded views into.
 
 
-def gen_go(defs: dict[str, Def]) -> str:
+def gen_go(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
     uses_time = any(f.type.kind == "time" for d in defs.values() for f in d.fields)
     out = ["// Code generated by scripts/gen/extension_schema.py from schema/extension/. DO NOT EDIT.", "",
            "// Package wire holds the extension protocol's and views' types (schema/extension/).",
@@ -285,15 +359,15 @@ def gen_go(defs: dict[str, Def]) -> str:
     def gtype(t: TypeRef, optional: bool, pointer: bool) -> str:
         k = t.kind
         if k == "string":
-            return "string"
+            return "*string" if pointer else "string"
         if k == "int":
             return "*int" if pointer else "int"
         if k == "int64":
-            return "int64"
+            return "*int64" if pointer else "int64"
         if k == "number":
             return "*float64" if pointer else "float64"
         if k == "bool":
-            return "bool"
+            return "*bool" if pointer else "bool"
         if k == "time":
             return "time.Time"
         if k == "any":
@@ -382,6 +456,7 @@ def gen_go(defs: dict[str, Def]) -> str:
         if d.kind in ("struct", "union") and not d.union:
             out.append(f"\t{json.dumps(d.name)}: func() any {{ return new({d.name}) }},")
     out += ["}", ""]
+    out += go_calls(calls or [])
     return "\n".join(out)
 
 
@@ -389,7 +464,7 @@ def gen_go(defs: dict[str, Def]) -> str:
 # TypeScript: interfaces, a union of its variants' interfaces, string enums open to values a newer hub sends.
 
 
-def gen_ts(defs: dict[str, Def]) -> str:
+def gen_ts(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
     out = [f"// {HEADER}", "// The extension protocol's and views' types (schema/extension/).", ""]
 
     def ttype(t: TypeRef) -> str:
@@ -454,6 +529,7 @@ def gen_ts(defs: dict[str, Def]) -> str:
                 out.append(f"export const {upper_snake(d.name)}_SINCE: Record<string, number> = {{ "
                            + ", ".join(f"{defs[v].tag}: {defs[v].since}" for v in d.variants) + " };")
             out.append("")
+    out += ts_calls(calls or [])
     return "\n".join(out)
 
 
@@ -872,11 +948,32 @@ def gofmt(src: str) -> str:
     return r.stdout
 
 
+def for_apps(defs: dict[str, Def]) -> dict[str, Def]:
+    """The definitions the apps read: none of a plugin-side file's, which the apps' own may not refer to."""
+    apps = {n: d for n, d in defs.items() if not d.side}
+
+    def refs(t: TypeRef):
+        while t is not None:
+            if t.kind == "ref":
+                yield t.ref
+            t = t.of
+
+    for d in apps.values():
+        used = [r for f in d.fields for r in refs(f.type)] + d.variants
+        for r in used:
+            if defs[r].side:
+                raise SchemaError(f"{d.name} refers to {r}, which is {defs[r].side}-side: the apps do not have it")
+    return apps
+
+
 def outputs(defs: dict[str, Def]) -> dict[Path, str]:
-    ts = gen_ts(defs)
-    out = {GO_OUT: gofmt(gen_go(defs)), SWIFT_OUT: gen_swift(defs), KOTLIN_OUT: gen_kotlin(defs)}
+    apps = for_apps(defs)
+    # The calls are what a program and the hub say to each other: the SDKs' only.
+    calls = load_calls(defs)
+    ts, ts_apps = gen_ts(defs, calls), gen_ts(apps)
+    out = {GO_OUT: gofmt(gen_go(defs, calls)), SWIFT_OUT: gen_swift(apps), KOTLIN_OUT: gen_kotlin(apps)}
     for p in TS_OUTS:
-        out[p] = ts
+        out[p] = ts if p == TS_SDK_OUT else ts_apps
     for f in SCHEMA_FILES:
         out[GO_SCHEMA_DIR / f] = (SCHEMA_DIR / f).read_text()
     return {p: (s.rstrip("\n") + "\n") for p, s in out.items()}

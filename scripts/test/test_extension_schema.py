@@ -140,7 +140,9 @@ class ExtensionSchemaTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_examples_hold_to_the_schema(self):
-        examples = sorted((SCHEMA_DIR / "examples").glob("*.json"))
+        # examples/plugin/ are the plugin-side schemas' (connector, kb): apart, as the apps' own tests read every
+        # example at the top level with their types, which do not have these.
+        examples = sorted((SCHEMA_DIR / "examples").glob("*.json")) + sorted((SCHEMA_DIR / "examples" / "plugin").glob("*.json"))
         self.assertGreater(len(examples), 10)
         for f in examples:
             with self.subTest(example=f.name):
@@ -149,6 +151,7 @@ class ExtensionSchemaTests(unittest.TestCase):
 
     def test_invalid_examples_are_refused(self):
         examples = sorted((SCHEMA_DIR / "examples" / "invalid").glob("*.json"))
+        examples += sorted((SCHEMA_DIR / "examples" / "plugin" / "invalid").glob("*.json"))
         self.assertGreater(len(examples), 5)
         for f in examples:
             with self.subTest(example=f.name):
@@ -174,7 +177,9 @@ class ExtensionSchemaTests(unittest.TestCase):
                     for name, sub in value.items():
                         walk(sub, f"{where}/{name}")
                     continue
-                if key not in validated and key not in annotations and not key.startswith("x-"):
+                if key.startswith("x-"):  # an annotation: what it holds is not keywords (x-methods' names)
+                    continue
+                if key not in validated and key not in annotations:
                     unknown.add(f"{where}: {key}")
                 walk(value, where)
 

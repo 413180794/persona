@@ -277,6 +277,10 @@ struct PhoneToolsTests {
 
         // A bare local date is accepted so "2026-10-24" works in filters.
         #expect(try ToolDate.parse("2026-10-24") != nil)
+        // Local times with seconds and no offset, as models often write them, read as the phone's own time.
+        let local = DateComponents(calendar: .current, timeZone: .current, year: 2026, month: 10, day: 24, hour: 14, minute: 0, second: 30).date
+        #expect(try ToolDate.parse("2026-10-24T14:00:30") == local)
+        #expect(try ToolDate.parse("2026-10-24 14:00:30") == local)
         #expect(try ToolDate.parse("") == nil)
         #expect(try ToolDate.parse(nil) == nil)
         #expect(throws: (any Error).self) { try ToolDate.parse("next tuesday") }

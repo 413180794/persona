@@ -334,6 +334,18 @@ struct IntentsTests {
         #expect(SessionEntity(machineID: "server", sessionID: "s1", title: "").id == entity.id)
     }
 
+    @Test func unresolvedSessionKeepsItsIdentifier() {
+        let entity = SessionEntityQuery.unresolved("server/s1")
+        #expect(entity.id == "server/s1")
+        #expect(entity.key == SessionKey(machineID: "server", sessionID: "s1"))
+
+        let other = SessionEntityQuery.unresolved("work|server/s1")
+        #expect(other.id == "work|server/s1")
+        #expect(other.key == SessionKey(group: "work", machineID: "server", sessionID: "s1"))
+
+        #expect(SessionEntityQuery.unresolved("server").sessionID == "")
+    }
+
     @Test func machineEntityCarriesTheOnlineFlag() {
         #expect(MachineEntity(machine("server", online: false)).online == false)
         #expect(MachineEntity(id: "server", name: "server").online == true)

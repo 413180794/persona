@@ -4,6 +4,14 @@ The protocol between hub and a connector running as its own program. Used by the
 
 **Now the connector namespace of the process-extension protocol** (#1101, `docs/extensions.md`, “Process-extension protocol”). Connector program is an extension contributing connectors. Hub opens via initialize; prefix every method below with `connector.` (status → `connector.status`), add contribution (connector ID) to params. All other params, results, requirements unchanged. Program-to-hub `secrets.*` and changed also prefixed with contribution. Process startup / stop / restart, config / user secrets are extension-platform responsibilities (`docs/extensions.md`).
 
+**The schema**: every call, event and answer below is described in `schema/extension/connector.schema.json` (with its
+calls in `x-methods` / `x-events`; the knowledge-base calls an extension makes directly are `kb.schema.json`), and the
+SDKs' types are generated from it (`sdk/go/wire`, `sdk/ts/src/wire.ts`). A program can be written from the schema and
+the SDK alone: `ext.Methods` answers the connector namespace with typed methods, `ext.Hub` has the program's calls,
+and `exttest.CheckConnectors` / `exttest.Start` hold it to the protocol against a fake hub. The conformance checks
+below hold every message both ways to the schema, and `server/internal/extension/conformance/plugin_schema_test.go`
+holds the schema to the server's Go types (schema/extension/README.md, "Plugin-side schemas and calls").
+
 `connector/serve` accepts process-extension initialize + `connector.*` (hub now uses only this), and legacy init + unprefixed methods below (standalone protocol retained one release cycle, removed at next protocol change). Go programs use `serve.MainWith`, also receiving declared user secrets (`Init.Declared`) and data directory under process protocol.
 
 ## Transport
@@ -164,7 +172,7 @@ Current 2. Changed field meaning / removal increments; optional additions do not
 
 ### Other languages: `CheckProgram`
 
-Without Go implementation to compare, `conformance.CheckProgram(t, manifest, run, init, opts...)` (`server/internal/connector/conformance/program.go`, method checks `program_wire.go`) exercises running program from hub side. For each manifest connector, call declared capabilities in hub order, **strictly decode** each response to hub Go type: `DisallowUnknownFields` catches extra fields, nonsnake_case keys, non-RFC 3339 dates; separate key check because Go matching is case-insensitive. Then enforce hub invariants:
+Without Go implementation to compare, `conformance.CheckProgram(t, manifest, run, init, opts...)` (`server/internal/connector/conformance/program.go`, method checks `program_wire.go`) exercises running program from hub side. For each manifest connector, call declared capabilities in hub order, **strictly decode** each response to hub Go type: `DisallowUnknownFields` catches extra fields, nonsnake_case keys, non-RFC 3339 dates; separate key check because Go matching is case-insensitive. Every response, the program's own calls and its events are also held to `connector.schema.json` (`wire.ValidateResult` / `ValidateParams`), and so are the params the hub sends. Then enforce hub invariants:
 
 | Method | Decode type | Additional requirements |
 | --- | --- | --- |

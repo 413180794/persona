@@ -157,13 +157,13 @@ nonisolated enum ToolDate {
         return formatter.string(from: date)
     }
 
-    /// Parses an ISO 8601 timestamp, or a bare `yyyy-MM-dd` / `yyyy-MM-dd HH:mm`
-    /// read as local time. Returns nil for nil/empty input.
+    /// Parses an ISO 8601 timestamp, or a bare `yyyy-MM-dd` / `yyyy-MM-dd HH:mm[:ss]`
+    /// (space or `T`) read as local time. Returns nil for nil/empty input.
     static func parse(_ raw: String?) throws -> Date? {
         guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         let text = raw.trimmingCharacters(in: .whitespaces)
         if let date = JSON.parseDate(text) { return date }
-        for format in ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd'T'HH:mm"] {
+        for format in ["yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss"] {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = .current

@@ -336,6 +336,11 @@ Recorded screens: `server/internal/screen/testdata/claude-2.1.318-rewind-*`; par
   In the real transcript the next message after the rewind hangs from that recap (not from the rewind point), so the old "two messages under one parent" rule would not have caught this rewind even when the next message came.
   An app-driven rewind (`session.rewind`) also writes no new line, so the quick read has to be told: node records `File.RewoundLines()` (the whole rewound part, not just its start, which may lie before the last 384 KB) in that file's quick-read cache and makes it re-read at once;
   otherwise the session list's LastText stays the rewound turn's last reply (over 90 seconds on a real node).
+- **The /rewind list is not every message the app shows** (2026-11-06, #5397, read from the 2.1.309 bundle's message selector): Claude lists the user's lines that are not `isMeta`, a tool result, a compact summary,
+  a command's output (`<local-command-stdout>` / `-stderr>`, `<bash-stdout>` / `-stderr>`), a `<task-notification>` or another agent's message. A local slash command such as `/rename` (`local-jsx`, `display: "system"`) is written as two
+  `system` / `local_command` lines (the command, then its output) plus an `isMeta` user note, so it is not a user line and not listed; the app shows the command as the user's message and counted it in `prompts_after`, so rewinding past it was refused (`rewind_mismatch`).
+  Older versions wrote commands as user lines, which Claude lists. The node translates the app's numbers before walking the list (`transcript.File.AsListed`, `node/rewind.go` `asListed`), so the four clients count as before;
+  when the transcript does not have the message where the app saw it, the app's numbers stand and the screen check refuses them as it always did.
 - Clear input: single-line uses `ctrl+k ctrl+u` (no notice); multiline needs one `ctrl+c`, which shows `Press Ctrl-C again to exit` below. Press once only, and only after confirming the box holds that message.
 - Tests: `claudeSim` in `node/rewind_sim_test.go` renders the recorded screens, and `TestClaudeSimMatchesRecordedScreens` compares each row, so flow tests use actual screen appearances;
   live testing ran only in a disposable session (`go test -tags herdrlive -run TestLiveRewind`, `JARVIS_LIVE_PANE` / `JARVIS_LIVE_PROMPT`).

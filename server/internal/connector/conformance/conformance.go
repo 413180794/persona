@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	wireschema "github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -59,7 +60,17 @@ func check(t testing.TB, c connector.Connector, inPlugin bool) {
 	}
 	callRaw := func(method string, params any, out *json.RawMessage) error {
 		m, p := wire(method, params)
-		return hub.Call(ctx, m, p, out)
+		err := hub.Call(ctx, m, p, out)
+		// What both sides send is the schema's (schema/extension/connector.schema.json): the plugin protocol's names.
+		if inPlugin {
+			if serr := paramsHold(m, p); serr != nil {
+				t.Error(serr)
+			}
+			if serr := wireschema.ValidateResult(m, *out); err == nil && serr != nil {
+				t.Errorf("%s: the answer does not hold to schema/extension: %v", m, serr)
+			}
+		}
+		return err
 	}
 	call := func(method string, params any) json.RawMessage {
 		t.Helper()

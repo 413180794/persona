@@ -550,3 +550,97 @@ func TestAppRewindLeavesTheRewoundTurnOutOfTheSessionList(t *testing.T) {
 		})
 	}
 }
+
+// A local slash command such as /rename (#5397): Claude Code writes it as system lines (the command, its output) and
+// leaves it out of its /rewind list, while the app shows it as one of the user's messages and counts it when it says
+// how many came after the one to go back to. The node counts as Claude does.
+func TestRewindOverALocalCommand(t *testing.T) {
+	const id = "0d000000-0000-4000-8000-000000005397"
+	lines := []string{
+		`{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-11-06T09:00:00Z","isSidechain":false,"message":{"role":"user","content":"first"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-11-06T09:00:05Z","isSidechain":false,"message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"one"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t1","parentUuid":"a1","timestamp":"2026-11-06T09:00:06Z","isSidechain":false,"durationMs":6000,"isMeta":false}`,
+		`{"type":"user","uuid":"u2","parentUuid":"t1","timestamp":"2026-11-06T09:01:00Z","isSidechain":false,"message":{"role":"user","content":"second"}}`,
+		`{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-11-06T09:01:05Z","isSidechain":false,"message":{"id":"m2","role":"assistant","content":[{"type":"text","text":"two"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t2","parentUuid":"a2","timestamp":"2026-11-06T09:01:06Z","isSidechain":false,"durationMs":6000,"isMeta":false}`,
+		// /rename as Claude Code 2.1.309 writes it: two local_command system lines and a meta note for the model.
+		`{"type":"system","subtype":"local_command","uuid":"c1","parentUuid":"t2","timestamp":"2026-11-06T09:02:00Z","isSidechain":false,"content":"<command-name>/rename</command-name>\n            <command-message>rename</command-message>\n            <command-args>release notes</command-args>","level":"info","isMeta":false,"userType":"external","entrypoint":"cli","version":"2.1.309"}`,
+		`{"type":"system","subtype":"local_command","uuid":"c2","parentUuid":"c1","timestamp":"2026-11-06T09:02:00Z","isSidechain":false,"content":"<local-command-stdout>Session renamed to: release notes</local-command-stdout>","level":"info","isMeta":false,"commandRun":{"command":"rename","args":"release notes"},"userType":"external","entrypoint":"cli","version":"2.1.309"}`,
+		`{"type":"user","uuid":"c3","parentUuid":"c2","timestamp":"2026-11-06T09:02:00Z","isSidechain":false,"isMeta":true,"message":{"role":"user","content":"<system-reminder>The user named this session \"release notes\". This may indicate the session's focus or intent.</system-reminder>"},"userType":"external","entrypoint":"cli","version":"2.1.309"}`,
+		`{"type":"user","uuid":"u3","parentUuid":"c3","timestamp":"2026-11-06T09:03:00Z","isSidechain":false,"message":{"role":"user","content":"third"}}`,
+		`{"type":"assistant","uuid":"a3","parentUuid":"u3","timestamp":"2026-11-06T09:03:05Z","isSidechain":false,"message":{"id":"m3","role":"assistant","content":[{"type":"text","text":"three"}]}}`,
+		`{"type":"system","subtype":"turn_duration","uuid":"t3","parentUuid":"a3","timestamp":"2026-11-06T09:03:06Z","isSidechain":false,"durationMs":6000,"isMeta":false}`,
+	}
+	setup := func(t *testing.T) (*Node, *claudeSim) {
+		t.Helper()
+		p := filepath.Join(t.TempDir(), id+".jsonl")
+		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// Claude's own list: the three messages, not /rename.
+		sim := newClaudeSim(simPrompt{"first", noCode}, simPrompt{"second", noCode}, simPrompt{"third", noCode})
+		n := rewindNode(t, sim, "claude", proto.StatusIdle)
+		n.agents = map[string]host.Agent{id: n.agents["s1"]}
+		n.paths, n.metas, n.bgScans = map[string]string{id: p}, map[string]quickMeta{}, map[string]*bgScan{}
+		n.files, n.watches = map[string]*transcript.File{}, map[string]*watch{}
+		return n, sim
+	}
+
+	// The app's count: second, then /rename and third after it.
+	t.Run("to a message before the command", func(t *testing.T) {
+		n, sim := setup(t)
+		res, err := n.rewind(context.Background(), id, rewindOpts{Prompt: "second", Occurrence: 1, PromptsAfter: after(2), Restore: RestoreConversation})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res["prompt"] != "second" || sim.rewound != 1 {
+			t.Fatalf("rewound to %d: %v", sim.rewound, res)
+		}
+	})
+	t.Run("to a message after it", func(t *testing.T) {
+		n, sim := setup(t)
+		if _, err := n.rewind(context.Background(), id, rewindOpts{Prompt: "third", Occurrence: 1, PromptsAfter: after(0), Restore: RestoreConversation}); err != nil {
+			t.Fatal(err)
+		}
+		if sim.rewound != 2 {
+			t.Fatalf("rewound to %d", sim.rewound)
+		}
+	})
+	t.Run("to the first one", func(t *testing.T) {
+		n, sim := setup(t)
+		if _, err := n.rewind(context.Background(), id, rewindOpts{Prompt: "first", Occurrence: 1, PromptsAfter: after(3), Restore: RestoreConversation}); err != nil {
+			t.Fatal(err)
+		}
+		if sim.rewound != 0 {
+			t.Fatalf("rewound to %d", sim.rewound)
+		}
+	})
+	// A client that already counts as Claude does (leaves /rename out) is not miscounted.
+	t.Run("counted as Claude does", func(t *testing.T) {
+		n, sim := setup(t)
+		if _, err := n.rewind(context.Background(), id, rewindOpts{Prompt: "second", Occurrence: 1, PromptsAfter: after(1), Restore: RestoreConversation}); err != nil {
+			t.Fatal(err)
+		}
+		if sim.rewound != 1 {
+			t.Fatalf("rewound to %d", sim.rewound)
+		}
+	})
+	// A count that is off for another reason is still refused, and nothing is restored.
+	for name, o := range map[string]rewindOpts{
+		"too many after":        {Prompt: "second", Occurrence: 1, PromptsAfter: after(4)},
+		"too few after":         {Prompt: "second", Occurrence: 1, PromptsAfter: after(0)},
+		"the command itself":    {Prompt: "/rename release notes", Occurrence: 1, PromptsAfter: after(1)},
+		"not in the transcript": {Prompt: "fourth", Occurrence: 1, PromptsAfter: after(0)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			n, sim := setup(t)
+			o.Restore = RestoreConversation
+			if code := rewindCode(t, func() error { _, err := n.rewind(context.Background(), id, o); return err }()); code != rewindMismatch {
+				t.Fatalf("code %q", code)
+			}
+			if sim.rewound != -1 {
+				t.Fatalf("rewound to %d", sim.rewound)
+			}
+		})
+	}
+}

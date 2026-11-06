@@ -329,7 +329,9 @@ so the extension does not need to read the hub's or the manager's data directory
 | `kb.update` | `{kind,id,...fields to update}` | `{id}` | `kb.write` |
 | `kb.owner` | `{}` | `{name,aliases,handles:[{kind,value}]}` | `kb.read` |
 
-kind is `projects`, `chats`, `people`, `docs`, `meetings` or `events`. list returns 30 by default, at most 200, with offset starting at 0;
+The params, answers, error codes and events are described in `schema/extension/kb.schema.json`; the Go SDK has them as `ext.Hub`'s `KBList`, `KBGet`, `KBDay`, `KBSearch`, `KBUpdate` and `KBOwner`.
+
+kind is `projects`, `chats`, `people`, `docs`, `meetings`, `events` or `recordings`. list returns 30 by default, at most 200, with offset starting at 0;
 if not finished, continue with next_offset. Paging is not a snapshot when things change between requests, so extensions should deduplicate and re-read when needed. search searches messages by default, 40 by default, at most 200;
 get includes the most recent 12000 characters of messages by default; recent_chars may be 0, at most 20000. Empty lists return `[]`.
 `kb.get` does not include live Agents; reading Agent state still needs the matching permission. A missing scope returns `permission_denied` with `scope` in the error data;

@@ -219,12 +219,14 @@ func (n *Node) rewind(ctx context.Context, id string, o rewindOpts) (map[string]
 		return nil, r.abort(ctx, rewindError(rewindFailed, "回退界面和预期的不一样，什么都没改。"))
 	}
 
-	// Walk up from (current) to the prompt: every step is one Up, and the row it lands on is read.
+	// Walk up from (current) to the prompt: every step is one Up, and the row it lands on is read. Where the prompt
+	// sits is counted as Claude's list counts (asListed).
 	if sel := list.Selected(); sel == nil || !sel.Current {
 		return nil, r.abort(ctx, rewindError(rewindFailed, "回退列表的光标不在最后，什么都没改。"))
 	}
+	walk := n.asListed(id, o)
 	steps, seen := 0, 0
-	for seen < o.Occurrence {
+	for seen < walk.Occurrence {
 		if steps >= rewindMaxSteps {
 			return nil, r.abort(ctx, rewindError(rewindMismatch, "回退列表太长，没有找到这条消息。"))
 		}
@@ -242,7 +244,7 @@ func (n *Node) rewind(ctx context.Context, id string, o rewindOpts) (map[string]
 			seen++
 		}
 	}
-	if o.PromptsAfter != nil && steps != *o.PromptsAfter+1 {
+	if walk.PromptsAfter != nil && steps != *walk.PromptsAfter+1 {
 		return nil, r.abort(ctx, rewindError(rewindMismatch, "回退列表里这条消息的位置和对话里看到的不一致，什么都没改。可以到电脑上回退。"))
 	}
 
@@ -315,6 +317,25 @@ func (n *Node) rewind(ctx context.Context, id string, o rewindOpts) (map[string]
 	res["input_cleared"] = r.takePromptOutOfBox(ctx, o.Prompt)
 	n.forgetRewound(id, o)
 	return res, nil
+}
+
+// asListed is where the app's prompt sits in Claude's /rewind list (#5397): the app counts every message of the user's
+// it shows, and Claude leaves out a local slash command such as /rename (transcript.File.AsListed). The app's numbers
+// stand when the transcript cannot say (not read, or the prompt not where the app saw it): the list on the screen is
+// checked against them all the same.
+func (n *Node) asListed(id string, o rewindOpts) rewindOpts {
+	if o.PromptsAfter == nil {
+		return o
+	}
+	f, err := n.file(id)
+	if err != nil {
+		return o
+	}
+	n.refresh(id, f)
+	if occ, after, ok := f.AsListed(o.Prompt, o.Occurrence, *o.PromptsAfter); ok {
+		o.Occurrence, o.PromptsAfter = occ, &after
+	}
+	return o
 }
 
 // forgetRewound leaves the rewound turns out of the session's transcript from now on. Claude writes nothing to its file

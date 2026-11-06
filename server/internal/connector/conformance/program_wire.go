@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 
+	wireschema "github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -458,4 +459,17 @@ func checkChanged(items []extension.ConnectorItem, raw json.RawMessage) error {
 		is.add("scope %q is not chats, items or inbox", e.Scope)
 	}
 	return is.err()
+}
+
+// paramsHold holds what the hub sends with a call to its definition in schema/extension (wireschema.Calls): a
+// failure is the hub's (or the schema's), not the program's.
+func paramsHold(method string, params any) error {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return err
+	}
+	if err := wireschema.ValidateParams(method, raw); err != nil {
+		return fmt.Errorf("%s: the hub's params do not hold to schema/extension: %v", method, err)
+	}
+	return nil
 }

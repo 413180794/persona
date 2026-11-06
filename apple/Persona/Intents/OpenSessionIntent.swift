@@ -37,9 +37,14 @@ struct SessionEntityQuery: EntityQuery {
 
     nonisolated func entities(for identifiers: [String]) async throws -> [SessionEntity] {
         let all = try await Self.all()
-        return identifiers.map { id in
-            all.first { $0.id == id } ?? SessionEntity(machineID: id, sessionID: "", title: id)
-        }
+        return identifiers.map { id in all.first { $0.id == id } ?? Self.unresolved(id) }
+    }
+
+    /// A saved session the hub does not list right now (its machine offline, say): rebuilt from its id, so it still
+    /// opens that session in its group. Only an id that is not `machine/session` keeps the old shape.
+    nonisolated static func unresolved(_ id: String) -> SessionEntity {
+        guard let key = SessionKey(path: id) else { return SessionEntity(machineID: id, sessionID: "", title: id) }
+        return SessionEntity(machineID: key.machineID, sessionID: key.sessionID, title: "", group: key.group)
     }
 
     nonisolated func suggestedEntities() async throws -> [SessionEntity] {

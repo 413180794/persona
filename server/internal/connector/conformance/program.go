@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	wireschema "github.com/nwverse/persona/sdk/go/wire"
 	"github.com/nwverse/persona/server/internal/connector"
 	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/extension"
@@ -193,6 +194,9 @@ func (p *probe) fromProgram(_ context.Context, method string, params json.RawMes
 	if !ok || !slices.Contains([]string{serve.MSecretsLoad, serve.MSecretsSave, serve.MSecretsDelete}, rest) {
 		return nil, &rpc.Error{Code: extension.CodeUnknownMethod, Message: "unknown method " + method}
 	}
+	if err := wireschema.ValidateParams(method, params); err != nil {
+		p.problem(fmt.Sprintf("%s: the params do not hold to schema/extension: %v", method, err))
+	}
 	var c secretCall
 	if err := decodeStrict(params, &c); err != nil {
 		p.problem(method + ": " + err.Error())
@@ -258,11 +262,17 @@ func (p *probe) call(method string, params any) (raw json.RawMessage, rejected *
 	}
 	ctx, cancel := context.WithTimeout(p.ctx, programCallTimeout)
 	defer cancel()
+	if err := paramsHold(serve.InPlugin(method), wire); err != nil {
+		p.problem(err.Error())
+	}
 	err = p.hub.Call(ctx, serve.InPlugin(method), wire, &raw)
 	var re *rpc.Error
 	switch {
 	case err == nil:
 		p.said(string(raw))
+		if err := wireschema.ValidateResult(serve.InPlugin(method), raw); err != nil {
+			p.failf("%s: the answer does not hold to schema/extension: %v", method, err)
+		}
 		return raw, nil
 	case errors.As(err, &re):
 		p.said(re.Message)
@@ -601,6 +611,8 @@ func (p *probe) report(items []extension.ConnectorItem) {
 			p.problem(fmt.Sprintf("event %q: the hub only takes %s", e.name, serve.InPlugin(serve.EChanged)))
 		} else if err := checkChanged(items, e.params); err != nil {
 			p.problem("changed event: " + err.Error())
+		} else if err := wireschema.ValidateParams(e.name, e.params); err != nil {
+			p.problem("changed event: does not hold to schema/extension: " + err.Error())
 		}
 	}
 	p.flush()

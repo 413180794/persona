@@ -2592,3 +2592,1181 @@ export interface MessagingError {
   code?: string;
   view?: View;
 }
+
+/**
+ * error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do; data
+ * {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.
+ */
+export type ConnectorErrorCode = "rate_limited" | "no_machine" | "offline" | "node_too_old" | "no_gh" | "not_signed_in" | (string & {});
+export const CONNECTOR_ERROR_CODES = ["rate_limited", "no_machine", "offline", "node_too_old", "no_gh", "not_signed_in"] as const;
+
+/**
+ * What a connector declares (ConnectorItem.capabilities): the hub calls only the methods of declared ones. fallback
+ * has no method: every inbox thing promises extra.rule_tier. An extension's connector with one this hub does not know
+ * loses only that capability.
+ */
+export type ConnectorCapability = "status" | "tools" | "actions" | "events" | "inbox" | "settle" | "archive" | "chats" | "items" | "login" | "options" | "threads" | "snapshot" | "group" | "meta" | "fallback" | "machines" | (string & {});
+export const CONNECTOR_CAPABILITIES = ["status", "tools", "actions", "events", "inbox", "settle", "archive", "chats", "items", "login", "options", "threads", "snapshot", "group", "meta", "fallback", "machines"] as const;
+
+/**
+ * ConnectorStatus.state. disabled is the hub's own (the user switched it off); a program never answers it.
+ */
+export type ConnectorState = "ok" | "not_configured" | "not_signed_in" | "no_permission" | "rate_limited" | "error" | "disabled" | (string & {});
+export const CONNECTOR_STATES = ["ok", "not_configured", "not_signed_in", "no_permission", "rate_limited", "error", "disabled"] as const;
+
+/**
+ * What changed (ConnectorChangedEvent.scope): the knowledge base's chats or items, or the inbox. Another scope is
+ * dropped and logged.
+ */
+export type ConnectorScope = "chats" | "items" | "inbox" | (string & {});
+export const CONNECTOR_SCOPES = ["chats", "items", "inbox"] as const;
+
+/**
+ * An inbox thing's tier by the connector's own rules: needs the user, worth knowing, noise. Empty leaves it to the
+ * model.
+ */
+export type ConnectorTier = "action" | "fyi" | "noise" | (string & {});
+export const CONNECTOR_TIERS = ["action", "fyi", "noise"] as const;
+
+/**
+ * ConnectorInboxThing.done: the thread is over without the user (read), or the user answered (replied).
+ */
+export type ConnectorDone = "read" | "replied" | (string & {});
+export const CONNECTOR_DONES = ["read", "replied"] as const;
+
+/**
+ * ConnectorTag.key values the hub knows: the user can mute by repo, chat and sender. Others are kept for rules.
+ */
+export type ConnectorTagKey = "repo" | "chat" | "sender" | "branch" | (string & {});
+export const CONNECTOR_TAG_KEYS = ["repo", "chat", "sender", "branch"] as const;
+
+/**
+ * ConnectorPrompt.kind besides fields to fill in (empty): a code to enter on a web page, or a URL to scan as a QR
+ * code. For both the app asks the same step again, without values, every interval seconds.
+ */
+export type ConnectorPromptKind = "device_code" | "qr" | (string & {});
+export const CONNECTOR_PROMPT_KINDS = ["device_code", "qr"] as const;
+
+/**
+ * What connector.posts.put says of each post: first time in the archive, its comment count moved, or refused (no id,
+ * or another connector's). An empty string is a post seen unchanged.
+ */
+export type ConnectorPostStatus = "new" | "changed" | "refused" | (string & {});
+export const CONNECTOR_POST_STATUSES = ["new", "changed", "refused"] as const;
+
+/**
+ * The tools a grouping connector answers in group.tool (the model reads the conversation with them); another may
+ * answer unknown_method.
+ */
+export type ConnectorGroupTool = "messages_before" | "messages_around" | "search" | (string & {});
+export const CONNECTOR_GROUP_TOOLS = ["messages_before", "messages_around", "search"] as const;
+
+/**
+ * An answer with nothing in it: {}.
+ */
+export interface Empty {
+}
+
+/**
+ * init, the bare opening of protocol 2 without the extension protocol (kept one release; the hub opens with
+ * initialize). Answered with ConnectorManifest.
+ */
+export interface ConnectorInitParams {
+  protocol: number;
+  /** The connector's settings. */
+  config?: unknown;
+}
+
+/**
+ * What the program says it is: init's answer, and connector.manifest's. The fields are ConnectorItem's
+ * (manifest.schema.json) with the protocol.
+ */
+export interface ConnectorManifest {
+  protocol: number;
+  id: string;
+  name: string;
+  capabilities: string[];
+  hosts?: string[];
+  agent_tools?: string[];
+  unlisted?: string[];
+  confirm_always?: string[];
+  poll_seconds?: number;
+  kinds?: string[];
+  archive_sources?: string[];
+  meta_description?: string;
+  cli?: string;
+}
+
+/**
+ * The params of a call without any of its own (status, tools.list, actions.list, inbox.collect, items.list, logout,
+ * options.get, auth.get; secrets.load, secrets.delete).
+ */
+export interface ConnectorParams {
+  contribution: string;
+}
+
+/**
+ * connector.status: how the connector is doing, from memory (no network; the hub asks every 30 seconds). Only an ok
+ * connector offers tools.
+ */
+export interface ConnectorStatus {
+  state: ConnectorState;
+  /** Who it reads as, for display. */
+  account?: string;
+  /** Where the sign-in comes from. */
+  via?: string;
+  /** One sentence for people when state is not ok; never a secret. */
+  error?: string;
+  /** How to fix it, a step a sentence. */
+  guide?: string[];
+  last_sync?: string;
+  last_event?: string;
+}
+
+/**
+ * A read tool (tools.list) or a write (actions.list): its name starts with <connector id>_.
+ */
+export interface ConnectorTool {
+  name: string;
+  description: string;
+  /** A JSON Schema with type object. */
+  input_schema: unknown;
+  /**
+   * Words that run the tool in a shell instead (a gated command's); runtimes refuse them in an assistant
+   * conversation.
+   */
+  shell?: string[];
+}
+
+/**
+ * tools.list and actions.list.
+ */
+export interface ConnectorTools {
+  tools?: ConnectorTool[];
+}
+
+/**
+ * tools.call, and actions.describe (what the phone's card says before a write).
+ */
+export interface ConnectorCallParams {
+  contribution: string;
+  name: string;
+  args?: unknown;
+}
+
+/**
+ * tools.call and actions.do.
+ */
+export interface ConnectorCallResult {
+  text?: string;
+}
+
+/**
+ * A write as the card names it: visible says who will see it.
+ */
+export interface ConnectorAction {
+  name?: string;
+  visible?: string;
+}
+
+/**
+ * actions.describe: the card's action and its full content. No network; an error refuses the call before the user is
+ * asked.
+ */
+export interface ConnectorDescribeResult {
+  action: ConnectorAction;
+  summary: string;
+}
+
+/**
+ * actions.do, only once the hub's gate let the write through: the very args of the card, and the hub's id for this
+ * run (the same if it is ever sent again: the program runs it once).
+ */
+export interface ConnectorDoParams {
+  contribution: string;
+  name: string;
+  args?: unknown;
+  request_id: string;
+}
+
+/**
+ * thread.page: one page of an inbox thread, oldest first; no before is the newest page.
+ */
+export interface ConnectorThreadParams {
+  contribution: string;
+  thread: string;
+  before?: string;
+  limit?: number;
+}
+
+/**
+ * thread.page's answer: before goes back one more page (none: the start).
+ */
+export interface ConnectorThreadPage {
+  chat: ConnectorThreadChat;
+  messages: ConnectorThreadMessage[];
+  before?: string;
+}
+
+/**
+ * The conversation the thread is. state … body_format are a pull request's or an issue's.
+ */
+export interface ConnectorThreadChat {
+  id: string;
+  name: string;
+  /** dm, group, channel (bubbles); pr, issue. */
+  kind: string;
+  url?: string;
+  /** A media ref (thread.media). */
+  avatar?: string;
+  members?: number;
+  /** The action that answers here, with {chat: <thread>, text, reply_to}; none when the user cannot. */
+  reply?: string;
+  /** open, merged, closed or draft. */
+  state?: string;
+  author?: ConnectorThreadPerson;
+  labels?: ConnectorThreadLabel[];
+  branch?: ConnectorThreadBranch;
+  body?: string;
+  /** Empty or markdown. */
+  body_format?: string;
+}
+
+export interface ConnectorThreadMessage {
+  id: string;
+  at: string;
+  sender: ConnectorThreadPerson;
+  mine?: boolean;
+  /** A line of the thread's own (joined, renamed, merged): no bubble. */
+  event?: boolean;
+  text?: string;
+  /** Empty or markdown. */
+  format?: string;
+  media?: ConnectorThreadMedia[];
+  reply_to?: ConnectorThreadQuote;
+  edited?: boolean;
+  url?: string;
+  /** Empty for a message; review, code (a comment on a line), check (CI). */
+  kind?: string;
+  /** approved, changes_requested, commented or dismissed. */
+  review?: string;
+  code?: ConnectorThreadCode;
+  check?: ConnectorThreadCheck;
+}
+
+export interface ConnectorThreadPerson {
+  id?: string;
+  name: string;
+  /** A media ref. */
+  avatar?: string;
+}
+
+/**
+ * A picture, sticker, video, voice message or file: ref and thumb are media refs; a file or voice message is only
+ * described.
+ */
+export interface ConnectorThreadMedia {
+  /** image, sticker, video, voice or file. */
+  kind: string;
+  ref?: string;
+  thumb?: string;
+  mime?: string;
+  name?: string;
+  size?: number;
+  /** Seconds. */
+  duration?: number;
+  width?: number;
+  height?: number;
+  /** A sticker's. */
+  emoji?: string;
+}
+
+/**
+ * The message another one answers, as much as the page could tell.
+ */
+export interface ConnectorThreadQuote {
+  id: string;
+  from?: string;
+  text?: string;
+}
+
+export interface ConnectorThreadLabel {
+  name: string;
+  /** Six hex digits. */
+  color?: string;
+}
+
+export interface ConnectorThreadBranch {
+  head: string;
+  base: string;
+}
+
+/**
+ * The line a code comment is on, and the end of the diff before it.
+ */
+export interface ConnectorThreadCode {
+  path: string;
+  line?: number;
+  hunk?: string;
+}
+
+/**
+ * A CI run: success, failure, pending, skipped or cancelled, and a failed one's log end (at most 8 KB).
+ */
+export interface ConnectorThreadCheck {
+  name: string;
+  state: string;
+  url?: string;
+  log?: string;
+}
+
+/**
+ * thread.media and archive.media: a ref the connector made. Refs never change meaning (the app caches them for good).
+ */
+export interface ConnectorMediaParams {
+  contribution: string;
+  ref: string;
+}
+
+/**
+ * Media bytes, base64: at most 4 MB from thread.media, 20 MB from archive.media.
+ */
+export interface ConnectorMedia {
+  mime: string;
+  /** Base64. */
+  data: string;
+}
+
+/**
+ * inbox.collect, from memory: the threads that may need the user.
+ */
+export interface ConnectorCollectResult {
+  things?: ConnectorInboxThing[];
+}
+
+/**
+ * One thread that may need the user; the hub makes inbox items of them. With group it is a batch of a conversation's
+ * new messages instead (docs "Event grouping"); with id and meta it is an event (group.append's answer).
+ */
+export interface ConnectorInboxThing {
+  /** The connector's stable key of the thread. */
+  thread: string;
+  /** One of the manifest's kinds. */
+  kind: string;
+  label?: string;
+  title?: string;
+  sender?: string;
+  preview?: string;
+  /** The thread as text, for triage, drafting and the AI twin. */
+  context?: string;
+  at?: string;
+  /** Marks the newest move: a different last adds to the open item. */
+  last?: string;
+  url?: string;
+  /** A link the system opens instead (sms:…). */
+  open_url?: string;
+  /** Where a reply goes and who sees it. */
+  reply_to?: string;
+  can_reply?: boolean;
+  /** ConnectorTier, or empty for the model. */
+  tier?: string;
+  why?: string;
+  /** The user's own triage rules for this source or account; when set the model gets them instead of the hub's. */
+  rules?: string;
+  /** ConnectorDone: ends the open item. */
+  done?: string;
+  read?: boolean;
+  tags?: ConnectorTag[];
+  extra?: ConnectorThingExtra;
+  group?: ConnectorThingGroup;
+  id?: string;
+  /** An event's own state, kept and handed back by the hub as it is. */
+  meta?: unknown;
+  parent?: ConnectorThingParent;
+}
+
+export interface ConnectorTag {
+  /** ConnectorTagKey, or the connector's own. */
+  key: string;
+  value: string;
+  name?: string;
+}
+
+/**
+ * Fields beyond the generic thing: rule_tier for a fallback connector; the rest only for a connector taking over one
+ * of the hub's own (lark, github).
+ */
+export interface ConnectorThingExtra {
+  source?: string;
+  account?: string;
+  account_name?: string;
+  legacy_id?: string;
+  avatar?: string;
+  count?: number;
+  started_at?: string;
+  rule_tier?: string;
+  lark?: unknown;
+  doc?: unknown;
+  moment?: unknown;
+}
+
+/**
+ * A batch to relate: its id (the same each time the batch is handed again) and its new messages' ids.
+ */
+export interface ConnectorThingGroup {
+  batch: string;
+  new: string[];
+}
+
+/**
+ * What the thing grew out of: kind inbox (an item's id), todo (a todo's id) or session (<machine>/<session>).
+ */
+export interface ConnectorThingParent {
+  kind: string;
+  id: string;
+}
+
+/**
+ * inbox.reply: the user pressed Send, itself the confirmation. client_id makes a retry go out once; changes move a
+ * document row's status first (text may then be empty).
+ */
+export interface ConnectorInboxReply {
+  contribution: string;
+  thread: string;
+  item_id?: string;
+  last?: string;
+  text?: string;
+  client_id?: string;
+  changes?: ConnectorStatusChange[];
+}
+
+export interface ConnectorStatusChange {
+  ref: string;
+  field: string;
+  value: string;
+}
+
+/**
+ * inbox.settle: the threads of the items the hub still has open.
+ */
+export interface ConnectorSettleParams {
+  contribution: string;
+  threads: string[];
+}
+
+/**
+ * inbox.settle's answer: why each thread that is over is (the hub files them done).
+ */
+export interface ConnectorSettled {
+  settled?: Record<string, string>;
+}
+
+/**
+ * group.tool: one of ConnectorGroupTool for the model, args as the model wrote them. Answered with any JSON.
+ */
+export interface ConnectorGroupToolParams {
+  contribution: string;
+  thread: string;
+  name: string;
+  args?: unknown;
+}
+
+/**
+ * group.append (meta): add messages to one event, an existing one (event and its meta) or a new one (event empty,
+ * meta null) that may continue a done one. Answered with the event as a ConnectorInboxThing with id and meta.
+ */
+export interface ConnectorGroupAppendParams {
+  contribution: string;
+  thread: string;
+  event: string;
+  meta: unknown;
+  messages: string[];
+  continues?: string;
+}
+
+/**
+ * group.fallback: group a batch by structure, with the conversation's events.
+ */
+export interface ConnectorGroupFallbackParams {
+  contribution: string;
+  thread: string;
+  batch: string;
+  events: ConnectorGroupEvent[];
+}
+
+export interface ConnectorGroupEvent {
+  id: string;
+  meta: unknown;
+  done: boolean;
+}
+
+/**
+ * group.fallback's answer: each new message exactly once, in an open event given (assign) or a new one (new).
+ */
+export interface ConnectorGroupFallback {
+  assign: ConnectorGroupAssign[];
+  new: ConnectorGroupNew[];
+}
+
+export interface ConnectorGroupAssign {
+  message: string;
+  event: string;
+}
+
+export interface ConnectorGroupNew {
+  key: string;
+  messages: string[];
+  rule_tier?: string;
+  title?: string;
+}
+
+/**
+ * archive.changes: the program's own cursor, kept and handed back as it is (empty the first time).
+ */
+export interface ConnectorChangesParams {
+  contribution: string;
+  cursor?: string;
+  limit?: number;
+}
+
+/**
+ * archive.changes' answer: what moved since the cursor, where to go on from, and whether another call has more now.
+ */
+export interface ConnectorChangesResult {
+  batches?: ConnectorChatBatch[];
+  next?: string;
+  more?: boolean;
+}
+
+/**
+ * One conversation's new messages, oldest first, archived as the chat <source>-<chat.id>: no source is the
+ * connector's id, else one of the manifest's archive_sources.
+ */
+export interface ConnectorChatBatch {
+  source?: string;
+  chat?: ConnectorArchiveChat;
+  messages?: ConnectorArchiveMessage[];
+}
+
+export interface ConnectorArchiveChat {
+  id: string;
+  name: string;
+  /** dm, group or bot. */
+  kind: string;
+  topic?: boolean;
+  updated_at?: string;
+}
+
+/**
+ * One archived message. The archive only appends: a message without at, or without text and media, is dropped.
+ */
+export interface ConnectorArchiveMessage {
+  id: string;
+  position?: string;
+  sender_id?: string;
+  sender_name?: string;
+  mine?: boolean;
+  /** TEXT, POST, IMAGE, FILE, CARD, SYSTEM… */
+  type?: string;
+  text?: string;
+  at?: string;
+  /** Refs for archive.media. */
+  media?: string[];
+  /** Raw identity clues; the hub keeps only their HMAC. */
+  sender_handles?: KBHandle[];
+}
+
+/**
+ * items.list: the knowledge base's documents, meetings and events.
+ */
+export interface ConnectorItems {
+  items: ConnectorKBItem[];
+}
+
+/**
+ * One knowledge-base item. The fields after where are the knowledge base's own (its tagging); a program leaves them
+ * out.
+ */
+export interface ConnectorKBItem {
+  kind: string;
+  id: string;
+  title: string;
+  url?: string;
+  at?: string;
+  /** Where it came from (a chat id, calendar…). */
+  where?: string;
+  projects?: string[];
+  note?: string;
+  seen?: string;
+  importance?: string;
+  relevance?: number;
+  tags?: string[];
+  locked?: boolean;
+  tagged_at?: string;
+  pinned?: string;
+  locked_fields?: string[];
+}
+
+/**
+ * items.doc_title: the title of a document link in a chat.
+ */
+export interface ConnectorDocTitleParams {
+  contribution: string;
+  url: string;
+}
+
+/**
+ * items.doc_title's answer: empty when it cannot be read.
+ */
+export interface ConnectorDocTitle {
+  title: string;
+}
+
+/**
+ * snapshot.get: the user's time zone (none: the program's own). The hub waits at most 3 seconds.
+ */
+export interface ConnectorSnapshotParams {
+  contribution: string;
+  tz?: string;
+}
+
+/**
+ * snapshot.get's answer: the unread chats and the rest of today's meetings (not declined, by start); a part not known
+ * is left out.
+ */
+export interface ConnectorSnapshot {
+  chats?: ConnectorSnapshotChats;
+  meetings?: ConnectorSnapshotMeeting[];
+}
+
+export interface ConnectorSnapshotChats {
+  at_me: ConnectorSnapshotChat[];
+  other: ConnectorSnapshotChat[];
+}
+
+export interface ConnectorSnapshotChat {
+  name: string;
+  unread: number;
+  /** The newest text's start, for a chat that @ the user. */
+  preview?: string;
+}
+
+export interface ConnectorSnapshotMeeting {
+  start: string;
+  end: string;
+  title: string;
+}
+
+/**
+ * login.step: step empty starts over; values are the fields of the step before.
+ */
+export interface ConnectorLoginParams {
+  contribution: string;
+  step?: string;
+  values?: Record<string, string>;
+}
+
+/**
+ * Where a sign-in stands: the next step to fill in, a code or QR code to wait on, or done. error is what was wrong
+ * with the values just given (the same step again).
+ */
+export interface ConnectorPrompt {
+  step?: string;
+  fields?: ConnectorField[];
+  /** ConnectorPromptKind, or empty for fields. */
+  kind?: string;
+  url?: string;
+  user_code?: string;
+  /** Seconds between asks of a device_code or qr step. */
+  interval?: number;
+  qr?: ConnectorQRCode;
+  hint?: string;
+  error?: string;
+  done?: boolean;
+  /** Who is signed in, once done. */
+  account?: string;
+}
+
+export interface ConnectorField {
+  name: string;
+  label: string;
+  secret?: boolean;
+  placeholder?: string;
+}
+
+/**
+ * A qr step's code, size rows of size 0 / 1: the hub fills it in on the way to the app; a program leaves it out.
+ */
+export interface ConnectorQRCode {
+  size: number;
+  rows: string[];
+}
+
+/**
+ * options.get's answer: the connector's own settings the user changes in the app.
+ */
+export interface ConnectorOptions {
+  options?: unknown;
+}
+
+/**
+ * options.set: the user changed them (an error refuses them), and after every start the ones accepted before.
+ */
+export interface ConnectorOptionsParams {
+  contribution: string;
+  options: unknown;
+}
+
+/**
+ * machines.online: one of the user's computers just connected. The hub does not wait for the answer.
+ */
+export interface ConnectorMachineParams {
+  contribution: string;
+  machine: string;
+}
+
+/**
+ * auth.set: where the sign-in comes from, as the user chose (after every start too; the program does not keep it).
+ */
+export interface ConnectorAuthSource {
+  contribution: string;
+  source: string;
+  machine?: string;
+  machine_name?: string;
+}
+
+/**
+ * auth.get and auth.set's answer. scopes only when known (scopes_known).
+ */
+export interface ConnectorAuth {
+  source: string;
+  machine?: string;
+  scopes?: string[];
+  scopes_known: boolean;
+}
+
+/**
+ * connector.secrets.load's answer: the connector's own state (a session, a token), sealed in the hub's database. No
+ * data: nothing stored.
+ */
+export interface ConnectorSecret {
+  /** Base64. */
+  data?: string;
+}
+
+/**
+ * connector.secrets.save: replaces what is stored.
+ */
+export interface ConnectorSecretSaveParams {
+  contribution: string;
+  /** Base64. */
+  data?: string;
+}
+
+/**
+ * connector.credentials.gh_token: a computer's gh token, for an extension granted gh_login. Kept in memory only.
+ */
+export interface ConnectorGhTokenParams {
+  contribution: string;
+  machine: string;
+  host?: string;
+}
+
+export interface ConnectorGhToken {
+  token: string;
+}
+
+/**
+ * connector.posts.put (archive): a feed's public posts into the knowledge base's post archive, at most 200 a call.
+ */
+export interface ConnectorPostsPutParams {
+  contribution: string;
+  posts: ConnectorPostPut[];
+}
+
+/**
+ * A post, with its comments when they were read this time: no comments keeps the archived ones; an empty list is
+ * none.
+ */
+export interface ConnectorPostPut {
+  post: ConnectorPost;
+  comments?: ConnectorPostComment[];
+}
+
+/**
+ * One public post. feed names the archive's heading; text over 64 KB is cut.
+ */
+export interface ConnectorPost {
+  id: string;
+  feed?: string;
+  author?: string;
+  author_id?: string;
+  anonymous?: boolean;
+  categories?: string[];
+  text: string;
+  images?: number;
+  reactions?: number;
+  comment_count: number;
+  at: string;
+  mine?: boolean;
+}
+
+/**
+ * A comment as it is to be written: the connector names the user and hides who is anonymous.
+ */
+export interface ConnectorPostComment {
+  author?: string;
+  reply_to?: string;
+  text: string;
+  at: string;
+}
+
+/**
+ * connector.posts.put's answer: ConnectorPostStatus (or empty) for each post, in order.
+ */
+export interface ConnectorPostsPut {
+  statuses: string[];
+}
+
+/**
+ * connector.posts.comments: replace one of its archived posts' comments, read when it had comment_count.
+ */
+export interface ConnectorPostsCommentsParams {
+  contribution: string;
+  id: string;
+  comment_count: number;
+  comments: ConnectorPostComment[];
+}
+
+/**
+ * connector.posts.pending: the posts whose comments to read again.
+ */
+export interface ConnectorPostsPendingParams {
+  contribution: string;
+  limit?: number;
+}
+
+/**
+ * Newest first, at most 500.
+ */
+export interface ConnectorPostsPending {
+  posts: ConnectorPendingPost[];
+}
+
+export interface ConnectorPendingPost {
+  id: string;
+  comment_count: number;
+  at: string;
+}
+
+/**
+ * connector.archive.chats: the chats archived under one of its sources (none: its id), to go on from where they are.
+ */
+export interface ConnectorArchiveChatsParams {
+  contribution: string;
+  source?: string;
+}
+
+export interface ConnectorArchivedChats {
+  chats: ConnectorArchivedChat[];
+}
+
+/**
+ * A chat's id at the source, and how far it was archived.
+ */
+export interface ConnectorArchivedChat {
+  id: string;
+  name?: string;
+  cursor?: string;
+  last_at?: string;
+  messages: number;
+}
+
+/**
+ * The event connector.changed: chats, items or the inbox changed; the hub reads them soon.
+ */
+export interface ConnectorChangedEvent {
+  contribution: string;
+  scope: ConnectorScope;
+}
+
+export type KBKind = "projects" | "chats" | "people" | "docs" | "meetings" | "events" | "recordings" | (string & {});
+export const KBKINDS = ["projects", "chats", "people", "docs", "meetings", "events", "recordings"] as const;
+
+/**
+ * error.code of a knowledge-base call besides permission_denied (data {scope}, the one missing): invalid_params,
+ * not_found, assistant_offline (the manager is away), kb_unavailable (not open yet). Both of the last are worth
+ * trying again.
+ */
+export type KBErrorCode = "invalid_params" | "not_found" | "assistant_offline" | "kb_unavailable" | (string & {});
+export const KBERROR_CODES = ["invalid_params", "not_found", "assistant_offline", "kb_unavailable"] as const;
+
+/**
+ * An identity clue: kind (phone, email, a source's user id kind…) and the raw value.
+ */
+export interface KBHandle {
+  kind: string;
+  value: string;
+}
+
+/**
+ * kb.list: one kind's entities, ranked; pages are not a snapshot (deduplicate, read again when needed).
+ */
+export interface KBListParams {
+  kind: KBKind;
+  tag?: string;
+  /** 0 is 30. */
+  limit?: number;
+  offset?: number;
+}
+
+export interface KBListResult {
+  items: KBEntry[];
+  /** The kind's most used tags. */
+  tags: string[];
+  total: number;
+  /** Where the next page starts; none at the end. */
+  next_offset?: number;
+}
+
+export interface KBEntry {
+  kind: string;
+  id: string;
+  name: string;
+  one_line?: string;
+  /** P0 (critical) … P3 (ignorable). */
+  importance?: string;
+  /** 0–100: how much it concerns the owner. */
+  relevance: number;
+  tags?: string[];
+  updated: string;
+  /** A project's short / long · status, a chat's dm / group… */
+  extra?: string;
+}
+
+/**
+ * kb.get: one entity, with its most recent messages (recent_chars, none is 12000; 0 leaves them out). Live agents are
+ * not in it.
+ */
+export interface KBGetParams {
+  kind: KBKind;
+  id: string;
+  recent_chars?: number;
+}
+
+export interface KBGetResult {
+  detail: KBDetail;
+}
+
+export interface KBDetail {
+  kind: string;
+  id: string;
+  /** Where it is on the manager's machine, for its own file tools. */
+  path: string;
+  /** The entity's own fields (meta.json). */
+  meta: unknown;
+  summary?: string;
+  log?: string[];
+  recent?: string;
+  links?: KBEntry[];
+  moments?: KBMomentRef[];
+  segments?: KBRecordingSegment[];
+}
+
+/**
+ * A feed post linked to a project.
+ */
+export interface KBMomentRef {
+  id: string;
+  author: string;
+  text: string;
+  at: string;
+  comments: number;
+  /** How it bears on the project. */
+  note?: string;
+}
+
+/**
+ * A recording's transcript segment, in seconds from its start.
+ */
+export interface KBRecordingSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * kb.day: a chat's messages of one day in the knowledge base's time zone.
+ */
+export interface KBDayParams {
+  id: string;
+  day: string;
+}
+
+/**
+ * prev and next are the days before and after that have messages (empty: none).
+ */
+export interface KBDayResult {
+  day: string;
+  messages: KBDayMessage[];
+  prev: string;
+  next: string;
+}
+
+export interface KBDayMessage {
+  /** The message's first line in the day's file, from 1. */
+  n: number;
+  text: string;
+}
+
+/**
+ * kb.search: lines that match, messages too unless messages is false.
+ */
+export interface KBSearchParams {
+  query: string;
+  messages?: boolean;
+  /** 0 is 40. */
+  limit?: number;
+}
+
+export interface KBSearchResult {
+  hits: KBHit[];
+}
+
+export interface KBHit {
+  /** Relative to the knowledge base. */
+  path: string;
+  line: string;
+}
+
+/**
+ * kb.update: kind and id, and the fields to change (the knowledge base's update API, plus pinned, lock and the
+ * remove_* lists). tags replaces (an empty list clears); a field left out is kept. Protected fields and history
+ * limits: docs/knowledge.md.
+ */
+export interface KBUpdateParams {
+  kind: KBKind;
+  id: string;
+  /** Confirmed facts automatic writes cannot replace; an empty string clears them. */
+  pinned?: string;
+  /** Whether an importance / relevance given here is kept from automatic tagging (default true). */
+  lock?: boolean;
+  remove_people?: string[];
+  remove_chats?: string[];
+  remove_aliases?: string[];
+  remove_projects?: string[];
+  name?: string;
+  /** A project's: short or long. */
+  project_kind?: string;
+  status?: string;
+  goal?: string;
+  my_role?: string;
+  note?: string;
+  importance?: string;
+  relevance?: number;
+  tags?: string[];
+  summary?: string;
+  /** A project's: a line appended to its timeline. */
+  log?: string;
+  /** Who writes the log line. */
+  source?: string;
+  aliases?: string[];
+  chats?: string[];
+  people?: string[];
+  /** A project's code directories, <machine>:<path>. */
+  dirs?: string[];
+  projects?: string[];
+  merge_into?: string;
+}
+
+export interface KBUpdateResult {
+  id: string;
+}
+
+/**
+ * kb.owner takes nothing.
+ */
+export interface KBOwnerParams {
+}
+
+/**
+ * kb.owner: the user's name, aliases and identities across sources (raw only through this explicit read).
+ */
+export interface KBOwner {
+  name: string;
+  aliases: string[];
+  handles: KBHandle[];
+}
+
+/**
+ * event.kb.changed: an entity changed (what: which part). Read it again if it matters.
+ */
+export interface KBChangedEvent {
+  kind: string;
+  id: string;
+  what: string;
+}
+
+/**
+ * event.kb.forgotten: a source's data was removed from the knowledge base.
+ */
+export interface KBForgottenEvent {
+  source: string;
+}
+
+/** One call or event of an extension point's protocol: who sends it, and the definitions its params and
+ * its answer hold to (no result: any JSON; an event has no answer). */
+export interface Call {
+  from: "hub" | "program";
+  params: string;
+  result?: string;
+  event?: boolean;
+}
+
+/** The calls and events the schemas describe, by name as on the wire. */
+export const CALLS: Record<string, Call> = {
+  "connector.status": { from: "hub", params: "ConnectorParams", result: "ConnectorStatus" },
+  "connector.manifest": { from: "hub", params: "ConnectorParams", result: "ConnectorManifest" },
+  "connector.tools.list": { from: "hub", params: "ConnectorParams", result: "ConnectorTools" },
+  "connector.tools.call": { from: "hub", params: "ConnectorCallParams", result: "ConnectorCallResult" },
+  "connector.actions.list": { from: "hub", params: "ConnectorParams", result: "ConnectorTools" },
+  "connector.actions.describe": { from: "hub", params: "ConnectorCallParams", result: "ConnectorDescribeResult" },
+  "connector.actions.do": { from: "hub", params: "ConnectorDoParams", result: "ConnectorCallResult" },
+  "connector.thread.page": { from: "hub", params: "ConnectorThreadParams", result: "ConnectorThreadPage" },
+  "connector.thread.media": { from: "hub", params: "ConnectorMediaParams", result: "ConnectorMedia" },
+  "connector.inbox.collect": { from: "hub", params: "ConnectorParams", result: "ConnectorCollectResult" },
+  "connector.inbox.reply": { from: "hub", params: "ConnectorInboxReply", result: "Empty" },
+  "connector.inbox.settle": { from: "hub", params: "ConnectorSettleParams", result: "ConnectorSettled" },
+  "connector.archive.changes": { from: "hub", params: "ConnectorChangesParams", result: "ConnectorChangesResult" },
+  "connector.archive.media": { from: "hub", params: "ConnectorMediaParams", result: "ConnectorMedia" },
+  "connector.items.list": { from: "hub", params: "ConnectorParams", result: "ConnectorItems" },
+  "connector.items.doc_title": { from: "hub", params: "ConnectorDocTitleParams", result: "ConnectorDocTitle" },
+  "connector.snapshot.get": { from: "hub", params: "ConnectorSnapshotParams", result: "ConnectorSnapshot" },
+  "connector.group.tool": { from: "hub", params: "ConnectorGroupToolParams" },
+  "connector.group.append": { from: "hub", params: "ConnectorGroupAppendParams", result: "ConnectorInboxThing" },
+  "connector.group.fallback": { from: "hub", params: "ConnectorGroupFallbackParams", result: "ConnectorGroupFallback" },
+  "connector.login.step": { from: "hub", params: "ConnectorLoginParams", result: "ConnectorPrompt" },
+  "connector.logout": { from: "hub", params: "ConnectorParams", result: "Empty" },
+  "connector.options.get": { from: "hub", params: "ConnectorParams", result: "ConnectorOptions" },
+  "connector.options.set": { from: "hub", params: "ConnectorOptionsParams", result: "Empty" },
+  "connector.machines.online": { from: "hub", params: "ConnectorMachineParams", result: "Empty" },
+  "connector.auth.get": { from: "hub", params: "ConnectorParams", result: "ConnectorAuth" },
+  "connector.auth.set": { from: "hub", params: "ConnectorAuthSource", result: "ConnectorAuth" },
+  "connector.secrets.load": { from: "program", params: "ConnectorParams", result: "ConnectorSecret" },
+  "connector.secrets.save": { from: "program", params: "ConnectorSecretSaveParams", result: "Empty" },
+  "connector.secrets.delete": { from: "program", params: "ConnectorParams", result: "Empty" },
+  "connector.posts.put": { from: "program", params: "ConnectorPostsPutParams", result: "ConnectorPostsPut" },
+  "connector.posts.comments": { from: "program", params: "ConnectorPostsCommentsParams", result: "Empty" },
+  "connector.posts.pending": { from: "program", params: "ConnectorPostsPendingParams", result: "ConnectorPostsPending" },
+  "connector.archive.chats": { from: "program", params: "ConnectorArchiveChatsParams", result: "ConnectorArchivedChats" },
+  "connector.credentials.gh_token": { from: "program", params: "ConnectorGhTokenParams", result: "ConnectorGhToken" },
+  "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
+  "kb.list": { from: "program", params: "KBListParams", result: "KBListResult" },
+  "kb.get": { from: "program", params: "KBGetParams", result: "KBGetResult" },
+  "kb.day": { from: "program", params: "KBDayParams", result: "KBDayResult" },
+  "kb.search": { from: "program", params: "KBSearchParams", result: "KBSearchResult" },
+  "kb.update": { from: "program", params: "KBUpdateParams", result: "KBUpdateResult" },
+  "kb.owner": { from: "program", params: "KBOwnerParams", result: "KBOwner" },
+  "event.kb.changed": { from: "hub", params: "KBChangedEvent", event: true },
+  "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
+};
