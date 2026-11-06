@@ -64,8 +64,10 @@ const (
 type observer struct {
 	on  bool // protocol 2, from ready on
 	key linkKey
-	// sending counts the call's sends to it in flight: what it works on then may be the call's own.
+	// sending counts the call's sends to it in flight: what it works on then may be the call's own. sends counts those
+	// begun: a look one began during is dropped (its message may be in what the look read).
 	sending atomic.Int32
+	sends   atomic.Int64
 	// doneSeq is the last line of it a finished run read: what works after that is a new turn.
 	doneSeq int
 	n       int               // observed runs made (their ids)
@@ -142,6 +144,7 @@ func (o *observer) unknown(r *voiceRun) {
 // observe follows the turn the bound conversation works on when no run of the call's is on it.
 func (t *tracker) observe(ctx context.Context) {
 	o := &t.obs
+	begun := o.sends.Load()
 	if !o.on || o.sending.Load() > 0 || slices.ContainsFunc(t.runs, func(r *voiceRun) bool {
 		return linkKey{r.MachineID, r.SessionID} == o.key
 	}) {
@@ -161,6 +164,9 @@ func (t *tracker) observe(ctx context.Context) {
 	page, err := hub.lastTurns(ctx, o.key.machine, o.key.session, 1)
 	if err != nil {
 		return
+	}
+	if o.sending.Load() > 0 || o.sends.Load() != begun {
+		return // a send of the call's began while it read: the turn may be that send's (its run follows it)
 	}
 	if o.afterStop {
 		if !slices.ContainsFunc(page.Items, func(it proto.Item) bool {

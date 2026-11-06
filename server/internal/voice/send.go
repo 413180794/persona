@@ -213,6 +213,7 @@ func (t *tracker) notSent(r *voiceRun, f sendFail) {
 func (t *tracker) sendBound(r *voiceRun, opts sendOpts, first bool) {
 	c := t.c
 	t.obs.sending.Add(1)
+	t.obs.sends.Add(1)
 	go func() {
 		handed := false // its count is handed to the tracker, which takes it off once the run is in its hands
 		defer func() {

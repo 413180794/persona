@@ -362,6 +362,15 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		t.c.pl.logf("run %s: read the answer: %v", r.ID, err)
 		return
 	}
+	if sess != nil && sess.Rev != 0 {
+		// The transcript moved on while it was read: the look (working, its background work) may be from before what
+		// was read, a whole turn between the two (#5060: its answer read as done while its background work went on).
+		// Look again at once.
+		if again, err := hub.session(ctx, r.MachineID, r.SessionID); err == nil && again != nil && again.Rev != sess.Rev {
+			r.ended, t.last = true, time.Time{}
+			return
+		}
+	}
 	r.notFound = !rd.Found
 	if rd.Found {
 		r.unsent = false

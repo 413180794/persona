@@ -46,6 +46,9 @@ type fakeHub struct {
 	ws     map[*websocket.Conn]map[string]bool
 	wsSaw  []map[string]any
 	looks  int // GET /api/v1/sessions?machine_id= (a run's check, or a send's look first)
+	// onLook runs as GET /api/v1/sessions?machine_id= is asked, onRead as an after_seq page is, before they answer
+	// (unlocked).
+	onLook, onRead func()
 
 	cards      []proto.Interaction // GET /api/v1/interactions
 	interrupts []string            // the sessions POST …/interrupt stopped
@@ -160,7 +163,11 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		if r.URL.Query().Has("machine_id") {
 			h.mu.Lock()
 			h.looks++
+			onLook := h.onLook
 			h.mu.Unlock()
+			if onLook != nil {
+				onLook()
+			}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"sessions": h.list()})
 	})
@@ -246,6 +253,12 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		_ = json.NewEncoder(w).Encode(sw)
 	})
 	mux.HandleFunc("GET /api/v1/sessions/m/{sid}/items", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		onRead := h.onRead
+		h.mu.Unlock()
+		if onRead != nil && r.URL.Query().Has("after_seq") {
+			onRead()
+		}
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		s := h.sessions[r.PathValue("sid")]

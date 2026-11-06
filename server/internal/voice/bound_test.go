@@ -956,3 +956,32 @@ func TestBoundHeldRun(t *testing.T) {
 	}
 	a.runStates(m.ID, runDone)
 }
+
+// A whole turn that comes between a check's look and its read (the look says idle, nothing in the background; the
+// read finds the answer) is looked at again before it is decided: its background work holds the run (#5060).
+func TestBoundTurnBetweenTheLookAndTheRead(t *testing.T) {
+	hub := agentHub(t)
+	hub.manual = true
+	var once atomic.Bool
+	hub.onRead = func() {
+		if !once.CompareAndSwap(false, true) {
+			return
+		}
+		hub.status("a1", "working")
+		hub.add("a1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "测试在后台跑了，单元测试都过了。"})
+		hub.edit("a1", func(s *fakeSession) { s.background = 1 })
+		hub.end("a1")
+	}
+	up := boundUpstream(t, false)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "跑一下全部测试"})
+	m := hub.waitSent(1)
+	if states := a.runStates(m.ID, runHeld); slices.Contains(states, runDone) {
+		t.Fatalf("run states %v", states)
+	}
+	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "后台还有 1 个任务") {
+		t.Fatalf("first: %s", got)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -107,6 +108,65 @@ func TestObservedTurnBeganDuringTheCall(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 	if n := up.count(said); n != 1 {
 		t.Fatalf("the handed-over turn was said again (%d)", n)
+	}
+}
+
+// A look of the observer's that a send of the call's began during is dropped: the turn it then reads working is the
+// send's (its run follows it), not one to follow as observed and fold into that run (#5060: the run's frames named
+// its message twice, and a test waiting for the fold's frame timed out).
+func TestALookASendBeganDuringIsDropped(t *testing.T) {
+	setVar(t, &lookEvery, 100*time.Millisecond)
+	hub := agentHub(t)
+	hub.manual = true
+	up := boundUpstream(t, false)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, boundStart("a1", nil))
+	a.until(ofType("ready"))
+	hub.subscribed("a1")
+	// The observer's next look is answered only once the send is in and its turn works.
+	looking := make(chan struct{})
+	var held atomic.Bool
+	hub.mu.Lock()
+	hub.onLook = func() {
+		if !held.CompareAndSwap(false, true) {
+			return // the send's own look, and every one after
+		}
+		close(looking)
+		for deadline := time.Now().Add(5 * time.Second); len(hub.messages()) == 0 && time.Now().Before(deadline); {
+			time.Sleep(10 * time.Millisecond)
+		}
+		hub.status("a1", "working")
+	}
+	hub.mu.Unlock()
+	select {
+	case <-looking:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the observer never looked")
+	}
+	a.send(map[string]any{"type": "text", "text": "修一下登录页的测试"})
+	m := hub.waitSent(1)
+	time.Sleep(300 * time.Millisecond) // the held look is answered, and the loop looks again
+	hub.add("a1", proto.Item{Role: "assistant", Kind: proto.KindText, Text: "登录页的测试修好了。"})
+	hub.end("a1")
+	var states []string
+	a.until(func(f map[string]any) bool {
+		if f["type"] != "run" {
+			return false
+		}
+		if f["id"] != m.ID {
+			t.Fatalf("a run of its own: %v", f)
+		}
+		if ids, _ := f["msg_ids"].([]any); len(ids) != 1 {
+			t.Fatalf("its frame names %v", f["msg_ids"])
+		}
+		if n := len(states); n > 0 && states[n-1] == f["state"] {
+			t.Fatalf("framed %s twice (%v)", f["state"], states) // a fold moved its base or added its message again
+		}
+		states = append(states, f["state"].(string))
+		return f["state"] == runDone
+	})
+	if got := content(up.nextMatch(on("dlg1"))); !strings.Contains(got, "登录页的测试修好了") {
+		t.Fatalf("result: %s", got)
 	}
 }
 
