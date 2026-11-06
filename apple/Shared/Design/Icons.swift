@@ -156,6 +156,8 @@ extension Theme {
         /// What follows from something before it: a follow-up, the next row of a table.
         static let followOn = "arrow.turn.down.right"
         static let enlarge = "arrow.up.left.and.arrow.down.right"
+        /// Back from the enlarged view (the composer's full-page editor, #3167); a file outline's 全部折叠.
+        static let shrink = "arrow.down.right.and.arrow.up.left"
         /// The text size setting.
         static let textSize = "textformat.size"
         static let upDown = "arrow.up.arrow.down"

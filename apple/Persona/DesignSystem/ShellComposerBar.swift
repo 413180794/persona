@@ -32,6 +32,47 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     @ViewBuilder var modes: () -> Modes
     @State private var dictation = Dictation()
     @Environment(\.buiTheme) private var theme
+    #if os(iOS)
+    /// The draft's height in the field's width and one line's, to tell when it is long enough to offer 展开 (#3167).
+    @State private var textHeight: CGFloat = 0
+    @State private var lineHeight: CGFloat = 0
+    /// The full-page editor is up (`ComposerPageEditor`), on the same draft.
+    @State private var enlarged = false
+    /// It went down because its 发送 sent: the keyboard does not come back to the emptied field.
+    @State private var sentFromPage = false
+    /// What the box's field is bound to while the page is up, so it cannot move the caller's `selection` under the
+    /// sheet (the page hands its cursor back to that when it goes down).
+    @State private var parkedSelection: TextSelection?
+    /// Asks the page for the keyboard: something asked for the box's (a file's path inserted, `PathInsert.edit`; ⌘I)
+    /// while the page is up. A focus binding does not reach into a sheet, so the page keeps its own.
+    @State private var pageFocusRequest = 0
+
+    /// Three lines or more: the box is getting small for the text, ChatGPT's point to offer its full-page editor.
+    private var offersEnlarge: Bool { !text.isEmpty && lineHeight > 0 && textHeight > lineHeight * 2.5 }
+
+    /// What is measured: enough of the draft for four lines at most (only "more than two and a half" matters), with a
+    /// trailing new line counted as the line it starts.
+    private var measuredText: String {
+        let head = String(text.prefix(600))
+        return head.isEmpty ? " " : head.hasSuffix("\n") ? head + " " : head
+    }
+    #endif
+
+    private var fieldSelection: Binding<TextSelection?> {
+        #if os(iOS)
+        enlarged ? $parkedSelection : $selection
+        #else
+        $selection
+        #endif
+    }
+
+    /// ⌘⏎ sends from the box; while the page is up, from the page only (its own 发送 has it).
+    private var sendShortcut: KeyboardShortcut? {
+        #if os(iOS)
+        if enlarged { return nil }
+        #endif
+        return KeyboardShortcut(.return, modifiers: .command)
+    }
 
     /// The icons' ink: the text color, or in the BeautifulUI style its quieter second ink.
     private var ink: Color { ComposerInk.icon(theme) }
@@ -57,7 +98,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             }
             HStack(alignment: .bottom, spacing: Theme.Space.xs) {
                 if !expanded { plus }
-                TextField(placeholder, text: $text, selection: $selection, axis: .vertical)
+                TextField(placeholder, text: $text, selection: fieldSelection, axis: .vertical)
                     .font(Theme.Font.body)
                     .lineLimit(expanded ? 1...8 : 1...1)
                     #if os(iOS) || os(visionOS)
@@ -76,6 +117,15 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     .padding(.top, expanded ? Theme.Space.l : 0)
                     .scaledFrame(minHeight: Theme.Size.tapTarget)
                     .accessibilityIdentifier("shell-composer-field")
+                    #if os(iOS)
+                    // The draft's lines as the field's width wraps them, and one line's height (after the identifier,
+                    // which would name these too). Not the field's own height: on a short page (quotes over it, the
+                    // keyboard up) the field is squeezed below its lines.
+                    // Not while the page is up: it has its own lines, and the box measures again as it comes back.
+                    .background(alignment: .topLeading) {
+                        if !enlarged { measuring }
+                    }
+                    #endif
                 if !expanded {
                     mic
                     if let stop { stopButton(stop) }
@@ -84,6 +134,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             if expanded {
                 HStack(spacing: Theme.Space.xs) {
                     plus
+                    #if os(iOS)
+                    if offersEnlarge { enlargeButton }
+                    #endif
                     Spacer(minLength: Theme.Space.s)
                     if let modesTitle {
                         Menu { modes() } label: { modesLabel(modesTitle) }
@@ -98,7 +151,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                         SendGateButton(gate: gate)
                     } else if canSend {
                         round(Theme.Icon.send, label: String(localized: "发送"), id: "shell-composer-send", action: sendTyped)
-                            .keyboardShortcut(.return, modifiers: .command)
+                            .keyboardShortcut(sendShortcut)
                     } else if let stop {
                         stopButton(stop)
                     }
@@ -118,8 +171,86 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         .animation(Theme.Motion.layout, value: expanded)
         .animation(Theme.Motion.state, value: canSend)
         .animation(Theme.Motion.standard, value: focused.wrappedValue)
+        #if os(iOS)
+        .animation(Theme.Motion.state, value: offersEnlarge)
+        .onChange(of: focused.wrappedValue) { _, wants in
+            // The box asked for while the page is up: the page takes it, the hidden box under the sheet does not.
+            guard enlarged, wants else { return }
+            focused.wrappedValue = false
+            pageFocusRequest += 1
+        }
+        .sheet(isPresented: $enlarged, onDismiss: {
+            // 收起 or a swipe down: back to the box, the text and the cursor where the page left them.
+            if !sentFromPage { focused.wrappedValue = true }
+            sentFromPage = false
+        }) {
+            ComposerPageEditor(placeholder: placeholder, text: $text, selection: $selection, focusRequest: pageFocusRequest,
+                               canSend: canSend, stop: stop.map { stop in { endDictation(then: stop) } }, quotes: quotes,
+                               collapse: { enlarged = false }, send: sendFromPage)
+                .presentationSizing(.page) // the iPad's too: a page's height, not the small form
+        }
+        #endif
         .onDisappear { if dictation.isListening { dictation.stop() } }
     }
+
+    #if os(iOS)
+    /// 展开: the draft in a full-page editor (ChatGPT's), offered once it is three lines long. In the card's row beside +,
+    /// where the composer's buttons are: over the field's corner it would cover the text or make it wrap anew.
+    private var enlargeButton: some View {
+        Button(action: enlarge) {
+            Label("展开", systemImage: Theme.Icon.enlarge)
+                .labelStyle(.titleAndIcon)
+                .font(Theme.Font.secondary)
+                .foregroundStyle(ink)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, Theme.Space.s)
+                .scaledFrame(minHeight: Theme.Size.tapTarget)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("展开输入框")
+        .accessibilityIdentifier("shell-composer-expand")
+        .transition(.opacity)
+    }
+
+    /// The draft's lines, measured in the field's width (`textHeight`, `lineHeight`).
+    private var measuring: some View {
+        ZStack(alignment: .topLeading) {
+            Text(verbatim: measuredText)
+                .lineLimit(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { textHeight = $0 }
+            Text(verbatim: " ").fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { lineHeight = $0 }
+        }
+        .font(Theme.Font.body)
+        .padding(.horizontal, expanded ? Theme.Space.l : Theme.Space.xs) // the field's own
+        .hidden()
+        .accessibilityHidden(true)
+    }
+
+    private func enlarge() {
+        // What the keyboard is still composing goes into the draft first: the page's editor is another text view (#2203).
+        if focused.wrappedValue {
+            TypedText.commitFocused(into: $text)
+        } else {
+            // An unfocused field's selection is stale (a restored draft's, PathInsert.edit): the page starts at the end.
+            selection = TextSelection(insertionPoint: text.endIndex)
+        }
+        if dictation.isListening { dictation.stop() }
+        enlarged = true
+    }
+
+    /// The page's 发送 (or ⌘⏎ there), after it confirmed what the keyboard was composing: as the box's send
+    /// (`sendTyped`), then the page goes down and the keyboard with it.
+    private func sendFromPage() {
+        sentFromPage = true
+        enlarged = false
+        send()
+    }
+    #endif
 
     private var plus: some View {
         Menu { attach() } label: {
@@ -206,3 +337,118 @@ private struct ComposerSurface: ViewModifier {
         }
     }
 }
+
+#if os(iOS)
+/// The composer's full page (#3167, ChatGPT's): the same draft and cursor as the box (`text`, `selection` are the
+/// caller's, `model.drafts` stays the one copy), its quotes on top, 收起 and 发送 in the bar. Photos and files stay in the
+/// composer under the sheet and go with the message all the same.
+private struct ComposerPageEditor: View {
+    var placeholder: String
+    @Binding var text: String
+    /// The caller's cursor: the page's own starts from it, takes it again when something moved it (a file's path
+    /// inserted) and gives it back as the page goes down. Bound straight to it, every keystroke's cursor went round
+    /// through the caller's view and came back late: a letter now and then went missing (iPad, both styles).
+    @Binding var selection: TextSelection?
+    /// Bumped when something asked the box for the keyboard: the page takes it.
+    var focusRequest: Int
+    var canSend: Bool
+    var stop: (() -> Void)?
+    var quotes: Binding<[ContextRef]>?
+    var collapse: () -> Void
+    var send: () -> Void
+    @FocusState private var focused: Bool
+    /// Sent once: a second tap or ⌘⏎ before the page is gone does not send again.
+    @State private var sent = false
+    @State private var cursor: TextSelection?
+    /// The caller's cursor as the page took it: moved since, someone else put it somewhere.
+    @State private var taken: TextSelection?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                if let quotes, !quotes.wrappedValue.isEmpty {
+                    QuoteBar(refs: quotes)
+                        .padding(.horizontal, Theme.Space.l)
+                }
+                TextEditor(text: $text, selection: $cursor)
+                    .font(Theme.Font.body)
+                    .focused($focused)
+                    .scrollContentBackground(.hidden)
+                    .overlay(alignment: .topLeading) {
+                        if text.isEmpty {
+                            // Where the text view's first line starts: its inset, then its line padding.
+                            Text(placeholder)
+                                .font(Theme.Font.body)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, Theme.Space.s)
+                                .padding(.leading, Theme.Space.xs + Theme.Space.xxs)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .padding(.horizontal, Theme.Space.m)
+                    .shellScaled() // the box's type size, a size up
+                    .accessibilityLabel(placeholder)
+                    .accessibilityIdentifier("composer-page-field")
+            }
+            .frame(maxWidth: ChatView.readableWidth) // an iPad's page: the conversation's measure, not the window's
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .themedPage()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        commitTyped()
+                        collapse()
+                    } label: { Label("收起", systemImage: Theme.Icon.shrink) }
+                        .accessibilityLabel("收起输入框")
+                        .accessibilityIdentifier("composer-page-collapse")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if !canSend, let stop {
+                        Button(action: stop) { Label("中断", systemImage: Theme.Icon.interrupt) }
+                            .accessibilityIdentifier("composer-page-stop")
+                    } else {
+                        Button(action: sendOnce) { Label("发送", systemImage: Theme.Icon.send) }
+                            .keyboardShortcut(.return, modifiers: .command) // the box's, which is off meanwhile
+                            .disabled(!canSend)
+                            .accessibilityIdentifier("composer-page-send")
+                    }
+                }
+            }
+        }
+        .onAppear {
+            cursor = selection ?? TextSelection(insertionPoint: text.endIndex)
+            taken = selection
+            focused = true
+        }
+        .onChange(of: focusRequest) {
+            if selection != taken { // where the caller put it (after an inserted path); not for a bare ⌘I
+                cursor = selection
+                taken = selection
+            }
+            focused = true
+        }
+        // A swipe down, or the page going away under it (another conversation, the tree swapped): what the keyboard
+        // is still composing stays in the draft. Not after a send: the text view could still hold the sent text.
+        .onDisappear {
+            guard !sent else { return }
+            commitTyped()
+            selection = cursor
+        }
+    }
+
+    private func sendOnce() {
+        guard !sent else { return }
+        sent = true
+        commitTyped()
+        send()
+    }
+
+    /// The keyboard's composition confirmed into the draft (`TypedText`, #2203); only while the page's editor has the
+    /// keyboard, never another text field's text.
+    private func commitTyped() {
+        if focused { TypedText.commitFocused(into: $text) }
+    }
+}
+#endif

@@ -190,6 +190,17 @@ hub 有 `connectors` 特性时，按 `GET /api/v1/connectors` 在飞书下面加
 - **iPad（regular 宽度，iPhone Duo 展开同理）也用这一个 `ShellComposerBar`**（#2779）：它不进新外壳（`RootView.usesShell` 只看 compact），
   环境里没有 `shell`，以前退回 `ComposerRow`，和 iPhone 不一样。现在 `ChatComposerKind.padCard`（iOS 且没开旧布局）让 Agent 对话、助手对话
   （`shellChat`）和助手新对话（`AssistantHome` 交给 `StarterComposer(shell:)`，模式 chip 收进模型菜单）都画它，宽度跟对话页一起限在 `ChatView.readableWidth` 并居中。
+- **长草稿可以展开成整页编辑器**（#3167，对齐 ChatGPT）：`ShellComposerBar` 里的字到 3 行（按输入框宽度折行后的草稿高度对一行字高，不看输入框自己的高度：上面有引用、键盘弹起时它会被压到不足 3 行），卡片按钮行 + 右边出现「⤢ 展开」
+  （读屏「展开输入框」）；点了拉起整页的 sheet（`ComposerPageEditor`，iPad 是 `.page` 大小，文字宽度限在 `ChatView.readableWidth`），顶栏左「收起」、右「发送」（Agent 工作中且没字时是「中断」），
+  上面是引用条。编辑的是同一份草稿（`text` 绑定，`model.drafts` 仍是唯一来源），待发的图片和文件留在下面的 composer 里照常随消息发出。
+  页有自己的光标（打开时接过调用方的 `selection`，关掉时还回去；直接绑调用方的，每个字的光标都绕调用方一圈、回来晚了，iPad 上偶尔丢字），
+  页开着时输入框自己的字段改绑一份闲置的 `parkedSelection`，在 sheet 下面动不了调用方的光标。焦点绑定进不了 sheet，页也有自己的 `@FocusState`：
+  页开着时谁要输入框的焦点（上传完的文件路径 `PathInsert.edit`、⌘I），输入框把它转给页，不在 sheet 下面弹键盘；这时输入框不算在编辑，
+  路径插在草稿末尾，页的光标跟到路径后面（调用方的光标动过才接，单纯 ⌘I 不动光标）。
+  收起、下滑关掉、页被换掉（切对话、换树）时先确认输入法正在拼的字（`TypedText.commitFocused`，#2203），回到输入框时键盘和光标都在原处；
+  在页里发送（工具栏按钮带 ⌘⏎ 快捷键）和点输入框的发送完全一样，只发一次；页开着时输入框的 ⌘⏎ 关掉，不会从下面再发。量行数的隐藏文字最多排 4 行、取草稿前 600 字，结尾的换行算一行，页开着时不量。
+  按钮放在按钮行、不压在输入框角上：压在角上要么挡字，要么出现时整段重新折行。只在 iOS；旧布局、Mac 不变。
+  UI 测试 `ComposerExpandTests`（助手 / Agent，键盘起落，一整段自动折行，光标从中间带过去带回来，下滑关掉留住改动，发送只到 hub 一次且带引用；iPhone / iPad / iPhone Duo 都能跑，`TEST_RUNNER_JARVIS_ORIENTATION=landscape` 横着跑；展开竖放的 iPhone Duo 上 XCUITest 把屏幕当成倒置竖屏、合成的拖动落不到位，用 `TEST_RUNNER_JARVIS_NO_DRAG=1` 跳过收键盘、下滑两步）。⌘⏎ 的用例要 `TEST_RUNNER_JARVIS_HARDWARE_KEYS=1`：Xcode 27.2 + iOS 26.5 模拟器上合成的 ⌘⏎ 普通字能到、快捷键不触发（输入框原有的 ⌘⏎ 同样不触发）。
 - 旧布局（`-ui.oldLayout YES`）和 Mac 不变：Agent 对话和助手新对话共用 `ComposerRow`（+、玻璃胶囊输入框、发送，Agent 工作中且没打字时是红色的中断，
   没有听写），输入框上方是权限 / 思考强度两个胶囊（`SessionModeBar`）。
 - **听写和中断按钮只有一份**（#1079）：`DesignSystem/ComposerButtons.swift` 的 `ComposerMicButton`（线条麦克风，听写中变实心、红色、脉动）和

@@ -315,7 +315,7 @@ struct FileViewer: View {
                         Label(page.showSource ? "按层级查看" : "查看源文件", systemImage: page.showSource ? "list.triangle" : Theme.Icon.code)
                     }
                     if !page.showSource, let outline = page.outline {
-                        Button { outline.setAll(open: false) } label: { Label("全部折叠", systemImage: "arrow.down.right.and.arrow.up.left") }
+                        Button { outline.setAll(open: false) } label: { Label("全部折叠", systemImage: Theme.Icon.shrink) }
                         if outline.canOpenAll {
                             Button { outline.setAll(open: true) } label: { Label("全部展开", systemImage: Theme.Icon.enlarge) }
                         }
