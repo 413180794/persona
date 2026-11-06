@@ -889,7 +889,11 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		return n.screenBefore(ctx, a.SessionID, a.Anchor, a.Lines, a.Loaded, a.Format == "ansi")
 	case "session.screen":
 		text, status, err := n.screen(ctx, p.SessionID, p.Lines, p.Source, p.Format == "ansi")
-		return map[string]any{"text": text, "status": status}, err
+		res := map[string]any{"text": text, "status": status}
+		if rev := dialogRev(text, p.Lines, p.Source, p.Format); rev != "" {
+			res["dialog_rev"] = rev
+		}
+		return res, err
 	case "terminal.watch":
 		var a struct {
 			Control *termControl `json:"control"`

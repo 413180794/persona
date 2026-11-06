@@ -29,6 +29,9 @@ type Dialog struct {
 	Review     bool   `json:"review,omitempty"`
 	Incomplete bool   `json:"incomplete,omitempty"`
 	Rev        string `json:"rev"`
+	// LegacyRev is Rev as hubs and nodes from before #5538 compute it (white space and all): the card an older hub
+	// makes carries it, and a hub asks an older node to check it.
+	LegacyRev string `json:"-"`
 	// Cursor is where the dialog's ❯ is: an option's key, CursorSubmit on the Submit / Next row, "" when unseen.
 	Cursor string `json:"-"`
 }

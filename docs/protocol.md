@@ -1183,7 +1183,11 @@ When an Agent is blocked without a hook interaction, the hub reads the screen on
 - Compatibility: old Apps don't know `dialog` and keep parsing `screen` and sending `keys` themselves; the hub adds `rev` to those too and checks it the same way; old nodes don't know `rev` / `option`,
   so the hub also passes the computed `keys`, behaving as before. Cards where no dialog was parsed (only the terminal and the key bar) aren't checked.
 - Screen card answers are synchronous: the hub waits until the node has pressed the keys before replying to the App (it used to reply success first and press in the background).
-- `rev` is computed by the hub and the node separately with the same parsing code: if you change the parsing in `internal/screen`, deploy the hub and all nodes together, or new cards will never match (`prompt_changed` every time).
+- `rev` hashes the header, what is asked and each option's label and detail with all white space and ANSI escapes left out, so the same dialog redrawn at another pane width (a phone or the web viewing the pane resizes it) keeps its `rev` (#5538).
+  The card takes the `rev` the node will check: `session.screen` with `lines` 40 (plain, visible) also returns `dialog_rev`, the node's own parse of that screen, so a hub and a node of different builds still agree.
+  A node that returns no `dialog_rev` (older than #5538) gets the old formula (`LegacyRev`, which kept the wrapped rows), and a node also accepts that one from an older hub.
+  A `prompt_changed` refusal's data carries `rev` (the card's) and, when a dialog is on screen, `seen_rev`, `seen_question` and `seen_options`. The node logs the same with the pane the answer read and the agent's pane (the one `session.screen` reads for the card), and the hub logs the refusal's data.
+  The card the hub makes after a `prompt_changed` is named by the node's `dialog_rev` too, so a dialog the node reads differently gets a new card rather than the old id again.
 - The watch also answers with `option` when there's a `dialog` (Siri's **Approve First Pending** doesn't handle screen cards).
 - **Multi-select** (AskUserQuestion `multiSelect` in Claude Code 2.1.316, `docs/claude-integration.md` ("Screen cards for multi-select questions")): `dialog` also carries
   `multi: true`, `submit` (`Submit`, or `Next` when more questions follow), and options also carry `checked` (already checked on the computer) and `text` (what's already typed in the free-answer box);

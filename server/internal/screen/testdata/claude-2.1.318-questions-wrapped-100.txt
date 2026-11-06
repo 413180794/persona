@@ -1,0 +1,27 @@
+⏺ 两个回归任务已经放到后台跑了：
+
+⏺ Bash(scripts/test/regress.sh --suite api)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ Bash(scripts/test/regress.sh --suite web)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ User answered Claude's questions:
+  ⎿  · 先发哪个环境？ → 预览
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ 环境  ☐ 迁移顺序  ✔ Submit  →
+
+这次发布前要先确认迁移顺序：数据库的新列已经加好，但旧版本的 node 还在读老字段，后台的两个回归任务也
+还在跑，结果大概十分钟后出来；如果现在切，出问题时只能回滚到上一个版本，新列里写进去的数据要手动清掉
+。你希望先切流量再等回归结果，还是等回归跑完再切？
+
+❯ 1. 先切流量（推荐）
+     现在就把百分之十的流量切到新版本，回归结果出来以后再决定要不要继续放量。
+  2. 等回归跑完
+     先不动线上，等两个后台任务都跑完、没有新的失败再切，大概要多等十分钟。
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel

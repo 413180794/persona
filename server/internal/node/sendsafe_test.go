@@ -2,9 +2,11 @@ package node
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -244,6 +246,59 @@ func TestDialogKeysCheckRevision(t *testing.T) {
 		t.Fatal("answered into a changed screen")
 	} else if code, _ := refusalOf(t, err); code != "prompt_changed" {
 		t.Fatal(code)
+	}
+}
+
+// #5538: the card is made from the screen at one width and answered after the pane was resized (a phone or the web
+// viewing it): the same dialog, so the answer goes in. A dialog that really changed is still refused, with both
+// revisions in the refusal. An older hub's card carries the old formula, which the node still takes.
+func TestDialogKeysAcrossWidths(t *testing.T) {
+	wide := screenFixture(t, "claude-2.1.318-questions-wrapped-100.txt")
+	f := &fakePane{screens: []string{wide}}
+	var logs bytes.Buffer
+	n := &Node{hosts: herdrHosts(f.serve(t)), agents: map[string]host.Agent{"s1": {PaneID: "w1:p1"}}, logger: log.New(&logs, "", 0)}
+	ctx := context.Background()
+	rev := dialogRev(wide, screen.DialogLines, "", "") // what session.screen gives the hub for its card
+	if rev == "" || rev != screenDialogRev(t, wide) {
+		t.Fatalf("session.screen's dialog_rev %q", rev)
+	}
+	for _, other := range [][3]any{{screen.DialogLines, "visible", "ansi"}, {60, "", ""}, {screen.DialogLines, "recent", ""}} {
+		if r := dialogRev(wide, other[0].(int), other[1].(string), other[2].(string)); r != "" {
+			t.Errorf("dialog_rev for a read dialogKeys does not make (%v): %q", other, r)
+		}
+	}
+
+	f.screens[0] = screenFixture(t, "claude-2.1.318-questions-wrapped-72.txt")
+	if keys, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err != nil || strings.Join(keys, ",") != "2" {
+		t.Fatalf("resized: %v %v", keys, err)
+	}
+
+	f.screens[0] = wide
+	legacy := screen.ParseDialog(wide).LegacyRev
+	if keys, _, err := n.dialogKeys(ctx, "s1", legacy, "1"); err != nil || strings.Join(keys, ",") != "1" {
+		t.Fatalf("an older hub's card: %v %v", keys, err)
+	}
+
+	f.screens[0] = screenFixture(t, "claude-2.1.318-questions-wrapped-changed-100.txt")
+	_, _, err := n.dialogKeys(ctx, "s1", rev, "2")
+	code, data := refusalOf(t, err)
+	seen := screenDialogRev(t, f.screens[0])
+	if code != screen.PromptChanged || data["rev"] != rev || data["seen_rev"] != seen || data["seen_options"] != float64(4) ||
+		!strings.Contains(data["seen_question"].(string), "回归") {
+		t.Fatalf("changed: %s %v", code, data)
+	}
+	// The node's log says it too, with the pane the answer read and the agent's (the card's) pane.
+	if l := logs.String(); !strings.Contains(l, "prompt_changed: the card's dialog "+rev+", "+seen+" in pane w1:p1 (the agent's pane: w1:p1)") {
+		t.Fatalf("log %q", l)
+	}
+	if len(f.keys) != 0 {
+		t.Fatalf("keys pressed: %v", f.keys)
+	}
+	f.screens[0] = screenFixture(t, "claude-2.1.312-empty-162.txt")
+	if _, _, err := n.dialogKeys(ctx, "s1", rev, "2"); err == nil {
+		t.Fatal("answered with no dialog on screen")
+	} else if code, data := refusalOf(t, err); code != screen.PromptChanged || data["rev"] != rev || data["seen_rev"] != nil {
+		t.Fatalf("gone: %s %v", code, data)
 	}
 }
 

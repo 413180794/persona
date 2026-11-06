@@ -30,12 +30,16 @@ const (
 	dialogScreen = "────────────────────\n Do you want to proceed?\n ❯ 1. Yes\n   2. Type something.\n   3. No\n"
 )
 
-// cardNode is a node that shows a screen (session.screen) and takes Codex answers (codex.answer).
+// cardNode is a node that shows a screen (session.screen) and takes Codex answers (codex.answer). Like a current
+// node it says the revision of the dialog on the screen it gives (dialog_rev), unless dialogRev says otherwise: ""
+// is a node from before #5538 that says none, anything else the revision a node of another build parses.
 type cardNode struct {
-	mu      sync.Mutex
-	answers []map[string]any
-	err     error
-	screen  string
+	mu        sync.Mutex
+	answers   []map[string]any
+	err       error
+	screen    string
+	dialogRev *string
+	keysErr   error // what session.keys answers
 }
 
 func (c *cardNode) setScreen(s string) {
@@ -63,7 +67,19 @@ func newCardFleet(t *testing.T, store bool) (*fleetTest, *cardNode) {
 			if c.screen == "node-error" {
 				return nil, errNode
 			}
-			return map[string]any{"text": c.screen}, nil
+			res := map[string]any{"text": c.screen}
+			if c.dialogRev != nil {
+				if *c.dialogRev != "" {
+					res["dialog_rev"] = *c.dialogRev
+				}
+			} else if d := screen.ParseDialog(c.screen); d != nil && p["lines"] == float64(screen.DialogLines) {
+				res["dialog_rev"] = d.Rev
+			}
+			return res, nil
+		case "session.keys":
+			if c.keysErr != nil {
+				return nil, c.keysErr
+			}
 		case "codex.answer":
 			c.answers = append(c.answers, p)
 			if c.err != nil {
@@ -624,6 +640,68 @@ func TestNoScreenCardWithoutATerminal(t *testing.T) {
 	got, _ := waitCards(ft.s, 1, 5*time.Second)
 	if len(got) != 1 || got["scr_mac_s1_"+screen.ParseDialog(pickModel).Rev] != proto.IxScreen {
 		t.Fatalf("want one screen card, for the terminal session: %v", got)
+	}
+}
+
+// #5538: the card carries the revision the node will check the answer against. A node says its own (dialog_rev), so
+// a hub and a node of different builds that parse the screen differently still agree; a node from before that says
+// none and checks the old formula, which the card then carries.
+func TestScreenCardTakesTheNodesRevision(t *testing.T) {
+	d := screen.ParseDialog(pickModel)
+	for _, c := range []struct {
+		name, nodeSays, want string
+	}{
+		{"another build", "0123456789ab", "0123456789ab"},
+		{"same build", d.Rev, d.Rev},
+		{"before #5538", "", d.LegacyRev},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ft, n := newCardFleet(t, false)
+			n.setScreen(pickModel)
+			n.mu.Lock()
+			n.dialogRev = &c.nodeSays
+			n.mu.Unlock()
+			blockSession(ft, proto.Session{SessionID: "s1"})
+			got, _ := waitCards(ft.s, 1, 5*time.Second)
+			if len(got) != 1 || got["scr_mac_s1_"+c.want] != proto.IxScreen {
+				t.Fatalf("want the card scr_mac_s1_%s: %v", c.want, got)
+			}
+			for _, ix := range ft.s.pendingInteractions() {
+				if ix.Dialog == nil || ix.Dialog.Rev != c.want {
+					t.Fatalf("dialog %+v", ix.Dialog)
+				}
+				if p, err := screenAnswer("s1", ix.Dialog, proto.Resolution{Option: "2"}); err != nil || p["rev"] != c.want {
+					t.Fatalf("answer %v %v", p, err)
+				}
+			}
+		})
+	}
+}
+
+// #5538: the node refuses an answer because it reads another dialog than the card's (prompt_changed). The card made
+// next is named by what the node reads, so it is a new card. Named by the hub's own reading, it came back under the
+// old id while the hub still read the old dialog, and every answer to it was refused again.
+func TestScreenCardRebuiltAfterPromptChanged(t *testing.T) {
+	ft, n := newCardFleet(t, false)
+	n.setScreen(pickModel)
+	first, second := "aaaaaaaaaaaa", "bbbbbbbbbbbb"
+	n.mu.Lock()
+	n.dialogRev = &first
+	n.keysErr = &rpc.Error{Code: screen.PromptChanged, Message: "变了", Data: json.RawMessage(`{"delivered":"none"}`)}
+	n.mu.Unlock()
+	blockSession(ft, proto.Session{SessionID: "s1"})
+	if got, _ := waitCards(ft.s, 1, 5*time.Second); len(got) != 1 || got["scr_mac_s1_"+first] != proto.IxScreen {
+		t.Fatalf("first card %v", got)
+	}
+	n.mu.Lock()
+	n.dialogRev = &second // the node now reads the screen as another dialog
+	n.mu.Unlock()
+	var re *rpc.Error
+	if err := ft.s.resolve("scr_mac_s1_"+first, proto.Resolution{Option: "1"}); !errors.As(err, &re) || re.Code != screen.PromptChanged {
+		t.Fatalf("answer: %v", err)
+	}
+	if got, _ := waitCards(ft.s, 1, 5*time.Second); len(got) != 1 || got["scr_mac_s1_"+second] != proto.IxScreen {
+		t.Fatalf("after prompt_changed: %v", got)
 	}
 }
 

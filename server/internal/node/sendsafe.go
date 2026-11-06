@@ -42,8 +42,8 @@ func (n *Node) dialogKeys(ctx context.Context, id, rev, option string) (keys, pr
 		return nil, nil, err
 	}
 	d := screen.ParseDialog(text)
-	if d == nil || d.Rev != rev {
-		return nil, nil, refusal(screen.PromptChanged, "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。", nil)
+	if !sameDialog(d, rev) {
+		return nil, nil, n.promptChanged(id, pane, rev, d)
 	}
 	if option == "" {
 		return nil, nil, nil
@@ -56,6 +56,46 @@ func (n *Node) dialogKeys(ctx context.Context, id, rev, option string) (keys, pr
 		return []string{"enter"}, o.Keys, nil
 	}
 	return o.Keys, nil, nil
+}
+
+// sameDialog: d is the dialog whose revision a card carries. A hub from before #5538 made the card with the old
+// formula (screen.Dialog.LegacyRev).
+func sameDialog(d *screen.Dialog, rev string) bool {
+	return d != nil && rev != "" && (d.Rev == rev || d.LegacyRev == rev)
+}
+
+// dialogRev is the revision of the dialog on a session.screen read, for the hub to make its card with: the same read
+// dialogKeys checks against (plain, visible, screen.DialogLines rows), parsed by the same code. A hub and a node of
+// different builds may parse a screen differently; with the node's own revision on the card they still agree.
+// "" for any other read, or no dialog.
+func dialogRev(text string, lines int, source, format string) string {
+	if lines != screen.DialogLines || (source != "" && source != "visible") || format == "ansi" {
+		return ""
+	}
+	if d := screen.ParseDialog(text); d != nil {
+		return d.Rev
+	}
+	return ""
+}
+
+// promptChanged refuses an answer to the dialog with revision rev, d being what pane shows now (nil: none). The
+// refusal and the log say both revisions and what the node read, so a mismatch can be seen (#5538). The log also
+// names the agent's pane, the one session.screen reads for the card, in case the answer read another.
+func (n *Node) promptChanged(id, pane, rev string, d *screen.Dialog) error {
+	cardPane := "none"
+	if a, ok := n.agent(id); ok {
+		cardPane = a.PaneID
+	}
+	data := map[string]any{"rev": rev}
+	if d == nil {
+		n.logf("session %s: prompt_changed: the card's dialog %s, none in pane %s (the agent's pane: %s)", id, rev, pane,
+			cardPane)
+	} else {
+		data["seen_rev"], data["seen_question"], data["seen_options"] = d.Rev, d.Question, len(d.Options)
+		n.logf("session %s: prompt_changed: the card's dialog %s, %s in pane %s (the agent's pane: %s), %d options, question %q",
+			id, rev, d.Rev, pane, cardPane, len(d.Options), d.Question)
+	}
+	return refusal(screen.PromptChanged, "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。", data)
 }
 
 // sendOpts are the optional fields of session.send.

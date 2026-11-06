@@ -1,6 +1,7 @@
 package screen
 
 import (
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -373,5 +374,50 @@ func TestUserPromptAboveAPanelIsNotAnOption(t *testing.T) {
 	}
 	if o := long.Options[0]; len(o.Keys) != 31 || o.Keys[0] != "up" || o.Keys[30] != "enter" {
 		t.Fatalf("a tall list's first option keys: %v", o.Keys)
+	}
+}
+
+// #5538: the same AskUserQuestion redrawn at another width (the pane resized) wraps its long question and its
+// options' details at other places, and a colored read has escapes around every word. It is the same dialog: same
+// Rev. Before, Question was only the wrapped row with the question mark and Detail the rows around it, so the
+// revision changed with the width and an answer to a card made before the resize was refused with prompt_changed.
+// The fixtures are drawn from the issue's description (two questions in a tab bar, a long Chinese question over
+// three rows, background tasks above).
+func TestRevisionIgnoresWrapAndColor(t *testing.T) {
+	wide := ParseDialog(fixture(t, "claude-2.1.318-questions-wrapped-100.txt"))
+	narrow := ParseDialog(fixture(t, "claude-2.1.318-questions-wrapped-72.txt"))
+	if wide == nil || narrow == nil || len(wide.Options) != 4 || len(narrow.Options) != 4 || len(wide.Steps) != 2 {
+		t.Fatalf("wide %+v narrow %+v", wide, narrow)
+	}
+	if wide.Options[0].Detail == narrow.Options[0].Detail && wide.Question == narrow.Question {
+		t.Fatal("the fixtures do not wrap differently")
+	}
+	if wide.LegacyRev == narrow.LegacyRev {
+		t.Fatal("the old revision did not move with the width: the fixtures do not show #5538")
+	}
+	if wide.Rev != narrow.Rev {
+		t.Fatalf("another width, another revision: %s → %s", wide.Rev, narrow.Rev)
+	}
+	colored := regexp.MustCompile(`\S+`).ReplaceAllString(fixture(t, "claude-2.1.318-questions-wrapped-100.txt"), "\x1b[38;5;153m$0\x1b[39m")
+	if c := ParseDialog(colored); c == nil || c.Rev != wide.Rev {
+		t.Fatalf("colored: %+v", c)
+	}
+
+	// What is asked or offered does change it.
+	if changed := ParseDialog(fixture(t, "claude-2.1.318-questions-wrapped-changed-100.txt")); changed == nil || changed.Rev == wide.Rev {
+		t.Fatal("another question, same revision")
+	}
+	wideText := fixture(t, "claude-2.1.318-questions-wrapped-100.txt")
+	for name, edit := range map[string][2]string{
+		"option label":  {"等回归跑完\n", "等回归跑完再说\n"},
+		"option detail": {"大概要多等十分钟", "大概要多等五分钟"},
+	} {
+		other := strings.Replace(wideText, edit[0], edit[1], 1)
+		if other == wideText {
+			t.Fatalf("%s: no edit", name)
+		}
+		if d := ParseDialog(other); d == nil || d.Rev == wide.Rev {
+			t.Errorf("another %s, same revision", name)
+		}
 	}
 }

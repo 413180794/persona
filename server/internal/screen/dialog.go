@@ -50,7 +50,7 @@ var submitRE = regexp.MustCompile(`^\s*(❯)?\s*(Submit|Next)$`)
 
 // ParseDialog reads the dialog at the bottom of a plain screen, or nil when there is none.
 func ParseDialog(plain string) *Dialog {
-	lines := strings.Split(strings.ReplaceAll(plain, "\r", ""), "\n")
+	lines := strings.Split(Plain(plain), "\n") // a colored read is the same dialog (#5538)
 	for i, l := range lines {
 		lines[i] = strings.TrimRight(strings.ReplaceAll(l, " ", " "), " ")
 	}
@@ -100,7 +100,7 @@ func rewindList(lines []string) *Dialog {
 		}
 		d.Options = append(d.Options, Option{Key: key, Label: row.Text, Detail: row.Changes, Keys: append(keys, "enter")})
 	}
-	hash(d, window)
+	hash(d, d.Question, window)
 	return d
 }
 
@@ -355,11 +355,15 @@ func describe(d *Dialog, lines []string, first int) {
 		}
 	}
 	asks := len(plain) > 0 && strings.ContainsAny(plain[len(plain)-1], "?？")
+	// What is asked, in the order it is on screen, for Rev: which wrapped row holds the question mark moves with the
+	// pane's width, so Question and Detail are cut differently at another width (#5538).
+	asked := strings.Join(append(slices.Clone(quoted), plain...), "\n")
 	switch {
 	case len(quoted) > 0 && asks:
 		// A boxed note above a question that is asked in plain words (a permission prompt's warning): the note is
 		// the warning, the question is the question.
 		d.Warning = joinWrapped(quoted)
+		asked = strings.Join(plain, "\n") // the warning is not in Rev
 		d.Question = plain[len(plain)-1]
 		d.Detail = strings.Join(plain[:len(plain)-1], "\n")
 	case len(quoted) > 0:
@@ -378,13 +382,36 @@ func describe(d *Dialog, lines []string, first int) {
 		d.Detail = strings.Join(append(slices.Clone(plain[:q]), plain[q+1:]...), "\n")
 	default:
 		d.Question, d.Header = d.Header, ""
+		asked = d.Question
 	}
-	hash(d, "")
+	hash(d, asked, "")
 }
 
-// hash sets Rev from what the dialog asks and offers, and window: where a scrolled list's rows sit in it (the /rewind
-// list's "↑ 1 more"), so the same rows one step further down are another dialog. window is shown nowhere.
-func hash(d *Dialog, window string) {
+// hash sets Rev from what the dialog asks (asked: its question and detail rows, in screen order) and offers, and
+// window: where a scrolled list's rows sit in it (the /rewind list's "↑ 1 more"), so the same rows one step further
+// down are another dialog. window is shown nowhere. Rev leaves out all white space: the same dialog redrawn at another
+// width (the pane resized) wraps its question and its options' details at other places, and an option's long label
+// onto its detail row. Before #5538 that was another revision, and an answer to a card made before the resize was
+// refused.
+func hash(d *Dialog, asked, window string) {
+	h := sha256.New()
+	h.Write([]byte(squash(d.Header) + "\x00" + squash(asked)))
+	if window != "" {
+		h.Write([]byte("\x00" + window))
+	}
+	for _, o := range d.Options {
+		label := o.Label
+		if o.Kind == KindTypeSomething { // its label is what is typed into it until it is read back as Text
+			label = o.Kind
+		}
+		h.Write([]byte("\x00" + o.Key + "\x00" + squash(label+o.Detail)))
+	}
+	d.Rev = hex.EncodeToString(h.Sum(nil))[:12]
+	legacyHash(d, window)
+}
+
+// legacyHash sets LegacyRev: Rev as hubs and nodes before #5538 compute it, wrapped rows and all.
+func legacyHash(d *Dialog, window string) {
 	h := sha256.New()
 	h.Write([]byte(d.Header + "\x00" + d.Question + "\x00" + d.Detail))
 	if window != "" {
@@ -397,7 +424,7 @@ func hash(d *Dialog, window string) {
 		}
 		h.Write([]byte("\x00" + o.Key + "\x00" + label + "\x00" + o.Detail))
 	}
-	d.Rev = hex.EncodeToString(h.Sum(nil))[:12]
+	d.LegacyRev = hex.EncodeToString(h.Sum(nil))[:12]
 }
 
 // The countdown Claude Code adds when it will answer for the user (auto mode: "⚠ Claude Code will automatically

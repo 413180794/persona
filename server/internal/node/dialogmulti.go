@@ -106,14 +106,15 @@ func (n *Node) dialogMulti(ctx context.Context, id, rev string, want []string, t
 	read := func() *screen.Dialog {
 		s, err := n.readPane(ctx, pane, "visible", screen.DialogLines)
 		if err != nil {
+			n.logf("session %s: reading pane %s for its dialog: %v", id, pane, err) // else it looks like no dialog
 			return nil
 		}
 		return screen.ParseDialog(s)
 	}
 	text = strings.Join(strings.Fields(text), " ") // one line: a newline would be enter
 	d := read()
-	if d == nil || d.Rev != rev || !d.Multi {
-		return refusal(screen.PromptChanged, "终端上的对话框已经变了（可能在电脑上答过了），这次什么都没按：看看新的再答。", nil)
+	if !sameDialog(d, rev) || !d.Multi {
+		return n.promptChanged(id, pane, rev, d)
 	}
 	if text != "" && !n.canTypeText(pane) {
 		return refusal(cannotType, cannotTypeMessage, nil)
@@ -128,7 +129,7 @@ func (n *Node) dialogMulti(ctx context.Context, id, rev string, want []string, t
 	for step := 0; ; step++ {
 		if step > 0 {
 			time.Sleep(dialogStep)
-			if d = read(); d == nil || d.Rev != rev {
+			if d = read(); !sameDialog(d, rev) {
 				return fmt.Errorf("作答到一半，终端上的对话框变了（电脑上有人在操作？），已经按下的键没有撤回：在电脑上看看")
 			}
 		}

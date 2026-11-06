@@ -162,21 +162,18 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 	if cur, ok := s.nodeSession(machine, sess.SessionID); !ok || cur.Status != proto.StatusBlocked {
 		return
 	}
-	var scr struct {
-		Text string `json:"text"`
-	}
-	if err := s.nodeCall(ctx, machine, "session.screen", map[string]any{"session_id": sess.SessionID, "lines": 40}, &scr); err != nil {
+	text, d, err := s.screenDialog(ctx, machine, sess.SessionID)
+	if err != nil {
 		return
 	}
-	d := screen.ParseDialog(scr.Text)
 	id := "scr_" + machine + "_" + sess.SessionID
 	if d != nil {
 		id += "_" + d.Rev // another dialog is another card: nothing picked on the last one carries over
 	}
 	ix := proto.Interaction{
 		ID: id, MachineID: machine, SessionID: sess.SessionID, SessionTitle: sess.Title, Cwd: sess.Cwd, Kind: proto.IxScreen,
-		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(24 * time.Hour).UTC(), Screen: trimScreen(scr.Text), Dialog: d,
-		Secret: screen.SecretPrompt(scr.Text),
+		CreatedAt: time.Now().UTC(), ExpiresAt: time.Now().Add(24 * time.Hour).UTC(), Screen: trimScreen(text), Dialog: d,
+		Secret: screen.SecretPrompt(text),
 	}
 	s.fleet.mu.Lock()
 	if s.screenHandedBackLocked(machine, sess.SessionID, id, d != nil) {
@@ -227,6 +224,8 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		err = s.nodeCall(kctx, machine, "session.keys", params, nil)
 		var re *rpc.Error
 		if errors.As(err, &re) && re.Code == screen.PromptChanged {
+			// Both revisions and what the node read, from a node that says so (#5538).
+			s.logf("[%s] screen card %s: prompt_changed, the node read %s", machine, id, re.Data)
 			s.forgetScreenAnswer(id)                    // nothing pressed
 			go s.createScreenInteraction(machine, sess) // the card for what is on screen now
 		} else if err == nil {
@@ -311,12 +310,9 @@ func (s *Service) upgradeScreenCard(machine, session, id string, p *pending) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		var scr struct {
-			Text string `json:"text"`
-		}
-		err := s.nodeCall(ctx, machine, "session.screen", map[string]any{"session_id": session, "lines": 40}, &scr)
+		_, d, err := s.screenDialog(ctx, machine, session)
 		cancel()
-		if err == nil && screen.ParseDialog(scr.Text) != nil {
+		if err == nil && d != nil {
 			s.fleet.mu.Lock()
 			same := s.fleet.interactions[id] == p
 			if same {
@@ -448,20 +444,36 @@ func (s *Service) recheckScreen(machine, session, answered string) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		var scr struct {
-			Text string `json:"text"`
-		}
-		err := s.nodeCall(ctx, machine, "session.screen", map[string]any{"session_id": session, "lines": 40}, &scr)
+		_, d, err := s.screenDialog(ctx, machine, session)
 		cancel()
 		if err != nil {
 			return
 		}
 		// No dialog (the screen between two) or the answered one (the keys not landed yet): look again.
-		if d := screen.ParseDialog(scr.Text); d != nil && "scr_"+machine+"_"+session+"_"+d.Rev != answered {
+		if d != nil && "scr_"+machine+"_"+session+"_"+d.Rev != answered {
 			s.createScreenInteraction(machine, cur)
 			return
 		}
 	}
+}
+
+// screenDialog reads a session's screen as a screen card shows it, and the dialog on it. The dialog's revision is the
+// one the node will check the answer against: the node's own (dialog_rev), so a hub and a node of different builds,
+// whose parsing may differ, still agree (#5538). A node from before it sends none and checks the old formula
+// (LegacyRev).
+func (s *Service) screenDialog(ctx context.Context, machine, session string) (string, *screen.Dialog, error) {
+	var scr struct {
+		Text      string `json:"text"`
+		DialogRev string `json:"dialog_rev"`
+	}
+	if err := s.nodeCall(ctx, machine, "session.screen", map[string]any{"session_id": session, "lines": screen.DialogLines}, &scr); err != nil {
+		return "", nil, err
+	}
+	d := screen.ParseDialog(scr.Text)
+	if d != nil {
+		d.Rev = cmp.Or(scr.DialogRev, d.LegacyRev)
+	}
+	return scr.Text, d, nil
 }
 
 // screenCardWait is how long a blocked session's screen card waits for a card its agent asks for itself.
