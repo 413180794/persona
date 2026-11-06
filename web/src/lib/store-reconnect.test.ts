@@ -1,7 +1,7 @@
 // The socket's side of #1574: a drop is invisible inside the grace, a restart retries at once, and a resumed hello
 // refetches nothing while an ordinary one refreshes everything as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { connect, getState, onHubEvent, reconnectNow, reset } from "./store";
+import { applyMachine, connect, getState, onHubEvent, reconnectNow, refresh, reset } from "./store";
 import { offlineNow } from "./feedback";
 import { liveEntry, resetLive } from "./live";
 
@@ -163,6 +163,22 @@ describe("live pushes (#1963)", () => {
     expect(liveEntry("m", "x")).toBeUndefined();
     resetLive();
   });
+
+  it("a hello that did not resume forgets every line; a resumed one keeps them", () => {
+    const s = online();
+    s.push({ type: "live", machine_id: "m", session_id: "x", live: { verb: "Frosting" } });
+    s.drop(1006);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().push({ type: "hello", server_version: "v1", event_stream: "s1", event_seq: 6, resumed: true });
+    expect(liveEntry("m", "x")?.live).toEqual({ verb: "Frosting" });
+    last().drop(1006);
+    vi.advanceTimersByTime(1000);
+    last().open();
+    last().push({ type: "hello", server_version: "v1", event_stream: "s2", event_seq: 1, resumed: false });
+    expect(liveEntry("m", "x")).toBeUndefined(); // nothing is replayed, so the lines from before the drop are gone
+    resetLive();
+  });
 });
 
 describe("the facts behind the pill (lib/connection.ts)", () => {
@@ -236,5 +252,102 @@ describe("the facts behind the pill (lib/connection.ts)", () => {
     expect(offlineNow()).toBeNull();
     s.drop();
     expect(offlineNow()).toBe("hub"); // inside the grace too: the socket is gone
+  });
+});
+
+describe("a slow refresh() does not put back an older snapshot", () => {
+  type Held = Record<string, ((body: unknown) => void)[]>;
+  /** GETs whose path is in `held` wait until their turn is resolved; the rest answer `answers[path]` (or {}) at once. */
+  function holdFetch(held: string[], answers: Record<string, unknown> = {}): Held {
+    const turns: Held = Object.fromEntries(held.map((p) => [p, []]));
+    const reply = (body: unknown) => ({ ok: true, status: 200, headers: new Headers(), text: async () => JSON.stringify(body) });
+    fetcher.mockImplementation(async (url: string) => {
+      const path = String(url).replace(/^.*\/api\/v1/, "");
+      if (turns[path]) return reply(await new Promise((r) => turns[path].push(r)));
+      return reply(answers[path] ?? {});
+    });
+    return turns;
+  }
+  const settle = async () => {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  };
+  const session = (machine_id: string, session_id: string, state: string) => ({ machine_id, session_id, state, title: session_id });
+
+  it("a machines push that comes while GET /machines is out wins over its answer", async () => {
+    const turns = holdFetch(["/machines"]);
+    const s = online(); // the hello refreshes
+    await settle();
+    expect(turns["/machines"]).toHaveLength(1);
+    s.push({ type: "machines", machines: [{ id: "a", name: "A", online: false }] });
+    turns["/machines"][0]({ machines: [{ id: "a", name: "A", online: true }] });
+    await settle();
+    expect(getState().loaded).toBe(true);
+    expect(getState().machines).toEqual([{ id: "a", name: "A", online: false }]);
+  });
+
+  it("applyMachine() while GET /machines is out wins over its answer", async () => {
+    const turns = holdFetch(["/machines"]);
+    online();
+    await settle();
+    turns["/machines"][0]({ machines: [{ id: "a", name: "A", online: true, engine: "herdr" }] });
+    await settle();
+    const later = refresh();
+    await settle();
+    applyMachine({ id: "a", name: "A", online: true, engine: "orca" });
+    turns["/machines"][1]({ machines: [{ id: "a", name: "A", online: true, engine: "herdr" }] });
+    await later;
+    expect(getState().machines[0].engine).toBe("orca");
+  });
+
+  it("a hub without deltas: a sessions push while GET /sessions is out keeps that machine's pushed list", async () => {
+    const turns = holdFetch(["/sessions"]);
+    const s = online(); // the hello says no sessions_delta
+    await settle();
+    s.push({ type: "sessions", machine_id: "m", sessions: [session("m", "x", "working")] });
+    turns["/sessions"][0]({ sessions: [session("m", "x", "idle"), session("n", "y", "idle")] });
+    await settle();
+    expect(getState().sessions.m.map((x) => x.state)).toEqual(["working"]);
+    expect(getState().sessions.n.map((x) => x.session_id)).toEqual(["y"]); // a machine not pushed takes the answer
+  });
+
+  it("reset() while a refresh() is out: its answers belong to the old login and are dropped", async () => {
+    const turns = holdFetch(["/sessions"], { "/machines": { machines: [{ id: "a", name: "A", online: true }] } });
+    online();
+    await settle();
+    reset();
+    turns["/sessions"][0]({ sessions: [session("a", "x", "idle")] });
+    await settle();
+    const st = getState();
+    expect(st.loaded).toBe(false);
+    expect(st.machines).toEqual([]);
+    expect(st.sessions).toEqual({});
+  });
+
+  it("two overlapping refreshes: the older one answering last does not undo the newer one", async () => {
+    const turns = holdFetch(["/machines"]);
+    online(); // the first refresh
+    await settle();
+    const newer = refresh();
+    await settle();
+    expect(turns["/machines"]).toHaveLength(2);
+    turns["/machines"][1]({ machines: [{ id: "a", name: "A", online: false }] });
+    await newer;
+    turns["/machines"][0]({ machines: [{ id: "a", name: "A", online: true }] });
+    await settle();
+    expect(getState().machines).toEqual([{ id: "a", name: "A", online: false }]);
+  });
+
+  it("refreshes answered in order are all applied", async () => {
+    const turns = holdFetch(["/machines"]);
+    online();
+    await settle();
+    turns["/machines"][0]({ machines: [{ id: "a", name: "A", online: true }] });
+    await settle();
+    expect(getState().machines[0].online).toBe(true);
+    const next = refresh();
+    await settle();
+    turns["/machines"][1]({ machines: [{ id: "a", name: "A", online: false }] });
+    await next;
+    expect(getState().machines[0].online).toBe(false);
   });
 });

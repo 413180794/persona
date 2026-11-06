@@ -32,4 +32,13 @@ describe("receiveLive", () => {
     expect(liveEntry("m", "s")).toBeUndefined();
     expect(liveEntry("m", "other")).toBeUndefined();
   });
+
+  it("forgets a stale line on a later push, even when its null never came", () => {
+    receiveLive({ machine_id: "m", session_id: "old", live: { verb: "A" } }, 1000);
+    receiveLive({ machine_id: "m", session_id: "new", live: { verb: "B" } }, 1000 + LIVE_STALE_MS - 1);
+    expect(liveEntry("m", "old")).toBeDefined();
+    receiveLive({ machine_id: "m", session_id: "new", live: { verb: "C" } }, 1000 + LIVE_STALE_MS);
+    expect(liveEntry("m", "old")).toBeUndefined();
+    expect(liveEntry("m", "new")?.live).toEqual({ verb: "C" });
+  });
 });

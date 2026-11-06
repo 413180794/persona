@@ -179,19 +179,35 @@ let inflight: Promise<void> | null = null;
 // A call while a pull is on the way: that pull may have been answered before the change the call is for, so one more
 // pull follows it (one, however many calls came meanwhile).
 let queued: Promise<void> | null = null;
+// Bumped by resetAgents(): a pull still on its way belongs to the previous login, so its answer (and the follow-up
+// pull queued behind it) is dropped.
+let listGen = 0;
 export function refreshAgentSessions(): Promise<void> {
   if (inflight) {
-    queued ??= inflight.then(() => {
-      queued = null;
-      return refreshAgentSessions();
-    });
+    const gen = listGen;
+    if (!queued) {
+      const next: Promise<void> = inflight.then(() => {
+        // only clear our own slot: after resetAgents() a newer login may have queued its own follow-up
+        if (queued === next) queued = null;
+        return gen === listGen ? refreshAgentSessions() : undefined;
+      });
+      queued = next;
+    }
     return queued;
   }
-  inflight = Promise.all([fetchSessions(), fetchSources().catch(() => null)])
-    .then(([sessions, sources]) => emit({ sessions, loaded: true, error: "", ...(sources ? { hints: setupHints(sources) } : {}) }))
-    .catch((e) => emit({ loaded: true, error: errorText(e) }))
-    .finally(() => (inflight = null));
-  return inflight;
+  const gen = listGen;
+  const pull: Promise<void> = Promise.all([fetchSessions(), fetchSources().catch(() => null)])
+    .then(([sessions, sources]) => {
+      if (gen === listGen) emit({ sessions, loaded: true, error: "", ...(sources ? { hints: setupHints(sources) } : {}) });
+    })
+    .catch((e) => {
+      if (gen === listGen) emit({ loaded: true, error: errorText(e) });
+    })
+    .finally(() => {
+      if (inflight === pull) inflight = null;
+    });
+  inflight = pull;
+  return pull;
 }
 
 // Called by the WebSocket handler: re-pull the list, and tell open sessions which ids moved (empty = all).
@@ -213,6 +229,10 @@ export function setLocalRead(id: string) {
 }
 
 export function resetAgents() {
+  listGen++;
+  // the next login's first pull starts right away instead of waiting behind the old one
+  inflight = null;
+  queued = null;
   emit({ sessions: [], loaded: false, error: "", hints: [] });
 }
 
@@ -379,27 +399,51 @@ const emitPrefs = (p: AgentPrefs) => {
   prefListeners.forEach((l) => l());
 };
 
+const prefsGone = (e: unknown) => {
+  const status = (e as { status?: number }).status;
+  if (status === 404 || status === 405) hubPrefs = false;
+};
+
+// A GET answer is applied only if it can't undo something newer: no local change since it was sent (prefsRev), no
+// PUT on its way when it was sent (prefsOut; that PUT's answer carries the hub's state), and no later GET applied
+// already (prefsGetSeq / prefsGetApplied; separate connections can answer out of order).
+let prefsRev = 0;
+let prefsOut = 0;
+let prefsGetSeq = 0;
+let prefsGetApplied = 0;
+// A GET sent while a PUT is out will be dropped, so a change from another device it may carry is pulled again once
+// the PUTs are done.
+let prefsPullAfterSave = false;
 export function refreshAgentPrefs(): Promise<void> {
+  const rev = prefsOut ? -1 : prefsRev;
+  if (rev === -1) prefsPullAfterSave = true;
+  const seq = ++prefsGetSeq;
   return api<AgentPrefs>("/agents/prefs")
     .then((p) => {
       hubPrefs = true;
+      if (rev !== prefsRev || seq < prefsGetApplied) return;
+      prefsGetApplied = seq;
       emitPrefs(normalizePrefs(p));
     })
-    .catch((e) => {
-      if ((e as { status?: number }).status === 404 || (e as { status?: number }).status === 405) hubPrefs = false;
-    });
+    .catch(prefsGone);
 }
 
 let saveSeq = 0;
 export function updateAgentPrefs(f: (p: AgentPrefs) => AgentPrefs) {
   const next = f(prefs);
+  prefsRev++;
   emitPrefs(next);
   if (!hubPrefs) return;
   const seq = ++saveSeq;
+  prefsOut++;
   api<AgentPrefs>("/agents/prefs", { method: "PUT", json: next })
     .then((p) => seq === saveSeq && emitPrefs(normalizePrefs(p)))
-    .catch((e) => {
-      if ((e as { status?: number }).status === 404 || (e as { status?: number }).status === 405) hubPrefs = false;
+    .catch(prefsGone)
+    .finally(() => {
+      prefsOut--;
+      if (prefsOut || !prefsPullAfterSave) return;
+      prefsPullAfterSave = false;
+      if (hubPrefs) void refreshAgentPrefs();
     });
 }
 

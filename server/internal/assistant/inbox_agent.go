@@ -148,6 +148,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 		linked[t.ID] = &t
 	}
 	owner := s.owner(ctx)
+	loc := s.location(ctx) // the chain's times, read in the user's zone (the hub runs in UTC)
 	now := time.Now().UTC()
 	byEvent := s.conversationsByEvent(ctx)
 	b.mu.Lock()
@@ -184,7 +185,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			continue
 		}
 		it.Agent.State, it.Agent.StartedAt, it.Agent.Attempts, it.Agent.RetryAfter = AgentRunning, &now, it.Agent.Attempts+1, nil
-		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault)
+		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault, loc)
 		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) }})
 	}
 	b.mu.Unlock()
@@ -359,25 +360,26 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 
 // inboxAgentPrompt is the AI twin's first message for an item (prompts/inbox/agent.md).
 func (b *inboxBook) inboxAgentPrompt(it *InboxItem, owner string, kbc *prompts.KBContext) string {
-	return b.inboxAgentPromptFor(it, owner, kbc, nil, 1)
+	return b.inboxAgentPromptFor(it, owner, kbc, nil, 1, time.UTC)
 }
 
 // inboxAgentPromptFor is inboxAgentPrompt for an item about one of the user's tasks (linked: its progress).
 // larkDefault is lark.account: the Feishu account lark_messages reads unless the prompt names another.
-func (b *inboxBook) inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompts.KBContext, linked *prompts.InboxTask, larkDefault int) string {
-	a := b.inboxAgentFor(it, owner, linked, larkDefault)
+// loc: the user's time zone, which the chain's times are read in.
+func (b *inboxBook) inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompts.KBContext, linked *prompts.InboxTask, larkDefault int, loc *time.Location) string {
+	a := b.inboxAgentFor(it, owner, linked, larkDefault, loc)
 	a.KB = kbc
 	return prompts.RenderInboxAgent(a)
 }
 
 // inboxAgentFor is what the AI twin's first message is made of, but the knowledge base's part.
-func (b *inboxBook) inboxAgentFor(it *InboxItem, owner string, linked *prompts.InboxTask, larkDefault int) prompts.InboxAgent {
+func (b *inboxBook) inboxAgentFor(it *InboxItem, owner string, linked *prompts.InboxTask, larkDefault int, loc *time.Location) prompts.InboxAgent {
 	a := prompts.InboxAgent{Owner: owner, EventID: it.ID, Title: it.Title, Item: b.promptItem(it), Task: it.Agent.Task, Reason: it.Agent.Reason,
 		Linked: linked}
 	if len(it.Agent.Lost) > 0 { // the event's conversation is gone: where it got to goes with the new one
 		a.Resumed, a.Recap = true, it.Recap
 		for _, e := range it.Chain {
-			a.Chain = append(a.Chain, chainLine(e))
+			a.Chain = append(a.Chain, chainLine(e, loc))
 		}
 	}
 	for _, n := range it.Agent.Pending {

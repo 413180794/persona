@@ -450,7 +450,7 @@ func TestInboxItemAboutATask(t *testing.T) {
 		t.Fatalf("agent = %+v", it.Agent)
 	}
 	linked := &prompts.InboxTask{ID: todo.ID, Title: "修登录崩溃", State: "在做", Last: "测试通过"}
-	if p := h.inbox.inboxAgentPromptFor(it, "示例用户", nil, linked, 1); !strings.Contains(p, "正在做的任务「修登录崩溃」") || !strings.Contains(p, "测试通过") {
+	if p := h.inbox.inboxAgentPromptFor(it, "示例用户", nil, linked, 1, time.UTC); !strings.Contains(p, "正在做的任务「修登录崩溃」") || !strings.Contains(p, "测试通过") {
 		t.Fatalf("the agent is not told the task:\n%s", p)
 	}
 

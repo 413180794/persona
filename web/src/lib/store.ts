@@ -389,10 +389,12 @@ function onMessage(msg: Record<string, unknown>) {
       send({ type: "pong" });
       break;
     case "machines":
+      machinesRev++;
       set({ machines: msg.machines as Machine[] });
       break;
     case "sessions": {
       const mid = msg.machine_id as string;
+      sessionsChanged(mid);
       // A delta hub's list has no Codex history (the page has that from GET /sessions): keep what it already has.
       const list = sessionSnapshot((msg.sessions as Session[]) ?? [], state.sessions[mid] ?? [], deltaOn());
       set({ sessions: { ...state.sessions, [mid]: list } });
@@ -401,6 +403,7 @@ function onMessage(msg: Record<string, unknown>) {
     }
     case "sessions_delta": {
       const mid = msg.machine_id as string;
+      sessionsChanged(mid);
       const list = applySessionDelta(
         state.sessions[mid] ?? [],
         (msg.upsert as Session[]) ?? [],
@@ -412,6 +415,7 @@ function onMessage(msg: Record<string, unknown>) {
     }
     case "session": {
       const s = msg.session as Session;
+      sessionsChanged(s.machine_id);
       upsertSession(s);
       break;
     }
@@ -474,6 +478,7 @@ export function saveMutes(mutes: AgentMutes): Promise<void> {
  * push says the same, this only does not wait for it (iOS AppModel.applyMachine). */
 export function applyMachine(m: Machine) {
   if (!state.machines.some((x) => x.id === m.id)) return;
+  machinesRev++;
   set({ machines: state.machines.map((x) => (x.id === m.id ? { ...x, ...m } : x)) });
 }
 
@@ -638,7 +643,24 @@ function numbered<T>(path: string) {
 const todosAsked = numbered<{ todos: Todo[] }>("/todos");
 const assistantAsked = numbered<AssistantInfo>("/assistant");
 
+// refresh() calls, numbered the same way: one that started before the last one applied, or before reset(), is older
+// than what the page shows and is dropped whole.
+const refreshes = { asked: 0, applied: 0 };
+// Bumped by every machines push and applyMachine(): a GET /machines answer asked for before one of them is older.
+let machinesRev = 0;
+// Session pushes, numbered, and the last one per machine: on a hub without deltas a GET /sessions answer asked for
+// before a push to a machine must not put that machine's older list back.
+let sessionsRev = 0;
+const sessionsPushed = new Map<string, number>();
+
+function sessionsChanged(mid: string) {
+  sessionsPushed.set(mid, ++sessionsRev);
+}
+
 export async function refresh() {
+  const gen = ++refreshes.asked;
+  const machinesAt = machinesRev;
+  const sessionsAt = sessionsRev;
   const before = ixRev;
   // the answers count only if this page changes nothing while they are on their way, and had no change out when they left
   const mutesAt = mutesSaves.out ? -1 : mutesSaves.rev;
@@ -654,6 +676,8 @@ export async function refresh() {
     api<Partial<AgentPins>>("/pins"),
     asked.answer,
   ]);
+  if (gen < refreshes.applied) return;
+  refreshes.applied = gen;
   const patch: Partial<State> = { loaded: true };
   if (sessions.status === "fulfilled") {
     const by: Record<string, Session[]> = {};
@@ -662,12 +686,15 @@ export async function refresh() {
       // What the socket pushed is newer than this answer (the request went out before): keep it, take only the Codex
       // history the answer has and the page does not.
       for (const [mid, old] of Object.entries(state.sessions)) by[mid] = sessionRefreshed(by[mid] ?? [], old, true);
+    } else {
+      // a machine pushed since the request went out keeps what was pushed
+      for (const [mid, rev] of sessionsPushed) if (rev > sessionsAt && state.sessions[mid]) by[mid] = state.sessions[mid];
     }
     patch.sessions = by;
   }
   if (interactions.status === "fulfilled") patch.interactions = mergeInteractions(interactions.value.interactions ?? [], before);
   if (assistant.status === "fulfilled" && askedAssistant.fresh()) patch.assistant = { ...assistant.value, conversations: assistant.value.conversations ?? [] };
-  if (machines.status === "fulfilled") patch.machines = machines.value.machines ?? [];
+  if (machines.status === "fulfilled" && machinesAt === machinesRev) patch.machines = machines.value.machines ?? [];
   if (mutes.status === "fulfilled" && mutesAt === mutesSaves.rev) patch.mutes = { spaces: mutes.value.spaces ?? [], sessions: mutes.value.sessions ?? [], allowed: mutes.value.allowed ?? [] };
   if (pins.status === "fulfilled" && pinsAt === pinsSaves.rev) patch.pins = pinsOf(pins.value);
   if (todos.status === "fulfilled") {
@@ -738,6 +765,9 @@ export function reset() {
   // and so do the pins and mutes of a refresh() or a failed save still on its way
   mutesSaves.rev++;
   pinsSaves.rev++;
+  // a refresh() still on its way belongs to the old login too
+  refreshes.applied = ++refreshes.asked;
+  sessionsPushed.clear();
   resetAgents();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({

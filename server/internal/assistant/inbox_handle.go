@@ -38,9 +38,9 @@ func renderNote(n inboxNote, owner string) string {
 		Context: n.Context, Machine: n.Machine, Session: n.Session})
 }
 
-// chainLine is a chain entry as the conversation reads it.
-func chainLine(e InboxChainEntry) string {
-	line := e.At.Local().Format("01-02 15:04") + " " + e.Text
+// chainLine is a chain entry as the conversation reads it, its time in loc (the user's zone).
+func chainLine(e InboxChainEntry, loc *time.Location) string {
+	line := e.At.In(loc).Format("01-02 15:04") + " " + e.Text
 	if e.Detail != "" && !strings.Contains(e.Text, e.Detail) {
 		line += "（" + clip(oneLine(e.Detail), 200) + "）" // i18n-ignore: a line of the prompt the model reads (prompts/inbox/agent.md)
 	}
