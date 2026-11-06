@@ -4,7 +4,7 @@
   "err_already_set": "管理者パスワードはすでに設定されています。サインインしてください",
   "err_setup_local_only": "初回設定はハブと同じローカルネットワークからのみ行えます",
   "err_setup_code_required": "先にセットアップコードを入力してください",
-  "err_bad_setup_code": "セットアップコードが違うか期限切れです。ハブのマシンでjarvisd hub admin setup-codeを実行して新しいコードを取得してください",
+  "err_bad_setup_code": "セットアップコードが違うか期限切れです。ハブのマシンでpersonad hub admin setup-codeを実行して新しいコードを取得してください",
   "err_login_required": "セッションの期限が切れました。もう一度サインインしてください",
   "err_csrf": "ページが古くなっています。再読み込みしてからやり直してください",
   "err_tls_required": "TLSポート経由でアクセスしてください",

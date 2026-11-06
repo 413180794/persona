@@ -282,7 +282,7 @@ func (h *Hub) serveHTTP(ctx context.Context) error {
 	servers = append(servers, plain)
 	listeners = append(listeners, ln)
 	go func() { errs <- plain.Serve(ln) }()
-	h.logf("jarvisd hub %s listening on %s (%s)", h.version, h.cfg.Listen, h.cfg.PublicURL)
+	h.logf("personad hub %s listening on %s (%s)", h.version, h.cfg.Listen, h.cfg.PublicURL)
 	if h.slot != nil {
 		h.logf("hub: slot %s, relayed by the hub's edge: the route moves here now", h.slot.Name)
 		h.slot.Ready()

@@ -53,5 +53,7 @@
   "clear_token": "Remove token",
   "save": "Save",
   "new_token": "New token (the current one isn't shown)",
-  "token_save_hint": "After saving, the hub reads the index again with it."
+  "token_save_hint": "After saving, the hub reads the index again with it.",
+  "official_unreachable": "Can't reach the official extensions right now. Try again later.",
+  "catalog_unreadable": "Can't read the marketplace right now. Its extensions show up here once it can be read"
 }

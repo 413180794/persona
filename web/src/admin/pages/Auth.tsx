@@ -29,7 +29,7 @@ function Frame({ title, subtitle, children, hubName }: { title: string; subtitle
   );
 }
 
-const CMD = "jarvisd hub admin reset-password";
+const CMD = "personad hub admin reset-password";
 
 export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminState) => void }) {
   const [pw, setPw] = useState("");
@@ -89,14 +89,15 @@ export function Setup({ state, onDone }: { state: AdminState; onDone: (s: AdminS
               <div className="mb-3 rounded-control bg-inset px-3 py-2.5 text-[12px] leading-relaxed text-ink-2 shadow-hairline">
                 <p>{t("admin-pages-auth.code_intro")}</p>
                 <ul className="mt-1.5 list-disc space-y-1 pl-4 marker:text-ink-3">
+                  <li>{tRich("admin-pages-auth.code_from_setup", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">personad hub setup</span> })}</li>
+                  <li>{tRich("admin-pages-auth.code_from_command", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">personad hub admin setup-code</span> })}</li>
                   <li>
+                    {/* the hub's systemd unit keeps its jarvisd name (docs/rename.md): the command is the real one */}
                     {tRich("admin-pages-auth.code_from_logs", {
                       systemd: <span className="whitespace-nowrap font-mono text-[11.5px]">journalctl --user -u jarvisd</span>,
                       docker: <span className="whitespace-nowrap font-mono text-[11.5px]">docker compose logs hub</span>,
                     })}
                   </li>
-                  <li>{tRich("admin-pages-auth.code_from_setup", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">personad hub setup</span> })}</li>
-                  <li>{tRich("admin-pages-auth.code_from_command", { command: <span className="whitespace-nowrap font-mono text-[11.5px]">jarvisd hub admin setup-code</span> })}</li>
                 </ul>
               </div>
             )}

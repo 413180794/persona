@@ -52,5 +52,7 @@
   "clear_token": "去掉 token",
   "save": "保存",
   "new_token": "新的 token（现在的不显示）",
-  "token_save_hint": "保存后 hub 用它重新读一次索引。"
+  "token_save_hint": "保存后 hub 用它重新读一次索引。",
+  "official_unreachable": "暂时读不到官方扩展，稍后再试。",
+  "catalog_unreadable": "市场暂时读不到，读到后扩展会列在这里"
 }

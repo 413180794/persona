@@ -1,0 +1,88 @@
+// @vitest-environment jsdom
+// The admin page's markets (#4481): the official market out of reach is grey, not a red "fill in a token", and the
+// catalog does not say "no extensions" when it could not be read; another market's error stays red.
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.hoisted(() => {
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
+  window.matchMedia ??= ((query: string) => ({ matches: false, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false })) as typeof window.matchMedia;
+});
+import { resetExtensionRoot, setCsrf, setTransport } from "../api";
+import type { Market } from "../../lib/extension-market";
+import { ExtensionMarkets } from "./ExtensionMarket";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const LIMITED = "读不到 github:nwverse/persona-extensions：被限流了（HTTP 403）：约 45 分钟后再试；常用这个市场就填一个 token，额度更高";
+let host: HTMLDivElement;
+let root: Root;
+let markets: Market[];
+
+const flush = async () => {
+  // the catalog loads after a timer (its search debounce)
+  for (let i = 0; i < 8; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+};
+const text = () => host.textContent ?? "";
+
+beforeEach(() => {
+  resetExtensionRoot();
+  setCsrf("tok");
+  setTransport(async (url) => {
+    const path = url.replace("/api/v1/admin", "").replace(/\?.*$/, "");
+    const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
+    if (path === "/extensions") return reply({ extensions: [] });
+    if (path === "/extensions/-/markets") return reply({ markets });
+    if (path === "/extensions/-/catalog") return reply({ extensions: [] });
+    return reply({}, 404);
+  });
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  host.remove();
+  document.body.innerHTML = "";
+  setTransport((url, init) => fetch(url, init));
+  setCsrf("");
+  resetExtensionRoot();
+});
+
+const open = async () => {
+  act(() => root.render(<ExtensionMarkets onChanged={() => {}} />));
+  await flush();
+};
+
+const official = (error?: string): Market => ({ id: "official", name: "github:nwverse/persona-extensions", spec: "github:nwverse/persona-extensions", official: true, extensions: 0, error } as Market);
+
+describe("the admin page's markets", () => {
+  it("shows the official market out of reach in grey, with the reason on hover", async () => {
+    markets = [official(LIMITED)];
+    await open();
+    expect(text()).toContain("暂时读不到官方扩展，稍后再试。");
+    expect(text()).not.toContain("填一个 token");
+    const line = [...host.querySelectorAll("p")].find((p) => p.textContent === "暂时读不到官方扩展，稍后再试。")!;
+    expect(line.className).toContain("text-ink-3");
+    expect(line.getAttribute("title")).toBe(LIMITED);
+    expect(host.querySelector(".bg-red-tint")).toBeNull();
+    expect(host.querySelector(".text-red")).toBeNull();
+    expect(text()).toContain("市场暂时读不到，读到后扩展会列在这里");
+    expect(text()).not.toContain("这里还没有扩展");
+  });
+
+  it("keeps another market's error red", async () => {
+    markets = [official(), { id: "m2", name: "team", spec: "https://market.example.com/persona-extensions.json", extensions: 0, error: "HTTP 404" } as Market];
+    await open();
+    expect(text()).toContain("读不到：HTTP 404");
+    expect(host.querySelector(".text-red")).not.toBeNull();
+  });
+
+  it("says there are no extensions when every market was read", async () => {
+    markets = [official()];
+    await open();
+    expect(text()).toContain("这里还没有扩展");
+    expect(text()).not.toContain("暂时读不到");
+  });
+});

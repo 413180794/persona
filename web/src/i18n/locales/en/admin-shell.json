@@ -13,7 +13,7 @@
   "restarting": "Restarting the hub…",
   "restarting_detail": "This usually takes a few seconds. Apps disconnect briefly and reconnect on their own.",
   "slow": "The hub isn't back yet",
-  "slow_detail": "It's been 90 seconds. Check the logs on the hub machine: journalctl --user -u jarvisd for systemd, docker compose logs hub for Docker.",
+  "slow_detail": "It's been 90 seconds. Check the logs on the hub machine: journalctl --user -u jarvisd for the background service (it keeps its old name), docker compose logs hub for Docker.",
   "got_it": "Got it",
   "reason_separator": "; ",
   "restart_manual": "{reasons}. Restart on the hub machine: systemctl --user restart jarvisd, or docker compose restart hub.",

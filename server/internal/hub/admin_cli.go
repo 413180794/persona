@@ -23,13 +23,13 @@ import (
 // `jarvisd hub admin …` on the hub's machine (docs/admin.md): widen or set the admin UI's scope, reset its password.
 
 const adminUsage = `usage:
-  jarvisd hub admin access                         show who may open the admin UI
-  jarvisd hub admin access --get                   print hub.json's admin.access (empty when not chosen yet)
-  jarvisd hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]
+  personad hub admin access                        show who may open the admin UI
+  personad hub admin access --get                  print hub.json's admin.access (empty when not chosen yet)
+  personad hub admin access <loopback|lan|cidrs|any> [--cidrs a,b]
                                                    set it (the only way to widen it; the web page only narrows)
-  jarvisd hub admin reset-password [--clear]       set a new administrator password (or clear it: first-run
+  personad hub admin reset-password [--clear]      set a new administrator password (or clear it: first-run
                                                    setup again); every signed-in browser is signed out
-  jarvisd hub admin setup-code                     a one-time code for first-run setup from this machine (asks the
+  personad hub admin setup-code                    a one-time code for first-run setup from this machine (asks the
                                                    running hub; valid 10 minutes)`
 
 // AccessChoices explains each scope; the deploy scripts print the same (scripts/admin_access.sh).
@@ -203,7 +203,7 @@ func adminSetupCode(ctx context.Context, dir string, stdout io.Writer) error {
 	_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&out)
 	switch {
 	case resp.StatusCode == http.StatusConflict:
-		return errors.New("管理员密码已经设过了：直接登录，忘了就 jarvisd hub admin reset-password")
+		return errors.New("管理员密码已经设过了：直接登录，忘了就 personad hub admin reset-password")
 	case resp.StatusCode != http.StatusOK || out.Code == "":
 		return fmt.Errorf("hub 没给设置码（HTTP %d）：%s", resp.StatusCode, out.Error)
 	}

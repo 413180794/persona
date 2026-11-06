@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/net/html"
+
 	"github.com/nwverse/persona/sdk/go/wire"
 
 	"github.com/yuin/goldmark"
@@ -19,11 +21,101 @@ var danglingMarks = regexp.MustCompile("\\*{2,}|_{2,}|~{2,}|`+")
 
 // PlainMarkdown is md without its markup, for places that show text as it is (a push, a one-line preview): a line per
 // block, emphasis and code without their marks, a link as its text. Marks a clip left unpaired are dropped too.
-func PlainMarkdown(md string) string { return plain(md, true) }
+func PlainMarkdown(md string) string { return plain(md, true, false) }
+
+// PushText is PlainMarkdown for a finished turn's push, whose text node already flattened to one line (snippet): a
+// table run into one line says its cells (「项 · 状态 · 构建 · 通过」), and an answer folded in an HTML block
+// (<details>) says its words, not nothing (#4462). Only the push reads text this way: a plan's title (PlanTitle) and
+// other one-line views keep PlainMarkdown's.
+func PushText(md string) string {
+	lines := strings.Split(plain(oneLineTables(md), true, true), "\n")
+	for i, l := range lines {
+		lines[i] = strings.Trim(l, " ·") // a table's cell next to an HTML block's tag leaves a separator at an end
+	}
+	return strings.Join(lines, "\n")
+}
+
+var (
+	// A table's delimiter row inside a line: at least two cells of three dashes or more (| --- | :-: |).
+	tableDelimiter = regexp.MustCompile(`\|(\s*:?-{3,}:?\s*\|){2,}`)
+	codeSpan       = regexp.MustCompile("`+[^`]*`+")
+)
+
+// oneLineTables rewrites each line of md that holds a whole table (its rows run together) as its cells joined by
+// 「 · 」. Code spans are left out of both the check and the split: `|---|` in one is its text. Nothing is substituted
+// into the text, so whatever it holds comes back as it was.
+func oneLineTables(md string) string {
+	lines := strings.Split(md, "\n")
+	for i, l := range lines {
+		// bare is l with its code spans' bytes blanked (same length, so its indexes are l's).
+		bare := []byte(l)
+		for _, r := range codeSpan.FindAllStringIndex(l, -1) {
+			for k := r[0]; k < r[1]; k++ {
+				bare[k] = 'x'
+			}
+		}
+		delims := tableDelimiter.FindAllIndex(bare, -1)
+		if len(delims) == 0 {
+			continue
+		}
+		var cells []string
+		start := 0
+		cut := func(end int) {
+			if c := strings.TrimSpace(l[start:end]); c != "" {
+				cells = append(cells, c)
+			}
+		}
+		for k, d := 0, 0; k < len(bare); k++ {
+			if d < len(delims) && k == delims[d][0] { // a delimiter row is one cell boundary
+				cut(k)
+				k, start, d = delims[d][1]-1, delims[d][1], d+1
+				continue
+			}
+			if bare[k] == '|' {
+				cut(k)
+				start = k + 1
+			}
+		}
+		cut(len(l))
+		if len(cells) < 2 {
+			continue // a table's own delimiter row on its line: the parser reads that table as one
+		}
+		lines[i] = strings.Join(cells, " · ")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// htmlText is an HTML block's words: its text, unescaped, without tags, comments, or what script and style hold.
+func htmlText(block string) string {
+	z := html.NewTokenizer(strings.NewReader(block))
+	var b strings.Builder
+	skip := 0
+	for {
+		switch z.Next() {
+		case html.ErrorToken: // the end, or nothing more it can read
+			return b.String()
+		case html.TextToken: // unescaped by the tokenizer (&lt; is <); comments are their own tokens, left out
+			if skip == 0 {
+				b.Write(z.Text())
+				b.WriteByte(' ')
+			}
+		case html.StartTagToken:
+			if name, _ := z.TagName(); string(name) == "script" || string(name) == "style" {
+				skip++
+			}
+			b.WriteByte(' ')
+		case html.EndTagToken:
+			if name, _ := z.TagName(); (string(name) == "script" || string(name) == "style") && skip > 0 {
+				skip--
+			}
+			b.WriteByte(' ')
+		}
+	}
+}
 
 // plain is md as plain text; dropDangling also drops emphasis marks and backticks left over after the parse, which a
 // clip leaves unpaired but which in an uncut text are its content (__init__.py, a**b).
-func plain(md string, dropDangling bool) string {
+func plain(md string, dropDangling, htmlWords bool) string {
 	md = wire.AssistantCardText(md)
 	src := []byte(md)
 	var b strings.Builder
@@ -53,7 +145,19 @@ func plain(md string, dropDangling bool) string {
 					b.Write(seg.Value(src))
 				}
 			}
-		case *ast.RawHTML, *ast.HTMLBlock:
+		case *ast.HTMLBlock:
+			if entering && htmlWords {
+				var raw strings.Builder
+				lines := n.Lines()
+				for i := 0; i < lines.Len(); i++ {
+					seg := lines.At(i)
+					raw.Write(seg.Value(src))
+				}
+				b.WriteString(strings.ReplaceAll(htmlText(raw.String()), "\n", " "))
+				b.WriteByte('\n')
+			}
+			return ast.WalkSkipChildren, nil
+		case *ast.RawHTML:
 			return ast.WalkSkipChildren, nil
 		}
 		if !entering && n.Type() == ast.TypeBlock {
@@ -78,7 +182,7 @@ func plain(md string, dropDangling bool) string {
 // checkbox, code spans, a link's target) that would show as they are.
 func PlanTitle(plan string) string {
 	for _, l := range strings.Split(plan, "\n") {
-		if l = plain(l, false); l != "" { // a plan is not clipped: what is left of its marks is its text
+		if l = plain(l, false, false); l != "" { // a plan is not clipped: what is left of its marks is its text
 			return l
 		}
 	}

@@ -7,7 +7,7 @@
   "setup_title": "Set an admin password",
   "setup_subtitle": "This is your first visit. Set a password to sign in with from now on.",
   "code_intro": "Setting the first password takes a one-time setup code, to confirm it's someone who can work on the hub machine. It's valid for 10 minutes and works once. Get it from any of these:",
-  "code_from_logs": "The hub's startup log: {systemd}, or {docker} for Docker",
+  "code_from_logs": "The hub's startup log has it too: {systemd} for the background service (it keeps its old name), {docker} for Docker",
   "code_from_setup": "The admin address {command} printed at the end of installing: open that address and the code fills in by itself",
   "code_from_command": "Running {command} on the hub machine",
   "setup_code": "Setup code",

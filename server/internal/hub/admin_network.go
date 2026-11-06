@@ -113,7 +113,7 @@ func (h *Hub) adminNetworkRoutes(mux *http.ServeMux) {
 		next.trusted = current.trusted
 		if !narrowerAccess(current, next) {
 			writeErrCode(w, http.StatusForbidden, "widen_cli_only",
-				errors.New("the admin UI only narrows its scope: widen it on the hub's machine (jarvisd hub admin access)"))
+				errors.New("the admin UI only narrows its scope: widen it on the hub's machine (personad hub admin access)"))
 			return
 		}
 		if !in.Force && !h.adminWouldAllow(r, next) {

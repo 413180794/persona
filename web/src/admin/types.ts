@@ -7,7 +7,7 @@ export interface AdminState {
   logged_in: boolean;
   can_setup: boolean;
   // No password yet and the request came over loopback (maybe a reverse proxy on the hub machine relaying the
-  // internet): setup also needs the one-time code the hub logs / `jarvisd hub admin setup-code` prints.
+  // internet): setup also needs the one-time code the hub logs / `personad hub admin setup-code` prints.
   setup_code_required?: boolean;
   csrf?: string;
   hub_name: string;

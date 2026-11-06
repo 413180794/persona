@@ -32,7 +32,7 @@ func PairPeer() error {
 	}
 	fmt.Println(code.Code)
 	fmt.Fprintf(os.Stderr, "\n这是这台 hub 的互联码，%d 分钟内有效，只能用一次。\n"+
-		"在另一台 hub 上：管理界面「互联 › 输入互联码」里粘贴；或者在那台机器上运行 jarvisd hub peer add '<互联码>'。\n",
+		"在另一台 hub 上：管理界面「互联 › 输入互联码」里粘贴；或者在那台机器上运行 personad hub peer add '<互联码>'。\n",
 		max(1, int(time.Until(code.ExpiresAt).Round(time.Minute).Minutes())))
 	return nil
 }
@@ -41,7 +41,7 @@ func PairPeer() error {
 // `jarvisd hub peer center [<hub_id>] [--confirm]` (set as center; this hub when no id is given).
 func PeerCommand(args []string, stdin io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("用法：jarvisd hub peer add <互联码>|- ｜ list ｜ remove <hub_id> ｜ center [<hub_id>] [--confirm]")
+		return errors.New("用法：personad hub peer add <互联码>|- ｜ list ｜ remove <hub_id> ｜ center [<hub_id>] [--confirm]")
 	}
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -52,7 +52,7 @@ func PeerCommand(args []string, stdin io.Reader, out io.Writer) error {
 	switch args[0] {
 	case "add":
 		if len(args) != 2 {
-			return errors.New("用法：jarvisd hub peer add <互联码>（- 从标准输入读）")
+			return errors.New("用法：personad hub peer add <互联码>（- 从标准输入读）")
 		}
 		code := args[1]
 		if code == "-" {
@@ -109,7 +109,7 @@ func PeerCommand(args []string, stdin io.Reader, out io.Writer) error {
 		return nil
 	case "remove":
 		if len(args) != 2 {
-			return errors.New("用法：jarvisd hub peer remove <hub_id>")
+			return errors.New("用法：personad hub peer remove <hub_id>")
 		}
 		if err := cfg.adminCall(ctx, http.MethodDelete, "/api/v1/admin/cli/peers/"+args[1], nil, nil); err != nil {
 			return err

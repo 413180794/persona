@@ -7,7 +7,7 @@
   "setup_title": "设置管理员密码",
   "setup_subtitle": "第一次打开管理界面，先设一个密码，以后用它登录。",
   "code_intro": "第一次设置密码，要先输入一次性设置码。有了它，才能确认在设置的人能操作 hub 机器。这个码 10 分钟内有效，只能用一次。在下面任一处拿码：",
-  "code_from_logs": "hub 启动日志：{systemd}，Docker 是 {docker}",
+  "code_from_logs": "hub 的启动日志里也有：常驻服务（服务名沿用旧名）用 {systemd}，Docker 用 {docker}",
   "code_from_setup": "安装时 {command} 最后打印的管理界面地址里带着设置码，用那个地址打开就会自动填好",
   "code_from_command": "在 hub 机器上运行 {command}",
   "setup_code": "设置码",

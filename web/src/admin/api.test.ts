@@ -73,7 +73,7 @@ describe("adminApi", () => {
 
   it("explains the setup code errors", async () => {
     stub(401, { error: "bad setup code", code: "bad_setup_code" });
-    expect(errorText(await adminApi("/setup", "POST").catch((e) => e))).toContain("jarvisd hub admin setup-code");
+    expect(errorText(await adminApi("/setup", "POST").catch((e) => e))).toContain("personad hub admin setup-code");
     stub(403, { error: "setup code required", code: "setup_code_required" });
     expect(errorText(await adminApi("/setup", "POST").catch((e) => e))).toBe("先输入设置码");
   });

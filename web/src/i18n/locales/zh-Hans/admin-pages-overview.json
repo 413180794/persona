@@ -44,7 +44,7 @@
   "doctor_rerun": "再查一次",
   "doctor_run": "运行检查",
   "doctor_ran": "{time} 检查。只读，不改配置；不测公网能不能连进来。",
-  "doctor_footer": "和在 hub 机器上运行 jarvisd hub doctor 一样：配置、TLS 证书、候选地址、IPv6、防火墙。只读。",
+  "doctor_footer": "和在 hub 机器上运行 personad hub doctor 一样：配置、TLS 证书、候选地址、IPv6、防火墙。只读。",
   "doctor_none": "还没检查。",
   "next_steps": "下一步"
 }

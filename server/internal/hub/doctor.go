@@ -133,7 +133,7 @@ func (d *doctorReport) config(dir string) *Config {
 	// Match the runtime's omitted-listen default, without generating a token or host name.
 	cfg := &Config{Listen: ":18660", dir: dir}
 	if json.Unmarshal(b, cfg) != nil {
-		d.problem("配置", "hub.json 格式有误；请修正 JSON 后重新运行 jarvisd hub doctor")
+		d.problem("配置", "hub.json 格式有误；请修正 JSON 后重新运行 personad hub doctor")
 		return nil
 	}
 	var raw map[string]json.RawMessage
@@ -227,7 +227,7 @@ func (d *doctorReport) running(ctx context.Context, cfg *Config) []Endpoint {
 			}
 		}
 		if err != nil {
-			d.problem("运行中的 hub", "无法连接本机回环，hub 可能没运行或未监听回环地址；请启动 jarvisd hub run 并检查 listen")
+			d.problem("运行中的 hub", "无法连接本机回环，hub 可能没运行或未监听回环地址；请启动 personad hub run 并检查 listen")
 			return nil
 		}
 		var body struct {

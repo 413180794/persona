@@ -128,6 +128,8 @@ personad hub setup [--yes] [--listen :18660] [--tls :18662] [--outside] [--no-se
 
 **Docker / NAS**：不走 `hub setup`。compose 照旧，另一个小 PR 让入口脚本首次生成 `.env` 缺的值（随机库密码、PUID / PGID），`compose.yaml` 映射 TLS 端口（镜像现在只 `EXPOSE 18660`，`Dockerfile:83`）。NAS 的说明里直说「还要再加一台电脑」。
 
+实现（#4481、#4484）：结尾的管理界面地址按 hub 实际的 `listen` 选：只监听回环（`127.0.0.1` / `localhost` / `::1`）时打印回环地址，说明「只能在这台电脑上打开」和怎么改成手机也能开（提示里写出 hub.json 的实际路径，把其中的 `listen` 改成 `:端口` 后重跑 `hub setup`），`--json` 的最后一行多一个 `admin_local_only: true`；绑某一个地址时用那个地址；监听全部地址时才用局域网 IP。重跑时 `--listen` / `--tls` 只在显式给了、而且和 hub.json 里的不一样时才说「已有的不改」，两边的值都写出来；`--tls :端口` 和新装写下的「局域网 IP:端口」算同一个。管理界面、hub 日志、`hub doctor`、`hub admin` / `hub peer` 的用法和报错里的命令一律写 `personad`（`jarvisd` 别名照样能用，服务端 `command_name_test.go`、网页 `web/src/admin/command-name.test.ts` 守着）；systemd 单元名照旧是 `jarvisd`，管理界面提到 `journalctl --user -u jarvisd` 的地方说明「服务名沿用旧名」。管理界面的扩展页和「设置 › 扩展」一样：官方市场读不到时灰字「暂时读不到官方扩展，稍后再试。」（原因悬停可见），市场读不到时目录不说「这里还没有扩展」。
+
 实现（#4045）：生成的值**不回写 `.env`**：`.env` 是 compose 在宿主机上读的，容器起来时已经读完了。改成 compose 不再强制 `JARVIS_DB_PASSWORD`、`JARVIS_PUBLIC_URL`、`PUID` / `PGID`（只剩 `JARVIS_IMAGE`）：没设库密码时 postgres 的入口（compose 里包的一层）第一次启动随机生成，存 `data/docker/db-password`（postgres 只挂这个子目录），镜像里的 `jarvisd` 包装脚本每次运行（含 `docker compose exec`）读它补进数据库地址；没设 `PUID` / `PGID` 时取 `data/` 的属主（归 root 时用 1000）。`data/` 里还没有 `hub.json` 时入口脚本写一份容器用的新安装默认值（`public_url: ""`、`public.tls_listen: ":18662"`、`admin.first_setup: "code"`、`machines: []`，不带 token，hub 首次读到时补），没走 `newInstallConfig()`：容器里拿不到 NAS 的局域网地址，`public_url` 只认 `JARVIS_PUBLIC_URL`，空着时入口脚本和 `hub pair` 都直说要设它。compose 映射 `${JARVIS_TLS_PORT:-18662}:18662`，镜像 `EXPOSE 18660 18662`。已有 `.env` / `hub.json` 的部署行为不变（`scripts/test/test_docker_entrypoint.py`）。见 `docs/docker.md`「装」。
 
 **Mac 一体化**（拍板 1、2 之后）：Persona Link 加「把这台 Mac 设成 hub」，内部调 `personad hub setup`，装好后本机是 `kind: local`，窗口里直接显示 `pair-codes` 返回的 `qr.rows`。和 Mac App `PersonaMac` 合不合成一个下载另行拍板（拍板 3）。
@@ -540,7 +542,7 @@ pending 的电脑：`pushManaged` 跳过；`defaultAssistantMachine` 和助手�
 
 | 命令 | 输出 |
 | --- | --- |
-| `personad hub setup [--json]` | 每步一行中文；`--json` 时一行一个 `{"step","ok","detail","next"}`，最后一行 `{"done":true,"pair_url","admin_url","setup_code","expires_at"}`，给 Persona Link / Mac 一体化调用 |
+| `personad hub setup [--json]` | 每步一行中文；`--json` 时一行一个 `{"step","ok","detail","next"}`，最后一行 `{"done":true,"pair_url","admin_url","admin_local_only","setup_code","expires_at"}`，给 Persona Link / Mac 一体化调用 |
 | `personad hub pair --machine <id> --add` | 同现在，多一行「已添加：<名字>」 |
 
 ## 6. 做 / 暂不做 / 要拍板

@@ -44,7 +44,7 @@
   "doctor_rerun": "再実行",
   "doctor_run": "診断を実行",
   "doctor_ran": "{time}に診断しました。読み取りのみで設定は変更しません。インターネットから接続できるかは確認しません。",
-  "doctor_footer": "ハブのマシンでjarvisd hub doctorを実行するのと同じです。設定、TLS証明書、候補アドレス、IPv6、ファイアウォールを確認します。読み取りのみです。",
+  "doctor_footer": "ハブのマシンでpersonad hub doctorを実行するのと同じです。設定、TLS証明書、候補アドレス、IPv6、ファイアウォールを確認します。読み取りのみです。",
   "doctor_none": "まだ診断していません。",
   "next_steps": "次のステップ"
 }

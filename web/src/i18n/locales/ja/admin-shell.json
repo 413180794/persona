@@ -13,7 +13,7 @@
   "restarting": "ハブを再起動しています…",
   "restarting_detail": "通常は数秒で終わります。その間アプリは一時的に切断され、自動で再接続します。",
   "slow": "ハブがまだ戻っていません",
-  "slow_detail": "90秒待ちました。ハブのマシンでログを確認してください。systemdはjournalctl --user -u jarvisd、Dockerはdocker compose logs hubです。",
+  "slow_detail": "90秒待ちました。ハブのマシンでログを確認してください。常駐サービス（サービス名は旧名のまま）はjournalctl --user -u jarvisd、Dockerはdocker compose logs hubです。",
   "got_it": "OK",
   "reason_separator": "。",
   "restart_manual": "{reasons}。ハブのマシンで再起動してください：systemctl --user restart jarvisd、またはdocker compose restart hub。",

@@ -314,7 +314,7 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 		}
 		if !h.adminCanSetup(r) {
 			writeErrCode(w, http.StatusForbidden, "setup_local_only",
-				errors.New("set the first password from the hub's own network, or run jarvisd hub admin reset-password on the hub's machine"))
+				errors.New("set the first password from the hub's own network, or run personad hub admin reset-password on the hub's machine"))
 			return
 		}
 		if h.setupCodeRequired(r) {
@@ -323,7 +323,7 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 			}
 			if strings.TrimSpace(in.SetupCode) == "" {
 				writeErrCode(w, http.StatusForbidden, "setup_code_required",
-					errors.New("the first password needs the setup code: the admin link personad hub setup printed, the hub log, or jarvisd hub admin setup-code"))
+					errors.New("the first password needs the setup code: the admin link personad hub setup printed, the hub log, or personad hub admin setup-code"))
 				return
 			}
 			if problem := adminPasswordProblem(in.Password); problem != nil { // before spending the code
@@ -334,7 +334,7 @@ func (h *Hub) adminAuthRoutes(open, closed *http.ServeMux) {
 				h.adminFailed(r)
 				h.logf("admin: wrong or expired setup code from %s", maskedSource(r))
 				writeErrCode(w, http.StatusUnauthorized, "bad_setup_code",
-					errors.New("wrong or expired setup code: jarvisd hub admin setup-code prints a new one"))
+					errors.New("wrong or expired setup code: personad hub admin setup-code prints a new one"))
 				return
 			}
 		}

@@ -834,7 +834,7 @@ func (p *Pusher) notifyDone(machineID, machine, sessionID, title, text string, w
 }
 
 func donePayloadIn(l i18n.Lang, machineID, machine, sessionID, title, text string) map[string]any {
-	text = plainMarkdown(text) // an agent's last words are Markdown; a notification shows them as they are
+	text = textfmt.PushText(text) // an agent's last words are Markdown, flattened by node; a notification shows them as they are
 	if text == "" {
 		text = i18n.T(l, "push.done_body")
 	}

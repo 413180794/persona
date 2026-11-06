@@ -376,6 +376,112 @@ func TestSetupKeepsAnExistingHubJSON(t *testing.T) {
 	}
 }
 
+// A hub listening on loopback only (#4484): the admin URL is the loopback one that opens, said to work on this
+// machine only; the same --listen / --tls again says nothing about not changing them.
+func TestSetupLoopbackHubAdminURL(t *testing.T) {
+	home := setupTestHome(t)
+	token := "handwritten-token"
+	port := fakeHub(t, &token, false)
+	listen := "127.0.0.1:" + strconv.Itoa(port)
+	cmds := &fakeCommands{replies: map[string]fakeReply{"loginctl show-user": {out: "yes\n"}}}
+	o := setupOptions{listen: listen, tls: "127.0.0.1:18662", listenSet: true, tlsSet: true}
+	e, out := testSetupEnv(t, home, o, cmds, "systemctl", "loginctl")
+	file := `{"token":"handwritten-token","listen":"` + listen + `","database_url":"postgres://x","public":{"tls_listen":"127.0.0.1:18662"}}`
+	if err := os.WriteFile(filepath.Join(e.root, "hub.json"), []byte(file), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.setup(context.Background()); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	text := out.String()
+	for _, want := range []string{"http://" + listen + "/admin#setup=ABCD-EFGH\n", "只能在这台电脑上打开", "在这台电脑的浏览器里打开"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("no %q in:\n%s", want, text)
+		}
+	}
+	for _, not := range []string{ip4(192, 168, 1, 20), "只用于新装", "用手机浏览器"} {
+		if strings.Contains(text, not) {
+			t.Fatalf("%q in:\n%s", not, text)
+		}
+	}
+	// --json says so too.
+	e.o.json = true
+	out.Reset()
+	if err := e.setup(context.Background()); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	var done map[string]any
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &done); err != nil || done["admin_local_only"] != true ||
+		done["admin_url"] != "http://"+listen+"/admin#setup=ABCD-EFGH" {
+		t.Fatalf("done line %q", lines[len(lines)-1])
+	}
+}
+
+func TestSetupAdminURL(t *testing.T) {
+	lan := ip4(192, 168, 1, 20)
+	e := &setupEnv{lanIPv4: func() string { return lan }}
+	for _, c := range []struct {
+		listen, public, want string
+		local                bool
+	}{
+		{":18660", "", "http://" + lan + ":18660/admin", false},
+		{"0.0.0.0:18660", "", "http://" + lan + ":18660/admin", false},
+		{"[::]:18660", "", "http://" + lan + ":18660/admin", false},
+		{"127.0.0.1:18660", "", "http://127.0.0.1:18660/admin", true},
+		{"localhost:18660", "", "http://127.0.0.1:18660/admin", true},
+		{"[::1]:18660", "", "http://[::1]:18660/admin", true},
+		{ip4(10, 0, 0, 5) + ":18660", "", "http://" + ip4(10, 0, 0, 5) + ":18660/admin", false},
+	} {
+		if got, local := e.adminURL(&Config{Listen: c.listen, PublicURL: c.public}); got != c.want || local != c.local {
+			t.Errorf("adminURL(%q) = %q, %v; want %q, %v", c.listen, got, local, c.want, c.local)
+		}
+	}
+	// No LAN address found: public_url's host, else a placeholder.
+	e.lanIPv4 = func() string { return "" }
+	if got, _ := e.adminURL(&Config{Listen: ":18660", PublicURL: "http://hub.example.com:18660"}); got != "http://hub.example.com:18660/admin" {
+		t.Errorf("from public_url: %q", got)
+	}
+}
+
+// Rerunning with --listen / --tls (#4484): only a value that differs from hub.json's is mentioned, with both sides.
+func TestSetupKeptListenNote(t *testing.T) {
+	lan := ip4(192, 168, 1, 20)
+	file := func(s string) *jsonObject {
+		o, err := parseJSONObject([]byte(s))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return o
+	}
+	fresh := file(`{"token":"x","listen":":18660","public":{"tls_listen":"` + lan + `:18662"}}`)
+	for _, c := range []struct {
+		name string
+		o    setupOptions
+		raw  *jsonObject
+		want []string // "" when there is no note
+	}{
+		{"flags not given", setupOptions{listen: ":1", tls: ":2"}, fresh, nil},
+		{"same as a new install wrote", setupOptions{listen: ":18660", tls: ":18662", listenSet: true, tlsSet: true}, fresh, nil},
+		{"spelled differently", setupOptions{listen: "0.0.0.0:18660", tls: lan + ":18662", listenSet: true, tlsSet: true}, fresh, nil},
+		{"no listen in the file", setupOptions{listen: ":18660", listenSet: true}, file(`{"token":"x"}`), nil},
+		{"other listen", setupOptions{listen: ":18760", listenSet: true}, fresh, []string{"listen 仍是 :18660（这次给的 --listen :18760）", "只用于新装"}},
+		{"tls off in the file", setupOptions{tls: ":18662", tlsSet: true}, file(`{"token":"x"}`), []string{"public.tls_listen 仍是 空（没开 TLS）（这次给的 --tls :18662）"}},
+		{"other tls host", setupOptions{tls: "127.0.0.1:18662", tlsSet: true}, fresh, []string{"public.tls_listen 仍是 " + lan + ":18662"}},
+	} {
+		e := &setupEnv{o: c.o, lanIPv4: func() string { return lan }}
+		got := e.keptListenNote(c.raw)
+		if len(c.want) == 0 && got != "" {
+			t.Errorf("%s: note %q", c.name, got)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: no %q in %q", c.name, w, got)
+			}
+		}
+	}
+}
+
 // db.sh wrote only database_url (no hub has run): the new-install defaults fill in around it.
 func TestSetupFillsAFileNoHubHasRead(t *testing.T) {
 	home := setupTestHome(t)

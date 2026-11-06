@@ -44,7 +44,7 @@
   "doctor_rerun": "Run again",
   "doctor_run": "Run checks",
   "doctor_ran": "Checked {time}. Read-only, no config changes; doesn't test whether the internet can reach the hub.",
-  "doctor_footer": "Same as running jarvisd hub doctor on the hub machine: config, TLS certificate, candidate addresses, IPv6, firewall. Read-only.",
+  "doctor_footer": "Same as running personad hub doctor on the hub machine: config, TLS certificate, candidate addresses, IPv6, firewall. Read-only.",
   "doctor_none": "Not checked yet.",
   "next_steps": "Next steps"
 }

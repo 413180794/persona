@@ -289,8 +289,8 @@ func (e *setupEnv) config() (*setupConfig, error) {
 			return nil, e.fail("config", "写不了 "+e.hubJSON()+"："+err.Error(), "检查这个目录的权限")
 		}
 	} else {
-		if e.o.listenSet || e.o.tlsSet {
-			notes = append(notes, "已有的 listen、public.tls_listen 不改（--listen、--tls 只用于新装）")
+		if note := e.keptListenNote(raw); note != "" {
+			notes = append(notes, note)
 		}
 		if e.o.outside {
 			if err := editHubJSON(e.root, outsideTLS); err != nil {
@@ -328,6 +328,65 @@ func (e *setupEnv) config() (*setupConfig, error) {
 	}
 	e.report("config", true, detail, "")
 	return &setupConfig{Config: cfg, fresh: fresh}, nil
+}
+
+// keptListenNote is what a rerun says about --listen / --tls on a hub.json a hub has run with: those flags only shape
+// a new install, so a value given explicitly that differs from the file's is named with both sides; the same value
+// again (or a flag not given) says nothing.
+func (e *setupEnv) keptListenNote(raw *jsonObject) string {
+	var file struct {
+		Listen string
+		Public struct {
+			TLSListen string `json:"tls_listen"`
+		}
+	}
+	file.Listen = ":18660" // Config's default when hub.json has none
+	if b, ok := raw.get("listen"); ok {
+		_ = json.Unmarshal(b, &file.Listen)
+	}
+	if b, ok := raw.get("public"); ok {
+		_ = json.Unmarshal(b, &file.Public)
+	}
+	var diffs []string
+	if e.o.listenSet && !sameListen(e.o.listen, file.Listen, "") {
+		diffs = append(diffs, "listen 仍是 "+file.Listen+"（这次给的 --listen "+e.o.listen+"）")
+	}
+	// A new install binds a TLS address given without a host to the LAN IPv4 (newInstallConfig): that is the same.
+	if e.o.tlsSet && !sameListen(e.o.tls, file.Public.TLSListen, e.lanIPv4()) {
+		have := file.Public.TLSListen
+		if have == "" {
+			have = "空（没开 TLS）"
+		}
+		diffs = append(diffs, "public.tls_listen 仍是 "+have+"（这次给的 --tls "+e.o.tls+"）")
+	}
+	if len(diffs) == 0 {
+		return ""
+	}
+	return strings.Join(diffs, "，") + "：--listen、--tls 只用于新装，已有的不改"
+}
+
+// sameListen: the address a flag asked for is the one the file has; a flag without a host also matches the file's
+// port on lan (what a new install writes for it), and "localhost" / "0.0.0.0" read like their usual spellings.
+func sameListen(flag, file, lan string) bool {
+	if flag == file {
+		return true
+	}
+	fh, fp, err1 := net.SplitHostPort(flag)
+	hh, hp, err2 := net.SplitHostPort(file)
+	if err1 != nil || err2 != nil || fp != hp {
+		return false
+	}
+	norm := func(h string) string {
+		switch h {
+		case "0.0.0.0", "::", "*":
+			return ""
+		case "localhost":
+			return "127.0.0.1"
+		}
+		return h
+	}
+	fh, hh = norm(fh), norm(hh)
+	return fh == hh || (fh == "" && lan != "" && hh == lan)
 }
 
 // installInputs looks at this machine for a new hub.json: the LAN address, free ports (another hub on the default
@@ -653,7 +712,7 @@ func (e *setupEnv) finish(ctx context.Context, cfg *setupConfig) error {
 	if err != nil {
 		return e.fail("health", "hub 在运行，但没拿到管理界面的设置码："+err.Error(), "运行 personad hub admin setup-code 再试")
 	}
-	adminURL := e.adminURL(cfg.Config)
+	adminURL, localOnly := e.adminURL(cfg.Config)
 	if code != "" {
 		adminURL += "#setup=" + url.QueryEscape(code)
 	}
@@ -662,8 +721,8 @@ func (e *setupEnv) finish(ctx context.Context, cfg *setupConfig) error {
 		expires = codeExpires
 	}
 	if e.o.json {
-		done := map[string]any{"done": true, "pair_url": p.PairURL, "admin_url": adminURL, "setup_code": code,
-			"expires_at": expires.UTC().Format(time.RFC3339)}
+		done := map[string]any{"done": true, "pair_url": p.PairURL, "admin_url": adminURL, "admin_local_only": localOnly,
+			"setup_code": code, "expires_at": expires.UTC().Format(time.RFC3339)}
 		b, _ := marshalNoEscape(done)
 		_, _ = e.out.Write(append(b, '\n'))
 		return nil
@@ -671,11 +730,19 @@ func (e *setupEnv) finish(ctx context.Context, cfg *setupConfig) error {
 	fmt.Fprintf(e.out, "\nhub 装好了。\n\n1. 用 Persona App 扫这个二维码，配对你的手机（%d 分钟内有效）：\n\n", minutesLeft(p.ExpiresAt))
 	qrterminal.GenerateHalfBlock(p.PairURL, qrterminal.L, e.out)
 	fmt.Fprintf(e.out, "\n   扫不了时，把这条配对链接发到手机上打开：%s\n\n", p.PairURL)
+	browser := "用手机浏览器"
+	if localOnly {
+		browser = "在这台电脑的浏览器里"
+	}
 	if code != "" {
-		fmt.Fprintf(e.out, "2. 用手机浏览器打开下面的地址，设一个管理员密码（设置码已经带在地址里，%d 分钟内有效）：\n   %s\n",
-			minutesLeft(codeExpires), adminURL)
+		fmt.Fprintf(e.out, "2. %s打开下面的地址，设一个管理员密码（设置码已经带在地址里，%d 分钟内有效）：\n   %s\n",
+			browser, minutesLeft(codeExpires), adminURL)
 	} else {
 		fmt.Fprintf(e.out, "2. 管理员密码已经设过了，管理界面在：\n   %s\n", adminURL)
+	}
+	if localOnly {
+		fmt.Fprintf(e.out, "   hub 现在只在这台电脑上监听（listen 是 %s），这个地址只能在这台电脑上打开；"+
+			"要用手机打开，把 %s 里的 \"listen\" 改成 \":%s\"（让 hub 在所有地址上监听），再运行一次 personad hub setup。\n", cfg.Listen, e.hubJSON(), portOf(cfg.Listen))
 	}
 	fmt.Fprintln(e.out, "\n过期了就再运行一次 personad hub setup（已经装好的不会重做），或者 personad hub pair 只出配对码。")
 	return nil
@@ -707,8 +774,22 @@ func (e *setupEnv) setupCode(ctx context.Context, cfg *Config) (string, time.Tim
 	return "", time.Time{}, fmt.Errorf("HTTP %d", resp.StatusCode)
 }
 
-// adminURL is where a phone on the LAN opens the admin UI: the LAN address and the plaintext port.
-func (e *setupEnv) adminURL(cfg *Config) string {
+// adminURL is where the admin UI opens, on the plaintext port: a hub listening on loopback only answers there
+// (localOnly: only a browser on this machine can open it), one bound to a single address answers on that one, and
+// one on every address is opened by a phone on the LAN at this machine's LAN address.
+func (e *setupEnv) adminURL(cfg *Config) (u string, localOnly bool) {
+	port := portOf(cfg.Listen)
+	if h, _, err := net.SplitHostPort(cfg.Listen); err == nil {
+		switch ip := net.ParseIP(h); {
+		case h == "localhost" || (ip != nil && ip.IsLoopback()):
+			if ip == nil || ip.To4() != nil {
+				h = "127.0.0.1"
+			}
+			return "http://" + net.JoinHostPort(h, port) + "/admin", true
+		case ip != nil && !ip.IsUnspecified():
+			return "http://" + net.JoinHostPort(h, port) + "/admin", false
+		}
+	}
 	host := e.lanIPv4()
 	if host == "" {
 		if u, err := url.Parse(cfg.PublicURL); err == nil && u.Hostname() != "" {
@@ -718,7 +799,7 @@ func (e *setupEnv) adminURL(cfg *Config) string {
 	if host == "" {
 		host = "<这台电脑的局域网 IP>"
 	}
-	return "http://" + net.JoinHostPort(host, portOf(cfg.Listen)) + "/admin"
+	return "http://" + net.JoinHostPort(host, port) + "/admin", false
 }
 
 // --- the machine --------------------------------------------------------------------------------------------------

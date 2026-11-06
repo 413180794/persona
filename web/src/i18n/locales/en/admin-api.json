@@ -4,7 +4,7 @@
   "err_already_set": "An admin password is already set. Sign in instead.",
   "err_setup_local_only": "First-time setup only works from the hub's local network",
   "err_setup_code_required": "Enter the setup code first",
-  "err_bad_setup_code": "The setup code is wrong or expired. Run jarvisd hub admin setup-code on the hub machine for a new one.",
+  "err_bad_setup_code": "The setup code is wrong or expired. Run personad hub admin setup-code on the hub machine for a new one.",
   "err_login_required": "Your session expired. Sign in again.",
   "err_csrf": "This page is out of date. Refresh and try again.",
   "err_tls_required": "Open this through the TLS port",

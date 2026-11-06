@@ -84,7 +84,7 @@ func (h *Hub) logSetupCode(code string, expires time.Time) {
 		where = "(admin.first_setup is \"code\": from any source)"
 	}
 	h.logf("admin: first-run setup code %s (10 minutes, until %s): needed to set the admin password %s; "+
-		"jarvisd hub admin setup-code prints a new one", code, expires.UTC().Format(time.RFC3339), where)
+		"personad hub admin setup-code prints a new one", code, expires.UTC().Format(time.RFC3339), where)
 }
 
 // adminStartup logs a setup code when the hub starts without an administrator password.
@@ -119,11 +119,11 @@ func (h *Hub) setupCodeRoute(open *http.ServeMux) {
 			return
 		}
 		if hash != "" {
-			writeErrCode(w, http.StatusConflict, "already_set", errors.New("the administrator password is already set: sign in, or jarvisd hub admin reset-password"))
+			writeErrCode(w, http.StatusConflict, "already_set", errors.New("the administrator password is already set: sign in, or personad hub admin reset-password"))
 			return
 		}
 		code, expires := h.newSetupCode()
-		h.logf("admin: a new first-run setup code was printed by jarvisd hub admin setup-code")
+		h.logf("admin: a new first-run setup code was printed by personad hub admin setup-code")
 		writeJSON(w, map[string]any{"code": code, "expires_at": expires.UTC()})
 	})
 }

@@ -182,7 +182,7 @@ function AccessCard({ v, onSaved }: { v: NetworkView; onSaved: (v: NetworkView) 
           {tRich("admin-pages-network.lockout_body", {
             address: <span className="font-mono text-ink">{v.you.address}</span>,
             scope: ACCESS_INFO[pick].label,
-            command: <span className="font-mono">jarvisd hub admin access</span>,
+            command: <span className="font-mono">personad hub admin access</span>,
           })}
         </p>
       </Dialog>

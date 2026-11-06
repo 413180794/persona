@@ -4,7 +4,7 @@
   "err_already_set": "已经有人设好了管理员密码，请直接登录",
   "err_setup_local_only": "首次设置只能在 hub 所在的局域网里做",
   "err_setup_code_required": "先输入设置码",
-  "err_bad_setup_code": "设置码不对或过期了，在 hub 机器上运行 jarvisd hub admin setup-code 取一个新的",
+  "err_bad_setup_code": "设置码不对或过期了，在 hub 机器上运行 personad hub admin setup-code 取一个新的",
   "err_login_required": "登录过期了，请重新登录",
   "err_csrf": "页面过期了，刷新一下再试",
   "err_tls_required": "需要经 TLS 端口访问",

@@ -84,7 +84,7 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
         ) : (
           markets.map((m) => (
             <div key={m.id} className="flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3">
-              <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[10px]", m.error ? "bg-red-tint text-red" : "bg-inset text-ink-2 shadow-hairline")}>
+              <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[10px]", m.error && !m.official ? "bg-red-tint text-red" : "bg-inset text-ink-2 shadow-hairline")}>
                 <AdminIcon name={marketKind(m.spec) === "web" ? "web" : "git"} size={16} />
               </span>
               <div className="min-w-[200px] flex-1">
@@ -100,7 +100,14 @@ export function ExtensionMarkets({ onChanged }: { onChanged: () => void }) {
                 </div>
                 <div className="mt-0.5 font-mono text-[11.5px] break-all text-ink-3">{specLabel(m.spec)}</div>
                 <div className="mt-0.5 text-[11.5px] text-ink-3">{marketLine(m, (iso) => ago(iso))}</div>
-                {m.error && <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("admin-pages-extensionmarket.read_failed", { error: m.error })}</p>}
+                {m.error &&
+                  // the official market out of reach is the network's (rate limits, no route), not this hub's fault: grey,
+                  // like 设置 › 扩展 (docs/onboarding.md 4.5); the reason stays on hover
+                  (m.official ? (
+                    <p title={m.error} className="mt-1 text-[12px] leading-relaxed text-ink-3">{t("admin-pages-extensionmarket.official_unreachable")}</p>
+                  ) : (
+                    <p className="mt-1 text-[12px] leading-relaxed break-words text-red">{t("admin-pages-extensionmarket.read_failed", { error: m.error })}</p>
+                  ))}
                 {(m.warnings ?? []).map((w) => (
                   <p key={w} className="mt-1 flex items-start gap-1.5 text-[11.5px] leading-relaxed break-words text-orange">
                     <AdminIcon name="alert" size={12} className="mt-0.5 shrink-0" />
@@ -183,7 +190,11 @@ function MarketCatalog({ markets, onChanged }: { markets: Market[]; onChanged: (
       {!data ? (
         error ? <ErrorBox error={error} onRetry={() => load()} /> : <Loader />
       ) : data.extensions.length === 0 ? (
-        <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q.trim() ? t("admin-pages-extensionmarket.not_found", { query: q.trim() }) : t("admin-pages-extensionmarket.catalog_empty")}</p>
+        <p className="px-4 py-6 text-center text-[12.5px] text-ink-3">{q.trim()
+            ? t("admin-pages-extensionmarket.not_found", { query: q.trim() })
+            : markets.some((m) => m.error && (!market || m.id === market))
+              ? t("admin-pages-extensionmarket.catalog_unreadable")
+              : t("admin-pages-extensionmarket.catalog_empty")}</p>
       ) : (
         data.extensions.map((it) => {
           const st = itemState(it);

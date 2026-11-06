@@ -68,3 +68,60 @@ func TestPlanTitle(t *testing.T) {
 		}
 	}
 }
+
+// A reply flattened to one line (node's snippet) keeps its words in a push: a table's cells joined, an HTML block's
+// text without tags, comments, scripts or styles (#4462).
+func TestPushTextOfAFlattenedReply(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"| 项 | 状态 | |---|---| | 构建 | 通过 |", "项 · 状态 · 构建 · 通过"},
+		{"结果如下 | 模块 | 结果 | | :--- | ---: | | hub | 通过 |", "结果如下 · 模块 · 结果 · hub · 通过"},
+		{"<details><summary>结果</summary>全部通过</details>", "结果 全部通过"},
+		{"<details><summary>比较</summary>当 1 < 2 且 3 > 1 时通过</details>", "比较 当 1 < 2 且 3 > 1 时通过"},
+		{"<details><summary>A &amp; B</summary>&lt;ok&gt;</details>", "A & B <ok>"},
+		{"<script>alert(1)</script>", ""},
+		{"<style>p{color:red}</style>", ""},
+		{"<!--\n不该出现\n-->", ""},
+		{"<div>正文<script>alert(1)</script></div>", "正文"},
+		{"a | b 两个都行", "a | b 两个都行"},
+		{"use `|---|---|` to mark", "use |---|---| to mark"},
+		{"grep -E 'a|---|b'", "grep -E 'a|---|b'"},
+		{"进度 |--| 50%", "进度 |--| 50%"},
+		{"## 早报 **今天 3 个会**", "早报 今天 3 个会"},
+		{"| 项 | 状态 |\n|---|---|\n| 构建 | 通过 |", "项\n状态\n构建\n通过"}, // a table on its own lines, as before
+	} {
+		if got := PushText(tc.in); got != tc.want {
+			t.Errorf("PushText(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// Text that already holds what used to be the code-span marker ("\x00N\x00") comes back as it was, with no panic;
+// a table's cell next to an HTML tag leaves no separator at the end of the line (review of #4475).
+func TestPushTextKeepsWhatItIsGiven(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"\x000\x00 | a | b | |---|---|", "\x000\x00 · a · b"},
+		{"`c` \x005\x00 | a | b | |---|---|", "c \x005\x00 · a · b"},
+		{"`|x|` | a | b | |---|---|", "|x| · a · b"},
+		{"<details><summary>表</summary>| a | b | |---|---| | 1 | 2 |</details>", "表 · a · b · 1 · 2"},
+	} {
+		if got := PushText(tc.in); got != tc.want {
+			t.Errorf("PushText(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// PushText's handling stays out of PlainMarkdown and PlanTitle: they read these as they did.
+func TestPlainMarkdownAndPlanTitleUnchanged(t *testing.T) {
+	for in, want := range map[string]string{
+		"<details><summary>计划</summary></details>": "",
+		"改 `a|-|b`": "改 a|-|b",
+		"| 项 | 状态 | |---|---| | 构建 | 通过 |": "| 项 | 状态 | |---|---| | 构建 | 通过 |",
+	} {
+		if got := PlanTitle(in); got != want {
+			t.Errorf("PlanTitle(%q) = %q, want %q", in, got, want)
+		}
+		if got := PlainMarkdown(in); got != want {
+			t.Errorf("PlainMarkdown(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
