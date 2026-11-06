@@ -1,8 +1,0 @@
-{
-  "core/designsystem/src/debug/kotlin/persona/core/designsystem/catalog/ChatPartsSamples.kt": 15,
-  "core/designsystem/src/debug/kotlin/persona/core/designsystem/catalog/ComponentCatalogScreen.kt": 142,
-  "core/designsystem/src/debug/kotlin/persona/core/designsystem/catalog/ImageViewerSamples.kt": 11,
-  "core/designsystem/src/debug/kotlin/persona/core/designsystem/catalog/InlineStatusCatalog.kt": 5,
-  "core/designsystem/src/main/kotlin/persona/core/designsystem/OperationFeedback.kt": 17,
-  "core/designsystem/src/main/kotlin/persona/core/designsystem/StatusComponents.kt": 2
-}

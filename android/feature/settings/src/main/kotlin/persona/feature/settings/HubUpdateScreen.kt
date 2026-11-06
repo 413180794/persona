@@ -111,7 +111,7 @@ private fun LazyListScope.version(s: HubUpdateStatus, state: HubUpdateState, res
     val rows = buildList<@Composable () -> Unit> {
         add { JRow(stringResource(R.string.settings_hub_update_version), value = s.version.ifBlank { stringResource(R.string.settings_hub_update_unknown) }) }
         add { JRow(stringResource(R.string.settings_hub_update_channel), value = HubUpdateText.channel(s.channel, resources)) }
-        HubUpdateText.lastCheck(s)?.let { at -> add { JRow(stringResource(R.string.settings_hub_update_last_check), value = at) } }
+        HubUpdateText.lastCheck(s, resources)?.let { at -> add { JRow(stringResource(R.string.settings_hub_update_last_check), value = at) } }
         add {
             JRow(onClick = onCheck, enabled = !state.checking && !s.working, chevron = false,
                 trailing = if (state.checking) ({ JSpinner() }) else null) {
@@ -240,14 +240,15 @@ private fun LazyListScope.history(records: List<HubUpdateRecord>) {
 @Composable
 private fun RecordRow(r: HubUpdateRecord) {
     val palette = PersonaTheme.palette
+    val resources = LocalResources.current
     val tone: Color = when (r.result) { "updated" -> palette.positive; "rolled_back", "held" -> palette.cautionText; else -> palette.danger.text }
     JRow {
         Column(verticalArrangement = Arrangement.spacedBy(Tokens.Space.xxs)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                Text(HubUpdateText.record(r.result, LocalResources.current), style = PersonaTheme.type.bodyStrong, color = tone, maxLines = 1)
+                Text(HubUpdateText.record(r.result, resources), style = PersonaTheme.type.bodyStrong, color = tone, maxLines = 1)
                 if (r.auto) JChip(stringResource(R.string.settings_hub_update_auto_chip))
                 Spacer(Modifier.weight(1f))
-                HubUpdateText.recordTime(r)?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1) }
+                HubUpdateText.recordTime(r, resources)?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink3, maxLines = 1) }
             }
             Text("${r.fromVersion} → ${r.toVersion}", style = PersonaTheme.type.codeSmall, color = palette.ink2, maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
             r.reason?.takeIf { it.isNotBlank() }?.let { Text(it, style = PersonaTheme.type.caption, color = palette.ink3) }

@@ -115,6 +115,26 @@ class ProactiveStoreTest {
         return messages
     }
 
+    @Test fun pairingAndCompatibilityFailuresUseTheProactivePagesLanguage() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        for (language in listOf("zh", "en", "ja")) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(language))
+            }
+            val localized = context.createConfigurationContext(config)
+            val words = ProactiveText(localized)
+            for ((kind, id) in listOf(
+                persona.core.hub.HubError.PairingExpired to persona.core.designsystem.R.string.designsystem_feedback_pairing_expired,
+                persona.core.hub.HubError.Incompatible to persona.core.designsystem.R.string.designsystem_feedback_incompatible,
+            )) {
+                val error = persona.core.hub.HubFailure(kind, "raw detail")
+                val expected = localized.getString(id)
+                assertEquals(language, expected, loadFailure(words, error))
+                assertEquals(language, expected.trimEnd('。', '.'), failureReason(words, error))
+            }
+        }
+    }
+
     @Test fun repeatingAndOneOffTasksAreTheirOwnSections() = runTest {
         val store = ProactiveStore(FakeHub(listOf(ci, byPersona, review, morning, patrol)), this, say)
         store.refresh()

@@ -469,21 +469,16 @@ internal const val LOCAL_UNCONFIRMED = "结果待确认 · 打开核对" // i18n
 
 @Composable
 private fun InboxLocalStatus(label: String) {
-    // The repositories write these labels in Chinese as tokens (a pending state's label, 草稿 · …); they turn into
-    // the shown language here.
-    val pending = PendingStatus.entries.firstOrNull { label.startsWith(it.label) }
-    if (pending != null) {
-        PendingBadge(pending, reason = if (pending == PendingStatus.Refused) label.substringAfter("：", "").takeIf { it.isNotBlank() } else null) // i18n-ignore: separator of the token
-    } else {
-        val draft = label.removePrefix(LOCAL_DRAFT).takeIf { label.startsWith(LOCAL_DRAFT) }
-        val shown = when {
-            draft != null -> stringResource(R.string.inbox_local_draft, draft)
-            label == LOCAL_UNCONFIRMED -> stringResource(R.string.inbox_local_unconfirmed)
-            else -> label
-        }
-        Text(shown, style = PersonaTheme.type.micro,
-            color = if (draft != null) PersonaTheme.palette.cautionText else PersonaTheme.palette.ink3)
+    // A pending reply shows as its badge from [InboxRecord.localDelivery]; the real repository words the rest in the
+    // shown language already, and the demo one writes the tokens above, which turn into the shown language here.
+    val draft = label.removePrefix(LOCAL_DRAFT).takeIf { label.startsWith(LOCAL_DRAFT) }
+    val shown = when {
+        draft != null -> stringResource(R.string.inbox_local_draft, draft)
+        label == LOCAL_UNCONFIRMED -> stringResource(R.string.inbox_local_unconfirmed)
+        else -> label
     }
+    Text(shown, style = PersonaTheme.type.micro,
+        color = if (draft != null) PersonaTheme.palette.cautionText else PersonaTheme.palette.ink3)
 }
 
 @Composable

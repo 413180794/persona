@@ -3,6 +3,7 @@ package persona.feature.voice
 import persona.core.contracts.api.VoiceModelChoice
 import persona.core.contracts.api.VoiceModelOptions
 import persona.core.contracts.api.VoiceOption
+import persona.core.designsystem.UiText
 import persona.core.designsystem.operationFeedback
 import persona.core.domain.FailureAction
 import android.content.res.Resources
@@ -44,6 +45,7 @@ internal class VoiceText(private val resources: Resources) {
     fun voicesFailed(reason: String) = get(R.string.voice_voices_failed, reason)
 
     internal fun string(@StringRes id: Int, vararg args: Any) = get(id, *args)
+    internal fun resolve(text: UiText) = text.resolve(resources)
 }
 
 /** The page's words in the language it is shown in. */
@@ -113,7 +115,7 @@ internal fun loadFailure(error: Throwable, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
         feedback.offline -> text.string(R.string.voice_load_offline)
-        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message
+        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> text.resolve(feedback.text)
         else -> hubMessage(error)?.let { text.string(R.string.voice_load_no_result_reason, it) } ?: text.string(R.string.voice_load_no_result)
     }
 }
@@ -123,7 +125,7 @@ internal fun voicesFailure(error: Throwable, text: VoiceText): String {
     val feedback = operationFeedback(error)
     return when {
         feedback.offline -> text.string(R.string.voice_hub_unreachable)
-        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message
+        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> text.resolve(feedback.text)
         else -> hubMessage(error) ?: text.string(R.string.voice_no_result)
     }
 }
@@ -133,10 +135,10 @@ private fun reason(error: Throwable, status: Int?, text: VoiceText): String {
     return when {
         // The hub refuses extensions to a device that may only read and answer (docs/extensions.md); not an expired pairing.
         status == 403 -> text.string(R.string.voice_device_not_allowed)
-        status == 401 || feedback.action == FailureAction.PairAgain -> feedback.message
+        status == 401 || feedback.action == FailureAction.PairAgain -> text.resolve(feedback.text)
         status != null && status >= 500 -> text.string(R.string.voice_service_no_response)
         status != null -> "HTTP $status"
-        feedback.action == FailureAction.UpdateHub -> feedback.message
+        feedback.action == FailureAction.UpdateHub -> text.resolve(feedback.text)
         feedback.offline -> text.string(R.string.voice_hub_unreachable)
         else -> hubMessage(error) ?: text.string(R.string.voice_connect_failed)
     }

@@ -80,6 +80,33 @@ class VoiceTextTest {
         assertEquals("音色列表没拿到：连不上 hub", text.voicesFailed(voicesFailure(IOException("reset"), text)))
     }
 
+    @Test fun pairingAndCompatibilityFailuresResolveWithTheVoicePagesResources() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val expected = mapOf(
+            "zh" to "配对已失效，请重新扫码",
+            "en" to "Pairing has expired. Scan the code again.",
+            "ja" to "ペアリングが無効になりました。もう一度スキャンしてください",
+        )
+        for ((language, pairing) in expected) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(language))
+            }
+            val resources = context.createConfigurationContext(config).resources
+            val words = VoiceText(resources)
+            val expired = HubFailure(HubError.PairingExpired, "raw detail", 401)
+            assertEquals(language, pairing, loadFailure(expired, words))
+            assertEquals(language, pairing, voicesFailure(expired, words))
+            assertEquals(language, words.unreachable(pairing),
+                connectFailure(expired, 401, live = false, text = words))
+            val incompatible = HubFailure(HubError.Incompatible, "raw detail")
+            val update = resources.getString(persona.core.designsystem.R.string.designsystem_feedback_incompatible)
+            assertEquals(language, update, loadFailure(incompatible, words))
+            assertEquals(language, update, voicesFailure(incompatible, words))
+            assertEquals(language, words.unreachable(update),
+                connectFailure(incompatible, null, live = false, text = words))
+        }
+    }
+
     @Test fun theModelComesFromTheModelConfigurationAndIsNeverQuietlySwapped() {
         val models = VoiceModelOptions(listOf(VoiceModelOption("fast", "快"), VoiceModelOption("deep")), default = "deep")
         assertEquals("An older hub: the plugin's default", VoiceSetup.Ready("deep"), resolveVoiceModel(null, models, text))

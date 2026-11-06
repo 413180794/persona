@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import android.content.res.Resources
-import android.text.format.DateUtils
 import androidx.annotation.StringRes
 import java.time.Instant
 import java.time.ZoneId
@@ -135,14 +134,6 @@ internal object ChannelText {
         ).joinToString(" · ")
 
     fun ago(res: Resources, at: Instant, now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()): String = agoText(res, at, now, zone)
-
-    /**
-     * Kept for callers without [Resources] (HubUpdateState): the system's words for it, in the phone's language rather
-     * than the app's. Pass [Resources] instead.
-     */
-    @Deprecated("Pass Resources", ReplaceWith("ago(res, at, now)"))
-    fun ago(at: Instant, now: Instant = Instant.now()): String =
-        DateUtils.getRelativeTimeSpanString(at.toEpochMilli(), now.toEpochMilli(), DateUtils.MINUTE_IN_MILLIS).toString()
 
     /** 最近's 在等 line: the answers and questions the channel waits on; null when it waits on nothing. */
     fun waiting(res: Resources, d: ChannelDetail): String? = listOfNotNull(

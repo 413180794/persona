@@ -109,13 +109,9 @@ fun StatusLabel(status: Status, modifier: Modifier = Modifier, text: String = st
     Text(text, modifier, color = PersonaTheme.palette.status(status).text, style = PersonaTheme.type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
-/**
- * Where an outgoing message or operation stands. Pages show [localizedLabel] (or [labelRes] outside composition);
- * [label] stays the Simplified Chinese words for the code outside composition that still reads it.
- */
-enum class PendingStatus(val label: String) {
-    Sending("发送中"), Waiting("连上后自动发送"), Unconfirmed("结果待确认"),
-    Verifying("正在核对"), NeedsReview("没能确认是否送达"), Refused("没有发出"), WaitingForNetwork("等待网络");
+/** Where an outgoing message or operation stands. Pages show [localizedLabel] (or [labelRes] outside composition). */
+enum class PendingStatus {
+    Sending, Waiting, Unconfirmed, Verifying, NeedsReview, Refused, WaitingForNetwork;
 
     @get:StringRes val labelRes: Int get() = when (this) {
         Sending -> R.string.designsystem_pending_sending

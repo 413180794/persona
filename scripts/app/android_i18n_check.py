@@ -5,7 +5,8 @@
   and plurals
   with the quantities their language needs; values/ is English, so its translatable text has no Chinese or Japanese.
 - String keys start with the module's name (`settings_…`), since all modules' resources merge into one table.
-- Kotlin code and XML outside the translated values directories only lose hardcoded Chinese / Japanese text: each file may hold
+- Kotlin code and XML outside the translated values directories (and outside tests and the design system's debug catalog)
+  only lose hardcoded Chinese / Japanese text: each file may hold
   no more than its module's i18n-baseline.json records (one file per module, so modules move in parallel). A literal that is not UI text (a hub token it matches, a prompt
   sent to the model) says why on its line with `// i18n-ignore: <reason>`.
 
@@ -231,6 +232,10 @@ def source_files(root=ANDROID):
                 continue
             parts = path.relative_to(src).parts
             if parts[0] in ('test', 'androidTest') or parts[0].startswith('test'):
+                continue
+            # Only the design system's developer catalog is exempt; ordinary debug client code is still checked.
+            catalog = ('core', 'designsystem', 'src', 'debug', 'kotlin', 'persona', 'core', 'designsystem', 'catalog')
+            if path.relative_to(root).parts[:len(catalog)] == catalog:
                 continue
             if path.suffix == '.kt':
                 yield path, kotlin_count

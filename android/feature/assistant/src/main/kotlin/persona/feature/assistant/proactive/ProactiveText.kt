@@ -16,6 +16,7 @@ import persona.core.contracts.api.ScheduledTask
 import persona.core.designsystem.LocalizedFormats
 import persona.core.designsystem.icons.PhIcon
 import persona.core.designsystem.icons.PhIcons
+import persona.core.designsystem.UiText
 import persona.core.designsystem.operationFeedback
 import persona.core.domain.FailureAction
 import persona.feature.assistant.R
@@ -36,6 +37,7 @@ internal class ProactiveText(private val res: Resources, val locale: Locale) {
     constructor(context: Context) : this(context.resources, LocalizedFormats.locale(context))
 
     fun string(@StringRes id: Int, vararg args: Any): String = res.getString(id, *args)
+    fun resolve(text: UiText): String = text.resolve(res)
     private fun plural(@PluralsRes id: Int, count: Long, vararg args: Any): String =
         res.getQuantityString(id, count.toInt(), *args)
 
@@ -228,7 +230,7 @@ internal fun loadFailure(say: ProactiveText, error: Throwable): String {
     val feedback = operationFeedback(error)
     return when {
         feedback.offline -> say.string(R.string.assistant_proactive_load_offline)
-        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message
+        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> say.resolve(feedback.text)
         else -> say.string(R.string.assistant_proactive_load_failed,
             hubErrorText(say, error.message) ?: say.string(R.string.assistant_proactive_unknown_error))
     }
@@ -242,7 +244,7 @@ internal fun failureReason(say: ProactiveText, error: Throwable): String {
     val feedback = operationFeedback(error)
     return when {
         feedback.offline -> say.string(R.string.assistant_proactive_offline)
-        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> feedback.message.trimEnd('。', '.')
+        feedback.action == FailureAction.PairAgain || feedback.action == FailureAction.UpdateHub -> say.resolve(feedback.text).trimEnd('。', '.')
         else -> hubErrorText(say, error.message) ?: say.string(R.string.assistant_proactive_no_answer)
     }
 }

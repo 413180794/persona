@@ -9,12 +9,12 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Folds repeated failure notices. [localize] turns an [OperationFeedback.text] into the app's language (the app
- * passes `{ it.resolve(context) }`); without it the notices are [OperationFeedback.message].
+ * passes `{ it.resolve(context) }`).
  */
 class FeedbackGate(
     private val connection: () -> ConnectionState,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
-    private val localize: ((UiText) -> String)? = null,
+    private val localize: (UiText) -> String,
 ) : AppFeedback {
     private val queue = MutableSharedFlow<FeedbackNotice>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     /** What to show, with its button (撤销) when it has one. */
@@ -27,7 +27,7 @@ class FeedbackGate(
     override fun failure(error: Throwable, operation: Boolean): Boolean {
         if (error is CancellationException || !operation) return true
         val feedback = operationFeedback(error)
-        val message = localize?.invoke(feedback.text) ?: feedback.message
+        val message = localize(feedback.text)
         val offline = connection() != ConnectionState.Online
         if (offline) {
             val now = clock()

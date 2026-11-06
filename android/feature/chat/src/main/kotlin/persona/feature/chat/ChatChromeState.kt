@@ -121,14 +121,14 @@ internal class ChatChromeState(
                     is ChatActionResult.Failed -> {
                         val feedback = result.cause?.let { operationFeedback(it) }
                         pending = action.takeIf { feedback?.action == FailureAction.Verify }
-                        notice = feedback?.message ?: result.reason.shown
+                        notice = feedback?.text?.resolve(res) ?: result.reason.shown
                     }
                 }
             } catch (error: CancellationException) { throw error }
             catch (error: Exception) {
                 val feedback = operationFeedback(error)
                 pending = action.takeIf { feedback.action == FailureAction.Verify }
-                notice = feedback.message
+                notice = feedback.text.resolve(res)
             }
             finally { busy = false }
         }

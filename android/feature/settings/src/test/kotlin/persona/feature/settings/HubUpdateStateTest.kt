@@ -163,6 +163,28 @@ class HubUpdateStateTest {
         assertEquals("自动更新不会装这一版：代码比 hub 旧。确认没问题可以手动更新。", HubUpdateText.latestWarning(held.copy(auto = true), res))
     }
 
+    @Test fun updateTimesUseThePagesLanguageForChecksReleasesAndHistory() {
+        val context = RuntimeEnvironment.getApplication()
+        val now = java.time.Instant.parse("2026-01-02T12:00:00Z")
+        val at = "2026-01-02T09:00:00Z"
+        val status = newer.copy(lastCheck = at, latest = newer.latest!!.copy(released = at))
+        val record = HubUpdateRecord("1.0", "1.1", result = "updated", started = now.toString(), ended = at)
+        for (language in listOf("zh", "en", "ja")) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(language))
+            }
+            val resources = context.createConfigurationContext(config).resources
+            val ago = resources.getQuantityString(R.plurals.settings_src_hours_ago, 3, 3)
+            assertEquals(language, ago, HubUpdateText.lastCheck(status, resources, now))
+            assertEquals(language, ago, HubUpdateText.recordTime(record, resources, now))
+            assertEquals(language, ago, HubUpdateText.recordTime(record.copy(ended = null, started = at), resources, now))
+            assertEquals(language, resources.getString(R.string.settings_hub_update_released, ago),
+                HubUpdateText.released(status, resources, now))
+            assertNull(HubUpdateText.lastCheck(status.copy(lastCheck = "invalid"), resources, now))
+            assertNull(HubUpdateText.recordTime(record.copy(ended = "invalid"), resources, now))
+        }
+    }
+
     @Test fun aDockerHubsSteps() {
         val docker = current.copy(channel = "docker", canUpdate = false, image = HubImage("ghcr.io/example/persona", "1.42.0", pinned = true))
         val (none, plain) = HubUpdateText.dockerSteps(docker, res)

@@ -112,10 +112,11 @@ data class AgentRowMetadata(
     val sending: Boolean = false,
     val verifying: Boolean = false,
 ) {
-    val deliveryLabels: List<String> get() = buildList {
-        if (needsConfirmation) add(if (verifying) PendingStatus.Verifying.label else PendingStatus.Unconfirmed.label)
-        if (pendingCount > 0) add("${PendingStatus.Waiting.label} · $pendingCount")
-        if (sending) add(PendingStatus.Sending.label)
+    /** Where the row's outgoing messages stand, in [res]' language. */
+    fun deliveryLabels(res: Resources): List<String> = buildList {
+        if (needsConfirmation) add(res.getString(if (verifying) PendingStatus.Verifying.labelRes else PendingStatus.Unconfirmed.labelRes))
+        if (pendingCount > 0) add("${res.getString(PendingStatus.Waiting.labelRes)} · $pendingCount")
+        if (sending) add(res.getString(PendingStatus.Sending.labelRes))
     }
     /** A draft or an attachment waits in the composer; the row says which (AgentsScreen.kt). */
     val hasDraft: Boolean get() = draft.isNotBlank() || hasAttachments

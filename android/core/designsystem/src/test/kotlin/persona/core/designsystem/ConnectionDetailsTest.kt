@@ -73,7 +73,7 @@ class ConnectionDetailsTest {
     @Test fun failuresBuzzAsErrorsOrWhileOfflineAsANudge() {
         var state = ConnectionState.Online
         var clock = 0L
-        val gate = FeedbackGate({ state }, { clock })
+        val gate = FeedbackGate({ state }, { clock }, localize = { it.toString() })
         val seen = mutableListOf<FeedbackNotice>()
         val collector = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch { gate.notices.collect { seen += it } }
         gate.failure(IllegalStateException("boom"))

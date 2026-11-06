@@ -98,6 +98,25 @@ class I18nCheckTest(unittest.TestCase):
         write(self.module, 'src/main/res/values-zh/strings.xml', strings('<string name="demo_x">中文</string>'))
         self.assertEqual({'feature/demo/src/main/kotlin/A.kt': 4}, count(self.root))
 
+    def test_only_the_designsystem_debug_catalog_is_exempt(self):
+        catalog = 'core/designsystem/src/debug/kotlin/persona/core/designsystem/catalog'
+        write(self.root, 'core/designsystem/build.gradle.kts', '')
+        write(self.root, f'{catalog}/Catalog.kt', 'val t = "开发者示例"')
+        write(self.root, f'{catalog}/nested/Sample.kt', 'val t = "开发者示例"')
+        clients = [
+            'feature/demo/src/debug/kotlin/Catalog.kt',
+            'feature/demo/src/debug/res/layout/client.xml',
+            'feature/demo/src/debug/kotlin/persona/core/designsystem/catalog/Client.kt',
+            'core/designsystem/src/debug/kotlin/persona/core/designsystem/Client.kt',
+            'core/designsystem/src/debug/kotlin/persona/core/designsystem/catalogue/Client.kt',
+            'core/designsystem/src/main/kotlin/persona/core/designsystem/catalog/Client.kt',
+        ]
+        for path in clients:
+            write(self.root, path, '<TextView text="客户端中文" />' if path.endswith('.xml') else 'val t = "客户端中文"')
+        counts = count(self.root)
+        self.assertEqual({path: 1 for path in clients}, counts)
+        self.assertEqual(len(clients), len(regressions(counts, {})))
+
     def test_counts_may_only_go_down(self):
         self.assertEqual([], regressions({'a.kt': 2}, {'a.kt': 3}))
         self.assertEqual(1, len(regressions({'a.kt': 4}, {'a.kt': 3})))

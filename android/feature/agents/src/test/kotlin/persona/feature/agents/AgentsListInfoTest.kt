@@ -41,11 +41,11 @@ class AgentsListInfoTest {
             states.mapIndexed { index, state -> OutboxMessage("message-$index", session.key, "内容", state) }, false,
         )
         val mixed = info(DeliveryState.Unknown, DeliveryState.Queued, DeliveryState.WaitingForNetwork, DeliveryState.Sending)
-        assertEquals(listOf("结果待确认", "连上后自动发送 · 2", "发送中"), mixed.deliveryLabels)
+        assertEquals(listOf("结果待确认", "连上后自动发送 · 2", "发送中"), mixed.deliveryLabels(res))
         assertTrue(mixed.hasDraft)
-        assertEquals(listOf("正在核对"), info(DeliveryState.Verifying).deliveryLabels)
+        assertEquals(listOf("正在核对"), info(DeliveryState.Verifying).deliveryLabels(res))
         assertTrue(info(DeliveryState.NeedsConfirmation).needsConfirmation)
-        assertTrue(info(DeliveryState.Sent, DeliveryState.Refused, DeliveryState.Rejected).deliveryLabels.isEmpty())
+        assertTrue(info(DeliveryState.Sent, DeliveryState.Refused, DeliveryState.Rejected).deliveryLabels(res).isEmpty())
         assertTrue(AgentRowMetadata().withDelivery(emptyList(), true).needsConfirmation)
         assertEquals("项目 › 测试 · 机器", session.spaceLocation(res, "机器"))
         assertEquals("循环，下次 17:20", LoopInfo(nextAt = "2026-01-01T17:20:00Z")
@@ -54,6 +54,25 @@ class AgentsListInfoTest {
             .nextRunLabel(res, Instant.parse("2026-01-01T08:00:00Z")))
         sessions.value = emptyList()
         assertTrue(observed.isEmpty())
+    }
+
+    @Test fun deliveryLabelsUseTheRowsResourcesRatherThanFixedChinese() {
+        val context = RuntimeEnvironment.getApplication()
+        val metadata = AgentRowMetadata(needsConfirmation = true, pendingCount = 2, sending = true)
+        val expected = mapOf(
+            "zh" to listOf("结果待确认", "连上后自动发送 · 2", "发送中"),
+            "en" to listOf("Result unconfirmed", "Sends when connected · 2", "Sending"),
+            "ja" to listOf("結果未確認", "接続後に自動送信 · 2", "送信中"),
+        )
+        for ((language, labels) in expected) {
+            val config = android.content.res.Configuration(context.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(language))
+            }
+            val resources = context.createConfigurationContext(config).resources
+            assertEquals(language, labels, metadata.deliveryLabels(resources))
+            assertEquals(resources.getString(persona.core.designsystem.R.string.designsystem_pending_verifying),
+                metadata.copy(verifying = true).deliveryLabels(resources).first())
+        }
     }
 
     @Test fun requestSummariesAndFiltersRespectSessionAndSpaceMutesAcrossGroups() {

@@ -189,12 +189,13 @@ internal object HubUpdateText {
         else -> R.string.settings_hub_update_state_failed
     })
 
-    fun recordTime(r: HubUpdateRecord, now: Instant = Instant.now()): String? =
-        parseTime(r.ended ?: r.started)?.let { ChannelText.ago(it, now) }
+    fun recordTime(r: HubUpdateRecord, resources: Resources, now: Instant = Instant.now()): String? =
+        parseTime(r.ended ?: r.started)?.let { ChannelText.ago(resources, it, now) }
 
     /** 「3 小时前发布」 under a newer release. */
     fun released(s: HubUpdateStatus, resources: Resources, now: Instant = Instant.now()): String? =
-        parseTime(s.latest?.released)?.let { resources.getString(R.string.settings_hub_update_released, ChannelText.ago(it, now)) }
+        parseTime(s.latest?.released)?.let { resources.getString(R.string.settings_hub_update_released, ChannelText.ago(resources, it, now)) }
 
-    fun lastCheck(s: HubUpdateStatus, now: Instant = Instant.now()): String? = parseTime(s.lastCheck)?.let { ChannelText.ago(it, now) }
+    fun lastCheck(s: HubUpdateStatus, resources: Resources, now: Instant = Instant.now()): String? =
+        parseTime(s.lastCheck)?.let { ChannelText.ago(resources, it, now) }
 }

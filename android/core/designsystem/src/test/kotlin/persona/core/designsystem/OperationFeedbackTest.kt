@@ -19,7 +19,7 @@ class OperationFeedbackTest {
         assertEquals(FailureAction.OpenTerminal, operationFeedback(input).action)
         assertEquals(FailureAction.None, operationFeedback(HubFailure(HubError.Server, retryable = false)).action)
         var now = 0L
-        val gate = FeedbackGate({ ConnectionState.WaitingForNetwork }, { now })
+        val gate = FeedbackGate({ ConnectionState.WaitingForNetwork }, { now }, localize = { it.toString() })
         val observed = mutableListOf<String>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { gate.messages.toList(observed) }
         val offline = HubFailure(HubError.NoNetwork)
@@ -48,16 +48,19 @@ class OperationFeedbackTest {
         val feedback = operationFeedback(offline)
         assertEquals(FailureAction.WakeComputer, feedback.action)
         assertEquals(UiText.Res(R.string.designsystem_feedback_computer_offline), feedback.text)
-        assertFalse(feedback.message.contains("rpc"))
+        assertNull(feedback.hubWords)
         val restarting = operationFeedback(HubFailure(HubError.Server, "assistant offline", status = 503, code = "assistant_offline", retryable = true))
-        assertFalse(restarting.message.contains("assistant offline"))
+        assertEquals(UiText.Res(R.string.designsystem_feedback_assistant_restarting), restarting.text)
+        assertNull(restarting.hubWords)
         // The ones it words (apierr.codeActions) keep its sentence, in the request's language.
         val missing = operationFeedback(HubFailure(HubError.Server, "Claude Code is not installed on Laptop.", status = 409, code = "claude_missing", retryable = false))
-        assertEquals("Claude Code is not installed on Laptop.", missing.message)
+        assertEquals("Claude Code is not installed on Laptop.", missing.hubWords)
+        assertEquals(UiText.Res(R.string.designsystem_feedback_claude_missing), missing.text)
         assertEquals(ReadinessActionId.WakeComputer, feedback.action.readinessAction())
         val noMachine = operationFeedback(HubFailure(HubError.Server, "HTTP 409", status = 409, code = "no_machine", retryable = false))
         assertEquals(FailureAction.AddComputer, noMachine.action)
         assertEquals(R.string.designsystem_readiness_action_add_computer, noMachine.actionLabelRes)
-        assertEquals("No computer is connected yet.", noMachine.message)
+        assertEquals(UiText.Res(R.string.designsystem_feedback_no_machine), noMachine.text)
+        assertNull(noMachine.hubWords)
     }
 }

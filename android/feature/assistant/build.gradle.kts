@@ -22,6 +22,7 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.lifecycle.compose)
     implementation(libs.coroutines.android)
+    testImplementation(project(":core:hub"))
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(platform(libs.compose.bom))
