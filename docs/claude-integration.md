@@ -91,12 +91,13 @@ Tested 2026-11-04 with Claude Code 2.1.318: plugin hooks behave like settings ho
 | Event | matcher | Purpose |
 | --- | --- | --- |
 | PreToolUse | `AskUserQuestion` | Block waiting for phone answer, timeout 86400 |
-| PermissionRequest | `*` | ExitPlanMode → plan approval; others → tool authorization |
+| PermissionRequest | `*` | ExitPlanMode → plan approval; AskUserQuestion → nothing (the terminal has it, see below); others → tool authorization |
 | Notification / Stop / UserPromptSubmit / SessionStart | — | Report only, record pane; hub sends completion push from session state changes, not Stop |
 
 Test results:
 
 - **`AskUserQuestion`**: PreToolUse returns `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{...original input, "answers":{"<original question>":"<label>"}}}}` → model receives `Your questions have been answered: "Which color?"="Blue"`; no TUI dialog. Join multiple labels with `", "`; custom text is a direct string.
+- **A question handed back to the terminal** (#5945, measured on 2.1.319 in an isolated session with logging hooks): when the `AskUserQuestion` PreToolUse gives no decision (the phone handed it back, the wait ended), Claude Code sends a `PermissionRequest` for the same call 60 ms later, **without `tool_use_id`**. Its dialog is already on the terminal and is not blocked by that hook; an answer typed there is taken and the turn goes on while the hook still waits, and Claude Code never ends the hook (it ran its full 60 s). So node answers it with nothing at once and shows no card: an "Allow / Deny AskUserQuestion" card could not be withdrawn and stayed until it timed out.
 - **ExitPlanMode uses PermissionRequest, not PreToolUse** (PreToolUse matcher does not trigger in bypass mode).
   - Approval: `decision: {behavior: "allow", updatedInput: <original input>, updatedPermissions: [{type: "setMode", mode: "bypassPermissions", destination: "session"}]}`. **Plain `{behavior: "allow"}` does not work; TUI still asks “Would you like to proceed?”**
   - Return for changes: `{behavior: "deny", message: "…revision feedback"}`; message becomes an is_error tool_result, and the model revises and resubmits.

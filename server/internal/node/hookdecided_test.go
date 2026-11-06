@@ -246,3 +246,28 @@ func TestDecisionsForget(t *testing.T) {
 		t.Fatal("an answer is used once")
 	}
 }
+
+// A question the phone handed back to the terminal (or whose wait ended) comes back from Claude Code as a
+// PermissionRequest for AskUserQuestion. Measured on 2.1.319 (#5945): the terminal's dialog is up and takes the answer
+// while that hook waits, the turn goes on, and the hook is never ended, and its input has no tool_use_id. A card for it
+// ("Allow / Deny AskUserQuestion") could only go stale: none is shown, the hook answers nothing at once, and standby does
+// not hold it for the phone either.
+func TestQuestionHandedBackGetsNoPermissionCard(t *testing.T) {
+	n := codexTestNode(t)
+	fh := withFakeHub(t, n)
+	q, _ := json.Marshal(map[string]any{"questions": []any{map[string]any{"question": "Which color?", "header": "Color",
+		"options": []any{map[string]any{"label": "Red"}, map[string]any{"label": "Blue"}}}}})
+	in := hookInput{HookEventName: "PermissionRequest", SessionID: decidedSession, ToolName: "AskUserQuestion", ToolInput: q,
+		PermissionMode: "bypassPermissions"}
+	out, took := runPermissionHook(t, n, in)
+	if out != nil || len(fh.interactions()) != 0 || took > time.Second {
+		t.Fatalf("out %v after %v, %d cards: the terminal has the question", out, took, len(fh.interactions()))
+	}
+	if holdsForPhone(in, sockRequest{Attempt: "a1"}) {
+		t.Fatal("standby holds it for the phone")
+	}
+	// Any other tool's permission still asks the phone.
+	if out, _ := runPermissionHook(t, n, decidedInput("ls")); out == nil || len(fh.interactions()) != 1 {
+		t.Fatalf("a Bash permission: out %v, %d cards", out, len(fh.interactions()))
+	}
+}

@@ -398,6 +398,14 @@ func (n *Node) handleHook(ctx context.Context, req sockRequest) (any, error) {
 			"updatedPermissions": []any{map[string]any{"type": "setMode", "mode": mode, "destination": "session"}},
 		}), nil
 
+	case in.HookEventName == "PermissionRequest" && in.ToolName == "AskUserQuestion":
+		// The question's own PreToolUse (above) gave no answer: the phone handed it back to the terminal, or the wait
+		// ended. Claude Code then asks permission for the same call, but its dialog is already on the terminal and takes
+		// the answer there while this hook waits, the turn goes on, and the hook is never ended (2.1.319, #5945). Its
+		// input has no tool_use_id either, so an "Allow / Deny AskUserQuestion" card could not be withdrawn and stayed
+		// until it timed out. The terminal has the question: nothing is shown.
+		return nil, nil
+
 	case in.HookEventName == "PermissionRequest":
 		ix.Kind, ix.Summary = proto.IxPermission, toolSummary(in.ToolName, in.ToolInput)
 		// Assistant grants live at the hub so revocation applies to the next request. File grants cover
@@ -547,8 +555,10 @@ var agentGone = procGone
 // asksPhone: the hook events that may wait on the phone (the cases of handleHook that call ask).
 func asksPhone(in hookInput) bool {
 	switch in.HookEventName {
-	case "Elicitation", "PermissionRequest":
+	case "Elicitation":
 		return true
+	case "PermissionRequest":
+		return in.ToolName != "AskUserQuestion" // the terminal has the question once its PreToolUse let go (#5945)
 	case "PreToolUse":
 		return in.ToolName == "AskUserQuestion" || in.ToolName == "Bash"
 	}
