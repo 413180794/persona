@@ -43385,6 +43385,29 @@
       },
       "extractionState": "manual"
     },
+    "Hub Version": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hub Version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブのバージョン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 版本"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Hub update available: %@": {
       "localizations": {
         "en": {

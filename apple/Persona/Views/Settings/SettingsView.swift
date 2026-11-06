@@ -181,7 +181,7 @@ struct SettingsView: View {
                             .settingsListRow(SettingsPage.hubs)
                             .accessibilityIdentifier("settings.hubs")
                             NavigationLink(value: SettingsPage.hub) {
-                                SettingsRow(title: "hub", symbol: Theme.Icon.server, tint: Theme.Hue.blue, value: hubSummary, look: .oneLine)
+                                SettingsRow(title: String(localized: "Hub Version"), symbol: Theme.Icon.server, tint: Theme.Hue.blue, value: hubSummary, look: .oneLine)
                             }
                             .settingsListRow(SettingsPage.hub)
                             .accessibilityIdentifier("settings.hub")
