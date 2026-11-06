@@ -31,7 +31,7 @@ internal enum class AddStage {
     Connected,
     /** Rejected here, or removed elsewhere (rejected, or it waited too long). */
     Gone,
-    /** Confirming one with no code made here: it waits but is not online to be looked at. */
+    /** Confirming one with no code made here, or one that joined since the code was made: it waits but is not online to be looked at. */
     Offline,
 }
 
@@ -54,6 +54,8 @@ internal data class AddComputerState(
     val polled: List<Machine>? = null,
     /** The list has had it since the code was made: when it is gone after that, it was removed. */
     val seen: Boolean = false,
+    /** It has been online since the code was made: offline after that, it is asleep, not waiting for the link (#5307). */
+    val joined: Boolean = false,
 ) {
     val machineId: String? get() = code?.machine ?: confirming
     val secondsLeft: Int get() = code?.let { c -> if (c.expiresAt <= 0) 0 else maxOf(0L, (c.expiresAt - now + 999) / 1000).toInt() } ?: 0
@@ -83,6 +85,8 @@ internal fun AddComputerState.stage(listed: List<Machine>): AddStage {
         }
     }
     if (m == null && seen) return AddStage.Gone
+    // Joined, or it has a hub error other than never having connected: a new code would revoke a pairing that works.
+    if (m != null && !m.online && (joined || (m.errorCode != null && m.errorCode != "never_connected"))) return AddStage.Offline
     if (m == null || !m.online) return if (secondsLeft > 0) AddStage.Waiting else AddStage.Expired
     return if (m.pending) AddStage.Joined else AddStage.Connected
 }
@@ -182,7 +186,7 @@ internal class AddComputerModel(
         try {
             val code = call()
             val now = clock()
-            if (mine == seq) mutable.update { it.copy(code = code.copy(expiresAt = localExpiry(code.expiresAt, now)), busy = false, polled = null, seen = false, outcome = null, now = now) }
+            if (mine == seq) mutable.update { it.copy(code = code.copy(expiresAt = localExpiry(code.expiresAt, now)), busy = false, polled = null, seen = false, joined = false, outcome = null, now = now) }
         } catch (cancelled: CancellationException) { if (mine == seq) mutable.update { it.copy(busy = false) }; throw cancelled }
         catch (error: Exception) { if (mine == seq) mutable.update { it.copy(busy = false, error = addErrorText(error)) } }
     }
@@ -204,20 +208,22 @@ internal class AddComputerModel(
         // 确认电脑 with no computer named: the list may have had none yet when the page opened.
         val found = if (s.confirmOnly && s.confirming == null && s.code == null) pendingToConfirm(listed.value, null) else null
         val t = if (found == null) s else s.copy(confirming = found.id, os = ComputerOs.of(found.os ?: found.system?.os) ?: s.os)
-        val seen = t.seen || t.machine(listed.value) != null
-        t.copy(now = clock(), seen = seen)
+        val m = t.machine(listed.value)
+        t.copy(now = clock(), seen = t.seen || m != null, joined = t.joined || (t.code != null && m?.online == true))
     }
 
     /** Reads the machine list once (the hub of the computer in hand). */
     suspend fun poll() {
         val id = state.value.machineId ?: return
         val list = try { api.machines(id) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { return }
-        mutable.update { s -> if (s.machineId != id) s else s.copy(polled = list, seen = s.seen || list.any { it.id == id }) }
+        mutable.update { s -> if (s.machineId != id) s else s.copy(polled = list, seen = s.seen || list.any { it.id == id },
+            joined = s.joined || (s.code != null && list.any { it.id == id && it.online })) }
     }
 
     /**
      * The countdown each second and the machine list every three, while a code waits for its computer and while it
-     * asks whether it is yours (rejected or removed elsewhere, the next poll no longer has it: it is gone).
+     * asks whether it is yours (rejected or removed elsewhere, the next poll no longer has it: it is gone), and while one
+     * that joined is offline (awake again, it is asked about again).
      */
     suspend fun run() {
         var n = 0
@@ -225,7 +231,7 @@ internal class AddComputerModel(
             delay(1_000)
             tick()
             val s = state.value
-            val waiting = s.code != null && s.outcome == null && s.stage(listed.value).let { it == AddStage.Waiting || it == AddStage.Expired || it == AddStage.Joined }
+            val waiting = s.code != null && s.outcome == null && s.stage(listed.value).let { it == AddStage.Waiting || it == AddStage.Expired || it == AddStage.Joined || it == AddStage.Offline }
             if (waiting && ++n % 3 == 0) poll()
         }
     }

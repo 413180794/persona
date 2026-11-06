@@ -97,6 +97,31 @@ class AddComputerModelTest {
         assertEquals(AddStage.Gone, model.state.value.stage(list.value))
     }
 
+    @Test fun joinedThenOfflinePastExpiryIsOfflineNotExpired() = runTest {
+        // #5307: it joined, nobody answered, it went to sleep and the code ran out: not Expired (a new code would revoke
+        // the pairing of a computer that works), but Offline, and Joined again when it wakes.
+        val hub = Hub()
+        val list = MutableStateFlow(emptyList<Machine>())
+        var now = 0L
+        val model = AddComputerModel(hub, list) { now }
+        model.setName("小林的 MacBook"); model.add()
+        backgroundScope.launch { model.run() }
+        hub.listed = listOf(Machine("macbook", online = true, trust = "pending"))
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals(AddStage.Joined, model.state.value.stage(list.value))
+        now = 600_000
+        hub.listed = listOf(Machine("macbook", online = false, trust = "pending", errorCode = "link_offline"))
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals(AddStage.Offline, model.state.value.stage(list.value))
+        hub.listed = listOf(Machine("macbook", online = false, trust = "pending"))
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals("joined, even with no error code", AddStage.Offline, model.state.value.stage(list.value))
+        hub.listed = listOf(Machine("macbook", online = true, trust = "pending"))
+        advanceTimeBy(3_000); runCurrent()
+        assertEquals(AddStage.Joined, model.state.value.stage(list.value))
+        assertTrue(hub.calls.none { it.startsWith("again") })
+    }
+
     @Test fun confirmingOneThatWaits() = runBlocking {
         val hub = Hub()
         val list = MutableStateFlow(listOf(Machine("old", online = true), Machine("a", online = false, trust = "pending", errorCode = "never_connected"),

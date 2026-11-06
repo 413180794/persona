@@ -60,7 +60,9 @@ const extensionUsage = `usage: personad extension <command> (also: personad ext,
   search [words]                    the markets' extensions
   install market:<market>/<id>      install (or upgrade) one of a market's extensions
   auto-upgrade on|off [<id>]        market extensions upgrade themselves (all of them, or one)
-  upgrades                          newer versions: going in, waiting for your confirmation, skipped`
+  upgrades                          newer versions: going in, waiting for your confirmation, skipped
+  audit [<id>] [--limit=N]          who installed, switched, signed in, deleted what, and when, newest first
+                                    (an extension, a connector, feishu for the Feishu bot; all of them without an id)`
 
 // PluginCommand runs `personad extension <args>`.
 func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -348,6 +350,8 @@ func ExtensionCommand(ctx context.Context, args []string, stdin io.Reader, stdou
 			fmt.Fprintf(stdout, "单独关掉的：%s\n", strings.Join(v.Off, "、"))
 		}
 		return nil
+	case "audit": // docs/extensions.md, after the install steps
+		return auditCommand(ctx, c, args[1:], stdout)
 	case "upgrades":
 		var v upgradesView
 		if err := c.do(ctx, "GET", "/api/v1/extensions/-/upgrades", nil, &v); err != nil {

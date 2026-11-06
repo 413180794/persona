@@ -164,6 +164,32 @@ func (d *DB) AddExtensionAudit(ctx context.Context, id, action, actor string, de
 	return err
 }
 
+// ExtensionAudit is one row of plugin_audit: what was done to an extension, a connector (connector_… actions) or the
+// Feishu bot (bot_…), by whom and when.
+type ExtensionAudit struct {
+	Plugin string          `json:"plugin"`
+	Action string          `json:"action"`
+	Actor  string          `json:"actor"`
+	Detail json.RawMessage `json:"detail"`
+	At     time.Time       `json:"at"`
+}
+
+// ExtensionAudits is the audit newest first: plugin's rows, or everyone's when plugin is "", at most limit of them.
+func (d *DB) ExtensionAudits(ctx context.Context, plugin string, limit int) ([]ExtensionAudit, error) {
+	rows, err := d.pool.Query(ctx, `SELECT plugin, action, actor, detail, at FROM plugin_audit
+		WHERE $1::text = '' OR plugin = $1::text ORDER BY at DESC, id DESC LIMIT $2`, plugin, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExtensionAudit, error) {
+		var a ExtensionAudit
+		var detail []byte
+		err := r.Scan(&a.Plugin, &a.Action, &a.Actor, &detail, &a.At)
+		a.Detail = detail
+		return a, err
+	})
+}
+
 var _ extension.Store = (*DB)(nil)
 var _ extension.PlanStore = (*DB)(nil)
 

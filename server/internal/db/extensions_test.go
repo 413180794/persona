@@ -93,3 +93,50 @@ func TestExtensionMarketRows(t *testing.T) {
 		t.Fatal(rows)
 	}
 }
+
+// The audit reads back newest first, by extension (or connector, or the bot) or everyone's, at most limit rows, with
+// its details as they were written.
+func TestExtensionAudits(t *testing.T) {
+	d, ctx := open(t), context.Background()
+	ids := []string{"example-audit-a", "example-audit-b"}
+	clean := func() {
+		if _, err := d.pool.Exec(context.Background(), `DELETE FROM plugin_audit WHERE plugin = ANY($1)`, ids); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clean()
+	t.Cleanup(clean)
+	for _, r := range []struct{ id, action, actor, detail string }{
+		{ids[0], "install", "personad extension", `{"version":"1.0.0"}`},
+		{ids[1], "connector_signed_in", "device:dev_phone", `{"account":"Example"}`},
+		{ids[0], "connector_logout", "hub token", ``},
+	} {
+		if err := d.AddExtensionAudit(ctx, r.id, r.action, r.actor, json.RawMessage(r.detail)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := d.ExtensionAudits(ctx, ids[0], 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Action != "connector_logout" || got[1].Action != "install" || got[1].Actor != "personad extension" ||
+		string(got[0].Detail) != "{}" || got[1].At.After(got[0].At) {
+		t.Fatalf("by extension: %+v", got)
+	}
+	var v struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(got[1].Detail, &v); err != nil || v.Version != "1.0.0" {
+		t.Fatalf("detail %s (%v)", got[1].Detail, err)
+	}
+	all, err := d.ExtensionAudits(ctx, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 2 || all[0].Plugin != ids[0] || all[0].Action != "connector_logout" || all[1].Plugin != ids[1] {
+		t.Fatalf("everyone's, at most 2: %+v", all)
+	}
+	if none, err := d.ExtensionAudits(ctx, "example-audit-none", 10); err != nil || len(none) != 0 {
+		t.Fatalf("an extension without rows: %+v (%v)", none, err)
+	}
+}

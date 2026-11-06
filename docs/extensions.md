@@ -472,6 +472,9 @@ only when the App ID, domain or secret really changed; never the secret), `bot_e
 (a new pairing code was issued; never the code), `bot_paired` (`{open_id}`), `bot_pair_guessed` (`{fails}`: the pairing was dropped after too many wrong codes) and
 `bot_unpaired`. What happens in the Feishu chat (pairing, guessing) is recorded with the Feishu account as the actor, `feishu:<open_id>`.
 
+Reading it back (#5356): `personad extension audit [<id>] [--limit=N]` prints one line per row, newest first (time in UTC, id, action, actor, detail); the id is an
+extension's, a connector's or `feishu` for the bot, and without one it is everyone's. The same comes from `GET /api/v1/extensions/-/audit` (see the API table below).
+
 ### Command-line programs (tools)
 
 When an extension works through some command-line tool (for example, wrapping the CLI of a company's internal service), it lists it in the manifest's `tools`, and the hub installs it at install time, so computers that never had that CLI can use it right away (#4507).
@@ -642,6 +645,7 @@ personad extension search [keyword]                  Each result printed as mark
 personad extension install market:<marketplace id>/<extension id>  Install from a marketplace; if already installed, this upgrades it
 personad extension auto-upgrade on|off [<id>]        Master switch for auto-upgrading marketplace extensions; with an id, the switch for that one extension
 personad extension upgrades                          Marketplace extensions with a new version: upgradable / waiting for you to confirm / skipped
+personad extension audit [<id>] [--limit=N]         The audit, newest first: who installed, switched, signed in or deleted what, and when; without an id, everyone's
 
 # Writing extensions (see "Writing extensions: SDK, templates and command line"); without <dir> it is the current directory
 personad extension new <id> [--template go|ts] [--name <name>] [--dir <dir>]   go template by default; name and dir both default to the id
@@ -884,6 +888,7 @@ The `-` endpoints below exist only when `features` in `/health` and hello includ
 | `PUT /api/v1/extensions/{id}/-/enabled` `{enabled}` | Full-access devices | Returns the details; enabling an extension that uses the Inbox and has no fallback while **Message triage** cannot be called returns 409 `needs_triage_model` ("General Inbox rules" above); the same for install and upgrade |
 | `PUT /api/v1/extensions/{id}/-/config` `{config}` | Full-access devices | Replaces the whole thing; not matching the schema returns 400 `{code: "invalid_config", field, message}` |
 | `PUT /api/v1/extensions/{id}/-/secrets/{name}` `{value}`, `DELETE …` | Full-access devices | At most 16 KB; the value is never echoed and never goes into logs or the audit log |
+| `GET /api/v1/extensions/-/audit?plugin=&limit=` | Full-access devices (never an extension's token) | `{audit: [{plugin, action, actor, detail, at}]}`, newest first: `plugin` is an extension's, a connector's or `feishu`, everyone's without it; `limit` defaults to 100, at most 1000 (400 below 1); 503 without a database |
 | `POST /api/v1/extensions/-/preview` `{source, upgrade?}` | Master token over loopback | Returns a preview; from anywhere else 403 `this_machine_only` |
 | `POST /api/v1/extensions/-/dev` `{dir, config?, secrets?}`, `POST …/{id}/-/dev/restart`, `DELETE …/{id}/-/dev`, `GET …/{id}/-/dev/logs` | Same as above | Extensions under development (`personad extension dev`), see "Writing extensions", "dev" |
 | `POST /api/v1/extensions/-/install` `{preview_id, permissions_digest}` | Same as above | Returns the details |
