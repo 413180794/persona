@@ -143,7 +143,12 @@ function Shell() {
   const hubName = useStore((s) => s.hubName);
   useEffect(() => void rememberHub(here(), hubName), [hubName]);
   // the conversation on the page: a session's (`/s/…`), or the pane a tab (`/t/…`) opens on
-  const tabSessions = useStore((s) => (route.name === "tab" || route.name === "session" ? s.sessions[route.mid] : undefined));
+  const tabSessions = useStore((s) => {
+    if (route.name !== "tab" && route.name !== "session") return undefined;
+    const complete = s.sessions[route.mid] ?? [];
+    const details = new Set(complete.map((row) => row.session_id));
+    return [...complete, ...s.sessionSummaries.filter((row) => row.machine_id === route.mid && !details.has(row.session_id))];
+  });
   const loaded = useStore((s) => s.loaded);
   const path = href(route);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `route` is parsed anew each render; its path says it all

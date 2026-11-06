@@ -72,12 +72,12 @@ function online(features?: string[]) {
 describe("reconnecting", () => {
   it("first connect sends no resume point; reconnects resume from the last broadcast seen", () => {
     const s = online();
-    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_delta,session_live"); // the session list comes as deltas; status lines are pushed
+    expect(s.url).toBe("ws://hub/api/v1/ws?token=tok&features=sessions_list,sessions_delta,session_live"); // the session list comes as deltas; status lines are pushed
     s.push({ type: "todos", event_seq: 6 });
     s.push({ type: "items", machine_id: "m", session_id: "x", items: [] });
     s.drop();
     vi.advanceTimersByTime(600);
-    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_delta,session_live");
+    expect(last().url).toBe("ws://hub/api/v1/ws?token=tok&event_stream=s1&event_seq=6&features=sessions_list,sessions_delta,session_live");
   });
 
   it("an ordinary drop stays invisible for 8 s, then shows as before", () => {
@@ -121,7 +121,8 @@ describe("reconnecting", () => {
     last().open();
     last().push({ type: "hello", server_version: "v1", event_stream: "s1", event_seq: 9, resumed: false });
     await vi.advanceTimersByTimeAsync(0);
-    expect(fetched(fetcher)).toEqual(expect.arrayContaining(["/api/v1/sessions", "/api/v1/interactions", "/api/v1/machines", "/api/v1/todos"]));
+    expect(fetched(fetcher)).toEqual(expect.arrayContaining(["/api/v1/interactions", "/api/v1/machines", "/api/v1/todos"]));
+    expect(fetched(fetcher)).not.toContain("/api/v1/sessions"); // cached legacy rows + socket recovery, never another full-list download
   });
 
   it("a restart retries at once and stays invisible for 30 s", () => {

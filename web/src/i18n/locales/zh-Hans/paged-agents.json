@@ -1,0 +1,19 @@
+{
+  "search": "搜索会话",
+  "all": "全部",
+  "group_by": "浏览方式",
+  "group_filter": "筛选分组",
+  "recent": "最近更新",
+  "machine": "电脑",
+  "all_machines": "所有电脑",
+  "project": "项目",
+  "group": "空间",
+  "account": "账号",
+  "provider": "精确的提供方 ID",
+  "count": "{count} 个会话",
+  "invalid_page": "hub 返回的会话页无效。",
+  "inconsistent_delta": "hub 返回的会话更新不一致。",
+  "repeated_cursor": "hub 重复返回了同一个会话更新游标。",
+  "inconsistent_page": "hub 在分页期间改变了会话快照。",
+  "more": "加载更多"
+}

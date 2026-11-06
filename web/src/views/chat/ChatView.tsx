@@ -12,6 +12,8 @@ import { hasEffortOnly, hasModes, isMuted, toggleMute } from "../../lib/session-
 import { attachLive, flipPin } from "../../lib/agent-actions";
 import { isPinned } from "../../lib/pins";
 import { acknowledgeLaunch, launchMessageId } from "../../lib/new-agent";
+import { useRuntimeSession } from "../../lib/runtime-session";
+import { SessionDetailNotice } from "../../ui/SessionDetailNotice";
 import { getSession, getState, listenSession, markSeenLocally, refresh, refreshTodos, saveMutes, useStore } from "../../lib/store";
 import { agentsWorking, buildTaskIndex, stableSubagents, STOP_LOOP_MESSAGE, subagentParent, type TaskIndex } from "../../lib/tasks";
 import { stabilizeLines, stableValue } from "../../lib/stable-lines";
@@ -169,9 +171,10 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
   inPage?: boolean;
   panel?: PanelChrome;
 }) {
-  const session = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === sid) ?? s.assistant?.conversations.find((c) => c.session_id === sid));
-  // a subagent's own launches are listed on the session that launched it
+  const { session, detail, retry: retryDetail } = useRuntimeSession(mid, sid);
+  // Virtual subagent transcript views read their execution metadata from the complete parent snapshot.
   const parentSid = subagentParent(sid);
+  useRuntimeSession(mid, parentSid, parentSid !== sid);
   const listed = useStore((s) => (s.sessions[mid] ?? []).find((x) => x.session_id === parentSid)?.subagents);
   // the same array while nothing a card shows changed (#5602): the context, and every exchange reading it, stay put
   const lastSubagents = useRef<Subagent[] | undefined>(undefined);
@@ -938,6 +941,7 @@ export function ChatView({ mid, sid, assistant, starting: launching, onToggleSid
           panel={panel}
         />
       )}
+      {!readOnly && detail.error && <SessionDetailNotice error={detail.error} retry={retryDetail} />}
       {session && !panel && panes.length > 1 && <PaneTabs sessions={panes} current={sid} onSelect={(s) => navigate(paneRoute(s), true)} />}
 
       {/* the page's middle: the chat and (once shown) the terminal stacked in one box; without a terminal to show it adds no box */}

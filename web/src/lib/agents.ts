@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
 import { api, errorText } from "./api";
+import { SessionList, compareListIds } from "./session-list";
 
 export interface AgentSession {
   id: string;
@@ -175,6 +176,18 @@ const emit = (p: Partial<ListState>) => {
   listeners.forEach((l) => l());
 };
 
+let bounded = false;
+export const personalOrder = (a: AgentSession, b: AgentSession) => b.rankTimeMs - a.rankTimeMs || compareListIds(a.id, b.id);
+export const personalSessions = new SessionList<AgentSession>("/agents/sessions", (s) => s.id, personalOrder);
+export function setAgentListMode(enabled: boolean) {
+  bounded = enabled;
+}
+personalSessions.subscribe(() => {
+  if (!bounded) return;
+  const page = personalSessions.getSnapshot();
+  emit({ sessions: page.rows, loaded: page.loaded, error: page.error ?? "" });
+});
+
 let inflight: Promise<void> | null = null;
 // A call while a pull is on the way: that pull may have been answered before the change the call is for, so one more
 // pull follows it (one, however many calls came meanwhile).
@@ -183,6 +196,14 @@ let queued: Promise<void> | null = null;
 // pull queued behind it) is dropped.
 let listGen = 0;
 export function refreshAgentSessions(): Promise<void> {
+  if (bounded) {
+    const gen = listGen;
+    return Promise.all([personalSessions.load(), fetchSources().catch(() => null)])
+      .then(([, sources]) => {
+        if (gen === listGen && sources) emit({ hints: setupHints(sources) });
+      })
+      .catch((e) => { if (gen === listGen) emit({ loaded: true, error: errorText(e) }); });
+  }
   if (inflight) {
     const gen = listGen;
     if (!queued) {
@@ -212,7 +233,8 @@ export function refreshAgentSessions(): Promise<void> {
 
 // Called by the WebSocket handler: re-pull the list, and tell open sessions which ids moved (empty = all).
 export function agentsChanged(ids: string[]) {
-  void refreshAgentSessions();
+  if (bounded) personalSessions.invalidate();
+  else void refreshAgentSessions();
   changedListeners.forEach((l) => l(ids));
 }
 
@@ -229,6 +251,8 @@ export function setLocalRead(id: string) {
 }
 
 export function resetAgents() {
+  bounded = false;
+  personalSessions.reset();
   listGen++;
   // the next login's first pull starts right away instead of waiting behind the old one
   inflight = null;

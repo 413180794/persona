@@ -1,0 +1,19 @@
+{
+  "search": "セッションを検索",
+  "all": "すべて",
+  "group_by": "表示方法",
+  "group_filter": "グループで絞り込む",
+  "recent": "最近の更新",
+  "machine": "コンピュータ",
+  "all_machines": "すべてのコンピュータ",
+  "project": "プロジェクト",
+  "group": "スペース",
+  "account": "アカウント",
+  "provider": "プロバイダー ID（完全一致）",
+  "count": "{count} 件のセッション",
+  "invalid_page": "ハブから無効なセッションページが返されました。",
+  "inconsistent_delta": "ハブから整合性のないセッション更新が返されました。",
+  "repeated_cursor": "ハブから同じセッション更新カーソルが繰り返し返されました。",
+  "inconsistent_page": "ページ読み込み中にハブのセッションスナップショットが変わりました。",
+  "more": "さらに読み込む"
+}

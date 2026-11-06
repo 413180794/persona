@@ -1,0 +1,6 @@
+{
+  "unsupported": "This hub does not support exact session details yet. Cached details are kept.",
+  "invalid_lookup": "The hub did not return the requested session. Unrelated rows were ignored.",
+  "missing": "This session is no longer available. Its cached conversation remains readable.",
+  "metadata_unavailable": "This older hub has no cached details for this session. The conversation remains available."
+}

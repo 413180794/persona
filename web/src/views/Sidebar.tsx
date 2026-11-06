@@ -30,7 +30,7 @@ import { BADGE_TONE, navIcon, pageRoute } from "./extensions/ExtensionSlots";
 import { href, navigate, routePath, useRoute, type Route } from "../lib/router";
 import { useAgentSessions, useCounts } from "../lib/sessions";
 import { terminalTarget } from "../lib/session-view";
-import { refresh, reset, useLarkOn, useStore } from "../lib/store";
+import { refresh, reset, rememberSessionRow, useLarkOn, useStore } from "../lib/store";
 import { draftLine, rowLine } from "../lib/row-line";
 import { useLeftDraft } from "../lib/drafts";
 import { planInRow, planLabel, planLine } from "../lib/plan";
@@ -75,6 +75,11 @@ import { AGENTS_FOLD, onGrouping, setAgentsFolded } from "../lib/sidebar-api";
 import { ariaKeyshortcuts, formatChord, jumpHint, useBindings } from "../lib/shortcuts";
 import { toggleSidebarColumn } from "../lib/layout";
 import { markAllSeenLabel, stateCount } from "../lib/state-labels";
+import { PagedSessionList } from "./agents/PagedSessionList";
+import { SESSION_LIST_STYLE } from "../ui/list-metrics";
+import { runtimeIdentity, runtimeOrder, runtimeRemoval, runtimeSessions } from "../lib/runtime-list";
+import { SESSIONS_LIST_FEATURE } from "../lib/session-list";
+import { personalOrder, personalSessions } from "../lib/agents";
 import { NoComputers, useAddComputer } from "./machines/AddComputerEntry";
 import { neverConnected } from "../lib/add-computer";
 
@@ -545,7 +550,38 @@ function MorePages({ more, reg, hover, activeKey, go }: { more: NavPage[]; reg: 
 
 /** The sidebar's "Agents": grouping, the quick filter, "Pinned", "Starting", the groups (spaces, machines, repositories,
  *  states or todos) and "Recent". The drawer and the phone's Agents page both show it. `add`: the title row's "+". */
-function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean }) {
+function AgentsBlock(props: Parameters<typeof LegacyAgentsBlock>[0]) {
+  const bounded = useStore((s) => s.features.includes(SESSIONS_LIST_FEATURE));
+  return bounded ? <BoundedAgentsBlock {...props} /> : <LegacyAgentsBlock {...props} />;
+}
+
+function BoundedAgentsBlock({ reg, hover, activeKey, go, onNewAgent, add = true }: Parameters<typeof LegacyAgentsBlock>[0]) {
+  const machines = useStore((s) => s.machines);
+  const [rowMenu, setRowMenu] = useState<{ s: Session; anchor: HTMLElement; at?: MenuAt } | null>(null);
+  const [renaming, setRenaming] = useState<Session | null>(null);
+  const [deleting, setDeleting] = useState<Session | null>(null);
+  const [closing, setClosing] = useState<Session | null>(null);
+  const [linkTarget, setLinkTarget] = useState<Session>();
+  const onRowMenu = useCallback<RowMenuFn>((s, anchor, at) => setRowMenu({ s, anchor, at }), []);
+  return <>
+    <div className={SESSION_LIST_STYLE.heading}><span className={SESSION_LIST_STYLE.headingText}>{t("agentspage.title")}</span>{add && <SectionAdd label={t("sidebar.new_agent")} onClick={onNewAgent} />}</div>
+    <HubNoticeLine />
+    <HerdrNotices />
+    <PagedSessionList root={runtimeSessions} path="/sessions" identity={runtimeIdentity} compare={runtimeOrder} removeIdentity={runtimeRemoval} event="sessions_list"
+      label={(dimension, id) => dimension === "machine" ? machineWithHub(id, machines) : id}
+      renderRow={(s) => {
+        const k = `s:${s.machine_id}/${s.session_id}`;
+        return <SessionRow s={s} k={k} reg={reg} hover={hover} active={activeKey === k} to={{ name: "session", mid: s.machine_id, sid: s.session_id }} go={go} onMenu={onRowMenu} hint={[machineWithHub(s.machine_id, machines), s.space_name || baseName(s.cwd)].filter(Boolean).join(" · ")} showTodoTag />;
+      }} />
+    {rowMenu && <AgentRowMenu s={rowMenu.s} anchor={rowMenu.anchor} at={rowMenu.at} onClose={() => setRowMenu(null)} onRename={setRenaming} onDelete={setDeleting} onLinkTodo={setLinkTarget} onCloseAgent={setClosing} />}
+    {renaming && <RenameDialog open session={renaming} onClose={() => setRenaming(null)} />}
+    {deleting && <DeleteSessionDialog open session={deleting} machineName={machineWithHub(deleting.machine_id, machines)} onClose={() => setDeleting(null)} />}
+    {closing && <CloseAgentDialog open session={closing} machineName={machineWithHub(closing.machine_id, machines)} onClose={() => setClosing(null)} />}
+    <LinkTodoDialog open={Boolean(linkTarget)} session={linkTarget} onClose={() => setLinkTarget(undefined)} />
+  </>;
+}
+
+function LegacyAgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = true, foldable = false }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn; onNewAgent: () => void; onNavigate?: () => void; add?: boolean; foldable?: boolean }) {
   const machines = useStore((s) => s.machines);
   const all = useAgentSessions();
   const mutes = useStore((s) => s.mutes);
@@ -1968,7 +2004,7 @@ export const SessionRow = memo(function SessionRow({ s: given, k, reg, hover, ac
         regRow(el);
       }}
       href={href(to)}
-      onClick={go(to)}
+      onClick={(event) => { rememberSessionRow(given); go(to)(event); }}
       // right click (at the pointer), the menu key and Shift+F10 (beside the row): the row's menu, the same as its ⋯
       {...(onMenu ? contextMenuProps((at, el) => onMenu(s, el, at)) : {})}
       onMouseEnter={() => hover(k)}
@@ -2118,7 +2154,27 @@ function agentRowItems(s: AgentSession, p: AgentPrefs): MenuItem[] {
 
 // memoized: its props are stable (reg, hover, go) or a string, and it reads the agents from their own store, so a
 // sessions push does not reach it
-const PersonalAgents = memo(function PersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+const personalIdentity = (s: AgentSession) => s.id;
+const PersonalAgents = memo(function PersonalAgents(props: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+  const bounded = useStore((s) => s.features.includes(SESSIONS_LIST_FEATURE));
+  return bounded ? <BoundedPersonalAgents {...props} /> : <LegacyPersonalAgents {...props} />;
+});
+
+function BoundedPersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
+  const prefs = useAgentPrefs();
+  const [rowMenu, setRowMenu] = useState<{ s: AgentSession; el: HTMLElement } | null>(null);
+  const onMenu = useCallback((s: AgentSession, el: HTMLElement) => setRowMenu({ s, el }), []);
+  const [folded, toggle] = useFolded("personal-agents", false, { holds: activeKey.startsWith("a:") });
+  const page = useSyncExternalStore(personalSessions.subscribe, personalSessions.getSnapshot, personalSessions.getSnapshot);
+  if (page.loaded && !page.total && !page.error) return null;
+  return <Section title={t("sidebar.personal_agents")} folded={folded} onToggle={toggle} right={<GroupCount n={page.total} label={t("sidebar.agent_count", { count: page.total })} />}>
+    {!folded && <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} event="agents" personal
+      renderRow={(s) => <AgentRow s={s} reg={reg} hover={hover} active={activeKey === `a:${s.id}`} go={go} pinned={prefs.pins.includes(s.id)} onMenu={onMenu} />} />}
+    {rowMenu && <Menu anchor={rowMenu.el} onClose={() => setRowMenu(null)} align="right" width={200} items={agentRowItems(rowMenu.s, prefs)} />}
+  </Section>;
+}
+
+const LegacyPersonalAgents = memo(function LegacyPersonalAgents({ reg, hover, activeKey, go }: { reg: RegFn; hover: (k: string | null) => void; activeKey: string; go: GoFn }) {
   const { sessions, loaded, error } = useAgentList();
   const [retrying, setRetrying] = useState(false);
   const retry = async () => {

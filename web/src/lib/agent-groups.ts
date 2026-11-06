@@ -108,7 +108,9 @@ export function buildSpaces(live: Session[], machines: Machine[]): { spaces: Spa
 }
 
 export function isWaiting(s: Session): boolean {
-  return ["idle", "unknown"].includes(stateOf(s)) && Boolean(s.loop || s.background?.length || s.subagents?.some((a) => a.running) || hubWaits(s.work));
+  const waiting = typeof s.waiting === "boolean" ? s.waiting
+    : Boolean(s.loop || s.background?.length || s.subagents?.some((a) => a.running) || s.workflows?.some((w) => w.running) || hubWaits(s.work));
+  return ["idle", "unknown"].includes(stateOf(s)) && waiting;
 }
 
 const NO_MUTES: AgentMutes = { spaces: [], sessions: [] };

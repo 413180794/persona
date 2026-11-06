@@ -3,7 +3,10 @@
 
 import { BASE } from "./base";
 import { useRef, useSyncExternalStore } from "react";
-import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents } from "./agents";
+import { agentsChanged, refreshAgentPrefs, refreshAgentSessions, resetAgents, setAgentListMode } from "./agents";
+import { onRuntimeChanges, runtimeIdentity, runtimeRemoval, runtimeSessions, SESSIONS_LOOKUP_FEATURE } from "./runtime-list";
+import { sameValue } from "./stable-lines";
+import { SESSIONS_LIST_FEATURE, type ListCounts } from "./session-list";
 import { applySessionDelta, SESSIONS_DELTA_FEATURE, sessionRefreshed, sessionSnapshot } from "./sessions-delta";
 import { api, ApiError, CLIENT_FEATURES, CLIENT_PLATFORM, CLIENT_VERSION, errorText, getToken } from "./api";
 import { currentLanguage } from "../i18n";
@@ -51,6 +54,9 @@ export interface State {
   mesh: MeshHub[];
   machines: Machine[];
   sessions: Record<string, Session[]>;
+  /** Compact list rows never overwrite a chat's complete details in sessions. */
+  sessionSummaries: Session[];
+  sessionCounts: ListCounts | null;
   interactions: Interaction[];
   /** Cards this page just answered, by interaction id: shown answered (with the picks) for a moment, not clickable. */
   answered: Record<string, AnsweredCard>;
@@ -78,6 +84,8 @@ let state: State = {
   mesh: [],
   machines: [],
   sessions: {},
+  sessionSummaries: [],
+  sessionCounts: null,
   interactions: [],
   answered: {},
   assistant: null,
@@ -124,6 +132,35 @@ function set(patch: Partial<State>) {
   else notify();
 }
 
+let listedFull = new Map<string, Session>();
+const rowHints = new Map<string, Session>();
+const ROW_HINT_LIMIT = 100;
+runtimeSessions.subscribe(() => {
+  const { rows, counts } = runtimeSessions.getSnapshot();
+  if (rows !== state.sessionSummaries && !runtimeSessions.isSummary()) {
+    const next = new Map(rows.map((row) => [runtimeIdentity(row), row]));
+    applyCompleteSessions(rows.filter((row) => listedFull.get(runtimeIdentity(row)) !== row));
+    listedFull = next;
+  }
+  if (rows !== state.sessionSummaries || counts !== state.sessionCounts) set({ sessionSummaries: rows, sessionCounts: counts });
+});
+onRuntimeChanges((upsert, remove) => {
+  for (const row of upsert) if (rowHints.has(runtimeIdentity(row))) rowHints.set(runtimeIdentity(row), row);
+  // Older paged hubs return complete rows. Update only details already retained; never materialize the delta backlog.
+  const known = new Set(Object.values(state.sessions).flat().map(runtimeIdentity));
+  const updates = runtimeSessions.isSummary() ? [] : upsert.filter((row) => known.has(runtimeIdentity(row)));
+  applyCompleteSessions(updates, remove);
+});
+
+/** A clicked filtered row may not belong to the unfiltered first page. Keep a small hint until exact lookup finishes. */
+export function rememberSessionRow(row: Session) {
+  const id = runtimeIdentity(row);
+  rowHints.delete(id);
+  rowHints.set(id, row);
+  if (rowHints.size > ROW_HINT_LIMIT) rowHints.delete(rowHints.keys().next().value!);
+  if (!state.features.includes(SESSIONS_LOOKUP_FEATURE) && typeof row.waiting !== "boolean") applyCompleteSessions([row]);
+}
+
 /** Tells the views now of the pushes still waiting for the next frame, if any: for code that keeps something tied to
  *  the session the page draws, read from the state right after a request returns (lib/ultracode.ts setUltracode), so
  *  the page draws that same session with it rather than an older one for a frame. */
@@ -137,7 +174,38 @@ export function getState() {
 
 export function getSession(mid: string, sid: string): Session | undefined {
   return (state.sessions[mid] ?? []).find((s) => s.session_id === sid)
-    ?? state.assistant?.conversations.find((s) => s.machine_id === mid && s.session_id === sid);
+    ?? state.assistant?.conversations.find((s) => s.machine_id === mid && s.session_id === sid)
+    ?? state.sessionSummaries.find((s) => s.machine_id === mid && s.session_id === sid)
+    ?? rowHints.get(runtimeIdentity({ machine_id: mid, session_id: sid } as Session));
+}
+
+/** Complete snapshots replace optional fields as well: omitted task arrays must not survive from an older snapshot. */
+export function applyCompleteSessions(rows: Session[], remove: string[] = []) {
+  if (!rows.length && !remove.length) return;
+  const by = { ...state.sessions };
+  const updates = new Map<string, Map<string, Session>>();
+  const machine = (mid: string) => {
+    if (!updates.has(mid)) updates.set(mid, new Map((by[mid] ?? []).map((row) => [row.session_id, row])));
+    return updates.get(mid)!;
+  };
+  let changed = false;
+  remove = remove.map(runtimeRemoval);
+  for (const id of remove) {
+    changed = rowHints.delete(id) || changed;
+    const [mid, sid] = JSON.parse(id) as [string, string];
+    changed = machine(mid).delete(sid) || changed;
+    if (state.assistant?.conversations.some((row) => runtimeIdentity(row) === id)) changed = true;
+  }
+  for (const row of rows) {
+    const records = machine(row.machine_id);
+    if (!sameValue(records.get(row.session_id), row)) { records.set(row.session_id, row); changed = true; }
+  }
+  if (!changed) return;
+  for (const [mid, records] of updates) by[mid] = [...records.values()];
+  const assistant = state.assistant;
+  const full = new Map(rows.map((row) => [runtimeIdentity(row), row]));
+  const gone = new Set(remove);
+  set({ sessions: by, ...(assistant ? { assistant: { ...assistant, conversations: assistant.conversations.filter((row) => !gone.has(runtimeIdentity(row))).map((row) => full.get(runtimeIdentity(row)) ?? row) } } : {}) });
 }
 
 // Selectors may build new arrays / objects: a result shallow-equal to the last one is the last one, so
@@ -297,7 +365,7 @@ export function connect() {
   clearTimeout(retryTimer);
   ws?.close();
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
+  const sock = new WebSocket(`${proto}//${location.host}${BASE}/api/v1/ws?${wsQuery(getToken(), cursor, [SESSIONS_LIST_FEATURE, SESSIONS_DELTA_FEATURE, SESSION_LIVE_FEATURE])}`);
   ws = sock;
   restartNotice = false;
   // an attempt does not move offline back to connecting: the pill stays on one phase while the hub is down instead of
@@ -435,6 +503,10 @@ function onMessage(msg: Record<string, unknown>) {
         mesh: Array.isArray(mesh) ? mesh : [],
       });
       back();
+      const summaryMode = state.features.includes(SESSIONS_LOOKUP_FEATURE);
+      if (runtimeSessions.isSummary() !== summaryMode) listedFull.clear();
+      runtimeSessions.setSummary(summaryMode);
+      setAgentListMode(state.features.includes(SESSIONS_LIST_FEATURE));
       // subscriptions are per connection: chats resubscribe from what they have either way
       sessionListeners.forEach((ls) => ls.forEach((l) => l.reconnected?.()));
       // resumed: the hub replays every broadcast missed since the cursor, nothing needs refetching
@@ -453,6 +525,10 @@ function onMessage(msg: Record<string, unknown>) {
     case "machines":
       machinesRev++;
       set({ machines: msg.machines as Machine[] });
+      break;
+    case "sessions_list":
+      // A hint is not a checkpoint. Even resumed connections must check the HTTP epoch.
+      runtimeSessions.invalidate();
       break;
     case "sessions": {
       const mid = msg.machine_id as string;
@@ -587,7 +663,19 @@ export function dropSession(mid: string, sid: string) {
 export function upsertSession(s: Session) {
   const list = state.sessions[s.machine_id] ?? [];
   const i = list.findIndex((x) => x.session_id === s.session_id);
-  const next = i < 0 ? [...list, s] : list.map((x, j) => (j === i ? { ...x, ...s } : x));
+  const next = i < 0 ? [...list, s] : list.map((x, j) => {
+    if (j !== i) return x;
+    const merged = { ...x, ...s };
+    // An optimistic action can start from getSession's summary fallback. A later complete info response must
+    // drop its scalar summary markers, or they keep overriding the complete task arrays indefinitely.
+    if (typeof s.waiting !== "boolean") {
+      delete merged.waiting;
+      delete merged.background_count;
+      delete merged.running_subagents;
+      delete merged.running_workflows;
+    }
+    return merged;
+  });
   set({ sessions: { ...state.sessions, [s.machine_id]: next }, ...syncAssistant(s.machine_id, [s]) });
 }
 
@@ -737,7 +825,9 @@ export async function refresh() {
     (reason: unknown) => applyTodos({ status: "rejected", reason }, asked.fresh),
   );
   const [sessions, interactions, assistant, machines, mutes, pins] = await Promise.allSettled([
-    api<{ sessions: Session[] }>("/sessions"),
+    state.features.includes(SESSIONS_LIST_FEATURE)
+      ? runtimeSessions.load().then(() => null)
+      : state.loaded ? Promise.resolve(null) : api<{ sessions: Session[] }>("/sessions"),
     api<{ interactions: Interaction[] }>("/interactions"),
     askedAssistant.answer,
     api<{ machines: Machine[] }>("/machines"),
@@ -747,7 +837,7 @@ export async function refresh() {
   if (gen < refreshes.applied) return todosDone;
   refreshes.applied = gen;
   const patch: Partial<State> = { loaded: true };
-  if (sessions.status === "fulfilled") {
+  if (sessions.status === "fulfilled" && sessions.value) {
     const by: Record<string, Session[]> = {};
     for (const s of sessions.value.sessions ?? []) (by[s.machine_id] ??= []).push(s);
     if (deltaOn()) {
@@ -854,10 +944,15 @@ export function reset() {
   refreshes.applied = ++refreshes.asked;
   sessionsPushed.clear();
   resetAgents();
+  rowHints.clear();
+  listedFull.clear();
+  runtimeSessions.reset();
   Object.values(state.launches).forEach((launch) => releaseAttachments(launch.attachments));
   set({
     machines: [],
     sessions: {},
+  sessionSummaries: [],
+  sessionCounts: null,
     interactions: [],
     answered: {},
     assistant: null,

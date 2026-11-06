@@ -240,6 +240,14 @@ export interface Session {
   /** Its own task list (Claude Code's TodoWrite / TaskCreate): how far along it is (docs/agent-goal.md "Plan"). */
   plan?: PlanInfo;
   background?: BackgroundTask[];
+  /** Bounded list summaries omit task arrays; these scalars are authoritative when present. */
+  waiting?: boolean;
+  background_count?: number;
+  running_subagents?: number;
+  running_workflows?: number;
+  parent_session_id?: string;
+  root_session_id?: string;
+  is_subagent?: boolean;
   /** Claude Code workflow runs it launched in the last day, newest first (#2935); older hubs leave it out. */
   workflows?: Workflow[];
   /** Working only because of background work: its turn is over, workflows / background commands / subagents run on

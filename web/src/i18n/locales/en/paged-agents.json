@@ -1,0 +1,19 @@
+{
+  "search": "Search sessions",
+  "all": "All",
+  "group_by": "Browse by",
+  "group_filter": "Filter group",
+  "recent": "Recently updated",
+  "machine": "Computer",
+  "all_machines": "All computers",
+  "project": "Project",
+  "group": "Space",
+  "account": "Account",
+  "provider": "Exact provider ID",
+  "count": "{count} sessions",
+  "invalid_page": "The hub returned an invalid session page.",
+  "inconsistent_delta": "The hub returned inconsistent session updates.",
+  "repeated_cursor": "The hub repeated a session update cursor.",
+  "inconsistent_page": "The hub changed the session snapshot while paging.",
+  "more": "Load more"
+}

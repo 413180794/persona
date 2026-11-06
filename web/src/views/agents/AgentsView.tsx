@@ -14,7 +14,6 @@ import {
   onAgentsChanged,
   pendingOutgoing,
   providerLabel,
-  refreshAgentSessions,
   sendMessage,
   setLocalRead,
   useAgentList,
@@ -30,6 +29,11 @@ import { Markdown } from "../../ui/Markdown";
 import { SearchField } from "../../ui/SearchField";
 import { formatDate, t } from "../../i18n";
 import { composing } from "../../lib/send-history";
+import { personalOrder, personalSessions, type AgentSession } from "../../lib/agents";
+import { SESSIONS_LIST_FEATURE } from "../../lib/session-list";
+import { useStore } from "../../lib/store";
+import { PagedSessionList } from "./PagedSessionList";
+import { SESSION_LIST_METRICS, SESSION_LIST_STYLE } from "../../ui/list-metrics";
 
 export function AgentsView({ id, onToggleSidebar }: { id?: string; onToggleSidebar: () => void }) {
   return id ? <AgentSessionView id={id} onToggleSidebar={onToggleSidebar} /> : <AgentList onToggleSidebar={onToggleSidebar} />;
@@ -48,17 +52,38 @@ function Header({ title, sub, avatar, onToggleSidebar }: { title: string; sub?: 
   );
 }
 
+const personalIdentity = (s: AgentSession) => s.id;
 function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+  const bounded = useStore((s) => s.features.includes(SESSIONS_LIST_FEATURE));
+  return bounded ? <BoundedAgentList onToggleSidebar={onToggleSidebar} /> : <LegacyAgentList onToggleSidebar={onToggleSidebar} />;
+}
+
+function BoundedAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+  const prefs = useAgentPrefs();
+  return <div className="flex h-full flex-col">
+    <Header title={t("agents-agentsview.title")} sub={t("agents-agentsview.subtitle")} onToggleSidebar={onToggleSidebar} />
+    <div className="min-h-0 flex-1 overflow-y-auto"><div className={SESSION_LIST_STYLE.personalPage}>
+      <PagedSessionList root={personalSessions} path="/agents/sessions" identity={personalIdentity} compare={personalOrder} event="agents" personal renderRow={(s) => <div className={SESSION_LIST_STYLE.personalRow}>
+        <a href={href({ name: "agents", id: s.id })} onClick={(e) => onLinkClick(e, { name: "agents", id: s.id })} className="flex min-w-0 flex-1 items-center gap-2">
+          <AgentAvatar s={s} size={SESSION_LIST_METRICS.avatar} /><span className={SESSION_LIST_STYLE.personalTitle}>{s.title || t("lib-format.untitled_session")}</span>
+          {s.unreadCount > 0 && <span className={SESSION_LIST_STYLE.personalBadge}>{s.unreadCount}</span>}
+        </a>
+        <button type="button" aria-label={t(prefs.pins.includes(s.id) ? "agents-agentsview.unpin" : "agents-agentsview.pin")} onClick={() => updateAgentPrefs((x) => togglePin(x, s.id))} className={SESSION_LIST_STYLE.pinButton}><Icon name="pin" size={SESSION_LIST_METRICS.icon} /></button>
+      </div>} />
+    </div></div>
+  </div>;
+}
+
+function LegacyAgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
   const { sessions, loaded, error, hints } = useAgentList();
   const [q, setQ] = useState("");
-  useEffect(() => void refreshAgentSessions(), []);
   const prefs = useAgentPrefs();
   const groups = arrangeSessions(sessions, prefs, q);
   return (
     <div className="flex h-full flex-col">
       <Header title={t("agents-agentsview.title")} sub={t("agents-agentsview.subtitle")} onToggleSidebar={onToggleSidebar} />
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[760px] px-5 py-6 sm:px-8">
+        <div className={SESSION_LIST_STYLE.personalPage}>
           <SearchField tone="inset" size="md" icon={false} className="mb-4" value={q} onChange={setQ} placeholder={t("agents-agentsview.search_placeholder")} />
           {!loaded && <Loading />}
           {error && <p className="text-[13px] text-red">{error}</p>}
@@ -71,10 +96,10 @@ function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                 <span className="tabular-nums">{g.sessions.length}</span>
               </h2>
               {g.sessions.map((s) => (
-                <a key={s.id} href={href({ name: "agents", id: s.id })} onClick={(e) => onLinkClick(e, { name: "agents", id: s.id })} className="flex items-center gap-2 px-4 py-2 hover:bg-hover">
-                  <AgentAvatar s={s} size={22} />
+                <a key={s.id} href={href({ name: "agents", id: s.id })} onClick={(e) => onLinkClick(e, { name: "agents", id: s.id })} className={SESSION_LIST_STYLE.personalRow}>
+                  <AgentAvatar s={s} size={SESSION_LIST_METRICS.avatar} />
                   <span className={cx("min-w-0 flex-1 truncate text-[13px]", s.unreadCount ? "font-medium text-ink" : "text-ink-2")}>{s.title || t("lib-format.untitled_session")}</span>
-                  {s.unreadCount > 0 && <span className="rounded-full bg-accent px-1.5 text-[10.5px] font-semibold text-white tabular-nums">{s.unreadCount}</span>}
+                  {s.unreadCount > 0 && <span className={SESSION_LIST_STYLE.personalBadge}>{s.unreadCount}</span>}
                   <span className="shrink-0 text-[11px] text-ink-3">{s.rankTimeMs ? ago(new Date(s.rankTimeMs).toISOString()) : ""}</span>
                   <button
                     type="button"
@@ -87,7 +112,7 @@ function AgentList({ onToggleSidebar }: { onToggleSidebar: () => void }) {
                     }}
                     className={cx("flex size-6 shrink-0 items-center justify-center rounded-[6px] hover:bg-hover", prefs.pins.includes(s.id) ? "text-accent" : "text-ink-3")}
                   >
-                    <Icon name="pin" size={12} />
+                    <Icon name="pin" size={SESSION_LIST_METRICS.icon} />
                   </button>
                 </a>
               ))}
