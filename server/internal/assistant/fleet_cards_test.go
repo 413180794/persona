@@ -490,6 +490,76 @@ func TestScreenCardBackHalfDrawnUnreadableStaysQuiet(t *testing.T) {
 	}
 }
 
+// placeholderBack: a card made with no dialog to read (#4450) whose node detaches inside its look-again window and is
+// back within resumeGrace; the card read then is the same id (an exact-id mark, not the session's). Nothing has rung.
+func placeholderBack(t *testing.T) (*fleetTest, *cardNode) {
+	t.Helper()
+	ft, n := noDialogPlaceholder(t, "  ✢ Percolating…\n", 20*time.Millisecond, 600*time.Millisecond)
+	s := ft.s
+	if got := pendingIDs(s); len(got) != 1 || got["scr_mac_s1"] == "" {
+		t.Fatalf("the placeholder: %v", got)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, 100*time.Millisecond); len(pushes) != 0 {
+		t.Fatalf("the placeholder rang inside its window: %d pushes", len(pushes))
+	}
+	s.NodeDetached("mac")
+	if back, _ := waitCards(s, 1, 2*time.Second); len(back) != 1 || back["scr_mac_s1"] == "" {
+		t.Fatalf("the placeholder did not come back: %v", back)
+	}
+	s.fleet.mu.Lock()
+	left := len(s.fleet.screenDetached)
+	s.fleet.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("not an exact-id return: %d marks left", left)
+	}
+	return ft, n
+}
+
+// A placeholder that never rang, detached inside its window and back, still unreadable when the window ends: it rings
+// once, as it would have without the detach (#4979).
+func TestScreenCardPlaceholderBackRingsAtTheWindowsEnd(t *testing.T) {
+	ft, _ := placeholderBack(t)
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, 2*time.Second); len(pushes) != 1 {
+		t.Fatalf("the back placeholder never rang: %d pushes", len(pushes))
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 300*time.Millisecond); len(pushes) != 1 {
+		t.Fatalf("pushed %d times", len(pushes))
+	}
+}
+
+// The same, but the real dialog shows after the reconnect: its card replaces the placeholder and rings once (#4979).
+func TestScreenCardPlaceholderBackThenTheDialogRings(t *testing.T) {
+	ft, n := placeholderBack(t)
+	s := ft.s
+	n.setScreen(pickModel)
+	if id, ok := waitReplaced(s, "scr_mac_s1", 2*time.Second); !ok || id == "" {
+		t.Fatalf("the dialog's card did not replace the placeholder: %v", pendingIDs(s))
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(pushes) != 1 {
+		t.Fatalf("the dialog's card never rang: %d pushes", len(pushes))
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 800*time.Millisecond); len(pushes) != 1 {
+		t.Fatalf("pushed %d times", len(pushes))
+	}
+}
+
+// A placeholder that rang at its window's end, detached and back within resumeGrace: the card read again is the one
+// that rang, and its window's end is quiet (#4252/#4979).
+func TestScreenCardPlaceholderThatRangBackStaysQuiet(t *testing.T) {
+	ft, _ := noDialogPlaceholder(t, "  ✢ Percolating…\n", 20*time.Millisecond, 300*time.Millisecond)
+	s := ft.s
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, 2*time.Second); len(pushes) != 1 {
+		t.Fatalf("the placeholder did not ring at its window's end: %d pushes", len(pushes))
+	}
+	s.NodeDetached("mac")
+	if back, _ := waitCards(s, 1, 2*time.Second); len(back) != 1 || back["scr_mac_s1"] == "" {
+		t.Fatalf("the placeholder did not come back: %v", back)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(pushes) != 1 {
+		t.Fatalf("the back placeholder rang again: %d pushes", len(pushes))
+	}
+}
+
 // Away longer than resumeGrace: the dialog read once the node is back is pushed again.
 func TestScreenCardBackAfterTheGraceIsPushed(t *testing.T) {
 	old := resumeGrace

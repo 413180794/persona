@@ -50,6 +50,9 @@ type pending struct {
 	// claimed: an answer was taken for this hook-waited card (resolve). It stays in the map until await or
 	// finishInteraction ends it, but a second answer finds it no longer pending.
 	claimed bool
+	// announced: a screen card that rang (announce), carried through a detach (screenGone.announced), so the card
+	// read again once the node is back rings at the window's end only if its predecessor never did (#4979).
+	announced bool
 }
 
 // resumeGrace is how long a resumable interaction outlives its node: a little longer than hooks keep reconnecting
@@ -204,8 +207,8 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		s.fleet.mu.Unlock()
 		return
 	}
-	back := s.screenBackLocked(machine, sess.SessionID, id, d != nil, time.Now())
-	p := &pending{ix: ix, local: func(r proto.Resolution) error {
+	back, rang := s.screenBackLocked(machine, sess.SessionID, id, d != nil, time.Now())
+	p := &pending{ix: ix, announced: rang || !back && d != nil, local: func(r proto.Resolution) error {
 		if r.Dismiss {
 			return nil
 		}
@@ -238,7 +241,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		s.announce(ix)
 	}
 	if d == nil {
-		go s.upgradeScreenCard(machine, sess.SessionID, id, p, back)
+		go s.upgradeScreenCard(machine, sess.SessionID, id, p)
 	}
 }
 
@@ -246,32 +249,35 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 type screenGone struct {
 	machine, session string
 	at               time.Time
+	announced        bool // the card had rung (pending.announced)
 }
 
 // screenBackLocked: card id is a screen card whose node's connection ended within resumeGrace, read again off the same
 // dialog now that the node is back. Its push went out already, so it comes back without ringing the phone a second
 // time (#4252), as a Codex card a reconnected node lists again does; the mark is used up. A card read before the
 // dialog is drawn (no dialog: a half-drawn screen right after the reconnect) is that card too while the session has a
-// mark, which it leaves for the card upgradeScreenCard makes once the dialog shows. Callers hold s.fleet.mu.
-func (s *Service) screenBackLocked(machine, session, id string, dialog bool, now time.Time) bool {
+// mark, which it leaves for the card upgradeScreenCard makes once the dialog shows. announced is whether the card
+// matched had rung: a placeholder (#4450) detached inside its window had not, and still rings once (#4979). Callers
+// hold s.fleet.mu.
+func (s *Service) screenBackLocked(machine, session, id string, dialog bool, now time.Time) (back, announced bool) {
 	for k, g := range s.fleet.screenDetached {
 		if now.Sub(g.at) > resumeGrace {
 			delete(s.fleet.screenDetached, k)
 		}
 	}
-	if _, ok := s.fleet.screenDetached[id]; ok {
+	if g, ok := s.fleet.screenDetached[id]; ok {
 		delete(s.fleet.screenDetached, id)
-		return true
+		return true, g.announced
 	}
 	if dialog {
-		return false
+		return false, false
 	}
 	for _, g := range s.fleet.screenDetached {
 		if g.machine == machine && g.session == session {
-			return true
+			return true, g.announced
 		}
 	}
-	return false
+	return false, false
 }
 
 // screenUpgradeEvery: how often, and screenUpgradeFor how long, a screen card made without a dialog it could read
@@ -282,8 +288,9 @@ const screenUpgradeEvery, screenUpgradeFor = 500 * time.Millisecond, 30 * time.S
 // hook; on Windows the hooks take seconds before AskUserQuestion's dialog shows), so the card made then has no dialog
 // to answer. Look at the screen again; once a dialog shows, its card replaces this one. The loop is pinned to its own
 // card generation (p), so after blocked -> working -> blocked a placeholder reusing this id belongs to a newer card.
-// Failed reads cost one more poll; the last poll past the window rings the unreadable card once, except a reconnect-back card (back), which already rang before the detach (#4252).
-func (s *Service) upgradeScreenCard(machine, session, id string, p *pending, back bool) {
+// Failed reads cost one more poll; the last poll past the window rings the unreadable card once, unless it rang
+// already (p.announced: a reconnect-back card whose predecessor rang before the detach, #4252/#4979).
+func (s *Service) upgradeScreenCard(machine, session, id string, p *pending) {
 	every, span := cmp.Or(s.fleet.upgradeEvery, screenUpgradeEvery), cmp.Or(s.fleet.upgradeFor, screenUpgradeFor)
 	end := time.Now().Add(span)
 	for {
@@ -315,11 +322,12 @@ func (s *Service) upgradeScreenCard(machine, session, id string, p *pending, bac
 			return
 		}
 		if !time.Now().Before(end) {
-			// Window over and unreadable: re-pin (the read took time), then ring once; a reconnect-back card already rang (#4252).
+			// Window over and unreadable: re-pin (the read took time), then ring once unless it rang already.
 			s.fleet.mu.Lock()
-			same := s.fleet.interactions[id] == p
+			ring := s.fleet.interactions[id] == p && !p.announced
+			p.announced = true
 			s.fleet.mu.Unlock()
-			if same && !back {
+			if ring {
 				s.announce(p.ix)
 			}
 			return
@@ -1514,7 +1522,7 @@ func (s *Service) cancelMachineInteractions(machineID string) {
 				if s.fleet.screenDetached == nil {
 					s.fleet.screenDetached = map[string]screenGone{}
 				}
-				s.fleet.screenDetached[id] = screenGone{machine: machineID, session: p.ix.SessionID, at: now}
+				s.fleet.screenDetached[id] = screenGone{machine: machineID, session: p.ix.SessionID, at: now, announced: p.announced}
 			}
 		}
 	}
