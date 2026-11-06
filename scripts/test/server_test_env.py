@@ -18,6 +18,9 @@ DATABASE_QUERY_KEYS = {
 }
 # pgx uses os/user's home for defaults, not the sandbox HOME. Override implicit profile-file reads explicitly.
 DATABASE_QUERY_DEFAULTS = {"passfile": "", "sslcert": "", "sslkey": "", "sslrootcert": ""}
+# The hub's production database and the test database next to it: persona, or jarvis on a hub set up before the rename
+# (#6149; scripts/deploy/db.sh keeps that database, and makes <database>_test in it).
+TEST_DATABASES = {"/persona": "/persona_test", "/jarvis": "/jarvis_test"}
 PROFILE_VARIABLES = {
     "CLAUDE_CONFIG_DIR", "CODEX_HOME", "CODEX_CONFIG_DIR",
     "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
@@ -34,8 +37,8 @@ def test_database_url(config_file):
     parsed = urlsplit(value)
     if parsed.scheme not in {"postgres", "postgresql"} or not parsed.netloc or parsed.fragment:
         raise ValueError("hub database_url must be a Postgres URL")
-    if parsed.path != "/persona":
-        raise ValueError("server tests require the production persona database configuration")
+    if parsed.path not in TEST_DATABASES:
+        raise ValueError("server tests require the hub's production database configuration (persona, or jarvis before the rename)")
     # Go's URL query parser decodes keys and picks the first value; validating the path alone misses overrides.
     if ";" in parsed.query or re.search(r"%(?![0-9A-Fa-f]{2})", parsed.query):
         raise ValueError("invalid server test database query")
@@ -47,7 +50,7 @@ def test_database_url(config_file):
         settings[key] = setting
     for key, setting in DATABASE_QUERY_DEFAULTS.items():
         settings.setdefault(key, setting)
-    test_url = urlunsplit(parsed._replace(path="/persona_test", query=urlencode(settings)))
+    test_url = urlunsplit(parsed._replace(path=TEST_DATABASES[parsed.path], query=urlencode(settings)))
     if test_url == value:
         raise ValueError("server test database must differ from the production database")
     return test_url

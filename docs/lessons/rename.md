@@ -43,3 +43,12 @@ A runner-wide `umask 077` also changes fixture creation: a requested `0640` seed
 ## Preserve meaningful checks
 
 JSON baseline paths may use escaped slashes; decode paths and retain every metric and threshold. Do not raise token baselines or remove source checks. Update old compatibility tests to assert canonical behavior, collision safety and rejection of obsolete inputs; merely changing an expected token can hide recursive aliases. Every full test invocation must start with a fresh outer HOME as well as fixture-specific overrides. Collapsing old/new `Setenv` calls can clear the sandbox root and make a CLI contact an existing profile; compile success does not catch this. Audit all duplicated environment assignments before running mutation tests, and retain an external private incident record if isolation fails. Never perform automatic live cleanup. Record exact test commands, skips and unavailable platforms. After rebasing, repeat the scan because unrelated merges can reintroduce previous-brand files.
+
+## A helper that makes what is missing turns a rename into an empty store (2026-11-07, #6149)
+
+`scripts/deploy/db.sh` ran on every hub deploy: if the container was missing, it created one with a fresh volume and wrote that container's address into `hub.json`. Renaming its container from `jarvis-postgres` to `persona-postgres` made every hub set up before the rename look like a new one. The next deploy made an empty `persona-postgres` and would have pointed `hub.json` at it. One hub was saved only because the old container still held port 18661, so `docker run` failed before `hub.json` was written. It left a Created container and an empty volume behind.
+
+- A helper that provisions on absence must decide from what is **configured**, not from today's names. db.sh now keeps an existing `database_url`, starts only the container made with that URL's user, and creates nothing while any database container, volume or URL exists.
+- Grep a rename for every "create if missing" path: container / volume / unit / directory / config-file names that a deploy, setup or start step looks up and then creates. Each one needs a test with the old resource present and the new name absent.
+- Values derived from the old name break the same way: a user or database in a URL, the `<db>_test` the test helper derives. Read them from the configured URL rather than from constants.
+

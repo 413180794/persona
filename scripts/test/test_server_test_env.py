@@ -25,6 +25,8 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                 ("postgres://user:synthetic@localhost:5432/persona?sslmode=disable", "postgres://user:synthetic@localhost:5432/persona_test?sslmode=disable"),
                 ("postgresql://user:synthetic@localhost/persona", "postgresql://user:synthetic@localhost/persona_test"),
                 ("postgres://user:p%40ss@[::1]:5432/persona?sslmode=require", "postgres://user:p%40ss@[::1]:5432/persona_test?sslmode=require"),
+                # a hub set up before the rename keeps its jarvis database (#6149): the tests sit next to it
+                ("postgres://user:synthetic@localhost:18661/jarvis?sslmode=disable", "postgres://user:synthetic@localhost:18661/jarvis_test?sslmode=disable"),
             ):
                 with self.subTest(source=source):
                     config.write_text(json.dumps({"database_url": source}))
@@ -37,6 +39,7 @@ class ServerTestEnvironmentTests(unittest.TestCase):
                     self.assertNotEqual(source, expected)
             for source in (
                 "postgres://user:synthetic@localhost/custom", "postgres://user:synthetic@localhost/persona_test",
+                "postgres://user:synthetic@localhost/jarvis_test", "postgres://user:synthetic@localhost/jarvis/",
                 "postgres://user:synthetic@localhost/%6aarvis", "postgres://user:synthetic@localhost/persona/",
                 "postgres://user:synthetic@localhost/persona#fragment", "https://example.com/persona", "postgres:///persona", 42, None,
             ):
