@@ -300,15 +300,13 @@ func (h *Hub) relayTo(w http.ResponseWriter, r *http.Request, admin bool, id str
 		writeErrCode(w, http.StatusServiceUnavailable, assistantwire.CodeAssistantOffline, errAssistantOffline)
 		return
 	}
-	for k := range r.Header {
-		if strings.HasPrefix(strings.ToLower(k), "x-persona-") {
-			r.Header.Del(k)
-		}
-	}
+	// Who asked, as the hub's auth found it. Set on the outgoing request in Rewrite, after the proxy has dropped the
+	// hop-by-hop headers: set on r, a client's "Connection: X-Persona-…" would make the proxy drop them again.
 	p := principalOf(r.Context())
+	who := http.Header{}
 	set := func(k, v string) {
 		if v != "" {
-			r.Header.Set(k, v)
+			who.Set(k, v)
 		}
 	}
 	set(extwire.HeaderDevice, p.ID)
@@ -339,6 +337,14 @@ func (h *Hub) relayTo(w http.ResponseWriter, r *http.Request, admin bool, id str
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.URL.Scheme, pr.Out.URL.Host = "http", "manager"
 			pr.Out.Host = "manager"
+			for k := range pr.Out.Header {
+				if strings.HasPrefix(strings.ToLower(k), "x-persona-") {
+					pr.Out.Header.Del(k)
+				}
+			}
+			for k, v := range who {
+				pr.Out.Header[k] = v
+			}
 			pr.Out.Header.Del("Authorization")
 			pr.Out.Header.Del("Cookie")
 			if q := pr.Out.URL.Query(); q.Has("token") { // a WebSocket's credential in the query: the hub's too

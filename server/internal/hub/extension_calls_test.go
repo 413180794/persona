@@ -380,6 +380,40 @@ func TestRelayedPairingCallEndsWithTheCode(t *testing.T) {
 	}
 }
 
+// A client cannot drop the hub's headers by naming them in Connection (a hop-by-hop header the proxy removes): a
+// pairing code stays paired, an extension's token stays the extension's.
+func TestRelayedCallerHeadersSurviveConnection(t *testing.T) {
+	h, _, fx, srv := relayTestHub(t)
+	tok := "jp_" + strings.Repeat("cd", 32)
+	if err := h.store.CreatePairToken(context.Background(), hashToken(tok), time.Now().Add(time.Minute), ""); err != nil {
+		t.Fatal(err)
+	}
+	ext := fx.issue("caller", "Caller", []string{extension.ScopeCallPrefix + "callee"})
+	get := func(token string) map[string]string {
+		t.Helper()
+		req, _ := http.NewRequest("GET", srv.URL+"/api/v1/extensions/callee/echo", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Connection", "X-Persona-Paired, X-Persona-Role, X-Persona-Device, X-Persona-Extension")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		out := map[string]string{}
+		_ = json.NewDecoder(res.Body).Decode(&out)
+		if res.StatusCode != 200 {
+			t.Fatalf("%d %v", res.StatusCode, out)
+		}
+		return out
+	}
+	if got := get(tok); got["X-Persona-Paired"] != "1" || got["X-Persona-Role"] != roleFull || got["X-Persona-Device"] != "pair_"+hashToken(tok) {
+		t.Fatalf("pairing code: %v", got)
+	}
+	if got := get(ext); got["X-Persona-Role"] != roleExtension || got["X-Persona-Extension"] != "caller" {
+		t.Fatalf("extension token: %v", got)
+	}
+}
+
 // A request that passed the auth just before its device was revoked ends as it starts; the master token's are not
 // kept, a device's are until done.
 func TestRelayedCallRevokedBeforeTracked(t *testing.T) {
