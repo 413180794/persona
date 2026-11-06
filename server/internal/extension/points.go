@@ -56,6 +56,10 @@ type ConnectorItem struct {
 	MetaDescription string `json:"meta_description,omitempty"`
 	// CLI is the connector's command line on the assistant's PATH (connector.Manifest.CLI): a lowercase name.
 	CLI string `json:"cli,omitempty"`
+	// SendsAsUser: the connector's program sends messages in the user's name on its own, outside the hub's write gate
+	// (a read tool that also replies, say). The user agrees to it at install, and the program may then keep each such
+	// send in the sent-as-user ledger with sent.record (docs/extensions.md "Sent as the user").
+	SendsAsUser bool `json:"sends_as_user,omitempty"`
 }
 
 // metaDescriptionMost is the longest meta_description (runes): a paragraph the relating prompt carries every time.

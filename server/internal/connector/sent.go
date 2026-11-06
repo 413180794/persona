@@ -11,6 +11,9 @@ import (
 const (
 	ThroughRule = "rule" // a connector_gate rule allowed it
 	ThroughCard = "card" // the user allowed it on the phone
+	// ThroughAuto is a send an extension's connector made on its own, outside the gate (sent.record): no rule and no
+	// card were involved.
+	ThroughAuto = "auto"
 )
 
 // LetThrough is how the gate let a write through.
@@ -36,6 +39,23 @@ type Sent struct {
 
 // SentTextMost is the most of a write's text that Sent keeps, in characters.
 const SentTextMost = 4000
+
+// MethodSentRecord is the call an extension's connector makes to put a send of its own in the ledger.
+const MethodSentRecord = "sent.record"
+
+// SentRecordParams are sent.record's params (schema/extension/connector.schema.json ConnectorSentRecordParams): an
+// extension's connector that declares sends_as_user tells the hub about a message it sent in the user's name outside
+// the write gate. Where it came from and how it was let through are the hub's to say, not these.
+type SentRecordParams struct {
+	Contribution string         `json:"contribution"`          // the connector's id: one of the caller's own
+	Target       map[string]any `json:"target"`                // where it went: an object of short values (a chat, a thread, recipients…); nil: missing
+	Text         *string        `json:"text"`                  // what it said, cut to SentTextMost characters (may be empty); nil: missing
+	Summary      string         `json:"summary,omitempty"`     // one line saying what it was
+	SessionID    string         `json:"session_id,omitempty"`  // the conversation that asked, when one did (the extension's word)
+	MachineID    string         `json:"machine_id,omitempty"`  // the computer it ran on, when it names one (the extension's word)
+	MessageRef   string         `json:"message_ref,omitempty"` // the sent message's id on the other side
+	Setting      string         `json:"setting,omitempty"`     // the extension's setting that let it send without asking
+}
 
 // writtenText is the words a write puts out, as its arguments say them: the first of the fields connectors name
 // their text by (GitHub's body, mail's and the chats' text) that has any, cut to SentTextMost characters.

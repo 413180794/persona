@@ -174,6 +174,8 @@ type extensions struct {
 	nodes extensionNodes
 	// sandboxes are the owner's sandbox choices and the egress proxy (extension_sandbox.go).
 	sandboxes extensionSandboxes
+	// sentLimit is the rate limit of the extensions' sent.record calls (sent_ledger.go).
+	sentLimit sentLimiter
 	// voice is the hub.json entry the built-in voice extension took over (nil without one); voiceID the built-in's id
 	// once registered, "" when there is none (voice_extension.go).
 	voice   *ExtensionConfig
@@ -867,6 +869,8 @@ func (ps *extensions) specOf(ctx context.Context, p *extension.Extension, hp *hu
 		switch method {
 		case "kb.list", "kb.get", "kb.day", "kb.search", "kb.update", "kb.owner":
 			return ps.extensionKBCall(ctx, id, method, params)
+		case connector.MethodSentRecord:
+			return ps.extensionSentRecord(ctx, id, params)
 		}
 		if rest, ok := strings.CutPrefix(method, serve.Namespace+"."); ok {
 			c := byID[contributionOf(params)]

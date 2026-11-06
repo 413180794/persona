@@ -176,6 +176,52 @@ func TestTheKnowledgeBaseFromTheSDK(t *testing.T) {
 	}
 }
 
+// A connector that sends in the user's name on its own declares it (sends_as_user) and tells the hub of each send; as
+// the real hub, the fake refuses a connector that does not declare it, and holds the params to the schema.
+func TestRecordSentFromTheSDK(t *testing.T) {
+	manifest := []byte(`{
+  "manifest_version": 1, "id": "examplechat", "name": "Example Chat", "version": "1.0.0",
+  "engines": {"extension_protocol": 1},
+  "runtime": {"command": "bin/examplechat"},
+  "activation_events": ["on_startup"],
+  "contributes": {"connectors": [
+    {"id": "examplechat", "name": "Example Chat", "capabilities": ["status"], "sends_as_user": true},
+    {"id": "examplequiet", "name": "Example Quiet", "capabilities": ["status"]}
+  ]}
+}`)
+	c := &exampleChat{}
+	prog := c.program()
+	prog.Manifest = manifest
+	h := exttest.Start(t, manifest, exttest.Serve(t, prog))
+	ctx := context.Background()
+	err := c.hub.RecordSent(ctx, wire.ConnectorSentRecordParams{Contribution: "examplechat", Target: map[string]json.RawMessage{"chat": json.RawMessage(`"chat_1"`)},
+		Text: "Thanks, got it.", Summary: "Auto-reply", SessionID: "conv_1", Setting: "auto_reply"})
+	if got := h.Sent(); err != nil || len(got) != 1 || got[0].Contribution != "examplechat" || got[0].Text != "Thanks, got it." ||
+		got[0].Setting != "auto_reply" || string(got[0].Target["chat"]) != `"chat_1"` {
+		t.Fatalf("sent.record: %v, recorded %+v", err, h.Sent())
+	}
+	// As the hub keeps it: 20 keys of the target at most, in key order.
+	many := map[string]json.RawMessage{}
+	for i := range 25 {
+		many[fmt.Sprintf("k%02d", i)] = json.RawMessage(`"v"`)
+	}
+	if err := c.hub.RecordSent(ctx, wire.ConnectorSentRecordParams{Contribution: "examplechat", Target: many, Text: ""}); err != nil {
+		t.Fatalf("a long target and an empty text: %v", err)
+	}
+	if got := h.Sent(); len(got) != 2 || len(got[1].Target) != 20 || got[1].Target["k19"] == nil || got[1].Target["k20"] != nil {
+		t.Errorf("the target as the hub keeps it: %+v", got)
+	}
+	var e *ext.Error
+	err = c.hub.RecordSent(ctx, wire.ConnectorSentRecordParams{Contribution: "examplequiet", Target: map[string]json.RawMessage{}, Text: "x"})
+	if !errors.As(err, &e) || e.Code != wire.ErrorCodePermissionDenied || len(h.Sent()) != 2 {
+		t.Errorf("a connector that does not declare sends_as_user: %v, recorded %+v", err, h.Sent())
+	}
+	err = c.hub.RecordSent(ctx, wire.ConnectorSentRecordParams{Contribution: "another", Target: map[string]json.RawMessage{}, Text: "x"})
+	if !errors.As(err, &e) || e.Code != wire.ErrorCodePermissionDenied || len(h.Sent()) != 2 {
+		t.Errorf("a connector the extension does not have: %v, recorded %+v", err, h.Sent())
+	}
+}
+
 func TestStartWithAnotherGrant(t *testing.T) {
 	c := &exampleChat{}
 	h := exttest.StartWith(t, connectorManifest, exttest.Serve(t, c.program()), func(p *wire.InitializeParams) {

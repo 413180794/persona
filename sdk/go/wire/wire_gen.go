@@ -528,6 +528,10 @@ type ConnectorItem struct {
 	ArchiveSources   []string          `json:"archive_sources,omitempty"`
 	MetaDescription  string            `json:"meta_description,omitempty"`
 	CLI              string            `json:"cli,omitempty"`
+	// The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that also
+	// replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the install
+	// preview says so.
+	SendsAsUser bool `json:"sends_as_user,omitempty"`
 }
 
 // NamedItem: A contribution with only an id and a name: voice, computer, browser.
@@ -2792,7 +2796,8 @@ type MessagingError struct {
 }
 
 // ConnectorErrorCode: error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call /
-// actions.do; data {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.
+// actions.do, and the hub's answer to too many sent.record; data {retry_after} in seconds, fractional allowed), and
+// why credentials.gh_token has no token.
 const (
 	ConnectorErrorCodeRateLimited = "rate_limited"
 	ConnectorErrorCodeNoMachine   = "no_machine"
@@ -3539,6 +3544,38 @@ type ConnectorGhTokenParams struct {
 	Host         string `json:"host,omitempty"`
 }
 
+// ConnectorSentRecordParams: sent.record: the program of a connector that declares sends_as_user (manifest
+// connectors[].sends_as_user) tells the hub about a message it sent in the user's name outside the hub's write gate,
+// for the sent-as-user ledger (docs/connectors.md "Sent as the user"). Only a connector of the caller's own that
+// declares it may: else permission_denied. The hub sets the row's origin (the extension; session_id and machine_id
+// are kept beside it) and how it was let through (kind auto, with setting) itself. Errors: permission_denied,
+// invalid_params, rate_limited (data {retry_after} in seconds: 60 calls at once per extension, then one a second,
+// whether or not they were allowed), and no_database on a hub without a database; a ledger that cannot be written is
+// an error with a message and no code. Recording is best effort: it never undoes the send.
+type ConnectorSentRecordParams struct {
+	Contribution string `json:"contribution"`
+	// Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
+	// value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is an empty
+	// string. The hub keeps 20 keys at most, in key order, each name cut to 64 characters. Anything but an object is
+	// invalid_params.
+	Target map[string]json.RawMessage `json:"target"`
+	// What it said; may be empty, but it must be there (else invalid_params). The hub keeps the first 4000 characters.
+	Text string `json:"text"`
+	// One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the
+	// connector and the target.
+	Summary string `json:"summary,omitempty"`
+	// The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot
+	// check; cut to 200 characters.
+	SessionID string `json:"session_id,omitempty"`
+	// The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check;
+	// cut to 200 characters.
+	MachineID string `json:"machine_id,omitempty"`
+	// The sent message's id on the other side, when the service gave one; cut to 200 characters.
+	MessageRef string `json:"message_ref,omitempty"`
+	// The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
+	Setting string `json:"setting,omitempty"`
+}
+
 type ConnectorGhToken struct {
 	Token string `json:"token"`
 }
@@ -4238,6 +4275,7 @@ var newDef = map[string]func() any{
 	"ConnectorSecret":              func() any { return new(ConnectorSecret) },
 	"ConnectorSecretSaveParams":    func() any { return new(ConnectorSecretSaveParams) },
 	"ConnectorGhTokenParams":       func() any { return new(ConnectorGhTokenParams) },
+	"ConnectorSentRecordParams":    func() any { return new(ConnectorSentRecordParams) },
 	"ConnectorGhToken":             func() any { return new(ConnectorGhToken) },
 	"ConnectorPostsPutParams":      func() any { return new(ConnectorPostsPutParams) },
 	"ConnectorPostPut":             func() any { return new(ConnectorPostPut) },
@@ -4329,6 +4367,7 @@ var Calls = map[string]Call{
 	"connector.posts.pending":        {Name: "connector.posts.pending", From: "program", Params: "ConnectorPostsPendingParams", Result: "ConnectorPostsPending"},
 	"connector.archive.chats":        {Name: "connector.archive.chats", From: "program", Params: "ConnectorArchiveChatsParams", Result: "ConnectorArchivedChats"},
 	"connector.credentials.gh_token": {Name: "connector.credentials.gh_token", From: "program", Params: "ConnectorGhTokenParams", Result: "ConnectorGhToken"},
+	"sent.record":                    {Name: "sent.record", From: "program", Params: "ConnectorSentRecordParams", Result: "Empty"},
 	"connector.changed":              {Name: "connector.changed", From: "program", Params: "ConnectorChangedEvent", Result: "", Event: true},
 	"channel.receive":                {Name: "channel.receive", From: "program", Params: "ChannelReceiveParams", Result: "Empty"},
 	"channel.status":                 {Name: "channel.status", From: "program", Params: "ChannelStatusParams", Result: "Empty"},

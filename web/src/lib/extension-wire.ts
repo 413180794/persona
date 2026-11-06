@@ -503,6 +503,12 @@ export interface ConnectorItem {
   archive_sources?: string[];
   meta_description?: string;
   cli?: string;
+  /**
+   * The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that
+   * also replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the
+   * install preview says so.
+   */
+  sends_as_user?: boolean;
 }
 
 /**

@@ -752,6 +752,12 @@ data class ExtensionConnectorItem(
     @SerialName("archive_sources") val archiveSources: List<String>? = null,
     @SerialName("meta_description") val metaDescription: String? = null,
     val cli: String? = null,
+    /**
+     * The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that
+     * also replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the
+     * install preview says so.
+     */
+    @SerialName("sends_as_user") val sendsAsUser: Boolean? = null,
 )
 
 /**

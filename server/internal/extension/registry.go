@@ -394,6 +394,21 @@ func (r *Registry) HubScopeAllowed(id, scope string) bool {
 		(p.Record.Granted.FullHub() || slices.Contains(p.Record.Granted.Hub, scope))
 }
 
+// SendsAsUser says whether extension id, enabled and compatible, has a connector contribution with this id that
+// declares sends_as_user (ConnectorItem.SendsAsUser). It reads the live record under the registry lock, like
+// HubScopeAllowed, and the manifest as installed (Full: what the user agreed to), not the one without the contributions
+// switched off: a connector's switch is the connector's own (SwitchedElsewhere, Settings › Connectors), which neither
+// takes it out of the manifest nor stops a send that already happened from being recorded.
+func (r *Registry) SendsAsUser(id, contribution string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.extensions[id]
+	if p == nil || !p.Record.Enabled || p.Problem != "" || p.Full == nil {
+		return false
+	}
+	return slices.ContainsFunc(p.Full.SendsAsUser(), func(c ConnectorItem) bool { return c.ID == contribution })
+}
+
 // EventSubscribers snapshots the enabled, compatible extensions subscribed to topic. A nonempty scope additionally
 // requires that actual grant (or the legacy full-hub grant); an empty scope preserves the other event topics' rules.
 func (r *Registry) EventSubscribers(topic, scope string) []string {
@@ -576,7 +591,7 @@ func MorePermissions(cur *Extension, m *Manifest) bool {
 		len(NewTools(was, m)) > 0 ||
 		slices.ContainsFunc(m.Topics(), func(t string) bool { return !slices.Contains(was.Topics(), t) }) ||
 		slices.ContainsFunc(m.Surfaces(), func(t string) bool { return !slices.Contains(was.Surfaces(), t) }) ||
-		len(newChannels(was, m)) > 0 ||
+		len(newChannels(was, m)) > 0 || len(newSendsAsUser(was, m)) > 0 ||
 		slices.ContainsFunc(m.ContributesTo(), func(t string) bool { return !slices.Contains(was.ContributesTo(), t) })
 }
 

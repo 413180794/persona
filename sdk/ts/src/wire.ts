@@ -503,6 +503,12 @@ export interface ConnectorItem {
   archive_sources?: string[];
   meta_description?: string;
   cli?: string;
+  /**
+   * The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that
+   * also replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the
+   * install preview says so.
+   */
+  sends_as_user?: boolean;
 }
 
 /**
@@ -2922,8 +2928,9 @@ export interface MessagingError {
 }
 
 /**
- * error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do; data
- * {retry_after} in seconds, fractional allowed), and why credentials.gh_token has no token.
+ * error.code a program answers or gets besides the base ErrorCode: rate_limited (tools.call / actions.do, and the
+ * hub's answer to too many sent.record; data {retry_after} in seconds, fractional allowed), and why
+ * credentials.gh_token has no token.
  */
 export type ConnectorErrorCode = "rate_limited" | "no_machine" | "offline" | "node_too_old" | "no_gh" | "not_signed_in" | (string & {});
 export const CONNECTOR_ERROR_CODES = ["rate_limited", "no_machine", "offline", "node_too_old", "no_gh", "not_signed_in"] as const;
@@ -3701,6 +3708,52 @@ export interface ConnectorGhTokenParams {
   host?: string;
 }
 
+/**
+ * sent.record: the program of a connector that declares sends_as_user (manifest connectors[].sends_as_user) tells the
+ * hub about a message it sent in the user's name outside the hub's write gate, for the sent-as-user ledger
+ * (docs/connectors.md "Sent as the user"). Only a connector of the caller's own that declares it may: else
+ * permission_denied. The hub sets the row's origin (the extension; session_id and machine_id are kept beside it) and
+ * how it was let through (kind auto, with setting) itself. Errors: permission_denied, invalid_params, rate_limited
+ * (data {retry_after} in seconds: 60 calls at once per extension, then one a second, whether or not they were
+ * allowed), and no_database on a hub without a database; a ledger that cannot be written is an error with a message
+ * and no code. Recording is best effort: it never undoes the send.
+ */
+export interface ConnectorSentRecordParams {
+  contribution: string;
+  /**
+   * Where it went: an object of short values (a chat, a thread, recipients…). Strings are cut to 200 characters; a
+   * value that is not a string, a number, a boolean or a list of up to 10 strings is dropped, and so is an empty
+   * string. The hub keeps 20 keys at most, in key order, each name cut to 64 characters. Anything but an object is
+   * invalid_params.
+   */
+  target: Record<string, unknown>;
+  /**
+   * What it said; may be empty, but it must be there (else invalid_params). The hub keeps the first 4000 characters.
+   */
+  text: string;
+  /**
+   * One line saying what it was: the first line is kept, cut to 300 characters. Without it the hub makes one from the
+   * connector and the target.
+   */
+  summary?: string;
+  /**
+   * The Persona conversation that asked for the send, when one did. The extension's own word, which the hub cannot
+   * check; cut to 200 characters.
+   */
+  session_id?: string;
+  /**
+   * The computer that conversation ran on, when it names one. The extension's own word, which the hub cannot check;
+   * cut to 200 characters.
+   */
+  machine_id?: string;
+  /** The sent message's id on the other side, when the service gave one; cut to 200 characters. */
+  message_ref?: string;
+  /**
+   * The extension's setting (config key) that let it send without asking, when there is one; cut to 200 characters.
+   */
+  setting?: string;
+}
+
 export interface ConnectorGhToken {
   token: string;
 }
@@ -4211,6 +4264,7 @@ export const CALLS: Record<string, Call> = {
   "connector.posts.pending": { from: "program", params: "ConnectorPostsPendingParams", result: "ConnectorPostsPending" },
   "connector.archive.chats": { from: "program", params: "ConnectorArchiveChatsParams", result: "ConnectorArchivedChats" },
   "connector.credentials.gh_token": { from: "program", params: "ConnectorGhTokenParams", result: "ConnectorGhToken" },
+  "sent.record": { from: "program", params: "ConnectorSentRecordParams", result: "Empty" },
   "connector.changed": { from: "program", params: "ConnectorChangedEvent", event: true },
   "channel.receive": { from: "program", params: "ChannelReceiveParams", result: "Empty" },
   "channel.status": { from: "program", params: "ChannelStatusParams", result: "Empty" },

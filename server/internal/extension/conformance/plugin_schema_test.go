@@ -79,6 +79,7 @@ var goTypes = map[string]any{
 	"ConnectorGhToken":             serve.GhTokenResult{},
 	"ConnectorChangedEvent":        serve.ChangedEvent{},
 	"ConnectorInitParams":          serve.InitParams{},
+	"ConnectorSentRecordParams":    connector.SentRecordParams{},
 
 	"ChannelReceiveParams": channel.ReceiveParams{},
 	"ChannelStatusParams":  channel.StatusParams{},
@@ -115,6 +116,10 @@ var serverCalls = []string{
 	serve.MPostsPending, serve.MArchiveChats, serve.MGhToken, serve.EChanged,
 }
 
+// sent.record is the hub's own (extmgr answers it for a connector that declares sends_as_user), outside the
+// connector protocol's namespace.
+var sentCalls = []string{connector.MethodSentRecord}
+
 var channelCalls = []string{channel.MReceive, channel.MStatus, channel.MSend, channel.MTyping, channel.MEdit}
 
 var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, assistantwire.MethodKBDay,
@@ -130,6 +135,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 		want = append(want, channel.InPlugin(m))
 	}
 	want = append(want, kbCalls...)
+	want = append(want, sentCalls...)
 	for _, name := range want {
 		if _, ok := wire.Calls[name]; !ok {
 			t.Errorf("%s: the server has it, schema/extension does not list it (x-methods / x-events)", name)
@@ -137,7 +143,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	}
 	for name := range wire.Calls {
 		if (strings.HasPrefix(name, serve.Namespace+".") || strings.HasPrefix(name, channel.Namespace+".") ||
-			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.")) &&
+			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.") || strings.HasPrefix(name, "sent.")) &&
 			!slices.Contains(want, name) {
 			t.Errorf("%s: schema/extension lists it, the server has no such call", name)
 		}

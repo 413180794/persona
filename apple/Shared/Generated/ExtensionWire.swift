@@ -1342,8 +1342,12 @@ nonisolated struct ExtensionConnectorItem: Codable, Hashable, Sendable {
     var archiveSources: [String]?
     var metaDescription: String?
     var cli: String?
+    /// The connector sends messages in the user's name by itself, not through the hub's write gate (a read tool that
+    /// also replies, say). Its program may then record each one in the sent-as-user ledger with sent.record, and the
+    /// install preview says so.
+    var sendsAsUser: Bool?
 
-    init(id: String = "", name: String = "", capabilities: [String] = [], hosts: [String]? = nil, agentTools: [String]? = nil, unlisted: [String]? = nil, confirmAlways: [String]? = nil, pollSeconds: Int? = nil, kinds: [String]? = nil, kindDescriptions: [String: String]? = nil, archiveSources: [String]? = nil, metaDescription: String? = nil, cli: String? = nil) {
+    init(id: String = "", name: String = "", capabilities: [String] = [], hosts: [String]? = nil, agentTools: [String]? = nil, unlisted: [String]? = nil, confirmAlways: [String]? = nil, pollSeconds: Int? = nil, kinds: [String]? = nil, kindDescriptions: [String: String]? = nil, archiveSources: [String]? = nil, metaDescription: String? = nil, cli: String? = nil, sendsAsUser: Bool? = nil) {
         self.id = id
         self.name = name
         self.capabilities = capabilities
@@ -1357,6 +1361,7 @@ nonisolated struct ExtensionConnectorItem: Codable, Hashable, Sendable {
         self.archiveSources = archiveSources
         self.metaDescription = metaDescription
         self.cli = cli
+        self.sendsAsUser = sendsAsUser
     }
 
     enum CodingKeys: String, CodingKey {
@@ -1373,6 +1378,7 @@ nonisolated struct ExtensionConnectorItem: Codable, Hashable, Sendable {
         case archiveSources = "archive_sources"
         case metaDescription = "meta_description"
         case cli
+        case sendsAsUser = "sends_as_user"
     }
 
     init(from decoder: Decoder) throws {
@@ -1390,6 +1396,7 @@ nonisolated struct ExtensionConnectorItem: Codable, Hashable, Sendable {
         self.archiveSources = try? c.decodeIfPresent([String].self, forKey: .archiveSources)
         self.metaDescription = try? c.decodeIfPresent(String.self, forKey: .metaDescription)
         self.cli = try? c.decodeIfPresent(String.self, forKey: .cli)
+        self.sendsAsUser = try? c.decodeIfPresent(Bool.self, forKey: .sendsAsUser)
     }
 }
 

@@ -120,7 +120,8 @@ func (r *NodeRuntime) consent() *nodeConsent {
 
 // Digest is what the user agrees to when installing: the permissions and whether it runs code, as a sha256 of their
 // canonical JSON. Install and upgrade carry the digest of the preview the user saw, so what installs is what they saw.
-// A plugin without a node program digests as it did before there were any (what installed plugins were granted holds).
+// A plugin without a node program digests as it did before there were any (what installed plugins were granted holds),
+// and so does one whose connectors do not send as the user.
 func Digest(m *Manifest) string {
 	b, _ := json.Marshal(struct {
 		RunsCode    bool         `json:"runs_code"`
@@ -129,9 +130,45 @@ func Digest(m *Manifest) string {
 		Surfaces    []string     `json:"surfaces,omitempty"`
 		Node        *nodeConsent `json:"node,omitempty"`
 		Tools       []string     `json:"tools,omitempty"`
-	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.NodeProgram().consent(), m.ToolsConsent()})
+		SendsAsUser []string     `json:"sends_as_user,omitempty"`
+	}{m.Runtime != nil, m.Permissions.normalized(), m.Topics(), m.Surfaces(), m.NodeProgram().consent(), m.ToolsConsent(), sendsAsUserIDs(m)})
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// sendsAsUserIDs are the ids of m's connectors that send as the user, sorted: what the digest holds of them.
+func sendsAsUserIDs(m *Manifest) []string {
+	var out []string
+	for _, c := range m.SendsAsUser() {
+		if !slices.Contains(out, c.ID) {
+			out = append(out, c.ID)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// newSendsAsUser are m's connectors that send as the user and that old did not declare so: a connector that sends in
+// the user's name on its own, outside the write gate, is something to agree to again.
+func newSendsAsUser(old, m *Manifest) []ConnectorItem {
+	was := sendsAsUserIDs(old)
+	var out []ConnectorItem
+	for _, c := range m.SendsAsUser() {
+		if !slices.Contains(was, c.ID) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// sendsAsUserLine is the line for connectors that send as the user.
+func sendsAsUserLine(l i18n.Lang, title string, list []ConnectorItem) PermissionLine {
+	var names []string
+	for _, c := range list {
+		names = append(names, c.Name)
+	}
+	return PermissionLine{Key: "sends_as_user", Title: title,
+		Detail: permissionText(l, "sends_as_user_detail", i18n.Args{"names": strings.Join(names, permissionText(l, "list_separator"))})}
 }
 
 // toolsLine is the tools as the install screen shows them.
@@ -277,6 +314,9 @@ func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine {
 		out = append(out, PermissionLine{Key: "channel", Title: permissionText(l, "channel_title"),
 			Detail: permissionText(l, "channel_detail", i18n.Args{"names": strings.Join(names, permissionText(l, "list_separator"))})})
 	}
+	if sends := m.SendsAsUser(); len(sends) > 0 {
+		out = append(out, sendsAsUserLine(l, permissionText(l, "sends_as_user_title"), sends))
+	}
 	if topics := m.Topics(); len(topics) > 0 {
 		var what []string
 		for _, t := range topics {
@@ -312,7 +352,8 @@ func ExplainIn(l i18n.Lang, m *Manifest) []PermissionLine {
 
 // Added is what upgrading from old to m adds to what the plugin may do, in Explain's words: running a program when old
 // ran none, the hosts and secrets old did not have, the hub's token or launchers' keys when old did not get them, the
-// channels and the extensions it contributes to that old did not have. Nil when nothing is added.
+// channels and the extensions it contributes to that old did not have, and the connectors that send as the user
+// that old did not. Nil when nothing is added.
 func Added(old, m *Manifest) []PermissionLine { return AddedIn(i18n.Default, old, m) }
 
 // AddedIn generates only the permissions added by an upgrade, in the requested language.
@@ -378,6 +419,9 @@ func AddedIn(l i18n.Lang, old, m *Manifest) []PermissionLine {
 		}
 		out = append(out, PermissionLine{Key: "channel", Title: permissionText(l, "channel_more_title"),
 			Detail: permissionText(l, "channel_detail", i18n.Args{"names": strings.Join(names, permissionText(l, "list_separator"))})})
+	}
+	if sends := newSendsAsUser(old, m); len(sends) > 0 {
+		out = append(out, sendsAsUserLine(l, permissionText(l, "sends_as_user_more_title"), sends))
 	}
 	var topics []string
 	for _, t := range m.Topics() {

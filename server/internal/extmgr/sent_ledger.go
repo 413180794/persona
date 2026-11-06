@@ -9,17 +9,22 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/connector"
+	"github.com/nwverse/persona/server/internal/connector/serve"
 	"github.com/nwverse/persona/server/internal/db"
+	"github.com/nwverse/persona/server/internal/extension"
 	"github.com/nwverse/persona/server/internal/mail"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // The ledger of what Persona wrote as the user (sent_as_user, docs/connectors.md "Sent as the user", #5278). The
 // connectors' write gate runs here, so this is where a write that went out is known with the conversation that asked
 // and the card the user answered. Registry.SetSent tells recordSent of every gated write whose action succeeded;
-// refusals, declines, failures and the user's own sends (Registry.Run) never get here.
+// refusals, declines, failures and the user's own sends (Registry.Run) never get here. A send an extension's connector
+// made on its own, outside the gate, comes in through sent.record instead (extensionSentRecord).
 
 // sentStore keeps and reads the ledger (db.RecordSentAsUser…).
 type sentStore interface {
@@ -235,7 +240,8 @@ func genericTarget(args json.RawMessage) (map[string]any, string) {
 func scalarOrStrings(v any) (any, bool) {
 	switch v := v.(type) {
 	case string:
-		return cutRunes(cleanText(v), sentValueMost), v != ""
+		s := cutRunes(cleanText(v), sentValueMost)
+		return s, s != ""
 	case float64, bool:
 		return v, true
 	case []any:
@@ -250,6 +256,148 @@ func scalarOrStrings(v any) (any, bool) {
 		return out, len(out) > 0
 	}
 	return nil, false
+}
+
+const (
+	sentRecordAction = connector.MethodSentRecord // a row's action when an extension told the hub of the send
+	sentTargetKeys   = 20                         // most keys of a recorded target
+	sentKeyMost      = 64                         // characters of one key in it
+
+	sentRecordBurst = 60          // sent.record calls one extension may make at once
+	sentRecordEvery = time.Second // one more call is allowed this often after that: 60 a minute
+)
+
+// sentLimiter is a token bucket per extension for sent.record: a program that loops cannot fill the ledger.
+type sentLimiter struct {
+	mu      sync.Mutex
+	now     func() time.Time // time.Now when nil (tests)
+	buckets map[string]*sentBucket
+}
+
+type sentBucket struct {
+	tokens float64
+	at     time.Time
+}
+
+// take uses one of id's tokens. When there is none it returns how long until the next one.
+func (l *sentLimiter) take(id string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	if l.now != nil {
+		now = l.now()
+	}
+	b := l.buckets[id]
+	if b == nil {
+		if l.buckets == nil {
+			l.buckets = map[string]*sentBucket{}
+		}
+		b = &sentBucket{tokens: sentRecordBurst, at: now}
+		l.buckets[id] = b
+	}
+	if d := now.Sub(b.at); d > 0 {
+		b.tokens = min(sentRecordBurst, b.tokens+float64(d)/float64(sentRecordEvery))
+		b.at = now
+	}
+	if b.tokens >= 1 {
+		b.tokens--
+		return 0
+	}
+	return time.Duration((1 - b.tokens) * float64(sentRecordEvery))
+}
+
+// extensionSentRecord answers an extension's sent.record (docs/extensions.md "Sent as the user: sent.record"): its
+// connector says it sent a message in the user's name outside the write gate, which this keeps in the ledger like the
+// gate's own. At most sentRecordBurst calls at once and then one a second per extension, refused or not (rate_limited,
+// data {retry_after}). Only a connector of the caller's that declares sends_as_user may (permission_denied otherwise,
+// nothing written), whether or not the user switched the connector off since: the send already happened. The row's
+// origin and how it was let through are the hub's words, whatever the params say: origin is the extension (the machine
+// and session it names are its own word, kept beside it), let_through is auto (with the setting that allowed it). A
+// failed write is the caller's to see, as an error with a message and no code: the send already happened and stays so.
+func (ps *extensions) extensionSentRecord(ctx context.Context, id string, raw json.RawMessage) (any, error) {
+	if wait := ps.sentLimit.take(id); wait > 0 {
+		data, _ := json.Marshal(map[string]float64{"retry_after": wait.Seconds()})
+		return nil, &rpc.Error{Code: serve.CodeRateLimited, Data: data,
+			Message: fmt.Sprintf("sent.record: more than %d calls in a minute, try again in %.0f seconds", sentRecordBurst, max(1, wait.Seconds()))}
+	}
+	var p connector.SentRecordParams
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record: " + err.Error()}
+		}
+	}
+	if ps.reg == nil || !ps.reg.SendsAsUser(id, p.Contribution) {
+		return nil, &rpc.Error{Code: extension.CodePermissionDenied,
+			Message: "sent.record: " + id + " has no connector " + p.Contribution + " that declares sends_as_user"}
+	}
+	if p.Text == nil {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record: text is required (it may be empty)"}
+	}
+	target, brief, err := recordedTarget(p.Target)
+	if err != nil {
+		return nil, &rpc.Error{Code: "invalid_params", Message: "sent.record: " + err.Error()}
+	}
+	var st sentStore
+	if ps.h != nil {
+		st, _ = ps.h.store.(sentStore)
+	}
+	if st == nil {
+		return nil, &rpc.Error{Code: "no_database", Message: "sent.record: no database, there is no ledger"}
+	}
+	field := func(s string) string { return cutRunes(strings.TrimSpace(cleanText(s)), sentValueMost) }
+	origin := map[string]any{"extension": id}
+	if v := field(p.MachineID); v != "" {
+		origin["machine_id"] = v
+	}
+	if v := field(p.SessionID); v != "" {
+		origin["session_id"] = v
+	}
+	through := map[string]any{"kind": connector.ThroughAuto}
+	if v := field(p.Setting); v != "" {
+		through["setting"] = v
+	}
+	summary := strings.TrimSpace(cleanText(p.Summary))
+	if summary == "" {
+		summary = strings.TrimSuffix(strings.TrimSpace(p.Contribution+": "+brief), ":")
+	}
+	summary, _, _ = strings.Cut(summary, "\n") // the given line or the made one: a value in the target may have several
+	row := db.SentAsUser{At: time.Now(), Connector: p.Contribution, Action: sentRecordAction, Target: mustJSON(target),
+		Text: cutRunes(cleanText(*p.Text), connector.SentTextMost), Summary: cutRunes(strings.TrimSpace(summary), sentSummaryMost),
+		Origin: mustJSON(origin), LetThrough: mustJSON(through), MessageRef: field(p.MessageRef)}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if _, err := st.RecordSentAsUser(ctx, row); err != nil {
+		ps.logf("sent ledger: %s: %s: %v", id, p.Contribution, err)
+		return nil, errors.New("sent.record: the ledger could not be written")
+	}
+	return struct{}{}, nil
+}
+
+// recordedTarget is the target an extension gave, as a row keeps it: values that are short strings, numbers,
+// booleans or short lists of strings (anything else, nested objects included, is dropped, as a gated write's target
+// is), at most sentTargetKeys of them in key order, each key cut to sentKeyMost characters; and the same in a few
+// words. A missing target is an error.
+func recordedTarget(fields map[string]any) (map[string]any, string, error) {
+	if fields == nil {
+		return nil, "", errors.New("target: an object of where it went")
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	target := map[string]any{}
+	var brief []string
+	for _, k := range keys {
+		v, ok := scalarOrStrings(fields[k])
+		name := cutRunes(cleanText(k), sentKeyMost)
+		if !ok || name == "" || len(target) == sentTargetKeys {
+			continue
+		}
+		target[name] = v
+		brief = append(brief, name+" "+fmt.Sprint(v))
+	}
+	return target, strings.Join(brief, ", "), nil
 }
 
 // sentLedgerNow is the clock the prune reads (tests pin it).

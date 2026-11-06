@@ -739,6 +739,17 @@ func (m *Manifest) Connectors() []ConnectorItem {
 	return out
 }
 
+// SendsAsUser are the connectors that say they send messages in the user's name on their own (ConnectorItem.SendsAsUser).
+func (m *Manifest) SendsAsUser() []ConnectorItem {
+	var out []ConnectorItem
+	for _, c := range m.Connectors() {
+		if c.SendsAsUser {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // APIs are the manifest's contributions to api.
 func (m *Manifest) APIs() []APIItem {
 	var out []APIItem

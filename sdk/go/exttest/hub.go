@@ -15,10 +15,13 @@ import (
 	"github.com/nwverse/persona/sdk/go/wire"
 )
 
+// sentTargetKeys is the most keys of a sent.record target the hub keeps.
+const sentTargetKeys = 20
+
 // hub is the hub's side of the protocol, enough to check a program: it calls, and answers the program's calls to
 // the hub as the real one would: it refuses what the manifest does not let the program ask (refuses), keeps a
-// connector's secrets in memory and a channel's messages, answers what answers says, refuses a call of the
-// connector, channel or knowledge-base namespace it does not know, and answers another extension point's with {}. What the
+// connector's secrets in memory, a channel's messages and the sends recorded, answers what answers says, refuses a call
+// of the connector, channel or knowledge-base namespace it does not know, and answers another extension point's with {}. What the
 // program sends that the schemas describe (wire.Calls) is held to them; what does not hold is in problems.
 type hub struct {
 	run     Run
@@ -33,6 +36,7 @@ type hub struct {
 	secrets  map[string][]byte // by contribution
 	events   []Event
 	received []wire.ChannelReceiveParams
+	sent     []wire.ConnectorSentRecordParams
 	problems []string
 }
 
@@ -157,6 +161,26 @@ func (h *hub) answerOf(f func(json.RawMessage) (any, error), method string, para
 		h.mu.Lock()
 		h.received = append(h.received, p)
 		h.mu.Unlock()
+	case ext.SentNamespace + ".record":
+		var p wire.ConnectorSentRecordParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, err
+		}
+		// As the hub keeps it: 20 keys of the target at most, in key order. (The ledger being down, no_database, is
+		// Host.Answer's to simulate.)
+		if len(p.Target) > sentTargetKeys {
+			keys := make([]string, 0, len(p.Target))
+			for k := range p.Target {
+				keys = append(keys, k)
+			}
+			slices.Sort(keys)
+			for _, k := range keys[sentTargetKeys:] {
+				delete(p.Target, k)
+			}
+		}
+		h.mu.Lock()
+		h.sent = append(h.sent, p)
+		h.mu.Unlock()
 	case ext.ConnectorNamespace + ".secrets.load":
 		h.mu.Lock()
 		defer h.mu.Unlock()
@@ -194,7 +218,8 @@ func (h *hub) answerOf(f func(json.RawMessage) (any, error), method string, para
 
 // refuses is the real hub's refusal of a program's call, or nil: a connector or channel the extension does not
 // contribute (no_contribution), a knowledge-base call or a gh token without the permission granted
-// (permission_denied, data {scope}), the knowledge base's connector calls of a connector without archive
+// (permission_denied, data {scope}), a sent.record for a connector that does not declare sends_as_user
+// (permission_denied) or with a target that is not an object or no text (invalid_params), the knowledge base's connector calls of a connector without archive
 // (no_capability).
 func refuses(m *wire.Manifest, method string, params json.RawMessage) error {
 	if m == nil {
@@ -223,6 +248,19 @@ func refuses(m *wire.Manifest, method string, params json.RawMessage) error {
 		// hub_api is the legacy full grant only without scopes (the hub's FullHub).
 		if !(perms.HubAPI && len(perms.Hub) == 0) && !slices.Contains(perms.Hub, scope) {
 			return denied(scope)
+		}
+	case ext.SentNamespace:
+		// Only a connector of its own that declares sends_as_user (the hub's registry check), with a target that is an
+		// object and a text (which may be empty).
+		if !slices.ContainsFunc(connectors, func(it wire.ConnectorItem) bool { return it.ID == c && it.SendsAsUser }) {
+			return &ext.Error{Code: wire.ErrorCodePermissionDenied, Message: method + ": " + c + " is not a connector that declares sends_as_user"}
+		}
+		var p struct {
+			Target map[string]json.RawMessage `json:"target"`
+			Text   *string                    `json:"text"`
+		}
+		if err := json.Unmarshal(params, &p); err != nil || p.Target == nil || p.Text == nil {
+			return &ext.Error{Code: "invalid_params", Message: method + ": target (an object) and text are required"}
 		}
 	case ext.ChannelNamespace:
 		if c == "" && len(channels) == 1 {

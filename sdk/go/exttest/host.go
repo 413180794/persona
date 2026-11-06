@@ -280,6 +280,13 @@ func CheckChannels(t testing.TB, manifest []byte, run Run, config ...json.RawMes
 	return h
 }
 
+// Sent are the sends the program recorded with sent.record (RecordSent), in order.
+func (h *Host) Sent() []wire.ConnectorSentRecordParams {
+	h.h.mu.Lock()
+	defer h.h.mu.Unlock()
+	return slices.Clone(h.h.sent)
+}
+
 // Received are the owner's messages the program handed over (channel.receive), in order.
 func (h *Host) Received() []wire.ChannelReceiveParams {
 	h.h.mu.Lock()

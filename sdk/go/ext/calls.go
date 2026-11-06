@@ -10,7 +10,8 @@ import (
 )
 
 // Typed calls, both ways, for the extension points whose calls the schemas describe (wire.Calls: the connector, the
-// channel and the knowledge base; schema/extension/connector.schema.json, channel.schema.json and kb.schema.json).
+// channel, the knowledge base and the sent-as-user ledger; schema/extension/connector.schema.json, channel.schema.json
+// and kb.schema.json).
 
 // MethodFunc answers one method of a namespace.
 type MethodFunc func(ctx context.Context, params json.RawMessage) (any, error)
@@ -60,6 +61,9 @@ type Empty = wire.Empty
 // connector.<method>, with the connector's id as the contribution.
 const ConnectorNamespace = "connector"
 
+// SentNamespace is the hub's own namespace for the sent-as-user ledger: RecordSent is sent.record.
+const SentNamespace = "sent"
+
 // ConnectorChanged tells the hub a connector's chats, items or inbox changed (wire.ConnectorScope*): it reads them
 // soon.
 func (h *Hub) ConnectorChanged(contribution, scope string) error {
@@ -107,6 +111,16 @@ func (h *Hub) PendingPosts(ctx context.Context, p wire.ConnectorPostsPendingPara
 // ArchivedChats are the chats the knowledge base has under one of the connector's sources, with how far each is.
 func (h *Hub) ArchivedChats(ctx context.Context, p wire.ConnectorArchiveChatsParams) (wire.ConnectorArchivedChats, error) {
 	return callHub[wire.ConnectorArchivedChats](ctx, h, ConnectorNamespace+".archive.chats", p)
+}
+
+// RecordSent tells the hub about a message the connector sent in the user's name outside the hub's write gate (a read
+// tool that also replies, say), for the hub's sent-as-user ledger. The connector must declare sends_as_user in the
+// manifest (connectors[].sends_as_user), else the hub answers permission_denied; the hub itself says it was this
+// extension's and that it was let through on its own (auto), so p carries only where it went and what it said (Target
+// is a JSON object of short values: a chat, a thread, recipients…). Call it after the send went out: a failure here
+// never undoes it, so a send that cannot be recorded is still a send.
+func (h *Hub) RecordSent(ctx context.Context, p wire.ConnectorSentRecordParams) error {
+	return h.Call(ctx, SentNamespace+".record", p, nil)
 }
 
 // GhToken is a computer's gh token, for an extension granted gh_login. Keep it in memory only.
