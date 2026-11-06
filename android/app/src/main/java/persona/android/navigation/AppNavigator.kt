@@ -3,6 +3,7 @@ package persona.android.navigation
 import androidx.navigation3.runtime.NavKey
 import persona.core.navigation.*
 import persona.core.contracts.SessionKey
+import persona.core.hub.errors.ErrorBreadcrumbs
 
 internal class AppNavigator(
     private val stacks: Map<AppTab, MutableList<NavKey>>,
@@ -22,10 +23,13 @@ internal class AppNavigator(
     override fun selectTab(tab: AppTab) {
         if (tab != selectedTab()) openedFrom.clear()
         onSelectTab(tab)
+        ErrorBreadcrumbs.shared.navigation("tab:${tab.name}")
     }
 
     override fun navigate(key: NavKey) {
         val from = selectedTab()
+        // The route's type only, never its arguments (machine, session, item ids).
+        ErrorBreadcrumbs.shared.navigation(key::class.simpleName ?: "route")
         val shown = stacks.mapValues { it.value.lastOrNull() }
         open(key)
         val to = selectedTab()

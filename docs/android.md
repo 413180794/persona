@@ -263,6 +263,15 @@ Android's take on plan section 4 ("session keys must tell groups apart"), decide
 
 The budgets don't cover the outbox, drafts or persistent preferences. Inline Lark images keep using the existing in-memory cache of encoded bytes, with no new on-disk copy of originals. Peak image decoding, SQLite physical usage, cold start and scrolling performance are all unmeasured and still need acceptance on a real device.
 
+## Error reports (#5533)
+
+The app's crashes and ANRs go to the hub's `error_reports` (format and rules: [protocol.md](protocol.md) "Error reports"). The pure parts are in `:core:hub` (`persona.core.hub.errors`: report builder, disk queue, sender, exit-reason planner, ANR trace parser, breadcrumbs); `app/errors/ErrorReporting.kt` wires them into `PersonaApp`. There is no UI.
+
+- **Crash**: an `UncaughtExceptionHandler`, installed first in `PersonaApp.onCreate`, writes the report synchronously (kind `crash`, level `fatal`, `previous_launch` true) and then hands the crash to the previous handler. It never throws; writing is one small file.
+- **Next start**: `getHistoricalProcessExitReasons` turns `REASON_ANR` (kind `anr`, the main thread's Java frames parsed from the trace, nothing else from it) and `REASON_CRASH_NATIVE` into reports, each once (the newest exit timestamp seen is kept in the `error-reports` preferences). `REASON_CRASH` is reported only when the Java handler did not write it (no handler crash time within 10 s before the exit). The first run only records where it is: exits from before the reporter are not sent.
+- **Content**: exception types, messages (`message` ≤ 1 KB), frames (class, method, source file name, line; `in_app` for `persona.*`), at most 5 causes × 64 frames, the release (`versionName`), build (`versionCode`), Android version and `Build.MODEL`. Breadcrumbs are the last 20 navigations through `AppNavigator` (route type names and tab names, never route arguments); pages that switch content without the navigator leave no breadcrumb.
+- **Queue and sending**: one JSON file a report in `files/error-reports/`, at most 50, at most 7 days old. Sent only to the selected group's hub (the one the hub-level pages show), whenever its connection is online and its hello's `features` has `error_reports`; online without it, the queue is deleted. Batches of ≤ 20 reports and < 240 KB through the connection's authenticated route (same token and `X-Jarvis-Client`), on `Dispatchers.IO`. 2xx deletes the batch (and `{"enabled": false}` deletes the rest); 4xx drops it, except 408 / 429; 5xx or no answer keeps it for the next time.
+
 ## Internationalization (简体中文 / English / 日本語, #2453)
 
 Shared conventions (language list, fallback, glossary, protocol fields) are defined in `docs/i18n.md`; this section only covers how Android does it.
@@ -340,7 +349,7 @@ Modules are defined by `android/settings.gradle.kts`, and direct in-repository d
 | `:core:demo` | Local demo data and DemoHub, using sample fixtures in assets | `:core:contracts`, `:core:hub` |
 | `:core:designsystem` | Tokens for three styles (palettes, typography, shapes, motion), component skins (page scaffolds, lists, buttons, decisions, chats, Inbox), shell navigation components, glass (Haze); bundled fonts (OFL) and Phosphor icons | `:core:domain`, `:core:hub` |
 | `:core:domain` | Pure JVM: continuity reducer, chatLines, sorting, Inbox sections, answering policies and pairing parsing | `:core:contracts` |
-| `:core:hub` | Pure JVM: OkHttp HTTP / WS, TLS pinning, routing, heartbeat, pairing and business transports | `:core:contracts` |
+| `:core:hub` | Pure JVM: OkHttp HTTP / WS, TLS pinning, routing, heartbeat, pairing and business transports; error reports (see "Error reports") | `:core:contracts` |
 | `:core:navigation` | Navigation 3 route types, Navigator, notification and machine page routes | No in-repository module dependencies |
 | `:core:terminal` | Pure JVM: VT grid, Unicode width, wrapping and terminal input encoding | No in-repository module dependencies |
 | `:feature:agents` | Computer → space → session list, request cards, create and close confirmation, space page, session and space renaming (immediate local effect) | `:core:contracts`, `:feature:chat`, `:core:domain`, `:core:designsystem`, `:core:navigation` |
