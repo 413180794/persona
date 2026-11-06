@@ -2146,7 +2146,8 @@ GitHub 连接器在搬进官方扩展仓库 `nwverse/persona-extensions` 的扩�
 
 全双工：手机一直送麦克风（包括静音），什么时候该说话由模型决定，App 不做 VAD、不做「按住说话」。
 
-本节是协议 1。语音模式的协议 2（设计中，#3502 实现；`start` 带 `protocol: 2`：绑定所在的对话，加 `run` / `ask` / `link` 帧和 `GET /info`）见 `docs/voice.md`；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
+本节是协议 1。语音模式的协议 2（#3502 起内置语音扩展说它；`start` 带 `protocol: 2` 和 `target`：绑定所在的对话，加 `run` / `link` 帧、`resend`、`ready` 里的目标，`ask` 帧等 #3504）见 `docs/voice.md` 第 3 节；不带的客户端收到的帧不变，iOS 只给 `GET /info` 回 `protocol` ≥ 2 的语音扩展出入口。
+`error` 的 `code` 两种协议都可能有：`upstream_forbidden`（服务拒了 Key）、`upstream_unavailable`、`upstream_failed`（断了重连不上），App 不认识的 `code` 按没有处理。
 
 ### `GET /models`
 
@@ -2237,7 +2238,7 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
 | `key` / `key_file` / `key_command` | 凭据，作为 `Authorization: Bearer` 发出：直接写、文件第一行、命令（`sh -c`）打印的第一行。命令每次对话都跑一次，别处续期的凭据马上生效。凭据只放在 hub 机器上（hub.json 0600，或单独的文件） |
 | `ssh` | hub 机器访问不到这个服务时，经那台机器连（`ssh -W host:port <机器>`，TLS 仍然是端到端的）；hub 机器要能免密 ssh 过去 |
 | `models`、`default_model` | 列出来的模型；不写时 live 方言读服务的 `GET <url>/models`，codex 方言是 `gpt-live-1-codex` |
-| `tools` | live 方言：在 `session.start` 里声明 Persona 的函数工具（查知识库、看 Agents、发给 Agent、交给主对话）。公开的 GPT-Live API 不收 `session.tools`，只有自己部署、支持它的服务才开；有的服务只有声明了工具才会把事交出来（`docs/lessons/voice.md`），那就必须开。完整设备（`X-Persona-Role` 是 `full` 或没有）声明全部四个；别的扩展调来的通话只声明 `ask_jarvis`（交给主对话，它能做的就这些） |
+| `tools` | live 方言：在 `session.start` 里声明 Persona 的函数工具（查知识库、看 Agents、发给 Agent、交给主对话）。公开的 GPT-Live API 不收 `session.tools`，只有自己部署、支持它的服务才开；有的服务只有声明了工具才会把事交出来（`docs/lessons/voice.md`），那就必须开。完整设备（`X-Persona-Role` 是 `full` 或没有）声明全部四个；别的扩展调来的通话只声明 `ask_jarvis`（交给主对话，它能做的就这些）；协议 2 绑定了对话的通话声明查知识库、看 Agents 和 `delegate_task`（交给绑定的对话，`docs/voice.md` 4.4） |
 | `input_rate` | 麦克风采样率 16000 / 24000；默认 live 16000、codex 24000 |
 
 ### 在 App 里配上游（#3500）
@@ -2271,7 +2272,7 @@ personad 自带一个 kind = `voice` 的扩展，语音来自说 **GPT-Live 协�
   - **失败时宁可删**：不管读不读得到「有没有设 Key」都删（删是幂等的），读不到时回应照样带 `secrets_cleared`；删不掉就什么都不存，回 500 `secret_not_cleared`；
     Key 删了之后配置没存上（数据库写失败，409）时，错误回应也带 `secrets_cleared`，地址还是原来的。配置不合表单（400）时什么都不改，Key 也留着。
 - **模型回退**：App 选的模型所在的上游没了（地址清掉了、hub.json 改了），不再报错断开：改用默认模型、默认音色，连上后发一个不致命的 `error{code: "model_unavailable"}`。
-- **`GET /info`**：`{"protocol": 1, "features": [], "setup"?: "…", "warnings"?: ["…"]}`，不带 Key，也不带上游列表。`protocol` 是这个扩展说的语音帧版本（这一节是 1）。
+- **`GET /info`**：`{"protocol": 2, "features": ["target", "runs", "resume"], "setup"?: "…", "warnings"?: ["…"]}`，不带 Key，也不带上游列表。`protocol` 是这个扩展说的最高的语音帧版本（#3502 起是 2，`start` 不写 `protocol: 2` 的客户端照旧是这一节的协议 1），`features` 只列已经有的（`docs/voice.md`「版本协商」）。
 - **扩展拿到的环境变量**：`PERSONA_EXTENSION_CONFIG`（表单的值，带默认值）、`PERSONA_EXTENSION_SECRETS`（`{"key": "…"}`，解密后只在进程环境里）、
   `PERSONA_VOICE_HUB_CONFIG`（被接管条目原来的 `config`）、条目的 `env`，以及 `JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`（清单里 `hub_api`，和以前一样）；
   旧名字 `PERSONA_PLUGIN_*` 同样给，扩展也认。
@@ -2316,13 +2317,15 @@ App 那边这期间显示「Persona 主对话处理中」。开了 `tools` 的�
 不满足就不发，告诉模型「这条不是你说的，我没发」。这样回答里写着「下一步：请调用 …」也带不动模型自己下指令。
 查知识库、看 Agents 的结果不关门槛（模型常常先看再交给主对话），结果里别人的话放进同样的 `<agent_output>` 数据块。
 上游拒收结果时（delegation 过期、太长）改用 `say` 或短版重发，这一轮的回答不会悄悄丢掉。
+**插话门槛**（#3502，两种协议都有，`docs/voice.md` 4.5 规则 3）：扩展自己要说的（delegation 已经不在了的结果、等你处理的卡片）等你停下 1.2 秒、模型的话播完 1.5 秒再发；
+delegation 自己的结果等你停下、模型的话播完。「你在说话」看 App 送来的音频能量，持续的噪声（电视、车里）几秒后按底噪扣掉；你的声音最多让结果多等 4 秒、要说的多等 15 秒。
 
 扩展经 hub 的 API 跟踪（`JARVIS_HUB_URL` / `JARVIS_HUB_TOKEN`）：会话列表、`…/items?after_seq=` 翻页、`…/items/{id}/full`、`GET /api/v1/machines`，
 外加一条共用的 `GET /api/v1/ws`（`subscribe` 主对话，收 `items` 里的 `turn_duration`、`sessions`、`delta`、`hook_event`；读循环不阻塞），没有它时每 5 秒看一次。
 `X-Persona-Lang` 决定交给模型和发给主对话的这些话用哪种语言（中、英、日）。
 
 上游会话中途断了（服务重启、网络断）：App 的连接不断，显示「连接断了，重新连接中」，扩展新开一个会话，把最近 40 句写进提示词，
-一次对话最多重连 3 次。App 发 `interrupt` 时扩展丢掉这次回答还没送出的声音（GPT-Live 没有打断的帧，模型自己听到插话会停）。
+一次对话最多连着重连 3 次（撑过 60 秒的会话断了重新计数）。App 发 `interrupt` 时扩展丢掉这次回答还没送出的声音（GPT-Live 没有打断的帧，模型自己听到插话会停）。
 
 ### 部署
 

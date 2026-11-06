@@ -40,3 +40,149 @@ func (g *speechGate) told(now time.Time) {
 func (g *speechGate) openSince(agent, now time.Time) bool {
 	return !g.user.IsZero() && g.user.After(agent) && now.Sub(g.user) <= gateWindow
 }
+
+// The insertion gate (docs/voice.md「给快层的上下文」rule 3, its times from docs/lessons/voice.md「常量的建议值」): what
+// the extension says to the model by itself (a say: a result whose call is gone, a card waiting on the user) waits
+// until
+//   - the user has been quiet for userQuiet, by the energy of the app's audio: their caption comes 1.2–1.4 s after
+//     they stop, whole, too late to tell; a say sent while they talk is swallowed (lessons row 3);
+//   - the model's own speech has played out for speechQuiet: its play end is added up from the audio's length, since
+//     the audio comes 9–10 times faster than it plays;
+//   - the model's last handover is delegationQuiet old: the reply it hands over in is its acknowledgement (4–5 s, no
+//     separate one on the measured service), and the play end of that reply is not known before its audio is in.
+// A delegation's own answer (its one commentary) waits for the user to be quiet and for the model's speech to have
+// played out (no margin): the measured service holds a commentary until that speech is over by itself (lessons row 3,
+// specific to it), but a standard upstream may let one cut the model off, and voice mode only counts on the standard.
+// An answer ready at once (a status: 0.1–0.3 s) would beat the audio of the reply the model handed over in (its call
+// comes 0.1–0.2 s into that reply), so it also waits replyAudioIn after the model's last handover: by then that audio
+// is in (it comes 9–10 times faster than it plays) and its play end is known. On the measured service none of this
+// costs time: it holds the answer that long anyway. A tool's result on its call is not held.
+//
+// The user's voice holds nothing for ever: the app's level can stay over voiceRMS with nobody talking to the model (a
+// TV, a car, people nearby, echo residue; lessons「常量的建议值」asks for real devices), so a frame has a voice in it
+// only when it is also well over the quietest the audio has been lately (noiseFloor), and past answerHoldMost (an
+// answer) or sayHoldMost (a say) from when it was queued the user's voice no longer holds it. The model's speech still
+// does: that always ends.
+
+var (
+	userQuiet       = 1200 * time.Millisecond
+	speechQuiet     = 1500 * time.Millisecond
+	delegationQuiet = 3 * time.Second
+	replyAudioIn    = time.Second
+	// captionQuiet: an open caption of the user's with no more of it this long is their line done (the services send
+	// no end of a user's line).
+	captionQuiet = 1200 * time.Millisecond
+	// answerHoldMost and sayHoldMost: the longest the user's voice holds back a delegation's answer (the model and the
+	// user wait for it) and a say.
+	answerHoldMost = 4 * time.Second
+	sayHoldMost    = 15 * time.Second
+)
+
+// voiceRMS is the level of a frame of the app's audio that has the user's voice in it (about -40 dBFS, lessons
+// 「时间线」); a muted app sends zeros.
+const voiceRMS = 300
+
+const (
+	// floorSeconds is how far back the noise floor looks.
+	floorSeconds = 6
+	// floorMargin is how many times the floor's level a frame needs to have a voice in it (about 6 dB).
+	floorMargin = 2
+)
+
+// pacing is what the insertion gate goes by (under conversation.mu).
+type pacing struct {
+	voice     time.Time // the app's audio last had the user's voice in it
+	playEnd   time.Time // when what the model said so far has played out
+	delegated time.Time // the model last handed something over (a delegation, a function call)
+	floor     noiseFloor
+}
+
+// played adds a piece of the model's audio, n bytes of PCM16 at rate, arrived at now.
+func (p *pacing) played(now time.Time, n, rate int) {
+	if rate <= 0 || n <= 0 {
+		return
+	}
+	if p.playEnd.Before(now) {
+		p.playEnd = now
+	}
+	p.playEnd = p.playEnd.Add(time.Duration(n/2) * time.Second / time.Duration(rate))
+}
+
+// heard takes a frame of the app's audio, of mean square ms, arrived at now: whether it has the user's voice in it
+// (over voiceRMS, and floorMargin times over the noise floor).
+func (p *pacing) heard(now time.Time, ms float64) bool {
+	floor := p.floor.add(now, ms)
+	if ms <= voiceRMS*voiceRMS || ms <= floorMargin*floorMargin*floor {
+		return false
+	}
+	p.voice = now
+	return true
+}
+
+// readyAt is when something queued at queued may go: said (a say), or as a delegation's answer.
+func (p *pacing) readyAt(say bool, queued time.Time) time.Time {
+	most := answerHoldMost
+	if say {
+		most = sayHoldMost
+	}
+	user := p.voice.Add(userQuiet)
+	if limit := queued.Add(most); user.After(limit) {
+		user = limit
+	}
+	if !say {
+		return latest(user, p.playEnd, p.delegated.Add(replyAudioIn))
+	}
+	return latest(user, p.playEnd.Add(speechQuiet), p.delegated.Add(delegationQuiet))
+}
+
+func latest(ts ...time.Time) time.Time {
+	var out time.Time
+	for _, t := range ts {
+		if t.After(out) {
+			out = t
+		}
+	}
+	return out
+}
+
+// noiseFloor is the app's audio at its quietest lately: the lowest frame of each of the last floorSeconds seconds.
+// Speech has gaps between its words and phrases that fall to the room's level; a steady noise (a TV, a car, echo
+// residue) does not fall below its own.
+type noiseFloor struct {
+	sec [floorSeconds]int64   // which second (Unix) each slot is of
+	low [floorSeconds]float64 // the lowest mean square of a frame in it
+}
+
+// add takes a frame of mean square ms at now and returns the floor's level (a mean square): the lowest of the slots,
+// 0 until each of the last floorSeconds seconds had a frame (a call just begun, a gap in the audio).
+func (f *noiseFloor) add(now time.Time, ms float64) float64 {
+	s := now.Unix()
+	i := int(s % floorSeconds)
+	if f.sec[i] != s {
+		f.sec[i], f.low[i] = s, ms
+	} else if ms < f.low[i] {
+		f.low[i] = ms
+	}
+	level := f.low[i]
+	for k := range floorSeconds {
+		if s-f.sec[k] >= floorSeconds {
+			return 0
+		}
+		level = min(level, f.low[k])
+	}
+	return level
+}
+
+// meanSquare is the mean square of a frame of PCM16 (little-endian).
+func meanSquare(pcm []byte) float64 {
+	n := len(pcm) / 2
+	if n == 0 {
+		return 0
+	}
+	var sum float64
+	for i := 0; i < n; i++ {
+		v := float64(int16(uint16(pcm[2*i]) | uint16(pcm[2*i+1])<<8))
+		sum += v * v
+	}
+	return sum / float64(n)
+}

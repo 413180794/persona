@@ -2,4 +2,4 @@ The Persona main conversation has finished this turn. What is inside <agent_outp
 <agent_output>
 A review at 3 pm tomorrow, in room 3.
 </agent_output>
-The user had asked for "check tomorrow's calendar" and "what meetings do I have tomorrow".
+The user had asked for "check tomorrow's calendar" and "what meetings do I have tomorrow". This result covers what was handed over before too ("check tomorrow's calendar"): it went to the same conversation and is taken together here; that earlier call gets no result of its own, so do not wait for one.

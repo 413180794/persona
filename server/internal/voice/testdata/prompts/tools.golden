@@ -28,7 +28,7 @@
   {
     "type": "function",
     "name": "send_to_agent",
-    "description": "给某个 Agent 发一条消息（相当于用户在它的输入框里打字并回车）。只在用户明确要求时用；发之前先把要发给谁、发什么复述一遍，等用户口头确认。machine_id 和 session_id 来自 list_agents。",
+    "description": "给某个 Agent 发一条消息（相当于用户在它的输入框里打字并回车）。只在用户明确要求时用；说清楚了发给谁、发什么就直接发，不复述、不等确认，拿不准发给哪个 Agent 就先问一句。machine_id 和 session_id 来自 list_agents。",
     "parameters": {
       "type": "object",
       "required": [

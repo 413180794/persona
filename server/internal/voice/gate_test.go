@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -78,6 +79,49 @@ func TestGateClosesWhenTheModelTakesTheAnswerIn(t *testing.T) {
 	if len(msgs) != 2 || !strings.HasPrefix(msgs[1].Text, "查一下邮件") {
 		t.Fatalf("sent %+v", msgs)
 	}
+}
+
+// The app's level stays over voiceRMS with nobody talking to the model (a TV, a car, echo residue): a delegation's
+// answer is held answerHoldMost at most, then goes while the noise goes on (protocol 1, as on Android: before the gate
+// it went at once).
+func TestEndlessVoiceDoesNotHoldTheAnswer(t *testing.T) {
+	setVar(t, &answerHoldMost, time.Second)
+	hub := newFakeHub(t)
+	up := delegatingUpstream(t)
+	pl := testPlugin(t, liveProvider(up), hub.server(t))
+	a := dialApp(t, pl, map[string]any{"type": "start"})
+	a.until(ofType("ready"))
+	a.send(map[string]any{"type": "text", "text": "明天有什么会"})
+	stop := make(chan struct{})
+	streamed := make(chan struct{})
+	go func() { // 20 ms frames, as loud as a voice, for up to 8 s
+		defer close(streamed)
+		for range 400 {
+			select {
+			case <-stop:
+				return
+			case <-time.After(20 * time.Millisecond):
+			}
+			_ = a.c.Write(context.Background(), websocket.MessageBinary, tone(320, 3000))
+		}
+	}()
+	asked := time.Now()
+	got := content(up.nextMatch(on("dlg1")))
+	took := time.Since(asked)
+	select {
+	case <-streamed:
+		t.Fatal("the answer waited for the noise to end")
+	default:
+	}
+	close(stop)
+	<-streamed
+	if !strings.Contains(got, "明天下午三点有会") {
+		t.Fatalf("answer: %s", got)
+	}
+	if took < answerHoldMost {
+		t.Fatalf("the answer went %v after the question: not held by the voice", took)
+	}
+	a.protocolOne()
 }
 
 // docs/voice.md 4.5 rule 4: a service that refuses the result on its delegation (gone: expired, closed) has it said

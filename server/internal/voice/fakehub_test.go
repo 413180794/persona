@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -44,6 +45,10 @@ type fakeHub struct {
 	ws     map[*websocket.Conn]map[string]bool
 	wsSaw  []map[string]any
 	looks  int // GET /api/v1/sessions?machine_id= (a run's check, or a send's look first)
+
+	cards      []proto.Interaction // GET /api/v1/interactions
+	interrupts []string            // the sessions POST …/interrupt stopped
+	offline    bool                // the machine is not connected
 }
 
 type fakeSession struct {
@@ -54,9 +59,14 @@ type fakeSession struct {
 	background int
 	turnError  string
 	items      []proto.Item
+	look       func(s *proto.Session) // what else the list says of it (an agent's title, its activity…)
 }
 
-type sentMsg struct{ Session, Text, ID string }
+type sentMsg struct {
+	Session, Text, ID string
+	ClearDraft        string
+	Dismiss           bool
+}
 
 func newFakeHub(t *testing.T) *fakeHub {
 	return &fakeHub{t: t, main: "main1", sessions: map[string]*fakeSession{"main1": {id: "main1", assistant: true, status: "idle"}},
@@ -86,11 +96,13 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/messages", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Text        string `json:"text"`
-			ClientMsgID string `json:"client_msg_id"`
+			Text          string `json:"text"`
+			ClientMsgID   string `json:"client_msg_id"`
+			ClearDraft    string `json:"clear_draft"`
+			DismissNotice bool   `json:"dismiss_notice"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&in)
-		m := sentMsg{Session: r.PathValue("sid"), Text: in.Text, ID: in.ClientMsgID}
+		m := sentMsg{Session: r.PathValue("sid"), Text: in.Text, ID: in.ClientMsgID, ClearDraft: in.ClearDraft, Dismiss: in.DismissNotice}
 		h.mu.Lock()
 		delay, onSend, cut := h.delay, h.onSend, h.cut
 		h.mu.Unlock()
@@ -132,7 +144,22 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		_ = json.NewEncoder(w).Encode(map[string]any{"sessions": h.list()})
 	})
 	mux.HandleFunc("GET /api/v1/machines", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, `{"machines":[{"id":"m","name":"M","online":true}]}`)
+		h.mu.Lock()
+		online := !h.offline
+		h.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"machines": []proto.Machine{{ID: "m", Name: "工作站", Online: online}}})
+	})
+	mux.HandleFunc("GET /api/v1/interactions", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"interactions": append([]proto.Interaction{}, h.cards...)})
+	})
+	mux.HandleFunc("POST /api/v1/sessions/m/{sid}/interrupt", func(w http.ResponseWriter, r *http.Request) {
+		h.mu.Lock()
+		h.interrupts = append(h.interrupts, r.PathValue("sid"))
+		h.mu.Unlock()
+		h.status(r.PathValue("sid"), "idle")
+		_, _ = io.WriteString(w, `{}`)
 	})
 	mux.HandleFunc("GET /api/v1/sessions/m/{sid}/items", func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
@@ -147,12 +174,20 @@ func (h *fakeHub) server(t *testing.T) *httptest.Server {
 		if n := len(s.items); n > 0 {
 			last = s.items[n-1].Seq
 		}
-		if !q.Has("after_seq") { // turns=1: the last exchange
+		if !q.Has("after_seq") { // turns=n: the last n exchanges
 			to := last
 			if h.toSeq != nil {
 				to = h.toSeq(s.id, last)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": []proto.Item{}, "to_seq": to})
+			turns, _ := strconv.Atoi(q.Get("turns"))
+			from := len(s.items)
+			for n := 0; from > 0 && n < turns; {
+				from--
+				if it := s.items[from]; it.Role == "user" && it.Kind == proto.KindText {
+					n++
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": append([]proto.Item{}, s.items[from:]...), "to_seq": to})
 			return
 		}
 		after, _ := strconv.Atoi(q.Get("after_seq"))
@@ -241,11 +276,13 @@ func (h *fakeHub) list() []proto.Session {
 
 func (h *fakeHub) listLocked() []proto.Session {
 	out := []proto.Session{}
-	for _, id := range []string{"main1", "a1"} {
+	ids := make([]string, 0, len(h.sessions))
+	for id := range h.sessions {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
 		s := h.sessions[id]
-		if s == nil {
-			continue
-		}
 		ps := proto.Session{MachineID: "m", SessionID: s.id, Assistant: s.assistant, Status: s.status, State: s.status,
 			PendingInteractions: s.pending, TurnError: s.turnError, Rev: int64(len(s.items))}
 		for range s.background {
@@ -253,6 +290,9 @@ func (h *fakeHub) listLocked() []proto.Session {
 		}
 		if n := len(s.items); n > 0 {
 			ps.LastText = clipRunes(s.items[n-1].Text, 200)
+		}
+		if s.look != nil {
+			s.look(&ps)
 		}
 		out = append(out, ps)
 	}

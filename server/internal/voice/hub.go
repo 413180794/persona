@@ -41,13 +41,19 @@ func newHubClient(base, token string) *hubClient {
 	return &hubClient{url: strings.TrimRight(base, "/"), token: token, http: &http.Client{}}
 }
 
-// hubError is a call the hub refused: its status, and what its body says (apierr's error, code, delivered).
+// hubError is a call the hub refused: its status, and what its body says (apierr's error, code, delivered, and a
+// refused send's details: node/sendsafe.go).
 type hubError struct {
 	Status    int
 	Message   string // the hub's words ("" when its body had none)
 	Code      string
 	Delivered string // a send: "unknown" when it may have been typed
-	call      string // method and path, for the log
+	// A send refused with dialog_open: the dialog's first line, and notice when Enter only closes it (a send with
+	// dismiss_notice goes through). With input_draft: the words in the input box, and what clear_draft takes to clear
+	// them (none when they cannot be cleared).
+	Dialog, Draft, Clearable string
+	Notice                   bool
+	call                     string // method and path, for the log
 }
 
 func (e *hubError) Error() string {
@@ -133,9 +139,14 @@ func (h *hubClient) call(ctx context.Context, method, path string, body, out any
 			Error     string `json:"error"`
 			Code      string `json:"code"`
 			Delivered string `json:"delivered"`
+			Dialog    string `json:"dialog"`
+			Notice    bool   `json:"notice"`
+			Draft     string `json:"draft"`
+			Clearable string `json:"clearable"`
 		}
 		_ = json.Unmarshal(raw, &e)
-		return &hubError{Status: res.StatusCode, Message: e.Error, Code: e.Code, Delivered: e.Delivered, call: method + " " + path}
+		return &hubError{Status: res.StatusCode, Message: e.Error, Code: e.Code, Delivered: e.Delivered, Dialog: e.Dialog,
+			Notice: e.Notice, Draft: e.Draft, Clearable: e.Clearable, call: method + " " + path}
 	}
 	if out == nil {
 		return nil
@@ -192,18 +203,38 @@ func (h *hubClient) session(ctx context.Context, machine, id string) (*proto.Ses
 
 // machineOnline: the hub has machine id connected (false when it does not know it).
 func (h *hubClient) machineOnline(ctx context.Context, id string) (bool, error) {
+	m, err := h.machine(ctx, id)
+	return m != nil && m.Online, err
+}
+
+// machine is machine id as the hub lists it; nil when it does not know it.
+func (h *hubClient) machine(ctx context.Context, id string) (*proto.Machine, error) {
 	var out struct {
 		Machines []proto.Machine `json:"machines"`
 	}
 	if err := h.call(ctx, "GET", "/api/v1/machines", nil, &out); err != nil {
-		return false, err
+		return nil, err
 	}
-	for _, m := range out.Machines {
-		if m.ID == id {
-			return m.Online, nil
+	for i := range out.Machines {
+		if out.Machines[i].ID == id {
+			return &out.Machines[i], nil
 		}
 	}
-	return false, nil
+	return nil, nil
+}
+
+// interactions are the cards waiting on the user, on every machine.
+func (h *hubClient) interactions(ctx context.Context) ([]proto.Interaction, error) {
+	var out struct {
+		Interactions []proto.Interaction `json:"interactions"`
+	}
+	err := h.call(ctx, "GET", "/api/v1/interactions", nil, &out)
+	return out.Interactions, err
+}
+
+// interrupt stops the conversation's turn (the app's 停止 button).
+func (h *hubClient) interrupt(ctx context.Context, machine, session string) error {
+	return h.call(ctx, "POST", sessionPath(machine, session)+"/interrupt", map[string]any{}, nil)
 }
 
 func sessionPath(machine, session string) string {
@@ -228,11 +259,18 @@ func (p itemsPage) last() int {
 
 // lastSeq is the conversation's last line now (0 for an empty one): a run's answer comes after it.
 func (h *hubClient) lastSeq(ctx context.Context, machine, session string) (int, error) {
-	var page itemsPage
-	if err := h.call(ctx, "GET", sessionPath(machine, session)+"/items?turns=1&lazy_images=1", nil, &page); err != nil {
+	page, err := h.lastTurns(ctx, machine, session, 1)
+	if err != nil {
 		return 0, err
 	}
 	return page.last(), nil
+}
+
+// lastTurns is the conversation's last n exchanges.
+func (h *hubClient) lastTurns(ctx context.Context, machine, session string, n int) (itemsPage, error) {
+	var page itemsPage
+	err := h.call(ctx, "GET", fmt.Sprintf("%s/items?turns=%d&lazy_images=1", sessionPath(machine, session), n), nil, &page)
+	return page, err
 }
 
 // itemsAfter is a page of the lines after seq after.
@@ -249,10 +287,26 @@ func (h *hubClient) itemFull(ctx context.Context, machine, session, id string) (
 	return it, err
 }
 
+// sendOpts are a send's options (docs/protocol.md「发消息」): the draft in the agent's input box to clear first (as
+// the refusal gave it), and closing a notice that Enter only closes.
+type sendOpts struct {
+	ClearDraft    string
+	DismissNotice bool
+}
+
 // send types text into a conversation as message id (voice-…: the conversation shows it came by voice,
-// docs/channels.md「来源标记」; the hub sends an id once).
-func (h *hubClient) send(ctx context.Context, machine, session, text, id string) error {
-	return h.call(ctx, "POST", sessionPath(machine, session)+"/messages", map[string]string{"text": text, "client_msg_id": id}, nil)
+// docs/channels.md「来源标记」; the hub sends an id once, and forgets one it refused: the same id goes again).
+func (h *hubClient) send(ctx context.Context, machine, session, text, id string, opts ...sendOpts) error {
+	body := map[string]any{"text": text, "client_msg_id": id}
+	for _, o := range opts {
+		if o.ClearDraft != "" {
+			body["clear_draft"] = o.ClearDraft
+		}
+		if o.DismissNotice {
+			body["dismiss_notice"] = true
+		}
+	}
+	return h.call(ctx, "POST", sessionPath(machine, session)+"/messages", body, nil)
 }
 
 // assistant: where the Persona tab's assistant runs and its main conversation (empty until there is one).

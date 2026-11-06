@@ -1,0 +1,1 @@
+"批准" was not sent to Claude Code: it only says yes or no, and Claude Code is waiting on a card (a plan, a permission). Cards are answered by tapping them on the screen, not by voice. Tell the user in one sentence to tap it on the screen.

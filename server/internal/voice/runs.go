@@ -18,8 +18,10 @@ import (
 // that turn's whole answer: not the conversation's last 200 characters, not another turn's. Its words go back on the
 // delegation it came from (that delegation's one commentary) while that is still open, else as something to say.
 //
-// The target is the Persona main conversation (protocol 1). Each conversation has a tracker: one goroutine that owns
-// its runs and checks them when the hub link says their conversation changed, and every 5 s regardless.
+// The target is the conversation a protocol 2 call is bound to (target.go), else the Persona main conversation of the
+// moment (protocol 1). Each conversation has a tracker: one goroutine that owns its runs and checks them when the hub
+// link says their conversation changed, and every 5 s regardless. On protocol 2 the app follows each run by its run
+// frames (docs/voice.md「扩展 → App」).
 
 // voiceRun is one handed-over task being followed.
 type voiceRun struct {
@@ -36,6 +38,65 @@ type voiceRun struct {
 	ended    bool      // the hub said a turn ended there since
 	waiting  bool      // the user was told it waits for them (until it works again)
 	rev      int64     // the conversation's transcript before the send (proto.Session.Rev)
+
+	// task is its own task (Tasks has the folded ones' too); message what was sent (a resend sends it again).
+	task, message string
+	// State is the run frame's (protocol 2), with why it was refused or failed: Code, Message (the hub's words),
+	// Draft and Clearable (409 input_draft).
+	State, Code, Message, Draft, Clearable string
+	// unsent: the app handed it back while it was being sent: past channel.QueuedMost without its message in the
+	// conversation it is unknown, not answered with the conversation's last words (docs/voice.md「重连和续接」).
+	unsent bool
+	// foldedCalls is how many earlier runs folded into it handed work over on calls that get no answer of their own.
+	foldedCalls int
+	framed      int // the base_seq its last run frame said
+	framedIDs   int // how many msg_ids it said
+}
+
+// The run frame's states (docs/voice.md「扩展 → App」).
+const (
+	runSending  = "sending"
+	runSent     = "sent"
+	runWorking  = "working"
+	runNeedsYou = "needs_you"
+	runBlocked  = "blocked"
+	runHeld     = "held"
+	runDone     = "done"
+	runFailed   = "failed"
+	runRefused  = "refused"
+	runUnknown  = "unknown"
+	runFolded   = "folded"
+)
+
+// set moves r to state, telling the app (protocol 2) and the next session's instructions (what is still open).
+func (t *tracker) set(r *voiceRun, state string) {
+	open := ""
+	if openState(state) {
+		open = r.task
+	}
+	t.c.setOpen(r.ID, open)
+	if r.State == state && r.Base == r.framed && len(r.MsgIDs) == r.framedIDs {
+		return // a hold moves the base on, a fold adds msg_ids: the app hands them back on a resume
+	}
+	r.State, r.framed, r.framedIDs = state, r.Base, len(r.MsgIDs)
+	t.c.runFrame(r)
+}
+
+// runFrame tells the app how a run stands (protocol 2 only).
+func (c *conversation) runFrame(r *voiceRun) {
+	if c.version < 2 {
+		return
+	}
+	f := map[string]any{"type": "run", "id": r.ID, "task": r.task, "state": r.State, "msg_ids": append([]string{}, r.MsgIDs...),
+		"base_seq": r.Base, "started_at": stamp(r.Started)}
+	// clearable is the hub's own (only a one-line draft has it): what the app hands back as clear_draft (resend), as
+	// every client does; draft is all the box holds, an IDE's selection marker too.
+	for k, v := range map[string]string{"code": r.Code, "message": r.Message, "draft": r.Draft, "clearable": r.Clearable} {
+		if v != "" {
+			f[k] = v
+		}
+	}
+	c.sendApp(f)
 }
 
 const (
@@ -56,10 +117,14 @@ type tracker struct {
 	runs  []*voiceRun
 	last  time.Time             // the last check of everything
 	ended map[linkKey]time.Time // when the hub last said a turn ended there (one may end while its message is sent)
+	// refused are the runs the hub refused (409), by id, that the app may send again (resend).
+	refused map[string]*voiceRun
 }
 
+const refusedMost = 20
+
 func newTracker(c *conversation, link *linkListener) *tracker {
-	return &tracker{c: c, link: link, ops: make(chan func(), 16), ended: map[linkKey]time.Time{}}
+	return &tracker{c: c, link: link, ops: make(chan func(), 16), ended: map[linkKey]time.Time{}, refused: map[string]*voiceRun{}}
 }
 
 // loop owns the runs until the conversation ends: then they are dropped (they are not kept anywhere; what was sent goes
@@ -129,10 +194,16 @@ func (t *tracker) adopt(r *voiceRun) {
 		if !o.Held {
 			r.Tasks = append(slices.Clone(o.Tasks), r.Tasks...)
 		}
+		r.foldedCalls += o.foldedCalls
+		if o.Delegation != "" {
+			r.foldedCalls++ // its call gets no answer of its own: r's answer covers it
+		}
 		r.appIDs = append(o.appIDs, r.appIDs...)
 		t.link.unwatch(linkKey{o.MachineID, o.SessionID}) // r holds its own watch
+		t.set(o, runFolded)
 	}
 	t.runs = append(keep, r)
+	t.set(r, firstNonEmpty(r.State, runSent))
 	if at, ok := t.ended[linkKey{r.MachineID, r.SessionID}]; ok && !at.Before(r.Started) {
 		r.ended, r.Seen = true, true // a turn ended while its message was being sent
 	}
@@ -142,9 +213,15 @@ func (t *tracker) adopt(r *voiceRun) {
 func (t *tracker) drop(r *voiceRun) {
 	t.runs = slices.DeleteFunc(t.runs, func(o *voiceRun) bool { return o == r })
 	t.link.unwatch(linkKey{r.MachineID, r.SessionID})
+	t.c.setOpen(r.ID, "")
 }
 
 func working(s *proto.Session) bool { return s.Status == proto.StatusWorking || s.Starting }
+
+// waitingOnUser: its turn is open, stopped on the user (a permission, a plan, a question, a dialog on the screen).
+func waitingOnUser(s *proto.Session) bool {
+	return s.Status == proto.StatusBlocked || s.State == proto.StateNeedsYou || s.PendingInteractions > 0
+}
 
 // check is channel.Run's rules against the conversation now (the assistant's checkChannelRun, over HTTP): wait, read
 // the answer, or give up; an answer, a stop or a card waiting for the user is told to the voice model.
@@ -161,7 +238,7 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 	if sess != nil {
 		look.Working, look.Offline, look.Background = working(sess), sess.Status == proto.StatusOffline, channel.Background(*sess)
 		if !look.Working {
-			look.Waiting = sess.Status == proto.StatusBlocked || sess.State == proto.StateNeedsYou || sess.PendingInteractions > 0
+			look.Waiting = waitingOnUser(sess)
 		}
 		if !r.Seen && !look.Working && sess.Rev != 0 && sess.Rev != r.rev {
 			// Its transcript moved since the send: a short turn may have come and gone between two looks (no hub link
@@ -174,9 +251,14 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 	switch {
 	case look.Waiting && !r.waiting:
 		r.waiting = true // once until it works again: the user answers on the phone
-		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), Status: "needs_you", Tasks: r.Tasks})), false, false)
+		t.set(r, runNeedsYou)
+		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: string(l), To: t.c.target.to(), Status: "needs_you",
+			Tasks: r.Tasks})), false, false)
 	case look.Working:
 		r.waiting = false
+		if !r.Held {
+			t.set(r, runWorking)
+		}
 	}
 	step := r.Check(look)
 	switch step.Do {
@@ -207,9 +289,19 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 		return
 	}
 	r.notFound = !rd.Found
+	if rd.Found {
+		r.unsent = false
+	}
 	if !rd.Found {
 		if now.Sub(r.Started) < channel.QueuedMost {
 			return // it waits behind another turn: it starts the next one
+		}
+		if r.unsent {
+			// Handed back while it was being sent, and never showed: it may or may not have got there.
+			t.c.pl.logf("run %s: handed back while sending, its message never showed: unknown", r.ID)
+			t.drop(r)
+			t.notSent(r, sendFail{state: runUnknown, code: "unknown", prompt: "unknown"})
+			return
 		}
 		t.c.pl.logf("run %s: its message never showed in the conversation: answering with its last words", r.ID)
 		snap := r.Run
@@ -229,16 +321,19 @@ func (t *tracker) check(ctx context.Context, r *voiceRun) {
 // finish tells the voice model a run's result: its answer, or why there is none. A held one (its background work goes
 // on) is answered now and followed on for the turn that work starts.
 func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
-	l := string(t.c.language())
+	l, to := string(t.c.language()), t.c.target.to()
 	t.c.toolsDone(r.appIDs)
 	r.appIDs = nil
+	state := runDone
 	switch {
 	case res.Quiet:
 		// nothing to say: a held run whose background work ended without words
 	case res.Note != "" && strings.TrimSpace(res.Answer) == "" && !res.Held:
-		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: l, Status: "failed", Tasks: r.Tasks, Reason: res.Note})), true, false)
+		state = runFailed
+		t.c.tell(r, plainWords(prompts.RenderVoiceReport(prompts.VoiceReport{Lang: l, To: to, Status: "failed", Tasks: r.Tasks,
+			Folded: r.foldedCalls > 0, Reason: res.Note})), true, false)
 	default:
-		rep := prompts.VoiceReport{Lang: l, Status: "done", Tasks: r.Tasks, Stopped: res.Stopped, Again: r.Held}
+		rep := prompts.VoiceReport{Lang: l, To: to, Status: "done", Tasks: r.Tasks, Folded: r.foldedCalls > 0, Stopped: res.Stopped, Again: r.Held}
 		if res.Held {
 			rep.Background = look.Background
 		}
@@ -246,10 +341,12 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 	}
 	if res.Held {
 		r.Hold(res.Last, time.Now())
-		r.Delegation, r.waiting = "", false
+		r.Delegation, r.waiting, r.foldedCalls = "", false, 0
+		t.set(r, runHeld) // with its new base
 		return
 	}
 	t.drop(r)
+	t.set(r, state)
 }
 
 // handOver sends task to the main conversation and follows the run it starts, in the background. delegation is where
@@ -257,7 +354,8 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 func (t *tracker) handOver(task, delegation string, gen int, appID string, history []prompts.VoiceLine) {
 	c := t.c
 	l := c.language()
-	r := &voiceRun{Tasks: []string{clipRunes(task, taskMost)}, Delegation: delegation, Gen: gen, appIDs: []string{appID}}
+	r := &voiceRun{task: clipRunes(task, taskMost), Delegation: delegation, Gen: gen, appIDs: []string{appID}}
+	r.Tasks = []string{r.task}
 	r.ID, r.Channel, r.Probe, r.Started = appID, "voice", channel.Probe(task), time.Now()
 	message := prompts.RenderVoiceDelegated(prompts.VoiceDelegated{Lang: string(l), Task: task, History: history})
 	go func() {

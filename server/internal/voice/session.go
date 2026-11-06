@@ -22,8 +22,11 @@ import (
 // The upstream session can drop mid-conversation: the app's socket stays open, shows 「重新连接中」 and the
 // conversation goes on in a new session told what was said so far.
 
+// stableAfter is how long an upstream session holds before a drop of it no longer counts toward maxReconnects.
+var stableAfter = time.Minute
+
 const (
-	maxReconnects = 3  // per conversation
+	maxReconnects = 3  // in a row: a session that held stableAfter starts the count over
 	historyLines  = 40 // what a reconnected session is told was said
 	recentLines   = 6  // what a handed-over task is sent with of the conversation
 	startTimeout  = 25 * time.Second
@@ -49,6 +52,15 @@ type conversation struct {
 	role string
 	lang i18n.Lang
 	runs *tracker
+	// version is the voice wire the app speaks: 1, or 2 when its start says so (docs/voice.md「协议变更」). target is
+	// the conversation a protocol 2 call is bound to, fixed before ready; prep its binding, taken while the upstream
+	// connects; resume the runs the app handed back (a call picked up again).
+	version int
+	target  *boundTarget
+	prep    chan prepared
+	resume  []resumeRun
+	resumed bool // the app picked the call up again: its first session is told what was said
+	wake    chan struct{}
 
 	mu         sync.Mutex
 	closed     bool
@@ -76,6 +88,13 @@ type conversation struct {
 	gate             speechGate
 	unacked          map[string]*sentWords // what deliver sent with an event id, until the service acks or refuses it
 	events           int                   // event ids given
+	snap             *prompts.VoiceTarget  // what the voice model is told of the bound conversation
+	snapWords        string                // what of the snapshot the session took in came from agents (agentWords)
+	open             []openTask            // the runs not over yet (a new session is told what it waits for)
+	pace             pacing                // what the insertion gate goes by (gate.go)
+	queue            []*sentWords          // what waits for the insertion gate
+	userAt           time.Time             // the user's open caption last grew
+	connectedAt      time.Time             // the upstream session came up
 }
 
 type outFrame struct {
@@ -88,13 +107,15 @@ type outFrame struct {
 func (pl *Plugin) converse(ctx context.Context, app *websocket.Conn, role string, lang i18n.Lang) {
 	ctx, cancel := context.WithCancel(ctx)
 	c := &conversation{pl: pl, app: app, ctx: ctx, cancel: cancel, out: make(chan outFrame, 2048), role: role, lang: lang,
-		delegations: map[string]int{}, pending: map[string]*time.Timer{}, unacked: map[string]*sentWords{}}
+		delegations: map[string]int{}, pending: map[string]*time.Timer{}, unacked: map[string]*sentWords{}, version: 1,
+		wake: make(chan struct{}, 1)}
 	pl.active.Add(1)
 	defer pl.active.Add(-1)
 	writerDone := make(chan struct{})
 	go c.writeApp(writerDone)
 	c.runs = newTracker(c, pl.link.listen())
 	go c.runs.loop(ctx)
+	go c.speaker()
 	defer func() {
 		c.shutdown()
 		// What is queued for the app (a fatal error, its close) goes out before the socket is dropped.
@@ -113,11 +134,15 @@ func (pl *Plugin) converse(ctx context.Context, app *websocket.Conn, role string
 	}()
 	if err := c.begin(); err != nil {
 		pl.logf("start failed: %v", err)
-		if errors.Is(err, errNoUpstream) {
+		var ce *codedError
+		switch {
+		case errors.Is(err, errNoUpstream):
 			c.failCode(codeNoUpstream, "还没配实时语音服务：在 设置 › 扩展 › 实时语音 里填服务地址和 Key", true)
-			return
+		case errors.As(err, &ce):
+			c.failCode(ce.code, ce.msg, true)
+		default:
+			c.failCode(upstreamCode(err), "语音会话没能建立："+err.Error(), true)
 		}
-		c.fail("语音会话没能建立："+err.Error(), true)
 		return
 	}
 	c.readApp()
@@ -186,13 +211,12 @@ func (c *conversation) begin() error {
 	if err != nil {
 		return err
 	}
-	var start struct {
-		Type  string `json:"type"`
-		Model string `json:"model"`
-		Voice string `json:"voice"`
-	}
+	var start startFrame
 	if typ != websocket.MessageText || json.Unmarshal(b, &start) != nil || start.Type != "start" {
 		return errors.New("the first frame must be start")
+	}
+	if err := c.negotiate(&start); err != nil {
+		return err
 	}
 	p, model, err := c.pl.cat.resolve(c.ctx, start.Model)
 	gone := errors.Is(err, errNoProvider)
@@ -221,12 +245,117 @@ func (c *conversation) begin() error {
 	return nil
 }
 
+// negotiate reads what the app's start asks for: the protocol, the conversation to bind (protocol 2: its binding starts
+// now, while the upstream connects), what it hands back of a call it picks up again. Another extension calling has
+// protocol 1 only (docs/voice.md「权限」): the main conversation, never a target of its choosing.
+func (c *conversation) negotiate(s *startFrame) error {
+	full := c.role == "" || c.role == roleFull
+	if s.Target != nil && !full {
+		return &codedError{code: codeTargetForbidden, msg: "别的扩展调来的语音只能交给 Persona 主对话，不能绑定对话"}
+	}
+	if s.Protocol < 2 || !full {
+		return nil // protocol 1: its frames, the main conversation
+	}
+	if s.Target == nil || s.Target.MachineID == "" || s.Target.SessionID == "" {
+		return errors.New("protocol 2 starts with the conversation to bind (target)")
+	}
+	c.version = 2
+	machine, session, recent := s.Target.MachineID, s.Target.SessionID, appRecent(c.language(), s.Recent)
+	c.prep = make(chan prepared, 1)
+	go func() { c.prep <- c.prepare(c.ctx, machine, session, recent) }()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.history = historyOf(s.History)
+	if s.Resume != nil {
+		for _, r := range s.Resume.Runs {
+			if r.ID == "" || !openState(r.State) || len(c.resume) == resumeMost {
+				continue
+			}
+			c.resume = append(c.resume, r)
+			c.open = append(c.open, openTask{id: r.ID, task: clipRunes(r.Task, taskMost)})
+		}
+	}
+	c.resumed = len(c.history) > 0 || len(c.resume) > 0
+	return nil
+}
+
+// bound waits for the binding negotiate started (the first session), or takes a new snapshot of the bound
+// conversation (a new session after a drop: the last one is told again when it cannot be read). online: its machine
+// is connected, as far as the hub said.
+func (c *conversation) bound(ctx context.Context) (online bool, err error) {
+	if c.version < 2 {
+		return true, nil
+	}
+	if c.prep != nil {
+		var p prepared
+		select {
+		case p = <-c.prep:
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+		c.prep = nil
+		if p.err != nil {
+			return false, p.err
+		}
+		c.mu.Lock()
+		c.target, c.snap = p.target, p.snap
+		c.mu.Unlock()
+		return p.online, nil
+	}
+	if snap := c.refreshSnapshot(ctx, c.target); snap != nil {
+		c.mu.Lock()
+		c.snap = snap
+		c.mu.Unlock()
+	}
+	return true, nil
+}
+
+// openTask is a run not over yet, as a new upstream session is told (instructions' Waiting).
+type openTask struct{ id, task string }
+
+// waiting are the tasks of the runs not over yet, oldest first (mu held).
+func (c *conversation) waiting() []string {
+	var out []string
+	for _, o := range c.open {
+		out = append(out, o.task)
+	}
+	return out
+}
+
+// setOpen records run id's task as not over yet (task "": over).
+func (c *conversation) setOpen(id, task string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.open = slices.DeleteFunc(c.open, func(o openTask) bool { return o.id == id })
+	if task != "" {
+		c.open = append(c.open, openTask{id: id, task: task})
+	}
+}
+
+// upstreamError is a failure of the realtime service the app shows by its code.
+type upstreamError struct {
+	code string
+	err  error
+}
+
+func (e *upstreamError) Error() string { return e.err.Error() }
+func (e *upstreamError) Unwrap() error { return e.err }
+
+// upstreamCode is the code of a failure to start the upstream session ("" when it is not one the app knows).
+func upstreamCode(err error) string {
+	var ue *upstreamError
+	if errors.As(err, &ue) {
+		return ue.code
+	}
+	return ""
+}
+
 // connect opens an upstream session and waits for it to start; the first one answers the app's start with ready.
 func (c *conversation) connect() error {
 	c.mu.Lock()
 	p, w, model, voice := c.p, c.w, c.model, c.voice
 	history := append([]prompts.VoiceLine(nil), c.history...)
-	if !c.started {
+	if !c.started && !c.resumed {
 		history = nil
 	}
 	c.mu.Unlock()
@@ -237,17 +366,28 @@ func (c *conversation) connect() error {
 	if err != nil {
 		return err
 	}
+	online, err := c.bound(dctx)
+	if err != nil {
+		_ = up.CloseNow()
+		return err
+	}
 	tools, mode := c.toolSet(), ""
 	switch {
+	case c.target != nil && len(tools) > 0:
+		mode = "bound"
 	case len(tools) == len(toolNames):
 		mode = "all"
 	case len(tools) > 0:
 		mode = "ask_jarvis"
 	}
+	c.mu.Lock()
+	snap, waiting := c.snap, c.waiting()
+	c.mu.Unlock()
 	s := session{
 		Model: model, Voice: voice, InputRate: p.inputRate(),
 		Instructions: prompts.RenderVoiceInstructions(prompts.VoiceInstructions{
-			Owner: c.pl.cfg.Owner, Notes: c.pl.cfg.Notes, Tools: mode, History: clipHistory(history),
+			Lang: string(c.language()), Owner: c.pl.cfg.Owner, Notes: c.pl.cfg.Notes, Tools: mode, History: clipHistory(history),
+			Target: snap, Waiting: waiting,
 		}),
 		Tools: toolDecls(tools),
 	}
@@ -271,7 +411,11 @@ func (c *conversation) connect() error {
 				started, rate = true, e.rate
 			case evError:
 				_ = up.CloseNow()
-				return errors.New(firstNonEmpty(e.text, e.code, "the service refused the session"))
+				err := errors.New(firstNonEmpty(e.text, e.code, "the service refused the session"))
+				if e.code == codeUpstreamUnavailable {
+					err = &upstreamError{code: codeUpstreamUnavailable, err: err}
+				}
+				return err
 			}
 		}
 	}
@@ -285,21 +429,46 @@ func (c *conversation) connect() error {
 		_ = up.CloseNow()
 		return errors.New("closed")
 	}
-	c.up, c.ready = up, true
+	c.up, c.ready, c.connectedAt = up, true, time.Now()
 	gen := c.gen
 	first := !c.started
+	// A session after a drop is told the bound conversation as it is now: an agent's words the last session had not
+	// taken in (its turn went on meanwhile) close the user-speech gate, as a result sent does. The same snapshot does
+	// not: a request the user made just before the drop still counts.
+	if words := agentWords(snap); words != c.snapWords {
+		if !first {
+			c.gate.told(c.connectedAt)
+		}
+		c.snapWords = words
+	}
 	if first {
 		c.started, c.outRate = true, rate
-		c.sendApp(map[string]any{"type": "ready", "input_rate": p.inputRate(), "output_rate": rate, "model": c.modelID, "voice": nilIfEmpty(voice)})
+		ready := map[string]any{"type": "ready", "input_rate": p.inputRate(), "output_rate": rate, "model": c.modelID, "voice": nilIfEmpty(voice)}
+		if c.version >= 2 {
+			ready["protocol"], ready["features"], ready["target"] = infoProtocol, features, c.target.frame()
+		}
+		c.sendApp(ready)
+		if !online {
+			c.failCode(codeMachineOffline, "这台电脑离线，说的话要等它上线才发得出去", false)
+		}
 	} else {
 		if rate != c.outRate {
 			c.pl.logf("reconnected session speaks at %d Hz, the app plays %d", rate, c.outRate)
 		}
-		c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "done": true})
+		if c.version >= 2 {
+			c.sendApp(map[string]any{"type": "link", "state": "live"})
+		} else {
+			c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "done": true})
+		}
 		c.pl.logf("reconnected (%d)", c.reconnects)
 	}
+	resume := c.resume
+	c.resume = nil
 	c.mu.Unlock()
 	go c.readUpstream(up, gen)
+	if first && len(resume) > 0 {
+		c.runs.resume(resume)
+	}
 	return nil
 }
 
@@ -340,6 +509,10 @@ func (c *conversation) toolSet() []string {
 	switch {
 	case !c.p.tools():
 		return nil
+	case c.version >= 2:
+		// Bound to a conversation: what hands work over goes to it (delegate_task); send_to_agent and ask_jarvis would
+		// go past it. The measured service hands nothing over without a tool (docs/lessons/voice.md「其他行为」).
+		return boundTools
 	case c.role == "" || c.role == roleFull:
 		return toolNames
 	}
@@ -365,8 +538,11 @@ func (c *conversation) language() i18n.Lang {
 
 // dialError adds what the service answered to a refused handshake (the library keeps the first KB of its body).
 func dialError(err error, res *http.Response) error {
-	if res == nil || res.Body == nil {
+	if res == nil {
 		return err
+	}
+	if res.Body == nil {
+		res.Body = http.NoBody
 	}
 	raw, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
 	var e struct {
@@ -378,10 +554,17 @@ func dialError(err error, res *http.Response) error {
 	if json.Unmarshal(raw, &e) == nil && e.Error.Message != "" {
 		msg = e.Error.Message
 	}
-	if msg == "" {
-		return fmt.Errorf("HTTP %d", res.StatusCode)
+	err = fmt.Errorf("HTTP %d", res.StatusCode)
+	if msg != "" {
+		err = fmt.Errorf("HTTP %d: %s", res.StatusCode, clipRunes(msg, 200))
 	}
-	return fmt.Errorf("HTTP %d: %s", res.StatusCode, clipRunes(msg, 200))
+	switch res.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return &upstreamError{code: codeUpstreamForbidden, err: err}
+	case http.StatusServiceUnavailable:
+		return &upstreamError{code: codeUpstreamUnavailable, err: err}
+	}
+	return err
 }
 
 func (c *conversation) readUpstream(up upLink, gen int) {
@@ -418,6 +601,7 @@ func (c *conversation) handle(gen int, e event) {
 		if c.dropAudio {
 			return
 		}
+		c.pace.played(now, len(e.audio), c.outRate)
 		c.closeUser()
 		select {
 		case c.out <- outFrame{audio: e.audio}:
@@ -427,6 +611,7 @@ func (c *conversation) handle(gen int, e event) {
 		c.dropAudio = false
 		if strings.TrimSpace(e.text) != "" {
 			c.gate.user = time.Now()
+			c.userAt = c.gate.user
 		}
 		c.userText(e.text, e.replace, e.final)
 	case evAssistant:
@@ -436,9 +621,11 @@ func (c *conversation) handle(gen int, e event) {
 		c.closeAsst()
 	case evInterrupted:
 		c.sendApp(map[string]any{"type": "clear"})
+		c.pace.playEnd = time.Now() // the app drops what it had not played
 		c.closeAsst()
 	case evDelegation:
 		c.closeUser()
+		c.pace.delegated = time.Now()
 		if e.id == "" {
 			return
 		}
@@ -459,6 +646,7 @@ func (c *conversation) handle(gen int, e event) {
 		c.startTask(e.id, e.text, at)
 	case evToolCall:
 		c.closeUser()
+		c.pace.delegated = time.Now()
 		if t := c.pending[e.id]; t != nil {
 			t.Stop()
 			delete(c.pending, e.id)
@@ -581,20 +769,24 @@ func (c *conversation) runTool(gen int, e event) {
 	if label == "" {
 		label = e.name
 	}
-	c.sendApp(map[string]any{"type": "tool", "id": e.callID, "label": label, "done": false})
 	switch e.name {
-	case "ask_jarvis":
+	case "ask_jarvis", "delegate_task":
+		// A handover: protocol 2 reports it with run frames, protocol 1 with a tool line.
 		var in struct {
 			Task string `json:"task"`
 		}
 		_ = json.Unmarshal([]byte(e.args), &in)
-		c.sendApp(map[string]any{"type": "tool", "id": e.callID, "done": true})
+		if c.version < 2 {
+			c.sendApp(map[string]any{"type": "tool", "id": e.callID, "label": label, "done": false})
+			c.sendApp(map[string]any{"type": "tool", "id": e.callID, "done": true})
+		}
 		if e.id != "" {
 			c.delegations[e.id] = gen // its result is the call's answer, whether or not the call came with its delegation
 		}
 		c.handOver(strings.TrimSpace(in.Task), e.id, gen, at)
 		return
 	}
+	c.sendApp(map[string]any{"type": "tool", "id": e.callID, "label": label, "done": false})
 	delete(c.delegations, e.id) // its delegation is the tool's: the result answers it
 	answer := func(out string) {
 		// A tool's result goes on its call only (not said once that is gone: the model has moved on).
@@ -635,6 +827,10 @@ func (c *conversation) startTask(delegationID, text string, at time.Time) {
 // the model handed this over), else tells the model it was not sent (mu held; it goes on in the background). The answer
 // goes back on delegation, of upstream session gen, while that is open.
 func (c *conversation) handOver(task, delegation string, gen int, at time.Time) {
+	if c.version >= 2 {
+		c.handOverBound(task, delegation, gen, at)
+		return
+	}
 	c.whenSpoken(at, func(spoken bool) {
 		// What was said, taken now: the caption of the user's request often comes after the model's call (gate.go).
 		c.mu.Lock()
@@ -712,13 +908,84 @@ type sentWords struct {
 	agent      bool // an agent's words (gate.go)
 	onCall     bool // a tool's result: on its call only, never said
 	at         time.Time
+	queued     time.Time // it went into the queue: the user's voice holds it back at most answerHoldMost / sayHoldMost
+	prio       int       // which goes first of what waits for the insertion gate: higher first, then the oldest
 }
 
-// deliver sends s: as the answer on its delegation while that is open in its session, else as something to say. On a
+// deliver sends s once the insertion gate lets it (gate.go; a tool's result on its call goes at once).
+func (c *conversation) deliver(s *sentWords) {
+	if s.onCall {
+		c.sendNow(s)
+		return
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	s.queued = time.Now()
+	c.queue = append(c.queue, s)
+	c.mu.Unlock()
+	select {
+	case c.wake <- struct{}{}:
+	default:
+	}
+}
+
+// speaker sends what waits for the insertion gate as the gate lets it, and ends the user's open caption after
+// captionQuiet without more of it (and without their voice).
+func (c *conversation) speaker() {
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-c.wake:
+		case <-tick.C:
+		}
+		for {
+			s := c.nextToSay(time.Now())
+			if s == nil {
+				break
+			}
+			c.sendNow(s)
+		}
+		c.mu.Lock()
+		if now := time.Now(); c.user != nil && now.Sub(c.userAt) >= captionQuiet && now.Sub(c.pace.voice) >= captionQuiet {
+			c.closeUser()
+		}
+		c.mu.Unlock()
+	}
+}
+
+// nextToSay takes the first of the queue the insertion gate lets go now: the highest prio, then the oldest.
+func (c *conversation) nextToSay(now time.Time) *sentWords {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	best := -1
+	for i, s := range c.queue {
+		say := s.delegation == "" || s.gen != c.gen
+		if now.Before(c.pace.readyAt(say, s.queued)) {
+			continue
+		}
+		if best < 0 || s.prio > c.queue[best].prio {
+			best = i
+		}
+	}
+	if best < 0 {
+		return nil
+	}
+	s := c.queue[best]
+	c.queue = slices.Delete(c.queue, best, best+1)
+	return s
+}
+
+// sendNow sends s: as the answer on its delegation while that is open in its session, else as something to say. On a
 // service that acks (liveWire) it goes with an event id and is kept until the ack, which closes the gate again when it
 // holds an agent's words (gate.go), or until the service refuses it (serviceRefused). An agent's words close the gate
 // as they are sent.
-func (c *conversation) deliver(s *sentWords) {
+func (c *conversation) sendNow(s *sentWords) {
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
@@ -833,9 +1100,12 @@ func (c *conversation) lost(gen int, why error) {
 		return
 	}
 	c.pl.logf("session lost: %v", why)
+	if !c.connectedAt.IsZero() && time.Since(c.connectedAt) >= stableAfter {
+		c.reconnects = 0 // it held: a drop now is not one of a run of them (docs/voice.md「重连和续接」)
+	}
 	if c.reconnects >= maxReconnects {
 		c.mu.Unlock()
-		c.fail("语音连接断了，重连也没成功。点下面的按钮重新开始", true)
+		c.failCode(codeUpstreamFailed, "语音连接断了，重连也没成功。点下面的按钮重新开始", true)
 		return
 	}
 	c.reconnects++
@@ -848,10 +1118,15 @@ func (c *conversation) lost(gen int, why error) {
 		delete(c.pending, id)
 	}
 	clear(c.unacked) // that session's: an ack or refusal of it never comes
+	c.pace.playEnd = time.Now()
 	c.sendApp(map[string]any{"type": "clear"})
 	c.closeAsst()
 	c.closeUser()
-	c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "label": "连接断了，重新连接中", "done": false})
+	if c.version >= 2 {
+		c.sendApp(map[string]any{"type": "link", "state": "reconnecting"})
+	} else {
+		c.sendApp(map[string]any{"type": "tool", "id": "reconnect", "label": "连接断了，重新连接中", "done": false})
+	}
 	c.mu.Unlock()
 	if old != nil {
 		_ = old.CloseNow()
@@ -871,7 +1146,7 @@ func (c *conversation) lost(gen int, why error) {
 			}
 			c.pl.logf("reconnect: %v", err)
 		}
-		c.fail("语音连接断了，重连没成功："+err.Error(), true)
+		c.failCode(codeUpstreamFailed, "语音连接断了，重连没成功："+err.Error(), true)
 	}()
 }
 
@@ -883,8 +1158,10 @@ func (c *conversation) readApp() {
 			return
 		}
 		if typ == websocket.MessageBinary {
+			ms := meanSquare(b)
 			c.mu.Lock()
 			up, ready, w := c.up, c.ready, c.w
+			c.pace.heard(time.Now(), ms)
 			c.mu.Unlock()
 			if ready && len(b) > 0 {
 				_ = writeJSON(c.ctx, up, w.audio(b))
@@ -892,8 +1169,10 @@ func (c *conversation) readApp() {
 			continue
 		}
 		var msg struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+			Type       string `json:"type"`
+			Text       string `json:"text"`
+			ID         string `json:"id"`
+			ClearDraft string `json:"clear_draft"`
 		}
 		if json.Unmarshal(b, &msg) != nil {
 			continue
@@ -902,6 +1181,7 @@ func (c *conversation) readApp() {
 		case "interrupt":
 			c.mu.Lock()
 			c.dropAudio, c.lastAudio = true, time.Now()
+			c.pace.playEnd = c.lastAudio // the app drops what it had not played
 			c.closeAsst()
 			c.mu.Unlock()
 			c.sendApp(map[string]any{"type": "clear"})
@@ -918,6 +1198,12 @@ func (c *conversation) readApp() {
 			c.mu.Unlock()
 			if !c.sendUp(-1, w.text(text)) {
 				c.fail("语音会话还没连上，这句没发出去", false)
+			}
+		case "resend":
+			// The user tapped 重发 / 清空并发送 under a run a 409 refused (protocol 2): their own act, not the model's,
+			// so not held to the user-speech gate.
+			if c.version >= 2 && msg.ID != "" {
+				c.runs.resend(msg.ID, msg.ClearDraft)
 			}
 		}
 	}

@@ -58,10 +58,14 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `todo/outcome.md`、`outcome_input.md` | 任务做完时从 Agent 最后的回复里抽结论、链接、决定、踩坑（JSON；`docs/todos.md`「做完记结论」） | `assistant/todo_outcome.go` |
 | `todo/project.md` | 新开 Agent 时第一句前面的 `<jarvis-context>`：工作目录所属项目的一句话和最近几条「待办 ·」结论 | `assistant/todo_outcome.go` |
 | `tools/launcher_check.md` | 设置 › 模型「测试可用性」发的那一句 | `node/launchercheck.go` |
-| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、函数工具：全部 / 只有 `ask_jarvis`（别的扩展调来的通话）/ 没有，重连时断之前说过的话） | `voice/session.go` |
-| `voice/delegated.md` | 语音里交给主对话的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go` |
-| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you / failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`） | `voice/runs.go` |
-| `voice/refused.md` | 没发出去时告诉语音模型的话：`unprompted`（用户发言门槛没过）/ `empty` / `unknown`（可能已经发出去了）/ `unreachable`（连不上 hub）/ `failed`（带不带 hub 说的原因），发给主对话或 Agent | `voice/session.go`、`runs.go`、`tools.go` |
+| `voice/instructions.md` | 内置语音插件的实时模型的 instructions（称呼、说话方式、函数工具：全部 / 只有 `ask_jarvis`（别的扩展调来的通话）/ 绑定对话时的 `bound`（只读的两个加 `delegate_task`）/ 没有；协议 2 绑定对话时的一段：「状态：」「停止：」「回答：」、不复述直接交、批准只在屏幕上点；重连时断之前说过的话和还在等的事），中英日三份 | `voice/session.go` |
+| `voice/target.md` | 协议 2 绑定的对话（主对话 / Persona 对话 / Agent）和开场快照：标题、目标、进展、最近几轮、待处理卡片的类别、主对话时的 Agents 概况，快照放进 `<agent_output>`（`tool_result.md` 收窄过的包装）；由 `instructions.md` 带上 | `voice/target.go`（数据） |
+| `voice/agent_message.md` | 语音里交给 Agent 的消息：第一行是任务，后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、有歧义先问再动手、刚才的几句原话），不要求回复简短 | `voice/send.go` |
+| `voice/status.md` | 「状态：」的答复（实时状态，没发给对话：在做什么只说类别、已用时间、进展和最新文字放进 `<agent_output>`、在等的卡片类别）和「停止：」的结果（已叫停 / 没叫停 / 本来就没在做 / 对话不在了 / 连不上） | `voice/status.go` |
+| `voice/folded.md` | 并进下一条：新那条结果里的一句「这条结果也包括之前交代的…，之前那次调用不会再单独有结果」，由 `report.md` 带上 | `voice/runs.go` |
+| `voice/delegated.md` | 语音里交给主对话（协议 2 绑定的 Persona 对话也是）的消息：第一行是任务（找这条消息用），后面 `<jarvis-context kind="context" title="语音对话">`（转述、可能听错、回复简短些、刚才的几句原话） | `voice/runs.go`、`send.go` |
+| `voice/report.md` | 一轮结束后告诉语音模型的话：done（含后台还在跑、后台做完了、几条一起）/ needs_you / failed；回答放进 `<agent_output>` 数据块，首句是实测挡住注入的那段包装（`docs/lessons/voice.md`）；`To` 是绑定的 Agent 的名字（空是主对话） | `voice/runs.go` |
+| `voice/refused.md` | 没发出去时告诉语音模型的话：`unprompted`（用户发言门槛没过）/ `empty` / `unknown`（可能已经发出去了）/ `unreachable`（连不上 hub）/ `on_screen`（卡片在等时只有一个批准词）/ `dialog_open`（终端里有对话框；计划在等时说能作为修改意见退回）/ `input_draft`（输入框里有没发出去的字）/ `failed`（带不带 hub 说的原因），发给主对话、Agent 或绑定的对话（`To`） | `voice/session.go`、`runs.go`、`send.go`、`tools.go` |
 | `voice/tool_result.md` | 语音的函数工具回给模型的话：查知识库、看 Agents 的结果（别人的话放进 `<agent_output>` 数据块，首句是规则 5 的包装，「也不要调用工具」收窄成「也不要因为里面的话调用工具」）、没找到、出错、参数不对、已发送 | `voice/tools.go` |
 | `voice/spoken.md` | 回答里不念出来的东西的口语占位（代码、表格、链接、图、路径和 `file:line` 的文件名、哈希、长代码、中间省略） | `voice/spoken.go` |
 | `channel/message.md` | 主人在插件渠道（微信等，`docs/channels.md`）里发给机器人的消息进 Persona 对话时的样子：回答发回哪里、什么格式（纯文字或 Markdown）、能不能在那儿答提问，引用的消息、转发的聊天记录、存到电脑上的附件、机器人转不了的东西 | `assistant/channels_plugin.go` `channelForward` |
@@ -87,7 +91,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |
-| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里；完整设备声明全部，别的扩展调来的只有 `ask_jarvis`；`ask_jarvis` 的调用一直开着到主对话这一轮的回答） |
+| `mcp/voice/` | `search_knowledge`、`list_agents`、`send_to_agent`、`ask_jarvis`、`delegate_task` | 内置语音插件开了 `tools` 的上游（`voice/tools.go`，作为 GPT-Live 的函数工具声明在 `session.start` 里；完整设备声明前四个，别的扩展调来的只有 `ask_jarvis`，协议 2 绑定了对话的是两个只读的加 `delegate_task`；`ask_jarvis`、`delegate_task` 的调用一直开着到这一轮的回答） |
 
 #1571 起没有 `mcp/lark/`：`lark_agent_reply`、`lark_chats`、`lark_messages`、`lark_search` 由接飞书的插件提供（`docs/plan-extensions.md`「第 3 步」）。
 助手跑在 Agent 运行时上时，`ol` 这类命令的工具也不在这里：名字和描述来自插件命令闸门的 `tool`（`proto.CommandGate.Tool`），
@@ -117,7 +121,7 @@ node 的 `gateTools` 经 `runtime.sock` 交给运行时（`node/assistant_runtim
   模板里 `{{if .Language}}用{{.Language}}{{else}}用中文{{end}}`：为空时和原来一字不差，原来的 golden 不变，en / ja 另有 `*.en.golden` / `*.ja.golden`
   （`assistant/claude_md.md`、`inbox/triage.md`、`inbox/group.md`、`inbox/draft.md`、`tools/session_title.md`；`docs/i18n.md`）。
   知识库的提示词（`kb/`）保持中文，见 `docs/i18n.md`「后续工作」。
-- 语音一轮的提示词（`voice/report.md`、`refused.md`、`delegated.md`、`spoken.md`、`tool_result.md`，#3501）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
+- 语音的提示词（`voice/` 下的全部，#3501 起；`instructions.md`、`target.md`、`agent_message.md`、`status.md`、`folded.md` 是 #3502）整段按语言写三份：字段 `Lang` 是 i18n 代码（`en`、`ja`，其余是中文），
   模板里 `{{if eq .Lang "en"}}…{{else if eq .Lang "ja"}}…{{else}}…{{end}}`；golden 是 `voice/testdata/prompts/<名字>.<分支>.<zh-Hans|en|ja>.golden`
   （`go test ./internal/voice -run Golden`，`UPDATE_GOLDEN=1` 更新）。快层要念给用户听，话用用户的语言写，模型才会用这种语言接着说。
 

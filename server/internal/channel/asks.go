@@ -140,6 +140,13 @@ func is(text string, words []string) bool {
 	return slices.Contains(words, t)
 }
 
+// IsApprovalWord says whether text is only a word that approves or refuses a card (yes, no, the plan's approve), in
+// any of the three languages: a voice conversation does not send it on while its conversation waits on such a card,
+// since a card is answered on the screen (docs/voice.md「发送、门槛和 409」).
+func IsApprovalWord(text string) bool {
+	return is(text, yes) || is(text, no) || is(text, planApprove)
+}
+
 // numberEnd is the punctuation an option number may end with (a full stop, an enumeration comma, !); not ? — "1?"
 // asks what 1 is.
 const numberEnd = "。.．、!！"

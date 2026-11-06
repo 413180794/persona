@@ -2,6 +2,7 @@ package voice
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -184,7 +185,8 @@ func TestPluginWithoutAnUpstream(t *testing.T) {
 	if code, _ := get("/health"); code != http.StatusOK {
 		t.Fatalf("health %d", code)
 	}
-	if code, info := get("/info"); code != http.StatusOK || info["protocol"] != float64(1) || info["setup"] != SetupKey || info["warnings"] != nil {
+	if code, info := get("/info"); code != http.StatusOK || info["protocol"] != float64(2) || info["setup"] != SetupKey || info["warnings"] != nil ||
+		fmt.Sprint(info["features"]) != "[target runs resume]" {
 		t.Fatalf("info %d %v", code, info)
 	}
 	if code, models := get("/models"); code != http.StatusOK || models["models"] == nil || len(models["models"].([]any)) != 0 {

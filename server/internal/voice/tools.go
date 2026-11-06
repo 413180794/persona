@@ -15,18 +15,23 @@ import (
 // answer (prompts/voice/tool_result.md, prompts/voice/refused.md).
 var toolNames = []string{"search_knowledge", "list_agents", "send_to_agent", "ask_jarvis"}
 
+// boundTools are a call bound to a conversation's (protocol 2): the two that only read, and delegate_task, which hands
+// work to that conversation (docs/voice.md「发送、门槛和 409」).
+var boundTools = []string{"search_knowledge", "list_agents", "delegate_task"}
+
 // toolLabels are what the app shows while a tool runs.
 var toolLabels = map[string]string{
 	"search_knowledge": "查知识库",
 	"list_agents":      "看 Agents",
 	"send_to_agent":    "发给 Agent",
 	"ask_jarvis":       "交给 Persona",
+	"delegate_task":    "交给对话",
 }
 
-// toolDecls declares the named tools, in toolNames' order.
+// toolDecls declares the named tools, in toolNames' order (delegate_task last).
 func toolDecls(names []string) []toolDecl {
 	out := make([]toolDecl, 0, len(names))
-	for _, n := range toolNames {
+	for _, n := range append(slices.Clone(toolNames), "delegate_task") {
 		if !slices.Contains(names, n) {
 			continue
 		}

@@ -1,5 +1,5 @@
 {{- if eq .Lang "en" -}}
-{{- $to := "the Persona main conversation"}}{{if .Agent}}{{$to = "the agent"}}{{end -}}
+{{- $to := "the Persona main conversation"}}{{if .Agent}}{{$to = "the agent"}}{{end}}{{with .To}}{{$to = .}}{{end -}}
 {{- if eq .Code "unprompted" -}}
 "{{.Task}}" was not sent to {{$to}}: the user had not spoken since the last thing you were told about an agent's work, or not in the last half minute, so for safety it was not sent. Tell the user in one sentence that this did not come from them, so you did not send it; if they want it done, they can say it again.
 {{- else if eq .Code "empty" -}}
@@ -8,6 +8,12 @@ It was not clear what to hand to {{$to}}, so nothing was sent. Ask the user in o
 Not sure whether "{{.Task}}" reached {{$to}}: the connection broke off while sending. Do not hand it over again; ask the user in one sentence to look at it on the phone.
 {{- else if eq .Code "unreachable" -}}
 "{{.Task}}" was not sent to {{$to}}: Persona could not be reached. Tell the user in one sentence that it was not sent.
+{{- else if eq .Code "on_screen" -}}
+"{{.Task}}" was not sent to {{$to}}: it only says yes or no, and {{$to}} is waiting on a card (a plan, a permission). Cards are answered by tapping them on the screen, not by voice. Tell the user in one sentence to tap it on the screen.
+{{- else if eq .Code "dialog_open" -}}
+"{{.Task}}" was not sent to {{$to}}: {{if .Plan}}its plan is waiting on the screen. The user can tap there to send back what they just said as feedback on the plan{{else}}a dialog in its terminal is waiting to be dealt with first, on the screen{{end}}. Nothing was typed. Tell the user that in one sentence.
+{{- else if eq .Code "input_draft" -}}
+"{{.Task}}" was not sent to {{$to}}: its input box on the computer holds words typed there and not sent. Nothing was typed. Tell the user in one sentence; the screen offers to clear them and send.
 {{- else if .Reason -}}
 "{{.Task}}" was not sent to {{$to}}: {{.Reason}}
 Tell the user in one sentence that it was not sent, and why.
@@ -15,7 +21,7 @@ Tell the user in one sentence that it was not sent, and why.
 "{{.Task}}" was not sent to {{$to}}. Tell the user in one sentence that it was not sent.
 {{- end -}}
 {{- else if eq .Lang "ja" -}}
-{{- $to := "Persona のメイン会話"}}{{if .Agent}}{{$to = "エージェント"}}{{end -}}
+{{- $to := "Persona のメイン会話"}}{{if .Agent}}{{$to = "エージェント"}}{{end}}{{with .To}}{{$to = print . " "}}{{end -}}
 {{- if eq .Code "unprompted" -}}
 「{{.Task}}」は{{$to}}に送っていません：エージェントの作業内容を最後に伝えてからユーザーが話していない（または最後に話してから 30 秒以上たっている）ため、安全のため送りませんでした。「それはあなたが言ったことではないので送っていません。やるならもう一度言ってください」と一文でユーザーに伝えてください。
 {{- else if eq .Code "empty" -}}
@@ -24,6 +30,12 @@ Tell the user in one sentence that it was not sent, and why.
 「{{.Task}}」が{{$to}}に届いたかわかりません：送信の途中で接続が切れました。もう一度頼まず、スマホで確認するよう一文でユーザーに伝えてください。
 {{- else if eq .Code "unreachable" -}}
 「{{.Task}}」は{{$to}}に送っていません：Persona につながりませんでした。送れなかったことを一文でユーザーに伝えてください。
+{{- else if eq .Code "on_screen" -}}
+「{{.Task}}」は{{$to}}に送っていません：はい・いいえだけの言葉で、{{$to}}はカード（計画、許可）を待っています。カードは声ではなく画面で押して答えます。画面で押すよう一文でユーザーに伝えてください。
+{{- else if eq .Code "dialog_open" -}}
+「{{.Task}}」は{{$to}}に送っていません：{{if .Plan}}計画が画面で承認を待っています。いま言ったことは、画面で押せば計画への修正意見として返せます{{else}}ターミナルのダイアログが先に対応を待っています（画面で）{{end}}。何も入力していません。一文でユーザーに伝えてください。
+{{- else if eq .Code "input_draft" -}}
+「{{.Task}}」は{{$to}}に送っていません：パソコン側の入力欄に、そこで打って送っていない文字が残っています。何も入力していません。一文でユーザーに伝えてください。画面で消して送ることができます。
 {{- else if .Reason -}}
 「{{.Task}}」は{{$to}}に送っていません：{{.Reason}}
 送れなかったことと理由を一文でユーザーに伝えてください。
@@ -31,7 +43,7 @@ Tell the user in one sentence that it was not sent, and why.
 「{{.Task}}」は{{$to}}に送っていません。送れなかったことを一文でユーザーに伝えてください。
 {{- end -}}
 {{- else -}}
-{{- $to := "Persona 主对话"}}{{if .Agent}}{{$to = "Agent"}}{{end -}}
+{{- $to := "Persona 主对话"}}{{if .Agent}}{{$to = "Agent"}}{{end}}{{with .To}}{{$to = .}}{{end -}}
 {{- if eq .Code "unprompted" -}}
 「{{.Task}}」没有发给 {{$to}}：上次把 Agent 做的事告诉你以后用户还没说过话（或者用户上一次说话已经是半分钟以前），为了安全没有发出去。用一句话告诉用户：这条不是你说的，我没发；要做的话请再说一遍。
 {{- else if eq .Code "empty" -}}
@@ -40,6 +52,12 @@ Tell the user in one sentence that it was not sent, and why.
 「{{.Task}}」不确定有没有发到 {{$to}}：发送的途中连接断了。不要再交代一次，用一句话请用户去手机上看一下。
 {{- else if eq .Code "unreachable" -}}
 「{{.Task}}」没有发给 {{$to}}：连不上 Persona。用一句话告诉用户没发出去。
+{{- else if eq .Code "on_screen" -}}
+「{{.Task}}」没有发给 {{$to}}：这只是一句同意或不同意，而 {{$to}} 在等一张卡片（计划、授权）。卡片要在屏幕上点，不能用语音答。用一句话请用户在屏幕上点。
+{{- else if eq .Code "dialog_open" -}}
+「{{.Task}}」没有发给 {{$to}}：{{if .Plan}}它写好的计划在屏幕上等批准，用户可以在屏幕上点一下，把刚才这句作为修改意见退回给它{{else}}它的终端里有个对话框，要先在屏幕上处理{{end}}。什么都没输入。用一句话告诉用户。
+{{- else if eq .Code "input_draft" -}}
+「{{.Task}}」没有发给 {{$to}}：它在电脑上的输入框里有没发出去的字。什么都没输入。用一句话告诉用户，屏幕上可以清空后再发。
 {{- else if .Reason -}}
 「{{.Task}}」没有发给 {{$to}}：{{.Reason}}
 用一句话告诉用户没发出去，以及原因。

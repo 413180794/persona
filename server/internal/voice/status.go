@@ -1,0 +1,109 @@
+package voice
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/prompts"
+	"github.com/nwverse/persona/server/internal/proto"
+)
+
+// A status asked for (「状态：…」) is answered from the bound conversation's live state, never sent to it, and is no
+// write: not held to the user-speech gate (docs/voice.md「状态查询」). A stop (「停止：…」) is a write: behind the gate,
+// it interrupts the conversation's turn (the app's 停止 button) and is told once that worked. Both answer on the
+// delegation that asked, as its one commentary.
+
+const (
+	statusTimeout = 10 * time.Second
+	latestRunes   = 300
+)
+
+// answerStatus tells the model how the bound conversation stands, on delegation of upstream session gen.
+func (c *conversation) answerStatus(delegation string, gen int) {
+	ctx, cancel := context.WithTimeout(c.ctx, statusTimeout)
+	defer cancel()
+	hub, t, l := c.pl.hub, c.target, c.language()
+	st := prompts.VoiceStatus{Lang: string(l), To: t.to(), Do: "status"}
+	sess, err := hub.session(ctx, t.MachineID, t.SessionID)
+	switch {
+	case err != nil:
+		st.Do = "unreachable"
+	case sess == nil:
+		st.Do = "gone"
+	default:
+		st.State = sess.State
+		if working(sess) {
+			st.State = proto.StateWorking
+			st.Activity = activityKind(sess.Activity)
+			if !sess.StateSince.IsZero() {
+				st.Elapsed = channel.Duration(l, time.Since(sess.StateSince))
+			}
+		}
+		if sess.Work != nil {
+			st.Work = clipRunes(oneLine(sess.Work.Line), 200)
+		}
+		if page, err := hub.lastTurns(ctx, t.MachineID, t.SessionID, 1); err == nil {
+			st.Latest = latestWords(page.Items)
+			if st.Latest != "" {
+				st.Latest = clipRunes(oneLine(speakable(l, st.Latest)), latestRunes)
+			}
+		}
+		if ixs, err := hub.interactions(ctx); err == nil {
+			st.Cards = cardsOf(ixs, t)
+		}
+	}
+	if ctx.Err() != nil && c.ctx.Err() != nil {
+		return
+	}
+	c.tell(&voiceRun{Delegation: delegation, Gen: gen}, plainWords(prompts.RenderVoiceStatus(st)), true, st.Latest != "" || st.Work != "")
+}
+
+// stopTarget interrupts the bound conversation's turn (working, or waiting on the user mid-turn) and tells the model
+// how that went.
+func (c *conversation) stopTarget(delegation string, gen int) {
+	ctx, cancel := context.WithTimeout(c.ctx, statusTimeout)
+	defer cancel()
+	hub, t := c.pl.hub, c.target
+	st := prompts.VoiceStatus{Lang: string(c.language()), To: t.to(), Do: "stopped"}
+	sess, err := hub.session(ctx, t.MachineID, t.SessionID)
+	switch {
+	case err != nil:
+		st.Do = "stop_failed"
+	case sess == nil:
+		st.Do = "gone"
+	case !working(sess) && !waitingOnUser(sess):
+		st.Do = "idle"
+	default:
+		// Working, or its turn stopped on a card or a dialog: the interrupt (Esc) ends it, as the app's 停止 does.
+		if err := hub.interrupt(ctx, t.MachineID, t.SessionID); err != nil {
+			c.pl.logf("stop %s/%s: %v", t.MachineID, t.SessionID, err)
+			st.Do, st.Reason = "stop_failed", hubReason(err)
+		} else {
+			c.runs.stopped()
+		}
+	}
+	if c.ctx.Err() != nil {
+		return
+	}
+	c.tell(&voiceRun{Delegation: delegation, Gen: gen}, plainWords(prompts.RenderVoiceStatus(st)), true, false)
+}
+
+// activityKind is what sort of step an activity is (transcript.Activity: 「在读 tasks.go」 is 在读): never the file,
+// the command or the pattern (docs/voice.md「状态查询」: only the category).
+func activityKind(activity string) string {
+	verb, _, _ := strings.Cut(strings.TrimSpace(activity), " ")
+	return verb
+}
+
+// latestWords is the conversation's latest words in items (its last exchange): its last text of the assistant's.
+func latestWords(items []proto.Item) string {
+	for i := len(items) - 1; i >= 0; i-- {
+		it := items[i]
+		if it.Role == "assistant" && it.Kind == proto.KindText && strings.TrimSpace(it.Text) != "" {
+			return it.Text
+		}
+	}
+	return ""
+}

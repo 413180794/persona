@@ -350,7 +350,7 @@ func TestLiveDialectTools(t *testing.T) {
 	// The delegation was the tool call's envelope: nothing went to the main conversation.
 	time.Sleep(toolCallWait + 300*time.Millisecond)
 	if msgs := hub.messages(); len(msgs) != 0 {
-		t.Fatalf("main conversation got %q", msgs)
+		t.Fatalf("main conversation got %+v", msgs)
 	}
 }
 

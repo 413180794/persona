@@ -326,3 +326,18 @@ func TestMatchOptionNumberShapes(t *testing.T) {
 		t.Errorf("2号 with a label 2: %q, %v", got, ok)
 	}
 }
+
+// The words that approve or refuse a card, in any language, with the marks a reply may end with; anything more is an
+// instruction.
+func TestIsApprovalWord(t *testing.T) {
+	for _, text := range []string{"批准", "好的。", "OK", "approve!", "承認", "不行", "deny", "いいえ"} {
+		if !IsApprovalWord(text) {
+			t.Errorf("%q is an approval word", text)
+		}
+	}
+	for _, text := range []string{"批准后再跑一遍测试", "好的，顺便把 lint 也修了", "run the tests", "第二个", ""} {
+		if IsApprovalWord(text) {
+			t.Errorf("%q is not an approval word", text)
+		}
+	}
+}
