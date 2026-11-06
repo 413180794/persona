@@ -948,6 +948,9 @@ type UIContext struct {
 	Locale    string `json:"locale,omitempty"`
 	Platform  string `json:"platform,omitempty"`
 	UIVersion int    `json:"ui_version,omitempty"`
+	// Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current client or
+	// hub advertises it.
+	Stream *UIStreamCapability `json:"stream,omitempty"`
 }
 
 // UIRequest: an app's POST …/-/ui/{ui}: without action it draws, with one a control was used.
@@ -1496,6 +1499,8 @@ type View struct {
 }
 
 type Section struct {
+	// Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots.
+	Key    string      `json:"key,omitempty"`
 	Title  string      `json:"title,omitempty"`
 	Footer string      `json:"footer,omitempty"`
 	Items  []Component `json:"items"`
@@ -4073,6 +4078,506 @@ type KBForgottenEvent struct {
 	Source string `json:"source"`
 }
 
+// Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
+// range.
+type UIStreamScalar = json.RawMessage
+
+// Interaction value: scalar, scalar array or scalar map only (one container level). No functions, callbacks, binary
+// data or nested containers. Never send credentials or secret field contents.
+type UIStreamValue = json.RawMessage
+
+// UIStreamCapability: client opt-in for protocol 1 plus supported native component tags. ui_version alone does not
+// opt in. Declaration is not runtime support.
+type UIStreamCapability struct {
+	Protocol   int      `json:"protocol"`
+	Components []string `json:"components"`
+}
+
+// UIStreamSnapshot: full authoritative tree before deltas, including after resume or recovery. Keys required on
+// sections/items; tiles and global uniqueness need semantic validation.
+type UIStreamSnapshot struct {
+	Protocol int    `json:"protocol"`
+	Session  string `json:"session"`
+	Epoch    string `json:"epoch"`
+	Version  int64  `json:"version"`
+	RootKey  string `json:"root_key"`
+	View     View   `json:"view"`
+}
+
+func (v UIStreamSnapshot) MarshalJSON() ([]byte, error) {
+	type plain UIStreamSnapshot
+	return json.Marshal(struct {
+		plain
+		Protocol int              `json:"protocol"`
+		Session  string           `json:"session"`
+		Epoch    string           `json:"epoch"`
+		Version  int64            `json:"version"`
+		RootKey  string           `json:"root_key"`
+		View     requiredJSONView `json:"view"`
+	}{
+		plain:    plain(v),
+		Protocol: v.Protocol,
+		Session:  v.Session,
+		Epoch:    v.Epoch,
+		Version:  v.Version,
+		RootKey:  v.RootKey,
+		View:     (requiredJSONView)(v.View),
+	})
+}
+
+// UIStreamDelta: atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate
+// against a staged whole tree before committing. Ordering/equality are reducer checks.
+type UIStreamDelta struct {
+	Protocol    int                 `json:"protocol"`
+	Session     string              `json:"session"`
+	Epoch       string              `json:"epoch"`
+	BaseVersion int64               `json:"base_version"`
+	Version     int64               `json:"version"`
+	Operations  []UIStreamOperation `json:"operations"`
+}
+
+// UIStreamEvent: authenticated owner interaction for the displayed generation/version. Deduplicate event_id before
+// writes. Validate action against the saved node/event slot, then resolve its callback server-side; no callback code
+// or secrets in this payload.
+type UIStreamEvent struct {
+	Protocol int    `json:"protocol"`
+	Session  string `json:"session"`
+	Epoch    string `json:"epoch"`
+	Version  int64  `json:"version"`
+	EventID  string `json:"event_id"`
+	Key      string `json:"key"`
+	// Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim.
+	Action string        `json:"action"`
+	Event  string        `json:"event"`
+	Value  UIStreamValue `json:"value"`
+}
+
+// UIStreamOperation: atomic native tree operation. Unknown operations invalidate the entire batch and require a
+// snapshot, never skipping. Tiles update by replacing their containing grid/carousel. One struct for every variant:
+// op says which fields mean something.
+type UIStreamOperation struct {
+	Op      string     `json:"op"`
+	Key     string     `json:"key,omitempty"`
+	View    *View      `json:"view,omitempty"`
+	Section *Section   `json:"section,omitempty"`
+	Item    *Component `json:"item,omitempty"`
+	Parent  string     `json:"parent,omitempty"`
+	Before  string     `json:"before,omitempty"`
+}
+
+// UIStreamOperation ops.
+const (
+	UIStreamOperationReplace = "replace"
+	UIStreamOperationInsert  = "insert"
+	UIStreamOperationRemove  = "remove"
+	UIStreamOperationMove    = "move"
+)
+
+// UIStreamOperationOps are the ops of UIStreamOperation, in order.
+var UIStreamOperationOps = []string{"replace", "insert", "remove", "move"}
+
+func (v UIStreamOperation) MarshalJSON() ([]byte, error) {
+	type plain UIStreamOperation
+	switch v.Op {
+	case "replace", "remove":
+		return json.Marshal(struct {
+			plain
+			Key     string                 `json:"key"`
+			View    *requiredJSONView      `json:"view,omitempty"`
+			Section *requiredJSONSection   `json:"section,omitempty"`
+			Item    *requiredJSONComponent `json:"item,omitempty"`
+		}{
+			plain:   plain(v),
+			Key:     v.Key,
+			View:    (*requiredJSONView)(v.View),
+			Section: (*requiredJSONSection)(v.Section),
+			Item:    (*requiredJSONComponent)(v.Item),
+		})
+	case "insert":
+		return json.Marshal(struct {
+			plain
+			View    *requiredJSONView      `json:"view,omitempty"`
+			Section *requiredJSONSection   `json:"section,omitempty"`
+			Item    *requiredJSONComponent `json:"item,omitempty"`
+			Parent  string                 `json:"parent"`
+		}{
+			plain:   plain(v),
+			View:    (*requiredJSONView)(v.View),
+			Section: (*requiredJSONSection)(v.Section),
+			Item:    (*requiredJSONComponent)(v.Item),
+			Parent:  v.Parent,
+		})
+	case "move":
+		return json.Marshal(struct {
+			plain
+			Key     string                 `json:"key"`
+			View    *requiredJSONView      `json:"view,omitempty"`
+			Section *requiredJSONSection   `json:"section,omitempty"`
+			Item    *requiredJSONComponent `json:"item,omitempty"`
+			Parent  string                 `json:"parent"`
+		}{
+			plain:   plain(v),
+			Key:     v.Key,
+			View:    (*requiredJSONView)(v.View),
+			Section: (*requiredJSONSection)(v.Section),
+			Item:    (*requiredJSONComponent)(v.Item),
+			Parent:  v.Parent,
+		})
+	default:
+		return json.Marshal(plain(v))
+	}
+}
+
+// UIStreamRequest: owner-bound lifecycle request over the authenticated WebSocket. The transport supplies
+// principal/hub identity; never trust an owner field from JSON. No endpoint or runtime is enabled by these contracts.
+// One struct for every variant: request says which fields mean something.
+type UIStreamRequest struct {
+	Request      string         `json:"request"`
+	Protocol     int            `json:"protocol,omitempty"`
+	RequestID    string         `json:"request_id,omitempty"`
+	Extension    string         `json:"extension,omitempty"`
+	Contribution string         `json:"contribution,omitempty"`
+	Context      *UIContext     `json:"context,omitempty"`
+	State        string         `json:"state,omitempty"`
+	Session      string         `json:"session,omitempty"`
+	Epoch        string         `json:"epoch,omitempty"`
+	Version      int64          `json:"version,omitempty"`
+	Interaction  *UIStreamEvent `json:"interaction,omitempty"`
+}
+
+// UIStreamRequest requests.
+const (
+	UIStreamRequestOpen     = "open"
+	UIStreamRequestClose    = "close"
+	UIStreamRequestSuspend  = "suspend"
+	UIStreamRequestResume   = "resume"
+	UIStreamRequestEvent    = "event"
+	UIStreamRequestSnapshot = "snapshot"
+)
+
+// UIStreamRequestRequests are the requests of UIStreamRequest, in order.
+var UIStreamRequestRequests = []string{"open", "close", "suspend", "resume", "event", "snapshot"}
+
+func (v UIStreamRequest) MarshalJSON() ([]byte, error) {
+	type plain UIStreamRequest
+	switch v.Request {
+	case "open":
+		return json.Marshal(struct {
+			plain
+			Protocol     int        `json:"protocol"`
+			RequestID    string     `json:"request_id"`
+			Extension    string     `json:"extension"`
+			Contribution string     `json:"contribution"`
+			Context      *UIContext `json:"context"`
+			State        string     `json:"state"`
+		}{
+			plain:        plain(v),
+			Protocol:     v.Protocol,
+			RequestID:    v.RequestID,
+			Extension:    v.Extension,
+			Contribution: v.Contribution,
+			Context:      v.Context,
+			State:        v.State,
+		})
+	case "close", "suspend":
+		return json.Marshal(struct {
+			plain
+			Protocol  int    `json:"protocol"`
+			RequestID string `json:"request_id"`
+			Session   string `json:"session"`
+			Epoch     string `json:"epoch"`
+		}{
+			plain:     plain(v),
+			Protocol:  v.Protocol,
+			RequestID: v.RequestID,
+			Session:   v.Session,
+			Epoch:     v.Epoch,
+		})
+	case "resume", "snapshot":
+		return json.Marshal(struct {
+			plain
+			Protocol  int    `json:"protocol"`
+			RequestID string `json:"request_id"`
+			Session   string `json:"session"`
+			Epoch     string `json:"epoch"`
+			Version   int64  `json:"version"`
+		}{
+			plain:     plain(v),
+			Protocol:  v.Protocol,
+			RequestID: v.RequestID,
+			Session:   v.Session,
+			Epoch:     v.Epoch,
+			Version:   v.Version,
+		})
+	case "event":
+		return json.Marshal(struct {
+			plain
+			Protocol    int            `json:"protocol"`
+			RequestID   string         `json:"request_id"`
+			Interaction *UIStreamEvent `json:"interaction"`
+		}{
+			plain:       plain(v),
+			Protocol:    v.Protocol,
+			RequestID:   v.RequestID,
+			Interaction: v.Interaction,
+		})
+	default:
+		return json.Marshal(plain(v))
+	}
+}
+
+// requiredJSONComponent preserves required fields only inside stream payloads.
+type requiredJSONComponent Component
+
+func (v requiredJSONComponent) MarshalJSON() ([]byte, error) {
+	type plain Component
+	switch v.Type {
+	case "text", "markdown", "code":
+		return json.Marshal(struct {
+			plain
+			Text string `json:"text"`
+		}{
+			plain: plain(v),
+			Text:  v.Text,
+		})
+	case "metric":
+		return json.Marshal(struct {
+			plain
+			Label string `json:"label"`
+			Value string `json:"value"`
+		}{
+			plain: plain(v),
+			Label: v.Label,
+			Value: v.Value,
+		})
+	case "progress":
+		return json.Marshal(struct {
+			plain
+			Label string   `json:"label"`
+			Ratio *float64 `json:"ratio"`
+		}{
+			plain: plain(v),
+			Label: v.Label,
+			Ratio: v.Ratio,
+		})
+	case "row", "empty", "header":
+		return json.Marshal(struct {
+			plain
+			Title string `json:"title"`
+		}{
+			plain: plain(v),
+			Title: v.Title,
+		})
+	case "button":
+		return json.Marshal(struct {
+			plain
+			Title  string  `json:"title"`
+			Action *Action `json:"action"`
+		}{
+			plain:  plain(v),
+			Title:  v.Title,
+			Action: v.Action,
+		})
+	case "link":
+		return json.Marshal(struct {
+			plain
+			Title string `json:"title"`
+			URL   string `json:"url"`
+		}{
+			plain: plain(v),
+			Title: v.Title,
+			URL:   v.URL,
+		})
+	case "field":
+		return json.Marshal(struct {
+			plain
+			Label string `json:"label"`
+			Name  string `json:"name"`
+			Kind  string `json:"kind"`
+		}{
+			plain: plain(v),
+			Label: v.Label,
+			Name:  v.Name,
+			Kind:  v.Kind,
+		})
+	case "divider", "loading":
+		return json.Marshal(struct {
+			plain
+		}{
+			plain: plain(v),
+		})
+	case "chart":
+		return json.Marshal(struct {
+			plain
+			Kind   string        `json:"kind"`
+			Series []ChartSeries `json:"series"`
+		}{
+			plain:  plain(v),
+			Kind:   v.Kind,
+			Series: v.Series,
+		})
+	case "stat_grid":
+		return json.Marshal(struct {
+			plain
+			Stats []Stat `json:"stats"`
+		}{
+			plain: plain(v),
+			Stats: v.Stats,
+		})
+	case "segmented":
+		return json.Marshal(struct {
+			plain
+			Value   string   `json:"value"`
+			Action  *Action  `json:"action"`
+			Name    string   `json:"name"`
+			Choices []Choice `json:"choices"`
+		}{
+			plain:   plain(v),
+			Value:   v.Value,
+			Action:  v.Action,
+			Name:    v.Name,
+			Choices: v.Choices,
+		})
+	case "table":
+		return json.Marshal(struct {
+			plain
+			Columns []TableColumn `json:"columns"`
+			Rows    [][]string    `json:"rows"`
+		}{
+			plain:   plain(v),
+			Columns: v.Columns,
+			Rows:    v.Rows,
+		})
+	case "html":
+		return json.Marshal(struct {
+			plain
+			Html string `json:"html"`
+		}{
+			plain: plain(v),
+			Html:  v.Html,
+		})
+	case "breadcrumb":
+		return json.Marshal(struct {
+			plain
+			Crumbs []Crumb `json:"crumbs"`
+		}{
+			plain:  plain(v),
+			Crumbs: v.Crumbs,
+		})
+	case "file_tree":
+		return json.Marshal(struct {
+			plain
+			Entries []TreeEntry `json:"entries"`
+		}{
+			plain:   plain(v),
+			Entries: v.Entries,
+		})
+	case "diff":
+		return json.Marshal(struct {
+			plain
+			Path string `json:"path"`
+		}{
+			plain: plain(v),
+			Path:  v.Path,
+		})
+	case "comment_thread":
+		return json.Marshal(struct {
+			plain
+			Comments []Comment `json:"comments"`
+		}{
+			plain:    plain(v),
+			Comments: v.Comments,
+		})
+	case "composer":
+		return json.Marshal(struct {
+			plain
+			Name    string           `json:"name"`
+			Buttons []ComposerButton `json:"buttons"`
+		}{
+			plain:   plain(v),
+			Name:    v.Name,
+			Buttons: v.Buttons,
+		})
+	case "image":
+		return json.Marshal(struct {
+			plain
+			Src *ImageSource `json:"src"`
+			Alt string       `json:"alt"`
+		}{
+			plain: plain(v),
+			Src:   v.Src,
+			Alt:   v.Alt,
+		})
+	case "grid", "carousel":
+		return json.Marshal(struct {
+			plain
+			Tiles []Tile `json:"tiles"`
+		}{
+			plain: plain(v),
+			Tiles: v.Tiles,
+		})
+	default:
+		return json.Marshal(plain(v))
+	}
+}
+
+// requiredJSONSection preserves required fields only inside stream payloads.
+type requiredJSONSection Section
+
+func (v requiredJSONSection) MarshalJSON() ([]byte, error) {
+	type plain Section
+	return json.Marshal(struct {
+		plain
+		Items []requiredJSONComponent `json:"items"`
+	}{
+		plain: plain(v),
+		Items: func() []requiredJSONComponent {
+			if v.Items == nil {
+				return nil
+			}
+			out := make([]requiredJSONComponent, len(v.Items))
+			for i, item := range v.Items {
+				out[i] = (requiredJSONComponent)(item)
+			}
+			return out
+		}(),
+	})
+}
+
+// requiredJSONView preserves required fields only inside stream payloads.
+type requiredJSONView View
+
+func (v requiredJSONView) MarshalJSON() ([]byte, error) {
+	type plain View
+	return json.Marshal(struct {
+		plain
+		Sections []requiredJSONSection       `json:"sections"`
+		Pages    map[string]requiredJSONView `json:"pages,omitempty"`
+	}{
+		plain: plain(v),
+		Sections: func() []requiredJSONSection {
+			if v.Sections == nil {
+				return nil
+			}
+			out := make([]requiredJSONSection, len(v.Sections))
+			for i, item := range v.Sections {
+				out[i] = (requiredJSONSection)(item)
+			}
+			return out
+		}(),
+		Pages: func() map[string]requiredJSONView {
+			if v.Pages == nil {
+				return nil
+			}
+			out := make(map[string]requiredJSONView, len(v.Pages))
+			for key, item := range v.Pages {
+				out[key] = (requiredJSONView)(item)
+			}
+			return out
+		}(),
+	})
+}
+
 // newDef makes a value of each definition, for tests that read examples by definition name.
 var newDef = map[string]func() any{
 	"Manifest":                     func() any { return new(Manifest) },
@@ -4390,6 +4895,12 @@ var newDef = map[string]func() any{
 	"KBOwner":                      func() any { return new(KBOwner) },
 	"KBChangedEvent":               func() any { return new(KBChangedEvent) },
 	"KBForgottenEvent":             func() any { return new(KBForgottenEvent) },
+	"UIStreamCapability":           func() any { return new(UIStreamCapability) },
+	"UIStreamSnapshot":             func() any { return new(UIStreamSnapshot) },
+	"UIStreamDelta":                func() any { return new(UIStreamDelta) },
+	"UIStreamEvent":                func() any { return new(UIStreamEvent) },
+	"UIStreamOperation":            func() any { return new(UIStreamOperation) },
+	"UIStreamRequest":              func() any { return new(UIStreamRequest) },
 }
 
 // Call is one call or event of an extension point's protocol (the schemas' x-methods and x-events): who

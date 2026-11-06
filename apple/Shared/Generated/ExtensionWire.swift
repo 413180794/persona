@@ -2665,8 +2665,11 @@ nonisolated struct ExtensionUIContext: Codable, Hashable, Sendable {
     var locale: String?
     var platform: String?
     var uiVersion: Int?
+    /// Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current
+    /// client or hub advertises it.
+    var stream: ExtensionUIStreamCapability?
 
-    init(launcher: String? = nil, machine: String? = nil, item: String? = nil, size: String? = nil, tz: String? = nil, locale: String? = nil, platform: String? = nil, uiVersion: Int? = nil) {
+    init(launcher: String? = nil, machine: String? = nil, item: String? = nil, size: String? = nil, tz: String? = nil, locale: String? = nil, platform: String? = nil, uiVersion: Int? = nil, stream: ExtensionUIStreamCapability? = nil) {
         self.launcher = launcher
         self.machine = machine
         self.item = item
@@ -2675,6 +2678,7 @@ nonisolated struct ExtensionUIContext: Codable, Hashable, Sendable {
         self.locale = locale
         self.platform = platform
         self.uiVersion = uiVersion
+        self.stream = stream
     }
 
     enum CodingKeys: String, CodingKey {
@@ -2686,6 +2690,7 @@ nonisolated struct ExtensionUIContext: Codable, Hashable, Sendable {
         case locale
         case platform
         case uiVersion = "ui_version"
+        case stream
     }
 
     init(from decoder: Decoder) throws {
@@ -2698,6 +2703,7 @@ nonisolated struct ExtensionUIContext: Codable, Hashable, Sendable {
         self.locale = try? c.decodeIfPresent(String.self, forKey: .locale)
         self.platform = try? c.decodeIfPresent(String.self, forKey: .platform)
         self.uiVersion = try? c.decodeIfPresent(Int.self, forKey: .uiVersion)
+        self.stream = try? c.decodeIfPresent(ExtensionUIStreamCapability.self, forKey: .stream)
     }
 }
 
@@ -3803,13 +3809,16 @@ nonisolated struct ExtensionView: Codable, Hashable, Sendable {
 }
 
 nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
+    /// Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots.
+    var key: String?
     var title: String?
     var footer: String?
     var items: [ExtensionComponent]
     var more: ExtensionMore?
     var pane: String?
 
-    init(title: String? = nil, footer: String? = nil, items: [ExtensionComponent] = [], more: ExtensionMore? = nil, pane: String? = nil) {
+    init(key: String? = nil, title: String? = nil, footer: String? = nil, items: [ExtensionComponent] = [], more: ExtensionMore? = nil, pane: String? = nil) {
+        self.key = key
         self.title = title
         self.footer = footer
         self.items = items
@@ -3818,6 +3827,7 @@ nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case key
         case title
         case footer
         case items
@@ -3827,6 +3837,7 @@ nonisolated struct ExtensionSection: Codable, Hashable, Sendable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try? c.decodeIfPresent(String.self, forKey: .key)
         self.title = try? c.decodeIfPresent(String.self, forKey: .title)
         self.footer = try? c.decodeIfPresent(String.self, forKey: .footer)
         self.items = (try? c.decodeIfPresent([ExtensionComponent].self, forKey: .items)) ?? []
@@ -9094,5 +9105,574 @@ nonisolated struct ExtensionMessagingError: Codable, Hashable, Sendable {
         self.error = (try? c.decodeIfPresent(String.self, forKey: .error)) ?? ""
         self.code = try? c.decodeIfPresent(String.self, forKey: .code)
         self.view = try? c.decodeIfPresent(ExtensionView.self, forKey: .view)
+    }
+}
+
+/// Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
+/// range.
+typealias ExtensionUIStreamScalar = JSONValue
+
+/// Interaction value: scalar, scalar array or scalar map only (one container level). No functions, callbacks, binary
+/// data or nested containers. Never send credentials or secret field contents.
+typealias ExtensionUIStreamValue = JSONValue
+
+/// Client opt-in for protocol 1 plus supported native component tags. ui_version alone does not opt in. Declaration
+/// is not runtime support.
+nonisolated struct ExtensionUIStreamCapability: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var components: [String]
+
+    init(`protocol`: Int = 0, components: [String] = []) {
+        self.protocol = `protocol`
+        self.components = components
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case components
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.components = try c.decode([String].self, forKey: .components)
+    }
+}
+
+/// Full authoritative tree before deltas, including after resume or recovery. Keys required on sections/items; tiles
+/// and global uniqueness need semantic validation.
+nonisolated struct ExtensionUIStreamSnapshot: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var session: String
+    var epoch: String
+    var version: Int64
+    var rootKey: String
+    var view: ExtensionView
+
+    init(`protocol`: Int = 0, session: String = "", epoch: String = "", version: Int64 = 0, rootKey: String = "", view: ExtensionView = ExtensionView()) {
+        self.protocol = `protocol`
+        self.session = session
+        self.epoch = epoch
+        self.version = version
+        self.rootKey = rootKey
+        self.view = view
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case session
+        case epoch
+        case version
+        case rootKey = "root_key"
+        case view
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.version = try c.decode(Int64.self, forKey: .version)
+        self.rootKey = try c.decode(String.self, forKey: .rootKey)
+        self.view = try c.decode(ExtensionView.self, forKey: .view)
+    }
+}
+
+/// Atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate against a staged
+/// whole tree before committing. Ordering/equality are reducer checks.
+nonisolated struct ExtensionUIStreamDelta: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var session: String
+    var epoch: String
+    var baseVersion: Int64
+    var version: Int64
+    var operations: [ExtensionUIStreamOperation]
+
+    init(`protocol`: Int = 0, session: String = "", epoch: String = "", baseVersion: Int64 = 0, version: Int64 = 0, operations: [ExtensionUIStreamOperation] = []) {
+        self.protocol = `protocol`
+        self.session = session
+        self.epoch = epoch
+        self.baseVersion = baseVersion
+        self.version = version
+        self.operations = operations
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case session
+        case epoch
+        case baseVersion = "base_version"
+        case version
+        case operations
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.baseVersion = try c.decode(Int64.self, forKey: .baseVersion)
+        self.version = try c.decode(Int64.self, forKey: .version)
+        self.operations = try c.decode([ExtensionUIStreamOperation].self, forKey: .operations)
+    }
+}
+
+/// Authenticated owner interaction for the displayed generation/version. Deduplicate event_id before writes. Validate
+/// action against the saved node/event slot, then resolve its callback server-side; no callback code or secrets in
+/// this payload.
+nonisolated struct ExtensionUIStreamEvent: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var session: String
+    var epoch: String
+    var version: Int64
+    var eventId: String
+    var key: String
+    /// Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim.
+    var action: String
+    var event: String
+    var value: ExtensionUIStreamValue
+
+    init(`protocol`: Int = 0, session: String = "", epoch: String = "", version: Int64 = 0, eventId: String = "", key: String = "", action: String = "", event: String = "", value: ExtensionUIStreamValue = .null) {
+        self.protocol = `protocol`
+        self.session = session
+        self.epoch = epoch
+        self.version = version
+        self.eventId = eventId
+        self.key = key
+        self.action = action
+        self.event = event
+        self.value = value
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case session
+        case epoch
+        case version
+        case eventId = "event_id"
+        case key
+        case action
+        case event
+        case value
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.version = try c.decode(Int64.self, forKey: .version)
+        self.eventId = try c.decode(String.self, forKey: .eventId)
+        self.key = try c.decode(String.self, forKey: .key)
+        self.action = try c.decode(String.self, forKey: .action)
+        self.event = try c.decode(String.self, forKey: .event)
+        self.value = try c.decode(ExtensionUIStreamValue.self, forKey: .value)
+    }
+}
+
+/// Atomic native tree operation. Unknown operations invalidate the entire batch and require a snapshot, never
+/// skipping. Tiles update by replacing their containing grid/carousel.
+nonisolated enum ExtensionUIStreamOperation: Codable, Hashable, Sendable {
+    case replace(ExtensionUIStreamReplace)
+    case insert(ExtensionUIStreamInsert)
+    case remove(ExtensionUIStreamRemove)
+    case move(ExtensionUIStreamMove)
+    /// A op this app does not know, or a variant it could not read: reject the batch and request a full snapshot.
+    case unknown(op: String)
+
+    static let ops = ["replace", "insert", "remove", "move"]
+
+    private enum TagKey: String, CodingKey {
+        case tag = "op"
+    }
+
+    var op: String {
+        switch self {
+        case .replace: "replace"
+        case .insert: "insert"
+        case .remove: "remove"
+        case .move: "move"
+        case .unknown(let t): t
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let t = (try? decoder.container(keyedBy: TagKey.self).decode(String.self, forKey: .tag)) ?? ""
+        switch t {
+        case "replace": self = (try? ExtensionUIStreamReplace(from: decoder)).map { .replace($0) } ?? .unknown(op: t)
+        case "insert": self = (try? ExtensionUIStreamInsert(from: decoder)).map { .insert($0) } ?? .unknown(op: t)
+        case "remove": self = (try? ExtensionUIStreamRemove(from: decoder)).map { .remove($0) } ?? .unknown(op: t)
+        case "move": self = (try? ExtensionUIStreamMove(from: decoder)).map { .move($0) } ?? .unknown(op: t)
+        default: self = .unknown(op: t)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .replace(let v): try v.encode(to: encoder)
+        case .insert(let v): try v.encode(to: encoder)
+        case .remove(let v): try v.encode(to: encoder)
+        case .move(let v): try v.encode(to: encoder)
+        case .unknown: break
+        }
+        var c = encoder.container(keyedBy: TagKey.self)
+        try c.encode(op, forKey: .tag)
+    }
+}
+
+/// Replace a complete node/subtree; omitted properties are cleared. Exactly one payload, matching the target kind and
+/// key.
+nonisolated struct ExtensionUIStreamReplace: Codable, Hashable, Sendable {
+    var key: String
+    var view: ExtensionView?
+    var section: ExtensionSection?
+    var item: ExtensionComponent?
+
+    init(key: String = "", view: ExtensionView? = nil, section: ExtensionSection? = nil, item: ExtensionComponent? = nil) {
+        self.key = key
+        self.view = view
+        self.section = section
+        self.item = item
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case view
+        case section
+        case item
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try c.decode(String.self, forKey: .key)
+        self.view = c.contains(.view) ? try c.decode(ExtensionView.self, forKey: .view) : nil
+        self.section = c.contains(.section) ? try c.decode(ExtensionSection.self, forKey: .section) : nil
+        self.item = c.contains(.item) ? try c.decode(ExtensionComponent.self, forKey: .item) : nil
+    }
+}
+
+/// Insert a section under root or item under section. before names a destination sibling; omitted means append.
+nonisolated struct ExtensionUIStreamInsert: Codable, Hashable, Sendable {
+    var parent: String
+    var before: String?
+    var section: ExtensionSection?
+    var item: ExtensionComponent?
+
+    init(parent: String = "", before: String? = nil, section: ExtensionSection? = nil, item: ExtensionComponent? = nil) {
+        self.parent = parent
+        self.before = before
+        self.section = section
+        self.item = item
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case parent
+        case before
+        case section
+        case item
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.parent = try c.decode(String.self, forKey: .parent)
+        self.before = c.contains(.before) ? try c.decode(String.self, forKey: .before) : nil
+        self.section = c.contains(.section) ? try c.decode(ExtensionSection.self, forKey: .section) : nil
+        self.item = c.contains(.item) ? try c.decode(ExtensionComponent.self, forKey: .item) : nil
+    }
+}
+
+/// Remove a node and its subtree, never the root. Existence/root checks are semantic.
+nonisolated struct ExtensionUIStreamRemove: Codable, Hashable, Sendable {
+    var key: String
+
+    init(key: String = "") {
+        self.key = key
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try c.decode(String.self, forKey: .key)
+    }
+}
+
+/// Move a section/item subtree. No cycles, tile moves or wrong parent kinds. Omitted before appends.
+nonisolated struct ExtensionUIStreamMove: Codable, Hashable, Sendable {
+    var key: String
+    var parent: String
+    var before: String?
+
+    init(key: String = "", parent: String = "", before: String? = nil) {
+        self.key = key
+        self.parent = parent
+        self.before = before
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case parent
+        case before
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.key = try c.decode(String.self, forKey: .key)
+        self.parent = try c.decode(String.self, forKey: .parent)
+        self.before = c.contains(.before) ? try c.decode(String.self, forKey: .before) : nil
+    }
+}
+
+/// Owner-bound lifecycle request over the authenticated WebSocket. The transport supplies principal/hub identity;
+/// never trust an owner field from JSON. No endpoint or runtime is enabled by these contracts.
+nonisolated enum ExtensionUIStreamRequest: Codable, Hashable, Sendable {
+    case open(ExtensionUIStreamOpenRequest)
+    case close(ExtensionUIStreamCloseRequest)
+    case suspend(ExtensionUIStreamSuspendRequest)
+    case resume(ExtensionUIStreamResumeRequest)
+    case event(ExtensionUIStreamEventRequest)
+    case snapshot(ExtensionUIStreamSnapshotRequest)
+    /// A request this app does not know, or a variant it could not read: reject the entire request.
+    case unknown(request: String)
+
+    static let requests = ["open", "close", "suspend", "resume", "event", "snapshot"]
+
+    private enum TagKey: String, CodingKey {
+        case tag = "request"
+    }
+
+    var request: String {
+        switch self {
+        case .open: "open"
+        case .close: "close"
+        case .suspend: "suspend"
+        case .resume: "resume"
+        case .event: "event"
+        case .snapshot: "snapshot"
+        case .unknown(let t): t
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let t = (try? decoder.container(keyedBy: TagKey.self).decode(String.self, forKey: .tag)) ?? ""
+        switch t {
+        case "open": self = (try? ExtensionUIStreamOpenRequest(from: decoder)).map { .open($0) } ?? .unknown(request: t)
+        case "close": self = (try? ExtensionUIStreamCloseRequest(from: decoder)).map { .close($0) } ?? .unknown(request: t)
+        case "suspend": self = (try? ExtensionUIStreamSuspendRequest(from: decoder)).map { .suspend($0) } ?? .unknown(request: t)
+        case "resume": self = (try? ExtensionUIStreamResumeRequest(from: decoder)).map { .resume($0) } ?? .unknown(request: t)
+        case "event": self = (try? ExtensionUIStreamEventRequest(from: decoder)).map { .event($0) } ?? .unknown(request: t)
+        case "snapshot": self = (try? ExtensionUIStreamSnapshotRequest(from: decoder)).map { .snapshot($0) } ?? .unknown(request: t)
+        default: self = .unknown(request: t)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        switch self {
+        case .open(let v): try v.encode(to: encoder)
+        case .close(let v): try v.encode(to: encoder)
+        case .suspend(let v): try v.encode(to: encoder)
+        case .resume(let v): try v.encode(to: encoder)
+        case .event(let v): try v.encode(to: encoder)
+        case .snapshot(let v): try v.encode(to: encoder)
+        case .unknown: break
+        }
+        var c = encoder.container(keyedBy: TagKey.self)
+        try c.encode(request, forKey: .tag)
+    }
+}
+
+/// Reauthorize the extension/contribution and explicit context.stream capability; allocate an owner-bound session and
+/// send a snapshot before deltas.
+nonisolated struct ExtensionUIStreamOpenRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var `extension`: String
+    var contribution: String
+    var context: ExtensionUIContext
+    var state: String
+
+    init(`protocol`: Int = 0, requestId: String = "", `extension`: String = "", contribution: String = "", context: ExtensionUIContext = ExtensionUIContext(), state: String = "") {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.extension = `extension`
+        self.contribution = contribution
+        self.context = context
+        self.state = state
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case `extension`
+        case contribution
+        case context
+        case state
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.extension = try c.decode(String.self, forKey: .`extension`)
+        self.contribution = try c.decode(String.self, forKey: .contribution)
+        self.context = try c.decode(ExtensionUIContext.self, forKey: .context)
+        self.state = try c.decode(String.self, forKey: .state)
+    }
+}
+
+/// Idempotent for unknown/already closed owned sessions; unmount and release state, callbacks and effects.
+nonisolated struct ExtensionUIStreamCloseRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var session: String
+    var epoch: String
+
+    init(`protocol`: Int = 0, requestId: String = "", session: String = "", epoch: String = "") {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.session = session
+        self.epoch = epoch
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case session
+        case epoch
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+    }
+}
+
+/// Stop UI intervals/polling and bound pending work. Service work is independent of visibility.
+nonisolated struct ExtensionUIStreamSuspendRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var session: String
+    var epoch: String
+
+    init(`protocol`: Int = 0, requestId: String = "", session: String = "", epoch: String = "") {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.session = session
+        self.epoch = epoch
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case session
+        case epoch
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+    }
+}
+
+/// Reauthorize the owned session, discard stale delta chains and send a fresh snapshot before further deltas.
+nonisolated struct ExtensionUIStreamResumeRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var session: String
+    var epoch: String
+    var version: Int64
+
+    init(`protocol`: Int = 0, requestId: String = "", session: String = "", epoch: String = "", version: Int64 = 0) {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.session = session
+        self.epoch = epoch
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case session
+        case epoch
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.version = try c.decode(Int64.self, forKey: .version)
+    }
+}
+
+/// Authorize and deduplicate the interaction before invoking its registered server-side callback. request_id is
+/// correlation, not write deduplication.
+nonisolated struct ExtensionUIStreamEventRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var interaction: ExtensionUIStreamEvent
+
+    init(`protocol`: Int = 0, requestId: String = "", interaction: ExtensionUIStreamEvent = ExtensionUIStreamEvent()) {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.interaction = interaction
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case interaction
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.interaction = try c.decode(ExtensionUIStreamEvent.self, forKey: .interaction)
+    }
+}
+
+/// Read-only recovery request: reauthorize and send a complete snapshot, never replay an interaction or write.
+nonisolated struct ExtensionUIStreamSnapshotRequest: Codable, Hashable, Sendable {
+    var `protocol`: Int
+    var requestId: String
+    var session: String
+    var epoch: String
+    var version: Int64
+
+    init(`protocol`: Int = 0, requestId: String = "", session: String = "", epoch: String = "", version: Int64 = 0) {
+        self.protocol = `protocol`
+        self.requestId = requestId
+        self.session = session
+        self.epoch = epoch
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case `protocol`
+        case requestId = "request_id"
+        case session
+        case epoch
+        case version
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocol = try c.decode(Int.self, forKey: .`protocol`)
+        self.requestId = try c.decode(String.self, forKey: .requestId)
+        self.session = try c.decode(String.self, forKey: .session)
+        self.epoch = try c.decode(String.self, forKey: .epoch)
+        self.version = try c.decode(Int64.self, forKey: .version)
     }
 }

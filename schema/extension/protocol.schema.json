@@ -226,7 +226,9 @@
         "tz": {"type": "string"},
         "locale": {"type": "string"},
         "platform": {"$ref": "view.schema.json#/$defs/Platform"},
-        "ui_version": {"type": "integer"}
+        "ui_version": {"type": "integer"},
+        "stream": {"$ref": "stream.schema.json#/$defs/UIStreamCapability",
+          "description": "Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current client or hub advertises it."}
       }
     },
     "UIRequest": {

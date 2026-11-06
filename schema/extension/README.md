@@ -8,6 +8,7 @@ from them instead of being written once per platform:
 | --- | --- |
 | `manifest.schema.json` | The manifest `persona-extension.json` (called `persona-plugin.json` before the rename, same fields): the root, `engines`, `runtime`, `secrets`, `permissions`, `contributes` and each extension point's contributions |
 | `protocol.schema.json` | The process protocol: one frame a line (`Frame`, `RPCError`), error codes, `initialize`'s params and answer, `ui.render` / `ui.action`'s params `UIParams`, the badge event, and the `UIContext` / `UIRequest` the apps send the hub to draw a slot and the `UIPlace` the hub lists |
+| `stream.schema.json` | **Contract-only (#5956).** Native UI stream protocol 1: explicit `UIStreamCapability`, owner-session lifecycle requests, complete keyed snapshots, atomic deltas and bounded interaction values; no runtime or transport activation |
 | `view.schema.json` | Views, sections, components (`Component`, told apart by `type`), actions, `ui.action`'s answer, and the `persona-card` in assistant answers (`PersonaCard`, folded into components in #1850) |
 | `messaging.schema.json` | The `messaging` extension point (#2138): the manifest's sources (`MessagingItem`), conversations, messages and parts (`MessagingPart`, by `kind`), sends, composer modes, documents, posts, events and errors; see `docs/extension-messaging.md` |
 | `connector.schema.json` | **Plugin-side.** The `connectors` extension point's calls (`docs/connector-protocol.md`): everything the hub asks a connector program (`connector.status`, `connector.inbox.collect`, `connector.thread.page`, `connector.archive.changes`, `connector.group.*`, `connector.login.step`…), what the program asks back (`connector.secrets.*`, the knowledge base's `connector.posts.*` and `connector.archive.chats`, `connector.credentials.gh_token`, and the hub's own `sent.record`, which puts a send of the connector's in the sent-as-user ledger), the `connector.changed` event, the capabilities, states and error codes |
@@ -28,7 +29,7 @@ python3 scripts/test/test_extension_schema.py     # --check, and the examples ho
 | --- | --- | --- |
 | Go | `sdk/go/wire/wire_gen.go` (its own module `github.com/nwverse/persona/sdk/go`, without dependencies) | Structs; a union is **one flat struct** (every variant's fields together, all optional, `Type` says which), like the hub's `UIElem`; an enum is string constants and a list (`Tones`); `ComponentSince` is the UI version each component came with; `Calls` is the calls and events of the extension points (below) |
 | TypeScript | `sdk/ts/src/wire.ts`; the web app has a copy without the plugin-side schemas, `web/src/lib/extension-wire.ts` | Interfaces; a union is the union of its variants (`Component = TextComponent \| …`); an enum is a union of literals plus `string & {}` (values from a newer hub still read); `CALLS` as in Go |
-| Swift | `apple/Shared/Generated/ExtensionWire.swift` | Type names with an `Extension` prefix (`ExtensionView`), `nonisolated`, `Codable`, `Hashable`, `Sendable`; a missing field or a field of the wrong type never fails (zero value or nil); a union is an enum, an unknown or unreadable component is `.unknown(type:)`; free JSON is `JSONValue` |
+| Swift | `apple/Shared/Generated/ExtensionWire.swift` | Type names with an `Extension` prefix (`ExtensionView`), `nonisolated`, `Codable`, `Hashable`, `Sendable`; legacy models take zero/nil for missing or mistyped fields, while stream envelopes reject missing required and mistyped present fields; a union is an enum, an unknown or unreadable component is `.unknown(type:)`; free JSON is `JSONValue` |
 | Kotlin | `android/core/contracts/src/main/kotlin/persona/core/contracts/generated/ExtensionWire.kt` | kotlinx.serialization data classes, also with the `Extension` prefix, every field with a default; a union is a sealed interface plus a serializer reading `type`, an unknown or unreadable one is `Unknown(type, raw)` and written back as it was. Unlike Swift, an object other than a component with a field of the wrong type does not read at all (the hub checks Views against the schema first, so what the apps get holds) |
 
 The generator also copies the schemas as they are to `sdk/go/wire/schema/` (`go:embed` cannot reach outside the
@@ -36,6 +37,89 @@ module): `wire.Validate(<definition>, value)` checks against them. The hub check
 (`extension.CheckView`), the conformance tests check `initialize`'s answer and every connector call with it, and it
 knows the same subset as the validator in `scripts/test/test_extension_schema.py`.
 The View semantics both extensions and the assistant check (charts, tables, fields) are in `sdk/go/wire/viewcheck.go`.
+
+## Native UI stream protocol 1 (contract only)
+
+Stage 1 of #5956 defines the wire for **server-only TSX execution, native client rendering and WebSocket deltas**.
+It installs no engine, handlers, endpoints, subscriptions or reducer. Runtime activation requires later sandbox,
+resource-isolation and egress verification; existing process extensions and HTTP render/action/invalidation behavior
+are unchanged. The hub still
+advertises UI version 6 and no stream capability; adding generated client models does not enable client support.
+
+### Negotiation and messages
+
+`UIContext.stream = {protocol: 1, components: [...]}` is an explicit opt-in separate from `ui_version`.
+Missing `stream`, even with UI version 7, means snapshot-only. Future handlers must authorize the contribution and
+fit the complete View to supported components and UI version. Widgets/system surfaces continue using snapshots.
+`Section.key` is optional for legacy Views (`x-since: 7`); stream sections and components require bounded keys.
+
+- `UIStreamRequest` has a required `request` discriminator, `protocol: 1` and `request_id`. Requests are `open`,
+  `close`, `suspend`, `resume`, `event` and `snapshot`. Open carries extension/contribution, context and bounded
+  opaque state. Close/suspend carry session/epoch; resume/snapshot also carry the displayed version. Event carries
+  a typed `interaction`. Authentication supplies the principal and hub identity; JSON cannot claim an owner.
+- `UIStreamSnapshot` is `{protocol, session, epoch, version, root_key, view}`. It precedes any delta and is sent again
+  after resume, reconnect or recovery. Future WebSocket relaying must identify these payloads independently from
+  other traffic; this stage does not register transport event names.
+- `UIStreamDelta` is `{protocol, session, epoch, base_version, version, operations}`. Apply only to the matching
+  session/epoch and exact base. Changed batches advance the version; an empty batch keeps it. Rotate the epoch
+  before the positive JSON-safe version range `1..9007199254740991` is exhausted.
+- `UIStreamEvent` is `{protocol, session, epoch, version, event_id, key, action, event, value}`. `action` is the opaque
+  registered `Action.id` for this node/event slot; a node may expose several distinct actions. It grants no authority.
+  `event` is `press`, `change` or `submit`; values are JSON scalars, scalar arrays or scalar maps, not arbitrary nested
+  objects. Callbacks stay on the server. Never send execution code, functions, runtime configuration, credentials or
+  secret input contents. `event_id` deduplicates accepted interactions before writes; `request_id` only correlates
+  lifecycle requests.
+
+`replace` addresses `key` and carries **exactly one** complete `view`, `section` or `item`. Missing fields clear the
+old payload's fields; replacement is not a property merge. `insert` carries exactly one `section` or `item` plus
+`parent` and optional `before`; omitted `before` appends. `remove` addresses a subtree by key, never the root.
+`move` addresses a section/item subtree plus its destination parent/optional sibling. There are no array offsets,
+DOM nodes, HTML, arbitrary component properties or executable callback payloads. Root children are Sections;
+Section children are Components. Tiles retain the page key namespace but initially update only by replacing their
+containing grid/carousel. Validation-only `UIStreamView`/`UIStreamSection`/`UIStreamItem` aliases constrain the
+existing native vocabulary without generating a competing tree model.
+
+### Bounds and later semantic gates
+
+| Limit | Contract |
+| --- | --- |
+| Session/epoch/request/event IDs and node keys | 1–128 Unicode code points |
+| Operations per delta | 0–256 |
+| Capability component list | At most 64 unique tags, each 1–64 code points |
+| Interaction value | At most one container level, 64 entries; map keys 1–128, strings at most 4096 code points; finite numbers within ±(2^53−1) |
+| Opaque state | Schema: at most 16384 code points; transport/manager: at most 16 KiB UTF-8 |
+| Frames | At most 1 MiB UTF-8; requests/interactions at most 64 KiB UTF-8, checked before JSON parsing |
+| Materialized tree | At most 300 total logical nodes and depth 16; schema only bounds each sections/items array |
+| Pending work | At most 256 pending operations and 64 events per session; overflow discards deltas and recovers a snapshot, never retries a write |
+| Lifecycle defaults | At most 8 sessions per principal; suspended/disconnected state expires after 5 minutes with a sweep no later than 1 minute |
+
+**JSON Schema does not enforce cross-field or topology semantics.** Later manager/reducer work must bound byte size,
+depth, global nodes and queues; enforce extension/runtime-wide session totals (required before activation); authorize
+owner, extension, contribution, active generation and node/callback; enforce all keys including tiles, uniqueness,
+replacement key/kind equality, parent/sibling existence and kinds, no cycles/root removal/tile operations, version
+ordering, capability support and complete View semantics. Stage and validate the entire resulting tree before an
+atomic commit. Unknown operations and any invalid batch require a full snapshot, never partial application or
+skipping. Generated Swift/Kotlin unknown variants are recovery/rejection signals, not permission to draw/apply them.
+Schema validation and successful decoding are not authorization or proof of atomicity. Validate raw stream numbers
+before float64/JavaScript rounding: near-limit fractions can otherwise become apparently safe integral versions.
+Go's raw stream validator retains numeric literals; Python stream fixtures use Decimal. Already-decoded floating
+values cannot recover discarded digits.
+
+Suspend stops UI-only timers/polling and bounds/cancels pending UI work, independently of service work. Resume and
+reconnect reauthorize and send a fresh full snapshot rather than replaying a stale chain. Close is idempotent for
+already closed/unknown owned sessions, and releases effects, timers, callbacks and ephemeral state. Upgrade,
+disable, revocation or runtime restart disposes the generation; the client reopens. These are requirements for the
+later implementation, not lifecycle code implemented here.
+
+`UIStreamSnapshot.keyed.json` → `UIStreamDelta.operations.json` → `UIStreamSnapshot.after-operations.json` is the
+shared native operation trace (root metadata clearing, zero ratio, insert, move, remove, empty section replacement).
+Stage 1 checks schemas and serialization, **not trace reduction**. `UIStreamDelta.empty.json` and event fixtures
+cover empty batches, null/false/zero/empty strings and collections. Stream-bound Go wrappers preserve required
+native component fields (`code.text`, empty table rows, file entries and comments), without changing the public
+legacy Component encoder. The required-empty fixture checks stream shape/round trips only: legacy `CheckView`
+re-encodes native Components and still rejects these fields as missing. Resolve that validation boundary before
+stream runtime activation; do not treat the fixture as semantic acceptance. General optional empty component
+properties still have their existing Go `omitempty` behavior and require a later explicitly scoped serialization decision.
 
 ## Plugin-side schemas and calls
 
@@ -94,7 +178,11 @@ The generator understands only what is below; anything else stops it with an err
   annotations `x-side`, `x-methods` and `x-events` above. **Definition names are global**; a reference to another file
   is `<file>.json#/$defs/<name>`.
 - A definition is one of:
-  - **A struct**: `"type": "object"` + `properties` + `required`. Known fields keep their types. An object that says
+  - **A validation-only alias**: `$ref` to an existing named native type, optionally with validation overlays. The
+    generator reuses that type and rejects alias cycles; no second model is generated.
+  - **A struct**: `"type": "object"` + `properties` + `required`. An object `oneOf` may contain single-field
+    `required` alternatives for exactly one payload; TS generates an exclusive union, other models rely on schema
+    validation. Known fields keep their types. An object that says
     `additionalProperties: true` or a sub-schema also keeps extra keys (see "Custom contributions" below); one that
     says nothing or `false` is generated as before.
   - **A string enum**: `"type": "string"` + `enum`. The field stays a string in every language (an unknown value
@@ -104,7 +192,14 @@ The generator understands only what is below; anything else stops it with an err
   - **A union told apart by a field**: `oneOf` of `$ref`s only, with `"x-discriminator": "type"`; each variant is a
     struct that has the field as a distinct `const` string.
   - **Free JSON**: `oneOf` with `"x-untagged": true` (such as `runtime.command`, a string or an object): generated
-    as free JSON (Go `json.RawMessage`, TS `unknown`, Swift `JSONValue`, Kotlin `JsonElement`).
+    as free JSON (Go `json.RawMessage`, TS `unknown`, Swift `JSONValue`, Kotlin `JsonElement`). With
+    `"x-json-value": true`, TS instead generates the schema's scalar/array/map union (including `null`); the other
+    languages retain their native JSON values and require schema validation for bounds.
+  - `"x-preserve-required": true` retains required zero/empty fields in Go's flat unions and in Kotlin stream
+    serializers, including empty native children under the production codec, without changing legacy encoding.
+    Swift stream envelopes reject missing required or mistyped present fields instead of normalizing them.
+    Union variants inherit it. `"x-unknown-policy": "recover" | "reject"` documents how generated client
+    unknown variants must be handled; it is not a reducer. `const` fields retain literal types in TS.
 - Field types: `string` (`format: date-time` is a time: Go `time.Time`, a string elsewhere), `integer`
   (`"x-go-type": "int64"` is 64 bits: Go `int64`, Swift `Int64`, Kotlin `Long`; `Int` on the watch is 32 bits and
   cannot hold a build number), `number`, `boolean`, `array` + `items`, an `object` **without** `properties` +
@@ -118,7 +213,7 @@ The generator understands only what is below; anything else stops it with an err
 - In one union, same-named fields of several variants become one field of Go's flat struct, so their types must be
   the same (enums count as strings); the generator stops otherwise: give the new field another name.
 - The validation keywords (`pattern`, `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, `maxItems`,
-  `uniqueItems`, `minProperties`, `maxProperties`, `const`, `enum`) do not change what is generated; `sdk/go/wire`'s
+  `uniqueItems`, `minProperties`, `maxProperties`, `propertyNames`, `const`, `enum`) do not change what is generated; `sdk/go/wire`'s
   `Validate` and the validator in `scripts/test/test_extension_schema.py` both know them. A keyword neither knows
   fails `test_schema_keywords_are_known` (#4012); what an `x-` annotation holds is not checked as keywords.
   Rules a schema cannot say (at most 300 components a page, the same labels in every chart series, field names

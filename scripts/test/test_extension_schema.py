@@ -7,10 +7,12 @@ examples/invalid/ must not. The validator below knows the subset the generator d
 """
 
 import json
+import math
 import re
 import subprocess
 import sys
 import unittest
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,18 +57,21 @@ class Validator:
                 for option in schema["oneOf"]:
                     target, f = self.resolve(option["$ref"], here)
                     if target["properties"][disc].get("const") == tag:
-                        return self.errors(target, value, f, at)
-                return [f"{at}: no variant with {disc} {tag!r}"]
-            passing = [o for o in schema["oneOf"] if not self.errors(o, value, here, at)]
-            if len(passing) != 1:
-                errs.append(f"{at}: matches {len(passing)} of oneOf, not one")
-            return errs
+                        errs += self.errors(option, value, here, at)
+                        break
+                else:
+                    return [f"{at}: no variant with {disc} {tag!r}"]
+            else:
+                passing = [o for o in schema["oneOf"] if not self.errors(o, value, here, at)]
+                if len(passing) != 1:
+                    errs.append(f"{at}: matches {len(passing)} of oneOf, not one")
+            # Every oneOf form retains sibling constraints and selected branch overlays.
         t = schema.get("type")
-        types = {"string": str, "boolean": bool, "object": dict, "array": list}
-        if t == "integer":
-            ok = isinstance(value, int) and not isinstance(value, bool)
-        elif t == "number":
-            ok = isinstance(value, (int, float)) and not isinstance(value, bool)
+        types = {"string": str, "boolean": bool, "object": dict, "array": list, "null": type(None)}
+        if t in ("integer", "number"):
+            finite = value.is_finite() if isinstance(value, Decimal) else (
+                isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value))
+            ok = finite and (t == "number" or value == (value.to_integral_value() if isinstance(value, Decimal) else math.trunc(value)))
         elif t:
             ok = isinstance(value, types[t])
         else:
@@ -84,7 +89,7 @@ class Validator:
                 errs.append(f"{at}: longer than {schema['maxLength']}")
             if "pattern" in schema and not re.search(schema["pattern"], value):
                 errs.append(f"{at}: {value!r} does not match {schema['pattern']}")
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
             if "minimum" in schema and value < schema["minimum"]:
                 errs.append(f"{at}: below {schema['minimum']}")
             if "maximum" in schema and value > schema["maximum"]:
@@ -114,6 +119,8 @@ class Validator:
                 errs.append(f"{at}: more than {schema['maxProperties']} properties")
             extra = schema.get("additionalProperties", True)
             for k, v in value.items():
+                if "propertyNames" in schema:
+                    errs += self.errors(schema["propertyNames"], k, here, f"{at}.<key>")
                 if k in props:
                     errs += self.errors(props[k], v, here, f"{at}.{k}")
                 elif extra is False:
@@ -149,7 +156,7 @@ class ExtensionSchemaTests(unittest.TestCase):
         self.assertGreater(len(examples), 10)
         for f in examples:
             with self.subTest(example=f.name):
-                errs = self.v.validate(f.name.split(".")[0], json.loads(f.read_text()))
+                errs = self.v.validate(f.name.split(".")[0], json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float))
                 self.assertEqual(errs, [])
 
     def test_invalid_examples_are_refused(self):
@@ -158,14 +165,14 @@ class ExtensionSchemaTests(unittest.TestCase):
         self.assertGreater(len(examples), 5)
         for f in examples:
             with self.subTest(example=f.name):
-                self.assertNotEqual(self.v.validate(f.name.split(".")[0], json.loads(f.read_text())), [])
+                self.assertNotEqual(self.v.validate(f.name.split(".")[0], json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float)), [])
 
     def test_schema_keywords_are_known(self):
         # A keyword neither validator knows is silently ignored (maxProperties and uniqueItems were, #4012): every
         # keyword the schemas use is one both validate, or an annotation (description, title, format, x-*).
         validated = {"$ref", "oneOf", "type", "const", "enum", "minLength", "maxLength", "pattern", "minimum", "maximum",
                      "items", "minItems", "maxItems", "uniqueItems", "properties", "required", "additionalProperties",
-                     "minProperties", "maxProperties", "$defs"}
+                     "minProperties", "maxProperties", "propertyNames", "$defs"}
         annotations = {"$schema", "$id", "title", "description", "format"}
         unknown = set()
 
@@ -200,6 +207,52 @@ class ExtensionSchemaTests(unittest.TestCase):
         manifest["off_by_default"] = ["voice/v"]
         self.assertEqual(self.v.validate("Manifest", manifest), [])
 
+    def test_stream_raw_number_precision(self):
+        for raw in ["9007199254740991.1", "-9007199254740991.1"]:
+            self.assertNotEqual(self.v.validate("UIStreamScalar", json.loads(raw, parse_float=Decimal)), [])
+        for raw in ["9007199254740990.5", "0.99999999999999999", "1e-20000"]:
+            self.assertNotEqual(self.v.validate("UIStreamVersion", json.loads(raw, parse_float=Decimal)), [])
+        for raw in ["1", "1e0", "9007199254740991", "9007199254740991.0"]:
+            self.assertEqual(self.v.validate("UIStreamVersion", json.loads(raw, parse_float=Decimal)), [])
+        for raw in ["0.5", "1e-20000", "-9007199254740991"]:
+            self.assertEqual(self.v.validate("UIStreamScalar", json.loads(raw, parse_float=Decimal)), [])
+
+    def test_stream_bounds_and_payload_validation(self):
+        def check(definition, value, valid):
+            self.assertEqual(not self.v.validate(definition, value), valid, (definition, value))
+
+        base = {"protocol": 1, "session": "session-a", "epoch": "epoch-a", "version": 1,
+                "base_version": 1, "operations": []}
+        for version in [0, -1, 1.5, True, 9007199254740992]:
+            check("UIStreamDelta", dict(base, version=version), False)
+        check("UIStreamDelta", dict(base, version=9007199254740991), True)
+        for size in [256, 257]:
+            check("UIStreamDelta", dict(base, operations=[{"op": "remove", "key": "node"}] * size), size == 256)
+        for key in ["", "x" * 128, "x" * 129]:
+            check("UIStreamDelta", dict(base, session=key), len(key) == 128)
+        for value in [None, False, 0, "", [], {}, [None] * 64, {"x" * 128: False}]:
+            check("UIStreamValue", value, True)
+        for value in [[None] * 65, {str(i): 0 for i in range(65)}, {"": 0}, {"x" * 129: 0},
+                      [[0]], {"nested": {}}, "x" * 4097, float("nan"), float("inf")]:
+            check("UIStreamValue", value, False)
+        # oneOf payload presence must not bypass the field's typed payload or closed-object validation.
+        for op in [{"op": "replace", "key": "node", "item": {"type": "text", "key": "node"}},
+                   {"op": "replace", "key": "node", "item": {"type": "text", "key": "node", "text": "Demo", "html": "code"}},
+                   {"op": "replace", "key": "node", "item": {"type": "divider"}},
+                   {"op": "replace", "key": "node", "item": {"type": "divider", "key": ""}},
+                   {"op": "replace", "key": "node", "item": {"type": "divider", "key": "node", "execute": "code"}},
+                   {"op": "replace", "key": "node", "item": None},
+                   {"op": "replace", "key": "node", "view": {"sections": []}, "extra": True}]:
+            check("UIStreamOperation", op, False)
+
+    def test_stream_semantic_checks_are_not_claimed_by_schema(self):
+        # Existence, target kind/key equality, cycles, ordering and cross-owner authorization need the later reducer.
+        check = self.v.validate
+        self.assertEqual(check("UIStreamDelta", {"protocol": 1, "session": "session-a", "epoch": "epoch-a",
+                         "base_version": 5, "version": 2, "operations": [{"op": "move", "key": "node", "parent": "node"}]}), [])
+        self.assertEqual(check("UIContext", {"ui_version": 7}), [])  # not stream opt-in
+        self.assertEqual(check("Section", {"items": []}), [])  # legacy keys remain optional
+
     def test_persona_card_cases_hold_to_the_schema(self):
         # examples/persona-card/<case>.json: a persona-card and the view every app turns it into (null: not drawn,
         # it stays a code block); sdk/go/wire/personacard.go is the reference (TestPersonaCardCases).
@@ -207,7 +260,7 @@ class ExtensionSchemaTests(unittest.TestCase):
         self.assertGreater(len(cases), 5)
         for f in cases:
             with self.subTest(case=f.name):
-                c = json.loads(f.read_text())
+                c = json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float)
                 self.assertEqual(self.v.validate("PersonaCard", c["card"]), [])
                 if c["view"] is not None:
                     self.assertEqual(self.v.validate("View", c["view"]), [])
@@ -220,7 +273,7 @@ class ExtensionSchemaTests(unittest.TestCase):
         seen = set()
         for f in pages:
             with self.subTest(page=f.name):
-                v = json.loads(f.read_text())
+                v = json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float)
                 self.assertEqual(self.v.validate("View", v), [])
                 seen |= {i["type"] for s in v["sections"] for i in s["items"]}
         view = self.v.files["view.schema.json"]["$defs"]
@@ -234,10 +287,10 @@ class ExtensionSchemaTests(unittest.TestCase):
         tags = {view[o["$ref"].split("/")[-1]]["properties"]["type"]["const"] for o in view["Component"]["oneOf"]}
         seen = set()
         for f in (SCHEMA_DIR / "examples").glob("View.*.json"):
-            for s in json.loads(f.read_text())["sections"]:
+            for s in json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float)["sections"]:
                 seen |= {i["type"] for i in s["items"]}
         for f in (SCHEMA_DIR / "examples" / "assistant").glob("*.json"):
-            v = json.loads(f.read_text())
+            v = json.loads(f.read_text(), parse_float=Decimal if f.name.startswith("UIStream") else float)
             self.assertEqual(self.v.validate("View", v), [])
             for s in v["sections"]:
                 seen |= {i["type"] for i in s["items"]}

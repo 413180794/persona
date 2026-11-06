@@ -68,6 +68,8 @@
     "Section": {
       "type": "object",
       "properties": {
+        "key": {"type": "string", "minLength": 1, "maxLength": 128, "x-since": 7,
+          "description": "Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots."},
         "title": {"type": "string", "maxLength": 2000},
         "footer": {"type": "string", "maxLength": 2000},
         "items": {"type": "array", "items": {"$ref": "#/$defs/Component"}},

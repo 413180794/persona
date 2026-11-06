@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_DIR = ROOT / "schema" / "extension"
 SCHEMA_FILES = ["manifest.schema.json", "protocol.schema.json", "view.schema.json", "messaging.schema.json",
-                "connector.schema.json", "channel.schema.json", "kb.schema.json"]
+                "connector.schema.json", "channel.schema.json", "kb.schema.json", "stream.schema.json"]
 
 GO_OUT = ROOT / "sdk/go/wire/wire_gen.go"
 # The TypeScript SDK's types, and the web app's copy. A schema file marked "x-side": "plugin" (what only the hub and
@@ -65,6 +65,7 @@ class Field:
     required: bool
     doc: str = ""
     pointer: bool = False  # x-go-pointer: a Go scalar whose absence means something
+    literal: object = None  # const fields retain literal types in TypeScript
 
 
 @dataclass
@@ -81,6 +82,10 @@ class Def:
     union: str = ""  # the union a variant belongs to
     extra: bool = False  # explicit additionalProperties: retain extra keys as opaque JSON
     side: str = ""  # the file's x-side: "plugin" is generated into the SDKs only
+    exclusive: list[str] = field(default_factory=list)  # object oneOf: exactly one required payload
+    json_types: list[TypeRef] = field(default_factory=list)  # bounded untagged JSON, typed in TS
+    preserve_required: bool = False  # strict stream fields/serialization; legacy native models stay permissive
+    unknown_policy: str = "skip"  # stream operations recover; lifecycle requests reject
 
 
 def is_scalar(s: dict) -> bool:
@@ -111,12 +116,16 @@ def load() -> dict[str, Def]:
             raise SchemaError(f"$ref {ref!r}: {name} is in {raw[name][0]}")
         return name
 
-    def typeof(s: dict, at: str) -> TypeRef:
+    def typeof(s: dict, at: str, aliases: tuple[str, ...] = ()) -> TypeRef:
         if "$ref" in s:
             name = resolve(s["$ref"], at.split(".")[0])
             target = raw[name][1]
+            if "$ref" in target:
+                if name in aliases:
+                    raise SchemaError(f"{at}: cyclic validation alias {name}")
+                return typeof(target, name, aliases + (name,))
             if target.get("x-untagged"):
-                return TypeRef("any")
+                return TypeRef("ref", ref=name) if target.get("x-json-value") else TypeRef("any")
             if is_scalar(target):
                 return typeof(target, name)
             return TypeRef("ref", ref=name)
@@ -125,6 +134,8 @@ def load() -> dict[str, Def]:
             if "const" in s:
                 return TypeRef("string")
             return TypeRef("any")
+        if t == "null":
+            return TypeRef("null")
         if t == "string":
             return TypeRef("time") if s.get("format") == "date-time" else TypeRef("string")
         if t == "integer":
@@ -147,9 +158,15 @@ def load() -> dict[str, Def]:
         doc = s.get("description", "")
         if is_scalar(s):
             continue  # a named string (an id, a host): used as its type where it is referenced
+        if "$ref" in s:
+            typeof(s, name)  # validation-only alias: reuse the referenced native wire type, checking cycles
+            continue
         if s.get("x-untagged"):
-            defs[name] = Def(name, "any", doc)
-        elif "oneOf" in s:
+            if s.get("x-json-value"):
+                defs[name] = Def(name, "any", doc, json_types=[typeof(v, name) for v in s["oneOf"]])
+            else:
+                defs[name] = Def(name, "any", doc)
+        elif "oneOf" in s and s.get("type") != "object":
             disc = s.get("x-discriminator")
             if not disc:
                 raise SchemaError(f"{name}: a oneOf needs x-discriminator (or x-untagged for free JSON)")
@@ -162,16 +179,29 @@ def load() -> dict[str, Def]:
             req = set(s.get("required", []))
             for fname, fs in s.get("properties", {}).items():
                 fields.append(Field(fname, typeof(fs, f"{name}.{fname}"), fname in req, fs.get("description", ""),
-                                    bool(fs.get("x-go-pointer"))))
+                                    bool(fs.get("x-go-pointer")), fs.get("const")))
+            exclusive = []
+            for option in s.get("oneOf", []):
+                if set(option) != {"required"} or len(option["required"]) != 1:
+                    raise SchemaError(f"{name}: object oneOf supports only single required payload fields")
+                payload = option["required"][0]
+                if payload not in s.get("properties", {}) or payload in req or payload in exclusive:
+                    raise SchemaError(f"{name}: object oneOf payload must be distinct, declared and optional")
+                exclusive.append(payload)
             extra = s.get("additionalProperties")
             keep_extra = extra is True or isinstance(extra, dict)
             if keep_extra and any(go_field(f.name) == "AdditionalProperties" or lower_camel(f.name) == "additionalProperties"
                                   for f in fields):
                 raise SchemaError(f"{name}: additionalProperties is reserved for the extra-key map")
-            defs[name] = Def(name, "struct", doc, fields=fields, since=s.get("x-since", 0), extra=keep_extra)
+            defs[name] = Def(name, "struct", doc, fields=fields, since=s.get("x-since", 0), extra=keep_extra,
+                             exclusive=exclusive)
         else:
             raise SchemaError(f"{name}: not a struct, string enum, discriminated union or x-untagged")
         defs[name].side = sides[f]
+        defs[name].preserve_required = bool(s.get("x-preserve-required"))
+        defs[name].unknown_policy = s.get("x-unknown-policy", "skip")
+        if defs[name].unknown_policy not in ("skip", "recover", "reject"):
+            raise SchemaError(f"{name}: unsupported x-unknown-policy")
 
     for u in [d for d in defs.values() if d.kind == "union"]:
         for v in u.variants:
@@ -185,6 +215,7 @@ def load() -> dict[str, Def]:
             if vd.union:
                 raise SchemaError(f"{v}: in two unions")
             vd.tag, vd.union = const, u.name
+            vd.preserve_required = vd.preserve_required or u.preserve_required
             vd.fields = [x for x in vd.fields if x.name != u.discriminator]
         tags = [defs[v].tag for v in u.variants]
         if len(set(tags)) != len(tags):
@@ -335,6 +366,12 @@ def comment(prefix: str, text: str, width: int = 118) -> list[str]:
     return lines
 
 
+def unknown_doc(d: Def) -> str:
+    prefix = f"A {d.discriminator} this app does not know, or a variant it could not read: "
+    return prefix + {"skip": "skipped when drawn.", "recover": "reject the batch and request a full snapshot.",
+                     "reject": "reject the entire request."}[d.unknown_policy]
+
+
 def reserved_keys(defs: dict[str, Def], d: Def) -> list[str]:
     keys = [f.name for f in d.fields]
     if d.union:
@@ -390,6 +427,92 @@ def gen_go(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
             tag += ",omitzero" if f.type.kind == "time" or f.type.kind == "array" and f.pointer else ",omitempty"
         return comment("\t// ", f.doc) + [f"\t{go_field(f.name)} {typ} `json:\"{tag}\"`"]
 
+    # Preserve required native union fields only when reached from an explicitly preserving stream object.
+    # Ancestor wrappers override native children, never the legacy public models' encoders.
+    def refs(t: TypeRef) -> list[str]:
+        if t.kind == "ref":
+            return [t.ref]
+        return refs(t.of) if t.of else []
+
+    reachable: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in reachable:
+            return
+        reachable.add(name)
+        d = defs[name]
+        for f in flat_fields(defs, d) if d.kind == "union" else d.fields:
+            for ref in refs(f.type):
+                visit(ref)
+
+    for d in defs.values():
+        if d.preserve_required:
+            visit(d.name)
+    wrapped = {name for name in reachable if defs[name].kind == "union" and not defs[name].preserve_required}
+    while True:
+        ancestors = {name for name in reachable if not defs[name].preserve_required
+                     and any(ref in wrapped for f in defs[name].fields for ref in refs(f.type))}
+        if ancestors <= wrapped:
+            break
+        wrapped |= ancestors
+
+    def wire_type(t: TypeRef, optional: bool, pointer: bool) -> str:
+        if t.kind == "ref" and t.ref in wrapped:
+            return ("*" if optional else "") + "requiredJSON" + t.ref
+        if t.kind == "array":
+            return "[]" + wire_type(t.of, False, False)
+        if t.kind == "map":
+            return "map[string]" + wire_type(t.of, False, False)
+        return gtype(t, optional, pointer)
+
+    def converted(t: TypeRef, value: str, optional: bool, pointer: bool) -> str:
+        typ = wire_type(t, optional, pointer)
+        if typ == gtype(t, optional, pointer):
+            return value
+        if t.kind == "ref":
+            return f"({typ})({value})"
+        if t.kind == "array":
+            body = f"for i, item := range {value} {{ out[i] = {converted(t.of, 'item', False, False)} }}"
+            allocation = f"make({typ}, len({value}))"
+        else:
+            body = f"for key, item := range {value} {{ out[key] = {converted(t.of, 'item', False, False)} }}"
+            allocation = f"make({typ}, len({value}))"
+        return f"func() {typ} {{ if {value} == nil {{ return nil }}; out := {allocation}; {body}; return out }}()"
+
+    def marshaler(d: Def, name: str) -> list[str]:
+        fields = flat_fields(defs, d) if d.kind == "union" else d.fields
+        groups: dict[tuple[str, ...], list[str]] = {}
+        if d.kind == "union":
+            for variant in d.variants:
+                required = tuple(sorted(f.name for f in defs[variant].fields if f.required))
+                groups.setdefault(required, []).append(defs[variant].tag)
+        else:
+            groups[tuple(f.name for f in fields if f.required)] = []
+        lines = [f"func (v {name}) MarshalJSON() ([]byte, error) {{",
+                 f"\ttype plain {d.name}"]
+        if d.kind == "union":
+            lines.append(f"\tswitch v.{go_field(d.discriminator)} {{")
+        for required, tags in groups.items():
+            if tags:
+                lines.append("\tcase " + ", ".join(json.dumps(tag) for tag in tags) + ":")
+            # Shadow only required or recursively wrapped fields. Embedding preserves optional/extraneous
+            # fields and their legacy omitempty tags, and avoids marshaling any nested payload twice.
+            selected = [f for f in fields if f.name in required or any(ref in wrapped for ref in refs(f.type))]
+            lines += ["\t\treturn json.Marshal(struct {", "\t\t\tplain"]
+            for f in selected:
+                optional = d.kind == "union" or not f.required
+                typ = wire_type(f.type, optional, f.pointer)
+                tag = f.name + ("" if f.name in required else ",omitempty")
+                lines.append(f'\t\t\t{go_field(f.name)} {typ} `json:"{tag}"`')
+            lines += ["\t\t}{", "\t\t\tplain: plain(v),"]
+            for f in selected:
+                value = converted(f.type, "v." + go_field(f.name), d.kind == "union" or not f.required, f.pointer)
+                lines.append(f"\t\t\t{go_field(f.name)}: {value},")
+            lines.append("\t\t})")
+        if d.kind == "union":
+            lines += ["\tdefault:", "\t\treturn json.Marshal(plain(v))", "\t}"]
+        return lines + ["}", ""]
+
     for d in defs.values():
         if d.union:
             continue
@@ -433,6 +556,8 @@ def gen_go(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
                 if keys:
                     out += ["\t\tswitch key {", f"\t\tcase {keys}:", "\t\t\tcontinue", "\t\t}"]
                 out += ["\t\tfields[key] = value", "\t}", "\treturn json.Marshal(fields)", "}", ""]
+            elif d.preserve_required and any(ref in wrapped for f in d.fields for ref in refs(f.type)):
+                out += marshaler(d, d.name)
         elif d.kind == "union":
             disc = d.discriminator
             out += comment("// ", named(d.name, d.doc) + f" One struct for every variant: {disc} says which fields "
@@ -447,10 +572,16 @@ def gen_go(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
             out += [")", "", f"// {d.name}{plural(go_field(disc))} are the {disc}s of {d.name}, in order.",
                     f"var {d.name}{plural(go_field(disc))} = []string{{"
                     + ", ".join(json.dumps(defs[v].tag) for v in d.variants) + "}", ""]
+            if d.preserve_required:
+                out += marshaler(d, d.name)
             if any(defs[v].since for v in d.variants):
                 out += [f"// {d.name}Since is the UI version that brought each {disc}.",
                         f"var {d.name}Since = map[string]int{{"
                         + ", ".join(f"{json.dumps(defs[v].tag)}: {defs[v].since}" for v in d.variants) + "}", ""]
+    for name in sorted(wrapped):
+        out += [f"// requiredJSON{name} preserves required fields only inside stream payloads.",
+                f"type requiredJSON{name} {name}", ""]
+        out += marshaler(defs[name], "requiredJSON" + name)
     out += ["// newDef makes a value of each definition, for tests that read examples by definition name.",
             "var newDef = map[string]func() any{"]
     for d in defs.values():
@@ -478,6 +609,8 @@ def gen_ts(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
             return "boolean"
         if k == "any":
             return "unknown"
+        if k == "null":
+            return "null"
         if k == "array":
             inner = ttype(t.of)
             return f"{inner}[]" if re.fullmatch(r"\w+", inner) else f"({inner})[]"
@@ -492,7 +625,8 @@ def gen_ts(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
                 lines.append(f"  /** {f.doc} */")
             elif f.doc:
                 lines += ["  /**"] + comment("   * ", f.doc) + ["   */"]
-            lines.append(f"  {f.name}{'' if f.required else '?'}: {ttype(f.type)};")
+            typ = json.dumps(f.literal) if f.literal is not None else ttype(f.type)
+            lines.append(f"  {f.name}{'' if f.required else '?'}: {typ};")
         return lines
 
     def doc(text: str) -> list[str]:
@@ -508,17 +642,27 @@ def gen_ts(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
                        "as const;")
             out.append("")
         elif d.kind == "any":
-            out += doc(d.doc) + [f"export type {d.name} = unknown;", ""]
+            typ = " | ".join(ttype(t) for t in d.json_types) if d.json_types else "unknown"
+            out += doc(d.doc) + [f"export type {d.name} = {typ};", ""]
         elif d.kind == "struct":
             out += doc(d.doc)
-            out.append(f"export interface {d.name} {{")
+            out.append(f"export type {d.name} = {{" if d.exclusive else f"export interface {d.name} {{")
             if d.union:
                 out.append(f"  {defs[d.union].discriminator}: {json.dumps(d.tag)};")
-            out += fields(d.fields)
+            out += fields([f for f in d.fields if f.name not in d.exclusive])
             if d.extra:
                 out += ["  /** Extra keys are opaque JSON; declared properties keep their own types. */",
                         "  [key: string]: unknown;"]
-            out += ["}", ""]
+            if d.exclusive:
+                out += ["} & ("]
+                for payload in d.exclusive:
+                    parts = [f"{f.name}{'' if f.name == payload else '?'}: "
+                             + (ttype(f.type) if f.name == payload else "never")
+                             for f in d.fields if f.name in d.exclusive]
+                    out.append("  | { " + "; ".join(parts) + " }")
+                out += [");", ""]
+            else:
+                out += ["}", ""]
         elif d.kind == "union":
             out += doc(d.doc)
             out.append(f"export type {d.name} =")
@@ -535,8 +679,8 @@ def gen_ts(defs: dict[str, Def], calls: list[Call] | None = None) -> str:
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Swift: Codable structs that never fail on a missing or mistyped field (it takes its zero value, or nil), unions as enums whose unknown or
-# unreadable variants decode as .unknown, enums as string constants (a newer hub's values pass through).
+# Swift: legacy Codable structs tolerate missing/mistyped fields; new stream envelopes reject them. Unions decode
+# unreadable variants as .unknown; enums retain string constants (newer hub values pass through).
 
 SWIFT_KEYWORDS = {"protocol", "extension", "default", "func", "class", "struct", "enum", "var", "let", "in", "is", "as",
                   "for", "if", "return", "switch", "case", "where", "import", "init", "operator", "static", "public",
@@ -601,6 +745,8 @@ def gen_swift(defs: dict[str, Def]) -> str:
         if k == "map":
             return "[:]"
         d = defs[t.ref]
+        if d.kind == "any":
+            return ".null"
         if d.kind == "enum":
             return '""'
         if d.kind == "union":
@@ -645,6 +791,12 @@ def gen_swift(defs: dict[str, Def]) -> str:
                 if d.extra:
                     value = f"ExtensionWireJSON.decode({stype(f.type)}.self, from: raw[{json.dumps(f.name)}])"
                     lines.append(f"        self.{n} = {value}" + (f" ?? {zero(f.type)}" if f.required else ""))
+                elif d.preserve_required:
+                    # New stream envelopes cannot normalize malformed fields into valid operations. Required JSON
+                    # values decode null explicitly; optional typed fields reject a present null or wrong type.
+                    decode = f"try c.decode({stype(f.type)}.self, forKey: .{key})"
+                    lines.append(f"        self.{n} = {decode}" if f.required
+                                 else f"        self.{n} = c.contains(.{key}) ? {decode} : nil")
                 elif f.required:
                     lines.append(f"        self.{n} = (try? c.decodeIfPresent({stype(f.type)}.self, forKey: .{key})) "
                                  f"?? {zero(f.type)}")
@@ -700,7 +852,7 @@ def gen_swift(defs: dict[str, Def]) -> str:
             out.append(f"nonisolated enum {name}: Codable, Hashable, Sendable {{")
             for v in d.variants:
                 out.append(f"    case {swift_ident(lower_camel(defs[v].tag))}({swift_name(v)})")
-            out += [f"    /// A {disc} this app does not know, or a variant it could not read: skipped when drawn.",
+            out += [f"    /// {unknown_doc(d)}",
                     f"    case unknown({disc}: String)", "",
                     f"    static let {lower_camel(plural(disc))} = "
                     f"[{', '.join(json.dumps(defs[v].tag) for v in d.variants)}]", ""]
@@ -754,6 +906,7 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
            "import kotlinx.serialization.descriptors.SerialDescriptor",
            "import kotlinx.serialization.encoding.Decoder",
            "import kotlinx.serialization.encoding.Encoder",
+           "import kotlinx.serialization.json.Json",
            "import kotlinx.serialization.json.JsonDecoder",
            "import kotlinx.serialization.json.JsonElement",
            "import kotlinx.serialization.json.JsonEncoder",
@@ -804,6 +957,8 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
         if k == "map":
             return "emptyMap()"
         d = defs[t.ref]
+        if d.kind == "any":
+            return "JsonNull"
         if d.kind == "enum":
             return '""'
         if d.kind == "union":
@@ -828,7 +983,8 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
         elif d.kind == "struct":
             name = swift_name(d.name)
             out += kdoc(d.doc)
-            out.append(f"@Serializable(with = {name}Serializer::class)" if d.extra else "@Serializable")
+            custom = d.extra or d.preserve_required
+            out.append(f"@Serializable(with = {name}Serializer::class)" if custom else "@Serializable")
             params = []
             if d.union:
                 disc = defs[d.union].discriminator
@@ -853,9 +1009,9 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
             else:
                 out.append(f"class {name}{suffix}")
             out.append("")
-            if d.extra:
-                # A separate, generated class lets kotlinx decode the known fields without recursively calling this
-                # object's custom serializer or leaking the extra-key map into a nested wire field.
+            if custom:
+                # A separate, generated class avoids recursive serialization. Stream encoding preserves required
+                # defaults throughout its native payload without changing legacy objects or the caller's codec.
                 known_name = name + "Known"
                 keys = ", ".join(json.dumps(k) for k in reserved_keys(defs, d))
                 out += ["@Serializable"]
@@ -873,29 +1029,40 @@ def gen_kotlin(defs: dict[str, Def]) -> str:
                         f"        val input = decoder as? JsonDecoder ?: throw SerializationException(\"{name} needs JSON\")",
                         "        val obj = input.decodeJsonElement() as? JsonObject",
                         f"            ?: throw SerializationException(\"{name} needs an object\")",
-                        "        val fields = input.json.decodeFromJsonElement(known, JsonObject(obj.filterKeys { it in keys }))",
+                        "        val fields = input.json.decodeFromJsonElement(known, "
+                        + ("JsonObject(obj.filterKeys { it in keys })" if d.extra else "obj") + ")",
                         f"        return {name}("]
                 member_names = [kt_ident(lower_camel(f.name)) for f in d.fields]
                 if d.union:
                     member_names.insert(0, kt_ident(lower_camel(defs[d.union].discriminator)))
                 for n in member_names:
                     out.append(f"            {n} = fields.{n},")
-                out += ["            additionalProperties = obj.filterKeys { it !in keys },", "        )", "    }", "",
+                if d.extra:
+                    out.append("            additionalProperties = obj.filterKeys { it !in keys },")
+                out += ["        )", "    }", "",
                         f"    override fun serialize(encoder: Encoder, value: {name}) {{",
                         f"        val output = encoder as? JsonEncoder ?: throw SerializationException(\"{name} needs JSON\")",
                         f"        val fields = {known_name}("]
                 for n in member_names:
                     out.append(f"            {n} = value.{n},")
-                out += ["        )", "        val obj = output.json.encodeToJsonElement(known, fields) as JsonObject",
-                        "        output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))",
-                        "    }", "}", ""]
+                out.append("        )")
+                codec = "output.json"
+                if d.preserve_required:
+                    out.append("        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }")
+                    codec = "codec"
+                out.append(f"        val obj = {codec}.encodeToJsonElement(known, fields) as JsonObject")
+                if d.extra:
+                    out.append("        output.encodeJsonElement(JsonObject(value.additionalProperties.filterKeys { it !in keys } + obj))")
+                else:
+                    out.append("        output.encodeJsonElement(obj)")
+                out += ["    }", "}", ""]
         elif d.kind == "union":
             name, disc = swift_name(d.name), d.discriminator
             dk = kt_ident(lower_camel(disc))
             out += kdoc(d.doc)
             out += [f"@Serializable(with = {name}Serializer::class)", f"sealed interface {name} {{",
                     f"    val {dk}: String", "",
-                    f"    /** A {disc} this app does not know, or a variant it could not read: skipped when drawn. */",
+                    f"    /** {unknown_doc(d)} */",
                     f"    data class Unknown(override val {dk}: String, val raw: JsonObject = JsonObject(emptyMap()))"
                     f" : {name}", "", "    companion object {",
                     f"        val {upper_snake(plural(disc))} = listOf("
@@ -960,7 +1127,7 @@ def for_apps(defs: dict[str, Def]) -> dict[str, Def]:
             t = t.of
 
     for d in apps.values():
-        used = [r for f in d.fields for r in refs(f.type)] + d.variants
+        used = [r for t in [*(f.type for f in d.fields), *d.json_types] for r in refs(t)] + d.variants
         for r in used:
             if defs[r].side:
                 raise SchemaError(f"{d.name} refers to {r}, which is {defs[r].side}-side: the apps do not have it")

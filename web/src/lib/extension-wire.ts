@@ -5,7 +5,7 @@ export type ActivationEvent = "on_startup" | "on_call" | "on_http" | (string & {
 export const ACTIVATION_EVENTS = ["on_startup", "on_call", "on_http"] as const;
 
 export interface Manifest {
-  manifest_version: number;
+  manifest_version: 1;
   id: string;
   name: string;
   version: string;
@@ -161,8 +161,8 @@ export interface PackMember {
 export interface Engines {
   /** A range of hub build numbers (">=202611050000 <202701010000"). */
   persona?: string;
-  extension_protocol?: number;
-  plugin_protocol?: number;
+  extension_protocol?: 1;
+  plugin_protocol?: 1;
 }
 
 export interface Runtime {
@@ -786,7 +786,7 @@ export const HUB_CAPABILITIES = ["inbox_group"] as const;
  * hubs send both.
  */
 export interface InitializeParams {
-  protocol: number;
+  protocol: 1;
   hub: HubInfo;
   extension?: ExtensionInfo;
   plugin?: ExtensionInfo;
@@ -833,7 +833,7 @@ export interface ExtensionInfo {
 }
 
 export interface InitializeResult {
-  protocol: number;
+  protocol: 1;
   id: string;
   version: string;
   /** A subset of the manifest's. */
@@ -915,6 +915,11 @@ export interface UIContext {
   locale?: string;
   platform?: Platform;
   ui_version?: number;
+  /**
+   * Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current client
+   * or hub advertises it.
+   */
+  stream?: UIStreamCapability;
 }
 
 /**
@@ -1306,6 +1311,8 @@ export interface View {
 }
 
 export interface Section {
+  /** Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots. */
+  key?: string;
   title?: string;
   footer?: string;
   items: Component[];
@@ -2040,7 +2047,7 @@ export interface AssistantHTMLActionInput {
   url?: string;
   client_msg_id: string;
   /** Always true: the call was confirmed natively, outside the HTML. */
-  confirmed: boolean;
+  confirmed: true;
 }
 
 /**
@@ -2058,7 +2065,7 @@ export interface AssistantHTMLOpenResult {
  */
 export interface ViewChangedError {
   error: string;
-  code: string;
+  code: "view_changed";
   /** The current stored version. */
   version: number;
   /** The current card, as feed.views carries it (a transcript card: id is its key, version 1). */
@@ -2999,4 +3006,209 @@ export interface MessagingError {
   error: string;
   code?: string;
   view?: View;
+}
+
+/**
+ * Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
+ * range.
+ */
+export type UIStreamScalar = null | boolean | number | string;
+
+/**
+ * Interaction value: scalar, scalar array or scalar map only (one container level). No functions, callbacks, binary
+ * data or nested containers. Never send credentials or secret field contents.
+ */
+export type UIStreamValue = UIStreamScalar | UIStreamScalar[] | Record<string, UIStreamScalar>;
+
+/**
+ * Client opt-in for protocol 1 plus supported native component tags. ui_version alone does not opt in. Declaration is
+ * not runtime support.
+ */
+export interface UIStreamCapability {
+  protocol: 1;
+  components: string[];
+}
+
+/**
+ * Full authoritative tree before deltas, including after resume or recovery. Keys required on sections/items; tiles
+ * and global uniqueness need semantic validation.
+ */
+export interface UIStreamSnapshot {
+  protocol: 1;
+  session: string;
+  epoch: string;
+  version: number;
+  root_key: string;
+  view: View;
+}
+
+/**
+ * Atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate against a staged
+ * whole tree before committing. Ordering/equality are reducer checks.
+ */
+export interface UIStreamDelta {
+  protocol: 1;
+  session: string;
+  epoch: string;
+  base_version: number;
+  version: number;
+  operations: UIStreamOperation[];
+}
+
+/**
+ * Authenticated owner interaction for the displayed generation/version. Deduplicate event_id before writes. Validate
+ * action against the saved node/event slot, then resolve its callback server-side; no callback code or secrets in
+ * this payload.
+ */
+export interface UIStreamEvent {
+  protocol: 1;
+  session: string;
+  epoch: string;
+  version: number;
+  event_id: string;
+  key: string;
+  /**
+   * Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim.
+   */
+  action: string;
+  event: string;
+  value: UIStreamValue;
+}
+
+/**
+ * Atomic native tree operation. Unknown operations invalidate the entire batch and require a snapshot, never
+ * skipping. Tiles update by replacing their containing grid/carousel.
+ */
+export type UIStreamOperation =
+  | UIStreamReplace
+  | UIStreamInsert
+  | UIStreamRemove
+  | UIStreamMove;
+export const UISTREAM_OPERATION_OPS = ["replace", "insert", "remove", "move"] as const;
+
+/**
+ * Replace a complete node/subtree; omitted properties are cleared. Exactly one payload, matching the target kind and
+ * key.
+ */
+export type UIStreamReplace = {
+  op: "replace";
+  key: string;
+} & (
+  | { view: View; section?: never; item?: never }
+  | { view?: never; section: Section; item?: never }
+  | { view?: never; section?: never; item: Component }
+);
+
+/**
+ * Insert a section under root or item under section. before names a destination sibling; omitted means append.
+ */
+export type UIStreamInsert = {
+  op: "insert";
+  parent: string;
+  before?: string;
+} & (
+  | { section: Section; item?: never }
+  | { section?: never; item: Component }
+);
+
+/**
+ * Remove a node and its subtree, never the root. Existence/root checks are semantic.
+ */
+export interface UIStreamRemove {
+  op: "remove";
+  key: string;
+}
+
+/**
+ * Move a section/item subtree. No cycles, tile moves or wrong parent kinds. Omitted before appends.
+ */
+export interface UIStreamMove {
+  op: "move";
+  key: string;
+  parent: string;
+  before?: string;
+}
+
+/**
+ * Owner-bound lifecycle request over the authenticated WebSocket. The transport supplies principal/hub identity;
+ * never trust an owner field from JSON. No endpoint or runtime is enabled by these contracts.
+ */
+export type UIStreamRequest =
+  | UIStreamOpenRequest
+  | UIStreamCloseRequest
+  | UIStreamSuspendRequest
+  | UIStreamResumeRequest
+  | UIStreamEventRequest
+  | UIStreamSnapshotRequest;
+export const UISTREAM_REQUEST_REQUESTS = ["open", "close", "suspend", "resume", "event", "snapshot"] as const;
+
+/**
+ * Reauthorize the extension/contribution and explicit context.stream capability; allocate an owner-bound session and
+ * send a snapshot before deltas.
+ */
+export interface UIStreamOpenRequest {
+  request: "open";
+  protocol: 1;
+  request_id: string;
+  extension: string;
+  contribution: string;
+  context: UIContext;
+  state: string;
+}
+
+/**
+ * Idempotent for unknown/already closed owned sessions; unmount and release state, callbacks and effects.
+ */
+export interface UIStreamCloseRequest {
+  request: "close";
+  protocol: 1;
+  request_id: string;
+  session: string;
+  epoch: string;
+}
+
+/**
+ * Stop UI intervals/polling and bound pending work. Service work is independent of visibility.
+ */
+export interface UIStreamSuspendRequest {
+  request: "suspend";
+  protocol: 1;
+  request_id: string;
+  session: string;
+  epoch: string;
+}
+
+/**
+ * Reauthorize the owned session, discard stale delta chains and send a fresh snapshot before further deltas.
+ */
+export interface UIStreamResumeRequest {
+  request: "resume";
+  protocol: 1;
+  request_id: string;
+  session: string;
+  epoch: string;
+  version: number;
+}
+
+/**
+ * Authorize and deduplicate the interaction before invoking its registered server-side callback. request_id is
+ * correlation, not write deduplication.
+ */
+export interface UIStreamEventRequest {
+  request: "event";
+  protocol: 1;
+  request_id: string;
+  interaction: UIStreamEvent;
+}
+
+/**
+ * Read-only recovery request: reauthorize and send a complete snapshot, never replay an interaction or write.
+ */
+export interface UIStreamSnapshotRequest {
+  request: "snapshot";
+  protocol: 1;
+  request_id: string;
+  session: string;
+  epoch: string;
+  version: number;
 }

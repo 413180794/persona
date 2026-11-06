@@ -10,6 +10,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonEncoder
@@ -1307,6 +1308,11 @@ data class ExtensionUIContext(
     val locale: String? = null,
     val platform: String? = null,
     @SerialName("ui_version") val uiVersion: Int? = null,
+    /**
+     * Explicit stream opt-in, independent of ui_version. Absent means snapshot-only. Contract only: no current client
+     * or hub advertises it.
+     */
+    val stream: ExtensionUIStreamCapability? = null,
 )
 
 /**
@@ -1944,6 +1950,10 @@ data class ExtensionView(
 
 @Serializable
 data class ExtensionSection(
+    /**
+     * Stable section identity in stream protocol 1 (UI version 7); optional for legacy snapshots.
+     */
+    val key: String? = null,
     val title: String? = null,
     val footer: String? = null,
     val items: List<ExtensionComponent> = emptyList(),
@@ -4175,3 +4185,915 @@ data class ExtensionMessagingError(
     val code: String? = null,
     val view: ExtensionView? = null,
 )
+
+/**
+ * Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
+ * range.
+ */
+typealias ExtensionUIStreamScalar = JsonElement
+
+/**
+ * Interaction value: scalar, scalar array or scalar map only (one container level). No functions, callbacks, binary
+ * data or nested containers. Never send credentials or secret field contents.
+ */
+typealias ExtensionUIStreamValue = JsonElement
+
+/**
+ * Client opt-in for protocol 1 plus supported native component tags. ui_version alone does not opt in. Declaration is
+ * not runtime support.
+ */
+@Serializable(with = ExtensionUIStreamCapabilitySerializer::class)
+data class ExtensionUIStreamCapability(
+    val protocol: Int = 0,
+    val components: List<String> = emptyList(),
+)
+
+@Serializable
+private data class ExtensionUIStreamCapabilityKnown(
+    val protocol: Int = 0,
+    val components: List<String> = emptyList(),
+)
+
+object ExtensionUIStreamCapabilitySerializer : KSerializer<ExtensionUIStreamCapability> {
+    private val known = ExtensionUIStreamCapabilityKnown.serializer()
+    private val keys = setOf<String>("protocol", "components")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamCapability {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamCapability needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamCapability needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamCapability(
+            protocol = fields.protocol,
+            components = fields.components,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamCapability) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamCapability needs JSON")
+        val fields = ExtensionUIStreamCapabilityKnown(
+            protocol = value.protocol,
+            components = value.components,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Full authoritative tree before deltas, including after resume or recovery. Keys required on sections/items; tiles
+ * and global uniqueness need semantic validation.
+ */
+@Serializable(with = ExtensionUIStreamSnapshotSerializer::class)
+data class ExtensionUIStreamSnapshot(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+    @SerialName("root_key") val rootKey: String = "",
+    val view: ExtensionView = ExtensionView(),
+)
+
+@Serializable
+private data class ExtensionUIStreamSnapshotKnown(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+    @SerialName("root_key") val rootKey: String = "",
+    val view: ExtensionView = ExtensionView(),
+)
+
+object ExtensionUIStreamSnapshotSerializer : KSerializer<ExtensionUIStreamSnapshot> {
+    private val known = ExtensionUIStreamSnapshotKnown.serializer()
+    private val keys = setOf<String>("protocol", "session", "epoch", "version", "root_key", "view")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamSnapshot {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamSnapshot needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamSnapshot needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamSnapshot(
+            protocol = fields.protocol,
+            session = fields.session,
+            epoch = fields.epoch,
+            version = fields.version,
+            rootKey = fields.rootKey,
+            view = fields.view,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamSnapshot) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamSnapshot needs JSON")
+        val fields = ExtensionUIStreamSnapshotKnown(
+            protocol = value.protocol,
+            session = value.session,
+            epoch = value.epoch,
+            version = value.version,
+            rootKey = value.rootKey,
+            view = value.view,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Atomic batch, at most 256 operations. Empty batch is explicit and keeps the version. Validate against a staged
+ * whole tree before committing. Ordering/equality are reducer checks.
+ */
+@Serializable(with = ExtensionUIStreamDeltaSerializer::class)
+data class ExtensionUIStreamDelta(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    @SerialName("base_version") val baseVersion: Long = 0L,
+    val version: Long = 0L,
+    val operations: List<ExtensionUIStreamOperation> = emptyList(),
+)
+
+@Serializable
+private data class ExtensionUIStreamDeltaKnown(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    @SerialName("base_version") val baseVersion: Long = 0L,
+    val version: Long = 0L,
+    val operations: List<ExtensionUIStreamOperation> = emptyList(),
+)
+
+object ExtensionUIStreamDeltaSerializer : KSerializer<ExtensionUIStreamDelta> {
+    private val known = ExtensionUIStreamDeltaKnown.serializer()
+    private val keys = setOf<String>("protocol", "session", "epoch", "base_version", "version", "operations")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamDelta {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamDelta needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamDelta needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamDelta(
+            protocol = fields.protocol,
+            session = fields.session,
+            epoch = fields.epoch,
+            baseVersion = fields.baseVersion,
+            version = fields.version,
+            operations = fields.operations,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamDelta) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamDelta needs JSON")
+        val fields = ExtensionUIStreamDeltaKnown(
+            protocol = value.protocol,
+            session = value.session,
+            epoch = value.epoch,
+            baseVersion = value.baseVersion,
+            version = value.version,
+            operations = value.operations,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Authenticated owner interaction for the displayed generation/version. Deduplicate event_id before writes. Validate
+ * action against the saved node/event slot, then resolve its callback server-side; no callback code or secrets in
+ * this payload.
+ */
+@Serializable(with = ExtensionUIStreamEventSerializer::class)
+data class ExtensionUIStreamEvent(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+    @SerialName("event_id") val eventId: String = "",
+    val key: String = "",
+    /**
+     * Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim.
+     */
+    val action: String = "",
+    val event: String = "",
+    val value: ExtensionUIStreamValue = JsonNull,
+)
+
+@Serializable
+private data class ExtensionUIStreamEventKnown(
+    val protocol: Int = 0,
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+    @SerialName("event_id") val eventId: String = "",
+    val key: String = "",
+    /**
+     * Opaque registered callback Action.id for this node and event slot; never callback code or an authority claim.
+     */
+    val action: String = "",
+    val event: String = "",
+    val value: ExtensionUIStreamValue = JsonNull,
+)
+
+object ExtensionUIStreamEventSerializer : KSerializer<ExtensionUIStreamEvent> {
+    private val known = ExtensionUIStreamEventKnown.serializer()
+    private val keys = setOf<String>("protocol", "session", "epoch", "version", "event_id", "key", "action", "event", "value")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamEvent {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamEvent needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamEvent needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamEvent(
+            protocol = fields.protocol,
+            session = fields.session,
+            epoch = fields.epoch,
+            version = fields.version,
+            eventId = fields.eventId,
+            key = fields.key,
+            action = fields.action,
+            event = fields.event,
+            value = fields.value,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamEvent) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamEvent needs JSON")
+        val fields = ExtensionUIStreamEventKnown(
+            protocol = value.protocol,
+            session = value.session,
+            epoch = value.epoch,
+            version = value.version,
+            eventId = value.eventId,
+            key = value.key,
+            action = value.action,
+            event = value.event,
+            value = value.value,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Atomic native tree operation. Unknown operations invalidate the entire batch and require a snapshot, never
+ * skipping. Tiles update by replacing their containing grid/carousel.
+ */
+@Serializable(with = ExtensionUIStreamOperationSerializer::class)
+sealed interface ExtensionUIStreamOperation {
+    val op: String
+
+    /** A op this app does not know, or a variant it could not read: reject the batch and request a full snapshot. */
+    data class Unknown(override val op: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionUIStreamOperation
+
+    companion object {
+        val OPS = listOf("replace", "insert", "remove", "move")
+    }
+}
+
+object ExtensionUIStreamOperationSerializer : KSerializer<ExtensionUIStreamOperation> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamOperation {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamOperation needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: return ExtensionUIStreamOperation.Unknown("")
+        val tag = (obj["op"] as? JsonPrimitive)?.contentOrNull ?: ""
+        return try {
+            when (tag) {
+                "replace" -> input.json.decodeFromJsonElement(ExtensionUIStreamReplace.serializer(), obj)
+                "insert" -> input.json.decodeFromJsonElement(ExtensionUIStreamInsert.serializer(), obj)
+                "remove" -> input.json.decodeFromJsonElement(ExtensionUIStreamRemove.serializer(), obj)
+                "move" -> input.json.decodeFromJsonElement(ExtensionUIStreamMove.serializer(), obj)
+                else -> ExtensionUIStreamOperation.Unknown(tag, obj)
+            }
+        } catch (_: SerializationException) {
+            ExtensionUIStreamOperation.Unknown(tag, obj)
+        } catch (_: IllegalArgumentException) {
+            ExtensionUIStreamOperation.Unknown(tag, obj)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamOperation) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamOperation needs JSON")
+        val obj = when (value) {
+            is ExtensionUIStreamReplace -> output.json.encodeToJsonElement(ExtensionUIStreamReplace.serializer(), value) as JsonObject
+            is ExtensionUIStreamInsert -> output.json.encodeToJsonElement(ExtensionUIStreamInsert.serializer(), value) as JsonObject
+            is ExtensionUIStreamRemove -> output.json.encodeToJsonElement(ExtensionUIStreamRemove.serializer(), value) as JsonObject
+            is ExtensionUIStreamMove -> output.json.encodeToJsonElement(ExtensionUIStreamMove.serializer(), value) as JsonObject
+            is ExtensionUIStreamOperation.Unknown -> value.raw
+        }
+        output.encodeJsonElement(JsonObject(obj + ("op" to JsonPrimitive(value.op))))
+    }
+}
+
+/**
+ * Replace a complete node/subtree; omitted properties are cleared. Exactly one payload, matching the target kind and
+ * key.
+ */
+@Serializable(with = ExtensionUIStreamReplaceSerializer::class)
+data class ExtensionUIStreamReplace(
+    override val op: String = "replace",
+    val key: String = "",
+    val view: ExtensionView? = null,
+    val section: ExtensionSection? = null,
+    val item: ExtensionComponent? = null,
+) : ExtensionUIStreamOperation
+
+@Serializable
+private data class ExtensionUIStreamReplaceKnown(
+    val op: String = "replace",
+    val key: String = "",
+    val view: ExtensionView? = null,
+    val section: ExtensionSection? = null,
+    val item: ExtensionComponent? = null,
+)
+
+object ExtensionUIStreamReplaceSerializer : KSerializer<ExtensionUIStreamReplace> {
+    private val known = ExtensionUIStreamReplaceKnown.serializer()
+    private val keys = setOf<String>("key", "view", "section", "item", "op")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamReplace {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamReplace needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamReplace needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamReplace(
+            op = fields.op,
+            key = fields.key,
+            view = fields.view,
+            section = fields.section,
+            item = fields.item,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamReplace) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamReplace needs JSON")
+        val fields = ExtensionUIStreamReplaceKnown(
+            op = value.op,
+            key = value.key,
+            view = value.view,
+            section = value.section,
+            item = value.item,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Insert a section under root or item under section. before names a destination sibling; omitted means append.
+ */
+@Serializable(with = ExtensionUIStreamInsertSerializer::class)
+data class ExtensionUIStreamInsert(
+    override val op: String = "insert",
+    val parent: String = "",
+    val before: String? = null,
+    val section: ExtensionSection? = null,
+    val item: ExtensionComponent? = null,
+) : ExtensionUIStreamOperation
+
+@Serializable
+private data class ExtensionUIStreamInsertKnown(
+    val op: String = "insert",
+    val parent: String = "",
+    val before: String? = null,
+    val section: ExtensionSection? = null,
+    val item: ExtensionComponent? = null,
+)
+
+object ExtensionUIStreamInsertSerializer : KSerializer<ExtensionUIStreamInsert> {
+    private val known = ExtensionUIStreamInsertKnown.serializer()
+    private val keys = setOf<String>("parent", "before", "section", "item", "op")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamInsert {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamInsert needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamInsert needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamInsert(
+            op = fields.op,
+            parent = fields.parent,
+            before = fields.before,
+            section = fields.section,
+            item = fields.item,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamInsert) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamInsert needs JSON")
+        val fields = ExtensionUIStreamInsertKnown(
+            op = value.op,
+            parent = value.parent,
+            before = value.before,
+            section = value.section,
+            item = value.item,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Remove a node and its subtree, never the root. Existence/root checks are semantic.
+ */
+@Serializable(with = ExtensionUIStreamRemoveSerializer::class)
+data class ExtensionUIStreamRemove(
+    override val op: String = "remove",
+    val key: String = "",
+) : ExtensionUIStreamOperation
+
+@Serializable
+private data class ExtensionUIStreamRemoveKnown(
+    val op: String = "remove",
+    val key: String = "",
+)
+
+object ExtensionUIStreamRemoveSerializer : KSerializer<ExtensionUIStreamRemove> {
+    private val known = ExtensionUIStreamRemoveKnown.serializer()
+    private val keys = setOf<String>("key", "op")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamRemove {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamRemove needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamRemove needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamRemove(
+            op = fields.op,
+            key = fields.key,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamRemove) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamRemove needs JSON")
+        val fields = ExtensionUIStreamRemoveKnown(
+            op = value.op,
+            key = value.key,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Move a section/item subtree. No cycles, tile moves or wrong parent kinds. Omitted before appends.
+ */
+@Serializable(with = ExtensionUIStreamMoveSerializer::class)
+data class ExtensionUIStreamMove(
+    override val op: String = "move",
+    val key: String = "",
+    val parent: String = "",
+    val before: String? = null,
+) : ExtensionUIStreamOperation
+
+@Serializable
+private data class ExtensionUIStreamMoveKnown(
+    val op: String = "move",
+    val key: String = "",
+    val parent: String = "",
+    val before: String? = null,
+)
+
+object ExtensionUIStreamMoveSerializer : KSerializer<ExtensionUIStreamMove> {
+    private val known = ExtensionUIStreamMoveKnown.serializer()
+    private val keys = setOf<String>("key", "parent", "before", "op")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamMove {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamMove needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamMove needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamMove(
+            op = fields.op,
+            key = fields.key,
+            parent = fields.parent,
+            before = fields.before,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamMove) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamMove needs JSON")
+        val fields = ExtensionUIStreamMoveKnown(
+            op = value.op,
+            key = value.key,
+            parent = value.parent,
+            before = value.before,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Owner-bound lifecycle request over the authenticated WebSocket. The transport supplies principal/hub identity;
+ * never trust an owner field from JSON. No endpoint or runtime is enabled by these contracts.
+ */
+@Serializable(with = ExtensionUIStreamRequestSerializer::class)
+sealed interface ExtensionUIStreamRequest {
+    val request: String
+
+    /** A request this app does not know, or a variant it could not read: reject the entire request. */
+    data class Unknown(override val request: String, val raw: JsonObject = JsonObject(emptyMap())) : ExtensionUIStreamRequest
+
+    companion object {
+        val REQUESTS = listOf("open", "close", "suspend", "resume", "event", "snapshot")
+    }
+}
+
+object ExtensionUIStreamRequestSerializer : KSerializer<ExtensionUIStreamRequest> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: return ExtensionUIStreamRequest.Unknown("")
+        val tag = (obj["request"] as? JsonPrimitive)?.contentOrNull ?: ""
+        return try {
+            when (tag) {
+                "open" -> input.json.decodeFromJsonElement(ExtensionUIStreamOpenRequest.serializer(), obj)
+                "close" -> input.json.decodeFromJsonElement(ExtensionUIStreamCloseRequest.serializer(), obj)
+                "suspend" -> input.json.decodeFromJsonElement(ExtensionUIStreamSuspendRequest.serializer(), obj)
+                "resume" -> input.json.decodeFromJsonElement(ExtensionUIStreamResumeRequest.serializer(), obj)
+                "event" -> input.json.decodeFromJsonElement(ExtensionUIStreamEventRequest.serializer(), obj)
+                "snapshot" -> input.json.decodeFromJsonElement(ExtensionUIStreamSnapshotRequest.serializer(), obj)
+                else -> ExtensionUIStreamRequest.Unknown(tag, obj)
+            }
+        } catch (_: SerializationException) {
+            ExtensionUIStreamRequest.Unknown(tag, obj)
+        } catch (_: IllegalArgumentException) {
+            ExtensionUIStreamRequest.Unknown(tag, obj)
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamRequest needs JSON")
+        val obj = when (value) {
+            is ExtensionUIStreamOpenRequest -> output.json.encodeToJsonElement(ExtensionUIStreamOpenRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamCloseRequest -> output.json.encodeToJsonElement(ExtensionUIStreamCloseRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamSuspendRequest -> output.json.encodeToJsonElement(ExtensionUIStreamSuspendRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamResumeRequest -> output.json.encodeToJsonElement(ExtensionUIStreamResumeRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamEventRequest -> output.json.encodeToJsonElement(ExtensionUIStreamEventRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamSnapshotRequest -> output.json.encodeToJsonElement(ExtensionUIStreamSnapshotRequest.serializer(), value) as JsonObject
+            is ExtensionUIStreamRequest.Unknown -> value.raw
+        }
+        output.encodeJsonElement(JsonObject(obj + ("request" to JsonPrimitive(value.request))))
+    }
+}
+
+/**
+ * Reauthorize the extension/contribution and explicit context.stream capability; allocate an owner-bound session and
+ * send a snapshot before deltas.
+ */
+@Serializable(with = ExtensionUIStreamOpenRequestSerializer::class)
+data class ExtensionUIStreamOpenRequest(
+    override val request: String = "open",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val extension: String = "",
+    val contribution: String = "",
+    val context: ExtensionUIContext = ExtensionUIContext(),
+    val state: String = "",
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamOpenRequestKnown(
+    val request: String = "open",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val extension: String = "",
+    val contribution: String = "",
+    val context: ExtensionUIContext = ExtensionUIContext(),
+    val state: String = "",
+)
+
+object ExtensionUIStreamOpenRequestSerializer : KSerializer<ExtensionUIStreamOpenRequest> {
+    private val known = ExtensionUIStreamOpenRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "extension", "contribution", "context", "state", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamOpenRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamOpenRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamOpenRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamOpenRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            extension = fields.extension,
+            contribution = fields.contribution,
+            context = fields.context,
+            state = fields.state,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamOpenRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamOpenRequest needs JSON")
+        val fields = ExtensionUIStreamOpenRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            extension = value.extension,
+            contribution = value.contribution,
+            context = value.context,
+            state = value.state,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Idempotent for unknown/already closed owned sessions; unmount and release state, callbacks and effects.
+ */
+@Serializable(with = ExtensionUIStreamCloseRequestSerializer::class)
+data class ExtensionUIStreamCloseRequest(
+    override val request: String = "close",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamCloseRequestKnown(
+    val request: String = "close",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+)
+
+object ExtensionUIStreamCloseRequestSerializer : KSerializer<ExtensionUIStreamCloseRequest> {
+    private val known = ExtensionUIStreamCloseRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "session", "epoch", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamCloseRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamCloseRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamCloseRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamCloseRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            session = fields.session,
+            epoch = fields.epoch,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamCloseRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamCloseRequest needs JSON")
+        val fields = ExtensionUIStreamCloseRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            session = value.session,
+            epoch = value.epoch,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Stop UI intervals/polling and bound pending work. Service work is independent of visibility.
+ */
+@Serializable(with = ExtensionUIStreamSuspendRequestSerializer::class)
+data class ExtensionUIStreamSuspendRequest(
+    override val request: String = "suspend",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamSuspendRequestKnown(
+    val request: String = "suspend",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+)
+
+object ExtensionUIStreamSuspendRequestSerializer : KSerializer<ExtensionUIStreamSuspendRequest> {
+    private val known = ExtensionUIStreamSuspendRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "session", "epoch", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamSuspendRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamSuspendRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamSuspendRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamSuspendRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            session = fields.session,
+            epoch = fields.epoch,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamSuspendRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamSuspendRequest needs JSON")
+        val fields = ExtensionUIStreamSuspendRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            session = value.session,
+            epoch = value.epoch,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Reauthorize the owned session, discard stale delta chains and send a fresh snapshot before further deltas.
+ */
+@Serializable(with = ExtensionUIStreamResumeRequestSerializer::class)
+data class ExtensionUIStreamResumeRequest(
+    override val request: String = "resume",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamResumeRequestKnown(
+    val request: String = "resume",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+)
+
+object ExtensionUIStreamResumeRequestSerializer : KSerializer<ExtensionUIStreamResumeRequest> {
+    private val known = ExtensionUIStreamResumeRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "session", "epoch", "version", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamResumeRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamResumeRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamResumeRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamResumeRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            session = fields.session,
+            epoch = fields.epoch,
+            version = fields.version,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamResumeRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamResumeRequest needs JSON")
+        val fields = ExtensionUIStreamResumeRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            session = value.session,
+            epoch = value.epoch,
+            version = value.version,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Authorize and deduplicate the interaction before invoking its registered server-side callback. request_id is
+ * correlation, not write deduplication.
+ */
+@Serializable(with = ExtensionUIStreamEventRequestSerializer::class)
+data class ExtensionUIStreamEventRequest(
+    override val request: String = "event",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val interaction: ExtensionUIStreamEvent = ExtensionUIStreamEvent(),
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamEventRequestKnown(
+    val request: String = "event",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val interaction: ExtensionUIStreamEvent = ExtensionUIStreamEvent(),
+)
+
+object ExtensionUIStreamEventRequestSerializer : KSerializer<ExtensionUIStreamEventRequest> {
+    private val known = ExtensionUIStreamEventRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "interaction", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamEventRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamEventRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamEventRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamEventRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            interaction = fields.interaction,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamEventRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamEventRequest needs JSON")
+        val fields = ExtensionUIStreamEventRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            interaction = value.interaction,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}
+
+/**
+ * Read-only recovery request: reauthorize and send a complete snapshot, never replay an interaction or write.
+ */
+@Serializable(with = ExtensionUIStreamSnapshotRequestSerializer::class)
+data class ExtensionUIStreamSnapshotRequest(
+    override val request: String = "snapshot",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+) : ExtensionUIStreamRequest
+
+@Serializable
+private data class ExtensionUIStreamSnapshotRequestKnown(
+    val request: String = "snapshot",
+    val protocol: Int = 0,
+    @SerialName("request_id") val requestId: String = "",
+    val session: String = "",
+    val epoch: String = "",
+    val version: Long = 0L,
+)
+
+object ExtensionUIStreamSnapshotRequestSerializer : KSerializer<ExtensionUIStreamSnapshotRequest> {
+    private val known = ExtensionUIStreamSnapshotRequestKnown.serializer()
+    private val keys = setOf<String>("protocol", "request_id", "session", "epoch", "version", "request")
+    override val descriptor: SerialDescriptor = known.descriptor
+
+    override fun deserialize(decoder: Decoder): ExtensionUIStreamSnapshotRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("ExtensionUIStreamSnapshotRequest needs JSON")
+        val obj = input.decodeJsonElement() as? JsonObject
+            ?: throw SerializationException("ExtensionUIStreamSnapshotRequest needs an object")
+        val fields = input.json.decodeFromJsonElement(known, obj)
+        return ExtensionUIStreamSnapshotRequest(
+            request = fields.request,
+            protocol = fields.protocol,
+            requestId = fields.requestId,
+            session = fields.session,
+            epoch = fields.epoch,
+            version = fields.version,
+        )
+    }
+
+    override fun serialize(encoder: Encoder, value: ExtensionUIStreamSnapshotRequest) {
+        val output = encoder as? JsonEncoder ?: throw SerializationException("ExtensionUIStreamSnapshotRequest needs JSON")
+        val fields = ExtensionUIStreamSnapshotRequestKnown(
+            request = value.request,
+            protocol = value.protocol,
+            requestId = value.requestId,
+            session = value.session,
+            epoch = value.epoch,
+            version = value.version,
+        )
+        val codec = Json(output.json) { encodeDefaults = true; explicitNulls = false }
+        val obj = codec.encodeToJsonElement(known, fields) as JsonObject
+        output.encodeJsonElement(obj)
+    }
+}

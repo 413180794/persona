@@ -1,5 +1,6 @@
 package persona.core.contracts.generated
 
+import persona.core.contracts.JsonCodec
 import persona.core.contracts.zhAny
 
 import java.io.File
@@ -54,6 +55,12 @@ class ExtensionWireTest {
         // An extension's sign-in (#4507).
         "AuthStatus" to ExtensionAuthStatus.serializer(),
         "AuthPrompt" to ExtensionAuthPrompt.serializer(),
+        // Contract-only native UI streaming (#5956); no renderer or runtime activation.
+        "UIContext" to ExtensionUIContext.serializer(),
+        "UIStreamSnapshot" to ExtensionUIStreamSnapshot.serializer(),
+        "UIStreamDelta" to ExtensionUIStreamDelta.serializer(),
+        "UIStreamEvent" to ExtensionUIStreamEvent.serializer(),
+        "UIStreamRequest" to ExtensionUIStreamRequest.serializer(),
     )
 
     @Suppress("UNCHECKED_CAST")
@@ -65,6 +72,18 @@ class ExtensionWireTest {
             val raw = json.parseToJsonElement(f.readText())
             val back = json.encodeToJsonElement(serializer, json.decodeFromJsonElement(serializer, raw))
             assertTrue("${f.name} round trip differs:\n$raw\n$back", same(raw, back))
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun streamExamplesRoundTripWithProductionCodec() {
+        val files = examples.listFiles { f -> f.isFile && f.name.startsWith("UIStream") && f.name.endsWith(".json") }.orEmpty()
+        assertTrue("no stream examples", files.size > 15)
+        for (f in files) {
+            val serializer = types.getValue(f.name.substringBefore(".")) as KSerializer<Any?>
+            val raw = JsonCodec.parseToJsonElement(f.readText())
+            val back = JsonCodec.encodeToJsonElement(serializer, JsonCodec.decodeFromJsonElement(serializer, raw))
+            assertTrue("${f.name} production round trip differs:\n$raw\n$back", same(raw, back))
         }
     }
 
