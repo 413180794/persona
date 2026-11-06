@@ -24,6 +24,8 @@ nonisolated enum ServerEvent: Sendable {
     /// What changed in a machine's list since the last (a hub that has `sessions_delta`, asked for on connect): the
     /// sessions new or different, whole, and the ids gone (docs/protocol.md「会话增量」).
     case sessionsDelta(machineID: String, upsert: [Session], remove: [String])
+    /// A lightweight hint, never an authoritative row checkpoint.
+    case sessionsList(revision: String)
     /// hasMore is nil when the event cannot know (a catch-up after since_seq): only pages from the end tell. moreAfter:
     /// the hub capped a catch-up, more came after these.
     case items(SessionKey, [Item], backlog: Bool, hasMore: Bool?, span: ItemSpan, moreAfter: Bool)
@@ -88,6 +90,7 @@ nonisolated enum ServerEvent: Sendable {
         var sessions: [Session]?
         var upsert: [Session]?
         var remove: [String]?
+        var revision: String?
         var items: [Item]?
         var backlog: Bool?
         var hasMore: Bool?
@@ -156,7 +159,7 @@ nonisolated enum ServerEvent: Sendable {
         var git: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case type, machines, sessions, upsert, remove, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
+            case type, machines, sessions, upsert, remove, revision, items, backlog, text, status, interaction, id, name, args, event, message, error, revs, fleet, history
             case features, epoch, seq, full, cols, rows, data, unsupported, state, desktops, mesh, channel, build, update, item, view, action, key, conversation, plan
             case plugin, badge, invalidate, cwd, dirs, git, operation, auth, source, conversations, account
             case extensionID = "extension"
@@ -197,6 +200,7 @@ nonisolated enum ServerEvent: Sendable {
         case "sessions":
             guard let m = e.machineID else { return nil }
             return .sessions(machineID: m, (e.sessions ?? []).map { var s = $0; s.machineID = m; return s })
+        case "sessions_list": return e.revision.map { .sessionsList(revision: $0) }
         case "sessions_delta":
             guard let m = e.machineID else { return nil }
             return .sessionsDelta(machineID: m, upsert: (e.upsert ?? []).map { var s = $0; s.machineID = m; return s }, remove: e.remove ?? [])
@@ -294,7 +298,7 @@ nonisolated extension ServerEvent {
         case .error(let key, let message): return .error(key.map(k), message)
         case .sessionsDelta(let machine, let upsert, let remove):
             return .sessionsDelta(machineID: machine, upsert: upsert.map { var s = $0; s.group = group; return s }, remove: remove)
-        case .hello, .interactionResolved, .toolCall, .revs, .lark, .messaging, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
+        case .sessionsList, .hello, .interactionResolved, .toolCall, .revs, .lark, .messaging, .agents, .inbox, .fleet, .hubUpdate, .desktops, .todos,
              .personas, .managers, .assistantFeed, .assistantView, .assistantViewAction, .assistantViewBlock, .taskPlan, .pluginBadge,
              .extensionInvalidate, .fsChanged, .extensionOperation, .extensionAuth: return self
         }
@@ -350,6 +354,8 @@ final class LiveConnection {
     @ObservationIgnored private(set) var resumed = false
     /// Where the app is in the hub's numbered broadcasts: kept across reconnects, cleared with another hub.
     @ObservationIgnored private(set) var cursor = EventCursor()
+    /// iOS/Mac list clients opt in; watch/extension consumers retain their existing full-list contract.
+    @ObservationIgnored var usesSessionList = false
     @ObservationIgnored var onEvent: ((ServerEvent) -> Void)?
     /// The state or `stalled` changed.
     @ObservationIgnored var onChange: (() -> Void)?
@@ -497,7 +503,7 @@ final class LiveConnection {
         if config != given { self.config = config }
         var comps = URLComponents(url: config.url.appending(path: "/api/v1/ws"), resolvingAgainstBaseURL: false)!
         comps.scheme = config.url.scheme == "https" ? "wss" : "ws"
-        comps.queryItems = Self.queryItems(cursor)
+        comps.queryItems = Self.queryItems(cursor, sessionList: usesSessionList)
         var req = URLRequest(url: HubTransport.resolve(comps.url!, hub: config.url))
         req.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
         req.setValue(LanguageStore.shared.launched, forHTTPHeaderField: "Accept-Language")
@@ -517,8 +523,8 @@ final class LiveConnection {
     /// The socket URL's query: session lists as deltas (an older hub ignores the question and sends whole lists), the
     /// extensions' install steps (`extension_operation`, #3307), the managers' roster changes (`managers`,
     /// docs/managers.md), and where to resume the broadcasts from once a hello gave a stream.
-    static func queryItems(_ cursor: EventCursor) -> [URLQueryItem] {
-        [URLQueryItem(name: "features", value: "sessions_delta,extension_operations,managers")] + cursor.queryItems
+    static func queryItems(_ cursor: EventCursor, sessionList: Bool = false) -> [URLQueryItem] {
+        [URLQueryItem(name: "features", value: (sessionList ? "sessions_list," : "") + "sessions_delta,extension_operations,managers")] + cursor.queryItems
     }
 
     private func heartbeat(_ t: URLSessionWebSocketTask, _ gen: Int) {

@@ -12,7 +12,6 @@ struct AllSessionsReadersTests {
     /// The files under `Persona/Views` and `Mac` that may read it, how many times, and why. Exact: a read taken out
     /// lowers its number here, a new one needs a reason here.
     private static let allowed: [String: (count: Int, why: String)] = [
-        "ChatsView.swift": (3, "the Agents list, through AgentsFeed (which holds it while the list scrolls)"),
         "SpaceView.swift": (1, "a space's agents"),
         "MachineSpacesView.swift": (1, "a machine's spaces and agents"),
         "MachineDetailView.swift": (1, "机器: each machine's agents for its card, through allSessions(inFront:) (behind another section, as they are now)"),

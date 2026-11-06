@@ -15,6 +15,8 @@ struct SpaceGroup: Identifiable {
     var sessions: [Session] // in tab order
     /// The hub project key for whole-space todo links; nil outside a herdr workspace.
     var todoSpace: String? = nil
+    var aggregate: SessionListCounts? = nil
+    var bounded = false
 
     var state: AgentState { sessions.map(\.state).min { $0.priority < $1.priority } ?? .idle }
     var updatedAt: Date { sessions.compactMap(\.updatedAt).max() ?? .distantPast }
@@ -29,7 +31,7 @@ struct SpaceGroup: Identifiable {
     /// Nothing going on: every agent quiet and none waiting on a /loop or background work.
     var isQuiet: Bool { sessions.allSatisfy { $0.isQuiet && !$0.isWaiting } }
 
-    func count(_ s: AgentState) -> Int { sessions.filter { $0.state == s }.count }
+    func count(_ s: AgentState) -> Int { bounded ? aggregate?.state[s.rawValue] ?? 0 : sessions.filter { $0.state == s }.count }
 
     static func build(_ sessions: [Session]) -> [SpaceGroup] {
         var groups: [String: SpaceGroup] = [:]
@@ -68,8 +70,8 @@ extension Session {
     /// out (`WorkState.hubWaits`: a retry, a wake after a deploy) will wake it: new messages may come in minutes.
     /// Waiting in the list.
     var isWaiting: Bool {
-        isQuiet && (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running)
-            || work?.hubWaits == true || !runningWorkflows.isEmpty)
+        isQuiet && (listWaiting ?? (loop != nil || !(background ?? []).isEmpty || (subagents ?? []).contains(where: \.running)
+            || work?.hubWaits == true || !runningWorkflows.isEmpty))
     }
 }
 
@@ -568,6 +570,22 @@ private struct AgentsList: View {
     /// Folded sections (spaces, machines, states), one id per line.
     @StoredValue("dev.folded") private var foldedList = ""
     @State private var quick: AgentFilter = .all
+    @State private var paginationArmed = false
+
+    private var selectedHub: String? {
+        if !machineFilter.isEmpty { return MachineRef(path: machineFilter).group }
+        return hubFilter.isEmpty ? nil : String(hubFilter.dropFirst())
+    }
+
+    private var listQuery: SessionListQuery {
+        var q = SessionListQuery(state: quick.state?.rawValue ?? "", text: query)
+        if !machineFilter.isEmpty { q.machine = MachineRef(path: machineFilter).id }
+        let links = model.links.filter { selectedHub == nil || $0.group == selectedHub }
+        let pins = links.contains { !$0.pins.pins.sessions.isEmpty || !$0.pins.pins.spaces.isEmpty }
+        let mutes = links.contains { !$0.pins.mutes.sessions.isEmpty || !$0.pins.mutes.spaces.isEmpty }
+        q.legacy = AgentListLoadingPolicy.runtime(grouping: grouping, filter: quick, query: query, hasPins: pins, hasMutes: mutes)
+        return q
+    }
     /// Under a quick filter, the agents it showed stay until it is chosen again: one opened from Unread is seen now
     /// but keeps its place, so the next one is still right below it.
     @State private var kept = Set<SessionKey>()
@@ -606,7 +624,7 @@ private struct AgentsList: View {
         return false
     }
 
-    private var sessions: [Session] { feed.following ? feed.sessions : model.allSessions }
+    private var sessions: [Session] { feed.following ? feed.sessions : model.sessionLists.sessions }
     private var machines: [Machine] { feed.following ? feed.machines : model.machines }
     /// What the rows read (a machine's name, an agent's label), filled by each run of the body and not observed. SwiftUI
     /// tracks what each row of a `List` read when it was last drawn: a row that asked the model for its machine went on
@@ -615,6 +633,7 @@ private struct AgentsList: View {
     private final class Lookup {
         var machines: [MachineRef: Machine] = [:]
         var sessions: [SessionKey: Session] = [:]
+        var scopes: [String: RuntimeSessionLists.Scope] = [:]
 
         func update(machines: [Machine], sessions: [Session]) {
             self.machines = Dictionary(machines.map { ($0.ref, $0) }, uniquingKeysWith: { a, _ in a })
@@ -656,7 +675,7 @@ private struct AgentsList: View {
         return sessions.filter { s in
             !s.assistant && (machineFilter.isEmpty || s.machineRef.path == machineFilter) &&
             (!multiHub || HubFilter.matches(hubFilter, s.group)) &&
-            (query.isEmpty || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
+            (query.isEmpty || model.sessionLists.isPaged(s.group) || [s.title, s.cwd, s.lastText ?? "", s.spaceName ?? "", s.slotName ?? ""]
                 .contains { $0.localizedCaseInsensitiveContains(query) })
         }
     }
@@ -707,6 +726,7 @@ private struct AgentsList: View {
         Haptics.tap()
         feed.reader.keep(id)
         let f = folding([id], !(shown ?? isFolded(id)), in: folded)
+        if shown ?? isFolded(id), let scope = lookup.scopes[id] { Task { await model.sessionLists.expand(scope) } }
         withAnimation(Theme.Motion.standard) { setFolded(f) }
     }
 
@@ -720,7 +740,15 @@ private struct AgentsList: View {
         let filtered = quick == .all ? base : base.filter { matching.contains($0.key) || kept.contains($0.key) }
         // A pinned agent shows once, under Pinned; every grouping below is built from the rest.
         let unpinned = filtered.filter { !model.isPinned($0.key) }
-        let groups = SpaceGroup.build(unpinned)
+        let _ = lookup.scopes.removeAll(keepingCapacity: true)
+        let groups = SpaceGroup.build(unpinned).map { group in
+            var group = group
+            let scope = spaceScope(group)
+            lookup.scopes[group.id] = scope
+            group.bounded = model.sessionLists.isPaged(group.group)
+            group.aggregate = model.sessionLists.aggregate(scope)
+            return group
+        }
         // Pinned spaces lead; muted spaces with something running come after the other busy ones, shown quietly;
         // quiet spaces (muted or not) fold into Idle Spaces. Under a quick filter every space it leaves is listed, most
         // recent first: the order must not move while its agents are being seen.
@@ -746,6 +774,14 @@ private struct AgentsList: View {
         // a machine do not name it. Counted before the quick filter: choosing one does not add or take away headings.
         let byHost = machineFilter.isEmpty && Set(base.lazy.filter { $0.state.isLive }.map(\.machineRef)).count > 1
         let built = grouping == .repo ? RepoTree.build(unpinned.filter { $0.state.isLive }, machines: machines.map(\.ref)) : []
+        let _ = built.forEach { host in
+            for repo in host.repos { lookup.scopes[repo.id] = repoScope(repo) }
+        }
+        let _ = machines.forEach { machine in
+            var query = listQuery
+            query.machine = machine.id
+            lookup.scopes["machine/" + machine.ref.path] = RuntimeSessionLists.Scope(hub: machine.group, query: query)
+        }
         // Recently Updated: each machine's repositories by their latest agent (the machines keep their order, as By Project's do).
         let tree = sort == .updated ? built.map { host in
             var h = host
@@ -923,6 +959,26 @@ private struct AgentsList: View {
                 spaceSections(active: active, quiet: quiet, byHost: byHost)
             }
 
+            if !model.sessionLists.errors.isEmpty {
+                Section {
+                    ForEach(model.sessionLists.errors, id: \.self) { error in
+                        Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger)
+                    }
+                }
+            }
+            if model.sessionLists.hasMore {
+                Section {
+                    Button { Task { await model.sessionLists.next() } } label: {
+                        Label("Load More", systemImage: Theme.Icon.disclosure).lineLimit(1)
+                    }
+                    .themedButton()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("agents.nextPage")
+                    .task(id: paginationArmed) { if paginationArmed { await model.sessionLists.next() } }
+                }
+                .listRowBackground(Color.clear)
+            }
+
             if base.isEmpty, !query.isEmpty {
                 // Nothing matches the search: not Start Your First Session with its New Session, which read as if the agents were gone.
                 Section {
@@ -999,7 +1055,7 @@ private struct AgentsList: View {
         // not pinned in the safe area under a folding field: pinned, it stayed under the folded field (TestFlight 35,
         // ~120 pt of blurred list). On the list itself, before the alerts, as it always was.
         .modifier(AgentsSystemSearch(enabled: !ownsTop, query: $query, searching: $searching))
-        .refreshable { await model.refresh() }
+        .refreshable { await model.sessionLists.reload(); await model.refresh() }
         // Whether each machine's herdr runs, while the list is in sight (a modifier of its own: in this chain the
         // compiler ran out of time type-checking it).
         .modifier(HerdrPolling(watch: herdr, key: HerdrWatch.key(machines), covered: covered))
@@ -1021,6 +1077,13 @@ private struct AgentsList: View {
                 TodoLinkAgentSheet(space: TodoItem.Space(machineID: group.machineID, space: space))
             }
         }
+        .task(id: listQuery) {
+            paginationArmed = false
+            if !query.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            guard !Task.isCancelled else { return }
+            await model.sessionLists.select(listQuery, hub: selectedHub, model: model)
+        }
+        .task(id: hubFilter) { await model.sessionLists.select(listQuery, hub: selectedHub, model: model) }
         .onChange(of: matching) { _, now in kept.formUnion(now) }
         .onChange(of: query.isEmpty, initial: true) { _, empty in feed.searching = !empty }
         .onChange(of: grouping, initial: true) { _, mode in feed.recent = mode == .recent }
@@ -1042,7 +1105,7 @@ private struct AgentsList: View {
             #if (os(iOS) || os(visionOS)) && (DEBUG || PERF_SIGNPOST)
             PerfScroll.mark("Agents list \(phase)")
             #endif
-            if phase != .idle { feed.reader.cancel() }
+            if phase != .idle { feed.reader.cancel(); paginationArmed = true }
             #if os(iOS) || os(visionOS)
             if ownsTop, phase == .idle { header.settle() }
             #endif
@@ -1076,7 +1139,8 @@ private struct AgentsList: View {
     /// them. The tap reads the list as it is then.
     /// `base`: as the body worked it out (working it out again here went through every agent twice more per push).
     private func filterBar(_ base: [Session]) -> some View {
-        QuickFilterBar(selection: quick, counts: Self.counts(base, muted: model.isMuted)) { choose($0, self.base) }.equatable()
+        QuickFilterBar(selection: quick, counts: model.sessionLists.paged ? [:] : Self.counts(base, muted: model.isMuted),
+                       countsUnknown: model.sessionLists.paged) { choose($0, self.base) }.equatable()
             .searchTraceMark("filter")
     }
 
@@ -1329,6 +1393,26 @@ private struct AgentsList: View {
         .accessibilityIdentifier("agents.tab")
     }
 
+    private func spaceScope(_ group: SpaceGroup) -> RuntimeSessionLists.Scope {
+        var query = listQuery
+        query.machine = group.machineID
+        query.group = group.spaceID == "-" ? "" : group.spaceID
+        return RuntimeSessionLists.Scope(hub: group.group, query: query)
+    }
+
+    private func machineScope(_ machine: Machine) -> RuntimeSessionLists.Scope {
+        var query = listQuery
+        query.machine = machine.id
+        return RuntimeSessionLists.Scope(hub: machine.group, query: query)
+    }
+
+    private func repoScope(_ repo: RepoTree.Repo) -> RuntimeSessionLists.Scope {
+        var query = listQuery
+        query.machine = repo.machine.id
+        query.project = repo.path
+        return RuntimeSessionLists.Scope(hub: repo.machine.group, query: query)
+    }
+
     /// A visible ⋯ for open / mark read / pin / mute: long press on a list section header does not reach a context menu.
     private func spaceHeader(_ g: SpaceGroup, folded isFolded: Bool, namesMachine: Bool) -> some View {
         HStack(spacing: Theme.Space.xs) {
@@ -1349,6 +1433,7 @@ private struct AgentsList: View {
             .labelOnlyMenu()
             .accessibilityLabel("More actions for \(g.name) [Chats View 661d12]")
         }
+        .task(id: spaceScope(g)) { await model.sessionLists.loadCounts(spaceScope(g)) }
     }
 
     /// The ⋯ on a space's or a repository's header.
@@ -1476,7 +1561,8 @@ private struct AgentsList: View {
     private func repoHeader(_ r: RepoTree.Repo, folded isFolded: Bool) -> some View {
         let spaces = SpaceGroup.build(r.sessions)
         let space = spaces.count == 1 && spaces[0].spaceID != "-" ? spaces[0] : nil
-        let counts = SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0, sessions: r.sessions)
+        let counts = SpaceGroup(id: r.id, machineID: r.machine.id, spaceID: "-", group: r.machine.group, name: r.name, index: 0, sessions: r.sessions,
+                                aggregate: model.sessionLists.aggregate(repoScope(r)), bounded: model.sessionLists.isPaged(r.machine.group))
         let unread = r.sessions.filter { $0.state == .unread }.map(\.key)
         return HStack(spacing: Theme.Space.xs) {
             Button { toggleFold(r.id) } label: {
@@ -1503,6 +1589,7 @@ private struct AgentsList: View {
                 .accessibilityLabel("More actions for \(r.name) [Chats View 661d12]")
             }
         }
+        .task(id: repoScope(r)) { await model.sessionLists.loadCounts(repoScope(r)) }
     }
 
     /// A working tree in its repository's card: its row and agents (`worktreeRow`), then the spaces nested under it
@@ -1558,7 +1645,7 @@ private struct AgentsList: View {
             listSection {
                 cappedRows(AgentListOrder.recent(sessions), key: "recent") { s in slotRow(s, context: true) }
             } header: {
-                SectionHeader(title: String(localized: "Recently Used"), count: sessions.count, tone: StatusPalette.idle)
+                SectionHeader(title: String(localized: "Recently Used"), count: model.sessionLists.paged ? nil : sessions.count, tone: StatusPalette.idle)
             }
         }
     }
@@ -1619,6 +1706,12 @@ private struct AgentsList: View {
     /// The fold ids of the sections By Status / By Machine shows now (Collapse All).
     private func sectionIDs(_ sessions: [Session]) -> [String] { order.sectionIDs(sessions, byMachine: grouping == .machine) }
 
+    private func stateSectionCount(_ key: String, loaded: Int) -> Int {
+        let filters: [String: AgentFilter] = ["needs": .needsYou, "unread": .unread, "working": .working]
+        guard model.sessionLists.paged, let filter = filters[key] else { return loaded }
+        return model.sessionLists.stateCounts?[filter] ?? 0
+    }
+
     /// A section per rank (`rank`); Seen starts folded, it is the long tail, and its header is its one fold: no
     /// "N more idle" row inside it as well (2026-10-31: it took two taps where the other states take one). Waiting: nothing new
     /// yet, but a /loop or background work will bring some.
@@ -1638,8 +1731,8 @@ private struct AgentsList: View {
                         cappedRows(rows, key: id) { s in slotRow(s, context: true, inStateSection: b.key != "muted") }
                     }
                 } header: {
-                    FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(rows.count) [Chats View cb60bd]")) { toggleFold(id) } label: {
-                        SectionHeader(title: b.title, count: rows.count, tone: b.tint)
+                    FoldButton(title: b.title, folded: isFolded(id), detail: String(localized: "\(stateSectionCount(b.key, loaded: rows.count)) [Chats View cb60bd]")) { toggleFold(id) } label: {
+                        SectionHeader(title: b.title, count: stateSectionCount(b.key, loaded: rows.count), tone: b.tint)
                     }
                     .modifier(FoldAnchor(id: id, reader: feed.reader))
                 }
@@ -1702,7 +1795,8 @@ private struct AgentsList: View {
         ForEach(machineOrder(live), id: \.ref) { m in
             let rows = ordered(live.filter { $0.machineRef == m.ref })
             let id = "machine/" + m.ref.path
-            let group = SpaceGroup(id: "m-" + m.ref.path, machineID: m.id, spaceID: "-", group: m.group, name: m.title, index: 0, sessions: rows)
+            let group = SpaceGroup(id: "m-" + m.ref.path, machineID: m.id, spaceID: "-", group: m.group, name: m.title, index: 0, sessions: rows,
+                                   aggregate: model.sessionLists.aggregate(machineScope(m)), bounded: model.sessionLists.isPaged(m.group))
             listSection {
                 if !isFolded(id) {
                     if quick == .all {
@@ -1716,6 +1810,7 @@ private struct AgentsList: View {
                 FoldButton(title: m.title, folded: isFolded(id), detail: StateCounts.spoken(group)) { toggleFold(id) } label: {
                     MachineSectionHeader(machine: m, group: group)
                 }
+                .task(id: machineScope(m)) { await model.sessionLists.loadCounts(machineScope(m)) }
             }
             .listSectionSpacing(isFolded(id) ? .custom(0) : .default)
         }
@@ -1726,7 +1821,7 @@ private struct AgentsList: View {
                                                                        @ViewBuilder row: @escaping (Item) -> Row) -> some View {
         let key = "all:" + key
         // Under a quick filter or a search every row it leaves shows: what was asked for, and already few.
-        if let cap = AgentRowCap.capped(items.count), query.isEmpty, quick == .all {
+        if let cap = AgentRowCap.capped(items.count), query.isEmpty, quick == .all, !model.sessionLists.paged {
             if expandedIdle.contains(key) {
                 ForEach(items) { row($0) }
                 collapseRow(String(localized: "Collapse"), key: key, depth: depth)
@@ -1928,6 +2023,7 @@ private struct AgentsList: View {
             slotRowBody(s, context: context, inStateSection: inStateSection, cardLast: cardLast, showHost: showHost, depth: depth,
                         pane: pane, branch: branch)
         }
+        .onAppear { if paginationArmed { Task { await model.sessionLists.appeared(s) } } }
         // Not `.equatable()`: through an `EquatableView` the row's list traits (insets, separator, background) were
         // lost. SwiftUI compares a view with its own `==` when it has one.
     }
@@ -2200,6 +2296,10 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 /// alone (`landCritical`): the list may still move under the finger (a card put in at the top, a space moving up),
 /// which is the price of showing it now.
 @MainActor @Observable final class AgentsFeed {
+    #if DEBUG
+    /// The controlled UI driver must cancel/hold the same reader as a real gesture; never retained by the probe.
+    @ObservationIgnored static weak var pagingProbe: AgentsFeed?
+    #endif
     /// The agents as the list's structure last changed (`shape`): the body reads this, each row its own `Row`.
     private(set) var sessions: [Session] = []
     private(set) var interactions: [Interaction] = []
@@ -2231,6 +2331,10 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     func follow(_ model: AppModel) {
         guard self.model == nil else { return }
         self.model = model
+        #if DEBUG
+        Self.pagingProbe = self
+        #endif
+        model.sessionLists.bind(model)
         pull()
         following = true
     }
@@ -2352,10 +2456,10 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     /// once; watched again at every change, held or not, never twice at a time).
     private func current() -> ([Session], [Interaction], [Machine])? {
         guard let model else { return nil }
-        guard !watching else { return (model.allSessions, model.pendingInteractions, model.machines) }
+        guard !watching else { return (model.sessionLists.sessions, model.pendingInteractions, model.machines) }
         watching = true
         return withObservationTracking {
-            (model.allSessions, model.pendingInteractions, model.machines)
+            (model.sessionLists.sessions, model.pendingInteractions, model.machines)
         } onChange: { [weak self] in
             Task { @MainActor in // told before the change: read it after
                 self?.watching = false
@@ -2376,7 +2480,14 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
     private func changed() {
         guard hold.wait() else { return pull() }
         guard let (s, i, m) = current() else { return }
+        // A newly fetched page is not a live insertion: append every row now, not only urgent rows (which left gaps
+        // such as 49 → 52 during a glide until the scroll hold released). Existing rows keep their identities.
+        if model?.sessionLists.paged == true, Self.appendsPage(s, after: shown) { return pull() }
         if Self.critical(s, i, m) != Self.critical(shown, interactions, machines) { landCritical(s, i, m) }
+    }
+
+    nonisolated static func appendsPage(_ next: [Session], after old: [Session]) -> Bool {
+        next.count > old.count && zip(next, old).allSatisfy { $0.key == $1.key }
     }
 
     /// While held, only what must show at once, onto the rows as shown: the states of the agents that start or stop
@@ -2420,9 +2531,13 @@ nonisolated struct AgentsListShown: Encodable, Equatable {
 struct QuickFilterBar: View, Equatable {
     nonisolated let selection: AgentFilter
     nonisolated let counts: [AgentFilter: Int]
+    /// The hub counts the whole transport collection, including assistants, not the exact visible Agents membership.
+    nonisolated var countsUnknown = false
     var choose: (AgentFilter) -> Void
 
-    nonisolated static func == (a: Self, b: Self) -> Bool { a.selection == b.selection && a.counts == b.counts }
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.selection == b.selection && a.counts == b.counts && a.countsUnknown == b.countsUnknown
+    }
 
     /// No sideways scroll view: the navigation stack can take one at the top of the page for the page's own and
     /// inset it by the whole top bar. It did behind a chat reopened at launch (the chips drawn ~170 pt under the
@@ -2439,7 +2554,7 @@ struct QuickFilterBar: View, Equatable {
             // went with the counts moved under the pointer.
             Picker("Filter", selection: Binding(get: { selection }, set: { if $0 != selection { choose($0) } })) {
                 ForEach(AgentFilter.allCases) { f in
-                    Text(f == .all ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
+                    Text(f == .all || countsUnknown ? f.title : "\(f.title) \(counts[f] ?? 0)").tag(f)
                 }
             }
             .pickerStyle(.segmented)
@@ -2473,9 +2588,10 @@ struct QuickFilterBar: View, Equatable {
     }
 
     /// All, and the states that have agents right now; the chosen one stays while it empties, so it can be left.
-    private var shown: [AgentFilter] {
-        AgentFilter.allCases.filter { $0 == .all || $0 == selection || (counts[$0] ?? 0) > 0 }
+    var availableFilters: [AgentFilter] {
+        AgentFilter.allCases.filter { countsUnknown || $0 == .all || $0 == selection || (counts[$0] ?? 0) > 0 }
     }
+    private var shown: [AgentFilter] { availableFilters }
 
     /// Persona' own chips: the state's dot, the name and the count on a tinted capsule.
     @ViewBuilder private func plainChips(padding: CGFloat) -> some View {

@@ -137,6 +137,24 @@ extension APIClient {
         try await get("/api/v1/agents", as: AgentSources.self).sources
     }
 
+    func personalAgentListPage(_ query: SessionListQuery, cursor: String? = nil, since: String? = nil) async throws -> SessionListPage<PersonalAgentSession> {
+        if query.legacy {
+            return SessionListPage(sessions: try await personalAgentSessions(), remove: [], hasMore: nil, nextCursor: nil, revision: nil, total: nil)
+        }
+        var parameters = query.parameters
+        if let cursor { parameters["cursor"] = cursor }
+        if let since { parameters["since"] = since }
+        var data = try await request("GET", "/api/v1/agents/sessions", query: parameters)
+        // Older personal-agent routes interpret q as a transcript search and return items rather than sessions.
+        if let raw = try? JSON.decoder.decode(JSONValue.self, from: data), raw["revision"] == nil, raw["items"] != nil {
+            data = try await request("GET", "/api/v1/agents/sessions")
+        }
+        let response = data
+        return try await Task.detached(priority: .userInitiated) {
+            try JSON.decoder.decode(SessionListPage<PersonalAgentSession>.self, from: response)
+        }.value
+    }
+
     func personalAgentSessions() async throws -> [PersonalAgentSession] {
         try await get("/api/v1/agents/sessions", as: AgentSessions.self).sessions
     }

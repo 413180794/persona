@@ -593,6 +593,11 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     var queued: [String]?
     /// Shells / subagents Claude left running in the background.
     var background: [BackgroundTask]?
+    /// Bounded list summaries supply scalars instead of chat-only arrays. Nil means a complete/legacy row.
+    var listWaiting: Bool? = nil
+    var listBackgroundCount: Int? = nil
+    var listRunningSubagents: Int? = nil
+    var listRunningWorkflows: Int? = nil
     /// The /loop driving this agent (it wakes itself up on a schedule).
     var loop: LoopInfo?
     /// The goal it works toward until it holds (Claude Code's /goal, a Codex thread goal; docs/agent-goal.md).
@@ -760,6 +765,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case listWaiting = "waiting", listBackgroundCount = "background_count", listRunningSubagents = "running_subagents", listRunningWorkflows = "running_workflows"
         case title, cwd, status, launcher, model, agent, effort, efforts, capabilities, attached
         case canFork = "can_fork"
         case sourceKind = "source_kind", sourceThreadID = "source_thread_id", sourceInstanceID = "source_instance_id",
@@ -831,6 +837,10 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
         stateSince = try c.decodeIfPresent(Date.self, forKey: .stateSince)
         queued = try c.decodeIfPresent([String].self, forKey: .queued)
         background = try c.decodeIfPresent([BackgroundTask].self, forKey: .background)
+        listWaiting = try c.decodeIfPresent(Bool.self, forKey: .listWaiting)
+        listBackgroundCount = try c.decodeIfPresent(Int.self, forKey: .listBackgroundCount)
+        listRunningSubagents = try c.decodeIfPresent(Int.self, forKey: .listRunningSubagents)
+        listRunningWorkflows = try c.decodeIfPresent(Int.self, forKey: .listRunningWorkflows)
         loop = try c.decodeIfPresent(LoopInfo.self, forKey: .loop)
         goal = try c.decodeIfPresent(GoalInfo.self, forKey: .goal)
         subagents = try c.decodeIfPresent([Subagent].self, forKey: .subagents)

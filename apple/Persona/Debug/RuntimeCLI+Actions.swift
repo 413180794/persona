@@ -60,6 +60,7 @@ extension RuntimeCLI {
     /// bottom, without animation (no deceleration: what is under test is where things land, not the fling). Only one
     /// that is drawn: the shell's page behind has a list as large as the one on screen (`frame`: which one moved).
     private static func scroll(_ a: Args) -> Reply {
+        AgentsFeed.pagingProbe?.reader.cancel()
         var views: [UIScrollView] = []
         func collect(_ v: UIView) {
             if let s = v as? UIScrollView, !s.isHidden, s.window != nil, s.contentSize.height > s.bounds.height + 1, drawn(s) {

@@ -8,19 +8,28 @@ struct PersonalAgentsRoute: Hashable {}
 /// the web through the hub. Re-pulls on the hub's `agents` events.
 struct PersonalAgentListView: View {
     @Environment(AppModel.self) private var model
-    @State private var sessions: [PersonalAgentSession] = []
+    @State private var list = PersonalAgentListModel()
+    @State private var paginationArmed = false
+    private var sessions: [PersonalAgentSession] { list.page?.rows ?? [] }
     @State private var sources: [PersonalAgentSourceStatus] = []
     @State private var error: String?
-    @State private var loaded = false
+    private var loaded: Bool { list.page?.loaded == true }
+    private var shownError: String? { list.page?.error ?? error }
     @State private var query = ""
     @State private var naming = false
     @State private var newSection = ""
     private var store: PersonalAgentPrefsStore { .shared }
 
     private var prefs: PersonalAgentPrefs { store.prefs }
-    private var groups: [PersonalAgentGroup] { PersonalAgentArrange.arrange(sessions, prefs: prefs, query: query) }
+    private var listQuery: SessionListQuery {
+        SessionListQuery(legacy: AgentListLoadingPolicy.personal(prefs, query: query),
+                         state: prefs.view.showMode == .unread ? "unread" : "",
+                         provider: prefs.view.providerFilter.count == 1 ? prefs.view.providerFilter[0] : "", text: query)
+    }
+    private var groups: [PersonalAgentGroup] { PersonalAgentArrange.arrange(sessions, prefs: prefs, query: list.page?.paged == true ? "" : query) }
     private var allProviders: [String] {
         var seen: [String] = []
+        for s in sources.flatMap({ ($0.providers ?? []).map(\.provider) + ($0.accounts ?? []).map(\.provider) }) where !seen.contains(s) { seen.append(s) }
         for s in sessions where !seen.contains(s.provider) { seen.append(s.provider) }
         return seen
     }
@@ -29,7 +38,7 @@ struct PersonalAgentListView: View {
 
     var body: some View {
         List {
-            if let error {
+            if let error = shownError {
                 Section { Label(error, systemImage: Theme.Icon.error).foregroundStyle(Theme.danger) }
             }
             ForEach(sources.flatMap { $0.accounts ?? [] }, id: \.accountId) { a in
@@ -58,10 +67,16 @@ struct PersonalAgentListView: View {
                             if g.id == "pinned" { Image(systemName: Theme.Icon.pinned).imageScale(.small) }
                             Text(g.label)
                             Spacer()
-                            if g.unread > 0 { Text("\(g.unread)").monospacedDigit() }
+                            if list.page?.paged != true, g.unread > 0 { Text("\(g.unread)").monospacedDigit() }
                         }
                     }
                 }
+            }
+            if list.page?.hasMore == true {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("personalAgents.nextPage")
+                    .task(id: paginationArmed) { if paginationArmed { await list.page?.next() } }
             }
             if loaded && sessions.isEmpty && error == nil {
                 let hints = sources.compactMap(\.setupHint)
@@ -91,10 +106,21 @@ struct PersonalAgentListView: View {
             }
         } message: { Text("Long-press a session to move it into this group.") }
         .overlay { if !loaded && error == nil { ProgressView() } }
-        .refreshable { await load() }
-        .task { await load() }
+        .refreshable { await list.page?.reload(); await load() }
+        .task(id: listQuery) {
+            paginationArmed = false
+            if !query.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            guard !Task.isCancelled else { return }
+            await load()
+        }
+        .onChange(of: model.api?.config) { _, _ in Task { await load() } }
+        .onChange(of: model.api?.group) { _, _ in Task { await load() } }
+        .onScrollPhaseChange { _, phase in if phase != .idle { paginationArmed = true } }
         .task {
-            for await _ in PersonalAgentSync.shared.changes() { await load() }
+            for await _ in PersonalAgentSync.shared.changes() {
+                await load() // prefs/source status and changed credentials follow the hub; an unchanged row baseline is reused
+                list.page?.invalidate()
+            }
         }
     }
 
@@ -167,10 +193,10 @@ struct PersonalAgentListView: View {
         guard let api = model.api else { return }
         async let p: Void = store.load(api)
         do {
-            async let list = api.personalAgentSessions()
+            list.connect(api)
             async let st = api.personalAgentSources()
-            sessions = try await list
-            PersonalAgentIndex.update(sessions)
+            await list.page?.select(listQuery)
+            if let failure = list.page?.error { throw APIError(status: 0, message: failure) }
             sources = (try? await st) ?? sources
             error = nil
         } catch {
@@ -178,7 +204,6 @@ struct PersonalAgentListView: View {
             self.error = String(localized: "Can't connect to personal agents: \(error.localizedDescription)")
         }
         _ = await p
-        loaded = true
     }
 }
 

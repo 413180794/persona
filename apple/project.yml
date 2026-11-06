@@ -577,6 +577,9 @@ targets:
       - path: PersonaTests/NotifyPrefsTests.swift
       - path: PersonaTests/PushCryptoTests.swift
       - path: PersonaTests/UsageWindowsTests.swift
+      - path: PersonaTests/SessionListTests.swift
+      - path: PersonaTests/AgentListFallbackTests.swift
+      - path: PersonaTests/FakeHub.swift
     dependencies:
       - target: PersonaMac
     settings:

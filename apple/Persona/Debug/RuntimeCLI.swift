@@ -24,6 +24,7 @@ enum RuntimeCLI {
         .merging(actionCommands) { core, _ in core }
         .merging(motionCommands) { core, _ in core }
         .merging(imageViewerCommands) { core, _ in core }
+        .merging(agentsPagingCommands) { core, _ in core }
 
     private static let coreCommands: [String: Command] = [
         "ping": { _ in ["pong": true, "pid": Int(ProcessInfo.processInfo.processIdentifier)] },

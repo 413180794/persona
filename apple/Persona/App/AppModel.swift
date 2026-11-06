@@ -555,6 +555,7 @@ final class AppModel {
         applyPersonaPalette()
         machines = []
         sessionsByMachine = [:]
+        sessionLists.forget()
         pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
         muteWhileDesktop = false
@@ -578,6 +579,7 @@ final class AppModel {
         shown = []
         machines = []
         sessionsByMachine = [:]
+        sessionLists.forget()
         pendingSessions = [:]
         interactions = [:]
     }
@@ -611,6 +613,7 @@ final class AppModel {
         forgetDeviceCredentials()
         machines = []
         sessionsByMachine = [:]
+        sessionLists.forget()
         pendingSessions = [:] // a burst from the hub left before this
         interactions = [:]
         muteWhileDesktop = false
@@ -780,6 +783,7 @@ final class AppModel {
             let st = try await api.assistant()
             guard api.group == hub?.group else { return } // another group was picked meanwhile
             assistantConfig = st
+            if sessionLists.lists[api.group]?.paged == true { landSessionSummaries(api.stamp(st.conversations), group: api.group) }
             // Only on the very first launch: after New Chat the key exists but is empty, and the home page stays.
             let neverChosen = UserDefaults.standard.object(forKey: "assistant.current") == nil
             if assistantCurrent == nil, neverChosen {
@@ -966,12 +970,27 @@ final class AppModel {
     /// Chat views on screen, newest last: `visibleSession` is the top one.
     @ObservationIgnored private var shown: [(owner: UUID, key: SessionKey)] = []
     @ObservationIgnored private var filling = Set<SessionKey>()
+    @ObservationIgnored private var detailFetching = Set<SessionKey>()
+
+    func refreshSessionDetail(_ key: SessionKey) async {
+        guard sessionLists.lists[key.group]?.paged == true, let api = api(key.group), detailFetching.insert(key).inserted else { return }
+        defer { detailFetching.remove(key) }
+        do {
+            let full = try await api.sessionListDetail(key, title: latest(key)?.title ?? "")
+            guard self.api(key.group)?.config.url == api.config.url else { return }
+            let list = (sessionsByMachine[key.machineRef] ?? []).filter { $0.key != key } + [full]
+            applySessions([key.machineRef: list])
+        } catch {
+            if isSubscribed(key), !error.isQuiet { chat(key).error = error.localizedDescription }
+        }
+    }
 
     func subscribe(_ key: SessionKey, by owner: UUID) {
         let first = subscribers[key, default: []].isEmpty
         subscribers[key, default: []].insert(owner)
         guard first else { return }
         let store = chat(key)
+        Task { await refreshSessionDetail(key) }
         socket(key.group)?.send(subscribeMessage(key))
         if socket(key.group)?.state != .connected && !store.loadedOnce { Task { await loadInitial(key) } }
     }
@@ -1373,6 +1392,7 @@ final class AppModel {
     @ObservationIgnored private var deltas = DeltaPacer()
     /// Session lists received and not applied yet (`applyPendingSessions`), by machine.
     @ObservationIgnored private var pendingSessions: [MachineRef: [Session]] = [:]
+    let sessionLists = RuntimeSessionLists()
     @ObservationIgnored private var sessionsFlushScheduled = false
     /// Agents marked seen that the hub has not taken yet (#1588): shown seen, sent again until it has.
     @ObservationIgnored private var seenOutbox = SeenOutbox()
@@ -1408,6 +1428,24 @@ final class AppModel {
         }
     }
 
+    /// The complete fallback is authoritative on a list-negotiated hub. Older delta sockets retain their live rows
+    /// while REST fills history, including a snapshot still waiting for the burst flush.
+    func landCompleteSessionList(_ rows: [Session], group: String) {
+        var updates = Dictionary(grouping: rows, by: \.machineRef)
+        let delta = socket(group)?.state == .connected && features(group).contains(SessionPatch.feature) && !features(group).contains("sessions_list")
+        for (ref, list) in updates {
+            updates[ref] = SessionPatch.refreshed(list, over: sessionsByMachine[ref] ?? [], connectedToDeltaHub: delta)
+            if let pending = pendingSessions[ref] {
+                pendingSessions[ref] = SessionPatch.refreshed(list, over: pending, connectedToDeltaHub: delta)
+            }
+        }
+        for ref in sessionsByMachine.keys where ref.group == group && updates[ref] == nil { updates[ref] = [] }
+        if !delta {
+            for ref in pendingSessions.keys where ref.group == group && updates[ref]?.isEmpty != false { pendingSessions[ref] = [] }
+        }
+        applySessions(updates)
+    }
+
     private func scheduleSessionsFlush() {
         guard !sessionsFlushScheduled else { return }
         sessionsFlushScheduled = true
@@ -1422,6 +1460,11 @@ final class AppModel {
         switch ev {
         case .hello(let hello):
             link(group)?.received(hello)
+            if let page = sessionLists.lists[group], page.loaded, !page.query.legacy, page.paged != hello.features.contains("sessions_list"), let link = link(group) {
+                page.cancel()
+                Task { await self.refresh(link) }
+            }
+            if isHub { PersonalAgentSync.shared.received([]) }
             Task { await refreshInAppTunnel(group) }
             // Back on the hub: an install that moved on while the connection was down shows where it is now (#3307).
             if isHub, Set(hello.features).hasExtensionFeature("operations") { Task { await ExtensionOperations.shared.reload() } }
@@ -1457,6 +1500,9 @@ final class AppModel {
                     socket(group)?.send(subscribeMessage(key))
                 }
             }
+        case .sessionsList:
+            sessionLists.invalidate(group)
+            for key in subscribers.keys where key.group == group { Task { await refreshSessionDetail(key) } }
         case .sessions(let machineID, let list):
             // A busy hub sends each machine's list on its own, one after another: they are applied together a moment
             // later, so the pages that read the sessions update once for the lot (one SwiftUI pass, not one a machine).
@@ -1579,6 +1625,7 @@ final class AppModel {
         case .machines: "machines"
         case .sessions: "sessions"
         case .sessionsDelta: "sessions_delta"
+        case .sessionsList: "sessions_list"
         case .items: "items"
         case .screen: "screen"
         case .delta: "delta"
@@ -2545,24 +2592,13 @@ final class AppModel {
         let asked = Date.now
         do {
             async let m = api.machines()
-            async let s = api.sessions()
+            let page = sessionLists.list(link, model: self)
+            async let s: Void = page.refresh()
             async let i = api.interactions()
-            let (machines, sessions, ixs) = try await (m, s, i)
+            let (machines, _, ixs) = try await (m, s, i)
             guard self.link(group) === link else { return } // removed meanwhile
             replaceMachines(group, machines)
-            let rest = Dictionary(grouping: sessions, by: \.machineRef)
-            var lists = sessionsByMachine.filter { $0.key.group != group }
-            if link.live.state == .connected && link.features.contains(SessionPatch.feature) {
-                // What the socket pushed is newer than this answer: only the Codex history comes from it.
-                for (ref, list) in rest {
-                    lists[ref] = SessionPatch.refreshed(list, over: sessionsByMachine[ref] ?? [], connectedToDeltaHub: true)
-                    if let p = pendingSessions[ref] { pendingSessions[ref] = SessionPatch.refreshed(list, over: p, connectedToDeltaHub: true) }
-                }
-            } else {
-                for (ref, list) in rest { lists[ref] = list }
-            }
-            lists = seenOutbox.land(lists, at: Date())
-            if lists != sessionsByMachine { sessionsByMachine = lists }
+            if page.paged { page.invalidate() }
             replaceInteractions(group, ixs, askedAt: asked)
             link.live.ensureConnected()
         } catch {

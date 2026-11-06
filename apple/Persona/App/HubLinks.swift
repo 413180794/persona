@@ -26,6 +26,7 @@ final class HubLink: Identifiable {
         self.group = group
         self.fallback = config
         self.pins = pins
+        live.usesSessionList = true
     }
 
     /// The hub requests go to: the one the socket is on.
