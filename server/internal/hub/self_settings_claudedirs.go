@@ -63,13 +63,23 @@ func (h *Hub) addBlockedClaudeDir(ctx context.Context, v json.RawMessage) (*self
 	if len(proto.CleanClaudeDirPatterns([]string{p})) == 0 || !proto.ValidClaudeDirPattern(p) {
 		return nil, fmt.Errorf("bad pattern %q: a path or glob starting with / or ~/", a.Pattern)
 	}
-	now := m.blockedClaudeDirs(ctx)
+	now, err := m.readBlockedClaudeDirs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if slices.Contains(now, p) {
 		return &selfChange{summary: p + " is already blocked on " + m.cfg.ID + "."}, nil
 	}
 	return &selfChange{summary: i18n.T(h.userLang(), "hub-self_settings_claudedirs.block", i18n.Args{"machine": m.cfg.Name, "path": p}),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			if err := m.setBlockedClaudeDirs(ctx, append(m.blockedClaudeDirs(ctx), p)); err != nil {
+			now, err := m.readBlockedClaudeDirs(ctx)
+			if err != nil {
+				return "", err
+			}
+			if !slices.Contains(now, p) {
+				now = append(now, p)
+			}
+			if err := m.setBlockedClaudeDirs(ctx, now); err != nil {
 				return "", err
 			}
 			return "Blocked " + p + " on " + m.cfg.ID + ".", nil
@@ -83,12 +93,20 @@ func (h *Hub) removeBlockedClaudeDir(ctx context.Context, id string) (*selfChang
 		return nil, fmt.Errorf("remove takes \"<machine id>:<pattern>\", got %q", id)
 	}
 	p = strings.TrimSuffix(strings.TrimSpace(p), "/")
-	if !slices.Contains(m.blockedClaudeDirs(ctx), p) {
+	now, err := m.readBlockedClaudeDirs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Contains(now, p) {
 		return nil, fmt.Errorf("%s is not blocked on %s (get lists the patterns)", p, m.cfg.ID)
 	}
 	return &selfChange{summary: i18n.T(h.userLang(), "hub-self_settings_claudedirs.unblock", i18n.Args{"machine": m.cfg.Name, "path": p}),
 		apply: func(ctx context.Context, _ map[string]string) (string, error) {
-			rest := slices.DeleteFunc(m.blockedClaudeDirs(ctx), func(s string) bool { return s == p })
+			now, err := m.readBlockedClaudeDirs(ctx)
+			if err != nil {
+				return "", err
+			}
+			rest := slices.DeleteFunc(now, func(s string) bool { return s == p })
 			if err := m.setBlockedClaudeDirs(ctx, rest); err != nil {
 				return "", err
 			}

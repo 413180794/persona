@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/bus"
@@ -236,4 +238,53 @@ func TestManagersEventIsOptIn(t *testing.T) {
 		t.Fatalf("an app that did not ask got %s", raw)
 	case <-time.After(100 * time.Millisecond):
 	}
+}
+
+// A join whose token cannot be saved does not use up its code: once the store works again the same code joins.
+func TestManagersInstallCodeSurvivesAFailedSave(t *testing.T) {
+	h, srv, _ := managersHub(t)
+	var made struct {
+		Manager managerInfo `json:"manager"`
+		Code    string      `json:"code"`
+	}
+	if code := managersDo(t, h, srv, "POST", "/api/v1/managers", map[string]any{"name": "工作"}, &made); code != 201 {
+		t.Fatalf("make: %d", code)
+	}
+
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, os.Getenv("JARVIS_TEST_DATABASE_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	allow := func() {
+		_, _ = conn.Exec(ctx, `DROP TRIGGER IF EXISTS test_refuse_bus_identity ON bus_identities`)
+		_, _ = conn.Exec(ctx, `DROP FUNCTION IF EXISTS test_refuse_bus_identity()`)
+	}
+	t.Cleanup(allow)
+	for _, q := range []string{
+		`CREATE OR REPLACE FUNCTION test_refuse_bus_identity() RETURNS trigger LANGUAGE plpgsql
+			AS $$ BEGIN RAISE EXCEPTION 'bus_identities write refused by the test'; END $$`,
+		`CREATE TRIGGER test_refuse_bus_identity BEFORE INSERT OR UPDATE ON bus_identities
+			FOR EACH ROW EXECUTE FUNCTION test_refuse_bus_identity()`,
+	} {
+		if _, err := conn.Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code := managersDo(t, h, srv, "POST", bus.JoinPath, map[string]any{"code": made.Code}, nil); code != http.StatusServiceUnavailable {
+		t.Fatalf("join while the token cannot be saved: %d", code)
+	}
+	allow()
+
+	var joined struct {
+		ID, Name, Token string
+	}
+	if code := managersDo(t, h, srv, "POST", bus.JoinPath, map[string]any{"code": made.Code}, &joined); code != 200 {
+		t.Fatalf("the same code after the store recovered: %d", code)
+	}
+	if joined.ID != made.Manager.ID || joined.Name != "工作" || joined.Token == "" {
+		t.Fatalf("joined: %+v", joined)
+	}
+	_ = dialRawBus(t, srv, joined.Token)
 }

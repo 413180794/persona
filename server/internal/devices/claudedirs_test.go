@@ -3,6 +3,7 @@ package devices
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -291,5 +293,160 @@ func TestConfigureNodeSaysUsageWindows(t *testing.T) {
 	defer f.mu.Unlock()
 	if len(f.configure) != 2 || string(f.configure[0]["usage_windows"]) != "true" || string(f.configure[1]["usage_windows"]) != "false" {
 		t.Fatalf("usage_windows in node.configure: %v", f.configure)
+	}
+}
+
+// faultyDirsStore fails or holds reads of claude_dirs/<id>: failNext makes the next one fail; hold, when set, makes the
+// next one read, then signal entered and wait for release before returning what it read.
+type faultyDirsStore struct {
+	dirsStore
+	mu       sync.Mutex
+	failNext bool
+	hold     bool
+	entered  chan struct{}
+	release  chan struct{}
+}
+
+func (s *faultyDirsStore) Setting(ctx context.Context, key string, out any) (bool, error) {
+	if !strings.HasPrefix(key, "claude_dirs/") {
+		return s.dirsStore.Setting(ctx, key, out)
+	}
+	s.mu.Lock()
+	fail, hold := s.failNext, s.hold
+	s.failNext, s.hold = false, false
+	s.mu.Unlock()
+	if fail {
+		return false, errors.New("pool timeout")
+	}
+	ok, err := s.dirsStore.Setting(ctx, key, out)
+	if hold {
+		close(s.entered)
+		<-s.release
+	}
+	return ok, err
+}
+
+func faultyDirsHub(t *testing.T) (*settingsStore, *faultyDirsStore, *Machine) {
+	t.Helper()
+	h, st, m, _ := dirsHub(t)
+	fs := &faultyDirsStore{dirsStore: dirsStore{st}, entered: make(chan struct{}), release: make(chan struct{})}
+	h.opts.Store = fs
+	m.mu.Lock()
+	m.info.Home = "/home/me"
+	m.mu.Unlock()
+	return st, fs, m
+}
+
+// A failed read of the remembered dirs leaves them as they were: the event's dirs do not replace the list.
+func TestRememberClaudeDirsKeepsListOnReadError(t *testing.T) {
+	st, fs, m := faultyDirsHub(t)
+	ctx := context.Background()
+	_ = st.PutSetting(ctx, claudeDirsKey("m1"), []string{"/home/me/.config/cc/a", "/home/me/.config/cc/b"})
+	fs.failNext = true
+	m.rememberClaudeDirs(json.RawMessage(`{"dirs":["/home/me/.config/cc/new"]}`))
+	var seen []string
+	_, _ = st.Setting(ctx, claudeDirsKey("m1"), &seen)
+	if !slices.Equal(seen, []string{"/home/me/.config/cc/a", "/home/me/.config/cc/b"}) {
+		t.Fatalf("remembered %v after a failed read", seen)
+	}
+	// The next event, read fine, adds to the list.
+	m.rememberClaudeDirs(json.RawMessage(`{"dirs":["/home/me/.config/cc/new"]}`))
+	_, _ = st.Setting(ctx, claudeDirsKey("m1"), &seen)
+	if !slices.Equal(seen, []string{"/home/me/.config/cc/a", "/home/me/.config/cc/b", "/home/me/.config/cc/new"}) {
+		t.Fatalf("remembered %v", seen)
+	}
+}
+
+// Blocking still stores the patterns when the remembered dirs cannot be read (it is a privacy control, and the list
+// is filtered by them wherever it is used); only the pruning waits, and the list is not overwritten.
+func TestBlockClaudeDirsReadError(t *testing.T) {
+	st, fs, m := faultyDirsHub(t)
+	ctx := context.Background()
+	_ = st.PutSetting(ctx, claudeDirsKey("m1"), []string{"/home/me/.config/cc/a", "/home/me/.config/cc/b"})
+	fs.failNext = true
+	if err := m.setBlockedClaudeDirs(ctx, []string{"~/.config/cc/a"}); err != nil {
+		t.Fatalf("block refused on a failed read of the remembered dirs: %v", err)
+	}
+	if b := m.blockedClaudeDirs(ctx); !slices.Equal(b, []string{"~/.config/cc/a"}) {
+		t.Fatalf("blocked %v", b)
+	}
+	var seen []string
+	_, _ = st.Setting(ctx, claudeDirsKey("m1"), &seen)
+	if !slices.Equal(seen, []string{"/home/me/.config/cc/a", "/home/me/.config/cc/b"}) {
+		t.Fatalf("remembered %v after a failed read", seen)
+	}
+	if dirs := m.claudeDirs(ctx); slices.Contains(dirs, "/home/me/.config/cc/a") {
+		t.Fatalf("blocked dir still handed to the node: %v", dirs)
+	}
+}
+
+// Remembered dirs that do not decode are not a read error for good: what decodes is kept and written back, by a
+// claude.dirs event and by a block alike.
+func TestClaudeDirsRecoverFromAnUndecodableList(t *testing.T) {
+	for name, raw := range map[string]string{
+		"an entry is not a string": `["/home/me/.config/cc/a", 7, "/home/me/.config/cc/b"]`,
+		"not JSON":                 `["/home/me/.config/cc/a",`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, _, m := faultyDirsHub(t)
+			ctx := context.Background()
+			bad := func() {
+				st.mu.Lock()
+				st.vals[claudeDirsKey("m1")] = []byte(raw)
+				st.mu.Unlock()
+			}
+			read := func() []string {
+				var seen []string
+				if _, err := st.Setting(ctx, claudeDirsKey("m1"), &seen); err != nil {
+					t.Fatalf("still undecodable: %v", err)
+				}
+				return seen
+			}
+			bad()
+			m.rememberClaudeDirs(json.RawMessage(`{"dirs":["/home/me/.config/cc/new"]}`))
+			if seen := read(); !slices.Contains(seen, "/home/me/.config/cc/new") {
+				t.Fatalf("remembered %v", seen)
+			}
+			bad()
+			if err := m.setBlockedClaudeDirs(ctx, []string{"~/.config/cc/a"}); err != nil {
+				t.Fatal(err)
+			}
+			if seen := read(); slices.Contains(seen, "/home/me/.config/cc/a") {
+				t.Fatalf("blocked dir still remembered: %v", seen)
+			}
+		})
+	}
+}
+
+// A dir blocked while a claude.dirs event is being remembered stays forgotten: the event's write does not bring back
+// the list it read before the block.
+func TestBlockClaudeDirsDuringRemember(t *testing.T) {
+	st, fs, m := faultyDirsHub(t)
+	ctx := context.Background()
+	_ = st.PutSetting(ctx, claudeDirsKey("m1"), []string{"/home/me/.config/cc/keep", "/home/me/.config/cc/gone"})
+	fs.hold = true
+	remembered := make(chan struct{})
+	go func() {
+		defer close(remembered)
+		m.rememberClaudeDirs(json.RawMessage(`{"dirs":["/home/me/.config/cc/new"]}`))
+	}()
+	<-fs.entered
+	blocked := make(chan error, 1)
+	go func() { blocked <- m.setBlockedClaudeDirs(ctx, []string{"~/.config/cc/gone"}) }()
+	// Without the lock the block finishes while the remember is held; with it, it waits for the remember.
+	select {
+	case err := <-blocked:
+		blocked <- err
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(fs.release)
+	<-remembered
+	if err := <-blocked; err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	_, _ = st.Setting(ctx, claudeDirsKey("m1"), &seen)
+	if !slices.Equal(seen, []string{"/home/me/.config/cc/keep", "/home/me/.config/cc/new"}) {
+		t.Fatalf("remembered %v", seen)
 	}
 }

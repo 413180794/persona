@@ -39,7 +39,7 @@ type managerStore interface {
 	SeeBusIdentity(ctx context.Context, id string, where *db.BusIdentity) error
 	RenameBusIdentity(ctx context.Context, id, name string) (bool, error)
 	AddManagerInstallCode(ctx context.Context, hash string, c db.ManagerInstallCode) error
-	UseManagerInstallCode(ctx context.Context, hash string) (*db.ManagerInstallCode, error)
+	RedeemManagerInstallCode(ctx context.Context, codeHash, tokenHash string) (*db.ManagerInstallCode, string, error)
 	ManagerInstallCodeByHash(ctx context.Context, hash string) (*db.ManagerInstallCode, error)
 	PendingManagerInstalls(ctx context.Context) ([]db.ManagerInstallCode, error)
 	DropManagerInstallCodes(ctx context.Context, id string) (int64, error)
@@ -165,6 +165,9 @@ func (h *Hub) newInstallCode(ctx context.Context, id, name string) (string, time
 	if s == nil {
 		return "", time.Time{}, errors.New("no database")
 	}
+	if !busManagerID.MatchString(id) {
+		return "", time.Time{}, fmt.Errorf("bad manager id %q", id)
+	}
 	code := installCodePrefix + randomHex(16)
 	until := time.Now().Add(installCodeTTL).UTC().Truncate(time.Second)
 	if err := s.AddManagerInstallCode(ctx, hashToken(code), db.ManagerInstallCode{ManagerID: id, Name: name, ExpiresAt: until}); err != nil {
@@ -174,7 +177,9 @@ func (h *Hub) newInstallCode(ctx context.Context, id, name string) (string, time
 }
 
 // redeemInstallCode trades an install code for its manager's bus token, once. A manager that had a token gets a
-// new one (moved, or installed again): the old one stops working.
+// new one (moved, or installed again): the old one stops working and a connection that came with it is hung up. The
+// code is used and the token saved in one transaction, so a save that fails (or a client that went away) leaves the
+// code good for a retry.
 func (h *Hub) redeemInstallCode(ctx context.Context, code string) (id, name, token string, err error) {
 	s := h.managerStore()
 	if s == nil {
@@ -183,21 +188,15 @@ func (h *Hub) redeemInstallCode(ctx context.Context, code string) (id, name, tok
 	if !installCodeShape.MatchString(code) {
 		return "", "", "", errInstallCode
 	}
-	c, err := s.UseManagerInstallCode(ctx, hashToken(code))
+	tok := busTokenPrefix + randomHex(24)
+	c, name, err := s.RedeemManagerInstallCode(ctx, hashToken(code), hashToken(tok))
 	if err != nil {
 		return "", "", "", err
 	}
 	if c == nil {
 		return "", "", "", errInstallCode
 	}
-	name = c.Name
-	if b, err := s.BusIdentityByID(ctx, c.ManagerID); err == nil && b != nil && b.Name != "" {
-		name = b.Name // renamed while the code waited
-	}
-	tok, err := h.createBusToken(ctx, c.ManagerID, name)
-	if err != nil {
-		return "", "", "", err
-	}
+	h.busHangUp(c.ManagerID, bus.CloseRevoked, "its token was replaced")
 	h.logf("managers: [%s] traded its install code", c.ManagerID)
 	h.managersChanged()
 	return c.ManagerID, name, tok, nil

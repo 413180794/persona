@@ -116,6 +116,8 @@ type Machine struct {
 	notes nodeNotes
 	// opened is what the hub has open on the node through the bus connection of the moment (hubopen.go).
 	opened hubOpened
+	// claudeDirsMu serializes the read-modify-writes of the remembered and blocked Claude config dirs (claudedirs.go).
+	claudeDirsMu sync.Mutex
 	// nodeCmd replaces the node command (tests).
 	nodeCmd func(context.Context) *exec.Cmd
 	// dialTailcat replaces dialing the node over tailcat, probeDirect checking that ssh works (tests).

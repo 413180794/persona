@@ -146,13 +146,32 @@ func (h *Manager) appsOn(ctx context.Context, m *Machine, names []string) []appr
 	return out
 }
 
-// approvedApps is the apps always allowed on each Mac.
-func (h *Manager) approvedApps(ctx context.Context) map[string][]approvedApp {
+// approvedApps is the apps always allowed on each Mac. A failed read is an error, not an empty list: the writers put
+// back the whole map, so taking it for "none" would drop every other Mac's apps. A stored value that does not decode
+// is not: no later read would do better, so what did decode (nothing, for broken JSON) stands and the next write
+// replaces the bad value.
+func (h *Manager) approvedApps(ctx context.Context) (map[string][]approvedApp, error) {
 	all := map[string][]approvedApp{}
-	if h.store != nil {
-		_, _ = h.store.Setting(ctx, computerAppsKey, &all)
+	if h.store == nil {
+		return all, nil
 	}
-	return all
+	if _, err := h.store.Setting(ctx, computerAppsKey, &all); err != nil {
+		if !undecodable(err) {
+			return nil, err
+		}
+		h.logf("%s does not decode, keeping what does: %v", computerAppsKey, err)
+	}
+	if all == nil { // a stored null
+		all = map[string][]approvedApp{}
+	}
+	return all, nil
+}
+
+// undecodable: err is the stored JSON not fitting, not the store failing to answer.
+func undecodable(err error) bool {
+	var syntax *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	return errors.As(err, &syntax) || errors.As(err, &typ)
 }
 
 func (h *Manager) putApprovedApps(ctx context.Context, all map[string][]approvedApp) error {
@@ -162,6 +181,25 @@ func (h *Manager) putApprovedApps(ctx context.Context, all map[string][]approved
 	return h.store.PutSetting(ctx, computerAppsKey, all)
 }
 
+// rememberApps keeps apps always allowed on m, writing nothing when the apps kept cannot be read. An app already kept
+// is not added twice (the approval may have asked about it because its read failed).
+func (h *Manager) rememberApps(ctx context.Context, m *Machine, apps []approvedApp) error {
+	computerAppsMu.Lock()
+	defer computerAppsMu.Unlock()
+	all, err := h.approvedApps(ctx)
+	if err != nil {
+		return err
+	}
+	for _, a := range apps {
+		if slices.ContainsFunc(all[m.cfg.ID], func(k approvedApp) bool { return k.BundleID == a.BundleID }) {
+			continue
+		}
+		a.At = time.Now().UTC()
+		all[m.cfg.ID] = append(all[m.cfg.ID], a)
+	}
+	return h.putApprovedApps(ctx, all)
+}
+
 // approveApps asks on the phone about the apps this call names that m has not always allowed (or every time: those
 // never remembered, a call whose apps are not all known). asked: a card was shown; ok: go ahead.
 func (h *Manager) approveApps(ctx context.Context, m *Machine, by asker, tool string, names []string, whole bool, args json.RawMessage) (asked, ok bool) {
@@ -169,7 +207,11 @@ func (h *Manager) approveApps(ctx context.Context, m *Machine, by asker, tool st
 		return false, true
 	}
 	apps := h.appsOn(ctx, m, names)
-	kept := h.approvedApps(ctx)[m.cfg.ID]
+	all, err := h.approvedApps(ctx)
+	if err != nil {
+		h.logf("[%s] reading the apps always allowed: %v", m.cfg.ID, err) // asked, as if none were
+	}
+	kept := all[m.cfg.ID]
 	var need []approvedApp
 	remember := whole
 	for _, a := range apps {
@@ -210,24 +252,23 @@ func (h *Manager) approveApps(ctx context.Context, m *Machine, by asker, tool st
 	r, _ := h.waitInteraction(ctx, ix)
 	ok = r.Allow != nil && *r.Allow
 	if ok && r.Always && remember {
-		computerAppsMu.Lock()
-		all := h.approvedApps(ctx)
-		for _, a := range need {
-			a.At = time.Now().UTC()
-			all[m.cfg.ID] = append(all[m.cfg.ID], a)
-		}
-		if err := h.putApprovedApps(ctx, all); err != nil {
+		if err := h.rememberApps(ctx, m, need); err != nil {
 			h.logf("[%s] keeping the apps allowed: %v", m.cfg.ID, err)
+		} else {
+			h.logf("[%s] %d app(s) always allowed for the assistant", m.cfg.ID, len(need))
 		}
-		computerAppsMu.Unlock()
-		h.logf("[%s] %d app(s) always allowed for the assistant", m.cfg.ID, len(need))
 	}
 	return true, ok
 }
 
 // getComputerApps: GET /api/v1/machines/{mid}/computer/apps, the apps always allowed on this Mac.
 func (h *Manager) getComputerApps(w http.ResponseWriter, r *http.Request, m *Machine) {
-	apps := h.approvedApps(r.Context())[m.cfg.ID]
+	all, err := h.approvedApps(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	apps := all[m.cfg.ID]
 	if apps == nil {
 		apps = []approvedApp{}
 	}
@@ -238,9 +279,11 @@ func (h *Manager) getComputerApps(w http.ResponseWriter, r *http.Request, m *Mac
 func (h *Manager) deleteComputerApp(w http.ResponseWriter, r *http.Request, m *Machine) {
 	id := r.PathValue("bundle")
 	computerAppsMu.Lock()
-	all := h.approvedApps(r.Context())
-	all[m.cfg.ID] = slices.DeleteFunc(all[m.cfg.ID], func(a approvedApp) bool { return a.BundleID == id })
-	err := h.putApprovedApps(r.Context(), all)
+	all, err := h.approvedApps(r.Context())
+	if err == nil {
+		all[m.cfg.ID] = slices.DeleteFunc(all[m.cfg.ID], func(a approvedApp) bool { return a.BundleID == id })
+		err = h.putApprovedApps(r.Context(), all)
+	}
 	computerAppsMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

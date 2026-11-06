@@ -88,12 +88,11 @@ func (d *DB) RenameBusIdentity(ctx context.Context, id, name string) (bool, erro
 	return err == nil && tag.RowsAffected() > 0, err
 }
 
-// DeleteBusIdentity removes identity id, and its install codes; it reports whether there was one.
+// DeleteBusIdentity removes identity id, and its install codes; it reports whether there was one. It is one
+// statement, so the codes never go without the identity.
 func (d *DB) DeleteBusIdentity(ctx context.Context, id string) (bool, error) {
-	if _, err := d.pool.Exec(ctx, `DELETE FROM manager_install_codes WHERE manager_id = $1`, id); err != nil {
-		return false, err
-	}
-	tag, err := d.pool.Exec(ctx, `DELETE FROM bus_identities WHERE id = $1`, id)
+	tag, err := d.pool.Exec(ctx, `WITH codes AS (DELETE FROM manager_install_codes WHERE manager_id = $1)
+		DELETE FROM bus_identities WHERE id = $1`, id)
 	return err == nil && tag.RowsAffected() > 0, err
 }
 
@@ -116,20 +115,46 @@ func (d *DB) AddManagerInstallCode(ctx context.Context, hash string, c ManagerIn
 	return err
 }
 
-// UseManagerInstallCode marks the code that hashes to hash used, once: nil when there is none, it expired or it was
-// used already.
-func (d *DB) UseManagerInstallCode(ctx context.Context, hash string) (*ManagerInstallCode, error) {
-	var c ManagerInstallCode
-	err := d.pool.QueryRow(ctx, `UPDATE manager_install_codes SET used_at = now()
-		WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()
-		RETURNING manager_id, name, expires_at`, hash).Scan(&c.ManagerID, &c.Name, &c.ExpiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
+// RedeemManagerInstallCode trades the code that hashes to codeHash for a manager token, once: in one transaction it
+// marks the code used and saves its manager's identity with tokenHash (a new one, or a new token for one there is),
+// so a code is never used up without a token, and a failed save leaves it good for a retry. The name is the
+// identity's when it has one (renamed while the code waited), else the code's. Nil when the code is unknown, expired
+// or used already.
+func (d *DB) RedeemManagerInstallCode(ctx context.Context, codeHash, tokenHash string) (*ManagerInstallCode, string, error) {
+	var c *ManagerInstallCode
+	var name string
+	err := pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
+		var used ManagerInstallCode
+		err := tx.QueryRow(ctx, `UPDATE manager_install_codes SET used_at = now()
+			WHERE code_hash = $1 AND used_at IS NULL AND expires_at > now()
+			RETURNING manager_id, name, expires_at`, codeHash).Scan(&used.ManagerID, &used.Name, &used.ExpiresAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		name = used.Name
+		var had string
+		err = tx.QueryRow(ctx, `SELECT name FROM bus_identities WHERE id = $1 FOR UPDATE`, used.ManagerID).Scan(&had)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if had != "" {
+			name = had
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO bus_identities (id, role, name, token_hash) VALUES ($1, 'manager', $2, $3)
+			ON CONFLICT (id) DO UPDATE SET role = 'manager', name = $2, token_hash = $3, created_at = now()`,
+			used.ManagerID, name, tokenHash); err != nil {
+			return err
+		}
+		c = &used
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return &c, nil
+	return c, name, nil
 }
 
 // ManagerInstallCodeByHash is the code that hashes to hash while it is still good (not used, not expired), without

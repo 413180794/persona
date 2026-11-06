@@ -1182,6 +1182,16 @@ func (m *Machine) blockedClaudeDirs(ctx context.Context) []string {
 	return m.claudeDirsState(ctx).Blocked
 }
 
+// readBlockedClaudeDirs is blockedClaudeDirs with the error, for changing the list: a failed read is not "none
+// blocked", or the PUT that follows would replace every pattern with just the one changed.
+func (m *Machine) readBlockedClaudeDirs(ctx context.Context) ([]string, error) {
+	var st claudeDirsState
+	if err := m.hub.managerHTTP(ctx, http.MethodGet, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs", nil, &st); err != nil {
+		return nil, fmt.Errorf("read blocked claude dirs: %w", err)
+	}
+	return st.Blocked, nil
+}
+
 func (m *Machine) setBlockedClaudeDirs(ctx context.Context, patterns []string) error {
 	return m.hub.managerHTTP(ctx, http.MethodPut, "/api/v1/machines/"+m.cfg.ID+"/claude-dirs/blocked",
 		map[string]any{"blocked": patterns}, nil)

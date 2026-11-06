@@ -25,11 +25,19 @@ func claudeDirsKey(machine string) string { return "claude_dirs/" + machine }
 func claudeDirsBlockedKey(machine string) string { return "claude_dirs_blocked/" + machine }
 
 func (m *Machine) blockedClaudeDirs(ctx context.Context) []string {
+	out, _ := m.readBlockedClaudeDirs(ctx)
+	return out
+}
+
+// readBlockedClaudeDirs is blockedClaudeDirs with the read error, for the writers that must not act on a list they
+// could not read.
+func (m *Machine) readBlockedClaudeDirs(ctx context.Context) ([]string, error) {
 	var out []string
-	if m.d.opts.Store != nil {
-		_, _ = m.d.opts.Store.Setting(ctx, claudeDirsBlockedKey(m.cfg.ID), &out)
+	if m.d.opts.Store == nil {
+		return nil, nil
 	}
-	return proto.CleanClaudeDirPatterns(out)
+	_, err := m.d.opts.Store.Setting(ctx, claudeDirsBlockedKey(m.cfg.ID), &out)
+	return proto.CleanClaudeDirPatterns(out), err
 }
 
 // nodeHome is the machine's home directory, for "~" in patterns ("" before the node first said).
@@ -117,10 +125,23 @@ func (m *Machine) rememberClaudeDirs(params json.RawMessage) {
 		return
 	}
 	ctx := context.Background()
-	var seen []string
-	_, _ = m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
-	blocked, home := m.blockedClaudeDirs(ctx), m.nodeHome()
-	changed := false
+	// Held across the reads and the write: a setBlockedClaudeDirs in between would have its pruning undone.
+	m.claudeDirsMu.Lock()
+	defer m.claudeDirsMu.Unlock()
+	seen, changed, err := m.readRememberedClaudeDirs(ctx)
+	// A failed read must not turn into an overwrite: the list would hold only this event's dirs.
+	if err != nil {
+		m.d.logf("[%s] remember claude dirs: read: %v", m.cfg.ID, err)
+		return
+	}
+	// Nor is anything remembered without the blocked patterns, even ones that do not decode: it might be a dir the
+	// user keeps out. Saving the patterns again (storeBlockedClaudeDirs does not read them) mends them.
+	blocked, err := m.readBlockedClaudeDirs(ctx)
+	if err != nil {
+		m.d.logf("[%s] remember claude dirs: read blocked: %v", m.cfg.ID, err)
+		return
+	}
+	home := m.nodeHome()
 	for _, d := range p.Dirs {
 		if d != "" && !slices.Contains(seen, d) && !proto.ClaudeDirBlocked(d, home, blocked) {
 			seen = append(seen, d)
@@ -132,6 +153,24 @@ func (m *Machine) rememberClaudeDirs(params json.RawMessage) {
 			m.d.logf("[%s] remember claude dirs: %v", m.cfg.ID, err)
 		}
 	}
+}
+
+// readRememberedClaudeDirs reads the dirs remembered for the machine. A stored value that does not decode is not an
+// error: no later read would do better, so the dirs that did decode stand and rewrite says to write them back over it.
+func (m *Machine) readRememberedClaudeDirs(ctx context.Context) (seen []string, rewrite bool, err error) {
+	_, err = m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen)
+	if err == nil || !undecodable(err) {
+		return seen, false, err
+	}
+	m.d.logf("[%s] remembered claude dirs do not decode, keeping what does: %v", m.cfg.ID, err)
+	return slices.DeleteFunc(seen, func(d string) bool { return d == "" }), true, nil
+}
+
+// undecodable: err is the stored JSON not fitting, not the store failing to answer.
+func undecodable(err error) bool {
+	var syntax *json.SyntaxError
+	var typ *json.UnmarshalTypeError
+	return errors.As(err, &syntax) || errors.As(err, &typ)
 }
 
 var errBadPattern = errors.New("bad pattern")
@@ -148,22 +187,36 @@ func (m *Machine) setBlockedClaudeDirs(ctx context.Context, patterns []string) e
 			return fmt.Errorf("%w %q: a path or glob starting with / or ~/", errBadPattern, p)
 		}
 	}
-	if err := m.d.opts.Store.PutSetting(ctx, claudeDirsBlockedKey(m.cfg.ID), patterns); err != nil {
+	if err := m.storeBlockedClaudeDirs(ctx, patterns); err != nil {
 		return err
-	}
-	var seen []string
-	if ok, _ := m.d.opts.Store.Setting(ctx, claudeDirsKey(m.cfg.ID), &seen); ok {
-		home := m.nodeHome()
-		kept := slices.DeleteFunc(slices.Clone(seen), func(d string) bool { return proto.ClaudeDirBlocked(d, home, patterns) })
-		if len(kept) != len(seen) {
-			if err := m.d.opts.Store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), kept); err != nil {
-				return err
-			}
-		}
 	}
 	m.d.logf("[%s] blocked claude dirs: %v", m.cfg.ID, patterns)
 	m.reconfigureClaudeDirs(ctx)
 	return nil
+}
+
+// storeBlockedClaudeDirs writes the patterns and prunes the remembered dirs they block, under claudeDirsMu so a
+// concurrent rememberClaudeDirs cannot write back a list read before the patterns changed.
+func (m *Machine) storeBlockedClaudeDirs(ctx context.Context, patterns []string) error {
+	m.claudeDirsMu.Lock()
+	defer m.claudeDirsMu.Unlock()
+	// The patterns go in whatever the remembered list's state: blocking is the user keeping a dir out, and every use
+	// of that list (claudeDirs, claudeDirsState) filters it by the patterns anyway.
+	if err := m.d.opts.Store.PutSetting(ctx, claudeDirsBlockedKey(m.cfg.ID), patterns); err != nil {
+		return err
+	}
+	seen, rewrite, err := m.readRememberedClaudeDirs(ctx)
+	if err != nil {
+		// Pruning waits for the next block: writing a list not read would drop the other remembered dirs.
+		m.d.logf("[%s] blocked claude dirs: not pruning the remembered ones: %v", m.cfg.ID, err)
+		return nil
+	}
+	home := m.nodeHome()
+	kept := slices.DeleteFunc(slices.Clone(seen), func(d string) bool { return proto.ClaudeDirBlocked(d, home, patterns) })
+	if len(kept) == len(seen) && !rewrite {
+		return nil
+	}
+	return m.d.opts.Store.PutSetting(ctx, claudeDirsKey(m.cfg.ID), kept)
 }
 
 // reconfigureClaudeDirs hands an online node its directories and blocked patterns again and takes the session list
