@@ -710,8 +710,9 @@ func maybeDelivered(err error) bool {
 	return d.Delivered == deliveredUnknown
 }
 
-// Herdr resumes offline sessions in a new pane. Orca can create new sessions, but must not automatically resume an
-// existing one: it may still be open in Orca's native chat or suspended in another terminal.
+// Herdr resumes offline sessions in a new pane, and so does Orca for a Claude session (#5548) once nothing has it
+// open: its last pane runs no agent (suspended, in the background) and start's openElsewhereRefusal finds no live
+// claude on it.
 const (
 	notRunning    = "not_running"
 	notInFront    = "agent_not_in_front"
@@ -719,9 +720,15 @@ const (
 )
 
 // notRunningRefusal refuses, with nothing typed, a send to a session that is not live when the machine's engine
-// cannot start sessions (no host.Launcher) or is Orca, instead of trying to resume it there: when the pane it was last seen in is
-// still there, its agent is not in front (suspended, in the background); otherwise it is gone. nil when the engine can
-// resume it (herdr: unchanged).
+// cannot start sessions (no host.Launcher) or is Orca, instead of trying to resume it there: when the pane it was last
+// seen in is still there, its agent is not in front (suspended, in the background); otherwise it is gone. nil when the
+// engine can resume it: herdr, and Orca for a Claude session (its own <id>.jsonl; Codex, TRAEX and pi sessions are
+// not resumed in Orca).
+// orcaContinues: Orca can continue session id once its agent is gone — a Claude session (its own <id>.jsonl, not a
+// Codex or TRAEX rollout); Codex, TRAEX and pi sessions are not resumed in Orca (#5548). Send (notRunningRefusal) and
+// retire share it, so the task closer never closes an agent a message cannot bring back.
+func (n *Node) orcaContinues(id string) bool { return n.claudeTranscript(id, true) != "" }
+
 func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
 	h := n.defaultHost()
 	if h == nil {
@@ -736,10 +743,14 @@ func (n *Node) notRunningRefusal(ctx context.Context, id string) error {
 	if pane != "" {
 		if ph, ref := n.hosts.Pane(pane); ph != nil {
 			if _, err := ph.Agent(ctx, ref); err == nil {
-				log.Printf("send %s: not on the live list; its last pane %s still runs an agent: refused as not in front", id, pane)
+				log.Printf("send %s: not on the live list; its last pane %s is still open: refused as not in front", id, pane)
 				return refusal(notInFront, inFrontReason, nil)
 			}
 		}
+	}
+	if h.Kind() == host.Orca && n.orcaContinues(id) {
+		log.Printf("send %s: not on the live list (last pane %q): resuming it in Orca", id, pane)
+		return nil
 	}
 	log.Printf("send %s: not on the live list (last pane %q): refused as not running", id, pane)
 	name := n.defaultEngineName()

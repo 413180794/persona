@@ -764,10 +764,12 @@ func TestOrcaPromptSubmitFails(t *testing.T) {
 	}
 }
 
-// A session that is not running on an engine that cannot resume it (Orca, Herdr App) is refused, nothing typed, with a
-// reason: its claude not in front when its pane is still there (suspended), else not running — not "unsupported".
+// A session that is not running on an engine that cannot resume it (Herdr App), or that Orca does not resume (no
+// Claude transcript), is refused, nothing typed, with a reason: its claude not in front when its pane is still there
+// (suspended), else not running — not "unsupported". Orca resumes a Claude session whose pane is gone (#5548).
 func TestNotRunningOnAnEngineWithoutResume(t *testing.T) {
 	n, o, procs := orcaSession(t)
+	n.claudeStart, n.claudeReady = 200*time.Millisecond, 200*time.Millisecond
 	procs.set("tab1:leaf1") // suspended: no claude in front
 	time.Sleep(orcaProcsMaxAge)
 	listSessions(t, n)
@@ -778,13 +780,36 @@ func TestNotRunningOnAnEngineWithoutResume(t *testing.T) {
 	if !strings.Contains(err.Error(), "不在前台") {
 		t.Errorf("message %q", err)
 	}
-	o.SetTerminals() // the terminal closed
-	_, err = request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
-	if code, data := refusalOf(t, err); code != "not_running" || data["delivered"] != "none" || !strings.Contains(err.Error(), "Orca") {
-		t.Fatalf("gone: %v", err)
-	}
 	if w := o.Writes(); len(w) != 0 {
 		t.Errorf("wrote %+v", w)
+	}
+	o.SetTerminals() // the terminal closed: resumed in a new one, with the launcher that started it
+	n.state.mu.Lock()
+	st := n.state.Sessions[sidA]
+	st.Launcher = "claude-gpt"
+	n.state.Sessions[sidA] = st
+	n.state.mu.Unlock()
+	_, _ = request(t, n, "session.send", map[string]any{"session_id": sidA, "text": "hello"})
+	if s := strings.Join(o.Trace("terminal.send"), "\n"); !strings.Contains(s, "--resume "+sidA) || !strings.Contains(s, "claude-gpt") {
+		t.Fatalf("gone: not resumed with its launcher; calls %v", o.Trace())
+	}
+	const unknown = "0e000000-0000-4000-8000-0000000000ff" // no Claude transcript: not Orca's to resume
+	_, err = request(t, n, "session.send", map[string]any{"session_id": unknown, "text": "hello"})
+	if code, data := refusalOf(t, err); code != "not_running" || data["delivered"] != "none" || !strings.Contains(err.Error(), "Orca") {
+		t.Fatalf("no transcript: %v", err)
+	}
+	const cx = "0e000000-0000-4000-8000-0000000000fe" // a Codex Persona started, exited: its rollout is no Claude transcript
+	writeRollout(t, n.home, cx, orcaCwd, time.Now(), time.Now().Add(-time.Minute))
+	n.state.mu.Lock()
+	n.state.Sessions[cx] = sessionState{Launcher: "codex", Cwd: orcaCwd}
+	n.state.mu.Unlock()
+	o.Reset()
+	_, err = request(t, n, "session.send", map[string]any{"session_id": cx, "text": "hello"})
+	if code, _ := refusalOf(t, err); code != "not_running" {
+		t.Fatalf("codex: %v", err)
+	}
+	if c := o.Trace("terminal.create", "terminal.send"); len(c) != 0 {
+		t.Errorf("codex resumed in Orca: %v", c)
 	}
 
 	hn, hc := hcSession(t)

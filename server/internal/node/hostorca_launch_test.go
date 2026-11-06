@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -149,22 +150,65 @@ func TestOrcaRefusesWhenNoWorktrees(t *testing.T) {
 	}
 }
 
-func TestOrcaRefusesOfflineResume(t *testing.T) {
-	n, _, _, _, home := orcaNode(t)
+// A Claude session that is not running resumes in Orca as on herdr (#5548): a terminal opened in the Orca worktree
+// holding its directory, cd there, its launcher with --resume. One still open elsewhere (a live claude writes it) is
+// refused, nothing started: two writers would corrupt the transcript.
+func TestOrcaResumesAnOfflineSession(t *testing.T) {
+	n, _, o, _, home := orcaNode(t)
+	n.claudeStart, n.claudeReady = 200*time.Millisecond, 200*time.Millisecond // the fake terminal never runs claude
 	projDir := filepath.Join(home, "my-project")
 	mkdir(t, projDir)
+	o.SetWorktrees(orcarttest.Worktree("repo1::"+projDir, projDir, "refs/heads/main"))
+	const id = "0e000000-0000-4000-8000-000000000003"
+	writeTranscript(t, home, projDir, id, time.Now().Add(-time.Hour), `{"type":"custom-title","customTitle":"x"}`)
 
-	// Attempt session.start with resume_session_id
-	_, err := request(t, n, "session.start", map[string]any{
-		"session_id":        "0e000000-0000-4000-8000-000000000003",
-		"resume_session_id": "0e000000-0000-4000-8000-000000000003",
-		"cwd":               projDir,
-	})
-	if err == nil {
-		t.Fatalf("expected refusal for offline resume in Orca, got nil")
+	// The start then waits for claude, which the fake never runs: a timeout, not a refusal.
+	_, err := request(t, n, "session.start", map[string]any{"session_id": id, "resume_session_id": id, "cwd": projDir})
+	if isRefusal(err, "orca_resume") || isRefusal(err, openElsewhere) {
+		t.Fatalf("resume refused: %v", err)
 	}
-	if !strings.Contains(err.Error(), "orca_resume") && !strings.Contains(err.Error(), "请在电脑上恢复") {
-		t.Errorf("expected orca_resume refusal, got: %v", err)
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(strings.Join(o.Trace("terminal.send"), "\n"), "--resume "+id) {
+		if time.Now().After(deadline) {
+			t.Fatalf("no resume typed; calls: %v", o.Trace())
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if c := o.Trace("terminal.create"); len(c) != 1 || !strings.Contains(c[0], `"worktree":"id:repo1::`+projDir+`"`) {
+		t.Errorf("terminal.create %v", c)
+	}
+	if s := strings.Join(o.Trace("terminal.send"), "\n"); !strings.Contains(s, "cd -- ") || !strings.Contains(s, projDir) {
+		t.Errorf("not started in the session's directory: %s", s)
+	}
+
+	const open = "0e000000-0000-4000-8000-000000000004"
+	writeClaudeSession(t, home, os.Getpid(), open, "cli") // this test's own pid: a live claude has it open
+	o.Reset()
+	_, err = request(t, n, "session.start", map[string]any{"session_id": open, "resume_session_id": open, "cwd": projDir})
+	if !isRefusal(err, openElsewhere) {
+		t.Fatalf("resume of a session open elsewhere: %v", err)
+	}
+	if c := o.Trace("terminal.create", "terminal.send"); len(c) != 0 {
+		t.Errorf("Orca was asked %v", c)
+	}
+
+	// Only Claude sessions: a TRAEX resume is refused, and so is one an Orca native chat owns (its runtime's).
+	_, err = request(t, n, "session.start", map[string]any{"session_id": id, "resume_session_id": id, "cwd": projDir, "launcher": traexAgent})
+	if !isRefusal(err, "orca_resume") {
+		t.Errorf("TRAEX resume: %v", err)
+	}
+	if n.runtimes == nil {
+		n.runtimes = newRuntimeRegistry()
+	}
+	n.runtimes.mu.Lock()
+	n.runtimes.known[id] = knownSession{runtime: "orca", label: "Orca", at: time.Now()}
+	n.runtimes.mu.Unlock()
+	_, err = request(t, n, "session.start", map[string]any{"session_id": id, "resume_session_id": id, "cwd": projDir})
+	if !isRefusal(err, "runtime_session") {
+		t.Errorf("resume of a native chat's session: %v", err)
+	}
+	if c := o.Trace("terminal.create", "terminal.send"); len(c) != 0 {
+		t.Errorf("Orca was asked %v", c)
 	}
 }
 

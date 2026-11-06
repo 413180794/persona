@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nwverse/persona/server/internal/orcart/orcarttest"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -134,5 +135,36 @@ func TestHerdrSendResumesARetiredCodex(t *testing.T) {
 	if got := f.trace("tab.create", "pane.send_keys", "agent.prompt", "pane.send_text"); len(got) != 1 ||
 		!strings.Contains(got[0], `"workspace_id":"w1"`) {
 		t.Errorf("herdr calls %q", got)
+	}
+}
+
+// Orca continues only Claude sessions (#5548): retire closes there only what a message brings back. A stopped Codex
+// on Orca is not closed — the task closer would close an agent that could not be continued (send refuses it as not
+// running) — while a stopped Claude is.
+func TestOrcaRetiresOnlyWhatItCanContinue(t *testing.T) {
+	withCodexLaunchers(t, map[string][]string{"cx": {"codex"}})
+	n, _, o, procs, home := orcaNode(t)
+	const cx = "0a000000-0000-4000-8000-0000000000c1"
+	writeRollout(t, home, cx, orcaCwd, time.Now(), time.Now().Add(-time.Minute), event("task_started"), event("task_complete"))
+	n.state.put(cx, sessionState{Launcher: "cx", Cwd: orcaCwd})
+	o.SetTerminals(orcaTerm("term_1", "tab1", "leaf1", "codex"))
+	o.SetWorktrees(orcarttest.Worktree("repo::"+orcaCwd, orcaCwd, "refs/heads/main"))
+	procs.set("tab1:leaf1", orcaProc{pid: 4250, agent: "codex", start: time.Now().Add(-time.Hour)})
+	if m := byID(listSessions(t, n)); m[cx].PaneID != "orca:tab1:leaf1" {
+		t.Fatalf("codex not listed: %v", m)
+	}
+	o.Reset()
+	_, err := request(t, n, "session.retire", map[string]any{"session_id": cx})
+	if code, _ := refusalOf(t, err); code != notRetirable {
+		t.Fatalf("codex on Orca: %v", err)
+	}
+	if c := o.Trace("terminal.close"); len(c) != 0 {
+		t.Errorf("closed: %v", c)
+	}
+
+	cn, co, _ := orcaSession(t) // a stopped Claude (done): closed, the next message resumes it
+	res, err := request(t, cn, "session.retire", map[string]any{"session_id": sidA})
+	if err != nil || res["closed"] != true {
+		t.Fatalf("claude on Orca: %v, %v (calls %v)", res, err, co.Trace())
 	}
 }

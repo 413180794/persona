@@ -76,11 +76,17 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if a, ok := n.agent(resume); ok {
 			return n.sessionFor(resume, a), nil // already running
 		}
-		if n.startKind(ctx) == proto.EngineOrca { // a resume opens in the start's host: Orca cannot reopen one
-			return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：从手机只能新建，这次没有启动。", nil)
-		}
+		// A claude still alive on the session (Claude's desktop app, another terminal, suspended there) refuses: two
+		// writers would corrupt its transcript. Otherwise a Claude session resumes in the start's host, Orca like herdr: a
+		// terminal opened in the session's worktree (#5548).
 		if r := n.openElsewhereRefusal(resume); r != nil { // open in Claude's desktop app or a terminal (openelsewhere.go)
 			return nil, r
+		}
+		if _, _, known := n.runtimes.belongs(resume); known { // an Orca native chat and the like: its runtime's, not a terminal's
+			return nil, refusal("runtime_session", "这个会话属于另一个工具（例如 Orca 的原生对话），请在那里继续，这次没有启动。", nil)
+		}
+		if n.startKind(ctx) == proto.EngineOrca && kind != "claude" { // the start's host
+			return nil, refusal("orca_resume", "Orca 上只能从手机继续 Claude 会话：其它 Agent 请在电脑上恢复，这次没有启动。", nil)
 		}
 	}
 

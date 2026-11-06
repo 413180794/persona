@@ -17,7 +17,7 @@ import (
 // the agent process with it, while everything needed to bring it back stays — the session id, its transcript, and in
 // the node's state the launcher, directory and model it ran with. The next message to it resumes it (send: claude
 // --resume, codex resume, traex resume) in a new tab of the same engine. Only an agent that can come back that way is
-// closed: one this engine can open a tab for again, stopped, not an assistant conversation, not one another tool owns.
+// closed: one this engine can open a tab for again (on Orca, Claude sessions only: orcaContinues), stopped, not an assistant conversation, not one another tool owns.
 
 const notRetirable = "not_retirable"
 
@@ -48,6 +48,9 @@ func (n *Node) retire(ctx context.Context, id string) (closed bool, err error) {
 	}
 	if _, err := hostCap[host.Launcher](n); err != nil {
 		return no("this engine cannot open it again")
+	}
+	if h := n.defaultHost(); h != nil && h.Kind() == host.Orca && !n.orcaContinues(id) {
+		return no("Orca continues only Claude sessions") // send would refuse it as not running (notRunningRefusal)
 	}
 	if a.AgentStatus == proto.StatusWorking || a.AgentStatus == proto.StatusBlocked {
 		return no("the agent is " + a.AgentStatus)

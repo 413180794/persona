@@ -89,14 +89,18 @@ func TestStartOpensInTheNamedHost(t *testing.T) {
 	if hh.asked() != 1 || oh.asked() != 1 {
 		t.Errorf("default start: herdr asked %d, orca asked %d (%v)", hh.asked(), oh.asked(), err)
 	}
-	// A resume named into Orca is refused before any host is asked.
+	// A TRAEX resume named into Orca is refused before any host is asked (Orca continues only Claude, #5548); a
+	// Claude resume opens there.
 	const id = "0d000000-0000-4000-8000-0000000000ee"
-	if _, err := n.start(withStartHost(context.Background(), "orca"), t.TempDir(), "", "", id, "", "", "", "", "", ""); err == nil ||
-		!strings.Contains(err.Error(), "Orca") {
-		t.Errorf("resume into Orca: %v", err)
+	if _, err := n.start(withStartHost(context.Background(), "orca"), t.TempDir(), traexAgent, "", id, "", "", "", "", "", ""); !isRefusal(err, "orca_resume") {
+		t.Errorf("TRAEX resume into Orca: %v", err)
 	}
 	if oh.asked() != 1 {
-		t.Errorf("orca asked again for a refused resume")
+		t.Errorf("orca asked for a refused resume")
+	}
+	_, err = n.start(withStartHost(context.Background(), "orca"), t.TempDir(), "", "", id, "", "", "", "", "", "")
+	if oh.asked() != 2 || hh.asked() != 1 {
+		t.Errorf("Claude resume into Orca: orca asked %d, herdr asked %d (%v)", oh.asked(), hh.asked(), err)
 	}
 }
 
