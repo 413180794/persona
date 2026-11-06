@@ -54,8 +54,12 @@ or the manager restarts and retries). A previous interrupted send (hub stopped o
 | --- | --- | --- |
 | Lark | Unhandled new messages in one chat (starting at the first new message; later ones merge into it) | `lark:<feedId>:<first message position>` |
 | Lark Docs | One document notification-center card (latest mentions / comments / replies to me in one document) | `doc:<notification id>:<update time in milliseconds>` |
-| Mail | Unread mail in a thread (same subject after stripping Re: / Fwd: / 回复： [reply] / [list name] means the same thread) | `mail:<account>:<thread>:<first mail uid>` |
+| Mail | Unread mail in a thread (same subject after stripping Re: / Fwd: / 回复： [reply] / [list name] means the same thread; when nothing is left after stripping, mail is split further by sender address: one person's subject-less mail is one item, different people's are separate items, #4852) | `mail:<account>:<thread>:<first mail uid>` |
 
+- Subject-less mail used to be one item per account (sender, preview and "sent to me" taken from the latest); since #4852 it is split by sender, so a subject-less back-and-forth among several people also becomes several items.
+  The "no subject" item already open before the upgrade (the old thread key): when every unread mail in it on this page has a sender, it is filed (`done_by=superseded`) and the mail goes into each sender's item, each listed once;
+  while some mail has no sender, it stays to hold those (the ones with a sender go to their own items); if it is Needs you or the AI twin worked on it (has a draft), it is kept as it is (mail, tier and draft untouched) and handled as usual, and a sender item a round since #4852 opened with only that mail is filed (`superseded`), so the mail is still listed once;
+  when all its mail was read elsewhere it counts as `read` as usual. An item reopened this way is handled by the same rule on the next round.
 - A chat / thread has only one **unhandled** item at a time. Messages arriving after it is handled open a new item (only messages after the last one at handling time count).
   Exception: Reopen (single `done:false`, bulk `reopen` / Undo) does not check whether a newer item exists for the thread; it reopens the old one anyway, yielding two unhandled items.
   Later messages always merge into the newest (`UpdatedAt`, ties by ID, `threadIndex.openFor`, #3796); the old item stays unchanged.
@@ -389,7 +393,7 @@ To-dos do not store a separate tree. Code: `assistant/inbox_parent.go`.
 - Hub background collection (`server/internal/extmgr/inbox.go`, delivering data to the manager for item composition): collect Lark chats 3 seconds after real-time Lark events; this round reads chats only. Every 2 minutes, also read document notifications,
   Moments, and other connectors (their events / setting changes also trigger this full round); mail every 3 minutes. Previously every Lark event read all of them (#674). Pull-to-refresh
   (`POST /api/v1/inbox/refresh`) collects everything immediately. Changes write `inbox_items` and push `{"type":"inbox"}`, prompting App refetch; new plugin-connector items store / push only after triage ("AI triage").
-- **Done** is recorded only in Persona (`done_at`, `done_by=user`; ignored items use `dismissed`, see "Clean up all"). It does not change Lark or mail read state. Done items remain listed for 3 days, reopenable at the bottom,
+- **Done** is recorded only in Persona (`done_at`, `done_by=user`; ignored items use `dismissed`, see "Clean up all"; one replaced by the new thread rule uses `superseded`). It does not change Lark or mail read state. Done items remain listed for 3 days, reopenable at the bottom,
   and are deleted from the database after 8 days (meanwhile preventing old still-unread Lark messages from resurfacing).
 - Read elsewhere (Lark / another mail client): mark `read`; non-Needs you items become done (`done_by=read`). Needs you remains open, but unread count becomes zero and me / everyone mention flags clear (no longer unread mentions). Rule-tiered items are retiered using current rules after reading; no longer Needs you means done.
   Already-read open items with remaining unread count or stale rule tiers (read before a rule change) are reconciled next round (#798).

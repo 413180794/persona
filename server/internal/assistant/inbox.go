@@ -75,7 +75,7 @@ type InboxItem struct {
 	Reason      string     `json:"reason,omitempty"`
 	Read        bool       `json:"read,omitempty"` // read somewhere else (Feishu, another mail client)
 	DoneAt      *time.Time `json:"done_at,omitempty"`
-	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied
+	DoneBy      string     `json:"done_by,omitempty"` // user | dismissed | read | replied | superseded
 	Lark        *InboxLark `json:"lark,omitempty"`
 	// Conversation is where the item opens in a messaging source (docs/extension-messaging.md "9", #2138): listed
 	// only, from Lark; an app with the source opens it there, an older one uses Lark.
@@ -866,15 +866,6 @@ func mailThread(subject string, from ...string) string {
 
 // applyMail turns one account's latest inbox page into items: unseen messages grouped by thread.
 func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistantwire.InboxMailSummary, now time.Time) []*InboxItem {
-	threads := map[string][]assistantwire.InboxMailSummary{}
-	var order []string
-	for _, m := range msgs {
-		t := mailThread(m.Subject, m.From.Email)
-		if _, ok := threads[t]; !ok {
-			order = append(order, t)
-		}
-		threads[t] = append(threads[t], m)
-	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var changed []*InboxItem
@@ -884,6 +875,20 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 		}
 		return it.Mail.Thread, true
 	})
+	superseded, stay := b.supersedeSubjectless(index, msgs, now)
+	changed = append(changed, superseded...)
+	threads := map[string][]assistantwire.InboxMailSummary{}
+	var order []string
+	for _, m := range msgs {
+		t := mailThread(m.Subject, m.From.Email)
+		if stay[m.UID] {
+			t = subjectlessThread // the old item that keeps its mail (supersedeSubjectless)
+		}
+		if _, ok := threads[t]; !ok {
+			order = append(order, t)
+		}
+		threads[t] = append(threads[t], m)
+	}
 	for _, t := range order {
 		list := threads[t]
 		sort.Slice(list, func(i, j int) bool { return list[i].UID < list[j].UID })
@@ -975,6 +980,82 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 		changed = append(changed, it)
 	}
 	return changed
+}
+
+// subjectlessThread is the key every subject-less mail had before #4852 grouped them by sender too.
+var subjectlessThread = mailThread("")
+
+// supersedeSubjectless settles an open item from before #4852 that holds subject-less mail of several senders under
+// the empty subject's key, under b.mu: no round matches it by its senders any more, so each mail is listed once
+// (#3796, #4920).
+//
+//   - One the owner has to act on (需要你) or the AI 分身 worked on keeps its mail as it was (stay: those UIDs stay under
+//     the empty subject's key), with its tier and draft; it is read and filed like any item. A sender item a round
+//     since #4852 opened with only that mail is filed as superseded.
+//   - Any other is filed as superseded once every unread mail of it on the page has a sender (each goes into its
+//     sender's item); while some have none it stays open for those, and the round keeps them in it.
+//   - When all of its mail on the page is read elsewhere it is read like any item; while none is on the page it is
+//     left alone.
+//
+// An item the owner moved back (移回) is filed as superseded again the same way.
+func (b *inboxBook) supersedeSubjectless(index *threadIndex, msgs []assistantwire.InboxMailSummary, now time.Time) ([]*InboxItem, map[uint32]bool) {
+	open, _ := index.openFor(subjectlessThread)
+	if open == nil {
+		return nil, nil
+	}
+	byUID := make(map[uint32]assistantwire.InboxMailSummary, len(msgs))
+	for _, m := range msgs {
+		byUID[m.UID] = m
+	}
+	if open.Tier == TierAction || open.Agent != nil {
+		stay := map[uint32]bool{}
+		for _, uid := range open.Mail.UIDs {
+			stay[uid] = true
+		}
+		// A hub that already ran #4852 opened sender items for the same mail: one holding only mail the old item
+		// keeps would list it a second time and no round touches it again, so it is filed. One with other mail too
+		// keeps only that (the round lists its thread's mail, without these); one the owner has to act on, or with a
+		// draft, is left as it is.
+		var filed []*InboxItem
+		for _, it := range b.items {
+			if it == open || !it.open() || it.Mail == nil || it.Mail.AccountID != open.Mail.AccountID ||
+				it.Mail.Mailbox != open.Mail.Mailbox || it.Mail.Thread == subjectlessThread ||
+				it.Tier == TierAction || it.Agent != nil || len(it.Mail.UIDs) == 0 ||
+				slices.ContainsFunc(it.Mail.UIDs, func(uid uint32) bool { return !stay[uid] }) {
+				continue
+			}
+			it.done(now, "superseded")
+			filed = append(filed, it)
+		}
+		return filed, stay
+	}
+	onPage, seen, moved, remain := 0, 0, 0, 0
+	for _, uid := range open.Mail.UIDs {
+		m, ok := byUID[uid]
+		switch {
+		case !ok:
+			continue
+		case m.Seen:
+			seen++
+		case strings.TrimSpace(m.From.Email) != "" && mailThread(m.Subject, m.From.Email) != subjectlessThread:
+			moved++
+		default:
+			remain++
+		}
+		onPage++
+	}
+	switch {
+	case moved > 0 && remain == 0:
+		open.done(now, "superseded")
+	case onPage > 0 && seen == onPage && !open.Read:
+		open.Read = true
+		if open.Tier != "" {
+			open.done(now, "read")
+		}
+	default:
+		return nil, nil // nothing on the page, or mail without a sender that the round keeps in it
+	}
+	return []*InboxItem{open}, nil
 }
 
 // mailMessages are the mails of a batch (those not in the item before) for its received entry.
