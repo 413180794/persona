@@ -48,7 +48,7 @@ struct CarPlayMicPermission: MicPermission {
         }
     }
 
-    /// 继续 on an ended car call, or a fresh start when there is none.
+    /// Continue on an ended car call, or a fresh start when there is none.
     static func resume() async -> String? {
         if let call = VoiceCalls.shared.current, call.surface == .carPlay, call.phase.isEnded {
             await VoiceCalls.shared.resume(call.key)
@@ -74,7 +74,7 @@ struct CarPlayMicPermission: MicPermission {
         call.interruptSpeech()
     }
 
-    /// A live car call (not ended). Used so auto-start does not reopen after 结束.
+    /// A live car call (not ended). Used so auto-start does not reopen after End.
     static var isRunning: Bool {
         guard let call = VoiceCalls.shared.current, call.surface == .carPlay else { return false }
         return !call.phase.isEnded

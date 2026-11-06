@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-/// "跟 Persona 聊聊": starts the hands-free voice conversation on the CarPlay screen (or says where it is not there yet).
+/// "Talk to Persona": starts the hands-free voice conversation on the CarPlay screen (or says where it is not there yet).
 /// Runs in the background; the conversation itself is `VoiceConversation(surface: .carPlay)` via `VoiceCalls`.
 struct TalkToPersonaIntent: AppIntent {
     nonisolated static let title: LocalizedStringResource = "跟 Persona 聊聊"

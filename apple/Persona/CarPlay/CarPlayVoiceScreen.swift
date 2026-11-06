@@ -18,8 +18,8 @@ nonisolated struct CarPlayVoiceStateSpec: Equatable, Sendable {
 
 /// When the CarPlay screen starts the conversation by itself: once after it connects and once each time it comes back to
 /// the foreground. Becoming active alone does not count: a notification banner, Siri or a call ending makes the scene
-/// resign and become active again, and that must not reopen the microphone after the user pressed 结束 or the
-/// conversation ended by itself (idle, no permission, no voice plugin). Then only 继续 or Siri start it again.
+/// resign and become active again, and that must not reopen the microphone after the user pressed End or the
+/// conversation ended by itself (idle, no permission, no voice plugin). Then only Continue or Siri start it again.
 nonisolated struct CarPlayAutoStart: Equatable, Sendable {
     private(set) var armed = false
 
@@ -33,7 +33,7 @@ nonisolated struct CarPlayAutoStart: Equatable, Sendable {
     }
 }
 
-/// What "跟 Persona 聊聊" (TalkToPersonaIntent) may do. Apple: the voice screen must be on screen while voice is
+/// What "Talk to Persona" (TalkToPersonaIntent) may do. Apple: the voice screen must be on screen while voice is
 /// active, so CarPlay being connected is not enough; Persona has to be the app showing in the car.
 nonisolated enum CarPlayTalk: Equatable, Sendable {
     case start
@@ -68,7 +68,7 @@ nonisolated enum CarPlayTalk: Equatable, Sendable {
 /// The CarPlay voice screen as data: its states, which state a phase shows, and the wording of its buttons.
 /// Pure (no CarPlay import), so it is testable on any platform.
 nonisolated enum CarPlayVoiceScreen {
-    /// The ended state's second line when the template shows no buttons (no "继续" to tap): Siri starts it again.
+    /// The ended state's second line when the template shows no buttons (no "Continue" to tap): Siri starts it again.
     static let resumeBySiri = "说「跟 Persona 聊聊」再聊"
 
     /// The template's states. `endedReason` is the sentence shown in the ended state; an empty or missing one falls back
@@ -122,7 +122,7 @@ nonisolated enum CarPlayVoiceScreen {
     }
 
     /// The state a template built on connecting opens on: connecting when the conversation is about to start by itself
-    /// (there is no call yet, and would otherwise open on 已结束 for a moment), else the phase's own state.
+    /// (there is no call yet, and would otherwise open on Ended for a moment), else the phase's own state.
     static func openingStateID(for phase: VoicePhase?, startingNow: Bool, tools: Int = 0, asking: Bool = false,
                                targetBusy: Bool = false, link: VoiceLink = .live) -> String {
         let active: Bool = {

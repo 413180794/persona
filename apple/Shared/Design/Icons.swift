@@ -167,7 +167,7 @@ extension Theme {
         /// What follows from something before it: a follow-up, the next row of a table.
         static let followOn = "arrow.turn.down.right"
         static let enlarge = "arrow.up.left.and.arrow.down.right"
-        /// Back from the enlarged view (the composer's full-page editor, #3167); a file outline's 全部折叠.
+        /// Back from the enlarged view (the composer's full-page editor, #3167); a file outline's Collapse all.
         static let shrink = "arrow.down.right.and.arrow.up.left"
         /// The text size setting.
         static let textSize = "textformat.size"
@@ -214,13 +214,13 @@ extension Theme {
         static let voiceListening = "waveform.badge.mic"
         /// Persona is speaking; the user may cut in.
         static let voiceSpeaking = "speaker.wave.2.fill"
-        /// Persona is working on a tool (the voice screen's 处理中).
+        /// Persona is working on a tool (the voice screen's Working).
         static let voiceWorking = "hourglass"
         /// The voice conversation has stopped (mic off).
         static let voiceEnded = "mic.slash"
         /// Start listening again after the conversation stopped.
         static let voiceResume = "mic.circle.fill"
-        /// Cut Persona off while it speaks (the voice screen's 打断).
+        /// Cut Persona off while it speaks (the voice screen's Interrupt).
         static let voiceInterruptSpeech = "hand.tap.fill"
 
         // MARK: Navigation

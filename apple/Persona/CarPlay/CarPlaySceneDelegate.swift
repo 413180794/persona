@@ -46,7 +46,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var autoStart = CarPlayAutoStart()
     /// A start that failed before `VoiceCalls` took the call (no hub, no mic…): shown as the ended headline.
     private var startFailure: String?
-    /// True while `beginCall` / `resumeCall` is in flight: the template stays on connecting, not 已结束.
+    /// True while `beginCall` / `resumeCall` is in flight: the template stays on connecting, not Ended.
     private var starting = false
     /// Watches `VoiceCalls` / the car call for phase changes.
     private var watchTask: Task<Void, Never>?

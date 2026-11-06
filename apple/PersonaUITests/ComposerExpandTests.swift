@@ -1,7 +1,7 @@
 import XCTest
 
-/// 展开 in the shell's composer (#3167): a draft three lines long offers it; the full-page editor holds the same text and
-/// quotes, edits there are the box's when it goes down, and its 发送 sends as the box's does. The assistant's and an
+/// Expand in the shell's composer (#3167): a draft three lines long offers it; the full-page editor holds the same text and
+/// quotes, edits there are the box's when it goes down, and its Send sends as the box's does. The assistant's and an
 /// agent's conversation, keyboard up and down; iPhone and iPad alike (the iPad draws the same composer, #2779).
 /// Against scripts/mock/mock_hub.py or composer_hub.py (TEST_RUNNER_JARVIS_MOCK_HUB=…); TEST_RUNNER_JARVIS_SHOTS=<dir>
 /// keeps screenshots, TEST_RUNNER_JARVIS_SHOTS_APPEARANCE names them (light / dark).
@@ -36,7 +36,7 @@ final class ComposerExpandTests: XCTestCase {
 
     @MainActor func testTheAssistantsDraftOpensFullPage() { expands(isAssistant: true) }
 
-    /// One paragraph, no new line, wrapped past three lines by the field's width: 展开 all the same.
+    /// One paragraph, no new line, wrapped past three lines by the field's width: Expand all the same.
     @MainActor func testALongParagraphOffersIt() {
         open(isAssistant: true)
         startTyping()
@@ -54,7 +54,7 @@ final class ComposerExpandTests: XCTestCase {
     }
 
     /// The cursor goes over and back where it is, not at the end: an edit in the middle on the page, then typing on in
-    /// the box goes on from there. A swipe down keeps what was typed on the page, as 收起 does.
+    /// the box goes on from there. A swipe down keeps what was typed on the page, as Collapse does.
     @MainActor func testTheCursorAndASwipeDownCarryOver() {
         // With the quotes: they put the page's text below its bar, where a tap lands in the text (without them the
         // text view starts under the bar).
@@ -190,7 +190,7 @@ final class ComposerExpandTests: XCTestCase {
         field.typeText("line one\nline two")
         sleep(1)
         XCTAssertFalse(expand.exists, "展开 offered for two lines")
-        // Four: 展开 in the card's row, with a title and an icon, over the keyboard.
+        // Four: Expand in the card's row, with a title and an icon, over the keyboard.
         let marker = "expand-\(name)-\(Int(Date.now.timeIntervalSince1970))"
         field.typeText("\nline three\n\(marker)")
         XCTAssertTrue(expand.waitForExistence(timeout: 5), "no 展开 for four lines")
@@ -202,7 +202,7 @@ final class ComposerExpandTests: XCTestCase {
         let draft = "line one\nline two\nline three\n\(marker)"
         XCTAssertEqual(field.value as? String, draft)
 
-        // 展开: the page, filling the window, with the same text and the quotes.
+        // Expand: the page, filling the window, with the same text and the quotes.
         expand.tap()
         XCTAssertTrue(page.waitForExistence(timeout: 5), "the full-page editor did not open")
         sleep(1)
@@ -218,7 +218,7 @@ final class ComposerExpandTests: XCTestCase {
         XCTAssertEqual(element("composer-page-send").label, "发送")
         shot("\(name)-page")
 
-        // An edit at the cursor (the end, where the box left it), then 收起: the box has it, the keyboard on the box.
+        // An edit at the cursor (the end, where the box left it), then Collapse: the box has it, the keyboard on the box.
         page.typeText(" edited")
         element("composer-page-collapse").tap()
         XCTAssertTrue(page.waitForNonExistence(timeout: 5), "收起 left the page up")
@@ -228,7 +228,7 @@ final class ComposerExpandTests: XCTestCase {
         XCTAssertEqual(field.value as? String, draft + " edited!", "the cursor moved")
         shot("\(name)-collapsed")
 
-        // Keyboard down: 展开 is still there, and the page's 发送 sends what it shows.
+        // Keyboard down: Expand is still there, and the page's Send sends what it shows.
         if drags { putKeyboardAway(name) }
         expand.tap()
         XCTAssertTrue(page.waitForExistence(timeout: 5))
@@ -245,7 +245,7 @@ final class ComposerExpandTests: XCTestCase {
         shot("\(name)-sent")
     }
 
-    /// Drags the chat down until the keyboard goes; 展开 must still be there.
+    /// Drags the chat down until the keyboard goes; Expand must still be there.
     @MainActor private func putKeyboardAway(_ name: String) {
         for y in [0.2, 0.135, 0.1] where app.keyboards.firstMatch.exists { // a drag the list took as a scroll's end leaves it up
             // High on the page: lower down, over the quotes and a long draft, the assistant's task chips (a sideways

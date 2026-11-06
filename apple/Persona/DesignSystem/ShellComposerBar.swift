@@ -33,12 +33,12 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     @State private var dictation = Dictation()
     @Environment(\.buiTheme) private var theme
     #if os(iOS)
-    /// The draft's height in the field's width and one line's, to tell when it is long enough to offer 展开 (#3167).
+    /// The draft's height in the field's width and one line's, to tell when it is long enough to offer Expand (#3167).
     @State private var textHeight: CGFloat = 0
     @State private var lineHeight: CGFloat = 0
     /// The full-page editor is up (`ComposerPageEditor`), on the same draft.
     @State private var enlarged = false
-    /// It went down because its 发送 sent: the keyboard does not come back to the emptied field.
+    /// It went down because its Send sent: the keyboard does not come back to the emptied field.
     @State private var sentFromPage = false
     /// What the box's field is bound to while the page is up, so it cannot move the caller's `selection` under the
     /// sheet (the page hands its cursor back to that when it goes down).
@@ -66,7 +66,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         #endif
     }
 
-    /// ⌘⏎ sends from the box; while the page is up, from the page only (its own 发送 has it).
+    /// ⌘⏎ sends from the box; while the page is up, from the page only (its own Send has it).
     private var sendShortcut: KeyboardShortcut? {
         #if os(iOS)
         if enlarged { return nil }
@@ -180,7 +180,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
             pageFocusRequest += 1
         }
         .sheet(isPresented: $enlarged, onDismiss: {
-            // 收起 or a swipe down: back to the box, the text and the cursor where the page left them.
+            // Collapse or a swipe down: back to the box, the text and the cursor where the page left them.
             if !sentFromPage { focused.wrappedValue = true }
             sentFromPage = false
         }) {
@@ -194,7 +194,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     }
 
     #if os(iOS)
-    /// 展开: the draft in a full-page editor (ChatGPT's), offered once it is three lines long. In the card's row beside +,
+    /// Expand: the draft in a full-page editor (ChatGPT's), offered once it is three lines long. In the card's row beside +,
     /// where the composer's buttons are: over the field's corner it would cover the text or make it wrap anew.
     private var enlargeButton: some View {
         Button(action: enlarge) {
@@ -243,7 +243,7 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         enlarged = true
     }
 
-    /// The page's 发送 (or ⌘⏎ there), after it confirmed what the keyboard was composing: as the box's send
+    /// The page's Send (or ⌘⏎ there), after it confirmed what the keyboard was composing: as the box's send
     /// (`sendTyped`), then the page goes down and the keyboard with it.
     private func sendFromPage() {
         sentFromPage = true
@@ -340,7 +340,7 @@ private struct ComposerSurface: ViewModifier {
 
 #if os(iOS)
 /// The composer's full page (#3167, ChatGPT's): the same draft and cursor as the box (`text`, `selection` are the
-/// caller's, `model.drafts` stays the one copy), its quotes on top, 收起 and 发送 in the bar. Photos and files stay in the
+/// caller's, `model.drafts` stays the one copy), its quotes on top, Collapse and Send in the bar. Photos and files stay in the
 /// composer under the sheet and go with the message all the same.
 private struct ComposerPageEditor: View {
     var placeholder: String

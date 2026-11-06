@@ -155,7 +155,7 @@ struct CarPlayVoiceScreenTests {
         #expect(ids.contains(CarPlayVoiceScreen.stateID(for: .ended(.user))))
     }
 
-    /// Connecting the car: no call yet but about to start, so the screen opens on connecting, not 已结束.
+    /// Connecting the car: no call yet but about to start, so the screen opens on connecting, not Ended.
     @Test func connectingTheCarOpensOnConnecting() {
         #expect(CarPlayVoiceScreen.openingStateID(for: nil, startingNow: true) == "connecting")
         #expect(CarPlayVoiceScreen.openingStateID(for: .ended(.idle), startingNow: true) == "connecting")
