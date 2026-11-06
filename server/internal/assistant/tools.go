@@ -27,7 +27,7 @@ import (
 // toolNames are the tools only assistant conversations get; their descriptions and schemas are in prompts/mcp
 // (docs/prompts.md).
 var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
-	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "interaction_answer", "inbox_draft",
+	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "interaction_answer", "inbox_suggest", "inbox_draft",
 	"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 	"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 	"conversation_new", "conversation_send", "task_plan", "task_review"}
@@ -94,6 +94,8 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 		return s.toolInteractionAnswer(ctx, self, args)
 	case "inbox_draft":
 		return s.toolInboxDraft(ctx, self, args)
+	case "inbox_suggest":
+		return s.toolInboxSuggest(ctx, self, args)
 	case "notify_user":
 		var a struct{ Title, Body string }
 		if err := json.Unmarshal(args, &a); err != nil || strings.TrimSpace(a.Title+a.Body) == "" {
@@ -256,6 +258,7 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			}
 			return "", err
 		}
+		s.inboxAgentStarted(ctx, self, am.ID, res.Session.SessionID, a.Prompt) // an inbox event's conversation: its chain
 		if s.quietAgentTask(ctx, self, am, a.Cwd, a.Prompt, params["tab_name"], res.Session.SessionID) {
 			return fmt.Sprintf("Started on %s in %s: session %s, a task of this conversation (its card is in the conversation; "+
 				"you are told here when it is done or waits for the user, nothing else notifies the user).%s", am.Name, a.Cwd, res.Session.SessionID, note), nil

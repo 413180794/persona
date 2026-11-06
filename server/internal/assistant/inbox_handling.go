@@ -45,4 +45,6 @@ type InboxSuggestion struct {
 	MachineID string      `json:"machine_id,omitempty"`
 	Changes   []DocChange `json:"changes,omitempty"`
 	At        time.Time   `json:"at"`
+	// Cwd is where an agent suggestion's Agent starts (the tool's cwd; "" home): kept, not listed.
+	Cwd string `json:"cwd,omitempty"`
 }

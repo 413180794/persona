@@ -1,0 +1,1 @@
+这件事处理完了：{{if eq .Text "self_replied"}}{{.Owner}}已经在来源里自己回复了{{else if eq .Text "replied"}}{{.Owner}}直接发了回复{{else if eq .Text "dismissed"}}{{.Owner}}忽略了它{{else if eq .Text "read"}}它在别处已经看过、结束了{{else}}{{.Owner}}标了已处理{{end}}。不用再做，也不用再交建议，停下。

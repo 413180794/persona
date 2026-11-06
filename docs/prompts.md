@@ -39,8 +39,9 @@ MCP 工具给模型看的描述和参数说明也是提示词，在 `mcp/`（见
 | `inbox/group.md`、`group_input.md` | 事件合成：一个会话的一批新消息各归哪件事，给动到的事写标题、总结、分级；输入里带着这个会话的事和已经调过的工具（`docs/inbox.md`「事件合成」） | `assistant/inbox_group.go` |
 | `inbox/item.md` | 一件事给模型看的样子（类型行 + 内容），分拣、代写、判断、AI 分身共用 | 同上 |
 | `inbox/draft.md`、`draft_input.md` | 代写回复 | 同上 |
-| `inbox/judge.md`、`judge_input.md` | 要不要交给 AI 分身 | `assistant/inbox_agent.go` |
-| `inbox/agent.md`、`agent_title.md`、`agent_ref.md` | AI 分身的第一条消息（来源相关的说明、知识库背景） | 同上 |
+| `inbox/judge.md`、`judge_input.md` | 第一期起只用它的 `task_id`：这件事说的是用户哪个进行中的任务 | `assistant/inbox_handle.go` `linkTask` |
+| `inbox/agent.md`、`agent_title.md`、`agent_ref.md` | 处理对话（AI 分身）的第一条消息：绑定的事件 id、来源相关的说明、接着做时的总结 / 链条 / 期间的话、知识库背景 | `assistant/inbox_agent.go` |
+| `inbox/handling/*.md` | 程序告诉处理对话的话：新消息（`new_messages`）、已经发出（`sent`）、Agent 已经开了（`agent_started`）、交回去做（`handback`）、驳回（`rejected`）、用户说（`instructed`）、处理完了（`closed`） | `assistant/inbox_handle.go` |
 | `kb/compress.md`、`compress_input.md` | 会话压缩 + 打标 | `kb/compress.go` |
 | `kb/project.md`、`project_input.md` | 重写项目档案 | 同上 |
 | `kb/items.md`、`items_input.md` | 文档 / 会议 / 日程打标 | `kb/items.go` |
@@ -94,7 +95,7 @@ hub 提供给 Agent / 助手的 MCP 工具，每个一个文件：`mcp/<场景>/
 | `mcp/assistant/` | `ask_user`、`notify_user`、`jarvis_settings`（设置读写与手机确认） | 助手对话（`assistant/tools.go` 的 `toolNames`） |
 | `mcp/schedule/` | `schedule_followup`、`schedule_routine`、`delete_routine`、`list_followups`、`cancel_followup` | 同上 |
 | `mcp/agents/` | `agents_list`、`agent_read`、`agent_send`、`agent_start`、`interaction_answer` | 同上 |
-| `mcp/inbox/` | `inbox_draft`（AI 分身交草稿） | 同上 |
+| `mcp/inbox/` | `inbox_suggest`（处理对话交建议和总结）、`inbox_draft`（旧名，只交回复） | 同上 |
 | `mcp/kb/` | `kb_search`、`kb_list`、`kb_get`、`kb_update` | 同上 |
 | `mcp/mail/` | `mail_accounts`、`mail_search`、`mail_read`、`mail_send` | 所有对话（`mail/mcp.go` 的 `Tools`） |
 | `mcp/github/` | `github_search`、`github_read`、`github_diff`、`github_checks`（只读）；`github_comment`、`github_review`（写，过闸门） | 助手，GitHub 连接器状态是 `ok` 时（`connector/github/tools.go`；golden `mcp_tools.assistant_with_github`） |

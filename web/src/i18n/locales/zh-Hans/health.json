@@ -36,5 +36,18 @@
   "report_upload": "上传体检报告",
   "report_uploading": "正在上传…",
   "report_failed": "上传失败：{error}",
-  "report_prompt": "这是我的体检报告，帮我逐项看看：{paths}"
+  "report_prompt": "这是我的体检报告，帮我逐项看看：{paths}",
+  "reports": "体检报告",
+  "reports_count": "{count} 份",
+  "reports_empty": "还没有。上传的报告会留在这里，可以随时查看和删除。",
+  "reports_load_failed": "没读到：{error}",
+  "report_recorded": "已整理",
+  "report_unrecorded": "还没整理",
+  "report_no_record": "这份报告还没有整理记录。打开原件可以看报告本身。",
+  "report_open": "打开原件",
+  "report_delete": "删除",
+  "report_delete_confirm": "确定删除",
+  "report_keep": "不删了",
+  "report_delete_body": "原件和整理好的记录会永久删除，不能恢复。健康对话和健康记忆里已经提到的内容不会一起删，要清掉需要单独处理。",
+  "report_deleted": "已删除「{title}」"
 }

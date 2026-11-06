@@ -36,5 +36,18 @@
   "report_upload": "Upload a checkup report",
   "report_uploading": "Uploading…",
   "report_failed": "Upload failed: {error}",
-  "report_prompt": "This is my checkup report. Please go through it item by item: {paths}"
+  "report_prompt": "This is my checkup report. Please go through it item by item: {paths}",
+  "reports": "Checkup reports",
+  "reports_count": "{count}",
+  "reports_empty": "None yet. Reports you upload stay here, and you can view or delete them anytime.",
+  "reports_load_failed": "Couldn't read them: {error}",
+  "report_recorded": "Summarized",
+  "report_unrecorded": "Not summarized yet",
+  "report_no_record": "This report has no summary yet. Open the original to see the report itself.",
+  "report_open": "Open original",
+  "report_delete": "Delete",
+  "report_delete_confirm": "Delete for good",
+  "report_keep": "Keep it",
+  "report_delete_body": "The original and its summary will be deleted for good. Anything your health conversations and health memory already mention stays; remove that separately.",
+  "report_deleted": "Deleted \"{title}\""
 }

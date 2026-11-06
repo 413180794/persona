@@ -158,6 +158,10 @@
 - **入口（#4656）**：只有输入框的 `+` 时看不出能传，所以健康页有一个明确的「上传体检报告」：网页在首页输入框下方，iOS / Mac 在「问问看」最前面。
   点了选 PDF 或图片（图片也当文件传，原件同样留在 `reports/`），全部传完后自动开一段健康对话（`views/health/reports.ts`、`FileUploads.startAll`），第一条消息带着路径；
   传的途中离开页面也照样开。测整条路：iOS 启动参数 `-showReportUpload <文件名>`（假 hub 上看 `POST …/files?dest=health` 和 `POST /api/v1/assistant/conversations`）。
+- **查看和删除（#4998）**：健康页有「体检报告」，列出 `reports/` 里的报告（`server/internal/node/healthreports.go`）：原件和同名 `.md` 记录算一份，只有记录的（对话里发的照片）也算一份。
+  能看整理记录、打开原件、删除。删除是永久的，原件和记录一起删；**对话和健康记忆里已经提到的内容不会一起删**，确认时写明。名字只能是 `reports/` 里的一个普通文件，软链、文件夹、`../` 都拒绝。
+  网页在首页（`views/health/HealthReports.tsx`），iOS / Mac 是单独一页（`HealthReportsView.swift`）。node 太旧时回 409 `node_outdated`，页面显示这句话。接口在 `server/internal/devices/healthreports.go`，hub 转发（`devicewire.Routes`）。
+  截图参数：`-openReportRecord YES`（直接打开第一份的记录）、`-showReportDelete YES`（直接弹删除确认），都从报告页开始算。
 - 还没有：Android（还没有健康空间的入口）。
 
 ## 第一版不做的

@@ -135,6 +135,7 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 	var applied []doneState  // applied[i] is what this request wrote onto changed[i]
 	var gens []uint64        // gens[i] is changed[i]'s mutation generation this request stamped
 	seen := map[string]bool{}
+	var tell []*InboxItem // events whose conversation is told to stop
 	b := &s.inbox
 	b.mu.Lock()
 	if filter != nil {
@@ -168,6 +169,9 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 			previous = append(previous, doneState{DoneAt: it.DoneAt, DoneBy: it.DoneBy, chain: it.Chain, chainSeq: it.ChainSeq})
 			if done {
 				b.file(it, now, doneByOf(action == bulkDismiss))
+				if b.closeHandling(it, doneByOf(action == bulkDismiss), now) {
+					tell = append(tell, it)
+				}
 			} else {
 				it.DoneAt, it.DoneBy = nil, ""
 			}
@@ -201,6 +205,9 @@ func (s *Service) setInboxBulk(ctx context.Context, action string, targets []inb
 		}
 		slices.Sort(res.Failed)
 		res.Changed = slices.DeleteFunc(res.Changed, func(it InboxItem) bool { return rolled[it.ID] })
+	}
+	for _, it := range tell {
+		s.tellSoon(ctx, it)
 	}
 	return res
 }

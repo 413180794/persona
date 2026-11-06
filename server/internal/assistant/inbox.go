@@ -212,16 +212,20 @@ func (it *InboxItem) listed() InboxItem {
 		h := *it.Handling
 		c.Handling = &h
 	}
-	if it.Suggestion != nil {
-		g := *it.Suggestion
-		g.Changes = slices.Clone(g.Changes)
+	if g := currentSuggestion(it); g != nil {
+		g := *g
+		g.Changes, g.Cwd = slices.Clone(g.Changes), ""
 		c.Suggestion = &g
+		if c.Handling == nil { // an old draft: its conversation is done with this round
+			c.Handling = &InboxHandling{Owner: HandlingOwner, State: HandlingDone, MachineID: it.Agent.MachineID, SessionID: it.Agent.SessionID}
+		}
 	}
 	c.Mutes = mutesOf(it)
 	c.Version = inboxVersion(it)
 	c.Conversation = conversationOf(it)
 	if it.Agent != nil { // the copy is encoded after the lock is released
 		a := *it.Agent
+		a.Pending, a.Wake, a.SentOf, a.Lost = nil, false, "", nil
 		c.Agent = &a
 	}
 	if it.Mail != nil {
@@ -1025,6 +1029,7 @@ func (s *Service) inboxRoutes() {
 	s.inboxMuteRoutes()
 	s.inboxParentRoutes()
 	s.inboxBulkRoutes()
+	s.inboxSuggestionRoutes()
 	s.translateRoutes()
 	// Items of connectors (GitHub…) only go to apps that draw them (?sources=all): an older app would show a PR as
 	// a mail and send a reply as one. triage says how many new items wait for the model, and why (inbox_admit.go).
@@ -1262,9 +1267,11 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	// Keep the state we are changing so a failed write restores it: the request must not look done while the row
 	// (what a restart reads) still holds the other state.
 	prevDoneAt, prevDoneBy, prevChain, prevSeq := it.DoneAt, it.DoneBy, it.Chain, it.ChainSeq
+	tell := false
 	if done {
 		if it.open() {
 			b.file(it, time.Now(), doneByOf(dismiss))
+			tell = b.closeHandling(it, doneByOf(dismiss), time.Now()) // its conversation stops
 		} else {
 			it.done(time.Now(), doneByOf(dismiss))
 		}
@@ -1284,6 +1291,9 @@ func (s *Service) setInboxDone(ctx context.Context, id string, done, dismiss boo
 	})
 	if failed[id] {
 		return InboxItem{}, errInboxNotPersisted
+	}
+	if tell {
+		s.tellSoon(ctx, it)
 	}
 	return out, nil
 }

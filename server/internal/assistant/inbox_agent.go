@@ -3,6 +3,7 @@ package assistant
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -83,15 +84,32 @@ type InboxAgent struct {
 	// out of the next rounds until the backoff passed.
 	Attempts   int        `json:"attempts,omitempty"`
 	RetryAfter *time.Time `json:"retry_after,omitempty"`
+
+	// The processing conversation's bookkeeping (inbox_handle.go), persisted, not listed: what waits to be told it
+	// (sent with the next delivery, or carried by the first message of a new one), whether that asks it to work
+	// (Wake: a turn starts), the item's Last when Persona sent a confirmed reply (a "replied" from the source then is
+	// Persona's own message, not the user's), and the conversations found gone.
+	Pending []inboxNote `json:"pending,omitempty"`
+	Wake    bool        `json:"wake,omitempty"`
+	SentOf  string      `json:"sent_of,omitempty"`
+	Lost    []string    `json:"lost,omitempty"`
+	// Back is the handling state a waking note interrupted (waiting, done…): a turn that only updates the recap
+	// goes back to it.
+	Back string `json:"back,omitempty"`
 }
+
+// lost: conversation sid was found gone.
+func (a *InboxAgent) lost(sid string) bool { return slices.Contains(a.Lost, sid) }
 
 // startDue says a queued agent waits for no backoff (a fresh judge's agent has no RetryAfter).
 func (a *InboxAgent) startDue(now time.Time) bool {
 	return a.RetryAfter == nil || !a.RetryAfter.After(now)
 }
 
-// handInbox is one pass of models 2 and 3: settle agents that finished or hung, judge newly triaged 需要你 items,
-// start agents for the queued ones. One pass at a time, in the background.
+// handInbox is one pass of the AI 分身's work (docs/inbox.md「AI 分身」): settle conversations that finished, hung or
+// were lost, escalate every newly triaged 需要你 item to the manager (one processing conversation per event), deliver
+// what waits for the events' conversations (new messages, the user's answers), start conversations for the queued
+// ones. One pass at a time, in the background.
 func (s *Service) handInbox(ctx context.Context) {
 	cfg := s.inboxConfig(ctx).Agent
 	b := &s.inbox
@@ -101,78 +119,28 @@ func (s *Service) handInbox(ctx context.Context) {
 	ctx = context.WithoutCancel(ctx) // like triageInbox: the pass outlives the caller
 	go func() {
 		defer b.handing.Unlock()
-		s.sweepInboxAgents(ctx, cfg, time.Now())
-		for _, it := range b.toJudge(time.Now().Add(-agentMaxAge(cfg))) {
-			if s.judgeOne(ctx, it) {
-				s.saveInbox(ctx, []*InboxItem{it})
+		now := time.Now()
+		s.sweepInboxAgents(ctx, cfg, now)
+		escalated := b.escalate(now.Add(-agentMaxAge(cfg)), now)
+		if tasks := s.activeTasks(ctx); len(tasks) > 0 { // which of the user's tasks a new one is about
+			for _, it := range escalated {
+				b.mu.Lock()
+				fresh := it.Agent != nil && it.Agent.SessionID == "" && it.Agent.TodoID == ""
+				b.mu.Unlock()
+				if fresh {
+					s.linkTask(ctx, it, tasks)
+				}
 			}
 		}
+		s.saveInbox(ctx, escalated)
+		s.deliverPending(ctx)
 		s.startInboxAgents(ctx, cfg)
 	}()
 }
 
-// toJudge: open 需要你 items triaged on their current content and not judged on it yet, newest first.
-func (b *inboxBook) toJudge(since time.Time) []*InboxItem {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	var out []*InboxItem
-	for _, it := range b.items {
-		if it.open() && it.Tier == TierAction && it.TriagedAt == it.Last && it.JudgedAt != it.Last && it.Context != "" &&
-			it.UpdatedAt.After(since) && (it.Agent == nil || it.Agent.State != AgentRunning) {
-			out = append(out, it)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
-	return out
-}
-
-// judgeOne asks model 2 about one item. A model failure leaves it unjudged, so the next pass tries again.
-func (s *Service) judgeOne(ctx context.Context, it *InboxItem) bool {
-	b := &s.inbox
-	tasks := s.activeTasks(ctx) // before the inbox lock: it reads the todos and the machines' sessions
-	b.mu.Lock()
-	last, input := it.Last, prompts.RenderInboxJudgeInput(prompts.InboxJudgeInput{Summary: it.Summary, Item: b.promptItem(it), Tasks: tasks})
-	b.mu.Unlock()
-	system := prompts.RenderInboxJudge(prompts.InboxJudge{Owner: s.owner(ctx), Rules: s.inboxConfig(ctx).AgentRules})
-	var out struct {
-		Handle bool   `json:"handle"`
-		Task   string `json:"task"`
-		Reason string `json:"reason"`
-		TaskID string `json:"task_id"`
-	}
-	cctx, cancel := context.WithTimeout(ctx, 90*time.Second)
-	err := s.inboxModelJSON(cctx, purposeJudge, system, input, 0, &out)
-	cancel()
-	if err != nil {
-		if paused, _ := modelPaused(err); ctx.Err() == nil && !paused {
-			s.logf("inbox: judge %s: %v", it.ID, err)
-		}
-		return false
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if it.Last != last || !it.open() {
-		return false
-	}
-	it.JudgedAt = last
-	task := strings.TrimSpace(out.Task)
-	if out.Handle && task == "" {
-		task = "看清楚对方要什么，查需要的信息，起草回复"
-	}
-	if out.Handle {
-		it.Agent = &InboxAgent{State: AgentQueued, Task: clip(oneLine(task), 300), Reason: clip(oneLine(out.Reason), 30), Of: last}
-		for _, t := range tasks { // only a task it was shown
-			if t.ID == strings.TrimSpace(out.TaskID) {
-				it.Agent.TodoID = t.ID
-			}
-		}
-	} else {
-		it.Agent = &InboxAgent{State: AgentSkipped, Reason: clip(oneLine(out.Reason), 30), Of: last}
-	}
-	return true
-}
-
-// startInboxAgents starts queued items, newest first, while fewer than the configured number are running.
+// startInboxAgents starts a processing conversation for the queued events that have none (newest first, while fewer
+// than the configured number are looking): one the event's id finds (a start the manager restarted during) is taken
+// back instead; one that comes after a lost conversation carries the recap and the chain.
 func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	b := &s.inbox
 	linked := map[string]*prompts.InboxTask{} // read before the inbox lock (todos and sessions)
@@ -181,6 +149,7 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 	}
 	owner := s.owner(ctx)
 	now := time.Now().UTC()
+	byEvent := s.conversationsByEvent(ctx)
 	b.mu.Lock()
 	running := 0
 	var queued []*InboxItem
@@ -189,27 +158,40 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			continue
 		}
 		switch {
-		case it.Agent.State == AgentRunning:
+		case it.Agent.SessionID != "" && (it.Handling == nil && it.Agent.State == AgentRunning || it.Handling != nil && it.Handling.State == HandlingLooking):
 			running++
-		case it.Agent.State == AgentQueued && it.open() && it.Agent.startDue(now):
+		case it.Agent.State == AgentQueued && it.Agent.SessionID == "" && it.open() && it.Agent.startDue(now):
 			queued = append(queued, it)
 		}
 	}
 	sort.Slice(queued, func(i, j int) bool { return queued[i].UpdatedAt.After(queued[j].UpdatedAt) })
-	queued = queued[:min(len(queued), max(agentConcurrency(cfg)-running, 0))]
 	type job struct {
 		it     *InboxItem
 		chat   string
 		prompt func(*prompts.KBContext) string
 	}
-	jobs := make([]job, 0, len(queued))
+	var jobs []job
+	var adopted []*InboxItem
 	larkDefault := max(b.larkAccount, 1)
 	for _, it := range queued {
+		if ref, ok := byEvent[it.ID]; ok && !it.Agent.lost(ref.SessionID) { // the event's conversation is there: go on in it
+			it.Agent.MachineID, it.Agent.SessionID, it.Agent.Wake = ref.MachineID, ref.SessionID, true
+			b.setHandling(it, HandlingLooking, "", now)
+			adopted = append(adopted, it)
+			continue
+		}
+		if len(jobs) >= max(agentConcurrency(cfg)-running, 0) {
+			continue
+		}
 		it.Agent.State, it.Agent.StartedAt, it.Agent.Attempts, it.Agent.RetryAfter = AgentRunning, &now, it.Agent.Attempts+1, nil
 		a := b.inboxAgentFor(it, owner, linked[it.Agent.TodoID], larkDefault)
 		jobs = append(jobs, job{it, kbChatOf(it), func(kbc *prompts.KBContext) string { a.KB = kbc; return prompts.RenderInboxAgent(a) }})
 	}
 	b.mu.Unlock()
+	s.saveInbox(ctx, adopted)
+	for _, it := range adopted {
+		s.deliverNotes(ctx, it)
+	}
 	for _, j := range jobs {
 		var kbc *prompts.KBContext
 		if j.chat != "" {
@@ -223,10 +205,16 @@ func (s *Service) startInboxAgents(ctx context.Context, cfg InboxAgentConfig) {
 			if err != nil {
 				// The item may have been replied to or filed while the start was in flight: it never queues again.
 				s.requeueAgentStart(ctx, a, err, time.Now().UTC(), j.it.open())
+				if a.State == AgentFailed {
+					b.failHandling(j.it, a.Error, time.Now())
+				}
 				s.logf("inbox: agent for %s: %v", j.it.ID, err)
 			} else {
 				a.MachineID, a.SessionID = machineID, sessionID
+				a.Pending = nil // the first message carried them
+				a.Lost = nil
 				b.noteHandling(j.it, machineID, sessionID)
+				b.setHandling(j.it, HandlingLooking, "", time.Now())
 			}
 		}
 		b.mu.Unlock()
@@ -309,26 +297,45 @@ func (s *Service) requeueAgentStart(ctx context.Context, a *InboxAgent, err erro
 	}
 }
 
-// sweepInboxAgents fails agents that ended their turn without a draft, or ran past the timeout.
+// sweepInboxAgents settles the events' conversations: one looking that ended its turn without a suggestion (after its
+// first minute) or ran past the timeout fails, so does one whose sub-session ran past four timeouts; a start the
+// manager did not live to record goes back to the queue (the event's id finds its conversation).
 func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, now time.Time) {
 	b := &s.inbox
 	b.mu.Lock()
-	var running []*InboxItem
+	var running, orphans []*InboxItem
 	for _, it := range b.items {
-		if it.Agent != nil && it.Agent.State == AgentRunning && it.Agent.SessionID != "" {
+		a, h := it.Agent, it.Handling
+		switch {
+		case a == nil:
+		case a.SessionID != "" && (a.State == AgentRunning || h != nil && (h.State == HandlingLooking || h.State == HandlingAgent)):
 			running = append(running, it)
+		case a.State != AgentRunning || a.SessionID != "":
+		case a.StartedAt == nil || now.Sub(*a.StartedAt) > inboxAgentStartWait+time.Minute:
+			a.State, a.StartedAt = AgentQueued, nil
+			orphans = append(orphans, it)
 		}
 	}
 	b.mu.Unlock()
-	var changed []*InboxItem
+	changed := orphans
 	for _, it := range running {
 		b.mu.Lock()
 		a := *it.Agent
+		state := HandlingLooking
+		if it.Handling != nil {
+			state = it.Handling.State
+		}
 		b.mu.Unlock()
 		reason := ""
-		if a.StartedAt != nil && now.Sub(*a.StartedAt) > agentTimeout(cfg) {
+		switch {
+		case state == HandlingAgent:
+			if a.StartedAt != nil && now.Sub(*a.StartedAt) > 4*agentTimeout(cfg) {
+				reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.timeout")
+			}
+		case state != HandlingLooking:
+		case a.StartedAt != nil && now.Sub(*a.StartedAt) > agentTimeout(cfg):
 			reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.timeout")
-		} else if a.StartedAt != nil && now.Sub(*a.StartedAt) > time.Minute {
+		case a.StartedAt != nil && now.Sub(*a.StartedAt) > time.Minute:
 			if sess, ok := s.session(ctx, a.MachineID, a.SessionID); ok && sess.Status != proto.StatusWorking {
 				reason = i18n.T(s.lang(ctx), "assistant-inbox_agent.no_draft")
 			}
@@ -337,8 +344,12 @@ func (s *Service) sweepInboxAgents(ctx context.Context, cfg InboxAgentConfig, no
 			continue
 		}
 		b.mu.Lock()
-		if it.Agent != nil && it.Agent.State == AgentRunning && it.Agent.SessionID == a.SessionID {
-			it.Agent.State, it.Agent.Error = AgentFailed, reason
+		if it.Agent != nil && it.Agent.SessionID == a.SessionID && (it.Handling == nil || it.Handling.State == state) {
+			if it.Suggestion != nil { // new messages left its suggestion standing: it still holds
+				b.setHandling(it, HandlingDone, "", now)
+			} else {
+				b.failHandling(it, reason, now)
+			}
 			changed = append(changed, it)
 		}
 		b.mu.Unlock()
@@ -361,7 +372,19 @@ func (b *inboxBook) inboxAgentPromptFor(it *InboxItem, owner string, kbc *prompt
 
 // inboxAgentFor is what the AI 分身's first message is made of, but the knowledge base's part.
 func (b *inboxBook) inboxAgentFor(it *InboxItem, owner string, linked *prompts.InboxTask, larkDefault int) prompts.InboxAgent {
-	a := prompts.InboxAgent{Owner: owner, Title: it.Title, Item: b.promptItem(it), Task: it.Agent.Task, Linked: linked}
+	a := prompts.InboxAgent{Owner: owner, EventID: it.ID, Title: it.Title, Item: b.promptItem(it), Task: it.Agent.Task, Reason: it.Agent.Reason,
+		Linked: linked}
+	if len(it.Agent.Lost) > 0 { // the event's conversation is gone: where it got to goes with the new one
+		a.Resumed, a.Recap = true, it.Recap
+		for _, e := range it.Chain {
+			a.Chain = append(a.Chain, chainLine(e))
+		}
+	}
+	for _, n := range it.Agent.Pending {
+		if n.Name != prompts.NoteNewMessages { // the item above is its content now
+			a.Notes = append(a.Notes, renderNote(n, owner))
+		}
+	}
 	switch {
 	case it.Lark != nil:
 		a.Lark = &prompts.InboxAgentLark{FeedID: it.Lark.FeedID}
@@ -404,52 +427,6 @@ func (b *inboxBook) agentStarting() bool {
 		}
 	}
 	return false
-}
-
-// inboxDraft keeps the draft of the agent in conversation sessionID on its item, with the moves of a document's rows
-// it proposes, and puts the item's message card in the task's conversation. It is the item's id; "" when no item's
-// agent runs there. A change the item does not offer (a row it lists, one of the column's values) is refused, and
-// nothing kept.
-func (s *Service) inboxDraft(ctx context.Context, sessionID, text, note string, proposed []DocChange) (string, *DocChange) {
-	if s.inboxReady(ctx) != nil {
-		return "", nil
-	}
-	b := &s.inbox
-	b.mu.Lock()
-	it := b.itemOfAgent(sessionID)
-	// An agent that answers before its start returned (an agent runtime that is already running starts a turn at
-	// once): its item learns the conversation's id a moment later.
-	for wait := time.Now().Add(inboxDraftWait); it == nil && b.agentStarting() && time.Now().Before(wait); {
-		b.mu.Unlock()
-		time.Sleep(100 * time.Millisecond)
-		b.mu.Lock()
-		it = b.itemOfAgent(sessionID)
-	}
-	if it == nil {
-		b.mu.Unlock()
-		return "", nil
-	}
-	var changes []DocChange
-	for _, ch := range proposed {
-		if it.Doc == nil || !docOffers(*it.Doc, ch) {
-			b.mu.Unlock()
-			return it.ID, &ch
-		}
-		changes = append(changes, ch)
-	}
-	now := time.Now().UTC()
-	it.Agent.State, it.Agent.Error, it.Agent.Changes = AgentDrafted, "", changes
-	it.Agent.Draft, it.Agent.Note, it.Agent.DraftedAt = text, note, &now
-	card := messageCardOf(it)
-	if !it.open() { // the user answered or filed it while the agent worked: nothing more to send or decide
-		card = nil
-	}
-	b.mu.Unlock()
-	s.saveInbox(ctx, []*InboxItem{it})
-	if card != nil {
-		s.messageCard(ctx, it.ID, *card)
-	}
-	return it.ID, nil
 }
 
 // messageCardOf is the card for an item whose draft is about a task; nil when it is about none. Under b.mu.

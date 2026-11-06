@@ -50,6 +50,19 @@
           ],
           "version": "d45aefe6809ea192",
           "status": "action",
+          "handling": {
+            "owner": "manager",
+            "state": "done",
+            "machine_id": "m1",
+            "session_id": "s1"
+          },
+          "suggestion": {
+            "version": 1,
+            "kind": "reply",
+            "text": "已收到示例。",
+            "handback": false,
+            "at": "2026-01-02T03:04:05Z"
+          },
           "chain": [
             {
               "id": "c1",

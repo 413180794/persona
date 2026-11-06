@@ -284,6 +284,8 @@ var Routes = []string{
 	"POST /api/v1/machines/{mid}/herdr/start",
 	"GET /api/v1/machines/{mid}/botmux",
 	"PUT /api/v1/machines/{mid}/botmux",
+	"GET /api/v1/machines/{mid}/health/reports",
+	"DELETE /api/v1/machines/{mid}/health/reports/{name}",
 	"POST /api/v1/machines/{mid}/deploy",
 	"GET /api/v1/machines/{mid}/claude-dirs",
 	"PUT /api/v1/machines/{mid}/claude-dirs/blocked",

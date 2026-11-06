@@ -575,3 +575,11 @@ node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来
 - 有用例失败时，`xcodebuild test` 在用例跑完后还要去模拟器收诊断，等满 600 秒才退出（日志里是 `Failure collecting diagnostics from simulator: Timed out after 600.0 seconds`），用例本身不到一秒。本机反复跑时加 `-collect-test-diagnostics never`。
 - 新加的测试文件要先 `xcodegen generate` 再跑：工程里没有这个文件时，`-only-testing:PersonaTests/<套件>` 不报错，只是一条都不跑（「Test run with 6 tests」只剩别的套件），容易当成通过。
 - 模型里的回调都是 `[weak self]` 时，用例里 `let (_, socket) = …` 丢掉模型，模型当场释放，之后送进去的帧全被吞掉、断言莫名失败：用例要自己拿着模型（App 里由 `VoiceCalls.current` 拿着）。
+
+## 隔离 hub 的 e2e 里让假 Claude 调 Persona 的工具（2026-11-06，#5073）
+
+- 收件箱处理对话的结果只能由它调 MCP 工具（`inbox_suggest`）交上来，光回一段文字的假 Claude 测不到。做法：假 Claude 从自己的 `--mcp-config`
+  （node 给无头助手对话传的那段 JSON）里取 `mcpServers.jarvis` 的 `command` / `args` / `env`，自己起一个 `personad mcp`，发 `initialize`、
+  `notifications/initialized`、`tools/call`；工具按 `JARVIS_SESSION_ID` 认出是哪段对话，和真的一样经 node → hub → 管理者。要调什么由测试写的计划文件决定（按消息里的一段字匹配）。
+- `prompts.TestEveryTemplateIsUsed` 按带引号的模板全名（`"inbox/handling/sent"`）在 Go 和模板里找：模板名拼出来（`"inbox/handling/" + name`）的会被当成没用到，常量里写全名。
+- 旧的收件箱 e2e（`run.py` 的「管理者停了 hub 还在读来源」几条）在 2026-11-05 来源挪进管理者后就不成立了，master 上也是那 6 条挂：对比时先在 master 上跑一遍。

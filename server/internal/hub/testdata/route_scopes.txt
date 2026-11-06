@@ -52,6 +52,7 @@ inbox.write          DELETE /api/v1/inbox/mutes/{id}
 -                    DELETE /api/v1/launchers/{name}
 -                    DELETE /api/v1/machines/{mid}/browser/cookies
 -                    DELETE /api/v1/machines/{mid}/computer/apps/{bundle}
+-                    DELETE /api/v1/machines/{mid}/health/reports/{name}
 -                    DELETE /api/v1/managers/{id}
 -                    DELETE /api/v1/recordings/{id}
 -                    DELETE /api/v1/sessions/{mid}/{sid}
@@ -171,6 +172,7 @@ machines.read        GET /api/v1/machines/{id}/metrics
 -                    GET /api/v1/machines/{mid}/git/log
 -                    GET /api/v1/machines/{mid}/git/show
 -                    GET /api/v1/machines/{mid}/git/status
+-                    GET /api/v1/machines/{mid}/health/reports
 -                    GET /api/v1/machines/{mid}/herdr
 -                    GET /api/v1/machines/{mid}/launchers
 -                    GET /api/v1/machines/{mid}/launchers/{name}/models
@@ -296,6 +298,7 @@ inbox.write          POST /api/v1/inbox/{id}/doc/status
 inbox.write          POST /api/v1/inbox/{id}/done
 inbox.write          POST /api/v1/inbox/{id}/draft
 inbox.write          POST /api/v1/inbox/{id}/reply
+inbox.write          POST /api/v1/inbox/{id}/suggestion
 agents.control       POST /api/v1/interactions/{id}/reanswer
 agents.control       POST /api/v1/interactions/{id}/resolve
 -                    POST /api/v1/launchers

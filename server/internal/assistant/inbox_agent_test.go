@@ -27,32 +27,32 @@ func actionItem(id string, at time.Time) *InboxItem {
 		UpdatedAt: at, Lark: &InboxLark{FeedID: "f1"}}
 }
 
-func TestInboxJudgeQueuesOrSkips(t *testing.T) {
+// Every newly triaged 需要你 item is escalated to the manager (no judge filters it): queued, 进行中; new content goes
+// to the same conversation; old, untriaged, not 需要你, done ones are not.
+func TestInboxEscalates(t *testing.T) {
 	now := time.Now()
 	h := agentHub(t)
 	it := actionItem("lark:f1:11", now)
+	it.Summary, it.Reason = "张三问 1013 合了没有", "私聊直接提问"
 	h.inbox.items[it.ID] = it
-
-	h.in.model = fakeModel(t, `{"handle":true,"task":"查 1013 是否合入","reason":"可查"}`)
-	if got := h.inbox.toJudge(now.Add(-time.Hour)); len(got) != 1 {
-		t.Fatalf("toJudge = %d", len(got))
+	if got := h.inbox.escalate(now.Add(-time.Hour), now); len(got) != 1 || it.Agent == nil || it.Agent.State != AgentQueued ||
+		it.Agent.Task != "张三问 1013 合了没有" || it.Agent.Of != "12" || it.Handling == nil || it.Handling.State != HandlingLooking ||
+		it.status() != StatusWorking {
+		t.Fatalf("escalated %d: agent %+v handling %+v", len(got), it.Agent, it.Handling)
 	}
-	if !h.judgeOne(context.Background(), it) || it.Agent == nil || it.Agent.State != AgentQueued ||
-		it.Agent.Task != "查 1013 是否合入" || it.JudgedAt != "12" || it.Agent.Of != "12" {
-		t.Fatalf("agent = %+v judged %q", it.Agent, it.JudgedAt)
+	if got := h.inbox.escalate(now.Add(-time.Hour), now); len(got) != 0 {
+		t.Fatalf("escalated twice: %d", len(got))
 	}
-	if got := h.inbox.toJudge(now.Add(-time.Hour)); len(got) != 0 {
-		t.Fatalf("judged twice: %d", len(got))
-	}
-
-	// New messages: judged again, and the old work is replaced.
-	it.Last, it.TriagedAt = "13", "13"
-	h.in.model = fakeModel(t, "```json\n{\"handle\":false,\"reason\":\"只是通知\"}\n```")
-	if !h.judgeOne(context.Background(), it) || it.Agent.State != AgentSkipped || it.Agent.Reason != "只是通知" {
-		t.Fatalf("agent = %+v", it.Agent)
+	// Its conversation is there: new messages are told it, not started again.
+	it.Agent.State, it.Agent.SessionID, it.Agent.Pending = AgentRunning, "s1", nil
+	h.inbox.setHandling(it, HandlingWaiting, "", now)
+	it.Last, it.Context = "13", "张三：好的，那我等你"
+	it.TriagedAt = "13" // handled: triage leaves it
+	if got := h.inbox.escalate(now.Add(-time.Hour), now); len(got) != 1 || len(it.Agent.Pending) != 1 ||
+		it.Agent.Pending[0].Name != prompts.NoteNewMessages || !it.Agent.Wake || it.Handling.State != HandlingLooking || it.Agent.SessionID != "s1" {
+		t.Fatalf("new messages: %+v / %+v", it.Agent, it.Handling)
 	}
 
-	// Not 需要你, too old, not triaged on the current content, done: never judged.
 	fyi := actionItem("a", now)
 	fyi.Tier = TierFYI
 	old := actionItem("b", now.Add(-48*time.Hour))
@@ -61,18 +61,20 @@ func TestInboxJudgeQueuesOrSkips(t *testing.T) {
 	done := actionItem("d", now)
 	done.done(now, "user")
 	h.inbox.items = map[string]*InboxItem{"a": fyi, "b": old, "c": stale, "d": done}
-	if got := h.inbox.toJudge(now.Add(-24 * time.Hour)); len(got) != 0 {
-		t.Fatalf("toJudge = %+v", got)
+	if got := h.inbox.escalate(now.Add(-24*time.Hour), now); len(got) != 0 {
+		t.Fatalf("escalated %+v", got)
 	}
 }
 
-func TestInboxJudgeModelFailureRetries(t *testing.T) {
+// The judge only links an event to one of the user's tasks: a failure leaves it unlinked.
+func TestInboxLinkTaskModelFailure(t *testing.T) {
 	h := agentHub(t)
 	it := actionItem("x", time.Now())
+	it.Agent = &InboxAgent{State: AgentQueued}
 	h.inbox.items[it.ID] = it
 	h.in.model = fakeModel(t, "no json here")
-	if h.judgeOne(context.Background(), it) || it.JudgedAt != "" || it.Agent != nil {
-		t.Fatalf("judged on a failed call: %+v", it.Agent)
+	if h.linkTask(context.Background(), it, []prompts.InboxTask{{ID: "todo_1"}}) || it.Agent.TodoID != "" {
+		t.Fatalf("linked on a failed call: %+v", it.Agent)
 	}
 }
 
@@ -178,7 +180,8 @@ func TestInboxAgentDoneWithoutADraft(t *testing.T) {
 	h.inbox.items[it.ID] = it
 	h.f.setSessions("server", proto.Session{SessionID: "s1", Status: proto.StatusIdle})
 	h.sweepInboxAgents(context.Background(), InboxAgentConfig{}, time.Now())
-	if it.Agent.State != AgentFailed || it.Agent.Error != "做完了但没有给出草稿" {
+	if it.Agent.State != AgentFailed || it.Agent.Error != "做完了但没有给出建议" || it.Handling == nil || it.Handling.State != HandlingFailed ||
+		it.status() != StatusAction || it.Chain[len(it.Chain)-1].Kind != ChainFailed {
 		t.Fatalf("agent = %+v", it.Agent)
 	}
 }
@@ -386,7 +389,7 @@ func TestInboxAgentPrompt(t *testing.T) {
 	it.Agent = &InboxAgent{Task: "查 1013 是否合入"}
 	p := newInbox().inboxAgentPrompt(it, "小明", nil)
 	for _, want := range []string{`title="飞书 · 群 &quot;A&quot; &lt;b&gt;"`, "飞书会话 id：f1", "查 1013 是否合入",
-		"inbox_draft", "张三：1013 合了吗？", "小明"} {
+		"inbox_suggest", "张三：1013 合了吗？", "小明", "事件 x"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}
@@ -417,14 +420,6 @@ func TestInboxModelsLive(t *testing.T) {
 	if it.Tier != TierAction {
 		t.Fatalf("tier = %s", it.Tier)
 	}
-	start = time.Now()
-	if !h.judgeOne(context.Background(), it) {
-		t.Fatal("judge failed")
-	}
-	t.Logf("model 2 (%s): %+v", time.Since(start).Round(time.Millisecond), *it.Agent)
-	if it.Agent.State != AgentQueued {
-		t.Fatalf("not handed over: %+v", it.Agent)
-	}
 }
 
 // An item about one of the user's tasks (docs/unified-entry.md): the judge sees the tasks and links the item; the AI
@@ -444,8 +439,9 @@ func TestInboxItemAboutATask(t *testing.T) {
 	h.inbox.mu.Lock() // the started task's snapshot reads the inbox meanwhile
 	h.inbox.items[it.ID] = it
 	h.inbox.mu.Unlock()
-	if !h.judgeOne(ctx, it) {
-		t.Fatal("not judged")
+	it.Agent = &InboxAgent{State: AgentQueued}
+	if !h.linkTask(ctx, it, h.activeTasks(ctx)) {
+		t.Fatal("not linked")
 	}
 	if c := onlyCall(t, calls()); !strings.Contains(c.User, todo.ID+"：修登录崩溃") {
 		t.Fatalf("the judge was not shown the task:\n%s", c.User)
@@ -465,7 +461,8 @@ func TestInboxItemAboutATask(t *testing.T) {
 	h.inbox.mu.Lock()
 	h.inbox.items[other.ID] = other
 	h.inbox.mu.Unlock()
-	h.judgeOne(ctx, other)
+	other.Agent = &InboxAgent{State: AgentQueued}
+	h.linkTask(ctx, other, h.activeTasks(ctx))
 	if other.Agent == nil || other.Agent.TodoID != "" {
 		t.Fatalf("made-up task linked: %+v", other.Agent)
 	}

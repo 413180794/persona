@@ -81,8 +81,7 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 	for _, t := range things {
 		open, done := index.openFor(t.Thread)
 		if t.Done != "" {
-			if open != nil {
-				b.settleThing(open, t, now)
+			if open != nil && b.settleThing(open, t, now) {
 				changed = append(changed, open)
 			}
 			continue
@@ -138,16 +137,24 @@ func (b *inboxBook) applyConnector(id, name string, things []connector.InboxThin
 
 // settleThing ends an open item a thing says is over: the user's own reply in the source is recorded as such (and the
 // processing conversation, if one works on it, is told), anything else as filed. Under b.mu.
-func (b *inboxBook) settleThing(open *InboxItem, t connector.InboxThing, now time.Time) {
+// A "replied" that is the reply Persona just sent for a confirmed suggestion is not the user's: the event stays open,
+// waiting for the other side (false: nothing changed).
+func (b *inboxBook) settleThing(open *InboxItem, t connector.InboxThing, now time.Time) bool {
 	if t.Done == connector.DoneReplied {
+		if ownSend(open, t.Last) {
+			return false
+		}
 		b.noteSelfReplied(open, now)
 		open.done(now, t.Done)
+		b.closeHandling(open, "self_replied", now) // told on the AI 分身's next pass (deliverPending)
 	} else {
 		b.file(open, now, t.Done)
+		b.closeHandling(open, t.Done, now)
 	}
 	if t.Why != "" {
 		open.Reason = t.Why
 	}
+	return true
 }
 
 func fillConnectorItem(it *InboxItem, t connector.InboxThing) {

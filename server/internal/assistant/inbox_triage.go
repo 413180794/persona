@@ -312,13 +312,19 @@ func (s *Service) replyInbox(ctx context.Context, id, text string, changes ...Do
 // replyInboxAs is replyInbox with the app's own id for the send (client_id): a retry of the same request is sent once.
 // Empty: one derived from the item and the text.
 func (s *Service) replyInboxAs(ctx context.Context, id, text, clientID string, changes ...DocChange) (InboxItem, error) {
-	return s.replyInboxFrom(ctx, id, text, clientID, false, changes...)
+	return s.replyInboxDo(ctx, id, text, clientID, false, true, changes...)
 }
 
 // replyInboxFrom is replyInboxAs; fromCard: it is 发送 on a message card (sendFromCard), which does not reply to an
 // item filed since (errInboxItemDone). Checked with the copy for the reply, so an item filed after sendFromCard
 // looked is not answered and keeps its mark (#4871).
 func (s *Service) replyInboxFrom(ctx context.Context, id, text, clientID string, fromCard bool, changes ...DocChange) (InboxItem, error) {
+	return s.replyInboxDo(ctx, id, text, clientID, fromCard, true, changes...)
+}
+
+// replyInboxDo is replyInboxFrom; file false keeps the item open (a confirmed suggestion's reply: the event waits for
+// the other side), a repeat of the reply still being answered as sent.
+func (s *Service) replyInboxDo(ctx context.Context, id, text, clientID string, fromCard, file bool, changes ...DocChange) (InboxItem, error) {
 	b := &s.inbox
 	b.mu.Lock()
 	it, ok := b.items[id]
@@ -395,16 +401,23 @@ func (s *Service) replyInboxFrom(ctx context.Context, id, text, clientID string,
 	// The reply answers what the item held when it was sent. A move that came in meanwhile (collection runs while the
 	// reply is out) is not answered: the item stays open with it, so it is not filed unseen (#1828). An item filed
 	// meanwhile (read elsewhere) is filed as replied.
-	kept := it.open() && it.Last != c.Last
+	kept := !file && it.open() || it.open() && it.Last != c.Last
 	once.keptOpen = kept
 	b.noteSent(it, now)
+	tell := false
 	if !kept {
 		it.done(now, "replied")
+		tell = b.closeHandling(it, "replied", now) // its conversation stops
 	}
 	out := it.listed()
 	b.mu.Unlock()
 	if !kept {
 		s.saveReplied(ctx, it, once)
+	} else if !file {
+		s.saveInbox(ctx, []*InboxItem{it})
+	}
+	if tell {
+		s.tellSoon(ctx, it)
 	}
 	// The item's cards in the assistant's conversations show it sent, wherever it was sent from.
 	s.markCardsSent(ctx, id, now, text, true)

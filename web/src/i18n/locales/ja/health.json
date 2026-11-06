@@ -36,5 +36,18 @@
   "report_upload": "健康診断の結果をアップロード",
   "report_uploading": "アップロード中…",
   "report_failed": "アップロードできませんでした：{error}",
-  "report_prompt": "これは私の健康診断の結果です。項目ごとに見てください：{paths}"
+  "report_prompt": "これは私の健康診断の結果です。項目ごとに見てください：{paths}",
+  "reports": "健康診断レポート",
+  "reports_count": "{count} 件",
+  "reports_empty": "まだありません。アップロードしたレポートはここに残り、いつでも確認・削除できます。",
+  "reports_load_failed": "読み取れませんでした：{error}",
+  "report_recorded": "整理済み",
+  "report_unrecorded": "未整理",
+  "report_no_record": "このレポートはまだ整理されていません。原本を開くとレポートを確認できます。",
+  "report_open": "原本を開く",
+  "report_delete": "削除",
+  "report_delete_confirm": "完全に削除",
+  "report_keep": "削除しない",
+  "report_delete_body": "原本と整理した記録は完全に削除され、元に戻せません。健康の会話と健康メモリに書かれた内容は一緒には削除されないため、別途削除してください。",
+  "report_deleted": "「{title}」を削除しました"
 }

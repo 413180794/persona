@@ -29,5 +29,10 @@
   "failed_timeout": "対応がタイムアウトしました",
   "failed_stopped": "対応の会話が提案なしで止まりました",
   "failed_send": "送信できませんでした",
-  "failed_start": "対応の会話を開始できませんでした"
+  "failed_start": "対応の会話を開始できませんでした",
+  "suggested_reply": "マネージャーが返信を提案",
+  "suggested_agent": "マネージャーが Agent の起動を提案",
+  "suggested_handback": "マネージャーが提案、判断をお願いします",
+  "confirmed_agent": "確認しました：Agent を起動",
+  "failed_agent": "Agent を起動できませんでした"
 }

@@ -631,7 +631,7 @@ POST /api/v1/assistant/warm                 → {"ok": true, "readiness"?: Readi
 | --- | --- | --- | --- |
 | `user`（或不带） | 用户在 App / 网页里新建（含主对话，含在收件箱、飞书会话里点「交给 AI」开的） | — | 最近 |
 | `channel` | 用户在飞书机器人、微信等渠道里 `/new` 开的 | 渠道 id（`feishu`、`wechat`…） | 最近 |
-| `inbox` | 收件箱的 AI 分身起草回复（`docs/inbox.md`） | 收件箱条目 id | 自动 · 收件箱 |
+| `inbox` | 收件箱一件事的处理对话（AI 分身，`docs/inbox.md`） | 收件箱条目 id | 自动 · 收件箱 |
 | `task` | 定时任务和跟进（`schedule_followup`，含 `new_conversation` 的和只推送 `notify_user` 的 `push: "asked"` 任务自己的对话） | 任务 id | 自动 · 定时任务 |
 | `spawned` | 另一段对话用 `conversation_new` 开的 | 开它的那段对话的会话 id | 自动 · 对话派生 |
 | `lark_agent` | 飞书里发 `/agent …`（扩展经 `POST /api/v1/assistant/conversations`，`purpose: "lark.agent"`，`docs/lark-agent.md`） | 扩展 id | 自动 · 飞书 /agent |
@@ -1259,6 +1259,9 @@ App 对话页输入框的「+」›「文件」（Agents 和「对话」tab 的�
   （0700 / 0600，7 天后在 node 启动时清掉），上限 50 MB（`proto.MaxTerminalUploadBytes`，超过同样回 413 `too_large`，带 `limit`）。别的 `dest` 回 400；
   旧 hub / 旧 node 忽略这个参数，照旧放临时目录。
 - `?dest=health`（健康空间的体检报告，`docs/health.md`「体检报告」）：node 存到健康目录的 `reports/`（`原名-YYYYMMDD-HHMMSS.扩展名`，0700 / 0600，不过期），上限同 `MaxUploadBytes`。
+
+- `GET /api/v1/machines/{mid}/health/reports`：这些报告，新的在前，`{"reports":[{name,title,path?,record_path?,size,modified_at}]}`（`proto.HealthReport`，#4998）。`path` 是原件，`record_path` 是同名 `.md` 记录，都读 `file` / `file/download`。
+- `DELETE /api/v1/machines/{mid}/health/reports/{name}`：永久删除一份（原件和记录），已经不在了也回成功；`name` 不是 `reports/` 里的普通文件回错。两个接口都只给完整凭据，旧 node 回 409 `node_outdated`（RPC `health.reports.list` / `health.reports.delete`）。
 
 ### 发送视频
 
@@ -2101,6 +2104,7 @@ hub 后台采集飞书、邮件和各个连接器，交给管理者（助手）�
 | DELETE | `/api/v1/inbox/mutes/{id}` | 取消静音：以后的照常进来，已经收掉的不回来 |
 | POST | `/api/v1/inbox/{id}/draft` | `{instruction?}` → `{text}`：按用户口吻起草的回复（不发送） |
 | POST | `/api/v1/inbox/{id}/reply` | `{text, changes?, client_id?, expected_uid?, expected_version?}`（发到一半和助手断了：502 `assistant_in_doubt`、`delivered:"unknown"`，可能已经发出去，同一条再发不会发两次）：飞书发到原会话 / 邮件按回复发出 / 云文档发成评论（`doc.reply` 指的地方），并标为已处理（`done_by=replied`），返回这件。云文档的 `changes:[{ref,field,value}]` 先改状态再评论；只改状态时 `text` 可以为空。提供 `client_id` 时保存回执，飞书原样透传为上游 `clientId`；不提供时 `clientId` 由这件的 id 和文字算出（UUIDv5），hub 重启后重试也不会重复。飞书的同一件只发一次：同一件的回复排队处理；已经因回复处理掉、文字又相同的直接返回成功，不再发。文字不同照常发。飞书发到哪：私聊发进会话；`lark.thread_kind` 非空时回复 `reply_to` 并落进它的话题；群里 @我（`kind=mention`）的引用 `reply_to` 回复；其它群和没有 `reply_to` 的旧数据照旧发进会话 |
+| POST | `/api/v1/inbox/{id}/suggestion` | `{version, action, text?, client_id?}`：对这件当前的建议（管理者的处理对话交的，[inbox.md](inbox.md)「AI 分身：处理对话和建议」）`confirm`（照原样执行；带 `text` 就是改了再确认）/ `reject`（交回处理对话）/ `instruct`（`text` 必填，交回处理对话重新出建议）→ 这件。回复的确认经 `/reply` 同样只发一次的路发出，但不标已处理（`handling.state=waiting`）。`409 {code:"suggestion_stale", error, item}`：`version` 不是当前的（或已经没有建议）；`409 inbox_item_done`；`400`；`403` 只能作答的设备除了以文字确认回复或结论都不行；`502 assistant_in_doubt` 同 `/reply`。旧 hub 没有（404 / 405） |
 | POST | `/api/v1/inbox/{id}/doc/status` | `{ref, field, value}`：把云文档里这一行的状态改成 `value`（必须是这一列的可选值），先读最新的再写（别人刚改过就 409 失败），返回重新读过的这件 |
 | POST | `/api/v1/inbox/refresh` | 立刻采集一次，返回列表和 `triage`（`?sources=all` 同上）；插件连接器的新条目在后台分拣完才进列表，不等它 |
 | PUT | `/api/v1/inbox/{id}/parent` | `{kind, id}` 设这件的上级（`kind` 是 `inbox` / `todo` / `session`），`null` 或 `{}` 去掉 → 这件 `InboxItem`；没有这件或上级那件 404，上级不合法 400，会连成环 409（[inbox.md](inbox.md)） |

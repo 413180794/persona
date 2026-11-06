@@ -55,8 +55,7 @@ func (b *inboxBook) applyMigrated(id string, things []connector.InboxThing, now 
 		}
 		open, done := index.openFor(source + "\x00" + t.Thread)
 		if t.Done != "" {
-			if open != nil {
-				b.settleThing(open, t, now)
+			if open != nil && b.settleThing(open, t, now) {
 				changed = append(changed, open)
 			}
 			continue

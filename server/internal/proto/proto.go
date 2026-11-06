@@ -351,6 +351,21 @@ type UploadedFile struct {
 	Size int64  `json:"size"`
 }
 
+// HealthReport is one report in the health space's reports/ (docs/health.md「体检报告」): an original, its record, or both.
+type HealthReport struct {
+	Name       string    `json:"name"`                  // the file: the key to delete it
+	Title      string    `json:"title"`                 // the name without the upload's time
+	Path       string    `json:"path,omitempty"`        // the original; empty for a record alone
+	RecordPath string    `json:"record_path,omitempty"` // the .md the health conversation wrote; empty until it has
+	Size       int64     `json:"size"`
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+// HealthReports is health.reports.list's answer, the newest first.
+type HealthReports struct {
+	Reports []HealthReport `json:"reports"`
+}
+
 type NodeInfo struct {
 	NodeUpdate         bool    `json:"node_update,omitempty"`
 	NodeUpdateReason   string  `json:"node_update_reason,omitempty"`

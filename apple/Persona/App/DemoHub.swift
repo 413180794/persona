@@ -173,6 +173,7 @@ final class DemoHub {
         if let sample = DemoKBSample.answer(p, q, kb: data["kb"]) { return sample } // knowledge-search screenshots
         #endif
         if let answer = try providers.get(p, q) { return answer }
+        if p.count == 4, p[0] == "machines", p[2] == "health", p[3] == "reports" { return ["reports": .array([])] }
         switch p {
         case ["health"]: return ["ok": true, "version": "demo"]
         case ["machines"]: return ["machines": .array(machines)]

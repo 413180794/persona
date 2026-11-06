@@ -16,6 +16,7 @@ import { Icon, type IconName } from "../../ui/icons";
 import { ChatView } from "../chat/ChatView";
 import { Composer, type Outgoing } from "../chat/Composer";
 import { conversationTitle, newestFirst } from "../assistant/conversations";
+import { HealthReports } from "./HealthReports";
 import { REPORT_FILES, uploadReports } from "./reports";
 import { Empty, SectionTitle } from "../assistant/parts";
 import { t } from "../../i18n";
@@ -138,6 +139,8 @@ function HealthHome({ onToggleSidebar }: { onToggleSidebar: () => void }) {
               </button>
             ))}
           </div>
+
+          <HealthReports version={seed} />
 
           <section className="mt-7">
             <SectionTitle>{t("health.recent")}</SectionTitle>

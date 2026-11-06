@@ -146,7 +146,8 @@ func TestGoldenInboxJudge(t *testing.T) {
 		h.setConfig(func(cfg *assistantwire.InboxConfig) { cfg.AgentRules = strings.TrimSpace(c.rules) }) // the hub trims them
 		it := *items[c.item]
 		h.inbox.items[it.ID] = &it
-		h.judgeOne(ctx, &it)
+		it.Agent = &InboxAgent{State: AgentQueued}
+		h.linkTask(ctx, &it, nil)
 		goldenCall(t, "inbox_judge."+c.name, onlyCall(t, calls()))
 	}
 }

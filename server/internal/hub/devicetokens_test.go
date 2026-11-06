@@ -264,6 +264,7 @@ func TestAnswerRoleOnlyWhatTheWatchDoes(t *testing.T) {
 		{"POST", "/api/v1/inbox/x/done", true},
 		{"POST", "/api/v1/inbox/x/draft", true},
 		{"POST", "/api/v1/inbox/x/reply", true},
+		{"POST", "/api/v1/inbox/x/suggestion", true}, // what it may do with it the manager checks
 
 		{"GET", "/api/v1/ws", false},
 		{"GET", "/api/v1/machines/m/file", false},

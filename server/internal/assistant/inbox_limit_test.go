@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nwverse/persona/server/internal/prompts"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -116,7 +117,7 @@ func TestInboxTriageWaitsOutAnExhaustedQuota(t *testing.T) {
 	}
 }
 
-// A judge call put off by a held connection leaves the item to be judged later and says nothing in the log.
+// A judge call put off by a held connection leaves the item unlinked and says nothing in the log.
 func TestInboxJudgePutOffQuietly(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -132,8 +133,9 @@ func TestInboxJudgePutOffQuietly(t *testing.T) {
 		h.inbox.mu.Lock()
 		h.inbox.items[id] = it
 		h.inbox.mu.Unlock()
-		if h.judgeOne(context.Background(), it) || it.JudgedAt != "" || it.Agent != nil {
-			t.Fatalf("judged on a put-off call: %+v", it.Agent)
+		it.Agent = &InboxAgent{State: AgentQueued}
+		if h.linkTask(context.Background(), it, []prompts.InboxTask{{ID: "todo_1", Title: "示例"}}) || it.Agent.TodoID != "" {
+			t.Fatalf("linked on a put-off call: %+v", it.Agent)
 		}
 	}
 	if s := logs.String(); s != "" {

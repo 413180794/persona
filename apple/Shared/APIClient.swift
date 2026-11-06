@@ -1081,6 +1081,26 @@ nonisolated struct APIClient: Sendable {
         enum CodingKeys: String, CodingKey { case name, content; case updatedAt = "updated_at" }
     }
     struct MemoryBody: Decodable { var files: [MemoryFile] }
+    /// One report in the health space's reports/ (docs/health.md「体检报告」): an original, its record, or both.
+    struct HealthReport: Decodable, Identifiable, Hashable, Sendable {
+        var name: String
+        var title: String
+        var path: String?
+        var recordPath: String?
+        var size: Int64
+        var modifiedAt: Date?
+        var id: String { name }
+        enum CodingKeys: String, CodingKey { case name, title, path, size; case recordPath = "record_path", modifiedAt = "modified_at" }
+    }
+    struct HealthReportsBody: Decodable { var reports: [HealthReport] }
+    func healthReports(machine: String) async throws -> [HealthReport] {
+        try await get("/api/v1/machines/\(machine)/health/reports", as: HealthReportsBody.self).reports
+    }
+    /// `name` is a file name: anything may be in it, so it is escaped here (`encodedPath` leaves a path with escapes alone).
+    func deleteHealthReport(name: String, machine: String) async throws {
+        let escaped = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? name
+        try await delete("/api/v1/machines/\(machine)/health/reports/\(escaped)")
+    }
     /// `space`: nil for the assistant's own memory, `Session.healthSpace` for the health space's (docs/health.md).
     func assistantMemory(space: String? = nil) async throws -> [MemoryFile] {
         try await get("/api/v1/assistant/memory", query: ["space": space ?? ""], as: MemoryBody.self).files

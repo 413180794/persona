@@ -36,7 +36,7 @@ struct HealthModelTests {
             return Data(#"{"files":[{"name":"MEMORY.md","content":"x"},{"name":"allergy.md","content":"y"}]}"#.utf8)
         }
         let page = HealthModel(deps: deps(hub))
-        await page.load()
+        await page.load(machine: "m")
         #expect(page.loaded)
         #expect(page.fetched.map(\.sessionID) == ["h1"])
         #expect(page.fetched.first?.machineID == "m") // the list's machine, when an item leaves it out
@@ -48,7 +48,7 @@ struct HealthModelTests {
         let hub = FakeHub()
         hub.on("GET", "/api/v1/assistant") { _ in throw APIError(status: 500, message: "hub down") }
         let page = HealthModel(deps: deps(hub))
-        await page.load()
+        await page.load(machine: "m")
         #expect(page.loaded)
         #expect(page.fetched.isEmpty)
         #expect(page.error != nil)
@@ -111,5 +111,39 @@ struct HealthModelTests {
         let page = AssistantMemoryModel(deps: deps(hub))
         await page.load()
         #expect(page.loaded)
+    }
+
+    @Test func listsReportsAndDeletesByTheirEscapedName() async throws {
+        let hub = FakeHub()
+        var left = #"""
+            {"reports":[
+             {"name":"2026 体检-20261106-093000.pdf","title":"2026 体检","path":"/h/reports/2026 体检-20261106-093000.pdf",
+              "record_path":"/h/reports/2026 体检-20261106-093000.md","size":12,"modified_at":"2026-11-06T09:30:00.123456789+08:00"},
+             {"name":"血常规.md","title":"血常规","record_path":"/h/reports/血常规.md","size":3,"modified_at":"2026-11-05T09:30:00Z"}]}
+            """#
+        hub.on("GET", "/api/v1/machines/m/health/reports") { _ in Data(left.utf8) }
+        let page = HealthReportsModel(machine: "m", deps: deps(hub))
+        await page.load()
+        #expect(page.reports.map(\.title) == ["2026 体检", "血常规"])
+        #expect(page.reports[0].recordPath == "/h/reports/2026 体检-20261106-093000.md")
+        #expect(page.reports[0].modifiedAt == JSON.parseDate("2026-11-06T09:30:00.123+08:00"))
+        #expect(page.reports[1].path == nil)
+
+        let escaped = "2026%20%E4%BD%93%E6%A3%80-20261106-093000.pdf"
+        hub.on("DELETE", "/api/v1/machines/m/health/reports/\(escaped)") { _ in
+            left = #"{"reports":[]}"#
+            return Data("{}".utf8)
+        }
+        await page.delete(page.reports[0])
+        #expect(page.reports.isEmpty)
+    }
+
+    @Test func aReportsErrorStaysOnThePage() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/machines/m/health/reports") { _ in throw APIError(status: 409, message: "太旧") }
+        let page = HealthReportsModel(machine: "m", deps: deps(hub))
+        await page.load()
+        #expect(page.loaded)
+        #expect(page.error == "太旧")
     }
 }

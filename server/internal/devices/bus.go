@@ -222,6 +222,8 @@ func (d *Devices) Handler(next http.Handler) http.Handler {
 	route("POST /api/v1/machines/{mid}/herdr/start", d.postHerdrStart)
 	route("GET /api/v1/machines/{mid}/botmux", d.getBotmux)
 	route("PUT /api/v1/machines/{mid}/botmux", d.putBotmux)
+	route("GET /api/v1/machines/{mid}/health/reports", d.listHealthReports)
+	route("DELETE /api/v1/machines/{mid}/health/reports/{name}", d.deleteHealthReport)
 	route("POST /api/v1/machines/{mid}/deploy", func(w http.ResponseWriter, r *http.Request, m *Machine) {
 		if err := m.startDeploy(); err != nil {
 			writeErr(w, http.StatusConflict, err)

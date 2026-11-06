@@ -1080,6 +1080,17 @@ ASSISTANT += [
     health_sess("hlth0003-0000-4000-8000-000000000003", "步数目标", 60 * 70, "最近 7 天平均 7,860 步，离每天 8,000 步差一点。"),
     health_sess("hlth0004-0000-4000-8000-000000000004", "今天吃了什么", 15, "今天吃了 1,830 kcal，还能吃 420 kcal。"),
 ]
+# The health space's reports/ (docs/health.md「体检报告」): originals with their records, an original not summarized yet,
+# a record alone (a photo sent in a conversation).
+HEALTH_REPORT_RECORD = "报告日期：2026-10-28\n机构：示例体检中心\n类型：年度体检\n\n| 项目 | 结果 | 单位 | 参考范围 | 异常 |\n| --- | --- | --- | --- | --- |\n| 总胆固醇 | 5.8 | mmol/L | < 5.2 | 偏高 |\n| 低密度脂蛋白 | 3.6 | mmol/L | < 3.4 | 偏高 |\n| 空腹血糖 | 5.1 | mmol/L | 3.9–6.1 | |\n\n结论：血脂略高，建议三个月后复查。\n"
+HEALTH_REPORTS_DIR = "/home/me/.jarvis/health/reports/"
+HEALTH_REPORTS = [
+    {"name": "2026 年度体检-20261106-093000.pdf", "title": "2026 年度体检", "path": HEALTH_REPORTS_DIR + "2026 年度体检-20261106-093000.pdf",
+     "record_path": HEALTH_REPORTS_DIR + "2026 年度体检-20261106-093000.md", "size": 2_481_000, "modified_at": ago(days=1)},
+    {"name": "血常规复查-20261020-181500.png", "title": "血常规复查", "path": HEALTH_REPORTS_DIR + "血常规复查-20261020-181500.png",
+     "size": 864_000, "modified_at": ago(days=17)},
+    {"name": "2025 年度体检.md", "title": "2025 年度体检", "record_path": HEALTH_REPORTS_DIR + "2025 年度体检.md", "size": 1_204, "modified_at": ago(days=370)},
+]
 HEALTH_MEMORY = [
     {"name": "MEMORY.md", "content": "- [步数目标](step-goal.md) — 每天 8000 步", "updated_at": ago(days=2)},
     {"name": "step-goal.md", "content": "---\nname: step-goal\ndescription: 每天 8000 步\nmetadata:\n  type: user\n---\n\n用户的目标是每天 8000 步。",
@@ -10762,6 +10773,10 @@ class H(BaseHTTPRequestHandler):
             if parse_qs(urlparse(self.path).query).get("space", [""])[0] == "health":
                 return self.send_json({"files": HEALTH_MEMORY, "dir": "/home/me/.jarvis/health/memory"})
             return self.send_json({"files": MEMORY, "dir": "/home/me/.jarvis/assistant/memory"})
+        if p.startswith("/api/v1/machines/") and p.endswith("/health/reports"): return self.send_json({"reports": HEALTH_REPORTS})
+        if p.startswith("/api/v1/machines/") and p.endswith("/file") and q.get("path", [""])[0].startswith(HEALTH_REPORTS_DIR):
+            path = q["path"][0]
+            return self.send_json({"path": path, "name": path.rsplit("/", 1)[1], "size": len(HEALTH_REPORT_RECORD.encode()), "text": HEALTH_REPORT_RECORD, "truncated": False, "is_dir": False})
         if p == "/mock/schedule": return self.send_json({"ran": SCHEDULE_RAN})
         if p == "/mock/schedule/reset":  # back to the starting schedule (captures that ran or cancelled something)
             start = copy.deepcopy(SCHEDULE_START)
@@ -12088,6 +12103,10 @@ class H(BaseHTTPRequestHandler):
             if isinstance(body.get("main_tasks_quiet"), bool):
                 ASSISTANT_CONFIG["main_tasks_quiet"] = body["main_tasks_quiet"]
             return self.send_json(assistant_state())
+        if "/health/reports/" in p and p.startswith("/api/v1/machines/") and self.command == "DELETE":
+            name = unquote(p.rsplit("/", 1)[1])
+            HEALTH_REPORTS[:] = [r for r in HEALTH_REPORTS if r["name"] != name]
+            return self.send_json({"ok": True})
         if p.startswith("/api/v1/assistant/memory/") and self.command in ("PUT", "DELETE"):
             name = unquote(p.rsplit("/", 1)[1])
             files = HEALTH_MEMORY if parse_qs(urlparse(self.path).query).get("space", [""])[0] == "health" else MEMORY

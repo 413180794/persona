@@ -4,5 +4,6 @@
   "source_lark": "飞书",
   "source_mail": "邮件",
   "mail_target_changed": "邮件回复对象已变化，请查看最新邮件后确认发送",
-  "item_done": "这件事已经处理过了，回复没有发出去。要回复的话，先把它移回收件箱。"
+  "item_done": "这件事已经处理过了，回复没有发出去。要回复的话，先把它移回收件箱。",
+  "suggestion_stale": "建议已更新"
 }

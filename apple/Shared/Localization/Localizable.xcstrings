@@ -4664,6 +4664,28 @@
         }
       }
     },
+    "%lld 份": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 份"
+          }
+        }
+      }
+    },
     "%lld 分": {
       "localizations": {
         "en": {
@@ -16733,6 +16755,28 @@
         }
       }
     },
+    "不删了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep it"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除しない"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不删了"
+          }
+        }
+      }
+    },
     "不到 1 分钟": {
       "localizations": {
         "en": {
@@ -20654,6 +20698,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "低"
+          }
+        }
+      }
+    },
+    "体检报告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checkup reports"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康診断レポート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "体检报告"
           }
         }
       }
@@ -27611,6 +27677,28 @@
         }
       }
     },
+    "删除这份报告？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this report?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このレポートを削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这份报告？"
+          }
+        }
+      }
+    },
     "删除这条录音？": {
       "localizations": {
         "en": {
@@ -29543,6 +29631,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "压缩失败：%@"
+          }
+        }
+      }
+    },
+    "原件和整理好的记录会永久删除，不能恢复。健康对话和健康记忆里已经提到的内容不会一起删，要清掉需要单独处理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original and its summary will be deleted for good. Anything your health conversations and health memory already mention stays; remove that separately."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原本と整理した記録は完全に削除され、元に戻せません。健康の会話と健康メモリに書かれた内容は一緒には削除されないため、別途削除してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原件和整理好的记录会永久删除，不能恢复。健康对话和健康记忆里已经提到的内容不会一起删，要清掉需要单独处理。"
           }
         }
       }
@@ -38067,6 +38177,28 @@
         }
       }
     },
+    "在健康页点「上传体检报告」，传过的报告会留在这里，可以随时查看和删除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap \"Upload checkup report\" on the Health page. Reports you upload stay here, and you can view or delete them anytime."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康ページの「健康診断レポートをアップロード」をタップしてください。アップロードしたレポートはここに残り、いつでも確認・削除できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在健康页点「上传体检报告」，传过的报告会留在这里，可以随时查看和删除。"
+          }
+        }
+      }
+    },
     "在单独窗口打开": {
       "localizations": {
         "en": {
@@ -46377,6 +46509,28 @@
         }
       }
     },
+    "已整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarized"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整理済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已整理"
+          }
+        }
+      }
+    },
     "已断开。": {
       "localizations": {
         "en": {
@@ -53209,6 +53363,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开侧边栏"
+          }
+        }
+      }
+    },
+    "打开原件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open original"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原本を開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开原件"
           }
         }
       }
@@ -67564,6 +67740,28 @@
         }
       }
     },
+    "查看整理记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View summary"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整理した記録を見る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看整理记录"
+          }
+        }
+      }
+    },
     "查看文件": {
       "localizations": {
         "zh-Hans": {
@@ -74723,6 +74921,28 @@
         }
       }
     },
+    "没读到体检报告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read checkup reports"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康診断レポートを読み取れませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没读到体检报告"
+          }
+        }
+      }
+    },
     "没读到健康对话：%@": {
       "localizations": {
         "en": {
@@ -80004,6 +80224,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "确定"
+          }
+        }
+      }
+    },
+    "确定删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete for good"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全に削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定删除"
           }
         }
       }
@@ -92707,6 +92949,28 @@
         }
       }
     },
+    "还没整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not summarized yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未整理"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没整理"
+          }
+        }
+      }
+    },
     "还没整理的": {
       "localizations": {
         "en": {
@@ -92901,6 +93165,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有任务"
+          }
+        }
+      }
+    },
+    "还没有体检报告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No checkup reports yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康診断レポートはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有体检报告"
           }
         }
       }

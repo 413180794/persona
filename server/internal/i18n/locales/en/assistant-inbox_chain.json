@@ -33,5 +33,10 @@
   "failed_timeout": "Handling timed out",
   "failed_stopped": "The handling conversation stopped without a suggestion",
   "failed_send": "Sending didn’t go through",
-  "failed_start": "The handling conversation couldn’t start"
+  "failed_start": "The handling conversation couldn’t start",
+  "suggested_reply": "Manager suggests a reply",
+  "suggested_agent": "Manager suggests starting an Agent",
+  "suggested_handback": "Manager suggests a next step for you to decide",
+  "confirmed_agent": "You confirmed: an Agent started",
+  "failed_agent": "The Agent couldn’t start"
 }

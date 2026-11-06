@@ -10,6 +10,7 @@ import SwiftUI
 @Observable final class HealthModel {
     private(set) var fetched: [Session] = []
     private(set) var memoryCount: Int?
+    private(set) var reportCount: Int?
     private(set) var loaded = false
     /// Why the list could not be read; shown only while there is nothing to show.
     private(set) var error: String?
@@ -17,9 +18,10 @@ import SwiftUI
 
     init(deps: AssistantDeps = .live) { self.deps = deps }
 
-    func load() async {
+    func load(machine: String) async {
         guard let api = deps.api() else { return }
         async let memory = try? api.assistantMemory(space: Session.healthSpace)
+        async let reports = try? api.healthReports(machine: machine)
         do {
             fetched = try await api.healthConversations()
             error = nil
@@ -27,6 +29,7 @@ import SwiftUI
             self.error = error.shown ?? self.error
         }
         if let files = await memory { memoryCount = files.filter { $0.name != AssistantMemoryEntry.index }.count }
+        if let list = await reports { reportCount = list.count }
         loaded = true
     }
 
@@ -100,8 +103,8 @@ struct HealthView: View {
             }
         }
         #endif
-        .task { await page.load() }
-        .refreshable { await page.load() }
+        .task { await page.load(machine: machine.id) }
+        .refreshable { await page.load(machine: machine.id) }
     }
 
     private func sections(_ list: [Session]) -> some View {
@@ -135,6 +138,18 @@ struct HealthView: View {
                     }
                 } header: {
                     Text("问问看")
+                }
+                Section {
+                    NavigationLink { HealthReportsView(machine: machine) } label: {
+                        HStack {
+                            Label { Text("体检报告").lineLimit(1) } icon: { Image(systemName: Theme.Icon.document) }
+                            Spacer(minLength: Theme.Space.s)
+                            if let n = page.reportCount, n > 0 {
+                                Text("\(n) 份").font(Theme.Font.secondary).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("health-reports")
                 }
                 Section {
                     if !list.isEmpty {
@@ -242,12 +257,12 @@ struct HealthView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("health-conversation")
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button { Task { await model.archiveConversation(s.key, true); await page.load() } } label: {
+            Button { Task { await model.archiveConversation(s.key, true); await page.load(machine: machine.id) } } label: {
                 Label("归档", systemImage: Theme.Icon.archive)
             }
         }
         .contextMenu {
-            Button { Task { await model.archiveConversation(s.key, true); await page.load() } } label: {
+            Button { Task { await model.archiveConversation(s.key, true); await page.load(machine: machine.id) } } label: {
                 Label("归档", systemImage: Theme.Icon.archive)
             }
         }

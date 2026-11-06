@@ -237,7 +237,7 @@ var (
 		`extensions/-/(widgets|shortcuts))$`)
 	// The watch draws extensions' widgets on its faces and runs their shortcuts (docs/extensions.md「系统级位置」).
 	answerWrites = regexp.MustCompile(`^/api/v1/(interactions/[^/]+/resolve|sessions/[^/]+/[^/]+/(messages|seen|interrupt)|` +
-		`inbox/[^/]+/(done|reply|draft)|extensions/[^/]+/-/(widget|shortcut)/[^/]+)$`)
+		`inbox/[^/]+/(done|reply|draft|suggestion)|extensions/[^/]+/-/(widget|shortcut)/[^/]+)$`)
 	answerPuts = regexp.MustCompile(`^/api/v1/devices/[^/]+/widgets$`)
 	// answerKey is a key the watch can press on a screen card it could not read: a menu's number, Esc, Return.
 	answerKey = regexp.MustCompile(`^([1-9]|esc|enter)$`)
