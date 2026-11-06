@@ -1289,9 +1289,14 @@ const (
 // AnsweredByAssistant marks a resolution the assistant gave for the user (Resolution.AnsweredBy).
 const AnsweredByAssistant = "assistant"
 
+// QuestionOptionDefer dismisses a triage question without sending an agent reply.
+// Other question runtimes do not interpret this triage-only action.
+const QuestionOptionDefer = "defer"
+
 type QuestionOption struct {
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
+	Action      string `json:"action,omitempty"` // Optional triage intent; empty means a normal answer.
 }
 
 type Question struct {

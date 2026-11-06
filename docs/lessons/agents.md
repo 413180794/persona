@@ -431,3 +431,9 @@ Test report-only hooks with real input: `SessionStart` always carries `source`.
 
 Revoking an assistant conversation's grants kills its whole process group (`resetAssistantPermissions`, #5936). On macOS, a process that is forking while `kill(-pgid, SIGKILL)` goes out can leave a child that missed the signal. The child is adopted by launchd, keeps the group's pipes and goes on working; Linux orders the two, so CI never saw it. `TestResetAssistantPermissionsKillsUncooperativeChild` failed two runs in three on macOS, each time with one `sleep 30` left over (PPID 1, the killed group's pgid).
 After a group kill whose leftovers matter, sweep with `osproc.SweepGroup`, which kills again until `kill(-pgid, 0)` says ESRCH. Killed members count until they are reaped, which happens quickly.
+
+## Verify the actual question producer and durable consumer (#5976)
+
+A question UI can be correct while a second producer omits its cancellation capability. Match the reported card ID and tool against both pending interactions and history. A later question with a different ID can be a newly generated triage question, not replay of the answered one. Treat explicit defer as structured option intent instead of forwarding a model-generated pause label to an Agent and causing another turn.
+
+Closing is not durable merely because the card vanished: persist the interaction outcome and the owning turn, propagate write failures, and serialize turn writes so an earlier snapshot cannot overwrite cancellation. Replay terminal outcomes to owners after reconnect instead of asking again. Test the actual triage producer, old persisted cards, failed writes, stale snapshots, and a genuinely new turn; Agent-runtime tests alone miss this path.

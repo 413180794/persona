@@ -164,7 +164,12 @@ func cardQuestions(qs []proto.Question, lang i18n.Lang) []proto.Question {
 				continue
 			}
 			labels[l] = true
-			c.Options = append(c.Options, proto.QuestionOption{Label: l, Description: clip(oneLine(o.Description), 120)})
+			option := proto.QuestionOption{Label: l, Description: clip(oneLine(o.Description), 120)}
+			// Only triage single-choice cards can defer; never combine it with other answers.
+			if !q.MultiSelect && o.Action == proto.QuestionOptionDefer {
+				option.Action = proto.QuestionOptionDefer
+			}
+			c.Options = append(c.Options, option)
 		}
 		if len(c.Options) < 2 {
 			c.Options = append(c.Options, proto.QuestionOption{Label: answerLabel(lang, answerSkip)})

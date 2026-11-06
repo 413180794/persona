@@ -33,8 +33,10 @@ type pending struct {
 	ix   proto.Interaction
 	done chan proto.Resolution
 	// resolved broadcasts a claimed answer to every overlapping resumable waiter.
-	resolved   chan struct{}
-	resolution *proto.Resolution
+	resolved       chan struct{}
+	resolution     *proto.Resolution
+	persisting     *questionPersistence
+	persistenceErr error
 	// local is set for interactions the manager resolves itself (screen dialogs, Codex cards): it acts on the answer,
 	// and an error goes back to whoever answered (prompt_changed: nothing was pressed).
 	local func(proto.Resolution) error
@@ -702,6 +704,22 @@ func (s *Service) await(ctx context.Context, p *pending) (proto.Resolution, erro
 	// Decide under the same lock as resolve: an answer already claimed must be
 	// persisted before any waiter can record a competing timeout or disconnect.
 	s.fleet.mu.Lock()
+	if p.persisting != nil {
+		attempt := p.persisting
+		s.fleet.mu.Unlock()
+		<-attempt.done
+		if attempt.err != nil {
+			return proto.Resolution{}, attempt.err
+		}
+		<-resolved
+		s.finishInteraction(id)
+		return *p.resolution, nil
+	}
+	if p.persistenceErr != nil {
+		err := p.persistenceErr
+		s.fleet.mu.Unlock()
+		return proto.Resolution{}, err
+	}
 	if p.claimed {
 		hasAnswer := p.resolution != nil
 		s.fleet.mu.Unlock()
@@ -836,6 +854,15 @@ func (s *Service) resolveRemembered(id string, r proto.Resolution, remember bool
 			}
 		}
 	}
+	if p != nil && p.persisting != nil {
+		attempt := p.persisting
+		s.fleet.mu.Unlock()
+		<-attempt.done
+		if attempt.err != nil {
+			return attempt.err
+		}
+		return fmt.Errorf("interaction %s is %w", id, errNotPending)
+	}
 	if p != nil && p.claimed {
 		p = nil // answered a moment ago: the first answer is the one the hook and the history get
 	}
@@ -858,6 +885,10 @@ func (s *Service) resolveRemembered(id string, r proto.Resolution, remember bool
 	} else if p != nil {
 		p.claimed = true
 		p.resolution = &r
+		if durableQuestion(p.ix) {
+			p.persisting = &questionPersistence{done: make(chan struct{})}
+			p.persistenceErr = nil
+		}
 		if p.resolved == nil {
 			p.resolved = make(chan struct{})
 		}
@@ -903,7 +934,13 @@ func (s *Service) resolveRemembered(id string, r proto.Resolution, remember bool
 		return err
 	}
 	kept := redacted(p.ix, r)
-	s.recordEnd(id, status, &kept)
+	if durableQuestion(p.ix) {
+		if err := s.persistQuestion(p, status, kept); err != nil {
+			return err
+		}
+	} else {
+		s.recordEnd(id, status, &kept)
+	}
 	s.channelsEnded(p.ix, &r)
 	go s.InteractionResolved(context.Background(), InteractionResolved{Interaction: p.ix, Resolution: r, Status: status})
 	if remember {
@@ -1447,7 +1484,7 @@ func (s *Service) interactionOutcome(ctx context.Context, id string) string {
 // like any agent's card: recorded, announced, pushed, expired (waitInteraction); the answer goes to its Action, or
 // waits when it cannot take it (keepAnswer). A question that left the snapshot is withdrawn, as a hook's that went
 // away, and nothing is said about it. One it still reports a while after its answer went, with no answer waiting for
-// it, is shown again: the answer did not take.
+// it, retries delivery from its durable outcome rather than asking the user again.
 func (s *Service) askOnPhone(list []proto.Interaction) {
 	f := &s.fleet
 	f.askMu.Lock()
@@ -1468,8 +1505,19 @@ func (s *Service) askOnPhone(list []proto.Interaction) {
 		q := &askedOne{cancel: cancel}
 		f.asked[ix.ID] = q
 		go func(ix proto.Interaction) {
-			r, err := s.waitInteraction(ctx, ix)
-			if err != nil || r.Dismiss && ctx.Err() != nil {
+			defer func() {
+				f.askMu.Lock()
+				q.ended = time.Now()
+				f.askMu.Unlock()
+			}()
+			r, err := s.waitOwnedQuestion(ctx, ix)
+			if err != nil {
+				if ctx.Err() == nil {
+					s.logf("assistant: question %s: %v", ix.ID, err)
+				}
+				return
+			}
+			if r.Dismiss && ctx.Err() != nil {
 				return // withdrawn: it knows
 			}
 			answer, _ := json.Marshal(r)
@@ -1478,9 +1526,6 @@ func (s *Service) askOnPhone(list []proto.Interaction) {
 			if _, err := s.Action(context.Background(), act); err != nil && !s.keepAnswer(act, err, ix.ExpiresAt) {
 				s.logf("assistant: answer %s: %v", ix.ID, err)
 			}
-			f.askMu.Lock()
-			q.ended = time.Now()
-			f.askMu.Unlock()
 		}(ix)
 	}
 	for id, q := range f.asked {

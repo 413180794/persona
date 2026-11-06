@@ -32,6 +32,73 @@ class QuestionCancellationUiTest {
     private val question = Interaction("q", kind = "question", canCancel = true,
         questions = listOf(Question("Choose a format", options = listOf(QuestionOption("JSON"), QuestionOption("CSV")))))
     private val close = "Close question without answering"
+    private val triageQuestion = question.copy(
+        id = "work_pending", toolName = "persona_triage", sessionTitle = "App verification",
+        questions = listOf(Question("手机准备好验收了吗？", options = listOf(
+            QuestionOption("准备好了，开始验收"), QuestionOption("先不管，稍后再验收"),
+        ))),
+    )
+
+    @Test fun triageCloseDiscardsOnlyCurrentCardAndLaterQuestionStillAnswers() {
+        var requests by mutableStateOf(listOf(triageQuestion))
+        val sent = mutableListOf<Pair<String, Resolution>>()
+        rule.setContent {
+            PersonaTheme(reduceMotion = true) {
+                InteractionPanel(requests, null, 600.dp, null, emptySet(), { ix, resolution ->
+                    sent += ix.id to resolution; requests = emptyList()
+                }, null, {})
+            }
+        }
+        rule.onAllNodesWithText("手机准备好验收了吗？").onFirst().assertIsDisplayed()
+        rule.onNodeWithContentDescription(close).assertIsEnabled().performClick()
+        assertEquals(listOf(triageQuestion.id to Resolution(cancel = true)), sent)
+        rule.onNodeWithContentDescription(close).assertDoesNotExist()
+        requests = listOf(question.copy(id = "work_new", toolName = "persona_triage"))
+        rule.onAllNodesWithText("Choose a format").onFirst().assertIsDisplayed()
+        rule.onNodeWithContentDescription(close).assertIsEnabled()
+        rule.onNodeWithText("1. JSON").performClick()
+        assertEquals("work_new" to Resolution(answers = mapOf("Choose a format" to "JSON")), sent.last())
+        assertEquals(2, sent.size)
+    }
+
+    @Test fun triageCollapseDoesNotSubmitAndLaterKeepsOriginalAnswerForServerIntent() {
+        var collapsed by mutableStateOf(false)
+        val sent = mutableListOf<Resolution>()
+        rule.setContent {
+            PersonaTheme(reduceMotion = true) {
+                InteractionPanel(listOf(triageQuestion), null, 600.dp, null, emptySet(), { _, resolution -> sent += resolution },
+                    null, {}, collapsed = collapsed, onCollapsedChange = { collapsed = it })
+            }
+        }
+        rule.onNodeWithContentDescription("Collapse").performClick()
+        assertTrue(sent.isEmpty())
+        rule.onNodeWithContentDescription(close).assertIsEnabled()
+        rule.onNodeWithContentDescription("Expand").performClick()
+        rule.onNodeWithText("2. 先不管，稍后再验收").performClick()
+        assertEquals(listOf(Resolution(answers = mapOf("手机准备好验收了吗？" to "先不管，稍后再验收"))), sent)
+    }
+
+    @Test fun triageScreenshotsAcrossStyles() {
+        var style by mutableStateOf(AppStyle.Glass)
+        var dark by mutableStateOf(false)
+        rule.setContent {
+            PersonaTheme(style = style, darkTheme = dark, reduceMotion = true) {
+                Column(Modifier.width(400.dp).background(PersonaTheme.palette.background).testTag("triage-shot")) {
+                    InteractionPanel(listOf(triageQuestion), null, 600.dp, null, emptySet(), { _, _ -> }, null, {})
+                }
+            }
+        }
+        val output = File("build/question-cancel-shots/triage").also { it.mkdirs() }
+        for (s in AppStyle.entries) for (d in listOf(false, true)) {
+            style = s; dark = d; rule.waitForIdle()
+            rule.onNodeWithContentDescription(close).assertIsDisplayed().assertIsEnabled()
+            rule.onAllNodesWithText("手机准备好验收了吗？").onFirst().assertIsDisplayed()
+            val bitmap = rule.onNodeWithTag("triage-shot").captureToImage().asAndroidBitmap()
+            File(output, "${s.name.lowercase()}-${if (d) "dark" else "light"}.png").outputStream().use {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+        }
+    }
 
     @Test fun closeWithdrawsOnlySelectedQuestionAndCannotSubmitTwice() {
         var requests by mutableStateOf(listOf(question))

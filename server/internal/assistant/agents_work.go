@@ -157,6 +157,7 @@ type workBook struct {
 	// answering marks cards whose answer is being delivered to the agent: a repeated callback in the send window
 	// (a redelivered webhook, a second tap, phone and watch together) is the same answer, not a second one.
 	answering map[string]bool
+	writes    map[[2]string]*sync.Mutex
 	switches  *TriageSwitches // the saved switches, once read (nil: not read yet)
 	// delegated are the questions the assistant answered for the user, by session (fleet_delegate.go), read back
 	// from the events once (delegatedLoaded): the same question again is the user's.
@@ -181,6 +182,7 @@ func (b *workBook) init() {
 		b.seen = map[[2]string]time.Time{}
 		b.approved = map[[2]string]approval{}
 		b.answering = map[string]bool{}
+		b.writes = map[[2]string]*sync.Mutex{}
 	}
 }
 
@@ -335,6 +337,7 @@ func (s *Service) loadWork(ctx context.Context) bool {
 			up = s.cardsUp(ctx)
 		}
 		if ix, ok := up[e.InteractionID]; ok && !now.After(e.TurnAt.Add(workCardTTL)) {
+			ix.CanCancel = true // The manager can retire its own cards, including cards restored from older hubs.
 			cards[e.InteractionID] = ix
 			continue
 		}
@@ -374,6 +377,14 @@ func (s *Service) loadWork(ctx context.Context) bool {
 }
 
 func (s *Service) saveWork(e db.SessionWork) {
+	unlock := s.lockWorkWrite([2]string{e.MachineID, e.SessionID})
+	defer unlock()
+	// A caller may have captured e before a newer answer was committed. Write
+	// the current state after acquiring the session's write lock, never that
+	// stale snapshot over a durable cancellation.
+	if current, ok := s.workEntry([2]string{e.MachineID, e.SessionID}); ok {
+		e = current
+	}
 	st := s.workDB()
 	if st == nil {
 		return
@@ -427,8 +438,13 @@ func (s *Service) putWork(_ context.Context, e db.SessionWork) {
 	e.UpdatedAt = time.Now().UTC()
 	s.work.mu.Lock()
 	s.work.init()
+	key := [2]string{e.MachineID, e.SessionID}
+	if current := s.work.entries[key]; current != nil && current.Work.Deferred && current.TurnAt.Equal(e.TurnAt) {
+		e.Work.Deferred = true
+		e.InteractionID, e.Work.InteractionID, e.WakeAt, e.Work.WakeAt = "", "", nil, nil
+	}
 	c := e
-	s.work.entries[[2]string{e.MachineID, e.SessionID}] = &c
+	s.work.entries[key] = &c
 	s.work.mu.Unlock()
 	s.saveWork(e)
 	s.publishSoon()
@@ -959,7 +975,7 @@ func linkQuestion(w *proto.WorkState, loc *time.Location, l i18n.Lang) string {
 func workCard(machine string, c proto.Session, w proto.WorkState, id string) proto.Interaction {
 	ix := proto.Interaction{
 		ID: id, MachineID: machine, SessionID: c.SessionID, SessionTitle: agentLabel(c), Cwd: c.Cwd,
-		Kind: proto.IxQuestion, ToolName: workCardTool, Summary: w.Line, Questions: w.Questions,
+		Kind: proto.IxQuestion, ToolName: workCardTool, Summary: w.Line, Questions: w.Questions, CanCancel: true,
 		CreatedAt: time.Now().UTC(), ExpiresAt: w.TurnAt.Add(workCardTTL).UTC(),
 	}
 	if c.Agent != "" && c.Agent != "claude" {
@@ -996,6 +1012,9 @@ func errGone(id string) error {
 func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution) (bool, error) {
 	if !strings.HasPrefix(id, workCardPrefix) {
 		return false, nil
+	}
+	if r.Cancel && !r.IsQuestionCancel() {
+		return true, errInvalidQuestionCancel
 	}
 	if !s.loadWork(ctx) {
 		return true, errors.New("the agents' work could not be read yet") // not final: the hub tries again
@@ -1047,8 +1066,10 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		}
 		s.publishSoon() // the card goes from the snapshot all the same
 	}
-	if r.Dismiss {
-		done(func(e *db.SessionWork) { e.Work.Deferred = true })
+	if r.Cancel || r.Dismiss {
+		if err := s.deferWorkCard(ctx, ix, ""); err != nil {
+			return true, err
+		}
 		s.workEvent(ix.MachineID, ix.SessionID, "answered", map[string]any{"after": after, "dismissed": true})
 		return true, nil
 	}
@@ -1061,7 +1082,11 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 			continue
 		}
 		items = append(items, item{q.Question, a})
-		only[canonicalAnswer(a)] = true
+		if deferredWorkOption(q, a) {
+			only[answerSkip] = true
+		} else {
+			only[canonicalAnswer(a)] = true
+		}
 	}
 	s.workEvent(ix.MachineID, ix.SessionID, "answered", map[string]any{"after": after, "answers": len(items)})
 	render := func() string {
@@ -1087,7 +1112,9 @@ func (s *Service) workAnswer(ctx context.Context, id string, r proto.Resolution)
 		return true, nil
 	case len(only) == 1 && (only[answerSkip] || only[answerNotNow] || only[answerStop] || only[answerHold]):
 		line := workT(s.lang(ctx), "you_skipped")
-		done(func(e *db.SessionWork) { e.Work.Line, e.Work.Deferred = line, true })
+		if err := s.deferWorkCard(ctx, ix, line); err != nil {
+			return true, err
+		}
 		return true, nil
 	case len(only) == 1 && only[answerWait]:
 		l := s.lang(ctx)
@@ -1405,7 +1432,10 @@ func (s *Service) cardTick(ctx context.Context, v *workView, k [2]string, now ti
 		ix, keep := s.cardBack(v, e, now)
 		if ix != nil {
 			s.work.mu.Lock()
-			s.work.cards[ix.ID] = *ix
+			current, exists := s.work.entries[k]
+			if exists && current.InteractionID == ix.ID {
+				s.work.cards[ix.ID] = *ix
+			}
 			s.work.mu.Unlock()
 			s.publishSoon()
 			return

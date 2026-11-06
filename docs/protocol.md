@@ -570,7 +570,9 @@ A question advertises `can_cancel:true` only when its runtime can discard that r
 
 The manager records `cancelled` with the cancellation resolution, removes the pending card, and releases its waiter once. Repeated HTTP cancellation returns the recorded result, and a reconnecting resumable hook receives the same cancellation instead of a new question. Claude `AskUserQuestion` hooks deny only that tool call without `updatedInput.answers`; Codex owned and joined app-server `item/tool/requestUserInput` requests receive `{"answers":{}}` on the original request, with no user message or `turn/interrupt`. The assistant's `ask_user` tool also releases its wait with an explicit no-answer result. Existing `dismiss` still hands control back to the computer.
 
-Terminal-only Codex questions (including asynchronous rollout questions) do not advertise cancellation: sending Escape may fold a pane, clear notes, or stop a turn. Upgrade the hub, manager, and the node running the supported runtime before expecting the button; older components omit the capability. Existing questions created before the upgrade keep their original capability.
+Manager-owned `persona_triage` cards also advertise cancellation, including restored cards created by older versions. Their cancellation defers only that turn, removes its wakeup, and sends no Agent message. Triage option objects may carry `action:"defer"`; clients still submit the selected label in `answers`, and the owner interprets the action on that exact offered single-choice option. Existing clients can ignore the new optional field. Terminal outcomes are replayed to the owner without showing the same ID again.
+
+Terminal-only Codex questions (including asynchronous rollout questions) do not advertise cancellation: sending Escape may fold a pane, clear notes, or stop a turn. Upgrade the hub, manager, and the node running the supported runtime before expecting the button; older components omit the capability. Existing runtime questions created before the upgrade keep their original capability; manager-owned triage cards are upgraded when restored.
 
 ### MCP elicitation
 
