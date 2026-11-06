@@ -141,7 +141,7 @@ class ChannelsStateTest {
         assertEquals(ExtensionRoute("wechat"), ChannelText.settingsDestination("settings/plugins/wechat"))
         assertEquals(SettingsPageRoute(SettingsPage.ModelConfig), ChannelText.settingsDestination("settings/model-config"))
         // The Feishu bot's own page is iOS's and the web's: no row.
-        assertNull(ChannelText.settingsDestination("settings/connectors/feishu-bot"))
+        assertEquals(SettingsPageRoute(SettingsPage.FeishuBot), ChannelText.settingsDestination("settings/connectors/feishu-bot"))
         assertNull(ChannelText.settingsDestination("settings/plugins/../x"))
         assertNull(ChannelText.settingsDestination(null))
         assertNull(ChannelText.settingsDestination("https://example.com"))

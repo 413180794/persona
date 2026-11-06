@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 import persona.android.PersonaApp
 import persona.core.contracts.api.*
 import persona.core.hub.HttpChannelManagement
+import persona.core.hub.HttpFeishuBotSettings
 import persona.core.hub.HubError
 import persona.core.hub.HubFailure
 import kotlinx.coroutines.CancellationException
@@ -51,6 +52,16 @@ object ChannelsModule {
         }
 
     @Provides @Singleton fun directory(store: ChannelStore): ChannelDirectory = store
+
+    /** 设置 › 飞书机器人: the selected hub's bot, like the channels' pages. */
+    @Provides @Singleton fun feishuBot(runtime: ConnectionRuntime): FeishuBotSettings = object : FeishuBotSettings {
+        private fun api(): HttpFeishuBotSettings {
+            val data = runtime.scopedData.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)
+            return HttpFeishuBotSettings(runtime.connectionFor(data))
+        }
+        override suspend fun status() = api().status()
+        override suspend fun update(update: FeishuBotUpdate) = api().update(update)
+    }
 }
 
 /**

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置 › 飞书机器人 (#2806); words shared with the web (settings-feishubot, lib-feishu-bot). -->
+<resources>
+    <string name="settings_feishu_bot_title">Lark bot</string>
+    <string name="settings_feishu_bot_footer">Messaging this bot in Lark is talking to Persona. It only answers you once paired, and stays quiet in groups.</string>
+    <string name="settings_feishu_bot_enable">Turn on Lark bot</string>
+    <string name="settings_feishu_bot_last_event">Last received</string>
+    <string name="settings_feishu_bot_credentials">App credentials</string>
+    <string name="settings_feishu_bot_credentials_from_config">The credentials in hub.json are in use; saving here switches to these.</string>
+    <string name="settings_feishu_bot_credentials_secret_note">The App Secret is stored encrypted on the hub and won\'t be shown again.</string>
+    <string name="settings_feishu_bot_required">Required</string>
+    <string name="settings_feishu_bot_secret_saved">Saved; leave empty to keep</string>
+    <string name="settings_feishu_bot_platform">Platform</string>
+    <string name="settings_feishu_bot_platform_feishu">Feishu</string>
+    <string name="settings_feishu_bot_verify_save">Verify and save</string>
+    <string name="settings_feishu_bot_credentials_saved">App credentials verified and saved</string>
+    <string name="settings_feishu_bot_agents">Agents chatted with in Lark</string>
+    <string name="settings_feishu_bot_howto">How to create the bot</string>
+    <string name="settings_feishu_bot_howto_footer">The hub opens the persistent connection itself, so it doesn\'t need a public address.</string>
+    <string name="settings_feishu_bot_step_create_app">On the Lark Developer Console, create a custom app and turn on the Bot feature</string>
+    <string name="settings_feishu_bot_step_permissions">Under permissions, grant: read and send direct messages (im:message, im:message:send_as_bot), receive direct messages sent to the bot, and upload and download message resources. Reading contact names helps too (contact:user.base:readonly)</string>
+    <string name="settings_feishu_bot_step_events">Under Events &amp; callbacks, choose to receive events through a persistent connection, and subscribe to Message received and Card action</string>
+    <string name="settings_feishu_bot_step_publish">Publish a version (your company\'s admin may need to approve it), then enter the App ID and App Secret above</string>
+    <string name="settings_feishu_bot_state_checking">Checking…</string>
+    <string name="settings_feishu_bot_state_unreadable">Couldn\'t read the status</string>
+    <string name="settings_feishu_bot_state_off">Off</string>
+    <string name="settings_feishu_bot_state_no_credentials">App credentials not set</string>
+    <string name="settings_feishu_bot_state_error">Can\'t connect: %1$s</string>
+    <string name="settings_feishu_bot_state_connecting">Connecting…</string>
+    <string name="settings_feishu_bot_state_connected">Connected</string>
+    <string name="settings_feishu_bot_state_connected_unpaired">Connected, waiting for you to pair</string>
+    <string name="settings_feishu_bot_read_failed">Couldn\'t read the bot\'s status: %1$s</string>
+    <string name="settings_feishu_bot_not_saved">Couldn\'t save: %1$s</string>
+    <string name="settings_feishu_bot_platform_lark" translatable="false">Lark</string>
+    <string name="settings_feishu_bot_secret_filled">Filled in; tap Verify and save</string>
+    <string name="settings_feishu_bot_unpairs">Saving another App ID ends the pairing; pair again on the bot\'s channel page.</string>
+</resources>

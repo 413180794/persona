@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置 › 飞书机器人 (#2806); words shared with the web (settings-feishubot, lib-feishu-bot). -->
+<resources>
+    <string name="settings_feishu_bot_title">Lark ボット</string>
+    <string name="settings_feishu_bot_footer">Lark でこのボットに個別チャットすると、Persona と話せます。ボットはペアリングしたあなたにだけ応答し、グループでは応答しません。</string>
+    <string name="settings_feishu_bot_enable">Lark ボットをオン</string>
+    <string name="settings_feishu_bot_last_event">最終受信</string>
+    <string name="settings_feishu_bot_credentials">アプリの認証情報</string>
+    <string name="settings_feishu_bot_credentials_from_config">現在は hub.json の認証情報を使っています。ここで保存すると、こちらに切り替わります。</string>
+    <string name="settings_feishu_bot_credentials_secret_note">App Secret はハブに暗号化して保存され、再表示されません。</string>
+    <string name="settings_feishu_bot_required">必須</string>
+    <string name="settings_feishu_bot_secret_saved">保存済み。空欄のままで変更なし</string>
+    <string name="settings_feishu_bot_platform">プラットフォーム</string>
+    <string name="settings_feishu_bot_platform_feishu">Feishu</string>
+    <string name="settings_feishu_bot_verify_save">確認して保存</string>
+    <string name="settings_feishu_bot_credentials_saved">アプリの認証情報を確認して保存しました</string>
+    <string name="settings_feishu_bot_agents">Lark でチャットしたエージェント</string>
+    <string name="settings_feishu_bot_howto">ボットの作り方</string>
+    <string name="settings_feishu_bot_howto_footer">永続接続はハブから接続するため、ハブにパブリックアドレスは不要です。</string>
+    <string name="settings_feishu_bot_step_create_app">Lark 開発者コンソールでカスタムアプリを作成し、「ボット」機能を有効にします</string>
+    <string name="settings_feishu_bot_step_permissions">権限で次を有効にします：個別チャットのメッセージの読み取りと送信（im:message、im:message:send_as_bot）、ボット宛ての個別チャットのメッセージの取得、メッセージ内のリソースのアップロードとダウンロード。連絡先の名前も読めるとさらに便利です（contact:user.base:readonly）</string>
+    <string name="settings_feishu_bot_step_events">「イベントとコールバック」で「永続接続でイベントを受信」を選び、「メッセージの受信」と「カードのアクション」を購読します</string>
+    <string name="settings_feishu_bot_step_publish">バージョンを公開し（管理者の承認が必要な場合があります）、App ID と App Secret を上に入力します</string>
+    <string name="settings_feishu_bot_state_checking">確認中…</string>
+    <string name="settings_feishu_bot_state_unreadable">状態を取得できません</string>
+    <string name="settings_feishu_bot_state_off">オフ</string>
+    <string name="settings_feishu_bot_state_no_credentials">アプリの認証情報が未入力です</string>
+    <string name="settings_feishu_bot_state_error">接続できません：%1$s</string>
+    <string name="settings_feishu_bot_state_connecting">接続中…</string>
+    <string name="settings_feishu_bot_state_connected">接続済み</string>
+    <string name="settings_feishu_bot_state_connected_unpaired">接続済み、ペアリング待ち</string>
+    <string name="settings_feishu_bot_read_failed">ボットの状態を読み込めませんでした：%1$s</string>
+    <string name="settings_feishu_bot_not_saved">保存できませんでした：%1$s</string>
+    <string name="settings_feishu_bot_secret_filled">入力済み。「確認して保存」をタップ</string>
+    <string name="settings_feishu_bot_unpairs">別の App ID に変えると今のペアリングは解除されます。保存後にボットのチャネルページで再ペアリングしてください。</string>
+</resources>

@@ -274,6 +274,7 @@ private fun SettingsContent(
         "triage" -> TriageSettingsPage(services.triage.takeUnless { services.demo }, services.models.takeUnless { services.demo }, onBack = back,
             onModel = { onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("agent.triage")) ?: run { purpose = "agent.triage"; page = "models" } })
         "mail" -> MailAccountsPage(connectorsService, onBack = back, onAdd = { page = "mail-add" })
+        "feishu-bot" -> FeishuBotPage(services.feishuBot.takeUnless { services.demo }, back)
         "mail-add" -> AddMailAccountPage(connectorsService, onBack = { page = "mail" }, onAdded = { page = "mail" })
         "feishu" -> FeishuConnectorPage(connectorsService, onBack = back, onAgentModel = {
             onNavigate?.invoke(persona.core.navigation.ModelPurposeRoute("lark.agent")) ?: run { purpose = "lark.agent" }

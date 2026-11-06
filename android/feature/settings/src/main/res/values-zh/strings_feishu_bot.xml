@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 设置 › 飞书机器人 (#2806); words shared with the web (settings-feishubot, lib-feishu-bot). -->
+<resources>
+    <string name="settings_feishu_bot_title">飞书机器人</string>
+    <string name="settings_feishu_bot_footer">在飞书里私聊这个机器人，就是在和 Persona 说话。机器人只回应配对过的你，群里不回应。</string>
+    <string name="settings_feishu_bot_enable">打开飞书机器人</string>
+    <string name="settings_feishu_bot_last_event">最近收到</string>
+    <string name="settings_feishu_bot_credentials">应用凭证</string>
+    <string name="settings_feishu_bot_credentials_from_config">现在用的是 hub.json 里的凭证；在这里保存会改用这里的。</string>
+    <string name="settings_feishu_bot_credentials_secret_note">App Secret 加密存在 hub 上，不会再显示出来。</string>
+    <string name="settings_feishu_bot_required">必填</string>
+    <string name="settings_feishu_bot_secret_saved">已保存，留空不改</string>
+    <string name="settings_feishu_bot_platform">平台</string>
+    <string name="settings_feishu_bot_platform_feishu">飞书</string>
+    <string name="settings_feishu_bot_verify_save">验证并保存</string>
+    <string name="settings_feishu_bot_credentials_saved">应用凭证已验证并保存</string>
+    <string name="settings_feishu_bot_agents">飞书里聊过的 Agent</string>
+    <string name="settings_feishu_bot_howto">怎么建机器人</string>
+    <string name="settings_feishu_bot_howto_footer">长连接由 hub 主动连出去，hub 不需要公网地址。</string>
+    <string name="settings_feishu_bot_step_create_app">在飞书开放平台建一个企业自建应用，开启「机器人」能力</string>
+    <string name="settings_feishu_bot_step_permissions">权限里开通：读取与发送单聊消息（im:message、im:message:send_as_bot）、获取单聊中发给机器人的消息、上传和下载消息里的资源；能读通讯录名字更好（contact:user.base:readonly）</string>
+    <string name="settings_feishu_bot_step_events">「事件与回调」里选「使用长连接接收事件」，订阅「接收消息」和「卡片回传交互」</string>
+    <string name="settings_feishu_bot_step_publish">发布版本（公司里可能要管理员审核），把 App ID、App Secret 填到上面</string>
+    <string name="settings_feishu_bot_state_checking">正在检查…</string>
+    <string name="settings_feishu_bot_state_unreadable">读不到状态</string>
+    <string name="settings_feishu_bot_state_off">未打开</string>
+    <string name="settings_feishu_bot_state_no_credentials">还没填应用凭证</string>
+    <string name="settings_feishu_bot_state_error">连不上：%1$s</string>
+    <string name="settings_feishu_bot_state_connecting">正在连接…</string>
+    <string name="settings_feishu_bot_state_connected">已连接</string>
+    <string name="settings_feishu_bot_state_connected_unpaired">已连接，等你配对</string>
+    <string name="settings_feishu_bot_read_failed">读不到机器人的状态：%1$s</string>
+    <string name="settings_feishu_bot_not_saved">保存失败：%1$s</string>
+    <string name="settings_feishu_bot_secret_filled">已填写，点验证并保存</string>
+    <string name="settings_feishu_bot_unpairs">换成别的 App ID 会解除现在的配对，保存后到机器人的渠道页重新配对。</string>
+</resources>

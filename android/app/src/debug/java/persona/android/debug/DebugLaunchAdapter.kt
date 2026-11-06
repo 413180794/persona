@@ -28,6 +28,7 @@ private val pages = mapOf(
     "catalog" to ResolvedRoute(AppTab.Settings, ComponentCatalogRoute),
     "voice" to ResolvedRoute(AppTab.Jarvis, persona.core.navigation.VoiceRoute("voice", "语音")),  // i18n-ignore: debug launch arguments, developer-only
     "channels" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Channels)),
+    "feishu-bot" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.FeishuBot)),
     "managers" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Managers)),
     "hub-update" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.HubUpdate)),
     "translate" to ResolvedRoute(AppTab.Settings, persona.core.navigation.SettingsPageRoute(persona.core.navigation.SettingsPage.Translation)),

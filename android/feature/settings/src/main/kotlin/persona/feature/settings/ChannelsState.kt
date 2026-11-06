@@ -119,6 +119,7 @@ internal object ChannelText {
         return when {
             path.startsWith("settings/plugins/") -> path.removePrefix("settings/plugins/").takeIf { it.matches(ExtensionId) }?.let(::ExtensionRoute)
             path == "settings/model-config" -> SettingsPageRoute(SettingsPage.ModelConfig)
+            path == "settings/connectors/feishu-bot" -> SettingsPageRoute(SettingsPage.FeishuBot)
             else -> null
         }
     }

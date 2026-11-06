@@ -33,6 +33,7 @@ class SettingsNavigationTest {
             SettingsPage.Storage to "storage",
             SettingsPage.Desktops to "desktops",
             SettingsPage.Managers to "managers",
+            SettingsPage.FeishuBot to "feishu-bot",
         )
         assertEquals(SettingsPage.entries.toSet(), pages.keys)
         assertEquals(pages.size, pages.values.toSet().size)

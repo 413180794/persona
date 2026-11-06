@@ -30,6 +30,7 @@ fun SettingsPage.toInitialPage(): String = when (this) {
     SettingsPage.Storage -> "storage"
     SettingsPage.Desktops -> "desktops"
     SettingsPage.Managers -> "managers"
+    SettingsPage.FeishuBot -> "feishu-bot"
 }
 
 /** The root and unknown page names have no detail destination. */

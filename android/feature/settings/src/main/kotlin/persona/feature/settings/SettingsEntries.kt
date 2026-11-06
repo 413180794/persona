@@ -53,6 +53,8 @@ data class SettingsServices(
     val extensionSlots: ExtensionSlots? = null,
     /** Settings › Channels on the paired hub; null in demo mode. */
     val channels: ChannelManagement? = null,
+    /** 设置 › 飞书机器人 (its credentials), opened from its channel's page; null in demo mode. */
+    val feishuBot: persona.core.contracts.api.FeishuBotSettings? = null,
     /** The phone's hub groups (settings › hub); null where there is no real pairing (demo mode). */
     val hubs: HubGroups? = null,
     /** Pairs one more hub instead of replacing the pairing (settings › hub › "Add hub"). */
