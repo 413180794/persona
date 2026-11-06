@@ -842,17 +842,39 @@ func (s *Service) channelsCatchUp(ctx context.Context) {
 	for _, a := range gone {
 		s.channelInteractionDone(proto.Interaction{ID: a.ID})
 	}
+	s.closeEndedBotCards(ctx, pending, true)
+}
+
+// closeEndedBotCards closes the bot's cards whose interaction is over. Not being in pending is not enough: right
+// after a restart the manager's table is empty or partial (interactions are restored, screen and Codex cards rebuilt,
+// after this runs), so each is closed only once the history says it ended for good (botCardOver). One that may still
+// be waiting is looked at again a little later, once (again).
+func (s *Service) closeEndedBotCards(ctx context.Context, pending map[string]bool, again bool) {
 	b := &s.fbot
 	b.mu.Lock()
-	var ended []proto.Interaction
+	s.loadBotLocked(ctx) // cards posted before a restart are in the chat's state
+	var maybe []botCard
 	for id, card := range b.cards {
 		if !pending[id] && card.MessageID != "" {
-			ended = append(ended, card.Ix)
+			maybe = append(maybe, card)
 		}
 	}
 	b.mu.Unlock()
-	for _, ix := range ended {
-		s.feishuInteractionDone(ix, i18n.T(s.botLang(ctx), "assistant-channels.ended"))
+	var unsure []botCard
+	for _, card := range maybe {
+		switch s.botCardOver(ctx, card.Ix.ID) {
+		case cardOver:
+			s.feishuInteractionDone(card.Ix, i18n.T(s.botLang(ctx), "assistant-channels.ended"))
+		case cardUnsure:
+			unsure = append(unsure, card)
+		}
+	}
+	if again && len(unsure) > 0 {
+		time.AfterFunc(botCardRecheck, func() {
+			cctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			s.closeEndedBotCards(cctx, nil, false)
+		})
 	}
 }
 

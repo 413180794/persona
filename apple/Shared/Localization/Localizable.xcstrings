@@ -18640,6 +18640,29 @@
       },
       "extractionState": "manual"
     },
+    "Can't find the computer this space is on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't find the computer this space is on"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このスペースがあるコンピューターが見つかりません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到这个空间所在的电脑"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Can't find the hub this notification came from. Reconnect, then do it in the app.": {
       "localizations": {
         "en": {
@@ -21746,6 +21769,75 @@
       },
       "extractionState": "manual"
     },
+    "Choose a computer first": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a computer first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にコンピューターを選択してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先选一台电脑"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Choose a directory first": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a directory first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にディレクトリを選択してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先选一个目录"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Choose a launcher first": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a launcher first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先にランチャーを選択してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先选一个启动器"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Choose a provider": {
       "localizations": {
         "zh-Hans": {
@@ -23642,6 +23734,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Codex 实时"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Codex needs a first message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex needs a first message"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex には最初のメッセージが必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 要先写第一条消息"
           }
         }
       },
@@ -58669,6 +58784,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "コンピュータがまだありません：先に追加してから読み込みます"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "No computers available yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No computers available yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使えるコンピューターがまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有可用的电脑"
           }
         }
       },
@@ -96859,6 +96997,29 @@
       },
       "extractionState": "manual"
     },
+    "This computer has no launchers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer has no launchers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターにはランチャーがありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑上没有启动器"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "This computer is already confirmed": {
       "localizations": {
         "en": {
@@ -96969,6 +97130,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台电脑不在线或 node 较旧：列的是 hub 记下的目录，连上后会列出全部。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This computer is offline. Choose one that's online.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is offline. Choose one that's online."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターはオフラインです。オンラインのものを選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑离线了，换一台在线的"
           }
         }
       },
@@ -98717,29 +98901,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "此会话不允许审批，请打开 App 查看"
-          }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "This session can't send from Persona (canSend=false). Handle it on the Lark gateway's web page.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This session can't send from Persona (canSend=false). Handle it on the Lark gateway's web page."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このセッションはPersonaから送信できません（canSend=false）。LarkゲートウェイのWebページで対応してください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个会话不能从 Persona 发送（canSend=false），请到飞书网关的网页处理。"
           }
         }
       },
@@ -110909,6 +111070,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "「%1$@」不能从这里发消息。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "You can't send messages to this session from Persona. Reply on the Lark gateway's web page.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can't send messages to this session from Persona. Reply on the Lark gateway's web page."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このセッションにはPersonaからメッセージを送信できません。LarkゲートウェイのWebページで返信してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个会话不能从 Persona 发消息，请到飞书网关的网页里回复。"
           }
         }
       },

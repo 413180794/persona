@@ -64,6 +64,9 @@ type botState struct {
 	// Runs are an older hub's turns being answered: moved to the channels' runs (takeLegacyBotRuns).
 	Runs []*botRun `json:"runs,omitempty"`
 	Seen []string  `json:"seen,omitempty"`
+	// Cards are the cards asking what is asked that are still open in the chat, by interaction id: only where each
+	// is and what it answers (never what it says), so a card answered elsewhere after a restart is still closed.
+	Cards map[string]*botCardRef `json:"cards,omitempty"`
 	// Pairing is the pairing the state belongs to (the owner and when they paired, feishu.status; "" not paired; nil:
 	// not recorded yet, a state from before). Another one, or none, starts the chat afresh (feishuReconcile).
 	Pairing *string `json:"pairing,omitempty"`
@@ -76,7 +79,19 @@ const (
 	botSeenKeep       = 300
 	botThreadsKeep    = 500
 	botThreadsKeepFor = 30 * 24 * time.Hour
+	botCardsKeep      = 100
+	botCardsDays      = 7
 )
+
+// botCardRef is a card kept in the chat's state: its message and the interaction it asks.
+type botCardRef struct {
+	MessageID string    `json:"message_id"`
+	Kind      string    `json:"kind,omitempty"`
+	MachineID string    `json:"machine_id,omitempty"`
+	SessionID string    `json:"session_id,omitempty"`
+	Thread    string    `json:"thread,omitempty"` // the topic it was posted into (botCard.Thread)
+	At        time.Time `json:"at"`
+}
 
 // feishuBook is the chat's state in memory, the cards asking what is asked, and the bot's status a moment.
 type feishuBook struct {
@@ -219,6 +234,68 @@ func (s *Service) loadBotLocked(ctx context.Context) {
 	if b.st.Current.Kind == "" {
 		b.st.Current = botTarget{Kind: targetMain}
 	}
+	s.trimBotCardsLocked()
+	for id, ref := range b.st.Cards { // cards posted before a restart
+		if _, ok := b.cards[id]; !ok && ref != nil && ref.MessageID != "" {
+			if b.cards == nil {
+				b.cards = map[string]botCard{}
+			}
+			b.cards[id] = botCard{MessageID: ref.MessageID, Thread: ref.Thread, At: ref.At,
+				Ix: proto.Interaction{ID: id, Kind: ref.Kind, MachineID: ref.MachineID, SessionID: ref.SessionID}}
+		}
+	}
+}
+
+// trimBotCardsLocked keeps the cards' records small: none older than botCardsDays (long over, or Feishu no longer
+// lets them be changed), at most botCardsKeep, the newest; b.mu is held.
+func (s *Service) trimBotCardsLocked() {
+	b := &s.fbot
+	for id, ref := range b.st.Cards {
+		if ref == nil || b.clock().Sub(ref.At) > botCardsDays*24*time.Hour {
+			delete(b.st.Cards, id)
+		}
+	}
+	for len(b.st.Cards) > botCardsKeep {
+		oldest := ""
+		for id, ref := range b.st.Cards {
+			if oldest == "" || ref.At.Before(b.st.Cards[oldest].At) {
+				oldest = id
+			}
+		}
+		delete(b.st.Cards, oldest)
+	}
+}
+
+// keepBotCardLocked records (or, card empty, forgets) the card asking interaction id, in memory and in the chat's
+// state; b.mu is held.
+func (s *Service) keepBotCardLocked(id string, card *botCard) {
+	b := &s.fbot
+	s.loadBotLocked(context.Background())
+	if card == nil {
+		delete(b.cards, id)
+		if _, ok := b.st.Cards[id]; ok {
+			delete(b.st.Cards, id)
+			s.saveBotStateLocked()
+		}
+		return
+	}
+	if b.cards == nil {
+		b.cards = map[string]botCard{}
+	}
+	b.cards[id] = *card
+	if card.MessageID == "" {
+		return // claimed, not posted yet
+	}
+	if b.st.Cards == nil {
+		b.st.Cards = map[string]*botCardRef{}
+	}
+	at := card.At
+	if at.IsZero() {
+		at = b.clock()
+	}
+	b.st.Cards[id] = &botCardRef{MessageID: card.MessageID, Kind: card.Ix.Kind, MachineID: card.Ix.MachineID, SessionID: card.Ix.SessionID,
+		Thread: card.Thread, At: at.UTC()}
+	s.saveBotStateLocked()
 }
 
 // saveBotStateLocked writes the chat's state, once it was read: what is in memory after a failed read would be
@@ -232,6 +309,7 @@ func (s *Service) saveBotStateLocked() {
 		b.st.Seen = b.st.Seen[len(b.st.Seen)-botSeenKeep:]
 	}
 	pruneBotThreads(b.st.Threads, b.clock())
+	s.trimBotCardsLocked()
 	st := s.store()
 	if st == nil {
 		return

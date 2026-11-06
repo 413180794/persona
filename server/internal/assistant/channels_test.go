@@ -12,6 +12,7 @@ import (
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
 	"github.com/nwverse/persona/server/internal/channel"
+	"github.com/nwverse/persona/server/internal/feishubot"
 	"github.com/nwverse/persona/server/internal/i18n"
 	"github.com/nwverse/persona/server/internal/proto"
 	"github.com/nwverse/persona/server/internal/rpc"
@@ -380,6 +381,171 @@ func TestFeishuChatStartsAfreshWithANewPairing(t *testing.T) {
 	_, _ = st2.Setting(ctx, botStateKey, &saved)
 	if saved.Pairing == nil || *saved.Pairing != "ou_b@200" {
 		t.Fatalf("pairing %v", saved.Pairing)
+	}
+}
+
+// A card posted before the assistant restarted is still closed when it is answered elsewhere afterwards: where it is
+// was kept in the chat's state (ids and routing only, nothing it says).
+func TestFeishuCardIsClosedAfterARestart(t *testing.T) {
+	st := &memStore{}
+	f, posts := feishuHub("ou_a", time.Unix(100, 0))
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	ix := proto.Interaction{ID: "ix_q", MachineID: "server", SessionID: "m1", Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "用哪个分支？"}}}
+	before := newServiceOn(t, f, st)
+	before.feishuInteraction(ix)
+	if len(*posts) != 1 {
+		t.Fatalf("posts %v", *posts)
+	}
+	var kept botState
+	_, _ = st.Setting(context.Background(), botStateKey, &kept)
+	ref := kept.Cards["ix_q"]
+	if ref == nil || ref.MessageID != "om_card" || ref.SessionID != "m1" {
+		t.Fatalf("kept %+v", kept.Cards)
+	}
+	if b, _ := json.Marshal(kept); strings.Contains(string(b), "用哪个分支") {
+		t.Fatalf("the card's text is kept: %s", b)
+	}
+	after := newServiceOn(t, f, st) // the assistant restarted
+	after.InteractionEnded(context.Background(), InteractionEnded{Interaction: ix, Resolution: &proto.Resolution{Answers: map[string]string{"用哪个分支？": "main"}}})
+	waitUntil(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(*posts) == 2 && (*posts)[1]["update"] == true && (*posts)[1]["message_id"] == "om_card"
+	})
+	card, _ := (*posts)[1]["card"].(string)
+	if !strings.Contains(card, "✓") || strings.Contains(card, `"callback"`) {
+		t.Fatalf("closed card %s", card)
+	}
+	kept = botState{}
+	_, _ = st.Setting(context.Background(), botStateKey, &kept)
+	if len(kept.Cards) != 0 {
+		t.Fatalf("still kept %+v", kept.Cards)
+	}
+}
+
+// A card closed some other way than feishuInteractionDone (here its node went away) forgets its record too: kept, a
+// restart would close it again and write "Ended" over what it said.
+func TestFeishuDetachedCardIsNotKept(t *testing.T) {
+	st := &memStore{}
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	f.settings = &Settings{MachineID: "server", Main: "m1"}
+	s := newServiceOn(t, f, st)
+	s.feishuInteraction(proto.Interaction{ID: "ix_q", MachineID: "server", SessionID: "m1", Kind: proto.IxQuestion, Questions: []proto.Question{{Question: "q"}}})
+	var kept botState
+	if _, _ = st.Setting(context.Background(), botStateKey, &kept); kept.Cards["ix_q"] == nil {
+		t.Fatalf("not kept: %+v", kept.Cards)
+	}
+	s.feishuDetach([]string{"ix_q"})
+	kept = botState{}
+	if _, _ = st.Setting(context.Background(), botStateKey, &kept); len(kept.Cards) != 0 {
+		t.Fatalf("still kept after detach: %+v", kept.Cards)
+	}
+}
+
+// A press on a card whose interaction is over (answered elsewhere, maybe while the assistant was away) closes that
+// card the way an ended one looks, with no buttons left.
+func TestFeishuStalePressClosesTheCard(t *testing.T) {
+	st := &memStore{}
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	status := "pending" // in the history, not restored yet; then "" (no record, or the history could not be read)
+	f.answerApp(AppInteractions, InteractionsGet, func(json.RawMessage) (any, error) { return map[string]any{"ok": false, "status": status}, nil })
+	_ = st.PutSetting(context.Background(), botStateKey, botState{Current: botTarget{Kind: targetMain},
+		Cards: map[string]*botCardRef{"ix_old": {MessageID: "om_old", Kind: proto.IxPermission, MachineID: "server", SessionID: "a1", At: time.Now()}}})
+	s := newServiceOn(t, f, st)
+	var a feishubot.CardAction
+	a.Action.Value = map[string]any{"a": "ix", "id": "ix_old", "allow": "1"}
+	// Not known to be over: the toast only; the card stays live, its record kept.
+	for _, st2 := range []string{"pending", ""} {
+		status = st2
+		if res := s.botCardAction(context.Background(), &a, ""); res == nil || res.Card != nil || res.Toast == nil {
+			t.Fatalf("%q: %+v", st2, res)
+		}
+		var kept botState
+		_, _ = st.Setting(context.Background(), botStateKey, &kept)
+		if kept.Cards["ix_old"] == nil {
+			t.Fatalf("%q: record dropped", st2)
+		}
+	}
+	status = "resolved" // over for good
+	res := s.botCardAction(context.Background(), &a, "")
+	if res == nil || res.Card == nil || res.Toast == nil {
+		t.Fatalf("response %+v", res)
+	}
+	b, _ := json.Marshal(res.Card)
+	if !strings.Contains(string(b), "已结束") || strings.Contains(string(b), `"callback"`) {
+		t.Fatalf("card %s", b)
+	}
+	var kept botState
+	_, _ = st.Setting(context.Background(), botStateKey, &kept)
+	if len(kept.Cards) != 0 {
+		t.Fatalf("still kept %+v", kept.Cards)
+	}
+}
+
+// Right after a restart the manager may not have its interactions back yet: the catch-up closes a kept card only once
+// the history says it ended for good, never because it is missing from the cards up now.
+func TestFeishuCatchUpClosesOnlyCardsThatEnded(t *testing.T) {
+	st := &memStore{}
+	f, posts := feishuHub("ou_a", time.Unix(100, 0))
+	statuses := map[string]string{"ix_live": "pending", "ix_lost": "", "ix_done": "resolved", "ix_gone": "expired"}
+	f.answerApp(AppInteractions, InteractionsGet, func(p json.RawMessage) (any, error) {
+		var a struct {
+			ID string `json:"interaction_id"`
+		}
+		_ = json.Unmarshal(p, &a)
+		return map[string]any{"ok": false, "status": statuses[a.ID]}, nil
+	})
+	cards := map[string]*botCardRef{}
+	for id := range statuses {
+		cards[id] = &botCardRef{MessageID: "om_" + id, Kind: proto.IxPermission, MachineID: "server", SessionID: "a1", At: time.Now()}
+	}
+	_ = st.PutSetting(context.Background(), botStateKey, botState{Current: botTarget{Kind: targetMain}, Cards: cards})
+	s := newServiceOn(t, f, st)
+	old := botCardRecheck
+	botCardRecheck = time.Hour // not again within the test
+	defer func() { botCardRecheck = old }()
+	s.channelsCatchUp(context.Background()) // the hub lists no card up (the manager has not restored them)
+	waitUntil(t, func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(*posts) >= 2
+	})
+	time.Sleep(50 * time.Millisecond)
+	f.mu.Lock()
+	closed := map[string]bool{}
+	for _, p := range *posts {
+		if p["update"] == true {
+			closed[p["message_id"].(string)] = true
+		}
+	}
+	f.mu.Unlock()
+	if !closed["om_ix_done"] || !closed["om_ix_gone"] || closed["om_ix_live"] || closed["om_ix_lost"] {
+		t.Fatalf("closed %v", closed)
+	}
+	var kept botState
+	_, _ = st.Setting(context.Background(), botStateKey, &kept)
+	if kept.Cards["ix_live"] == nil || kept.Cards["ix_lost"] == nil || kept.Cards["ix_done"] != nil {
+		t.Fatalf("kept %v", kept.Cards)
+	}
+}
+
+// Records are kept small when read too: none older than a week, at most the newest hundred.
+func TestFeishuCardRecordsAreTrimmedOnLoad(t *testing.T) {
+	st := &memStore{}
+	cards := map[string]*botCardRef{"old": {MessageID: "om_old", At: time.Now().Add(-8 * 24 * time.Hour)}}
+	for i := 0; i < botCardsKeep+5; i++ {
+		cards[fmt.Sprintf("ix_%03d", i)] = &botCardRef{MessageID: "om", At: time.Now().Add(time.Duration(i) * time.Second)}
+	}
+	_ = st.PutSetting(context.Background(), botStateKey, botState{Current: botTarget{Kind: targetMain}, Cards: cards})
+	f, _ := feishuHub("ou_a", time.Unix(100, 0))
+	s := newServiceOn(t, f, st)
+	b := &s.fbot
+	b.mu.Lock()
+	s.loadBotLocked(context.Background())
+	n, _, old := len(b.cards), b.cards["ix_000"], b.cards["old"]
+	b.mu.Unlock()
+	if n != botCardsKeep || old.MessageID != "" {
+		t.Fatalf("%d cards, old %+v", n, old)
 	}
 }
 

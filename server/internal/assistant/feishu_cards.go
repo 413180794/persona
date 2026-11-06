@@ -67,6 +67,45 @@ func (s *Service) feishuInteractionAlways(ix proto.Interaction) {
 	s.postInteractionCard(ctx, ix)
 }
 
+// botCardRecheck is how long after a reconnection the cards that may still be waiting are looked at again (the
+// manager restores its interactions meanwhile).
+var botCardRecheck = 90 * time.Second
+
+type cardEnd int
+
+const (
+	cardWaiting cardEnd = iota // still up
+	cardOver                   // ended for good
+	cardUnsure                 // not up, not known to be over (not restored yet, the history could not say)
+)
+
+// botCardOver is whether interaction id is over for good, as the hub's queue and its history say (InteractionsGet).
+func (s *Service) botCardOver(ctx context.Context, id string) cardEnd {
+	var got struct {
+		OK     bool   `json:"ok"`
+		Status string `json:"status"`
+	}
+	switch err := s.appCall(ctx, AppInteractions, InteractionsGet, map[string]any{"interaction_id": id}, &got); {
+	case err != nil:
+		return cardUnsure
+	case got.OK:
+		return cardWaiting
+	case finalStatus(got.Status):
+		return cardOver
+	}
+	return cardUnsure
+}
+
+// finalStatus: how an interaction ended for good (InteractionsGet's status); "pending" (in the history, not up yet)
+// and "" (no record, or the history could not be read) are not.
+func finalStatus(status string) bool {
+	switch status {
+	case "resolved", "dismissed", "expired", "cancelled":
+		return true
+	}
+	return false
+}
+
 // postInteractionCard posts ix's card once, unless it ended meanwhile.
 func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction) {
 	if s.interactionEnded(ix.ID) { // ended while this looked at the bot: not asked (s.chans before s.fbot, never in it)
@@ -74,14 +113,12 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 	}
 	b := &s.fbot
 	b.mu.Lock()
+	s.loadBotLocked(ctx)
 	if _, ok := b.cards[ix.ID]; ok {
 		b.mu.Unlock()
 		return
 	}
-	if b.cards == nil {
-		b.cards = map[string]botCard{}
-	}
-	b.cards[ix.ID] = botCard{} // claimed: a second announce of the same card does not post twice
+	s.keepBotCardLocked(ix.ID, &botCard{}) // claimed: a second announce of the same card does not post twice
 	b.mu.Unlock()
 	reply := ""
 	for _, r := range s.channelRuns(channel.Feishu) {
@@ -105,17 +142,17 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 	b.mu.Lock()
 	if err != nil {
 		s.logf("bots: card for %s: %v", ix.ID, err)
-		delete(b.cards, ix.ID)
+		s.keepBotCardLocked(ix.ID, nil)
 		b.mu.Unlock()
 		return
 	}
 	if _, still := b.cards[ix.ID]; !still || ended { // answered while it was being posted
-		delete(b.cards, ix.ID)
+		s.keepBotCardLocked(ix.ID, nil)
 		b.mu.Unlock()
 		s.botCardDone(ctx, mid, ix, i18n.T(s.botLang(ctx), "assistant-feishu_cards.handled"))
 		return
 	}
-	b.cards[ix.ID] = botCard{MessageID: mid, Ix: ix, At: b.clock(), Thread: reply}
+	s.keepBotCardLocked(ix.ID, &botCard{MessageID: mid, Ix: ix, At: b.clock(), Thread: reply})
 	b.mu.Unlock()
 }
 
@@ -155,14 +192,18 @@ func (s *Service) botDrives(ctx context.Context, machine, session string) bool {
 func (s *Service) feishuInteractionDone(ix proto.Interaction, how string) {
 	b := &s.fbot
 	b.mu.Lock()
+	s.loadBotLocked(context.Background()) // a card posted before a restart is in the chat's state
 	c, ok := b.cards[ix.ID]
-	delete(b.cards, ix.ID)
+	s.keepBotCardLocked(ix.ID, nil)
 	if ok && typedAnswerable(c) {
 		b.noteEndedLocked(c)
 	}
 	b.mu.Unlock()
 	if !ok || c.MessageID == "" {
 		return
+	}
+	if ix.Kind == "" { // the catch-up knows only what was kept of it
+		ix = c.Ix
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -197,7 +238,7 @@ func (s *Service) feishuDetach(ids []string) {
 		if !ok || c.MessageID == "" {
 			continue
 		}
-		delete(b.cards, id) // closed here, not again by feishuInteractionDone
+		s.keepBotCardLocked(id, nil) // closed here, not again by feishuInteractionDone
 		if b.detached == nil {
 			b.detached = map[string]detachedCard{}
 		}
@@ -229,10 +270,7 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 		b.mu.Unlock()
 		return
 	}
-	if b.cards == nil {
-		b.cards = map[string]botCard{}
-	}
-	b.cards[ix.ID] = botCard{MessageID: d.card.MessageID, Thread: d.card.Thread, Ix: ix, At: b.clock()}
+	s.keepBotCardLocked(ix.ID, &botCard{MessageID: d.card.MessageID, Thread: d.card.Thread, Ix: ix, At: b.clock()})
 	b.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -245,7 +283,7 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 		s.logf("bots: reopen card %s: %v", ix.ID, err)
 		b.mu.Lock()
 		if c, still := b.cards[ix.ID]; still && c.MessageID == d.card.MessageID {
-			delete(b.cards, ix.ID)
+			s.keepBotCardLocked(ix.ID, nil)
 		}
 		b.mu.Unlock()
 		return
@@ -255,7 +293,7 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 	b.mu.Unlock()
 	if _, pending := s.pendingIx(ix.ID); !still || !pending { // answered or ended meanwhile: it says so again
 		b.mu.Lock()
-		delete(b.cards, ix.ID)
+		s.keepBotCardLocked(ix.ID, nil)
 		b.mu.Unlock()
 		s.botCardDone(ctx, d.card.MessageID, ix, i18n.T(s.botLang(ctx), "assistant-feishu_cards.handled"))
 	}
@@ -793,8 +831,27 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	if err := s.appCall(ctx, AppInteractions, InteractionsGet, map[string]any{"interaction_id": id}, &got); err != nil {
 		return toast("error", clip(oneLine(err.Error()), 80))
 	}
-	if !got.OK {
+	if !got.OK && !finalStatus(got.Status) {
+		// Not up now, but not known to be over either (in the history, not restored yet; or the history could not
+		// say): the card stays as it is.
 		return toast("info", endedText(l, got.Status, "assistant-feishu_cards.already_handled"))
+	}
+	if !got.OK {
+		// Over for good (answered elsewhere, maybe while the assistant was away): this card is closed as such, its
+		// buttons gone.
+		b := &s.fbot
+		b.mu.Lock()
+		s.loadBotLocked(ctx)
+		card, had := b.cards[id]
+		s.keepBotCardLocked(id, nil)
+		b.mu.Unlock()
+		ix := proto.Interaction{ID: id}
+		if had {
+			ix = card.Ix
+		}
+		ended := endedText(l, got.Status, "assistant-channels.ended")
+		return &feishubot.CardResponse{Toast: &feishubot.Toast{Type: "info", Content: endedText(l, got.Status, "assistant-feishu_cards.already_handled")},
+			Card: s.answeredCard(ctx, ix, ended).Raw()}
 	}
 	ix := got.Interaction
 	yes, no := true, false
@@ -859,7 +916,7 @@ func (s *Service) answerFromCard(ctx context.Context, a *feishubot.CardAction, a
 	b := &s.fbot
 	b.mu.Lock()
 	card, had := b.cards[id]
-	delete(b.cards, id)
+	s.keepBotCardLocked(id, nil)
 	b.mu.Unlock()
 	restore := func(ctx context.Context) {
 		if had {
@@ -925,10 +982,7 @@ func (s *Service) botRestoreCard(ctx context.Context, id string, card botCard) {
 	}
 	b := &s.fbot
 	b.mu.Lock()
-	if b.cards == nil {
-		b.cards = map[string]botCard{}
-	}
-	b.cards[id] = card
+	s.keepBotCardLocked(id, &card)
 	b.mu.Unlock()
 }
 

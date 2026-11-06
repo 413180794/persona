@@ -76,7 +76,7 @@ func (s *Service) botAnswerQuestion(ctx context.Context, messageID, text, action
 	}
 	if !got.OK {
 		b.mu.Lock()
-		delete(b.cards, ix.ID)
+		s.keepBotCardLocked(ix.ID, nil)
 		b.mu.Unlock()
 		s.botCardDone(ctx, card.MessageID, ix, endedText(l, got.Status, "assistant-feishu_cards.handled"))
 		s.botNote(ctx, messageID, endedText(l, got.Status, "assistant-channels_plugin.answered_elsewhere"))
@@ -87,7 +87,7 @@ func (s *Service) botAnswerQuestion(ctx context.Context, messageID, text, action
 	// still waits (botRestoreCard).
 	b.mu.Lock()
 	cur, had := b.cards[ix.ID]
-	delete(b.cards, ix.ID)
+	s.keepBotCardLocked(ix.ID, nil)
 	b.mu.Unlock()
 	switch ok, err := s.resolveInteraction(ctx, channel.Feishu, ix.ID, r, action); {
 	case err != nil:

@@ -86,6 +86,25 @@ struct NewChatView: View {
             && !(codex && contextBlock == nil && prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
+    /// Why Start Chat is greyed out, the first thing missing in `ready`'s order; nil when it is ready (or still loading).
+    private var notReadyReason: String? {
+        guard !ready, !loading, !starting else { return nil }
+        // A space's sheet hides the machine and directory rows: say what is wrong, not what to pick.
+        if machine == nil {
+            if preset != nil { return String(localized: "Can't find the computer this space is on") }
+            return machinesShown.isEmpty ? String(localized: "No computers available yet") : String(localized: "Choose a computer first")
+        }
+        if machine?.online != true {
+            if preset != nil || !machinesShown.contains(where: \.online) { return String(localized: "This computer is offline") }
+            return String(localized: "This computer is offline. Choose one that's online.")
+        }
+        // Until this machine's launchers and directories are in, cwd and launcher are not its own yet.
+        guard defaultsFor == machineID else { return nil }
+        if cwd.isEmpty { return String(localized: "Choose a directory first") }
+        if launcher.isEmpty && !unifiedModels { return launchers.isEmpty ? String(localized: "This computer has no launchers") : String(localized: "Choose a launcher first") }
+        return String(localized: "Codex needs a first message")
+    }
+
     private var startingLabel: String {
         let name = machine?.name ?? ""
         return codex ? String(localized: "Starting Codex on \(name)…") : String(localized: "Starting on \(name)…")
@@ -253,6 +272,12 @@ struct NewChatView: View {
                         .padding(Theme.Space.m)
                         .background(.regularMaterial, in: .rect(cornerRadius: Theme.Radius.card, style: .continuous))
                         .accessibilityIdentifier("newChat.error")
+                } else if let notReadyReason {
+                    // A grey button alone left the user checking every row for what was missing.
+                    Label(notReadyReason, systemImage: Theme.Icon.info)
+                        .font(Theme.Font.caption).foregroundStyle(.secondary).lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("newChat.notReady")
                 }
                 #if os(iOS) || os(visionOS)
                 Button {

@@ -191,7 +191,8 @@ struct LinkSheet: View {
             model.toast = Toast(String(localized: "Open the link from a chat to hand it to an agent."), style: .info)
             return
         }
-        let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.url.host ?? "") : title, url: target.url.absoluteString,
+        // A forwarded port's host is the phone's loopback: name it as the header does ("machine :5173", #3378).
+        let ref = ContextRef(kind: kind, title: title.isEmpty ? (target.forwarded ?? target.url.host ?? "") : title, url: target.url.absoluteString,
                              text: text.isEmpty ? "（整篇）" : text) // i18n-ignore: sentinel in the context XML, compared in QuoteViews
         if kind == "edit" {
             instruction = ""

@@ -66,11 +66,11 @@ struct PersonalAgentSessionView: View {
     @ViewBuilder private var composer: some View {
         VStack(spacing: Theme.Space.xs) {
             if !session.canSend {
-                Text("This session can't send from Persona (canSend=false). Handle it on the Lark gateway's web page.")
+                Text("You can't send messages to this session from Persona. Reply on the Lark gateway's web page.")
                     .font(Theme.Font.caption).foregroundStyle(.secondary)
             }
             HStack(alignment: .bottom, spacing: Theme.Space.s) {
-                TextField(String(localized: "Message \(session.provider) [Personal Agent Session View 72a8a3]"), text: $draft, axis: .vertical)
+                TextField(String(localized: "Message \(PersonalAgentArrange.providerLabel(session.provider)) [Personal Agent Session View 72a8a3]"), text: $draft, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(!session.canSend)
