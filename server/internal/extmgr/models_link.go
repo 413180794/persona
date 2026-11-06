@@ -63,6 +63,8 @@ func (h *Manager) modelsAppCall(ctx context.Context, p assistantwire.AppCall) (j
 			return nil, true, err
 		}
 		out = map[string]any{"report": report}
+	case assistantwire.PluginsModels: // the extensions with a model purpose of their own (extension_model.go)
+		out = map[string]any{"extensions": h.extensions.modelExtensions()}
 	case assistantwire.PluginsNeedTriage:
 		names := h.extensionsNeedingTriage()
 		if names == nil {

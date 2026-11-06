@@ -4440,6 +4440,93 @@ export interface TodoDecisionEvent {
 }
 
 /**
+ * error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params; assistant_offline
+ * (the manager is away: try again); model_unavailable (nothing to call for this extension: the user picks a model for
+ * it in Settings › Model configuration); model_paused (the connection is held for quota or load, nothing was sent;
+ * data ModelPause: try again after until); model_failed (the upstream refused or failed the request); timeout (past
+ * timeout_seconds); invalid_output (with json_schema, the reply was still not JSON matching it after one more try;
+ * data ModelInvalidOutput).
+ */
+export type ModelErrorCode = "invalid_params" | "assistant_offline" | "model_unavailable" | "model_paused" | "model_failed" | "timeout" | "invalid_output" | (string & {});
+export const MODEL_ERROR_CODES = ["invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "timeout", "invalid_output"] as const;
+
+/**
+ * One turn of the conversation: the user's, or the model's earlier answer.
+ */
+export interface ModelMessage {
+  role: ModelRole;
+  content: string;
+}
+
+export type ModelRole = "user" | "assistant" | (string & {});
+export const MODEL_ROLES = ["user", "assistant"] as const;
+
+/**
+ * model.complete (models): one answer to a conversation that starts and ends with the user's turn, the turns
+ * alternating.
+ */
+export interface ModelCompleteParams {
+  /** The system prompt. */
+  system?: string;
+  messages: ModelMessage[];
+  /** Room for the answer; 0 is 4096. Connections speaking the Responses API are sent none. */
+  max_tokens?: number;
+  /**
+   * A JSON Schema the answer must match: the hub asks for JSON matching it, checks the reply (type, enum, const,
+   * properties, required, additionalProperties, items, prefixItems, lengths, bounds, allOf / anyOf / oneOf, local
+   * $ref) and asks once more when it does not match; the result's json has the decoded value. At most 64 KiB.
+   */
+  json_schema?: unknown;
+  /** Bounds the whole call, a second try included; 0 is 120. */
+  timeout_seconds?: number;
+  /** What the call is for (daily, weekly…): it goes in the hub's log line with the usage. */
+  label?: string;
+}
+
+/**
+ * What the call spent, every request of it together (a second try for json_schema included), as the upstream counted
+ * it.
+ */
+export interface ModelUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  requests: number;
+}
+
+export interface ModelCompleteResult {
+  /** The answer as the model wrote it. */
+  text: string;
+  /** With json_schema: the answer decoded, matching it. */
+  json?: unknown;
+  /** The model that answered. */
+  model: string;
+  /** end_turn, or max_tokens when the answer was cut off. */
+  stop_reason: string;
+  usage: ModelUsage;
+}
+
+/**
+ * The data of model_paused.
+ */
+export interface ModelPause {
+  /** quota or busy. */
+  reason: string;
+  /** An RFC 3339 time. */
+  until: string;
+}
+
+/**
+ * The data of invalid_output: why the last reply did not match, the reply, and what the call spent.
+ */
+export interface ModelInvalidOutput {
+  problem: string;
+  text: string;
+  usage: ModelUsage;
+}
+
+/**
  * Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
  * range.
  */
@@ -4708,4 +4795,5 @@ export const CALLS: Record<string, Call> = {
   "event.kb.forgotten": { from: "hub", params: "KBForgottenEvent", event: true },
   "event.todo.changed": { from: "hub", params: "TodoChangedEvent", event: true },
   "event.todo.decision": { from: "hub", params: "TodoDecisionEvent", event: true },
+  "model.complete": { from: "program", params: "ModelCompleteParams", result: "ModelCompleteResult" },
 };

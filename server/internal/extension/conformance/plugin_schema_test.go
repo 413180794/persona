@@ -1,6 +1,6 @@
 package conformance_test
 
-// The plugin protocol's schemas (schema/extension/connector.schema.json, channel.schema.json, kb.schema.json, todos.schema.json) describe what the server's
+// The plugin protocol's schemas (schema/extension/connector.schema.json, channel.schema.json, kb.schema.json, todos.schema.json, models.schema.json) describe what the server's
 // own code sends and reads: every call and event they list is held to the Go types the hub and connector/serve put on
 // the wire, field by field, and every connector method the server knows is in them. The schema is what an extension
 // is written from; this keeps it from drifting from the code.
@@ -105,6 +105,11 @@ var goTypes = map[string]any{
 	"KBChangedEvent":   assistantwire.KBChanged{},
 	"KBForgottenEvent": assistantwire.KBForgottenEvent{},
 
+	"ModelCompleteParams": assistantwire.ModelCompleteParams{},
+	"ModelCompleteResult": assistantwire.ModelCompleteResult{},
+	"ModelPause":          assistantwire.ModelPause{},
+	"ModelInvalidOutput":  assistantwire.ModelInvalidOutput{},
+
 	"TodoChangedEvent":  assistantwire.TodoChangedEvent{},
 	"TodoDecisionEvent": assistantwire.TodoDecisionEvent{},
 }
@@ -131,6 +136,9 @@ var kbCalls = []string{assistantwire.MethodKBList, assistantwire.MethodKBGet, as
 	assistantwire.MethodKBSearch, assistantwire.MethodKBUpdate, assistantwire.MethodKBOwner, assistantwire.MethodKBRecent,
 	"event." + assistantwire.EventKBChanged, "event." + assistantwire.EventKBForgotten}
 
+// The model call the hub forwards for extensions granted models (models.schema.json).
+var modelCalls = []string{assistantwire.MethodModelComplete}
+
 // The to-do events the hub tells the extensions granted todos.read (todos.schema.json).
 var todoCalls = []string{"event." + assistantwire.EventTodoChanged, "event." + assistantwire.EventTodoDecision}
 
@@ -144,6 +152,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	}
 	want = append(want, kbCalls...)
 	want = append(want, todoCalls...)
+	want = append(want, modelCalls...)
 	want = append(want, sentCalls...)
 	for _, name := range want {
 		if _, ok := wire.Calls[name]; !ok {
@@ -152,7 +161,7 @@ func TestPluginSchemasListTheServersCalls(t *testing.T) {
 	}
 	for name := range wire.Calls {
 		if (strings.HasPrefix(name, serve.Namespace+".") || strings.HasPrefix(name, channel.Namespace+".") ||
-			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.") || strings.HasPrefix(name, "event.todo.") || strings.HasPrefix(name, "sent.")) &&
+			strings.HasPrefix(name, "kb.") || strings.HasPrefix(name, "event.kb.") || strings.HasPrefix(name, "event.todo.") || strings.HasPrefix(name, "sent.") || strings.HasPrefix(name, "model.")) &&
 			!slices.Contains(want, name) {
 			t.Errorf("%s: schema/extension lists it, the server has no such call", name)
 		}

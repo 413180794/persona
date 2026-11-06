@@ -17,6 +17,9 @@ const (
 	ScopeAssistantAsk  = "assistant.ask"
 	ScopeTodosRead     = "todos.read"
 	ScopeTodosWrite    = "todos.write"
+	// ScopeModels: calling a model through the hub (model.complete) on the extension's own purpose in Settings ›
+	// Models; never a key (#6102).
+	ScopeModels = "models"
 	// ScopeCallPrefix and an extension's id: calling that extension's own HTTP (/api/v1/extensions/<id>/…).
 	ScopeCallPrefix = "extensions.call:"
 )

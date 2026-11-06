@@ -1,0 +1,24 @@
+给这段话打标
+
+Reply with a single JSON value that matches this JSON Schema, and nothing else: no prose, no code fences.
+
+{
+  "type": "object",
+  "properties": {
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "tags",
+    "score"
+  ],
+  "additionalProperties": false
+}

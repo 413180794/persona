@@ -1,0 +1,3 @@
+Your reply was not JSON matching the schema: $: missing required "score"
+
+Reply again with the corrected JSON value only.

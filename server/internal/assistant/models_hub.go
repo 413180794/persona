@@ -32,6 +32,9 @@ func (s *Service) modelsRequest(ctx context.Context, method string, params json.
 	case assistantwire.MethodModelsUsable, assistantwire.MethodModelsLauncherHTTP:
 	case assistantwire.MethodModelsLaunchers:
 		return map[string]any{"launchers": s.gatewayLaunchers(ctx)}, true, nil
+	case assistantwire.MethodModelsExtensionComplete: // an extension's model.complete (model_rpc.go)
+		out, err := s.extensionComplete(ctx, params)
+		return out, true, err
 	default:
 		return nil, false, nil
 	}

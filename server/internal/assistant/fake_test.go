@@ -39,6 +39,7 @@ type fakeHub struct {
 	managed       map[string][]proto.ManagedLauncher // what each node was given (launchers.managed)
 	presets       []assistantwire.LauncherPreset
 	voice         []assistantwire.VoicePlugin
+	modelExts     []assistantwire.ModelExtension // plugins.models: the extensions granted models (model_rpc.go)
 	needTriage    []string
 	ownModels     bool                       // the test sets hello.Models itself: no fake model
 	devices       []Device                   // devices.list answers these when set (else one per machine with sessions)
@@ -378,6 +379,8 @@ func (f *fakeHub) AppCall(ctx context.Context, p AppCall) (json.RawMessage, erro
 		return json.Marshal(map[string]any{"presets": f.presets})
 	case AppPlugins + " " + assistantwire.PluginsVoice:
 		return json.Marshal(map[string]any{"plugins": f.voice})
+	case AppPlugins + " " + assistantwire.PluginsModels:
+		return json.Marshal(map[string]any{"extensions": f.modelExts})
 	case AppPlugins + " " + assistantwire.PluginsNeedTriage:
 		return json.Marshal(map[string]any{"names": f.needTriage})
 	}

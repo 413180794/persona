@@ -56,6 +56,7 @@ MCP tool descriptions and parameter explanations shown to models are also prompt
 | `tools/tab_name.md` | Name a new Agent's herdr tab | `assistant/agents_start.go` |
 | `tools/translate*.md` | Translate short text / an email | `assistant/inbox_translate.go` |
 | `tools/json_only.md` | Sentence appended to system prompts for all JSON requests | `ai/ai.go` `JSONMax` |
+| `tools/json_schema.md`, `json_schema_retry.md` | An extension's `model.complete` with `json_schema`: its system prompt followed by the schema to answer in; the turn asking once more with what did not match (docs/extensions.md "Model calls") | `assistant/model_rpc.go` |
 | `todo/title.md`, `title_input.md` | Short titles for to-dos created by `task_plan` / `agent_start` (within 20 characters, removing Agent instructions and provenance); purpose `todo.title` (`docs/todos.md`, "To-do titles") | `assistant/todo_titles.go` |
 | `todo/decisions.md` | `<persona-context>` before a message handed to an Agent: currently effective decisions on this to-do (`docs/todos.md`, "Decision log") | `assistant/todo_decisions.go` |
 | `todo/outcome.md`, `outcome_input.md` | Extract conclusions, links, decisions, and pitfalls from the Agent's final reply when a task finishes (JSON; `docs/todos.md`, "Record conclusions on completion") | `assistant/todo_outcome.go` |

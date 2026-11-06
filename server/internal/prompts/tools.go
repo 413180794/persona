@@ -35,3 +35,13 @@ type SessionTitleInput struct{ First, Reply, Retry string }
 func RenderSessionTitleInput(in SessionTitleInput) string {
 	return render("tools/session_title_input", in)
 }
+
+// JSONSchema is an extension's system prompt (may be empty) and the JSON Schema its reply must match, indented
+// (tools/json_schema, model.complete's json_schema; assistant/model_rpc.go).
+type JSONSchema struct{ System, Schema string }
+
+func RenderJSONSchema(in JSONSchema) string { return render("tools/json_schema", in) }
+
+// RenderJSONSchemaRetry is the turn asking once more after a reply that did not match the schema: problem says
+// what was wrong (tools/json_schema_retry).
+func RenderJSONSchemaRetry(problem string) string { return render("tools/json_schema_retry", problem) }

@@ -186,6 +186,14 @@ func (h *Hub) KBOwner(ctx context.Context) (wire.KBOwner, error) {
 	return callHub[wire.KBOwner](ctx, h, "kb.owner", wire.KBOwnerParams{})
 }
 
+// ModelComplete asks a model for one answer (permission models): it runs on the extension's own purpose in Settings ›
+// Model configuration, which the user chooses; no key and no budget. With JSONSchema the result's JSON has the answer
+// decoded. Errors carry wire.ModelErrorCode* or permission_denied; model_paused (wire.ModelPause) is worth trying
+// again after its until.
+func (h *Hub) ModelComplete(ctx context.Context, p wire.ModelCompleteParams) (wire.ModelCompleteResult, error) {
+	return callHub[wire.ModelCompleteResult](ctx, h, "model.complete", p)
+}
+
 func callHub[R any](ctx context.Context, h *Hub, method string, params any) (R, error) {
 	var r R
 	err := h.Call(ctx, method, params, &r)

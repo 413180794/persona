@@ -305,6 +305,7 @@ To call the hub's HTTP API, an extension lists the scopes it uses in `permission
 | `assistant.ask` | Start chats with Persona and read chat activity | `GET /api/v1/assistant`, `POST /api/v1/assistant/conversations`, `GET …/conversations/{id}/feed` |
 | `todos.read` | See to-dos | `GET /api/v1/todos`, `GET /api/v1/todos/{id}/decisions` |
 | `todos.write` | Create and edit to-dos, attach chats to to-dos | `POST /api/v1/todos`, `PATCH /api/v1/todos/{id}`, a to-do's `agents/{mid}/{sid}` and `spaces/{mid}/{space…}` (`PUT` / `DELETE`); deleting to-dos, decisions, completion checks and retries still require full access |
+| `models` | Use the model you pick for it in Settings › Model configuration (never the key) | No HTTP route: the `model.complete` RPC (see "Model calls"). Not covered by the legacy `hub_api` full access |
 | `extensions.call:<extension id>` | Call the API of extension "…" | That extension's own HTTP: `/api/v1/extensions/<id>/…` (excluding the hub's `/-/` endpoints) |
 
 - **Which route belongs to which scope** is registered in `routeScopes` in `server/internal/extmgr/extension_scopes.go` (by the pattern the route was registered with); **unregistered routes accept only full credentials**, and extension tokens always get 403.
@@ -367,6 +368,36 @@ Subscription example:
 
 The hub pushes `event.kb.changed {kind,id,what}` and `event.kb.forgotten {source}`. Only subscribers that are still enabled, have that contribution on, have their program running, and were actually granted
 `kb.read` (or legacy full access) receive them; write permission alone is not enough. Notifications carry only the identifying fields above, no body text, owner handles or absolute paths, and are not persisted for redelivery; after starting / reconnecting, an extension reads the full state first.
+
+### Model calls (#6102)
+
+An extension that needs a model (daily summaries, tagging, a weekly review) asks the hub instead of taking an API key of its own: it declares `models` in `permissions.hub`
+and calls `model.complete` over its process connection. The call runs on the extension's **own purpose** `extension.<id>` in Settings › Model configuration,
+which follows "Knowledge base" (`kb`) until the user picks another connection or model for it there; the extension never sees a key and does not choose the connection.
+
+| Method | Parameters | Returns | Scope |
+| --- | --- | --- | --- |
+| `model.complete` | `{system?, messages: [{role: user\|assistant, content}], max_tokens?, json_schema?, timeout_seconds?, label?}` | `{text, json?, model, stop_reason, usage}` | `models` |
+
+The schema is `schema/extension/models.schema.json`; the Go SDK has it as `ext.Hub.ModelComplete`.
+
+- **Messages** start and end with the user's turn and alternate; `max_tokens` defaults to 4096, at most 64000 (connections speaking the Responses API are sent none, as for the hub's own calls);
+  `timeout_seconds` bounds the whole call (default 120, at most 600). Params are strict: an unknown field (`model`, `temperature`…) is `invalid_params`.
+- **Structured output**: with `json_schema` the hub appends the schema to the system prompt (`prompts/tools/json_schema.md`), takes the JSON value out of the reply (a code fence or a sentence around it is fine),
+  checks it against the schema and asks once more with what was wrong (`tools/json_schema_retry.md`). The result's `json` is the decoded value; a second miss is `invalid_output` with `{problem, text, usage}`.
+  It works the same on every connection (no vendor structured-output feature is needed). Checked keywords: `type`, `enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, `prefixItems`,
+  `minItems`/`maxItems`, `minLength`/`maxLength`, `minimum`/`maximum` and the exclusive ones, `allOf`/`anyOf`/`oneOf` (taken as `anyOf`), local `$ref`; others (`format`, `pattern`…) are left to the extension. At most 64 KiB.
+- **No budget and no cap** (the user's decision): there is no daily limit and no fallback model. `usage` is what the call spent, every request of it together (`input_tokens`, `output_tokens`,
+  `cache_read_input_tokens`, `cache_creation_input_tokens`, `requests`); the manager logs one line per call with the extension, `label`, model and usage. Keep it in the extension's own report if the user should see it.
+- **A held connection**: when the connection is out of quota or busy (docs/model-config.md "Upstream rate limits") nothing is sent and the answer is `model_paused` with `{reason, until}`; try again after `until`.
+- **Errors**: `permission_denied` (`{scope: "models"}`), `invalid_params`, `assistant_offline`, `model_unavailable` (nothing callable for this extension: the user sets one up in Settings › Model configuration),
+  `model_paused`, `model_failed` (the upstream refused or failed), `timeout`, `invalid_output`.
+- Internally the manager forwards it to the assistant as `models.extension_complete {extension, params}` (not callable by extensions), so the call is always the extension's own; the assistant lists the
+  extensions with a purpose through `app.call plugins.models` (enabled, compatible, granted `models` itself).
+
+```json
+{"permissions":{"hub":["kb.read","kb.write","models"]}}
+```
 
 ### Sent as the user: `sent.record` (#5278)
 

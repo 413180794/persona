@@ -398,6 +398,15 @@ func (r *Registry) HubScopeAllowed(id, scope string) bool {
 		(p.Record.Granted.FullHub() || slices.Contains(p.Record.Granted.Hub, scope))
 }
 
+// HubScopeGranted is HubScopeAllowed without the legacy full-hub grant: the user granted scope itself. For what
+// did not exist under that grant (models: a purpose of its own in Settings › Models).
+func (r *Registry) HubScopeGranted(id, scope string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p := r.extensions[id]
+	return p != nil && p.Record.Enabled && p.Problem == "" && slices.Contains(p.Record.Granted.Hub, scope)
+}
+
 // SendsAsUser says whether extension id, enabled and compatible, has a connector contribution with this id that
 // declares sends_as_user (ConnectorItem.SendsAsUser). It reads the live record under the registry lock, like
 // HubScopeAllowed, and the manifest as installed (Full: what the user agreed to), not the one without the contributions

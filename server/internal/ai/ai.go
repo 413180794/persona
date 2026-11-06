@@ -74,46 +74,106 @@ func (c *Client) Complete(ctx context.Context, system, user string, maxTokens in
 
 // complete is Complete that also says whether the reply stopped at maxTokens (the Messages API's stop_reason).
 func (c *Client) complete(ctx context.Context, system, user string, maxTokens int) (text string, truncated bool, err error) {
+	r, err := c.Chat(ctx, Request{System: system, Messages: []Message{{Role: RoleUser, Content: user}}, MaxTokens: maxTokens})
+	return r.Text, r.Truncated, err
+}
+
+// The roles of a conversation's turns.
+const (
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+)
+
+// Message is one turn of a conversation: the user's, or the model's own earlier answer.
+type Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Request is a conversation to continue: a system prompt and turns that start and end with the user's.
+type Request struct {
+	System    string
+	Messages  []Message
+	MaxTokens int // the Messages API's max_tokens; the Responses API is sent none (some relays reject it)
+}
+
+// Usage is what one request spent, as the upstream counted it (zero where it did not say).
+type Usage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+}
+
+// Add is u and v together (a call made of several requests).
+func (u Usage) Add(v Usage) Usage {
+	return Usage{InputTokens: u.InputTokens + v.InputTokens, OutputTokens: u.OutputTokens + v.OutputTokens,
+		CacheReadInputTokens: u.CacheReadInputTokens + v.CacheReadInputTokens, CacheCreationInputTokens: u.CacheCreationInputTokens + v.CacheCreationInputTokens}
+}
+
+// Reply is the model's answer: its text, whether it stopped at MaxTokens, the model the upstream says answered
+// (the one asked for when it does not say) and what it spent.
+type Reply struct {
+	Text      string
+	Truncated bool
+	Model     string
+	Usage     Usage
+}
+
+// Chat sends a conversation and returns the reply. A context with a deadline bounds the request by it instead of the
+// client's 60 seconds (a long answer).
+func (c *Client) Chat(ctx context.Context, r Request) (Reply, error) {
 	if c.resolve != nil {
 		resolved, err := c.resolve(ctx)
 		if err != nil {
-			return "", false, err
+			return Reply{}, err
 		}
-		return resolved.complete(ctx, system, user, maxTokens)
+		return resolved.Chat(ctx, r)
 	}
 	if !c.cfg.Configured() {
-		return "", false, errNotConfigured
+		return Reply{}, errNotConfigured
 	}
 	key, err := c.key()
 	if err != nil {
-		return "", false, err
+		return Reply{}, err
 	}
 	// Every client of one address and key goes through the same gate, which holds requests back while the upstream
 	// is out of quota or busy (limit.go).
 	g := gateFor(c.cfg.BaseURL, key)
 	probe, err := g.admit(ctx)
 	if err != nil {
-		return "", false, err
+		return Reply{}, err
 	}
+	hc := c.http
+	if _, ok := ctx.Deadline(); ok && hc != nil && hc.Timeout != 0 {
+		copied := *hc
+		copied.Timeout = 0
+		hc = &copied
+	}
+	var reply Reply
 	var answered bool
 	if c.cfg.API == "responses" {
-		text, answered, err = c.respond(ctx, key, system, user)
+		reply, answered, err = c.respond(ctx, hc, key, r)
 	} else {
-		text, truncated, answered, err = c.messages(ctx, key, system, user, maxTokens)
+		reply, answered, err = c.messages(ctx, hc, key, r)
 	}
-	return text, truncated, g.done(probe, answered, err)
+	if reply.Model == "" {
+		reply.Model = c.cfg.Model
+	}
+	return reply, g.done(probe, answered, err)
 }
 
-// messages calls the Messages API; answered is whether the upstream said 200, truncated whether the reply stopped at
-// maxTokens. A model that thinks spends its thinking from the same maxTokens, so a long answer can stop half written.
-func (c *Client) messages(ctx context.Context, key, system, user string, maxTokens int) (text string, truncated, answered bool, err error) {
-	body, _ := json.Marshal(map[string]any{
-		"model": c.cfg.Model, "max_tokens": maxTokens, "system": system,
-		"messages": []any{map[string]any{"role": "user", "content": user}},
-	})
+// messages calls the Messages API; answered is whether the upstream said 200, Truncated whether the reply stopped at
+// MaxTokens. A model that thinks spends its thinking from the same MaxTokens, so a long answer can stop half written.
+func (c *Client) messages(ctx context.Context, hc *http.Client, key string, r Request) (reply Reply, answered bool, err error) {
+	turns := make([]any, 0, len(r.Messages))
+	for _, m := range r.Messages {
+		turns = append(turns, map[string]any{"role": m.Role, "content": m.Content})
+	}
+	body, _ := json.Marshal(map[string]any{"model": c.cfg.Model, "max_tokens": r.MaxTokens, "system": r.System, "messages": turns})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
-		return "", false, false, err
+		return reply, false, err
 	}
 	req.Header.Set("content-type", "application/json")
 	if c.cfg.Bearer {
@@ -122,24 +182,26 @@ func (c *Client) messages(ctx context.Context, key, system, user string, maxToke
 		req.Header.Set("x-api-key", key)
 	}
 	req.Header.Set("anthropic-version", "2023-06-01")
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
-		return "", false, false, fmt.Errorf("ai: %w", err)
+		return reply, false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != 200 {
-		return "", false, false, newHTTPError(resp, raw)
+		return reply, false, newHTTPError(resp, raw)
 	}
 	var out struct {
+		Model   string `json:"model"`
 		Content []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
+		Usage      Usage  `json:"usage"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", false, true, fmt.Errorf("ai: decode: %w", err)
+		return reply, true, fmt.Errorf("ai: decode: %w", err)
 	}
 	var b strings.Builder
 	for _, part := range out.Content {
@@ -147,39 +209,37 @@ func (c *Client) messages(ctx context.Context, key, system, user string, maxToke
 			b.WriteString(part.Text)
 		}
 	}
-	return b.String(), out.StopReason == "max_tokens", true, nil
+	return Reply{Text: b.String(), Truncated: out.StopReason == "max_tokens", Model: out.Model, Usage: out.Usage}, true, nil
 }
 
 // respond calls the Responses API. It always streams: some compatible endpoints (Codex-backed relays) reject
 // stream=false, and the text is just the concatenated output_text deltas. The system prompt goes in as a developer
 // message rather than `instructions`, which those relays replace with their own.
-func (c *Client) respond(ctx context.Context, key, system, user string) (text string, answered bool, err error) {
-	req := map[string]any{
-		"model": c.cfg.Model, "store": false, "stream": true,
-		"input": []any{
-			map[string]any{"role": "developer", "content": system},
-			map[string]any{"role": "user", "content": user},
-		},
+func (c *Client) respond(ctx context.Context, hc *http.Client, key string, r Request) (reply Reply, answered bool, err error) {
+	input := []any{map[string]any{"role": "developer", "content": r.System}}
+	for _, m := range r.Messages {
+		input = append(input, map[string]any{"role": m.Role, "content": m.Content})
 	}
+	req := map[string]any{"model": c.cfg.Model, "store": false, "stream": true, "input": input}
 	if c.cfg.ReasoningEffort != "" {
 		req["reasoning"] = map[string]any{"effort": c.cfg.ReasoningEffort}
 	}
 	body, _ := json.Marshal(req)
 	hreq, err := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(c.cfg.BaseURL, "/")+"/v1/responses", bytes.NewReader(body))
 	if err != nil {
-		return "", false, err
+		return reply, false, err
 	}
 	hreq.Header.Set("content-type", "application/json")
 	hreq.Header.Set("accept", "text/event-stream")
 	hreq.Header.Set("authorization", "Bearer "+key)
-	resp, err := c.http.Do(hreq)
+	resp, err := hc.Do(hreq)
 	if err != nil {
-		return "", false, fmt.Errorf("ai: %w", err)
+		return reply, false, fmt.Errorf("ai: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return "", false, newHTTPError(resp, raw)
+		return reply, false, newHTTPError(resp, raw)
 	}
 	var b strings.Builder
 	sc := bufio.NewScanner(resp.Body)
@@ -194,9 +254,17 @@ func (c *Client) respond(ctx context.Context, key, system, user string) (text st
 			Delta    string `json:"delta"`
 			Message  string `json:"message"`
 			Response struct {
+				Model string `json:"model"`
 				Error *struct {
 					Message string `json:"message"`
 				} `json:"error"`
+				Usage *struct {
+					InputTokens        int `json:"input_tokens"`
+					OutputTokens       int `json:"output_tokens"`
+					InputTokensDetails struct {
+						CachedTokens int `json:"cached_tokens"`
+					} `json:"input_tokens_details"`
+				} `json:"usage"`
 			} `json:"response"`
 		}
 		if json.Unmarshal([]byte(strings.TrimSpace(data)), &ev) != nil {
@@ -206,22 +274,27 @@ func (c *Client) respond(ctx context.Context, key, system, user string) (text st
 		case "response.output_text.delta":
 			b.WriteString(ev.Delta)
 		case "response.completed":
-			return b.String(), true, nil
+			reply = Reply{Text: b.String(), Model: ev.Response.Model}
+			if u := ev.Response.Usage; u != nil { // input_tokens counts the cached ones too
+				reply.Usage = Usage{InputTokens: u.InputTokens - u.InputTokensDetails.CachedTokens, OutputTokens: u.OutputTokens,
+					CacheReadInputTokens: u.InputTokensDetails.CachedTokens}
+			}
+			return reply, true, nil
 		case "response.failed", "response.incomplete", "error":
 			msg := ev.Message
 			if ev.Response.Error != nil {
 				msg = ev.Response.Error.Message
 			}
-			return "", true, fmt.Errorf("ai: %s: %s", ev.Type, msg)
+			return reply, true, fmt.Errorf("ai: %s: %s", ev.Type, msg)
 		}
 	}
 	if err := sc.Err(); err != nil {
-		return "", true, fmt.Errorf("ai: read stream: %w", err)
+		return reply, true, fmt.Errorf("ai: read stream: %w", err)
 	}
 	if b.Len() == 0 {
-		return "", true, errors.New("ai: stream ended without a reply")
+		return reply, true, errors.New("ai: stream ended without a reply")
 	}
-	return b.String(), true, nil
+	return Reply{Text: b.String()}, true, nil
 }
 
 // JSON asks for a JSON object and decodes the first one in the reply into out.

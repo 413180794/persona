@@ -4200,6 +4200,96 @@ type TodoDecisionEvent struct {
 	Decision TodoEventDecision `json:"decision"`
 }
 
+// ModelErrorCode: error.code of model.complete besides permission_denied (data {scope: "models"}): invalid_params;
+// assistant_offline (the manager is away: try again); model_unavailable (nothing to call for this extension: the user
+// picks a model for it in Settings › Model configuration); model_paused (the connection is held for quota or load,
+// nothing was sent; data ModelPause: try again after until); model_failed (the upstream refused or failed the
+// request); timeout (past timeout_seconds); invalid_output (with json_schema, the reply was still not JSON matching
+// it after one more try; data ModelInvalidOutput).
+const (
+	ModelErrorCodeInvalidParams    = "invalid_params"
+	ModelErrorCodeAssistantOffline = "assistant_offline"
+	ModelErrorCodeModelUnavailable = "model_unavailable"
+	ModelErrorCodeModelPaused      = "model_paused"
+	ModelErrorCodeModelFailed      = "model_failed"
+	ModelErrorCodeTimeout          = "timeout"
+	ModelErrorCodeInvalidOutput    = "invalid_output"
+)
+
+// ModelErrorCodes are the values of ModelErrorCode, in order.
+var ModelErrorCodes = []string{"invalid_params", "assistant_offline", "model_unavailable", "model_paused", "model_failed", "timeout", "invalid_output"}
+
+// ModelMessage: one turn of the conversation: the user's, or the model's earlier answer.
+type ModelMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// Values of ModelRole.
+const (
+	ModelRoleUser      = "user"
+	ModelRoleAssistant = "assistant"
+)
+
+// ModelRoles are the values of ModelRole, in order.
+var ModelRoles = []string{"user", "assistant"}
+
+// ModelCompleteParams: model.complete (models): one answer to a conversation that starts and ends with the user's
+// turn, the turns alternating.
+type ModelCompleteParams struct {
+	// The system prompt.
+	System   string         `json:"system,omitempty"`
+	Messages []ModelMessage `json:"messages"`
+	// Room for the answer; 0 is 4096. Connections speaking the Responses API are sent none.
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// A JSON Schema the answer must match: the hub asks for JSON matching it, checks the reply (type, enum, const,
+	// properties, required, additionalProperties, items, prefixItems, lengths, bounds, allOf / anyOf / oneOf, local
+	// $ref) and asks once more when it does not match; the result's json has the decoded value. At most 64 KiB.
+	JSONSchema json.RawMessage `json:"json_schema,omitempty"`
+	// Bounds the whole call, a second try included; 0 is 120.
+	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
+	// What the call is for (daily, weekly…): it goes in the hub's log line with the usage.
+	Label string `json:"label,omitempty"`
+}
+
+// ModelUsage: what the call spent, every request of it together (a second try for json_schema included), as the
+// upstream counted it.
+type ModelUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
+	Requests                 int `json:"requests"`
+}
+
+type ModelCompleteResult struct {
+	// The answer as the model wrote it.
+	Text string `json:"text"`
+	// With json_schema: the answer decoded, matching it.
+	JSON json.RawMessage `json:"json,omitempty"`
+	// The model that answered.
+	Model string `json:"model"`
+	// end_turn, or max_tokens when the answer was cut off.
+	StopReason string     `json:"stop_reason"`
+	Usage      ModelUsage `json:"usage"`
+}
+
+// ModelPause: the data of model_paused.
+type ModelPause struct {
+	// quota or busy.
+	Reason string `json:"reason"`
+	// An RFC 3339 time.
+	Until string `json:"until"`
+}
+
+// ModelInvalidOutput: the data of invalid_output: why the last reply did not match, the reply, and what the call
+// spent.
+type ModelInvalidOutput struct {
+	Problem string     `json:"problem"`
+	Text    string     `json:"text"`
+	Usage   ModelUsage `json:"usage"`
+}
+
 // Bounded JSON scalar, not executable content. Strings at most 4096 code points; finite numbers in the JSON-safe
 // range.
 type UIStreamScalar = json.RawMessage
@@ -5028,6 +5118,12 @@ var newDef = map[string]func() any{
 	"TodoChangedEvent":             func() any { return new(TodoChangedEvent) },
 	"TodoEventDecision":            func() any { return new(TodoEventDecision) },
 	"TodoDecisionEvent":            func() any { return new(TodoDecisionEvent) },
+	"ModelMessage":                 func() any { return new(ModelMessage) },
+	"ModelCompleteParams":          func() any { return new(ModelCompleteParams) },
+	"ModelUsage":                   func() any { return new(ModelUsage) },
+	"ModelCompleteResult":          func() any { return new(ModelCompleteResult) },
+	"ModelPause":                   func() any { return new(ModelPause) },
+	"ModelInvalidOutput":           func() any { return new(ModelInvalidOutput) },
 	"UIStreamCapability":           func() any { return new(UIStreamCapability) },
 	"UIStreamSnapshot":             func() any { return new(UIStreamSnapshot) },
 	"UIStreamDelta":                func() any { return new(UIStreamDelta) },
@@ -5099,4 +5195,5 @@ var Calls = map[string]Call{
 	"event.kb.forgotten":             {Name: "event.kb.forgotten", From: "hub", Params: "KBForgottenEvent", Result: "", Event: true},
 	"event.todo.changed":             {Name: "event.todo.changed", From: "hub", Params: "TodoChangedEvent", Result: "", Event: true},
 	"event.todo.decision":            {Name: "event.todo.decision", From: "hub", Params: "TodoDecisionEvent", Result: "", Event: true},
+	"model.complete":                 {Name: "model.complete", From: "program", Params: "ModelCompleteParams", Result: "ModelCompleteResult"},
 }

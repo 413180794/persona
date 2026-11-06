@@ -168,7 +168,7 @@ func modelRecordKey(id string) string {
 }
 
 func modelRecordID(p ModelPurpose) string {
-	if p.CategoryID != "" && p.ID != purposeLarkAgent {
+	if p.CategoryID != "" && p.ID != purposeLarkAgent && !isExtensionPurpose(p.ID) { // those two have records of their own
 		return p.CategoryID
 	}
 	return p.ID
@@ -264,6 +264,9 @@ func (s *Service) modelPurposeDef(ctx context.Context, id string) (ModelPurpose,
 				return ModelPurpose{ID: id, CategoryID: "assistant", Name: t.Label, Group: mc(l, "group_assistant"), Kind: "launcher", Parent: "assistant", MachineID: t.MachineID}, nil
 			}
 		}
+	}
+	if p, ok := s.extensionPurposeDef(ctx, id); ok { // an extension's own (model_rpc.go)
+		return p, nil
 	}
 	if strings.HasPrefix(id, "plugin.") {
 		for _, p := range s.voicePlugins(ctx) {
@@ -431,7 +434,7 @@ func inheritedLabel(l i18n.Lang, p ModelPurpose, base ModelBinding, from string,
 		return mc(l, "source_delegate_connection", i18n.Args{"provider": name}) // the model is the user's pick, or the connection's own
 	case p.ID == "agent.delegate":
 		return mc(l, "source_delegate_default", i18n.Args{"provider": name, "model": model})
-	case p.ID == purposeLarkAgent:
+	case p.ID == purposeLarkAgent, isExtensionPurpose(p.ID):
 		return purposeName(l, p.Parent)
 	case from == mc(l, modelAutoSource):
 		return mc(l, "source_auto_named", i18n.Args{"provider": name})
@@ -876,6 +879,15 @@ func (s *Service) modelConfigRoutes() {
 		purposes := []ModelPurpose{}
 		for _, id := range modelConfigIDs {
 			p, err := s.modelPurpose(ctx, id, providers)
+			if err != nil {
+				apierr.Write(w, 500, err)
+				return
+			}
+			purposes = append(purposes, p)
+		}
+		// The extensions' own (model_rpc.go), after the categories: each with its own record, like Lark /agent.
+		for _, x := range s.modelExtensions(ctx) {
+			p, err := s.modelPurpose(ctx, assistantwire.ExtensionPurposePrefix+x.ID, providers)
 			if err != nil {
 				apierr.Write(w, 500, err)
 				return

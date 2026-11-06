@@ -65,6 +65,7 @@
   "scope_assistant_ask": "Start Persona chats and read chat activity",
   "scope_todos_read": "View to-dos",
   "scope_todos_write": "Create and edit to-dos and link chats to them (no deletion)",
+  "scope_models": "Use the model you pick for it in Settings › Model configuration (never the key)",
   "scope_call": "Call the API of extension “{id}”",
   "slot_nav_page": "Entry in the main navigation",
   "slot_overview_card": "Card on the overview",

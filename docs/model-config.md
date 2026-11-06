@@ -53,6 +53,16 @@ GET `/api/v1/model-config/purposes/lark.agent` returns this purpose's own revisi
 
 The web catalog includes the separate row and a reset-to-follow action. Android uses its existing `/agent` model entry and editor. Existing Apple editors redirect any differing `category_id` to the parent category; they need [#5925](https://github.com/nwverse/persona/issues/5925) to edit this purpose instead. Do not treat their current link as an independent editor.
 
+## Extensions' own purposes (#6102)
+
+An extension granted the `models` scope (docs/extensions.md "Model calls") gets an API purpose `extension.<extension id>`, named after the extension, in the group "Extensions":
+`kind: "api"`, `parent: "kb"`, `category_id: "kb"`, with its own record (`model_config.extension.<id>`), revision and writable `provider` / `model` (`effort` with a Responses connection), the same shape as Lark /agent.
+With an empty binding it follows "Information processing" (`kb`), including later changes there; a pick here is the extension's alone and does not touch `kb`. Its `model.complete` calls resolve this purpose at the start of each call,
+so a change applies from the next call. The extension never chooses the connection and never sees a key. The prefix is not `plugin.`: the apps take `plugin.<id>` for a voice plugin and fetch its own model list for it. No budget, no cap and no fallback model (the user's decision).
+
+`GET /api/v1/model-config` lists these purposes after Lark /agent; the manager tells the assistant which extensions have one (`app.call plugins.models`: enabled, compatible, granted `models` itself; the legacy `hub_api` full access does not count).
+A switched-off or uninstalled extension's purpose is gone (404) and its record stays dormant until the extension is back. Each call's usage goes back to the extension in the result and into one log line of the manager; nothing is metered or limited.
+
 ## Legacy configuration compatibility and unified application (#697)
 
 No configuration copying or bulk database changes: reuse the four existing records `model_config.assistant`, `model_config.agent.new`, `model_config.kb`, and `model_config.inbox.triage` as category settings, preserving revisions and atomic concurrency checks. Without explicit selections, main chat uses the assistant's original default; Agents uses the original new-Agent default (Claude Code); information processing uses the old `kb.ai` / compatible triage-API baseline; information screening uses the old triage-API baseline. If the API baseline has no connection, continue automatically selecting a connection callable from the hub.
@@ -166,7 +176,7 @@ Direct-API purposes (knowledge processing, Inbox triage / assessment / drafting,
 
 ## API
 
-`purposes` in `GET /api/v1/model-config` returns the five ordered category configurations followed by the editable Lark /agent purpose, plus `providers`; `GET /api/v1/model-config/purposes/{id}` returns one `purpose` and available `providers`, supporting legacy-purpose queries.
+`purposes` in `GET /api/v1/model-config` returns the five ordered category configurations followed by the editable Lark /agent purpose and the extensions' own purposes (`extension.<id>`, see "Extensions' own purposes"), plus `providers`; `GET /api/v1/model-config/purposes/{id}` returns one `purpose` and available `providers`, supporting legacy-purpose queries.
 
 `Purpose` includes `id/name/group/kind`, `category_id`, `override`, `effective`, `revision`, `inherited_from/status`, `limit` when the connection is paused (see “Upstream rate limits”), and `fields/provider_ids` to constrain the form. The categories' `category_id` equals their own ID, with `uses: [{"name":"Read-only purpose description"}]`. Lark /agent points `category_id` to Agents but has its own `override`, `revision`, and nonempty `fields`; clients determine editability from `fields`, not solely `category_id`. Other legacy purposes and `task.<task id>` point `category_id` to their owning category; `override` is empty, `fields` is `[]`, and revision and effective model come from the category. Real task names no longer appear on the configuration home page. The `plugin.<plugin id>` model protocol remains independent and is not added to the four-category catalog. Responses contain no secrets.
 
@@ -187,7 +197,7 @@ Only `assistant` may write `runtime` (see “Main-chat runtime”).
 “Information screening” (`inbox.triage`) also governs plugins: plugins using the Inbox without their own fallback require it to be callable before they can be enabled. With such plugins enabled, a change making it unusable returns 422 `triage_model_in_use`,
 listing plugin names (clearing a selection still saves normally if fallback to `manager.json`'s `ai` / `inbox.triage_ai` or automatic selection remains callable; `docs/extensions.md`, “General Inbox rules”).
 
-Send to `PUT /api/v1/model-config/purposes/{id}` or the compatible `PATCH` endpoint. The five category configurations, Lark /agent, and independent plugins are writable; other legacy purposes or task IDs return 400 (purpose models are read-only; edit the owning category). Missing fields are unchanged, `null` clears a selection, and nonempty values override. Success returns the same structure as a single-item GET. Only supported fields may be selected; a revision mismatch returns 409, and unknown purposes are not created ad hoc.
+Send to `PUT /api/v1/model-config/purposes/{id}` or the compatible `PATCH` endpoint. The five category configurations, Lark /agent, the extensions' own purposes, and independent plugins are writable; other legacy purposes or task IDs return 400 (purpose models are read-only; edit the owning category). Missing fields are unchanged, `null` clears a selection, and nonempty values override. Success returns the same structure as a single-item GET. Only supported fields may be selected; a revision mismatch returns 409, and unknown purposes are not created ad hoc.
 
 ## Validation
 
