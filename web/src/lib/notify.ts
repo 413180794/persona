@@ -22,7 +22,20 @@ export interface NotifyPrefs {
   long_turn_seconds?: number;
   /** How long a finished turn waits before the phone's push (notify.go doneDelay). */
   done_delay_seconds?: number;
+  /** Quiet hours (#5806, hub/quiethours.go): inside the window no "finished" signal, and "Needs you" without sound. */
+  quiet?: QuietHours;
 }
+
+/** "HH:MM" local times; an empty `tz` is this browser's time zone. The window may cross midnight. */
+export interface QuietHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+  tz?: string;
+}
+
+/** The times the switch shows before any are set. */
+export const DEFAULT_QUIET: QuietHours = { enabled: false, start: "23:00", end: "07:00" };
 
 /** The hub's defaults (notify.go defaultPrefs, longTurn). */
 export const DEFAULT_PREFS: NotifyPrefs = { input: true, done: "long" };
@@ -34,8 +47,9 @@ export const DEFAULT_LONG_TURN_SECONDS = 60;
  * Does this browser want a signal (sound, notification) for the event? "Needs you": the "When something needs you" switch. "Done": "Don't notify" never,
  * "Every time" always, "Long tasks only" for a turn of at least long_turn_seconds (`ranMs`; unknown is not long, as on the Mac).
  */
-export function wants(kind: "needs" | "finished", prefs: NotifyPrefs, ranMs?: number): boolean {
+export function wants(kind: "needs" | "finished", prefs: NotifyPrefs, ranMs?: number, now: Date = new Date()): boolean {
   if (kind === "needs") return prefs.input;
+  if (inQuietHours(prefs, now)) return false;
   switch (prefs.done) {
     case "always":
       return true;
@@ -44,6 +58,31 @@ export function wants(kind: "needs" | "finished", prefs: NotifyPrefs, ranMs?: nu
     default:
       return false;
   }
+}
+
+function clockMinutes(s: string | undefined): number | undefined {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : undefined;
+}
+
+/** Is `now` inside the prefs' quiet hours (as the hub reads them: the start is inside, the end is not, start = end is none)? */
+export function inQuietHours(prefs: Pick<NotifyPrefs, "quiet">, now: Date = new Date()): boolean {
+  const q = prefs.quiet;
+  if (!q?.enabled) return false;
+  const start = clockMinutes(q.start);
+  const end = clockMinutes(q.end);
+  if (start === undefined || end === undefined || start === end) return false;
+  let minutes = now.getHours() * 60 + now.getMinutes();
+  if (q.tz) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone: q.tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+      const part = (type: string) => Number(parts.find((x) => x.type === type)?.value);
+      minutes = part("hour") * 60 + part("minute");
+    } catch {
+      // a zone this browser doesn't know: its own time
+    }
+  }
+  return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
 
 /** A duration as the app says it (NotifyPrefs.duration): whole minutes in minutes, else seconds; 60 s when unknown. */
@@ -97,6 +136,7 @@ export function normalize(raw: Partial<NotifyPrefs> | null | undefined): NotifyP
     done,
     long_turn_seconds: raw?.long_turn_seconds,
     done_delay_seconds: raw?.done_delay_seconds,
+    quiet: raw?.quiet?.enabled || raw?.quiet?.start ? { ...DEFAULT_QUIET, ...raw.quiet } : undefined,
   };
 }
 
@@ -141,14 +181,14 @@ export async function loadNotifyPrefs(): Promise<NotifyPrefs> {
 }
 
 /** Optimistic: the control moves at once and goes back if the hub says no (the error is the caller's to show). */
-export async function saveNotifyPrefs(patch: Partial<Pick<NotifyPrefs, "input" | "done">>): Promise<void> {
+export async function saveNotifyPrefs(patch: Partial<Pick<NotifyPrefs, "input" | "done" | "quiet">>): Promise<void> {
   const before = prefs;
   const mine = ++saveSeq;
   set({ ...prefs, ...patch });
   const { id, kept } = deviceId();
   if (!kept) return; // this page's own: nothing to keep them on the hub by
   try {
-    const answer = normalize(await api<Partial<NotifyPrefs>>(`/devices/${enc(id)}/prefs`, { method: "PUT", json: { input: prefs.input, done: prefs.done } }));
+    const answer = normalize(await api<Partial<NotifyPrefs>>(`/devices/${enc(id)}/prefs`, { method: "PUT", json: { input: prefs.input, done: prefs.done, ...(prefs.quiet && { quiet: prefs.quiet }) } }));
     if (mine === saveSeq) set(answer);
   } catch (e) {
     if (mine === saveSeq) set(before);
@@ -363,19 +403,19 @@ function buttonsOnNotifications(): boolean {
  * gets Allow / Deny where the browser can draw them (#4464): the worker shows it and an open page answers a button
  * (lib/notification-answer.ts); elsewhere it is the plain one.
  */
-export function postNotification(n: { title: string; body: string; tag: string; url: string; icon?: string; ix?: string }, open: () => void): void {
+export function postNotification(n: { title: string; body: string; tag: string; url: string; icon?: string; ix?: string; silent?: boolean }, open: () => void): void {
   if (!systemNotifyActive()) return;
   if (n.ix && buttonsOnNotifications()) {
     // Chrome doesn't let the worker's notification replace the page's under the same tag: take the page's back first
     closePageNotification(n.tag);
     const actions = [{ action: "allow", title: t("chat-interactions.allow") }, { action: "deny", title: t("chat-interactions.deny") }];
     navigator.serviceWorker.ready
-      .then((reg) => reg.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, data: { url: n.url, ix: n.ix }, actions } as NotificationOptions))
+      .then((reg) => reg.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, silent: n.silent, data: { url: n.url, ix: n.ix }, actions } as NotificationOptions))
       .catch(() => postNotification({ ...n, ix: undefined }, open));
     return;
   }
   try {
-    const note = new Notification(n.title, { body: n.body, tag: n.tag, icon: n.icon });
+    const note = new Notification(n.title, { body: n.body, tag: n.tag, icon: n.icon, silent: n.silent });
     posted.set(n.tag, note);
     // nor the page's the worker's (one with buttons, from an earlier permission card of this agent)
     closeWorkerNotifications(n.tag);
@@ -390,7 +430,7 @@ export function postNotification(n: { title: string; body: string; tag: string; 
   } catch {
     navigator.serviceWorker
       ?.getRegistration()
-      .then((reg) => reg?.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, data: { url: n.url } }))
+      .then((reg) => reg?.showNotification(n.title, { body: n.body, tag: n.tag, icon: n.icon, silent: n.silent, data: { url: n.url } }))
       .catch(() => {});
   }
 }

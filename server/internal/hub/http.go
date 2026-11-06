@@ -175,6 +175,10 @@ func (h *Hub) routes() http.Handler {
 			writeBodyErr(w, err, err)
 			return
 		}
+		if err := prefs.Quiet.validate(); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
 		raw, _ := json.Marshal(prefs)
 		prefs = devicePrefs(raw) // normalizes an unknown "done"
 		if err := h.push.setPrefsBy(r.PathValue("id"), principalOf(r.Context()).ID, prefs); err != nil {

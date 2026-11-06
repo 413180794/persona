@@ -422,7 +422,14 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
     onPinsOpen?.(false);
   }, [onPinsOpen]);
 
+  // Starting a conversation takes seconds: while one is on its way the button is busy and another press starts nothing,
+  // so a press that seemed lost does not open a second conversation (#5868). The ref holds before the state re-renders.
+  const [asking, setAsking] = useState(false);
+  const askingNow = useRef(false);
   const handleAskPersona = useCallback(async () => {
+    if (askingNow.current) return;
+    askingNow.current = true;
+    setAsking(true);
     // i18n-ignore: the request to the assistant is a prompt, written in one language (docs/i18n.md "Prompts")
     const chatTitle = chat.title || "飞书会话"; // i18n-ignore
     const where = ol ? `，在飞书账号 ${ol}：lark_messages 传 account=${ol}` : ""; // i18n-ignore: prompt
@@ -436,6 +443,9 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
       navigate({ name: "jarvis", sid: r.session.session_id });
     } catch (e) {
       toast(t("inbox-larkthread.summary_failed", { error: errorText(e) }), "error");
+    } finally {
+      askingNow.current = false;
+      setAsking(false);
     }
   }, [chat.title, feed, ol]);
 
@@ -551,6 +561,7 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
                 translateTo={translateTo}
                 onReply={handleReply}
                 onAskPersona={handleAskPersona}
+                askingPersona={asking}
                 onCopy={handleCopy}
                 onRetry={outbox.retry}
                 onCheck={outbox.check}
@@ -950,6 +961,7 @@ function Message({
   translateTo,
   onReply,
   onAskPersona,
+  askingPersona,
   onCopy,
   onRetry,
   onCheck,
@@ -966,6 +978,8 @@ function Message({
   translateTo?: string;
   onReply?: (m: LarkMessage) => void;
   onAskPersona?: () => void;
+  /** A conversation asked for with onAskPersona is starting: its button is busy until it opens or fails. */
+  askingPersona?: boolean;
   onCopy?: (m: LarkMessage) => void;
   onRetry?: (m: LarkMessage) => void;
   /** A file whose upload broke off: "Check result", or remove the local copy. */
@@ -1118,10 +1132,12 @@ function Message({
             <button
               type="button"
               onClick={onAskPersona}
+              disabled={askingPersona}
+              aria-busy={askingPersona || undefined}
               className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-accent-ink hover:bg-accent-tint/40"
               title={t("inbox-larkthread.ask_persona")}
             >
-              <Icon name="spark" size={11} />
+              {askingPersona ? <Spinner size={11} /> : <Icon name="spark" size={11} />}
               <span>{t("inbox-larkthread.summarize")}</span>
             </button>
           )}

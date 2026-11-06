@@ -60,6 +60,8 @@ type Pusher struct {
 	hubID func() string
 	// userLang is the user's language (Hub.userLang): pushes to a device that registered without one read in it.
 	userLang func() i18n.Lang
+	// userLoc is the user's time zone (Hub.userLocation): quiet hours without a zone of their own read in it (quiethours.go).
+	userLoc func() *time.Location
 	// desktopOpen: the desktop app with this push device id is connected (Hub.desktopOpen); it posts its own
 	// notifications for agents then (the Mac's MacAttentionWatcher).
 	desktopOpen func(device string) bool
@@ -186,17 +188,30 @@ func (p *Pusher) send(payload map[string]any, collapseID string, wants func(Noti
 
 // sendLocalized is send with the alert written per device, in its language (langOf).
 func (p *Pusher) sendLocalized(build localized, collapseID string, wants func(NotifyPrefs) bool) {
+	p.sendLocalizedQuiet(build, collapseID, wants, quietNone)
+}
+
+// sendLocalizedQuiet is sendLocalized with what each device's quiet hours do to this push (quiethours.go).
+func (p *Pusher) sendLocalizedQuiet(build localized, collapseID string, wants func(NotifyPrefs) bool, rule quietRule) {
 	if p == nil {
 		return
 	}
 	online := p.desktopOnline != nil && p.desktopOnline()
 	byPrefs := alertWanted(wants, online)
-	p.sendBuilt(build, collapseID, "alert", "10", func(d Device) bool {
+	var hush func(Device) bool
+	if rule == quietHush {
+		hush = func(d Device) bool { return p.inQuiet(devicePrefs(d.Prefs)) }
+	}
+	p.sendBuiltWith(build, collapseID, "alert", "10", func(d Device) bool {
 		if wants != nil && p.desktopOpen != nil && p.desktopOpen(d.DeviceID) {
 			return false
 		}
-		return byPrefs(devicePrefs(d.Prefs))
-	})
+		prefs := devicePrefs(d.Prefs)
+		if rule == quietSkip && p.inQuiet(prefs) {
+			return false
+		}
+		return byPrefs(prefs)
+	}, hush)
 }
 
 func (p *Pusher) device(id string) (Device, bool) {
@@ -653,6 +668,11 @@ func (p *Pusher) langOf(d Device) i18n.Lang {
 }
 
 func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority string, to func(Device) bool) {
+	p.sendBuiltWith(build, collapseID, pushType, priority, to, nil)
+}
+
+// sendBuiltWith is sendBuilt where the devices hush picks get the push without a sound (hushed, quiet hours).
+func (p *Pusher) sendBuiltWith(build localized, collapseID, pushType, priority string, to func(Device) bool, hush func(Device) bool) {
 	if p == nil {
 		return
 	}
@@ -682,12 +702,20 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 		payload map[string]any
 		body    []byte
 	}
-	byLang := map[i18n.Lang]built{}
+	type variant struct {
+		lang  i18n.Lang
+		quiet bool
+	}
+	byLang := map[variant]built{}
 	for _, d := range devices {
 		lang := p.langOf(d)
-		b, ok := byLang[lang]
+		key := variant{lang, hush != nil && hush(d)}
+		b, ok := byLang[key]
 		if !ok {
 			b.payload = cleanAlert(build(lang))
+			if key.quiet {
+				b.payload = hushed(b.payload)
+			}
 			if p.hubID != nil {
 				b.payload = maps.Clone(b.payload)
 				b.payload["hub_id"] = p.hubID()
@@ -702,7 +730,7 @@ func (p *Pusher) sendBuilt(build localized, collapseID, pushType, priority strin
 					p.logf("apns: %s push of %d bytes does not fit even shortened: %v", pushType, len(b.body), err)
 				}
 			}
-			byLang[lang] = b
+			byLang[key] = b
 		}
 		payload, body := b.payload, b.body
 		if p.relayed(d) {

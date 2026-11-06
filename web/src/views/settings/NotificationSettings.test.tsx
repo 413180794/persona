@@ -5,10 +5,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-type Pending = { method: string; resolve: (v: unknown) => void; reject: (e: unknown) => void };
+type Pending = { method: string; json?: unknown; resolve: (v: unknown) => void; reject: (e: unknown) => void };
 const pending: Pending[] = [];
 vi.mock("../../lib/api", () => ({
-  api: (_path: string, init?: { method?: string }) => new Promise((resolve, reject) => pending.push({ method: init?.method ?? "GET", resolve, reject })),
+  api: (_path: string, init?: { method?: string; json?: unknown }) =>
+    new Promise((resolve, reject) => pending.push({ method: init?.method ?? "GET", json: init?.json, resolve, reject })),
   enc: encodeURIComponent,
   errorText: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
@@ -114,5 +115,22 @@ describe("设置 › 通知", () => {
     await act(async () => named("提示音")!.click());
     expect(named("提示音")!.getAttribute("aria-checked")).toBe("false");
     expect(localStorage.getItem("persona.attentionSound")).toBeNull();
+  });
+
+  it("免打扰时段：打开后显示起止时间，存的时候带上这个浏览器的时区（#5806）", async () => {
+    await render();
+    await answer(0, { input: true, done: "long", quiet: { enabled: false, start: "", end: "" } });
+    const quiet = () => named("免打扰时段")!;
+    expect(quiet().getAttribute("aria-checked")).toBe("false");
+    expect(host.querySelector('input[type="time"]')).toBeNull();
+    await act(async () => quiet().click());
+    expect(quiet().getAttribute("aria-checked")).toBe("true");
+    const sent = pending[1];
+    expect(sent.method).toBe("PUT");
+    expect(sent.json).toMatchObject({ quiet: { enabled: true, start: "23:00", end: "07:00", tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+    await answer(1, { input: true, done: "long", quiet: { enabled: true, start: "23:00", end: "07:00" } });
+    const times = [...host.querySelectorAll<HTMLInputElement>('input[type="time"]')].map((i) => i.value);
+    expect(times).toEqual(["23:00", "07:00"]);
+    expect(host.textContent).toContain(`${new Intl.DateTimeFormat("zh-Hans", { timeStyle: "short" }).format(new Date(2000, 0, 1, 23, 0))} – `);
   });
 });

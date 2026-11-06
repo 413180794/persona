@@ -237,6 +237,7 @@ Go `hub.FleetState` and Swift `FleetState` (`apple/Shared/FleetState.swift`) mat
 - End: nothing displayable for over 1 minute, or only finished-unseen for over 5 minutes, sends `end` (`dismissal-date` = now) and forgets the activity token.
 - Start: with an activity token, send `update`; without one (App never opened, or the previous activity ended) but with a push-to-start token, send `start` once at the beginning of a "round"
   (going from empty / only finished to something needing you or working counts as a new round). If the user swipes away the activity, it won't be reopened in that round. An activity older than 8 hours (the system limit) is considered gone and starts again next round.
+  The `start` carries an alert ("2 need you · 3 working"), which is left out while the device is "Phone Muted" with a desktop online or inside its quiet hours (`quiet` in the device's prefs, #5806): the activity still starts, without lighting the screen.
 - APNs: `apns-push-type: liveactivity`, `apns-topic: <bundle>.push-type.liveactivity`, addressed to the activity's own token (or push-to-start token),
   in the same environment as device registration (Debug is sandbox). 410 / BadDeviceToken deletes that token.
 - One `live_activities` row per device (`device_id`, `activity_id`, `push_token`, `push_to_start_token`, `started_at`), with an in-memory copy and a database write on each change.

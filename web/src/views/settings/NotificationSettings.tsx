@@ -3,10 +3,10 @@
 // (GET / PUT /devices/{id}/prefs, lib/notify.ts), as the phone's are. The "Alert sound" switch sits here too, under the system
 // one (#4057): it is this browser's alone (lib/attention.ts), so it shows while the hub's prefs load, and it follows them.
 import { useEffect, useState } from "react";
-import { t } from "../../i18n";
+import { formatDate, t } from "../../i18n";
 import { errorText } from "../../lib/api";
 import { setAttentionSoundEnabled, useAttentionSoundSetting } from "../../lib/attention";
-import { durationText, loadNotifyPrefs, saveNotifyPrefs, setSystemNotify, useNotifyPrefs, useSystemNotify, type DonePref, type Permission } from "../../lib/notify";
+import { DEFAULT_QUIET, durationText, loadNotifyPrefs, saveNotifyPrefs, setSystemNotify, useNotifyPrefs, useSystemNotify, type DonePref, type Permission, type QuietHours } from "../../lib/notify";
 import { Button, cx, Loading, toast } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Group, Pill, Row, Switch } from "./SettingsParts";
@@ -16,6 +16,24 @@ const DONE: { v: DonePref; key: string }[] = [
   { v: "long", key: "settings-notifications.done_long" },
   { v: "always", key: "settings-notifications.done_always" },
 ];
+
+/** This browser's time zone, kept with the window so the hub reads it as this browser does. */
+function browserZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** "23:00" as this language writes a time of day ("11:00 PM" in English), as the time fields show it. */
+function clockText(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  return formatDate(new Date(2000, 0, 1, h, m), { timeStyle: "short" });
+}
+
+const timeClass =
+  "h-8 w-28 rounded-control bg-field px-2.5 text-[12.5px] tabular-nums text-ink shadow-inset-field outline-none focus:shadow-[inset_0_0_0_1px_var(--accent)] disabled:opacity-60";
 
 function permissionHint(p: Permission, on: boolean): string | undefined {
   if (p === "unsupported") return t("settings-notifications.system_unsupported");
@@ -53,6 +71,8 @@ export function NotificationSettings() {
   };
 
   const ready = state === "ready";
+  const quiet = prefs.quiet ?? DEFAULT_QUIET;
+  const saveQuiet = (patch: Partial<QuietHours>) => void save({ quiet: { ...quiet, tz: browserZone(), ...patch } });
   const long = durationText(prefs.long_turn_seconds, {
     s: (count) => t("settings-notifications.seconds", { count }),
     m: (count) => t("settings-notifications.minutes", { count }),
@@ -128,6 +148,38 @@ export function NotificationSettings() {
                 );
               })}
             </div>
+          </Group>
+
+          <Group footer={t("settings-notifications.quiet_footer")}>
+            <Row
+              icon="moon"
+              label={t("settings-notifications.quiet")}
+              hint={quiet.enabled ? t("settings-notifications.quiet_range", { start: clockText(quiet.start), end: clockText(quiet.end) }) : t("settings-notifications.quiet_hint")}
+            >
+              <Switch on={quiet.enabled} onChange={(enabled) => saveQuiet({ enabled })} label={t("settings-notifications.quiet")} />
+            </Row>
+            {quiet.enabled && (
+              <>
+                <Row label={t("settings-notifications.quiet_start")}>
+                  <input
+                    type="time"
+                    className={timeClass}
+                    aria-label={t("settings-notifications.quiet_start")}
+                    value={quiet.start}
+                    onChange={(e) => e.target.value && saveQuiet({ start: e.target.value.slice(0, 5) })}
+                  />
+                </Row>
+                <Row label={t("settings-notifications.quiet_end")}>
+                  <input
+                    type="time"
+                    className={timeClass}
+                    aria-label={t("settings-notifications.quiet_end")}
+                    value={quiet.end}
+                    onChange={(e) => e.target.value && saveQuiet({ end: e.target.value.slice(0, 5) })}
+                  />
+                </Row>
+              </>
+            )}
           </Group>
         </>
       )}

@@ -550,8 +550,9 @@ func (la *liveActivities) flush(st FleetState, urgent, force bool) (next time.Ti
 			la.mu.Unlock()
 			if !already {
 				la.markSent(r.DeviceID, dst, now, true)
-				// "Phone Muted" while a desktop is online: the activity still starts, without its alert (desktops.go).
-				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline()
+				// "Phone Muted" while a desktop is online, or the device's quiet hours (quiethours.go): the activity still
+				// starts, without its alert (desktops.go).
+				quiet := prefs.MuteWhileDesktop && la.h.push.desktopOnline != nil && la.h.push.desktopOnline() || la.h.push.inQuiet(prefs)
 				la.sendStart(d, r, startPayloadIn(la.h.userLang(), dst, now, quiet))
 			}
 		}
@@ -618,7 +619,7 @@ func liveActivityPayloadIn(l i18n.Lang, event string, st FleetState, now time.Ti
 	return map[string]any{"aps": aps}
 }
 
-// startPayload is a push-to-start; quiet drops its alert (the phone is muted while a desktop is online).
+// startPayload is a push-to-start; quiet drops its alert (the phone is muted while a desktop is online, or in its quiet hours).
 func startPayload(st FleetState, now time.Time, quiet bool) map[string]any {
 	return startPayloadIn(i18n.Default, st, now, quiet)
 }

@@ -66,6 +66,8 @@ type NotifyPrefs struct {
 	// Look: the persona this device's Live Activity draws (Settings › Look), echoed in its pushes (FleetState.Look): the
 	// widget extension cannot read the app's settings.
 	Look *FleetLook `json:"look,omitempty"`
+	// Quiet: this device's quiet hours (quiethours.go): no "Agent finished", and "Needs you" without sound, inside the window.
+	Quiet QuietHours `json:"quiet"`
 }
 
 // TranslatePrefs mirrors Settings › Translation on a device.
@@ -144,6 +146,9 @@ func devicePrefs(raw json.RawMessage) NotifyPrefs {
 	case "a", "b", "c", "custom":
 	default:
 		p.Island.Preset = "a"
+	}
+	if p.Quiet.validate() != nil { // stored before a check, or by hand: off
+		p.Quiet = QuietHours{}
 	}
 	if l := p.Look; l != nil && (l.Design == "" || len(l.Design) > 32 || len(l.Package) > 160) {
 		p.Look = nil // every push carries it, inside the activity's 4 KB

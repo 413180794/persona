@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"maps"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/i18n"
@@ -29,8 +30,8 @@ func (w pushWants) fn() func(NotifyPrefs) bool {
 func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string, wants pushWants) {
 	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
 	h.emitToExtensions("agent.finished", map[string]any{"machine_id": machineID, "machine": machine, "session_id": sessionID, "title": title})
-	h.push.sendLocalized(build, "", wants.fn())
-	h.notifyWSIn(kind, build, wants.fn())
+	h.push.sendLocalizedQuiet(build, "", wants.fn(), wants.quiet())
+	h.notifyWSQuiet(kind, build, wants.fn(), wants.quiet())
 }
 
 // notifyReply reminds the devices that take "needs you" pushes of an agent still waiting on the user's answer (#5096).
@@ -40,8 +41,8 @@ func (h *Hub) notifyDone(kind, machineID, machine, sessionID, title, text string
 func (h *Hub) notifyReply(machineID, machine, sessionID, title, text string) {
 	build := func(l i18n.Lang) map[string]any { return donePayloadIn(l, machineID, machine, sessionID, title, text) }
 	wants := pushWants{Kind: "input"}
-	h.push.sendLocalized(build, "", wants.fn())
-	h.notifyWSIn("reply", build, wants.fn())
+	h.push.sendLocalizedQuiet(build, "", wants.fn(), wants.quiet())
+	h.notifyWSQuiet("reply", build, wants.fn(), wants.quiet())
 }
 
 func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
@@ -50,10 +51,10 @@ func (h *Hub) notifyInteraction(ix proto.Interaction, machine string) {
 		"interaction_id": ix.ID, "kind": ix.Kind, "summary": ix.Summary})
 	wants := pushWants{Kind: "input"}
 	if ix.Kind == proto.IxElicitation {
-		h.notifyWSIn("interaction", build, wants.fn(), "elicitation")
+		h.notifyWSQuiet("interaction", build, wants.fn(), wants.quiet(), "elicitation")
 	} else {
-		h.push.sendLocalized(build, ix.ID, wants.fn())
-		h.notifyWSIn("interaction", build, wants.fn())
+		h.push.sendLocalizedQuiet(build, ix.ID, wants.fn(), wants.quiet())
+		h.notifyWSQuiet("interaction", build, wants.fn(), wants.quiet())
 	}
 }
 
@@ -65,6 +66,12 @@ func (h *Hub) notifyWS(kind string, payload map[string]any, wants func(NotifyPre
 
 // notifyWSIn is notifyWS with the alert written in each connection's language (client.lang).
 func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) bool, required ...string) {
+	h.notifyWSQuiet(kind, build, wants, quietNone, required...)
+}
+
+// notifyWSQuiet is notifyWSIn with what each device's quiet hours do to this notification (quiethours.go): skipped, or
+// marked "quiet" for the client to post without a sound.
+func (h *Hub) notifyWSQuiet(kind string, build localized, wants func(NotifyPrefs) bool, rule quietRule, required ...string) {
 	msgs := map[i18n.Lang]map[string]any{}
 	msgIn := func(l i18n.Lang) map[string]any {
 		if m, ok := msgs[l]; ok {
@@ -77,6 +84,11 @@ func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) b
 	// Mute phone holds these back while a desktop is online, with the same rule as the APNs pushes (alertWanted): an
 	// Android phone alerts from them. desktopOnline takes h.mu, so it is read before.
 	wants = alertWanted(wants, h.desktopOnline())
+	// Read before h.mu as well: the user's time zone asks the assistant's profile.
+	now, loc := time.Now(), (*time.Location)(nil)
+	if rule != quietNone && h.push != nil {
+		now, loc = h.push.now(), h.userLocation()
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for c := range h.clients {
@@ -90,7 +102,17 @@ func (h *Hub) notifyWSIn(kind string, build localized, wants func(NotifyPrefs) b
 		if h.push != nil {
 			prefs = h.push.prefs(c.device)
 		}
-		if wants == nil || wants(prefs) {
+		if wants != nil && !wants(prefs) {
+			continue
+		}
+		quiet := rule != quietNone && prefs.Quiet.activeAt(now, loc)
+		switch {
+		case quiet && rule == quietSkip:
+		case quiet:
+			msg := maps.Clone(msgIn(c.lang()))
+			msg["quiet"] = true
+			c.sendJSON(msg)
+		default:
 			c.sendJSON(msgIn(c.lang()))
 		}
 	}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_PREFS, durationText, normalize, notificationText, waitingCard, wants } from "./notify";
+import { DEFAULT_PREFS, durationText, inQuietHours, normalize, notificationText, waitingCard, wants } from "./notify";
 import type { Interaction } from "./types";
 
 const units = { s: (n: number) => `${n} 秒`, m: (n: number) => `${n} 分钟` };
@@ -207,5 +207,40 @@ describe("授权卡的通知带「允许 / 拒绝」（#4464）", () => {
     const { made, workerClosed } = await post({ workerHas: ["m/a#needs", "m/b#needs"] });
     expect(made).toEqual(["a 要你批准"]);
     expect(workerClosed).toEqual(["m/a#needs"]);
+  });
+});
+
+describe("quiet hours (#5806)", () => {
+  const night = { enabled: true, start: "23:00", end: "07:00", tz: "UTC" };
+  const at = (iso: string) => new Date(iso);
+
+  it("reads the window as the hub does: across midnight, start inside, end outside", () => {
+    expect(inQuietHours({ quiet: night }, at("2026-11-06T23:00:00Z"))).toBe(true);
+    expect(inQuietHours({ quiet: night }, at("2026-11-06T06:59:00Z"))).toBe(true);
+    expect(inQuietHours({ quiet: night }, at("2026-11-06T07:00:00Z"))).toBe(false);
+    expect(inQuietHours({ quiet: night }, at("2026-11-06T12:00:00Z"))).toBe(false);
+    expect(inQuietHours({ quiet: { ...night, start: "13:00", end: "15:00" } }, at("2026-11-06T14:00:00Z"))).toBe(true);
+    expect(inQuietHours({ quiet: { ...night, end: "23:00" } }, at("2026-11-06T23:00:00Z"))).toBe(false);
+    expect(inQuietHours({ quiet: { ...night, enabled: false } }, at("2026-11-06T23:30:00Z"))).toBe(false);
+    expect(inQuietHours({}, at("2026-11-06T23:30:00Z"))).toBe(false);
+  });
+
+  it("reads its own time zone", () => {
+    // 15:00 UTC is midnight in Tokyo
+    expect(inQuietHours({ quiet: { ...night, tz: "Asia/Tokyo" } }, at("2026-11-06T15:00:00Z"))).toBe(true);
+    expect(inQuietHours({ quiet: night }, at("2026-11-06T15:00:00Z"))).toBe(false);
+  });
+
+  it("holds back finished ones inside the window, never what needs you", () => {
+    const prefs = { ...DEFAULT_PREFS, done: "always" as const, quiet: night };
+    expect(wants("finished", prefs, 1000, at("2026-11-06T02:00:00Z"))).toBe(false);
+    expect(wants("finished", prefs, 1000, at("2026-11-06T12:00:00Z"))).toBe(true);
+    expect(wants("needs", prefs, undefined, at("2026-11-06T02:00:00Z"))).toBe(true);
+  });
+
+  it("keeps a window the hub sends and none when it never had one", () => {
+    expect(normalize({ quiet: night }).quiet).toEqual(night);
+    expect(normalize({ quiet: { enabled: false, start: "", end: "" } }).quiet).toBeUndefined();
+    expect(normalize({}).quiet).toBeUndefined();
   });
 });

@@ -3595,7 +3595,9 @@ def scrolling_screen(cols, rows, typed="", tick=0):
 
 
 PREFS = {"input": True, "done": "long", "live_activity": True, "lock_details": False, "long_turn_seconds": 60, "done_delay_seconds": 60,
-         "island": {"preset": "a", "left": "", "right": "", "machine": ""}}  # one device is enough
+         "island": {"preset": "a", "left": "", "right": "", "machine": ""},
+         # quiet hours (#5806): never set until a client sets them; MOCK_QUIET_HOURS=1 starts with 23:00–07:00 on
+         "quiet": {"enabled": True, "start": "23:00", "end": "07:00"} if os.environ.get("MOCK_QUIET_HOURS") else {"enabled": False, "start": "", "end": ""}}  # one device is enough
 RESOLVED = []  # resolve calls, newest last (GET /mock/resolved)
 # Settings › Connectors › Lark bot (GET/PUT /api/v1/bots/feishu); MOCK_BOT=pairing shows a code waiting, =off a fresh hub.
 FEISHU_BOT = {"enabled": True, "app_id": "cli_example0001", "domain": "https://open.feishu.cn", "has_secret": True,
@@ -12877,6 +12879,8 @@ class H(BaseHTTPRequestHandler):
             body = json.loads(self.last_body or b"{}")
             PREFS.update({k: v for k, v in body.items() if k in ("input", "done", "live_activity", "lock_details")})
             PREFS["island"].update({k: v for k, v in (body.get("island") or {}).items() if k in ("preset", "left", "right", "machine")})
+            if isinstance(body.get("quiet"), dict):
+                PREFS["quiet"] = {k: body["quiet"].get(k, "") for k in ("enabled", "start", "end", "tz")}
             return self.send_json(PREFS)
         if p.startswith("/api/v1/sessions/") and p.endswith("/messages") and os.environ.get("MOCK_SEND_REFUSE"):
             # MOCK_SEND_REFUSE=input_draft|dialog_open: the computer refuses sends (SendSafety); clear_draft then succeeds

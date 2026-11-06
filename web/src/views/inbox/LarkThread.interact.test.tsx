@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // The Feishu chat page's interactions against a fake hub (fetch): a reaction the hub turns down goes back, a card
 // button's failure says why and a success reads the window around the pressed message again, the draft and its quote
-// come back with the chat and are gone once sent, and a group's @ list offers "Everyone" first.
+// come back with the chat and are gone once sent, a group's @ list offers "Everyone" first, and 「让 Persona 总结」
+// starts one conversation however often it is pressed while that one is starting.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +15,9 @@ import { LarkThread, type LarkChatRef } from "./LarkThread";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Route = (url: string, init: RequestInit) => { status?: number; body: unknown } | undefined;
+type Reply = { status?: number; body: unknown };
+// A route may hold its answer back (a promise) to stand for a hub that takes a while.
+type Route = (url: string, init: RequestInit) => Reply | undefined | Promise<Reply | undefined>;
 let route: Route;
 const calls: { url: string; method: string; body?: unknown }[] = [];
 
@@ -70,7 +73,7 @@ beforeEach(() => {
     const method = init.method ?? "GET";
     const body = typeof init.body === "string" ? JSON.parse(init.body) : undefined;
     calls.push({ url, method, body });
-    const r = route(url, init) ?? (url.includes("/read-states") ? ok({ states: [] }) : url.endsWith("/read") ? ok({}) : { status: 404, body: { error: "not found" } });
+    const r = (await route(url, init)) ?? (url.includes("/read-states") ? ok({ states: [] }) : url.endsWith("/read") ? ok({}) : { status: 404, body: { error: "not found" } });
     return { ok: (r.status ?? 200) < 400, status: r.status ?? 200, text: async () => JSON.stringify(r.body), headers: new Headers() };
   }));
   host = document.createElement("div");
@@ -198,5 +201,25 @@ describe("飞书会话页的交互", () => {
     await flush();
     const sent = calls.find((c) => c.method === "POST" && c.url.includes("/conversations/g1/messages"));
     expect(sent?.body).toMatchObject({ mentions: [{ user_id: "u1", name: "示例成员" }] });
+  });
+
+  it("「让 Persona 总结」在对话开好之前再点，不会再开一段（#5868）", async () => {
+    let release: (r: Reply) => void = () => {};
+    route = (url, init) => {
+      if (url.includes("/conversations/f1/messages")) return ok({ messages: [msg("m1")] });
+      if (url.includes("/assistant/conversations") && init.method === "POST") return new Promise<Reply>((done) => { release = done; });
+      return undefined;
+    };
+    await render({ feed: "f1", title: "示例" });
+    const ask = () => buttons().find((b) => b.title === "让 Persona 总结")!;
+    await act(async () => ask().click());
+    await flush();
+    expect(ask().disabled).toBe(true);
+    await act(async () => ask().click());
+    await flush();
+    release(ok({ session: { machine_id: "mac", session_id: "s1" } }));
+    await flush();
+    expect(calls.filter((c) => c.method === "POST" && c.url.includes("/assistant/conversations"))).toHaveLength(1);
+    expect(ask().disabled).toBe(false);
   });
 });

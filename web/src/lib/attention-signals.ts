@@ -6,7 +6,7 @@ import { agentKey } from "./pins";
 import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
 import { answeredTags, attentionSoundEnabled, badgeText, batchDue, finishedBatch, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
-import { claimNotification, closeNotification, dismissNotification, releaseClaim, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
+import { claimNotification, closeNotification, dismissNotification, releaseClaim, FRONT_BEAT_MS, inQuietHours, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
 import { failedTagsOver, listenForNotificationClicks } from "./notification-answer";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
@@ -191,7 +191,8 @@ function notify(s: Session, kind: "needs" | "finished", card?: Interaction): { a
   // a permission card's gets Allow / Deny (#4464), when the session can be answered from here and nothing has to be
   // filled in first (fields: as the hub's push and the overview's quick answers); the rest need the conversation
   const ix = waiting.ix?.kind === "permission" && !waiting.ix.fields?.length && sessionCan(s, "approve") ? waiting.ix.id : undefined;
-  postNotification({ title, body, tag, url: href(route), icon, ix }, () => navigate(route));
+  // inside quiet hours a "Needs you" one comes without a sound (a finished one doesn't come at all: wants)
+  postNotification({ title, body, tag, url: href(route), icon, ix, silent: inQuietHours(notifyPrefs()) }, () => navigate(route));
   return { about: waiting.ix?.id };
 }
 
@@ -310,7 +311,7 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     const wanted = [...events, ...fresh.events].filter((e) => wants(e.kind, prefs, e.kind === "finished" ? ran(e.key) : undefined));
     const sound = attentionSoundEnabled();
     const speak = (kind: "needs" | "finished", k: string) => {
-      if (!sound || suppressed(k, { key: viewing.current, focused: inFront() })) return;
+      if (!sound || inQuietHours(prefs) || suppressed(k, { key: viewing.current, focused: inFront() })) return;
       if (allow.current(Date.now())) play(kind);
     };
     const find = (k: string) => latest.current.find((x) => agentKey(x) === k);
