@@ -25,6 +25,11 @@ struct SubagentCardTests {
         let tasks = TaskIndex.build(done)
         #expect(!tasks.started.contains("a"))
         #expect(SubagentCardStatus.of(call(done), tasks: tasks, agent: Subagent(id: "x1", sessionID: "s@x1", toolUseID: "a", running: true)) == .done)
+        // Whatever its report says: "background" in it is not a receipt (only "moved to the background (ID: …)" is).
+        let worded = [use, item(2, .toolResult, role: "user", text: "Set the background to gray.\nagentId: x1 (use SendMessage with to: 'x1')", id: "a")]
+        let wordedTasks = TaskIndex.build(worded)
+        #expect(!wordedTasks.started.contains("a"))
+        #expect(SubagentCardStatus.of(call(worded), tasks: wordedTasks, agent: Subagent(id: "x1", sessionID: "s@x1", toolUseID: "a", running: false)) == .done)
         let failed = [use, item(2, .toolResult, role: "user", text: "502", id: "a", error: true)]
         #expect(SubagentCardStatus.of(call(failed), tasks: TaskIndex.build(failed), agent: nil) == .failed)
     }

@@ -214,7 +214,7 @@ nonisolated struct TaskIndex: Equatable, Sendable {
                 // A subagent that ran to its end says its agentId under its report too (to go on with SendMessage):
                 // only its launch receipt means it went to the background (#5602: every finished one read as such).
                 if let use = uses[id], use.toolName == "Agent" || use.toolName == "Task",
-                   !text.contains("Async agent launched"), !text.contains("background"), use.toolInput?["run_in_background"]?.bool != true {
+                   !text.contains("Async agent launched"), !text.contains("moved to the background"), use.toolInput?["run_in_background"]?.bool != true {
                     continue
                 }
                 byTask[String(m.1)] = id
