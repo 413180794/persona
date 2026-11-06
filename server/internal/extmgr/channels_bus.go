@@ -106,7 +106,8 @@ func (h *Manager) feishuCall(ctx context.Context, method string, params json.Raw
 	switch method {
 	case assistantwire.FeishuStatusGet:
 		api, set := h.botAPI()
-		st := assistantwire.FeishuStatus{Ready: api != nil, Enabled: set.Enabled, Features: assistantwire.FeishuFeatures(set.Features)}
+		nudge := set.nudgeAfter()
+		st := assistantwire.FeishuStatus{Ready: api != nil, Enabled: set.Enabled, Features: assistantwire.FeishuFeatures(set.Features), NudgeAfter: &nudge}
 		if set.Owner != nil {
 			st.Owner, st.PairedAt = set.Owner.OpenID, set.Owner.At
 			st.Chats = botSendChats(set)

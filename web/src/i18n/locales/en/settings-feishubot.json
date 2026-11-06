@@ -61,5 +61,7 @@
   "features_footer": "The main chat can use all your data (Lark, mail, your phone's calendar and location…), and what the bot sends stays in Lark. Anything done on your behalf still asks you first.",
   "agents": "Agents chatted with in Lark",
   "howto": "How to create the bot",
-  "howto_footer": "The hub opens the persistent connection itself, so it doesn't need a public address."
+  "howto_footer": "The hub opens the persistent connection itself, so it doesn't need a public address.",
+  "nudge_title": "Nudge about unanswered cards",
+  "nudge_detail": "A card still unanswered after this long gets one reply under it in Lark (in a group topic it mentions you), outside your quiet hours"
 }

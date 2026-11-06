@@ -103,6 +103,8 @@ const (
 	DeviceSessionUnfollow = assistantwire.DeviceSessionUnfollow
 	DeviceSessionSendOnce = assistantwire.DeviceSessionSendOnce
 	AppFeishu             = assistantwire.AppFeishu
+	AppNotify             = assistantwire.AppNotify
+	NotifyQuietGet        = assistantwire.NotifyQuietGet
 	FeishuStatusGet       = assistantwire.FeishuStatusGet
 	FeishuPost            = assistantwire.FeishuPost
 	FeishuText            = assistantwire.FeishuText

@@ -907,3 +907,67 @@ func TestBoardTodoChangesCostNoStatusCalls(t *testing.T) {
 		t.Fatalf("%d status calls after a minute, want %d", n, base+1)
 	}
 }
+
+// A row whose card the bot nudged under says so (#6084); one it did not nudge says nothing. Nudging a card brings the
+// board up to date, so the row is marked without anyone asking for the board.
+func TestBoardMarksANudgedRow(t *testing.T) {
+	e := newBoardEnv(t)
+	e.s.fbot.now = e.clk.Now
+	e.f.answerApp(AppNotify, NotifyQuietGet, func(json.RawMessage) (any, error) { return map[string]bool{"quiet": false}, nil })
+	rowOf := func(card, q string) string {
+		for _, row := range strings.Split(bodyOf(t, card), "\n**") {
+			if strings.Contains(row, q) {
+				return row
+			}
+		}
+		t.Fatalf("no row for %q:\n%s", q, card)
+		return ""
+	}
+	old := e.card("ix_old", "box", "ag1", "旧的问题", 61*time.Minute)
+	e.card("ix_new", "box", "ag2", "新的问题", time.Minute)
+	e.s.fbot.mu.Lock()
+	e.s.keepBotCardLocked(old.ID, &botCard{MessageID: "om_" + old.ID, Ix: old, At: e.clk.Now().Add(-61 * time.Minute)})
+	e.s.keepBotCardLocked("ix_new", &botCard{MessageID: "om_ix_new", Ix: proto.Interaction{ID: "ix_new", MachineID: "box", SessionID: "ag2", Kind: proto.IxQuestion}, At: e.clk.Now().Add(-time.Minute)})
+	e.s.fbot.mu.Unlock()
+	e.tasks("/tasks")
+	card := cardOf(e.posts[0])
+	if strings.Contains(card, "已催过") {
+		t.Fatalf("a row is marked before any nudge:\n%s", card)
+	}
+
+	e.clk.advance(boardSettle) // whatever the first board scheduled has run
+	_, before := e.counts()
+	e.s.feishuForgetStatus()
+	e.s.nudgeTick(context.Background()) // ix_old waited 61 minutes, ix_new one
+	if len(e.texts) != 1 || e.texts[0]["reply_to"] != "om_ix_old" {
+		t.Fatalf("nudges: %v", e.texts)
+	}
+	e.clk.advance(boardSettle)
+	if _, u := e.counts(); u != before+1 {
+		t.Fatalf("%d board edits after a nudge, want %d", u, before+1)
+	}
+	card = cardOf(e.lastUpdate())
+	if r := rowOf(card, "旧的问题"); !strings.Contains(r, "已催过") {
+		t.Errorf("the nudged row is not marked:\n%s", card)
+	}
+	if r := rowOf(card, "新的问题"); strings.Contains(r, "已催过") {
+		t.Errorf("a row that was not nudged is marked:\n%s", card)
+	}
+}
+
+// A nudge that was let go, refused or given up, or that is only being tried, is not shown as sent: the mark is for what
+// went out.
+func TestBoardDoesNotMarkWhatWasNotNudged(t *testing.T) {
+	e := newBoardEnv(t)
+	skipped := e.card("ix_skipped", "box", "ag1", "放过的问题", time.Hour)
+	trying := e.card("ix_trying", "box", "ag2", "重试中的问题", time.Hour)
+	at := e.clk.Now().Add(-time.Hour)
+	e.s.fbot.mu.Lock()
+	e.s.keepBotCardLocked(skipped.ID, &botCard{MessageID: "om_s", Ix: skipped, At: at, SkippedAt: e.clk.Now(), Tries: 3, TriedAt: at})
+	e.s.keepBotCardLocked(trying.ID, &botCard{MessageID: "om_t", Ix: trying, At: at, Tries: 1, TriedAt: at})
+	e.s.fbot.mu.Unlock()
+	e.tasks("/tasks")
+	if card := cardOf(e.posts[0]); !strings.Contains(card, "放过的问题") || !strings.Contains(card, "重试中的问题") || strings.Contains(card, "已催过") {
+		t.Fatalf("the board:\n%s", card)
+	}
+}

@@ -108,6 +108,19 @@ describe("Feishu bot dialog", () => {
     expect(input("App Secret").value).toBe("");
   });
 
+  it("sets how long an unanswered card waits before the nudge, an hour when the hub says none", async () => {
+    await open(saved());
+    const select = () => document.body.querySelector<HTMLSelectElement>(`select[aria-label="${t("settings-feishubot.nudge_title")}"]`)!;
+    expect(select().value).toBe("60");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select(), "0");
+      select().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(calls.update[0].body).toEqual({ nudge_after: 0 });
+    await act(async () => calls.update[0].resolve(saved({ nudge_after: 0 })));
+    expect(select().value).toBe("0");
+  });
+
   it("fills the form from a switch's answer when nothing was typed", async () => {
     await open(saved());
     await act(async () => switches()[0].click());

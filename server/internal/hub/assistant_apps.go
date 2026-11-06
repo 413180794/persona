@@ -27,6 +27,8 @@ func (h *Hub) assistantAppCall(ctx context.Context, from string, p assistantwire
 			list = append(list, assistantwire.Setting{Key: s.Key, Title: s.Title, About: s.About, Value: s.Value, Actions: s.Actions})
 		}
 		out = map[string]any{"settings": list}
+	case assistantwire.AppNotify + " " + assistantwire.NotifyQuietGet:
+		out = map[string]bool{"quiet": h.push.quietNow()}
 	default:
 		return nil, false, nil
 	}

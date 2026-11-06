@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { botStateText, botSummary, botTone, credentialsChanged, credentialsOf, credentialsUpdate, DEFAULT_FEATURES, domainChoice, livePairing, pairingLeft, withFeature, type FeishuBotStatus } from "./feishu-bot";
+import { botStateText, botSummary, botTone, credentialsChanged, credentialsOf, credentialsUpdate, DEFAULT_FEATURES, domainChoice, livePairing, nudgeChoices, nudgeLabel, pairingLeft, withFeature, type FeishuBotStatus } from "./feishu-bot";
 import { channelTitle, dockerSteps, DOCKER_COMMAND, latestWarning, recordTitle, recordTone, updateFinished, updateStateTitle, updateView, updateWorking, type HubUpdateStatus } from "./hub-update";
 
 const bot = (o: Partial<FeishuBotStatus> = {}): FeishuBotStatus => ({
@@ -32,6 +32,13 @@ describe("feishu bot", () => {
     expect(withFeature({ ...DEFAULT_FEATURES, all_cards: true }, "cards", false)).toMatchObject({ cards: false, all_cards: false });
     expect(withFeature({ ...DEFAULT_FEATURES, cards: false }, "all_cards", true)).toMatchObject({ cards: true, all_cards: true });
     expect(withFeature(DEFAULT_FEATURES, "sync", true)).toEqual({ ...DEFAULT_FEATURES, sync: true });
+  });
+
+  it("lists the nudge delays, with the one in force among them", () => {
+    expect(nudgeChoices(60)).toEqual([0, 15, 30, 60, 120, 240, 480]);
+    expect(nudgeChoices(90)).toEqual([0, 15, 30, 60, 90, 120, 240, 480]);
+    expect(nudgeChoices(10080).at(-1)).toBe(10080);
+    expect([0, 15, 60, 90, 120].map(nudgeLabel)).toEqual(["关闭", "15 分钟", "1 小时", "90 分钟", "2 小时"]);
   });
 
   it("says the state", () => {

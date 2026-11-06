@@ -163,5 +163,9 @@
   "board_open": "Open",
   "board_more_one": "and {count} more, see the web app",
   "board_more_other": "and {count} more, see the web app",
-  "board_pointer": "Updated, it is the card above."
+  "board_pointer": "Updated, it is the card above.",
+  "nudge": "Still waiting for you: {what}",
+  "nudge_permission": "Still waiting for you: permission to use {tool}",
+  "nudge_bare": "Still waiting for you.",
+  "board_nudged": "nudged"
 }

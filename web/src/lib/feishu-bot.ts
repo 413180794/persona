@@ -34,6 +34,8 @@ export interface FeishuBotStatus {
   /** Where the chat's messages go now. */
   target?: string;
   agents?: { title: string; machine_id: string; session_id: string }[] | null;
+  /** Minutes an unanswered card waits before the one nudge under it, 0 off (#6084); a hub from before leaves it out (60). */
+  nudge_after?: number;
 }
 
 /** The edit sent to PUT: only what is set changes. */
@@ -43,9 +45,25 @@ export interface FeishuBotUpdate {
   app_secret?: string;
   domain?: string;
   features?: BotFeatures;
+  nudge_after?: number;
 }
 
 export const DEFAULT_FEATURES: BotFeatures = { main: true, cards: true, all_cards: false, pushes: false, sync: false, agents: false, reports: true, board: false };
+
+/** What a hub from before the setting does: nudge after an hour. */
+export const DEFAULT_NUDGE_AFTER = 60;
+const NUDGE_CHOICES = [0, 15, 30, 60, 120, 240, 480];
+
+/** The nudge delays to pick from; the one in force is there even when it is not one of the usual (set by the API). */
+export function nudgeChoices(current: number): number[] {
+  return NUDGE_CHOICES.includes(current) ? NUDGE_CHOICES : [...NUDGE_CHOICES, current].sort((a, b) => a - b);
+}
+
+/** "Off", "30 min", "2 h". */
+export function nudgeLabel(minutes: number): string {
+  if (minutes <= 0) return t("lib-feishu-bot.nudge_off");
+  return minutes % 60 === 0 ? t("lib-feishu-bot.nudge_hours", { hours: minutes / 60 }) : t("lib-feishu-bot.nudge_minutes", { minutes });
+}
 
 export const botStatus = () => api<FeishuBotStatus>("/bots/feishu");
 export const updateBot = (u: FeishuBotUpdate) => api<FeishuBotStatus>("/bots/feishu", { method: "PUT", json: u });

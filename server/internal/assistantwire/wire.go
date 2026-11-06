@@ -157,6 +157,12 @@ const (
 	AppInbox    = "inbox"
 	AppSettings = "settings"
 
+	// AppNotify is the hub's push settings: NotifyQuietGet tells whether the user is in their quiet hours now.
+	AppNotify = "notify"
+	// NotifyQuietGet: {} → {quiet}: true while any of the user's devices is inside its quiet hours (#5806), read in
+	// the hub's clock and the user's time zone. The Lark bot's nudges (#6084) wait for it to turn false.
+	NotifyQuietGet = "notify.quiet"
+
 	// AppTool: {name, arguments, machine_id, session_id} → proto.ToolResult, one of the assistant's tools that is the
 	// app's to run (persona_settings).
 	AppTool = "app.tool"
@@ -1032,7 +1038,13 @@ type FeishuStatus struct {
 	// the owner's private chat and the group chats the owner opted in. A thread the assistant posts into is checked
 	// against it before the call, so nothing goes to a chat an agent made up.
 	Chats []string `json:"chats,omitempty"`
+	// NudgeAfter is the bot's setting nudge_after (#6084): minutes a card waits unanswered before the one nudge under it,
+	// 0 off. nil (a status from before the setting) is NudgeAfterDefault.
+	NudgeAfter *int `json:"nudge_after,omitempty"`
 }
+
+// NudgeAfterDefault is nudge_after when never set: minutes a card of the Lark bot waits before it is nudged.
+const NudgeAfterDefault = 60
 
 // InteractionAnnounced is interaction.announced's params.
 type InteractionAnnounced struct {

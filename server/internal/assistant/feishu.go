@@ -76,6 +76,10 @@ type botState struct {
 	// Board is the standing "waiting for you" card: its message and when it was sent (feishu_board.go). Only the bot's
 	// `board` switch uses it.
 	Board *botBoardRef `json:"board,omitempty"`
+	// NudgeOffAt is when the nudge sweep first saw nudges off (nudge_after 0), cleared when it sees them on again: the
+	// first sweep with them on lets the cards already due go (feishu_nudge.go). Kept here so a restart while they are
+	// off does not nudge the backlog.
+	NudgeOffAt time.Time `json:"nudge_off_at,omitzero"`
 }
 
 // The bot's messages a reply is routed by: each turn binds several (its progress card or agent message, each answer
@@ -95,8 +99,17 @@ type botCardRef struct {
 	Kind      string    `json:"kind,omitempty"`
 	MachineID string    `json:"machine_id,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
-	Thread    string    `json:"thread,omitempty"` // the topic it was posted into (botCard.Thread)
+	Thread    string    `json:"thread,omitempty"`  // the topic it was posted into (botCard.Thread)
+	ChatID    string    `json:"chat_id,omitempty"` // the group chat of that topic (botCard.ChatID); "" in the owner's DM
 	At        time.Time `json:"at"`
+	// NudgedAt is when the card was nudged under (feishu_nudge.go): once set, never again, also after a restart.
+	NudgedAt time.Time `json:"nudged_at,omitzero"`
+	// SkippedAt is when the nudge for this card was given up (not due any more when nudges came on again, the chat
+	// refused it, too many tries): never nudged, and not shown as nudged. Tries and TriedAt are the sends tried and
+	// when the first went out, for the retry limits.
+	SkippedAt time.Time `json:"nudge_skipped_at,omitzero"`
+	Tries     int       `json:"nudge_tries,omitempty"`
+	TriedAt   time.Time `json:"nudge_tried_at,omitzero"`
 }
 
 // feishuBook is the chat's state in memory, the cards asking what is asked, and the bot's status a moment.
@@ -211,9 +224,17 @@ func (t *feishuTurn) pass() {
 type botCard struct {
 	MessageID string
 	Thread    string            // the topic the card was posted into (the run anchor it replies to); "" in the root chat
+	ChatID    string            // the group chat the card is in (a topic's card); "" in the owner's DM
 	Ix        proto.Interaction // what it asks (to close it when it ended unseen)
 	At        time.Time         // when it was posted: the latest waiting card is the one a typed answer answers
+	NudgedAt  time.Time         // when it was nudged under, zero before (feishu_nudge.go)
+	SkippedAt time.Time         // when its nudge was given up (botCardRef.SkippedAt)
+	Tries     int               // nudge sends tried
+	TriedAt   time.Time         // when the first nudge send was tried
 }
+
+// nudgeSettled: the card has had its nudge, or the nudge was given up; either way there is no more to do.
+func (c botCard) nudgeSettled() bool { return !c.NudgedAt.IsZero() || !c.SkippedAt.IsZero() }
 
 func (b *feishuBook) clock() time.Time {
 	if b.now != nil {
@@ -248,7 +269,7 @@ func (s *Service) loadBotLocked(ctx context.Context) {
 			if b.cards == nil {
 				b.cards = map[string]botCard{}
 			}
-			b.cards[id] = botCard{MessageID: ref.MessageID, Thread: ref.Thread, At: ref.At,
+			b.cards[id] = botCard{MessageID: ref.MessageID, Thread: ref.Thread, ChatID: ref.ChatID, At: ref.At, NudgedAt: ref.NudgedAt, SkippedAt: ref.SkippedAt, Tries: ref.Tries, TriedAt: ref.TriedAt,
 				Ix: proto.Interaction{ID: id, Kind: ref.Kind, MachineID: ref.MachineID, SessionID: ref.SessionID}}
 		}
 	}
@@ -302,7 +323,8 @@ func (s *Service) keepBotCardLocked(id string, card *botCard) {
 		at = b.clock()
 	}
 	b.st.Cards[id] = &botCardRef{MessageID: card.MessageID, Kind: card.Ix.Kind, MachineID: card.Ix.MachineID, SessionID: card.Ix.SessionID,
-		Thread: card.Thread, At: at.UTC()}
+		Thread: card.Thread, ChatID: card.ChatID, At: at.UTC(), NudgedAt: card.NudgedAt.UTC(),
+		SkippedAt: card.SkippedAt.UTC(), Tries: card.Tries, TriedAt: card.TriedAt.UTC()}
 	s.saveBotStateLocked()
 }
 

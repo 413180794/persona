@@ -630,6 +630,15 @@ func TestCardsOfATopicsRunGoIntoTheTopic(t *testing.T) {
 		if found != len(asks) {
 			t.Fatalf("%s: %d interaction cards posted, want %d", c.name, found, len(asks))
 		}
+		// The card's record keeps the group it is in, which a nudge under it needs (feishu_nudge.go); a card in the DM none.
+		for _, ix := range asks {
+			e.s.fbot.mu.Lock()
+			got := e.s.fbot.cards[ix.ID].ChatID
+			e.s.fbot.mu.Unlock()
+			if want := map[bool]string{true: testChat}[c.inTopic]; got != want {
+				t.Errorf("%s: the record of %s has chat %q, want %q", c.name, ix.ID, got, want)
+			}
+		}
 		// A card that is not in the topic that asked says in that topic where it went (once per card), and only then.
 		line := i18n.T(e.s.botLang(context.Background()), "assistant-feishu_cards.sent_to_dm")
 		told := 0
@@ -706,7 +715,7 @@ func TestCardOfATopicsRunFallsBackToTheDMOnlyWhenRefused(t *testing.T) {
 		e.s.fbot.mu.Lock()
 		card, ok := e.s.fbot.cards["ix_p"]
 		e.s.fbot.mu.Unlock()
-		if c.fallback != (ok && card.MessageID == "om_dm_card" && card.Thread == "") {
+		if c.fallback != (ok && card.MessageID == "om_dm_card" && card.Thread == "" && card.ChatID == "") {
 			t.Errorf("%s: the card kept: %+v (ok %v)", c.name, card, ok)
 		}
 		// The topic was not told where the card went: it did not go anywhere else of its own accord here.

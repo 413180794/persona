@@ -11,5 +11,8 @@
   "summary_disconnected": "连不上",
   "summary_connected": "已连接",
   "summary_unpaired": "待配对",
-  "pairing_left": "{minutes} 分 {seconds} 秒内有效"
+  "pairing_left": "{minutes} 分 {seconds} 秒内有效",
+  "nudge_off": "关闭",
+  "nudge_minutes": "{minutes} 分钟",
+  "nudge_hours": "{hours} 小时"
 }

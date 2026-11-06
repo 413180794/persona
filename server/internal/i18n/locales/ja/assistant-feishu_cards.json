@@ -163,5 +163,9 @@
   "board_open": "開く",
   "board_more_one": "ほか {count} 件はウェブアプリで確認してください",
   "board_more_other": "ほか {count} 件はウェブアプリで確認してください",
-  "board_pointer": "更新しました。上のカードです。"
+  "board_pointer": "更新しました。上のカードです。",
+  "nudge": "お返事をお待ちしています：{what}",
+  "nudge_permission": "お返事をお待ちしています：{tool}の使用許可",
+  "nudge_bare": "お返事をお待ちしています。",
+  "board_nudged": "催促済み"
 }

@@ -92,19 +92,26 @@ const (
 
 // botCardOver is whether interaction id is over for good, as the hub's queue and its history say (InteractionsGet).
 func (s *Service) botCardOver(ctx context.Context, id string) cardEnd {
+	_, end := s.botCardLook(ctx, id)
+	return end
+}
+
+// botCardLook is botCardOver with the interaction as the hub's queue has it, while it is up.
+func (s *Service) botCardLook(ctx context.Context, id string) (proto.Interaction, cardEnd) {
 	var got struct {
-		OK     bool   `json:"ok"`
-		Status string `json:"status"`
+		OK          bool              `json:"ok"`
+		Status      string            `json:"status"`
+		Interaction proto.Interaction `json:"interaction"`
 	}
 	switch err := s.appCall(ctx, AppInteractions, InteractionsGet, map[string]any{"interaction_id": id}, &got); {
 	case err != nil:
-		return cardUnsure
+		return proto.Interaction{}, cardUnsure
 	case got.OK:
-		return cardWaiting
+		return got.Interaction, cardWaiting
 	case finalStatus(got.Status):
-		return cardOver
+		return proto.Interaction{}, cardOver
 	}
-	return cardUnsure
+	return proto.Interaction{}, cardUnsure
 }
 
 // finalStatus: how an interaction ended for good (InteractionsGet's status); "pending" (in the history, not up yet)
@@ -156,8 +163,8 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 		// (a timeout, a gateway error) may have gone out, and a second card would show the same question twice: it is
 		// only logged.
 		s.logf("bots: card for %s refused in the topic: %v; sending it to the owner", ix.ID, err)
-		reply = ""
-		mid, err = s.botPostTo(ctx, feishuTarget{}, "", card, fallback, "")
+		reply, to = "", feishuTarget{}
+		mid, err = s.botPostTo(ctx, to, "", card, fallback, "")
 	}
 	ended := s.interactionEnded(ix.ID)
 	b.mu.Lock()
@@ -173,7 +180,7 @@ func (s *Service) postInteractionCard(ctx context.Context, ix proto.Interaction)
 		s.botCardDone(ctx, mid, ix, i18n.T(s.botLang(ctx), "assistant-feishu_cards.handled"))
 		return
 	}
-	s.keepBotCardLocked(ix.ID, &botCard{MessageID: mid, Ix: ix, At: b.clock(), Thread: reply})
+	s.keepBotCardLocked(ix.ID, &botCard{MessageID: mid, Ix: ix, At: b.clock(), Thread: reply, ChatID: to.ChatID})
 	b.mu.Unlock()
 	if topic != nil {
 		// The run was asked in a topic and the card went to the DM: the topic is told where it is.
@@ -347,7 +354,8 @@ func (s *Service) feishuCardBack(ix proto.Interaction) {
 		b.mu.Unlock()
 		return
 	}
-	s.keepBotCardLocked(ix.ID, &botCard{MessageID: d.card.MessageID, Thread: d.card.Thread, Ix: ix, At: b.clock()})
+	s.keepBotCardLocked(ix.ID, &botCard{MessageID: d.card.MessageID, Thread: d.card.Thread, ChatID: d.card.ChatID, Ix: ix, At: b.clock(),
+		NudgedAt: d.card.NudgedAt, SkippedAt: d.card.SkippedAt, Tries: d.card.Tries, TriedAt: d.card.TriedAt})
 	b.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

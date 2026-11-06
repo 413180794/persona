@@ -3,6 +3,7 @@ package hub
 import (
 	"errors"
 	"maps"
+	"slices"
 	"time"
 )
 
@@ -121,6 +122,22 @@ func (p *Pusher) inQuiet(prefs NotifyPrefs) bool {
 		loc = p.userLoc()
 	}
 	return prefs.Quiet.activeAt(p.now(), loc)
+}
+
+// quietNow reports whether any device that turned quiet hours on is inside its window now. The Lark bot's nudges
+// (#6084) are not tied to a device, so they wait while the user has declared any of theirs quiet: the quiet hours are
+// the user's, set on the device they sleep with.
+func (p *Pusher) quietNow() bool {
+	if p == nil {
+		return false
+	}
+	p.mu.Lock()
+	prefs := make([]NotifyPrefs, 0, len(p.devices))
+	for _, d := range p.devices {
+		prefs = append(prefs, devicePrefs(d.Prefs))
+	}
+	p.mu.Unlock()
+	return slices.ContainsFunc(prefs, p.inQuiet)
 }
 
 // hushed is an APNs alert payload delivered without a sound and without lighting the screen.

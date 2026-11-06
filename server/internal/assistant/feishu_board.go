@@ -260,6 +260,7 @@ type boardRow struct {
 	summary  string
 	from     string
 	link     string
+	nudged   bool // the bot nudged under its card in the chat (feishu_nudge.go, #6084)
 }
 
 // boardRows are the things waiting, in the order the board shows them: what holds up an Agent first, the longest
@@ -275,7 +276,7 @@ func (s *Service) boardRows(ctx context.Context, l i18n.Lang, web string, now ti
 			link = sessionLink(web, ix.MachineID, ix.SessionID, s.sessionAssistantLocal(ix.MachineID, ix.SessionID))
 		}
 		rows = append(rows, boardRow{blocking: true, waited: boardWaited(now, ix.CreatedAt), id: ix.ID,
-			summary: boardSummary(l, ix), from: s.boardFrom(l, ix.MachineID, ix.SessionID, ix.SessionTitle), link: link})
+			summary: boardSummary(l, ix), from: s.boardFrom(l, ix.MachineID, ix.SessionID, ix.SessionTitle), link: link, nudged: s.cardNudged(ix.ID)})
 	}
 	for _, a := range s.awaitingAcceptance(ctx) {
 		rows = append(rows, boardRow{waited: boardWaited(now, a.since), id: a.todo,
@@ -435,11 +436,14 @@ func (s *Service) boardCard(ctx context.Context) (card *feishubot.Card, fallback
 	return c, title + "\n" + clip(strings.Join(plain, "\n"), reportFallbackMax), said
 }
 
-// boardRowMarkdown is one row: its number and what it is, then how long it has waited, who asked and a link.
+// boardRowMarkdown is one row: its number and what it is, then how long it has waited, whether it was nudged, who asked and a link.
 func boardRowMarkdown(l i18n.Lang, n int, r boardRow) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%d** %s\n", n, feishubot.EscapeMarkdown(r.summary))
 	b.WriteString(feishubot.EscapeMarkdown(i18n.T(l, "assistant-feishu_cards.board_waited", i18n.Args{"wait": boardWait(l, r.waited)})))
+	if r.nudged {
+		b.WriteString(" · " + i18n.T(l, "assistant-feishu_cards.board_nudged"))
+	}
 	b.WriteString(" · " + feishubot.EscapeMarkdown(r.from))
 	if boardLinkOK(r.link) {
 		b.WriteString(" · [" + i18n.T(l, "assistant-feishu_cards.board_open") + "](" + r.link + ")")

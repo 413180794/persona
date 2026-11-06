@@ -13,6 +13,7 @@ const (
 	auditBotCredentials = "bot_credentials"  // {app_id, domain?, cleared?, owner_reset?}: never the secret
 	auditBotEnabled     = "bot_enabled"      // {enabled}: only when it changes
 	auditBotFeatures    = "bot_features"     // {features}: the switches, only when they change
+	auditBotNudgeAfter  = "bot_nudge_after"  // {minutes}: nudge_after, only when it changes
 	auditBotPairCode    = "bot_pair_code"    // a new pairing code was issued (never the code)
 	auditBotPaired      = "bot_paired"       // {open_id}: whoever sent the code is the owner now
 	auditBotPairGuessed = "bot_pair_guessed" // {fails}: the pairing was dropped after too many wrong codes

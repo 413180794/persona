@@ -51,6 +51,9 @@ type FeishuBotSettings struct {
 	// TopicChats are the group chats the owner opted in (bots_topics.go): their messages reach the assistant, and the
 	// bot may send into them. The owner's own list: it goes when the owner does.
 	TopicChats []BotChat `json:"topic_chats,omitempty"`
+	// NudgeAfter is how many minutes a card the bot sent may wait unanswered before the assistant nudges under it once
+	// (#6084, assistant/feishu_nudge.go): 0 is off, nil (never set) is assistantwire.NudgeAfterDefault.
+	NudgeAfter *int `json:"nudge_after,omitempty"`
 }
 
 // BotFeatures are the parts that can be switched on one by one: kept here with the credentials, acted on by the
@@ -235,9 +238,21 @@ func (h *Manager) botAPI() (*feishubot.Client, FeishuBotSettings) {
 	return b.api, set
 }
 
+// nudgeAfter is the setting in minutes: the default while never set, 0 off.
+func (s FeishuBotSettings) nudgeAfter() int {
+	if s.NudgeAfter == nil {
+		return assistantwire.NudgeAfterDefault
+	}
+	return *s.NudgeAfter
+}
+
 // copy is the settings with nothing shared: the owner is changed in place under h.bots.mu.
 func (s FeishuBotSettings) copy() FeishuBotSettings {
 	s.TopicChats = slices.Clone(s.TopicChats)
+	if s.NudgeAfter != nil {
+		n := *s.NudgeAfter
+		s.NudgeAfter = &n
+	}
 	if s.Owner != nil {
 		o := *s.Owner
 		s.Owner = &o
@@ -265,6 +280,7 @@ type feishuBotView struct {
 	Owner       *botOwnerView `json:"owner,omitempty"`
 	Pairing     *botPairView  `json:"pairing,omitempty"`
 	TopicChats  []botChatView `json:"topic_chats,omitempty"` // the group chats the owner opted in
+	NudgeAfter  int           `json:"nudge_after"`           // minutes before the one nudge under an unanswered card, 0 off
 	// Target and Agents are the assistant's (feishu.view): where the chat's messages go now, the agents bound to
 	// threads of the chat; left out while it is not connected.
 	Target string                      `json:"target,omitempty"`
@@ -288,7 +304,7 @@ func (h *Manager) botView(ctx context.Context) feishuBotView {
 	s := b.set
 	appID, _, domain, fromConfig, _ := h.botCredentialsLocked()
 	v := feishuBotView{Enabled: s.Enabled, AppID: appID, Domain: feishubot.ResolveDomain(domain), HasSecret: appID != "",
-		FromConfig: fromConfig, Features: s.Features, BotName: b.info.Name}
+		FromConfig: fromConfig, Features: s.Features, BotName: b.info.Name, NudgeAfter: s.nudgeAfter()}
 	if b.conn != nil {
 		st := b.conn.State()
 		v.Connected, v.Error = st.Connected, st.Error
@@ -331,8 +347,16 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 				ChatID string `json:"chat_id"`
 				Name   string `json:"name"`
 			} `json:"topic_chats"`
+			// NudgeAfter is minutes before the one nudge under an unanswered card; 0 turns nudges off, absent leaves it.
+			// Read as raw JSON so that anything but a whole number in range gets the same answer (nudgeAfterValue).
+			NudgeAfter json.RawMessage `json:"nudge_after"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		nudge, err := nudgeAfterValue(in.NudgeAfter)
+		if err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
@@ -375,6 +399,9 @@ func (h *Manager) botRoutes(api *http.ServeMux) {
 				writeErr(w, http.StatusBadRequest, err)
 				return
 			}
+		}
+		if nudge != nil {
+			h.setNudgeAfter(r.Context(), *nudge)
 		}
 		writeJSON(w, h.botView(r.Context()))
 	})

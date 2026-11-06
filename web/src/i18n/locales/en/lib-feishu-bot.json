@@ -11,5 +11,8 @@
   "summary_disconnected": "Can't connect",
   "summary_connected": "Connected",
   "summary_unpaired": "Not paired",
-  "pairing_left": "Valid for {minutes}m {seconds}s"
+  "pairing_left": "Valid for {minutes}m {seconds}s",
+  "nudge_off": "Off",
+  "nudge_minutes": "{minutes} min",
+  "nudge_hours": "{hours} h"
 }

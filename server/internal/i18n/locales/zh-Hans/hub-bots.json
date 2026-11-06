@@ -8,5 +8,6 @@
   "topic_chats_many": "最多开启 {n} 个群",
   "topic_chat_bad": "群 ID 为空、含空格或重复",
   "topic_needs_owner": "先配对机器人：开启的群属于主人的名单",
-  "topic_chats_new_app": "群名单请单独提交：换 App ID 会解除主人配对"
+  "topic_chats_new_app": "群名单请单独提交：换 App ID 会解除主人配对",
+  "nudge_after_range": "催办等待时间要在 0（关闭）到 {max} 分钟之间"
 }
