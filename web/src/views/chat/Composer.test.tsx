@@ -255,3 +255,47 @@ describe("Composer words of a send that fails after the box moved on", () => {
     expect(box().value).toBe("hello a");
   });
 });
+
+describe("Composer draft typed just before leaving (#4591)", () => {
+  const typeInto = (text: string) =>
+    act(() => {
+      const el = host.querySelector("textarea")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(el, text);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+  it("is saved when the box goes away before the debounce", () => {
+    render("a");
+    typeInto("still typing");
+    act(() => root.unmount());
+    root = createRoot(host);
+    expect(localStorage.getItem("draft:a")).toBe("still typing");
+  });
+
+  it("is saved for its own conversation when the box moves to another", () => {
+    render("a");
+    typeInto("for a");
+    render("b");
+    expect(localStorage.getItem("draft:a")).toBe("for a");
+    expect(localStorage.getItem("draft:b")).toBeNull();
+    expect(host.querySelector("textarea")!.value).toBe("");
+  });
+
+  it("is saved when the page is hidden", () => {
+    render("a");
+    typeInto("closing the tab");
+    act(() => {
+      dispatchEvent(new Event("pagehide"));
+    });
+    expect(localStorage.getItem("draft:a")).toBe("closing the tab");
+  });
+
+  it("is not written back after a send emptied the box", async () => {
+    render("a", () => new Promise<boolean>(() => {}));
+    typeInto("send me");
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="发送"]')!.click());
+    act(() => root.unmount());
+    root = createRoot(host);
+    expect(localStorage.getItem("draft:a")).toBeNull();
+  });
+});

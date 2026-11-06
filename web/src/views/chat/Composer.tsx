@@ -1,7 +1,7 @@
 // Beautiful UI's Prompt Bar, wired to a session: multi-line input, / commands, @ files and sessions, image attachments
 // (paste, drop, pick; click one to mark it up), files uploaded to the session's machine, send — and stop while the
 // agent works and nothing is typed. Quotes, edits and edited images from the chat arrive as draft events (drafts.ts).
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuickPrompts } from "../../lib/extension-declared";
 import { promptCommands, type ComposerCommand as Command } from "../../lib/extension-prompts";
 import { LOOP_TEXT, loopHint } from "../../lib/loop-command";
@@ -237,13 +237,37 @@ export function Composer({
     [draftKey],
   );
 
+  // What is typed goes into the conversation's stored draft 250 ms after the last key; one still waiting is written at
+  // once when the box goes away or moves to another conversation, and when the page is hidden (closed, reloaded,
+  // left), so the last words typed before switching are not lost (#4591).
+  const unsaved = useRef<{ key: string; text: string } | null>(null);
+  const saveDraft = useCallback(() => {
+    const u = unsaved.current;
+    if (!u) return;
+    unsaved.current = null;
+    if (u.text) localStorage.setItem(`draft:${u.key}`, u.text);
+    else localStorage.removeItem(`draft:${u.key}`);
+  }, []);
+  // The render that moves the box to another conversation still holds the old words: they are not that one's draft
+  // (the box reads its own next, and this runs again if it differs).
+  const savedFor = useRef(draftKey);
   useEffect(() => {
-    const t = setTimeout(() => {
-      if (draft) localStorage.setItem(`draft:${draftKey}`, draft);
-      else localStorage.removeItem(`draft:${draftKey}`);
-    }, 250);
+    if (savedFor.current !== draftKey) {
+      savedFor.current = draftKey;
+      return;
+    }
+    unsaved.current = { key: draftKey, text: draft };
+    const t = setTimeout(saveDraft, 250);
     return () => clearTimeout(t);
-  }, [draft, draftKey]);
+  }, [draft, draftKey, saveDraft]);
+  useEffect(() => {
+    addEventListener("pagehide", saveDraft);
+    return () => {
+      removeEventListener("pagehide", saveDraft);
+      // only this conversation's: on a switch the box still holds the old words under the new key for one render
+      if (unsaved.current?.key === draftKey) saveDraft();
+    };
+  }, [draftKey, saveDraft]);
 
   useLayoutEffect(() => {
     const el = input.current;
@@ -425,6 +449,7 @@ export function Composer({
     const sent = atts;
     setDraft("");
     draftNow.current = "";
+    unsaved.current = null;
     localStorage.removeItem(`draft:${draftKey}`);
     setAtts([]);
     refs.forEach((r) => removeContext(draftKey, r.id));
