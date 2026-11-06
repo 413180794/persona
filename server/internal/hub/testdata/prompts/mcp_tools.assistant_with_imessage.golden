@@ -410,6 +410,31 @@
     }
   },
   {
+    "name": "agent_interrupt",
+    "description": "Stop what an agent (from agents_list) is doing right now, and optionally redirect it: its current turn is cut off (Esc in its terminal, or its runtime's cancel), the agent and its session stay, and `then` is sent to it at once as the user would type it. Use it when waiting is worse than stopping: it works in the wrong direction, waits in a loop (sleep, polling), repeats a failing step, collides with another agent, or the user said stop. To add a word to an agent that works fine, use agent_send instead (queued behind its turn). What it did already is not undone (files it changed, commands it ran): tell it in `then` what to put back. Not for assistant conversations, and not for agents that can only be read.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "machine",
+        "session_id"
+      ],
+      "properties": {
+        "machine": {
+          "type": "string",
+          "description": "the machine's id or name, as agents_list shows it"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "the agent's session id, or its first 8 characters"
+        },
+        "then": {
+          "type": "string",
+          "description": "the new instruction, sent right after it stopped; empty: just stop it"
+        }
+      }
+    }
+  },
+  {
     "name": "agent_start",
     "description": "Start a new Claude Code agent in herdr on one of the user's computers, in a project directory, with a first prompt. Use for real development work instead of doing it here. Returns the new session id. When the launcher failed its last health check on that machine, the agent starts on a machine where it works (a directory under the home moves to that home) and the answer says so.",
     "input_schema": {
@@ -433,6 +458,43 @@
         "launcher": {
           "type": "string",
           "description": "shell command that starts claude (default: the machine's default)"
+        }
+      }
+    }
+  },
+  {
+    "name": "agent_supervise",
+    "description": "Take an agent you did not hand out (opened by hand on the Agents page, or by agent_start without a task) under your supervision, from the main conversation, as if task_plan had started it: it becomes a task of this conversation (a todo, its card in the conversation), you get a 督办 message when it needs you (waits for review, stopped short, waits for an answer, makes no progress, reports to you), and you close it with task_review. On an agent of a task you supervise already, it sets that task's done_when and expect_minutes instead. An agent of another conversation's task stays that conversation's.",
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "machine",
+        "session_id"
+      ],
+      "properties": {
+        "machine": {
+          "type": "string",
+          "description": "the machine's id or name, as agents_list shows it"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "the agent's session id, or its first 8 characters"
+        },
+        "title": {
+          "type": "string",
+          "description": "the task in a short line (Chinese, under 20 characters); empty: the agent's title"
+        },
+        "done_when": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "string"
+          },
+          "description": "results you can check when it says it is done (a PR merged, a screenshot, what the live system answers)"
+        },
+        "expect_minutes": {
+          "type": "integer",
+          "description": "how long it should take from now; longer without progress counts as stuck"
         }
       }
     }

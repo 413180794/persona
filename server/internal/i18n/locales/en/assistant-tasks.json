@@ -15,5 +15,8 @@
   "route_no_agent": "This task has no running agent",
   "route_offline": "That computer is offline",
   "outcome_question": "Outcome",
-  "outcome_pitfall": "Pitfall"
+  "outcome_pitfall": "Pitfall",
+  "adopt_notes": "Taken under supervision: {agent} · {machine} · {cwd}",
+  "adopt_failed": "Could not take it under supervision: {reason}",
+  "interrupt_summary": "Stop {agent} · {machine}"
 }

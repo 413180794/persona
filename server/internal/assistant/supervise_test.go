@@ -366,6 +366,9 @@ func TestGoldenSupervise(t *testing.T) {
 		{ID: "todo_2", Title: "部署 hub", Kind: sigIdle, Detail: "要用户决定：两种走法选一个", Machine: "box", Round: 1, Last: "A 先灰度，B 直接全量。选哪个？"},
 		{ID: "todo_3", Title: "整理材料", Kind: sigNeedsYou, Minutes: 4, Quiet: true, Ask: "- 用哪个分支？（选项：main / dev）"},
 		{ID: "todo_4", Title: "跑 UI 测试", Kind: sigStalled, Minutes: 35, Detail: "在等编译"},
+		{ID: "todo_5", Title: "迁移数据库", Kind: sigReport, Report: upReportQuestion, Said: "要不要先停写？\n停写约 2 分钟", Step: 2, Steps: 4,
+			Evidence: []string{"https://github.com/o/r/pull/902"}, Machine: "box", Session: "e5f6a7b8"},
+		{ID: "todo_6", Title: "整理文档", Kind: sigReport, Report: upReportProgress, Said: "写完了一半"},
 	})}))
 	golden(t, "supervise.rework", prompts.RenderSuperviseRework(prompts.SuperviseRework{Round: 1, Max: 2, Note: "补深色截图",
 		Checks: []prompts.SuperviseCheck{{Criterion: "PR 合并到 master", Met: true, Evidence: "pull/901 merged"}, {Criterion: "浅色 / 深色截图贴进 PR", Evidence: "只有浅色"}}}))

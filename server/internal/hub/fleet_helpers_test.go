@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nwverse/persona/server/internal/assistantwire"
+	"github.com/nwverse/persona/server/internal/prompts"
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
@@ -131,6 +132,10 @@ func (h *Hub) mcpTools(assistant bool) []proto.Tool {
 	ctx := context.Background()
 	agents, assistantOnly := fakeExtOf(h).AgentTools(ctx, assistant) // the extensions' (the manager's, faked)
 	tools := append(h.phoneToolList(), agents...)
+	if !assistant {
+		t := prompts.Tool("report_to_supervisor") // the agents' own, the manager's (assistant AgentTools)
+		tools = append(tools, proto.Tool{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema})
+	}
 	if assistant {
 		tools = append(tools, h.asst().Tools(ctx)...) // the assistant's own, when one is connected
 		tools = append(tools, assistantOnly...)

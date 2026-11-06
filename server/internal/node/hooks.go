@@ -195,7 +195,13 @@ func (n *Node) serveSock(ctx context.Context, c net.Conn) {
 		resp = n.cliCall(ctx, c, req)
 	case "mcp.call":
 		var res proto.ToolResult
-		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": req.SessionID,
+		sid := req.SessionID
+		// An agent's MCP server names no session; the one tool that needs to know whose call it is gets the session
+		// its pane runs. The rest go on as before, with none (a connector's card is not hung on the agent).
+		if sid == "" && !req.Assistant && req.Name == reportToSupervisorTool {
+			sid = n.paneCaller(req.Pane)
+		}
+		if err := n.peer.Call(ctx, "mcp.call", map[string]any{"name": req.Name, "args": req.Args, "session_id": sid,
 			"assistant": req.Assistant}, &res); err != nil {
 			res = proto.TextResult("Persona hub error: "+err.Error(), true)
 		}
@@ -818,4 +824,21 @@ func dialSocket(ctx context.Context, path string, req any, hangUpOnCancel bool) 
 		return nil, fmt.Errorf("node closed connection: %w", err)
 	}
 	return line, nil
+}
+
+// reportToSupervisorTool is the agents' tool that reports to their supervisor (assistant/agent_control.go).
+const reportToSupervisorTool = "report_to_supervisor"
+
+// paneCaller is the agent session running in pane (a hook's PaneRef): the one the host shows there now, else the one
+// its hooks bound it to (an agent the host does not recognise); "" when none is known.
+func (n *Node) paneCaller(pane string) string {
+	if pane == "" {
+		return ""
+	}
+	if id := n.sessionOfPane(pane); id != "" {
+		return id
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.panes[pane]
 }

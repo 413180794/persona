@@ -61,6 +61,8 @@ type Service struct {
 	quiet      quietBook         // quiet.go
 	supervise  superviseBook     // supervise.go
 	reports    reportBook        // reports.go
+	upReports  reportRate        // agent_control.go: report_to_supervisor
+	adoptMu    sync.Mutex        // agent_control.go: one agent_supervise at a time
 	accept     acceptBook        // acceptance.go
 	reporters  reporterBook      // reporters.go
 	sched      schedule          // schedule.go

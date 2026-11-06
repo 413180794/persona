@@ -188,6 +188,7 @@ const (
 	sigStalled     = "stalled"     // working, but nothing moved for long
 	sigInterrupted = "interrupted" // the model service cut its turn off
 	sigFailed      = "failed"      // its agent did not start
+	sigReport      = "report"      // its agent reported to the supervisor (report_to_supervisor, agent_control.go)
 )
 
 var (
@@ -215,15 +216,28 @@ type superviseSignal struct {
 	Machine, Session string
 	Detail, Ask      string
 	Minutes          int
+	// A report's (sigReport): its kind (progress, question, blocked, done), evidence and the step it is on.
+	Report      string
+	Evidence    []string
+	Step, Steps int
 }
 
-func (g superviseSignal) id() string { return g.Todo + "|" + g.Kind }
+// id names what a newer signal replaces while it waits: the task's signal of that kind (a report: of that kind of
+// report, so a progress report does not push out a question).
+func (g superviseSignal) id() string {
+	if g.Kind == sigReport {
+		return g.Todo + "|" + g.Kind + ":" + g.Report
+	}
+	return g.Todo + "|" + g.Kind
+}
 
 // urgent: a signal that waits on a decision goes out sooner than the rest.
 func (g superviseSignal) urgent() bool {
 	switch g.Kind {
 	case sigNeedsYou, sigIdle, sigFailed, sigInterrupted:
 		return true
+	case sigReport:
+		return g.Report != upReportProgress
 	}
 	return false
 }
@@ -292,6 +306,9 @@ func (s *Service) signal(g superviseSignal) {
 		}
 		if g.Detail == "" && cur.Key == g.Key {
 			g.Detail = cur.Detail // the watch's sight of what an event told already
+		}
+		if g.Kind == sigReport && cur.Key != g.Key {
+			g = joinReports(cur, g) // two questions before the message went: both are asked
 		}
 	}
 	b.pending[g.id()] = g
@@ -613,6 +630,9 @@ func mergeSignals(a, b []superviseSignal) []superviseSignal {
 	out := slices.Clone(a)
 	for _, g := range b {
 		if i := slices.IndexFunc(out, func(x superviseSignal) bool { return x.id() == g.id() }); i >= 0 {
+			if g.Kind == sigReport && out[i].Key != g.Key {
+				g = joinReports(out[i], g)
+			}
 			out[i] = g
 		} else {
 			out = append(out, g)
@@ -660,6 +680,9 @@ func (s *Service) digestEntry(ctx context.Context, g superviseSignal, web string
 	}
 	e := prompts.SuperviseEntry{ID: t.ID, Title: t.Title, Kind: g.Kind, Detail: g.Detail, Minutes: g.Minutes, DoneWhen: v.DoneWhen,
 		Round: v.Round, Link: todoLink(web, t.ID), Quiet: t.Quiet}
+	if g.Kind == sigReport { // what it said is the report itself, not a reason in brackets
+		e.Detail, e.Report, e.Said, e.Evidence, e.Step, e.Steps = "", g.Report, g.Detail, g.Evidence, g.Step, g.Steps
+	}
 	b := &s.supervise
 	b.mu.Lock()
 	e.Ask = cmp.Or(g.Ask, b.asks[t.ID])
@@ -681,7 +704,9 @@ func (s *Service) digestEntry(ctx context.Context, g superviseSignal, web string
 			e.Machine = m.Name
 		}
 		text := strings.TrimSpace(last.LastText)
-		if g.Kind == sigReview || g.Kind == sigIdle {
+		if g.Kind == sigReport {
+			text = "" // it said what it had to in the report
+		} else if g.Kind == sigReview || g.Kind == sigIdle {
 			if _, answer := s.lastTurn(ctx, last.MachineID, last.SessionID); answer != "" {
 				text = answer
 			}
@@ -695,8 +720,18 @@ func (s *Service) digestEntry(ctx context.Context, g superviseSignal, web string
 
 // sortEntries puts what waits on a decision first.
 func sortEntries(list []prompts.SuperviseEntry) []prompts.SuperviseEntry {
-	rank := map[string]int{sigNeedsYou: 0, sigIdle: 1, sigFailed: 2, sigInterrupted: 3, sigReview: 4, sigStalled: 5}
-	sort.SliceStable(list, func(i, j int) bool { return rank[list[i].Kind] < rank[list[j].Kind] })
+	rank := map[string]int{sigNeedsYou: 0, sigIdle: 2, sigFailed: 3, sigInterrupted: 4, sigReview: 5, sigStalled: 6, sigReport: 7}
+	at := func(e prompts.SuperviseEntry) int {
+		switch {
+		case e.Kind != sigReport:
+		case e.Report == upReportQuestion || e.Report == upReportBlocked: // waits on a decision too
+			return 1
+		case e.Report == upReportDone: // with the work waiting for review
+			return rank[sigReview]
+		}
+		return rank[e.Kind]
+	}
+	sort.SliceStable(list, func(i, j int) bool { return at(list[i]) < at(list[j]) })
 	return list
 }
 

@@ -94,9 +94,10 @@ so layout is arbitrary (short arrays can be one line) and does not affect transm
 | --- | --- | --- |
 | `mcp/assistant/` | `ask_user`, `notify_user`, `jarvis_settings` (settings reads/writes with phone confirmation) | Assistant chats (`toolNames` in `assistant/tools.go`) |
 | `mcp/schedule/` | `schedule_followup`, `schedule_routine`, `delete_routine`, `list_followups`, `cancel_followup` | Same as above |
-| `mcp/agents/` | `agents_list`, `agent_read`, `agent_send`, `agent_start`, `interaction_answer` | Same as above |
+| `mcp/agents/` | `agents_list`, `agent_read`, `agent_send`, `agent_interrupt`, `agent_start`, `agent_supervise`, `interaction_answer`, `task_plan`, `task_review` | Same as above |
 | `mcp/inbox/` | `inbox_suggest` (handling chat submits suggestions and a summary), `inbox_draft` (legacy name, reply only) | Same as above |
 | `mcp/kb/` | `kb_search`, `kb_list`, `kb_get`, `kb_update` | Same as above |
+| `mcp/supervisor/` | `report_to_supervisor` (a supervised task's agent reports to its supervisor, #5112) | Every agent, not assistant chats (`agentToolNames` in `assistant/agent_control.go`) |
 | `mcp/mail/` | `mail_accounts`, `mail_search`, `mail_read`, `mail_send` | All chats (`Tools` in `mail/mcp.go`) |
 | `mcp/github/` | `github_search`, `github_read`, `github_diff`, `github_checks` (read-only); `github_comment`, `github_review` (writes, gated) | Assistant, when GitHub connector status is `ok` (`connector/github/tools.go`; golden `mcp_tools.assistant_with_github`) |
 | `mcp/voice/` | `search_knowledge`, `list_agents`, `send_to_agent`, `ask_jarvis`, `delegate_task` | Upstream of the built-in voice plugin with `tools` enabled (`voice/tools.go`, declared as GPT-Live function tools in `session.start`; full devices declare the first four, calls from other extensions only `ask_jarvis`, protocol 2 bound chats the two read-only tools plus `delegate_task`; `ask_jarvis` and `delegate_task` calls remain open until the turn's answer) |

@@ -15,5 +15,8 @@
   "route_no_agent": "このタスクには実行中のエージェントがありません",
   "route_offline": "そのコンピューターはオフラインです",
   "outcome_question": "完了時の結論",
-  "outcome_pitfall": "つまずいた点"
+  "outcome_pitfall": "つまずいた点",
+  "adopt_notes": "監督下に置いた：{agent} · {machine} · {cwd}",
+  "adopt_failed": "監督下に置けませんでした：{reason}",
+  "interrupt_summary": "{agent} · {machine} を止める"
 }

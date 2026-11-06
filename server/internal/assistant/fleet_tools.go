@@ -32,6 +32,9 @@ func (s *Service) mcpTools(ctx context.Context, assistant bool) []proto.Tool {
 		agents, assistantOnly = s.ext.AgentTools(ctx, assistant)
 	}
 	tools := append(phone.Tools, agents...)
+	if !assistant {
+		tools = append(tools, s.AgentTools()...) // report_to_supervisor (agent_control.go)
+	}
 	if assistant {
 		tools = append(tools, s.Tools(ctx)...)
 		tools = append(tools, assistantOnly...)
@@ -46,6 +49,9 @@ func (s *Service) mcpCall(ctx context.Context, machine, session, name string, ar
 		if res, ok := s.ext.CallTool(ctx, machine, session, name, args, assistant); ok {
 			return res
 		}
+	}
+	if !assistant && isAgentTool(name) {
+		return s.agentTool(ctx, machine, session, name, args)
 	}
 	if assistant && s.isOwnTool(ctx, name) {
 		return s.Tool(ctx, ToolCall{Name: name, Arguments: args, MachineID: machine, SessionID: session})

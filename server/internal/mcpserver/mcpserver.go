@@ -154,8 +154,10 @@ func handle(ctx context.Context, version string, req request) (any, *rpcError) {
 		// Phone round trips, approvals and ask_user can take a while (the user may need to unlock the phone).
 		ctx, cancel := context.WithTimeout(ctx, 40*time.Minute)
 		defer cancel()
+		// pane: an agent's MCP server has no session id of its own; the node knows the session in its pane
+		// (report_to_supervisor needs to know whose report it is).
 		line, err := callNode(ctx, map[string]any{"kind": "mcp.call", "name": p.Name, "args": p.Arguments,
-			"session_id": sessionID(), "assistant": isAssistant()})
+			"session_id": sessionID(), "assistant": isAssistant(), "pane": node.HookPane(os.Getenv)})
 		if err != nil {
 			return toolResult(proto.TextResult(fmt.Sprintf("Persona node is not reachable (%v). Is the hub connected to this machine?", err), true)), nil
 		}

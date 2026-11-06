@@ -27,7 +27,7 @@ import (
 // toolNames are the tools only assistant conversations get; their descriptions and schemas are in prompts/mcp
 // (docs/prompts.md).
 var toolNames = []string{"ask_user", "notify_user", "schedule_followup", "schedule_routine", "delete_routine", "list_followups",
-	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_start", "interaction_answer", "inbox_suggest", "inbox_draft",
+	"cancel_followup", "agents_list", "agent_read", "agent_send", "agent_interrupt", "agent_start", "agent_supervise", "interaction_answer", "inbox_suggest", "inbox_draft",
 	"kb_search", "kb_list", "kb_get", "kb_update", "jarvis_settings",
 	"conversations_list", "conversation_read", "conversation_rename", "conversation_archive", "conversation_unarchive",
 	"conversation_new", "conversation_send", "task_plan", "task_review"}
@@ -38,6 +38,11 @@ func (s *Service) Tools(ctx context.Context) []proto.Tool {
 	if s.hello(ctx).PersonaView {
 		names = append(names, "view_show", "view_update", "view_get")
 	}
+	return toolsNamed(names)
+}
+
+// toolsNamed are the MCP tools of these names, as prompts/mcp has them.
+func toolsNamed(names []string) []proto.Tool {
 	tools := make([]proto.Tool, 0, len(names))
 	for _, n := range names {
 		t := prompts.Tool(n)
@@ -199,6 +204,10 @@ func (s *Service) runTool(ctx context.Context, machine, self, name string, args 
 			return "", err
 		}
 		return fmt.Sprintf("Resumed %s on %s (same session, directory and launcher) and sent.", agentLabel(c), am.Name), nil
+	case "agent_interrupt":
+		return s.toolAgentInterrupt(ctx, machine, self, args) // agent_control.go
+	case "agent_supervise":
+		return s.toolAgentSupervise(ctx, self, args)
 	case "agent_start":
 		var a struct {
 			Machine  string `json:"machine"`

@@ -312,6 +312,11 @@ type SuperviseEntry struct {
 	Last            string   // what its agent said last
 	Link            string   // the task's page ("" when the hub has no public_url)
 	Quiet           bool     // the user was not pushed about it
+	// report: what its agent reported (progress, question, blocked, done), its words, evidence and step.
+	Report      string
+	Said        string
+	Evidence    []string
+	Step, Steps int
 }
 
 func RenderSupervise(s Supervise) string { return render("assistant/supervise", s) }

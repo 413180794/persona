@@ -15,5 +15,8 @@
   "route_no_agent": "这个任务没有在跑的 Agent",
   "route_offline": "那台电脑不在线",
   "outcome_question": "做完的结论",
-  "outcome_pitfall": "踩过的坑"
+  "outcome_pitfall": "踩过的坑",
+  "adopt_notes": "收编：{agent} · {machine} · {cwd}",
+  "adopt_failed": "收编没成功：{reason}",
+  "interrupt_summary": "停下 {agent} · {machine}"
 }
