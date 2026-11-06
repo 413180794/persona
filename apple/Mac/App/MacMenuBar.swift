@@ -41,6 +41,13 @@ enum MacMenuBar {
     /// The number beside the icon.
     static func count(needsYou: Int) -> String? { needsYou > 0 ? "\(needsYou)" : nil }
 
+    /// The number beside the icon: waiting cards of the menu's 需要你 sessions, not sessions — one session waiting
+    /// on a second card shows 2 (#4081), the same unit as the Dock badge and the iPhone's Agents tab.
+    static func needsYouCount(_ sections: Sections, interactions: [Interaction]) -> Int {
+        let keys = Set(sections.needsYou.map(\.key))
+        return interactions.filter { keys.contains($0.sessionKey) }.count
+    }
+
     /// One line of the menu: an agent by its title and machine, and for one that needs you what it asks.
     struct Item: Equatable, Identifiable {
         let key: SessionKey
@@ -83,17 +90,20 @@ enum MacMenuBar {
     func start(_ model: AppModel) { observe(model) }
 
     private func observe(_ model: AppModel) {
-        let next = withObservationTracking {
+        let (next, count): (MacMenuBar.Shown, Int) = withObservationTracking {
             // Agents of quiet tasks (#1731) are the main conversation's to tell: not in the menu at all.
-            MacMenuBar.shown(MacMenuBar.sections(MacMenuBar.menuSessions(model.allSessions, quiet: { model.isQuiet($0) }),
-                                                 muted: { model.isMuted($0) }), paired: model.isPaired,
-                             interactions: model.pendingInteractions,
-                             machineName: names(model.machines))
+            let sections = MacMenuBar.sections(MacMenuBar.menuSessions(model.allSessions, quiet: { model.isQuiet($0) }),
+                                               muted: { model.isMuted($0) })
+            let shown = MacMenuBar.shown(sections, paired: model.isPaired,
+                                         interactions: model.pendingInteractions,
+                                         machineName: names(model.machines))
+            // Cards, not sessions: a second card for one 需要你 session moves the icon's number (#4081).
+            return (shown, MacMenuBar.needsYouCount(sections, interactions: model.pendingInteractions))
         } onChange: {
             // Told before the change lands: read the new values on the next turn of the main queue.
             DispatchQueue.main.async { MainActor.assumeIsolated { self.observe(model) } }
         }
-        if next.needsYou.count != needsYou { needsYou = next.needsYou.count }
+        if count != needsYou { needsYou = count }
         if next != shown { shown = next }
     }
 

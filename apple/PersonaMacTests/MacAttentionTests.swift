@@ -25,6 +25,27 @@ struct MacAttentionTests {
                                  muted: { muted.contains($0.sessionID) }).map { "\($0.0.sessionID):\($0.1.rawValue)" }
     }
 
+    private func interaction(_ id: String, session: String = "a", machine: String = "m",
+                             kind: String = "permission", title: String? = nil, createdAt: String? = nil,
+                             group: String? = nil) throws -> Interaction {
+        let created = createdAt.map { ",\"created_at\":\"\($0)\"" } ?? ""
+        let sessionTitle = title.map { ",\"session_title\":\"\($0)\"" } ?? ""
+        let groupJSON = group.map { ",\"app_hub_group\":\"\($0)\"" } ?? ""
+        return try JSON.decoder.decode(Interaction.self, from: Data("""
+        {"id":"\(id)","machine_id":"\(machine)","session_id":"\(session)","kind":"\(kind)"\(created)\(sessionTitle)\(groupJSON)}
+        """.utf8))
+    }
+
+    /// The new-card banners as interaction ids (#4081).
+    private func cards(_ old: [Interaction], _ new: [Interaction], transitioned: Set<SessionKey> = [],
+                       open: SessionKey? = nil, active: Bool = false,
+                       prefs: NotifyPrefs = NotifyPrefs(done: .always),
+                       muted: Set<String> = []) -> [String] {
+        MacAttention.newInteractions(old: old, new: new, transitionedKeys: transitioned, open: open,
+                                     appActive: active, prefs: prefs,
+                                     muted: { muted.contains($0.sessionID) }).map(\.id)
+    }
+
     @Test func needsYouAndFinishedNotify() {
         let out = ping([session("a", .working), session("b", .working)], [session("a", .needsYou), session("b", .unread)])
         #expect(out == ["a:needs_you", "b:unread"])
@@ -63,10 +84,74 @@ struct MacAttentionTests {
         #expect(ping(old, new, prefs: short) == ["a:unread", "b:unread", "c:needs_you"])
     }
 
-    @Test func dockBadgeCountsWhatNeedsYou() {
-        let list = [session("a", .needsYou), session("b", .needsYou), session("c", .working), session("j", .needsYou, assistant: true)]
-        #expect(MacAttention.badge(list, muted: { $0.sessionID == "b" }) == "2")
-        #expect(MacAttention.badge([session("c", .working)], muted: { _ in false }) == nil)
+    @Test func dockBadgeCountsWaitingCards() throws {
+        // Two cards for one already-waiting agent (#4081), one for another, a muted one's, and the Persona
+        // conversation's ask: cards are the unit, muted stays out, the Persona conversation keeps counting.
+        let list = try [interaction("a1", session: "a"), interaction("a2", session: "a"),
+                        interaction("b1", session: "b"), interaction("j1", session: "j")]
+        #expect(MacAttention.badge(list, muted: { $0.sessionID == "b" }) == "3")
+        #expect(MacAttention.badge([], muted: { _ in false }) == nil)
+    }
+
+    /// An agent already 在「需要你」gets a second card (a sub-agent's authorization, another confirmation): the
+    /// state never flips, but the card is new, so it gets its own banner.
+    @Test func secondCardForAnAlreadyWaitingAgentPings() throws {
+        let a = try interaction("a"), b = try interaction("b")
+        #expect(cards([a], [a, b]) == ["b"])
+    }
+
+    /// A card already in the last list is never announced again; one answered (gone from the list) is not reported;
+    /// a card genuinely new to an empty list is (the watcher only passes that when its flip banner did not take it).
+    @Test func oldAndResolvedCardsDoNotPingAgain() throws {
+        let a = try interaction("a"), b = try interaction("b")
+        #expect(cards([a], [a]).isEmpty)
+        #expect(cards([a, b], [a]).isEmpty)
+        #expect(cards([], [a]) == ["a"])
+    }
+
+    /// The flip-to-needs-you banner already carries that session's oldest waiting card, so it is not posted twice;
+    /// two cards landing with the flip still ping the second one.
+    @Test func flipBannerAndCardBannerDoNotDoubleUp() throws {
+        let key = SessionKey(machineID: "m", sessionID: "a")
+        #expect(cards([], [try interaction("a")], transitioned: [key]).isEmpty)
+        let a = try interaction("a", createdAt: "2001-09-09T01:46:40Z")
+        let b = try interaction("b", createdAt: "2001-09-09T01:46:41Z")
+        #expect(cards([], [a, b], transitioned: [key]) == ["b"])
+        // A card the old list already had when the state flips is the flip banner's, not reposted.
+        #expect(cards([a], [a], transitioned: [key]).isEmpty)
+    }
+
+    /// New-card banners follow the same rules as the flip banners: frontmost open chat, muted/quiet, and the
+    /// 需要你处理 notification setting.
+    @Test func newCardsFollowTheSameMuteFrontAndSettingsRules() throws {
+        let open = SessionKey(machineID: "m", sessionID: "a")
+        #expect(cards([try interaction("a")], [try interaction("a"), try interaction("b")],
+                      open: open, active: true).isEmpty)
+        #expect(cards([try interaction("a")], [try interaction("a"), try interaction("b")],
+                      open: open, active: false) == ["b"])
+        #expect(cards([], [try interaction("a")], muted: ["a"]).isEmpty)
+        #expect(cards([], [try interaction("a")], prefs: NotifyPrefs(input: false, done: .off)).isEmpty)
+    }
+
+    /// The same hub interaction id in two hub groups is two different cards (`uid` carries the group).
+    @Test func sameHubIdInTwoGroupsAreTwoCards() throws {
+        let one = try interaction("x", group: "g1")
+        let other = try interaction("x", group: "g2")
+        #expect(one.uid != other.uid)
+        #expect(cards([one], [one, other]) == ["x"])
+        #expect(cards([one], [one, other]).count == 1)
+    }
+
+    /// When the card event briefly leads the session event, the banner still goes out with a titled stand-in
+    /// rather than being dropped; a matching session in the list wins.
+    @Test func cardWithoutASessionUsesATitledStandIn() throws {
+        let ix = try interaction("a", title: "build")
+        let standIn = MacAttention.session(for: ix, in: [session("x", .working)])
+        #expect(standIn?.key == ix.sessionKey)
+        #expect(standIn?.state == .needsYou)
+        #expect(MacAttention.content(standIn!, .needsYou, interaction: ix).title == "build 需要你")
+        let real = session("a", .needsYou)
+        #expect(MacAttention.session(for: ix, in: [real])?.title == "t-a")
     }
 
     @Test func text() {

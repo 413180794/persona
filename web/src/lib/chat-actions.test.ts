@@ -87,6 +87,25 @@ describe("drafts", () => {
     sendDraft("m/s", { type: "replace", text: "" });
     expect(store.has("draft:m/s")).toBe(false);
   });
+
+  it("a replace while no composer is mounted puts a sent message's quote back on the bar, the words in the draft", () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => store.set(k, v),
+      removeItem: (k: string) => store.delete(k),
+    });
+    // a quote left on the bar from before: the message coming back has its own
+    sendDraft("m/q", { type: "quote", text: "旧的引用" });
+    // 回退到这里 finishes after the reader went to another chat: the message, sent with a quote, comes back
+    sendDraft("m/q", { type: "replace", text: withQuoteBlock({ text: "上周的结论" }, "照这个改") });
+    expect(store.get("draft:m/q")).toBe("照这个改");
+    expect(storedQuotes("m/q").map((q) => q.text)).toEqual(["上周的结论"]);
+    // one sent without a quote clears the bar, as the mounted composer does
+    sendDraft("m/q", { type: "replace", text: "只有字" });
+    expect(store.get("draft:m/q")).toBe("只有字");
+    expect(storedQuotes("m/q")).toEqual([]);
+  });
 });
 
 describe("@ mentions", () => {

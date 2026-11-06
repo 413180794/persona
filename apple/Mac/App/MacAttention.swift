@@ -3,7 +3,9 @@ import Foundation
 import UserNotifications
 
 /// What the Mac does outside its window when an agent needs you or finishes (docs/mac.md「和 iOS 的对应」):
-/// the Dock badge (how many need you) and a system notification for each agent that just turned 需要你 / 做完了.
+/// the Dock badge (how many cards wait on you) and a system notification for each agent that just turned 需要你 /
+/// 做完了, plus one for every newly arrived card while it is already 在「需要你」(#4081, a sub-agent's authorization
+/// or a second confirmation for the same agent).
 /// While the app runs it watches its own session list (the WebSocket stays open) and follows the same 设置 › 通知
 /// choices (`NotifyPrefs`); the hub pushes these to the Mac only while it is not connected (docs/mac.md「远程推送（Mac）」).
 enum MacAttention {
@@ -11,12 +13,12 @@ enum MacAttention {
     /// chat on screen while the app is in front, a muted agent, a session the list just learned about, or a finish
     /// right after a needs-you (the same stop). Persona's own conversations ping when they ask, not when they reply.
     static func transitions(old: [Session], new: [Session], open: SessionKey?, appActive: Bool, prefs: NotifyPrefs,
-                            now: Date, muted: (Session) -> Bool) -> [(Session, AgentState)] {
+                            now: Date, muted: (SessionKey) -> Bool) -> [(Session, AgentState)] {
         let before = Dictionary(old.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let longTurn = TimeInterval(prefs.longTurnSeconds ?? 60) // the hub's default (notify.go)
         return new.compactMap { s in
-            guard let was = before[s.key], was.state != s.state, !muted(s) else { return nil }
-            if appActive && s.key == open { return nil }
+            guard let was = before[s.key], was.state != s.state,
+                  MacAttention.allowsBanner(key: s.key, open: open, appActive: appActive, muted: muted) else { return nil }
             switch s.state {
             case .needsYou:
                 return prefs.input ? (s, .needsYou) : nil
@@ -36,9 +38,43 @@ enum MacAttention {
         }
     }
 
-    /// The Dock badge: agents and Persona conversations waiting on you, muted ones left out (the sidebar's badges).
-    static func badge(_ sessions: [Session], muted: (Session) -> Bool) -> String? {
-        let n = sessions.filter { $0.state == .needsYou && !muted($0) }.count
+    /// The shared banner rules for the state-flip notifications and the per-card ones, so the two never drift: the
+    /// chat on screen while the app is in front stays quiet, and a muted agent or a quiet task's (#1731) never pings.
+    static func allowsBanner(key: SessionKey, open: SessionKey?, appActive: Bool, muted: (SessionKey) -> Bool) -> Bool {
+        if appActive && key == open { return false }
+        return !muted(key)
+    }
+
+    /// The newly arrived cards that each need a banner of their own (#4081): the hub pushes the phone once per card,
+    /// and an agent already waiting on one card can ask again (a sub-agent's authorization, a second confirmation)
+    /// without leaving 需要你, so `transitions` alone misses the second one. A card whose uid was in the old list is
+    /// never reported again, and cards removed (answered) and re-added are judged by the lists as they are now.
+    /// `transitionedKeys` names the sessions flipping to 需要你 in this change (or within the watcher's short grace
+    /// for a state event that beats the card event): their oldest waiting card is what the flip banner already
+    /// carries, so it is not posted twice — two cards landing at once still ping the second one. With 需要你处理
+    /// pushes turned off (`prefs.input`) no card pings.
+    static func newInteractions(old: [Interaction], new: [Interaction], transitionedKeys: Set<SessionKey>,
+                                open: SessionKey?, appActive: Bool, prefs: NotifyPrefs,
+                                muted: (SessionKey) -> Bool) -> [Interaction] {
+        guard prefs.input else { return [] }
+        let alreadyThere = Set(old.map(\.uid))
+        // The card each flip banner shows: the session's oldest still-waiting card, the one pendingInteractions
+        // (oldest first) hands that banner in the watcher.
+        let announced = Set(transitionedKeys.compactMap { key -> String? in
+            new.filter { $0.sessionKey == key }
+                .min { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }?.uid
+        })
+        return new.filter { ix in
+            !alreadyThere.contains(ix.uid) && !announced.contains(ix.uid)
+                && allowsBanner(key: ix.sessionKey, open: open, appActive: appActive, muted: muted)
+        }
+    }
+
+    /// The Dock badge: waiting cards, not sessions — an agent already asking with a second card counts both (#4081),
+    /// the same unit as the iPhone's Agents tab and the menu bar icon. Muted agents and quiet tasks (#1731) stay out
+    /// like the sidebar's badges; the chat on screen still counts (a badge is not a banner).
+    static func badge(_ interactions: [Interaction], muted: (SessionKey) -> Bool) -> String? {
+        let n = interactions.filter { !muted($0.sessionKey) }.count
         return n > 0 ? "\(n)" : nil
     }
 
@@ -53,6 +89,21 @@ enum MacAttention {
 }
 
 extension MacAttention {
+    /// The session a card belongs to. An `.interaction` event can briefly beat its session update, so when the list
+    /// has no matching session decode a bare 需要你 stand-in from the card: better to banner (titled by the card)
+    /// than drop it. Returns nil only if that fixed shape ever fails to decode.
+    static func session(for ix: Interaction, in sessions: [Session]) -> Session? {
+        if let s = sessions.first(where: { $0.key == ix.sessionKey }) { return s }
+        let object: [String: Any] = [
+            "machine_id": ix.machineID, "session_id": ix.sessionID, "title": ix.sessionTitle ?? "Agent",
+            "cwd": ix.cwd ?? "", "status": "idle", "state": AgentState.needsYou.rawValue,
+            "started_by_jarvis": false, "assistant": ix.toolName == "ask_user", "pending_interactions": 1,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: object),
+              let standIn = try? JSON.decoder.decode(Session.self, from: data) else { return nil }
+        return standIn
+    }
+
     /// The banner for one agent. The userInfo keys are the hub push's (`machine_id`, `session_id`, `interaction_id`),
     /// so MacAppDelegate opens the chat or resolves a button the same way for both.
     static func content(_ s: Session, _ state: AgentState, interaction: Interaction?) -> UNMutableNotificationContent {
@@ -77,6 +128,11 @@ extension MacAttention {
     static let shared = MacAttentionWatcher()
 
     private var last: [Session] = []
+    private var lastInteractions: [Interaction] = []
+    /// Sessions whose flip to 需要你 has not met its card event yet, with the flip time (the short grace below).
+    /// The state event can beat the `.interaction` event by one main-queue turn; without this the card would then
+    /// ping on top of the flip banner.
+    private var flippedAt: [SessionKey: Date] = [:]
     /// When the current connected stretch began (MacAttention.connectedAt); nil until the first connect, and again
     /// while the socket is down, so a reconnect runs the settle instead of diffing the offline list at once.
     private var connectedAt: Date?
@@ -103,29 +159,56 @@ extension MacAttention {
 
     private func update(_ model: AppModel, sessions: [Session]) {
         // A quiet task's agent (#1731) is the main conversation's to tell: no banner, no count, like a muted one.
-        let muted: (Session) -> Bool = { model.isMuted($0) || model.isQuiet($0) }
-        NSApp.dockTile.badgeLabel = model.isPaired ? MacAttention.badge(sessions, muted: muted) : nil
-        defer { last = sessions }
+        let mutedKey: (SessionKey) -> Bool = { model.isMuted($0) || model.isQuiet($0) }
+        let interactions = model.pendingInteractions
+        // One tick per waiting card (the iPhone Agents tab's unit), not per session: a second card moves it (#4081).
+        NSApp.dockTile.badgeLabel = model.isPaired ? MacAttention.badge(interactions, muted: mutedKey) : nil
+        defer {
+            last = sessions
+            lastInteractions = interactions
+        }
         let now = Date()
         let startingToConnect = connectedAt == nil && model.live.state == .connected
         connectedAt = MacAttention.connectedAt(connectedAt, state: model.live.state, now: now)
         if startingToConnect {
             // Nothing else may change after the settle time: look again then.
             DispatchQueue.main.asyncAfter(deadline: .now() + MacAttention.settle + 0.1) { [weak self] in
-                MainActor.assumeIsolated { self?.last = model.allSessions }
+                MainActor.assumeIsolated {
+                    self?.last = model.allSessions
+                    self?.lastInteractions = model.pendingInteractions
+                }
             }
         }
         // 体验模式's agents are made up.
-        guard !model.isDemo, MacAttention.armed(connectedAt: connectedAt, now: Date()), !last.isEmpty else { return }
+        guard !model.isDemo, MacAttention.armed(connectedAt: connectedAt, now: now), !last.isEmpty else { return }
         let prefs = LiveActivityController.shared.prefs ?? NotifyPrefs()
         let ping = MacAttention.transitions(old: last, new: sessions, open: model.visibleSession, appActive: NSApp.isActive,
-                                            prefs: prefs, now: Date(), muted: muted)
-        guard !ping.isEmpty else { return }
-        let requests = ping.map { s, state in
+                                            prefs: prefs, now: now, muted: mutedKey)
+        // The flip banner of a 需要你 turn already carries that session's oldest card: remember the flip for this
+        // turn (cards in the same list) and for one settle-length grace in case the card event lands a turn later.
+        for (s, state) in ping where state == .needsYou { flippedAt[s.key] = now }
+        flippedAt = flippedAt.filter { now.timeIntervalSince($0.value) <= MacAttention.settle }
+        let cards = MacAttention.newInteractions(old: lastInteractions, new: interactions,
+                                                 transitionedKeys: Set(flippedAt.keys),
+                                                 open: model.visibleSession, appActive: NSApp.isActive,
+                                                 prefs: prefs, muted: mutedKey)
+        // The flip has met its card once a card for that session is present now: the flip banner covered it, and the
+        // next card of this stop must ping even if it still lands inside the grace.
+        let metKeys = flippedAt.keys.filter { key in interactions.contains { $0.sessionKey == key } }
+        for key in metKeys { flippedAt[key] = nil }
+        guard !ping.isEmpty || !cards.isEmpty else { return }
+        var requests = ping.map { s, state in
             // One per session and state: a second 做完了 for the same agent replaces the first.
             UNNotificationRequest(identifier: "\(s.machineID)/\(s.sessionID)#\(state.rawValue)",
-                                  content: MacAttention.content(s, state, interaction: model.pendingInteractions.first { $0.sessionKey == s.key }),
+                                  content: MacAttention.content(s, state, interaction: interactions.first { $0.sessionKey == s.key }),
                                   trigger: nil)
+        }
+        // One banner per new card, identified by the card's uid like the hub push's collapse id: answering removes
+        // the card and a later card (a different uid) pings again, even for the same agent.
+        requests += cards.compactMap { ix -> UNNotificationRequest? in
+            guard let s = MacAttention.session(for: ix, in: sessions) else { return nil }
+            return UNNotificationRequest(identifier: "interaction/\(ix.uid)",
+                                         content: MacAttention.content(s, .needsYou, interaction: ix), trigger: nil)
         }
         waiting += requests
         if asked {

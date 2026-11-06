@@ -275,8 +275,12 @@ export function sendDraft(key: string, e: DraftEvent): boolean {
     addQuote(key, { text: e.text, from: e.from, ts: e.ts, task: e.task }, false);
     return true;
   }
+  // 编辑 / 回退 a message sent with a quote while its box is away: as the composer would, the quotes go back to the bar
+  // above the input (any it had are replaced) and only the words into the draft.
+  const split = e.type === "replace" ? splitQuotes(e.text) : null;
+  if (e.type === "replace") setQuotes(key, split ? parseQuotes(split.quotes) : []);
   const stored = `draft:${key}`;
-  const next = applyDraft(localStorage.getItem(stored) ?? "", e);
+  const next = split ? split.rest : applyDraft(localStorage.getItem(stored) ?? "", e);
   if (next) localStorage.setItem(stored, next);
   else localStorage.removeItem(stored);
   return true;

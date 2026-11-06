@@ -88,4 +88,18 @@ struct MacMenuBarTests {
         #expect(MacMenuBar.count(needsYou: 0) == nil)
         #expect(MacMenuBar.count(needsYou: 3) == "3")
     }
+
+    /// The icon's number counts waiting cards of the menu's 需要你 sessions, not sessions (#4081): one agent on a
+    /// second card shows 2, matching the Dock badge and the iPhone's Agents tab.
+    @Test func iconCountsCardsNotSessions() throws {
+        func ix(_ id: String, _ session: String) throws -> Interaction {
+            try JSON.decoder.decode(Interaction.self, from: Data(
+                #"{"id":"\#(id)","machine_id":"m","session_id":"\#(session)","kind":"permission"}"#.utf8))
+        }
+        let sections = MacMenuBar.sections([session("a", .needsYou), session("w", .working)], muted: { _ in false })
+        #expect(MacMenuBar.needsYouCount(sections, interactions: []) == 0)
+        let cards = try [ix("a1", "a"), ix("a2", "a"), ix("w1", "w")]
+        // Both of a's cards count; w is working, so its (out-of-sync) card is not on the menu's number.
+        #expect(MacMenuBar.needsYouCount(sections, interactions: cards) == 2)
+    }
 }
