@@ -144,7 +144,7 @@ hub 留下的只有会话列表上的来源标记、完成推送（照快照的 
 6. **组织内容**：文字前面加一段 `<jarvis-context>`，说明这条从哪个渠道来、回答会发回去、用什么格式（提示词 `prompts/channel/message.md`，飞书机器人保留自己的 `bot/message.md`）；
    引用的消息、合并转发的聊天记录各放一段 `<jarvis-context>`；图片作为附件；文件见能力 `files_in`。
 7. **发**：Persona 的对话走 `session.send`（主对话跟着设置里的模型），`client_msg_id = <渠道>-<消息 id>`。
-8. **跟踪这一轮**（一个 run，存数据库，助手或 hub 重启接着等），规则就是原来飞书机器人和微信机器人各写了一遍的那套，现在在 `channel.Check`；
+8. **跟踪这一轮**（一个 run，存数据库，助手或 hub 重启接着等），规则就是原来飞书机器人和微信机器人各写了一遍的那套，现在在 `channel.Check`；一轮在 Agent 写出文字之前就被叫停（只跟着一条「已中断」或模型服务出错的提示）时，消息都到齐了就直接按「已停止 / 出错」收尾，不再当成排队等满 10 分钟（#4505）；还在重试的模型服务出错不算；
    读回答是 `channel.ReadTurn`（翻页读到 transcript 末尾、长条目读全文、合并的几条按消息分段 `RunAnswer`）。对话从哪来由调用方给一个 `ItemSource`：
    助手经总线（`session.items` / `session.item`），语音扩展经 hub 的 HTTP 接口（`…/items?after_seq=`、`…/items/{iid}/full`，#3489），规则只有一份：
    - 先按 `client_msg_id`（老 node 没有时按消息开头的一段字 `probe`）在 transcript 里找到这条消息，取它后面最后一次工具调用之后的回答；

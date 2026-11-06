@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/nwverse/persona/server/internal/channel"
@@ -119,6 +120,9 @@ type tracker struct {
 	ended map[linkKey]time.Time // when the hub last said a turn ended there (one may end while its message is sent)
 	// refused are the runs the hub refused (409), by id, that the app may send again (resend).
 	refused map[string]*voiceRun
+	// stopAsked is when the voice side last asked the bound conversation to stop (stopTarget, unix ns): a run read as
+	// stopped after that ends quietly, as stopped() ends it: the model already said it was stopped.
+	stopAsked atomic.Int64
 }
 
 const refusedMost = 20
@@ -324,6 +328,14 @@ func (t *tracker) finish(r *voiceRun, res *channel.Result, look channel.Look) {
 	l, to := string(t.c.language()), t.c.target.to()
 	t.c.toolsDone(r.appIDs)
 	r.appIDs = nil
+	if res.End == channel.EndStopped {
+		r.Code = "stopped" // the app shows it as stopped, not done
+		if at := t.stopAsked.Load(); at != 0 && strings.TrimSpace(res.Answer) == "" && !time.Unix(0, at).Before(r.Started.Add(-time.Second)) {
+			t.drop(r) // the voice side stopped it: what the model was told of the stop is its end (stopped)
+			t.set(r, runDone)
+			return
+		}
+	}
 	state := runDone
 	switch {
 	case res.Quiet:

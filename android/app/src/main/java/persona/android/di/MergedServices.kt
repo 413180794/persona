@@ -298,6 +298,8 @@ internal fun mergedAgentsState(list: List<GroupNames>, states: List<AgentsWiring
             return creation(index).start(request, operationId)
         }
         override suspend fun operation(operationId: String) = creation(started[operationId] ?: chosen).operation(operationId)
+        // The machine names the hub that took the start: [started] is lost when the wiring is rebuilt or the process dies.
+        override suspend fun operation(operationId: String, machineId: String) = creation(of(machineId)).operation(operationId)
         // 跟随模型配置 reads the selected group's agent.new purpose.
         override suspend fun newAgentModel() = creations.getOrNull(chosen)?.newAgentModel()
         override suspend fun launcherModels(machineId: String, launcher: String, refresh: Boolean) =

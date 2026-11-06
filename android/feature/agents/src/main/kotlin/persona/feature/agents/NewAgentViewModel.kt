@@ -352,7 +352,7 @@ internal class NewAgentViewModel(
             store.pending(service.scope, operation)
             mutable.update { it.copy(pending = operation) }
         }
-        val result = if (fresh) service.start(operation.request, operation.id) else service.operation(operation.id)
+        val result = if (fresh) service.start(operation.request, operation.id) else service.operation(operation.id, operation.request.machineId)
         when (result) {
             is AgentStartResult.Created -> {
                 require(result.session.machineId == operation.request.machineId && result.session.sessionId.isNotBlank())

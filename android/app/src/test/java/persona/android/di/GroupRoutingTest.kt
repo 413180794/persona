@@ -133,6 +133,28 @@ class GroupRoutingTest {
         assertEquals(SessionKey("m~g0a1b2c3d", "new"), created.session.key)
     }
 
+    @Test fun aStartsReceiptIsReadFromItsMachinesGroupAfterTheWiringIsRebuilt() = runBlocking<Unit> {
+        fun hub(answer: AgentStartResult, asked: MutableList<String>) = object : AgentCreationService {
+            override val scope = "hub/gen"
+            override suspend fun launchers(machineId: String) = emptyList<AgentLauncher>()
+            override suspend fun directories(machineId: String, path: String) = AgentDirectories(path)
+            override suspend fun start(request: AgentStartRequest, operationId: String) = AgentStartResult.Unknown
+            override suspend fun operation(operationId: String): AgentStartResult { asked += operationId; return answer }
+        }
+        val homeAsked = mutableListOf<String>()
+        val workAsked = mutableListOf<String>()
+        val created = AgentStartResult.Created(Session("mac~g0a1b2c3d", "new"))
+        val states = listOf(AgentsWiringState("a", creation = hub(AgentStartResult.Unknown, homeAsked)),
+            AgentsWiringState("b", creation = hub(created, workAsked)))
+        val request = AgentStartRequest("mac~g0a1b2c3d", "/", "claude")
+        requireNotNull(mergedAgentsState(listOf(primary, other), states, 0).creation).start(request, "op")
+        // A route change rebuilds the merged state (and process death loses it): the pending start is checked anew.
+        val rebuilt = requireNotNull(mergedAgentsState(listOf(primary, other), states, 0).creation)
+        assertEquals(created, rebuilt.operation("op", request.machineId))
+        assertEquals(listOf("op"), workAsked)
+        assertTrue(homeAsked.isEmpty())
+    }
+
     @Test fun mergedPinsWriteOnlyTheGroupsWhosePartChanged() = runBlocking<Unit> {
         class Hub(var pins: AgentOperationPreferences, val reachable: Boolean = true) : AgentOperations {
             val saved = mutableListOf<AgentOperationPreferences>()

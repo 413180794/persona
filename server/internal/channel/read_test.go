@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // pagedSource is a transcript read page items at a time (more_after while more follow), its cut items whole from full.
@@ -190,5 +191,41 @@ func TestFoldedRunAnswer(t *testing.T) {
 	}
 	if got, _ := RunAnswer(&Run{MsgIDs: []string{"wechat-1"}}, []proto.Item{userSays("wechat-1", "一"), agentSays("答一"), userSays("x", "y"), agentSays("答y")}); texts(got) != "答y" {
 		t.Errorf("one message: %q (as before: the last words)", texts(got))
+	}
+}
+
+// A turn stopped before the agent said anything (#4505): its message is followed only by the 已中断 notice. The turn is
+// over: found, without words, stopped, so the run ends now instead of waiting as one still queued.
+func TestReadTurnStoppedBeforeWords(t *testing.T) {
+	stopped := proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.InterruptedNotice}
+	src := &pagedSource{page: 10, items: numbered(userSays("voice-1", "one"), agentSays("answer one"), userSays("voice-2", "two"), stopped)}
+	rd, err := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-2"}})
+	if err != nil || !rd.Found || rd.Answer != "" || rd.Stopped == "" || rd.Last != 4 {
+		t.Fatalf("%+v %v", rd, err)
+	}
+	// A folded run whose next message is not in yet still waits: that message's turn is still to come.
+	if rd, _ := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-2", "voice-3"}}); rd.Found {
+		t.Fatalf("a folded run with a message still to come: %+v", rd)
+	}
+	// Once both are in and the turn was stopped before any words, the folded run is over too.
+	folded := &pagedSource{page: 10, items: numbered(userSays("voice-1", "one"), userSays("voice-2", "two"), stopped)}
+	if rd, _ := ReadTurn(context.Background(), folded, &Run{MsgIDs: []string{"voice-1", "voice-2"}}); !rd.Found || rd.Stopped == "" {
+		t.Fatalf("a folded run stopped before words: %+v", rd)
+	}
+	// A long API error still being retried: its suffix is read on the whole text, not the clipped reason.
+	long := proto.Item{Role: "system", Kind: proto.KindNotice, Text: transcript.APIErrorPrefix + strings.Repeat("x", 400) + transcript.APIRetrying}
+	src2 := &pagedSource{page: 10, items: numbered(userSays("voice-2", "two"), long)}
+	if rd, _ := ReadTurn(context.Background(), src2, &Run{MsgIDs: []string{"voice-2"}}); rd.Found {
+		t.Fatalf("a long API error being retried: %+v", rd)
+	}
+	// An API error Claude Code is still retrying is not the end of the turn.
+	src.items[3] = proto.Item{Seq: 4, ID: "id", Role: "system", Kind: proto.KindNotice, Text: transcript.APIErrorPrefix + "Overloaded（正在重试）"}
+	if rd, _ := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-2"}}); rd.Found {
+		t.Fatalf("an API error being retried: %+v", rd)
+	}
+	// Some other notice after it (not a stop) still waits.
+	src.items[3] = proto.Item{Seq: 4, ID: "id", Role: "system", Kind: proto.KindNotice, Text: "something else"}
+	if rd, _ := ReadTurn(context.Background(), src, &Run{MsgIDs: []string{"voice-2"}}); rd.Found {
+		t.Fatalf("a plain notice is not a stop: %+v", rd)
 	}
 }

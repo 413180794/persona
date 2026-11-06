@@ -311,31 +311,25 @@ export function buildTodoAgentGroups(
     liveByKey.set(`${s.machine_id}/${s.session_id}`, s);
   }
 
-  const assignedSessionKeys = new Set<string>();
+  // Each agent sits under one todo: the session's own open todo first (pushed with the session, so newer than a
+  // todo's agents list that still has it after a move, #4802; as Android's AgentList), else the first open todo
+  // listing it (not released).
+  const openIds = new Set(openTodos.map((t) => t.id));
+  const homeOf = new Map<string, string>();
+  for (const [key, s] of liveByKey) {
+    const own = s.todo?.id;
+    const home = own && openIds.has(own) ? own
+      : openTodos.find((t) => (t.agents ?? []).some((a) => !a.released_at && `${a.machine_id}/${a.session_id}` === key))?.id;
+    if (home) homeOf.set(key, home);
+  }
+  const assignedSessionKeys = new Set(homeOf.keys());
   const groups: AgentGroup[] = [];
 
   for (const todo of openTodos) {
-    const todoSessions: Session[] = [];
-    const activeAgents = (todo.agents ?? []).filter((a) => !a.released_at);
-
-    // 首先从 todo.agents 收集未 released 的 live 会话
-    for (const a of activeAgents) {
-      const key = `${a.machine_id}/${a.session_id}`;
-      const s = liveByKey.get(key);
-      if (s && !assignedSessionKeys.has(key)) {
-        todoSessions.push(s);
-        assignedSessionKeys.add(key);
-      }
-    }
-
-    // 其次补充 session.todo?.id 指向该待办的会话
-    for (const s of live) {
-      const key = `${s.machine_id}/${s.session_id}`;
-      if (s.todo?.id === todo.id && !assignedSessionKeys.has(key)) {
-        todoSessions.push(s);
-        assignedSessionKeys.add(key);
-      }
-    }
+    // in the todo's agents order, then the sessions on it by their own todo only
+    const listed = (todo.agents ?? []).filter((a) => !a.released_at).map((a) => `${a.machine_id}/${a.session_id}`);
+    const keys = [...new Set([...listed, ...liveByKey.keys()])].filter((key) => homeOf.get(key) === todo.id);
+    const todoSessions = keys.map((key) => liveByKey.get(key)!);
 
     if (todoSessions.length > 0) {
       // 组内排序：按状态优先级（置顶/需要你排前面，屏蔽降级），同优先级按时间降序

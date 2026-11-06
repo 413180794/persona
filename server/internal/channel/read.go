@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/transcript"
 )
 
 // Reading a run's answer out of the conversation is the same wherever the transcript comes from: the assistant reads it
@@ -77,7 +78,15 @@ func ReadTurn(ctx context.Context, src ItemSource, r *Run) (Reading, error) {
 	}
 	if named && found && !slices.ContainsFunc(kept, func(it proto.Item) bool { return it.Role == "assistant" }) {
 		// Its message is in, nothing after it yet: its turn has not answered (the session's status can come before its
-		// lines, two messages one right after the other): as one still waiting.
+		// lines, two messages one right after the other): as one still waiting. Unless the turn was stopped before it
+		// said anything (#4505): only the 已中断 notice follows it, and the turn is over without words.
+		// Only once all of a folded run's messages are in (a later one's turn is still to come), and not for an API
+		// error Claude Code is still retrying (the turn goes on).
+		if why := Stopped(kept); why != "" && !retrying(kept) {
+			if _, all := RunAnswer(r, kept); all {
+				return Reading{Found: true, Last: after, Stopped: why}, nil
+			}
+		}
 		return Reading{Last: after}, nil
 	}
 	answer, all := RunAnswer(r, kept)
@@ -153,6 +162,17 @@ func endsInWords(items []proto.Item) bool {
 			return true
 		}
 		return false
+	}
+	return false
+}
+
+// retrying: the last notice in items is an API error Claude Code is still retrying (read on the whole text: Stopped
+// clips it).
+func retrying(items []proto.Item) bool {
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i].Kind == proto.KindNotice && !compaction(items[i]) { // as Stopped skips them
+			return strings.HasSuffix(strings.TrimSpace(items[i].Text), transcript.APIRetrying)
+		}
 	}
 	return false
 }

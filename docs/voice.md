@@ -526,7 +526,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
   - 待处理卡片的类别。
 - 套 `status.md`，作为这个 delegation 的 final commentary 发出。
 - #3502 的取法：`activity` 只留动词（「在读 tasks.go」→「在读」，`transcript.Activity` 的说法都是动词开头），已用时间是会话的 `state_since`（hub 记的进入工作中的时刻），最新文字是 `items?turns=1` 里最后一条 Agent 文字（转成能说出口的，不超过 300 字），卡片只说类别；`work.line` 和最新文字放进数据块，带了它们的答复算「Agent 的内容」，关一次用户发言门槛。
-- 「停止：」过门槛后先看会话：不在了、没在工作也没停在等你（`blocked`、`needs_you`、有待处理的卡）就直接告诉快层，不调接口；停在卡片或终端对话框上的那一轮还开着，照样调 `interrupt`（发 Esc，和 App 的停止按钮一样关掉那张卡、结束这一轮）；`interrupt` 成功后快层才说「已经叫停了」，失败时带 hub 的原话。叫停成功后这个目标上的 run 都以 `done{code: stopped}` 结束、不再念：一轮在写出文字之前被叫停时，`channel.ReadTurn` 读不出它（#4505）。
+- 「停止：」过门槛后先看会话：不在了、没在工作也没停在等你（`blocked`、`needs_you`、有待处理的卡）就直接告诉快层，不调接口；停在卡片或终端对话框上的那一轮还开着，照样调 `interrupt`（发 Esc，和 App 的停止按钮一样关掉那张卡、结束这一轮）；`interrupt` 成功后快层才说「已经叫停了」，失败时带 hub 的原话。叫停成功后这个目标上的 run 都以 `done{code: stopped}` 结束、不再念。一轮在写出文字之前被叫停时，`channel.ReadTurn` 读成「找到了、没有字、已中断」（#4505）：是语音这边叫停的照样安静结束；别处（App、终端）叫停的，`done{code: stopped}` 之外还把「停了」告诉快层。叫停没成功时不算语音叫停的。
 
 ### 4.7 提问和卡片
 

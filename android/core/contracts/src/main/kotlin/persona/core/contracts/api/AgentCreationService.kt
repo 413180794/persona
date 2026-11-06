@@ -13,6 +13,9 @@ interface AgentCreationService {
     suspend fun start(request: AgentStartRequest, operationId: String): AgentStartResult
     suspend fun operation(operationId: String): AgentStartResult
 
+    /** The receipt of a start on [machineId]: a service over several hubs asks the hub that owns the machine. */
+    suspend fun operation(operationId: String, machineId: String): AgentStartResult = operation(operationId)
+
     /**
      * The hub's 新建 Agent model use (`agent.new`, docs/model-config.md): when it has one, a new agent follows it unless
      * a launcher is picked for this start (the request then carries an empty launcher). Null from hubs without

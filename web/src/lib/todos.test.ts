@@ -331,6 +331,42 @@ describe("Agents 侧边栏「按待办」分组 (buildTodoAgentGroups)", () => {
     expect(noTodo[1].folded).toBe(false);
   });
 
+  it("Agent 换到另一个待办后马上归新待办，即使旧待办的列表还没刷新 (#4802)", () => {
+    // the session (pushed first) is already on B; A's agents list, refreshed later, still has it
+    const sMoved = mockSession("mac-1", "moved", "working", { todo: { id: "todo-b", title: "B" } });
+    const sStays = mockSession("mac-1", "stays", "working", { todo: { id: "todo-a", title: "A" } });
+    const todos: Todo[] = [
+      {
+        id: "todo-a",
+        title: "待办 A",
+        created_at: "2026-11-02T10:00:00Z",
+        updated_at: "",
+        agents: [
+          { machine_id: "mac-1", session_id: "moved", linked_at: "" },
+          { machine_id: "mac-1", session_id: "stays", linked_at: "" },
+        ],
+      },
+      { id: "todo-b", title: "待办 B", created_at: "2026-11-02T09:00:00Z", updated_at: "", agents: [] },
+    ];
+
+    const groups = buildTodoAgentGroups([sMoved, sStays], machines, todos, mutes);
+    expect(groups.map((g) => g.key)).toEqual(["todo:todo-a", "todo:todo-b"]);
+    expect(groups[0].sessions.map((s) => s.session_id)).toEqual(["stays"]);
+    expect(groups[1].sessions.map((s) => s.session_id)).toEqual(["moved"]);
+  });
+
+  it("会话挂的待办已完成时，归第一个列着它的未完成待办 (#4802)", () => {
+    const s = mockSession("mac-1", "s1", "idle", { todo: { id: "todo-done", title: "旧" } });
+    const todos: Todo[] = [
+      { id: "todo-done", title: "已完成", created_at: "2026-11-02T08:00:00Z", updated_at: "", done_at: "2026-11-02T12:00:00Z", agents: [] },
+      { id: "todo-open", title: "进行中", created_at: "2026-11-02T09:00:00Z", updated_at: "", agents: [{ machine_id: "mac-1", session_id: "s1", linked_at: "" }] },
+    ];
+
+    const groups = buildTodoAgentGroups([s], machines, todos, mutes);
+    expect(groups.map((g) => g.key)).toEqual(["todo:todo-open"]);
+    expect(groups[0].sessions.map((x) => x.session_id)).toEqual(["s1"]);
+  });
+
   it("已完成的待办不生成 live 待办组", () => {
     const sDoneTask = mockSession("mac-1", "done-task", "idle", { todo: { id: "todo-done", title: "已完成" } });
     const todos: Todo[] = [

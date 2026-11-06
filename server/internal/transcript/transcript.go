@@ -237,6 +237,9 @@ var ContextRe = regexp.MustCompile(`(?s)<(?:jarvis|persona)-context>.*?</(?:jarv
 
 var tagRe = regexp.MustCompile(`(?s)<(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>(.*?)</(command-name|command-message|command-args|local-command-stdout|local-command-stderr|task-notification|system-reminder)>`)
 
+// APIRetrying ends an API error notice Claude Code is still retrying: the turn goes on.
+const APIRetrying = "（正在重试）"
+
 // InterruptedNotice is the notice a turn stopped by the user becomes (Claude Code and Codex); APIErrorPrefix starts
 // the notice of a turn the model service failed. The channels read them as why a turn ended without words
 // (channel.Stopped).
@@ -457,7 +460,7 @@ func parseLine(seq int, line []byte, meta *Meta) []proto.Item {
 			case e.MaxRetries > 0 && e.RetryAttempt >= e.MaxRetries:
 				text += fmt.Sprintf("（重试 %d 次后放弃）", e.RetryAttempt)
 			case e.RetryAttempt == 1:
-				text += "（正在重试）"
+				text += APIRetrying
 			}
 		case "local_command":
 			// Newer Claude Code writes slash commands and their output as system lines (older ones as user lines):

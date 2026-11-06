@@ -769,9 +769,14 @@ func (s *Service) readMailBody(ctx context.Context, a assistantwire.InboxMailAcc
 
 var replyPrefix = regexp.MustCompile(`(?i)^\s*((re|fw|fwd|aw|回复|答复|转发)\s*[:：]\s*|\[[^\]]{1,30}\]\s*)+`)
 
-// mailThread is what keeps replies in one item: the subject without Re: / Fwd: / [list] prefixes.
-func mailThread(subject string) string {
+// mailThread is what keeps replies in one item: the subject without Re: / Fwd: / [list] prefixes. A subject that is
+// empty once they are gone says nothing about which mails go together: those are grouped by who sent them too, so a
+// subject-less mail from one person is not folded under another's (#4852).
+func mailThread(subject string, from ...string) string {
 	s := strings.ToLower(strings.Join(strings.Fields(replyPrefix.ReplaceAllString(subject, "")), " "))
+	if s == "" && len(from) > 0 && strings.TrimSpace(from[0]) != "" {
+		s = "\x00from:" + strings.ToLower(strings.TrimSpace(from[0]))
+	}
 	sum := sha1.Sum([]byte(s))
 	return hex.EncodeToString(sum[:6])
 }
@@ -781,7 +786,7 @@ func (b *inboxBook) applyMail(a assistantwire.InboxMailAccount, msgs []assistant
 	threads := map[string][]assistantwire.InboxMailSummary{}
 	var order []string
 	for _, m := range msgs {
-		t := mailThread(m.Subject)
+		t := mailThread(m.Subject, m.From.Email)
 		if _, ok := threads[t]; !ok {
 			order = append(order, t)
 		}
