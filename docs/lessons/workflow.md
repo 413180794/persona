@@ -4,6 +4,8 @@ Pitfalls, odd behavior and the trade-offs made at the time (formerly in `CLAUDE.
 
 - PR merges and progress comments must be checked serially (#2024): `gh pr merge` can fail on a new conflict; if a compound shell command does not stop, the "merged" comment after it still goes out. Exit when the merge command fails, and read the PR's `state` again before posting a completion comment; mark it done only on `MERGED`. `mergeable: UNKNOWN` is not confirmation that it can merge, nor proof of a conflict; read back a definite state before acting. On a false report, edit the original comment first, keeping the verified results and the unfinished items; never leave two contradicting progress comments.
 
+- Resuming a workflow-owned agent with `SendMessage` before the runtime registered it created a second writer in the same worktree (#5956). Use only workflow pipeline stages to resume workflow-owned work. If writers collide, stop both, preserve all files in a full backup, then designate one recovery writer before changing anything.
+
 - Multiple agents working in this repo at once: each uses its own simulator (`SIM=<udid> scripts/app/sim.sh`); when someone else's unfinished files do not compile, build your own changes in a `git worktree`;
   commits stage only your own files / hunks.
 - mock hub ports collide too (2026-10-31: another lane's `mock_hub.py` held 18794, your own mock with `MOCK_DRAWER=1` could not start, the tests connected to someone else's mock

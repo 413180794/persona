@@ -1,0 +1,16 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
+const root = resolve(import.meta.dir, "..");
+const output = mkdtempSync(join(tmpdir(), "persona-sdk-portable-"));
+function run(command: string[]) {
+  const result = Bun.spawnSync(command, { cwd: root, timeout: 30000 });
+  process.stdout.write(result.stdout); process.stderr.write(result.stderr);
+  if (result.exitCode !== 0) throw new Error(`portable UI verification failed: exit=${result.exitCode}`);
+}
+try {
+  run([process.execPath, resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.ui.json", "--noEmit", "false",
+    "--rewriteRelativeImportExtensions", "--rootDir", root, "--outDir", output]);
+  run(["node", "--experimental-default-type=module", resolve(root, "scripts/portable-ui.mjs"), join(output, "src/ui.js")]);
+} finally { rmSync(output, { recursive: true, force: true }); }
