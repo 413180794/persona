@@ -25,13 +25,13 @@ sealed interface FileSelection {
     data class CommitFile(val hash: String, val file: SessionGitFile) : FileSelection
     /**
      * A document's or picture's two versions side by side (#2805): [path] and [beforePath] (a rename's old name)
-     * relative to the repository's root; [before] / [after] are `HEAD`, `INDEX`, a commit, 「hash^」 or `WORKTREE`
+     * relative to the repository's root; [before] / [after] are `HEAD`, `INDEX`, a commit, `hash^` or `WORKTREE`
      * (the file on disk). [deleted]: gone from the working tree, so there is no new version to read.
      */
     data class Compare(val path: String, val beforePath: String, val before: String, val after: String, val deleted: Boolean = false,
         /** The working-tree change it shows a half of; null for a commit's file. */
         val change: SessionGitFile? = null) : FileSelection {
-        /** Staged and changed again: the page switches between 未暂存 and 已暂存, as the text diff does. */
+        /** Staged and changed again: the page switches between Unstaged and Staged, as the text diff does. */
         val bothHalves: Boolean get() = change?.let { it.staged && it.unstaged } == true
         val staged: Boolean get() = before == "HEAD" && after == "INDEX"
     }

@@ -40,8 +40,8 @@ export function BotmuxSwitch({ machineID }: { machineID: string }) {
     }
   };
 
-  // A pill like the engine's beside it: a dot and "botmux · 开 / 关"; the footer says what it does on hover and to a
-  // screen reader. The hover fill is the off state's only, so hovering 开 does not look like 关.
+  // A pill like the engine's beside it: a dot and "botmux · on / off"; the footer says what it does on hover and to a
+  // screen reader. The hover fill is the off state's only, so hovering the on state does not make it look off.
   return (
     <button
       type="button"

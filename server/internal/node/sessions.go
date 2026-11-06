@@ -1164,7 +1164,7 @@ func (n *Node) lookAt(ctx context.Context, h host.Host, epoch uint64) (agents []
 	}
 	n.layouts[h.Kind()] = l
 	n.mu.Unlock()
-	// Panes running an agent the host does not detect (TRAEX) become agents of our own.
+	// Panes running an agent the host does not detect (a compatible CLI) become agents of our own.
 	agents = append(snap.Agents, n.traexAgents(ctx, snap.Panes, snap.Agents)...)
 	// Retain active Claude agents when Herdr temporarily drops agent detection during tool or subshell execution (#1641).
 	return append(agents, n.claudeGraceAgents(snap.Panes, agents)...), true, nil
@@ -1341,7 +1341,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 			opencode = append(opencode, a)
 			continue
 		}
-		if a.Agent == traexAgent { // found by its process, which names its session (traex.go)
+		if a.Agent == traexAgent { // found by its process, which names its session (the compatible CLI integration)
 			if id := a.SessionID(); id != "" {
 				m[id] = a
 			}
@@ -1463,7 +1463,7 @@ func (n *Node) setAgentsAt(agents []host.Agent, epoch uint64) bool {
 		}
 		m[id] = a
 	}
-	// botmux's Codex / TRAEX sessions, by the thread their rollout names (botmuxThreads), before any guess could take
+	// botmux's Codex and compatible variants sessions, by the thread their rollout names (botmuxThreads), before any guess could take
 	// that rollout for another pane. A parked one gives way to a pane that runs the same thread.
 	for _, a := range botmux {
 		id := botmuxThreads[a.PaneID]

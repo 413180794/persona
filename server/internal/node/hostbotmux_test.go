@@ -802,7 +802,7 @@ func TestSentinelOnlyTranscriptIsListedOffline(t *testing.T) {
 	}
 }
 
-// bmxRollout writes a Codex / TRAEX rollout under root (<home>/.codex, <home>/.trae/cli) whose first prompt is botmux's,
+// bmxRollout writes a Codex and compatible variants rollout under root (<home>/.codex, <home>/.trae/cli) whose first prompt is botmux's,
 // opening with the botmux session's id (botmuxID "": a prompt typed on the computer).
 func bmxRollout(t *testing.T, root, thread, cwd, botmuxID string, written time.Time, events ...string) string {
 	t.Helper()
@@ -840,7 +840,7 @@ const (
 	bmxThreadX  = "0c000000-0000-4000-8000-0000000000cc" // a Codex conversation of the computer's, same directory
 )
 
-// botmux's Codex and TRAEX sessions are listed as their threads (found by botmux's session id in the rollout's first
+// botmux's Codex and compatible variants sessions are listed as their threads (found by botmux's session id in the rollout's first
 // prompt), with botmux's state, the topic's title and the rollout as the conversation. One whose rollout is not found,
 // codex-app ones, and threads in another directory are not.
 func TestBotmuxListsCodexAndTraexSessions(t *testing.T) {
@@ -923,7 +923,7 @@ func TestBotmuxCodexSessionWinsOverCodexHistory(t *testing.T) {
 	}
 }
 
-// A message to a Codex / TRAEX session of botmux's goes to botmux as a turn of its botmux session — never typed into a
+// A message to a Codex and compatible variants session of botmux's goes to botmux as a turn of its botmux session — never typed into a
 // pane, never a resume of the thread elsewhere, no app-server join — and asks no screen first.
 func TestBotmuxCodexReplyIsDeliveredByBotmux(t *testing.T) {
 	n, f, fh, home := bmxNode(t)

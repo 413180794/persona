@@ -105,7 +105,7 @@ func TestGitMarket(t *testing.T) {
 }
 
 // A hub without git (the Docker image installs none) says so when it reads a git market, on the first clone and on
-// the fetch of a clone it already has, instead of an empty "git clone：" / "git fetch：".
+// the fetch of a clone it already has, instead of an empty "git clone: " / "git fetch: ".
 func TestGitMarketWithoutGit(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	for _, cloned := range []bool{false, true} {

@@ -1,5 +1,5 @@
-// 设置 › 通用 › 侧栏 (docs/web.md「侧栏的页面」): every page of the sidebar in its order, dragged (or moved with ↑ / ↓)
-// into another, and switched between the list and 更多. 设置 stays in the list; 恢复默认 forgets every choice.
+// Settings › General › Sidebar pages (docs/web.md "The sidebar's pages"): every page of the sidebar in its order, dragged (or moved with ↑ / ↓)
+// into another, and switched between the list and More. Settings stays in the list; Reset forgets every choice.
 import { useState } from "react";
 import { t } from "../../i18n";
 import { EXTENSION_CAP, inList, LOCKED, movePage, ordered, resetSidebarPrefs, setPageOrder, setPageShown, useSidebarPrefs } from "../../lib/sidebar-pages";
@@ -36,7 +36,7 @@ export function SidebarPagesGroup() {
           const p = byKey.get(k)!;
           const on = listed.has(k);
           const locked = k === LOCKED;
-          // an extension's page: the extension it comes from (its NavPage.title is "页面 · 扩展"; a built-in page's
+          // an extension's page: the extension it comes from (its NavPage.title is "Page · Extension"; a built-in page's
           // title is its badge's explanation, not shown here)
           const from = k.startsWith("p:") && p.title?.startsWith(`${p.label} · `) ? p.title.slice(p.label.length + 3) : "";
           return (

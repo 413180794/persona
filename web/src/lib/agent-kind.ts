@@ -4,7 +4,7 @@
 import { t } from "../i18n";
 import type { Session } from "./types";
 
-/** The agents whose own mark is drawn (ui/AgentMark.tsx). TRAEX has none: it has no public mark, it draws the letter. */
+/** The agents whose own mark is drawn (ui/AgentMark.tsx). A compatible CLI has none: it has no public mark, it draws the letter. */
 export const MARKED_AGENTS = ["claude", "codex", "opencode", "pi", "gemini", "cursor"] as const;
 export type MarkedAgent = (typeof MARKED_AGENTS)[number];
 

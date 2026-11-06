@@ -11,7 +11,7 @@ import (
 )
 
 // A run whose machine left the configuration ends like any other: the owner is told why, the message's reaction
-// turns to DONE, and the run is gone, instead of being dropped with the message left on 「OnIt」.
+// turns to DONE, and the run is gone, instead of being dropped with the message left on "OnIt".
 func TestChannelRunOnAMachineGoneIsAnswered(t *testing.T) {
 	f, posts := feishuHub("ou_a", time.Unix(100, 0))
 	f.devices = []Device{{ID: "server", Name: "server", Online: true, Reachable: true}} // "box" is not configured any more

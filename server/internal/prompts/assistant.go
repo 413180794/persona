@@ -46,7 +46,7 @@ func RenderAssistantHealthClaudeMD(d AssistantHealthClaudeMD) string {
 
 // AssistantGuestClaudeMD is a guest conversation's CLAUDE.md (docs/assistant.md ("Guest conversations")).
 type AssistantGuestClaudeMD struct {
-	Owner    string // "" is 用户
+	Owner    string // An empty name uses the generic user label.
 	Language string
 }
 

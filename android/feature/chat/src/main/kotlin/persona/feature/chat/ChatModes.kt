@@ -152,7 +152,7 @@ internal fun ChatModeBar(
                     JRow(option.title(resources), subtitle = option.detail(resources), trailing = { JRadio(option.id == session.effort, null) }, enabled = editable,
                         onClick = { open = false; if (option.id != session.effort) state.run(session, ChatAction.Modes(effort = option.id)) })
                 }
-                // /model types into Claude's pane: Claude in a terminal engine only (Codex / TRAEX pick in a menu the phone can't drive).
+                // /model types into Claude's pane: Claude in a terminal engine only (Codex and compatible variants pick in a menu the phone can't drive).
                 if (onPickModel != null && session.canTypeClaudeCommands) {
                     val current = SessionModes.claudeModelId(session.model)
                     JSectionHeader(stringResource(R.string.chat_modes_section_model))

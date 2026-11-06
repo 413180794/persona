@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-// The Agents block's grouping (#2812) against the store: 按待办 waits for the first GET /todos instead of drawing every
-// agent under 没挂待办的 and moving it, and a hub without todos hides 待办 and shows 按机器 while keeping the choice.
+// The Agents block's grouping (#2812) against the store: By to-do waits for the first GET /todos instead of drawing every
+// agent under No to-do and moving it, and a hub without todos hides To-dos and shows By machine while keeping the choice.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,7 +61,7 @@ const flush = async () => {
 const grouping = () => host.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Agent 分组"]')!;
 const segments = () => [...grouping().querySelectorAll<HTMLButtonElement>('[role="radio"]')];
 const checked = () => segments().find((b) => b.getAttribute("aria-checked") === "true")?.getAttribute("aria-label");
-// the Agents block's body: the segments, the quick filter and the groups (the personal agents' 加载中… is elsewhere)
+// the Agents block's body: the segments, the quick filter and the groups (the personal agents' Loading... is elsewhere)
 const agentsBlock = () => grouping().parentElement!;
 const render = async () => {
   act(() => root.render(<Sidebar route={{ name: "home" }} onSearch={() => {}} onNewAgent={() => {}} />));

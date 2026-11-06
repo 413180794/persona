@@ -9,7 +9,7 @@ import persona.core.contracts.api.FeishuBotStatus
 import persona.core.contracts.api.FeishuBotUpdate
 import persona.core.designsystem.failureReasonText
 
-/** 设置 › 飞书机器人: the hub's status and the credentials form as typed. */
+/** Settings › Lark bot: the hub's status and the credentials form as typed. */
 internal data class FeishuBotState(
     val status: FeishuBotStatus? = null,
     val loading: Boolean = false,

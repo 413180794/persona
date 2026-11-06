@@ -19,12 +19,12 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// TRAEX support. TRAEX (`traex`, an in-house fork of Codex) is an agent no host recognizes (it runs in herdr panes
-// herdr does not detect), so the node finds it itself in every host's panes:
-//   - ~/.trae/cli/thread-writer-locks/<thread id>.owner.json names the pid writing each thread (session);
+// A Codex-compatible CLI can run in herdr panes without being recognized by the host. The node therefore finds
+// it itself in every host's panes:
+//   - <CLI data>/thread-writer-locks/<thread id>.owner.json names the pid writing each thread (session);
 //   - that pid's environment holds the host's pane variable (host.PaneEnv: HERDR_PANE_ID), so pane → session is
 //     exact, no guessing by directory;
-//   - its conversation is a rollout in ~/.trae/cli/sessions/YYYY/MM/DD, the newer Codex format (transcript/codex.go);
+//   - its conversation is a rollout under <CLI data>/sessions/YYYY/MM/DD, the newer Codex format (transcript/codex.go);
 //   - herdr has no state for the pane: a spinner in the terminal title or "esc to interrupt" on screen is working,
 //     a numbered choice on screen is blocked, anything else is a finished turn (the hub turns that into "Unread" / "Seen").
 
@@ -46,11 +46,11 @@ type traexState struct {
 	at     time.Time
 }
 
-// traexOwners maps the live TRAEX processes to the conversation each runs. A process holds an owner file for every
+// traexOwners maps the live a compatible CLI processes to the conversation each runs. A process holds an owner file for every
 // thread it writes, its subagents included: the guardian that reviews tool calls before they run gets a thread (and
 // an owner file) newer than the conversation's, and taking the newest file showed the review instead of the
 // conversation (2026-11-01). So: the newest thread that is not a subagent, else the conversation of the newest
-// subagent, else the newest thread (TRAEX versions without thread_source / source in session_meta).
+// subagent, else the newest thread (a compatible CLI versions without thread_source / source in session_meta).
 func (n *Node) traexOwners() map[int]string {
 	dir := filepath.Join(n.traexHome(), "thread-writer-locks")
 	files, _ := filepath.Glob(filepath.Join(dir, "*.owner.json"))
@@ -91,7 +91,7 @@ func (n *Node) traexOwners() map[int]string {
 	return out
 }
 
-// alive says whether the process behind a pid file this user's claude or TRAEX wrote still runs. A pid now held by
+// alive says whether the process behind a pid file this user's claude or a compatible CLI wrote still runs. A pid now held by
 // another user's process is a reused one, not the program that wrote the file (#2141). The cost: a claude run as
 // another user that still writes into this user's home (`sudo claude`, sudo keeping HOME on macOS) counts as gone.
 func alive(pid int) bool { return osproc.AliveMine(pid) }
@@ -143,7 +143,7 @@ func (n *Node) paneOfPID(pid int) string {
 	return p
 }
 
-// traexAgents turns the panes running TRAEX into agents, with their session id and a state of our own.
+// traexAgents turns the panes running a compatible CLI into agents, with their session id and a state of our own.
 func (n *Node) traexAgents(ctx context.Context, panes []host.Agent, agents []host.Agent) []host.Agent {
 	owners := n.traexOwners()
 	if len(owners) == 0 {

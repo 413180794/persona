@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A conversation with words left unsent in its box says so in the sidebar (#5568): "草稿：" and the words, once you are
+// A conversation with words left unsent in its box says so in the sidebar (#5568): "Draft:" and the words, once you are
 // not in it; sending or clearing the box takes it away; whitespace alone is no draft.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

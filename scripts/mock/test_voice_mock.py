@@ -147,7 +147,7 @@ class VoiceMockTests(unittest.TestCase):
             refused = next(f for f in frames if f["type"] == "run" and f["state"] == "refused")
             self.assertEqual(refused["code"], "input_draft")
             self.assertEqual(refused["clearable"], "fix it")
-            # 清空并发送: the refused run goes again under its id.
+            # Clear and send: the refused run goes again under its id.
             ws.send({"type": "resend", "id": refused["id"], "clear_draft": "fix it"})
             again = ws.until(lambda f: f["type"] == "run" and f["id"] == refused["id"] and f["state"] == "working")
             self.assertNotIn("code", [k for k, v in again[-1].items() if v is not None])

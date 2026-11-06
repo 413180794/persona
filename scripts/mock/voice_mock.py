@@ -1,5 +1,5 @@
 """MOCK_VOICE for iOS's voice mode (docs/voice.md 6.8): the voice extension at protocol 2, beside the protocol 1 script
-that mock_hub.py keeps for Android (docs/android.md「语音对话」). mock_hub.py loads it when MOCK_VOICE is set and hands
+that mock_hub.py keeps for Android (docs/android.md"Voice conversations"). mock_hub.py loads it when MOCK_VOICE is set and hands
 it its own module (`install`); everything here is made up.
 
 What it adds, under /api/v1/extensions and the old /api/v1/plugins alike:

@@ -402,7 +402,7 @@ type Snapshot struct {
 	Workspaces []Workspace `json:"workspaces"`
 	Tabs       []Tab       `json:"tabs"`
 	Agents     []Agent     `json:"agents"`
-	// Panes is every pane, agent or not (agent empty): where agents herdr does not detect, such as TRAEX, are found.
+	// Panes is every pane, agent or not (agent empty): where agents herdr does not detect, such as a compatible CLI, are found.
 	Panes []Agent `json:"panes"`
 	// Layouts are the tabs' split layouts: where each pane sits in its tab (layout.go).
 	Layouts []TabLayout `json:"layouts"`

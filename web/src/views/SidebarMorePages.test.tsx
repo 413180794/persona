@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The pages put away in 设置 › 通用 › 侧栏 wait under「更多」(docs/web.md「侧栏的页面」): at the end of 页面, folded,
+// The pages put away in Settings › General › Sidebar pages wait under More (docs/web.md "The sidebar's pages"): at the end of Pages, folded,
 // opening by itself while one of them is open; the rail and the settings list follow the same choices.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -56,13 +56,13 @@ describe("更多 in the sidebar", () => {
     const more = moreButton()!;
     expect(more.textContent).toContain("2");
     expect(more.getAttribute("aria-expanded")).toBe("false");
-    // the pages are still there, under the folded 更多 (inert until it opens)
+    // the pages are still there, under the folded More (inert until it opens)
     const kb = [...host.querySelectorAll("a")].find((a) => a.textContent?.includes("知识库"))!;
     expect(kb.closest("[inert]")).not.toBeNull();
     act(() => more.click());
     expect(more.getAttribute("aria-expanded")).toBe("true");
     expect(kb.closest("[inert]")).toBeNull();
-    // 设置 stays in the list
+    // Settings stays in the list
     expect(pageLinks()).toContain("设置");
   });
 

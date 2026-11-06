@@ -53,7 +53,7 @@ func TestPaneOfPIDEnv(t *testing.T) {
 	}
 }
 
-// writeMetaRollout writes a rollout whose first line is a session_meta shaped like TRAEX / Codex ones (all values made up).
+// writeMetaRollout writes a rollout whose first line is a session_meta shaped like a compatible CLI / Codex ones (all values made up).
 func writeMetaRollout(t *testing.T, home, id, payload string, mtime time.Time) {
 	t.Helper()
 	day := filepath.Join(home, "sessions", mtime.Format("2006"), mtime.Format("01"), mtime.Format("02"))
@@ -92,7 +92,7 @@ const (
 	threadNew      = "01a00000-0000-7000-8000-00000000000d"
 )
 
-// The guardian that reviews TRAEX's tool calls writes a thread of its own from the same process, with a newer owner
+// The guardian that reviews the compatible CLI's tool calls writes a thread of its own from the same process, with a newer owner
 // file than the conversation's; the pane runs the conversation (2026-11-01: the app showed the review).
 func TestTraexOwnersPickTheConversation(t *testing.T) {
 	now := time.Now()
@@ -112,7 +112,7 @@ func TestTraexOwnersPickTheConversation(t *testing.T) {
 		t.Fatalf("only the guardian's owner file: got %s, want its conversation", got)
 	}
 
-	// TRAEX versions whose session_meta says nothing about subagents: the newest thread, as before.
+	// a compatible CLI versions whose session_meta says nothing about subagents: the newest thread, as before.
 	n := &Node{home: t.TempDir()}
 	writeMetaRollout(t, n.traexHome(), threadOld, `{"id":"`+threadOld+`","cwd":"/work/app","source":"exec"}`, now.Add(-time.Hour))
 	writeMetaRollout(t, n.traexHome(), threadNew, `{"id":"`+threadNew+`","cwd":"/work/app","source":"exec"}`, now)

@@ -2,7 +2,7 @@
 // BrandMark (CLAUDE.md: brand marks are not redrawn), in a fixed box so a column of rows lines up, centred, at the share
 // of the box its shape takes. Next to the state dot, never in its place. The one-color marks are templates drawn in
 // the text color, so they read in light and dark and in a selected button; Claude keeps its coral (Anthropic's mark is
-// coral on neutral). An agent with no mark of its own (TRAEX, a runtime, whatever else herdr reports) draws its first
+// coral on neutral). An agent with no mark of its own (a compatible CLI, a runtime, whatever else herdr reports) draws its first
 // letter on a plain tile of the same box.
 //
 // Where each mark comes from (also in THIRD_PARTY_NOTICES.md). Simple Icons (SI) releases the files under CC0; the

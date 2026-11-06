@@ -399,7 +399,7 @@ func TestRewindLeavesTheRewoundTurnsOutOfTheTranscript(t *testing.T) {
 
 // The session list's quick read takes the agent's last words off the conversation that is left after a rewind done
 // in the terminal: the turn gone back over ended in an API error, and the hub would report that error for the session
-// (TurnError, 「模型服务出错」) as long as it was the last text.
+// (TurnError, "Model service error") as long as it was the last text.
 func TestQuickMetaAfterATerminalRewindDropsTheRewoundError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "s.jsonl")
 	lines := []string{

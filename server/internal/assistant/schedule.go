@@ -1229,7 +1229,7 @@ func (s *Service) runTask(t Task, due, now time.Time, manual, retried bool) (pro
 			s.logf("task %s: its conversation %s is still on the last run; skipped", t.ID, short(t.RunSessionID))
 			run.MachineID, run.SessionID = t.RunMachineID, t.RunSessionID
 			err := s.skipRun(run, errTaskBusy)
-			if !manual { // 立即运行 is answered busy_wait in the app
+			if !manual { // Run now is answered busy_wait in the app
 				s.tellWaitingSkip(ctx, t, m)
 			}
 			return proto.Session{}, err
@@ -1313,7 +1313,7 @@ func (s *Service) sessionBusy(ctx context.Context, machine, id string) bool {
 }
 
 // tellWaitingSkip pushes that t's run was skipped because its last run waits on the user (an approval, a question):
-// only they can let it go on, and the 早报 not coming said nothing of why (#4499). Once per wait (waitKey). A last run
+// only they can let it go on, and the morning brief not coming said nothing of why (#4499). Once per wait (waitKey). A last run
 // that is only still working is not told (it ends by itself) and clears the mark, as does one no longer waiting. A
 // muted conversation is not pushed. A quiet task (pushesOnlyAsked) is pushed all the same, as its failed runs are
 // (run_failed): this says it did not run, not what it found.

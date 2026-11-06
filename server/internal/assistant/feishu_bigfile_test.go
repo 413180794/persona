@@ -61,7 +61,7 @@ func TestFeishuOnlyATooLargeFile(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "太大") || !strings.Contains(err.Error(), "录屏.mov") {
 		t.Fatalf("err %v", err)
 	}
-	// It is said under the message wrapped in not_sent: 「没能发出去」 once, not twice.
+	// It is said under the message wrapped in not_sent: "Could not send" once, not twice.
 	note := i18n.T("zh-Hans", "assistant-feishu.not_sent", i18n.Args{"error": err.Error()})
 	if strings.Count(note, "没能发出去") != 1 {
 		t.Fatalf("note %q", note)

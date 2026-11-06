@@ -119,7 +119,7 @@ func isCodexLine(line []byte) bool {
 			bytes.Contains(line, []byte(`"type":"history_mutation"`)))
 }
 
-// historyMutation is the newer rollout format (TRAEX, a Codex fork): the conversation's messages arrive as
+// historyMutation is the newer rollout format (a compatible CLI, a Codex fork): the conversation's messages arrive as
 // display_completions, each holding an item shaped like event_msg/item_completed's. The rest of the line (the model
 // context, up to a megabyte after a compaction) is not needed.
 type historyMutation struct {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The sidebar's pages as arranged in 设置 › 通用 › 侧栏: the order, the list and 更多, the defaults for new pages.
+// The sidebar's pages as arranged in Settings › General › Sidebar pages: the order, the list and More, the defaults for new pages.
 import { beforeEach, describe, expect, it } from "vitest";
 import { arrangePages, EXTENSION_CAP, getSidebarPrefs, inList, movePage, ordered, parsePrefs, resetSidebarPrefs, setPageOrder, setPageShown, type SidebarPrefs } from "./sidebar-pages";
 
@@ -17,7 +17,7 @@ describe("ordered", () => {
     expect(ordered(["home", "inbox", "kb", "settings"], ["kb", "gone", "home"])).toEqual(["inbox", "kb", "home", "settings"]);
   });
   it("puts a page the order does not know right before the one that follows it by default", () => {
-    // a new extension's page comes before 设置 by default, wherever the user moved the others
+    // a new extension's page comes before Settings by default, wherever the user moved the others
     expect(ordered(["home", "kb", "p:new", "settings"], ["kb", "home", "settings"])).toEqual(["kb", "home", "p:new", "settings"]);
     expect(ordered(["fresh", "home", "settings"], ["settings", "home"])).toEqual(["settings", "fresh", "home"]);
     // last by default: last

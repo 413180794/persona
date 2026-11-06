@@ -397,7 +397,7 @@ func cardButtons(t *testing.T, c *feishubot.Card) map[string]map[string]any {
 	return out
 }
 
-// A permission card's third button follows the app's rule (BUIPermissionForm, the web's PermissionCard): 本会话总是允许
+// A permission card's third button follows the app's rule (BUIPermissionForm, the web's PermissionCard): Always allow for this session
 // for Claude on a conversation, and for another agent only what it says that always allows. A runtime cannot keep
 // Claude's session rule (node/runtimes.go), so the button there would allow once and ask again.
 func TestFeishuPermissionCardOffersAlwaysOnlyWhereItWorks(t *testing.T) {

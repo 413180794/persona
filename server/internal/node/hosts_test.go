@@ -77,7 +77,7 @@ func TestRefreshWithoutHostsFails(t *testing.T) {
 	}
 }
 
-// The TRAEX pane lookup uses the host's PaneEnv; for herdr it must read an environment exactly like the regex it
+// The a compatible CLI pane lookup uses the host's PaneEnv; for herdr it must read an environment exactly like the regex it
 // replaced.
 func TestHerdrPaneEnvParsesLikeBefore(t *testing.T) {
 	old := `(?:^|[\x00\s])HERDR_PANE_ID=([^\x00\s]+)`

@@ -79,7 +79,7 @@ describe("modes", () => {
   });
 
   it("offers no effort where the node lists none or the phone cannot write", () => {
-    expect(hasEffortOnly(s({ agent: "codex" }))).toBe(false); // the terminal route, TRAEX
+    expect(hasEffortOnly(s({ agent: "codex" }))).toBe(false); // the terminal route, a compatible CLI
     expect(hasEffortOnly(s({ agent: "codex", source_kind: "codex_app_server", capabilities: { read: true }, efforts: ["low"] }))).toBe(false);
     expect(hasEffortOnly(s({ assistant: true, efforts: ["low"] }))).toBe(false);
     expect(hasEffortOnly(s({ efforts: ["low"] }))).toBe(false); // Claude Code has both chips

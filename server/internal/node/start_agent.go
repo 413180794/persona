@@ -9,8 +9,8 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Agents other than Claude Code that Persona starts without Claude's flags: TRAEX (on the PATH as traex), and a
-// launcher the hub says runs Codex or TRAEX (hub.json machines[].launchers, a wrapper the login shell's list does not
+// Agents other than Claude Code that Persona starts without Claude's flags: a compatible CLI (on the PATH as traex), and a
+// launcher the hub says runs Codex or a compatible CLI (hub.json machines[].launchers, a wrapper the login shell's list does not
 // show as one). A Codex launcher the login shell lists starts through codex_start.go instead.
 
 // agentLauncher is a launcher as launchers.list answers: with the agent it starts, for hubs that read agent_type.
@@ -71,7 +71,7 @@ func (n *Node) startOtherAgent(ctx context.Context, launch host.Launcher, cwd, l
 	}
 	n.mu.Unlock()
 	time.Sleep(300 * time.Millisecond) // the fresh shell loads ~/.zshrc; typed input is buffered either way
-	// A Codex wrapper is told to herdr as Codex (hostherdr.go); TRAEX is herdr's to detect.
+	// A Codex wrapper is told to herdr as Codex (hostherdr.go); a compatible CLI is herdr's to detect.
 	if err := launch.Run(ctx, created.Pane, withHerdrAgent(typedHerdrAgent(launch, kind, paneShells(ctx)...), otherAgentCommand(launcher, resume, prompt))); err != nil {
 		return nil, fmt.Errorf("run launcher: %w", err)
 	}

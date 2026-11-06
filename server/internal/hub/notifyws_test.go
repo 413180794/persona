@@ -201,7 +201,7 @@ func TestASlowClientIsClosedOnce(t *testing.T) {
 	}
 }
 
-// 手机静音 (mute_while_desktop) holds back a device's 需要你 and 做完 alerts on its WebSocket too while a desktop app is
+// Mute phone (mute_while_desktop) holds back a device's Needs you and Done alerts on its WebSocket too while a desktop app is
 // connected, as it does for its APNs pushes (alertWanted): an Android phone shows its alerts from these events. What
 // was asked for explicitly (the assistant's notify_user) still goes.
 func TestWSNotifyMuteWhileDesktop(t *testing.T) {
@@ -233,7 +233,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 		t.Fatalf("no desktop, interaction: %q", k)
 	}
 
-	// A desktop app connected: 需要你 and 做完 stay on the desktop.
+	// A desktop app connected: Needs you and Done stay on the desktop.
 	h.mu.Lock()
 	h.clients[mac] = struct{}{}
 	h.mu.Unlock()
@@ -267,7 +267,7 @@ func TestWSNotifyMuteWhileDesktop(t *testing.T) {
 	h.clients[mac] = struct{}{}
 	h.mu.Unlock()
 
-	// Without 手机静音 the desktop being online changes nothing.
+	// Without Mute phone the desktop being online changes nothing.
 	if err := h.push.setPrefs(phone.device, NotifyPrefs{Input: true, Done: DoneAlways}); err != nil {
 		t.Fatal(err)
 	}

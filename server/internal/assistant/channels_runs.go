@@ -434,7 +434,7 @@ func (s *Service) watchChannelRun(r *channel.Run) {
 	c.mu.Unlock()
 	if removed {
 		// The machine was removed: nothing will answer it. The run ends like any other, so the owner is told and the
-		// message's reaction changes, rather than left on 「OnIt」 with no word. An answer that did not go out is tried
+		// message's reaction changes, rather than left on "OnIt" with no word. An answer that did not go out is tried
 		// again (finishChannelRun gives up after channelAnswerTries and ends the run all the same).
 		s.logf("channels: %s: its machine was removed", r.ID)
 		res := &channel.Result{Note: i18n.T(s.botLang(ctx), "assistant-channels_runs.machine_gone"), End: channel.EndGone}

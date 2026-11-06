@@ -27,12 +27,12 @@ private class FakeBot(var status: FeishuBotStatus) : FeishuBotSettings {
     }
 }
 
-/** 设置 › 飞书机器人 (iOS `FeishuBotModelTests`): loading, the switch, saving credentials and what the hub says back. */
+/** Settings › Lark bot (iOS `FeishuBotModelTests`): loading, the switch, saving credentials and what the hub says back. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class FeishuBotModelTest {
     @Test fun loadingFillsTheFormFromTheHub() = runBlocking {
-        // The hub sends the domain it resolved (feishubot.ResolveDomain), the picker shows 飞书 / Lark.
+        // The hub sends the domain it resolved (feishubot.ResolveDomain), the picker shows Feishu / Lark.
         val model = FeishuBotModel(FakeBot(FeishuBotStatus(enabled = true, appId = "cli_a1", domain = "https://larksuite.com", hasSecret = true)))
         model.load()
         val state = model.state.value
@@ -89,7 +89,7 @@ class FeishuBotModelTest {
         assertEquals("https://open.example.com", FeishuBotState.domainChoice("https://open.example.com"))
         val same = FeishuBotState(status = FeishuBotStatus(appId = "cli_a1", domain = "https://open.feishu.cn", hasSecret = true),
             appId = "cli_a1", domain = "feishu")
-        assertFalse(same.canSave) // 飞书 is what the hub already uses
+        assertFalse(same.canSave) // Feishu is what the hub already uses
     }
 
     @Test fun credentialsFromHubJsonNeedTheSecretTyped() {

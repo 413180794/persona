@@ -8,7 +8,7 @@ import type { Session } from "./types";
 /** Pictures one message takes (iOS ChatView, MacComposerDrop.maxImages, Android ChatComposer). */
 export const MAX_IMAGES = 4;
 
-/** Claude Code in a herdr pane: it takes `/model` and `/clear` typed into its terminal (Codex, TRAEX, the assistant
+/** Claude Code in a herdr pane: it takes `/model` and `/clear` typed into its terminal (Codex, a compatible CLI, the assistant
  *  and the read-only sources have no such commands here). */
 export function paneClaude(s: Session | undefined): boolean {
   if (!s || s.assistant || s.source_kind || !s.pane_id) return false;

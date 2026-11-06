@@ -52,7 +52,7 @@ func TestCodexAsksAsync(t *testing.T) {
 	}
 }
 
-// The item alone (TRAEX, or a rollout without the function_call line) opens it too.
+// The item alone (a compatible CLI, or a rollout without the function_call line) opens it too.
 func TestCodexAsksItemOnly(t *testing.T) {
 	if open := feed(askAsyncItem).Open(); len(open) != 1 || open[0].Questions[0].Options[2].Label != "Blue" {
 		t.Errorf("%+v", open)

@@ -13,7 +13,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// Codex and TRAEX return their session only after startup even when a client asks for async: the node gets the agent
+// Codex and compatible variants return their session only after startup even when a client asks for async: the node gets the agent
 // type the launcher resolves to, and the start's budget (startBudget) follows it. What the start runs on is the
 // manager's (agents.start_params), whose calls carry no deadline over the bus: the budget is checked on the decision.
 func TestSessionStartBudgetMatchesNodeStartup(t *testing.T) {

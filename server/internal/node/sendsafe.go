@@ -109,7 +109,7 @@ func refusal(code, message string, data map[string]any) error {
 }
 
 // checkPane refuses a send into a pane that is not ready for typed text, after clearing the draft the user agreed
-// to clear. kind is the agent ("claude", "codex", TRAEX).
+// to clear. kind is the agent ("claude", "codex", a compatible CLI).
 func (n *Node) checkPane(ctx context.Context, pane, kind, clearDraft string) error {
 	return n.checkPaneFor(ctx, pane, kind, sendOpts{ClearDraft: clearDraft})
 }
@@ -120,7 +120,7 @@ const noticeTries = 3
 // checkPaneFor is checkPane with the send's options: the draft to clear and whether to close a notice.
 func (n *Node) checkPaneFor(ctx context.Context, pane, kind string, opts sendOpts) error {
 	clearDraft := opts.ClearDraft
-	// Codex / TRAEX: their own screen (codexask.go) — a draft in the box, an approval or a question overlay refuses;
+	// Codex and compatible variants: their own screen (codexask.go) — a draft in the box, an approval or a question overlay refuses;
 	// the transcript pager and 0.163's question pane are only shown, and step aside.
 	if kind == "codex" || kind == traexAgent {
 		if host.ParsePane(pane).Kind == host.Botmux {

@@ -102,7 +102,7 @@ class SessionSourceTest {
         assertFalse(live.canChangeModes || live.canTypeClaudeCommands)
         // A herdr pane joined on its app-server: no source, the levels the hub lists say so.
         assertTrue(session("""{"session_id":"s","agent":"codex","status":"idle","efforts":["medium"]}""").canChangeEffortOnly)
-        // Without levels (the terminal route, TRAEX), without sending, offline, or a Claude session: not this way.
+        // Without levels (the terminal route, a compatible CLI), without sending, offline, or a Claude session: not this way.
         assertFalse(live.copy(efforts = emptyList()).canChangeEffortOnly)
         assertFalse(live.copy(capabilities = SessionCapabilities(read = true)).canChangeEffortOnly)
         assertFalse(live.copy(status = "offline").canChangeEffortOnly)

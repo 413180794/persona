@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """End-to-end check of draft marks on sidebar rows (#5568): a conversation with words left unsent in its box shows a red
-"草稿：" and the words under its title once you leave it, for agents, Persona conversations and the main conversation;
+"Draft:" and the words under its title once you leave it, for agents, Persona conversations and the main conversation;
 it survives a reload, goes when the box is cleared or the words are sent, and whitespace alone is no draft.
 
 Needs a running web page against the fake hub and Playwright for Python (it drives the installed Chrome):
@@ -88,7 +88,7 @@ def run(browser, base, token, asks, done, seen, conv, shots):
     page.evaluate("localStorage.setItem('jarvis.theme', 'light')")
     page.reload()
 
-    # 1. An agent that needs you: typed, left — "草稿：" and the words in place of what it asks, its count stays.
+    # 1. An agent that needs you: typed, left — "Draft:" and the words in place of what it asks, its count stays.
     type_and_leave(page, agent_row(page, asks), "先把网络层的测试跑一遍\n再看覆盖率", agent_row(page, seen))
     mark = agent_row(page, asks).locator("[data-draft]")
     expect(mark).to_have_text("草稿：先把网络层的测试跑一遍 再看覆盖率")

@@ -77,7 +77,7 @@ func TestCodexUserMessageTags(t *testing.T) {
 	}
 }
 
-// TRAEX (a Codex fork) writes the newer rollout: messages come as history_mutation display_completions, tool calls
+// a compatible CLI (a Codex fork) writes the newer rollout: messages come as history_mutation display_completions, tool calls
 // still as event_msg/item_completed, and an item may appear in both.
 func TestHistoryMutationRollout(t *testing.T) {
 	lines := []string{

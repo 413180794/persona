@@ -27,7 +27,7 @@ import (
 // botmuxHost is botmux, the Feishu topic ↔ AI CLI bridge (docs/engines.md "botmux"): each topic is a session of a
 // coding CLI that botmux runs (in tmux) and answers in Feishu. It is not an engine to choose: a node on a machine with
 // botmux registers it next to the engine's hosts (nodeHosts). A pane is a botmux session, its id the botmux session
-// id: for Claude Code also the Claude session id botmux starts claude with; for Codex and TRAEX the thread is found in
+// id: for Claude Code also the Claude session id botmux starts claude with; for Codex and compatible variants the thread is found in
 // their rollouts (botmuxThreads). Listing and state (one `botmux observe` for every daemon's sessions) and replies,
 // which go to botmux's own delivery (POST /api/trigger on its dashboard: queued while a turn runs, a parked session
 // resumed by botmux) — never typed into the pane, never a `claude --resume` of Persona's. No screens, keys, closing or
@@ -316,7 +316,7 @@ var botmuxCLIs = map[string]string{"claude-code": "claude", "codex": "codex", "t
 // agent is a session as an agent pane, false for the ones botmux does not drive here: closed ones, ones of a CLI not in
 // botmuxCLIs, ones botmux runs in herdr (herdr's own panes already). A parked one is offline, so that a reply to it
 // goes to botmux, which resumes it; Agents lists it only while its transcript is listed offline. A Claude Code session
-// names its session (the botmux id); a Codex or TRAEX one is left for the node to find (botmuxThreads).
+// names its session (the botmux id); a Codex or a compatible CLI one is left for the node to find (botmuxThreads).
 func (r botmuxRow) agent() (host.Agent, bool) {
 	kind := botmuxCLIs[r.CLI.ID]
 	if kind == "" || r.Backend.Type == "herdr" || r.Closed != false || !validID(r.Identity.SessionID) {
@@ -669,10 +669,10 @@ func (h *botmuxHost) dashboard(ctx context.Context, fresh bool) (string, string,
 	return "", "", errors.New("botmux dashboard current: no dashboard URL in its output")
 }
 
-// botmuxThreads finds the thread of each Codex / TRAEX session botmux lists (pane → the session id the node keys it
+// botmuxThreads finds the thread of each Codex and compatible variants session botmux lists (pane → the session id the node keys it
 // on). botmux does not report it (it keeps the CLI's own id in its store), but it opens every prompt it hands these
 // CLIs with <session_id>botmux id</session_id>, so the rollout whose head carries the session's id is its thread —
-// the bridge botmux uses itself (Codex's history.jsonl, TRAEX's threads table: both say what the rollouts say). Only
+// the bridge botmux uses itself (Codex's history.jsonl, the compatible CLI's threads table: both say what the rollouts say). Only
 // rollouts in the session's working directory are read, each head once; of several (a fork copies the head) the most
 // recently written. A session whose rollout is not found (none yet, or a CODEX_HOME / TRAE_HOME of its own that this
 // node does not know) is not listed.

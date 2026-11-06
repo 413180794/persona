@@ -12,7 +12,7 @@ import persona.core.designsystem.icons.PhIcons
 
 /**
  * "Model": what the launcher that will run starts with, picked from the list its agent shows in /model (the sheet).
- * Nothing when that launcher has no list (TRAEX, a runtime's, older hubs); starting never waits for it.
+ * Nothing when that launcher has no list (a compatible CLI, a runtime's, older hubs); starting never waits for it.
  */
 internal fun LazyListScope.newAgentModelItems(state: NewAgentState, editable: Boolean, onOpen: () -> Unit, onRetry: () -> Unit) {
     val models = state.models

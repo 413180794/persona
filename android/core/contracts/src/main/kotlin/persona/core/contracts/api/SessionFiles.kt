@@ -32,7 +32,7 @@ interface SessionFiles {
     /** Whether [blob] works for [machineId] (its hub's `git_blob` feature): the Git page compares documents and pictures. */
     fun comparesVersions(machineId: String): Boolean = false
     /**
-     * A file as it is in [rev] (`HEAD`, `INDEX`, a commit or「hash^」), [path] relative to the repository's root
+     * A file as it is in [rev] (`HEAD`, `INDEX`, a commit or`hash^`), [path] relative to the repository's root
      * (`GET …/git/blob`): where the node put it, read with [download] or [file]; `missing` when that version has no
      * such file.
      */

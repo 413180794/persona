@@ -106,7 +106,7 @@ func (a *CodexAsks) Feed(line []byte) {
 		a.open = nil
 	case l.Type == "event_msg" && p.Type == "item_completed" && p.Item != nil:
 		a.item(p.Item, l.Timestamp)
-	case l.Type == "history_mutation": // TRAEX: the items arrive as display completions
+	case l.Type == "history_mutation": // a compatible CLI: the items arrive as display completions
 		for _, d := range p.Display {
 			if d.Item != nil {
 				a.item(d.Item, l.Timestamp)

@@ -82,7 +82,7 @@ func connectMachine(t *testing.T, d *Devices, cfg MachineConfig, n *buildNode) *
 	return m
 }
 
-// hubNodeBinary writes a node for the machine's platform where 重新部署 takes it (nodeBinary, deploy.go).
+// hubNodeBinary writes a node for the machine's platform where Redeploy finds it (nodeBinary, deploy.go).
 func hubNodeBinary(t *testing.T, goos, arch string) {
 	t.Helper()
 	dir := t.TempDir()

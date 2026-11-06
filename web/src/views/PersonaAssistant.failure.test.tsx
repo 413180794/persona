@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// hub 读失败时展示「没读到主对话：原因」和重试，不画欢迎页 (#5174)
+// If reading from the hub fails, show "Couldn't load main conversation: reason" and Retry, not the welcome page (#5174).
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The engine pill in a machine page's header (#2842): it scrolls to 引擎 and moves focus to the chosen engine.
+// The engine pill in a machine page's header (#2842): it scrolls to Engine and moves focus to the chosen engine.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openEngineSection } from "./engine-anchor";
 

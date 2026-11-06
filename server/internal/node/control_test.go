@@ -67,7 +67,7 @@ func TestSendToAnExitedAgentIsRefused(t *testing.T) {
 	}
 }
 
-// An agent herdr does not detect (TRAEX) in front, its shell behind it: the text goes as a paste (an escape in it
+// An agent herdr does not detect (a compatible CLI) in front, its shell behind it: the text goes as a paste (an escape in it
 // cannot end the paste early), then enter.
 func TestPromptFallbackPastesSafelyBeforeEnter(t *testing.T) {
 	n, f, _ := herdrNode(t)

@@ -84,7 +84,7 @@ export function byPrefix<T>(rows: T[], name: (t: T) => string, filter: string): 
   return [...head, ...rows.filter((r) => !name(r).toLowerCase().startsWith(f))];
 }
 
-/** Who answers in a session ("Claude" / "Codex" / "TRAEX" / a runtime's own name; Session.agentLabel). */
+/** Who answers in a session ("Claude" / "Codex" / "a compatible CLI" / a runtime's own name; Session.agentLabel). */
 export function agentLabel(s: Pick<Session, "agent" | "agent_label" | "source_kind">): string {
   if (s.agent === "codex" || s.source_kind === "codex_app_server" || s.source_kind === "codex_history") return "Codex";
   if (s.agent === "traex") return "TRAEX";

@@ -90,7 +90,7 @@ func (n *Node) resumeTabName(id string) string {
 	return n.meta(p, fi).title
 }
 
-// resumeOther resumes a Codex or TRAEX that is not running, with text as its next message: in a new tab of the
+// resumeOther resumes a Codex or a compatible CLI that is not running, with text as its next message: in a new tab of the
 // engine, in the directory and with the launcher (and model) it was started with, the message going in as the
 // resume's prompt (nothing is typed). One Persona did not start (its launcher unknown) is refused as before.
 func (n *Node) resumeOther(ctx context.Context, id, text string, images []proto.Image) error {
@@ -120,7 +120,7 @@ func (n *Node) resumeOther(ctx context.Context, id, text string, images []proto.
 		return err
 	}
 	tab := n.resumeTabName(id)
-	if n.codexPath(id) == "" { // TRAEX: `<launcher> resume <id> <message>`
+	if n.codexPath(id) == "" { // a compatible CLI: `<launcher> resume <id> <message>`
 		_, err = n.startOtherAgent(ctx, launch, st.Cwd, st.Launcher, traexAgent, text, id, ws, tab)
 		return uncertain(err)
 	}

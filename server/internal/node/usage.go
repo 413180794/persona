@@ -20,7 +20,7 @@ import (
 
 // Token usage of every agent on this machine, for the Dynamic Island's TPM / today's tokens / requests (docs/live-activity.md).
 // The transcripts are the record: Claude Code writes each reply's usage on its assistant lines (main and subagent
-// files), Codex and TRAEX a token_count event per request. The meter reads only what the files gained since the last
+// files), Codex and compatible variants a token_count event per request. The meter reads only what the files gained since the last
 // scan, sums it per minute and model for the last usageWindow, and reports changed minutes to the hub as "usage".
 // A node starts with the hub connection, so a fresh meter re-reads the window from the files and sends it whole
 // ("full"): nothing is stored, and restarting either side recounts the same numbers; the manager keeps the week
@@ -70,7 +70,7 @@ func newUsageMeter() *usageMeter {
 }
 
 // usageFiles lists the transcripts that may hold usage of the window: Claude Code's (every config directory, and
-// their subagents), Codex's and TRAEX's rollouts.
+// their subagents), Codex's and the compatible CLI's rollouts.
 func (n *Node) usageFiles(cutoff time.Time) []string {
 	paths := n.globProjects("*", "*.jsonl")
 	paths = append(paths, n.globProjects("*", "*", "subagents", "*.jsonl")...)

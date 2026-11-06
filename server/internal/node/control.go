@@ -29,7 +29,7 @@ func newUUID() string {
 
 // start launches the selected agent in a new herdr tab and waits for its session: `<launcher> --session-id …` (or
 // --resume) for Claude Code, waiting until claude is ready; a Codex launcher of the login shell with the first message
-// (codex_start.go); a TRAEX, or a launcher the user says runs another agent, without Claude's flags (start_agent.go).
+// (codex_start.go); a compatible CLI, or a launcher the user says runs another agent, without Claude's flags (start_agent.go).
 // workspaceID puts the tab into an existing space (e.g. "new tab next to this agent"); otherwise the workspace named
 // after the directory is reused or created.
 // tabName names the herdr tab (hub picks one from the first message when the user gave none); empty: agent-<n>.
@@ -547,7 +547,7 @@ func (n *Node) paneFor(ctx context.Context, id string) (string, error) {
 	if a, ok := n.agent(id); ok {
 		return a.PaneID, nil
 	}
-	if err := n.refreshHosts(ctx); err == nil { // the whole snapshot: agents the host does not detect (TRAEX) too
+	if err := n.refreshHosts(ctx); err == nil { // the whole snapshot: agents the host does not detect (a compatible CLI) too
 		if a, ok := n.agent(id); ok {
 			return a.PaneID, nil
 		}
@@ -666,7 +666,7 @@ func (n *Node) send(ctx context.Context, id, text string, images []proto.Image, 
 	return uncertain(err)
 }
 
-// prompt submits text to the agent in a pane. A host only prompts agents it detects (herdr); for the others (TRAEX)
+// prompt submits text to the agent in a pane. A host only prompts agents it detects (herdr); for the others (a compatible CLI)
 // the text is pasted into the pane and enter pressed, only while a program other than a shell runs in front of it
 // (typeable).
 func (n *Node) prompt(ctx context.Context, pane, text string) error {

@@ -573,7 +573,7 @@ type LauncherModel struct {
 }
 
 // LauncherModels is what a launcher's agent offers in its /model menu, for "New agent"'s model picker
-// (node/launcher_models.go). No models: its agent has no list to ask for (TRAEX, a runtime's).
+// (node/launcher_models.go). No models: its agent has no list to ask for (a compatible CLI, a runtime's).
 type LauncherModels struct {
 	Agent  string       `json:"agent"`
 	Models []AgentModel `json:"models"`
@@ -783,7 +783,7 @@ type Session struct {
 	// runtime lists (docs/runtimes.md), the agent it says it runs ("dsh").
 	Agent string `json:"agent,omitempty"`
 	// AgentLabel is what the apps call the agent when they do not know it themselves: a runtime's own name ("DSH").
-	// Empty for the agents the apps know (Claude Code, Codex, TRAEX).
+	// Empty for the agents the apps know (Claude Code, Codex, a compatible CLI).
 	AgentLabel string `json:"agent_label,omitempty"`
 	Launcher   string `json:"launcher,omitempty"`
 	Model      string `json:"model,omitempty"`

@@ -242,7 +242,7 @@ func TestHerdrTUIDrivingShowsBlockedAsIdle(t *testing.T) {
 	}
 }
 
-// The effort is not changed while the agent works or waits on a dialog; Codex / TRAEX sessions are refused. No herdr
+// The effort is not changed while the agent works or waits on a dialog; Codex and compatible variants sessions are refused. No herdr
 // call in either case.
 func TestHerdrModesRefusals(t *testing.T) {
 	n, f, home := herdrNode(t)

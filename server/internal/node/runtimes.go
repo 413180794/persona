@@ -1078,7 +1078,7 @@ func (n *Node) runtimeFor(ctx context.Context, method, id string) (*runtimeConn,
 	return nil, nil
 }
 
-// hasOwnSession: this machine has the session itself (a live agent in a terminal, a Claude / Codex / TRAEX record).
+// hasOwnSession: this machine has the session itself (a live agent in a terminal, a Claude / Codex and compatible variants record).
 func (n *Node) hasOwnSession(id string) bool {
 	if _, ok := n.agent(id); ok {
 		return true

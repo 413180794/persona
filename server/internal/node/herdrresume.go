@@ -80,7 +80,7 @@ func (n *Node) claudeResumeArgv(spec claudeLaunch, id string) (argv []string, ok
 	return []string{"eval", cmd}, true
 }
 
-// agentResumeArgv is the resume_argv for an agent Persona started (Claude, Codex, TRAEX, pi); a Codex gets
+// agentResumeArgv is the resume_argv for an agent Persona started (Claude, Codex, a compatible CLI, pi); a Codex gets
 // HERDR_AGENT=codex like Claude.
 func (n *Node) agentResumeArgv(spec agentLaunch, id string) (argv []string, ok bool) {
 	kind := spec.Agent

@@ -24,7 +24,7 @@ const (
 	sidB = "0d000000-0000-4000-8000-00000000000b"
 	sidC = "0d000000-0000-4000-8000-00000000000c"
 
-	// TRAEX thread ids (placeholders).
+	// a compatible CLI thread ids (placeholders).
 	thread1 = "0f000000-0000-4000-8000-000000000001"
 	thread2 = "0f000000-0000-4000-8000-000000000002"
 	thread3 = "0f000000-0000-4000-8000-000000000003"
@@ -184,7 +184,7 @@ func TestHerdrListGivesPaneIndexFromLayouts(t *testing.T) {
 }
 
 // An older herdr without session.snapshot: the agent list is used instead. Space / slot names stay what the last
-// good snapshot said (even for an agent that moved), and TRAEX panes, found only in a snapshot, are not listed.
+// good snapshot said (even for an agent that moved), and a compatible CLI panes, found only in a snapshot, are not listed.
 func TestHerdrListFallsBackToAgentListWithoutSnapshot(t *testing.T) {
 	n, f, home := herdrNode(t)
 	writeTraexOwner(t, home, thread1, os.Getpid())
@@ -312,9 +312,9 @@ func TestHerdrProcessNamesTheSessionOverTheBinding(t *testing.T) {
 	})
 }
 
-// TRAEX panes (herdr sees no agent there) are found by the thread lock files and the pane in their process's
+// a compatible CLI panes (herdr sees no agent there) are found by the thread lock files and the pane in their process's
 // environment; their status comes from the title's spinner without reading the screen. A pane herdr already reports
-// as an agent is not taken for a TRAEX one.
+// as an agent is not taken for a compatible CLI one.
 func TestHerdrTraexPanesAreMergedIntoTheList(t *testing.T) {
 	n, f, home := herdrNode(t)
 	writeTraexOwner(t, home, thread1, os.Getpid())
@@ -351,7 +351,7 @@ func TestHerdrTraexPanesAreMergedIntoTheList(t *testing.T) {
 	assertTrace(t, f.trace(), []string{call("session.snapshot", nil)})
 }
 
-// TestTraexOwnerHelper is the child TestHerdrTraexStatusFromScreen names as a TRAEX owner: it waits until killed.
+// TestTraexOwnerHelper is the child TestHerdrTraexStatusFromScreen names as a compatible CLI owner: it waits until killed.
 func TestTraexOwnerHelper(t *testing.T) {
 	if os.Getenv("PERSONA_TRAEX_OWNER_HELPER") == "" {
 		t.Skip("helper process only")
@@ -359,13 +359,13 @@ func TestTraexOwnerHelper(t *testing.T) {
 	time.Sleep(time.Minute)
 }
 
-// Without a spinner a TRAEX pane's status is read off its screen (at most every 2 s per pane): "esc to interrupt"
+// Without a spinner a compatible CLI pane's status is read off its screen (at most every 2 s per pane): "esc to interrupt"
 // is working, a numbered choice blocked, anything else a finished turn; a failed read keeps the last status, or is
 // unknown without one.
 func TestHerdrTraexStatusFromScreen(t *testing.T) {
 	n, f, home := herdrNode(t)
 	// Three of this user's processes, all alive: this one, its parent, and a child it runs. Not init: a pid file this
-	// user's TRAEX wrote that another user's process now has is a reused pid, not TRAEX (#2141).
+	// user's a compatible CLI wrote that another user's process now has is a reused pid, not a compatible CLI (#2141).
 	child := exec.Command(os.Args[0], "-test.run=^TestTraexOwnerHelper$")
 	child.Env = append(os.Environ(), "PERSONA_TRAEX_OWNER_HELPER=1")
 	if err := child.Start(); err != nil {

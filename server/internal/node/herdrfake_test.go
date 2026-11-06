@@ -289,7 +289,7 @@ func agentOf(kind, session, status, pane, tab, ws, cwd, title string) map[string
 // Everything below touches node internals; when herdr moves behind a host interface, this block is what changes.
 
 // herdrNode is a Node wired to a fresh fake herdr, with a temp home (~/.claude/projects exists, empty) and every map
-// the herdr paths touch. The two package-level caches that outlive a test (the offline list and TRAEX's panes and
+// the herdr paths touch. The two package-level caches that outlive a test (the offline list and the compatible CLI's panes and
 // statuses) are cleared before and after it; the other caches are keyed by the test's own temp paths.
 func herdrNode(t *testing.T) (*Node, *fakeHerdr, string) {
 	t.Helper()
@@ -386,7 +386,7 @@ func seedTraexPane(pid int, pane string) {
 	traexCache.Unlock()
 }
 
-// ageTraexStatus makes every remembered TRAEX status older than its 2 s cache.
+// ageTraexStatus makes every remembered a compatible CLI status older than its 2 s cache.
 func ageTraexStatus() {
 	traexCache.Lock()
 	for p, s := range traexCache.status {

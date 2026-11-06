@@ -23,7 +23,7 @@ import (
 // `claude --resume --fork-session` copies the whole conversation only, and --resume-session-at, which would cut it,
 // is not honoured by an interactive claude (tried 2026-11-05), so the node makes the copy itself.
 
-// forkable: the session is a Claude Code conversation whose transcript the node can copy. Codex, TRAEX, runtimes and
+// forkable: the session is a Claude Code conversation whose transcript the node can copy. Codex, a compatible CLI, runtimes and
 // other tools' sources have their own ids and files; the client hides "Branch to New Chat" for them.
 func (n *Node) forkable(s proto.Session) bool {
 	if _, codex := n.codexSource(s.SessionID); codex || s.SourceKind != "" || (s.Agent != "" && s.Agent != "claude") || !validID(s.SessionID) || n.runtimeAssistant(s.SessionID) || s.Starting {

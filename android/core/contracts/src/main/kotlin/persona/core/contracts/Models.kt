@@ -323,7 +323,7 @@ data class Session(
     @SerialName("pane_index") val paneIndex: Int? = null,
     /**
      * The main checkout of the repository [cwd] belongs to, when its host knows it (#2840: Paseo keeps its worktrees
-     * under its own folder, whose paths name no repository). 按仓库 goes by it (core:domain repoOf); older hubs never send it.
+     * under its own folder, whose paths name no repository). Group by repository goes by it (core:domain repoOf); older hubs never send it.
      */
     @SerialName("repo_root") val repoRoot: String? = null,
     @WireEnum("needs_you", "unread", "working", "idle", "offline", "unknown")
@@ -398,7 +398,7 @@ data class Session(
     val isCodex: Boolean get() = agent == "codex" || sourceKind == "codex_app_server" || sourceKind == "codex_history"
     /** Claude Code, or an older hub that does not name the agent: what Claude-only controls (modes, /model, /clear) need. */
     val isClaude: Boolean get() = !isCodex && (agent.isNullOrEmpty() || agent == "claude")
-    /** Who the user talks to: Claude, Codex, TRAEX, or what the hub calls a runtime's agent ("DSH"). */
+    /** Who the user talks to: Claude, Codex, a compatible CLI, or what the hub calls a runtime's agent ("DSH"). */
     val agentLabel: String get() = when {
         isCodex -> "Codex"
         agent == "traex" -> "TRAEX"
@@ -629,7 +629,7 @@ data class Interaction(
 ) {
     val sessionKey: SessionKey get() = SessionKey(machineId, sessionId)
 
-    /** The agent's name on a card not from Claude Code ("Codex", "TRAEX", "DSH"); null for Claude's. */
+    /** The agent's name on a card not from Claude Code ("Codex", "a compatible CLI", "DSH"); null for Claude's. */
     val agentDisplayName: String?
         get() = when (agent) {
             "codex" -> "Codex"

@@ -884,7 +884,7 @@ if os.environ.get("MOCK_OPENCODE"):
     ]
 
 # MOCK_AGENT_MARKS=1 (#3391): one agent of each kind the web draws a mark for, on the server: Claude Code, Codex, opencode, pi,
-# gemini, cursor, and two with none of their own (TRAEX, amp: the lettered fallback). Their panes are in the terminal tree too.
+# gemini, cursor, and two with none of their own (a compatible CLI, amp: the lettered fallback). Their panes are in the terminal tree too.
 MARKS_SPACE = "marks"
 MARKS_AGENTS = []  # (session id, agent, title, status, state, minutes ago)
 if os.environ.get("MOCK_AGENT_MARKS"):
@@ -1704,7 +1704,7 @@ def _managers_seed():
          "deploy": "docker", "version": "0.9.8", "last_seen": ago(hours=3)},
         {"id": "m-c1e9f0", "name": "测试", "online": False,
          "installing": (datetime.now(timezone.utc) + timedelta(minutes=7)).isoformat().replace("+00:00", "Z")},
-    ] + ([  # MOCK_MANAGER_EXPIRED=1: one made whose code expired unused (码已过期 · 新的安装码), and one expired too long ago
+    ] + ([  # MOCK_MANAGER_EXPIRED=1: one made whose code expired unused (Code expired · New installation code), and one expired too long ago
         {"id": "m-5d7a01", "name": "备用", "online": False,
          "installing": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")},
         {"id": "m-0e44b9", "name": "早就过期", "online": False,

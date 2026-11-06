@@ -67,7 +67,7 @@ func TestAgentInterrupt(t *testing.T) {
 }
 
 // agent_supervise makes an agent the main conversation did not hand out one of its supervised tasks (a todo with
-// the agent, a card in the feed), whose report gets to the main conversation in a 督办 message; on its own task it
+// the agent, a card in the feed), whose report gets to the main conversation in a Supervision message; on its own task it
 // sets the criteria; another conversation's task stays theirs, and only the main conversation supervises.
 func TestAgentSuperviseAndReport(t *testing.T) {
 	s, f := newQuietService(t)
@@ -113,7 +113,7 @@ func TestAgentSuperviseAndReport(t *testing.T) {
 		t.Fatalf("%d todos", n)
 	}
 
-	// Its report goes to the main conversation as a 督办 message.
+	// Its report goes to the main conversation as a Supervision message.
 	args := `{"kind":"question","text":"两种走法：A 先灰度，B 直接全量。选哪个？","evidence":["https://github.com/o/r/pull/901"],"step":2,"steps":5}`
 	if res := s.agentTool(ctx, "box", "s1abcdef", "report_to_supervisor", json.RawMessage(args)); res.IsError ||
 		!strings.Contains(res.Content[0].Text, "Sent to your supervisor") {
@@ -173,7 +173,7 @@ func TestReportSignalIDs(t *testing.T) {
 	}
 }
 
-// Two questions before the 督办 message goes are both in it, with both reports' evidence; a progress report beside
+// Two questions before the Supervision message goes are both in it, with both reports' evidence; a progress report beside
 // them is its own entry.
 func TestReportsOfAKindAreJoined(t *testing.T) {
 	a := superviseSignal{Todo: "todo_1", Kind: sigReport, Report: upReportQuestion, Key: "1", Detail: "用哪个分支？", Evidence: []string{"pr/1"},

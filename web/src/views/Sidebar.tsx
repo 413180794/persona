@@ -296,7 +296,7 @@ export function useNavPages() {
     ...(page[k] ? [page[k]] : []),
   ]);
 
-  // as arranged in 设置 › 通用 › 侧栏: the list, and the pages that wait under 更多 (docs/web.md「侧栏的页面」)
+  // as arranged in Settings › General › Sidebar pages: the list, and the pages that wait under More (docs/web.md "The sidebar's pages")
   const { shown: pages, more } = arrangePages(all, useSidebarPrefs());
 
   return { phase, online, total: machines.length, main, pages, more, all };
@@ -587,7 +587,7 @@ function AgentsBlock({ reg, hover, activeKey, go, onNewAgent, onNavigate, add = 
     return buildAgentGroups(unpinned, machines, "state", mutes);
   }, [unpinned, machines, shownGrouping, mutes, todos]);
   // by todo waits for the first GET /todos: the socket pushes the sessions before it answers, and a tree drawn without
-  // the todos puts every agent under 没挂待办的 for a moment, then moves them under their todos (#2812)
+  // the todos puts every agent under No to-do for a moment, then moves them under their todos (#2812)
   const todosPending = shownGrouping === "todo" && !todosLoaded;
   const todoTree = useMemo(() => {
     if (shownGrouping !== "todo" || !todosLoaded) return undefined;

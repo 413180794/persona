@@ -19,7 +19,7 @@ data class SessionInfo(
     val model: String? = null,
     val launcher: String? = null,
     @SerialName("git_branch") val gitBranch: String? = null,
-    /** The agent's own version (Claude Code, Codex or TRAEX). */
+    /** The agent's own version (Claude Code, Codex or a compatible CLI). */
     val version: String? = null,
     @SerialName("permission_mode") val permissionMode: String? = null,
     val effort: String? = null,

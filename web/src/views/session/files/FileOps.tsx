@@ -1,6 +1,6 @@
 // What the Files panel changes on the machine (#4883, aligned with the apps' #4858): upload into a folder (dropped or
 // chosen, with progress and cancel; a name already there asks replace or keep both), download, rename, move and move
-// to the trash (asked first, then 「已移到废纸篓 · 撤销」). Both views share it: the drill-in list (FilesPanel) and the
+// to the trash (asked first, then "Moved to trash · Undo"). Both views share it: the drill-in list (FilesPanel) and the
 // tree (FilesTree). Each action shows only when the hub says it can (`upload_dir`, `file_edit`).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, fileDownloadURL, isAbort } from "../../../lib/api";
@@ -52,7 +52,7 @@ interface Upload {
 interface NameAsk {
   name: string;
   dir: string;
-  /** More that are waiting on the same question (「其余的也这样」). */
+  /** More that are waiting on the same question ("Apply to the remaining items"). */
   more: number;
   answer: (c: Conflict | null, all: boolean) => void;
 }
@@ -365,7 +365,7 @@ interface Notice {
   action?: ToastAction;
 }
 
-/** A line at the panel's foot for what was just done (「已移到废纸篓 · 撤销」). It goes after a while, held while the
+/** A line at the panel's foot for what was just done ("Moved to trash · Undo"). It goes after a while, held while the
  *  pointer or the focus is on it (WCAG 2.2.1), or with its ×; its button runs and it goes. */
 function PanelNotice({ notice, onDone }: { notice: Notice | null; onDone: (id: number) => void }) {
   const [held, setHeld] = useState(false);
@@ -408,7 +408,7 @@ function PanelNotice({ notice, onDone }: { notice: Notice | null; onDone: (id: n
   );
 }
 
-/** 「x 已经有了」: replace it, keep both, or skip; with more waiting, the same for the rest too. */
+/** "x already exists": replace it, keep both, or skip; with more waiting, the same for the rest too. */
 function NameDialog({ ask }: { ask: NameAsk | null }) {
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [ask?.name, ask?.dir]);
@@ -441,7 +441,7 @@ function NameDialog({ ask }: { ask: NameAsk | null }) {
   );
 }
 
-/** 「移到…」: a folder picker on the machine, from the folder the first one is in; up, into a folder, then move here. */
+/** "Move to...": a folder picker on the machine, from the folder the first one is in; up, into a folder, then move here. */
 function MoveDialog({
   mid,
   cwd,
@@ -550,7 +550,7 @@ function MoveDialog({
   );
 }
 
-/** 「移到废纸篓？」: what goes, and that it can be put back. */
+/** "Move to trash?": what goes, and that it can be put back. */
 function TrashDialog({ targets, busy, onClose, onTrash }: { targets: OpTarget[] | null; busy: boolean; onClose: () => void; onTrash: () => void }) {
   const one = targets?.length === 1 ? targets[0] : null;
   return (

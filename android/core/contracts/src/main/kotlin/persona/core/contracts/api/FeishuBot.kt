@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * 设置 › 飞书机器人 (docs/bots.md「配置和接口」, iOS `FeishuBotView`): the Feishu bot the user talks to Persona through,
+ * Settings › Lark bot (docs/bots.md"Configuration and endpoints", iOS `FeishuBotView`): the Feishu bot the user talks to Persona through,
  * its app credentials and how to make one. Pairing, its features and a test message are on its channel's page
  * ([ChannelManagement]). Bound to the active pairing's selected hub.
  */

@@ -584,7 +584,7 @@ nonisolated struct Session: Codable, Identifiable, Hashable, Sendable {
     /// the tab's Started It. Nil when the host does not say (older nodes, hosts without layouts).
     var paneIndex: Int? = nil
     /// The main checkout of the repository `cwd` belongs to, when its host knows it (`repo_root`, #2840: Paseo keeps its
-    /// worktrees under its own folder, whose paths name no repository). 按仓库 goes by it (`RepoPlace`).
+    /// worktrees under its own folder, whose paths name no repository). Group by repository uses it (`RepoPlace`).
     var repoRoot: String? = nil
     var state: AgentState
     var seenAt: Date?

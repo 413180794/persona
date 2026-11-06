@@ -70,7 +70,7 @@ func TestHostDue(t *testing.T) {
 	if !n.hostDue(host.HerdrCore, now, true) {
 		t.Fatal("the kicked host is due")
 	}
-	// TRAEX state lives in the title spinner, which sends no event: its own host stays due, the other one not.
+	// a compatible CLI state lives in the title spinner, which sends no event: its own host stays due, the other one not.
 	n.agents["t1"] = host.Agent{Agent: traexAgent, PaneID: "herdr-core:t9"}
 	if n.hostDue(host.Herdr, now, false) {
 		t.Fatal("TRAEX in herdr-core must not make herdr poll")

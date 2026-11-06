@@ -17,7 +17,7 @@ import (
 // joined — Persona becomes a second client of that thread, asking it for nothing and changing none of its settings —
 // and from then on the thread's questions, approvals and the phone's messages go through the protocol: whoever answers
 // first wins, and serverRequest/resolved takes the other side's card away. A pane that is not on one (a launcher with
-// -c, a session running in its own process, 0.153 without a daemon, TRAEX) keeps the terminal route (codexask.go); so
+// -c, a session running in its own process, 0.153 without a daemon, a compatible CLI) keeps the terminal route (codexask.go); so
 // does a joined one whose app-server goes away, until it is back.
 
 // codexJoinRetry: a pane whose join failed is tried again after this long.

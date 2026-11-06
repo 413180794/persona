@@ -1,6 +1,6 @@
 // Package host is what the node needs from a terminal host — where the terminals run (herdr, later Orca): its panes,
 // reading their screens, typing into them, opening and closing them. What runs inside a pane (Claude Code, Codex,
-// TRAEX) is the agent; telling agents apart, finding their sessions and judging their state stay in the node, on top
+// a compatible CLI) is the agent; telling agents apart, finding their sessions and judging their state stay in the node, on top
 // of any host (docs/plan-orca-support.md).
 //
 // A host implements Host; everything else is an optional capability the node finds with a type assertion.
@@ -399,7 +399,7 @@ type Layout struct {
 	Slots  []Slot
 	// Agents are the panes running an agent the host detects.
 	Agents []Agent
-	// Panes is every pane, agent or not (Agent ""): where agents the host does not detect (TRAEX) are found.
+	// Panes is every pane, agent or not (Agent ""): where agents the host does not detect (a compatible CLI) are found.
 	Panes []Agent
 	// PaneIndex is each pane's 0-based place in its slot by layout, top left first (herdr: its split tree), keyed by
 	// PaneID; nil when the host does not say where its panes sit (docs/agent-states.md "Several panes in one tab").

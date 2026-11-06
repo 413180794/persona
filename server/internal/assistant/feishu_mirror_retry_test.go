@@ -63,7 +63,7 @@ func mirrorRetryHub(t *testing.T, fail func(n int) error) *mirrorWorld {
 
 var errLost = errors.New("context deadline exceeded") // sent, the reply lost on the way back
 
-// A 早报 whose first card's reply was lost goes again with the same key: Feishu lands a key once, so the owner does
+// A morning brief whose first card's reply was lost goes again with the same key: Feishu lands a key once, so the owner does
 // not see it twice.
 func TestFeishuMirrorRetryKeepsItsKey(t *testing.T) {
 	w := mirrorRetryHub(t, func(n int) error {

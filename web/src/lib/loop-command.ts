@@ -46,7 +46,7 @@ function every(m: RegExpExecArray): string {
   return t(UNIT[unit], { count: n });
 }
 
-/** Claude Code has /loop; Codex, TRAEX and other runtimes do not. */
+/** Claude Code has /loop; Codex, a compatible CLI and other runtimes do not. */
 export function hasLoop(s: { agent?: string; source_kind?: string } | undefined): boolean {
   return !!s && (!s.agent || s.agent === "claude") && !s.source_kind?.startsWith("codex");
 }

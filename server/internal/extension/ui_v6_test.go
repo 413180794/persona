@@ -501,7 +501,7 @@ func TestFitFieldsV6(t *testing.T) {
 	if m := got[8]; m.Kind != "text" || m.Value != "第一行\n第二行" {
 		t.Fatalf("multiline: %+v", m)
 	}
-	// the app sends the toggles (the user turned on 客厅 too): the extension gets one JSON array
+	// The app sends the toggles (the user enabled the living room too): the extension gets one JSON array.
 	values[toggles[2].Name] = "true"
 	out := CollectValues(values)
 	if len(out) != 2 || out["note"] != "x" || out["rooms"] != `["bedroom","kitchen","living"]` {

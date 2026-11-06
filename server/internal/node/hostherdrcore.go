@@ -350,7 +350,7 @@ func fromTerminal(t herdrcore.Terminal) host.Agent {
 	if t.Status != nil && t.Status.App != "" {
 		k, ok := hcAgents[t.Status.App]
 		if !ok {
-			return a // a program the node does not drive: left to the panes TRAEX may claim
+			return a // a program the node does not drive: left to the panes a compatible CLI may claim
 		}
 		a.Agent = k
 		a.AgentStatus = hcStatus[t.Status.State]

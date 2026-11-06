@@ -66,7 +66,7 @@ func TestHerdrAgentOnlyInHerdrPanes(t *testing.T) {
 }
 
 // A launcher the hub says runs Codex (a wrapper) is typed into its herdr pane with HERDR_AGENT=codex in front, but
-// not into a shell that cannot take it; a TRAEX is left to herdr's own detection.
+// not into a shell that cannot take it; a compatible CLI is left to herdr's own detection.
 func TestOtherAgentStartTellsHerdrCodex(t *testing.T) {
 	for _, tc := range []struct{ kind, launcher, shell, want string }{
 		{"codex", "cxw", "/bin/zsh", "HERDR_AGENT=codex cxw hi"},

@@ -139,7 +139,7 @@ export function Palette({ open, onClose, onNewAgent, pane, route = HOME }: { ope
   const bindings = useBindings();
   // "Inbox" and "Go to" (the Mac's quick open): the open inbox items, and the sidebar's pages with Persona and "All chats"
   const inboxItems = useInbox((s) => s.items);
-  // every page, the ones under 更多 too: finding a page is what this is for
+  // every page, the ones under More too: finding a page is what this is for
   const { all: pages } = useNavPages();
   // the pages come anew each render: kept by what they are, so the list (and the highlight under it) stays put
   const hasAssistant = Boolean(assistant);

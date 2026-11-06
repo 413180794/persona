@@ -260,8 +260,8 @@ export function openTitle(it: InboxItem): string {
 }
 
 /**
- * Drops the template's spaces where a Chinese name meets Chinese text: 「在 GitHub 里打开」 keeps them,
- * 「在微信里打开」 does not. Other scripts are left alone.
+ * Drops template spaces between adjacent Chinese characters. Spaces around Latin product names remain;
+ * other scripts are left alone.
  */
 export function tightCJK(text: string): string {
   return text.replace(/(?<=\p{Script=Han}) (?=\p{Script=Han})/gu, "");

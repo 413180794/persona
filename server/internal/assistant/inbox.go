@@ -989,7 +989,7 @@ var subjectlessThread = mailThread("")
 // the empty subject's key, under b.mu: no round matches it by its senders any more, so each mail is listed once
 // (#3796, #4920).
 //
-//   - One the owner has to act on (需要你) or the AI 分身 worked on keeps its mail as it was (stay: those UIDs stay under
+//   - One the owner has to act on (Needs you) or the AI twin worked on keeps its mail as it was (stay: those UIDs stay under
 //     the empty subject's key), with its tier and draft; it is read and filed like any item. A sender item a round
 //     since #4852 opened with only that mail is filed as superseded.
 //   - Any other is filed as superseded once every unread mail of it on the page has a sender (each goes into its
@@ -997,7 +997,7 @@ var subjectlessThread = mailThread("")
 //   - When all of its mail on the page is read elsewhere it is read like any item; while none is on the page it is
 //     left alone.
 //
-// An item the owner moved back (移回) is filed as superseded again the same way.
+// An item the owner moved back (Move back) is filed as superseded again the same way.
 func (b *inboxBook) supersedeSubjectless(index *threadIndex, msgs []assistantwire.InboxMailSummary, now time.Time) ([]*InboxItem, map[uint32]bool) {
 	open, _ := index.openFor(subjectlessThread)
 	if open == nil {

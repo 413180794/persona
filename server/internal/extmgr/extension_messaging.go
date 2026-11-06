@@ -348,7 +348,7 @@ func (ps *extensions) messagingChanged(id string, params json.RawMessage) {
 }
 
 // maxMessagingChanged is how many chats one push names; more is the same as none: read everything again
-// (docs/extension-messaging.md「八」, the schema's maxItems).
+// (docs/extension-messaging.md"8", the schema's maxItems).
 const maxMessagingChanged = 500
 
 // mergeMessagingChanged folds a later change into one waiting to go out: the chats of both, or every chat when either

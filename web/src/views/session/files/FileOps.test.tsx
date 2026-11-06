@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The Files panel's actions (#4883): a delete is asked first and then offers 撤销, which puts it back; an upload whose
+// The Files panel's actions (#4883): a delete is asked first and then offers Undo, which puts it back; an upload whose
 // name is taken asks and goes again as answered; what the hub can't do is not offered.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

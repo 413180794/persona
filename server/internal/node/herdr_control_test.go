@@ -410,7 +410,7 @@ func TestHerdrStartOfALiveSessionAndWithoutHerdr(t *testing.T) {
 	assertTrace(t, f.trace(), []string{call("workspace.list", nil)})
 }
 
-// session.send to an agent herdr does not prompt (agent.prompt: *_not_found, as for TRAEX): the text is typed and
+// session.send to an agent herdr does not prompt (agent.prompt: *_not_found, as for a compatible CLI): the text is typed and
 // enter pressed; other errors are returned as they are. A Codex pane is checked with one colored read of its end
 // (codexReady: a pane scrolled back reads the same).
 func TestHerdrSendFallsBackToTyping(t *testing.T) {

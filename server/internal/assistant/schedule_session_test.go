@@ -187,9 +187,9 @@ func TestATaskDueWhileItsLastRunIsGoingIsSkipped(t *testing.T) {
 }
 
 // A run skipped because its last run waits on the user (an approval, a question) is pushed once per wait: only they
-// can let it go on, and the 早报 not coming said nothing (#4499). The same wait skipped again: no second push. The
+// can let it go on, and the morning brief not coming said nothing (#4499). The same wait skipped again: no second push. The
 // old card answered and the turn stopped at a new one (no run went in between): a new wait, pushed again (review of
-// #4506). A last run only still working, a muted conversation and 立即运行 are not pushed.
+// #4506). A last run only still working, a muted conversation and Run now are not pushed.
 func TestASkipForALastRunWaitingOnTheUserIsPushedOnce(t *testing.T) {
 	n := newFakeHub().withMachine()
 	h := newStorelessService(t, n)
@@ -251,7 +251,7 @@ func TestASkipForALastRunWaitingOnTheUserIsPushedOnce(t *testing.T) {
 		t.Fatalf("after the wait ended, waiting again is news: %+v", p)
 	}
 
-	// 立即运行 on it: answered busy_wait in the app, no push.
+	// Run now on it: answered busy_wait in the app, no push.
 	waiting(cardA.Add(2 * time.Hour))
 	task, _ := taskByID(h, "p")
 	if _, err := h.runTask(task, time.Now(), time.Now(), true, false); !errors.Is(err, errTaskBusy) {

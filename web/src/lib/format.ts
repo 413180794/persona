@@ -154,7 +154,7 @@ export function ago(iso?: string, now = Date.now()): string {
   if (s < 45) return t("lib-format.just_now");
   if (s < 3600) return formatRelative(-Math.round(s / 60), "minute");
   if (s < 86400) return formatRelative(-Math.round(s / 3600), "hour");
-  // Days by the local calendar, not by 24 h spans: yesterday morning seen late tonight is 昨天, not 前天 (#4281).
+  // Days by the local calendar, not by 24 h spans: yesterday morning seen late tonight is yesterday, not the day before yesterday (#4281).
   const days = calendarDays(ts, now);
   if (days < 7) return formatRelative(-days, "day");
   return formatDate(ts, { month: "numeric", day: "numeric" });

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 设置 › 飞书机器人 (#2806); words shared with the web (settings-feishubot, lib-feishu-bot). -->
+<!-- Settings › Lark bot (#2806); words shared with the web (settings-feishubot, lib-feishu-bot). -->
 <resources>
     <string name="settings_feishu_bot_title">Lark bot</string>
     <string name="settings_feishu_bot_footer">Messaging this bot in Lark is talking to Persona. It only answers you once paired, and stays quiet in groups.</string>

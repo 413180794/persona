@@ -1,21 +1,21 @@
-// The sidebar's pages as the user arranged them (设置 › 通用 › 侧栏, docs/web.md「侧栏的页面」): their order, and which
-// stay in the list and which wait under「更多」. Kept per browser, as the pinned conversations are: a phone and a
+// The sidebar's pages as the user arranged them (Settings › General › Sidebar pages, docs/web.md "The sidebar's pages"): their order, and which
+// stay in the list and which wait under More. Kept per browser, as the pinned conversations are: a phone and a
 // laptop may well want different pages at hand.
 //
 // What is not decided by the user: the built-in pages stay in the list; an extension's page does too while fewer
-// than EXTENSION_CAP extension pages are in it, and goes under 更多 after that, so installing a tenth extension
-// does not make the list longer. 设置 always stays in the list (it is where all this is changed).
+// than EXTENSION_CAP extension pages are in it, and goes under More after that, so installing a tenth extension
+// does not make the list longer. Settings always stays in the list (it is where all this is changed).
 import { useSyncExternalStore } from "react";
 
 const KEY = "sidebar.pages";
 
-/** How many extension pages the list takes before the next ones wait under 更多 (the user's own choices aside). */
+/** How many extension pages the list takes before the next ones wait under More (the user's own choices aside). */
 export const EXTENSION_CAP = 3;
 
 /** The page that is never put away. */
 export const LOCKED = "settings";
 
-/** What the user chose: an order (keys, the first ones first) and, per key, shown in the list or put under 更多. */
+/** What the user chose: an order (keys, the first ones first) and, per key, shown in the list or put under More. */
 export type SidebarPrefs = { order: string[]; shown: string[]; hidden: string[] };
 
 const NONE: SidebarPrefs = { order: [], shown: [], hidden: [] };
@@ -38,8 +38,8 @@ export function parsePrefs(raw: string | null): SidebarPrefs {
 }
 
 /** `keys` in the user's order: the ordered ones as ordered; one the order does not know (a page added since, a new
- *  extension) right before the page that comes after it by default, so a new extension's page lands before 设置 as it
- *  would have anyway, and 设置 stays last. */
+ *  extension) right before the page that comes after it by default, so a new extension's page lands before Settings as it
+ *  would have anyway, and Settings stays last. */
 export function ordered(keys: readonly string[], order: readonly string[]): string[] {
   const present = new Set(keys);
   const out = order.filter((k, i) => present.has(k) && order.indexOf(k) === i);
@@ -53,7 +53,7 @@ export function ordered(keys: readonly string[], order: readonly string[]): stri
 }
 
 /** Whether each page is in the list: the user's choice, else the default (built-in yes; an extension's while the
- *  list has fewer than EXTENSION_CAP of them, counted in the order shown). 设置 is always in. */
+ *  list has fewer than EXTENSION_CAP of them, counted in the order shown). Settings is always in. */
 export function inList(keys: readonly string[], prefs: SidebarPrefs): Set<string> {
   const shown = new Set(prefs.shown);
   const hidden = new Set(prefs.hidden);
@@ -72,7 +72,7 @@ export function inList(keys: readonly string[], prefs: SidebarPrefs): Set<string
   return out;
 }
 
-/** The pages split as the sidebar draws them: the list, then what waits under 更多, both in the user's order. */
+/** The pages split as the sidebar draws them: the list, then what waits under More, both in the user's order. */
 export function arrangePages<T extends { k: string }>(pages: readonly T[], prefs: SidebarPrefs): { shown: T[]; more: T[] } {
   const byKey = new Map(pages.map((p) => [p.k, p]));
   const keys = ordered(pages.map((p) => p.k), prefs.order);
@@ -107,7 +107,7 @@ function save(p: SidebarPrefs) {
   listeners.forEach((l) => l());
 }
 
-/** Puts page `k` in the list (`on`) or under 更多; the choice sticks over the default. 设置 cannot be put away. */
+/** Puts page `k` in the list (`on`) or under More; the choice sticks over the default. Settings cannot be put away. */
 export function setPageShown(k: string, on: boolean) {
   if (k === LOCKED) return;
   const p = getSidebarPrefs();
@@ -129,7 +129,7 @@ export function movePage(keys: readonly string[], k: string, by: -1 | 1) {
   setPageOrder(next);
 }
 
-/** Back to the defaults: order, list and 更多 as if nothing had been chosen. */
+/** Back to the defaults: order, list and More as if nothing had been chosen. */
 export function resetSidebarPrefs() {
   save(NONE);
 }

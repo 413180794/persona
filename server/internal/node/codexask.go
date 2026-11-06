@@ -23,7 +23,7 @@ import (
 )
 
 // Codex questions and approvals as cards (docs/codex.md "Questions and approvals"). Codex in a terminal has no hook Persona can
-// answer through, so the node follows each live Codex / TRAEX session's rollout for the questions it asks
+// answer through, so the node follows each live Codex and compatible variants session's rollout for the questions it asks
 // (transcript.CodexAsks) and, while the host says it waits on the user, reads its screen for an approval
 // (screen.ReadCodex). The open ones go to the hub as one list (codex.interactions) whenever it changes; the hub keeps
 // a card for each and hands the phone's answer back (codex.answer). An answer is typed only after the screen shows
@@ -123,7 +123,7 @@ func (n *Node) syncCodexCards(ctx context.Context) {
 	}
 }
 
-// codexCardsNow reads the open cards of every live Codex / TRAEX session, or of only one.
+// codexCardsNow reads the open cards of every live Codex and compatible variants session, or of only one.
 func (n *Node) codexCardsNow(ctx context.Context, only string) []codexCard {
 	n.mu.Lock()
 	agents := map[string]codexAgent{}

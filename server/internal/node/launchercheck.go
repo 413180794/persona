@@ -39,7 +39,7 @@ func (n *Node) launcherCheck(ctx context.Context, name string) proto.LauncherChe
 	args := ` -p ` + shellQuote(prompt) + ` --output-format json --max-turns 1`
 	if agent == "agy" || agent == "omp" {
 		args = ` -p ` + shellQuote(prompt)
-	} else if agent != "claude" { // Codex / TRAEX: one non-interactive turn
+	} else if agent != "claude" { // Codex and compatible variants: one non-interactive turn
 		args = ` exec --skip-git-repo-check ` + shellQuote(prompt)
 	}
 	if agent == "claude" {

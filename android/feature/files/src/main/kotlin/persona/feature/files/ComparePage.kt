@@ -52,7 +52,7 @@ internal fun compareUnits(before: List<DocUnit>, after: List<DocUnit>): DocOutco
     return DocOutcome.Changes(DocumentCompare.hunks(ops), lines.count { it.kind == OpKind.Add }, lines.count { it.kind == OpKind.Del })
 }
 
-/** A revision in words: HEAD, 暂存区, 工作区, 「abc1234 之前」, a short hash. */
+/** A revision in words: HEAD, Index, Working tree, "before abc1234", a short hash. */
 internal fun revLabel(res: Resources, rev: String): String = when {
     rev == "HEAD" -> rev
     rev == "INDEX" -> res.getString(R.string.files_compare_index)
@@ -177,7 +177,7 @@ private fun units(ext: String, file: File, names: UnitNames): List<DocUnit> {
     return if (ext == "pdf") pdfUnits(file, names) else DocumentText.units(ext, file.readBytes(), names)
 }
 
-/** 未暂存 / 已暂存 for a change that has both halves (the text diff's switch). */
+/** Unstaged / Staged for a change that has both halves (the text diff's switch). */
 @Composable
 private fun Halves(selection: FileSelection.Compare, controller: FilesController) {
     val change = selection.change

@@ -1,5 +1,5 @@
 // A value that the extension may change between two draws (#2757): its numbers count to the new ones when only they
-// changed ("1.2M" → "8.4M", "2/8" → "3/8", "¥1.20" → "¥3.05"), any other change fades the new text in ("在做" → "等你").
+// changed ("1.2M" → "8.4M", "2/8" → "3/8", "¥1.20" → "¥3.05"), any other change fades the new text in ("Working" → "Needs you").
 // At rest it is the value's own text, nothing around it, so a view that doesn't change looks exactly as before.
 import { useMemo } from "react";
 import { EASE } from "../../ui/atoms";

@@ -69,7 +69,7 @@ func listedUIDs(b *inboxBook) map[uint32]int {
 }
 
 // Review of #4926: mail with no sender stays listed (in the old item, kept open for it), and an old item the owner
-// has to act on, or one the AI 分身 drafted for, keeps its mail, tier and draft instead of being filed silently.
+// has to act on, or one the AI twin drafted for, keeps its mail, tier and draft instead of being filed silently.
 func TestSubjectlessItemKeepsWhatCannotMove(t *testing.T) {
 	now := time.Now()
 	d := now.Add(-time.Hour).Format(time.RFC3339)
@@ -114,7 +114,7 @@ func TestSubjectlessItemKeepsWhatCannotMove(t *testing.T) {
 	}
 }
 
-// On a hub that already ran #4852, the sender items hold the same mail as an old 需要你 item that keeps it: they are
+// On a hub that already ran #4852, the sender items hold the same mail as an old Needs you item that keeps it: they are
 // filed, so each mail is still listed once.
 func TestSubjectlessItemKeptOnAnUpgradedHub(t *testing.T) {
 	now := time.Now()

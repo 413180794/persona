@@ -16,15 +16,15 @@ import (
 )
 
 // Codex support: herdr reports Codex panes as agent "codex"; their conversations are rollouts under
-// ~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session id>.jsonl (parsed by transcript/codex.go). TRAEX, a Codex
-// fork, keeps the same layout under ~/.trae/cli (traex.go). herdr's codex
-// integration reports the session id when Codex starts; a Codex started before that integration has none. Codex puts
+// ~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<session id>.jsonl (parsed by transcript/codex.go). Compatible Codex
+// variants use the same layout in their own data directories. herdr's Codex integration reports the session id when
+// Codex starts; a Codex started before that integration has none. Codex puts
 // the thread's name in the terminal title ("<name> | <directory>"), which says which thread the pane shows now; the
 // newest unclaimed rollout in the pane's directory is only the last resort (2026-10-31: five Codex panes in one
 // repository, four of them showed another pane's thread, and the one at work looked idle).
 //
 // Subagents write rollouts of their own next to the conversation, in the same directory: Codex's thread_spawn helpers
-// and TRAEX's guardian, which reviews each tool call before it runs. A pane never shows one: they are skipped when
+// and the compatible CLI's guardian, which reviews each tool call before it runs. A pane never shows one: they are skipped when
 // guessing, and a subagent's id maps to the conversation it belongs to (rolloutMeta).
 
 const codexWindow = 14 * 24 * time.Hour
@@ -43,7 +43,7 @@ type rolloutMeta struct {
 	root string // the conversation a subagent belongs to (session_id, else parent_thread_id); "" when not given
 }
 
-// rolloutCache is one rollout home's scan (Codex: ~/.codex, TRAEX: ~/.trae/cli — the same layout).
+// rolloutCache is one rollout home's scan (Codex: ~/.codex, a compatible CLI: the CLI-specific data directory — the same layout).
 type rolloutCache struct {
 	at       time.Time
 	rollouts []codexRollout

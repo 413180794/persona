@@ -207,7 +207,7 @@ export function MachineDetail({ mid, onToggleSidebar }: { mid: string; onToggleS
                   {hub}
                 </span>
               )}
-              {/* its engine and botmux, one click away (#2842): the engine opens 引擎 below, botmux flips */}
+              {/* its engine and botmux, one click away (#2842): the engine opens Engine below, botmux flips */}
               <button
                 type="button"
                 data-testid="engine-pill"

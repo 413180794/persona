@@ -16,7 +16,7 @@ import (
 	"github.com/nwverse/persona/server/internal/proto"
 )
 
-// The main conversation in charge of any agent (#5112, docs/unified-entry.md「督办」): stopping and redirecting one
+// The main conversation in charge of any agent (#5112, docs/unified-entry.md"Supervision"): stopping and redirecting one
 // (agent_interrupt), taking one it did not hand out under its supervision (agent_supervise), and the agents' own way
 // up to their supervisor (report_to_supervisor, one of the tools an agent gets, not the assistant; agentToolNames).
 
@@ -325,7 +325,7 @@ func (s *Service) agentTool(ctx context.Context, machine, session, name string, 
 }
 
 // reportToSupervisor turns agent machine/session's report into a signal for the supervisor of the task it works
-// for: in the next 督办 message (a question, a block or a finish soon: they are urgent).
+// for: in the next Supervision message (a question, a block or a finish soon: they are urgent).
 func (s *Service) reportToSupervisor(ctx context.Context, machine, session string, args json.RawMessage, now time.Time) (string, error) {
 	var a struct {
 		Kind     string   `json:"kind"`

@@ -53,7 +53,7 @@ object ChannelsModule {
 
     @Provides @Singleton fun directory(store: ChannelStore): ChannelDirectory = store
 
-    /** 设置 › 飞书机器人: the selected hub's bot, like the channels' pages. */
+    /** Settings › Lark bot: the selected hub's bot, like the channels' pages. */
     @Provides @Singleton fun feishuBot(runtime: ConnectionRuntime): FeishuBotSettings = object : FeishuBotSettings {
         private fun api(): HttpFeishuBotSettings {
             val data = runtime.scopedData.value ?: throw HubFailure(HubError.NoNetwork, AppText.get(R.string.app_error_pair_first), retryable = false)

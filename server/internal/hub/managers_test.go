@@ -333,7 +333,7 @@ func TestManagersInstallCodeSurvivesAFailedSave(t *testing.T) {
 }
 
 // A manager made and not installed stays in the roster after its code expires, as installing with the expired time
-// (the apps say 码已过期): the expired code no longer joins, …/code gives it a new one that does, and a pending one can
+// (the apps say Code expired): the expired code no longer joins, …/code gives it a new one that does, and a pending one can
 // be called off. Expired more than db.ManagerInstallKept ago, it leaves the roster and is cleaned up.
 func TestManagersExpiredInstallIsRenewed(t *testing.T) {
 	h, srv, _ := managersHub(t)

@@ -27,7 +27,7 @@ internal sealed interface CompareLine {
     data class Row(val cells: List<Pair<String, String>>) : CompareLine
 }
 
-/** The units' names in the app's words (第 N 页、幻灯片 N、工作表「…」、备注). */
+/** The units' names in the app's words (Page N, Slide N, Sheet "...", Notes). */
 internal interface UnitNames {
     fun page(n: Int): String
     fun slide(n: Int): String

@@ -45,7 +45,7 @@ var launcherModelsCache = struct {
 }{at: map[string]time.Time{}, got: map[string]proto.LauncherModels{}}
 
 // launcherModels is the launcher's model list. agentType is the agent the user said the launcher runs (the hub's
-// machine config); empty: what it runs. A launcher whose agent has no list to ask for (TRAEX, a runtime's) answers
+// machine config); empty: what it runs. A launcher whose agent has no list to ask for (a compatible CLI, a runtime's) answers
 // with its agent and no models.
 func (n *Node) launcherModels(ctx context.Context, name, agentType string, refresh bool) (proto.LauncherModels, error) {
 	if name != "claude" && !nameRe.MatchString(name) {

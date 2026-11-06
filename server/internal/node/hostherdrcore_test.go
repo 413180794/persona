@@ -82,7 +82,7 @@ func TestHerdrCoreStatusAndAgent(t *testing.T) {
 		{"claude-code", "idle", "claude", "claude", proto.StatusIdle},
 		{"claude-code", "error", "claude", "claude", proto.StatusUnknown},
 		{"codex", "working", "codex", "codex", proto.StatusWorking},
-		{"grok-build", "idle", "grok", "", ""},            // not a program the node drives: left for TRAEX
+		{"grok-build", "idle", "grok", "", ""},            // not a program the node drives: left for a compatible CLI
 		{"", "", "claude", "claude", proto.StatusUnknown}, // has not reported yet
 		{"", "", "/opt/bin/codex", "codex", proto.StatusUnknown},
 		{"", "", "zsh", "", ""},

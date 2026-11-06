@@ -1,5 +1,5 @@
 // The keyboard's place after a card above the composer is answered (#5154): the button pressed goes (the card turns
-// into its 已回答 receipt) or is disabled while it sends, and the browser drops the focus onto the page's body, so the
+// into its Answered receipt) or is disabled while it sends, and the browser drops the focus onto the page's body, so the
 // next words typed go nowhere and Tab starts over from the sidebar. The chat puts it back in its composer instead.
 
 /** Whether the focus was lost with `last`, the control above the composer it was on: nothing (the page's body) has it

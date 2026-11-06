@@ -14,7 +14,7 @@ import (
 )
 
 // herdr pushes its changes over events.subscribe: pollAgents takes a snapshot as soon as one arrives instead of
-// every second. The per-second snapshot stays only while the stream is down, or for TRAEX panes whose state is a
+// every second. The per-second snapshot stays only while the stream is down, or for a compatible CLI panes whose state is a
 // spinner in the title (a spinner-only title change emits no event); otherwise a slow one catches anything missed.
 //
 // Every watcher host gets its own signals: in the combined engine a herdr-core event refreshes herdr-core only, never
@@ -160,7 +160,7 @@ func (n *Node) panesChanged() {
 
 // hostDue says whether the host needs a snapshot on this tick: always for a host without an event stream (Orca polls
 // every second); for a watcher host when its stream announced a change, is not live, has not been snapshotted for
-// slowSnapshot, or runs a TRAEX pane whose spinner title emits no event. Kicked and last belong to this host only, so
+// slowSnapshot, or runs a compatible CLI pane whose spinner title emits no event. Kicked and last belong to this host only, so
 // one host's events never schedule the other host's snapshot.
 func (n *Node) hostDue(kind string, last time.Time, kicked bool) bool {
 	sig, ok := n.watcherSignal(kind)
@@ -173,7 +173,7 @@ func (n *Node) hostDue(kind string, last time.Time, kicked bool) bool {
 	return n.hostHasTraex(kind)
 }
 
-// hostHasTraex reports whether the host's last snapshot holds a live TRAEX agent (its state is a spinner in the
+// hostHasTraex reports whether the host's last snapshot holds a live a compatible CLI agent (its state is a spinner in the
 // title, which emits no event).
 func (n *Node) hostHasTraex(kind string) bool {
 	n.mu.Lock()

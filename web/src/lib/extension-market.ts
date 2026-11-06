@@ -171,7 +171,7 @@ export const wantsGitHubToken = (m: Pick<Market, "spec" | "has_token">) => isGit
 export const isGitHubMarket = (m: Pick<Market, "spec">) => m.spec.startsWith("github:");
 
 /**
- * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md「GitHub 限流」): a name, what it
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md "GitHub rate limits"): a name, what it
  * is for, a year. It needs no permission at all: such a token always reads public repositories, which is what lifts the
  * hourly limit; a private market's repository is chosen on that page.
  */

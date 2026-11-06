@@ -62,7 +62,7 @@ export function effortTitle(id?: string): string {
   return id ? (EFFORTS.find((m) => m.id === id)?.title ?? CODEX_EFFORTS.find((m) => m.id === id)?.title ?? id) : "";
 }
 
-/** Claude Code shows the two chips (its TUI's bottom bar); Codex, TRAEX and runtimes have no such switches. */
+/** Claude Code shows the two chips (its TUI's bottom bar); Codex, a compatible CLI and runtimes have no such switches. */
 export function hasModes(s: Session | undefined): boolean {
   if (!s || s.assistant) return false;
   if (s.agent === "agy") return true;

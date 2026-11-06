@@ -417,7 +417,7 @@ func TestCodexEffortFollowsTheModel(t *testing.T) {
 	waitFor(t, "the new settings", func() bool { t := threadOf(c, remoteRaw); return t.model == "gpt-test" && t.effort == "low" })
 }
 
-// Codex in a pane with no app-server (the terminal route) and TRAEX keep the old refusal.
+// Codex in a pane with no app-server (the terminal route) and a compatible CLI keep the old refusal.
 func TestCodexEffortRefusedOffTheAppServer(t *testing.T) {
 	n := remoteTestNode(t)
 	n.modes = map[string]sessionModes{}

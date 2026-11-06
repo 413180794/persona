@@ -10,7 +10,7 @@ export const UPLOAD_DIR_FEATURE = "upload_dir";
 /** hello `features`: rename / move / trash / restore (#4858 part 2). */
 export const FILE_EDIT_FEATURE = "file_edit";
 
-/** What an upload with a name already there does: `replace` it, or `keep` both (「名字 2.扩展名」, as Finder does). */
+/** What an upload with a name already there does: `replace` it, or `keep` both ("name 2.extension", as Finder does). */
 export type Conflict = "replace" | "keep";
 
 export interface Uploaded {
@@ -84,7 +84,7 @@ export async function trashEntries(mid: string, paths: string[], cwd: string): P
   return r.trashed ?? [];
 }
 
-/** Puts what trashEntries moved back where it was (撤销). */
+/** Puts what trashEntries moved back where it was (Undo). */
 export async function restoreEntries(mid: string, trashIds: string[]): Promise<string[]> {
   const r = await api<{ restored?: { path: string }[] }>(`/machines/${enc(mid)}/files/restore`, { method: "POST", json: { trash_ids: trashIds } });
   return (r.restored ?? []).map((x) => x.path);

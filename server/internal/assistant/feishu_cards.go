@@ -461,7 +461,7 @@ func (s *Service) interactionCard(ctx context.Context, ix proto.Interaction) *fe
 			feishubot.Btn(i18n.T(l, "assistant-feishu_cards.allow"), feishubot.Primary, val(map[string]any{"allow": "1"})),
 			feishubot.Btn(i18n.T(l, "assistant-feishu_cards.deny"), feishubot.Danger, val(map[string]any{"allow": "0"})),
 		}
-		// As the app's card (InteractionViews.swift's BUIPermissionForm, web's PermissionCard): 本会话总是允许 for
+		// As the app's card (InteractionViews.swift's BUIPermissionForm, web's PermissionCard): Always allow for this session for
 		// Claude on a conversation, and for another agent only what it says that always allows — a runtime cannot keep
 		// Claude's session rule (node/runtimes.go), so the button there would only allow once and ask again.
 		label := ix.AlwaysLabel
@@ -1211,7 +1211,7 @@ type mirrorSend struct {
 }
 
 // stillDue: a retry of m may go now: the switch its conversation needs is on, its notify_user did not go to Feishu
-// meanwhile, and its turn is still the conversation's last (an old 早报 must not land under a newer answer).
+// meanwhile, and its turn is still the conversation's last (an old morning brief must not land under a newer answer).
 func (s *Service) mirrorStillDue(ctx context.Context, m *mirrorSend) bool {
 	f, ready := s.feishuFeatures(ctx)
 	switch {
@@ -1225,7 +1225,7 @@ func (s *Service) mirrorStillDue(ctx context.Context, m *mirrorSend) bool {
 }
 
 // feishuMirrorRetry is how long a mirrored answer whose first card did not get out waits before it is sent again, and
-// feishuMirrorRetries how many times: the mirror is the last way a 早报 reaches Feishu, so one error must not lose it.
+// feishuMirrorRetries how many times: the mirror is the last way a morning brief reaches Feishu, so one error must not lose it.
 var (
 	feishuMirrorRetry   = 30 * time.Second
 	feishuMirrorRetries = 3
@@ -1440,7 +1440,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 	default:
 		// A command the bot does not know goes on as it is (an agent's own, like /compact). A bare one a letter off
 		// one of the bot's (/stpo for /stop) sent to a Persona conversation would sit in line behind the turn it
-		// meant to stop and be answered: the owner is asked instead. Words after it (/news 今天有什么新闻) make it a
+		// meant to stop and be answered: the owner is asked instead. Words after it (/news what is in the news today) make it a
 		// message; an agent's may be the project's own (/lint), so it goes. A doubled slash (//stpo) sends the text
 		// itself, one slash off, but only before a bot command or a slip of one and outside an agent: other text that
 		// starts with // (a "// TODO" note, "//example.com/x") goes as written.

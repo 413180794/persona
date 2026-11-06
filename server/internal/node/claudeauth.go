@@ -44,7 +44,7 @@ func (n *Node) claudeAuthStatus(ctx context.Context, name string) (proto.ClaudeA
 			return unknown(proto.ClaudeAuthNotClaude), nil
 		}
 		if d := n.launcherProbeCached(ctx, name); d.Agent != "" && d.Agent != "claude" {
-			return unknown(proto.ClaudeAuthNotClaude), nil // Codex, TRAEX: they have no `claude auth`
+			return unknown(proto.ClaudeAuthNotClaude), nil // Codex, a compatible CLI: they have no `claude auth`
 		}
 	}
 	// The login shell's claude, as the self-check reads it (cached). It is the one plain claude and a ~/.zshrc

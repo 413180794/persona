@@ -25,7 +25,7 @@ import (
 //     the phone's error, and nothing is kept for a later turn to carry.
 //
 // Permission modes stay Claude's: a Codex thread's approvals and sandbox are not changed from the phone. Panes on the
-// terminal route, subagents, the Codex App's own chats and TRAEX keep refusing both (modes.go).
+// terminal route, subagents, the Codex App's own chats and a compatible CLI keep refusing both (modes.go).
 
 // codexEffortLevels are Codex's reasoning efforts, weakest first: the Codex settings page's choices (codexconfig.go)
 // and what a thread offers when its app-server's model/list does not name its model.

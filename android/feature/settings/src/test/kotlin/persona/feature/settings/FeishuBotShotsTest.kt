@@ -34,8 +34,8 @@ import java.io.File
 import java.time.Instant
 
 /**
- * 设置 › 飞书机器人 (#2806) drawn with Robolectric's native graphics, in every style, light and dark: a bot that is
- * connected and paired (with the agents chatted with in Feishu), and one with no credentials yet, where 验证并保存
+ * Settings › Lark bot (#2806) drawn with Robolectric's native graphics, in every style, light and dark: a bot that is
+ * connected and paired (with the agents chatted with in Feishu), and one with no credentials yet, where Verify and save
  * waits for the secret. PNGs in `build/feishu-bot-shots/` (or `-Dpersona.shots=<dir>`).
  */
 @RunWith(AndroidJUnit4::class)
@@ -83,7 +83,7 @@ class FeishuBotShotsTest {
         rule.onNodeWithText("Persona 助手").assertIsDisplayed()
         rule.onNodeWithText("修登录页的跳转").assertIsDisplayed()
         rule.onNodeWithText("验证并保存").assertIsNotEnabled()
-        rule.onAllNodes(androidx.compose.ui.test.hasText("https://open.feishu.cn")).assertCountEquals(0) // 飞书, not the URL
+        rule.onAllNodes(androidx.compose.ui.test.hasText("https://open.feishu.cn")).assertCountEquals(0) // Feishu, not the URL
         shots("paired")
     }
 

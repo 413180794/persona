@@ -370,7 +370,7 @@ func TestClaudeResumeArgv(t *testing.T) {
 		`HERDR_AGENT=claude CLAUDE_CONFIG_DIR="$HOME"/.claude-work claude --resume `+startID) {
 		t.Fatalf("argv %q", argv)
 	}
-	// A Codex's resume says it is Codex; TRAEX and pi have no name in herdr: nothing in front.
+	// A Codex's resume says it is Codex; a compatible CLI and pi have no name in herdr: nothing in front.
 	for _, tc := range []struct{ kind, launcher, want string }{
 		{"codex", "cx", "HERDR_AGENT=codex cx resume " + startID},
 		{traexAgent, "tx", "tx resume " + startID},
@@ -465,7 +465,7 @@ func TestRunningPersonaClaudeGetsItsResumeCommand(t *testing.T) {
 	}
 }
 
-// Persona's Codex and other agents (TRAEX, pi) also get resume commands through their launcher,
+// Persona's Codex and other agents (a compatible CLI, pi) also get resume commands through their launcher,
 // instead of herdr falling back to bare builtin resume.
 func TestPersonaOtherAgentsResumeWithLauncher(t *testing.T) {
 	n, f, home := herdrNode(t)

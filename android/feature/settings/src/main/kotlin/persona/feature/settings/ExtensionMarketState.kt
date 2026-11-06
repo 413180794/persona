@@ -36,7 +36,7 @@ internal fun wantsGitHubToken(market: ExtensionMarket): Boolean = !market.hasTok
 internal fun isGitHubMarket(spec: String): Boolean = spec.trim().startsWith("github:", ignoreCase = true)
 
 /**
- * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md「GitHub 限流」): a name, what it
+ * GitHub's page for a new fine-grained token, filled in for a market (docs/extensions.md "GitHub rate limits"): a name, what it
  * is for, a year. No permission: such a token always reads public repositories, which is what lifts the hourly limit.
  */
 internal const val GitHubTokenUrl = "https://github.com/settings/personal-access-tokens/new" +

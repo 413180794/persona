@@ -4,7 +4,7 @@
 // open in place as a tree instead (files/FilesTree.tsx, Moshi's form; the menu switches back); either view refreshes
 // itself while shown (lib/fs-live.ts). Both views change files too (files/FileOps.tsx, #4883): files dropped or chosen
 // upload into the folder, and a row's menu (right click, its ⋯) downloads, renames, moves or moves it to the trash;
-// 「选择」 picks several for one of those.
+// "Select" picks several for one of those.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, enc, errorText, isAbort } from "../../lib/api";
 import { t } from "../../i18n";

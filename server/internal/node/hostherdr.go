@@ -49,7 +49,7 @@ const herdrPaneEnv = nodeclient.HerdrPaneEnv
 // environment, it would be authoritative for everything run there later.
 const herdrAgentEnv = "HERDR_AGENT"
 
-// herdrAgentName is what herdr calls an agent of kind, "" for one it has no integration for (TRAEX, pi: left to its
+// herdrAgentName is what herdr calls an agent of kind, "" for one it has no integration for (a compatible CLI, pi: left to its
 // own detection) and on Windows, where herdr does not read HERDR_AGENT.
 func herdrAgentName(kind string) string {
 	if runtime.GOOS != "windows" && (kind == "claude" || kind == "codex") {
@@ -161,7 +161,7 @@ func (h *herdrHost) SendKeys(ctx context.Context, pane host.PaneRef, keys ...str
 	return h.c.PaneSendKeys(ctx, pane.ID, keys...)
 }
 
-// Prompt is agent.prompt; herdr answers *_not_found for a pane whose agent it does not detect (TRAEX).
+// Prompt is agent.prompt; herdr answers *_not_found for a pane whose agent it does not detect (a compatible CLI).
 func (h *herdrHost) Prompt(ctx context.Context, pane host.PaneRef, text string) error {
 	err := h.c.AgentPrompt(ctx, pane.ID, text)
 	if herdr.IsNotFound(err) {

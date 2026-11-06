@@ -19,7 +19,7 @@ export interface AssistantLauncher {
   assistant?: boolean;
 }
 
-/** Runs Claude Code, Codex, or an assistant-capable runtime (such as Antigravity): what the assistant can use. TRAEX is left out. */
+/** Runs Claude Code, Codex, or an assistant-capable runtime (such as Antigravity): what the assistant can use. a compatible CLI is left out. */
 export function runsAssistant(l: AssistantLauncher): boolean {
   return l.base_url !== "(traex)" && (Boolean(l.assistant) || !l.agent || l.agent === "claude" || l.agent === "codex" || l.agent === "agy");
 }

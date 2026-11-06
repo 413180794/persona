@@ -702,7 +702,7 @@ func startsAsync(asked bool, resume, agentType string) bool {
 }
 
 // startBudget is how long a start may take: one acknowledged before the session is ready a moment, one answered only
-// after startup (a sync one, Codex, TRAEX) as long as a busy machine needs.
+// after startup (a sync one, Codex, a compatible CLI) as long as a busy machine needs.
 func startBudget(async bool) time.Duration {
 	if async {
 		return 15 * time.Second

@@ -60,7 +60,7 @@ internal fun visibleAgentRequests(
     }.sortedWith(compareBy<Interaction> { parseTime(it.expiresAt) ?: Instant.MAX }.thenBy { it.id })
 }
 
-/** Another agent's card (Codex, TRAEX, a runtime's) says who asks; Claude's reads as before. */
+/** Another agent's card (Codex, a compatible CLI, a runtime's) says who asks; Claude's reads as before. */
 internal fun Interaction.cardTitle(res: Resources): String {
     val who = agentDisplayName
     return when (kind) {
