@@ -127,13 +127,18 @@ final class PersonaStore {
     private func thumbnail(_ p: Persona) -> URL { thumbnails.appending(path: "\(p.id)-\(p.rev).png") }
     private func hasThumbnail(_ p: Persona) -> Bool { FileManager.default.fileExists(atPath: thumbnail(p).path(percentEncoded: false)) }
 
-    /// Picks a persona; a package is downloaded first (on failure the choice stays as it was and `error` says why).
+    /// Picks a persona; a package is downloaded first (on failure, or with no hub to download from, the choice stays
+    /// as it was and `error` says why).
     func choose(_ p: Persona, api: APIClient?) async {
         if !isOnPhone(p) {
-            guard let api else { return }
+            guard let api else {
+                error = String(localized: "“\(p.name)” isn’t on this phone yet. Connect to the hub, then choose it.")
+                return
+            }
             await download(p, api)
             guard isOnPhone(p) else { return }
         }
+        error = nil
         defaults.set(p.id, forKey: Self.chosenKey)
         current = p
     }

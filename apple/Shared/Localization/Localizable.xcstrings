@@ -115381,6 +115381,29 @@
       },
       "extractionState": "manual"
     },
+    "“%@” isn’t on this phone yet. Connect to the hub, then choose it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” isn’t on this phone yet. Connect to the hub, then choose it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はまだこの iPhone にありません。hub に接続してから選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」还没下载到手机上：连上 hub 后再选"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "“%@” will be removed from the list on all your devices. Its chat history on %@ won't be deleted; continue it on the computer with %@ and it'll come back.": {
       "localizations": {
         "zh-Hans": {

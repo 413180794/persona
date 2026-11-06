@@ -31,6 +31,7 @@ struct PersonalAgentSessionView: View {
                 LazyVStack(alignment: .leading, spacing: Theme.Space.m) {
                     if hasMore {
                         Button(loadingOlder ? String(localized: "Loading… [Personal Agent Session View 4927a5]") : String(localized: "Load Earlier")) { Task { await loadOlder() } }
+                            .lineLimit(1)
                             .disabled(loadingOlder).frame(maxWidth: .infinity)
                     }
                     if let error {
@@ -104,8 +105,9 @@ struct PersonalAgentSessionView: View {
             case .failed(let why):
                 HStack {
                     Text("Failed: \(why)").font(Theme.Font.label).foregroundStyle(Theme.danger).lineLimit(2)
-                    Button("Retry [Components b8784c]") { Task { await send(p) } }.font(Theme.Font.label)
-                    Button("Discard") { pending.removeAll { $0.id == p.id } }.font(Theme.Font.label)
+                    // The reason gives way; the buttons keep their one-line width.
+                    Button("Retry [Components b8784c]") { Task { await send(p) } }.font(Theme.Font.label).lineLimit(1).fixedSize()
+                    Button("Discard") { pending.removeAll { $0.id == p.id } }.font(Theme.Font.label).lineLimit(1).fixedSize()
                 }
             }
         }

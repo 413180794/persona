@@ -271,6 +271,22 @@ struct PersonaTests {
         #expect(!FileManager.default.fileExists(atPath: root.appending(path: "doudou/r1").path(percentEncoded: false)))
     }
 
+    /// With no hub, a package not on the phone cannot be chosen, and 设置 says why instead of doing nothing.
+    @Test func choosingOfflineSaysWhy() async throws {
+        let hub = FakeHub()
+        hub.on("GET", "/api/v1/personas", json: Self.info(rev: "r1"))
+        let (s, _, defaults) = store()
+        await s.refresh(hub.client)
+        await s.choose(try #require(s.offered.last), api: nil)
+        #expect(s.current.isBuiltin)
+        #expect(defaults.string(forKey: PersonaStore.chosenKey) == nil)
+        #expect(s.error?.contains("连上 hub") == true)
+        // Choosing one that is on the phone then clears the message.
+        await s.choose(Persona.visor, api: nil)
+        #expect(s.current.id == Persona.visor.id)
+        #expect(s.error == nil)
+    }
+
     /// An APNG's frames, composed whole, with its frame delays.
     @Test func framesFromAnAPNG() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "dot-\(UUID().uuidString).png")

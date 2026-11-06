@@ -253,3 +253,92 @@ func TestTypedAnswerToACardEndedElsewhereIsNotForwarded(t *testing.T) {
 		t.Fatalf("the waiting card was not answered: %v", *rs)
 	}
 }
+
+// Words that name no option answer, inside the card's topic, the free-text question itself, and an option question
+// takes them as its Other: both resolve once through the card input box's own path and never reach the conversation.
+// In the root chat the words still go to the conversation. A card that is no longer pending (interactions.get !ok)
+// swallows them with the handled note, while a card closed into b.ended still lets free words start a turn (#5461).
+func TestTypedFreeAnswerInTopic(t *testing.T) {
+	free := proto.Interaction{ID: "ix_free", MachineID: "server", SessionID: "m1", Kind: proto.IxQuestion,
+		Questions: []proto.Question{{Question: "为什么？"}}}
+	opts := qCard("ix_opts", false, "北京", "上海")
+
+	// A question without options: the words are the answer itself, the card closes, one resolve with the owner action.
+	s, _, _, _, rs := textAnswerBot(t, nil, free)
+	seedThreadCard(s, free, "om_topic", 1000)
+	if !s.botAnswerQuestion(context.Background(), "om_r", "因为我想试试", "oa_1", "om_topic", "") || len(*rs) != 1 {
+		t.Fatalf("free answer not resolved: %v", *rs)
+	}
+	r := (*rs)[0]
+	ans, _ := r["resolution"].(map[string]any)["answers"].(map[string]any)
+	if r["interaction_id"] != "ix_free" || r["action"] != "oa_1" || ans["为什么？"] != "因为我想试试" {
+		t.Fatalf("free resolve %v", r)
+	}
+	if _, waits := s.fbot.cards["ix_free"]; waits {
+		t.Fatal("the free-text card was not closed")
+	}
+
+	// An option question's words that name no option are its Other, submitted as the raw text (the card's free=1 form).
+	s, _, _, _, rs = textAnswerBot(t, nil, opts)
+	seedThreadCard(s, opts, "om_topic", 1000)
+	if !s.botAnswerQuestion(context.Background(), "om_r", "都不选，去杭州", "oa_1", "om_topic", "") || len(*rs) != 1 {
+		t.Fatalf("Other answer not resolved: %v", *rs)
+	}
+	ans, _ = (*rs)[0]["resolution"].(map[string]any)["answers"].(map[string]any)
+	if (*rs)[0]["interaction_id"] != "ix_opts" || ans["选哪个？"] != "都不选，去杭州" {
+		t.Fatalf("Other resolve %v", (*rs)[0])
+	}
+
+	// End to end: the topic message resolves the free-text question and starts no conversation.
+	s, f, _, _, rs := textAnswerBot(t, nil, free)
+	seedThreadCard(s, free, "om_topic", 1000)
+	var ev feishubot.MessageEvent
+	ev.Message.MessageID, ev.Message.RootID, ev.Message.MessageType, ev.Message.Content =
+		"om_in", "om_topic", "text", `{"text":"想换个方案"}`
+	st, _ := s.feishuStatus(context.Background())
+	s.feishuMessage(ev, st, "oa_1")
+	if len(*rs) != 1 || (*rs)[0]["interaction_id"] != "ix_free" || sendOnceText(f) != "" {
+		t.Fatalf("resolves %v, leaked into chat %q", *rs, sendOnceText(f))
+	}
+
+	// The same words in the root chat are not an answer there: the card keeps waiting and the message is sent on.
+	s, f, _, _, rs = textAnswerBot(t, nil, free)
+	seedCard(s, free)
+	ev = feishubot.MessageEvent{}
+	ev.Message.MessageID, ev.Message.MessageType, ev.Message.Content = "om_in2", "text", `{"text":"帮我查天气"}`
+	s.feishuMessage(ev, st, "oa_1")
+	if len(*rs) != 0 || !strings.Contains(sendOnceText(f), "帮我查天气") {
+		t.Fatalf("root words taken as an answer: resolves %v, sent %q", *rs, sendOnceText(f))
+	}
+	if _, waits := s.fbot.cards["ix_free"]; !waits {
+		t.Fatal("the root chat's card was closed")
+	}
+
+	// A card still shown but no longer pending in the hub (interactions.get !ok) swallows the topic's late free words
+	// with the handled note, posts the closed card, resolves nothing — the same as a late option.
+	s, _, posts, notes, rs := textAnswerBot(t, nil) // nothing pending in the queue
+	seedThreadCard(s, free, "om_topic", 1000)
+	if !s.botAnswerQuestion(context.Background(), "om_r", "迟到的回答", "oa_1", "om_topic", "") || len(*rs) != 0 {
+		t.Fatalf("ended card answered: %v", *rs)
+	}
+	if _, waits := s.fbot.cards["ix_free"]; waits || len(*posts) != 1 ||
+		!strings.Contains(noteText(notes), "已经在别处处理过了") {
+		t.Fatalf("ended card not closed: posts %d notes %q", len(*posts), noteText(notes))
+	}
+
+	// A card closed into b.ended in the topic (#5461) keeps its own rule for free words even with this change: they
+	// are not taken as a free answer, they start a turn and nothing is resolved; the ended card is read once.
+	s, f, _, _, rs = textAnswerBot(t, nil)
+	seedThreadCard(s, free, "om_topic", 1000)
+	s.feishuInteractionDone(free, "已在 App 中回答")
+	ev = feishubot.MessageEvent{}
+	ev.Message.MessageID, ev.Message.RootID, ev.Message.MessageType, ev.Message.Content =
+		"om_in3", "om_topic", "text", `{"text":"帮我看看别的"}`
+	s.feishuMessage(ev, st, "oa_1")
+	if len(*rs) != 0 || !strings.Contains(sendOnceText(f), "帮我看看别的") {
+		t.Fatalf("free words to an ended topic card were swallowed: resolves %v, sent %q", *rs, sendOnceText(f))
+	}
+	if _, left := s.fbot.ended["ix_free"]; left {
+		t.Fatal("the ended card was not forgotten after reading it once")
+	}
+}

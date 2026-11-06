@@ -8,7 +8,7 @@ import { runAction, turnErrorFix } from "../../lib/readiness";
 import { wakeSummary } from "../../lib/tasks";
 import { wakeDrawer, workSegment, type ChatLine, type OpenRecap, type Turn } from "../../lib/turns";
 import type { Item } from "../../lib/types";
-import { Button, Collapse, copyText, cx, Dialog, Spinner } from "../../ui/atoms";
+import { Button, Collapse, copyText, cx, Dialog } from "../../ui/atoms";
 import { Icon } from "../../ui/icons";
 import { Markdown } from "../../ui/Markdown";
 import { Answer, SegmentView } from "./SegmentView";
@@ -50,12 +50,11 @@ function LineBody({ line, mid, sid, streaming, expandFold, onRetry, fix, assista
           sid={sid}
           streaming={line.live ? streaming : undefined}
           expandFold={expandFold}
+          beforeWords={line.wakes && <WakeChip turn={line.wakes} mid={mid} sid={sid} expandFold={expandFold} />}
         />
       );
     case "notice":
       return <LineNotice item={line.item} />;
-    case "wakes":
-      return <WakeChip turn={line.turn} live={line.live} mid={mid} sid={sid} expandFold={expandFold} />;
     case "compact":
       return <CompactDivider item={line.item} />;
     case "recaps":
@@ -100,27 +99,27 @@ function LineNotice({ item }: { item: Item }) {
   );
 }
 
-// ── background tasks that reported back after the answer ──
+// ── background tasks that woke the agent: a chip above its newest words, their runs in a drawer (#3783) ──
 
-function WakeChip({ turn, live, mid, sid, expandFold }: { turn: Turn; live: boolean; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+function WakeChip({ turn, mid, sid, expandFold }: { turn: Turn; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const notices = turn.wakes;
   const failed = notices.some((n) => wakeSummary(n).failed);
-  const text = live ? t("chat-lines.wake_processing") : notices.length === 1 ? wakeSummary(notices[0]).text : t("chat-lines.wake_count", { count: notices.length });
+  const text = notices.length === 1 ? wakeSummary(notices[0]).text : t("chat-lines.wake_count", { count: notices.length });
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={t("chat-lines.wake_open")}
-        className="-mt-2 flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
+        className="flex w-fit max-w-full min-w-0 items-center gap-1.5 rounded-full bg-inset px-3 py-1 text-[12px] text-ink-2 shadow-hairline transition-colors hover:bg-hover-2"
       >
-        {live ? <Spinner size={11} /> : <Icon name="bell" size={12} className={cx("shrink-0", failed ? "text-red" : "text-accent")} />}
+        <Icon name="bell" size={12} className={cx("shrink-0", failed ? "text-red" : "text-accent")} />
         <span className="min-w-0 truncate">{text}</span>
         <Icon name="chevronRight" size={12} stroke={2.2} className="shrink-0 text-ink-3" />
       </button>
       <Dialog open={open} onClose={() => setOpen(false)} title={notices.length > 1 ? t("chat-lines.wake_count", { count: notices.length }) : t("chat-lines.wake_single")} width={640}>
-        {open && <WakeDrawerBody turn={turn} live={live} mid={mid} sid={sid} expandFold={expandFold} />}
+        {open && <WakeDrawerBody turn={turn} mid={mid} sid={sid} expandFold={expandFold} />}
       </Dialog>
     </>
   );
@@ -128,7 +127,7 @@ function WakeChip({ turn, live, mid, sid, expandFold }: { turn: Turn; live: bool
 
 /** Each wake (its reports, then what the agent answered to them), newest first; the steps in between fold into one
  *  work row at the end. */
-function WakeDrawerBody({ turn, live, mid, sid, expandFold }: { turn: Turn; live: boolean; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
+function WakeDrawerBody({ turn, mid, sid, expandFold }: { turn: Turn; mid: string; sid: string; expandFold: (f: Item) => Promise<void> }) {
   const d = wakeDrawer(turn);
   const work = workSegment(`dw-${turn.id}`, d.process);
   return (
@@ -143,7 +142,7 @@ function WakeDrawerBody({ turn, live, mid, sid, expandFold }: { turn: Turn; live
           {g.answer && <Answer item={g.answer} mid={mid} sid={sid} />}
         </section>
       ))}
-      {(work.steps.length > 0 || live) && <SegmentView seg={work} live={live} mid={mid} sid={sid} expandFold={expandFold} />}
+      {work.steps.length > 0 && <SegmentView seg={work} live={false} mid={mid} sid={sid} expandFold={expandFold} />}
     </div>
   );
 }

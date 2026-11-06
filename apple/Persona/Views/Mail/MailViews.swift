@@ -301,6 +301,7 @@ struct HTMLView: UIViewRepresentable {
         img{max-width:100%;height:auto} table{max-width:100%}
         @media (prefers-color-scheme: dark){body{color:#eee} a{color:#7ab}}</style></head><body>\(html)</body></html>
         """
+        context.coordinator.openURL = context.environment.openURL
         if context.coordinator.loaded != html {
             context.coordinator.loaded = html
             v.loadHTMLString(page, baseURL: nil)
@@ -310,6 +311,8 @@ struct HTMLView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         var height: Binding<CGFloat>
         var loaded: String?
+        /// The page's link handling (the inbox's: web pages in the in-app link sheet, other schemes to the system).
+        var openURL: OpenURLAction?
         init(height: Binding<CGFloat>) { self.height = height }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -320,7 +323,7 @@ struct HTMLView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
             if action.navigationType == .linkActivated, let url = action.request.url {
-                await UIApplication.shared.open(url)
+                if let openURL { openURL(url) } else { await UIApplication.shared.open(url) }
                 return .cancel
             }
             return .allow
@@ -449,17 +452,14 @@ struct MailAccountsView: View {
                         // A Mac form has no swipe to delete: the row's menu removes the account (#1221).
                         .contextMenu {
                             Button("Delete Account", role: .destructive) {
-                                Task { try? await model.api?.deleteMailAccount(a.id); await load() }
+                                Task { await delete([a.id]) }
                             }
                         }
                         #endif
                     }
                     .onDelete { idx in
                         let ids = idx.map { accounts[$0].id }
-                        Task {
-                            for id in ids { try? await model.api?.deleteMailAccount(id) }
-                            await load()
-                        }
+                        Task { await delete(ids) }
                     }
                 }
                 Section {
@@ -477,6 +477,18 @@ struct MailAccountsView: View {
     }
 
     private func load() async { accounts = (try? await model.api?.mailAccounts()) ?? [] }
+
+    /// Deletes the accounts, says why when one could not be (the row comes back with the reload), then reloads.
+    private func delete(_ ids: [String]) async {
+        for id in ids {
+            do {
+                try await model.api?.deleteMailAccount(id)
+            } catch {
+                model.show(error)
+            }
+        }
+        await load()
+    }
 }
 
 /// The Other IMAP footer for a QQ / NetEase address: where its authorization code is made, and a button to that web mail (#5123).

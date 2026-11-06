@@ -12,7 +12,10 @@ import (
 
 // botAnswerQuestion lets the owner's next plain message answer a waiting single-question card (IxQuestion,
 // one question) in the same Feishu topic, like its press: channel.MatchOption reads a number, ordinal or option name
-// (several for a multi-select), and interactions.resolve carries the message's one-use owner action. Forms, plans,
+// (several for a multi-select), and interactions.resolve carries the message's one-use owner action. Words that name no
+// option are, inside the card's topic, the free answer itself, submitted exactly like the card's input box and its
+// Answer button (answerFromCard, free=1): a question without options is answered in words, and an option question
+// takes its Other that way. In the root chat such words stay a message to the conversation, as before. Forms, plans,
 // permissions and terminal dialogs take no typed answer (#4675). A message written inside another agent's topic never
 // answers a card outside that topic; a message in the root chat answers the newest card anywhere. False leaves the
 // message to the agent; a card no longer pending is closed, saying whether it was answered elsewhere, expired or was
@@ -61,9 +64,15 @@ func (s *Service) botAnswerQuestion(ctx context.Context, messageID, text, action
 		return false
 	}
 	ix := card.Ix
-	label, ok := channel.MatchOption(ix.Questions[0], text)
-	if !ok {
-		return false
+	answer, matched := channel.MatchOption(ix.Questions[0], text)
+	if !matched {
+		// Inside the card's topic the words are the free answer itself (the card input box's free=1 submission):
+		// a question without options, or an option question's Other. In the root chat they are left to the
+		// conversation, the previous behavior (#5436).
+		if !inTopic {
+			return false
+		}
+		answer = text
 	}
 	l := s.botLang(ctx)
 	var got struct {
@@ -82,7 +91,7 @@ func (s *Service) botAnswerQuestion(ctx context.Context, messageID, text, action
 		s.botNote(ctx, messageID, endedText(l, got.Status, "assistant-channels_plugin.answered_elsewhere"))
 		return true
 	}
-	r := proto.Resolution{Answers: map[string]string{ix.Questions[0].Question: label}}
+	r := proto.Resolution{Answers: map[string]string{ix.Questions[0].Question: answer}}
 	// Close the card optimistically, as a press does; put it back when the answer could not be handed over and the card
 	// still waits (botRestoreCard).
 	b.mu.Lock()

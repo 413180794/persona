@@ -1,5 +1,4 @@
 {
-  "wake_processing": "后台任务完成 · 正在处理",
   "wake_count_other": "{count} 个后台任务完成",
   "wake_single": "后台任务完成",
   "wake_open": "后台任务完成，查看之后的消息",

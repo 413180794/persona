@@ -272,11 +272,12 @@ struct KnowledgeView: View {
 
     private func search() async {
         let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty, let api = model.api else { results = nil; resultsFor = ""; return }
+        guard !q.isEmpty, let api = model.api else { results = nil; resultsFor = ""; searchError = nil; return }
         // Coming back from an entry the task runs again for the same text: keep what is shown.
         if q == resultsFor, results != nil { return }
         try? await Task.sleep(for: .milliseconds(300)) // typing
         guard !Task.isCancelled else { return }
+        searchError = nil // the last search's error is not this one's: wait for this one (#3377)
         do {
             let found = try await api.kbFind(q)
             guard !Task.isCancelled else { return }
@@ -285,6 +286,9 @@ struct KnowledgeView: View {
             searchError = nil
         } catch {
             guard !Task.isCancelled, let shown = error.shown else { return }
+            // The page shows results before an error: the last text's results stayed and hid it (#3377).
+            results = nil
+            resultsFor = ""
             searchError = shown
         }
     }

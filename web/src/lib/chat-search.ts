@@ -142,8 +142,6 @@ function lineItemIds(line: ChatLine): string[] {
       const s = line.seg;
       return [...(s.user ? [s.user.id, ...s.user.images.map((i) => i.id)] : []), ...s.steps.flatMap(stepItemIds), ...(s.answer ? [s.answer.id] : []), ...s.folds.map((f) => f.id)];
     }
-    case "wakes":
-      return [...line.turn.wakes, ...line.turn.afterWake, ...line.turn.tail].map((i) => i.id);
     case "recaps":
       return line.items.map((i) => i.id);
     default:
@@ -151,13 +149,12 @@ function lineItemIds(line: ChatLine): string[] {
   }
 }
 
-/** The line a hit is on: the one that draws it (a visible row before a wake's drawer), else the line of the nearest
- *  item before it that a line draws (another block of your message, a notice folded into a compaction). */
+/** The line a hit is on: the one that draws it (a wake's runs are part of their exchange's line, #3783), else the line
+ *  of the nearest item before it that a line draws (another block of your message, a notice folded into a compaction). */
 export function lineOfItem(lines: ChatLine[], items: Item[], itemId: string): string | undefined {
   const owner = new Map<string, string>();
   const claim = (l: ChatLine) => lineItemIds(l).forEach((id) => owner.has(id) || owner.set(id, l.id));
-  lines.filter((l) => l.kind !== "wakes").forEach(claim);
-  lines.filter((l) => l.kind === "wakes").forEach(claim);
+  lines.forEach(claim);
   const direct = owner.get(itemId);
   if (direct) return direct;
   let last: string | undefined;

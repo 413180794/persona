@@ -182,7 +182,10 @@ describe("chatLines", () => {
     expect(openRecap(mid, mid[1].kind === "recaps" ? mid[1].items[0] : undefined)).toBeUndefined();
   });
 
-  it("keeps work a background task woke the agent for in the exchange, behind a wakes chip", () => {
+  // #3783: after background tasks woke the agent, the newest words are the answer, at the bottom; the runs since the
+  // first wake are behind the chip above them (the longest run's words used to be the answer, the rest only in there)
+  const wakesOf = (l: ReturnType<typeof chatLines>[number] | undefined) => (l?.kind === "segment" ? l.wakes : undefined);
+  it("answers a woken exchange with its newest words, the earlier runs behind the chip", () => {
     const items = [
       u(1, "run the tests in the background"),
       a(2, "started, I will tell you when it ends — this is the long one"),
@@ -192,29 +195,57 @@ describe("chatLines", () => {
       a(6, "all green"),
     ];
     const ls = chatLines(items);
-    expect(kinds(ls)).toEqual(["segment", "wakes"]);
+    expect(kinds(ls)).toEqual(["segment"]);
     const seg = ls[0].kind === "segment" ? ls[0].seg : null;
-    // the longest run's words are the answer; what came after it is only in the drawer
-    expect(seg?.answer?.text).toContain("long one");
-    const w = ls[1].kind === "wakes" ? ls[1].turn : null;
+    expect(seg?.answer?.text).toBe("all green");
+    const w = wakesOf(ls[0]);
     expect(w?.wakes).toHaveLength(1);
     const d = wakeDrawer(w!);
-    expect(d.groups.map((g) => g.answer?.text)).toEqual(["all green"]);
+    // the answer is in the chat, not again in the drawer
+    expect(d.groups.map((g) => g.answer?.text)).toEqual([undefined]);
     expect(d.groups[0].notices.map((n) => n.id)).toEqual(["n3#0"]);
     expect(d.process.map((p) => p.kind)).toEqual(["tool_use", "tool_result"]);
   });
 
-  it("puts the latest wake first in the drawer", () => {
-    const items = [u(1, "go"), a(2, "ok"), wake(3, "a"), a(4, "a done"), wake(5, "b"), a(6, "b done")];
+  it("puts the latest earlier wake first in the drawer", () => {
+    const items = [u(1, "go"), a(2, "ok"), wake(3, "a"), a(4, "a done"), wake(5, "b"), a(6, "b done"), wake(7, "c"), a(8, "c done")];
     const ls = chatLines(items);
-    const w = ls.find((l) => l.kind === "wakes");
-    const d = wakeDrawer(w!.kind === "wakes" ? w!.turn : (null as never));
-    expect(d.groups.map((g) => g.answer?.text)).toEqual(["b done", "a done"]);
+    expect(ls[0].kind === "segment" && ls[0].seg.answer?.text).toBe("c done");
+    expect(wakeDrawer(wakesOf(ls[0])!).groups.map((g) => g.answer?.text)).toEqual([undefined, "b done", "a done"]);
+  });
+
+  it("keeps a long-running agent's newest words at the bottom of a long history", () => {
+    const long = "a full summary of everything so far. ".repeat(60);
+    const items: Item[] = [u(1, "keep going until it is merged"), a(2, long)];
+    let seq = 3;
+    for (let n = 0; n < 8; n++) {
+      items.push(wake(seq++, `wait ${n}`), tool(seq++, `t${n}`), res(seq++, `t${n}`), a(seq++, `update ${n}`));
+    }
+    const ls = chatLines(items);
+    const last = ls[ls.length - 1];
+    expect(last.kind === "segment" && last.seg.answer?.text).toBe("update 7");
+    expect(wakesOf(last)?.wakes).toHaveLength(8);
+    // the long summary folds into the work above, as earlier words do
+    expect(last.kind === "segment" && last.seg.steps.some((s) => s.kind === "text" && s.item.text === long)).toBe(true);
+  });
+
+  it("does not take a short reply to a wake away once it lands after streaming", () => {
+    const before = [u(1, "watch the deploy"), a(2, "watching it; a long explanation of what I will check. ".repeat(20)), wake(3, "deploy"), tool(4, "x"), res(5, "x")];
+    // streaming: the reply is not an item yet, the agent is at work on the wake
+    const live = chatLines(before, { live: true });
+    const working = live[live.length - 1];
+    expect(working.kind === "segment" && working.live).toBe(true);
+    // it lands: the short words are the answer on screen, not only in the drawer
+    const done = chatLines([...before, a(6, "deployed")]);
+    const last = done[done.length - 1];
+    expect(last.kind === "segment" && last.seg.answer?.text).toBe("deployed");
+    expect(wakeDrawer(wakesOf(last)!).groups.every((g) => g.answer?.text !== "deployed")).toBe(true);
   });
 
   it("reopens the exchange a recap closed when a background task reports back", () => {
     const ls = chatLines([u(1, "go"), a(2, "started the build, waiting for it"), recap(3, "waiting for the build"), wake(4, "build"), a(5, "ok")]);
-    expect(kinds(ls)).toEqual(["segment", "wakes", "recaps"]);
+    expect(kinds(ls)).toEqual(["segment", "recaps"]);
+    expect(ls[0].kind === "segment" && ls[0].seg.answer?.text).toBe("ok");
   });
 
   it("opens work a wake started on its own with the wake notice", () => {

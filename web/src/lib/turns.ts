@@ -457,9 +457,7 @@ export interface Turn {
   wakes: Item[];
   /** Everything from the first wake on, for the "Background task done" drawer. */
   afterWake: Item[];
-  /** What came after the answer (a follow-up once a background task reported back): only in the drawer. */
-  tail: Item[];
-  /** Messages and steps in arrival order, up to the answer (how the exchange is drawn). */
+  /** Messages and steps in arrival order (how the exchange is drawn). */
   ordered: Item[];
 }
 
@@ -477,36 +475,20 @@ function isAnswerText(i: Item): boolean {
 const isWake = (i: Item) => i.kind === "notice" && i.wake === true;
 
 function newTurn(id: string): Turn {
-  return { id, users: [], process: [], trailing: [], wakes: [], afterWake: [], tail: [], ordered: [] };
+  return { id, users: [], process: [], trailing: [], wakes: [], afterWake: [], ordered: [] };
 }
 
 function cloneTurn(t: Turn): Turn {
-  return { ...t, users: [...t.users], process: [...t.process], trailing: [...t.trailing], wakes: [...t.wakes], afterWake: [...t.afterWake], tail: [...t.tail], ordered: [...t.ordered] };
+  return { ...t, users: [...t.users], process: [...t.process], trailing: [...t.trailing], wakes: [...t.wakes], afterWake: [...t.afterWake], ordered: [...t.ordered] };
 }
 
 /** Background tasks split an exchange into runs (before the first wake, after each one), each ending in the agent's
- *  words. The answer is the longest of those; what comes after it shows only in the drawer. */
-function pickAnswerAcrossWakes(t: Turn) {
-  const all = t.ordered;
-  const candidates: number[] = [];
-  let last: number | undefined;
-  all.forEach((r, i) => {
-    if (isWake(r)) {
-      if (last !== undefined) candidates.push(last);
-      last = undefined;
-    } else if (isAnswerText(r)) last = i;
-  });
-  if (last !== undefined) candidates.push(last);
-  const len = (i: number) => all[i].text?.length ?? 0;
-  let pick: number | undefined;
-  for (const c of candidates) if (pick === undefined || len(c) >= len(pick)) pick = c; // ties: the later one
-  // what you sent stays with the exchange
-  const first = all.findIndex(isWake);
-  if (first >= 0) t.afterWake = all.slice(first).filter((x) => !isUserInput(x));
-  if (pick === undefined) return;
-  t.tail = all.slice(pick + 1).filter((x) => !isUserInput(x));
-  t.ordered = [...all.slice(0, pick + 1), ...all.slice(pick + 1).filter(isUserInput)];
-  t.process = t.ordered.filter((x) => !isUserInput(x));
+ *  words. The answer is the latest words, like any exchange's (#3783: the longest run's used to be, and everything
+ *  after it went behind the chip, so a long-running agent's newest words were out of sight for hours); the drawer
+ *  holds the runs since the first wake. */
+function collectWakeRuns(t: Turn) {
+  const first = t.ordered.findIndex(isWake);
+  if (first >= 0) t.afterWake = t.ordered.slice(first).filter((x) => !isUserInput(x));
 }
 
 export function buildBlocks(items: Item[]): Block[] {
@@ -522,7 +504,7 @@ export function buildBlocks(items: Item[]): Block[] {
     if (!cur) return;
     const t: Turn = cur;
     last.raw = cloneTurn(t);
-    if (t.wakes.length) pickAnswerAcrossWakes(t);
+    if (t.wakes.length) collectWakeRuns(t);
     t.answer = [...t.process].reverse().find(isAnswerText);
     if (last.reopenedAt !== null) {
       blocks.splice(last.reopenedAt, 0, { kind: "turn", turn: t }); // back in its place, the recap still after it
@@ -605,11 +587,9 @@ export function buildBlocks(items: Item[]): Block[] {
 
 export type ChatLine =
   /** A message (or none), one work row for what the agent did after it, the agent's last words. */
-  | { kind: "segment"; id: string; seg: Segment; live: boolean }
+  | { kind: "segment"; id: string; seg: Segment; live: boolean; wakes?: Turn }
   /** A notice of its own line: a wake that opens new work, "Interrupted" after an exchange. */
   | { kind: "notice"; id: string; item: Item }
-  /** Under an answer: background tasks reported back; what the agent did next opens in a drawer. */
-  | { kind: "wakes"; id: string; turn: Turn; live: boolean }
   /** Where the context was compacted: a divider across the chat (lib/compaction.ts). */
   | { kind: "compact"; id: string; item: Item }
   /** One or more "while you were away" recaps in a row. */
@@ -650,17 +630,13 @@ function turnLines(t: Turn, live: boolean): ChatLine[] {
     ordered = ordered.slice(1);
   }
   const segs = segments(ordered);
-  const after = () => {
-    if (t.wakes.length) out.push({ kind: "wakes", id: `wk-${t.id}`, turn: t, live: live && t.tail.length > 0 });
-    for (const n of t.trailing) out.push({ kind: "notice", id: n.id, item: n });
-  };
   segs.forEach((seg, k) => {
-    // once the answer is in and a background task woke the agent, the new work runs behind the chip
-    const isLive = live && k === segs.length - 1 && !t.tail.length;
     if (k === 0 && !seg.user && wokeAt) seg.start = wokeAt;
-    out.push({ kind: "segment", id: seg.id, seg, live: isLive });
+    const last = k === segs.length - 1;
+    // woken by background tasks: the chip with the runs since the first wake sits above the newest words (#3783)
+    out.push({ kind: "segment", id: seg.id, seg, live: live && last, ...(last && t.wakes.length ? { wakes: t } : {}) });
   });
-  after();
+  for (const n of t.trailing) out.push({ kind: "notice", id: n.id, item: n });
   return out;
 }
 
@@ -744,8 +720,9 @@ export function openRecap(lines: ChatLine[], pending?: Item): OpenRecap | undefi
   return { line: last.id, earlier: last.items.slice(0, -1), newest: pending };
 }
 
-/** The drawer behind a wakes line: each wake (its task reports, then what the agent answered to them), newest wake
- *  first; the steps in between fold into one work row at the end. */
+/** The drawer behind the wakes chip: each wake (its task reports, then what the agent answered to them), newest wake
+ *  first, but the exchange's answer, which the chat shows below the chip; the steps in between fold into one work row
+ *  at the end. */
 export function wakeDrawer(t: Turn): { groups: { id: string; notices: Item[]; answer?: Item }[]; process: Item[] } {
   const groups: { id: string; notices: Item[]; answer?: Item }[] = [];
   const process: Item[] = [];
@@ -767,7 +744,9 @@ export function wakeDrawer(t: Turn): { groups: { id: string; notices: Item[]; an
     chunk.push(r);
   }
   flush();
-  return { groups: groups.reverse(), process };
+  // the exchange's answer (the newest words) is in the chat below the chip, not again in here
+  for (const g of groups) if (g.answer && g.answer.id === t.answer?.id) g.answer = undefined;
+  return { groups: groups.filter((g) => g.notices.length || g.answer).reverse(), process };
 }
 
 /** The title of the context a message another Persona conversation sent carries (prompts/assistant/relay.md). */
