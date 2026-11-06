@@ -3,12 +3,14 @@ package devices
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/nwverse/persona/server/internal/proto"
+	"github.com/nwverse/persona/server/internal/rpc"
 )
 
 // A set is stored in its canonical form under its own key, the closest single engine beside it (an older hub reads
@@ -180,5 +182,31 @@ func TestHerdrRowFollowsTheSet(t *testing.T) {
 		if code, _ := call(t, mux, "PUT", "/api/v1/machines/mac/herdr", `{"autostart": false}`); code != c.code {
 			t.Errorf("%v: %d, want %d", c.hosts, code, c.code)
 		}
+	}
+}
+
+// A start naming a host goes only to a node that takes sets: an older one would start in its engine instead.
+func TestStartHostNeedsANodeWithSets(t *testing.T) {
+	_, _, m, _ := engineHub(t)
+	f, _ := connectEngineNode(t, m)
+	m.mu.Lock()
+	m.info.Version = "old"
+	m.mu.Unlock()
+	err := m.call(context.Background(), "session.start", map[string]any{"cwd": "/tmp", "host": "orca"}, nil)
+	var rerr *rpc.Error
+	if !errors.As(err, &rerr) || rerr.Code != proto.CodeNodeOutdated || rerr.Message == "" {
+		t.Fatalf("old node, host named: %v", err)
+	}
+	if calls := f.seen(); len(calls) != 0 {
+		t.Errorf("sent to the old node: %v", calls)
+	}
+	if err := m.call(context.Background(), "session.start", map[string]any{"cwd": "/tmp"}, nil); err != nil {
+		t.Errorf("old node, no host: %v", err)
+	}
+	m.mu.Lock()
+	m.info.EngineHosts = &proto.EngineChoice{Hosts: []string{"herdr", "orca"}, Default: "herdr"}
+	m.mu.Unlock()
+	if err := m.call(context.Background(), "session.start", map[string]any{"cwd": "/tmp", "host": "orca"}, nil); err != nil {
+		t.Errorf("new node, host named: %v", err)
 	}
 }

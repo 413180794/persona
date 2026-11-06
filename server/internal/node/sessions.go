@@ -999,6 +999,9 @@ func untitled(s *proto.Session, m quickMeta) {
 
 func (n *Node) decorate(s *proto.Session) {
 	s.AlsoOpenIn = n.alsoOpenIn(s.SessionID) // live in another host too (ownership.go)
+	if s.PaneID != "" && s.Host == "" {
+		s.Host = host.ParsePane(s.PaneID).Kind // the host it runs in (#2576)
+	}
 	if st, ok := n.state.get(s.SessionID); ok {
 		s.StartedByJarvis = st.Ultracode == nil || !st.StartedAt.IsZero()
 		s.Launcher = st.Launcher

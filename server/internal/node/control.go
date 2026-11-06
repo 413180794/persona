@@ -75,7 +75,7 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		if a, ok := n.agent(resume); ok {
 			return n.sessionFor(resume, a), nil // already running
 		}
-		if n.defaultKind() == proto.EngineOrca { // a resume goes to the default host: Orca cannot reopen one
+		if n.startKind(ctx) == proto.EngineOrca { // a resume opens in the start's host: Orca cannot reopen one
 			return nil, refusal("orca_resume", "Orca 会话请在电脑上恢复：从手机只能新建，这次没有启动。", nil)
 		}
 		if r := n.openElsewhereRefusal(resume); r != nil { // open in Claude's desktop app or a terminal (openelsewhere.go)
@@ -83,7 +83,8 @@ func (n *Node) start(ctx context.Context, cwd, launcher, prompt, resume, workspa
 		}
 	}
 
-	launch, err := hostCap[host.Launcher](n) // new sessions start in the engine (herdr only so far: herdr-core cannot start them)
+	// New sessions start in the host the start named, else the default host (herdr-core cannot start them).
+	launch, err := hostCapFor[host.Launcher](n, n.startKind(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -261,6 +262,9 @@ func (n *Node) workspaceFor(ctx context.Context, launch host.Launcher, cwd strin
 		// Nothing was started or typed: say so, and what to do, instead of herdr's own words (the app showed
 		// "herdr workspace list: exec: \"herdr\": executable file not found").
 		name := n.defaultEngineName()
+		if k := n.startKind(ctx); proto.EngineNames[k] != "" && k != n.defaultKind() {
+			name = proto.EngineNames[k] // a start that named its host
+		}
 		msg := fmt.Sprintf("这台电脑上的 %s 没在运行（或没装），不能在这里新开或接着会话，这次没有发送。"+
 			"要从手机接着电脑上开着的会话，在那边继续；要从手机新开，先在这台电脑上装好并打开 %s。", name, name)
 		if startErr != nil && !errors.Is(startErr, errHerdrNotInstalled) {

@@ -490,14 +490,14 @@ Page directories: `Assistant / Chat / Chats / Feishu / Inbox(+Lark) / Interactio
 
 ### 6.1 Learn from the reference client, do not copy it
 
-Reference-client approach [Fact]: local SPM package `Packages/removedKit/Package.swift`, layered `*Contracts` (pure types / protocols) → `*Client` (transport, depends only on Contracts + TransportContracts) → `*Feature` (SwiftUI, Contracts + DesignSystem, **not Client**),
+Reference-client approach [Fact]: local SPM package `Packages/<client kit>/Package.swift`, layered `*Contracts` (pure types / protocols) → `*Client` (transport, depends only on Contracts + TransportContracts) → `*Feature` (SwiftUI, Contracts + DesignSystem, **not Client**),
 plus `SharedKit` (SharedCore / HTTPTransport / CredentialStore / ConnectionStorage), `DesignSystem`. For example, `AgentsFeature` depends on `AgentContracts`, `HerdrContracts`, `TerminalUI`, not `AgentBridgeClient`; App composition root injects implementations.
 
 Borrow: ① separate pure types from transport; ② Features depend only on contracts for fake tests/previews; ③ package unit tests require no App host; ④ one target per Feature removes single-namespace collisions.
 
 Do not copy:
 1. The reference client connects a dozen Lark gateway domains, each with three targets (~30); Persona has one backend (hub), so **one Contracts target with domain directories** suffices, keeping total targets around 10.
-2. Reference-client composition root makes 40+ journals/stores fields in the `App` struct (`removed/App/removedApp.swift:30-90`), becoming another huge file; Persona should construct centrally in a normal `AppContainer` class and inject by Feature.
+2. Reference-client composition root makes 40+ journals/stores fields in the `App` struct of its app entry point, becoming another huge file; Persona should construct centrally in a normal `AppContainer` class and inject by Feature.
 3. Reference-client terminal uses SwiftTerm; Persona has justified its own VT subset (`docs/terminal.md:58-78`). Keep it as independent `TerminalCore`, also the easiest part to port line-by-line to Kotlin.
 4. Persona contracts have three consumers (Go hub, iOS, Android), so Contracts must provide **language-independent JSON fixtures / specifications** as well as Swift types, a need the reference client lacks.
 

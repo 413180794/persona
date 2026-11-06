@@ -5,8 +5,8 @@ Research date: 2026-10-30. Read-only research; no repository files changed.
 ## 0. Conventions
 
 - Path prefixes:
-  - `MF/` = reference client `Packages/removedKit/Sources/Features/MessagingFeature/`
-  - `OLK/` = the Lark gateway business module in the reference client (called `LarkGatewayKit` below, under `Packages/removedKit/Sources/`)
+  - `MF/` = reference client `Packages/<client kit>/Sources/Features/MessagingFeature/`
+  - `OLK/` = the Lark gateway business module in the reference client (called `LarkGatewayKit` below, under `Packages/<client kit>/Sources/`)
   - `BH-docs/` = reference client `docs/`
   - `J/` = Persona repository root (worktree)
   - `OL/` = upstream Lark gateway source (upstream repository in this computer's zoekt index)

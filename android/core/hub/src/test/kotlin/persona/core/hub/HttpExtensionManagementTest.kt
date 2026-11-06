@@ -26,19 +26,19 @@ class HttpExtensionManagementTest {
     }
 
     @Test fun aNewHubAnswersUnderExtensions() = withHub(legacy = false) { server, api ->
-        server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"removed","name":"removed","kind":"ui","status":"running"}],
+        server.enqueue(MockResponse().setBody("""{"extensions":[{"id":"example-usage","name":"Example Usage","kind":"ui","status":"running"}],
             "can_install":true,"markets":true}"""))
         val listing = api.listing()
         assertEquals("/api/v1/extensions", (server.takeRequest().path).zhAny())
-        assertEquals(listOf("removed"), (listing.extensions.map { it.id }).zhAny())
+        assertEquals(listOf("example-usage"), (listing.extensions.map { it.id }).zhAny())
         assertTrue(listing.canInstall && listing.markets)
 
-        server.enqueue(MockResponse().setBody("""{"ui":[{"extension":"removed","extension_name":"removed","id":"usage","title":"用量",
+        server.enqueue(MockResponse().setBody("""{"ui":[{"extension":"example-usage","extension_name":"Example Usage","id":"usage","title":"用量",
             "placement":"nav_page"}]}"""))
         val place = api.uiPlaces("").single()
         assertEquals("/api/v1/extensions/-/ui", (server.takeRequest().path).zhAny())
-        assertEquals("removed", (place.extension).zhAny())
-        assertEquals("removed", (place.extensionName).zhAny())
+        assertEquals("example-usage", (place.extension).zhAny())
+        assertEquals("Example Usage", (place.extensionName).zhAny())
 
         server.enqueue(MockResponse().setBody(detail))
         api.extension("example-notes")

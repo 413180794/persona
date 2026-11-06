@@ -181,6 +181,10 @@ func (m *Machine) call(ctx context.Context, method string, params any, out any) 
 	p := m.peer
 	info := m.info
 	m.mu.Unlock()
+	if info.Version != "" && info.EngineHosts == nil && method == "session.start" && proto.StartHost(params) != "" {
+		// An older node ignores host and would start in its engine instead (#2576): refused, nothing started.
+		return &rpc.Error{Code: proto.CodeNodeOutdated, Message: i18n.T(m.hub.contextLang(ctx), "hub-machine.node_no_engine_hosts")}
+	}
 	if info.Version != "" && !info.ModelConfiguration && (method == "assistant.send" || method == "assistant.warm" || method == "session.start" || method == "session.send") {
 		raw, _ := json.Marshal(params)
 		var fields struct {

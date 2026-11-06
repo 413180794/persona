@@ -558,9 +558,12 @@ func (h *Hub) startSession(w http.ResponseWriter, r *http.Request) {
 		Prompt          string `json:"prompt"`
 		ResumeSessionID string `json:"resume_session_id"`
 		WorkspaceID     string `json:"workspace_id"`
-		PermissionMode  string `json:"permission_mode,omitempty"`
-		Effort          string `json:"effort,omitempty"`
-		Ultracode       *bool  `json:"ultracode,omitempty"`
+		// Host: the machine's enabled engine host to open in (herdr, orca, paseo…; #2576); empty: its default host.
+		// Checked by the node (an older node ignores it and starts in its engine).
+		Host           string `json:"host,omitempty"`
+		PermissionMode string `json:"permission_mode,omitempty"`
+		Effort         string `json:"effort,omitempty"`
+		Ultracode      *bool  `json:"ultracode,omitempty"`
 		// TabName names the herdr tab; empty: one made from the first message (tabName, assistant/agents_start.go),
 		// else agent-<n>.
 		TabName string `json:"tab_name,omitempty"`

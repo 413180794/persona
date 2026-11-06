@@ -156,10 +156,10 @@ type runtimeStartParams struct {
 // engineRuntimes maps the engines that are a runtime to that runtime's id (engine.go).
 var engineRuntimes = map[string]string{proto.EnginePaseo: proto.EnginePaseo}
 
-// engineRuntime is the runtime that is this machine's engine (Paseo), when it is connected and starts sessions; nil on
-// a machine whose engine is a terminal (herdr, Orca…).
-func (n *Node) engineRuntime() *runtimeConn {
-	id, ok := engineRuntimes[n.defaultKind()]
+// engineRuntime is the runtime that is the host of a start in ctx (Paseo: the one the start named, else the machine's
+// default host), when it is connected and starts sessions; nil when that host is a terminal (herdr, Orca…).
+func (n *Node) engineRuntime(ctx context.Context) *runtimeConn {
+	id, ok := engineRuntimes[n.startKind(ctx)]
 	if !ok {
 		return nil
 	}
@@ -180,8 +180,8 @@ func (n *Node) engineRuntime() *runtimeConn {
 
 // engineRuntimeAway is why a session cannot start or continue on a machine whose engine is a runtime that is not
 // connected (Paseo not running, or its bridge not up yet). Nothing was started or sent.
-func (n *Node) engineRuntimeAway() error {
-	name := proto.EngineNames[n.defaultKind()]
+func (n *Node) engineRuntimeAway(ctx context.Context) error {
+	name := proto.EngineNames[n.startKind(ctx)]
 	return refusal(engineMissing, fmt.Sprintf("这台电脑的引擎是 %s，但 %s 现在没有连上 Persona（没在运行，或刚启动还没连上），不能在这里新开或接着会话，这次没有发送。"+
 		"在电脑上打开 %s 后再试。", name, name, name), nil)
 }
@@ -189,9 +189,9 @@ func (n *Node) engineRuntimeAway() error {
 // startOnEngineRuntime starts a session on the machine's engine runtime: a launcher of the login shell's, or a session
 // to continue (resume), go there too — on such a machine there is no terminal to start them in.
 func (n *Node) startOnEngineRuntime(ctx context.Context, p runtimeStartParams) (*proto.Session, error) {
-	h := n.engineRuntime()
+	h := n.engineRuntime(ctx)
 	if h == nil {
-		return nil, n.engineRuntimeAway()
+		return nil, n.engineRuntimeAway(ctx)
 	}
 	if p.Resume != "" {
 		return n.takeOverInRuntime(ctx, h, p)
@@ -246,9 +246,9 @@ func (n *Node) takeOverInRuntime(ctx context.Context, h *runtimeConn, p runtimeS
 // continueInRuntime is a message to a Claude session not running anywhere on a machine whose engine is a runtime: the
 // runtime takes the session over, and the message goes to it there (the caller keeps the echo, as for any send).
 func (n *Node) continueInRuntime(ctx context.Context, id, text string, images []proto.Image, clientMsgID string) error {
-	h := n.engineRuntime()
+	h := n.engineRuntime(ctx)
 	if h == nil {
-		return n.engineRuntimeAway()
+		return n.engineRuntimeAway(ctx)
 	}
 	if _, err := n.takeOverInRuntime(ctx, h, runtimeStartParams{Resume: id}); err != nil {
 		return err

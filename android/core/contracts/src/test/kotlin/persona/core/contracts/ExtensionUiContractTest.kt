@@ -70,11 +70,11 @@ class ExtensionUiContractTest {
     @Test fun bothKeysDecode() {
         val json = Json(JsonCodec) {}
         val current = json.decodeFromString(ExtensionUiPlace.serializer(),
-            """{"extension":"removed","extension_name":"removed","id":"usage","title":"用量","placement":"nav_page"}""")
+            """{"extension":"example-usage","extension_name":"Example Usage","id":"usage","title":"用量","placement":"nav_page"}""")
         val legacy = json.decodeFromString(ExtensionUiPlace.serializer(),
-            """{"plugin":"removed","plugin_name":"removed","id":"usage","title":"用量","placement":"nav_page"}""")
-        assertEquals("removed", (current.extension).zhAny())
-        assertEquals("removed", (current.extensionName).zhAny())
+            """{"plugin":"example-usage","plugin_name":"Example Usage","id":"usage","title":"用量","placement":"nav_page"}""")
+        assertEquals("example-usage", (current.extension).zhAny())
+        assertEquals("Example Usage", (current.extensionName).zhAny())
         assertEquals(current, legacy)
         assertEquals(3, json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","extensions":3}""").extensions)
         assertEquals(3, json.decodeFromString(ExtensionMarket.serializer(), """{"id":"m","plugins":3}""").extensions)

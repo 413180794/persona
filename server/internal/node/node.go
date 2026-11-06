@@ -2,6 +2,7 @@
 package node
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -401,6 +402,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 		Runtime          string        `json:"runtime"`
 		Prompt           string        `json:"prompt"`
 		ResumeSessionID  string        `json:"resume_session_id"`
+		Host             string        `json:"host"` // session.start: the enabled host to open in ("" the default host, #2576)
 		WorkspaceID      string        `json:"workspace_id"`
 		Text             string        `json:"text"`
 		Images           []proto.Image `json:"images"`
@@ -697,7 +699,7 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 			if kind == "" {
 				kind = launcherAgentType(p.Launcher)
 			}
-			if _, runtime := engineRuntimes[n.defaultKind()]; runtime { // the default host is a runtime (Paseo)
+			if _, runtime := engineRuntimes[cmp.Or(p.Host, n.defaultKind())]; runtime { // the start's host is a runtime (Paseo)
 				kind = "runtime"
 			}
 			if n.runtimes.launcherRuntime(p.Launcher) != nil && !shellLauncherNames()[p.Launcher] {
@@ -718,13 +720,17 @@ func (n *Node) handle(ctx context.Context, method string, params json.RawMessage
 				return map[string]any{"session": s}, err
 			}
 		}
-		if _, ok := engineRuntimes[n.defaultKind()]; ok { // the default host is a runtime (Paseo): every start is its (runtimecontrol.go)
+		if err := n.checkStartHost(p.Host); err != nil {
+			return nil, err
+		}
+		ctx := withStartHost(ctx, p.Host)
+		if _, ok := engineRuntimes[n.startKind(ctx)]; ok { // the start's host is a runtime (Paseo): it is its (runtimecontrol.go)
 			s, err := n.startOnEngineRuntime(ctx, rp)
 			return map[string]any{"session": s}, err
 		}
 		// Only Claude Code has a session id before it starts; another agent picks its own (start_agent.go).
 		if p.Async && p.ResumeSessionID == "" && (p.AgentType == "" || p.AgentType == "claude") {
-			s, err := n.startAsync(p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode})
+			s, err := n.startAsyncIn(p.Host, p.SessionID, p.Cwd, p.Launcher, p.Prompt, p.WorkspaceID, p.PermissionMode, p.Effort, tab, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode})
 			return map[string]any{"session": s}, err
 		}
 		s, err := n.start(ctx, p.Cwd, p.Launcher, p.Prompt, p.ResumeSessionID, p.WorkspaceID, p.PermissionMode, p.Effort, tab, "", p.AgentType, modelExecution{Model: p.Model, Effort: p.Effort, UseEffort: p.ModelFingerprint != "", Fingerprint: p.ModelFingerprint, Ultracode: p.Ultracode})

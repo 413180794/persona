@@ -1,6 +1,7 @@
 package proto
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 )
@@ -105,4 +106,14 @@ func SuggestEngineHosts(found []Engine) EngineChoice {
 	}
 	c, _ := NormalizeEngineChoice(hosts, "") // only known hosts: cannot fail
 	return c
+}
+
+// StartHost is the host a session.start's params name ("" : none), for the hub's check that the node takes it.
+func StartHost(params any) string {
+	raw, _ := json.Marshal(params)
+	var f struct {
+		Host string `json:"host"`
+	}
+	_ = json.Unmarshal(raw, &f)
+	return f.Host
 }

@@ -136,11 +136,16 @@ func (l *startLog) listed(seen map[string]bool) []proto.Session {
 // startAsync checks the arguments, answers with the session it is going to be and starts it in the background.
 // id is the session id to use (the hub may pick it); empty: a new one.
 func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, tabName string, options ...modelExecution) (*proto.Session, error) {
+	return n.startAsyncIn("", id, cwd, launcher, prompt, workspaceID, mode, effort, tabName, options...)
+}
+
+// startAsyncIn is startAsync in host kind ("" : the default host, withStartHost).
+func (n *Node) startAsyncIn(kind, id, cwd, launcher, prompt, workspaceID, mode, effort, tabName string, options ...modelExecution) (*proto.Session, error) {
 	execution := executionOption(options)
 	if err := execution.check(); err != nil {
 		return nil, err
 	}
-	if n.defaultKind() == "" { // no host enabled: refused before a starting row shows up on the phone
+	if kind == "" && n.defaultKind() == "" { // no host enabled: refused before a starting row shows up on the phone
 		return nil, noEngineRefusal()
 	}
 	if id == "" {
@@ -176,7 +181,7 @@ func (n *Node) startAsync(id, cwd, launcher, prompt, workspaceID, mode, effort, 
 	// rewrite r.session (under the log's lock) before this goroutine would get to it.
 	s := r.session
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), n.startWait())
+		ctx, cancel := context.WithTimeout(withStartHost(context.Background(), kind), n.startWait())
 		defer cancel()
 		_, err := n.start(ctx, cwd, launcher, prompt, "", workspaceID, mode, effort, tabName, id, "", execution)
 		if err != nil {
