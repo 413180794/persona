@@ -563,3 +563,9 @@ node 跑启动器的命令用的是交互式登录 shell（`zsh -ic`），原来
 - 做法：下载 Chrome for Testing 的 `chrome-headless-shell-linux64.zip`（版本号看 `last-known-good-versions.json`），`ldd` 看缺哪些库。没有 sudo 时用 `apt-get download` 下这些库的 deb，`dpkg-deb -x` 解到自己的目录，启动时 `LD_LIBRARY_PATH` 指过去。
   中文字体（如 Noto Sans CJK）也这样解开，写一个 `fonts.conf` 把字体目录加进去，用 `FONTCONFIG_FILE` 指给浏览器，不然中文全是方框。用现成的 `playwright-core`：`chromium.launch({ executablePath, env })`。下载的东西各放一个新目录，不放进仓库。
 - 等待：网页一直连着 WebSocket，`waitUntil: "networkidle"` 有时等不到，用 `load` 再等页面上的某段字。假 hub 用 `/?token=mock` 登录后先等侧边栏出来再跳到要拍的页面，不然拍到的是登录页。
+
+## 本机跑 iOS 单测：失败后 xcodebuild 再等十分钟（2026-11-06，#3507）
+
+- 有用例失败时，`xcodebuild test` 在用例跑完后还要去模拟器收诊断，等满 600 秒才退出（日志里是 `Failure collecting diagnostics from simulator: Timed out after 600.0 seconds`），用例本身不到一秒。本机反复跑时加 `-collect-test-diagnostics never`。
+- 新加的测试文件要先 `xcodegen generate` 再跑：工程里没有这个文件时，`-only-testing:PersonaTests/<套件>` 不报错，只是一条都不跑（「Test run with 6 tests」只剩别的套件），容易当成通过。
+- 模型里的回调都是 `[weak self]` 时，用例里 `let (_, socket) = …` 丢掉模型，模型当场释放，之后送进去的帧全被吞掉、断言莫名失败：用例要自己拿着模型（App 里由 `VoiceCalls.current` 拿着）。

@@ -71,6 +71,23 @@ import Testing
         #expect(mic.claim(dictation))
     }
 
+    /// An owner that gives way (a voice call) and is gone without releasing must not keep the microphone for good.
+    @Test func anOwnerThatGivesWayButDoesNotReleaseStillLetsGo() {
+        final class Asked { var count = 0 }
+        let mic = RecordingMicrophone()
+        let call = UUID(), recording = UUID(), dictation = UUID()
+        let asked = Asked()
+        let held = mic.claim(call, givingWay: { asked.count += 1 })
+        #expect(held)
+        let second = mic.claim(dictation, givingWay: {})
+        #expect(!second, "a call does not take it from a call")
+        #expect(mic.claim(recording))
+        #expect(asked.count == 1)
+        #expect(!mic.release(call), "it is the recording's now")
+        #expect(!mic.claim(dictation))
+        #expect(mic.release(recording))
+    }
+
     @Test func gapsAndEmptyRecordingsNotReady() {
         var entry = RecordingEntry(id: UUID(), createdAt: .now, source: .watch, active: false, expectedSegments: 2)
         entry.segments = [RecordingSegment(index: 0, start: 0, duration: 30), RecordingSegment(index: 2, start: 60, duration: 30)]

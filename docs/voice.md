@@ -247,9 +247,9 @@ hub 经 `/api/v1/bus/relay` 把 App 的 HTTP / WS 原样交给管理者（先去
 
 | 帧 | 新 / 改 | 说明 |
 | --- | --- | --- |
-| `{"type":"start","model","voice","protocol":2,"target":{"machine_id","session_id"},"recent":[…],"history":[…],"resume":{…}}` | 改：后五项可选，协议 2 必须带 `target` | `target` 就是 ChatView 的 key。kind 由扩展按会话的 `assistant` 判断，App 不传。`recent`：App 手上最近 3 轮，`[{role, text}]`，每条不超过 300 字。`history`：这段通话已有的字幕，续接时带，最多 40 句。`resume`：`{runs: [{id, msg_ids, task, base_seq, started_at, state}]}`，只带没结束的 |
+| `{"type":"start","model","voice","protocol":2,"target":{"machine_id","session_id"},"recent":[…],"history":[…],"resume":{…}}` | 改：后五项可选，协议 2 必须带 `target` | `target` 就是 ChatView 的 key。kind 由扩展按会话的 `assistant` 判断，App 不传。`recent`：App 手上最近 3 轮，`[{role, text}]`，每条不超过 300 字。`history`：这段通话已有的字幕，续接时带，最多 40 句，格式同 `recent`。`resume`：`{runs: [{id, msg_ids, task, base_seq, started_at, state}]}`，只带没结束的，`started_at` 照 `run` 帧原样交回（字符串或数字） |
 | 二进制 PCM16 / `interrupt` / `text` | 不变 | 静音时照发全零帧；`text` 算用户发言 |
-| `{"type":"resend","id","clear_draft":"<clearable 原文>"}` | 新 | 重发被 409 拒掉的那条，id 不变。`clear_draft` 是 node 要核对的原文（`node/sendsafe.go` 只在它和输入框里能清的那行**一字不差**时才清），取自 `run.clearable`，和 iOS / 网页的发件箱回 hub 给的 `clearable` 一样；不是 `run.draft`：输入框里有 IDE 的选区标记（`[⧉ Selected 3 lines from foo.go] fix it`）时 `draft` 是整行，`clearable` 只是 `fix it`。#3502 的扩展只要 `clear_draft` 不空，就用自己记下的 hub 原文去清（App 回 `draft` 也能清对）。只认这条连接上被 hub 拒掉（409）的 run；门槛没过、没听清、批准词这几种不能重发，续接后也不认之前的。重发是一个新的 run：`started_at`、基线、「见过它在工作」都从重发这一刻重新算（#3502） |
+| `{"type":"resend","id","clear_draft":"<clearable 原文>"}` | 新 | 重发被 409 拒掉的那条，id 不变。`clear_draft` 是 node 要核对的原文（`node/sendsafe.go` 只在它和输入框里能清的那行**一字不差**时才清），取自 `run.clearable`，和 iOS / 网页的发件箱回 hub 给的 `clearable` 一样；不是 `run.draft`：输入框里有 IDE 的选区标记（`[⧉ Selected 3 lines from foo.go] fix it`）时 `draft` 是整行，`clearable` 只是 `fix it`。#3502 的扩展只要 `clear_draft` 不空，就用自己记下的 hub 原文去清（App 回 `draft` 也能清对）。只认这条连接上被 hub 拒掉（409）的 run；门槛没过、没听清、批准词这几种不能重发，续接后也不认之前的。被拒的 run 算结束，不进 `resume`，App 也只对**当前连接**报过 `refused` 的 run 给「重发」「清空并发送」（`VoiceConversation.canResend`），续接后要再说一遍。重发是一个新的 run：`started_at`、基线、「见过它在工作」都从重发这一刻重新算（#3502） |
 
 计划卡的「作为修改意见退回」是 App 直接调 `resolve`（带 feedback），不经过扩展。
 
@@ -769,7 +769,7 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
 4. **显示条件**（`VoiceAvailability`，纯函数）：
    - 平台是 iOS；
    - 这个组有 running 的 voice 扩展，并且 `/info.protocol >= 2`；
-   - 会话能发送（`capabilities` 为 nil 也算）；
+   - 会话能发送，和输入框同一条规则 `Session.canSend`：没有来源的会话（herdr）不看 `capabilities`，为 nil 也算；有来源的要明确说能发送，免得入口出现在输入框写着「仅查看」的页上；
    - 是完整设备。
 
    不满足时按钮不出现。「+」里的菜单项还在，点了显示 1.3 里的说明。
@@ -813,10 +813,12 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
 
 ```swift
 @MainActor @Observable final class VoiceCalls {             // 全 App 最多一段通话
-    static let shared = VoiceCalls()
+    static let shared = VoiceCalls(watchesApp: true)         // 自己看 App 进后台
     private(set) var current: VoiceConversation?
-    func start(_ key: SessionKey, surface: VoiceSurface, deps: VoiceDeps) async
-    func end(_ reason: VoiceEnd, from surface: VoiceSurface)    // 只停自己这个 surface 开的
+    func start(_ key: SessionKey, extensionID: String, surface: VoiceSurface, recent: [VoiceLine], deps: VoiceDeps) async
+    func end(_ reason: VoiceEnd, from surface: VoiceSurface)    // 只停自己这个 surface 开的；.user（点「结束」）哪个都停
+    func leave(_ key: SessionKey, from surface: VoiceSurface)   // 离开 / 藏起这页
+    func resume(_ key: SessionKey) async                      // 「继续」
     func isBound(to key: SessionKey) -> Bool                  // ChatView 只读这一个布尔值
 }
 @MainActor @Observable final class VoiceConversation {
@@ -829,13 +831,19 @@ App 带来的 `recent` 只留用户和 Agent 的文字，去掉 `<jarvis-context
     var muted: Bool
     let levels: VoiceLevels                     // 单独的小 @Observable，约 20 Hz，只给光球读
 }
-struct VoiceDeps { var api: APIClient; var socket: (URLRequest) -> any VoiceSocket
+struct VoiceDeps { var api: () -> APIClient?                 // 每次连接都重新取，重连跟着当前线路走
+                   var socket: (URLRequest, APIClient) -> any VoiceSocket   // 用这个 client 的 URLSession
                    var audio: () -> any VoiceAudio; var mic: any MicPermission
-                   var idleTimer: any IdleTimerControl; var clock: any Clock<Duration> }
+                   var microphone: RecordingMicrophone      // 麦克风归属（录音 / 听写来抢时通话让出）
+                   var idleTimer: any IdleTimerControl; var clock: any VoiceClock   // now + sleep，测试里手动拨
+                   var session: (SessionKey) -> Session?    // 空闲规则看目标在不在工作
+                   var voice: (String, String) -> String? } // 本机记的音色（组、扩展 id）
 ```
 
 - 状态不放在 `AppModel` 或 `ChatView` 里：ChatView 有 `.id(key)` 会被重建，而且是热路径（`docs/ios-state.md`）。
-- `/info` 按组缓存 60 秒，回到前台或改了设置后刷新。
+- `/info` 按组缓存 60 秒（`VoiceSupport`）。回到前台时下次刷新重新问，问到之前沿用上次的结果，入口不会消失再出现、挤动输入框那一行；改了设置时清掉重问。`/info` 回 403 说明这是只能回答的设备（hub 转发处拒的），「完整设备」就按这个判断。
+- 时钟不用 `any Clock<Duration>`：存在类型上拿不到能比较的 `Instant`，空闲规则又要墙钟。`VoiceClock` 只有 `now` 和 `sleep(for:)`，测试用的假时钟好拨。
+- `ready` 之前按上次的采样率（同组同扩展记在内存里，没有就是 16000 / 24000）先录；`ready` 说的不一样时，已经缓存的那段重采样后再发，音频按新采样率重建。
 
 ### 6.4 音频管线，以及和 #1931 的关系
 
@@ -844,7 +852,7 @@ struct VoiceDeps { var api: APIClient; var socket: (URLRequest) -> any VoiceSock
   2. `api.url(api.extensionPath("/\(id)/ws"))`，http / https 换成 ws / wss；
   3. 带 `Authorization: Bearer` 的 `URLRequest`；
   4. `api.session.webSocketTask`。
-- **`PhoneVoiceAudio`**：经作者同意，从 #1931 的 `DuplexVoiceSession` 音频部分改出来，PR 里注明出处。做成共用的音频引擎，CarPlay 也能直接用。
+- **`PhoneVoiceAudio`**：从 #1931 的 `DuplexVoiceSession` 音频部分改出来，文件头和 PR（#3789）里注明出处。开工前在 #1951 问过作者能否这样复用，合并时作者还没答复，维护者决定先合并、在 #1951 跟进；作者有异议就回退或重写这部分。做成共用的音频引擎，CarPlay 也能直接用。
   - **保留**：`.playAndRecord` / `.voiceChat` + VoiceProcessing、`AVAudioConverter`、用「代」丢掉 `clear` 之前的声音、ping、来电打断、媒体服务重置、和 `RecordingMicrophone` 互斥。
   - **改动**：
     - 申请麦克风权限；
@@ -860,7 +868,7 @@ struct VoiceDeps { var api: APIClient; var socket: (URLRequest) -> any VoiceSock
   1. **命名**：手机端用独立的名字（`Voice*`），不用 `DuplexVoice*`、`InputPump`、`PCM16`、`VoicePlugin*`、`APIClient.voicePlugins()`。
   2. **通话归属**：归 `VoiceCalls` 管，带 surface。**「进后台就结束」等规则只对 `surface == .phone` 生效**；CarPlay 只停自己开的那段通话。
   3. **路径**：建议 #1931 改用 `extensionPath`（`/api/v1/extensions`）。
-  4. **共用的改动先定下来**：麦克风用途文案用一句话覆盖听写、录音、手机和 CarPlay 上的语音对话；CLAUDE.md 索引、`docs/extensions.md`、`Icons.swift`、`Theme.swift` 两边都会改。谁后合并，谁 rebase 解决冲突。
+  4. **共用的改动先定下来**：麦克风用途文案用一句话覆盖听写、录音、手机和 CarPlay 上的语音对话（iOS 的已在 #3507 加上「语音对话时声音经 hub 实时传给它配置的语音服务」）；CLAUDE.md 索引、`docs/extensions.md`、`Icons.swift`、`Theme.swift` 两边都会改。谁后合并，谁 rebase 解决冲突。
   5. **#1931 先合**：我们 rebase，另提 PR 把 CarPlay 改成 `VoiceConversation(surface: .carPlay)` 外面的一层薄壳，先征得作者同意，或者由作者来做。**我们先合**：给作者提建议，请 CarPlay 改用 `VoiceCalls` 和 `PhoneVoiceAudio`。
 
 ### 6.5 生命周期
@@ -869,8 +877,11 @@ struct VoiceDeps { var api: APIClient; var socket: (URLRequest) -> any VoiceSock
   - 通话期间 `isIdleTimerDisabled = true`，结束时恢复，所以等长任务时不会因为自动锁屏而断。
   - `scenePhase` 变成 background 时结束：否则麦克风会一直开着，也一直在计费。
 - **离开这个对话**：ChatView 的 key 变了，或者 `.onTabVisibility` 报告这页被藏起来了。
-- **来电**（音频会话 interruption began）、开始录音或听写：结束。
+- **来电**（音频会话 interruption began）、开始录音或听写：结束。通话用 `RecordingMicrophone.claim(_:givingWay:)` 占麦克风，录音、听写再 `claim` 时通话先结束、让出麦克风；反过来，录音或听写进行中开不了通话（`microphoneBusy`）。
 - **断线**：按 1、4、10 秒重连 3 次，带 `resume`。都失败就是 `ended(.lost)`，「继续」一直留在这页上。
+  - 每条新连接从头开始：上一条报的 `link`、正在问的卡片（`ask`）、非致命提示都清掉，由新连接重新报；上一条还没播完的声音丢掉。
+  - 握手被 hub 拒：401（token）、403（只能回答的设备）直接结束（`rejected`），不重试。404 只在这次开始后还没有任何连接 `ready` 过时结束；连上过以后的 404 是 hub 正在重新应用扩展（改了设置、停用再启用、升级：先从表里删掉、等旧进程退出），算一次失败的重试。
+  - 握手被拒时，挂着的 `start` 发送、ping 和接收会同时失败，谁先报不一定：每条路都带上握手的状态码（`HubVoiceSocket.finish`）。
 - **空闲**：10 分钟没人说话、没有开着的 run、目标也不在工作时结束。成本主要靠服务端的暂停（4.9）。
 
 ### 6.6 设计系统（缺什么先加；`Shared/` 里的部分要能编进 watchOS 10）
@@ -913,16 +924,16 @@ struct VoiceDeps { var api: APIClient; var socket: (URLRequest) -> any VoiceSock
 ### 6.10 iOS 测试（PersonaTests，FakeHub + `FakeVoiceSocket` + `FakeVoiceAudio`）
 
 - **帧**：新帧、未知帧、缺字段；`start` 的 `target` / `recent` / `history` / `resume`；地址（路径前缀、ws / wss）。
-- **字幕和状态**：按 id 合并，跨连接代数不串；`VoiceBarLine` 的各种相位，包括 `link` 和 `refused`。
+- **字幕和状态**：按 id 合并，跨连接代数不串；`VoiceBarLine` 的各种相位，包括 `link` 和 `refused`（`VoiceBarLine` 和通话条一起在 #3508 做）。
 - **规则**：
   - 模型解析（「未验证」算可用、模型已下架）；
   - 空闲规则；
-  - `VoiceAvailability`（`capabilities` 为 nil、协议低于 2、不是 iOS）；
+  - `VoiceAvailability`（没有来源时 `capabilities` 为 nil、有来源但没说能发送、协议低于 2、不是 iOS）；
   - `VoiceCalls` 的所有权（同时只有一段；换会话会结束旧的；进后台只结束 `.phone` 的）。
 - **动作**：
   - 续接时交回的 `resume` 只含没结束的 run，`base_seq` 是最新的；
   - `ready` 前的缓存会补发；
-  - 「作为修改意见退回」会带上 feedback 调 `resolve`；
+  - 「作为修改意见退回」会带上 feedback 调 `resolve`（#3508，App 直接调 `model.resolve`，不经过通话）；
   - idle timer 开始时关、结束时恢复。
 
 ## 7. 拆分
