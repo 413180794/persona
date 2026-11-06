@@ -406,7 +406,7 @@ func TestAPIModelPurposesFallBackToAKeyedConnection(t *testing.T) {
 	if !triageUsableOf(t, s) {
 		t.Fatal("the keyed connection is usable")
 	}
-	if p := purposeOf(t, s, "kb"); p.InheritedFrom != mc(i18n.Default, modelAutoSource) {
+	if p := purposeOf(t, s, "kb"); p.InheritedFrom != "自动选择：claude-gw（hub 上能直接调用的接入）" {
 		t.Fatalf("fallback not labelled: %+v", p)
 	}
 	if p := purposeOf(t, s, "translate"); p.InheritedFrom != "信息处理" {

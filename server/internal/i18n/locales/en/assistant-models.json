@@ -86,5 +86,7 @@
   "err_runtime_invalid": "Runtime must be cli or agentsdk",
   "err_runtime_assistant_only": "Only the main chat can choose a runtime",
   "use_delegate": "Deciding whether to answer an agent's question for you",
-  "source_delegate_default": "Same connection as triage, on Opus 5.5"
+  "source_delegate_default": "Same connection as triage ({provider}), on {model}",
+  "source_delegate_connection": "Same connection as triage ({provider})",
+  "source_auto_named": "Automatic: {provider} (a connection the hub can call directly)"
 }

@@ -334,7 +334,7 @@ func (s *Service) modelBaseline(ctx context.Context, p ModelPurpose) (ModelBindi
 		if err == nil {
 			b = s.delegateBaseline(ctx, b)
 		}
-		return b, mc(l, "source_delegate_default"), err
+		return b, "inbox.triage", err // inheritedLabel names the connection and the model
 	}
 	if p.Kind == "api" {
 		provider := "legacy.ai"
@@ -383,8 +383,35 @@ func (s *Service) delegateBaseline(ctx context.Context, b ModelBinding) ModelBin
 	return b
 }
 
-// modelAutoSource is (the catalog name of) what 继承来源 says for an API use that runs on fallbackAPIProvider's pick.
+// modelAutoSource is (the catalog name of) what modelBaseline calls the default of an API use that runs on
+// fallbackAPIProvider's pick; 继承来源 names the pick (inheritedLabel).
 const modelAutoSource = "source_auto"
+
+// inheritedLabel is what 继承来源 says for p, whose default is base (from: what modelBaseline calls it). Nothing when
+// p picks its own connection: none of it is inherited. Where the default is not a fixed place it names what it
+// actually runs on: 提问代答's connection and the model on it (Opus only when that connection serves Claude models,
+// delegateBaseline), the connection an unconfigured API use falls back to.
+func inheritedLabel(l i18n.Lang, p ModelPurpose, base ModelBinding, from string, providers []ModelProvider) string {
+	if p.Override.Provider != "" {
+		return ""
+	}
+	name, model := base.Provider, base.Model
+	for _, v := range providers {
+		if v.ID == base.Provider {
+			name, model = cmp.Or(v.Name, v.ID), cmp.Or(model, v.Model)
+			break
+		}
+	}
+	switch {
+	case p.ID == "agent.delegate" && (p.Override.Model != "" || model == ""):
+		return mc(l, "source_delegate_connection", i18n.Args{"provider": name}) // the model is the user's pick, or the connection's own
+	case p.ID == "agent.delegate":
+		return mc(l, "source_delegate_default", i18n.Args{"provider": name, "model": model})
+	case from == mc(l, modelAutoSource):
+		return mc(l, "source_auto_named", i18n.Args{"provider": name})
+	}
+	return from
+}
 
 // modelNoAPIStatus explains an API use with nothing to call: launchers like 「Claude Code 默认」 only start a CLI on a
 // computer, so they never show up for these uses. A catalog name.
@@ -573,10 +600,11 @@ func (s *Service) modelPurpose(ctx context.Context, id string, providers []Model
 	if err != nil {
 		return p, err
 	}
-	_, p.InheritedFrom, err = s.modelBaseline(ctx, p)
+	base, from, err := s.modelBaseline(ctx, p)
 	if err != nil {
 		return p, err
 	}
+	p.InheritedFrom = inheritedLabel(s.requestCtxLang(ctx), p, base, from, providers)
 	stored := s.storedLaunchers(ctx)
 	p.Fields = []string{"provider", "model"}
 	p.ProviderIDs = []string{}

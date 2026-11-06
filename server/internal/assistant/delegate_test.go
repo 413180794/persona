@@ -177,9 +177,20 @@ func TestDelegateModel(t *testing.T) {
 		if err != nil || p.CategoryID != "agent.delegate" || len(p.Fields) == 0 || p.Effective.Model != tc.want {
 			t.Fatalf("%s: settings show %+v %v", tc.triage, p, err)
 		}
+		// 继承来源 says what it runs on: the triage's connection, and the model actually on it.
+		if want := "跟「信息筛选」同一个接入（hub 分拣 API），模型 " + tc.want; p.InheritedFrom != want {
+			t.Fatalf("%s: inherited from %q, want %q", tc.triage, p.InheritedFrom, want)
+		}
 		setModel(t, s, "agent.delegate", ModelBinding{Model: "claude-sonnet-5-5"})
 		if b, _ := s.resolveModel(ctx, "agent.delegate"); b.Model != "claude-sonnet-5-5" {
 			t.Fatalf("the user's pick: %+v", b)
+		}
+		if p, _ := s.modelPurpose(ctx, "agent.delegate", s.modelProviders(ctx)); p.InheritedFrom != "跟「信息筛选」同一个接入（hub 分拣 API）" {
+			t.Fatalf("%s: a model of the user's: inherited from %q", tc.triage, p.InheritedFrom)
+		}
+		setModel(t, s, "agent.delegate", ModelBinding{Provider: "launcher.claude", Model: "claude-sonnet-5-5"})
+		if p, _ := s.modelPurpose(ctx, "agent.delegate", s.modelProviders(ctx)); p.InheritedFrom != "" {
+			t.Fatalf("%s: a connection of the user's: inherited from %q", tc.triage, p.InheritedFrom)
 		}
 	}
 }

@@ -86,5 +86,7 @@
   "err_runtime_invalid": "运行方式只能是 cli 或 agentsdk",
   "err_runtime_assistant_only": "只有主对话可以选择运行方式",
   "use_delegate": "Agent 的提问先判断要不要替你答",
-  "source_delegate_default": "跟「信息筛选」同一个接入，模型用 Opus 5.5"
+  "source_delegate_default": "跟「信息筛选」同一个接入（{provider}），模型 {model}",
+  "source_delegate_connection": "跟「信息筛选」同一个接入（{provider}）",
+  "source_auto_named": "自动选择：{provider}（hub 上能直接调用的接入）"
 }
