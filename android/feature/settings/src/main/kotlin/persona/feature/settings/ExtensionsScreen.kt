@@ -158,7 +158,7 @@ fun ExtensionPage(
     val signInState by signIn.state.collectAsState()
     var signOutError by remember { mutableStateOf<String?>(null) }
     var confirmingSignOut by remember { mutableStateOf(false) }
-    val polled = signInState.bind.prompt?.takeIf { it.polled }
+    val polled = signInState.bind.prompt?.takeIf { signInState.bind.polled }
     LaunchedEffect(signIn, polled?.step, polled?.kind, polled?.userCode, polled?.url) { if (polled != null) signIn.poll() }
     LaunchedEffect(signInState.signedInAs) {
         val who = signInState.signedInAs ?: return@LaunchedEffect

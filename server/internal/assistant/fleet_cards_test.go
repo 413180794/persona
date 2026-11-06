@@ -60,6 +60,9 @@ func newCardFleet(t *testing.T, store bool) (*fleetTest, *cardNode) {
 		defer c.mu.Unlock()
 		switch method {
 		case "session.screen":
+			if c.screen == "node-error" {
+				return nil, errNode
+			}
 			return map[string]any{"text": c.screen}, nil
 		case "codex.answer":
 			c.answers = append(c.answers, p)
@@ -269,6 +272,87 @@ func TestScreenCardUpgradeTimingIsPerService(t *testing.T) {
 	}
 }
 
+func waitReplaced(s *Service, oldID string, d time.Duration) (string, bool) {
+	for deadline := time.Now().Add(d); time.Now().Before(deadline); {
+		if got := pendingIDs(s); len(got) == 1 && got[oldID] == "" {
+			for id := range got {
+				return id, true
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return "", false
+}
+
+// noDialogPlaceholder blocks a session whose screen has no dialog yet, with the upgrade loop's timing set per
+// Service before the card is made (#4665): the loop reads its timing as it starts.
+func noDialogPlaceholder(t *testing.T, screenText string, poll, window time.Duration) (*fleetTest, *cardNode) {
+	t.Helper()
+	ft, n := newCardFleet(t, false)
+	ft.s.fleet.upgradeEvery, ft.s.fleet.upgradeFor = poll, window
+	n.setScreen(screenText)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	waitCards(ft.s, 1, 2*time.Second)
+	return ft, n
+}
+
+// A card made while its dialog is not drawn yet goes to the apps but does not ring (#4450: it used to ring twice).
+func TestScreenCardWithoutDialogShowsWithoutAPush(t *testing.T) {
+	ft, n := noDialogPlaceholder(t, "  ✢ Percolating… (running PreToolUse hooks… 1/2 · 3s)\n", 20*time.Millisecond, 600*time.Millisecond)
+	told := ""
+	for _, params := range ft.toldOf(assistantwire.EventFleetInteraction) {
+		told += string(params)
+	}
+	if !strings.Contains(told, `"id":"scr_mac_s1"`) {
+		t.Fatal("the placeholder was not put on the apps")
+	}
+	n.setScreen(pickModel)
+	waitReplaced(ft.s, "scr_mac_s1", 2*time.Second)
+}
+
+// The dialog shows during the window, after reads failed, or on the poll that crosses the window's end: the
+// placeholder never rings; only its replacement card does.
+func TestScreenCardDialogRingsOnceForTheRealCard(t *testing.T) {
+	for _, c := range []struct {
+		name             string
+		poll, window, at time.Duration
+		failFor          time.Duration
+	}{
+		{"within the window", 20 * time.Millisecond, 600 * time.Millisecond, 100 * time.Millisecond, 0},
+		{"after reads failed for a while", 20 * time.Millisecond, 600 * time.Millisecond, 150 * time.Millisecond, 150 * time.Millisecond},
+		{"on the poll crossing the window's end", 400 * time.Millisecond, 600 * time.Millisecond, 450 * time.Millisecond, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			ft, n := noDialogPlaceholder(t, "  ✢ Percolating…\n", c.poll, c.window)
+			if c.failFor > 0 {
+				n.setScreen("node-error") // a screen read the node cannot serve
+			}
+			time.Sleep(c.at)
+			n.setScreen(pickModel)
+			realID, ok := waitReplaced(ft.s, "scr_mac_s1", 2*time.Second)
+			if !ok {
+				t.Fatalf("the dialog's card did not replace the placeholder: %v", pendingIDs(ft.s))
+			}
+			if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, 2*time.Second); len(pushes) != 1 ||
+				pushes[0].Interaction == nil || pushes[0].Interaction.ID != realID {
+				t.Fatalf("want one push for %s, got %+v", realID, pushes)
+			}
+		})
+	}
+}
+
+// Window's end, still blocked and unreadable: the card already on the apps is announced once, not before or again.
+func TestScreenCardUnreadableAnnouncedOnceAfterTheWindow(t *testing.T) {
+	ft, _ := noDialogPlaceholder(t, "  Waiting for something\n", 20*time.Millisecond, 600*time.Millisecond)
+	if early := ft.pushesOf(assistantwire.NotifyInput, 1, 300*time.Millisecond); len(early) != 0 {
+		t.Fatalf("rang before the window ended: %d pushes", len(early))
+	}
+	pushes := ft.pushesOf(assistantwire.NotifyInput, 1, 2*time.Second)
+	if len(pushes) != 1 || pushes[0].Interaction == nil || pushes[0].Interaction.ID != "scr_mac_s1" {
+		t.Fatalf("want one late push for the placeholder, got %+v", pushes)
+	}
+}
+
 // The dialog answered on the computer: the agent moves on and its screen card goes, cancelled in the history too.
 func TestScreenCardGoneWhenTheAgentMovesOnIsRecorded(t *testing.T) {
 	ft, n := newCardFleet(t, true)
@@ -377,6 +461,32 @@ func TestScreenCardBackHalfDrawnAfterTheNodeReconnectsIsQuiet(t *testing.T) {
 	}
 	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, 300*time.Millisecond); len(pushes) != 1 {
 		t.Fatalf("pushed %d times", len(pushes))
+	}
+}
+
+// A half-drawn reconnect-back card that stays unreadable past the window rang before the detach: no late ring (#4450/#4252).
+func TestScreenCardBackHalfDrawnUnreadableStaysQuiet(t *testing.T) {
+	ft, n := newCardFleet(t, false)
+	s := ft.s
+	s.fleet.upgradeEvery, s.fleet.upgradeFor = 20*time.Millisecond, 600*time.Millisecond
+	n.setScreen(pickModel)
+	blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 1, time.Second); len(pushes) != 1 {
+		t.Fatalf("first: pushed %d times", len(pushes))
+	}
+	n.setScreen("  Waiting for something\n")
+	s.NodeDetached("mac")
+	if back, _ := waitCards(s, 1, 2*time.Second); len(back) != 1 || back["scr_mac_s1"] == "" {
+		t.Fatalf("the placeholder did not come back: %v", back)
+	}
+	if pushes := ft.pushesOf(assistantwire.NotifyInput, 2, time.Second); len(pushes) != 1 {
+		t.Fatalf("the back placeholder rang past the window: %d pushes", len(pushes))
+	}
+	// Join the expired quiet loop: equal call counts 100ms apart (20ms polls) are past its last read.
+	calls := len(ft.d.callsTo("mac", "session.screen"))
+	time.Sleep(100 * time.Millisecond)
+	if got := len(ft.d.callsTo("mac", "session.screen")); got != calls {
+		t.Fatalf("the look-again loop kept polling: %d then %d", calls, got)
 	}
 }
 
@@ -969,6 +1079,8 @@ func TestScreenCardIgnoresANumberedAnswer(t *testing.T) {
 			t.Fatalf("the answer's numbered list became the card's options: %q %+v", ix.Dialog.Question, ix.Dialog.Options)
 		}
 	}
+	n.setScreen(pickModel) // join the placeholder's look-again loop
+	waitReplaced(s, "scr_mac_s1", 2*time.Second)
 }
 
 // The same Codex question asked again rings the phone again (#3766): after it was handed back to the computer, and
@@ -1104,6 +1216,9 @@ func TestScreenCardJustAnsweredIsNotAskedAgain(t *testing.T) {
 			shortScreenQuiet(t, time.Second)
 			ft, n := newCardFleet(t, false)
 			s := ft.s
+			if c.screen != pickModel {
+				s.fleet.upgradeEvery, s.fleet.upgradeFor = 20*time.Millisecond, 600*time.Millisecond
+			}
 			n.setScreen(c.screen)
 			blockSession(ft, proto.Session{SessionID: "s1", Agent: "claude"})
 			id := onlyCard(t, s)

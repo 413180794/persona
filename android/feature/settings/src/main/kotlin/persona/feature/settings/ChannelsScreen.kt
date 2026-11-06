@@ -37,6 +37,7 @@ import persona.core.designsystem.*
 import persona.core.designsystem.icons.PhIcons
 import persona.core.navigation.ChannelRoute
 import persona.core.navigation.LocalDetailKey
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -133,7 +134,7 @@ internal fun ChannelPage(channels: ChannelManagement?, channelId: String, onBack
     var unbinding by remember { mutableStateOf(false) }
     LaunchedEffect(model) { model.load() }
     // A code on screen: ask the hub again on its own until it is scanned or sent (and the page is open).
-    val polled = state.bind.prompt?.takeIf { it.polled }
+    val polled = state.bind.prompt?.takeIf { state.bind.polled }
     LaunchedEffect(model, polled?.step, polled?.kind, polled?.userCode, polled?.url) { if (polled != null) model.poll() }
     LaunchedEffect(state.boundAs) {
         val who = state.boundAs ?: return@LaunchedEffect
@@ -244,13 +245,16 @@ private fun LazyListScope.binding(
                 ChannelNote(if (channel.bind == "qr") stringResource(R.string.settings_src_channel_bind_qr_note, channel.label) else stringResource(R.string.settings_src_channel_bind_note))
             }
         }
-        else -> item("bind-step-${prompt.step}-${prompt.kind}") { BindStep(channel, prompt, bind, model) }
+        else -> item("bind-step-${prompt.step}-${prompt.kind}") { BindStep(channel, prompt, bind, model, scope) }
     }
 }
 
-/** One binding step: its hint and the hub's word on it, then a QR code, a code, or fields to fill in. */
+/**
+ * One binding step: its hint and the hub's word on it, then a QR code, a code, or fields to fill in. 重新开始 runs in
+ * [pageScope], the page's: this list item's goes away when it scrolls out and would leave it spinning.
+ */
 @Composable
-private fun BindStep(channel: HubChannel, prompt: BindPrompt, bind: BindState, model: ChannelModel) {
+private fun BindStep(channel: HubChannel, prompt: BindPrompt, bind: BindState, model: ChannelModel, pageScope: CoroutineScope) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val res = LocalResources.current
@@ -264,8 +268,9 @@ private fun BindStep(channel: HubChannel, prompt: BindPrompt, bind: BindState, m
         prompt.error?.takeIf { it.isNotBlank() }?.let { JInlineStatus(it, tone = InlineTone.Failed) }
         bind.error?.let { JInlineStatus(it.text(), tone = InlineTone.Failed) }
         val rows = prompt.qr?.rows.orEmpty()
-        when {
-            prompt.kind == "qr" && rows.isNotEmpty() -> {
+        val view = StepView.of(prompt)
+        when (view) {
+            StepView.QrCode -> {
                 JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_channel_qr_label, channel.label))
                 Waiting(stringResource(R.string.settings_src_channel_waiting_scan, channel.label))
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
@@ -278,29 +283,32 @@ private fun BindStep(channel: HubChannel, prompt: BindPrompt, bind: BindState, m
                     JButton(stringResource(R.string.settings_src_cancel), model::cancelBind, Modifier.weight(1f), kind = JButtonKind.Secondary)
                 }
             }
-            prompt.kind == "pair_code" || prompt.kind == "device_code" -> {
+            StepView.Code -> {
                 val code = prompt.userCode.orEmpty()
-                Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                // No code: the page to open is the step (StepView.of); no empty box with a grey 复制.
+                if (code.isNotEmpty()) Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                     JCodeDisplay(code, Modifier.weight(1f))
                     JIconButton(PhIcons.Copy, stringResource(R.string.settings_src_channel_copy_code), {
                         context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(res.getString(R.string.settings_src_channel_code_clip), code))
                         feedback?.notice(res.getString(R.string.settings_src_copied))
-                    }, enabled = code.isNotEmpty())
+                    })
                 }
                 Waiting(if (prompt.kind == "pair_code") stringResource(R.string.settings_src_channel_waiting_send, channel.label) else stringResource(R.string.settings_src_channel_waiting_authorize))
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    prompt.url?.takeIf { prompt.kind == "device_code" && it.startsWith("https://") }?.let { url ->
+                    prompt.url?.takeIf { prompt.kind == "device_code" && StepView.isWebLink(it) }?.let { url ->
                         JButton(stringResource(R.string.settings_src_open_web), { runCatching { uri.openUri(url) } }, Modifier.weight(1f), kind = JButtonKind.Secondary, icon = PhIcons.ArrowSquareOut)
                     }
                     JButton(stringResource(R.string.settings_src_cancel), model::cancelBind, Modifier.weight(1f), kind = JButtonKind.Secondary)
                 }
             }
-            prompt.polled -> {
-                // A step to wait on with nothing the app can draw (a QR step whose code did not come): it still goes on.
+            StepView.QrLink -> {
+                QrLinkStep(prompt.url.orEmpty(), channel.label)
                 Waiting(stringResource(R.string.settings_src_channel_waiting_confirm, channel.label))
                 JButton(stringResource(R.string.settings_src_cancel), model::cancelBind, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
             }
-            else -> {
+            StepView.Unknown, StepView.Incomplete -> CannotDrawStep(prompt, bind.sending, { pageScope.launch { model.startBind() } }, model::cancelBind)
+            StepView.Fields -> {
                 prompt.fields.forEach { field ->
                     JTextField(bind.values[field.name].orEmpty(), { model.setValue(field.name, it) }, Modifier.fillMaxWidth(),
                         label = field.label.ifBlank { field.name }, placeholder = field.placeholder?.takeIf { it.isNotBlank() } ?: field.label,

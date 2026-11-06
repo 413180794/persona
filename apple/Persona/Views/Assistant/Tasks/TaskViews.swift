@@ -383,7 +383,7 @@ struct TaskNowLine: View {
     var body: some View {
         let now = TaskNow(lead: lead, working: state == .working)
         let text: String = {
-            if state == .needsYou { return String(localized: "有事等你回答") }
+            if state == .needsYou { return TaskAsk.waitingLine(store.interactions(todo)) }
             if state == .failed { return String(localized: "没开起来：\(store.startFailure(todo) ?? String(localized: "原因不明"))") }
             if let now { return now.text }
             if let e = todo.agents.first?.startError, !e.isEmpty { return String(localized: "没开起来：\(e)") }

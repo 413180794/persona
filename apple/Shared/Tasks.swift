@@ -456,6 +456,25 @@ nonisolated enum TaskNow: Equatable, Sendable {
     }
 }
 
+/// What a task waiting for the user asks (#3998): the first of its pending cards that says anything, in the inbox
+/// 需要你 row's words (`InboxAgentRow`), on one line; nil when none does.
+nonisolated enum TaskAsk {
+    static func line(_ interactions: [Interaction]) -> String? {
+        for ix in interactions {
+            let text = ix.askLine(includeToolName: false) ?? ix.summary ?? ix.questions?.first?.question ?? ""
+            let line = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }.joined(separator: " ")
+            if !line.isEmpty { return line }
+        }
+        return nil
+    }
+
+    /// The task card's line while it waits: what it asks, else the generic word.
+    static func waitingLine(_ interactions: [Interaction]) -> String {
+        line(interactions) ?? String(localized: "有事等你回答")
+    }
+}
+
 /// What each of an agent's running subagents is for (docs/unified-entry.md): shown under its own progress,
 /// never instead of it.
 nonisolated func runningSubagents(_ lead: Session?) -> [String] {

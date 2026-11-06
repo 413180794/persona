@@ -58,4 +58,27 @@ class HttpProviderSetupTest {
         assertEquals(400, refused.status)
         assertTrue(refused.message.contains("没有这个供应商预设"))
     }
+
+    // A launcher that is slow to answer (cold CLI, slow gateway): the hub allows the check 100 s and each import step
+    // 30 s, so the phone must outwait it (iOS: 110 / 45) rather than fail at the default 15 (#4813).
+    @Test fun checkAndImportWaitLongerThanTheDefault() = runBlocking {
+        MockWebServer().use { server ->
+            val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
+            val timeouts = mutableMapOf<String, Long?>()
+            val providers = HttpProviderSetup { path, method, body, timeout ->
+                timeouts["$method ${path.substringBefore('?')}"] = timeout
+                http.newCall(Request.Builder().url(server.url(path)).method(method, body).build()).execute()
+            }
+            server.enqueue(MockResponse().setBody("""{"machine":"m1","check":{}}"""))
+            providers.check("jv_team", "m1")
+            server.enqueue(MockResponse().setBody("""{"providers":[]}"""))
+            providers.importPreview("m1")
+            server.enqueue(MockResponse().setBody("""{}"""))
+            providers.import("m1", listOf("eg"))
+            server.enqueue(MockResponse().setBody("""{"launchers":[]}"""))
+            providers.launchers()
+            assertEquals(mapOf("POST /api/v1/launchers/jv_team/check" to 110L, "GET /api/v1/launchers/import" to 45L,
+                "POST /api/v1/launchers/import" to 45L, "GET /api/v1/launchers" to null), timeouts)
+        }
+    }
 }

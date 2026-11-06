@@ -30,13 +30,14 @@ import okhttp3.Response
 
 /** 新增模型供应商 over the pairing's connection (docs/launchers.md「接口」). */
 class HttpProviderSetup internal constructor(
-    private val request: suspend (String, String, RequestBody?) -> Response,
-    /** For 测试连接 / 获取模型列表: the hub gives the gateway 30 s, longer than the client's 15. */
-    private val slow: suspend (String, String, RequestBody?) -> Response,
+    /** The last argument is the read timeout in seconds; null keeps the client's 15. */
+    private val request: suspend (String, String, RequestBody?, Long?) -> Response,
 ) : ProviderSetup {
-    internal constructor(request: suspend (String, String, RequestBody?) -> Response) : this(request, request)
-    constructor(connection: OkHttpHubConnection) : this({ path, method, body -> connection.request(path, method, body) },
-        { path, method, body -> connection.request(path, method, body, readTimeoutSeconds = PROBE_READ_TIMEOUT_SECONDS) })
+    internal constructor(request: suspend (String, String, RequestBody?) -> Response) :
+        this({ path: String, method: String, body: RequestBody?, _: Long? -> request(path, method, body) })
+    constructor(connection: OkHttpHubConnection) : this({ path: String, method: String, body: RequestBody?, timeout: Long? ->
+        connection.request(path, method, body, readTimeoutSeconds = timeout)
+    })
 
     // A hub from before the extension base has no such route (its GET /launchers/{name} answers 404 for "presets").
     override suspend fun presets(): List<ProviderPreset> = try {
@@ -64,10 +65,10 @@ class HttpProviderSetup internal constructor(
     }
 
     override suspend fun test(probe: ProviderProbe): ProviderTest =
-        JsonCodec.decodeFromString(ProviderTest.serializer(), call("/api/v1/launchers/test", "POST", probe.body(), slow))
+        JsonCodec.decodeFromString(ProviderTest.serializer(), call("/api/v1/launchers/test", "POST", probe.body(), PROBE_READ_TIMEOUT_SECONDS))
 
     override suspend fun discover(probe: ProviderProbe): ProviderDiscovery =
-        JsonCodec.decodeFromString(ProviderDiscovery.serializer(), call("/api/v1/launchers/discover", "POST", probe.copy(model = null).body(), slow))
+        JsonCodec.decodeFromString(ProviderDiscovery.serializer(), call("/api/v1/launchers/discover", "POST", probe.copy(model = null).body(), PROBE_READ_TIMEOUT_SECONDS))
 
     private fun ProviderProbe.body(): RequestBody {
         fun String?.kept() = this?.trim()?.takeIf { it.isNotEmpty() }
@@ -93,7 +94,7 @@ class HttpProviderSetup internal constructor(
         val url = HttpUrl.Builder().scheme("https").host("example.com").addPathSegments("api/v1/launchers").addPathSegment(name)
             .addPathSegment("check").apply { machine?.takeIf { it.isNotBlank() }?.let { addQueryParameter("machine", it) } }.build()
         val target = url.encodedPath + (url.encodedQuery?.let { "?$it" } ?: "")
-        val answer = JsonCodec.parseToJsonElement(call(target, "POST", "{}".toRequestBody(json))).jsonObject
+        val answer = JsonCodec.parseToJsonElement(call(target, "POST", "{}".toRequestBody(json), CHECK_READ_TIMEOUT_SECONDS)).jsonObject
         val check = answer["check"] ?: throw HubFailure(HubError.Protocol)
         return LauncherCheckAnswer((answer["machine"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
             JsonCodec.decodeFromJsonElement(LauncherCheck.serializer(), check))
@@ -102,7 +103,7 @@ class HttpProviderSetup internal constructor(
     override suspend fun importPreview(machine: String): List<ImportedProvider> {
         val url = HttpUrl.Builder().scheme("https").host("example.com").addPathSegments("api/v1/launchers/import")
             .addQueryParameter("machine", machine).build()
-        val list = JsonCodec.parseToJsonElement(call("${url.encodedPath}?${url.encodedQuery}", "GET")).jsonObject["providers"] as? JsonArray
+        val list = JsonCodec.parseToJsonElement(call("${url.encodedPath}?${url.encodedQuery}", "GET", timeout = IMPORT_READ_TIMEOUT_SECONDS)).jsonObject["providers"] as? JsonArray
         return list?.let { JsonCodec.decodeFromJsonElement(ListSerializer(ImportedProvider.serializer()), it) }.orEmpty()
     }
 
@@ -111,7 +112,7 @@ class HttpProviderSetup internal constructor(
             put("machine", machine)
             put("providers", JsonArray(providers.map(::JsonPrimitive)))
         }
-        return JsonCodec.decodeFromString(LauncherImportResult.serializer(), call("/api/v1/launchers/import", "POST", body.toString().toRequestBody(json)))
+        return JsonCodec.decodeFromString(LauncherImportResult.serializer(), call("/api/v1/launchers/import", "POST", body.toString().toRequestBody(json), IMPORT_READ_TIMEOUT_SECONDS))
     }
 
     private fun path(name: String, vararg more: String): String {
@@ -122,15 +123,20 @@ class HttpProviderSetup internal constructor(
 
     private suspend fun call(
         path: String, method: String, body: RequestBody? = null,
-        via: suspend (String, String, RequestBody?) -> Response = request,
+        timeout: Long? = null,
     ): String =
-        via(path, method, body).use {
+        request(path, method, body, timeout).use {
             if (!it.isSuccessful) throw HubFailure.from(it)
             it.body?.string().orEmpty()
         }
 
     private companion object {
+        /** 测试连接 / 获取模型列表: the hub gives the gateway 30 s. */
         const val PROBE_READ_TIMEOUT_SECONDS = 40L
+        /** 测试可用性: the hub gives the launcher's CLI 100 s to answer (as iOS). */
+        const val CHECK_READ_TIMEOUT_SECONDS = 110L
+        /** ~/.zshrc preview and import: the hub gives each call to the machine 30 s (as iOS). */
+        const val IMPORT_READ_TIMEOUT_SECONDS = 45L
         val json = "application/json; charset=utf-8".toMediaType()
     }
 }

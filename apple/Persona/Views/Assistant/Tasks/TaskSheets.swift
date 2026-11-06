@@ -276,11 +276,13 @@ struct TaskBoardSheet: View {
         .accessibilityIdentifier("task-board.agent")
     }
 
-    /// Where the agent is and what it said last, like a task's line: machine · project · agent · last words.
+    /// Where the agent is and what it said last, like a task's line: machine · project · agent · last words; while it
+    /// waits for the user, what it asks instead (#3998).
     private func agentSubtitle(_ agent: DockAgent) -> String {
         let model = AppModel.shared
         let session = model.session(agent.key)
-        let last = session?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let asks = session?.state == .needsYou ? TaskAsk.line(model.pendingInteractions.filter { $0.sessionKey == agent.key }) : nil
+        let last = asks ?? session?.lastText?.trimmingCharacters(in: .whitespacesAndNewlines)
         return [model.machine(agent.key.machineRef)?.name ?? agent.key.machineID, session?.folderName, session?.agentLabel, last]
             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
@@ -289,6 +291,10 @@ struct TaskBoardSheet: View {
         let lead = store.leadSession(todo)
         let place = TaskPlace.line(todo, lead: lead)
         if let failure = store.startFailure(todo) { return place.isEmpty ? failure : place + " · " + failure }
+        // Waiting for the user: what it asks (#3998), before its last words.
+        if store.state(todo) == .needsYou, let asks = TaskAsk.line(store.interactions(todo)) {
+            return place.isEmpty ? asks : place + " · " + asks
+        }
         guard let now = TaskNow(lead: lead, working: store.state(todo) == .working) else { return place }
         return place + " · " + now.text
     }

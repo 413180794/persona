@@ -19,4 +19,11 @@
     <string name="settings_src_connector_logout_body">hub 上存的登录状态和凭据会删掉，再用要重新登录。对方服务里的授权不一定一起撤销，需要的话到那边撤销。</string>
     <string name="settings_src_connector_not_signed_in">没有登录上：%1$s</string>
     <string name="settings_src_connector_not_signed_out">没有退出：%1$s</string>
+    <!-- A sign-in / binding step the app cannot draw, or a QR step without its modules (SignInSteps.kt, #4488). -->
+    <string name="settings_src_signin_cannot_draw">这个版本的 App 显示不了这一步。更新 App 后点「重新开始」再试。</string>
+    <string name="settings_src_signin_incomplete">hub 发来的这一步缺了要显示的内容。点「重新开始」再试一次。</string>
+    <string name="settings_src_signin_restart">重新开始</string>
+    <string name="settings_src_signin_qr_link">这里画不出二维码。把下面的链接发到%1$s里打开，确认后这里会自动继续。</string>
+    <string name="settings_src_signin_copy_link">复制链接</string>
+    <string name="settings_src_signin_link">链接</string>
 </resources>

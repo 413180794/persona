@@ -234,11 +234,12 @@ internal data class BindState(
     val error: ResText? = null,
 ) {
     val active: Boolean get() = prompt != null
-    val polled: Boolean get() = prompt?.polled == true
+    /** A code or QR code on screen, asked again by itself; never a step this app cannot draw (#4488). */
+    val polled: Boolean get() = prompt?.let { !it.done && StepView.of(it).asksAgain } == true
     /** Fields to fill in, at least one filled (the hub says which it still needs). */
     val canSubmit: Boolean get() {
         val p = prompt ?: return false
-        return !sending && !p.polled && p.fields.isNotEmpty() && p.fields.any { values[it.name].orEmpty().isNotBlank() }
+        return !sending && StepView.of(p) == StepView.Fields && p.fields.any { values[it.name].orEmpty().isNotBlank() }
     }
     /** How long to wait before asking the hub again, at least a second. */
     val pollMillis: Long get() = (prompt?.interval ?: 0).coerceAtLeast(MinPollSeconds) * 1000L
@@ -336,7 +337,7 @@ internal class ChannelModel(private val api: ChannelManagement, private val id: 
     suspend fun poll(wait: suspend (Long) -> Unit = { delay(it) }) {
         while (true) {
             val bind = state.value.bind
-            val prompt = bind.prompt?.takeIf { it.polled } ?: return
+            val prompt = bind.prompt?.takeIf { bind.polled } ?: return
             wait(bind.pollMillis)
             // Cancelled or replaced while waiting: whatever is on screen now is the one to ask about.
             if (state.value.bind.prompt !== prompt) continue

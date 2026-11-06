@@ -205,7 +205,7 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		return
 	}
 	back := s.screenBackLocked(machine, sess.SessionID, id, d != nil, time.Now())
-	s.ixMapLocked()[id] = &pending{ix: ix, local: func(r proto.Resolution) error {
+	p := &pending{ix: ix, local: func(r proto.Resolution) error {
 		if r.Dismiss {
 			return nil
 		}
@@ -226,16 +226,19 @@ func (s *Service) createScreenInteraction(machine string, sess proto.Session) {
 		}
 		return err
 	}}
+	s.ixMapLocked()[id] = p
 	s.fleet.mu.Unlock()
 	s.record(ix)
-	if back {
-		s.show(ix) // pushed before its node's connection ended (#4252)
-		go s.feishuCardBack(ix)
+	if back || d == nil {
+		s.show(ix) // back: pushed before the node's connection ended (#4252); no dialog: the real card rings later (#4450)
+		if back {
+			go s.feishuCardBack(ix)
+		}
 	} else {
 		s.announce(ix)
 	}
 	if d == nil {
-		go s.upgradeScreenCard(machine, sess.SessionID, id)
+		go s.upgradeScreenCard(machine, sess.SessionID, id, p, back)
 	}
 }
 
@@ -277,18 +280,20 @@ const screenUpgradeEvery, screenUpgradeFor = 500 * time.Millisecond, 30 * time.S
 
 // upgradeScreenCard: the agent may be called blocked before it draws its dialog (Orca does so from its PreToolUse
 // hook; on Windows the hooks take seconds before AskUserQuestion's dialog shows), so the card made then has no dialog
-// to answer. Look at the screen again; once a dialog shows, its card replaces this one. Stop when this card is
-// answered or gone, the agent no longer blocked, or the time up (a dialog the manager cannot read: the card stays).
-func (s *Service) upgradeScreenCard(machine, session, id string) {
+// to answer. Look at the screen again; once a dialog shows, its card replaces this one. The loop is pinned to its own
+// card generation (p), so after blocked -> working -> blocked a placeholder reusing this id belongs to a newer card.
+// Failed reads cost one more poll; the last poll past the window rings the unreadable card once, except a reconnect-back card (back), which already rang before the detach (#4252).
+func (s *Service) upgradeScreenCard(machine, session, id string, p *pending, back bool) {
 	every, span := cmp.Or(s.fleet.upgradeEvery, screenUpgradeEvery), cmp.Or(s.fleet.upgradeFor, screenUpgradeFor)
-	for end := time.Now().Add(span); time.Now().Before(end); {
+	end := time.Now().Add(span)
+	for {
 		time.Sleep(every)
 		cur, ok := s.nodeSession(machine, session)
 		if !ok || cur.Status != proto.StatusBlocked {
 			return
 		}
 		s.fleet.mu.Lock()
-		_, still := s.fleet.interactions[id]
+		still := s.fleet.interactions[id] == p
 		s.fleet.mu.Unlock()
 		if !still {
 			return
@@ -299,12 +304,24 @@ func (s *Service) upgradeScreenCard(machine, session, id string) {
 		}
 		err := s.nodeCall(ctx, machine, "session.screen", map[string]any{"session_id": session, "lines": 40}, &scr)
 		cancel()
-		if err != nil {
+		if err == nil && screen.ParseDialog(scr.Text) != nil {
+			s.fleet.mu.Lock()
+			same := s.fleet.interactions[id] == p
+			s.fleet.mu.Unlock()
+			if same {
+				s.finishInteraction(id)
+				s.createScreenInteraction(machine, cur)
+			}
 			return
 		}
-		if screen.ParseDialog(scr.Text) != nil {
-			s.finishInteraction(id)
-			s.createScreenInteraction(machine, cur)
+		if !time.Now().Before(end) {
+			// Window over and unreadable: re-pin (the read took time), then ring once; a reconnect-back card already rang (#4252).
+			s.fleet.mu.Lock()
+			same := s.fleet.interactions[id] == p
+			s.fleet.mu.Unlock()
+			if same && !back {
+				s.announce(p.ix)
+			}
 			return
 		}
 	}

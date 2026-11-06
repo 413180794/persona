@@ -9,6 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import persona.core.contracts.api.BindField
 import persona.core.contracts.api.BindPrompt
+import persona.core.contracts.api.BindQrCode
 import persona.core.contracts.api.HubConnector
 
 /** A plugin connector's sign-in, a step at a time, against a fake hub (what each step asks for is the hub's). */
@@ -27,8 +28,8 @@ class ConnectorSignInModelTest {
     @Test fun fieldsThenCodeThenDone() = runBlocking {
         val hub = Hub(
             BindPrompt(step = "server", fields = listOf(BindField("server", "Server"), BindField("note", "Note"))),
-            BindPrompt(step = "scan", kind = "qr", interval = 1),
-            BindPrompt(step = "scan", kind = "qr", interval = 1),
+            BindPrompt(step = "scan", kind = "qr", interval = 1, qr = BindQrCode(1, listOf("1"))),
+            BindPrompt(step = "scan", kind = "qr", interval = 1, qr = BindQrCode(1, listOf("1"))),
             BindPrompt(done = true, account = "wxid_example_a"),
         )
         val model = ConnectorSignInModel(hub, "example")
@@ -48,6 +49,32 @@ class ConnectorSignInModelTest {
         assertEquals("wxid_example_a", model.state.value.signedInAs)
         model.signedInShown()
         assertNull(model.state.value.signedInAs)
+    }
+
+    /** A step this app cannot draw is not asked again by itself and has no 下一步; 重新开始 is the first step again (#4488). */
+    @Test fun stepsItCannotDrawAreNotAskedAgain() = runBlocking {
+        for (p in listOf(BindPrompt(step = "auth", kind = "open_url", url = "https://example.com/auth"),
+                         BindPrompt(step = "scan", kind = "qr", interval = 1),
+                         BindPrompt(step = "scan", kind = "qr", interval = 1, url = "weixin-only-content", qr = BindQrCode(0, emptyList())),
+                         BindPrompt(step = "device", kind = "device_code", url = "weixin-only-content"),
+                         BindPrompt(step = "wait", hint = "Hold on"))) {
+            assertFalse("$p", BindState(p).polled)
+            assertFalse("$p", BindState(p).canSubmit)
+        }
+        for (p in listOf(BindPrompt(step = "scan", kind = "qr", qr = BindQrCode(1, listOf("1"))),
+                         BindPrompt(step = "scan", kind = "qr", url = "https://example.com/q"),
+                         BindPrompt(step = "device", kind = "device_code", userCode = "ABCD-1234"),
+                         BindPrompt(step = "pair", kind = "pair_code", userCode = "482913"),
+                         // An extension's device code may come with its page alone (docs/extensions.md「登录」).
+                         BindPrompt(step = "device", kind = "device_code", url = "HTTPS://example.com/device"))) assertTrue("$p", BindState(p).polled)
+
+        val hub = Hub(BindPrompt(step = "auth", kind = "open_url"), BindPrompt(step = "phone", fields = listOf(BindField("phone", "Phone"))))
+        val model = ConnectorSignInModel(hub, "example")
+        assertTrue(model.start())
+        model.poll { throw AssertionError("asked again") }
+        assertTrue(model.start())
+        assertEquals(listOf("", ""), hub.steps.map { it.first })
+        assertEquals("phone", model.state.value.bind.prompt?.step)
     }
 
     @Test fun aFailedStepSaysWhyAndKeepsTheStep() = runBlocking {

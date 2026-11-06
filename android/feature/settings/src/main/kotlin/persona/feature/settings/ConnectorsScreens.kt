@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import persona.core.contracts.api.*
@@ -632,7 +633,7 @@ internal fun HubConnectorPage(
     LaunchedEffect(connectors, connectorId) { load() }
     BackHandler(onBack = onBack)
     // A code on screen: ask the hub again on its own until it is scanned or entered (and the page is open).
-    val polled = signInState.bind.prompt?.takeIf { it.polled }
+    val polled = signInState.bind.prompt?.takeIf { signInState.bind.polled }
     LaunchedEffect(signIn, polled?.step, polled?.kind, polled?.userCode, polled?.url) { if (polled != null) signIn?.poll() }
     LaunchedEffect(signInState.signedInAs) {
         val who = signInState.signedInAs ?: return@LaunchedEffect
@@ -830,17 +831,21 @@ private fun LazyListScope.connectorSignIn(
                     Modifier.padding(horizontal = rowPadding, vertical = Tokens.Space.s))
             }
         }
-        else -> item("signin-step-${prompt.step}-${prompt.kind}") { ConnectorSignInStep(c.name, prompt, bind, model) }
+        else -> item("signin-step-${prompt.step}-${prompt.kind}") { ConnectorSignInStep(c.name, prompt, bind, model, pageScope = scope) }
     }
 }
 
 /**
  * One sign-in step: its hint and the hub's word on it, then a QR code, a code to enter elsewhere, or fields to fill in.
  * [deviceLink] (an extension's sign-in, #4507) also shows a device code's page as a link to tap and its QR code (the hub
- * draws it) to scan with another phone. [name] is what is signed in to.
+ * draws it) to scan with another phone. [name] is what is signed in to. 重新开始 runs in [pageScope] (the page's, not this
+ * list item's, which goes away when the item scrolls out and would leave it spinning).
  */
 @Composable
-internal fun ConnectorSignInStep(name: String, prompt: BindPrompt, bind: BindState, model: ConnectorSignInModel, deviceLink: Boolean = false) {
+internal fun ConnectorSignInStep(
+    name: String, prompt: BindPrompt, bind: BindState, model: ConnectorSignInModel, deviceLink: Boolean = false,
+    pageScope: CoroutineScope? = null,
+) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val res = LocalResources.current
@@ -853,15 +858,16 @@ internal fun ConnectorSignInStep(name: String, prompt: BindPrompt, bind: BindSta
         prompt.error?.takeIf { it.isNotBlank() }?.let { JInlineStatus(it, tone = InlineTone.Failed) }
         bind.error?.let { JInlineStatus(it.text(), tone = InlineTone.Failed) }
         val rows = prompt.qr?.rows.orEmpty()
+        val view = StepView.of(prompt)
         when {
-            prompt.kind == "qr" && rows.isNotEmpty() -> {
+            view == StepView.QrCode -> {
                 JQrCode(rows, Modifier.align(Alignment.CenterHorizontally), label = stringResource(R.string.settings_src_connector_qr_label, name))
                 SignInWaiting(stringResource(R.string.settings_src_connector_waiting_scan))
                 JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
             }
-            prompt.kind == "device_code" && deviceLink -> {
+            view == StepView.Code && prompt.kind == "device_code" && deviceLink -> {
                 val code = prompt.userCode.orEmpty()
-                val link = prompt.url?.takeIf { it.startsWith("https://") }
+                val link = prompt.url?.takeIf { StepView.isWebLink(it) }
                 link?.let { url ->
                     JGroupItem(GroupPosition.Single) {
                         JRow(stringResource(R.string.settings_ext_auth_link_label), subtitle = url, subtitleLines = 2, leadingIcon = PhIcons.LinkSimple,
@@ -893,30 +899,34 @@ internal fun ConnectorSignInStep(name: String, prompt: BindPrompt, bind: BindSta
                     JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.weight(1f), kind = JButtonKind.Secondary)
                 }
             }
-            prompt.kind == "device_code" -> {
+            view == StepView.Code -> {
                 val code = prompt.userCode.orEmpty()
-                Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
+                // No code: the page to open is the step (StepView.of); no empty box with a grey 复制.
+                if (code.isNotEmpty()) Row(Modifier.padding(start = rowPadding), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Tokens.Space.m)) {
                     JCodeDisplay(code, Modifier.weight(1f))
                     JIconButton(PhIcons.Copy, stringResource(R.string.settings_src_connector_copy_code), {
                         context.getSystemService(ClipboardManager::class.java)
                             ?.setPrimaryClip(ClipData.newPlainText(res.getString(R.string.settings_src_connector_code_clip), code))
                         feedback?.notice(res.getString(R.string.settings_src_copied))
-                    }, enabled = code.isNotEmpty())
+                    })
                 }
                 SignInWaiting(stringResource(R.string.settings_src_channel_waiting_authorize))
                 Row(horizontalArrangement = Arrangement.spacedBy(Tokens.Space.s)) {
-                    prompt.url?.takeIf { it.startsWith("https://") }?.let { url ->
+                    prompt.url?.takeIf { StepView.isWebLink(it) }?.let { url ->
                         JButton(stringResource(R.string.settings_src_open_web), { runCatching { uri.openUri(url) } }, Modifier.weight(1f),
                             kind = JButtonKind.Secondary, icon = PhIcons.ArrowSquareOut)
                     }
                     JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.weight(1f), kind = JButtonKind.Secondary)
                 }
             }
-            prompt.polled -> {
-                // A step to wait on with nothing to draw (a QR step whose code did not come): it still goes on.
+            view == StepView.QrLink -> {
+                QrLinkStep(prompt.url.orEmpty(), name)
                 SignInWaiting(stringResource(R.string.settings_src_connector_waiting_confirm))
                 JButton(stringResource(R.string.settings_src_cancel), model::cancel, Modifier.fillMaxWidth(), kind = JButtonKind.Secondary)
             }
+            view == StepView.Unknown || view == StepView.Incomplete ->
+                CannotDrawStep(prompt, bind.sending, { (pageScope ?: scope).launch { model.start() } }, model::cancel)
             else -> {
                 prompt.fields.forEach { field ->
                     JTextField(bind.values[field.name].orEmpty(), { model.setValue(field.name, it) }, Modifier.fillMaxWidth(),

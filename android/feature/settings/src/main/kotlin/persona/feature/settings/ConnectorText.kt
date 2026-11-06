@@ -112,7 +112,7 @@ internal class ConnectorSignInModel(
     suspend fun poll(wait: suspend (Long) -> Unit = { delay(it) }) {
         while (true) {
             val bind = state.value.bind
-            val prompt = bind.prompt?.takeIf { it.polled } ?: return
+            val prompt = bind.prompt?.takeIf { bind.polled } ?: return
             wait(bind.pollMillis)
             // Cancelled or replaced while waiting: whatever is on screen now is the one to ask about.
             if (state.value.bind.prompt !== prompt) continue

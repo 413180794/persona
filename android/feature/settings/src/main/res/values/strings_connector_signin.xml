@@ -19,4 +19,11 @@
     <string name="settings_src_connector_logout_body">The sign-in and credentials stored on the hub are deleted; sign in again to use it. Access on the other service is not always revoked with it: revoke it there if needed.</string>
     <string name="settings_src_connector_not_signed_in">Couldn\'t sign in: %1$s</string>
     <string name="settings_src_connector_not_signed_out">Couldn\'t sign out: %1$s</string>
+    <!-- A sign-in / binding step the app cannot draw, or a QR step without its modules (SignInSteps.kt, #4488). -->
+    <string name="settings_src_signin_cannot_draw">This version of the app can\'t show this step. Update the app, then tap Start over.</string>
+    <string name="settings_src_signin_incomplete">This step from the hub is missing what it should show. Tap Start over to try again.</string>
+    <string name="settings_src_signin_restart">Start over</string>
+    <string name="settings_src_signin_qr_link">The QR code can\'t be shown here. Open the link below in %1$s; once you confirm, this continues on its own.</string>
+    <string name="settings_src_signin_copy_link">Copy link</string>
+    <string name="settings_src_signin_link">Link</string>
 </resources>

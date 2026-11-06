@@ -19,4 +19,11 @@
     <string name="settings_src_connector_logout_body">hub に保存されたログイン状態と認証情報は削除されます。使うにはもう一度ログインしてください。相手側サービスの許可は一緒に取り消されるとは限らないので、必要ならそちらで取り消してください。</string>
     <string name="settings_src_connector_not_signed_in">ログインできませんでした：%1$s</string>
     <string name="settings_src_connector_not_signed_out">ログアウトできませんでした：%1$s</string>
+    <!-- A sign-in / binding step the app cannot draw, or a QR step without its modules (SignInSteps.kt, #4488). -->
+    <string name="settings_src_signin_cannot_draw">このバージョンのアプリではこの手順を表示できません。アプリを更新してから「やり直す」をタップしてください。</string>
+    <string name="settings_src_signin_incomplete">ハブから届いたこの手順には表示する内容がありません。「やり直す」をタップしてもう一度試してください。</string>
+    <string name="settings_src_signin_restart">やり直す</string>
+    <string name="settings_src_signin_qr_link">ここではQRコードを表示できません。下のリンクを%1$sで開いてください。確認すると自動で続行します。</string>
+    <string name="settings_src_signin_copy_link">リンクをコピー</string>
+    <string name="settings_src_signin_link">リンク</string>
 </resources>
