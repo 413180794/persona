@@ -47,6 +47,8 @@ struct PendingCards: View {
     @State private var shown: CGFloat = 0
     /// The cards' container's length (see `cardRoom`).
     @State private var containerLength: CGFloat = 0
+    /// 「N 个待处理」's height, once it showed (the cards' room in a voice call).
+    @State private var countHeight: CGFloat = 0
     @State private var position = ScrollPosition(edge: .top)
 
     /// The share of the page the cards may take before they scroll.
@@ -64,6 +66,9 @@ struct PendingCards: View {
                 Text("\(cards.count) pending")
                     .font(Theme.Font.sectionHeader).foregroundStyle(.secondary).lineLimit(1)
                     .padding(.horizontal, Theme.Space.xs)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                        if h > 0, abs(h - countHeight) >= 1 { countHeight = h } // the last one stays: the cap in a call counts it
+                    }
                     .accessibilityIdentifier("pending-cards-count")
             }
             // One scroll view whether or not they fit: a card keeps what is typed into it in its own state.
@@ -130,8 +135,26 @@ struct PendingCards: View {
 
     private var cap: CGFloat {
         let half = room.height * Self.share
-        guard keyboardRoom else { return half }
+        guard keyboardRoom else {
+            // In a voice call the bar is taller than the composer it replaces (at large text sizes, much taller), and the
+            // conversation's last rows are the call's captions: the cards give up what of their half would leave the
+            // conversation less than `voiceThreadRoom` over the floor. Measured against the header as it stands open
+            // (`fixedHeader`), not as it folds: the list's height moves the fold, and the fold moved the cap, back and
+            // forth every frame.
+            // What the footer holds besides the cards comes from the bar's own height (`VoiceBarRoom`) and the count's,
+            // never from the footer as measured: that moves with the cap, and a cap within a point of half flipped between
+            // the two every frame.
+            guard inCall, room.height > 0 else { return half }
+            let others = VoiceBarRoom.shared.height + countHeight + Theme.Space.s * 3 + Theme.Space.m
+            let fits = room.height - room.fixedHeader - room.listFloor - Theme.Size.voiceThreadRoom - others
+            return max(Theme.Size.tapTarget, min(half, fits))
+        }
         return max(Theme.Size.tapTarget, shown + room.height - room.footer - room.header - room.listFloor)
+    }
+
+    /// A voice call is on in the cards' conversation (docs/voice.md 6.2).
+    private var inCall: Bool {
+        cards.first.map { VoiceCalls.shared.isLive(on: $0.interaction.sessionKey) } ?? false
     }
 
     /// As tall as the cards (with the scrolling margins), at most the cap; with the keyboard up no taller than they need,

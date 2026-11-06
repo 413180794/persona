@@ -589,6 +589,10 @@ struct ChatView: View {
         #endif
         // A different chat shown in place: its own cards decide whether another conversation needs you (#4348).
         .onChange(of: key) { _, _ in offeredNext = nil }
+        // Leaving the conversation ends the phone's voice call bound to it (docs/voice.md 6.5): another agent shown in
+        // place, the page gone, or hidden in the shell (`onTabVisibility`).
+        .onChange(of: key) { old, _ in VoiceCalls.shared.leave(old) }
+        .onTabVisibility(appear: {}, disappear: { [key] in VoiceCalls.shared.leave(key) })
         .onChange(of: status) { _, st in if !st.isActive { Task { await loadGit() } } }
         // One stack: the chat takes the whole screen. Beside the list (split) the tab bar stays, or there is no way out.
         .hidesTabBarWhenShown(style == .dev && split == nil)
@@ -1825,8 +1829,11 @@ struct ChatView: View {
                 }
             }
         }
-        TaskDock(conversation: conversation, computer: computerActivity)
-        RouteChip(conversation: conversation)
+        // Out of the way of a voice call (docs/voice.md 6.2「通话期间」), back when it ends.
+        VoiceCallHides(key: key) {
+            TaskDock(conversation: conversation, computer: computerActivity)
+            RouteChip(conversation: conversation)
+        }
     }
 
     /// The agent's pending cards, and in DEBUG the sample ones the screenshot switches add (`-showSampleQuestion YES`…).
@@ -1841,6 +1848,8 @@ struct ChatView: View {
         for (flag, sample) in samples where UserDefaults.standard.bool(forKey: flag) {
             if let ix = sample(key) { cards.append(PendingCards.Card(interaction: ix, enabled: true)) }
         }
+        // `-showVoiceSample asking|approval|plan_feedback`: the card the voice asks about or points to.
+        cards += VoiceSample.cards(key).map { PendingCards.Card(interaction: $0, enabled: true) }
         #endif
         return cards
     }
@@ -1967,6 +1976,13 @@ struct ChatView: View {
             Color.clear
                 .frame(height: Theme.Size.line)
                 .id(Self.bottomID)
+            // A voice call's captions, the thread's last rows while it is bound here (docs/voice.md 6.2): they read the
+            // call themselves; the page only asks whether one is bound.
+            if viewing == nil, VoiceCalls.shared.isBound(to: key) {
+                VoiceThreadTail(key: key, held: frozen != nil)
+                    .flippedBack()
+                    .id("voice-tail")
+            }
             if let err = store.error {
                 Label(err, systemImage: Theme.Icon.error).font(Theme.Font.label).foregroundStyle(Theme.danger).flippedBack()
             }
@@ -2166,6 +2182,7 @@ struct ChatView: View {
         // Not while a tapped header is held in place (`ChatPin`): opening a work line loads its steps.
         .onChange(of: store.items.count) { _, _ in contentArrived(foldChrome: true) }
         .modifier(ChatStreamFollow(store: store) { contentArrived(foldChrome: true) })
+        .modifier(VoiceTailFollow(key: key) { contentArrived(foldChrome: false) }) // a voice call's captions, likewise
         // Your own message brings you to the newest — only yours (one typed on the computer, or sent by another session,
         // used to pull you out of the history you were reading too), and only if you have not scrolled since sending it:
         // Claude can take it in seconds later, while you went back up to read (2026-10-30).
@@ -3538,6 +3555,32 @@ struct Composer: View, Equatable {
     @State private var macWindow: Int?
     #endif
     @FocusState private var focused: Bool
+    /// The 「+」 menu's Voice Chat where the page offers no call: why (docs/voice.md 1.3).
+    @State private var voiceNote: VoiceUnavailableNote?
+
+    /// The voice call bound to this conversation, live or ended (docs/voice.md 6.2): the bar takes the box's place while
+    /// it is on, and 「语音已结束 · 继续」 sits over the box after it ended by itself.
+    private var voiceCall: VoiceConversation? { VoiceCalls.shared.call(on: key) }
+
+    /// The composer's voice button (docs/voice.md 6.1): only where a call can start; the 「+」 menu's item stays and says why
+    /// not.
+    private var voiceEntry: (() -> Void)? {
+        guard VoiceSupport.shared.availability(for: model.session(key), group: key.group).isAvailable else { return nil }
+        return { startVoice() }
+    }
+
+    private func startVoice() {
+        focused = false
+        voiceNote = VoiceEntry.start(key, model: model)
+    }
+
+    /// Voice Chat in the 「+」 menu (iOS only: the Mac and visionOS have no call audio yet, docs/voice.md 6.9).
+    @ViewBuilder private var voiceMenuItem: some View {
+        if VoicePlatform.current == .phone {
+            Button { startVoice() } label: { Label("Voice Chat", systemImage: Theme.Icon.voiceChannel) }
+                .accessibilityIdentifier("composer-menu-voice")
+        }
+    }
 
     /// /clear only for Claude in a herdr pane (the headless assistant and Codex / TRAEX have no such command here).
     private var canClear: Bool {
@@ -3670,7 +3713,8 @@ struct Composer: View, Equatable {
         Binding(get: { model.composerContexts[key] ?? [] }, set: { model.composerContexts[key] = $0.isEmpty ? nil : $0 })
     }
 
-    /// The notes over the box, the attachments and the box itself (`body` adds what happens around them).
+    /// The notes over the box, the attachments and the box itself (`body` adds what happens around them). In a voice
+    /// call the voice bar takes the box's place (docs/voice.md 6.2); what goes with a typed message waits, kept.
     private var composerStack: some View {
         composerNotes
             .readinessSheets($failureRoute)
@@ -3684,7 +3728,9 @@ struct Composer: View, Equatable {
     private var gate: SendGate? { isMain && !status.isActive ? model.readinessGate(route: $failureRoute) : nil }
 
     private var composerNotes: some View {
-        VStack(spacing: Theme.Space.s) {
+        let call = voiceCall
+        let inCall = call.map { !$0.isOver } ?? false
+        return VStack(spacing: Theme.Space.s) {
             if let s = model.session(key), s.starting == true || s.startError != nil {
                 StartingNote(error: s.startError, agent: s.agentLabel)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -3714,7 +3760,7 @@ struct Composer: View, Equatable {
                 LoopDraftNote(hint: hint)
                     .transition(.opacity)
             }
-            if let suggestion {
+            if let suggestion, !inCall {
                 SuggestionPill(text: suggestion) {
                     text = suggestion
                     selection = TextSelection(insertionPoint: suggestion.endIndex) // keep typing after it
@@ -3724,28 +3770,39 @@ struct Composer: View, Equatable {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
-            if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
-            #if os(iOS) || os(visionOS)
-            PasteImageChip(focused: focused) { add($0) }
-            #endif
-            if !images.isEmpty {
-                ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
+            if !inCall {
+                if !uploads.items.isEmpty { UploadsBar(uploads: uploads) }
+                if !videos.items.isEmpty { VideoAttachmentsBar(videos: videos) }
+                #if os(iOS) || os(visionOS)
+                PasteImageChip(focused: focused) { add($0) }
+                #endif
+                if !images.isEmpty {
+                    ComposerImages(images: $images) { editingIndex = $0 } // a tap marks it up before sending
+                }
+                // In the stack, not over it: the composer sits in its own hosting controller, which takes no touches
+                // outside its bounds (#518).
+                let slash = slashRows
+                if !slash.isEmpty {
+                    SlashMenu(rows: slash, pick: pickSlash)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            // In the stack, not over it: the composer sits in its own hosting controller, which takes no touches
-            // outside its bounds (#518).
-            let slash = slashRows
-            if !slash.isEmpty {
-                SlashMenu(rows: slash, pick: pickSlash)
+            // A call that ended by itself: 「语音已结束 · 继续」 over the box, until the page goes (docs/voice.md 1.2 L).
+            if let call, call.isOver, case .ended(let end) = call.phase, let note = VoiceEndNote.make(end, extensionID: call.extensionID) {
+                VoiceEndedStrip(call: call, note: note)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            if usesShellComposer {
+            if let call, inCall {
+                VoiceBar(call: call, key: key, label: VoiceEntry.label(model.session(key), model: model))
+                    .transition(.opacity)
+            } else if usesShellComposer {
                 // The shell's composer (docs/ios.md「新外壳」), whatever the style: the assistant's and an agent's (#1091).
                 ShellComposerBar(placeholder: status.isActive ? String(localized: "Add a note (queued)")
                                      : (suggestion ?? (shellChat ? String(localized: "Ask \(model.persona.name)") : placeholder ?? String(localized: "Message Claude"))),
                                  text: textBinding, selection: $selection, focused: $focused, canSend: canSend,
                                  hasAttachments: hasAttachments,
                                  stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
+                                 voice: voiceEntry,
                                  modesTitle: modesTitle,
                                  quotes: contexts,
                                  alwaysOpen: ChatComposerKind.macCard,
@@ -3760,6 +3817,7 @@ struct Composer: View, Equatable {
                         Button { showGlasses = true } label: { Label("Glasses Photo", systemImage: Theme.Icon.glasses).lineLimit(1) }
                     }
                     Button { showFiles = true } label: { Label("Files", systemImage: Theme.Icon.file) }
+                    voiceMenuItem
                     extensionPrompts
                     if !shellChat { quickCommands } // an agent's, as its composer offered them before the shell's
                 } modes: {
@@ -3772,7 +3830,8 @@ struct Composer: View, Equatable {
                                text: textBinding, selection: $selection, focused: $focused,
                                hasAttachments: hasAttachments,
                                stop: status.isActive && model.session(key)?.canInterrupt == true ? { Task { await model.interrupt(key) } } : nil,
-                               attach: PromptItems.attachments(camera: CameraPicker.isAvailable, glasses: MetaGlasses.isBuiltIn),
+                               attach: PromptItems.attachments(camera: CameraPicker.isAvailable, glasses: MetaGlasses.isBuiltIn)
+                                   + (VoicePlatform.current == .phone ? [PromptItems.voice] : []),
                                mentions: mentions,
                                commands: promptCommands,
                                models: canPickModel ? PromptItems.claudeModels : [],
@@ -3784,6 +3843,7 @@ struct Composer: View, Equatable {
                                    case "photo": showPhotos = true
                                    case "camera": showCamera = true
                                    case "glasses": showGlasses = true
+                                   case PromptItems.voice.id: startVoice()
                                    default: showFiles = true
                                    }
                                },
@@ -3826,6 +3886,7 @@ struct Composer: View, Equatable {
                         Button { showGlasses = true } label: { Label("Glasses Photo", systemImage: Theme.Icon.glasses).lineLimit(1) }
                     }
                     Button { showFiles = true } label: { Label("Files", systemImage: Theme.Icon.file) }
+                    voiceMenuItem
                     extensionPrompts
                     quickCommands
                 }
@@ -3845,6 +3906,8 @@ struct Composer: View, Equatable {
             guard phase == .active else { return }
             await declarations.refreshWhileActive(api: model.api(key.group))
         }
+        // Voice (docs/voice.md 6.1): asks the hub about it, says why there is none, and the DEBUG switches (6.8).
+        .modifier(ComposerVoice(key: key, note: $voiceNote, active: phase == .active, offered: { voiceEntry != nil }, start: { startVoice() }))
         #if DEBUG
         .task { // `-showSampleQuotes YES`: a page's text and another session quoted over the box (#986, screenshots)
             guard UserDefaults.standard.bool(forKey: "showSampleQuotes") else { return }

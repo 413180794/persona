@@ -2,7 +2,9 @@ import BeautifulUI
 import SwiftUI
 
 /// The shell's composer (docs/ios.md「新外壳」), ChatGPT's: one line — [+] Ask Persona… [mic] — that grows into a card
-/// while typing, the field on top and a row under it: [+] … [model · effort] [mic] [send]. The assistant's
+/// while typing, the field on top and a row under it: [+] … [model · effort] [mic] [send]. With Voice Chat offered
+/// (`voice`, docs/voice.md 6.1) the line is [+] … [mic] [voice], or [+] … [voice] [stop] while the agent works (dictation
+/// is then in the card's row), and the card's row has voice in send's place while nothing is typed. The assistant's
 /// conversation and an agent's (in the shell) both type here (#1091). The field is one view in both
 /// shapes (only the buttons around it come and go), so focus and the IME's marked text survive the change.
 /// The callers keep their own state (drafts, uploads, SendSafety in `Composer`; the starter's text in StarterComposer).
@@ -16,6 +18,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
     var hasAttachments = false
     /// Set while the agent works: a stop button takes send's place while nothing is typed.
     var stop: (() -> Void)?
+    /// Voice Chat (docs/voice.md 6.1): set where the conversation offers a voice call; nil, the composer is as it was.
+    var voice: (() -> Void)? = nil
     /// What the model button says, ChatGPT's "6.1 Sol Medium": the model, then the effort (`SessionModes.composerTitle`);
     /// nil: no button. Its menu says what needs saying about the permission mode (Allow Everything), not the button (#1117).
     var modesTitle: SessionModes.ComposerTitle?
@@ -127,7 +131,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     }
                     #endif
                 if !expanded {
-                    mic
+                    // While the agent works, voice and stop share the line and dictation waits in the card's row.
+                    if voice == nil || stop == nil { mic }
+                    if let voice { voiceButton(voice) }
                     if let stop { stopButton(stop) }
                 }
             }
@@ -152,8 +158,9 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
                     } else if canSend {
                         round(Theme.Icon.send, label: String(localized: "Send"), id: "shell-composer-send", action: sendTyped)
                             .keyboardShortcut(sendShortcut)
-                    } else if let stop {
-                        stopButton(stop)
+                    } else {
+                        if let voice { voiceButton(voice) }
+                        if let stop { stopButton(stop) }
                     }
                 }
                 .padding(.leading, Theme.Space.s)
@@ -297,6 +304,14 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
         ComposerRoundButton.stop(id: "shell-composer-stop") { endDictation(then: stop) }
     }
 
+    /// Round in send's place; beside stop (the agent works) a plain icon like dictation's, so the line keeps one round button.
+    private func voiceButton(_ voice: @escaping () -> Void) -> some View {
+        ComposerVoiceButton(round: stop == nil, id: "shell-composer-voice") {
+            focused.wrappedValue = false
+            endDictation(then: voice)
+        }
+    }
+
     private func round(_ symbol: String, label: String, id: String, action: @escaping () -> Void) -> some View {
         ComposerRoundButton(symbol: symbol, label: label, id: id) { endDictation(then: action) }
     }
@@ -319,7 +334,8 @@ struct ShellComposerBar<Attach: View, Modes: View>: View {
 }
 
 /// The composer's surface: the white card with its stroke and shadow, or in the BeautifulUI style its raised surface.
-private struct ComposerSurface: ViewModifier {
+/// The voice bar wears it too (it takes the composer's place in a call, docs/voice.md 6.2).
+struct ComposerSurface: ViewModifier {
     func body(content: Content) -> some View {
         if AppStyle.current.usesBeautifulUI {
             content.buiSurface(radius: Theme.Shell.composerRadius, elevation: .raised)

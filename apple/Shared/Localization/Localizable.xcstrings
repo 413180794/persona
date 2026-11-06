@@ -1195,6 +1195,29 @@
       },
       "extractionState": "manual"
     },
+    "%@ answered; work continues in the background": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ answered; work continues in the background"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@は回答済みです。バックグラウンドで作業を続けています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 答过了，后台还在跑"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%@ at %@, in your phone's time zone.": {
       "localizations": {
         "zh-Hans": {
@@ -1494,6 +1517,29 @@
       },
       "extractionState": "manual"
     },
+    "%@ is asking you; just say your answer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is asking you; just say your answer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@が質問しています。そのまま声で答えてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在问你，直接说出回答"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%@ is connected": {
       "localizations": {
         "zh-Hans": {
@@ -1632,6 +1678,29 @@
       },
       "extractionState": "manual"
     },
+    "%@ is offline right now; it can’t be sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is offline right now; it can’t be sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@は現在オフラインのため送信できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 现在不在线，发不进去"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "%@ is offline. Check personad and the SSH tunnel.": {
       "localizations": {
         "en": {
@@ -1673,6 +1742,121 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ 现在离线，可能睡着了，或者上面的 Persona Link 没在运行。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@ is waiting for you to handle the card above": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is waiting for you to handle the card above"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@は上のカードの対応を待っています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在等你先处理上面的卡片"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@ is waiting on its plan; this wasn’t sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is waiting on its plan; this wasn’t sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@はプランの確認待ちのため、この内容は送信されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在等你看计划，这句没发出去"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@ is waiting on something else": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is waiting on something else"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@はほかの処理を待っています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在等别的事"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@ is waiting: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is waiting: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@は待機中：%2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在等：%2$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@ is working": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is working"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@が作業中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 在做"
           }
         }
       },
@@ -3703,6 +3887,75 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$@：\\n「%2$@」"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@’s engine isn’t on that computer; it can’t be sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@’s engine isn’t on that computer; it can’t be sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのコンピューターに%1$@のエンジンがないため送信できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "那台电脑上找不到 %1$@ 的引擎，发不进去"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@’s input box on the computer has unsent text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@’s input box on the computer has unsent text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピューター上の%1$@の入力欄に未送信の文字があります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 的输入框里有电脑上没发出去的字"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "%@’s input box on the computer has unsent text: “%@”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@’s input box on the computer has unsent text: “%2$@”"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンピューター上の%1$@の入力欄に未送信の文字があります：「%2$@」"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ 的输入框里有电脑上没发出去的字：『%2$@』"
           }
         }
       },
@@ -9003,6 +9256,29 @@
       },
       "extractionState": "manual"
     },
+    "A call or another app took the audio": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A call or another app took the audio"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着信またはほかのアプリがオーディオを使用しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来电或别的 App 占用了声音"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "A call or another app took the audio, so the chat stopped": {
       "localizations": {
         "en": {
@@ -9435,6 +9711,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "录音正在进行，请先结束录音再听写"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "A recording or dictation took the microphone": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A recording or dictation took the microphone"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "録音または音声入力がマイクを使用しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录音或听写用了麦克风"
           }
         }
       },
@@ -12133,6 +12432,29 @@
       },
       "extractionState": "manual"
     },
+    "All Captions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Captions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕全文"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕全文"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "All Caught Up": {
       "localizations": {
         "en": {
@@ -14423,6 +14745,29 @@
       },
       "extractionState": "manual"
     },
+    "Approve it by tapping on screen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approve it by tapping on screen"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "承認は画面上でタップしてください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批准请在屏幕上点"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Approve, Auto-Accept Edits": {
       "localizations": {
         "en": {
@@ -15088,6 +15433,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "叫它启动了，但 herdr 还没有应答"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Asking by Voice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asking by Voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声で質問中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在语音提问"
           }
         }
       },
@@ -20061,6 +20429,75 @@
           "stringUnit": {
             "state": "translated",
             "value": "已取消"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Can’t reach the realtime voice service (wrong key, or not available in your region)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can’t reach the realtime voice service (wrong key, or not available in your region)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リアルタイム音声サービスに接続できません（キーが正しくないか、お住まいの地域では利用できません）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上实时语音服务（Key 不对，或所在地区不支持）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Captions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Captions last only for this call and aren’t saved. Instructions and answers stay in the chat as usual.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Captions last only for this call and aren’t saved. Instructions and answers stay in the chat as usual."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕はこの通話中だけのもので、保存されません。チャットに渡した指示と回答はいつもどおりチャットに残ります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字幕只在这次通话里，不会保存；交给对话的指令和回答照常在对话里。"
           }
         }
       },
@@ -31046,6 +31483,29 @@
       },
       "extractionState": "manual"
     },
+    "Couldn’t hand it to %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t hand it to %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@に渡せませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能交给 %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Create": {
       "localizations": {
         "en": {
@@ -34314,6 +34774,29 @@
       },
       "extractionState": "manual"
     },
+    "Didn’t catch that; say it again": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Didn’t catch that; say it again"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞き取れませんでした。もう一度お話しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没听清，再说一遍"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Diff View": {
       "localizations": {
         "zh-Hans": {
@@ -37121,6 +37604,29 @@
       },
       "extractionState": "manual"
     },
+    "Ends the voice chat; what was handed over still gets done": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ends the voice chat; what was handed over still gets done"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声チャットを終了します。渡した作業はそのまま続きます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束语音对话，已经交出去的事照常做完"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "End…": {
       "localizations": {
         "en": {
@@ -39609,6 +40115,29 @@
       },
       "extractionState": "manual"
     },
+    "Fill in the realtime voice service’s address and key to use it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fill in the realtime voice service’s address and key to use it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リアルタイム音声サービスのアドレスとキーを入力すると使えます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填好实时语音服务的地址和 Key 就能用。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Fill in “%@”": {
       "localizations": {
         "en": {
@@ -40041,6 +40570,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "做完首次设置，它会装上 ego-browser 命令"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Finish the recording or dictation first": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finish the recording or dictation first"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に録音または音声入力を終了してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先结束录音或听写"
           }
         }
       },
@@ -42370,6 +42922,29 @@
       },
       "extractionState": "manual"
     },
+    "Handing it to %@…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handing it to %1$@…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@に渡しています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在交给 %1$@…"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Handle in Terminal on Computer": {
       "localizations": {
         "en": {
@@ -42825,6 +43400,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "健康对话只在这里：Persona 的其他对话看不到、读不到。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Hearing you": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hearing you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞き取り中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在听你说"
           }
         }
       },
@@ -46767,6 +47365,29 @@
       },
       "extractionState": "manual"
     },
+    "It’s view-only and can’t take messages.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "It’s view-only and can’t take messages."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧専用のため、メッセージを送れません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它只能查看，发不了消息。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Japanese": {
       "localizations": {
         "en": {
@@ -47084,6 +47705,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "刚刚"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Just speak; it goes to %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just speak; it goes to %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのまま話すと%1$@に渡します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接说，会交给 %1$@"
           }
         }
       },
@@ -49858,6 +50502,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "我在听"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Listening [Voice Bar Line 226686]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listening"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在听"
           }
         }
       },
@@ -53644,6 +54311,29 @@
       },
       "extractionState": "manual"
     },
+    "Microphone access is needed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Microphone access is needed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクへのアクセスが必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要麦克风权限"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Microphone: %@": {
       "localizations": {
         "en": {
@@ -55085,6 +55775,29 @@
       },
       "extractionState": "manual"
     },
+    "Mute [Voice Bar 7db2e1]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mute"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミュート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静音"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Mute repository: owner/name": {
       "localizations": {
         "en": {
@@ -55195,6 +55908,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "已静音：%1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Muted; results and questions are still read aloud": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muted; results and questions are still read aloud"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミュート中。結果と質問はいつもどおり読み上げます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已静音，结果和提问照常念给你听"
           }
         }
       },
@@ -55844,6 +56580,29 @@
       },
       "extractionState": "manual"
     },
+    "Needs a tap from you": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs a tap from you"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タップが必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要你点一下"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Needs manual cleanup": {
       "localizations": {
         "en": {
@@ -56000,6 +56759,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "网络已打开，脚本仍关闭"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Never Mind": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never Mind"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "やめる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "算了"
           }
         }
       },
@@ -57685,6 +58467,29 @@
       },
       "extractionState": "manual"
     },
+    "No Captions Yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Captions Yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まだ字幕はありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有字幕"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "No Channels": {
       "localizations": {
         "en": {
@@ -58347,6 +59152,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "不用了"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "No one spoke for ten minutes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No one spoke for ten minutes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10分間だれも話しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "十分钟没人说话"
           }
         }
       },
@@ -62667,6 +63495,29 @@
       },
       "extractionState": "manual"
     },
+    "Not sure it was sent; check the chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not sure it was sent; check the chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送信されたか不明です。チャットを確認してください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不确定发出去没有，看一下对话"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Not sure whether the last request went through": {
       "localizations": {
         "en": {
@@ -62708,6 +63559,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "还不知道能不能操控"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Not sure yet whether the hub supports voice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not sure yet whether the hub supports voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブが音声に対応しているかまだ分かりません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还不知道 hub 支不支持语音"
           }
         }
       },
@@ -65958,6 +66832,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开系统设置"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Open Settings [Voice Entry 93112c]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定を開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去设置"
           }
         }
       },
@@ -73630,6 +74527,52 @@
       },
       "extractionState": "manual"
     },
+    "Realtime voice isn’t on for the hub yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Realtime voice isn’t on for the hub yet"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブでリアルタイム音声がまだ有効になっていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 上还没开实时语音"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Realtime voice service isn’t set up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Realtime voice service isn’t set up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リアルタイム音声サービスが未設定です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没配实时语音服务"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Recalled": {
       "localizations": {
         "en": {
@@ -73971,6 +74914,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在重新连接"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Reconnecting…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnecting…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再接続しています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新连接中…"
           }
         }
       },
@@ -76957,6 +77923,29 @@
       },
       "extractionState": "manual"
     },
+    "Resuming…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resuming…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再開しています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在接上…"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Retake": {
       "localizations": {
         "en": {
@@ -78831,6 +79820,29 @@
       },
       "extractionState": "manual"
     },
+    "Same as saying it; the voice handles it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same as saying it; the voice handles it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話した場合と同じく、音声が処理します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和说出来一样，交给语音处理。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Sat [Assistant Proactive Views de07b5]": {
       "comment": "Weekday, short: Saturday",
       "localizations": {
@@ -79310,6 +80322,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "说一句话：比如「别这么回，先问时间」"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Say something and captions will appear here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Say something and captions will appear here."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話すと、ここに字幕が表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说一句话，字幕就会出现在这里。"
           }
         }
       },
@@ -81130,6 +82165,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "打回修改"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Send Back as Feedback": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send Back as Feedback"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修正意見として差し戻す"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作为修改意见退回"
           }
         }
       },
@@ -85718,6 +86776,52 @@
       },
       "extractionState": "manual"
     },
+    "Something went wrong with the microphone or speaker": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something went wrong with the microphone or speaker"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクまたはスピーカーで問題が発生しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "麦克风或扬声器出了问题"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Something went wrong with voice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Something went wrong with voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声で問題が発生しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音出了问题"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Sonnet Tier": {
       "localizations": {
         "en": {
@@ -86105,6 +87209,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "对话派生"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Speaking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaking"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話しています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在说"
           }
         }
       },
@@ -87114,6 +88241,29 @@
       },
       "extractionState": "manual"
     },
+    "Starting %@…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting %1$@…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@を起動しています…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在把 %1$@ 拉起来…"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Starting Codex on %@…": {
       "localizations": {
         "en": {
@@ -87661,6 +88811,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "还缺：%1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Stop %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@を停止"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止 %1$@"
           }
         }
       },
@@ -92177,6 +93350,29 @@
       },
       "extractionState": "manual"
     },
+    "The app went to the background": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app went to the background"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリがバックグラウンドに移りました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 进了后台"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "The audio on this device and the text in Knowledge will both be deleted.": {
       "localizations": {
         "en": {
@@ -92494,6 +93690,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个窗口打开的对话已经不在了。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The chosen voice model can’t be used": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The chosen voice model can’t be used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した音声モデルは使用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选的语音模型用不了"
           }
         }
       },
@@ -93349,6 +94568,29 @@
       },
       "extractionState": "manual"
     },
+    "The hub doesn’t have this voice extension": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub doesn’t have this voice extension"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブにこの音声拡張機能がありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 上没有这个语音扩展"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "The hub has no avatar for this phone: update the hub, or the app hasn't told it yet (pushes won't carry the avatar)": {
       "localizations": {
         "en": {
@@ -93671,6 +94913,29 @@
       },
       "extractionState": "manual"
     },
+    "The hub no longer accepts this device; pair again and retry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub no longer accepts this device; pair again and retry"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブがこのデバイスを認識しません。再ペアリングしてからお試しください"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 不认这台设备了，重新配对后再试"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "The hub opens the persistent connection itself, so it doesn't need a public address.": {
       "localizations": {
         "en": {
@@ -93873,6 +95138,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "hub 记下的不是设置里的形象（App 告诉它时失败了）"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The hub’s voice extension is too old to use here": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The hub’s voice extension is too old to use here"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブの音声拡張機能が古いため、ここでは使えません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hub 的语音扩展太旧，这里用不了"
           }
         }
       },
@@ -94947,6 +96235,52 @@
       },
       "extractionState": "manual"
     },
+    "The realtime voice service disconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The realtime voice service disconnected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リアルタイム音声サービスとの接続が切れました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时语音服务断开了"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The realtime voice service is temporarily unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The realtime voice service is temporarily unavailable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リアルタイム音声サービスは一時的に利用できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时语音服务暂时不可用"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "The recording info wasn't saved. Keep the app installed and try again.": {
       "localizations": {
         "en": {
@@ -95425,6 +96759,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "系统说现在不能开"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The system’s audio services restarted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system’s audio services restarted"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムのオーディオサービスが再起動しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统的音频服务重启了"
           }
         }
       },
@@ -96949,6 +98306,52 @@
       },
       "extractionState": "manual"
     },
+    "This chat is open elsewhere; it can’t be sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chat is open elsewhere; it can’t be sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットはほかの場所で開かれているため送信できません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个对话正在别处打开，发不进去"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This chat’s hub isn’t paired": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This chat’s hub isn’t paired"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットのハブがペアリングされていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个对话的 hub 没有配对"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "This cleans up %lld items (%@). New messages that arrive later aren't affected, and you can undo it afterward.": {
       "localizations": {
         "zh-Hans": {
@@ -97225,6 +98628,29 @@
       },
       "extractionState": "manual"
     },
+    "This computer is offline [Voice Notes 7fefa8]": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is offline"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターはオフラインです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑离线"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "This computer is offline or its node is older: these are the folders the hub remembers. All of them show up once it connects.": {
       "localizations": {
         "en": {
@@ -97289,6 +98715,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这台电脑离线了：Persona Link 没在运行，或者电脑睡着了。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This computer is offline; what you say can’t be sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer is offline; what you say can’t be sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコンピューターはオフラインのため、話した内容を送れません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台电脑离线，说的话发不出去"
           }
         }
       },
@@ -97501,6 +98950,52 @@
       },
       "extractionState": "manual"
     },
+    "This device can only view and answer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device can only view and answer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスは閲覧と回答のみ可能です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备只能查看和回答"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This device can only view and answer, not use voice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device can only view and answer, not use voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスは閲覧と回答のみ可能で、音声は使えません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备只能查看和回答，不能用语音"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "This device can't add computers. Try again from Persona on a phone or computer that is already signed in.": {
       "localizations": {
         "en": {
@@ -97519,6 +99014,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个设备不能添加电脑。用已经登录好的手机或电脑上的 Persona 再试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This device can’t use voice in this chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device can’t use voice in this chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスはこのチャットで音声を使えません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备不能在这个对话里用语音"
           }
         }
       },
@@ -99405,6 +100923,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个已经处理过了。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This wasn’t sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This wasn’t sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この内容は送信されませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这句没发出去"
           }
         }
       },
@@ -101322,6 +102863,29 @@
       },
       "extractionState": "manual"
     },
+    "Try again once connected to the hub.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again once connected to the hub."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハブに接続してからもう一度お試しください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连上 hub 后再试一次。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Try another word. You can search names, descriptions, publishers and tags.": {
       "localizations": {
         "en": {
@@ -101875,6 +103439,29 @@
       },
       "extractionState": "manual"
     },
+    "Turn on realtime voice in Settings › Extensions. If the hub is too old, update it first.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on realtime voice in Settings › Extensions. If the hub is too old, update it first."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定 › 拡張機能でリアルタイム音声をオンにしてください。ハブが古い場合は先にハブを更新してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在设置 › 扩展里打开实时语音；hub 太旧时先更新 hub。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Turn on the Lark bot before pairing.": {
       "localizations": {
         "en": {
@@ -102100,6 +103687,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "直接打字"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Type a Line": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type a Line"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力して伝える"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打字说一句"
           }
         }
       },
@@ -107275,6 +108885,29 @@
       },
       "extractionState": "manual"
     },
+    "Voice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音色"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Voice %@": {
       "localizations": {
         "en": {
@@ -107321,6 +108954,29 @@
       },
       "extractionState": "manual"
     },
+    "Voice Ended": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Ended"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声が終了しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音已结束"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Voice Orb": {
       "shouldTranslate": false,
       "localizations": {
@@ -107345,6 +109001,75 @@
       },
       "extractionState": "manual"
     },
+    "Voice Paused": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Paused"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声を一時停止中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音已暂停"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Voice chat needs a device that can send messages.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice chat needs a device that can send messages."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声チャットはメッセージを送れるデバイスで使ってください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音对话要在能发消息的设备上用。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Voice ended · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice ended · %1$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声が終了しました · %1$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音已结束 · %1$@"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "Voice error, so the chat stopped": {
       "localizations": {
         "en": {
@@ -107363,6 +109088,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "语音出错，对话已停"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Voice isn’t available in this chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice isn’t available in this chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このチャットでは音声を使えません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个对话不能用语音"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Voice · This call only": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice · This call only"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声 · この通話のみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音 · 只在这次通话里"
           }
         }
       },
@@ -107409,6 +109180,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待中"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Waiting for %@ · Speak to resume": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for %1$@ · Speak to resume"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@を待機中 · 話すと再開"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在等 %1$@ · 一开口就接上"
           }
         }
       },
@@ -108779,6 +110573,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "翻译范围"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "What to say": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What to say"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伝える内容"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要说的话"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "What you say goes to this chat": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What you say goes to this chat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話した内容をこのチャットに渡します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说的话交给这个对话"
           }
         }
       },
@@ -110982,6 +112822,29 @@
       },
       "extractionState": "manual"
     },
+    "You": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなた"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
     "You Were Mentioned": {
       "localizations": {
         "en": {
@@ -111276,6 +113139,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个会话不能从 Persona 发消息，请到飞书网关的网页里回复。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "You didn’t say this, so it wasn’t sent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You didn’t say this, so it wasn’t sent"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたの発言ではないため、送信しませんでした"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条不是你说的，没有发出去"
           }
         }
       },

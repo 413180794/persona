@@ -1100,6 +1100,22 @@ but UIKit still had a page with only Agents Back and empty content.
 - Swift 6.3 / Xcode 26.6 overflows generating a reabstraction thunk for isolated method values with implicit actor parameters, a compiler bug rather than source error. No normal `error:` line; inspect `While emitting IR SIL function` and stack dump.
 - Wrap in ordinary closure `set: { pick($0) }`. Other `flatMap(Type.init(rawValue:))` calls are unaffected; changing flatMap did not help. Leave an English comment naming compiler / issue so nobody "simplifies" it back.
 
+### `apple_l10n.py sync` from the command line also changes other people's strings (#3508)
+
+- **Symptom**: after a `SWIFT_EMIT_LOC_STRINGS=YES` build, `apple_l10n.py sync` added this change's 82 keys, but also keys from other code that never
+  made it into the catalog (a `"/"`), and rewrote 58 existing entries (merged comments, states): the diff was mostly other people's.
+- **Approach**: use sync only to see which keys are new. For the commit, put the catalog back and insert only your own entries with a script
+  (English key, explicit en / zh-Hans / ja), each before the first key that sorts after it, without re-sorting the file (master's is
+  nearly but not strictly sorted: `dict(sorted(...))` moves other people's entries), and write it back with
+  `json.dumps(d, ensure_ascii=False, indent=2) + "\n"` (the format `apple_english_keys.py` wrote; check that master's file round-trips
+  unchanged first, and that `git diff` shows only `+` lines). Then `apple_l10n.py check`. A conflict in the catalog resolves the same way:
+  take master's file, insert your entries.
+- **Rebased across the English-key migration (#5430)**: a branch written with Chinese keys does not need its keys hand-translated. Run master's
+  `scripts/i18n/apple_english_keys.py <scratch worktree>` on a scratch worktree of the branch's old tip (it still has the Chinese-source catalog),
+  import it to get `migrate()`'s mapping, then take the migrated new files, the mapped entries, and the same key changes in the files you only
+  touched. Keys it suffixes (`Mute [Voice Bar 7db2e1]`) collide with an existing English key that means something else in Chinese: keep the suffix.
+  `apple_comments.py check` also fails on Chinese UI words in comments: write the English label (`Never Mind`), keep 「…」 for doc headings or text matched word for word.
+
 ## Context-block bodies always use `ContextText.inBlock` (2026-11-06, #3831)
 
 - `ContextRef.xml` previously removed literal `</jarvis-context>` / `</persona-context>` tags once. Nested `</jarvis-</jarvis-context>context>` leaves a closing tag after deletion, ending the block early; third-party Inbox text handed to AI becomes apparent user speech. Case variants and whitespace `</jarvis-context >` are also accepted by hub / web readers and bypass single literal removal.

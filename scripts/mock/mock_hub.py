@@ -10634,6 +10634,12 @@ def voice_socket(h):
         h.close_connection = True
 
 
+if VOICE_MODE:  # iOS's protocol 2 beside the script above (docs/voice.md 6.8): scripts/mock/voice_mock.py
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import voice_mock
+    voice_route = voice_mock.install(sys.modules[__name__])
+
+
 # ---------- area: model defaults (#2455) ----------
 # MOCK_MODEL_DEFAULTS=1: the main chat has a "Runtime" (cli / agentsdk, saved in its binding; "cli" is stored as none),
 # GET /api/v1/machines/{mid}/launchers carries `default` (?purpose=, "New Agent"'s agent.new when absent), and the main

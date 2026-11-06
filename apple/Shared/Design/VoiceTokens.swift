@@ -30,4 +30,54 @@ nonisolated extension Theme.Size {
     static let voiceLevelBar: CGFloat = 3
     static let voiceLevelGap: CGFloat = 2
     static let voiceLevelHeight: CGFloat = 16
+    /// How much of the conversation a call keeps in sight over the pending cards (`PendingCards`) where the page is short
+    /// (large text): about a line of the call's captions, its last row. The card the user has to answer gets the rest.
+    static let voiceThreadRoom: CGFloat = 44
+}
+
+nonisolated extension Theme {
+    /// The voice conversation's cues (docs/voice.md 1.2 A / I / M, 6.6): a short sound through the voice's own player (so
+    /// echo cancellation takes it out of the microphone too) and a tap on the hand. Played on a change the user did not
+    /// make on the screen: connected, a card that wants a tap, the connection picked up again. Quiet beside the voice, and
+    /// short enough not to cover a word of it.
+    enum VoiceCue: String, CaseIterable, Sendable {
+        /// Connected, Listening: two notes up.
+        case ready
+        /// A card wants a tap (a plan, a permission, a question): two notes up and back, a little higher.
+        case attention
+        /// The voice's connection dropped and is being picked up: one low note.
+        case reconnecting
+
+        /// The notes, in hertz, one after the other.
+        var notes: [Double] {
+            switch self {
+            case .ready: [659.25, 880]
+            case .attention: [880, 1174.66, 880]
+            case .reconnecting: [440]
+            }
+        }
+
+        /// How long each note sounds, and the quiet between two.
+        static let note: TimeInterval = 0.085
+        static let gap: TimeInterval = 0.035
+        /// Each note's ends ramp in and out over this much, so it does not click.
+        static let ramp: TimeInterval = 0.012
+        /// Loudness, a share of full scale: under the voice's own level.
+        static let gain: Double = 0.16
+
+        /// What the hand feels with it.
+        var haptic: VoiceHaptic {
+            switch self {
+            case .ready: .tap
+            case .attention: .attention
+            case .reconnecting: .none
+            }
+        }
+    }
+
+    /// The taps a voice call gives (`Haptics` in the app): with a cue, and on their own where no sound can play (the call
+    /// ended by itself: its player is gone).
+    enum VoiceHaptic: String, Sendable {
+        case none, tap, attention, failure
+    }
 }

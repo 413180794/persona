@@ -921,7 +921,8 @@ Reject (ii), "add realtime type to model providers": it would need a new API ret
 1. **Optional `voice:` callback in `ShellComposerBar`**:
    - collapsed row: idle `[+][composer][dictation][voice]`, working `[+][composer][voice][stop]`, dictation in expanded row;
    - expanded row: voice button occupies send position when composer empty;
-   - BeautifulUI `PromptComposer` uses corresponding implementation;
+   - one round button per row (#3508, `ComposerVoiceButton`): idle, voice is the round button in send's place; working, stop is round and voice a plain icon like dictation;
+   - the new shell uses `ShellComposerBar` in every style (BeautifulUI too); the old layout's `ComposerRow` and BeautifulUI `PromptComposer` only get "Voice Chat" in "+", no inline button; the voice bar replaces them all the same;
    - reuse `Theme.Icon.voiceChannel`, one meaning, one icon.
 2. **"Voice Chat" in "+" menu**: accessible from anywhere.
 3. Main-chat and Agent pages share `ChatView`, so one change gives both entries. Without a main chat, assistant shows `ShellHome`, no phase-one entry there.
@@ -931,7 +932,8 @@ Reject (ii), "add realtime type to model providers": it would need a new API ret
    - session sendable, same `Session.canSend` as composer: no-source sessions (herdr) ignore `capabilities`, nil allowed; external sources explicitly require sending, avoiding voice entry on "View only" pages;
    - full device.
 
-   Otherwise hide button. "+" menu item remains, showing 1.3 explanation when tapped.
+   Otherwise hide button. "+" menu item remains, showing 1.3 explanation when tapped (`VoiceUnavailableNote`, a system alert: why, plus "Open Settings"). "Open Settings" goes to Settings › Extensions (straight to the voice extension's page when there is one); answer-only devices and read-only chats get none.
+   The composer (`Composer`) asks `/info` while its page is in front (`VoiceSupport.refresh`, at most once a minute per group).
 
 ### 6.2 UI
 
@@ -956,17 +958,23 @@ Reject (ii), "add realtime type to model providers": it would need a new API ret
 
 - **Shape**: call bar reuses `ComposerSurface`, changed private → internal. All style differences stay inside; pages never check `usesBeautifulUI`.
 - **Left**: mute/unmute. **Center**: orb, "Interrupt voice" button while fast layer speaks. **Right**: end.
-- **Second row**: pure `VoiceBarLine.make(phase:link:runs:session:cards:muted:)` produces:
-  - activity category and elapsed time;
-  - "Waiting for Claude · Voice paused";
-  - "Needs a tap";
-  - undelivered reason with "Resend", "Clear and send", "Cancel", "Return as feedback".
+- **Second row**: pure `VoiceBarLine.make(phase:link:runs:session:cards:muted:asking:notice:label:dismissed:resendable:)` (#3508), in this order:
+  - why the last instruction did not go (the newest run is `refused` / `failed` / `unknown` and not put away with "Never Mind"), with "Resend", "Clear and Send", "Never Mind", "Send Back as Feedback". "Resend" / "Clear and Send" only for a run refused on the connection up now (`resendable`, i.e. `canResend`), "Clear and Send" only with `clearable`; a 409 `dialog_open` while a plan card waits gets "Send Back as Feedback" (the app's own `resolve`, `approve: false` with the words as feedback);
+  - "This computer is offline; what you say can't be sent" (the non-fatal `machine_offline`);
+  - "Claude is asking you; just say your answer" (the card the `ask` frame is about) / "Needs a tap from you" (any other pending card);
+  - "Waiting for Claude · Speak to resume" (upstream paused; the first row already says "Voice Paused", so it is not repeated);
+  - "Starting Claude…", "Handing it to Claude…", "Claude is waiting: …" (`work.line`);
+  - what it does and for how long, "Claude 在跑测试 · 2 min": the hub's `activity` words; the time from `state_since`, else the run's `started_at`; nothing under a minute;
+  - "Muted; results and questions are still read aloud" / "Just speak; it goes to Claude".
 
-  Working target adds "Stop Claude" (`POST …/interrupt`). Buttons single-line; overflow goes into "⋯".
-- **Thread tail**: `VoiceThreadTail(key:)` reads `VoiceCalls` itself; ChatView only places it at the end. Integrate with bottom-pinning: new captions keep bottom like new items. Full text in `VoiceTranscriptSheet`.
+  Working target adds "Stop Claude" (`POST …/interrupt`). Buttons single-line; words and buttons share a line when they fit, otherwise the words go over the buttons, and buttons that still do not fit go into the "⋯" at the end of the second row (`ViewThatFits`). "⋯" holds the overflowed buttons first, then type a line, all captions, voice, model. In the persona's own conversations "Claude" is the persona's name.
+- **First row**: `VoiceBarStatus.make` gives the words beside the orb and the orb's phase: Connecting… / Listening / Hearing you / Speaking / Muted / Voice Paused / Resuming… / Reconnecting… / "<tool>…" (read-only tools). Where the words do not fit between mute, orb and end (accessibility sizes: "Voice Pa…" was cut, or wrapped), they go under the row (`ViewThatFits`).
+- **Height**: the bar lays itself out at its own height (`fixedSize(vertical:)`); with many cards the cards' area scrolls (squeezed, the second line was cut to one and the first row's words shrank). During a call, where the page is short (large text), the cards' area stops where the footer would run over the conversation, keeping `Theme.Size.voiceThreadRoom` (44 pt, about a caption line) of it in sight (`PendingCards.cap`); at standard sizes the cards keep their half page, and nothing changes outside calls. It is worked out only from values the cards do not move: the page height, the open header (`fixedHeader`), the bar's own measured height (`VoiceBarRoom`) and the count's. A folding header or the measured footer fed back into it and changed it every frame (CPU at 99%, UI tests never saw the app idle).
+- **Thread tail**: `VoiceThreadTail(key:held:)` reads `VoiceCalls` itself; ChatView only places it at the newest end (next to the sentinel): at most 6 captions under "Voice · This call only". Bottom-pinning: `VoiceTailFollow`, written like `ChatStreamFollow`, calls `contentArrived` on a new caption or one 40 characters longer; while the user reads history (`frozen`) the tail stays as it was (`held`). Full text in `VoiceTranscriptSheet`.
 - **During call**: main-chat footer hides TaskDock and RouteChip, restores on end.
 - **"⋯"**: type an utterance (`text` frame), full captions, voice, model.
-- **Cards**: unchanged `PendingCards`, resolved through `model.resolve`; asking marker from `ask` frame. New cards play haptic/tone.
+- **Cards**: unchanged `PendingCards`, resolved through `model.resolve`; the asked card shows "Asking by Voice" in its title row (`VoiceAskMark` after `InteractionPanel`'s title, from the `ask` frame; an icon alone where the row is short, so it never widens the card and the page). New cards play haptic/tone.
+- **Ended by itself** (1.2 L): the composer comes back with a row over it, "Voice ended · <why>", with "Continue" (endings that may just pass: the background, a phone call, a lost connection, idle) or "Retry" (failures), plus "Open Settings" and "Details" (`VoiceEndNote` / `VoiceEndedStrip`). The why maps `VoiceEnd` and `error.code` to localized words; the extension's or upstream's own words are only under "Details". The user's own endings (End, leaving the page, another call) leave nothing.
 
 ### 6.3 State model (MVVM, dependencies via `Deps`)
 
@@ -1036,7 +1044,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
 - **Only `surface == .phone`**:
   - `isIdleTimerDisabled = true` during call, restored at end; long-task waits do not disconnect from auto-lock;
   - end when `scenePhase` becomes background; otherwise microphone and billing continue.
-- **Leave chat**: ChatView key changes or `.onTabVisibility` reports hidden page.
+- **Leave chat**: ChatView's key changes (`onChange(of: key)`), or `.onTabVisibility` reports the page is no longer in front (back, replaced, hidden in the shell); both call `VoiceCalls.leave` (#3508).
 - **Incoming call** (audio-session interruption began), recording/dictation starts: end. Call claims mic with `RecordingMicrophone.claim(_:givingWay:)`; a later recording/dictation claim ends call and yields. Conversely, active recording/dictation blocks call (`microphoneBusy`).
 - **Disconnect**: 3 retries after 1, 4, 10 seconds with `resume`; all fail → `ended(.lost)`, "Continue" remains on page.
   - New connections reset prior `link`, asking card, nonfatal hints; new connection reports them again. Discard unplayed prior audio.
@@ -1049,14 +1057,14 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
 - **Tokens**: new apple/Shared/Design/VoiceTokens.swift, `extension Theme`, avoiding #1931's `Theme.swift` edits.
   - `Theme.Motion.voiceBreath` (listening, about 1.6 s), `voiceBeat` (speaking, about 0.42 s), matching Android `Voice.kt`;
   - `Theme.Size.voiceOrb` and level-bar dimensions;
-  - tones/haptics: add missing tokens first.
+  - tones/haptics (#3508): `Theme.VoiceCue` (`ready` connected, `attention` a new card, `reconnecting`: the notes' frequencies, each note's length, the gap, the ramp, the gain) and the `Theme.VoiceHaptic` that goes with each. The app's `VoiceCueTone` synthesizes PCM16 at the output rate and plays it through the call's own player (`VoiceConversation.play(_:)`), so echo cancellation removes it. A call that ended by itself has no player left: endings only tap (`VoiceEndNote.haptic`).
 - **Icons**: existing `voiceChannel` entry. Add `voiceMute`, `voiceUnmute`, `voiceEnd`, `voiceCaptions`, `voiceTimbre`; pass `IconVocabularyTests`, avoid #1931 collisions.
 - **Components**:
   - new `DesignSystem/VoiceOrb.swift`: phase/level inputs, static frame with Reduce Motion, button while fast layer speaks;
   - `VoiceBar`, `VoiceThreadTail`, `VoiceTranscriptSheet` in `Views/Voice/`;
   - colors: `Theme.persona` fast-layer speech, `Theme.danger` end.
 - **Text**: use master localization mechanism at merge (aligned with #2931 iOS trilingual work). Buttons single-line; separate text/accessibility for "Interrupt voice" and "Stop Claude".
-- **Accessibility**: announce only state changes ("Needs a tap", "Paused", "Ended"), not captions, avoiding duplicate speech and VoiceOver leaking into mic.
+- **Accessibility**: announce only state changes ("Needs a tap", "Paused", "Ended"), not captions, avoiding duplicate speech and VoiceOver leaking into mic. #3508: when the second line's kind becomes one that needs the user, paused, not sent or offline (`VoiceBarLine.Kind.announced`), its words are announced; the end announces "Voice ended".
 
 ### 6.7 Settings
 
@@ -1068,12 +1076,14 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
 
 - **Launch arguments** (add all to `scripts/release/release.sh`, ensure no Swift-identifier collision):
   - `-showVoiceSample listening|speaking|working|paused|asking|approval|refused|plan_feedback|ended|setup`: no socket/mic, fake states; may combine `-openSession`;
-  - `-openVoice YES`: real mock flow.
+  - `-openVoice YES`: real mock flow (taps the voice button once the page offers a call). `-openVoice silent`: the same real socket, bar and thread with no microphone or speaker (`VoiceSample.SilentAudio` reports playing for as long as the received PCM lasts): on this dev machine's simulator `AVAudioEngine.inputNode` aborts (an `AURemoteIO::Initialize` RPC timeout, lessons "The iOS voice mode", #5029), so a simulator without a microphone walks the flow this way.
 - **Mock**: new scripts/mock/voice_mock.py, imported by `mock_hub.py` with `MOCK_VOICE=1`, avoiding other PR edits there.
   - Add voice in `/api/v1/extensions`, `/info`, `/models`, `/voices`, `purposes/plugin.voice`;
   - `/ws` sends a scripted sequence: `ready` → partial-to-final captions → `run` from sending to working → `link paused/live` → `ask` → `run refused(input_draft)` → `run done`; `interrupt` returns `clear`;
+    #3508: only a `start` with `protocol: 2` and a `target` gets this script; any other start (Android) is handed to mock_hub.py's protocol 1 script unchanged. The instruction is written into that conversation as a user message and the conversation turns working; the question is a real card (`interaction` push), answered "by voice" at 21 s unless tapped first; `resend` takes a refused run through sending → working again. `MOCK_VOICE=setup` is an extension that needs setup, `MOCK_VOICE=p1` an old one whose `/info` is 404, `MOCK_VOICE_PACE=0.1` runs the script ten times as fast, and `GET /mock/voice2` shows what the app sent.
   - new scripts/mock/test_voice_mock.py.
 - **Screenshots**: UI tests `launchPinned()`. Matrix: main/Agent chat × dark/light × Glass/BeautifulUI × standard/AX large text.
+  #3508: `PersonaUITests/VoiceModeTests` (`TEST_RUNNER_JARVIS_VOICE_HUB` pointing at a `MOCK_VOICE=1` mock, `TEST_RUNNER_JARVIS_SHOTS` for the images): four matrix cases (Agent / main × standard / AX XL) each shoot ten samples; `testOpenVoiceWalksTheScript` walks the mock's script with `-openVoice silent` (connected → handed over → working → paused → asked → refused, Clear and Send → result read out → End), then checks that the background leaves "Continue" and that going back closes the socket.
 
 ### 6.9 Mac and other platforms
 
@@ -1095,6 +1105,7 @@ struct VoiceDeps { var api: () -> APIClient?                 // Refetch each con
   - pre-ready buffer sent;
   - "Return as feedback" calls resolve with feedback (#3508 App `model.resolve`, not call);
   - idle timer disabled on start, restored on end.
+- **#3508**: `VoiceBarLineTests` (every second-line case and its buttons, the first row and the orb), `VoiceNotesTests` (the "+" explanations, the ended row), `VoiceModeTests` (`isOver` changes only as a call ends or picks up, `VoiceCalls.isLive`, Never Mind, the plan feedback body, Clear and Send returns `clearable`, the cue tones' rate, length and gain).
 
 ## 7. Work breakdown
 

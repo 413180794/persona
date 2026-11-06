@@ -280,6 +280,7 @@ struct InteractionPanel: View {
                 .font(Theme.Font.labelStrong)
                 .foregroundStyle(StatusPalette.needsYou.dot)
             Text(panelTitle).font(Theme.Font.labelStrong).foregroundStyle(StatusPalette.needsYou.text).lineLimit(1)
+            VoiceAskMark(interaction: interaction) // Asking by Voice (docs/voice.md 1.2 H)
             if collapsed {
                 Text(previewText).font(Theme.Font.secondary).foregroundStyle(.primary).lineLimit(1)
             }

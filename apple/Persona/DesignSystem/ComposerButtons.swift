@@ -73,6 +73,35 @@ extension ComposerRoundButton {
     }
 }
 
+/// Voice Chat from the composer (docs/voice.md 6.1, `Theme.Icon.voiceChannel`): in send's place a round ink button like
+/// send; beside stop (the agent works) a plain icon like dictation's.
+struct ComposerVoiceButton: View {
+    var round: Bool
+    var id = "composer-voice"
+    var action: () -> Void
+    @Environment(\.buiTheme) private var theme
+
+    var body: some View {
+        if round {
+            ComposerRoundButton(symbol: Theme.Icon.voiceChannel, label: String(localized: "Voice Chat"), id: id, action: action)
+        } else {
+            Button(action: action) {
+                Image(systemName: Theme.Icon.voiceChannel)
+                    .font(Theme.Font.heading)
+                    .fontWeight(.medium)
+                    .foregroundStyle(ComposerInk.icon(theme))
+                    .scaledFrame(width: Theme.Size.tapTarget, height: Theme.Size.tapTarget)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Voice Chat")
+            .accessibilityIdentifier(id)
+            .shellScaled()
+            .transition(.scale.combined(with: .opacity))
+        }
+    }
+}
+
 /// The ink of the composer's icons: the text color, or in the BeautifulUI style its quieter second ink.
 enum ComposerInk {
     static func icon(_ theme: BUITheme) -> Color { AppStyle.current.usesBeautifulUI ? theme.colors.ink2 : Color.primary }

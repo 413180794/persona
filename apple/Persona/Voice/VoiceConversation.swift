@@ -161,7 +161,12 @@ struct VoiceDeps {
     let surface: VoiceSurface
     let extensionID: String
 
-    private(set) var phase: VoicePhase = .connecting
+    private(set) var phase: VoicePhase = .connecting {
+        didSet { if isOver != phase.isEnded { isOver = phase.isEnded } }
+    }
+    /// Whether it ended: changes only as it ends or is picked up again, so the page can swap the bar and the composer
+    /// without being drawn again on every phase (listening, speaking…).
+    private(set) var isOver = false
     /// The upstream model's connection (paused while the agent works).
     private(set) var link: VoiceLink = .live
     /// At most 40, oldest first.
@@ -178,6 +183,8 @@ struct VoiceDeps {
     private(set) var tools: [VoiceTool] = []
     private(set) var model: String?
     private(set) var voice: String?
+    /// Instructions that did not go whose line the user put away (Never Mind): the bar no longer offers anything for them.
+    private(set) var dismissed: Set<String> = []
     /// The microphone sends silence while muted; the voice still speaks.
     var muted = false {
         didSet { uplink.isMuted = muted }
@@ -379,6 +386,17 @@ struct VoiceDeps {
 
     /// A short sound through the voice's player (see `VoiceAudio.cue`).
     func cue(_ pcm: Data) { audio?.cue(pcm) }
+
+    /// One of the call's cues (`Theme.VoiceCue`), made at the rate the voice plays at.
+    func play(_ cue: Theme.VoiceCue) {
+        guard audio != nil else { return }
+        self.cue(VoiceCueTone.pcm(cue, rate: format.outputRate))
+    }
+
+    /// Never Mind on what did not go: its line goes away.
+    func dismiss(run id: String) {
+        if !dismissed.contains(id) { dismissed.insert(id) }
+    }
 
     // MARK: Socket
 

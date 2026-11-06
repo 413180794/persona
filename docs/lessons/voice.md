@@ -283,3 +283,26 @@ Other values: allowing 450 tokens per append (500-token limit, rejection observe
 - Do not tell "working" from `status` alone (#5500, end-to-end on a local hub with a real Claude Code and the main chat): the main chat (headless claude) stays `working` while its permission hook waits for a tap (`state: needs_you`, `pending_interactions: 1`), and a herdr Claude Code asking through its hook is listed `working` too.
   Read as working, the call said "the main chat is still processing" every 2 minutes while it waited for an approval. A wait on the user is `blocked`, `needs_you` or a pending card, whatever `status` says (`atWork`).
   The other way round, a terminal dialog shows as `blocked` about 1.5 s before the node's screen reading makes it a card: a turn that says "check your phone" the moment it sees `blocked` says it twice, once more by the card's kind (`cardGrace`).
+
+## The iOS voice mode (#3508, 2026-11-06)
+
+- **On this dev machine's simulator `AVAudioEngine.inputNode` aborts**: an RPC timeout inside `AURemoteIO::Initialize` (`_ReportRPCTimeout` → `abort`)
+  in `PhoneVoiceAudio.build()`. It cannot be caught, and never reaches the "no voice processing, plain capture" fallback. It looks like the Mac gives the
+  simulator no audio input (no permission, or no input device); devices are not affected (#5029). To drive the real socket and UI on a simulator, use
+  `-openVoice silent` (`VoiceSample.SilentAudio`: no microphone and no speaker, it reports playing for as long as the received PCM lasts). Audio itself
+  can only be checked on a device.
+- **The voice bar was squeezed when cards were up**: the cards and the composer share the footer's height; offered too little, the bar shrank 在听 with
+  `minimumScaleFactor` and cut its second line to one line with an ellipsis. The bar lays itself out at its own height
+  (`fixedSize(horizontal: false, vertical: true)`); the cards' area scrolls anyway.
+- **The second line's words and buttons**: `ViewThatFits(in: .horizontal)` picks by ideal width, and a `Text`'s ideal width is its unwrapped line, so
+  "words over buttons" has to be the last candidate (the one that is always used). The buttons' overflow gets its own `ViewThatFits` holding only the
+  buttons; with the words in it, long words never "fit" and every button ends up in ⋯.
+- **A mark in a card's title row widened the whole page at large text sizes**: `Chip` does not shrink (`fixedSize`); at AX sizes 正在语音提问 was wider
+  than the row, and the card, the footer and the page ran off both sides of the screen. A tag put into someone else's row goes through `ViewThatFits`
+  and falls back to an icon.
+- **Don't size the cards from a header that folds with the list**: making the cards' area give way in a call, the first try used `FooterRoom.header`
+  (the header as folded now). The list grew → the header folded → the cards grew → the list shrank → the header unfolded… every frame: the app took a
+  whole core and XCUITest never saw it idle, so the test hung. The open header (`fixedHeader`) fixed that. The next try took "what else the footer
+  holds" as the measured footer minus the cards' measured height; the two update in different frames, and the cap flipped by a point around half the
+  page (a plan card in BeautifulUI at the standard size): another loop. Now it uses only values the cards do not move: the page height, the open
+  header, the bar's own measured height (`VoiceBarRoom`) and the count's. The rule: what sizes an area must not take inputs the area itself moves.
