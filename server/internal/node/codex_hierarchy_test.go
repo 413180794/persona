@@ -55,7 +55,7 @@ func TestCodexProjectRootRealWorktrees(t *testing.T) {
 
 func TestCodexHistoricalHierarchyWithoutDesktop(t *testing.T) {
 	n := remoteTestNode(t)
-	home := t.TempDir()
+	home := canonicalCodexHome(t.TempDir(), n.home)
 	ids := []string{"0e000000-0000-4000-8000-000000000001", "0e000000-0000-4000-8000-000000000002", "0e000000-0000-4000-8000-000000000003", "0e000000-0000-4000-8000-000000000004"}
 	missing := "0e000000-0000-4000-8000-000000000099"
 	parents := []string{"", ids[0], ids[1], missing}
@@ -98,7 +98,7 @@ func TestCodexHistoricalHierarchyWithoutDesktop(t *testing.T) {
 	if root.ParentSessionID != "" || root.IsSubagent {
 		t.Fatalf("root marked child: %+v", root)
 	}
-	otherHome := t.TempDir()
+	otherHome := canonicalCodexHome(t.TempDir(), n.home)
 	s := proto.Session{Capabilities: &proto.SessionCapabilities{}, ParentThreadID: ids[0]}
 	n.decorateCodexSession(&s, codexSource{home: otherHome}, n.codexInventory().LegacyHome, map[string]string{})
 	if s.ParentSessionID == root.SessionID {
