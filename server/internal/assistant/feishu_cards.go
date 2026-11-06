@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/nwverse/persona/server/internal/channel"
 	"github.com/nwverse/persona/server/internal/feishubot"
@@ -981,14 +982,34 @@ func botHelp(l i18n.Lang, f FeishuFeatures) string {
 	return b.String()
 }
 
+// parseBotCommand splits a bot message into its /command, lower-cased, and the rest. Any white space ends the command
+// (a line break, a tab, a full-width space), a full-width slash starts one like "/", and the rest keeps its own line
+// breaks with only the white space around it trimmed. ok is false when the message does not start with a slash.
+func parseBotCommand(text string) (cmd, rest string, ok bool) {
+	t := strings.TrimLeftFunc(text, unicode.IsSpace)
+	if after, found := strings.CutPrefix(t, "／"); found {
+		t = "/" + after
+	}
+	if !strings.HasPrefix(t, "/") {
+		return "", "", false
+	}
+	end := strings.IndexFunc(t, unicode.IsSpace)
+	if end < 0 {
+		end = len(t)
+	}
+	return strings.ToLower(t[:end]), strings.TrimFunc(t[end:], unicode.IsSpace), true
+}
+
 // botCommand runs a /command. Not handled, the message goes on with the text returned: as it is for a command it does
 // not know (it may be the agent's own, like /compact), without the command for "/new <message>". root and parent are
 // the message's thread root and the message it replies to: the commands that act on a conversation follow the target
 // the thread binds, like a normal message does.
 func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, text, root, parent string) (bool, string) {
 	l := s.botLang(ctx)
-	cmd, rest, _ := strings.Cut(strings.TrimSpace(text), " ")
-	rest = strings.TrimSpace(rest)
+	cmd, rest, ok := parseBotCommand(text)
+	if !ok {
+		return false, text
+	}
 	// fallback goes as a rich-text list when Feishu refuses the card (the list cards carry their own; other command
 	// replies have none).
 	reply := func(c *feishubot.Card, fallback string) {
@@ -996,7 +1017,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			s.logf("bots: command reply: %v", err)
 		}
 	}
-	switch strings.ToLower(cmd) {
+	switch cmd {
 	case "/help", "/帮助":
 		reply(feishubot.NewCard(i18n.T(l, "assistant-feishu_cards.help_title"), feishubot.Blue, i18n.T(l, "assistant-feishu_cards.help_title")).Markdown(botHelp(l, f)), "")
 	case "/main", "/jarvis", "/主对话":
@@ -1035,7 +1056,7 @@ func (s *Service) botCommand(ctx context.Context, f FeishuFeatures, messageID, t
 			return true, ""
 		}
 		reply(s.startAgentCard(ctx, rest), "")
-	case "/stop", "/停":
+	case "/stop", "/停止", "/停":
 		t := s.botTargetFor(root, parent)
 		// Commands run before the normal message's botAllowed gate, so check it here: with the Agents feature off
 		// a reply in an agent's thread must not interrupt that agent.

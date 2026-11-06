@@ -567,7 +567,7 @@ func (s *Service) feishuMessage(ev feishubot.MessageEvent, st FeishuStatus) {
 	defer cancel()
 	msg := ev.Message
 	content := feishubot.ParseContent(msg.MessageType, msg.Content, msg.Mentions)
-	if strings.HasPrefix(content.Text, "/") && !content.Forward && len(content.Media) == 0 {
+	if _, _, isCommand := parseBotCommand(content.Text); isCommand && !content.Forward && len(content.Media) == 0 {
 		handled, rest := s.botCommand(ctx, st.Features, msg.MessageID, content.Text, msg.RootID, msg.ParentID)
 		if handled {
 			return

@@ -740,6 +740,14 @@ func (s *Service) continueTask(ctx context.Context, cur Todo) (json.RawMessage, 
 // taskStartRetryDelay is how long a task waits before its one retry after a dropped link (tests shorten it).
 var taskStartRetryDelay = 3 * time.Second
 
+// Bounds of the bounded retry before a needs recheck treats a node as unreachable: agentReachBackoff before the
+// second try and doubled before the third; agentReachMax bounds one whole recheck, machines included (tests shorten).
+var (
+	agentReachAttempts = 3
+	agentReachBackoff  = 300 * time.Millisecond
+	agentReachMax      = 2 * time.Second
+)
+
 // transientStartErr: the agent did not start because a link on the way was down or dropped (this hub's to the
 // machine, or one further on that answered with the same words: a member hub, a connector), not because the node
 // refused; worth one retry.
@@ -861,6 +869,94 @@ func (s *Service) taskAgents(ctx context.Context, t Todo) []proto.Session {
 		}
 	}
 	return out
+}
+
+// sessionsReached lists machine's sessions, retrying a dropped or offline link a bounded number of times within
+// ctx. reached is false when the node could not be asked after the retries: the caller must not read that as
+// "the machine has no sessions". ErrNoDevice is deliberately different: the hub itself answers that it has no
+// such machine (it was removed from the hub's configuration), a definite answer rather than a flaky node — an
+// agent registered on a machine the hub no longer knows cannot still be waiting, so it answers with an empty
+// list and reached true. Retrying it would spend the budget and wrongly keep a needs notice for a machine gone
+// for good.
+func (s *Service) sessionsReached(ctx context.Context, machine string) ([]proto.Session, bool) {
+	backoff := agentReachBackoff
+	for attempt := 0; ; attempt++ {
+		list, err := s.sessions(ctx, machine)
+		if err == nil {
+			return list, true
+		}
+		if errors.Is(err, ErrNoDevice) {
+			return nil, true // definite: the hub no longer knows this machine
+		}
+		if attempt+1 >= agentReachAttempts || ctx.Err() != nil {
+			return nil, false
+		}
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, false
+		case <-timer.C:
+		}
+		backoff *= 2
+	}
+}
+
+// taskAgentsReached is taskAgents plus reachability. Each distinct machine of t's active agents is asked once
+// within one agentReachMax deadline so retries across machines cannot stack; reached is false when one stayed
+// unreachable, so callers keep "still waits" rather than read an unreachable node as an answer (ErrNoDevice: none).
+func (s *Service) taskAgentsReached(ctx context.Context, t Todo) (agents []proto.Session, reached bool) {
+	ctx, cancel := context.WithTimeout(ctx, agentReachMax)
+	defer cancel()
+	reached = true
+	lists, asked := map[string][]proto.Session{}, map[string]bool{}
+	for _, a := range t.Agents {
+		if a.ReleasedAt != nil || a.DismissedAt != nil || asked[a.MachineID] {
+			continue
+		}
+		asked[a.MachineID] = true
+		list, ok := s.sessionsReached(ctx, a.MachineID)
+		if !ok {
+			reached = false
+			continue
+		}
+		lists[a.MachineID] = list
+	}
+	for _, a := range t.Agents {
+		if a.ReleasedAt != nil || a.DismissedAt != nil {
+			continue
+		}
+		for _, c := range lists[a.MachineID] {
+			if c.SessionID == a.SessionID {
+				agents = append(agents, c)
+				break
+			}
+		}
+	}
+	return agents, reached
+}
+
+// taskNeedsRecheck freshly asks t's agents' machines whether one still waits for the user. known is false when an
+// agent machine stayed unreachable after the bounded retries, so a caller can keep the notice rather than take
+// an unreachable node for an answer.
+func (s *Service) taskNeedsRecheck(ctx context.Context, t Todo) (waits, known bool) {
+	agents, reached := s.taskAgentsReached(ctx, t)
+	if !reached {
+		return false, false
+	}
+	for _, c := range agents {
+		if c.State == proto.StateNeedsYou || c.PendingInteractions > 0 {
+			return true, true
+		}
+	}
+	return false, true
+}
+
+// taskWaits: one of t's agents still waits for the user. A machine the recheck cannot reach is not an answer: it
+// is taken as still waiting, so a needs notice is never dropped on a transient RPC failure.
+func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
+	waits, known := s.taskNeedsRecheck(ctx, t)
+	return waits || !known
 }
 
 // taskWorking: one of the task's agents started a turn.

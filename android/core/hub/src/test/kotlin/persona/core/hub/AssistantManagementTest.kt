@@ -17,6 +17,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AssistantManagementTest {
+    /** 跑完推送 travels both ways; a task without it never sends it, so a hub without `task_push` is not sent it. */
+    @Test fun taskPushIsReadAndSentOnlyWhenSet() = runBlocking {
+        MockWebServer().use { server ->
+            val api = HttpAssistantManagement(server.url("/").toString(), "test-token", OkHttpClient()) { true }
+            server.enqueue(MockResponse().setBody("""{"tasks":[{"id":"t1","repeat":"interval","every_minutes":30,"push":"asked"},{"id":"t2","repeat":"daily"}]}"""))
+            val (asked, plain) = api.tasks()
+            server.takeRequest()
+            assertTrue(asked.pushesOnlyAsked)
+            assertNull(plain.push)
+            assertFalse(plain.pushesOnlyAsked)
+
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"t1","repeat":"interval","push":"asked"}}"""))
+            api.saveTask(asked)
+            assertEquals("asked", JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject.getValue("push").jsonPrimitive.content)
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"t1","repeat":"interval","push":""}}"""))
+            api.saveTask(asked.copy(push = ""))
+            assertEquals("", JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject.getValue("push").jsonPrimitive.content)
+            server.enqueue(MockResponse().setBody("""{"task":{"id":"t2","repeat":"daily"}}"""))
+            api.saveTask(plain)
+            assertFalse(JsonCodec.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject.containsKey("push"))
+        }
+    }
+
     @Test fun migratedActionsPreserveDefaultsPathsAndPairingScope() = runBlocking {
         MockWebServer().use { server ->
             var current = true

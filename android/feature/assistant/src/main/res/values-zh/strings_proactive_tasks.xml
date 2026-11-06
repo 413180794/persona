@@ -49,4 +49,10 @@
     <string name="assistant_proactive_conversation_own_note">每次运行都发进这个任务自己的对话，能看到前几次的结果。对话太长或想重来时，点「下次开新对话」，原来的对话还在。</string>
     <string name="assistant_proactive_conversation_first_note">第一次运行时开一段新对话，之后每次都在这段对话里接着跑，能看到前几次的结果。</string>
     <string name="assistant_proactive_run_now_new">先添加，再运行一次</string>
+    <string name="assistant_proactive_push">跑完推送</string>
+    <string name="assistant_proactive_push_every">每次</string>
+    <string name="assistant_proactive_push_asked">只在它自己提醒时</string>
+    <string name="assistant_proactive_push_every_note">每次运行完都把回答推送到手机。</string>
+    <string name="assistant_proactive_push_asked_note">只有这次运行判断你需要知道、主动提醒你时才推送，没事就不打扰；出错、被打断照常推送。这种任务固定在它自己的对话里跑，你在那段对话里发的消息做完也不推送。</string>
+    <string name="assistant_proactive_push_asked_mark">只在提醒时推送</string>
 </resources>

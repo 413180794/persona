@@ -240,6 +240,50 @@ class ProactiveStoreTest {
         assertEquals("", hub.writes.single().editable()["session_id"].toString().trim('"'))
     }
 
+    /** 只在它自己提醒时 is written, leaves 接着原来的对话 (the hub runs it in its own conversation), and can be turned back. */
+    @Test fun pushOnlyAskedIsWrittenAndLeavesTheOriginalConversation() = runTest {
+        val hub = FakeHub(listOf(review))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        val opened = review.draft()
+        assertEquals("", opened.push)
+        val asked = opened.pushing(ScheduledTask.PUSH_ASKED)
+        assertFalse(asked.continues)
+        assertFalse(asked.sameAs(opened))
+        assertTrue(store.save(TaskChange.Edit("fu_review", opened, asked)).isSuccess)
+        val written = hub.writes.single()
+        assertEquals(ScheduledTask.PUSH_ASKED, written.push)
+        assertNull(written.sessionId)
+        assertEquals("asked", written.editable()["push"].toString().trim('"'))
+        val saved = store.state.value.task("fu_review")!!
+        assertTrue(saved.pushesOnlyAsked)
+        assertTrue(store.save(TaskChange.Edit("fu_review", saved.draft(), saved.draft().pushing(""))).isSuccess)
+        assertEquals("", hub.writes.last().push)
+    }
+
+    /** A task that never had 跑完推送 does not send it, so a hub without `task_push` is never sent one. */
+    @Test fun pushStaysUnsetUntilItIsChosen() = runTest {
+        val hub = FakeHub(listOf(morning))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        val opened = morning.draft()
+        assertTrue(store.save(TaskChange.Edit("morning", opened, opened.copy(prompt = "早报，三条以内"))).isSuccess)
+        assertNull(hub.writes.single().push)
+        assertFalse(hub.writes.single().editable().containsKey("push"))
+    }
+
+    /** Persona set 只在它自己提醒时 from a conversation while the page was open; the person's other edit keeps it. */
+    @Test fun pushSetMeanwhileStaysWhenThePersonEditsSomethingElse() = runTest {
+        val hub = FakeHub(listOf(morning))
+        val store = ProactiveStore(hub, this, say)
+        store.refresh()
+        val opened = morning.draft()
+        hub.table = listOf(morning.copy(push = ScheduledTask.PUSH_ASKED))
+        store.loadTasks()
+        assertTrue(store.save(TaskChange.Edit("morning", opened, opened.copy(prompt = "早报，三条以内"))).isSuccess)
+        assertEquals(ScheduledTask.PUSH_ASKED, hub.writes.single().push)
+    }
+
     @Test fun editingATaskDeletedMeanwhileDoesNotBringItBack() = runTest {
         val hub = FakeHub(listOf(byPersona, morning))
         val store = ProactiveStore(hub, this, say)

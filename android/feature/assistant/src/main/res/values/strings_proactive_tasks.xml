@@ -53,4 +53,10 @@
     <string name="assistant_proactive_conversation_own_note">Every run goes into this task\'s own chat, so it can see earlier results. When the chat gets long or you want a fresh start, tap New chat next time; the old chat stays.</string>
     <string name="assistant_proactive_conversation_first_note">The first run starts a new chat, and every run after that carries on in it, so it can see earlier results.</string>
     <string name="assistant_proactive_run_now_new">Adds it first, then runs it once</string>
+    <string name="assistant_proactive_push">Push When Done</string>
+    <string name="assistant_proactive_push_every">Every Run</string>
+    <string name="assistant_proactive_push_asked">Only Its Alerts</string>
+    <string name="assistant_proactive_push_every_note">Pushes the answer to your phone after every run.</string>
+    <string name="assistant_proactive_push_asked_note">Pushes only when a run decides you need to know and alerts you; otherwise it stays quiet. Errors and interruptions are pushed as usual. These tasks always run in their own chat, and messages you send in that chat aren\'t pushed when done either.</string>
+    <string name="assistant_proactive_push_asked_mark">Pushes only when it alerts you</string>
 </resources>

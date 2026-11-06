@@ -6,6 +6,7 @@ import { shortTime } from "../../lib/inbox";
 import { olAccount } from "../../lib/lark-accounts";
 import { useLarkDisplay, type LarkMessageDisplay } from "../../lib/lark-display";
 import { canOpenPin, canRemovePin, ChatPinsModel, liveChatPinsDeps, pinSummary, type ChatPin, type ChatPinTarget } from "../../lib/lark-pins";
+import { isResumed } from "../../lib/reconnect";
 import { onHubEvent } from "../../lib/store";
 import { t } from "../../i18n";
 import { Button, cx, Dialog, IconButton, Loading, Spinner } from "../../ui/atoms";
@@ -31,14 +32,19 @@ export function LarkPinsDialog({ feed, topic, account, onClose, onOpen }: {
     model.start();
     void model.refresh();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = onHubEvent("lark", (msg) => {
-      const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
-      if (!ids.includes(feed) || olAccount(msg.ol_account) !== account) return;
+    const settle = () => {
       clearTimeout(timer);
       timer = setTimeout(() => void model.refresh(), 400);
+    };
+    const off = onHubEvent("lark", (msg) => {
+      const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
+      if (ids.includes(feed) && olAccount(msg.ol_account) === account) settle();
     });
+    // A reconnect the hub could not resume: the `lark` pushes missed meanwhile are not replayed.
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && settle());
     return () => {
       off();
+      offHello();
       clearTimeout(timer);
       model.stop();
     };

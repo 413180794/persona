@@ -206,37 +206,6 @@ func (s *Service) dropQueuedNeeds(todoID string) bool {
 	return removed || changed
 }
 
-// taskNeedsRecheck freshly asks t's agents' machines whether one still waits for the user. Unlike taskWaits it
-// keeps "no agent waits" and "a machine could not be asked" apart: known is false on an RPC failure, so a caller
-// can keep the notice instead of taking an unreachable node for an answer.
-func (s *Service) taskNeedsRecheck(ctx context.Context, t Todo) (waits, known bool) {
-	for _, a := range t.Agents {
-		if a.ReleasedAt != nil || a.DismissedAt != nil {
-			continue
-		}
-		list, err := s.sessions(ctx, a.MachineID)
-		if err != nil {
-			return false, false
-		}
-		for _, c := range list {
-			if c.SessionID == a.SessionID && (c.State == proto.StateNeedsYou || c.PendingInteractions > 0) {
-				return true, true
-			}
-		}
-	}
-	return false, true
-}
-
-// taskWaits: one of t's agents still waits for the user.
-func (s *Service) taskWaits(ctx context.Context, t Todo) bool {
-	for _, c := range s.taskAgents(ctx, t) {
-		if c.State == proto.StateNeedsYou || c.PendingInteractions > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // quietAgentTask: an agent agent_start opened from the main conversation is a quiet task while the user wants those
 // told only there (quietTask), and so is one a reporting conversation opened (reporters.go): a todo is made and the
 // agent is linked to it, so it goes like a task_plan task (card, snapshot, receipt, notices). Without the setting it

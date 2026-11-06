@@ -100,8 +100,18 @@ data class ScheduledTask(
     /** The task's own conversation, kept by the hub; empty = the next run starts one. */
     @SerialName("run_machine_id") val runMachineId: String? = null,
     @SerialName("run_session_id") val runSessionId: String? = null,
+    /**
+     * 跑完推送: "" (or absent) = push after every run, [PUSH_ASKED] = only what a run sends with notify_user. The hub
+     * offers it with the [PUSH_FEATURE] hello feature; an older one leaves it out.
+     */
+    val push: String? = null,
 ) {
-    /** The fields `PUT /api/v1/assistant/tasks/{id}` saves; "" = the default. `push` is left out, so the hub keeps it. */
+    val pushesOnlyAsked: Boolean get() = push == PUSH_ASKED
+
+    /**
+     * The fields `PUT /api/v1/assistant/tasks/{id}` saves; "" = the default. `push` goes only when the task has one, so a
+     * hub without it is never sent it and an unchanged one keeps what it has.
+     */
     fun editable(): JsonObject = buildJsonObject {
         if (id.isNotBlank()) put("id", id)
         put("title", title)
@@ -114,12 +124,17 @@ data class ScheduledTask(
         put("enabled", enabled)
         put("session_id", sessionId.orEmpty())
         put("permission_mode", permissionMode.orEmpty())
+        push?.let { put("push", it) }
     }
 
     companion object {
         const val ONCE = "once"
         const val DAILY = "daily"
         const val INTERVAL = "interval"
+        /** 只在它自己提醒时 (docs/assistant.md「跑完推送」). */
+        const val PUSH_ASKED = "asked"
+        /** The hello feature of a hub that reads and writes [push]. */
+        const val PUSH_FEATURE = "task_push"
     }
 }
 

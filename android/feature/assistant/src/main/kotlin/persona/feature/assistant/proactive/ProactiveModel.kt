@@ -90,7 +90,8 @@ internal val TaskPermissionModes = listOf("", "acceptEdits", "plan", "auto", Byp
 
 /**
  * The fields a person edits (iOS AssistantTaskEditor). Everything else on a task belongs to the hub and is never
- * changed here. [continues] is 接着原来的对话: runs go into the conversation the task came from.
+ * changed here. [continues] is 接着原来的对话: runs go into the conversation the task came from. [push] is 跑完推送
+ * ("" every run, [ScheduledTask.PUSH_ASKED] only what a run sends); such a task always runs in its own conversation.
  */
 internal data class TaskDraft(
     val title: String = "",
@@ -103,7 +104,12 @@ internal data class TaskDraft(
     val enabled: Boolean = true,
     val continues: Boolean = false,
     val permissionMode: String = "",
+    val push: String = "",
 ) {
+    val pushesOnlyAsked: Boolean get() = push == ScheduledTask.PUSH_ASKED
+    /** 跑完推送 set to [value]: only its alerts leaves 接着原来的对话 (the hub runs such a task in its own conversation). */
+    fun pushing(value: String) = copy(push = value, continues = continues && value != ScheduledTask.PUSH_ASKED)
+
     /** A one-off may go without a title (its prompt names it); a repeating one needs one. */
     val titled: Boolean get() = repeat == TaskRepeat.Once || title.isNotBlank()
     val timed: Boolean get() = when (repeat) {
@@ -155,17 +161,21 @@ internal fun ScheduledTask.draft() = TaskDraft(
     title = title, prompt = prompt, repeat = repeat, at = parseTime(at),
     time = normalizeTime(time?.takeIf { it.isNotBlank() } ?: "09:00"), weekdays = weekdays,
     everyMinutes = everyMinutes.takeIf { it > 0 } ?: DefaultInterval, enabled = enabled,
-    continues = !sessionId.isNullOrBlank(), permissionMode = permissionMode.orEmpty(),
+    continues = !sessionId.isNullOrBlank(), permissionMode = permissionMode.orEmpty(), push = push.orEmpty(),
 )
 
-/** [draft] written onto the task; turning 接着原来的对话 off clears the conversation (the hub only lets it be cleared). */
+/**
+ * [draft] written onto the task; turning 接着原来的对话 off clears the conversation (the hub only lets it be cleared). A
+ * task that never had 跑完推送 keeps it unset while it pushes every run, so a hub without it is never sent one.
+ */
 internal fun ScheduledTask.applying(draft: TaskDraft): ScheduledTask = draft.normalized().let {
     copy(
         title = it.title, prompt = it.prompt, repeats = it.repeat.wire,
         at = when (it.repeat) { TaskRepeat.Once -> it.at?.toString(); TaskRepeat.Interval -> at; TaskRepeat.Daily -> null },
         time = it.time.takeIf { _ -> it.repeat == TaskRepeat.Daily }, weekdays = if (it.repeat == TaskRepeat.Daily) it.weekdays else emptyList(),
         everyMinutes = if (it.repeat == TaskRepeat.Interval) it.everyMinutes else 0, enabled = it.enabled,
-        sessionId = sessionId.takeIf { _ -> it.continues }, permissionMode = it.permissionMode.ifBlank { null },
+        sessionId = sessionId.takeIf { _ -> it.continues && !it.pushesOnlyAsked }, permissionMode = it.permissionMode.ifBlank { null },
+        push = it.push.takeIf { p -> p.isNotEmpty() || push != null },
     )
 }
 
@@ -183,7 +193,7 @@ internal fun ScheduledTask.patched(from: TaskDraft, to: TaskDraft): ScheduledTas
         time = if (ruleChanged) after.time else pick { it.time },
         weekdays = if (ruleChanged) after.weekdays else pick { it.weekdays },
         everyMinutes = if (ruleChanged) after.everyMinutes else pick { it.everyMinutes },
-        enabled = pick { it.enabled }, continues = pick { it.continues }, permissionMode = pick { it.permissionMode },
+        enabled = pick { it.enabled }, continues = pick { it.continues }, permissionMode = pick { it.permissionMode }, push = pick { it.push },
     ))
 }
 

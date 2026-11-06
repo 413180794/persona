@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -85,7 +86,7 @@ class ProactiveShotsTest {
                 enabled = true, createdBy = "assistant", lastRun = at(-60 * 24 * 3), lastStatus = "failed", lastError = "assistant machine is offline",
                 nextRun = at(60 * 24 * 3), permissionMode = BypassMode),
             ScheduledTask(id = "patrol", title = words.patrol, prompt = words.patrol, repeats = ScheduledTask.INTERVAL, everyMinutes = 30,
-                at = at(12), nextRun = at(12), enabled = true, permissionMode = "auto"),
+                at = at(12), nextRun = at(12), enabled = true, permissionMode = "auto", push = ScheduledTask.PUSH_ASKED),
             ScheduledTask(id = "evening", title = words.evening, prompt = words.evening, repeats = ScheduledTask.DAILY, time = "21:30",
                 weekdays = listOf(1, 3, 5), enabled = false),
             ScheduledTask(id = "f1", repeats = ScheduledTask.ONCE, at = at(40), nextRun = at(40), title = words.prep, prompt = words.prep, enabled = true,
@@ -105,7 +106,7 @@ class ProactiveShotsTest {
         var dark by mutableStateOf(false)
         var page by mutableStateOf<String?>(null)
         rule.setContent {
-            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) { CompositionLocalProvider(LocalHubFeatures provides setOf(ScheduledTask.PUSH_FEATURE)) {
                 Box(Modifier.testTag("shot").width(400.dp).height(1400.dp).background(PersonaTheme.palette.background)) {
                     key(page) {
                         val scope = rememberCoroutineScope()
@@ -114,7 +115,7 @@ class ProactiveShotsTest {
                         ProactiveScreen(store, onBack = {}, onOpenConversation = {}, machines = machines, initialPage = page)
                     }
                 }
-            }
+            } }
         }
         fun capture(name: String) {
             rule.waitForIdle()
@@ -128,6 +129,15 @@ class ProactiveShotsTest {
             style = s; dark = d
             capture("overview-${s.name.lowercase()}-${if (d) "dark" else "light"}")
         }
+        // 跑完推送 (服务巡检 is only its alerts): the list's mark and the editor's choice in every style, light and dark.
+        for (target in listOf<String?>(null, "routine:patrol")) {
+            page = target
+            for (s in AppStyle.entries) for (d in listOf(false, true)) {
+                style = s; dark = d
+                capture("push-${target?.substringAfter(':') ?: "overview"}-${s.name.lowercase()}-${if (d) "dark" else "light"}")
+            }
+        }
+        page = null
         style = AppStyle.Glass
         for (target in listOf("routine:morning", "routine:weekly", "routine:patrol", "routine:f1", "new:0", "followups", "runs")) {
             page = target

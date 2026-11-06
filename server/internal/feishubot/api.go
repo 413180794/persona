@@ -105,8 +105,9 @@ func (c *Client) tenantToken(ctx context.Context, fresh bool) (string, error) {
 }
 
 const (
-	codeRateLimited = 99991400 // the open platform's rate-limit body code
-	callMaxAttempts = 3        // includes the first attempt; callSleep is swapped in tests, so no t.Parallel here
+	codeRateLimited  = 99991400         // the open platform's rate-limit body code
+	callMaxAttempts  = 3                // includes the first attempt; callSleep is swapped in tests, so no t.Parallel here
+	callMaxRetryWait = 60 * time.Second // a server Retry-After longer than this ends the retries instead of hanging on it
 )
 
 var (
@@ -134,13 +135,25 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 		payload, _ = json.Marshal(in)
 	}
 	var lastErr error
-	fresh, waits := false, 0 // fresh forces one token refresh after tokenGone; waits counts backoff slots used
-	for attempt := 0; attempt < callMaxAttempts; attempt++ {
-		tok, err := c.tenantToken(ctx, fresh)
-		if err != nil {
-			return err
+	giveUp := func() error {
+		if e := ctx.Err(); e != nil {
+			return e // a cancel during the waits wins over the stored error
 		}
-		fresh = false // the fresh token is cached; a later transient retry reuses it
+		return lastErr
+	}
+	forcedFresh, waits := false, 0 // forcedFresh makes the next token fetch bypass the cache (after a tokenGone answer); waits counts backoff slots used
+	for attempt := 0; attempt < callMaxAttempts; attempt++ {
+		tok, err := c.tenantToken(ctx, forcedFresh)
+		if err != nil {
+			// Idempotent endpoint and unsent body: keep forcedFresh on failure so a forced fetch retries, never replays the stale token.
+			lastErr = err
+			if !c.waitRetry(ctx, attempt, waits, 0) {
+				return giveUp()
+			}
+			waits++
+			continue
+		}
+		forcedFresh = false // the fresh token is cached; a later transient retry reuses it
 		var body io.Reader
 		if payload != nil {
 			body = bytes.NewReader(payload)
@@ -153,7 +166,7 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 		if payload != nil {
 			req.Header.Set("Content-Type", "application/json; charset=utf-8")
 		}
-		retry := false
+		retry, after := false, time.Duration(0)
 		resp, err := c.http.Do(req)
 		switch {
 		case err != nil:
@@ -162,6 +175,7 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 			}
 			lastErr, retry = err, true
 		default:
+			after = retryAfterDelay(resp.Header.Get("Retry-After"))
 			raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 			resp.Body.Close()
 			switch {
@@ -189,7 +203,7 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 					retry = true
 				case env.Code != 0:
 					if tokenGone(env.Code) && attempt == 0 {
-						fresh = true
+						forcedFresh = true
 						continue // one fresh token, one immediate retry, no backoff slot spent
 					}
 					lastErr = &APIError{Op: op, Code: env.Code, Msg: env.Msg}
@@ -203,25 +217,34 @@ func (c *Client) callRetry(ctx context.Context, op, method, path string, in, out
 				}
 			}
 		}
-		if !idempotent || !retry || !c.waitRetry(ctx, waits) {
-			if e := ctx.Err(); e != nil {
-				return e // the context ended during the backoff
-			}
-			return lastErr
+		if !idempotent || !retry || !c.waitRetry(ctx, attempt, waits, after) {
+			return giveUp()
 		}
 		waits++
 	}
 	return lastErr
 }
 
-// waitRetry applies the backoff after a failed attempt with +/-25% jitter and reports whether to try once more.
-func (c *Client) waitRetry(ctx context.Context, n int) bool {
-	if n >= len(callBackoff) {
+// waitRetry applies +/-25% jittered backoff (or a larger server Retry-After) and reports whether to try once more.
+func (c *Client) waitRetry(ctx context.Context, attempt, n int, after time.Duration) bool {
+	if attempt+1 >= callMaxAttempts || n >= len(callBackoff) || after > callMaxRetryWait {
 		return false
 	}
 	base := callBackoff[n]
 	d := base*3/4 + time.Duration(rand.Int64N(int64(base/2)))
-	return callSleep(ctx, d) == nil
+	return callSleep(ctx, max(d, after)) == nil // the server's throttle window wins over the short jittered backoff
+}
+
+// retryAfterDelay parses a standard Retry-After header: delta seconds or an HTTP date.
+func retryAfterDelay(v string) time.Duration {
+	v = strings.TrimSpace(v)
+	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil && time.Until(t) > 0 {
+		return time.Until(t)
+	}
+	return 0
 }
 
 // BotInfo is the app's bot: its name and open id (GET /open-apis/bot/v3/info). Asking for it also checks the app's

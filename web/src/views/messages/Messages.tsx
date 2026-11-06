@@ -10,6 +10,7 @@ import {
   arrangeConversations, conversationPreview, filterConversations, larkChatsFor, unreadBadge, useLarkChats, useLarkHome, type LarkChatsStore,
   type LarkConversation,
 } from "../../lib/lark-chats";
+import { isResumed } from "../../lib/reconnect";
 import { href, navigate, onLinkClick } from "../../lib/router";
 import { onHubEvent, useLarkOn } from "../../lib/store";
 import { t } from "../../i18n";
@@ -39,16 +40,22 @@ export function Messages({ id, onToggleSidebar }: { id?: string; onToggleSidebar
     // A chat changed (the hub's coalesced `lark` push): read the loaded window again (and the accounts' unread counts),
     // once things settle.
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = onHubEvent("lark", (msg) => {
-      if (Array.isArray(msg.feed_ids) && !msg.feed_ids.length) return;
+    const settle = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         void larkChats.refresh();
         void larkAccounts.refresh();
       }, 800);
+    };
+    const off = onHubEvent("lark", (msg) => {
+      if (Array.isArray(msg.feed_ids) && !msg.feed_ids.length) return;
+      settle();
     });
+    // A reconnect the hub could not resume: the `lark` pushes missed meanwhile are not replayed.
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && settle());
     return () => {
       off();
+      offHello();
       clearTimeout(timer);
     };
   }, [on, larkChats]);

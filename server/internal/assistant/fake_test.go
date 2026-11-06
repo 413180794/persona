@@ -41,6 +41,7 @@ type fakeHub struct {
 	ownModels     bool                       // the test sets hello.Models itself: no fake model
 	devices       []Device                   // devices.list answers these when set (else one per machine with sessions)
 	sessions      map[string][]proto.Session // by machine: the machines there are
+	sessionsFail  map[string]int             // by machine: sessions.list fails offline this many more times (then recovers)
 	items         []proto.Item               // session.items answers this
 	calls         []DeviceCall
 	known         map[string]bool  // conversations the nodes have
@@ -117,8 +118,8 @@ type modelCall struct{ System, User string }
 
 func newFakeHub() *fakeHub {
 	// 主对话派的任务只在主对话里通知 is on by default (tasks from the main conversation are quiet, #1731).
-	return &fakeHub{sessions: map[string][]proto.Session{}, known: map[string]bool{}, offline: map[string]bool{},
-		tokens: map[string][]map[string]map[string]string{}, managed: map[string][]proto.ManagedLauncher{}}
+	return &fakeHub{sessions: map[string][]proto.Session{}, sessionsFail: map[string]int{}, known: map[string]bool{},
+		offline: map[string]bool{}, tokens: map[string][]map[string]map[string]string{}, managed: map[string][]proto.ManagedLauncher{}}
 }
 
 // withMachine adds the assistant's machine "server" (no sessions yet).
@@ -163,6 +164,10 @@ func (f *fakeHub) DeviceCall(ctx context.Context, p DeviceCall) (json.RawMessage
 	_ = json.Unmarshal(p.Params, &a)
 	switch p.Method {
 	case DeviceSessionsList:
+		if f.sessionsFail[p.Device] > 0 { // a node that answers offline for a few tries, then recovers
+			f.sessionsFail[p.Device]--
+			return nil, fmt.Errorf("%s: %w", p.Device, apierr.ErrOffline)
+		}
 		return json.Marshal(map[string]any{"sessions": list, "muted": f.muted[p.Device]})
 	case DeviceSessionGet:
 		for _, s := range list {

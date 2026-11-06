@@ -9,6 +9,7 @@ import { api, ApiError } from "./api";
 import type { LarkMessage, LarkPart } from "./inbox";
 import { braveClimbSummary, decodeBraveClimbParts } from "./lark-brave-climb";
 import { larkPath, olAccount } from "./lark-accounts";
+import { isResumed } from "./reconnect";
 import { onHubEvent } from "./store";
 
 export interface LarkMessageDisplay {
@@ -197,9 +198,12 @@ export function useLarkDisplayState(ol?: number): LarkDisplayState {
     const back = () => document.visibilityState === "visible" && void model.refresh();
     document.addEventListener("visibilitychange", back);
     const off = onHubEvent("lark", onLarkPush);
+    // A reconnect the hub could not resume: a `settings_changed` push missed meanwhile is not replayed.
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && void model.refresh());
     return () => {
       document.removeEventListener("visibilitychange", back);
       off();
+      offHello();
     };
   }, [model]);
   return useSyncExternalStore(model.subscribe, () => model.state, () => model.state);

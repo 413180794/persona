@@ -49,4 +49,10 @@
     <string name="assistant_proactive_conversation_own_note">毎回このタスク専用のチャットに送るので、前回までの結果を参照できます。チャットが長くなったりやり直したいときは「次回は新しいチャット」をタップしてください。元のチャットは残ります。</string>
     <string name="assistant_proactive_conversation_first_note">初回の実行で新しいチャットを始め、以降はそのチャットで続けるので、前回までの結果を参照できます。</string>
     <string name="assistant_proactive_run_now_new">追加してから1回実行します</string>
+    <string name="assistant_proactive_push">完了時にプッシュ</string>
+    <string name="assistant_proactive_push_every">毎回</string>
+    <string name="assistant_proactive_push_asked">通知時のみ</string>
+    <string name="assistant_proactive_push_every_note">実行が終わるたびに回答をスマートフォンにプッシュします。</string>
+    <string name="assistant_proactive_push_asked_note">実行時にあなたが知るべきだと判断して通知した場合のみプッシュし、何もなければ邪魔しません。エラーや中断は通常どおりプッシュします。このタスクは常に専用のチャットで実行され、そのチャットで送ったメッセージも完了時にプッシュされません。</string>
+    <string name="assistant_proactive_push_asked_mark">通知時のみプッシュ</string>
 </resources>

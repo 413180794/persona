@@ -19,6 +19,9 @@ func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	old := quietNoticeDelay
 	quietNoticeDelay = 30 * time.Millisecond
 	t.Cleanup(func() { quietNoticeDelay = old })
+	reachA, reachB, reachM := agentReachAttempts, agentReachBackoff, agentReachMax
+	agentReachAttempts, agentReachBackoff, agentReachMax = 2, time.Millisecond, 200*time.Millisecond
+	t.Cleanup(func() { agentReachAttempts, agentReachBackoff, agentReachMax = reachA, reachB, reachM })
 	shortSupervise(t)
 	s, f := newTaskService(t)
 	f.hello.Assistant.MachineID = "server"
@@ -26,6 +29,19 @@ func newQuietService(t *testing.T) (*Service, *fakeHub) {
 	f.known["conv1"] = true
 	f.setSessions("server", proto.Session{SessionID: "conv1", MachineID: "server", Assistant: true, Status: proto.StatusIdle})
 	return s, f
+}
+
+// sessionsListCalls counts the sessions.list calls one machine got.
+func (f *fakeHub) sessionsListCalls(machine string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, c := range f.calls {
+		if c.Device == machine && c.Method == DeviceSessionsList {
+			n++
+		}
+	}
+	return n
 }
 
 // notices are the texts sent into the main conversation.
@@ -411,17 +427,19 @@ func TestQuietNeedsNoticeDroppedWhenAnswered(t *testing.T) {
 // The answer arrives while the node still reports blocked (the production order: the resolve goroutine runs before
 // the node flips its session): the hook cannot confirm the answer, so the stale notice lives on until the drain
 // asks once more right before delivery. A node unreachable then is not an answer — the notice waits for the next
-// drain, which drops it once the node is back and no card waits.
+// drain, which drops it once the node is back and no card waits. ErrNoDevice is a definite answer too, not a
+// flaky node: that stale notice is dropped at the same drain.
 func TestQueuedNeedsNoticeRecheckedAtDrain(t *testing.T) {
 	ix := proto.Interaction{ID: "ix1", MachineID: "box", SessionID: "s1", Kind: proto.IxQuestion,
 		Questions: []proto.Question{{Question: "用哪个分支？"}}}
 	resolution := proto.Resolution{Answers: map[string]string{"用哪个分支？": "main"}}
 	for _, tc := range []struct {
-		name        string
-		unreachable bool
+		name string
+		mode string // caught: the node caught up; unreachable: offline at first, back later; removed: hub forgot it
 	}{
-		{"node caught up before the drain", false},
-		{"node unreachable at the drain, back and answered later", true},
+		{"node caught up before the drain", "caught"},
+		{"node unreachable at the drain, back and answered later", "unreachable"},
+		{"the hub no longer knows the machine", "removed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, f := newQuietService(t)
@@ -444,20 +462,26 @@ func TestQueuedNeedsNoticeRecheckedAtDrain(t *testing.T) {
 			}
 			idleLark := busy1
 			idleLark.Status = proto.StatusIdle
-			if tc.unreachable {
+			switch tc.mode {
+			case "unreachable":
+				f.sessionsFail["box"] = 100
+				s.drainRelays("server", []proto.Session{idleLark})
+				time.Sleep(50 * time.Millisecond) // longer than the bounded retries, far below their cap
+				if q, sent := s.queuedFor("lark1"), f.sentTo("lark1"); q != 1 || sent != 0 {
+					t.Fatalf("an unreachable node was read as answered: %d queued, %d sent", q, sent)
+				}
+				f.sessionsFail["box"] = 0
+				agentTurn(s, f, proto.StatusWorking, "", 0) // the node is back and the agent continues
+				s.drainRelays("server", []proto.Session{idleLark})
+			case "removed":
 				f.mu.Lock()
 				delete(f.sessions, "box")
 				f.mu.Unlock()
 				s.drainRelays("server", []proto.Session{idleLark})
-				time.Sleep(quietNoticeDelay)
-				if q, sent := s.queuedFor("lark1"), f.sentTo("lark1"); q != 1 || sent != 0 {
-					t.Fatalf("an unreachable node was read as answered: %d queued, %d sent", q, sent)
-				}
-				agentTurn(s, f, proto.StatusWorking, "", 0) // the node is back and the agent continues
-			} else {
+			default:
 				agentTurn(s, f, proto.StatusWorking, "", 0) // the node caught up with the answer
+				s.drainRelays("server", []proto.Session{idleLark})
 			}
-			s.drainRelays("server", []proto.Session{idleLark})
 			waitFor(t, "the stale notice to leave the queue", func() bool { return s.queuedFor("lark1") == 0 })
 			time.Sleep(2 * quietNoticeDelay)
 			if got := f.sentTo("lark1"); got != 0 {
@@ -506,6 +530,67 @@ func TestQueuedDoneNoticeSurvivesAnsweredCard(t *testing.T) {
 	if q := s.queuedFor("lark1"); q != 0 {
 		t.Fatalf("%d notice(s) still queued", q)
 	}
+}
+
+// A needs recheck keeps "the node says the card is gone" apart from "the node could not be asked": a node that
+// stayed unreachable is an unknown (notice kept, taskWaits true), retried within the hard cap; a machine the hub
+// no longer knows is a definite "not waiting"; each distinct machine is asked once.
+func TestTaskNeedsRecheckReachability(t *testing.T) {
+	ctx := context.Background()
+	// Not registered with the service, so no background loop asks box.
+	waitingTodo := Todo{ID: "needs", Agents: []TodoAgent{{MachineID: "box", SessionID: "s1"}}}
+
+	t.Run("unreachable is unknown, retried and bounded", func(t *testing.T) {
+		s, f := newQuietService(t)
+		f.sessionsFail["box"] = 100
+		before, start := f.sessionsListCalls("box"), time.Now()
+		waits, known := s.taskNeedsRecheck(ctx, waitingTodo)
+		calls, elapsed := f.sessionsListCalls("box")-before, time.Since(start)
+		if waits || known || calls != agentReachAttempts || elapsed >= agentReachMax {
+			t.Fatalf("waits=%v known=%v calls=%d elapsed=%s", waits, known, calls, elapsed)
+		}
+		if !s.taskWaits(ctx, waitingTodo) {
+			t.Fatal("taskWaits read an unreachable node as answered")
+		}
+	})
+
+	t.Run("the node recovers within the retries", func(t *testing.T) {
+		s, f := newQuietService(t)
+		f.sessionsFail["box"] = agentReachAttempts - 1 // every try but the last fails
+		f.setSessions("box", proto.Session{SessionID: "s1", MachineID: "box",
+			Status: proto.StatusWorking, State: proto.StateWorking})
+		before := f.sessionsListCalls("box")
+		if waits, known := s.taskNeedsRecheck(ctx, waitingTodo); waits || !known {
+			t.Fatalf("waits=%v known=%v, want false/true (answered)", waits, known)
+		}
+		if n := f.sessionsListCalls("box") - before; n != agentReachAttempts {
+			t.Fatalf("%d list calls, want %d", n, agentReachAttempts)
+		}
+	})
+
+	t.Run("a machine the hub no longer knows is definite not-waiting", func(t *testing.T) {
+		s, f := newQuietService(t)
+		f.mu.Lock()
+		delete(f.sessions, "box") // the hub answers ErrNoDevice: it no longer knows this machine
+		f.mu.Unlock()
+		if waits, known := s.taskNeedsRecheck(ctx, waitingTodo); waits || !known || s.taskWaits(ctx, waitingTodo) {
+			t.Fatalf("waits=%v known=%v taskWaits=true, want false/true/false", waits, known)
+		}
+	})
+
+	t.Run("two agents on one machine are one list call", func(t *testing.T) {
+		s, f := newQuietService(t)
+		f.setSessions("box",
+			proto.Session{SessionID: "s1", MachineID: "box"},
+			proto.Session{SessionID: "s2", MachineID: "box"})
+		todo := Todo{ID: "two-agents", Agents: []TodoAgent{
+			{MachineID: "box", SessionID: "s1"}, {MachineID: "box", SessionID: "s2"}}}
+		before := f.sessionsListCalls("box")
+		agents, reached := s.taskAgentsReached(ctx, todo)
+		if !reached || len(agents) != 2 || f.sessionsListCalls("box")-before != 1 {
+			t.Fatalf("reached=%v agents=%d calls=%d, want true/2/1", reached, len(agents), f.sessionsListCalls("box")-before)
+		}
+	})
 }
 
 // An agent a reporting conversation opens with agent_start is its task as one from task_plan is (#4101): not

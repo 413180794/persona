@@ -25,7 +25,7 @@ private val DraftSaver = Saver<TaskDraft?, Any>(
     save = { draft ->
         draft?.let {
             arrayListOf<Any>(it.title, it.prompt, it.repeat.name, it.at?.toEpochMilli() ?: -1L, it.time, it.weekdays.joinToString(","),
-                it.everyMinutes, it.enabled, it.continues, it.permissionMode)
+                it.everyMinutes, it.enabled, it.continues, it.permissionMode, it.push)
         }
     },
     restore = { saved ->
@@ -34,7 +34,7 @@ private val DraftSaver = Saver<TaskDraft?, Any>(
                 values[0] as String, values[1] as String, TaskRepeat.valueOf(values[2] as String),
                 (values[3] as Long).takeIf { it >= 0 }?.let(Instant::ofEpochMilli), values[4] as String,
                 (values[5] as String).split(",").mapNotNull { it.toIntOrNull() }, values[6] as Int, values[7] as Boolean,
-                values[8] as Boolean, values[9] as String,
+                values[8] as Boolean, values[9] as String, values.getOrNull(10) as? String ?: "",
             )
         }
     },
@@ -64,6 +64,7 @@ internal fun TaskEditorPage(
     onModelConfiguration: ((String) -> Unit)? = null,
 ) {
     val isNew = id == null
+    val features = LocalHubFeatures.current
     val found = id?.let(state::task)
     var known by remember { mutableStateOf<ScheduledTask?>(null) }
     LaunchedEffect(found) { if (found != null) known = found }
@@ -227,6 +228,8 @@ internal fun TaskEditorPage(
                 supportingText = stringResource(R.string.assistant_proactive_prompt_note))
         }
         runsWithSection(draft, isNew, task, busy, onModelConfiguration, onChooseMode = { choosingMode = true })
+        // A hub without 跑完推送 would not keep it; one already set on the task still shows, to be turned back.
+        if (ScheduledTask.PUSH_FEATURE in features || task?.pushesOnlyAsked == true) pushSection(draft, busy, onPush = { edit(draft.pushing(it)) })
         conversationSection(draft, task, busy, state, store, onOpenConversation, onContinues = { edit(draft.copy(continues = it)) })
         if (task == null && !isNew) return@JListPage
         val runs = task?.let { state.runsOf(it.id) }.orEmpty()
@@ -338,6 +341,24 @@ private fun androidx.compose.foundation.lazy.LazyListScope.runsWithSection(
 }
 
 /**
+ * 跑完推送 (docs/assistant.md「跑完推送」, iOS pushSection): every run, or only what a run sends with notify_user. Only its
+ * alerts runs the task in its own conversation, so 接着原来的对话 goes.
+ */
+private fun androidx.compose.foundation.lazy.LazyListScope.pushSection(draft: TaskDraft, busy: Boolean, onPush: (String) -> Unit) {
+    val choices = listOf("", ScheduledTask.PUSH_ASKED)
+    item("push-header") { JSectionHeader(stringResource(R.string.assistant_proactive_push)) }
+    item("push") {
+        JCard {
+            JSegmented(
+                listOf(JSegment(stringResource(R.string.assistant_proactive_push_every)), JSegment(stringResource(R.string.assistant_proactive_push_asked))),
+                if (draft.pushesOnlyAsked) 1 else 0, { if (!busy) onPush(choices[it]) }, Modifier.fillMaxWidth(),
+            )
+        }
+        SectionNote(stringResource(if (draft.pushesOnlyAsked) R.string.assistant_proactive_push_asked_note else R.string.assistant_proactive_push_every_note))
+    }
+}
+
+/**
  * 对话 (docs/assistant.md「定时任务」): the conversation it came from (接着原来的对话), else the task's own one, which
  * the first run starts and the next ones continue; 下次开新对话 lets the next run start over.
  */
@@ -348,7 +369,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.conversationSection(
     val origin = task?.origin
     val own = task?.ownConversation
     val rows = buildList {
-        if (origin != null) add("continue")
+        if (origin != null && !draft.pushesOnlyAsked) add("continue")
         if (!draft.continues) { add("own"); if (own != null) add("fresh") }
     }
     item("conversation-header") { JSectionHeader(stringResource(R.string.assistant_proactive_conversation)) }

@@ -70,8 +70,8 @@ internal fun UpcomingRow(item: Upcoming, now: Instant, zone: ZoneId, position: G
 }
 
 /**
- * A repeating task: its rule in words, the next and last run, what it runs with when that is not the default, who set
- * it up, and its switch. The picture carries a mark when the last run failed (danger) or when Persona made it.
+ * A repeating task: its rule in words, the next and last run, what it runs with when that is not the default, 只在提醒时推送
+ * when 跑完推送 is only its alerts, who set it up, and its switch. The picture carries a mark when the last run failed (danger) or when Persona made it.
  */
 @Composable
 internal fun TaskRow(
@@ -86,6 +86,7 @@ internal fun TaskRow(
         task.nextLine(say, now, zone),
         lastRun?.line(say, now, zone),
         task.runsWith(say),
+        stringResource(R.string.assistant_proactive_push_asked_mark).takeIf { task.pushesOnlyAsked },
         stringResource(R.string.assistant_proactive_made_by_assistant).takeIf { task.byAssistant },
     )
     JGroupItem(position) {
@@ -124,6 +125,7 @@ internal fun OneOffRow(
         task.whereLine(say, machines),
         task.prompt.lineSequence().firstOrNull { it.isNotBlank() }?.trim()?.takeIf { it != title },
         task.runsWith(say),
+        stringResource(R.string.assistant_proactive_push_asked_mark).takeIf { task.pushesOnlyAsked },
     )
     JGroupItem(position) {
         JRow(

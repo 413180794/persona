@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -163,6 +164,114 @@ func TestCallBusinessErrorNotRetried(t *testing.T) {
 	var apiErr *APIError
 	if err := callOnce(c); !errors.As(err, &apiErr) || apiErr.Code != 230002 || hits.Load() != 1 {
 		t.Fatalf("err=%v hits=%d", err, hits.Load())
+	}
+}
+
+// Token fetch failures use the bounded backoff (a uuid-less POST retries pre-send); after tokenGone a failed forced fetch keeps forcing, so the POST lands once on the new token.
+func TestCallTokenFetchRetries(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		post        bool
+		plainFails  int
+		forcedFails int32
+		fetches     int32
+		hits        int32
+		landed      int32
+		sleeps      int32
+	}{
+		{"get recovers after a fetch failure", false, 1, 0, 2, 1, 1, 1},
+		{"uuid-less post retries before its body lands", true, 1, 0, 2, 1, 1, 1},
+		{"all fetches fail returns the token error", false, 3, 0, 3, 0, 0, 2},
+		{"get retries the forced fetch with the new token", false, 0, 1, 3, 2, 1, 1},
+		{"uuid-less post lands once with the new token", true, 0, 1, 3, 2, 1, 1},
+		{"uuid-less post forced fetches all fail", true, 0, 2, 3, 1, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var n, forcedN, hits, landed, slept, goneN atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/open-apis/auth/v3/tenant_access_token/internal" {
+					fail := goneN.Load() > 0 && forcedN.Add(1) <= tc.forcedFails || goneN.Load() == 0 && n.Add(1) <= int32(tc.plainFails)
+					if fail {
+						w.WriteHeader(http.StatusBadGateway)
+						return
+					}
+					okJSON(w, map[string]any{"code": 0, "tenant_access_token": map[bool]string{true: "tok2", false: "tok1"}[goneN.Load() > 0], "expire": 7200})
+					return
+				}
+				hits.Add(1)
+				if tc.plainFails == 0 && r.Header.Get("Authorization") != "Bearer tok2" {
+					goneN.Store(1) // rejected at the auth layer; the body never lands
+					okJSON(w, map[string]any{"code": 99991663})
+					return
+				}
+				landed.Add(1)
+				okJSON(w, map[string]any{"code": 0, "data": map[string]any{"message_id": "m1"}, "bot": map[string]any{"open_id": "o1"}})
+			}))
+			defer srv.Close()
+			c := New("cli_x", "secret", srv.URL)
+			prev := callSleep
+			callSleep = func(context.Context, time.Duration) error { slept.Add(1); return nil }
+			defer func() { callSleep = prev }()
+			var err error
+			if tc.post {
+				_, err = c.Send(context.Background(), "chat_id", "c1", TypeText, TextContent("hi"), "")
+			} else {
+				_, err = c.BotInfo(context.Background())
+			}
+			wantErr := tc.landed == 0
+			if (err != nil) != wantErr || n.Load()+forcedN.Load() != tc.fetches || hits.Load() != tc.hits ||
+				landed.Load() != tc.landed || slept.Load() != tc.sleeps || wantErr && !strings.Contains(err.Error(), "token") {
+				t.Fatalf("err=%v fetches=%d hits=%d landed=%d sleeps=%d", err, n.Load()+forcedN.Load(), hits.Load(), landed.Load(), slept.Load())
+			}
+		})
+	}
+}
+
+// 429 honors a Retry-After delta/date on the HTTP status or body rate-limit code; past the cap it gives up at once.
+func TestCallRetryAfter(t *testing.T) {
+	cases := []struct {
+		name    string
+		after   string // empty sends an HTTP date 10s out
+		status  int
+		code    int
+		hits    int32
+		minWait time.Duration
+	}{
+		{"delta seconds on 429", "5", http.StatusTooManyRequests, 0, 3, 5 * time.Second},
+		{"delta seconds on body code", "2", http.StatusOK, codeRateLimited, 3, 2 * time.Second},
+		{"http date on 429", "", http.StatusTooManyRequests, 0, 3, 8 * time.Second},
+		{"retry-after exactly at the cap", strconv.Itoa(int(callMaxRetryWait / time.Second)), http.StatusTooManyRequests, 0, 3, callMaxRetryWait},
+		{"past the cap gives up", strconv.Itoa(int(callMaxRetryWait/time.Second) + 30), http.StatusTooManyRequests, codeRateLimited, 1, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var slept []time.Duration
+			after := tc.after
+			if after == "" {
+				after = time.Now().Add(10 * time.Second).UTC().Format(http.TimeFormat)
+			}
+			c, _, hits, _ := retryAPIClient(t, func(w http.ResponseWriter, _ *http.Request, n *atomic.Int32) {
+				if n.Load() < 3 {
+					w.Header().Set("Retry-After", after)
+					w.WriteHeader(tc.status)
+					okJSON(w, map[string]any{"code": tc.code})
+					return
+				}
+				botInfoOK(w)
+			})
+			callSleep = func(_ context.Context, d time.Duration) error { slept = append(slept, d); return nil }
+			_, err := c.BotInfo(context.Background())
+			wantErr := tc.hits == 1
+			if (err != nil) != wantErr || hits.Load() != tc.hits || len(slept) != int(tc.hits)-1 ||
+				wantErr && errorCode(err) != codeRateLimited {
+				t.Fatalf("err=%v wantErr=%v hits=%d sleeps=%v", err, wantErr, hits.Load(), slept)
+			}
+			for _, d := range slept {
+				if d < tc.minWait || tc.after != "" && d != tc.minWait {
+					t.Fatalf("sleep %v, want %v", d, tc.minWait)
+				}
+			}
+		})
 	}
 }
 

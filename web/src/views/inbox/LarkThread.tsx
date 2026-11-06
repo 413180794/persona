@@ -25,6 +25,7 @@ import { canAddPin, changeChatPin, needsRecheck, pinProblemText, type ChatPinTar
 import { historyProblem, type HistoryProblem, latestOf, nearTop, OlderPaging, screensFromEnd, showsJumpToLatest } from "../../lib/lark-history";
 import { initialCursor, LarkReadTracker } from "../../lib/lark-read";
 import { clickLink, linkHref, prefetchLink } from "../../lib/links";
+import { isResumed } from "../../lib/reconnect";
 import { navigate } from "../../lib/router";
 import { getState, onHubEvent, useStore } from "../../lib/store";
 import { isForeignCached, requestTranslation, translatesChat, translationOf, useTranslatePrefs, useTranslations } from "../../lib/translate";
@@ -214,29 +215,36 @@ function LarkThreadBody({ chat, pinsOpen = false, onPinsOpen }: LarkThreadProps)
   useReadReports(feed, ol, scroller, tracker, pageRef, placed, page);
   const { states: receipts, changed: receiptsChanged } = useReadReceipts(feed, ol, scroller, pageRef, page);
 
-  useEffect(
-    () =>
-      onHubEvent("lark", (msg) => {
-        const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
-        const p = pageRef.current;
-        // another account's push names its own chats (the same group can be in two accounts)
-        if (!ids.includes(feed) || olAccount(msg.ol_account) !== ol || !p) return;
-        // something happened in the chat: the receipts of mine on screen may have moved too
-        receiptsChanged();
-        if (p.has_newer) return;
-        const gen = windowGen.current;
-        api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
-          .then((r) => {
-            if (gen !== windowGen.current) return;
-            // A list showing its newest message keeps showing it as more come in (iOS larkFollowsEnd).
-            const el = scroller.current;
-            if (el && screensFromEnd(el) < 0.05) toEnd.current = true;
-            setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []) });
-          })
-          .catch(() => {});
-      }),
-    [feed, ol, base, receiptsChanged],
-  );
+  useEffect(() => {
+    const changed = () => {
+      const p = pageRef.current;
+      if (!p) return;
+      // something happened in the chat: the receipts of mine on screen may have moved too
+      receiptsChanged();
+      if (p.has_newer) return;
+      const gen = windowGen.current;
+      api<LarkPage>(larkPath(`${base}?limit=${PAGE}`, ol))
+        .then((r) => {
+          if (gen !== windowGen.current) return;
+          // A list showing its newest message keeps showing it as more come in (iOS larkFollowsEnd).
+          const el = scroller.current;
+          if (el && screensFromEnd(el) < 0.05) toEnd.current = true;
+          setPage((cur) => cur && { ...cur, messages: mergeMessages(cur.messages, r.messages ?? []) });
+        })
+        .catch(() => {});
+    };
+    const offLark = onHubEvent("lark", (msg) => {
+      const ids = Array.isArray(msg.feed_ids) ? (msg.feed_ids as string[]) : [];
+      // another account's push names its own chats (the same group can be in two accounts)
+      if (ids.includes(feed) && olAccount(msg.ol_account) === ol) changed();
+    });
+    // A reconnect the hub could not resume: the `lark` pushes missed meanwhile are not replayed.
+    const offHello = onHubEvent("hello", (msg) => !isResumed(msg) && changed());
+    return () => {
+      offLark();
+      offHello();
+    };
+  }, [feed, ol, base, receiptsChanged]);
 
   // First paint: at the first new message (a little of what came before shows above it), else at the bottom.
   useLayoutEffect(() => {
