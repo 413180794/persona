@@ -89,8 +89,9 @@ export function answeringWindows(wins: ClickWindow[]): ClickWindow[] {
     } catch {
       return false;
     }
-    // also under a sub-path a reverse proxy serves the hub at (/<prefix>/admin)
-    return !/\/admin(\/|$)/.test(p);
+    // the admin UI is at the root only (docs/web.md「子路径」), and the worker is registered only there: an app page
+    // with "admin" further down its path (a session or machine called admin) is still asked
+    return !/^\/admin(\/|$)/.test(p);
   });
   return [...app].sort((a, b) => rank(b) - rank(a)).slice(0, ASK_AT_MOST);
 }

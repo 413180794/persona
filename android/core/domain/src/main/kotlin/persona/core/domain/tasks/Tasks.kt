@@ -579,12 +579,13 @@ class TasksStore(
     /**
      * 发送 on a message card: the (edited) draft goes out through the inbox; the hub records it on the card, whose
      * `assistant_feed` event draws it sent (put in at once here too). Taps while one is on its way, and on a card
-     * already sent, do nothing ([busy] under the card's id); a draft with a blank to fill in is not sent.
+     * already sent or dealt with elsewhere (`filed_at`, #5095), do nothing ([busy] under the card's id); a draft with a
+     * blank to fill in is not sent.
      */
     fun sendMessage(card: FeedItem, text: String, onError: (Throwable) -> Unit) {
         val itemId = card.ref ?: return
         val latest = { _feeds.value[card.conversation]?.firstOrNull { it.id == card.id } ?: card }
-        if (latest().sent != null) return
+        if (!latest().canSend) return
         draftPlaceholder(text)?.let { onError(DraftPlaceholderLeft(it)); return }
         act(card.id, onError) {
             api.inboxReply(itemId, text, card.id)

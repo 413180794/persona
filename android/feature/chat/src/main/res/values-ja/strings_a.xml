@@ -329,6 +329,7 @@
     <string name="chat_tasks_send">送信</string>
     <string name="chat_tasks_later">後で</string>
     <string name="chat_tasks_message_filed">この件は対応済みのため、返信は送信していません。</string>
+    <string name="chat_tasks_message_filed_title">対応済み・送信しなかった下書き</string>
     <string name="chat_tasks_dock_waiting">%1$s・要対応</string>
     <string name="chat_tasks_dock_interrupted">%1$s・中断</string>
     <string name="chat_tasks_route_chip">「%1$s」へ ×</string>

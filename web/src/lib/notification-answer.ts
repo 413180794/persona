@@ -21,6 +21,17 @@ export type ClickPlan = { open: string } | { ix: Interaction; allow: boolean; bo
 
 /** Cards being answered from a notification now: a second click on one is not sent again. */
 const answering = new Set<string>();
+/** Cards whose 没能允许 / 没能拒绝 notification is up while the card still waits: it goes when the card does (#5070). */
+const failed = new Set<string>();
+const failedTag = (id: string) => `answer-failed#${id}`;
+
+/** The failure notifications whose card is no longer pending (answered elsewhere, withdrawn): to take back. */
+export function failedTagsOver(pending: readonly Interaction[]): string[] {
+  const ids = new Set(pending.map((ix) => ix.id));
+  const over = [...failed].filter((id) => !ids.has(id));
+  over.forEach((id) => failed.delete(id));
+  return over.map(failedTag);
+}
 
 const isNote = (m: unknown): m is NoteMessage => {
   const n = m as Partial<NoteMessage> | null;
@@ -34,6 +45,7 @@ const isNote = (m: unknown): m is NoteMessage => {
  * no permission card, or one already being answered from a notification.
  */
 export function planClick(m: unknown, interactions: readonly Interaction[], now: number): ClickPlan | undefined {
+  // until is the worker's Date.now() and now the page's: one browser on one machine, so the same clock
   if (!isNote(m) || now > m.until) return undefined;
   if (m.action === "open") return m.url?.startsWith("/") && !m.url.startsWith("//") ? { open: m.url } : undefined;
   const ix = interactions.find((x) => x.id === m.ix);
@@ -60,7 +72,12 @@ async function answer(ix: Interaction, allow: boolean, body: Resolution) {
     // nobody is looking at the page: the failure is a notification of its own, a click opens the conversation
     const route = { name: "session", mid: ix.machine_id, sid: ix.session_id } as const;
     if (document.visibilityState === "visible" && document.hasFocus()) toast(r.error, "error");
-    else postNotification({ title: allow ? t("notify.allow_failed") : t("notify.deny_failed"), body: r.error, tag: `answer-failed#${ix.id}`, url: href(route) }, () => navigate(route));
+    else {
+      postNotification({ title: allow ? t("notify.allow_failed") : t("notify.deny_failed"), body: r.error, tag: failedTag(ix.id), url: href(route) }, () => navigate(route));
+      // a card that is over already (expired, withdrawn) keeps it: the notification is the only word of why
+      if (getState().interactions.some((x) => x.id === ix.id)) failed.add(ix.id);
+      else failed.delete(ix.id); // an earlier failure's mark must not take this one back
+    }
   } finally {
     answering.delete(ix.id);
   }

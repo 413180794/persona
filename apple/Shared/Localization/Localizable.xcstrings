@@ -48869,28 +48869,6 @@
         }
       }
     },
-    "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The app key is stored encrypted on the hub; only the account name is shown. It's deleted when you sign out."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アプリキーは暗号化してハブに保存され、アカウント名のみ表示されます。ログアウトすると一緒に削除されます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。"
-          }
-        }
-      }
-    },
     "应用程序(客户端) ID": {
       "localizations": {
         "en": {

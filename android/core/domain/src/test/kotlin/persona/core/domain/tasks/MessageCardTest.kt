@@ -108,6 +108,18 @@ class MessageCardTest {
         assertTrue(errors.isEmpty())
     }
 
+    /** A card dealt with elsewhere (#4797) is not sent from a stale copy either: the hub would refuse it with a 409 (#5095). */
+    @Test fun aCardFiledElsewhereIsNotSent() = runBlocking {
+        val filed = card(extra = mapOf("filed_at" to "2026-11-04T10:30:00Z"))
+        val api = Api(CompletableDeferred(Unit), listOf(filed))
+        val store = TasksStore(api, Connection(), CoroutineScope(Dispatchers.Unconfined))
+        store.load("c1")
+        val errors = mutableListOf<Throwable>()
+        store.sendMessage(card(), "修好了") { errors += it } // the copy drawn before it was filed
+        assertTrue(api.replies.isEmpty())
+        assertTrue(errors.isEmpty())
+    }
+
     @Test fun aDraftWithABlankIsNotSent() {
         val gate = CompletableDeferred(Unit)
         val api = Api(gate, emptyList())

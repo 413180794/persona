@@ -349,6 +349,7 @@
     <string name="chat_tasks_send">Send</string>
     <string name="chat_tasks_later">Later</string>
     <string name="chat_tasks_message_filed">Already dealt with, so this reply wasn\'t sent.</string>
+    <string name="chat_tasks_message_filed_title">Handled elsewhere, draft not sent</string>
     <string name="chat_tasks_dock_waiting">%1$s · Needs you</string>
     <string name="chat_tasks_dock_interrupted">%1$s · Interrupted</string>
     <string name="chat_tasks_route_chip">To “%1$s” ×</string>

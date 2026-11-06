@@ -329,6 +329,7 @@
     <string name="chat_tasks_send">发送</string>
     <string name="chat_tasks_later">稍后</string>
     <string name="chat_tasks_message_filed">这件事已经处理过了，回复没有发出去</string>
+    <string name="chat_tasks_message_filed_title">已处理，未发送的草稿</string>
     <string name="chat_tasks_dock_waiting">%1$s · 等你</string>
     <string name="chat_tasks_dock_interrupted">%1$s · 中断了</string>
     <string name="chat_tasks_route_chip">对「%1$s」说 ×</string>

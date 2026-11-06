@@ -601,12 +601,15 @@ private fun MessageCard(item: FeedItem, host: AssistantTaskHost, todos: List<Tod
                         color = PersonaTheme.palette.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+            // A filed card is no longer a draft to send (#5095): plain well, a read-only text and a title saying so.
             Column(Modifier.fillMaxWidth().clip(PersonaTheme.shapes.controlShape)
-                .background(if (done) PersonaTheme.palette.done.tint else PersonaTheme.palette.accentSoft).padding(Tokens.Space.m),
-                verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
-                Text(stringResource(if (done) R.string.chat_tasks_message_replied else R.string.chat_tasks_message_drafted), style = PersonaTheme.type.caption,
-                    color = if (done) PersonaTheme.palette.done.text else PersonaTheme.palette.accent)
+                .background(when { done -> PersonaTheme.palette.done.tint; filed -> PersonaTheme.palette.sunken; else -> PersonaTheme.palette.accentSoft })
+                .padding(Tokens.Space.m), verticalArrangement = Arrangement.spacedBy(Tokens.Space.xs)) {
+                Text(stringResource(when { done -> R.string.chat_tasks_message_replied; filed -> R.string.chat_tasks_message_filed_title
+                    else -> R.string.chat_tasks_message_drafted }), style = PersonaTheme.type.caption,
+                    color = when { done -> PersonaTheme.palette.done.text; filed -> PersonaTheme.palette.ink2; else -> PersonaTheme.palette.accent })
                 if (sent != null) Text(sent.text, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink)
+                else if (filed) Text(draft, style = PersonaTheme.type.body, color = PersonaTheme.palette.ink2)
                 else BasicTextField(draft, { draft = it }, Modifier.fillMaxWidth(),
                     textStyle = PersonaTheme.type.body.copy(color = PersonaTheme.palette.ink),
                     cursorBrush = SolidColor(PersonaTheme.palette.accent))

@@ -117,14 +117,16 @@ describe("授权通知上的按钮（#4464）", () => {
     expect(app.sent).toEqual([expect.objectContaining({ action: "deny" })]);
   });
 
-  it("挑窗口：有焦点 / 可见的在前，跳过管理页和不能收消息的，最多问三个", () => {
+  it("挑窗口：有焦点 / 可见的在前，跳过管理页（只认根路径的）和不能收消息的，最多问三个", () => {
     const front = page(true, { focused: true, url: "/s/m/a" });
     const seen = page(true, { visibilityState: "visible", url: "/" });
     const back = page(true, { url: "/overview" });
     const admin = page(true, { url: "/admin" });
-    const proxied = page(true, { url: "https://hub.example/persona/admin/" });
+    const named = page(true, { url: "https://hub.example/s/m/admin" });
     const old = win({ name: "old" });
-    expect(answeringWindows([back, admin, proxied, old, seen, front])).toEqual([front, seen, back]);
+    expect(answeringWindows([back, admin, old, seen, front])).toEqual([front, seen, back]);
+    // only the root's /admin is the admin page: a conversation called admin is the app's (#5070)
+    expect(answeringWindows([admin, named])).toEqual([named]);
     expect(answeringWindows([back, back, back, back])).toHaveLength(3);
   });
 

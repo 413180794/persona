@@ -82,8 +82,6 @@ enum ConnectorText {
         case "telegram": ConnectorProfile(brand: Theme.Brand.telegram, app: "Telegram", reads: String(localized: "它的私聊和群"),
                                           signInFooter: String(localized: "API 凭据和登录状态加密存在 hub 上，只显示 api_id；退出登录时一起删掉。"),
                                           logoutEndsRemoteSession: true)
-        // No mark yet: 微信's and its terms of use are undecided, so it draws the generic icon until they are.
-        case "wechat-connector": ConnectorProfile(signInFooter: String(localized: "应用密钥加密存在 hub 上，只显示账号名；退出登录时一起删掉。"))
         default: ConnectorProfile()
         }
     }

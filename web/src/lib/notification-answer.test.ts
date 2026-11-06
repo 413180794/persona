@@ -17,7 +17,7 @@ vi.mock("./notify", () => ({ postNotification: (n: { title: string; body: string
 vi.mock("../ui/atoms", () => ({ toast: (...a: unknown[]) => toasts.push(a) }));
 vi.mock("./router", () => ({ navigate: (r: unknown) => navigate(r), href: (r: { mid: string; sid: string }) => `/s/${r.mid}/${r.sid}` }));
 
-const { NOTE_MESSAGE, onWorkerMessage, planClick } = await import("./notification-answer");
+const { failedTagsOver, NOTE_MESSAGE, onWorkerMessage, planClick } = await import("./notification-answer");
 const worker = await import("./sw-click");
 const { allowBody, denyBody } = await import("./quick-answers");
 
@@ -99,6 +99,35 @@ describe("页面收到 worker 的消息", () => {
     await settle();
     expect(posted).toEqual([expect.objectContaining({ title: "没能允许", body: "这个请求已经过期，回答没有送到", url: "/s/m/a" })]);
     expect(toasts).toEqual([]);
+  });
+
+  it("没答上的通知：卡后来在别处答掉了就收回，卡还在就留着，卡本来就结束了不收回（#5070）", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    deliver(note("allow"));
+    answers[0]!({ ok: false, error: "没送到：hub 连不上" });
+    await settle();
+    expect(failedTagsOver([perm, ask])).toEqual([]);
+    expect(failedTagsOver([ask])).toEqual(["answer-failed#p1"]);
+    expect(failedTagsOver([ask])).toEqual([]);
+    // over already when it failed (410: answerCard took the card off): its notification is the only word of why
+    deliver(note("deny"));
+    interactions = [ask];
+    answers[1]!({ ok: false, error: "这个请求已经过期，回答没有送到" });
+    await settle();
+    expect(failedTagsOver([ask])).toEqual([]);
+  });
+
+  it("同一张卡先没送到、再点一次时卡已经结束：后一条说明原因的通知不被收回", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    deliver(note("allow"));
+    answers[0]!({ ok: false, error: "没送到：hub 连不上" });
+    await settle();
+    deliver(note("allow"));
+    interactions = [ask];
+    answers[1]!({ ok: false, error: "这个请求已经过期，回答没有送到" });
+    await settle();
+    expect(posted).toHaveLength(2);
+    expect(failedTagsOver([ask])).toEqual([]);
   });
 
   it("没答上（页面就在前台）：提示条", async () => {

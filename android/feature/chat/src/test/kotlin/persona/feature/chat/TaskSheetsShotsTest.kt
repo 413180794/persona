@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -23,6 +24,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -170,6 +173,37 @@ class TaskSheetsShotsTest {
         assertTrue("no 「$expected」", rule.onAllNodesWithText(expected, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
         assertTrue("「$absent」 still shown", rule.onAllNodesWithText(absent, substring = true, useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
     }
+
+    /** A message card dealt with elsewhere (#4797, #5095): no send / later, the draft read-only under a plain title. */
+    private fun filed(style: AppStyle, dark: Boolean) {
+        val store = TasksStore(Api(todos), Connection(), CoroutineScope(Dispatchers.Unconfined))
+        val item = FeedItem("m1", "main", at = now.toString(), kind = "message", ref = "example:1", body = buildJsonObject {
+            put("sender", "王芳"); put("chat", "发布群"); put("text", "登录页的崩溃修好了吗？")
+            put("draft", "在修了，今晚前给你结果"); put("filed_at", now.toString())
+        })
+        rule.setContent {
+            PersonaTheme(darkTheme = dark, reduceMotion = true, style = style) {
+                val host = AssistantTaskHost(store, "main", listOf(lead, helper, own), { it }, {}, {}, {})
+                Column(Modifier.testTag("shot").width(400.dp).background(PersonaTheme.palette.background).padding(Tokens.Space.l)) {
+                    AssistantExtraLine(AssistantExtra.Feed(item), host)
+                }
+            }
+        }
+        rule.waitForIdle()
+        assertTrue("no filed title", rule.onAllNodesWithText("已处理，未发送的草稿", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue("send still shown", rule.onAllNodesWithText("发送", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        assertTrue("draft still editable", rule.onAllNodes(hasSetTextAction(), useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+        val bitmap = rule.onNodeWithTag("shot").captureToImage().asAndroidBitmap()
+        File(out(), "tasks-filed-${style.name.lowercase()}-${if (dark) "dark" else "light"}.png").outputStream()
+            .use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun filedGlass() = filed(AppStyle.Glass, false)
+    @Test fun filedGlassDark() = filed(AppStyle.Glass, true)
+    @Test fun filedBrief() = filed(AppStyle.Brief, false)
+    @Test fun filedBriefDark() = filed(AppStyle.Brief, true)
+    @Test fun filedBoard() = filed(AppStyle.Board, false)
+    @Test fun filedBoardDark() = filed(AppStyle.Board, true)
 
     @Test fun waitingCardSaysWhatItAsks() = card(listOf(bash), "需要授权：swift test", "有事等你回答")
     @Test fun waitingCardWithoutACardReadsAsBefore() = card(emptyList(), "有事等你回答", "需要授权")

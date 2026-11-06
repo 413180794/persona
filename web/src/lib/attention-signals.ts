@@ -7,7 +7,7 @@ import { useCounts, useAgentSessions } from "./sessions";
 import { getState, useStore } from "./store";
 import { answeredTags, attentionSoundEnabled, badgeText, detectNewCards, detectTransitions, pickEvent, rateLimiter, SETTLE_MS, settledTags, suppressed, tabTitle, trackTurns, type Turn } from "./attention";
 import { claimNotification, closeNotification, FRONT_BEAT_MS, loadNotifyPrefs, markFront, notificationText, notifyPrefs, waitingCard, otherTabInFront, postNotification, systemNotifyActive, wants } from "./notify";
-import { listenForNotificationClicks } from "./notification-answer";
+import { failedTagsOver, listenForNotificationClicks } from "./notification-answer";
 import { isMuted } from "./session-actions";
 import { href, navigate } from "./router";
 import { t } from "../i18n";
@@ -264,8 +264,8 @@ export function useAttentionSignals(label: string, pane: { mid: string; sid: str
     for (const e of fresh.events) bare.current.delete(e.key);
     for (const e of events) if (e.kind === "needs" && !interactions.some((ix) => agentKey(ix) === e.key)) bare.current.add(e.key);
     // answered or seen, here or elsewhere: its system notification goes too (#3458); and one about a card that is gone,
-    // while the session waits on another
-    const settled = new Set([...settledTags(prev.current, next), ...answeredTags(announced.current, interactions)]);
+    // while the session waits on another; and a 没能允许 one about a card that is gone
+    const settled = new Set([...settledTags(prev.current, next), ...answeredTags(announced.current, interactions), ...failedTagsOver(interactions)]);
     settled.forEach(closeNotification);
     for (const tag of settled) if (tag.endsWith("#needs")) announced.current.delete(tag.slice(0, -"#needs".length));
     prev.current = next;

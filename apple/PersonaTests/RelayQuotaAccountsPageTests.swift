@@ -2,16 +2,16 @@ import Foundation
 import Testing
 @testable import Jarvis
 
-/// quota-relay-history's sidebar page (nav_page `sidebar`, #4576) as the extension draws it: the fixture is the extension's
-/// own export (persona-removed `extensions/quota-relay-history/testdata/relay-history-accounts-view.json`, made-up
+/// quota-relay's sidebar page (nav_page `sidebar`, #4576) as the extension draws it: the fixture is the extension's
+/// own export (extensions repo `testdata/relay-accounts-view.json`, made-up
 /// accounts), copied here as is. The page reads, stays on the list page (no tabs), its filter, segmented and search
 /// send what the extension reads back, a row pushes the account's page without asking the extension, and nothing on it
 /// names a launcher or a key.
 @MainActor
-struct relay-historyAccountsPageTests {
+struct RelayQuotaAccountsPageTests {
     private static let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        .appending(path: "Fixtures/relay-history-accounts-view.json")
-    private static let path = "/api/v1/plugins/quota-relay-history/-/ui/sidebar"
+        .appending(path: "Fixtures/relay-accounts-view.json")
+    private static let path = "/api/v1/plugins/quota-relay/-/ui/sidebar"
 
     /// One of the fixture's views (`default`, `kiro`, `detail`) as the JSON the hub would send.
     private static func raw(_ name: String) throws -> String {
@@ -25,7 +25,7 @@ struct relay-historyAccountsPageTests {
     }
 
     private func page(_ hub: FakeHub, state: String? = nil, depth: Int = 1) -> ExtensionViewModel {
-        ExtensionViewModel(plugin: "quota-relay-history", ui: "sidebar", context: ExtensionUIContext.here().forPage(), state: state,
+        ExtensionViewModel(plugin: "quota-relay", ui: "sidebar", context: ExtensionUIContext.here().forPage(), state: state,
                            depth: depth, deps: .init(api: { hub.client }))
     }
 
@@ -63,7 +63,7 @@ struct relay-historyAccountsPageTests {
         for name in ["default", "kiro"] {
             let v = try Self.view(name)
             #expect(v.tabs == nil && !v.wantsCodePage, "\(name) is not the code-hosting page")
-            #expect(v.title == "relay-history 账号" && v.refreshAfter == 60)
+            #expect(v.title == "中转账号" && v.refreshAfter == 60)
             #expect(v.search?.action.id == "search" && v.search?.placeholder == "搜索账号")
             let f = try #require(v.filter)
             #expect(f.name == "status" && f.action.id == "status" && f.value == "all")
@@ -164,7 +164,7 @@ struct relay-historyAccountsPageTests {
 
         // The page it pushes: the same interface, one level deeper, starting with the account's state.
         let t = ExtensionPushTarget(model: m, push: pushed)
-        #expect(t.plugin == "quota-relay-history" && t.ui == "sidebar" && t.depth == 2 && t.state == pushed.state)
+        #expect(t.plugin == "quota-relay" && t.ui == "sidebar" && t.depth == 2 && t.state == pushed.state)
 
         // That page asks for its view with that state and draws the account's page.
         let detail = FakeHub()

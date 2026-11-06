@@ -1,23 +1,23 @@
 import XCTest
 
-/// quota-relay-history's sidebar page 「relay-history 账号」 (#4576) opened from the shell's drawer, on the extension's exported
+/// quota-relay's sidebar page 「中转账号」 (#4576) opened from the shell's drawer, on the extension's exported
 /// fixture: the default view, the Kiro type picked, a search, one account's page. Against scripts/mock/mock_hub.py with
-/// `MOCK_PLUGINS=1 MOCK_relay-history=apple/PersonaTests/Fixtures/relay-history-accounts-view.json`:
-/// `TEST_RUNNER_JARVIS_relay-history_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots,
+/// `MOCK_PLUGINS=1 MOCK_RELAY_ACCOUNTS=apple/PersonaTests/Fixtures/relay-accounts-view.json`:
+/// `TEST_RUNNER_JARVIS_RELAY_ACCOUNTS_HUB=http://127.0.0.1:<端口>`; `TEST_RUNNER_JARVIS_SHOTS=<目录>` keeps the screenshots,
 /// named by `TEST_RUNNER_JARVIS_SHOTS_APPEARANCE` and the style.
-final class relay-historyAccountsPageUITests: XCTestCase {
+final class RelayQuotaAccountsPageUITests: XCTestCase {
     private var env: [String: String] { ProcessInfo.processInfo.environment }
 
     @MainActor private func shot(_ app: XCUIApplication, _ name: String) {
         guard let dir = env["JARVIS_SHOTS"] else { return }
         let look = env["JARVIS_SHOTS_APPEARANCE"] ?? "light"
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: dir)
-            .appending(path: "relay-history-\(name)-\(UITestStyle.name)-\(look).png"))
+            .appending(path: "relay-quota-\(name)-\(UITestStyle.name)-\(look).png"))
     }
 
     @MainActor func testTheAccountsPage() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "the shell's drawer is the phone's")
-        guard let hub = env["JARVIS_relay-history_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_relay-history (JARVIS_relay-history_HUB)") }
+        guard let hub = env["JARVIS_RELAY_ACCOUNTS_HUB"] else { throw XCTSkip("needs mock_hub.py with MOCK_RELAY_ACCOUNTS (JARVIS_RELAY_ACCOUNTS_HUB)") }
         continueAfterFailure = false
         let pair = "jarvis://pair?url=" + hub.addingPercentEncoding(withAllowedCharacters: .alphanumerics)! + "&token=mock"
         let app = XCUIApplication()
@@ -29,7 +29,7 @@ final class relay-historyAccountsPageUITests: XCTestCase {
         let face = app.buttons["assistant-sidebar-button"]
         XCTAssertTrue(face.waitForExistence(timeout: 20), app.debugDescription)
         face.tap()
-        let entry = app.descendants(matching: .any)["sidebar-extension-quota-relay-history-sidebar"]
+        let entry = app.descendants(matching: .any)["sidebar-extension-quota-relay-sidebar"]
         XCTAssertTrue(entry.waitForExistence(timeout: 20), "the page is not in the drawer:\n\(app.debugDescription)")
         entry.tap()
 

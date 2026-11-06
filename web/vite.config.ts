@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { PRELOAD_LANGS, preloadScript } from "./src/startup-preload";
 import { textScale } from "./src/lib/text-scale";
+import { classicWorkerProblem } from "./src/sw-entry-check";
 
 // `npm run dev` talks to a hub through Vite's proxy: JARVIS_HUB_URL (eval "$(python3 ../scripts/jarvis_config.py env)").
 const environment = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
@@ -81,8 +82,19 @@ const startupPreload: Plugin = {
   },
 };
 
+// Build only: sw.js must not import anything (src/sw-entry-check.ts); the build fails, saying why and how to fix it.
+const classicWorker: Plugin = {
+  name: "classic-worker",
+  apply: "build",
+  generateBundle(_, bundle) {
+    const sw = bundle["sw.js"];
+    const problem = sw?.type === "chunk" ? classicWorkerProblem(sw.code, [...sw.imports, ...sw.dynamicImports]) : undefined;
+    if (problem) this.error(problem);
+  },
+};
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), adminFallback, startupPreload],
+  plugins: [react(), tailwindcss(), adminFallback, startupPreload, classicWorker],
   // 字号 (src/lib/text-scale.ts): font sizes become calc(size * var(--text-scale, 1)), after Tailwind wrote them.
   css: { postcss: { plugins: [textScale()] } },
   server: {

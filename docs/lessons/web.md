@@ -308,7 +308,7 @@
 ## service worker 和页面别共用有值的模块（2026-11-06，#4464）
 
 - `sw.js` 是 `vite.config.ts` 里的一个入口，按 classic script 注册：页面也 import 了 `sw.ts` 依赖的某个模块的值（常量、函数）时，Rollup 把它拆成共享 chunk，`sw.js` 开头变成 `import … from "./assets/…"`，classic worker 一加载就语法错，整个 service worker 装不上（离线外壳、通知点击都没了），`tsc` 和单测都看不出来。
-  页面要用的常量自己再写一份（单测里比对两份一样），只 `import type`；改完看一眼 `head -c 200 dist/sw.js` 不以 `import` 开头。
+  页面要用的常量自己再写一份（单测里比对两份一样），只 `import type`。`npm run build` 会查（`vite.config.ts` 的 `classic-worker`，#5070）：`sw.js` 里有 import 就构建失败并说明原因。
 
 ## 词条名别以复数后缀结尾（2026-11-05）
 
