@@ -67,6 +67,16 @@ Writes (create event, create reminder, complete reminder, write health data) car
 or "Write health: weight 72.5 kg". If the user denies, the tool returns `isError=true` with `The user declined on the phone.`. Confirmation covers only one call;
 if Claude calls again, it asks again.
 
+- **One at a time** (#4456, `PhoneConfirmations`): a write that comes while another is on screen waits behind it and shows once that one is answered.
+  Each answer goes to the confirmation it names: dismissing the dialog denies only the one it showed, and an answer counts once.
+- **How long the hub waits** (`phoneConfirmWait` in `server/internal/hub/hub.go`, #4427): a confirmed write waits up to 30 minutes, other phone calls 2 minutes.
+  The clock starts when the hub sends the `tool_call` to the phone (after waking it, if it had to), not when the dialog shows: a write queued behind another
+  has less of its 30 minutes left when its turn comes, and the hub may have stopped waiting already. An approval after that is still carried out on the phone,
+  and the agent was told to check before calling again.
+- **A result while the socket is down** (#4456, `ToolResultOutbox`): Allow tapped just as the app comes back from the background can land before the socket
+  has reconnected. The result is kept (only tool results, at most 16 per hub group) and sent once that group connects again; the hub matches it to the call
+  by `call_id` whatever connection it comes on. One older than 30 minutes is dropped: the hub no longer waits for it.
+
 Reads do not interrupt the user, but every call leaves a `tool_call` / `tool_result` record in the session.
 
 `phone_clipboard_set` and `phone_notify` also change things on the phone, but do not show confirmation. Confirmation happens in the app; the hub's `connector_gate` does not govern phone tools. `mail_send` confirmation is requested by the hub under different rules; see the next section.
@@ -131,7 +141,7 @@ Health Connect is built into Android 14 and later; on 8–13 it must be installe
 - **No API to read Notes, WeChat, or other apps' data**. The only routes are "screenshot + `phone_photo_get` to inspect the image" or the user manually pasting into the clipboard.
 - **The app must be connected to the hub**: the hub can send `tool_call` only to a phone that has sent `register_phone`. In the foreground or just after entering the background, the WebSocket
   remains available to receive calls; when iOS suspends the iPhone app, the hub first sends a silent push to wake it in the background and waits up to 20 seconds for connection (`hub.go`, `wakePhone`). Only the most recently registered device is woken; if it was woken within 30 seconds, skip the push but still wait 20 seconds. Hub push configuration is required; Android is not woken.
-  If waking fails, return an error asking the model to have the user open Persona and retry. A call waits at most 2 minutes for the phone; timeout also returns an error.
+  If waking fails, return an error asking the model to have the user open Persona and retry. A call waits at most 2 minutes for the phone (a confirmed write 30 minutes, see "Confirmation flow"); timeout also returns an error.
 - **Background location is unavailable**: only "While Using" permission is requested, so location fails outside the foreground.
 - **Clipboard reads trigger a system prompt**: when reading content copied in another app, iOS asks "Allow Paste?" and the user must allow it.
 - **Health data is aggregated by day only**: no individual-record queries; steps/energy are totals, heart rate is daily average/minimum/maximum, and sleep is daily time asleep

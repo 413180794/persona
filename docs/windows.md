@@ -169,7 +169,7 @@ If Git Bash can't be found, these commands don't start (the machine info has no 
 - Killed jarvis-link: back after 5 seconds. Killed the node: back after 11 seconds. Killed the supervisor: within 2 seconds jarvis-link and the node were both gone; the next 5-minute time trigger brought them all back and the machine came back online on the hub.
 - A probe task had confirmed earlier: a non-administrator can register an `InteractiveToken` task but not an S4U one; the GUI-subsystem copy and the children it starts with `CREATE_NO_WINDOW` have no console window
   and all run in the user session; `RestartOnFailure` does not restart a program that exits with code 1.
-- Tests: `go test ./cmd/jarvis-link/` passes on Windows and on Linux (`golang:1.27` container); `supervise_windows_test.go` fails when the Job is removed (the child outlives the supervisor).
+- Tests: `go test ./cmd/persona-link/` passes on Windows and on Linux (`golang:1.27` container); `supervise_windows_test.go` fails when the Job is removed (the child outlives the supervisor).
 - Not verified: the logon trigger on an actual logoff and logon (that would close the Orca and Claude sessions in use on this machine; the logon trigger was accepted at registration); passive mode; the phone UI (the phone was locked; the same hub APIs the App calls were used; the App UI was checked during the second step below).
 
 ## Verification record (2026-11-03, real Windows 11 machine)

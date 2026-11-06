@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/nwverse/persona/server/internal/nodecmd"
 )
 
 // silentNode listens on the node socket under home like a node that is stuck: it takes connections and reads the
@@ -77,55 +79,8 @@ func launchEnv(home string) []string {
 	return append(env, "HOME="+home)
 }
 
-// A node that takes the connection and never answers: launch gives up after launchNodeWait and says which socket
-// did not answer and what to do, instead of waiting forever (#4548).
-func TestLaunchGivesUpOnANodeThatDoesNotAnswer(t *testing.T) {
-	home := shortHome(t)
-	t.Setenv("HOME", home)
-	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
-	sock, requests := silentNode(t, home)
-	defer func(w time.Duration) { launchNodeWait = w }(launchNodeWait)
-	launchNodeWait = 200 * time.Millisecond
-
-	stopped := false
-	start := time.Now()
-	err := runLaunch(func() { stopped = true }, "foo", nil)
-	if took := time.Since(start); took > 5*time.Second {
-		t.Fatalf("launch took %s with a %s limit", took, launchNodeWait)
-	}
-	if !stopped {
-		t.Error("launch kept main's signal handling")
-	}
-	if err == nil {
-		t.Fatal("launch succeeded against a node that never answered")
-	}
-	for _, want := range []string{"did not answer within 200ms", sock, "node doctor"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error %q does not mention %q", err, want)
-		}
-	}
-	select {
-	case line := <-requests:
-		if !strings.Contains(line, `"launcher.env"`) || !strings.Contains(line, `"foo"`) {
-			t.Errorf("node got %q", line)
-		}
-	default:
-		t.Error("the node never got the request")
-	}
-}
-
-// No node at all is not a timeout: the error stays the node's own (nothing listens), not the "did not answer" one.
-func TestLaunchWithoutANodeIsNotATimeout(t *testing.T) {
-	home := shortHome(t)
-	t.Setenv("HOME", home)
-	t.Setenv("PERSONA_HOME", "")
-	t.Setenv("JARVIS_HOME", "")
-	err := runLaunch(func() {}, "foo", nil)
-	if err == nil || strings.Contains(err.Error(), "did not answer") {
-		t.Fatalf("err = %v", err)
-	}
-}
+// launchWait is nodecmd's bound on launch's wait for the node.
+var launchWait = nodecmd.LaunchNodeWait
 
 // Ctrl-C (SIGINT) and kill (SIGTERM) end `personad launch` while it waits for a node that does not answer, well
 // before the wait runs out (#4548). The child is this test binary running main().
@@ -157,7 +112,7 @@ func TestLaunchStopsOnASignalWhileWaiting(t *testing.T) {
 			case <-requests:
 			case err := <-exited:
 				t.Fatalf("child exited before asking the node: %v", err)
-			case <-time.After(launchNodeWait):
+			case <-time.After(launchWait):
 				cmd.Process.Kill()
 				t.Fatal("child never asked the node")
 			}
@@ -174,7 +129,7 @@ func TestLaunchStopsOnASignalWhileWaiting(t *testing.T) {
 				if ws, ok := ee.Sys().(syscall.WaitStatus); !ok || !ws.Signaled() || ws.Signal() != sig {
 					t.Errorf("child ended with %v, want killed by %s", err, sig)
 				}
-			case <-time.After(launchNodeWait / 2):
+			case <-time.After(launchWait / 2):
 				cmd.Process.Kill()
 				t.Fatalf("child still running %s after %s", time.Since(sent).Round(time.Millisecond), sig)
 			}

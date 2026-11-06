@@ -56,7 +56,7 @@ jarvis-link and the resident node and restarts them on exit. Both are in one tas
 
 ## Responsibilities
 
-- **jarvis-link** (`server/cmd/jarvis-link`, `server/internal/link`): a separate small program doing only three things:
+- **jarvis-link** (`server/cmd/persona-link`, also reachable as `server/cmd/jarvis-link`; `server/internal/link`): a separate small program doing only three things:
   - Discovery: find the hub among candidate addresses and connect;
   - Reporting: identify the computer, version and address used;
   - Link: maintain the connection and forward streams opened by the hub unchanged to the local resident node.
@@ -211,7 +211,7 @@ Prefer the hub's own TLS and fingerprint when possible; when hub TLS is enabled,
 
 The protocol is fixed in [plan-hub-center.md](plan-hub-center.md), section 4; details are here. The dialing side (#435) follows this specification and has belonged to the manager since 2026-11-04
 (`server/internal/devices/service.go`; credentials generated during pairing are handed to the hub for encrypted storage with its key and retrieved when dialing). Implementation: `server/internal/link/`
-(`listen.go` for the listener and three endpoints, `passive.go` for pairing codes and links, `tlsid.go` for identity, `ratelimit.go` for rate limiting); CLI in `server/cmd/jarvis-link/passive.go`.
+(`listen.go` for the listener and three endpoints, `passive.go` for pairing codes and links, `tlsid.go` for identity, `ratelimit.go` for rate limiting); CLI in `server/cmd/persona-link/passive.go`.
 
 ### Listener and identity
 
@@ -589,7 +589,7 @@ Logs:
 
 ## How passive mode and the node service were verified (2026-11-02)
 
-- Go tests (`server/internal/link/listen_test.go`, `server/cmd/jarvis-link/passive_test.go`) use a fake hub following section 4: pins the link fingerprint (a different fingerprint fails the handshake),
+- Go tests (`server/internal/link/listen_test.go`, `server/cmd/persona-link/passive_test.go`) use a fake hub following section 4: pins the link fingerprint (a different fingerprint fails the handshake),
   pairs with the code and opens authenticated streams to a fake node in a temporary directory (echo); verifies 300 KiB random bytes unchanged both ways, wrong credential 401, correct credentials also 429 after rate limiting, single-use and expired codes,
   other paths 404, old credentials 401 and old streams closing with 4002 after re-pairing, missing node 503, helper disconnecting when hub doesn't pong, occupied port error and retry, switching between active / passive.
   Existing active-mode tests all still pass.

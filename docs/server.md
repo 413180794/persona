@@ -4,6 +4,12 @@
 
 Go, single binary, `server/cmd/personad`. Modes: `docs/architecture.md`; protocol: docs/protocol.md.
 
+Programs (`server/cmd/`):
+
+- `personad` (alias `jarvisd`): everything, and the compatibility entry. Its device commands (`node …`, `hook`, `mcp`, `ask`, `notify`, `tool`, `launch`, `codex-start`, `tab-start`, `office`, `sysmon`, `node-update-check`, `node-update-watch`) are `internal/nodecmd`'s.
+- `persona-node`: the device's program, `internal/nodecmd` alone. It takes the same commands and arguments and gives the same output and exit codes as `personad`, and links neither the hub, the manager nor the database (`cmd/persona-node/main_test.go` guards that on every platform it ships for). The node writes `<its own binary> hook` / `mcp` into the settings it manages, so either program serves what it wrote.
+- `persona-link` (directory alias `cmd/jarvis-link`): the connector, `docs/link.md`.
+
 ## Code
 
 | Package | Content |
@@ -22,6 +28,8 @@ Go, single binary, `server/cmd/personad`. Modes: `docs/architecture.md`; protoco
 | `internal/db` | Postgres connection pool, embedded SQL migrations in two sets (`migrations/hub/`, `migrations/manager/`; “Migrations” below), table access |
 | `internal/mail` | IMAP/SMTP, encrypted account storage, mail HTTP APIs and MCP tools (`docs/mail.md`) |
 | `internal/mcpserver` | personad mcp: stdio MCP server for Claude |
+| `internal/nodecmd` | The device's command line (`personad` and `persona-node` both dispatch it) |
+| `internal/nodeclient` | The client side of `node.sock` for hook / mcp / ask / notify / tool |
 | `internal/apns` | APNs client (.p 8 key, provider token, single push), shared by direct hub and relay |
 | `internal/pushcrypto` | Push-body encryption with phone public key (HPKE), `docs/push-relay.md` |
 | `internal/relay` | Publisher-run personad relay, `docs/push-relay.md` |

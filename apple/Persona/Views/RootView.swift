@@ -115,10 +115,12 @@ struct RootView: View {
         #endif
         .alert("Claude Wants to Act on Your iPhone", isPresented: Binding(
             get: { model.pendingConfirmation != nil },
-            set: { if !$0 { model.pendingConfirmation?.respond(false); model.pendingConfirmation = nil } }
+            // Gone without an answer: Deny for the one this alert showed. Its own button may have answered it already,
+            // and the next one may be on screen by the time this comes: that one is not touched (#4456).
+            set: { [shown = model.pendingConfirmation?.id] in if !$0, let shown { model.phoneConfirmations.answer(shown, false) } }
         ), presenting: model.pendingConfirmation) { c in
-            Button("Allow [Notification Actions ce7ef2]") { c.respond(true); model.pendingConfirmation = nil }
-            Button("Deny", role: .cancel) { c.respond(false); model.pendingConfirmation = nil }
+            Button("Allow [Notification Actions ce7ef2]") { model.phoneConfirmations.answer(c.id, true) }
+            Button("Deny", role: .cancel) { model.phoneConfirmations.answer(c.id, false) }
         } message: { c in
             Text(c.summary)
         }

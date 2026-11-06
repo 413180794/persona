@@ -161,7 +161,12 @@ final class AppModel {
     var latestAnswerFor: SessionKey?
     /// A hub link's message to land on once its chat shows (HubPageRouting, #2696); taken by that chat.
     var messageJump: MessageJump?
-    var pendingConfirmation: PhoneConfirmation?
+    /// The phone writes waiting for Allow / Deny, one shown at a time (#4456).
+    @ObservationIgnored let phoneConfirmations = PhoneConfirmations()
+    /// The one on screen (RootView / MacRootView's alert).
+    var pendingConfirmation: PhoneConfirmation? { phoneConfirmations.current }
+    /// Phone tool results the socket could not take yet, sent when it connects (#4456).
+    @ObservationIgnored let toolResults = ToolResultOutbox()
     /// Remembered across launches together with the open dev chat (restoreChat), so a relaunch lands where you were.
     var selectedTab: AppTab = .assistant {
         didSet {
@@ -570,6 +575,9 @@ final class AppModel {
     /// Sign Out of everything: every group, every hub (Settings › Disconnect with one group, a revoked credential of this device).
     func unpair() {
         LarkChatOutbox.forget()
+        // No hub left to answer: the open questions are denied, their results have nowhere to go.
+        phoneConfirmations.denyAll()
+        toolResults.forget(groups: Set(links.map(\.group)))
         LarkDrafts.shared.forget()
         pairingEngineMachine = nil
         checklistPending = false
@@ -1195,6 +1203,8 @@ final class AppModel {
     private func didConnect(_ group: String) {
         guard let link = link(group) else { return }
         registerPhone(link)
+        // Phone tool results answered while the socket was down: the hub matches them to their calls by call_id (#4456).
+        toolResults.flush(group: group, on: link.live)
         // The hub resumed its broadcasts (docs/hub-restart.md): what this app missed follows the hello, and the
         // connection's snapshot (machines, sessions, pending interactions) is whole: nothing to fetch again, no Updating….
         let plan = ReconnectPlan(resumed: link.live.resumed)
@@ -1593,7 +1603,8 @@ final class AppModel {
         #if DEBUG && (os(iOS) || os(visionOS))
         if name == RuntimeCLI.hubTool {
             let (text, isError) = await RuntimeCLI.runFromHub(args)
-            socket(group)?.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError])
+            toolResults.send(["type": "tool_result", "call_id": callID, "content": [["type": "text", "text": text]], "is_error": isError],
+                             callID: callID, group: group, on: socket(group))
             return
         }
         #endif
@@ -1601,7 +1612,9 @@ final class AppModel {
             await self?.confirm(summary) ?? false
         }
         guard let data = try? JSON.encoder.encode(content), let arr = try? JSONSerialization.jsonObject(with: data) else { return }
-        socket(group)?.send(["type": "tool_result", "call_id": callID, "content": arr, "is_error": isError])
+        // Allowed just as the app came back from the background, the socket may not be up yet: kept until it is (#4456).
+        toolResults.send(["type": "tool_result", "call_id": callID, "content": arr, "is_error": isError], callID: callID, group: group,
+                         on: socket(group))
     }
 
 
@@ -1613,9 +1626,8 @@ final class AppModel {
         MacShellState.shared.showMain()
         NSApp.requestUserAttention(.criticalRequest)
         #endif
-        return await withCheckedContinuation { cont in
-            pendingConfirmation = PhoneConfirmation(summary: summary) { cont.resume(returning: $0) }
-        }
+        // One at a time: a second write waits behind the one on screen instead of taking its place (#4456).
+        return await phoneConfirmations.ask(summary)
     }
 
     // MARK: Actions
@@ -2257,6 +2269,7 @@ final class AppModel {
     func forgetGroups(_ gone: Set<String>, keepingPushKeys: Bool = false) {
         guard !gone.isEmpty else { return }
         if !keepingPushKeys { LarkChatOutbox.forget(groups: gone) }
+        toolResults.forget(groups: gone)
         machines = machines.filter { !gone.contains($0.group) }
         sessionsByMachine = sessionsByMachine.filter { !gone.contains($0.key.group) }
         interactions = interactions.filter { !gone.contains($0.value.group) }
@@ -2586,12 +2599,6 @@ enum AppTab: String, Hashable {
     #if os(iOS) || os(visionOS)
     case feishu
     #endif
-}
-
-struct PhoneConfirmation: Identifiable {
-    let id = UUID()
-    let summary: String
-    let respond: (Bool) -> Void
 }
 
 struct Toast: Identifiable, Equatable {
